@@ -1,5 +1,4 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
+import { beforeEach, describe, expect, it } from 'vitest';
 import 'reflect-metadata';
 import httpMocks from 'node-mocks-http';
 import type { Request, Response } from 'express';
@@ -17,40 +16,13 @@ import {
   resetAppConfig
 } from '../src';
 
-test.beforeEach(() => {
-  resetControllerRegistry();
-  resetAppConfig();
-  configureApp({ logging: { level: 'error' } });
-});
+function toExpressApp(app: unknown) {
+  return app as { handle: (req: Request, res: Response, next: (err?: unknown) => void) => void };
+}
 
-test('controllers auto-register and respect configured prefix', async () => {
-  configureApp({ prefix: '/v1' });
-
-  @Controller('/hello')
-  class HelloController extends BaseController {
-    constructor(@Inject(TYPES.RequestTracker) tracker: RequestTracker) {
-      super(tracker);
-    }
-
-    protected controllerId(): string {
-      return 'HelloController';
-    }
-
-    @Get('/')
-    handle(_req: Request, res: Response) {
-      this.mergeRequestMetadata(res, { greeted: true });
-      this.logInfo(res, 'Hello issued');
-      return this.ok(res, { message: 'hello' });
-    }
-  }
-
-  const { app, diagnostics } = createApp();
-  const expressApp = app as unknown as { handle: (req: Request, res: Response, next: (err?: unknown) => void) => void };
-
-  const req = httpMocks.createRequest<Request>({
-    method: 'GET',
-    url: '/v1/hello/'
-  });
+async function dispatch(app: unknown, options: Parameters<typeof httpMocks.createRequest>[0]) {
+  const expressApp = toExpressApp(app);
+  const req = httpMocks.createRequest<Request>(options);
   const res = httpMocks.createResponse<Response>({ req });
 
   await new Promise<void>((resolve, reject) => {
@@ -61,6 +33,8 @@ test('controllers auto-register and respect configured prefix', async () => {
       return res;
     }) as typeof res.end;
 
+    res.on('error', (err) => reject(err));
+
     expressApp.handle(req, res, (err?: unknown) => {
       if (err) {
         reject(err);
@@ -68,14 +42,49 @@ test('controllers auto-register and respect configured prefix', async () => {
     });
   });
 
-  assert.equal(res.statusCode, 200);
-  const payload = res._getJSONData();
-  assert.equal(payload.message, 'hello');
+  return res;
+}
 
-  const requestSnapshots = diagnostics.requests();
-  assert.equal(requestSnapshots.length >= 1, true);
-  const first = requestSnapshots.find((entry) => entry.path.includes('/v1/hello'));
-  assert.ok(first, 'expected request snapshot to exist');
-  const helloMetadata = (first?.metadata?.HelloController as Record<string, unknown> | undefined) ?? {};
-  assert.equal(helloMetadata.greeted, true);
+describe('routing', () => {
+  beforeEach(() => {
+    resetControllerRegistry();
+    resetAppConfig();
+    configureApp({ logging: { level: 'error' } });
+  });
+
+  it('controllers auto-register and respect configured prefix', async () => {
+    configureApp({ prefix: '/v1' });
+
+    @Controller('/hello')
+    class HelloController extends BaseController {
+      constructor(@Inject(TYPES.RequestTracker) tracker: RequestTracker) {
+        super(tracker);
+      }
+
+      protected controllerId(): string {
+        return 'HelloController';
+      }
+
+      @Get('/')
+      handle(_req: Request, res: Response) {
+        this.mergeRequestMetadata(res, { greeted: true });
+        this.logInfo(res, 'Hello issued');
+        return this.ok(res, { message: 'hello' });
+      }
+    }
+
+    const { app, diagnostics } = createApp();
+    const res = await dispatch(app, { method: 'GET', url: '/v1/hello/' });
+
+    expect(res.statusCode).toBe(200);
+    const payload = res._getJSONData();
+    expect(payload.message).toBe('hello');
+
+    const requestSnapshots = diagnostics.requests();
+    expect(requestSnapshots.length).toBeGreaterThanOrEqual(1);
+    const first = requestSnapshots.find((entry) => entry.path.includes('/v1/hello'));
+    expect(first).toBeDefined();
+    const helloMetadata = (first?.metadata?.HelloController as Record<string, unknown> | undefined) ?? {};
+    expect(helloMetadata.greeted).toBe(true);
+  });
 });

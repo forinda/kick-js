@@ -161,7 +161,7 @@ Additional internal documentation describing the folder layout lives in `docs/st
 - `npm run dev` – run the sample app (`src/main.ts`) with hot reload
 - `npm run build` – bundle library to `dist/`
 - `npm run check` – type-check
-- `npm test` – runs TypeScript-powered integration specs via Node's test runner
+- `npm test` – runs Vitest against the integration-style specs
 
 ## CI & release pipeline
 

@@ -20,7 +20,8 @@
     "build": "tsup",
     "start": "node dist/index.js",
     "prepublishOnly": "npm run build && npm run check && npm test",
-    "test": "node --require ts-node/register --test tests/**/*.test.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "prepare": "husky"
   },
   "keywords": [
@@ -47,6 +48,7 @@
     "@swc/core": "^1.7.28",
     "@types/express": "^5.0.3",
     "@types/node": "^24.5.2",
+    "@vitest/coverage-v8": "^3.2.4",
     "husky": "^9.1.7",
     "joi": "^18.0.1",
     "node-mocks-http": "^1.17.2",
@@ -54,6 +56,7 @@
     "ts-node-dev": "^2.0.0",
     "tsup": "^8.5.0",
     "typescript": "^5.9.2",
+    "vitest": "^3.2.4",
     "zod": "^4.1.9"
   }
 }

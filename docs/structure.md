@@ -8,7 +8,7 @@ The framework is organised into layered folders that keep application concepts s
 - **src/shared/** – shared tokens and configuration helpers (`TYPES`, config resolvers, state shapes).
 - **src/utils/** – internal utilities (reactive store helper, error helpers, logger, DI wrappers).
 - **examples/** – sample applications demonstrating usage of the framework (`basic-todo`, `medium-kanban`, `complex-analytics`) each organised with `src/controllers`, `src/services`, `src/domain`, and app-specific folders (e.g. `src/db/`).
-- **tests/** – split test suites (`routing.test.ts`, `errors.test.ts`, `validation.test.ts`) covering routing behavior, error propagation, and schema validation respectively.
+- **tests/** – split Vitest suites (`routing.test.ts`, `errors.test.ts`, `validation.test.ts`) covering routing behavior, error propagation, and schema validation respectively.
 
 Key files:
 
