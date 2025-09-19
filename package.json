@@ -1,0 +1,59 @@
+{
+  "name": "@forinda/kickjs",
+  "version": "0.1.0",
+  "description": "Express + TypeScript + Inversify starter with reactive state, request telemetry, and Spring Boot-style decorators.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "clean": "rm -rf dist",
+    "dev": "ts-node-dev --respawn --transpile-only src/main.ts",
+    "check": "tsc --noEmit",
+    "build": "tsup",
+    "start": "node dist/index.js",
+    "prepublishOnly": "npm run build && npm run check && npm test",
+    "test": "node --require ts-node/register --test tests/**/*.test.ts",
+    "prepare": "husky"
+  },
+  "keywords": [
+    "express",
+    "typescript",
+    "inversify",
+    "decorators",
+    "starter"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.17"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "inversify": "^7.10.0",
+    "reflect-metadata": "^0.2.2"
+  },
+  "devDependencies": {
+    "@swc/core": "^1.7.28",
+    "@types/express": "^5.0.3",
+    "@types/node": "^24.5.2",
+    "husky": "^9.1.7",
+    "joi": "^18.0.1",
+    "node-mocks-http": "^1.17.2",
+    "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.2",
+    "zod": "^4.1.9"
+  }
+}
