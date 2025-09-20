@@ -2,9 +2,16 @@ import type { Response } from 'express';
 import { createError, type AppErrorOptions } from '../utils/errors';
 import { RequestTracker } from './request-tracker';
 import type { RequestState } from '../shared/types';
+import { Inject, Injectable } from '../utils/injection';
+import { TYPES } from '../shared/types';
 
+@Injectable()
 export abstract class BaseController {
-  protected constructor(private readonly requestTracker: RequestTracker) {}
+  @Inject(TYPES.RequestTracker)
+  // Using property injection so subclasses don't have to pass the tracker via super()
+  private injectedTracker?: RequestTracker;
+
+  private runtimeTracker?: RequestTracker;
 
   protected abstract controllerId(): string;
 
@@ -25,7 +32,8 @@ export abstract class BaseController {
   }
 
   protected respond<T>(res: Response, status: number, payload?: T) {
-    this.requestTracker.recordResponse(res, status, payload);
+    const tracker = this.ensureTracker();
+    tracker.recordResponse(res, status, payload);
     if (payload === undefined) {
       res.status(status).end();
     } else {
@@ -35,23 +43,28 @@ export abstract class BaseController {
   }
 
   protected logDebug(res: Response, message: string, metadata?: Record<string, unknown>) {
-    this.requestTracker.log(res, `[${this.controllerId()}] ${message}`, 'debug', metadata);
+    const tracker = this.ensureTracker();
+    tracker.log(res, `[${this.controllerId()}] ${message}`, 'debug', metadata);
   }
 
   protected logInfo(res: Response, message: string, metadata?: Record<string, unknown>) {
-    this.requestTracker.log(res, `[${this.controllerId()}] ${message}`, 'info', metadata);
+    const tracker = this.ensureTracker();
+    tracker.log(res, `[${this.controllerId()}] ${message}`, 'info', metadata);
   }
 
   protected logWarn(res: Response, message: string, metadata?: Record<string, unknown>) {
-    this.requestTracker.log(res, `[${this.controllerId()}] ${message}`, 'warn', metadata);
+    const tracker = this.ensureTracker();
+    tracker.log(res, `[${this.controllerId()}] ${message}`, 'warn', metadata);
   }
 
   protected logError(res: Response, message: string, metadata?: Record<string, unknown>) {
-    this.requestTracker.log(res, `[${this.controllerId()}] ${message}`, 'error', metadata);
+    const tracker = this.ensureTracker();
+    tracker.log(res, `[${this.controllerId()}] ${message}`, 'error', metadata);
   }
 
   protected mergeRequestMetadata(res: Response, patch: Record<string, unknown>) {
-    const current = this.requestTracker.get(res)?.state.metadata[this.controllerId()];
+    const tracker = this.ensureTracker();
+    const current = tracker.get(res)?.state.metadata[this.controllerId()];
     const currentRecord = typeof current === 'object' && current !== null ? (current as Record<string, unknown>) : {};
 
     const namespacedPatch: Record<string, unknown> = {
@@ -61,14 +74,31 @@ export abstract class BaseController {
       }
     };
 
-    this.requestTracker.mergeMetadata(res, namespacedPatch);
+    tracker.mergeMetadata(res, namespacedPatch);
   }
 
   protected getRequestState(res: Response): RequestState | undefined {
-    return this.requestTracker.get(res)?.state;
+    return this.ensureTracker().get(res)?.state;
   }
 
   protected fail(code: string, message: string, options?: AppErrorOptions): never {
     throw createError(code, message, options);
+  }
+
+  public attachRequestTracker(tracker: RequestTracker) {
+    this.runtimeTracker = tracker;
+  }
+
+  private ensureTracker(): RequestTracker {
+    if (this.runtimeTracker) {
+      return this.runtimeTracker;
+    }
+
+    if (this.injectedTracker) {
+      this.runtimeTracker = this.injectedTracker;
+      return this.runtimeTracker;
+    }
+
+    throw createError('TRACKER_MISSING', 'RequestTracker is not available on this controller');
   }
 }

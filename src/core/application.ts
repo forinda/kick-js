@@ -9,6 +9,7 @@ import { buildContainer } from '../infrastructure/container';
 import { resolveConfig, type AppConfig, type ResolvedAppConfig } from '../shared/config';
 import { TYPES } from '../shared/types';
 import { createError, isAppError } from '../utils/errors';
+import { discoverControllersFromFilesystem, type DiscoveredController } from './controller-discovery';
 
 export interface CreateAppOptions {
   controllers?: Array<new (...args: never[]) => unknown>;
@@ -24,6 +25,9 @@ export interface CreateAppResult {
   requestTracker: RequestTracker;
   diagnostics: AppDiagnostics;
   config: ResolvedAppConfig;
+  discovery: {
+    controllers: DiscoveredController[];
+  };
 }
 
 export interface BootstrapOptions extends CreateAppOptions {
@@ -37,6 +41,9 @@ export interface BootstrapContext {
   requestTracker: RequestTracker;
   diagnostics: AppDiagnostics;
   config: ResolvedAppConfig;
+  discovery: {
+    controllers: DiscoveredController[];
+  };
   shutdown(): void;
 }
 
@@ -50,6 +57,14 @@ export function createApp(options: CreateAppOptions = {}): CreateAppResult {
   const requestTracker = container.get<RequestTracker>(TYPES.RequestTracker);
   const diagnostics = container.get<AppDiagnostics>(TYPES.Diagnostics);
 
+  const discoveredControllers = discoverControllersFromFilesystem(config.api.discovery);
+  const manualControllers = options.controllers ?? [];
+  const controllers = new Set<new (...args: never[]) => unknown>();
+  manualControllers.forEach((ControllerClass) => controllers.add(ControllerClass));
+  discoveredControllers.forEach((entry) => controllers.add(entry.controller));
+
+  const controllersToRegister = controllers.size > 0 ? Array.from(controllers) : undefined;
+
   app.use(express.json());
 
   options.additionalMiddleware?.forEach((middleware) => {
@@ -59,7 +74,7 @@ export function createApp(options: CreateAppOptions = {}): CreateAppResult {
   app.use(requestTracker.middleware());
 
   registerControllers(app, container, {
-    controllers: options.controllers,
+    controllers: controllersToRegister,
     prefix: config.prefix
   });
 
@@ -102,11 +117,20 @@ export function createApp(options: CreateAppOptions = {}): CreateAppResult {
     }
   });
 
-  return { app, container, requestTracker, diagnostics, config };
+  return {
+    app,
+    container,
+    requestTracker,
+    diagnostics,
+    config,
+    discovery: {
+      controllers: discoveredControllers
+    }
+  };
 }
 
 export async function bootstrap(options: BootstrapOptions = {}): Promise<BootstrapContext> {
-  const { app, container, requestTracker, diagnostics, config } = createApp(options);
+  const { app, container, requestTracker, diagnostics, config, discovery } = createApp(options);
   const port = Number(options.port ?? process.env.PORT ?? 3000);
 
   const server = app.listen(port, () => {
@@ -124,5 +148,5 @@ export async function bootstrap(options: BootstrapOptions = {}): Promise<Bootstr
   process.once('SIGINT', shutdown);
   process.once('SIGTERM', shutdown);
 
-  return { app, server, container, requestTracker, diagnostics, config, shutdown };
+  return { app, server, container, requestTracker, diagnostics, config, discovery, shutdown };
 }

@@ -7,9 +7,6 @@ import {
   BaseController,
   Controller,
   Get,
-  Inject,
-  RequestTracker,
-  TYPES,
   createApp,
   configureApp,
   resetControllerRegistry,
@@ -57,10 +54,6 @@ describe('routing', () => {
 
     @Controller('/hello')
     class HelloController extends BaseController {
-      constructor(@Inject(TYPES.RequestTracker) tracker: RequestTracker) {
-        super(tracker);
-      }
-
       protected controllerId(): string {
         return 'HelloController';
       }

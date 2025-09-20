@@ -1,16 +1,6 @@
 import type { Request, Response } from 'express';
 import { z } from 'zod';
-import {
-  BaseController,
-  Controller,
-  Delete,
-  Get,
-  Inject,
-  Patch,
-  Post,
-  RequestTracker,
-  TYPES
-} from '../../../../src';
+import { BaseController, Controller, Delete, Get, Inject, Patch, Post } from '../../../../src';
 import { BoardService } from '../services/board.service';
 import { KANBAN_TYPES } from '../domain/board.types';
 
@@ -25,11 +15,8 @@ const transitionSchema = z.object({
 
 @Controller('/board')
 export class BoardController extends BaseController {
-  constructor(
-    @Inject(TYPES.RequestTracker) tracker: RequestTracker,
-    @Inject(KANBAN_TYPES.BoardService) private readonly board: BoardService
-  ) {
-    super(tracker);
+  constructor(@Inject(KANBAN_TYPES.BoardService) private readonly board: BoardService) {
+    super();
   }
 
   protected controllerId(): string {

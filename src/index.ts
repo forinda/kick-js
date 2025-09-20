@@ -12,6 +12,16 @@ export {
 export type { RouteOptions, RouteValidation, ControllerConstructor } from './decorators/http';
 
 export { BaseController } from './core/base-controller';
+export {
+  HttpVerbController,
+  GetController,
+  PostController,
+  PutController,
+  PatchController,
+  DeleteController
+} from './core/http-controllers';
+export { discoverControllersFromFilesystem } from './core/controller-discovery';
+export type { DiscoveredController } from './core/controller-discovery';
 export { RequestTracker } from './core/request-tracker';
 export { AppDiagnostics } from './core/diagnostics';
 export { createApp, bootstrap } from './core/application';
@@ -21,9 +31,22 @@ export {
   configureApp,
   getAppConfig,
   resolveConfig,
-  resetAppConfig
+  resetAppConfig,
+  createKickConfig
 } from './shared/config';
-export type { AppConfig, ResolvedAppConfig } from './shared/config';
+export type {
+  AppConfig,
+  ResolvedAppConfig,
+  ApiConfig,
+  ResolvedApiConfig,
+  ControllerDiscoveryConfig,
+  ResolvedControllerDiscoveryConfig,
+  CreateKickConfigOptions,
+  EnvBinding,
+  EnvBindingOptions,
+  AppConfigPath
+} from './shared/config';
+export type { KickCliConfig, KickCommandDefinition, KickStructureConfig, KickConfig } from './cli/types';
 
 export { TYPES } from './shared/types';
 export type { AppState, RequestState, RequestLogEntry } from './shared/types';

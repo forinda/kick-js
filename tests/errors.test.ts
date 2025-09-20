@@ -7,9 +7,6 @@ import {
   BaseController,
   Controller,
   Get,
-  Inject,
-  RequestTracker,
-  TYPES,
   createApp,
   createError,
   isAppError,
@@ -53,10 +50,6 @@ describe('errors', () => {
   it('AppError helpers propagate structured codes through the pipeline', async () => {
     @Controller('/fail')
     class FailController extends BaseController {
-      constructor(@Inject(TYPES.RequestTracker) tracker: RequestTracker) {
-        super(tracker);
-      }
-
       protected controllerId(): string {
         return 'FailController';
       }

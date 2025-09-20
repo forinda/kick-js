@@ -1,14 +1,6 @@
 import type { Request, Response } from 'express';
 import { z } from 'zod';
-import {
-  BaseController,
-  Controller,
-  Get,
-  Inject,
-  Post,
-  RequestTracker,
-  TYPES
-} from '../../../../src';
+import { BaseController, Controller, Get, Inject, Post } from '../../../../src';
 import { EventService } from '../services/event.service';
 import { ANALYTICS_TYPES } from '../domain/analytics.types';
 
@@ -26,11 +18,8 @@ const historyQuerySchema = z.object({
 
 @Controller('/analytics')
 export class EventController extends BaseController {
-  constructor(
-    @Inject(TYPES.RequestTracker) tracker: RequestTracker,
-    @Inject(ANALYTICS_TYPES.EventService) private readonly events: EventService
-  ) {
-    super(tracker);
+  constructor(@Inject(ANALYTICS_TYPES.EventService) private readonly events: EventService) {
+    super();
   }
 
   protected controllerId(): string {

@@ -9,9 +9,6 @@ import {
   BaseController,
   Controller,
   Get,
-  Inject,
-  RequestTracker,
-  TYPES,
   createApp,
   configureApp,
   resetControllerRegistry,
@@ -53,10 +50,6 @@ describe('validation', () => {
   it('supports zod and joi schemas', async () => {
     @Controller('/validate')
     class ValidationController extends BaseController {
-      constructor(@Inject(TYPES.RequestTracker) tracker: RequestTracker) {
-        super(tracker);
-      }
-
       protected controllerId(): string {
         return 'ValidationController';
       }

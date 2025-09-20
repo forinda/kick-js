@@ -1,16 +1,6 @@
 import type { Request, Response } from 'express';
 import { z } from 'zod';
-import {
-  BaseController,
-  Controller,
-  Delete,
-  Get,
-  Inject,
-  TYPES,
-  Patch,
-  Post,
-  RequestTracker
-} from '../../../../src';
+import { BaseController, Controller, Delete, Get, Inject, Patch, Post } from '../../../../src';
 import { TODO_TYPES } from '../domain/todo.types';
 import { TodoService } from '../services/todo.service';
 
@@ -20,11 +10,8 @@ const createTodoSchema = z.object({
 
 @Controller('/todos')
 export class TodoController extends BaseController {
-  constructor(
-    @Inject(TYPES.RequestTracker) tracker: RequestTracker,
-    @Inject(TODO_TYPES.TodoService) private readonly todos: TodoService
-  ) {
-    super(tracker);
+  constructor(@Inject(TODO_TYPES.TodoService) private readonly todos: TodoService) {
+    super();
   }
 
   protected controllerId(): string {

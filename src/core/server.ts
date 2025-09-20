@@ -39,6 +39,7 @@ export function registerControllers(app: Application, container: Container, opti
     }
 
     const instance = container.get<unknown>(ControllerClass) as Record<string | symbol, unknown>;
+    attachRequestTracker(instance, requestTracker);
     const routes: RouteDefinition[] = Reflect.getMetadata(DecoratorMetadata.ROUTES_KEY, ControllerClass) ?? [];
 
     routes.forEach((route) => {
@@ -82,6 +83,14 @@ function ensureInjectable(constructor: ControllerConstructor) {
   if (!Reflect.hasOwnMetadata('inversify:paramtypes', constructor)) {
     Injectable()(constructor as never);
   }
+}
+
+function attachRequestTracker(instance: Record<string | symbol, unknown>, tracker: RequestTracker) {
+  const attach = (instance as { attachRequestTracker?: (tracker: RequestTracker) => void }).attachRequestTracker;
+  if (typeof attach !== 'function') {
+    return;
+  }
+  attach.call(instance, tracker);
 }
 
 function buildRoutePath(prefix: string, basePath: string, routePath: string) {
