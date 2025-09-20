@@ -23,9 +23,8 @@ npm install @forinda/kickjs
 
 ```ts
 // app.ts
-import 'reflect-metadata';
-import type { Request, Response } from 'express';
-import { z } from 'zod';
+import "reflect-metadata";
+import type { Request, Response } from "express";
 import {
   BaseController,
   Controller,
@@ -34,35 +33,44 @@ import {
   RequestTracker,
   TYPES,
   bootstrap,
-  configureApp
-} from '@forinda/kickjs';
+  configureApp,
+} from "@forinda/kickjs";
 
-configureApp({ prefix: '/api' });
+configureApp({ prefix: "/api/v1" });
 
-@Controller('/hello')
+@Controller("/hello")
 class HelloController extends BaseController {
   constructor(@Inject(TYPES.RequestTracker) tracker: RequestTracker) {
     super(tracker);
   }
 
   protected controllerId(): string {
-    return 'HelloController';
+    return "HelloController";
   }
 
   @Get({
-    path: '/',
-    validate: {
-      query: z.object({ name: z.string().optional() })
-    }
+    path: "/",
+    middlewares: [],
+    validate: {},
   })
   handle(req: Request, res: Response) {
-    const name = typeof req.query.name === 'string' ? req.query.name : 'World';
+    const name = typeof req.query.name === "string" ? req.query.name : "World";
     this.mergeRequestMetadata(res, { greeted: name });
     return this.ok(res, { message: `Hello ${name}` });
   }
 }
 
-bootstrap();
+async function main() {
+  const port = Number(process.env.PORT ?? 3000);
+  await bootstrap({ port });
+  console.log(`Server started on http://localhost:${port}`);
+}
+
+main().catch((error) => {
+  console.error("Failed to bootstrap application", error);
+  process.exitCode = 1;
+});
+
 ```
 
 `bootstrap` wires Express, the Inversify container, and the request tracker. Controllers extending `BaseController` get ergonomic helpers for responses, structured logging, request metadata annotations, and a `fail()` helper for consistent error payloads. Route decorators accept Zod/Joi schemas for request validation without additional middleware.
