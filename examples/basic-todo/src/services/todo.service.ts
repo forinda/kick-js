@@ -1,67 +1,45 @@
 import { randomUUID } from 'node:crypto';
-import { Inject, Injectable } from '../../../../src/utils/injection';
-import { createReactive, type Reactive, type ReactiveRegistry } from '../../../../src/utils/reactive';
-import { TYPES } from '../../../../src/shared/types';
+import { KickInjectable } from "@forinda/kickjs";
 import type { Todo } from '../domain/todo.types';
 
-interface TodoState extends Record<string, unknown> {
-  todos: Todo[];
-}
-
-@Injectable()
+@KickInjectable()
 export class TodoService {
-  private readonly store: Reactive<TodoState>;
+  private todos: Todo[] = [
+    {
+      id: randomUUID(),
+      title: "Sample Todo",
+      completed: false,
+      createdAt: Date.now()
+    }
+  ];
 
-  constructor(@Inject(TYPES.StateRegistry) registry: ReactiveRegistry) {
-    this.store = createReactive<TodoState>(
-      { todos: [] },
-      {
-        id: 'sample:todos',
-        label: 'sample:todos',
-        registry,
-        trackHistory: true,
-        maxHistory: 100
-      }
-    );
-
-    this.store.watch((_state, change) => {
-      if (change.property === 'todos') {
-        // eslint-disable-next-line no-console
-        console.debug('[TodoService] Todos updated. Count:', this.store.state.todos.length);
-      }
-    });
+  list(): Todo[] {
+    return this.todos;
   }
 
-  list() {
-    return [...this.store.state.todos];
-  }
-
-  create(title: string) {
+  create(title: string): Todo {
     const todo: Todo = {
       id: randomUUID(),
       title,
       completed: false,
       createdAt: Date.now()
     };
-    this.store.state.todos = [...this.store.state.todos, todo];
+    this.todos.push(todo);
     return todo;
   }
 
-  toggle(id: string) {
-    let updated: Todo | undefined;
-    this.store.state.todos = this.store.state.todos.map((todo) => {
-      if (todo.id === id) {
-        updated = { ...todo, completed: !todo.completed };
-        return updated;
-      }
+  toggle(id: string): Todo | null {
+    const todo = this.todos.find(t => t.id === id);
+    if (todo) {
+      todo.completed = !todo.completed;
       return todo;
-    });
-    return updated;
+    }
+    return null;
   }
 
-  remove(id: string) {
-    const before = this.store.state.todos.length;
-    this.store.state.todos = this.store.state.todos.filter((todo) => todo.id !== id);
-    return this.store.state.todos.length < before;
+  remove(id: string): boolean {
+    const initialLength = this.todos.length;
+    this.todos = this.todos.filter(todo => todo.id !== id);
+    return this.todos.length < initialLength;
   }
 }

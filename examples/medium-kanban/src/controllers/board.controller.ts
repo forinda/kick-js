@@ -1,75 +1,50 @@
-import type { Request, Response } from 'express';
-import { z } from 'zod';
-import { BaseController, Controller, Delete, Get, Inject, Patch, Post } from '../../../../src';
+import {
+  KickController,
+  KickDelete,
+  KickGet,
+  KickInject,
+  KickPatch,
+  KickPost,
+} from "@forinda/kickjs";
 import { BoardService } from '../services/board.service';
-import { KANBAN_TYPES } from '../domain/board.types';
 
-const createTaskSchema = z.object({
-  title: z.string().min(1, 'Title is required'),
-  description: z.string().optional()
-});
+@KickController('/board')
+export class BoardController {
+  constructor(@KickInject(BoardService) private readonly board: BoardService) {}
 
-const transitionSchema = z.object({
-  direction: z.enum(['forward', 'back'])
-});
-
-@Controller('/board')
-export class BoardController extends BaseController {
-  constructor(@Inject(KANBAN_TYPES.BoardService) private readonly board: BoardService) {
-    super();
-  }
-
-  protected controllerId(): string {
-    return 'BoardController';
-  }
-
-  @Get('/tasks')
-  list(_req: Request, res: Response) {
+  @KickGet('/tasks')
+  list() {
     const state = this.board.list();
-    this.mergeRequestMetadata(res, { taskCount: state.tasks.length });
-    return this.ok(res, state);
+    return { tasks: state.tasks, metrics: state.metrics };
   }
 
-  @Post({
-    path: '/tasks',
-    validate: {
-      body: createTaskSchema
-    }
-  })
-  create(req: Request, res: Response) {
+  @KickPost('/tasks')
+  create(req: { body: { title: string; description?: string } }) {
     const task = this.board.create({
-      title: req.body.title as string,
-      description: req.body.description as string | undefined
+      title: req.body.title,
+      description: req.body.description
     });
-    this.logInfo(res, 'Task created', { id: task.id });
-    return this.created(res, task);
+    return { task };
   }
 
-  @Patch({
-    path: '/tasks/:id/transition',
-    validate: {
-      body: transitionSchema
-    }
-  })
-  transition(req: Request, res: Response) {
-    const direction = req.body.direction as 'forward' | 'back';
+  @KickPatch('/tasks/:id/transition')
+  transition(req: { params: { id: string }; body: { direction: 'forward' | 'back' } }) {
+    const direction = req.body.direction;
     const task =
       direction === 'forward'
-        ? this.board.advance(String(req.params.id))
-        : this.board.revert(String(req.params.id));
+        ? this.board.advance(req.params.id)
+        : this.board.revert(req.params.id);
 
     if (!task) {
-      return this.ok(res, { updated: false });
+      return { updated: false };
     }
 
-    this.logInfo(res, 'Task transitioned', { id: task.id, status: task.status });
-    return this.ok(res, task);
+    return { task, updated: true };
   }
 
-  @Delete('/tasks/:id')
-  remove(req: Request, res: Response) {
-    const deleted = this.board.remove(String(req.params.id));
-    this.logWarn(res, 'Task removed', { id: req.params.id, deleted });
-    return deleted ? this.noContent(res) : this.ok(res, { deleted: false });
+  @KickDelete('/tasks/:id')
+  remove(req: { params: { id: string } }) {
+    const deleted = this.board.remove(req.params.id);
+    return { success: deleted };
   }
 }
