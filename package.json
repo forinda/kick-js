@@ -27,7 +27,14 @@
     "prepublishOnly": "npm run build && npm run check && npm test",
     "test": "vitest run",
     "test:watch": "vitest",
-    "prepare": "husky"
+    "prepare": "husky",
+    "prerelease": "npm run clean && npm run build && npm run check && npm test",
+        "release:patch": "node scripts/release.js patch",
+    "release:minor": "node scripts/release.js minor",
+    "release:major": "node scripts/release.js major",
+    "release:prerelease": "node scripts/release.js prerelease",
+    "release:dry": "node scripts/release.js patch --dry-run",
+    "version": "git add package.json && git commit -m \"chore: bump version to $(node -p \"require('./package.json').version\")\""
   },
   "keywords": [
     "express",
