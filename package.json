@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Express + TypeScript + Inversify starter with reactive state, request telemetry, and Spring Boot-style decorators.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
