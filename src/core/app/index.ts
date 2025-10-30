@@ -128,7 +128,7 @@ export class KickApp extends EventEmitter implements KickApplication {
         sortedMiddleware.forEach(mw => {
             const metadata = Reflect.getMetadata(KICK_CONTROLLER_METADATA_KEYS.middlewareOptions, mw.constructor);
             if (metadata) {
-                console.log(`[KickApp]: Registered middleware '${metadata.name}' (priority: ${metadata.priority}, source: ${metadata.global ? 'global' : 'DI'})`);
+                // console.log(`[KickApp]: Registered middleware '${metadata.name}' (priority: ${metadata.priority}, source: ${metadata.global ? 'global' : 'DI'})`);
                 this.emit('middleware:registered:detailed', { 
                     middleware: mw, 
                     metadata,
@@ -145,9 +145,9 @@ export class KickApp extends EventEmitter implements KickApplication {
     }
 
     public mountMiddlewares() {
-        console.log(
-            `[KickApp]: Mounting ${this.context.middlewares.length} middlewares`
-        );
+        // console.log(
+        //     `[KickApp]: Mounting ${this.context.middlewares.length} middlewares`
+        // );
 
         this.context.middlewares.forEach((middleware) => {
             this.context.app.use(middleware.use);
@@ -158,10 +158,10 @@ export class KickApp extends EventEmitter implements KickApplication {
     }
 
     public loadModules(modules: KickCreateModuleResultType[]) {
-        console.log(`[KickApp]: Loading ${modules.length} modules`);
+        // console.log(`[KickApp]: Loading ${modules.length} modules`);
         
         modules.forEach((module) => {
-            console.log(`[MODULE]: loading ${module.name}`);
+            // console.log(`[MODULE]: loading ${module.name}`);
             module.install(this.container);
             this.emit('module:loaded', { module: module.name });
         });
@@ -183,7 +183,7 @@ export class KickApp extends EventEmitter implements KickApplication {
     private extractMiddlewaresFromContainer() {
         try {
             const middlewares = this.container.getAll<any>(KICK_MODULE_KEYS.KickMiddlewareType);
-            console.log(`[KickApp]: Found ${middlewares.length} middlewares in DI container`);
+            // console.log(`[KickApp]: Found ${middlewares.length} middlewares in DI container`);
             
             if (middlewares.length > 0) {
                 this.registerMiddleware(middlewares);
@@ -196,7 +196,7 @@ export class KickApp extends EventEmitter implements KickApplication {
     private mapControllers() {
         try {
             const controllers = this.container.getAll<any>(KICK_MODULE_KEYS.KickControllerType);
-            console.log(`[KickApp]: Mapping ${controllers.length} controllers with prefix: "${this.prefix}"`);
+            // console.log(`[KickApp]: Mapping ${controllers.length} controllers with prefix: "${this.prefix}"`);
             
             let routeCount = 0;
             controllers.forEach(controller => {
@@ -250,7 +250,7 @@ export class KickApp extends EventEmitter implements KickApplication {
             this.setState('routePrefix', this.prefix);
             
         } catch (error) {
-            console.warn('[KickApp]: No controllers found to map', error);
+            // console.warn('[KickApp]: No controllers found to map', error);
             this.emit('error', { type: 'controller-mapping', error });
         }
     }
@@ -276,7 +276,7 @@ export class KickApp extends EventEmitter implements KickApplication {
     }
 
     public handleError(error: Error, context?: any): void {
-        console.error(`[KickApp:${this.name}] Error:`, error.message);
+        // console.error(`[KickApp:${this.name}] Error:`, error.message);
         this.emit('error', { error, context, timestamp: Date.now() });
     }
 
@@ -311,11 +311,11 @@ export function createKickApp(options: CreateKickAppOptions) {
 
     const kickApp = new KickApp(appContext, options.name || "KickApp", options.prefix || "", options.config);
 
-    console.log(`[KickApp]: Initializing ${kickApp.name}${kickApp.prefix ? ` with prefix: "${kickApp.prefix}"` : ''}`);
+    // console.log(`[KickApp]: Initializing ${kickApp.name}${kickApp.prefix ? ` with prefix: "${kickApp.prefix}"` : ''}`);
     
     // Log config if provided
     if (kickApp.config) {
-        console.log(`[KickApp]: Config loaded - App: ${kickApp.config.name}, Port: ${kickApp.config.port}`);
+        // console.log(`[KickApp]: Config loaded - App: ${kickApp.config.name}, Port: ${kickApp.config.port}`);
     }
 
     // Load plugins first
@@ -325,7 +325,7 @@ export function createKickApp(options: CreateKickAppOptions) {
 
     // Register global middlewares first (these are not managed by DI)
     if (options.globalMiddlewares) {
-        console.log(`[KickApp]: Registering ${options.globalMiddlewares.length} global middlewares`);
+        // console.log(`[KickApp]: Registering ${options.globalMiddlewares.length} global middlewares`);
         kickApp.registerMiddleware(options.globalMiddlewares);
     }
 
@@ -335,8 +335,8 @@ export function createKickApp(options: CreateKickAppOptions) {
     // Mount all middlewares (global + DI-managed) after they've been collected
     kickApp.mountMiddlewares();
 
-    console.log(`[KickApp]: Initialization complete`);
-    console.log(`[KickApp]: Stats:`, kickApp.getStats());
+    // console.log(`[KickApp]: Initialization complete`);
+    // console.log(`[KickApp]: Stats:`, kickApp.getStats());
 
     // Create the HTTP server
     const server = createServer(kickApp.context.app);

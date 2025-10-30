@@ -31,7 +31,7 @@ export const createModule: CreateModuleFuncType = <TName extends string>(
       const bindingKey = KICK_MODULE_KEYS.KickMiddlewareType;
       bind(bindingKey).to(middleware);
       bind(middleware).toSelf();
-      console.log(`[Module:${name}] Registered middleware: ${middleware.name}`);
+    //   console.log(`[Module:${name}] Registered middleware: ${middleware.name}`);
     });
   });
 

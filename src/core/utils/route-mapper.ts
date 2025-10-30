@@ -122,7 +122,7 @@ export class RouteMapper {
     controllerName: string,
     prefix?: string
   ) {
-    const prefixInfo = prefix ? ` [prefix: ${prefix}]` : '';
-    console.log(`[ROUTE]: ${method} ${path} -> ${controllerName}.${handlerName}${prefixInfo}`);
+    const _prefixInfo = prefix ? ` [prefix: ${prefix}]` : '';
+    // console.log(`[ROUTE]: ${method} ${path} -> ${controllerName}.${handlerName}${prefixInfo}`);
   }
 }

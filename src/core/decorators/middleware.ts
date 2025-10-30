@@ -74,7 +74,7 @@ export function KickMiddleware(options: KickMiddlewareOptions = {}): ClassDecora
       target
     );
     
-    console.log(`[KickMiddleware]: Registered ${middlewareMetadata.name} middleware`);
+    // console.log(`[KickMiddleware]: Registered ${middlewareMetadata.name} middleware`);
   };
 }
 

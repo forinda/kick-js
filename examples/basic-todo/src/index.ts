@@ -10,12 +10,12 @@ const app = express();
 // Add JSON parsing middleware
 app.use(express.json());
 
-console.log('🚀 Creating KickApp with Config...');
+// console.log('🚀 Creating KickApp with Config...');
 
 // Demonstrate getting middleware metadata (from classes, not instances)
-console.log('📋 Middleware Metadata:');
-console.log('  Logger:', getMiddlewareMetadata(TestMiddleware));
-console.log('  Auth:', getMiddlewareMetadata(AuthMiddleware));
+// console.log('📋 Middleware Metadata:');
+// console.log('  Logger:', getMiddlewareMetadata(TestMiddleware));
+// console.log('  Auth:', getMiddlewareMetadata(AuthMiddleware));
 
 // Create global middleware instances (not managed by DI)
 const corsMiddleware = new CorsMiddleware();
@@ -32,19 +32,19 @@ async function startApp() {
     });
 
     console.log('✅ KickApp created successfully!');
-    console.log('📊 Available properties:', Object.keys(server));
+    // console.log('📊 Available properties:', Object.keys(server));
 
     // Access the KickApp instance safely
     if (server.kickApp) {
         console.log('📱 KickApp instance found!');
         
         // Demonstrate config access
-        console.log('⚙️  App Config:', {
-            name: server.kickApp.getConfig('name'),
-            port: server.kickApp.getConfig('port'),
-            prefix: server.kickApp.getConfig('prefix'),
-            environment: server.kickApp.getConfig('env')
-        });
+        // console.log('⚙️  App Config:', {
+        //     name: server.kickApp.getConfig('name'),
+        //     port: server.kickApp.getConfig('port'),
+        //     prefix: server.kickApp.getConfig('prefix'),
+        //     environment: server.kickApp.getConfig('env')
+        // });
         
         // Demonstrate reactive features
         server.kickApp.on('initialized', (stats: any) => {
@@ -84,14 +84,14 @@ async function startApp() {
         console.log(`🎯 Todo app is running on http://${host}:${port}`);
         
         if (server.kickApp) {
-            console.log("📈 Current app state:", server.kickApp.state);
-            console.log("📊 App stats:", server.kickApp.getStats());
-            console.log("⚙️  Final config check:", {
-                configName: server.kickApp.getConfig('name'),
-                configPort: server.kickApp.getConfig('port'),
-                actualPort: port,
-                hasConfig: server.kickApp.hasConfig('port')
-            });
+            // console.log("📈 Current app state:", server.kickApp.state);
+            // console.log("📊 App stats:", server.kickApp.getStats());
+            // console.log("⚙️  Final config check:", {
+            //     configName: server.kickApp.getConfig('name'),
+            //     configPort: server.kickApp.getConfig('port'),
+            //     actualPort: port,
+            //     hasConfig: server.kickApp.hasConfig('port')
+            // });
             
             // Update state to demonstrate reactivity
             server.kickApp.setState('status', 'running');
