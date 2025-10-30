@@ -135,7 +135,7 @@ function main() {
   runCommand(`npm version ${releaseType} --no-git-tag-version`, `Bumping version to ${nextVersion}`);
   
   // Commit version bump
-  runCommand('git add package.json', 'Staging package.json');
+  runCommand('git add package.json package-lock.json', 'Staging package.json and package-lock.json');
   runCommand(`git commit -m "chore: release v${nextVersion}"`, 'Committing version bump');
   
   // Create git tag
