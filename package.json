@@ -43,7 +43,7 @@
     "decorators",
     "starter"
   ],
-  "author": "",
+  "author": "Felix Orinda",
   "license": "MIT",
   "engines": {
     "node": ">=20.0"
@@ -79,5 +79,18 @@
     "typescript": "^5.9.2",
     "vitest": "^3.2.4",
     "zod": "^4.1.9"
-  }
+  },
+  "directories": {
+    "doc": "docs",
+    "example": "examples",
+    "test": "tests"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/forinda/kick-js.git"
+  },
+  "bugs": {
+    "url": "https://github.com/forinda/kick-js/issues"
+  },
+  "homepage": "https://github.com/forinda/kick-js#readme"
 }
