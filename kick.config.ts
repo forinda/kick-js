@@ -1,6 +1,4 @@
-import { createKickConfig } from './src/cli/utils/config-helpers';
-
-export default createKickConfig({
+export default {
   app: {
     name: 'KickJS Framework',
     port: 3000,
@@ -26,4 +24,4 @@ export default createKickConfig({
       NODE_ENV: 'production'
     }
   }
-});
+};

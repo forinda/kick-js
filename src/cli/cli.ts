@@ -3,7 +3,7 @@ import pkg from '../../package.json';
 import { registerInitCommand } from './commands/init';
 import { registerGeneratorCommands } from './commands/generate-controller';
 import { registerRunCommands } from './commands/run';
-import { loadKickConfig } from './config';
+import { loadKickConfig } from './utils/config-loader';
 import { registerCustomCommands } from './commands/custom';
 
 async function main() {

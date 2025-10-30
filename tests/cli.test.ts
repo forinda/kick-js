@@ -22,17 +22,17 @@ describe('CLI tooling', () => {
     const result = await initProject({ targetDirectory: tempDir, force: true, packageName: 'kick-test' });
     expect(result.createdFiles).toContain('package.json');
 
-    const mainFile = await fs.readFile(path.join(tempDir, 'src', 'main.ts'), 'utf8');
-    expect(mainFile).toContain('bootstrap');
+    const mainFile = await fs.readFile(path.join(tempDir, 'src', 'index.ts'), 'utf8');
+    expect(mainFile).toContain('createKickAppWithConfig');
 
     const controllerFile = await fs.readFile(
-      path.join(tempDir, 'src', 'domains', 'app', 'controllers', 'hello.get.controller.ts'),
+      path.join(tempDir, 'src', 'controllers', 'user.controller.ts'),
       'utf8'
     );
-    expect(controllerFile).toContain('HelloGetController');
+    expect(controllerFile).toContain('UserController');
 
-    const appConfigFile = await fs.readFile(path.join(tempDir, 'src', 'config', 'kick.config.ts'), 'utf8');
-    expect(appConfigFile).toContain('createKickConfig');
+    const appConfigFile = await fs.readFile(path.join(tempDir, 'kick.config.js'), 'utf8');
+    expect(appConfigFile).toContain('module.exports');
   });
 
   it('generates controllers following the naming convention', async () => {

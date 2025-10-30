@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import { KickConfig, KickAppConfig, KickDevConfig, KickStartConfig } from '../types';
+import { KickConfig, KickAppConfig, KickDevConfig, KickStartConfig, KickCommandDefinition } from '../types';
 
 const CONFIG_FILE_NAMES = [
   'kick.config.ts',
@@ -13,6 +13,7 @@ const CONFIG_FILE_NAMES = [
 
 export interface LoadedKickConfig extends KickConfig {
   configPath?: string;
+  commands?: KickCommandDefinition[];
 }
 
 /**
@@ -81,7 +82,8 @@ export function getDefaultConfig(): KickConfig {
     },
     generators: {
       controllerRoot: 'src/domains/app/controllers'
-    }
+    },
+    commands: []
   };
 }
 
@@ -93,7 +95,10 @@ export function mergeConfigWithOptions(
   cliOptions: Record<string, any>,
   command: 'dev' | 'start'
 ): KickDevConfig | KickStartConfig {
-  const baseConfig = command === 'dev' ? config.dev : config.start;
+  const defaultConfig = getDefaultConfig();
+  const baseConfig = command === 'dev' 
+    ? (config.dev || defaultConfig.dev)
+    : (config.start || defaultConfig.start);
   
   return {
     ...baseConfig,

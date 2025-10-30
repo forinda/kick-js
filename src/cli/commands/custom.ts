@@ -1,8 +1,8 @@
 import type { Command } from 'commander';
-import { KickConfig } from '../config';
+import { LoadedKickConfig } from '../utils/config-loader';
 import { runShellCommand } from '../utils/shell';
 
-export function registerCustomCommands(program: Command, config?: KickConfig) {
+export function registerCustomCommands(program: Command, config?: LoadedKickConfig) {
   if (!config?.commands) {
     return;
   }

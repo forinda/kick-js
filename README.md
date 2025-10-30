@@ -239,6 +239,7 @@ import { LoggingMiddleware } from "./middlewares/logging.middleware";
 
 export const AppModule = createModule("app", {
   controllers: [UserController],
+  services: [UserService], // Register your services
   middlewares: [LoggingMiddleware] // Optional: DI-managed middlewares
 });
 ```
@@ -258,10 +259,8 @@ import {
   KickAppMiddleware, 
   KickRequest, 
   KickResponse, 
-  KickNextFn,
-  KickInject 
+  KickNextFn 
 } from "@forinda/kickjs";
-import { LoggerService } from "../services/logger.service";
 
 @KickMiddleware({ 
   name: "RequestLogger", 
@@ -270,19 +269,14 @@ import { LoggerService } from "../services/logger.service";
   tags: ["logging", "development"] 
 })
 export class LoggingMiddleware implements KickAppMiddleware {
-  constructor(
-    @KickInject(LoggerService)
-    private readonly logger: LoggerService
-  ) {}
-
   use(req: KickRequest, res: KickResponse, next: KickNextFn): void {
     const start = Date.now();
     
-    this.logger.info(`→ ${req.method} ${req.url}`);
+    console.log(`→ ${req.method} ${req.url}`);
     
     res.on('finish', () => {
       const duration = Date.now() - start;
-      this.logger.info(`← ${req.method} ${req.url} ${res.statusCode} (${duration}ms)`);
+      console.log(`← ${req.method} ${req.url} ${res.statusCode} (${duration}ms)`);
     });
     
     next();
