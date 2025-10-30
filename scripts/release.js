@@ -86,10 +86,10 @@ function main() {
   console.log('  node scripts/release.js patch');
   console.log('  node scripts/release.js minor');
   console.log('  node scripts/release.js major --dry-run');
-  console.log('\nOr using pnpm scripts:');
-  console.log('  pnpm run release:patch');
-  console.log('  pnpm run release:minor');
-  console.log('  pnpm run release:major');
+  console.log('\nOr using npm scripts:');
+  console.log('  npm run release:patch');
+  console.log('  npm run release:minor');
+  console.log('  npm run release:major');
     process.exit(1);
   }
 
@@ -109,13 +109,13 @@ function main() {
     console.log('\n🧪 DRY RUN - No changes will be made');
     console.log('\nCommands that would be executed:');
     console.log('1. Git status check');
-    console.log('2. pnpm run clean');
-    console.log('3. pnpm run build');
-    console.log('4. pnpm run check');
-    console.log('5. pnpm test');
-    console.log(`6. pnpm version ${releaseType}`);
+    console.log('2. npm run clean');
+    console.log('3. npm run build');
+    console.log('4. npm run check');
+    console.log('5. npm test');
+    console.log(`6. npm version ${releaseType}`);
     console.log('7. git push --follow-tags');
-    console.log('8. pnpm publish');
+    console.log('8. npm publish');
     console.log('9. Manual GitHub release instructions provided');
     return;
   }
@@ -126,13 +126,13 @@ function main() {
   checkBranch();
 
   // Build and test
-  runCommand('pnpm run clean', 'Cleaning build directory');
-  runCommand('pnpm run build', 'Building project');
-  runCommand('pnpm run check', 'Type checking');
-  runCommand('pnpm test', 'Running tests');
+  runCommand('npm run clean', 'Cleaning build directory');
+  runCommand('npm run build', 'Building project');
+  runCommand('npm run check', 'Type checking');
+  runCommand('npm test', 'Running tests');
 
   // Version bump
-  runCommand(`pnpm version ${releaseType} --no-git-tag-version`, `Bumping version to ${nextVersion}`);
+  runCommand(`npm version ${releaseType} --no-git-tag-version`, `Bumping version to ${nextVersion}`);
   
   // Commit version bump
   runCommand('git add package.json', 'Staging package.json');
@@ -145,7 +145,7 @@ function main() {
   runCommand('git push --follow-tags', 'Pushing to repository');
 
   // Publish to npm
-  runCommand('pnpm publish', 'Publishing to npm');
+  runCommand('npm publish', 'Publishing to npm');
 
   console.log('\n🎉 Release completed successfully!');
   console.log(`📦 Published: @forinda/kickjs@${nextVersion}`);
@@ -160,7 +160,7 @@ function main() {
   console.log(`   5. Publish the release`);
   console.log('\n🎯 Or use the quick link:');
   console.log(`   https://github.com/forinda/kick-js/releases/new?tag=v${nextVersion}&title=v${nextVersion}`);
-  console.log('\n💡 Tip: Use `pnpm run release:patch` for easier releases!');
+  console.log('\n💡 Tip: Use `npm run release:patch` for easier releases!');
 }
 
 main();
