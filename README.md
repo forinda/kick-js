@@ -439,166 +439,40 @@ src/
 
 ## 🤝 Contributing
 
-We welcome contributions! Please follow these guidelines:
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for detailed information on how to get started.
 
-### Development Setup
+### Quick Start for Contributors
 
 1. **Fork and clone the repository**
    ```bash
    git clone https://github.com/yourusername/kickjs.git
    cd kickjs
-   ```
-
-2. **Install dependencies**
-   ```bash
    pnpm install
    ```
 
-3. **Run tests**
-   ```bash
-   pnpm test
-   ```
-
-4. **Start development**
-   ```bash
-   pnpm dev
-   ```
-
-### Contribution Guidelines
-
-#### Code Style
-- Use TypeScript for all code
-- Follow existing naming conventions
-- Use decorators for framework features
-- Include comprehensive JSDoc comments
-- Maintain 100% type coverage
-
-#### Testing
-- Write tests for all new features
-- Ensure existing tests pass
-- Include integration tests for complex features
-- Test both success and error cases
-
-#### Documentation
-- Update README for new features
-- Include code examples
-- Document breaking changes
-- Update type definitions
-
-#### Pull Request Process
-
-1. **Create a feature branch**
-   ```bash
-   git checkout -b feature/amazing-feature
-   ```
-
-2. **Make your changes**
-   - Write code following our style guide
-   - Add tests for new functionality
-   - Update documentation
-
-3. **Test your changes**
+2. **Run tests to ensure everything works**
    ```bash
    pnpm test
    pnpm build
    ```
 
-4. **Commit with conventional commits**
+3. **Create a feature branch and make your changes**
    ```bash
-   git commit -m "feat: add amazing new feature"
+   git checkout -b feature/amazing-feature
+   # Make your changes...
+   git commit -m "feat: add amazing feature"
    ```
 
-5. **Push and create PR**
-   ```bash
-   git push origin feature/amazing-feature
-   ```
+4. **Submit a pull request**
 
-#### Commit Message Format
+For detailed guidelines, development setup, coding standards, and more, please read our [Contributing Guide](CONTRIBUTING.md).
 
-We use [Conventional Commits](https://conventionalcommits.org/):
+### 📞 Getting Help
 
-- `feat:` - New features
-- `fix:` - Bug fixes  
-- `docs:` - Documentation changes
-- `refactor:` - Code refactoring
-- `test:` - Adding tests
-- `chore:` - Maintenance tasks
-
-#### Examples:
-```bash
-feat: add request context injection system
-fix: resolve middleware priority sorting issue
-docs: update README with plugin examples
-refactor: extract route mapping to utility class
-test: add integration tests for middleware system
-```
-
-### Development Scripts
-
-```bash
-# Development server with hot reload
-pnpm dev
-
-# Run tests
-pnpm test
-
-# Build the library
-pnpm build
-
-# Type checking
-pnpm type-check
-
-# Linting
-pnpm lint
-
-# Run example applications
-pnpm example:basic-todo
-pnpm example:medium-kanban
-pnpm example:complex-analytics
-```
-
-### Reporting Issues
-
-When reporting issues, please include:
-
-1. **Environment information**
-   - Node.js version
-   - TypeScript version
-   - Operating system
-
-2. **Reproduction steps**
-   - Minimal code example
-   - Expected vs actual behavior
-   - Error messages with stack traces
-
-3. **Context**
-   - What you were trying to achieve
-   - Any workarounds you've tried
-
-### Feature Requests
-
-For feature requests:
-
-1. **Check existing issues** to avoid duplicates
-2. **Describe the use case** and problem you're solving
-3. **Provide examples** of how the API should work
-4. **Consider backwards compatibility**
-
-### Getting Help
-
-- 📖 Check the documentation and examples
-- 🐛 Search existing GitHub issues
-- 💬 Join our Discord community (coming soon)
-- 📧 Email maintainers for security issues
-
-### Code of Conduct
-
-We are committed to providing a welcoming and inclusive environment. Please:
-
-- Be respectful and constructive
-- Welcome newcomers and help them learn
-- Focus on the best outcome for the community
-- Show empathy towards other community members
+- 📖 Check the [documentation](README.md) and [examples](examples/)
+- 🐛 Search [existing issues](https://github.com/forinda/kickjs/issues)
+- 💬 Join our community discussions
+- 📧 Contact maintainers for security issues
 
 Thank you for contributing to KickJS! 🚀
 
