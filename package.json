@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Express + TypeScript + Inversify starter with reactive state, request telemetry, and Spring Boot-style decorators.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -29,7 +29,7 @@
     "test:watch": "vitest",
     "prepare": "husky",
     "prerelease": "npm run clean && npm run build && npm run check && npm test",
-        "release:patch": "node scripts/release.js patch",
+    "release:patch": "node scripts/release.js patch",
     "release:minor": "node scripts/release.js minor",
     "release:major": "node scripts/release.js major",
     "release:prerelease": "node scripts/release.js prerelease",
