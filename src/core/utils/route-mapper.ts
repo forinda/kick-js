@@ -1,5 +1,6 @@
 import type { KickRequest, KickResponse, KickNextFn, KickRequestContext } from "../types";
 import type { KickRouteMetadata } from "../types/route";
+import { combineRoutePaths } from "./normalize-route-path";
 
 /**
  * Route mapper utility for creating contextual handlers
@@ -83,7 +84,7 @@ export class RouteMapper {
     }
     
     // Combine prefix and route path
-    return `${normalizedPrefix}${normalizedRoutePath}`;
+    return combineRoutePaths(normalizedPrefix, normalizedRoutePath);
   }
 
   /**

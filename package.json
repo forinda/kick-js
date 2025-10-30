@@ -39,13 +39,15 @@
   "author": "",
   "license": "MIT",
   "engines": {
-    "node": ">=18.17"
+    "node": ">=20.0"
   },
   "publishConfig": {
     "access": "public"
   },
   "dependencies": {
-    "commander": "^11.1.0",
+    "commander": "^11.1.0"
+  },
+  "peerDependencies": {
     "express": "^5.1.0",
     "inversify": "^7.10.0",
     "reflect-metadata": "^0.2.2"
@@ -54,10 +56,15 @@
     "@swc/core": "^1.7.28",
     "@types/express": "^5.0.3",
     "@types/node": "^24.5.2",
+    "@types/supertest": "^6.0.3",
     "@vitest/coverage-v8": "^3.2.4",
+    "express": "^5.1.0",
     "husky": "^9.1.7",
+    "inversify": "^7.10.0",
     "joi": "^18.0.1",
     "node-mocks-http": "^1.17.2",
+    "reflect-metadata": "^0.2.2",
+    "supertest": "^7.1.4",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
     "tsup": "^8.5.0",
