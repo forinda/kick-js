@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { KickInjectable } from "../../../../src";
+import { KickInjectable } from "@forinda/kickjs";
 import type { Todo } from '../domain/todo.types';
 
 @KickInjectable()

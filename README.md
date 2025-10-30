@@ -104,6 +104,87 @@ export class UserController {
 }
 ```
 
+### Configuration
+
+KickJS supports flexible configuration through `kick.config.ts` files. This provides type safety and prevents configuration errors.
+
+```typescript
+// kick.config.ts
+import { createKickConfig } from "@forinda/kickjs";
+
+export default createKickConfig({
+  app: {
+    name: 'My App',
+    port: 3000,
+    host: 'localhost',
+    prefix: '/api/v1',
+    env: 'development'
+  },
+  dev: {
+    port: 3000,
+    host: 'localhost',
+    entry: 'src/index.ts',
+    watch: true,
+    env: {
+      NODE_ENV: 'development',
+      DEBUG: 'app:*'
+    }
+  },
+  start: {
+    port: 3000,
+    host: '0.0.0.0',
+    entry: 'dist/index.js',
+    env: {
+      NODE_ENV: 'production'
+    }
+  }
+});
+```
+
+#### Using Configuration in Your App
+
+```typescript
+// src/index.ts
+import { createKickAppWithConfig } from "@forinda/kickjs";
+import { AppModule } from "./app.module";
+
+async function startApp() {
+  const server = await createKickAppWithConfig({
+    app: express(),
+    modules: [AppModule]
+  });
+
+  // Access config in your app
+  console.log('App Name:', server.kickApp.getConfig('name'));
+  console.log('API Prefix:', server.kickApp.getConfig('prefix'));
+  
+  // Config with fallback
+  const theme = server.kickApp.getConfigOrDefault('ui.theme', 'dark');
+  
+  const port = server.kickApp.getConfig('port') || 3000;
+  server.listen(port, () => {
+    console.log(`🚀 ${server.kickApp.getConfig('name')} running on port ${port}`);
+  });
+}
+
+startApp();
+```
+
+#### CLI Configuration Support
+
+The KickJS CLI automatically loads your configuration:
+
+```bash
+# Uses config file values
+kick dev
+
+# Override specific values
+kick dev --port 8080 --host 0.0.0.0
+
+# Production mode
+kick start --port 3000
+```
+
 ### Creating Services
 
 Services contain your business logic and can be injected into controllers and other services.

@@ -1,8 +1,8 @@
-#!/usr/bin/env node
 import { Command } from 'commander';
 import pkg from '../../package.json';
 import { registerInitCommand } from './commands/init';
 import { registerGeneratorCommands } from './commands/generate-controller';
+import { registerRunCommands } from './commands/run';
 import { loadKickConfig } from './config';
 import { registerCustomCommands } from './commands/custom';
 
@@ -17,6 +17,7 @@ async function main() {
     controllerRoot: config?.generators?.controllerRoot,
     structure: config?.structure
   });
+  registerRunCommands(program);
   registerCustomCommands(program, config);
 
   program.showHelpAfterError();

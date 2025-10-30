@@ -1,4 +1,4 @@
-import { BaseKickMiddleware, KickMiddleware, KickRequest, KickResponse, KickNextFn } from "../../../../src";
+import { BaseKickMiddleware, KickMiddleware, KickRequest, KickResponse, KickNextFn } from "@forinda/kickjs";
 
 @KickMiddleware({ 
     name: 'RequestLogger', 

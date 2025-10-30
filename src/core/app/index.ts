@@ -12,25 +12,28 @@ import type { KickApplicationContext } from "../types/application";
 import type { KickAppMiddleware } from "../types/application";
 import type { KickAppPlugin } from "../types/application";
 import type { KickCreateModuleResultType, KickNextFn, KickRequest, KickResponse } from "../types";
+import type { KickAppConfig } from "../../cli/types";
 
 @AutoBind
 export class KickApp extends EventEmitter implements KickApplication {
     context: KickApplicationContext;
     name: string;
     public prefix: string;
+    public config?: KickAppConfig;
     private container: Container;
     private _isInitialized = false;
     private _state: Record<string, any> = {};
 
-    constructor(context: KickApplicationContext, name: string = "KickApp", prefix: string = "") {
+    constructor(context: KickApplicationContext, name: string = "KickApp", prefix: string = "", config?: KickAppConfig) {
         super();
         this.context = context;
         this.name = name;
         this.prefix = prefix;
+        this.config = config;
         this.container = new Container({ autobind: true });
         
         // Emit creation event
-        this.emit('created', { name: this.name, prefix: this.prefix });
+        this.emit('created', { name: this.name, prefix: this.prefix, config: this.config });
     }
 
     public get isInitialized(): boolean {
@@ -66,6 +69,32 @@ export class KickApp extends EventEmitter implements KickApplication {
 
     public offStateChange(key: string, listener: (data: { value: any; oldValue: any }) => void): void {
         this.off(`state:${key}`, listener);
+    }
+
+    /**
+     * Get a configuration value by key path (supports nested access like 'database.host')
+     */
+    public getConfig<T = any>(key?: string): T | undefined {
+        if (!this.config) return undefined;
+        
+        if (!key) return this.config as T;
+        
+        return key.split('.').reduce((obj: any, k) => obj?.[k], this.config) as T;
+    }
+
+    /**
+     * Check if a configuration key exists
+     */
+    public hasConfig(key: string): boolean {
+        return this.getConfig(key) !== undefined;
+    }
+
+    /**
+     * Get config value with fallback
+     */
+    public getConfigOrDefault<T>(key: string, defaultValue: T): T {
+        const value = this.getConfig<T>(key);
+        return value !== undefined ? value : defaultValue;
     }
 
     public loadPlugin(plugins: KickAppPlugin | KickAppPlugin[]) {
@@ -266,6 +295,7 @@ export class KickApp extends EventEmitter implements KickApplication {
 type CreateKickAppOptions = {
     name?: string;
     prefix?: string; // API prefix for all routes
+    config?: KickAppConfig; // App configuration
     app: KickApplicationContext["app"];
     plugins?: KickAppPlugin[];
     globalMiddlewares?: KickAppMiddleware[]; // Global/Express middlewares (not managed by DI)
@@ -279,9 +309,14 @@ export function createKickApp(options: CreateKickAppOptions) {
         app: options.app,
     };
 
-    const kickApp = new KickApp(appContext, options.name || "KickApp", options.prefix || "");
+    const kickApp = new KickApp(appContext, options.name || "KickApp", options.prefix || "", options.config);
 
     console.log(`[KickApp]: Initializing ${kickApp.name}${kickApp.prefix ? ` with prefix: "${kickApp.prefix}"` : ''}`);
+    
+    // Log config if provided
+    if (kickApp.config) {
+        console.log(`[KickApp]: Config loaded - App: ${kickApp.config.name}, Port: ${kickApp.config.port}`);
+    }
 
     // Load plugins first
     if (options.plugins) {
@@ -339,4 +374,27 @@ export function createKickApp(options: CreateKickAppOptions) {
     });
 
     return kickServer;
+}
+
+/**
+ * Create a KickApp with automatic config loading
+ */
+export async function createKickAppWithConfig(options: Omit<CreateKickAppOptions, 'config'> & { 
+    configOverrides?: Partial<KickAppConfig> 
+}) {
+    const { loadAppConfig, getConfigFromEnv } = await import('../utils/app-config');
+    
+    // Load config from file and environment
+    const envConfig = getConfigFromEnv();
+    const appConfig = await loadAppConfig({ ...envConfig, ...options.configOverrides });
+    
+    // Use config values for app setup if not explicitly provided
+    const appOptions: CreateKickAppOptions = {
+        ...options,
+        name: options.name || appConfig.name,
+        prefix: options.prefix || appConfig.prefix,
+        config: appConfig
+    };
+    
+    return createKickApp(appOptions);
 }

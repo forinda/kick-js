@@ -1,4 +1,4 @@
-import { KickAppMiddleware, KickRequest, KickResponse, KickNextFn } from "../../../../src";
+import { KickAppMiddleware, KickRequest, KickResponse, KickNextFn } from "@forinda/kickjs";
 
 /**
  * Global CORS middleware - not managed by DI container

@@ -45,6 +45,21 @@ export class TodoController {
     context.res.json(result);
   }
 
+  @KickGet("/info")
+  info(context: KickRequestContext) {
+    // Access app config through the request context
+    // This would typically be injected via DI or accessed through a service
+    const result = {
+      message: "Todo app information",
+      requestId: context.meta.requestId,
+      timestamp: new Date().toISOString(),
+      // Note: In a real app, you'd inject the app instance or config service
+      note: "Config access would typically be done through dependency injection"
+    };
+
+    context.res.json(result);
+  }
+
   @KickPost("/")
   create(context: KickRequestContext) {
     const { req, res } = context;
@@ -60,7 +75,7 @@ export class TodoController {
     const todo = this.todos.create(req.body.title.trim());
     const stats = this.todos.getStats();
     
-    res.status(201).json({ 
+    return res.status(201).json({ 
       todo, 
       stats,
       success: true,
@@ -86,7 +101,7 @@ export class TodoController {
     const stats = this.todos.getStats();
     const status = todo.completed ? 'completed' : 'pending';
     
-    res.json({ 
+    return res.json({ 
       todo, 
       stats,
       success: true,

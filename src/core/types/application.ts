@@ -1,6 +1,8 @@
 import { KickRequestHandler } from "./http";
 import { KickRouteMetadata } from "./route";
 import { Application } from "express";
+import { KickAppConfig } from "../../cli/types";
+
 /**
  * The application context interface for KickJS applications.
  * Holds request handlers, middlewares, and the Express application instance.
@@ -22,7 +24,9 @@ export interface KickAppMiddleware {
 export type KickAppPlugin = {
   install: (context: KickApplicationContext) => void;
 };
+
 export interface KickApplication {
   context: KickApplicationContext;
   name: string;
+  config?: KickAppConfig;
 }

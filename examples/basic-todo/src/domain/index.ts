@@ -1,4 +1,4 @@
-import { createModule } from "../../../../src";
+import { createModule } from "@forinda/kickjs";
 import { TodoController } from "../controllers/todo.controller";
 import { TestMiddleware } from "../m-ware/test-m-ware";
 import { AuthMiddleware } from "../m-ware/auth-middleware";
