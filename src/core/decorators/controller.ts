@@ -1,6 +1,7 @@
 import { decorate, injectable } from "inversify";
 import type { KickControllerOptions } from "../types/route";
 import { KICK_CONTROLLER_METADATA_KEYS } from "../constants/di-keys";
+import { bindClassMethods } from "../utils/bind-class-methods";
 
 
 /**
@@ -18,6 +19,7 @@ export function KickController<PathName extends string>(
 ): ClassDecorator {
   return function (target: Function) {
     decorate(injectable('Request'), target);
+    bindClassMethods(target.prototype);
     // Register the controller with the DI container
     Reflect.defineMetadata(KICK_CONTROLLER_METADATA_KEYS.path, path, target);
     Reflect.defineMetadata(

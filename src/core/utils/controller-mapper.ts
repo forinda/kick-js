@@ -1,14 +1,14 @@
 import { KICK_CONTROLLER_METADATA_KEYS } from "../constants/di-keys";
-import type { ModuleController } from "../types";
+import type { KickModuleController } from "../types";
 import type { KickControllerOptions, KickRouteMetadata } from "../types/route";
 import { combineRoutePaths } from "./normalize-route-path";
 
 /**
  * Map the controller metadata to a route configuration
- * @param {ModuleController} controller
+ * @param {KickModuleController} controller
  * @returns {KickRouteMetadata[]}
  */
-export function mapController(controller: ModuleController) {
+export function mapController(controller: KickModuleController) {
   const basePath: string =
     Reflect.getMetadata(
       KICK_CONTROLLER_METADATA_KEYS.path,

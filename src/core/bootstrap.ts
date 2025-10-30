@@ -1,5 +1,5 @@
 import { Container } from "inversify";
-import type { BootstrapContext, CreateModuleResultType } from "./types";
+import type { BootstrapContext, KickCreateModuleResultType } from "./types";
 import { KICK_MODULE_KEYS } from "./constants/di-keys";
 import { mapController } from "./utils/controller-mapper";
 
@@ -10,7 +10,7 @@ export function bootstrapExpressApp({ app, modules }: BootstrapContext) {
   return app;
 }
 
-function createAndLoadModules(modules: CreateModuleResultType[]) {
+function createAndLoadModules(modules: KickCreateModuleResultType[]) {
   // Your module creation and loading logic here
   const container = new Container({ autobind: true });
   modules.forEach((module) => {

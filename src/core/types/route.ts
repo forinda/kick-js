@@ -1,7 +1,10 @@
-type KickMiddleware = Function;
+import { KickAppMiddleware } from "./application";
+
+
+// type KickMiddleware = (
 
 export type CreateRouteType = {
-  middlewares?: KickMiddleware[];
+  middlewares?: KickAppMiddleware[];
 };
 export type KickRouteMetadata = {
   path: string;
@@ -11,5 +14,5 @@ export type KickRouteMetadata = {
   middlewares?: CreateRouteType["middlewares"];
 };
 export type KickControllerOptions = {
-  middlewares?: KickMiddleware[];
+  middlewares?: KickAppMiddleware[];
 };
