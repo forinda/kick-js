@@ -10,10 +10,36 @@ export interface KickGeneratorsConfig {
   controllerRoot?: string;
 }
 
+export interface KickAppConfig {
+  name?: string;
+  port?: number;
+  host?: string;
+  prefix?: string;
+  env?: 'development' | 'production' | string;
+}
+
+export interface KickDevConfig {
+  port?: number;
+  host?: string;
+  entry?: string;
+  watch?: boolean;
+  env?: Record<string, string>;
+}
+
+export interface KickStartConfig {
+  port?: number;
+  host?: string;
+  entry?: string;
+  env?: Record<string, string>;
+}
+
 export interface KickCliConfig {
   commands?: KickCommandDefinition[];
   generators?: KickGeneratorsConfig;
   structure?: KickStructureConfig;
+  app?: KickAppConfig;
+  dev?: KickDevConfig;
+  start?: KickStartConfig;
 }
 
 export interface CustomCommandRuntime {

@@ -11,21 +11,30 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "LICENSE",
+    "README.md"
   ],
   "bin": {
     "kick": "dist/cli.js"
   },
   "scripts": {
     "clean": "rm -rf dist",
-    "dev": "ts-node-dev --respawn --transpile-only src/main.ts",
+    "dev": "tsup --watch src/index.ts",
     "check": "tsc --noEmit",
     "build": "tsup",
     "start": "node dist/index.js",
     "prepublishOnly": "npm run build && npm run check && npm test",
     "test": "vitest run",
     "test:watch": "vitest",
-    "prepare": "husky"
+    "prepare": "husky",
+    "prerelease": "npm run clean && npm run build && npm run check && npm test",
+        "release:patch": "node scripts/release.js patch",
+    "release:minor": "node scripts/release.js minor",
+    "release:major": "node scripts/release.js major",
+    "release:prerelease": "node scripts/release.js prerelease",
+    "release:dry": "node scripts/release.js patch --dry-run",
+    "version": "git add package.json && git commit -m \"chore: bump version to $(node -p \"require('./package.json').version\")\""
   },
   "keywords": [
     "express",
@@ -37,13 +46,15 @@
   "author": "",
   "license": "MIT",
   "engines": {
-    "node": ">=18.17"
+    "node": ">=20.0"
   },
   "publishConfig": {
     "access": "public"
   },
   "dependencies": {
-    "commander": "^11.1.0",
+    "commander": "^11.1.0"
+  },
+  "peerDependencies": {
     "express": "^5.1.0",
     "inversify": "^7.10.0",
     "reflect-metadata": "^0.2.2"
@@ -52,13 +63,19 @@
     "@swc/core": "^1.7.28",
     "@types/express": "^5.0.3",
     "@types/node": "^24.5.2",
+    "@types/supertest": "^6.0.3",
     "@vitest/coverage-v8": "^3.2.4",
+    "express": "^5.1.0",
     "husky": "^9.1.7",
+    "inversify": "^7.10.0",
     "joi": "^18.0.1",
     "node-mocks-http": "^1.17.2",
+    "reflect-metadata": "^0.2.2",
+    "supertest": "^7.1.4",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
     "tsup": "^8.5.0",
+    "tsx": "^4.20.6",
     "typescript": "^5.9.2",
     "vitest": "^3.2.4",
     "zod": "^4.1.9"

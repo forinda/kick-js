@@ -1,29 +1,31 @@
-import { createKickConfig } from './src/cli/utils/config-helpers';
+import type { KickConfig } from '../../src/cli/types';
 
-export default createKickConfig({
+const config: KickConfig = {
   app: {
-    name: 'KickJS Framework',
-    port: 3000,
+    name: 'Basic Todo App',
+    port: 3005,
     host: 'localhost',
-    prefix: '',
+    prefix: '/api/v1',
     env: 'development'
   },
   dev: {
-    port: 3000,
+    port: 3005,
     host: 'localhost',
     entry: 'src/index.ts',
     watch: true,
     env: {
       NODE_ENV: 'development',
-      DEBUG: 'kick:*'
+      DEBUG: 'todo:*'
     }
   },
   start: {
-    port: 3000,
+    port: 3005,
     host: '0.0.0.0',
     entry: 'dist/index.js',
     env: {
       NODE_ENV: 'production'
     }
   }
-});
+};
+
+export default config;

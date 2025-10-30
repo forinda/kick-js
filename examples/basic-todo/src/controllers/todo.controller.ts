@@ -1,57 +1,129 @@
-import type { Request, Response } from 'express';
-import { z } from 'zod';
-import { BaseController, Controller, Delete, Get, Inject, Patch, Post } from '../../../../src';
-import { TODO_TYPES } from '../domain/todo.types';
-import { TodoService } from '../services/todo.service';
+import {
+  KickController,
+  KickDelete,
+  KickGet,
+  KickInject,
+  KickPatch,
+  KickPost,
+  KickRequestContext,
+} from "@forinda/kickjs";
+import { TodoService } from "../services/todo.service";
 
-const createTodoSchema = z.object({
-  title: z.string().min(1, 'Title is required')
-});
-
-@Controller('/todos')
-export class TodoController extends BaseController {
-  constructor(@Inject(TODO_TYPES.TodoService) private readonly todos: TodoService) {
-    super();
+@KickController("/todos")
+export class TodoController {
+  constructor(
+    @KickInject(TodoService)
+    private readonly todos: TodoService
+  ) {
+    console.log('🎮 TodoController initialized');
   }
 
-  protected controllerId(): string {
-    return 'TodoController';
+  @KickGet("/")
+  list(context: KickRequestContext) {
+    const todos = this.todos.list();
+    const stats = this.todos.getStats();
+    
+    const result = { 
+      todos, 
+      stats,
+      message: `Found ${todos.length} todos (${stats.completed} completed, ${stats.pending} pending)`,
+      requestId: context.meta.requestId
+    };
+
+    context.res.json(result);
   }
 
-  @Get('/')
-  list(_req: Request, res: Response) {
-    this.logDebug(res, 'Listing todos');
-    return this.ok(res, { todos: this.todos.list() });
+  @KickGet("/stats")
+  stats(context: KickRequestContext) {
+    const stats = this.todos.getStats();
+    const result = { 
+      stats,
+      message: `Todo statistics: ${stats.completionRate.toFixed(1)}% completion rate`,
+      requestId: context.meta.requestId
+    };
+
+    context.res.json(result);
   }
 
-  @Post({
-    path: '/',
-    validate: {
-      body: createTodoSchema
+  @KickGet("/info")
+  info(context: KickRequestContext) {
+    // Access app config through the request context
+    // This would typically be injected via DI or accessed through a service
+    const result = {
+      message: "Todo app information",
+      requestId: context.meta.requestId,
+      timestamp: new Date().toISOString(),
+      // Note: In a real app, you'd inject the app instance or config service
+      note: "Config access would typically be done through dependency injection"
+    };
+
+    context.res.json(result);
+  }
+
+  @KickPost("/")
+  create(context: KickRequestContext) {
+    const { req, res } = context;
+    
+    if (!req.body.title || req.body.title.trim() === '') {
+      return res.status(400).json({ 
+        error: 'Title is required and cannot be empty',
+        success: false,
+        requestId: context.meta.requestId
+      });
     }
-  })
-  create(req: Request, res: Response) {
-    const todo = this.todos.create(req.body.title as string);
-    this.logInfo(res, 'Todo created', { id: todo.id });
-    return this.created(res, todo);
+
+    const todo = this.todos.create(req.body.title.trim());
+    const stats = this.todos.getStats();
+    
+    return res.status(201).json({ 
+      todo, 
+      stats,
+      success: true,
+      message: `Todo "${todo.title}" created successfully`,
+      requestId: context.meta.requestId
+    });
   }
 
-  @Patch({
-    path: '/:id/toggle'
-  })
-  toggle(req: Request, res: Response) {
-    const todo = this.todos.toggle(String(req.params.id));
+  @KickPatch("/:id/toggle")
+  toggle(context: KickRequestContext) {
+    const { req, res } = context;
+    const todo = this.todos.toggle(req.params.id);
+    
     if (!todo) {
-      return this.ok(res, { updated: false });
+      return res.status(404).json({ 
+        error: 'Todo not found',
+        success: false,
+        updated: false,
+        requestId: context.meta.requestId
+      });
     }
-    this.logInfo(res, 'Todo toggled', { id: todo.id, completed: todo.completed });
-    return this.ok(res, todo);
+
+    const stats = this.todos.getStats();
+    const status = todo.completed ? 'completed' : 'pending';
+    
+    return res.json({ 
+      todo, 
+      stats,
+      success: true,
+      updated: true,
+      message: `Todo "${todo.title}" marked as ${status}`,
+      requestId: context.meta.requestId
+    });
   }
 
-  @Delete('/:id')
-  remove(req: Request, res: Response) {
-    const deleted = this.todos.remove(String(req.params.id));
-    this.logWarn(res, 'Todo removed', { id: req.params.id, deleted });
-    return deleted ? this.noContent(res) : this.ok(res, { deleted: false });
+  @KickDelete("/:id")
+  remove(context: KickRequestContext) {
+    const { req, res } = context;
+    const success = this.todos.remove(req.params.id);
+    const stats = this.todos.getStats();
+    
+    const result = { 
+      success, 
+      stats,
+      message: success ? 'Todo removed successfully' : 'Todo not found',
+      requestId: context.meta.requestId
+    };
+
+    res.status(success ? 200 : 404).json(result);
   }
 }

@@ -1,48 +1,28 @@
 import { randomUUID } from 'node:crypto';
-import { Inject, Injectable } from '../../../../src/utils/injection';
-import { createReactive, type Reactive, type ReactiveRegistry } from '../../../../src/utils/reactive';
-import { TYPES } from '../../../../src/shared/types';
+import { KickInjectable } from "@forinda/kickjs";
 import type { KanbanMetrics, Task, TaskStatus } from '../domain/board.types';
 
-interface KanbanState extends Record<string, unknown> {
-  tasks: Task[];
-  metrics: KanbanMetrics;
-}
-
-@Injectable()
+@KickInjectable()
 export class BoardService {
-  private readonly store: Reactive<KanbanState>;
-
-  constructor(@Inject(TYPES.StateRegistry) registry: ReactiveRegistry) {
-    this.store = createReactive<KanbanState>(
-      {
-        tasks: [],
-        metrics: { backlog: 0, in_progress: 0, done: 0 }
-      },
-      {
-        id: 'sample:kanban',
-        label: 'sample:kanban',
-        registry,
-        trackHistory: true,
-        maxHistory: 200
-      }
-    );
-
-    this.store.watch((_state, change) => {
-      if (change.property === 'tasks') {
-        this.recalculateMetrics();
-      }
-    });
-  }
+  private tasks: Task[] = [
+    {
+      id: randomUUID(),
+      title: 'Sample Task',
+      description: 'This is a sample task',
+      status: 'backlog',
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    }
+  ];
 
   list() {
     return {
-      tasks: [...this.store.state.tasks],
-      metrics: { ...this.store.state.metrics }
+      tasks: [...this.tasks],
+      metrics: this.calculateMetrics()
     };
   }
 
-  create(input: { title: string; description?: string }) {
+  create(input: { title: string; description?: string }): Task {
     const now = Date.now();
     const task: Task = {
       id: randomUUID(),
@@ -53,11 +33,11 @@ export class BoardService {
       updatedAt: now
     };
 
-    this.store.state.tasks = [...this.store.state.tasks, task];
+    this.tasks.push(task);
     return task;
   }
 
-  advance(id: string) {
+  advance(id: string): Task | null {
     return this.updateStatus(id, (current) => {
       const transitions: TaskStatus[] = ['backlog', 'in_progress', 'done'];
       const nextIndex = Math.min(transitions.indexOf(current) + 1, transitions.length - 1);
@@ -65,7 +45,7 @@ export class BoardService {
     });
   }
 
-  revert(id: string) {
+  revert(id: string): Task | null {
     return this.updateStatus(id, (current) => {
       const transitions: TaskStatus[] = ['backlog', 'in_progress', 'done'];
       const prevIndex = Math.max(transitions.indexOf(current) - 1, 0);
@@ -73,34 +53,36 @@ export class BoardService {
     });
   }
 
-  remove(id: string) {
-    const before = this.store.state.tasks.length;
-    this.store.state.tasks = this.store.state.tasks.filter((task) => task.id !== id);
-    return this.store.state.tasks.length < before;
+  remove(id: string): boolean {
+    const initialLength = this.tasks.length;
+    this.tasks = this.tasks.filter((task) => task.id !== id);
+    return this.tasks.length < initialLength;
   }
 
-  private updateStatus(id: string, computeStatus: (current: TaskStatus) => TaskStatus) {
-    let updated: Task | undefined;
-    this.store.state.tasks = this.store.state.tasks.map((task) => {
-      if (task.id === id) {
-        const nextStatus = computeStatus(task.status);
-        updated = {
-          ...task,
-          status: nextStatus,
-          updatedAt: Date.now()
-        };
-        return updated;
-      }
-      return task;
-    });
-    return updated;
+  private updateStatus(id: string, computeStatus: (current: TaskStatus) => TaskStatus): Task | null {
+    const taskIndex = this.tasks.findIndex(task => task.id === id);
+    if (taskIndex === -1) return null;
+
+    const task = this.tasks[taskIndex];
+    const nextStatus = computeStatus(task.status);
+    
+    if (nextStatus !== task.status) {
+      this.tasks[taskIndex] = {
+        ...task,
+        status: nextStatus,
+        updatedAt: Date.now()
+      };
+      return this.tasks[taskIndex];
+    }
+    
+    return task;
   }
 
-  private recalculateMetrics() {
+  private calculateMetrics(): KanbanMetrics {
     const metrics: KanbanMetrics = { backlog: 0, in_progress: 0, done: 0 };
-    this.store.state.tasks.forEach((task) => {
+    this.tasks.forEach((task) => {
       metrics[task.status] += 1;
     });
-    this.store.state.metrics = metrics;
+    return metrics;
   }
 }

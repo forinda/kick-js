@@ -1,347 +1,566 @@
-# Kick
+# KickJS
 
-Opinionated Express + TypeScript framework starter that feels like Spring Boot: decorator-driven controllers, configuration-first bootstrap, and fully instrumented telemetry ready for custom devtools.
+🚀 A modern, decorator-driven TypeScript framework built on Express with dependency injection, reactive state management, and enterprise-ready features.
 
-## Highlights
+## ✨ Features
 
-- Spring Boot-style controllers via `@Controller`, `@Get`, etc., auto-registered at decoration time
-- Nuxt-style, file-system driven controller discovery powered by verb-specific base controllers (`src/domains/app/controllers/users.get.controller.ts` ➜ `GET /users`)
-- Batteries-included `kick` CLI for bootstrapping projects, generating controllers, and wiring custom commands
-- Domain-first scaffolding with configurable folder layout for controllers, services, and domain logic
-- Schema-aware route decorators (Zod/Joi) with duplicate-route protection hashed at bootstrap
-- Built-in `BaseController` helper with structured responses, request logging, and `fail()` AppError helpers
-- `configureApp` and per-call `config` options for prefixes, health endpoints, logging levels, and telemetry limits
-- Request telemetry tracked behind the scenes and exposed via `AppDiagnostics`
-- Dependency injection utilities (`@Inject`, `@Injectable`, …) that hide raw Inversify decorators
-- `tsup` build pipeline producing CommonJS bundles + type declarations
-- GitHub Actions workflow for CI and optional npm publishing
+- **Decorator-Driven Architecture**: Spring Boot-style controllers with `@KickController`, `@KickGet`, `@KickPost`, etc.
+- **Dependency Injection**: Powered by Inversify with automatic binding and container management
+- **Reactive State Management**: Built-in EventEmitter-based state with observable properties
+- **Middleware System**: Priority-based middleware with both global and DI-managed middlewares
+- **Request Context Injection**: Automatic injection of request context with metadata
+- **Route Prefixing**: Flexible API prefixing for better organization
+- **Module System**: Organize your application into reusable, self-contained modules
+- **Auto-Binding**: Automatic method binding with `@AutoBind` decorator
+- **Type Safety**: Full TypeScript support with comprehensive type definitions
 
-## Install
+## 📦 Installation
 
 ```bash
 npm install @forinda/kickjs
+# or
+pnpm add @forinda/kickjs
+# or
+yarn add @forinda/kickjs
 ```
 
-## Creating your first service
+## 🏗️ Creating Your First App
 
-```ts
-// app.ts
-import "reflect-metadata";
-import type { Request, Response } from "express";
-import {
-  BaseController,
-  Controller,
-  Get,
-  bootstrap,
-  configureApp,
+### Basic Setup
+
+```typescript
+// src/index.ts
+import express from "express";
+import { createKickApp, KickController, KickGet, KickRequestContext } from "@forinda/kickjs";
+import { AppModule } from "./app.module";
+
+const app = express();
+app.use(express.json());
+
+const server = createKickApp({
+  name: "MyApp",
+  prefix: "/api/v1", // Optional: prefix all routes
+  app,
+  modules: [AppModule]
+});
+
+server.listen(3000, () => {
+  console.log("🚀 Server running on http://localhost:3000");
+  console.log("📊 App Stats:", server.getStats());
+});
+```
+
+### Creating Controllers
+
+Controllers are the heart of your KickJS application. They handle HTTP requests and contain your business logic.
+
+```typescript
+// src/controllers/users.controller.ts
+import { 
+  KickController, 
+  KickGet, 
+  KickPost, 
+  KickRequestContext,
+  KickInject 
 } from "@forinda/kickjs";
+import { UserService } from "../services/user.service";
 
-configureApp({ prefix: "/api/v1" });
+@KickController("/users")
+export class UserController {
+  constructor(
+    @KickInject(UserService)
+    private readonly userService: UserService
+  ) {}
 
-@Controller("/hello")
-class HelloController extends BaseController {
-  protected controllerId(): string {
-    return "HelloController";
+  @KickGet("/")
+  async getUsers(context: KickRequestContext) {
+    const { res } = context;
+    const users = await this.userService.findAll();
+    
+    res.json({
+      users,
+      requestId: context.meta.requestId,
+      timestamp: context.meta.startTime
+    });
   }
 
-  @Get({
-    path: "/",
-    middlewares: [],
-    validate: {},
-  })
-  handle(req: Request, res: Response) {
-    const name = typeof req.query.name === "string" ? req.query.name : "World";
-    this.mergeRequestMetadata(res, { greeted: name });
-    return this.ok(res, { message: `Hello ${name}` });
-  }
-}
-
-async function main() {
-  const port = Number(process.env.PORT ?? 3000);
-  await bootstrap({ port });
-  console.log(`Server started on http://localhost:${port}`);
-}
-
-main().catch((error) => {
-  console.error("Failed to bootstrap application", error);
-  process.exitCode = 1;
-});
-
-```
-
-`bootstrap` wires Express, the Inversify container, and the request tracker. Controllers extending `BaseController` get ergonomic helpers for responses, structured logging, request metadata annotations, and a `fail()` helper for consistent error payloads. Route decorators accept Zod/Joi schemas for request validation without additional middleware.
-
-## Public API surface
-
-```ts
-import {
-  Controller,
-  Get,
-  Post,
-  Put,
-  Patch,
-  Delete,
-  HttpVerbController,
-  GetController,
-  PostController,
-  PutController,
-  PatchController,
-  DeleteController,
-  Inject,
-  Injectable,
-  Optional,
-  MultiInject,
-  Named,
-  Tagged,
-  Unmanaged,
-  BaseController,
-  discoverControllersFromFilesystem,
-  RequestTracker,
-  AppDiagnostics,
-  TYPES,
-  configureApp,
-  createApp,
-  bootstrap,
-  createError,
-  AppError,
-  isAppError,
-  resetControllerRegistry,
-  resetAppConfig
-} from '@forinda/kickjs';
-```
-
-- `Controller`, `Get`, `Post`, `Put`, `Patch`, `Delete`: decorators for routing with built-in schema validation and duplicate-route protection
-- `Inject`, `Injectable`, `Optional`, `MultiInject`, `Named`, `Tagged`, `Unmanaged`: DI helpers wrapping Inversify without exposing its API surface
-- `HttpVerbController` & the verb-specific subclasses (`GetController`, `PostController`, …): enforce single-verb controllers with shared response/logging helpers and Nuxt-style route derivation
-- `BaseController`: abstract class with response + logging helpers for traditional decorator-driven controllers. The request tracker is injected automatically, so subclasses never pass it through `super()`.
-- `configureApp(config)`: set global prefix, logging level, telemetry limits, and health endpoint before bootstrapping
-- `createApp(options)`: create an Express application with auto-registered controllers (optionally override config per call) and get back a `discovery.controllers` list for diagnostics
-- `bootstrap(options)`: create & start the HTTP server (accepts `port`, config overrides, extra middleware)
-- `RequestTracker`: injectable request context tracker used internally by `BaseController`
-- `AppDiagnostics`: inspect application/request telemetry without touching internal reactive state
-- `createError` / `AppError` / `isAppError`: structured error helpers for consistent codes and statuses
-- `discoverControllersFromFilesystem(config)`: manually trigger file-system discovery when building custom tooling or CLIs
-- `TYPES`: symbol map to wire container bindings
-- `resetControllerRegistry()` / `resetAppConfig()`: utilities for clearing global state in integration tests
-- `createKickConfig(options)`: compose environment-aware app configuration objects that can be passed to `configureApp` or `createApp`
-
-## File-based controllers
-
-Kick bootstraps controllers automatically by scanning `src/http` (configurable) for files that follow Nuxt-style naming. Each file becomes a single-verb controller by extending the appropriate base class:
-
-```
-src/http/
-└─ users.get.controller.ts        ➜ GET  /users
-└─ users.post.controller.ts       ➜ POST /users
-└─ admin/reports.[id].get.controller.ts ➜ GET /admin/reports/:id
-```
-
-```ts
-// src/http/users.get.controller.ts
-import type { Request, Response } from 'express';
-import { GetController } from '@forinda/kickjs';
-
-export default class UsersGetController extends GetController {
-  handle(_req: Request, res: Response) {
-    return this.ok(res, { users: ['Ada', 'Linus'] });
-  }
-}
-```
-
-Naming rules:
-
-- `<segments>.<verb>.controller.(ts|js)` – the last token before `.controller` defines the HTTP method
-- Directory names and file segments turn into URL fragments (`[id]` → `:id`, `[...slug]` → `:slug*`, `index` is omitted)
-- Set `static route = '/custom/path'` on the class to override the derived path, and `static tags = ['admin']` to enrich diagnostics metadata
-
-Discovery can be customised through `configureApp({ api: { discovery: { ... } } })`:
-
-```ts
-configureApp({
-  prefix: '/api',
-  api: {
-    discovery: {
-      roots: ['apps/api/http'],
-      baseRoute: '/',
-      ignore: ['__mocks__']
+  @KickPost("/")
+  async createUser(context: KickRequestContext) {
+    const { req, res } = context;
+    
+    if (!req.body.name || !req.body.email) {
+      return res.status(400).json({
+        error: "Name and email are required",
+        requestId: context.meta.requestId
+      });
     }
+
+    const user = await this.userService.create(req.body);
+    res.status(201).json({
+      user,
+      requestId: context.meta.requestId
+    });
   }
-});
-```
-
-Disable discovery (e.g. for legacy decorator-driven projects) with `configureApp({ api: { discovery: { enabled: false } } })` and pass controllers explicitly to `createApp({ controllers: [...] })`.
-
-## CLI
-
-Kick ships with a `kick` executable once the package is installed locally (`npx kick --help`).
-
-### Bootstrapping a project
-
-```bash
-npm create kick@latest my-app
-cd my-app
-npm install
-npm run dev
-```
-
-The initializer mirrors running `kick init my-app` inside an empty directory: it scaffolds a domain-first folder layout, creates `kick.config.ts` at the repo root for CLI defaults, and generates `src/config/kick.config.ts` for runtime configuration. Both files are plain TypeScript modules you can edit.
-
-During `bootstrap`, load the runtime config and pass it to `configureApp` once before invoking `createApp`/`bootstrap`:
-
-```ts
-// src/main.ts
-import 'reflect-metadata';
-import { bootstrap, configureApp } from '@forinda/kickjs';
-import appConfig from './config/kick.config';
-
-configureApp(appConfig);
-
-async function main() {
-  const { shutdown } = await bootstrap({ port: process.env.PORT ?? 3000 });
-  process.once('SIGINT', shutdown);
-  process.once('SIGTERM', shutdown);
 }
-
-main().catch((error) => {
-  console.error('Failed to bootstrap Kick app', error);
-  process.exitCode = 1;
-});
 ```
 
-`createKickConfig` handles `.env`, `.env.<NODE_ENV>`, and `.env.local` files automatically, so populating `src/config/kick.config.ts` with env bindings ensures local and production deployments share a single source of truth.
+### Configuration
 
-### `kick init [directory]`
+KickJS supports flexible configuration through `kick.config.ts` files. This provides type safety and prevents configuration errors.
 
-Scaffold a fresh project with a minimal `package.json`, `tsconfig.json`, `kick.config.ts`, `src/main.ts`, and a sample domain under `src/domains/app`. Use `--force` to overwrite existing files and `--name` to control the package name.
-
-### `kick generate controller <name>`
-
-Generate a convention-based controller file. The command derives the proper filename and class name, so:
-
-```bash
-kick generate controller admin/reports/[id] --method get --tags admin,reports
-```
-
-creates `src/domains/admin/controllers/reports.[id].get.controller.ts` when using the default domain layout. Override the discovery root with `--root` when your project stores controllers elsewhere.
-
-### `kick generate domain <name>`
-
-Create a domain folder following your configured layout (defaults to `src/domains/<name>/(controllers|services|domain)`) and, unless `--no-controller` is passed, drop in a starter `index.get.controller.ts` file you can immediately extend.
-
-### Custom commands
-
-Add `kick.config.ts` (or `.js`/`.json`) to declare shorthand commands that proxy to shell steps:
-
-```ts
-import type { KickConfig } from '@forinda/kickjs';
-
-const config: KickConfig = {
-  structure: {
-    domainRoot: 'src/domains',
-    domainFolders: ['controllers', 'services', 'domain'],
-    defaultDomain: 'app'
-  },
-  generators: { controllerRoot: 'src/domains/app/controllers' },
-  commands: [
-    { name: 'dev', description: 'Start the dev server', steps: 'npm run dev' },
-    { name: 'lint', steps: ['npm run lint', 'npm run typecheck'] }
-  ]
-};
-
-export default config;
-```
-
-Any command listed becomes available directly, so `kick lint` runs the declared steps. The `structure` block informs both discovery defaults and the CLI generators/initialiser.
-
-## Configuration helper
-
-Use `createKickConfig` to compose application settings that blend defaults, environment variables, and ad-hoc overrides:
-
-```ts
-// src/config/kick.config.ts
-import { createKickConfig } from '@forinda/kickjs';
+```typescript
+// kick.config.ts
+import { createKickConfig } from "@forinda/kickjs";
 
 export default createKickConfig({
-  defaults: {
-    prefix: '/api',
-    api: {
-      discovery: {
-        roots: ['src/domains/app/controllers', 'src/http']
-      }
+  app: {
+    name: 'My App',
+    port: 3000,
+    host: 'localhost',
+    prefix: '/api/v1',
+    env: 'development'
+  },
+  dev: {
+    port: 3000,
+    host: 'localhost',
+    entry: 'src/index.ts',
+    watch: true,
+    env: {
+      NODE_ENV: 'development',
+      DEBUG: 'app:*'
     }
   },
-  env: {
-    KICK_PREFIX: 'prefix',
-    KICK_HEALTH: 'healthEndpoint',
-    KICK_LOG_LEVEL: { path: 'logging.level' }
-  },
-  overrides: (current) => ({
-    telemetry: {
-      trackReactiveHistory: process.env.NODE_ENV !== 'production'
+  start: {
+    port: 3000,
+    host: '0.0.0.0',
+    entry: 'dist/index.js',
+    env: {
+      NODE_ENV: 'production'
     }
-  })
+  }
 });
 ```
 
-You can pass the resulting `AppConfig` to `configureApp(config)` during bootstrap or supply it via `createApp({ config })` when composing tests. Environment bindings auto-cast booleans/numbers and accept custom transformers for complex structures.
+#### Using Configuration in Your App
 
-## Diagnostics & telemetry
+```typescript
+// src/index.ts
+import { createKickAppWithConfig } from "@forinda/kickjs";
+import { AppModule } from "./app.module";
 
-`AppDiagnostics` surfaces sanitized snapshots of the framework's internal state so you can build devtools without touching the underlying reactive registry. After creating or bootstrapping the app, read diagnostics straight from the returned context:
+async function startApp() {
+  const server = await createKickAppWithConfig({
+    app: express(),
+    modules: [AppModule]
+  });
 
-```ts
-const { diagnostics } = createApp();
-const stores = diagnostics.stores();
-// -> [{ id, label, snapshot, history }, ... ]
+  // Access config in your app
+  console.log('App Name:', server.kickApp.getConfig('name'));
+  console.log('API Prefix:', server.kickApp.getConfig('prefix'));
+  
+  // Config with fallback
+  const theme = server.kickApp.getConfigOrDefault('ui.theme', 'dark');
+  
+  const port = server.kickApp.getConfig('port') || 3000;
+  server.listen(port, () => {
+    console.log(`🚀 ${server.kickApp.getConfig('name')} running on port ${port}`);
+  });
+}
 
-const requests = diagnostics.requests();
-// -> [{ id, path, status, logs, metadata, ... }, ... ]
+startApp();
 ```
 
-Stores whose `label` starts with `request:` represent in-flight or completed requests, ready for live dashboards.
+#### CLI Configuration Support
 
-## Request validation
+The KickJS CLI automatically loads your configuration:
 
-Provide Zod or Joi schemas directly to the HTTP decorators – the framework will validate `params`, `query`, and `body` before your handler executes:
+```bash
+# Uses config file values
+kick dev
 
-```ts
-@Post({
-  path: '/users',
-  validate: {
-    body: z.object({ email: z.string().email(), name: z.string().min(1) })
+# Override specific values
+kick dev --port 8080 --host 0.0.0.0
+
+# Production mode
+kick start --port 3000
+```
+
+### Creating Services
+
+Services contain your business logic and can be injected into controllers and other services.
+
+```typescript
+// src/services/user.service.ts
+import { KickInjectable } from "@forinda/kickjs";
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  createdAt: Date;
+}
+
+@KickInjectable()
+export class UserService {
+  private users: User[] = [];
+
+  async findAll(): Promise<User[]> {
+    return this.users;
   }
-})
-createUser(req: Request, res: Response) {
-  return this.created(res, req.body);
+
+  async create(userData: { name: string; email: string }): Promise<User> {
+    const user: User = {
+      id: Math.random().toString(36).substr(2, 9),
+      name: userData.name,
+      email: userData.email,
+      createdAt: new Date()
+    };
+    
+    this.users.push(user);
+    return user;
+  }
+
+  async findById(id: string): Promise<User | undefined> {
+    return this.users.find(user => user.id === id);
+  }
 }
 ```
 
-If validation fails, the request short-circuits with a structured `VALIDATION_ERROR` payload and a 400 response.
+### Creating Modules
 
-## Route uniqueness
+Modules help organize your application by grouping related controllers, services, and middlewares.
 
-`registerControllers` hashes every `[METHOD] path` combination to block duplicate routes. If two handlers resolve to the same normalized path, the framework throws a `ROUTE_CONFLICT` error during bootstrap so you catch collisions early.
+```typescript
+// src/app.module.ts
+import { createModule } from "@forinda/kickjs";
+import { UserController } from "./controllers/user.controller";
+import { UserService } from "./services/user.service";
+import { LoggingMiddleware } from "./middlewares/logging.middleware";
 
-## Sample projects
+export const AppModule = createModule("app", {
+  controllers: [UserController],
+  middlewares: [LoggingMiddleware] // Optional: DI-managed middlewares
+});
+```
 
-- `examples/basic-todo` – minimal CRUD organised as `src/(controllers|services|domain)` (`node --loader ts-node/esm examples/basic-todo/index.ts`).
-- `examples/medium-kanban` – workflow + metrics sample with the same structure (`node --loader ts-node/esm examples/medium-kanban/index.ts`).
-- `examples/complex-analytics` – reactive event DB + aggregations with an additional `src/db/` layer (`node --loader ts-node/esm examples/complex-analytics/index.ts`).
+## 🛠️ Creating Middlewares
 
-Additional internal documentation describing the folder layout lives in `docs/structure.md`.
+KickJS supports two types of middlewares: global middlewares and DI-managed middlewares.
 
-## Development scripts
+### DI-Managed Middlewares (Recommended)
 
-- `npm run dev` – run the sample app (`src/main.ts`) with hot reload
-- `npm run build` – bundle library to `dist/`
-- `npm run check` – type-check
-- `npm test` – runs Vitest against the integration-style specs
+These middlewares are managed by the dependency injection container and can inject services.
 
-## CI & release pipeline
+```typescript
+// src/middlewares/logging.middleware.ts
+import { 
+  KickMiddleware, 
+  KickAppMiddleware, 
+  KickRequest, 
+  KickResponse, 
+  KickNextFn,
+  KickInject 
+} from "@forinda/kickjs";
+import { LoggerService } from "../services/logger.service";
 
-`.github/workflows/release.yml` performs type-checking, tests, and build on pushes to `main`. Publishing happens automatically when:
+@KickMiddleware({ 
+  name: "RequestLogger", 
+  priority: 1, // Lower numbers execute first
+  global: true,
+  tags: ["logging", "development"] 
+})
+export class LoggingMiddleware implements KickAppMiddleware {
+  constructor(
+    @KickInject(LoggerService)
+    private readonly logger: LoggerService
+  ) {}
 
-1. A GitHub release is published, or
-2. The workflow is dispatched manually with `publish=true`.
+  use(req: KickRequest, res: KickResponse, next: KickNextFn): void {
+    const start = Date.now();
+    
+    this.logger.info(`→ ${req.method} ${req.url}`);
+    
+    res.on('finish', () => {
+      const duration = Date.now() - start;
+      this.logger.info(`← ${req.method} ${req.url} ${res.statusCode} (${duration}ms)`);
+    });
+    
+    next();
+  }
+}
+```
 
-Configure the `NPM_TOKEN` repository secret before triggering the publish job.
+### Global Middlewares
+
+Global middlewares are not managed by DI and are useful for framework-level concerns like CORS.
+
+```typescript
+// src/middlewares/cors.middleware.ts
+import { KickAppMiddleware, KickRequest, KickResponse, KickNextFn } from "@forinda/kickjs";
+
+export class CorsMiddleware implements KickAppMiddleware {
+  use(req: KickRequest, res: KickResponse, next: KickNextFn): void {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    
+    if (req.method === 'OPTIONS') {
+      res.status(200).end();
+      return;
+    }
+    
+    next();
+  }
+}
+```
+
+Register global middlewares when creating your app:
+
+```typescript
+const corsMiddleware = new CorsMiddleware();
+
+const server = createKickApp({
+  name: "MyApp",
+  app,
+  globalMiddlewares: [corsMiddleware], // Global middlewares
+  modules: [AppModule] // DI-managed middlewares are in modules
+});
+```
+
+## 🔌 Creating Plugins
+
+Plugins allow you to extend the application context during initialization.
+
+```typescript
+// src/plugins/database.plugin.ts
+import { KickAppPlugin, KickApplicationContext } from "@forinda/kickjs";
+
+export class DatabasePlugin implements KickAppPlugin {
+  install(context: KickApplicationContext): void {
+    // Initialize database connection
+    console.log("🗄️  Database plugin initialized");
+    
+    // Add database middleware or modify app
+    context.app.use((req, res, next) => {
+      // Add database connection to request
+      (req as any).db = /* your database connection */;
+      next();
+    });
+  }
+}
+```
+
+Use plugins in your app:
+
+```typescript
+const dbPlugin = new DatabasePlugin();
+
+const server = createKickApp({
+  name: "MyApp",
+  app,
+  plugins: [dbPlugin],
+  modules: [AppModule]
+});
+```
+
+## 🎯 Advanced Features
+
+### Request Context
+
+Every controller method receives a `KickRequestContext` with rich metadata:
+
+```typescript
+interface KickRequestContext {
+  req: KickRequest;        // Express request
+  res: KickResponse;       // Express response  
+  next: KickNextFn;        // Express next function
+  meta: {
+    routePath: string;     // Route pattern
+    method: string;        // HTTP method
+    controllerName: string; // Controller class name
+    handlerName: string;   // Method name
+    startTime: number;     // Request start timestamp
+    requestId: string;     // Unique request ID
+  };
+}
+```
+
+### Reactive State Management
+
+KickApp includes reactive state management:
+
+```typescript
+// Set state
+server.kickApp.setState('userCount', 42);
+
+// Listen to state changes
+server.kickApp.onStateChange('userCount', (data) => {
+  console.log(`User count changed: ${data.oldValue} → ${data.value}`);
+});
+
+// Get current state
+const currentState = server.kickApp.state;
+```
+
+### Event System
+
+Listen to application events:
+
+```typescript
+server.kickApp.on('route:registered', (route) => {
+  console.log(`Route registered: ${route.method} ${route.path}`);
+});
+
+server.kickApp.on('middleware:registered', (middleware) => {
+  console.log(`Middleware registered: ${middleware.count} middlewares`);
+});
+
+server.kickApp.on('controller:mapped', (controller) => {
+  console.log(`Controller mapped: ${controller.controller}`);
+});
+```
+
+### Error Handling
+
+Add global error handlers:
+
+```typescript
+server.addErrorHandler((errorData) => {
+  console.error('Application error:', errorData);
+  // Send to logging service, etc.
+});
+```
+
+## 🚀 Running Your Application
+
+### Development
+
+```bash
+# Using tsx for development
+npx tsx watch src/index.ts
+
+# Or with nodemon
+npx nodemon --exec tsx src/index.ts
+```
+
+### Production
+
+```bash
+# Build your TypeScript
+npx tsc
+
+# Run the compiled JavaScript
+node dist/index.js
+```
+
+### Example Scripts (package.json)
+
+```json
+{
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "vitest"
+  }
+}
+```
+
+## 📁 Project Structure
+
+```
+src/
+├── controllers/          # HTTP controllers
+│   ├── user.controller.ts
+│   └── auth.controller.ts
+├── services/             # Business logic services
+│   ├── user.service.ts
+│   └── auth.service.ts
+├── middlewares/          # Custom middlewares
+│   ├── logging.middleware.ts
+│   └── auth.middleware.ts
+├── plugins/              # Application plugins
+│   └── database.plugin.ts
+├── types/                # Type definitions
+│   └── user.types.ts
+├── modules/              # Application modules
+│   ├── user.module.ts
+│   └── auth.module.ts
+└── index.ts              # Application entry point
+```
+
+## 📚 API Reference
+
+### Decorators
+
+- `@KickController(path)` - Define a controller class
+- `@KickGet(path)` - HTTP GET route
+- `@KickPost(path)` - HTTP POST route  
+- `@KickPut(path)` - HTTP PUT route
+- `@KickPatch(path)` - HTTP PATCH route
+- `@KickDelete(path)` - HTTP DELETE route
+- `@KickMiddleware(options)` - Define a middleware class
+- `@KickInject(token)` - Inject dependencies
+- `@KickInjectable()` - Mark class as injectable service
+- `@AutoBind` - Automatically bind class methods
+
+### Core Functions
+
+- `createKickApp(options)` - Create a KickJS application
+- `createModule(name, options)` - Create a module
+- `isKickMiddleware(target)` - Check if class is a middleware
+- `getMiddlewareMetadata(target)` - Get middleware metadata
+
+### Types
+
+- `KickRequestContext` - Request context interface
+- `KickAppMiddleware` - Middleware interface  
+- `KickAppPlugin` - Plugin interface
+- `KickApplicationContext` - Application context interface
+
+## 🤝 Contributing
+
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for detailed information on how to get started.
+
+### Quick Start for Contributors
+
+1. **Fork and clone the repository**
+   ```bash
+   git clone https://github.com/yourusername/kickjs.git
+   cd kickjs
+   pnpm install
+   ```
+
+2. **Run tests to ensure everything works**
+   ```bash
+   pnpm test
+   pnpm build
+   ```
+
+3. **Create a feature branch and make your changes**
+   ```bash
+   git checkout -b feature/amazing-feature
+   # Make your changes...
+   git commit -m "feat: add amazing feature"
+   ```
+
+4. **Submit a pull request**
+
+For detailed guidelines, development setup, coding standards, and more, please read our [Contributing Guide](CONTRIBUTING.md).
+
+### 📞 Getting Help
+
+- 📖 Check the [documentation](README.md) and [examples](examples/)
+- 🐛 Search [existing issues](https://github.com/forinda/kickjs/issues)
+- 💬 Join our community discussions
+- 📧 Contact maintainers for security issues
+
+Thank you for contributing to KickJS! 🚀
+
+## 📄 License
+
+MIT License - see [LICENSE](LICENSE) file for details.
+
+---
+
+**Made with ❤️ by the KickJS team**

@@ -10,6 +10,7 @@ export default defineConfig([
     dts: true,
     shims: false,
     minify: false,
+    globalName: 'kickjs',
     external: ['ts-node/register']
   },
   {
@@ -21,6 +22,7 @@ export default defineConfig([
     dts: false,
     shims: false,
     minify: false,
+    globalName: 'kickjsCli',
     banner: {
       js: '#!/usr/bin/env node'
     },
