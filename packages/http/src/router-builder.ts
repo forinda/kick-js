@@ -17,7 +17,6 @@ export function getControllerPath(controllerClass: any): string {
 export function buildRoutes(controllerClass: any): Router {
   const router = Router()
   const container = Container.getInstance()
-  const controller = container.resolve(controllerClass)
   const controllerPath = getControllerPath(controllerClass)
   const routes: RouteDefinition[] = Reflect.getMetadata(METADATA.ROUTES, controllerClass) || []
 
@@ -50,10 +49,11 @@ export function buildRoutes(controllerClass: any): Router {
       })
     }
 
-    // Main handler
+    // Main handler — resolve controller per-request to respect DI scoping
     handlers.push(async (req: Request, res: Response, next: NextFunction) => {
       const ctx = new RequestContext(req, res, next)
       try {
+        const controller = container.resolve(controllerClass)
         await controller[route.handlerName](ctx)
       } catch (err: any) {
         next(err)
