@@ -209,7 +209,11 @@ function categorizeCommits(commits) {
 }
 
 function formatCommit(commit) {
-  return `- ${commit.message} (\`${commit.hash}\`) — @${commit.author}`
+  const hashLink = `[${commit.hash}](${REPO_URL}/commit/${commit.fullHash})`
+  const authorLink = commit.email.includes('noreply')
+    ? `@${commit.author}`
+    : `[@${commit.author}](https://github.com/${commit.author})`
+  return `- ${commit.message} (${hashLink}) — ${authorLink}`
 }
 
 function generateReleaseNotes(version, fromRef) {
