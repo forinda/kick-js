@@ -347,6 +347,13 @@ function main() {
 
   // Pre-flight
   if (!dryRun) {
+    const branch = exec('git branch --show-current')
+    if (branch !== 'main') {
+      console.error(`\nError: Releases must be made from the main branch. Current branch: ${branch}`)
+      console.error('  Merge your changes to main first, then run the release from there.')
+      process.exit(1)
+    }
+
     const status = exec('git status --porcelain')
     if (status) {
       console.error('\nError: Working directory not clean. Commit or stash changes first.')
