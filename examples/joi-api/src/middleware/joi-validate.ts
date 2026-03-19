@@ -1,11 +1,11 @@
 /**
  * Joi validation middleware — replaces the built-in Zod validate().
  *
- * The built-in validate() middleware calls .safeParse() which is Zod-specific.
- * This middleware does the same thing but uses Joi's .validate() method.
+ * Returns a KickJS MiddlewareHandler (ctx, next) so it works with @Middleware.
+ * The built-in validate() uses Zod's .safeParse() — this uses Joi's .validate().
  */
-import type { Request, Response, NextFunction } from 'express'
 import type Joi from 'joi'
+import type { MiddlewareHandler } from '@kickjs/core'
 
 interface JoiValidationSchema {
   body?: Joi.Schema
@@ -13,12 +13,12 @@ interface JoiValidationSchema {
   params?: Joi.Schema
 }
 
-export function joiValidate(schema: JoiValidationSchema) {
-  return (req: Request, res: Response, next: NextFunction) => {
+export function joiValidate(schema: JoiValidationSchema): MiddlewareHandler {
+  return (ctx, next) => {
     if (schema.body) {
-      const { error, value } = schema.body.validate(req.body, { abortEarly: false })
+      const { error, value } = schema.body.validate(ctx.req.body, { abortEarly: false })
       if (error) {
-        return res.status(422).json({
+        return ctx.res.status(422).json({
           message: error.details[0]?.message || 'Validation failed',
           errors: error.details.map((d) => ({
             field: d.path.join('.'),
@@ -26,13 +26,13 @@ export function joiValidate(schema: JoiValidationSchema) {
           })),
         })
       }
-      req.body = value
+      ctx.req.body = value
     }
 
     if (schema.query) {
-      const { error, value } = schema.query.validate(req.query, { abortEarly: false })
+      const { error, value } = schema.query.validate(ctx.req.query, { abortEarly: false })
       if (error) {
-        return res.status(422).json({
+        return ctx.res.status(422).json({
           message: 'Invalid query parameters',
           errors: error.details.map((d) => ({
             field: d.path.join('.'),
@@ -40,13 +40,13 @@ export function joiValidate(schema: JoiValidationSchema) {
           })),
         })
       }
-      ;(req as any).query = value
+      ;(ctx.req as any).query = value
     }
 
     if (schema.params) {
-      const { error, value } = schema.params.validate(req.params, { abortEarly: false })
+      const { error, value } = schema.params.validate(ctx.req.params, { abortEarly: false })
       if (error) {
-        return res.status(422).json({
+        return ctx.res.status(422).json({
           message: 'Invalid path parameters',
           errors: error.details.map((d) => ({
             field: d.path.join('.'),
@@ -54,7 +54,7 @@ export function joiValidate(schema: JoiValidationSchema) {
           })),
         })
       }
-      ;(req as any).params = value
+      ;(ctx.req as any).params = value
     }
 
     next()

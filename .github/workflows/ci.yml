@@ -37,7 +37,7 @@ jobs:
         run: pnpm turbo build --filter='./packages/*'
 
       - name: Typecheck
-        run: pnpm typecheck
+        run: pnpm turbo typecheck --filter='./packages/*'
 
       - name: Run tests
         run: pnpm test
