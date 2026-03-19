@@ -1,18 +1,15 @@
-name: CI & Release
+name: Release
 
 on:
   push:
-    branches:
-      - main
     tags:
       - 'v*'
   release:
-    types:
-      - published
+    types: [published]
   workflow_dispatch:
     inputs:
       publish:
-        description: 'Publish the current version to npm'
+        description: 'Publish all packages to npm'
         required: false
         default: 'false'
 
@@ -23,46 +20,56 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Use Node.js 20
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci
-
-      - name: Type-check
-        run: npm run check
-
-      - name: Test
-        run: npm test
+        run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: npm run build
+        run: pnpm build
+
+      - name: Test
+        run: pnpm test
 
   publish:
     needs: verify
-    if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && github.event.inputs.publish == 'true') || startsWith(github.ref, 'refs/tags/')
+    if: >
+      github.event_name == 'release' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.publish == 'true') ||
+      startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Use Node.js 20
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
+          cache: pnpm
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: npm run build
+        run: pnpm build
 
-      - name: Publish to npm
+      - name: Publish all packages
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish
+        run: pnpm -r publish --access public --no-git-checks
