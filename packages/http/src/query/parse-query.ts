@@ -82,8 +82,10 @@ export function parsePagination(params: {
   page?: string | number
   limit?: string | number
 }): PaginationParams {
-  let page = typeof params.page === 'string' ? parseInt(params.page, 10) : (params.page ?? DEFAULT_PAGE)
-  let limit = typeof params.limit === 'string' ? parseInt(params.limit, 10) : (params.limit ?? DEFAULT_LIMIT)
+  let page =
+    typeof params.page === 'string' ? parseInt(params.page, 10) : (params.page ?? DEFAULT_PAGE)
+  let limit =
+    typeof params.limit === 'string' ? parseInt(params.limit, 10) : (params.limit ?? DEFAULT_LIMIT)
 
   if (isNaN(page) || page < 1) page = DEFAULT_PAGE
   if (isNaN(limit) || limit < 1) limit = DEFAULT_LIMIT

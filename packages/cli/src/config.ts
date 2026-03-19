@@ -44,12 +44,7 @@ export function defineConfig(config: KickConfig): KickConfig {
   return config
 }
 
-const CONFIG_FILES = [
-  'kick.config.ts',
-  'kick.config.js',
-  'kick.config.mjs',
-  'kick.config.json',
-]
+const CONFIG_FILES = ['kick.config.ts', 'kick.config.js', 'kick.config.mjs', 'kick.config.json']
 
 /** Load kick.config.* from the project root */
 export async function loadKickConfig(cwd: string): Promise<KickConfig | null> {
@@ -66,9 +61,10 @@ export async function loadKickConfig(cwd: string): Promise<KickConfig | null> {
       return JSON.parse(content)
     }
 
-    // For .ts/.js/.mjs — dynamic import
+    // For .ts/.js/.mjs — dynamic import (use file URL for cross-platform compat)
     try {
-      const mod = await import(filepath)
+      const { pathToFileURL } = await import('node:url')
+      const mod = await import(pathToFileURL(filepath).href)
       return mod.default ?? mod
     } catch {
       // If ts import fails, skip

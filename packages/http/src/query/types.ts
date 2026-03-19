@@ -13,7 +13,17 @@ export type FilterOperator =
   | 'ends'
 
 export const FILTER_OPERATORS = new Set<string>([
-  'eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'between', 'in', 'contains', 'starts', 'ends',
+  'eq',
+  'neq',
+  'gt',
+  'gte',
+  'lt',
+  'lte',
+  'between',
+  'in',
+  'contains',
+  'starts',
+  'ends',
 ])
 
 export interface FilterItem {

@@ -110,14 +110,13 @@ export function buildOpenAPISpec(options: SwaggerOptions = {}): any {
     // Skip excluded controllers
     if (Reflect.getMetadata(SWAGGER_KEYS.EXCLUDE, controllerClass)) continue
 
-    const routes: RouteDefinition[] =
-      Reflect.getMetadata(METADATA.ROUTES, controllerClass) || []
-    const classTags: string[] =
-      Reflect.getMetadata(SWAGGER_KEYS.TAGS, controllerClass) || []
-    const classAuth: string | undefined =
-      Reflect.getMetadata(SWAGGER_KEYS.BEARER_AUTH, controllerClass)
-    const controllerPath =
-      Reflect.getMetadata(METADATA.CONTROLLER_PATH, controllerClass) || '/'
+    const routes: RouteDefinition[] = Reflect.getMetadata(METADATA.ROUTES, controllerClass) || []
+    const classTags: string[] = Reflect.getMetadata(SWAGGER_KEYS.TAGS, controllerClass) || []
+    const classAuth: string | undefined = Reflect.getMetadata(
+      SWAGGER_KEYS.BEARER_AUTH,
+      controllerClass,
+    )
+    const controllerPath = Reflect.getMetadata(METADATA.CONTROLLER_PATH, controllerClass) || '/'
 
     for (const route of routes) {
       // Skip excluded methods
@@ -139,8 +138,11 @@ export function buildOpenAPISpec(options: SwaggerOptions = {}): any {
         Reflect.getMetadata(SWAGGER_KEYS.RESPONSES, controllerClass, route.handlerName) || []
       const methodTags: string[] =
         Reflect.getMetadata(SWAGGER_KEYS.TAGS, controllerClass, route.handlerName) || []
-      const methodAuth: string | undefined =
-        Reflect.getMetadata(SWAGGER_KEYS.BEARER_AUTH, controllerClass, route.handlerName)
+      const methodAuth: string | undefined = Reflect.getMetadata(
+        SWAGGER_KEYS.BEARER_AUTH,
+        controllerClass,
+        route.handlerName,
+      )
 
       // Tags — method level overrides class level
       const tags = methodTags.length > 0 ? methodTags : classTags
@@ -216,7 +218,11 @@ export function buildOpenAPISpec(options: SwaggerOptions = {}): any {
       }
 
       // File upload detection
-      const fileUpload = Reflect.getMetadata(METADATA.FILE_UPLOAD, controllerClass, route.handlerName)
+      const fileUpload = Reflect.getMetadata(
+        METADATA.FILE_UPLOAD,
+        controllerClass,
+        route.handlerName,
+      )
       if (fileUpload) {
         const properties: any = {}
         if (fileUpload.fieldName) {
@@ -242,12 +248,15 @@ export function buildOpenAPISpec(options: SwaggerOptions = {}): any {
             description: resp.description || '',
             ...(resp.schema
               ? (() => {
-                  const converted = typeof resp.schema === 'function' || typeof resp.schema === 'object'
-                    ? toJsonSchema(resp.schema)
-                    : null
+                  const converted =
+                    typeof resp.schema === 'function' || typeof resp.schema === 'object'
+                      ? toJsonSchema(resp.schema)
+                      : null
                   const finalSchema = converted
                     ? registerSchema(converted, `${route.handlerName}Response${resp.status}`)
-                    : (typeof resp.schema === 'object' ? resp.schema : undefined)
+                    : typeof resp.schema === 'object'
+                      ? resp.schema
+                      : undefined
                   return finalSchema
                     ? { content: { 'application/json': { schema: finalSchema } } }
                     : {}
@@ -302,9 +311,9 @@ export function buildOpenAPISpec(options: SwaggerOptions = {}): any {
 
   // Clean up empty components
   if (Object.keys(spec.components.schemas).length === 0) delete spec.components.schemas
-  if (Object.keys(spec.components.securitySchemes).length === 0) delete spec.components.securitySchemes
+  if (Object.keys(spec.components.securitySchemes).length === 0)
+    delete spec.components.securitySchemes
   if (Object.keys(spec.components).length === 0) delete spec.components
 
   return spec
 }
-

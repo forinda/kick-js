@@ -33,7 +33,7 @@ export class RequestContext<TBody = any, TParams = any, TQuery = any> {
   }
 
   get requestId(): string | undefined {
-    return this.req.headers['x-request-id'] as string | undefined
+    return (this.req as any).requestId ?? (this.req.headers['x-request-id'] as string | undefined)
   }
 
   // ── Query String Parsing ───────────────────────────────────────────

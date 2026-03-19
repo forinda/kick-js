@@ -8,11 +8,7 @@ import type { Container } from './container'
  *   beforeRoutes  → just before module routes are mounted
  *   afterRoutes   → after module routes but before error handlers
  */
-export type MiddlewarePhase =
-  | 'beforeGlobal'
-  | 'afterGlobal'
-  | 'beforeRoutes'
-  | 'afterRoutes'
+export type MiddlewarePhase = 'beforeGlobal' | 'afterGlobal' | 'beforeRoutes' | 'afterRoutes'
 
 /** A middleware entry contributed by an adapter */
 export interface AdapterMiddleware {

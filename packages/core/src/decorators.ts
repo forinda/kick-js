@@ -132,8 +132,7 @@ export function Transactional(): MethodDecorator {
 /** Property injection — resolved lazily from the container */
 export function Autowired(token?: any): PropertyDecorator {
   return (target, propertyKey) => {
-    const existing: Map<string, any> =
-      Reflect.getMetadata(METADATA.AUTOWIRED, target) || new Map()
+    const existing: Map<string, any> = Reflect.getMetadata(METADATA.AUTOWIRED, target) || new Map()
     existing.set(propertyKey as string, token)
     Reflect.defineMetadata(METADATA.AUTOWIRED, existing, target)
   }
@@ -142,8 +141,7 @@ export function Autowired(token?: any): PropertyDecorator {
 /** Constructor parameter injection with explicit token */
 export function Inject(token: any): ParameterDecorator {
   return (target, _propertyKey, parameterIndex) => {
-    const existing: Record<number, any> =
-      Reflect.getMetadata(METADATA.INJECT, target) || {}
+    const existing: Record<number, any> = Reflect.getMetadata(METADATA.INJECT, target) || {}
     existing[parameterIndex] = token
     Reflect.defineMetadata(METADATA.INJECT, existing, target)
   }

@@ -18,10 +18,7 @@ function printGenerated(files: string[]): void {
 }
 
 export function registerGenerateCommand(program: Command): void {
-  const gen = program
-    .command('generate')
-    .alias('g')
-    .description('Generate code scaffolds')
+  const gen = program.command('generate').alias('g').description('Generate code scaffolds')
 
   // ── kick g module <name> ────────────────────────────────────────────
   gen

@@ -17,9 +17,7 @@ const log = createLogger('Application')
  * A middleware entry in the declarative pipeline.
  * Can be a bare handler or an object with path scoping.
  */
-export type MiddlewareEntry =
-  | RequestHandler
-  | { path: string; handler: RequestHandler }
+export type MiddlewareEntry = RequestHandler | { path: string; handler: RequestHandler }
 
 export interface ApplicationOptions {
   /** Feature modules to load */

@@ -97,9 +97,7 @@ export class Container {
     if (this.resolving.has(token)) {
       const chain = [...this.resolving].map(tokenName)
       chain.push(tokenName(token))
-      throw new Error(
-        `Circular dependency detected: ${chain.join(' -> ')}`,
-      )
+      throw new Error(`Circular dependency detected: ${chain.join(' -> ')}`)
     }
     this.resolving.add(token)
 
@@ -125,8 +123,7 @@ export class Container {
   }
 
   private createInstance(reg: Registration): any {
-    const paramTypes: Constructor[] =
-      Reflect.getMetadata(METADATA.PARAM_TYPES, reg.target) || []
+    const paramTypes: Constructor[] = Reflect.getMetadata(METADATA.PARAM_TYPES, reg.target) || []
 
     const args = paramTypes.map((paramType, index) => {
       // Check for @Inject token override on constructor parameter

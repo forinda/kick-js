@@ -1,9 +1,4 @@
-import {
-  Container,
-  type AppModule,
-  type AppModuleClass,
-  type ModuleRoutes,
-} from '@kickjs/core'
+import { Container, type AppModule, type AppModuleClass, type ModuleRoutes } from '@kickjs/core'
 import { Application, type ApplicationOptions } from '@kickjs/http'
 
 /**
@@ -41,9 +36,10 @@ export function createTestApp(options: CreateTestAppOptions): {
   })
 
   // Apply DI overrides (e.g. mock repositories)
+  // Use Reflect.ownKeys to iterate both string and symbol keys
   if (options.overrides) {
-    for (const [token, impl] of Object.entries(options.overrides)) {
-      container.registerInstance(token, impl)
+    for (const token of Reflect.ownKeys(options.overrides)) {
+      container.registerInstance(token, options.overrides[token as any])
     }
   }
 

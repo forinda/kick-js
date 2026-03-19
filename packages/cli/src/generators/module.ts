@@ -590,19 +590,16 @@ export const modules: AppModuleClass[] = [${pascal}Module]
 
     // Add to modules array — handle both empty and existing entries
     // Match the array assignment: `= [...]` or `= [\n...\n]`
-    content = content.replace(
-      /(=\s*\[)([\s\S]*?)(])/,
-      (_match, open, existing, close) => {
-        const trimmed = existing.trim()
-        if (!trimmed) {
-          // Empty array: `= []`
-          return `${open}${pascal}Module${close}`
-        }
-        // Existing entries: append with comma
-        const needsComma = trimmed.endsWith(',') ? '' : ','
-        return `${open}${existing.trimEnd()}${needsComma} ${pascal}Module${close}`
-      },
-    )
+    content = content.replace(/(=\s*\[)([\s\S]*?)(])/, (_match, open, existing, close) => {
+      const trimmed = existing.trim()
+      if (!trimmed) {
+        // Empty array: `= []`
+        return `${open}${pascal}Module${close}`
+      }
+      // Existing entries: append with comma
+      const needsComma = trimmed.endsWith(',') ? '' : ','
+      return `${open}${existing.trimEnd()}${needsComma} ${pascal}Module${close}`
+    })
   }
 
   await writeFile(indexPath, content, 'utf-8')

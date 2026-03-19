@@ -12,8 +12,9 @@ export const baseEnvSchema = z.object({
   LOG_LEVEL: z.string().default('info'),
 })
 
-/** Cached env config to avoid re-parsing */
+/** Cached env config to avoid re-parsing — keyed by schema reference */
 let cachedEnv: any = null
+let cachedSchema: any = null
 
 /**
  * Define a custom env schema by extending the base.
@@ -38,10 +39,12 @@ export function defineEnv<T extends z.ZodRawShape>(
   return extend(baseEnvSchema)
 }
 
-/** Parse and validate process.env against a Zod schema. Caches result. */
+/** Parse and validate process.env against a Zod schema. Caches result per schema. */
 export function loadEnv<T extends z.ZodObject<any>>(schema?: T): z.infer<T> {
-  if (cachedEnv) return cachedEnv
   const s = schema || baseEnvSchema
+  // Re-parse if schema changed or no cache yet
+  if (cachedEnv && cachedSchema === s) return cachedEnv
+  cachedSchema = s
   cachedEnv = s.parse(process.env)
   return cachedEnv
 }
@@ -55,6 +58,7 @@ export function getEnv<K extends string>(key: K): any {
 /** Reset cached env (useful for testing) */
 export function resetEnvCache(): void {
   cachedEnv = null
+  cachedSchema = null
 }
 
 export type Env = z.infer<typeof baseEnvSchema>

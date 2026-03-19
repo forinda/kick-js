@@ -34,8 +34,19 @@ export class CorsAdapter implements AppAdapter {
     } = this.options
 
     app.use((req, res, next) => {
-      const originValue = Array.isArray(origin) ? origin.join(',') : String(origin)
-      res.setHeader('Access-Control-Allow-Origin', originValue)
+      let originValue: string | undefined
+      if (origin === true) {
+        // Reflect the request origin
+        originValue = req.headers.origin as string | undefined
+        if (originValue) res.setHeader('Vary', 'Origin')
+      } else if (origin === false) {
+        originValue = undefined
+      } else if (Array.isArray(origin)) {
+        originValue = origin.join(',')
+      } else {
+        originValue = String(origin)
+      }
+      if (originValue) res.setHeader('Access-Control-Allow-Origin', originValue)
       res.setHeader('Access-Control-Allow-Methods', methods.join(','))
       res.setHeader('Access-Control-Allow-Headers', allowedHeaders.join(','))
       res.setHeader('Access-Control-Max-Age', String(maxAge))

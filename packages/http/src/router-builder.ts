@@ -1,11 +1,6 @@
 import 'reflect-metadata'
 import { Router, type Request, type Response, type NextFunction } from 'express'
-import {
-  Container,
-  METADATA,
-  type RouteDefinition,
-  type MiddlewareHandler,
-} from '@kickjs/core'
+import { Container, METADATA, type RouteDefinition, type MiddlewareHandler } from '@kickjs/core'
 import { RequestContext } from './context'
 import { validate } from './middleware/validate'
 
@@ -24,8 +19,7 @@ export function buildRoutes(controllerClass: any): Router {
   const container = Container.getInstance()
   const controller = container.resolve(controllerClass)
   const controllerPath = getControllerPath(controllerClass)
-  const routes: RouteDefinition[] =
-    Reflect.getMetadata(METADATA.ROUTES, controllerClass) || []
+  const routes: RouteDefinition[] = Reflect.getMetadata(METADATA.ROUTES, controllerClass) || []
 
   // Class-level middleware
   const classMiddlewares: MiddlewareHandler[] =
@@ -48,11 +42,11 @@ export function buildRoutes(controllerClass: any): Router {
       handlers.push(validate(route.validation))
     }
 
-    // Class + method middleware (wrapped as Express middleware)
+    // Class + method middleware (wrapped as Express middleware with error catching)
     for (const mw of [...classMiddlewares, ...methodMiddlewares]) {
       handlers.push((req: Request, res: Response, next: NextFunction) => {
         const ctx = new RequestContext(req, res, next)
-        return mw(ctx, next)
+        Promise.resolve(mw(ctx, next)).catch(next)
       })
     }
 
@@ -65,10 +59,8 @@ export function buildRoutes(controllerClass: any): Router {
         next(err)
       }
     })
-
     ;(router as any)[method](fullPath, ...handlers)
   }
 
   return router
 }
-
