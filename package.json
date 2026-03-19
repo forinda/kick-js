@@ -22,6 +22,12 @@
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs",
+    "release:patch": "node scripts/release.js patch",
+    "release:minor": "node scripts/release.js minor",
+    "release:major": "node scripts/release.js major",
+    "release:alpha": "node scripts/release.js prerelease --tag alpha",
+    "release:beta": "node scripts/release.js prerelease --tag beta",
+    "release:dry": "node scripts/release.js patch --dry-run",
     "prepare": "husky"
   },
   "devDependencies": {
