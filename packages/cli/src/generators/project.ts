@@ -34,10 +34,10 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
           format: 'prettier --write src/',
         },
         dependencies: {
-          '@kickjs/core': '^0.1.0',
-          '@kickjs/http': '^0.1.0',
-          '@kickjs/config': '^0.1.0',
-          '@kickjs/swagger': '^0.1.0',
+          '@forinda/kickjs-core': '^0.1.0',
+          '@forinda/kickjs-http': '^0.1.0',
+          '@forinda/kickjs-config': '^0.1.0',
+          '@forinda/kickjs-swagger': '^0.1.0',
           express: '^5.1.0',
           'reflect-metadata': '^0.2.2',
           zod: '^4.3.6',
@@ -45,7 +45,7 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
           'pino-pretty': '^13.1.3',
         },
         devDependencies: {
-          '@kickjs/cli': '^0.1.0',
+          '@forinda/kickjs-cli': '^0.1.0',
           '@swc/core': '^1.7.28',
           '@types/express': '^5.0.6',
           '@types/node': '^24.5.2',
@@ -170,8 +170,8 @@ NODE_ENV=development
   await writeFileSafe(
     join(dir, 'src/index.ts'),
     `import 'reflect-metadata'
-import { bootstrap } from '@kickjs/http'
-import { SwaggerAdapter } from '@kickjs/swagger'
+import { bootstrap } from '@forinda/kickjs-http'
+import { SwaggerAdapter } from '@forinda/kickjs-swagger'
 import { modules } from './modules'
 
 bootstrap({
@@ -188,7 +188,7 @@ bootstrap({
   // ── src/modules/index.ts ────────────────────────────────────────────
   await writeFileSafe(
     join(dir, 'src/modules/index.ts'),
-    `import type { AppModuleClass } from '@kickjs/core'
+    `import type { AppModuleClass } from '@forinda/kickjs-core'
 
 export const modules: AppModuleClass[] = []
 `,

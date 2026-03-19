@@ -1,5 +1,5 @@
 {
-  "name": "@kickjs/swagger",
+  "name": "@forinda/kickjs-swagger",
   "version": "0.3.0",
   "description": "OpenAPI spec generation from decorators, Swagger UI and ReDoc serving for KickJS",
   "type": "module",
@@ -24,7 +24,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@kickjs/core": "workspace:*",
+    "@forinda/kickjs-core": "workspace:*",
     "reflect-metadata": "^0.2.2"
   },
   "peerDependencies": {

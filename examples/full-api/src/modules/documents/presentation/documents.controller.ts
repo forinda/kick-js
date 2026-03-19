@@ -6,9 +6,9 @@ import {
   Autowired,
   Middleware,
   FileUpload,
-} from '@kickjs/core'
-import { RequestContext, upload } from '@kickjs/http'
-import { ApiTags, ApiOperation, ApiResponse } from '@kickjs/swagger'
+} from '@forinda/kickjs-core'
+import { RequestContext, upload } from '@forinda/kickjs-http'
+import { ApiTags, ApiOperation, ApiResponse } from '@forinda/kickjs-swagger'
 import { CreateDocumentsUseCase } from '../application/use-cases/create-documents.use-case'
 import { GetDocumentsUseCase } from '../application/use-cases/get-documents.use-case'
 import { ListDocumentsUseCase } from '../application/use-cases/list-documents.use-case'

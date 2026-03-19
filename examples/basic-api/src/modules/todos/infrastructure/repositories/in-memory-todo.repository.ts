@@ -1,4 +1,4 @@
-import { Repository } from '@kickjs/core'
+import { Repository } from '@forinda/kickjs-core'
 import type { ITodoRepository } from '../../domain/repositories/todo.repository'
 import { Todo } from '../../domain/entities/todo.entity'
 import type { TodoId } from '../../domain/value-objects/todo-id.vo'

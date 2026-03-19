@@ -14,10 +14,10 @@ export function registerInfoCommand(program: Command): void {
     Node:     ${process.version}
 
   Packages:
-    @kickjs/core     workspace
-    @kickjs/http     workspace
-    @kickjs/config   workspace
-    @kickjs/cli      workspace
+    @forinda/kickjs-core     workspace
+    @forinda/kickjs-http     workspace
+    @forinda/kickjs-config   workspace
+    @forinda/kickjs-cli      workspace
 `)
     })
 }

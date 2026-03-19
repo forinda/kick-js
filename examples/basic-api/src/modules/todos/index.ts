@@ -1,5 +1,5 @@
-import { Container, type AppModule, type ModuleRoutes } from '@kickjs/core'
-import { buildRoutes } from '@kickjs/http'
+import { Container, type AppModule, type ModuleRoutes } from '@forinda/kickjs-core'
+import { buildRoutes } from '@forinda/kickjs-http'
 import { TODO_REPOSITORY } from './domain/repositories/todo.repository'
 import { InMemoryTodoRepository } from './infrastructure/repositories/in-memory-todo.repository'
 import { TodoController } from './presentation/todo.controller'

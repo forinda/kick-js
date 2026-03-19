@@ -10,7 +10,7 @@
  */
 import Joi from 'joi'
 import joiToJson from 'joi-to-json'
-import type { SchemaParser } from '@kickjs/swagger'
+import type { SchemaParser } from '@forinda/kickjs-swagger'
 
 export const joiSchemaParser: SchemaParser = {
   name: 'joi',

@@ -9,5 +9,5 @@ export default defineConfig({
   dts: true,
   shims: false,
   minify: false,
-  external: ['@kickjs/core', 'reflect-metadata', 'zod'],
+  external: ['@forinda/kickjs-core', 'reflect-metadata', 'zod'],
 })

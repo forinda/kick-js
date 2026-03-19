@@ -1,4 +1,4 @@
-import { Service, Inject, HttpException } from '@kickjs/core'
+import { Service, Inject, HttpException } from '@forinda/kickjs-core'
 import { USERS_REPOSITORY, type IUsersRepository } from '../repositories/users.repository'
 
 @Service()

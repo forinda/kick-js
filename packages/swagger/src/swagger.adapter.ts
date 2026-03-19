@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import type { Express } from 'express'
-import { Logger, type AppAdapter, type Container } from '@kickjs/core'
+import { Logger, type AppAdapter, type Container } from '@forinda/kickjs-core'
 import {
   buildOpenAPISpec,
   registerControllerForDocs,

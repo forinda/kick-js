@@ -2,7 +2,7 @@
 
 ## New Features
 
-- feat: add sub-path exports for @kickjs/core and @kickjs/http ([8bfb401](https://github.com/forinda/kick-js/commit/8bfb4016d40b36eb4a6bccb1bf421d8f088196f2)) — [@forinda](https://github.com/forinda)
+- feat: add sub-path exports for @forinda/kickjs-core and @forinda/kickjs-http ([8bfb401](https://github.com/forinda/kick-js/commit/8bfb4016d40b36eb4a6bccb1bf421d8f088196f2)) — [@forinda](https://github.com/forinda)
 - feat: add monorepo release script with auto release notes ([4398824](https://github.com/forinda/kick-js/commit/43988245f66e451567f6ed6563c540d7b56268ae)) — [@forinda](https://github.com/forinda)
 - feat: add example applications showcasing framework features ([cbd6de3](https://github.com/forinda/kick-js/commit/cbd6de3f80f9de72e8fb7624770f50bb0e873f11)) — [@forinda](https://github.com/forinda)
 - feat: v0.3.0 monorepo rewrite — custom DI, Express 5, Zod, Vite HMR ([83d41fe](https://github.com/forinda/kick-js/commit/83d41fe3a60af58a8a55da188b15a92c3ee3ab54)) — [@forinda](https://github.com/forinda)
@@ -42,4 +42,4 @@
 ---
 
 **Full Changelog**: https://github.com/forinda/kick-js/compare/v0.2.0...v0.3.0
-**Packages**: `@kickjs/core`, `@kickjs/config`, `@kickjs/http`, `@kickjs/swagger`, `@kickjs/cli`, `@kickjs/testing`
+**Packages**: `@forinda/kickjs-core`, `@forinda/kickjs-config`, `@forinda/kickjs-http`, `@forinda/kickjs-swagger`, `@forinda/kickjs-cli`, `@forinda/kickjs-testing`

@@ -1,4 +1,4 @@
-import { Service } from '@kickjs/core'
+import { Service } from '@forinda/kickjs-core'
 import { loadEnv } from './env'
 
 /** Injectable service for accessing typed environment configuration */

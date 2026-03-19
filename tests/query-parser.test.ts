@@ -6,7 +6,7 @@ import {
   parsePagination,
   parseSearchQuery,
   buildQueryParams,
-} from '@kickjs/http'
+} from '@forinda/kickjs-http'
 
 describe('Query Parser', () => {
   // ── parseFilters ──────────────────────────────────────────────────

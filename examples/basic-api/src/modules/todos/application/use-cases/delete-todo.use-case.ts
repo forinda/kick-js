@@ -1,4 +1,4 @@
-import { Service, Inject, HttpException } from '@kickjs/core'
+import { Service, Inject, HttpException } from '@forinda/kickjs-core'
 import { TODO_REPOSITORY, type ITodoRepository } from '../../domain/repositories/todo.repository'
 import { TodoId } from '../../domain/value-objects/todo-id.vo'
 

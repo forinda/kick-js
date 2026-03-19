@@ -9,7 +9,7 @@ import {
   Autowired,
   Configuration,
   Bean,
-} from '@kickjs/core'
+} from '@forinda/kickjs-core'
 
 /**
  * Note: @Service/@Injectable decorators fire at class-definition time and

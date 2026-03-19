@@ -1,4 +1,4 @@
-# @kickjs/config
+# @forinda/kickjs-config
 
 Type-safe environment configuration with Zod validation and an injectable config service.
 

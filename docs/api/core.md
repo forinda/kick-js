@@ -1,4 +1,4 @@
-# @kickjs/core
+# @forinda/kickjs-core
 
 Inversion-of-Control container, decorators, logger, and error types shared by all KickJS packages.
 

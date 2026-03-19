@@ -1,5 +1,5 @@
 {
-  "name": "@kickjs/monorepo",
+  "name": "@forinda/kickjs-monorepo",
   "version": "0.3.0",
   "private": true,
   "description": "A production-grade, decorator-driven Node.js framework built on Express 5 and TypeScript",

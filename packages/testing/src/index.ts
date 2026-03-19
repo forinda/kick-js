@@ -1,5 +1,10 @@
-import { Container, type AppModule, type AppModuleClass, type ModuleRoutes } from '@kickjs/core'
-import { Application, type ApplicationOptions } from '@kickjs/http'
+import {
+  Container,
+  type AppModule,
+  type AppModuleClass,
+  type ModuleRoutes,
+} from '@forinda/kickjs-core'
+import { Application, type ApplicationOptions } from '@forinda/kickjs-http'
 
 /**
  * Options for creating a test application.

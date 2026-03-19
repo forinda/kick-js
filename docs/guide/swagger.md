@@ -5,7 +5,7 @@ KickJS auto-generates OpenAPI 3.0.3 specs from your decorators and validation sc
 ## Setup
 
 ```typescript
-import { SwaggerAdapter } from '@kickjs/swagger'
+import { SwaggerAdapter } from '@forinda/kickjs-swagger'
 
 bootstrap({
   modules,
@@ -164,7 +164,7 @@ interface SchemaParser {
 ```typescript
 import Joi from 'joi'
 import joiToJson from 'joi-to-json'
-import type { SchemaParser } from '@kickjs/swagger'
+import type { SchemaParser } from '@forinda/kickjs-swagger'
 
 export const joiSchemaParser: SchemaParser = {
   name: 'joi',
@@ -195,7 +195,7 @@ new SwaggerAdapter({
 ```typescript
 import * as yup from 'yup'
 import { convertSchema } from '@sodaru/yup-to-json-schema'
-import type { SchemaParser } from '@kickjs/swagger'
+import type { SchemaParser } from '@forinda/kickjs-swagger'
 
 export const yupSchemaParser: SchemaParser = {
   name: 'yup',
@@ -215,7 +215,7 @@ export const yupSchemaParser: SchemaParser = {
 ```typescript
 import * as v from 'valibot'
 import { toJsonSchema } from '@valibot/to-json-schema'
-import type { SchemaParser } from '@kickjs/swagger'
+import type { SchemaParser } from '@forinda/kickjs-swagger'
 
 export const valibotSchemaParser: SchemaParser = {
   name: 'valibot',

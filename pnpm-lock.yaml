@@ -50,16 +50,16 @@ importers:
 
   examples/auth-api:
     dependencies:
-      '@kickjs/config':
+      '@forinda/kickjs-config':
         specifier: workspace:*
         version: link:../../packages/config
-      '@kickjs/core':
+      '@forinda/kickjs-core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@kickjs/http':
+      '@forinda/kickjs-http':
         specifier: workspace:*
         version: link:../../packages/http
-      '@kickjs/swagger':
+      '@forinda/kickjs-swagger':
         specifier: workspace:*
         version: link:../../packages/swagger
       express:
@@ -78,7 +78,7 @@ importers:
         specifier: ^4.3.6
         version: 4.3.6
     devDependencies:
-      '@kickjs/cli':
+      '@forinda/kickjs-cli':
         specifier: workspace:*
         version: link:../../packages/cli
       '@swc/core':
@@ -111,16 +111,16 @@ importers:
 
   examples/basic-api:
     dependencies:
-      '@kickjs/config':
+      '@forinda/kickjs-config':
         specifier: workspace:*
         version: link:../../packages/config
-      '@kickjs/core':
+      '@forinda/kickjs-core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@kickjs/http':
+      '@forinda/kickjs-http':
         specifier: workspace:*
         version: link:../../packages/http
-      '@kickjs/swagger':
+      '@forinda/kickjs-swagger':
         specifier: workspace:*
         version: link:../../packages/swagger
       express:
@@ -139,7 +139,7 @@ importers:
         specifier: ^4.3.6
         version: 4.3.6
     devDependencies:
-      '@kickjs/cli':
+      '@forinda/kickjs-cli':
         specifier: workspace:*
         version: link:../../packages/cli
       '@swc/core':
@@ -166,16 +166,16 @@ importers:
 
   examples/full-api:
     dependencies:
-      '@kickjs/config':
+      '@forinda/kickjs-config':
         specifier: workspace:*
         version: link:../../packages/config
-      '@kickjs/core':
+      '@forinda/kickjs-core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@kickjs/http':
+      '@forinda/kickjs-http':
         specifier: workspace:*
         version: link:../../packages/http
-      '@kickjs/swagger':
+      '@forinda/kickjs-swagger':
         specifier: workspace:*
         version: link:../../packages/swagger
       cookie-parser:
@@ -197,7 +197,7 @@ importers:
         specifier: ^4.3.6
         version: 4.3.6
     devDependencies:
-      '@kickjs/cli':
+      '@forinda/kickjs-cli':
         specifier: workspace:*
         version: link:../../packages/cli
       '@swc/core':
@@ -233,16 +233,16 @@ importers:
 
   examples/joi-api:
     dependencies:
-      '@kickjs/config':
+      '@forinda/kickjs-config':
         specifier: workspace:*
         version: link:../../packages/config
-      '@kickjs/core':
+      '@forinda/kickjs-core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@kickjs/http':
+      '@forinda/kickjs-http':
         specifier: workspace:*
         version: link:../../packages/http
-      '@kickjs/swagger':
+      '@forinda/kickjs-swagger':
         specifier: workspace:*
         version: link:../../packages/swagger
       express:
@@ -267,7 +267,7 @@ importers:
         specifier: ^4.3.6
         version: 4.3.6
     devDependencies:
-      '@kickjs/cli':
+      '@forinda/kickjs-cli':
         specifier: workspace:*
         version: link:../../packages/cli
       '@swc/core':
@@ -300,16 +300,16 @@ importers:
 
   examples/swagger-api:
     dependencies:
-      '@kickjs/config':
+      '@forinda/kickjs-config':
         specifier: workspace:*
         version: link:../../packages/config
-      '@kickjs/core':
+      '@forinda/kickjs-core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@kickjs/http':
+      '@forinda/kickjs-http':
         specifier: workspace:*
         version: link:../../packages/http
-      '@kickjs/swagger':
+      '@forinda/kickjs-swagger':
         specifier: workspace:*
         version: link:../../packages/swagger
       express:
@@ -328,7 +328,7 @@ importers:
         specifier: ^4.3.6
         version: 4.3.6
     devDependencies:
-      '@kickjs/cli':
+      '@forinda/kickjs-cli':
         specifier: workspace:*
         version: link:../../packages/cli
       '@swc/core':
@@ -361,16 +361,16 @@ importers:
 
   examples/validated-api:
     dependencies:
-      '@kickjs/config':
+      '@forinda/kickjs-config':
         specifier: workspace:*
         version: link:../../packages/config
-      '@kickjs/core':
+      '@forinda/kickjs-core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@kickjs/http':
+      '@forinda/kickjs-http':
         specifier: workspace:*
         version: link:../../packages/http
-      '@kickjs/swagger':
+      '@forinda/kickjs-swagger':
         specifier: workspace:*
         version: link:../../packages/swagger
       express:
@@ -389,7 +389,7 @@ importers:
         specifier: ^4.3.6
         version: 4.3.6
     devDependencies:
-      '@kickjs/cli':
+      '@forinda/kickjs-cli':
         specifier: workspace:*
         version: link:../../packages/cli
       '@swc/core':
@@ -444,7 +444,7 @@ importers:
 
   packages/config:
     dependencies:
-      '@kickjs/core':
+      '@forinda/kickjs-core':
         specifier: workspace:*
         version: link:../core
       dotenv:
@@ -500,7 +500,7 @@ importers:
 
   packages/http:
     dependencies:
-      '@kickjs/core':
+      '@forinda/kickjs-core':
         specifier: workspace:*
         version: link:../core
       cookie-parser:
@@ -543,7 +543,7 @@ importers:
 
   packages/swagger:
     dependencies:
-      '@kickjs/core':
+      '@forinda/kickjs-core':
         specifier: workspace:*
         version: link:../core
       reflect-metadata:
@@ -577,10 +577,10 @@ importers:
 
   packages/testing:
     dependencies:
-      '@kickjs/core':
+      '@forinda/kickjs-core':
         specifier: workspace:*
         version: link:../core
-      '@kickjs/http':
+      '@forinda/kickjs-http':
         specifier: workspace:*
         version: link:../http
     devDependencies:

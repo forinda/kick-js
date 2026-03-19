@@ -1,4 +1,4 @@
-import { Service, Inject, HttpException } from '@kickjs/core'
+import { Service, Inject, HttpException } from '@forinda/kickjs-core'
 import { DOCUMENTS_REPOSITORY, type IDocumentsRepository } from '../repositories/documents.repository'
 
 @Service()

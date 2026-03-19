@@ -6,13 +6,13 @@ import {
   Put,
   Delete,
   Autowired,
-} from '@kickjs/core'
-import type { RequestContext } from '@kickjs/http'
+} from '@forinda/kickjs-core'
+import type { RequestContext } from '@forinda/kickjs-http'
 import {
   ApiTags,
   ApiOperation,
   ApiResponse,
-} from '@kickjs/swagger'
+} from '@forinda/kickjs-swagger'
 import { createProductsSchema } from '../application/dtos/create-products.dto'
 import { updateProductsSchema } from '../application/dtos/update-products.dto'
 import { CreateProductsUseCase } from '../application/use-cases/create-products.use-case'

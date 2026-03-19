@@ -70,7 +70,7 @@ pnpm dev
 ## Creating Your Own
 
 ```bash
-npx @kickjs/cli new my-api
+npx @forinda/kickjs-cli new my-api
 cd my-api
 pnpm install
 pnpm kick g module users

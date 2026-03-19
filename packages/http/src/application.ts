@@ -6,7 +6,7 @@ import {
   type AppModuleClass,
   type AppAdapter,
   type AdapterMiddleware,
-} from '@kickjs/core'
+} from '@forinda/kickjs-core'
 import { buildRoutes } from './router-builder'
 import { requestId } from './middleware/request-id'
 import { notFoundHandler, errorHandler } from './middleware/error-handler'

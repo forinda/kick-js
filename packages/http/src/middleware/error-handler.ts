@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from 'express'
-import { HttpException, createLogger } from '@kickjs/core'
+import { HttpException, createLogger } from '@forinda/kickjs-core'
 
 const log = createLogger('ErrorHandler')
 

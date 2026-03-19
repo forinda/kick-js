@@ -1,5 +1,5 @@
 import type { Express } from 'express'
-import type { AppAdapter, AdapterMiddleware, Container } from '@kickjs/core'
+import type { AppAdapter, AdapterMiddleware, Container } from '@forinda/kickjs-core'
 
 /**
  * Health check adapter -- registers /health and /health/ready endpoints.

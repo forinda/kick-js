@@ -1,4 +1,4 @@
-# @kickjs/swagger
+# @forinda/kickjs-swagger
 
 Auto-generates an OpenAPI 3.0.3 spec from controller decorators and serves Swagger UI and ReDoc.
 

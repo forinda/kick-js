@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { Repository, HttpException } from '@kickjs/core'
+import { Repository, HttpException } from '@forinda/kickjs-core'
 import type { IDocumentsRepository } from '../../domain/repositories/documents.repository'
 import type { DocumentsResponseDTO } from '../../application/dtos/documents-response.dto'
 import type { CreateDocumentsDTO } from '../../application/dtos/create-documents.dto'

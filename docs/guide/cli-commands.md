@@ -92,10 +92,10 @@ Output:
     Node:     v20.x.x
 
   Packages:
-    @kickjs/core     workspace
-    @kickjs/http     workspace
-    @kickjs/config   workspace
-    @kickjs/cli      workspace
+    @forinda/kickjs-core     workspace
+    @forinda/kickjs-http     workspace
+    @forinda/kickjs-config   workspace
+    @forinda/kickjs-cli      workspace
 ```
 
 ## kick generate (kick g)

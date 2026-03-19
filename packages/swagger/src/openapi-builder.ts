@@ -1,5 +1,5 @@
 import 'reflect-metadata'
-import { METADATA, type RouteDefinition } from '@kickjs/core'
+import { METADATA, type RouteDefinition } from '@forinda/kickjs-core'
 import { SWAGGER_KEYS, type ApiOperationOptions, type ApiResponseOptions } from './decorators'
 import { zodSchemaParser, type SchemaParser } from './schema-parser'
 

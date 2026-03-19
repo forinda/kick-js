@@ -4,10 +4,10 @@ KickJS wraps Multer to provide a clean file upload API with middleware helpers a
 
 ## Upload Middleware
 
-Import the `upload` factory from `@kickjs/http`:
+Import the `upload` factory from `@forinda/kickjs-http`:
 
 ```ts
-import { upload } from '@kickjs/http'
+import { upload } from '@forinda/kickjs-http'
 ```
 
 ### Single File
@@ -64,7 +64,7 @@ When `allowedTypes` is set, any file with a non-matching MIME type triggers an e
 For disk-stored uploads, use `cleanupFiles()` to delete temporary files after the response finishes:
 
 ```ts
-import { upload, cleanupFiles } from '@kickjs/http'
+import { upload, cleanupFiles } from '@forinda/kickjs-http'
 
 @Post('/process')
 @Middleware(upload.single('document', { dest: '/tmp/uploads' }), cleanupFiles())
@@ -82,7 +82,7 @@ async processDocument(ctx: RequestContext) {
 The `@FileUpload` decorator stores upload configuration as metadata on a controller method. This is useful when a framework-level router reads the metadata to wire up upload middleware automatically.
 
 ```ts
-import { FileUpload } from '@kickjs/core'
+import { FileUpload } from '@forinda/kickjs-core'
 
 @Post('/upload')
 @FileUpload({ mode: 'single', fieldName: 'file', maxSize: 10_000_000, allowedMimeTypes: ['application/pdf'] })

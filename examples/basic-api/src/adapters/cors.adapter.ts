@@ -1,5 +1,5 @@
 import type { Express } from 'express'
-import type { AppAdapter, Container } from '@kickjs/core'
+import type { AppAdapter, Container } from '@forinda/kickjs-core'
 
 interface CorsAdapterOptions {
   origin?: string | string[] | boolean

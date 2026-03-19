@@ -1,13 +1,13 @@
 # Testing
 
-The `@kickjs/testing` package provides utilities for integration testing KickJS applications. It works with Vitest and supertest to test HTTP endpoints with full DI container support.
+The `@forinda/kickjs-testing` package provides utilities for integration testing KickJS applications. It works with Vitest and supertest to test HTTP endpoints with full DI container support.
 
 ## createTestApp
 
 Create an Application instance configured for testing. This resets the DI container, applies an empty middleware stack (no helmet, cors, or compression), and runs `setup()` without starting an HTTP server:
 
 ```ts
-import { createTestApp } from '@kickjs/testing'
+import { createTestApp } from '@forinda/kickjs-testing'
 import { UserModule } from '../src/modules/users'
 
 const { app, expressApp, container } = createTestApp({
@@ -53,8 +53,8 @@ const { expressApp } = createTestApp({
 Build a quick test module when you need full control over the DI graph:
 
 ```ts
-import { createTestModule, createTestApp } from '@kickjs/testing'
-import { buildRoutes } from '@kickjs/http'
+import { createTestModule, createTestApp } from '@forinda/kickjs-testing'
+import { buildRoutes } from '@forinda/kickjs-http'
 
 const TestModule = createTestModule({
   register: (container) => {
@@ -78,7 +78,7 @@ Use the `expressApp` returned by `createTestApp` with supertest:
 ```ts
 import { describe, it, expect, beforeEach } from 'vitest'
 import request from 'supertest'
-import { createTestApp } from '@kickjs/testing'
+import { createTestApp } from '@forinda/kickjs-testing'
 import { ProductModule } from '../src/modules/products'
 
 describe('Products API', () => {
@@ -124,7 +124,7 @@ describe('Products API', () => {
 Call `Container.reset()` in `beforeEach` to ensure tests do not share singleton state. The `createTestApp` function calls `Container.reset()` internally, so if you create a fresh test app per test, isolation is automatic:
 
 ```ts
-import { Container } from '@kickjs/core'
+import { Container } from '@forinda/kickjs-core'
 
 beforeEach(() => {
   Container.reset()
@@ -139,7 +139,7 @@ You can test services directly by using the container:
 
 ```ts
 import { describe, it, expect, beforeEach } from 'vitest'
-import { Container, Scope } from '@kickjs/core'
+import { Container, Scope } from '@forinda/kickjs-core'
 
 describe('UserService', () => {
   beforeEach(() => {

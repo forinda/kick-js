@@ -1,5 +1,5 @@
 {
-  "name": "@kickjs/core",
+  "name": "@forinda/kickjs-core",
   "version": "0.3.0",
   "description": "Core DI container, decorators, module system, and logger for KickJS",
   "type": "module",

@@ -1,4 +1,4 @@
-# @kickjs/testing
+# @forinda/kickjs-testing
 
 Test utilities for creating isolated KickJS application instances with DI overrides.
 

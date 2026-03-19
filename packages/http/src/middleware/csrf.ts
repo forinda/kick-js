@@ -30,7 +30,7 @@ export interface CsrfOptions {
  *
  * @example
  * ```ts
- * import { csrf } from '@kickjs/http'
+ * import { csrf } from '@forinda/kickjs-http'
  *
  * bootstrap({
  *   modules,

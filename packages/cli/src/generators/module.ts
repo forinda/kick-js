@@ -51,8 +51,8 @@ export async function generateModule(options: GenerateModuleOptions): Promise<st
  *   domain/          — Entities, value objects, repository interfaces, domain services
  *   infrastructure/  — Repository implementations (in-memory, Drizzle, Prisma, etc.)
  */
-import { Container, type AppModule, type ModuleRoutes } from '@kickjs/core'
-import { buildRoutes } from '@kickjs/http'
+import { Container, type AppModule, type ModuleRoutes } from '@forinda/kickjs-core'
+import { buildRoutes } from '@forinda/kickjs-http'
 import { ${pascal.toUpperCase()}_REPOSITORY } from './domain/repositories/${kebab}.repository'
 import { ${repo === 'inmemory' ? `InMemory${pascal}Repository` : `Drizzle${pascal}Repository`} } from './infrastructure/repositories/${repo === 'inmemory' ? `in-memory-${kebab}` : `drizzle-${kebab}`}.repository'
 import { ${pascal}Controller } from './presentation/${kebab}.controller'
@@ -106,11 +106,11 @@ export class ${pascal}Module implements AppModule {
  *   @Autowired() — injects dependencies lazily from the DI container
  *   @Middleware(...handlers) — attach middleware at class or method level
  *
- * Add Swagger decorators (@ApiTags, @ApiOperation, @ApiResponse) from @kickjs/swagger
+ * Add Swagger decorators (@ApiTags, @ApiOperation, @ApiResponse) from @forinda/kickjs-swagger
  * for automatic OpenAPI documentation.
  */
-import { Controller, Get, Post, Put, Delete, Autowired } from '@kickjs/core'
-import { RequestContext } from '@kickjs/http'
+import { Controller, Get, Post, Put, Delete, Autowired } from '@forinda/kickjs-core'
+import { RequestContext } from '@forinda/kickjs-http'
 import { Create${pascal}UseCase } from '../application/use-cases/create-${kebab}.use-case'
 import { Get${pascal}UseCase } from '../application/use-cases/get-${kebab}.use-case'
 import { List${pluralPascal}UseCase } from '../application/use-cases/list-${plural}.use-case'
@@ -217,7 +217,7 @@ export type Update${pascal}DTO = z.infer<typeof update${pascal}Schema>
  * Use cases are thin: validate input (via DTO), call domain/repo, return response.
  * Keep business rules in the domain service, not here.
  */
-import { Service, Inject } from '@kickjs/core'
+import { Service, Inject } from '@forinda/kickjs-core'
 import { ${pascal.toUpperCase()}_REPOSITORY, type I${pascal}Repository } from '../../domain/repositories/${kebab}.repository'
 import type { Create${pascal}DTO } from '../dtos/create-${kebab}.dto'
 import type { ${pascal}ResponseDTO } from '../dtos/${kebab}-response.dto'
@@ -236,7 +236,7 @@ export class Create${pascal}UseCase {
     },
     {
       file: `get-${kebab}.use-case.ts`,
-      content: `import { Service, Inject } from '@kickjs/core'
+      content: `import { Service, Inject } from '@forinda/kickjs-core'
 import { ${pascal.toUpperCase()}_REPOSITORY, type I${pascal}Repository } from '../../domain/repositories/${kebab}.repository'
 import type { ${pascal}ResponseDTO } from '../dtos/${kebab}-response.dto'
 
@@ -254,7 +254,7 @@ export class Get${pascal}UseCase {
     },
     {
       file: `list-${plural}.use-case.ts`,
-      content: `import { Service, Inject } from '@kickjs/core'
+      content: `import { Service, Inject } from '@forinda/kickjs-core'
 import { ${pascal.toUpperCase()}_REPOSITORY, type I${pascal}Repository } from '../../domain/repositories/${kebab}.repository'
 import type { ${pascal}ResponseDTO } from '../dtos/${kebab}-response.dto'
 
@@ -272,7 +272,7 @@ export class List${pluralPascal}UseCase {
     },
     {
       file: `update-${kebab}.use-case.ts`,
-      content: `import { Service, Inject } from '@kickjs/core'
+      content: `import { Service, Inject } from '@forinda/kickjs-core'
 import { ${pascal.toUpperCase()}_REPOSITORY, type I${pascal}Repository } from '../../domain/repositories/${kebab}.repository'
 import type { Update${pascal}DTO } from '../dtos/update-${kebab}.dto'
 import type { ${pascal}ResponseDTO } from '../dtos/${kebab}-response.dto'
@@ -291,7 +291,7 @@ export class Update${pascal}UseCase {
     },
     {
       file: `delete-${kebab}.use-case.ts`,
-      content: `import { Service, Inject } from '@kickjs/core'
+      content: `import { Service, Inject } from '@forinda/kickjs-core'
 import { ${pascal.toUpperCase()}_REPOSITORY, type I${pascal}Repository } from '../../domain/repositories/${kebab}.repository'
 
 @Service()
@@ -351,7 +351,7 @@ export const ${pascal.toUpperCase()}_REPOSITORY = Symbol('I${pascal}Repository')
  * Use this for cross-entity logic, validation rules, and domain invariants.
  * Keep it free of HTTP/framework concerns.
  */
-import { Service, Inject, HttpException } from '@kickjs/core'
+import { Service, Inject, HttpException } from '@forinda/kickjs-core'
 import { ${pascal.toUpperCase()}_REPOSITORY, type I${pascal}Repository } from '../repositories/${kebab}.repository'
 
 @Service()
@@ -384,7 +384,7 @@ export class ${pascal}DomainService {
  * @Repository() registers this class in the DI container as a singleton.
  */
 import { randomUUID } from 'node:crypto'
-import { Repository, HttpException } from '@kickjs/core'
+import { Repository, HttpException } from '@forinda/kickjs-core'
 import type { I${pascal}Repository } from '../../domain/repositories/${kebab}.repository'
 import type { ${pascal}ResponseDTO } from '../../application/dtos/${kebab}-response.dto'
 import type { Create${pascal}DTO } from '../../application/dtos/create-${kebab}.dto'
@@ -565,7 +565,7 @@ async function autoRegisterModule(
   if (!exists) {
     await writeFileSafe(
       indexPath,
-      `import type { AppModuleClass } from '@kickjs/core'
+      `import type { AppModuleClass } from '@forinda/kickjs-core'
 import { ${pascal}Module } from './${plural}'
 
 export const modules: AppModuleClass[] = [${pascal}Module]

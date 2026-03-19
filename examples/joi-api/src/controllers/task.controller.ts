@@ -7,9 +7,9 @@
  *   3. Same decorator pattern (@Controller, @Get, @Post, etc.)
  */
 import { randomUUID } from 'node:crypto'
-import { Controller, Get, Post, Put, Delete, Middleware } from '@kickjs/core'
-import { RequestContext } from '@kickjs/http'
-import { ApiTags, ApiOperation, ApiResponse } from '@kickjs/swagger'
+import { Controller, Get, Post, Put, Delete, Middleware } from '@forinda/kickjs-core'
+import { RequestContext } from '@forinda/kickjs-http'
+import { ApiTags, ApiOperation, ApiResponse } from '@forinda/kickjs-swagger'
 import { joiValidate } from '../middleware/joi-validate'
 import {
   createTaskSchema,

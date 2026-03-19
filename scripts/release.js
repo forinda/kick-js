@@ -31,7 +31,7 @@ const path = require('path')
 // ── Configuration ───────────────────────────────────────────────────────
 
 const REPO_URL = 'https://github.com/forinda/kick-js'
-const NPM_SCOPE = '@kickjs'
+const NPM_SCOPE = '@forinda/kickjs'
 
 // Packages to bump (order matters — deps first)
 const PACKAGES = [

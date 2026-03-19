@@ -1,4 +1,4 @@
-# @kickjs/cli
+# @forinda/kickjs-cli
 
 Command-line interface for scaffolding projects, generating code, and running the dev server.
 

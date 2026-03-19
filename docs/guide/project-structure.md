@@ -17,7 +17,7 @@ kick-js/
     basic-api/    # Reference application
 ```
 
-Each package is published under the `@kickjs/` scope. Applications import from `@kickjs/core` and `@kickjs/http`.
+Each package is published under the `@kickjs/` scope. Applications import from `@forinda/kickjs-core` and `@forinda/kickjs-http`.
 
 ## Application Layout
 
@@ -102,7 +102,7 @@ Modules are composed in the entry point via the `modules` array:
 
 ```ts
 // src/modules/index.ts
-import type { AppModuleClass } from '@kickjs/core'
+import type { AppModuleClass } from '@forinda/kickjs-core'
 import { TodoModule } from './todos'
 import { OrderModule } from './orders'
 
@@ -111,7 +111,7 @@ export const modules: AppModuleClass[] = [TodoModule, OrderModule]
 
 ```ts
 // src/index.ts
-import { bootstrap } from '@kickjs/http'
+import { bootstrap } from '@forinda/kickjs-http'
 import { modules } from './modules'
 
 bootstrap({ modules, apiPrefix: '/api', defaultVersion: 1 })

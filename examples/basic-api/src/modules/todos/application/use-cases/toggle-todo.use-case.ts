@@ -1,4 +1,4 @@
-import { Service } from '@kickjs/core'
+import { Service } from '@forinda/kickjs-core'
 import { TodoDomainService } from '../../domain/services/todo-domain.service'
 
 @Service()

@@ -1,4 +1,4 @@
-import { Service, Inject } from '@kickjs/core'
+import { Service, Inject } from '@forinda/kickjs-core'
 import { DOCUMENTS_REPOSITORY, type IDocumentsRepository } from '../../domain/repositories/documents.repository'
 import type { DocumentsResponseDTO } from '../dtos/documents-response.dto'
 

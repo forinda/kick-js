@@ -4,7 +4,7 @@ Adapters plug into the KickJS application lifecycle. Use them to add health chec
 
 ## The AppAdapter Interface
 
-Every adapter implements part (or all) of the `AppAdapter` interface from `@kickjs/core`:
+Every adapter implements part (or all) of the `AppAdapter` interface from `@forinda/kickjs-core`:
 
 ```ts
 interface AppAdapter {
@@ -65,7 +65,7 @@ Register routes that bypass the global middleware stack:
 
 ```ts
 import type { Express } from 'express'
-import type { AppAdapter, AdapterMiddleware, Container } from '@kickjs/core'
+import type { AppAdapter, AdapterMiddleware, Container } from '@forinda/kickjs-core'
 
 export class HealthAdapter implements AppAdapter {
   name = 'HealthAdapter'
@@ -99,7 +99,7 @@ export class HealthAdapter implements AppAdapter {
 Scope middleware to specific paths using the `path` property:
 
 ```ts
-import type { AppAdapter, AdapterMiddleware } from '@kickjs/core'
+import type { AppAdapter, AdapterMiddleware } from '@forinda/kickjs-core'
 
 export class RateLimitAdapter implements AppAdapter {
   name = 'RateLimitAdapter'
@@ -118,7 +118,7 @@ export class RateLimitAdapter implements AppAdapter {
 Connect on start, clean up on shutdown:
 
 ```ts
-import type { AppAdapter, Container } from '@kickjs/core'
+import type { AppAdapter, Container } from '@forinda/kickjs-core'
 import { createClient } from 'redis'
 
 const REDIS = Symbol('Redis')
@@ -143,7 +143,7 @@ export class RedisAdapter implements AppAdapter {
 Pass adapter instances to `bootstrap()` or `Application`:
 
 ```ts
-import { bootstrap } from '@kickjs/http'
+import { bootstrap } from '@forinda/kickjs-http'
 import { modules } from './modules'
 import { HealthAdapter } from './adapters/health.adapter'
 import { CorsAdapter } from './adapters/cors.adapter'

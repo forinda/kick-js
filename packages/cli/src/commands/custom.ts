@@ -13,7 +13,7 @@ import { runShellCommand } from '../utils/shell'
  *
  * @example kick.config.ts
  * ```ts
- * import { defineConfig } from '@kickjs/cli'
+ * import { defineConfig } from '@forinda/kickjs-cli'
  *
  * export default defineConfig({
  *   commands: [

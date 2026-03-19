@@ -8,7 +8,7 @@
 ## Create a New Project
 
 ```bash
-npx @kickjs/cli new my-api
+npx @forinda/kickjs-cli new my-api
 cd my-api
 pnpm install
 ```
@@ -63,8 +63,8 @@ src/modules/users/
 ## Your First Controller
 
 ```typescript
-import { Controller, Get, Post } from '@kickjs/core'
-import { RequestContext } from '@kickjs/http'
+import { Controller, Get, Post } from '@forinda/kickjs-core'
+import { RequestContext } from '@forinda/kickjs-http'
 import { z } from 'zod'
 
 const createUserSchema = z.object({
@@ -90,8 +90,8 @@ export class UserController {
 ## Your First Module
 
 ```typescript
-import { Container, type AppModule, type ModuleRoutes } from '@kickjs/core'
-import { buildRoutes } from '@kickjs/http'
+import { Container, type AppModule, type ModuleRoutes } from '@forinda/kickjs-core'
+import { buildRoutes } from '@forinda/kickjs-http'
 import { UserController } from './presentation/user.controller'
 
 export class UserModule implements AppModule {
@@ -113,7 +113,7 @@ export class UserModule implements AppModule {
 
 ```typescript
 import 'reflect-metadata'
-import { bootstrap } from '@kickjs/http'
+import { bootstrap } from '@forinda/kickjs-http'
 import { UserModule } from './modules/users'
 
 bootstrap({
@@ -126,11 +126,11 @@ That's it. Your API is running at `http://localhost:3000/api/v1/users`.
 ## Add Swagger Docs
 
 ```bash
-pnpm add @kickjs/swagger
+pnpm add @forinda/kickjs-swagger
 ```
 
 ```typescript
-import { SwaggerAdapter } from '@kickjs/swagger'
+import { SwaggerAdapter } from '@forinda/kickjs-swagger'
 
 bootstrap({
   modules: [UserModule],

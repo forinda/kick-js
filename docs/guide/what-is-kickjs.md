@@ -29,17 +29,17 @@ KickJS is a production-grade, decorator-driven Node.js framework built on Expres
 ## Architecture
 
 ```
-@kickjs/testing --> @kickjs/http --> @kickjs/core
+@forinda/kickjs-testing --> @forinda/kickjs-http --> @forinda/kickjs-core
                                          ^
-@kickjs/config --------------------------+
-@kickjs/swagger --> @kickjs/core
+@forinda/kickjs-config --------------------------+
+@forinda/kickjs-swagger --> @forinda/kickjs-core
 
-@kickjs/cli (standalone)
+@forinda/kickjs-cli (standalone)
 ```
 
-- **@kickjs/core** — DI container, 20+ decorators, module system, logger, error types
-- **@kickjs/http** — Express 5 app, router builder, RequestContext, middleware, query parsing
-- **@kickjs/config** — Zod-based env validation, ConfigService
-- **@kickjs/swagger** — OpenAPI spec generation, Swagger UI, ReDoc
-- **@kickjs/cli** — Project scaffolding, DDD code generators, custom commands
-- **@kickjs/testing** — Test utilities for integration testing
+- **@forinda/kickjs-core** — DI container, 20+ decorators, module system, logger, error types
+- **@forinda/kickjs-http** — Express 5 app, router builder, RequestContext, middleware, query parsing
+- **@forinda/kickjs-config** — Zod-based env validation, ConfigService
+- **@forinda/kickjs-swagger** — OpenAPI spec generation, Swagger UI, ReDoc
+- **@forinda/kickjs-cli** — Project scaffolding, DDD code generators, custom commands
+- **@forinda/kickjs-testing** — Test utilities for integration testing

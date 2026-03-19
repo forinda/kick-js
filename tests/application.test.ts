@@ -9,8 +9,8 @@ import {
   Autowired,
   type AppModule,
   type ModuleRoutes,
-} from '@kickjs/core'
-import { Application, buildRoutes, RequestContext } from '@kickjs/http'
+} from '@forinda/kickjs-core'
+import { Application, buildRoutes, RequestContext } from '@forinda/kickjs-http'
 
 /** Register a class in the container (decorator may have fired on old instance) */
 function reg(cls: any, container: Container) {

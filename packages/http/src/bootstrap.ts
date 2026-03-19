@@ -1,4 +1,4 @@
-import { createLogger } from '@kickjs/core'
+import { createLogger } from '@forinda/kickjs-core'
 import { Application, type ApplicationOptions } from './application'
 
 const log = createLogger('Process')
@@ -16,7 +16,7 @@ const log = createLogger('Process')
  * ```ts
  * // src/index.ts — that's it, the whole file
  * import 'reflect-metadata'
- * import { bootstrap } from '@kickjs/http'
+ * import { bootstrap } from '@forinda/kickjs-http'
  * import { modules } from './modules'
  *
  * bootstrap({ modules })

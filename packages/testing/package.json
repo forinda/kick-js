@@ -1,5 +1,5 @@
 {
-  "name": "@kickjs/testing",
+  "name": "@forinda/kickjs-testing",
   "version": "0.3.0",
   "description": "Test utilities, TestModule builder, and helpers for KickJS applications",
   "type": "module",
@@ -24,8 +24,8 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@kickjs/core": "workspace:*",
-    "@kickjs/http": "workspace:*"
+    "@forinda/kickjs-core": "workspace:*",
+    "@forinda/kickjs-http": "workspace:*"
   },
   "devDependencies": {
     "@swc/core": "^1.7.28",

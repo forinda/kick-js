@@ -8,10 +8,10 @@ The `kick dev` command runs `npx vite-node --watch src/index.ts`. Vite watches y
 
 ### The bootstrap() Function
 
-The `bootstrap()` function from `@kickjs/http` handles the entire HMR lifecycle:
+The `bootstrap()` function from `@forinda/kickjs-http` handles the entire HMR lifecycle:
 
 ```ts
-import { bootstrap } from '@kickjs/http'
+import { bootstrap } from '@forinda/kickjs-http'
 import { modules } from './modules'
 
 bootstrap({ modules })

@@ -1,5 +1,5 @@
 {
-  "name": "@kickjs/http",
+  "name": "@forinda/kickjs-http",
   "version": "0.3.0",
   "description": "Express 5 integration, router builder, RequestContext, and middleware for KickJS",
   "type": "module",
@@ -64,7 +64,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@kickjs/core": "workspace:*",
+    "@forinda/kickjs-core": "workspace:*",
     "cookie-parser": "^1.4.7",
     "multer": "^2.1.1",
     "reflect-metadata": "^0.2.2"

@@ -1,4 +1,4 @@
-import { defineConfig } from '@kickjs/cli'
+import { defineConfig } from '@forinda/kickjs-cli'
 
 /**
  * Project-level CLI configuration.

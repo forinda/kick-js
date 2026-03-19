@@ -1,5 +1,5 @@
-import { HttpException, type MiddlewareHandler } from '@kickjs/core'
-import type { RequestContext } from '@kickjs/http'
+import { HttpException, type MiddlewareHandler } from '@forinda/kickjs-core'
+import type { RequestContext } from '@forinda/kickjs-http'
 
 // Mock secret used for token encoding/decoding.
 // In a real application this would come from environment variables.

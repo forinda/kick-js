@@ -8,7 +8,7 @@
  * @Repository() registers this class in the DI container as a singleton.
  */
 import { randomUUID } from 'node:crypto'
-import { Repository, HttpException } from '@kickjs/core'
+import { Repository, HttpException } from '@forinda/kickjs-core'
 import type { IUserRepository } from '../../domain/repositories/user.repository'
 import type { UserResponseDTO } from '../../application/dtos/user-response.dto'
 import type { CreateUserDTO } from '../../application/dtos/create-user.dto'

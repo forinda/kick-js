@@ -20,7 +20,7 @@ KickJS gives you the DX of NestJS — decorators, dependency injection, module s
 
 ```bash
 # Scaffold a new project
-npx @kickjs/cli new my-api
+npx @forinda/kickjs-cli new my-api
 cd my-api
 
 # Start development with HMR
@@ -35,7 +35,7 @@ pnpm kick g module users
 ```typescript
 // src/index.ts
 import 'reflect-metadata'
-import { bootstrap } from '@kickjs/http'
+import { bootstrap } from '@forinda/kickjs-http'
 import { UserModule } from './modules/users'
 
 bootstrap({ modules: [UserModule] })
@@ -43,8 +43,8 @@ bootstrap({ modules: [UserModule] })
 
 ```typescript
 // src/modules/users/presentation/user.controller.ts
-import { Controller, Get, Post, Autowired } from '@kickjs/core'
-import { RequestContext } from '@kickjs/http'
+import { Controller, Get, Post, Autowired } from '@forinda/kickjs-core'
+import { RequestContext } from '@forinda/kickjs-http'
 import { z } from 'zod'
 
 const createUserSchema = z.object({
@@ -71,8 +71,8 @@ export class UserController {
 
 ```typescript
 // src/modules/users/index.ts
-import { Container, type AppModule, type ModuleRoutes } from '@kickjs/core'
-import { buildRoutes } from '@kickjs/http'
+import { Container, type AppModule, type ModuleRoutes } from '@forinda/kickjs-core'
+import { buildRoutes } from '@forinda/kickjs-http'
 import { UserController } from './presentation/user.controller'
 import './domain/services/user.service'
 
@@ -95,12 +95,12 @@ export class UserModule implements AppModule {
 
 | Package | Description |
 |---------|-------------|
-| [`@kickjs/core`](packages/core/) | DI container, 20+ decorators, module system, logger, error types |
-| [`@kickjs/http`](packages/http/) | Express 5 app, router builder, RequestContext, middleware, query parsing |
-| [`@kickjs/config`](packages/config/) | Zod-based env validation, ConfigService, `@Value` decorator |
-| [`@kickjs/swagger`](packages/swagger/) | OpenAPI spec from decorators, Swagger UI, ReDoc, pluggable schema parsers |
-| [`@kickjs/cli`](packages/cli/) | Project scaffolding, DDD code generators, custom commands |
-| [`@kickjs/testing`](packages/testing/) | `createTestApp`, `createTestModule` test utilities |
+| [`@forinda/kickjs-core`](packages/core/) | DI container, 20+ decorators, module system, logger, error types |
+| [`@forinda/kickjs-http`](packages/http/) | Express 5 app, router builder, RequestContext, middleware, query parsing |
+| [`@forinda/kickjs-config`](packages/config/) | Zod-based env validation, ConfigService, `@Value` decorator |
+| [`@forinda/kickjs-swagger`](packages/swagger/) | OpenAPI spec from decorators, Swagger UI, ReDoc, pluggable schema parsers |
+| [`@forinda/kickjs-cli`](packages/cli/) | Project scaffolding, DDD code generators, custom commands |
+| [`@forinda/kickjs-testing`](packages/testing/) | `createTestApp`, `createTestModule` test utilities |
 
 ## Full-Featured Bootstrap
 
@@ -110,8 +110,8 @@ import express from 'express'
 import helmet from 'helmet'
 import cors from 'cors'
 import compression from 'compression'
-import { bootstrap, requestId } from '@kickjs/http'
-import { SwaggerAdapter } from '@kickjs/swagger'
+import { bootstrap, requestId } from '@forinda/kickjs-http'
+import { SwaggerAdapter } from '@forinda/kickjs-swagger'
 import { modules } from './modules'
 
 bootstrap({
@@ -229,7 +229,7 @@ GET /api/v1/todos?page=2&limit=25&q=urgent&filter=status:eq:active&filter=priori
 Implement `QueryBuilderAdapter` to translate `ParsedQuery` into your ORM's query format:
 
 ```typescript
-import { type QueryBuilderAdapter, type ParsedQuery } from '@kickjs/http'
+import { type QueryBuilderAdapter, type ParsedQuery } from '@forinda/kickjs-http'
 
 // Prisma adapter
 class PrismaQueryAdapter implements QueryBuilderAdapter<PrismaQuery, PrismaConfig> {
@@ -278,7 +278,7 @@ Swagger uses Zod by default to convert validation schemas into OpenAPI JSON Sche
 ```typescript
 import Joi from 'joi'
 import joiToJson from 'joi-to-json'
-import { type SchemaParser, SwaggerAdapter } from '@kickjs/swagger'
+import { type SchemaParser, SwaggerAdapter } from '@forinda/kickjs-swagger'
 
 const joiParser: SchemaParser = {
   name: 'joi',
@@ -297,7 +297,7 @@ new SwaggerAdapter({
 Adapters hook into the application lifecycle to add functionality like database connections, auth, caching, or documentation.
 
 ```typescript
-import { type AppAdapter, type Container } from '@kickjs/core'
+import { type AppAdapter, type Container } from '@forinda/kickjs-core'
 import type { Express } from 'express'
 
 export class RedisAdapter implements AppAdapter {
@@ -407,7 +407,7 @@ kick g module users --dry-run       # Preview without writing
 Extend the CLI via `kick.config.ts` — the whole team uses `kick db:migrate` etc.:
 
 ```typescript
-import { defineConfig } from '@kickjs/cli'
+import { defineConfig } from '@forinda/kickjs-cli'
 
 export default defineConfig({
   commands: [
@@ -433,7 +433,7 @@ export default defineConfig({
 ## Environment Configuration
 
 ```typescript
-import { defineEnv, loadEnv } from '@kickjs/config'
+import { defineEnv, loadEnv } from '@forinda/kickjs-config'
 import { z } from 'zod'
 
 const envSchema = defineEnv((base) =>
@@ -451,7 +451,7 @@ const env = loadEnv(envSchema)
 ## Testing
 
 ```typescript
-import { createTestApp, createTestModule } from '@kickjs/testing'
+import { createTestApp, createTestModule } from '@forinda/kickjs-testing'
 import { describe, it, expect } from 'vitest'
 import supertest from 'supertest'
 
@@ -502,12 +502,12 @@ Preserved: HTTP server, DB pool, Redis, Socket.IO, port binding
 ```
 kick-js/
   packages/
-    core/           @kickjs/core
-    http/           @kickjs/http
-    config/         @kickjs/config
-    swagger/        @kickjs/swagger
-    cli/            @kickjs/cli
-    testing/        @kickjs/testing
+    core/           @forinda/kickjs-core
+    http/           @forinda/kickjs-http
+    config/         @forinda/kickjs-config
+    swagger/        @forinda/kickjs-swagger
+    cli/            @forinda/kickjs-cli
+    testing/        @forinda/kickjs-testing
   examples/
     basic-api/      Full DDD todo CRUD example
   turbo.json
@@ -518,12 +518,12 @@ kick-js/
 ## Dependency Graph
 
 ```
-@kickjs/testing --> @kickjs/http --> @kickjs/core
+@forinda/kickjs-testing --> @forinda/kickjs-http --> @forinda/kickjs-core
                                          ^
-@kickjs/config --------------------------+
-@kickjs/swagger --> @kickjs/core
+@forinda/kickjs-config --------------------------+
+@forinda/kickjs-swagger --> @forinda/kickjs-core
 
-@kickjs/cli (standalone -- generates code, no runtime dependency)
+@forinda/kickjs-cli (standalone -- generates code, no runtime dependency)
 ```
 
 ## Technical Decisions
@@ -544,12 +544,12 @@ kick-js/
 
 Key upcoming packages:
 
-- **`@kickjs/database`** -- Drizzle adapter, transaction propagation, query builder adapter
-- **`@kickjs/auth`** -- JWT/API key strategies, `@Authenticated`, `@Roles` guards
-- **`@kickjs/cache`** -- `@Cacheable`/`@CacheEvict` with Redis or in-memory stores
-- **`@kickjs/websocket`** -- Socket.IO with `@Gateway`/`@OnEvent` decorators
-- **`@kickjs/queue`** -- BullMQ job processing with `@Worker` decorator
-- **`@kickjs/mail`** -- Pluggable transports (Resend, SMTP), EJS templates
+- **`@forinda/kickjs-database`** -- Drizzle adapter, transaction propagation, query builder adapter
+- **`@forinda/kickjs-auth`** -- JWT/API key strategies, `@Authenticated`, `@Roles` guards
+- **`@forinda/kickjs-cache`** -- `@Cacheable`/`@CacheEvict` with Redis or in-memory stores
+- **`@forinda/kickjs-websocket`** -- Socket.IO with `@Gateway`/`@OnEvent` decorators
+- **`@forinda/kickjs-queue`** -- BullMQ job processing with `@Worker` decorator
+- **`@forinda/kickjs-mail`** -- Pluggable transports (Resend, SMTP), EJS templates
 - **Plugin system** -- Third-party packages extend framework with adapters, CLI generators, Vite plugins
 
 ## Contributing

@@ -13,8 +13,8 @@ import {
   Autowired,
   Middleware,
   type MiddlewareHandler,
-} from '@kickjs/core'
-import { buildRoutes, getControllerPath, RequestContext } from '@kickjs/http'
+} from '@forinda/kickjs-core'
+import { buildRoutes, getControllerPath, RequestContext } from '@forinda/kickjs-http'
 import { z } from 'zod'
 
 /**

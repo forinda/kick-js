@@ -7,7 +7,7 @@ KickJS lets you extend the CLI with project-specific commands defined in `kick.c
 Create a `kick.config.ts` (or `.js`, `.mjs`, `.json`) in your project root:
 
 ```ts
-import { defineConfig } from '@kickjs/cli'
+import { defineConfig } from '@forinda/kickjs-cli'
 
 export default defineConfig({
   commands: [
@@ -38,7 +38,7 @@ export default defineConfig({
 The `defineConfig` helper provides type safety for your configuration:
 
 ```ts
-import { defineConfig } from '@kickjs/cli'
+import { defineConfig } from '@forinda/kickjs-cli'
 
 export default defineConfig({
   modulesDir: 'src/modules',
@@ -120,7 +120,7 @@ kick db:migrate --verbose
 A production `kick.config.ts` with Drizzle ORM commands:
 
 ```ts
-import { defineConfig } from '@kickjs/cli'
+import { defineConfig } from '@forinda/kickjs-cli'
 
 export default defineConfig({
   modulesDir: 'src/modules',

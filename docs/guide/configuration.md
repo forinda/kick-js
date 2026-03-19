@@ -1,6 +1,6 @@
 # Configuration
 
-The `@kickjs/config` package provides Zod-validated environment configuration with caching and an injectable service for accessing values throughout your application.
+The `@forinda/kickjs-config` package provides Zod-validated environment configuration with caching and an injectable service for accessing values throughout your application.
 
 ## Defining an Environment Schema
 
@@ -8,7 +8,7 @@ Use `defineEnv()` to extend the base schema with your application-specific varia
 
 ```ts
 import { z } from 'zod'
-import { defineEnv } from '@kickjs/config'
+import { defineEnv } from '@forinda/kickjs-config'
 
 const envSchema = defineEnv((base) =>
   base.extend({
@@ -34,7 +34,7 @@ The base schema provides these defaults:
 Parse and validate `process.env` against your schema. The result is cached -- subsequent calls return the same object without re-parsing:
 
 ```ts
-import { loadEnv } from '@kickjs/config'
+import { loadEnv } from '@forinda/kickjs-config'
 
 const env = loadEnv(envSchema)
 console.log(env.DATABASE_URL) // fully typed
@@ -47,7 +47,7 @@ If called without a schema, `loadEnv()` uses the base schema only.
 Retrieve a single variable from the cached config:
 
 ```ts
-import { getEnv } from '@kickjs/config'
+import { getEnv } from '@forinda/kickjs-config'
 
 const port = getEnv('PORT') // uses cached env, falls back to base schema
 ```
@@ -57,7 +57,7 @@ const port = getEnv('PORT') // uses cached env, falls back to base schema
 Clear the cached config. Useful in tests when you need to reload with different environment values:
 
 ```ts
-import { resetEnvCache, loadEnv } from '@kickjs/config'
+import { resetEnvCache, loadEnv } from '@forinda/kickjs-config'
 
 resetEnvCache()
 process.env.PORT = '4000'
@@ -69,8 +69,8 @@ const env = loadEnv(envSchema) // re-parsed with new PORT
 `ConfigService` is an injectable singleton that wraps `loadEnv()`. Inject it into any service or controller:
 
 ```ts
-import { Service, Autowired } from '@kickjs/core'
-import { ConfigService } from '@kickjs/config'
+import { Service, Autowired } from '@forinda/kickjs-core'
+import { ConfigService } from '@forinda/kickjs-config'
 
 @Service()
 class DatabaseService {
@@ -99,7 +99,7 @@ class DatabaseService {
 The `@Value` decorator injects an environment variable directly into a class property. It is evaluated lazily -- the value is read from `process.env` at access time, not at decoration time.
 
 ```ts
-import { Service, Value } from '@kickjs/core'
+import { Service, Value } from '@forinda/kickjs-core'
 
 @Service()
 class MailService {

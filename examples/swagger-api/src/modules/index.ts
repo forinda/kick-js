@@ -1,4 +1,4 @@
-import type { AppModuleClass } from '@kickjs/core'
+import type { AppModuleClass } from '@forinda/kickjs-core'
 import { UserModule } from './users'
 import { PostModule } from './posts'
 

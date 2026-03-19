@@ -8,8 +8,8 @@ import {
   Middleware,
   HttpException,
   Inject,
-} from '@kickjs/core'
-import type { RequestContext } from '@kickjs/http'
+} from '@forinda/kickjs-core'
+import type { RequestContext } from '@forinda/kickjs-http'
 import { authGuard, createMockToken } from '../../../middleware/auth.middleware'
 import { USERS_REPOSITORY, type IUsersRepository } from '../domain/repositories/users.repository'
 import { CreateUsersUseCase } from '../application/use-cases/create-users.use-case'

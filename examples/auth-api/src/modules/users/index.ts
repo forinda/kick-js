@@ -1,5 +1,5 @@
-import { Container, type AppModule, type ModuleRoutes } from '@kickjs/core'
-import { buildRoutes } from '@kickjs/http'
+import { Container, type AppModule, type ModuleRoutes } from '@forinda/kickjs-core'
+import { buildRoutes } from '@forinda/kickjs-http'
 import { USERS_REPOSITORY } from './domain/repositories/users.repository'
 import { InMemoryUsersRepository } from './infrastructure/repositories/in-memory-users.repository'
 import { UsersController } from './presentation/users.controller'

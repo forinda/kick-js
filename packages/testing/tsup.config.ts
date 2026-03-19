@@ -9,5 +9,5 @@ export default defineConfig({
   dts: true,
   shims: false,
   minify: false,
-  external: ['@kickjs/core', '@kickjs/http'],
+  external: ['@forinda/kickjs-core', '@forinda/kickjs-http'],
 })

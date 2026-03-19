@@ -1,11 +1,11 @@
-import { Controller, Get, Post, Put, Delete, Autowired } from '@kickjs/core'
-import { RequestContext } from '@kickjs/http'
+import { Controller, Get, Post, Put, Delete, Autowired } from '@forinda/kickjs-core'
+import { RequestContext } from '@forinda/kickjs-http'
 import {
   ApiTags,
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
-} from '@kickjs/swagger'
+} from '@forinda/kickjs-swagger'
 import { z } from 'zod'
 import { CreateUserUseCase } from '../application/use-cases/create-user.use-case'
 import { GetUserUseCase } from '../application/use-cases/get-user.use-case'

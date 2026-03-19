@@ -7,7 +7,7 @@ KickJS has a built-in lightweight IoC container with no external dependencies. I
 ### Decorators
 
 ```typescript
-import { Service, Repository, Component, Injectable } from '@kickjs/core'
+import { Service, Repository, Component, Injectable } from '@forinda/kickjs-core'
 
 @Service()     // Semantic alias — business logic (singleton)
 class UserService { }
@@ -155,7 +155,7 @@ Error: Circular dependency detected: OrderService -> PaymentService -> OrderServ
 Reset the container between tests for isolation:
 
 ```typescript
-import { Container } from '@kickjs/core'
+import { Container } from '@forinda/kickjs-core'
 
 beforeEach(() => {
   Container.reset()

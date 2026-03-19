@@ -1,4 +1,4 @@
-import { Service, Inject } from '@kickjs/core'
+import { Service, Inject } from '@forinda/kickjs-core'
 import { USERS_REPOSITORY, type IUsersRepository } from '../../domain/repositories/users.repository'
 import type { UpdateUsersDTO } from '../dtos/update-users.dto'
 import type { UsersResponseDTO } from '../dtos/users-response.dto'

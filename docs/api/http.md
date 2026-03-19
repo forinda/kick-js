@@ -1,4 +1,4 @@
-# @kickjs/http
+# @forinda/kickjs-http
 
 Express-based HTTP layer with declarative middleware pipeline, request context, routing, and query string parsing.
 

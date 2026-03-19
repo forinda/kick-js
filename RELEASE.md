@@ -50,7 +50,7 @@ node scripts/release.js custom 1.0.0-rc.1
 5. **Commits**: `chore: release vX.Y.Z`
 6. **Tags**: `vX.Y.Z` (annotated)
 7. **Pushes** to remote with tags
-8. **Publishes** all 6 `@kickjs/*` packages to npm
+8. **Publishes** all 6 `@forinda/kickjs-*` packages to npm
 
 ## Options
 
@@ -113,12 +113,12 @@ All packages use **lockstep versioning** — every package shares the same versi
 
 | Package | Description |
 |---------|-------------|
-| `@kickjs/core` | DI container, decorators, module system, logger |
-| `@kickjs/http` | Express 5 app, middleware, query parsing |
-| `@kickjs/config` | Zod env validation, ConfigService |
-| `@kickjs/swagger` | OpenAPI spec, Swagger UI, ReDoc |
-| `@kickjs/cli` | CLI binary, generators, custom commands |
-| `@kickjs/testing` | Test utilities |
+| `@forinda/kickjs-core` | DI container, decorators, module system, logger |
+| `@forinda/kickjs-http` | Express 5 app, middleware, query parsing |
+| `@forinda/kickjs-config` | Zod env validation, ConfigService |
+| `@forinda/kickjs-swagger` | OpenAPI spec, Swagger UI, ReDoc |
+| `@forinda/kickjs-cli` | CLI binary, generators, custom commands |
+| `@forinda/kickjs-testing` | Test utilities |
 
 Examples are **not published** — they exist for reference only.
 

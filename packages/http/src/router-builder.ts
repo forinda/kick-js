@@ -1,6 +1,11 @@
 import 'reflect-metadata'
 import { Router, type Request, type Response, type NextFunction } from 'express'
-import { Container, METADATA, type RouteDefinition, type MiddlewareHandler } from '@kickjs/core'
+import {
+  Container,
+  METADATA,
+  type RouteDefinition,
+  type MiddlewareHandler,
+} from '@forinda/kickjs-core'
 import { RequestContext } from './context'
 import { validate } from './middleware/validate'
 

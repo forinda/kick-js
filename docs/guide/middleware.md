@@ -13,8 +13,8 @@ type MiddlewareHandler = (ctx: any, next: () => void) => void | Promise<void>
 The `ctx` parameter is a `RequestContext` instance. Call `next()` to pass control to the next handler in the chain.
 
 ```ts
-import type { MiddlewareHandler } from '@kickjs/core'
-import type { RequestContext } from '@kickjs/http'
+import type { MiddlewareHandler } from '@forinda/kickjs-core'
+import type { RequestContext } from '@forinda/kickjs-http'
 
 const authMiddleware: MiddlewareHandler = async (ctx: RequestContext, next) => {
   const token = ctx.headers['authorization']
@@ -34,7 +34,7 @@ The `@Middleware()` decorator works on both classes and methods. It accepts one 
 Runs on every route in the controller, before any method-level middleware:
 
 ```ts
-import { Controller, Get, Middleware } from '@kickjs/core'
+import { Controller, Get, Middleware } from '@forinda/kickjs-core'
 
 @Controller()
 @Middleware(authMiddleware, loggingMiddleware)
@@ -82,7 +82,7 @@ Global middleware is configured in `bootstrap()` via the `middleware` option. Th
 
 ```ts
 import express from 'express'
-import { bootstrap, requestId } from '@kickjs/http'
+import { bootstrap, requestId } from '@forinda/kickjs-http'
 import { modules } from './modules'
 
 bootstrap({
@@ -119,7 +119,7 @@ middleware: [
 Adapters (database, rate limiting, CORS, Swagger, etc.) can inject middleware at four phases in the pipeline. This is done by implementing the `middleware()` method on `AppAdapter`:
 
 ```ts
-import type { AppAdapter, AdapterMiddleware } from '@kickjs/core'
+import type { AppAdapter, AdapterMiddleware } from '@forinda/kickjs-core'
 
 class RateLimitAdapter implements AppAdapter {
   middleware(): AdapterMiddleware[] {

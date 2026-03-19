@@ -4,10 +4,10 @@ KickJS provides a structured error-handling pipeline built on the `HttpException
 
 ## HttpException
 
-The `HttpException` class carries an HTTP status code, a message, and optional validation details. Import it from `@kickjs/core`.
+The `HttpException` class carries an HTTP status code, a message, and optional validation details. Import it from `@forinda/kickjs-core`.
 
 ```ts
-import { HttpException } from '@kickjs/core'
+import { HttpException } from '@forinda/kickjs-core'
 
 throw new HttpException(400, 'Invalid input')
 ```
@@ -43,7 +43,7 @@ throw HttpException.unprocessable('Validation failed', [
 
 ```ts
 import { z } from 'zod'
-import { HttpException } from '@kickjs/core'
+import { HttpException } from '@forinda/kickjs-core'
 
 const schema = z.object({ name: z.string().min(1) })
 const result = schema.safeParse(req.body)
@@ -79,7 +79,7 @@ If Express has already started streaming the response (`res.headersSent === true
 
 ## Logging
 
-Errors are logged using the `@kickjs/core` Pino logger tagged with `ErrorHandler`:
+Errors are logged using the `@forinda/kickjs-core` Pino logger tagged with `ErrorHandler`:
 
 - **500+ HttpException** and **unexpected errors** are logged at `error` level with full stack traces.
 - **Headers-already-sent** conditions are logged at `warn` level.

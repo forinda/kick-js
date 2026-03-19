@@ -5,8 +5,8 @@ KickJS includes an ORM-agnostic query string parser that turns URL parameters in
 ## Basic Usage
 
 ```ts
-import { Controller, Get } from '@kickjs/core'
-import { RequestContext } from '@kickjs/http'
+import { Controller, Get } from '@forinda/kickjs-core'
+import { RequestContext } from '@forinda/kickjs-http'
 
 @Controller('/tasks')
 class TaskController {
@@ -24,7 +24,7 @@ class TaskController {
 The equivalent standalone call:
 
 ```ts
-import { parseQuery } from '@kickjs/http'
+import { parseQuery } from '@forinda/kickjs-http'
 
 const parsed = parseQuery(req.query, { filterable: ['status'] })
 ```
@@ -114,7 +114,7 @@ interface ParsedQuery {
 Convert a `ParsedQuery` back into a query parameter object, useful for generating links or in tests:
 
 ```ts
-import { buildQueryParams } from '@kickjs/http'
+import { buildQueryParams } from '@forinda/kickjs-http'
 
 const params = buildQueryParams(parsed)
 // { filter: ['status:eq:active'], sort: ['createdAt:desc'], page: 2, limit: 10, q: 'deploy' }
@@ -125,7 +125,7 @@ const params = buildQueryParams(parsed)
 To connect parsed queries to your ORM, implement the `QueryBuilderAdapter` interface:
 
 ```ts
-import { QueryBuilderAdapter, ParsedQuery } from '@kickjs/http'
+import { QueryBuilderAdapter, ParsedQuery } from '@forinda/kickjs-http'
 
 class DrizzleQueryAdapter implements QueryBuilderAdapter<DrizzleResult, DrizzleConfig> {
   readonly name = 'drizzle'

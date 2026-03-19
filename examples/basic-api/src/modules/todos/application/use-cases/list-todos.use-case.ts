@@ -1,4 +1,4 @@
-import { Service, Inject } from '@kickjs/core'
+import { Service, Inject } from '@forinda/kickjs-core'
 import { TODO_REPOSITORY, type ITodoRepository } from '../../domain/repositories/todo.repository'
 
 @Service()
