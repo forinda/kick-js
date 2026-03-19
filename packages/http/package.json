@@ -9,6 +9,46 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./application": {
+      "import": "./dist/application.js",
+      "types": "./dist/application.d.ts"
+    },
+    "./bootstrap": {
+      "import": "./dist/bootstrap.js",
+      "types": "./dist/bootstrap.d.ts"
+    },
+    "./context": {
+      "import": "./dist/context.js",
+      "types": "./dist/context.d.ts"
+    },
+    "./router": {
+      "import": "./dist/router-builder.js",
+      "types": "./dist/router-builder.d.ts"
+    },
+    "./middleware/csrf": {
+      "import": "./dist/middleware/csrf.js",
+      "types": "./dist/middleware/csrf.d.ts"
+    },
+    "./middleware/upload": {
+      "import": "./dist/middleware/upload.js",
+      "types": "./dist/middleware/upload.d.ts"
+    },
+    "./middleware/validate": {
+      "import": "./dist/middleware/validate.js",
+      "types": "./dist/middleware/validate.d.ts"
+    },
+    "./middleware/request-id": {
+      "import": "./dist/middleware/request-id.js",
+      "types": "./dist/middleware/request-id.d.ts"
+    },
+    "./middleware/error-handler": {
+      "import": "./dist/middleware/error-handler.js",
+      "types": "./dist/middleware/error-handler.d.ts"
+    },
+    "./query": {
+      "import": "./dist/query/index.js",
+      "types": "./dist/query/index.d.ts"
     }
   },
   "files": ["dist"],

@@ -9,6 +9,34 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./container": {
+      "import": "./dist/container.js",
+      "types": "./dist/container.d.ts"
+    },
+    "./decorators": {
+      "import": "./dist/decorators.js",
+      "types": "./dist/decorators.d.ts"
+    },
+    "./module": {
+      "import": "./dist/app-module.js",
+      "types": "./dist/app-module.d.ts"
+    },
+    "./adapter": {
+      "import": "./dist/adapter.js",
+      "types": "./dist/adapter.d.ts"
+    },
+    "./logger": {
+      "import": "./dist/logger.js",
+      "types": "./dist/logger.d.ts"
+    },
+    "./errors": {
+      "import": "./dist/errors.js",
+      "types": "./dist/errors.d.ts"
+    },
+    "./types": {
+      "import": "./dist/interfaces.js",
+      "types": "./dist/interfaces.d.ts"
     }
   },
   "files": ["dist"],
