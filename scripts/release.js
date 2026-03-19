@@ -399,7 +399,7 @@ function main() {
     ...PACKAGES.map((p) => `${p}/package.json`),
     ...EXAMPLES.filter((e) => fs.existsSync(`${e}/package.json`)).map((e) => `${e}/package.json`),
   ]
-  if (notes) filesToStage.push(`RELEASE_NOTES_v${nextVersion}.md`)
+  // Note: RELEASE_NOTES file is gitignored — used for GitHub Release body, not committed
 
   run(`git add ${filesToStage.join(' ')}`, 'Staging version bumps')
   run(

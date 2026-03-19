@@ -1,6 +1,6 @@
 {
   "name": "@kickjs/testing",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "description": "Test utilities, TestModule builder, and helpers for KickJS applications",
   "type": "module",
   "main": "dist/index.js",
@@ -11,7 +11,9 @@
       "types": "./dist/index.d.ts"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",

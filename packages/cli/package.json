@@ -1,6 +1,6 @@
 {
   "name": "@kickjs/cli",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "description": "CLI for KickJS — project scaffolding, DDD module generation, dev/build/start",
   "type": "module",
   "main": "dist/index.js",
@@ -14,7 +14,9 @@
       "types": "./dist/index.d.ts"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",

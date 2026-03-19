@@ -1,6 +1,6 @@
 {
   "name": "@kickjs/swagger",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "description": "OpenAPI spec generation from decorators, Swagger UI and ReDoc serving for KickJS",
   "type": "module",
   "main": "dist/index.js",
@@ -11,7 +11,9 @@
       "types": "./dist/index.d.ts"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",

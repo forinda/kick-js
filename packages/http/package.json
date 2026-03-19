@@ -1,6 +1,6 @@
 {
   "name": "@kickjs/http",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "description": "Express 5 integration, router builder, RequestContext, and middleware for KickJS",
   "type": "module",
   "main": "dist/index.js",
@@ -51,7 +51,9 @@
       "types": "./dist/query/index.d.ts"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
