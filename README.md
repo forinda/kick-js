@@ -93,14 +93,14 @@ export class UserModule implements AppModule {
 
 ## Packages
 
-| Package | Description |
-|---------|-------------|
-| [`@forinda/kickjs-core`](packages/core/) | DI container, 20+ decorators, module system, logger, error types |
-| [`@forinda/kickjs-http`](packages/http/) | Express 5 app, router builder, RequestContext, middleware, query parsing |
-| [`@forinda/kickjs-config`](packages/config/) | Zod-based env validation, ConfigService, `@Value` decorator |
-| [`@forinda/kickjs-swagger`](packages/swagger/) | OpenAPI spec from decorators, Swagger UI, ReDoc, pluggable schema parsers |
-| [`@forinda/kickjs-cli`](packages/cli/) | Project scaffolding, DDD code generators, custom commands |
-| [`@forinda/kickjs-testing`](packages/testing/) | `createTestApp`, `createTestModule` test utilities |
+| Package | npm | Description |
+|---------|-----|-------------|
+| [`@forinda/kickjs-core`](packages/core/) | [![npm](https://img.shields.io/npm/v/@forinda/kickjs-core)](https://www.npmjs.com/package/@forinda/kickjs-core) | DI container, 20+ decorators, module system, logger, error types |
+| [`@forinda/kickjs-http`](packages/http/) | [![npm](https://img.shields.io/npm/v/@forinda/kickjs-http)](https://www.npmjs.com/package/@forinda/kickjs-http) | Express 5 app, router builder, RequestContext, middleware, query parsing |
+| [`@forinda/kickjs-config`](packages/config/) | [![npm](https://img.shields.io/npm/v/@forinda/kickjs-config)](https://www.npmjs.com/package/@forinda/kickjs-config) | Zod-based env validation, ConfigService, `@Value` decorator |
+| [`@forinda/kickjs-swagger`](packages/swagger/) | [![npm](https://img.shields.io/npm/v/@forinda/kickjs-swagger)](https://www.npmjs.com/package/@forinda/kickjs-swagger) | OpenAPI spec from decorators, Swagger UI, ReDoc, pluggable schema parsers |
+| [`@forinda/kickjs-cli`](packages/cli/) | [![npm](https://img.shields.io/npm/v/@forinda/kickjs-cli)](https://www.npmjs.com/package/@forinda/kickjs-cli) | Project scaffolding, DDD code generators, custom commands |
+| [`@forinda/kickjs-testing`](packages/testing/) | [![npm](https://img.shields.io/npm/v/@forinda/kickjs-testing)](https://www.npmjs.com/package/@forinda/kickjs-testing) | `createTestApp`, `createTestModule` test utilities |
 
 ## Full-Featured Bootstrap
 
