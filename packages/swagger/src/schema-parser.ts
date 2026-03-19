@@ -54,9 +54,7 @@ export const zodSchemaParser: SchemaParser = {
   },
 
   toJsonSchema(schema: unknown): Record<string, unknown> {
-    const result = (schema as any).toJSONSchema()
-    // Remove $schema — the OpenAPI spec builder manages the top-level schema
-    delete result.$schema
-    return result
+    const { $schema: _, ...rest } = (schema as any).toJSONSchema() as Record<string, unknown>
+    return rest
   },
 }

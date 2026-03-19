@@ -66,8 +66,13 @@ export async function loadKickConfig(cwd: string): Promise<KickConfig | null> {
       const { pathToFileURL } = await import('node:url')
       const mod = await import(pathToFileURL(filepath).href)
       return mod.default ?? mod
-    } catch {
-      // If ts import fails, skip
+    } catch (err) {
+      if (filename.endsWith('.ts')) {
+        console.warn(
+          `Warning: Failed to load ${filename}. TypeScript config files require ` +
+            'a runtime loader (e.g. tsx, ts-node) or use kick.config.js/.mjs instead.',
+        )
+      }
       continue
     }
   }

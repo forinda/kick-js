@@ -44,7 +44,7 @@ export function createTestApp(options: CreateTestAppOptions): {
   }
 
   // Run setup without starting the HTTP server
-  ;(app as any).setup()
+  app.setup()
 
   return {
     app,

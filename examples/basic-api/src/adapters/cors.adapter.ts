@@ -42,7 +42,12 @@ export class CorsAdapter implements AppAdapter {
       } else if (origin === false) {
         originValue = undefined
       } else if (Array.isArray(origin)) {
-        originValue = origin.join(',')
+        // Match request origin against allow-list, echo back if matched
+        const reqOrigin = req.headers.origin as string | undefined
+        if (reqOrigin && origin.includes(reqOrigin)) {
+          originValue = reqOrigin
+          res.setHeader('Vary', 'Origin')
+        }
       } else {
         originValue = String(origin)
       }

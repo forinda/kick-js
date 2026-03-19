@@ -11,7 +11,7 @@ function escapeHtml(str: string): string {
 /** Generate Swagger UI HTML that loads from CDN */
 export function swaggerUIHtml(specUrl: string, title = 'API Docs'): string {
   const safeTitle = escapeHtml(title)
-  const safeUrl = JSON.stringify(specUrl)
+  const safeUrl = JSON.stringify(specUrl).replace(/</g, '\\u003c')
 
   return `<!DOCTYPE html>
 <html lang="en">

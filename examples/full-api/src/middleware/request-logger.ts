@@ -16,7 +16,7 @@ export function requestLogger() {
 
     res.on('finish', () => {
       const duration = Date.now() - start
-      const requestId = req.headers['x-request-id'] || '-'
+      const requestId = (req as any).requestId || req.headers['x-request-id'] || '-'
       log.info(`${req.method} ${req.originalUrl} ${res.statusCode} ${duration}ms [${requestId}]`)
     })
 
