@@ -1,560 +1,567 @@
 # KickJS
 
-🚀 A modern, decorator-driven TypeScript framework built on Express with dependency injection, reactive state management, and enterprise-ready features.
+A production-grade, decorator-driven Node.js framework built on Express 5 and TypeScript.
 
-## ✨ Features
+KickJS gives you the DX of NestJS — decorators, dependency injection, module system, code generators — without the weight. No RxJS, no class-transformer, no class-validator. Just TypeScript, Zod, and decorators.
 
-- **Decorator-Driven Architecture**: Spring Boot-style controllers with `@KickController`, `@KickGet`, `@KickPost`, etc.
-- **Dependency Injection**: Powered by Inversify with automatic binding and container management
-- **Reactive State Management**: Built-in EventEmitter-based state with observable properties
-- **Middleware System**: Priority-based middleware with both global and DI-managed middlewares
-- **Request Context Injection**: Automatic injection of request context with metadata
-- **Route Prefixing**: Flexible API prefixing for better organization
-- **Module System**: Organize your application into reusable, self-contained modules
-- **Auto-Binding**: Automatic method binding with `@AutoBind` decorator
-- **Type Safety**: Full TypeScript support with comprehensive type definitions
+## Highlights
 
-## 📦 Installation
+- **Custom DI container** — constructor and property injection, no external dependency
+- **Decorator-driven** — `@Controller`, `@Get`, `@Post`, `@Service`, `@Autowired`, `@Middleware`
+- **Zod-native validation** — schemas double as OpenAPI documentation
+- **Vite HMR** — zero-downtime hot reload in development, preserves DB/Redis/Socket connections
+- **DDD generators** — `kick g module users` scaffolds entity, repository, service, use-cases, DTOs, controller
+- **Auto OpenAPI** — Swagger UI and ReDoc generated from your decorators and Zod schemas
+- **Pluggable** — adapters for database, auth, cache, swagger; schema parsers for Zod/Yup/Joi; query builders for Drizzle/Prisma/Sequelize
+- **Extensible CLI** — register project-specific commands in `kick.config.ts`
+- **ESM + TypeScript strict** — modern stack, tree-shakeable packages
+
+## Quick Start
 
 ```bash
-npm install @forinda/kickjs
-# or
-pnpm add @forinda/kickjs
-# or
-yarn add @forinda/kickjs
+# Scaffold a new project
+npx @kickjs/cli new my-api
+cd my-api
+
+# Start development with HMR
+pnpm kick dev
+
+# Generate a DDD module
+pnpm kick g module users
 ```
 
-## 🏗️ Creating Your First App
-
-### Basic Setup
+## Minimal Example
 
 ```typescript
 // src/index.ts
-import express from "express";
-import { createKickApp, KickController, KickGet, KickRequestContext } from "@forinda/kickjs";
-import { AppModule } from "./app.module";
+import 'reflect-metadata'
+import { bootstrap } from '@kickjs/http'
+import { UserModule } from './modules/users'
 
-const app = express();
-app.use(express.json());
-
-const server = createKickApp({
-  name: "MyApp",
-  prefix: "/api/v1", // Optional: prefix all routes
-  app,
-  modules: [AppModule]
-});
-
-server.listen(3000, () => {
-  console.log("🚀 Server running on http://localhost:3000");
-  console.log("📊 App Stats:", server.getStats());
-});
+bootstrap({ modules: [UserModule] })
 ```
-
-### Creating Controllers
-
-Controllers are the heart of your KickJS application. They handle HTTP requests and contain your business logic.
 
 ```typescript
-// src/controllers/users.controller.ts
-import { 
-  KickController, 
-  KickGet, 
-  KickPost, 
-  KickRequestContext,
-  KickInject 
-} from "@forinda/kickjs";
-import { UserService } from "../services/user.service";
+// src/modules/users/presentation/user.controller.ts
+import { Controller, Get, Post, Autowired } from '@kickjs/core'
+import { RequestContext } from '@kickjs/http'
+import { z } from 'zod'
 
-@KickController("/users")
-export class UserController {
-  constructor(
-    @KickInject(UserService)
-    private readonly userService: UserService
-  ) {}
-
-  @KickGet("/")
-  async getUsers(context: KickRequestContext) {
-    const { res } = context;
-    const users = await this.userService.findAll();
-    
-    res.json({
-      users,
-      requestId: context.meta.requestId,
-      timestamp: context.meta.startTime
-    });
-  }
-
-  @KickPost("/")
-  async createUser(context: KickRequestContext) {
-    const { req, res } = context;
-    
-    if (!req.body.name || !req.body.email) {
-      return res.status(400).json({
-        error: "Name and email are required",
-        requestId: context.meta.requestId
-      });
-    }
-
-    const user = await this.userService.create(req.body);
-    res.status(201).json({
-      user,
-      requestId: context.meta.requestId
-    });
-  }
-}
-```
-
-### Configuration
-
-KickJS supports flexible configuration through `kick.config.ts` files. This provides type safety and prevents configuration errors.
-
-```typescript
-// kick.config.ts
-import { createKickConfig } from "@forinda/kickjs";
-
-export default createKickConfig({
-  app: {
-    name: 'My App',
-    port: 3000,
-    host: 'localhost',
-    prefix: '/api/v1',
-    env: 'development'
-  },
-  dev: {
-    port: 3000,
-    host: 'localhost',
-    entry: 'src/index.ts',
-    watch: true,
-    env: {
-      NODE_ENV: 'development',
-      DEBUG: 'app:*'
-    }
-  },
-  start: {
-    port: 3000,
-    host: '0.0.0.0',
-    entry: 'dist/index.js',
-    env: {
-      NODE_ENV: 'production'
-    }
-  }
-});
-```
-
-#### Using Configuration in Your App
-
-```typescript
-// src/index.ts
-import { createKickAppWithConfig } from "@forinda/kickjs";
-import { AppModule } from "./app.module";
-
-async function startApp() {
-  const server = await createKickAppWithConfig({
-    app: express(),
-    modules: [AppModule]
-  });
-
-  // Access config in your app
-  console.log('App Name:', server.kickApp.getConfig('name'));
-  console.log('API Prefix:', server.kickApp.getConfig('prefix'));
-  
-  // Config with fallback
-  const theme = server.kickApp.getConfigOrDefault('ui.theme', 'dark');
-  
-  const port = server.kickApp.getConfig('port') || 3000;
-  server.listen(port, () => {
-    console.log(`🚀 ${server.kickApp.getConfig('name')} running on port ${port}`);
-  });
-}
-
-startApp();
-```
-
-#### CLI Configuration Support
-
-The KickJS CLI automatically loads your configuration:
-
-```bash
-# Uses config file values
-kick dev
-
-# Override specific values
-kick dev --port 8080 --host 0.0.0.0
-
-# Production mode
-kick start --port 3000
-```
-
-### Creating Services
-
-Services contain your business logic and can be injected into controllers and other services.
-
-```typescript
-// src/services/user.service.ts
-import { KickInjectable } from "@forinda/kickjs";
-
-export interface User {
-  id: string;
-  name: string;
-  email: string;
-  createdAt: Date;
-}
-
-@KickInjectable()
-export class UserService {
-  private users: User[] = [];
-
-  async findAll(): Promise<User[]> {
-    return this.users;
-  }
-
-  async create(userData: { name: string; email: string }): Promise<User> {
-    const user: User = {
-      id: Math.random().toString(36).substr(2, 9),
-      name: userData.name,
-      email: userData.email,
-      createdAt: new Date()
-    };
-    
-    this.users.push(user);
-    return user;
-  }
-
-  async findById(id: string): Promise<User | undefined> {
-    return this.users.find(user => user.id === id);
-  }
-}
-```
-
-### Creating Modules
-
-Modules help organize your application by grouping related controllers, services, and middlewares.
-
-```typescript
-// src/app.module.ts
-import { createModule } from "@forinda/kickjs";
-import { UserController } from "./controllers/user.controller";
-import { UserService } from "./services/user.service";
-import { LoggingMiddleware } from "./middlewares/logging.middleware";
-
-export const AppModule = createModule("app", {
-  controllers: [UserController],
-  services: [UserService], // Register your services
-  middlewares: [LoggingMiddleware] // Optional: DI-managed middlewares
-});
-```
-
-## 🛠️ Creating Middlewares
-
-KickJS supports two types of middlewares: global middlewares and DI-managed middlewares.
-
-### DI-Managed Middlewares (Recommended)
-
-These middlewares are managed by the dependency injection container and can inject services.
-
-```typescript
-// src/middlewares/logging.middleware.ts
-import { 
-  KickMiddleware, 
-  KickAppMiddleware, 
-  KickRequest, 
-  KickResponse, 
-  KickNextFn 
-} from "@forinda/kickjs";
-
-@KickMiddleware({ 
-  name: "RequestLogger", 
-  priority: 1, // Lower numbers execute first
-  global: true,
-  tags: ["logging", "development"] 
+const createUserSchema = z.object({
+  name: z.string().min(1),
+  email: z.string().email(),
 })
-export class LoggingMiddleware implements KickAppMiddleware {
-  use(req: KickRequest, res: KickResponse, next: KickNextFn): void {
-    const start = Date.now();
-    
-    console.log(`→ ${req.method} ${req.url}`);
-    
-    res.on('finish', () => {
-      const duration = Date.now() - start;
-      console.log(`← ${req.method} ${req.url} ${res.statusCode} (${duration}ms)`);
-    });
-    
-    next();
+
+@Controller()
+export class UserController {
+  @Autowired() private userService!: UserService
+
+  @Get('/')
+  async list(ctx: RequestContext) {
+    ctx.json(await this.userService.findAll())
+  }
+
+  @Post('/', { body: createUserSchema })
+  async create(ctx: RequestContext) {
+    const user = await this.userService.create(ctx.body)
+    ctx.created(user)
   }
 }
 ```
 
-### Global Middlewares
-
-Global middlewares are not managed by DI and are useful for framework-level concerns like CORS.
-
 ```typescript
-// src/middlewares/cors.middleware.ts
-import { KickAppMiddleware, KickRequest, KickResponse, KickNextFn } from "@forinda/kickjs";
+// src/modules/users/index.ts
+import { Container, type AppModule, type ModuleRoutes } from '@kickjs/core'
+import { buildRoutes } from '@kickjs/http'
+import { UserController } from './presentation/user.controller'
+import './domain/services/user.service'
 
-export class CorsMiddleware implements KickAppMiddleware {
-  use(req: KickRequest, res: KickResponse, next: KickNextFn): void {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    
-    if (req.method === 'OPTIONS') {
-      res.status(200).end();
-      return;
+export class UserModule implements AppModule {
+  register(container: Container): void {
+    // Bind interfaces to implementations
+  }
+
+  routes(): ModuleRoutes {
+    return {
+      path: '/users',
+      router: buildRoutes(UserController),
+      controller: UserController, // enables auto OpenAPI docs
     }
-    
-    next();
   }
 }
 ```
 
-Register global middlewares when creating your app:
+## Packages
+
+| Package | Description |
+|---------|-------------|
+| [`@kickjs/core`](packages/core/) | DI container, 20+ decorators, module system, logger, error types |
+| [`@kickjs/http`](packages/http/) | Express 5 app, router builder, RequestContext, middleware, query parsing |
+| [`@kickjs/config`](packages/config/) | Zod-based env validation, ConfigService, `@Value` decorator |
+| [`@kickjs/swagger`](packages/swagger/) | OpenAPI spec from decorators, Swagger UI, ReDoc, pluggable schema parsers |
+| [`@kickjs/cli`](packages/cli/) | Project scaffolding, DDD code generators, custom commands |
+| [`@kickjs/testing`](packages/testing/) | `createTestApp`, `createTestModule` test utilities |
+
+## Full-Featured Bootstrap
 
 ```typescript
-const corsMiddleware = new CorsMiddleware();
+import 'reflect-metadata'
+import express from 'express'
+import helmet from 'helmet'
+import cors from 'cors'
+import compression from 'compression'
+import { bootstrap, requestId } from '@kickjs/http'
+import { SwaggerAdapter } from '@kickjs/swagger'
+import { modules } from './modules'
 
-const server = createKickApp({
-  name: "MyApp",
-  app,
-  globalMiddlewares: [corsMiddleware], // Global middlewares
-  modules: [AppModule] // DI-managed middlewares are in modules
-});
+bootstrap({
+  modules,
+  apiPrefix: '/api',
+  defaultVersion: 1,
+  trustProxy: true,
+
+  adapters: [
+    new HealthAdapter(),
+    new DatabaseAdapter({ url: process.env.DATABASE_URL }),
+    new SwaggerAdapter({
+      info: { title: 'My API', version: '1.0.0' },
+      bearerAuth: true,
+    }),
+  ],
+
+  middleware: [
+    requestId(),
+    helmet(),
+    cors({ origin: process.env.CORS_ORIGIN }),
+    compression(),
+    express.json({ limit: '1mb' }),
+  ],
+})
 ```
 
-## 🔌 Creating Plugins
+## Decorators
 
-Plugins allow you to extend the application context during initialization.
+### Class Decorators
+
+| Decorator | Purpose |
+|-----------|---------|
+| `@Injectable()` | Mark a class for DI registration |
+| `@Service()` | Semantic alias for business logic |
+| `@Repository()` | Semantic alias for data access |
+| `@Controller(path?)` | HTTP controller with optional route prefix |
+| `@Configuration()` | Factory class for `@Bean` methods |
+| `@Component()` | Generic managed component |
+
+### Method Decorators
+
+| Decorator | Purpose |
+|-----------|---------|
+| `@Get(path?, validation?)` | HTTP GET route |
+| `@Post(path?, validation?)` | HTTP POST route with optional Zod body/query/params validation |
+| `@Put(path?, validation?)` | HTTP PUT route |
+| `@Delete(path?, validation?)` | HTTP DELETE route |
+| `@Patch(path?, validation?)` | HTTP PATCH route |
+| `@Bean(options?)` | Factory method inside `@Configuration` |
+| `@PostConstruct()` | Lifecycle hook called after instantiation |
+| `@Transactional()` | Wrap method in DB transaction (auto commit/rollback) |
+| `@Middleware(...handlers)` | Attach middleware to class or method |
+| `@FileUpload(config)` | Configure file upload handling |
+
+### Property Decorators
+
+| Decorator | Purpose |
+|-----------|---------|
+| `@Autowired(token?)` | Lazy property injection from container |
+| `@Inject(token)` | Constructor parameter injection with explicit token |
+| `@Value(envKey, default?)` | Inject environment variable (throws if missing with no default) |
+
+### Swagger Decorators
+
+| Decorator | Purpose |
+|-----------|---------|
+| `@ApiTags(...tags)` | Tag controller or method |
+| `@ApiOperation({ summary })` | Describe an endpoint |
+| `@ApiResponse({ status, description, schema? })` | Document response (stackable) |
+| `@ApiBearerAuth()` | Mark as requiring auth |
+| `@ApiExclude()` | Hide from OpenAPI spec |
+
+## Query String Parsing
+
+Built-in ORM-agnostic query parser supporting filtering, sorting, pagination, and full-text search.
 
 ```typescript
-// src/plugins/database.plugin.ts
-import { KickAppPlugin, KickApplicationContext } from "@forinda/kickjs";
+@Get('/')
+async list(ctx: RequestContext) {
+  const parsed = ctx.qs({
+    filterable: ['status', 'priority'],
+    sortable: ['createdAt', 'title'],
+    searchable: ['title', 'description'],
+  })
 
-export class DatabasePlugin implements KickAppPlugin {
-  install(context: KickApplicationContext): void {
-    // Initialize database connection
-    console.log("🗄️  Database plugin initialized");
-    
-    // Add database middleware or modify app
-    context.app.use((req, res, next) => {
-      // Add database connection to request
-      (req as any).db = /* your database connection */;
-      next();
-    });
+  // Pass to your ORM query builder adapter
+  const q = drizzleAdapter.build(parsed, { columns, searchColumns })
+  const rows = await db.select().from(todos)
+    .where(q.where).orderBy(...q.orderBy)
+    .limit(q.limit).offset(q.offset)
+
+  ctx.json(rows)
+}
+```
+
+### Query Format
+
+```
+GET /api/v1/todos?page=2&limit=25&q=urgent&filter=status:eq:active&filter=priority:gte:3&sort=createdAt:desc
+```
+
+| Parameter | Format | Example |
+|-----------|--------|---------|
+| `page` | Number (default: 1) | `?page=2` |
+| `limit` | Number (default: 20, max: 100) | `?limit=50` |
+| `q` | Search string | `?q=hello` |
+| `filter` | `field:operator:value` (repeatable) | `?filter=status:eq:active` |
+| `sort` | `field:asc\|desc` (repeatable) | `?sort=name:asc` |
+
+**Filter operators:** `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `between`, `in`, `contains`, `starts`, `ends`
+
+### Custom Query Builder Adapter
+
+Implement `QueryBuilderAdapter` to translate `ParsedQuery` into your ORM's query format:
+
+```typescript
+import { type QueryBuilderAdapter, type ParsedQuery } from '@kickjs/http'
+
+// Prisma adapter
+class PrismaQueryAdapter implements QueryBuilderAdapter<PrismaQuery, PrismaConfig> {
+  name = 'prisma'
+  build(parsed: ParsedQuery, config: PrismaConfig): PrismaQuery {
+    return {
+      where: buildPrismaWhere(parsed.filters, config.fieldMap),
+      orderBy: parsed.sort.map(s => ({ [s.field]: s.direction })),
+      skip: parsed.pagination.offset,
+      take: parsed.pagination.limit,
+    }
+  }
+}
+
+// Sequelize adapter
+class SequelizeQueryAdapter implements QueryBuilderAdapter<SequelizeQuery, SequelizeConfig> {
+  name = 'sequelize'
+  build(parsed: ParsedQuery, config: SequelizeConfig): SequelizeQuery {
+    return {
+      where: buildSequelizeWhere(parsed.filters, config.columns),
+      order: parsed.sort.map(s => [s.field, s.direction.toUpperCase()]),
+      offset: parsed.pagination.offset,
+      limit: parsed.pagination.limit,
+    }
+  }
+}
+
+// Drizzle adapter
+class DrizzleQueryAdapter implements QueryBuilderAdapter<DrizzleQuery, DrizzleConfig> {
+  name = 'drizzle'
+  build(parsed: ParsedQuery, config: DrizzleConfig): DrizzleQuery {
+    return {
+      where: buildDrizzleWhere(parsed.filters, config.columns),
+      orderBy: buildDrizzleSort(parsed.sort, config.columns),
+      limit: parsed.pagination.limit,
+      offset: parsed.pagination.offset,
+    }
   }
 }
 ```
 
-Use plugins in your app:
+## Pluggable Schema Parser (Swagger)
+
+Swagger uses Zod by default to convert validation schemas into OpenAPI JSON Schema. Override for Yup, Joi, Valibot, ArkType, or any other validation library:
 
 ```typescript
-const dbPlugin = new DatabasePlugin();
+import Joi from 'joi'
+import joiToJson from 'joi-to-json'
+import { type SchemaParser, SwaggerAdapter } from '@kickjs/swagger'
 
-const server = createKickApp({
-  name: "MyApp",
-  app,
-  plugins: [dbPlugin],
-  modules: [AppModule]
-});
+const joiParser: SchemaParser = {
+  name: 'joi',
+  supports: (schema) => Joi.isSchema(schema),
+  toJsonSchema: (schema) => joiToJson(schema),
+}
+
+new SwaggerAdapter({
+  info: { title: 'My API', version: '1.0.0' },
+  schemaParser: joiParser,
+})
 ```
 
-## 🎯 Advanced Features
+## Adapter Pattern
 
-### Request Context
-
-Every controller method receives a `KickRequestContext` with rich metadata:
+Adapters hook into the application lifecycle to add functionality like database connections, auth, caching, or documentation.
 
 ```typescript
-interface KickRequestContext {
-  req: KickRequest;        // Express request
-  res: KickResponse;       // Express response  
-  next: KickNextFn;        // Express next function
-  meta: {
-    routePath: string;     // Route pattern
-    method: string;        // HTTP method
-    controllerName: string; // Controller class name
-    handlerName: string;   // Method name
-    startTime: number;     // Request start timestamp
-    requestId: string;     // Unique request ID
-  };
+import { type AppAdapter, type Container } from '@kickjs/core'
+import type { Express } from 'express'
+
+export class RedisAdapter implements AppAdapter {
+  name = 'RedisAdapter'
+
+  beforeMount(app: Express, container: Container) {
+    container.registerInstance(REDIS, redisClient)
+  }
+
+  middleware() {
+    return [{ handler: rateLimiter(), phase: 'afterGlobal' as const }]
+  }
+
+  async shutdown() {
+    await redisClient.quit()
+  }
 }
 ```
 
-### Reactive State Management
+**Lifecycle hooks:** `beforeMount` > `middleware` (4 phases) > `beforeStart` > `afterStart` > `shutdown`
 
-KickApp includes reactive state management:
+**Middleware phases:** `beforeGlobal` > user middleware > `afterGlobal` > module registration > `beforeRoutes` > routes > `afterRoutes`
 
-```typescript
-// Set state
-server.kickApp.setState('userCount', 42);
+## Module System
 
-// Listen to state changes
-server.kickApp.onStateChange('userCount', (data) => {
-  console.log(`User count changed: ${data.oldValue} → ${data.value}`);
-});
-
-// Get current state
-const currentState = server.kickApp.state;
-```
-
-### Event System
-
-Listen to application events:
+Modules encapsulate a feature domain. Each module registers its dependencies and declares its routes.
 
 ```typescript
-server.kickApp.on('route:registered', (route) => {
-  console.log(`Route registered: ${route.method} ${route.path}`);
-});
+export class OrderModule implements AppModule {
+  register(container: Container): void {
+    container.registerFactory(ORDER_REPOSITORY, () =>
+      container.resolve(DrizzleOrderRepository),
+    )
+  }
 
-server.kickApp.on('middleware:registered', (middleware) => {
-  console.log(`Middleware registered: ${middleware.count} middlewares`);
-});
-
-server.kickApp.on('controller:mapped', (controller) => {
-  console.log(`Controller mapped: ${controller.controller}`);
-});
+  routes(): ModuleRoutes {
+    return {
+      path: '/orders',
+      version: 2,  // mounts at /api/v2/orders
+      router: buildRoutes(OrderController),
+      controller: OrderController,
+    }
+  }
+}
 ```
 
-### Error Handling
+## DDD Module Structure
 
-Add global error handlers:
+Generated by `kick g module <name>`:
 
-```typescript
-server.addErrorHandler((errorData) => {
-  console.error('Application error:', errorData);
-  // Send to logging service, etc.
-});
+```
+src/modules/<name>/
+  presentation/
+    <name>.controller.ts
+  domain/
+    entities/<name>.entity.ts
+    value-objects/<name>-id.vo.ts
+    repositories/<name>.repository.ts     # interface + DI token
+    services/<name>-domain.service.ts
+  application/
+    use-cases/
+      create-<name>.use-case.ts
+      list-<names>.use-case.ts
+      get-<name>.use-case.ts
+      update-<name>.use-case.ts
+      delete-<name>.use-case.ts
+    dtos/
+      create-<name>.dto.ts
+      update-<name>.dto.ts
+  infrastructure/
+    repositories/
+      in-memory-<name>.repository.ts
+  index.ts                                # module definition
 ```
 
-## 🚀 Running Your Application
-
-### Development
+## CLI Commands
 
 ```bash
-# Using tsx for development
-npx tsx watch src/index.ts
+# Project lifecycle
+kick new <project-name>     # Scaffold new project
+kick dev                    # Dev server with Vite HMR
+kick build                  # Production build via Vite
+kick start                  # Run production build
+kick info                   # Print versions and environment
 
-# Or with nodemon
-npx nodemon --exec tsx src/index.ts
+# Code generation
+kick g module <name>        # Full DDD module scaffold
+kick g controller <name>    # Single controller
+kick g service <name>       # Service class
+kick g middleware <name>    # Middleware handler
+kick g guard <name>         # Auth guard
+kick g adapter <name>       # Lifecycle adapter
+kick g dto <name>           # DTO with Zod schema
 ```
 
-### Production
+### Generator Flags
 
 ```bash
-# Build your TypeScript
-npx tsc
-
-# Run the compiled JavaScript
-node dist/index.js
+kick g module users --no-entity     # Skip entity/value objects
+kick g module users --no-tests      # Skip test files
+kick g module users --minimal       # Only index.ts + controller
+kick g module users --dry-run       # Preview without writing
 ```
 
-### Example Scripts (package.json)
+### Custom Commands
 
-```json
-{
-  "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "build": "tsc",
-    "start": "node dist/index.js",
-    "test": "vitest"
-  }
-}
+Extend the CLI via `kick.config.ts` — the whole team uses `kick db:migrate` etc.:
+
+```typescript
+import { defineConfig } from '@kickjs/cli'
+
+export default defineConfig({
+  commands: [
+    {
+      name: 'db:migrate',
+      description: 'Run database migrations',
+      steps: 'npx drizzle-kit migrate',
+    },
+    {
+      name: 'db:seed',
+      description: 'Seed the database',
+      steps: 'npx tsx src/db/seed.ts',
+    },
+    {
+      name: 'proto:gen',
+      description: 'Generate TypeScript from protobuf',
+      steps: ['npx buf generate', 'echo "Protobuf types generated"'],
+    },
+  ],
+})
 ```
 
-## 📁 Project Structure
+## Environment Configuration
 
-```
-src/
-├── controllers/          # HTTP controllers
-│   ├── user.controller.ts
-│   └── auth.controller.ts
-├── services/             # Business logic services
-│   ├── user.service.ts
-│   └── auth.service.ts
-├── middlewares/          # Custom middlewares
-│   ├── logging.middleware.ts
-│   └── auth.middleware.ts
-├── plugins/              # Application plugins
-│   └── database.plugin.ts
-├── types/                # Type definitions
-│   └── user.types.ts
-├── modules/              # Application modules
-│   ├── user.module.ts
-│   └── auth.module.ts
-└── index.ts              # Application entry point
+```typescript
+import { defineEnv, loadEnv } from '@kickjs/config'
+import { z } from 'zod'
+
+const envSchema = defineEnv((base) =>
+  base.extend({
+    DATABASE_URL: z.string().url(),
+    JWT_SECRET: z.string().min(32),
+    REDIS_URL: z.string().url().optional(),
+  }),
+)
+
+// Validates on first call — throws with clear errors on misconfiguration
+const env = loadEnv(envSchema)
 ```
 
-## 📚 API Reference
+## Testing
 
-### Decorators
+```typescript
+import { createTestApp, createTestModule } from '@kickjs/testing'
+import { describe, it, expect } from 'vitest'
+import supertest from 'supertest'
 
-- `@KickController(path)` - Define a controller class
-- `@KickGet(path)` - HTTP GET route
-- `@KickPost(path)` - HTTP POST route  
-- `@KickPut(path)` - HTTP PUT route
-- `@KickPatch(path)` - HTTP PATCH route
-- `@KickDelete(path)` - HTTP DELETE route
-- `@KickMiddleware(options)` - Define a middleware class
-- `@KickInject(token)` - Inject dependencies
-- `@KickInjectable()` - Mark class as injectable service
-- `@AutoBind` - Automatically bind class methods
+describe('TodoController', () => {
+  it('creates a todo', async () => {
+    const { expressApp } = createTestApp({
+      modules: [TodoModule],
+      overrides: {
+        [TODO_REPOSITORY]: new InMemoryTodoRepository(),
+      },
+    })
 
-### Core Functions
+    const res = await supertest(expressApp)
+      .post('/api/v1/todos')
+      .send({ title: 'Write tests' })
 
-- `createKickApp(options)` - Create a KickJS application
-- `createModule(name, options)` - Create a module
-- `isKickMiddleware(target)` - Check if class is a middleware
-- `getMiddlewareMetadata(target)` - Get middleware metadata
+    expect(res.status).toBe(201)
+    expect(res.body.title).toBe('Write tests')
+  })
+})
+```
 
-### Types
+## HMR Architecture
 
-- `KickRequestContext` - Request context interface
-- `KickAppMiddleware` - Middleware interface  
-- `KickAppPlugin` - Plugin interface
-- `KickApplicationContext` - Application context interface
+`kick dev` uses `vite-node --watch` for true hot module replacement:
 
-## 🤝 Contributing
+```
+File change detected
+      |
+import.meta.hot.accept()
+      |
+main() re-executes
+      |
+g.__app exists? --- YES -> app.rebuild()
+                 \-- NO  -> app.start()
+      |
+rebuild():
+  1. Reset DI container (fresh singletons)
+  2. Create new Express app
+  3. Re-run setup (middleware + routes)
+  4. Swap handler on existing http.Server
+      |
+Preserved: HTTP server, DB pool, Redis, Socket.IO, port binding
+```
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for detailed information on how to get started.
+## Repository Structure
 
-### Quick Start for Contributors
+```
+kick-js/
+  packages/
+    core/           @kickjs/core
+    http/           @kickjs/http
+    config/         @kickjs/config
+    swagger/        @kickjs/swagger
+    cli/            @kickjs/cli
+    testing/        @kickjs/testing
+  examples/
+    basic-api/      Full DDD todo CRUD example
+  turbo.json
+  pnpm-workspace.yaml
+  tsconfig.base.json
+```
 
-1. **Fork and clone the repository**
-   ```bash
-   git clone https://github.com/yourusername/kickjs.git
-   cd kickjs
-   pnpm install
-   ```
+## Dependency Graph
 
-2. **Run tests to ensure everything works**
-   ```bash
-   pnpm test
-   pnpm build
-   ```
+```
+@kickjs/testing --> @kickjs/http --> @kickjs/core
+                                         ^
+@kickjs/config --------------------------+
+@kickjs/swagger --> @kickjs/core
 
-3. **Create a feature branch and make your changes**
-   ```bash
-   git checkout -b feature/amazing-feature
-   # Make your changes...
-   git commit -m "feat: add amazing feature"
-   ```
+@kickjs/cli (standalone -- generates code, no runtime dependency)
+```
 
-4. **Submit a pull request**
+## Technical Decisions
 
-For detailed guidelines, development setup, coding standards, and more, please read our [Contributing Guide](CONTRIBUTING.md).
+| Area | Choice | Why |
+|------|--------|-----|
+| DI | Custom container | Lightweight, no external dep, full control |
+| Module system | ESM only | Tree-shaking, native Node.js support |
+| Runtime | Node.js 20+ | LTS with native ESM |
+| HTTP | Express 5 | Mature, async middleware, wide ecosystem |
+| Validation | Zod | Runtime + static types, doubles as OpenAPI schema |
+| Build | tsup + Vite | Fast package builds, native HMR for apps |
+| Test | Vitest | ESM-native, fast, Vite-compatible |
+| Logging | Pino | Fastest Node.js logger, structured JSON in prod |
+| Monorepo | pnpm + Turborepo | Efficient deps, build caching |
 
-### 📞 Getting Help
+## Roadmap
 
-- 📖 Check the [documentation](README.md) and [examples](examples/)
-- 🐛 Search [existing issues](https://github.com/forinda/kickjs/issues)
-- 💬 Join our community discussions
-- 📧 Contact maintainers for security issues
+Key upcoming packages:
 
-Thank you for contributing to KickJS! 🚀
+- **`@kickjs/database`** -- Drizzle adapter, transaction propagation, query builder adapter
+- **`@kickjs/auth`** -- JWT/API key strategies, `@Authenticated`, `@Roles` guards
+- **`@kickjs/cache`** -- `@Cacheable`/`@CacheEvict` with Redis or in-memory stores
+- **`@kickjs/websocket`** -- Socket.IO with `@Gateway`/`@OnEvent` decorators
+- **`@kickjs/queue`** -- BullMQ job processing with `@Worker` decorator
+- **`@kickjs/mail`** -- Pluggable transports (Resend, SMTP), EJS templates
+- **Plugin system** -- Third-party packages extend framework with adapters, CLI generators, Vite plugins
 
-## 📄 License
+## Contributing
 
-MIT License - see [LICENSE](LICENSE) file for details.
+```bash
+git clone https://github.com/forinda/kick-js.git
+cd kick-js
+pnpm install
+pnpm build
+pnpm test
+```
 
----
+## License
 
-**Made with ❤️ by the KickJS team**
+MIT License - see [LICENSE](LICENSE) for details.

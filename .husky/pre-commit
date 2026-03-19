@@ -1,1 +1,1 @@
-npm run check && npm test
+pnpm turbo build --filter='./packages/*' && pnpm test && pnpm format:check
