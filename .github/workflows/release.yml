@@ -33,7 +33,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: pnpm build
+        run: pnpm turbo build --filter='./packages/*'
 
       - name: Test
         run: pnpm test
@@ -63,9 +63,9 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: pnpm build
+        run: pnpm turbo build --filter='./packages/*'
 
-      - name: Publish all packages
+      - name: Publish framework packages
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: pnpm -r publish --access public --no-git-checks
+        run: pnpm --filter='./packages/*' publish --access public --no-git-checks
