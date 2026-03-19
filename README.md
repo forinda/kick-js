@@ -542,7 +542,7 @@ kick-js/
 
 ## Roadmap
 
-See [plan.md](plan.md) for the full roadmap. Key upcoming packages:
+Key upcoming packages:
 
 - **`@kickjs/database`** -- Drizzle adapter, transaction propagation, query builder adapter
 - **`@kickjs/auth`** -- JWT/API key strategies, `@Authenticated`, `@Roles` guards
