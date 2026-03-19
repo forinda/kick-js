@@ -1,0 +1,45 @@
+{
+  "name": "@kickjs/testing",
+  "version": "0.1.0",
+  "description": "Test utilities, TestModule builder, and helpers for KickJS applications",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist .turbo",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@kickjs/core": "workspace:*",
+    "@kickjs/http": "workspace:*"
+  },
+  "devDependencies": {
+    "@swc/core": "^1.7.28",
+    "@types/express": "^5.0.6",
+    "@types/node": "^24.5.2",
+    "express": "^5.1.0",
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT",
+  "author": "Felix Orinda",
+  "engines": {
+    "node": ">=20.0"
+  }
+}
