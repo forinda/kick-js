@@ -66,12 +66,22 @@ Document response statuses. Stackable — add multiple for different status code
 
 ```typescript
 @Post('/')
-@ApiResponse({ status: 201, description: 'Created', schema: userResponseSchema })
+@ApiResponse({ status: 201, description: 'Created', schema: userResponseSchema, name: 'UserResponse' })
 @ApiResponse({ status: 422, description: 'Validation error' })
 @ApiResponse({ status: 409, description: 'Already exists' })
 ```
 
-When you pass a Zod (or Joi) schema, it's converted to JSON Schema and registered in `components.schemas` for the Models section.
+When you pass a Zod (or Joi) schema, it's converted to JSON Schema and registered in `components/schemas`.
+
+**Schema naming:** Use `name` to control the schema name in the Models section. If omitted, it's auto-generated from the handler name (e.g., `createResponse201`).
+
+```typescript
+// Explicit name — appears as "UserResponse" in Models
+@ApiResponse({ status: 200, schema: userSchema, name: 'UserResponse' })
+
+// Auto-generated name — appears as "getUserResponse200"
+@ApiResponse({ status: 200, schema: userSchema })
+```
 
 ### @ApiBearerAuth
 
@@ -107,12 +117,22 @@ const createUserSchema = z.object({
   tags: z.array(z.string()).max(10).optional(),
 })
 
-@Post('/', { body: createUserSchema })
+@Post('/', { body: createUserSchema, name: 'CreateUserRequest' })
 ```
 
 This generates:
 - A request body schema with all field types, constraints, and enums
-- A model in the "Schemas" section of Swagger UI
+- A model named `CreateUserRequest` in the "Schemas" section of Swagger UI
+
+**Schema naming:** Use `name` in the validation config to control the request body schema name. If omitted, it's auto-generated from the handler name (e.g., `createBody`).
+
+```typescript
+// Explicit name — appears as "CreateUserRequest" in Models
+@Post('/', { body: createUserSchema, name: 'CreateUserRequest' })
+
+// Auto-generated name — appears as "createBody"
+@Post('/', { body: createUserSchema })
+```
 
 ### Query Parameters
 
@@ -142,7 +162,7 @@ const userResponse = z.object({
   createdAt: z.string(),
 })
 
-@ApiResponse({ status: 200, schema: userResponse })
+@ApiResponse({ status: 200, schema: userResponse, name: 'UserResponse' })
 ```
 
 ## Custom Schema Parser
@@ -263,7 +283,7 @@ Use it with the `@Middleware` decorator:
 ```typescript
 @Post('/')
 @Middleware(joiValidate({ body: createTaskSchema }))
-@ApiResponse({ status: 201, schema: taskResponseSchema })
+@ApiResponse({ status: 201, schema: taskResponseSchema, name: 'TaskResponse' })
 async create(ctx: RequestContext) {
   ctx.created(ctx.body)
 }
