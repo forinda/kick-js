@@ -6,10 +6,8 @@ import { SwaggerAdapter } from '@forinda/kickjs-swagger'
 import { WsAdapter } from '@forinda/kickjs-ws'
 import { modules } from './modules'
 
-// Import WS controllers so decorators register
-import './ws/chat.service'
-import './ws/chat.controller'
-import './ws/notifications.controller'
+// Import all WS controllers (single barrel — add new ones in ws/index.ts)
+import './ws'
 
 bootstrap({
   modules,
