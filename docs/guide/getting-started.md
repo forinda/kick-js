@@ -153,7 +153,7 @@ pnpm kick start
 
 ## Next Steps
 
-- [Dependency Injection](/guide/dependency-injection) — learn about the DI container
-- [Controllers & Routes](/guide/controllers) — route decorators and validation
-- [Middleware](/guide/middleware) — class and method middleware
-- [Examples](/examples/) — see complete example applications
+- [Dependency Injection](./dependency-injection) — learn about the DI container
+- [Controllers & Routes](./controllers) — route decorators and validation
+- [Middleware](./middleware) — class and method middleware
+- [Examples](../examples/) — see complete example applications

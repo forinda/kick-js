@@ -1,6 +1,10 @@
-import { defineConfig } from 'vitepress'
+import defineVersionedConfig from 'vitepress-versioning-plugin'
+import pkg from '../../package.json'
 
-export default defineConfig({
+export default defineVersionedConfig({
+  versioning: {
+    latestVersion: pkg.version,
+  },
   title: 'KickJS',
   description: 'A production-grade, decorator-driven Node.js framework built on Express 5 and TypeScript',
   base: '/kick-js/',
@@ -8,17 +12,19 @@ export default defineConfig({
   head: [['link', { rel: 'icon', type: 'image/svg+xml', href: '/logo.svg' }]],
 
   themeConfig: {
+    versionSwitcher: false,
     nav: [
       { text: 'Guide', link: '/guide/getting-started' },
       { text: 'API', link: '/api/core' },
       { text: 'Examples', link: '/examples/' },
       {
-        text: 'v0.3.0-alpha',
+        text: `v${pkg.version}`,
         items: [
           { text: 'Changelog', link: '/changelog' },
           { text: 'Roadmap', link: '/roadmap' },
         ],
       },
+      { component: 'VersionSwitcher' },
     ],
 
     sidebar: {
@@ -114,4 +120,4 @@ export default defineConfig({
       provider: 'local',
     },
   },
-})
+}, __dirname)

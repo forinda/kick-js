@@ -287,6 +287,6 @@ new SwaggerAdapter({
 
 | Example | What it shows |
 |---------|---------------|
-| [swagger-api](/examples/swagger-api) | Rich Zod schemas: nested objects, arrays, enums, UUID, datetime, regex, partial, paginated responses |
-| [joi-api](/examples/joi-api) | Custom `joiSchemaParser`, Joi validation middleware, Joi schemas in Swagger |
-| [validated-api](/examples/validated-api) | Query parsing with `ctx.qs()` + Swagger decorators |
+| [swagger-api](../examples/swagger-api) | Rich Zod schemas: nested objects, arrays, enums, UUID, datetime, regex, partial, paginated responses |
+| [joi-api](../examples/joi-api) | Custom `joiSchemaParser`, Joi validation middleware, Joi schemas in Swagger |
+| [validated-api](../examples/validated-api) | Query parsing with `ctx.qs()` + Swagger decorators |
