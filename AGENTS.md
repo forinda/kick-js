@@ -117,6 +117,23 @@ When adding new features, use these as templates:
 
 Do NOT consider a feature complete until its docs are written and the sidebar is updated in `docs/.vitepress/config.mts`.
 
+## Mandatory: Use the CLI for Examples
+
+**Example apps MUST be scaffolded using the KickJS CLI** (`kick new` + `kick g module`). This ensures the CLI stays functional and tested against the latest framework changes. If a scaffold fails, that's a CLI bug — fix it before creating the example manually.
+
+```bash
+# Build the CLI first
+pnpm build
+
+# Scaffold from the repo root
+cd examples
+npx kick new upload-api --pm pnpm --git --install
+cd upload-api
+npx kick g module upload
+```
+
+After scaffolding, customize the generated code for the example's purpose.
+
 ## Common Pitfalls
 
 1. **Don't use absolute links in docs** — breaks versioning and i18n

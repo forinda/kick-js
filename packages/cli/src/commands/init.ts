@@ -1,20 +1,92 @@
-import { resolve } from 'node:path'
+import { resolve, basename } from 'node:path'
+import { createInterface } from 'node:readline'
 import type { Command } from 'commander'
 import { initProject } from '../generators/project'
 
+function ask(question: string, defaultValue?: string): Promise<string> {
+  const rl = createInterface({ input: process.stdin, output: process.stdout })
+  const suffix = defaultValue ? ` (${defaultValue})` : ''
+  return new Promise((res) => {
+    rl.question(`  ${question}${suffix}: `, (answer) => {
+      rl.close()
+      res(answer.trim() || defaultValue || '')
+    })
+  })
+}
+
+async function choose(question: string, options: string[], defaultIdx = 0): Promise<string> {
+  console.log(`  ${question}`)
+  for (let i = 0; i < options.length; i++) {
+    const marker = i === defaultIdx ? '>' : ' '
+    console.log(`   ${marker} ${i + 1}. ${options[i]}`)
+  }
+  const answer = await ask('Choose', String(defaultIdx + 1))
+  const idx = parseInt(answer, 10) - 1
+  return options[idx] ?? options[defaultIdx]
+}
+
+async function confirm(question: string, defaultYes = true): Promise<boolean> {
+  const hint = defaultYes ? 'Y/n' : 'y/N'
+  const answer = await ask(`${question} (${hint})`)
+  if (!answer) return defaultYes
+  return answer.toLowerCase().startsWith('y')
+}
+
 export function registerInitCommand(program: Command): void {
   program
-    .command('new <name>')
+    .command('new [name]')
     .alias('init')
-    .description('Create a new KickJS project')
+    .description('Create a new KickJS project (use "." for current directory)')
     .option('-d, --directory <dir>', 'Target directory (defaults to project name)')
-    .option('--pm <manager>', 'Package manager: pnpm | npm | yarn', 'pnpm')
-    .action(async (name: string, opts: any) => {
-      const directory = resolve(opts.directory || name)
+    .option('--pm <manager>', 'Package manager: pnpm | npm | yarn')
+    .option('--git', 'Initialize git repository')
+    .option('--no-git', 'Skip git initialization')
+    .option('--install', 'Install dependencies after scaffolding')
+    .option('--no-install', 'Skip dependency installation')
+    .action(async (name: string | undefined, opts: any) => {
+      console.log()
+
+      // Resolve project name — support "." for current directory
+      if (!name) {
+        name = await ask('Project name', 'my-api')
+      }
+
+      let directory: string
+      if (name === '.') {
+        directory = resolve('.')
+        name = basename(directory)
+      } else {
+        directory = resolve(opts.directory || name)
+      }
+
+      // Package manager — prompt if not provided via --pm
+      let packageManager = opts.pm
+      if (!packageManager) {
+        packageManager = await choose('Package manager:', ['pnpm', 'npm', 'yarn'], 0)
+      }
+
+      // Git init — prompt if not explicitly set
+      let initGit: boolean
+      if (opts.git === undefined) {
+        initGit = await confirm('Initialize git repository?', true)
+      } else {
+        initGit = opts.git
+      }
+
+      // Install deps — prompt if not explicitly set
+      let installDeps: boolean
+      if (opts.install === undefined) {
+        installDeps = await confirm('Install dependencies?', true)
+      } else {
+        installDeps = opts.install
+      }
+
       await initProject({
         name,
         directory,
-        packageManager: opts.pm,
+        packageManager,
+        initGit,
+        installDeps,
       })
     })
 }

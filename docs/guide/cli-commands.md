@@ -7,15 +7,27 @@ The `kick` CLI provides commands for project creation, development, code generat
 Create a new KickJS project:
 
 ```bash
-kick new my-app
-kick new my-app --pm npm
+kick new my-app            # Interactive prompts for PM, git, install
+kick new .                 # Scaffold in current directory
+kick new my-app --pm pnpm  # Skip PM prompt
+kick new my-app --git --install  # Non-interactive
+kick new my-app --no-git --no-install  # Skip git and install
 kick new my-app -d ./custom-directory
 ```
+
+When run without flags, the CLI prompts for:
+1. **Package manager** — pnpm, npm, or yarn
+2. **Git init** — initialize a git repository with an initial commit
+3. **Install deps** — run the selected package manager's install command
 
 | Flag | Description | Default |
 |------|-------------|---------|
 | `-d, --directory <dir>` | Target directory | Project name |
-| `--pm <manager>` | Package manager: `pnpm`, `npm`, or `yarn` | `pnpm` |
+| `--pm <manager>` | Package manager: `pnpm`, `npm`, or `yarn` | Prompted |
+| `--git / --no-git` | Initialize git repository | Prompted |
+| `--install / --no-install` | Install dependencies | Prompted |
+
+Use `.` as the project name to scaffold in the current directory (the folder name becomes the project name).
 
 The `init` alias also works: `kick init my-app`.
 

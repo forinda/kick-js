@@ -1,10 +1,13 @@
 import { join } from 'node:path'
+import { execSync } from 'node:child_process'
 import { writeFileSafe } from '../utils/fs'
 
 interface InitProjectOptions {
   name: string
   directory: string
   packageManager?: 'pnpm' | 'npm' | 'yarn'
+  initGit?: boolean
+  installDeps?: boolean
 }
 
 /** Scaffold a new KickJS project */
@@ -211,13 +214,41 @@ export default defineConfig({
 `,
   )
 
-  console.log('  Project scaffolded successfully!')
+  // ── Git Init ─────────────────────────────────────────────────────────
+  if (options.initGit) {
+    try {
+      execSync('git init', { cwd: dir, stdio: 'pipe' })
+      execSync('git add -A', { cwd: dir, stdio: 'pipe' })
+      execSync('git commit -m "chore: initial commit from kick new"', {
+        cwd: dir,
+        stdio: 'pipe',
+      })
+      console.log('  Git repository initialized')
+    } catch {
+      console.log('  Warning: git init failed (git may not be installed)')
+    }
+  }
+
+  // ── Install Dependencies ────────────────────────────────────────────
+  if (options.installDeps) {
+    console.log(`\n  Installing dependencies with ${packageManager}...\n`)
+    try {
+      execSync(`${packageManager} install`, { cwd: dir, stdio: 'inherit' })
+      console.log('\n  Dependencies installed successfully!')
+    } catch {
+      console.log(`\n  Warning: ${packageManager} install failed. Run it manually.`)
+    }
+  }
+
+  console.log('\n  Project scaffolded successfully!')
   console.log()
+
+  const needsCd = dir !== process.cwd()
   console.log('  Next steps:')
-  console.log(`    cd ${name}`)
-  console.log(`    ${packageManager} install`)
-  console.log(`    kick g module user`)
-  console.log(`    kick dev`)
+  if (needsCd) console.log(`    cd ${name}`)
+  if (!options.installDeps) console.log(`    ${packageManager} install`)
+  console.log('    kick g module user')
+  console.log('    kick dev')
   console.log()
   console.log('  Commands:')
   console.log('    kick dev         Start dev server with Vite HMR')
