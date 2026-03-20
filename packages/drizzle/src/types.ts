@@ -1,12 +1,24 @@
 /** DI token for resolving the Drizzle database instance from the container */
 export const DRIZZLE_DB = Symbol('DrizzleDB')
 
-export interface DrizzleAdapterOptions {
+export interface DrizzleAdapterOptions<TDb = unknown> {
   /**
    * Drizzle database instance — the return value of `drizzle()`.
-   * Typed as `any` to avoid coupling to a specific driver (pg, mysql, sqlite).
+   * Preserves the full type so services can inject it type-safely.
+   *
+   * @example
+   * ```ts
+   * import { drizzle } from 'drizzle-orm/better-sqlite3'
+   * import * as schema from './schema'
+   *
+   * const db = drizzle({ client: sqlite, schema })
+   * // db is BetterSQLite3Database<typeof schema>
+   *
+   * new DrizzleAdapter({ db })
+   * // TDb is inferred as BetterSQLite3Database<typeof schema>
+   * ```
    */
-  db: any
+  db: TDb
 
   /** Enable query logging (default: false) */
   logging?: boolean

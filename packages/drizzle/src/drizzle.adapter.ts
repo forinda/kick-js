@@ -10,53 +10,52 @@ const log = Logger.for('DrizzleAdapter')
  * Works with any Drizzle driver: `drizzle-orm/postgres-js`, `drizzle-orm/node-postgres`,
  * `drizzle-orm/mysql2`, `drizzle-orm/better-sqlite3`, `drizzle-orm/libsql`, etc.
  *
+ * The adapter is generic — the db type is inferred from what you pass in,
+ * so services can inject the fully-typed database instance.
+ *
  * @example
  * ```ts
- * import { drizzle } from 'drizzle-orm/postgres-js'
- * import postgres from 'postgres'
+ * import { drizzle } from 'drizzle-orm/better-sqlite3'
+ * import * as schema from './schema'
  * import { DrizzleAdapter } from '@forinda/kickjs-drizzle'
  *
- * const client = postgres(process.env.DATABASE_URL!)
- * const db = drizzle(client)
+ * const db = drizzle({ client: sqlite, schema })
  *
  * bootstrap({
  *   modules,
  *   adapters: [
- *     new DrizzleAdapter({
- *       db,
- *       logging: true,
- *       onShutdown: () => client.end(),
- *     }),
+ *     new DrizzleAdapter({ db, onShutdown: () => sqlite.close() }),
  *   ],
  * })
  * ```
  *
- * Inject the db instance in services:
+ * Inject the typed db instance in services:
  * ```ts
+ * import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
+ * import * as schema from './schema'
+ *
  * @Service()
  * class UserService {
- *   @Inject(DRIZZLE_DB) private db: PostgresJsDatabase
+ *   constructor(@Inject(DRIZZLE_DB) private db: BetterSQLite3Database<typeof schema>) {}
  * }
  * ```
  */
-export class DrizzleAdapter implements AppAdapter {
+export class DrizzleAdapter<TDb = unknown> implements AppAdapter {
   name = 'DrizzleAdapter'
-  private db: any
+  private db: TDb
   private onShutdown?: () => void | Promise<void>
 
-  constructor(private options: DrizzleAdapterOptions) {
+  constructor(private options: DrizzleAdapterOptions<TDb>) {
     this.db = options.db
     this.onShutdown = options.onShutdown
   }
 
   /** Register the Drizzle db instance in the DI container */
-  beforeStart(_app: any, container: Container): void {
-    // Set up query logging if requested
+  beforeStart(_app: unknown, container: Container): void {
     if (this.options.logging) {
       log.info('Query logging enabled')
     }
 
-    // Register the db instance as a singleton in the container
     container.registerFactory(DRIZZLE_DB, () => this.db, Scope.SINGLETON)
 
     log.info('Drizzle database registered in DI container')

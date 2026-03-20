@@ -11,6 +11,7 @@ export class UsersModule implements AppModule {
   routes(): ModuleRoutes {
     return {
       path: '/users',
+      version: 2,
       router: buildRoutes(UsersController),
       controller: UsersController,
     }
