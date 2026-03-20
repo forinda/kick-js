@@ -37,6 +37,7 @@ const guideSidebar = [
       { text: 'Reactivity', link: '/guide/reactivity' },
       { text: 'DevTools', link: '/guide/devtools' },
       { text: 'Adapters', link: '/guide/adapters' },
+      { text: 'Plugins', link: '/guide/plugins' },
       { text: 'Decorators Reference', link: '/guide/decorators' },
       { text: 'Custom Decorators', link: '/guide/custom-decorators' },
       { text: 'HMR (Hot Reload)', link: '/guide/hmr' },

@@ -9,7 +9,7 @@
 - [ ] CLI `kick deploy` command
 - [x] OpenTelemetry integration — tracing and metrics via OtelAdapter (v0.6.x)
 - [x] SSE (Server-Sent Events) — `ctx.sse()` helper for real-time streaming (v0.6.x)
-- [ ] Plugin system for community extensions
+- [x] Plugin system for community extensions (v0.6.x)
 - [ ] Docs i18n translation (build-time Google Translate)
 
 ## Under Consideration

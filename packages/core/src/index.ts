@@ -55,6 +55,9 @@ export {
   type MiddlewarePhase,
 } from './adapter'
 
+// Plugin System
+export { type KickPlugin } from './plugin'
+
 // Logger
 export { Logger, createLogger, rootLogger, logger } from './logger'
 

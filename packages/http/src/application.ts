@@ -6,6 +6,7 @@ import {
   type AppModuleClass,
   type AppAdapter,
   type AdapterMiddleware,
+  type KickPlugin,
 } from '@forinda/kickjs-core'
 import { buildRoutes } from './router-builder'
 import { requestId } from './middleware/request-id'
@@ -54,6 +55,9 @@ export interface ApplicationOptions {
    */
   middleware?: MiddlewareEntry[]
 
+  /** Plugins that bundle modules, adapters, middleware, and DI bindings */
+  plugins?: KickPlugin[]
+
   /** Express `trust proxy` setting */
   trustProxy?: boolean | number | string | ((ip: string, hopIndex: number) => boolean)
   /** Maximum JSON body size (only used when middleware is not provided) */
@@ -70,10 +74,17 @@ export class Application {
   private httpServer: http.Server | null = null
   private adapters: AppAdapter[]
 
+  private plugins: KickPlugin[]
+
   constructor(private readonly options: ApplicationOptions) {
     this.app = express()
     this.container = Container.getInstance()
-    this.adapters = options.adapters ?? []
+    this.plugins = options.plugins ?? []
+    this.adapters = [
+      // Plugin adapters first
+      ...this.plugins.flatMap((p) => p.adapters?.() ?? []),
+      ...(options.adapters ?? []),
+    ]
   }
 
   /**
@@ -107,6 +118,19 @@ export class Application {
     // ── 3. Adapter middleware: beforeGlobal ───────────────────────────
     this.mountMiddlewareList(adapterMw.beforeGlobal)
 
+    // ── 3b. Plugin registration ──────────────────────────────────────
+    for (const plugin of this.plugins) {
+      plugin.register?.(this.container)
+    }
+
+    // ── 3c. Plugin middleware ─────────────────────────────────────────
+    for (const plugin of this.plugins) {
+      const mw = plugin.middleware?.() ?? []
+      for (const handler of mw) {
+        this.app.use(handler)
+      }
+    }
+
     // ── 4. Global middleware ─────────────────────────────────────────
     if (this.options.middleware) {
       // User-declared pipeline — full control
@@ -123,7 +147,12 @@ export class Application {
     this.mountMiddlewareList(adapterMw.afterGlobal)
 
     // ── 6. Module registration + DI bootstrap ────────────────────────
-    const modules = this.options.modules.map((ModuleClass) => {
+    // Plugin modules first, then user modules
+    const allModuleClasses = [
+      ...this.plugins.flatMap((p) => p.modules?.() ?? []),
+      ...this.options.modules,
+    ]
+    const modules = allModuleClasses.map((ModuleClass) => {
       const mod = new ModuleClass()
       mod.register(this.container)
       return mod
@@ -188,11 +217,16 @@ export class Application {
       throw err
     })
 
-    this.httpServer.listen(port, () => {
+    this.httpServer.listen(port, async () => {
       log.info(`Server running on http://localhost:${port}`)
 
       for (const adapter of this.adapters) {
         adapter.afterStart?.(this.httpServer!, this.container)
+      }
+
+      // Plugin onReady hooks
+      for (const plugin of this.plugins) {
+        await plugin.onReady?.(this.container)
       }
     })
   }
@@ -217,10 +251,11 @@ export class Application {
   async shutdown(): Promise<void> {
     log.info('Shutting down...')
 
-    // Run all adapter shutdowns concurrently — don't let one failure block the rest
-    const results = await Promise.allSettled(
-      this.adapters.map((adapter) => Promise.resolve(adapter.shutdown?.())),
-    )
+    // Run all plugin + adapter shutdowns concurrently
+    const results = await Promise.allSettled([
+      ...this.plugins.map((plugin) => Promise.resolve(plugin.shutdown?.())),
+      ...this.adapters.map((adapter) => Promise.resolve(adapter.shutdown?.())),
+    ])
     for (const result of results) {
       if (result.status === 'rejected') {
         log.error({ err: result.reason }, 'Adapter shutdown failed')
