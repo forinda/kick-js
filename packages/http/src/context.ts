@@ -126,6 +126,23 @@ export class RequestContext<TBody = any, TParams = any, TQuery = any> {
   }
 
   /**
+   * Render a template using the registered view engine (EJS, Pug, Handlebars, etc.).
+   * Requires a ViewAdapter to be configured in bootstrap().
+   *
+   * @param template - Template name (without extension, relative to viewsDir)
+   * @param data - Data to pass to the template
+   *
+   * @example
+   * ```ts
+   * ctx.render('dashboard', { user, title: 'Dashboard' })
+   * ctx.render('emails/welcome', { name: 'Alice' })
+   * ```
+   */
+  render(template: string, data: Record<string, any> = {}) {
+    return this.res.render(template, data)
+  }
+
+  /**
    * Parse query params and return a standardized paginated response.
    * Calls `ctx.qs()` internally, then wraps your data with pagination meta.
    *

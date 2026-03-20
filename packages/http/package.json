@@ -89,6 +89,10 @@
     "./query": {
       "import": "./dist/query/index.js",
       "types": "./dist/query/index.d.ts"
+    },
+    "./views": {
+      "import": "./dist/middleware/views.js",
+      "types": "./dist/middleware/views.d.ts"
     }
   },
   "files": [

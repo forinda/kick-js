@@ -1,5 +1,8 @@
+import { cpSync, existsSync, mkdirSync } from 'node:fs'
+import { resolve, join } from 'node:path'
 import type { Command } from 'commander'
 import { runShellCommand } from '../utils/shell'
+import { loadKickConfig } from '../config'
 
 export function registerRunCommands(program: Command): void {
   program
@@ -31,9 +34,35 @@ export function registerRunCommands(program: Command): void {
   program
     .command('build')
     .description('Build for production via Vite')
-    .action(() => {
+    .action(async () => {
       console.log('\n  Building for production...\n')
       runShellCommand('npx vite build')
+
+      // Copy static directories to dist (e.g., templates, public assets)
+      const config = await loadKickConfig(process.cwd())
+      const copyDirs = config?.copyDirs ?? []
+
+      if (copyDirs.length > 0) {
+        console.log('\n  Copying directories to dist...')
+        for (const entry of copyDirs) {
+          const src = typeof entry === 'string' ? entry : entry.src
+          const dest =
+            typeof entry === 'string' ? join('dist', entry) : (entry.dest ?? join('dist', src))
+          const srcPath = resolve(src)
+          const destPath = resolve(dest)
+
+          if (!existsSync(srcPath)) {
+            console.log(`    ⚠ Skipped ${src} (not found)`)
+            continue
+          }
+
+          mkdirSync(destPath, { recursive: true })
+          cpSync(srcPath, destPath, { recursive: true })
+          console.log(`    ✓ ${src} → ${dest}`)
+        }
+      }
+
+      console.log('\n  Build complete.\n')
     })
 
   program

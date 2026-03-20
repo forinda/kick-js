@@ -40,6 +40,20 @@ export interface KickConfig {
   defaultRepo?: 'drizzle' | 'inmemory' | 'prisma'
   /** Drizzle schema output directory */
   schemaDir?: string
+  /**
+   * Directories to copy to dist/ after build.
+   * Useful for EJS templates, email templates, static assets, etc.
+   *
+   * @example
+   * ```ts
+   * copyDirs: [
+   *   'src/views',                          // copies to dist/src/views
+   *   { src: 'src/views', dest: 'dist/views' }, // custom dest
+   *   'src/emails',
+   * ]
+   * ```
+   */
+  copyDirs?: Array<string | { src: string; dest?: string }>
   /** Custom commands that extend the CLI */
   commands?: KickCommandDefinition[]
   /** Code style overrides (auto-detected from prettier when possible) */

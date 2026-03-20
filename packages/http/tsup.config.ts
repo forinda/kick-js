@@ -15,6 +15,7 @@ export default defineConfig({
     'src/middleware/request-id.ts',
     'src/middleware/error-handler.ts',
     'src/devtools.ts',
+    'src/middleware/views.ts',
     'src/query/index.ts',
   ],
   format: ['esm'],
