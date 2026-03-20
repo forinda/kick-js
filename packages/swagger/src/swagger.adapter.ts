@@ -18,6 +18,8 @@ export interface SwaggerAdapterOptions extends SwaggerOptions {
   redocPath?: string
   /** Path to serve the raw JSON spec (default: '/openapi.json') */
   specPath?: string
+  /** Other adapters to discover (e.g., WsAdapter for WebSocket server URLs) */
+  adapters?: any[]
 }
 
 /**
@@ -44,6 +46,33 @@ export class SwaggerAdapter implements AppAdapter {
   name = 'SwaggerAdapter'
 
   constructor(private options: SwaggerAdapterOptions = {}) {}
+
+  /** Auto-detect server URLs from the running HTTP server and peer adapters */
+  afterStart(server: any, _container: Container): void {
+    const addr = server?.address?.()
+    if (!addr || typeof addr !== 'object') return
+
+    const host = addr.address === '::' || addr.address === '0.0.0.0' ? 'localhost' : addr.address
+
+    // Auto-add HTTP server URL if none configured
+    if (!this.options.servers || this.options.servers.length === 0) {
+      this.options.servers = [{ url: `http://${host}:${addr.port}`, description: 'HTTP server' }]
+    }
+
+    // Auto-add WebSocket server URLs from WsAdapter
+    const wsAdapter = this.options.adapters?.find(
+      (a) => a.name === 'WsAdapter' && typeof a.getStats === 'function',
+    )
+    if (wsAdapter) {
+      const stats = wsAdapter.getStats()
+      for (const namespace of Object.keys(stats.namespaces || {})) {
+        this.options.servers!.push({
+          url: `ws://${host}:${addr.port}${namespace}`,
+          description: `WebSocket: ${namespace}`,
+        })
+      }
+    }
+  }
 
   /** Collect controller metadata as routes are mounted */
   onRouteMount(controllerClass: any, mountPath: string): void {

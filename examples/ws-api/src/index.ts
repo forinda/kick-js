@@ -23,17 +23,13 @@ bootstrap({
       adapters: [wsAdapter],
     }),
     new SwaggerAdapter({
+      adapters: [wsAdapter],
       info: {
         title: 'WebSocket Chat API',
         version: '1.0.0',
         description:
           'KickJS example with WebSocket chat, rooms, and notifications.\n\n' +
-          '**WebSocket endpoints:**\n' +
-          '- `ws://localhost:3000/ws/chat` — Chat with rooms\n' +
-          '- `ws://localhost:3000/ws/notifications` — Pub/sub notifications\n\n' +
-          '**Debug:**\n' +
-          '- `GET /_debug/ws` — WebSocket stats\n' +
-          '- `GET /_debug/state` — Full state including WS',
+          '**Debug:** `/_debug/ws`, `/_debug/state`',
       },
     }),
   ],
