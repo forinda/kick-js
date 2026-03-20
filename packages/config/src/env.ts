@@ -18,7 +18,7 @@ let cachedSchema: any = null
 
 /**
  * Define a custom env schema by extending the base.
- * Returns a loader function that validates process.env.
+ * Returns a Zod schema that validates process.env.
  *
  * @example
  * ```ts
@@ -31,12 +31,13 @@ let cachedSchema: any = null
  * )
  *
  * const env = loadEnv(envSchema)
+ * env.DATABASE_URL // string — fully typed, autocompletes
  * ```
  */
 export function defineEnv<T extends z.ZodRawShape>(
   extend: (base: typeof baseEnvSchema) => z.ZodObject<any>,
-): z.ZodObject<any> {
-  return extend(baseEnvSchema)
+): ReturnType<typeof extend> {
+  return extend(baseEnvSchema) as ReturnType<typeof extend>
 }
 
 /** Parse and validate process.env against a Zod schema. Caches result per schema. */
@@ -49,10 +50,38 @@ export function loadEnv<T extends z.ZodObject<any>>(schema?: T): z.infer<T> {
   return cachedEnv
 }
 
-/** Get a single typed environment variable value */
-export function getEnv<K extends string>(key: K): any {
-  const env = loadEnv()
-  return (env as any)[key]
+/**
+ * Get a single typed environment variable value.
+ *
+ * @example
+ * ```ts
+ * // Without schema — returns `any`
+ * const port = getEnv('PORT')
+ *
+ * // With schema — fully typed key + return value
+ * const dbUrl = getEnv('DATABASE_URL', envSchema)
+ * ```
+ */
+export function getEnv<T extends z.ZodObject<any>, K extends string & keyof z.infer<T>>(
+  key: K,
+  schema?: T,
+): z.infer<T>[K] {
+  const env = loadEnv(schema)
+  return env[key]
+}
+
+/**
+ * Reload env from process.env (re-reads dotenv, clears cache).
+ * Called during HMR rebuild to pick up .env file changes.
+ */
+export function reloadEnv(): void {
+  // Re-read .env file into process.env
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  require('dotenv').config({ override: true })
+
+  // Clear the parse cache so next loadEnv() re-validates
+  cachedEnv = null
+  cachedSchema = null
 }
 
 /** Reset cached env (useful for testing) */

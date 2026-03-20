@@ -9,5 +9,5 @@ export default defineConfig({
   dts: true,
   shims: false,
   minify: false,
-  external: ['@forinda/kickjs-core'],
+  external: ['@forinda/kickjs-core', 'vite'],
 })

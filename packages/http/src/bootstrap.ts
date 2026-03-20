@@ -1,6 +1,16 @@
 import { createLogger } from '@forinda/kickjs-core'
 import { Application, type ApplicationOptions } from './application'
 
+/** Try to reload env from .env file if config package is available */
+function tryReloadEnv(): void {
+  try {
+    const config = require('@forinda/kickjs-config')
+    config.reloadEnv?.()
+  } catch {
+    // Config package not installed — skip
+  }
+}
+
 const log = createLogger('Process')
 
 /**
@@ -49,6 +59,7 @@ export function bootstrap(options: ApplicationOptions): void {
   // ── HMR rebuild ──────────────────────────────────────────────────────
   if (g.__app) {
     log.info('HMR: Rebuilding application...')
+    tryReloadEnv()
     g.__app.rebuild()
     return
   }

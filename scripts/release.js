@@ -11,11 +11,12 @@
  *   node scripts/release.js <patch|minor|major|prerelease|custom> [options]
  *
  * Options:
- *   --dry-run       Preview changes without executing
- *   --no-push       Skip git push
- *   --no-publish    Skip npm publish
- *   --tag <name>    Custom prerelease tag (default: alpha)
- *   --from <ref>    Generate notes from this ref (default: last tag)
+ *   --dry-run          Preview changes without executing
+ *   --no-push          Skip git push
+ *   --no-publish       Skip npm publish
+ *   --github-release   Create a GitHub release via gh CLI with release notes
+ *   --tag <name>       Custom prerelease tag (default: alpha)
+ *   --from <ref>       Generate notes from this ref (default: last tag)
  *
  * Examples:
  *   node scripts/release.js patch
@@ -290,6 +291,7 @@ function main() {
   const dryRun = args.includes('--dry-run')
   const noPush = args.includes('--no-push')
   const noPublish = args.includes('--no-publish')
+  const githubRelease = args.includes('--github-release')
   const tagIdx = args.indexOf('--tag')
   const preTag = tagIdx !== -1 ? args[tagIdx + 1] : 'alpha'
   const fromIdx = args.indexOf('--from')
@@ -305,11 +307,12 @@ function main() {
     console.log('  prerelease   Pre-release          (0.1.0 -> 0.1.1-alpha.0)')
     console.log('  custom X.Y.Z Set exact version\n')
     console.log('Options:')
-    console.log('  --dry-run      Preview without changes')
-    console.log('  --no-push      Skip git push')
-    console.log('  --no-publish   Skip npm publish')
-    console.log('  --tag <name>   Prerelease tag (default: alpha)')
-    console.log('  --from <ref>   Generate notes from this git ref\n')
+    console.log('  --dry-run          Preview without changes')
+    console.log('  --no-push          Skip git push')
+    console.log('  --no-publish       Skip npm publish')
+    console.log('  --github-release   Create GitHub release via gh CLI')
+    console.log('  --tag <name>       Prerelease tag (default: alpha)')
+    console.log('  --from <ref>       Generate notes from this git ref\n')
     console.log('Examples:')
     console.log('  node scripts/release.js patch')
     console.log('  node scripts/release.js minor --dry-run')
@@ -382,7 +385,8 @@ function main() {
     console.log(`  4. git add -A && git commit -m "chore: release v${nextVersion}"`)
     console.log(`  5. git tag v${nextVersion}`)
     if (!noPush) console.log('  6. git push --follow-tags')
-    if (!noPublish) console.log('  7. pnpm -r publish --access public --no-git-checks')
+    if (githubRelease) console.log(`  7. gh release create v${nextVersion} --title "v${nextVersion}" --notes-file RELEASE_NOTES_v${nextVersion}.md`)
+    if (!noPublish) console.log(`  ${githubRelease ? '8' : '7'}. pnpm -r publish --access public --no-git-checks`)
     return
   }
 
@@ -417,6 +421,28 @@ function main() {
     console.log('\n  Skipped push (--no-push)')
   }
 
+  // GitHub Release
+  if (githubRelease) {
+    if (noPush) {
+      console.log('\n  Skipped GitHub release (--no-push — tag not pushed)')
+    } else {
+      const notesFile = `RELEASE_NOTES_v${nextVersion}.md`
+      const isPrerelease = /-(alpha|beta|rc)\.\d+$/.test(nextVersion)
+      const ghCmd = [
+        'gh release create',
+        `v${nextVersion}`,
+        `--title "v${nextVersion}"`,
+        notes && fs.existsSync(notesFile)
+          ? `--notes-file ${notesFile}`
+          : '--generate-notes',
+        isPrerelease ? '--prerelease' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')
+      run(ghCmd, `Creating GitHub release v${nextVersion}`)
+    }
+  }
+
   // Publish
   if (!noPublish) {
     run('pnpm -r publish --access public --no-git-checks', 'Publishing to npm')
@@ -429,16 +455,21 @@ function main() {
   console.log(`  Released v${nextVersion}`)
   console.log(`  Tag:     v${nextVersion}`)
   console.log(`  Packages: ${PACKAGES.map((p) => `${NPM_SCOPE}/${path.basename(p)}`).join(', ')}`)
+  if (githubRelease && !noPush) {
+    console.log(`  GitHub:  ${REPO_URL}/releases/tag/v${nextVersion}`)
+  }
   console.log('='.repeat(50))
 
-  console.log('\nTo create a GitHub Release:')
-  console.log(`  ${REPO_URL}/releases/new?tag=v${nextVersion}&title=v${nextVersion}`)
-  if (notes) {
-    console.log(`  Paste content from RELEASE_NOTES_v${nextVersion}.md`)
-  }
+  if (!githubRelease) {
+    console.log('\nTo create a GitHub Release:')
+    console.log(`  ${REPO_URL}/releases/new?tag=v${nextVersion}&title=v${nextVersion}`)
+    if (notes) {
+      console.log(`  Paste content from RELEASE_NOTES_v${nextVersion}.md`)
+    }
 
-  console.log('\nOr use gh CLI:')
-  console.log(`  gh release create v${nextVersion} --title "v${nextVersion}" --notes-file RELEASE_NOTES_v${nextVersion}.md`)
+    console.log('\nOr use gh CLI:')
+    console.log(`  gh release create v${nextVersion} --title "v${nextVersion}" --notes-file RELEASE_NOTES_v${nextVersion}.md`)
+  }
 }
 
 main()

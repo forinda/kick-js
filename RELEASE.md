@@ -12,7 +12,11 @@
    # Option 2: set token directly
    echo "//registry.npmjs.org/:_authToken=YOUR_TOKEN" >> ~/.npmrc
    ```
-4. GitHub `NPM_TOKEN` secret set (for CI-triggered publishes):
+4. GitHub CLI (`gh`) installed and authenticated (for `--github-release`):
+   ```bash
+   gh auth login
+   ```
+5. GitHub `NPM_TOKEN` secret set (for CI-triggered publishes):
    - Repo Settings > Secrets > Actions > `NPM_TOKEN`
 
 ## Release Commands
@@ -32,6 +36,11 @@ pnpm release:minor
 # Major release: 0.1.0 -> 1.0.0
 pnpm release:major
 
+# With GitHub release (creates gh release with release notes)
+pnpm release:patch:gh
+pnpm release:minor:gh
+pnpm release:major:gh
+
 # Pre-release: 0.1.0 -> 0.1.1-alpha.0
 pnpm release:alpha
 pnpm release:beta
@@ -39,6 +48,9 @@ pnpm release:beta
 # Custom version
 node scripts/release.js custom 0.3.0
 node scripts/release.js custom 1.0.0-rc.1
+
+# Custom version with GitHub release
+node scripts/release.js custom 0.3.0 --github-release
 ```
 
 ## What the Release Script Does
@@ -50,7 +62,8 @@ node scripts/release.js custom 1.0.0-rc.1
 5. **Commits**: `chore: release vX.Y.Z`
 6. **Tags**: `vX.Y.Z` (annotated)
 7. **Pushes** to remote with tags
-8. **Publishes** all 6 `@forinda/kickjs-*` packages to npm
+8. **Creates GitHub release** (if `--github-release`) via `gh` CLI with release notes
+9. **Publishes** all 6 `@forinda/kickjs-*` packages to npm
 
 ## Options
 
@@ -59,6 +72,7 @@ node scripts/release.js custom 1.0.0-rc.1
 | `--dry-run` | Preview only, no changes |
 | `--no-push` | Skip `git push` |
 | `--no-publish` | Skip `npm publish` |
+| `--github-release` | Create GitHub release via `gh` CLI with release notes |
 | `--tag <name>` | Prerelease tag (default: `alpha`) |
 | `--from <ref>` | Generate notes from specific git ref |
 
@@ -75,17 +89,22 @@ node scripts/release.js custom 0.3.0 --dry-run
 # 3. Run the release (bumps, builds, tests, commits, tags, pushes, publishes)
 node scripts/release.js custom 0.3.0
 
-# 4. Create GitHub Release with the generated notes
-gh release create v0.3.0 --title "v0.3.0" --notes-file RELEASE_NOTES_v0.3.0.md
+# 4. Or run with --github-release to auto-create the GitHub release
+node scripts/release.js custom 0.3.0 --github-release
 ```
 
 ## Step-by-Step: Subsequent Releases
 
 ```bash
 # After merging PRs to main:
-pnpm release:patch    # bug fixes
-pnpm release:minor    # new features
-pnpm release:major    # breaking changes
+pnpm release:patch       # bug fixes (manual GH release)
+pnpm release:minor       # new features (manual GH release)
+pnpm release:major       # breaking changes (manual GH release)
+
+# With automatic GitHub release creation:
+pnpm release:patch:gh    # bug fixes + GH release
+pnpm release:minor:gh    # new features + GH release
+pnpm release:major:gh    # breaking changes + GH release
 ```
 
 ## CI Auto-Publish
