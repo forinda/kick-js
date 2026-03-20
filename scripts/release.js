@@ -386,7 +386,7 @@ function main() {
     console.log(`  5. git tag v${nextVersion}`)
     if (!noPush) console.log('  6. git push --follow-tags')
     if (githubRelease) console.log(`  7. gh release create v${nextVersion} --title "v${nextVersion}" --notes-file RELEASE_NOTES_v${nextVersion}.md`)
-    if (!noPublish) console.log(`  ${githubRelease ? '8' : '7'}. pnpm -r publish --access public --no-git-checks`)
+    if (!noPublish) console.log(`  ${githubRelease ? '8' : '7'}. pnpm --filter='./packages/*' publish --access public --no-git-checks`)
     return
   }
 
@@ -445,7 +445,7 @@ function main() {
 
   // Publish
   if (!noPublish) {
-    run('pnpm -r publish --access public --no-git-checks', 'Publishing to npm')
+    run("pnpm --filter='./packages/*' publish --access public --no-git-checks", 'Publishing to npm')
   } else {
     console.log('\n  Skipped publish (--no-publish)')
   }
