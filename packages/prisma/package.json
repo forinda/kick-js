@@ -16,7 +16,14 @@
     "orm",
     "database",
     "query-builder",
-    "adapter"
+    "adapter",
+    "@forinda/kickjs-core",
+    "@forinda/kickjs-http",
+    "@forinda/kickjs-config",
+    "@forinda/kickjs-cli",
+    "@forinda/kickjs-swagger",
+    "@forinda/kickjs-testing",
+    "@forinda/kickjs-prisma"
   ],
   "type": "module",
   "main": "dist/index.js",
@@ -58,5 +65,13 @@
   "engines": {
     "node": ">=20.0"
   },
-  "homepage": "https://forinda.github.io/kick-js/"
+  "homepage": "https://forinda.github.io/kick-js/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/forinda/kick-js.git",
+    "directory": "packages/prisma"
+  },
+  "bugs": {
+    "url": "https://github.com/forinda/kick-js/issues"
+  }
 }
