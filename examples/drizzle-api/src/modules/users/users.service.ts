@@ -1,13 +1,12 @@
 import { Service, Inject } from '@forinda/kickjs-core'
 import { DRIZZLE_DB } from '@forinda/kickjs-drizzle'
 import { eq } from 'drizzle-orm'
-import { users } from '../../db/schema'
-import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
-import type * as schema from '../../db/schema'
+import { users, posts } from '@/db/schema'
+import type { AppDatabase } from '@/db'
 
 @Service()
 export class UsersService {
-  constructor(@Inject(DRIZZLE_DB) private db: BetterSQLite3Database<typeof schema>) {}
+  constructor(@Inject(DRIZZLE_DB) private db: AppDatabase) {}
 
   findAll() {
     return this.db.select().from(users).all()
@@ -19,6 +18,22 @@ export class UsersService {
 
   create(data: { name: string; email: string; role?: 'admin' | 'user' | 'editor' }) {
     return this.db.insert(users).values(data).returning().get()
+  }
+
+  /** Create a user with a welcome post in a single transaction */
+  createWithPost(data: { name: string; email: string; role?: 'admin' | 'user' | 'editor' }) {
+    return this.db.transaction((tx) => {
+      const user = tx.insert(users).values(data).returning().get()
+      tx.insert(posts)
+        .values({
+          title: `Welcome ${user.name}!`,
+          content: `${user.name} joined the platform.`,
+          published: true,
+          authorId: user.id,
+        })
+        .run()
+      return user
+    })
   }
 
   update(

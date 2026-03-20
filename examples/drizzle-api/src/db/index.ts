@@ -57,5 +57,6 @@ sqlite.exec(`
 `)
 
 export const db = drizzle({ client: sqlite, schema })
+export type AppDatabase = typeof db
 export { sqlite }
 export { schema }

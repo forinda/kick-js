@@ -1,5 +1,6 @@
 export { DrizzleAdapter } from './drizzle.adapter'
 export { DrizzleQueryAdapter } from './query-adapter'
+export { transactional } from './transactional'
 export { DRIZZLE_DB } from './types'
 export type { DrizzleAdapterOptions } from './types'
 export type { DrizzleQueryConfig, DrizzleQueryResult, DrizzleOps } from './query-adapter'

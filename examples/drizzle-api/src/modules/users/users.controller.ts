@@ -24,6 +24,12 @@ export class UsersController {
     return ctx.created(user)
   }
 
+  @Post('/with-post')
+  createWithPost(ctx: RequestContext) {
+    const user = this.usersService.createWithPost(ctx.body)
+    return ctx.created(user)
+  }
+
   @Put('/:id')
   update(ctx: RequestContext) {
     const user = this.usersService.update(Number(ctx.params.id), ctx.body)
