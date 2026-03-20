@@ -1,45 +1,64 @@
 # Roadmap
 
-## Planned
+## v1.x — Next Up
 
-- [x] WebSocket support via decorators (v0.4.x)
-- [x] Drizzle database adapter (v0.5.x)
+### High Priority
+- [ ] `@Cron` scheduler — decorator-based task scheduling with cron expressions
+- [ ] `@Cacheable` decorator — method-level caching with pluggable backends (Redis, memory, LRU)
+- [ ] Auth plugin — JWT, OAuth2, API keys, session auth out of the box
+- [ ] Notification system — multi-channel (email, Slack, webhook, SMS, DB)
+- [ ] `kick g scaffold` — generate full CRUD from field definitions (schema + module + migration)
+- [ ] `kick tinker` — REPL with DI container and services loaded
+- [ ] Admin panel adapter — auto-generated CRUD UI from Drizzle/Prisma schemas
+- [ ] SPA integration — serve Vue/React/Svelte builds, Inertia.js-style server-driven UI
+
+### Medium Priority
+- [ ] `@Broadcast` decorator — auto-push events to WebSocket channels from mutations
+- [ ] `@Before` / `@After` / `@Around` — AOP method interceptors
+- [ ] `@OnEvent` decorator — typed event system with `post_save`, `pre_delete` style hooks
+- [ ] `@Profile('dev')` — conditional service registration by environment
+- [ ] `@ConfigProperties('database')` — bind whole config sections to typed classes
+- [ ] Mailer adapter — email with template rendering (EJS/Pug) + queue integration
+- [ ] Queue monitoring dashboard — `/_debug/queues` with job stats, failures, retries
+- [ ] `kick secrets` — encrypted secrets vault (like Rails credentials)
+- [ ] `kick deploy` — deploy to Fly.io, Railway, Render, Docker
+
+### Under Consideration
 - [ ] TypeORM adapter
-- [x] GraphQL module — `@Resolver`, `@Query`, `@Mutation`, `@Arg` decorators with GraphiQL playground (v0.7.x)
-- [ ] CLI `kick deploy` command
-- [x] OpenTelemetry integration — tracing and metrics via OtelAdapter (v0.6.x)
-- [x] SSE (Server-Sent Events) — `ctx.sse()` helper for real-time streaming (v0.6.x)
-- [x] Plugin system for community extensions (v0.6.x)
-- [ ] Docs i18n translation (build-time Google Translate)
-
-## Under Consideration
-
 - [ ] gRPC support
-- [x] Queue/worker module — BullMQ adapter with `@Job`, `@Process` decorators (v0.7.x)
-- [x] Multi-tenancy — tenant resolution via header/subdomain/path/query/custom (v0.7.x)
-- [x] CLI `kick inspect` — connect to running app, display routes/metrics/DI state (v0.7.x)
-- [ ] VS Code extension (DI graph, route map, middleware pipeline)
+- [ ] Docs i18n translation (build-time Google Translate)
+- [ ] Turbo/HTMX-style server-driven UI with SSE + HTML fragments
+- [ ] Active Record callbacks — `@BeforeSave`, `@AfterCreate` on entity classes
+- [ ] Query scopes — chainable, reusable query filters as decorators
+- [ ] `kick console` / database REPL
 
-## Recently Completed
+## v1.0.0 — Shipped
 
-- [x] Drizzle ORM adapter with query builder and DI integration (v0.5.x)
-- [x] WebSocket support — `@WsController`, `@OnMessage`, `@OnConnect`, rooms, heartbeat, DevTools integration (v0.4.x)
-- [x] WebSocket example app with chat, rooms, and notifications (v0.4.x)
-- [x] Swagger schema `name` attribute for request body and response schema mapping (v0.4.x)
-- [x] npm keywords and cross-reference for package discoverability (v0.4.x)
-- [x] DevToolsAdapter — reactive metrics, health, DI introspection at `/_debug/*` (v0.4.x)
-- [x] Vue-inspired reactivity module — `ref`, `computed`, `watch`, `reactive` (v0.4.x)
-- [x] `kick g config` command for existing projects (v0.4.x)
-- [x] `kick new` directory safety prompts with `--force` flag (v0.4.x)
-- [x] CLI generates `kick.config.ts` in new projects (v0.4.x)
-- [x] Devtools example app with reactive concurrency tracking (v0.4.x)
-- [x] File upload improvements — MIME map, short extensions, `@FileUpload` decorator, value-or-function `allowedTypes` (v0.4.x)
-- [x] Comprehensive decorators reference page (v0.4.x)
-- [x] Docs versioning with automatic snapshots on release (v0.4.x)
-- [x] GitHub Pages deployment workflow (v0.4.x)
-- [x] Rate limiting middleware (v0.4.x)
-- [x] Session management middleware (v0.4.x)
-- [x] Prisma database adapter (v0.4.x)
-- [x] GitHub release CLI option, typesafe config keys, .env hot reload (v0.3.2)
-- [x] Per-package README/LICENSE, npm scope rename (v0.3.1)
-- [x] Monorepo rewrite with custom DI, Express 5, Zod, Vite HMR (v0.3.0)
+- [x] **Adaptive architecture** — REST, GraphQL, WebSocket, SSE, queues (v1.0.0)
+- [x] **16 packages** — core, http, config, cli, swagger, testing, ws, prisma, drizzle, otel, graphql, queue, multi-tenant, vscode-extension (v1.0.0)
+- [x] **17 example apps** — REST, GraphQL, WebSocket, SSE, OTel, Drizzle, queue, microservice, minimal (v1.0.0)
+- [x] **5 project templates** — rest, graphql, ddd, microservice, minimal (v0.7.x)
+- [x] **CLI generators** — module, resolver, job, adapter, middleware, guard, service, controller, dto, config (v0.7.x)
+- [x] **`kick add`** — registry-aware package installer with 16 packages (v0.7.x)
+- [x] **`kick inspect`** — connect to running app, display routes/metrics/DI state (v0.7.x)
+- [x] **DevTools dashboard** — web UI at `/_debug` with health, metrics, routes, DI, WebSocket stats (v0.6.x)
+- [x] **Plugin system** — `KickPlugin` interface for bundling modules, adapters, middleware (v0.6.x)
+- [x] **View engines** — pluggable EJS/Pug/Handlebars/Nunjucks with `ctx.render()` (v0.7.x)
+- [x] **Build-time folder copying** — `copyDirs` in kick.config.ts (v0.7.x)
+- [x] **4 queue providers** — BullMQ, RabbitMQ, Kafka, Redis Pub/Sub (v0.7.x)
+- [x] **GraphQL** — `@Resolver`, `@Query`, `@Mutation`, `@Arg` with GraphiQL (v0.7.x)
+- [x] **Multi-tenancy** — header/subdomain/path/query/custom resolution (v0.7.x)
+- [x] **OpenTelemetry** — automatic tracing and metrics (v0.6.x)
+- [x] **SSE** — `ctx.sse()` for real-time streaming (v0.6.x)
+- [x] **Vue-inspired reactivity** — `ref`, `computed`, `watch`, `reactive` (v0.4.x)
+- [x] **WebSocket** — `@WsController`, `@OnMessage`, rooms, heartbeat (v0.4.x)
+- [x] **Drizzle adapter** — type-safe DB with query builder and transactions (v0.5.x)
+- [x] **Prisma adapter** — DI integration and query building (v0.4.x)
+- [x] **Swagger/OpenAPI** — auto-generated from decorators + Zod schemas (v0.3.x)
+- [x] **`@ApiQueryParams`** — document filterable/sortable/searchable fields in Swagger (v0.5.x)
+- [x] **`ctx.paginate()`** — standardized paginated responses with meta (v0.5.x)
+- [x] **File uploads** — MIME map, `@FileUpload`, value-or-function `allowedTypes` (v0.4.x)
+- [x] **Rate limiting, sessions, CSRF** — built-in middleware (v0.4.x)
+- [x] **Migration guide** — step-by-step Express to KickJS (v0.7.x)
+- [x] **Custom decorators guide** — tutorials for `@Transactional`, `@Cache`, `@Timed`, custom queues (v0.5.x)
+- [x] **VS Code extension** — activity bar with health, routes, DI views (v0.7.x)
