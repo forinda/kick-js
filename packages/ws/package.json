@@ -1,0 +1,80 @@
+{
+  "name": "@forinda/kickjs-ws",
+  "version": "0.4.3",
+  "description": "WebSocket support with decorators, namespaces, rooms, and DI integration for KickJS",
+  "keywords": [
+    "kickjs",
+    "nodejs",
+    "typescript",
+    "express",
+    "decorators",
+    "dependency-injection",
+    "backend",
+    "api",
+    "framework",
+    "websocket",
+    "ws",
+    "realtime",
+    "rooms",
+    "namespaces",
+    "@forinda/kickjs-core",
+    "@forinda/kickjs-http",
+    "@forinda/kickjs-config",
+    "@forinda/kickjs-cli",
+    "@forinda/kickjs-swagger",
+    "@forinda/kickjs-testing",
+    "@forinda/kickjs-prisma",
+    "@forinda/kickjs-ws"
+  ],
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist .turbo",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@forinda/kickjs-core": "workspace:*",
+    "reflect-metadata": "^0.2.2",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@swc/core": "^1.7.28",
+    "@types/node": "^24.5.2",
+    "@types/ws": "^8.18.0",
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT",
+  "author": "Felix Orinda",
+  "engines": {
+    "node": ">=20.0"
+  },
+  "homepage": "https://forinda.github.io/kick-js/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/forinda/kick-js.git",
+    "directory": "packages/ws"
+  },
+  "bugs": {
+    "url": "https://github.com/forinda/kick-js/issues"
+  }
+}

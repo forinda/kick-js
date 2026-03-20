@@ -21,6 +21,7 @@ export default defineConfig({
       '@forinda/kickjs-config': path.resolve(__dirname, 'packages/config/src/index.ts'),
       '@forinda/kickjs-swagger': path.resolve(__dirname, 'packages/swagger/src/index.ts'),
       '@forinda/kickjs-testing': path.resolve(__dirname, 'packages/testing/src/index.ts'),
+      '@forinda/kickjs-ws': path.resolve(__dirname, 'packages/ws/src/index.ts'),
     },
   },
   test: {

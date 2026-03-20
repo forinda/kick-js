@@ -33,6 +33,10 @@ This guide helps AI agents (Claude, Copilot, etc.) work effectively on the KickJ
 | OpenAPI builder | `packages/swagger/src/openapi-builder.ts` |
 | Prisma adapter | `packages/prisma/src/prisma.adapter.ts` |
 | Prisma query adapter | `packages/prisma/src/query-adapter.ts` |
+| WebSocket adapter | `packages/ws/src/ws-adapter.ts` |
+| WebSocket decorators | `packages/ws/src/decorators.ts` |
+| WebSocket context | `packages/ws/src/ws-context.ts` |
+| Room manager | `packages/ws/src/room-manager.ts` |
 
 ### Configuration
 

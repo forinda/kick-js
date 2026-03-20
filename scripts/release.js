@@ -43,6 +43,7 @@ const PACKAGES = [
   'packages/cli',
   'packages/testing',
   'packages/prisma',
+  'packages/ws',
 ]
 
 // Examples also get version bumped (but not published)

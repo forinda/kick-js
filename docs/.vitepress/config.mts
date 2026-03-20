@@ -32,6 +32,7 @@ const guideSidebar = [
       { text: 'Sessions', link: '/guide/sessions' },
       { text: 'Swagger / OpenAPI', link: '/guide/swagger' },
       { text: 'Configuration', link: '/guide/configuration' },
+      { text: 'WebSockets', link: '/guide/websockets' },
       { text: 'Reactivity', link: '/guide/reactivity' },
       { text: 'DevTools', link: '/guide/devtools' },
       { text: 'Adapters', link: '/guide/adapters' },
@@ -63,6 +64,7 @@ const apiSidebar = [
       { text: '@forinda/kickjs-cli', link: '/api/cli' },
       { text: '@forinda/kickjs-testing', link: '/api/testing' },
       { text: '@forinda/kickjs-prisma', link: '/api/prisma' },
+      { text: '@forinda/kickjs-ws', link: '/api/ws' },
     ],
   },
 ]
