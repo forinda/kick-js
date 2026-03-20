@@ -2,6 +2,25 @@
 
 Command-line interface for scaffolding projects, generating code, and running the dev server.
 
+## Installation
+
+```bash
+# Global install
+pnpm add -g @forinda/kickjs-cli
+
+# Or use npx
+npx @forinda/kickjs-cli new my-api
+```
+
+### Link local build (for contributors)
+
+```bash
+pnpm build
+cd packages/cli && pnpm link --global
+```
+
+`kick` now points to your local build. Re-run `pnpm build` after changes.
+
 ## CLI Commands
 
 | Command | Alias | Description |
@@ -19,9 +38,11 @@ Command-line interface for scaffolding projects, generating code, and running th
 
 ### Command Options
 
-**kick new**
+**kick new [name]** (use `.` for current directory)
 - `-d, --directory <dir>` -- Target directory (defaults to project name)
-- `--pm <manager>` -- Package manager: `pnpm` | `npm` | `yarn` (default: `pnpm`)
+- `--pm <manager>` -- Package manager: `pnpm` | `npm` | `yarn` (prompted if omitted)
+- `--git / --no-git` -- Initialize git repository (prompted if omitted)
+- `--install / --no-install` -- Install dependencies (prompted if omitted)
 
 **kick dev**
 - `-e, --entry <file>` -- Entry file (default: `src/index.ts`)

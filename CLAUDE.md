@@ -93,6 +93,17 @@ Every controller method receives `ctx: RequestContext` with:
 - `ctx.qs(fieldConfig)` — parsed query with filters/sort/pagination
 - `ctx.json(data)`, `ctx.created(data)`, `ctx.noContent()`, `ctx.notFound()`
 
+## Linking the CLI Locally
+
+To make `kick` available globally from your local build (like `ng` for Angular):
+
+```bash
+pnpm build
+cd packages/cli && pnpm link --global
+```
+
+Now `kick` uses your latest local code. After changes, just `pnpm build` — no re-link needed.
+
 ## Testing
 
 - Tests live in `tests/` at root

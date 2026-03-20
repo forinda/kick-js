@@ -2,6 +2,40 @@
 
 The `kick` CLI provides commands for project creation, development, code generation, and custom workflows. It is powered by Commander.js and reads project-level configuration from `kick.config.ts`.
 
+## Installation
+
+### From npm (published version)
+
+```bash
+pnpm add -g @forinda/kickjs-cli
+kick --version
+```
+
+### Link locally (development version)
+
+When working on the KickJS monorepo, link the CLI globally so `kick` always uses your latest local build — no need to publish first:
+
+```bash
+# From the repo root
+pnpm build
+cd packages/cli
+pnpm link --global
+```
+
+Now `kick` is available anywhere on your terminal, pointing to your local build. After making CLI changes, just run `pnpm build` and the linked `kick` picks up the changes immediately.
+
+To unlink later:
+
+```bash
+pnpm uninstall -g @forinda/kickjs-cli
+```
+
+### Using npx (no install)
+
+```bash
+npx @forinda/kickjs-cli new my-api
+```
+
 ## kick new
 
 Create a new KickJS project:

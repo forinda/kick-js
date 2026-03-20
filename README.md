@@ -16,18 +16,41 @@ KickJS gives you the DX of NestJS — decorators, dependency injection, module s
 - **Extensible CLI** — register project-specific commands in `kick.config.ts`
 - **ESM + TypeScript strict** — modern stack, tree-shakeable packages
 
+## Install the CLI
+
+```bash
+# Global install (recommended)
+pnpm add -g @forinda/kickjs-cli
+
+# Or use npx without installing
+npx @forinda/kickjs-cli new my-api
+```
+
+### For contributors (link local build)
+
+```bash
+git clone https://github.com/forinda/kick-js.git
+cd kick-js
+pnpm install && pnpm build
+cd packages/cli && pnpm link --global
+```
+
+Now `kick` uses your local build. After changes, just `pnpm build` — no re-link needed.
+
 ## Quick Start
 
 ```bash
-# Scaffold a new project
-npx @forinda/kickjs-cli new my-api
-cd my-api
+# Scaffold a new project (interactive prompts for PM, git, install)
+kick new my-api
+
+# Or scaffold in the current directory
+kick new .
 
 # Start development with HMR
-pnpm kick dev
+kick dev
 
 # Generate a DDD module
-pnpm kick g module users
+kick g module users
 ```
 
 ## Minimal Example
