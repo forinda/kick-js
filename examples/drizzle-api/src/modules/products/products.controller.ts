@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Put, Delete, Autowired, ApiQueryParams } from '@forinda/kickjs-core'
 import type { RequestContext } from '@forinda/kickjs-http'
 import { ProductsService } from './products.service'
+import { createProductSchema, updateProductSchema } from './products.schema'
 import { ApiTags } from '@forinda/kickjs-swagger'
 
 @Controller('/')
@@ -30,14 +31,14 @@ export class ProductsController {
     return ctx.json(product)
   }
 
-  @Post('/')
+  @Post('/', { body: createProductSchema, name: 'CreateProduct' })
   @ApiTags('Products')
   create(ctx: RequestContext) {
     const product = this.productsService.create(ctx.body)
     return ctx.created(product)
   }
 
-  @Put('/:id')
+  @Put('/:id', { body: updateProductSchema, name: 'UpdateProduct' })
   @ApiTags('Products')
   update(ctx: RequestContext) {
     const product = this.productsService.update(Number(ctx.params.id), ctx.body)

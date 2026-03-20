@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Put, Delete, Autowired, ApiQueryParams } from '@forinda/kickjs-core'
 import type { RequestContext } from '@forinda/kickjs-http'
 import { UsersService } from './users.service'
+import { createUserSchema, updateUserSchema } from './users.schema'
 import { ApiTags } from '@forinda/kickjs-swagger'
 
 @Controller('/')
@@ -30,21 +31,21 @@ export class UsersController {
     return ctx.json(user)
   }
 
-  @Post('/')
+  @Post('/', { body: createUserSchema, name: 'CreateUser' })
   @ApiTags('Users')
   create(ctx: RequestContext) {
     const user = this.usersService.create(ctx.body)
     return ctx.created(user)
   }
 
-  @Post('/with-post')
+  @Post('/with-post', { body: createUserSchema, name: 'CreateUserWithPost' })
   @ApiTags('Users')
   createWithPost(ctx: RequestContext) {
     const user = this.usersService.createWithPost(ctx.body)
     return ctx.created(user)
   }
 
-  @Put('/:id')
+  @Put('/:id', { body: updateUserSchema, name: 'UpdateUser' })
   @ApiTags('Users')
   update(ctx: RequestContext) {
     const user = this.usersService.update(Number(ctx.params.id), ctx.body)
