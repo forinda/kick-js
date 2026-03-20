@@ -10,13 +10,14 @@ Generate a full DDD module with all layers:
 kick g module product
 ```
 
-This creates the following structure inside `src/modules/products/`:
+This creates 18 files inside `src/modules/products/`:
 
 ```
 products/
   index.ts                                          # Module class (register + routes)
+  constants.ts                                      # Module-level constants and tokens
   presentation/
-    product.controller.ts                           # @Controller with CRUD routes
+    product.controller.ts                           # @Controller with CRUD routes, @ApiTags, @ApiQueryParams
   application/
     dtos/
       create-product.dto.ts                         # Zod schema for POST
@@ -26,6 +27,7 @@ products/
       create-product.use-case.ts                    # @Service use case
       get-product.use-case.ts
       list-products.use-case.ts
+      find-paginated-products.use-case.ts           # findPaginated with ctx.paginate()
       update-product.use-case.ts
       delete-product.use-case.ts
   domain/
@@ -40,7 +42,12 @@ products/
   infrastructure/
     repositories/
       in-memory-product.repository.ts               # @Repository implementation
+  __tests__/
+    product.controller.spec.ts                      # Controller test scaffold
+    product.use-cases.spec.ts                       # Use case test scaffold
 ```
+
+The generated controller includes `@ApiTags` for Swagger grouping and `@ApiQueryParams` on list endpoints to declare filterable, sortable, and searchable fields. The `findPaginated` use case demonstrates the `ctx.paginate()` pattern for returning standardized paginated responses. The `constants.ts` file centralizes DI tokens and module-level constants. Test scaffolds in `__tests__/` include `Container.reset()` setup and basic test cases for each use case and controller route.
 
 ### Module Flags
 

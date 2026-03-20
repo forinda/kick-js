@@ -139,3 +139,84 @@ class DrizzleQueryAdapter implements QueryBuilderAdapter<DrizzleResult, DrizzleC
 ```
 
 The adapter pattern keeps the query parser ORM-agnostic. You can write adapters for Drizzle, Prisma, Sequelize, or any other query builder.
+
+## Paginated Responses with ctx.paginate()
+
+The `ctx.paginate()` method wraps a service call into a standardized paginated response. It combines the parsed query pagination with your data-fetching logic and returns a `PaginatedResponse`.
+
+### PaginatedResponse Shape
+
+```ts
+interface PaginatedResponse<T> {
+  data: T[]
+  meta: {
+    page: number
+    limit: number
+    total: number
+    totalPages: number
+    hasNext: boolean
+    hasPrev: boolean
+  }
+}
+```
+
+### Usage
+
+Your service method should return an object with `data` (the page of results) and `total` (the total count across all pages):
+
+```ts
+@Service()
+class TaskService {
+  async findPaginated(parsed: ParsedQuery) {
+    const { pagination, filters } = parsed
+    const [data, total] = await Promise.all([
+      this.repo.find({ ...filters, skip: pagination.offset, take: pagination.limit }),
+      this.repo.count(filters),
+    ])
+    return { data, total }
+  }
+}
+```
+
+Then in your controller, call `ctx.paginate()` with the parsed query and the service result:
+
+```ts
+import { Controller, Get } from '@forinda/kickjs-core'
+import { RequestContext } from '@forinda/kickjs-http'
+
+@Controller('/tasks')
+class TaskController {
+  @Autowired() private taskService!: TaskService
+
+  @Get('/')
+  async list(ctx: RequestContext) {
+    const parsed = ctx.qs({
+      filterable: ['status', 'priority'],
+      sortable: ['createdAt', 'title'],
+    })
+    const { data, total } = await this.taskService.findPaginated(parsed)
+    return ctx.paginate({ data, total, parsed })
+  }
+}
+```
+
+The response sent to the client looks like:
+
+```json
+{
+  "data": [
+    { "id": 1, "title": "Deploy v2", "status": "active" },
+    { "id": 2, "title": "Write tests", "status": "active" }
+  ],
+  "meta": {
+    "page": 2,
+    "limit": 10,
+    "total": 57,
+    "totalPages": 6,
+    "hasNext": true,
+    "hasPrev": true
+  }
+}
+```
+
+The `meta` fields are computed automatically from the pagination values in the parsed query and the `total` you provide. This ensures a consistent pagination contract across all your endpoints.

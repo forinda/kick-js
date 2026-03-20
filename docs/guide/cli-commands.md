@@ -185,7 +185,7 @@ Output:
 Generate code scaffolds. See the [Generators](./generators.md) page for full details.
 
 ```bash
-kick g module user
+kick g module user       # Generates 18 files with DDD structure, tests, and API decorators
 kick g controller auth
 kick g service payment
 kick g middleware logger

@@ -146,22 +146,6 @@ class CacheService {
 }
 ```
 
-### @Transactional()
-
-Wraps a method in a database transaction. Requires a `TransactionManager` registered in the DI container (e.g., via `@forinda/kickjs-prisma`).
-
-```ts
-@Service()
-class OrderService {
-  @Transactional()
-  async placeOrder(data: OrderDto) {
-    await this.orderRepo.create(data)
-    await this.inventoryRepo.decrement(data.items)
-    // Auto-commits on success, auto-rolls back on throw
-  }
-}
-```
-
 ## Method & Class Decorators
 
 ### @Middleware(...handlers)
@@ -344,6 +328,39 @@ Hide a controller or method from the generated OpenAPI spec.
 async internalEndpoint(ctx: RequestContext) { ... }
 ```
 
+### @ApiQueryParams(config)
+
+Declares the filterable, sortable, and searchable query parameters for an endpoint. This decorator lives in `@forinda/kickjs-core` and works with both the query parser and the Swagger spec generator. When `@forinda/kickjs-swagger` is installed, the declared fields are automatically added as OpenAPI query parameters.
+
+```ts
+import { Controller, Get, ApiQueryParams } from '@forinda/kickjs-core'
+import { RequestContext } from '@forinda/kickjs-http'
+
+@Controller('/tasks')
+class TaskController {
+  @Get('/')
+  @ApiQueryParams({
+    filterable: ['status', 'priority', 'assigneeId'],
+    sortable: ['createdAt', 'title', 'priority'],
+    searchable: ['title', 'description'],
+  })
+  async list(ctx: RequestContext) {
+    const parsed = ctx.qs({
+      filterable: ['status', 'priority', 'assigneeId'],
+      sortable: ['createdAt', 'title', 'priority'],
+      searchable: ['title', 'description'],
+    })
+    // ...
+  }
+}
+```
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `filterable` | `string[]` | Fields that clients can filter on via `?filter=field:op:value` |
+| `sortable` | `string[]` | Fields that clients can sort by via `?sort=field:direction` |
+| `searchable` | `string[]` | Fields included in free-text `?q=` search |
+
 ## Summary Table
 
 | Decorator | Target | Package | Purpose |
@@ -367,4 +384,5 @@ async internalEndpoint(ctx: RequestContext) { ... }
 | `@ApiResponse` | Method | swagger | OpenAPI response |
 | `@ApiTags` | Class/Method | swagger | OpenAPI tags |
 | `@ApiBearerAuth` | Class/Method | swagger | Bearer auth scheme |
+| `@ApiQueryParams` | Method | core | Declare filterable/sortable/searchable query fields |
 | `@ApiExclude` | Class/Method | swagger | Hide from spec |
