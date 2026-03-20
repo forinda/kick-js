@@ -108,11 +108,13 @@ export function registerGenerateCommand(program: Command): void {
     .description('Generate a kick.config.ts at the project root')
     .option('--modules-dir <dir>', 'Modules directory path', 'src/modules')
     .option('--repo <type>', 'Default repository type: inmemory | drizzle', 'inmemory')
+    .option('-f, --force', 'Overwrite existing kick.config.ts without prompting')
     .action(async (opts: any) => {
       const files = await generateConfig({
         outDir: resolve('.'),
         modulesDir: opts.modulesDir,
         defaultRepo: opts.repo,
+        force: opts.force,
       })
       printGenerated(files)
     })
