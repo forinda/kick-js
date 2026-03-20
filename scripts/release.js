@@ -42,6 +42,7 @@ const PACKAGES = [
   'packages/swagger',
   'packages/cli',
   'packages/testing',
+  'packages/prisma',
 ]
 
 // Examples also get version bumped (but not published)
@@ -52,6 +53,8 @@ const EXAMPLES = [
   'examples/full-api',
   'examples/swagger-api',
   'examples/joi-api',
+  'examples/upload-api',
+  'examples/devtools-api',
 ]
 
 const RELEASE_TYPES = ['patch', 'minor', 'major', 'prerelease', 'custom']
