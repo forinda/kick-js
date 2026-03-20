@@ -23,13 +23,20 @@
 - [ ] `kick secrets` — encrypted secrets vault (like Rails credentials)
 - [ ] `kick deploy` — deploy to Fly.io, Railway, Render, Docker
 
+### Community / Tutorial Patterns (not maintained in core)
+
+These are ORM/DB-specific and vary by ecosystem. We provide tutorials in the [Custom Decorators Guide](./guide/custom-decorators.md) showing how to build them yourself:
+
+- `@Transactional` — each ORM has its own transaction API
+- `@BeforeSave` / `@AfterCreate` — ORM-specific lifecycle hooks
+- Query scopes — depends on Drizzle/Prisma/Mongoose query builders
+- Custom queue providers — RabbitMQ, SQS, etc. (tutorial + `QueueProvider` interface)
+
 ### Under Consideration
 - [ ] TypeORM adapter
 - [ ] gRPC support
 - [ ] Docs i18n translation (build-time Google Translate)
 - [ ] Turbo/HTMX-style server-driven UI with SSE + HTML fragments
-- [ ] Active Record callbacks — `@BeforeSave`, `@AfterCreate` on entity classes
-- [ ] Query scopes — chainable, reusable query filters as decorators
 - [ ] `kick console` / database REPL
 
 ## v1.0.0 — Shipped
