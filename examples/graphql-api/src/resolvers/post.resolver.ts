@@ -18,17 +18,17 @@ const posts: Post[] = [
 @Service()
 @Resolver('Post')
 export class PostResolver {
-  @Query('posts')
+  @Query('posts', { returnType: '[Post!]!' })
   findAll() {
     return posts
   }
 
-  @Query('post')
+  @Query('post', { returnType: 'Post' })
   findOne(@Arg('id', 'ID!') id: string) {
     return posts.find((p) => p.id === id) ?? null
   }
 
-  @Mutation('createPost')
+  @Mutation('createPost', { returnType: 'Post!' })
   create(
     @Arg('title', 'String!') title: string,
     @Arg('content', 'String!') content: string,

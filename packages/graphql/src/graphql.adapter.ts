@@ -1,5 +1,6 @@
 import { Logger, type AppAdapter, type Container } from '@forinda/kickjs-core'
 import type { Request, Response } from 'express'
+import express from 'express'
 import {
   RESOLVER_META,
   QUERY_META,
@@ -21,6 +22,11 @@ export interface GraphQLAdapterOptions {
   resolvers: any[]
   /** Custom GraphQL schema string (merged with auto-generated schema) */
   typeDefs?: string
+  /**
+   * The graphql module — pass `import * as graphql from 'graphql'` or `require('graphql')`.
+   * Required because the adapter can't resolve the graphql package from its own node_modules.
+   */
+  graphql: any
 }
 
 /**
@@ -64,51 +70,52 @@ export class GraphQLAdapter implements AppAdapter {
       container.register(ResolverClass, ResolverClass)
     }
 
-    try {
-      const graphql = require('graphql')
-
-      // Build schema from decorators
-      const { schema, rootValue } = this.buildSchema(graphql, container)
-
-      // Mount GraphQL endpoint
-      app.post(this.options.path, async (req: Request, res: Response) => {
-        const { query, variables, operationName } = req.body ?? {}
-        if (!query) {
-          res.status(400).json({ errors: [{ message: 'Query is required' }] })
-          return
-        }
-
-        try {
-          const result = await graphql.graphql({
-            schema,
-            source: query,
-            rootValue,
-            variableValues: variables,
-            operationName,
-            contextValue: { req, res, container },
-          })
-          res.json(result)
-        } catch (err: any) {
-          res.status(500).json({ errors: [{ message: err.message }] })
-        }
-      })
-
-      // GET for playground/introspection
-      app.get(this.options.path, (req: Request, res: Response) => {
-        if (this.options.playground) {
-          res.type('html').send(this.renderPlayground())
-        } else {
-          res.status(404).json({ message: 'GraphQL Playground disabled' })
-        }
-      })
-
-      log.info(`GraphQL endpoint: ${this.options.path}`)
-      if (this.options.playground) {
-        log.info(`GraphQL Playground: ${this.options.path} (GET)`)
-      }
-    } catch {
-      log.warn('graphql package not found. Install it: pnpm add graphql')
+    const graphqlLib = this.options.graphql
+    if (!graphqlLib?.buildSchema) {
+      log.warn(
+        'graphql module not provided. Pass { graphql: require("graphql") } to GraphQLAdapter.',
+      )
+      return
     }
+
+    const { schema, rootValue } = this.buildSchema(graphqlLib, container)
+    log.info(`GraphQL endpoint: ${this.options.path}`)
+    if (this.options.playground) {
+      log.info(`GraphQL Playground: ${this.options.path} (GET)`)
+    }
+
+    const jsonParser = express.json()
+
+    app.post(this.options.path, jsonParser, async (req: Request, res: Response) => {
+      const { query, variables, operationName } = req.body ?? {}
+      if (!query) {
+        res.status(400).json({ errors: [{ message: 'Query is required' }] })
+        return
+      }
+
+      try {
+        const result = await graphqlLib.graphql({
+          schema,
+          source: query,
+          rootValue,
+          variableValues: variables,
+          operationName,
+          contextValue: { req, res, container },
+        })
+        res.json(result)
+      } catch (err: any) {
+        res.status(500).json({ errors: [{ message: err.message }] })
+      }
+    })
+
+    // GET for playground/introspection
+    app.get(this.options.path, (_req: Request, res: Response) => {
+      if (this.options.playground) {
+        res.type('html').send(this.renderPlayground())
+      } else {
+        res.status(404).json({ message: 'GraphQL Playground disabled' })
+      }
+    })
   }
 
   private buildSchema(graphql: any, container: Container) {

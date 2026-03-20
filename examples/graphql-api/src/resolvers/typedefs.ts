@@ -1,3 +1,8 @@
+/**
+ * Custom GraphQL type definitions.
+ * Only define custom types here — Query and Mutation are auto-generated
+ * from @Query and @Mutation decorators on resolver classes.
+ */
 export const typeDefs = `
   type User {
     id: ID!
@@ -11,18 +16,5 @@ export const typeDefs = `
     title: String!
     content: String!
     authorId: ID!
-  }
-
-  type Query {
-    users: [User!]!
-    user(id: ID!): User
-    posts: [Post!]!
-    post(id: ID!): Post
-  }
-
-  type Mutation {
-    createUser(name: String!, email: String!): User!
-    deleteUser(id: ID!): User
-    createPost(title: String!, content: String!, authorId: ID!): Post!
   }
 `

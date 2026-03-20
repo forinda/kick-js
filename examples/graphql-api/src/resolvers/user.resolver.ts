@@ -19,24 +19,24 @@ const users: User[] = [
 @Service()
 @Resolver('User')
 export class UserResolver {
-  @Query('users')
+  @Query('users', { returnType: '[User!]!' })
   findAll() {
     return users
   }
 
-  @Query('user')
+  @Query('user', { returnType: 'User' })
   findOne(@Arg('id', 'ID!') id: string) {
     return users.find((u) => u.id === id) ?? null
   }
 
-  @Mutation('createUser')
+  @Mutation('createUser', { returnType: 'User!' })
   create(@Arg('name', 'String!') name: string, @Arg('email', 'String!') email: string) {
     const user: User = { id: String(nextId++), name, email, role: 'viewer' }
     users.push(user)
     return user
   }
 
-  @Mutation('deleteUser')
+  @Mutation('deleteUser', { returnType: 'User' })
   delete(@Arg('id', 'ID!') id: string) {
     const index = users.findIndex((u) => u.id === id)
     if (index === -1) return null
