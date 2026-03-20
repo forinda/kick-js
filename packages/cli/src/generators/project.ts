@@ -1,6 +1,12 @@
-import { join } from 'node:path'
+import { join, dirname } from 'node:path'
 import { execSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { writeFileSafe } from '../utils/fs'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const cliPkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'))
+const KICKJS_VERSION = `^${cliPkg.version}`
 
 interface InitProjectOptions {
   name: string
@@ -23,7 +29,7 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
     JSON.stringify(
       {
         name,
-        version: '0.1.0',
+        version: cliPkg.version,
         type: 'module',
         scripts: {
           dev: 'kick dev',
@@ -37,10 +43,10 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
           format: 'prettier --write src/',
         },
         dependencies: {
-          '@forinda/kickjs-core': '^0.1.0',
-          '@forinda/kickjs-http': '^0.1.0',
-          '@forinda/kickjs-config': '^0.1.0',
-          '@forinda/kickjs-swagger': '^0.1.0',
+          '@forinda/kickjs-core': KICKJS_VERSION,
+          '@forinda/kickjs-http': KICKJS_VERSION,
+          '@forinda/kickjs-config': KICKJS_VERSION,
+          '@forinda/kickjs-swagger': KICKJS_VERSION,
           express: '^5.1.0',
           'reflect-metadata': '^0.2.2',
           zod: '^4.3.6',
@@ -48,7 +54,7 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
           'pino-pretty': '^13.1.3',
         },
         devDependencies: {
-          '@forinda/kickjs-cli': '^0.1.0',
+          '@forinda/kickjs-cli': KICKJS_VERSION,
           '@swc/core': '^1.7.28',
           '@types/express': '^5.0.6',
           '@types/node': '^24.5.2',
@@ -181,7 +187,7 @@ bootstrap({
   modules,
   adapters: [
     new SwaggerAdapter({
-      info: { title: '${name}', version: '0.1.0' },
+      info: { title: '${name}', version: '${cliPkg.version}' },
     }),
   ],
 })
