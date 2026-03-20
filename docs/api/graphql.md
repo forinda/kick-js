@@ -1,195 +1,218 @@
 # @forinda/kickjs-graphql
 
-GraphQL support for KickJS applications — decorator-driven resolvers with optional GraphiQL playground.
+GraphQL support for KickJS — decorator-driven resolvers with auto-generated schema and GraphiQL playground.
 
 ## Installation
 
 ```bash
 pnpm add @forinda/kickjs-graphql graphql
+# Or use the CLI:
+kick add graphql
 ```
 
-## Exports
-
-### Decorators
-
-| Decorator | Description |
-|-----------|-------------|
-| `@Resolver(typeName?)` | Mark a class as a GraphQL resolver (optionally scoped to a type) |
-| `@Query(name?)` | Mark a method as a GraphQL query field |
-| `@Mutation(name?)` | Mark a method as a GraphQL mutation field |
-| `@Subscription(name?)` | Mark a method as a GraphQL subscription field |
-| `@Arg(name, options?)` | Inject a named argument into a resolver method |
-
-### Adapter
-
-| Export | Description |
-|--------|-------------|
-| `GraphQLAdapter` | AppAdapter that mounts the GraphQL endpoint on the HTTP server |
-
-### Types
-
-| Export | Description |
-|--------|-------------|
-| `GraphQLAdapterOptions` | Configuration options for `GraphQLAdapter` |
-| `ResolverMeta` | Metadata stored by `@Resolver` |
-| `QueryMeta` | Metadata stored by `@Query` |
-| `MutationMeta` | Metadata stored by `@Mutation` |
-| `SubscriptionMeta` | Metadata stored by `@Subscription` |
-
-## GraphQLAdapter Options
+## Quick Start
 
 ```ts
-interface GraphQLAdapterOptions {
-  /** URL path for the GraphQL endpoint (default: '/graphql') */
-  path?: string
-  /** Enable the GraphiQL interactive playground (default: true in development) */
-  playground?: boolean
-  /** Array of resolver classes decorated with @Resolver */
-  resolvers?: Function[]
-  /** GraphQL type definitions (SDL string or DocumentNode) */
-  typeDefs?: string | DocumentNode
-}
-```
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `path` | `string` | `'/graphql'` | URL path for the GraphQL endpoint |
-| `playground` | `boolean` | `true` (dev) | Enable GraphiQL interactive playground |
-| `resolvers` | `Function[]` | `[]` | Resolver classes decorated with `@Resolver` |
-| `typeDefs` | `string \| DocumentNode` | — | GraphQL schema type definitions |
-
-## Decorators
-
-### @Resolver
-
-Marks a class as a GraphQL resolver. Optionally scope it to a specific type name.
-
-```ts
-@Resolver()
-export class RootResolver { ... }
-
-@Resolver('User')
-export class UserResolver { ... }
-```
-
-### @Query
-
-Marks a method as a GraphQL query field. The method name is used as the field name unless overridden.
-
-```ts
-@Query()
-users() { ... }
-
-@Query('allUsers')
-getUsers() { ... }
-```
-
-### @Mutation
-
-Marks a method as a GraphQL mutation field.
-
-```ts
-@Mutation()
-createUser(@Arg('input') input: CreateUserInput) { ... }
-```
-
-### @Subscription
-
-Marks a method as a GraphQL subscription field. Return an `AsyncIterator`.
-
-```ts
-@Subscription()
-onUserCreated() {
-  return pubsub.asyncIterator('USER_CREATED')
-}
-```
-
-### @Arg
-
-Injects a named argument from the GraphQL field arguments into the method parameter.
-
-```ts
-@Query()
-user(@Arg('id') id: string) { ... }
-
-@Arg('limit', { nullable: true, defaultValue: 10 })
-```
-
-## GraphiQL Playground
-
-When `playground` is enabled (the default in development), navigate to the GraphQL endpoint path in a browser to access the GraphiQL interactive IDE. This provides:
-
-- Schema exploration and auto-complete
-- Query history
-- Variable and header editors
-- Real-time documentation from your schema
-
-## Example
-
-```ts
-import { Resolver, Query, Mutation, Arg } from '@forinda/kickjs-graphql'
-import { Service, Autowired } from '@forinda/kickjs-core'
-
-@Service()
-@Resolver()
-export class UserResolver {
-  @Autowired()
-  private userService!: UserService
-
-  @Query()
-  async users() {
-    return this.userService.findAll()
-  }
-
-  @Query()
-  async user(@Arg('id') id: string) {
-    return this.userService.findById(id)
-  }
-
-  @Mutation()
-  async createUser(@Arg('name') name: string, @Arg('email') email: string) {
-    return this.userService.create({ name, email })
-  }
-}
-```
-
-### Bootstrap
-
-```ts
-import { bootstrap } from '@forinda/kickjs-core'
+import 'reflect-metadata'
+import * as graphql from 'graphql'
+import { bootstrap } from '@forinda/kickjs-http'
 import { GraphQLAdapter } from '@forinda/kickjs-graphql'
 import { UserResolver } from './resolvers/user.resolver'
 
+const typeDefs = `
+  type User {
+    id: ID!
+    name: String!
+    email: String!
+  }
+`
+
 bootstrap({
-  modules,
+  modules: [],
   adapters: [
     new GraphQLAdapter({
-      path: '/graphql',
-      playground: true,
+      graphql,                          // pass the graphql module
       resolvers: [UserResolver],
-      typeDefs: `
-        type User {
-          id: ID!
-          name: String!
-          email: String!
-        }
-
-        type Query {
-          users: [User!]!
-          user(id: ID!): User
-        }
-
-        type Mutation {
-          createUser(name: String!, email: String!): User!
-        }
-      `,
+      typeDefs,                         // only custom types — Query/Mutation auto-generated
     }),
   ],
 })
 ```
 
+Then visit `http://localhost:3000/graphql` for the GraphiQL playground.
+
+## Adapter Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `graphql` | `any` | **required** | The `graphql` module (`import * as graphql from 'graphql'`) |
+| `resolvers` | `any[]` | `[]` | Resolver classes decorated with `@Resolver` |
+| `typeDefs` | `string` | — | Custom type definitions (only custom types, NOT Query/Mutation) |
+| `path` | `string` | `'/graphql'` | URL path for the endpoint |
+| `playground` | `boolean` | `true` (dev) | Enable GraphiQL interactive playground |
+
+## Decorators
+
+### @Resolver(typeName?)
+
+```ts
+@Service()
+@Resolver('User')
+export class UserResolver { ... }
+```
+
+### @Query(name?, options?)
+
+```ts
+@Query('users', { returnType: '[User!]!' })
+findAll() { return this.users }
+
+@Query('user', { returnType: 'User' })
+findById(@Arg('id', 'ID!') id: string) { ... }
+```
+
+The `returnType` must match your custom types in `typeDefs`. Without it, defaults to `String`.
+
+### @Mutation(name?, options?)
+
+```ts
+@Mutation('createUser', { returnType: 'User!' })
+create(@Arg('name', 'String!') name: string, @Arg('email', 'String!') email: string) { ... }
+```
+
+### @Arg(name, type?)
+
+Injects a named GraphQL argument. The `type` string is used in the auto-generated schema.
+
+```ts
+@Arg('id', 'ID!')       // required ID
+@Arg('name', 'String!')  // required string
+@Arg('limit', 'Int')     // optional int
+```
+
+## How Schema Generation Works
+
+The adapter auto-generates `Query` and `Mutation` types from your `@Query`/`@Mutation` decorators:
+
+```
+Your typeDefs (custom types only):     Auto-generated from decorators:
+─────────────────────────────────     ──────────────────────────────
+type User {                           type Query {
+  id: ID!                               users: [User!]!
+  name: String!                         user(id: ID!): User
+  email: String!                      }
+}
+                                      type Mutation {
+                                        createUser(name: String!, email: String!): User!
+                                      }
+```
+
+**Do NOT define Query or Mutation in your typeDefs** — they will conflict with the auto-generated ones.
+
+## Full Example
+
+### Resolver
+
+```ts
+// src/resolvers/user.resolver.ts
+import { Service } from '@forinda/kickjs-core'
+import { Resolver, Query, Mutation, Arg } from '@forinda/kickjs-graphql'
+
+@Service()
+@Resolver('User')
+export class UserResolver {
+  private users = [
+    { id: '1', name: 'Alice', email: 'alice@example.com' },
+    { id: '2', name: 'Bob', email: 'bob@example.com' },
+  ]
+
+  @Query('users', { returnType: '[User!]!' })
+  findAll() {
+    return this.users
+  }
+
+  @Query('user', { returnType: 'User' })
+  findById(@Arg('id', 'ID!') id: string) {
+    return this.users.find((u) => u.id === id) ?? null
+  }
+
+  @Mutation('createUser', { returnType: 'User!' })
+  create(@Arg('name', 'String!') name: string, @Arg('email', 'String!') email: string) {
+    const user = { id: String(this.users.length + 1), name, email }
+    this.users.push(user)
+    return user
+  }
+}
+```
+
+### Type Definitions
+
+```ts
+// src/resolvers/typedefs.ts
+export const typeDefs = `
+  type User {
+    id: ID!
+    name: String!
+    email: String!
+  }
+`
+```
+
+### Sample Queries
+
+Try these in the GraphiQL playground at `/graphql`:
+
+```graphql
+# List all users
+query {
+  users {
+    id
+    name
+    email
+  }
+}
+
+# Get a single user
+query {
+  user(id: "1") {
+    name
+    email
+  }
+}
+
+# Create a user
+mutation {
+  createUser(name: "Charlie", email: "charlie@example.com") {
+    id
+    name
+  }
+}
+```
+
+### With curl
+
+```bash
+# Query
+curl -X POST http://localhost:3000/graphql \
+  -H 'Content-Type: application/json' \
+  -d '{"query":"{ users { id name email } }"}'
+
+# Mutation
+curl -X POST http://localhost:3000/graphql \
+  -H 'Content-Type: application/json' \
+  -d '{"query":"mutation { createUser(name: \"Eve\", email: \"eve@test.com\") { id name } }"}'
+```
+
+## CLI Generator
+
+```bash
+kick g resolver user
+```
+
+Generates `user.resolver.ts` with CRUD queries/mutations and `user.typedefs.ts` with the type definition.
+
 ## Related
 
-- [Adapters Guide](../guide/adapters.md) -- how adapters hook into the KickJS lifecycle
-- [@forinda/kickjs-core](./core.md) -- DI container, decorators
-- [@forinda/kickjs-http](./http.md) -- HTTP server that GraphQLAdapter attaches to
+- [GraphQL Example](../examples/graphql-api.md) — full working example
+- [Custom Decorators](../guide/custom-decorators.md) — extend the decorator system
+- [@forinda/kickjs-core](./core.md) — DI container, decorators

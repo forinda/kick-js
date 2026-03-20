@@ -9,5 +9,5 @@ export default defineConfig({
   dts: true,
   shims: false,
   minify: false,
-  external: ['@forinda/kickjs-core', '@forinda/kickjs-http', 'reflect-metadata', 'graphql'],
+  external: ['@forinda/kickjs-core', '@forinda/kickjs-http', 'reflect-metadata', 'graphql', 'express'],
 })
