@@ -93,6 +93,10 @@ const examplesSidebar = [
       { text: 'Drizzle ORM', link: '/examples/drizzle-api' },
       { text: 'SSE Streaming', link: '/examples/sse-api' },
       { text: 'OpenTelemetry', link: '/examples/otel-api' },
+      { text: 'GraphQL', link: '/examples/graphql-api' },
+      { text: 'Queue Workers', link: '/examples/queue-api' },
+      { text: 'Microservice', link: '/examples/microservice-api' },
+      { text: 'Minimal', link: '/examples/minimal-api' },
     ],
   },
 ]
