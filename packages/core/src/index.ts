@@ -7,11 +7,9 @@ export { Container } from './container'
 export {
   Scope,
   METADATA,
-  TRANSACTION_MANAGER,
   type Constructor,
   type ServiceOptions,
   type BeanOptions,
-  type TransactionManager,
   type BuilderOf,
   type Buildable,
 } from './interfaces'
@@ -26,7 +24,6 @@ export {
   Controller,
   Bean,
   PostConstruct,
-  Transactional,
   Autowired,
   Inject,
   Value,

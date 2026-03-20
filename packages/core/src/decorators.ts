@@ -104,29 +104,6 @@ export function PostConstruct(): MethodDecorator {
   }
 }
 
-/** Wrap a method in a database transaction with auto commit/rollback */
-export function Transactional(): MethodDecorator {
-  return (_target, _propertyKey, descriptor: PropertyDescriptor) => {
-    const original = descriptor.value
-    descriptor.value = async function (this: any, ...args: any[]) {
-      if (!containerRef) {
-        throw new Error('@Transactional: Container not initialized. Call bootstrap() first.')
-      }
-      const txManager = containerRef.resolve(Symbol.for('TransactionManager'))
-      const tx = await txManager.begin()
-      try {
-        const result = await original.apply(this, args)
-        await txManager.commit(tx)
-        return result
-      } catch (err) {
-        await txManager.rollback(tx)
-        throw err
-      }
-    }
-    return descriptor
-  }
-}
-
 // ── Property Decorators ─────────────────────────────────────────────────
 
 /** Property injection — resolved lazily from the container */

@@ -19,13 +19,6 @@ export interface BeanOptions {
   scope?: Scope
 }
 
-/** Transaction manager interface for @Transactional support */
-export interface TransactionManager<TTx = unknown> {
-  begin(): Promise<TTx>
-  commit(tx: TTx): Promise<void>
-  rollback(tx: TTx): Promise<void>
-}
-
 /** Fluent builder type */
 export type BuilderOf<T> = {
   [K in keyof T as T[K] extends Function ? never : K]-?: (value: T[K]) => BuilderOf<T>
@@ -59,6 +52,3 @@ export const METADATA = {
   PROPERTY_TYPE: 'design:type',
   RETURN_TYPE: 'design:returntype',
 } as const
-
-/** DI token for transaction manager */
-export const TRANSACTION_MANAGER = Symbol('TransactionManager')
