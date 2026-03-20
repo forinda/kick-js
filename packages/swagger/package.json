@@ -53,5 +53,6 @@
   "author": "Felix Orinda",
   "engines": {
     "node": ">=20.0"
-  }
+  },
+  "homepage": "https://forinda.github.io/kick-js/"
 }
