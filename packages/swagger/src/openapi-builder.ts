@@ -225,13 +225,21 @@ export function buildOpenAPISpec(options: SwaggerOptions = {}): any {
         route.handlerName,
       )
       if (fileUpload) {
+        const fieldName = fileUpload.fieldName ?? 'file'
         const properties: any = {}
-        if (fileUpload.fieldName) {
-          properties[fileUpload.fieldName] = {
+
+        if (fileUpload.mode === 'array') {
+          properties[fieldName] = {
+            type: 'array',
+            items: { type: 'string', format: 'binary' },
+          }
+        } else if (fileUpload.mode !== 'none') {
+          properties[fieldName] = {
             type: 'string',
             format: 'binary',
           }
         }
+
         op.requestBody = {
           required: true,
           content: {
