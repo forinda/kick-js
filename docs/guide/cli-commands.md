@@ -224,6 +224,55 @@ kick db:seed
 kick proto:gen
 ```
 
+## kick inspect
+
+Inspect a running KickJS application and display diagnostic information including registered routes, middleware, adapters, and DI container state.
+
+```bash
+kick inspect                      # Inspect localhost:3000
+kick inspect http://localhost:4000  # Inspect a specific URL
+kick inspect --port 4000          # Shorthand for custom port
+kick inspect --watch              # Re-inspect on changes (live reload)
+kick inspect --json               # Output as JSON
+```
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--port <port>` | Port of the running app to inspect | `3000` |
+| `--watch` | Continuously re-inspect when the app reloads | `false` |
+| `--json` | Output raw JSON instead of formatted tables | `false` |
+
+Example output:
+
+```
+  KickJS Inspector — http://localhost:3000
+
+  Routes (12):
+    GET     /health
+    GET     /api/users
+    POST    /api/users
+    GET     /api/users/:id
+    PUT     /api/users/:id
+    DELETE  /api/users/:id
+    GET     /api/posts
+    POST    /api/posts
+    GET     /graphql          [GraphQLAdapter]
+    WS      /chat             [WsAdapter]
+
+  Adapters (3):
+    GraphQLAdapter     /graphql
+    WsAdapter          /chat
+    DevToolsAdapter    /_debug
+
+  Middleware (5):
+    cors, helmet, csrf, rateLimit, session
+
+  DI Container:
+    Services:    8
+    Controllers: 4
+    Resolvers:   2
+```
+
 ## Port Configuration
 
 Port resolution order:

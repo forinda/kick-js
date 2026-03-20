@@ -1,0 +1,91 @@
+{
+  "name": "kickjs-devtools",
+  "displayName": "KickJS DevTools",
+  "description": "VS Code extension for inspecting KickJS applications — routes, DI container, metrics, and health",
+  "version": "0.6.0",
+  "publisher": "forinda",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other", "Debuggers"],
+  "keywords": ["kickjs", "devtools", "nodejs", "express", "typescript", "decorator"],
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "kickjs.inspect",
+        "title": "KickJS: Inspect Running App"
+      },
+      {
+        "command": "kickjs.showRoutes",
+        "title": "KickJS: Show Routes"
+      },
+      {
+        "command": "kickjs.showContainer",
+        "title": "KickJS: Show DI Container"
+      },
+      {
+        "command": "kickjs.showMetrics",
+        "title": "KickJS: Show Metrics"
+      }
+    ],
+    "configuration": {
+      "title": "KickJS DevTools",
+      "properties": {
+        "kickjs.serverUrl": {
+          "type": "string",
+          "default": "http://localhost:3000",
+          "description": "URL of the running KickJS application"
+        },
+        "kickjs.debugPath": {
+          "type": "string",
+          "default": "/_debug",
+          "description": "Base path for DevTools endpoints"
+        },
+        "kickjs.autoRefresh": {
+          "type": "boolean",
+          "default": true,
+          "description": "Auto-refresh data every 30 seconds"
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "kickjs",
+          "title": "KickJS",
+          "icon": "resources/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "kickjs": [
+        {
+          "id": "kickjs.health",
+          "name": "Health"
+        },
+        {
+          "id": "kickjs.routes",
+          "name": "Routes"
+        },
+        {
+          "id": "kickjs.container",
+          "name": "DI Container"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "^24.5.2",
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.2"
+  },
+  "private": true
+}

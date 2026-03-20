@@ -71,6 +71,9 @@ const apiSidebar = [
       { text: '@forinda/kickjs-ws', link: '/api/ws' },
       { text: '@forinda/kickjs-drizzle', link: '/api/drizzle' },
       { text: '@forinda/kickjs-otel', link: '/api/otel' },
+      { text: '@forinda/kickjs-graphql', link: '/api/graphql' },
+      { text: '@forinda/kickjs-queue', link: '/api/queue' },
+      { text: '@forinda/kickjs-multi-tenant', link: '/api/multi-tenant' },
     ],
   },
 ]
