@@ -228,12 +228,35 @@ export function Middleware(...handlers: MiddlewareHandler[]): ClassDecorator & M
 
 // ── File Upload Decorator ───────────────────────────────────────────────
 
-export interface FileUploadConfig {
-  mode: 'single' | 'array' | 'none'
-  fieldName?: string
-  maxCount?: number
+/**
+ * File filter — accepts short extensions ('jpg'), full MIME types ('image/jpeg'),
+ * wildcards ('image/*'), or a function `(mimetype, filename) => boolean` for full control.
+ */
+export type FileTypeFilter = string[] | ((mimetype: string, filename: string) => boolean)
+
+/**
+ * Shared upload options used by both the `@FileUpload` decorator and the
+ * `upload.single()` / `upload.array()` / `upload.none()` middleware.
+ */
+export interface BaseUploadOptions {
+  /** Max file size in bytes (default: 5MB) */
   maxSize?: number
-  allowedMimeTypes?: string[]
+  /**
+   * Allowed file types:
+   * - **string[]** — short extensions ('jpg'), full MIME types ('image/jpeg'), or wildcards ('image/*')
+   * - **function** — `(mimetype, filename) => boolean` for full control
+   */
+  allowedTypes?: FileTypeFilter
+  /** Extend the built-in extension-to-MIME map */
+  customMimeMap?: Record<string, string>
+}
+
+export interface FileUploadConfig extends BaseUploadOptions {
+  mode: 'single' | 'array' | 'none'
+  /** Form field name (default: 'file') */
+  fieldName?: string
+  /** Max files for array mode (default: 10) */
+  maxCount?: number
 }
 
 /** Configure file upload handling for a controller method */

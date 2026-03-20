@@ -57,20 +57,33 @@ import { RequestContext } from '@forinda/kickjs-http'
 @Controller('/files')
 class FileController {
   @Post('/upload')
-  @FileUpload({ mode: 'single', fieldName: 'document', maxSize: 10_000_000, allowedMimeTypes: ['pdf', 'docx'] })
+  @FileUpload({ mode: 'single', fieldName: 'document', maxSize: 10_000_000, allowedTypes: ['pdf', 'docx'] })
   async handleUpload(ctx: RequestContext) {
     ctx.json({ file: ctx.file.originalname, size: ctx.file.size })
   }
 
   @Post('/photos')
-  @FileUpload({ mode: 'array', fieldName: 'photos', maxCount: 5, allowedMimeTypes: ['jpg', 'png', 'webp'] })
+  @FileUpload({ mode: 'array', fieldName: 'photos', maxCount: 5, allowedTypes: ['jpg', 'png', 'webp'] })
   async handlePhotos(ctx: RequestContext) {
     ctx.json({ count: ctx.files?.length })
+  }
+
+  @Post('/avatar')
+  @FileUpload({
+    mode: 'single',
+    fieldName: 'avatar',
+    allowedTypes: (mime, filename) => mime.startsWith('image/') || filename.endsWith('.heic'),
+    customMimeMap: { heic: 'image/heic' },
+  })
+  async handleAvatar(ctx: RequestContext) {
+    ctx.json({ file: ctx.file.originalname })
   }
 }
 ```
 
 ### FileUploadConfig
+
+The `@FileUpload` decorator and the `upload.*()` middleware share the same base options (`BaseUploadOptions`). The decorator adds `mode`, `fieldName`, and `maxCount`.
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
@@ -78,7 +91,8 @@ class FileController {
 | `fieldName` | `string` | `'file'` | Form field name |
 | `maxCount` | `number` | `10` | Max files (array mode only) |
 | `maxSize` | `number` | `5MB` | Max file size in bytes |
-| `allowedMimeTypes` | `string[]` | all | Allowed types — short extensions or full MIME types |
+| `allowedTypes` | `string[] \| FileTypeFilter` | all | String array or filter function |
+| `customMimeMap` | `Record<string, string>` | — | Extend the built-in MIME map |
 
 ## UploadOptions
 

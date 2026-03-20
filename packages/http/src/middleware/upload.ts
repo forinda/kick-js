@@ -1,6 +1,7 @@
 import { unlink } from 'node:fs/promises'
 import type { Request, Response, NextFunction, RequestHandler } from 'express'
 import multer, { type Options as MulterOptions } from 'multer'
+import type { BaseUploadOptions, FileUploadConfig } from '@forinda/kickjs-core'
 
 /**
  * Maps short file extensions to their MIME types.
@@ -75,42 +76,11 @@ export function resolveMimeTypes(types: string[]): string[] {
 }
 
 /**
- * File filter function — receives the MIME type and original filename,
- * returns `true` to accept or `false` to reject.
+ * Upload options for the middleware.
+ * Extends BaseUploadOptions from core (shared with @FileUpload decorator)
+ * and adds Multer-specific storage options.
  */
-export type FileFilterFn = (mimetype: string, filename: string) => boolean
-
-export interface UploadOptions {
-  /** Max file size in bytes (default: 5MB) */
-  maxSize?: number
-  /**
-   * Allowed file types. Accepts:
-   * - **string[]** — short extensions (`'jpg'`), full MIME types (`'image/jpeg'`), or wildcards (`'image/*'`)
-   * - **function** — `(mimetype, filename) => boolean` for full control
-   *
-   * @example
-   * ```ts
-   * // Short extensions (resolved via built-in MIME map)
-   * allowedTypes: ['jpg', 'png', 'pdf']
-   *
-   * // Full MIME types and wildcards
-   * allowedTypes: ['image/*', 'application/pdf']
-   *
-   * // Custom filter function
-   * allowedTypes: (mime, name) => mime.startsWith('image/') || name.endsWith('.heic')
-   * ```
-   */
-  allowedTypes?: string[] | FileFilterFn
-  /**
-   * Extend or override the built-in extension-to-MIME map.
-   * Merged with the defaults — your entries take precedence.
-   *
-   * @example
-   * ```ts
-   * customMimeMap: { heic: 'image/heic', jxl: 'image/jxl' }
-   * ```
-   */
-  customMimeMap?: Record<string, string>
+export interface UploadOptions extends BaseUploadOptions {
   /** Multer storage config (default: memory storage) */
   storage?: MulterOptions['storage']
   /** Multer dest for disk storage shorthand */
@@ -244,17 +214,13 @@ export function cleanupFiles() {
 /**
  * Build upload middleware from a @FileUpload decorator config.
  * Used internally by the router builder when it detects FILE_UPLOAD metadata.
+ * Accepts the same FileUploadConfig interface used by the @FileUpload decorator.
  */
-export function buildUploadMiddleware(config: {
-  mode: 'single' | 'array' | 'none'
-  fieldName?: string
-  maxCount?: number
-  maxSize?: number
-  allowedMimeTypes?: string[]
-}): RequestHandler {
+export function buildUploadMiddleware(config: FileUploadConfig): RequestHandler {
   const options: UploadOptions = {}
   if (config.maxSize) options.maxSize = config.maxSize
-  if (config.allowedMimeTypes) options.allowedTypes = config.allowedMimeTypes
+  if (config.allowedTypes) options.allowedTypes = config.allowedTypes
+  if (config.customMimeMap) options.customMimeMap = config.customMimeMap
 
   const fieldName = config.fieldName ?? 'file'
 

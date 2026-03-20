@@ -41,6 +41,8 @@ export {
   type RouteDefinition,
   type MiddlewareHandler,
   type FileUploadConfig,
+  type FileTypeFilter,
+  type BaseUploadOptions,
 } from './decorators'
 
 // Module System
