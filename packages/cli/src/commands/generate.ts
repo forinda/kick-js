@@ -7,6 +7,7 @@ import { generateGuard } from '../generators/guard'
 import { generateService } from '../generators/service'
 import { generateController } from '../generators/controller'
 import { generateDto } from '../generators/dto'
+import { generateConfig } from '../generators/config'
 
 function printGenerated(files: string[]): void {
   const cwd = process.cwd()
@@ -98,6 +99,21 @@ export function registerGenerateCommand(program: Command): void {
     .option('-o, --out <dir>', 'Output directory', 'src/dtos')
     .action(async (name: string, opts: any) => {
       const files = await generateDto({ name, outDir: resolve(opts.out) })
+      printGenerated(files)
+    })
+
+  // ── kick g config ────────────────────────────────────────────────────
+  gen
+    .command('config')
+    .description('Generate a kick.config.ts at the project root')
+    .option('--modules-dir <dir>', 'Modules directory path', 'src/modules')
+    .option('--repo <type>', 'Default repository type: inmemory | drizzle', 'inmemory')
+    .action(async (opts: any) => {
+      const files = await generateConfig({
+        outDir: resolve('.'),
+        modulesDir: opts.modulesDir,
+        defaultRepo: opts.repo,
+      })
       printGenerated(files)
     })
 }
