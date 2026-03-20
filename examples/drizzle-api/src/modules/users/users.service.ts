@@ -1,15 +1,33 @@
 import { Service, Inject } from '@forinda/kickjs-core'
-import { DRIZZLE_DB } from '@forinda/kickjs-drizzle'
-import { eq } from 'drizzle-orm'
+import { DRIZZLE_DB, DrizzleQueryAdapter } from '@forinda/kickjs-drizzle'
+import { eq, ne, gt, gte, lt, lte, ilike, inArray, and, or, asc, desc } from 'drizzle-orm'
 import { users, posts } from '@/db/schema'
 import type { AppDatabase } from '@/db'
+import type { ParsedQuery } from '@forinda/kickjs-http'
+
+const queryAdapter = new DrizzleQueryAdapter({
+  eq, ne, gt, gte, lt, lte, ilike, inArray, and, or, asc, desc,
+})
 
 @Service()
 export class UsersService {
   constructor(@Inject(DRIZZLE_DB) private db: AppDatabase) {}
 
-  findAll() {
-    return this.db.select().from(users).all()
+  findAll(parsed: ParsedQuery) {
+    const query = queryAdapter.build(parsed, {
+      table: users,
+      searchColumns: ['name', 'email'],
+    })
+
+    return this.db
+      .select()
+      .from(users)
+      .$dynamic()
+      .where(query.where)
+      .orderBy(...query.orderBy)
+      .limit(query.limit)
+      .offset(query.offset)
+      .all()
   }
 
   findById(id: number) {

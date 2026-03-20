@@ -34,14 +34,14 @@ export {
   Patch,
   Middleware,
   FileUpload,
-  QueryParams,
+  ApiQueryParams,
   Builder,
   type RouteDefinition,
   type MiddlewareHandler,
   type FileUploadConfig,
   type FileTypeFilter,
   type BaseUploadOptions,
-  type QueryParamsConfig,
+  type ApiQueryParamsConfig,
 } from './decorators'
 
 // Module System

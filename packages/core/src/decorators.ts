@@ -181,7 +181,7 @@ export const Patch = createRouteDecorator('PATCH')
 
 // ── Query Params Decorator ─────────────────────────────────────────────
 
-export interface QueryParamsConfig {
+export interface ApiQueryParamsConfig {
   /** Fields that can be used in filter queries (e.g., `?filter=status:eq:active`) */
   filterable?: string[]
   /** Fields that can be used in sort queries (e.g., `?sort=createdAt:desc`) */
@@ -198,7 +198,7 @@ export interface QueryParamsConfig {
  * @example
  * ```ts
  * @Get('/')
- * @QueryParams({
+ * @ApiQueryParams({
  *   filterable: ['status', 'category', 'price'],
  *   sortable: ['name', 'createdAt', 'price'],
  *   searchable: ['name', 'description'],
@@ -208,7 +208,7 @@ export interface QueryParamsConfig {
  * }
  * ```
  */
-export function QueryParams(config: QueryParamsConfig): MethodDecorator {
+export function ApiQueryParams(config: ApiQueryParamsConfig): MethodDecorator {
   return (target, propertyKey) => {
     Reflect.defineMetadata(METADATA.QUERY_PARAMS, config, target.constructor, propertyKey)
   }

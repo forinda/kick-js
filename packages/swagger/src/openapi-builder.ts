@@ -202,7 +202,7 @@ export function buildOpenAPISpec(options: SwaggerOptions = {}): any {
         }
       }
 
-      // @QueryParams decorator — document filterable/sortable/searchable fields
+      // @ApiQueryParams decorator — document filterable/sortable/searchable fields
       const queryParamsConfig = Reflect.getMetadata(
         METADATA.QUERY_PARAMS,
         controllerClass,
