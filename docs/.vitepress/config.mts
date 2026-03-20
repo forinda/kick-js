@@ -38,6 +38,7 @@ const guideSidebar = [
       { text: 'Reactivity', link: '/guide/reactivity' },
       { text: 'DevTools', link: '/guide/devtools' },
       { text: 'Adapters', link: '/guide/adapters' },
+      { text: 'View Engines', link: '/guide/view-engines' },
       { text: 'Plugins', link: '/guide/plugins' },
       { text: 'Decorators Reference', link: '/guide/decorators' },
       { text: 'Custom Decorators', link: '/guide/custom-decorators' },

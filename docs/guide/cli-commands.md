@@ -317,6 +317,68 @@ Port resolution order:
 
 If the chosen port is in use, the server retries up to 3 times on consecutive ports (3001, 3002, etc.).
 
+## kick.config.ts Reference
+
+The `kick.config.ts` file at your project root controls CLI behavior, generators, and build steps. Generate one with `kick g config` or create it manually.
+
+```ts
+// kick.config.ts
+import { defineConfig } from '@forinda/kickjs-cli'
+
+export default defineConfig({
+  pattern: 'rest',
+  modulesDir: 'src/modules',
+  defaultRepo: 'drizzle',
+  copyDirs: ['src/views', 'src/emails'],
+  commands: [
+    {
+      name: 'db:migrate',
+      description: 'Run database migrations',
+      steps: 'npx drizzle-kit migrate',
+    },
+  ],
+})
+```
+
+### `pattern`
+
+Controls the default generator behavior and project template style.
+
+| Value | Description |
+|-------|-------------|
+| `'rest'` | Express + Swagger (default) |
+| `'graphql'` | GraphQL + GraphiQL |
+| `'ddd'` | Full DDD modules with use cases, entities, value objects |
+| `'microservice'` | REST + queue workers + OTel |
+| `'minimal'` | Bare Express with no scaffolding |
+
+### `copyDirs`
+
+Directories to copy into `dist/` after `kick build`. Useful for template files, email templates, static assets, and any non-TypeScript resources that Vite does not bundle.
+
+Each entry can be a simple string (copied to the same relative path under `dist/`) or an object with explicit source and destination:
+
+```ts
+copyDirs: [
+  'src/views',                              // copies to dist/src/views
+  { src: 'src/views', dest: 'dist/views' }, // custom destination
+  'src/emails',                             // copies to dist/src/emails
+  'public/assets',                          // copies to dist/public/assets
+]
+```
+
+If a source directory does not exist, the CLI logs a warning and skips it.
+
+### Other Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `modulesDir` | `string` | `'src/modules'` | Where generators place module files |
+| `defaultRepo` | `'drizzle' \| 'inmemory' \| 'prisma'` | `'inmemory'` | Default repository implementation for generators |
+| `schemaDir` | `string` | `undefined` | Drizzle schema output directory |
+| `commands` | `KickCommandDefinition[]` | `[]` | Custom CLI commands (see [Custom Commands](./custom-commands.md)) |
+| `style` | `object` | auto-detected | Code style overrides (`semicolons`, `quotes`, `trailingComma`, `indent`) |
+
 ## Error Handling
 
 All commands show help text after errors (`program.showHelpAfterError()`). The CLI loads `kick.config.ts` at startup to register custom commands before parsing arguments.
