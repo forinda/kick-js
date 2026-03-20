@@ -3,7 +3,8 @@
 ## Planned
 
 - [x] WebSocket support via decorators (v0.4.x)
-- [ ] Database adapters (Drizzle, TypeORM)
+- [x] Drizzle database adapter (v0.5.x)
+- [ ] TypeORM adapter
 - [ ] GraphQL module
 - [ ] CLI `kick deploy` command
 - [ ] Plugin system for community extensions
@@ -21,6 +22,7 @@
 
 ## Recently Completed
 
+- [x] Drizzle ORM adapter with query builder and DI integration (v0.5.x)
 - [x] WebSocket support — `@WsController`, `@OnMessage`, `@OnConnect`, rooms, heartbeat, DevTools integration (v0.4.x)
 - [x] WebSocket example app with chat, rooms, and notifications (v0.4.x)
 - [x] Swagger schema `name` attribute for request body and response schema mapping (v0.4.x)

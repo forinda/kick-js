@@ -1,0 +1,82 @@
+{
+  "name": "@forinda/kickjs-drizzle",
+  "version": "0.5.1",
+  "description": "Drizzle ORM adapter with DI integration, transaction support, and query building for KickJS",
+  "keywords": [
+    "kickjs",
+    "nodejs",
+    "typescript",
+    "express",
+    "decorators",
+    "dependency-injection",
+    "backend",
+    "api",
+    "framework",
+    "drizzle",
+    "drizzle-orm",
+    "orm",
+    "database",
+    "query-builder",
+    "adapter",
+    "sql",
+    "postgres",
+    "mysql",
+    "sqlite",
+    "@forinda/kickjs-core",
+    "@forinda/kickjs-http",
+    "@forinda/kickjs-config",
+    "@forinda/kickjs-cli",
+    "@forinda/kickjs-swagger",
+    "@forinda/kickjs-testing",
+    "@forinda/kickjs-drizzle"
+  ],
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist .turbo",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@forinda/kickjs-core": "workspace:*",
+    "@forinda/kickjs-http": "workspace:*",
+    "reflect-metadata": "^0.2.2"
+  },
+  "peerDependencies": {
+    "drizzle-orm": ">=0.30.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.2",
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT",
+  "author": "Felix Orinda",
+  "engines": {
+    "node": ">=20.0"
+  },
+  "homepage": "https://forinda.github.io/kick-js/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/forinda/kick-js.git",
+    "directory": "packages/drizzle"
+  },
+  "bugs": {
+    "url": "https://github.com/forinda/kick-js/issues"
+  }
+}

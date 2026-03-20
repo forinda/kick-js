@@ -65,6 +65,7 @@ const apiSidebar = [
       { text: '@forinda/kickjs-testing', link: '/api/testing' },
       { text: '@forinda/kickjs-prisma', link: '/api/prisma' },
       { text: '@forinda/kickjs-ws', link: '/api/ws' },
+      { text: '@forinda/kickjs-drizzle', link: '/api/drizzle' },
     ],
   },
 ]
