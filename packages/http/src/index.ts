@@ -23,7 +23,13 @@ export {
   type SessionData,
   type Session,
 } from './middleware/session'
-export { upload, cleanupFiles, type UploadOptions } from './middleware/upload'
+export {
+  upload,
+  cleanupFiles,
+  resolveMimeTypes,
+  buildUploadMiddleware,
+  type UploadOptions,
+} from './middleware/upload'
 
 // Query String Parsing
 export {

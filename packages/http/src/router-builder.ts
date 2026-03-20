@@ -5,9 +5,11 @@ import {
   METADATA,
   type RouteDefinition,
   type MiddlewareHandler,
+  type FileUploadConfig,
 } from '@forinda/kickjs-core'
 import { RequestContext } from './context'
 import { validate } from './middleware/validate'
+import { buildUploadMiddleware } from './middleware/upload'
 
 /** Get the controller path set by @Controller('/path') */
 export function getControllerPath(controllerClass: any): string {
@@ -44,6 +46,16 @@ export function buildRoutes(controllerClass: any): Router {
     // Validation middleware (shared with standalone validate() export)
     if (route.validation) {
       handlers.push(validate(route.validation))
+    }
+
+    // @FileUpload decorator — auto-attach upload middleware from metadata
+    const fileUploadConfig: FileUploadConfig | undefined = Reflect.getMetadata(
+      METADATA.FILE_UPLOAD,
+      controllerClass,
+      route.handlerName,
+    )
+    if (fileUploadConfig) {
+      handlers.push(buildUploadMiddleware(fileUploadConfig))
     }
 
     // Class + method middleware (wrapped as Express middleware with error catching)
