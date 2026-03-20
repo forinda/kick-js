@@ -83,17 +83,29 @@ kick new my-app -d ./custom-directory
 ```
 
 When run without flags, the CLI prompts for:
-1. **Package manager** — pnpm, npm, or yarn
-2. **Git init** — initialize a git repository with an initial commit
-3. **Install deps** — run the selected package manager's install command
+1. **Project template** — REST, GraphQL, DDD, Microservice, or Minimal
+2. **Package manager** — pnpm, npm, or yarn
+3. **Git init** — initialize a git repository with an initial commit
+4. **Install deps** — run the selected package manager's install command
 
 | Flag | Description | Default |
 |------|-------------|---------|
+| `-t, --template <type>` | Project template: `rest`, `graphql`, `ddd`, `microservice`, `minimal` | Prompted |
 | `-d, --directory <dir>` | Target directory | Project name |
 | `--pm <manager>` | Package manager: `pnpm`, `npm`, or `yarn` | Prompted |
 | `--git / --no-git` | Initialize git repository | Prompted |
 | `--install / --no-install` | Install dependencies | Prompted |
 | `-f, --force` | Clear non-empty directory without prompting | `false` |
+
+### Templates
+
+| Template | Adapters | Initial deps |
+|----------|----------|-------------|
+| `rest` (default) | Swagger + DevTools | core, http, config, swagger |
+| `graphql` | GraphQLAdapter + DevTools | core, http, graphql |
+| `ddd` | Swagger + DevTools | core, http, config, swagger |
+| `microservice` | Swagger + OTel + DevTools | core, http, swagger, otel, queue |
+| `minimal` | None | core, http |
 
 Use `.` as the project name to scaffold in the current directory (the folder name becomes the project name).
 
@@ -180,12 +192,33 @@ Output:
     @forinda/kickjs-cli      workspace
 ```
 
+## kick add
+
+Add KickJS packages with their required peer dependencies automatically resolved.
+
+```bash
+kick add graphql          # installs @forinda/kickjs-graphql + graphql
+kick add drizzle otel     # installs multiple packages at once
+kick add queue:bullmq     # installs queue package + bullmq + ioredis
+kick add --list           # show all available packages
+```
+
+| Flag | Description |
+|------|-------------|
+| `--pm <manager>` | Package manager override (auto-detected from lockfile) |
+| `-D, --dev` | Install as dev dependency |
+| `--list` | List all available packages |
+
+Available packages: `core`, `http`, `config`, `cli`, `swagger`, `graphql`, `drizzle`, `prisma`, `ws`, `otel`, `queue`, `queue:bullmq`, `queue:rabbitmq`, `queue:kafka`, `multi-tenant`, `testing`.
+
 ## kick generate (kick g)
 
 Generate code scaffolds. See the [Generators](./generators.md) page for full details.
 
 ```bash
 kick g module user       # Generates 18 files with DDD structure, tests, and API decorators
+kick g resolver product  # GraphQL resolver with @Query/@Mutation/@Arg
+kick g job email         # Queue job processor with @Job/@Process
 kick g controller auth
 kick g service payment
 kick g middleware logger
