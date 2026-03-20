@@ -4,36 +4,69 @@ The `kick` CLI provides commands for project creation, development, code generat
 
 ## Installation
 
-### From npm (published version)
+### For users (building apps with KickJS)
+
+Install the published CLI globally:
 
 ```bash
+# pnpm
 pnpm add -g @forinda/kickjs-cli
+
+# npm
+npm install -g @forinda/kickjs-cli
+
+# yarn
+yarn global add @forinda/kickjs-cli
+```
+
+Verify it's available:
+
+```bash
 kick --version
 ```
 
-### Link locally (development version)
-
-When working on the KickJS monorepo, link the CLI globally so `kick` always uses your latest local build — no need to publish first:
+Or use `npx` without a global install:
 
 ```bash
-# From the repo root
+npx @forinda/kickjs-cli new my-api
+```
+
+### For contributors (working on the KickJS monorepo)
+
+::: warning Important
+If you're contributing to KickJS, **always link the local CLI** instead of using the published npm version. The published version may not include your latest changes, which means scaffolding and generators could be out of sync with the framework.
+:::
+
+Link your local build globally so `kick` always points to your dev version:
+
+```bash
+# From the repo root — build first, then link
 pnpm build
 cd packages/cli
 pnpm link --global
 ```
 
-Now `kick` is available anywhere on your terminal, pointing to your local build. After making CLI changes, just run `pnpm build` and the linked `kick` picks up the changes immediately.
+This makes `kick` behave like `ng` for Angular — it's globally available and always runs your local code. After making CLI changes:
 
-To unlink later:
+```bash
+# Just rebuild — no need to re-link
+pnpm build
+```
+
+The linked `kick` picks up changes immediately.
+
+To check which version you're running:
+
+```bash
+kick --version          # Shows the version
+which kick              # Shows the linked path — should point to your repo
+```
+
+To unlink and switch back to the published version:
 
 ```bash
 pnpm uninstall -g @forinda/kickjs-cli
-```
-
-### Using npx (no install)
-
-```bash
-npx @forinda/kickjs-cli new my-api
+pnpm add -g @forinda/kickjs-cli
 ```
 
 ## kick new
