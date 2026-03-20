@@ -2,7 +2,7 @@
 
 ## Planned
 
-- [ ] WebSocket support via decorators
+- [x] WebSocket support via decorators (v0.4.x)
 - [ ] Database adapters (Drizzle, TypeORM)
 - [ ] GraphQL module
 - [ ] CLI `kick deploy` command
@@ -21,6 +21,8 @@
 
 ## Recently Completed
 
+- [x] WebSocket support — `@WsController`, `@OnMessage`, `@OnConnect`, rooms, heartbeat, DevTools integration (v0.4.x)
+- [x] WebSocket example app with chat, rooms, and notifications (v0.4.x)
 - [x] Swagger schema `name` attribute for request body and response schema mapping (v0.4.x)
 - [x] npm keywords and cross-reference for package discoverability (v0.4.x)
 - [x] DevToolsAdapter — reactive metrics, health, DI introspection at `/_debug/*` (v0.4.x)

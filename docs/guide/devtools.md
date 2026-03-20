@@ -101,6 +101,30 @@ Deep health check with computed status derived from reactive error rate.
 
 Returns `200` when healthy, `503` when degraded (error rate exceeds threshold).
 
+### `GET /_debug/ws`
+
+WebSocket stats when `WsAdapter` is active. Shows namespaces, connections, message counts, and rooms.
+
+```json
+{
+  "enabled": true,
+  "totalConnections": 42,
+  "activeConnections": 12,
+  "messagesReceived": 1580,
+  "messagesSent": 3200,
+  "errors": 0,
+  "namespaces": {
+    "/ws/chat": { "connections": 8, "handlers": 10 },
+    "/ws/notifications": { "connections": 4, "handlers": 4 }
+  },
+  "rooms": {
+    "/ws/chat": ["room:general", "room:support"]
+  }
+}
+```
+
+Returns `404` if no `WsAdapter` is registered.
+
 ### `GET /_debug/state`
 
 Full reactive state snapshot — everything in one endpoint.
