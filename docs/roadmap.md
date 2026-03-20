@@ -3,10 +3,8 @@
 ## Planned
 
 - [ ] WebSocket support via decorators
-- [ ] Database adapters (Prisma, Drizzle, TypeORM)
+- [ ] Database adapters (Drizzle, TypeORM)
 - [ ] GraphQL module
-- [ ] Rate limiting middleware
-- [ ] Session management
 - [ ] CLI `kick deploy` command
 - [ ] Plugin system for community extensions
 
@@ -25,3 +23,6 @@
 - [x] Monorepo rewrite with custom DI, Express 5, Zod, Vite HMR (v0.3.0)
 - [x] VitePress documentation site with versioning and i18n support
 - [x] GitHub Pages deployment workflow
+- [x] Rate limiting middleware
+- [x] Session management middleware
+- [x] Prisma database adapter

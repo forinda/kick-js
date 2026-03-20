@@ -104,6 +104,19 @@ When adding new features, use these as templates:
 - [ ] Update versioned docs in `docs/versions/` if modifying existing pages
 - [ ] Run `pnpm docs:build` to verify
 
+## Mandatory: Keep Docs in Sync
+
+**Every feature addition, update, or API change MUST include documentation updates.** This prevents docs from going stale.
+
+- New middleware → add a guide page at `docs/guide/<name>.md` + sidebar entry
+- New package → add an API page at `docs/api/<name>.md` + sidebar entry
+- New example → add a page at `docs/examples/<name>.md` + sidebar entry
+- Changed API/options → update the relevant docs page
+- Completed roadmap item → check it off in `docs/roadmap.md`
+- New feature → update `docs/roadmap.md` "Recently Completed" section
+
+Do NOT consider a feature complete until its docs are written and the sidebar is updated in `docs/.vitepress/config.mts`.
+
 ## Common Pitfalls
 
 1. **Don't use absolute links in docs** — breaks versioning and i18n
