@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-http",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Express 5 integration, router builder, RequestContext, and middleware for KickJS",
   "keywords": [
     "kickjs",
