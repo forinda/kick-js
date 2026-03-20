@@ -5,7 +5,7 @@
 - [x] WebSocket support via decorators (v0.4.x)
 - [x] Drizzle database adapter (v0.5.x)
 - [ ] TypeORM adapter
-- [ ] GraphQL module
+- [x] GraphQL module — `@Resolver`, `@Query`, `@Mutation`, `@Arg` decorators with GraphiQL playground (v0.7.x)
 - [ ] CLI `kick deploy` command
 - [x] OpenTelemetry integration — tracing and metrics via OtelAdapter (v0.6.x)
 - [x] SSE (Server-Sent Events) — `ctx.sse()` helper for real-time streaming (v0.6.x)
@@ -15,10 +15,10 @@
 ## Under Consideration
 
 - [ ] gRPC support
-- [ ] Queue/worker module (BullMQ, SQS)
-- [ ] Multi-tenancy helpers
+- [x] Queue/worker module — BullMQ adapter with `@Job`, `@Process` decorators (v0.7.x)
+- [x] Multi-tenancy — tenant resolution via header/subdomain/path/query/custom (v0.7.x)
+- [x] CLI `kick inspect` — connect to running app, display routes/metrics/DI state (v0.7.x)
 - [ ] VS Code extension (DI graph, route map, middleware pipeline)
-- [ ] CLI `kick inspect` (connect to running app, show live state)
 
 ## Recently Completed
 
