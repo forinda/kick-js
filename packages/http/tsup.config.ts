@@ -8,6 +8,7 @@ export default defineConfig({
     'src/context.ts',
     'src/router-builder.ts',
     'src/middleware/csrf.ts',
+    'src/middleware/rate-limit.ts',
     'src/middleware/upload.ts',
     'src/middleware/validate.ts',
     'src/middleware/request-id.ts',
