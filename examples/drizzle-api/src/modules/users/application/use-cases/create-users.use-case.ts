@@ -1,0 +1,22 @@
+/**
+ * Create Users Use Case
+ *
+ * Application layer — orchestrates a single business operation.
+ * Use cases are thin: validate input (via DTO), call domain/repo, return response.
+ * Keep business rules in the domain service, not here.
+ */
+import { Service, Inject } from '@forinda/kickjs-core'
+import { USERS_REPOSITORY, type IUsersRepository } from '../../domain/repositories/users.repository'
+import type { CreateUsersDTO } from '../dtos/create-users.dto'
+import type { UsersResponseDTO } from '../dtos/users-response.dto'
+
+@Service()
+export class CreateUsersUseCase {
+  constructor(
+    @Inject(USERS_REPOSITORY) private readonly repo: IUsersRepository,
+  ) {}
+
+  async execute(dto: CreateUsersDTO): Promise<UsersResponseDTO> {
+    return this.repo.create(dto)
+  }
+}
