@@ -387,12 +387,13 @@ function main() {
   if (dryRun) {
     console.log('\n[DRY RUN] Would execute:')
     bumpAllPackages(nextVersion, true)
-    console.log(`  4. Snapshot docs → docs/versions/${nextVersion}/`)
-    console.log(`  5. git add -A && git commit -m "chore: release v${nextVersion}"`)
-    console.log(`  6. git tag v${nextVersion}`)
-    if (!noPush) console.log('  7. git push --follow-tags')
-    if (githubRelease) console.log(`  8. gh release create v${nextVersion} --title "v${nextVersion}" --notes-file RELEASE_NOTES_v${nextVersion}.md`)
-    if (!noPublish) console.log(`  ${githubRelease ? '9' : '8'}. pnpm --filter='./packages/*' publish --access public --no-git-checks`)
+    console.log(`  4. Update docs/changelog.md with release notes`)
+    console.log(`  5. Snapshot docs → docs/versions/${nextVersion}/`)
+    console.log(`  6. git add -A && git commit -m "chore: release v${nextVersion}"`)
+    console.log(`  7. git tag v${nextVersion}`)
+    if (!noPush) console.log('  8. git push --follow-tags')
+    if (githubRelease) console.log(`  9. gh release create v${nextVersion} --title "v${nextVersion}" --notes-file RELEASE_NOTES_v${nextVersion}.md`)
+    if (!noPublish) console.log(`  ${githubRelease ? '10' : '9'}. pnpm --filter='./packages/*' publish --access public --no-git-checks`)
     return
   }
 
@@ -402,6 +403,18 @@ function main() {
   // Build & test
   run('pnpm build', 'Building all packages')
   run('pnpm test', 'Running tests')
+
+  // Update docs/changelog.md with release notes
+  if (notes) {
+    const changelogPath = path.join('docs', 'changelog.md')
+    if (fs.existsSync(changelogPath)) {
+      const existing = fs.readFileSync(changelogPath, 'utf-8')
+      const header = '# Changelog\n\nAll notable changes to KickJS are documented here.\n\n'
+      const body = existing.replace(header, '')
+      fs.writeFileSync(changelogPath, header + notes + '\n\n' + body)
+      console.log('  Updated docs/changelog.md')
+    }
+  }
 
   // Snapshot docs for versioning
   const docsSnapshotDir = path.join('docs', 'versions', nextVersion)
@@ -430,6 +443,7 @@ function main() {
     ...PACKAGES.map((p) => `${p}/package.json`),
     ...EXAMPLES.filter((e) => fs.existsSync(`${e}/package.json`)).map((e) => `${e}/package.json`),
     docsSnapshotDir,
+    'docs/changelog.md',
   ]
   // Note: RELEASE_NOTES file is gitignored — used for GitHub Release body, not committed
 
