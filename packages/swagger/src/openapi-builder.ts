@@ -202,6 +202,62 @@ export function buildOpenAPISpec(options: SwaggerOptions = {}): any {
         }
       }
 
+      // @QueryParams decorator — document filterable/sortable/searchable fields
+      const queryParamsConfig = Reflect.getMetadata(
+        METADATA.QUERY_PARAMS,
+        controllerClass,
+        route.handlerName,
+      )
+      if (queryParamsConfig) {
+        if (queryParamsConfig.filterable?.length) {
+          op.parameters.push({
+            name: 'filter',
+            in: 'query',
+            required: false,
+            description: `Filter fields: ${queryParamsConfig.filterable.join(', ')}. Format: \`field:operator:value\`. Operators: eq, neq, gt, gte, lt, lte, contains, starts, ends, in, between`,
+            schema: { type: 'array', items: { type: 'string' } },
+            style: 'form',
+            explode: true,
+          })
+        }
+        if (queryParamsConfig.sortable?.length) {
+          op.parameters.push({
+            name: 'sort',
+            in: 'query',
+            required: false,
+            description: `Sort fields: ${queryParamsConfig.sortable.join(', ')}. Format: \`field:asc\` or \`field:desc\``,
+            schema: { type: 'array', items: { type: 'string' } },
+            style: 'form',
+            explode: true,
+          })
+        }
+        if (queryParamsConfig.searchable?.length) {
+          op.parameters.push({
+            name: 'q',
+            in: 'query',
+            required: false,
+            description: `Search across: ${queryParamsConfig.searchable.join(', ')}`,
+            schema: { type: 'string' },
+          })
+        }
+        op.parameters.push(
+          {
+            name: 'page',
+            in: 'query',
+            required: false,
+            description: 'Page number (default: 1)',
+            schema: { type: 'integer', minimum: 1, default: 1 },
+          },
+          {
+            name: 'limit',
+            in: 'query',
+            required: false,
+            description: 'Items per page (default: 20, max: 100)',
+            schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+          },
+        )
+      }
+
       // Remove empty parameters array
       if (op.parameters.length === 0) delete op.parameters
 

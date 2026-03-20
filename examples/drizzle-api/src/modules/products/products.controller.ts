@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Autowired } from '@forinda/kickjs-core'
+import { Controller, Get, Post, Put, Delete, Autowired, QueryParams } from '@forinda/kickjs-core'
 import type { RequestContext } from '@forinda/kickjs-http'
 import { ProductsService } from './products.service'
 
@@ -7,10 +7,15 @@ export class ProductsController {
   @Autowired() private productsService!: ProductsService
 
   @Get('/')
+  @QueryParams({
+    filterable: ['name', 'category', 'price', 'stock'],
+    sortable: ['name', 'price', 'createdAt'],
+    searchable: ['name', 'description', 'category'],
+  })
   list(ctx: RequestContext) {
     const parsed = ctx.qs({
-      filters: ['name', 'category', 'price', 'stock'],
-      sort: ['name', 'price', 'createdAt'],
+      filterable: ['name', 'category', 'price', 'stock'],
+      sortable: ['name', 'price', 'createdAt'],
     })
     return ctx.json(this.productsService.findAll(parsed))
   }

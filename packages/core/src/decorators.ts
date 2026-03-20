@@ -179,6 +179,41 @@ export const Put = createRouteDecorator('PUT')
 export const Delete = createRouteDecorator('DELETE')
 export const Patch = createRouteDecorator('PATCH')
 
+// ── Query Params Decorator ─────────────────────────────────────────────
+
+export interface QueryParamsConfig {
+  /** Fields that can be used in filter queries (e.g., `?filter=status:eq:active`) */
+  filterable?: string[]
+  /** Fields that can be used in sort queries (e.g., `?sort=createdAt:desc`) */
+  sortable?: string[]
+  /** Fields that are searched with the `?q=` parameter */
+  searchable?: string[]
+}
+
+/**
+ * Document the query parameters accepted by a GET endpoint.
+ * Used by SwaggerAdapter to generate `filter`, `sort`, `page`, `limit`, and `q` params
+ * in the OpenAPI spec, with descriptions listing the allowed fields.
+ *
+ * @example
+ * ```ts
+ * @Get('/')
+ * @QueryParams({
+ *   filterable: ['status', 'category', 'price'],
+ *   sortable: ['name', 'createdAt', 'price'],
+ *   searchable: ['name', 'description'],
+ * })
+ * list(ctx: RequestContext) {
+ *   const parsed = ctx.qs({ filterable: ['status', 'category', 'price'], ... })
+ * }
+ * ```
+ */
+export function QueryParams(config: QueryParamsConfig): MethodDecorator {
+  return (target, propertyKey) => {
+    Reflect.defineMetadata(METADATA.QUERY_PARAMS, config, target.constructor, propertyKey)
+  }
+}
+
 // ── Middleware Decorators ───────────────────────────────────────────────
 
 export type MiddlewareHandler = (ctx: any, next: () => void) => void | Promise<void>
