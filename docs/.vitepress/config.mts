@@ -13,6 +13,7 @@ const guideSidebar = [
   {
     text: 'Core Concepts',
     items: [
+      { text: 'Decorators', link: '/guide/decorators' },
       { text: 'Dependency Injection', link: '/guide/dependency-injection' },
       { text: 'Modules', link: '/guide/modules' },
       { text: 'Controllers & Routes', link: '/guide/controllers' },
