@@ -113,7 +113,7 @@ export default defineVersionedConfig({
 
     footer: {
       message: 'Released under the MIT License.',
-      copyright: 'Copyright 2024-present Felix Orinda',
+      copyright: `Copyright 2024-${new Date().getFullYear()} Felix Orinda`,
     },
 
     search: {
