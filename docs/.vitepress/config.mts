@@ -76,6 +76,7 @@ const examplesSidebar = [
       { text: 'Auth API', link: '/examples/auth-api' },
       { text: 'Validated API', link: '/examples/validated-api' },
       { text: 'Full API', link: '/examples/full-api' },
+      { text: 'DevTools API', link: '/examples/devtools-api' },
     ],
   },
 ]
