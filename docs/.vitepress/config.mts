@@ -86,6 +86,9 @@ const examplesSidebar = [
       { text: 'Full API', link: '/examples/full-api' },
       { text: 'DevTools API', link: '/examples/devtools-api' },
       { text: 'WebSocket Chat', link: '/examples/ws-api' },
+      { text: 'Drizzle ORM', link: '/examples/drizzle-api' },
+      { text: 'SSE Streaming', link: '/examples/sse-api' },
+      { text: 'OpenTelemetry', link: '/examples/otel-api' },
     ],
   },
 ]
