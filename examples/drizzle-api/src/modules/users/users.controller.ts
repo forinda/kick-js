@@ -16,11 +16,10 @@ export class UsersController {
     searchable: ['name', 'email'],
   })
   list(ctx: RequestContext) {
-    const parsed = ctx.qs({
-      filterable: ['name', 'email', 'role'],
-      sortable: ['name', 'email', 'createdAt'],
-    })
-    return ctx.json(this.usersService.findAll(parsed))
+    return ctx.paginate(
+      async (parsed) => this.usersService.findAll(parsed),
+      { filterable: ['name', 'email', 'role'], sortable: ['name', 'email', 'createdAt'] },
+    )
   }
 
   @Get('/:id')

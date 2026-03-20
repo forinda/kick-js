@@ -16,11 +16,10 @@ export class ProductsController {
     searchable: ['name', 'description', 'category'],
   })
   list(ctx: RequestContext) {
-    const parsed = ctx.qs({
-      filterable: ['name', 'category', 'price', 'stock'],
-      sortable: ['name', 'price', 'createdAt'],
-    })
-    return ctx.json(this.productsService.findAll(parsed))
+    return ctx.paginate(
+      async (parsed) => this.productsService.findAll(parsed),
+      { filterable: ['name', 'category', 'price', 'stock'], sortable: ['name', 'price', 'createdAt'] },
+    )
   }
 
   @Get('/:id')

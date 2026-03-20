@@ -1,6 +1,6 @@
 import { Service, Inject } from '@forinda/kickjs-core'
 import { DRIZZLE_DB, DrizzleQueryAdapter } from '@forinda/kickjs-drizzle'
-import { eq, ne, gt, gte, lt, lte, ilike, inArray, and, or, asc, desc } from 'drizzle-orm'
+import { eq, ne, gt, gte, lt, lte, ilike, inArray, and, or, asc, desc, count } from 'drizzle-orm'
 import { products } from '@/db/schema'
 import type { AppDatabase } from '@/db'
 import type { ParsedQuery } from '@forinda/kickjs-http'
@@ -24,13 +24,13 @@ const queryAdapter = new DrizzleQueryAdapter({
 export class ProductsService {
   constructor(@Inject(DRIZZLE_DB) private db: AppDatabase) {}
 
-  findAll(parsed: ParsedQuery) {
+  async findAll(parsed: ParsedQuery) {
     const query = queryAdapter.build(parsed, {
       table: products,
       searchColumns: ['name', 'description', 'category'],
     })
 
-    return this.db
+    const data = this.db
       .select()
       .from(products)
       .$dynamic()
@@ -39,6 +39,15 @@ export class ProductsService {
       .limit(query.limit)
       .offset(query.offset)
       .all()
+
+    const totalResult = this.db
+      .select({ count: count() })
+      .from(products)
+      .$dynamic()
+      .where(query.where)
+      .get()
+
+    return { data, total: totalResult?.count ?? 0 }
   }
 
   findById(id: number) {
