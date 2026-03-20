@@ -10,5 +10,6 @@ yarn-error.log*
 .vscode/
 .turbo/
 *.tsbuildinfo
-.vitepress/
+.vitepress/dist/
+.vitepress/cache/
 RELEASE_NOTES_*.md
