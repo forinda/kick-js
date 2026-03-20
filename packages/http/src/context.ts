@@ -172,4 +172,61 @@ export class RequestContext<TBody = any, TParams = any, TQuery = any> {
 
     return this.json(response)
   }
+
+  // ── Server-Sent Events ──────────────────────────────────────────────
+
+  /**
+   * Start an SSE (Server-Sent Events) stream.
+   * Sets the correct headers and returns helpers to send events.
+   *
+   * @example
+   * ```ts
+   * @Get('/events')
+   * async stream(ctx: RequestContext) {
+   *   const sse = ctx.sse()
+   *
+   *   const interval = setInterval(() => {
+   *     sse.send({ time: new Date().toISOString() }, 'tick')
+   *   }, 1000)
+   *
+   *   sse.onClose(() => clearInterval(interval))
+   * }
+   * ```
+   */
+  sse() {
+    this.res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    })
+    this.res.flushHeaders()
+
+    const closeCallbacks: Array<() => void> = []
+
+    this.req.on('close', () => {
+      for (const cb of closeCallbacks) cb()
+    })
+
+    return {
+      /** Send an SSE event with optional event name and id */
+      send: (data: any, event?: string, id?: string) => {
+        if (id) this.res.write(`id: ${id}\n`)
+        if (event) this.res.write(`event: ${event}\n`)
+        this.res.write(`data: ${JSON.stringify(data)}\n\n`)
+      },
+      /** Send a comment (keeps connection alive) */
+      comment: (text: string) => {
+        this.res.write(`: ${text}\n\n`)
+      },
+      /** Register a callback when the client disconnects */
+      onClose: (fn: () => void) => {
+        closeCallbacks.push(fn)
+      },
+      /** End the SSE stream */
+      close: () => {
+        this.res.end()
+      },
+    }
+  }
 }

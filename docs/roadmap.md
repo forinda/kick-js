@@ -7,8 +7,9 @@
 - [ ] TypeORM adapter
 - [ ] GraphQL module
 - [ ] CLI `kick deploy` command
+- [x] OpenTelemetry integration — tracing and metrics via OtelAdapter (v0.6.x)
+- [x] SSE (Server-Sent Events) — `ctx.sse()` helper for real-time streaming (v0.6.x)
 - [ ] Plugin system for community extensions
-- [ ] OpenTelemetry integration (traces, metrics export)
 - [ ] Docs i18n translation (build-time Google Translate)
 
 ## Under Consideration
@@ -16,7 +17,6 @@
 - [ ] gRPC support
 - [ ] Queue/worker module (BullMQ, SQS)
 - [ ] Multi-tenancy helpers
-- [ ] SSE (Server-Sent Events) support
 - [ ] VS Code extension (DI graph, route map, middleware pipeline)
 - [ ] CLI `kick inspect` (connect to running app, show live state)
 

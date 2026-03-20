@@ -33,6 +33,7 @@ const guideSidebar = [
       { text: 'Swagger / OpenAPI', link: '/guide/swagger' },
       { text: 'Configuration', link: '/guide/configuration' },
       { text: 'WebSockets', link: '/guide/websockets' },
+      { text: 'Server-Sent Events', link: '/guide/sse' },
       { text: 'Reactivity', link: '/guide/reactivity' },
       { text: 'DevTools', link: '/guide/devtools' },
       { text: 'Adapters', link: '/guide/adapters' },
@@ -68,6 +69,7 @@ const apiSidebar = [
       { text: '@forinda/kickjs-prisma', link: '/api/prisma' },
       { text: '@forinda/kickjs-ws', link: '/api/ws' },
       { text: '@forinda/kickjs-drizzle', link: '/api/drizzle' },
+      { text: '@forinda/kickjs-otel', link: '/api/otel' },
     ],
   },
 ]
