@@ -87,23 +87,66 @@ All middleware methods accept an `UploadOptions` object:
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `maxSize` | `number` | `5 * 1024 * 1024` (5 MB) | Maximum file size in bytes |
-| `allowedTypes` | `string[]` | all | MIME types or short extensions (`'jpg'`, `'pdf'`). Supports wildcards like `image/*` |
+| `allowedTypes` | `string[] \| FileFilterFn` | all | String array or filter function (see below) |
+| `customMimeMap` | `Record<string, string>` | — | Extend the built-in extension-to-MIME map |
 | `storage` | Multer `StorageEngine` | memory | Custom Multer storage engine |
 | `dest` | `string` | — | Shorthand for disk storage destination directory |
 
-## Short Extension Support
+## Allowed Types — Value or Function
 
-You can use short file extensions instead of full MIME types:
+`allowedTypes` follows a Vue-style pattern: pass a **value** (string array) or a **function** for full control.
+
+### String Array (short extensions, MIME types, or wildcards)
 
 ```ts
-// These are equivalent
+// Short extensions — resolved via built-in MIME map
 upload.single('file', { allowedTypes: ['jpg', 'png', 'pdf'] })
+
+// Full MIME types
 upload.single('file', { allowedTypes: ['image/jpeg', 'image/png', 'application/pdf'] })
+
+// Wildcards
+upload.single('file', { allowedTypes: ['image/*'] })
+
+// Mix all three
+upload.single('file', { allowedTypes: ['jpg', 'application/pdf', 'video/*'] })
 ```
 
-Supported extensions include: `jpg`, `png`, `gif`, `webp`, `svg`, `pdf`, `doc`, `docx`, `xls`, `xlsx`, `csv`, `txt`, `zip`, `mp3`, `mp4`, and many more. Full MIME types and wildcards (`image/*`) are also accepted.
+### Filter Function
 
-Use `resolveMimeTypes()` to inspect how extensions are mapped:
+For full control, pass a function that receives the MIME type and original filename:
+
+```ts
+// Accept images and HEIC files by extension
+upload.single('file', {
+  allowedTypes: (mime, filename) =>
+    mime.startsWith('image/') || filename.endsWith('.heic'),
+})
+
+// Accept anything under 2MB that isn't executable
+upload.single('file', {
+  allowedTypes: (mime) =>
+    !mime.includes('executable') && !mime.includes('x-msdownload'),
+})
+```
+
+### Custom MIME Map
+
+Extend the built-in extension map with your own mappings. Your entries take precedence over defaults:
+
+```ts
+upload.single('file', {
+  allowedTypes: ['heic', 'jxl', 'jpg'],
+  customMimeMap: {
+    heic: 'image/heic',
+    jxl: 'image/jxl',
+  },
+})
+```
+
+## Short Extension Support
+
+The built-in MIME map covers 40+ common extensions. Use `resolveMimeTypes()` to inspect how extensions are mapped:
 
 ```ts
 import { resolveMimeTypes } from '@forinda/kickjs-http'

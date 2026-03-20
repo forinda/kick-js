@@ -74,11 +74,43 @@ export function resolveMimeTypes(types: string[]): string[] {
   })
 }
 
+/**
+ * File filter function — receives the MIME type and original filename,
+ * returns `true` to accept or `false` to reject.
+ */
+export type FileFilterFn = (mimetype: string, filename: string) => boolean
+
 export interface UploadOptions {
   /** Max file size in bytes (default: 5MB) */
   maxSize?: number
-  /** Allowed MIME types — accepts short extensions ('jpg') or full MIME types ('image/jpeg'). Supports wildcards like 'image/*' */
-  allowedTypes?: string[]
+  /**
+   * Allowed file types. Accepts:
+   * - **string[]** — short extensions (`'jpg'`), full MIME types (`'image/jpeg'`), or wildcards (`'image/*'`)
+   * - **function** — `(mimetype, filename) => boolean` for full control
+   *
+   * @example
+   * ```ts
+   * // Short extensions (resolved via built-in MIME map)
+   * allowedTypes: ['jpg', 'png', 'pdf']
+   *
+   * // Full MIME types and wildcards
+   * allowedTypes: ['image/*', 'application/pdf']
+   *
+   * // Custom filter function
+   * allowedTypes: (mime, name) => mime.startsWith('image/') || name.endsWith('.heic')
+   * ```
+   */
+  allowedTypes?: string[] | FileFilterFn
+  /**
+   * Extend or override the built-in extension-to-MIME map.
+   * Merged with the defaults — your entries take precedence.
+   *
+   * @example
+   * ```ts
+   * customMimeMap: { heic: 'image/heic', jxl: 'image/jxl' }
+   * ```
+   */
+  customMimeMap?: Record<string, string>
   /** Multer storage config (default: memory storage) */
   storage?: MulterOptions['storage']
   /** Multer dest for disk storage shorthand */
@@ -86,27 +118,44 @@ export interface UploadOptions {
 }
 
 function createMulter(options: UploadOptions) {
-  const resolvedTypes = options.allowedTypes ? resolveMimeTypes(options.allowedTypes) : undefined
+  const mimeMap = options.customMimeMap ? { ...MIME_MAP, ...options.customMimeMap } : MIME_MAP
 
   const limits: MulterOptions['limits'] = {
     fileSize: options.maxSize ?? 5 * 1024 * 1024,
   }
 
-  const fileFilter: MulterOptions['fileFilter'] = resolvedTypes
-    ? (_req, file, cb) => {
-        const allowed = resolvedTypes.some((type) => {
-          if (type.endsWith('/*')) {
-            return file.mimetype.startsWith(type.replace('/*', '/'))
-          }
-          return file.mimetype === type
-        })
-        if (allowed) {
-          cb(null, true)
-        } else {
-          cb(new Error(`File type ${file.mimetype} is not allowed`))
-        }
+  let fileFilter: MulterOptions['fileFilter'] | undefined
+
+  if (typeof options.allowedTypes === 'function') {
+    // Custom filter function
+    const filterFn = options.allowedTypes
+    fileFilter = (_req, file, cb) => {
+      if (filterFn(file.mimetype, file.originalname)) {
+        cb(null, true)
+      } else {
+        cb(new Error(`File type ${file.mimetype} is not allowed`))
       }
-    : undefined
+    }
+  } else if (Array.isArray(options.allowedTypes)) {
+    // String array — resolve short extensions using the (possibly extended) MIME map
+    const resolvedTypes = options.allowedTypes.map((t) => {
+      const lower = t.toLowerCase().replace(/^\./, '')
+      return mimeMap[lower] ?? t
+    })
+    fileFilter = (_req, file, cb) => {
+      const allowed = resolvedTypes.some((type) => {
+        if (type.endsWith('/*')) {
+          return file.mimetype.startsWith(type.replace('/*', '/'))
+        }
+        return file.mimetype === type
+      })
+      if (allowed) {
+        cb(null, true)
+      } else {
+        cb(new Error(`File type ${file.mimetype} is not allowed`))
+      }
+    }
+  }
 
   const multerOptions: MulterOptions = {
     limits,

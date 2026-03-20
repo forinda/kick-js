@@ -29,6 +29,7 @@ export {
   resolveMimeTypes,
   buildUploadMiddleware,
   type UploadOptions,
+  type FileFilterFn,
 } from './middleware/upload'
 
 // Query String Parsing
