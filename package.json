@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-monorepo",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "private": true,
   "description": "A production-grade, decorator-driven Node.js framework built on Express 5 and TypeScript",
   "author": "Felix Orinda",
