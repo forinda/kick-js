@@ -357,7 +357,6 @@ async internalEndpoint(ctx: RequestContext) { ... }
 | `@Get/Post/Put/Delete/Patch` | Method | core | HTTP route handler |
 | `@Bean` | Method | core | Factory method in Configuration |
 | `@PostConstruct` | Method | core | Post-instantiation hook |
-| `@Transactional` | Method | core | Wraps in DB transaction |
 | `@Middleware` | Class/Method | core | Attach middleware |
 | `@FileUpload` | Method | core | Configure file upload |
 | `@Autowired` | Property | core | Property injection |
