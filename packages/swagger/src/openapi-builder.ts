@@ -209,7 +209,8 @@ export function buildOpenAPISpec(options: SwaggerOptions = {}): any {
       if (route.validation?.body && ['post', 'put', 'patch'].includes(method)) {
         const bodySchema = toJsonSchema(route.validation.body)
         if (bodySchema) {
-          const ref = registerSchema(bodySchema, `${route.handlerName}Body`)
+          const bodyName = route.validation.name || `${route.handlerName}Body`
+          const ref = registerSchema(bodySchema, bodyName)
           op.requestBody = {
             required: true,
             content: { 'application/json': { schema: ref } },
@@ -252,8 +253,9 @@ export function buildOpenAPISpec(options: SwaggerOptions = {}): any {
                     typeof resp.schema === 'function' || typeof resp.schema === 'object'
                       ? toJsonSchema(resp.schema)
                       : null
+                  const schemaName = resp.name || `${route.handlerName}Response${resp.status}`
                   const finalSchema = converted
-                    ? registerSchema(converted, `${route.handlerName}Response${resp.status}`)
+                    ? registerSchema(converted, schemaName)
                     : typeof resp.schema === 'object'
                       ? resp.schema
                       : undefined

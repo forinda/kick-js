@@ -21,6 +21,8 @@ export interface ApiResponseOptions {
   status: number
   description?: string
   schema?: any
+  /** Schema name in components/schemas (e.g., 'UserResponse', 'ErrorBody'). Auto-generated from handler name if omitted. */
+  name?: string
 }
 
 /** Attach operation metadata to a route handler */

@@ -175,6 +175,8 @@ export interface RouteDefinition {
     body?: any
     query?: any
     params?: any
+    /** Schema name in OpenAPI components/schemas for the request body. Auto-generated from handler name if omitted. */
+    name?: string
   }
 }
 
