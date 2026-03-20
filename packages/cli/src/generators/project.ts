@@ -8,22 +8,52 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const cliPkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'))
 const KICKJS_VERSION = `^${cliPkg.version}`
 
+type ProjectTemplate = 'rest' | 'graphql' | 'ddd' | 'microservice' | 'minimal'
+
 interface InitProjectOptions {
   name: string
   directory: string
   packageManager?: 'pnpm' | 'npm' | 'yarn'
   initGit?: boolean
   installDeps?: boolean
+  template?: ProjectTemplate
 }
 
 /** Scaffold a new KickJS project */
 export async function initProject(options: InitProjectOptions): Promise<void> {
-  const { name, directory, packageManager = 'pnpm' } = options
+  const { name, directory, packageManager = 'pnpm', template = 'rest' } = options
   const dir = directory
 
   console.log(`\n  Creating KickJS project: ${name}\n`)
 
-  // ── package.json ────────────────────────────────────────────────────
+  // ── package.json — template-aware deps ────────────────────────────
+  const baseDeps: Record<string, string> = {
+    '@forinda/kickjs-core': KICKJS_VERSION,
+    '@forinda/kickjs-http': KICKJS_VERSION,
+    '@forinda/kickjs-config': KICKJS_VERSION,
+    express: '^5.1.0',
+    'reflect-metadata': '^0.2.2',
+    zod: '^4.3.6',
+    pino: '^10.3.1',
+    'pino-pretty': '^13.1.3',
+  }
+
+  // Add template-specific deps
+  if (template !== 'minimal') {
+    baseDeps['@forinda/kickjs-swagger'] = KICKJS_VERSION
+  }
+  if (template === 'graphql') {
+    baseDeps['@forinda/kickjs-graphql'] = KICKJS_VERSION
+    baseDeps['graphql'] = '^16.11.0'
+  }
+  if (template === 'microservice') {
+    baseDeps['@forinda/kickjs-queue'] = KICKJS_VERSION
+    baseDeps['@forinda/kickjs-otel'] = KICKJS_VERSION
+  }
+  if (template === 'ddd') {
+    baseDeps['@forinda/kickjs-swagger'] = KICKJS_VERSION
+  }
+
   await writeFileSafe(
     join(dir, 'package.json'),
     JSON.stringify(
@@ -42,17 +72,7 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
           lint: 'eslint src/',
           format: 'prettier --write src/',
         },
-        dependencies: {
-          '@forinda/kickjs-core': KICKJS_VERSION,
-          '@forinda/kickjs-http': KICKJS_VERSION,
-          '@forinda/kickjs-config': KICKJS_VERSION,
-          '@forinda/kickjs-swagger': KICKJS_VERSION,
-          express: '^5.1.0',
-          'reflect-metadata': '^0.2.2',
-          zod: '^4.3.6',
-          pino: '^10.3.1',
-          'pino-pretty': '^13.1.3',
-        },
+        dependencies: baseDeps,
         devDependencies: {
           '@forinda/kickjs-cli': KICKJS_VERSION,
           '@swc/core': '^1.7.28',
@@ -175,24 +195,8 @@ NODE_ENV=development
 `,
   )
 
-  // ── src/index.ts — clean entry point with Swagger baked in ────────
-  await writeFileSafe(
-    join(dir, 'src/index.ts'),
-    `import 'reflect-metadata'
-import { bootstrap } from '@forinda/kickjs-http'
-import { SwaggerAdapter } from '@forinda/kickjs-swagger'
-import { modules } from './modules'
-
-bootstrap({
-  modules,
-  adapters: [
-    new SwaggerAdapter({
-      info: { title: '${name}', version: '${cliPkg.version}' },
-    }),
-  ],
-})
-`,
-  )
+  // ── src/index.ts — template-aware entry point ─────────────────────
+  await writeFileSafe(join(dir, 'src/index.ts'), getEntryFile(name, template))
 
   // ── src/modules/index.ts ────────────────────────────────────────────
   await writeFileSafe(
@@ -203,12 +207,18 @@ export const modules: AppModuleClass[] = []
 `,
   )
 
+  // ── Template-specific files ─────────────────────────────────────────
+  if (template === 'graphql') {
+    await writeFileSafe(join(dir, 'src/resolvers/.gitkeep'), '')
+  }
+
   // ── kick.config.ts — CLI configuration ─────────────────────────────
   await writeFileSafe(
     join(dir, 'kick.config.ts'),
     `import { defineConfig } from '@forinda/kickjs-cli'
 
 export default defineConfig({
+  pattern: '${template}',
   modulesDir: 'src/modules',
   defaultRepo: 'inmemory',
 
@@ -289,13 +299,106 @@ export default defineConfig({
   console.log('  Next steps:')
   if (needsCd) console.log(`    cd ${name}`)
   if (!options.installDeps) console.log(`    ${packageManager} install`)
-  console.log('    kick g module user')
+
+  const genHint: Record<string, string> = {
+    rest: 'kick g module user',
+    graphql: 'kick g resolver user',
+    ddd: 'kick g module user --repo drizzle',
+    microservice: 'kick g module user && kick g job email',
+    minimal: '# add your routes to src/index.ts',
+  }
+  console.log(`    ${genHint[template] ?? genHint.rest}`)
   console.log('    kick dev')
   console.log()
   console.log('  Commands:')
   console.log('    kick dev         Start dev server with Vite HMR')
   console.log('    kick build       Production build via Vite')
   console.log('    kick start       Run production build')
-  console.log('    kick g module X  Generate a DDD module')
+  console.log(`    kick g module X  Generate a DDD module`)
+  if (template === 'graphql') console.log('    kick g resolver X  Generate a GraphQL resolver')
+  if (template === 'microservice')
+    console.log('    kick g job X       Generate a queue job processor')
   console.log()
+}
+
+// ── Entry file templates ─────────────────────────────────────────────────
+
+function getEntryFile(name: string, template: ProjectTemplate): string {
+  switch (template) {
+    case 'graphql':
+      return `import 'reflect-metadata'
+import { bootstrap } from '@forinda/kickjs-http'
+import { DevToolsAdapter } from '@forinda/kickjs-http/devtools'
+import { GraphQLAdapter } from '@forinda/kickjs-graphql'
+import { modules } from './modules'
+
+// Import your resolvers here
+// import { UserResolver } from './resolvers/user.resolver'
+
+bootstrap({
+  modules,
+  adapters: [
+    new DevToolsAdapter(),
+    new GraphQLAdapter({
+      resolvers: [/* UserResolver */],
+      // Add custom type definitions here:
+      // typeDefs: userTypeDefs,
+    }),
+  ],
+})
+`
+
+    case 'microservice':
+      return `import 'reflect-metadata'
+import { bootstrap } from '@forinda/kickjs-http'
+import { DevToolsAdapter } from '@forinda/kickjs-http/devtools'
+import { SwaggerAdapter } from '@forinda/kickjs-swagger'
+import { OtelAdapter } from '@forinda/kickjs-otel'
+// import { QueueAdapter, BullMQProvider } from '@forinda/kickjs-queue'
+import { modules } from './modules'
+
+bootstrap({
+  modules,
+  adapters: [
+    new OtelAdapter({ serviceName: '${name}' }),
+    new DevToolsAdapter(),
+    new SwaggerAdapter({
+      info: { title: '${name}', version: '${cliPkg.version}' },
+    }),
+    // Uncomment when Redis is available:
+    // new QueueAdapter({
+    //   provider: new BullMQProvider({ host: 'localhost', port: 6379 }),
+    // }),
+  ],
+})
+`
+
+    case 'minimal':
+      return `import 'reflect-metadata'
+import { bootstrap } from '@forinda/kickjs-http'
+import { modules } from './modules'
+
+bootstrap({ modules })
+`
+
+    case 'ddd':
+    case 'rest':
+    default:
+      return `import 'reflect-metadata'
+import { bootstrap } from '@forinda/kickjs-http'
+import { DevToolsAdapter } from '@forinda/kickjs-http/devtools'
+import { SwaggerAdapter } from '@forinda/kickjs-swagger'
+import { modules } from './modules'
+
+bootstrap({
+  modules,
+  adapters: [
+    new DevToolsAdapter(),
+    new SwaggerAdapter({
+      info: { title: '${name}', version: '${cliPkg.version}' },
+    }),
+  ],
+})
+`
+  }
 }

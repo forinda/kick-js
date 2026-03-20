@@ -45,6 +45,10 @@ export function registerInitCommand(program: Command): void {
     .option('--install', 'Install dependencies after scaffolding')
     .option('--no-install', 'Skip dependency installation')
     .option('-f, --force', 'Remove existing files without prompting')
+    .option(
+      '-t, --template <type>',
+      'Project template: rest | graphql | ddd | microservice | minimal',
+    )
     .action(async (name: string | undefined, opts: any) => {
       console.log()
 
@@ -90,6 +94,31 @@ export function registerInitCommand(program: Command): void {
         }
       }
 
+      // Template — prompt if not provided via --template
+      let template = opts.template
+      if (!template) {
+        template = await choose(
+          'Project template:',
+          [
+            'REST API (Express + Swagger)',
+            'GraphQL API (GraphQL + GraphiQL)',
+            'DDD (Domain-Driven Design modules)',
+            'Microservice (REST + Queue worker)',
+            'Minimal (bare Express)',
+          ],
+          0,
+        )
+        // Map display names to config values
+        const templateMap: Record<string, string> = {
+          'REST API (Express + Swagger)': 'rest',
+          'GraphQL API (GraphQL + GraphiQL)': 'graphql',
+          'DDD (Domain-Driven Design modules)': 'ddd',
+          'Microservice (REST + Queue worker)': 'microservice',
+          'Minimal (bare Express)': 'minimal',
+        }
+        template = templateMap[template] ?? 'rest'
+      }
+
       // Package manager — prompt if not provided via --pm
       let packageManager = opts.pm
       if (!packageManager) {
@@ -118,6 +147,7 @@ export function registerInitCommand(program: Command): void {
         packageManager,
         initGit,
         installDeps,
+        template,
       })
     })
 }
