@@ -91,26 +91,25 @@ export class ${pascal}Module implements AppModule {
 `,
   )
 
+  // ── Constants ──────────────────────────────────────────────────────
+  await write(
+    'constants.ts',
+    `import type { QueryParamsConfig } from '@forinda/kickjs-core'
+
+export const ${pascal.toUpperCase()}_QUERY_CONFIG: QueryParamsConfig = {
+  filterable: ['name'],
+  sortable: ['name', 'createdAt'],
+  searchable: ['name'],
+}
+`,
+  )
+
   // ── Controller ──────────────────────────────────────────────────────
   await write(
     `presentation/${kebab}.controller.ts`,
-    `/**
- * ${pascal} Controller
- *
- * Presentation layer — handles HTTP requests and delegates to use cases.
- * Each method receives a RequestContext with typed body, params, and query.
- *
- * Decorators:
- *   @Controller(path?) — registers this class as an HTTP controller
- *   @Get/@Post/@Put/@Delete(path?, validation?) — defines routes with optional Zod validation
- *   @Autowired() — injects dependencies lazily from the DI container
- *   @Middleware(...handlers) — attach middleware at class or method level
- *
- * Add Swagger decorators (@ApiTags, @ApiOperation, @ApiResponse) from @forinda/kickjs-swagger
- * for automatic OpenAPI documentation.
- */
-import { Controller, Get, Post, Put, Delete, Autowired } from '@forinda/kickjs-core'
-import { RequestContext } from '@forinda/kickjs-http'
+    `import { Controller, Get, Post, Put, Delete, Autowired, ApiQueryParams } from '@forinda/kickjs-core'
+import type { RequestContext } from '@forinda/kickjs-http'
+import { ApiTags } from '@forinda/kickjs-swagger'
 import { Create${pascal}UseCase } from '../application/use-cases/create-${kebab}.use-case'
 import { Get${pascal}UseCase } from '../application/use-cases/get-${kebab}.use-case'
 import { List${pluralPascal}UseCase } from '../application/use-cases/list-${plural}.use-case'
@@ -118,6 +117,7 @@ import { Update${pascal}UseCase } from '../application/use-cases/update-${kebab}
 import { Delete${pascal}UseCase } from '../application/use-cases/delete-${kebab}.use-case'
 import { create${pascal}Schema } from '../application/dtos/create-${kebab}.dto'
 import { update${pascal}Schema } from '../application/dtos/update-${kebab}.dto'
+import { ${pascal.toUpperCase()}_QUERY_CONFIG } from '../constants'
 
 @Controller()
 export class ${pascal}Controller {
@@ -127,32 +127,40 @@ export class ${pascal}Controller {
   @Autowired() private update${pascal}UseCase!: Update${pascal}UseCase
   @Autowired() private delete${pascal}UseCase!: Delete${pascal}UseCase
 
-  @Post('/', { body: create${pascal}Schema })
-  async create(ctx: RequestContext) {
-    const result = await this.create${pascal}UseCase.execute(ctx.body)
-    ctx.created(result)
-  }
-
   @Get('/')
+  @ApiTags('${pascal}')
+  @ApiQueryParams(${pascal.toUpperCase()}_QUERY_CONFIG)
   async list(ctx: RequestContext) {
-    const result = await this.list${pluralPascal}UseCase.execute()
-    ctx.json(result)
+    return ctx.paginate(
+      (parsed) => this.list${pluralPascal}UseCase.execute(parsed),
+      ${pascal.toUpperCase()}_QUERY_CONFIG,
+    )
   }
 
   @Get('/:id')
+  @ApiTags('${pascal}')
   async getById(ctx: RequestContext) {
     const result = await this.get${pascal}UseCase.execute(ctx.params.id)
     if (!result) return ctx.notFound('${pascal} not found')
     ctx.json(result)
   }
 
-  @Put('/:id', { body: update${pascal}Schema })
+  @Post('/', { body: create${pascal}Schema, name: 'Create${pascal}' })
+  @ApiTags('${pascal}')
+  async create(ctx: RequestContext) {
+    const result = await this.create${pascal}UseCase.execute(ctx.body)
+    ctx.created(result)
+  }
+
+  @Put('/:id', { body: update${pascal}Schema, name: 'Update${pascal}' })
+  @ApiTags('${pascal}')
   async update(ctx: RequestContext) {
     const result = await this.update${pascal}UseCase.execute(ctx.params.id, ctx.body)
     ctx.json(result)
   }
 
   @Delete('/:id')
+  @ApiTags('${pascal}')
   async remove(ctx: RequestContext) {
     await this.delete${pascal}UseCase.execute(ctx.params.id)
     ctx.noContent()
@@ -256,7 +264,7 @@ export class Get${pascal}UseCase {
       file: `list-${plural}.use-case.ts`,
       content: `import { Service, Inject } from '@forinda/kickjs-core'
 import { ${pascal.toUpperCase()}_REPOSITORY, type I${pascal}Repository } from '../../domain/repositories/${kebab}.repository'
-import type { ${pascal}ResponseDTO } from '../dtos/${kebab}-response.dto'
+import type { ParsedQuery } from '@forinda/kickjs-http'
 
 @Service()
 export class List${pluralPascal}UseCase {
@@ -264,8 +272,8 @@ export class List${pluralPascal}UseCase {
     @Inject(${pascal.toUpperCase()}_REPOSITORY) private readonly repo: I${pascal}Repository,
   ) {}
 
-  async execute(): Promise<${pascal}ResponseDTO[]> {
-    return this.repo.findAll()
+  async execute(parsed: ParsedQuery) {
+    return this.repo.findPaginated(parsed)
   }
 }
 `,
@@ -328,10 +336,12 @@ export class Delete${pascal}UseCase {
 import type { ${pascal}ResponseDTO } from '../../application/dtos/${kebab}-response.dto'
 import type { Create${pascal}DTO } from '../../application/dtos/create-${kebab}.dto'
 import type { Update${pascal}DTO } from '../../application/dtos/update-${kebab}.dto'
+import type { ParsedQuery } from '@forinda/kickjs-http'
 
 export interface I${pascal}Repository {
   findById(id: string): Promise<${pascal}ResponseDTO | null>
   findAll(): Promise<${pascal}ResponseDTO[]>
+  findPaginated(parsed: ParsedQuery): Promise<{ data: ${pascal}ResponseDTO[]; total: number }>
   create(dto: Create${pascal}DTO): Promise<${pascal}ResponseDTO>
   update(id: string, dto: Update${pascal}DTO): Promise<${pascal}ResponseDTO>
   delete(id: string): Promise<void>
@@ -385,6 +395,7 @@ export class ${pascal}DomainService {
  */
 import { randomUUID } from 'node:crypto'
 import { Repository, HttpException } from '@forinda/kickjs-core'
+import type { ParsedQuery } from '@forinda/kickjs-http'
 import type { I${pascal}Repository } from '../../domain/repositories/${kebab}.repository'
 import type { ${pascal}ResponseDTO } from '../../application/dtos/${kebab}-response.dto'
 import type { Create${pascal}DTO } from '../../application/dtos/create-${kebab}.dto'
@@ -400,6 +411,12 @@ export class InMemory${pascal}Repository implements I${pascal}Repository {
 
   async findAll(): Promise<${pascal}ResponseDTO[]> {
     return Array.from(this.store.values())
+  }
+
+  async findPaginated(parsed: ParsedQuery): Promise<{ data: ${pascal}ResponseDTO[]; total: number }> {
+    const all = Array.from(this.store.values())
+    const data = all.slice(parsed.pagination.offset, parsed.pagination.offset + parsed.pagination.limit)
+    return { data, total: all.length }
   }
 
   async create(dto: Create${pascal}DTO): Promise<${pascal}ResponseDTO> {
@@ -543,6 +560,133 @@ export class ${pascal}Id {
     return this.value === other.value
   }
 }
+`,
+    )
+  }
+
+  // ── Tests ──────────────────────────────────────────────────────────
+  if (!noTests) {
+    await write(
+      `__tests__/${kebab}.controller.test.ts`,
+      `import { describe, it, expect, beforeEach } from 'vitest'
+import { Container } from '@forinda/kickjs-core'
+
+describe('${pascal}Controller', () => {
+  beforeEach(() => {
+    Container.reset()
+  })
+
+  it('should be defined', () => {
+    expect(true).toBe(true)
+  })
+
+  describe('POST /${plural}', () => {
+    it('should create a new ${kebab}', async () => {
+      // TODO: Set up test module, call create endpoint, assert 201
+      expect(true).toBe(true)
+    })
+  })
+
+  describe('GET /${plural}', () => {
+    it('should return paginated ${plural}', async () => {
+      // TODO: Set up test module, call list endpoint, assert { data, meta }
+      expect(true).toBe(true)
+    })
+  })
+
+  describe('GET /${plural}/:id', () => {
+    it('should return a ${kebab} by id', async () => {
+      // TODO: Create a ${kebab}, then fetch by id, assert match
+      expect(true).toBe(true)
+    })
+
+    it('should return 404 for non-existent ${kebab}', async () => {
+      // TODO: Fetch non-existent id, assert 404
+      expect(true).toBe(true)
+    })
+  })
+
+  describe('PUT /${plural}/:id', () => {
+    it('should update an existing ${kebab}', async () => {
+      // TODO: Create, update, assert changes
+      expect(true).toBe(true)
+    })
+  })
+
+  describe('DELETE /${plural}/:id', () => {
+    it('should delete a ${kebab}', async () => {
+      // TODO: Create, delete, assert gone
+      expect(true).toBe(true)
+    })
+  })
+})
+`,
+    )
+
+    await write(
+      `__tests__/${kebab}.repository.test.ts`,
+      `import { describe, it, expect, beforeEach } from 'vitest'
+import { InMemory${pascal}Repository } from '../infrastructure/repositories/in-memory-${kebab}.repository'
+
+describe('InMemory${pascal}Repository', () => {
+  let repo: InMemory${pascal}Repository
+
+  beforeEach(() => {
+    repo = new InMemory${pascal}Repository()
+  })
+
+  it('should create and retrieve a ${kebab}', async () => {
+    const created = await repo.create({ name: 'Test ${pascal}' })
+    expect(created).toBeDefined()
+    expect(created.name).toBe('Test ${pascal}')
+    expect(created.id).toBeDefined()
+
+    const found = await repo.findById(created.id)
+    expect(found).toEqual(created)
+  })
+
+  it('should return null for non-existent id', async () => {
+    const found = await repo.findById('non-existent')
+    expect(found).toBeNull()
+  })
+
+  it('should list all ${plural}', async () => {
+    await repo.create({ name: '${pascal} 1' })
+    await repo.create({ name: '${pascal} 2' })
+
+    const all = await repo.findAll()
+    expect(all).toHaveLength(2)
+  })
+
+  it('should return paginated results', async () => {
+    await repo.create({ name: '${pascal} 1' })
+    await repo.create({ name: '${pascal} 2' })
+    await repo.create({ name: '${pascal} 3' })
+
+    const result = await repo.findPaginated({
+      filters: [],
+      sort: [],
+      search: '',
+      pagination: { page: 1, limit: 2, offset: 0 },
+    })
+
+    expect(result.data).toHaveLength(2)
+    expect(result.total).toBe(3)
+  })
+
+  it('should update a ${kebab}', async () => {
+    const created = await repo.create({ name: 'Original' })
+    const updated = await repo.update(created.id, { name: 'Updated' })
+    expect(updated.name).toBe('Updated')
+  })
+
+  it('should delete a ${kebab}', async () => {
+    const created = await repo.create({ name: 'To Delete' })
+    await repo.delete(created.id)
+    const found = await repo.findById(created.id)
+    expect(found).toBeNull()
+  })
+})
 `,
     )
   }
