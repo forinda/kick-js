@@ -15,6 +15,7 @@ export type {
   ParsedQuery,
   QueryFieldConfig,
   QueryBuilderAdapter,
+  PaginatedResponse,
 } from './types'
 
 export { FILTER_OPERATORS } from './types'

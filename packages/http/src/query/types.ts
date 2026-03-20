@@ -65,6 +65,19 @@ export interface QueryFieldConfig {
   searchable?: string[]
 }
 
+/** Standardized paginated response shape */
+export interface PaginatedResponse<T = any> {
+  data: T[]
+  meta: {
+    page: number
+    limit: number
+    total: number
+    totalPages: number
+    hasNext: boolean
+    hasPrev: boolean
+  }
+}
+
 /**
  * Interface for ORM-specific query builder adapters.
  * Implement this to translate a `ParsedQuery` into your ORM's query format.

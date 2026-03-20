@@ -50,4 +50,5 @@ export {
   type ParsedQuery,
   type QueryFieldConfig,
   type QueryBuilderAdapter,
+  type PaginatedResponse,
 } from './query'

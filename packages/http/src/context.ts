@@ -1,5 +1,10 @@
 import type { Request, Response, NextFunction } from 'express'
-import { parseQuery, type ParsedQuery, type QueryFieldConfig } from './query'
+import {
+  parseQuery,
+  type ParsedQuery,
+  type QueryFieldConfig,
+  type PaginatedResponse,
+} from './query'
 
 /**
  * Unified request/response abstraction passed to every controller method.
@@ -118,5 +123,53 @@ export class RequestContext<TBody = any, TParams = any, TQuery = any> {
     this.res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
     this.res.setHeader('Content-Type', contentType)
     return this.res.send(buffer)
+  }
+
+  /**
+   * Parse query params and return a standardized paginated response.
+   * Calls `ctx.qs()` internally, then wraps your data with pagination meta.
+   *
+   * @param fetcher - Async function that receives ParsedQuery and returns `{ data, total }`
+   * @param fieldConfig - Optional whitelist for filterable, sortable, searchable fields
+   *
+   * @example
+   * ```ts
+   * @Get('/')
+   * async list(ctx: RequestContext) {
+   *   return ctx.paginate(
+   *     async (parsed) => {
+   *       const data = await db.select().from(users)
+   *         .where(query.where).limit(parsed.pagination.limit)
+   *         .offset(parsed.pagination.offset).all()
+   *       const total = await db.select({ count: count() }).from(users).get()
+   *       return { data, total: total?.count ?? 0 }
+   *     },
+   *     { filterable: ['name', 'role'], sortable: ['createdAt'] },
+   *   )
+   * }
+   * ```
+   */
+  async paginate<T>(
+    fetcher: (parsed: ParsedQuery) => Promise<{ data: T[]; total: number }>,
+    fieldConfig?: QueryFieldConfig,
+  ) {
+    const parsed = this.qs(fieldConfig)
+    const { data, total } = await fetcher(parsed)
+    const { page, limit } = parsed.pagination
+    const totalPages = Math.ceil(total / limit) || 1
+
+    const response: PaginatedResponse<T> = {
+      data,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasNext: page < totalPages,
+        hasPrev: page > 1,
+      },
+    }
+
+    return this.json(response)
   }
 }
