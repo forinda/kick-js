@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { WebSocketServer, type WebSocket } from 'ws'
 import type { IncomingMessage } from 'node:http'
 import type { Duplex } from 'node:stream'
-import { type AppAdapter, type Container, createLogger } from '@forinda/kickjs-core'
+import { type AppAdapter, type Container, createLogger, ref, type Ref } from '@forinda/kickjs-core'
 import {
   WS_METADATA,
   wsControllerRegistry,
@@ -53,10 +53,48 @@ export class WsAdapter implements AppAdapter {
   private roomManager = new RoomManager()
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null
 
+  // ── Reactive Stats (exposed for DevToolsAdapter) ─────────────────────
+  /** Total WebSocket connections ever opened */
+  readonly totalConnections: Ref<number>
+  /** Currently active connections */
+  readonly activeConnections: Ref<number>
+  /** Total messages received */
+  readonly messagesReceived: Ref<number>
+  /** Total messages sent */
+  readonly messagesSent: Ref<number>
+  /** Total errors */
+  readonly wsErrors: Ref<number>
+
   constructor(options: WsAdapterOptions = {}) {
     this.basePath = options.path ?? '/ws'
     this.heartbeatInterval = options.heartbeatInterval ?? 30000
     this.maxPayload = options.maxPayload
+
+    this.totalConnections = ref(0)
+    this.activeConnections = ref(0)
+    this.messagesReceived = ref(0)
+    this.messagesSent = ref(0)
+    this.wsErrors = ref(0)
+  }
+
+  /** Get a snapshot of WebSocket stats for DevTools */
+  getStats() {
+    const namespaceStats: Record<string, { connections: number; handlers: number }> = {}
+    for (const [path, entry] of this.namespaces) {
+      namespaceStats[path] = {
+        connections: entry.sockets.size,
+        handlers: entry.handlers.length,
+      }
+    }
+    return {
+      totalConnections: this.totalConnections.value,
+      activeConnections: this.activeConnections.value,
+      messagesReceived: this.messagesReceived.value,
+      messagesSent: this.messagesSent.value,
+      errors: this.wsErrors.value,
+      namespaces: namespaceStats,
+      rooms: this.roomManager.getAllRooms(),
+    }
   }
 
   beforeStart(_app: any, container: Container): void {
@@ -158,6 +196,8 @@ export class WsAdapter implements AppAdapter {
     ;(ws as any).__alive = true
 
     entry.sockets.set(socketId, ws)
+    this.totalConnections.value++
+    this.activeConnections.value++
 
     const ctx = new WsContext(
       ws,
@@ -182,6 +222,7 @@ export class WsAdapter implements AppAdapter {
 
     // Message handler
     ws.on('message', (raw: Buffer | string) => {
+      this.messagesReceived.value++
       try {
         const parsed = JSON.parse(raw.toString())
         const event = parsed.event as string
@@ -215,6 +256,7 @@ export class WsAdapter implements AppAdapter {
 
     // Close handler
     ws.on('close', () => {
+      this.activeConnections.value--
       this.invokeHandlers(controller, entry.handlers, 'disconnect', ctx)
       this.roomManager.leaveAll(socketId)
       entry.sockets.delete(socketId)
@@ -223,6 +265,7 @@ export class WsAdapter implements AppAdapter {
 
     // Error handler
     ws.on('error', (err: Error) => {
+      this.wsErrors.value++
       ctx.data = { message: err.message, name: err.name }
       this.invokeHandlers(controller, entry.handlers, 'error', ctx)
     })

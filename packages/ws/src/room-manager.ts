@@ -54,6 +54,15 @@ export class RoomManager {
     return this.roomSockets.get(room) ?? new Map()
   }
 
+  /** Get all rooms with their member counts */
+  getAllRooms(): Record<string, number> {
+    const result: Record<string, number> = {}
+    for (const [room, sockets] of this.roomSockets) {
+      result[room] = sockets.size
+    }
+    return result
+  }
+
   /** Broadcast to all sockets in a room, optionally excluding one */
   broadcast(room: string, event: string, data: any, excludeId?: string): void {
     const sockets = this.roomSockets.get(room)

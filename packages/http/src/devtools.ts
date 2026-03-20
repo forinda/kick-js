@@ -46,6 +46,8 @@ export interface DevToolsOptions {
   onErrorRateExceeded?: (rate: number) => void
   /** Error rate threshold (default: 0.5 = 50%) */
   errorRateThreshold?: number
+  /** Other adapters to discover stats from (e.g., WsAdapter) */
+  adapters?: any[]
 }
 
 /**
@@ -105,6 +107,7 @@ export class DevToolsAdapter implements AppAdapter {
   private container: Container | null = null
   private adapterStatuses: Record<string, string> = {}
   private stopErrorWatch: (() => void) | null = null
+  private peerAdapters: any[] = []
 
   constructor(options: DevToolsOptions = {}) {
     this.basePath = options.basePath ?? '/_debug'
@@ -112,6 +115,7 @@ export class DevToolsAdapter implements AppAdapter {
     this.exposeConfig = options.exposeConfig ?? false
     this.configPrefixes = options.configPrefixes ?? ['APP_', 'NODE_ENV']
     this.errorRateThreshold = options.errorRateThreshold ?? 0.5
+    this.peerAdapters = options.adapters ?? []
 
     // Initialize reactive state
     this.requestCount = ref(0)
@@ -188,6 +192,9 @@ export class DevToolsAdapter implements AppAdapter {
     })
 
     router.get('/state', (_req: Request, res: Response) => {
+      const wsAdapter = this.peerAdapters.find(
+        (a) => a.name === 'WsAdapter' && typeof a.getStats === 'function',
+      )
       res.json({
         reactive: {
           requestCount: this.requestCount.value,
@@ -200,7 +207,19 @@ export class DevToolsAdapter implements AppAdapter {
         routes: this.routes.length,
         container: this.container?.getRegistrations().length ?? 0,
         routeLatency: this.routeLatency,
+        ...(wsAdapter ? { ws: wsAdapter.getStats() } : {}),
       })
+    })
+
+    router.get('/ws', (_req: Request, res: Response) => {
+      const wsAdapter = this.peerAdapters.find(
+        (a) => a.name === 'WsAdapter' && typeof a.getStats === 'function',
+      )
+      if (!wsAdapter) {
+        res.json({ enabled: false, message: 'WsAdapter not found' })
+        return
+      }
+      res.json({ enabled: true, ...wsAdapter.getStats() })
     })
 
     if (this.exposeConfig) {

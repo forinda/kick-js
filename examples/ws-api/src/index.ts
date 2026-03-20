@@ -9,14 +9,19 @@ import { modules } from './modules'
 // Import all WS controllers (single barrel — add new ones in ws/index.ts)
 import './ws'
 
+const wsAdapter = new WsAdapter({ path: '/ws', heartbeatInterval: 30000 })
+
 bootstrap({
   modules,
   apiPrefix: '/api',
   defaultVersion: 1,
 
   adapters: [
-    new WsAdapter({ path: '/ws', heartbeatInterval: 30000 }),
-    new DevToolsAdapter({ enabled: true }),
+    wsAdapter,
+    new DevToolsAdapter({
+      enabled: true,
+      adapters: [wsAdapter],
+    }),
     new SwaggerAdapter({
       info: {
         title: 'WebSocket Chat API',
@@ -25,7 +30,10 @@ bootstrap({
           'KickJS example with WebSocket chat, rooms, and notifications.\n\n' +
           '**WebSocket endpoints:**\n' +
           '- `ws://localhost:3000/ws/chat` — Chat with rooms\n' +
-          '- `ws://localhost:3000/ws/notifications` — Pub/sub notifications',
+          '- `ws://localhost:3000/ws/notifications` — Pub/sub notifications\n\n' +
+          '**Debug:**\n' +
+          '- `GET /_debug/ws` — WebSocket stats\n' +
+          '- `GET /_debug/state` — Full state including WS',
       },
     }),
   ],
