@@ -277,6 +277,13 @@ export class DevToolsAdapter implements AppAdapter {
     ]
   }
 
+  beforeStart(_app: any, _container: Container): void {
+    if (!this.enabled) return
+    // Clear routes on rebuild/restart to prevent duplication
+    this.routes = []
+    this.adapterStatuses[this.name] = 'running'
+  }
+
   onRouteMount(controllerClass: any, mountPath: string): void {
     if (!this.enabled) return
 
@@ -305,11 +312,6 @@ export class DevToolsAdapter implements AppAdapter {
         ],
       })
     }
-  }
-
-  beforeStart(_app: any, _container: Container): void {
-    if (!this.enabled) return
-    this.adapterStatuses[this.name] = 'running'
   }
 
   afterStart(_server: any, _container: Container): void {
