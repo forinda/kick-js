@@ -36,6 +36,11 @@ export class RequestContext<TBody = any, TParams = any, TQuery = any> {
     return (this.req as any).requestId ?? (this.req.headers['x-request-id'] as string | undefined)
   }
 
+  /** Session data (requires session middleware) */
+  get session(): any {
+    return (this.req as any).session
+  }
+
   // ── Query String Parsing ───────────────────────────────────────────
 
   /**

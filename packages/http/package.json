@@ -34,6 +34,10 @@
       "import": "./dist/middleware/rate-limit.js",
       "types": "./dist/middleware/rate-limit.d.ts"
     },
+    "./middleware/session": {
+      "import": "./dist/middleware/session.js",
+      "types": "./dist/middleware/session.d.ts"
+    },
     "./middleware/upload": {
       "import": "./dist/middleware/upload.js",
       "types": "./dist/middleware/upload.d.ts"

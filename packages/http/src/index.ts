@@ -16,6 +16,13 @@ export { validate } from './middleware/validate'
 export { notFoundHandler, errorHandler } from './middleware/error-handler'
 export { csrf, type CsrfOptions } from './middleware/csrf'
 export { rateLimit, type RateLimitOptions, type RateLimitStore } from './middleware/rate-limit'
+export {
+  session,
+  type SessionOptions,
+  type SessionStore,
+  type SessionData,
+  type Session,
+} from './middleware/session'
 export { upload, cleanupFiles, type UploadOptions } from './middleware/upload'
 
 // Query String Parsing
