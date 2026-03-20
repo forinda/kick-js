@@ -168,39 +168,33 @@ export class Application {
     }
   }
 
-  /** Start the HTTP server, retrying up to 3 times on port conflict */
+  /** Start the HTTP server — fails fast if port is in use */
   start(): void {
     this.setup()
 
-    const basePort = this.options.port ?? parseInt(process.env.PORT || '3000', 10)
-    const maxRetries = 3
+    const port = this.options.port ?? parseInt(process.env.PORT || '3000', 10)
+    this.httpServer = http.createServer(this.app)
 
-    const tryListen = (port: number, attempt: number) => {
-      this.httpServer = http.createServer(this.app)
+    this.httpServer.on('error', (err: NodeJS.ErrnoException) => {
+      if (err.code === 'EADDRINUSE') {
+        log.error(
+          `Port ${port} is already in use. Kill the existing process or use a different port:\n` +
+            `  PORT=${port + 1} kick dev\n` +
+            `  lsof -i :${port}   # find what's using it\n` +
+            `  kill <PID>          # stop it`,
+        )
+        process.exit(1)
+      }
+      throw err
+    })
 
-      this.httpServer.on('error', (err: NodeJS.ErrnoException) => {
-        if (err.code === 'EADDRINUSE' && attempt < maxRetries) {
-          const nextPort = port + 1
-          log.warn(`Port ${port} in use, trying ${nextPort}... (${attempt + 1}/${maxRetries})`)
-          tryListen(nextPort, attempt + 1)
-        } else {
-          throw err
-        }
-      })
+    this.httpServer.listen(port, () => {
+      log.info(`Server running on http://localhost:${port}`)
 
-      this.httpServer.listen(port, () => {
-        if (port !== basePort) {
-          log.warn(`Port ${basePort} was in use, using ${port} instead`)
-        }
-        log.info(`Server running on http://localhost:${port}`)
-
-        for (const adapter of this.adapters) {
-          adapter.afterStart?.(this.httpServer!, this.container)
-        }
-      })
-    }
-
-    tryListen(basePort, 0)
+      for (const adapter of this.adapters) {
+        adapter.afterStart?.(this.httpServer!, this.container)
+      }
+    })
   }
 
   /** HMR rebuild: swap Express handler without restarting the server */
