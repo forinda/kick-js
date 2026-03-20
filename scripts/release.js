@@ -385,11 +385,12 @@ function main() {
   if (dryRun) {
     console.log('\n[DRY RUN] Would execute:')
     bumpAllPackages(nextVersion, true)
-    console.log(`  4. git add -A && git commit -m "chore: release v${nextVersion}"`)
-    console.log(`  5. git tag v${nextVersion}`)
-    if (!noPush) console.log('  6. git push --follow-tags')
-    if (githubRelease) console.log(`  7. gh release create v${nextVersion} --title "v${nextVersion}" --notes-file RELEASE_NOTES_v${nextVersion}.md`)
-    if (!noPublish) console.log(`  ${githubRelease ? '8' : '7'}. pnpm --filter='./packages/*' publish --access public --no-git-checks`)
+    console.log(`  4. Snapshot docs → docs/versions/${nextVersion}/`)
+    console.log(`  5. git add -A && git commit -m "chore: release v${nextVersion}"`)
+    console.log(`  6. git tag v${nextVersion}`)
+    if (!noPush) console.log('  7. git push --follow-tags')
+    if (githubRelease) console.log(`  8. gh release create v${nextVersion} --title "v${nextVersion}" --notes-file RELEASE_NOTES_v${nextVersion}.md`)
+    if (!noPublish) console.log(`  ${githubRelease ? '9' : '8'}. pnpm --filter='./packages/*' publish --access public --no-git-checks`)
     return
   }
 
@@ -400,11 +401,33 @@ function main() {
   run('pnpm build', 'Building all packages')
   run('pnpm test', 'Running tests')
 
+  // Snapshot docs for versioning
+  const docsSnapshotDir = path.join('docs', 'versions', nextVersion)
+  const docsContentDirs = ['guide', 'api', 'examples']
+  const docsContentFiles = ['changelog.md', 'roadmap.md', 'index.md']
+
+  console.log(`\n  Snapshotting docs → ${docsSnapshotDir}/`)
+  fs.mkdirSync(docsSnapshotDir, { recursive: true })
+
+  for (const dir of docsContentDirs) {
+    const src = path.join('docs', dir)
+    if (fs.existsSync(src)) {
+      run(`cp -r ${src} ${path.join(docsSnapshotDir, dir)}`, `  Copying docs/${dir}/`)
+    }
+  }
+  for (const file of docsContentFiles) {
+    const src = path.join('docs', file)
+    if (fs.existsSync(src)) {
+      run(`cp ${src} ${path.join(docsSnapshotDir, file)}`, `  Copying docs/${file}`)
+    }
+  }
+
   // Commit
   const filesToStage = [
     'package.json',
     ...PACKAGES.map((p) => `${p}/package.json`),
     ...EXAMPLES.filter((e) => fs.existsSync(`${e}/package.json`)).map((e) => `${e}/package.json`),
+    docsSnapshotDir,
   ]
   // Note: RELEASE_NOTES file is gitignored — used for GitHub Release body, not committed
 
