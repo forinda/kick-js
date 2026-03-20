@@ -155,6 +155,9 @@ export class DevToolsAdapter implements AppAdapter {
 
     this.container = container
     this.startedAt.value = Date.now()
+    // Clear routes on rebuild/restart to prevent HMR duplication
+    this.routes = []
+    this.adapterStatuses[this.name] = 'running'
 
     const router = Router()
 
@@ -275,13 +278,6 @@ export class DevToolsAdapter implements AppAdapter {
         phase: 'beforeGlobal',
       },
     ]
-  }
-
-  beforeStart(_app: any, _container: Container): void {
-    if (!this.enabled) return
-    // Clear routes on rebuild/restart to prevent duplication
-    this.routes = []
-    this.adapterStatuses[this.name] = 'running'
   }
 
   onRouteMount(controllerClass: any, mountPath: string): void {
