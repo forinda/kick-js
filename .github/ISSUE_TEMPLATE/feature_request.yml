@@ -1,0 +1,91 @@
+name: Feature Request
+description: Suggest a new feature or enhancement for KickJS
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have an idea for KickJS? We'd love to hear it. Please describe the feature below.
+
+  - type: dropdown
+    id: package
+    attributes:
+      label: Related Package
+      description: Which package would this feature belong to?
+      multiple: true
+      options:
+        - "@forinda/kickjs-core"
+        - "@forinda/kickjs-http"
+        - "@forinda/kickjs-config"
+        - "@forinda/kickjs-cli"
+        - "@forinda/kickjs-swagger"
+        - "@forinda/kickjs-testing"
+        - "@forinda/kickjs-prisma"
+        - "New package"
+        - "Documentation"
+        - "Other"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: type
+    attributes:
+      label: Feature Type
+      description: What kind of feature is this?
+      options:
+        - "New middleware"
+        - "New decorator"
+        - "New adapter"
+        - "New CLI command / generator"
+        - "New package"
+        - "API enhancement"
+        - "DX improvement"
+        - "Performance"
+        - "Documentation"
+        - "Other"
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What problem does this feature solve? Is this related to a frustration?
+      placeholder: "I'm always frustrated when..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: Describe the solution you'd like. Include API examples if possible.
+      placeholder: |
+        ```ts
+        // Example usage of the proposed feature
+        @Controller('/users')
+        class UserController {
+          @Get('/')
+          @RateLimit({ max: 100, windowMs: 60_000 })
+          async list(ctx: RequestContext) { ... }
+        }
+        ```
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Any alternative solutions or workarounds you've considered.
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Any other context, mockups, or references.
+    validations:
+      required: false
