@@ -37,6 +37,10 @@
     "./types": {
       "import": "./dist/interfaces.js",
       "types": "./dist/interfaces.d.ts"
+    },
+    "./reactivity": {
+      "import": "./dist/reactivity.js",
+      "types": "./dist/reactivity.d.ts"
     }
   },
   "files": [

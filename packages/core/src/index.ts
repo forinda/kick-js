@@ -61,3 +61,17 @@ export { Logger, createLogger, rootLogger, logger } from './logger'
 
 // Errors
 export { HttpException, type ValidationError } from './errors'
+
+// Reactivity
+export {
+  ref,
+  computed,
+  watch,
+  reactive,
+  isRef,
+  unref,
+  toRefs,
+  type Ref,
+  type ComputedRef,
+  type WatchOptions,
+} from './reactivity'

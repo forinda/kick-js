@@ -10,6 +10,7 @@ export default defineConfig({
     'src/logger.ts',
     'src/errors.ts',
     'src/interfaces.ts',
+    'src/reactivity.ts',
   ],
   format: ['esm'],
   target: 'node20',

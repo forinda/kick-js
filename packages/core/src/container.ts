@@ -75,6 +75,19 @@ export class Container {
     return this.registrations.has(token)
   }
 
+  /** Return a snapshot of all registered tokens with their scope and instantiation status */
+  getRegistrations(): Array<{ token: string; scope: string; instantiated: boolean }> {
+    const entries: Array<{ token: string; scope: string; instantiated: boolean }> = []
+    for (const [token, reg] of this.registrations) {
+      entries.push({
+        token: tokenName(token),
+        scope: reg.scope,
+        instantiated: reg.instance !== undefined,
+      })
+    }
+    return entries
+  }
+
   /** Resolve a dependency by its token */
   resolve<T = any>(token: any): T {
     const reg = this.registrations.get(token)
