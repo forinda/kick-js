@@ -79,6 +79,7 @@ const examplesSidebar = [
       { text: 'Validated API', link: '/examples/validated-api' },
       { text: 'Full API', link: '/examples/full-api' },
       { text: 'DevTools API', link: '/examples/devtools-api' },
+      { text: 'WebSocket Chat', link: '/examples/ws-api' },
     ],
   },
 ]

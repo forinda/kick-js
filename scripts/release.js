@@ -56,6 +56,7 @@ const EXAMPLES = [
   'examples/joi-api',
   'examples/upload-api',
   'examples/devtools-api',
+  'examples/ws-api',
 ]
 
 const RELEASE_TYPES = ['patch', 'minor', 'major', 'prerelease', 'custom']
