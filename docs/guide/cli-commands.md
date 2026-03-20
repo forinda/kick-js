@@ -93,10 +93,13 @@ When run without flags, the CLI prompts for:
 | `--pm <manager>` | Package manager: `pnpm`, `npm`, or `yarn` | Prompted |
 | `--git / --no-git` | Initialize git repository | Prompted |
 | `--install / --no-install` | Install dependencies | Prompted |
+| `-f, --force` | Clear non-empty directory without prompting | `false` |
 
 Use `.` as the project name to scaffold in the current directory (the folder name becomes the project name).
 
 The `init` alias also works: `kick init my-app`.
+
+**Non-empty directory safety:** If the target directory already contains files, the CLI shows up to 5 existing entries and asks for confirmation before clearing them. Use `--force` to skip the prompt.
 
 ## kick dev
 
@@ -189,7 +192,27 @@ kick g middleware logger
 kick g guard admin
 kick g adapter websocket
 kick g dto create-user
+kick g config
 ```
+
+### kick g config
+
+Generate a `kick.config.ts` at the project root. Useful for existing projects created before the CLI included this file.
+
+```bash
+kick g config                        # Interactive — prompts if file exists
+kick g config --force                # Overwrite without prompting
+kick g config --modules-dir src/mods # Custom modules directory
+kick g config --repo drizzle         # Default repo type
+```
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `-f, --force` | Overwrite existing config without prompting | `false` |
+| `--modules-dir <dir>` | Modules directory path | `src/modules` |
+| `--repo <type>` | Default repository type: `inmemory` or `drizzle` | `inmemory` |
+
+If `kick.config.ts` already exists, the CLI prompts for confirmation before overwriting.
 
 ## Custom Commands
 
