@@ -8,6 +8,8 @@ import { generateService } from '../generators/service'
 import { generateController } from '../generators/controller'
 import { generateDto } from '../generators/dto'
 import { generateConfig } from '../generators/config'
+import { generateResolver } from '../generators/resolver'
+import { generateJob } from '../generators/job'
 
 function printGenerated(files: string[]): void {
   const cwd = process.cwd()
@@ -99,6 +101,27 @@ export function registerGenerateCommand(program: Command): void {
     .option('-o, --out <dir>', 'Output directory', 'src/dtos')
     .action(async (name: string, opts: any) => {
       const files = await generateDto({ name, outDir: resolve(opts.out) })
+      printGenerated(files)
+    })
+
+  // ── kick g resolver <name> ────────────────────────────────────────────
+  gen
+    .command('resolver <name>')
+    .description('Generate a GraphQL @Resolver class with @Query and @Mutation methods')
+    .option('-o, --out <dir>', 'Output directory', 'src/resolvers')
+    .action(async (name: string, opts: any) => {
+      const files = await generateResolver({ name, outDir: resolve(opts.out) })
+      printGenerated(files)
+    })
+
+  // ── kick g job <name> ────────────────────────────────────────────────
+  gen
+    .command('job <name>')
+    .description('Generate a @Job queue processor with @Process handlers')
+    .option('-o, --out <dir>', 'Output directory', 'src/jobs')
+    .option('-q, --queue <name>', 'Queue name (default: <name>-queue)')
+    .action(async (name: string, opts: any) => {
+      const files = await generateJob({ name, outDir: resolve(opts.out), queue: opts.queue })
       printGenerated(files)
     })
 
