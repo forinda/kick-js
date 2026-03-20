@@ -243,6 +243,58 @@ class AnalyticsService {
 
 Decorators execute **bottom-up** — `@Roles` runs first, then `@Cache`, then `@Timed`.
 
+## Pattern 7: Custom Queue Provider
+
+KickJS ships with BullMQ via `@forinda/kickjs-queue`, but you can create your own queue provider for RabbitMQ, SQS, Kafka, or any other backend. Implement the `QueueProvider` interface and the `@Job`/`@Process` decorators work unchanged.
+
+```ts
+import type { QueueProvider } from '@forinda/kickjs-queue'
+import amqplib from 'amqplib'
+
+export class RabbitMQProvider implements QueueProvider {
+  private connection: amqplib.Connection | null = null
+  private channel: amqplib.Channel | null = null
+
+  constructor(private url: string) {}
+
+  private async ensureChannel() {
+    if (!this.channel) {
+      this.connection = await amqplib.connect(this.url)
+      this.channel = await this.connection.createChannel()
+    }
+    return this.channel
+  }
+
+  async addJob(queue: string, name: string, data: any) {
+    const ch = await this.ensureChannel()
+    await ch.assertQueue(queue, { durable: true })
+    ch.sendToQueue(queue, Buffer.from(JSON.stringify({ name, data })))
+  }
+
+  createWorker(
+    queue: string,
+    processor: (job: { name: string; data: any }) => Promise<void>,
+  ) {
+    this.ensureChannel().then(async (ch) => {
+      await ch.assertQueue(queue, { durable: true })
+      ch.consume(queue, async (msg) => {
+        if (!msg) return
+        const job = JSON.parse(msg.content.toString())
+        await processor(job)
+        ch.ack(msg)
+      })
+    })
+  }
+
+  async shutdown() {
+    await this.channel?.close()
+    await this.connection?.close()
+  }
+}
+```
+
+Then use it with the existing adapter by passing your provider, or create a custom adapter that accepts it. The `@Job` and `@Process` decorators are just metadata — they work with any queue backend.
+
 ## Tips
 
 - **Use Symbols for metadata keys** — avoids collisions between libraries

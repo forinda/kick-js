@@ -17,6 +17,39 @@ export interface QueueAdapterOptions {
 /** DI token for resolving the QueueService from the container */
 export const QUEUE_MANAGER = Symbol('QueueManager')
 
+/**
+ * Abstract interface for queue providers.
+ * Implement this to use a different queue backend (RabbitMQ, SQS, Kafka, etc.)
+ * while keeping the @Job/@Process decorators working.
+ *
+ * @example
+ * ```ts
+ * class RabbitMQProvider implements QueueProvider {
+ *   async addJob(queue, name, data) { ... }
+ *   async createWorker(queue, processor) { ... }
+ *   async shutdown() { ... }
+ * }
+ *
+ * new QueueAdapter({ provider: new RabbitMQProvider(amqpUrl) })
+ * ```
+ */
+export interface QueueProvider {
+  /** Add a job to a queue */
+  addJob(queue: string, name: string, data: any, opts?: any): Promise<any>
+  /** Add multiple jobs to a queue */
+  addBulk?(queue: string, jobs: Array<{ name: string; data: any; opts?: any }>): Promise<any[]>
+  /** Create a worker that processes jobs from a queue */
+  createWorker(
+    queue: string,
+    processor: (job: { name: string; data: any; id?: string }) => Promise<void>,
+    concurrency?: number,
+  ): any
+  /** Get or create a queue by name */
+  getQueue?(name: string): any
+  /** Graceful shutdown — close all workers and queues */
+  shutdown(): Promise<void>
+}
+
 /** Metadata keys for queue decorators */
 export const QUEUE_METADATA = {
   JOB: Symbol('queue:job'),

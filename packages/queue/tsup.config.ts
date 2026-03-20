@@ -9,5 +9,5 @@ export default defineConfig({
   dts: true,
   shims: false,
   minify: false,
-  external: ['@forinda/kickjs-core', 'reflect-metadata', 'bullmq', 'ioredis'],
+  external: ['@forinda/kickjs-core', 'reflect-metadata', 'bullmq', 'ioredis', 'amqplib', 'kafkajs'],
 })
