@@ -32,6 +32,8 @@ const guideSidebar = [
       { text: 'Sessions', link: '/guide/sessions' },
       { text: 'Swagger / OpenAPI', link: '/guide/swagger' },
       { text: 'Configuration', link: '/guide/configuration' },
+      { text: 'Reactivity', link: '/guide/reactivity' },
+      { text: 'DevTools', link: '/guide/devtools' },
       { text: 'Adapters', link: '/guide/adapters' },
       { text: 'HMR (Hot Reload)', link: '/guide/hmr' },
     ],
