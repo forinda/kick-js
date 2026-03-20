@@ -1,0 +1,46 @@
+{
+  "name": "@forinda/kickjs-prisma",
+  "version": "0.3.2",
+  "description": "Prisma ORM adapter with DI integration, transaction support, and query building for KickJS",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist .turbo",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@forinda/kickjs-core": "workspace:*",
+    "@forinda/kickjs-http": "workspace:*",
+    "reflect-metadata": "^0.2.2"
+  },
+  "peerDependencies": {
+    "@prisma/client": ">=5.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.2",
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT",
+  "author": "Felix Orinda",
+  "engines": {
+    "node": ">=20.0"
+  },
+  "homepage": "https://forinda.github.io/kick-js/"
+}
