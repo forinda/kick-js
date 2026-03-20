@@ -22,6 +22,8 @@
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs",
+    "docs:translate": "node scripts/translate-docs.js",
+    "docs:translate:build": "node scripts/translate-docs.js && vitepress build docs",
     "release:patch": "node scripts/release.js patch",
     "release:minor": "node scripts/release.js minor",
     "release:major": "node scripts/release.js major",
@@ -36,6 +38,7 @@
   "devDependencies": {
     "@swc/core": "^1.7.28",
     "@types/express": "^5.0.6",
+    "@vitalets/google-translate-api": "^9.2.1",
     "express": "^5.2.1",
     "husky": "^9.1.7",
     "prettier": "^3.8.1",
