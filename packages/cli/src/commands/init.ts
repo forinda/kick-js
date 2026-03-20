@@ -1,5 +1,6 @@
 import { resolve, basename } from 'node:path'
 import { createInterface } from 'node:readline'
+import { existsSync, readdirSync, rmSync } from 'node:fs'
 import type { Command } from 'commander'
 import { initProject } from '../generators/project'
 
@@ -43,6 +44,7 @@ export function registerInitCommand(program: Command): void {
     .option('--no-git', 'Skip git initialization')
     .option('--install', 'Install dependencies after scaffolding')
     .option('--no-install', 'Skip dependency installation')
+    .option('-f, --force', 'Remove existing files without prompting')
     .action(async (name: string | undefined, opts: any) => {
       console.log()
 
@@ -57,6 +59,35 @@ export function registerInitCommand(program: Command): void {
         name = basename(directory)
       } else {
         directory = resolve(opts.directory || name)
+      }
+
+      // Check if target directory exists and is non-empty
+      if (existsSync(directory)) {
+        const entries = readdirSync(directory)
+        if (entries.length > 0) {
+          if (opts.force) {
+            console.log(`  Clearing existing files in ${directory}...\n`)
+          } else {
+            console.log(`  Directory "${name}" is not empty:`)
+            const shown = entries.slice(0, 5)
+            for (const entry of shown) {
+              console.log(`    - ${entry}`)
+            }
+            if (entries.length > 5) {
+              console.log(`    ... and ${entries.length - 5} more`)
+            }
+            console.log()
+            const shouldClear = await confirm('Remove all existing files and proceed?', false)
+            if (!shouldClear) {
+              console.log('  Aborted.\n')
+              return
+            }
+          }
+          // Remove contents but keep the directory itself
+          for (const entry of entries) {
+            rmSync(resolve(directory, entry), { recursive: true, force: true })
+          }
+        }
       }
 
       // Package manager — prompt if not provided via --pm
