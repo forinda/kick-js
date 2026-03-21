@@ -1,3 +1,5 @@
+import type { MaybePromise } from '@forinda/kickjs-core'
+
 /** DI token for resolving the Drizzle database instance from the container */
 export const DRIZZLE_DB = Symbol('DrizzleDB')
 
@@ -39,5 +41,5 @@ export interface DrizzleAdapterOptions<TDb = unknown> {
    * })
    * ```
    */
-  onShutdown?: () => any
+  onShutdown?: () => MaybePromise<any>
 }

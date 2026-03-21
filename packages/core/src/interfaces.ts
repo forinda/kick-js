@@ -9,6 +9,9 @@ export enum Scope {
 /** Generic constructor type */
 export type Constructor<T = any> = new (...args: any[]) => T
 
+/** A value that may or may not be wrapped in a Promise */
+export type MaybePromise<T = void> = T | Promise<T>
+
 /** Options for @Service, @Repository, @Component decorators */
 export interface ServiceOptions {
   scope?: Scope

@@ -12,6 +12,7 @@ export {
   type BeanOptions,
   type BuilderOf,
   type Buildable,
+  type MaybePromise,
 } from './interfaces'
 
 // Decorators

@@ -1,4 +1,5 @@
 import type { Container } from './container'
+import type { MaybePromise } from './interfaces'
 
 /**
  * Where in the middleware pipeline an adapter's middleware should be inserted.
@@ -62,7 +63,7 @@ export interface AppAdapter {
   afterStart?(server: any, container: Container): void
 
   /** Called on shutdown — clean up connections */
-  shutdown?(): void | Promise<void>
+  shutdown?(): MaybePromise
 }
 
 /** Constructor type for AppAdapter classes */
