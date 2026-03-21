@@ -1,24 +1,9 @@
 import { resolve, join } from 'node:path'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
+import { fork } from 'node:child_process'
 import type { Command } from 'commander'
 
-/**
- * `kick tinker` — Interactive REPL with DI container loaded.
- *
- * Boots the KickJS application (without starting the HTTP server),
- * then drops into a Node REPL with the container and all registered
- * services available.
- *
- * Usage:
- *   kick tinker                    # Default: loads src/index.ts
- *   kick tinker --entry src/app.ts # Custom entry point
- *
- * Inside the REPL:
- *   > container.resolve(UserService)
- *   > const users = container.resolve(UserRepository)
- *   > await users.findAll()
- */
 export function registerTinkerCommand(program: Command): void {
   program
     .command('tinker')
@@ -28,90 +13,109 @@ export function registerTinkerCommand(program: Command): void {
       const cwd = process.cwd()
       const entryPath = resolve(cwd, opts.entry)
 
-      console.log(`\n  🔧 KickJS Tinker`)
-      console.log(`  Loading: ${opts.entry}\n`)
-
-      // Resolve @forinda/kickjs-core from the user's project
-      const corePath = findPackage(cwd, '@forinda/kickjs-core')
-      if (!corePath) {
-        console.error('  Error: @forinda/kickjs-core not found in this project.')
-        console.error('  Install it: pnpm add @forinda/kickjs-core\n')
+      if (!existsSync(entryPath)) {
+        console.error(`\n  Error: ${opts.entry} not found.\n`)
         process.exit(1)
       }
 
-      const core: any = await import(pathToFileURL(corePath).href)
-      const Container = core.Container
-
-      // Try to load the entry file to trigger decorator registration
-      try {
-        await import(pathToFileURL(entryPath).href)
-      } catch (err: any) {
-        if (err.code === 'ERR_MODULE_NOT_FOUND' || err.code === 'MODULE_NOT_FOUND') {
-          console.error(`  Error: Could not find ${opts.entry}`)
-          console.error(`  Make sure the file exists and your project is set up.\n`)
-          process.exit(1)
-        }
-        // Non-fatal: some apps may fail to fully boot without a DB, etc.
-        console.warn(`  Warning: Entry loaded with errors: ${err.message}`)
-        console.warn(`  Container may be partially initialized.\n`)
+      // Find tsx for TypeScript + decorator support
+      const tsxBin = findBin(cwd, 'tsx')
+      if (!tsxBin) {
+        console.error('\n  Error: tsx not found. Install it: pnpm add -D tsx\n')
+        process.exit(1)
       }
 
-      const container = Container.getInstance()
+      // Write a temporary tinker script that loads the app and starts REPL
+      const tinkerScript = generateTinkerScript(entryPath, opts.entry)
+      const tmpFile = join(cwd, '.kick-tinker.mjs')
 
-      // Start REPL
-      const repl = await import('node:repl')
-      const server = repl.start({
-        prompt: 'kick> ',
-        useGlobal: true,
-      })
+      const { writeFileSync, unlinkSync } = await import('node:fs')
+      writeFileSync(tmpFile, tinkerScript, 'utf-8')
 
-      // Inject helpers into REPL context
-      server.context.container = container
-      server.context.Container = Container
-      server.context.resolve = (token: any) => container.resolve(token)
+      try {
+        // Run the tinker script under tsx (inherits stdio for interactive REPL)
+        const child = fork(tmpFile, [], {
+          cwd,
+          execPath: tsxBin,
+          stdio: 'inherit',
+        })
 
-      // Add commonly used core exports
-      if (core.Logger) server.context.Logger = core.Logger
-      if (core.HttpException) server.context.HttpException = core.HttpException
-      if (core.HttpStatus) server.context.HttpStatus = core.HttpStatus
-      if (core.Service) server.context.Service = core.Service
-      if (core.Inject) server.context.Inject = core.Inject
-
-      console.log('  Available globals:')
-      console.log('    container    — DI container instance')
-      console.log('    resolve(T)   — shorthand for container.resolve(T)')
-      console.log('    Container    — Container class (for .reset(), etc.)')
-      console.log('    Logger, HttpException, HttpStatus')
-      console.log()
-
-      server.on('exit', () => {
-        console.log('\n  Goodbye!\n')
-        process.exit(0)
-      })
+        await new Promise<void>((resolve) => {
+          child.on('exit', () => resolve())
+        })
+      } finally {
+        // Clean up temp file
+        try {
+          unlinkSync(tmpFile)
+        } catch {
+          // ignore
+        }
+      }
     })
 }
 
-/**
- * Find a package in the project's node_modules, walking up directories.
- * Returns the absolute path to the package directory, or null if not found.
- */
-/**
- * Find a package in the project's node_modules, walking up directories.
- * Returns the absolute path to the package's ESM entry file, or null if not found.
- */
-function findPackage(startDir: string, packageName: string): string | null {
+function generateTinkerScript(entryPath: string, displayPath: string): string {
+  const entryUrl = pathToFileURL(entryPath).href
+
+  return `
+import 'reflect-metadata'
+
+console.log('\\n  🔧 KickJS Tinker')
+console.log('  Loading: ${displayPath}\\n')
+
+// Load core
+let Container, Logger, HttpException, HttpStatus
+try {
+  const core = await import('@forinda/kickjs-core')
+  Container = core.Container
+  Logger = core.Logger
+  HttpException = core.HttpException
+  HttpStatus = core.HttpStatus
+} catch {
+  console.error('  Error: @forinda/kickjs-core not found.')
+  console.error('  Install it: pnpm add @forinda/kickjs-core\\n')
+  process.exit(1)
+}
+
+// Load entry to trigger decorator registration
+try {
+  await import('${entryUrl}')
+} catch (err) {
+  console.warn('  Warning: ' + err.message)
+  console.warn('  Container may be partially initialized.\\n')
+}
+
+const container = Container.getInstance()
+
+// Start REPL
+const repl = await import('node:repl')
+const server = repl.start({ prompt: 'kick> ', useGlobal: true })
+
+server.context.container = container
+server.context.Container = Container
+server.context.resolve = (token) => container.resolve(token)
+server.context.Logger = Logger
+server.context.HttpException = HttpException
+server.context.HttpStatus = HttpStatus
+
+console.log('  Available globals:')
+console.log('    container    — DI container instance')
+console.log('    resolve(T)   — shorthand for container.resolve(T)')
+console.log('    Container, Logger, HttpException, HttpStatus')
+console.log()
+
+server.on('exit', () => {
+  console.log('\\n  Goodbye!\\n')
+  process.exit(0)
+})
+`
+}
+
+function findBin(startDir: string, name: string): string | null {
   let dir = startDir
   while (true) {
-    const candidate = join(dir, 'node_modules', packageName)
-    const pkgJsonPath = join(candidate, 'package.json')
-    if (existsSync(pkgJsonPath)) {
-      // Read package.json to find the ESM entry point
-      const pkgJson = JSON.parse(readFileSync(pkgJsonPath, 'utf-8'))
-      // Resolve: exports["."].import > main > index.js
-      const entry =
-        pkgJson.exports?.['.']?.import ?? pkgJson.exports?.['.'] ?? pkgJson.main ?? 'index.js'
-      return join(candidate, entry)
-    }
+    const candidate = join(dir, 'node_modules', '.bin', name)
+    if (existsSync(candidate)) return candidate
     const parent = resolve(dir, '..')
     if (parent === dir) break
     dir = parent
