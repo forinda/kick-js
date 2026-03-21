@@ -10,6 +10,7 @@ import { generateDto } from '../generators/dto'
 import { generateConfig } from '../generators/config'
 import { generateResolver } from '../generators/resolver'
 import { generateJob } from '../generators/job'
+import { generateScaffold, parseFields } from '../generators/scaffold'
 
 function printGenerated(files: string[]): void {
   const cwd = process.cwd()
@@ -122,6 +123,42 @@ export function registerGenerateCommand(program: Command): void {
     .option('-q, --queue <name>', 'Queue name (default: <name>-queue)')
     .action(async (name: string, opts: any) => {
       const files = await generateJob({ name, outDir: resolve(opts.out), queue: opts.queue })
+      printGenerated(files)
+    })
+
+  // ── kick g scaffold <name> <fields...> ─────────────────────────────
+  gen
+    .command('scaffold <name> [fields...]')
+    .description(
+      'Generate a full CRUD module from field definitions\n' +
+        '  Example: kick g scaffold Post title:string body:text published:boolean?\n' +
+        '  Types: string, text, number, int, float, boolean, date, email, url, uuid, json, enum:a,b,c\n' +
+        '  Append ? for optional fields: description:text?',
+    )
+    .option('--no-entity', 'Skip entity and value object generation')
+    .option('--no-tests', 'Skip test file generation')
+    .option('--modules-dir <dir>', 'Modules directory', 'src/modules')
+    .action(async (name: string, rawFields: string[], opts: any) => {
+      if (rawFields.length === 0) {
+        console.error(
+          '\n  Error: At least one field is required.\n' +
+            '  Usage: kick g scaffold <name> <field:type> [field:type...]\n' +
+            '  Example: kick g scaffold Post title:string body:text published:boolean\n',
+        )
+        process.exit(1)
+      }
+      const fields = parseFields(rawFields)
+      const files = await generateScaffold({
+        name,
+        fields,
+        modulesDir: resolve(opts.modulesDir),
+        noEntity: opts.entity === false,
+        noTests: opts.tests === false,
+      })
+      console.log(`\n  Scaffolded ${name} with ${fields.length} field(s):`)
+      for (const f of fields) {
+        console.log(`    ${f.name}: ${f.type}${f.optional ? ' (optional)' : ''}`)
+      }
       printGenerated(files)
     })
 
