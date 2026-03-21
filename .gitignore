@@ -13,3 +13,4 @@ yarn-error.log*
 **/.vitepress/dist/
 **/.vitepress/cache/
 RELEASE_NOTES_*.md
+benchmark-results.json
