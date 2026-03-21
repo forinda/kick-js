@@ -35,6 +35,7 @@ const guideSidebar = [
       { text: 'Swagger / OpenAPI', link: '/guide/swagger' },
       { text: 'Configuration', link: '/guide/configuration' },
       { text: 'WebSockets', link: '/guide/websockets' },
+      { text: 'Socket.IO', link: '/guide/socketio' },
       { text: 'Server-Sent Events', link: '/guide/sse' },
       { text: 'Reactivity', link: '/guide/reactivity' },
       { text: 'DevTools', link: '/guide/devtools' },
