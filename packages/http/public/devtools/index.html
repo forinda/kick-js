@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KickJS DevTools</title>
+  <script src="tailwind.global.js"></script>
+  <script src="vue.global.min.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            kick: { 50: '#f0f9ff', 500: '#38bdf8', 600: '#0284c7', 900: '#0c4a6e' }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-slate-950 text-slate-200 min-h-screen">
+
+<div id="app">
+  <!-- Header -->
+  <header class="border-b border-slate-800 px-6 py-4">
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-2xl font-bold text-kick-500">⚡ KickJS DevTools</h1>
+        <p class="text-sm text-slate-500">Development introspection dashboard</p>
+      </div>
+      <div class="flex items-center gap-3 text-sm text-slate-500">
+        <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        Auto-refresh {{ pollInterval / 1000 }}s
+        <span class="text-slate-600">&middot;</span>
+        {{ lastUpdate }}
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <nav class="flex gap-1 mt-4">
+      <button v-for="t in tabs" :key="t.id"
+        @click="activeTab = t.id"
+        :class="[
+          'px-4 py-2 text-sm font-medium rounded-t-lg transition-colors',
+          activeTab === t.id
+            ? 'bg-slate-800 text-kick-500 border border-slate-700 border-b-slate-800'
+            : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+        ]">
+        {{ t.label }}
+        <span v-if="t.count !== undefined"
+          class="ml-1.5 text-xs bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded-full">{{ t.count }}</span>
+      </button>
+    </nav>
+  </header>
+
+  <main class="p-6">
+
+    <!-- ─── Overview Tab ─────────────────────────────────────────── -->
+    <div v-show="activeTab === 'overview'">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+
+        <!-- Health -->
+        <div class="bg-slate-900 rounded-xl border border-slate-800 p-5">
+          <button @click="toggle('health')" class="w-full flex items-center justify-between mb-3">
+            <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500">Health</h2>
+            <svg :class="{'rotate-180': !collapsed.health}" class="w-4 h-4 text-slate-500 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </button>
+          <div v-show="!collapsed.health">
+            <template v-if="health">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-slate-400">Status</span>
+                <span :class="health.status === 'healthy' ? 'bg-emerald-900 text-emerald-300' : 'bg-red-900 text-red-300'"
+                  class="px-2 py-0.5 rounded text-xs font-semibold">{{ health.status }}</span>
+              </div>
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-slate-400">Uptime</span>
+                <span class="font-semibold tabular-nums">{{ formatDuration(health.uptime) }}</span>
+              </div>
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-slate-400">Error Rate</span>
+                <span class="font-semibold tabular-nums">{{ (health.errorRate * 100).toFixed(2) }}%</span>
+              </div>
+              <!-- Adapter statuses (collapsible) -->
+              <template v-if="health.adapters && Object.keys(health.adapters).length">
+                <div class="border-t border-slate-800 mt-2 pt-2">
+                  <button @click="toggle('adapters')" class="text-xs text-slate-500 hover:text-slate-300 flex items-center gap-1">
+                    <svg :class="{'rotate-180': !collapsed.adapters}" class="w-3 h-3 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                    Adapters ({{ Object.keys(health.adapters).length }})
+                  </button>
+                  <div v-show="!collapsed.adapters" class="mt-1">
+                    <div v-for="(status, name) in health.adapters" :key="name" class="flex items-center justify-between py-1">
+                      <span class="text-slate-400 text-sm">{{ name }}</span>
+                      <span :class="status === 'running' ? 'bg-emerald-900/50 text-emerald-300' : 'bg-amber-900/50 text-amber-300'"
+                        class="px-2 py-0.5 rounded text-xs font-semibold">{{ status }}</span>
+                    </div>
+                  </div>
+                </div>
+              </template>
+            </template>
+            <p v-else class="text-slate-600 italic">Loading...</p>
+          </div>
+        </div>
+
+        <!-- Metrics -->
+        <div class="bg-slate-900 rounded-xl border border-slate-800 p-5">
+          <button @click="toggle('metrics')" class="w-full flex items-center justify-between mb-3">
+            <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500">Metrics</h2>
+            <svg :class="{'rotate-180': !collapsed.metrics}" class="w-4 h-4 text-slate-500 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </button>
+          <div v-show="!collapsed.metrics">
+            <template v-if="metrics">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-slate-400">Total Requests</span>
+                <span class="font-semibold tabular-nums">{{ metrics.requests.toLocaleString() }}</span>
+              </div>
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-slate-400">5xx Errors</span>
+                <span class="font-semibold tabular-nums text-red-400">{{ metrics.serverErrors }}</span>
+              </div>
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-slate-400">4xx Errors</span>
+                <span class="font-semibold tabular-nums text-amber-400">{{ metrics.clientErrors }}</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-slate-400">Started</span>
+                <span class="font-semibold text-sm">{{ new Date(metrics.startedAt).toLocaleTimeString() }}</span>
+              </div>
+            </template>
+            <p v-else class="text-slate-600 italic">Loading...</p>
+          </div>
+        </div>
+
+        <!-- WebSocket -->
+        <div class="bg-slate-900 rounded-xl border border-slate-800 p-5">
+          <button @click="toggle('ws')" class="w-full flex items-center justify-between mb-3">
+            <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500">WebSocket</h2>
+            <svg :class="{'rotate-180': !collapsed.ws}" class="w-4 h-4 text-slate-500 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </button>
+          <div v-show="!collapsed.ws">
+            <template v-if="ws && ws.enabled">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-slate-400">Active</span>
+                <span class="font-semibold tabular-nums text-emerald-400">{{ ws.activeConnections }}</span>
+              </div>
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-slate-400">Total</span>
+                <span class="font-semibold tabular-nums">{{ ws.totalConnections }}</span>
+              </div>
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-slate-400">Messages In</span>
+                <span class="font-semibold tabular-nums">{{ ws.messagesReceived }}</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-slate-400">Messages Out</span>
+                <span class="font-semibold tabular-nums">{{ ws.messagesSent }}</span>
+              </div>
+              <!-- Namespaces (collapsible) -->
+              <template v-if="ws.namespaces && Object.keys(ws.namespaces).length">
+                <div class="border-t border-slate-800 mt-2 pt-2">
+                  <button @click="toggle('wsNs')" class="text-xs text-slate-500 hover:text-slate-300 flex items-center gap-1">
+                    <svg :class="{'rotate-180': !collapsed.wsNs}" class="w-3 h-3 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                    Namespaces ({{ Object.keys(ws.namespaces).length }})
+                  </button>
+                  <div v-show="!collapsed.wsNs" class="mt-1">
+                    <div v-for="(ns, name) in ws.namespaces" :key="name" class="flex items-center justify-between py-1">
+                      <span class="text-slate-400 text-sm font-mono">{{ name }}</span>
+                      <span class="text-sm">{{ ns.connections }} conn / {{ ns.handlers }} handlers</span>
+                    </div>
+                  </div>
+                </div>
+              </template>
+            </template>
+            <p v-else class="text-slate-600 italic">{{ ws ? 'No WsAdapter' : 'Loading...' }}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── Routes Tab ───────────────────────────────────────────── -->
+    <div v-show="activeTab === 'routes'">
+      <div class="bg-slate-900 rounded-xl border border-slate-800 p-5">
+        <!-- Search + Method Filter -->
+        <div class="flex flex-col sm:flex-row gap-3 mb-4">
+          <div class="relative flex-1">
+            <svg class="absolute left-3 top-2.5 w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            <input v-model="routeSearch" type="text" placeholder="Search routes..."
+              class="w-full bg-slate-800 border border-slate-700 rounded-lg pl-10 pr-4 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-kick-500">
+          </div>
+          <div class="flex gap-1">
+            <button v-for="m in ['ALL','GET','POST','PUT','DELETE','PATCH']" :key="m"
+              @click="routeMethodFilter = m"
+              :class="[
+                'px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors',
+                routeMethodFilter === m
+                  ? 'bg-kick-500/20 text-kick-500 border border-kick-500/30'
+                  : 'bg-slate-800 text-slate-400 border border-slate-700 hover:text-slate-200'
+              ]">{{ m }}</button>
+          </div>
+        </div>
+
+        <!-- Routes Table -->
+        <div class="overflow-x-auto" v-if="paginatedRoutes.length">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b-2 border-slate-700">
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Method</th>
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Path</th>
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Controller</th>
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Handler</th>
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Middleware</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="r in paginatedRoutes" :key="r.path + r.method"
+                class="border-b border-slate-800 hover:bg-slate-800/50">
+                <td class="py-2 px-3">
+                  <span :class="methodColor(r.method)" class="text-xs font-bold">{{ r.method }}</span>
+                </td>
+                <td class="py-2 px-3 font-mono text-sm">{{ r.path }}</td>
+                <td class="py-2 px-3">{{ r.controller }}</td>
+                <td class="py-2 px-3 text-slate-400">{{ r.handler }}</td>
+                <td class="py-2 px-3 text-slate-500 text-xs">{{ r.middleware.length ? r.middleware.join(', ') : '—' }}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <!-- Pagination -->
+          <div v-if="filteredRoutes.length > routePageSize" class="flex items-center justify-between mt-4 pt-3 border-t border-slate-800">
+            <span class="text-sm text-slate-500">
+              Showing {{ (routePage - 1) * routePageSize + 1 }}–{{ Math.min(routePage * routePageSize, filteredRoutes.length) }}
+              of {{ filteredRoutes.length }}
+            </span>
+            <div class="flex gap-1">
+              <button @click="routePage = Math.max(1, routePage - 1)" :disabled="routePage === 1"
+                class="px-3 py-1 text-sm rounded bg-slate-800 border border-slate-700 disabled:opacity-30 hover:bg-slate-700">Prev</button>
+              <button v-for="p in routeTotalPages" :key="p" @click="routePage = p"
+                :class="['px-3 py-1 text-sm rounded border', p === routePage ? 'bg-kick-500/20 border-kick-500/30 text-kick-500' : 'bg-slate-800 border-slate-700 hover:bg-slate-700']">{{ p }}</button>
+              <button @click="routePage = Math.min(routeTotalPages, routePage + 1)" :disabled="routePage === routeTotalPages"
+                class="px-3 py-1 text-sm rounded bg-slate-800 border border-slate-700 disabled:opacity-30 hover:bg-slate-700">Next</button>
+            </div>
+          </div>
+        </div>
+        <p v-else class="text-slate-600 italic">{{ routeSearch || routeMethodFilter !== 'ALL' ? 'No matching routes' : 'No routes registered' }}</p>
+      </div>
+    </div>
+
+    <!-- ─── Container Tab ────────────────────────────────────────── -->
+    <div v-show="activeTab === 'container'">
+      <div class="bg-slate-900 rounded-xl border border-slate-800 p-5">
+        <!-- Search -->
+        <div class="relative mb-4">
+          <svg class="absolute left-3 top-2.5 w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          <input v-model="containerSearch" type="text" placeholder="Search tokens..."
+            class="w-full bg-slate-800 border border-slate-700 rounded-lg pl-10 pr-4 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-kick-500">
+        </div>
+
+        <!-- Container Table -->
+        <div class="overflow-x-auto" v-if="paginatedContainer.length">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b-2 border-slate-700">
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Token</th>
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Scope</th>
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Instantiated</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="r in paginatedContainer" :key="r.token"
+                class="border-b border-slate-800 hover:bg-slate-800/50">
+                <td class="py-2 px-3 font-mono text-sm">{{ r.token }}</td>
+                <td class="py-2 px-3">
+                  <span class="bg-blue-900/50 text-blue-300 px-2 py-0.5 rounded text-xs font-semibold">{{ r.scope }}</span>
+                </td>
+                <td class="py-2 px-3">
+                  <span :class="r.instantiated ? 'bg-emerald-900/50 text-emerald-300' : 'bg-amber-900/50 text-amber-300'"
+                    class="px-2 py-0.5 rounded text-xs font-semibold">{{ r.instantiated ? 'yes' : 'no' }}</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <!-- Pagination -->
+          <div v-if="filteredContainer.length > containerPageSize" class="flex items-center justify-between mt-4 pt-3 border-t border-slate-800">
+            <span class="text-sm text-slate-500">
+              Showing {{ (containerPage - 1) * containerPageSize + 1 }}–{{ Math.min(containerPage * containerPageSize, filteredContainer.length) }}
+              of {{ filteredContainer.length }}
+            </span>
+            <div class="flex gap-1">
+              <button @click="containerPage = Math.max(1, containerPage - 1)" :disabled="containerPage === 1"
+                class="px-3 py-1 text-sm rounded bg-slate-800 border border-slate-700 disabled:opacity-30 hover:bg-slate-700">Prev</button>
+              <button v-for="p in containerTotalPages" :key="p" @click="containerPage = p"
+                :class="['px-3 py-1 text-sm rounded border', p === containerPage ? 'bg-kick-500/20 border-kick-500/30 text-kick-500' : 'bg-slate-800 border-slate-700 hover:bg-slate-700']">{{ p }}</button>
+              <button @click="containerPage = Math.min(containerTotalPages, containerPage + 1)" :disabled="containerPage === containerTotalPages"
+                class="px-3 py-1 text-sm rounded bg-slate-800 border border-slate-700 disabled:opacity-30 hover:bg-slate-700">Next</button>
+            </div>
+          </div>
+        </div>
+        <p v-else class="text-slate-600 italic">{{ containerSearch ? 'No matching tokens' : 'No DI registrations' }}</p>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+const { createApp, ref, computed, onMounted, onUnmounted, reactive, watch } = Vue
+
+const BASE = document.body.dataset.base || '/_debug'
+
+createApp({
+  setup() {
+    const activeTab = ref('overview')
+    const pollInterval = ref(30000)
+    const lastUpdate = ref('loading...')
+
+    // Data
+    const health = ref(null)
+    const metrics = ref(null)
+    const ws = ref(null)
+    const routeData = ref(null)
+    const containerData = ref(null)
+
+    // Collapsible state
+    const collapsed = reactive({
+      health: false,
+      metrics: false,
+      ws: false,
+      adapters: true,
+      wsNs: true,
+    })
+
+    function toggle(key) { collapsed[key] = !collapsed[key] }
+
+    // Route search + filter + pagination
+    const routeSearch = ref('')
+    const routeMethodFilter = ref('ALL')
+    const routePage = ref(1)
+    const routePageSize = ref(15)
+
+    const filteredRoutes = computed(() => {
+      let routes = routeData.value?.routes || []
+      if (routeMethodFilter.value !== 'ALL') {
+        routes = routes.filter(r => r.method === routeMethodFilter.value)
+      }
+      if (routeSearch.value) {
+        const q = routeSearch.value.toLowerCase()
+        routes = routes.filter(r =>
+          r.path.toLowerCase().includes(q) ||
+          r.controller.toLowerCase().includes(q) ||
+          r.handler.toLowerCase().includes(q)
+        )
+      }
+      return routes
+    })
+
+    const routeTotalPages = computed(() => Math.ceil(filteredRoutes.value.length / routePageSize.value) || 1)
+    const paginatedRoutes = computed(() => {
+      const start = (routePage.value - 1) * routePageSize.value
+      return filteredRoutes.value.slice(start, start + routePageSize.value)
+    })
+
+    // Reset page when search/filter changes
+    watch([routeSearch, routeMethodFilter], () => { routePage.value = 1 })
+
+    // Container search + pagination
+    const containerSearch = ref('')
+    const containerPage = ref(1)
+    const containerPageSize = ref(20)
+
+    const filteredContainer = computed(() => {
+      let regs = containerData.value?.registrations || []
+      if (containerSearch.value) {
+        const q = containerSearch.value.toLowerCase()
+        regs = regs.filter(r => r.token.toLowerCase().includes(q))
+      }
+      return regs
+    })
+
+    const containerTotalPages = computed(() => Math.ceil(filteredContainer.value.length / containerPageSize.value) || 1)
+    const paginatedContainer = computed(() => {
+      const start = (containerPage.value - 1) * containerPageSize.value
+      return filteredContainer.value.slice(start, start + containerPageSize.value)
+    })
+
+    watch(containerSearch, () => { containerPage.value = 1 })
+
+    // Tab badges
+    const tabs = computed(() => [
+      { id: 'overview', label: 'Overview' },
+      { id: 'routes', label: 'Routes', count: routeData.value?.routes?.length },
+      { id: 'container', label: 'Container', count: containerData.value?.count },
+    ])
+
+    // Data fetching
+    async function fetchJSON(path) {
+      try {
+        const r = await fetch(BASE + path)
+        return r.ok ? r.json() : null
+      } catch { return null }
+    }
+
+    async function refresh() {
+      const [h, m, r, c, w] = await Promise.all([
+        fetchJSON('/health'),
+        fetchJSON('/metrics'),
+        fetchJSON('/routes'),
+        fetchJSON('/container'),
+        fetchJSON('/ws'),
+      ])
+      if (h) health.value = h
+      if (m) metrics.value = m
+      if (r) routeData.value = r
+      if (c) containerData.value = c
+      ws.value = w || { enabled: false }
+      lastUpdate.value = new Date().toLocaleTimeString()
+    }
+
+    function formatDuration(seconds) {
+      if (seconds < 60) return seconds + 's'
+      if (seconds < 3600) return Math.floor(seconds / 60) + 'm ' + (seconds % 60) + 's'
+      const h = Math.floor(seconds / 3600)
+      const m = Math.floor((seconds % 3600) / 60)
+      return h + 'h ' + m + 'm'
+    }
+
+    function methodColor(method) {
+      return {
+        GET: 'text-emerald-400', POST: 'text-blue-400', PUT: 'text-amber-400',
+        DELETE: 'text-red-400', PATCH: 'text-violet-400',
+      }[method] || 'text-slate-400'
+    }
+
+    let timer
+    onMounted(() => { refresh(); timer = setInterval(refresh, pollInterval.value) })
+    onUnmounted(() => clearInterval(timer))
+
+    return {
+      activeTab, tabs, pollInterval, lastUpdate,
+      health, metrics, ws, routeData, containerData,
+      collapsed, toggle,
+      routeSearch, routeMethodFilter, routePage, routePageSize,
+      filteredRoutes, paginatedRoutes, routeTotalPages,
+      containerSearch, containerPage, containerPageSize,
+      filteredContainer, paginatedContainer, containerTotalPages,
+      formatDuration, methodColor,
+    }
+  }
+}).mount('#app')
+</script>
+
+</body>
+</html>

@@ -1,6 +1,8 @@
 import type { Request, Response, NextFunction } from 'express'
 import { Router } from 'express'
-import { renderDashboard } from './devtools/dashboard'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { existsSync, readFileSync } from 'node:fs'
 import {
   type AppAdapter,
   type AdapterMiddleware,
@@ -238,10 +240,25 @@ export class DevToolsAdapter implements AppAdapter {
       })
     }
 
-    // Dashboard UI — self-contained HTML that polls JSON endpoints
-    router.get('/', (_req: Request, res: Response) => {
-      res.type('html').send(renderDashboard(this.basePath))
-    })
+    // Dashboard UI — Vue + Tailwind from public/devtools directory
+    const publicDir = this.resolvePublicDir()
+    if (publicDir) {
+      // Serve static assets (vue.global.min.js, tailwind-cdn.js)
+      const express = require('express')
+      router.use(express.static(publicDir))
+
+      // Serve index.html with base path injected
+      const indexHtml = readFileSync(join(publicDir, 'index.html'), 'utf-8')
+      router.get('/', (_req: Request, res: Response) => {
+        // Inject basePath as data attribute for the Vue app
+        const html = indexHtml.replace('<body', `<body data-base="${this.basePath}"`)
+        res.type('html').send(html)
+      })
+    } else {
+      router.get('/', (_req: Request, res: Response) => {
+        res.type('html').send('<h1>DevTools: public directory not found</h1>')
+      })
+    }
 
     app.use(this.basePath, router)
     log.info(`DevTools mounted at ${this.basePath}`)
@@ -327,5 +344,19 @@ export class DevToolsAdapter implements AppAdapter {
   shutdown(): void {
     this.stopErrorWatch?.()
     this.adapterStatuses[this.name] = 'stopped'
+  }
+
+  /** Find the public/devtools directory relative to the built dist or source */
+  private resolvePublicDir(): string | null {
+    // Try relative to this file's location (works in dist/)
+    const thisDir = dirname(fileURLToPath(import.meta.url))
+    const candidates = [
+      join(thisDir, '..', 'public', 'devtools'), // dist/ -> public/devtools
+      join(thisDir, '..', '..', 'public', 'devtools'), // src/ -> public/devtools
+    ]
+    for (const dir of candidates) {
+      if (existsSync(join(dir, 'index.html'))) return dir
+    }
+    return null
   }
 }

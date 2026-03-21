@@ -100,7 +100,8 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "public"
   ],
   "scripts": {
     "build": "tsup",
