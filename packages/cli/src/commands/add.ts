@@ -57,6 +57,13 @@ const PACKAGE_REGISTRY: Record<string, { pkg: string; peers: string[]; descripti
     description: 'OpenTelemetry tracing + metrics',
   },
 
+  // Auth
+  auth: {
+    pkg: '@forinda/kickjs-auth',
+    peers: ['jsonwebtoken'],
+    description: 'Authentication — JWT, API key, and custom strategies',
+  },
+
   // Cron
   cron: {
     pkg: '@forinda/kickjs-cron',

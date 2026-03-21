@@ -2,9 +2,9 @@
 
 ## v1.x — Planned
 
-- [ ] `@Cron` scheduler — decorator-based task scheduling with cron expressions
-- [ ] `@Cacheable` decorator — method-level caching with pluggable backends (Redis, memory)
-- [ ] Auth plugin — JWT + API key authentication out of the box
+- [x] `@Cron` scheduler — `@forinda/kickjs-cron` with pluggable CronScheduler (croner, interval, custom)
+- [x] `@Cacheable` decorator — pluggable CacheProvider (memory default, Redis, custom)
+- [x] Auth plugin — `@forinda/kickjs-auth` with JWT, API key, and custom strategies
 - [ ] `kick g scaffold` — generate full CRUD from field definitions
 - [ ] `kick tinker` — REPL with DI container loaded
 - [ ] `kick deploy` — deploy to Fly.io, Railway, Docker
