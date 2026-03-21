@@ -46,4 +46,4 @@ If you find KickJS useful, please leave a star on [GitHub](https://github.com/fo
 
 Let's build something great together.
 
-— **Felix Orinda**
+— [**Felix Orinda**](https://github.com/forinda)
