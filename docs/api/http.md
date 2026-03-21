@@ -63,6 +63,7 @@ class RequestContext<TBody = any, TParams = any, TQuery = any> {
   get<T = any>(key: string): T | undefined
   set(key: string, value: any): void
 
+  // Response helpers
   json(data: any, status?: number): Response
   created(data: any): Response
   noContent(): Response
@@ -70,6 +71,23 @@ class RequestContext<TBody = any, TParams = any, TQuery = any> {
   badRequest(message: string): Response
   html(content: string, status?: number): Response
   download(buffer: Buffer, filename: string, contentType?: string): Response
+
+  // Template rendering (requires ViewAdapter)
+  render(template: string, data?: Record<string, any>): void
+
+  // Pagination — parses query, fetches data, returns paginated JSON
+  paginate<T>(
+    fetcher: (parsed: ParsedQuery) => Promise<{ data: T[]; total: number }>,
+    fieldConfig?: QueryFieldConfig,
+  ): Promise<Response>
+
+  // Server-Sent Events
+  sse(): {
+    send(data: any, event?: string, id?: string): void
+    comment(text: string): void
+    onClose(fn: () => void): void
+    close(): void
+  }
 }
 ```
 
