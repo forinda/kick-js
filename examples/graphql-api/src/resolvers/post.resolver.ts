@@ -11,8 +11,18 @@ interface Post {
 let nextId = 3
 
 const posts: Post[] = [
-  { id: '1', title: 'Getting Started with GraphQL', content: 'GraphQL is a query language...', authorId: '1' },
-  { id: '2', title: 'Advanced TypeScript Patterns', content: 'Decorators enable powerful...', authorId: '2' },
+  {
+    id: '1',
+    title: 'Getting Started with GraphQL',
+    content: 'GraphQL is a query language...',
+    authorId: '1',
+  },
+  {
+    id: '2',
+    title: 'Advanced TypeScript Patterns',
+    content: 'Decorators enable powerful...',
+    authorId: '2',
+  },
 ]
 
 @Service()
