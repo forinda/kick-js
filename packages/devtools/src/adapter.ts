@@ -272,6 +272,27 @@ export class DevToolsAdapter implements AppAdapter {
       res.json({ enabled: true, ...wsAdapter.getStats() })
     })
 
+    router.get('/queues', async (_req: Request, res: Response) => {
+      const queueAdapter = this.peerAdapters.find(
+        (a) => a.name === 'QueueAdapter' && typeof a.getQueueNames === 'function',
+      )
+      if (!queueAdapter) {
+        res.json({ enabled: false, message: 'QueueAdapter not found' })
+        return
+      }
+      try {
+        const names: string[] = queueAdapter.getQueueNames?.() ?? []
+        const queues: any[] = []
+        for (const name of names) {
+          const stats = await queueAdapter.getQueueStats?.(name)
+          queues.push({ name, ...stats })
+        }
+        res.json({ enabled: true, queues })
+      } catch {
+        res.json({ enabled: true, queues: [], error: 'Failed to fetch queue stats' })
+      }
+    })
+
     if (this.exposeConfig) {
       router.get('/config', (_req: Request, res: Response) => {
         const config: Record<string, string> = {}

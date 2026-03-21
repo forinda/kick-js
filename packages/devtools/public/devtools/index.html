@@ -300,6 +300,51 @@
       </div>
     </div>
 
+    <!-- ─── Queues Tab ─────────────────────────────────────────── -->
+    <div v-show="activeTab === 'queues'">
+      <div class="bg-slate-900 rounded-xl border border-slate-800 p-5">
+        <template v-if="queueData && queueData.enabled">
+          <div v-if="queueData.queues.length" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div v-for="q in queueData.queues" :key="q.name"
+              class="bg-slate-800/50 rounded-lg border border-slate-700 p-4">
+              <h3 class="font-mono text-sm font-semibold text-kick-500 mb-3">{{ q.name }}</h3>
+              <div v-if="q.error" class="text-red-400 text-sm">{{ q.error }}</div>
+              <template v-else>
+                <div class="grid grid-cols-2 gap-2 text-sm">
+                  <div class="flex justify-between">
+                    <span class="text-slate-400">Waiting</span>
+                    <span class="font-semibold tabular-nums text-amber-400">{{ q.waiting }}</span>
+                  </div>
+                  <div class="flex justify-between">
+                    <span class="text-slate-400">Active</span>
+                    <span class="font-semibold tabular-nums text-blue-400">{{ q.active }}</span>
+                  </div>
+                  <div class="flex justify-between">
+                    <span class="text-slate-400">Completed</span>
+                    <span class="font-semibold tabular-nums text-emerald-400">{{ q.completed }}</span>
+                  </div>
+                  <div class="flex justify-between">
+                    <span class="text-slate-400">Failed</span>
+                    <span class="font-semibold tabular-nums text-red-400">{{ q.failed }}</span>
+                  </div>
+                  <div class="flex justify-between">
+                    <span class="text-slate-400">Delayed</span>
+                    <span class="font-semibold tabular-nums text-violet-400">{{ q.delayed }}</span>
+                  </div>
+                  <div class="flex justify-between">
+                    <span class="text-slate-400">Paused</span>
+                    <span class="font-semibold tabular-nums text-slate-400">{{ q.paused }}</span>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
+          <p v-else class="text-slate-600 italic">No queues registered</p>
+        </template>
+        <p v-else class="text-slate-600 italic">{{ queueData ? 'QueueAdapter not found' : 'Loading...' }}</p>
+      </div>
+    </div>
+
   </main>
 
   <!-- Auth Gate — shown when token is required but not found -->
@@ -363,6 +408,7 @@ createApp({
     const ws = ref(null)
     const routeData = ref(null)
     const containerData = ref(null)
+    const queueData = ref(null)
 
     // Collapsible state
     const collapsed = reactive({
@@ -433,6 +479,7 @@ createApp({
       { id: 'overview', label: 'Overview' },
       { id: 'routes', label: 'Routes', count: routeData.value?.routes?.length },
       { id: 'container', label: 'Container', count: containerData.value?.count },
+      { id: 'queues', label: 'Queues', count: queueData.value?.queues?.length },
     ])
 
     // Data fetching
@@ -473,18 +520,20 @@ createApp({
     }
 
     async function refresh() {
-      const [h, m, r, c, w] = await Promise.all([
+      const [h, m, r, c, w, q] = await Promise.all([
         fetchJSON('/health'),
         fetchJSON('/metrics'),
         fetchJSON('/routes'),
         fetchJSON('/container'),
         fetchJSON('/ws'),
+        fetchJSON('/queues'),
       ])
       if (h) health.value = h
       if (m) metrics.value = m
       if (r) routeData.value = r
       if (c) containerData.value = c
       ws.value = w || { enabled: false }
+      queueData.value = q || { enabled: false }
       lastUpdate.value = new Date().toLocaleTimeString()
     }
 
@@ -509,7 +558,7 @@ createApp({
 
     return {
       activeTab, tabs, pollInterval, lastUpdate,
-      health, metrics, ws, routeData, containerData,
+      health, metrics, ws, routeData, containerData, queueData,
       collapsed, toggle,
       showAuthGate, tokenInput, authError, submitToken,
       routeSearch, routeMethodFilter, routePage, routePageSize,

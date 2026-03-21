@@ -114,6 +114,30 @@ export class QueueAdapter implements AppAdapter {
     )
   }
 
+  /** Get all registered queue names (used by DevTools) */
+  getQueueNames(): string[] {
+    return this.queueService.getQueueNames()
+  }
+
+  /** Get stats for a specific queue (used by DevTools) */
+  async getQueueStats(name: string): Promise<Record<string, any>> {
+    const queue = this.queueService.getQueue(name)
+    if (!queue) return { error: 'Queue not found' }
+    try {
+      const counts = await queue.getJobCounts()
+      return {
+        waiting: counts.waiting ?? 0,
+        active: counts.active ?? 0,
+        completed: counts.completed ?? 0,
+        failed: counts.failed ?? 0,
+        delayed: counts.delayed ?? 0,
+        paused: counts.paused ?? 0,
+      }
+    } catch {
+      return { error: 'Stats unavailable' }
+    }
+  }
+
   /** Gracefully close all workers and queues */
   async shutdown(): Promise<void> {
     // Close workers first so they stop picking up new jobs

@@ -43,6 +43,7 @@ const guideSidebar = [
       { text: 'Mailer', link: '/guide/mailer' },
       { text: 'Caching', link: '/guide/caching' },
       { text: 'View Engines', link: '/guide/view-engines' },
+      { text: 'MongoDB', link: '/guide/mongodb' },
       { text: 'SPA Integration', link: '/guide/spa' },
       { text: 'Plugins', link: '/guide/plugins' },
       { text: 'Decorators Reference', link: '/guide/decorators' },

@@ -123,6 +123,13 @@ const PACKAGE_REGISTRY: Record<
     description: 'Tenant resolution middleware',
   },
 
+  // Notifications
+  notifications: {
+    pkg: '@forinda/kickjs-notifications',
+    peers: [],
+    description: 'Multi-channel notifications — email, Slack, Discord, webhook',
+  },
+
   // Testing
   testing: {
     pkg: '@forinda/kickjs-testing',

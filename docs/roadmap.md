@@ -10,8 +10,8 @@
 - [ ] `kick deploy` — deploy to Fly.io, Railway, Docker
 - [x] SPA integration — `SpaAdapter` serves Vue/React/Svelte builds alongside API
 - [x] Mailer adapter — `@forinda/kickjs-mailer` with pluggable MailProvider (SMTP, Resend, SES, custom)
-- [ ] Queue monitoring in DevTools dashboard — `/_debug/queues`
-- [ ] Notification system — multi-channel (email, Slack, webhook)
+- [x] Queue monitoring in DevTools dashboard — `/_debug/queues` tab with job counts
+- [x] Notification system — `@forinda/kickjs-notifications` with email, Slack, Discord, webhook
 
 ### Community / Tutorial Patterns
 
