@@ -6,6 +6,7 @@ const guideSidebar = [
     text: 'Introduction',
     items: [
       { text: 'What is KickJS?', link: '/guide/what-is-kickjs' },
+      { text: 'Inspiration', link: '/guide/inspiration' },
       { text: 'Getting Started', link: '/guide/getting-started' },
       { text: 'Migration from Express', link: '/guide/migration-from-express' },
       { text: 'Project Structure', link: '/guide/project-structure' },
