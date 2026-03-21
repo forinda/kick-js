@@ -1,4 +1,6 @@
-import { resolve } from 'node:path'
+import { resolve, join } from 'node:path'
+import { existsSync, readFileSync } from 'node:fs'
+import { pathToFileURL } from 'node:url'
 import type { Command } from 'commander'
 
 /**
@@ -23,15 +25,26 @@ export function registerTinkerCommand(program: Command): void {
     .description('Interactive REPL with DI container and services loaded')
     .option('-e, --entry <file>', 'Entry file to load', 'src/index.ts')
     .action(async (opts: any) => {
-      const entryPath = resolve(opts.entry)
+      const cwd = process.cwd()
+      const entryPath = resolve(cwd, opts.entry)
 
       console.log(`\n  🔧 KickJS Tinker`)
       console.log(`  Loading: ${opts.entry}\n`)
 
+      // Resolve @forinda/kickjs-core from the user's project
+      const corePath = findPackage(cwd, '@forinda/kickjs-core')
+      if (!corePath) {
+        console.error('  Error: @forinda/kickjs-core not found in this project.')
+        console.error('  Install it: pnpm add @forinda/kickjs-core\n')
+        process.exit(1)
+      }
+
+      const core: any = await import(pathToFileURL(corePath).href)
+      const Container = core.Container
+
+      // Try to load the entry file to trigger decorator registration
       try {
-        // Dynamically import the app entry to trigger decorator registration
-        // We use tsx/vite-node at runtime, so TS imports work
-        await importEntry(entryPath)
+        await import(pathToFileURL(entryPath).href)
       } catch (err: any) {
         if (err.code === 'ERR_MODULE_NOT_FOUND' || err.code === 'MODULE_NOT_FOUND') {
           console.error(`  Error: Could not find ${opts.entry}`)
@@ -41,16 +54,6 @@ export function registerTinkerCommand(program: Command): void {
         // Non-fatal: some apps may fail to fully boot without a DB, etc.
         console.warn(`  Warning: Entry loaded with errors: ${err.message}`)
         console.warn(`  Container may be partially initialized.\n`)
-      }
-
-      // Get the container
-      let Container: any
-      try {
-        const core = await import('@forinda/kickjs-core')
-        Container = core.Container
-      } catch {
-        console.error('  Error: @forinda/kickjs-core not found. Is it installed?\n')
-        process.exit(1)
       }
 
       const container = Container.getInstance()
@@ -67,19 +70,12 @@ export function registerTinkerCommand(program: Command): void {
       server.context.Container = Container
       server.context.resolve = (token: any) => container.resolve(token)
 
-      // Try to make commonly used exports available
-      try {
-        const core = await import('@forinda/kickjs-core')
-        Object.assign(server.context, {
-          Service: core.Service,
-          Inject: core.Inject,
-          Logger: core.Logger,
-          HttpException: core.HttpException,
-          HttpStatus: core.HttpStatus,
-        })
-      } catch {
-        // Non-critical
-      }
+      // Add commonly used core exports
+      if (core.Logger) server.context.Logger = core.Logger
+      if (core.HttpException) server.context.HttpException = core.HttpException
+      if (core.HttpStatus) server.context.HttpStatus = core.HttpStatus
+      if (core.Service) server.context.Service = core.Service
+      if (core.Inject) server.context.Inject = core.Inject
 
       console.log('  Available globals:')
       console.log('    container    — DI container instance')
@@ -95,26 +91,30 @@ export function registerTinkerCommand(program: Command): void {
     })
 }
 
-async function importEntry(entryPath: string): Promise<void> {
-  // Try native ESM import first (works with tsx, vite-node, ts-node/esm)
-  try {
-    await import(entryPath)
-    return
-  } catch (err: any) {
-    // If it's a TS file and native import failed, try with tsx
-    if (entryPath.endsWith('.ts')) {
-      try {
-        // tsx registers itself as a loader
-        const { register } = await import('node:module')
-        if (typeof register === 'function') {
-          register('tsx/esm', import.meta.url)
-          await import(entryPath)
-          return
-        }
-      } catch {
-        // Fall through
-      }
+/**
+ * Find a package in the project's node_modules, walking up directories.
+ * Returns the absolute path to the package directory, or null if not found.
+ */
+/**
+ * Find a package in the project's node_modules, walking up directories.
+ * Returns the absolute path to the package's ESM entry file, or null if not found.
+ */
+function findPackage(startDir: string, packageName: string): string | null {
+  let dir = startDir
+  while (true) {
+    const candidate = join(dir, 'node_modules', packageName)
+    const pkgJsonPath = join(candidate, 'package.json')
+    if (existsSync(pkgJsonPath)) {
+      // Read package.json to find the ESM entry point
+      const pkgJson = JSON.parse(readFileSync(pkgJsonPath, 'utf-8'))
+      // Resolve: exports["."].import > main > index.js
+      const entry =
+        pkgJson.exports?.['.']?.import ?? pkgJson.exports?.['.'] ?? pkgJson.main ?? 'index.js'
+      return join(candidate, entry)
     }
-    throw err
+    const parent = resolve(dir, '..')
+    if (parent === dir) break
+    dir = parent
   }
+  return null
 }
