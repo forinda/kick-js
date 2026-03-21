@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from 'express'
-import { Router } from 'express'
+import { Router, static as serveStatic } from 'express'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { existsSync, readFileSync } from 'node:fs'
@@ -309,8 +309,7 @@ export class DevToolsAdapter implements AppAdapter {
     const publicDir = this.resolvePublicDir()
     if (publicDir) {
       // Serve static assets (vue.global.min.js, tailwind-cdn.js)
-      const express = require('express')
-      router.use(express.static(publicDir))
+      router.use(serveStatic(publicDir))
 
       // Serve index.html with base path injected
       const indexHtml = readFileSync(join(publicDir, 'index.html'), 'utf-8')
