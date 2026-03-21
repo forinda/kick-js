@@ -38,7 +38,7 @@ const guideSidebar = [
       { text: 'Reactivity', link: '/guide/reactivity' },
       { text: 'DevTools', link: '/guide/devtools' },
       { text: 'Adapters', link: '/guide/adapters' },
-      { text: 'Authentication', link: '/guide/auth' },
+      { text: 'Authentication', link: '/guide/authentication' },
       { text: 'Cron Jobs', link: '/guide/cron' },
       { text: 'Caching', link: '/guide/caching' },
       { text: 'View Engines', link: '/guide/view-engines' },
