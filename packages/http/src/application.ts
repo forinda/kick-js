@@ -197,6 +197,11 @@ export class Application {
     }
   }
 
+  /** Register modules and DI without starting the HTTP server (used by kick tinker) */
+  registerOnly(): void {
+    this.setup()
+  }
+
   /** Start the HTTP server — fails fast if port is in use */
   start(): void {
     this.setup()

@@ -67,6 +67,13 @@ export function bootstrap(options: ApplicationOptions): void {
   // ── First boot ───────────────────────────────────────────────────────
   const app = new Application(options)
   g.__app = app
+
+  // In tinker mode, register modules and DI but skip starting the HTTP server
+  if (process.env.KICK_TINKER) {
+    app.registerOnly()
+    return
+  }
+
   app.start()
 
   // ── Vite HMR acceptance ──────────────────────────────────────────────

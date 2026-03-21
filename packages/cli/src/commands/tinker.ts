@@ -60,6 +60,9 @@ function generateTinkerScript(entryPath: string, displayPath: string): string {
   return `
 import 'reflect-metadata'
 
+// Prevent bootstrap() from starting the HTTP server
+process.env.KICK_TINKER = '1'
+
 console.log('\\n  🔧 KickJS Tinker')
 console.log('  Loading: ${displayPath}\\n')
 
