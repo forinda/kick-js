@@ -6,9 +6,9 @@
 - [x] `@Cacheable` decorator — pluggable CacheProvider (memory default, Redis, custom)
 - [x] Auth plugin — `@forinda/kickjs-auth` with JWT, API key, and custom strategies
 - [x] `kick g scaffold` — generate full CRUD module from field definitions
-- [ ] `kick tinker` — REPL with DI container loaded
+- [x] `kick tinker` — REPL with DI container loaded
 - [ ] `kick deploy` — deploy to Fly.io, Railway, Docker
-- [ ] SPA integration — serve Vue/React/Svelte builds alongside API
+- [x] SPA integration — `SpaAdapter` serves Vue/React/Svelte builds alongside API
 - [x] Mailer adapter — `@forinda/kickjs-mailer` with pluggable MailProvider (SMTP, Resend, SES, custom)
 - [ ] Queue monitoring in DevTools dashboard — `/_debug/queues`
 - [ ] Notification system — multi-channel (email, Slack, webhook)

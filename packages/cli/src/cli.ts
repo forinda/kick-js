@@ -9,6 +9,7 @@ import { registerInfoCommand } from './commands/info'
 import { registerCustomCommands } from './commands/custom'
 import { registerInspectCommand } from './commands/inspect'
 import { registerAddCommand } from './commands/add'
+import { registerTinkerCommand } from './commands/tinker'
 import { loadKickConfig } from './config'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -31,6 +32,7 @@ async function main() {
   registerInfoCommand(program)
   registerInspectCommand(program)
   registerAddCommand(program)
+  registerTinkerCommand(program)
   registerCustomCommands(program, config)
 
   program.showHelpAfterError()
