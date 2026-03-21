@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-multi-tenant",
-  "version": "0.6.0",
+  "version": "1.1.0",
   "description": "Multi-tenancy helpers for KickJS — tenant resolution, scoped DI, and database routing",
   "keywords": [
     "kickjs",
@@ -17,9 +17,14 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
-    ".": { "import": "./dist/index.js", "types": "./dist/index.d.ts" }
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
@@ -36,11 +41,21 @@
     "tsup": "^8.5.0",
     "typescript": "^5.9.2"
   },
-  "publishConfig": { "access": "public" },
+  "publishConfig": {
+    "access": "public"
+  },
   "license": "MIT",
   "author": "Felix Orinda",
-  "engines": { "node": ">=20.0" },
+  "engines": {
+    "node": ">=20.0"
+  },
   "homepage": "https://forinda.github.io/kick-js/",
-  "repository": { "type": "git", "url": "https://github.com/forinda/kick-js.git", "directory": "packages/multi-tenant" },
-  "bugs": { "url": "https://github.com/forinda/kick-js/issues" }
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/forinda/kick-js.git",
+    "directory": "packages/multi-tenant"
+  },
+  "bugs": {
+    "url": "https://github.com/forinda/kick-js/issues"
+  }
 }

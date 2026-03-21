@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-otel",
-  "version": "0.5.2",
+  "version": "1.1.0",
   "description": "OpenTelemetry adapter for KickJS — automatic tracing, metrics, and export to any OTel backend",
   "keywords": [
     "kickjs",
@@ -51,9 +51,15 @@
     "@opentelemetry/semantic-conventions": ">=1.20.0"
   },
   "peerDependenciesMeta": {
-    "@opentelemetry/sdk-node": { "optional": true },
-    "@opentelemetry/sdk-trace-base": { "optional": true },
-    "@opentelemetry/sdk-metrics": { "optional": true }
+    "@opentelemetry/sdk-node": {
+      "optional": true
+    },
+    "@opentelemetry/sdk-trace-base": {
+      "optional": true
+    },
+    "@opentelemetry/sdk-metrics": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@opentelemetry/api": "^1.9.0",
