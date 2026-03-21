@@ -64,7 +64,10 @@ const guideSidebar = [
   },
   {
     text: 'Testing',
-    items: [{ text: 'Testing Guide', link: '/guide/testing' }],
+    items: [
+      { text: 'Testing Guide', link: '/guide/testing' },
+      { text: 'Benchmarks', link: '/guide/benchmarks' },
+    ],
   },
 ]
 
