@@ -58,6 +58,12 @@ export {
 // Plugin System
 export { type KickPlugin } from './plugin'
 
+// Cron
+export { Cron, getCronJobs, type CronJobMeta, CRON_META } from './cron'
+
+// Cache
+export { Cacheable, CacheEvict, type CacheOptions } from './cache'
+
 // Logger
 export { Logger, createLogger, rootLogger, logger } from './logger'
 
