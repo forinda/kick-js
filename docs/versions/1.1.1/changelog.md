@@ -30,7 +30,7 @@ All notable changes to KickJS are documented here.
 ## New Features
 
 - feat: MongoDB docs, queue monitoring in DevTools, notification system ([b77a1df](https://github.com/forinda/kick-js/commit/b77a1df0ef5d38fb767459d1e993bb62b940b013)) — [@forinda](https://github.com/forinda)
-- feat: add MaybePromise<T> utility type, use in adapter and drizzle ([7ceeea2](https://github.com/forinda/kick-js/commit/7ceeea2965aa69694382516b48808fa6a38e0960)) — [@forinda](https://github.com/forinda)
+- feat: add MaybePromise\<T\> utility type, use in adapter and drizzle ([7ceeea2](https://github.com/forinda/kick-js/commit/7ceeea2965aa69694382516b48808fa6a38e0960)) — [@forinda](https://github.com/forinda)
 - feat: add `kick tinker` REPL and SpaAdapter for frontend integration ([7a530e3](https://github.com/forinda/kick-js/commit/7a530e3ea73eae91d75c6624e705993dd3f6bf10)) — [@forinda](https://github.com/forinda)
 - feat: add @forinda/kickjs-mailer with pluggable MailProvider ([fd55b15](https://github.com/forinda/kick-js/commit/fd55b159e23023db049236cc3c22ed3cdc9aa74e)) — [@forinda](https://github.com/forinda)
 - feat: add `kick g scaffold` for field-driven CRUD module generation ([0318023](https://github.com/forinda/kick-js/commit/03180236ba493f09e73d23a9c9cc3a6c2c186fad)) — [@forinda](https://github.com/forinda)
