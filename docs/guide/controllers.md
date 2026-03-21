@@ -121,6 +121,77 @@ async list(ctx: RequestContext) {
 | `ctx.badRequest(message)`                 | 400    | Bad request error      |
 | `ctx.html(content, status?)`              | 200    | HTML response          |
 | `ctx.download(buffer, filename, type?)`   | --     | File download          |
+| `ctx.render(template, data?)`             | 200    | Render a template (requires ViewAdapter) |
+
+### Pagination
+
+`ctx.paginate()` parses query params, calls your fetcher, and returns a standardized paginated response:
+
+```ts
+@Get('/')
+@ApiQueryParams({ filterable: ['status'], sortable: ['createdAt'] })
+async list(ctx: RequestContext) {
+  return ctx.paginate(
+    async (parsed) => {
+      const data = await this.repo.findPaginated(parsed)
+      return data // { data: T[], total: number }
+    },
+    { filterable: ['status'], sortable: ['createdAt'] },
+  )
+}
+```
+
+Response shape:
+```json
+{
+  "data": [...],
+  "meta": {
+    "page": 1,
+    "limit": 10,
+    "total": 42,
+    "totalPages": 5,
+    "hasNext": true,
+    "hasPrev": false
+  }
+}
+```
+
+### Template Rendering
+
+Render server-side templates using the configured view engine (requires [ViewAdapter](./view-engines.md)):
+
+```ts
+@Get('/dashboard')
+async dashboard(ctx: RequestContext) {
+  ctx.render('dashboard', { user: ctx.req.user, title: 'Dashboard' })
+}
+```
+
+### Server-Sent Events
+
+`ctx.sse()` starts an SSE stream for real-time updates:
+
+```ts
+@Get('/events')
+async stream(ctx: RequestContext) {
+  const sse = ctx.sse()
+
+  const interval = setInterval(() => {
+    sse.send({ time: new Date().toISOString() }, 'tick')
+  }, 1000)
+
+  sse.onClose(() => clearInterval(interval))
+}
+```
+
+SSE helpers:
+
+| Method | Description |
+|---|---|
+| `sse.send(data, event?, id?)` | Send an event to the client |
+| `sse.comment(text)` | Send a keep-alive comment |
+| `sse.onClose(fn)` | Register disconnect callback |
+| `sse.close()` | End the stream |
 
 ## Middleware on Controllers
 
