@@ -184,9 +184,6 @@ importers:
       '@forinda/kickjs-core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@forinda/kickjs-devtools':
-        specifier: workspace:*
-        version: link:../../packages/devtools
       '@forinda/kickjs-http':
         specifier: workspace:*
         version: link:../../packages/http
@@ -212,6 +209,9 @@ importers:
       '@forinda/kickjs-cli':
         specifier: workspace:*
         version: link:../../packages/cli
+      '@forinda/kickjs-devtools':
+        specifier: workspace:*
+        version: link:../../packages/devtools
       '@swc/core':
         specifier: ^1.7.28
         version: 1.15.18
@@ -242,9 +242,6 @@ importers:
       '@forinda/kickjs-core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@forinda/kickjs-devtools':
-        specifier: workspace:*
-        version: link:../../packages/devtools
       '@forinda/kickjs-drizzle':
         specifier: workspace:*
         version: link:../../packages/drizzle
@@ -279,6 +276,9 @@ importers:
       '@forinda/kickjs-cli':
         specifier: workspace:*
         version: link:../../packages/cli
+      '@forinda/kickjs-devtools':
+        specifier: workspace:*
+        version: link:../../packages/devtools
       '@swc/core':
         specifier: ^1.7.28
         version: 1.15.18
@@ -382,9 +382,6 @@ importers:
       '@forinda/kickjs-core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@forinda/kickjs-devtools':
-        specifier: workspace:*
-        version: link:../../packages/devtools
       '@forinda/kickjs-graphql':
         specifier: workspace:*
         version: link:../../packages/graphql
@@ -416,6 +413,9 @@ importers:
       '@forinda/kickjs-cli':
         specifier: workspace:*
         version: link:../../packages/cli
+      '@forinda/kickjs-devtools':
+        specifier: workspace:*
+        version: link:../../packages/devtools
       '@swc/core':
         specifier: ^1.7.28
         version: 1.15.18
@@ -519,9 +519,6 @@ importers:
       '@forinda/kickjs-core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@forinda/kickjs-devtools':
-        specifier: workspace:*
-        version: link:../../packages/devtools
       '@forinda/kickjs-http':
         specifier: workspace:*
         version: link:../../packages/http
@@ -553,6 +550,9 @@ importers:
       '@forinda/kickjs-cli':
         specifier: workspace:*
         version: link:../../packages/cli
+      '@forinda/kickjs-devtools':
+        specifier: workspace:*
+        version: link:../../packages/devtools
       '@swc/core':
         specifier: ^1.7.28
         version: 1.15.18
@@ -647,9 +647,6 @@ importers:
       '@forinda/kickjs-core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@forinda/kickjs-devtools':
-        specifier: workspace:*
-        version: link:../../packages/devtools
       '@forinda/kickjs-http':
         specifier: workspace:*
         version: link:../../packages/http
@@ -696,6 +693,9 @@ importers:
       '@forinda/kickjs-cli':
         specifier: workspace:*
         version: link:../../packages/cli
+      '@forinda/kickjs-devtools':
+        specifier: workspace:*
+        version: link:../../packages/devtools
       '@swc/core':
         specifier: ^1.7.28
         version: 1.15.18
@@ -726,9 +726,6 @@ importers:
       '@forinda/kickjs-core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@forinda/kickjs-devtools':
-        specifier: workspace:*
-        version: link:../../packages/devtools
       '@forinda/kickjs-http':
         specifier: workspace:*
         version: link:../../packages/http
@@ -757,6 +754,9 @@ importers:
       '@forinda/kickjs-cli':
         specifier: workspace:*
         version: link:../../packages/cli
+      '@forinda/kickjs-devtools':
+        specifier: workspace:*
+        version: link:../../packages/devtools
       '@swc/core':
         specifier: ^1.7.28
         version: 1.15.18
@@ -793,9 +793,6 @@ importers:
       '@forinda/kickjs-core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@forinda/kickjs-devtools':
-        specifier: workspace:*
-        version: link:../../packages/devtools
       '@forinda/kickjs-http':
         specifier: workspace:*
         version: link:../../packages/http
@@ -821,6 +818,9 @@ importers:
       '@forinda/kickjs-cli':
         specifier: workspace:*
         version: link:../../packages/cli
+      '@forinda/kickjs-devtools':
+        specifier: workspace:*
+        version: link:../../packages/devtools
       '@swc/core':
         specifier: ^1.7.28
         version: 1.15.18
@@ -1034,9 +1034,6 @@ importers:
       '@forinda/kickjs-core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@forinda/kickjs-devtools':
-        specifier: workspace:*
-        version: link:../../packages/devtools
       '@forinda/kickjs-http':
         specifier: workspace:*
         version: link:../../packages/http
@@ -1065,6 +1062,9 @@ importers:
       '@forinda/kickjs-cli':
         specifier: workspace:*
         version: link:../../packages/cli
+      '@forinda/kickjs-devtools':
+        specifier: workspace:*
+        version: link:../../packages/devtools
       '@swc/core':
         specifier: ^1.7.28
         version: 1.15.18
