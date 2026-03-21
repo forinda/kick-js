@@ -145,6 +145,29 @@ function detectPackageManager(): string {
   return 'npm'
 }
 
+export function printPackageList(): void {
+  console.log('\n  Available KickJS packages:\n')
+  const maxName = Math.max(...Object.keys(PACKAGE_REGISTRY).map((k) => k.length))
+  for (const [name, info] of Object.entries(PACKAGE_REGISTRY)) {
+    const padded = name.padEnd(maxName + 2)
+    const peers = info.peers.length ? ` (+ ${info.peers.join(', ')})` : ''
+    console.log(`    ${padded} ${info.description}${peers}`)
+  }
+  console.log('\n  Usage: kick add graphql drizzle otel')
+  console.log('         kick add queue:bullmq')
+  console.log()
+}
+
+export function registerListCommand(program: Command): void {
+  program
+    .command('list')
+    .alias('ls')
+    .description('List all available KickJS packages')
+    .action(() => {
+      printPackageList()
+    })
+}
+
 export function registerAddCommand(program: Command): void {
   program
     .command('add [packages...]')
@@ -155,16 +178,7 @@ export function registerAddCommand(program: Command): void {
     .action(async (packages: string[], opts: any) => {
       // List mode
       if (opts.list || packages.length === 0) {
-        console.log('\n  Available KickJS packages:\n')
-        const maxName = Math.max(...Object.keys(PACKAGE_REGISTRY).map((k) => k.length))
-        for (const [name, info] of Object.entries(PACKAGE_REGISTRY)) {
-          const padded = name.padEnd(maxName + 2)
-          const peers = info.peers.length ? ` (+ ${info.peers.join(', ')})` : ''
-          console.log(`    ${padded} ${info.description}${peers}`)
-        }
-        console.log('\n  Usage: kick add graphql drizzle otel')
-        console.log('         kick add queue:bullmq')
-        console.log()
+        printPackageList()
         return
       }
 

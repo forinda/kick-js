@@ -21,7 +21,7 @@ export interface KickCommandDefinition {
 }
 
 /** Project pattern — controls what generators produce and which deps are installed */
-export type ProjectPattern = 'rest' | 'graphql' | 'ddd' | 'microservice' | 'minimal'
+export type ProjectPattern = 'rest' | 'graphql' | 'ddd' | 'cqrs' | 'minimal'
 
 /** Configuration for the kick.config.ts file */
 export interface KickConfig {
@@ -30,7 +30,7 @@ export interface KickConfig {
    * - 'rest' — Express + Swagger (default)
    * - 'graphql' — GraphQL + GraphiQL
    * - 'ddd' — Full DDD modules with use cases, entities, value objects
-   * - 'microservice' — REST + queue workers
+   * - 'cqrs' — CQRS with commands, queries, events, WebSocket + queue
    * - 'minimal' — Bare Express with no scaffolding
    */
   pattern?: ProjectPattern

@@ -8,7 +8,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const cliPkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'))
 const KICKJS_VERSION = `^${cliPkg.version}`
 
-type ProjectTemplate = 'rest' | 'graphql' | 'ddd' | 'microservice' | 'minimal'
+type ProjectTemplate = 'rest' | 'graphql' | 'ddd' | 'cqrs' | 'minimal'
 
 interface InitProjectOptions {
   name: string
@@ -41,13 +41,15 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
   // Add template-specific deps
   if (template !== 'minimal') {
     baseDeps['@forinda/kickjs-swagger'] = KICKJS_VERSION
+    baseDeps['@forinda/kickjs-devtools'] = KICKJS_VERSION
   }
   if (template === 'graphql') {
     baseDeps['@forinda/kickjs-graphql'] = KICKJS_VERSION
     baseDeps['graphql'] = '^16.11.0'
   }
-  if (template === 'microservice') {
+  if (template === 'cqrs') {
     baseDeps['@forinda/kickjs-queue'] = KICKJS_VERSION
+    baseDeps['@forinda/kickjs-ws'] = KICKJS_VERSION
     baseDeps['@forinda/kickjs-otel'] = KICKJS_VERSION
   }
   if (template === 'ddd') {
@@ -168,6 +170,25 @@ export default defineConfig({
     ),
   )
 
+  // ── .editorconfig ─────────────────────────────────────────────────────
+  await writeFileSafe(
+    join(dir, '.editorconfig'),
+    `# https://editorconfig.org
+root = true
+
+[*]
+indent_style = space
+indent_size = 2
+end_of_line = lf
+charset = utf-8
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+[*.md]
+trim_trailing_whitespace = false
+`,
+  )
+
   // ── .gitignore ──────────────────────────────────────────────────────
   await writeFileSafe(
     join(dir, '.gitignore'),
@@ -177,6 +198,30 @@ dist/
 coverage/
 .DS_Store
 *.tsbuildinfo
+`,
+  )
+
+  // ── .gitattributes ────────────────────────────────────────────────────
+  await writeFileSafe(
+    join(dir, '.gitattributes'),
+    `# Auto-detect text files and normalise line endings to LF
+* text=auto eol=lf
+
+# Explicitly mark generated / binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+
+# Lock files — treat as generated
+pnpm-lock.yaml -diff linguist-generated
+yarn.lock -diff linguist-generated
+package-lock.json -diff linguist-generated
 `,
   )
 
@@ -304,20 +349,36 @@ export default defineConfig({
     rest: 'kick g module user',
     graphql: 'kick g resolver user',
     ddd: 'kick g module user --repo drizzle',
-    microservice: 'kick g module user && kick g job email',
+    cqrs: 'kick g module user --pattern cqrs',
     minimal: '# add your routes to src/index.ts',
   }
   console.log(`    ${genHint[template] ?? genHint.rest}`)
   console.log('    kick dev')
   console.log()
   console.log('  Commands:')
-  console.log('    kick dev         Start dev server with Vite HMR')
-  console.log('    kick build       Production build via Vite')
-  console.log('    kick start       Run production build')
-  console.log(`    kick g module X  Generate a DDD module`)
-  if (template === 'graphql') console.log('    kick g resolver X  Generate a GraphQL resolver')
-  if (template === 'microservice')
-    console.log('    kick g job X       Generate a queue job processor')
+  console.log('    kick dev                  Start dev server with Vite HMR')
+  console.log('    kick build                Production build via Vite')
+  console.log('    kick start                Run production build')
+  console.log()
+  console.log('  Generators:')
+  console.log('    kick g module <name>      Full DDD module (controller, DTOs, use-cases, repo)')
+  console.log('    kick g scaffold <n> <f..> CRUD module from field definitions')
+  console.log('    kick g controller <name>  Standalone controller')
+  console.log('    kick g service <name>     @Service() class')
+  console.log('    kick g middleware <name>   Express middleware')
+  console.log('    kick g guard <name>       Route guard (auth, roles, etc.)')
+  console.log('    kick g adapter <name>     AppAdapter with lifecycle hooks')
+  console.log('    kick g dto <name>         Zod DTO schema')
+  if (template === 'graphql') console.log('    kick g resolver <name>    GraphQL resolver')
+  if (template === 'cqrs') console.log('    kick g job <name>         Queue job processor')
+  console.log('    kick g config             Generate kick.config.ts')
+  console.log()
+  console.log('  Add packages:')
+  console.log('    kick add <pkg>            Install a KickJS package + peers')
+  console.log('    kick add --list           Show all available packages')
+  console.log()
+  console.log('  Available: auth, swagger, graphql, drizzle, prisma, ws,')
+  console.log('             cron, queue, mailer, otel, multi-tenant, notifications, testing')
   console.log()
 }
 
@@ -348,12 +409,13 @@ bootstrap({
 })
 `
 
-    case 'microservice':
+    case 'cqrs':
       return `import 'reflect-metadata'
 import { bootstrap } from '@forinda/kickjs-http'
 import { DevToolsAdapter } from '@forinda/kickjs-devtools'
 import { SwaggerAdapter } from '@forinda/kickjs-swagger'
 import { OtelAdapter } from '@forinda/kickjs-otel'
+// import { WsAdapter } from '@forinda/kickjs-ws'
 // import { QueueAdapter, BullMQProvider } from '@forinda/kickjs-queue'
 import { modules } from './modules'
 
@@ -365,6 +427,8 @@ bootstrap({
     new SwaggerAdapter({
       info: { title: '${name}', version: '${cliPkg.version}' },
     }),
+    // Uncomment for WebSocket support:
+    // new WsAdapter(),
     // Uncomment when Redis is available:
     // new QueueAdapter({
     //   provider: new BullMQProvider({ host: 'localhost', port: 6379 }),

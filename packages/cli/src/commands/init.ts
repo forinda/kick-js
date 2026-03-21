@@ -45,10 +45,7 @@ export function registerInitCommand(program: Command): void {
     .option('--install', 'Install dependencies after scaffolding')
     .option('--no-install', 'Skip dependency installation')
     .option('-f, --force', 'Remove existing files without prompting')
-    .option(
-      '-t, --template <type>',
-      'Project template: rest | graphql | ddd | microservice | minimal',
-    )
+    .option('-t, --template <type>', 'Project template: rest | graphql | ddd | cqrs | minimal')
     .action(async (name: string | undefined, opts: any) => {
       console.log()
 
@@ -103,7 +100,7 @@ export function registerInitCommand(program: Command): void {
             'REST API (Express + Swagger)',
             'GraphQL API (GraphQL + GraphiQL)',
             'DDD (Domain-Driven Design modules)',
-            'Microservice (REST + Queue worker)',
+            'CQRS (Commands, Queries, Events + WS/Queue)',
             'Minimal (bare Express)',
           ],
           0,
@@ -113,7 +110,7 @@ export function registerInitCommand(program: Command): void {
           'REST API (Express + Swagger)': 'rest',
           'GraphQL API (GraphQL + GraphiQL)': 'graphql',
           'DDD (Domain-Driven Design modules)': 'ddd',
-          'Microservice (REST + Queue worker)': 'microservice',
+          'CQRS (Commands, Queries, Events + WS/Queue)': 'cqrs',
           'Minimal (bare Express)': 'minimal',
         }
         template = templateMap[template] ?? 'rest'

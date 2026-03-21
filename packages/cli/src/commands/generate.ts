@@ -1,6 +1,7 @@
 import { resolve } from 'node:path'
 import type { Command } from 'commander'
 import { generateModule } from '../generators/module'
+import type { RepoType } from '../generators/module'
 import { generateAdapter } from '../generators/adapter'
 import { generateMiddleware } from '../generators/middleware'
 import { generateGuard } from '../generators/guard'
@@ -11,6 +12,8 @@ import { generateConfig } from '../generators/config'
 import { generateResolver } from '../generators/resolver'
 import { generateJob } from '../generators/job'
 import { generateScaffold, parseFields } from '../generators/scaffold'
+import { generateTest } from '../generators/test'
+import { loadKickConfig } from '../config'
 
 function printGenerated(files: string[]): void {
   const cwd = process.cwd()
@@ -21,26 +24,70 @@ function printGenerated(files: string[]): void {
   console.log()
 }
 
+const GENERATORS = [
+  { name: 'module <name>', description: 'Full DDD module (controller, DTOs, use-cases, repo)' },
+  { name: 'scaffold <name> <fields...>', description: 'CRUD module from field definitions' },
+  { name: 'controller <name>', description: '@Controller() class            [-m module]' },
+  { name: 'service <name>', description: '@Service() singleton             [-m module]' },
+  { name: 'middleware <name>', description: 'Express middleware function     [-m module]' },
+  { name: 'guard <name>', description: 'Route guard (auth, roles, etc.)  [-m module]' },
+  { name: 'dto <name>', description: 'Zod DTO schema                  [-m module]' },
+  { name: 'adapter <name>', description: 'AppAdapter with lifecycle hooks (app-level only)' },
+  { name: 'test <name>', description: 'Vitest test scaffold            [-m module]' },
+  { name: 'resolver <name>', description: 'GraphQL @Resolver class' },
+  { name: 'job <name>', description: 'Queue @Job processor' },
+  { name: 'config', description: 'Generate kick.config.ts' },
+]
+
+function printGeneratorList(): void {
+  console.log('\n  Available generators:\n')
+  const maxName = Math.max(...GENERATORS.map((g) => g.name.length))
+  for (const g of GENERATORS) {
+    console.log(`    kick g ${g.name.padEnd(maxName + 2)} ${g.description}`)
+  }
+  console.log()
+}
+
 export function registerGenerateCommand(program: Command): void {
-  const gen = program.command('generate').alias('g').description('Generate code scaffolds')
+  const gen = program
+    .command('generate')
+    .alias('g')
+    .description('Generate code scaffolds')
+    .option('--list', 'List all available generators')
+    .action((opts: any) => {
+      if (opts.list) {
+        printGeneratorList()
+      } else {
+        gen.help()
+      }
+    })
 
   // ── kick g module <name> ────────────────────────────────────────────
   gen
     .command('module <name>')
-    .description('Generate a full DDD module with all layers')
+    .description('Generate a module (structure depends on project pattern)')
     .option('--no-entity', 'Skip entity and value object generation')
     .option('--no-tests', 'Skip test file generation')
-    .option('--repo <type>', 'Repository implementation: inmemory | drizzle', 'inmemory')
-    .option('--minimal', 'Only generate index.ts and controller')
-    .option('--modules-dir <dir>', 'Modules directory', 'src/modules')
+    .option('--repo <type>', 'Repository implementation: inmemory | drizzle | prisma')
+    .option('--pattern <pattern>', 'Override project pattern: rest | ddd | cqrs | minimal')
+    .option('--minimal', 'Shorthand for --pattern minimal')
+    .option('--modules-dir <dir>', 'Modules directory')
+    .option('-f, --force', 'Overwrite existing files without prompting')
     .action(async (name: string, opts: any) => {
+      const config = await loadKickConfig(process.cwd())
+      const modulesDir = opts.modulesDir ?? config?.modulesDir ?? 'src/modules'
+      const repo: RepoType = opts.repo ?? config?.defaultRepo ?? 'inmemory'
+      const pattern = opts.pattern ?? config?.pattern ?? 'ddd'
+
       const files = await generateModule({
         name,
-        modulesDir: resolve(opts.modulesDir),
+        modulesDir: resolve(modulesDir),
         noEntity: opts.entity === false,
         noTests: opts.tests === false,
-        repo: opts.repo,
+        repo,
         minimal: opts.minimal,
+        force: opts.force,
+        pattern,
       })
       printGenerated(files)
     })
@@ -58,50 +105,131 @@ export function registerGenerateCommand(program: Command): void {
   // ── kick g middleware <name> ────────────────────────────────────────
   gen
     .command('middleware <name>')
-    .description('Generate an Express middleware function')
-    .option('-o, --out <dir>', 'Output directory', 'src/middleware')
+    .description(
+      'Generate an Express middleware function\n' +
+        '  Use -m to scope it to a module: kick g middleware auth -m users',
+    )
+    .option('-o, --out <dir>', 'Output directory (overrides --module)')
+    .option('-m, --module <module>', 'Place inside a module folder')
     .action(async (name: string, opts: any) => {
-      const files = await generateMiddleware({ name, outDir: resolve(opts.out) })
+      const config = await loadKickConfig(process.cwd())
+      const modulesDir = config?.modulesDir ?? 'src/modules'
+      const files = await generateMiddleware({
+        name,
+        outDir: opts.out,
+        moduleName: opts.module,
+        modulesDir,
+        pattern: config?.pattern,
+      })
       printGenerated(files)
     })
 
   // ── kick g guard <name> ────────────────────────────────────────────
   gen
     .command('guard <name>')
-    .description('Generate a route guard (auth, roles, etc.)')
-    .option('-o, --out <dir>', 'Output directory', 'src/guards')
+    .description(
+      'Generate a route guard (auth, roles, etc.)\n' +
+        '  Use -m to scope it to a module: kick g guard admin -m users',
+    )
+    .option('-o, --out <dir>', 'Output directory (overrides --module)')
+    .option('-m, --module <module>', 'Place inside a module folder')
     .action(async (name: string, opts: any) => {
-      const files = await generateGuard({ name, outDir: resolve(opts.out) })
+      const config = await loadKickConfig(process.cwd())
+      const modulesDir = config?.modulesDir ?? 'src/modules'
+      const files = await generateGuard({
+        name,
+        outDir: opts.out,
+        moduleName: opts.module,
+        modulesDir,
+        pattern: config?.pattern,
+      })
       printGenerated(files)
     })
 
   // ── kick g service <name> ──────────────────────────────────────────
   gen
     .command('service <name>')
-    .description('Generate a @Service() class')
-    .option('-o, --out <dir>', 'Output directory', 'src/services')
+    .description(
+      'Generate a @Service() class\n' +
+        '  Use -m to scope it to a module: kick g service payment -m orders',
+    )
+    .option('-o, --out <dir>', 'Output directory (overrides --module)')
+    .option('-m, --module <module>', 'Place inside a module folder')
     .action(async (name: string, opts: any) => {
-      const files = await generateService({ name, outDir: resolve(opts.out) })
+      const config = await loadKickConfig(process.cwd())
+      const modulesDir = config?.modulesDir ?? 'src/modules'
+      const files = await generateService({
+        name,
+        outDir: opts.out,
+        moduleName: opts.module,
+        modulesDir,
+        pattern: config?.pattern,
+      })
       printGenerated(files)
     })
 
   // ── kick g controller <name> ───────────────────────────────────────
   gen
     .command('controller <name>')
-    .description('Generate a @Controller() class with basic routes')
-    .option('-o, --out <dir>', 'Output directory', 'src/controllers')
+    .description(
+      'Generate a @Controller() class with basic routes\n' +
+        '  Use -m to scope it to a module: kick g controller auth -m users',
+    )
+    .option('-o, --out <dir>', 'Output directory (overrides --module)')
+    .option('-m, --module <module>', 'Place inside a module folder')
     .action(async (name: string, opts: any) => {
-      const files = await generateController({ name, outDir: resolve(opts.out) })
+      const config = await loadKickConfig(process.cwd())
+      const modulesDir = config?.modulesDir ?? 'src/modules'
+      const files = await generateController({
+        name,
+        outDir: opts.out,
+        moduleName: opts.module,
+        modulesDir,
+        pattern: config?.pattern,
+      })
       printGenerated(files)
     })
 
   // ── kick g dto <name> ──────────────────────────────────────────────
   gen
     .command('dto <name>')
-    .description('Generate a Zod DTO schema')
-    .option('-o, --out <dir>', 'Output directory', 'src/dtos')
+    .description(
+      'Generate a Zod DTO schema\n' +
+        '  Use -m to scope it to a module: kick g dto create-user -m users',
+    )
+    .option('-o, --out <dir>', 'Output directory (overrides --module)')
+    .option('-m, --module <module>', 'Place inside a module folder')
     .action(async (name: string, opts: any) => {
-      const files = await generateDto({ name, outDir: resolve(opts.out) })
+      const config = await loadKickConfig(process.cwd())
+      const modulesDir = config?.modulesDir ?? 'src/modules'
+      const files = await generateDto({
+        name,
+        outDir: opts.out,
+        moduleName: opts.module,
+        modulesDir,
+        pattern: config?.pattern,
+      })
+      printGenerated(files)
+    })
+
+  // ── kick g test <name> ────────────────────────────────────────────────
+  gen
+    .command('test <name>')
+    .description(
+      'Generate a Vitest test scaffold\n' +
+        '  Use -m to scope it to a module: kick g test user-service -m users',
+    )
+    .option('-o, --out <dir>', 'Output directory (overrides --module)')
+    .option('-m, --module <module>', "Place inside a module's __tests__/ folder")
+    .action(async (name: string, opts: any) => {
+      const config = await loadKickConfig(process.cwd())
+      const modulesDir = config?.modulesDir ?? 'src/modules'
+      const files = await generateTest({
+        name,
+        outDir: opts.out,
+        moduleName: opts.module,
+        modulesDir,
+      })
       printGenerated(files)
     })
 
@@ -137,7 +265,7 @@ export function registerGenerateCommand(program: Command): void {
     )
     .option('--no-entity', 'Skip entity and value object generation')
     .option('--no-tests', 'Skip test file generation')
-    .option('--modules-dir <dir>', 'Modules directory', 'src/modules')
+    .option('--modules-dir <dir>', 'Modules directory')
     .action(async (name: string, rawFields: string[], opts: any) => {
       if (rawFields.length === 0) {
         console.error(
@@ -147,11 +275,13 @@ export function registerGenerateCommand(program: Command): void {
         )
         process.exit(1)
       }
+      const config = await loadKickConfig(process.cwd())
+      const modulesDir = opts.modulesDir ?? config?.modulesDir ?? 'src/modules'
       const fields = parseFields(rawFields)
       const files = await generateScaffold({
         name,
         fields,
-        modulesDir: resolve(opts.modulesDir),
+        modulesDir: resolve(modulesDir),
         noEntity: opts.entity === false,
         noTests: opts.tests === false,
       })
@@ -167,7 +297,7 @@ export function registerGenerateCommand(program: Command): void {
     .command('config')
     .description('Generate a kick.config.ts at the project root')
     .option('--modules-dir <dir>', 'Modules directory path', 'src/modules')
-    .option('--repo <type>', 'Default repository type: inmemory | drizzle', 'inmemory')
+    .option('--repo <type>', 'Default repository type: inmemory | drizzle | prisma', 'inmemory')
     .option('-f, --force', 'Overwrite existing kick.config.ts without prompting')
     .action(async (opts: any) => {
       const files = await generateConfig({

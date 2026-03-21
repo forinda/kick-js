@@ -1,12 +1,30 @@
+import type { RepoType } from '../module'
+
+function repoMaps(pascal: string, kebab: string, repo: RepoType) {
+  const repoClassMap: Record<string, string> = {
+    inmemory: `InMemory${pascal}Repository`,
+    drizzle: `Drizzle${pascal}Repository`,
+    prisma: `Prisma${pascal}Repository`,
+  }
+  const repoFileMap: Record<string, string> = {
+    inmemory: `in-memory-${kebab}`,
+    drizzle: `drizzle-${kebab}`,
+    prisma: `prisma-${kebab}`,
+  }
+  return {
+    repoClass: repoClassMap[repo] ?? repoClassMap.inmemory,
+    repoFile: repoFileMap[repo] ?? repoFileMap.inmemory,
+  }
+}
+
+/** DDD module index — nested folders, use-cases, domain services */
 export function generateModuleIndex(
   pascal: string,
   kebab: string,
   plural: string,
-  repo: 'drizzle' | 'inmemory',
+  repo: RepoType,
 ): string {
-  const repoClass =
-    repo === 'inmemory' ? `InMemory${pascal}Repository` : `Drizzle${pascal}Repository`
-  const repoFile = repo === 'inmemory' ? `in-memory-${kebab}` : `drizzle-${kebab}`
+  const { repoClass, repoFile } = repoMaps(pascal, kebab, repo)
 
   return `/**
  * ${pascal} Module
@@ -49,6 +67,73 @@ export class ${pascal}Module implements AppModule {
    * The path is prefixed with the global apiPrefix and version (e.g. /api/v1/${plural}).
    * Passing 'controller' enables automatic OpenAPI spec generation via SwaggerAdapter.
    */
+  routes(): ModuleRoutes {
+    return {
+      path: '/${plural}',
+      router: buildRoutes(${pascal}Controller),
+      controller: ${pascal}Controller,
+    }
+  }
+}
+`
+}
+
+/** REST module index — flat folder, service + controller, no use-cases */
+export function generateRestModuleIndex(
+  pascal: string,
+  kebab: string,
+  plural: string,
+  repo: RepoType,
+): string {
+  const { repoClass, repoFile } = repoMaps(pascal, kebab, repo)
+
+  return `/**
+ * ${pascal} Module
+ *
+ * REST module with a flat folder structure.
+ * Controller delegates to service, service wraps the repository.
+ *
+ * Structure:
+ *   ${kebab}.controller.ts  — HTTP routes (CRUD)
+ *   ${kebab}.service.ts     — Business logic
+ *   ${kebab}.repository.ts  — Repository interface
+ *   ${repoFile}.repository.ts — Repository implementation
+ *   dtos/                   — Request/response schemas
+ */
+import { Container, type AppModule, type ModuleRoutes } from '@forinda/kickjs-core'
+import { buildRoutes } from '@forinda/kickjs-http'
+import { ${pascal.toUpperCase()}_REPOSITORY } from './${kebab}.repository'
+import { ${repoClass} } from './${repoFile}.repository'
+import { ${pascal}Controller } from './${kebab}.controller'
+
+// Eagerly load decorated classes so @Service()/@Repository() decorators register in the DI container
+import.meta.glob(['./**/*.service.ts', './**/*.repository.ts', '!./**/*.test.ts'], { eager: true })
+
+export class ${pascal}Module implements AppModule {
+  register(container: Container): void {
+    container.registerFactory(${pascal.toUpperCase()}_REPOSITORY, () =>
+      container.resolve(${repoClass}),
+    )
+  }
+
+  routes(): ModuleRoutes {
+    return {
+      path: '/${plural}',
+      router: buildRoutes(${pascal}Controller),
+      controller: ${pascal}Controller,
+    }
+  }
+}
+`
+}
+
+/** Minimal module index — just controller, no service/repo */
+export function generateMinimalModuleIndex(pascal: string, kebab: string, plural: string): string {
+  return `import { type AppModule, type ModuleRoutes } from '@forinda/kickjs-core'
+import { buildRoutes } from '@forinda/kickjs-http'
+import { ${pascal}Controller } from './${kebab}.controller'
+
+export class ${pascal}Module implements AppModule {
   routes(): ModuleRoutes {
     return {
       path: '/${plural}',

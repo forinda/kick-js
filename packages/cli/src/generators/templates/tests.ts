@@ -54,9 +54,14 @@ describe('${pascal}Controller', () => {
 `
 }
 
-export function generateRepositoryTest(pascal: string, kebab: string, plural: string): string {
+export function generateRepositoryTest(
+  pascal: string,
+  kebab: string,
+  plural: string,
+  repoImport = `../infrastructure/repositories/in-memory-${kebab}.repository`,
+): string {
   return `import { describe, it, expect, beforeEach } from 'vitest'
-import { InMemory${pascal}Repository } from '../infrastructure/repositories/in-memory-${kebab}.repository'
+import { InMemory${pascal}Repository } from '${repoImport}'
 
 describe('InMemory${pascal}Repository', () => {
   let repo: InMemory${pascal}Repository

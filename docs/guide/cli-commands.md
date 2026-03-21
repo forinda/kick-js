@@ -90,7 +90,7 @@ When run without flags, the CLI prompts for:
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `-t, --template <type>` | Project template: `rest`, `graphql`, `ddd`, `microservice`, `minimal` | Prompted |
+| `-t, --template <type>` | Project template: `rest`, `graphql`, `ddd`, `cqrs`, `minimal` | Prompted |
 | `-d, --directory <dir>` | Target directory | Project name |
 | `--pm <manager>` | Package manager: `pnpm`, `npm`, or `yarn` | Prompted |
 | `--git / --no-git` | Initialize git repository | Prompted |
@@ -104,7 +104,7 @@ When run without flags, the CLI prompts for:
 | `rest` (default) | Swagger + DevTools | core, http, config, swagger |
 | `graphql` | GraphQLAdapter + DevTools | core, http, graphql |
 | `ddd` | Swagger + DevTools | core, http, config, swagger |
-| `microservice` | Swagger + OTel + DevTools | core, http, swagger, otel, queue |
+| `cqrs` | Swagger + OTel + WS + DevTools | core, http, swagger, otel, ws, queue |
 | `minimal` | None | core, http |
 
 Use `.` as the project name to scaffold in the current directory (the folder name becomes the project name).
@@ -192,6 +192,43 @@ Output:
     @forinda/kickjs-cli      workspace
 ```
 
+## kick list
+
+List all available KickJS packages. Alias: `kick ls`.
+
+```bash
+kick list
+kick ls
+```
+
+Output shows each package name, description, and required peer dependencies:
+
+```
+  Available KickJS packages:
+
+    core            DI container, decorators, reactivity
+    http            Express 5, routing, middleware
+    config          Zod-based env validation
+    cli             CLI tool and code generators
+    swagger         OpenAPI spec + Swagger UI + ReDoc
+    graphql         GraphQL resolvers + GraphiQL (+ graphql)
+    drizzle         Drizzle ORM adapter + query builder (+ drizzle-orm)
+    prisma          Prisma adapter + query builder (+ @prisma/client)
+    ws              WebSocket with @WsController decorators (+ socket.io)
+    otel            OpenTelemetry tracing + metrics (+ @opentelemetry/api)
+    devtools        Development dashboard — routes, DI, metrics, health
+    auth            Authentication — JWT, API key, and custom strategies (+ jsonwebtoken)
+    mailer          Email sending — SMTP, Resend, SES, or custom provider (+ nodemailer)
+    cron            Cron job scheduling (+ croner)
+    queue           Queue adapter (BullMQ/RabbitMQ/Kafka)
+    queue:bullmq    Queue with BullMQ + Redis (+ bullmq, ioredis)
+    queue:rabbitmq  Queue with RabbitMQ (+ amqplib)
+    queue:kafka     Queue with Kafka (+ kafkajs)
+    multi-tenant    Tenant resolution middleware
+    notifications   Multi-channel notifications — email, Slack, Discord, webhook
+    testing         Test utilities and TestModule builder
+```
+
 ## kick add
 
 Add KickJS packages with their required peer dependencies automatically resolved.
@@ -200,23 +237,23 @@ Add KickJS packages with their required peer dependencies automatically resolved
 kick add graphql          # installs @forinda/kickjs-graphql + graphql
 kick add drizzle otel     # installs multiple packages at once
 kick add queue:bullmq     # installs queue package + bullmq + ioredis
-kick add --list           # show all available packages
+kick add --list           # show all available packages (same as kick list)
 ```
 
 | Flag | Description |
 |------|-------------|
 | `--pm <manager>` | Package manager override (auto-detected from lockfile) |
 | `-D, --dev` | Install as dev dependency |
-| `--list` | List all available packages |
-
-Available packages: `core`, `http`, `config`, `cli`, `swagger`, `graphql`, `drizzle`, `prisma`, `ws`, `otel`, `queue`, `queue:bullmq`, `queue:rabbitmq`, `queue:kafka`, `multi-tenant`, `testing`.
+| `--list` | List all available packages (same as `kick list`) |
 
 ## kick generate (kick g)
 
 Generate code scaffolds. See the [Generators](./generators.md) page for full details.
 
 ```bash
-kick g module user       # Generates 18 files with DDD structure, tests, and API decorators
+kick g --list            # List all available generators
+kick g module user       # Structure depends on pattern in kick.config.ts
+kick g module user --pattern rest  # Force flat REST structure
 kick g resolver product  # GraphQL resolver with @Query/@Mutation/@Arg
 kick g job email         # Queue job processor with @Job/@Process
 kick g controller auth
@@ -243,7 +280,7 @@ kick g config --repo drizzle         # Default repo type
 |------|-------------|---------|
 | `-f, --force` | Overwrite existing config without prompting | `false` |
 | `--modules-dir <dir>` | Modules directory path | `src/modules` |
-| `--repo <type>` | Default repository type: `inmemory` or `drizzle` | `inmemory` |
+| `--repo <type>` | Default repository type: `inmemory`, `drizzle`, or `prisma` | `inmemory` |
 
 If `kick.config.ts` already exists, the CLI prompts for confirmation before overwriting.
 
@@ -349,7 +386,7 @@ Controls the default generator behavior and project template style.
 | `'rest'` | Express + Swagger (default) |
 | `'graphql'` | GraphQL + GraphiQL |
 | `'ddd'` | Full DDD modules with use cases, entities, value objects |
-| `'microservice'` | REST + queue workers + OTel |
+| `'cqrs'` | CQRS with commands, queries, events + WS/queue |
 | `'minimal'` | Bare Express with no scaffolding |
 
 ### `copyDirs`

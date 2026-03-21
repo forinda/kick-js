@@ -1,14 +1,27 @@
 import { join } from 'node:path'
 import { writeFileSafe } from '../utils/fs'
 import { toPascalCase, toKebabCase, toCamelCase } from '../utils/naming'
+import { resolveOutDir } from '../utils/resolve-out-dir'
+import type { ProjectPattern } from '../config'
 
 interface GenerateDtoOptions {
   name: string
-  outDir: string
+  outDir?: string
+  moduleName?: string
+  modulesDir?: string
+  pattern?: ProjectPattern
 }
 
 export async function generateDto(options: GenerateDtoOptions): Promise<string[]> {
-  const { name, outDir } = options
+  const { name, moduleName, modulesDir, pattern } = options
+  const outDir = resolveOutDir({
+    type: 'dto',
+    outDir: options.outDir,
+    moduleName,
+    modulesDir,
+    defaultDir: 'src/dtos',
+    pattern,
+  })
   const kebab = toKebabCase(name)
   const pascal = toPascalCase(name)
   const camel = toCamelCase(name)

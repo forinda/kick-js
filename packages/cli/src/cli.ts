@@ -8,7 +8,7 @@ import { registerRunCommands } from './commands/run'
 import { registerInfoCommand } from './commands/info'
 import { registerCustomCommands } from './commands/custom'
 import { registerInspectCommand } from './commands/inspect'
-import { registerAddCommand } from './commands/add'
+import { registerAddCommand, registerListCommand } from './commands/add'
 import { registerTinkerCommand } from './commands/tinker'
 import { loadKickConfig } from './config'
 
@@ -32,6 +32,7 @@ async function main() {
   registerInfoCommand(program)
   registerInspectCommand(program)
   registerAddCommand(program)
+  registerListCommand(program)
   registerTinkerCommand(program)
   registerCustomCommands(program, config)
 

@@ -1,3 +1,4 @@
+/** DDD controller — injects use-cases, nested import paths */
 export function generateController(
   pascal: string,
   kebab: string,
@@ -60,6 +61,68 @@ export class ${pascal}Controller {
   @ApiTags('${pascal}')
   async remove(ctx: RequestContext) {
     await this.delete${pascal}UseCase.execute(ctx.params.id)
+    ctx.noContent()
+  }
+}
+`
+}
+
+/** REST controller — injects service directly, flat import paths */
+export function generateRestController(
+  pascal: string,
+  kebab: string,
+  plural: string,
+  pluralPascal: string,
+): string {
+  const camel = pascal.charAt(0).toLowerCase() + pascal.slice(1)
+  return `import { Controller, Get, Post, Put, Delete, Autowired, ApiQueryParams } from '@forinda/kickjs-core'
+import type { RequestContext } from '@forinda/kickjs-http'
+import { ApiTags } from '@forinda/kickjs-swagger'
+import { ${pascal}Service } from './${kebab}.service'
+import { create${pascal}Schema } from './dtos/create-${kebab}.dto'
+import { update${pascal}Schema } from './dtos/update-${kebab}.dto'
+import { ${pascal.toUpperCase()}_QUERY_CONFIG } from './${kebab}.constants'
+
+@Controller()
+export class ${pascal}Controller {
+  @Autowired() private ${camel}Service!: ${pascal}Service
+
+  @Get('/')
+  @ApiTags('${pascal}')
+  @ApiQueryParams(${pascal.toUpperCase()}_QUERY_CONFIG)
+  async list(ctx: RequestContext) {
+    return ctx.paginate(
+      (parsed) => this.${camel}Service.findPaginated(parsed),
+      ${pascal.toUpperCase()}_QUERY_CONFIG,
+    )
+  }
+
+  @Get('/:id')
+  @ApiTags('${pascal}')
+  async getById(ctx: RequestContext) {
+    const result = await this.${camel}Service.findById(ctx.params.id)
+    if (!result) return ctx.notFound('${pascal} not found')
+    ctx.json(result)
+  }
+
+  @Post('/', { body: create${pascal}Schema, name: 'Create${pascal}' })
+  @ApiTags('${pascal}')
+  async create(ctx: RequestContext) {
+    const result = await this.${camel}Service.create(ctx.body)
+    ctx.created(result)
+  }
+
+  @Put('/:id', { body: update${pascal}Schema, name: 'Update${pascal}' })
+  @ApiTags('${pascal}')
+  async update(ctx: RequestContext) {
+    const result = await this.${camel}Service.update(ctx.params.id, ctx.body)
+    ctx.json(result)
+  }
+
+  @Delete('/:id')
+  @ApiTags('${pascal}')
+  async remove(ctx: RequestContext) {
+    await this.${camel}Service.delete(ctx.params.id)
     ctx.noContent()
   }
 }
