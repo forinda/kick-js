@@ -38,7 +38,7 @@ Once running, visit these endpoints:
 ### Bootstrap with DevTools (`src/index.ts`)
 
 ```ts
-import { DevToolsAdapter } from '@forinda/kickjs-http/devtools'
+import { DevToolsAdapter } from '@forinda/kickjs-devtools'
 import { ref, computed, watch } from '@forinda/kickjs-core'
 
 // Custom reactive state

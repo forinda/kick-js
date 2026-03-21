@@ -1,7 +1,7 @@
 import 'reflect-metadata'
 import * as graphql from 'graphql'
 import { bootstrap } from '@forinda/kickjs-http'
-import { DevToolsAdapter } from '@forinda/kickjs-http/devtools'
+import { DevToolsAdapter } from '@forinda/kickjs-devtools'
 import { GraphQLAdapter } from '@forinda/kickjs-graphql'
 import { modules } from './modules'
 import { UserResolver } from './resolvers/user.resolver'

@@ -31,9 +31,6 @@ export {
   type UploadOptions,
 } from './middleware/upload'
 
-// DevTools
-export { DevToolsAdapter, type DevToolsOptions } from './devtools'
-
 // Query String Parsing
 export {
   parseQuery,

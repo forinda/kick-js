@@ -1,7 +1,7 @@
 import 'reflect-metadata'
 import express from 'express'
 import { bootstrap, requestId } from '@forinda/kickjs-http'
-import { DevToolsAdapter } from '@forinda/kickjs-http/devtools'
+import { DevToolsAdapter } from '@forinda/kickjs-devtools'
 import { SwaggerAdapter } from '@forinda/kickjs-swagger'
 import { WsAdapter } from '@forinda/kickjs-ws'
 import { modules } from './modules'

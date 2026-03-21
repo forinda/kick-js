@@ -4,7 +4,10 @@ import { resolve } from 'node:path'
 import type { Command } from 'commander'
 
 /** Registry of KickJS packages and their required peer dependencies */
-const PACKAGE_REGISTRY: Record<string, { pkg: string; peers: string[]; description: string }> = {
+const PACKAGE_REGISTRY: Record<
+  string,
+  { pkg: string; peers: string[]; description: string; dev?: boolean }
+> = {
   // Core (already installed by kick new)
   core: {
     pkg: '@forinda/kickjs-core',
@@ -17,7 +20,12 @@ const PACKAGE_REGISTRY: Record<string, { pkg: string; peers: string[]; descripti
     description: 'Express 5, routing, middleware',
   },
   config: { pkg: '@forinda/kickjs-config', peers: [], description: 'Zod-based env validation' },
-  cli: { pkg: '@forinda/kickjs-cli', peers: [], description: 'CLI tool and code generators' },
+  cli: {
+    pkg: '@forinda/kickjs-cli',
+    peers: [],
+    description: 'CLI tool and code generators',
+    dev: true,
+  },
 
   // API
   swagger: {
@@ -55,6 +63,14 @@ const PACKAGE_REGISTRY: Record<string, { pkg: string; peers: string[]; descripti
     pkg: '@forinda/kickjs-otel',
     peers: ['@opentelemetry/api'],
     description: 'OpenTelemetry tracing + metrics',
+  },
+
+  // DevTools
+  devtools: {
+    pkg: '@forinda/kickjs-devtools',
+    peers: [],
+    description: 'Development dashboard — routes, DI, metrics, health',
+    dev: true,
   },
 
   // Auth
@@ -112,6 +128,7 @@ const PACKAGE_REGISTRY: Record<string, { pkg: string; peers: string[]; descripti
     pkg: '@forinda/kickjs-testing',
     peers: [],
     description: 'Test utilities and TestModule builder',
+    dev: true,
   },
 }
 
@@ -145,8 +162,9 @@ export function registerAddCommand(program: Command): void {
       }
 
       const pm = opts.pm ?? detectPackageManager()
-      const devFlag = opts.dev ? ' -D' : ''
-      const allDeps = new Set<string>()
+      const forceDevFlag = opts.dev
+      const prodDeps = new Set<string>()
+      const devDeps = new Set<string>()
       const unknown: string[] = []
 
       for (const name of packages) {
@@ -155,32 +173,47 @@ export function registerAddCommand(program: Command): void {
           unknown.push(name)
           continue
         }
-        allDeps.add(entry.pkg)
+        const target = forceDevFlag || entry.dev ? devDeps : prodDeps
+        target.add(entry.pkg)
         for (const peer of entry.peers) {
-          allDeps.add(peer)
+          target.add(peer)
         }
       }
 
       if (unknown.length > 0) {
         console.log(`\n  Unknown packages: ${unknown.join(', ')}`)
         console.log('  Run "kick add --list" to see available packages.\n')
-        if (allDeps.size === 0) return
+        if (prodDeps.size === 0 && devDeps.size === 0) return
       }
 
-      const depsArray = Array.from(allDeps)
-      const installCmd = `${pm} add${devFlag} ${depsArray.join(' ')}`
-
-      console.log(`\n  Installing ${depsArray.length} package(s):`)
-      for (const dep of depsArray) {
-        console.log(`    + ${dep}`)
+      // Install production dependencies
+      if (prodDeps.size > 0) {
+        const deps = Array.from(prodDeps)
+        const cmd = `${pm} add ${deps.join(' ')}`
+        console.log(`\n  Installing ${deps.length} dependency(ies):`)
+        for (const dep of deps) console.log(`    + ${dep}`)
+        console.log()
+        try {
+          execSync(cmd, { stdio: 'inherit' })
+        } catch {
+          console.log(`\n  Installation failed. Run manually:\n    ${cmd}\n`)
+        }
       }
-      console.log()
 
-      try {
-        execSync(installCmd, { stdio: 'inherit' })
-        console.log('\n  Done!\n')
-      } catch {
-        console.log(`\n  Installation failed. Run manually:\n    ${installCmd}\n`)
+      // Install dev dependencies
+      if (devDeps.size > 0) {
+        const deps = Array.from(devDeps)
+        const cmd = `${pm} add -D ${deps.join(' ')}`
+        console.log(`\n  Installing ${deps.length} dev dependency(ies):`)
+        for (const dep of deps) console.log(`    + ${dep} (dev)`)
+        console.log()
+        try {
+          execSync(cmd, { stdio: 'inherit' })
+        } catch {
+          console.log(`\n  Installation failed. Run manually:\n    ${cmd}\n`)
+        }
       }
+
+      console.log('  Done!\n')
     })
 }

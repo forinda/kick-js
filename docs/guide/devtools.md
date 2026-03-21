@@ -6,7 +6,7 @@ The DevTools adapter provides Vue-style reactive introspection for KickJS applic
 
 ```ts
 import { bootstrap } from '@forinda/kickjs-http'
-import { DevToolsAdapter } from '@forinda/kickjs-http/devtools'
+import { DevToolsAdapter } from '@forinda/kickjs-devtools'
 
 bootstrap({
   modules: [UserModule, ProductModule],

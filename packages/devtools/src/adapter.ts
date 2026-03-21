@@ -3,6 +3,7 @@ import { Router } from 'express'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { existsSync, readFileSync } from 'node:fs'
+import { randomBytes } from 'node:crypto'
 import {
   type AppAdapter,
   type AdapterMiddleware,
@@ -51,6 +52,20 @@ export interface DevToolsOptions {
   errorRateThreshold?: number
   /** Other adapters to discover stats from (e.g., WsAdapter) */
   adapters?: any[]
+
+  /**
+   * Secret token to guard DevTools access. When set, all requests must
+   * include this token as `x-devtools-token` header or `?token=` query param.
+   *
+   * Auto-generated on startup if not provided. The token is logged to the console.
+   * Set to `false` to disable the guard entirely (not recommended).
+   *
+   * @example
+   * ```ts
+   * new DevToolsAdapter({ secret: process.env.DEVTOOLS_SECRET })
+   * ```
+   */
+  secret?: string | false
 }
 
 /**
@@ -66,7 +81,7 @@ export interface DevToolsOptions {
  *
  * @example
  * ```ts
- * import { DevToolsAdapter } from '@forinda/kickjs-http/devtools'
+ * import { DevToolsAdapter } from '@forinda/kickjs-devtools'
  *
  * bootstrap({
  *   modules: [UserModule],
@@ -88,6 +103,7 @@ export class DevToolsAdapter implements AppAdapter {
   private exposeConfig: boolean
   private configPrefixes: string[]
   private errorRateThreshold: number
+  private secret: string | false
 
   // ── Reactive State ───────────────────────────────────────────────────
   /** Total requests received */
@@ -119,6 +135,16 @@ export class DevToolsAdapter implements AppAdapter {
     this.configPrefixes = options.configPrefixes ?? ['APP_', 'NODE_ENV']
     this.errorRateThreshold = options.errorRateThreshold ?? 0.5
     this.peerAdapters = options.adapters ?? []
+
+    // Secret token guard
+    if (options.secret === false) {
+      this.secret = false
+    } else if (options.secret) {
+      this.secret = options.secret
+    } else {
+      // Auto-generate a random token
+      this.secret = randomBytes(16).toString('hex')
+    }
 
     // Initialize reactive state
     this.requestCount = ref(0)
@@ -163,6 +189,24 @@ export class DevToolsAdapter implements AppAdapter {
     this.adapterStatuses[this.name] = 'running'
 
     const router = Router()
+
+    // ── Access guard — require secret token ──────────────────────────
+    if (this.secret !== false) {
+      const token = this.secret
+      router.use((req: Request, res: Response, next: NextFunction) => {
+        const provided = req.headers['x-devtools-token'] ?? req.query?.token
+        if (provided === token) return next()
+        // Allow the dashboard HTML itself (it will include the token in API calls)
+        if (req.path === '/' && req.method === 'GET' && !req.query?.token) {
+          return next() // serve dashboard, it handles auth via token
+        }
+        // Serve static assets for the dashboard (js files)
+        if (req.path.endsWith('.js') || req.path.endsWith('.css')) {
+          return next()
+        }
+        res.status(403).json({ error: 'Forbidden — invalid or missing devtools token' })
+      })
+    }
 
     router.get('/routes', (_req: Request, res: Response) => {
       res.json({ routes: this.routes })
@@ -261,7 +305,13 @@ export class DevToolsAdapter implements AppAdapter {
     }
 
     app.use(this.basePath, router)
-    log.info(`DevTools mounted at ${this.basePath}`)
+
+    if (this.secret) {
+      log.info(`DevTools mounted at ${this.basePath} [token: ${this.secret}]`)
+      log.info(`Access: ${this.basePath}?token=${this.secret}`)
+    } else {
+      log.info(`DevTools mounted at ${this.basePath} [no guard]`)
+    }
   }
 
   middleware(): AdapterMiddleware[] {

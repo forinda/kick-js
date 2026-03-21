@@ -1,6 +1,6 @@
 import 'reflect-metadata'
 import { bootstrap } from '@forinda/kickjs-http'
-import { DevToolsAdapter } from '@forinda/kickjs-http/devtools'
+import { DevToolsAdapter } from '@forinda/kickjs-devtools'
 import { SwaggerAdapter } from '@forinda/kickjs-swagger'
 import { OtelAdapter } from '@forinda/kickjs-otel'
 // import { QueueAdapter, BullMQProvider } from '@forinda/kickjs-queue'

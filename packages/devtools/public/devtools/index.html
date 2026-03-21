@@ -301,6 +301,27 @@
     </div>
 
   </main>
+
+  <!-- Auth Gate — shown when token is required but not found -->
+  <div v-if="showAuthGate" class="fixed inset-0 bg-slate-950/90 flex items-center justify-center z-50">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl">
+      <div class="text-center mb-6">
+        <h2 class="text-xl font-bold text-kick-500 mb-2">⚡ KickJS DevTools</h2>
+        <p class="text-sm text-slate-400">Enter your DevTools token to continue</p>
+        <p class="text-xs text-slate-600 mt-1">Token is shown in your server console on startup</p>
+      </div>
+      <form @submit.prevent="submitToken">
+        <input v-model="tokenInput" type="text" placeholder="Paste your token here..."
+          autofocus
+          class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-kick-500 font-mono mb-3">
+        <p v-if="authError" class="text-red-400 text-sm mb-3">{{ authError }}</p>
+        <button type="submit"
+          class="w-full bg-kick-500 hover:bg-kick-600 text-white font-semibold py-2.5 rounded-lg transition-colors">
+          Authenticate
+        </button>
+      </form>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -308,11 +329,33 @@ const { createApp, ref, computed, onMounted, onUnmounted, reactive, watch } = Vu
 
 const BASE = document.body.dataset.base || '/_debug'
 
+// Token resolution: URL query > cookie > empty (will prompt)
+function getToken() {
+  const fromUrl = new URLSearchParams(window.location.search).get('token')
+  if (fromUrl) {
+    // Save to cookie for future visits
+    document.cookie = `kickjs_devtools_token=${fromUrl}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax`
+    // Clean URL (remove token from query string)
+    const url = new URL(window.location)
+    url.searchParams.delete('token')
+    window.history.replaceState({}, '', url.toString())
+    return fromUrl
+  }
+  // Try cookie
+  const match = document.cookie.match(/kickjs_devtools_token=([^;]+)/)
+  return match ? match[1] : ''
+}
+
+let TOKEN = getToken()
+
 createApp({
   setup() {
     const activeTab = ref('overview')
     const pollInterval = ref(30000)
     const lastUpdate = ref('loading...')
+    const showAuthGate = ref(false)
+    const tokenInput = ref('')
+    const authError = ref('')
 
     // Data
     const health = ref(null)
@@ -395,9 +438,38 @@ createApp({
     // Data fetching
     async function fetchJSON(path) {
       try {
-        const r = await fetch(BASE + path)
+        const headers = TOKEN ? { 'x-devtools-token': TOKEN } : {}
+        const r = await fetch(BASE + path, { headers })
+        if (r.status === 403) {
+          showAuthGate.value = true
+          return null
+        }
         return r.ok ? r.json() : null
       } catch { return null }
+    }
+
+    async function submitToken() {
+      authError.value = ''
+      const testToken = tokenInput.value.trim()
+      if (!testToken) { authError.value = 'Token is required'; return }
+
+      // Test the token
+      try {
+        const r = await fetch(BASE + '/health', { headers: { 'x-devtools-token': testToken } })
+        if (r.status === 403) {
+          authError.value = 'Invalid token'
+          return
+        }
+      } catch {
+        authError.value = 'Connection failed'
+        return
+      }
+
+      // Save to cookie and reload
+      TOKEN = testToken
+      document.cookie = `kickjs_devtools_token=${testToken}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax`
+      showAuthGate.value = false
+      refresh()
     }
 
     async function refresh() {
@@ -439,6 +511,7 @@ createApp({
       activeTab, tabs, pollInterval, lastUpdate,
       health, metrics, ws, routeData, containerData,
       collapsed, toggle,
+      showAuthGate, tokenInput, authError, submitToken,
       routeSearch, routeMethodFilter, routePage, routePageSize,
       filteredRoutes, paginatedRoutes, routeTotalPages,
       containerSearch, containerPage, containerPageSize,

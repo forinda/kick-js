@@ -82,10 +82,6 @@
       "import": "./dist/middleware/error-handler.js",
       "types": "./dist/middleware/error-handler.d.ts"
     },
-    "./devtools": {
-      "import": "./dist/devtools.js",
-      "types": "./dist/devtools.d.ts"
-    },
     "./query": {
       "import": "./dist/query/index.js",
       "types": "./dist/query/index.d.ts"
@@ -100,8 +96,7 @@
     }
   },
   "files": [
-    "dist",
-    "public"
+    "dist"
   ],
   "scripts": {
     "build": "tsup",

@@ -328,7 +328,7 @@ function getEntryFile(name: string, template: ProjectTemplate): string {
     case 'graphql':
       return `import 'reflect-metadata'
 import { bootstrap } from '@forinda/kickjs-http'
-import { DevToolsAdapter } from '@forinda/kickjs-http/devtools'
+import { DevToolsAdapter } from '@forinda/kickjs-devtools'
 import { GraphQLAdapter } from '@forinda/kickjs-graphql'
 import { modules } from './modules'
 
@@ -351,7 +351,7 @@ bootstrap({
     case 'microservice':
       return `import 'reflect-metadata'
 import { bootstrap } from '@forinda/kickjs-http'
-import { DevToolsAdapter } from '@forinda/kickjs-http/devtools'
+import { DevToolsAdapter } from '@forinda/kickjs-devtools'
 import { SwaggerAdapter } from '@forinda/kickjs-swagger'
 import { OtelAdapter } from '@forinda/kickjs-otel'
 // import { QueueAdapter, BullMQProvider } from '@forinda/kickjs-queue'
@@ -386,7 +386,7 @@ bootstrap({ modules })
     default:
       return `import 'reflect-metadata'
 import { bootstrap } from '@forinda/kickjs-http'
-import { DevToolsAdapter } from '@forinda/kickjs-http/devtools'
+import { DevToolsAdapter } from '@forinda/kickjs-devtools'
 import { SwaggerAdapter } from '@forinda/kickjs-swagger'
 import { modules } from './modules'
 
