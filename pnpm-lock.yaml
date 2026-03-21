@@ -1290,6 +1290,34 @@ importers:
         specifier: ^3.2.4
         version: 3.2.4(@types/node@24.12.0)(tsx@4.21.0)(yaml@2.8.2)
 
+  packages/mailer:
+    dependencies:
+      '@forinda/kickjs-core':
+        specifier: workspace:*
+        version: link:../core
+      reflect-metadata:
+        specifier: ^0.2.2
+        version: 0.2.2
+    devDependencies:
+      '@types/node':
+        specifier: ^24.5.2
+        version: 24.12.0
+      '@types/nodemailer':
+        specifier: ^6.4.17
+        version: 6.4.23
+      nodemailer:
+        specifier: ^6.10.1
+        version: 6.10.1
+      tsup:
+        specifier: ^8.5.0
+        version: 8.5.1(@swc/core@1.15.18)(postcss@8.5.8)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2)
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.4(@types/node@24.12.0)(tsx@4.21.0)(yaml@2.8.2)
+
   packages/multi-tenant:
     dependencies:
       '@forinda/kickjs-core':
@@ -3033,6 +3061,9 @@ packages:
   '@types/node@24.12.0':
     resolution: {integrity: sha512-GYDxsZi3ChgmckRT9HPU0WEhKLP08ev/Yfcq2AstjrDASOYCSXeyjDsHg4v5t4jOj7cyDX3vmprafKlWIG9MXQ==}
 
+  '@types/nodemailer@6.4.23':
+    resolution: {integrity: sha512-aFV3/NsYFLSx9mbb5gtirBSXJnAlrusoKNuPbxsASWc7vrKLmIrTQRpdcxNcSFL3VW2A2XpeLEavwb2qMi6nlQ==}
+
   '@types/qs@6.15.0':
     resolution: {integrity: sha512-JawvT8iBVWpzTrz3EGw9BTQFg3BQNmwERdKE22vlTxawwtbyUSlMppvZYKLZzB5zgACXdXxbD3m1bXaMqP/9ow==}
 
@@ -4186,6 +4217,10 @@ packages:
   node-gyp-build-optional-packages@5.2.2:
     resolution: {integrity: sha512-s+w+rBWnpTMwSFbaE0UXsRlg7hU4FjekKU4eyAih5T8nJuNZT1nNsskXpxmeqSK9UzkBl6UgRlnKc8hz8IEqOw==}
     hasBin: true
+
+  nodemailer@6.10.1:
+    resolution: {integrity: sha512-Z+iLaBGVaSjbIzQ4pX6XV41HrooLsQ10ZWPUehGmuantvzWoDVBnmsdUcOIDM1t+yPor5pDhVlDESgOMEGxhHA==}
+    engines: {node: '>=6.0.0'}
 
   object-assign@4.1.1:
     resolution: {integrity: sha512-rJgTQnkUnH1sFw8yT6VSU3zD3sWmu6sZhIseY8VX+GRu3P6F7Fu+JNDoXfklElbLJSnc3FUQHVe4cU5hj+BcUg==}
@@ -6316,6 +6351,10 @@ snapshots:
     dependencies:
       undici-types: 7.16.0
 
+  '@types/nodemailer@6.4.23':
+    dependencies:
+      '@types/node': 24.12.0
+
   '@types/qs@6.15.0': {}
 
   '@types/range-parser@1.2.7': {}
@@ -7430,6 +7469,8 @@ snapshots:
     dependencies:
       detect-libc: 2.1.2
     optional: true
+
+  nodemailer@6.10.1: {}
 
   object-assign@4.1.1: {}
 

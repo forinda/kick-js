@@ -1,0 +1,43 @@
+import { Logger, type AppAdapter, type Container } from '@forinda/kickjs-core'
+import { MailerService, MAILER } from './mailer.service'
+import type { MailerOptions } from './types'
+
+const log = Logger.for('MailerAdapter')
+
+/**
+ * Mailer adapter — registers MailerService in the DI container.
+ *
+ * @example
+ * ```ts
+ * import { MailerAdapter, SmtpProvider } from '@forinda/kickjs-mailer'
+ *
+ * bootstrap({
+ *   adapters: [
+ *     new MailerAdapter({
+ *       provider: new SmtpProvider({ host: 'smtp.gmail.com', port: 587, auth: { ... } }),
+ *       defaultFrom: { name: 'My App', address: 'noreply@myapp.com' },
+ *     }),
+ *   ],
+ * })
+ * ```
+ */
+export class MailerAdapter implements AppAdapter {
+  name = 'MailerAdapter'
+  private mailer: MailerService
+
+  constructor(private options: MailerOptions) {
+    this.mailer = new MailerService(options)
+  }
+
+  afterStart(_server: any, container: Container): void {
+    container.registerInstance(MAILER, this.mailer)
+    log.info(
+      `Mail provider: ${this.options.provider.name}${this.options.enabled === false ? ' (disabled)' : ''}`,
+    )
+  }
+
+  async shutdown(): Promise<void> {
+    await this.mailer.shutdown()
+    log.info('Mailer shut down')
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "name": "@forinda/kickjs-mailer",
+  "version": "1.0.0",
+  "description": "Pluggable email sending for KickJS — nodemailer, Resend, SES, and custom providers",
+  "keywords": [
+    "kickjs",
+    "mailer",
+    "email",
+    "nodemailer",
+    "resend",
+    "ses",
+    "smtp",
+    "templates",
+    "typescript",
+    "adapter"
+  ],
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist .turbo"
+  },
+  "dependencies": {
+    "@forinda/kickjs-core": "workspace:*",
+    "reflect-metadata": "^0.2.2"
+  },
+  "peerDependencies": {
+    "nodemailer": "^6.0.0"
+  },
+  "peerDependenciesMeta": {
+    "nodemailer": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.2",
+    "@types/nodemailer": "^6.4.17",
+    "nodemailer": "^6.10.1",
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT",
+  "author": "Felix Orinda",
+  "engines": {
+    "node": ">=20.0"
+  },
+  "homepage": "https://forinda.github.io/kick-js/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/forinda/kick-js.git",
+    "directory": "packages/mailer"
+  },
+  "bugs": {
+    "url": "https://github.com/forinda/kick-js/issues"
+  }
+}

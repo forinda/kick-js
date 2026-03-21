@@ -9,7 +9,7 @@
 - [ ] `kick tinker` — REPL with DI container loaded
 - [ ] `kick deploy` — deploy to Fly.io, Railway, Docker
 - [ ] SPA integration — serve Vue/React/Svelte builds alongside API
-- [ ] Mailer adapter — send emails with template rendering + queue integration
+- [x] Mailer adapter — `@forinda/kickjs-mailer` with pluggable MailProvider (SMTP, Resend, SES, custom)
 - [ ] Queue monitoring in DevTools dashboard — `/_debug/queues`
 - [ ] Notification system — multi-channel (email, Slack, webhook)
 

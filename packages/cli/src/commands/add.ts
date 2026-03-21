@@ -64,6 +64,13 @@ const PACKAGE_REGISTRY: Record<string, { pkg: string; peers: string[]; descripti
     description: 'Authentication — JWT, API key, and custom strategies',
   },
 
+  // Mailer
+  mailer: {
+    pkg: '@forinda/kickjs-mailer',
+    peers: ['nodemailer'],
+    description: 'Email sending — SMTP, Resend, SES, or custom provider',
+  },
+
   // Cron
   cron: {
     pkg: '@forinda/kickjs-cron',

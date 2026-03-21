@@ -17,6 +17,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@forinda/kickjs-auth': path.resolve(__dirname, 'packages/auth/src/index.ts'),
+      '@forinda/kickjs-mailer': path.resolve(__dirname, 'packages/mailer/src/index.ts'),
       '@forinda/kickjs-core': path.resolve(__dirname, 'packages/core/src/index.ts'),
       '@forinda/kickjs-cron': path.resolve(__dirname, 'packages/cron/src/index.ts'),
       '@forinda/kickjs-http': path.resolve(__dirname, 'packages/http/src/index.ts'),
