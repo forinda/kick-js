@@ -44,6 +44,7 @@ interface GenerateModuleOptions {
   minimal?: boolean
   force?: boolean
   pattern?: ProjectPattern
+  dryRun?: boolean
 }
 
 /** Prompt the user for a single-line answer via stdin */
@@ -82,7 +83,7 @@ interface ModuleContext {
  *   minimal      — just controller + module index
  */
 export async function generateModule(options: GenerateModuleOptions): Promise<string[]> {
-  const { name, modulesDir, noEntity, noTests, repo = 'inmemory', force } = options
+  const { name, modulesDir, noEntity, noTests, repo = 'inmemory', force, dryRun } = options
 
   let pattern = options.pattern ?? 'ddd'
   if (options.minimal) pattern = 'minimal'
@@ -98,6 +99,10 @@ export async function generateModule(options: GenerateModuleOptions): Promise<st
 
   const write = async (relativePath: string, content: string) => {
     const fullPath = join(moduleDir, relativePath)
+    if (dryRun) {
+      files.push(fullPath)
+      return
+    }
     if (!overwriteAll && (await fileExists(fullPath))) {
       const answer = await promptUser(
         `  File already exists: ${relativePath}\n  Overwrite? (y/n/a = yes/no/all) `,
@@ -144,7 +149,9 @@ export async function generateModule(options: GenerateModuleOptions): Promise<st
   }
 
   // Auto-register in modules index (all patterns need this)
-  await autoRegisterModule(modulesDir, pascal, plural)
+  if (!dryRun) {
+    await autoRegisterModule(modulesDir, pascal, plural)
+  }
 
   return files
 }

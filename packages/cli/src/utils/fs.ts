@@ -1,8 +1,16 @@
 import { writeFile, mkdir, access, readFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 
-/** Write a file, creating parent directories if needed */
+let _dryRun = false
+
+/** Enable/disable dry run mode globally for all writeFileSafe calls */
+export function setDryRun(enabled: boolean): void {
+  _dryRun = enabled
+}
+
+/** Write a file, creating parent directories if needed. Skips writing in dry run mode. */
 export async function writeFileSafe(filePath: string, content: string): Promise<void> {
+  if (_dryRun) return
   await mkdir(dirname(filePath), { recursive: true })
   await writeFile(filePath, content, 'utf-8')
 }
