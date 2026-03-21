@@ -39,5 +39,5 @@ export interface DrizzleAdapterOptions<TDb = unknown> {
    * })
    * ```
    */
-  onShutdown?: () => void | Promise<void>
+  onShutdown?: () => any
 }
