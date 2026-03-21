@@ -299,3 +299,130 @@ bootstrap({
 | **Bundle size** | ~1.5MB | ~500KB |
 
 Both approaches follow the same KickJS pattern: create an adapter, register the connection in DI, implement a repository, and swap it in your module's `register()`.
+
+## Using Query Parsing with MongoDB
+
+KickJS's `ctx.qs()` parses `?filter=`, `?sort=`, `?page=`, and `?q=` into a `ParsedQuery` object. Here's how to translate that into MongoDB queries:
+
+### Filter → MongoDB `$match`
+
+```ts
+import type { ParsedQuery, FilterItem } from '@forinda/kickjs-http'
+
+function buildMongoFilter(parsed: ParsedQuery): Record<string, any> {
+  const filter: Record<string, any> = {}
+
+  for (const f of parsed.filters) {
+    switch (f.operator) {
+      case 'eq':  filter[f.field] = f.value; break
+      case 'ne':  filter[f.field] = { $ne: f.value }; break
+      case 'gt':  filter[f.field] = { $gt: Number(f.value) }; break
+      case 'gte': filter[f.field] = { $gte: Number(f.value) }; break
+      case 'lt':  filter[f.field] = { $lt: Number(f.value) }; break
+      case 'lte': filter[f.field] = { $lte: Number(f.value) }; break
+      case 'in':  filter[f.field] = { $in: f.value.split(',') }; break
+      case 'like': filter[f.field] = { $regex: f.value, $options: 'i' }; break
+    }
+  }
+
+  // Full-text search
+  if (parsed.search) {
+    filter.$or = parsed.searchFields.map((field) => ({
+      [field]: { $regex: parsed.search, $options: 'i' },
+    }))
+  }
+
+  return filter
+}
+```
+
+### Sort → MongoDB `.sort()`
+
+```ts
+function buildMongoSort(parsed: ParsedQuery): Record<string, 1 | -1> {
+  const sort: Record<string, 1 | -1> = {}
+  for (const s of parsed.sort) {
+    sort[s.field] = s.direction === 'asc' ? 1 : -1
+  }
+  return Object.keys(sort).length ? sort : { createdAt: -1 }
+}
+```
+
+### Full Repository Example
+
+```ts
+@Repository()
+export class MongoProductRepository {
+  constructor(@Inject(MONGO_DB) private db: Db) {}
+
+  private get collection() {
+    return this.db.collection('products')
+  }
+
+  async findPaginated(parsed: ParsedQuery) {
+    const filter = buildMongoFilter(parsed)
+    const sort = buildMongoSort(parsed)
+    const { offset, limit } = parsed.pagination
+
+    const [data, total] = await Promise.all([
+      this.collection.find(filter).sort(sort).skip(offset).limit(limit).toArray(),
+      this.collection.countDocuments(filter),
+    ])
+
+    return { data, total }
+  }
+}
+```
+
+### Controller with `@ApiQueryParams`
+
+```ts
+import { Controller, Get, ApiQueryParams } from '@forinda/kickjs-core'
+import type { RequestContext } from '@forinda/kickjs-http'
+
+const PRODUCT_QUERY = {
+  filterable: ['category', 'price', 'status'],
+  sortable: ['name', 'price', 'createdAt'],
+  searchable: ['name', 'description'],
+}
+
+@Controller()
+export class ProductController {
+  @Get('/')
+  @ApiQueryParams(PRODUCT_QUERY)
+  async list(ctx: RequestContext) {
+    return ctx.paginate(
+      (parsed) => this.repo.findPaginated(parsed),
+      PRODUCT_QUERY,
+    )
+  }
+}
+```
+
+This gives you URLs like:
+```
+GET /products?filter=category:eq:electronics&sort=price:desc&page=2&limit=10
+GET /products?q=phone&filter=price:lte:1000
+```
+
+### Mongoose Version
+
+With Mongoose, the same pattern works — just use the model's query builder:
+
+```ts
+@Repository()
+export class MongooseProductRepository {
+  async findPaginated(parsed: ParsedQuery) {
+    const filter = buildMongoFilter(parsed)
+    const sort = buildMongoSort(parsed)
+    const { offset, limit } = parsed.pagination
+
+    const [data, total] = await Promise.all([
+      Product.find(filter).sort(sort).skip(offset).limit(limit).lean(),
+      Product.countDocuments(filter),
+    ])
+
+    return { data, total }
+  }
+}
+```
