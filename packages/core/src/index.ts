@@ -62,13 +62,21 @@ export { type KickPlugin } from './plugin'
 export { Cron, getCronJobs, type CronJobMeta, CRON_META } from './cron'
 
 // Cache
-export { Cacheable, CacheEvict, type CacheOptions } from './cache'
+export {
+  Cacheable,
+  CacheEvict,
+  setCacheProvider,
+  getCacheProvider,
+  MemoryCacheProvider,
+  type CacheProvider,
+  type CacheOptions,
+} from './cache'
 
 // Logger
 export { Logger, createLogger, rootLogger, logger } from './logger'
 
 // Errors
-export { HttpException, type ValidationError } from './errors'
+export { HttpException, HttpStatus, type HttpStatusCode, type ValidationError } from './errors'
 
 // Reactivity
 export {

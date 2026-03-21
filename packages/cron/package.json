@@ -1,31 +1,18 @@
 {
-  "name": "@forinda/kickjs-config",
+  "name": "@forinda/kickjs-cron",
   "version": "1.0.0",
-  "description": "Zod-based environment validation and typed configuration for KickJS",
+  "description": "Production-grade cron job scheduling with pluggable backends for KickJS",
   "keywords": [
     "kickjs",
-    "nodejs",
+    "cron",
+    "scheduler",
+    "jobs",
+    "croner",
+    "node-cron",
     "typescript",
-    "express",
     "decorators",
-    "dependency-injection",
-    "backend",
-    "api",
-    "framework",
-    "configuration",
-    "env",
-    "environment-variables",
-    "zod",
-    "validation",
-    "dotenv",
-    "hot-reload",
-    "@forinda/kickjs-core",
-    "@forinda/kickjs-http",
-    "@forinda/kickjs-config",
-    "@forinda/kickjs-cli",
-    "@forinda/kickjs-swagger",
-    "@forinda/kickjs-testing",
-    "@forinda/kickjs-prisma"
+    "production",
+    "timezone"
   ],
   "type": "module",
   "main": "dist/index.js",
@@ -42,31 +29,27 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
-    "test": "vitest run --passWithNoTests",
-    "test:watch": "vitest",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist .turbo",
-    "lint": "tsc --noEmit"
+    "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
     "@forinda/kickjs-core": "workspace:*",
-    "dotenv": "^17.3.1",
-    "zod": "^4.3.6"
+    "reflect-metadata": "^0.2.2"
   },
   "peerDependencies": {
-    "vite": ">=5.0.0"
+    "croner": "^9.0.0 || ^10.0.0"
   },
   "peerDependenciesMeta": {
-    "vite": {
+    "croner": {
       "optional": true
     }
   },
   "devDependencies": {
-    "@swc/core": "^1.7.28",
     "@types/node": "^24.5.2",
+    "croner": "^10.0.1",
     "tsup": "^8.5.0",
     "typescript": "^5.9.2",
-    "vite": "^6.3.5",
     "vitest": "^3.2.4"
   },
   "publishConfig": {
@@ -81,7 +64,7 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/forinda/kick-js.git",
-    "directory": "packages/config"
+    "directory": "packages/cron"
   },
   "bugs": {
     "url": "https://github.com/forinda/kick-js/issues"

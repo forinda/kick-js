@@ -93,10 +93,6 @@
     "./views": {
       "import": "./dist/middleware/views.js",
       "types": "./dist/middleware/views.d.ts"
-    },
-    "./cron": {
-      "import": "./dist/middleware/cron.js",
-      "types": "./dist/middleware/cron.d.ts"
     }
   },
   "files": [

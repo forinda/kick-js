@@ -57,6 +57,13 @@ const PACKAGE_REGISTRY: Record<string, { pkg: string; peers: string[]; descripti
     description: 'OpenTelemetry tracing + metrics',
   },
 
+  // Cron
+  cron: {
+    pkg: '@forinda/kickjs-cron',
+    peers: ['croner'],
+    description: 'Cron job scheduling (production-grade with croner)',
+  },
+
   // Queue
   queue: {
     pkg: '@forinda/kickjs-queue',

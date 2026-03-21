@@ -12,7 +12,7 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev --concurrency 20",
-    "test": "vitest run",
+    "test": "turbo run test --filter='./packages/*'",
     "test:watch": "turbo run test:watch",
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",

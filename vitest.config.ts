@@ -17,6 +17,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@forinda/kickjs-core': path.resolve(__dirname, 'packages/core/src/index.ts'),
+      '@forinda/kickjs-cron': path.resolve(__dirname, 'packages/cron/src/index.ts'),
       '@forinda/kickjs-http': path.resolve(__dirname, 'packages/http/src/index.ts'),
       '@forinda/kickjs-config': path.resolve(__dirname, 'packages/config/src/index.ts'),
       '@forinda/kickjs-swagger': path.resolve(__dirname, 'packages/swagger/src/index.ts'),
@@ -26,7 +27,7 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['tests/**/*.test.ts'],
+    include: ['packages/*/tests/**/*.test.ts'],
     globals: false,
     pool: 'threads',
     poolOptions: {
