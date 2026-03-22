@@ -135,7 +135,7 @@ export default defineConfig({
           module: 'ESNext',
           moduleResolution: 'bundler',
           lib: ['ES2022'],
-          types: ['node'],
+          types: ['node', 'vite/client'],
           strict: true,
           esModuleInterop: true,
           skipLibCheck: true,
