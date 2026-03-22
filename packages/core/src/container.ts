@@ -30,6 +30,8 @@ export class Container {
 
   /** Callback set by the decorators module to flush pending registrations */
   static _onReady: ((container: Container) => void) | null = null
+  /** Callback invoked on reset so decorators can update their container reference */
+  static _onReset: ((container: Container) => void) | null = null
 
   static getInstance(): Container {
     if (!Container.instance) {
@@ -49,6 +51,8 @@ export class Container {
    */
   static reset(): void {
     Container.instance = new Container()
+    // Notify decorators so they update their container reference
+    Container._onReset?.(Container.instance)
   }
 
   /** Register a class constructor under the given token */

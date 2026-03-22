@@ -24,6 +24,12 @@ function flushPending(container: any): void {
 // Wire up synchronously — Container._onReady is called on first getInstance()
 Container._onReady = flushPending
 
+// On Container.reset(), update containerRef so subsequent @Service() decorators
+// (from HMR re-evaluation) register on the new container, not the old one.
+Container._onReset = (container: any) => {
+  containerRef = container
+}
+
 // ── Class Decorators ────────────────────────────────────────────────────
 
 function registerInContainer(target: any, scope: Scope): void {

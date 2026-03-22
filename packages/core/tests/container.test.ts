@@ -372,6 +372,32 @@ describe('Container', () => {
     expect(fresh.has(Ephemeral)).toBe(false)
   })
 
+  // ── Container.reset() updates decorator container ref (KICK-017) ──
+
+  it('reset() updates containerRef so @Service registers on new container', () => {
+    // Simulate: cold boot → reset (HMR) → re-register on fresh container
+    const container1 = Container.getInstance()
+
+    class MyService {
+      value = 'hello'
+    }
+    // Manually register on first container
+    container1.register(MyService, MyService)
+    expect(container1.resolve(MyService).value).toBe('hello')
+
+    // Reset simulates HMR
+    Container.reset()
+    const container2 = Container.getInstance()
+
+    // Old registrations are gone
+    expect(container2.has(MyService)).toBe(false)
+
+    // Re-register on the new container (simulating @Service re-evaluation)
+    container2.register(MyService, MyService)
+    expect(container2.has(MyService)).toBe(true)
+    expect(container2.resolve(MyService).value).toBe('hello')
+  })
+
   // ── Complex DI graph ──────────────────────────────────────────────
 
   it('resolves a multi-level dependency graph', () => {
