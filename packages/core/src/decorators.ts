@@ -122,7 +122,12 @@ export function Autowired(token?: any): PropertyDecorator {
   }
 }
 
-/** Constructor parameter injection with explicit token */
+/**
+ * Constructor parameter injection with an explicit token.
+ *
+ * **Constructor parameters only** — does not work as a property decorator.
+ * For property injection with a token, use `@Autowired(token)` instead.
+ */
 export function Inject(token: any): ParameterDecorator {
   return (target, _propertyKey, parameterIndex) => {
     const existing: Record<number, any> = Reflect.getMetadata(METADATA.INJECT, target) || {}

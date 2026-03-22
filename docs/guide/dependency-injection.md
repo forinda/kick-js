@@ -40,7 +40,7 @@ TypeScript's `emitDecoratorMetadata` resolves constructor parameter types automa
 
 ### Explicit Token Override
 
-Use `@Inject` when the type doesn't match the token (e.g., interface bindings):
+Use `@Inject` when the type doesn't match the token (e.g., interface bindings). **`@Inject` is for constructor parameters only** — it does not work as a property decorator.
 
 ```typescript
 const ORDER_REPO = Symbol('OrderRepository')
@@ -55,17 +55,75 @@ class OrderService {
 
 ## Property Injection
 
-Use `@Autowired` for lazy property injection:
+Use `@Autowired` for lazy property injection. For token-based property injection, pass the token to `@Autowired`:
 
 ```typescript
 @Controller()
 class OrderController {
-  @Autowired() private orderService!: OrderService
-  @Autowired() private logger!: Logger
+  @Autowired() private orderService!: OrderService         // resolved by class type
+  @Autowired() private logger!: Logger                     // resolved by class type
+  @Autowired(ORDER_REPO) private repo!: IOrderRepository   // resolved by token
 }
 ```
 
 Properties are resolved lazily on first access, not at construction time.
+
+::: tip @Inject vs @Autowired
+| Decorator | Where | Resolves by |
+|---|---|---|
+| `@Inject(token)` | Constructor parameters only | Explicit token (Symbol, string) |
+| `@Autowired()` | Class properties only | Class type (from TypeScript metadata) |
+| `@Autowired(token)` | Class properties only | Explicit token |
+
+Using `@Inject` on a property causes a TypeScript compile error (`TS1240`). Use `@Autowired(token)` instead.
+:::
+
+## When You Need Manual Registration
+
+Classes decorated with `@Service()`, `@Controller()`, or `@Repository()` are **auto-registered** in the DI container — you don't need to register them in your module. `@Autowired()` resolves them by class type automatically:
+
+```typescript
+@Service()
+class EmailService { ... }  // auto-registered by @Service()
+
+@Controller()
+class UserController {
+  @Autowired() private emailService!: EmailService  // just works — no manual setup
+}
+```
+
+However, when injecting by **token** (Symbol) — typically for interface-based bindings — you **must** register the token → implementation mapping in your module's `register()` method. Interfaces don't exist at runtime, so the container has no way to resolve them automatically:
+
+```typescript
+// 1. Define the interface and token
+const USER_REPO = Symbol('UserRepository')
+
+interface IUserRepository {
+  findById(id: string): Promise<User | null>
+}
+
+// 2. Implement it (auto-registered as a class, but NOT bound to the token)
+@Repository()
+class InMemoryUserRepository implements IUserRepository { ... }
+
+// 3. Bind the token to the implementation in your module
+class UserModule implements AppModule {
+  register(container: Container) {
+    container.registerFactory(USER_REPO, () =>
+      container.resolve(InMemoryUserRepository),
+    )
+  }
+  // ...
+}
+
+// 4. Now inject by token
+@Controller()
+class UserController {
+  @Autowired(USER_REPO) private repo!: IUserRepository  // resolved via module binding
+}
+```
+
+This pattern lets you swap implementations (e.g., `InMemoryUserRepository` → `DrizzleUserRepository`) by changing only the module registration — no changes needed in controllers or services.
 
 ## Factory Registration
 

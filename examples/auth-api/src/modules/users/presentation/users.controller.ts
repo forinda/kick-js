@@ -7,7 +7,6 @@ import {
   Autowired,
   Middleware,
   HttpException,
-  Inject,
 } from '@forinda/kickjs-core'
 import type { RequestContext } from '@forinda/kickjs-http'
 import { authGuard, createMockToken } from '../../../middleware/auth.middleware'
@@ -29,7 +28,7 @@ export class UsersController {
   @Autowired() private updateUsersUseCase!: UpdateUsersUseCase
   @Autowired() private deleteUsersUseCase!: DeleteUsersUseCase
 
-  @Inject(USERS_REPOSITORY) private readonly repo!: IUsersRepository
+  @Autowired(USERS_REPOSITORY) private readonly repo!: IUsersRepository
 
   // -- Public auth endpoints (no guard) --
 

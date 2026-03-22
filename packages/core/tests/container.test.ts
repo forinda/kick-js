@@ -204,6 +204,104 @@ describe('Container', () => {
     expect(svc.logger.log('hello')).toBe('hello')
   })
 
+  it('@Autowired(token) injects by explicit token on a property', () => {
+    const REPO_TOKEN = Symbol('UserRepo')
+
+    class InMemoryRepo {
+      findAll() {
+        return ['alice', 'bob']
+      }
+    }
+
+    class UserService {
+      @Autowired(REPO_TOKEN) repo!: InMemoryRepo
+    }
+
+    const container = Container.getInstance()
+    container.register(InMemoryRepo, InMemoryRepo)
+    container.registerFactory(REPO_TOKEN, () => container.resolve(InMemoryRepo))
+    container.register(UserService, UserService)
+
+    const svc = container.resolve(UserService)
+    expect(svc.repo).toBeInstanceOf(InMemoryRepo)
+    expect(svc.repo.findAll()).toEqual(['alice', 'bob'])
+  })
+
+  it('@Autowired(token) fails when token is not registered in module', () => {
+    const UNREGISTERED = Symbol('Unregistered')
+
+    class BrokenService {
+      @Autowired(UNREGISTERED) dep!: any
+    }
+
+    const container = Container.getInstance()
+    container.register(BrokenService, BrokenService)
+
+    const svc = container.resolve(BrokenService)
+    expect(() => svc.dep).toThrow('No binding found')
+  })
+
+  it('interface-based injection: module registers token → implementation', () => {
+    // Simulates the pattern: interface IRepo + Symbol token + concrete class
+    const ORDER_REPO = Symbol('OrderRepo')
+
+    class DrizzleOrderRepo {
+      save(order: any) {
+        return { ...order, id: '1' }
+      }
+    }
+
+    class OrderService {
+      constructor(@Inject(ORDER_REPO) public repo: any) {}
+    }
+
+    const container = Container.getInstance()
+    // Concrete class auto-registered (simulating @Repository())
+    container.register(DrizzleOrderRepo, DrizzleOrderRepo)
+    // Module binds the token to the implementation
+    container.registerFactory(ORDER_REPO, () => container.resolve(DrizzleOrderRepo))
+    container.register(OrderService, OrderService)
+
+    const svc = container.resolve(OrderService)
+    expect(svc.repo).toBeInstanceOf(DrizzleOrderRepo)
+    expect(svc.repo.save({ name: 'test' })).toEqual({ name: 'test', id: '1' })
+  })
+
+  it('swapping implementations only requires changing module registration', () => {
+    const REPO = Symbol('Repo')
+
+    class InMemoryRepo {
+      type = 'inmemory'
+    }
+    class PostgresRepo {
+      type = 'postgres'
+    }
+
+    class MyService {
+      constructor(@Inject(REPO) public repo: any) {}
+    }
+
+    const container = Container.getInstance()
+    container.register(InMemoryRepo, InMemoryRepo)
+    container.register(PostgresRepo, PostgresRepo)
+    container.register(MyService, MyService)
+
+    // Initially bound to InMemory
+    container.registerFactory(REPO, () => container.resolve(InMemoryRepo))
+    let svc = container.resolve(MyService)
+    expect(svc.repo.type).toBe('inmemory')
+
+    // Swap to Postgres — only registration changes
+    Container.reset()
+    const c2 = Container.getInstance()
+    c2.register(InMemoryRepo, InMemoryRepo)
+    c2.register(PostgresRepo, PostgresRepo)
+    c2.register(MyService, MyService)
+    c2.registerFactory(REPO, () => c2.resolve(PostgresRepo))
+    svc = c2.resolve(MyService)
+    expect(svc.repo.type).toBe('postgres')
+  })
+
   // ── @PostConstruct ────────────────────────────────────────────────
 
   it('@PostConstruct is called after instantiation', () => {
