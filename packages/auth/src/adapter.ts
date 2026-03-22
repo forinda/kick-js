@@ -153,24 +153,58 @@ export class AuthAdapter implements AppAdapter {
 
   // ── Metadata Resolution ─────────────────────────────────────────────
 
+  /**
+   * Resolve which controller class and handler method will serve this request.
+   *
+   * This runs at the `beforeRoutes` middleware phase — BEFORE Express mounts
+   * the router and populates `req.route`. We therefore cannot rely on
+   * `req.route` and must match the request URL against collected route metadata.
+   *
+   * How it works:
+   *
+   *   1. During setup, `onRouteMount(controllerClass, mountPath)` is called for
+   *      each module route. This populates `routeControllers` with entries like:
+   *        "/api/v1/users" → UsersController
+   *
+   *   2. When a request arrives (e.g. GET /api/v1/users/me):
+   *      a. Find the matching mount path prefix ("/api/v1/users")
+   *      b. Compute the relative path: "/api/v1/users/me" - "/api/v1/users" = "/me"
+   *      c. Read the controller's @Controller() path and @Get/@Post/... route metadata
+   *      d. Build each route's full path within the router (controller prefix + route path)
+   *      e. Match the relative path against these, including parameterized segments
+   *         (e.g. /:id matches /123)
+   *
+   *   3. Once the handler is resolved, `isAuthRequired()` can check @Public(),
+   *      @Authenticated(), and @Roles() metadata on the matched method — so
+   *      decorator-based auth decisions work correctly even at beforeRoutes phase.
+   *
+   * If no controller matches (e.g. static files, unknown paths), returns undefined
+   * for both fields — `isAuthRequired()` then falls back to `defaultPolicy`.
+   */
   private resolveHandler(req: any): { controllerClass: any; handlerName: string | undefined } {
-    // Express 5 stores matched route info
-    const route = req.route
-    if (!route) {
-      return { controllerClass: undefined, handlerName: undefined }
-    }
+    const reqPath = req.baseUrl ? req.baseUrl + req.path : req.path
 
-    // Try to find the controller from our collected route mounts
     for (const [mountPath, controllerClass] of this.routeControllers) {
-      if (req.baseUrl?.startsWith(mountPath) || req.path?.startsWith(mountPath)) {
-        const routes: RouteDefinition[] =
-          Reflect.getMetadata(METADATA.ROUTES, controllerClass) ?? []
-        const matched = routes.find(
-          (r) => r.method === req.method && this.pathMatches(r.path, req.route?.path ?? req.path),
-        )
-        if (matched) {
-          return { controllerClass, handlerName: matched.handlerName }
-        }
+      if (!reqPath.startsWith(mountPath)) continue
+
+      const controllerPath: string =
+        Reflect.getMetadata(METADATA.CONTROLLER_PATH, controllerClass) || '/'
+      const routes: RouteDefinition[] = Reflect.getMetadata(METADATA.ROUTES, controllerClass) ?? []
+
+      // Compute the path relative to the mount point
+      const relativePath = reqPath.slice(mountPath.length) || '/'
+
+      const matched = routes.find((r) => {
+        if (r.method !== req.method) return false
+        // Build the full route path within the router (controller prefix + route path)
+        const routeSuffix = r.path === '/' ? '' : r.path
+        const fullRoutePath =
+          controllerPath === '/' ? routeSuffix || '/' : controllerPath + routeSuffix
+        return this.pathMatches(fullRoutePath, relativePath)
+      })
+
+      if (matched) {
+        return { controllerClass, handlerName: matched.handlerName }
       }
     }
 
@@ -178,9 +212,15 @@ export class AuthAdapter implements AppAdapter {
   }
 
   private pathMatches(routePath: string, requestPath: string): boolean {
-    // Normalize trailing slashes and compare
     const norm = (p: string) => p.replace(/\/+$/, '') || '/'
-    return norm(routePath) === norm(requestPath)
+    const normalizedRoute = norm(routePath)
+    const normalizedRequest = norm(requestPath)
+
+    if (normalizedRoute === normalizedRequest) return true
+
+    // Match parameterized routes — e.g. /:id matches /123
+    const pattern = normalizedRoute.replace(/:[\w]+/g, '[^/]+')
+    return new RegExp(`^${pattern}$`).test(normalizedRequest)
   }
 
   private isAuthRequired(controllerClass: any, handlerName?: string): boolean {

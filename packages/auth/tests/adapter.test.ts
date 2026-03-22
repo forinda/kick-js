@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import 'reflect-metadata'
-import { AuthAdapter, ApiKeyStrategy, type AuthStrategy } from '@forinda/kickjs-auth'
+import { AuthAdapter, ApiKeyStrategy, Public, type AuthStrategy } from '@forinda/kickjs-auth'
+import { Controller, Get, Post } from '@forinda/kickjs-core'
 
 describe('AuthAdapter', () => {
   it('creates adapter with strategies', () => {
@@ -126,5 +127,69 @@ describe('AuthAdapter', () => {
     })
 
     expect(typeof customHandler).toBe('function')
+  })
+
+  it('@Public() route is accessible without req.route (beforeRoutes phase)', async () => {
+    @Controller()
+    class UsersCtrl {
+      @Get('/me')
+      @Public()
+      getProfile() {}
+
+      @Post('/')
+      create() {}
+    }
+
+    const adapter = new AuthAdapter({
+      strategies: [new ApiKeyStrategy({ keys: { 'sk-valid': { name: 'Bot' } } })],
+      defaultPolicy: 'protected',
+    })
+
+    // Simulate onRouteMount called during setup
+    adapter.onRouteMount!(UsersCtrl, '/api/v1/users')
+
+    const handler = adapter.middleware!()[0].handler
+
+    // Simulate a request at beforeRoutes phase — no req.route available
+    const publicReq = { path: '/api/v1/users/me', method: 'GET', headers: {}, baseUrl: '' }
+    const publicRes = { status: vi.fn().mockReturnThis(), json: vi.fn() }
+    const publicNext = vi.fn()
+
+    await handler(publicReq, publicRes, publicNext)
+    // @Public() route should pass through without auth
+    expect(publicNext).toHaveBeenCalled()
+
+    // Non-public route should still require auth
+    const protectedReq = { path: '/api/v1/users', method: 'POST', headers: {}, baseUrl: '' }
+    const protectedRes = { status: vi.fn().mockReturnThis(), json: vi.fn() }
+    const protectedNext = vi.fn()
+
+    await handler(protectedReq, protectedRes, protectedNext)
+    expect(protectedNext).not.toHaveBeenCalled()
+    expect(protectedRes.status).toHaveBeenCalledWith(401)
+  })
+
+  it('resolves parameterized routes without req.route', async () => {
+    @Controller()
+    class ItemCtrl {
+      @Get('/:id')
+      @Public()
+      getById() {}
+    }
+
+    const adapter = new AuthAdapter({
+      strategies: [],
+      defaultPolicy: 'protected',
+    })
+
+    adapter.onRouteMount!(ItemCtrl, '/api/v1/items')
+
+    const handler = adapter.middleware!()[0].handler
+    const req = { path: '/api/v1/items/abc-123', method: 'GET', headers: {}, baseUrl: '' }
+    const res = { status: vi.fn().mockReturnThis(), json: vi.fn() }
+    const next = vi.fn()
+
+    await handler(req, res, next)
+    expect(next).toHaveBeenCalled()
   })
 })
