@@ -69,6 +69,29 @@ const guideSidebar = [
       { text: 'Benchmarks', link: '/guide/benchmarks' },
     ],
   },
+  {
+    text: 'Tutorials: Building a Jira Clone',
+    collapsed: false,
+    items: [
+      { text: 'Mongoose to Drizzle', link: '/guide/tutorial-mongoose-to-drizzle' },
+      { text: 'DDD Module Architecture', link: '/guide/tutorial-ddd-architecture' },
+      { text: 'Query Parsing & Pagination', link: '/guide/tutorial-query-pagination' },
+      { text: 'Real-Time (SSE & WebSocket)', link: '/guide/tutorial-realtime' },
+      { text: 'Background Jobs & Cron', link: '/guide/tutorial-background-jobs' },
+    ],
+  },
+  {
+    text: 'Tutorials: Framework Deep Dives',
+    collapsed: true,
+    items: [
+      { text: 'DI Container Gotchas', link: '/guide/tutorial-di-gotchas' },
+      { text: 'Surviving HMR with Decorators', link: '/guide/tutorial-hmr-decorators' },
+      { text: 'JWT Auth & Refresh Rotation', link: '/guide/tutorial-jwt-auth' },
+      { text: 'Custom CLI Commands', link: '/guide/tutorial-custom-cli' },
+      { text: 'Module Generator Patterns', link: '/guide/tutorial-generator-patterns' },
+      { text: 'Typed Client Vision', link: '/guide/tutorial-typed-client' },
+    ],
+  },
 ]
 
 const apiSidebar = [
@@ -97,22 +120,22 @@ const apiSidebar = [
 
 const examplesSidebar = [
   {
-    text: 'Examples',
+    text: 'Full Applications',
     items: [
       { text: 'Overview', link: '/examples/' },
-      { text: 'Basic API', link: '/examples/basic-api' },
-      { text: 'Auth API', link: '/examples/auth-api' },
-      { text: 'Validated API', link: '/examples/validated-api' },
-      { text: 'Full API', link: '/examples/full-api' },
-      { text: 'DevTools API', link: '/examples/devtools-api' },
-      { text: 'WebSocket Chat', link: '/examples/ws-api' },
-      { text: 'Drizzle ORM', link: '/examples/drizzle-api' },
-      { text: 'SSE Streaming', link: '/examples/sse-api' },
-      { text: 'OpenTelemetry', link: '/examples/otel-api' },
-      { text: 'GraphQL', link: '/examples/graphql-api' },
-      { text: 'Queue Workers', link: '/examples/queue-api' },
-      { text: 'Microservice', link: '/examples/microservice-api' },
+      { text: 'Jira Clone (Drizzle)', link: '/examples/jira-drizzle-api' },
+      { text: 'Jira Clone (Mongoose)', link: '/examples/jira-mongoose-api' },
+    ],
+  },
+  {
+    text: 'Focused Examples',
+    items: [
       { text: 'Minimal', link: '/examples/minimal-api' },
+      { text: 'Joi Validation', link: '/examples/joi-api' },
+      { text: 'DevTools', link: '/examples/devtools-api' },
+      { text: 'GraphQL', link: '/examples/graphql-api' },
+      { text: 'Microservice', link: '/examples/microservice-api' },
+      { text: 'OpenTelemetry', link: '/examples/otel-api' },
     ],
   },
 ]
