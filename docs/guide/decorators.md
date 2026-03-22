@@ -51,20 +51,6 @@ class UserRepository {
 }
 ```
 
-### @Configuration()
-
-Marks a class as a configuration provider. Methods decorated with `@Bean` become factory functions.
-
-```ts
-@Configuration()
-class AppConfig {
-  @Bean()
-  createRedisClient() {
-    return new Redis(process.env.REDIS_URL)
-  }
-}
-```
-
 ## Method Decorators — HTTP Routes
 
 ### @Get(path?, validation?)
@@ -117,20 +103,6 @@ class UserController {
 | `params` | Zod schema | Validate `req.params` |
 
 ## Method Decorators — Lifecycle & Behavior
-
-### @Bean(options?)
-
-Inside a `@Configuration` class, marks a method as a factory for DI registration.
-
-```ts
-@Configuration()
-class DbConfig {
-  @Bean({ scope: Scope.SINGLETON })
-  createPool() {
-    return new Pool({ connectionString: process.env.DATABASE_URL })
-  }
-}
-```
 
 ### @PostConstruct()
 
@@ -370,9 +342,7 @@ class TaskController {
 | `@Injectable` | Class | core | Generic DI registration |
 | `@Component` | Class | core | Alias for Injectable |
 | `@Repository` | Class | core | Data access class |
-| `@Configuration` | Class | core | Config provider for @Bean |
 | `@Get/Post/Put/Delete/Patch` | Method | core | HTTP route handler |
-| `@Bean` | Method | core | Factory method in Configuration |
 | `@PostConstruct` | Method | core | Post-instantiation hook |
 | `@Middleware` | Class/Method | core | Attach middleware |
 | `@FileUpload` | Method | core | Configure file upload |

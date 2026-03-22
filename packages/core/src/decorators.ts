@@ -1,5 +1,5 @@
 import 'reflect-metadata'
-import { METADATA, Scope, type BeanOptions, type ServiceOptions } from './interfaces'
+import { METADATA, Scope, type ServiceOptions } from './interfaces'
 import { Container } from './container'
 
 // ── Decorator Registration System ───────────────────────────────────────
@@ -90,14 +90,6 @@ export function Repository(options?: ServiceOptions): ClassDecorator {
   }
 }
 
-/** Mark a class as a configuration provider for @Bean methods */
-export function Configuration(): ClassDecorator {
-  return (target: any) => {
-    registerInContainer(target, Scope.SINGLETON)
-    Reflect.defineMetadata(METADATA.CONFIGURATION, true, target)
-  }
-}
-
 /**
  * Mark a class as an HTTP controller and register it in the DI container.
  *
@@ -114,16 +106,6 @@ export function Controller(path?: string): ClassDecorator {
 }
 
 // ── Method Decorators ───────────────────────────────────────────────────
-
-/** Mark a method inside @Configuration as a bean factory */
-export function Bean(options?: BeanOptions): MethodDecorator {
-  return (target, propertyKey) => {
-    Reflect.defineMetadata(METADATA.BEAN, true, target, propertyKey)
-    if (options) {
-      Reflect.defineMetadata(METADATA.BEAN_OPTIONS, options, target, propertyKey)
-    }
-  }
-}
 
 /** Mark a method as a lifecycle hook called after instantiation */
 export function PostConstruct(): MethodDecorator {

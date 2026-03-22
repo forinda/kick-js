@@ -13,9 +13,7 @@ import {
   FileUpload,
   ApiQueryParams,
   Builder,
-  Bean,
   PostConstruct,
-  Configuration,
   Service,
   Component,
   Repository,
@@ -69,13 +67,6 @@ describe('Class Decorators', () => {
     expect(Reflect.getMetadata(METADATA.INJECTABLE, MyRepo)).toBe(true)
   })
 
-  it('@Configuration marks as configuration + injectable', () => {
-    @Configuration()
-    class AppConfig {}
-
-    expect(Reflect.getMetadata(METADATA.INJECTABLE, AppConfig)).toBe(true)
-    expect(Reflect.getMetadata(METADATA.CONFIGURATION, AppConfig)).toBe(true)
-  })
 })
 
 describe('HTTP Route Decorators', () => {
@@ -255,22 +246,6 @@ describe('@Builder', () => {
     expect(user).toBeInstanceOf(User)
     expect(user.name).toBe('Alice')
     expect(user.age).toBe(30)
-  })
-})
-
-describe('@Bean', () => {
-  it('sets bean metadata on method', () => {
-    class Config {
-      @Bean({ name: 'DB_CONNECTION' })
-      createDb() {
-        return { connected: true }
-      }
-    }
-
-    const isBen = Reflect.getMetadata(METADATA.BEAN, Config.prototype, 'createDb')
-    expect(isBen).toBe(true)
-    const opts = Reflect.getMetadata(METADATA.BEAN_OPTIONS, Config.prototype, 'createDb')
-    expect(opts.name).toBe('DB_CONNECTION')
   })
 })
 

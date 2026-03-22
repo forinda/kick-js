@@ -14,7 +14,7 @@ KickJS wouldn't exist without the incredible work of others:
 
 - **[TanStack](https://tanstack.com)** — Tanner Linsley's suite of tools showed me what great developer experience looks like. The way TanStack Router, Query, and Table are designed — framework-agnostic, type-safe, composable — is a constant source of inspiration for how KickJS approaches pluggability and DX.
 
-- **Spring Boot** — The decorator-driven DI model (`@Service`, `@Controller`, `@Autowired`, `@Bean`) that makes KickJS feel familiar to Java developers came directly from studying Spring's elegant approach to inversion of control.
+- **Spring Boot** — The decorator-driven DI model (`@Service`, `@Controller`, `@Autowired`, `@Inject`) that makes KickJS feel familiar to Java developers came directly from studying Spring's elegant approach to inversion of control.
 
 - **NestJS** — Proved that decorators and DI can work beautifully in TypeScript. KickJS borrows from its module system and guard patterns while staying closer to Express's simplicity.
 

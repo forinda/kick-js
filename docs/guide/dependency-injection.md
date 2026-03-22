@@ -147,22 +147,6 @@ register(container: Container): void {
 }
 ```
 
-## Configuration Classes
-
-Use `@Configuration` and `@Bean` for factory method patterns:
-
-```typescript
-@Configuration()
-class AppConfig {
-  @Bean()
-  createMailer(): MailService {
-    return new MailService({ apiKey: process.env.MAIL_KEY })
-  }
-}
-```
-
-Bean methods are invoked during `container.bootstrap()` and their return values are registered as singletons.
-
 ## Lifecycle Hooks
 
 ### @PostConstruct

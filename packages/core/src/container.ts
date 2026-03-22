@@ -21,7 +21,7 @@ function tokenName(token: any): string {
  * the application share a single container instance.
  *
  * Supports constructor injection, property injection (@Autowired),
- * factory-based beans (@Bean), and lifecycle hooks (@PostConstruct).
+ * factory registrations, and lifecycle hooks (@PostConstruct).
  */
 export class Container {
   private static instance: Container
@@ -139,14 +139,10 @@ export class Container {
     }
   }
 
-  /** Process all @Configuration classes and invoke their @Bean methods */
+  /** Lifecycle hook called during Application.setup() after module registration */
   bootstrap(): void {
-    for (const [, reg] of this.registrations) {
-      const isConfig = Reflect.getMetadata(METADATA.CONFIGURATION, reg.target)
-      if (isConfig) {
-        this.processConfiguration(reg.target)
-      }
-    }
+    // Reserved for future use — adapters and modules register via
+    // container.register(), registerFactory(), and registerInstance().
   }
 
   private createInstance(reg: Registration): any {
@@ -208,23 +204,6 @@ export class Container {
         enumerable: true,
         configurable: true,
       })
-    }
-  }
-
-  private processConfiguration(target: Constructor): void {
-    const instance = this.resolve(target)
-    const prototype = target.prototype
-
-    for (const key of Object.getOwnPropertyNames(prototype)) {
-      if (key === 'constructor') continue
-      const beanMeta = Reflect.getMetadata(METADATA.BEAN, prototype, key)
-      if (!beanMeta) continue
-
-      const options = Reflect.getMetadata(METADATA.BEAN_OPTIONS, prototype, key) || {}
-      const returnType = Reflect.getMetadata(METADATA.RETURN_TYPE, prototype, key)
-      const token = returnType || key
-
-      this.registerFactory(token, () => instance[key](), options.scope || Scope.SINGLETON)
     }
   }
 }

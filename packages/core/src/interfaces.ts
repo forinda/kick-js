@@ -17,11 +17,6 @@ export interface ServiceOptions {
   scope?: Scope
 }
 
-/** Options for @Bean decorator */
-export interface BeanOptions {
-  scope?: Scope
-}
-
 /** Fluent builder type */
 export type BuilderOf<T> = {
   [K in keyof T as T[K] extends Function ? never : K]-?: (value: T[K]) => BuilderOf<T>
@@ -38,9 +33,6 @@ export const METADATA = {
   SCOPE: Symbol('kick:scope'),
   AUTOWIRED: Symbol('kick:autowired'),
   INJECT: Symbol('kick:inject'),
-  CONFIGURATION: Symbol('kick:configuration'),
-  BEAN: Symbol('kick:bean'),
-  BEAN_OPTIONS: Symbol('kick:bean:options'),
   POST_CONSTRUCT: Symbol('kick:post_construct'),
   BUILDER: Symbol('kick:builder'),
   QUERY_PARAMS: Symbol('kick:query:params'),
