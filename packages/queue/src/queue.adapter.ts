@@ -71,6 +71,13 @@ export class QueueAdapter implements AppAdapter {
         this.queueService.registerQueue(queueName, queue)
       }
 
+      // Auto-register the @Job class if not already in the container.
+      // @Service()/@Job() set metadata but don't always call container.register(),
+      // especially after HMR rebuilds which reset the container.
+      if (!container.has(jobClass)) {
+        container.register(jobClass, jobClass)
+      }
+
       // Resolve the processor instance from DI
       const processor = container.resolve(jobClass)
 
