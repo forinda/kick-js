@@ -1,5 +1,7 @@
+import express from 'express'
 import {
   Container,
+  type AppAdapter,
   type AppModule,
   type AppModuleClass,
   type ModuleRoutes,
@@ -12,6 +14,8 @@ import { Application, type ApplicationOptions } from '@forinda/kickjs-http'
  */
 export interface CreateTestAppOptions {
   modules: AppModuleClass[]
+  /** Adapters to attach (auth, queue, devtools, etc.) */
+  adapters?: AppAdapter[]
   overrides?: Record<symbol | string, any>
   port?: number
   apiPrefix?: string
@@ -33,23 +37,24 @@ export function createTestApp(options: CreateTestAppOptions): {
 
   const app = new Application({
     modules: options.modules,
+    adapters: options.adapters,
     port: options.port,
     apiPrefix: options.apiPrefix,
     defaultVersion: options.defaultVersion,
-    // Use minimal middleware for testing — no helmet, cors, compression, etc.
-    middleware: [],
+    // Minimal middleware for testing — JSON body parsing only, no helmet/cors/compression
+    middleware: [express.json()],
   })
 
-  // Apply DI overrides (e.g. mock repositories)
-  // Use Reflect.ownKeys to iterate both string and symbol keys
+  // Run setup — this calls module register() and mounts routes
+  app.setup()
+
+  // Apply DI overrides AFTER setup so they take precedence over
+  // bindings registered by modules during register().
   if (options.overrides) {
     for (const token of Reflect.ownKeys(options.overrides)) {
       container.registerInstance(token, options.overrides[token as any])
     }
   }
-
-  // Run setup without starting the HTTP server
-  app.setup()
 
   return {
     app,
@@ -64,7 +69,7 @@ export function createTestApp(options: CreateTestAppOptions): {
  */
 export function createTestModule(config: {
   register: (container: Container) => void
-  routes: () => ModuleRoutes | ModuleRoutes[]
+  routes: () => ModuleRoutes | ModuleRoutes[] | null
 }): AppModuleClass {
   return class TestModule implements AppModule {
     register(container: Container) {

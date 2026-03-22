@@ -1,0 +1,43 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".",
+    "baseUrl": ".",
+    "paths": {
+      "@forinda/kickjs-core": ["packages/core/src/index.ts"],
+      "@forinda/kickjs-core/*": ["packages/core/src/*"],
+      "@forinda/kickjs-http": ["packages/http/src/index.ts"],
+      "@forinda/kickjs-http/*": ["packages/http/src/*"],
+      "@forinda/kickjs-auth": ["packages/auth/src/index.ts"],
+      "@forinda/kickjs-auth/*": ["packages/auth/src/*"],
+      "@forinda/kickjs-config": ["packages/config/src/index.ts"],
+      "@forinda/kickjs-config/*": ["packages/config/src/*"],
+      "@forinda/kickjs-cli": ["packages/cli/src/index.ts"],
+      "@forinda/kickjs-cli/*": ["packages/cli/src/*"],
+      "@forinda/kickjs-swagger": ["packages/swagger/src/index.ts"],
+      "@forinda/kickjs-swagger/*": ["packages/swagger/src/*"],
+      "@forinda/kickjs-testing": ["packages/testing/src/index.ts"],
+      "@forinda/kickjs-testing/*": ["packages/testing/src/*"],
+      "@forinda/kickjs-queue": ["packages/queue/src/index.ts"],
+      "@forinda/kickjs-queue/*": ["packages/queue/src/*"],
+      "@forinda/kickjs-ws": ["packages/ws/src/index.ts"],
+      "@forinda/kickjs-ws/*": ["packages/ws/src/*"],
+      "@forinda/kickjs-cron": ["packages/cron/src/index.ts"],
+      "@forinda/kickjs-cron/*": ["packages/cron/src/*"],
+      "@forinda/kickjs-mailer": ["packages/mailer/src/index.ts"],
+      "@forinda/kickjs-mailer/*": ["packages/mailer/src/*"],
+      "@forinda/kickjs-devtools": ["packages/devtools/src/index.ts"],
+      "@forinda/kickjs-devtools/*": ["packages/devtools/src/*"],
+      "@forinda/kickjs-prisma": ["packages/prisma/src/index.ts"],
+      "@forinda/kickjs-prisma/*": ["packages/prisma/src/*"],
+      "@forinda/kickjs-drizzle": ["packages/drizzle/src/index.ts"],
+      "@forinda/kickjs-drizzle/*": ["packages/drizzle/src/*"]
+    }
+  },
+  "include": [
+    "tests/**/*.ts",
+    "packages/*/tests/**/*.ts",
+    "packages/*/src/**/*.ts"
+  ]
+}

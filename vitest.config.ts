@@ -25,11 +25,16 @@ export default defineConfig({
       '@forinda/kickjs-swagger': path.resolve(__dirname, 'packages/swagger/src/index.ts'),
       '@forinda/kickjs-testing': path.resolve(__dirname, 'packages/testing/src/index.ts'),
       '@forinda/kickjs-ws': path.resolve(__dirname, 'packages/ws/src/index.ts'),
+      '@forinda/kickjs-devtools': path.resolve(__dirname, 'packages/devtools/src/index.ts'),
+      '@forinda/kickjs-queue': path.resolve(__dirname, 'packages/queue/src/index.ts'),
     },
   },
   test: {
+    typecheck: {
+      tsconfig: './tsconfig.test.json',
+    },
     environment: 'node',
-    include: ['packages/*/tests/**/*.test.ts'],
+    include: ['packages/*/tests/**/*.test.ts', 'tests/**/*.test.ts'],
     globals: false,
     pool: 'threads',
     poolOptions: {
