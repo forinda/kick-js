@@ -41,10 +41,10 @@ pnpm add @forinda/kickjs-queue bullmq ioredis
 
 ```ts
 interface QueueAdapterOptions {
-  /** Redis connection options (host, port, password, etc.) */
-  redis: RedisOptions
-  /** Array of job processor classes decorated with @Job */
-  queues: Function[]
+  /** Redis connection configuration */
+  redis: { host: string; port: number; password?: string }
+  /** Queue names to pre-create (optional — queues are also created on-demand via @Job) */
+  queues?: string[]
   /** Number of concurrent jobs per worker (default: 1) */
   concurrency?: number
 }
@@ -52,9 +52,13 @@ interface QueueAdapterOptions {
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `redis` | `RedisOptions` | — | Redis connection configuration (from ioredis) |
-| `queues` | `Function[]` | `[]` | Job processor classes decorated with `@Job` |
+| `redis` | `{ host, port, password? }` | — | Redis connection configuration |
+| `queues` | `string[]` | `[]` | Queue names to pre-create. Queues referenced by `@Job` are created automatically even if not listed here. |
 | `concurrency` | `number` | `1` | Number of concurrent jobs each worker processes |
+
+::: warning
+Pass queue **name strings** (e.g. `['email', 'notifications']`), not class references. Passing classes causes a runtime error in BullMQ. Processor classes are discovered automatically via the `@Job` decorator — you do not need to list them here.
+:::
 
 ## Decorators
 
