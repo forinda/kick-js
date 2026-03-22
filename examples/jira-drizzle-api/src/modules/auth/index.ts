@@ -1,0 +1,24 @@
+import { Container, type AppModule, type ModuleRoutes } from '@forinda/kickjs-core'
+import { buildRoutes } from '@forinda/kickjs-http'
+import { TOKENS } from '@/shared/constants/tokens'
+import { DrizzleRefreshTokenRepository } from './infrastructure/repositories/drizzle-refresh-token.repository'
+import { AuthController } from './presentation/auth.controller'
+
+// Eagerly load use cases so @Service() decorators register in the DI container
+import.meta.glob(['./application/use-cases/**/*.ts'], { eager: true })
+
+export class AuthModule implements AppModule {
+  register(container: Container): void {
+    container.registerFactory(TOKENS.REFRESH_TOKEN_REPOSITORY, () =>
+      container.resolve(DrizzleRefreshTokenRepository),
+    )
+  }
+
+  routes(): ModuleRoutes {
+    return {
+      path: '/auth',
+      router: buildRoutes(AuthController),
+      controller: AuthController,
+    }
+  }
+}
