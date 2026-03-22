@@ -27,6 +27,7 @@ export default defineConfig({
       '@forinda/kickjs-ws': path.resolve(__dirname, 'packages/ws/src/index.ts'),
       '@forinda/kickjs-devtools': path.resolve(__dirname, 'packages/devtools/src/index.ts'),
       '@forinda/kickjs-queue': path.resolve(__dirname, 'packages/queue/src/index.ts'),
+      '@forinda/kickjs-drizzle': path.resolve(__dirname, 'packages/drizzle/src/index.ts'),
     },
   },
   test: {
