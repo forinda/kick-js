@@ -54,6 +54,11 @@ export class Container {
   /** Register a class constructor under the given token */
   register(token: any, target: Constructor, scope: Scope = Scope.SINGLETON): void {
     this.registrations.set(token, { target, scope })
+    // Store a name-based fallback so HMR class re-creation (new identity)
+    // can still resolve by the original class name.
+    if (typeof token === 'function' && token.name) {
+      this.registrations.set(`__hmr__${token.name}`, { target, scope })
+    }
   }
 
   /** Register a factory function under the given token */
@@ -90,7 +95,12 @@ export class Container {
 
   /** Resolve a dependency by its token */
   resolve<T = any>(token: any): T {
-    const reg = this.registrations.get(token)
+    let reg = this.registrations.get(token)
+    // HMR fallback: when Vite re-evaluates a module, decorated classes get new
+    // identity. Try resolving by class name if the primary token lookup fails.
+    if (!reg && typeof token === 'function' && token.name) {
+      reg = this.registrations.get(`__hmr__${token.name}`)
+    }
     if (!reg) {
       throw new Error(`No binding found for: ${tokenName(token)}`)
     }
