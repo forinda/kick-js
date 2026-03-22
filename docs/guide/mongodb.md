@@ -48,7 +48,7 @@ export class MongooseAdapter implements AppAdapter {
 
 ```ts
 // src/modules/users/domain/user.model.ts
-import { Schema, model } from 'mongoose'
+import mongoose, { Schema, type Model } from 'mongoose'
 
 export interface IUser {
   name: string
@@ -67,7 +67,10 @@ const userSchema = new Schema<IUser>(
   { timestamps: true },
 )
 
-export const User = model<IUser>('User', userSchema)
+// HMR-safe: reuse existing model if already compiled, otherwise create it.
+// Without this guard, `kick dev` throws OverwriteModelError on hot reload.
+export const User: Model<IUser> =
+  (mongoose.models.User as Model<IUser>) || mongoose.model<IUser>('User', userSchema)
 ```
 
 ### Repository Using Mongoose
