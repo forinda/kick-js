@@ -105,6 +105,9 @@ export class Application {
     // Collect adapter middleware by phase
     const adapterMw = this.collectAdapterMiddleware()
 
+    // Expose the Application instance on the Express app for adapter discovery
+    ;(this.app as any).__kickApp = this
+
     // ── 1. Adapter beforeMount hooks ──────────────────────────────────
     for (const adapter of this.adapters) {
       adapter.beforeMount?.(this.app, this.container)
@@ -275,6 +278,11 @@ export class Application {
 
   getExpressApp(): Express {
     return this.app
+  }
+
+  /** Get registered adapters — used by DevToolsAdapter for peer discovery */
+  getAdapters(): AppAdapter[] {
+    return this.adapters
   }
 
   getHttpServer(): http.Server | null {

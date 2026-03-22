@@ -124,6 +124,7 @@ export class DevToolsAdapter implements AppAdapter {
   // ── Internal State ───────────────────────────────────────────────────
   private routes: RouteInfo[] = []
   private container: Container | null = null
+  private appRef: any = null
   private adapterStatuses: Record<string, string> = {}
   private stopErrorWatch: (() => void) | null = null
   private peerAdapters: any[] = []
@@ -179,9 +180,23 @@ export class DevToolsAdapter implements AppAdapter {
 
   // ── Adapter Lifecycle ────────────────────────────────────────────────
 
+  /**
+   * Resolve peer adapters at request time. Prefers live adapters from the
+   * Application registry (survives HMR rebuild) and falls back to the
+   * constructor-provided refs.
+   */
+  private getPeerAdapters(): any[] {
+    const kickApp = this.appRef?.__kickApp
+    if (kickApp && typeof kickApp.getAdapters === 'function') {
+      return kickApp.getAdapters()
+    }
+    return this.peerAdapters
+  }
+
   beforeMount(app: any, container: Container): void {
     if (!this.enabled) return
 
+    this.appRef = app
     this.container = container
     this.startedAt.value = Date.now()
     // Clear routes on rebuild/restart to prevent HMR duplication
@@ -242,7 +257,7 @@ export class DevToolsAdapter implements AppAdapter {
     })
 
     router.get('/state', (_req: Request, res: Response) => {
-      const wsAdapter = this.peerAdapters.find(
+      const wsAdapter = this.getPeerAdapters().find(
         (a) => a.name === 'WsAdapter' && typeof a.getStats === 'function',
       )
       res.json({
@@ -262,7 +277,7 @@ export class DevToolsAdapter implements AppAdapter {
     })
 
     router.get('/ws', (_req: Request, res: Response) => {
-      const wsAdapter = this.peerAdapters.find(
+      const wsAdapter = this.getPeerAdapters().find(
         (a) => a.name === 'WsAdapter' && typeof a.getStats === 'function',
       )
       if (!wsAdapter) {
@@ -273,7 +288,7 @@ export class DevToolsAdapter implements AppAdapter {
     })
 
     router.get('/queues', async (_req: Request, res: Response) => {
-      const queueAdapter = this.peerAdapters.find(
+      const queueAdapter = this.getPeerAdapters().find(
         (a) => a.name === 'QueueAdapter' && typeof a.getQueueNames === 'function',
       )
       if (!queueAdapter) {
