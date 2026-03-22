@@ -11,6 +11,7 @@ import {
   generateController,
   generateRestController,
   generateConstants,
+  generateDrizzleConstants,
   generateCreateDTO,
   generateUpdateDTO,
   generateResponseDTO,
@@ -304,8 +305,11 @@ async function generateDddFiles(ctx: ModuleContext): Promise<void> {
   // Module index
   await write('index.ts', generateModuleIndex(pascal, kebab, plural, repo))
 
-  // Constants
-  await write('constants.ts', generateConstants(pascal))
+  // Constants — use Drizzle-specific type-safe config when repo is drizzle
+  await write(
+    'constants.ts',
+    repo === 'drizzle' ? generateDrizzleConstants(pascal, kebab) : generateConstants(pascal),
+  )
 
   // Controller (injects use-cases)
   await write(

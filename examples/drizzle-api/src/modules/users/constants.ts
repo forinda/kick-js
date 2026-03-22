@@ -1,7 +1,16 @@
-import type { QueryParamsConfig } from '@forinda/kickjs-core'
+import type { DrizzleQueryParamsConfig } from '@forinda/kickjs-drizzle'
+import { users } from '@/db/schema'
 
-export const USERS_QUERY_CONFIG: QueryParamsConfig = {
-  filterable: ['name', 'email', 'role'],
-  sortable: ['name', 'email', 'createdAt'],
-  searchable: ['name', 'email'],
+export const USERS_QUERY_CONFIG: DrizzleQueryParamsConfig = {
+  columns: {
+    name: users.name,
+    email: users.email,
+    role: users.role,
+  },
+  sortable: {
+    name: users.name,
+    email: users.email,
+    createdAt: users.createdAt,
+  },
+  searchColumns: [users.name, users.email],
 }

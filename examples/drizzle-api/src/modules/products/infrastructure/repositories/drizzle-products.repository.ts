@@ -1,7 +1,8 @@
 import { Service, Inject } from '@forinda/kickjs-core'
 import { DRIZZLE_DB, DrizzleQueryAdapter } from '@forinda/kickjs-drizzle'
-import { eq, ne, gt, gte, lt, lte, ilike, inArray, and, or, asc, desc, count } from 'drizzle-orm'
+import { eq, ne, gt, gte, lt, lte, ilike, inArray, between, and, or, asc, desc, count } from 'drizzle-orm'
 import { products } from '@/db/schema'
+import { PRODUCTS_QUERY_CONFIG } from '../../constants'
 import type { AppDatabase } from '@/db'
 import type { IProductsRepository } from '../../domain/repositories/products.repository'
 import type { CreateProductsDTO } from '../../application/dtos/create-products.dto'
@@ -9,7 +10,7 @@ import type { UpdateProductsDTO } from '../../application/dtos/update-products.d
 import type { ParsedQuery } from '@forinda/kickjs-http'
 
 const queryAdapter = new DrizzleQueryAdapter({
-  eq, ne, gt, gte, lt, lte, ilike, inArray, and, or, asc, desc,
+  eq, ne, gt, gte, lt, lte, ilike, inArray, between, and, or, asc, desc,
 })
 
 @Service()
@@ -25,10 +26,7 @@ export class DrizzleProductsRepository implements IProductsRepository {
   }
 
   async findPaginated(parsed: ParsedQuery) {
-    const query = queryAdapter.build(parsed, {
-      table: products,
-      searchColumns: ['name', 'description', 'category'],
-    })
+    const query = queryAdapter.buildFromColumns(parsed, PRODUCTS_QUERY_CONFIG)
 
     const data = this.db
       .select().from(products).$dynamic()

@@ -4,7 +4,7 @@ export {
   generateMinimalModuleIndex,
 } from './module-index'
 export { generateController, generateRestController } from './controller'
-export { generateConstants } from './constants'
+export { generateConstants, generateDrizzleConstants } from './constants'
 export { generateCreateDTO, generateUpdateDTO, generateResponseDTO } from './dtos'
 export { generateUseCases } from './use-cases'
 export {

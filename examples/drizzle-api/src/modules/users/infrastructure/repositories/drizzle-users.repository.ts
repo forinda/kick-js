@@ -1,7 +1,8 @@
 import { Service, Inject } from '@forinda/kickjs-core'
 import { DRIZZLE_DB, DrizzleQueryAdapter } from '@forinda/kickjs-drizzle'
-import { eq, ne, gt, gte, lt, lte, ilike, inArray, and, or, asc, desc, count } from 'drizzle-orm'
+import { eq, ne, gt, gte, lt, lte, ilike, inArray, between, and, or, asc, desc, count } from 'drizzle-orm'
 import { users, posts } from '@/db/schema'
+import { USERS_QUERY_CONFIG } from '../../constants'
 import type { AppDatabase } from '@/db'
 import type { IUsersRepository } from '../../domain/repositories/users.repository'
 import type { CreateUsersDTO } from '../../application/dtos/create-users.dto'
@@ -9,7 +10,7 @@ import type { UpdateUsersDTO } from '../../application/dtos/update-users.dto'
 import type { ParsedQuery } from '@forinda/kickjs-http'
 
 const queryAdapter = new DrizzleQueryAdapter({
-  eq, ne, gt, gte, lt, lte, ilike, inArray, and, or, asc, desc,
+  eq, ne, gt, gte, lt, lte, ilike, inArray, between, and, or, asc, desc,
 })
 
 @Service()
@@ -25,10 +26,7 @@ export class DrizzleUsersRepository implements IUsersRepository {
   }
 
   async findPaginated(parsed: ParsedQuery) {
-    const query = queryAdapter.build(parsed, {
-      table: users,
-      searchColumns: ['name', 'email'],
-    })
+    const query = queryAdapter.buildFromColumns(parsed, USERS_QUERY_CONFIG)
 
     const data = this.db
       .select().from(users).$dynamic()

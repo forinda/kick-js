@@ -109,65 +109,73 @@ export function generateDrizzleRepository(
  * Drizzle ${pascal} Repository
  *
  * Implements the repository interface using Drizzle ORM.
- * Requires a Drizzle database instance injected via the DI container.
+ * Uses buildFromColumns() with Column objects for type-safe query building.
  *
  * TODO: Update the schema import to match your Drizzle schema file.
- * TODO: Replace 'db' injection token with your actual database token.
+ * TODO: Replace DRIZZLE_DB injection token with your actual database token.
  *
  * @Repository() registers this class in the DI container as a singleton.
  */
-import { eq, sql } from 'drizzle-orm'
-import { Repository, HttpException, Autowired } from '@forinda/kickjs-core'
+import { eq, ne, gt, gte, lt, lte, ilike, inArray, between, and, or, asc, desc, count, sql } from 'drizzle-orm'
+import { Repository, HttpException, Inject } from '@forinda/kickjs-core'
+import { DRIZZLE_DB, DrizzleQueryAdapter } from '@forinda/kickjs-drizzle'
 import type { ParsedQuery } from '@forinda/kickjs-http'
 import type { I${pascal}Repository } from '${repoPrefix}/${kebab}.repository'
 import type { ${pascal}ResponseDTO } from '${dtoPrefix}/${kebab}-response.dto'
 import type { Create${pascal}DTO } from '${dtoPrefix}/create-${kebab}.dto'
 import type { Update${pascal}DTO } from '${dtoPrefix}/update-${kebab}.dto'
+import { ${pascal.toUpperCase()}_QUERY_CONFIG } from '../../constants'
 
 // TODO: Import your Drizzle schema table — e.g.:
 // import { ${kebab}s } from '@/db/schema'
 
-// TODO: Import your Drizzle DB injection token — e.g.:
-// import { DRIZZLE_DB } from '@/db/drizzle.provider'
+const queryAdapter = new DrizzleQueryAdapter({
+  eq, ne, gt, gte, lt, lte, ilike, inArray, between, and, or, asc, desc,
+})
 
 @Repository()
 export class Drizzle${pascal}Repository implements I${pascal}Repository {
-  // TODO: Uncomment and configure your Drizzle DB injection:
-  // @Autowired(DRIZZLE_DB) private db!: DrizzleDB
+  constructor(@Inject(DRIZZLE_DB) private db: any) {}
 
   async findById(id: string): Promise<${pascal}ResponseDTO | null> {
     // TODO: Implement with Drizzle
-    // const [row] = await this.db.select().from(${kebab}s).where(eq(${kebab}s.id, id))
+    // const row = this.db.select().from(${kebab}s).where(eq(${kebab}s.id, id)).get()
     // return row ?? null
     throw new Error('Drizzle ${pascal} repository not yet implemented — update schema imports and queries')
   }
 
   async findAll(): Promise<${pascal}ResponseDTO[]> {
     // TODO: Implement with Drizzle
-    // return this.db.select().from(${kebab}s)
+    // return this.db.select().from(${kebab}s).all()
     throw new Error('Drizzle ${pascal} repository not yet implemented')
   }
 
   async findPaginated(parsed: ParsedQuery): Promise<{ data: ${pascal}ResponseDTO[]; total: number }> {
-    // TODO: Implement with Drizzle
-    // const data = await this.db.select().from(${kebab}s)
-    //   .limit(parsed.pagination.limit)
-    //   .offset(parsed.pagination.offset)
-    // const [{ count }] = await this.db.select({ count: sql\`count(*)\` }).from(${kebab}s)
-    // return { data, total: Number(count) }
+    // TODO: Use buildFromColumns() with your query config for type-safe filtering
+    // const query = queryAdapter.buildFromColumns(parsed, ${pascal.toUpperCase()}_QUERY_CONFIG)
+    //
+    // const data = this.db
+    //   .select().from(${kebab}s).$dynamic()
+    //   .where(query.where).orderBy(...query.orderBy)
+    //   .limit(query.limit).offset(query.offset).all()
+    //
+    // const totalResult = this.db
+    //   .select({ count: count() }).from(${kebab}s)
+    //   .$dynamic().where(query.where).get()
+    //
+    // return { data, total: totalResult?.count ?? 0 }
     throw new Error('Drizzle ${pascal} repository not yet implemented')
   }
 
   async create(dto: Create${pascal}DTO): Promise<${pascal}ResponseDTO> {
     // TODO: Implement with Drizzle
-    // const [row] = await this.db.insert(${kebab}s).values(dto).returning()
-    // return row
+    // return this.db.insert(${kebab}s).values(dto).returning().get()
     throw new Error('Drizzle ${pascal} repository not yet implemented')
   }
 
   async update(id: string, dto: Update${pascal}DTO): Promise<${pascal}ResponseDTO> {
     // TODO: Implement with Drizzle
-    // const [row] = await this.db.update(${kebab}s).set(dto).where(eq(${kebab}s.id, id)).returning()
+    // const row = this.db.update(${kebab}s).set(dto).where(eq(${kebab}s.id, id)).returning().get()
     // if (!row) throw HttpException.notFound('${pascal} not found')
     // return row
     throw new Error('Drizzle ${pascal} repository not yet implemented')
@@ -175,8 +183,7 @@ export class Drizzle${pascal}Repository implements I${pascal}Repository {
 
   async delete(id: string): Promise<void> {
     // TODO: Implement with Drizzle
-    // const result = await this.db.delete(${kebab}s).where(eq(${kebab}s.id, id))
-    // if (!result.rowCount) throw HttpException.notFound('${pascal} not found')
+    // this.db.delete(${kebab}s).where(eq(${kebab}s.id, id)).run()
     throw new Error('Drizzle ${pascal} repository not yet implemented')
   }
 }
