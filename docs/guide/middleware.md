@@ -80,6 +80,18 @@ For a given route, middleware executes in this order:
 
 Global middleware is configured in `bootstrap()` via the `middleware` option. These run on every request before any route is matched.
 
+::: warning Different signature from @Middleware
+Global middleware uses the **raw Express signature** `(req, res, next)`, not the KickJS `MiddlewareHandler` signature `(ctx, next)`. This is because global middleware runs before routes are matched, outside the KickJS `RequestContext` pipeline.
+
+| Location | Signature | Receives |
+|---|---|---|
+| `bootstrap({ middleware })` | `(req, res, next)` | Express `Request`, `Response`, `NextFunction` |
+| `@Middleware()` on class/method | `(ctx, next)` | KickJS `RequestContext`, `next()` |
+| Adapter `middleware()` | `(req, res, next)` | Express `Request`, `Response`, `NextFunction` |
+
+Using the wrong signature causes runtime crashes. If you see `Cannot read properties of undefined`, check which signature you're using.
+:::
+
 ```ts
 import express from 'express'
 import { bootstrap, requestId } from '@forinda/kickjs-http'
