@@ -168,6 +168,8 @@ export class Application {
 
     for (const mod of modules) {
       const result = mod.routes()
+      if (!result) continue // Non-HTTP modules (queues, cron) may return null
+
       const routeSets = Array.isArray(result) ? result : [result]
 
       for (const route of routeSets) {

@@ -22,8 +22,8 @@ export interface ModuleRoutes {
 export interface AppModule {
   /** Bind interfaces to implementations in the container */
   register(container: Container): void
-  /** Return route definitions for this module */
-  routes(): ModuleRoutes | ModuleRoutes[]
+  /** Return route definitions for this module, or null for non-HTTP modules */
+  routes(): ModuleRoutes | ModuleRoutes[] | null
 }
 
 /** Constructor type for AppModule classes */

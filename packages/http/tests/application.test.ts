@@ -27,11 +27,15 @@ describe('Application', () => {
   it('creates an Application with modules', () => {
     @Controller()
     class HealthCtrl {
-      @Get('/') check(ctx: RequestContext) { ctx.json({ ok: true }) }
+      @Get('/') check(ctx: RequestContext) {
+        ctx.json({ ok: true })
+      }
     }
 
     class HealthModule implements AppModule {
-      register(container: Container) { reg(HealthCtrl, container) }
+      register(container: Container) {
+        reg(HealthCtrl, container)
+      }
       routes(): ModuleRoutes {
         return { path: '/health', router: buildRoutes(HealthCtrl) }
       }
@@ -44,29 +48,39 @@ describe('Application', () => {
   it('setup() mounts routes and middleware without starting server', () => {
     @Controller()
     class TestCtrl {
-      @Get('/') handle(ctx: RequestContext) { ctx.json({ test: true }) }
+      @Get('/') handle(ctx: RequestContext) {
+        ctx.json({ test: true })
+      }
     }
 
     class TestModule implements AppModule {
-      register(container: Container) { reg(TestCtrl, container) }
+      register(container: Container) {
+        reg(TestCtrl, container)
+      }
       routes(): ModuleRoutes {
         return { path: '/test', router: buildRoutes(TestCtrl) }
       }
     }
 
     const app = new Application({ modules: [TestModule], middleware: [] })
-    expect(() => { ;(app as any).setup() }).not.toThrow()
+    expect(() => {
+      ;(app as any).setup()
+    }).not.toThrow()
     expect(app.getExpressApp()).toBeDefined()
   })
 
   it('configures apiPrefix and versioning', () => {
     @Controller()
     class V2Ctrl {
-      @Get('/') handle(ctx: RequestContext) { ctx.json({}) }
+      @Get('/') handle(ctx: RequestContext) {
+        ctx.json({})
+      }
     }
 
     class V2Module implements AppModule {
-      register(container: Container) { reg(V2Ctrl, container) }
+      register(container: Container) {
+        reg(V2Ctrl, container)
+      }
       routes(): ModuleRoutes {
         return { path: '/items', router: buildRoutes(V2Ctrl), version: 2 }
       }
@@ -80,7 +94,9 @@ describe('Application', () => {
     })
 
     // setup() should complete without error for versioned routes
-    expect(() => { ;(app as any).setup() }).not.toThrow()
+    expect(() => {
+      ;(app as any).setup()
+    }).not.toThrow()
     expect(app.getExpressApp()).toBeDefined()
   })
 
@@ -98,11 +114,15 @@ describe('Application', () => {
 
     @Controller()
     class Ctrl {
-      @Get('/') handle(ctx: RequestContext) { ctx.json({}) }
+      @Get('/') handle(ctx: RequestContext) {
+        ctx.json({})
+      }
     }
 
     class Mod implements AppModule {
-      register(container: Container) { reg(Ctrl, container) }
+      register(container: Container) {
+        reg(Ctrl, container)
+      }
       routes(): ModuleRoutes {
         return { path: '/x', router: buildRoutes(Ctrl) }
       }
@@ -133,11 +153,15 @@ describe('Application', () => {
 
     @Controller()
     class SpyCtrl {
-      @Get('/') handle(ctx: RequestContext) { ctx.json({}) }
+      @Get('/') handle(ctx: RequestContext) {
+        ctx.json({})
+      }
     }
 
     class SpyModule implements AppModule {
-      register(container: Container) { reg(SpyCtrl, container) }
+      register(container: Container) {
+        reg(SpyCtrl, container)
+      }
       routes(): ModuleRoutes {
         return { path: '/spy', router: buildRoutes(SpyCtrl), controller: SpyCtrl }
       }
@@ -161,17 +185,36 @@ describe('Application', () => {
   it('shutdown() calls adapter shutdown hooks with allSettled', async () => {
     const shutdowns: string[] = []
 
-    const adapterA = { name: 'A', shutdown: async () => { shutdowns.push('A') } }
-    const adapterB = { name: 'B', shutdown: async () => { throw new Error('B failed') } }
-    const adapterC = { name: 'C', shutdown: async () => { shutdowns.push('C') } }
+    const adapterA = {
+      name: 'A',
+      shutdown: async () => {
+        shutdowns.push('A')
+      },
+    }
+    const adapterB = {
+      name: 'B',
+      shutdown: async () => {
+        throw new Error('B failed')
+      },
+    }
+    const adapterC = {
+      name: 'C',
+      shutdown: async () => {
+        shutdowns.push('C')
+      },
+    }
 
     @Controller()
     class Ctrl {
-      @Get('/') handle(ctx: RequestContext) { ctx.json({}) }
+      @Get('/') handle(ctx: RequestContext) {
+        ctx.json({})
+      }
     }
 
     class Mod implements AppModule {
-      register(container: Container) { reg(Ctrl, container) }
+      register(container: Container) {
+        reg(Ctrl, container)
+      }
       routes(): ModuleRoutes {
         return { path: '/x', router: buildRoutes(Ctrl) }
       }
@@ -196,11 +239,15 @@ describe('Application', () => {
   it('rebuild() creates a fresh Express app and resets container', () => {
     @Controller()
     class RebuildCtrl {
-      @Get('/') handle(ctx: RequestContext) { ctx.json({}) }
+      @Get('/') handle(ctx: RequestContext) {
+        ctx.json({})
+      }
     }
 
     class RebuildModule implements AppModule {
-      register(container: Container) { reg(RebuildCtrl, container) }
+      register(container: Container) {
+        reg(RebuildCtrl, container)
+      }
       routes(): ModuleRoutes {
         return { path: '/r', router: buildRoutes(RebuildCtrl) }
       }
@@ -218,15 +265,21 @@ describe('Application', () => {
   // ── Middleware pipeline ───────────────────────────────────────────
 
   it('uses custom middleware pipeline when provided', () => {
-    const customMw = (_req: any, _res: any, next: any) => { next() }
+    const customMw = (_req: any, _res: any, next: any) => {
+      next()
+    }
 
     @Controller()
     class Ctrl {
-      @Get('/') handle(ctx: RequestContext) { ctx.json({}) }
+      @Get('/') handle(ctx: RequestContext) {
+        ctx.json({})
+      }
     }
 
     class Mod implements AppModule {
-      register(container: Container) { reg(Ctrl, container) }
+      register(container: Container) {
+        reg(Ctrl, container)
+      }
       routes(): ModuleRoutes {
         return { path: '/m', router: buildRoutes(Ctrl) }
       }
@@ -234,30 +287,81 @@ describe('Application', () => {
 
     const app = new Application({ modules: [Mod], middleware: [customMw] })
     // setup() should complete without error when custom middleware provided
-    expect(() => { ;(app as any).setup() }).not.toThrow()
+    expect(() => {
+      ;(app as any).setup()
+    }).not.toThrow()
     expect(app.getExpressApp()).toBeDefined()
   })
 
   // ── Multiple modules ──────────────────────────────────────────────
 
+  it('handles modules that return null from routes() (non-HTTP modules)', () => {
+    @Controller()
+    class HttpCtrl {
+      @Get('/') handle(ctx: RequestContext) {
+        ctx.json({})
+      }
+    }
+
+    class HttpModule implements AppModule {
+      register(container: Container) {
+        reg(HttpCtrl, container)
+      }
+      routes(): ModuleRoutes {
+        return { path: '/http', router: buildRoutes(HttpCtrl) }
+      }
+    }
+
+    // Non-HTTP module (e.g. queue processor, cron jobs)
+    class QueueModule implements AppModule {
+      register(_container: Container) {}
+      routes() {
+        return null
+      }
+    }
+
+    const app = new Application({ modules: [HttpModule, QueueModule], middleware: [] })
+    expect(() => {
+      ;(app as any).setup()
+    }).not.toThrow()
+  })
+
   it('mounts multiple modules with separate paths', () => {
     @Controller()
-    class ACtrl { @Get('/') handle(ctx: RequestContext) { ctx.json({ a: true }) } }
+    class ACtrl {
+      @Get('/') handle(ctx: RequestContext) {
+        ctx.json({ a: true })
+      }
+    }
 
     @Controller()
-    class BCtrl { @Get('/') handle(ctx: RequestContext) { ctx.json({ b: true }) } }
+    class BCtrl {
+      @Get('/') handle(ctx: RequestContext) {
+        ctx.json({ b: true })
+      }
+    }
 
     class ModA implements AppModule {
-      register(container: Container) { reg(ACtrl, container) }
-      routes(): ModuleRoutes { return { path: '/a', router: buildRoutes(ACtrl) } }
+      register(container: Container) {
+        reg(ACtrl, container)
+      }
+      routes(): ModuleRoutes {
+        return { path: '/a', router: buildRoutes(ACtrl) }
+      }
     }
 
     class ModB implements AppModule {
-      register(container: Container) { reg(BCtrl, container) }
-      routes(): ModuleRoutes { return { path: '/b', router: buildRoutes(BCtrl) } }
+      register(container: Container) {
+        reg(BCtrl, container)
+      }
+      routes(): ModuleRoutes {
+        return { path: '/b', router: buildRoutes(BCtrl) }
+      }
     }
 
     const app = new Application({ modules: [ModA, ModB], middleware: [] })
-    expect(() => { ;(app as any).setup() }).not.toThrow()
+    expect(() => {
+      ;(app as any).setup()
+    }).not.toThrow()
   })
 })
