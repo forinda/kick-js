@@ -35,9 +35,9 @@ let cachedSchema: any = null
  * ```
  */
 export function defineEnv<T extends z.ZodRawShape>(
-  extend: (base: typeof baseEnvSchema) => z.ZodObject<any>,
-): ReturnType<typeof extend> {
-  return extend(baseEnvSchema) as ReturnType<typeof extend>
+  extend: (base: typeof baseEnvSchema) => z.ZodObject<T>,
+): z.ZodObject<T> {
+  return extend(baseEnvSchema)
 }
 
 /** Parse and validate process.env against a Zod schema. Caches result per schema. */
