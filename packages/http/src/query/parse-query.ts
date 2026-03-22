@@ -6,6 +6,7 @@ import {
   type PaginationParams,
   type ParsedQuery,
   type QueryFieldConfig,
+  type StringQueryFieldConfig,
 } from './types'
 
 const MAX_SEARCH_LENGTH = 200
@@ -100,26 +101,49 @@ export function parseSearchQuery(q: string | undefined): string {
   return q.trim().slice(0, MAX_SEARCH_LENGTH)
 }
 
+// ── Config normalizer ───────────────────────────────────────────────────
+
+/**
+ * Normalize a QueryFieldConfig into the string-based form.
+ * Detects column-object-based configs (DrizzleQueryParamsConfig) by checking
+ * for a `columns` property and extracts `Object.keys()`.
+ */
+function normalizeFieldConfig(config?: QueryFieldConfig): StringQueryFieldConfig | undefined {
+  if (!config) return undefined
+
+  // Column-object-based config (e.g., DrizzleQueryParamsConfig)
+  if ('columns' in config && config.columns && typeof config.columns === 'object') {
+    return {
+      filterable: Object.keys(config.columns),
+      sortable: config.sortable ? Object.keys(config.sortable) : undefined,
+      searchable: undefined, // searchColumns are Column objects, not used for string filtering
+    }
+  }
+
+  // Already string-based
+  return config as StringQueryFieldConfig
+}
+
 // ── Combined parser ─────────────────────────────────────────────────────
 
 /**
  * Parse a raw Express query object into a structured, ORM-agnostic ParsedQuery.
  *
  * @param query - Raw query string object from `req.query` or Zod-validated object
- * @param fieldConfig - Optional field restrictions (whitelist filterable/sortable/searchable)
+ * @param fieldConfig - Optional field restrictions (whitelist filterable/sortable/searchable).
+ *   Accepts both string-based configs (`{ filterable, sortable, searchable }`) and
+ *   column-object configs (`{ columns, sortable, searchColumns }`).
  *
  * @example
  * ```ts
- * // In a controller
- * @Get('/')
- * async list(ctx: RequestContext) {
- *   const parsed = parseQuery(ctx.query, {
- *     filterable: ['status', 'priority'],
- *     sortable: ['createdAt', 'title'],
- *   })
- *   // Pass to your ORM query builder adapter
- *   const q = drizzleAdapter.build(parsed, { columns, searchColumns })
- * }
+ * // String-based config
+ * const parsed = parseQuery(ctx.query, {
+ *   filterable: ['status', 'priority'],
+ *   sortable: ['createdAt', 'title'],
+ * })
+ *
+ * // Column-object config (DrizzleQueryParamsConfig)
+ * const parsed = parseQuery(ctx.query, TASK_QUERY_CONFIG)
  * ```
  *
  * Query string format:
@@ -134,9 +158,10 @@ export function parseQuery(
   query: Record<string, any>,
   fieldConfig?: QueryFieldConfig,
 ): ParsedQuery {
+  const normalized = normalizeFieldConfig(fieldConfig)
   return {
-    filters: parseFilters(query.filter, fieldConfig?.filterable),
-    sort: parseSort(query.sort, fieldConfig?.sortable),
+    filters: parseFilters(query.filter, normalized?.filterable),
+    sort: parseSort(query.sort, normalized?.sortable),
     pagination: parsePagination({ page: query.page, limit: query.limit }),
     search: parseSearchQuery(query.q),
   }

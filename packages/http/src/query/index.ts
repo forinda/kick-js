@@ -14,6 +14,8 @@ export type {
   PaginationParams,
   ParsedQuery,
   QueryFieldConfig,
+  StringQueryFieldConfig,
+  ColumnQueryFieldConfig,
   QueryBuilderAdapter,
   PaginatedResponse,
 } from './types'

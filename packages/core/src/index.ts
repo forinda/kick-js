@@ -41,6 +41,8 @@ export {
   type BaseUploadOptions,
   type ApiQueryParamsConfig,
   type ApiQueryParamsConfig as QueryParamsConfig,
+  type ColumnApiQueryParamsConfig,
+  normalizeApiQueryParamsConfig,
 } from './decorators'
 
 // Module System

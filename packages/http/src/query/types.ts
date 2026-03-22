@@ -58,11 +58,30 @@ export interface ParsedQuery {
 /**
  * Restrict which fields can be filtered, sorted, or searched.
  * Fields not in the allow-list are silently ignored.
+ *
+ * Accepts two forms:
+ * 1. **String arrays** (standard): `{ filterable: ['name', 'status'], sortable: ['createdAt'] }`
+ * 2. **Column-object maps** (Drizzle-style): `{ columns: { name: col, status: col }, sortable: { createdAt: col } }`
+ *
+ * When column-object maps are provided, `Object.keys()` is used to derive the field names.
  */
-export interface QueryFieldConfig {
+export type QueryFieldConfig = StringQueryFieldConfig | ColumnQueryFieldConfig
+
+export interface StringQueryFieldConfig {
   filterable?: string[]
   sortable?: string[]
   searchable?: string[]
+}
+
+/**
+ * Column-object-based field config (e.g., from DrizzleQueryParamsConfig).
+ * Keys are the field names used in query strings; values are ORM column references.
+ */
+export interface ColumnQueryFieldConfig {
+  columns: Record<string, any>
+  sortable?: Record<string, any>
+  searchColumns?: any[]
+  [key: string]: any
 }
 
 /** Standardized paginated response shape */

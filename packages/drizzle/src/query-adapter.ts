@@ -109,6 +109,32 @@ export interface DrizzleQueryParamsConfig {
 }
 
 /**
+ * Convert a DrizzleQueryParamsConfig into a string-based QueryFieldConfig.
+ * Useful for passing to `@ApiQueryParams()` or other APIs that expect string arrays.
+ *
+ * @example
+ * ```ts
+ * import { toQueryFieldConfig } from '@forinda/kickjs-drizzle'
+ *
+ * const fieldConfig = toQueryFieldConfig(TASK_QUERY_CONFIG)
+ * // → { filterable: ['status', 'priority'], sortable: ['title', 'createdAt'], searchable: [] }
+ * ```
+ */
+export function toQueryFieldConfig(config: DrizzleQueryParamsConfig): {
+  filterable: string[]
+  sortable: string[]
+  searchable: string[]
+} {
+  return {
+    filterable: Object.keys(config.columns),
+    sortable: config.sortable ? Object.keys(config.sortable) : [],
+    searchable: config.searchColumns
+      ? config.searchColumns.map((col) => col.name ?? '').filter(Boolean)
+      : [],
+  }
+}
+
+/**
  * Result shape compatible with Drizzle's query builder.
  * Use with `db.select().from(table).where(result.where).orderBy(...result.orderBy).limit(result.limit).offset(result.offset)`
  */

@@ -209,26 +209,61 @@ export interface ApiQueryParamsConfig {
 }
 
 /**
+ * Column-object-based query params config (e.g., from DrizzleQueryParamsConfig).
+ * `Object.keys()` is used to derive field names for OpenAPI docs.
+ */
+export interface ColumnApiQueryParamsConfig {
+  columns: Record<string, any>
+  sortable?: Record<string, any>
+  searchColumns?: any[]
+  [key: string]: any
+}
+
+/**
+ * Normalize a query params config to the string-based ApiQueryParamsConfig.
+ * Handles both string-based and column-object-based configs.
+ */
+export function normalizeApiQueryParamsConfig(
+  config: ApiQueryParamsConfig | ColumnApiQueryParamsConfig,
+): ApiQueryParamsConfig {
+  if ('columns' in config && config.columns && typeof config.columns === 'object') {
+    return {
+      filterable: Object.keys(config.columns),
+      sortable: config.sortable ? Object.keys(config.sortable) : undefined,
+      searchable: config.searchColumns
+        ? config.searchColumns.map((col: any) => col?.name ?? '').filter(Boolean)
+        : undefined,
+    }
+  }
+  return config as ApiQueryParamsConfig
+}
+
+/**
  * Document the query parameters accepted by a GET endpoint.
  * Used by SwaggerAdapter to generate `filter`, `sort`, `page`, `limit`, and `q` params
  * in the OpenAPI spec, with descriptions listing the allowed fields.
  *
+ * Accepts both string-based configs and column-object configs (e.g., DrizzleQueryParamsConfig).
+ *
  * @example
  * ```ts
- * @Get('/')
+ * // String-based
  * @ApiQueryParams({
  *   filterable: ['status', 'category', 'price'],
  *   sortable: ['name', 'createdAt', 'price'],
  *   searchable: ['name', 'description'],
  * })
- * list(ctx: RequestContext) {
- *   const parsed = ctx.qs({ filterable: ['status', 'category', 'price'], ... })
- * }
+ *
+ * // Column-object-based (Drizzle)
+ * @ApiQueryParams(TASK_QUERY_CONFIG)
  * ```
  */
-export function ApiQueryParams(config: ApiQueryParamsConfig): MethodDecorator {
+export function ApiQueryParams(
+  config: ApiQueryParamsConfig | ColumnApiQueryParamsConfig,
+): MethodDecorator {
   return (target, propertyKey) => {
-    Reflect.defineMetadata(METADATA.QUERY_PARAMS, config, target.constructor, propertyKey)
+    const normalized = normalizeApiQueryParamsConfig(config)
+    Reflect.defineMetadata(METADATA.QUERY_PARAMS, normalized, target.constructor, propertyKey)
   }
 }
 
