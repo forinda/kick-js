@@ -12,6 +12,42 @@
 - [x] Mailer adapter — `@forinda/kickjs-mailer` with pluggable MailProvider (SMTP, Resend, SES, custom)
 - [x] Queue monitoring in DevTools dashboard — `/_debug/queues` tab with job counts
 - [x] Notification system — `@forinda/kickjs-notifications` with email, Slack, Discord, webhook
+- [ ] Type-safe API client generation (tRPC-like) — `kick generate:client` from route decorators + Zod DTOs (KICK-018)
+
+## v1.2.x — Resolved Issues
+
+### Bug Fixes
+- [x] Modules without routes crash Express — return `null` from `routes()` (KICK-003)
+- [x] `defineEnv`/`loadEnv` loses Zod schema types — schema type preserved through chain (KICK-004)
+- [x] Controller path doubled in route mounting — `@Controller` path is metadata only, not routing (KICK-007)
+- [x] `ctx.set()`/`ctx.get()` not shared between middleware and handler — metadata Map stored on `req` (KICK-009)
+- [x] `@Public()` not respected — auth middleware matches by path pattern, not `req.route` (KICK-010)
+- [x] `@Inject` on properties causes TS1240 — documented as constructor-only, use `@Autowired(token)` for properties (KICK-011)
+- [x] Nodemailer peer dep mismatch — widened to `>=6.0.0` (KICK-002)
+- [x] `QueryParamsConfig` type name mismatch in docs — added re-export alias (KICK-014)
+- [x] `@Job` classes not auto-registered in DI — QueueAdapter registers before resolving (KICK-016)
+- [x] Decorator `containerRef` stale after `Container.reset()` — `_onReset` callback updates ref (KICK-017)
+- [x] DI bindings lost on HMR — class name fallback key + persistent decorator registry (KICK-013)
+- [x] DevTools peers lost on HMR — discover adapters at request time from app registry (KICK-012)
+- [x] Double-slash routes (`/api/v1//projects`) — normalize module path before mounting (KICK-007)
+- [x] `vite/client` missing in generated tsconfig — `kick new` includes it by default (KICK-019)
+
+### Enhancements
+- [x] `DrizzleQueryAdapter.buildFromColumns()` — type-safe Column-based query building with `baseCondition`, smart type coercion, native `between` (KICK-020)
+- [x] `DrizzleQueryParamsConfig` type exported from `@forinda/kickjs-drizzle` (KICK-022)
+- [x] CLI generates `DrizzleQueryParamsConfig` when `--repo drizzle` (KICK-021)
+- [x] `@ApiQueryParams` and `ctx.paginate` accept both string-based and column-object configs (KICK-023)
+- [x] `kick new` generates README.md (KICK-015)
+- [x] `kick new` supports `--template` flag for CI/scriptable usage (KICK-001)
+
+### Documentation
+- [x] Config guide: `defineEnv` + `createConfigService` patterns (KICK-004)
+- [x] Queue docs: fixed `QueueAdapterOptions.queues` type (KICK-005)
+- [x] MongoDB guide: HMR-safe Mongoose model pattern (KICK-006)
+- [x] Middleware guide: global vs route handler signature difference (KICK-008)
+- [x] Benchmarks guide: rewritten for user apps, not monorepo (KICK-016)
+- [x] Query parsing guide: column-object config support
+- [x] Decorators guide: `@ApiQueryParams` accepts Drizzle configs
 
 ### Community / Tutorial Patterns
 
