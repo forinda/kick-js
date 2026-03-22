@@ -156,4 +156,33 @@ describe('Router Builder', () => {
     // class middleware + method middleware + handler = at least 3
     expect(getRoute.route.stack.length).toBeGreaterThanOrEqual(3)
   })
+
+  it('RequestContext metadata is shared across instances for the same request', () => {
+    const mockReq = {} as any
+    const mockRes = {} as any
+    const mockNext = (() => {}) as any
+
+    const ctx1 = new RequestContext(mockReq, mockRes, mockNext)
+    const ctx2 = new RequestContext(mockReq, mockRes, mockNext)
+
+    ctx1.set('user', { id: 1, name: 'Alice' })
+
+    // ctx2 wraps the same req — should see the value set by ctx1
+    expect(ctx2.get('user')).toEqual({ id: 1, name: 'Alice' })
+  })
+
+  it('RequestContext metadata is isolated between different requests', () => {
+    const reqA = {} as any
+    const reqB = {} as any
+    const mockRes = {} as any
+    const mockNext = (() => {}) as any
+
+    const ctxA = new RequestContext(reqA, mockRes, mockNext)
+    const ctxB = new RequestContext(reqB, mockRes, mockNext)
+
+    ctxA.set('user', { id: 1 })
+
+    // Different request — should NOT see the value
+    expect(ctxB.get('user')).toBeUndefined()
+  })
 })

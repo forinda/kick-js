@@ -11,13 +11,22 @@ import {
  * Shields handlers from raw Express objects and provides convenience methods.
  */
 export class RequestContext<TBody = any, TParams = any, TQuery = any> {
-  private metadata = new Map<string, any>()
-
   constructor(
     public readonly req: Request,
     public readonly res: Response,
     public readonly next: NextFunction,
   ) {}
+
+  /**
+   * Per-request metadata map shared across all RequestContext instances
+   * for the same request. Stored on `req` so middleware can pass data
+   * to handlers via `ctx.set()` / `ctx.get()`.
+   */
+  private get metadata(): Map<string, any> {
+    const r = this.req as any
+    if (!r.__ctxMeta) r.__ctxMeta = new Map<string, any>()
+    return r.__ctxMeta
+  }
 
   // ── Request Data ────────────────────────────────────────────────────
 
