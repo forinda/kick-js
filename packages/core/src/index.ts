@@ -80,6 +80,9 @@ export { Logger, createLogger, rootLogger, logger } from './logger'
 // Errors
 export { HttpException, HttpStatus, type HttpStatusCode, type ValidationError } from './errors'
 
+// Path utilities
+export { normalizePath, joinPaths } from './path'
+
 // Reactivity
 export {
   ref,

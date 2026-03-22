@@ -11,6 +11,7 @@ export default defineConfig({
     'src/errors.ts',
     'src/interfaces.ts',
     'src/reactivity.ts',
+    'src/path.ts',
   ],
   format: ['esm'],
   target: 'node20',

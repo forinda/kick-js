@@ -1,5 +1,5 @@
 import 'reflect-metadata'
-import { METADATA, type RouteDefinition } from '@forinda/kickjs-core'
+import { METADATA, joinPaths, type RouteDefinition } from '@forinda/kickjs-core'
 import { SWAGGER_KEYS, type ApiOperationOptions, type ApiResponseOptions } from './decorators'
 import { zodSchemaParser, type SchemaParser } from './schema-parser'
 
@@ -123,9 +123,7 @@ export function buildOpenAPISpec(options: SwaggerOptions = {}): any {
       // Build the full path — mountPath is the actual Express mount prefix (from onRouteMount),
       // and route.path is the method-level path. @Controller path is not included here
       // because buildRoutes does not bake it into the router.
-      let routePath = route.path === '/' ? '' : route.path
-      let fullPath = mountPath + routePath
-      if (!fullPath) fullPath = '/'
+      const fullPath = joinPaths(mountPath, route.path)
 
       // Convert Express :param to OpenAPI {param}
       const openApiPath = fullPath.replace(/:([a-zA-Z_]+)/g, '{$1}')

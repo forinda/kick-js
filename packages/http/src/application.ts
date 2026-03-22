@@ -3,6 +3,7 @@ import express, { type Express, type RequestHandler } from 'express'
 import {
   Container,
   createLogger,
+  normalizePath,
   type AppModuleClass,
   type AppAdapter,
   type AdapterMiddleware,
@@ -176,14 +177,7 @@ export class Application {
 
       for (const route of routeSets) {
         const version = route.version ?? defaultVersion
-        // Normalize the route path:
-        // - '/' or '' or undefined → mount directly at /api/v1
-        // - '/users' → mount at /api/v1/users
-        // - 'users' (missing leading /) → mount at /api/v1/users
-        let routePath = route.path?.trim() || ''
-        if (routePath === '/') routePath = ''
-        if (routePath && !routePath.startsWith('/')) routePath = `/${routePath}`
-        const mountPath = `${apiPrefix}/v${version}${routePath}`
+        const mountPath = `${apiPrefix}/v${version}${normalizePath(route.path)}`
         this.app.use(mountPath, route.router)
 
         // Notify adapters (e.g. SwaggerAdapter for OpenAPI spec generation)
