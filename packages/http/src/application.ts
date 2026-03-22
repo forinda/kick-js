@@ -176,7 +176,14 @@ export class Application {
 
       for (const route of routeSets) {
         const version = route.version ?? defaultVersion
-        const mountPath = `${apiPrefix}/v${version}${route.path}`
+        // Normalize the route path:
+        // - '/' or '' or undefined → mount directly at /api/v1
+        // - '/users' → mount at /api/v1/users
+        // - 'users' (missing leading /) → mount at /api/v1/users
+        let routePath = route.path?.trim() || ''
+        if (routePath === '/') routePath = ''
+        if (routePath && !routePath.startsWith('/')) routePath = `/${routePath}`
+        const mountPath = `${apiPrefix}/v${version}${routePath}`
         this.app.use(mountPath, route.router)
 
         // Notify adapters (e.g. SwaggerAdapter for OpenAPI spec generation)

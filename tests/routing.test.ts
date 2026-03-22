@@ -116,6 +116,34 @@ describe('Routing: no path doubling (KICK-007)', () => {
   })
 })
 
+// ── Module path '/' does not produce double slash ─────────────────────
+
+describe('Routing: module path "/" does not produce double slash', () => {
+  beforeEach(() => Container.reset())
+
+  it('path: "/" mounts at /api/v1 without trailing slash', async () => {
+    @Controller()
+    class ProjectCtrl {
+      @Get('/projects/:id')
+      get(ctx: RequestContext) {
+        ctx.json({ id: ctx.params.id })
+      }
+    }
+
+    const TestModule = createTestModule({
+      register: (c) => reg(ProjectCtrl, c),
+      routes: () => ({ path: '/', router: buildRoutes(ProjectCtrl), controller: ProjectCtrl }),
+    })
+
+    const { expressApp } = createTestApp({ modules: [TestModule] })
+
+    // Should be /api/v1/projects/123, NOT /api/v1//projects/123
+    const res = await request(expressApp).get('/api/v1/projects/abc')
+    expect(res.status).toBe(200)
+    expect(res.body.id).toBe('abc')
+  })
+})
+
 // ── Null routes for non-HTTP modules (KICK-003) ──────────────────────
 
 describe('Routing: null routes for non-HTTP modules (KICK-003)', () => {
