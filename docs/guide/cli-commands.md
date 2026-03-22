@@ -77,9 +77,17 @@ Create a new KickJS project:
 kick new my-app            # Interactive prompts for PM, git, install
 kick new .                 # Scaffold in current directory
 kick new my-app --pm pnpm  # Skip PM prompt
-kick new my-app --git --install  # Non-interactive
-kick new my-app --no-git --no-install  # Skip git and install
-kick new my-app -d ./custom-directory
+kick new my-app --git --install           # Non-interactive (defaults to rest template)
+kick new my-app --no-git --no-install     # Skip git and install
+kick new my-app -d ./custom-directory     # Custom target directory
+kick new my-app -t graphql --pm pnpm --no-git --install  # Fully scriptable
+```
+
+All prompts are skippable via flags, making `kick new` usable in **CI pipelines and shell scripts**:
+
+```bash
+# Fully non-interactive — no TTY required
+kick new my-api --template rest --pm pnpm --no-git --install
 ```
 
 When run without flags, the CLI prompts for:
