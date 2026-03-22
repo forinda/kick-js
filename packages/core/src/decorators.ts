@@ -2,13 +2,19 @@ import 'reflect-metadata'
 import { METADATA, Scope, type BeanOptions, type ServiceOptions } from './interfaces'
 import { Container } from './container'
 
-// ── Deferred Registration Queue ─────────────────────────────────────────
+// ── Decorator Registration System ───────────────────────────────────────
 // Decorators execute at class-definition time (module load). The Container
 // may not exist yet when the first decorator fires. We queue registrations
 // and flush them on first Container.getInstance() call.
+//
+// `allRegistrations` is a persistent registry that survives Container.reset().
+// On reset (HMR), all previously decorated classes are re-registered on the
+// fresh container. This ensures @Service, @Controller, @Repository, etc.
+// all survive HMR without manual re-registration.
 
 type PendingRegistration = { target: any; scope: Scope }
 const pendingRegistrations: PendingRegistration[] = []
+const allRegistrations = new Map<any, Scope>()
 let containerRef: any = null
 
 function flushPending(container: any): void {
@@ -24,10 +30,16 @@ function flushPending(container: any): void {
 // Wire up synchronously — Container._onReady is called on first getInstance()
 Container._onReady = flushPending
 
-// On Container.reset(), update containerRef so subsequent @Service() decorators
-// (from HMR re-evaluation) register on the new container, not the old one.
+// On Container.reset(), update containerRef and replay ALL decorator
+// registrations on the fresh container. This handles HMR where the container
+// is wiped but not all decorated modules are re-evaluated.
 Container._onReset = (container: any) => {
   containerRef = container
+  for (const [target, scope] of allRegistrations) {
+    if (!container.has(target)) {
+      container.register(target, target, scope)
+    }
+  }
 }
 
 // ── Class Decorators ────────────────────────────────────────────────────
@@ -35,6 +47,9 @@ Container._onReset = (container: any) => {
 function registerInContainer(target: any, scope: Scope): void {
   Reflect.defineMetadata(METADATA.INJECTABLE, true, target)
   Reflect.defineMetadata(METADATA.SCOPE, scope, target)
+
+  // Track in persistent registry — survives Container.reset() for HMR replay
+  allRegistrations.set(target, scope)
 
   if (containerRef) {
     // Container already initialized — register immediately
