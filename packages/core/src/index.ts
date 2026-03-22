@@ -43,6 +43,7 @@ export {
   type FileTypeFilter,
   type BaseUploadOptions,
   type ApiQueryParamsConfig,
+  type ApiQueryParamsConfig as QueryParamsConfig,
 } from './decorators'
 
 // Module System
