@@ -304,10 +304,13 @@ async internalEndpoint(ctx: RequestContext) { ... }
 
 Declares the filterable, sortable, and searchable query parameters for an endpoint. This decorator lives in `@forinda/kickjs-core` and works with both the query parser and the Swagger spec generator. When `@forinda/kickjs-swagger` is installed, the declared fields are automatically added as OpenAPI query parameters.
 
+Accepts **both** string-based configs and column-object configs (e.g., `DrizzleQueryParamsConfig`):
+
 ```ts
 import { Controller, Get, ApiQueryParams } from '@forinda/kickjs-core'
 import { RequestContext } from '@forinda/kickjs-http'
 
+// String-based config
 @Controller('/tasks')
 class TaskController {
   @Get('/')
@@ -317,21 +320,37 @@ class TaskController {
     searchable: ['title', 'description'],
   })
   async list(ctx: RequestContext) {
-    const parsed = ctx.qs({
-      filterable: ['status', 'priority', 'assigneeId'],
-      sortable: ['createdAt', 'title', 'priority'],
-      searchable: ['title', 'description'],
-    })
-    // ...
+    return ctx.paginate(
+      (parsed) => this.taskService.findPaginated(parsed),
+      { filterable: ['status', 'priority', 'assigneeId'], sortable: ['createdAt', 'title'] },
+    )
   }
 }
 ```
 
-| Option | Type | Description |
+**With Drizzle Column objects** — pass your `DrizzleQueryParamsConfig` directly:
+
+```ts
+import { TASK_QUERY_CONFIG } from '../constants'
+
+@Controller('/tasks')
+class TaskController {
+  @Get('/')
+  @ApiQueryParams(TASK_QUERY_CONFIG) // Column objects → field names extracted automatically
+  async list(ctx: RequestContext) {
+    return ctx.paginate(
+      (parsed) => this.taskService.findPaginated(parsed),
+      TASK_QUERY_CONFIG,
+    )
+  }
+}
+```
+
+| String-based option | Column-based option | Description |
 |--------|------|-------------|
-| `filterable` | `string[]` | Fields that clients can filter on via `?filter=field:op:value` |
-| `sortable` | `string[]` | Fields that clients can sort by via `?sort=field:direction` |
-| `searchable` | `string[]` | Fields included in free-text `?q=` search |
+| `filterable: string[]` | `columns: Record<string, Column>` | Fields that clients can filter on via `?filter=field:op:value` |
+| `sortable: string[]` | `sortable: Record<string, Column>` | Fields that clients can sort by via `?sort=field:direction` |
+| `searchable: string[]` | `searchColumns: Column[]` | Fields included in free-text `?q=` search |
 
 ## Summary Table
 

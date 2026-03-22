@@ -90,12 +90,60 @@ GET /tasks?q=deploy+script
 
 Restrict which fields clients can filter and sort on. Fields not in the allow-list are silently dropped.
 
+### String-based (standard)
+
 ```ts
-interface QueryFieldConfig {
+const config = {
+  filterable: ['status', 'priority'],
+  sortable: ['createdAt', 'title'],
+  searchable: ['title', 'description'],
+}
+```
+
+### Column-object-based (Drizzle)
+
+If you use `@forinda/kickjs-drizzle`, you can pass a `DrizzleQueryParamsConfig` directly — `ctx.qs()` and `ctx.paginate()` will extract field names from `Object.keys()` automatically:
+
+```ts
+import type { DrizzleQueryParamsConfig } from '@forinda/kickjs-drizzle'
+import { tasks } from '@/db/schema'
+
+export const TASK_QUERY_CONFIG: DrizzleQueryParamsConfig = {
+  columns: {
+    status: tasks.status,
+    priority: tasks.priority,
+  },
+  sortable: {
+    title: tasks.title,
+    createdAt: tasks.createdAt,
+  },
+  searchColumns: [tasks.title, tasks.key],
+}
+
+// Both work:
+const parsed = ctx.qs(TASK_QUERY_CONFIG)
+return ctx.paginate(fetcher, TASK_QUERY_CONFIG)
+```
+
+### TypeScript interface
+
+```ts
+// String-based
+interface StringQueryFieldConfig {
   filterable?: string[]
   sortable?: string[]
   searchable?: string[]
 }
+
+// Column-object-based
+interface ColumnQueryFieldConfig {
+  columns: Record<string, any>
+  sortable?: Record<string, any>
+  searchColumns?: any[]
+}
+
+// Union — both accepted
+type QueryFieldConfig = StringQueryFieldConfig | ColumnQueryFieldConfig
 ```
 
 ## ParsedQuery Result
