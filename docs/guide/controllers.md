@@ -40,14 +40,36 @@ export class TodoController {
 
 ## @Controller Decorator
 
-`@Controller(path?)` registers the class in the DI container as a singleton and sets the base route path. The path defaults to `'/'`.
+`@Controller(path?)` registers the class in the DI container as a singleton and marks it as a controller. The optional path serves as **metadata only** (used by adapters like Swagger for OpenAPI spec generation) — it is **not** baked into the Express router.
 
 ```ts
-@Controller('/admin')  // all routes prefixed with /admin
+@Controller('/admin')
 export class AdminController { ... }
 ```
 
-The controller path is combined with individual route paths. A `@Get('/stats')` inside `@Controller('/admin')` resolves to `/admin/stats`.
+### Route Prefix: Module, Not Controller
+
+The route prefix for a controller comes from the **module's `routes().path`**, not from `@Controller()`. This is the single source of truth for where routes are mounted:
+
+```ts
+// Module defines the mount prefix
+class AdminModule implements AppModule {
+  register(container: Container) { ... }
+  routes() {
+    return { path: '/admin', router: buildRoutes(AdminController) }
+  }
+}
+
+@Controller()  // no path needed — module handles the prefix
+export class AdminController {
+  @Get('/stats')   // resolves to /api/v1/admin/stats
+  async stats(ctx: RequestContext) { ... }
+}
+```
+
+::: warning
+Do **not** set the same path on both the module and the controller. The module path is the mount prefix — the controller path is metadata only. Setting both would have previously caused path doubling (e.g. `/api/v1/admin/admin/stats`).
+:::
 
 ## Route Decorators
 

@@ -77,7 +77,14 @@ export function Configuration(): ClassDecorator {
   }
 }
 
-/** Mark a class as an HTTP controller with an optional route prefix */
+/**
+ * Mark a class as an HTTP controller and register it in the DI container.
+ *
+ * @param path - **Deprecated.** The path parameter is no longer used for routing.
+ *   Route prefixes are defined by the module's `routes().path` — the single source
+ *   of truth for where routes are mounted. This parameter will be removed in a
+ *   future major version.
+ */
 export function Controller(path?: string): ClassDecorator {
   return (target: any) => {
     registerInContainer(target, Scope.SINGLETON)
@@ -149,8 +156,11 @@ export interface RouteDefinition {
   path: string
   handlerName: string
   validation?: {
+    /** JSON Schema object for validating the request body */
     body?: any
+    /** JSON Schema object for validating query parameters */
     query?: any
+    /** JSON Schema object for validating URL params */
     params?: any
     /** Schema name in OpenAPI components/schemas for the request body. Auto-generated from handler name if omitted. */
     name?: string

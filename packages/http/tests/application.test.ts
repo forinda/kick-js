@@ -326,6 +326,45 @@ describe('Application', () => {
     }).not.toThrow()
   })
 
+  it('deduplicates overlapping module path and controller path (KICK-007)', () => {
+    const mounted: string[] = []
+
+    const spyAdapter = {
+      name: 'SpyAdapter',
+      onRouteMount: (_ctrl: any, path: string) => {
+        mounted.push(path)
+      },
+    }
+
+    // Controller path matches module path — should NOT double
+    @Controller('/users')
+    class UsersCtrl {
+      @Get('/me') handle(ctx: RequestContext) {
+        ctx.json({})
+      }
+    }
+
+    class UsersModule implements AppModule {
+      register(container: Container) {
+        reg(UsersCtrl, container)
+      }
+      routes(): ModuleRoutes {
+        return { path: '/users', router: buildRoutes(UsersCtrl), controller: UsersCtrl }
+      }
+    }
+
+    const app = new Application({
+      modules: [UsersModule],
+      adapters: [spyAdapter],
+      middleware: [],
+    })
+    ;(app as any).setup()
+
+    // Mount path stays /api/v1/users — controller path is no longer baked into the router,
+    // so there's no doubling. Routes inside the router are just /me, not /users/me.
+    expect(mounted[0]).toBe('/api/v1/users')
+  })
+
   it('mounts multiple modules with separate paths', () => {
     @Controller()
     class ACtrl {

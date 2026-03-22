@@ -20,11 +20,16 @@ export function getControllerPath(controllerClass: any): string {
  * Build an Express Router from a controller class decorated with @Get, @Post, etc.
  * Resolves the controller from the DI container, wraps handlers in RequestContext,
  * and applies class-level and method-level middleware.
+ *
+ * Routes are registered using only the method-level decorator paths (e.g. @Get('/me') → '/me').
+ * The @Controller path is NOT baked into the router — it serves as metadata only
+ * (used by Swagger and other adapters for introspection).
+ * The module's routes().path is the single source of truth for the mount prefix,
+ * which avoids path doubling when both the module and controller specify the same path.
  */
 export function buildRoutes(controllerClass: any): Router {
   const router = Router()
   const container = Container.getInstance()
-  const controllerPath = getControllerPath(controllerClass)
   const routes: RouteDefinition[] = Reflect.getMetadata(METADATA.ROUTES, controllerClass) || []
 
   // Class-level middleware
@@ -33,8 +38,7 @@ export function buildRoutes(controllerClass: any): Router {
 
   for (const route of routes) {
     const method = route.method.toLowerCase() as 'get' | 'post' | 'put' | 'delete' | 'patch'
-    let routePath = route.path === '/' ? '' : route.path
-    const fullPath = controllerPath === '/' ? routePath || '/' : controllerPath + routePath
+    const fullPath = route.path || '/'
 
     // Method-level middleware
     const methodMiddlewares: MiddlewareHandler[] =

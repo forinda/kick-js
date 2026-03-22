@@ -169,10 +169,9 @@ export class AuthAdapter implements AppAdapter {
    *   2. When a request arrives (e.g. GET /api/v1/users/me):
    *      a. Find the matching mount path prefix ("/api/v1/users")
    *      b. Compute the relative path: "/api/v1/users/me" - "/api/v1/users" = "/me"
-   *      c. Read the controller's @Controller() path and @Get/@Post/... route metadata
-   *      d. Build each route's full path within the router (controller prefix + route path)
-   *      e. Match the relative path against these, including parameterized segments
-   *         (e.g. /:id matches /123)
+   *      c. Read the controller's @Get/@Post/... route metadata
+   *      d. Match the relative path against each route's method-level path,
+   *         including parameterized segments (e.g. /:id matches /123)
    *
    *   3. Once the handler is resolved, `isAuthRequired()` can check @Public(),
    *      @Authenticated(), and @Roles() metadata on the matched method — so
@@ -187,20 +186,16 @@ export class AuthAdapter implements AppAdapter {
     for (const [mountPath, controllerClass] of this.routeControllers) {
       if (!reqPath.startsWith(mountPath)) continue
 
-      const controllerPath: string =
-        Reflect.getMetadata(METADATA.CONTROLLER_PATH, controllerClass) || '/'
       const routes: RouteDefinition[] = Reflect.getMetadata(METADATA.ROUTES, controllerClass) ?? []
 
       // Compute the path relative to the mount point
       const relativePath = reqPath.slice(mountPath.length) || '/'
 
+      // Routes are registered using only method-level paths (no controller prefix),
+      // so match directly against r.path.
       const matched = routes.find((r) => {
         if (r.method !== req.method) return false
-        // Build the full route path within the router (controller prefix + route path)
-        const routeSuffix = r.path === '/' ? '' : r.path
-        const fullRoutePath =
-          controllerPath === '/' ? routeSuffix || '/' : controllerPath + routeSuffix
-        return this.pathMatches(fullRoutePath, relativePath)
+        return this.pathMatches(r.path || '/', relativePath)
       })
 
       if (matched) {
