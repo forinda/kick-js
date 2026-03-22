@@ -1,33 +1,24 @@
 # Benchmarks
 
-KickJS includes a built-in benchmark suite powered by [autocannon](https://github.com/mcollina/autocannon) to measure HTTP performance and track regressions.
+## Benchmarking Your App
 
-## Running Benchmarks
+Use [autocannon](https://github.com/mcollina/autocannon) to load-test your KickJS application:
 
 ```bash
-# Full benchmark (100 connections, 30s per endpoint)
-pnpm bench
+# Install autocannon
+pnpm add -D autocannon
 
-# Quick run (50 connections, 10s)
-pnpm bench:quick
+# Start your app
+kick dev
 
-# Custom settings
-pnpm bench -- --connections 200 --duration 60
+# In another terminal — 100 concurrent connections for 30 seconds
+npx autocannon http://localhost:3000/api/v1/users -c 100 -d 30
+
+# Quick test — 50 connections, 10 seconds
+npx autocannon http://localhost:3000/api/v1/users -c 50 -d 10
 ```
 
-Results are saved to `benchmark-results.json` for comparison over time.
-
-## What's Tested
-
-| Endpoint | Description |
-|---|---|
-| Minimal (text) | Raw `res.send('ok')` — measures base framework overhead |
-| JSON object | Single object `res.json({...})` — typical API response |
-| JSON array (50 items) | List endpoint with 50 items — serialization cost |
-| Middleware stack (3 layers) | Request ID + auth + timing middleware — real-world chain |
-| POST + body parse | `express.json()` + body parsing — write endpoint |
-
-## Metrics
+### Metrics to Watch
 
 | Metric | What it tells you |
 |---|---|
@@ -37,9 +28,19 @@ Results are saved to `benchmark-results.json` for comparison over time.
 | **p99** | Worst-case latency — only 1% are slower |
 | **Errors** | Failed requests under load |
 
-## Sample Results
+### Tips for Accurate Results
 
-Results vary by machine. Here's a reference from a typical dev machine (Node 24, Linux):
+- Run with `NODE_ENV=production` — Express disables debugging features
+- Close other applications to reduce CPU contention
+- Run multiple times and compare median results
+- Use a consistent machine for tracking regressions
+- Don't compare across different hardware
+
+## Framework Reference Numbers
+
+The KickJS monorepo includes a benchmark suite that measures framework overhead. These numbers are from the repo's internal tests, not something you run in your app.
+
+Results vary by machine. Reference from a typical dev machine (Node 24, Linux):
 
 | Endpoint | Req/s | p50 | p97.5 | p99 |
 |---|---|---|---|---|
@@ -52,27 +53,4 @@ Results vary by machine. Here's a reference from a typical dev machine (Node 24,
 Key takeaways:
 - Middleware overhead is minimal (~5% for 3 layers)
 - JSON serialization is the main cost for large responses
-- These numbers reflect Express 5 performance — KickJS's decorator/DI layer adds negligible overhead
-
-## Benchmarking Your App
-
-You can benchmark your own KickJS app with autocannon directly:
-
-```bash
-# Install autocannon globally
-pnpm add -g autocannon
-
-# Start your app
-pnpm dev
-
-# In another terminal
-autocannon http://localhost:3000/api/v1/users -c 100 -d 30
-```
-
-## Tips for Accurate Results
-
-- Run with `NODE_ENV=production` — Express disables debugging features
-- Close other applications to reduce CPU contention
-- Run multiple times and compare median results
-- Use a consistent machine for tracking regressions
-- Don't compare across different hardware
+- KickJS's decorator/DI layer adds negligible overhead over raw Express 5
