@@ -64,9 +64,13 @@ process.env.PORT = '4000'
 const env = loadEnv(envSchema) // re-parsed with new PORT
 ```
 
-## ConfigService
+## Accessing Config in Services
 
-`ConfigService` is an injectable singleton that wraps `loadEnv()`. Inject it into any service or controller:
+There are two approaches for accessing environment config via DI. Choose based on whether you need full type safety.
+
+### Option 1: `ConfigService` (untyped, quick)
+
+`ConfigService` is a built-in injectable singleton that wraps `loadEnv()` with the base schema. It works without any setup but does **not** provide typed keys or return values — you must cast manually:
 
 ```ts
 import { Service, Autowired } from '@forinda/kickjs-core'
@@ -74,22 +78,77 @@ import { ConfigService } from '@forinda/kickjs-config'
 
 @Service()
 class DatabaseService {
-  @Autowired()
-  private config!: ConfigService
+  @Autowired() private config!: ConfigService
 
   connect() {
-    const url = this.config.get<string>('DATABASE_URL')
-    // ...
+    const url = this.config.get<string>('DATABASE_URL') // manual cast, no autocomplete
   }
 }
 ```
 
+### Option 2: `createConfigService` (fully typed, recommended)
+
+`createConfigService()` creates an injectable service class bound to your Zod schema. Keys autocomplete and return values are inferred from the schema — no manual casting:
+
+```ts
+// src/config/env.ts
+import { z } from 'zod'
+import { defineEnv, loadEnv, createConfigService } from '@forinda/kickjs-config'
+
+export const envSchema = defineEnv((base) =>
+  base.extend({
+    DATABASE_URL: z.string().url(),
+    JWT_SECRET: z.string().min(32),
+    REDIS_URL: z.string().url().optional(),
+  })
+)
+
+// Direct access (no DI needed)
+export const env = loadEnv(envSchema)
+env.DATABASE_URL  // string — fully typed
+env.JWT_SECRET    // string — fully typed
+env.REDIS_URL     // string | undefined — fully typed
+
+// Injectable service (for DI)
+export const AppConfigService = createConfigService(envSchema)
+export type AppConfigService = InstanceType<typeof AppConfigService>
+```
+
+Then inject it in any service or controller:
+
+```ts
+import { Service, Autowired } from '@forinda/kickjs-core'
+import { AppConfigService } from '../config/env'
+
+@Service()
+class DatabaseService {
+  @Autowired() private config!: AppConfigService
+
+  connect() {
+    const url = this.config.get('DATABASE_URL')  // string — autocompletes!
+    const bad = this.config.get('NOPE')           // TS error — key doesn't exist
+  }
+}
+```
+
+### Which to use?
+
+| | `loadEnv()` | `ConfigService` | `createConfigService()` |
+| --- | --- | --- | --- |
+| **Type safety** | Full | None (manual cast) | Full |
+| **DI injectable** | No | Yes | Yes |
+| **Key autocomplete** | Yes | No | Yes |
+| **Best for** | Module-scope access | Quick prototyping | Production services |
+
 ### Available Methods
+
+Both `ConfigService` and `createConfigService` instances provide:
 
 | Method | Return | Description |
 | --- | --- | --- |
-| `get<T>(key)` | `T` | Get a single env variable by key |
-| `getAll()` | `Readonly<Record>` | Get a frozen copy of all config values |
+| `get(key)` | typed value | Get a single env variable by key |
+| `getAll()` | `Readonly<TEnv>` | Get a frozen copy of all config values |
+| `reload()` | `void` | Re-read `.env` and re-validate (for HMR) |
 | `isProduction()` | `boolean` | `NODE_ENV === 'production'` |
 | `isDevelopment()` | `boolean` | `NODE_ENV === 'development'` |
 | `isTest()` | `boolean` | `NODE_ENV === 'test'` |
