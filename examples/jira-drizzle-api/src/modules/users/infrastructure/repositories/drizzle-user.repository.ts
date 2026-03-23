@@ -8,7 +8,7 @@ import type { IUserRepository } from '../../domain/repositories/user.repository'
 import type { CreateUserDTO } from '../../application/dtos/create-user.dto'
 import type { UpdateUserDTO } from '../../application/dtos/update-user.dto'
 import { USER_QUERY_CONFIG } from '../../constants'
-import { AppDatabase } from '@/db'
+import type { AppDatabase } from '@/db'
 import { queryAdapter } from '@/shared/infrastructure/query-adapter'
 
 @Repository()
