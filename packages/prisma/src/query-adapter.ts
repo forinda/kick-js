@@ -1,9 +1,28 @@
 import type { QueryBuilderAdapter, ParsedQuery, FilterItem, SortItem } from '@forinda/kickjs-http'
 
-/** Configuration for the Prisma query builder adapter */
-export interface PrismaQueryConfig {
+/**
+ * Configuration for the Prisma query builder adapter.
+ *
+ * Use the generic parameter to constrain `searchColumns` to actual model field names:
+ *
+ * @example
+ * ```ts
+ * import type { User } from '@prisma/client'
+ *
+ * // Type-safe — only User field names are accepted
+ * const config: PrismaQueryConfig<User> = {
+ *   searchColumns: ['name', 'email'],  // ✓ valid User fields
+ * }
+ *
+ * // Without generic — accepts any string (backward compatible)
+ * const config: PrismaQueryConfig = {
+ *   searchColumns: ['name', 'email'],
+ * }
+ * ```
+ */
+export interface PrismaQueryConfig<TModel = Record<string, any>> {
   /** Columns to search across when a search string is provided */
-  searchColumns?: string[]
+  searchColumns?: (keyof TModel & string)[]
 }
 
 /** Result shape matching Prisma's findMany arguments */
@@ -19,19 +38,26 @@ export interface PrismaQueryResult {
  *
  * @example
  * ```ts
+ * import type { User } from '@prisma/client'
+ *
  * const adapter = new PrismaQueryAdapter()
  * const parsed = parseQuery(req.query)
- * const args = adapter.build(parsed, { searchColumns: ['name', 'email'] })
+ *
+ * // Type-safe — only User fields allowed in searchColumns
+ * const args = adapter.build(parsed, { searchColumns: ['name', 'email'] } satisfies PrismaQueryConfig<User>)
  * const users = await prisma.user.findMany(args)
  * ```
  */
 export class PrismaQueryAdapter implements QueryBuilderAdapter<
   PrismaQueryResult,
-  PrismaQueryConfig
+  PrismaQueryConfig<any>
 > {
   readonly name = 'PrismaQueryAdapter'
 
-  build(parsed: ParsedQuery, config: PrismaQueryConfig = {}): PrismaQueryResult {
+  build<TModel = Record<string, any>>(
+    parsed: ParsedQuery,
+    config: PrismaQueryConfig<TModel> = {},
+  ): PrismaQueryResult {
     const result: PrismaQueryResult = {}
 
     // Build where clause from filters and search

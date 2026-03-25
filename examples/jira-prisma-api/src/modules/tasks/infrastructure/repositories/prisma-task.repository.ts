@@ -3,7 +3,7 @@ import { PRISMA_CLIENT } from '@forinda/kickjs-prisma'
 import type { PrismaClient } from '@prisma/client'
 import type { ParsedQuery } from '@forinda/kickjs-http'
 import type { ITaskRepository, NewTask } from '../../domain/repositories/task.repository'
-import { TASK_QUERY_CONFIG } from '../../constants'
+
 import { queryAdapter } from '@/shared/infrastructure/query-adapter'
 
 @Repository()
@@ -22,7 +22,7 @@ export class PrismaTaskRepository implements ITaskRepository {
   }
 
   async findPaginated(parsed: ParsedQuery, projectId?: string) {
-    const query = queryAdapter.build(parsed, TASK_QUERY_CONFIG)
+    const query = queryAdapter.build(parsed, { searchColumns: ['title', 'key'] })
     const where = projectId
       ? query.where
         ? { AND: [query.where, { projectId }] }

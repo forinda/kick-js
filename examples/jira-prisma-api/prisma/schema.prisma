@@ -69,6 +69,7 @@ model User {
   activities         Activity[]
   channelMemberships ChannelMember[]
   refreshTokens      RefreshToken[]
+  createdChannels    Channel[]      @relation("ChannelCreator")
 
   @@map("users")
 }
@@ -97,11 +98,12 @@ model Workspace {
   updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
 
   // Relations
-  owner    User              @relation("WorkspaceOwner", fields: [ownerId], references: [id])
-  members  WorkspaceMember[]
-  projects Project[]
-  labels   Label[]
-  channels Channel[]
+  owner      User              @relation("WorkspaceOwner", fields: [ownerId], references: [id])
+  members    WorkspaceMember[]
+  projects   Project[]
+  labels     Label[]
+  channels   Channel[]
+  tasks      Task[]
   activities Activity[]
 
   @@map("workspaces")
@@ -136,10 +138,11 @@ model Project {
   updatedAt     DateTime @default(now()) @updatedAt @map("updated_at")
 
   // Relations
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  lead      User?     @relation("ProjectLead", fields: [leadId], references: [id], onDelete: SetNull)
-  tasks     Task[]
-  channels  Channel[]
+  workspace  Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  lead       User?      @relation("ProjectLead", fields: [leadId], references: [id], onDelete: SetNull)
+  tasks      Task[]
+  channels   Channel[]
+  activities Activity[]
 
   @@unique([workspaceId, key])
   @@map("projects")
@@ -266,7 +269,7 @@ model Channel {
   // Relations
   workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project   Project?        @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  createdBy User            @relation(fields: [createdById], references: [id])
+  createdBy User            @relation("ChannelCreator", fields: [createdById], references: [id])
   members   ChannelMember[]
   messages  Message[]
 

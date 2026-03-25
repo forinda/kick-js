@@ -5,7 +5,7 @@ import type { ParsedQuery } from '@forinda/kickjs-http'
 import type { IUserRepository } from '../../domain/repositories/user.repository'
 import type { CreateUserDTO } from '../../application/dtos/create-user.dto'
 import type { UpdateUserDTO } from '../../application/dtos/update-user.dto'
-import { USER_QUERY_CONFIG } from '../../constants'
+
 import { queryAdapter } from '@/shared/infrastructure/query-adapter'
 
 @Repository()
@@ -25,7 +25,7 @@ export class PrismaUserRepository implements IUserRepository {
   }
 
   async findPaginated(parsed: ParsedQuery) {
-    const query = queryAdapter.build(parsed, USER_QUERY_CONFIG)
+    const query = queryAdapter.build(parsed, { searchColumns: ['firstName', 'lastName', 'email'] })
 
     const [data, total] = await Promise.all([
       this.prisma.user.findMany({

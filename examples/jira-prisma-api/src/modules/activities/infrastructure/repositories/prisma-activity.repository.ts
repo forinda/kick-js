@@ -6,7 +6,7 @@ import type {
   IActivityRepository,
   NewActivity,
 } from '../../domain/repositories/activity.repository'
-import { ACTIVITY_QUERY_CONFIG } from '../../constants'
+
 import { queryAdapter } from '@/shared/infrastructure/query-adapter'
 
 @Repository()
@@ -17,7 +17,7 @@ export class PrismaActivityRepository implements IActivityRepository {
     parsed: ParsedQuery,
     scope: { workspaceId: string; projectId?: string; taskId?: string },
   ) {
-    const query = queryAdapter.build(parsed, ACTIVITY_QUERY_CONFIG)
+    const query = queryAdapter.build(parsed, { searchColumns: ['action'] })
     const scopeCondition: any = { workspaceId: scope.workspaceId }
     if (scope.projectId) scopeCondition.projectId = scope.projectId
     if (scope.taskId) scopeCondition.taskId = scope.taskId

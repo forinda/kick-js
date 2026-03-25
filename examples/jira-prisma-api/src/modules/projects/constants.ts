@@ -1,5 +1,7 @@
-import type { PrismaQueryConfig } from '@forinda/kickjs-prisma'
+import type { QueryParamsConfig } from '@forinda/kickjs-core'
 
-export const PROJECT_QUERY_CONFIG: PrismaQueryConfig = {
-  searchColumns: ['name', 'key'],
+export const PROJECT_QUERY_CONFIG: QueryParamsConfig = {
+  filterable: ['workspaceId', 'isArchived'],
+  sortable: ['name', 'createdAt', 'updatedAt'],
+  searchable: ['name', 'key'],
 }

@@ -6,7 +6,7 @@ import type {
   INotificationRepository,
   NewNotification,
 } from '../../domain/repositories/notification.repository'
-import { NOTIFICATION_QUERY_CONFIG } from '../../constants'
+
 import { queryAdapter } from '@/shared/infrastructure/query-adapter'
 
 @Repository()
@@ -18,7 +18,7 @@ export class PrismaNotificationRepository implements INotificationRepository {
   }
 
   async findPaginated(parsed: ParsedQuery, recipientId: string) {
-    const query = queryAdapter.build(parsed, NOTIFICATION_QUERY_CONFIG)
+    const query = queryAdapter.build(parsed, { searchColumns: ['title', 'body'] })
     const where = query.where
       ? { AND: [query.where, { recipientId }] }
       : { recipientId }

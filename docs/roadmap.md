@@ -22,10 +22,10 @@
 - [x] Validate `modules.repo` at config load time — warn if value doesn't match a known built-in pattern (KICK-024)
 
 ### Prisma Adapter
-- [ ] `PrismaQueryAdapter` type-safe `searchColumns` — accept Prisma model field names via generics instead of plain strings (KICK-025)
+- [x] `PrismaQueryAdapter` type-safe `searchColumns` — accept Prisma model field names via generics instead of plain strings (KICK-025)
 
 ### Examples
-- [ ] Verify `jira-prisma-api` compiles against Prisma schema — run `prisma generate` + `tsc --noEmit` to catch type mismatches (KICK-026)
+- [x] Verify `jira-prisma-api` compiles against Prisma schema — run `prisma generate` + `tsc --noEmit` to catch type mismatches (KICK-026)
 
 ### Future
 - [ ] Type-safe API client generation (tRPC-like) — `kick generate:client` from route decorators + Zod DTOs (KICK-018)

@@ -3,7 +3,7 @@ import { PRISMA_CLIENT } from '@forinda/kickjs-prisma'
 import type { PrismaClient } from '@prisma/client'
 import type { ParsedQuery } from '@forinda/kickjs-http'
 import type { IWorkspaceRepository } from '../../domain/repositories/workspace.repository'
-import { WORKSPACE_QUERY_CONFIG } from '../../constants'
+
 import { queryAdapter } from '@/shared/infrastructure/query-adapter'
 
 @Repository()
@@ -27,7 +27,7 @@ export class PrismaWorkspaceRepository implements IWorkspaceRepository {
   }
 
   async findPaginated(parsed: ParsedQuery) {
-    const query = queryAdapter.build(parsed, WORKSPACE_QUERY_CONFIG)
+    const query = queryAdapter.build(parsed, { searchColumns: ['name', 'slug'] })
 
     const [data, total] = await Promise.all([
       this.prisma.workspace.findMany({

@@ -3,7 +3,7 @@ import { PRISMA_CLIENT } from '@forinda/kickjs-prisma'
 import type { PrismaClient } from '@prisma/client'
 import type { ParsedQuery } from '@forinda/kickjs-http'
 import type { ILabelRepository, NewLabel } from '../../domain/repositories/label.repository'
-import { LABEL_QUERY_CONFIG } from '../../constants'
+
 import { queryAdapter } from '@/shared/infrastructure/query-adapter'
 
 @Repository()
@@ -22,7 +22,7 @@ export class PrismaLabelRepository implements ILabelRepository {
   }
 
   async findPaginated(parsed: ParsedQuery, workspaceId?: string) {
-    const query = queryAdapter.build(parsed, LABEL_QUERY_CONFIG)
+    const query = queryAdapter.build(parsed, { searchColumns: ['name'] })
     const where = workspaceId
       ? query.where
         ? { AND: [query.where, { workspaceId }] }

@@ -3,7 +3,7 @@ import { PRISMA_CLIENT } from '@forinda/kickjs-prisma'
 import type { PrismaClient } from '@prisma/client'
 import type { ParsedQuery } from '@forinda/kickjs-http'
 import type { IMessageRepository, NewMessage } from '../../domain/repositories/message.repository'
-import { MESSAGE_QUERY_CONFIG } from '../../constants'
+
 import { queryAdapter } from '@/shared/infrastructure/query-adapter'
 
 @Repository()
@@ -26,7 +26,7 @@ export class PrismaMessageRepository implements IMessageRepository {
   }
 
   async findPaginated(parsed: ParsedQuery, channelId: string) {
-    const query = queryAdapter.build(parsed, MESSAGE_QUERY_CONFIG)
+    const query = queryAdapter.build(parsed, { searchColumns: ['content'] })
     const where = query.where
       ? { AND: [query.where, { channelId }] }
       : { channelId }
