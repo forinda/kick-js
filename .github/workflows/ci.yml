@@ -32,6 +32,8 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
 
       - name: Build framework packages
         run: pnpm turbo build --filter='./packages/*'
