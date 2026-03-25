@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-cron",
-  "version": "1.3.1",
+  "version": "1.3.2",
   "description": "Production-grade cron job scheduling with pluggable backends for KickJS",
   "keywords": [
     "kickjs",
