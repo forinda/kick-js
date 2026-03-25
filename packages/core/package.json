@@ -88,8 +88,8 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup",
-    "dev": "tsup --watch",
+    "build": "vite build && tsc --emitDeclarationOnly --outDir dist --declaration",
+    "dev": "vite build --watch",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
@@ -104,8 +104,8 @@
   "devDependencies": {
     "@swc/core": "^1.7.28",
     "@types/node": "^24.5.2",
-    "tsup": "^8.5.0",
     "typescript": "^5.9.2",
+    "vite": "^8.0.2",
     "vitest": "^3.2.4"
   },
   "publishConfig": {
