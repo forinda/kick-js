@@ -73,8 +73,8 @@ export function registerGenerateCommand(program: Command): void {
 
   // ── kick g module <name> ────────────────────────────────────────────
   gen
-    .command('module <name>')
-    .description('Generate a module (structure depends on project pattern)')
+    .command('module <names...>')
+    .description('Generate one or more modules (e.g. kick g module user task project)')
     .option('--no-entity', 'Skip entity and value object generation')
     .option('--no-tests', 'Skip test file generation')
     .option('--repo <type>', 'Repository implementation: inmemory | drizzle | prisma')
@@ -83,7 +83,7 @@ export function registerGenerateCommand(program: Command): void {
     .option('--modules-dir <dir>', 'Modules directory')
     .option('--no-pluralize', 'Use singular names (skip auto-pluralization)')
     .option('-f, --force', 'Overwrite existing files without prompting')
-    .action(async (name: string, opts: any, cmd: any) => {
+    .action(async (names: string[], opts: any, cmd: any) => {
       const dryRun = isDryRun(cmd)
       setDryRun(dryRun)
       const config = await loadKickConfig(process.cwd())
@@ -91,24 +91,26 @@ export function registerGenerateCommand(program: Command): void {
       const modulesDir = opts.modulesDir ?? mc.dir ?? 'src/modules'
       const repo: RepoType = opts.repo ?? resolveRepoType(mc.repo)
       const pattern = opts.pattern ?? config?.pattern ?? 'ddd'
-      // Commander's --no-pluralize always defines opts.pluralize (true/false).
-      // Only override config when the user explicitly passed --no-pluralize.
       const shouldPluralize = opts.pluralize === false ? false : (mc.pluralize ?? true)
 
-      const files = await generateModule({
-        name,
-        modulesDir: resolve(modulesDir),
-        noEntity: opts.entity === false,
-        noTests: opts.tests === false,
-        repo,
-        minimal: opts.minimal,
-        force: opts.force,
-        pattern,
-        dryRun,
-        pluralize: shouldPluralize,
-        prismaClientPath: mc.prismaClientPath,
-      })
-      printGenerated(files, dryRun)
+      const allFiles: string[] = []
+      for (const name of names) {
+        const files = await generateModule({
+          name,
+          modulesDir: resolve(modulesDir),
+          noEntity: opts.entity === false,
+          noTests: opts.tests === false,
+          repo,
+          minimal: opts.minimal,
+          force: opts.force,
+          pattern,
+          dryRun,
+          pluralize: shouldPluralize,
+          prismaClientPath: mc.prismaClientPath,
+        })
+        allFiles.push(...files)
+      }
+      printGenerated(allFiles, dryRun)
     })
 
   // ── kick g adapter <name> ──────────────────────────────────────────

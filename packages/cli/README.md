@@ -21,7 +21,7 @@ kick build                # Production build via Vite
 kick start                # Run production build
 kick info                 # Print system and framework info
 
-kick g module <name>      # Generate full DDD module
+kick g module <names...>  # Generate one or more DDD modules
 kick g scaffold <name>    # Generate CRUD module from field definitions
 kick g controller <name>  # Generate controller
 kick g service <name>     # Generate service
@@ -30,6 +30,7 @@ kick g guard <name>       # Generate auth guard
 kick g adapter <name>     # Generate lifecycle adapter
 kick g dto <name>         # Generate DTO with Zod schema
 
+kick rm module <names...> # Remove one or more modules
 kick add <pkg>            # Install a KickJS package + peers
 kick add --list           # Show all available packages
 ```

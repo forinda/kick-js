@@ -6,10 +6,11 @@ Run `kick g --list` to see all available generators at a glance.
 
 ## kick g module
 
-Generate a module whose structure depends on the project `pattern` in `kick.config.ts`.
+Generate one or more modules. Structure depends on the project `pattern` in `kick.config.ts`.
 
 ```bash
 kick g module product
+kick g module user task project    # generate multiple at once
 ```
 
 ::: tip Pattern determines structure
@@ -291,6 +292,18 @@ export class ProductModule implements AppModule {
   }
 }
 ```
+
+## kick rm module
+
+Remove one or more modules. Deletes the module directory and unregisters it from `src/modules/index.ts`.
+
+```bash
+kick rm module user                  # remove a single module
+kick rm module user task project     # remove multiple at once
+kick rm module user --force          # skip confirmation prompt
+```
+
+The command also supports `kick remove module` as the full form.
 
 ## Module-Scoped vs Global Generation
 
