@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-multi-tenant",
-  "version": "1.2.11",
+  "version": "1.2.12",
   "description": "Multi-tenancy helpers for KickJS — tenant resolution, scoped DI, and database routing",
   "keywords": [
     "kickjs",

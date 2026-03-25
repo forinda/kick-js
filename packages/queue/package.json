@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-queue",
-  "version": "1.2.11",
+  "version": "1.2.12",
   "description": "BullMQ queue/worker adapter with decorator-driven job processing for KickJS",
   "keywords": [
     "kickjs",
