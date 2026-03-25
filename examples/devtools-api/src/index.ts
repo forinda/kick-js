@@ -39,7 +39,8 @@ const concurrencyTracker = () => {
 
 // ── DevTools adapter ────────────────────────────────────────────────
 const devtools = new DevToolsAdapter({
-  enabled: true,
+  // Defaults to disabled in production (NODE_ENV=production).
+  // Remove `enabled: true` to respect the default — never expose in prod.
   exposeConfig: true,
   configPrefixes: ['APP_', 'NODE_ENV', 'PORT'],
   errorRateThreshold: 0.3,
