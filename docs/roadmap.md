@@ -27,6 +27,23 @@
 ### Examples
 - [x] Verify `jira-prisma-api` compiles against Prisma schema — run `prisma generate` + `tsc --noEmit` to catch type mismatches (KICK-026)
 
+### Prisma 7 Compatibility (KICK-027)
+Prisma 7 introduces several breaking changes that affect `@forinda/kickjs-prisma` and the `jira-prisma-api` example:
+
+- [x] **PrismaAdapter: support driver adapters** — Logging now uses `$extends` fallback when `$on` is unavailable (Prisma 7). `PrismaAdapterOptions.client` is `any`-typed, already version-agnostic.
+- [x] **Import path change** — `jira-prisma-v7-api` uses `@/generated/prisma/client`. CLI template includes a Prisma 7 import note.
+- [x] **Schema generator update** — v7 example uses `provider = "prisma-client"` with `output` field + `prisma.config.ts`.
+- [x] **Remove middleware usage** — No `$use()` calls in adapter. Logging uses `$extends` for Prisma 7+.
+- [x] **Env loading** — v7 example uses `dotenv/config` in `prisma.config.ts`. `@forinda/kickjs-config` loads env before app bootstrap.
+- [x] **jira-prisma-v7-api example** — Full v7 migration: driver adapters, generated client path, prisma.config.ts, 47 files updated.
+- [x] **Peer dependency range** — `@prisma/client` marked optional in `peerDependenciesMeta` for Prisma 7 users.
+
+### CLI
+- [ ] Configurable Prisma generated client path in `modules` config — e.g. `modules.prismaClientPath: '@/generated/prisma/client'` so the `--repo prisma` template imports from the correct folder. Must resolve within `src/` for alias compatibility (KICK-029)
+
+### Code Quality
+- [ ] Remove `any` casts in jira-prisma-v7-api repositories — properly type Prisma `include` relation results instead of `(r: any)` workarounds (KICK-028)
+
 ### Future
 - [ ] Type-safe API client generation (tRPC-like) — `kick generate:client` from route decorators + Zod DTOs (KICK-018)
 - [ ] `kick deploy` — deploy to Fly.io, Railway, Docker

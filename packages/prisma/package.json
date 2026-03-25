@@ -52,6 +52,11 @@
   "peerDependencies": {
     "@prisma/client": ">=5.0.0"
   },
+  "peerDependenciesMeta": {
+    "@prisma/client": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@types/node": "^24.5.2",
     "tsup": "^8.5.0",

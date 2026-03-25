@@ -287,10 +287,14 @@ export function generatePrismaRepository(
  *
  * Ensure your Prisma schema has a '${pascal}' model defined.
  *
+ * NOTE: For Prisma 7+, change the PrismaClient import to your generated output path:
+ *   import type { PrismaClient } from '@/generated/prisma'
+ *
  * @Repository() registers this class in the DI container as a singleton.
  */
 import { Repository, HttpException, Inject } from '@forinda/kickjs-core'
 import { PRISMA_CLIENT } from '@forinda/kickjs-prisma'
+// Prisma 5/6: '@prisma/client' | Prisma 7+: your generated output path (e.g. '@/generated/prisma')
 import type { PrismaClient } from '@prisma/client'
 import type { ParsedQuery } from '@forinda/kickjs-http'
 import type { I${pascal}Repository } from '${repoPrefix}/${kebab}.repository'

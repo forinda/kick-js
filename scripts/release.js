@@ -68,6 +68,7 @@ const EXAMPLES = [
   'examples/jira-drizzle-api',
   'examples/jira-mongoose-api',
   'examples/jira-prisma-api',
+  'examples/jira-prisma-v7-api',
 ]
 
 const RELEASE_TYPES = ['patch', 'minor', 'major', 'prerelease', 'custom']
