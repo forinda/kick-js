@@ -667,7 +667,7 @@ importers:
         version: 5.2.1
       joi:
         specifier: ^18.0.2
-        version: 18.0.2
+        version: 18.1.1
       joi-to-json:
         specifier: ^5.0.1
         version: 5.0.1
@@ -2959,9 +2959,6 @@ packages:
   '@shikijs/vscode-textmate@10.0.2':
     resolution: {integrity: sha512-83yeghZ2xxin3Nj8z1NMd/NCuca+gsYXswywDy5bHvwlWL8tpTQmzGeUuHd9FC3E/SBEMvzJRwWEOz5gGes9Qg==}
 
-  '@standard-schema/spec@1.1.0':
-    resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
-
   '@socket.io/component-emitter@3.1.2':
     resolution: {integrity: sha512-9BCxFwvbGg/RsZK9tjXd8s4UcwR0MWeFQ1XEKIQVVvAGJyINdrqKMcTRyLoK8Rse1GjzLV9cwjWV1olXRWEXVA==}
 
@@ -4234,8 +4231,8 @@ packages:
   joi-to-json@5.0.1:
     resolution: {integrity: sha512-0v5BGa/S0TU8WqPnxm3K78KXg4FPHOo0E41Gndof/hOdyek4B/oTf78PvTwyE8hRa6kG7R/NTRns1z9easHPKw==}
 
-  joi@18.0.2:
-    resolution: {integrity: sha512-RuCOQMIt78LWnktPoeBL0GErkNaJPTBGcYuyaBvUOQSpcpcLfWrHPPihYdOGbV5pam9VTWbeoF7TsGiHugcjGA==}
+  joi@18.1.1:
+    resolution: {integrity: sha512-pJkBiPtNo+o0h19LfSvUN46Y5zY+ck99AtHwch9n2HqVLNRgP0ZMyIH8FRMoP+HV8hy/+AG99dXFfwpf83iZfQ==}
     engines: {node: '>= 20'}
 
   joycon@3.1.1:
@@ -7051,8 +7048,6 @@ snapshots:
 
   '@shikijs/vscode-textmate@10.0.2': {}
 
-  '@standard-schema/spec@1.1.0': {}
-
   '@socket.io/component-emitter@3.1.2': {}
 
   '@stablelib/base64@1.0.1': {}
@@ -8413,7 +8408,7 @@ snapshots:
       combinations: 1.0.0
       lodash: 4.17.23
 
-  joi@18.0.2:
+  joi@18.1.1:
     dependencies:
       '@hapi/address': 5.1.1
       '@hapi/formula': 3.0.2
