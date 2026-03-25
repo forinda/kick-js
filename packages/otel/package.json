@@ -52,8 +52,9 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup",
-    "dev": "tsup --watch",
+    "build": "vite build && pnpm build:types",
+    "build:types": "tsc -p tsconfig.build.json",
+    "dev": "vite build --watch",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist .turbo",
     "lint": "tsc --noEmit"
@@ -87,7 +88,7 @@
     "@opentelemetry/sdk-metrics": "^2.6.1",
     "@opentelemetry/semantic-conventions": "^1.4.0",
     "@types/node": "^24.5.2",
-    "tsup": "^8.5.0",
+    "vite": "^8.0.2",
     "typescript": "^5.9.2"
   },
   "publishConfig": {
