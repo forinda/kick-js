@@ -60,7 +60,7 @@
   "dependencies": {
     "@forinda/kickjs-core": "workspace:*",
     "reflect-metadata": "^0.2.2",
-    "ws": "^8.18.0"
+    "ws": "^8.20.0"
   },
   "devDependencies": {
     "@swc/core": "^1.7.28",
