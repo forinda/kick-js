@@ -9,7 +9,13 @@ export const rootLogger = pino({
     ? {
         transport: {
           target: 'pino-pretty',
-          options: { colorize: true, translateTime: 'SYS:HH:MM:ss.l' },
+          options: {
+            colorize: true,
+            translateTime: 'SYS:HH:MM:ss.l',
+            singleLine: true,
+            ignore: 'pid,hostname,component',
+            messageFormat: '{if component}[{component}] {end}{msg}',
+          },
         },
       }
     : {}),
