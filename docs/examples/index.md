@@ -17,6 +17,17 @@ KickJS ships with example applications that demonstrate different features and p
 
 [View source](https://github.com/forinda/kick-js/tree/main/examples/jira-drizzle-api) | [Full docs](./jira-drizzle-api)
 
+### Jira Clone (Prisma)
+
+**What it shows:** The same Jira clone using Prisma ORM with PostgreSQL instead of Drizzle.
+
+- Same 14 modules with Prisma Client repositories
+- Declarative `schema.prisma` with auto-generated client
+- `@forinda/kickjs-prisma` adapter with `PRISMA_CLIENT` DI token
+- `prisma db push` for schema sync, `prisma migrate` for production
+
+[View source](https://github.com/forinda/kick-js/tree/main/examples/jira-prisma-api) | [Full docs](./jira-prisma-api)
+
 ### Jira Clone (Mongoose)
 
 **What it shows:** The same Jira clone using MongoDB and Mongoose instead of PostgreSQL.

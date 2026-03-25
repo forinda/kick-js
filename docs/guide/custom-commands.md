@@ -41,9 +41,11 @@ The `defineConfig` helper provides type safety for your configuration:
 import { defineConfig } from '@forinda/kickjs-cli'
 
 export default defineConfig({
-  modulesDir: 'src/modules',
-  defaultRepo: 'drizzle',
-  schemaDir: 'src/db/schema',
+  modules: {
+    dir: 'src/modules',
+    repo: 'drizzle',
+    schemaDir: 'src/db/schema',
+  },
   style: {
     semicolons: false,
     quotes: 'single',
@@ -123,8 +125,10 @@ A production `kick.config.ts` with Drizzle ORM commands:
 import { defineConfig } from '@forinda/kickjs-cli'
 
 export default defineConfig({
-  modulesDir: 'src/modules',
-  defaultRepo: 'drizzle',
+  modules: {
+    dir: 'src/modules',
+    repo: 'drizzle',
+  },
   commands: [
     {
       name: 'db:generate',

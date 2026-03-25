@@ -372,8 +372,12 @@ import { defineConfig } from '@forinda/kickjs-cli'
 
 export default defineConfig({
   pattern: 'rest',
-  modulesDir: 'src/modules',
-  defaultRepo: 'drizzle',
+  modules: {
+    dir: 'src/modules',
+    repo: 'drizzle',
+    pluralize: true,
+    schemaDir: 'src/db/schema',
+  },
   copyDirs: ['src/views', 'src/emails'],
   commands: [
     {
@@ -414,15 +418,27 @@ copyDirs: [
 
 If a source directory does not exist, the CLI logs a warning and skips it.
 
+### `modules`
+
+Module generation settings — controls how `kick g module` produces code.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `modules.dir` | `string` | `'src/modules'` | Where generators place module files |
+| `modules.repo` | `string \| { name: string }` | `'inmemory'` | Default repository type. Built-in: `'drizzle'`, `'inmemory'`, `'prisma'`. Custom: `{ name: 'typeorm' }` |
+| `modules.pluralize` | `boolean` | `true` | Whether to pluralize module folder and route names |
+| `modules.schemaDir` | `string` | `undefined` | Schema output directory (e.g. `'src/db/schema'` or `'prisma/'`) |
+
 ### Other Options
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `modulesDir` | `string` | `'src/modules'` | Where generators place module files |
-| `defaultRepo` | `'drizzle' \| 'inmemory' \| 'prisma'` | `'inmemory'` | Default repository implementation for generators |
-| `schemaDir` | `string` | `undefined` | Drizzle schema output directory |
 | `commands` | `KickCommandDefinition[]` | `[]` | Custom CLI commands (see [Custom Commands](./custom-commands.md)) |
 | `style` | `object` | auto-detected | Code style overrides (`semicolons`, `quotes`, `trailingComma`, `indent`) |
+
+::: details Deprecated top-level aliases
+`modulesDir`, `defaultRepo`, `schemaDir`, and `pluralize` are still accepted at the top level for backward compatibility but are deprecated. Use the `modules` block instead.
+:::
 
 ## Error Handling
 

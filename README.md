@@ -446,35 +446,44 @@ kick g dto <name>           # DTO with Zod schema
 ### Generator Flags
 
 ```bash
-kick g module users --no-entity     # Skip entity/value objects
-kick g module users --no-tests      # Skip test files
-kick g module users --minimal       # Only index.ts + controller
-kick g module users --dry-run       # Preview without writing
+kick g module users --no-entity       # Skip entity/value objects
+kick g module users --no-tests        # Skip test files
+kick g module users --minimal         # Only index.ts + controller
+kick g module users --dry-run         # Preview without writing
+kick g module users --repo prisma     # Prisma repository (working code)
+kick g module users --repo drizzle    # Drizzle repository (working code)
+kick g module users --no-pluralize    # Singular: src/modules/user/
 ```
 
-### Custom Commands
+### Configuration
 
-Extend the CLI via `kick.config.ts` — the whole team uses `kick db:migrate` etc.:
+Configure module generation, custom commands, and more in `kick.config.ts`:
 
 ```typescript
 import { defineConfig } from '@forinda/kickjs-cli'
 
 export default defineConfig({
+  pattern: 'ddd',
+
+  // Module generation settings
+  modules: {
+    dir: 'src/modules',
+    repo: 'prisma',                    // 'drizzle' | 'inmemory' | 'prisma' | { name: 'custom' }
+    pluralize: true,                   // false → singular folder/route names
+    schemaDir: 'prisma/',
+  },
+
+  // Custom CLI commands — the whole team uses kick db:migrate etc.
   commands: [
     {
       name: 'db:migrate',
       description: 'Run database migrations',
-      steps: 'npx drizzle-kit migrate',
+      steps: 'npx prisma migrate dev',
     },
     {
       name: 'db:seed',
       description: 'Seed the database',
-      steps: 'npx tsx src/db/seed.ts',
-    },
-    {
-      name: 'proto:gen',
-      description: 'Generate TypeScript from protobuf',
-      steps: ['npx buf generate', 'echo "Protobuf types generated"'],
+      steps: 'npx prisma db seed',
     },
   ],
 })

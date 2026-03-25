@@ -59,22 +59,15 @@ const PACKAGES = [
 
 // Examples also get version bumped (but not published)
 const EXAMPLES = [
-  'examples/auth-api',
-  'examples/basic-api',
   'examples/devtools-api',
-  'examples/drizzle-api',
-  'examples/full-api',
   'examples/graphql-api',
   'examples/joi-api',
   'examples/microservice-api',
   'examples/minimal-api',
   'examples/otel-api',
-  'examples/queue-api',
-  'examples/sse-api',
-  'examples/swagger-api',
-  'examples/upload-api',
-  'examples/validated-api',
-  'examples/ws-api',
+  'examples/jira-drizzle-api',
+  'examples/jira-mongoose-api',
+  'examples/jira-prisma-api',
 ]
 
 const RELEASE_TYPES = ['patch', 'minor', 'major', 'prerelease', 'custom']

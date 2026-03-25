@@ -1,7 +1,7 @@
 import { resolve } from 'node:path'
 import type { Command } from 'commander'
 import { generateModule } from '../generators/module'
-import type { RepoType } from '../generators/module'
+import { resolveRepoType, type RepoType } from '../generators/module'
 import { generateAdapter } from '../generators/adapter'
 import { generateMiddleware } from '../generators/middleware'
 import { generateGuard } from '../generators/guard'
@@ -13,7 +13,7 @@ import { generateResolver } from '../generators/resolver'
 import { generateJob } from '../generators/job'
 import { generateScaffold, parseFields } from '../generators/scaffold'
 import { generateTest } from '../generators/test'
-import { loadKickConfig } from '../config'
+import { loadKickConfig, resolveModuleConfig } from '../config'
 import { setDryRun } from '../utils/fs'
 
 /** Check if --dry-run was passed on the parent generate command */
@@ -81,14 +81,19 @@ export function registerGenerateCommand(program: Command): void {
     .option('--pattern <pattern>', 'Override project pattern: rest | ddd | cqrs | minimal')
     .option('--minimal', 'Shorthand for --pattern minimal')
     .option('--modules-dir <dir>', 'Modules directory')
+    .option('--no-pluralize', 'Use singular names (skip auto-pluralization)')
     .option('-f, --force', 'Overwrite existing files without prompting')
     .action(async (name: string, opts: any, cmd: any) => {
       const dryRun = isDryRun(cmd)
       setDryRun(dryRun)
       const config = await loadKickConfig(process.cwd())
-      const modulesDir = opts.modulesDir ?? config?.modulesDir ?? 'src/modules'
-      const repo: RepoType = opts.repo ?? config?.defaultRepo ?? 'inmemory'
+      const mc = resolveModuleConfig(config)
+      const modulesDir = opts.modulesDir ?? mc.dir ?? 'src/modules'
+      const repo: RepoType = opts.repo ?? resolveRepoType(mc.repo)
       const pattern = opts.pattern ?? config?.pattern ?? 'ddd'
+      // Commander's --no-pluralize always defines opts.pluralize (true/false).
+      // Only override config when the user explicitly passed --no-pluralize.
+      const shouldPluralize = opts.pluralize === false ? false : (mc.pluralize ?? true)
 
       const files = await generateModule({
         name,
@@ -100,6 +105,7 @@ export function registerGenerateCommand(program: Command): void {
         force: opts.force,
         pattern,
         dryRun,
+        pluralize: shouldPluralize,
       })
       printGenerated(files, dryRun)
     })
@@ -129,7 +135,7 @@ export function registerGenerateCommand(program: Command): void {
       const dryRun = isDryRun(cmd)
       setDryRun(dryRun)
       const config = await loadKickConfig(process.cwd())
-      const modulesDir = config?.modulesDir ?? 'src/modules'
+      const modulesDir = resolveModuleConfig(config).dir ?? 'src/modules'
       const files = await generateMiddleware({
         name,
         outDir: opts.out,
@@ -153,7 +159,7 @@ export function registerGenerateCommand(program: Command): void {
       const dryRun = isDryRun(cmd)
       setDryRun(dryRun)
       const config = await loadKickConfig(process.cwd())
-      const modulesDir = config?.modulesDir ?? 'src/modules'
+      const modulesDir = resolveModuleConfig(config).dir ?? 'src/modules'
       const files = await generateGuard({
         name,
         outDir: opts.out,
@@ -177,7 +183,7 @@ export function registerGenerateCommand(program: Command): void {
       const dryRun = isDryRun(cmd)
       setDryRun(dryRun)
       const config = await loadKickConfig(process.cwd())
-      const modulesDir = config?.modulesDir ?? 'src/modules'
+      const modulesDir = resolveModuleConfig(config).dir ?? 'src/modules'
       const files = await generateService({
         name,
         outDir: opts.out,
@@ -201,7 +207,7 @@ export function registerGenerateCommand(program: Command): void {
       const dryRun = isDryRun(cmd)
       setDryRun(dryRun)
       const config = await loadKickConfig(process.cwd())
-      const modulesDir = config?.modulesDir ?? 'src/modules'
+      const modulesDir = resolveModuleConfig(config).dir ?? 'src/modules'
       const files = await generateController({
         name,
         outDir: opts.out,
@@ -225,7 +231,7 @@ export function registerGenerateCommand(program: Command): void {
       const dryRun = isDryRun(cmd)
       setDryRun(dryRun)
       const config = await loadKickConfig(process.cwd())
-      const modulesDir = config?.modulesDir ?? 'src/modules'
+      const modulesDir = resolveModuleConfig(config).dir ?? 'src/modules'
       const files = await generateDto({
         name,
         outDir: opts.out,
@@ -249,7 +255,7 @@ export function registerGenerateCommand(program: Command): void {
       const dryRun = isDryRun(cmd)
       setDryRun(dryRun)
       const config = await loadKickConfig(process.cwd())
-      const modulesDir = config?.modulesDir ?? 'src/modules'
+      const modulesDir = resolveModuleConfig(config).dir ?? 'src/modules'
       const files = await generateTest({
         name,
         outDir: opts.out,
@@ -295,6 +301,7 @@ export function registerGenerateCommand(program: Command): void {
     )
     .option('--no-entity', 'Skip entity and value object generation')
     .option('--no-tests', 'Skip test file generation')
+    .option('--no-pluralize', 'Use singular names (skip auto-pluralization)')
     .option('--modules-dir <dir>', 'Modules directory')
     .action(async (name: string, rawFields: string[], opts: any, cmd: any) => {
       const dryRun = isDryRun(cmd)
@@ -308,7 +315,8 @@ export function registerGenerateCommand(program: Command): void {
         process.exit(1)
       }
       const config = await loadKickConfig(process.cwd())
-      const modulesDir = opts.modulesDir ?? config?.modulesDir ?? 'src/modules'
+      const mc = resolveModuleConfig(config)
+      const modulesDir = opts.modulesDir ?? mc.dir ?? 'src/modules'
       const fields = parseFields(rawFields)
       const files = await generateScaffold({
         name,
@@ -316,6 +324,7 @@ export function registerGenerateCommand(program: Command): void {
         modulesDir: resolve(modulesDir),
         noEntity: opts.entity === false,
         noTests: opts.tests === false,
+        pluralize: opts.pluralize === false ? false : (mc.pluralize ?? true),
       })
       console.log(`\n  Scaffolded ${name} with ${fields.length} field(s):`)
       for (const f of fields) {

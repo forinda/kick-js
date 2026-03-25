@@ -1,5 +1,26 @@
 import type { RepoType } from '../module'
 
+const repoLabelMap: Record<string, string> = {
+  inmemory: 'in-memory',
+  drizzle: 'Drizzle',
+  prisma: 'Prisma',
+}
+
+function toPascalRepoType(repo: string): string {
+  return (
+    repo.charAt(0).toUpperCase() +
+    repo.slice(1).replace(/-([a-z])/g, (_, c: string) => c.toUpperCase())
+  )
+}
+
+function toKebabRepoType(repo: string): string {
+  return repo.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase()
+}
+
+function repoLabel(repo: RepoType): string {
+  return repoLabelMap[repo] ?? toPascalRepoType(repo)
+}
+
 function repoMaps(pascal: string, kebab: string, repo: RepoType) {
   const repoClassMap: Record<string, string> = {
     inmemory: `InMemory${pascal}Repository`,
@@ -12,8 +33,8 @@ function repoMaps(pascal: string, kebab: string, repo: RepoType) {
     prisma: `prisma-${kebab}`,
   }
   return {
-    repoClass: repoClassMap[repo] ?? repoClassMap.inmemory,
-    repoFile: repoFileMap[repo] ?? repoFileMap.inmemory,
+    repoClass: repoClassMap[repo] ?? `${toPascalRepoType(repo)}${pascal}Repository`,
+    repoFile: repoFileMap[repo] ?? `${toKebabRepoType(repo)}-${kebab}`,
   }
 }
 
@@ -36,7 +57,7 @@ export function generateModuleIndex(
  *   presentation/    — HTTP controllers (entry points)
  *   application/     — Use cases (orchestration) and DTOs (validation)
  *   domain/          — Entities, value objects, repository interfaces, domain services
- *   infrastructure/  — Repository implementations (in-memory, Drizzle, Prisma, etc.)
+ *   infrastructure/  — Repository implementations (currently ${repoLabel(repo)})
  */
 import { Container, type AppModule, type ModuleRoutes } from '@forinda/kickjs-core'
 import { buildRoutes } from '@forinda/kickjs-http'
@@ -54,7 +75,7 @@ export class ${pascal}Module implements AppModule {
   /**
    * Register module dependencies in the DI container.
    * Bind repository interface tokens to their implementations here.
-   * To swap implementations (e.g. in-memory -> Drizzle), change the factory target.
+   * Currently wired to ${repoLabel(repo)}. To swap implementations, change the factory target.
    */
   register(container: Container): void {
     container.registerFactory(${pascal.toUpperCase()}_REPOSITORY, () =>

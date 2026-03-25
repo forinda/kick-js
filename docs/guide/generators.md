@@ -140,21 +140,44 @@ The event handler includes commented-out integration points for:
 | `--pattern <type>` | Override project pattern: `rest`, `ddd`, `cqrs`, `minimal` | from config or `ddd` |
 | `--no-entity` | Skip entity and value object generation (DDD only) | false |
 | `--no-tests` | Skip test file generation | false |
-| `--repo <type>` | Repository implementation: `inmemory`, `drizzle`, or `prisma` | from config or `inmemory` |
+| `--repo <type>` | Repository implementation (see [Repository Variants](#repository-variants)) | from config or `inmemory` |
+| `--no-pluralize` | Use singular names for folders and routes | from config or `false` |
 | `--minimal` | Shorthand for `--pattern minimal` | false |
 | `--modules-dir <dir>` | Modules directory | from config or `src/modules` |
 | `-f, --force` | Overwrite existing files without prompting | false |
 
+### Pluralization
+
+By default, module names are pluralized: `kick g module user` creates `src/modules/users/` with route `/users`.
+
+Disable pluralization per-command or globally:
+
+```bash
+# Per-command
+kick g module user --no-pluralize    # → src/modules/user/, route /user
+
+# Via config (applies to all generators)
+export default defineConfig({
+  pluralize: false,
+})
+```
+
+The `--no-pluralize` flag always wins over the config value.
+
 ### Config-Aware Defaults
 
-The generator reads `kick.config.ts` for `pattern`, `defaultRepo`, and `modulesDir`. CLI flags override the config:
+The generator reads `kick.config.ts` for defaults. Module-specific settings live under the `modules` key:
 
 ```ts
 // kick.config.ts
 export default defineConfig({
   pattern: 'rest',
-  modulesDir: 'src/modules',
-  defaultRepo: 'drizzle',
+  modules: {
+    dir: 'src/modules',
+    repo: 'drizzle',
+    pluralize: true,
+    schemaDir: 'src/db/schema',
+  },
 })
 ```
 
@@ -162,7 +185,12 @@ export default defineConfig({
 kick g module user                   # uses rest pattern + drizzle (from config)
 kick g module user --pattern ddd     # overrides to DDD structure
 kick g module user --repo prisma     # overrides repo, keeps rest pattern
+kick g module user --no-pluralize    # overrides pluralization
 ```
+
+::: tip Backward compatibility
+Top-level `modulesDir`, `defaultRepo`, `pluralize`, and `schemaDir` are still supported but deprecated. Prefer the `modules` block.
+:::
 
 ### Overwrite Protection
 
@@ -183,13 +211,37 @@ Use `--force` to skip all prompts and overwrite everything.
 
 The `--repo` flag generates a different infrastructure implementation:
 
+**Built-in types** generate fully working repository code:
+
 | Value | Generated file | Description |
 |-------|---------------|-------------|
-| `inmemory` | `in-memory-{name}.repository.ts` | Map-based store for prototyping |
-| `drizzle` | `drizzle-{name}.repository.ts` | Drizzle ORM scaffold with TODO markers |
-| `prisma` | `prisma-{name}.repository.ts` | Prisma Client scaffold with TODO markers |
+| `inmemory` | `in-memory-{name}.repository.ts` | Working Map-based store for prototyping |
+| `drizzle` | `drizzle-{name}.repository.ts` | Working Drizzle ORM queries with `DRIZZLE_DB` injection |
+| `prisma` | `prisma-{name}.repository.ts` | Working Prisma Client queries with `PRISMA_CLIENT` injection |
 
-The Drizzle and Prisma templates include commented-out query examples and TODO markers for schema imports and DB injection tokens, so you can fill in the blanks for your specific setup.
+**Custom types** accept any ORM name and generate a stub with TODO markers:
+
+```bash
+kick g module user --repo typeorm     # → typeorm-user.repository.ts
+kick g module user --repo mongoose    # → mongoose-user.repository.ts
+kick g module user --repo mikro-orm   # → mikro-orm-user.repository.ts
+```
+
+Custom repositories use a working in-memory implementation as a placeholder with `// TODO: Implement with {orm}` markers, so the generated module compiles and runs immediately.
+
+You can set the default via `kick.config.ts`:
+
+```ts
+export default defineConfig({
+  modules: {
+    // Built-in (string) — generates working code
+    repo: 'prisma',
+
+    // Custom (object) — generates stub with TODO markers
+    repo: { name: 'typeorm' },
+  },
+})
+```
 
 ### Auto-Registration
 
@@ -266,7 +318,7 @@ kick g middleware logger             # → src/middleware/logger.middleware.ts
 kick g guard rate-limit              # → src/guards/rate-limit.guard.ts
 ```
 
-The `--module` flag respects `modulesDir` from `kick.config.ts`. If you also pass `-o, --out <dir>`, the explicit output directory always wins.
+The `--module` flag respects `modules.dir` from `kick.config.ts`. If you also pass `-o, --out <dir>`, the explicit output directory always wins.
 
 ::: warning Adapters are always app-level
 Adapters (`kick g adapter`) do not support `--module` because they configure app-wide lifecycle hooks and are not scoped to a single module.
@@ -367,4 +419,4 @@ All standalone generators accept:
 | `-o, --out <dir>` | Output directory | Varies by type |
 | `-m, --module <name>` | Place inside a module folder | - |
 
-Names are automatically converted: `kick g module user-profile` produces `UserProfile` (PascalCase) for classes and `user-profile` (kebab-case) for file names. Module names are pluralized for the directory (`user-profiles/`).
+Names are automatically converted: `kick g module user-profile` produces `UserProfile` (PascalCase) for classes and `user-profile` (kebab-case) for file names. Module names are pluralized for the directory (`user-profiles/`) unless `--no-pluralize` is passed or `pluralize: false` is set in config.

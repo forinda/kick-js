@@ -23,6 +23,45 @@ export interface KickCommandDefinition {
 /** Project pattern — controls what generators produce and which deps are installed */
 export type ProjectPattern = 'rest' | 'graphql' | 'ddd' | 'cqrs' | 'minimal'
 
+/** Built-in repository types with first-class code generation support */
+export type BuiltinRepoType = 'drizzle' | 'inmemory' | 'prisma'
+
+/** Custom repository type — generates a stub with TODO markers */
+export interface CustomRepoType {
+  name: string
+}
+
+/** Repository type — built-in string or custom object */
+export type RepoTypeConfig = BuiltinRepoType | CustomRepoType
+
+/** Module generation settings — controls how `kick g module` produces code */
+export interface ModuleConfig {
+  /** Where modules live (default: 'src/modules') */
+  dir?: string
+  /**
+   * Default repository implementation for generators.
+   *
+   * Built-in types (string): `'drizzle'`, `'inmemory'`, `'prisma'`
+   * — generate fully working repository code.
+   *
+   * Custom types (object): `{ name: 'typeorm' }`
+   * — generate a stub repository with TODO markers.
+   *
+   * @example
+   * repo: 'prisma'                // built-in
+   * repo: { name: 'typeorm' }     // custom
+   */
+  repo?: RepoTypeConfig
+  /** Schema output directory (e.g. 'src/db/schema' for Drizzle, 'prisma/' for Prisma) */
+  schemaDir?: string
+  /**
+   * Whether to pluralize module names in generated code.
+   * When true (default), `kick g module user` creates `src/modules/users/`.
+   * When false, it creates `src/modules/user/` and uses singular names throughout.
+   */
+  pluralize?: boolean
+}
+
 /** Configuration for the kick.config.ts file */
 export interface KickConfig {
   /**
@@ -34,12 +73,28 @@ export interface KickConfig {
    * - 'minimal' — Bare Express with no scaffolding
    */
   pattern?: ProjectPattern
-  /** Where modules live (default: 'src/modules') */
+  /**
+   * Module generation settings — directory, repo type, pluralization, schema dir.
+   *
+   * @example
+   * modules: {
+   *   dir: 'src/modules',
+   *   repo: 'prisma',
+   *   pluralize: false,
+   *   schemaDir: 'prisma/',
+   * }
+   */
+  modules?: ModuleConfig
+
+  // ── Backward-compatible top-level aliases (deprecated, use modules.* instead) ──
+  /** @deprecated Use `modules.dir` instead */
   modulesDir?: string
-  /** Default repository implementation for generators */
-  defaultRepo?: 'drizzle' | 'inmemory' | 'prisma'
-  /** Drizzle schema output directory */
+  /** @deprecated Use `modules.repo` instead */
+  defaultRepo?: RepoTypeConfig
+  /** @deprecated Use `modules.schemaDir` instead */
   schemaDir?: string
+  /** @deprecated Use `modules.pluralize` instead */
+  pluralize?: boolean
   /**
    * Directories to copy to dist/ after build.
    * Useful for EJS templates, email templates, static assets, etc.
@@ -68,6 +123,17 @@ export interface KickConfig {
 /** Helper to define a type-safe kick.config.ts */
 export function defineConfig(config: KickConfig): KickConfig {
   return config
+}
+
+/** Resolve module config with backward-compatible fallbacks from top-level fields */
+export function resolveModuleConfig(config: KickConfig | null): ModuleConfig {
+  if (!config) return {}
+  return {
+    dir: config.modules?.dir ?? config.modulesDir,
+    repo: config.modules?.repo ?? config.defaultRepo,
+    schemaDir: config.modules?.schemaDir ?? config.schemaDir,
+    pluralize: config.modules?.pluralize ?? config.pluralize,
+  }
 }
 
 const CONFIG_FILES = ['kick.config.ts', 'kick.config.js', 'kick.config.mjs', 'kick.config.json']

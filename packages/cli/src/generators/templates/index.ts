@@ -12,6 +12,7 @@ export {
   generateInMemoryRepository,
   generateDrizzleRepository,
   generatePrismaRepository,
+  generateCustomRepository,
 } from './repository'
 export { generateDomainService, generateEntity, generateValueObject } from './domain'
 export { generateControllerTest, generateRepositoryTest } from './tests'

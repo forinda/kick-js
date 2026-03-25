@@ -124,6 +124,7 @@ const examplesSidebar = [
     items: [
       { text: 'Overview', link: '/examples/' },
       { text: 'Jira Clone (Drizzle)', link: '/examples/jira-drizzle-api' },
+      { text: 'Jira Clone (Prisma)', link: '/examples/jira-prisma-api' },
       { text: 'Jira Clone (Mongoose)', link: '/examples/jira-mongoose-api' },
     ],
   },

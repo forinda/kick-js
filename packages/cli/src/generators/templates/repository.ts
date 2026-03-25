@@ -190,6 +190,88 @@ export class Drizzle${pascal}Repository implements I${pascal}Repository {
 `
 }
 
+export function generateCustomRepository(
+  pascal: string,
+  kebab: string,
+  repoType: string,
+  repoPrefix = '../../domain/repositories',
+  dtoPrefix = '../../application/dtos',
+): string {
+  const repoTypePascal =
+    repoType.charAt(0).toUpperCase() +
+    repoType.slice(1).replace(/-([a-z])/g, (_, c: string) => c.toUpperCase())
+  return `/**
+ * ${repoTypePascal} ${pascal} Repository
+ *
+ * Stub implementation for a custom '${repoType}' repository.
+ * Implements the repository interface using an in-memory Map as a placeholder.
+ *
+ * TODO: Replace the in-memory Map with your ${repoType} data-access logic.
+ * See I${pascal}Repository for the interface contract.
+ *
+ * @Repository() registers this class in the DI container as a singleton.
+ */
+import { randomUUID } from 'node:crypto'
+import { Repository, HttpException } from '@forinda/kickjs-core'
+import type { ParsedQuery } from '@forinda/kickjs-http'
+import type { I${pascal}Repository } from '${repoPrefix}/${kebab}.repository'
+import type { ${pascal}ResponseDTO } from '${dtoPrefix}/${kebab}-response.dto'
+import type { Create${pascal}DTO } from '${dtoPrefix}/create-${kebab}.dto'
+import type { Update${pascal}DTO } from '${dtoPrefix}/update-${kebab}.dto'
+
+@Repository()
+export class ${repoTypePascal}${pascal}Repository implements I${pascal}Repository {
+  // TODO: Replace with your ${repoType} client/connection
+  private store = new Map<string, ${pascal}ResponseDTO>()
+
+  async findById(id: string): Promise<${pascal}ResponseDTO | null> {
+    // TODO: Implement with ${repoType}
+    return this.store.get(id) ?? null
+  }
+
+  async findAll(): Promise<${pascal}ResponseDTO[]> {
+    // TODO: Implement with ${repoType}
+    return Array.from(this.store.values())
+  }
+
+  async findPaginated(parsed: ParsedQuery): Promise<{ data: ${pascal}ResponseDTO[]; total: number }> {
+    // TODO: Implement with ${repoType}
+    const all = Array.from(this.store.values())
+    const data = all.slice(parsed.pagination.offset, parsed.pagination.offset + parsed.pagination.limit)
+    return { data, total: all.length }
+  }
+
+  async create(dto: Create${pascal}DTO): Promise<${pascal}ResponseDTO> {
+    // TODO: Implement with ${repoType}
+    const now = new Date().toISOString()
+    const entity: ${pascal}ResponseDTO = {
+      id: randomUUID(),
+      name: dto.name,
+      createdAt: now,
+      updatedAt: now,
+    }
+    this.store.set(entity.id, entity)
+    return entity
+  }
+
+  async update(id: string, dto: Update${pascal}DTO): Promise<${pascal}ResponseDTO> {
+    // TODO: Implement with ${repoType}
+    const existing = this.store.get(id)
+    if (!existing) throw HttpException.notFound('${pascal} not found')
+    const updated = { ...existing, ...dto, updatedAt: new Date().toISOString() }
+    this.store.set(id, updated)
+    return updated
+  }
+
+  async delete(id: string): Promise<void> {
+    // TODO: Implement with ${repoType}
+    if (!this.store.has(id)) throw HttpException.notFound('${pascal} not found')
+    this.store.delete(id)
+  }
+}
+`
+}
+
 export function generatePrismaRepository(
   pascal: string,
   kebab: string,
@@ -203,70 +285,54 @@ export function generatePrismaRepository(
  * Implements the repository interface using Prisma Client.
  * Requires a PrismaClient instance injected via the DI container.
  *
- * TODO: Ensure your Prisma schema has a '${pascal}' model defined.
- * TODO: Replace 'PRISMA_CLIENT' with your actual Prisma injection token.
+ * Ensure your Prisma schema has a '${pascal}' model defined.
  *
  * @Repository() registers this class in the DI container as a singleton.
  */
-import { Repository, HttpException, Autowired } from '@forinda/kickjs-core'
+import { Repository, HttpException, Inject } from '@forinda/kickjs-core'
+import { PRISMA_CLIENT } from '@forinda/kickjs-prisma'
+import type { PrismaClient } from '@prisma/client'
 import type { ParsedQuery } from '@forinda/kickjs-http'
 import type { I${pascal}Repository } from '${repoPrefix}/${kebab}.repository'
 import type { ${pascal}ResponseDTO } from '${dtoPrefix}/${kebab}-response.dto'
 import type { Create${pascal}DTO } from '${dtoPrefix}/create-${kebab}.dto'
 import type { Update${pascal}DTO } from '${dtoPrefix}/update-${kebab}.dto'
 
-// TODO: Import your Prisma injection token — e.g.:
-// import { PRISMA_CLIENT } from '@/db/prisma.provider'
-// import type { PrismaClient } from '@prisma/client'
-
 @Repository()
 export class Prisma${pascal}Repository implements I${pascal}Repository {
-  // TODO: Uncomment and configure your Prisma injection:
-  // @Autowired(PRISMA_CLIENT) private prisma!: PrismaClient
+  @Inject(PRISMA_CLIENT) private prisma!: PrismaClient
 
   async findById(id: string): Promise<${pascal}ResponseDTO | null> {
-    // TODO: Implement with Prisma
-    // return this.prisma.${camel}.findUnique({ where: { id } })
-    throw new Error('Prisma ${pascal} repository not yet implemented — update Prisma imports and queries')
+    return (this.prisma.${camel} as any).findUnique({ where: { id } })
   }
 
   async findAll(): Promise<${pascal}ResponseDTO[]> {
-    // TODO: Implement with Prisma
-    // return this.prisma.${camel}.findMany()
-    throw new Error('Prisma ${pascal} repository not yet implemented')
+    return (this.prisma.${camel} as any).findMany()
   }
 
   async findPaginated(parsed: ParsedQuery): Promise<{ data: ${pascal}ResponseDTO[]; total: number }> {
-    // TODO: Implement with Prisma
-    // const [data, total] = await Promise.all([
-    //   this.prisma.${camel}.findMany({
-    //     skip: parsed.pagination.offset,
-    //     take: parsed.pagination.limit,
-    //   }),
-    //   this.prisma.${camel}.count(),
-    // ])
-    // return { data, total }
-    throw new Error('Prisma ${pascal} repository not yet implemented')
+    const [data, total] = await Promise.all([
+      (this.prisma.${camel} as any).findMany({
+        skip: parsed.pagination.offset,
+        take: parsed.pagination.limit,
+      }),
+      (this.prisma.${camel} as any).count(),
+    ])
+    return { data, total }
   }
 
   async create(dto: Create${pascal}DTO): Promise<${pascal}ResponseDTO> {
-    // TODO: Implement with Prisma
-    // return this.prisma.${camel}.create({ data: dto })
-    throw new Error('Prisma ${pascal} repository not yet implemented')
+    return (this.prisma.${camel} as any).create({ data: dto })
   }
 
   async update(id: string, dto: Update${pascal}DTO): Promise<${pascal}ResponseDTO> {
-    // TODO: Implement with Prisma
-    // const row = await this.prisma.${camel}.update({ where: { id }, data: dto })
-    // if (!row) throw HttpException.notFound('${pascal} not found')
-    // return row
-    throw new Error('Prisma ${pascal} repository not yet implemented')
+    const existing = await (this.prisma.${camel} as any).findUnique({ where: { id } })
+    if (!existing) throw HttpException.notFound('${pascal} not found')
+    return (this.prisma.${camel} as any).update({ where: { id }, data: dto })
   }
 
   async delete(id: string): Promise<void> {
-    // TODO: Implement with Prisma
-    // await this.prisma.${camel}.delete({ where: { id } })
-    throw new Error('Prisma ${pascal} repository not yet implemented')
+    await (this.prisma.${camel} as any).deleteMany({ where: { id } })
   }
 }
 `

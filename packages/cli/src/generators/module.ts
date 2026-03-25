@@ -3,7 +3,7 @@ import { createInterface } from 'node:readline'
 import { writeFileSafe, fileExists } from '../utils/fs'
 import { toPascalCase, toKebabCase, pluralize, pluralizePascal } from '../utils/naming'
 import { readFile, writeFile } from 'node:fs/promises'
-import type { ProjectPattern } from '../config'
+import type { ProjectPattern, RepoTypeConfig } from '../config'
 import {
   generateModuleIndex,
   generateRestModuleIndex,
@@ -20,6 +20,7 @@ import {
   generateInMemoryRepository,
   generateDrizzleRepository,
   generatePrismaRepository,
+  generateCustomRepository,
   generateDomainService,
   generateEntity,
   generateValueObject,
@@ -34,7 +35,15 @@ import {
   generateCqrsEvents,
 } from './templates'
 
-export type RepoType = 'drizzle' | 'inmemory' | 'prisma'
+export type BuiltinRepoType = 'drizzle' | 'inmemory' | 'prisma'
+export type RepoType = BuiltinRepoType | (string & {})
+
+/** Resolve a RepoTypeConfig (from kick.config.ts) into a flat repo type string */
+export function resolveRepoType(config?: RepoTypeConfig): RepoType {
+  if (!config) return 'inmemory'
+  if (typeof config === 'string') return config
+  return config.name
+}
 
 interface GenerateModuleOptions {
   name: string
@@ -46,6 +55,8 @@ interface GenerateModuleOptions {
   force?: boolean
   pattern?: ProjectPattern
   dryRun?: boolean
+  /** When false, skip pluralization — use singular names for folders, routes, and classes */
+  pluralize?: boolean
 }
 
 /** Prompt the user for a single-line answer via stdin */
@@ -85,14 +96,15 @@ interface ModuleContext {
  */
 export async function generateModule(options: GenerateModuleOptions): Promise<string[]> {
   const { name, modulesDir, noEntity, noTests, repo = 'inmemory', force, dryRun } = options
+  const shouldPluralize = options.pluralize !== false
 
   let pattern = options.pattern ?? 'ddd'
   if (options.minimal) pattern = 'minimal'
 
   const kebab = toKebabCase(name)
   const pascal = toPascalCase(name)
-  const plural = pluralize(kebab)
-  const pluralPascal = pluralizePascal(pascal)
+  const plural = shouldPluralize ? pluralize(kebab) : kebab
+  const pluralPascal = shouldPluralize ? pluralizePascal(pascal) : pascal
   const moduleDir = join(modulesDir, plural)
 
   const files: string[] = []
@@ -206,17 +218,21 @@ async function generateRestFiles(ctx: ModuleContext): Promise<void> {
   await write(`${kebab}.repository.ts`, generateRepositoryInterface(pascal, kebab, './dtos'))
 
   // Repository implementation (flat imports)
-  const repoFileMap: Record<RepoType, string> = {
+  const builtinRepoFileMap: Record<string, string> = {
     inmemory: `in-memory-${kebab}`,
     drizzle: `drizzle-${kebab}`,
     prisma: `prisma-${kebab}`,
   }
-  const repoGeneratorMap: Record<RepoType, () => string> = {
+  const builtinRepoGeneratorMap: Record<string, () => string> = {
     inmemory: () => generateInMemoryRepository(pascal, kebab, '.', './dtos'),
     drizzle: () => generateDrizzleRepository(pascal, kebab, '.', './dtos'),
     prisma: () => generatePrismaRepository(pascal, kebab, '.', './dtos'),
   }
-  await write(`${repoFileMap[repo]}.repository.ts`, repoGeneratorMap[repo]())
+  const repoFile = builtinRepoFileMap[repo] ?? `${toKebabCase(repo)}-${kebab}`
+  const repoGenerator =
+    builtinRepoGeneratorMap[repo] ??
+    (() => generateCustomRepository(pascal, kebab, repo, '.', './dtos'))
+  await write(`${repoFile}.repository.ts`, repoGenerator())
 
   // Tests
   if (!noTests) {
@@ -226,7 +242,12 @@ async function generateRestFiles(ctx: ModuleContext): Promise<void> {
     )
     await write(
       `__tests__/${kebab}.repository.test.ts`,
-      generateRepositoryTest(pascal, kebab, plural, `../${repoFileMap.inmemory}.repository`),
+      generateRepositoryTest(
+        pascal,
+        kebab,
+        plural,
+        `../${builtinRepoFileMap.inmemory ?? `in-memory-${kebab}`}.repository`,
+      ),
     )
   }
 }
@@ -272,17 +293,21 @@ async function generateCqrsFiles(ctx: ModuleContext): Promise<void> {
   await write(`${kebab}.repository.ts`, generateRepositoryInterface(pascal, kebab, './dtos'))
 
   // Repository implementation (flat imports)
-  const repoFileMap: Record<RepoType, string> = {
+  const builtinRepoFileMap: Record<string, string> = {
     inmemory: `in-memory-${kebab}`,
     drizzle: `drizzle-${kebab}`,
     prisma: `prisma-${kebab}`,
   }
-  const repoGeneratorMap: Record<RepoType, () => string> = {
+  const builtinRepoGeneratorMap: Record<string, () => string> = {
     inmemory: () => generateInMemoryRepository(pascal, kebab, '.', './dtos'),
     drizzle: () => generateDrizzleRepository(pascal, kebab, '.', './dtos'),
     prisma: () => generatePrismaRepository(pascal, kebab, '.', './dtos'),
   }
-  await write(`${repoFileMap[repo]}.repository.ts`, repoGeneratorMap[repo]())
+  const repoFile = builtinRepoFileMap[repo] ?? `${toKebabCase(repo)}-${kebab}`
+  const repoGenerator =
+    builtinRepoGeneratorMap[repo] ??
+    (() => generateCustomRepository(pascal, kebab, repo, '.', './dtos'))
+  await write(`${repoFile}.repository.ts`, repoGenerator())
 
   // Tests
   if (!noTests) {
@@ -292,7 +317,12 @@ async function generateCqrsFiles(ctx: ModuleContext): Promise<void> {
     )
     await write(
       `__tests__/${kebab}.repository.test.ts`,
-      generateRepositoryTest(pascal, kebab, plural, `../${repoFileMap.inmemory}.repository`),
+      generateRepositoryTest(
+        pascal,
+        kebab,
+        plural,
+        `../${builtinRepoFileMap.inmemory ?? `in-memory-${kebab}`}.repository`,
+      ),
     )
   }
 }
@@ -338,20 +368,20 @@ async function generateDddFiles(ctx: ModuleContext): Promise<void> {
   await write(`domain/services/${kebab}-domain.service.ts`, generateDomainService(pascal, kebab))
 
   // Repository Implementation
-  const repoFileMap: Record<RepoType, string> = {
+  const builtinRepoFileMap: Record<string, string> = {
     inmemory: `in-memory-${kebab}`,
     drizzle: `drizzle-${kebab}`,
     prisma: `prisma-${kebab}`,
   }
-  const repoGeneratorMap: Record<RepoType, () => string> = {
+  const builtinRepoGeneratorMap: Record<string, () => string> = {
     inmemory: () => generateInMemoryRepository(pascal, kebab),
     drizzle: () => generateDrizzleRepository(pascal, kebab),
     prisma: () => generatePrismaRepository(pascal, kebab),
   }
-  await write(
-    `infrastructure/repositories/${repoFileMap[repo]}.repository.ts`,
-    repoGeneratorMap[repo](),
-  )
+  const repoFile = builtinRepoFileMap[repo] ?? `${toKebabCase(repo)}-${kebab}`
+  const repoGenerator =
+    builtinRepoGeneratorMap[repo] ?? (() => generateCustomRepository(pascal, kebab, repo))
+  await write(`infrastructure/repositories/${repoFile}.repository.ts`, repoGenerator())
 
   // Entity & Value Objects
   if (!noEntity) {

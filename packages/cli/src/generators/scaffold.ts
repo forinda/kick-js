@@ -96,15 +96,17 @@ interface ScaffoldOptions {
   noEntity?: boolean
   noTests?: boolean
   repo?: 'inmemory'
+  pluralize?: boolean
 }
 
 export async function generateScaffold(options: ScaffoldOptions): Promise<string[]> {
   const { name, fields, modulesDir, noEntity, noTests, repo = 'inmemory' } = options
+  const shouldPluralize = options.pluralize !== false
   const kebab = toKebabCase(name)
   const pascal = toPascalCase(name)
   const camel = toCamelCase(name)
-  const plural = pluralize(kebab)
-  const pluralPascal = pluralizePascal(pascal)
+  const plural = shouldPluralize ? pluralize(kebab) : kebab
+  const pluralPascal = shouldPluralize ? pluralizePascal(pascal) : pascal
   const moduleDir = join(modulesDir, plural)
 
   const files: string[] = []
