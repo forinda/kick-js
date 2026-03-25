@@ -88,7 +88,8 @@
     "dist"
   ],
   "scripts": {
-    "build": "vite build && tsc --emitDeclarationOnly --outDir dist --declaration",
+    "build": "vite build && pnpm build:types",
+    "build:types": "tsc -p tsconfig.build.json",
     "dev": "vite build --watch",
     "test": "vitest run",
     "test:watch": "vitest",
