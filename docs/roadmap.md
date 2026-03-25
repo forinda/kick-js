@@ -51,7 +51,22 @@ Prisma 7 introduces several breaking changes that affect `@forinda/kickjs-prisma
 
 ### Future
 - [x] `kick remove module <name>` — delete module directory and unregister from `src/modules/index.ts` (KICK-031)
-- [ ] Migrate `kick dev` from `vite-node` to Vite Environment Module Runner — `vite-node` is deprecated, Vite has native support (KICK-034)
+### Vite Environment Migration (KICK-034)
+Migrate from `vite-node` (deprecated) to Vite's native `RunnableDevEnvironment` API. This unlocks a unified dev server architecture:
+
+- [ ] **Replace `vite-node` in `kick dev`** — use `createServer()` + `env.runner.import()` instead of `npx vite-node --watch`. Removes `vite-node` as a dependency entirely.
+- [ ] **Unified backend + frontend dev server** — run KickJS API (`server` environment) and SPA frontend (`client` environment) in the same Vite instance with shared HMR. One port, one process, no proxy needed.
+- [ ] **`kick dev --spa <dir>`** — serve a Vue/React/Svelte app alongside the API. The SPA gets Vite's native HMR; the API gets KickJS's `Application.rebuild()` HMR. Both share the same Vite config.
+- [ ] **`kick dev:debug`** — rework for programmatic server (can't just pass `--inspect` to a shell command). Use `node --inspect` with inline Vite server creation.
+- [ ] **Remove `vite-node`** from project template, all 10 examples, and CLI devDependency.
+
+**Why this matters:** Today `kick dev` (API) and a frontend dev server run as separate processes. With Vite Environments, one `kick dev` command serves both, with one HMR socket, one port, and zero CORS config. The `SpaAdapter` already serves built SPAs in production — this extends that to development.
+
+**Requires:** Vite 6+ (we're on 7.3.1). SWC decorator plugin must work through the runner (needs testing).
+
+See: [Migration notes](../articles/vite-node-migration-notes.md) | [Vite Environment API](https://vite.dev/guide/api-environment-frameworks)
+
+### Future
 - [ ] Type-safe API client generation (tRPC-like) — `kick generate:client` from route decorators + Zod DTOs (KICK-018)
 - [ ] `kick deploy` — deploy to Fly.io, Railway, Docker
 
