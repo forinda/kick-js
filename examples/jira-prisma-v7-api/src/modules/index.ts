@@ -28,5 +28,5 @@ export const modules: AppModuleClass[] = [
   ChannelModule,
   MessageModule,
   StatModule,
-  QueueModule,
+  QueueModule
 ]
