@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-config",
-  "version": "1.2.13",
+  "version": "1.3.0",
   "description": "Zod-based environment validation and typed configuration for KickJS",
   "keywords": [
     "kickjs",
