@@ -29,6 +29,13 @@ This guide helps AI agents (Claude, Copilot, etc.) work effectively on the KickJ
 | Config/env | `packages/config/src/` |
 | CLI commands | `packages/cli/src/commands/` |
 | Code generators | `packages/cli/src/generators/` |
+| Generator patterns | `packages/cli/src/generators/patterns/{rest,ddd,cqrs,minimal}.ts` |
+| Template functions | `packages/cli/src/generators/templates/` |
+| Drizzle templates | `packages/cli/src/generators/templates/drizzle/` |
+| Prisma templates | `packages/cli/src/generators/templates/prisma/` |
+| TemplateContext type | `packages/cli/src/generators/templates/types.ts` |
+| ModuleConfig type | `packages/cli/src/config.ts` |
+| PrismaModelDelegate | `packages/prisma/src/types.ts` |
 | Swagger decorators | `packages/swagger/src/decorators.ts` |
 | OpenAPI builder | `packages/swagger/src/openapi-builder.ts` |
 | Prisma adapter | `packages/prisma/src/prisma.adapter.ts` |
@@ -61,7 +68,7 @@ When adding new features, use these as templates:
 | New middleware | `packages/http/src/middleware/csrf.ts` |
 | New adapter | `packages/swagger/src/swagger.adapter.ts` |
 | New package | `packages/prisma/` (full package structure) |
-| New example app | `examples/basic-api/` |
+| New example app | `examples/minimal-api/` (simple) or `examples/jira-prisma-api/` (full) |
 | New test file | `tests/container.test.ts` |
 | Package exports | `packages/http/package.json` (exports map) |
 | tsup config | `packages/http/tsup.config.ts` (multi-entry) |
@@ -84,7 +91,7 @@ When adding new features, use these as templates:
 - [ ] Create `packages/<name>/` directory
 - [ ] Add `package.json` (name: `@forinda/kickjs-<name>`, version: lockstep)
 - [ ] Add `tsconfig.json` (extends `../../tsconfig.base.json`)
-- [ ] Add `tsup.config.ts` (ESM, node20, dts, sourcemap)
+- [ ] Add `tsup.config.ts` (ESM, node20, dts, `sourcemap: false`, `minify: true`)
 - [ ] Add `src/index.ts` (barrel exports)
 - [ ] Add `README.md` and `LICENSE`
 - [ ] Run `pnpm install` to link workspace
@@ -94,11 +101,12 @@ When adding new features, use these as templates:
 
 ### New Example App
 
-- [ ] Create `examples/<name>/` with DDD structure
-- [ ] Add `package.json` (private: true, version: lockstep)
-- [ ] Follow structure: `src/index.ts`, `src/modules/`, `src/adapters/`, `src/middleware/`
+- [ ] Scaffold with CLI: `cd examples && kick new <name> --pm pnpm --no-git --no-install -f`
+- [ ] Add `package.json` (private: true, version: lockstep, `workspace:*` deps)
+- [ ] Add to `scripts/release.js` EXAMPLES array
 - [ ] Add docs page at `docs/examples/<name>.md`
 - [ ] Add to sidebar in `docs/.vitepress/config.mts`
+- [ ] Reference examples: `minimal-api/` (simple), `jira-prisma-api/` (full DDD)
 
 ### Documentation Changes
 
@@ -137,6 +145,39 @@ npx kick g module upload
 ```
 
 After scaffolding, customize the generated code for the example's purpose.
+
+## CLI Generator Architecture
+
+Template functions accept `TemplateContext` (option object, not positional args):
+```ts
+interface TemplateContext {
+  pascal: string; kebab: string; plural?: string; pluralPascal?: string
+  repoPrefix?: string; dtoPrefix?: string; prismaClientPath?: string; repoType?: string
+}
+```
+
+ORM-specific templates live in subfolders:
+- `templates/drizzle/` — `generateDrizzleRepository`, `generateDrizzleConstants`
+- `templates/prisma/` — `generatePrismaRepository` (uses `PrismaModelDelegate`)
+
+Pattern generators are in `generators/patterns/`:
+- `rest.ts`, `ddd.ts`, `cqrs.ts`, `minimal.ts` — each exports a `generate*Files(ctx: ModuleContext)` function
+
+### Key Config: kick.config.ts
+
+```ts
+export default defineConfig({
+  pattern: 'ddd',
+  modules: {
+    dir: 'src/modules',
+    repo: 'prisma',                     // 'drizzle' | 'inmemory' | 'prisma' | { name: 'custom' }
+    pluralize: true,
+    prismaClientPath: '@/generated/prisma/client',  // Prisma 7
+  },
+})
+```
+
+Top-level `modulesDir`, `defaultRepo`, `pluralize`, `schemaDir` are deprecated — use `modules` block.
 
 ## Common Pitfalls
 

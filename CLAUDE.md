@@ -40,17 +40,17 @@ packages/               # Published @forinda/kickjs-* packages
   devtools/             # Debug dashboard at /_debug
   notifications/        # Multi-channel: email, Slack, Discord, webhook
   multi-tenant/         # Tenant resolution middleware
-examples/               # Non-published example apps
-  minimal-api/          # Simplest possible app
-  jira-drizzle-api/     # Full Jira clone (PostgreSQL + Drizzle)
-  jira-mongoose-api/    # Full Jira clone (MongoDB + Mongoose)
-  jira-prisma-api/      # Full Jira clone (PostgreSQL + Prisma 6)
-  jira-prisma-v7-api/   # Full Jira clone (PostgreSQL + Prisma 7)
-  graphql-api/          # GraphQL with resolvers
-  devtools-api/         # DevTools + reactive state
-  joi-api/              # Custom Joi schema parser
-  microservice-api/     # OTel + DevTools + Swagger
-  otel-api/             # OpenTelemetry tracing
+examples/               # Non-published example apps (private, not on npm)
+  jira-drizzle-api/     # Full Jira clone — PostgreSQL + Drizzle ORM
+  jira-mongoose-api/    # Full Jira clone — MongoDB + Mongoose
+  jira-prisma-api/      # Full Jira clone — PostgreSQL + Prisma 6
+  jira-prisma-v7-api/   # Full Jira clone — PostgreSQL + Prisma 7 (driver adapters)
+  minimal-api/          # Simplest possible app (~10 lines)
+  graphql-api/          # GraphQL with @Resolver decorators
+  devtools-api/         # DevTools dashboard + reactive state
+  joi-api/              # Custom Joi schema parser for Swagger
+  microservice-api/     # OTel + DevTools + Swagger template
+  otel-api/             # OpenTelemetry console tracing
 articles/               # Blog articles (dev.to)
 scripts/                # release.js (versioning)
 docs/                   # VitePress documentation site
