@@ -71,7 +71,7 @@ When adding new features, use these as templates:
 | New example app | `examples/minimal-api/` (simple) or `examples/jira-prisma-api/` (full) |
 | New test file | `tests/container.test.ts` |
 | Package exports | `packages/http/package.json` (exports map) |
-| tsup config | `packages/http/tsup.config.ts` (multi-entry) |
+| Vite build config | `packages/http/vite.config.ts` (multi-entry) |
 
 ## Checklist: Adding a Feature
 
@@ -79,7 +79,7 @@ When adding new features, use these as templates:
 
 - [ ] Create `packages/http/src/middleware/<name>.ts`
 - [ ] Export factory function: `export function name(options = {}) { return (req, res, next) => ... }`
-- [ ] Add to `packages/http/tsup.config.ts` entry array
+- [ ] Add to `packages/http/vite.config.ts` `build.lib.entry` object
 - [ ] Add to `packages/http/package.json` exports map
 - [ ] Add re-export to `packages/http/src/index.ts`
 - [ ] Add docs page at `docs/guide/<name>.md`
@@ -91,7 +91,8 @@ When adding new features, use these as templates:
 - [ ] Create `packages/<name>/` directory
 - [ ] Add `package.json` (name: `@forinda/kickjs-<name>`, version: lockstep)
 - [ ] Add `tsconfig.json` (extends `../../tsconfig.base.json`)
-- [ ] Add `tsup.config.ts` (ESM, node20, dts, `sourcemap: false`, `minify: true`)
+- [ ] Add `vite.config.ts` (ESM lib mode, node20, `minify: 'esbuild'`, externals)
+- [ ] Add `tsconfig.build.json` (extends tsconfig, `emitDeclarationOnly: true`)
 - [ ] Add `src/index.ts` (barrel exports)
 - [ ] Add `README.md` and `LICENSE`
 - [ ] Run `pnpm install` to link workspace

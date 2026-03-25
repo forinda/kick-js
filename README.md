@@ -613,7 +613,7 @@ kick-js/
 | Runtime | Node.js 20+ | LTS with native ESM |
 | HTTP | Express 5 | Mature, async middleware, wide ecosystem |
 | Validation | Zod | Runtime + static types, doubles as OpenAPI schema |
-| Build | tsup + Vite | Fast package builds, native HMR for apps |
+| Build | Vite 8 | Unified toolchain — library builds, HMR, SSR |
 | Test | Vitest | ESM-native, fast, Vite-compatible |
 | Logging | Pino | Fastest Node.js logger, structured JSON in prod |
 | Monorepo | pnpm + Turborepo | Efficient deps, build caching |

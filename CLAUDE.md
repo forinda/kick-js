@@ -60,7 +60,8 @@ docs/                   # VitePress documentation site
 
 - **pnpm** — always use `pnpm`, never npm/yarn
 - **Turbo** — orchestrates builds with dependency-aware caching
-- **tsup** — builds each package (ESM, DTS, no sourcemaps, minified, node20 target)
+- **Vite 8** — builds each package in library mode (ESM, esbuild minify, node20 target)
+- **tsc** — generates `.d.ts` via `tsconfig.build.json` (`emitDeclarationOnly`)
 - **Vitest** — test runner with SWC for decorator support
 
 ## Code Style
@@ -75,17 +76,17 @@ docs/                   # VitePress documentation site
 ### Adding Middleware (to `packages/http`)
 
 1. Create `packages/http/src/middleware/<name>.ts`
-2. Add entry to `packages/http/tsup.config.ts`
+2. Add entry to `packages/http/vite.config.ts` `build.lib.entry` object
 3. Add export map entry to `packages/http/package.json`
 4. Add re-export to `packages/http/src/index.ts`
 
 ### Adding a Package
 
-1. Create `packages/<name>/` with `package.json`, `tsconfig.json`, `tsup.config.ts`
+1. Create `packages/<name>/` with `package.json`, `tsconfig.json`, `tsconfig.build.json`, `vite.config.ts`
 2. Name it `@forinda/kickjs-<name>`, use lockstep version
 3. Use `workspace:*` for internal deps
-4. Set `sourcemap: false`, `minify: true` in tsup config
-5. Add all runtime deps to `external` in tsup config
+4. Set `minify: 'esbuild'` in vite.config.ts, add all runtime deps to `rollupOptions.external`
+5. Build script: `"build": "vite build && pnpm build:types"`, `"build:types": "tsc -p tsconfig.build.json"`
 
 ### Adding an Adapter
 
@@ -240,6 +241,6 @@ test: description      # Test changes
 - `pnpm --filter='./packages/*' publish` — only publishes framework packages, not examples
 - All internal links in docs must be **relative** (for versioning/i18n support)
 - The `kick` CLI binary comes from `packages/cli/src/cli.ts`
-- tsup configs: `sourcemap: false`, `minify: true`, all runtime deps in `external`
+- Vite configs: `minify: 'esbuild'`, all runtime deps in `rollupOptions.external`
 - `@prisma/client` peer dep is optional (Prisma 7 generates client locally)
 - Old top-level config fields (`modulesDir`, `defaultRepo`, etc.) are deprecated — use `modules` block

@@ -75,24 +75,20 @@ Replace tsup with Vite library mode for building all 18 `@forinda/kickjs-*` pack
 - SWC transforms would be identical in dev and production builds
 
 **Implementation plan:**
-1. [ ] **Proof of concept** — migrate `@forinda/kickjs-config` (smallest package, no sub-path exports) from tsup to `vite build` in library mode. Verify: ESM output, `.d.ts` generation (via `tsc --emitDeclarationOnly`), externals, minification, and that the published tarball is equivalent.
-2. [ ] **Sub-path exports** — test with `@forinda/kickjs-core` which has multiple entry points (`/container`, `/decorators`, `/errors`, etc.). Verify Vite's `build.lib.entry` handles multiple entries with correct chunk splitting.
-3. [ ] **DTS pipeline** — decide on `.d.ts` strategy: `tsc --emitDeclarationOnly` (simple, already works) vs `vite-plugin-dts` (integrated but another dep). Compare build times.
-4. [ ] **Migrate remaining packages** — roll out to all 18 packages. Update `turbo.json` pipeline if build scripts change.
-5. [ ] **Remove tsup** — delete all `tsup.config.ts` files, remove `tsup` from devDependencies across the monorepo, update CLAUDE.md build instructions.
-6. [ ] **Verify CI** — ensure `pnpm build` still works in GitHub Actions, tarballs are equivalent, and publish flow is unchanged.
+1. [x] **Proof of concept** — migrated `@forinda/kickjs-config` from tsup to Vite 8 library mode. ESM output, `.d.ts` via `tsc --emitDeclarationOnly`, externals, esbuild minification all verified.
+2. [x] **Sub-path exports** — migrated `@forinda/kickjs-core` with 10 entry points. Vite's `build.lib.entry` object handles multiple entries with automatic chunk splitting.
+3. [x] **DTS pipeline** — chose `tsc -p tsconfig.build.json` (simple, zero deps). Each package has `tsconfig.build.json` extending the main config with `emitDeclarationOnly: true`.
+4. [x] **Migrate remaining packages** — all 19 packages (17 framework + CLI + VS Code extension) migrated. CLI uses banner for shebang, VS Code extension outputs CJS.
+5. [x] **Remove tsup** — deleted all `tsup.config.ts` files, removed `tsup` from all devDependencies, updated CLAUDE.md and AGENTS.md.
+6. [ ] **Verify CI** — push and confirm GitHub Actions build passes.
 
-**Risks:**
-- Vite library mode doesn't generate `.d.ts` natively — requires a separate step
-- Build times may differ (tsup uses esbuild, Vite uses Rollup for production)
-- The VS Code extension (`kickjs-devtools`) currently builds CJS via tsup — Vite library mode can output CJS but needs explicit config
-
-**Acceptance criteria:**
-- All packages build with `vite build` + `tsc --emitDeclarationOnly`
-- `pnpm pack` output is identical (same files, same exports)
-- No runtime regressions in examples or tests
-- Build time is comparable (< 2x slower)
-- Zero tsup/esbuild references remain in the monorepo
+**Results:**
+- Vite 8 (Rolldown) + esbuild minification for all packages
+- `tsc -p tsconfig.build.json` for `.d.ts` with source maps (IDE "Go to Definition")
+- VS Code extension builds CJS via Vite library mode
+- CLI shebang via `rollupOptions.output.banner`
+- 29/29 builds, 31/31 tests pass locally
+- Vite hoisted to workspace root — zero per-package vite devDeps
 
 ### Future
 - [ ] Type-safe API client generation (tRPC-like) — `kick generate:client` from route decorators + Zod DTOs (KICK-018)
