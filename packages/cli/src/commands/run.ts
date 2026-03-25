@@ -82,7 +82,13 @@ export function registerRunCommands(program: Command): void {
     .description('Build for production via Vite')
     .action(async () => {
       console.log('\n  Building for production...\n')
-      runShellCommand('npx vite build')
+
+      // Resolve vite from the user's project, not the CLI package
+      const { createRequire } = await import('node:module')
+      const require = createRequire(resolve('package.json'))
+      const vitePath = require.resolve('vite')
+      const { build } = await import(vitePath)
+      await build({ configFile: resolve('vite.config.ts') })
 
       // Copy static directories to dist (e.g., templates, public assets)
       const config = await loadKickConfig(process.cwd())
