@@ -106,7 +106,6 @@
     "@swc/core": "^1.7.28",
     "@types/node": "^24.5.2",
     "typescript": "^5.9.2",
-    "vite": "^8.0.2",
     "vitest": "^3.2.4"
   },
   "publishConfig": {

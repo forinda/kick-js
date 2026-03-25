@@ -88,7 +88,6 @@
     "@opentelemetry/sdk-metrics": "^2.6.1",
     "@opentelemetry/semantic-conventions": "^1.4.0",
     "@types/node": "^24.5.2",
-    "vite": "^8.0.2",
     "typescript": "^5.9.2"
   },
   "publishConfig": {
