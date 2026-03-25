@@ -2,8 +2,11 @@ import { defineConfig } from '@forinda/kickjs-cli'
 
 export default defineConfig({
   pattern: 'ddd',
-  modulesDir: 'src/modules',
-  defaultRepo: 'prisma',
+  modules: {
+    dir: 'src/modules',
+    repo: 'prisma',
+    prismaClientPath: '@/generated/prisma/client',
+  },
 
   commands: [
     {
