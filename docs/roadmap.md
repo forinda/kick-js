@@ -46,6 +46,7 @@ Prisma 7 introduces several breaking changes that affect `@forinda/kickjs-prisma
 - [ ] Refactor CLI generators: use option objects instead of positional args, split patterns into individual files, group ORM-specific templates in `templates/drizzle/` and `templates/prisma/` folders (KICK-030)
 
 ### Future
+- [ ] `kick remove module <name>` — delete module directory and unregister from `src/modules/index.ts` (KICK-031)
 - [ ] Type-safe API client generation (tRPC-like) — `kick generate:client` from route decorators + Zod DTOs (KICK-018)
 - [ ] `kick deploy` — deploy to Fly.io, Railway, Docker
 

@@ -1,5 +1,5 @@
 export { PrismaAdapter } from './prisma.adapter'
 export { PrismaQueryAdapter } from './query-adapter'
 export { PRISMA_CLIENT } from './types'
-export type { PrismaAdapterOptions } from './types'
+export type { PrismaAdapterOptions, PrismaModelDelegate } from './types'
 export type { PrismaQueryConfig, PrismaQueryResult } from './query-adapter'

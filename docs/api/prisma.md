@@ -1,27 +1,58 @@
 # @forinda/kickjs-prisma
 
-Prisma ORM adapter with DI integration and query building for KickJS.
+Prisma ORM adapter with DI integration, type-safe query building, and `PrismaModelDelegate` for cast-free repositories. Supports Prisma 5, 6, and 7+.
 
 ## Installation
 
 ```bash
+# Using the KickJS CLI (recommended)
+kick add prisma
+
+# Manual install
 pnpm add @forinda/kickjs-prisma @prisma/client
-npx prisma init
 ```
 
-## Quick Start
+## Quick Start (Prisma 5/6)
 
 ```ts
 import { PrismaClient } from '@prisma/client'
 import { PrismaAdapter } from '@forinda/kickjs-prisma'
 
-const prisma = new PrismaClient()
+bootstrap({
+  modules,
+  adapters: [
+    new PrismaAdapter({ client: new PrismaClient(), logging: true }),
+  ],
+})
+```
+
+## Quick Start (Prisma 7+)
+
+```ts
+import { PrismaClient } from './generated/prisma/client'
+import { PrismaPg } from '@prisma/adapter-pg'
+import pg from 'pg'
+import { PrismaAdapter } from '@forinda/kickjs-prisma'
+
+const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL })
+const client = new PrismaClient({ adapter: new PrismaPg(pool) })
 
 bootstrap({
   modules,
   adapters: [
-    new PrismaAdapter({ client: prisma, logging: true }),
+    new PrismaAdapter({ client, logging: true }),
   ],
+})
+```
+
+Configure `modules.prismaClientPath` in `kick.config.ts` so `kick g module --repo prisma` generates the correct import:
+
+```ts
+export default defineConfig({
+  modules: {
+    repo: 'prisma',
+    prismaClientPath: '@/generated/prisma/client', // Prisma 7+
+  },
 })
 ```
 
@@ -29,71 +60,88 @@ bootstrap({
 
 Implements `AppAdapter` to manage the Prisma lifecycle:
 
-- **`beforeStart(app, container)`** — registers the `PrismaClient` in the DI container under the `PRISMA_CLIENT` symbol
+- **`beforeStart(app, container)`** — registers the `PrismaClient` in the DI container under the `PRISMA_CLIENT` symbol. Sets up query logging if enabled.
 - **`shutdown()`** — calls `prisma.$disconnect()`
 
 ### Options
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `client` | `PrismaClient` | **required** | Your PrismaClient instance |
-| `logging` | `boolean` | `false` | Log queries via `$on('query')` |
+| `client` | `any` | **required** | PrismaClient instance (any Prisma version) |
+| `logging` | `boolean` | `false` | Log queries — uses `$on('query')` for Prisma 5/6, `$extends` for Prisma 7+ |
 
-### Injecting PrismaClient
+## PrismaModelDelegate
 
-Use the `PRISMA_CLIENT` symbol to inject the client into services:
+A typed interface for common Prisma model CRUD operations. Use it to type-narrow the injected `PrismaClient` to a specific model without `as any` casts.
+
+This is what `kick g module --repo prisma` generates by default:
 
 ```ts
-import { Service, Inject } from '@forinda/kickjs-core'
-import { PRISMA_CLIENT } from '@forinda/kickjs-prisma'
-import type { PrismaClient } from '@prisma/client'
+import { Repository, Inject } from '@forinda/kickjs-core'
+import { PRISMA_CLIENT, type PrismaModelDelegate } from '@forinda/kickjs-prisma'
 
-@Service()
-class UserRepository {
-  @Inject(PRISMA_CLIENT) private prisma!: PrismaClient
-
-  async findAll() {
-    return this.prisma.user.findMany()
-  }
+@Repository()
+class PrismaUserRepository {
+  @Inject(PRISMA_CLIENT) private prisma!: { user: PrismaModelDelegate }
 
   async findById(id: string) {
     return this.prisma.user.findUnique({ where: { id } })
   }
 
-  async create(data: { name: string; email: string }) {
-    return this.prisma.user.create({ data })
+  async findAll() {
+    return this.prisma.user.findMany()
+  }
+
+  async create(data: CreateUserDTO) {
+    return this.prisma.user.create({ data: data as Record<string, unknown> })
   }
 }
 ```
+
+For full Prisma field-level type safety, replace `PrismaModelDelegate` with your actual PrismaClient:
+
+```ts
+import type { PrismaClient } from '@prisma/client' // or '@/generated/prisma/client' for v7
+@Inject(PRISMA_CLIENT) private prisma!: PrismaClient
+```
+
+### PrismaModelDelegate Methods
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `findUnique` | `({ where, include? }) => Promise<unknown>` | Find by unique field |
+| `findFirst` | `(args?) => Promise<unknown>` | Find first match |
+| `findMany` | `(args?) => Promise<unknown[]>` | Find multiple records |
+| `create` | `({ data }) => Promise<unknown>` | Create a record |
+| `update` | `({ where, data }) => Promise<unknown>` | Update a record |
+| `delete` | `({ where }) => Promise<unknown>` | Delete a record |
+| `deleteMany` | `({ where? }) => Promise<{ count }>` | Delete multiple records |
+| `count` | `({ where? }) => Promise<number>` | Count records |
 
 ## PrismaQueryAdapter
 
 Translates `ParsedQuery` from `ctx.qs()` into Prisma-compatible `findMany` arguments.
 
 ```ts
-import { PrismaQueryAdapter } from '@forinda/kickjs-prisma'
+import type { User } from '@prisma/client'
+import { PrismaQueryAdapter, type PrismaQueryConfig } from '@forinda/kickjs-prisma'
 
 const queryAdapter = new PrismaQueryAdapter()
 
-@Controller('/users')
-class UserController {
-  @Inject(PRISMA_CLIENT) private prisma!: PrismaClient
+// Type-safe — only User field names accepted in searchColumns
+const config: PrismaQueryConfig<User> = {
+  searchColumns: ['name', 'email'],
+}
 
-  @Get('/')
-  async list(ctx: RequestContext) {
-    const parsed = ctx.qs({
-      filterable: ['status', 'role'],
-      sortable: ['createdAt', 'name'],
-      searchable: ['name', 'email'],
-    })
+const args = queryAdapter.build(parsed, config)
+const users = await prisma.user.findMany(args)
+```
 
-    const args = queryAdapter.build(parsed, {
-      searchColumns: ['name', 'email'],
-    })
+Without the generic, `searchColumns` accepts any string:
 
-    const users = await this.prisma.user.findMany(args)
-    ctx.json(users)
-  }
+```ts
+const config: PrismaQueryConfig = {
+  searchColumns: ['name', 'email'],
 }
 ```
 
@@ -117,10 +165,10 @@ class UserController {
 
 ```ts
 interface PrismaQueryResult {
-  where?: Record<string, any>    // Prisma where clause
+  where?: Record<string, any>
   orderBy?: Record<string, 'asc' | 'desc'>[]
-  skip?: number                  // Offset
-  take?: number                  // Limit
+  skip?: number
+  take?: number
 }
 ```
 
@@ -132,6 +180,7 @@ import {
   PrismaQueryAdapter,
   PRISMA_CLIENT,
   type PrismaAdapterOptions,
+  type PrismaModelDelegate,
   type PrismaQueryConfig,
   type PrismaQueryResult,
 } from '@forinda/kickjs-prisma'
