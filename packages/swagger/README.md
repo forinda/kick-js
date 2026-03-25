@@ -5,6 +5,10 @@ Auto-generated OpenAPI spec from decorators, Swagger UI, and ReDoc for KickJS.
 ## Install
 
 ```bash
+# Using the KickJS CLI (recommended)
+kick add swagger
+
+# Manual install
 pnpm add @forinda/kickjs-swagger @forinda/kickjs-core
 ```
 

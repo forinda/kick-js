@@ -5,6 +5,10 @@ Core DI container, decorators, module system, logger, and error types for KickJS
 ## Install
 
 ```bash
+# Using the KickJS CLI (included by default with kick new)
+kick add core
+
+# Manual install
 pnpm add @forinda/kickjs-core
 ```
 
@@ -22,6 +26,7 @@ pnpm add @forinda/kickjs-core
 
 ```typescript
 import { Service, Controller, Get, Autowired } from '@forinda/kickjs-core'
+import { RequestContext } from '@forinda/kickjs-http'
 
 @Service()
 class UserService {
@@ -35,7 +40,7 @@ class UserController {
   @Autowired() private userService!: UserService
 
   @Get('/')
-  async list(ctx: any) {
+  async list(ctx: RequestContext) {
     ctx.json(this.userService.findAll())
   }
 }

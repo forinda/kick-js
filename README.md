@@ -559,7 +559,14 @@ kick-js/
     cli/            @forinda/kickjs-cli
     testing/        @forinda/kickjs-testing
   examples/
-    basic-api/      Full DDD todo CRUD example
+    jira-drizzle-api/   Full Jira clone (PostgreSQL + Drizzle)
+    jira-mongoose-api/  Full Jira clone (MongoDB + Mongoose)
+    minimal-api/        Simplest possible app
+    joi-api/            Joi schema parser for Swagger
+    graphql-api/        GraphQL with resolvers
+    devtools-api/       DevTools + reactive state
+    microservice-api/   Microservice template
+    otel-api/           OpenTelemetry tracing
   turbo.json
   pnpm-workspace.yaml
   tsconfig.base.json

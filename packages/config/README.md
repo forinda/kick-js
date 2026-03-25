@@ -5,6 +5,10 @@ Zod-based environment validation and ConfigService for KickJS.
 ## Install
 
 ```bash
+# Using the KickJS CLI (recommended)
+kick add config
+
+# Manual install
 pnpm add @forinda/kickjs-config @forinda/kickjs-core zod
 ```
 

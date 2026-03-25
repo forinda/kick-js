@@ -5,6 +5,10 @@ Test utilities for KickJS — `createTestApp` and `createTestModule` helpers.
 ## Install
 
 ```bash
+# Using the KickJS CLI (recommended — installs as dev dependency)
+kick add testing
+
+# Manual install
 pnpm add -D @forinda/kickjs-testing
 ```
 

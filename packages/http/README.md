@@ -5,6 +5,10 @@ Express 5 application, router builder, RequestContext, middleware, and query par
 ## Install
 
 ```bash
+# Using the KickJS CLI (recommended — auto-installs peer dependencies)
+kick add http
+
+# Manual install
 pnpm add @forinda/kickjs-http @forinda/kickjs-core express reflect-metadata
 ```
 

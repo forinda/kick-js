@@ -14,7 +14,9 @@ kick-js/
     config/       # Configuration loading
     testing/      # Test utilities
   examples/
-    basic-api/    # Reference application
+    jira-drizzle-api/   # Full Jira clone (PostgreSQL + Drizzle)
+    jira-mongoose-api/  # Full Jira clone (MongoDB + Mongoose)
+    minimal-api/        # Simplest possible app
 ```
 
 Each package is published under the `@kickjs/` scope. Applications import from `@forinda/kickjs-core` and `@forinda/kickjs-http`.

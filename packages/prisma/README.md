@@ -11,6 +11,10 @@ Prisma ORM adapter for the [KickJS](https://forinda.github.io/kick-js/) framewor
 ## Installation
 
 ```bash
+# Using the KickJS CLI (recommended — auto-installs peer dependencies)
+kick add prisma
+
+# Manual install
 pnpm add @forinda/kickjs-prisma @prisma/client
 ```
 
