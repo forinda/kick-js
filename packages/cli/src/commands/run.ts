@@ -4,30 +4,76 @@ import type { Command } from 'commander'
 import { runShellCommand } from '../utils/shell'
 import { loadKickConfig } from '../config'
 
+/**
+ * Start the Vite dev server using RunnableDevEnvironment.
+ * Replaces the old `npx vite-node --watch` approach — no separate dependency needed.
+ */
+async function startDevServer(entry: string, port?: string): Promise<void> {
+  // Set port before Vite server creation so the app picks it up
+  if (port) process.env.PORT = port
+
+  // Resolve vite from the user's project, not the CLI package
+  const { createRequire } = await import('node:module')
+  const require = createRequire(resolve('package.json'))
+  const vitePath = require.resolve('vite')
+  const { createServer, isRunnableDevEnvironment } = await import(vitePath)
+
+  const server = await createServer({
+    configFile: resolve('vite.config.ts'),
+    appType: 'custom',
+    server: {
+      middlewareMode: true,
+      hmr: true,
+    },
+    environments: {
+      ssr: {},
+    },
+  })
+
+  const env = server.environments.ssr
+
+  if (!isRunnableDevEnvironment(env)) {
+    console.error(
+      '\n  Error: Vite environment is not runnable.\n' +
+        '  Ensure vite.config.ts uses the default SSR environment.\n',
+    )
+    process.exit(1)
+  }
+
+  console.log(`\n  KickJS dev server starting...`)
+  console.log(`  Entry:  ${entry}`)
+  console.log(`  HMR:    enabled (Vite Environment Runner)\n`)
+
+  await env.runner.import(`/${entry}`)
+
+  // Keep the process alive — the Express server is running
+  // Graceful shutdown on SIGINT/SIGTERM
+  const shutdown = async () => {
+    await server.close()
+    process.exit(0)
+  }
+  process.on('SIGINT', shutdown)
+  process.on('SIGTERM', shutdown)
+}
+
 export function registerRunCommands(program: Command): void {
   program
     .command('dev')
     .description('Start development server with Vite HMR (zero-downtime reload)')
     .option('-e, --entry <file>', 'Entry file', 'src/index.ts')
     .option('-p, --port <port>', 'Port number')
-    .action((opts: any) => {
-      const envVars: string[] = []
-      if (opts.port) envVars.push(`PORT=${opts.port}`)
-
-      // vite-node --watch gives true HMR via import.meta.hot.accept()
-      // The Application.rebuild() swaps the Express handler on the existing
-      // http.Server — DB, Redis, Socket.IO connections survive across reloads
-      const cmd = `npx vite-node --watch ${opts.entry}`
-      const fullCmd = envVars.length ? `${envVars.join(' ')} ${cmd}` : cmd
-
-      console.log(`\n  KickJS dev server starting...`)
-      console.log(`  Entry:  ${opts.entry}`)
-      console.log(`  HMR:    enabled (vite-node)\n`)
-
+    .action(async (opts: any) => {
       try {
-        runShellCommand(fullCmd)
-      } catch {
-        // Process exits on SIGINT — expected
+        await startDevServer(opts.entry, opts.port)
+      } catch (err: any) {
+        if (err.code === 'ERR_MODULE_NOT_FOUND' && err.message?.includes('vite')) {
+          console.error(
+            '\n  Error: vite is not installed.\n' + '  Run: pnpm add -D vite unplugin-swc\n',
+          )
+        } else {
+          console.error('\n  Dev server failed:', err.message ?? err)
+        }
+        process.exit(1)
       }
     })
 
@@ -78,15 +124,22 @@ export function registerRunCommands(program: Command): void {
 
   program
     .command('dev:debug')
-    .description('Start dev server with Node.js inspector')
+    .description('Start dev server with Node.js inspector attached')
     .option('-e, --entry <file>', 'Entry file', 'src/index.ts')
     .option('-p, --port <port>', 'Port number')
-    .action((opts: any) => {
-      const envVars = opts.port ? `PORT=${opts.port} ` : ''
+    .option('--inspect-port <port>', 'Inspector port', '9229')
+    .action(async (opts: any) => {
+      // For debug mode, we need --inspect on the Node.js process itself.
+      // Re-launch the dev command with NODE_OPTIONS=--inspect
+      const inspectPort = opts.inspectPort ?? '9229'
+      process.env.NODE_OPTIONS = `--inspect=0.0.0.0:${inspectPort}`
+      console.log(`  Debugger: ws://0.0.0.0:${inspectPort}`)
+
       try {
-        runShellCommand(`${envVars}npx vite-node --inspect --watch ${opts.entry}`)
-      } catch {
-        // SIGINT
+        await startDevServer(opts.entry, opts.port)
+      } catch (err: any) {
+        console.error('\n  Dev server (debug) failed:', err.message ?? err)
+        process.exit(1)
       }
     })
 }

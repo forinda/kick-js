@@ -38,7 +38,8 @@
     "@forinda/kickjs-queue",
     "@forinda/kickjs-multi-tenant",
     "@forinda/kickjs-devtools",
-    "@forinda/kickjs-notifications"
+    "@forinda/kickjs-notifications",
+    "vite"
   ],
   "type": "module",
   "main": "dist/index.js",

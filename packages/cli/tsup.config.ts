@@ -21,7 +21,7 @@ export default defineConfig([
     dts: false,
     shims: false,
     minify: true,
-    external: ['commander'],
+    external: ['commander', 'vite'],
     banner: {
       js: '#!/usr/bin/env node',
     },
