@@ -118,12 +118,24 @@ export class UserModule implements AppModule {
 
 | Package | npm | Description |
 |---------|-----|-------------|
-| [`@forinda/kickjs-core`](packages/core/) | [![npm](https://img.shields.io/npm/v/@forinda/kickjs-core)](https://www.npmjs.com/package/@forinda/kickjs-core) | DI container, 20+ decorators, module system, logger, error types |
-| [`@forinda/kickjs-http`](packages/http/) | [![npm](https://img.shields.io/npm/v/@forinda/kickjs-http)](https://www.npmjs.com/package/@forinda/kickjs-http) | Express 5 app, router builder, RequestContext, middleware, query parsing |
-| [`@forinda/kickjs-config`](packages/config/) | [![npm](https://img.shields.io/npm/v/@forinda/kickjs-config)](https://www.npmjs.com/package/@forinda/kickjs-config) | Zod-based env validation, ConfigService, `@Value` decorator |
-| [`@forinda/kickjs-swagger`](packages/swagger/) | [![npm](https://img.shields.io/npm/v/@forinda/kickjs-swagger)](https://www.npmjs.com/package/@forinda/kickjs-swagger) | OpenAPI spec from decorators, Swagger UI, ReDoc, pluggable schema parsers |
-| [`@forinda/kickjs-cli`](packages/cli/) | [![npm](https://img.shields.io/npm/v/@forinda/kickjs-cli)](https://www.npmjs.com/package/@forinda/kickjs-cli) | Project scaffolding, DDD code generators, custom commands |
-| [`@forinda/kickjs-testing`](packages/testing/) | [![npm](https://img.shields.io/npm/v/@forinda/kickjs-testing)](https://www.npmjs.com/package/@forinda/kickjs-testing) | `createTestApp`, `createTestModule` test utilities |
+| [`@forinda/kickjs-core`](packages/core/) | [![npm](https://img.shields.io/npm/v/@forinda/kickjs-core)](https://www.npmjs.com/package/@forinda/kickjs-core) | DI container, 20+ decorators, module system, logger |
+| [`@forinda/kickjs-http`](packages/http/) | [![npm](https://img.shields.io/npm/v/@forinda/kickjs-http)](https://www.npmjs.com/package/@forinda/kickjs-http) | Express 5 app, routing, middleware, query parsing |
+| [`@forinda/kickjs-config`](packages/config/) | [![npm](https://img.shields.io/npm/v/@forinda/kickjs-config)](https://www.npmjs.com/package/@forinda/kickjs-config) | Zod-based env validation, ConfigService, `@Value` |
+| [`@forinda/kickjs-cli`](packages/cli/) | [![npm](https://img.shields.io/npm/v/@forinda/kickjs-cli)](https://www.npmjs.com/package/@forinda/kickjs-cli) | Scaffolding, generators, `kick add`, `kick rm` |
+| [`@forinda/kickjs-swagger`](packages/swagger/) | [![npm](https://img.shields.io/npm/v/@forinda/kickjs-swagger)](https://www.npmjs.com/package/@forinda/kickjs-swagger) | OpenAPI from decorators, Swagger UI, ReDoc |
+| [`@forinda/kickjs-testing`](packages/testing/) | [![npm](https://img.shields.io/npm/v/@forinda/kickjs-testing)](https://www.npmjs.com/package/@forinda/kickjs-testing) | `createTestApp`, `createTestModule` helpers |
+| [`@forinda/kickjs-prisma`](packages/prisma/) | [![npm](https://img.shields.io/npm/v/@forinda/kickjs-prisma)](https://www.npmjs.com/package/@forinda/kickjs-prisma) | Prisma adapter (v5/6/7), PrismaModelDelegate |
+| [`@forinda/kickjs-drizzle`](packages/drizzle/) | [![npm](https://img.shields.io/npm/v/@forinda/kickjs-drizzle)](https://www.npmjs.com/package/@forinda/kickjs-drizzle) | Drizzle adapter, query builder |
+| [`@forinda/kickjs-auth`](packages/auth/) | [![npm](https://img.shields.io/npm/v/@forinda/kickjs-auth)](https://www.npmjs.com/package/@forinda/kickjs-auth) | JWT, API key, OAuth, `@Public`, `@Roles` |
+| [`@forinda/kickjs-ws`](packages/ws/) | [![npm](https://img.shields.io/npm/v/@forinda/kickjs-ws)](https://www.npmjs.com/package/@forinda/kickjs-ws) | WebSocket with `@WsController`, rooms |
+| [`@forinda/kickjs-queue`](packages/queue/) | [![npm](https://img.shields.io/npm/v/@forinda/kickjs-queue)](https://www.npmjs.com/package/@forinda/kickjs-queue) | BullMQ, RabbitMQ, Kafka job processing |
+| [`@forinda/kickjs-cron`](packages/cron/) | [![npm](https://img.shields.io/npm/v/@forinda/kickjs-cron)](https://www.npmjs.com/package/@forinda/kickjs-cron) | `@Cron` decorator, pluggable schedulers |
+| [`@forinda/kickjs-mailer`](packages/mailer/) | [![npm](https://img.shields.io/npm/v/@forinda/kickjs-mailer)](https://www.npmjs.com/package/@forinda/kickjs-mailer) | SMTP, Resend, SES, ConsoleProvider |
+| [`@forinda/kickjs-graphql`](packages/graphql/) | [![npm](https://img.shields.io/npm/v/@forinda/kickjs-graphql)](https://www.npmjs.com/package/@forinda/kickjs-graphql) | `@Resolver`, `@Query`, `@Mutation`, GraphiQL |
+| [`@forinda/kickjs-otel`](packages/otel/) | [![npm](https://img.shields.io/npm/v/@forinda/kickjs-otel)](https://www.npmjs.com/package/@forinda/kickjs-otel) | OpenTelemetry tracing and metrics |
+| [`@forinda/kickjs-devtools`](packages/devtools/) | [![npm](https://img.shields.io/npm/v/@forinda/kickjs-devtools)](https://www.npmjs.com/package/@forinda/kickjs-devtools) | Debug dashboard at `/_debug` |
+| [`@forinda/kickjs-notifications`](packages/notifications/) | [![npm](https://img.shields.io/npm/v/@forinda/kickjs-notifications)](https://www.npmjs.com/package/@forinda/kickjs-notifications) | Email, Slack, Discord, webhook channels |
+| [`@forinda/kickjs-multi-tenant`](packages/multi-tenant/) | [![npm](https://img.shields.io/npm/v/@forinda/kickjs-multi-tenant)](https://www.npmjs.com/package/@forinda/kickjs-multi-tenant) | Tenant resolution middleware |
 
 ## Bundle Sizes
 
