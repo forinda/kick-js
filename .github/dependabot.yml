@@ -29,6 +29,6 @@ updates:
       interval: "weekly"
       day: "monday"
     labels:
-      - "ci"
+      - "dependencies"
     commit-message:
       prefix: "ci"
