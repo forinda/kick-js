@@ -1,4 +1,7 @@
-export function generateDomainService(pascal: string, kebab: string): string {
+import type { TemplateContext } from './types'
+
+export function generateDomainService(ctx: TemplateContext): string {
+  const { pascal, kebab } = ctx
   return `/**
  * ${pascal} Domain Service
  *
@@ -25,7 +28,8 @@ export class ${pascal}DomainService {
 `
 }
 
-export function generateEntity(pascal: string, kebab: string): string {
+export function generateEntity(ctx: TemplateContext): string {
+  const { pascal, kebab } = ctx
   return `/**
  * ${pascal} Entity
  *
@@ -98,7 +102,8 @@ export class ${pascal} {
 `
 }
 
-export function generateValueObject(pascal: string, kebab: string): string {
+export function generateValueObject(ctx: TemplateContext): string {
+  const { pascal, kebab } = ctx
   return `/**
  * ${pascal} ID Value Object
  *

@@ -1,4 +1,7 @@
-export function generateCreateDTO(pascal: string, kebab: string): string {
+import type { TemplateContext } from './types'
+
+export function generateCreateDTO(ctx: TemplateContext): string {
+  const { pascal, kebab } = ctx
   return `import { z } from 'zod'
 
 /**
@@ -18,7 +21,8 @@ export type Create${pascal}DTO = z.infer<typeof create${pascal}Schema>
 `
 }
 
-export function generateUpdateDTO(pascal: string, kebab: string): string {
+export function generateUpdateDTO(ctx: TemplateContext): string {
+  const { pascal, kebab } = ctx
   return `import { z } from 'zod'
 
 export const update${pascal}Schema = z.object({
@@ -29,7 +33,8 @@ export type Update${pascal}DTO = z.infer<typeof update${pascal}Schema>
 `
 }
 
-export function generateResponseDTO(pascal: string, kebab: string): string {
+export function generateResponseDTO(ctx: TemplateContext): string {
+  const { pascal, kebab } = ctx
   return `export interface ${pascal}ResponseDTO {
   id: string
   name: string

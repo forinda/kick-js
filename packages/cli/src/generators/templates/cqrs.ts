@@ -1,10 +1,8 @@
+import type { TemplateContext } from './types'
+
 /** CQRS module index — commands, queries, events, WebSocket + queue integration */
-export function generateCqrsModuleIndex(
-  pascal: string,
-  kebab: string,
-  plural: string,
-  repo: string,
-): string {
+export function generateCqrsModuleIndex(ctx: TemplateContext & { repo: string }): string {
+  const { pascal, kebab, plural = '', repo } = ctx
   const repoClassMap: Record<string, string> = {
     inmemory: `InMemory${pascal}Repository`,
     drizzle: `Drizzle${pascal}Repository`,
@@ -67,13 +65,8 @@ export class ${pascal}Module implements AppModule {
 }
 
 /** CQRS controller — dispatches to command/query handlers */
-export function generateCqrsController(
-  pascal: string,
-  kebab: string,
-  plural: string,
-  pluralPascal: string,
-): string {
-  const camel = pascal.charAt(0).toLowerCase() + pascal.slice(1)
+export function generateCqrsController(ctx: TemplateContext): string {
+  const { pascal, kebab, plural = '', pluralPascal = '' } = ctx
   return `import { Controller, Get, Post, Put, Delete, Autowired, ApiQueryParams } from '@forinda/kickjs-core'
 import type { RequestContext } from '@forinda/kickjs-http'
 import { ApiTags } from '@forinda/kickjs-swagger'
@@ -137,10 +130,8 @@ export class ${pascal}Controller {
 }
 
 /** CQRS commands — write operations that emit events */
-export function generateCqrsCommands(
-  pascal: string,
-  kebab: string,
-): { file: string; content: string }[] {
+export function generateCqrsCommands(ctx: TemplateContext): { file: string; content: string }[] {
+  const { pascal, kebab } = ctx
   return [
     {
       file: `create-${kebab}.command.ts`,
@@ -212,12 +203,8 @@ export class Delete${pascal}Command {
 }
 
 /** CQRS queries — read operations */
-export function generateCqrsQueries(
-  pascal: string,
-  kebab: string,
-  plural: string,
-  pluralPascal: string,
-): { file: string; content: string }[] {
+export function generateCqrsQueries(ctx: TemplateContext): { file: string; content: string }[] {
+  const { pascal, kebab, plural = '', pluralPascal = '' } = ctx
   return [
     {
       file: `get-${kebab}.query.ts`,
@@ -259,10 +246,8 @@ export class List${pluralPascal}Query {
 }
 
 /** CQRS events — domain event emitter + handler with WS/queue integration */
-export function generateCqrsEvents(
-  pascal: string,
-  kebab: string,
-): { file: string; content: string }[] {
+export function generateCqrsEvents(ctx: TemplateContext): { file: string; content: string }[] {
+  const { pascal, kebab } = ctx
   return [
     {
       file: `${kebab}.events.ts`,

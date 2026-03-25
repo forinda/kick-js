@@ -1,9 +1,7 @@
-export function generateUseCases(
-  pascal: string,
-  kebab: string,
-  plural: string,
-  pluralPascal: string,
-): { file: string; content: string }[] {
+import type { TemplateContext } from './types'
+
+export function generateUseCases(ctx: TemplateContext): { file: string; content: string }[] {
+  const { pascal, kebab, plural = '', pluralPascal = '' } = ctx
   return [
     {
       file: `create-${kebab}.use-case.ts`,

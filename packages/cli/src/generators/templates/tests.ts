@@ -1,4 +1,7 @@
-export function generateControllerTest(pascal: string, kebab: string, plural: string): string {
+import type { TemplateContext } from './types'
+
+export function generateControllerTest(ctx: TemplateContext): string {
+  const { pascal, kebab, plural = '' } = ctx
   return `import { describe, it, expect, beforeEach } from 'vitest'
 import { Container } from '@forinda/kickjs-core'
 
@@ -54,14 +57,15 @@ describe('${pascal}Controller', () => {
 `
 }
 
-export function generateRepositoryTest(
-  pascal: string,
-  kebab: string,
-  plural: string,
-  repoImport = `../infrastructure/repositories/in-memory-${kebab}.repository`,
-): string {
+export function generateRepositoryTest(ctx: TemplateContext): string {
+  const {
+    pascal,
+    kebab,
+    plural = '',
+    repoPrefix = `../infrastructure/repositories/in-memory-${kebab}.repository`,
+  } = ctx
   return `import { describe, it, expect, beforeEach } from 'vitest'
-import { InMemory${pascal}Repository } from '${repoImport}'
+import { InMemory${pascal}Repository } from '${repoPrefix}'
 
 describe('InMemory${pascal}Repository', () => {
   let repo: InMemory${pascal}Repository

@@ -43,7 +43,7 @@ Prisma 7 introduces several breaking changes that affect `@forinda/kickjs-prisma
 
 ### Code Quality
 - [x] Remove `any` casts in jira-prisma-v7-api repositories — typed relation results with Prisma model types, removed unnecessary field access casts (KICK-028)
-- [ ] Refactor CLI generators: use option objects instead of positional args, split patterns into individual files, group ORM-specific templates in `templates/drizzle/` and `templates/prisma/` folders (KICK-030)
+- [x] Refactor CLI generators: use option objects (`TemplateContext`), split patterns into `patterns/` folder, group ORM templates in `templates/drizzle/` and `templates/prisma/` (KICK-030)
 
 ### Future
 - [ ] `kick remove module <name>` — delete module directory and unregister from `src/modules/index.ts` (KICK-031)

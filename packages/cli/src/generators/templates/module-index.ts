@@ -1,4 +1,5 @@
 import type { RepoType } from '../module'
+import type { TemplateContext } from './types'
 
 const repoLabelMap: Record<string, string> = {
   inmemory: 'in-memory',
@@ -39,12 +40,8 @@ function repoMaps(pascal: string, kebab: string, repo: RepoType) {
 }
 
 /** DDD module index — nested folders, use-cases, domain services */
-export function generateModuleIndex(
-  pascal: string,
-  kebab: string,
-  plural: string,
-  repo: RepoType,
-): string {
+export function generateModuleIndex(ctx: TemplateContext & { repo: RepoType }): string {
+  const { pascal, kebab, plural = '', repo } = ctx
   const { repoClass, repoFile } = repoMaps(pascal, kebab, repo)
 
   return `/**
@@ -100,12 +97,8 @@ export class ${pascal}Module implements AppModule {
 }
 
 /** REST module index — flat folder, service + controller, no use-cases */
-export function generateRestModuleIndex(
-  pascal: string,
-  kebab: string,
-  plural: string,
-  repo: RepoType,
-): string {
+export function generateRestModuleIndex(ctx: TemplateContext & { repo: RepoType }): string {
+  const { pascal, kebab, plural = '', repo } = ctx
   const { repoClass, repoFile } = repoMaps(pascal, kebab, repo)
 
   return `/**
@@ -149,7 +142,8 @@ export class ${pascal}Module implements AppModule {
 }
 
 /** Minimal module index — just controller, no service/repo */
-export function generateMinimalModuleIndex(pascal: string, kebab: string, plural: string): string {
+export function generateMinimalModuleIndex(ctx: TemplateContext): string {
+  const { pascal, kebab, plural = '' } = ctx
   return `import { type AppModule, type ModuleRoutes } from '@forinda/kickjs-core'
 import { buildRoutes } from '@forinda/kickjs-http'
 import { ${pascal}Controller } from './${kebab}.controller'

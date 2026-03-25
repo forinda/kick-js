@@ -1,5 +1,8 @@
+import type { TemplateContext } from './types'
+
 /** REST service — wraps repository with CRUD methods, replaces use-cases for flat pattern */
-export function generateRestService(pascal: string, kebab: string): string {
+export function generateRestService(ctx: TemplateContext): string {
+  const { pascal, kebab } = ctx
   return `import { Service, Inject, HttpException } from '@forinda/kickjs-core'
 import type { ParsedQuery } from '@forinda/kickjs-http'
 import { ${pascal.toUpperCase()}_REPOSITORY, type I${pascal}Repository } from './${kebab}.repository'
@@ -41,7 +44,8 @@ export class ${pascal}Service {
 }
 
 /** REST constants — query config for flat pattern */
-export function generateRestConstants(pascal: string): string {
+export function generateRestConstants(ctx: TemplateContext): string {
+  const { pascal } = ctx
   return `import type { QueryFieldConfig } from '@forinda/kickjs-http'
 
 export const ${pascal.toUpperCase()}_QUERY_CONFIG: QueryFieldConfig = {
