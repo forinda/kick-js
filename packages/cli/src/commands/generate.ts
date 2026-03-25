@@ -106,6 +106,7 @@ export function registerGenerateCommand(program: Command): void {
         pattern,
         dryRun,
         pluralize: shouldPluralize,
+        prismaClientPath: mc.prismaClientPath,
       })
       printGenerated(files, dryRun)
     })

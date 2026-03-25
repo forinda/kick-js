@@ -32,7 +32,7 @@ export class RefreshTokenUseCase {
       throw HttpException.unauthorized(ErrorCode.USER_NOT_FOUND)
     }
 
-    if (!(user as any).isActive) {
+    if (!user.isActive) {
       throw HttpException.forbidden(ErrorCode.USER_INACTIVE)
     }
 
@@ -49,11 +49,11 @@ export class RefreshTokenUseCase {
     const accessToken = jwt.sign(
       {
         sub: user.id,
-        email: (user as any).email,
-        globalRole: (user as any).globalRole,
+        email: user.email,
+        globalRole: user.globalRole,
       },
       env.JWT_SECRET,
-      { expiresIn: env.JWT_ACCESS_EXPIRES_IN as any },
+      { expiresIn: env.JWT_ACCESS_EXPIRES_IN as string & jwt.SignOptions["expiresIn"] },
     )
 
     return { accessToken, refreshToken: newRefreshToken }

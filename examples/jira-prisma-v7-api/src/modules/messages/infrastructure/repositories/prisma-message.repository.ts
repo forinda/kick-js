@@ -50,7 +50,7 @@ export class PrismaMessageRepository implements IMessageRepository {
 
   async update(id: string, data: Partial<NewMessage>) {
     const message = await this.prisma.message
-      .update({ where: { id }, data: { ...(data as any), isEdited: true } })
+      .update({ where: { id }, data: { ...data, isEdited: true } })
       .catch(() => null)
     if (!message) throw HttpException.notFound('Message not found')
     return message

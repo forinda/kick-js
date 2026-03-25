@@ -62,6 +62,16 @@ export interface ModuleConfig {
    * When false, it creates `src/modules/user/` and uses singular names throughout.
    */
   pluralize?: boolean
+  /**
+   * Import path for the Prisma generated client in `--repo prisma` templates.
+   * Must resolve within `src/` for path alias compatibility.
+   *
+   * @default '@prisma/client' (Prisma 5/6)
+   * @example
+   * prismaClientPath: '@/generated/prisma/client'  // Prisma 7+
+   * prismaClientPath: './generated/prisma/client'   // relative
+   */
+  prismaClientPath?: string
 }
 
 /** Configuration for the kick.config.ts file */
@@ -135,6 +145,7 @@ export function resolveModuleConfig(config: KickConfig | null): ModuleConfig {
     repo: config.modules?.repo ?? config.defaultRepo,
     schemaDir: config.modules?.schemaDir ?? config.schemaDir,
     pluralize: config.modules?.pluralize ?? config.pluralize,
+    prismaClientPath: config.modules?.prismaClientPath,
   }
 
   // Warn if a string repo value isn't a known built-in

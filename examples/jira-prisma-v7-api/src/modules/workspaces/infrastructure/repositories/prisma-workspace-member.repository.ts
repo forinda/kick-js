@@ -1,6 +1,6 @@
 import { Repository, Inject } from '@forinda/kickjs-core'
 import { PRISMA_CLIENT } from '@forinda/kickjs-prisma'
-import type { PrismaClient } from '@/generated/prisma/client'
+import type { PrismaClient, User, WorkspaceMember } from '@/generated/prisma/client'
 import type {
   IWorkspaceMemberRepository,
   NewWorkspaceMember,
@@ -31,7 +31,10 @@ export class PrismaWorkspaceMemberRepository implements IWorkspaceMemberReposito
         },
       },
     })
-    return members.map(({ user, ...member }: any) => ({ member, user }))
+    return members.map(({ user, ...member }) => ({
+      member: member as WorkspaceMember,
+      user: user as User,
+    }))
   }
 
   async listByUser(userId: string) {

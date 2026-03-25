@@ -39,10 +39,11 @@ Prisma 7 introduces several breaking changes that affect `@forinda/kickjs-prisma
 - [x] **Peer dependency range** — `@prisma/client` marked optional in `peerDependenciesMeta` for Prisma 7 users.
 
 ### CLI
-- [ ] Configurable Prisma generated client path in `modules` config — e.g. `modules.prismaClientPath: '@/generated/prisma/client'` so the `--repo prisma` template imports from the correct folder. Must resolve within `src/` for alias compatibility (KICK-029)
+- [x] Configurable Prisma generated client path in `modules` config — `modules.prismaClientPath` controls the import in `--repo prisma` templates (KICK-029)
 
 ### Code Quality
-- [ ] Remove `any` casts in jira-prisma-v7-api repositories — properly type Prisma `include` relation results instead of `(r: any)` workarounds (KICK-028)
+- [x] Remove `any` casts in jira-prisma-v7-api repositories — typed relation results with Prisma model types, removed unnecessary field access casts (KICK-028)
+- [ ] Refactor CLI generators: use option objects instead of positional args, split patterns into individual files, group ORM-specific templates in `templates/drizzle/` and `templates/prisma/` folders (KICK-030)
 
 ### Future
 - [ ] Type-safe API client generation (tRPC-like) — `kick generate:client` from route decorators + Zod DTOs (KICK-018)

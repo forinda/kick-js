@@ -1,6 +1,6 @@
 import { Repository, Inject, HttpException } from '@forinda/kickjs-core'
 import { PRISMA_CLIENT } from '@forinda/kickjs-prisma'
-import type { PrismaClient } from '@/generated/prisma/client'
+import type { PrismaClient, Workspace } from '@/generated/prisma/client'
 import type { ParsedQuery } from '@forinda/kickjs-http'
 import type { IWorkspaceRepository } from '../../domain/repositories/workspace.repository'
 
@@ -23,7 +23,7 @@ export class PrismaWorkspaceRepository implements IWorkspaceRepository {
       where: { userId },
       include: { workspace: true },
     })
-    return memberships.map((m: any) => m.workspace)
+    return memberships.map((m) => (m as { workspace: Workspace }).workspace)
   }
 
   async findPaginated(parsed: ParsedQuery) {

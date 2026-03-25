@@ -57,6 +57,8 @@ interface GenerateModuleOptions {
   dryRun?: boolean
   /** When false, skip pluralization — use singular names for folders, routes, and classes */
   pluralize?: boolean
+  /** Prisma client import path (default: '@prisma/client', Prisma 7+: '@/generated/prisma/client') */
+  prismaClientPath?: string
 }
 
 /** Prompt the user for a single-line answer via stdin */
@@ -80,6 +82,7 @@ interface ModuleContext {
   repo: RepoType
   noEntity: boolean
   noTests: boolean
+  prismaClientPath: string
   write: (relativePath: string, content: string) => Promise<void>
   files: string[]
 }
@@ -140,6 +143,7 @@ export async function generateModule(options: GenerateModuleOptions): Promise<st
     repo,
     noEntity: noEntity ?? false,
     noTests: noTests ?? false,
+    prismaClientPath: options.prismaClientPath ?? '@prisma/client',
     write,
     files,
   }
@@ -195,7 +199,7 @@ export class ${pascal}Controller {
 // ── Pattern: rest ───────────────────────────────────────────────────────
 
 async function generateRestFiles(ctx: ModuleContext): Promise<void> {
-  const { pascal, kebab, plural, pluralPascal, repo, noTests, write } = ctx
+  const { pascal, kebab, plural, pluralPascal, repo, noTests, prismaClientPath, write } = ctx
 
   // Module index
   await write('index.ts', generateRestModuleIndex(pascal, kebab, plural, repo))
@@ -226,7 +230,7 @@ async function generateRestFiles(ctx: ModuleContext): Promise<void> {
   const builtinRepoGeneratorMap: Record<string, () => string> = {
     inmemory: () => generateInMemoryRepository(pascal, kebab, '.', './dtos'),
     drizzle: () => generateDrizzleRepository(pascal, kebab, '.', './dtos'),
-    prisma: () => generatePrismaRepository(pascal, kebab, '.', './dtos'),
+    prisma: () => generatePrismaRepository(pascal, kebab, '.', './dtos', prismaClientPath),
   }
   const repoFile = builtinRepoFileMap[repo] ?? `${toKebabCase(repo)}-${kebab}`
   const repoGenerator =
@@ -255,7 +259,7 @@ async function generateRestFiles(ctx: ModuleContext): Promise<void> {
 // ── Pattern: cqrs ───────────────────────────────────────────────────────
 
 async function generateCqrsFiles(ctx: ModuleContext): Promise<void> {
-  const { pascal, kebab, plural, pluralPascal, repo, noTests, write } = ctx
+  const { pascal, kebab, plural, pluralPascal, repo, noTests, prismaClientPath, write } = ctx
 
   // Module index
   await write('index.ts', generateCqrsModuleIndex(pascal, kebab, plural, repo))
@@ -301,7 +305,7 @@ async function generateCqrsFiles(ctx: ModuleContext): Promise<void> {
   const builtinRepoGeneratorMap: Record<string, () => string> = {
     inmemory: () => generateInMemoryRepository(pascal, kebab, '.', './dtos'),
     drizzle: () => generateDrizzleRepository(pascal, kebab, '.', './dtos'),
-    prisma: () => generatePrismaRepository(pascal, kebab, '.', './dtos'),
+    prisma: () => generatePrismaRepository(pascal, kebab, '.', './dtos', prismaClientPath),
   }
   const repoFile = builtinRepoFileMap[repo] ?? `${toKebabCase(repo)}-${kebab}`
   const repoGenerator =
@@ -330,7 +334,8 @@ async function generateCqrsFiles(ctx: ModuleContext): Promise<void> {
 // ── Pattern: ddd ────────────────────────────────────────────────────────
 
 async function generateDddFiles(ctx: ModuleContext): Promise<void> {
-  const { pascal, kebab, plural, pluralPascal, repo, noEntity, noTests, write } = ctx
+  const { pascal, kebab, plural, pluralPascal, repo, noEntity, noTests, prismaClientPath, write } =
+    ctx
 
   // Module index
   await write('index.ts', generateModuleIndex(pascal, kebab, plural, repo))
@@ -376,7 +381,7 @@ async function generateDddFiles(ctx: ModuleContext): Promise<void> {
   const builtinRepoGeneratorMap: Record<string, () => string> = {
     inmemory: () => generateInMemoryRepository(pascal, kebab),
     drizzle: () => generateDrizzleRepository(pascal, kebab),
-    prisma: () => generatePrismaRepository(pascal, kebab),
+    prisma: () => generatePrismaRepository(pascal, kebab, undefined, undefined, prismaClientPath),
   }
   const repoFile = builtinRepoFileMap[repo] ?? `${toKebabCase(repo)}-${kebab}`
   const repoGenerator =

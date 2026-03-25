@@ -31,7 +31,7 @@ export class RegisterUseCase {
       passwordHash,
       firstName: dto.firstName,
       lastName: dto.lastName,
-    } as any)
+    })
 
     const accessToken = this.generateAccessToken(user)
     const refreshToken = crypto.randomUUID()
@@ -49,7 +49,7 @@ export class RegisterUseCase {
     return jwt.sign(
       { sub: user.id, email: user.email, globalRole: user.globalRole },
       env.JWT_SECRET,
-      { expiresIn: env.JWT_ACCESS_EXPIRES_IN as any },
+      { expiresIn: env.JWT_ACCESS_EXPIRES_IN as string & jwt.SignOptions["expiresIn"] },
     )
   }
 }

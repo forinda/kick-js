@@ -24,25 +24,25 @@ export class LoginUseCase {
       throw HttpException.unauthorized(ErrorCode.INVALID_CREDENTIALS)
     }
 
-    if (!(user as any).isActive) {
+    if (!user.isActive) {
       throw HttpException.forbidden(ErrorCode.USER_INACTIVE)
     }
 
-    const valid = await bcrypt.compare(dto.password, (user as any).passwordHash)
+    const valid = await bcrypt.compare(dto.password, user.passwordHash)
     if (!valid) {
       throw HttpException.unauthorized(ErrorCode.INVALID_CREDENTIALS)
     }
 
-    await this.userRepo.update(user.id, { lastLoginAt: new Date() } as any)
+    await this.userRepo.update(user.id, { lastLoginAt: new Date() })
 
     const accessToken = jwt.sign(
       {
         sub: user.id,
-        email: (user as any).email,
-        globalRole: (user as any).globalRole,
+        email: user.email,
+        globalRole: user.globalRole,
       },
       env.JWT_SECRET,
-      { expiresIn: env.JWT_ACCESS_EXPIRES_IN as any },
+      { expiresIn: env.JWT_ACCESS_EXPIRES_IN as string & jwt.SignOptions["expiresIn"] },
     )
 
     const refreshToken = crypto.randomUUID()
