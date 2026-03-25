@@ -169,6 +169,7 @@ export function registerInitCommand(program: Command): void {
         initGit,
         installDeps,
         template,
+        defaultRepo,
       })
     })
 }
