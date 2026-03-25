@@ -101,7 +101,7 @@ When adding new features, use these as templates:
 
 ### New Example App
 
-- [ ] Scaffold with CLI: `cd examples && kick new <name> --pm pnpm --no-git --no-install -f`
+- [ ] Scaffold with CLI: `cd examples && kick new <name> -t ddd --pm pnpm --no-git --no-install -f`
 - [ ] Add `package.json` (private: true, version: lockstep, `workspace:*` deps)
 - [ ] Add to `scripts/release.js` EXAMPLES array
 - [ ] Add docs page at `docs/examples/<name>.md`
@@ -139,7 +139,7 @@ pnpm build
 
 # Scaffold from the repo root
 cd examples
-npx kick new upload-api --pm pnpm --git --install
+npx kick new upload-api -t ddd --pm pnpm --no-git --no-install -f
 cd upload-api
 npx kick g module upload
 ```
