@@ -117,7 +117,7 @@
     "express": "^5.1.0"
   },
   "devDependencies": {
-    "@swc/core": "^1.7.28",
+    "@swc/core": "^1.15.21",
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.6",
     "@types/multer": "^2.1.0",

@@ -53,7 +53,7 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
-    "@swc/core": "^1.7.28",
+    "@swc/core": "^1.15.21",
     "@types/node": "^24.5.2",
     "@types/ws": "^8.18.0",
     "tsup": "^8.5.0",

@@ -54,7 +54,7 @@
     "commander": "^13.1.0"
   },
   "devDependencies": {
-    "@swc/core": "^1.7.28",
+    "@swc/core": "^1.15.21",
     "@types/node": "^24.5.2",
     "tsup": "^8.5.0",
     "typescript": "^5.9.2",
