@@ -93,8 +93,9 @@ kick new my-api --template rest --pm pnpm --no-git --install
 When run without flags, the CLI prompts for:
 1. **Project template** — REST, GraphQL, DDD, Microservice, or Minimal
 2. **Package manager** — pnpm, npm, or yarn
-3. **Git init** — initialize a git repository with an initial commit
-4. **Install deps** — run the selected package manager's install command
+3. **Default repository** — Prisma, Drizzle, In-Memory, or Custom ORM
+4. **Git init** — initialize a git repository with an initial commit
+5. **Install deps** — run the selected package manager's install command
 
 | Flag | Description | Default |
 |------|-------------|---------|

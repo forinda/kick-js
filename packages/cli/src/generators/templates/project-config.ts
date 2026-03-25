@@ -1,0 +1,227 @@
+type ProjectTemplate = 'rest' | 'graphql' | 'ddd' | 'cqrs' | 'minimal'
+
+/** Generate package.json with template-aware dependencies */
+export function generatePackageJson(
+  name: string,
+  template: ProjectTemplate,
+  kickjsVersion: string,
+): string {
+  const baseDeps: Record<string, string> = {
+    '@forinda/kickjs-core': kickjsVersion,
+    '@forinda/kickjs-http': kickjsVersion,
+    '@forinda/kickjs-config': kickjsVersion,
+    express: '^5.1.0',
+    'reflect-metadata': '^0.2.2',
+    zod: '^4.3.6',
+    pino: '^10.3.1',
+    'pino-pretty': '^13.1.3',
+  }
+
+  // Add template-specific deps
+  if (template !== 'minimal') {
+    baseDeps['@forinda/kickjs-swagger'] = kickjsVersion
+    baseDeps['@forinda/kickjs-devtools'] = kickjsVersion
+  }
+  if (template === 'graphql') {
+    baseDeps['@forinda/kickjs-graphql'] = kickjsVersion
+    baseDeps['graphql'] = '^16.11.0'
+  }
+  if (template === 'cqrs') {
+    baseDeps['@forinda/kickjs-queue'] = kickjsVersion
+    baseDeps['@forinda/kickjs-ws'] = kickjsVersion
+    baseDeps['@forinda/kickjs-otel'] = kickjsVersion
+  }
+  if (template === 'ddd') {
+    baseDeps['@forinda/kickjs-swagger'] = kickjsVersion
+  }
+
+  return JSON.stringify(
+    {
+      name,
+      version: kickjsVersion.replace('^', ''), // Remove the ^ prefix for project version
+      type: 'module',
+      scripts: {
+        dev: 'kick dev',
+        'dev:debug': 'kick dev:debug',
+        build: 'kick build',
+        start: 'kick start',
+        test: 'vitest run',
+        'test:watch': 'vitest',
+        typecheck: 'tsc --noEmit',
+        lint: 'eslint src/',
+        format: 'prettier --write src/',
+      },
+      dependencies: baseDeps,
+      devDependencies: {
+        '@forinda/kickjs-cli': kickjsVersion,
+        '@swc/core': '^1.7.28',
+        '@types/express': '^5.0.6',
+        '@types/node': '^24.5.2',
+        'unplugin-swc': '^1.5.9',
+        vite: '^7.3.1',
+        'vite-node': '^5.3.0',
+        vitest: '^3.2.4',
+        typescript: '^5.9.2',
+        prettier: '^3.8.1',
+      },
+    },
+    null,
+    2,
+  )
+}
+
+/** Generate vite.config.ts for HMR and SWC decorators */
+export function generateViteConfig(): string {
+  return `import { defineConfig } from 'vite'
+import { resolve } from 'path'
+import swc from 'unplugin-swc'
+
+export default defineConfig({
+  plugins: [swc.vite()],
+  resolve: {
+    alias: {
+      '@': resolve(__dirname, 'src'),
+    },
+  },
+  server: {
+    watch: { usePolling: false },
+    hmr: true,
+  },
+  build: {
+    target: 'node20',
+    ssr: true,
+    outDir: 'dist',
+    sourcemap: true,
+    rollupOptions: {
+      input: resolve(__dirname, 'src/index.ts'),
+      output: { format: 'esm' },
+    },
+  },
+})
+`
+}
+
+/** Generate tsconfig.json with decorator support */
+export function generateTsConfig(): string {
+  return JSON.stringify(
+    {
+      compilerOptions: {
+        target: 'ES2022',
+        module: 'ESNext',
+        moduleResolution: 'bundler',
+        lib: ['ES2022'],
+        types: ['node', 'vite/client'],
+        strict: true,
+        esModuleInterop: true,
+        skipLibCheck: true,
+        sourceMap: true,
+        declaration: true,
+        experimentalDecorators: true,
+        emitDecoratorMetadata: true,
+        outDir: 'dist',
+        rootDir: 'src',
+        paths: { '@/*': ['./src/*'] },
+      },
+      include: ['src'],
+    },
+    null,
+    2,
+  )
+}
+
+/** Generate .prettierrc with project formatting rules */
+export function generatePrettierConfig(): string {
+  return JSON.stringify(
+    {
+      semi: false,
+      singleQuote: true,
+      trailingComma: 'all',
+      printWidth: 100,
+      tabWidth: 2,
+    },
+    null,
+    2,
+  )
+}
+
+/** Generate .editorconfig for consistent editor settings */
+export function generateEditorConfig(): string {
+  return `# https://editorconfig.org
+root = true
+
+[*]
+indent_style = space
+indent_size = 2
+end_of_line = lf
+charset = utf-8
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+[*.md]
+trim_trailing_whitespace = false
+`
+}
+
+/** Generate .gitignore with common Node.js patterns */
+export function generateGitIgnore(): string {
+  return `node_modules/
+dist/
+.env
+coverage/
+.DS_Store
+*.tsbuildinfo
+`
+}
+
+/** Generate .gitattributes for consistent line endings */
+export function generateGitAttributes(): string {
+  return `# Auto-detect text files and normalise line endings to LF
+* text=auto eol=lf
+
+# Explicitly mark generated / binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+
+# Lock files — treat as generated
+pnpm-lock.yaml -diff linguist-generated
+yarn.lock -diff linguist-generated
+package-lock.json -diff linguist-generated
+`
+}
+
+/** Generate .env file with default environment variables */
+export function generateEnv(): string {
+  return `PORT=3000
+NODE_ENV=development
+`
+}
+
+/** Generate .env.example file as a template */
+export function generateEnvExample(): string {
+  return `PORT=3000
+NODE_ENV=development
+`
+}
+
+/** Generate vitest.config.ts for test configuration */
+export function generateVitestConfig(): string {
+  return `import { defineConfig } from 'vitest/config'
+import swc from 'unplugin-swc'
+
+export default defineConfig({
+  plugins: [swc.vite()],
+  test: {
+    globals: true,
+    environment: 'node',
+    include: ['src/**/*.test.ts'],
+  },
+})
+`
+}

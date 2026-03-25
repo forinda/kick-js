@@ -46,6 +46,7 @@ export function registerInitCommand(program: Command): void {
     .option('--no-install', 'Skip dependency installation')
     .option('-f, --force', 'Remove existing files without prompting')
     .option('-t, --template <type>', 'Project template: rest | graphql | ddd | cqrs | minimal')
+    .option('-r, --repo <type>', 'Default repository: prisma | drizzle | inmemory | custom')
     .action(async (name: string | undefined, opts: any) => {
       console.log()
 
@@ -120,6 +121,29 @@ export function registerInitCommand(program: Command): void {
       let packageManager = opts.pm
       if (!packageManager) {
         packageManager = await choose('Package manager:', ['pnpm', 'npm', 'yarn'], 0)
+      }
+
+      // Repository type — prompt if not provided via --repo
+      let defaultRepo = opts.repo
+      if (!defaultRepo) {
+        const repoChoice = await choose(
+          'Default repository/ORM:',
+          ['Prisma', 'Drizzle', 'In-Memory', 'Custom (specify later)'],
+          0,
+        )
+        const repoMap: Record<string, string> = {
+          Prisma: 'prisma',
+          Drizzle: 'drizzle',
+          'In-Memory': 'inmemory',
+          'Custom (specify later)': 'custom',
+        }
+        defaultRepo = repoMap[repoChoice] ?? 'inmemory'
+
+        // If custom, ask for the name
+        if (defaultRepo === 'custom') {
+          const customName = await ask('Custom repository name', 'custom')
+          defaultRepo = customName
+        }
       }
 
       // Git init — prompt if not explicitly set

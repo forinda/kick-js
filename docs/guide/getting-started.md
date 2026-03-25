@@ -18,6 +18,9 @@ This scaffolds a project with:
 - `src/modules/` — feature modules directory
 - `vite.config.ts` — Vite config for HMR dev server
 - `kick.config.ts` — CLI configuration (optional)
+- `CLAUDE.md` — AI development guide with patterns and conventions
+- `AGENTS.md` — AI agent guide with checklists and file locations
+- `README.md` — project documentation
 
 ## Start Development
 

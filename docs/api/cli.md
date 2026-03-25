@@ -86,9 +86,14 @@ function defineConfig(config: KickConfig): KickConfig
 
 ```typescript
 interface KickConfig {
-  modulesDir?: string                     // default: 'src/modules'
-  defaultRepo?: 'drizzle' | 'inmemory' | 'prisma'
-  schemaDir?: string
+  pattern?: 'rest' | 'ddd' | 'cqrs' | 'minimal'
+  modules?: {
+    dir?: string                          // default: 'src/modules'
+    repo?: 'drizzle' | 'inmemory' | 'prisma' | { name: string }
+    pluralize?: boolean                   // default: true
+    schemaDir?: string                    // For Drizzle/Prisma schema files
+    prismaClientPath?: string             // Prisma 7: '@/generated/prisma/client'
+  }
   commands?: KickCommandDefinition[]
   style?: {
     semicolons?: boolean
@@ -96,6 +101,11 @@ interface KickConfig {
     trailingComma?: 'all' | 'es5' | 'none'
     indent?: number
   }
+  // Deprecated (use modules.* instead)
+  modulesDir?: string                     // @deprecated - use modules.dir
+  defaultRepo?: 'drizzle' | 'inmemory' | 'prisma'  // @deprecated - use modules.repo
+  pluralize?: boolean                     // @deprecated - use modules.pluralize
+  schemaDir?: string                      // @deprecated - use modules.schemaDir
 }
 ```
 
