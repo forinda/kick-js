@@ -159,6 +159,57 @@ export default defineConfig({
 })
 ```
 
+## Copying Static Assets (copyDirs)
+
+When you run `kick build`, Vite bundles your TypeScript into `dist/index.js`. But static assets like EJS templates, HTML files, or public CSS/JS need to be copied alongside the bundle for runtime access.
+
+The `copyDirs` config handles this automatically after `vite build` completes:
+
+```ts
+import { defineConfig } from '@forinda/kickjs-cli'
+
+export default defineConfig({
+  copyDirs: [
+    'views',                                    // views/ → dist/views/
+    'public',                                   // public/ → dist/public/
+    { src: 'templates', dest: 'dist/email' },   // templates/ → dist/email/
+  ],
+})
+```
+
+Each entry can be:
+- A **string** — copies `<name>/` to `dist/<name>/`
+- An **object** with `src` and optional `dest` — copies `src` to the specified destination
+
+### Build output
+
+```bash
+kick build
+
+  Building for production...
+
+  vite v8.0.2 building ssr environment for production...
+  ✓ 83 modules transformed.
+  dist/index.js  429.46 kB
+
+  Copying directories to dist...
+    ✓ views → dist/views
+    ✓ public → dist/public
+
+  Build complete.
+```
+
+### When to use
+
+- **EJS/Pug/Handlebars templates** served by the `ViewAdapter`
+- **Public assets** (CSS, JS, images) served via `express.static()`
+- **Email templates** loaded at runtime by the mailer
+- **Migration files** or seed scripts that need to ship with the build
+
+::: tip Reference
+See the [devtools-api example](https://github.com/forinda/kick-js/tree/main/examples/devtools-api) for a working `copyDirs` setup with EJS views and public assets.
+:::
+
 ## Config File Resolution
 
 The CLI searches for configuration in this order:

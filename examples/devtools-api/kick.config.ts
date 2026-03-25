@@ -4,6 +4,14 @@ export default defineConfig({
   modulesDir: 'src/modules',
   defaultRepo: 'inmemory',
 
+  // Copy static assets to dist/ during `kick build`
+  // Vite bundles TS → dist/index.js, but views and public files
+  // need to be alongside the bundle for runtime access.
+  copyDirs: [
+    'views',   // views/ → dist/views/
+    'public',  // public/ → dist/public/
+  ],
+
   commands: [
     {
       name: 'test',
