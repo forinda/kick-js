@@ -26,7 +26,7 @@
     "@forinda/kickjs-swagger": "workspace:*",
     "@forinda/kickjs-ws": "workspace:*",
     "bcryptjs": "^3.0.3",
-    "bullmq": "^5.71.0",
+    "bullmq": "^5.71.1",
     "drizzle-orm": "^0.45.1",
     "express": "^5.1.0",
     "ioredis": "^5.10.1",
