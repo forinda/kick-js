@@ -76,6 +76,7 @@ import { resolve } from 'path'
 import swc from 'unplugin-swc'
 
 export default defineConfig({
+  oxc: false,
   plugins: [swc.vite()],
   resolve: {
     alias: {
