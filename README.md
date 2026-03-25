@@ -135,10 +135,10 @@ All packages ship minified ESM with no sourcemaps. External dependencies (Expres
 | `@forinda/kickjs-http` | **22.7 kB** | Express 5 app, routing, middleware, query parsing |
 | `@forinda/kickjs-config` | **2.6 kB** | Zod-based env validation, ConfigService |
 | `@forinda/kickjs-swagger` | **9.2 kB** | OpenAPI spec generation, Swagger UI, ReDoc |
-| `@forinda/kickjs-cli` | **173.2 kB** | Project scaffolding, DDD generators (includes templates) |
+| `@forinda/kickjs-cli` | **221.6 kB** | Project scaffolding, DDD generators, CLAUDE.md/AGENTS.md generation |
 | `@forinda/kickjs-testing` | **0.7 kB** | `createTestApp`, `createTestModule` helpers |
 | `@forinda/kickjs-auth` | **8.0 kB** | JWT/API key strategies, auth guards |
-| `@forinda/kickjs-prisma` | **2.1 kB** | Prisma adapter, DI integration |
+| `@forinda/kickjs-prisma` | **2.4 kB** | Prisma adapter, PrismaModelDelegate, query builder |
 | `@forinda/kickjs-drizzle` | **4.1 kB** | Drizzle adapter, query builder |
 | `@forinda/kickjs-ws` | **6.3 kB** | WebSocket adapter with decorators |
 | `@forinda/kickjs-queue` | **8.0 kB** | BullMQ/AMQP/Kafka job processing |
