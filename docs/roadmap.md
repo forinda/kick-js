@@ -7,12 +7,57 @@
 - [x] Auth plugin — `@forinda/kickjs-auth` with JWT, API key, and custom strategies
 - [x] `kick g scaffold` — generate full CRUD module from field definitions
 - [x] `kick tinker` — REPL with DI container loaded
-- [ ] `kick deploy` — deploy to Fly.io, Railway, Docker
 - [x] SPA integration — `SpaAdapter` serves Vue/React/Svelte builds alongside API
 - [x] Mailer adapter — `@forinda/kickjs-mailer` with pluggable MailProvider (SMTP, Resend, SES, custom)
 - [x] Queue monitoring in DevTools dashboard — `/_debug/queues` tab with job counts
 - [x] Notification system — `@forinda/kickjs-notifications` with email, Slack, Discord, webhook
+- [x] Extensible `defaultRepo` — custom ORM support via `{ name: 'typeorm' }` config
+- [x] Working Prisma CLI template — `kick g module --repo prisma` generates real Prisma code
+- [x] `--no-pluralize` — configurable pluralization for module generators
+- [x] `modules` config block — grouped generation settings with backward compat
+
+## v1.2.14 — Next
+
+### CLI
+- [x] Validate `modules.repo` at config load time — warn if value doesn't match a known built-in pattern (KICK-024)
+
+### Prisma Adapter
+- [ ] `PrismaQueryAdapter` type-safe `searchColumns` — accept Prisma model field names via generics instead of plain strings (KICK-025)
+
+### Examples
+- [ ] Verify `jira-prisma-api` compiles against Prisma schema — run `prisma generate` + `tsc --noEmit` to catch type mismatches (KICK-026)
+
+### Future
 - [ ] Type-safe API client generation (tRPC-like) — `kick generate:client` from route decorators + Zod DTOs (KICK-018)
+- [ ] `kick deploy` — deploy to Fly.io, Railway, Docker
+
+## v1.2.13 — CLI Extensibility & Bundle Optimization
+
+### Features
+- [x] **Extensible `defaultRepo`** — accepts built-in strings (`'drizzle'`, `'prisma'`, `'inmemory'`) or custom objects (`{ name: 'typeorm' }`) for any ORM
+- [x] **Working Prisma template** — `kick g module --repo prisma` generates fully functional Prisma Client code with `@Inject(PRISMA_CLIENT)`
+- [x] **`--no-pluralize` flag** — skip auto-pluralization for module folders and routes, also configurable via `modules.pluralize: false`
+- [x] **`modules` config block** — grouped `dir`, `repo`, `pluralize`, `schemaDir` under `modules` key; old top-level fields deprecated with backward compat
+- [x] **Custom repo types** — any string generates a stub repository with correct naming (e.g. `TypeormUserRepository`)
+- [x] **Dynamic module comments** — generated JSDoc reflects actual repo type instead of hardcoding "Drizzle"
+
+### Bundle Size Optimization
+- [x] Disabled sourcemaps and enabled minification across all 18 packages
+- [x] Fixed missing externals (express, pino, zod, multer, commander, dotenv) — testing package dropped from 2.7MB to 12KB
+- [x] Bundle size table added to root README
+
+### Examples
+- [x] Added `jira-prisma-api` — full Jira clone with Prisma ORM (14 DDD modules, 17 Prisma models)
+- [x] Bumped `jira-drizzle-api` and `jira-mongoose-api` from v1.2.10 to v1.2.13
+- [x] Release script now bumps example versions (cleaned up deleted examples from EXAMPLES list)
+
+### Documentation
+- [x] Removed 7 orphaned example doc pages (basic-api, auth-api, validated-api, full-api, ws-api, sse-api, queue-api)
+- [x] Created docs for jira-drizzle-api, jira-prisma-api, jira-mongoose-api, joi-api
+- [x] Added READMEs for 11 packages (ws, drizzle, otel, graphql, auth, cron, mailer, queue, multi-tenant, devtools, notifications)
+- [x] Added `kick add` CLI install instructions to all 18 package READMEs
+- [x] Fixed `ctx: any` to `RequestContext` in core README
+- [x] Updated all docs to use new `modules` config block
 
 ## v1.2.x — Resolved Issues
 

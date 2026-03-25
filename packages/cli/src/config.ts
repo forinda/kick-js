@@ -26,6 +26,8 @@ export type ProjectPattern = 'rest' | 'graphql' | 'ddd' | 'cqrs' | 'minimal'
 /** Built-in repository types with first-class code generation support */
 export type BuiltinRepoType = 'drizzle' | 'inmemory' | 'prisma'
 
+export const BUILTIN_REPO_TYPES: readonly string[] = ['drizzle', 'inmemory', 'prisma']
+
 /** Custom repository type — generates a stub with TODO markers */
 export interface CustomRepoType {
   name: string
@@ -128,12 +130,22 @@ export function defineConfig(config: KickConfig): KickConfig {
 /** Resolve module config with backward-compatible fallbacks from top-level fields */
 export function resolveModuleConfig(config: KickConfig | null): ModuleConfig {
   if (!config) return {}
-  return {
+  const mc: ModuleConfig = {
     dir: config.modules?.dir ?? config.modulesDir,
     repo: config.modules?.repo ?? config.defaultRepo,
     schemaDir: config.modules?.schemaDir ?? config.schemaDir,
     pluralize: config.modules?.pluralize ?? config.pluralize,
   }
+
+  // Warn if a string repo value isn't a known built-in
+  if (mc.repo && typeof mc.repo === 'string' && !BUILTIN_REPO_TYPES.includes(mc.repo)) {
+    console.warn(
+      `  Warning: modules.repo '${mc.repo}' is not a built-in type (${BUILTIN_REPO_TYPES.join(', ')}).` +
+        ` It will generate a stub repository. Use { name: '${mc.repo}' } to silence this warning.`,
+    )
+  }
+
+  return mc
 }
 
 const CONFIG_FILES = ['kick.config.ts', 'kick.config.js', 'kick.config.mjs', 'kick.config.json']
