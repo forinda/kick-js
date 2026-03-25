@@ -45,6 +45,10 @@ Prisma 7 introduces several breaking changes that affect `@forinda/kickjs-prisma
 - [x] Remove `any` casts in jira-prisma-v7-api repositories — typed relation results with Prisma model types, removed unnecessary field access casts (KICK-028)
 - [x] Refactor CLI generators: use option objects (`TemplateContext`), split patterns into `patterns/` folder, group ORM templates in `templates/drizzle/` and `templates/prisma/` (KICK-030)
 
+### CLI
+- [ ] `kick add prisma` should scaffold `prisma/schema.prisma` + `prisma.config.ts` (v7). `kick add drizzle` should scaffold `drizzle.config.ts` + `src/db/schema/` (KICK-032)
+- [ ] `kick new` should generate a project-level `CLAUDE.md` with framework context, wiring patterns, and available commands for AI-assisted development (KICK-033)
+
 ### Future
 - [x] `kick remove module <name>` — delete module directory and unregister from `src/modules/index.ts` (KICK-031)
 - [ ] Type-safe API client generation (tRPC-like) — `kick generate:client` from route decorators + Zod DTOs (KICK-018)
