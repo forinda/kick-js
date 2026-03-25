@@ -59,7 +59,7 @@ export function generatePackageJson(
         '@types/node': '^24.5.2',
         'unplugin-swc': '^1.5.9',
         vite: '^7.3.1',
-        'vite-node': '^5.3.0',
+        'vite-node': '^6.0.0',
         vitest: '^3.2.4',
         typescript: '^5.9.2',
         prettier: '^3.8.1',

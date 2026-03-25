@@ -51,6 +51,7 @@ Prisma 7 introduces several breaking changes that affect `@forinda/kickjs-prisma
 
 ### Future
 - [x] `kick remove module <name>` — delete module directory and unregister from `src/modules/index.ts` (KICK-031)
+- [ ] Migrate `kick dev` from `vite-node` to Vite Environment Module Runner — `vite-node` is deprecated, Vite has native support (KICK-034)
 - [ ] Type-safe API client generation (tRPC-like) — `kick generate:client` from route decorators + Zod DTOs (KICK-018)
 - [ ] `kick deploy` — deploy to Fly.io, Railway, Docker
 
