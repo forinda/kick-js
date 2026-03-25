@@ -125,6 +125,33 @@ export class UserModule implements AppModule {
 | [`@forinda/kickjs-cli`](packages/cli/) | [![npm](https://img.shields.io/npm/v/@forinda/kickjs-cli)](https://www.npmjs.com/package/@forinda/kickjs-cli) | Project scaffolding, DDD code generators, custom commands |
 | [`@forinda/kickjs-testing`](packages/testing/) | [![npm](https://img.shields.io/npm/v/@forinda/kickjs-testing)](https://www.npmjs.com/package/@forinda/kickjs-testing) | `createTestApp`, `createTestModule` test utilities |
 
+## Bundle Sizes
+
+All packages ship minified ESM with no sourcemaps. External dependencies (Express, Zod, Pino, etc.) are never bundled — only framework code is included.
+
+| Package | JS Bundle | Description |
+|---------|-----------|-------------|
+| `@forinda/kickjs-core` | **13.9 kB** | DI container, decorators, module system, logger |
+| `@forinda/kickjs-http` | **22.7 kB** | Express 5 app, routing, middleware, query parsing |
+| `@forinda/kickjs-config` | **2.6 kB** | Zod-based env validation, ConfigService |
+| `@forinda/kickjs-swagger` | **9.2 kB** | OpenAPI spec generation, Swagger UI, ReDoc |
+| `@forinda/kickjs-cli` | **173.2 kB** | Project scaffolding, DDD generators (includes templates) |
+| `@forinda/kickjs-testing` | **0.7 kB** | `createTestApp`, `createTestModule` helpers |
+| `@forinda/kickjs-auth` | **8.0 kB** | JWT/API key strategies, auth guards |
+| `@forinda/kickjs-prisma` | **2.1 kB** | Prisma adapter, DI integration |
+| `@forinda/kickjs-drizzle` | **4.1 kB** | Drizzle adapter, query builder |
+| `@forinda/kickjs-ws` | **6.3 kB** | WebSocket adapter with decorators |
+| `@forinda/kickjs-queue` | **8.0 kB** | BullMQ/AMQP/Kafka job processing |
+| `@forinda/kickjs-graphql` | **4.4 kB** | GraphQL adapter |
+| `@forinda/kickjs-mailer` | **4.3 kB** | Pluggable email transports |
+| `@forinda/kickjs-cron` | **3.4 kB** | Scheduled task runner |
+| `@forinda/kickjs-otel` | **2.6 kB** | OpenTelemetry tracing/metrics |
+| `@forinda/kickjs-devtools` | **6.0 kB** | Dev dashboard adapter |
+| `@forinda/kickjs-notifications` | **2.9 kB** | Notification channels |
+| `@forinda/kickjs-multi-tenant` | **1.4 kB** | Multi-tenancy middleware |
+
+> **Total framework JS:** ~276 kB minified (core + http + config + swagger). A typical app using core, http, config, and swagger ships under 50 kB of framework code — the rest is your application logic.
+
 ## Full-Featured Bootstrap
 
 ```typescript

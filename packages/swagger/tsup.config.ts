@@ -4,10 +4,10 @@ export default defineConfig({
   entry: ['src/index.ts'],
   format: ['esm'],
   target: 'node20',
-  sourcemap: true,
+  sourcemap: false,
   clean: true,
   dts: true,
   shims: false,
-  minify: false,
-  external: ['@forinda/kickjs-core', 'reflect-metadata', 'zod'],
+  minify: true,
+  external: ['@forinda/kickjs-core', 'reflect-metadata', 'zod', 'express'],
 })

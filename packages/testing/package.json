@@ -50,6 +50,9 @@
     "@forinda/kickjs-core": "workspace:*",
     "@forinda/kickjs-http": "workspace:*"
   },
+  "peerDependencies": {
+    "express": "^5.1.0"
+  },
   "devDependencies": {
     "@swc/core": "^1.7.28",
     "@types/express": "^5.0.6",
