@@ -41,7 +41,6 @@
   "devDependencies": {
     "@forinda/kickjs-cli": "workspace:*",
     "@swc/core": "^1.7.28",
-    "@types/bcryptjs": "^3.0.0",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^24.5.2",
