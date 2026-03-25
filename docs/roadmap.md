@@ -57,12 +57,42 @@ Migrate from `vite-node` (deprecated) to Vite's native `RunnableDevEnvironment` 
 - [x] **Replace `vite-node` in `kick dev`** — uses `createServer()` + `RunnableDevEnvironment.runner.import()`. Removed `vite-node` from all examples and project template.
 - [x] **`kick dev:debug`** — uses `NODE_OPTIONS=--inspect` with programmatic Vite server.
 - [x] **Remove `vite-node`** — removed from project template, all 10 examples. CLI resolves `vite` from the user's project via `createRequire`.
+- [x] **Suppress Vite 7 esbuild/oxc warning** — `unplugin-swc` sets `esbuild: false` internally, but Vite 7 replaced esbuild with Oxc. Added `oxc: false` to all 10 examples and the CLI project template.
 - [ ] **Unified backend + frontend dev server** — run KickJS API (`server` environment) and SPA frontend (`client` environment) in the same Vite instance with shared HMR. One port, one process, no proxy needed.
 - [ ] **`kick dev --spa <dir>`** — serve a Vue/React/Svelte app alongside the API. The SPA gets Vite's native HMR; the API gets KickJS's `Application.rebuild()` HMR.
 
 **Verified:** SWC decorator transforms, HMR rebuild (`Application.rebuild()`), and graceful shutdown all work through the Vite Environment Runner.
 
 See: [Migration notes](../articles/vite-node-migration-notes.md) | [Vite Environment API](https://vite.dev/guide/api-environment-frameworks)
+
+### Migrate Package Builds from tsup to Vite (KICK-035)
+Replace tsup with Vite library mode for building all 18 `@forinda/kickjs-*` packages. This unifies the toolchain — Vite for dev, build, and SSR — instead of maintaining two build systems.
+
+**Motivation:**
+- `kick dev` already uses Vite Environment Runner (KICK-034)
+- Examples already build with `vite build --ssr`
+- tsup is an extra dependency (+ esbuild) that duplicates what Vite already does
+- SWC transforms would be identical in dev and production builds
+
+**Implementation plan:**
+1. [ ] **Proof of concept** — migrate `@forinda/kickjs-config` (smallest package, no sub-path exports) from tsup to `vite build` in library mode. Verify: ESM output, `.d.ts` generation (via `tsc --emitDeclarationOnly`), externals, minification, and that the published tarball is equivalent.
+2. [ ] **Sub-path exports** — test with `@forinda/kickjs-core` which has multiple entry points (`/container`, `/decorators`, `/errors`, etc.). Verify Vite's `build.lib.entry` handles multiple entries with correct chunk splitting.
+3. [ ] **DTS pipeline** — decide on `.d.ts` strategy: `tsc --emitDeclarationOnly` (simple, already works) vs `vite-plugin-dts` (integrated but another dep). Compare build times.
+4. [ ] **Migrate remaining packages** — roll out to all 18 packages. Update `turbo.json` pipeline if build scripts change.
+5. [ ] **Remove tsup** — delete all `tsup.config.ts` files, remove `tsup` from devDependencies across the monorepo, update CLAUDE.md build instructions.
+6. [ ] **Verify CI** — ensure `pnpm build` still works in GitHub Actions, tarballs are equivalent, and publish flow is unchanged.
+
+**Risks:**
+- Vite library mode doesn't generate `.d.ts` natively — requires a separate step
+- Build times may differ (tsup uses esbuild, Vite uses Rollup for production)
+- The VS Code extension (`kickjs-devtools`) currently builds CJS via tsup — Vite library mode can output CJS but needs explicit config
+
+**Acceptance criteria:**
+- All packages build with `vite build` + `tsc --emitDeclarationOnly`
+- `pnpm pack` output is identical (same files, same exports)
+- No runtime regressions in examples or tests
+- Build time is comparable (< 2x slower)
+- Zero tsup/esbuild references remain in the monorepo
 
 ### Future
 - [ ] Type-safe API client generation (tRPC-like) — `kick generate:client` from route decorators + Zod DTOs (KICK-018)
