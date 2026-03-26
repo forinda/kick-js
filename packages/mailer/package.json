@@ -71,7 +71,7 @@
     }
   },
   "devDependencies": {
-    "@types/node": "^24.5.2",
+    "@types/node": "^25.5.0",
     "@types/nodemailer": "^7.0.11",
     "nodemailer": "^8.0.4",
     "typescript": "^5.9.2",

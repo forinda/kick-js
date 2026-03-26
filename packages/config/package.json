@@ -74,7 +74,7 @@
   },
   "devDependencies": {
     "@swc/core": "^1.7.28",
-    "@types/node": "^24.5.2",
+    "@types/node": "^25.5.0",
     "typescript": "^5.9.2",
     "vitest": "^3.2.4"
   },

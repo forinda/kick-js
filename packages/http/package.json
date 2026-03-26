@@ -133,7 +133,7 @@
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.6",
     "@types/multer": "^2.1.0",
-    "@types/node": "^24.5.2",
+    "@types/node": "^25.5.0",
     "express": "^5.1.0",
     "typescript": "^5.9.2",
     "vitest": "^3.2.4"

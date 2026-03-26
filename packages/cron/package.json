@@ -71,7 +71,7 @@
     }
   },
   "devDependencies": {
-    "@types/node": "^24.5.2",
+    "@types/node": "^25.5.0",
     "croner": "^10.0.1",
     "typescript": "^5.9.2",
     "vitest": "^3.2.4"
