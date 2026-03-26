@@ -40,7 +40,7 @@ We are committed to providing a welcoming and inclusive environment for everyone
 
 ### Enforcement
 
-Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the project maintainers at [conduct@kickjs.dev](mailto:conduct@kickjs.dev). All complaints will be reviewed and investigated promptly and fairly.
+Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the project maintainers at [the project maintainers via GitHub Issues](https://github.com/forinda/kick-js/issues). All complaints will be reviewed and investigated promptly and fairly.
 
 ## 🚀 Getting Started
 
@@ -59,12 +59,12 @@ Before contributing, ensure you have:
 1. **Fork the repository** on GitHub
 2. **Clone your fork** locally:
    ```bash
-   git clone https://github.com/yourusername/kickjs.git
-   cd kickjs
+   git clone https://github.com/<your-username>/kick-js.git
+   cd kick-js
    ```
 3. **Add upstream remote**:
    ```bash
-   git remote add upstream https://github.com/forinda/kickjs.git
+   git remote add upstream https://github.com/forinda/kick-js.git
    ```
 4. **Install dependencies**:
    ```bash
@@ -692,4 +692,4 @@ Thank you for contributing to KickJS! Your efforts help make this framework bett
 
 ---
 
-*For questions about this contribution guide, please [open an issue](https://github.com/forinda/kickjs/issues) or reach out to the maintainers.*
+*For questions about this contribution guide, please [open an issue](https://github.com/forinda/kick-js/issues) or reach out to the maintainers.*
