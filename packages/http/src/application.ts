@@ -4,10 +4,12 @@ import {
   Container,
   createLogger,
   normalizePath,
+  METADATA,
   type AppModuleClass,
   type AppAdapter,
   type AdapterMiddleware,
   type KickPlugin,
+  type RouteDefinition,
 } from '@forinda/kickjs-core'
 import { requestId } from './middleware/request-id'
 import { notFoundHandler, errorHandler } from './middleware/error-handler'
@@ -62,6 +64,11 @@ export interface ApplicationOptions {
   trustProxy?: boolean | number | string | ((ip: string, hopIndex: number) => boolean)
   /** Maximum JSON body size (only used when middleware is not provided) */
   jsonLimit?: string | number
+  /**
+   * Log route summary on startup. Default: true in dev, false in production.
+   * Set to `true` to always log, `false` to always suppress.
+   */
+  logRoutesTable?: boolean
 }
 
 /**
@@ -168,6 +175,10 @@ export class Application {
     // ── 8. Mount module routes with versioning ───────────────────────
     const apiPrefix = this.options.apiPrefix ?? '/api'
     const defaultVersion = this.options.defaultVersion ?? 1
+    const shouldLogRoutes = this.options.logRoutesTable ?? process.env.NODE_ENV !== 'production'
+
+    // Collect route metadata during mounting (avoids calling mod.routes() twice)
+    const mountedRoutes: Array<{ controller: any; mountPath: string }> = []
 
     for (const mod of modules) {
       const result = mod.routes()
@@ -185,8 +196,37 @@ export class Application {
           for (const adapter of this.adapters) {
             adapter.onRouteMount?.(route.controller, mountPath)
           }
+          if (shouldLogRoutes) {
+            mountedRoutes.push({ controller: route.controller, mountPath })
+          }
         }
       }
+    }
+
+    // ── 8b. Log route summary ─────────────────────────────────────────
+    if (shouldLogRoutes && mountedRoutes.length > 0) {
+      let totalRoutes = 0
+      log.info('Routes:')
+
+      for (const { controller, mountPath } of mountedRoutes) {
+        const defs: RouteDefinition[] = Reflect.getMetadata(METADATA.ROUTES, controller) || []
+        if (defs.length === 0) continue
+
+        const counts: Record<string, number> = {}
+        for (const def of defs) {
+          const m = def.method.toUpperCase()
+          counts[m] = (counts[m] || 0) + 1
+        }
+        totalRoutes += defs.length
+
+        const methods = Object.entries(counts)
+          .map(([m, n]) => `${n} ${m}`)
+          .join(', ')
+        const name = controller.name || 'Controller'
+        log.info(`  ${name.padEnd(30)} ${mountPath.padEnd(25)} ${defs.length} routes (${methods})`)
+      }
+
+      log.info(`  Total: ${totalRoutes} routes`)
     }
 
     // ── 9. Adapter middleware: afterRoutes ────────────────────────────

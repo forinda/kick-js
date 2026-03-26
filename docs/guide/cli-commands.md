@@ -139,6 +139,7 @@ kick dev -p 4000
 
 Under the hood this starts a Vite dev server with `RunnableDevEnvironment`. The `Application.rebuild()` method swaps the Express handler on the existing HTTP server, so database connections and port bindings survive reloads.
 
+
 ## kick dev:debug
 
 Start the dev server with the Node.js inspector attached:

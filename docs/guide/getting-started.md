@@ -126,6 +126,26 @@ bootstrap({
 
 That's it. Your API is running at `http://localhost:3000/api/v1/users`.
 
+### Route Summary
+
+In dev mode, a compact route summary is logged at startup:
+
+```
+[Application] Routes:
+  UserController   /api/v1/users   5 routes (2 GET, 1 POST, 1 PUT, 1 DELETE)
+  Total: 5 routes
+```
+
+This is enabled by default when `NODE_ENV !== 'production'`. Override with `logRoutesTable`:
+
+```ts
+bootstrap({
+  modules: [UserModule],
+  logRoutesTable: true,   // always log (even in production)
+  // logRoutesTable: false, // never log
+})
+```
+
 ## Add Swagger Docs
 
 ```bash
