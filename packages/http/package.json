@@ -104,6 +104,10 @@
     "./spa": {
       "import": "./dist/middleware/spa.js",
       "types": "./dist/middleware/spa.d.ts"
+    },
+    "./middleware/request-logger": {
+      "import": "./dist/middleware/request-logger.js",
+      "types": "./dist/middleware/request-logger.d.ts"
     }
   },
   "files": [

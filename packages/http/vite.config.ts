@@ -19,6 +19,7 @@ export default defineConfig({
         'middleware/error-handler': resolve(__dirname, 'src/middleware/error-handler.ts'),
         'middleware/views': resolve(__dirname, 'src/middleware/views.ts'),
         'middleware/spa': resolve(__dirname, 'src/middleware/spa.ts'),
+        'middleware/request-logger': resolve(__dirname, 'src/middleware/request-logger.ts'),
         'query/index': resolve(__dirname, 'src/query/index.ts'),
       },
       formats: ['es'],
