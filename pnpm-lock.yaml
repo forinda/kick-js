@@ -275,6 +275,9 @@ importers:
       '@forinda/kickjs-cli':
         specifier: workspace:*
         version: link:../../packages/cli
+      '@forinda/kickjs-testing':
+        specifier: workspace:*
+        version: link:../../packages/testing
       '@swc/core':
         specifier: ^1.7.28
         version: 1.15.18
@@ -287,12 +290,18 @@ importers:
       '@types/node':
         specifier: ^24.5.2
         version: 24.12.0
+      '@types/supertest':
+        specifier: ^7.2.0
+        version: 7.2.0
       drizzle-kit:
         specifier: ^0.31.10
         version: 0.31.10
       prettier:
         specifier: ^3.8.1
         version: 3.8.1
+      supertest:
+        specifier: ^7.2.2
+        version: 7.2.2
       typescript:
         specifier: ^5.9.2
         version: 5.9.3
