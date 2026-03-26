@@ -108,6 +108,14 @@
     "./middleware/request-logger": {
       "import": "./dist/middleware/request-logger.js",
       "types": "./dist/middleware/request-logger.d.ts"
+    },
+    "./middleware/helmet": {
+      "import": "./dist/middleware/helmet.js",
+      "types": "./dist/middleware/helmet.d.ts"
+    },
+    "./middleware/cors": {
+      "import": "./dist/middleware/cors.js",
+      "types": "./dist/middleware/cors.d.ts"
     }
   },
   "files": [

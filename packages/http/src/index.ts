@@ -16,6 +16,8 @@ export { validate } from './middleware/validate'
 export { notFoundHandler, errorHandler } from './middleware/error-handler'
 export { csrf, type CsrfOptions } from './middleware/csrf'
 export { requestLogger, type RequestLoggerOptions } from './middleware/request-logger'
+export { helmet, type HelmetOptions } from './middleware/helmet'
+export { cors, type CorsOptions } from './middleware/cors'
 export { rateLimit, type RateLimitOptions, type RateLimitStore } from './middleware/rate-limit'
 export {
   session,

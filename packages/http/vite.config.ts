@@ -20,6 +20,8 @@ export default defineConfig({
         'middleware/views': resolve(__dirname, 'src/middleware/views.ts'),
         'middleware/spa': resolve(__dirname, 'src/middleware/spa.ts'),
         'middleware/request-logger': resolve(__dirname, 'src/middleware/request-logger.ts'),
+        'middleware/helmet': resolve(__dirname, 'src/middleware/helmet.ts'),
+        'middleware/cors': resolve(__dirname, 'src/middleware/cors.ts'),
         'query/index': resolve(__dirname, 'src/query/index.ts'),
       },
       formats: ['es'],
