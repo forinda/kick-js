@@ -104,6 +104,18 @@ function getCurrentVersion() {
   return readJson('packages/core/package.json').version
 }
 
+/** Derive the npm dist-tag from a version string */
+function getDistTag(version) {
+  if (!version.includes('-')) return 'latest'
+  const match = version.match(/-([0-9A-Za-z-]+)(?:\.|$)/)
+  if (!match) {
+    throw new Error(
+      `Unsupported prerelease version format "${version}". Expected a valid semver prerelease like "1.2.3-alpha" or "1.2.3-alpha.0".`,
+    )
+  }
+  return match[1]
+}
+
 function bumpVersion(current, type, tag = 'alpha') {
   const match = current.match(/^(\d+)\.(\d+)\.(\d+)(?:-([a-z]+)\.(\d+))?$/)
   if (!match) throw new Error(`Cannot parse version: ${current}`)
@@ -300,10 +312,142 @@ function generateReleaseNotes(version, fromRef) {
   return notes
 }
 
+// ── Interactive Prompt ──────────────────────────────────────────────────
+
+const readline = require('readline')
+
+function ask(question) {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
+  return new Promise((resolve) => {
+    rl.question(question, (answer) => {
+      rl.close()
+      resolve(answer.trim())
+    })
+  })
+}
+
+async function interactiveRelease() {
+  const currentVersion = getCurrentVersion()
+  const branch = exec('git branch --show-current')
+
+  console.log('\n🚀 KickJS Interactive Release')
+  console.log('='.repeat(50))
+  console.log(`  Current version: ${currentVersion}`)
+  console.log(`  Branch:          ${branch}`)
+  console.log(`  Packages:        ${PACKAGES.length} framework + ${EXAMPLES.length} examples`)
+  console.log('='.repeat(50))
+
+  // 1. Release type
+  console.log('\n  Release type:')
+  console.log('    1) patch       — Bug fixes')
+  console.log('    2) minor       — New features')
+  console.log('    3) major       — Breaking changes')
+  console.log('    4) prerelease  — Alpha/beta/rc')
+  console.log('    5) custom      — Set exact version')
+
+  const typeChoice = await ask('\n  Choose (1-5): ')
+  const typeMap = { '1': 'patch', '2': 'minor', '3': 'major', '4': 'prerelease', '5': 'custom' }
+  const releaseType = typeMap[typeChoice]
+  if (!releaseType) {
+    console.error('  Invalid choice.')
+    process.exit(1)
+  }
+
+  // 2. Pre-release tag (if prerelease)
+  let preTag = 'alpha'
+  if (releaseType === 'prerelease') {
+    console.log('\n  Pre-release channel:')
+    console.log('    1) alpha')
+    console.log('    2) beta')
+    console.log('    3) rc')
+    console.log('    4) custom')
+    const tagChoice = await ask('\n  Choose (1-4): ')
+    const tagMap = { '1': 'alpha', '2': 'beta', '3': 'rc' }
+    if (tagChoice === '4') {
+      preTag = await ask('  Custom tag: ')
+      if (!preTag || !/^[a-z]+$/.test(preTag)) {
+        console.error('  Invalid tag. Must be lowercase letters only (e.g. next, canary, dev).')
+        process.exit(1)
+      }
+    } else {
+      preTag = tagMap[tagChoice] || 'alpha'
+    }
+  }
+
+  // 3. Custom version (if custom)
+  let customVersion = null
+  if (releaseType === 'custom') {
+    customVersion = await ask('\n  Enter version (e.g. 2.0.0-rc.1): ')
+    if (!/^\d+\.\d+\.\d+(-[a-zA-Z0-9]+(\.\d+)?)?$/.test(customVersion)) {
+      console.error('  Invalid version format. Expected: X.Y.Z, X.Y.Z-tag, or X.Y.Z-tag.N (e.g. 2.0.0, 1.5.0-alpha, 1.5.0-rc.1)')
+      process.exit(1)
+    }
+  }
+
+  const nextVersion = releaseType === 'custom'
+    ? customVersion
+    : bumpVersion(currentVersion, releaseType, preTag)
+
+  // 4. Options
+  console.log(`\n  Version: ${currentVersion} → ${nextVersion}`)
+  const dryRunAnswer = await ask('  Dry run? (y/N): ')
+  const dryRun = dryRunAnswer.toLowerCase() === 'y'
+
+  // In dry-run mode, nothing is pushed or published — reflect that in the summary
+  let noPush = dryRun
+  let noPublish = dryRun
+  let githubRelease = false
+
+  if (!dryRun) {
+    const pushAnswer = await ask('  Push to remote? (Y/n): ')
+    noPush = pushAnswer.toLowerCase() === 'n'
+
+    const publishAnswer = await ask('  Publish to npm? (Y/n): ')
+    noPublish = publishAnswer.toLowerCase() === 'n'
+
+    const ghAnswer = await ask('  Create GitHub release? (Y/n): ')
+    githubRelease = ghAnswer.toLowerCase() !== 'n'
+  }
+
+  // Summary
+  console.log('\n' + '='.repeat(50))
+  console.log('  Release Summary:')
+  console.log(`    Type:            ${releaseType}${releaseType === 'prerelease' ? ` (${preTag})` : ''}`)
+  console.log(`    Version:         ${currentVersion} → ${nextVersion}`)
+  console.log(`    Dry run:         ${dryRun ? 'yes' : 'no'}`)
+  console.log(`    Push:            ${noPush ? 'no' : 'yes'}`)
+  console.log(`    Publish to npm:  ${noPublish ? 'no' : 'yes'}`)
+  console.log(`    GitHub release:  ${githubRelease ? 'yes' : 'no'}`)
+  console.log('='.repeat(50))
+
+  const confirm = await ask('\n  Proceed? (y/N): ')
+  if (confirm.toLowerCase() !== 'y') {
+    console.log('  Aborted.')
+    process.exit(0)
+  }
+
+  // Build the equivalent args and call main logic
+  const fakeArgs = [releaseType]
+  if (releaseType === 'custom') fakeArgs.push(nextVersion)
+  if (dryRun) fakeArgs.push('--dry-run')
+  if (noPush) fakeArgs.push('--no-push')
+  if (noPublish) fakeArgs.push('--no-publish')
+  if (githubRelease) fakeArgs.push('--github-release')
+  if (releaseType === 'prerelease') fakeArgs.push('--tag', preTag)
+
+  return fakeArgs
+}
+
 // ── Main ────────────────────────────────────────────────────────────────
 
-function main() {
-  const args = process.argv.slice(2)
+async function main() {
+  let args = process.argv.slice(2)
+
+  // Interactive mode when no args provided
+  if (args.length === 0) {
+    args = await interactiveRelease()
+  }
+
   const releaseType = args[0]
   const dryRun = args.includes('--dry-run')
   const noPush = args.includes('--no-push')
@@ -330,15 +474,22 @@ function main() {
     console.log('  --github-release   Create GitHub release via gh CLI')
     console.log('  --tag <name>       Prerelease tag (default: alpha)')
     console.log('  --from <ref>       Generate notes from this git ref\n')
+    console.log('Or run with no arguments for interactive mode.\n')
     console.log('Examples:')
+    console.log('  node scripts/release.js               # interactive')
     console.log('  node scripts/release.js patch')
     console.log('  node scripts/release.js minor --dry-run')
     console.log('  node scripts/release.js prerelease --tag beta')
-    console.log('  node scripts/release.js custom 1.0.0-rc.1\n')
-    console.log('Shorthand (from package.json):')
-    console.log('  pnpm release:patch')
-    console.log('  pnpm release:minor')
-    console.log('  pnpm release:major')
+    console.log('')
+    console.log('Shorthand via pnpm scripts:')
+    console.log('  pnpm release:patch       # patch bump')
+    console.log('  pnpm release:minor       # minor bump')
+    console.log('  pnpm release:major       # major bump')
+    console.log('  pnpm release:patch:gh    # patch + GitHub release')
+    console.log('  pnpm release:minor:gh    # minor + GitHub release')
+    console.log('  pnpm release:major:gh    # major + GitHub release')
+    console.log('  pnpm release:alpha       # alpha prerelease')
+    console.log('  pnpm release:beta        # beta prerelease')
     process.exit(1)
   }
 
@@ -368,9 +519,10 @@ function main() {
   // Pre-flight
   if (!dryRun) {
     const branch = exec('git branch --show-current')
-    if (branch !== 'main') {
-      console.error(`\nError: Releases must be made from the main branch. Current branch: ${branch}`)
-      console.error('  Merge your changes to main first, then run the release from there.')
+    const isPrerelease = nextVersion.includes('-')
+    const allowedBranches = isPrerelease ? ['main', 'dev'] : ['main']
+    if (!allowedBranches.includes(branch)) {
+      console.error(`\nError: ${isPrerelease ? 'Pre-releases' : 'Stable releases'} must be made from ${allowedBranches.join(' or ')}. Current branch: ${branch}`)
       process.exit(1)
     }
 
@@ -405,7 +557,7 @@ function main() {
     console.log(`  7. git tag v${nextVersion}`)
     if (!noPush) console.log('  8. git push --follow-tags')
     if (githubRelease) console.log(`  9. gh release create v${nextVersion} --title "v${nextVersion}" --notes-file RELEASE_NOTES_v${nextVersion}.md`)
-    if (!noPublish) console.log(`  ${githubRelease ? '10' : '9'}. pnpm --filter='./packages/*' publish --access public --no-git-checks`)
+    if (!noPublish) console.log(`  ${githubRelease ? '10' : '9'}. pnpm --filter='./packages/*' publish --access public --no-git-checks --tag ${getDistTag(nextVersion)}`)
     return
   }
 
@@ -499,7 +651,8 @@ function main() {
 
   // Publish
   if (!noPublish) {
-    run("pnpm --filter='./packages/*' publish --access public --no-git-checks", 'Publishing to npm')
+    const distTag = getDistTag(nextVersion)
+    run(`pnpm --filter='./packages/*' publish --access public --no-git-checks --tag ${distTag}`, `Publishing to npm (dist-tag: ${distTag})`)
   } else {
     console.log('\n  Skipped publish (--no-publish)')
   }
@@ -526,4 +679,7 @@ function main() {
   }
 }
 
-main()
+main().catch((err) => {
+  console.error(err)
+  process.exit(1)
+})

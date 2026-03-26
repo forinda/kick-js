@@ -43,7 +43,7 @@ jobs:
     if: >
       (github.event_name == 'release' && github.event.release.target_commitish == 'main') ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.publish == 'true' && github.ref == 'refs/heads/main') ||
-      startsWith(github.ref, 'refs/tags/v')
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -65,7 +65,26 @@ jobs:
       - name: Build
         run: pnpm turbo build --filter='./packages/*'
 
+      - name: Determine npm dist-tag
+        id: dist-tag
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          TAG=""
+          if echo "$VERSION" | grep -q "-"; then
+            PRERELEASE="${VERSION#*-}"
+            PRERELEASE_TAG="${PRERELEASE%%.*}"
+            case "$PRERELEASE_TAG" in
+              alpha|beta|rc|next) TAG="$PRERELEASE_TAG" ;;
+              "") TAG="latest" ;;
+              *) TAG="$PRERELEASE_TAG" ;;
+            esac
+          else
+            TAG="latest"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Publishing $VERSION with tag: $TAG"
+
       - name: Publish framework packages
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: pnpm --filter='./packages/*' publish --access public --no-git-checks
+        run: pnpm --filter='./packages/*' publish --access public --no-git-checks --tag ${{ steps.dist-tag.outputs.tag }}
