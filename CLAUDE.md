@@ -121,6 +121,35 @@ Every controller method receives `ctx: RequestContext` with:
 - `ctx.paginate(handler, config)` — auto-paginated response
 - `ctx.json(data)`, `ctx.created(data)`, `ctx.noContent()`, `ctx.notFound()`
 
+### Built-in Middleware
+
+```ts
+import { helmet, cors, requestId, requestLogger, csrf, rateLimit, validate, upload } from '@forinda/kickjs-http'
+
+bootstrap({
+  middleware: [
+    helmet(),           // Security headers (X-Frame-Options, HSTS, etc.)
+    cors({ origin: ['https://app.example.com'] }),  // CORS with spec-correct behavior
+    requestId(),        // X-Request-Id generation/propagation
+    requestLogger(),    // Pino-based request logging (method, URL, status, duration)
+    csrf(),             // CSRF protection (double-submit cookie)
+    rateLimit(),        // Rate limiting with pluggable store
+    express.json(),     // Body parsing
+  ],
+})
+```
+
+### Git Workflow
+
+Use feature branches — never commit directly to `main`:
+```bash
+git checkout -b feat/my-feature
+# ... make changes ...
+git commit -m "feat: description (#issue)"
+git push -u origin feat/my-feature
+gh pr create
+```
+
 ## CLI Architecture
 
 The CLI (`packages/cli/`) is structured as:
