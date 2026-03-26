@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import 'dotenv/config'
+import { Container } from '@forinda/kickjs-core'
 
 /**
  * Base environment schema with common server variables.
@@ -47,6 +48,10 @@ export function loadEnv<T extends z.ZodObject<any>>(schema?: T): z.infer<T> {
   if (cachedEnv && cachedSchema === s) return cachedEnv
   cachedSchema = s
   cachedEnv = s.parse(process.env)
+
+  // Register env resolver so @Value() reads validated values
+  Container._envResolver = (key: string) => cachedEnv?.[key]
+
   return cachedEnv
 }
 

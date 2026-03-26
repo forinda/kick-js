@@ -2,19 +2,21 @@ import { defineConfig } from '@forinda/kickjs-cli'
 
 export default defineConfig({
   pattern: 'ddd',
-  modulesDir: 'src/modules',
-  defaultRepo: 'inmemory',
+  modules: {
+    dir: 'src/modules',
+    repo: { name: 'mongoose' },
+  },
 
   commands: [
     {
       name: 'seed',
       description: 'Populate database with sample data',
-      steps: 'npx vite-node src/db/seed.ts',
+      steps: 'npx tsx src/db/seed.ts',
     },
     {
       name: 'db:reset',
       description: 'Drop database and reseed',
-      steps: ['npx vite-node src/db/reset.ts', 'npx vite-node src/db/seed.ts'],
+      steps: ['npx tsx src/db/reset.ts', 'npx tsx src/db/seed.ts'],
     },
     {
       name: 'test',

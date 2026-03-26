@@ -32,6 +32,11 @@ export class Container {
   static _onReady: ((container: Container) => void) | null = null
   /** Callback invoked on reset so decorators can update their container reference */
   static _onReset: ((container: Container) => void) | null = null
+  /**
+   * Environment resolver for @Value decorator. Set by @forinda/kickjs-config
+   * to return Zod-validated, type-coerced env values instead of raw process.env strings.
+   */
+  static _envResolver: ((key: string) => any) | null = null
 
   static getInstance(): Container {
     if (!Container.instance) {
@@ -209,6 +214,14 @@ export class Container {
     for (const [prop, config] of valueProps) {
       Object.defineProperty(instance, prop, {
         get() {
+          // Use the registered env resolver if available (set by @forinda/kickjs-config)
+          // This returns Zod-validated, type-coerced values (e.g. PORT as number)
+          if (Container._envResolver) {
+            const val = Container._envResolver(config.envKey)
+            if (val !== undefined) return val
+          }
+
+          // Fallback to raw process.env for apps not using @forinda/kickjs-config
           const val = process.env[config.envKey]
           if (val !== undefined) return val
           if (config.defaultValue !== undefined) return config.defaultValue
