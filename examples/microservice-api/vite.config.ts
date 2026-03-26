@@ -14,6 +14,9 @@ export default defineConfig({
     watch: { usePolling: false },
     hmr: true,
   },
+  ssr: {
+    external: ['pino', 'pino-pretty'],
+  },
   build: {
     target: 'node20',
     ssr: true,

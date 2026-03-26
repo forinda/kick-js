@@ -83,6 +83,11 @@ export default defineConfig({
       '@': resolve(__dirname, 'src'),
     },
   },
+  ssr: {
+    // Don't bundle pino — its worker-thread transport needs Node.js resolution
+    // to find pino-pretty at runtime for colored log output
+    external: ['pino', 'pino-pretty'],
+  },
   server: {
     watch: { usePolling: false },
     hmr: true,

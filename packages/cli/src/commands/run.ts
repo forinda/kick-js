@@ -58,6 +58,20 @@ async function startDevServer(entry: string, port?: string): Promise<void> {
 
   await env.runner.import(`/${entry}`)
 
+  // Watch kick.config.ts for changes — restart the server on config edits
+  const configFiles = ['kick.config.ts', 'kick.config.js', 'kick.config.mjs']
+  for (const file of configFiles) {
+    const configPath = resolve(file)
+    server.watcher.add(configPath)
+  }
+  server.watcher.on('change', (path: string) => {
+    const name = path.split('/').pop() ?? ''
+    if (configFiles.includes(name)) {
+      console.log(`\n  kick.config changed, restarting...\n`)
+      server.restart()
+    }
+  })
+
   // Keep the process alive — the Express server is running
   // Graceful shutdown on SIGINT/SIGTERM
   const shutdown = async () => {
