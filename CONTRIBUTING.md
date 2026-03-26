@@ -169,25 +169,50 @@ kickjs/
 
 We follow a **feature branch workflow**:
 
-1. **Main branch**:
-   - `main`: Stable, production-ready code. All PRs target `main`.
+1. **Long-lived branches**:
+   - `main`: Stable, production-ready code. Published as `latest` on npm.
+   - `dev`: Pre-release channel. Published as `alpha`/`beta` on npm.
 
-2. **Feature branches** (branched from `main`):
+2. **Feature branches** (auto-deleted after PR merge):
    - `feat/feature-name`: New features
    - `fix/bug-description`: Bug fixes
    - `docs/documentation-update`: Documentation updates
    - `chore/maintenance-task`: Maintenance, deps, CI
 
-Branches are auto-deleted after PR merge.
+### Release Channels
+
+| Target | Command | npm tag | Example |
+|--------|---------|---------|---------|
+| `main` | `pnpm release:patch` | `latest` | `1.4.1` |
+| `main` | `pnpm release:minor` | `latest` | `1.5.0` |
+| `dev` | `pnpm release:alpha` | `alpha` | `1.5.0-alpha.0` |
+| `dev` | `pnpm release:beta` | `beta` | `1.5.0-beta.0` |
+| `dev` | `node scripts/release.js prerelease --tag rc` | `rc` | `1.5.0-rc.0` |
+
+When `dev` is stable, create a PR to `main` and do a full release.
 
 ### Workflow Steps
 
-1. **Create a feature branch from main**:
-   ```bash
-   git checkout main
-   git pull origin main
-   git checkout -b feat/amazing-feature
-   ```
+**Stable work (target: main):**
+```bash
+git checkout main && git pull origin main
+git checkout -b feat/amazing-feature
+# ... make changes, commit, push ...
+gh pr create --base main
+```
+
+**Experimental work (target: dev):**
+```bash
+git checkout dev && git pull origin dev
+git checkout -b feat/experimental-feature
+# ... make changes, commit, push ...
+gh pr create --base dev
+```
+
+**Promote dev to main:**
+```bash
+gh pr create --base main --head dev --title "Release: merge dev into main"
+```
 
 2. **Make your changes**:
    - Write code following our standards

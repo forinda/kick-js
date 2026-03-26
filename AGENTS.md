@@ -229,10 +229,10 @@ gh pr create --title "feat: print route table on startup" --body "Closes #31"
 
 ### Commit convention
 
-Follow [Conventional Commits](https://www.conventionalcommits.org/):
-- `feat:` → minor version bump
-- `fix:` → patch version bump
-- `docs:`, `chore:`, `test:`, `ci:` → no version bump
+Follow [Conventional Commits](https://www.conventionalcommits.org/). Commit types categorize changes and guide the explicit version bump when running `node scripts/release.js <patch|minor|major>`:
+- `feat:` — generally corresponds to a minor version bump
+- `fix:` — generally corresponds to a patch version bump
+- `docs:`, `chore:`, `test:`, `ci:` — usually no version bump
 
 Reference issue numbers: `feat: add helmet middleware (#21)`
 

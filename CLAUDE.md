@@ -124,9 +124,11 @@ Every controller method receives `ctx: RequestContext` with:
 ### Built-in Middleware
 
 ```ts
-import { helmet, cors, requestId, requestLogger, csrf, rateLimit, validate, upload } from '@forinda/kickjs-http'
+import express from 'express'
+import { bootstrap, helmet, cors, requestId, requestLogger, csrf, rateLimit } from '@forinda/kickjs-http'
 
 bootstrap({
+  modules: [/* your modules */],
   middleware: [
     helmet(),           // Security headers (X-Frame-Options, HSTS, etc.)
     cors({ origin: ['https://app.example.com'] }),  // CORS with spec-correct behavior
@@ -139,15 +141,22 @@ bootstrap({
 })
 ```
 
+Also available: `validate()` (Zod body/query/params), `upload()` (multer file handling), `session()` (cookie sessions).
+
 ### Git Workflow
 
-Use feature branches — never commit directly to `main`:
+Use feature branches — never commit directly to `main` or `dev`:
+- **Stable work** → branch from `main`, PR to `main`
+- **Experimental work** → branch from `dev`, PR to `dev`
+- **Promote** → PR `dev` → `main` when stable
+
 ```bash
+git checkout main && git pull origin main
 git checkout -b feat/my-feature
 # ... make changes ...
 git commit -m "feat: description (#issue)"
 git push -u origin feat/my-feature
-gh pr create
+gh pr create --base main
 ```
 
 ## CLI Architecture
