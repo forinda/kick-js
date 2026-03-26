@@ -56,7 +56,7 @@ describe('DI: @Autowired(TOKEN) property injection', () => {
       routes: () => ({ path: '/greet', router: buildRoutes(GreetCtrl), controller: GreetCtrl }),
     })
 
-    const { expressApp } = createTestApp({ modules: [TestModule] })
+    const { expressApp } = await createTestApp({ modules: [TestModule] })
 
     const res = await request(expressApp).get('/api/v1/greet/Alice')
     expect(res.status).toBe(200)
@@ -103,7 +103,7 @@ describe('DI: implementation swapping via module registration', () => {
       routes: () => ({ path: '/data', router: buildRoutes(DataCtrl), controller: DataCtrl }),
     })
 
-    const { expressApp: app1 } = createTestApp({ modules: [ModuleA] })
+    const { expressApp: app1 } = await createTestApp({ modules: [ModuleA] })
     const res1 = await request(app1).get('/api/v1/data/')
     expect(res1.body[0].source).toBe('memory')
 
@@ -119,7 +119,7 @@ describe('DI: implementation swapping via module registration', () => {
       routes: () => ({ path: '/data', router: buildRoutes(DataCtrl), controller: DataCtrl }),
     })
 
-    const { expressApp: app2 } = createTestApp({ modules: [ModuleB] })
+    const { expressApp: app2 } = await createTestApp({ modules: [ModuleB] })
     const res2 = await request(app2).get('/api/v1/data/')
     expect(res2.body[0].source).toBe('mock')
   })
@@ -193,7 +193,7 @@ describe('DI: full controller → service → repository pipeline', () => {
     // Simulate design:type for @Autowired property
     Reflect.defineMetadata('design:type', TaskService, TaskCtrl.prototype, 'svc')
 
-    const { expressApp } = createTestApp({ modules: [TestModule] })
+    const { expressApp } = await createTestApp({ modules: [TestModule] })
 
     const listRes = await request(expressApp).get('/api/v1/tasks/')
     expect(listRes.status).toBe(200)
@@ -236,7 +236,7 @@ describe('DI: test overrides', () => {
     })
 
     // Override with test config
-    const { expressApp } = createTestApp({
+    const { expressApp } = await createTestApp({
       modules: [TestModule],
       overrides: { [CONFIG]: { env: 'test' } },
     })

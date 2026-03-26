@@ -48,7 +48,7 @@ describe('Routing: module route mounting', () => {
       routes: () => ({ path: '/todos', router: buildRoutes(TodoCtrl), controller: TodoCtrl }),
     })
 
-    const { expressApp } = createTestApp({ modules: [TestModule] })
+    const { expressApp } = await createTestApp({ modules: [TestModule] })
 
     const listRes = await request(expressApp).get('/api/v1/todos/')
     expect(listRes.status).toBe(200)
@@ -79,7 +79,7 @@ describe('Routing: module route mounting', () => {
       routes: () => ({ path: '/exists', router: buildRoutes(EmptyCtrl) }),
     })
 
-    const { expressApp } = createTestApp({ modules: [TestModule] })
+    const { expressApp } = await createTestApp({ modules: [TestModule] })
 
     const res = await request(expressApp).get('/api/v1/nope')
     expect(res.status).toBe(404)
@@ -105,7 +105,7 @@ describe('Routing: no path doubling (KICK-007)', () => {
       routes: () => ({ path: '/items', router: buildRoutes(ItemsCtrl), controller: ItemsCtrl }),
     })
 
-    const { expressApp } = createTestApp({ modules: [TestModule] })
+    const { expressApp } = await createTestApp({ modules: [TestModule] })
 
     const res = await request(expressApp).get('/api/v1/items/list')
     expect(res.status).toBe(200)
@@ -135,7 +135,7 @@ describe('Routing: module path "/" does not produce double slash', () => {
       routes: () => ({ path: '/', router: buildRoutes(ProjectCtrl), controller: ProjectCtrl }),
     })
 
-    const { expressApp } = createTestApp({ modules: [TestModule] })
+    const { expressApp } = await createTestApp({ modules: [TestModule] })
 
     // Should be /api/v1/projects/123, NOT /api/v1//projects/123
     const res = await request(expressApp).get('/api/v1/projects/abc')
@@ -168,7 +168,7 @@ describe('Routing: null routes for non-HTTP modules (KICK-003)', () => {
       routes: () => null,
     })
 
-    const { expressApp } = createTestApp({ modules: [HttpModule, WorkerModule] })
+    const { expressApp } = await createTestApp({ modules: [HttpModule, WorkerModule] })
 
     const res = await request(expressApp).get('/api/v1/health/')
     expect(res.status).toBe(200)
@@ -208,7 +208,7 @@ describe('Routing: multiple modules', () => {
       routes: () => ({ path: '/posts', router: buildRoutes(PostsCtrl) }),
     })
 
-    const { expressApp } = createTestApp({ modules: [UsersModule, PostsModule] })
+    const { expressApp } = await createTestApp({ modules: [UsersModule, PostsModule] })
 
     const usersRes = await request(expressApp).get('/api/v1/users/')
     expect(usersRes.body.type).toBe('users')

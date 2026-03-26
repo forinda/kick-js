@@ -27,7 +27,7 @@ function reg(cls: any, container: Container) {
 describe('DevTools: debug endpoints', () => {
   beforeEach(() => Container.reset())
 
-  function createAppWithDevtools(opts?: { adapters?: AppAdapter[] }) {
+  async function createAppWithDevtools(opts?: { adapters?: AppAdapter[] }) {
     @Controller()
     class AppCtrl {
       @Get('/')
@@ -51,14 +51,14 @@ describe('DevTools: debug endpoints', () => {
       adapters: opts?.adapters ?? [],
     })
 
-    return createTestApp({
+    return await createTestApp({
       modules: [TestModule],
       adapters: [devtools, ...(opts?.adapters ?? [])],
     })
   }
 
   it('/_debug/health returns health status', async () => {
-    const { expressApp } = createAppWithDevtools()
+    const { expressApp } = await createAppWithDevtools()
 
     const res = await request(expressApp).get('/_debug/health')
     expect(res.status).toBe(200)
@@ -67,7 +67,7 @@ describe('DevTools: debug endpoints', () => {
   })
 
   it('/_debug/metrics returns request metrics', async () => {
-    const { expressApp } = createAppWithDevtools()
+    const { expressApp } = await createAppWithDevtools()
 
     // Make some requests to generate metrics
     await request(expressApp).get('/api/v1/app/')
@@ -80,7 +80,7 @@ describe('DevTools: debug endpoints', () => {
   })
 
   it('/_debug/routes returns registered routes', async () => {
-    const { expressApp } = createAppWithDevtools()
+    const { expressApp } = await createAppWithDevtools()
 
     const res = await request(expressApp).get('/_debug/routes')
     expect(res.status).toBe(200)
@@ -127,7 +127,7 @@ describe('DevTools: queue adapter peer discovery', () => {
       adapters: [mockQueueAdapter],
     })
 
-    const { expressApp } = createTestApp({
+    const { expressApp } = await createTestApp({
       modules: [TestModule],
       adapters: [devtools, mockQueueAdapter],
     })
@@ -161,7 +161,7 @@ describe('DevTools: queue adapter peer discovery', () => {
       adapters: [], // no queue adapter
     })
 
-    const { expressApp } = createTestApp({
+    const { expressApp } = await createTestApp({
       modules: [TestModule],
       adapters: [devtools],
     })
@@ -199,7 +199,7 @@ describe('DevTools: queue adapter peer discovery', () => {
       adapters: [brokenQueueAdapter],
     })
 
-    const { expressApp } = createTestApp({
+    const { expressApp } = await createTestApp({
       modules: [TestModule],
       adapters: [devtools, brokenQueueAdapter],
     })
@@ -245,7 +245,7 @@ describe('DevTools: ws adapter peer discovery', () => {
       adapters: [mockWsAdapter],
     })
 
-    const { expressApp } = createTestApp({
+    const { expressApp } = await createTestApp({
       modules: [TestModule],
       adapters: [devtools, mockWsAdapter],
     })
@@ -275,7 +275,7 @@ describe('DevTools: ws adapter peer discovery', () => {
       adapters: [],
     })
 
-    const { expressApp } = createTestApp({
+    const { expressApp } = await createTestApp({
       modules: [TestModule],
       adapters: [devtools],
     })

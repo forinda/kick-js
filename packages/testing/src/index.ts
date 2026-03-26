@@ -16,22 +16,34 @@ export interface CreateTestAppOptions {
   modules: AppModuleClass[]
   /** Adapters to attach (auth, queue, devtools, etc.) */
   adapters?: AppAdapter[]
+  /** DI overrides applied after module registration. Supports both string and symbol keys. */
   overrides?: Record<symbol | string, any>
   port?: number
   apiPrefix?: string
   defaultVersion?: number
+  /** Express middleware pipeline. When provided, replaces the default (express.json()). */
+  middleware?: express.RequestHandler[]
 }
 
 /**
  * Create an Application instance configured for testing.
  * Resets the DI container, registers modules, applies overrides,
  * and returns both the Application and its Express app.
+ *
+ * @example
+ * ```ts
+ * const { expressApp, container } = await createTestApp({
+ *   modules: [UserModule],
+ *   overrides: { [USER_REPO]: new InMemoryUserRepo() },
+ * })
+ * const res = await request(expressApp).get('/api/v1/users')
+ * ```
  */
-export function createTestApp(options: CreateTestAppOptions): {
+export async function createTestApp(options: CreateTestAppOptions): Promise<{
   app: Application
-  expressApp: any
+  expressApp: express.Express
   container: Container
-} {
+}> {
   Container.reset()
   const container = Container.getInstance()
 
@@ -41,12 +53,13 @@ export function createTestApp(options: CreateTestAppOptions): {
     port: options.port,
     apiPrefix: options.apiPrefix,
     defaultVersion: options.defaultVersion,
-    // Minimal middleware for testing — JSON body parsing only, no helmet/cors/compression
-    middleware: [express.json()],
+    // Use provided middleware, or default to JSON body parsing only
+    middleware: options.middleware ?? [express.json()],
   })
 
-  // Run setup — this calls module register() and mounts routes
-  app.setup()
+  // Run setup — mounts routes, registers modules, initializes adapters.
+  // Awaited to support future async adapter hooks.
+  await Promise.resolve(app.setup())
 
   // Apply DI overrides AFTER setup so they take precedence over
   // bindings registered by modules during register().
@@ -66,6 +79,17 @@ export function createTestApp(options: CreateTestAppOptions): {
 /**
  * Build a quick TestModule that explicitly registers dependencies.
  * Useful for integration tests that need to control the DI graph.
+ *
+ * @example
+ * ```ts
+ * const TestModule = createTestModule({
+ *   register: (c) => {
+ *     c.registerFactory(USER_REPO, () => new InMemoryUserRepo())
+ *     c.register(UserController)
+ *   },
+ *   routes: () => buildRoutes(UserController, '/users'),
+ * })
+ * ```
  */
 export function createTestModule(config: {
   register: (container: Container) => void

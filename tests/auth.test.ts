@@ -45,7 +45,7 @@ describe('Auth: @Public() routes bypass auth (KICK-010)', () => {
       defaultPolicy: 'protected',
     })
 
-    const { expressApp } = createTestApp({
+    const { expressApp } = await createTestApp({
       modules: [TestModule],
       adapters: [authAdapter],
     })
@@ -89,7 +89,7 @@ describe('Auth: API key strategy', () => {
       defaultPolicy: 'protected',
     })
 
-    const { expressApp } = createTestApp({
+    const { expressApp } = await createTestApp({
       modules: [TestModule],
       adapters: [authAdapter],
     })
@@ -126,7 +126,7 @@ describe('Auth: API key strategy', () => {
       defaultPolicy: 'protected',
     })
 
-    const { expressApp } = createTestApp({
+    const { expressApp } = await createTestApp({
       modules: [TestModule],
       adapters: [authAdapter],
     })
@@ -163,7 +163,7 @@ describe('Auth: open default policy', () => {
       defaultPolicy: 'open',
     })
 
-    const { expressApp } = createTestApp({
+    const { expressApp } = await createTestApp({
       modules: [TestModule],
       adapters: [authAdapter],
     })

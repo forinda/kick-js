@@ -44,7 +44,7 @@ function createSimpleModule() {
 describe('Adapters: lifecycle hooks', () => {
   beforeEach(() => Container.reset())
 
-  it('beforeMount runs before beforeStart', () => {
+  it('beforeMount runs before beforeStart', async () => {
     const order: string[] = []
 
     const adapter: AppAdapter = {
@@ -54,12 +54,12 @@ describe('Adapters: lifecycle hooks', () => {
     }
 
     const { Module } = createSimpleModule()
-    createTestApp({ modules: [Module], adapters: [adapter] })
+    await createTestApp({ modules: [Module], adapters: [adapter] })
 
     expect(order).toEqual(['beforeMount', 'beforeStart'])
   })
 
-  it('beforeMount receives the express app and container', () => {
+  it('beforeMount receives the express app and container', async () => {
     let receivedApp: any = null
     let receivedContainer: any = null
 
@@ -72,7 +72,7 @@ describe('Adapters: lifecycle hooks', () => {
     }
 
     const { Module } = createSimpleModule()
-    createTestApp({ modules: [Module], adapters: [adapter] })
+    await createTestApp({ modules: [Module], adapters: [adapter] })
 
     expect(receivedApp).toBeDefined()
     expect(receivedContainer).toBeInstanceOf(Container)
@@ -95,7 +95,7 @@ describe('Adapters: lifecycle hooks', () => {
     }
 
     const { Module } = createSimpleModule()
-    const { app } = createTestApp({ modules: [Module], adapters: [adapterA, adapterB] })
+    const { app } = await createTestApp({ modules: [Module], adapters: [adapterA, adapterB] })
 
     await app.shutdown()
 
@@ -116,7 +116,7 @@ describe('Adapters: lifecycle hooks', () => {
     }
 
     const { Module } = createSimpleModule()
-    const { app } = createTestApp({ modules: [Module], adapters: [adapterOk, adapterBad] })
+    const { app } = await createTestApp({ modules: [Module], adapters: [adapterOk, adapterBad] })
 
     await expect(app.shutdown()).resolves.toBeUndefined()
   })
@@ -127,7 +127,7 @@ describe('Adapters: lifecycle hooks', () => {
 describe('Adapters: onRouteMount', () => {
   beforeEach(() => Container.reset())
 
-  it('onRouteMount is called for each module with a controller', () => {
+  it('onRouteMount is called for each module with a controller', async () => {
     const mounted: Array<{ ctrl: string; path: string }> = []
 
     const spyAdapter: AppAdapter = {
@@ -163,14 +163,14 @@ describe('Adapters: onRouteMount', () => {
       routes: () => ({ path: '/posts', router: buildRoutes(PostsCtrl), controller: PostsCtrl }),
     })
 
-    createTestApp({ modules: [UsersModule, PostsModule], adapters: [spyAdapter] })
+    await createTestApp({ modules: [UsersModule, PostsModule], adapters: [spyAdapter] })
 
     expect(mounted).toHaveLength(2)
     expect(mounted[0]).toEqual({ ctrl: 'UsersCtrl', path: '/api/v1/users' })
     expect(mounted[1]).toEqual({ ctrl: 'PostsCtrl', path: '/api/v1/posts' })
   })
 
-  it('onRouteMount is not called for modules without controller', () => {
+  it('onRouteMount is not called for modules without controller', async () => {
     const mounted: string[] = []
 
     const spyAdapter: AppAdapter = {
@@ -196,7 +196,7 @@ describe('Adapters: onRouteMount', () => {
       routes: () => ({ path: '/without', router: buildRoutes(Ctrl) }), // no controller
     })
 
-    createTestApp({ modules: [WithCtrl, WithoutCtrl], adapters: [spyAdapter] })
+    await createTestApp({ modules: [WithCtrl, WithoutCtrl], adapters: [spyAdapter] })
 
     expect(mounted).toEqual(['/api/v1/with'])
   })
@@ -237,7 +237,7 @@ describe('Adapters: middleware phases', () => {
       routes: () => ({ path: '/order', router: buildRoutes(OrderCtrl) }),
     })
 
-    const { expressApp } = createTestApp({ modules: [TestModule], adapters: [adapter] })
+    const { expressApp } = await createTestApp({ modules: [TestModule], adapters: [adapter] })
 
     const res = await request(expressApp).get('/api/v1/order/')
     expect(res.status).toBe(200)
@@ -271,7 +271,7 @@ describe('Adapters: middleware phases', () => {
       routes: () => ({ path: '/headers', router: buildRoutes(HeaderCtrl) }),
     })
 
-    const { expressApp } = createTestApp({ modules: [TestModule], adapters: [adapter] })
+    const { expressApp } = await createTestApp({ modules: [TestModule], adapters: [adapter] })
 
     const res = await request(expressApp).get('/api/v1/headers/')
     expect(res.status).toBe(200)
@@ -284,7 +284,7 @@ describe('Adapters: middleware phases', () => {
 describe('Adapters: multiple adapters', () => {
   beforeEach(() => Container.reset())
 
-  it('multiple adapters all receive lifecycle hooks in order', () => {
+  it('multiple adapters all receive lifecycle hooks in order', async () => {
     const events: string[] = []
 
     const adapterA: AppAdapter = {
@@ -300,7 +300,7 @@ describe('Adapters: multiple adapters', () => {
     }
 
     const { Module } = createSimpleModule()
-    createTestApp({ modules: [Module], adapters: [adapterA, adapterB] })
+    await createTestApp({ modules: [Module], adapters: [adapterA, adapterB] })
 
     // All beforeMount before any beforeStart
     expect(events.indexOf('A:beforeMount')).toBeLessThan(events.indexOf('A:beforeStart'))
@@ -351,7 +351,7 @@ describe('Adapters: multiple adapters', () => {
       routes: () => ({ path: '/multi', router: buildRoutes(MultiCtrl) }),
     })
 
-    const { expressApp } = createTestApp({
+    const { expressApp } = await createTestApp({
       modules: [TestModule],
       adapters: [adapterA, adapterB],
     })

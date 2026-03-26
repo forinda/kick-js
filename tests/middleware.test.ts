@@ -49,7 +49,7 @@ describe('Middleware: RequestContext metadata sharing (KICK-009)', () => {
       }),
     })
 
-    const { expressApp } = createTestApp({ modules: [TestModule] })
+    const { expressApp } = await createTestApp({ modules: [TestModule] })
 
     const res = await request(expressApp).get('/api/v1/profile/me')
     expect(res.status).toBe(200)
@@ -76,7 +76,7 @@ describe('Middleware: RequestContext metadata sharing (KICK-009)', () => {
       routes: () => ({ path: '/roles', router: buildRoutes(RoleCtrl), controller: RoleCtrl }),
     })
 
-    const { expressApp } = createTestApp({ modules: [TestModule] })
+    const { expressApp } = await createTestApp({ modules: [TestModule] })
 
     const res = await request(expressApp).get('/api/v1/roles/role')
     expect(res.status).toBe(200)
@@ -103,7 +103,7 @@ describe('Middleware: RequestContext metadata sharing (KICK-009)', () => {
       routes: () => ({ path: '/tags', router: buildRoutes(TagCtrl), controller: TagCtrl }),
     })
 
-    const { expressApp } = createTestApp({ modules: [TestModule] })
+    const { expressApp } = await createTestApp({ modules: [TestModule] })
 
     const [res1, res2] = await Promise.all([
       request(expressApp).get('/api/v1/tags/echo').set('x-tag', 'first'),
@@ -148,7 +148,7 @@ describe('Middleware: execution order', () => {
       routes: () => ({ path: '/order', router: buildRoutes(OrderCtrl) }),
     })
 
-    const { expressApp } = createTestApp({ modules: [TestModule] })
+    const { expressApp } = await createTestApp({ modules: [TestModule] })
 
     const res = await request(expressApp).get('/api/v1/order/')
     expect(res.status).toBe(200)
@@ -174,7 +174,7 @@ describe('Middleware: execution order', () => {
       routes: () => ({ path: '/blocked', router: buildRoutes(BlockedCtrl) }),
     })
 
-    const { expressApp } = createTestApp({ modules: [TestModule] })
+    const { expressApp } = await createTestApp({ modules: [TestModule] })
 
     const res = await request(expressApp).get('/api/v1/blocked/')
     expect(res.status).toBe(403)
