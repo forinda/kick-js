@@ -23,6 +23,12 @@ export interface CreateTestAppOptions {
   defaultVersion?: number
   /** Express middleware pipeline. When provided, replaces the default (express.json()). */
   middleware?: express.RequestHandler[]
+  /**
+   * Use an isolated container instead of the global singleton.
+   * Prevents concurrent tests from interfering with each other's DI state.
+   * When true, Container.create() is used instead of Container.reset() + getInstance().
+   */
+  isolated?: boolean
 }
 
 /**
@@ -44,8 +50,15 @@ export async function createTestApp(options: CreateTestAppOptions): Promise<{
   expressApp: express.Express
   container: Container
 }> {
-  Container.reset()
-  const container = Container.getInstance()
+  let container: Container
+  if (options.isolated) {
+    // Isolated container — safe for concurrent tests
+    container = Container.create()
+  } else {
+    // Global singleton — reset for serial test isolation (default)
+    Container.reset()
+    container = Container.getInstance()
+  }
 
   const app = new Application({
     modules: options.modules,

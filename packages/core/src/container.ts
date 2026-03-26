@@ -55,6 +55,21 @@ export class Container {
     Container._onReset?.(Container.instance)
   }
 
+  /**
+   * Create an isolated container instance (not the global singleton).
+   * Useful for concurrent tests that must not share DI state.
+   *
+   * @example
+   * ```ts
+   * const container = Container.create()
+   * container.register(UserService, UserService)
+   * const svc = container.resolve(UserService)
+   * ```
+   */
+  static create(): Container {
+    return new Container()
+  }
+
   /** Register a class constructor under the given token */
   register(token: any, target: Constructor, scope: Scope = Scope.SINGLETON): void {
     this.registrations.set(token, { target, scope })
