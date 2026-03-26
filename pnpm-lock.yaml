@@ -635,6 +635,9 @@ importers:
       '@forinda/kickjs-cli':
         specifier: workspace:*
         version: link:../../packages/cli
+      '@forinda/kickjs-testing':
+        specifier: workspace:*
+        version: link:../../packages/testing
       '@swc/core':
         specifier: ^1.7.28
         version: 1.15.18
@@ -650,12 +653,18 @@ importers:
       '@types/pg':
         specifier: 8.11.11
         version: 8.11.11
+      '@types/supertest':
+        specifier: ^6.0.2
+        version: 6.0.3
       prettier:
         specifier: ^3.8.1
         version: 3.8.1
       prisma:
         specifier: ^7.5.0
         version: 7.5.0(@types/react@19.2.14)(better-sqlite3@11.10.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
+      supertest:
+        specifier: ^7.1.0
+        version: 7.2.2
       typescript:
         specifier: ^5.9.2
         version: 5.9.3

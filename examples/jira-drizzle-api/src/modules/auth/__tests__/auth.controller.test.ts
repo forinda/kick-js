@@ -1,5 +1,5 @@
 import 'reflect-metadata'
-import { describe, it, expect, beforeEach, beforeAll } from 'vitest'
+import { describe, it, expect, beforeEach, beforeAll, afterAll, vi } from 'vitest'
 import request from 'supertest'
 import jwt from 'jsonwebtoken'
 import {
@@ -31,13 +31,17 @@ import { TOKENS } from '@/shared/constants/tokens'
 // ── Test JWT secret ──────────────────────────────────────────────────
 const TEST_JWT_SECRET = 'test-secret-that-is-at-least-32-chars-long!'
 
-// Set env vars before any import that reads them
+// Stub env vars so they don't leak to other tests
 beforeAll(() => {
-  process.env.JWT_SECRET = TEST_JWT_SECRET
-  process.env.JWT_REFRESH_SECRET = TEST_JWT_SECRET
-  process.env.JWT_ACCESS_EXPIRES_IN = '15m'
-  process.env.JWT_REFRESH_EXPIRES_IN = '7d'
-  process.env.DATABASE_URL = 'postgresql://test:test@localhost/test'
+  vi.stubEnv('JWT_SECRET', TEST_JWT_SECRET)
+  vi.stubEnv('JWT_REFRESH_SECRET', TEST_JWT_SECRET)
+  vi.stubEnv('JWT_ACCESS_EXPIRES_IN', '15m')
+  vi.stubEnv('JWT_REFRESH_EXPIRES_IN', '7d')
+  vi.stubEnv('DATABASE_URL', 'postgresql://test:test@localhost/test')
+})
+
+afterAll(() => {
+  vi.unstubAllEnvs()
 })
 
 // ── In-memory repositories ───────────────────────────────────────────
