@@ -169,23 +169,24 @@ kickjs/
 
 We follow a **feature branch workflow**:
 
-1. **Main branches**:
-   - `main`: Stable, production-ready code
-   - `dev`: Development branch with latest features
+1. **Main branch**:
+   - `main`: Stable, production-ready code. All PRs target `main`.
 
-2. **Feature branches**:
-   - `feature/feature-name`: New features
+2. **Feature branches** (branched from `main`):
+   - `feat/feature-name`: New features
    - `fix/bug-description`: Bug fixes
    - `docs/documentation-update`: Documentation updates
-   - `refactor/improvement-description`: Code refactoring
+   - `chore/maintenance-task`: Maintenance, deps, CI
+
+Branches are auto-deleted after PR merge.
 
 ### Workflow Steps
 
-1. **Create a feature branch**:
+1. **Create a feature branch from main**:
    ```bash
-   git checkout dev
-   git pull upstream dev
-   git checkout -b feature/amazing-feature
+   git checkout main
+   git pull origin main
+   git checkout -b feat/amazing-feature
    ```
 
 2. **Make your changes**:
