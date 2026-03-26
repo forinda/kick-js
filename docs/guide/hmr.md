@@ -111,7 +111,7 @@ export default defineConfig({
 })
 ```
 
-The `kick dev` command uses `vite-node --watch` which reads this config automatically. No additional HMR configuration is needed.
+The `kick dev` command uses Vite's Environment Runner which reads this config automatically. No additional HMR configuration is needed.
 
 ## Graceful Shutdown
 

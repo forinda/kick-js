@@ -1,6 +1,6 @@
 ---
 title: "KickJS Custom CLI Commands for Seeding, Resetting, and Testing — Zero Extra Dependencies"
-description: "How I replaced a mess of npm scripts with custom CLI commands in KickJS's kick.config.ts, using vite-node for path alias support and keeping developer experience tight."
+description: "How I replaced a mess of npm scripts with custom CLI commands in KickJS's kick.config.ts, using tsx for path alias support and keeping developer experience tight."
 tags: ["kickjs", "nodejs", "typescript", "mongodb", "cli"]
 canonical_url: ""
 published: false
@@ -34,12 +34,12 @@ export default defineConfig({
     {
       name: 'seed',
       description: 'Populate database with sample data',
-      steps: 'npx vite-node src/db/seed.ts',
+      steps: 'npx tsx src/db/seed.ts',
     },
     {
       name: 'db:reset',
       description: 'Drop database and reseed',
-      steps: ['npx vite-node src/db/reset.ts', 'npx vite-node src/db/seed.ts'],
+      steps: ['npx tsx src/db/reset.ts', 'npx tsx src/db/seed.ts'],
     },
     {
       name: 'test',
@@ -347,31 +347,29 @@ The `kick db:reset` command chains this with the seed:
 {
   name: 'db:reset',
   description: 'Drop database and reseed',
-  steps: ['npx vite-node src/db/reset.ts', 'npx vite-node src/db/seed.ts'],
+  steps: ['npx tsx src/db/reset.ts', 'npx tsx src/db/seed.ts'],
 },
 ```
 
 Run `kick db:reset` and 10 seconds later you have a fresh database with all the test data. This is the command I run most often during development -- probably 5-10 times a day.
 
-## Using vite-node for Path Aliases
+## Using tsx for Path Aliases
 
-Notice that the seed script imports from `@/modules/users/infrastructure/schemas/user.schema`. That `@/` prefix is a path alias configured in `tsconfig.json` that maps to `src/`. Standard `node --loader ts-node` does not resolve these aliases. Neither does `tsx` out of the box.
+Notice that the seed script imports from `@/modules/users/infrastructure/schemas/user.schema`. That `@/` prefix is a path alias configured in `tsconfig.json` that maps to `src/`. Standard `node` does not resolve these aliases.
 
-The solution is `vite-node`, which comes free with the KickJS dev setup (KickJS uses Vite under the hood for HMR). `vite-node` reads your `vite.config.ts` (or falls back to `tsconfig.json` paths) and resolves aliases the same way your dev server does.
-
-```bash
-npx vite-node src/db/seed.ts
-```
-
-This runs the TypeScript file directly, with full path alias support, ESM module resolution, and access to environment variables from `.env`. No compilation step, no intermediate JavaScript files. It just works.
-
-If your project does not use Vite, `tsx` with `tsconfig-paths` achieves the same thing:
+The solution is `tsx`, which runs TypeScript directly with ESM support. For path alias resolution, pair it with `tsconfig-paths`:
 
 ```bash
-npx tsx --require tsconfig-paths/register src/db/seed.ts
+npx tsx src/db/seed.ts
 ```
 
-But if you already have Vite in your stack, `vite-node` is the simpler choice.
+This runs the TypeScript file directly with ESM module resolution and access to environment variables from `.env`. No compilation step, no intermediate JavaScript files.
+
+For `@/` alias support, add `tsconfig-paths`:
+
+```bash
+npx tsx --import tsconfig-paths/register src/db/seed.ts
+```
 
 ## The Check Command: Pre-Push Validation
 
@@ -418,7 +416,7 @@ No descriptions. No grouping. No way to tell which scripts are for developers vs
 npm scripts compose awkwardly. You need `&&` for sequencing, `concurrently` for parallelism, and `cross-env` for environment variables. kick commands support arrays for sequential steps natively:
 
 ```typescript
-steps: ['npx vite-node src/db/reset.ts', 'npx vite-node src/db/seed.ts'],
+steps: ['npx tsx src/db/reset.ts', 'npx tsx src/db/seed.ts'],
 ```
 
 No shell operator gymnastics. If a step fails, it stops.

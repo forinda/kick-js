@@ -137,7 +137,7 @@ kick dev -p 4000
 | `-e, --entry <file>` | Entry file | `src/index.ts` |
 | `-p, --port <port>` | Port number | `3000` (or `PORT` env) |
 
-Under the hood this runs `npx vite-node --watch <entry>`. The `Application.rebuild()` method swaps the Express handler on the existing HTTP server, so database connections and port bindings survive reloads.
+Under the hood this starts a Vite dev server with `RunnableDevEnvironment`. The `Application.rebuild()` method swaps the Express handler on the existing HTTP server, so database connections and port bindings survive reloads.
 
 ## kick dev:debug
 
@@ -148,7 +148,7 @@ kick dev:debug
 kick dev:debug -p 4000
 ```
 
-Same flags as `kick dev`. Runs `npx vite-node --inspect --watch <entry>`.
+Same flags as `kick dev`. Attaches `NODE_OPTIONS=--inspect` to the Vite Environment Runner.
 
 ## kick build
 
