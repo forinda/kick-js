@@ -26,8 +26,20 @@ async function startDevServer(entry: string, port?: string): Promise<void> {
       hmr: true,
     },
     environments: {
+      // Only the SSR environment is needed for backend apps
       ssr: {},
     },
+    // Filter out "(client)" warnings about node: modules being externalized
+    customLogger: (() => {
+      const { createLogger: createViteLogger } = require(vitePath)
+      const logger = createViteLogger()
+      const origWarn = logger.warn.bind(logger)
+      logger.warn = (msg: string, options?: any) => {
+        if (msg.includes('(client)') && msg.includes('externalized')) return
+        origWarn(msg, options)
+      }
+      return logger
+    })(),
   })
 
   const env = server.environments.ssr
