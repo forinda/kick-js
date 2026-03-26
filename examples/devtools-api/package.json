@@ -8,6 +8,8 @@
     "dev:debug": "kick dev:debug",
     "build": "kick build",
     "start": "kick start",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -24,11 +26,15 @@
   "devDependencies": {
     "@forinda/kickjs-cli": "workspace:*",
     "@forinda/kickjs-devtools": "workspace:*",
+    "@forinda/kickjs-testing": "workspace:*",
+    "supertest": "^7.2.2",
+    "@types/supertest": "^7.2.0",
     "@swc/core": "^1.7.28",
     "@types/express": "^5.0.6",
     "@types/node": "^24.5.2",
     "unplugin-swc": "^1.5.9",
     "vite": "^8.0.2",
+    "vitest": "^3.2.4",
     "typescript": "^5.9.2"
   }
 }
