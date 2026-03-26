@@ -90,6 +90,13 @@ export async function generateDddFiles(ctx: ModuleContext): Promise<void> {
 
   // Tests
   if (!noTests) {
+    // Always generate an in-memory repo for testing — even when using drizzle/prisma
+    if (repo !== 'inmemory') {
+      await write(
+        `infrastructure/repositories/in-memory-${kebab}.repository.ts`,
+        generateInMemoryRepository({ pascal, kebab }),
+      )
+    }
     await write(
       `__tests__/${kebab}.controller.test.ts`,
       generateControllerTest({ pascal, kebab, plural }),
