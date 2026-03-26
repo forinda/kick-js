@@ -405,6 +405,9 @@ importers:
       '@forinda/kickjs-cli':
         specifier: workspace:*
         version: link:../../packages/cli
+      '@forinda/kickjs-testing':
+        specifier: workspace:*
+        version: link:../../packages/testing
       '@swc/core':
         specifier: ^1.7.28
         version: 1.15.18
@@ -423,9 +426,15 @@ importers:
       '@types/nodemailer':
         specifier: ^7.0.11
         version: 7.0.11
+      '@types/supertest':
+        specifier: ^7.2.0
+        version: 7.2.0
       prettier:
         specifier: ^3.8.1
         version: 3.8.1
+      supertest:
+        specifier: ^7.2.2
+        version: 7.2.2
       typescript:
         specifier: ^5.9.2
         version: 5.9.3
@@ -508,6 +517,9 @@ importers:
       '@forinda/kickjs-cli':
         specifier: workspace:*
         version: link:../../packages/cli
+      '@forinda/kickjs-testing':
+        specifier: workspace:*
+        version: link:../../packages/testing
       '@swc/core':
         specifier: ^1.7.28
         version: 1.15.18
@@ -520,12 +532,18 @@ importers:
       '@types/node':
         specifier: ^24.5.2
         version: 24.12.0
+      '@types/supertest':
+        specifier: ^6.0.2
+        version: 6.0.3
       prettier:
         specifier: ^3.8.1
         version: 3.8.1
       prisma:
         specifier: ^6.9.0
         version: 6.19.2(typescript@5.9.3)
+      supertest:
+        specifier: ^7.1.0
+        version: 7.2.2
       typescript:
         specifier: ^5.9.2
         version: 5.9.3
@@ -3259,6 +3277,9 @@ packages:
 
   '@types/superagent@8.1.9':
     resolution: {integrity: sha512-pTVjI73witn+9ILmoJdajHGW2jkSaOzhiFYF1Rd3EQ94kymLqB9PjD9ISg7WaALC7+dCHT0FGe9T2LktLq/3GQ==}
+
+  '@types/supertest@6.0.3':
+    resolution: {integrity: sha512-8WzXq62EXFhJ7QsH3Ocb/iKQ/Ty9ZVWnVzoTKc9tyyFRRF3a74Tk2+TLFgaFFw364Ere+npzHKEJ6ga2LzIL7w==}
 
   '@types/supertest@7.2.0':
     resolution: {integrity: sha512-uh2Lv57xvggst6lCqNdFAmDSvoMG7M/HDtX4iUCquxQ5EGPtaPM5PL5Hmi7LCvOG8db7YaCPNJEeoI8s/WzIQw==}
@@ -7376,6 +7397,11 @@ snapshots:
       '@types/methods': 1.1.4
       '@types/node': 24.12.0
       form-data: 4.0.5
+
+  '@types/supertest@6.0.3':
+    dependencies:
+      '@types/methods': 1.1.4
+      '@types/superagent': 8.1.9
 
   '@types/supertest@7.2.0':
     dependencies:
