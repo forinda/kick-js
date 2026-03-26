@@ -4,7 +4,7 @@ KickJS uses Vite's HMR to provide zero-downtime reloading during development. Wh
 
 ## How It Works
 
-The `kick dev` command runs `npx vite-node --watch src/index.ts`. Vite watches your source files and triggers module re-execution when changes are detected.
+The `kick dev` command starts a Vite dev server using the native `RunnableDevEnvironment` API. Vite watches your source files and triggers module re-execution when changes are detected.
 
 ### The bootstrap() Function
 
@@ -122,3 +122,30 @@ When the process receives `SIGINT` or `SIGTERM`, `bootstrap()` calls `app.shutdo
 3. Exits the process
 
 Adapter shutdown failures are logged but do not prevent other adapters from cleaning up.
+
+## Troubleshooting
+
+### Raw JSON logs instead of colored output
+
+Pino uses a worker thread to load `pino-pretty`. Vite's SSR bundler can't resolve it from the bundled output. Fix: add `pino` and `pino-pretty` to `ssr.external` in your `vite.config.ts`:
+
+```ts
+export default defineConfig({
+  ssr: {
+    external: ['pino', 'pino-pretty'],
+  },
+  // ...
+})
+```
+
+This tells Vite not to bundle these modules — Node.js resolves them at runtime, allowing the worker thread to find `pino-pretty`.
+
+### `kick.config.ts` changes not picked up
+
+`kick dev` watches `kick.config.ts` and automatically restarts the Vite server when it changes. If the restart doesn't happen, ensure:
+- The file is named `kick.config.ts` (not `.js` or `.mjs`) — only `.ts` is watched
+- You're running `kick dev`, not `npx vite` directly
+
+### `(client) warning: Module "node:*" externalized`
+
+This warning appears when Vite creates a client environment alongside the SSR environment. It's harmless for backend apps. KickJS's `kick dev` filters these warnings automatically. If you see them, rebuild the CLI: `pnpm --filter @forinda/kickjs-cli build`.

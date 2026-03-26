@@ -1,166 +1,327 @@
 # Testing
 
-The `@forinda/kickjs-testing` package provides utilities for integration testing KickJS applications. It works with Vitest and supertest to test HTTP endpoints with full DI container support.
+The `@forinda/kickjs-testing` package provides utilities for integration testing KickJS applications. Works with Vitest and supertest.
+
+## Setup
+
+```bash
+pnpm add -D @forinda/kickjs-testing supertest @types/supertest vitest
+```
 
 ## createTestApp
 
-Create an Application instance configured for testing. This resets the DI container, applies an empty middleware stack (no helmet, cors, or compression), and runs `setup()` without starting an HTTP server:
+Creates an Application instance for testing — resets DI, runs `setup()`, returns the Express app for supertest:
 
 ```ts
 import { createTestApp } from '@forinda/kickjs-testing'
 import { UserModule } from '../src/modules/users'
 
-const { app, expressApp, container } = createTestApp({
+const { expressApp, container } = await createTestApp({
   modules: [UserModule],
 })
 ```
+
+::: tip
+`createTestApp` is **async** — always `await` it.
+:::
 
 ### Options
 
 ```ts
 interface CreateTestAppOptions {
   modules: AppModuleClass[]
+  adapters?: AppAdapter[]
   overrides?: Record<symbol | string, any>
   port?: number
   apiPrefix?: string
   defaultVersion?: number
+  middleware?: express.RequestHandler[] // replaces default (express.json())
+  isolated?: boolean // use Container.create() instead of reset()
 }
 ```
 
-### DI Overrides
+## Testing a DDD Module
 
-Pass mock implementations via the `overrides` option. These are registered as instances in the container before setup runs:
+The recommended pattern: create an in-memory repository, wire a test controller without auth, and test via supertest.
+
+### 1. In-Memory Repository
+
+Implement the repository interface with a plain array:
 
 ```ts
-const mockRepo = {
-  findAll: async () => [{ id: '1', name: 'Test' }],
-  findById: async (id: string) => ({ id, name: 'Test' }),
-  create: async (dto: any) => ({ id: '1', ...dto }),
-  update: async (id: string, dto: any) => ({ id, ...dto }),
-  delete: async () => {},
+import type { IUserRepository, User, NewUser } from '../domain/repositories/user.repository'
+
+class InMemoryUserRepository implements IUserRepository {
+  private users: User[] = [
+    { id: 'u1', email: 'alice@test.com', firstName: 'Alice', /* ... */ },
+  ]
+
+  async findById(id: string) {
+    return this.users.find((u) => u.id === id) ?? null
+  }
+
+  async findAll() {
+    return this.users
+  }
+
+  async create(dto: NewUser) {
+    const user: User = { id: `u${this.users.length + 1}`, ...dto }
+    this.users.push(user)
+    return user
+  }
+
+  async delete(id: string) {
+    this.users = this.users.filter((u) => u.id !== id)
+  }
 }
-
-const { expressApp } = createTestApp({
-  modules: [UserModule],
-  overrides: {
-    [USER_REPOSITORY.toString()]: mockRepo,
-  },
-})
 ```
 
-## createTestModule
+### 2. Test Controller (no auth)
 
-Build a quick test module when you need full control over the DI graph:
+Create a lightweight controller that skips auth middleware:
 
 ```ts
-import { createTestModule, createTestApp } from '@forinda/kickjs-testing'
-import { buildRoutes } from '@forinda/kickjs-http'
+import { Controller, Get, Delete, Inject } from '@forinda/kickjs-core'
+import type { RequestContext } from '@forinda/kickjs-http'
+import { USER_REPOSITORY, type IUserRepository } from '../domain/repositories/user.repository'
 
-const TestModule = createTestModule({
-  register: (container) => {
-    container.registerInstance(DB_TOKEN, mockDb)
-    container.register(MyService, MyService)
-  },
-  routes: () => ({
-    path: '/test',
-    router: buildRoutes(MyController),
-    controller: MyController,
-  }),
-})
+@Controller()
+class TestUserController {
+  constructor(@Inject(USER_REPOSITORY) private readonly repo: IUserRepository) {}
 
-const { expressApp } = createTestApp({ modules: [TestModule] })
+  @Get('/')
+  async list(ctx: RequestContext) {
+    const users = await this.repo.findAll()
+    ctx.json({ data: users, total: users.length })
+  }
+
+  @Get('/:id')
+  async getById(ctx: RequestContext) {
+    const user = await this.repo.findById(ctx.params.id)
+    if (!user) return ctx.notFound('User not found')
+    ctx.json({ data: user })
+  }
+
+  @Delete('/:id')
+  async remove(ctx: RequestContext) {
+    await this.repo.delete(ctx.params.id)
+    ctx.noContent()
+  }
+}
 ```
 
-## HTTP Testing with Supertest
+### 3. Integration Test
 
-Use the `expressApp` returned by `createTestApp` with supertest:
+Wire everything with `createTestModule` and hit endpoints with supertest:
 
 ```ts
+import 'reflect-metadata'
 import { describe, it, expect, beforeEach } from 'vitest'
 import request from 'supertest'
-import { createTestApp } from '@forinda/kickjs-testing'
-import { ProductModule } from '../src/modules/products'
+import { Container } from '@forinda/kickjs-core'
+import { buildRoutes } from '@forinda/kickjs-http'
+import { createTestApp, createTestModule } from '@forinda/kickjs-testing'
 
-describe('Products API', () => {
-  let expressApp: any
+describe('UserController', () => {
+  beforeEach(() => Container.reset())
 
-  beforeEach(() => {
-    const result = createTestApp({
-      modules: [ProductModule],
-      apiPrefix: '/api',
-      defaultVersion: 1,
+  function buildTestModule() {
+    return createTestModule({
+      register: (c) => {
+        c.registerFactory(USER_REPOSITORY, () => new InMemoryUserRepository())
+        c.register(TestUserController, TestUserController)
+      },
+      routes: () => ({
+        path: '/users',
+        router: buildRoutes(TestUserController),
+        controller: TestUserController,
+      }),
     })
-    expressApp = result.expressApp
+  }
+
+  it('GET /api/v1/users returns user list', async () => {
+    const { expressApp } = await createTestApp({ modules: [buildTestModule()] })
+    const res = await request(expressApp).get('/api/v1/users').expect(200)
+    expect(res.body.data).toHaveLength(1)
   })
 
-  it('POST /api/v1/products creates a product', async () => {
-    const res = await request(expressApp)
-      .post('/api/v1/products')
-      .send({ name: 'Widget' })
-      .expect(201)
-
-    expect(res.body).toHaveProperty('id')
-    expect(res.body.name).toBe('Widget')
+  it('GET /api/v1/users/:id returns 404 for unknown', async () => {
+    const { expressApp } = await createTestApp({ modules: [buildTestModule()] })
+    await request(expressApp).get('/api/v1/users/unknown').expect(404)
   })
 
-  it('GET /api/v1/products lists products', async () => {
-    const res = await request(expressApp)
-      .get('/api/v1/products')
-      .expect(200)
-
-    expect(Array.isArray(res.body)).toBe(true)
-  })
-
-  it('GET /api/v1/products/:id returns 404 for missing', async () => {
-    await request(expressApp)
-      .get('/api/v1/products/nonexistent')
-      .expect(404)
+  it('DELETE removes and reduces count', async () => {
+    const { expressApp } = await createTestApp({ modules: [buildTestModule()] })
+    await request(expressApp).delete('/api/v1/users/u1').expect(204)
+    const res = await request(expressApp).get('/api/v1/users').expect(200)
+    expect(res.body.data).toHaveLength(0)
   })
 })
 ```
+
+## Testing Auth Middleware
+
+Test that protected routes reject invalid tokens and accept valid ones:
+
+```ts
+import jwt from 'jsonwebtoken'
+import { Controller, Get, Middleware, HttpException } from '@forinda/kickjs-core'
+import type { MiddlewareHandler } from '@forinda/kickjs-core'
+
+const TEST_SECRET = 'test-secret-that-is-at-least-32-chars-long!'
+
+// Replicate auth logic with a known test secret
+const testAuthMiddleware: MiddlewareHandler = (ctx, next) => {
+  const header = ctx.req.headers.authorization
+  if (!header?.startsWith('Bearer ')) {
+    throw HttpException.unauthorized('Missing or invalid authorization header')
+  }
+  try {
+    const payload = jwt.verify(header.slice(7), TEST_SECRET) as jwt.JwtPayload
+    ctx.set('user', { id: payload.sub!, email: payload.email })
+  } catch {
+    throw HttpException.unauthorized('Invalid or expired token')
+  }
+  next()
+}
+
+@Controller()
+@Middleware(testAuthMiddleware)
+class ProtectedController {
+  @Get('/me')
+  async me(ctx: RequestContext) {
+    ctx.json({ data: ctx.get('user') })
+  }
+}
+
+// Tests
+it('rejects requests without token', async () => {
+  const { expressApp } = await createTestApp({ modules: [buildProtectedModule()] })
+  await request(expressApp).get('/api/v1/protected/me').expect(401)
+})
+
+it('accepts valid JWT', async () => {
+  const { expressApp } = await createTestApp({ modules: [buildProtectedModule()] })
+  const token = jwt.sign({ sub: 'u1', email: 'alice@test.com' }, TEST_SECRET, { expiresIn: '1h' })
+
+  const res = await request(expressApp)
+    .get('/api/v1/protected/me')
+    .set('Authorization', `Bearer ${token}`)
+    .expect(200)
+
+  expect(res.body.data.id).toBe('u1')
+})
+
+it('rejects expired tokens', async () => {
+  const { expressApp } = await createTestApp({ modules: [buildProtectedModule()] })
+  const token = jwt.sign({ sub: 'u1' }, TEST_SECRET, { expiresIn: '-1s' })
+
+  await request(expressApp)
+    .get('/api/v1/protected/me')
+    .set('Authorization', `Bearer ${token}`)
+    .expect(401)
+})
+```
+
+## Testing Adapters
+
+Test that adapters run their lifecycle hooks:
+
+```ts
+import type { AppAdapter } from '@forinda/kickjs-core'
+
+it('adapter hooks fire during setup', async () => {
+  const order: string[] = []
+  const adapter: AppAdapter = {
+    name: 'TestAdapter',
+    beforeMount: () => order.push('beforeMount'),
+    beforeStart: () => order.push('beforeStart'),
+  }
+
+  await createTestApp({ modules: [SomeModule], adapters: [adapter] })
+  expect(order).toEqual(['beforeMount', 'beforeStart'])
+})
+```
+
+## Testing File Uploads
+
+Use supertest's `.attach()` method with the `upload` middleware:
+
+```ts
+import { Controller, Post, Middleware } from '@forinda/kickjs-core'
+import { upload } from '@forinda/kickjs-http'
+
+@Controller()
+class UploadController {
+  @Post('/')
+  @Middleware(upload.single('file', { maxSize: 5 * 1024 * 1024 }))
+  async handleUpload(ctx: RequestContext) {
+    ctx.json({ filename: ctx.file?.originalname, size: ctx.file?.size })
+  }
+}
+
+// Test
+it('accepts file upload', async () => {
+  const { expressApp } = await createTestApp({ modules: [buildUploadModule()] })
+
+  const res = await request(expressApp)
+    .post('/api/v1/uploads')
+    .attach('file', Buffer.from('hello world'), 'test.txt')
+    .expect(200)
+
+  expect(res.body.filename).toBe('test.txt')
+  expect(res.body.size).toBe(11)
+})
+
+it('rejects files exceeding size limit', async () => {
+  const { expressApp } = await createTestApp({ modules: [buildUploadModule()] })
+  const largeBuffer = Buffer.alloc(6 * 1024 * 1024) // 6MB > 5MB limit
+
+  await request(expressApp)
+    .post('/api/v1/uploads')
+    .attach('file', largeBuffer, 'big.bin')
+    .expect(413)
+})
+```
+
+## Environment Isolation
+
+Use `vi.stubEnv()` to set env vars without leaking to other tests:
+
+```ts
+import { vi, beforeAll, afterAll } from 'vitest'
+
+beforeAll(() => {
+  vi.stubEnv('JWT_SECRET', 'test-secret-32-chars-minimum!!')
+  vi.stubEnv('DATABASE_URL', 'postgresql://test@localhost/test')
+})
+
+afterAll(() => {
+  vi.unstubAllEnvs()
+})
+```
+
+::: warning
+Never use `process.env.X = 'value'` directly — it leaks across tests. Always use `vi.stubEnv()`.
+:::
 
 ## Container Isolation
 
-Call `Container.reset()` in `beforeEach` to ensure tests do not share singleton state. The `createTestApp` function calls `Container.reset()` internally, so if you create a fresh test app per test, isolation is automatic:
+For concurrent test environments (`--pool threads`), use isolated containers:
 
 ```ts
-import { Container } from '@forinda/kickjs-core'
-
-beforeEach(() => {
-  Container.reset()
-})
-```
-
-`Container.reset()` destroys the current singleton container and forces `Container.getInstance()` to create a new one. All registered classes, factories, and instances are cleared.
-
-## Testing without HTTP
-
-You can test services directly by using the container:
-
-```ts
-import { describe, it, expect, beforeEach } from 'vitest'
-import { Container, Scope } from '@forinda/kickjs-core'
-
-describe('UserService', () => {
-  beforeEach(() => {
-    Container.reset()
-  })
-
-  it('resolves with injected dependencies', () => {
-    const container = Container.getInstance()
-    container.registerInstance(DB_TOKEN, mockDb)
-    container.register(UserService, UserService, Scope.SINGLETON)
-
-    const service = container.resolve(UserService)
-    expect(service).toBeDefined()
-  })
+const { expressApp } = await createTestApp({
+  modules: [UserModule],
+  isolated: true, // uses Container.create() instead of Container.reset()
 })
 ```
 
 ## Tips
 
-- Always call `createTestApp` or `Container.reset()` in `beforeEach` to prevent test pollution.
-- Use the `overrides` option to swap real database repositories with in-memory mocks.
-- The test app uses an empty middleware array by default, so authentication middleware is not applied unless you explicitly add it.
-- Adapter lifecycle hooks (`beforeMount`, `beforeStart`) still run during `setup()`. Pass adapters in the test app options if you need them.
-- The `expressApp` works directly with supertest -- no need to start a server or bind a port.
+- Always `await createTestApp()` — it's async
+- Use `beforeEach(() => Container.reset())` for serial test isolation
+- Use `isolated: true` for concurrent tests
+- Test controllers without auth by creating test-only controllers
+- Use `vi.stubEnv()` for env vars, never raw `process.env`
+- The `expressApp` works directly with supertest — no server needed
+- Adapter lifecycle hooks (`beforeMount`, `beforeStart`) still run during setup
