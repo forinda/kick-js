@@ -316,6 +316,29 @@ const { expressApp } = await createTestApp({
 })
 ```
 
+## Generated Tests
+
+When you scaffold a module with `kick g module`, the CLI generates test stubs automatically:
+
+```bash
+kick g module user
+# Creates:
+#   __tests__/user.controller.test.ts  — HTTP integration test scaffold
+#   __tests__/user.repository.test.ts  — InMemoryRepository unit tests
+```
+
+When using `repo: 'drizzle'` or `repo: 'prisma'`, the generator creates **both** the ORM repository and an in-memory repository for testing. The in-memory repo implements the same interface, so tests run without a database.
+
+```
+src/modules/users/
+  drizzle-user.repository.ts      # Production — talks to PostgreSQL
+  in-memory-user.repository.ts    # Testing — in-memory stub
+  __tests__/
+    user.repository.test.ts       # Imports InMemoryUserRepository
+```
+
+The generated tests are scaffolds with real assertions. Customize them for your domain logic.
+
 ## Tips
 
 - Always `await createTestApp()` — it's async
@@ -325,3 +348,4 @@ const { expressApp } = await createTestApp({
 - Use `vi.stubEnv()` for env vars, never raw `process.env`
 - The `expressApp` works directly with supertest — no server needed
 - Adapter lifecycle hooks (`beforeMount`, `beforeStart`) still run during setup
+- Generated tests work out of the box — `kick g module user && npx vitest run`
