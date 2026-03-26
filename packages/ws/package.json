@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-ws",
-  "version": "1.4.0",
+  "version": "1.4.1-alpha.0",
   "description": "WebSocket support with decorators, namespaces, rooms, and DI integration for KickJS",
   "keywords": [
     "kickjs",
