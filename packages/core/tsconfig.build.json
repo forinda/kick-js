@@ -1,7 +1,11 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "emitDeclarationOnly": true,
-    "declaration": true
-  }
+    "declaration": true,
+    "outDir": "dist",
+    "paths": {
+      "@forinda/kickjs": ["../kickjs/src/index.ts"]
+    }
+  },
+  "include": ["src/index.ts"]
 }

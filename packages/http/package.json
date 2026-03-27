@@ -122,9 +122,8 @@
     "dist"
   ],
   "scripts": {
-    "build": "vite build && pnpm build:types",
-    "build:types": "tsc -p tsconfig.build.json",
-    "dev": "vite build --watch",
+    "build": "echo '@forinda/kickjs-http is a deprecated shim — no build needed'",
+    "dev": "echo 'use @forinda/kickjs instead'",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
@@ -132,10 +131,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@forinda/kickjs-core": "workspace:*",
-    "cookie-parser": "^1.4.7",
-    "multer": "^2.1.1",
-    "reflect-metadata": "^0.2.2"
+    "@forinda/kickjs": "workspace:*"
   },
   "peerDependencies": {
     "express": "^5.1.0"
