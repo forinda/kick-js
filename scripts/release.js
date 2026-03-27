@@ -29,47 +29,25 @@ const { execSync } = require('child_process')
 const fs = require('fs')
 const path = require('path')
 
+const log = console.log.bind(console)
+const logError = console.error.bind(console)
+
 // ── Configuration ───────────────────────────────────────────────────────
 
 const REPO_URL = 'https://github.com/forinda/kick-js'
 const NPM_SCOPE = '@forinda/kickjs'
 
-// Packages to bump (order matters — deps first)
-const PACKAGES = [
-  'packages/core',
-  'packages/config',
-  'packages/http',
-  'packages/auth',
-  'packages/cron',
-  'packages/devtools',
-  'packages/drizzle',
-  'packages/graphql',
-  'packages/mailer',
-  'packages/multi-tenant',
-  'packages/notifications',
-  'packages/otel',
-  'packages/prisma',
-  'packages/queue',
-  'packages/swagger',
-  'packages/cli',
-  'packages/testing',
-  'packages/ws',
-  'packages/vscode-extension',
-]
+// Auto-discover packages and examples from the filesystem
+function discoverDirs(baseDir) {
+  if (!fs.existsSync(baseDir)) return []
+  return fs
+    .readdirSync(baseDir, { withFileTypes: true })
+    .filter((d) => d.isDirectory() && fs.existsSync(path.join(baseDir, d.name, 'package.json')))
+    .map((d) => path.join(baseDir, d.name))
+}
 
-// Examples also get version bumped (but not published)
-const EXAMPLES = [
-  'examples/devtools-api',
-  'examples/graphql-api',
-  'examples/joi-api',
-  'examples/microservice-api',
-  'examples/minimal-api',
-  'examples/otel-api',
-  'examples/jira-drizzle-api',
-  'examples/jira-mongoose-api',
-  'examples/jira-prisma-api',
-  'examples/jira-prisma-v7-api',
-]
+const PACKAGES = discoverDirs('packages')
+const EXAMPLES = discoverDirs('examples')
 
 const RELEASE_TYPES = ['patch', 'minor', 'major', 'prerelease', 'custom']
 
@@ -80,12 +58,12 @@ function exec(cmd, opts = {}) {
 }
 
 function run(cmd, description) {
-  console.log(`\n  ${description}...`)
+  log(`\n  ${description}...`)
   try {
     execSync(cmd, { stdio: 'inherit' })
-    console.log(`  Done.`)
+    log(`  Done.`)
   } catch (err) {
-    console.error(`  Failed: ${err.message}`)
+    logError(`  Failed: ${err.message}`)
     process.exit(1)
   }
 }
@@ -148,7 +126,7 @@ function bumpVersion(current, type, tag = 'alpha') {
 function bumpAllPackages(newVersion, dryRun) {
   const files = ['package.json', ...PACKAGES.map((p) => `${p}/package.json`), ...EXAMPLES.map((e) => `${e}/package.json`)]
 
-  console.log(`\n  Bumping all packages to ${newVersion}:`)
+  log(`\n  Bumping all packages to ${newVersion}:`)
 
   for (const file of files) {
     const fullPath = path.resolve(file)
@@ -164,7 +142,7 @@ function bumpAllPackages(newVersion, dryRun) {
     if (!dryRun) {
       writeJson(fullPath, pkg)
     }
-    console.log(`    ${file}: ${oldVersion} -> ${newVersion}`)
+    log(`    ${file}: ${oldVersion} -> ${newVersion}`)
   }
 }
 
@@ -251,7 +229,7 @@ function generateReleaseNotes(version, fromRef) {
   const commits = getCommitsSince(ref)
 
   if (commits.length === 0) {
-    console.log('  No commits found since last tag.')
+    log('  No commits found since last tag.')
     return null
   }
 
@@ -330,43 +308,43 @@ async function interactiveRelease() {
   const currentVersion = getCurrentVersion()
   const branch = exec('git branch --show-current')
 
-  console.log('\n🚀 KickJS Interactive Release')
-  console.log('='.repeat(50))
-  console.log(`  Current version: ${currentVersion}`)
-  console.log(`  Branch:          ${branch}`)
-  console.log(`  Packages:        ${PACKAGES.length} framework + ${EXAMPLES.length} examples`)
-  console.log('='.repeat(50))
+  log('\n🚀 KickJS Interactive Release')
+  log('='.repeat(50))
+  log(`  Current version: ${currentVersion}`)
+  log(`  Branch:          ${branch}`)
+  log(`  Packages:        ${PACKAGES.length} framework + ${EXAMPLES.length} examples`)
+  log('='.repeat(50))
 
   // 1. Release type
-  console.log('\n  Release type:')
-  console.log('    1) patch       — Bug fixes')
-  console.log('    2) minor       — New features')
-  console.log('    3) major       — Breaking changes')
-  console.log('    4) prerelease  — Alpha/beta/rc')
-  console.log('    5) custom      — Set exact version')
+  log('\n  Release type:')
+  log('    1) patch       — Bug fixes')
+  log('    2) minor       — New features')
+  log('    3) major       — Breaking changes')
+  log('    4) prerelease  — Alpha/beta/rc')
+  log('    5) custom      — Set exact version')
 
   const typeChoice = await ask('\n  Choose (1-5): ')
   const typeMap = { '1': 'patch', '2': 'minor', '3': 'major', '4': 'prerelease', '5': 'custom' }
   const releaseType = typeMap[typeChoice]
   if (!releaseType) {
-    console.error('  Invalid choice.')
+    logError('  Invalid choice.')
     process.exit(1)
   }
 
   // 2. Pre-release tag (if prerelease)
   let preTag = 'alpha'
   if (releaseType === 'prerelease') {
-    console.log('\n  Pre-release channel:')
-    console.log('    1) alpha')
-    console.log('    2) beta')
-    console.log('    3) rc')
-    console.log('    4) custom')
+    log('\n  Pre-release channel:')
+    log('    1) alpha')
+    log('    2) beta')
+    log('    3) rc')
+    log('    4) custom')
     const tagChoice = await ask('\n  Choose (1-4): ')
     const tagMap = { '1': 'alpha', '2': 'beta', '3': 'rc' }
     if (tagChoice === '4') {
       preTag = await ask('  Custom tag: ')
       if (!preTag || !/^[a-z]+$/.test(preTag)) {
-        console.error('  Invalid tag. Must be lowercase letters only (e.g. next, canary, dev).')
+        logError('  Invalid tag. Must be lowercase letters only (e.g. next, canary, dev).')
         process.exit(1)
       }
     } else {
@@ -379,7 +357,7 @@ async function interactiveRelease() {
   if (releaseType === 'custom') {
     customVersion = await ask('\n  Enter version (e.g. 2.0.0-rc.1): ')
     if (!/^\d+\.\d+\.\d+(-[a-zA-Z0-9]+(\.\d+)?)?$/.test(customVersion)) {
-      console.error('  Invalid version format. Expected: X.Y.Z, X.Y.Z-tag, or X.Y.Z-tag.N (e.g. 2.0.0, 1.5.0-alpha, 1.5.0-rc.1)')
+      logError('  Invalid version format. Expected: X.Y.Z, X.Y.Z-tag, or X.Y.Z-tag.N (e.g. 2.0.0, 1.5.0-alpha, 1.5.0-rc.1)')
       process.exit(1)
     }
   }
@@ -389,7 +367,7 @@ async function interactiveRelease() {
     : bumpVersion(currentVersion, releaseType, preTag)
 
   // 4. Options
-  console.log(`\n  Version: ${currentVersion} → ${nextVersion}`)
+  log(`\n  Version: ${currentVersion} → ${nextVersion}`)
   const dryRunAnswer = await ask('  Dry run? (y/N): ')
   const dryRun = dryRunAnswer.toLowerCase() === 'y'
 
@@ -410,19 +388,19 @@ async function interactiveRelease() {
   }
 
   // Summary
-  console.log('\n' + '='.repeat(50))
-  console.log('  Release Summary:')
-  console.log(`    Type:            ${releaseType}${releaseType === 'prerelease' ? ` (${preTag})` : ''}`)
-  console.log(`    Version:         ${currentVersion} → ${nextVersion}`)
-  console.log(`    Dry run:         ${dryRun ? 'yes' : 'no'}`)
-  console.log(`    Push:            ${noPush ? 'no' : 'yes'}`)
-  console.log(`    Publish to npm:  ${noPublish ? 'no' : 'yes'}`)
-  console.log(`    GitHub release:  ${githubRelease ? 'yes' : 'no'}`)
-  console.log('='.repeat(50))
+  log('\n' + '='.repeat(50))
+  log('  Release Summary:')
+  log(`    Type:            ${releaseType}${releaseType === 'prerelease' ? ` (${preTag})` : ''}`)
+  log(`    Version:         ${currentVersion} → ${nextVersion}`)
+  log(`    Dry run:         ${dryRun ? 'yes' : 'no'}`)
+  log(`    Push:            ${noPush ? 'no' : 'yes'}`)
+  log(`    Publish to npm:  ${noPublish ? 'no' : 'yes'}`)
+  log(`    GitHub release:  ${githubRelease ? 'yes' : 'no'}`)
+  log('='.repeat(50))
 
   const confirm = await ask('\n  Proceed? (y/N): ')
   if (confirm.toLowerCase() !== 'y') {
-    console.log('  Aborted.')
+    log('  Aborted.')
     process.exit(0)
   }
 
@@ -459,37 +437,37 @@ async function main() {
   const fromRef = fromIdx !== -1 ? args[fromIdx + 1] : null
 
   if (!releaseType || !RELEASE_TYPES.includes(releaseType)) {
-    console.log('KickJS Monorepo Release Script\n')
-    console.log('Usage: node scripts/release.js <type> [options]\n')
-    console.log('Types:')
-    console.log('  patch        Bug fixes          (0.1.0 -> 0.1.1)')
-    console.log('  minor        New features        (0.1.0 -> 0.2.0)')
-    console.log('  major        Breaking changes     (0.1.0 -> 1.0.0)')
-    console.log('  prerelease   Pre-release          (0.1.0 -> 0.1.1-alpha.0)')
-    console.log('  custom X.Y.Z Set exact version\n')
-    console.log('Options:')
-    console.log('  --dry-run          Preview without changes')
-    console.log('  --no-push          Skip git push')
-    console.log('  --no-publish       Skip npm publish')
-    console.log('  --github-release   Create GitHub release via gh CLI')
-    console.log('  --tag <name>       Prerelease tag (default: alpha)')
-    console.log('  --from <ref>       Generate notes from this git ref\n')
-    console.log('Or run with no arguments for interactive mode.\n')
-    console.log('Examples:')
-    console.log('  node scripts/release.js               # interactive')
-    console.log('  node scripts/release.js patch')
-    console.log('  node scripts/release.js minor --dry-run')
-    console.log('  node scripts/release.js prerelease --tag beta')
-    console.log('')
-    console.log('Shorthand via pnpm scripts:')
-    console.log('  pnpm release:patch       # patch bump')
-    console.log('  pnpm release:minor       # minor bump')
-    console.log('  pnpm release:major       # major bump')
-    console.log('  pnpm release:patch:gh    # patch + GitHub release')
-    console.log('  pnpm release:minor:gh    # minor + GitHub release')
-    console.log('  pnpm release:major:gh    # major + GitHub release')
-    console.log('  pnpm release:alpha       # alpha prerelease')
-    console.log('  pnpm release:beta        # beta prerelease')
+    log('KickJS Monorepo Release Script\n')
+    log('Usage: node scripts/release.js <type> [options]\n')
+    log('Types:')
+    log('  patch        Bug fixes          (0.1.0 -> 0.1.1)')
+    log('  minor        New features        (0.1.0 -> 0.2.0)')
+    log('  major        Breaking changes     (0.1.0 -> 1.0.0)')
+    log('  prerelease   Pre-release          (0.1.0 -> 0.1.1-alpha.0)')
+    log('  custom X.Y.Z Set exact version\n')
+    log('Options:')
+    log('  --dry-run          Preview without changes')
+    log('  --no-push          Skip git push')
+    log('  --no-publish       Skip npm publish')
+    log('  --github-release   Create GitHub release via gh CLI')
+    log('  --tag <name>       Prerelease tag (default: alpha)')
+    log('  --from <ref>       Generate notes from this git ref\n')
+    log('Or run with no arguments for interactive mode.\n')
+    log('Examples:')
+    log('  node scripts/release.js               # interactive')
+    log('  node scripts/release.js patch')
+    log('  node scripts/release.js minor --dry-run')
+    log('  node scripts/release.js prerelease --tag beta')
+    log('')
+    log('Shorthand via pnpm scripts:')
+    log('  pnpm release:patch       # patch bump')
+    log('  pnpm release:minor       # minor bump')
+    log('  pnpm release:major       # major bump')
+    log('  pnpm release:patch:gh    # patch + GitHub release')
+    log('  pnpm release:minor:gh    # minor + GitHub release')
+    log('  pnpm release:major:gh    # major + GitHub release')
+    log('  pnpm release:alpha       # alpha prerelease')
+    log('  pnpm release:beta        # beta prerelease')
     process.exit(1)
   }
 
@@ -500,21 +478,21 @@ async function main() {
   if (releaseType === 'custom') {
     nextVersion = args[1]
     if (!nextVersion || !/^\d+\.\d+\.\d+/.test(nextVersion)) {
-      console.error('Error: custom release requires a valid version (e.g. 1.0.0-rc.1)')
+      logError('Error: custom release requires a valid version (e.g. 1.0.0-rc.1)')
       process.exit(1)
     }
   } else {
     nextVersion = bumpVersion(currentVersion, releaseType, preTag)
   }
 
-  console.log('KickJS Monorepo Release')
-  console.log('='.repeat(50))
-  console.log(`  Current:  ${currentVersion}`)
-  console.log(`  Next:     ${nextVersion}`)
-  console.log(`  Type:     ${releaseType}`)
-  console.log(`  Packages: ${PACKAGES.length} framework + ${EXAMPLES.length} examples`)
-  console.log(`  Dry run:  ${dryRun ? 'yes' : 'no'}`)
-  console.log('='.repeat(50))
+  log('KickJS Monorepo Release')
+  log('='.repeat(50))
+  log(`  Current:  ${currentVersion}`)
+  log(`  Next:     ${nextVersion}`)
+  log(`  Type:     ${releaseType}`)
+  log(`  Packages: ${PACKAGES.length} framework + ${EXAMPLES.length} examples`)
+  log(`  Dry run:  ${dryRun ? 'yes' : 'no'}`)
+  log('='.repeat(50))
 
   // Pre-flight
   if (!dryRun) {
@@ -522,19 +500,19 @@ async function main() {
     const isPrerelease = nextVersion.includes('-')
     const allowedBranches = isPrerelease ? ['main', 'dev'] : ['main']
     if (!allowedBranches.includes(branch)) {
-      console.error(`\nError: ${isPrerelease ? 'Pre-releases' : 'Stable releases'} must be made from ${allowedBranches.join(' or ')}. Current branch: ${branch}`)
+      logError(`\nError: ${isPrerelease ? 'Pre-releases' : 'Stable releases'} must be made from ${allowedBranches.join(' or ')}. Current branch: ${branch}`)
       process.exit(1)
     }
 
     const status = exec('git status --porcelain')
     if (status) {
-      console.error('\nError: Working directory not clean. Commit or stash changes first.')
+      logError('\nError: Working directory not clean. Commit or stash changes first.')
       process.exit(1)
     }
   }
 
   // Generate release notes first (before version bump changes the log)
-  console.log('\nGenerating release notes...')
+  log('\nGenerating release notes...')
   const notes = generateReleaseNotes(nextVersion, fromRef)
 
   if (notes) {
@@ -542,22 +520,22 @@ async function main() {
     if (!dryRun) {
       fs.writeFileSync(notesFile, notes)
     }
-    console.log(`\n${'='.repeat(50)}`)
-    console.log(notes)
-    console.log('='.repeat(50))
-    console.log(`  Saved to: ${notesFile}`)
+    log(`\n${'='.repeat(50)}`)
+    log(notes)
+    log('='.repeat(50))
+    log(`  Saved to: ${notesFile}`)
   }
 
   if (dryRun) {
-    console.log('\n[DRY RUN] Would execute:')
+    log('\n[DRY RUN] Would execute:')
     bumpAllPackages(nextVersion, true)
-    console.log(`  4. Update docs/changelog.md with release notes`)
-    console.log(`  5. Snapshot docs → docs/versions/${nextVersion}/`)
-    console.log(`  6. git add -A && git commit -m "chore: release v${nextVersion}"`)
-    console.log(`  7. git tag v${nextVersion}`)
-    if (!noPush) console.log('  8. git push --follow-tags')
-    if (githubRelease) console.log(`  9. gh release create v${nextVersion} --title "v${nextVersion}" --notes-file RELEASE_NOTES_v${nextVersion}.md`)
-    if (!noPublish) console.log(`  ${githubRelease ? '10' : '9'}. pnpm --filter='./packages/*' publish --access public --no-git-checks --tag ${getDistTag(nextVersion)}`)
+    log(`  4. Update docs/changelog.md with release notes`)
+    log(`  5. Snapshot docs → docs/versions/${nextVersion}/`)
+    log(`  6. git add -A && git commit -m "chore: release v${nextVersion}"`)
+    log(`  7. git tag v${nextVersion}`)
+    if (!noPush) log('  8. git push --follow-tags')
+    if (githubRelease) log(`  9. gh release create v${nextVersion} --title "v${nextVersion}" --notes-file RELEASE_NOTES_v${nextVersion}.md`)
+    if (!noPublish) log(`  ${githubRelease ? '10' : '9'}. pnpm --filter='./packages/*' publish --access public --no-git-checks --tag ${getDistTag(nextVersion)}`)
     return
   }
 
@@ -576,7 +554,7 @@ async function main() {
       const header = '# Changelog\n\nAll notable changes to KickJS are documented here.\n\n'
       const body = existing.replace(header, '')
       fs.writeFileSync(changelogPath, header + notes + '\n\n' + body)
-      console.log('  Updated docs/changelog.md')
+      log('  Updated docs/changelog.md')
     }
   }
 
@@ -585,7 +563,7 @@ async function main() {
   const docsContentDirs = ['guide', 'api', 'examples']
   const docsContentFiles = ['changelog.md', 'roadmap.md', 'index.md']
 
-  console.log(`\n  Snapshotting docs → ${docsSnapshotDir}/`)
+  log(`\n  Snapshotting docs → ${docsSnapshotDir}/`)
   fs.mkdirSync(docsSnapshotDir, { recursive: true })
 
   for (const dir of docsContentDirs) {
@@ -624,13 +602,13 @@ async function main() {
   if (!noPush) {
     run('git push --follow-tags', 'Pushing to remote')
   } else {
-    console.log('\n  Skipped push (--no-push)')
+    log('\n  Skipped push (--no-push)')
   }
 
   // GitHub Release
   if (githubRelease) {
     if (noPush) {
-      console.log('\n  Skipped GitHub release (--no-push — tag not pushed)')
+      log('\n  Skipped GitHub release (--no-push — tag not pushed)')
     } else {
       const notesFile = `RELEASE_NOTES_v${nextVersion}.md`
       const isPrerelease = /-(alpha|beta|rc)\.\d+$/.test(nextVersion)
@@ -654,32 +632,32 @@ async function main() {
     const distTag = getDistTag(nextVersion)
     run(`pnpm --filter='./packages/*' publish --access public --no-git-checks --tag ${distTag}`, `Publishing to npm (dist-tag: ${distTag})`)
   } else {
-    console.log('\n  Skipped publish (--no-publish)')
+    log('\n  Skipped publish (--no-publish)')
   }
 
   // Done
-  console.log(`\n${'='.repeat(50)}`)
-  console.log(`  Released v${nextVersion}`)
-  console.log(`  Tag:     v${nextVersion}`)
-  console.log(`  Packages: ${PACKAGES.map((p) => `${NPM_SCOPE}-${path.basename(p)}`).join(', ')}`)
+  log(`\n${'='.repeat(50)}`)
+  log(`  Released v${nextVersion}`)
+  log(`  Tag:     v${nextVersion}`)
+  log(`  Packages: ${PACKAGES.map((p) => `${NPM_SCOPE}-${path.basename(p)}`).join(', ')}`)
   if (githubRelease && !noPush) {
-    console.log(`  GitHub:  ${REPO_URL}/releases/tag/v${nextVersion}`)
+    log(`  GitHub:  ${REPO_URL}/releases/tag/v${nextVersion}`)
   }
-  console.log('='.repeat(50))
+  log('='.repeat(50))
 
   if (!githubRelease) {
-    console.log('\nTo create a GitHub Release:')
-    console.log(`  ${REPO_URL}/releases/new?tag=v${nextVersion}&title=v${nextVersion}`)
+    log('\nTo create a GitHub Release:')
+    log(`  ${REPO_URL}/releases/new?tag=v${nextVersion}&title=v${nextVersion}`)
     if (notes) {
-      console.log(`  Paste content from RELEASE_NOTES_v${nextVersion}.md`)
+      log(`  Paste content from RELEASE_NOTES_v${nextVersion}.md`)
     }
 
-    console.log('\nOr use gh CLI:')
-    console.log(`  gh release create v${nextVersion} --title "v${nextVersion}" --notes-file RELEASE_NOTES_v${nextVersion}.md`)
+    log('\nOr use gh CLI:')
+    log(`  gh release create v${nextVersion} --title "v${nextVersion}" --notes-file RELEASE_NOTES_v${nextVersion}.md`)
   }
 }
 
 main().catch((err) => {
-  console.error(err)
+  logError(err)
   process.exit(1)
 })
