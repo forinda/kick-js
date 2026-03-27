@@ -30,8 +30,7 @@ No migrations needed — Mongoose creates collections automatically.
 
 | Package | Purpose |
 |---------|---------|
-| `@forinda/kickjs` | DI, decorators, module system |
-| `@forinda/kickjs` | Express 5, routing, middleware |
+| `@forinda/kickjs` | Core framework: DI, decorators, Express 5 routing, middleware |
 | `@forinda/kickjs-config` | Zod-based env validation |
 | `@forinda/kickjs-swagger` | OpenAPI docs |
 | `@forinda/kickjs-devtools` | Debug dashboard |

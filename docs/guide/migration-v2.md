@@ -9,7 +9,7 @@ KickJS v2.0 unifies `@forinda/kickjs-core` and `@forinda/kickjs-http` into a sin
 | `@forinda/kickjs-core` + `@forinda/kickjs-http` | `@forinda/kickjs` |
 | `AdapterContext.app: any` | `AdapterContext.app: Express` |
 | `AdapterContext.server: any` | `AdapterContext.server: http.Server` |
-| `MiddlewareHandler<TCtx = any>` | `MiddlewareHandler<TCtx = any>` (unchanged, but typed when using barrel) |
+| `MiddlewareHandler<TCtx = any>` | `MiddlewareHandler<TCtx = any>` (pass `RequestContext` for typing) |
 | Two installs | One install |
 
 ## Step 1: Update Dependencies
