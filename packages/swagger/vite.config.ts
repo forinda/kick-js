@@ -15,6 +15,7 @@ export default defineConfig({
     minify: 'esbuild',
     rollupOptions: {
       external: [
+        '@forinda/kickjs',
         '@forinda/kickjs-core',
         'reflect-metadata',
         'zod',
