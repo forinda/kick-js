@@ -1,4 +1,4 @@
-import { Logger, type AppAdapter, type AdapterContext } from '@forinda/kickjs-core'
+import { Logger, type AppAdapter, type AdapterContext } from '@forinda/kickjs'
 import { NotificationService, NOTIFICATIONS } from './service'
 import type { NotificationServiceOptions } from './types'
 

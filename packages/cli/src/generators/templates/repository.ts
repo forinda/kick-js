@@ -14,7 +14,7 @@ export function generateRepositoryInterface(ctx: TemplateContext): string {
 import type { ${pascal}ResponseDTO } from '${dtoPrefix}/${kebab}-response.dto'
 import type { Create${pascal}DTO } from '${dtoPrefix}/create-${kebab}.dto'
 import type { Update${pascal}DTO } from '${dtoPrefix}/update-${kebab}.dto'
-import type { ParsedQuery } from '@forinda/kickjs-http'
+import type { ParsedQuery } from '@forinda/kickjs'
 
 export interface I${pascal}Repository {
   findById(id: string): Promise<${pascal}ResponseDTO | null>
@@ -46,8 +46,8 @@ export function generateInMemoryRepository(ctx: TemplateContext): string {
  * @Repository() registers this class in the DI container as a singleton.
  */
 import { randomUUID } from 'node:crypto'
-import { Repository, HttpException } from '@forinda/kickjs-core'
-import type { ParsedQuery } from '@forinda/kickjs-http'
+import { Repository, HttpException } from '@forinda/kickjs'
+import type { ParsedQuery } from '@forinda/kickjs'
 import type { I${pascal}Repository } from '${repoPrefix}/${kebab}.repository'
 import type { ${pascal}ResponseDTO } from '${dtoPrefix}/${kebab}-response.dto'
 import type { Create${pascal}DTO } from '${dtoPrefix}/create-${kebab}.dto'
@@ -122,8 +122,8 @@ export function generateCustomRepository(ctx: TemplateContext): string {
  * @Repository() registers this class in the DI container as a singleton.
  */
 import { randomUUID } from 'node:crypto'
-import { Repository, HttpException } from '@forinda/kickjs-core'
-import type { ParsedQuery } from '@forinda/kickjs-http'
+import { Repository, HttpException } from '@forinda/kickjs'
+import type { ParsedQuery } from '@forinda/kickjs'
 import type { I${pascal}Repository } from '${repoPrefix}/${kebab}.repository'
 import type { ${pascal}ResponseDTO } from '${dtoPrefix}/${kebab}-response.dto'
 import type { Create${pascal}DTO } from '${dtoPrefix}/create-${kebab}.dto'

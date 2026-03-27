@@ -5,8 +5,8 @@ import {
   type AppModule,
   type AppModuleClass,
   type ModuleRoutes,
-} from '@forinda/kickjs-core'
-import { Application, type ApplicationOptions } from '@forinda/kickjs-http'
+} from '@forinda/kickjs'
+import { Application, type ApplicationOptions } from '@forinda/kickjs'
 
 /**
  * Options for creating a test application.

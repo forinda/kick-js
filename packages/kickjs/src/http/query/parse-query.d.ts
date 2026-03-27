@@ -1,15 +1,27 @@
-import { type FilterItem, type SortItem, type PaginationParams, type ParsedQuery, type QueryFieldConfig } from './types';
+import {
+  type FilterItem,
+  type SortItem,
+  type PaginationParams,
+  type ParsedQuery,
+  type QueryFieldConfig,
+} from './types'
 /** Parse filter strings like "status:eq:active" into structured objects */
-export declare function parseFilters(filterParam: string | string[] | undefined, allowedFields?: string[]): FilterItem[];
+export declare function parseFilters(
+  filterParam: string | string[] | undefined,
+  allowedFields?: string[],
+): FilterItem[]
 /** Parse sort strings like "firstName:asc" into structured objects */
-export declare function parseSort(sortParam: string | string[] | undefined, allowedFields?: string[]): SortItem[];
+export declare function parseSort(
+  sortParam: string | string[] | undefined,
+  allowedFields?: string[],
+): SortItem[]
 /** Parse page/limit into pagination with computed offset */
 export declare function parsePagination(params: {
-    page?: string | number;
-    limit?: string | number;
-}): PaginationParams;
+  page?: string | number
+  limit?: string | number
+}): PaginationParams
 /** Sanitize and truncate search query */
-export declare function parseSearchQuery(q: string | undefined): string;
+export declare function parseSearchQuery(q: string | undefined): string
 /**
  * Parse a raw Express query object into a structured, ORM-agnostic ParsedQuery.
  *
@@ -38,7 +50,12 @@ export declare function parseSearchQuery(q: string | undefined): string;
  *
  * Filter operators: eq, neq, gt, gte, lt, lte, between, in, contains, starts, ends
  */
-export declare function parseQuery(query: Record<string, any>, fieldConfig?: QueryFieldConfig): ParsedQuery;
+export declare function parseQuery(
+  query: Record<string, any>,
+  fieldConfig?: QueryFieldConfig,
+): ParsedQuery
 /** Convert ParsedQuery back into query string parameters */
-export declare function buildQueryParams(parsed: Partial<ParsedQuery>): Record<string, string | string[] | number>;
+export declare function buildQueryParams(
+  parsed: Partial<ParsedQuery>,
+): Record<string, string | string[] | number>
 //# sourceMappingURL=parse-query.d.ts.map

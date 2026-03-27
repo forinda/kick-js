@@ -60,7 +60,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@forinda/kickjs-core": "workspace:*",
+    "@forinda/kickjs": "workspace:*",
     "reflect-metadata": "^0.2.2"
   },
   "peerDependencies": {

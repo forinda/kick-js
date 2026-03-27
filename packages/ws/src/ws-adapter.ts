@@ -9,7 +9,7 @@ import {
   createLogger,
   ref,
   type Ref,
-} from '@forinda/kickjs-core'
+} from '@forinda/kickjs'
 import {
   WS_METADATA,
   wsControllerRegistry,
@@ -133,6 +133,7 @@ export class WsAdapter implements AppAdapter {
   }
 
   afterStart({ server }: AdapterContext): void {
+    if (!server) return
     this.wss = new WebSocketServer({
       noServer: true,
       maxPayload: this.maxPayload,

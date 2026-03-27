@@ -1,6 +1,6 @@
-import type { Container } from './container';
-import type { AppAdapter } from './adapter';
-import type { AppModuleClass } from './app-module';
+import type { Container } from './container'
+import type { AppAdapter } from './adapter'
+import type { AppModuleClass } from './app-module'
 /**
  * Plugin interface for extending KickJS applications.
  *
@@ -54,37 +54,37 @@ import type { AppModuleClass } from './app-module';
  * ```
  */
 export interface KickPlugin {
-    /** Human-readable name for logging and debugging */
-    name: string;
-    /**
-     * Register DI bindings before modules load.
-     * Use this to provide services that modules depend on.
-     */
-    register?(container: Container): void;
-    /**
-     * Return module classes to be loaded alongside user modules.
-     * Plugin modules are loaded before user modules.
-     */
-    modules?(): AppModuleClass[];
-    /**
-     * Return adapter instances to be added to the application.
-     * Plugin adapters are added before user adapters.
-     */
-    adapters?(): AppAdapter[];
-    /**
-     * Return Express middleware to be added to the global pipeline.
-     * Plugin middleware runs before user-defined middleware.
-     */
-    middleware?(): any[];
-    /**
-     * Called after the application has fully bootstrapped.
-     * Use for post-startup logic like logging, health registration, etc.
-     */
-    onReady?(container: Container): void | Promise<void>;
-    /**
-     * Called during application shutdown.
-     * Clean up plugin resources (connections, intervals, etc.).
-     */
-    shutdown?(): void | Promise<void>;
+  /** Human-readable name for logging and debugging */
+  name: string
+  /**
+   * Register DI bindings before modules load.
+   * Use this to provide services that modules depend on.
+   */
+  register?(container: Container): void
+  /**
+   * Return module classes to be loaded alongside user modules.
+   * Plugin modules are loaded before user modules.
+   */
+  modules?(): AppModuleClass[]
+  /**
+   * Return adapter instances to be added to the application.
+   * Plugin adapters are added before user adapters.
+   */
+  adapters?(): AppAdapter[]
+  /**
+   * Return Express middleware to be added to the global pipeline.
+   * Plugin middleware runs before user-defined middleware.
+   */
+  middleware?(): any[]
+  /**
+   * Called after the application has fully bootstrapped.
+   * Use for post-startup logic like logging, health registration, etc.
+   */
+  onReady?(container: Container): void | Promise<void>
+  /**
+   * Called during application shutdown.
+   * Clean up plugin resources (connections, intervals, etc.).
+   */
+  shutdown?(): void | Promise<void>
 }
 //# sourceMappingURL=plugin.d.ts.map

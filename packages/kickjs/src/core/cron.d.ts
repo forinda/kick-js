@@ -1,11 +1,11 @@
-import 'reflect-metadata';
-declare const CRON_META: unique symbol;
+import 'reflect-metadata'
+declare const CRON_META: unique symbol
 export interface CronJobMeta {
-    expression: string;
-    handlerName: string;
-    description?: string;
-    timezone?: string;
-    runOnInit?: boolean;
+  expression: string
+  handlerName: string
+  description?: string
+  timezone?: string
+  runOnInit?: boolean
 }
 /**
  * Schedule a method to run on a cron expression.
@@ -17,12 +17,15 @@ export interface CronJobMeta {
  * @param options.timezone - IANA timezone (e.g. 'America/New_York', 'UTC')
  * @param options.runOnInit - Run immediately on startup before first scheduled tick
  */
-export declare function Cron(expression: string, options?: {
-    description?: string;
-    timezone?: string;
-    runOnInit?: boolean;
-}): MethodDecorator;
+export declare function Cron(
+  expression: string,
+  options?: {
+    description?: string
+    timezone?: string
+    runOnInit?: boolean
+  },
+): MethodDecorator
 /** Read cron jobs registered on a class */
-export declare function getCronJobs(target: any): CronJobMeta[];
-export { CRON_META };
+export declare function getCronJobs(target: any): CronJobMeta[]
+export { CRON_META }
 //# sourceMappingURL=cron.d.ts.map

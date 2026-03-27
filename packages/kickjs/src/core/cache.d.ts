@@ -1,5 +1,5 @@
-import 'reflect-metadata';
-declare const CACHEABLE_META: unique symbol;
+import 'reflect-metadata'
+declare const CACHEABLE_META: unique symbol
 /**
  * Abstract cache backend. Implement this interface to use Redis, Memcached,
  * or any other cache store with @Cacheable and @CacheEvict.
@@ -25,16 +25,16 @@ declare const CACHEABLE_META: unique symbol;
  * ```
  */
 export interface CacheProvider {
-    /** Retrieve a cached value. Return null if not found or expired. */
-    get(key: string): Promise<any | null>;
-    /** Store a value with a TTL in milliseconds. */
-    set(key: string, value: any, ttlMs: number): Promise<void>;
-    /** Delete a specific cache key. */
-    del(key: string): Promise<void>;
-    /** Delete all keys matching a prefix. Used by @CacheEvict. */
-    delByPrefix?(prefix: string): Promise<void>;
-    /** Optional cleanup on shutdown. */
-    shutdown?(): Promise<void>;
+  /** Retrieve a cached value. Return null if not found or expired. */
+  get(key: string): Promise<any | null>
+  /** Store a value with a TTL in milliseconds. */
+  set(key: string, value: any, ttlMs: number): Promise<void>
+  /** Delete a specific cache key. */
+  del(key: string): Promise<void>
+  /** Delete all keys matching a prefix. Used by @CacheEvict. */
+  delByPrefix?(prefix: string): Promise<void>
+  /** Optional cleanup on shutdown. */
+  shutdown?(): Promise<void>
 }
 /**
  * Default in-memory cache provider using a Map.
@@ -42,12 +42,12 @@ export interface CacheProvider {
  * For multi-instance or production, use a Redis-backed provider.
  */
 export declare class MemoryCacheProvider implements CacheProvider {
-    private store;
-    get(key: string): Promise<any | null>;
-    set(key: string, value: any, ttlMs: number): Promise<void>;
-    del(key: string): Promise<void>;
-    delByPrefix(prefix: string): Promise<void>;
-    shutdown(): Promise<void>;
+  private store
+  get(key: string): Promise<any | null>
+  set(key: string, value: any, ttlMs: number): Promise<void>
+  del(key: string): Promise<void>
+  delByPrefix(prefix: string): Promise<void>
+  shutdown(): Promise<void>
 }
 /**
  * Set the global cache provider used by @Cacheable and @CacheEvict.
@@ -61,14 +61,14 @@ export declare class MemoryCacheProvider implements CacheProvider {
  * setCacheProvider(new RedisCacheProvider(redisClient))
  * ```
  */
-export declare function setCacheProvider(provider: CacheProvider): void;
+export declare function setCacheProvider(provider: CacheProvider): void
 /** Get the current cache provider */
-export declare function getCacheProvider(): CacheProvider;
+export declare function getCacheProvider(): CacheProvider
 export interface CacheOptions {
-    /** Time-to-live in seconds (default: 60) */
-    ttl?: number;
-    /** Cache key prefix (default: ClassName.methodName) */
-    key?: string;
+  /** Time-to-live in seconds (default: 60) */
+  ttl?: number
+  /** Cache key prefix (default: ClassName.methodName) */
+  key?: string
 }
 /**
  * Cache the return value of a method for the specified TTL.
@@ -79,15 +79,18 @@ export interface CacheOptions {
  * @param ttl - Time-to-live in seconds (default: 60)
  * @param options.key - Custom cache key prefix
  */
-export declare function Cacheable(ttl?: number, options?: {
-    key?: string;
-}): MethodDecorator;
+export declare function Cacheable(
+  ttl?: number,
+  options?: {
+    key?: string
+  },
+): MethodDecorator
 /**
  * Evict cached values matching a key prefix after the method executes.
  * Works with any CacheProvider that implements `delByPrefix`.
  *
  * @param key - Cache key prefix to evict (matches the @Cacheable key)
  */
-export declare function CacheEvict(key: string): MethodDecorator;
-export { CACHEABLE_META };
+export declare function CacheEvict(key: string): MethodDecorator
+export { CACHEABLE_META }
 //# sourceMappingURL=cache.d.ts.map

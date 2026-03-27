@@ -1,4 +1,4 @@
-import { type ApplicationOptions } from './application';
+import { type ApplicationOptions } from './application'
 /**
  * Bootstrap a KickJS application with zero boilerplate.
  *
@@ -18,5 +18,5 @@ import { type ApplicationOptions } from './application';
  * bootstrap({ modules })
  * ```
  */
-export declare function bootstrap(options: ApplicationOptions): void;
+export declare function bootstrap(options: ApplicationOptions): void
 //# sourceMappingURL=bootstrap.d.ts.map

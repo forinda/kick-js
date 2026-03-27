@@ -30,8 +30,8 @@ export async function generateGuard(options: GenerateGuardOptions): Promise<stri
   const filePath = join(outDir, `${kebab}.guard.ts`)
   await writeFileSafe(
     filePath,
-    `import { Container, HttpException } from '@forinda/kickjs-core'
-import type { RequestContext } from '@forinda/kickjs-http'
+    `import { Container, HttpException } from '@forinda/kickjs'
+import type { RequestContext } from '@forinda/kickjs'
 
 /**
  * ${pascal} guard.

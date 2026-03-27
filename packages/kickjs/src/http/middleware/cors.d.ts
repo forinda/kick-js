@@ -1,19 +1,19 @@
-import type { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction } from 'express'
 export interface CorsOptions {
-    /** Allowed origin(s). `true` reflects request origin, `'*'` allows all, string/regex/array for allowlist. Default: `'*'` */
-    origin?: boolean | string | RegExp | (string | RegExp)[];
-    /** Allowed HTTP methods. Default: `['GET','HEAD','PUT','PATCH','POST','DELETE']` */
-    methods?: string[];
-    /** Allowed request headers. Default: reflects `Access-Control-Request-Headers` */
-    allowedHeaders?: string[];
-    /** Headers exposed to the browser. Default: none */
-    exposedHeaders?: string[];
-    /** Allow credentials (cookies, authorization). Default: false */
-    credentials?: boolean;
-    /** Preflight cache duration in seconds. Default: 86400 (24h) */
-    maxAge?: number;
-    /** Handle preflight OPTIONS requests. Default: true */
-    preflight?: boolean;
+  /** Allowed origin(s). `true` reflects request origin, `'*'` allows all, string/regex/array for allowlist. Default: `'*'` */
+  origin?: boolean | string | RegExp | (string | RegExp)[]
+  /** Allowed HTTP methods. Default: `['GET','HEAD','PUT','PATCH','POST','DELETE']` */
+  methods?: string[]
+  /** Allowed request headers. Default: reflects `Access-Control-Request-Headers` */
+  allowedHeaders?: string[]
+  /** Headers exposed to the browser. Default: none */
+  exposedHeaders?: string[]
+  /** Allow credentials (cookies, authorization). Default: false */
+  credentials?: boolean
+  /** Preflight cache duration in seconds. Default: 86400 (24h) */
+  maxAge?: number
+  /** Handle preflight OPTIONS requests. Default: true */
+  preflight?: boolean
 }
 /**
  * CORS middleware with correct spec behavior.
@@ -39,5 +39,7 @@ export interface CorsOptions {
  * })
  * ```
  */
-export declare function cors(options?: CorsOptions): (req: Request, res: Response, next: NextFunction) => void;
+export declare function cors(
+  options?: CorsOptions,
+): (req: Request, res: Response, next: NextFunction) => void
 //# sourceMappingURL=cors.d.ts.map

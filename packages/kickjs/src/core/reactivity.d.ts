@@ -4,9 +4,9 @@
  * backend state — config, metrics, health, circuit breakers.
  */
 export interface Ref<T = any> {
-    value: T;
-    /** Subscribe to changes. Returns unsubscribe function. */
-    subscribe(fn: (newValue: T, oldValue: T) => void): () => void;
+  value: T
+  /** Subscribe to changes. Returns unsubscribe function. */
+  subscribe(fn: (newValue: T, oldValue: T) => void): () => void
 }
 /**
  * Create a reactive reference. Reading `.value` tracks the dependency,
@@ -18,9 +18,9 @@ export interface Ref<T = any> {
  * count.value++  // triggers watchers
  * ```
  */
-export declare function ref<T>(initialValue: T): Ref<T>;
+export declare function ref<T>(initialValue: T): Ref<T>
 export interface ComputedRef<T = any> {
-    readonly value: T;
+  readonly value: T
 }
 /**
  * Create a computed value that auto-recalculates when its reactive
@@ -34,12 +34,12 @@ export interface ComputedRef<T = any> {
  * console.log(doubled.value) // 10
  * ```
  */
-export declare function computed<T>(getter: () => T): ComputedRef<T>;
+export declare function computed<T>(getter: () => T): ComputedRef<T>
 export interface WatchOptions {
-    /** Run the callback immediately with the current value (default: false) */
-    immediate?: boolean;
+  /** Run the callback immediately with the current value (default: false) */
+  immediate?: boolean
 }
-type WatchSource<T> = Ref<T> | ComputedRef<T> | (() => T);
+type WatchSource<T> = Ref<T> | ComputedRef<T> | (() => T)
 /**
  * Watch a reactive source and run a callback when it changes.
  * Returns a stop function to unsubscribe.
@@ -54,7 +54,11 @@ type WatchSource<T> = Ref<T> | ComputedRef<T> | (() => T);
  * stop()           // no more callbacks
  * ```
  */
-export declare function watch<T>(source: WatchSource<T>, callback: (newValue: T, oldValue: T) => void, options?: WatchOptions): () => void;
+export declare function watch<T>(
+  source: WatchSource<T>,
+  callback: (newValue: T, oldValue: T) => void,
+  options?: WatchOptions,
+): () => void
 /**
  * Create a deeply reactive proxy around a plain object. Property reads
  * are tracked, property writes trigger watchers and computed recalculations.
@@ -70,14 +74,16 @@ export declare function watch<T>(source: WatchSource<T>, callback: (newValue: T,
  * console.log(errorRate.value) // 0.05
  * ```
  */
-export declare function reactive<T extends Record<string, any>>(target: T): T;
+export declare function reactive<T extends Record<string, any>>(target: T): T
 /** Check if a value is a Ref */
-export declare function isRef(value: any): value is Ref;
+export declare function isRef(value: any): value is Ref
 /** Unwrap a ref or return the value as-is */
-export declare function unref<T>(value: Ref<T> | T): T;
+export declare function unref<T>(value: Ref<T> | T): T
 /** Convert all properties of an object to refs */
-export declare function toRefs<T extends Record<string, any>>(obj: T): {
-    [K in keyof T]: Ref<T[K]>;
-};
-export {};
+export declare function toRefs<T extends Record<string, any>>(
+  obj: T,
+): {
+  [K in keyof T]: Ref<T[K]>
+}
+export {}
 //# sourceMappingURL=reactivity.d.ts.map

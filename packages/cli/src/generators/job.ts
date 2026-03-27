@@ -24,7 +24,7 @@ export async function generateJob(options: GenerateJobOptions): Promise<string[]
 
   await write(
     `${kebab}.job.ts`,
-    `import { Inject } from '@forinda/kickjs-core'
+    `import { Inject } from '@forinda/kickjs'
 import { Job, Process, QUEUE_MANAGER, type QueueService } from '@forinda/kickjs-queue'
 
 /**

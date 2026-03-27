@@ -9,11 +9,7 @@
 export * from './core'
 
 // ── HTTP ────────────────────────────────────────────────────────────────
-export {
-  Application,
-  type ApplicationOptions,
-  type MiddlewareEntry,
-} from './http/application'
+export { Application, type ApplicationOptions, type MiddlewareEntry } from './http/application'
 
 export { bootstrap } from './http/bootstrap'
 

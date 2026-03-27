@@ -29,8 +29,8 @@ export async function generateController(options: GenerateControllerOptions): Pr
   const filePath = join(outDir, `${kebab}.controller.ts`)
   await writeFileSafe(
     filePath,
-    `import { Controller, Get, Post, Autowired } from '@forinda/kickjs-core'
-import type { RequestContext } from '@forinda/kickjs-http'
+    `import { Controller, Get, Post, Autowired } from '@forinda/kickjs'
+import type { RequestContext } from '@forinda/kickjs'
 
 @Controller()
 export class ${pascal}Controller {

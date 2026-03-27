@@ -1,5 +1,5 @@
 import type { Queue, JobsOptions } from 'bullmq'
-import { Logger } from '@forinda/kickjs-core'
+import { Logger } from '@forinda/kickjs'
 
 const log = Logger.for('QueueService')
 

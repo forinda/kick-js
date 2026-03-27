@@ -1,4 +1,4 @@
-import type { QueryBuilderAdapter, ParsedQuery, FilterItem, SortItem } from '@forinda/kickjs-http'
+import type { QueryBuilderAdapter, ParsedQuery, FilterItem, SortItem } from '@forinda/kickjs'
 
 /**
  * Configuration for the Prisma query builder adapter.
