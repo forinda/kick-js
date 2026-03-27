@@ -158,9 +158,8 @@ export class EmailProcessor {
 ### Bootstrap
 
 ```ts
-import { bootstrap } from '@forinda/kickjs-core'
+import { bootstrap } from '@forinda/kickjs-http'
 import { QueueAdapter } from '@forinda/kickjs-queue'
-import { EmailProcessor } from './jobs/email.processor'
 
 bootstrap({
   modules,
@@ -170,7 +169,7 @@ bootstrap({
         host: 'localhost',
         port: 6379,
       },
-      queues: [EmailProcessor],
+      queues: ['email'],
       concurrency: 5,
     }),
   ],

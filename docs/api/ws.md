@@ -1,11 +1,11 @@
 # @forinda/kickjs-ws
 
-WebSocket support for KickJS applications via [Socket.IO](https://socket.io), using the same decorator-driven approach as HTTP controllers.
+WebSocket support for KickJS applications via the lightweight [`ws`](https://github.com/websockets/ws) library, using the same decorator-driven approach as HTTP controllers.
 
 ## Installation
 
 ```bash
-pnpm add @forinda/kickjs-ws socket.io
+pnpm add @forinda/kickjs-ws ws
 ```
 
 ## Exports
