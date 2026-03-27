@@ -5,7 +5,7 @@ KickJS provides `@Cacheable` and `@CacheEvict` decorators with a pluggable cache
 ## Quick Start
 
 ```ts
-import { Service, Cacheable, CacheEvict } from '@forinda/kickjs-core'
+import { Service, Cacheable, CacheEvict } from '@forinda/kickjs'
 
 @Service()
 export class ProductService {
@@ -41,7 +41,7 @@ That's it — caching works out of the box with the built-in memory provider.
 Implement the `CacheProvider` interface to use any backend:
 
 ```ts
-import type { CacheProvider } from '@forinda/kickjs-core'
+import type { CacheProvider } from '@forinda/kickjs'
 
 export interface CacheProvider {
   get(key: string): Promise<any | null>
@@ -55,7 +55,7 @@ export interface CacheProvider {
 ### Redis Example
 
 ```ts
-import type { CacheProvider } from '@forinda/kickjs-core'
+import type { CacheProvider } from '@forinda/kickjs'
 import Redis from 'ioredis'
 
 export class RedisCacheProvider implements CacheProvider {
@@ -96,7 +96,7 @@ export class RedisCacheProvider implements CacheProvider {
 Call `setCacheProvider()` before bootstrapping:
 
 ```ts
-import { setCacheProvider } from '@forinda/kickjs-core'
+import { setCacheProvider } from '@forinda/kickjs'
 import { RedisCacheProvider } from './redis-cache'
 
 // Use Redis for all @Cacheable/@CacheEvict
@@ -116,7 +116,7 @@ In-memory `Map`-based cache. Works out of the box, no configuration needed.
 - No cross-process sharing
 
 ```ts
-import { setCacheProvider, MemoryCacheProvider } from '@forinda/kickjs-core'
+import { setCacheProvider, MemoryCacheProvider } from '@forinda/kickjs'
 
 // This is the default — you only need this if you want to reset
 setCacheProvider(new MemoryCacheProvider())

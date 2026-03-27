@@ -77,8 +77,8 @@ The `AuthAdapter` with `defaultPolicy: 'protected'` validates JWTs globally and 
 Instead of relying on the adapter's policy system, I built a simple bridge middleware that reads the user the `AuthAdapter` stored on `req` and makes it available through the context API:
 
 ```typescript
-import type { MiddlewareHandler } from '@forinda/kickjs-core';
-import type { RequestContext } from '@forinda/kickjs-http';
+import type { MiddlewareHandler } from '@forinda/kickjs';
+import type { RequestContext } from '@forinda/kickjs';
 
 export const authBridgeMiddleware: MiddlewareHandler = (ctx: RequestContext, next) => {
   const user = (ctx.req as any).user;
@@ -109,8 +109,8 @@ This gives me explicit control. There is no magic. If a controller has `@Middlew
 Reading the user in every handler via `ctx.get('user')` is verbose and returns an optional type. I wrapped it in a helper:
 
 ```typescript
-import type { RequestContext } from '@forinda/kickjs-http';
-import { HttpException } from '@forinda/kickjs-core';
+import type { RequestContext } from '@forinda/kickjs';
+import { HttpException } from '@forinda/kickjs';
 
 export interface AuthUser {
   id: string;

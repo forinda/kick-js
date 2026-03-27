@@ -13,8 +13,8 @@ type MiddlewareHandler<TCtx = any> = (ctx: TCtx, next: () => void) => void | Pro
 The generic `TCtx` defaults to `any`. For full type safety, pass `RequestContext`:
 
 ```ts
-import type { MiddlewareHandler } from '@forinda/kickjs-core'
-import type { RequestContext } from '@forinda/kickjs-http'
+import type { MiddlewareHandler } from '@forinda/kickjs'
+import type { RequestContext } from '@forinda/kickjs'
 
 const authMiddleware: MiddlewareHandler<RequestContext> = async (ctx, next) => {
   const token = ctx.headers['authorization']  // fully typed
@@ -34,7 +34,7 @@ The `@Middleware()` decorator works on both classes and methods. It accepts one 
 Runs on every route in the controller, before any method-level middleware:
 
 ```ts
-import { Controller, Get, Middleware } from '@forinda/kickjs-core'
+import { Controller, Get, Middleware } from '@forinda/kickjs'
 
 @Controller()
 @Middleware(authMiddleware, loggingMiddleware)
@@ -94,7 +94,7 @@ Using the wrong signature causes runtime crashes. If you see `Cannot read proper
 
 ```ts
 import express from 'express'
-import { bootstrap, requestId } from '@forinda/kickjs-http'
+import { bootstrap, requestId } from '@forinda/kickjs'
 import { modules } from './modules'
 
 bootstrap({
@@ -131,7 +131,7 @@ middleware: [
 Adapters (database, rate limiting, CORS, Swagger, etc.) can inject middleware at four phases in the pipeline. This is done by implementing the `middleware()` method on `AppAdapter`:
 
 ```ts
-import type { AppAdapter, AdapterMiddleware } from '@forinda/kickjs-core'
+import type { AppAdapter, AdapterMiddleware } from '@forinda/kickjs'
 
 class RateLimitAdapter implements AppAdapter {
   middleware(): AdapterMiddleware[] {

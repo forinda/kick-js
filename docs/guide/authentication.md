@@ -20,7 +20,7 @@ kick add auth
 ## Quick Start
 
 ```ts
-import { bootstrap } from '@forinda/kickjs-http'
+import { bootstrap } from '@forinda/kickjs'
 import { AuthAdapter, JwtStrategy } from '@forinda/kickjs-auth'
 
 bootstrap({
@@ -343,8 +343,8 @@ new AuthAdapter({
 ## Full Example
 
 ```ts
-import { Controller, Get, Post, Service } from '@forinda/kickjs-core'
-import { bootstrap, RequestContext } from '@forinda/kickjs-http'
+import { Controller, Get, Post, Service } from '@forinda/kickjs'
+import { bootstrap, RequestContext } from '@forinda/kickjs'
 import { AuthAdapter, JwtStrategy, Authenticated, Public, Roles } from '@forinda/kickjs-auth'
 import jwt from 'jsonwebtoken'
 

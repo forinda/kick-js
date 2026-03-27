@@ -81,8 +81,8 @@ class InMemoryUserRepository implements IUserRepository {
 Create a lightweight controller that skips auth middleware:
 
 ```ts
-import { Controller, Get, Delete, Inject } from '@forinda/kickjs-core'
-import type { RequestContext } from '@forinda/kickjs-http'
+import { Controller, Get, Delete, Inject } from '@forinda/kickjs'
+import type { RequestContext } from '@forinda/kickjs'
 import { USER_REPOSITORY, type IUserRepository } from '../domain/repositories/user.repository'
 
 @Controller()
@@ -118,8 +118,8 @@ Wire everything with `createTestModule` and hit endpoints with supertest:
 import 'reflect-metadata'
 import { describe, it, expect, beforeEach } from 'vitest'
 import request from 'supertest'
-import { Container } from '@forinda/kickjs-core'
-import { buildRoutes } from '@forinda/kickjs-http'
+import { Container } from '@forinda/kickjs'
+import { buildRoutes } from '@forinda/kickjs'
 import { createTestApp, createTestModule } from '@forinda/kickjs-testing'
 
 describe('UserController', () => {
@@ -165,8 +165,8 @@ Test that protected routes reject invalid tokens and accept valid ones:
 
 ```ts
 import jwt from 'jsonwebtoken'
-import { Controller, Get, Middleware, HttpException } from '@forinda/kickjs-core'
-import type { MiddlewareHandler } from '@forinda/kickjs-core'
+import { Controller, Get, Middleware, HttpException } from '@forinda/kickjs'
+import type { MiddlewareHandler } from '@forinda/kickjs'
 
 const TEST_SECRET = 'test-secret-that-is-at-least-32-chars-long!'
 
@@ -228,7 +228,7 @@ it('rejects expired tokens', async () => {
 Test that adapters run their lifecycle hooks:
 
 ```ts
-import type { AppAdapter } from '@forinda/kickjs-core'
+import type { AppAdapter } from '@forinda/kickjs'
 
 it('adapter hooks fire during setup', async () => {
   const order: string[] = []
@@ -248,8 +248,8 @@ it('adapter hooks fire during setup', async () => {
 Use supertest's `.attach()` method with the `upload` middleware:
 
 ```ts
-import { Controller, Post, Middleware } from '@forinda/kickjs-core'
-import { upload } from '@forinda/kickjs-http'
+import { Controller, Post, Middleware } from '@forinda/kickjs'
+import { upload } from '@forinda/kickjs'
 
 @Controller()
 class UploadController {

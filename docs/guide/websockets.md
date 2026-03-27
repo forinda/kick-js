@@ -5,7 +5,7 @@ KickJS provides decorator-driven WebSocket support with namespaces, rooms, and f
 ## Setup
 
 ```ts
-import { bootstrap } from '@forinda/kickjs-http'
+import { bootstrap } from '@forinda/kickjs'
 import { WsAdapter } from '@forinda/kickjs-ws'
 
 bootstrap({

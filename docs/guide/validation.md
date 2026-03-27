@@ -7,8 +7,8 @@ KickJS validates request data using Zod schemas. Validation can be declared inli
 The route decorators (`@Get`, `@Post`, `@Put`, `@Delete`, `@Patch`) accept a second argument with Zod schemas for `body`, `query`, and `params`:
 
 ```ts
-import { Controller, Post, Put, Get } from '@forinda/kickjs-core'
-import { RequestContext } from '@forinda/kickjs-http'
+import { Controller, Post, Put, Get } from '@forinda/kickjs'
+import { RequestContext } from '@forinda/kickjs'
 import { z } from 'zod'
 
 const createTodoSchema = z.object({
@@ -80,10 +80,10 @@ async update(ctx: RequestContext) {
 
 ## The validate() Middleware
 
-Under the hood, route validation uses the `validate()` function from `@forinda/kickjs-http`. You can also use it directly as Express middleware:
+Under the hood, route validation uses the `validate()` function from `@forinda/kickjs`. You can also use it directly as Express middleware:
 
 ```ts
-import { validate } from '@forinda/kickjs-http'
+import { validate } from '@forinda/kickjs'
 
 // As standalone Express middleware
 app.post('/custom',

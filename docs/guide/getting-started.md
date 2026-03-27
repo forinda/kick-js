@@ -66,8 +66,8 @@ src/modules/users/
 ## Your First Controller
 
 ```typescript
-import { Controller, Get, Post } from '@forinda/kickjs-core'
-import { RequestContext } from '@forinda/kickjs-http'
+import { Controller, Get, Post } from '@forinda/kickjs'
+import { RequestContext } from '@forinda/kickjs'
 import { z } from 'zod'
 
 const createUserSchema = z.object({
@@ -93,8 +93,8 @@ export class UserController {
 ## Your First Module
 
 ```typescript
-import { Container, type AppModule, type ModuleRoutes } from '@forinda/kickjs-core'
-import { buildRoutes } from '@forinda/kickjs-http'
+import { Container, type AppModule, type ModuleRoutes } from '@forinda/kickjs'
+import { buildRoutes } from '@forinda/kickjs'
 import { UserController } from './presentation/user.controller'
 
 export class UserModule implements AppModule {
@@ -116,7 +116,7 @@ export class UserModule implements AppModule {
 
 ```typescript
 import 'reflect-metadata'
-import { bootstrap } from '@forinda/kickjs-http'
+import { bootstrap } from '@forinda/kickjs'
 import { UserModule } from './modules/users'
 
 bootstrap({

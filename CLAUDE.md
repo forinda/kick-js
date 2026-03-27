@@ -90,7 +90,7 @@ docs/                   # VitePress documentation site
 
 ### Adding an Adapter
 
-Implement `AppAdapter` from `@forinda/kickjs-core/adapter`:
+Implement `AppAdapter` from `@forinda/kickjs/adapter`:
 - `name: string`
 - `beforeMount?({ app }: AdapterContext)`, `beforeStart?({ container }: AdapterContext)`, `afterStart?({ server }: AdapterContext)`
 - `shutdown?(): Promise<void>`
@@ -125,7 +125,7 @@ Every controller method receives `ctx: RequestContext` with:
 
 ```ts
 import express from 'express'
-import { bootstrap, helmet, cors, requestId, requestLogger, csrf, rateLimit } from '@forinda/kickjs-http'
+import { bootstrap, helmet, cors, requestId, requestLogger, csrf, rateLimit } from '@forinda/kickjs'
 
 bootstrap({
   modules: [/* your modules */],

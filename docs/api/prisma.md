@@ -82,7 +82,7 @@ Uses the `PrismaModelDelegate` interface from `@forinda/kickjs-prisma`. Works im
 **Cons:** No field-level autocomplete (methods return `unknown`).
 
 ```ts
-import { Repository, HttpException, Inject } from '@forinda/kickjs-core'
+import { Repository, HttpException, Inject } from '@forinda/kickjs'
 import { PRISMA_CLIENT, type PrismaModelDelegate } from '@forinda/kickjs-prisma'
 
 @Repository()
@@ -132,7 +132,7 @@ Import your actual `PrismaClient` type for full field-level autocomplete, valida
 **Cons:** Requires importing from your generated client path.
 
 ```ts
-import { Repository, HttpException, Inject } from '@forinda/kickjs-core'
+import { Repository, HttpException, Inject } from '@forinda/kickjs'
 import { PRISMA_CLIENT } from '@forinda/kickjs-prisma'
 // Prisma 5/6
 import type { PrismaClient } from '@prisma/client'

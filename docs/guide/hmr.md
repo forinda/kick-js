@@ -8,10 +8,10 @@ The `kick dev` command starts a Vite dev server using the native `RunnableDevEnv
 
 ### The bootstrap() Function
 
-The `bootstrap()` function from `@forinda/kickjs-http` handles the entire HMR lifecycle:
+The `bootstrap()` function from `@forinda/kickjs` handles the entire HMR lifecycle:
 
 ```ts
-import { bootstrap } from '@forinda/kickjs-http'
+import { bootstrap } from '@forinda/kickjs'
 import { modules } from './modules'
 
 bootstrap({ modules })

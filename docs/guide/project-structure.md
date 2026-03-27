@@ -19,7 +19,7 @@ kick-js/
     minimal-api/        # Simplest possible app
 ```
 
-Each package is published under the `@forinda/` scope. Applications import from `@forinda/kickjs-core` and `@forinda/kickjs-http`.
+Each package is published under the `@forinda/` scope. Applications import from `@forinda/kickjs` and `@forinda/kickjs`.
 
 ## Application Layout
 
@@ -104,7 +104,7 @@ Modules are composed in the entry point via the `modules` array:
 
 ```ts
 // src/modules/index.ts
-import type { AppModuleClass } from '@forinda/kickjs-core'
+import type { AppModuleClass } from '@forinda/kickjs'
 import { TodoModule } from './todos'
 import { OrderModule } from './orders'
 
@@ -113,7 +113,7 @@ export const modules: AppModuleClass[] = [TodoModule, OrderModule]
 
 ```ts
 // src/index.ts
-import { bootstrap } from '@forinda/kickjs-http'
+import { bootstrap } from '@forinda/kickjs'
 import { modules } from './modules'
 
 bootstrap({ modules, apiPrefix: '/api', defaultVersion: 1 })

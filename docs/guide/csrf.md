@@ -16,7 +16,7 @@ The CSRF middleware requires a cookie parser to be registered before it:
 
 ```ts
 import cookieParser from 'cookie-parser'
-import { csrf } from '@forinda/kickjs-http'
+import { csrf } from '@forinda/kickjs'
 
 bootstrap({
   modules,
