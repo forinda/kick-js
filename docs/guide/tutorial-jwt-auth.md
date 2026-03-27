@@ -77,10 +77,9 @@ The `AuthAdapter` with `defaultPolicy: 'protected'` validates JWTs globally and 
 Instead of relying on the adapter's policy system, I built a simple bridge middleware that reads the user the `AuthAdapter` stored on `req` and makes it available through the context API:
 
 ```typescript
-import type { MiddlewareHandler } from '@forinda/kickjs';
-import type { RequestContext } from '@forinda/kickjs';
+import type { MiddlewareHandler, RequestContext } from '@forinda/kickjs';
 
-export const authBridgeMiddleware: MiddlewareHandler = (ctx: RequestContext, next) => {
+export const authBridgeMiddleware: MiddlewareHandler<RequestContext> = (ctx, next) => {
   const user = (ctx.req as any).user;
   if (user) {
     ctx.set('user', user);
