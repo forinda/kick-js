@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "description": "A production-grade, decorator-driven Node.js framework built on Express 5 and TypeScript. This is the umbrella package — install individual @forinda/kickjs-* packages for the framework.",
   "keywords": [
     "kickjs",
