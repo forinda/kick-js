@@ -1,4 +1,4 @@
-import { Service } from '@forinda/kickjs-core'
+import { Service } from '@forinda/kickjs'
 import type { z } from 'zod'
 import { loadEnv, reloadEnv } from './env'
 

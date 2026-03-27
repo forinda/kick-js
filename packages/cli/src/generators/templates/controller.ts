@@ -3,8 +3,8 @@ import type { TemplateContext } from './types'
 /** DDD controller — injects use-cases, nested import paths */
 export function generateController(ctx: TemplateContext): string {
   const { pascal, kebab, plural = '', pluralPascal = '' } = ctx
-  return `import { Controller, Get, Post, Put, Delete, Autowired, ApiQueryParams } from '@forinda/kickjs-core'
-import type { RequestContext } from '@forinda/kickjs-http'
+  return `import { Controller, Get, Post, Put, Delete, Autowired, ApiQueryParams } from '@forinda/kickjs'
+import type { RequestContext } from '@forinda/kickjs'
 import { ApiTags } from '@forinda/kickjs-swagger'
 import { Create${pascal}UseCase } from '../application/use-cases/create-${kebab}.use-case'
 import { Get${pascal}UseCase } from '../application/use-cases/get-${kebab}.use-case'
@@ -69,8 +69,8 @@ export class ${pascal}Controller {
 export function generateRestController(ctx: TemplateContext): string {
   const { pascal, kebab, plural = '', pluralPascal = '' } = ctx
   const camel = pascal.charAt(0).toLowerCase() + pascal.slice(1)
-  return `import { Controller, Get, Post, Put, Delete, Autowired, ApiQueryParams } from '@forinda/kickjs-core'
-import type { RequestContext } from '@forinda/kickjs-http'
+  return `import { Controller, Get, Post, Put, Delete, Autowired, ApiQueryParams } from '@forinda/kickjs'
+import type { RequestContext } from '@forinda/kickjs'
 import { ApiTags } from '@forinda/kickjs-swagger'
 import { ${pascal}Service } from './${kebab}.service'
 import { create${pascal}Schema } from './dtos/create-${kebab}.dto'

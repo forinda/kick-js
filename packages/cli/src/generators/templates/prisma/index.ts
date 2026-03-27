@@ -21,9 +21,9 @@ export function generatePrismaRepository(ctx: TemplateContext): string {
  *
  * @Repository() registers this class in the DI container as a singleton.
  */
-import { Repository, HttpException, Inject } from '@forinda/kickjs-core'
+import { Repository, HttpException, Inject } from '@forinda/kickjs'
 import { PRISMA_CLIENT, type PrismaModelDelegate } from '@forinda/kickjs-prisma'
-import type { ParsedQuery } from '@forinda/kickjs-http'
+import type { ParsedQuery } from '@forinda/kickjs'
 import type { I${pascal}Repository } from '${repoPrefix}/${kebab}.repository'
 import type { ${pascal}ResponseDTO } from '${dtoPrefix}/${kebab}-response.dto'
 import type { Create${pascal}DTO } from '${dtoPrefix}/create-${kebab}.dto'

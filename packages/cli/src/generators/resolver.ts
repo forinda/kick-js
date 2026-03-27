@@ -22,7 +22,7 @@ export async function generateResolver(options: GenerateResolverOptions): Promis
 
   await write(
     `${kebab}.resolver.ts`,
-    `import { Service } from '@forinda/kickjs-core'
+    `import { Service } from '@forinda/kickjs'
 import { Resolver, Query, Mutation, Arg } from '@forinda/kickjs-graphql'
 
 /**

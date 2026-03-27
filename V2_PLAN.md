@@ -55,8 +55,8 @@ import { Controller, Get, Service, bootstrap, RequestContext, loadEnv } from '@f
 - [x] Verify 38/38 exports resolve at runtime (Node ESM)
 - [x] Verify in fresh external project (14/14 exports via `file:` protocol)
 - [x] Verify all sub-path imports work (container, logger, errors, reactivity, middleware, query)
-- [ ] Publish alpha: `pnpm release:alpha` from dev
-- [ ] Test alpha install from npm in external projects
+- [x] Publish alpha: `1.7.1-alpha.0` published to npm with `alpha` tag
+- [x] Test alpha install: 18/18 exports resolve from `pnpm add @forinda/kickjs@alpha`
 
 ## Phase 4: Migrate Consumers (only after Phase 3 is proven)
 - [ ] Update all 16 adapter/plugin packages to import from `@forinda/kickjs`

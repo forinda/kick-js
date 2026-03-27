@@ -1,4 +1,4 @@
-import type { QueryBuilderAdapter, ParsedQuery, FilterItem, SortItem } from '@forinda/kickjs-http'
+import type { QueryBuilderAdapter, ParsedQuery, FilterItem, SortItem } from '@forinda/kickjs'
 
 /**
  * Configuration for the Drizzle query builder adapter.

@@ -13,7 +13,7 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      '@forinda/kickjs-core': path.resolve(__dirname, '../core/src/index.ts'),
+      '@forinda/kickjs': path.resolve(__dirname, '../core/src/index.ts'),
       '@forinda/kickjs-notifications': path.resolve(__dirname, 'src/index.ts'),
     },
   },

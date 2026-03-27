@@ -4,7 +4,7 @@ import {
   type AdapterContext,
   type AdapterMiddleware,
   Scope,
-} from '@forinda/kickjs-core'
+} from '@forinda/kickjs'
 import type { Request, Response, NextFunction } from 'express'
 import {
   TENANT_CONTEXT,

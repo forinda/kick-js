@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import 'reflect-metadata'
 import { AuthAdapter, ApiKeyStrategy, Public, type AuthStrategy } from '@forinda/kickjs-auth'
-import { Controller, Get, Post } from '@forinda/kickjs-core'
+import { Controller, Get, Post } from '@forinda/kickjs'
 
 describe('AuthAdapter', () => {
   it('creates adapter with strategies', () => {
