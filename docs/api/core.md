@@ -140,13 +140,21 @@ interface ModuleRoutes {
 Lifecycle hooks for plugging in cross-cutting concerns (database, docs, rate limiting).
 
 ```typescript
+interface AdapterContext {
+  app: any              // Express application
+  container: Container  // DI container
+  server?: any          // http.Server (only available in afterStart)
+  env: string           // NODE_ENV (default: 'development')
+  isProduction: boolean // true when NODE_ENV === 'production'
+}
+
 interface AppAdapter {
   name?: string
   middleware?(): AdapterMiddleware[]
-  beforeMount?(app: any, container: Container): void
+  beforeMount?(ctx: AdapterContext): void
   onRouteMount?(controllerClass: any, mountPath: string): void
-  beforeStart?(app: any, container: Container): void
-  afterStart?(server: any, container: Container): void
+  beforeStart?(ctx: AdapterContext): void
+  afterStart?(ctx: AdapterContext): void
   shutdown?(): void | Promise<void>
 }
 

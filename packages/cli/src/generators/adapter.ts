@@ -16,8 +16,7 @@ export async function generateAdapter(options: GenerateAdapterOptions): Promise<
   const filePath = join(outDir, `${kebab}.adapter.ts`)
   await writeFileSafe(
     filePath,
-    `import type { Express } from 'express'
-import type { AppAdapter, AdapterMiddleware, Container } from '@forinda/kickjs-core'
+    `import type { AppAdapter, AdapterContext, AdapterMiddleware } from '@forinda/kickjs-core'
 
 export interface ${pascal}AdapterOptions {
   // Add your adapter configuration here
@@ -68,7 +67,7 @@ export class ${pascal}Adapter implements AppAdapter {
    * Use this to mount routes that bypass the middleware stack
    * (health checks, docs UI, static assets).
    */
-  beforeMount(app: Express, container: Container): void {
+  beforeMount({ app }: AdapterContext): void {
     // Example: mount a status route
     // app.get('/${kebab}/status', (_req, res) => {
     //   res.json({ status: 'ok' })
@@ -79,7 +78,7 @@ export class ${pascal}Adapter implements AppAdapter {
    * Called after modules and routes are registered, before the server starts.
    * Use this for late-stage DI registrations or config validation.
    */
-  beforeStart(app: Express, container: Container): void {
+  beforeStart({ container }: AdapterContext): void {
     // Example: register a service in the DI container
     // container.registerInstance(MY_TOKEN, new MyService(this.options))
   }
@@ -88,7 +87,7 @@ export class ${pascal}Adapter implements AppAdapter {
    * Called after the HTTP server is listening.
    * Use this to attach to the raw http.Server (Socket.IO, gRPC, etc).
    */
-  afterStart(server: any, container: Container): void {
+  afterStart({ server, container }: AdapterContext): void {
     // Example: attach Socket.IO
     // const io = new Server(server)
     // container.registerInstance(SOCKET_IO, io)

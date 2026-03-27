@@ -1,6 +1,5 @@
 import { Router } from 'express'
-import type { Express } from 'express'
-import { Logger, type AppAdapter, type Container } from '@forinda/kickjs-core'
+import { Logger, type AppAdapter, type AdapterContext } from '@forinda/kickjs-core'
 import {
   buildOpenAPISpec,
   registerControllerForDocs,
@@ -48,7 +47,7 @@ export class SwaggerAdapter implements AppAdapter {
   constructor(private options: SwaggerAdapterOptions = {}) {}
 
   /** Auto-detect server URLs from the running HTTP server and peer adapters */
-  afterStart(server: any, _container: Container): void {
+  afterStart({ server }: AdapterContext): void {
     const addr = server?.address?.()
     if (!addr || typeof addr !== 'object') return
 
@@ -79,7 +78,7 @@ export class SwaggerAdapter implements AppAdapter {
     registerControllerForDocs(controllerClass, mountPath)
   }
 
-  beforeMount(app: Express, _container: Container): void {
+  beforeMount({ app }: AdapterContext): void {
     // Clear previous registrations (supports HMR rebuild)
     clearRegisteredRoutes()
     const docsPath = this.options.docsPath ?? '/docs'

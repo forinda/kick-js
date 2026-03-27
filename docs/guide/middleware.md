@@ -7,17 +7,17 @@ KickJS provides middleware at three levels: global (applied to all requests), cl
 All KickJS middleware follows the same signature:
 
 ```ts
-type MiddlewareHandler = (ctx: any, next: () => void) => void | Promise<void>
+type MiddlewareHandler<TCtx = any> = (ctx: TCtx, next: () => void) => void | Promise<void>
 ```
 
-The `ctx` parameter is a `RequestContext` instance. Call `next()` to pass control to the next handler in the chain.
+The generic `TCtx` defaults to `any`. For full type safety, pass `RequestContext`:
 
 ```ts
 import type { MiddlewareHandler } from '@forinda/kickjs-core'
 import type { RequestContext } from '@forinda/kickjs-http'
 
-const authMiddleware: MiddlewareHandler = async (ctx: RequestContext, next) => {
-  const token = ctx.headers['authorization']
+const authMiddleware: MiddlewareHandler<RequestContext> = async (ctx, next) => {
+  const token = ctx.headers['authorization']  // fully typed
   if (!token) return ctx.badRequest('Missing authorization header')
 
   ctx.set('user', { id: 'user-123' })

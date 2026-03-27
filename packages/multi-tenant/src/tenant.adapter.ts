@@ -1,8 +1,8 @@
 import {
   Logger,
   type AppAdapter,
+  type AdapterContext,
   type AdapterMiddleware,
-  type Container,
   Scope,
 } from '@forinda/kickjs-core'
 import type { Request, Response, NextFunction } from 'express'
@@ -97,7 +97,7 @@ export class TenantAdapter implements AppAdapter {
     ]
   }
 
-  beforeStart(_app: any, container: Container): void {
+  beforeStart({ container }: AdapterContext): void {
     // Register a factory that reads the tenant from the current request context
     // This requires request-scoped resolution — for now, register as a placeholder
     container.registerFactory(

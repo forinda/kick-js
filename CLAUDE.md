@@ -92,7 +92,7 @@ docs/                   # VitePress documentation site
 
 Implement `AppAdapter` from `@forinda/kickjs-core/adapter`:
 - `name: string`
-- `beforeMount?(app, container)`, `beforeStart?(app, container)`, `afterStart?(app, container)`
+- `beforeMount?({ app }: AdapterContext)`, `beforeStart?({ container }: AdapterContext)`, `afterStart?({ server }: AdapterContext)`
 - `shutdown?(): Promise<void>`
 - `middleware?(): AdapterMiddleware[]`
 

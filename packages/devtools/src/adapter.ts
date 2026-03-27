@@ -6,6 +6,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { randomBytes } from 'node:crypto'
 import {
   type AppAdapter,
+  type AdapterContext,
   type AdapterMiddleware,
   type Container,
   METADATA,
@@ -193,7 +194,7 @@ export class DevToolsAdapter implements AppAdapter {
     return this.peerAdapters
   }
 
-  beforeMount(app: any, container: Container): void {
+  beforeMount({ app, container }: AdapterContext): void {
     if (!this.enabled) return
 
     this.appRef = app
@@ -418,7 +419,7 @@ export class DevToolsAdapter implements AppAdapter {
     }
   }
 
-  afterStart(_server: any, _container: Container): void {
+  afterStart({}: AdapterContext): void {
     if (!this.enabled) return
     log.info(
       `DevTools ready — ${this.routes.length} routes tracked, ` +

@@ -60,7 +60,7 @@ export default defineConfig({
 
 Implements `AppAdapter` to manage the Prisma lifecycle:
 
-- **`beforeStart(app, container)`** — registers the `PrismaClient` in the DI container under the `PRISMA_CLIENT` symbol. Sets up query logging if enabled.
+- **`beforeStart({ container }: AdapterContext)`** — registers the `PrismaClient` in the DI container under the `PRISMA_CLIENT` symbol. Sets up query logging if enabled.
 - **`shutdown()`** — calls `prisma.$disconnect()`
 
 ### Options

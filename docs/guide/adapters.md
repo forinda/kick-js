@@ -7,16 +7,30 @@ Adapters plug into the KickJS application lifecycle. Use them to add health chec
 Every adapter implements part (or all) of the `AppAdapter` interface from `@forinda/kickjs-core`:
 
 ```ts
+import type { AppAdapter, AdapterContext } from '@forinda/kickjs-core'
+
+// AdapterContext — populated by the framework, passed to all hooks
+interface AdapterContext {
+  app: any              // Express application instance
+  container: Container  // DI container
+  server?: any          // http.Server (only in afterStart)
+  env: string           // NODE_ENV (default: 'development')
+  isProduction: boolean // true when NODE_ENV === 'production'
+}
+
+// AppAdapter — implement the hooks you need
 interface AppAdapter {
   name?: string
   middleware?(): AdapterMiddleware[]
-  beforeMount?(app: Express, container: Container): void
+  beforeMount?(ctx: AdapterContext): void | Promise<void>
   onRouteMount?(controllerClass: any, mountPath: string): void
-  beforeStart?(app: Express, container: Container): void
-  afterStart?(server: http.Server, container: Container): void
+  beforeStart?(ctx: AdapterContext): void | Promise<void>
+  afterStart?(ctx: AdapterContext): void | Promise<void>
   shutdown?(): void | Promise<void>
 }
 ```
+
+All hooks receive an `AdapterContext` — no need to import Express or http types. Destructure only what you need.
 
 All methods are optional. Implement only what you need.
 
@@ -64,13 +78,12 @@ After setup, when the HTTP server starts listening, `afterStart` is called. On s
 Register routes that bypass the global middleware stack:
 
 ```ts
-import type { Express } from 'express'
-import type { AppAdapter, AdapterMiddleware, Container } from '@forinda/kickjs-core'
+import type { AppAdapter, AdapterContext } from '@forinda/kickjs-core'
 
 export class HealthAdapter implements AppAdapter {
   name = 'HealthAdapter'
 
-  beforeMount(app: Express, _container: Container): void {
+  beforeMount({ app }: AdapterContext): void {
     app.get('/health', (_req, res) => {
       res.json({
         status: 'ok',
@@ -118,7 +131,7 @@ export class RateLimitAdapter implements AppAdapter {
 Connect on start, clean up on shutdown:
 
 ```ts
-import type { AppAdapter, Container } from '@forinda/kickjs-core'
+import type { AppAdapter, AdapterContext } from '@forinda/kickjs-core'
 import { createClient } from 'redis'
 
 const REDIS = Symbol('Redis')
@@ -127,7 +140,7 @@ export class RedisAdapter implements AppAdapter {
   name = 'RedisAdapter'
   private client = createClient()
 
-  async beforeStart(_app: any, container: Container): Promise<void> {
+  async beforeStart({ container }: AdapterContext): Promise<void> {
     await this.client.connect()
     container.registerInstance(REDIS, this.client)
   }

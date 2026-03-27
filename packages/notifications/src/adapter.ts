@@ -1,4 +1,4 @@
-import { Logger, type AppAdapter, type Container } from '@forinda/kickjs-core'
+import { Logger, type AppAdapter, type AdapterContext } from '@forinda/kickjs-core'
 import { NotificationService, NOTIFICATIONS } from './service'
 import type { NotificationServiceOptions } from './types'
 
@@ -32,7 +32,7 @@ export class NotificationAdapter implements AppAdapter {
     this.service = new NotificationService(options)
   }
 
-  afterStart(_server: any, container: Container): void {
+  afterStart({ container }: AdapterContext): void {
     container.registerInstance(NOTIFICATIONS, this.service)
     log.info(`Channels: ${this.service.getChannelNames().join(', ')}`)
   }

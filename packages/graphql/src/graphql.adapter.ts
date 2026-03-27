@@ -1,4 +1,4 @@
-import { Logger, type AppAdapter, type Container } from '@forinda/kickjs-core'
+import { Logger, type AppAdapter, type AdapterContext, type Container } from '@forinda/kickjs-core'
 import type { Request, Response } from 'express'
 import express from 'express'
 import {
@@ -62,7 +62,7 @@ export class GraphQLAdapter implements AppAdapter {
     }
   }
 
-  beforeMount(app: any, container: Container): void {
+  beforeMount({ app, container }: AdapterContext): void {
     this.container = container
 
     // Register resolver classes in DI

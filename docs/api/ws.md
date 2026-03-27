@@ -108,13 +108,13 @@ The built-in WS package uses the lightweight `ws` library. If you prefer Socket.
 
 ```ts
 import { Server } from 'socket.io'
-import type { AppAdapter, Container } from '@forinda/kickjs-core'
+import type { AppAdapter, AdapterContext } from '@forinda/kickjs-core'
 
 export class SocketIOAdapter implements AppAdapter {
   readonly name = 'SocketIOAdapter'
   private io!: Server
 
-  afterStart(server: any) {
+  afterStart({ server }: AdapterContext) {
     this.io = new Server(server, {
       cors: { origin: '*' },
     })
