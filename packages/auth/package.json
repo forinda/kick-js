@@ -1,7 +1,7 @@
 {
   "name": "@forinda/kickjs-auth",
   "version": "1.7.0",
-  "description": "Pluggable authentication for KickJS — JWT, API key, and custom strategies",
+  "description": "Pluggable authentication for KickJS \u2014 JWT, API key, and custom strategies",
   "keywords": [
     "kickjs",
     "nodejs",
@@ -61,7 +61,7 @@
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
-    "@forinda/kickjs-core": "workspace:*",
+    "@forinda/kickjs": "workspace:*",
     "reflect-metadata": "^0.2.2"
   },
   "peerDependencies": {

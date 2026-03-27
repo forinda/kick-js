@@ -1,4 +1,4 @@
-import { Logger, type AppAdapter, type AdapterContext, type Container } from '@forinda/kickjs-core'
+import { Logger, type AppAdapter, type AdapterContext, type Container } from '@forinda/kickjs'
 import type { Request, Response } from 'express'
 import express from 'express'
 import {
@@ -86,7 +86,7 @@ export class GraphQLAdapter implements AppAdapter {
 
     const jsonParser = express.json()
 
-    app.post(this.options.path, jsonParser, async (req: Request, res: Response) => {
+    app.post(this.options.path!, jsonParser, async (req: Request, res: Response) => {
       const { query, variables, operationName } = req.body ?? {}
       if (!query) {
         res.status(400).json({ errors: [{ message: 'Query is required' }] })
@@ -109,7 +109,7 @@ export class GraphQLAdapter implements AppAdapter {
     })
 
     // GET for playground/introspection
-    app.get(this.options.path, (_req: Request, res: Response) => {
+    app.get(this.options.path!, (_req: Request, res: Response) => {
       if (this.options.playground) {
         res.type('html').send(this.renderPlayground())
       } else {

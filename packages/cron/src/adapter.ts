@@ -4,7 +4,7 @@ import {
   type AdapterContext,
   getCronJobs,
   type CronJobMeta,
-} from '@forinda/kickjs-core'
+} from '@forinda/kickjs'
 
 import { type CronScheduler, CronerScheduler, IntervalScheduler } from './scheduler'
 

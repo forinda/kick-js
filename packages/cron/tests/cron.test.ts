@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import 'reflect-metadata'
-import { Cron, getCronJobs, Container, Scope } from '@forinda/kickjs-core'
+import { Cron, getCronJobs, Container, Scope } from '@forinda/kickjs'
 import { CronAdapter, IntervalScheduler, type CronScheduler } from '@forinda/kickjs-cron'
 
 // ── @Cron Decorator ─────────────────────────────────────────────────────

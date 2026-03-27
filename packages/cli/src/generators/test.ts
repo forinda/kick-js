@@ -32,7 +32,7 @@ export async function generateTest(options: GenerateTestOptions): Promise<string
   await writeFileSafe(
     filePath,
     `import { describe, it, expect, beforeEach } from 'vitest'
-import { Container } from '@forinda/kickjs-core'
+import { Container } from '@forinda/kickjs'
 
 describe('${pascal}', () => {
   beforeEach(() => {
