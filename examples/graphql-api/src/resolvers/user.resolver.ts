@@ -1,4 +1,4 @@
-import { Service } from '@forinda/kickjs-core'
+import { Service } from '@forinda/kickjs'
 import { Resolver, Query, Mutation, Arg } from '@forinda/kickjs-graphql'
 
 interface User {

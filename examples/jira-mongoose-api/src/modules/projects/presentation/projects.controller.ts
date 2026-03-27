@@ -1,5 +1,5 @@
-import { Controller, Get, Post, Patch, Delete, Middleware, Autowired, ApiQueryParams } from '@forinda/kickjs-core';
-import type { RequestContext } from '@forinda/kickjs-http';
+import { Controller, Get, Post, Patch, Delete, Middleware, Autowired, ApiQueryParams } from '@forinda/kickjs';
+import type { RequestContext } from '@forinda/kickjs';
 import { z } from 'zod';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@forinda/kickjs-swagger';
 import { createProjectSchema } from '../application/dtos/create-project.dto';

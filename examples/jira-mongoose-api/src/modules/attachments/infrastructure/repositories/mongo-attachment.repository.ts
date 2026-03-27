@@ -1,4 +1,4 @@
-import { Repository } from '@forinda/kickjs-core';
+import { Repository } from '@forinda/kickjs';
 import type { IAttachmentRepository } from '../../domain/repositories/attachment.repository';
 import type { AttachmentEntity } from '../../domain/entities/attachment.entity';
 import { AttachmentModel } from '../schemas/attachment.schema';

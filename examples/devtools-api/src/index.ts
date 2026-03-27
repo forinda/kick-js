@@ -1,10 +1,10 @@
 import 'reflect-metadata'
 import express from 'express'
-import { bootstrap, requestId } from '@forinda/kickjs-http'
+import { bootstrap, requestId } from '@forinda/kickjs'
 import { DevToolsAdapter } from '@forinda/kickjs-devtools'
 import { SwaggerAdapter } from '@forinda/kickjs-swagger'
-import { ref, computed, watch } from '@forinda/kickjs-core'
-import { createLogger } from '@forinda/kickjs-core/logger'
+import { ref, computed, watch } from '@forinda/kickjs'
+import { createLogger } from '@forinda/kickjs/logger'
 import { modules } from './modules'
 
 const log = createLogger('DevToolsExample')

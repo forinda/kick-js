@@ -1,7 +1,7 @@
-import { Repository, Inject, HttpException } from '@forinda/kickjs-core'
+import { Repository, Inject, HttpException } from '@forinda/kickjs'
 import { PRISMA_CLIENT } from '@forinda/kickjs-prisma'
 import type { PrismaClient, Workspace } from '@/generated/prisma/client'
-import type { ParsedQuery } from '@forinda/kickjs-http'
+import type { ParsedQuery } from '@forinda/kickjs'
 import type { IWorkspaceRepository } from '../../domain/repositories/workspace.repository'
 
 import { queryAdapter } from '@/shared/infrastructure/query-adapter'

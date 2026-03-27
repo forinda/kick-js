@@ -8,8 +8,8 @@
  * @Repository() registers this class in the DI container as a singleton.
  */
 import { randomUUID } from 'node:crypto'
-import { Repository, HttpException } from '@forinda/kickjs-core'
-import type { ParsedQuery } from '@forinda/kickjs-http'
+import { Repository, HttpException } from '@forinda/kickjs'
+import type { ParsedQuery } from '@forinda/kickjs'
 import type { ITaskRepository } from '../../domain/repositories/task.repository'
 import type { TaskResponseDTO } from '../../application/dtos/task-response.dto'
 import type { CreateTaskDTO } from '../../application/dtos/create-task.dto'

@@ -16,11 +16,10 @@
   },
   "dependencies": {
     "@forinda/kickjs-config": "workspace:*",
-    "@forinda/kickjs-core": "workspace:*",
+    "@forinda/kickjs": "workspace:*",
     "@forinda/kickjs-cron": "workspace:*",
     "@forinda/kickjs-devtools": "workspace:*",
     "@forinda/kickjs-drizzle": "workspace:*",
-    "@forinda/kickjs-http": "workspace:*",
     "@forinda/kickjs-mailer": "workspace:*",
     "@forinda/kickjs-queue": "workspace:*",
     "@forinda/kickjs-swagger": "workspace:*",

@@ -1,4 +1,4 @@
-import { Repository, Inject } from '@forinda/kickjs-core'
+import { Repository, Inject } from '@forinda/kickjs'
 import { PRISMA_CLIENT } from '@forinda/kickjs-prisma'
 import type { PrismaClient, User, WorkspaceMember } from '@/generated/prisma/client'
 import type {

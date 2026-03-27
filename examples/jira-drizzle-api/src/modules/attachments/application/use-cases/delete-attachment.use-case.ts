@@ -1,4 +1,4 @@
-import { Service, Inject } from '@forinda/kickjs-core'
+import { Service, Inject } from '@forinda/kickjs'
 import { DRIZZLE_DB } from '@forinda/kickjs-drizzle'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import { eq, sql } from 'drizzle-orm'

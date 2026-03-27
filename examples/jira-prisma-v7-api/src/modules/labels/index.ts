@@ -1,5 +1,5 @@
-import { Container, type AppModule, type ModuleRoutes } from '@forinda/kickjs-core'
-import { buildRoutes } from '@forinda/kickjs-http'
+import { Container, type AppModule, type ModuleRoutes } from '@forinda/kickjs'
+import { buildRoutes } from '@forinda/kickjs'
 import { LABEL_REPOSITORY } from './domain/repositories/label.repository'
 import { TASK_LABEL_REPOSITORY } from './domain/repositories/task-label.repository'
 import { PrismaLabelRepository } from './infrastructure/repositories/prisma-label.repository'

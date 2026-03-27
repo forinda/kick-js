@@ -1,4 +1,4 @@
-import type { QueryParamsConfig } from '@forinda/kickjs-core'
+import type { QueryParamsConfig } from '@forinda/kickjs'
 
 export const NOTIFICATION_QUERY_CONFIG: QueryParamsConfig = {
   filterable: ['recipientId', 'type', 'isRead'],

@@ -1,4 +1,4 @@
-import { Repository } from '@forinda/kickjs-core';
+import { Repository } from '@forinda/kickjs';
 import type { IRefreshTokenRepository } from '../../domain/repositories/refresh-token.repository';
 import { RefreshTokenModel } from '../schemas/refresh-token.schema';
 

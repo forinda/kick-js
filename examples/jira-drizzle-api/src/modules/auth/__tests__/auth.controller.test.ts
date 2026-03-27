@@ -10,10 +10,10 @@ import {
   Inject,
   Middleware,
   HttpException,
-} from '@forinda/kickjs-core'
-import type { MiddlewareHandler } from '@forinda/kickjs-core'
-import type { RequestContext } from '@forinda/kickjs-http'
-import { buildRoutes } from '@forinda/kickjs-http'
+} from '@forinda/kickjs'
+import type { MiddlewareHandler } from '@forinda/kickjs'
+import type { RequestContext } from '@forinda/kickjs'
+import { buildRoutes } from '@forinda/kickjs'
 import { createTestApp, createTestModule } from '@forinda/kickjs-testing'
 import {
   USER_REPOSITORY,

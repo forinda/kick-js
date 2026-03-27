@@ -1,4 +1,4 @@
-import { Service, Inject } from '@forinda/kickjs-core'
+import { Service, Inject } from '@forinda/kickjs'
 import {
   ATTACHMENT_REPOSITORY,
   type IAttachmentRepository,

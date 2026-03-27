@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { bootstrap } from '@forinda/kickjs-http';
+import { bootstrap } from '@forinda/kickjs';
 import { modules } from './modules';
 import { adapters } from './config/adapters';
 import { middleware } from './config/middleware';

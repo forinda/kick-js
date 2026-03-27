@@ -1,4 +1,4 @@
-import { Repository } from '@forinda/kickjs-core';
+import { Repository } from '@forinda/kickjs';
 import type { IProjectRepository } from '../../domain/repositories/project.repository';
 import type { ProjectEntity } from '../../domain/entities/project.entity';
 import { ProjectModel } from '../schemas/project.schema';

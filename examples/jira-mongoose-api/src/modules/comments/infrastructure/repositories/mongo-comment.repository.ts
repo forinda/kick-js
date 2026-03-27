@@ -1,4 +1,4 @@
-import { Repository } from '@forinda/kickjs-core';
+import { Repository } from '@forinda/kickjs';
 import type { ICommentRepository } from '../../domain/repositories/comment.repository';
 import type { CommentEntity } from '../../domain/entities/comment.entity';
 import { CommentModel } from '../schemas/comment.schema';

@@ -1,4 +1,4 @@
-import { Service } from '@forinda/kickjs-core'
+import { Service } from '@forinda/kickjs'
 
 // Attachments are immutable — no update use case needed
 @Service()

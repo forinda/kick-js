@@ -1,8 +1,8 @@
 import 'reflect-metadata'
-import { Controller, Get } from '@forinda/kickjs-core'
-import { bootstrap, RequestContext } from '@forinda/kickjs-http'
-import { buildRoutes } from '@forinda/kickjs-http'
-import type { AppModule, Container, ModuleRoutes } from '@forinda/kickjs-core'
+import { Controller, Get } from '@forinda/kickjs'
+import { bootstrap, RequestContext } from '@forinda/kickjs'
+import { buildRoutes } from '@forinda/kickjs'
+import type { AppModule, Container, ModuleRoutes } from '@forinda/kickjs'
 
 @Controller()
 class HelloController {

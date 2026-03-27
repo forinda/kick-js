@@ -5,7 +5,7 @@
  * The built-in validate() uses Zod's .safeParse() — this uses Joi's .validate().
  */
 import type Joi from 'joi'
-import type { MiddlewareHandler } from '@forinda/kickjs-core'
+import type { MiddlewareHandler } from '@forinda/kickjs'
 
 interface JoiValidationSchema {
   body?: Joi.Schema

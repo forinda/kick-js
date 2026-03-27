@@ -1,4 +1,4 @@
-import type { ParsedQuery } from '@forinda/kickjs-http'
+import type { ParsedQuery } from '@forinda/kickjs'
 import type { Channel, ChannelMember } from '@/generated/prisma/client'
 
 export type { Channel, ChannelMember }

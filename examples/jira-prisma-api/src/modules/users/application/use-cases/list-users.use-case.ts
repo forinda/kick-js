@@ -1,6 +1,6 @@
-import { Service, Inject } from '@forinda/kickjs-core'
+import { Service, Inject } from '@forinda/kickjs'
 import { USER_REPOSITORY, type IUserRepository } from '../../domain/repositories/user.repository'
-import type { ParsedQuery } from '@forinda/kickjs-http'
+import type { ParsedQuery } from '@forinda/kickjs'
 
 @Service()
 export class ListUsersUseCase {

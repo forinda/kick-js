@@ -1,7 +1,7 @@
 import 'reflect-metadata'
 import { describe, it, expect, beforeEach } from 'vitest'
 import request from 'supertest'
-import { Container } from '@forinda/kickjs-core'
+import { Container } from '@forinda/kickjs'
 import { createTestApp } from '@forinda/kickjs-testing'
 import { ProductsModule } from './modules/products'
 

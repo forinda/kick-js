@@ -2,7 +2,7 @@
 import './tracing'
 
 import 'reflect-metadata'
-import { bootstrap } from '@forinda/kickjs-http'
+import { bootstrap } from '@forinda/kickjs'
 import { DevToolsAdapter } from '@forinda/kickjs-devtools'
 import { SwaggerAdapter } from '@forinda/kickjs-swagger'
 import { OtelAdapter } from '@forinda/kickjs-otel'

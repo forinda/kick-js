@@ -1,5 +1,5 @@
-import { Controller, Get, Middleware, Autowired } from '@forinda/kickjs-core';
-import type { RequestContext } from '@forinda/kickjs-http';
+import { Controller, Get, Middleware, Autowired } from '@forinda/kickjs';
+import type { RequestContext } from '@forinda/kickjs';
 import { z } from 'zod';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@forinda/kickjs-swagger';
 import { workspaceMembershipGuard } from '@/shared/guards/workspace-membership.guard';

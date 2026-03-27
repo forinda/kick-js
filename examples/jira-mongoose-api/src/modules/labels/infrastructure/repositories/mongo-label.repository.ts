@@ -1,4 +1,4 @@
-import { Repository } from '@forinda/kickjs-core';
+import { Repository } from '@forinda/kickjs';
 import type { ILabelRepository } from '../../domain/repositories/label.repository';
 import type { LabelEntity } from '../../domain/entities/label.entity';
 import { LabelModel } from '../schemas/label.schema';
