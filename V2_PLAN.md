@@ -24,104 +24,95 @@ import { Controller, Get, Service, bootstrap, RequestContext, loadEnv } from '@f
 
 ---
 
-## Migration Steps
+## Strategy: Build the Base First
 
-### Phase 1: Source Merge
+**Do NOT touch existing packages until the unified package is proven stable.**
+
+1. Build `@forinda/kickjs` as a standalone package with its own source
+2. All existing packages (`core`, `http`, adapters, examples) stay exactly as-is
+3. Test the unified package independently
+4. Only after it's stable: migrate consumers and create deprecated shims
+
+---
+
+## Phase 1: Source Merge ✅
 - [x] Copy `packages/core/src/*` into `packages/kickjs/src/core/`
 - [x] Copy `packages/http/src/*` into `packages/kickjs/src/http/`
 - [x] Create unified `packages/kickjs/src/index.ts` barrel exporting everything
 - [x] Add `packages/kickjs/vite.config.ts` with all entry points (34 modules)
 - [x] Add `packages/kickjs/tsconfig.build.json`
-- [x] Update `packages/kickjs/package.json` with sub-path exports, own deps (express, pino, etc.)
-- [x] Remove old root `index.js` and `index.d.ts`
+- [x] Update `packages/kickjs/package.json` with sub-path exports, own deps
 - [x] Fix internal imports (`@forinda/kickjs-core` → `../core` / `../../core`)
+- [x] Clean stale build artifacts from `src/`
 
-### Phase 2: Type Fixes (the whole point)
+## Phase 2: Type Fixes ✅ (the whole point)
 - [x] Type `AdapterContext.app` as `Express` (no more `any`)
 - [x] Type `AdapterContext.server` as `http.Server` (no more `any`)
 - [x] Type `MiddlewareHandler` with `RequestContext` by default (no generic needed)
-- [ ] Type `onRouteMount` controllerClass as `Constructor` (already done in v1.7 adapter.ts)
 
-### Phase 3: Deprecated Shims
-- [ ] Turn `packages/core/src/index.ts` into: `export * from '@forinda/kickjs'` + deprecation warning
-- [ ] Turn `packages/http/src/index.ts` into: `export * from '@forinda/kickjs'` + deprecation warning
-- [ ] Both packages keep their `package.json` names and versions (still published)
-- [ ] Add `@deprecated` JSDoc to shim exports
+## Phase 3: Stabilize the Unified Package
+- [ ] Write tests for the unified package (import resolution, type safety)
+- [ ] Verify `@forinda/kickjs` works in a fresh project (`npx kick new`)
+- [ ] Verify all sub-path exports resolve correctly
+- [ ] Publish alpha: `pnpm release:alpha` from dev
+- [ ] Test alpha install in external projects
 
-### Phase 4: Update Dependents
+## Phase 4: Migrate Consumers (only after Phase 3 is proven)
 - [ ] Update all 16 adapter/plugin packages to import from `@forinda/kickjs`
-  - auth, cron, devtools, drizzle, graphql, mailer, multi-tenant, notifications, otel, prisma, queue, swagger, cli, testing, ws, vscode-extension
-- [x] Update `packages/kickjs/package.json` dependencies (express, pino, multer, cookie-parser, reflect-metadata)
+- [ ] Update all 10 example apps
+- [ ] Update CLI generators + project template
+- [ ] Run full test suite (836+ tests)
 
-### Phase 5: Update Examples
-- [x] Update all 10 example app imports to `@forinda/kickjs`
-- [x] Update all 10 example package.json deps
-- [x] All 25 example build tasks pass
-- [ ] Fix Vitest resolution: workspace packages resolve via source instead of dist, causing "Class extends value undefined" in tests. Options:
-  - Add `resolve.alias` in vitest configs pointing `@forinda/kickjs` to dist
-  - Use `conditions: ['import']` in vitest config
-  - Set `exports.source` field in kickjs package.json
+## Phase 5: Deprecated Shims
+- [ ] Turn `packages/core` into: `export * from '@forinda/kickjs'` + deprecation warning
+- [ ] Turn `packages/http` into: `export * from '@forinda/kickjs'` + deprecation warning
+- [ ] Both still published — existing users get warnings, not errors
 
-### Phase 6: Update CLI
-- [ ] Update `packages/cli/src/generators/` templates to use `@forinda/kickjs`
-- [ ] Update `generateViteConfig()` project template
-- [ ] Update `generateKickConfig()` project template
-
-### Phase 7: Update Docs
+## Phase 6: Update Docs
 - [ ] Update all VitePress guides
 - [ ] Update CLAUDE.md, AGENTS.md, CONTRIBUTING.md, RELEASE.md
 - [ ] Add migration guide (v1.x → v2.0)
-- [ ] Update README.md
 
-### Phase 8: Test & Release
-- [ ] All 19 packages build
-- [ ] All tests pass (836+ tests)
-- [ ] Examples build and tests pass
+## Phase 7: Release v2.0.0
+- [ ] All packages build
+- [ ] All tests pass
 - [ ] Dry-run release
-- [ ] Pre-release on dev: `node scripts/release.js prerelease --tag alpha`
-- [ ] Promote to main: PR dev → main
-- [ ] Release: `node scripts/release.js major` (v2.0.0)
+- [ ] PR dev → main
+- [ ] `node scripts/release.js major` (v2.0.0)
 
 ---
 
-## File Structure (After)
+## File Structure
 
 ```
 packages/kickjs/
   src/
     index.ts              ← unified barrel (core + http exports)
-    container.ts          ← from core
-    decorators.ts         ← from core
-    adapter.ts            ← from core (now with typed Express/http.Server)
-    logger.ts             ← from core
-    errors.ts             ← from core
-    interfaces.ts         ← from core
-    reactivity.ts         ← from core
-    application.ts        ← from http
-    bootstrap.ts          ← from http
-    context.ts            ← from http (RequestContext)
-    router-builder.ts     ← from http
-    middleware/            ← from http
-    query/                ← from http
+    core/
+      container.ts        ← from core
+      decorators.ts       ← from core (MiddlewareHandler typed with RequestContext)
+      adapter.ts          ← from core (AdapterContext typed with Express + http.Server)
+      logger.ts           ← from core
+      errors.ts           ← from core
+      interfaces.ts       ← from core
+      reactivity.ts       ← from core
+      ...
+    http/
+      application.ts      ← from http
+      bootstrap.ts        ← from http
+      context.ts          ← from http (RequestContext)
+      router-builder.ts   ← from http
+      middleware/          ← from http
+      query/              ← from http
   vite.config.ts
   tsconfig.build.json
   package.json
 
-packages/core/              ← DEPRECATED SHIM
-  src/index.ts             → export * from '@forinda/kickjs'
-
-packages/http/              ← DEPRECATED SHIM
-  src/index.ts             → export * from '@forinda/kickjs'
+packages/core/              ← UNCHANGED until Phase 5
+packages/http/              ← UNCHANGED until Phase 5
 ```
 
-## Risks
-- Existing users importing from core/http will get deprecation warnings (not errors)
-- Adapter packages need to update their peer deps
-- CLI-generated projects will use the new import path
-- Bundle size of @forinda/kickjs is larger (includes both core + http)
-
-## Timeline
-- Phase 1-2: Source merge + type fixes (1 session)
-- Phase 3-4: Shims + dependents (1 session)
-- Phase 5-7: Examples + CLI + docs (1 session)
-- Phase 8: Test + release (1 session)
+## Learnings
+- Shims before stabilization causes Vitest workspace resolution issues
+- Build the standalone package first, prove it works, then migrate
+- Don't touch working code until the replacement is proven
