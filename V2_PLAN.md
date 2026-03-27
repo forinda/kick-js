@@ -54,8 +54,13 @@ import { Controller, Get, Service, bootstrap, RequestContext, loadEnv } from '@f
 - [x] Update `packages/kickjs/package.json` dependencies (express, pino, multer, cookie-parser, reflect-metadata)
 
 ### Phase 5: Update Examples
-- [ ] Update all 10 example apps to import from `@forinda/kickjs`
-- [ ] Remove `@forinda/kickjs-core` and `@forinda/kickjs-http` from example deps
+- [x] Update all 10 example app imports to `@forinda/kickjs`
+- [x] Update all 10 example package.json deps
+- [x] All 25 example build tasks pass
+- [ ] Fix Vitest resolution: workspace packages resolve via source instead of dist, causing "Class extends value undefined" in tests. Options:
+  - Add `resolve.alias` in vitest configs pointing `@forinda/kickjs` to dist
+  - Use `conditions: ['import']` in vitest config
+  - Set `exports.source` field in kickjs package.json
 
 ### Phase 6: Update CLI
 - [ ] Update `packages/cli/src/generators/` templates to use `@forinda/kickjs`
