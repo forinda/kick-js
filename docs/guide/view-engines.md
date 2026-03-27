@@ -16,7 +16,7 @@ The `ViewAdapter` registers a template engine with the underlying Express app an
 
 ## Installation
 
-The `ViewAdapter` ships with `@forinda/kickjs-http`. Import it from the sub-path `@forinda/kickjs-http/views`. You only need to install the template engine of your choice:
+The `ViewAdapter` ships with `@forinda/kickjs`. Import it from the main barrel or the sub-path `@forinda/kickjs/views`. You only need to install the template engine of your choice:
 
 ::: code-group
 ```bash [EJS]
@@ -54,7 +54,7 @@ Create `src/views/home.ejs`:
 
 ```ts
 import ejs from 'ejs'
-import { ViewAdapter } from '@forinda/kickjs-http/views'
+import { ViewAdapter } from '@forinda/kickjs/views'
 import { bootstrap } from '@forinda/kickjs'
 
 bootstrap({
@@ -101,7 +101,7 @@ Visit `http://localhost:3000/` and you will see the rendered HTML.
 
 ```ts
 import ejs from 'ejs'
-import { ViewAdapter } from '@forinda/kickjs-http/views'
+import { ViewAdapter } from '@forinda/kickjs/views'
 
 new ViewAdapter({ engine: ejs, ext: 'ejs', viewsDir: 'src/views' })
 ```
@@ -121,7 +121,7 @@ Template (`src/views/dashboard.ejs`):
 
 ```ts
 import pug from 'pug'
-import { ViewAdapter } from '@forinda/kickjs-http/views'
+import { ViewAdapter } from '@forinda/kickjs/views'
 
 new ViewAdapter({ engine: pug, ext: 'pug', viewsDir: 'src/views' })
 ```
@@ -139,7 +139,7 @@ ul
 
 ```ts
 import { engine } from 'express-handlebars'
-import { ViewAdapter } from '@forinda/kickjs-http/views'
+import { ViewAdapter } from '@forinda/kickjs/views'
 
 new ViewAdapter({ engine: engine(), ext: 'handlebars', viewsDir: 'src/views' })
 ```
@@ -159,7 +159,7 @@ Template (`src/views/dashboard.handlebars`):
 
 ```ts
 import nunjucks from 'nunjucks'
-import { ViewAdapter } from '@forinda/kickjs-http/views'
+import { ViewAdapter } from '@forinda/kickjs/views'
 
 // Configure nunjucks with the views directory
 nunjucks.configure('src/views', { autoescape: true })

@@ -59,3 +59,7 @@ export {
   type QueryBuilderAdapter,
   type PaginatedResponse,
 } from './http/query'
+
+// View & SPA Adapters
+export { ViewAdapter, type ViewAdapterOptions } from './http/middleware/views'
+export { SpaAdapter, type SpaAdapterOptions } from './http/middleware/spa'

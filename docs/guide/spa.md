@@ -6,7 +6,7 @@ Serve a Vue, React, Svelte, or Angular build alongside your KickJS API. API rout
 
 ```ts
 import { bootstrap } from '@forinda/kickjs'
-import { SpaAdapter } from '@forinda/kickjs-http/spa'
+import { SpaAdapter } from '@forinda/kickjs/spa'
 
 bootstrap({
   modules: [...],
