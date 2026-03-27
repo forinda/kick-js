@@ -16,7 +16,7 @@ The `ViewAdapter` registers a template engine with the underlying Express app an
 
 ## Installation
 
-The `ViewAdapter` ships with `@forinda/kickjs` -- no extra framework packages needed. You only need to install the template engine of your choice:
+The `ViewAdapter` ships with `@forinda/kickjs-http`. Import it from the sub-path `@forinda/kickjs-http/views`. You only need to install the template engine of your choice:
 
 ::: code-group
 ```bash [EJS]
