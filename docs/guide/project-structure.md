@@ -19,7 +19,7 @@ kick-js/
     minimal-api/        # Simplest possible app
 ```
 
-Each package is published under the `@kickjs/` scope. Applications import from `@forinda/kickjs-core` and `@forinda/kickjs-http`.
+Each package is published under the `@forinda/` scope. Applications import from `@forinda/kickjs-core` and `@forinda/kickjs-http`.
 
 ## Application Layout
 
