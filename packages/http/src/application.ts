@@ -220,8 +220,12 @@ export class Application {
         totalRoutes += defs.length
 
         const methodOrder = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']
+        const methodRank = (m: string) => {
+          const i = methodOrder.indexOf(m)
+          return i === -1 ? 99 : i
+        }
         const methods = Object.entries(counts)
-          .sort(([a], [b]) => (methodOrder.indexOf(a) ?? 99) - (methodOrder.indexOf(b) ?? 99))
+          .sort(([a], [b]) => methodRank(a) - methodRank(b))
           .map(([m, n]) => `${n} ${m}`)
           .join(', ')
         const name = controller.name || 'Controller'
