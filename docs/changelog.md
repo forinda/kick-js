@@ -2,11 +2,10 @@
 
 All notable changes to KickJS are documented here.
 
-# Release v1.4.1-alpha.0
+# Release v1.5.0
 
 ## New Features
 
-- feat: print route summary on startup in dev mode (#31) (#45) ([96b082c](https://github.com/forinda/kick-js/commit/96b082ccf615e393eb25a52e28dc716762c4788e)) — @Felix Orinda
 - feat: add helmet and CORS middleware (#21, #22) ([36dc70a](https://github.com/forinda/kick-js/commit/36dc70a38de2d8f801858a36c36a6c3c8e557004)) — [@forinda](https://github.com/forinda)
 
 ## Bug Fixes
@@ -21,7 +20,6 @@ All notable changes to KickJS are documented here.
 
 ## Maintenance
 
-- chore: upgrade vitest 3.x → 4.1.1 and @types/node 24.x → 25.x (#46) (#47) ([d93346c](https://github.com/forinda/kick-js/commit/d93346c51d70ebd07d493ddd1df5bbba85e8faa7)) — @Felix Orinda
 - chore: add dev branch + pre-release workflow (#44) ([cb3706b](https://github.com/forinda/kick-js/commit/cb3706b45d5845499c0bfdfbbaf9f2e9866fd27f)) — @Felix Orinda
 
 ## Contributors
@@ -31,14 +29,14 @@ All notable changes to KickJS are documented here.
 
 ## Stats
 
-- **8** commits
+- **6** commits
 - **2** contributor(s)
 - **19** packages published
 
 ---
 
-**Full Changelog**: https://github.com/forinda/kick-js/compare/v1.4.0...v1.4.1-alpha.0
-**Packages**: `@forinda/kickjs-core`, `@forinda/kickjs-config`, `@forinda/kickjs-http`, `@forinda/kickjs-auth`, `@forinda/kickjs-cron`, `@forinda/kickjs-devtools`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-graphql`, `@forinda/kickjs-mailer`, `@forinda/kickjs-multi-tenant`, `@forinda/kickjs-notifications`, `@forinda/kickjs-otel`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-cli`, `@forinda/kickjs-testing`, `@forinda/kickjs-ws`, `@forinda/kickjs-vscode-extension`
+**Full Changelog**: https://github.com/forinda/kick-js/compare/v1.4.0...v1.5.0
+**Packages**: `@forinda/kickjs/core`, `@forinda/kickjs/config`, `@forinda/kickjs/http`, `@forinda/kickjs/auth`, `@forinda/kickjs/cron`, `@forinda/kickjs/devtools`, `@forinda/kickjs/drizzle`, `@forinda/kickjs/graphql`, `@forinda/kickjs/mailer`, `@forinda/kickjs/multi-tenant`, `@forinda/kickjs/notifications`, `@forinda/kickjs/otel`, `@forinda/kickjs/prisma`, `@forinda/kickjs/queue`, `@forinda/kickjs/swagger`, `@forinda/kickjs/cli`, `@forinda/kickjs/testing`, `@forinda/kickjs/ws`, `@forinda/kickjs/vscode-extension`
 
 
 # Release v1.4.0
