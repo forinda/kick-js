@@ -1,4 +1,4 @@
-import { Logger, type AppAdapter, type Container, Scope } from '@forinda/kickjs-core'
+import { Logger, type AppAdapter, type AdapterContext, Scope } from '@forinda/kickjs-core'
 import { DRIZZLE_DB, type DrizzleAdapterOptions } from './types'
 
 const log = Logger.for('DrizzleAdapter')
@@ -51,7 +51,7 @@ export class DrizzleAdapter<TDb = unknown> implements AppAdapter {
   }
 
   /** Register the Drizzle db instance in the DI container */
-  beforeStart(_app: unknown, container: Container): void {
+  beforeStart({ container }: AdapterContext): void {
     if (this.options.logging) {
       log.info('Query logging enabled')
     }

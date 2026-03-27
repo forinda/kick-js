@@ -4,8 +4,8 @@ import {
   HttpStatus,
   METADATA,
   type AppAdapter,
+  type AdapterContext,
   type AdapterMiddleware,
-  type Container,
   type RouteDefinition,
 } from '@forinda/kickjs-core'
 
@@ -88,7 +88,7 @@ export class AuthAdapter implements AppAdapter {
     ]
   }
 
-  beforeStart(app: any, _container: Container): void {
+  beforeStart({}: AdapterContext): void {
     const strategyNames = this.strategies.map((s) => s.name).join(', ')
     log.info(`Auth enabled [${strategyNames}] (default: ${this.defaultPolicy})`)
   }

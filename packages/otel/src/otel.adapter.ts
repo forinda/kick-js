@@ -1,8 +1,8 @@
 import {
   Logger,
   type AppAdapter,
+  type AdapterContext,
   type AdapterMiddleware,
-  type Container,
 } from '@forinda/kickjs-core'
 import type { Request, Response, NextFunction } from 'express'
 import type { OtelAdapterOptions } from './types'
@@ -56,7 +56,7 @@ export class OtelAdapter implements AppAdapter {
     }
   }
 
-  beforeStart(_app: any, _container: Container): void {
+  beforeStart({}: AdapterContext): void {
     try {
       // Dynamically import OTel API — it's a peer dependency
       const otelApi = require('@opentelemetry/api')

@@ -10,7 +10,7 @@ Application adapter that collects route metadata during mount and serves documen
 class SwaggerAdapter implements AppAdapter {
   constructor(options?: SwaggerAdapterOptions)
   onRouteMount(controllerClass: any, mountPath: string): void
-  beforeMount(app: Express, container: Container): void
+  beforeMount({ app }: AdapterContext): void
 }
 
 interface SwaggerAdapterOptions extends SwaggerOptions {

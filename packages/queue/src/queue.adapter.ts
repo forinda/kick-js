@@ -1,5 +1,5 @@
 import { Queue, Worker, type Job as BullMQJob } from 'bullmq'
-import { Logger, type AppAdapter, type Container, Scope } from '@forinda/kickjs-core'
+import { Logger, type AppAdapter, type AdapterContext, Scope } from '@forinda/kickjs-core'
 import {
   QUEUE_MANAGER,
   QUEUE_METADATA,
@@ -39,7 +39,7 @@ export class QueueAdapter implements AppAdapter {
 
   constructor(private options: QueueAdapterOptions) {}
 
-  beforeStart(_app: any, container: Container): void {
+  beforeStart({ container }: AdapterContext): void {
     const { redis, queues: preCreateQueues = [], concurrency = 1 } = this.options
 
     const connection = { host: redis.host, port: redis.port, password: redis.password }

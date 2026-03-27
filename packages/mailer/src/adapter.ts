@@ -1,4 +1,4 @@
-import { Logger, type AppAdapter, type Container } from '@forinda/kickjs-core'
+import { Logger, type AppAdapter, type AdapterContext } from '@forinda/kickjs-core'
 import { MailerService, MAILER } from './mailer.service'
 import type { MailerOptions } from './types'
 
@@ -29,7 +29,7 @@ export class MailerAdapter implements AppAdapter {
     this.mailer = new MailerService(options)
   }
 
-  afterStart(_server: any, container: Container): void {
+  afterStart({ container }: AdapterContext): void {
     container.registerInstance(MAILER, this.mailer)
     log.info(
       `Mail provider: ${this.options.provider.name}${this.options.enabled === false ? ' (disabled)' : ''}`,

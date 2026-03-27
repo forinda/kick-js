@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve, join } from 'node:path'
-import { Logger, type AppAdapter } from '@forinda/kickjs-core'
+import { Logger, type AppAdapter, type AdapterContext } from '@forinda/kickjs-core'
 
 const log = Logger.for('SpaAdapter')
 
@@ -106,7 +106,7 @@ export class SpaAdapter implements AppAdapter {
     this.apiPrefixes = Array.isArray(prefix) ? prefix : [prefix]
   }
 
-  beforeMount(app: any): void {
+  beforeMount({ app }: AdapterContext): void {
     if (!existsSync(this.clientDir)) {
       log.warn(`SPA client directory not found: ${this.clientDir}`)
       log.warn('Build your frontend first, or set clientDir to the correct path.')
@@ -147,7 +147,7 @@ export class SpaAdapter implements AppAdapter {
     log.info(`Serving SPA from ${this.clientDir}`)
   }
 
-  beforeStart(app: any): void {
+  beforeStart({ app }: AdapterContext): void {
     if (!this.indexHtml) return
 
     // SPA fallback: serve index.html for all non-API, non-file routes

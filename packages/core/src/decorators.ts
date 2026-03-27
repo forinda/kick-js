@@ -269,7 +269,22 @@ export function ApiQueryParams(
 
 // ── Middleware Decorators ───────────────────────────────────────────────
 
-export type MiddlewareHandler = (ctx: any, next: () => void) => void | Promise<void>
+/**
+ * Middleware handler function.
+ * Generic `TCtx` defaults to `any` — import `RequestContext` from
+ * `@forinda/kickjs-http` for full type safety:
+ *
+ * ```ts
+ * import type { MiddlewareHandler } from '@forinda/kickjs-core'
+ * import type { RequestContext } from '@forinda/kickjs-http'
+ *
+ * const auth: MiddlewareHandler<RequestContext> = (ctx, next) => {
+ *   ctx.body  // fully typed
+ *   next()
+ * }
+ * ```
+ */
+export type MiddlewareHandler<TCtx = any> = (ctx: TCtx, next: () => void) => void | Promise<void>
 
 /** Attach middleware handlers to a class or method */
 export function Middleware(...handlers: MiddlewareHandler[]): ClassDecorator & MethodDecorator {

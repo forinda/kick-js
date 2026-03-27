@@ -52,6 +52,7 @@ export { type AppModule, type AppModuleClass, type ModuleRoutes } from './app-mo
 export {
   type AppAdapter,
   type AppAdapterClass,
+  type AdapterContext,
   type AdapterMiddleware,
   type MiddlewarePhase,
 } from './adapter'

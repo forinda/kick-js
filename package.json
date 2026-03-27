@@ -10,7 +10,9 @@
   },
   "packageManager": "pnpm@10.12.1",
   "scripts": {
-    "build": "turbo run build",
+    "build": "turbo run build --filter='./packages/*'",
+    "build:examples": "turbo run build --filter='./examples/*'",
+    "build:all": "turbo run build",
     "dev": "turbo run dev --concurrency 20",
     "test": "turbo run test --filter='./packages/*'",
     "test:integration": "vitest run tests/",

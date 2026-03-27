@@ -7,6 +7,7 @@ import {
   METADATA,
   type AppModuleClass,
   type AppAdapter,
+  type AdapterContext,
   type AdapterMiddleware,
   type KickPlugin,
   type RouteDefinition,
@@ -107,6 +108,35 @@ export class Application {
    * 9. Error handlers (notFound + global)
    * 10. Adapter beforeStart hooks
    */
+  /** Build the adapter context object (shared across all hooks) */
+  private adapterCtx(server?: any): AdapterContext {
+    const env = process.env.NODE_ENV ?? 'development'
+    return {
+      app: this.app,
+      container: this.container,
+      server,
+      env,
+      isProduction: env === 'production',
+    }
+  }
+
+  /** Call an adapter hook, catching sync errors and async rejections */
+  private callHook(
+    hook: ((ctx: AdapterContext) => void | Promise<void>) | undefined,
+    ctx: AdapterContext,
+  ): void {
+    if (!hook) return
+    try {
+      const result = hook(ctx)
+      // Catch async rejections from Promise-returning hooks
+      if (result && typeof result.catch === 'function') {
+        result.catch((err: any) => log.error(err, 'Adapter async hook failed'))
+      }
+    } catch (err) {
+      log.error(err, 'Adapter hook failed')
+    }
+  }
+
   setup(): void {
     log.info('Bootstrapping application...')
 
@@ -116,9 +146,11 @@ export class Application {
     // Expose the Application instance on the Express app for adapter discovery
     ;(this.app as any).__kickApp = this
 
+    const ctx = this.adapterCtx()
+
     // ── 1. Adapter beforeMount hooks ──────────────────────────────────
     for (const adapter of this.adapters) {
-      adapter.beforeMount?.(this.app, this.container)
+      this.callHook(adapter.beforeMount?.bind(adapter), ctx)
     }
 
     // ── 2. Hardened defaults ──────────────────────────────────────────
@@ -245,7 +277,7 @@ export class Application {
 
     // ── 11. Adapter beforeStart hooks ────────────────────────────────
     for (const adapter of this.adapters) {
-      adapter.beforeStart?.(this.app, this.container)
+      this.callHook(adapter.beforeStart?.bind(adapter), ctx)
     }
   }
 
@@ -278,7 +310,8 @@ export class Application {
       log.info(`Server running on http://localhost:${port}`)
 
       for (const adapter of this.adapters) {
-        adapter.afterStart?.(this.httpServer!, this.container)
+        const afterCtx = this.adapterCtx(this.httpServer!)
+        this.callHook(adapter.afterStart?.bind(adapter), afterCtx)
       }
 
       // Plugin onReady hooks
