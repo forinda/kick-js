@@ -1,11 +1,11 @@
 # @forinda/kickjs-ws
 
-WebSocket support for KickJS applications via [Socket.IO](https://socket.io), using the same decorator-driven approach as HTTP controllers.
+WebSocket support for KickJS applications via the lightweight [`ws`](https://github.com/websockets/ws) library, using the same decorator-driven approach as HTTP controllers.
 
 ## Installation
 
 ```bash
-pnpm add @forinda/kickjs-ws socket.io
+pnpm add @forinda/kickjs-ws ws
 ```
 
 ## Exports
@@ -100,6 +100,44 @@ export class ChatController {
     console.log(`Disconnected: ${ctx.socket.id}`)
   }
 }
+```
+
+## Using Socket.IO Instead
+
+The built-in WS package uses the lightweight `ws` library. If you prefer Socket.IO, create a custom adapter:
+
+```ts
+import { Server } from 'socket.io'
+import type { AppAdapter, Container } from '@forinda/kickjs-core'
+
+export class SocketIOAdapter implements AppAdapter {
+  readonly name = 'SocketIOAdapter'
+  private io!: Server
+
+  afterStart(server: any) {
+    this.io = new Server(server, {
+      cors: { origin: '*' },
+    })
+
+    this.io.on('connection', (socket) => {
+      console.log(`Connected: ${socket.id}`)
+      socket.on('disconnect', () => console.log(`Disconnected: ${socket.id}`))
+    })
+  }
+
+  async shutdown() {
+    this.io?.close()
+  }
+}
+```
+
+Register it in `bootstrap()`:
+
+```ts
+bootstrap({
+  modules,
+  adapters: [new SocketIOAdapter()],
+})
 ```
 
 ## Related
