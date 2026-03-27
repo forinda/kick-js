@@ -114,11 +114,8 @@ export class SocketIOAdapter implements AppAdapter {
   readonly name = 'SocketIOAdapter'
   private io!: Server
 
-  afterStart(app: any) {
-    const httpServer = app.__kickApp?.getHttpServer()
-    if (!httpServer) return
-
-    this.io = new Server(httpServer, {
+  afterStart(server: any) {
+    this.io = new Server(server, {
       cors: { origin: '*' },
     })
 

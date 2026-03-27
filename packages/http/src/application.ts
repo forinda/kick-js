@@ -205,6 +205,12 @@ export class Application {
 
     // ── 8b. Log route summary ─────────────────────────────────────────
     if (shouldLogRoutes && mountedRoutes.length > 0) {
+      const methodOrder = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']
+      const methodRank = (m: string) => {
+        const i = methodOrder.indexOf(m)
+        return i === -1 ? 99 : i
+      }
+
       let totalRoutes = 0
       log.info('Routes:')
 
@@ -219,11 +225,6 @@ export class Application {
         }
         totalRoutes += defs.length
 
-        const methodOrder = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']
-        const methodRank = (m: string) => {
-          const i = methodOrder.indexOf(m)
-          return i === -1 ? 99 : i
-        }
         const methods = Object.entries(counts)
           .sort(([a], [b]) => methodRank(a) - methodRank(b))
           .map(([m, n]) => `${n} ${m}`)
