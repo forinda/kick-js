@@ -219,7 +219,9 @@ export class Application {
         }
         totalRoutes += defs.length
 
+        const methodOrder = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']
         const methods = Object.entries(counts)
+          .sort(([a], [b]) => (methodOrder.indexOf(a) ?? 99) - (methodOrder.indexOf(b) ?? 99))
           .map(([m, n]) => `${n} ${m}`)
           .join(', ')
         const name = controller.name || 'Controller'
