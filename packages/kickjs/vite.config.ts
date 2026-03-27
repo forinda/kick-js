@@ -1,0 +1,58 @@
+import { defineConfig } from 'vite'
+import { resolve } from 'path'
+
+export default defineConfig({
+  build: {
+    lib: {
+      entry: {
+        index: resolve(__dirname, 'src/index.ts'),
+        'core/adapter': resolve(__dirname, 'src/core/adapter.ts'),
+        'core/container': resolve(__dirname, 'src/core/container.ts'),
+        'core/decorators': resolve(__dirname, 'src/core/decorators.ts'),
+        'core/logger': resolve(__dirname, 'src/core/logger.ts'),
+        'core/errors': resolve(__dirname, 'src/core/errors.ts'),
+        'core/interfaces': resolve(__dirname, 'src/core/interfaces.ts'),
+        'core/reactivity': resolve(__dirname, 'src/core/reactivity.ts'),
+        'core/app-module': resolve(__dirname, 'src/core/app-module.ts'),
+        'core/path': resolve(__dirname, 'src/core/path.ts'),
+        'core/cache': resolve(__dirname, 'src/core/cache.ts'),
+        'core/cron': resolve(__dirname, 'src/core/cron.ts'),
+        'core/plugin': resolve(__dirname, 'src/core/plugin.ts'),
+        'http/application': resolve(__dirname, 'src/http/application.ts'),
+        'http/bootstrap': resolve(__dirname, 'src/http/bootstrap.ts'),
+        'http/context': resolve(__dirname, 'src/http/context.ts'),
+        'http/router-builder': resolve(__dirname, 'src/http/router-builder.ts'),
+        'http/middleware/helmet': resolve(__dirname, 'src/http/middleware/helmet.ts'),
+        'http/middleware/cors': resolve(__dirname, 'src/http/middleware/cors.ts'),
+        'http/middleware/csrf': resolve(__dirname, 'src/http/middleware/csrf.ts'),
+        'http/middleware/rate-limit': resolve(__dirname, 'src/http/middleware/rate-limit.ts'),
+        'http/middleware/request-id': resolve(__dirname, 'src/http/middleware/request-id.ts'),
+        'http/middleware/request-logger': resolve(__dirname, 'src/http/middleware/request-logger.ts'),
+        'http/middleware/error-handler': resolve(__dirname, 'src/http/middleware/error-handler.ts'),
+        'http/middleware/validate': resolve(__dirname, 'src/http/middleware/validate.ts'),
+        'http/middleware/upload': resolve(__dirname, 'src/http/middleware/upload.ts'),
+        'http/middleware/session': resolve(__dirname, 'src/http/middleware/session.ts'),
+        'http/middleware/views': resolve(__dirname, 'src/http/middleware/views.ts'),
+        'http/middleware/spa': resolve(__dirname, 'src/http/middleware/spa.ts'),
+        'http/query/index': resolve(__dirname, 'src/http/query/index.ts'),
+      },
+      formats: ['es'],
+    },
+    target: 'node20',
+    outDir: 'dist',
+    emptyOutDir: true,
+    sourcemap: false,
+    minify: 'esbuild',
+    rollupOptions: {
+      external: [
+        'express',
+        'reflect-metadata',
+        'pino',
+        'pino-pretty',
+        'multer',
+        'cookie-parser',
+        /^node:/,
+      ],
+    },
+  },
+})

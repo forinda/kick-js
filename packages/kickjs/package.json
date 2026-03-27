@@ -1,7 +1,7 @@
 {
   "name": "@forinda/kickjs",
   "version": "1.7.0",
-  "description": "A production-grade, decorator-driven Node.js framework built on Express 5 and TypeScript. This is the umbrella package — install individual @forinda/kickjs-* packages for the framework.",
+  "description": "A production-grade, decorator-driven Node.js framework built on Express 5 and TypeScript.",
   "keywords": [
     "kickjs",
     "nodejs",
@@ -18,40 +18,101 @@
     "vite",
     "zod",
     "swagger",
-    "openapi",
-    "@forinda/kickjs-core",
-    "@forinda/kickjs-http",
-    "@forinda/kickjs-config",
-    "@forinda/kickjs-cli",
-    "@forinda/kickjs-swagger",
-    "@forinda/kickjs-testing",
-    "@forinda/kickjs-prisma",
-    "@forinda/kickjs-drizzle",
-    "@forinda/kickjs-auth",
-    "@forinda/kickjs-cron",
-    "@forinda/kickjs-mailer",
-    "@forinda/kickjs-queue",
-    "@forinda/kickjs-ws",
-    "@forinda/kickjs-graphql",
-    "@forinda/kickjs-otel",
-    "@forinda/kickjs-devtools",
-    "@forinda/kickjs-multi-tenant",
-    "@forinda/kickjs-notifications"
+    "openapi"
   ],
   "type": "module",
-  "main": "index.js",
-  "types": "index.d.ts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./adapter": {
+      "import": "./dist/core/adapter.js",
+      "types": "./dist/core/adapter.d.ts"
+    },
+    "./container": {
+      "import": "./dist/core/container.js",
+      "types": "./dist/core/container.d.ts"
+    },
+    "./decorators": {
+      "import": "./dist/core/decorators.js",
+      "types": "./dist/core/decorators.d.ts"
+    },
+    "./logger": {
+      "import": "./dist/core/logger.js",
+      "types": "./dist/core/logger.d.ts"
+    },
+    "./errors": {
+      "import": "./dist/core/errors.js",
+      "types": "./dist/core/errors.d.ts"
+    },
+    "./reactivity": {
+      "import": "./dist/core/reactivity.js",
+      "types": "./dist/core/reactivity.d.ts"
+    },
+    "./middleware/helmet": {
+      "import": "./dist/http/middleware/helmet.js",
+      "types": "./dist/http/middleware/helmet.d.ts"
+    },
+    "./middleware/cors": {
+      "import": "./dist/http/middleware/cors.js",
+      "types": "./dist/http/middleware/cors.d.ts"
+    },
+    "./middleware/csrf": {
+      "import": "./dist/http/middleware/csrf.js",
+      "types": "./dist/http/middleware/csrf.d.ts"
+    },
+    "./middleware/rate-limit": {
+      "import": "./dist/http/middleware/rate-limit.js",
+      "types": "./dist/http/middleware/rate-limit.d.ts"
+    },
+    "./middleware/request-id": {
+      "import": "./dist/http/middleware/request-id.js",
+      "types": "./dist/http/middleware/request-id.d.ts"
+    },
+    "./middleware/request-logger": {
+      "import": "./dist/http/middleware/request-logger.js",
+      "types": "./dist/http/middleware/request-logger.d.ts"
+    },
+    "./query": {
+      "import": "./dist/http/query/index.js",
+      "types": "./dist/http/query/index.d.ts"
+    }
+  },
   "files": [
-    "index.js",
-    "index.d.ts",
+    "dist",
     "README.md",
     "LICENSE"
   ],
-  "scripts": {},
+  "scripts": {
+    "build": "vite build && pnpm build:types",
+    "build:types": "tsc -p tsconfig.build.json",
+    "dev": "vite build --watch",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist .turbo"
+  },
   "dependencies": {
-    "@forinda/kickjs-core": "workspace:*",
-    "@forinda/kickjs-http": "workspace:*",
-    "@forinda/kickjs-config": "workspace:*"
+    "cookie-parser": "^1.4.7",
+    "multer": "^2.1.1",
+    "pino": "^10.3.1",
+    "pino-pretty": "^13.1.3",
+    "reflect-metadata": "^0.2.2"
+  },
+  "peerDependencies": {
+    "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "@swc/core": "^1.7.28",
+    "@types/cookie-parser": "^1.4.10",
+    "@types/express": "^5.0.6",
+    "@types/multer": "^2.1.0",
+    "@types/node": "^25.0.0",
+    "typescript": "^5.9.2",
+    "vite": "^8.0.2",
+    "vitest": "^4.1.1"
   },
   "publishConfig": {
     "access": "public"
