@@ -102,6 +102,47 @@ export class ChatController {
 }
 ```
 
+## Using Socket.IO Instead
+
+The built-in WS package uses the lightweight `ws` library. If you prefer Socket.IO, create a custom adapter:
+
+```ts
+import { Server } from 'socket.io'
+import type { AppAdapter, Container } from '@forinda/kickjs-core'
+
+export class SocketIOAdapter implements AppAdapter {
+  readonly name = 'SocketIOAdapter'
+  private io!: Server
+
+  afterStart(app: any) {
+    const httpServer = app.__kickApp?.getHttpServer()
+    if (!httpServer) return
+
+    this.io = new Server(httpServer, {
+      cors: { origin: '*' },
+    })
+
+    this.io.on('connection', (socket) => {
+      console.log(`Connected: ${socket.id}`)
+      socket.on('disconnect', () => console.log(`Disconnected: ${socket.id}`))
+    })
+  }
+
+  async shutdown() {
+    this.io?.close()
+  }
+}
+```
+
+Register it in `bootstrap()`:
+
+```ts
+bootstrap({
+  modules,
+  adapters: [new SocketIOAdapter()],
+})
+```
+
 ## Related
 
 - [WebSocket Guide](../guide/websockets.md) — full walkthrough with rooms, auth, heartbeat
