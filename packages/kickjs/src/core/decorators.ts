@@ -281,10 +281,7 @@ export function ApiQueryParams(
  * }
  * ```
  */
-export type MiddlewareHandler = (
-  ctx: import('../http/context').RequestContext,
-  next: () => void,
-) => void | Promise<void>
+export type MiddlewareHandler<TCtx = any> = (ctx: TCtx, next: () => void) => void | Promise<void>
 
 /** Attach middleware handlers to a class or method */
 export function Middleware(...handlers: MiddlewareHandler[]): ClassDecorator & MethodDecorator {

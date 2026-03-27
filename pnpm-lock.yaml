@@ -71,6 +71,9 @@ importers:
 
   examples/devtools-api:
     dependencies:
+      '@forinda/kickjs':
+        specifier: workspace:*
+        version: link:../../packages/kickjs
       '@forinda/kickjs-config':
         specifier: workspace:*
         version: link:../../packages/config
@@ -138,6 +141,9 @@ importers:
 
   examples/graphql-api:
     dependencies:
+      '@forinda/kickjs':
+        specifier: workspace:*
+        version: link:../../packages/kickjs
       '@forinda/kickjs-config':
         specifier: workspace:*
         version: link:../../packages/config
@@ -205,6 +211,9 @@ importers:
 
   examples/jira-drizzle-api:
     dependencies:
+      '@forinda/kickjs':
+        specifier: workspace:*
+        version: link:../../packages/kickjs
       '@forinda/kickjs-config':
         specifier: workspace:*
         version: link:../../packages/config
@@ -317,6 +326,9 @@ importers:
 
   examples/jira-mongoose-api:
     dependencies:
+      '@forinda/kickjs':
+        specifier: workspace:*
+        version: link:../../packages/kickjs
       '@forinda/kickjs-auth':
         specifier: workspace:*
         version: link:../../packages/auth
@@ -450,6 +462,9 @@ importers:
 
   examples/jira-prisma-api:
     dependencies:
+      '@forinda/kickjs':
+        specifier: workspace:*
+        version: link:../../packages/kickjs
       '@forinda/kickjs-config':
         specifier: workspace:*
         version: link:../../packages/config
@@ -559,6 +574,9 @@ importers:
 
   examples/jira-prisma-v7-api:
     dependencies:
+      '@forinda/kickjs':
+        specifier: workspace:*
+        version: link:../../packages/kickjs
       '@forinda/kickjs-config':
         specifier: workspace:*
         version: link:../../packages/config
@@ -680,6 +698,9 @@ importers:
 
   examples/joi-api:
     dependencies:
+      '@forinda/kickjs':
+        specifier: workspace:*
+        version: link:../../packages/kickjs
       '@forinda/kickjs-config':
         specifier: workspace:*
         version: link:../../packages/config
@@ -753,6 +774,9 @@ importers:
 
   examples/microservice-api:
     dependencies:
+      '@forinda/kickjs':
+        specifier: workspace:*
+        version: link:../../packages/kickjs
       '@forinda/kickjs-config':
         specifier: workspace:*
         version: link:../../packages/config
@@ -829,6 +853,9 @@ importers:
 
   examples/minimal-api:
     dependencies:
+      '@forinda/kickjs':
+        specifier: workspace:*
+        version: link:../../packages/kickjs
       '@forinda/kickjs-config':
         specifier: workspace:*
         version: link:../../packages/config
@@ -893,6 +920,9 @@ importers:
 
   examples/otel-api:
     dependencies:
+      '@forinda/kickjs':
+        specifier: workspace:*
+        version: link:../../packages/kickjs
       '@forinda/kickjs-config':
         specifier: workspace:*
         version: link:../../packages/config
