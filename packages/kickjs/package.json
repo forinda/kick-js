@@ -1,0 +1,73 @@
+{
+  "name": "@forinda/kickjs",
+  "version": "1.5.0",
+  "description": "A production-grade, decorator-driven Node.js framework built on Express 5 and TypeScript. This is the umbrella package — install individual @forinda/kickjs-* packages for the framework.",
+  "keywords": [
+    "kickjs",
+    "nodejs",
+    "typescript",
+    "express",
+    "decorators",
+    "dependency-injection",
+    "backend",
+    "api",
+    "framework",
+    "ddd",
+    "cqrs",
+    "rest",
+    "vite",
+    "zod",
+    "swagger",
+    "openapi",
+    "@forinda/kickjs-core",
+    "@forinda/kickjs-http",
+    "@forinda/kickjs-config",
+    "@forinda/kickjs-cli",
+    "@forinda/kickjs-swagger",
+    "@forinda/kickjs-testing",
+    "@forinda/kickjs-prisma",
+    "@forinda/kickjs-drizzle",
+    "@forinda/kickjs-auth",
+    "@forinda/kickjs-cron",
+    "@forinda/kickjs-mailer",
+    "@forinda/kickjs-queue",
+    "@forinda/kickjs-ws",
+    "@forinda/kickjs-graphql",
+    "@forinda/kickjs-otel",
+    "@forinda/kickjs-devtools",
+    "@forinda/kickjs-multi-tenant",
+    "@forinda/kickjs-notifications"
+  ],
+  "type": "module",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {},
+  "dependencies": {
+    "@forinda/kickjs-core": "workspace:*",
+    "@forinda/kickjs-http": "workspace:*",
+    "@forinda/kickjs-config": "workspace:*"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT",
+  "author": "Felix Orinda",
+  "engines": {
+    "node": ">=20.0"
+  },
+  "homepage": "https://forinda.github.io/kick-js/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/forinda/kick-js.git",
+    "directory": "packages/kickjs"
+  },
+  "bugs": {
+    "url": "https://github.com/forinda/kick-js/issues"
+  }
+}

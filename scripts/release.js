@@ -307,7 +307,7 @@ function generateReleaseNotes(version, fromRef) {
   // Links
   notes += `---\n\n`
   notes += `**Full Changelog**: ${REPO_URL}/compare/${ref}...v${version}\n`
-  notes += `**Packages**: ${PACKAGES.map((p) => `\`${NPM_SCOPE}/${path.basename(p)}\``).join(', ')}\n`
+  notes += `**Packages**: ${PACKAGES.map((p) => `\`${NPM_SCOPE}-${path.basename(p)}\``).join(', ')}\n`
 
   return notes
 }
@@ -661,7 +661,7 @@ async function main() {
   console.log(`\n${'='.repeat(50)}`)
   console.log(`  Released v${nextVersion}`)
   console.log(`  Tag:     v${nextVersion}`)
-  console.log(`  Packages: ${PACKAGES.map((p) => `${NPM_SCOPE}/${path.basename(p)}`).join(', ')}`)
+  console.log(`  Packages: ${PACKAGES.map((p) => `${NPM_SCOPE}-${path.basename(p)}`).join(', ')}`)
   if (githubRelease && !noPush) {
     console.log(`  GitHub:  ${REPO_URL}/releases/tag/v${nextVersion}`)
   }

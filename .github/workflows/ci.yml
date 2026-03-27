@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [20, 22]
+        node-version: [20, 22, 24]
 
     steps:
       - name: Checkout
@@ -46,3 +46,71 @@ jobs:
 
       - name: Format check
         run: pnpm format:check
+
+  bun-smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build framework packages
+        run: pnpm turbo build --filter='./packages/*'
+
+      - name: Smoke test — imports resolve under Bun
+        run: |
+          bun -e "
+            import { Container, Service, Controller } from './packages/core/dist/index.js'
+            import { Application, RequestContext, buildRoutes } from './packages/http/dist/index.js'
+            import { defineEnv, loadEnv } from './packages/config/dist/index.js'
+            console.log('Container:', typeof Container)
+            console.log('Application:', typeof Application)
+            console.log('defineEnv:', typeof defineEnv)
+            console.log('Bun smoke test passed')
+          "
+
+  deno-smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm turbo build --filter='./packages/*'
+
+      - name: Smoke test — pure ESM imports resolve under Deno
+        run: |
+          echo 'import { Scope } from "./packages/core/dist/interfaces.js"; import { parseQuery } from "./packages/http/dist/query/index.js"; console.log("Scope:", typeof Scope); console.log("parseQuery:", typeof parseQuery); console.log("Deno smoke test passed");' > deno-smoke.mjs
+          deno run --allow-read=. --allow-env deno-smoke.mjs
+          rm deno-smoke.mjs

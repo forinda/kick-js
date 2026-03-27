@@ -33,10 +33,10 @@
     "@types/supertest": "^7.2.0",
     "@swc/core": "^1.7.28",
     "@types/express": "^5.0.6",
-    "@types/node": "^24.5.2",
+    "@types/node": "^25.0.0",
     "unplugin-swc": "^1.5.9",
     "vite": "^8.0.2",
-    "vitest": "^3.2.4",
+    "vitest": "^4.1.1",
     "typescript": "^5.9.2",
     "prettier": "^3.8.1"
   }

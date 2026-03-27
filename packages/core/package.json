@@ -104,9 +104,9 @@
   },
   "devDependencies": {
     "@swc/core": "^1.7.28",
-    "@types/node": "^24.5.2",
+    "@types/node": "^25.0.0",
     "typescript": "^5.9.2",
-    "vitest": "^3.2.4"
+    "vitest": "^4.1.1"
   },
   "publishConfig": {
     "access": "public"
