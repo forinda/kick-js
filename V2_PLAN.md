@@ -50,12 +50,13 @@ import { Controller, Get, Service, bootstrap, RequestContext, loadEnv } from '@f
 - [x] Type `AdapterContext.server` as `http.Server` (no more `any`)
 - [x] Type `MiddlewareHandler` with `RequestContext` by default (no generic needed)
 
-## Phase 3: Stabilize the Unified Package
-- [ ] Write tests for the unified package (import resolution, type safety)
-- [ ] Verify `@forinda/kickjs` works in a fresh project (`npx kick new`)
-- [ ] Verify all sub-path exports resolve correctly
+## Phase 3: Stabilize the Unified Package ✅
+- [x] Write tests — 10 vitest tests covering all export categories
+- [x] Verify 38/38 exports resolve at runtime (Node ESM)
+- [x] Verify in fresh external project (14/14 exports via `file:` protocol)
+- [x] Verify all sub-path imports work (container, logger, errors, reactivity, middleware, query)
 - [ ] Publish alpha: `pnpm release:alpha` from dev
-- [ ] Test alpha install in external projects
+- [ ] Test alpha install from npm in external projects
 
 ## Phase 4: Migrate Consumers (only after Phase 3 is proven)
 - [ ] Update all 16 adapter/plugin packages to import from `@forinda/kickjs`
