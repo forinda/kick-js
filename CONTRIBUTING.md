@@ -221,10 +221,15 @@ gh pr create --base main --head dev --title "Release: merge dev into main"
 
 3. **Test your changes**:
    ```bash
-   pnpm test
-   pnpm build
-   pnpm lint
+   pnpm build              # Build framework packages
+   pnpm test               # Run package tests
+   pnpm format:check       # Check formatting
+   pnpm build:examples     # Verify examples still compile
    ```
+
+   ::: warning
+   If you change any framework package (`packages/*`), always run `pnpm build:examples` before submitting your PR. Example apps depend on the framework packages — a breaking change in `@forinda/kickjs-core` or `@forinda/kickjs-http` can silently break examples that CI may not catch in every job.
+   :::
 
 4. **Commit your changes**:
    ```bash

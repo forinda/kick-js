@@ -1,5 +1,5 @@
 import { resolve } from 'node:path'
-import { Logger, type AppAdapter, type Container } from '@forinda/kickjs-core'
+import { Logger, type AppAdapter, type AdapterContext } from '@forinda/kickjs-core'
 
 const log = Logger.for('ViewEngine')
 
@@ -60,7 +60,7 @@ export class ViewAdapter implements AppAdapter {
 
   constructor(private options: ViewAdapterOptions) {}
 
-  beforeMount(app: any, _container: Container): void {
+  beforeMount({ app }: AdapterContext): void {
     const { engine, ext, viewsDir = 'src/views' } = this.options
 
     // Register the engine

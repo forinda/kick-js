@@ -1,7 +1,7 @@
 import {
   Logger,
   type AppAdapter,
-  type Container,
+  type AdapterContext,
   getCronJobs,
   type CronJobMeta,
 } from '@forinda/kickjs-core'
@@ -89,7 +89,7 @@ export class CronAdapter implements AppAdapter {
     this.enabled = options.enabled ?? true
   }
 
-  async afterStart(_server: any, container: Container): Promise<void> {
+  async afterStart({ container }: AdapterContext): Promise<void> {
     if (!this.enabled) {
       log.info('Cron disabled')
       return

@@ -15,7 +15,7 @@ pnpm add mongoose
 ```ts
 // src/adapters/mongoose.adapter.ts
 import mongoose from 'mongoose'
-import { Logger, type AppAdapter, type Container } from '@forinda/kickjs-core'
+import { Logger, type AppAdapter, type AdapterContext } from '@forinda/kickjs-core'
 
 const log = Logger.for('MongooseAdapter')
 
@@ -31,7 +31,7 @@ export class MongooseAdapter implements AppAdapter {
 
   constructor(private opts: MongooseAdapterOptions) {}
 
-  async afterStart(_server: any, container: Container): Promise<void> {
+  async afterStart({ container }: AdapterContext): Promise<void> {
     await mongoose.connect(this.opts.uri, this.opts.options)
     container.registerInstance(MONGOOSE, mongoose)
     log.info(`Connected to MongoDB: ${this.opts.uri}`)
@@ -171,7 +171,7 @@ pnpm add mongodb
 ```ts
 // src/adapters/mongodb.adapter.ts
 import { MongoClient, type Db } from 'mongodb'
-import { Logger, type AppAdapter, type Container } from '@forinda/kickjs-core'
+import { Logger, type AppAdapter, type AdapterContext } from '@forinda/kickjs-core'
 
 const log = Logger.for('MongoDBAdapter')
 
@@ -189,7 +189,7 @@ export class MongoDBAdapter implements AppAdapter {
 
   constructor(private opts: MongoDBAdapterOptions) {}
 
-  async afterStart(_server: any, container: Container): Promise<void> {
+  async afterStart({ container }: AdapterContext): Promise<void> {
     this.client = new MongoClient(this.opts.uri)
     await this.client.connect()
 

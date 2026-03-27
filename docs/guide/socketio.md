@@ -13,7 +13,7 @@ pnpm add socket.io
 ```ts
 // src/adapters/socketio.adapter.ts
 import { Server, type Socket } from 'socket.io'
-import { Logger, type AppAdapter, type Container } from '@forinda/kickjs-core'
+import { Logger, type AppAdapter, type AdapterContext } from '@forinda/kickjs-core'
 
 const log = Logger.for('SocketIOAdapter')
 
@@ -43,7 +43,7 @@ export class SocketIOAdapter implements AppAdapter {
 
   constructor(private options: SocketIOAdapterOptions = {}) {}
 
-  afterStart(server: any, container: Container): void {
+  afterStart({ server, container }: AdapterContext): void {
     this.io = new Server(server, {
       cors: this.options.cors ?? { origin: '*' },
       path: this.options.path ?? '/socket.io',

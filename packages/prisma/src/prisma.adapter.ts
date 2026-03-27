@@ -1,4 +1,4 @@
-import { Logger, type AppAdapter, type Container, Scope } from '@forinda/kickjs-core'
+import { Logger, type AppAdapter, type AdapterContext, Scope } from '@forinda/kickjs-core'
 import { PRISMA_CLIENT, type PrismaAdapterOptions } from './types'
 
 const log = Logger.for('PrismaAdapter')
@@ -44,7 +44,7 @@ export class PrismaAdapter implements AppAdapter {
   }
 
   /** Register the PrismaClient in the DI container */
-  beforeStart(_app: any, container: Container): void {
+  beforeStart({ container }: AdapterContext): void {
     // Set up query logging if requested
     if (this.options.logging) {
       if (typeof this.client.$on === 'function') {

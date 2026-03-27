@@ -149,7 +149,7 @@ describe('Custom CronScheduler', () => {
       scheduler: customScheduler,
     })
 
-    await adapter.afterStart(null, container)
+    await adapter.afterStart({ app: null as any, container, env: 'test', isProduction: false })
 
     expect(customScheduler.schedule).toHaveBeenCalledTimes(1)
     expect(customScheduler.schedule).toHaveBeenCalledWith(
@@ -192,7 +192,7 @@ describe('CronAdapter', () => {
       services: [ScheduledService],
       scheduler: new IntervalScheduler(),
     })
-    await adapter.afterStart(null, container)
+    await adapter.afterStart({ app: null as any, container, env: 'test', isProduction: false })
 
     expect(handler).not.toHaveBeenCalled()
 
@@ -222,7 +222,7 @@ describe('CronAdapter', () => {
       services: [EagerService],
       scheduler: new IntervalScheduler(),
     })
-    await adapter.afterStart(null, container)
+    await adapter.afterStart({ app: null as any, container, env: 'test', isProduction: false })
 
     expect(handler).toHaveBeenCalledTimes(1)
 
@@ -247,7 +247,7 @@ describe('CronAdapter', () => {
       enabled: false,
       scheduler: new IntervalScheduler(),
     })
-    await adapter.afterStart(null, container)
+    await adapter.afterStart({ app: null as any, container, env: 'test', isProduction: false })
 
     vi.advanceTimersByTime(120000)
     expect(handler).not.toHaveBeenCalled()
@@ -270,7 +270,7 @@ describe('CronAdapter', () => {
       services: [Svc],
       scheduler: new IntervalScheduler(),
     })
-    await adapter.afterStart(null, container)
+    await adapter.afterStart({ app: null as any, container, env: 'test', isProduction: false })
 
     adapter.shutdown()
 
@@ -293,7 +293,7 @@ describe('CronAdapter', () => {
       services: [FailingService],
       scheduler: new IntervalScheduler(),
     })
-    await adapter.afterStart(null, container)
+    await adapter.afterStart({ app: null as any, container, env: 'test', isProduction: false })
 
     expect(() => vi.advanceTimersByTime(60000)).not.toThrow()
 
@@ -313,7 +313,7 @@ describe('CronAdapter', () => {
       scheduler: new IntervalScheduler(),
     })
 
-    await expect(adapter.afterStart(null, container)).resolves.toBeUndefined()
+    await expect(adapter.afterStart({ app: null as any, container, env: 'test', isProduction: false })).resolves.toBeUndefined()
     adapter.shutdown()
   })
 })

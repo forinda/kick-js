@@ -2,7 +2,14 @@ import { randomUUID } from 'node:crypto'
 import { WebSocketServer, type WebSocket } from 'ws'
 import type { IncomingMessage } from 'node:http'
 import type { Duplex } from 'node:stream'
-import { type AppAdapter, type Container, createLogger, ref, type Ref } from '@forinda/kickjs-core'
+import {
+  type AppAdapter,
+  type AdapterContext,
+  type Container,
+  createLogger,
+  ref,
+  type Ref,
+} from '@forinda/kickjs-core'
 import {
   WS_METADATA,
   wsControllerRegistry,
@@ -97,7 +104,7 @@ export class WsAdapter implements AppAdapter {
     }
   }
 
-  beforeStart(_app: any, container: Container): void {
+  beforeStart({ container }: AdapterContext): void {
     this.container = container
 
     // Discover all @WsController classes and build routing table
@@ -125,7 +132,7 @@ export class WsAdapter implements AppAdapter {
     }
   }
 
-  afterStart(server: any, _container: Container): void {
+  afterStart({ server }: AdapterContext): void {
     this.wss = new WebSocketServer({
       noServer: true,
       maxPayload: this.maxPayload,
