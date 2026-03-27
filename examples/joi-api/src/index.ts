@@ -9,7 +9,7 @@
  */
 import 'reflect-metadata'
 import express from 'express'
-import { bootstrap, requestId } from '@forinda/kickjs'
+import { bootstrap, requestId } from '@forinda/kickjs-http'
 import { SwaggerAdapter } from '@forinda/kickjs-swagger'
 import { modules } from './modules'
 import { joiSchemaParser } from './parsers/joi-schema-parser'

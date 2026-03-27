@@ -1,6 +1,6 @@
-import { Service, Inject } from '@forinda/kickjs'
+import { Service, Inject } from '@forinda/kickjs-core'
 import { TASK_REPOSITORY, type ITaskRepository } from '../../domain/repositories/task.repository'
-import type { ParsedQuery } from '@forinda/kickjs'
+import type { ParsedQuery } from '@forinda/kickjs-http'
 
 @Service()
 export class ListTasksUseCase {

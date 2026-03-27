@@ -7,9 +7,9 @@ import {
   Autowired,
   Middleware,
   ApiQueryParams,
-} from '@forinda/kickjs'
+} from '@forinda/kickjs-core'
 
-import type { RequestContext } from '@forinda/kickjs'
+import type { RequestContext } from '@forinda/kickjs-http'
 import { ApiTags, ApiBearerAuth } from '@forinda/kickjs-swagger'
 import { authBridgeMiddleware } from '@/shared/presentation/middlewares/auth-bridge.middleware'
 import { getUser } from '@/shared/utils/auth'

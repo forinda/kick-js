@@ -1,4 +1,4 @@
-import { Logger } from '@forinda/kickjs'
+import { Logger } from '@forinda/kickjs-core'
 import type { NotificationChannel, Notification } from '../types'
 
 const log = Logger.for('ConsoleNotification')

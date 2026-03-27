@@ -1,4 +1,4 @@
-import type { AppModule, ModuleRoutes, Container } from '@forinda/kickjs';
+import type { AppModule, ModuleRoutes, Container } from '@forinda/kickjs-core';
 
 export class CronModule implements AppModule {
   register(_container: Container): void {

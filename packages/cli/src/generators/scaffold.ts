@@ -220,7 +220,7 @@ function genConstants(pascal: string, fields: FieldDef[]): string {
   const sortable = [...allFieldNames, "'createdAt'", "'updatedAt'"].join(', ')
   const searchable = stringFields.length > 0 ? stringFields.join(', ') : "'name'"
 
-  return `import type { ApiQueryParamsConfig } from '@forinda/kickjs'
+  return `import type { ApiQueryParamsConfig } from '@forinda/kickjs-core'
 
 export const ${pascal.toUpperCase()}_QUERY_CONFIG: ApiQueryParamsConfig = {
   filterable: [${filterable}],
@@ -235,8 +235,8 @@ function genInMemoryRepository(pascal: string, kebab: string, fields: FieldDef[]
   const fieldSpread = '...dto'
 
   return `import { randomUUID } from 'node:crypto'
-import { Repository, HttpException } from '@forinda/kickjs'
-import type { ParsedQuery } from '@forinda/kickjs'
+import { Repository, HttpException } from '@forinda/kickjs-core'
+import type { ParsedQuery } from '@forinda/kickjs-http'
 import type { I${pascal}Repository } from '../../domain/repositories/${kebab}.repository'
 import type { ${pascal}ResponseDTO } from '../../application/dtos/${kebab}-response.dto'
 import type { Create${pascal}DTO } from '../../application/dtos/create-${kebab}.dto'
@@ -374,7 +374,7 @@ export class ${pascal}Id {
 // These reuse the same patterns as the existing module generator
 
 function genModuleIndex(pascal: string, kebab: string, plural: string, repo: string): string {
-  return `import type { AppModule, AppModuleClass } from '@forinda/kickjs'
+  return `import type { AppModule, AppModuleClass } from '@forinda/kickjs-core'
 import { ${pascal}Controller } from './presentation/${kebab}.controller'
 import { ${pascal}DomainService } from './domain/services/${kebab}-domain.service'
 import { ${pascal.toUpperCase()}_REPOSITORY } from './domain/repositories/${kebab}.repository'
@@ -401,8 +401,8 @@ function genController(
   plural: string,
   pluralPascal: string,
 ): string {
-  return `import { Controller, Get, Post, Put, Delete, Autowired, ApiQueryParams } from '@forinda/kickjs'
-import type { RequestContext } from '@forinda/kickjs'
+  return `import { Controller, Get, Post, Put, Delete, Autowired, ApiQueryParams } from '@forinda/kickjs-core'
+import type { RequestContext } from '@forinda/kickjs-http'
 import { ApiTags } from '@forinda/kickjs-swagger'
 import { Create${pascal}UseCase } from '../application/use-cases/create-${kebab}.use-case'
 import { Get${pascal}UseCase } from '../application/use-cases/get-${kebab}.use-case'
@@ -467,7 +467,7 @@ function genRepositoryInterface(pascal: string, kebab: string): string {
   return `import type { ${pascal}ResponseDTO } from '../../application/dtos/${kebab}-response.dto'
 import type { Create${pascal}DTO } from '../../application/dtos/create-${kebab}.dto'
 import type { Update${pascal}DTO } from '../../application/dtos/update-${kebab}.dto'
-import type { ParsedQuery } from '@forinda/kickjs'
+import type { ParsedQuery } from '@forinda/kickjs-http'
 
 export interface I${pascal}Repository {
   findById(id: string): Promise<${pascal}ResponseDTO | null>
@@ -483,7 +483,7 @@ export const ${pascal.toUpperCase()}_REPOSITORY = Symbol('I${pascal}Repository')
 }
 
 function genDomainService(pascal: string, kebab: string): string {
-  return `import { Service, Inject, HttpException } from '@forinda/kickjs'
+  return `import { Service, Inject, HttpException } from '@forinda/kickjs-core'
 import { ${pascal.toUpperCase()}_REPOSITORY, type I${pascal}Repository } from '../repositories/${kebab}.repository'
 
 @Service()
@@ -509,7 +509,7 @@ function genUseCases(
   return [
     {
       file: `create-${kebab}.use-case.ts`,
-      content: `import { Service, Inject } from '@forinda/kickjs'
+      content: `import { Service, Inject } from '@forinda/kickjs-core'
 import { ${pascal.toUpperCase()}_REPOSITORY, type I${pascal}Repository } from '../../domain/repositories/${kebab}.repository'
 import type { Create${pascal}DTO } from '../dtos/create-${kebab}.dto'
 
@@ -522,7 +522,7 @@ export class Create${pascal}UseCase {
     },
     {
       file: `get-${kebab}.use-case.ts`,
-      content: `import { Service, Inject } from '@forinda/kickjs'
+      content: `import { Service, Inject } from '@forinda/kickjs-core'
 import { ${pascal.toUpperCase()}_REPOSITORY, type I${pascal}Repository } from '../../domain/repositories/${kebab}.repository'
 
 @Service()
@@ -534,8 +534,8 @@ export class Get${pascal}UseCase {
     },
     {
       file: `list-${plural}.use-case.ts`,
-      content: `import { Service, Inject } from '@forinda/kickjs'
-import type { ParsedQuery } from '@forinda/kickjs'
+      content: `import { Service, Inject } from '@forinda/kickjs-core'
+import type { ParsedQuery } from '@forinda/kickjs-http'
 import { ${pascal.toUpperCase()}_REPOSITORY, type I${pascal}Repository } from '../../domain/repositories/${kebab}.repository'
 
 @Service()
@@ -547,7 +547,7 @@ export class List${pluralPascal}UseCase {
     },
     {
       file: `update-${kebab}.use-case.ts`,
-      content: `import { Service, Inject } from '@forinda/kickjs'
+      content: `import { Service, Inject } from '@forinda/kickjs-core'
 import { ${pascal.toUpperCase()}_REPOSITORY, type I${pascal}Repository } from '../../domain/repositories/${kebab}.repository'
 import type { Update${pascal}DTO } from '../dtos/update-${kebab}.dto'
 
@@ -560,7 +560,7 @@ export class Update${pascal}UseCase {
     },
     {
       file: `delete-${kebab}.use-case.ts`,
-      content: `import { Service, Inject } from '@forinda/kickjs'
+      content: `import { Service, Inject } from '@forinda/kickjs-core'
 import { ${pascal.toUpperCase()}_REPOSITORY, type I${pascal}Repository } from '../../domain/repositories/${kebab}.repository'
 
 @Service()
@@ -586,7 +586,7 @@ async function autoRegisterModule(
   if (!exists) {
     await writeFileSafe(
       indexPath,
-      `import type { AppModuleClass } from '@forinda/kickjs'\nimport { ${pascal}Module } from './${plural}'\n\nexport const modules: AppModuleClass[] = [${pascal}Module]\n`,
+      `import type { AppModuleClass } from '@forinda/kickjs-core'\nimport { ${pascal}Module } from './${plural}'\n\nexport const modules: AppModuleClass[] = [${pascal}Module]\n`,
     )
     return
   }

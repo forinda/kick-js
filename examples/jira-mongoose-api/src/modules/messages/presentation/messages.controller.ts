@@ -1,6 +1,6 @@
-import { Controller, Get, Patch, Delete, Middleware, Autowired } from '@forinda/kickjs';
-import type { RequestContext } from '@forinda/kickjs';
-import { HttpException } from '@forinda/kickjs';
+import { Controller, Get, Patch, Delete, Middleware, Autowired } from '@forinda/kickjs-core';
+import type { RequestContext } from '@forinda/kickjs-http';
+import { HttpException } from '@forinda/kickjs-core';
 import { z } from 'zod';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@forinda/kickjs-swagger';
 import { ErrorCode } from '@/shared/constants/error-codes';

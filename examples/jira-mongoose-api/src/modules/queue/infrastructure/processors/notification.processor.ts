@@ -1,4 +1,4 @@
-import { Service, Autowired, Logger } from '@forinda/kickjs';
+import { Service, Autowired, Logger } from '@forinda/kickjs-core';
 import { Job, Process } from '@forinda/kickjs-queue';
 import type { Job as BullMQJob } from 'bullmq';
 import { MongoNotificationRepository } from '@/modules/notifications/infrastructure/repositories/mongo-notification.repository';

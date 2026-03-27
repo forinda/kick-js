@@ -1,6 +1,6 @@
 import { WsController, OnConnect, OnDisconnect, OnMessage } from '@forinda/kickjs-ws';
 import type { WsContext } from '@forinda/kickjs-ws';
-import { Autowired, Logger } from '@forinda/kickjs';
+import { Autowired, Logger } from '@forinda/kickjs-core';
 import jwt from 'jsonwebtoken';
 import { env } from '@/config/env';
 import { MongoMessageRepository } from '../infrastructure/repositories/mongo-message.repository';

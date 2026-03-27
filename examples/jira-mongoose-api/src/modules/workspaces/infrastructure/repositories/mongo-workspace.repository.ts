@@ -1,4 +1,4 @@
-import { Repository } from '@forinda/kickjs';
+import { Repository } from '@forinda/kickjs-core';
 import type { IWorkspaceRepository } from '../../domain/repositories/workspace.repository';
 import type { WorkspaceEntity } from '../../domain/entities/workspace.entity';
 import { WorkspaceModel } from '../schemas/workspace.schema';

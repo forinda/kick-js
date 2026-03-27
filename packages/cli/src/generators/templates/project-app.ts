@@ -9,7 +9,7 @@ export function generateEntryFile(
   switch (template) {
     case 'graphql':
       return `import 'reflect-metadata'
-import { bootstrap } from '@forinda/kickjs'
+import { bootstrap } from '@forinda/kickjs-http'
 import { DevToolsAdapter } from '@forinda/kickjs-devtools'
 import { GraphQLAdapter } from '@forinda/kickjs-graphql'
 import { modules } from './modules'
@@ -32,7 +32,7 @@ bootstrap({
 
     case 'cqrs':
       return `import 'reflect-metadata'
-import { bootstrap } from '@forinda/kickjs'
+import { bootstrap } from '@forinda/kickjs-http'
 import { DevToolsAdapter } from '@forinda/kickjs-devtools'
 import { SwaggerAdapter } from '@forinda/kickjs-swagger'
 import { OtelAdapter } from '@forinda/kickjs-otel'
@@ -60,7 +60,7 @@ bootstrap({
 
     case 'minimal':
       return `import 'reflect-metadata'
-import { bootstrap } from '@forinda/kickjs'
+import { bootstrap } from '@forinda/kickjs-http'
 import { modules } from './modules'
 
 bootstrap({ modules })
@@ -70,7 +70,7 @@ bootstrap({ modules })
     case 'rest':
     default:
       return `import 'reflect-metadata'
-import { bootstrap } from '@forinda/kickjs'
+import { bootstrap } from '@forinda/kickjs-http'
 import { DevToolsAdapter } from '@forinda/kickjs-devtools'
 import { SwaggerAdapter } from '@forinda/kickjs-swagger'
 import { modules } from './modules'
@@ -90,7 +90,7 @@ bootstrap({
 
 /** Generate src/modules/index.ts module registry */
 export function generateModulesIndex(): string {
-  return `import type { AppModuleClass } from '@forinda/kickjs'
+  return `import type { AppModuleClass } from '@forinda/kickjs-core'
 
 export const modules: AppModuleClass[] = []
 `

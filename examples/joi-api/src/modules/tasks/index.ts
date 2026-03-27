@@ -4,8 +4,8 @@
  * This module uses a flat structure (no DDD layers) to show that KickJS
  * doesn't force you into DDD — you can use whatever structure fits your needs.
  */
-import { type AppModule, type ModuleRoutes } from '@forinda/kickjs'
-import { buildRoutes } from '@forinda/kickjs'
+import { type AppModule, type ModuleRoutes } from '@forinda/kickjs-core'
+import { buildRoutes } from '@forinda/kickjs-http'
 import { TaskController } from '../../controllers/task.controller'
 
 export class TaskModule implements AppModule {

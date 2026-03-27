@@ -16,7 +16,7 @@ export async function generateAdapter(options: GenerateAdapterOptions): Promise<
   const filePath = join(outDir, `${kebab}.adapter.ts`)
   await writeFileSafe(
     filePath,
-    `import type { AppAdapter, AdapterContext, AdapterMiddleware } from '@forinda/kickjs'
+    `import type { AppAdapter, AdapterContext, AdapterMiddleware } from '@forinda/kickjs-core'
 
 export interface ${pascal}AdapterOptions {
   // Add your adapter configuration here

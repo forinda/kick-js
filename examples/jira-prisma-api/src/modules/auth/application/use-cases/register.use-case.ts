@@ -1,4 +1,4 @@
-import { Service, Inject, HttpException } from '@forinda/kickjs'
+import { Service, Inject, HttpException } from '@forinda/kickjs-core'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import crypto from 'crypto'

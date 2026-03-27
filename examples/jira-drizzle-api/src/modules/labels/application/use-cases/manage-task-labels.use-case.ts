@@ -1,4 +1,4 @@
-import { Service, Inject } from '@forinda/kickjs'
+import { Service, Inject } from '@forinda/kickjs-core'
 import {
   TASK_LABEL_REPOSITORY,
   type ITaskLabelRepository,

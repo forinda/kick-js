@@ -10,8 +10,8 @@
  *   domain/          — Entities, value objects, repository interfaces, domain services
  *   infrastructure/  — Repository implementations (in-memory, Drizzle, Prisma, etc.)
  */
-import { Container, type AppModule, type ModuleRoutes } from '@forinda/kickjs'
-import { buildRoutes } from '@forinda/kickjs'
+import { Container, type AppModule, type ModuleRoutes } from '@forinda/kickjs-core'
+import { buildRoutes } from '@forinda/kickjs-http'
 import { PRODUCTS_REPOSITORY } from './domain/repositories/products.repository'
 import { InMemoryProductsRepository } from './infrastructure/repositories/in-memory-products.repository'
 import { ProductsController } from './presentation/products.controller'

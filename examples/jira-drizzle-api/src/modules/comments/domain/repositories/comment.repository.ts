@@ -1,5 +1,5 @@
 import type { comments } from '@/db/schema'
-import type { ParsedQuery } from '@forinda/kickjs'
+import type { ParsedQuery } from '@forinda/kickjs-http'
 
 export type Comment = typeof comments.$inferSelect
 export type NewComment = typeof comments.$inferInsert

@@ -15,7 +15,8 @@
     "format": "prettier --write src/"
   },
   "dependencies": {
-    "@forinda/kickjs": "workspace:*",
+    "@forinda/kickjs-core": "workspace:*",
+    "@forinda/kickjs-http": "workspace:*",
     "@forinda/kickjs-config": "workspace:*",
     "@forinda/kickjs-swagger": "workspace:*",
     "@forinda/kickjs-graphql": "workspace:*",

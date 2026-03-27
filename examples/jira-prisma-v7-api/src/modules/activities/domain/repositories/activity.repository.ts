@@ -1,4 +1,4 @@
-import type { ParsedQuery } from '@forinda/kickjs'
+import type { ParsedQuery } from '@forinda/kickjs-http'
 import type { Activity } from '@/generated/prisma/client'
 
 export type { Activity }

@@ -1,4 +1,4 @@
-import { Logger } from '@forinda/kickjs'
+import { Logger } from '@forinda/kickjs-core'
 import type { AuthStrategy, AuthUser } from '../types'
 
 const log = Logger.for('OAuthStrategy')

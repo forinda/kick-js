@@ -1,5 +1,5 @@
-import { Container, type AppModule, type ModuleRoutes } from '@forinda/kickjs'
-import { buildRoutes } from '@forinda/kickjs'
+import { Container, type AppModule, type ModuleRoutes } from '@forinda/kickjs-core'
+import { buildRoutes } from '@forinda/kickjs-http'
 import { TOKENS } from '@/shared/constants/tokens'
 import { PrismaRefreshTokenRepository } from './infrastructure/repositories/prisma-refresh-token.repository'
 import { AuthController } from './presentation/auth.controller'

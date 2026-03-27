@@ -1,5 +1,5 @@
-import type { MiddlewareHandler } from '@forinda/kickjs';
-import type { RequestContext } from '@forinda/kickjs';
+import type { MiddlewareHandler } from '@forinda/kickjs-core';
+import type { RequestContext } from '@forinda/kickjs-http';
 
 /**
  * Validates JWT from the Authorization header and stores the authenticated

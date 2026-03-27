@@ -29,7 +29,7 @@ export async function generateService(options: GenerateServiceOptions): Promise<
   const filePath = join(outDir, `${kebab}.service.ts`)
   await writeFileSafe(
     filePath,
-    `import { Service } from '@forinda/kickjs'
+    `import { Service } from '@forinda/kickjs-core'
 
 @Service()
 export class ${pascal}Service {

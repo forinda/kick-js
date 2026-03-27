@@ -1,5 +1,5 @@
 import type { channels, channelMembers } from '@/db/schema'
-import type { ParsedQuery } from '@forinda/kickjs'
+import type { ParsedQuery } from '@forinda/kickjs-http'
 
 export type Channel = typeof channels.$inferSelect
 export type NewChannel = typeof channels.$inferInsert

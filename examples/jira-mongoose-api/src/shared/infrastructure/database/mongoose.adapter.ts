@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
-import { Logger } from '@forinda/kickjs';
-import type { AppAdapter, Container } from '@forinda/kickjs';
+import { Logger } from '@forinda/kickjs-core';
+import type { AppAdapter, Container } from '@forinda/kickjs-core';
 import { TOKENS } from '@/shared/constants/tokens';
 
 const logger = Logger.for('MongooseAdapter');

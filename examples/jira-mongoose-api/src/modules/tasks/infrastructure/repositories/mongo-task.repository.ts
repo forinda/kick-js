@@ -1,4 +1,4 @@
-import { Repository } from '@forinda/kickjs';
+import { Repository } from '@forinda/kickjs-core';
 import type { ITaskRepository } from '../../domain/repositories/task.repository';
 import type { TaskEntity } from '../../domain/entities/task.entity';
 import { buildMongoFilter, buildMongoSort, buildMongoSearch } from '@/shared/infrastructure/database/query-helpers';

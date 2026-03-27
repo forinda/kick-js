@@ -1,4 +1,4 @@
-import { Logger } from '@forinda/kickjs'
+import { Logger } from '@forinda/kickjs-core'
 import type { MailProvider, MailMessage, MailResult } from '../types'
 
 const log = Logger.for('ConsoleMail')

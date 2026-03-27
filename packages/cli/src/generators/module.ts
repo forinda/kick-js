@@ -149,7 +149,7 @@ async function autoRegisterModule(
   if (!exists) {
     await writeFileSafe(
       indexPath,
-      `import type { AppModuleClass } from '@forinda/kickjs'
+      `import type { AppModuleClass } from '@forinda/kickjs-core'
 import { ${pascal}Module } from './${plural}'
 
 export const modules: AppModuleClass[] = [${pascal}Module]

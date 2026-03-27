@@ -1,4 +1,4 @@
-import type { QueryParamsConfig } from '@forinda/kickjs'
+import type { QueryParamsConfig } from '@forinda/kickjs-core'
 
 export const USER_QUERY_CONFIG: QueryParamsConfig = {
   filterable: ['email', 'globalRole', 'isActive'],

@@ -12,7 +12,7 @@ export function generateUseCases(ctx: TemplateContext): { file: string; content:
  * Use cases are thin: validate input (via DTO), call domain/repo, return response.
  * Keep business rules in the domain service, not here.
  */
-import { Service, Inject } from '@forinda/kickjs'
+import { Service, Inject } from '@forinda/kickjs-core'
 import { ${pascal.toUpperCase()}_REPOSITORY, type I${pascal}Repository } from '../../domain/repositories/${kebab}.repository'
 import type { Create${pascal}DTO } from '../dtos/create-${kebab}.dto'
 import type { ${pascal}ResponseDTO } from '../dtos/${kebab}-response.dto'
@@ -31,7 +31,7 @@ export class Create${pascal}UseCase {
     },
     {
       file: `get-${kebab}.use-case.ts`,
-      content: `import { Service, Inject } from '@forinda/kickjs'
+      content: `import { Service, Inject } from '@forinda/kickjs-core'
 import { ${pascal.toUpperCase()}_REPOSITORY, type I${pascal}Repository } from '../../domain/repositories/${kebab}.repository'
 import type { ${pascal}ResponseDTO } from '../dtos/${kebab}-response.dto'
 
@@ -49,9 +49,9 @@ export class Get${pascal}UseCase {
     },
     {
       file: `list-${plural}.use-case.ts`,
-      content: `import { Service, Inject } from '@forinda/kickjs'
+      content: `import { Service, Inject } from '@forinda/kickjs-core'
 import { ${pascal.toUpperCase()}_REPOSITORY, type I${pascal}Repository } from '../../domain/repositories/${kebab}.repository'
-import type { ParsedQuery } from '@forinda/kickjs'
+import type { ParsedQuery } from '@forinda/kickjs-http'
 
 @Service()
 export class List${pluralPascal}UseCase {
@@ -67,7 +67,7 @@ export class List${pluralPascal}UseCase {
     },
     {
       file: `update-${kebab}.use-case.ts`,
-      content: `import { Service, Inject } from '@forinda/kickjs'
+      content: `import { Service, Inject } from '@forinda/kickjs-core'
 import { ${pascal.toUpperCase()}_REPOSITORY, type I${pascal}Repository } from '../../domain/repositories/${kebab}.repository'
 import type { Update${pascal}DTO } from '../dtos/update-${kebab}.dto'
 import type { ${pascal}ResponseDTO } from '../dtos/${kebab}-response.dto'
@@ -86,7 +86,7 @@ export class Update${pascal}UseCase {
     },
     {
       file: `delete-${kebab}.use-case.ts`,
-      content: `import { Service, Inject } from '@forinda/kickjs'
+      content: `import { Service, Inject } from '@forinda/kickjs-core'
 import { ${pascal.toUpperCase()}_REPOSITORY, type I${pascal}Repository } from '../../domain/repositories/${kebab}.repository'
 
 @Service()

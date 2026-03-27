@@ -5,7 +5,7 @@
  * Use this for cross-entity logic, validation rules, and domain invariants.
  * Keep it free of HTTP/framework concerns.
  */
-import { Service, Inject, HttpException } from '@forinda/kickjs'
+import { Service, Inject, HttpException } from '@forinda/kickjs-core'
 import { HEALTH_REPOSITORY, type IHealthRepository } from '../repositories/health.repository'
 
 @Service()

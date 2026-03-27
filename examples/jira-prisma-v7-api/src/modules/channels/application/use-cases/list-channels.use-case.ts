@@ -1,7 +1,7 @@
-import { Service, Inject } from '@forinda/kickjs'
+import { Service, Inject } from '@forinda/kickjs-core'
 import { TOKENS } from '@/shared/constants/tokens'
 import type { IChannelRepository } from '../../domain/repositories/channel.repository'
-import type { ParsedQuery } from '@forinda/kickjs'
+import type { ParsedQuery } from '@forinda/kickjs-http'
 
 @Service()
 export class ListChannelsUseCase {

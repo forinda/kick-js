@@ -1,5 +1,5 @@
-import type { AppModule, ModuleRoutes, Container } from '@forinda/kickjs';
-import { buildRoutes } from '@forinda/kickjs';
+import type { AppModule, ModuleRoutes, Container } from '@forinda/kickjs-core';
+import { buildRoutes } from '@forinda/kickjs-http';
 import { TOKENS } from '@/shared/constants/tokens';
 import { MongoChannelRepository } from './infrastructure/repositories/mongo-channel.repository';
 import { ChannelsController } from './presentation/channels.controller';

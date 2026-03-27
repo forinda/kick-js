@@ -1,4 +1,4 @@
-import { Service, Inject } from '@forinda/kickjs';
+import { Service, Inject } from '@forinda/kickjs-core';
 import { TOKENS } from '@/shared/constants/tokens';
 import type { IWorkspaceMemberRepository } from '../../domain/repositories/workspace-member.repository';
 import type { IUserRepository } from '@/modules/users/domain/repositories/user.repository';

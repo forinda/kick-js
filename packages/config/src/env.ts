@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import 'dotenv/config'
-import { Container } from '@forinda/kickjs'
+import { Container } from '@forinda/kickjs-core'
 
 /**
  * Base environment schema with common server variables.

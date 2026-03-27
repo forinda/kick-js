@@ -1,4 +1,4 @@
-import { Service, Inject, HttpException, Logger } from '@forinda/kickjs';
+import { Service, Inject, HttpException, Logger } from '@forinda/kickjs-core';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';

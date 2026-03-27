@@ -1,4 +1,4 @@
-import { Repository } from '@forinda/kickjs';
+import { Repository } from '@forinda/kickjs-core';
 import type { IChannelRepository } from '../../domain/repositories/channel.repository';
 import type { ChannelEntity } from '../../domain/entities/channel.entity';
 import { ChannelModel } from '../schemas/channel.schema';

@@ -1,4 +1,4 @@
-import type { ParsedQuery } from '@forinda/kickjs'
+import type { ParsedQuery } from '@forinda/kickjs-http'
 import type { Comment } from '@prisma/client'
 
 export type { Comment }

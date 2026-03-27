@@ -13,8 +13,8 @@
  * Add Swagger decorators (@ApiTags, @ApiOperation, @ApiResponse) from @forinda/kickjs-swagger
  * for automatic OpenAPI documentation.
  */
-import { Controller, Get, Post, Put, Delete, Autowired } from '@forinda/kickjs'
-import { RequestContext } from '@forinda/kickjs'
+import { Controller, Get, Post, Put, Delete, Autowired } from '@forinda/kickjs-core'
+import { RequestContext } from '@forinda/kickjs-http'
 import { CreateProductsUseCase } from '../application/use-cases/create-products.use-case'
 import { GetProductsUseCase } from '../application/use-cases/get-products.use-case'
 import { ListProductsUseCase } from '../application/use-cases/list-products.use-case'

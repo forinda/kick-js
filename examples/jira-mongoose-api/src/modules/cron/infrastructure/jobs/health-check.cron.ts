@@ -1,4 +1,4 @@
-import { Service, Autowired, Logger } from '@forinda/kickjs';
+import { Service, Autowired, Logger } from '@forinda/kickjs-core';
 import { Cron } from '@forinda/kickjs-cron';
 import { QUEUE_MANAGER, type QueueService } from '@forinda/kickjs-queue';
 import { TOKENS } from '@/shared/constants/tokens';

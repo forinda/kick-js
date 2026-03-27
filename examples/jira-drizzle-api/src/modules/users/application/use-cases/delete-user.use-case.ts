@@ -1,4 +1,4 @@
-import { Service, Inject } from '@forinda/kickjs'
+import { Service, Inject } from '@forinda/kickjs-core'
 import { USER_REPOSITORY, type IUserRepository } from '../../domain/repositories/user.repository'
 
 @Service()

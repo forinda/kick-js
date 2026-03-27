@@ -1,5 +1,5 @@
 import { eq, and } from 'drizzle-orm'
-import { Repository, Inject } from '@forinda/kickjs'
+import { Repository, Inject } from '@forinda/kickjs-core'
 import { DRIZZLE_DB } from '@forinda/kickjs-drizzle'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type { ITaskLabelRepository } from '../../domain/repositories/task-label.repository'

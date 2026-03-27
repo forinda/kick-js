@@ -1,8 +1,8 @@
 import { eq, and, sql } from 'drizzle-orm'
-import { Repository, Inject } from '@forinda/kickjs'
+import { Repository, Inject } from '@forinda/kickjs-core'
 import { DRIZZLE_DB } from '@forinda/kickjs-drizzle'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
-import type { ParsedQuery } from '@forinda/kickjs'
+import type { ParsedQuery } from '@forinda/kickjs-http'
 import type {
   INotificationRepository,
   NewNotification,

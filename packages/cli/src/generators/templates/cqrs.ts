@@ -29,8 +29,8 @@ export function generateCqrsModuleIndex(ctx: TemplateContext & { repo: string })
  *   events/         — Domain events + handlers (WS broadcast, queue dispatch)
  *   dtos/           — Request/response schemas
  */
-import { Container, type AppModule, type ModuleRoutes } from '@forinda/kickjs'
-import { buildRoutes } from '@forinda/kickjs'
+import { Container, type AppModule, type ModuleRoutes } from '@forinda/kickjs-core'
+import { buildRoutes } from '@forinda/kickjs-http'
 import { ${pascal.toUpperCase()}_REPOSITORY } from './${kebab}.repository'
 import { ${repoClass} } from './${repoFile}.repository'
 import { ${pascal}Controller } from './${kebab}.controller'
@@ -67,8 +67,8 @@ export class ${pascal}Module implements AppModule {
 /** CQRS controller — dispatches to command/query handlers */
 export function generateCqrsController(ctx: TemplateContext): string {
   const { pascal, kebab, plural = '', pluralPascal = '' } = ctx
-  return `import { Controller, Get, Post, Put, Delete, Autowired, ApiQueryParams } from '@forinda/kickjs'
-import type { RequestContext } from '@forinda/kickjs'
+  return `import { Controller, Get, Post, Put, Delete, Autowired, ApiQueryParams } from '@forinda/kickjs-core'
+import type { RequestContext } from '@forinda/kickjs-http'
 import { ApiTags } from '@forinda/kickjs-swagger'
 import { Create${pascal}Command } from './commands/create-${kebab}.command'
 import { Update${pascal}Command } from './commands/update-${kebab}.command'
@@ -135,7 +135,7 @@ export function generateCqrsCommands(ctx: TemplateContext): { file: string; cont
   return [
     {
       file: `create-${kebab}.command.ts`,
-      content: `import { Service, Inject } from '@forinda/kickjs'
+      content: `import { Service, Inject } from '@forinda/kickjs-core'
 import { ${pascal.toUpperCase()}_REPOSITORY, type I${pascal}Repository } from '../${kebab}.repository'
 import type { Create${pascal}DTO } from '../dtos/create-${kebab}.dto'
 import type { ${pascal}ResponseDTO } from '../dtos/${kebab}-response.dto'
@@ -158,7 +158,7 @@ export class Create${pascal}Command {
     },
     {
       file: `update-${kebab}.command.ts`,
-      content: `import { Service, Inject } from '@forinda/kickjs'
+      content: `import { Service, Inject } from '@forinda/kickjs-core'
 import { ${pascal.toUpperCase()}_REPOSITORY, type I${pascal}Repository } from '../${kebab}.repository'
 import type { Update${pascal}DTO } from '../dtos/update-${kebab}.dto'
 import type { ${pascal}ResponseDTO } from '../dtos/${kebab}-response.dto'
@@ -181,7 +181,7 @@ export class Update${pascal}Command {
     },
     {
       file: `delete-${kebab}.command.ts`,
-      content: `import { Service, Inject } from '@forinda/kickjs'
+      content: `import { Service, Inject } from '@forinda/kickjs-core'
 import { ${pascal.toUpperCase()}_REPOSITORY, type I${pascal}Repository } from '../${kebab}.repository'
 import { ${pascal}Events } from '../events/${kebab}.events'
 
@@ -208,7 +208,7 @@ export function generateCqrsQueries(ctx: TemplateContext): { file: string; conte
   return [
     {
       file: `get-${kebab}.query.ts`,
-      content: `import { Service, Inject } from '@forinda/kickjs'
+      content: `import { Service, Inject } from '@forinda/kickjs-core'
 import { ${pascal.toUpperCase()}_REPOSITORY, type I${pascal}Repository } from '../${kebab}.repository'
 import type { ${pascal}ResponseDTO } from '../dtos/${kebab}-response.dto'
 
@@ -226,9 +226,9 @@ export class Get${pascal}Query {
     },
     {
       file: `list-${plural}.query.ts`,
-      content: `import { Service, Inject } from '@forinda/kickjs'
+      content: `import { Service, Inject } from '@forinda/kickjs-core'
 import { ${pascal.toUpperCase()}_REPOSITORY, type I${pascal}Repository } from '../${kebab}.repository'
-import type { ParsedQuery } from '@forinda/kickjs'
+import type { ParsedQuery } from '@forinda/kickjs-http'
 
 @Service()
 export class List${pluralPascal}Query {
@@ -251,7 +251,7 @@ export function generateCqrsEvents(ctx: TemplateContext): { file: string; conten
   return [
     {
       file: `${kebab}.events.ts`,
-      content: `import { Service } from '@forinda/kickjs'
+      content: `import { Service } from '@forinda/kickjs-core'
 import { EventEmitter } from 'node:events'
 import type { ${pascal}ResponseDTO } from '../dtos/${kebab}-response.dto'
 
@@ -291,7 +291,7 @@ export class ${pascal}Events {
     },
     {
       file: `on-${kebab}-change.handler.ts`,
-      content: `import { Service, Autowired } from '@forinda/kickjs'
+      content: `import { Service, Autowired } from '@forinda/kickjs-core'
 import { ${pascal}Events } from './${kebab}.events'
 
 /**

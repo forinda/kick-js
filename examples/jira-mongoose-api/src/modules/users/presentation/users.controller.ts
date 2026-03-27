@@ -1,6 +1,6 @@
-import { Controller, Get, Patch, Middleware, ApiQueryParams, Autowired } from '@forinda/kickjs';
+import { Controller, Get, Patch, Middleware, ApiQueryParams, Autowired } from '@forinda/kickjs-core';
 import { Roles } from '@forinda/kickjs-auth';
-import type { RequestContext } from '@forinda/kickjs';
+import type { RequestContext } from '@forinda/kickjs-http';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@forinda/kickjs-swagger';
 import { updateProfileSchema } from '../application/dtos/update-profile.dto';
 import { USER_QUERY_CONFIG } from '@/shared/constants/query-configs';

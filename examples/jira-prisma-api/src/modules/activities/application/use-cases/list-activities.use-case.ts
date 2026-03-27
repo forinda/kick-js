@@ -1,9 +1,9 @@
-import { Service, Inject } from '@forinda/kickjs'
+import { Service, Inject } from '@forinda/kickjs-core'
 import {
   ACTIVITY_REPOSITORY,
   type IActivityRepository,
 } from '../../domain/repositories/activity.repository'
-import type { ParsedQuery } from '@forinda/kickjs'
+import type { ParsedQuery } from '@forinda/kickjs-http'
 
 @Service()
 export class ListActivitiesUseCase {

@@ -56,7 +56,8 @@
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
-    "@forinda/kickjs": "workspace:*",
+    "@forinda/kickjs-core": "workspace:*",
+    "@forinda/kickjs-http": "workspace:*",
     "reflect-metadata": "^0.2.2"
   },
   "devDependencies": {

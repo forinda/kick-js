@@ -1,4 +1,4 @@
-import { Service, Inject } from '@forinda/kickjs';
+import { Service, Inject } from '@forinda/kickjs-core';
 import { TOKENS } from '@/shared/constants/tokens';
 import type { ITaskRepository } from '../../domain/repositories/task.repository';
 import type { IProjectRepository } from '@/modules/projects/domain/repositories/project.repository';

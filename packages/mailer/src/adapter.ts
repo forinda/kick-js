@@ -1,4 +1,4 @@
-import { Logger, type AppAdapter, type AdapterContext } from '@forinda/kickjs'
+import { Logger, type AppAdapter, type AdapterContext } from '@forinda/kickjs-core'
 import { MailerService, MAILER } from './mailer.service'
 import type { MailerOptions } from './types'
 

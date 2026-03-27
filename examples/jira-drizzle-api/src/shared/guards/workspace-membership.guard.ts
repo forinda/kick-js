@@ -1,5 +1,5 @@
-import { Container, HttpException, type MiddlewareHandler } from '@forinda/kickjs'
-import type { RequestContext } from '@forinda/kickjs'
+import { Container, HttpException, type MiddlewareHandler } from '@forinda/kickjs-core'
+import type { RequestContext } from '@forinda/kickjs-http'
 import { TOKENS } from '@/shared/constants/tokens'
 import { ErrorCode } from '@/shared/constants/error-codes'
 import { getUser } from '@/shared/utils/auth'

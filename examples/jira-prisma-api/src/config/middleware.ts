@@ -1,5 +1,5 @@
 import express from 'express'
-import type { MiddlewareEntry } from '@forinda/kickjs'
+import type { MiddlewareEntry } from '@forinda/kickjs-http'
 
 export const middleware: MiddlewareEntry[] = [
   express.json({ limit: '10mb' }),

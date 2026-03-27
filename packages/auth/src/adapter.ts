@@ -7,7 +7,7 @@ import {
   type AdapterContext,
   type AdapterMiddleware,
   type RouteDefinition,
-} from '@forinda/kickjs'
+} from '@forinda/kickjs-core'
 
 import { AUTH_META, type AuthAdapterOptions, type AuthStrategy, type AuthUser } from './types'
 

@@ -3,7 +3,7 @@ import {
   type AppAdapter,
   type AdapterContext,
   type AdapterMiddleware,
-} from '@forinda/kickjs'
+} from '@forinda/kickjs-core'
 import type { Request, Response, NextFunction } from 'express'
 import type { OtelAdapterOptions } from './types'
 

@@ -1,6 +1,6 @@
-import type { RequestContext } from '@forinda/kickjs';
-import type { MiddlewareHandler } from '@forinda/kickjs';
-import { Container, HttpException } from '@forinda/kickjs';
+import type { RequestContext } from '@forinda/kickjs-http';
+import type { MiddlewareHandler } from '@forinda/kickjs-core';
+import { Container, HttpException } from '@forinda/kickjs-core';
 import { TOKENS } from '@/shared/constants/tokens';
 import { ErrorCode } from '@/shared/constants/error-codes';
 import type { IWorkspaceMemberRepository } from '@/modules/workspaces/domain/repositories/workspace-member.repository';

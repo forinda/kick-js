@@ -1,4 +1,4 @@
-import { Repository, Inject } from '@forinda/kickjs'
+import { Repository, Inject } from '@forinda/kickjs-core'
 import { PRISMA_CLIENT } from '@forinda/kickjs-prisma'
 import type { PrismaClient } from '@prisma/client'
 import type { IChannelMemberRepository } from '../../domain/repositories/channel.repository'

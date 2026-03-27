@@ -3,7 +3,7 @@ import type { TemplateContext } from './types'
 export function generateControllerTest(ctx: TemplateContext): string {
   const { pascal, kebab, plural = '' } = ctx
   return `import { describe, it, expect, beforeEach } from 'vitest'
-import { Container } from '@forinda/kickjs'
+import { Container } from '@forinda/kickjs-core'
 
 describe('${pascal}Controller', () => {
   beforeEach(() => {

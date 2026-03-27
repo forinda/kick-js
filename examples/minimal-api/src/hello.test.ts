@@ -1,9 +1,9 @@
 import 'reflect-metadata'
 import { describe, it, expect, beforeEach } from 'vitest'
 import request from 'supertest'
-import { Controller, Get, Container } from '@forinda/kickjs'
-import type { AppModule, ModuleRoutes } from '@forinda/kickjs'
-import { RequestContext, buildRoutes } from '@forinda/kickjs'
+import { Controller, Get, Container } from '@forinda/kickjs-core'
+import type { AppModule, ModuleRoutes } from '@forinda/kickjs-core'
+import { RequestContext, buildRoutes } from '@forinda/kickjs-http'
 import { createTestApp } from '@forinda/kickjs-testing'
 
 // ── Controller under test ────────────────────────────────────────────

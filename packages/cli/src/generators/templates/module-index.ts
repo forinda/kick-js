@@ -56,8 +56,8 @@ export function generateModuleIndex(ctx: TemplateContext & { repo: RepoType }): 
  *   domain/          — Entities, value objects, repository interfaces, domain services
  *   infrastructure/  — Repository implementations (currently ${repoLabel(repo)})
  */
-import { Container, type AppModule, type ModuleRoutes } from '@forinda/kickjs'
-import { buildRoutes } from '@forinda/kickjs'
+import { Container, type AppModule, type ModuleRoutes } from '@forinda/kickjs-core'
+import { buildRoutes } from '@forinda/kickjs-http'
 import { ${pascal.toUpperCase()}_REPOSITORY } from './domain/repositories/${kebab}.repository'
 import { ${repoClass} } from './infrastructure/repositories/${repoFile}.repository'
 import { ${pascal}Controller } from './presentation/${kebab}.controller'
@@ -114,8 +114,8 @@ export function generateRestModuleIndex(ctx: TemplateContext & { repo: RepoType 
  *   ${repoFile}.repository.ts — Repository implementation
  *   dtos/                   — Request/response schemas
  */
-import { Container, type AppModule, type ModuleRoutes } from '@forinda/kickjs'
-import { buildRoutes } from '@forinda/kickjs'
+import { Container, type AppModule, type ModuleRoutes } from '@forinda/kickjs-core'
+import { buildRoutes } from '@forinda/kickjs-http'
 import { ${pascal.toUpperCase()}_REPOSITORY } from './${kebab}.repository'
 import { ${repoClass} } from './${repoFile}.repository'
 import { ${pascal}Controller } from './${kebab}.controller'
@@ -144,8 +144,8 @@ export class ${pascal}Module implements AppModule {
 /** Minimal module index — just controller, no service/repo */
 export function generateMinimalModuleIndex(ctx: TemplateContext): string {
   const { pascal, kebab, plural = '' } = ctx
-  return `import { type AppModule, type ModuleRoutes } from '@forinda/kickjs'
-import { buildRoutes } from '@forinda/kickjs'
+  return `import { type AppModule, type ModuleRoutes } from '@forinda/kickjs-core'
+import { buildRoutes } from '@forinda/kickjs-http'
 import { ${pascal}Controller } from './${kebab}.controller'
 
 export class ${pascal}Module implements AppModule {

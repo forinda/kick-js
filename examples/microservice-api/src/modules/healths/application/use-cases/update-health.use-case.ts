@@ -1,4 +1,4 @@
-import { Service, Inject } from '@forinda/kickjs'
+import { Service, Inject } from '@forinda/kickjs-core'
 import { HEALTH_REPOSITORY, type IHealthRepository } from '../../domain/repositories/health.repository'
 import type { UpdateHealthDTO } from '../dtos/update-health.dto'
 import type { HealthResponseDTO } from '../dtos/health-response.dto'

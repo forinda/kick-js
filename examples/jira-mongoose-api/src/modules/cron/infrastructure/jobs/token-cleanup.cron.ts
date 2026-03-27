@@ -1,4 +1,4 @@
-import { Service, Autowired, Logger } from '@forinda/kickjs';
+import { Service, Autowired, Logger } from '@forinda/kickjs-core';
 import { Cron } from '@forinda/kickjs-cron';
 import { TOKENS } from '@/shared/constants/tokens';
 import type { IRefreshTokenRepository } from '@/modules/auth/domain/repositories/refresh-token.repository';

@@ -1,4 +1,4 @@
-import { Service, Inject } from '@forinda/kickjs'
+import { Service, Inject } from '@forinda/kickjs-core'
 import { STATS_REPOSITORY, type IStatsRepository } from '../../domain/repositories/stat.repository'
 
 @Service()

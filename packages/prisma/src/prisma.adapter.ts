@@ -1,4 +1,4 @@
-import { Logger, type AppAdapter, type AdapterContext, Scope } from '@forinda/kickjs'
+import { Logger, type AppAdapter, type AdapterContext, Scope } from '@forinda/kickjs-core'
 import { PRISMA_CLIENT, type PrismaAdapterOptions } from './types'
 
 const log = Logger.for('PrismaAdapter')

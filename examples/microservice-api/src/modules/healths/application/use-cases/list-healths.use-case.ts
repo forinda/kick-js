@@ -1,6 +1,6 @@
-import { Service, Inject } from '@forinda/kickjs'
+import { Service, Inject } from '@forinda/kickjs-core'
 import { HEALTH_REPOSITORY, type IHealthRepository } from '../../domain/repositories/health.repository'
-import type { ParsedQuery } from '@forinda/kickjs'
+import type { ParsedQuery } from '@forinda/kickjs-http'
 
 @Service()
 export class ListHealthsUseCase {

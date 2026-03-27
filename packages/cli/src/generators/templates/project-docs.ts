@@ -142,7 +142,7 @@ ${template === 'graphql' ? '├── resolvers/         # GraphQL resolvers\n' 
 Use decorators to define routes:
 
 \`\`\`ts
-import { Controller, Get, Post, RequestContext } from '@forinda/kickjs'
+import { Controller, Get, Post, RequestContext } from '@forinda/kickjs-http'
 
 @Controller('/users')
 export class UserController {
@@ -164,7 +164,7 @@ export class UserController {
 Inject dependencies with \`@Service()\` and \`@Autowired()\`:
 
 \`\`\`ts
-import { Service, Autowired } from '@forinda/kickjs'
+import { Service, Autowired } from '@forinda/kickjs-core'
 
 @Service()
 export class UserService {
@@ -182,7 +182,7 @@ export class UserService {
 Register controllers and providers in modules:
 
 \`\`\`ts
-import { Module } from '@forinda/kickjs'
+import { Module } from '@forinda/kickjs-core'
 import { UserController } from './user.controller'
 import { UserService } from './user.service'
 
@@ -288,7 +288,7 @@ Tests live in \`src/**/*.test.ts\`:
 
 \`\`\`ts
 import { describe, it, expect, beforeEach } from 'vitest'
-import { Container } from '@forinda/kickjs'
+import { Container } from '@forinda/kickjs-core'
 import { createTestApp } from '@forinda/kickjs-testing'
 
 describe('UserController', () => {
@@ -578,7 +578,7 @@ All tests use Vitest:
 
 \`\`\`ts
 import { describe, it, expect, beforeEach } from 'vitest'
-import { Container } from '@forinda/kickjs'
+import { Container } from '@forinda/kickjs-core'
 import { createTestApp } from '@forinda/kickjs-testing'
 
 describe('UserController', () => {

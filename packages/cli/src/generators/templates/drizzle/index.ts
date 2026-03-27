@@ -19,9 +19,9 @@ export function generateDrizzleRepository(ctx: TemplateContext): string {
  * @Repository() registers this class in the DI container as a singleton.
  */
 import { eq, ne, gt, gte, lt, lte, ilike, inArray, between, and, or, asc, desc, count, sql } from 'drizzle-orm'
-import { Repository, HttpException, Inject } from '@forinda/kickjs'
+import { Repository, HttpException, Inject } from '@forinda/kickjs-core'
 import { DRIZZLE_DB, DrizzleQueryAdapter } from '@forinda/kickjs-drizzle'
-import type { ParsedQuery } from '@forinda/kickjs'
+import type { ParsedQuery } from '@forinda/kickjs-http'
 import type { I${pascal}Repository } from '${repoPrefix}/${kebab}.repository'
 import type { ${pascal}ResponseDTO } from '${dtoPrefix}/${kebab}-response.dto'
 import type { Create${pascal}DTO } from '${dtoPrefix}/create-${kebab}.dto'

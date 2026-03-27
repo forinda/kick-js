@@ -1,6 +1,6 @@
-import { Service, Inject } from '@forinda/kickjs'
+import { Service, Inject } from '@forinda/kickjs-core'
 import { LABEL_REPOSITORY, type ILabelRepository } from '../../domain/repositories/label.repository'
-import type { ParsedQuery } from '@forinda/kickjs'
+import type { ParsedQuery } from '@forinda/kickjs-http'
 
 @Service()
 export class ListLabelsUseCase {

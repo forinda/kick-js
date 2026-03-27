@@ -1,4 +1,4 @@
-import { Service, Inject, HttpException } from '@forinda/kickjs'
+import { Service, Inject, HttpException } from '@forinda/kickjs-core'
 import { LABEL_REPOSITORY, type ILabelRepository } from '../repositories/label.repository'
 
 @Service()

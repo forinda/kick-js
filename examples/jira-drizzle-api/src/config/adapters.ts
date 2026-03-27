@@ -6,7 +6,7 @@ import { MailerAdapter, ConsoleProvider } from '@forinda/kickjs-mailer'
 import { QueueAdapter } from '@forinda/kickjs-queue'
 import { CronAdapter } from '@forinda/kickjs-cron'
 import { db, client } from '@/db'
-import { AppAdapter } from '@forinda/kickjs'
+import { AppAdapter } from '@forinda/kickjs-core'
 import { env } from './env'
 
 // Side-effect imports: register decorated classes

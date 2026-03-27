@@ -1,5 +1,5 @@
 import 'reflect-metadata'
-import { Service } from '@forinda/kickjs'
+import { Service } from '@forinda/kickjs-core'
 import { QUEUE_METADATA, jobRegistry, type ProcessDefinition } from './types'
 
 /**

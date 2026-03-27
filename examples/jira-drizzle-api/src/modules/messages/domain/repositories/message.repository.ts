@@ -1,5 +1,5 @@
 import type { messages } from '@/db/schema'
-import type { ParsedQuery } from '@forinda/kickjs'
+import type { ParsedQuery } from '@forinda/kickjs-http'
 
 export type Message = typeof messages.$inferSelect
 export type NewMessage = typeof messages.$inferInsert

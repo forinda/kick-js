@@ -1,5 +1,5 @@
-import type { AppModule, ModuleRoutes, Container } from '@forinda/kickjs';
-import { buildRoutes } from '@forinda/kickjs';
+import type { AppModule, ModuleRoutes, Container } from '@forinda/kickjs-core';
+import { buildRoutes } from '@forinda/kickjs-http';
 import { TOKENS } from '@/shared/constants/tokens';
 import { MongoWorkspaceRepository } from './infrastructure/repositories/mongo-workspace.repository';
 import { MongoWorkspaceMemberRepository } from './infrastructure/repositories/mongo-workspace-member.repository';

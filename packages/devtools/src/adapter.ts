@@ -17,7 +17,7 @@ import {
   createLogger,
   type Ref,
   type ComputedRef,
-} from '@forinda/kickjs'
+} from '@forinda/kickjs-core'
 
 const log = createLogger('DevTools')
 

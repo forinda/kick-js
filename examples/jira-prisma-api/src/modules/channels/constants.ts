@@ -1,4 +1,4 @@
-import type { QueryParamsConfig } from '@forinda/kickjs'
+import type { QueryParamsConfig } from '@forinda/kickjs-core'
 
 export const CHANNEL_QUERY_CONFIG: QueryParamsConfig = {
   filterable: ['workspaceId', 'type'],

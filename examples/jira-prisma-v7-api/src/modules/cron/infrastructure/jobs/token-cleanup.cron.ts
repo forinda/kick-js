@@ -1,4 +1,4 @@
-import { Service, Inject, Logger } from '@forinda/kickjs'
+import { Service, Inject, Logger } from '@forinda/kickjs-core'
 import { Cron } from '@forinda/kickjs-cron'
 import { PRISMA_CLIENT } from '@forinda/kickjs-prisma'
 import type { PrismaClient } from '@/generated/prisma/client'

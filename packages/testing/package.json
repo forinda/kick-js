@@ -59,7 +59,8 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@forinda/kickjs": "workspace:*"
+    "@forinda/kickjs-core": "workspace:*",
+    "@forinda/kickjs-http": "workspace:*"
   },
   "peerDependencies": {
     "express": "^5.1.0"

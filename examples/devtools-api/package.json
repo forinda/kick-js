@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@forinda/kickjs": "workspace:*",
+    "@forinda/kickjs-core": "workspace:*",
+    "@forinda/kickjs-http": "workspace:*",
     "@forinda/kickjs-config": "workspace:*",
     "@forinda/kickjs-swagger": "workspace:*",
     "express": "^5.1.0",

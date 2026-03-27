@@ -8,8 +8,8 @@ export async function generateMinimalFiles(ctx: ModuleContext): Promise<void> {
 
   await write(
     `${kebab}.controller.ts`,
-    `import { Controller, Get } from '@forinda/kickjs'
-import type { RequestContext } from '@forinda/kickjs'
+    `import { Controller, Get } from '@forinda/kickjs-core'
+import type { RequestContext } from '@forinda/kickjs-http'
 
 @Controller()
 export class ${pascal}Controller {
