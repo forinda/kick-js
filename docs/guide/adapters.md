@@ -4,10 +4,10 @@ Adapters plug into the KickJS application lifecycle. Use them to add health chec
 
 ## The AppAdapter Interface
 
-Every adapter implements part (or all) of the `AppAdapter` interface from `@forinda/kickjs-core`:
+Every adapter implements part (or all) of the `AppAdapter` interface from `@forinda/kickjs`:
 
 ```ts
-import type { AppAdapter, AdapterContext } from '@forinda/kickjs-core'
+import type { AppAdapter, AdapterContext } from '@forinda/kickjs'
 
 // AdapterContext — populated by the framework, passed to all hooks
 interface AdapterContext {
@@ -78,7 +78,7 @@ After setup, when the HTTP server starts listening, `afterStart` is called. On s
 Register routes that bypass the global middleware stack:
 
 ```ts
-import type { AppAdapter, AdapterContext } from '@forinda/kickjs-core'
+import type { AppAdapter, AdapterContext } from '@forinda/kickjs'
 
 export class HealthAdapter implements AppAdapter {
   name = 'HealthAdapter'
@@ -112,7 +112,7 @@ export class HealthAdapter implements AppAdapter {
 Scope middleware to specific paths using the `path` property:
 
 ```ts
-import type { AppAdapter, AdapterMiddleware } from '@forinda/kickjs-core'
+import type { AppAdapter, AdapterMiddleware } from '@forinda/kickjs'
 
 export class RateLimitAdapter implements AppAdapter {
   name = 'RateLimitAdapter'
@@ -131,7 +131,7 @@ export class RateLimitAdapter implements AppAdapter {
 Connect on start, clean up on shutdown:
 
 ```ts
-import type { AppAdapter, AdapterContext } from '@forinda/kickjs-core'
+import type { AppAdapter, AdapterContext } from '@forinda/kickjs'
 import { createClient } from 'redis'
 
 const REDIS = Symbol('Redis')
@@ -156,7 +156,7 @@ export class RedisAdapter implements AppAdapter {
 Pass adapter instances to `bootstrap()` or `Application`:
 
 ```ts
-import { bootstrap } from '@forinda/kickjs-http'
+import { bootstrap } from '@forinda/kickjs'
 import { modules } from './modules'
 import { HealthAdapter } from './adapters/health.adapter'
 import { CorsAdapter } from './adapters/cors.adapter'

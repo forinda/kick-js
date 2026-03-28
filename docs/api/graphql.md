@@ -15,7 +15,7 @@ kick add graphql
 ```ts
 import 'reflect-metadata'
 import * as graphql from 'graphql'
-import { bootstrap } from '@forinda/kickjs-http'
+import { bootstrap } from '@forinda/kickjs'
 import { GraphQLAdapter } from '@forinda/kickjs-graphql'
 import { UserResolver } from './resolvers/user.resolver'
 
@@ -115,7 +115,7 @@ type User {                           type Query {
 
 ```ts
 // src/resolvers/user.resolver.ts
-import { Service } from '@forinda/kickjs-core'
+import { Service } from '@forinda/kickjs'
 import { Resolver, Query, Mutation, Arg } from '@forinda/kickjs-graphql'
 
 @Service()

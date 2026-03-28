@@ -1,4 +1,4 @@
-import type { MaybePromise } from '@forinda/kickjs-core'
+import type { MaybePromise } from '@forinda/kickjs'
 
 /** DI token for resolving the Drizzle database instance from the container */
 export const DRIZZLE_DB = Symbol('DrizzleDB')

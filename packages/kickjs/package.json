@@ -79,6 +79,14 @@
     "./query": {
       "import": "./dist/http/query/index.js",
       "types": "./dist/http/query/index.d.ts"
+    },
+    "./views": {
+      "import": "./dist/http/middleware/views.js",
+      "types": "./dist/http/middleware/views.d.ts"
+    },
+    "./spa": {
+      "import": "./dist/http/middleware/spa.js",
+      "types": "./dist/http/middleware/spa.d.ts"
     }
   },
   "files": [

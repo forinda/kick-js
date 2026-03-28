@@ -21,7 +21,7 @@ KickJS is built on Express 5, so your existing Express knowledge applies directl
 
 ```bash
 # In your existing Express project
-pnpm add @forinda/kickjs-core @forinda/kickjs-http @forinda/kickjs-swagger reflect-metadata zod
+pnpm add @forinda/kickjs @forinda/kickjs-swagger reflect-metadata zod
 pnpm add -D @forinda/kickjs-cli
 
 # Or use the CLI to add packages
@@ -55,7 +55,7 @@ import 'reflect-metadata'
 import cors from 'cors'
 import helmet from 'helmet'
 import express from 'express'
-import { bootstrap } from '@forinda/kickjs-http'
+import { bootstrap } from '@forinda/kickjs'
 import { SwaggerAdapter } from '@forinda/kickjs-swagger'
 import { modules } from './modules'
 
@@ -105,8 +105,8 @@ export default router
 
 ```ts
 // modules/users/controller.ts
-import { Controller, Get, Post, Autowired } from '@forinda/kickjs-core'
-import type { RequestContext } from '@forinda/kickjs-http'
+import { Controller, Get, Post, Autowired } from '@forinda/kickjs'
+import type { RequestContext } from '@forinda/kickjs'
 import { UserService } from './user.service'
 
 @Controller()
@@ -159,7 +159,7 @@ export class UserService {
 
 ```ts
 // modules/users/user.service.ts
-import { Service, Inject } from '@forinda/kickjs-core'
+import { Service, Inject } from '@forinda/kickjs'
 import { DRIZZLE_DB } from '@forinda/kickjs-drizzle'
 
 @Service()

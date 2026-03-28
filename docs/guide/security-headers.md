@@ -5,7 +5,7 @@ The `helmet()` middleware sets security-related HTTP headers with sensible defau
 ## Usage
 
 ```ts
-import { helmet } from '@forinda/kickjs-http'
+import { helmet } from '@forinda/kickjs'
 
 bootstrap({
   middleware: [helmet(), requestId(), express.json()],
@@ -52,7 +52,7 @@ helmet({
 ## Sub-path Import
 
 ```ts
-import { helmet } from '@forinda/kickjs-http/middleware/helmet'
+import { helmet } from '@forinda/kickjs/middleware/helmet'
 ```
 
 # CORS
@@ -62,7 +62,7 @@ The `cors()` middleware handles Cross-Origin Resource Sharing with correct spec 
 ## Usage
 
 ```ts
-import { cors } from '@forinda/kickjs-http'
+import { cors } from '@forinda/kickjs'
 
 // Allow all origins (default)
 bootstrap({
@@ -126,5 +126,5 @@ cors({
 ## Sub-path Import
 
 ```ts
-import { cors } from '@forinda/kickjs-http/middleware/cors'
+import { cors } from '@forinda/kickjs/middleware/cors'
 ```

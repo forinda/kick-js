@@ -1,5 +1,5 @@
 import { Queue, Worker, type Job as BullMQJob } from 'bullmq'
-import { Logger, type AppAdapter, type AdapterContext, Scope } from '@forinda/kickjs-core'
+import { Logger, type AppAdapter, type AdapterContext, Scope } from '@forinda/kickjs'
 import {
   QUEUE_MANAGER,
   QUEUE_METADATA,

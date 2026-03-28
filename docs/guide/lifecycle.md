@@ -163,10 +163,10 @@ During `kick dev`, file changes trigger an HMR rebuild — a faster path than a 
 
 ## bootstrap() vs Manual Wiring
 
-The `bootstrap()` helper from `@forinda/kickjs-http` handles the full lifecycle:
+The `bootstrap()` helper from `@forinda/kickjs` handles the full lifecycle:
 
 ```ts
-import { bootstrap } from '@forinda/kickjs-http'
+import { bootstrap } from '@forinda/kickjs'
 
 // This calls: new Application() → setup() → start()
 // Plus: HMR wiring, SIGINT/SIGTERM handlers, port conflict detection
@@ -180,7 +180,7 @@ bootstrap({
 For manual control:
 
 ```ts
-import { Application } from '@forinda/kickjs-http'
+import { Application } from '@forinda/kickjs'
 
 const app = new Application({ modules, adapters, middleware })
 app.setup()           // steps 1-13
@@ -193,7 +193,7 @@ app.start()           // steps 14-17
 A database adapter demonstrates all hooks:
 
 ```ts
-import type { AppAdapter, AdapterContext } from '@forinda/kickjs-core'
+import type { AppAdapter, AdapterContext } from '@forinda/kickjs'
 
 export class DatabaseAdapter implements AppAdapter {
   name = 'DatabaseAdapter'

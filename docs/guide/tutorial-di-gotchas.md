@@ -51,7 +51,7 @@ The module file imported these processors as side effects to ensure the decorato
 
 ```typescript
 // src/modules/queue/queue.module.ts
-import type { AppModule, ModuleRoutes, Container } from '@forinda/kickjs-core';
+import type { AppModule, ModuleRoutes, Container } from '@forinda/kickjs';
 import './infrastructure/processors/email.processor';
 import './infrastructure/processors/notification.processor';
 import './infrastructure/processors/activity.processor';

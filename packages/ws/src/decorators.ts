@@ -1,5 +1,5 @@
 import 'reflect-metadata'
-import { Service } from '@forinda/kickjs-core'
+import { Service } from '@forinda/kickjs'
 import { WS_METADATA, wsControllerRegistry, type WsHandlerDefinition } from './interfaces'
 
 /**

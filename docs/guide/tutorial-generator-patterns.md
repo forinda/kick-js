@@ -31,8 +31,8 @@ health/
 The `index.ts` file is your module definition. It implements `AppModule`, registers nothing in the DI container, and returns a single route pointing at the controller:
 
 ```typescript
-import type { AppModule, ModuleRoutes, Container } from '@forinda/kickjs-core';
-import { buildRoutes } from '@forinda/kickjs-http';
+import type { AppModule, ModuleRoutes, Container } from '@forinda/kickjs';
+import { buildRoutes } from '@forinda/kickjs';
 import { HealthController } from './health.controller';
 
 export class HealthModule implements AppModule {
@@ -53,8 +53,8 @@ export class HealthModule implements AppModule {
 The controller is equally lean. No services, no repositories, no DTOs. Just decorated route handlers returning responses directly:
 
 ```typescript
-import { Controller, Get } from '@forinda/kickjs-core';
-import type { RequestContext } from '@forinda/kickjs-http';
+import { Controller, Get } from '@forinda/kickjs';
+import type { RequestContext } from '@forinda/kickjs';
 
 @Controller()
 export class HealthController {
@@ -126,7 +126,7 @@ This is intentional. You get a working module the instant the generator finishes
 The `cats.config.ts` file contains a `QueryFieldConfig` for pagination:
 
 ```typescript
-import type { ApiQueryParamsConfig } from '@forinda/kickjs-core';
+import type { ApiQueryParamsConfig } from '@forinda/kickjs';
 
 export const CATS_QUERY_CONFIG: ApiQueryParamsConfig = {
   filterable: ['breed', 'color'],
@@ -404,7 +404,7 @@ import.meta.glob([
 When you run `kick g module`, the generator does not just create files in a new directory. It also updates `src/modules/index.ts` automatically. In Vibed, that file looks like this:
 
 ```typescript
-import type { AppModuleClass } from '@forinda/kickjs-core';
+import type { AppModuleClass } from '@forinda/kickjs';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { WorkspacesModule } from './workspaces/workspaces.module';

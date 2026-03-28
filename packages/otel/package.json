@@ -1,7 +1,7 @@
 {
   "name": "@forinda/kickjs-otel",
   "version": "1.7.1-alpha.0",
-  "description": "OpenTelemetry adapter for KickJS — automatic tracing, metrics, and export to any OTel backend",
+  "description": "OpenTelemetry adapter for KickJS \u2014 automatic tracing, metrics, and export to any OTel backend",
   "keywords": [
     "kickjs",
     "nodejs",
@@ -60,8 +60,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@forinda/kickjs-core": "workspace:*",
-    "@forinda/kickjs-http": "workspace:*",
+    "@forinda/kickjs": "workspace:*",
     "reflect-metadata": "^0.2.2"
   },
   "peerDependencies": {

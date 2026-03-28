@@ -5,8 +5,8 @@ Controllers are the presentation layer in KickJS. They handle HTTP requests, del
 ## Defining a Controller
 
 ```ts
-import { Controller, Get, Post, Put, Delete, Patch, Autowired } from '@forinda/kickjs-core'
-import { RequestContext } from '@forinda/kickjs-http'
+import { Controller, Get, Post, Put, Delete, Patch, Autowired } from '@forinda/kickjs'
+import { RequestContext } from '@forinda/kickjs'
 
 @Controller()
 export class TodoController {
@@ -220,7 +220,7 @@ SSE helpers:
 Use `@Middleware()` at the class or method level. See [Middleware](./middleware.md) for the full guide.
 
 ```ts
-import { Controller, Get, Middleware } from '@forinda/kickjs-core'
+import { Controller, Get, Middleware } from '@forinda/kickjs'
 
 @Controller()
 @Middleware(authMiddleware)          // runs on all routes in this controller

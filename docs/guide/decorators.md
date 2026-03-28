@@ -1,6 +1,6 @@
 # Decorators Reference
 
-KickJS provides 22 decorators across `@forinda/kickjs-core` and `@forinda/kickjs-swagger`. This page is a complete reference for all of them.
+KickJS provides 22 decorators across `@forinda/kickjs` and `@forinda/kickjs-swagger`. This page is a complete reference for all of them.
 
 ## Class Decorators
 
@@ -9,7 +9,7 @@ KickJS provides 22 decorators across `@forinda/kickjs-core` and `@forinda/kickjs
 Marks a class as an HTTP controller and registers it in the DI container.
 
 ```ts
-import { Controller } from '@forinda/kickjs-core'
+import { Controller } from '@forinda/kickjs'
 
 @Controller('/users')
 class UserController { ... }
@@ -23,7 +23,7 @@ class RootController { ... }
 Marks a class as a service (singleton by default).
 
 ```ts
-import { Service, Scope } from '@forinda/kickjs-core'
+import { Service, Scope } from '@forinda/kickjs'
 
 @Service()
 class UserService { ... }
@@ -66,7 +66,7 @@ class UserRepository {
 Map a controller method to an HTTP route. Optionally pass Zod schemas for request validation.
 
 ```ts
-import { Controller, Get, Post, Put, Delete, Patch } from '@forinda/kickjs-core'
+import { Controller, Get, Post, Put, Delete, Patch } from '@forinda/kickjs'
 import { z } from 'zod'
 
 const createUserSchema = z.object({ name: z.string(), email: z.string().email() })
@@ -125,7 +125,7 @@ class CacheService {
 Attach middleware to a class (all routes) or a specific method. Handlers receive `(ctx: RequestContext, next: () => void)`.
 
 ```ts
-import { Controller, Get, Middleware } from '@forinda/kickjs-core'
+import { Controller, Get, Middleware } from '@forinda/kickjs'
 
 // Class-level — applies to all routes
 @Controller('/admin')
@@ -146,7 +146,7 @@ class AdminController {
 Configures file upload handling. The router builder auto-attaches the upload middleware from this metadata — no need for `@Middleware(upload.single(...))`.
 
 ```ts
-import { Controller, Post, FileUpload } from '@forinda/kickjs-core'
+import { Controller, Post, FileUpload } from '@forinda/kickjs'
 
 @Controller('/files')
 class FileController {
@@ -229,7 +229,7 @@ class NotificationService {
 Adds a static `builder()` method for fluent construction.
 
 ```ts
-import { Builder } from '@forinda/kickjs-core'
+import { Builder } from '@forinda/kickjs'
 
 @Builder
 class UserDto {
@@ -302,13 +302,13 @@ async internalEndpoint(ctx: RequestContext) { ... }
 
 ### @ApiQueryParams(config)
 
-Declares the filterable, sortable, and searchable query parameters for an endpoint. This decorator lives in `@forinda/kickjs-core` and works with both the query parser and the Swagger spec generator. When `@forinda/kickjs-swagger` is installed, the declared fields are automatically added as OpenAPI query parameters.
+Declares the filterable, sortable, and searchable query parameters for an endpoint. This decorator lives in `@forinda/kickjs` and works with both the query parser and the Swagger spec generator. When `@forinda/kickjs-swagger` is installed, the declared fields are automatically added as OpenAPI query parameters.
 
 Accepts **both** string-based configs and column-object configs (e.g., `DrizzleQueryParamsConfig`):
 
 ```ts
-import { Controller, Get, ApiQueryParams } from '@forinda/kickjs-core'
-import { RequestContext } from '@forinda/kickjs-http'
+import { Controller, Get, ApiQueryParams } from '@forinda/kickjs'
+import { RequestContext } from '@forinda/kickjs'
 
 // String-based config
 @Controller('/tasks')

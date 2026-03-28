@@ -5,8 +5,8 @@ KickJS includes an ORM-agnostic query string parser that turns URL parameters in
 ## Basic Usage
 
 ```ts
-import { Controller, Get } from '@forinda/kickjs-core'
-import { RequestContext } from '@forinda/kickjs-http'
+import { Controller, Get } from '@forinda/kickjs'
+import { RequestContext } from '@forinda/kickjs'
 
 @Controller('/tasks')
 class TaskController {
@@ -24,7 +24,7 @@ class TaskController {
 The equivalent standalone call:
 
 ```ts
-import { parseQuery } from '@forinda/kickjs-http'
+import { parseQuery } from '@forinda/kickjs'
 
 const parsed = parseQuery(req.query, { filterable: ['status'] })
 ```
@@ -162,7 +162,7 @@ interface ParsedQuery {
 Convert a `ParsedQuery` back into a query parameter object, useful for generating links or in tests:
 
 ```ts
-import { buildQueryParams } from '@forinda/kickjs-http'
+import { buildQueryParams } from '@forinda/kickjs'
 
 const params = buildQueryParams(parsed)
 // { filter: ['status:eq:active'], sort: ['createdAt:desc'], page: 2, limit: 10, q: 'deploy' }
@@ -173,7 +173,7 @@ const params = buildQueryParams(parsed)
 To connect parsed queries to your ORM, implement the `QueryBuilderAdapter` interface:
 
 ```ts
-import { QueryBuilderAdapter, ParsedQuery } from '@forinda/kickjs-http'
+import { QueryBuilderAdapter, ParsedQuery } from '@forinda/kickjs'
 
 class DrizzleQueryAdapter implements QueryBuilderAdapter<DrizzleResult, DrizzleConfig> {
   readonly name = 'drizzle'
@@ -229,8 +229,8 @@ class TaskService {
 Then in your controller, call `ctx.paginate()` with the parsed query and the service result:
 
 ```ts
-import { Controller, Get } from '@forinda/kickjs-core'
-import { RequestContext } from '@forinda/kickjs-http'
+import { Controller, Get } from '@forinda/kickjs'
+import { RequestContext } from '@forinda/kickjs'
 
 @Controller('/tasks')
 class TaskController {

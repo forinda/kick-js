@@ -19,7 +19,7 @@ Frontend frameworks use reactivity to update the DOM. On the backend, the same p
 Creates a reactive reference. Reading `.value` tracks the dependency, writing `.value` triggers watchers.
 
 ```ts
-import { ref } from '@forinda/kickjs-core'
+import { ref } from '@forinda/kickjs'
 
 const count = ref(0)
 console.log(count.value) // 0
@@ -38,7 +38,7 @@ unsub() // cleanup
 Creates a lazy, cached derived value that auto-recalculates when dependencies change.
 
 ```ts
-import { ref, computed } from '@forinda/kickjs-core'
+import { ref, computed } from '@forinda/kickjs'
 
 const price = ref(100)
 const tax = ref(0.2)
@@ -68,7 +68,7 @@ doubled.value // calls = 2 (recalculated)
 Runs a side effect when a reactive source changes. Returns a stop function.
 
 ```ts
-import { ref, watch } from '@forinda/kickjs-core'
+import { ref, watch } from '@forinda/kickjs'
 
 const errorCount = ref(0)
 
@@ -106,7 +106,7 @@ watch(
 Creates a deeply reactive proxy. Property reads are tracked, writes trigger watchers.
 
 ```ts
-import { reactive, computed, watch } from '@forinda/kickjs-core'
+import { reactive, computed, watch } from '@forinda/kickjs'
 
 const metrics = reactive({
   requests: 0,
@@ -128,7 +128,7 @@ metrics.requests++
 ### Utilities
 
 ```ts
-import { isRef, unref, toRefs } from '@forinda/kickjs-core'
+import { isRef, unref, toRefs } from '@forinda/kickjs'
 
 isRef(count)   // true for refs, false for everything else
 unref(count)   // unwraps ref → value, plain values pass through
@@ -138,8 +138,8 @@ toRefs({ a: 1, b: 2 }) // { a: Ref<1>, b: Ref<2> }
 ## Real-World Example: Request Metrics
 
 ```ts
-import { ref, computed, watch } from '@forinda/kickjs-core'
-import { createLogger } from '@forinda/kickjs-core/logger'
+import { ref, computed, watch } from '@forinda/kickjs'
+import { createLogger } from '@forinda/kickjs/logger'
 
 const log = createLogger('Metrics')
 

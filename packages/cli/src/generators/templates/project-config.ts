@@ -7,8 +7,7 @@ export function generatePackageJson(
   kickjsVersion: string,
 ): string {
   const baseDeps: Record<string, string> = {
-    '@forinda/kickjs-core': kickjsVersion,
-    '@forinda/kickjs-http': kickjsVersion,
+    '@forinda/kickjs': kickjsVersion,
     '@forinda/kickjs-config': kickjsVersion,
     express: '^5.1.0',
     'reflect-metadata': '^0.2.2',

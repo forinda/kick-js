@@ -1,7 +1,7 @@
 {
   "name": "@forinda/kickjs-devtools",
   "version": "1.7.1-alpha.0",
-  "description": "Development introspection dashboard for KickJS — routes, DI container, metrics, health",
+  "description": "Development introspection dashboard for KickJS \u2014 routes, DI container, metrics, health",
   "keywords": [
     "kickjs",
     "nodejs",
@@ -60,7 +60,7 @@
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
-    "@forinda/kickjs-core": "workspace:*",
+    "@forinda/kickjs": "workspace:*",
     "reflect-metadata": "^0.2.2"
   },
   "peerDependencies": {

@@ -5,8 +5,8 @@ KickJS provides a built-in `ctx.sse()` helper for streaming real-time events to 
 ## Quick Start
 
 ```ts
-import { Controller, Get } from '@forinda/kickjs-core'
-import type { RequestContext } from '@forinda/kickjs-http'
+import { Controller, Get } from '@forinda/kickjs'
+import type { RequestContext } from '@forinda/kickjs'
 
 @Controller('/events')
 class EventsController {
@@ -103,7 +103,7 @@ The client sends `Last-Event-ID` on reconnection, allowing you to replay missed 
 ### Reactive SSE with KickJS reactivity
 
 ```ts
-import { ref, watch } from '@forinda/kickjs-core'
+import { ref, watch } from '@forinda/kickjs'
 
 const notifications = ref<string[]>([])
 

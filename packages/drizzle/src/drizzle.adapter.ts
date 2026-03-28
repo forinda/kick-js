@@ -1,4 +1,4 @@
-import { Logger, type AppAdapter, type AdapterContext, Scope } from '@forinda/kickjs-core'
+import { Logger, type AppAdapter, type AdapterContext, Scope } from '@forinda/kickjs'
 import { DRIZZLE_DB, type DrizzleAdapterOptions } from './types'
 
 const log = Logger.for('DrizzleAdapter')

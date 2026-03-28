@@ -42,7 +42,8 @@
     "resend": "^6.9.4",
     "socket.io": "^4.8.3",
     "uuid": "^13.0.0",
-    "zod": "^4.3.6"
+    "zod": "^4.3.6",
+    "@forinda/kickjs": "workspace:*"
   },
   "devDependencies": {
     "@forinda/kickjs-cli": "workspace:*",

@@ -76,7 +76,7 @@ Replace tsup with Vite library mode for building all 18 `@forinda/kickjs-*` pack
 
 **Implementation plan:**
 1. [x] **Proof of concept** — migrated `@forinda/kickjs-config` from tsup to Vite 8 library mode. ESM output, `.d.ts` via `tsc --emitDeclarationOnly`, externals, esbuild minification all verified.
-2. [x] **Sub-path exports** — migrated `@forinda/kickjs-core` with 10 entry points. Vite's `build.lib.entry` object handles multiple entries with automatic chunk splitting.
+2. [x] **Sub-path exports** — migrated `@forinda/kickjs-core` with 10 entry points, unified `@forinda/kickjs` with 30+ entry points. Vite's `build.lib.entry` object handles multiple entries with automatic chunk splitting.
 3. [x] **DTS pipeline** — chose `tsc -p tsconfig.build.json` (simple, zero deps). Each package has `tsconfig.build.json` extending the main config with `emitDeclarationOnly: true`.
 4. [x] **Migrate remaining packages** — all 19 packages (17 framework + CLI + VS Code extension) migrated. CLI uses banner for shebang, VS Code extension outputs CJS.
 5. [x] **Remove tsup** — deleted all `tsup.config.ts` files, removed `tsup` from all devDependencies, updated CLAUDE.md and AGENTS.md.

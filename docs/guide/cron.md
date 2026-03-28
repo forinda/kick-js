@@ -20,9 +20,9 @@ kick add cron
 ## Quick Start
 
 ```ts
-import { Service, Cron } from '@forinda/kickjs-core'
+import { Service, Cron } from '@forinda/kickjs'
 import { CronAdapter } from '@forinda/kickjs-cron'
-import { bootstrap } from '@forinda/kickjs-http'
+import { bootstrap } from '@forinda/kickjs'
 
 @Service()
 class ReportService {

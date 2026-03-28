@@ -13,6 +13,7 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
+      '@forinda/kickjs': path.resolve(__dirname, '../kickjs/src/index.ts'),
       '@forinda/kickjs-core': path.resolve(__dirname, 'src/index.ts'),
     },
   },
@@ -21,6 +22,6 @@ export default defineConfig({
     include: ['tests/**/*.test.ts'],
     globals: false,
     pool: 'threads',
-    poolOptions: { threads: { singleThread: true } },
+    maxConcurrency: 1,
   },
 })

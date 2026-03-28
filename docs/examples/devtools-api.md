@@ -39,7 +39,7 @@ Once running, visit these endpoints:
 
 ```ts
 import { DevToolsAdapter } from '@forinda/kickjs-devtools'
-import { ref, computed, watch } from '@forinda/kickjs-core'
+import { ref, computed, watch } from '@forinda/kickjs'
 
 // Custom reactive state
 const peakConcurrency = ref(0)

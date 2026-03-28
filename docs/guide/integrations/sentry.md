@@ -15,7 +15,7 @@ Create a Sentry adapter that hooks into the KickJS lifecycle:
 ```ts
 // src/adapters/sentry.adapter.ts
 import * as Sentry from '@sentry/node'
-import type { AppAdapter, AdapterContext } from '@forinda/kickjs-core'
+import type { AppAdapter, AdapterContext } from '@forinda/kickjs'
 
 export interface SentryAdapterOptions {
   /** Sentry DSN from your project settings */
@@ -72,7 +72,7 @@ export class SentryAdapter implements AppAdapter {
 // src/index.ts
 import 'reflect-metadata'
 import express from 'express'
-import { bootstrap, helmet, cors, requestId, requestLogger } from '@forinda/kickjs-http'
+import { bootstrap, helmet, cors, requestId, requestLogger } from '@forinda/kickjs'
 import { SwaggerAdapter } from '@forinda/kickjs-swagger'
 import { loadEnv } from '@forinda/kickjs-config'
 import { SentryAdapter } from './adapters/sentry.adapter'
@@ -185,7 +185,7 @@ Use Sentry scopes in your services to add business context:
 
 ```ts
 import * as Sentry from '@sentry/node'
-import { Service } from '@forinda/kickjs-core'
+import { Service } from '@forinda/kickjs'
 
 @Service()
 export class PaymentService {

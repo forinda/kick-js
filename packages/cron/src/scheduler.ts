@@ -1,4 +1,4 @@
-import { Logger } from '@forinda/kickjs-core'
+import { Logger } from '@forinda/kickjs'
 
 const log = Logger.for('CronScheduler')
 

@@ -14,7 +14,7 @@ Plugins are the highest-level extension mechanism in KickJS. A single plugin can
 ## Creating a Plugin
 
 ```ts
-import type { KickPlugin } from '@forinda/kickjs-core'
+import type { KickPlugin } from '@forinda/kickjs'
 
 export class CorsPlugin implements KickPlugin {
   name = 'CorsPlugin'
@@ -51,7 +51,7 @@ interface KickPlugin {
 ## Usage
 
 ```ts
-import { bootstrap } from '@forinda/kickjs-http'
+import { bootstrap } from '@forinda/kickjs'
 
 bootstrap({
   modules,
@@ -69,7 +69,7 @@ Plugins run before user-defined modules, adapters, and middleware, so they can p
 ## Full Example: Auth Plugin
 
 ```ts
-import type { KickPlugin, Container, AppModuleClass, AppAdapter } from '@forinda/kickjs-core'
+import type { KickPlugin, Container, AppModuleClass, AppAdapter } from '@forinda/kickjs'
 import passport from 'passport'
 
 export const AUTH_SERVICE = Symbol('AuthService')

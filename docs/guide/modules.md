@@ -1,11 +1,11 @@
 # Modules
 
-Every feature in a KickJS application is organized as a module. Modules implement the `AppModule` interface from `@forinda/kickjs-core` and are responsible for registering DI bindings and declaring routes.
+Every feature in a KickJS application is organized as a module. Modules implement the `AppModule` interface from `@forinda/kickjs` and are responsible for registering DI bindings and declaring routes.
 
 ## The AppModule Interface
 
 ```ts
-import type { Container } from '@forinda/kickjs-core'
+import type { Container } from '@forinda/kickjs'
 
 interface AppModule {
   register(container: Container): void
@@ -19,8 +19,8 @@ interface AppModule {
 ## Basic Module
 
 ```ts
-import { Container, type AppModule, type ModuleRoutes } from '@forinda/kickjs-core'
-import { buildRoutes } from '@forinda/kickjs-http'
+import { Container, type AppModule, type ModuleRoutes } from '@forinda/kickjs'
+import { buildRoutes } from '@forinda/kickjs'
 import { TODO_REPOSITORY } from './domain/repositories/todo.repository'
 import { InMemoryTodoRepository } from './infrastructure/repositories/in-memory-todo.repository'
 import { TodoController } from './presentation/todo.controller'
@@ -129,7 +129,7 @@ Modules are collected into an array and passed to `bootstrap()`:
 
 ```ts
 // src/modules/index.ts
-import type { AppModuleClass } from '@forinda/kickjs-core'
+import type { AppModuleClass } from '@forinda/kickjs'
 import { TodoModule } from './todos'
 import { UserModule } from './users'
 
@@ -138,7 +138,7 @@ export const modules: AppModuleClass[] = [TodoModule, UserModule]
 
 ```ts
 // src/index.ts
-import { bootstrap } from '@forinda/kickjs-http'
+import { bootstrap } from '@forinda/kickjs'
 import { modules } from './modules'
 
 bootstrap({ modules })
