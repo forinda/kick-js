@@ -20,8 +20,8 @@ KickJS v2.0 unifies `@forinda/kickjs-core` and `@forinda/kickjs-http` into a sin
   "dependencies": {
 -   "@forinda/kickjs-core": "^1.x",
 -   "@forinda/kickjs-http": "^1.x",
-+   "@forinda/kickjs": "^1.7.1-alpha.0",
-    "@forinda/kickjs-config": "^1.7.1-alpha.0",
++   "@forinda/kickjs": "latest",
+    "@forinda/kickjs-config": "latest",
     "express": "^5.1.0"
   }
 }

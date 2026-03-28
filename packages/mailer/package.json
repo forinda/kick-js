@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-mailer",
-  "version": "1.7.0",
+  "version": "1.7.1-alpha.0",
   "description": "Pluggable email sending for KickJS \u2014 nodemailer, Resend, SES, and custom providers",
   "keywords": [
     "kickjs",
