@@ -13,8 +13,9 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      '@forinda/kickjs': path.resolve(__dirname, '../core/src/index.ts'),
-      '@forinda/kickjs': path.resolve(__dirname, 'src/index.ts'),
+      '@forinda/kickjs': path.resolve(__dirname, '../kickjs/src/index.ts'),
+      '@forinda/kickjs-core': path.resolve(__dirname, '../core/src/index.ts'),
+      '@forinda/kickjs-http': path.resolve(__dirname, 'src/index.ts'),
     },
   },
   test: {
