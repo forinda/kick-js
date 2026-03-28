@@ -141,5 +141,5 @@ async list(ctx: RequestContext) {
 ## Related
 
 - [Prisma Adapter](./prisma.md) — alternative ORM adapter
-- [@forinda/kickjs-http Query Parsing](./http.md) — the ParsedQuery system
+- [@forinda/kickjs Query Parsing](./http.md) — the ParsedQuery system
 - [@forinda/kickjs-core](./core.md) — DI container, decorators

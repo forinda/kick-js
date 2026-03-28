@@ -196,8 +196,7 @@ Output:
     Node:     v20.x.x
 
   Packages:
-    @forinda/kickjs-core     workspace
-    @forinda/kickjs-http     workspace
+    @forinda/kickjs           workspace
     @forinda/kickjs-config   workspace
     @forinda/kickjs-cli      workspace
 ```
