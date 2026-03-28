@@ -23,6 +23,6 @@ export default defineConfig({
     include: ['tests/**/*.test.ts'],
     globals: false,
     pool: 'threads',
-    poolOptions: { threads: { singleThread: true } },
+    maxConcurrency: 1,
   },
 })
