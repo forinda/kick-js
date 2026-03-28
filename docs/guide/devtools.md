@@ -5,7 +5,7 @@ The DevTools adapter provides Vue-style reactive introspection for KickJS applic
 ## Quick Start
 
 ```ts
-import { bootstrap } from '@forinda/kickjs-http'
+import { bootstrap } from '@forinda/kickjs'
 import { DevToolsAdapter } from '@forinda/kickjs-devtools'
 
 bootstrap({
@@ -199,7 +199,7 @@ console.log(devtools.requestCount.value)
 console.log(devtools.errorRate.value)
 
 // Watch for changes
-import { watch } from '@forinda/kickjs-core'
+import { watch } from '@forinda/kickjs'
 
 watch(devtools.errorRate, (rate) => {
   if (rate > 0.1) pagerDuty.alert('High error rate')
@@ -215,7 +215,7 @@ devtools.requestCount.subscribe((newCount) => {
 
 The DevToolsAdapter uses three layers:
 
-1. **Reactive primitives** (`ref`, `computed`, `watch`) from `@forinda/kickjs-core/reactivity`
+1. **Reactive primitives** (`ref`, `computed`, `watch`) from `@forinda/kickjs/reactivity`
 2. **Middleware** that increments reactive counters on each request (phase: `beforeGlobal`)
 3. **Express routes** at `/_debug/*` that read reactive state and return JSON
 

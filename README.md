@@ -58,7 +58,7 @@ kick g module users
 ```typescript
 // src/index.ts
 import 'reflect-metadata'
-import { bootstrap } from '@forinda/kickjs-http'
+import { bootstrap } from '@forinda/kickjs'
 import { UserModule } from './modules/users'
 
 bootstrap({ modules: [UserModule] })
@@ -66,8 +66,8 @@ bootstrap({ modules: [UserModule] })
 
 ```typescript
 // src/modules/users/presentation/user.controller.ts
-import { Controller, Get, Post, Autowired } from '@forinda/kickjs-core'
-import { RequestContext } from '@forinda/kickjs-http'
+import { Controller, Get, Post, Autowired } from '@forinda/kickjs'
+import { RequestContext } from '@forinda/kickjs'
 import { z } from 'zod'
 
 const createUserSchema = z.object({
@@ -94,8 +94,8 @@ export class UserController {
 
 ```typescript
 // src/modules/users/index.ts
-import { Container, type AppModule, type ModuleRoutes } from '@forinda/kickjs-core'
-import { buildRoutes } from '@forinda/kickjs-http'
+import { Container, type AppModule, type ModuleRoutes } from '@forinda/kickjs'
+import { buildRoutes } from '@forinda/kickjs'
 import { UserController } from './presentation/user.controller'
 import './domain/services/user.service'
 
@@ -172,7 +172,7 @@ import express from 'express'
 import helmet from 'helmet'
 import cors from 'cors'
 import compression from 'compression'
-import { bootstrap, requestId } from '@forinda/kickjs-http'
+import { bootstrap, requestId } from '@forinda/kickjs'
 import { SwaggerAdapter } from '@forinda/kickjs-swagger'
 import { modules } from './modules'
 
@@ -291,7 +291,7 @@ GET /api/v1/todos?page=2&limit=25&q=urgent&filter=status:eq:active&filter=priori
 Implement `QueryBuilderAdapter` to translate `ParsedQuery` into your ORM's query format:
 
 ```typescript
-import { type QueryBuilderAdapter, type ParsedQuery } from '@forinda/kickjs-http'
+import { type QueryBuilderAdapter, type ParsedQuery } from '@forinda/kickjs'
 
 // Prisma adapter
 class PrismaQueryAdapter implements QueryBuilderAdapter<PrismaQuery, PrismaConfig> {
@@ -359,7 +359,7 @@ new SwaggerAdapter({
 Adapters hook into the application lifecycle to add functionality like database connections, auth, caching, or documentation.
 
 ```typescript
-import { type AppAdapter, type Container } from '@forinda/kickjs-core'
+import { type AppAdapter, type Container } from '@forinda/kickjs'
 import type { Express } from 'express'
 
 export class RedisAdapter implements AppAdapter {

@@ -40,7 +40,7 @@ KickJS integrates with external services through **adapters** and **middleware**
 All integrations follow the same adapter pattern:
 
 ```ts
-import { bootstrap } from '@forinda/kickjs-http'
+import { bootstrap } from '@forinda/kickjs'
 import { loadEnv } from '@forinda/kickjs-config'
 
 const env = loadEnv(envSchema)

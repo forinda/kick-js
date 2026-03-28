@@ -124,7 +124,7 @@ interface TenantContext {
 ### Bootstrap
 
 ```ts
-import { bootstrap } from '@forinda/kickjs-core'
+import { bootstrap } from '@forinda/kickjs'
 import { TenantAdapter } from '@forinda/kickjs-multi-tenant'
 
 bootstrap({
@@ -144,10 +144,10 @@ bootstrap({
 ### Using in a Controller
 
 ```ts
-import { Controller, Get } from '@forinda/kickjs-http'
-import { Inject } from '@forinda/kickjs-core'
+import { Controller, Get } from '@forinda/kickjs'
+import { Inject } from '@forinda/kickjs'
 import { TENANT_CONTEXT, TenantContext } from '@forinda/kickjs-multi-tenant'
-import type { RequestContext } from '@forinda/kickjs-http'
+import type { RequestContext } from '@forinda/kickjs'
 
 @Controller('/users')
 export class UserController {
@@ -168,8 +168,8 @@ export class UserController {
 ### Using in a Service
 
 ```ts
-import { Service } from '@forinda/kickjs-core'
-import { Inject } from '@forinda/kickjs-core'
+import { Service } from '@forinda/kickjs'
+import { Inject } from '@forinda/kickjs'
 import { TENANT_CONTEXT, TenantContext } from '@forinda/kickjs-multi-tenant'
 
 @Service()

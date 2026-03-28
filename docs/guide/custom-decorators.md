@@ -120,7 +120,7 @@ class OrderService {
 ## Pattern 3: Timing / Logging Decorator
 
 ```ts
-import { createLogger } from '@forinda/kickjs-core/logger'
+import { createLogger } from '@forinda/kickjs/logger'
 
 const log = createLogger('Perf')
 
@@ -212,7 +212,7 @@ function getBodySchema(target: any, handlerName: string): z.ZodType | undefined 
 Register something in the DI container when a class is decorated:
 
 ```ts
-import { Container, Scope } from '@forinda/kickjs-core'
+import { Container, Scope } from '@forinda/kickjs'
 
 /** Mark a class as a repository and register it as a singleton */
 function Repository(): ClassDecorator {

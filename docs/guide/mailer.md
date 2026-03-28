@@ -20,7 +20,7 @@ kick add mailer
 ## Quick Start
 
 ```ts
-import { bootstrap } from '@forinda/kickjs-http'
+import { bootstrap } from '@forinda/kickjs'
 import { MailerAdapter, SmtpProvider } from '@forinda/kickjs-mailer'
 
 bootstrap({
@@ -41,7 +41,7 @@ bootstrap({
 Then inject `MailerService` anywhere:
 
 ```ts
-import { Service, Inject } from '@forinda/kickjs-core'
+import { Service, Inject } from '@forinda/kickjs'
 import { MAILER, type MailerService } from '@forinda/kickjs-mailer'
 
 @Service()

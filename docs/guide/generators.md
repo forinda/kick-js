@@ -249,7 +249,7 @@ export default defineConfig({
 When you generate a module, the generator automatically updates `src/modules/index.ts`. If the file does not exist, it creates one:
 
 ```ts
-import type { AppModuleClass } from '@forinda/kickjs-core'
+import type { AppModuleClass } from '@forinda/kickjs'
 import { ProductModule } from './products'
 
 export const modules: AppModuleClass[] = [ProductModule]
@@ -258,7 +258,7 @@ export const modules: AppModuleClass[] = [ProductModule]
 If `index.ts` already exists, it appends the import and adds the module to the array:
 
 ```ts
-import type { AppModuleClass } from '@forinda/kickjs-core'
+import type { AppModuleClass } from '@forinda/kickjs'
 import { UserModule } from './users'
 import { ProductModule } from './products'
 
@@ -270,8 +270,8 @@ export const modules: AppModuleClass[] = [UserModule, ProductModule]
 The module `index.ts` registers the repository binding in the DI container and declares routes:
 
 ```ts
-import { Container, type AppModule, type ModuleRoutes } from '@forinda/kickjs-core'
-import { buildRoutes } from '@forinda/kickjs-http'
+import { Container, type AppModule, type ModuleRoutes } from '@forinda/kickjs'
+import { buildRoutes } from '@forinda/kickjs'
 import { PRODUCT_REPOSITORY } from './domain/repositories/product.repository'
 import { InMemoryProductRepository } from './infrastructure/repositories/in-memory-product.repository'
 import { ProductController } from './presentation/product.controller'

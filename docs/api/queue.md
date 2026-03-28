@@ -98,7 +98,7 @@ The `QueueService` is automatically registered in the DI container when `QueueAd
 ### Usage
 
 ```ts
-import { Service, Autowired } from '@forinda/kickjs-core'
+import { Service, Autowired } from '@forinda/kickjs'
 import { QueueService } from '@forinda/kickjs-queue'
 
 @Service()
@@ -126,7 +126,7 @@ export class UserService {
 
 ```ts
 import { Job, Process } from '@forinda/kickjs-queue'
-import { Service, Autowired } from '@forinda/kickjs-core'
+import { Service, Autowired } from '@forinda/kickjs'
 
 @Service()
 @Job('email')
@@ -158,7 +158,7 @@ export class EmailProcessor {
 ### Bootstrap
 
 ```ts
-import { bootstrap } from '@forinda/kickjs-http'
+import { bootstrap } from '@forinda/kickjs'
 import { QueueAdapter } from '@forinda/kickjs-queue'
 
 bootstrap({

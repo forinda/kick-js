@@ -6,7 +6,7 @@ KickJS provides cookie-based session middleware with HMAC-SHA256 signing, automa
 
 ```ts
 import cookieParser from 'cookie-parser'
-import { session } from '@forinda/kickjs-http'
+import { session } from '@forinda/kickjs'
 
 bootstrap({
   modules,
@@ -94,7 +94,7 @@ session({
 Implement `SessionStore` for production deployments:
 
 ```ts
-import type { SessionStore, SessionData } from '@forinda/kickjs-http'
+import type { SessionStore, SessionData } from '@forinda/kickjs'
 
 class RedisSessionStore implements SessionStore {
   constructor(private redis: Redis) {}

@@ -4,10 +4,10 @@ KickJS wraps Multer to provide file upload handling via both **middleware** and 
 
 ## Middleware Approach
 
-Import the `upload` factory from `@forinda/kickjs-http`:
+Import the `upload` factory from `@forinda/kickjs`:
 
 ```ts
-import { upload } from '@forinda/kickjs-http'
+import { upload } from '@forinda/kickjs'
 ```
 
 ### Single File
@@ -51,8 +51,8 @@ async handleForm(ctx: RequestContext) {
 The `@FileUpload` decorator is a declarative alternative. The router builder automatically attaches the upload middleware from the decorator metadata — no manual `@Middleware(upload.single(...))` needed.
 
 ```ts
-import { Controller, Post, FileUpload } from '@forinda/kickjs-core'
-import { RequestContext } from '@forinda/kickjs-http'
+import { Controller, Post, FileUpload } from '@forinda/kickjs'
+import { RequestContext } from '@forinda/kickjs'
 
 @Controller('/files')
 class FileController {
@@ -163,7 +163,7 @@ upload.single('file', {
 The built-in MIME map covers 40+ common extensions. Use `resolveMimeTypes()` to inspect how extensions are mapped:
 
 ```ts
-import { resolveMimeTypes } from '@forinda/kickjs-http'
+import { resolveMimeTypes } from '@forinda/kickjs'
 
 resolveMimeTypes(['jpg', 'pdf', 'image/*'])
 // → ['image/jpeg', 'application/pdf', 'image/*']
@@ -174,7 +174,7 @@ resolveMimeTypes(['jpg', 'pdf', 'image/*'])
 For disk-stored uploads, use `cleanupFiles()` to delete temporary files after the response finishes:
 
 ```ts
-import { upload, cleanupFiles } from '@forinda/kickjs-http'
+import { upload, cleanupFiles } from '@forinda/kickjs'
 
 @Post('/process')
 @Middleware(upload.single('document', { dest: '/tmp/uploads' }), cleanupFiles())

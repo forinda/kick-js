@@ -73,7 +73,7 @@ There are two approaches for accessing environment config via DI. Choose based o
 `ConfigService` is a built-in injectable singleton that wraps `loadEnv()` with the base schema. It works without any setup but does **not** provide typed keys or return values — you must cast manually:
 
 ```ts
-import { Service, Autowired } from '@forinda/kickjs-core'
+import { Service, Autowired } from '@forinda/kickjs'
 import { ConfigService } from '@forinda/kickjs-config'
 
 @Service()
@@ -117,7 +117,7 @@ export type AppConfigService = InstanceType<typeof AppConfigService>
 Then inject it in any service or controller:
 
 ```ts
-import { Service, Autowired } from '@forinda/kickjs-core'
+import { Service, Autowired } from '@forinda/kickjs'
 import { AppConfigService } from '../config/env'
 
 @Service()
@@ -158,7 +158,7 @@ Both `ConfigService` and `createConfigService` instances provide:
 The `@Value` decorator injects an environment variable directly into a class property. It is evaluated lazily -- the value is read from `process.env` at access time, not at decoration time.
 
 ```ts
-import { Service, Value } from '@forinda/kickjs-core'
+import { Service, Value } from '@forinda/kickjs'
 
 @Service()
 class MailService {

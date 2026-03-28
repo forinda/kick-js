@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-example-jira-mongoose-api",
-  "version": "1.7.0",
+  "version": "1.7.1-alpha.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -42,7 +42,8 @@
     "resend": "^6.9.4",
     "socket.io": "^4.8.3",
     "uuid": "^13.0.0",
-    "zod": "^4.3.6"
+    "zod": "^4.3.6",
+    "@forinda/kickjs": "workspace:*"
   },
   "devDependencies": {
     "@forinda/kickjs-cli": "workspace:*",

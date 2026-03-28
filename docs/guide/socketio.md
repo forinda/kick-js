@@ -13,7 +13,7 @@ pnpm add socket.io
 ```ts
 // src/adapters/socketio.adapter.ts
 import { Server, type Socket } from 'socket.io'
-import { Logger, type AppAdapter, type AdapterContext } from '@forinda/kickjs-core'
+import { Logger, type AppAdapter, type AdapterContext } from '@forinda/kickjs'
 
 const log = Logger.for('SocketIOAdapter')
 
@@ -86,7 +86,7 @@ export const SOCKET_IO = Symbol('SocketIO')
 ## Register in Bootstrap
 
 ```ts
-import { bootstrap } from '@forinda/kickjs-http'
+import { bootstrap } from '@forinda/kickjs'
 import { SocketIOAdapter } from './adapters/socketio.adapter'
 import { modules } from './modules'
 
@@ -144,7 +144,7 @@ bootstrap({
 Use the `SOCKET_IO` token to inject the io server anywhere:
 
 ```ts
-import { Service, Inject } from '@forinda/kickjs-core'
+import { Service, Inject } from '@forinda/kickjs'
 import { SOCKET_IO } from '../adapters/socketio.adapter'
 import type { Server } from 'socket.io'
 

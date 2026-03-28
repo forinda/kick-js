@@ -5,7 +5,7 @@ KickJS includes a built-in rate limiting middleware that protects your API from 
 ## Basic Usage
 
 ```ts
-import { rateLimit } from '@forinda/kickjs-http'
+import { rateLimit } from '@forinda/kickjs'
 
 bootstrap({
   modules,
@@ -44,7 +44,7 @@ When `headers` is enabled (default), the middleware sets:
 Apply different limits to specific routes using the `@Middleware` decorator:
 
 ```ts
-import { rateLimit } from '@forinda/kickjs-http'
+import { rateLimit } from '@forinda/kickjs'
 
 @Controller('/auth')
 class AuthController {
@@ -82,7 +82,7 @@ rateLimit({
 Implement the `RateLimitStore` interface for distributed deployments:
 
 ```ts
-import type { RateLimitStore } from '@forinda/kickjs-http'
+import type { RateLimitStore } from '@forinda/kickjs'
 
 class RedisStore implements RateLimitStore {
   constructor(private redis: Redis, private windowMs: number) {}

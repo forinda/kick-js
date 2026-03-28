@@ -39,7 +39,7 @@ Three queue processors handle different concerns:
 Each processor is a `@Service()` class decorated with `@Job(queueName)`. Individual methods are decorated with `@Process(jobName)`:
 
 ```typescript
-import { Service, Logger, Autowired } from '@forinda/kickjs-core'
+import { Service, Logger, Autowired } from '@forinda/kickjs'
 import { Job, Process } from '@forinda/kickjs-queue'
 import type { Job as BullMQJob } from 'bullmq'
 import { MAILER, type MailerService } from '@forinda/kickjs-mailer'

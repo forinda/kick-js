@@ -15,7 +15,7 @@ pnpm add mongoose
 ```ts
 // src/adapters/mongoose.adapter.ts
 import mongoose from 'mongoose'
-import { Logger, type AppAdapter, type AdapterContext } from '@forinda/kickjs-core'
+import { Logger, type AppAdapter, type AdapterContext } from '@forinda/kickjs'
 
 const log = Logger.for('MongooseAdapter')
 
@@ -77,8 +77,8 @@ export const User: Model<IUser> =
 
 ```ts
 // src/modules/users/infrastructure/mongoose-user.repository.ts
-import { Repository, HttpException } from '@forinda/kickjs-core'
-import type { ParsedQuery } from '@forinda/kickjs-http'
+import { Repository, HttpException } from '@forinda/kickjs'
+import type { ParsedQuery } from '@forinda/kickjs'
 import { User, type IUser } from '../domain/user.model'
 
 @Repository()
@@ -117,7 +117,7 @@ export class MongooseUserRepository {
 
 ```ts
 // src/index.ts
-import { bootstrap } from '@forinda/kickjs-http'
+import { bootstrap } from '@forinda/kickjs'
 import { MongooseAdapter } from './adapters/mongoose.adapter'
 import { modules } from './modules'
 
@@ -135,7 +135,7 @@ bootstrap({
 
 ```ts
 // src/modules/users/index.ts
-import type { AppModule } from '@forinda/kickjs-core'
+import type { AppModule } from '@forinda/kickjs'
 import { UserController } from './presentation/user.controller'
 import { USER_REPOSITORY } from './domain/repositories/user.repository'
 import { MongooseUserRepository } from './infrastructure/mongoose-user.repository'
@@ -171,7 +171,7 @@ pnpm add mongodb
 ```ts
 // src/adapters/mongodb.adapter.ts
 import { MongoClient, type Db } from 'mongodb'
-import { Logger, type AppAdapter, type AdapterContext } from '@forinda/kickjs-core'
+import { Logger, type AppAdapter, type AdapterContext } from '@forinda/kickjs'
 
 const log = Logger.for('MongoDBAdapter')
 
@@ -211,9 +211,9 @@ export class MongoDBAdapter implements AppAdapter {
 
 ```ts
 // src/modules/products/infrastructure/mongo-product.repository.ts
-import { Repository, Inject, HttpException } from '@forinda/kickjs-core'
+import { Repository, Inject, HttpException } from '@forinda/kickjs'
 import type { Db, ObjectId } from 'mongodb'
-import type { ParsedQuery } from '@forinda/kickjs-http'
+import type { ParsedQuery } from '@forinda/kickjs'
 import { MONGO_DB } from '../../../adapters/mongodb.adapter'
 
 interface ProductDoc {
@@ -310,7 +310,7 @@ KickJS's `ctx.qs()` parses `?filter=`, `?sort=`, `?page=`, and `?q=` into a `Par
 ### Filter → MongoDB `$match`
 
 ```ts
-import type { ParsedQuery, FilterItem } from '@forinda/kickjs-http'
+import type { ParsedQuery, FilterItem } from '@forinda/kickjs'
 
 function buildMongoFilter(parsed: ParsedQuery): Record<string, any> {
   const filter: Record<string, any> = {}
@@ -380,8 +380,8 @@ export class MongoProductRepository {
 ### Controller with `@ApiQueryParams`
 
 ```ts
-import { Controller, Get, ApiQueryParams } from '@forinda/kickjs-core'
-import type { RequestContext } from '@forinda/kickjs-http'
+import { Controller, Get, ApiQueryParams } from '@forinda/kickjs'
+import type { RequestContext } from '@forinda/kickjs'
 
 const PRODUCT_QUERY = {
   filterable: ['category', 'price', 'status'],

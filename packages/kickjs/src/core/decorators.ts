@@ -270,21 +270,19 @@ export function ApiQueryParams(
 // ── Middleware Decorators ───────────────────────────────────────────────
 
 /**
- * Middleware handler function with typed RequestContext.
+ * Middleware handler function.
+ * Pass `RequestContext` as the generic for full type safety:
  *
  * ```ts
- * import type { MiddlewareHandler } from '@forinda/kickjs'
+ * import type { MiddlewareHandler, RequestContext } from '@forinda/kickjs'
  *
- * const auth: MiddlewareHandler = (ctx, next) => {
- *   ctx.body  // fully typed — no generic needed
+ * const auth: MiddlewareHandler<RequestContext> = (ctx, next) => {
+ *   ctx.body  // fully typed
  *   next()
  * }
  * ```
  */
-export type MiddlewareHandler = (
-  ctx: import('../http/context').RequestContext,
-  next: () => void,
-) => void | Promise<void>
+export type MiddlewareHandler<TCtx = any> = (ctx: TCtx, next: () => void) => void | Promise<void>
 
 /** Attach middleware handlers to a class or method */
 export function Middleware(...handlers: MiddlewareHandler[]): ClassDecorator & MethodDecorator {
