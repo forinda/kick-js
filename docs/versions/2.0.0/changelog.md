@@ -23,7 +23,7 @@ All notable changes to KickJS are documented here.
 ## Documentation
 
 - docs: use alpha version in migration guide ([f9d79b0](https://github.com/forinda/kick-js/commit/f9d79b0ab32c88d7658faf6db371094a934c6b7d)) — [@forinda](https://github.com/forinda)
-- docs: use MiddlewareHandler<RequestContext> in JWT auth tutorial ([efbbfcd](https://github.com/forinda/kick-js/commit/efbbfcd972d7db168d101649b66c53782bb31d15)) — [@forinda](https://github.com/forinda)
+- docs: use MiddlewareHandler\<RequestContext\> in JWT auth tutorial ([efbbfcd](https://github.com/forinda/kick-js/commit/efbbfcd972d7db168d101649b66c53782bb31d15)) — [@forinda](https://github.com/forinda)
 - docs: fix roadmap entry point count (10 → 30+) ([95903fc](https://github.com/forinda/kick-js/commit/95903fcb649e7ccc137ab972f11dc45c0fc52cd3)) — [@forinda](https://github.com/forinda)
 - docs(v2): add v1.x → v2.0 migration guide ([bcc2032](https://github.com/forinda/kick-js/commit/bcc2032729e124ac57a415531dbe780af09f137a)) — [@forinda](https://github.com/forinda)
 - docs(v2): Phase 7 — update all docs to @forinda/kickjs (#68) ([db6d4fa](https://github.com/forinda/kick-js/commit/db6d4faab36be53f98aaba82db512639da948d84)) — [@forinda](https://github.com/forinda)
