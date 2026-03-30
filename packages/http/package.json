@@ -147,7 +147,7 @@
     "@types/multer": "^2.1.0",
     "@types/node": "^25.0.0",
     "express": "^5.1.0",
-    "typescript": "^5.9.2",
+    "typescript": "^6.0.2",
     "vitest": "^4.1.2"
   },
   "publishConfig": {
