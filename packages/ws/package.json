@@ -65,11 +65,11 @@
     "ws": "^8.20.0"
   },
   "devDependencies": {
-    "@swc/core": "^1.7.28",
+    "@swc/core": "^1.15.21",
     "@types/node": "^25.0.0",
     "@types/ws": "^8.18.0",
     "typescript": "^5.9.2",
-    "vitest": "^4.1.1"
+    "vitest": "^4.1.2"
   },
   "publishConfig": {
     "access": "public"
