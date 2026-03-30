@@ -55,7 +55,7 @@
     "@types/pg": "8.20.0",
     "prisma": "^7.5.0",
     "supertest": "^7.1.0",
-    "typescript": "^5.9.2",
+    "typescript": "^6.0.2",
     "unplugin-swc": "^1.5.9",
     "vite": "^8.0.3",
     "vitest": "^4.1.2"

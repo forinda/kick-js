@@ -118,7 +118,7 @@
     "@types/express": "^5.0.6",
     "@types/multer": "^2.1.0",
     "@types/node": "^25.0.0",
-    "typescript": "^5.9.2",
+    "typescript": "^6.0.2",
     "vite": "^8.0.3",
     "vitest": "^4.1.2"
   },
