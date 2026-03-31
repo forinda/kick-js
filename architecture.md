@@ -29,6 +29,10 @@
 13. [Diagrams](#13-diagrams)
 14. [Vite vs tsdown: Where Each Tool Lives](#14-vite-vs-tsdown-where-each-tool-lives)
 15. [DevTools Improvements](#15-devtools-improvements-why-classes-show-as-not-instantiated)
+16. [Production Readiness Audit](#16-production-readiness-audit)
+17. [Application Lifecycle Audit](#17-application-lifecycle-audit)
+18. [Request-Scoped DI](#18-request-scoped-di)
+19. [Build Banners](#19-build-banners)
 
 ---
 
@@ -2489,22 +2493,617 @@ These areas need no changes:
 
 ---
 
+## 17. Application Lifecycle Audit
+
+### 17.1 Current Lifecycle Execution Order
+
+```
+  bootstrap()
+       |
+       v
+  Install global error handlers (once, guarded by __kickBootstrapped)
+    - uncaughtException -> log.error
+    - unhandledRejection -> log.error
+    - SIGINT/SIGTERM -> app.shutdown() -> process.exit(0)
+       |
+       v
+  new Application(options) -> store in globalThis.__app
+       |
+       v
+  app.start()
+       |
+       v
+  setup()  ─────────────────────────────────────────────────────
+  │                                                             │
+  │  1. adapter.beforeMount(ctx)           [callHook, async]    │
+  │  2. Hardened defaults (x-powered-by, trust proxy)           │
+  │  3. Adapter middleware: beforeGlobal                        │
+  │  4. Plugin registration + plugin middleware                 │
+  │  5. Global middleware (user pipeline or defaults)           │
+  │  6. Adapter middleware: afterGlobal                         │
+  │  7. Module instantiation + module.register(container)       │
+  │  8. container.bootstrap()              [currently no-op]    │
+  │  9. Adapter middleware: beforeRoutes                        │
+  │ 10. Mount routes + adapter.onRouteMount()                   │
+  │ 11. Route summary logging                                  │
+  │ 12. Adapter middleware: afterRoutes                         │
+  │ 13. notFoundHandler() + errorHandler()                      │
+  │ 14. adapter.beforeStart(ctx)           [callHook, async]    │
+  │                                                             │
+  ──────────────────────────────────────────────────────────────
+       |
+       v
+  httpServer.listen(port)
+       |
+       v  (inside listen callback)
+  adapter.afterStart(ctx)                  [callHook, async]
+  plugin.onReady(container)                [awaited locally]
+       |
+       v
+  import.meta.hot.accept()                [Vite HMR]
+```
+
+### 17.2 Lifecycle Bugs Found
+
+#### A. `callHook()` swallows async errors silently
+
+**File:** `application.ts` lines 124-138
+
+```typescript
+private callHook(hook, ctx): void {
+  try {
+    const result = hook(ctx)
+    if (result && typeof result.catch === 'function') {
+      result.catch((err) => log.error(err, 'Adapter async hook failed'))
+      // ← Error logged but app continues. Critical setup failure goes unnoticed.
+    }
+  } catch (err) {
+    log.error(err, 'Adapter hook failed')
+    // ← Same: logged but not re-thrown
+  }
+}
+```
+
+If `adapter.beforeStart()` fails (e.g., can't connect to monitoring service), the server starts anyway. No way for adapters to signal "I'm critical, don't start without me."
+
+**Fix:** Make hooks awaitable and add a `critical` flag:
+
+```typescript
+private async callHookAsync(hook, ctx): Promise<void> {
+  const result = hook(ctx);
+  if (result instanceof Promise) await result;  // Propagate errors
+}
+
+// Or softer: let adapters opt-in to criticality
+interface AppAdapter {
+  critical?: boolean;  // If true, hook failure stops startup
+}
+```
+
+#### B. Plugin middleware not error-wrapped
+
+**File:** `application.ts` lines 169-174
+
+```typescript
+for (const plugin of this.plugins) {
+  const mw = plugin.middleware?.() ?? []
+  for (const handler of mw) {
+    this.app.use(handler)  // Direct, no try/catch
+  }
+}
+```
+
+If `plugin.middleware()` throws synchronously, the entire setup crashes with no recovery.
+
+#### C. `onRouteMount` not error-wrapped
+
+**File:** `application.ts` line 229
+
+```typescript
+adapter.onRouteMount?.(route.controller, mountPath)  // Direct call
+```
+
+If the devtools adapter's `onRouteMount` throws, route mounting stops for all subsequent adapters.
+
+#### D. `plugin.onReady()` errors don't propagate
+
+**File:** `application.ts` lines 318-320
+
+```typescript
+this.httpServer.listen(port, async () => {
+  // ...
+  for (const plugin of this.plugins) {
+    await plugin.onReady?.(this.container)  // Awaited here...
+  }
+})
+// ...but listen() callback is fire-and-forget. Caller never knows.
+```
+
+If `onReady` rejects, it becomes an unhandled rejection caught only by the global handler.
+
+#### E. `@PostConstruct` is sync-only
+
+**File:** `container.ts` line 187
+
+```typescript
+instance[postConstruct]()  // No await. Async @PostConstruct returns ignored Promise.
+```
+
+Async initialization hooks silently don't work. Routes mount before async setup completes.
+
+### 17.3 Missing Lifecycle Hooks
+
+| Phase | Exists | What's Missing |
+|---|---|---|
+| `beforeMount` | Yes | Works correctly |
+| `afterMount` | **No** | No hook after DI bootstrap + routes but before `beforeStart` |
+| `beforeStart` | Yes | Async errors swallowed |
+| `afterStart` | Yes | Inside listen callback (errors don't propagate) |
+| `onRebuild` | **No** | Adapters can't react to HMR rebuild specifically |
+| `onHealthCheck` | **No** | Adapters can't contribute to health check results |
+| `onRequest` | **No** | Per-request hook before middleware chain (for request-scoped DI setup) |
+
+### 17.4 Proposed Lifecycle Fix
+
+```typescript
+// Make setup() async and propagate errors
+async setup(): Promise<void> {
+  // 1. beforeMount — await critical adapters
+  for (const adapter of this.adapters) {
+    if (adapter.beforeMount) {
+      await adapter.beforeMount(this.createContext());  // Propagate errors
+    }
+  }
+
+  // ... middleware, modules, routes ...
+
+  // 14. beforeStart — await critical adapters
+  for (const adapter of this.adapters) {
+    if (adapter.beforeStart) {
+      await adapter.beforeStart(this.createContext());
+    }
+  }
+}
+
+// Make start() async
+async start(): Promise<void> {
+  await this.setup();  // Errors propagate to bootstrap()
+
+  await new Promise<void>((resolve, reject) => {
+    this.httpServer.listen(port, async () => {
+      try {
+        for (const adapter of this.adapters) {
+          await adapter.afterStart?.(this.createContext());
+        }
+        for (const plugin of this.plugins) {
+          await plugin.onReady?.(this.container);
+        }
+        resolve();
+      } catch (err) {
+        reject(err);
+      }
+    });
+  });
+}
+```
+
+---
+
+## 18. Request-Scoped DI
+
+### 18.1 The Problem
+
+Controllers are resolved per-request (`container.resolve(controllerClass)` in router-builder.ts line 77), but **services they depend on are singletons**. There's no way to inject request-specific data (auth user, tenant, request ID) through DI.
+
+**Current workaround:** Attach data to `req` object and pass `RequestContext` manually:
+
+```typescript
+// What developers must do today:
+@Controller('/users')
+class UserController {
+  constructor(private userService: UserService) {}
+
+  @Get('/')
+  async list(ctx: RequestContext) {
+    const user = ctx.req.user;           // Manual extraction
+    const tenant = ctx.req.tenant;       // Manual extraction
+    return this.userService.list(user, tenant);  // Pass explicitly
+  }
+}
+```
+
+**What they should be able to do:**
+
+```typescript
+@Controller('/users')
+class UserController {
+  constructor(
+    private userService: UserService,
+    @Inject(AUTH_USER) private currentUser: User,       // Injected per-request
+    @Inject(TENANT_CONTEXT) private tenant: TenantInfo, // Injected per-request
+  ) {}
+
+  @Get('/')
+  async list(ctx: RequestContext) {
+    // currentUser and tenant are already available via DI
+    return this.userService.list();
+  }
+}
+```
+
+### 18.2 Current Broken Pattern: TenantAdapter
+
+**File:** `packages/multi-tenant/src/tenant.adapter.ts` lines 103-107
+
+```typescript
+container.registerFactory(
+  TENANT_CONTEXT,
+  () => ({ id: 'default', name: 'Default Tenant' }) as TenantInfo,
+  Scope.SINGLETON,  // ← SINGLETON! Returns hardcoded default, not request tenant
+)
+```
+
+The factory can't access the current request, so it returns a useless default. This is a placeholder that doesn't work for actual multi-tenancy.
+
+### 18.3 Solution: AsyncLocalStorage + REQUEST Scope
+
+The cleanest approach for a server-side Node.js framework. No child containers needed.
+
+#### Step 1: Add `Scope.REQUEST` to the enum
+
+```typescript
+// packages/core/src/interfaces.ts
+export enum Scope {
+  SINGLETON = 'singleton',
+  TRANSIENT = 'transient',
+  REQUEST = 'request',       // NEW
+}
+```
+
+#### Step 2: Create a request-scoped storage
+
+```typescript
+// packages/http/src/request-store.ts
+import { AsyncLocalStorage } from 'node:async_hooks';
+
+export interface RequestStore {
+  requestId: string;
+  instances: Map<any, any>;   // Per-request singleton cache
+  values: Map<any, any>;      // Per-request registered values (user, tenant)
+}
+
+export const requestStore = new AsyncLocalStorage<RequestStore>();
+
+export function getRequestStore(): RequestStore {
+  const store = requestStore.getStore();
+  if (!store) throw new Error('No active request context. REQUEST-scoped services can only be resolved during a request.');
+  return store;
+}
+```
+
+#### Step 3: Wrap each request in AsyncLocalStorage
+
+```typescript
+// packages/http/src/middleware/request-scope.ts
+import { requestStore, RequestStore } from '../request-store';
+
+export function requestScopeMiddleware() {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const store: RequestStore = {
+      requestId: req.requestId || crypto.randomUUID(),
+      instances: new Map(),
+      values: new Map(),
+    };
+    requestStore.run(store, () => next());
+  };
+}
+```
+
+This middleware runs early (in the `beforeGlobal` phase), wrapping the entire request lifecycle.
+
+#### Step 4: Enhance Container.resolve() for REQUEST scope
+
+```typescript
+// packages/core/src/container.ts
+import { getRequestStore } from '@forinda/kickjs-http/request-store';
+
+resolve<T>(token: any): T {
+  let reg = this.registrations.get(token);
+  // ... existing fallback logic
+
+  // Singleton: return cached instance
+  if (reg.scope === Scope.SINGLETON && reg.instance) {
+    return reg.instance as T;
+  }
+
+  // REQUEST scope: cache per-request
+  if (reg.scope === Scope.REQUEST) {
+    const store = getRequestStore();
+
+    // Check for pre-registered request values (user, tenant)
+    if (store.values.has(token)) {
+      return store.values.get(token) as T;
+    }
+
+    // Check per-request instance cache (request-scoped singletons)
+    if (store.instances.has(token)) {
+      return store.instances.get(token) as T;
+    }
+
+    // Create instance, cache for this request only
+    const instance = this.createInstance(reg);
+    store.instances.set(token, instance);
+    return instance as T;
+  }
+
+  // Transient: always create new
+  return this.createInstance(reg) as T;
+}
+```
+
+#### Step 5: Register request values from middleware
+
+```typescript
+// packages/auth/src/adapter.ts - after authenticating
+import { getRequestStore } from '@forinda/kickjs-http/request-store';
+
+// In auth middleware, after resolving user:
+const store = getRequestStore();
+store.values.set(AUTH_USER, resolvedUser);
+```
+
+```typescript
+// packages/multi-tenant/src/tenant.adapter.ts - after resolving tenant
+const store = getRequestStore();
+store.values.set(TENANT_CONTEXT, resolvedTenant);
+```
+
+#### Step 6: Use in controllers and services
+
+```typescript
+// Now this works:
+@Controller('/users')
+class UserController {
+  constructor(
+    private userService: UserService,
+    @Inject(AUTH_USER) private currentUser: User,           // REQUEST-scoped
+    @Inject(TENANT_CONTEXT) private tenant: TenantInfo,     // REQUEST-scoped
+  ) {}
+
+  @Get('/me')
+  async me(ctx: RequestContext) {
+    return ctx.json(this.currentUser);  // Injected automatically
+  }
+}
+
+// Services can also inject request-scoped values:
+@Service({ scope: Scope.REQUEST })
+class AuditLogger {
+  constructor(
+    @Inject(AUTH_USER) private user: User,
+    @Inject('RequestId') private requestId: string,
+  ) {}
+
+  log(action: string) {
+    logger.info({ userId: this.user.id, requestId: this.requestId, action });
+  }
+}
+```
+
+### 18.4 How Scopes Interact
+
+```
+  Scope Resolution Rules
+  =======================
+
+  SINGLETON ──> One instance for the app lifetime
+                Can inject: other SINGLETONs
+                Cannot inject: REQUEST or TRANSIENT (would get stale reference)
+
+  TRANSIENT ──> New instance every resolve() call
+                Can inject: SINGLETON, REQUEST, TRANSIENT
+                No caching
+
+  REQUEST   ──> One instance per HTTP request (cached in AsyncLocalStorage)
+                Can inject: SINGLETON, other REQUEST, TRANSIENT
+                Garbage collected when request ends
+                Only available during request handling (throws outside)
+
+  Controller (resolved per-request in router-builder.ts)
+  ──> Can inject any scope safely because controllers
+      are created fresh per-request
+```
+
+**Validation rule:** If a SINGLETON tries to inject a REQUEST-scoped service, throw at resolution time:
+
+```typescript
+if (reg.scope === Scope.SINGLETON && depReg.scope === Scope.REQUEST) {
+  throw new Error(
+    `Cannot inject REQUEST-scoped "${tokenName(depToken)}" into SINGLETON "${tokenName(token)}". ` +
+    `Singletons outlive requests. Use TRANSIENT or REQUEST scope for the parent.`
+  );
+}
+```
+
+### 18.5 Logger Integration (Free Win)
+
+With AsyncLocalStorage in place, the logger automatically gets request context:
+
+```typescript
+// packages/core/src/logger.ts
+import { requestStore } from '@forinda/kickjs-http/request-store';
+
+class Logger {
+  info(msg: string, data?: any) {
+    const store = requestStore.getStore();
+    const context = store
+      ? { requestId: store.requestId, ...data }
+      : data;
+    this.pino.info(context, msg);
+  }
+}
+```
+
+Every log line inside a request automatically includes `requestId` — no manual passing needed. This also fixes the production readiness gap from Section 16.
+
+### 18.6 Implementation Priority
+
+```
+  Step   What                                    Effort   Depends On
+  ====   ====                                    ======   ==========
+  1      Add Scope.REQUEST enum value            Small    Nothing
+  2      Create requestStore (AsyncLocalStorage)  Small    Step 1
+  3      Add requestScopeMiddleware              Small    Step 2
+  4      Enhance resolve() for REQUEST scope     Medium   Steps 1-3
+  5      Add scope validation (SINGLETON→REQUEST) Small    Step 4
+  6      Update AuthAdapter to set AUTH_USER     Small    Steps 2-3
+  7      Fix TenantAdapter (replace broken       Small    Steps 2-3
+         SINGLETON factory)
+  8      Add requestId to logger via store       Small    Step 2
+  9      Update devtools to show REQUEST scope   Small    Step 1
+```
+
+---
+
+## 19. Build Banners
+
+React Router injects a copyright/license banner into every built JS file using tsup's `banner` option. KickJS should do the same.
+
+### 19.1 React Router's Pattern
+
+**File:** `build.utils.ts`
+
+```typescript
+export function createBanner(packageName: string, version: string) {
+  return `/**
+ * ${packageName} v${version}
+ *
+ * Copyright (c) Remix Software Inc.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE.md file in the root directory of this source tree.
+ *
+ * @license MIT
+ */`;
+}
+```
+
+Used in each package's tsup config:
+```typescript
+import { createBanner } from "../../build.utils";
+import pkg from "./package.json";
+
+export default defineConfig({
+  banner: { js: createBanner(pkg.name, pkg.version) },
+});
+```
+
+### 19.2 KickJS Banner Utility
+
+Create a shared build utility at the monorepo root:
+
+```typescript
+// build.utils.ts
+import { readFileSync } from 'node:fs';
+
+export function createBanner(packageName: string, version: string) {
+  return `/**
+ * ${packageName} v${version}
+ *
+ * Copyright (c) Felix Orinda
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE.md file in the root directory of this source tree.
+ *
+ * @license MIT
+ */`;
+}
+
+// Helper to read version from package.json
+export function readPkg(dir: string) {
+  return JSON.parse(readFileSync(`${dir}/package.json`, 'utf-8'));
+}
+```
+
+### 19.3 Usage in tsdown Configs
+
+```typescript
+// packages/core/tsdown.config.ts
+import { defineConfig } from 'tsdown'
+import { createBanner, readPkg } from '../../build.utils'
+
+const pkg = readPkg(__dirname)
+
+export default defineConfig({
+  entry: { index: 'src/index.ts' },
+  format: ['esm'],
+  dts: true,
+  platform: 'node',
+  banner: { js: createBanner(pkg.name, pkg.version) },
+})
+```
+
+Every built JS file in `dist/` will start with:
+```javascript
+/**
+ * @forinda/kickjs-core v2.0.1
+ *
+ * Copyright (c) Felix Orinda
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE.md file in the root directory of this source tree.
+ *
+ * @license MIT
+ */
+```
+
+### 19.4 CLI Banner (Shebang + Copyright)
+
+For the CLI package, combine the shebang with the banner:
+
+```typescript
+// packages/cli/tsdown.config.ts
+import { defineConfig } from 'tsdown'
+import { createBanner, readPkg } from '../../build.utils'
+
+const pkg = readPkg(__dirname)
+
+export default defineConfig({
+  entry: { cli: 'src/cli.ts' },
+  format: ['esm'],
+  dts: true,
+  platform: 'node',
+  banner: {
+    js: `#!/usr/bin/env node\n${createBanner(pkg.name, pkg.version)}`,
+  },
+})
+```
+
+---
+
 ## Key Takeaways for KickJS
 
 **Build & DX:**
 1. **Replace Turbo with pnpm + wireit** - Lighter orchestration, per-package caching, no daemon
 2. **Migrate library builds to tsdown** - Rolldown/Rust, single-step JS+DTS, `isolatedDeclarations` for near-instant types
-3. **Fix rebuild() error recovery** - Build new app fully before swapping listeners (P0)
-4. **Preserve manual registrations across HMR** - DB/Redis connections currently lost; add `container.markPersistent()`
-5. **Selective HMR invalidation** - Track DI dependency graph, only re-register changed + dependents
-6. **Dev/prod build splits** - Strip devtools and debug traces in production
-7. **Typegen for DI** - Generate `ContainerTokenMap` for fully typed `container.resolve()` calls
-8. **Fix devtools "not instantiated"** - Store `CLASS_KIND`, track `resolveCount`, add SSE + dependency graph
+3. **Add build banners** - Shared `createBanner()` utility, injected via tsdown `banner` option
+4. **Fix rebuild() error recovery** - Build new app fully before swapping listeners (P0)
+5. **Preserve manual registrations across HMR** - DB/Redis connections currently lost; add `container.markPersistent()`
+6. **Selective HMR invalidation** - Track DI dependency graph, only re-register changed + dependents
+7. **Dev/prod build splits** - Strip devtools and debug traces in production
+8. **Typegen for DI** - Generate `ContainerTokenMap` for fully typed `container.resolve()` calls
+9. **Fix devtools "not instantiated"** - Store `CLASS_KIND`, track `resolveCount`, add SSE + dependency graph
+
+**Lifecycle & DI:**
+10. **Make lifecycle hooks async-safe** - `callHook()` must propagate errors, not just log them. Make `setup()` and `start()` async
+11. **Add REQUEST scope** - AsyncLocalStorage-based per-request DI. Fixes auth user injection, tenant context, and request ID propagation
+12. **Fix TenantAdapter** - Currently registers a hardcoded default as SINGLETON; must use REQUEST scope with AsyncLocalStorage
+13. **Add scope validation** - Prevent SINGLETON from injecting REQUEST-scoped services (throw at resolution time)
+14. **Add missing lifecycle hooks** - `onRebuild`, `onHealthCheck`, `afterMount`
 
 **Production Runtime:**
-9. **Add health check endpoint** - `/health/live` + `/health/ready` with DB/Redis/queue checks (P0, blocking)
-10. **Add request context via AsyncLocalStorage** - Request ID in every log line, not just request middleware
-11. **Add shutdown timeout** - Configurable timeout (default 30s) with forced exit
-12. **Fix CORS defaults** - Change from `origin: '*'` to `origin: false` for production safety
-13. **Add distributed rate limiting** - Redis store adapter for multi-process deployments
-14. **Validate async `@PostConstruct`** - Either reject or properly await
+15. **Add health check endpoint** - `/health/live` + `/health/ready` with DB/Redis/queue checks (P0, blocking)
+16. **Add shutdown timeout** - Configurable timeout (default 30s) with forced exit
+17. **Fix CORS defaults** - Change from `origin: '*'` to `origin: false` for production safety
+18. **Add distributed rate limiting** - Redis store adapter for multi-process deployments
+19. **Validate async `@PostConstruct`** - Either reject or properly await
