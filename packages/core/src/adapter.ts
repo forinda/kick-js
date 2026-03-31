@@ -1,3 +1,5 @@
+import type http from 'node:http'
+import type { Express } from 'express'
 import type { Container } from './container'
 import type { MaybePromise, Constructor } from './interfaces'
 
@@ -35,12 +37,12 @@ export interface AdapterMiddleware {
  * ```
  */
 export interface AdapterContext {
-  /** Express application instance */
-  app: any
+  /** Express application instance — fully typed */
+  app: Express
   /** DI container */
   container: Container
-  /** Node.js http.Server (only available in afterStart) */
-  server?: any
+  /** Node.js http.Server — only available in afterStart */
+  server?: http.Server
   /** Current NODE_ENV value (default: 'development') */
   env: string
   /** true when NODE_ENV === 'production' */
@@ -108,6 +110,12 @@ export interface AppAdapter {
    * May return a Promise — async rejections are caught and logged.
    */
   afterStart?(ctx: AdapterContext): void | Promise<void>
+
+  /**
+   * Called by the /health/ready endpoint. Return the health status of your adapter's
+   * backing service (database, Redis, queue, etc.).
+   */
+  onHealthCheck?(): Promise<{ name: string; status: 'up' | 'down' }>
 
   /** Called on shutdown — clean up connections */
   shutdown?(): MaybePromise

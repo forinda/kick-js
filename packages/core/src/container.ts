@@ -74,6 +74,14 @@ export class Container {
    * to return Zod-validated, type-coerced env values instead of raw process.env strings.
    */
   static _envResolver: ((key: string) => any) | null = null
+  /**
+   * Request store provider for REQUEST-scoped DI. Set by @forinda/kickjs-http
+   * to return the current request's AsyncLocalStorage store.
+   * Returns { instances: Map, values: Map } or null if outside a request.
+   */
+  static _requestStoreProvider:
+    | (() => { instances: Map<any, any>; values: Map<any, any> } | null)
+    | null = null
 
   static getInstance(): Container {
     if (!Container.instance) {
@@ -243,6 +251,43 @@ export class Container {
       return reg.instance
     }
 
+    // REQUEST scope: one instance per HTTP request, cached in AsyncLocalStorage
+    if (reg.scope === Scope.REQUEST) {
+      if (!Container._requestStoreProvider) {
+        throw new Error(
+          `Cannot resolve REQUEST-scoped "${tokenName(token)}": no request store provider configured. ` +
+            `Ensure requestScopeMiddleware() is in your middleware pipeline.`,
+        )
+      }
+      const store = Container._requestStoreProvider()
+      if (!store) {
+        throw new Error(
+          `Cannot resolve REQUEST-scoped "${tokenName(token)}" outside an HTTP request context.`,
+        )
+      }
+      // Check for pre-registered request values (user, tenant, etc.)
+      if (store.values.has(token)) {
+        reg.resolveCount++
+        reg.lastResolvedAt = Date.now()
+        return store.values.get(token) as T
+      }
+      // Check per-request instance cache
+      if (store.instances.has(token)) {
+        reg.resolveCount++
+        reg.lastResolvedAt = Date.now()
+        return store.instances.get(token) as T
+      }
+      // Create instance and cache for this request only
+      const start = performance.now()
+      const instance = this.createInstance(reg)
+      reg.resolveDurationMs = performance.now() - start
+      reg.resolveCount++
+      reg.lastResolvedAt = Date.now()
+      if (!reg.firstResolvedAt) reg.firstResolvedAt = Date.now()
+      store.instances.set(token, instance)
+      return instance as T
+    }
+
     if (reg.factory) {
       const start = performance.now()
       const instance = reg.factory()
@@ -293,6 +338,16 @@ export class Container {
       const injectTokens: Record<number, any> =
         Reflect.getMetadata(METADATA.INJECT, reg.target) || {}
       const token = injectTokens[index] || paramType
+      // Scope validation: SINGLETON cannot inject REQUEST-scoped dependencies
+      if (reg.scope === Scope.SINGLETON) {
+        const depReg = this.registrations.get(token)
+        if (depReg && depReg.scope === Scope.REQUEST) {
+          throw new Error(
+            `Cannot inject REQUEST-scoped "${tokenName(token)}" into SINGLETON "${tokenName(reg.target)}". ` +
+              `Singletons outlive requests. Use TRANSIENT or REQUEST scope for the parent.`,
+          )
+        }
+      }
       return this.resolve(token)
     })
 

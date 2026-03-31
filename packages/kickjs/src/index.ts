@@ -17,6 +17,10 @@ export { RequestContext } from './http/context'
 
 export { buildRoutes, getControllerPath } from './http/router-builder'
 
+// Request-Scoped DI
+export { requestStore, getRequestStore, type RequestStore } from './http/request-store'
+export { requestScopeMiddleware } from './http/middleware/request-scope'
+
 // Middleware
 export { requestId, REQUEST_ID_HEADER } from './http/middleware/request-id'
 export { validate } from './http/middleware/validate'
