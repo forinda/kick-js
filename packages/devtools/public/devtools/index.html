@@ -261,8 +261,11 @@
             <thead>
               <tr class="border-b-2 border-slate-700">
                 <th class="text-left py-2 px-3 text-slate-400 font-semibold">Token</th>
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Kind</th>
                 <th class="text-left py-2 px-3 text-slate-400 font-semibold">Scope</th>
-                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Instantiated</th>
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Status</th>
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Resolves</th>
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Deps</th>
               </tr>
             </thead>
             <tbody>
@@ -270,12 +273,25 @@
                 class="border-b border-slate-800 hover:bg-slate-800/50">
                 <td class="py-2 px-3 font-mono text-sm">{{ r.token }}</td>
                 <td class="py-2 px-3">
-                  <span class="bg-blue-900/50 text-blue-300 px-2 py-0.5 rounded text-xs font-semibold">{{ r.scope }}</span>
+                  <span :class="{
+                    'bg-violet-900/50 text-violet-300': r.kind === 'controller',
+                    'bg-blue-900/50 text-blue-300': r.kind === 'service',
+                    'bg-teal-900/50 text-teal-300': r.kind === 'repository',
+                    'bg-slate-700/50 text-slate-300': !['controller','service','repository'].includes(r.kind),
+                  }" class="px-2 py-0.5 rounded text-xs font-semibold">{{ r.kind || 'unknown' }}</span>
                 </td>
                 <td class="py-2 px-3">
-                  <span :class="r.instantiated ? 'bg-emerald-900/50 text-emerald-300' : 'bg-amber-900/50 text-amber-300'"
-                    class="px-2 py-0.5 rounded text-xs font-semibold">{{ r.instantiated ? 'yes' : 'no' }}</span>
+                  <span class="bg-slate-700/50 text-slate-300 px-2 py-0.5 rounded text-xs font-semibold">{{ r.scope }}</span>
                 </td>
+                <td class="py-2 px-3">
+                  <span :class="{
+                    'bg-emerald-900/50 text-emerald-300': r.instantiated,
+                    'bg-amber-900/50 text-amber-300': !r.instantiated && r.postConstructStatus !== 'failed',
+                    'bg-red-900/50 text-red-300': r.postConstructStatus === 'failed',
+                  }" class="px-2 py-0.5 rounded text-xs font-semibold">{{ r.instantiated ? 'active' : (r.postConstructStatus === 'failed' ? 'failed' : 'registered') }}</span>
+                </td>
+                <td class="py-2 px-3 tabular-nums">{{ r.resolveCount ?? 0 }}</td>
+                <td class="py-2 px-3 text-slate-500 text-xs">{{ r.dependencies?.length ? r.dependencies.join(', ') : '—' }}</td>
               </tr>
             </tbody>
           </table>
