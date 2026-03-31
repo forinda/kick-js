@@ -1,75 +1,53 @@
-import type { Plugin, HmrContext } from 'vite'
+import type { Plugin } from 'vite'
 import type { PluginContext } from './context'
-import { invalidateVirtualModules } from './virtual-modules'
 
 /**
- * HMR plugin — handles hot updates for KickJS decorated modules.
+ * HMR plugin — full server reload on any source file change.
  *
- * When a file containing @Controller/@Service decorators changes:
- * 1. Virtual modules are invalidated (container-registry regenerates)
- * 2. A custom HMR event `kickjs:module-update` is sent to the SSR runner
- * 3. The bootstrap() function's `import.meta.hot.accept()` picks up the change
+ * This is a backend framework — no browser state to preserve.
+ * On any .ts file change: Vite invalidates the module graph, bootstrap's
+ * import.meta.hot.accept() fires, and rebuild() nukes the DI container +
+ * Express app and recreates everything from scratch. Same port, fresh state.
  *
- * Config file changes (kick.config.ts) trigger a full server restart.
- * Module barrel changes (modules/index.ts) trigger a full restart to pick up
- * new modules added by the code generator.
+ * New files (from `kick g module`) trigger a full Vite restart since they
+ * aren't in the module graph yet.
  */
 export function kickjsHmrPlugin(ctx: PluginContext): Plugin {
   return {
     name: 'kickjs:hmr',
-    apply: 'serve', // Only active in dev mode
+    apply: 'serve',
 
     configureServer(server) {
-      // Watch for new file additions in the src directory — when the generator
-      // creates new module files, Vite needs a full restart to pick them up.
+      // New .ts files in src/ → full Vite restart (not in module graph yet)
       server.watcher.on('add', (file: string) => {
-        if (file.endsWith('.ts') && !file.endsWith('.d.ts') && file.includes('/modules/')) {
-          server.config.logger.info(`New module file detected: ${file}`, { timestamp: true })
+        if (file.endsWith('.ts') && !file.endsWith('.d.ts') && !file.includes('node_modules')) {
+          server.config.logger.info(`New file: ${file}`, { timestamp: true })
+          server.restart()
+        }
+      })
+
+      // Deleted .ts files → full restart to avoid stale module references
+      server.watcher.on('unlink', (file: string) => {
+        if (file.endsWith('.ts') && !file.endsWith('.d.ts')) {
+          server.config.logger.info(`File removed: ${file}`, { timestamp: true })
           server.restart()
         }
       })
     },
 
-    handleHotUpdate({ file, server }: HmrContext) {
+    handleHotUpdate({ file, server }) {
       const relativePath = file.startsWith(ctx.root + '/') ? file.slice(ctx.root.length + 1) : file
 
       // Config file change → full restart
-      if (
-        relativePath === 'kick.config.ts' ||
-        relativePath === 'kick.config.js' ||
-        relativePath === 'kick.config.mjs'
-      ) {
+      if (/^kick\.config\.(ts|js|mjs)$/.test(relativePath)) {
+        server.config.logger.info('Config changed, restarting...', { timestamp: true })
         server.restart()
         return []
       }
 
-      // Module barrel change (e.g., modules/index.ts updated by generator) → full restart
-      // so Vite re-evaluates all imports including newly added modules
-      if (relativePath.endsWith('modules/index.ts')) {
-        server.config.logger.info('Module registry changed, restarting...', { timestamp: true })
-        server.restart()
-        return []
-      }
-
-      // Check if this is a KickJS decorated module
-      const isKickModule = ctx.discoveredModules.has(relativePath)
-
-      if (isKickModule) {
-        // Invalidate virtual modules so they regenerate
-        invalidateVirtualModules(ctx)
-
-        // Send custom HMR event for the DI system
-        server.hot.send({
-          type: 'custom',
-          event: 'kickjs:module-update',
-          data: {
-            file: relativePath,
-            kinds: [...(ctx.discoveredModules.get(relativePath) ?? [])],
-          },
-        })
-      }
-
-      // Let Vite handle the standard HMR flow (module graph invalidation)
+      // For .ts source files, let Vite's default HMR flow handle it.
+      // The module graph invalidation propagates to the entry file,
+      // bootstrap's import.meta.hot.accept() fires, and rebuild() runs.
       return undefined
     },
   }
