@@ -4,6 +4,9 @@ hero:
   name: KickJS
   text: The Adaptive Node.js Framework
   tagline: Build REST, GraphQL, WebSocket, or microservice APIs — your way. Decorator-driven, pluggable, and production-ready on Express 5.
+  image:
+    src: /logo.svg
+    alt: KickJS
   actions:
     - theme: brand
       text: Get Started
