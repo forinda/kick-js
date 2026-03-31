@@ -19,6 +19,9 @@ import {
   generateEntryFile,
   generateModulesIndex,
   generateKickConfig,
+  generateHelloService,
+  generateHelloController,
+  generateHelloModule,
 } from './templates/project-app'
 import { generateReadme, generateClaude, generateAgents } from './templates/project-docs'
 
@@ -87,6 +90,11 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
 
   // ── src/modules/index.ts ────────────────────────────────────────────
   await writeFileSafe(join(dir, 'src/modules/index.ts'), generateModulesIndex())
+
+  // ── src/modules/hello/ — sample module ─────────────────────────────
+  await writeFileSafe(join(dir, 'src/modules/hello/hello.service.ts'), generateHelloService())
+  await writeFileSafe(join(dir, 'src/modules/hello/hello.controller.ts'), generateHelloController())
+  await writeFileSafe(join(dir, 'src/modules/hello/hello.module.ts'), generateHelloModule())
 
   // ── Template-specific files ─────────────────────────────────────────
   if (template === 'graphql') {
