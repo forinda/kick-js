@@ -48,54 +48,60 @@
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "import": "./dist/index.mjs",
+      "types": "./dist/index.d.mts"
     },
     "./container": {
-      "import": "./dist/container.js",
-      "types": "./dist/container.d.ts"
+      "import": "./dist/container.mjs",
+      "types": "./dist/container.d.mts"
     },
     "./decorators": {
-      "import": "./dist/decorators.js",
-      "types": "./dist/decorators.d.ts"
+      "import": "./dist/decorators.mjs",
+      "types": "./dist/decorators.d.mts"
     },
     "./module": {
-      "import": "./dist/app-module.js",
-      "types": "./dist/app-module.d.ts"
+      "import": "./dist/app-module.mjs",
+      "types": "./dist/app-module.d.mts"
     },
     "./adapter": {
-      "import": "./dist/adapter.js",
-      "types": "./dist/adapter.d.ts"
+      "import": "./dist/adapter.mjs",
+      "types": "./dist/adapter.d.mts"
     },
     "./logger": {
-      "import": "./dist/logger.js",
-      "types": "./dist/logger.d.ts"
+      "import": "./dist/logger.mjs",
+      "types": "./dist/logger.d.mts"
     },
     "./errors": {
-      "import": "./dist/errors.js",
-      "types": "./dist/errors.d.ts"
+      "import": "./dist/errors.mjs",
+      "types": "./dist/errors.d.mts"
     },
     "./types": {
-      "import": "./dist/interfaces.js",
-      "types": "./dist/interfaces.d.ts"
+      "import": "./dist/interfaces.mjs",
+      "types": "./dist/interfaces.d.mts"
     },
     "./reactivity": {
-      "import": "./dist/reactivity.js",
-      "types": "./dist/reactivity.d.ts"
+      "import": "./dist/reactivity.mjs",
+      "types": "./dist/reactivity.d.mts"
     }
   },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "vite build && pnpm build:types",
-    "build:types": "tsc -p tsconfig.build.json",
-    "dev": "vite build --watch",
+    "build": "wireit",
+    "dev": "tsdown --watch",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist .turbo",
+    "clean": "rm -rf dist .wireit",
     "lint": "tsc --noEmit"
+  },
+  "wireit": {
+    "build": {
+      "command": "tsdown",
+      "files": ["src/**/*.ts", "tsdown.config.ts", "tsconfig.json", "package.json"],
+      "output": ["dist/**"]
+    }
   },
   "dependencies": {
     "pino": "^10.3.1",

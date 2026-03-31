@@ -18,75 +18,92 @@
     "vite",
     "zod",
     "swagger",
-    "openapi"
+    "openapi",
+    "@forinda/kickjs-http",
+    "@forinda/kickjs-config",
+    "@forinda/kickjs-cli",
+    "@forinda/kickjs-swagger",
+    "@forinda/kickjs-testing",
+    "@forinda/kickjs-prisma",
+    "@forinda/kickjs-ws",
+    "@forinda/kickjs-drizzle",
+    "@forinda/kickjs-otel",
+    "@forinda/kickjs-graphql",
+    "@forinda/kickjs-auth",
+    "@forinda/kickjs-cron",
+    "@forinda/kickjs-mailer",
+    "@forinda/kickjs-queue",
+    "@forinda/kickjs-multi-tenant",
+    "@forinda/kickjs-devtools",
+    "@forinda/kickjs-notifications"
   ],
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "import": "./dist/index.mjs",
+      "types": "./dist/index.d.mts"
     },
     "./adapter": {
-      "import": "./dist/core/adapter.js",
-      "types": "./dist/core/adapter.d.ts"
+      "import": "./dist/core/adapter.mjs",
+      "types": "./dist/core/adapter.d.mts"
     },
     "./container": {
-      "import": "./dist/core/container.js",
-      "types": "./dist/core/container.d.ts"
+      "import": "./dist/core/container.mjs",
+      "types": "./dist/core/container.d.mts"
     },
     "./decorators": {
-      "import": "./dist/core/decorators.js",
-      "types": "./dist/core/decorators.d.ts"
+      "import": "./dist/core/decorators.mjs",
+      "types": "./dist/core/decorators.d.mts"
     },
     "./logger": {
-      "import": "./dist/core/logger.js",
-      "types": "./dist/core/logger.d.ts"
+      "import": "./dist/core/logger.mjs",
+      "types": "./dist/core/logger.d.mts"
     },
     "./errors": {
-      "import": "./dist/core/errors.js",
-      "types": "./dist/core/errors.d.ts"
+      "import": "./dist/core/errors.mjs",
+      "types": "./dist/core/errors.d.mts"
     },
     "./reactivity": {
-      "import": "./dist/core/reactivity.js",
-      "types": "./dist/core/reactivity.d.ts"
+      "import": "./dist/core/reactivity.mjs",
+      "types": "./dist/core/reactivity.d.mts"
     },
     "./middleware/helmet": {
-      "import": "./dist/http/middleware/helmet.js",
-      "types": "./dist/http/middleware/helmet.d.ts"
+      "import": "./dist/http/middleware/helmet.mjs",
+      "types": "./dist/http/middleware/helmet.d.mts"
     },
     "./middleware/cors": {
-      "import": "./dist/http/middleware/cors.js",
-      "types": "./dist/http/middleware/cors.d.ts"
+      "import": "./dist/http/middleware/cors.mjs",
+      "types": "./dist/http/middleware/cors.d.mts"
     },
     "./middleware/csrf": {
-      "import": "./dist/http/middleware/csrf.js",
-      "types": "./dist/http/middleware/csrf.d.ts"
+      "import": "./dist/http/middleware/csrf.mjs",
+      "types": "./dist/http/middleware/csrf.d.mts"
     },
     "./middleware/rate-limit": {
-      "import": "./dist/http/middleware/rate-limit.js",
-      "types": "./dist/http/middleware/rate-limit.d.ts"
+      "import": "./dist/http/middleware/rate-limit.mjs",
+      "types": "./dist/http/middleware/rate-limit.d.mts"
     },
     "./middleware/request-id": {
-      "import": "./dist/http/middleware/request-id.js",
-      "types": "./dist/http/middleware/request-id.d.ts"
+      "import": "./dist/http/middleware/request-id.mjs",
+      "types": "./dist/http/middleware/request-id.d.mts"
     },
     "./middleware/request-logger": {
-      "import": "./dist/http/middleware/request-logger.js",
-      "types": "./dist/http/middleware/request-logger.d.ts"
+      "import": "./dist/http/middleware/request-logger.mjs",
+      "types": "./dist/http/middleware/request-logger.d.mts"
     },
     "./query": {
-      "import": "./dist/http/query/index.js",
-      "types": "./dist/http/query/index.d.ts"
+      "import": "./dist/http/query/index.mjs",
+      "types": "./dist/http/query/index.d.mts"
     },
     "./views": {
-      "import": "./dist/http/middleware/views.js",
-      "types": "./dist/http/middleware/views.d.ts"
+      "import": "./dist/http/middleware/views.mjs",
+      "types": "./dist/http/middleware/views.d.mts"
     },
     "./spa": {
-      "import": "./dist/http/middleware/spa.js",
-      "types": "./dist/http/middleware/spa.d.ts"
+      "import": "./dist/http/middleware/spa.mjs",
+      "types": "./dist/http/middleware/spa.d.mts"
     }
   },
   "files": [
@@ -95,12 +112,18 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "vite build && pnpm build:types",
-    "build:types": "tsc -p tsconfig.build.json",
-    "dev": "vite build --watch",
+    "build": "wireit",
+    "dev": "tsdown --watch",
     "test": "vitest run --passWithNoTests",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist .turbo"
+    "clean": "rm -rf dist .wireit"
+  },
+  "wireit": {
+    "build": {
+      "command": "tsdown",
+      "files": ["src/**/*.ts", "tsdown.config.ts", "tsconfig.json", "package.json"],
+      "output": ["dist/**"]
+    }
   },
   "dependencies": {
     "cookie-parser": "^1.4.7",

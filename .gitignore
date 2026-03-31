@@ -8,7 +8,9 @@ yarn-debug.log*
 yarn-error.log*
 .idea/
 .vscode/
+.wireit/
 .turbo/
+*.log
 *.tsbuildinfo
 **/.vitepress/dist/
 **/.vitepress/cache/

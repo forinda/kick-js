@@ -1,1 +1,1 @@
-pnpm turbo build --filter='./packages/*' --output-logs=errors-only && pnpm test --output-logs=errors-only && pnpm format:check
+pnpm build && pnpm test && pnpm format:check
