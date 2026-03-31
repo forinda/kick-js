@@ -2,13 +2,18 @@ import type { Plugin, ViteDevServer } from 'vite'
 import type { PluginContext } from './context'
 
 /**
- * Dev server plugin — mounts KickJS Express app as middleware on Vite's dev server.
+ * Dev server plugin — runs KickJS on its own HTTP port with Vite as the
+ * internal module loader and file watcher.
  *
- * Following the React Router pattern: everything runs on one port (Vite's port).
- * The plugin imports the entry file which runs bootstrap(). Bootstrap detects
- * the KICK_VITE env var and calls registerOnly() instead of start(), so it
- * sets up routes/middleware/DI without starting a separate HTTP server.
- * The Express app is then mounted on Vite's middleware stack.
+ * This is a backend framework — no browser state to preserve. On any file
+ * change, the Express app does a full rebuild (re-register modules, re-mount
+ * routes, swap handler). Vite's port is internal and hidden from the user.
+ *
+ * Architecture:
+ *   - Express listens on PORT (default 3000) — this is what clients hit
+ *   - Vite runs internally for SSR module loading + chokidar file watching
+ *   - File changes trigger app.rebuild() via Vite's HMR invalidation
+ *   - Vite's own port is suppressed from output
  */
 export function kickjsDevServerPlugin(ctx: PluginContext): Plugin {
   let entryImported = false
@@ -18,9 +23,6 @@ export function kickjsDevServerPlugin(ctx: PluginContext): Plugin {
     apply: 'serve',
 
     config() {
-      // Signal to bootstrap() that we're running inside the Vite plugin
-      process.env.KICK_VITE = '1'
-
       return {
         appType: 'custom',
         environments: {
@@ -29,16 +31,19 @@ export function kickjsDevServerPlugin(ctx: PluginContext): Plugin {
         server: {
           hmr: true,
         },
+        // Suppress Vite's "Local: http://localhost:5173" output —
+        // users should only see the Express port
+        clearScreen: false,
       }
     },
 
     configureServer(server: ViteDevServer) {
-      // Store server reference for other plugins (HMR, virtual modules)
       ctx.server = server
 
-      // Mount the KickJS app as middleware on Vite's server after all other
-      // middleware. This runs in the "return" phase of configureServer,
-      // which executes after Vite's built-in middleware.
+      // Override printUrls to suppress Vite's port from output
+      server.printUrls = () => {}
+
+      // Import the entry after Vite is ready — bootstrap() starts Express normally
       return async () => {
         if (entryImported) return
         entryImported = true
@@ -47,20 +52,7 @@ export function kickjsDevServerPlugin(ctx: PluginContext): Plugin {
         if (!env || !('runner' in env)) return
 
         try {
-          // Import the entry — bootstrap() will detect KICK_VITE and call
-          // registerOnly() instead of start(), setting up DI + routes without listening.
           await (env as any).runner.import(`/${ctx.entry}`)
-
-          // Get the Express app from globalThis.__app (set by bootstrap)
-          const g = globalThis as any
-          if (g.__app && typeof g.__app.getExpressApp === 'function') {
-            const expressApp = g.__app.getExpressApp()
-            // Mount the Express app as catch-all middleware on Vite's server
-            server.middlewares.use(expressApp)
-            server.config.logger.info(`KickJS app mounted on Vite server (single port)`, {
-              timestamp: true,
-            })
-          }
         } catch (err: any) {
           server.config.logger.error(`Failed to import entry: ${ctx.entry}`)
           server.config.logger.error(err)
