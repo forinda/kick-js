@@ -9,34 +9,25 @@ import { loadKickConfig } from '../config'
  * With the @forinda/kickjs-vite plugin in vite.config.ts, Vite handles
  * SSR environment setup, module discovery, and HMR automatically.
  */
-async function startDevServer(entry: string, port?: string): Promise<void> {
+async function startDevServer(_entry: string, port?: string): Promise<void> {
   if (port) process.env.PORT = port
 
   // Resolve vite from the user's project, not the CLI package
   const { createRequire } = await import('node:module')
   const require = createRequire(resolve('package.json'))
   const vitePath = require.resolve('vite')
-  const { createServer, isRunnableDevEnvironment } = await import(vitePath)
+  const { createServer } = await import(vitePath)
 
+  // The kickjs() Vite plugin handles SSR setup, entry import, and HMR.
+  // We just need to create the server and listen.
   const server = await createServer({
     configFile: resolve('vite.config.ts'),
   })
 
-  const env = server.environments.ssr
+  await server.listen()
+  server.printUrls()
 
-  if (!isRunnableDevEnvironment(env)) {
-    console.error(
-      '\n  Error: Vite environment is not runnable.\n' +
-        '  Ensure vite.config.ts includes the kickjs() plugin from @forinda/kickjs-vite.\n',
-    )
-    process.exit(1)
-  }
-
-  console.log(`\n  KickJS dev server starting...`)
-  console.log(`  Entry:  ${entry}`)
-  console.log(`  HMR:    enabled (Vite + @forinda/kickjs-vite)\n`)
-
-  await env.runner.import(`/${entry}`)
+  console.log(`\n  KickJS dev server running (Vite + @forinda/kickjs-vite)\n`)
 
   const shutdown = async () => {
     await server.close()

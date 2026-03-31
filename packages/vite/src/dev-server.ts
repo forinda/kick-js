@@ -6,10 +6,14 @@ import type { PluginContext } from './context'
  *
  * Sets up:
  * - SSR environment for server-side module loading
- * - Custom middleware mode (no built-in HTML serving)
+ * - Auto-imports the KickJS entry file when Vite starts
  * - Server reference storage for other plugins
+ *
+ * Works with both `vite` CLI and `kick dev` (programmatic API).
  */
 export function kickjsDevServerPlugin(ctx: PluginContext): Plugin {
+  let entryImported = false
+
   return {
     name: 'kickjs:dev-server',
     apply: 'serve',
@@ -21,7 +25,6 @@ export function kickjsDevServerPlugin(ctx: PluginContext): Plugin {
           ssr: {},
         },
         server: {
-          middlewareMode: true,
           hmr: true,
         },
       }
@@ -30,6 +33,21 @@ export function kickjsDevServerPlugin(ctx: PluginContext): Plugin {
     configureServer(server: ViteDevServer) {
       // Store server reference for other plugins (HMR, virtual modules)
       ctx.server = server
+
+      // Import the KickJS entry after Vite is fully ready.
+      // This runs the bootstrap() function which starts Express on its own port.
+      return () => {
+        if (entryImported) return
+        entryImported = true
+
+        const env = server.environments.ssr
+        if (env && 'runner' in env) {
+          ;(env as any).runner.import(`/${ctx.entry}`).catch((err: any) => {
+            server.config.logger.error(`Failed to import entry: ${ctx.entry}`)
+            server.config.logger.error(err)
+          })
+        }
+      }
     },
   }
 }
