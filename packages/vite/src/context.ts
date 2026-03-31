@@ -1,4 +1,4 @@
-import type { ModuleNode, ViteDevServer } from 'vite'
+import type { ViteDevServer } from 'vite'
 
 /** Shared context between KickJS Vite plugins */
 export interface PluginContext {
@@ -6,8 +6,6 @@ export interface PluginContext {
   root: string
   /** Entry file for the server app (default: src/index.ts) */
   entry: string
-  /** Discovered decorated modules: file path -> decorator kinds found */
-  discoveredModules: Map<string, Set<string>>
   /** Vite dev server reference (set during configureServer) */
   server?: ViteDevServer
 }
@@ -16,7 +14,6 @@ export function createPluginContext(options?: KickJSPluginOptions): PluginContex
   return {
     root: process.cwd(),
     entry: options?.entry ?? 'src/index.ts',
-    discoveredModules: new Map(),
   }
 }
 
