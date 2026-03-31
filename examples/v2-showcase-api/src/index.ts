@@ -6,7 +6,6 @@ import {
   requestLogger,
   helmet,
   cors,
-  validate,
 } from '@forinda/kickjs'
 import { DevToolsAdapter } from '@forinda/kickjs-devtools'
 import { SwaggerAdapter } from '@forinda/kickjs-swagger'
@@ -33,7 +32,6 @@ bootstrap({
     cors({ origin: '*' }),
     requestId(),
     requestLogger(),
-    validate(),
     express.json(),
   ],
 })
