@@ -54,7 +54,6 @@ export function generatePackageJson(
       dependencies: baseDeps,
       devDependencies: {
         '@forinda/kickjs-cli': kickjsVersion,
-        '@forinda/kickjs-vite': kickjsVersion,
         '@swc/core': '^1.15.21',
         '@types/express': '^5.0.6',
         '@types/node': '^25.0.0',
@@ -70,16 +69,15 @@ export function generatePackageJson(
   )
 }
 
-/** Generate vite.config.ts with KickJS Vite plugin and SWC decorators */
+/** Generate vite.config.ts for HMR and SWC decorators */
 export function generateViteConfig(): string {
   return `import { defineConfig } from 'vite'
 import { resolve } from 'path'
-import { kickjs } from '@forinda/kickjs-vite'
 import swc from 'unplugin-swc'
 
 export default defineConfig({
   oxc: false,
-  plugins: [kickjs(), swc.vite()],
+  plugins: [swc.vite()],
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),
