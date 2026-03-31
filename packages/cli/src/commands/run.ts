@@ -5,11 +5,11 @@ import { runShellCommand } from '../utils/shell'
 import { loadKickConfig } from '../config'
 
 /**
- * Start the Vite dev server using RunnableDevEnvironment.
- * Replaces the old `npx vite-node --watch` approach — no separate dependency needed.
+ * Start the Vite dev server.
+ * With the @forinda/kickjs-vite plugin in vite.config.ts, Vite handles
+ * SSR environment setup, module discovery, and HMR automatically.
  */
 async function startDevServer(entry: string, port?: string): Promise<void> {
-  // Set port before Vite server creation so the app picks it up
   if (port) process.env.PORT = port
 
   // Resolve vite from the user's project, not the CLI package
@@ -20,26 +20,6 @@ async function startDevServer(entry: string, port?: string): Promise<void> {
 
   const server = await createServer({
     configFile: resolve('vite.config.ts'),
-    appType: 'custom',
-    server: {
-      middlewareMode: true,
-      hmr: true,
-    },
-    environments: {
-      // Only the SSR environment is needed for backend apps
-      ssr: {},
-    },
-    // Filter out "(client)" warnings about node: modules being externalized
-    customLogger: (() => {
-      const { createLogger: createViteLogger } = require(vitePath)
-      const logger = createViteLogger()
-      const origWarn = logger.warn.bind(logger)
-      logger.warn = (msg: string, options?: any) => {
-        if (msg.includes('(client)') && msg.includes('externalized')) return
-        origWarn(msg, options)
-      }
-      return logger
-    })(),
   })
 
   const env = server.environments.ssr
@@ -47,33 +27,17 @@ async function startDevServer(entry: string, port?: string): Promise<void> {
   if (!isRunnableDevEnvironment(env)) {
     console.error(
       '\n  Error: Vite environment is not runnable.\n' +
-        '  Ensure vite.config.ts uses the default SSR environment.\n',
+        '  Ensure vite.config.ts includes the kickjs() plugin from @forinda/kickjs-vite.\n',
     )
     process.exit(1)
   }
 
   console.log(`\n  KickJS dev server starting...`)
   console.log(`  Entry:  ${entry}`)
-  console.log(`  HMR:    enabled (Vite Environment Runner)\n`)
+  console.log(`  HMR:    enabled (Vite + @forinda/kickjs-vite)\n`)
 
   await env.runner.import(`/${entry}`)
 
-  // Watch kick.config.ts for changes — restart the server on config edits
-  const configFiles = ['kick.config.ts', 'kick.config.js', 'kick.config.mjs']
-  for (const file of configFiles) {
-    const configPath = resolve(file)
-    server.watcher.add(configPath)
-  }
-  server.watcher.on('change', (path: string) => {
-    const name = path.split('/').pop() ?? ''
-    if (configFiles.includes(name)) {
-      console.log(`\n  kick.config changed, restarting...\n`)
-      server.restart()
-    }
-  })
-
-  // Keep the process alive — the Express server is running
-  // Graceful shutdown on SIGINT/SIGTERM
   const shutdown = async () => {
     await server.close()
     process.exit(0)
