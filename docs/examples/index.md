@@ -42,6 +42,19 @@ KickJS ships with example applications that demonstrate different features and p
 
 ## Focused Examples
 
+### v2 Showcase
+
+**What it shows:** All major v2.0 features in one app — Vite plugin, health checks, DI observability, async lifecycle, DevTools enhancements.
+
+- `@forinda/kickjs-vite` plugin in `vite.config.ts`
+- `/health/live` and `/health/ready` endpoints (built-in)
+- Enhanced DevTools: dependency graph (`/_debug/graph`), SSE stream (`/_debug/stream`), p50/p95/p99 latency
+- In-memory task CRUD with DDD architecture
+- Interface-based DI with `@Inject(TASK_REPOSITORY)`
+- `kick typegen` for fully typed `container.resolve()`
+
+[View source](https://github.com/forinda/kick-js/tree/main/examples/v2-showcase-api) | [Full docs](./v2-showcase-api)
+
 ### Minimal
 
 The simplest possible KickJS app — `bootstrap()` and one route, ~10 lines of code.
