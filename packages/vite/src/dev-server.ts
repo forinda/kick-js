@@ -2,18 +2,14 @@ import type { Plugin, ViteDevServer } from 'vite'
 import type { PluginContext } from './context'
 
 /**
- * Dev server plugin — runs KickJS on its own HTTP port with Vite as the
- * internal module loader and file watcher.
+ * Dev server plugin — imports the KickJS entry via Vite's SSR runner.
  *
- * This is a backend framework — no browser state to preserve. On any file
- * change, the Express app does a full rebuild (re-register modules, re-mount
- * routes, swap handler). Vite's port is internal and hidden from the user.
+ * Express owns the HTTP port (default 3000). Vite runs internally for
+ * module loading and file watching only — its port is hidden from users.
  *
- * Architecture:
- *   - Express listens on PORT (default 3000) — this is what clients hit
- *   - Vite runs internally for SSR module loading + chokidar file watching
- *   - File changes trigger app.rebuild() via Vite's HMR invalidation
- *   - Vite's own port is suppressed from output
+ * On file changes, Vite's HMR invalidates the module graph. bootstrap()'s
+ * import.meta.hot.accept() fires, calling rebuild() which nukes everything
+ * (Container, Express app, routes) and recreates from scratch on the same port.
  */
 export function kickjsDevServerPlugin(ctx: PluginContext): Plugin {
   let entryImported = false
@@ -31,8 +27,6 @@ export function kickjsDevServerPlugin(ctx: PluginContext): Plugin {
         server: {
           hmr: true,
         },
-        // Suppress Vite's "Local: http://localhost:5173" output —
-        // users should only see the Express port
         clearScreen: false,
       }
     },
@@ -40,10 +34,10 @@ export function kickjsDevServerPlugin(ctx: PluginContext): Plugin {
     configureServer(server: ViteDevServer) {
       ctx.server = server
 
-      // Override printUrls to suppress Vite's port from output
+      // Hide Vite's port — users only see the Express port
       server.printUrls = () => {}
 
-      // Import the entry after Vite is ready — bootstrap() starts Express normally
+      // Import the entry after Vite middleware is ready
       return async () => {
         if (entryImported) return
         entryImported = true
