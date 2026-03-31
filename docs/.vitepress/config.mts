@@ -114,6 +114,7 @@ const apiSidebar = [
       { text: '@forinda/kickjs-mailer', link: '/api/mailer' },
       { text: '@forinda/kickjs-queue', link: '/api/queue' },
       { text: '@forinda/kickjs-multi-tenant', link: '/api/multi-tenant' },
+      { text: '@forinda/kickjs-vite', link: '/api/vite' },
     ],
   },
 ]
@@ -131,6 +132,7 @@ const examplesSidebar = [
   {
     text: 'Focused Examples',
     items: [
+      { text: 'v2 Showcase', link: '/examples/v2-showcase-api' },
       { text: 'Minimal', link: '/examples/minimal-api' },
       { text: 'Joi Validation', link: '/examples/joi-api' },
       { text: 'DevTools', link: '/examples/devtools-api' },
