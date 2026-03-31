@@ -15,7 +15,6 @@
     "@forinda/kickjs-config": "workspace:*",
     "@forinda/kickjs-devtools": "workspace:*",
     "@forinda/kickjs-swagger": "workspace:*",
-    "@forinda/kickjs-vite": "workspace:*",
     "express": "^5.2.1",
     "reflect-metadata": "^0.2.2",
     "zod": "^4.3.6",

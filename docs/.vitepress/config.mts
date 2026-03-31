@@ -114,7 +114,6 @@ const apiSidebar = [
       { text: '@forinda/kickjs-mailer', link: '/api/mailer' },
       { text: '@forinda/kickjs-queue', link: '/api/queue' },
       { text: '@forinda/kickjs-multi-tenant', link: '/api/multi-tenant' },
-      { text: '@forinda/kickjs-vite', link: '/api/vite' },
     ],
   },
 ]

@@ -1,11 +1,10 @@
 import { defineConfig } from 'vite'
 import { resolve } from 'path'
-import { kickjs } from '@forinda/kickjs-vite'
 import swc from 'unplugin-swc'
 
 export default defineConfig({
   oxc: false,
-  plugins: [kickjs(), swc.vite()],
+  plugins: [swc.vite()],
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),
