@@ -23,6 +23,6 @@ export default defineConfig([
     platform: 'node',
     dts: false,
     external: ['commander', 'vite', /^node:/],
-    banner: { js: `#!/usr/bin/env node\n${banner}` },
+    banner: { js: banner },
   },
 ])
