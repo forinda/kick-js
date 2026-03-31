@@ -111,6 +111,12 @@ export interface AppAdapter {
    */
   afterStart?(ctx: AdapterContext): void | Promise<void>
 
+  /**
+   * Called by the /health/ready endpoint. Return the health status of your adapter's
+   * backing service (database, Redis, queue, etc.).
+   */
+  onHealthCheck?(): Promise<{ name: string; status: 'up' | 'down' }>
+
   /** Called on shutdown — clean up connections */
   shutdown?(): MaybePromise
 }

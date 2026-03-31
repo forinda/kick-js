@@ -48,6 +48,13 @@ const loggerCache = new Map<string, Logger>()
 export class Logger {
   private log: pino.Logger
 
+  /**
+   * Optional context provider for request-scoped log enrichment.
+   * Set by the HTTP package to inject requestId from AsyncLocalStorage.
+   * Returns extra fields to merge into every log call, or null if outside a request.
+   */
+  static _contextProvider: (() => Record<string, any> | null) | null = null
+
   constructor(name?: string) {
     this.log = name ? rootLogger.child({ component: name }) : rootLogger
   }
@@ -67,28 +74,45 @@ export class Logger {
     return new Logger(name)
   }
 
+  /** Get request context (requestId, etc.) if inside a request */
+  private ctx(): Record<string, any> | undefined {
+    return Logger._contextProvider?.() ?? undefined
+  }
+
   info(msg: string, ...args: any[]) {
-    this.log.info(msg, ...args)
+    const c = this.ctx()
+    c ? this.log.info(c, msg, ...args) : this.log.info(msg, ...args)
   }
 
   warn(msg: string, ...args: any[]) {
-    this.log.warn(msg, ...args)
+    const c = this.ctx()
+    c ? this.log.warn(c, msg, ...args) : this.log.warn(msg, ...args)
   }
 
   error(msgOrObj: any, msg?: string, ...args: any[]) {
-    this.log.error(msgOrObj, msg, ...args)
+    if (typeof msgOrObj === 'string') {
+      const c = this.ctx()
+      c ? this.log.error(c, msgOrObj) : this.log.error(msgOrObj)
+    } else {
+      const c = this.ctx()
+      const obj = c ? { ...msgOrObj, ...c } : msgOrObj
+      this.log.error(obj, msg, ...args)
+    }
   }
 
   debug(msg: string, ...args: any[]) {
-    this.log.debug(msg, ...args)
+    const c = this.ctx()
+    c ? this.log.debug(c, msg, ...args) : this.log.debug(msg, ...args)
   }
 
   trace(msg: string, ...args: any[]) {
-    this.log.trace(msg, ...args)
+    const c = this.ctx()
+    c ? this.log.trace(c, msg, ...args) : this.log.trace(msg, ...args)
   }
 
   fatal(msg: string, ...args: any[]) {
-    this.log.fatal(msg, ...args)
+    const c = this.ctx()
+    c ? this.log.fatal(c, msg, ...args) : this.log.fatal(msg, ...args)
   }
 }
 

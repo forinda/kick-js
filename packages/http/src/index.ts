@@ -10,6 +10,10 @@ export { RequestContext } from './context'
 // Router Builder
 export { buildRoutes, getControllerPath } from './router-builder'
 
+// Request-Scoped DI
+export { requestStore, getRequestStore, type RequestStore } from './request-store'
+export { requestScopeMiddleware } from './middleware/request-scope'
+
 // Middleware
 export { requestId, REQUEST_ID_HEADER } from './middleware/request-id'
 export { validate } from './middleware/validate'

@@ -22,6 +22,8 @@ export default defineConfig({
         'middleware/request-logger': resolve(__dirname, 'src/middleware/request-logger.ts'),
         'middleware/helmet': resolve(__dirname, 'src/middleware/helmet.ts'),
         'middleware/cors': resolve(__dirname, 'src/middleware/cors.ts'),
+        'middleware/request-scope': resolve(__dirname, 'src/middleware/request-scope.ts'),
+        'request-store': resolve(__dirname, 'src/request-store.ts'),
         'query/index': resolve(__dirname, 'src/query/index.ts'),
       },
       formats: ['es'],

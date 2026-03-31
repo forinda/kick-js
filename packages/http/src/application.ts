@@ -3,6 +3,7 @@ import express, { type Express, type RequestHandler } from 'express'
 import {
   Container,
   createLogger,
+  Logger,
   normalizePath,
   METADATA,
   type AppModuleClass,
@@ -14,6 +15,8 @@ import {
 } from '@forinda/kickjs-core'
 import { requestId } from './middleware/request-id'
 import { notFoundHandler, errorHandler } from './middleware/error-handler'
+import { requestScopeMiddleware } from './middleware/request-scope'
+import { requestStore, getRequestStore } from './request-store'
 
 const log = createLogger('Application')
 
@@ -98,6 +101,13 @@ export class Application {
       ...this.plugins.flatMap((p) => p.adapters?.() ?? []),
       ...(options.adapters ?? []),
     ]
+    // Wire the request store provider so Container can resolve REQUEST-scoped deps
+    Container._requestStoreProvider = () => requestStore.getStore() ?? null
+    // Wire logger context provider so logs auto-include requestId
+    Logger._contextProvider = () => {
+      const store = requestStore.getStore()
+      return store ? { requestId: store.requestId } : null
+    }
   }
 
   /**
@@ -160,6 +170,12 @@ export class Application {
     // ── 2. Hardened defaults ──────────────────────────────────────────
     this.app.disable('x-powered-by')
     this.app.set('trust proxy', this.options.trustProxy ?? false)
+
+    // ── 2b. Health check endpoints (before middleware, at root) ──────
+    this.mountHealthEndpoints()
+
+    // ── 2c. Request scope (AsyncLocalStorage) ────────────────────────
+    this.app.use(requestScopeMiddleware())
 
     // ── 3. Adapter middleware: beforeGlobal ───────────────────────────
     this.mountMiddlewareList(adapterMw.beforeGlobal)
@@ -456,5 +472,26 @@ export class Application {
     } else {
       this.app.use(entry.path, entry.handler)
     }
+  }
+
+  /** Mount /health/live and /health/ready endpoints at the root (no API prefix) */
+  private mountHealthEndpoints(): void {
+    this.app.get('/health/live', (_req, res) => {
+      res.json({ status: 'ok', uptime: process.uptime() })
+    })
+
+    this.app.get('/health/ready', async (_req, res) => {
+      const adaptersWithHealth = this.adapters.filter((a) => a.onHealthCheck)
+      const checks = await Promise.allSettled(adaptersWithHealth.map((a) => a.onHealthCheck!()))
+      const results = checks.map((c, i) => {
+        if (c.status === 'fulfilled') return c.value
+        return { name: adaptersWithHealth[i].name ?? 'unknown', status: 'down' as const }
+      })
+      const healthy = results.every((r) => r.status === 'up')
+      res.status(healthy ? 200 : 503).json({
+        status: healthy ? 'ready' : 'degraded',
+        checks: results,
+      })
+    })
   }
 }

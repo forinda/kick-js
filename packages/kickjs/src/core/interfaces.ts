@@ -4,6 +4,8 @@ import 'reflect-metadata'
 export enum Scope {
   SINGLETON = 'singleton',
   TRANSIENT = 'transient',
+  /** One instance per HTTP request, cached in AsyncLocalStorage. Throws outside request context. */
+  REQUEST = 'request',
 }
 
 /** Generic constructor type */
