@@ -91,8 +91,66 @@ bootstrap({
 /** Generate src/modules/index.ts module registry */
 export function generateModulesIndex(): string {
   return `import type { AppModuleClass } from '@forinda/kickjs'
+import { HelloModule } from './hello/hello.module'
 
-export const modules: AppModuleClass[] = []
+// Remove HelloModule and run: kick g module <name>
+export const modules: AppModuleClass[] = [HelloModule]
+`
+}
+
+/** Generate src/modules/hello/hello.service.ts */
+export function generateHelloService(): string {
+  return `import { Service } from '@forinda/kickjs'
+
+@Service()
+export class HelloService {
+  greet(name: string) {
+    return { message: \`Hello \${name} from KickJS!\`, timestamp: new Date().toISOString() }
+  }
+
+  healthCheck() {
+    return { status: 'ok', uptime: process.uptime() }
+  }
+}
+`
+}
+
+/** Generate src/modules/hello/hello.controller.ts */
+export function generateHelloController(): string {
+  return `import { Controller, Get, Autowired, type RequestContext } from '@forinda/kickjs'
+import { HelloService } from './hello.service'
+
+@Controller()
+export class HelloController {
+  @Autowired() private helloService!: HelloService
+
+  @Get('/')
+  index(ctx: RequestContext) {
+    ctx.json(this.helloService.greet('World'))
+  }
+
+  @Get('/health')
+  health(ctx: RequestContext) {
+    ctx.json(this.helloService.healthCheck())
+  }
+}
+`
+}
+
+/** Generate src/modules/hello/hello.module.ts */
+export function generateHelloModule(): string {
+  return `import { type AppModule, type ModuleRoutes, buildRoutes } from '@forinda/kickjs'
+import { HelloController } from './hello.controller'
+
+export class HelloModule implements AppModule {
+  routes(): ModuleRoutes {
+    return {
+      path: '/hello',
+      router: buildRoutes(HelloController),
+      controller: HelloController,
+    }
+  }
+}
 `
 }
 

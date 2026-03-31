@@ -165,7 +165,7 @@ export default defineVersionedConfig(
       'A production-grade, decorator-driven Node.js framework built on Express 5 and TypeScript',
     base: '/kick-js/',
     ignoreDeadLinks: true,
-    head: [['link', { rel: 'icon', type: 'image/svg+xml', href: '/logo.svg' }]],
+    head: [['link', { rel: 'icon', type: 'image/svg+xml', href: '/kick-js/logo.svg' }]],
 
     locales: {
       root: {
@@ -231,6 +231,9 @@ export default defineVersionedConfig(
         },
         { component: 'VersionSwitcher' },
       ],
+
+      logo: '/logo.svg',
+      siteTitle: 'KickJS',
 
       sidebar: sharedSidebar,
 
