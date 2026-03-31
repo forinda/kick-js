@@ -40,13 +40,14 @@ export function generatePackageJson(
       version: kickjsVersion.replace('^', ''), // Remove the ^ prefix for project version
       type: 'module',
       scripts: {
-        dev: 'kick dev',
+        dev: 'vite',
         'dev:debug': 'kick dev:debug',
         build: 'kick build',
         start: 'kick start',
         test: 'vitest run',
         'test:watch': 'vitest',
         typecheck: 'tsc --noEmit',
+        typegen: 'kick typegen',
         lint: 'eslint src/',
         format: 'prettier --write src/',
       },

@@ -159,13 +159,18 @@ export function generateKickConfig(
   template: ProjectTemplate,
   defaultRepo: string = 'inmemory',
 ): string {
+  const builtinRepos = ['drizzle', 'inmemory', 'prisma']
+  const repoValue = builtinRepos.includes(defaultRepo)
+    ? `'${defaultRepo}'`
+    : `{ name: '${defaultRepo}' }`
+
   return `import { defineConfig } from '@forinda/kickjs-cli'
 
 export default defineConfig({
   pattern: '${template}',
   modules: {
     dir: 'src/modules',
-    repo: '${defaultRepo}',
+    repo: ${repoValue},
     pluralize: true,
   },
 
