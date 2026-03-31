@@ -11,7 +11,6 @@ import { registerInspectCommand } from './commands/inspect'
 import { registerAddCommand, registerListCommand } from './commands/add'
 import { registerTinkerCommand } from './commands/tinker'
 import { registerRemoveCommand } from './commands/remove'
-import { registerTypegenCommand } from './commands/typegen'
 import { loadKickConfig } from './config'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -37,7 +36,6 @@ async function main() {
   registerListCommand(program)
   registerTinkerCommand(program)
   registerRemoveCommand(program)
-  registerTypegenCommand(program)
   registerCustomCommands(program, config)
 
   program.showHelpAfterError()
