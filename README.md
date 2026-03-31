@@ -34,24 +34,33 @@ cd my-api && pnpm dev
 
 ```typescript
 import 'reflect-metadata'
-import { Controller, Get, Service, Autowired, bootstrap, RequestContext } from '@forinda/kickjs'
+import {
+  Controller, Get, Service, Autowired, bootstrap,
+  buildRoutes, type AppModule, type ModuleRoutes, type RequestContext,
+} from '@forinda/kickjs'
 
 @Service()
 class GreetService {
-  greet(name: string) { return `Hello ${name}` }
+  greet(name: string) { return { message: `Hello ${name}!`, timestamp: new Date().toISOString() } }
 }
 
 @Controller()
 class HelloController {
-  @Autowired() private greet!: GreetService
+  @Autowired() private greetService!: GreetService
 
   @Get('/')
   handle(ctx: RequestContext) {
-    ctx.json({ message: this.greet.greet('KickJS') })
+    ctx.json(this.greetService.greet('KickJS'))
   }
 }
 
-bootstrap({ modules: [/* your modules */] })
+class HelloModule implements AppModule {
+  routes(): ModuleRoutes {
+    return { path: '/hello', router: buildRoutes(HelloController), controller: HelloController }
+  }
+}
+
+bootstrap({ modules: [HelloModule] })
 ```
 
 ## Highlights
