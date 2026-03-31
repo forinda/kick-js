@@ -14,7 +14,9 @@ import { Container } from './container'
 
 type PendingRegistration = { target: any; scope: Scope }
 const pendingRegistrations: PendingRegistration[] = []
-const allRegistrations = new Map<any, Scope>()
+// Keyed by class name to prevent memory leaks during HMR — new class with
+// the same name replaces the old entry instead of accumulating references.
+const allRegistrations = new Map<string, { target: any; scope: Scope }>()
 let containerRef: any = null
 
 function flushPending(container: any): void {
@@ -35,7 +37,7 @@ Container._onReady = flushPending
 // is wiped but not all decorated modules are re-evaluated.
 Container._onReset = (container: any) => {
   containerRef = container
-  for (const [target, scope] of allRegistrations) {
+  for (const [, { target, scope }] of allRegistrations) {
     if (!container.has(target)) {
       container.register(target, target, scope)
     }
@@ -48,8 +50,10 @@ function registerInContainer(target: any, scope: Scope): void {
   Reflect.defineMetadata(METADATA.INJECTABLE, true, target)
   Reflect.defineMetadata(METADATA.SCOPE, scope, target)
 
-  // Track in persistent registry — survives Container.reset() for HMR replay
-  allRegistrations.set(target, scope)
+  // Track in persistent registry — survives Container.reset() for HMR replay.
+  // Keyed by name so HMR class re-creation replaces the old entry.
+  const name = target.name || String(target)
+  allRegistrations.set(name, { target, scope })
 
   if (containerRef) {
     // Container already initialized — register immediately
@@ -65,6 +69,7 @@ function registerInContainer(target: any, scope: Scope): void {
 /** Mark a class as injectable with lifecycle scope */
 export function Injectable(options?: ServiceOptions): ClassDecorator {
   return (target: any) => {
+    Reflect.defineMetadata(METADATA.CLASS_KIND, 'injectable', target)
     registerInContainer(target, options?.scope ?? Scope.SINGLETON)
   }
 }
@@ -72,6 +77,7 @@ export function Injectable(options?: ServiceOptions): ClassDecorator {
 /** Mark a class as a service (semantic alias for Injectable) */
 export function Service(options?: ServiceOptions): ClassDecorator {
   return (target: any) => {
+    Reflect.defineMetadata(METADATA.CLASS_KIND, 'service', target)
     registerInContainer(target, options?.scope ?? Scope.SINGLETON)
   }
 }
@@ -79,6 +85,7 @@ export function Service(options?: ServiceOptions): ClassDecorator {
 /** Mark a class as a generic managed component */
 export function Component(options?: ServiceOptions): ClassDecorator {
   return (target: any) => {
+    Reflect.defineMetadata(METADATA.CLASS_KIND, 'component', target)
     registerInContainer(target, options?.scope ?? Scope.SINGLETON)
   }
 }
@@ -86,6 +93,7 @@ export function Component(options?: ServiceOptions): ClassDecorator {
 /** Mark a class as a repository */
 export function Repository(options?: ServiceOptions): ClassDecorator {
   return (target: any) => {
+    Reflect.defineMetadata(METADATA.CLASS_KIND, 'repository', target)
     registerInContainer(target, options?.scope ?? Scope.SINGLETON)
   }
 }
@@ -100,6 +108,7 @@ export function Repository(options?: ServiceOptions): ClassDecorator {
  */
 export function Controller(path?: string): ClassDecorator {
   return (target: any) => {
+    Reflect.defineMetadata(METADATA.CLASS_KIND, 'controller', target)
     registerInContainer(target, Scope.SINGLETON)
     Reflect.defineMetadata(METADATA.CONTROLLER_PATH, path || '/', target)
   }
@@ -271,10 +280,12 @@ export function ApiQueryParams(
 
 /**
  * Middleware handler function.
- * Pass `RequestContext` as the generic for full type safety:
+ * Generic `TCtx` defaults to `any` — import `RequestContext` from
+ * `@forinda/kickjs-http` for full type safety:
  *
  * ```ts
- * import type { MiddlewareHandler, RequestContext } from '@forinda/kickjs'
+ * import type { MiddlewareHandler } from '@forinda/kickjs-core'
+ * import type { RequestContext } from '@forinda/kickjs-http'
  *
  * const auth: MiddlewareHandler<RequestContext> = (ctx, next) => {
  *   ctx.body  // fully typed

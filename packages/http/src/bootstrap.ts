@@ -32,7 +32,7 @@ const log = createLogger('Process')
  * bootstrap({ modules })
  * ```
  */
-export function bootstrap(options: ApplicationOptions): void {
+export async function bootstrap(options: ApplicationOptions): Promise<void> {
   const g = globalThis as any
 
   // ── Global error handlers ────────────────────────────────────────────
@@ -60,7 +60,7 @@ export function bootstrap(options: ApplicationOptions): void {
   if (g.__app) {
     log.info('HMR: Rebuilding application...')
     tryReloadEnv()
-    g.__app.rebuild()
+    await g.__app.rebuild()
     return
   }
 
@@ -70,11 +70,11 @@ export function bootstrap(options: ApplicationOptions): void {
 
   // In tinker mode, register modules and DI but skip starting the HTTP server
   if (process.env.KICK_TINKER) {
-    app.registerOnly()
+    await app.registerOnly()
     return
   }
 
-  app.start()
+  await app.start()
 
   // ── Vite HMR acceptance ──────────────────────────────────────────────
   const meta = import.meta as any

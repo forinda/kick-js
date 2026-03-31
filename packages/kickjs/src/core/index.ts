@@ -12,6 +12,8 @@ export {
   type BuilderOf,
   type Buildable,
   type MaybePromise,
+  type ClassKind,
+  type PostConstructStatus,
 } from './interfaces'
 
 // Decorators
