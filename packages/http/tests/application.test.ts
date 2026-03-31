@@ -45,7 +45,7 @@ describe('Application', () => {
     expect(app).toBeDefined()
   })
 
-  it('setup() mounts routes and middleware without starting server', () => {
+  it('setup() mounts routes and middleware without starting server', async () => {
     @Controller()
     class TestCtrl {
       @Get('/') handle(ctx: RequestContext) {
@@ -63,13 +63,11 @@ describe('Application', () => {
     }
 
     const app = new Application({ modules: [TestModule], middleware: [] })
-    expect(() => {
-      ;(app as any).setup()
-    }).not.toThrow()
+    await (app as any).setup()
     expect(app.getExpressApp()).toBeDefined()
   })
 
-  it('configures apiPrefix and versioning', () => {
+  it('configures apiPrefix and versioning', async () => {
     @Controller()
     class V2Ctrl {
       @Get('/') handle(ctx: RequestContext) {
@@ -94,15 +92,13 @@ describe('Application', () => {
     })
 
     // setup() should complete without error for versioned routes
-    expect(() => {
-      ;(app as any).setup()
-    }).not.toThrow()
+    await (app as any).setup()
     expect(app.getExpressApp()).toBeDefined()
   })
 
   // ── Adapters ──────────────────────────────────────────────────────
 
-  it('calls adapter lifecycle hooks during setup', () => {
+  it('calls adapter lifecycle hooks during setup', async () => {
     const hooks: string[] = []
 
     const testAdapter = {
@@ -134,14 +130,14 @@ describe('Application', () => {
       middleware: [],
     })
 
-    ;(app as any).setup()
+    await (app as any).setup()
 
     expect(hooks).toContain('beforeMount')
     expect(hooks).toContain('beforeStart')
     expect(hooks.indexOf('beforeMount')).toBeLessThan(hooks.indexOf('beforeStart'))
   })
 
-  it('onRouteMount is called for adapters when controller is provided', () => {
+  it('onRouteMount is called for adapters when controller is provided', async () => {
     const mounted: string[] = []
 
     const spyAdapter = {
@@ -173,7 +169,7 @@ describe('Application', () => {
       middleware: [],
     })
 
-    ;(app as any).setup()
+    await (app as any).setup()
 
     expect(mounted.length).toBe(1)
     expect(mounted[0]).toContain('SpyCtrl')
@@ -226,7 +222,7 @@ describe('Application', () => {
       middleware: [],
     })
 
-    ;(app as any).setup()
+    await (app as any).setup()
 
     // Should not throw even though B fails
     await expect(app.shutdown()).resolves.toBeUndefined()
@@ -236,7 +232,7 @@ describe('Application', () => {
 
   // ── Rebuild (HMR) ────────────────────────────────────────────────
 
-  it('rebuild() creates a fresh Express app and resets container', () => {
+  it('rebuild() creates a fresh Express app and resets container', async () => {
     @Controller()
     class RebuildCtrl {
       @Get('/') handle(ctx: RequestContext) {
@@ -254,17 +250,17 @@ describe('Application', () => {
     }
 
     const app = new Application({ modules: [RebuildModule], middleware: [] })
-    ;(app as any).setup()
+    await (app as any).setup()
     const firstApp = app.getExpressApp()
 
-    app.rebuild()
+    await app.rebuild()
     const secondApp = app.getExpressApp()
     expect(firstApp).not.toBe(secondApp)
   })
 
   // ── Middleware pipeline ───────────────────────────────────────────
 
-  it('uses custom middleware pipeline when provided', () => {
+  it('uses custom middleware pipeline when provided', async () => {
     const customMw = (_req: any, _res: any, next: any) => {
       next()
     }
@@ -287,15 +283,13 @@ describe('Application', () => {
 
     const app = new Application({ modules: [Mod], middleware: [customMw] })
     // setup() should complete without error when custom middleware provided
-    expect(() => {
-      ;(app as any).setup()
-    }).not.toThrow()
+    await (app as any).setup()
     expect(app.getExpressApp()).toBeDefined()
   })
 
   // ── Multiple modules ──────────────────────────────────────────────
 
-  it('handles modules that return null from routes() (non-HTTP modules)', () => {
+  it('handles modules that return null from routes() (non-HTTP modules)', async () => {
     @Controller()
     class HttpCtrl {
       @Get('/') handle(ctx: RequestContext) {
@@ -321,12 +315,10 @@ describe('Application', () => {
     }
 
     const app = new Application({ modules: [HttpModule, QueueModule], middleware: [] })
-    expect(() => {
-      ;(app as any).setup()
-    }).not.toThrow()
+    await (app as any).setup()
   })
 
-  it('deduplicates overlapping module path and controller path (KICK-007)', () => {
+  it('deduplicates overlapping module path and controller path (KICK-007)', async () => {
     const mounted: string[] = []
 
     const spyAdapter = {
@@ -358,14 +350,14 @@ describe('Application', () => {
       adapters: [spyAdapter],
       middleware: [],
     })
-    ;(app as any).setup()
+    await (app as any).setup()
 
     // Mount path stays /api/v1/users — controller path is no longer baked into the router,
     // so there's no doubling. Routes inside the router are just /me, not /users/me.
     expect(mounted[0]).toBe('/api/v1/users')
   })
 
-  it('mounts multiple modules with separate paths', () => {
+  it('mounts multiple modules with separate paths', async () => {
     @Controller()
     class ACtrl {
       @Get('/') handle(ctx: RequestContext) {
@@ -399,8 +391,6 @@ describe('Application', () => {
     }
 
     const app = new Application({ modules: [ModA, ModB], middleware: [] })
-    expect(() => {
-      ;(app as any).setup()
-    }).not.toThrow()
+    await (app as any).setup()
   })
 })

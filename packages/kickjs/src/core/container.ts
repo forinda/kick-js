@@ -1,5 +1,14 @@
 import 'reflect-metadata'
-import { Constructor, Scope, METADATA } from './interfaces'
+import {
+  Constructor,
+  Scope,
+  METADATA,
+  type ClassKind,
+  type PostConstructStatus,
+} from './interfaces'
+import { createLogger } from './logger'
+
+const log = createLogger('Container')
 
 /** Internal registration entry that tracks how a dependency should be resolved */
 interface Registration {
@@ -7,6 +16,27 @@ interface Registration {
   scope: Scope
   instance?: any
   factory?: () => any
+  // Observability fields
+  kind: ClassKind
+  resolveCount: number
+  lastResolvedAt?: number
+  firstResolvedAt?: number
+  resolveDurationMs?: number
+  postConstructStatus: PostConstructStatus
+  dependencies: string[]
+}
+
+/** Create a Registration with observability defaults */
+function createReg(
+  fields: Partial<Registration> & Pick<Registration, 'target' | 'scope'>,
+): Registration {
+  return {
+    kind: 'unknown',
+    resolveCount: 0,
+    postConstructStatus: 'skipped',
+    dependencies: [],
+    ...fields,
+  }
 }
 
 /** Format a token for display in error messages */
@@ -27,6 +57,13 @@ export class Container {
   private static instance: Container
   private registrations = new Map<any, Registration>()
   private resolving = new Set<any>()
+
+  /**
+   * Persistent replay lists for manual registrations (factory/instance).
+   * These survive Container.reset() so adapters' DB/Redis bindings persist across HMR.
+   */
+  private static factoryRegistrations: Array<{ token: any; factory: () => any; scope: Scope }> = []
+  private static instanceRegistrations: Array<{ token: any; instance: any }> = []
 
   /** Callback set by the decorators module to flush pending registrations */
   static _onReady: ((container: Container) => void) | null = null
@@ -58,6 +95,29 @@ export class Container {
     Container.instance = new Container()
     // Notify decorators so they update their container reference
     Container._onReset?.(Container.instance)
+    // Replay manual registrations so adapter bindings (DB, Redis) survive HMR
+    for (const { token, factory, scope } of Container.factoryRegistrations) {
+      if (!Container.instance.has(token)) {
+        Container.instance.registrations.set(
+          token,
+          createReg({ target: Object as any, scope, factory, kind: 'factory' }),
+        )
+      }
+    }
+    for (const { token, instance } of Container.instanceRegistrations) {
+      if (!Container.instance.has(token)) {
+        Container.instance.registrations.set(
+          token,
+          createReg({
+            target: instance.constructor,
+            scope: Scope.SINGLETON,
+            instance,
+            kind: 'instance',
+            postConstructStatus: 'completed',
+          }),
+        )
+      }
+    }
   }
 
   /**
@@ -77,26 +137,54 @@ export class Container {
 
   /** Register a class constructor under the given token */
   register(token: any, target: Constructor, scope: Scope = Scope.SINGLETON): void {
-    this.registrations.set(token, { target, scope })
+    const kind: ClassKind = Reflect.getMetadata(METADATA.CLASS_KIND, target) ?? 'unknown'
+    const dependencies = this.extractDependencies(target)
+    const reg = createReg({ target, scope, kind, dependencies })
+    this.registrations.set(token, reg)
     // Store a name-based fallback so HMR class re-creation (new identity)
     // can still resolve by the original class name.
     if (typeof token === 'function' && token.name) {
-      this.registrations.set(`__hmr__${token.name}`, { target, scope })
+      this.registrations.set(`__hmr__${token.name}`, reg)
     }
   }
 
   /** Register a factory function under the given token */
   registerFactory(token: any, factory: () => any, scope: Scope = Scope.SINGLETON): void {
-    this.registrations.set(token, { target: Object as any, scope, factory })
+    this.registrations.set(
+      token,
+      createReg({ target: Object as any, scope, factory, kind: 'factory' }),
+    )
+    // Track for HMR replay — factory registrations survive Container.reset()
+    const idx = Container.factoryRegistrations.findIndex((r) => r.token === token)
+    if (idx >= 0) {
+      Container.factoryRegistrations[idx] = { token, factory, scope }
+    } else {
+      Container.factoryRegistrations.push({ token, factory, scope })
+    }
   }
 
   /** Register a pre-constructed singleton instance */
   registerInstance(token: any, instance: any): void {
-    this.registrations.set(token, {
-      target: instance.constructor,
-      scope: Scope.SINGLETON,
-      instance,
-    })
+    this.registrations.set(
+      token,
+      createReg({
+        target: instance.constructor,
+        scope: Scope.SINGLETON,
+        instance,
+        kind: 'instance',
+        postConstructStatus: 'completed',
+        resolveCount: 1,
+        firstResolvedAt: Date.now(),
+        lastResolvedAt: Date.now(),
+      }),
+    )
+    // Track for HMR replay — instance registrations survive Container.reset()
+    const idx = Container.instanceRegistrations.findIndex((r) => r.token === token)
+    if (idx >= 0) {
+      Container.instanceRegistrations[idx] = { token, instance }
+    } else {
+      Container.instanceRegistrations.push({ token, instance })
+    }
   }
 
   /** Check if a binding exists for the given token */
@@ -105,13 +193,33 @@ export class Container {
   }
 
   /** Return a snapshot of all registered tokens with their scope and instantiation status */
-  getRegistrations(): Array<{ token: string; scope: string; instantiated: boolean }> {
-    const entries: Array<{ token: string; scope: string; instantiated: boolean }> = []
+  getRegistrations(): Array<{
+    token: string
+    scope: string
+    kind: ClassKind
+    instantiated: boolean
+    resolveCount: number
+    lastResolvedAt?: number
+    firstResolvedAt?: number
+    resolveDurationMs?: number
+    postConstructStatus: PostConstructStatus
+    dependencies: string[]
+  }> {
+    const entries: Array<ReturnType<Container['getRegistrations']>[number]> = []
     for (const [token, reg] of this.registrations) {
       entries.push({
         token: tokenName(token),
         scope: reg.scope,
-        instantiated: reg.instance !== undefined,
+        kind: reg.kind,
+        // Singletons check cached instance; transients check resolveCount
+        instantiated:
+          reg.scope === Scope.SINGLETON ? reg.instance !== undefined : reg.resolveCount > 0,
+        resolveCount: reg.resolveCount,
+        lastResolvedAt: reg.lastResolvedAt,
+        firstResolvedAt: reg.firstResolvedAt,
+        resolveDurationMs: reg.resolveDurationMs,
+        postConstructStatus: reg.postConstructStatus,
+        dependencies: reg.dependencies,
       })
     }
     return entries
@@ -130,11 +238,18 @@ export class Container {
     }
 
     if (reg.scope === Scope.SINGLETON && reg.instance !== undefined) {
+      reg.resolveCount++
+      reg.lastResolvedAt = Date.now()
       return reg.instance
     }
 
     if (reg.factory) {
+      const start = performance.now()
       const instance = reg.factory()
+      reg.resolveDurationMs = performance.now() - start
+      reg.resolveCount++
+      reg.lastResolvedAt = Date.now()
+      if (!reg.firstResolvedAt) reg.firstResolvedAt = Date.now()
       if (reg.scope === Scope.SINGLETON) {
         reg.instance = instance
       }
@@ -149,7 +264,12 @@ export class Container {
     this.resolving.add(token)
 
     try {
+      const start = performance.now()
       const instance = this.createInstance(reg)
+      reg.resolveDurationMs = performance.now() - start
+      reg.resolveCount++
+      reg.lastResolvedAt = Date.now()
+      if (!reg.firstResolvedAt) reg.firstResolvedAt = Date.now()
       if (reg.scope === Scope.SINGLETON) {
         reg.instance = instance
       }
@@ -184,10 +304,44 @@ export class Container {
     // @PostConstruct lifecycle hook
     const postConstruct = Reflect.getMetadata(METADATA.POST_CONSTRUCT, reg.target.prototype)
     if (postConstruct && typeof instance[postConstruct] === 'function') {
-      instance[postConstruct]()
+      try {
+        const result = instance[postConstruct]()
+        if (result && typeof result.then === 'function') {
+          reg.postConstructStatus = 'pending'
+          ;(result as Promise<void>)
+            .then(() => {
+              reg.postConstructStatus = 'completed'
+            })
+            .catch(() => {
+              reg.postConstructStatus = 'failed'
+            })
+          log.warn(
+            `@PostConstruct on ${tokenName(reg.target)}.${String(postConstruct)}() returned a Promise ` +
+              `but the container is synchronous. The async operation will not be awaited.`,
+          )
+        } else {
+          reg.postConstructStatus = 'completed'
+        }
+      } catch (err) {
+        reg.postConstructStatus = 'failed'
+        log.error(
+          err,
+          `@PostConstruct on ${tokenName(reg.target)}.${String(postConstruct)}() threw an error`,
+        )
+      }
     }
 
     return instance
+  }
+
+  /** Extract dependency token names from constructor metadata */
+  private extractDependencies(target: Constructor): string[] {
+    const paramTypes: Constructor[] = Reflect.getMetadata(METADATA.PARAM_TYPES, target) || []
+    const injectTokens: Record<number, any> = Reflect.getMetadata(METADATA.INJECT, target) || {}
+    return paramTypes.map((type, index) => {
+      const token = injectTokens[index] || type
+      return tokenName(token)
+    })
   }
 
   private injectProperties(instance: any, target: Constructor): void {
