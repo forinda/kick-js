@@ -74,6 +74,13 @@ export async function bootstrap(options: ApplicationOptions): Promise<void> {
     return
   }
 
+  // In Vite plugin mode, setup routes/DI but don't start a separate server.
+  // The Vite plugin mounts the Express app on Vite's own server (single port).
+  if (process.env.KICK_VITE) {
+    await app.registerOnly()
+    return
+  }
+
   await app.start()
 
   // ── Vite HMR acceptance ──────────────────────────────────────────────
