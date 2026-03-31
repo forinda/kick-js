@@ -1,0 +1,52 @@
+import { defineConfig } from 'tsdown'
+import { createBanner, readPkg } from '../../build.utils.mjs'
+
+const pkg = readPkg(import.meta.dirname)
+
+export default defineConfig({
+  entry: {
+    index: 'src/index.ts',
+    'core/adapter': 'src/core/adapter.ts',
+    'core/container': 'src/core/container.ts',
+    'core/decorators': 'src/core/decorators.ts',
+    'core/logger': 'src/core/logger.ts',
+    'core/errors': 'src/core/errors.ts',
+    'core/interfaces': 'src/core/interfaces.ts',
+    'core/reactivity': 'src/core/reactivity.ts',
+    'core/app-module': 'src/core/app-module.ts',
+    'core/path': 'src/core/path.ts',
+    'core/cache': 'src/core/cache.ts',
+    'core/cron': 'src/core/cron.ts',
+    'core/plugin': 'src/core/plugin.ts',
+    'http/application': 'src/http/application.ts',
+    'http/bootstrap': 'src/http/bootstrap.ts',
+    'http/context': 'src/http/context.ts',
+    'http/router-builder': 'src/http/router-builder.ts',
+    'http/middleware/helmet': 'src/http/middleware/helmet.ts',
+    'http/middleware/cors': 'src/http/middleware/cors.ts',
+    'http/middleware/csrf': 'src/http/middleware/csrf.ts',
+    'http/middleware/rate-limit': 'src/http/middleware/rate-limit.ts',
+    'http/middleware/request-id': 'src/http/middleware/request-id.ts',
+    'http/middleware/request-logger': 'src/http/middleware/request-logger.ts',
+    'http/middleware/error-handler': 'src/http/middleware/error-handler.ts',
+    'http/middleware/validate': 'src/http/middleware/validate.ts',
+    'http/middleware/upload': 'src/http/middleware/upload.ts',
+    'http/middleware/session': 'src/http/middleware/session.ts',
+    'http/middleware/views': 'src/http/middleware/views.ts',
+    'http/middleware/spa': 'src/http/middleware/spa.ts',
+    'http/query/index': 'src/http/query/index.ts',
+  },
+  format: ['esm'],
+  platform: 'node',
+  dts: true,
+  external: [
+    'express',
+    'reflect-metadata',
+    'pino',
+    'pino-pretty',
+    'multer',
+    'cookie-parser',
+    /^node:/,
+  ],
+  banner: { js: createBanner(pkg.name, pkg.version) },
+})
