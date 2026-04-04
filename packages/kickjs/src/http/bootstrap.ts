@@ -77,11 +77,24 @@ export async function bootstrap(options: ApplicationOptions): Promise<Applicatio
   }
 
   // ── HMR rebuild ──────────────────────────────────────────────────────
+  // When Vite re-evaluates the entry file, bootstrap() is called again
+  // with FRESH options (new module list, new adapters, etc.).
+  // We create a brand new Application with these fresh options instead of
+  // reusing the old one — this ensures new modules/controllers are picked up.
   if (g.__app) {
     log.info('HMR: Rebuilding application...')
     tryReloadEnv()
-    await g.__app.rebuild()
-    return g.__app
+    Container.reset()
+
+    const freshApp = new Application(options)
+    g.__app = freshApp
+    g.__kickjs_container = freshApp.getContainer()
+
+    // start() detects Vite httpServer and skips listen()
+    // It re-runs the full setup pipeline with the fresh module list
+    await freshApp.start()
+    log.info('HMR: Application rebuilt with fresh modules')
+    return freshApp
   }
 
   // ── First boot ───────────────────────────────────────────────────────
