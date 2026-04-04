@@ -62,6 +62,21 @@ export function tokenName(token: any): string {
 //
 // Pattern from: React Router (globalThis for state), Vinxi (globalThis.app)
 
+// ── Change Event System ─────────────────────────────────────────────────
+// Batched (50ms debounce) so `kick g module` creating 10+ files emits ONE
+// notification, not 10. Any adapter can subscribe: Swagger, DevTools, WS, etc.
+
+/** A single container change event */
+export interface ContainerChangeEvent {
+  token: string
+  event: 'registered' | 'resolved' | 'invalidated'
+  kind?: ClassKind
+  timestamp: number
+}
+
+/** Listener that receives batched change events */
+export type ContainerChangeListener = (changes: ContainerChangeEvent[]) => void
+
 interface PersistentStore {
   factories: Array<{ token: any; factory: () => any; scope: Scope }>
   instances: Array<{ token: any; instance: any }>
@@ -95,6 +110,12 @@ export class Container {
   private static instance: Container
   private registrations = new Map<any, Registration>()
   private resolving = new Set<any>()
+
+  // ── Reactive change tracking ──────────────────────────────────────
+  private changeListeners = new Set<ContainerChangeListener>()
+  private pendingChanges: ContainerChangeEvent[] = []
+  private notifyTimer: ReturnType<typeof setTimeout> | null = null
+  private static readonly DEBOUNCE_MS = 50
 
   /** Callback set by the decorators module to flush pending registrations */
   static _onReady: ((container: Container) => void) | null = null
@@ -199,6 +220,7 @@ export class Container {
     if (typeof token === 'function' && token.name) {
       this.registrations.set(`__hmr__${token.name}`, reg)
     }
+    this.emit(tokenName(token), 'registered', kind)
   }
 
   /** Register a factory function under the given token */
@@ -227,6 +249,7 @@ export class Container {
     } else {
       store.factories.push({ token, factory, scope })
     }
+    this.emit(name, 'registered', 'factory')
   }
 
   /** Register a pre-constructed singleton instance */
@@ -255,6 +278,7 @@ export class Container {
     } else {
       store.instances.push({ token, instance })
     }
+    this.emit(name, 'registered', 'instance')
   }
 
   /** Check if a binding exists for the given token */
@@ -392,6 +416,104 @@ export class Container {
   bootstrap(): void {
     // Reserved for future use — adapters and modules register via
     // container.register(), registerFactory(), and registerInstance().
+  }
+
+  // ── Reactive Change API ─────────────────────────────────────────────
+
+  /**
+   * Subscribe to container changes. Returns an unsubscribe function.
+   *
+   * Changes are batched (50ms debounce) so bulk operations like
+   * `kick g module` creating 10+ files emit ONE batch, not 10 events.
+   *
+   * Any adapter can subscribe:
+   *   - SwaggerAdapter: re-build spec when controllers change
+   *   - DevToolsAdapter: push SSE events to dashboard
+   *   - WsAdapter: re-discover namespaces when controllers change
+   *   - OtelAdapter: emit tracing spans for DI resolution
+   *   - Custom user adapters
+   *
+   * @example
+   * ```ts
+   * const unsub = container.onChange((changes) => {
+   *   for (const c of changes) {
+   *     console.log(`${c.event}: ${c.token} (${c.kind})`)
+   *   }
+   * })
+   * // later:
+   * unsub()
+   * ```
+   */
+  onChange(callback: ContainerChangeListener): () => void {
+    this.changeListeners.add(callback)
+    return () => this.changeListeners.delete(callback)
+  }
+
+  /**
+   * Invalidate a specific registration. Clears the cached instance so the
+   * next resolve() creates a fresh one. Also invalidates dependents
+   * (anything that injected this token) by walking the dependency graph.
+   *
+   * Called by the Vite HMR plugin when a module file changes.
+   * Skips persistent registrations (DB connections, etc.).
+   */
+  invalidate(token: any): void {
+    const name = tokenName(token)
+    // Try both the token itself and the HMR fallback name
+    const reg = this.registrations.get(token) ?? this.registrations.get(`__hmr__${name}`)
+    if (!reg) return
+
+    // Don't invalidate persistent registrations (DB, Redis, etc.)
+    const store = getPersistentStore()
+    if (store.resolvedInstances.has(name)) return
+
+    // Clear cached instance — next resolve() will re-create
+    reg.instance = undefined
+    reg.resolveCount = 0
+    reg.postConstructStatus = 'skipped'
+    this.emit(name, 'invalidated', reg.kind)
+
+    // Walk dependency graph — invalidate anything that injected this token
+    for (const [depToken, depReg] of this.registrations) {
+      if (depReg.dependencies.includes(name)) {
+        this.invalidate(depToken)
+      }
+    }
+  }
+
+  /** Batch-emit a change event (debounced, flushed after 50ms of quiet) */
+  private emit(token: string, event: ContainerChangeEvent['event'], kind?: ClassKind): void {
+    this.pendingChanges.push({ token, event, kind, timestamp: Date.now() })
+
+    if (this.notifyTimer) clearTimeout(this.notifyTimer)
+    this.notifyTimer = setTimeout(() => {
+      const batch = this.pendingChanges.splice(0)
+      if (batch.length === 0) return
+      for (const listener of this.changeListeners) {
+        try {
+          listener(batch)
+        } catch {
+          // Don't let one broken listener break others
+        }
+      }
+    }, Container.DEBOUNCE_MS)
+  }
+
+  /** Flush pending change events immediately (useful in tests) */
+  flushChanges(): void {
+    if (this.notifyTimer) {
+      clearTimeout(this.notifyTimer)
+      this.notifyTimer = null
+    }
+    const batch = this.pendingChanges.splice(0)
+    if (batch.length === 0) return
+    for (const listener of this.changeListeners) {
+      try {
+        listener(batch)
+      } catch {
+        // Don't let one broken listener break others
+      }
+    }
   }
 
   private createInstance(reg: Registration): any {
