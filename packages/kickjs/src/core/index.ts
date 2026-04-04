@@ -1,7 +1,7 @@
 import 'reflect-metadata'
 
 // DI Container
-export { Container } from './container'
+export { Container, tokenName } from './container'
 
 // Interfaces & Constants
 export {
