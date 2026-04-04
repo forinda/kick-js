@@ -17,6 +17,8 @@ import {
   createLogger,
   type Ref,
   type ComputedRef,
+  getClassMeta,
+  getMethodMeta,
 } from '@forinda/kickjs'
 
 const log = createLogger('DevTools')
@@ -468,19 +470,21 @@ export class DevToolsAdapter implements AppAdapter {
   onRouteMount(controllerClass: any, mountPath: string): void {
     if (!this.enabled) return
 
-    const routes: Array<{ method: string; path: string; handlerName: string }> =
-      Reflect.getMetadata(METADATA.ROUTES, controllerClass) ?? []
+    const routes = getClassMeta<Array<{ method: string; path: string; handlerName: string }>>(
+      METADATA.ROUTES,
+      controllerClass,
+      [],
+    )
 
-    const classMiddleware: any[] =
-      Reflect.getMetadata(METADATA.CLASS_MIDDLEWARES, controllerClass) ?? []
+    const classMiddleware = getClassMeta<any[]>(METADATA.CLASS_MIDDLEWARES, controllerClass, [])
 
     for (const route of routes) {
-      const methodMiddleware: any[] =
-        Reflect.getMetadata(
-          METADATA.METHOD_MIDDLEWARES,
-          controllerClass.prototype,
-          route.handlerName,
-        ) ?? []
+      const methodMiddleware = getMethodMeta<any[]>(
+        METADATA.METHOD_MIDDLEWARES,
+        controllerClass.prototype,
+        route.handlerName,
+        [],
+      )
 
       this.routes.push({
         method: route.method.toUpperCase(),

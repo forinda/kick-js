@@ -9,6 +9,8 @@ import {
   createLogger,
   ref,
   type Ref,
+  getClassMetaOrUndefined,
+  getClassMeta,
 } from '@forinda/kickjs'
 import {
   WS_METADATA,
@@ -109,14 +111,14 @@ export class WsAdapter implements AppAdapter {
 
     // Discover all @WsController classes and build routing table
     for (const controllerClass of wsControllerRegistry) {
-      const namespace: string | undefined = Reflect.getMetadata(
-        WS_METADATA.WS_CONTROLLER,
-        controllerClass,
-      )
+      const namespace = getClassMetaOrUndefined<string>(WS_METADATA.WS_CONTROLLER, controllerClass)
       if (namespace === undefined) continue
 
-      const handlers: WsHandlerDefinition[] =
-        Reflect.getMetadata(WS_METADATA.WS_HANDLERS, controllerClass) || []
+      const handlers = getClassMeta<WsHandlerDefinition[]>(
+        WS_METADATA.WS_HANDLERS,
+        controllerClass,
+        [],
+      )
 
       const fullPath = this.basePath + (namespace === '/' ? '' : namespace)
 
