@@ -131,7 +131,11 @@ export class Application {
    * ```
    */
   handle(req: http.IncomingMessage, res: http.ServerResponse, next?: (err?: any) => void): void {
-    this.app(req as any, res as any, next)
+    if (next) {
+      this.app(req as any, res as any, next)
+    } else {
+      this.app(req as any, res as any)
+    }
   }
 
   /**
