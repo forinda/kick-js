@@ -16,23 +16,39 @@ const log = createLogger('Process')
 /**
  * Bootstrap a KickJS application with zero boilerplate.
  *
- * Handles:
- * - Vite HMR (hot-swaps Express handler without restarting the server)
- * - Graceful shutdown on SIGINT / SIGTERM
- * - Global uncaughtException / unhandledRejection handlers
- * - globalThis app storage for HMR rebuild
+ * ## Dev Mode (with @forinda/kickjs-vite)
+ *
+ * When the Vite plugin is active (`globalThis.__kickjs_httpServer` is set),
+ * `bootstrap()` sets up the Express app and adapters but does NOT start
+ * the HTTP server — Vite owns the port. The returned `app` object has a
+ * `.handle(req, res, next)` method that the Vite dev-server plugin calls
+ * on each request via `ssrLoadModule()`.
+ *
+ * ## Production Mode
+ *
+ * Without the Vite plugin, `bootstrap()` creates its own `http.Server`,
+ * binds to the port, and starts listening — same behavior as before.
+ *
+ * ## HMR
+ *
+ * On subsequent calls (module re-evaluation), `bootstrap()` rebuilds the
+ * Express app and swaps the request handler without restarting the server.
+ *
+ * @returns The Application instance. In Vite dev mode, the Express handler
+ *   is accessible at `app.handle` for the dev-server plugin to use.
  *
  * @example
  * ```ts
- * // src/index.ts — that's it, the whole file
+ * // src/index.ts
  * import 'reflect-metadata'
- * import { bootstrap } from '@forinda/kickjs-http'
+ * import { bootstrap } from '@forinda/kickjs'
  * import { modules } from './modules'
  *
- * bootstrap({ modules })
+ * // Export for Vite plugin (dev) — also works standalone (prod)
+ * export const app = await bootstrap({ modules })
  * ```
  */
-export async function bootstrap(options: ApplicationOptions): Promise<void> {
+export async function bootstrap(options: ApplicationOptions): Promise<Application> {
   const g = globalThis as any
 
   // ── Global error handlers ────────────────────────────────────────────
@@ -45,12 +61,16 @@ export async function bootstrap(options: ApplicationOptions): Promise<void> {
       log.error(reason as any, 'Unhandled rejection')
     })
 
-    for (const signal of ['SIGINT', 'SIGTERM'] as const) {
-      process.on(signal, async () => {
-        log.info(`Received ${signal}, shutting down...`)
-        if (g.__app) await g.__app.shutdown()
-        process.exit(0)
-      })
+    // Only register shutdown handlers if Vite is NOT managing the server.
+    // When Vite manages the server, the CLI handles shutdown via server.close().
+    if (!g.__kickjs_httpServer) {
+      for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+        process.on(signal, async () => {
+          log.info(`Received ${signal}, shutting down...`)
+          if (g.__app) await g.__app.shutdown()
+          process.exit(0)
+        })
+      }
     }
 
     g.__kickBootstrapped = true
@@ -61,24 +81,23 @@ export async function bootstrap(options: ApplicationOptions): Promise<void> {
     log.info('HMR: Rebuilding application...')
     tryReloadEnv()
     await g.__app.rebuild()
-    return
+    return g.__app
   }
 
   // ── First boot ───────────────────────────────────────────────────────
   const app = new Application(options)
   g.__app = app
 
+  // Store the container on globalThis so the HMR plugin can call invalidate()
+  g.__kickjs_container = app.getContainer()
+
   // In tinker mode, register modules and DI but skip starting the HTTP server
   if (process.env.KICK_TINKER) {
     await app.registerOnly()
-    return
+    return app
   }
 
   await app.start()
 
-  // ── Vite HMR acceptance ──────────────────────────────────────────────
-  const meta = import.meta as any
-  if (meta.hot) {
-    meta.hot.accept()
-  }
+  return app
 }
