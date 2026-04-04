@@ -1,4 +1,4 @@
-export interface CatResponseDTO {
+export interface TaskResponseDTO {
   id: string
   name: string
   createdAt: string

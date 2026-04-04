@@ -1,17 +1,17 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { InMemoryCatRepository } from '../infrastructure/repositories/in-memory-cat.repository'
+import { InMemoryTaskRepository } from '../infrastructure/repositories/in-memory-task.repository'
 
-describe('InMemoryCatRepository', () => {
-  let repo: InMemoryCatRepository
+describe('InMemoryTaskRepository', () => {
+  let repo: InMemoryTaskRepository
 
   beforeEach(() => {
-    repo = new InMemoryCatRepository()
+    repo = new InMemoryTaskRepository()
   })
 
-  it('should create and retrieve a cat', async () => {
-    const created = await repo.create({ name: 'Test Cat' })
+  it('should create and retrieve a task', async () => {
+    const created = await repo.create({ name: 'Test Task' })
     expect(created).toBeDefined()
-    expect(created.name).toBe('Test Cat')
+    expect(created.name).toBe('Test Task')
     expect(created.id).toBeDefined()
 
     const found = await repo.findById(created.id)
@@ -23,18 +23,18 @@ describe('InMemoryCatRepository', () => {
     expect(found).toBeNull()
   })
 
-  it('should list all cats', async () => {
-    await repo.create({ name: 'Cat 1' })
-    await repo.create({ name: 'Cat 2' })
+  it('should list all tasks', async () => {
+    await repo.create({ name: 'Task 1' })
+    await repo.create({ name: 'Task 2' })
 
     const all = await repo.findAll()
     expect(all).toHaveLength(2)
   })
 
   it('should return paginated results', async () => {
-    await repo.create({ name: 'Cat 1' })
-    await repo.create({ name: 'Cat 2' })
-    await repo.create({ name: 'Cat 3' })
+    await repo.create({ name: 'Task 1' })
+    await repo.create({ name: 'Task 2' })
+    await repo.create({ name: 'Task 3' })
 
     const result = await repo.findPaginated({
       filters: [],
@@ -47,13 +47,13 @@ describe('InMemoryCatRepository', () => {
     expect(result.total).toBe(3)
   })
 
-  it('should update a cat', async () => {
+  it('should update a task', async () => {
     const created = await repo.create({ name: 'Original' })
     const updated = await repo.update(created.id, { name: 'Updated' })
     expect(updated.name).toBe('Updated')
   })
 
-  it('should delete a cat', async () => {
+  it('should delete a task', async () => {
     const created = await repo.create({ name: 'To Delete' })
     await repo.delete(created.id)
     const found = await repo.findById(created.id)
