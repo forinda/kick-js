@@ -13,6 +13,7 @@ import {
   type KickPlugin,
   type RouteDefinition,
 } from '../core'
+import { getClassMeta } from '../core/metadata'
 import { requestId } from './middleware/request-id'
 import { notFoundHandler, errorHandler } from './middleware/error-handler'
 import { requestScopeMiddleware } from './middleware/request-scope'
@@ -275,7 +276,11 @@ export class Application {
       log.info('Routes:')
 
       for (const { controller, mountPath } of mountedRoutes) {
-        const defs: RouteDefinition[] = Reflect.getMetadata(METADATA.ROUTES, controller) || []
+        const defs: RouteDefinition[] = getClassMeta<RouteDefinition[]>(
+          METADATA.ROUTES,
+          controller,
+          [],
+        )
         if (defs.length === 0) continue
 
         const counts: Record<string, number> = {}

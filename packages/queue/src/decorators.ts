@@ -1,5 +1,4 @@
-import 'reflect-metadata'
-import { Service } from '@forinda/kickjs'
+import { Service, setClassMeta, pushClassMeta } from '@forinda/kickjs'
 import { QUEUE_METADATA, jobRegistry, type ProcessDefinition } from './types'
 
 /**
@@ -29,7 +28,7 @@ import { QUEUE_METADATA, jobRegistry, type ProcessDefinition } from './types'
 export function Job(queueName: string): ClassDecorator {
   return (target: any) => {
     Service()(target)
-    Reflect.defineMetadata(QUEUE_METADATA.JOB, queueName, target)
+    setClassMeta(QUEUE_METADATA.JOB, queueName, target)
     jobRegistry.add(target)
   }
 }
@@ -56,12 +55,9 @@ export function Job(queueName: string): ClassDecorator {
  */
 export function Process(jobName?: string): MethodDecorator {
   return (target, propertyKey) => {
-    const handlers: ProcessDefinition[] =
-      Reflect.getMetadata(QUEUE_METADATA.PROCESS, target.constructor) || []
-    handlers.push({
+    pushClassMeta<ProcessDefinition>(QUEUE_METADATA.PROCESS, target.constructor, {
       handlerName: propertyKey as string,
       jobName,
     })
-    Reflect.defineMetadata(QUEUE_METADATA.PROCESS, handlers, target.constructor)
   }
 }

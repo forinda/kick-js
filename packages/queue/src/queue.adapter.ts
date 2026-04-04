@@ -1,5 +1,12 @@
 import { Queue, Worker, type Job as BullMQJob } from 'bullmq'
-import { Logger, type AppAdapter, type AdapterContext, Scope } from '@forinda/kickjs'
+import {
+  Logger,
+  type AppAdapter,
+  type AdapterContext,
+  Scope,
+  getClassMetaOrUndefined,
+  getClassMeta,
+} from '@forinda/kickjs'
 import {
   QUEUE_MANAGER,
   QUEUE_METADATA,
@@ -54,11 +61,10 @@ export class QueueAdapter implements AppAdapter {
 
     // Discover all @Job-decorated classes and wire workers
     for (const jobClass of jobRegistry) {
-      const queueName: string | undefined = Reflect.getMetadata(QUEUE_METADATA.JOB, jobClass)
+      const queueName = getClassMetaOrUndefined<string>(QUEUE_METADATA.JOB, jobClass)
       if (queueName === undefined) continue
 
-      const handlers: ProcessDefinition[] =
-        Reflect.getMetadata(QUEUE_METADATA.PROCESS, jobClass) || []
+      const handlers = getClassMeta<ProcessDefinition[]>(QUEUE_METADATA.PROCESS, jobClass, [])
 
       if (handlers.length === 0) {
         log.warn(`@Job('${queueName}') class ${jobClass.name} has no @Process methods — skipping`)

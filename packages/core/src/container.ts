@@ -7,13 +7,6 @@ import {
   type PostConstructStatus,
 } from './interfaces'
 import { createLogger } from './logger'
-import {
-  getClassMeta,
-  getClassMetaOrUndefined,
-  getMetaMap,
-  getMetaRecord,
-  getMethodMetaOrUndefined,
-} from './metadata'
 
 const log = createLogger('Container')
 
@@ -152,7 +145,7 @@ export class Container {
 
   /** Register a class constructor under the given token */
   register(token: any, target: Constructor, scope: Scope = Scope.SINGLETON): void {
-    const kind = getClassMeta<ClassKind>(METADATA.CLASS_KIND, target, 'unknown')
+    const kind: ClassKind = Reflect.getMetadata(METADATA.CLASS_KIND, target) ?? 'unknown'
     const dependencies = this.extractDependencies(target)
     const reg = createReg({ target, scope, kind, dependencies })
     this.registrations.set(token, reg)
@@ -338,11 +331,12 @@ export class Container {
   }
 
   private createInstance(reg: Registration): any {
-    const paramTypes = getClassMeta<Constructor[]>(METADATA.PARAM_TYPES, reg.target, [])
+    const paramTypes: Constructor[] = Reflect.getMetadata(METADATA.PARAM_TYPES, reg.target) || []
 
     const args = paramTypes.map((paramType, index) => {
       // Check for @Inject token override on constructor parameter
-      const injectTokens = getMetaRecord<any>(METADATA.INJECT, reg.target)
+      const injectTokens: Record<number, any> =
+        Reflect.getMetadata(METADATA.INJECT, reg.target) || {}
       const token = injectTokens[index] || paramType
       // Scope validation: SINGLETON cannot inject REQUEST-scoped dependencies
       if (reg.scope === Scope.SINGLETON) {
@@ -363,10 +357,7 @@ export class Container {
     this.injectProperties(instance, reg.target)
 
     // @PostConstruct lifecycle hook
-    const postConstruct = getClassMetaOrUndefined<string | symbol>(
-      METADATA.POST_CONSTRUCT,
-      reg.target.prototype,
-    )
+    const postConstruct = Reflect.getMetadata(METADATA.POST_CONSTRUCT, reg.target.prototype)
     if (postConstruct && typeof instance[postConstruct] === 'function') {
       try {
         const result = instance[postConstruct]()
@@ -400,8 +391,8 @@ export class Container {
 
   /** Extract dependency token names from constructor metadata */
   private extractDependencies(target: Constructor): string[] {
-    const paramTypes = getClassMeta<Constructor[]>(METADATA.PARAM_TYPES, target, [])
-    const injectTokens = getMetaRecord<any>(METADATA.INJECT, target)
+    const paramTypes: Constructor[] = Reflect.getMetadata(METADATA.PARAM_TYPES, target) || []
+    const injectTokens: Record<number, any> = Reflect.getMetadata(METADATA.INJECT, target) || {}
     return paramTypes.map((type, index) => {
       const token = injectTokens[index] || type
       return tokenName(token)
@@ -410,11 +401,12 @@ export class Container {
 
   private injectProperties(instance: any, target: Constructor): void {
     // @Autowired — lazy DI property injection
-    const autowiredProps = getMetaMap<string, any>(METADATA.AUTOWIRED, target.prototype)
+    const autowiredProps: Map<string, any> =
+      Reflect.getMetadata(METADATA.AUTOWIRED, target.prototype) || new Map()
 
     for (const [prop, token] of autowiredProps) {
       const resolvedToken =
-        token || getMethodMetaOrUndefined(METADATA.PROPERTY_TYPE, target.prototype, prop)
+        token || Reflect.getMetadata(METADATA.PROPERTY_TYPE, target.prototype, prop)
       if (resolvedToken) {
         Object.defineProperty(instance, prop, {
           get: () => this.resolve(resolvedToken),
@@ -425,10 +417,8 @@ export class Container {
     }
 
     // @Value — lazy environment variable injection
-    const valueProps = getMetaMap<string, { envKey: string; defaultValue?: any }>(
-      METADATA.VALUE,
-      target.prototype,
-    )
+    const valueProps: Map<string, { envKey: string; defaultValue?: any }> =
+      Reflect.getMetadata(METADATA.VALUE, target.prototype) || new Map()
 
     for (const [prop, config] of valueProps) {
       Object.defineProperty(instance, prop, {

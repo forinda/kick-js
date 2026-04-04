@@ -1,4 +1,4 @@
-import 'reflect-metadata'
+import { setMethodMeta, setClassMeta, pushMethodMeta } from '@forinda/kickjs-core'
 
 const SWAGGER_KEYS = {
   OPERATION: Symbol('kick:swagger:operation'),
@@ -28,20 +28,18 @@ export interface ApiResponseOptions {
 /** Attach operation metadata to a route handler */
 export function ApiOperation(options: ApiOperationOptions): MethodDecorator {
   return (target, propertyKey) => {
-    Reflect.defineMetadata(SWAGGER_KEYS.OPERATION, options, target.constructor, propertyKey)
+    setMethodMeta(SWAGGER_KEYS.OPERATION, options, target.constructor, propertyKey as string)
   }
 }
 
 /** Document a response status. Can be stacked multiple times. */
 export function ApiResponse(options: ApiResponseOptions): MethodDecorator {
   return (target, propertyKey) => {
-    const existing: ApiResponseOptions[] =
-      Reflect.getMetadata(SWAGGER_KEYS.RESPONSES, target.constructor, propertyKey) || []
-    Reflect.defineMetadata(
+    pushMethodMeta<ApiResponseOptions>(
       SWAGGER_KEYS.RESPONSES,
-      [...existing, options],
       target.constructor,
-      propertyKey,
+      propertyKey as string,
+      options,
     )
   }
 }
@@ -50,9 +48,9 @@ export function ApiResponse(options: ApiResponseOptions): MethodDecorator {
 export function ApiTags(...tags: string[]): ClassDecorator & MethodDecorator {
   return (target: any, propertyKey?: string | symbol) => {
     if (propertyKey) {
-      Reflect.defineMetadata(SWAGGER_KEYS.TAGS, tags, target.constructor, propertyKey)
+      setMethodMeta(SWAGGER_KEYS.TAGS, tags, target.constructor, propertyKey as string)
     } else {
-      Reflect.defineMetadata(SWAGGER_KEYS.TAGS, tags, target)
+      setClassMeta(SWAGGER_KEYS.TAGS, tags, target)
     }
   }
 }
@@ -61,9 +59,9 @@ export function ApiTags(...tags: string[]): ClassDecorator & MethodDecorator {
 export function ApiBearerAuth(name = 'BearerAuth'): ClassDecorator & MethodDecorator {
   return (target: any, propertyKey?: string | symbol) => {
     if (propertyKey) {
-      Reflect.defineMetadata(SWAGGER_KEYS.BEARER_AUTH, name, target.constructor, propertyKey)
+      setMethodMeta(SWAGGER_KEYS.BEARER_AUTH, name, target.constructor, propertyKey as string)
     } else {
-      Reflect.defineMetadata(SWAGGER_KEYS.BEARER_AUTH, name, target)
+      setClassMeta(SWAGGER_KEYS.BEARER_AUTH, name, target)
     }
   }
 }
@@ -72,9 +70,9 @@ export function ApiBearerAuth(name = 'BearerAuth'): ClassDecorator & MethodDecor
 export function ApiExclude(): ClassDecorator & MethodDecorator {
   return (target: any, propertyKey?: string | symbol) => {
     if (propertyKey) {
-      Reflect.defineMetadata(SWAGGER_KEYS.EXCLUDE, true, target.constructor, propertyKey)
+      setMethodMeta(SWAGGER_KEYS.EXCLUDE, true, target.constructor, propertyKey as string)
     } else {
-      Reflect.defineMetadata(SWAGGER_KEYS.EXCLUDE, true, target)
+      setClassMeta(SWAGGER_KEYS.EXCLUDE, true, target)
     }
   }
 }

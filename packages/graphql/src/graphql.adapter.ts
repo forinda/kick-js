@@ -1,4 +1,12 @@
-import { Logger, type AppAdapter, type AdapterContext, type Container } from '@forinda/kickjs'
+import {
+  Logger,
+  type AppAdapter,
+  type AdapterContext,
+  type Container,
+  getClassMetaOrUndefined,
+  getClassMeta,
+  getMethodMeta,
+} from '@forinda/kickjs'
 import type { Request, Response } from 'express'
 import express from 'express'
 import {
@@ -124,11 +132,11 @@ export class GraphQLAdapter implements AppAdapter {
     const rootValue: Record<string, any> = {}
 
     for (const ResolverClass of this.options.resolvers) {
-      const meta: ResolverMeta = Reflect.getMetadata(RESOLVER_META, ResolverClass)
+      const meta = getClassMetaOrUndefined<ResolverMeta>(RESOLVER_META, ResolverClass)
       if (!meta) continue
 
-      const queries: FieldMeta[] = Reflect.getMetadata(QUERY_META, ResolverClass) ?? []
-      const mutations: FieldMeta[] = Reflect.getMetadata(MUTATION_META, ResolverClass) ?? []
+      const queries = getClassMeta<FieldMeta[]>(QUERY_META, ResolverClass, [])
+      const mutations = getClassMeta<FieldMeta[]>(MUTATION_META, ResolverClass, [])
 
       for (const q of queries) {
         const args = this.buildArgString(ResolverClass, q.handlerName)
@@ -137,8 +145,12 @@ export class GraphQLAdapter implements AppAdapter {
 
         rootValue[q.name] = async (argsObj: any, context: any) => {
           const instance = container.resolve(ResolverClass)
-          const argMeta: ArgMeta[] =
-            Reflect.getMetadata(ARG_META, ResolverClass, q.handlerName) ?? []
+          const argMeta: ArgMeta[] = getMethodMeta<ArgMeta[]>(
+            ARG_META,
+            ResolverClass,
+            q.handlerName,
+            [],
+          )
           const params = argMeta
             .sort((a, b) => a.paramIndex - b.paramIndex)
             .map((a) => argsObj[a.name])
@@ -157,8 +169,12 @@ export class GraphQLAdapter implements AppAdapter {
 
         rootValue[m.name] = async (argsObj: any, context: any) => {
           const instance = container.resolve(ResolverClass)
-          const argMeta: ArgMeta[] =
-            Reflect.getMetadata(ARG_META, ResolverClass, m.handlerName) ?? []
+          const argMeta: ArgMeta[] = getMethodMeta<ArgMeta[]>(
+            ARG_META,
+            ResolverClass,
+            m.handlerName,
+            [],
+          )
           const params = argMeta
             .sort((a, b) => a.paramIndex - b.paramIndex)
             .map((a) => argsObj[a.name])
@@ -193,7 +209,7 @@ export class GraphQLAdapter implements AppAdapter {
   }
 
   private buildArgString(ResolverClass: any, handlerName: string): string {
-    const argMeta: ArgMeta[] = Reflect.getMetadata(ARG_META, ResolverClass, handlerName) ?? []
+    const argMeta: ArgMeta[] = getMethodMeta<ArgMeta[]>(ARG_META, ResolverClass, handlerName, [])
     if (argMeta.length === 0) return ''
 
     const args = argMeta

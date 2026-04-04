@@ -1,4 +1,4 @@
-import { pushClassMeta, getClassMeta } from './metadata'
+import 'reflect-metadata'
 
 const CRON_META = Symbol('kick:cron')
 
@@ -33,19 +33,21 @@ export function Cron(
   options?: { description?: string; timezone?: string; runOnInit?: boolean },
 ): MethodDecorator {
   return (target, propertyKey) => {
-    pushClassMeta<CronJobMeta>(CRON_META, target.constructor, {
+    const existing: CronJobMeta[] = Reflect.getMetadata(CRON_META, target.constructor) ?? []
+    existing.push({
       expression,
       handlerName: propertyKey as string,
       description: options?.description,
       timezone: options?.timezone,
       runOnInit: options?.runOnInit,
     })
+    Reflect.defineMetadata(CRON_META, existing, target.constructor)
   }
 }
 
 /** Read cron jobs registered on a class */
 export function getCronJobs(target: any): CronJobMeta[] {
-  return getClassMeta<CronJobMeta[]>(CRON_META, target, [])
+  return Reflect.getMetadata(CRON_META, target) ?? []
 }
 
 export { CRON_META }
