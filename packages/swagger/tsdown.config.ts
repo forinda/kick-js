@@ -14,6 +14,7 @@ export default defineConfig({
     '@forinda/kickjs',
     '@forinda/kickjs-core',
     'reflect-metadata',
+    'swagger-ui-dist',
     'zod',
     'express',
     /^node:/,
