@@ -1,5 +1,5 @@
 /**
- * Cat Entity
+ * Task Entity
  *
  * Domain layer — the core business object.
  * Uses a private constructor with static factory methods (create, reconstitute)
@@ -11,33 +11,33 @@
  *   - reconstitute(): factory for rebuilding from persistence (no side effects)
  *   - changeName(): mutation method that enforces business rules
  */
-import { CatId } from '../value-objects/cat-id.vo'
+import { TaskId } from '../value-objects/task-id.vo'
 
-interface CatProps {
-  id: CatId
+interface TaskProps {
+  id: TaskId
   name: string
   createdAt: Date
   updatedAt: Date
 }
 
-export class Cat {
-  private constructor(private props: CatProps) {}
+export class Task {
+  private constructor(private props: TaskProps) {}
 
-  static create(params: { name: string }): Cat {
+  static create(params: { name: string }): Task {
     const now = new Date()
-    return new Cat({
-      id: CatId.create(),
+    return new Task({
+      id: TaskId.create(),
       name: params.name,
       createdAt: now,
       updatedAt: now,
     })
   }
 
-  static reconstitute(props: CatProps): Cat {
-    return new Cat(props)
+  static reconstitute(props: TaskProps): Task {
+    return new Task(props)
   }
 
-  get id(): CatId {
+  get id(): TaskId {
     return this.props.id
   }
   get name(): string {
