@@ -111,6 +111,29 @@ export class Application {
     }
   }
 
+  /** Get the DI container instance */
+  getContainer(): Container {
+    return this.container
+  }
+
+  /**
+   * Express request handler — delegates to the internal Express app.
+   *
+   * Used by the Vite dev-server plugin to route requests through KickJS:
+   * ```ts
+   * const mod = await ssrLoadModule('virtual:kickjs/app')
+   * mod.app.handle(req, res, next)
+   * ```
+   *
+   * Also works as a standard Node.js request handler for production:
+   * ```ts
+   * http.createServer(app.handle.bind(app))
+   * ```
+   */
+  handle(req: http.IncomingMessage, res: http.ServerResponse, next?: (err?: any) => void): void {
+    this.app(req as any, res as any, next)
+  }
+
   /**
    * Full setup pipeline:
    * 1. Adapter beforeMount hooks (early routes — docs, health)
@@ -319,10 +342,40 @@ export class Application {
     await this.setup()
   }
 
-  /** Start the HTTP server — fails fast if port is in use */
+  /**
+   * Start the HTTP server.
+   *
+   * In **dev mode** (Vite plugin active): reuses `globalThis.__kickjs_httpServer`
+   * created by Vite. Adapters (WsAdapter, Socket.IO, etc.) receive the real
+   * `http.Server` through `afterStart({ server })` — zero adapter changes needed.
+   *
+   * In **production**: creates its own `http.Server` and binds to the port.
+   */
   async start(): Promise<void> {
     await this.setup()
 
+    const g = globalThis as any
+
+    if (g.__kickjs_httpServer) {
+      // ── DEV MODE: Vite owns the http.Server ──────────────────────
+      // Don't create a new server or listen — Vite is already listening.
+      // Just wire up adapters with the Vite-created server.
+      this.httpServer = g.__kickjs_httpServer
+      log.info('Attached to Vite dev server (adapters use Vite httpServer)')
+
+      for (const adapter of this.adapters) {
+        const ctx = this.adapterCtx(this.httpServer!)
+        await this.callHook(adapter.afterStart?.bind(adapter), ctx)
+      }
+
+      for (const plugin of this.plugins) {
+        await plugin.onReady?.(this.container)
+      }
+
+      return
+    }
+
+    // ── PRODUCTION: Create and own the http.Server ─────────────────
     const port = this.options.port ?? parseInt(process.env.PORT || '3000', 10)
     this.httpServer = http.createServer(this.app)
 

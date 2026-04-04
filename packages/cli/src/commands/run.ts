@@ -5,9 +5,17 @@ import { runShellCommand } from '../utils/shell'
 import { loadKickConfig } from '../config'
 
 /**
- * Start the Vite dev server.
- * With the @forinda/kickjs-vite plugin in vite.config.ts, Vite handles
- * SSR environment setup, module discovery, and HMR automatically.
+ * Start the Vite dev server with @forinda/kickjs-vite plugin.
+ *
+ * The plugin (configured in the user's vite.config.ts) handles:
+ * - SSR environment setup (kickjs:core)
+ * - Module auto-discovery (kickjs:module-discovery)
+ * - Selective HMR invalidation (kickjs:hmr)
+ * - Virtual module generation (kickjs:virtual-modules)
+ * - Express mounting + httpServer piping (kickjs:dev-server)
+ *
+ * This function just creates the Vite server, listens, and handles shutdown.
+ * Vite owns the HTTP port — Express runs as post-middleware on Vite's server.
  */
 async function startDevServer(_entry: string, port?: string): Promise<void> {
   if (port) process.env.PORT = port
@@ -18,10 +26,12 @@ async function startDevServer(_entry: string, port?: string): Promise<void> {
   const vitePath = require.resolve('vite')
   const { createServer } = await import(vitePath)
 
-  // The kickjs() Vite plugin handles SSR setup, entry import, and HMR.
-  // We just need to create the server and listen.
   const server = await createServer({
     configFile: resolve('vite.config.ts'),
+    server: {
+      // Pass the port to Vite — it creates the httpServer
+      port: port ? parseInt(port, 10) : undefined,
+    },
   })
 
   await server.listen()
@@ -29,6 +39,7 @@ async function startDevServer(_entry: string, port?: string): Promise<void> {
 
   console.log(`\n  KickJS dev server running (Vite + @forinda/kickjs-vite)\n`)
 
+  // Graceful shutdown — Vite closes the server + all HMR connections
   const shutdown = async () => {
     await server.close()
     process.exit(0)

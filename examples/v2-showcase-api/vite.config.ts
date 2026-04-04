@@ -1,10 +1,14 @@
 import { defineConfig } from 'vite'
 import { resolve } from 'path'
 import swc from 'unplugin-swc'
+import { kickjsVitePlugin } from '@forinda/kickjs-vite'
 
 export default defineConfig({
   oxc: false,
-  plugins: [swc.vite()],
+  plugins: [
+    swc.vite(),
+    kickjsVitePlugin({ entry: 'src/index.ts' }),
+  ],
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),
@@ -12,10 +16,6 @@ export default defineConfig({
   },
   ssr: {
     external: ['pino', 'pino-pretty'],
-  },
-  server: {
-    watch: { usePolling: false },
-    hmr: true,
   },
   build: {
     target: 'node20',
