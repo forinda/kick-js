@@ -1,11 +1,13 @@
-import { METADATA, joinPaths, type RouteDefinition } from '@forinda/kickjs'
 import {
+  METADATA,
+  joinPaths,
+  type RouteDefinition,
   getClassMeta,
   getClassMetaOrUndefined,
   getMethodMeta,
   getMethodMetaOrUndefined,
   hasClassMeta,
-} from '@forinda/kickjs-core'
+} from '@forinda/kickjs'
 import { SWAGGER_KEYS, type ApiOperationOptions, type ApiResponseOptions } from './decorators'
 import { zodSchemaParser, type SchemaParser } from './schema-parser'
 
