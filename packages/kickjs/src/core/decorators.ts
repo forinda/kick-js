@@ -1,6 +1,15 @@
 import 'reflect-metadata'
 import { METADATA, Scope, type ServiceOptions } from './interfaces'
 import { Container } from './container'
+import {
+  setClassMeta,
+  setMethodMeta,
+  getClassMeta,
+  pushClassMeta,
+  pushMethodMeta,
+  setInMetaMap,
+  setInMetaRecord,
+} from './metadata'
 
 // ── Decorator Registration System ───────────────────────────────────────
 // Decorators execute at class-definition time (module load). The Container
@@ -47,8 +56,8 @@ Container._onReset = (container: any) => {
 // ── Class Decorators ────────────────────────────────────────────────────
 
 function registerInContainer(target: any, scope: Scope): void {
-  Reflect.defineMetadata(METADATA.INJECTABLE, true, target)
-  Reflect.defineMetadata(METADATA.SCOPE, scope, target)
+  setClassMeta(METADATA.INJECTABLE, true, target)
+  setClassMeta(METADATA.SCOPE, scope, target)
 
   // Track in persistent registry — survives Container.reset() for HMR replay.
   // Keyed by name so HMR class re-creation replaces the old entry.
@@ -69,7 +78,7 @@ function registerInContainer(target: any, scope: Scope): void {
 /** Mark a class as injectable with lifecycle scope */
 export function Injectable(options?: ServiceOptions): ClassDecorator {
   return (target: any) => {
-    Reflect.defineMetadata(METADATA.CLASS_KIND, 'injectable', target)
+    setClassMeta(METADATA.CLASS_KIND, 'injectable', target)
     registerInContainer(target, options?.scope ?? Scope.SINGLETON)
   }
 }
@@ -77,7 +86,7 @@ export function Injectable(options?: ServiceOptions): ClassDecorator {
 /** Mark a class as a service (semantic alias for Injectable) */
 export function Service(options?: ServiceOptions): ClassDecorator {
   return (target: any) => {
-    Reflect.defineMetadata(METADATA.CLASS_KIND, 'service', target)
+    setClassMeta(METADATA.CLASS_KIND, 'service', target)
     registerInContainer(target, options?.scope ?? Scope.SINGLETON)
   }
 }
@@ -85,7 +94,7 @@ export function Service(options?: ServiceOptions): ClassDecorator {
 /** Mark a class as a generic managed component */
 export function Component(options?: ServiceOptions): ClassDecorator {
   return (target: any) => {
-    Reflect.defineMetadata(METADATA.CLASS_KIND, 'component', target)
+    setClassMeta(METADATA.CLASS_KIND, 'component', target)
     registerInContainer(target, options?.scope ?? Scope.SINGLETON)
   }
 }
@@ -93,7 +102,7 @@ export function Component(options?: ServiceOptions): ClassDecorator {
 /** Mark a class as a repository */
 export function Repository(options?: ServiceOptions): ClassDecorator {
   return (target: any) => {
-    Reflect.defineMetadata(METADATA.CLASS_KIND, 'repository', target)
+    setClassMeta(METADATA.CLASS_KIND, 'repository', target)
     registerInContainer(target, options?.scope ?? Scope.SINGLETON)
   }
 }
@@ -108,9 +117,9 @@ export function Repository(options?: ServiceOptions): ClassDecorator {
  */
 export function Controller(path?: string): ClassDecorator {
   return (target: any) => {
-    Reflect.defineMetadata(METADATA.CLASS_KIND, 'controller', target)
+    setClassMeta(METADATA.CLASS_KIND, 'controller', target)
     registerInContainer(target, Scope.SINGLETON)
-    Reflect.defineMetadata(METADATA.CONTROLLER_PATH, path || '/', target)
+    setClassMeta(METADATA.CONTROLLER_PATH, path || '/', target)
   }
 }
 
@@ -119,7 +128,7 @@ export function Controller(path?: string): ClassDecorator {
 /** Mark a method as a lifecycle hook called after instantiation */
 export function PostConstruct(): MethodDecorator {
   return (target, propertyKey) => {
-    Reflect.defineMetadata(METADATA.POST_CONSTRUCT, propertyKey, target)
+    setClassMeta(METADATA.POST_CONSTRUCT, propertyKey, target)
   }
 }
 
@@ -128,9 +137,7 @@ export function PostConstruct(): MethodDecorator {
 /** Property injection — resolved lazily from the container */
 export function Autowired(token?: any): PropertyDecorator {
   return (target, propertyKey) => {
-    const existing: Map<string, any> = Reflect.getMetadata(METADATA.AUTOWIRED, target) || new Map()
-    existing.set(propertyKey as string, token)
-    Reflect.defineMetadata(METADATA.AUTOWIRED, existing, target)
+    setInMetaMap(METADATA.AUTOWIRED, target, propertyKey as string, token)
   }
 }
 
@@ -142,9 +149,7 @@ export function Autowired(token?: any): PropertyDecorator {
  */
 export function Inject(token: any): ParameterDecorator {
   return (target, _propertyKey, parameterIndex) => {
-    const existing: Record<number, any> = Reflect.getMetadata(METADATA.INJECT, target) || {}
-    existing[parameterIndex] = token
-    Reflect.defineMetadata(METADATA.INJECT, existing, target)
+    setInMetaRecord(METADATA.INJECT, target as object, parameterIndex, token)
   }
 }
 
@@ -159,10 +164,7 @@ export function Inject(token: any): ParameterDecorator {
  */
 export function Value(envKey: string, defaultValue?: any): PropertyDecorator {
   return (target, propertyKey) => {
-    const existing: Map<string, { envKey: string; defaultValue?: any }> =
-      Reflect.getMetadata(METADATA.VALUE, target) || new Map()
-    existing.set(propertyKey as string, { envKey, defaultValue })
-    Reflect.defineMetadata(METADATA.VALUE, existing, target)
+    setInMetaMap(METADATA.VALUE, target, propertyKey as string, { envKey, defaultValue })
   }
 }
 
@@ -187,15 +189,12 @@ export interface RouteDefinition {
 function createRouteDecorator(method: string) {
   return (path?: string, validation?: RouteDefinition['validation']): MethodDecorator => {
     return (target, propertyKey) => {
-      const routes: RouteDefinition[] =
-        Reflect.getMetadata(METADATA.ROUTES, target.constructor) || []
-      routes.push({
+      pushClassMeta<RouteDefinition>(METADATA.ROUTES, target.constructor, {
         method,
         path: path || '/',
         handlerName: propertyKey as string,
         validation,
       })
-      Reflect.defineMetadata(METADATA.ROUTES, routes, target.constructor)
     }
   }
 }
@@ -272,7 +271,7 @@ export function ApiQueryParams(
 ): MethodDecorator {
   return (target, propertyKey) => {
     const normalized = normalizeApiQueryParamsConfig(config)
-    Reflect.defineMetadata(METADATA.QUERY_PARAMS, normalized, target.constructor, propertyKey)
+    setMethodMeta(METADATA.QUERY_PARAMS, normalized, target.constructor, propertyKey as string)
   }
 }
 
@@ -299,20 +298,14 @@ export type MiddlewareHandler<TCtx = any> = (ctx: TCtx, next: () => void) => voi
 export function Middleware(...handlers: MiddlewareHandler[]): ClassDecorator & MethodDecorator {
   return (target: any, propertyKey?: string | symbol) => {
     if (propertyKey) {
-      // Method-level middleware
-      const existing: MiddlewareHandler[] =
-        Reflect.getMetadata(METADATA.METHOD_MIDDLEWARES, target.constructor, propertyKey) || []
-      Reflect.defineMetadata(
+      pushMethodMeta(
         METADATA.METHOD_MIDDLEWARES,
-        [...existing, ...handlers],
         target.constructor,
-        propertyKey,
+        propertyKey as string,
+        ...handlers,
       )
     } else {
-      // Class-level middleware
-      const existing: MiddlewareHandler[] =
-        Reflect.getMetadata(METADATA.CLASS_MIDDLEWARES, target) || []
-      Reflect.defineMetadata(METADATA.CLASS_MIDDLEWARES, [...existing, ...handlers], target)
+      pushClassMeta(METADATA.CLASS_MIDDLEWARES, target, ...handlers)
     }
   }
 }
@@ -353,7 +346,7 @@ export interface FileUploadConfig extends BaseUploadOptions {
 /** Configure file upload handling for a controller method */
 export function FileUpload(config: FileUploadConfig): MethodDecorator {
   return (target, propertyKey) => {
-    Reflect.defineMetadata(METADATA.FILE_UPLOAD, config, target.constructor, propertyKey)
+    setMethodMeta(METADATA.FILE_UPLOAD, config, target.constructor, propertyKey as string)
   }
 }
 
@@ -361,7 +354,7 @@ export function FileUpload(config: FileUploadConfig): MethodDecorator {
 
 /** Add a static builder() method for fluent construction */
 export function Builder(target: any): void {
-  Reflect.defineMetadata(METADATA.BUILDER, true, target)
+  setClassMeta(METADATA.BUILDER, true, target)
 
   target.builder = function () {
     const props: Record<string, any> = {}
