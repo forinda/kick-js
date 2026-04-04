@@ -1,5 +1,4 @@
-import 'reflect-metadata'
-import { Service } from '@forinda/kickjs'
+import { Service, setClassMeta, pushClassMeta } from '@forinda/kickjs'
 import { WS_METADATA, wsControllerRegistry, type WsHandlerDefinition } from './interfaces'
 
 /**
@@ -21,7 +20,7 @@ import { WS_METADATA, wsControllerRegistry, type WsHandlerDefinition } from './i
 export function WsController(namespace?: string): ClassDecorator {
   return (target: any) => {
     Service()(target)
-    Reflect.defineMetadata(WS_METADATA.WS_CONTROLLER, namespace || '/', target)
+    setClassMeta(WS_METADATA.WS_CONTROLLER, namespace || '/', target)
     wsControllerRegistry.add(target)
   }
 }
@@ -29,14 +28,11 @@ export function WsController(namespace?: string): ClassDecorator {
 function createWsHandlerDecorator(type: WsHandlerDefinition['type'], event?: string) {
   return (): MethodDecorator => {
     return (target, propertyKey) => {
-      const handlers: WsHandlerDefinition[] =
-        Reflect.getMetadata(WS_METADATA.WS_HANDLERS, target.constructor) || []
-      handlers.push({
+      pushClassMeta<WsHandlerDefinition>(WS_METADATA.WS_HANDLERS, target.constructor, {
         type,
         event,
         handlerName: propertyKey as string,
       })
-      Reflect.defineMetadata(WS_METADATA.WS_HANDLERS, handlers, target.constructor)
     }
   }
 }
@@ -101,13 +97,10 @@ export const OnError = createWsHandlerDecorator('error')
  */
 export function OnMessage(event: string): MethodDecorator {
   return (target, propertyKey) => {
-    const handlers: WsHandlerDefinition[] =
-      Reflect.getMetadata(WS_METADATA.WS_HANDLERS, target.constructor) || []
-    handlers.push({
+    pushClassMeta<WsHandlerDefinition>(WS_METADATA.WS_HANDLERS, target.constructor, {
       type: 'message',
       event,
       handlerName: propertyKey as string,
     })
-    Reflect.defineMetadata(WS_METADATA.WS_HANDLERS, handlers, target.constructor)
   }
 }

@@ -1,5 +1,13 @@
-import 'reflect-metadata'
-import { METADATA, joinPaths, type RouteDefinition } from '@forinda/kickjs'
+import {
+  METADATA,
+  joinPaths,
+  type RouteDefinition,
+  getClassMeta,
+  getClassMetaOrUndefined,
+  getMethodMeta,
+  getMethodMetaOrUndefined,
+  hasClassMeta,
+} from '@forinda/kickjs'
 import { SWAGGER_KEYS, type ApiOperationOptions, type ApiResponseOptions } from './decorators'
 import { zodSchemaParser, type SchemaParser } from './schema-parser'
 
@@ -108,17 +116,22 @@ export function buildOpenAPISpec(options: SwaggerOptions = {}): any {
 
   for (const { controllerClass, mountPath } of registeredRoutes) {
     // Skip excluded controllers
-    if (Reflect.getMetadata(SWAGGER_KEYS.EXCLUDE, controllerClass)) continue
+    if (hasClassMeta(SWAGGER_KEYS.EXCLUDE, controllerClass)) continue
 
-    const routes: RouteDefinition[] = Reflect.getMetadata(METADATA.ROUTES, controllerClass) || []
-    const classTags: string[] = Reflect.getMetadata(SWAGGER_KEYS.TAGS, controllerClass) || []
-    const classAuth: string | undefined = Reflect.getMetadata(
+    const routes: RouteDefinition[] = getClassMeta<RouteDefinition[]>(
+      METADATA.ROUTES,
+      controllerClass,
+      [],
+    )
+    const classTags: string[] = getClassMeta<string[]>(SWAGGER_KEYS.TAGS, controllerClass, [])
+    const classAuth: string | undefined = getClassMetaOrUndefined<string>(
       SWAGGER_KEYS.BEARER_AUTH,
       controllerClass,
     )
     for (const route of routes) {
       // Skip excluded methods
-      if (Reflect.getMetadata(SWAGGER_KEYS.EXCLUDE, controllerClass, route.handlerName)) continue
+      if (getMethodMetaOrUndefined(SWAGGER_KEYS.EXCLUDE, controllerClass, route.handlerName))
+        continue
 
       // Build the full path — mountPath is the actual Express mount prefix (from onRouteMount),
       // and route.path is the method-level path. @Controller path is not included here
@@ -130,13 +143,25 @@ export function buildOpenAPISpec(options: SwaggerOptions = {}): any {
       const method = route.method.toLowerCase()
 
       // Gather metadata
-      const operation: ApiOperationOptions =
-        Reflect.getMetadata(SWAGGER_KEYS.OPERATION, controllerClass, route.handlerName) || {}
-      const responses: ApiResponseOptions[] =
-        Reflect.getMetadata(SWAGGER_KEYS.RESPONSES, controllerClass, route.handlerName) || []
-      const methodTags: string[] =
-        Reflect.getMetadata(SWAGGER_KEYS.TAGS, controllerClass, route.handlerName) || []
-      const methodAuth: string | undefined = Reflect.getMetadata(
+      const operation: ApiOperationOptions = getMethodMeta<ApiOperationOptions>(
+        SWAGGER_KEYS.OPERATION,
+        controllerClass,
+        route.handlerName,
+        {} as ApiOperationOptions,
+      )
+      const responses: ApiResponseOptions[] = getMethodMeta<ApiResponseOptions[]>(
+        SWAGGER_KEYS.RESPONSES,
+        controllerClass,
+        route.handlerName,
+        [],
+      )
+      const methodTags: string[] = getMethodMeta<string[]>(
+        SWAGGER_KEYS.TAGS,
+        controllerClass,
+        route.handlerName,
+        [],
+      )
+      const methodAuth: string | undefined = getMethodMetaOrUndefined<string>(
         SWAGGER_KEYS.BEARER_AUTH,
         controllerClass,
         route.handlerName,
@@ -201,7 +226,7 @@ export function buildOpenAPISpec(options: SwaggerOptions = {}): any {
       }
 
       // @ApiQueryParams decorator — document filterable/sortable/searchable fields
-      const queryParamsConfig = Reflect.getMetadata(
+      const queryParamsConfig = getMethodMetaOrUndefined<any>(
         METADATA.QUERY_PARAMS,
         controllerClass,
         route.handlerName,
@@ -273,7 +298,7 @@ export function buildOpenAPISpec(options: SwaggerOptions = {}): any {
       }
 
       // File upload detection
-      const fileUpload = Reflect.getMetadata(
+      const fileUpload = getMethodMetaOrUndefined<any>(
         METADATA.FILE_UPLOAD,
         controllerClass,
         route.handlerName,

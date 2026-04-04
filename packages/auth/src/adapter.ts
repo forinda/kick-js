@@ -1,8 +1,10 @@
-import 'reflect-metadata'
 import {
   Logger,
   HttpStatus,
   METADATA,
+  getClassMeta,
+  getClassMetaOrUndefined,
+  getMethodMetaOrUndefined,
   type AppAdapter,
   type AdapterContext,
   type AdapterMiddleware,
@@ -186,7 +188,11 @@ export class AuthAdapter implements AppAdapter {
     for (const [mountPath, controllerClass] of this.routeControllers) {
       if (!reqPath.startsWith(mountPath)) continue
 
-      const routes: RouteDefinition[] = Reflect.getMetadata(METADATA.ROUTES, controllerClass) ?? []
+      const routes: RouteDefinition[] = getClassMeta<RouteDefinition[]>(
+        METADATA.ROUTES,
+        controllerClass,
+        [],
+      )
 
       // Compute the path relative to the mount point
       const relativePath = reqPath.slice(mountPath.length) || '/'
@@ -226,16 +232,24 @@ export class AuthAdapter implements AppAdapter {
 
     // Method-level @Public always wins
     if (handlerName) {
-      const isPublic = Reflect.getMetadata(AUTH_META.PUBLIC, controllerClass, handlerName)
+      const isPublic = getMethodMetaOrUndefined<boolean>(
+        AUTH_META.PUBLIC,
+        controllerClass,
+        handlerName,
+      )
       if (isPublic) return false
 
       // Method-level @Authenticated
-      const methodAuth = Reflect.getMetadata(AUTH_META.AUTHENTICATED, controllerClass, handlerName)
+      const methodAuth = getMethodMetaOrUndefined<boolean>(
+        AUTH_META.AUTHENTICATED,
+        controllerClass,
+        handlerName,
+      )
       if (methodAuth !== undefined) return methodAuth
     }
 
     // Class-level @Authenticated
-    const classAuth = Reflect.getMetadata(AUTH_META.AUTHENTICATED, controllerClass)
+    const classAuth = getClassMetaOrUndefined<boolean>(AUTH_META.AUTHENTICATED, controllerClass)
     if (classAuth !== undefined) return classAuth
 
     // Default policy
@@ -244,7 +258,7 @@ export class AuthAdapter implements AppAdapter {
 
   private getRequiredRoles(controllerClass: any, handlerName?: string): string[] | undefined {
     if (!controllerClass || !handlerName) return undefined
-    return Reflect.getMetadata(AUTH_META.ROLES, controllerClass, handlerName)
+    return getMethodMetaOrUndefined<string[]>(AUTH_META.ROLES, controllerClass, handlerName)
   }
 
   private getStrategyName(controllerClass: any, handlerName?: string): string | undefined {
@@ -252,11 +266,15 @@ export class AuthAdapter implements AppAdapter {
 
     // Method-level strategy
     if (handlerName) {
-      const methodStrategy = Reflect.getMetadata(AUTH_META.STRATEGY, controllerClass, handlerName)
+      const methodStrategy = getMethodMetaOrUndefined<string>(
+        AUTH_META.STRATEGY,
+        controllerClass,
+        handlerName,
+      )
       if (methodStrategy) return methodStrategy
     }
 
     // Class-level strategy
-    return Reflect.getMetadata(AUTH_META.STRATEGY, controllerClass)
+    return getClassMetaOrUndefined<string>(AUTH_META.STRATEGY, controllerClass)
   }
 }

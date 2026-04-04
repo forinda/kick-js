@@ -3,6 +3,7 @@ import express, { type Express, type RequestHandler } from 'express'
 import {
   Container,
   createLogger,
+  Logger,
   normalizePath,
   METADATA,
   type AppModuleClass,
@@ -14,6 +15,8 @@ import {
 } from '@forinda/kickjs-core'
 import { requestId } from './middleware/request-id'
 import { notFoundHandler, errorHandler } from './middleware/error-handler'
+import { requestScopeMiddleware } from './middleware/request-scope'
+import { requestStore, getRequestStore } from './request-store'
 
 const log = createLogger('Application')
 
@@ -70,6 +73,11 @@ export interface ApplicationOptions {
    * Set to `true` to always log, `false` to always suppress.
    */
   logRoutesTable?: boolean
+  /**
+   * Maximum time (ms) to wait for graceful shutdown before forcing exit.
+   * Default: 30000 (30 seconds). Set to 0 to disable forced exit.
+   */
+  shutdownTimeout?: number
 }
 
 /**
@@ -93,6 +101,13 @@ export class Application {
       ...this.plugins.flatMap((p) => p.adapters?.() ?? []),
       ...(options.adapters ?? []),
     ]
+    // Wire the request store provider so Container can resolve REQUEST-scoped deps
+    Container._requestStoreProvider = () => requestStore.getStore() ?? null
+    // Wire logger context provider so logs auto-include requestId
+    Logger._contextProvider = () => {
+      const store = requestStore.getStore()
+      return store ? { requestId: store.requestId } : null
+    }
   }
 
   /**
@@ -120,24 +135,23 @@ export class Application {
     }
   }
 
-  /** Call an adapter hook, catching sync errors and async rejections */
-  private callHook(
+  /** Call an adapter hook, awaiting async hooks and catching errors */
+  private async callHook(
     hook: ((ctx: AdapterContext) => void | Promise<void>) | undefined,
     ctx: AdapterContext,
-  ): void {
+  ): Promise<void> {
     if (!hook) return
     try {
       const result = hook(ctx)
-      // Catch async rejections from Promise-returning hooks
-      if (result && typeof result.catch === 'function') {
-        result.catch((err: any) => log.error(err, 'Adapter async hook failed'))
+      if (result && typeof (result as Promise<void>).then === 'function') {
+        await result
       }
     } catch (err) {
       log.error(err, 'Adapter hook failed')
     }
   }
 
-  setup(): void {
+  async setup(): Promise<void> {
     log.info('Bootstrapping application...')
 
     // Collect adapter middleware by phase
@@ -150,12 +164,18 @@ export class Application {
 
     // ── 1. Adapter beforeMount hooks ──────────────────────────────────
     for (const adapter of this.adapters) {
-      this.callHook(adapter.beforeMount?.bind(adapter), ctx)
+      await this.callHook(adapter.beforeMount?.bind(adapter), ctx)
     }
 
     // ── 2. Hardened defaults ──────────────────────────────────────────
     this.app.disable('x-powered-by')
     this.app.set('trust proxy', this.options.trustProxy ?? false)
+
+    // ── 2b. Health check endpoints (before middleware, at root) ──────
+    this.mountHealthEndpoints()
+
+    // ── 2c. Request scope (AsyncLocalStorage) ────────────────────────
+    this.app.use(requestScopeMiddleware())
 
     // ── 3. Adapter middleware: beforeGlobal ───────────────────────────
     this.mountMiddlewareList(adapterMw.beforeGlobal)
@@ -167,9 +187,13 @@ export class Application {
 
     // ── 3c. Plugin middleware ─────────────────────────────────────────
     for (const plugin of this.plugins) {
-      const mw = plugin.middleware?.() ?? []
-      for (const handler of mw) {
-        this.app.use(handler)
+      try {
+        const mw = plugin.middleware?.() ?? []
+        for (const handler of mw) {
+          this.app.use(handler)
+        }
+      } catch (err) {
+        log.error(err, `Plugin middleware failed: ${(plugin as any).name ?? 'unknown'}`)
       }
     }
 
@@ -226,7 +250,11 @@ export class Application {
         // Notify adapters (e.g. SwaggerAdapter for OpenAPI spec generation)
         if (route.controller) {
           for (const adapter of this.adapters) {
-            adapter.onRouteMount?.(route.controller, mountPath)
+            try {
+              adapter.onRouteMount?.(route.controller, mountPath)
+            } catch (err) {
+              log.error(err, `adapter.onRouteMount() failed for ${mountPath}`)
+            }
           }
           if (shouldLogRoutes) {
             mountedRoutes.push({ controller: route.controller, mountPath })
@@ -277,18 +305,18 @@ export class Application {
 
     // ── 11. Adapter beforeStart hooks ────────────────────────────────
     for (const adapter of this.adapters) {
-      this.callHook(adapter.beforeStart?.bind(adapter), ctx)
+      await this.callHook(adapter.beforeStart?.bind(adapter), ctx)
     }
   }
 
   /** Register modules and DI without starting the HTTP server (used by kick tinker) */
-  registerOnly(): void {
-    this.setup()
+  async registerOnly(): Promise<void> {
+    await this.setup()
   }
 
   /** Start the HTTP server — fails fast if port is in use */
-  start(): void {
-    this.setup()
+  async start(): Promise<void> {
+    await this.setup()
 
     const port = this.options.port ?? parseInt(process.env.PORT || '3000', 10)
     this.httpServer = http.createServer(this.app)
@@ -306,29 +334,49 @@ export class Application {
       throw err
     })
 
-    this.httpServer.listen(port, async () => {
-      log.info(`Server running on http://localhost:${port}`)
+    // Wrap listen in a Promise so afterStart/onReady errors propagate
+    await new Promise<void>((resolve, reject) => {
+      this.httpServer!.listen(port, async () => {
+        try {
+          log.info(`Server running on http://localhost:${port}`)
 
-      for (const adapter of this.adapters) {
-        const afterCtx = this.adapterCtx(this.httpServer!)
-        this.callHook(adapter.afterStart?.bind(adapter), afterCtx)
-      }
+          for (const adapter of this.adapters) {
+            const afterCtx = this.adapterCtx(this.httpServer!)
+            await this.callHook(adapter.afterStart?.bind(adapter), afterCtx)
+          }
 
-      // Plugin onReady hooks
-      for (const plugin of this.plugins) {
-        await plugin.onReady?.(this.container)
-      }
+          // Plugin onReady hooks
+          for (const plugin of this.plugins) {
+            await plugin.onReady?.(this.container)
+          }
+
+          resolve()
+        } catch (err) {
+          reject(err)
+        }
+      })
     })
   }
 
   /** HMR rebuild: swap Express handler without restarting the server */
-  rebuild(): void {
-    // Reset the DI container so singletons are re-created with fresh code
-    Container.reset()
-    this.container = Container.getInstance()
+  async rebuild(): Promise<void> {
+    // Build the new app fully before swapping — if setup() throws,
+    // the old app keeps running so the server stays responsive.
+    const prevApp = this.app
+    const prevContainer = this.container
 
-    this.app = express()
-    this.setup()
+    try {
+      Container.reset()
+      this.container = Container.getInstance()
+      this.app = express()
+      await this.setup()
+    } catch (err) {
+      log.error(err, 'HMR rebuild failed, keeping previous app')
+      // Restore previous state so the server stays responsive
+      this.app = prevApp
+      this.container = prevContainer
+      return
+    }
 
     if (this.httpServer) {
       this.httpServer.removeAllListeners('request')
@@ -341,19 +389,36 @@ export class Application {
   async shutdown(): Promise<void> {
     log.info('Shutting down...')
 
-    // Run all plugin + adapter shutdowns concurrently
-    const results = await Promise.allSettled([
-      ...this.plugins.map((plugin) => Promise.resolve(plugin.shutdown?.())),
-      ...this.adapters.map((adapter) => Promise.resolve(adapter.shutdown?.())),
-    ])
-    for (const result of results) {
-      if (result.status === 'rejected') {
-        log.error({ err: result.reason }, 'Adapter shutdown failed')
-      }
+    const timeoutMs = this.options.shutdownTimeout ?? 30_000
+    let timer: ReturnType<typeof setTimeout> | undefined
+
+    // Start a force-exit timer if timeout is configured
+    if (timeoutMs > 0) {
+      timer = setTimeout(() => {
+        log.warn(`Shutdown timeout (${timeoutMs}ms) reached, forcing exit`)
+        process.exit(1)
+      }, timeoutMs)
+      // Don't let the timer keep the process alive if shutdown completes
+      timer.unref()
     }
 
-    if (this.httpServer) {
-      await new Promise<void>((resolve) => this.httpServer!.close(() => resolve()))
+    try {
+      // Run all plugin + adapter shutdowns concurrently
+      const results = await Promise.allSettled([
+        ...this.plugins.map((plugin) => Promise.resolve(plugin.shutdown?.())),
+        ...this.adapters.map((adapter) => Promise.resolve(adapter.shutdown?.())),
+      ])
+      for (const result of results) {
+        if (result.status === 'rejected') {
+          log.error({ err: result.reason }, 'Adapter shutdown failed')
+        }
+      }
+
+      if (this.httpServer) {
+        await new Promise<void>((resolve) => this.httpServer!.close(() => resolve()))
+      }
+    } finally {
+      if (timer) clearTimeout(timer)
     }
   }
 
@@ -407,5 +472,26 @@ export class Application {
     } else {
       this.app.use(entry.path, entry.handler)
     }
+  }
+
+  /** Mount /health/live and /health/ready endpoints at the root (no API prefix) */
+  private mountHealthEndpoints(): void {
+    this.app.get('/health/live', (_req, res) => {
+      res.json({ status: 'ok', uptime: process.uptime() })
+    })
+
+    this.app.get('/health/ready', async (_req, res) => {
+      const adaptersWithHealth = this.adapters.filter((a) => a.onHealthCheck)
+      const checks = await Promise.allSettled(adaptersWithHealth.map((a) => a.onHealthCheck!()))
+      const results = checks.map((c, i) => {
+        if (c.status === 'fulfilled') return c.value
+        return { name: adaptersWithHealth[i].name ?? 'unknown', status: 'down' as const }
+      })
+      const healthy = results.every((r) => r.status === 'up')
+      res.status(healthy ? 200 : 503).json({
+        status: healthy ? 'ready' : 'degraded',
+        checks: results,
+      })
+    })
   }
 }

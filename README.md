@@ -1,6 +1,18 @@
-# KickJS
+<p align="center">
+  <a href="https://forinda.github.io/kick-js/">
+    <img src="docs/public/banner.svg" alt="KickJS" width="600" />
+  </a>
+</p>
 
-A production-grade, decorator-driven Node.js framework built on Express 5 and TypeScript.
+<p align="center">
+  A production-grade, decorator-driven Node.js framework built on Express 5 and TypeScript.
+</p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/@forinda/kickjs"><img src="https://img.shields.io/npm/v/@forinda/kickjs?color=FACC15&label=npm" alt="npm version" /></a>
+  <a href="https://github.com/forinda/kick-js/blob/main/LICENSE"><img src="https://img.shields.io/github/license/forinda/kick-js?color=312E81" alt="license" /></a>
+  <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen" alt="node version" /></a>
+</p>
 
 NestJS ergonomics without the complexity — decorators, DI, module system, and code generators, powered by Zod and Vite.
 
@@ -22,24 +34,33 @@ cd my-api && pnpm dev
 
 ```typescript
 import 'reflect-metadata'
-import { Controller, Get, Service, Autowired, bootstrap, RequestContext } from '@forinda/kickjs'
+import {
+  Controller, Get, Service, Autowired, bootstrap,
+  buildRoutes, type AppModule, type ModuleRoutes, type RequestContext,
+} from '@forinda/kickjs'
 
 @Service()
 class GreetService {
-  greet(name: string) { return `Hello ${name}` }
+  greet(name: string) { return { message: `Hello ${name}!`, timestamp: new Date().toISOString() } }
 }
 
 @Controller()
 class HelloController {
-  @Autowired() private greet!: GreetService
+  @Autowired() private greetService!: GreetService
 
   @Get('/')
   handle(ctx: RequestContext) {
-    ctx.json({ message: this.greet.greet('KickJS') })
+    ctx.json(this.greetService.greet('KickJS'))
   }
 }
 
-bootstrap({ modules: [/* your modules */] })
+class HelloModule implements AppModule {
+  routes(): ModuleRoutes {
+    return { path: '/hello', router: buildRoutes(HelloController), controller: HelloController }
+  }
+}
+
+bootstrap({ modules: [HelloModule] })
 ```
 
 ## Highlights

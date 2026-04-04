@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from 'express'
 
 export interface CorsOptions {
-  /** Allowed origin(s). `true` reflects request origin, `'*'` allows all, string/regex/array for allowlist. Default: `'*'` */
+  /** Allowed origin(s). `true` reflects request origin, `'*'` allows all, `false` rejects all. Default: `false` (restrictive) */
   origin?: boolean | string | RegExp | (string | RegExp)[]
   /** Allowed HTTP methods. Default: `['GET','HEAD','PUT','PATCH','POST','DELETE']` */
   methods?: string[]
@@ -57,7 +57,7 @@ function isOriginAllowed(requestOrigin: string, allowed: CorsOptions['origin']):
  */
 export function cors(options: CorsOptions = {}) {
   const {
-    origin = '*',
+    origin = false,
     methods = DEFAULT_METHODS,
     allowedHeaders,
     exposedHeaders,

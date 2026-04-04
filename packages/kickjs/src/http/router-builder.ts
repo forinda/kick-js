@@ -1,4 +1,3 @@
-import 'reflect-metadata'
 import { Router, type Request, type Response, type NextFunction } from 'express'
 import {
   Container,
@@ -7,13 +6,14 @@ import {
   type MiddlewareHandler,
   type FileUploadConfig,
 } from '../core'
+import { getClassMeta, getMethodMeta, getMethodMetaOrUndefined } from '../core/metadata'
 import { RequestContext } from './context'
 import { validate } from './middleware/validate'
 import { buildUploadMiddleware } from './middleware/upload'
 
 /** Get the controller path set by @Controller('/path') */
 export function getControllerPath(controllerClass: any): string {
-  return Reflect.getMetadata(METADATA.CONTROLLER_PATH, controllerClass) || '/'
+  return getClassMeta<string>(METADATA.CONTROLLER_PATH, controllerClass, '/')
 }
 
 /**
@@ -30,19 +30,30 @@ export function getControllerPath(controllerClass: any): string {
 export function buildRoutes(controllerClass: any): Router {
   const router = Router()
   const container = Container.getInstance()
-  const routes: RouteDefinition[] = Reflect.getMetadata(METADATA.ROUTES, controllerClass) || []
+  const routes: RouteDefinition[] = getClassMeta<RouteDefinition[]>(
+    METADATA.ROUTES,
+    controllerClass,
+    [],
+  )
 
   // Class-level middleware
-  const classMiddlewares: MiddlewareHandler[] =
-    Reflect.getMetadata(METADATA.CLASS_MIDDLEWARES, controllerClass) || []
+  const classMiddlewares: MiddlewareHandler[] = getClassMeta<MiddlewareHandler[]>(
+    METADATA.CLASS_MIDDLEWARES,
+    controllerClass,
+    [],
+  )
 
   for (const route of routes) {
     const method = route.method.toLowerCase() as 'get' | 'post' | 'put' | 'delete' | 'patch'
     const fullPath = route.path || '/'
 
     // Method-level middleware
-    const methodMiddlewares: MiddlewareHandler[] =
-      Reflect.getMetadata(METADATA.METHOD_MIDDLEWARES, controllerClass, route.handlerName) || []
+    const methodMiddlewares: MiddlewareHandler[] = getMethodMeta<MiddlewareHandler[]>(
+      METADATA.METHOD_MIDDLEWARES,
+      controllerClass,
+      route.handlerName,
+      [],
+    )
 
     // Build handler chain
     const handlers: any[] = []
@@ -53,7 +64,7 @@ export function buildRoutes(controllerClass: any): Router {
     }
 
     // @FileUpload decorator — auto-attach upload middleware from metadata
-    const fileUploadConfig: FileUploadConfig | undefined = Reflect.getMetadata(
+    const fileUploadConfig = getMethodMetaOrUndefined<FileUploadConfig>(
       METADATA.FILE_UPLOAD,
       controllerClass,
       route.handlerName,

@@ -4,6 +4,8 @@ import 'reflect-metadata'
 export enum Scope {
   SINGLETON = 'singleton',
   TRANSIENT = 'transient',
+  /** One instance per HTTP request, cached in AsyncLocalStorage. Throws outside request context. */
+  REQUEST = 'request',
 }
 
 /** Generic constructor type */
@@ -27,10 +29,25 @@ export interface Buildable<T> {
   builder(): BuilderOf<T>
 }
 
+/** Decorator class kind for devtools introspection */
+export type ClassKind =
+  | 'service'
+  | 'controller'
+  | 'repository'
+  | 'component'
+  | 'injectable'
+  | 'factory'
+  | 'instance'
+  | 'unknown'
+
+/** PostConstruct lifecycle status */
+export type PostConstructStatus = 'pending' | 'completed' | 'failed' | 'skipped'
+
 /** Symbol-based metadata keys for the DI system */
 export const METADATA = {
   INJECTABLE: Symbol('kick:injectable'),
   SCOPE: Symbol('kick:scope'),
+  CLASS_KIND: Symbol('kick:class-kind'),
   AUTOWIRED: Symbol('kick:autowired'),
   INJECT: Symbol('kick:inject'),
   POST_CONSTRUCT: Symbol('kick:post_construct'),

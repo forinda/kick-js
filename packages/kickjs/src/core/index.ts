@@ -1,7 +1,12 @@
 import 'reflect-metadata'
 
 // DI Container
-export { Container } from './container'
+export {
+  Container,
+  tokenName,
+  type ContainerChangeEvent,
+  type ContainerChangeListener,
+} from './container'
 
 // Interfaces & Constants
 export {
@@ -12,6 +17,8 @@ export {
   type BuilderOf,
   type Buildable,
   type MaybePromise,
+  type ClassKind,
+  type PostConstructStatus,
 } from './interfaces'
 
 // Decorators
@@ -82,6 +89,23 @@ export { HttpException, HttpStatus, type HttpStatusCode, type ValidationError } 
 
 // Path utilities
 export { normalizePath, joinPaths } from './path'
+
+// Metadata utilities
+export {
+  setClassMeta,
+  setMethodMeta,
+  getClassMeta,
+  getMethodMeta,
+  hasClassMeta,
+  getClassMetaOrUndefined,
+  getMethodMetaOrUndefined,
+  pushClassMeta,
+  pushMethodMeta,
+  setInMetaMap,
+  getMetaMap,
+  setInMetaRecord,
+  getMetaRecord,
+} from './metadata'
 
 // Reactivity
 export {

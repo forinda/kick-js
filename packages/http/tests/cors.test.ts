@@ -11,8 +11,13 @@ function createApp(options = {}) {
 }
 
 describe('cors middleware', () => {
-  it('allows all origins by default', async () => {
-    const res = await request(createApp()).get('/').expect(200)
+  it('rejects cross-origin by default (restrictive)', async () => {
+    const res = await request(createApp()).get('/').set('Origin', 'https://evil.com').expect(200)
+    expect(res.headers['access-control-allow-origin']).toBeUndefined()
+  })
+
+  it('allows all origins when explicitly set to *', async () => {
+    const res = await request(createApp({ origin: '*' })).get('/').expect(200)
     expect(res.headers['access-control-allow-origin']).toBe('*')
   })
 

@@ -1,4 +1,4 @@
-import 'reflect-metadata'
+import { setClassMeta, pushClassMeta, pushMethodMeta } from '@forinda/kickjs'
 
 const RESOLVER_META = Symbol('gql:resolver')
 const QUERY_META = Symbol('gql:query')
@@ -30,7 +30,7 @@ export interface ArgMeta {
  */
 export function Resolver(typeName?: string): ClassDecorator {
   return (target: any) => {
-    Reflect.defineMetadata(
+    setClassMeta(
       RESOLVER_META,
       { typeName: typeName ?? target.name.replace('Resolver', '') },
       target,
@@ -44,14 +44,12 @@ export function Query(
   options?: { description?: string; returnType?: string },
 ): MethodDecorator {
   return (target, propertyKey) => {
-    const existing: FieldMeta[] = Reflect.getMetadata(QUERY_META, target.constructor) ?? []
-    existing.push({
+    pushClassMeta<FieldMeta>(QUERY_META, target.constructor, {
       name: name ?? (propertyKey as string),
       handlerName: propertyKey as string,
       returnType: options?.returnType,
       description: options?.description,
     })
-    Reflect.defineMetadata(QUERY_META, existing, target.constructor)
   }
 }
 
@@ -61,27 +59,23 @@ export function Mutation(
   options?: { description?: string; returnType?: string },
 ): MethodDecorator {
   return (target, propertyKey) => {
-    const existing: FieldMeta[] = Reflect.getMetadata(MUTATION_META, target.constructor) ?? []
-    existing.push({
+    pushClassMeta<FieldMeta>(MUTATION_META, target.constructor, {
       name: name ?? (propertyKey as string),
       handlerName: propertyKey as string,
       returnType: options?.returnType,
       description: options?.description,
     })
-    Reflect.defineMetadata(MUTATION_META, existing, target.constructor)
   }
 }
 
 /** Define a Subscription field */
 export function Subscription(name?: string, options?: { description?: string }): MethodDecorator {
   return (target, propertyKey) => {
-    const existing: FieldMeta[] = Reflect.getMetadata(SUBSCRIPTION_META, target.constructor) ?? []
-    existing.push({
+    pushClassMeta<FieldMeta>(SUBSCRIPTION_META, target.constructor, {
       name: name ?? (propertyKey as string),
       handlerName: propertyKey as string,
       description: options?.description,
     })
-    Reflect.defineMetadata(SUBSCRIPTION_META, existing, target.constructor)
   }
 }
 
@@ -89,9 +83,7 @@ export function Subscription(name?: string, options?: { description?: string }):
 export function Arg(name: string, type?: string): ParameterDecorator {
   return (target, propertyKey, paramIndex) => {
     const key = propertyKey as string
-    const existing: ArgMeta[] = Reflect.getMetadata(ARG_META, target.constructor, key) ?? []
-    existing.push({ paramIndex, name, type })
-    Reflect.defineMetadata(ARG_META, existing, target.constructor, key)
+    pushMethodMeta<ArgMeta>(ARG_META, target.constructor, key, { paramIndex, name, type })
   }
 }
 

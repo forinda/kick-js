@@ -1,6 +1,12 @@
 type ProjectTemplate = 'rest' | 'graphql' | 'ddd' | 'cqrs' | 'minimal'
 
-/** Generate src/index.ts entry file with template-specific bootstrap */
+/**
+ * Generate src/index.ts entry file with template-specific bootstrap.
+ *
+ * All templates export the app for the Vite plugin (dev mode).
+ * In production, bootstrap() auto-starts the HTTP server when
+ * `globalThis.__kickjs_httpServer` is not set.
+ */
 export function generateEntryFile(
   name: string,
   template: ProjectTemplate,
@@ -17,7 +23,8 @@ import { modules } from './modules'
 // Import your resolvers here
 // import { UserResolver } from './resolvers/user.resolver'
 
-bootstrap({
+// Export the app for the Vite plugin (dev mode)
+export const app = await bootstrap({
   modules,
   adapters: [
     new DevToolsAdapter(),
@@ -40,7 +47,8 @@ import { OtelAdapter } from '@forinda/kickjs-otel'
 // import { QueueAdapter, BullMQProvider } from '@forinda/kickjs-queue'
 import { modules } from './modules'
 
-bootstrap({
+// Export the app for the Vite plugin (dev mode)
+export const app = await bootstrap({
   modules,
   adapters: [
     new OtelAdapter({ serviceName: '${name}' }),
@@ -63,25 +71,41 @@ bootstrap({
 import { bootstrap } from '@forinda/kickjs'
 import { modules } from './modules'
 
-bootstrap({ modules })
+// Export the app for the Vite plugin (dev mode)
+export const app = await bootstrap({ modules })
 `
 
     case 'ddd':
     case 'rest':
     default:
       return `import 'reflect-metadata'
-import { bootstrap } from '@forinda/kickjs'
+import express from 'express'
+import {
+  bootstrap,
+  requestId,
+  requestLogger,
+  helmet,
+  cors,
+} from '@forinda/kickjs'
 import { DevToolsAdapter } from '@forinda/kickjs-devtools'
 import { SwaggerAdapter } from '@forinda/kickjs-swagger'
 import { modules } from './modules'
 
-bootstrap({
+// Export the app for the Vite plugin (dev mode)
+export const app = await bootstrap({
   modules,
   adapters: [
     new DevToolsAdapter(),
     new SwaggerAdapter({
       info: { title: '${name}', version: '${version}' },
     }),
+  ],
+  middleware: [
+    helmet(),
+    cors({ origin: '*' }),
+    requestId(),
+    requestLogger(),
+    express.json(),
   ],
 })
 `
@@ -91,8 +115,66 @@ bootstrap({
 /** Generate src/modules/index.ts module registry */
 export function generateModulesIndex(): string {
   return `import type { AppModuleClass } from '@forinda/kickjs'
+import { HelloModule } from './hello/hello.module'
 
-export const modules: AppModuleClass[] = []
+// Remove HelloModule and run: kick g module <name>
+export const modules: AppModuleClass[] = [HelloModule]
+`
+}
+
+/** Generate src/modules/hello/hello.service.ts */
+export function generateHelloService(): string {
+  return `import { Service } from '@forinda/kickjs'
+
+@Service()
+export class HelloService {
+  greet(name: string) {
+    return { message: \`Hello \${name} from KickJS!\`, timestamp: new Date().toISOString() }
+  }
+
+  healthCheck() {
+    return { status: 'ok', uptime: process.uptime() }
+  }
+}
+`
+}
+
+/** Generate src/modules/hello/hello.controller.ts */
+export function generateHelloController(): string {
+  return `import { Controller, Get, Autowired, type RequestContext } from '@forinda/kickjs'
+import { HelloService } from './hello.service'
+
+@Controller()
+export class HelloController {
+  @Autowired() private helloService!: HelloService
+
+  @Get('/')
+  index(ctx: RequestContext) {
+    ctx.json(this.helloService.greet('World'))
+  }
+
+  @Get('/health')
+  health(ctx: RequestContext) {
+    ctx.json(this.helloService.healthCheck())
+  }
+}
+`
+}
+
+/** Generate src/modules/hello/hello.module.ts */
+export function generateHelloModule(): string {
+  return `import { type AppModule, type ModuleRoutes, buildRoutes } from '@forinda/kickjs'
+import { HelloController } from './hello.controller'
+
+export class HelloModule implements AppModule {
+  routes(): ModuleRoutes {
+    return {
+      path: '/hello',
+      router: buildRoutes(HelloController),
+      controller: HelloController,
+    }
+  }
+}
 `
 }
 
@@ -101,13 +183,18 @@ export function generateKickConfig(
   template: ProjectTemplate,
   defaultRepo: string = 'inmemory',
 ): string {
+  const builtinRepos = ['drizzle', 'inmemory', 'prisma']
+  const repoValue = builtinRepos.includes(defaultRepo)
+    ? `'${defaultRepo}'`
+    : `{ name: '${defaultRepo}' }`
+
   return `import { defineConfig } from '@forinda/kickjs-cli'
 
 export default defineConfig({
   pattern: '${template}',
   modules: {
     dir: 'src/modules',
-    repo: '${defaultRepo}',
+    repo: ${repoValue},
     pluralize: true,
   },
 

@@ -40,25 +40,27 @@ export function generatePackageJson(
       version: kickjsVersion.replace('^', ''), // Remove the ^ prefix for project version
       type: 'module',
       scripts: {
-        dev: 'kick dev',
+        dev: 'vite',
         'dev:debug': 'kick dev:debug',
         build: 'kick build',
         start: 'kick start',
         test: 'vitest run',
         'test:watch': 'vitest',
         typecheck: 'tsc --noEmit',
+        typegen: 'kick typegen',
         lint: 'eslint src/',
         format: 'prettier --write src/',
       },
       dependencies: baseDeps,
       devDependencies: {
         '@forinda/kickjs-cli': kickjsVersion,
-        '@swc/core': '^1.7.28',
+        '@forinda/kickjs-vite': kickjsVersion,
+        '@swc/core': '^1.15.21',
         '@types/express': '^5.0.6',
         '@types/node': '^25.0.0',
         'unplugin-swc': '^1.5.9',
-        vite: '^8.0.2',
-        vitest: '^4.1.1',
+        vite: '^8.0.3',
+        vitest: '^4.1.2',
         typescript: '^5.9.2',
         prettier: '^3.8.1',
       },
@@ -68,15 +70,29 @@ export function generatePackageJson(
   )
 }
 
-/** Generate vite.config.ts for HMR and SWC decorators */
+/**
+ * Generate vite.config.ts with the KickJS Vite plugin.
+ *
+ * The plugin handles:
+ * - SSR environment setup for backend Node.js code
+ * - Virtual module generation (virtual:kickjs/app)
+ * - Module auto-discovery (scans *.module.ts files)
+ * - HMR with selective container invalidation
+ * - Express mounting via configureServer() post-hook
+ * - httpServer piping to adapters (WsAdapter, Socket.IO, etc.)
+ */
 export function generateViteConfig(): string {
   return `import { defineConfig } from 'vite'
 import { resolve } from 'path'
 import swc from 'unplugin-swc'
+import { kickjsVitePlugin } from '@forinda/kickjs-vite'
 
 export default defineConfig({
   oxc: false,
-  plugins: [swc.vite()],
+  plugins: [
+    swc.vite(),
+    kickjsVitePlugin({ entry: 'src/index.ts' }),
+  ],
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),
@@ -86,10 +102,6 @@ export default defineConfig({
     // Don't bundle pino — its worker-thread transport needs Node.js resolution
     // to find pino-pretty at runtime for colored log output
     external: ['pino', 'pino-pretty'],
-  },
-  server: {
-    watch: { usePolling: false },
-    hmr: true,
   },
   build: {
     target: 'node20',

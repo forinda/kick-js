@@ -1,4 +1,4 @@
-import 'reflect-metadata'
+import { setClassMeta, setMethodMeta } from '@forinda/kickjs'
 import { AUTH_META } from './types'
 
 /**
@@ -29,14 +29,14 @@ import { AUTH_META } from './types'
 export function Authenticated(strategy?: string): ClassDecorator & MethodDecorator {
   return (target: any, propertyKey?: string | symbol) => {
     if (propertyKey) {
-      Reflect.defineMetadata(AUTH_META.AUTHENTICATED, true, target.constructor, propertyKey)
+      setMethodMeta(AUTH_META.AUTHENTICATED, true, target.constructor, propertyKey as string)
       if (strategy) {
-        Reflect.defineMetadata(AUTH_META.STRATEGY, strategy, target.constructor, propertyKey)
+        setMethodMeta(AUTH_META.STRATEGY, strategy, target.constructor, propertyKey as string)
       }
     } else {
-      Reflect.defineMetadata(AUTH_META.AUTHENTICATED, true, target)
+      setClassMeta(AUTH_META.AUTHENTICATED, true, target)
       if (strategy) {
-        Reflect.defineMetadata(AUTH_META.STRATEGY, strategy, target)
+        setClassMeta(AUTH_META.STRATEGY, strategy, target)
       }
     }
   }
@@ -62,7 +62,7 @@ export function Authenticated(strategy?: string): ClassDecorator & MethodDecorat
  */
 export function Public(): MethodDecorator {
   return (target: any, propertyKey: string | symbol) => {
-    Reflect.defineMetadata(AUTH_META.PUBLIC, true, target.constructor, propertyKey)
+    setMethodMeta(AUTH_META.PUBLIC, true, target.constructor, propertyKey as string)
   }
 }
 
@@ -86,7 +86,7 @@ export function Public(): MethodDecorator {
  */
 export function Roles(...roles: string[]): MethodDecorator {
   return (target: any, propertyKey: string | symbol) => {
-    Reflect.defineMetadata(AUTH_META.AUTHENTICATED, true, target.constructor, propertyKey)
-    Reflect.defineMetadata(AUTH_META.ROLES, roles, target.constructor, propertyKey)
+    setMethodMeta(AUTH_META.AUTHENTICATED, true, target.constructor, propertyKey as string)
+    setMethodMeta(AUTH_META.ROLES, roles, target.constructor, propertyKey as string)
   }
 }

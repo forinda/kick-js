@@ -43,20 +43,27 @@
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "import": "./dist/index.mjs",
+      "types": "./dist/index.d.mts"
     }
   },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "vite build && pnpm build:types",
-    "build:types": "tsc -p tsconfig.build.json",
-    "dev": "vite build --watch",
+    "build": "wireit",
+    "dev": "tsdown --watch",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist .turbo",
+    "clean": "rm -rf dist .wireit",
     "lint": "tsc --noEmit"
+  },
+  "wireit": {
+    "build": {
+      "command": "tsdown",
+      "files": ["src/**/*.ts", "tsdown.config.ts", "tsconfig.json", "package.json"],
+      "output": ["dist/**"],
+      "dependencies": ["../core:build"]
+    }
   },
   "dependencies": {
     "@forinda/kickjs": "workspace:*",

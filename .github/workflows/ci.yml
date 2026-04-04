@@ -36,10 +36,10 @@ jobs:
           DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
 
       - name: Build framework packages
-        run: pnpm turbo build --filter='./packages/*'
+        run: pnpm build
 
       - name: Typecheck
-        run: pnpm turbo typecheck --filter='./packages/*'
+        run: pnpm -r --filter='./packages/*' typecheck
 
       - name: Run tests
         run: pnpm test
@@ -69,7 +69,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build framework packages
-        run: pnpm turbo build --filter='./packages/*'
+        run: pnpm build
 
       - name: Smoke test — imports resolve under Bun
         run: |
@@ -107,7 +107,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build packages
-        run: pnpm turbo build --filter='./packages/*'
+        run: pnpm build
 
       - name: Smoke test — pure ESM imports resolve under Deno
         run: |

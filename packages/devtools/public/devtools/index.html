@@ -26,12 +26,18 @@
   <header class="border-b border-slate-800 px-6 py-4">
     <div class="flex items-center justify-between">
       <div>
-        <h1 class="text-2xl font-bold text-kick-500">⚡ KickJS DevTools</h1>
+        <h1 class="text-2xl font-bold text-kick-500">&#9889; KickJS DevTools</h1>
         <p class="text-sm text-slate-500">Development introspection dashboard</p>
       </div>
       <div class="flex items-center gap-3 text-sm text-slate-500">
-        <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-        Auto-refresh {{ pollInterval / 1000 }}s
+        <template v-if="sseConnected">
+          <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span class="text-emerald-400 font-medium">Live</span>
+        </template>
+        <template v-else>
+          <span class="inline-block w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+          <span class="text-amber-400 font-medium">Polling</span>
+        </template>
         <span class="text-slate-600">&middot;</span>
         {{ lastUpdate }}
       </div>
@@ -220,7 +226,7 @@
                 <td class="py-2 px-3 font-mono text-sm">{{ r.path }}</td>
                 <td class="py-2 px-3">{{ r.controller }}</td>
                 <td class="py-2 px-3 text-slate-400">{{ r.handler }}</td>
-                <td class="py-2 px-3 text-slate-500 text-xs">{{ r.middleware.length ? r.middleware.join(', ') : '—' }}</td>
+                <td class="py-2 px-3 text-slate-500 text-xs">{{ r.middleware.length ? r.middleware.join(', ') : '&#8212;' }}</td>
               </tr>
             </tbody>
           </table>
@@ -228,7 +234,7 @@
           <!-- Pagination -->
           <div v-if="filteredRoutes.length > routePageSize" class="flex items-center justify-between mt-4 pt-3 border-t border-slate-800">
             <span class="text-sm text-slate-500">
-              Showing {{ (routePage - 1) * routePageSize + 1 }}–{{ Math.min(routePage * routePageSize, filteredRoutes.length) }}
+              Showing {{ (routePage - 1) * routePageSize + 1 }}&#8211;{{ Math.min(routePage * routePageSize, filteredRoutes.length) }}
               of {{ filteredRoutes.length }}
             </span>
             <div class="flex gap-1">
@@ -248,11 +254,37 @@
     <!-- ─── Container Tab ────────────────────────────────────────── -->
     <div v-show="activeTab === 'container'">
       <div class="bg-slate-900 rounded-xl border border-slate-800 p-5">
-        <!-- Search -->
-        <div class="relative mb-4">
-          <svg class="absolute left-3 top-2.5 w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-          <input v-model="containerSearch" type="text" placeholder="Search tokens..."
-            class="w-full bg-slate-800 border border-slate-700 rounded-lg pl-10 pr-4 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-kick-500">
+        <!-- Search + Kind Filter + Scope Filter -->
+        <div class="flex flex-col gap-3 mb-4">
+          <div class="relative">
+            <svg class="absolute left-3 top-2.5 w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            <input v-model="containerSearch" type="text" placeholder="Search tokens..."
+              class="w-full bg-slate-800 border border-slate-700 rounded-lg pl-10 pr-4 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-kick-500">
+          </div>
+          <div class="flex flex-col sm:flex-row gap-3">
+            <div class="flex gap-1">
+              <span class="text-xs text-slate-500 self-center mr-1">Kind:</span>
+              <button v-for="k in ['ALL','controller','service','repository','other']" :key="k"
+                @click="containerKindFilter = k"
+                :class="[
+                  'px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors',
+                  containerKindFilter === k
+                    ? kindFilterActiveClass(k)
+                    : 'bg-slate-800 text-slate-400 border border-slate-700 hover:text-slate-200'
+                ]">{{ k === 'ALL' ? 'ALL' : k }}</button>
+            </div>
+            <div class="flex gap-1">
+              <span class="text-xs text-slate-500 self-center mr-1">Scope:</span>
+              <button v-for="s in ['ALL','singleton','transient','request']" :key="s"
+                @click="containerScopeFilter = s"
+                :class="[
+                  'px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors',
+                  containerScopeFilter === s
+                    ? 'bg-kick-500/20 text-kick-500 border border-kick-500/30'
+                    : 'bg-slate-800 text-slate-400 border border-slate-700 hover:text-slate-200'
+                ]">{{ s === 'ALL' ? 'ALL' : s }}</button>
+            </div>
+          </div>
         </div>
 
         <!-- Container Table -->
@@ -260,30 +292,96 @@
           <table class="w-full text-sm">
             <thead>
               <tr class="border-b-2 border-slate-700">
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold w-6"></th>
                 <th class="text-left py-2 px-3 text-slate-400 font-semibold">Token</th>
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Kind</th>
                 <th class="text-left py-2 px-3 text-slate-400 font-semibold">Scope</th>
-                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Instantiated</th>
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Status</th>
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Resolves</th>
+                <th class="text-left py-2 px-3 text-slate-400 font-semibold">Deps</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="r in paginatedContainer" :key="r.token"
-                class="border-b border-slate-800 hover:bg-slate-800/50">
-                <td class="py-2 px-3 font-mono text-sm">{{ r.token }}</td>
-                <td class="py-2 px-3">
-                  <span class="bg-blue-900/50 text-blue-300 px-2 py-0.5 rounded text-xs font-semibold">{{ r.scope }}</span>
-                </td>
-                <td class="py-2 px-3">
-                  <span :class="r.instantiated ? 'bg-emerald-900/50 text-emerald-300' : 'bg-amber-900/50 text-amber-300'"
-                    class="px-2 py-0.5 rounded text-xs font-semibold">{{ r.instantiated ? 'yes' : 'no' }}</span>
-                </td>
-              </tr>
+              <template v-for="r in paginatedContainer" :key="r.token">
+                <tr @click="toggleContainerRow(r.token)"
+                  class="border-b border-slate-800 hover:bg-slate-800/50 cursor-pointer select-none">
+                  <td class="py-2 px-3">
+                    <svg :class="{'rotate-90': expandedContainerRows[r.token]}" class="w-3 h-3 text-slate-500 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                  </td>
+                  <td class="py-2 px-3 font-mono text-sm">{{ r.token }}</td>
+                  <td class="py-2 px-3">
+                    <span :class="kindBadgeClass(r.kind)" class="px-2 py-0.5 rounded text-xs font-semibold">{{ r.kind || 'unknown' }}</span>
+                  </td>
+                  <td class="py-2 px-3">
+                    <span class="bg-slate-700/50 text-slate-300 px-2 py-0.5 rounded text-xs font-semibold">{{ r.scope }}</span>
+                  </td>
+                  <td class="py-2 px-3">
+                    <span :class="statusBadgeClass(r)" class="px-2 py-0.5 rounded text-xs font-semibold">{{ statusLabel(r) }}</span>
+                  </td>
+                  <td class="py-2 px-3 tabular-nums">{{ r.resolveCount ?? 0 }}</td>
+                  <td class="py-2 px-3 text-slate-500 text-xs">{{ r.dependencies?.length || 0 }}</td>
+                </tr>
+                <!-- Expanded detail row -->
+                <tr v-if="expandedContainerRows[r.token]">
+                  <td colspan="7" class="bg-slate-800/30 px-6 py-4 border-b border-slate-800">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <h4 class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">Dependencies</h4>
+                        <div v-if="r.dependencies && r.dependencies.length" class="flex flex-wrap gap-1">
+                          <button v-for="dep in r.dependencies" :key="dep"
+                            @click.stop="openDetailModal(findRegistration(dep))"
+                            class="bg-slate-700/50 text-kick-500 hover:bg-slate-700 px-2 py-0.5 rounded text-xs font-mono transition-colors">
+                            {{ dep }}
+                          </button>
+                        </div>
+                        <span v-else class="text-slate-600 text-sm">None</span>
+                      </div>
+                      <div>
+                        <h4 class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">Resolve Stats</h4>
+                        <div class="space-y-1 text-sm">
+                          <div class="flex justify-between">
+                            <span class="text-slate-400">Resolve Count</span>
+                            <span class="tabular-nums">{{ r.resolveCount ?? 0 }}</span>
+                          </div>
+                          <div v-if="r.firstResolved" class="flex justify-between">
+                            <span class="text-slate-400">First Resolved</span>
+                            <span class="text-xs">{{ new Date(r.firstResolved).toLocaleTimeString() }}</span>
+                          </div>
+                          <div v-if="r.lastResolved" class="flex justify-between">
+                            <span class="text-slate-400">Last Resolved</span>
+                            <span class="text-xs">{{ new Date(r.lastResolved).toLocaleTimeString() }}</span>
+                          </div>
+                          <div v-if="r.resolveDurationMs != null" class="flex justify-between">
+                            <span class="text-slate-400">Duration</span>
+                            <span class="tabular-nums">{{ r.resolveDurationMs.toFixed(2) }}ms</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div>
+                        <h4 class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">PostConstruct</h4>
+                        <span :class="{
+                          'bg-emerald-900/50 text-emerald-300': r.postConstructStatus === 'done',
+                          'bg-red-900/50 text-red-300': r.postConstructStatus === 'failed',
+                          'bg-slate-700/50 text-slate-400': !r.postConstructStatus || r.postConstructStatus === 'none',
+                        }" class="px-2 py-0.5 rounded text-xs font-semibold">{{ r.postConstructStatus || 'none' }}</span>
+                      </div>
+                      <div class="flex items-end">
+                        <button @click.stop="openDetailModal(r)"
+                          class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-kick-500/20 text-kick-500 border border-kick-500/30 hover:bg-kick-500/30 transition-colors">
+                          View Full Details
+                        </button>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              </template>
             </tbody>
           </table>
 
           <!-- Pagination -->
           <div v-if="filteredContainer.length > containerPageSize" class="flex items-center justify-between mt-4 pt-3 border-t border-slate-800">
             <span class="text-sm text-slate-500">
-              Showing {{ (containerPage - 1) * containerPageSize + 1 }}–{{ Math.min(containerPage * containerPageSize, filteredContainer.length) }}
+              Showing {{ (containerPage - 1) * containerPageSize + 1 }}&#8211;{{ Math.min(containerPage * containerPageSize, filteredContainer.length) }}
               of {{ filteredContainer.length }}
             </span>
             <div class="flex gap-1">
@@ -296,7 +394,126 @@
             </div>
           </div>
         </div>
-        <p v-else class="text-slate-600 italic">{{ containerSearch ? 'No matching tokens' : 'No DI registrations' }}</p>
+        <p v-else class="text-slate-600 italic">{{ containerSearch || containerKindFilter !== 'ALL' || containerScopeFilter !== 'ALL' ? 'No matching tokens' : 'No DI registrations' }}</p>
+      </div>
+    </div>
+
+    <!-- ─── Graph Tab ────────────────────────────────────────────── -->
+    <div v-show="activeTab === 'graph'">
+      <div class="bg-slate-900 rounded-xl border border-slate-800 p-5">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-sm font-semibold text-slate-400">Dependency Graph</h2>
+          <button @click="fetchGraph" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-800 text-slate-400 border border-slate-700 hover:text-slate-200 transition-colors">
+            Refresh
+          </button>
+        </div>
+
+        <template v-if="graphData">
+          <div v-if="graphData.nodes && graphData.nodes.length" class="space-y-6">
+            <!-- Controllers -->
+            <div v-if="graphNodesByKind.controllers.length">
+              <h3 class="text-xs font-semibold uppercase tracking-wider text-violet-400 mb-2">Controllers</h3>
+              <div class="space-y-1">
+                <div v-for="node in graphNodesByKind.controllers" :key="node.id">
+                  <button @click="openDetailModalFromGraph(node)"
+                    class="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-800/50 transition-colors group">
+                    <div class="flex items-center gap-2">
+                      <span class="bg-violet-900/50 text-violet-300 px-2 py-0.5 rounded text-xs font-semibold">ctrl</span>
+                      <span class="font-mono text-sm text-slate-200">{{ node.id }}</span>
+                      <span v-if="node.scope" class="bg-slate-700/50 text-slate-400 px-1.5 py-0.5 rounded text-xs">{{ node.scope }}</span>
+                      <span v-if="node.resolveCount" class="text-slate-600 text-xs ml-auto">{{ node.resolveCount }} resolves</span>
+                    </div>
+                    <!-- Dependencies (edges from this node) -->
+                    <div v-if="graphEdgesFrom(node.id).length" class="ml-8 mt-1 space-y-0.5">
+                      <div v-for="edge in graphEdgesFrom(node.id)" :key="edge.to" class="flex items-center gap-2 text-xs text-slate-500">
+                        <svg class="w-3 h-3 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5-5 5M6 12h12"/></svg>
+                        <span :class="graphNodeBadgeClass(edge.to)" class="px-1.5 py-0.5 rounded text-xs font-semibold">{{ graphNodeKindLabel(edge.to) }}</span>
+                        <span class="font-mono">{{ edge.to }}</span>
+                      </div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Services -->
+            <div v-if="graphNodesByKind.services.length">
+              <h3 class="text-xs font-semibold uppercase tracking-wider text-blue-400 mb-2">Services</h3>
+              <div class="space-y-1">
+                <div v-for="node in graphNodesByKind.services" :key="node.id">
+                  <button @click="openDetailModalFromGraph(node)"
+                    class="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-800/50 transition-colors group">
+                    <div class="flex items-center gap-2">
+                      <span class="bg-blue-900/50 text-blue-300 px-2 py-0.5 rounded text-xs font-semibold">svc</span>
+                      <span class="font-mono text-sm text-slate-200">{{ node.id }}</span>
+                      <span v-if="node.scope" class="bg-slate-700/50 text-slate-400 px-1.5 py-0.5 rounded text-xs">{{ node.scope }}</span>
+                      <span v-if="node.resolveCount" class="text-slate-600 text-xs ml-auto">{{ node.resolveCount }} resolves</span>
+                    </div>
+                    <div v-if="graphEdgesFrom(node.id).length" class="ml-8 mt-1 space-y-0.5">
+                      <div v-for="edge in graphEdgesFrom(node.id)" :key="edge.to" class="flex items-center gap-2 text-xs text-slate-500">
+                        <svg class="w-3 h-3 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5-5 5M6 12h12"/></svg>
+                        <span :class="graphNodeBadgeClass(edge.to)" class="px-1.5 py-0.5 rounded text-xs font-semibold">{{ graphNodeKindLabel(edge.to) }}</span>
+                        <span class="font-mono">{{ edge.to }}</span>
+                      </div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Repositories -->
+            <div v-if="graphNodesByKind.repositories.length">
+              <h3 class="text-xs font-semibold uppercase tracking-wider text-teal-400 mb-2">Repositories</h3>
+              <div class="space-y-1">
+                <div v-for="node in graphNodesByKind.repositories" :key="node.id">
+                  <button @click="openDetailModalFromGraph(node)"
+                    class="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-800/50 transition-colors group">
+                    <div class="flex items-center gap-2">
+                      <span class="bg-teal-900/50 text-teal-300 px-2 py-0.5 rounded text-xs font-semibold">repo</span>
+                      <span class="font-mono text-sm text-slate-200">{{ node.id }}</span>
+                      <span v-if="node.scope" class="bg-slate-700/50 text-slate-400 px-1.5 py-0.5 rounded text-xs">{{ node.scope }}</span>
+                      <span v-if="node.resolveCount" class="text-slate-600 text-xs ml-auto">{{ node.resolveCount }} resolves</span>
+                    </div>
+                    <div v-if="graphEdgesFrom(node.id).length" class="ml-8 mt-1 space-y-0.5">
+                      <div v-for="edge in graphEdgesFrom(node.id)" :key="edge.to" class="flex items-center gap-2 text-xs text-slate-500">
+                        <svg class="w-3 h-3 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5-5 5M6 12h12"/></svg>
+                        <span :class="graphNodeBadgeClass(edge.to)" class="px-1.5 py-0.5 rounded text-xs font-semibold">{{ graphNodeKindLabel(edge.to) }}</span>
+                        <span class="font-mono">{{ edge.to }}</span>
+                      </div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Other -->
+            <div v-if="graphNodesByKind.other.length">
+              <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Other</h3>
+              <div class="space-y-1">
+                <div v-for="node in graphNodesByKind.other" :key="node.id">
+                  <button @click="openDetailModalFromGraph(node)"
+                    class="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-800/50 transition-colors group">
+                    <div class="flex items-center gap-2">
+                      <span class="bg-slate-700/50 text-slate-300 px-2 py-0.5 rounded text-xs font-semibold">other</span>
+                      <span class="font-mono text-sm text-slate-200">{{ node.id }}</span>
+                      <span v-if="node.scope" class="bg-slate-700/50 text-slate-400 px-1.5 py-0.5 rounded text-xs">{{ node.scope }}</span>
+                      <span v-if="node.resolveCount" class="text-slate-600 text-xs ml-auto">{{ node.resolveCount }} resolves</span>
+                    </div>
+                    <div v-if="graphEdgesFrom(node.id).length" class="ml-8 mt-1 space-y-0.5">
+                      <div v-for="edge in graphEdgesFrom(node.id)" :key="edge.to" class="flex items-center gap-2 text-xs text-slate-500">
+                        <svg class="w-3 h-3 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5-5 5M6 12h12"/></svg>
+                        <span :class="graphNodeBadgeClass(edge.to)" class="px-1.5 py-0.5 rounded text-xs font-semibold">{{ graphNodeKindLabel(edge.to) }}</span>
+                        <span class="font-mono">{{ edge.to }}</span>
+                      </div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p v-else class="text-slate-600 italic">No nodes in graph</p>
+        </template>
+        <p v-else class="text-slate-600 italic">Loading graph...</p>
       </div>
     </div>
 
@@ -347,11 +564,90 @@
 
   </main>
 
-  <!-- Auth Gate — shown when token is required but not found -->
+  <!-- ─── Detail Modal ───────────────────────────────────────────── -->
+  <div v-if="detailModal" class="fixed inset-0 bg-slate-950/80 flex items-center justify-center z-50" @click.self="detailModal = null">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl p-6 max-w-lg w-full mx-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+      <!-- Header -->
+      <div class="flex items-start justify-between mb-4">
+        <div>
+          <h2 class="text-lg font-bold font-mono text-slate-200 mb-1">{{ detailModal.token || detailModal.id }}</h2>
+          <div class="flex gap-2">
+            <span :class="kindBadgeClass(detailModal.kind)" class="px-2 py-0.5 rounded text-xs font-semibold">{{ detailModal.kind || 'unknown' }}</span>
+            <span class="bg-slate-700/50 text-slate-300 px-2 py-0.5 rounded text-xs font-semibold">{{ detailModal.scope || 'singleton' }}</span>
+            <span :class="statusBadgeClass(detailModal)" class="px-2 py-0.5 rounded text-xs font-semibold">{{ statusLabel(detailModal) }}</span>
+          </div>
+        </div>
+        <button @click="detailModal = null" class="text-slate-500 hover:text-slate-300 transition-colors p-1">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <!-- Dependencies -->
+      <div class="mb-4">
+        <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">Dependencies</h3>
+        <div v-if="detailModalDependencies.length" class="flex flex-wrap gap-1">
+          <button v-for="dep in detailModalDependencies" :key="dep"
+            @click="openDetailModal(findRegistration(dep))"
+            class="bg-slate-800 text-kick-500 hover:bg-slate-700 px-2.5 py-1 rounded text-xs font-mono transition-colors border border-slate-700">
+            {{ dep }}
+          </button>
+        </div>
+        <span v-else class="text-slate-600 text-sm">None</span>
+      </div>
+
+      <!-- Dependents -->
+      <div class="mb-4">
+        <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">Dependents</h3>
+        <div v-if="detailModalDependents.length" class="flex flex-wrap gap-1">
+          <button v-for="dep in detailModalDependents" :key="dep"
+            @click="openDetailModal(findRegistration(dep))"
+            class="bg-slate-800 text-amber-400 hover:bg-slate-700 px-2.5 py-1 rounded text-xs font-mono transition-colors border border-slate-700">
+            {{ dep }}
+          </button>
+        </div>
+        <span v-else class="text-slate-600 text-sm">None</span>
+      </div>
+
+      <!-- Resolve Stats -->
+      <div class="mb-4">
+        <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">Resolve Stats</h3>
+        <div class="bg-slate-800/50 rounded-lg border border-slate-700 p-3 space-y-2 text-sm">
+          <div class="flex justify-between">
+            <span class="text-slate-400">Resolve Count</span>
+            <span class="font-semibold tabular-nums">{{ detailModal.resolveCount ?? 0 }}</span>
+          </div>
+          <div v-if="detailModal.firstResolved" class="flex justify-between">
+            <span class="text-slate-400">First Resolved</span>
+            <span>{{ new Date(detailModal.firstResolved).toLocaleString() }}</span>
+          </div>
+          <div v-if="detailModal.lastResolved" class="flex justify-between">
+            <span class="text-slate-400">Last Resolved</span>
+            <span>{{ new Date(detailModal.lastResolved).toLocaleString() }}</span>
+          </div>
+          <div v-if="detailModal.resolveDurationMs != null" class="flex justify-between">
+            <span class="text-slate-400">Resolution Duration</span>
+            <span class="tabular-nums">{{ detailModal.resolveDurationMs.toFixed(2) }}ms</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- PostConstruct -->
+      <div>
+        <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">PostConstruct</h3>
+        <span :class="{
+          'bg-emerald-900/50 text-emerald-300': detailModal.postConstructStatus === 'done',
+          'bg-red-900/50 text-red-300': detailModal.postConstructStatus === 'failed',
+          'bg-slate-700/50 text-slate-400': !detailModal.postConstructStatus || detailModal.postConstructStatus === 'none',
+        }" class="px-2 py-0.5 rounded text-xs font-semibold">{{ detailModal.postConstructStatus || 'none' }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Auth Gate -->
   <div v-if="showAuthGate" class="fixed inset-0 bg-slate-950/90 flex items-center justify-center z-50">
     <div class="bg-slate-900 border border-slate-700 rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl">
       <div class="text-center mb-6">
-        <h2 class="text-xl font-bold text-kick-500 mb-2">⚡ KickJS DevTools</h2>
+        <h2 class="text-xl font-bold text-kick-500 mb-2">&#9889; KickJS DevTools</h2>
         <p class="text-sm text-slate-400">Enter your DevTools token to continue</p>
         <p class="text-xs text-slate-600 mt-1">Token is shown in your server console on startup</p>
       </div>
@@ -378,15 +674,12 @@ const BASE = document.body.dataset.base || '/_debug'
 function getToken() {
   const fromUrl = new URLSearchParams(window.location.search).get('token')
   if (fromUrl) {
-    // Save to cookie for future visits
     document.cookie = `kickjs_devtools_token=${fromUrl}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax`
-    // Clean URL (remove token from query string)
     const url = new URL(window.location)
     url.searchParams.delete('token')
     window.history.replaceState({}, '', url.toString())
     return fromUrl
   }
-  // Try cookie
   const match = document.cookie.match(/kickjs_devtools_token=([^;]+)/)
   return match ? match[1] : ''
 }
@@ -396,11 +689,11 @@ let TOKEN = getToken()
 createApp({
   setup() {
     const activeTab = ref('overview')
-    const pollInterval = ref(30000)
     const lastUpdate = ref('loading...')
     const showAuthGate = ref(false)
     const tokenInput = ref('')
     const authError = ref('')
+    const sseConnected = ref(false)
 
     // Data
     const health = ref(null)
@@ -409,6 +702,10 @@ createApp({
     const routeData = ref(null)
     const containerData = ref(null)
     const queueData = ref(null)
+    const graphData = ref(null)
+
+    // Detail modal
+    const detailModal = ref(null)
 
     // Collapsible state
     const collapsed = reactive({
@@ -449,16 +746,28 @@ createApp({
       return filteredRoutes.value.slice(start, start + routePageSize.value)
     })
 
-    // Reset page when search/filter changes
     watch([routeSearch, routeMethodFilter], () => { routePage.value = 1 })
 
-    // Container search + pagination
+    // Container search + filter + pagination
     const containerSearch = ref('')
+    const containerKindFilter = ref('ALL')
+    const containerScopeFilter = ref('ALL')
     const containerPage = ref(1)
     const containerPageSize = ref(20)
+    const expandedContainerRows = reactive({})
 
     const filteredContainer = computed(() => {
       let regs = containerData.value?.registrations || []
+      if (containerKindFilter.value !== 'ALL') {
+        if (containerKindFilter.value === 'other') {
+          regs = regs.filter(r => !['controller', 'service', 'repository'].includes(r.kind))
+        } else {
+          regs = regs.filter(r => r.kind === containerKindFilter.value)
+        }
+      }
+      if (containerScopeFilter.value !== 'ALL') {
+        regs = regs.filter(r => r.scope === containerScopeFilter.value)
+      }
       if (containerSearch.value) {
         const q = containerSearch.value.toLowerCase()
         regs = regs.filter(r => r.token.toLowerCase().includes(q))
@@ -472,13 +781,134 @@ createApp({
       return filteredContainer.value.slice(start, start + containerPageSize.value)
     })
 
-    watch(containerSearch, () => { containerPage.value = 1 })
+    watch([containerSearch, containerKindFilter, containerScopeFilter], () => { containerPage.value = 1 })
+
+    function toggleContainerRow(token) {
+      expandedContainerRows[token] = !expandedContainerRows[token]
+    }
+
+    // Helper to find a registration by token
+    function findRegistration(token) {
+      const regs = containerData.value?.registrations || []
+      return regs.find(r => r.token === token) || { token: token, kind: 'unknown', scope: 'unknown' }
+    }
+
+    // Detail modal helpers
+    function openDetailModal(reg) {
+      if (reg) detailModal.value = reg
+    }
+
+    function openDetailModalFromGraph(node) {
+      const reg = findRegistration(node.id)
+      // Merge graph node data into the registration
+      detailModal.value = {
+        ...reg,
+        token: reg.token || node.id,
+        kind: reg.kind || node.kind,
+        scope: reg.scope || node.scope,
+        resolveCount: reg.resolveCount ?? node.resolveCount,
+      }
+    }
+
+    const detailModalDependencies = computed(() => {
+      if (!detailModal.value) return []
+      // From container registration
+      if (detailModal.value.dependencies && detailModal.value.dependencies.length) {
+        return detailModal.value.dependencies
+      }
+      // From graph edges
+      if (graphData.value && graphData.value.edges) {
+        const token = detailModal.value.token || detailModal.value.id
+        return graphData.value.edges.filter(e => e.from === token).map(e => e.to)
+      }
+      return []
+    })
+
+    const detailModalDependents = computed(() => {
+      if (!detailModal.value) return []
+      const token = detailModal.value.token || detailModal.value.id
+      // From container: find all registrations that list this token as a dependency
+      const regs = containerData.value?.registrations || []
+      const fromContainer = regs
+        .filter(r => r.dependencies && r.dependencies.includes(token))
+        .map(r => r.token)
+      if (fromContainer.length) return fromContainer
+      // From graph edges (reverse)
+      if (graphData.value && graphData.value.edges) {
+        return graphData.value.edges.filter(e => e.to === token).map(e => e.from)
+      }
+      return []
+    })
+
+    // Kind/status badge helpers
+    function kindBadgeClass(kind) {
+      return {
+        'bg-violet-900/50 text-violet-300': kind === 'controller',
+        'bg-blue-900/50 text-blue-300': kind === 'service',
+        'bg-teal-900/50 text-teal-300': kind === 'repository',
+        'bg-slate-700/50 text-slate-300': !['controller', 'service', 'repository'].includes(kind),
+      }
+    }
+
+    function statusBadgeClass(r) {
+      return {
+        'bg-emerald-900/50 text-emerald-300': r.instantiated,
+        'bg-amber-900/50 text-amber-300': !r.instantiated && r.postConstructStatus !== 'failed',
+        'bg-red-900/50 text-red-300': r.postConstructStatus === 'failed',
+      }
+    }
+
+    function statusLabel(r) {
+      return r.instantiated ? 'active' : (r.postConstructStatus === 'failed' ? 'failed' : 'registered')
+    }
+
+    function kindFilterActiveClass(k) {
+      if (k === 'ALL') return 'bg-kick-500/20 text-kick-500 border border-kick-500/30'
+      if (k === 'controller') return 'bg-violet-900/50 text-violet-300 border border-violet-700/50'
+      if (k === 'service') return 'bg-blue-900/50 text-blue-300 border border-blue-700/50'
+      if (k === 'repository') return 'bg-teal-900/50 text-teal-300 border border-teal-700/50'
+      return 'bg-slate-700/50 text-slate-300 border border-slate-600/50'
+    }
+
+    // Graph helpers
+    const graphNodesByKind = computed(() => {
+      const nodes = graphData.value?.nodes || []
+      return {
+        controllers: nodes.filter(n => n.kind === 'controller'),
+        services: nodes.filter(n => n.kind === 'service'),
+        repositories: nodes.filter(n => n.kind === 'repository'),
+        other: nodes.filter(n => !['controller', 'service', 'repository'].includes(n.kind)),
+      }
+    })
+
+    function graphEdgesFrom(nodeId) {
+      return (graphData.value?.edges || []).filter(e => e.from === nodeId)
+    }
+
+    function graphNodeKindLabel(nodeId) {
+      const node = (graphData.value?.nodes || []).find(n => n.id === nodeId)
+      if (!node) return '?'
+      if (node.kind === 'controller') return 'ctrl'
+      if (node.kind === 'service') return 'svc'
+      if (node.kind === 'repository') return 'repo'
+      return 'other'
+    }
+
+    function graphNodeBadgeClass(nodeId) {
+      const node = (graphData.value?.nodes || []).find(n => n.id === nodeId)
+      if (!node) return 'bg-slate-700/50 text-slate-300'
+      if (node.kind === 'controller') return 'bg-violet-900/50 text-violet-300'
+      if (node.kind === 'service') return 'bg-blue-900/50 text-blue-300'
+      if (node.kind === 'repository') return 'bg-teal-900/50 text-teal-300'
+      return 'bg-slate-700/50 text-slate-300'
+    }
 
     // Tab badges
     const tabs = computed(() => [
       { id: 'overview', label: 'Overview' },
       { id: 'routes', label: 'Routes', count: routeData.value?.routes?.length },
       { id: 'container', label: 'Container', count: containerData.value?.count },
+      { id: 'graph', label: 'Graph', count: graphData.value?.nodes?.length },
       { id: 'queues', label: 'Queues', count: queueData.value?.queues?.length },
     ])
 
@@ -500,7 +930,6 @@ createApp({
       const testToken = tokenInput.value.trim()
       if (!testToken) { authError.value = 'Token is required'; return }
 
-      // Test the token
       try {
         const r = await fetch(BASE + '/health', { headers: { 'x-devtools-token': testToken } })
         if (r.status === 403) {
@@ -512,11 +941,11 @@ createApp({
         return
       }
 
-      // Save to cookie and reload
       TOKEN = testToken
       document.cookie = `kickjs_devtools_token=${testToken}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax`
       showAuthGate.value = false
       refresh()
+      connectSSE()
     }
 
     async function refresh() {
@@ -537,6 +966,11 @@ createApp({
       lastUpdate.value = new Date().toLocaleTimeString()
     }
 
+    async function fetchGraph() {
+      const g = await fetchJSON('/graph')
+      if (g) graphData.value = g
+    }
+
     function formatDuration(seconds) {
       if (seconds < 60) return seconds + 's'
       if (seconds < 3600) return Math.floor(seconds / 60) + 'm ' + (seconds % 60) + 's'
@@ -552,19 +986,101 @@ createApp({
       }[method] || 'text-slate-400'
     }
 
-    let timer
-    onMounted(() => { refresh(); timer = setInterval(refresh, pollInterval.value) })
-    onUnmounted(() => clearInterval(timer))
+    // SSE connection
+    let eventSource = null
+    let pollTimer = null
+
+    function connectSSE() {
+      if (eventSource) {
+        eventSource.close()
+        eventSource = null
+      }
+      if (pollTimer) {
+        clearInterval(pollTimer)
+        pollTimer = null
+      }
+
+      const sseUrl = `${BASE}/stream${TOKEN ? '?token=' + TOKEN : ''}`
+      eventSource = new EventSource(sseUrl)
+
+      eventSource.onopen = () => {
+        sseConnected.value = true
+        if (pollTimer) {
+          clearInterval(pollTimer)
+          pollTimer = null
+        }
+      }
+
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data)
+          if (data.type === 'metrics') {
+            if (metrics.value) {
+              metrics.value.requests = data.requestCount
+              metrics.value.serverErrors = data.errorCount
+              metrics.value.clientErrors = data.clientErrorCount
+              metrics.value.errorRate = data.errorRate
+            }
+            if (health.value) {
+              health.value.uptime = data.uptimeSeconds
+              health.value.errorRate = data.errorRate
+            }
+            lastUpdate.value = new Date().toLocaleTimeString()
+          }
+          if (data.type === 'container') {
+            fetchJSON('/container').then(c => { if (c) containerData.value = c })
+            fetchJSON('/routes').then(r => { if (r) routeData.value = r })
+            fetchGraph()
+          }
+        } catch {}
+      }
+
+      eventSource.onerror = () => {
+        sseConnected.value = false
+        if (eventSource) {
+          eventSource.close()
+          eventSource = null
+        }
+        // Fallback to polling
+        if (!pollTimer) {
+          pollTimer = setInterval(refresh, 5000)
+        }
+      }
+    }
+
+    onMounted(() => {
+      refresh()
+      fetchGraph()
+      connectSSE()
+    })
+
+    onUnmounted(() => {
+      if (eventSource) {
+        eventSource.close()
+        eventSource = null
+      }
+      if (pollTimer) {
+        clearInterval(pollTimer)
+        pollTimer = null
+      }
+    })
 
     return {
-      activeTab, tabs, pollInterval, lastUpdate,
-      health, metrics, ws, routeData, containerData, queueData,
+      activeTab, tabs, lastUpdate, sseConnected,
+      health, metrics, ws, routeData, containerData, queueData, graphData,
       collapsed, toggle,
       showAuthGate, tokenInput, authError, submitToken,
       routeSearch, routeMethodFilter, routePage, routePageSize,
       filteredRoutes, paginatedRoutes, routeTotalPages,
-      containerSearch, containerPage, containerPageSize,
+      containerSearch, containerKindFilter, containerScopeFilter,
+      containerPage, containerPageSize,
       filteredContainer, paginatedContainer, containerTotalPages,
+      expandedContainerRows, toggleContainerRow,
+      detailModal, detailModalDependencies, detailModalDependents,
+      openDetailModal, openDetailModalFromGraph, findRegistration,
+      graphData, graphNodesByKind, graphEdgesFrom, graphNodeKindLabel, graphNodeBadgeClass,
+      fetchGraph,
+      kindBadgeClass, statusBadgeClass, statusLabel, kindFilterActiveClass,
       formatDuration, methodColor,
     }
   }

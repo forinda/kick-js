@@ -131,6 +131,7 @@ const examplesSidebar = [
   {
     text: 'Focused Examples',
     items: [
+      { text: 'v2 Showcase', link: '/examples/v2-showcase-api' },
       { text: 'Minimal', link: '/examples/minimal-api' },
       { text: 'Joi Validation', link: '/examples/joi-api' },
       { text: 'DevTools', link: '/examples/devtools-api' },
@@ -165,7 +166,7 @@ export default defineVersionedConfig(
       'A production-grade, decorator-driven Node.js framework built on Express 5 and TypeScript',
     base: '/kick-js/',
     ignoreDeadLinks: true,
-    head: [['link', { rel: 'icon', type: 'image/svg+xml', href: '/logo.svg' }]],
+    head: [['link', { rel: 'icon', type: 'image/svg+xml', href: '/kick-js/logo.svg' }]],
 
     locales: {
       root: {
@@ -231,6 +232,9 @@ export default defineVersionedConfig(
         },
         { component: 'VersionSwitcher' },
       ],
+
+      logo: '/logo.svg',
+      siteTitle: 'KickJS',
 
       sidebar: sharedSidebar,
 

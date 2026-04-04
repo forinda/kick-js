@@ -1,4 +1,7 @@
+import { dirname } from 'node:path'
+import { createRequire } from 'node:module'
 import { Router } from 'express'
+import express from 'express'
 import { Logger, type AppAdapter, type AdapterContext } from '@forinda/kickjs'
 import {
   buildOpenAPISpec,
@@ -9,6 +12,15 @@ import {
 import { swaggerUIHtml, redocHtml } from './ui'
 
 const log = Logger.for('SwaggerAdapter')
+
+/**
+ * Resolve the absolute path to swagger-ui-dist's static assets.
+ * Uses createRequire to find it relative to this package (works with pnpm).
+ */
+function getSwaggerUiDistPath(): string {
+  const require = createRequire(import.meta.url)
+  return dirname(require.resolve('swagger-ui-dist/package.json'))
+}
 
 export interface SwaggerAdapterOptions extends SwaggerOptions {
   /** Path to serve Swagger UI (default: '/docs') */
@@ -24,6 +36,9 @@ export interface SwaggerAdapterOptions extends SwaggerOptions {
 /**
  * Swagger adapter — auto-generates OpenAPI spec from decorators and serves docs.
  *
+ * Assets are served locally from `swagger-ui-dist` (npm dependency) —
+ * no CDN required, works fully offline.
+ *
  * @example
  * ```ts
  * bootstrap({
@@ -37,8 +52,8 @@ export interface SwaggerAdapterOptions extends SwaggerOptions {
  * ```
  *
  * Endpoints:
- *   GET /docs         — Swagger UI
- *   GET /redoc        — ReDoc
+ *   GET /docs         — Swagger UI (local assets, no CDN)
+ *   GET /redoc        — ReDoc (CDN — no local package available)
  *   GET /openapi.json — Raw OpenAPI 3.0.3 spec
  */
 export class SwaggerAdapter implements AppAdapter {
@@ -85,23 +100,18 @@ export class SwaggerAdapter implements AppAdapter {
     const redocPath = this.options.redocPath ?? '/redoc'
     const specPath = this.options.specPath ?? '/openapi.json'
 
-    // Use a sub-router with relaxed CSP so CDN scripts load
     const docsRouter = Router()
 
-    docsRouter.use((_req, res, next) => {
-      res.setHeader(
-        'Content-Security-Policy',
-        [
-          "default-src 'self'",
-          "script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.redoc.ly https://cdn.jsdelivr.net",
-          "style-src 'self' 'unsafe-inline' https://unpkg.com https://fonts.googleapis.com",
-          "font-src 'self' https://fonts.gstatic.com",
-          "img-src 'self' data: https://unpkg.com",
-          "connect-src 'self'",
-        ].join('; '),
-      )
-      next()
-    })
+    // ── Serve swagger-ui-dist static assets locally ──────────────────
+    // This makes Swagger UI work offline — no CDN needed.
+    // Assets served at /_swagger-assets/ (CSS, JS, fonts, etc.)
+    const swaggerAssetsPath = '/_swagger-assets'
+    try {
+      const swaggerDistDir = getSwaggerUiDistPath()
+      docsRouter.use(swaggerAssetsPath, express.static(swaggerDistDir))
+    } catch {
+      log.warn('swagger-ui-dist not found — Swagger UI will load from CDN (requires internet).')
+    }
 
     // Spec endpoint (JSON)
     docsRouter.get(specPath, (_req, res) => {
@@ -109,12 +119,12 @@ export class SwaggerAdapter implements AppAdapter {
       res.json(spec)
     })
 
-    // Swagger UI
+    // Swagger UI — uses local assets if available, CDN fallback
     docsRouter.get(docsPath, (_req, res) => {
-      res.type('html').send(swaggerUIHtml(specPath, this.options.info?.title))
+      res.type('html').send(swaggerUIHtml(specPath, this.options.info?.title, swaggerAssetsPath))
     })
 
-    // ReDoc
+    // ReDoc — still CDN-based (no npm package for standalone bundle)
     docsRouter.get(redocPath, (_req, res) => {
       res.type('html').send(redocHtml(specPath, this.options.info?.title))
     })

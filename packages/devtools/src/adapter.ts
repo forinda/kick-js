@@ -17,6 +17,8 @@ import {
   createLogger,
   type Ref,
   type ComputedRef,
+  getClassMeta,
+  getMethodMeta,
 } from '@forinda/kickjs'
 
 const log = createLogger('DevTools')
@@ -30,12 +32,33 @@ interface RouteInfo {
   middleware: string[]
 }
 
-/** Per-route latency stats */
+/** Per-route latency stats with percentile tracking */
 interface RouteStats {
   count: number
   totalMs: number
   minMs: number
   maxMs: number
+  /** Ring buffer of last N samples for percentile computation */
+  samples: number[]
+}
+
+const MAX_SAMPLES = 1000
+
+/** Compute a percentile from a sorted array of numbers */
+function percentile(sorted: number[], p: number): number {
+  if (sorted.length === 0) return 0
+  const idx = Math.ceil(p * sorted.length) - 1
+  return sorted[Math.max(0, idx)]
+}
+
+/** Compute p50, p95, p99 from a RouteStats samples buffer */
+function computePercentiles(stats: RouteStats): { p50: number; p95: number; p99: number } {
+  const sorted = [...stats.samples].sort((a, b) => a - b)
+  return {
+    p50: percentile(sorted, 0.5),
+    p95: percentile(sorted, 0.95),
+    p99: percentile(sorted, 0.99),
+  }
 }
 
 export interface DevToolsOptions {
@@ -234,6 +257,12 @@ export class DevToolsAdapter implements AppAdapter {
     })
 
     router.get('/metrics', (_req: Request, res: Response) => {
+      // Build latency with percentiles, omitting raw samples from response
+      const latency: Record<string, any> = {}
+      for (const [key, stats] of Object.entries(this.routeLatency)) {
+        const { samples: _, ...rest } = stats
+        latency[key] = { ...rest, ...computePercentiles(stats) }
+      }
       res.json({
         requests: this.requestCount.value,
         serverErrors: this.errorCount.value,
@@ -241,7 +270,7 @@ export class DevToolsAdapter implements AppAdapter {
         errorRate: this.errorRate.value,
         uptimeSeconds: this.uptimeSeconds.value,
         startedAt: new Date(this.startedAt.value).toISOString(),
-        routeLatency: this.routeLatency,
+        routeLatency: latency,
       })
     })
 
@@ -309,6 +338,81 @@ export class DevToolsAdapter implements AppAdapter {
       }
     })
 
+    // ── Dependency graph ────────────────────────────────────────────
+    router.get('/graph', (_req: Request, res: Response) => {
+      const registrations = this.container?.getRegistrations() ?? []
+      const nodes = registrations
+        .filter((r) => !r.token.startsWith('__hmr__'))
+        .map((r) => ({
+          id: r.token,
+          kind: r.kind,
+          scope: r.scope,
+          resolveCount: r.resolveCount,
+        }))
+      const nodeIds = new Set(nodes.map((n) => n.id))
+      const edges: Array<{ from: string; to: string }> = []
+      for (const r of registrations) {
+        if (r.token.startsWith('__hmr__')) continue
+        for (const dep of r.dependencies) {
+          if (nodeIds.has(dep)) {
+            edges.push({ from: r.token, to: dep })
+          }
+        }
+      }
+      res.json({ nodes, edges })
+    })
+
+    // ── SSE stream for real-time updates ───────────────────────
+    // Uses container.onChange() to push events only when something
+    // actually changes — no polling. Also sends periodic heartbeats
+    // to keep the connection alive through proxies.
+    router.get('/stream', (req: Request, res: Response) => {
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+      })
+
+      // Send initial state
+      const sendMetrics = () => {
+        const data = {
+          type: 'metrics',
+          requestCount: this.requestCount.value,
+          errorCount: this.errorCount.value,
+          clientErrorCount: this.clientErrorCount.value,
+          errorRate: this.errorRate.value,
+          uptimeSeconds: this.uptimeSeconds.value,
+        }
+        res.write(`data: ${JSON.stringify(data)}\n\n`)
+      }
+      sendMetrics()
+
+      // Subscribe to container changes (batched, ~50ms debounce)
+      const unsubContainer = this.container?.onChange?.((changes) => {
+        res.write(
+          `data: ${JSON.stringify({ type: 'container', changes, timestamp: Date.now() })}\n\n`,
+        )
+        // Also send updated metrics after container changes
+        sendMetrics()
+      })
+
+      // Watch reactive metrics — push on change (request count, errors)
+      const stopRequestWatch = watch(this.requestCount, () => sendMetrics())
+      const stopErrorWatch = watch(this.errorCount, () => sendMetrics())
+
+      // Heartbeat every 30s to keep connection alive through proxies/LBs
+      const heartbeat = setInterval(() => {
+        res.write(`: heartbeat\n\n`)
+      }, 30000)
+
+      req.on('close', () => {
+        unsubContainer?.()
+        stopRequestWatch()
+        stopErrorWatch()
+        clearInterval(heartbeat)
+      })
+    })
+
     if (this.exposeConfig) {
       router.get('/config', (_req: Request, res: Response) => {
         const config: Record<string, string> = {}
@@ -373,6 +477,7 @@ export class DevToolsAdapter implements AppAdapter {
                 totalMs: 0,
                 minMs: Infinity,
                 maxMs: 0,
+                samples: [],
               }
             }
             const stats = this.routeLatency[routeKey]
@@ -380,6 +485,8 @@ export class DevToolsAdapter implements AppAdapter {
             stats.totalMs += elapsed
             stats.minMs = Math.min(stats.minMs, elapsed)
             stats.maxMs = Math.max(stats.maxMs, elapsed)
+            stats.samples.push(elapsed)
+            if (stats.samples.length > MAX_SAMPLES) stats.samples.shift()
           })
 
           next()
@@ -392,19 +499,21 @@ export class DevToolsAdapter implements AppAdapter {
   onRouteMount(controllerClass: any, mountPath: string): void {
     if (!this.enabled) return
 
-    const routes: Array<{ method: string; path: string; handlerName: string }> =
-      Reflect.getMetadata(METADATA.ROUTES, controllerClass) ?? []
+    const routes = getClassMeta<Array<{ method: string; path: string; handlerName: string }>>(
+      METADATA.ROUTES,
+      controllerClass,
+      [],
+    )
 
-    const classMiddleware: any[] =
-      Reflect.getMetadata(METADATA.CLASS_MIDDLEWARES, controllerClass) ?? []
+    const classMiddleware = getClassMeta<any[]>(METADATA.CLASS_MIDDLEWARES, controllerClass, [])
 
     for (const route of routes) {
-      const methodMiddleware: any[] =
-        Reflect.getMetadata(
-          METADATA.METHOD_MIDDLEWARES,
-          controllerClass.prototype,
-          route.handlerName,
-        ) ?? []
+      const methodMiddleware = getMethodMeta<any[]>(
+        METADATA.METHOD_MIDDLEWARES,
+        controllerClass.prototype,
+        route.handlerName,
+        [],
+      )
 
       this.routes.push({
         method: route.method.toUpperCase(),
