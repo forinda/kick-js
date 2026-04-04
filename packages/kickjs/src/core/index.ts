@@ -1,7 +1,12 @@
 import 'reflect-metadata'
 
 // DI Container
-export { Container, tokenName } from './container'
+export {
+  Container,
+  tokenName,
+  type ContainerChangeEvent,
+  type ContainerChangeListener,
+} from './container'
 
 // Interfaces & Constants
 export {
