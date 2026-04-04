@@ -1,9 +1,29 @@
 # KickJS v3 Implementation Plan
 
+> **Status (2026-04-04):** Steps 1-6 and 8 are COMPLETE. Vite plugin E2E tested.
+> See commit log on `feat/vite-hmr-architecture` for all 9 commits.
+
 > **Context:** The initial Vite plugin attempt (commits on `feat/vite-hmr-architecture`) failed because
 > we tried to split the HTTP server from Vite, and mounting Express on Vite had issues. This plan
 > is informed by benchmarking 6 frameworks (NestJS, H3/Nuxt, React Router, AdonisJS, TanStack Start,
 > Vinxi) to find patterns that actually work. See `bench-mark/SYNTHESIS.md` for the full comparison.
+
+## Implementation Status
+
+| Step | Description | Status | Commit |
+|------|------------|--------|--------|
+| 8 | Metadata utilities (`metadata.ts`) | DONE | `0a65496` + `549f244` |
+| 1 | Persistent state via `globalThis` | DONE | `6cb5376` |
+| 3 | Reactive container `onChange()` + `invalidate()` | DONE | `1d4a627` |
+| 2 | `@forinda/kickjs-vite` plugin (core + dev server + virtual modules) | DONE | `38cf3e3` |
+| 4 | Module auto-discovery (`transform()` hook) | DONE | `3605d06` |
+| 5 | HMR selective invalidation (`handleHotUpdate()`) | DONE | `3605d06` |
+| 6 | Batched HMR updates (150ms debounce) | DONE | Built into Step 5 |
+| — | CLI integration + example app | DONE | `fc27cd9` + `5ced93c` + `c06c033` |
+| — | E2E test: /health, /api, /docs, /openapi.json | DONE | Verified manually |
+| 7 | Inertia SPA support | PLANNED | — |
+| — | CLI template update (`kick new` with vite plugin) | TODO | — |
+| — | Update all example apps to use vite plugin | TODO | — |
 
 ---
 
