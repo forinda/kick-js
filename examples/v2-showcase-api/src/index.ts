@@ -24,7 +24,9 @@ const swagger = new SwaggerAdapter({
   },
 })
 
-bootstrap({
+// Export the app for the Vite plugin (dev mode).
+// In production, bootstrap() auto-starts the HTTP server.
+export const app = await bootstrap({
   modules,
   adapters: [devtools, swagger],
   middleware: [
