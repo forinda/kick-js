@@ -8,10 +8,31 @@ function escapeHtml(str: string): string {
     .replace(/'/g, '&#39;')
 }
 
-/** Generate Swagger UI HTML that loads from CDN */
-export function swaggerUIHtml(specUrl: string, title = 'API Docs'): string {
+/**
+ * Generate Swagger UI HTML using local assets from swagger-ui-dist.
+ *
+ * Assets are served from `/_swagger-assets/` by the adapter's Express
+ * static middleware. Falls back to CDN if the local path is not provided.
+ * This ensures Swagger UI works fully offline in development.
+ *
+ * @param specUrl - Path to the OpenAPI JSON spec (e.g., '/openapi.json')
+ * @param title - Page title
+ * @param assetsPath - Base path for local swagger-ui-dist assets (e.g., '/_swagger-assets')
+ */
+export function swaggerUIHtml(specUrl: string, title = 'API Docs', assetsPath?: string): string {
   const safeTitle = escapeHtml(title)
   const safeUrl = JSON.stringify(specUrl).replace(/</g, '\\u003c')
+
+  // Use local assets if available, CDN as fallback
+  const cssHref = assetsPath
+    ? `${assetsPath}/swagger-ui.css`
+    : 'https://unpkg.com/swagger-ui-dist@5/swagger-ui.css'
+  const bundleSrc = assetsPath
+    ? `${assetsPath}/swagger-ui-bundle.js`
+    : 'https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js'
+  const presetSrc = assetsPath
+    ? `${assetsPath}/swagger-ui-standalone-preset.js`
+    : 'https://unpkg.com/swagger-ui-dist@5/swagger-ui-standalone-preset.js'
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -19,12 +40,12 @@ export function swaggerUIHtml(specUrl: string, title = 'API Docs'): string {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${safeTitle}</title>
-  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
+  <link rel="stylesheet" href="${cssHref}">
 </head>
 <body>
   <div id="swagger-ui"></div>
-  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
-  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-standalone-preset.js"></script>
+  <script src="${bundleSrc}"></script>
+  <script src="${presetSrc}"></script>
   <script>
     SwaggerUIBundle({
       url: ${safeUrl},
@@ -39,7 +60,13 @@ export function swaggerUIHtml(specUrl: string, title = 'API Docs'): string {
 </html>`
 }
 
-/** Generate ReDoc HTML that loads from CDN */
+/**
+ * Generate ReDoc HTML.
+ *
+ * ReDoc doesn't publish a standalone npm package suitable for local serving,
+ * so it still loads from CDN. If offline support for ReDoc is needed,
+ * vendor the standalone bundle into the package's public/ directory.
+ */
 export function redocHtml(specUrl: string, title = 'API Docs'): string {
   const safeTitle = escapeHtml(title)
   const safeUrl = escapeHtml(specUrl)
