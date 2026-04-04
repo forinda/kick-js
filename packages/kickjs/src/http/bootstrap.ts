@@ -1,4 +1,4 @@
-import { createLogger } from '../core'
+import { createLogger, Container } from '../core'
 import { Application, type ApplicationOptions } from './application'
 
 /** Try to reload env from .env file if config package is available */
