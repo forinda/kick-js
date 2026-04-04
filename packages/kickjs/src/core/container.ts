@@ -47,9 +47,37 @@ function createReg(
 }
 
 /** Format a token for display in error messages */
-function tokenName(token: any): string {
+export function tokenName(token: any): string {
   if (typeof token === 'symbol') return token.toString()
   return token?.name || String(token)
+}
+
+// ── Persistent Store ────────────────────────────────────────────────────
+// globalThis-based storage that survives BOTH Container.reset() AND Vite's
+// ssrLoadModule() re-evaluation. When Vite re-evaluates a module, the
+// Container class gets a new identity (new statics). But globalThis persists.
+//
+// This is how DB connections, Redis clients, WsAdapter instances, and any
+// other stateful bindings survive HMR without being dropped.
+//
+// Pattern from: React Router (globalThis for state), Vinxi (globalThis.app)
+
+interface PersistentStore {
+  factories: Array<{ token: any; factory: () => any; scope: Scope }>
+  instances: Array<{ token: any; instance: any }>
+  /** Resolved instances keyed by string name — survives class identity changes */
+  resolvedInstances: Map<string, any>
+}
+
+function getPersistentStore(): PersistentStore {
+  if (!(globalThis as any).__kickjs_persistent) {
+    ;(globalThis as any).__kickjs_persistent = {
+      factories: [],
+      instances: [],
+      resolvedInstances: new Map(),
+    } satisfies PersistentStore
+  }
+  return (globalThis as any).__kickjs_persistent
 }
 
 /**
@@ -59,18 +87,14 @@ function tokenName(token: any): string {
  *
  * Supports constructor injection, property injection (@Autowired),
  * factory registrations, and lifecycle hooks (@PostConstruct).
+ *
+ * Persistent state (DB connections, Redis, etc.) is stored on globalThis so
+ * it survives both Container.reset() and Vite module re-evaluation.
  */
 export class Container {
   private static instance: Container
   private registrations = new Map<any, Registration>()
   private resolving = new Set<any>()
-
-  /**
-   * Persistent replay lists for manual registrations (factory/instance).
-   * These survive Container.reset() so adapters' DB/Redis bindings persist across HMR.
-   */
-  private static factoryRegistrations: Array<{ token: any; factory: () => any; scope: Scope }> = []
-  private static instanceRegistrations: Array<{ token: any; instance: any }> = []
 
   /** Callback set by the decorators module to flush pending registrations */
   static _onReady: ((container: Container) => void) | null = null
@@ -104,22 +128,35 @@ export class Container {
 
   /**
    * Resets the container by replacing the singleton with a fresh instance.
-   * Useful for testing to ensure a clean slate between test runs.
+   * Persistent registrations (DB, Redis, etc.) are replayed from globalThis
+   * so they survive both reset() and Vite module re-evaluation.
    */
   static reset(): void {
     Container.instance = new Container()
     // Notify decorators so they update their container reference
     Container._onReset?.(Container.instance)
-    // Replay manual registrations so adapter bindings (DB, Redis) survive HMR
-    for (const { token, factory, scope } of Container.factoryRegistrations) {
+    // Replay persistent registrations from globalThis store
+    const store = getPersistentStore()
+    for (const { token, factory, scope } of store.factories) {
       if (!Container.instance.has(token)) {
+        // Check if we have a previously resolved instance for this token
+        const name = tokenName(token)
+        const existing = store.resolvedInstances.get(name)
         Container.instance.registrations.set(
           token,
-          createReg({ target: Object as any, scope, factory, kind: 'factory' }),
+          createReg({
+            target: Object as any,
+            scope,
+            factory,
+            kind: 'factory',
+            instance: existing, // Reuse resolved instance if available
+            resolveCount: existing ? 1 : 0,
+            postConstructStatus: existing ? 'completed' : 'skipped',
+          }),
         )
       }
     }
-    for (const { token, instance } of Container.instanceRegistrations) {
+    for (const { token, instance } of store.instances) {
       if (!Container.instance.has(token)) {
         Container.instance.registrations.set(
           token,
@@ -129,6 +166,7 @@ export class Container {
             instance,
             kind: 'instance',
             postConstructStatus: 'completed',
+            resolveCount: 1,
           }),
         )
       }
@@ -165,21 +203,37 @@ export class Container {
 
   /** Register a factory function under the given token */
   registerFactory(token: any, factory: () => any, scope: Scope = Scope.SINGLETON): void {
+    const store = getPersistentStore()
+    const name = tokenName(token)
+    // Check if we already have a resolved instance from a previous HMR cycle
+    const existingInstance = store.resolvedInstances.get(name)
+
     this.registrations.set(
       token,
-      createReg({ target: Object as any, scope, factory, kind: 'factory' }),
+      createReg({
+        target: Object as any,
+        scope,
+        factory,
+        kind: 'factory',
+        instance: existingInstance,
+        resolveCount: existingInstance ? 1 : 0,
+        postConstructStatus: existingInstance ? 'completed' : 'skipped',
+      }),
     )
-    // Track for HMR replay — factory registrations survive Container.reset()
-    const idx = Container.factoryRegistrations.findIndex((r) => r.token === token)
+    // Track in globalThis for persistence across HMR + module re-evaluation
+    const idx = store.factories.findIndex((r) => tokenName(r.token) === name)
     if (idx >= 0) {
-      Container.factoryRegistrations[idx] = { token, factory, scope }
+      store.factories[idx] = { token, factory, scope }
     } else {
-      Container.factoryRegistrations.push({ token, factory, scope })
+      store.factories.push({ token, factory, scope })
     }
   }
 
   /** Register a pre-constructed singleton instance */
   registerInstance(token: any, instance: any): void {
+    const store = getPersistentStore()
+    const name = tokenName(token)
+
     this.registrations.set(
       token,
       createReg({
@@ -193,12 +247,13 @@ export class Container {
         lastResolvedAt: Date.now(),
       }),
     )
-    // Track for HMR replay — instance registrations survive Container.reset()
-    const idx = Container.instanceRegistrations.findIndex((r) => r.token === token)
+    // Track in globalThis for persistence across HMR + module re-evaluation
+    store.resolvedInstances.set(name, instance)
+    const idx = store.instances.findIndex((r) => tokenName(r.token) === name)
     if (idx >= 0) {
-      Container.instanceRegistrations[idx] = { token, instance }
+      store.instances[idx] = { token, instance }
     } else {
-      Container.instanceRegistrations.push({ token, instance })
+      store.instances.push({ token, instance })
     }
   }
 
@@ -304,6 +359,8 @@ export class Container {
       if (!reg.firstResolvedAt) reg.firstResolvedAt = Date.now()
       if (reg.scope === Scope.SINGLETON) {
         reg.instance = instance
+        // Persist resolved factory instances so they survive module re-evaluation
+        getPersistentStore().resolvedInstances.set(tokenName(token), instance)
       }
       return instance
     }
