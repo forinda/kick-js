@@ -85,6 +85,23 @@ export { HttpException, HttpStatus, type HttpStatusCode, type ValidationError } 
 // Path utilities
 export { normalizePath, joinPaths } from './path'
 
+// Metadata utilities
+export {
+  setClassMeta,
+  setMethodMeta,
+  getClassMeta,
+  getMethodMeta,
+  hasClassMeta,
+  getClassMetaOrUndefined,
+  getMethodMetaOrUndefined,
+  pushClassMeta,
+  pushMethodMeta,
+  setInMetaMap,
+  getMetaMap,
+  setInMetaRecord,
+  getMetaRecord,
+} from './metadata'
+
 // Reactivity
 export {
   ref,
