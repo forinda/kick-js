@@ -1,5 +1,13 @@
 # KickJS Architecture Overhaul — Implementation Plan
 
+> **Update (2026-04-04):** Phases 1-3 of this plan are largely complete. The Vite plugin work
+> (Phase 7) has been redesigned based on benchmarking 6 frameworks (NestJS, H3/Nuxt, React Router,
+> AdonisJS, TanStack Start, Vinxi). See **`v3/plan.md`** for the revised Vite plugin architecture
+> and **`v3/architecture.md`** for how it all connects. Key changes from this plan:
+> - httpServer piping solved (no middlewareMode — Vite creates the server, adapters attach to it)
+> - Reactive container as universal event bus (Swagger, DevTools, WS all subscribe)
+> - Batched HMR (debounced so `kick g module` creating 10+ files emits one update)
+
 ## Context
 
 The `architecture.md` document (19 sections) describes a comprehensive overhaul of KickJS: build system migration (Turbo -> wireit + tsdown), HMR/rebuild stability fixes, DI container enhancements (request-scoped DI, observability), production readiness gaps, lifecycle fixes, devtools improvements, and a future Vite plugin with typegen. This plan breaks that into 7 independently shippable phases ordered by dependency and priority.
