@@ -47,12 +47,10 @@
  * | Plugin | Responsibility |
  * |--------|---------------|
  * | `kickjs:core` | Vite config: appType, SSR environment, externals |
+ * | `kickjs:module-discovery` | Auto-discover `@Module` classes via `transform()` |
+ * | `kickjs:hmr` | Selective container invalidation via `handleHotUpdate()` |
  * | `kickjs:virtual-modules` | `virtual:kickjs/app` resolution and generation |
  * | `kickjs:dev-server` | `configureServer()` — mounts Express, pipes httpServer |
- *
- * Future sub-plugins (v3 roadmap):
- * - `kickjs:module-discovery` — auto-discover `@Module` classes via `transform()`
- * - `kickjs:hmr` — selective container invalidation via `handleHotUpdate()`
  *
  * ## httpServer Piping
  *
@@ -74,6 +72,8 @@ import type { KickJSPluginOptions, PluginContext } from './types'
 import { kickjsCorePlugin } from './core-plugin'
 import { kickjsVirtualModulesPlugin } from './virtual-modules'
 import { kickjsDevServerPlugin } from './dev-server'
+import { kickjsModuleDiscoveryPlugin } from './module-discovery'
+import { kickjsHmrPlugin } from './hmr-plugin'
 
 /**
  * Create the KickJS Vite plugin array.
@@ -123,6 +123,8 @@ export function kickjsVitePlugin(options: KickJSPluginOptions = {}): Plugin[] {
   return [
     rootResolver,
     kickjsCorePlugin(ctx),
+    kickjsModuleDiscoveryPlugin(ctx),
+    kickjsHmrPlugin(ctx),
     kickjsVirtualModulesPlugin(ctx),
     kickjsDevServerPlugin(ctx),
   ]
