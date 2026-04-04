@@ -1,4 +1,4 @@
-import { setMethodMeta, setClassMeta, pushMethodMeta } from '@forinda/kickjs-core'
+import { setMethodMeta, setClassMeta, pushMethodMeta } from '@forinda/kickjs'
 
 const SWAGGER_KEYS = {
   OPERATION: Symbol('kick:swagger:operation'),

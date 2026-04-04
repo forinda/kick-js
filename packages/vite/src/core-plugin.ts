@@ -61,6 +61,7 @@ export function kickjsCorePlugin(ctx: PluginContext): Plugin {
           // These should NOT be bundled by Vite — they run natively in Node
           external: [
             '@forinda/kickjs',
+            // Legacy packages — still referenced in some dist/ files until V2 migration Phase 4 completes
             '@forinda/kickjs-core',
             '@forinda/kickjs-http',
             'express',
