@@ -1,6 +1,12 @@
 type ProjectTemplate = 'rest' | 'graphql' | 'ddd' | 'cqrs' | 'minimal'
 
-/** Generate src/index.ts entry file with template-specific bootstrap */
+/**
+ * Generate src/index.ts entry file with template-specific bootstrap.
+ *
+ * All templates export the app for the Vite plugin (dev mode).
+ * In production, bootstrap() auto-starts the HTTP server when
+ * `globalThis.__kickjs_httpServer` is not set.
+ */
 export function generateEntryFile(
   name: string,
   template: ProjectTemplate,
@@ -17,7 +23,8 @@ import { modules } from './modules'
 // Import your resolvers here
 // import { UserResolver } from './resolvers/user.resolver'
 
-bootstrap({
+// Export the app for the Vite plugin (dev mode)
+export const app = await bootstrap({
   modules,
   adapters: [
     new DevToolsAdapter(),
@@ -40,7 +47,8 @@ import { OtelAdapter } from '@forinda/kickjs-otel'
 // import { QueueAdapter, BullMQProvider } from '@forinda/kickjs-queue'
 import { modules } from './modules'
 
-bootstrap({
+// Export the app for the Vite plugin (dev mode)
+export const app = await bootstrap({
   modules,
   adapters: [
     new OtelAdapter({ serviceName: '${name}' }),
@@ -63,25 +71,41 @@ bootstrap({
 import { bootstrap } from '@forinda/kickjs'
 import { modules } from './modules'
 
-bootstrap({ modules })
+// Export the app for the Vite plugin (dev mode)
+export const app = await bootstrap({ modules })
 `
 
     case 'ddd':
     case 'rest':
     default:
       return `import 'reflect-metadata'
-import { bootstrap } from '@forinda/kickjs'
+import express from 'express'
+import {
+  bootstrap,
+  requestId,
+  requestLogger,
+  helmet,
+  cors,
+} from '@forinda/kickjs'
 import { DevToolsAdapter } from '@forinda/kickjs-devtools'
 import { SwaggerAdapter } from '@forinda/kickjs-swagger'
 import { modules } from './modules'
 
-bootstrap({
+// Export the app for the Vite plugin (dev mode)
+export const app = await bootstrap({
   modules,
   adapters: [
     new DevToolsAdapter(),
     new SwaggerAdapter({
       info: { title: '${name}', version: '${version}' },
     }),
+  ],
+  middleware: [
+    helmet(),
+    cors({ origin: '*' }),
+    requestId(),
+    requestLogger(),
+    express.json(),
   ],
 })
 `

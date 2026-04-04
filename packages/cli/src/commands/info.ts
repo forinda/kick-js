@@ -14,8 +14,8 @@ export function registerInfoCommand(program: Command): void {
     Node:     ${process.version}
 
   Packages:
-    @forinda/kickjs-core     workspace
-    @forinda/kickjs-http     workspace
+    @forinda/kickjs          workspace
+    @forinda/kickjs-vite     workspace
     @forinda/kickjs-config   workspace
     @forinda/kickjs-cli      workspace
 `)
