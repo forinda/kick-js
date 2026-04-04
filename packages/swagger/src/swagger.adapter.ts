@@ -93,11 +93,13 @@ export class SwaggerAdapter implements AppAdapter {
         'Content-Security-Policy',
         [
           "default-src 'self'",
-          "script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.redoc.ly https://cdn.jsdelivr.net",
+          // Allow Vite's HMR client (/@vite/*), CDN scripts, and inline scripts
+          "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdn.redoc.ly https://cdn.jsdelivr.net",
           "style-src 'self' 'unsafe-inline' https://unpkg.com https://fonts.googleapis.com",
           "font-src 'self' https://fonts.gstatic.com",
           "img-src 'self' data: https://unpkg.com",
-          "connect-src 'self'",
+          // Allow connecting to self (API) + Vite HMR WebSocket
+          "connect-src 'self' ws://localhost:* wss://localhost:*",
         ].join('; '),
       )
       next()
