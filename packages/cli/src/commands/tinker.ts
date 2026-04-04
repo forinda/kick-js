@@ -69,14 +69,14 @@ console.log('  Loading: ${displayPath}\\n')
 // Load core
 let Container, Logger, HttpException, HttpStatus
 try {
-  const core = await import('@forinda/kickjs-core')
+  const core = await import('@forinda/kickjs')
   Container = core.Container
   Logger = core.Logger
   HttpException = core.HttpException
   HttpStatus = core.HttpStatus
 } catch {
-  console.error('  Error: @forinda/kickjs-core not found.')
-  console.error('  Install it: pnpm add @forinda/kickjs-core\\n')
+  console.error('  Error: @forinda/kickjs not found.')
+  console.error('  Install it: pnpm add @forinda/kickjs\\n')
   process.exit(1)
 }
 

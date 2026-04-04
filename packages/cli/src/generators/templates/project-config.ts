@@ -54,6 +54,7 @@ export function generatePackageJson(
       dependencies: baseDeps,
       devDependencies: {
         '@forinda/kickjs-cli': kickjsVersion,
+        '@forinda/kickjs-vite': kickjsVersion,
         '@swc/core': '^1.15.21',
         '@types/express': '^5.0.6',
         '@types/node': '^25.0.0',
@@ -69,15 +70,29 @@ export function generatePackageJson(
   )
 }
 
-/** Generate vite.config.ts for HMR and SWC decorators */
+/**
+ * Generate vite.config.ts with the KickJS Vite plugin.
+ *
+ * The plugin handles:
+ * - SSR environment setup for backend Node.js code
+ * - Virtual module generation (virtual:kickjs/app)
+ * - Module auto-discovery (scans *.module.ts files)
+ * - HMR with selective container invalidation
+ * - Express mounting via configureServer() post-hook
+ * - httpServer piping to adapters (WsAdapter, Socket.IO, etc.)
+ */
 export function generateViteConfig(): string {
   return `import { defineConfig } from 'vite'
 import { resolve } from 'path'
 import swc from 'unplugin-swc'
+import { kickjsVitePlugin } from '@forinda/kickjs-vite'
 
 export default defineConfig({
   oxc: false,
-  plugins: [swc.vite()],
+  plugins: [
+    swc.vite(),
+    kickjsVitePlugin({ entry: 'src/index.ts' }),
+  ],
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),
@@ -87,10 +102,6 @@ export default defineConfig({
     // Don't bundle pino — its worker-thread transport needs Node.js resolution
     // to find pino-pretty at runtime for colored log output
     external: ['pino', 'pino-pretty'],
-  },
-  server: {
-    watch: { usePolling: false },
-    hmr: true,
   },
   build: {
     target: 'node20',

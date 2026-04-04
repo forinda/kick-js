@@ -10,7 +10,7 @@ export function generateReadme(name: string, template: ProjectTemplate, pm: stri
     minimal: 'Minimal',
   }
 
-  const packages = ['@forinda/kickjs-core', '@forinda/kickjs-http', '@forinda/kickjs-config']
+  const packages = ['@forinda/kickjs', '@forinda/kickjs-vite', '@forinda/kickjs-config']
   if (template !== 'minimal') {
     packages.push('@forinda/kickjs-swagger', '@forinda/kickjs-devtools')
   }

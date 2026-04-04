@@ -9,15 +9,16 @@ const PACKAGE_REGISTRY: Record<
   { pkg: string; peers: string[]; description: string; dev?: boolean }
 > = {
   // Core (already installed by kick new)
-  core: {
-    pkg: '@forinda/kickjs-core',
-    peers: [],
-    description: 'DI container, decorators, reactivity',
-  },
-  http: {
-    pkg: '@forinda/kickjs-http',
+  kickjs: {
+    pkg: '@forinda/kickjs',
     peers: ['express'],
-    description: 'Express 5, routing, middleware',
+    description: 'Unified framework: DI, decorators, routing, middleware',
+  },
+  vite: {
+    pkg: '@forinda/kickjs-vite',
+    peers: ['vite'],
+    description: 'Vite plugin: dev server, HMR, module discovery',
+    dev: true,
   },
   config: { pkg: '@forinda/kickjs-config', peers: [], description: 'Zod-based env validation' },
   cli: {
