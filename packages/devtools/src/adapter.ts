@@ -362,7 +362,10 @@ export class DevToolsAdapter implements AppAdapter {
       res.json({ nodes, edges })
     })
 
-    // ── SSE stream for real-time metrics ─────────────────────────
+    // ── SSE stream for real-time updates ───────────────────────
+    // Uses container.onChange() to push events only when something
+    // actually changes — no polling. Also sends periodic heartbeats
+    // to keep the connection alive through proxies.
     router.get('/stream', (req: Request, res: Response) => {
       res.writeHead(200, {
         'Content-Type': 'text/event-stream',
@@ -370,8 +373,10 @@ export class DevToolsAdapter implements AppAdapter {
         Connection: 'keep-alive',
       })
 
-      const interval = setInterval(() => {
+      // Send initial state
+      const sendMetrics = () => {
         const data = {
+          type: 'metrics',
           requestCount: this.requestCount.value,
           errorCount: this.errorCount.value,
           clientErrorCount: this.clientErrorCount.value,
@@ -379,9 +384,33 @@ export class DevToolsAdapter implements AppAdapter {
           uptimeSeconds: this.uptimeSeconds.value,
         }
         res.write(`data: ${JSON.stringify(data)}\n\n`)
-      }, 1000)
+      }
+      sendMetrics()
 
-      req.on('close', () => clearInterval(interval))
+      // Subscribe to container changes (batched, ~50ms debounce)
+      const unsubContainer = this.container?.onChange?.((changes) => {
+        res.write(
+          `data: ${JSON.stringify({ type: 'container', changes, timestamp: Date.now() })}\n\n`,
+        )
+        // Also send updated metrics after container changes
+        sendMetrics()
+      })
+
+      // Watch reactive metrics — push on change (request count, errors)
+      const stopRequestWatch = watch(this.requestCount, () => sendMetrics())
+      const stopErrorWatch = watch(this.errorCount, () => sendMetrics())
+
+      // Heartbeat every 30s to keep connection alive through proxies/LBs
+      const heartbeat = setInterval(() => {
+        res.write(`: heartbeat\n\n`)
+      }, 30000)
+
+      req.on('close', () => {
+        unsubContainer?.()
+        stopRequestWatch()
+        stopErrorWatch()
+        clearInterval(heartbeat)
+      })
     })
 
     if (this.exposeConfig) {
