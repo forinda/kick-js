@@ -240,65 +240,171 @@ export const manifest = {
 
 ### 2.4 — Reactive Container (The Core Innovation)
 
-**Current:** `Container.registrations` is a plain `Map<token, Registration>`. Changes are invisible.
+**Current:** `Container.registrations` is a plain `Map<token, Registration>`. Changes are invisible. Adapters have no way to know when something changed.
 
-**V3:** Wrap registration access in the existing reactivity system.
+**V3:** The container becomes a **global reactive event bus**. ANY adapter can subscribe to changes — not just DevTools, not just Swagger. This is the universal mechanism.
 
 ```typescript
 // packages/core/src/container.ts — enhanced
 
-import { ref, watch, type Ref } from './reactivity'
+/** A batched set of container changes (debounced to avoid 10 events for 10 files) */
+export interface ContainerChangeEvent {
+  token: any
+  event: 'registered' | 'resolved' | 'invalidated'
+  kind?: ClassKind
+  timestamp: number
+}
+
+export type ContainerChangeListener = (changes: ContainerChangeEvent[]) => void
 
 export class Container {
-  // Current: private registrations = new Map<any, Registration>()
-  // V3: Each registration's instance is a ref()
-  private registrations = new Map<any, Registration & { instanceRef: Ref<any> }>()
+  private changeListeners = new Set<ContainerChangeListener>()
+  private pendingChanges: ContainerChangeEvent[] = []
+  private notifyTimer: ReturnType<typeof setTimeout> | null = null
   
-  // New: observable registration count (devtools subscribes to this)
-  readonly registrationCount = ref(0)
+  // ── Global Subscription API ──────────────────────────────────────
   
-  resolve(token: any): any {
-    const reg = this.registrations.get(token)
-    if (!reg) throw new Error(`No provider for ${tokenName(token)}`)
+  /**
+   * Subscribe to container changes. Returns unsubscribe function.
+   * Changes are batched (50ms debounce) so `kick g module` creating
+   * 10 files emits ONE batch, not 10 events.
+   *
+   * ANY adapter can use this:
+   *   - SwaggerAdapter: re-build spec when controllers change
+   *   - DevToolsAdapter: push SSE events to dashboard
+   *   - WsAdapter: notify connected clients of service changes
+   *   - OtelAdapter: emit tracing events for DI resolution
+   *   - Custom adapters: anything the user writes
+   */
+  onChange(callback: ContainerChangeListener): () => void {
+    this.changeListeners.add(callback)
+    return () => this.changeListeners.delete(callback)
+  }
+  
+  // ── Internal: Batched Emission ───────────────────────────────────
+  
+  private emit(token: any, event: ContainerChangeEvent['event']) {
+    const kind = this.registrations.get(token)?.kind
+    this.pendingChanges.push({ token, event, kind, timestamp: Date.now() })
     
-    if (reg.scope === Scope.SINGLETON) {
-      if (reg.instanceRef.value !== undefined) return reg.instanceRef.value
-      const instance = this.createInstance(reg)
-      reg.instanceRef.value = instance  // Triggers subscribers!
-      return instance
-    }
-    // ... REQUEST and TRANSIENT scopes
+    // Debounce: flush after 50ms of quiet
+    if (this.notifyTimer) clearTimeout(this.notifyTimer)
+    this.notifyTimer = setTimeout(() => {
+      const batch = [...this.pendingChanges]
+      this.pendingChanges = []
+      for (const listener of this.changeListeners) {
+        try { listener(batch) } catch { /* don't let one listener break others */ }
+      }
+    }, 50)
+  }
+  
+  // ── Enhanced Operations ──────────────────────────────────────────
+  
+  register(token, target, scope) {
+    // ... existing logic ...
+    this.emit(token, 'registered')
+  }
+  
+  resolve(token) {
+    // ... existing logic ...
+    this.emit(token, 'resolved')
+    return instance
   }
   
   /**
    * Invalidate a specific registration. Called by Vite HMR plugin
-   * when a module changes. Clears the cached instance so next resolve()
-   * creates a fresh one. Triggers reactive subscribers.
+   * when a module changes. Clears cached instance, walks dependency graph.
    */
   invalidate(token: any): void {
     const reg = this.registrations.get(token)
-    if (!reg) return
-    if (reg.persistent) return  // DB connections etc. survive invalidation
+    if (!reg || reg.persistent) return
     
-    // Clear instance — next resolve() will re-create
-    reg.instanceRef.value = undefined
+    reg.instance = undefined
     reg.resolveCount = 0
+    this.emit(token, 'invalidated')
     
-    // Invalidate dependents (anything that injected this token)
+    // Walk dependency graph — invalidate anything that injected this token
     for (const [depToken, depReg] of this.registrations) {
       if (depReg.dependencies.includes(tokenName(token))) {
-        this.invalidate(depToken)  // Recursive — walks the dependency graph
+        this.invalidate(depToken)
       }
     }
   }
-  
-  /**
-   * Subscribe to all container changes. Used by DevTools SSE stream.
-   */
-  onChange(callback: (token: any, event: 'registered' | 'resolved' | 'invalidated') => void) {
-    // Uses the reactivity system's watch() internally
+}
+```
+
+**How each adapter uses it:**
+
+```typescript
+// ── SwaggerAdapter ─────────────────────────────────────────────
+beforeStart({ container }: AdapterContext): void {
+  container.onChange((changes) => {
+    // Only care about controller changes
+    const hasControllerChange = changes.some(c => c.kind === 'controller')
+    if (hasControllerChange) {
+      // Notify browser to re-fetch /openapi.json
+      this.notifySpecChanged()
+    }
+  })
+}
+
+// ── DevToolsAdapter ────────────────────────────────────────────
+beforeStart({ container }: AdapterContext): void {
+  container.onChange((changes) => {
+    // Push ALL changes to the SSE stream
+    for (const client of this.sseClients) {
+      client.write(`data: ${JSON.stringify(changes)}\n\n`)
+    }
+  })
+}
+
+// ── WsAdapter ──────────────────────────────────────────────────
+beforeStart({ container }: AdapterContext): void {
+  container.onChange((changes) => {
+    // Re-discover @WsController namespaces if controllers changed
+    const hasWsChange = changes.some(c => 
+      c.kind === 'controller' && c.event === 'registered'
+    )
+    if (hasWsChange) {
+      this.refreshNamespaces()
+    }
+  })
+}
+
+// ── OtelAdapter ────────────────────────────────────────────────
+beforeStart({ container }: AdapterContext): void {
+  container.onChange((changes) => {
+    for (const c of changes) {
+      if (c.event === 'resolved') {
+        this.tracer.startSpan(`di.resolve.${tokenName(c.token)}`).end()
+      }
+    }
+  })
+}
+
+// ── Custom User Adapter ────────────────────────────────────────
+// Users can write their own:
+class MetricsAdapter implements AppAdapter {
+  name = 'MetricsAdapter'
+  beforeStart({ container }: AdapterContext): void {
+    container.onChange((changes) => {
+      prometheus.counter('di_changes_total').inc(changes.length)
+    })
   }
 }
+```
+
+**The key design decision:** `onChange()` is on the **Container**, not on the Vite plugin. This means:
+- Works in production too (not just dev)
+- Works without Vite (testing, REPL, scripts)
+- Any adapter — existing or future — can subscribe
+- The batching (50ms debounce) prevents thundering herd from `kick g module` (10+ files)
+
+**How it connects to what exists:**
+- `reactivity.ts` provides the primitives (`ref`, `watch`) — container uses them internally
+- `container.ts` already tracks `resolveCount`, `dependencies`, `kind` — emit exposes these
+- `adapter.ts` already has `beforeStart({ container })` — adapters already receive the container
+- **Zero new interfaces needed** — just `container.onChange()` on the existing Container class
 ```
 
 **How it connects to what exists:**
@@ -562,6 +668,95 @@ In production:
 | Phase 4: Typegen | `kick typegen` command | Future |
 | Phase 4: Vite Plugin | **@forinda/kickjs-vite** | **The main new work** |
 
+### 3.1 — The Swagger Staleness Problem
+
+**Current flow:**
+
+```
+1. beforeMount()  → clearRegisteredRoutes() → mount docs router
+                                                 ↓
+                                    docsRouter.get('/openapi.json', () => {
+                                      return buildOpenAPISpec(options)
+                                         ↑
+2. onRouteMount() → registerControllerForDocs(class, path)
+                    pushes to module-level `registeredRoutes[]`
+                         ↑
+3. Application.setup() line 251 → adapter.onRouteMount(controller, mountPath)
+```
+
+**Why it goes stale during HMR:**
+
+The problem is `registeredRoutes` is a **module-level array** in `openapi-builder.ts`:
+```typescript
+// openapi-builder.ts line 37
+const registeredRoutes: RegisteredRoute[] = []
+```
+
+During v2 HMR (`rebuild()`):
+1. `clearRegisteredRoutes()` empties the array ✓
+2. `setup()` calls `onRouteMount()` for each controller ✓
+3. BUT: the `docsRouter` was mounted in `beforeMount()` on the **OLD Express app**
+4. The new Express app has a NEW `docsRouter` — but `beforeMount()` runs before routes are registered
+5. So `/openapi.json` is served from the new router, but `registeredRoutes[]` may not have
+   all routes yet because `beforeMount` fires at step 1 of `setup()` and `onRouteMount` fires at step 11
+
+**But there's a deeper problem:** The `GET /openapi.json` handler calls `buildOpenAPISpec()` on
+every request (line 107-109). So the spec IS fresh per request. The real staleness happens when:
+- The Swagger UI at `/docs` is loaded in the browser
+- It fetches `/openapi.json` once and caches it
+- After HMR, the browser tab still shows the old spec
+- User has to manually refresh the browser tab
+
+**How reactivity fixes this:**
+
+```typescript
+// v3: SwaggerAdapter subscribes to container changes
+beforeStart({ container }: AdapterContext): void {
+  // When any controller is registered/invalidated, notify Swagger UI
+  container.onChange((token, event) => {
+    const reg = container.getRegistration(token)
+    if (reg?.kind === 'controller' && (event === 'registered' || event === 'invalidated')) {
+      // Send SSE event to connected Swagger UI tabs
+      this.notifySpecChanged()
+    }
+  })
+}
+
+// In the Swagger UI HTML, add auto-refresh:
+// <script>
+//   const es = new EventSource('/_swagger/stream')
+//   es.onmessage = () => ui.specActions.download()  // Re-fetch spec
+// </script>
+```
+
+**Or simpler — use Vite's HMR channel:**
+```typescript
+// In kickjs:hmr-plugin handleHotUpdate():
+server.hot.send({
+  type: 'custom',
+  event: 'kickjs:spec-changed',
+  data: { timestamp: Date.now() }
+})
+
+// Swagger UI listens via the Vite HMR client (already loaded in dev):
+// if (import.meta.hot) {
+//   import.meta.hot.on('kickjs:spec-changed', () => {
+//     fetch('/openapi.json').then(r => r.json()).then(spec => ui.specActions.updateSpec(spec))
+//   })
+// }
+```
+
+This way, when you change a controller file:
+1. Vite HMR fires → `kickjs:hmr-plugin` detects controller change
+2. Sends `kickjs:spec-changed` event via Vite's HMR WebSocket
+3. Swagger UI (in the browser) receives it and re-fetches `/openapi.json`
+4. New spec is served from `buildOpenAPISpec()` which reads fresh `registeredRoutes[]`
+5. **Zero manual refresh needed**
+
+Same pattern applies to DevTools dashboard, ReDoc, or any dev UI.
+
+---
+
 **Key realization:** Most of Phase 1 and Phase 3 from the original plan are **already done**. The remaining work is:
 1. **@forinda/kickjs-vite plugin** (the big piece)
 2. **Reactive container** (connecting `reactivity.ts` to `container.ts`)
@@ -607,4 +802,133 @@ In production:
 **Start with:** Reactive container (smallest change, biggest leverage).
 **Then:** Vite plugin (core + virtual-modules + dev-server).
 **Then:** HMR plugin (uses reactive container's invalidate()).
-**Finally:** DevTools SSE + CLI integration.
+**Then:** DevTools SSE + CLI integration.
+**Future:** Inertia SPA support (see below).
+
+---
+
+## 5. Inertia-Like SPA Support — How It Fits
+
+### The Vision
+
+KickJS controllers serve full SPA pages (React/Vue/Svelte) without building a separate API:
+
+```typescript
+@Controller('/users')
+class UserController {
+  @Get('/')
+  async index(ctx: RequestContext) {
+    const users = await this.userService.findAll()
+    return ctx.inertia('Users/Index', { users })  // SPA page, not JSON
+  }
+}
+```
+
+### How It Connects to V3
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                 Vite Dev Server (port 3000)                      │
+│                                                                  │
+│  ┌─────────────────────┐  ┌──────────────────────────────────┐  │
+│  │ Client Environment  │  │ SSR Environment                  │  │
+│  │                     │  │                                  │  │
+│  │ src/pages/**/*.tsx   │  │ src/modules/**/*.ts              │  │
+│  │ React/Vue/Svelte    │  │ @Controller, @Service            │  │
+│  │ HMR for components  │  │                                  │  │
+│  │                     │  │ ctx.inertia('Users/Index', props) │  │
+│  │ ← hydrates from ──────── SSR renders component + props    │  │
+│  │   server HTML       │  │                                  │  │
+│  └─────────────────────┘  └──────────────────────────────────┘  │
+│                                                                  │
+│  @forinda/kickjs-vite plugin:                                   │
+│    core-plugin     → configures both environments               │
+│    dev-server      → pipes httpServer (WS, Socket.IO work)      │
+│    virtual-modules → discovers modules AND pages                │
+│    hmr-plugin      → batched updates for both sides             │
+│                                                                  │
+│  @forinda/kickjs-inertia adapter:                               │
+│    Subscribes to container.onChange():                           │
+│      controller change → bump asset version → stale clients     │
+│      force full reload (Inertia protocol: 409 Conflict)         │
+│                                                                  │
+│  Request flow:                                                  │
+│    First visit → SSR render → full HTML + hydration script      │
+│    Navigation  → X-Inertia header → JSON { component, props }  │
+│    Form submit → redirect → client follows → JSON page          │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Why V3 Must Come First
+
+Inertia needs everything from Steps 1-6:
+
+| Inertia Needs | V3 Provides |
+|---------------|-------------|
+| SSR page rendering | `ssrLoadModule()` from Vite plugin (Step 2) |
+| Client HMR for page components | Dual Vite environment (client + ssr) from core plugin |
+| httpServer for WebSocket | `globalThis.__kickjs_httpServer` piping (Step 2) |
+| Asset version bumping on controller change | `container.onChange()` reactive subscription (Step 3) |
+| Auto-discover page components | `virtual:kickjs/pages` virtual module (Step 4) |
+| Batched updates on `kick g module` | Debounced HMR + container events (Steps 5-6) |
+| Persistent SSR renderer across HMR | `globalThis.__kickjs_persistent` (Step 1) |
+
+### Inertia Protocol (What the Adapter Implements)
+
+```
+1. First visit (no X-Inertia header):
+   Server renders full HTML with SSR'd component
+   + __INERTIA_PAGE__ = { component, props, url, version }
+   + <script src="/src/app.tsx"> (Vite client entry)
+   Browser hydrates → SPA is alive
+
+2. Client navigation (X-Inertia: true):
+   Server returns JSON: { component, props, url, version }
+   Client swaps component (no page reload)
+
+3. Asset version mismatch (X-Inertia-Version differs):
+   Server returns 409 Conflict
+   Client does full page reload (picks up new assets)
+
+4. Redirects:
+   Server returns 303 See Other
+   Client follows redirect → gets JSON page for target URL
+
+5. Validation errors:
+   Server returns 422 with errors in shared props
+   Client renders same page with error messages
+
+6. Shared data (auth user, flash messages):
+   InertiaAdapter.share({ user: authUser, flash: session.flash })
+   Available in every page component as shared props
+```
+
+### Package: `@forinda/kickjs-inertia`
+
+```
+packages/inertia/
+  src/
+    inertia-adapter.ts       → AppAdapter (lifecycle hooks, version tracking)
+    inertia-middleware.ts     → X-Inertia-Version header, 409 detection
+    context-extension.ts     → ctx.inertia(component, props), ctx.inertia.redirect()
+    ssr/
+      react.ts               → renderToString/renderToPipeableStream
+      vue.ts                 → renderToString
+      svelte.ts              → render
+    client/
+      react.ts               → createInertiaApp() + resolveComponent()
+      vue.ts                 → createInertiaApp()
+      svelte.ts              → createInertiaApp()
+    types.ts                 → InertiaPage, InertiaConfig, SharedData
+```
+
+### CLI Template
+
+```bash
+kick new my-app --template inertia-react
+# Creates:
+#   src/modules/    ← KickJS controllers + services (same as API mode)
+#   src/pages/      ← React page components (receive props from controllers)
+#   src/app.tsx     ← Inertia client entry
+#   kick.config.ts  ← { mode: 'inertia', spa: { framework: 'react' } }
+```

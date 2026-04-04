@@ -586,13 +586,895 @@ Each step is independently testable and shippable.
 Steps 3-5 can partially overlap (3 unblocks 5, but 4 is independent).
 ```
 
+---
+
+### Step 6: Batched Update Subscriptions (1 day)
+
+**Goal:** When `kick g module users` creates 10+ files at once, subscribers (Swagger, DevTools)
+get ONE update, not 10 rapid-fire updates that crash or cause stale intermediate states.
+
+**The problem:**
+```
+kick g module users
+  → creates user.module.ts      → Vite detects → HMR fires → Swagger re-fetches
+  → creates user.controller.ts  → Vite detects → HMR fires → Swagger re-fetches
+  → creates user.service.ts     → Vite detects → HMR fires → Swagger re-fetches
+  → creates user.repository.ts  → Vite detects → HMR fires → Swagger re-fetches
+  → creates user.dtos.ts        → Vite detects → HMR fires → Swagger re-fetches
+  → creates user.module.ts index update → ...
+  ... 10+ files = 10+ HMR cycles = 10+ spec rebuilds = flicker/crashes
+```
+
+**Solution: Debounced batching in the HMR plugin.**
+
+```typescript
+// packages/vite/src/hmr-plugin.ts — enhanced
+
+export function kickjsHmrPlugin(ctx: PluginContext): Plugin {
+  let pendingTokens = new Set<string>()
+  let debounceTimer: ReturnType<typeof setTimeout> | null = null
+  const DEBOUNCE_MS = 150  // Wait 150ms after last file change before notifying
+
+  return {
+    name: 'kickjs:hmr',
+
+    handleHotUpdate({ file, server }) {
+      const tokens = fileTokenMap.get(file)
+      if (!tokens?.length) return
+
+      // Accumulate changed tokens
+      for (const t of tokens) pendingTokens.add(t)
+
+      // Debounce: only fire after 150ms of quiet
+      if (debounceTimer) clearTimeout(debounceTimer)
+      debounceTimer = setTimeout(() => {
+        const batch = [...pendingTokens]
+        pendingTokens.clear()
+
+        // Invalidate all changed tokens at once
+        const container = globalThis.__kickjs_container
+        if (container) {
+          for (const token of batch) {
+            container.invalidate(token)
+          }
+        }
+
+        // ONE virtual module invalidation
+        const vmod = server.moduleGraph.getModuleById('\0virtual:kickjs/app')
+        if (vmod) server.moduleGraph.invalidateModule(vmod)
+
+        // ONE notification to Swagger UI / DevTools
+        server.hot.send({
+          type: 'custom',
+          event: 'kickjs:hmr',
+          data: { tokens: batch, timestamp: Date.now() },
+        })
+
+        console.log(`  HMR: invalidated ${batch.length} tokens: ${batch.join(', ')}`)
+      }, DEBOUNCE_MS)
+
+      // Tell Vite we handled it (don't do default full-page reload)
+      return []
+    },
+  }
+}
+```
+
+**The same debouncing in the container's `onChange()`:**
+
+```typescript
+// packages/core/src/container.ts — batched change notifications
+
+export class Container {
+  private pendingChanges: Array<{ token: any; event: string }> = []
+  private notifyTimer: ReturnType<typeof setTimeout> | null = null
+
+  private emit(token: any, event: string) {
+    this.pendingChanges.push({ token, event })
+
+    if (this.notifyTimer) clearTimeout(this.notifyTimer)
+    this.notifyTimer = setTimeout(() => {
+      const batch = [...this.pendingChanges]
+      this.pendingChanges = []
+
+      for (const listener of this.changeListeners) {
+        listener(batch)  // Listener receives array of changes, not one at a time
+      }
+    }, 50)  // 50ms debounce for container-level events
+  }
+}
+```
+
+**Result:**
+```
+kick g module users (creates 10 files)
+  → Vite detects 10 file changes over ~200ms
+  → HMR plugin accumulates: [UserModule, UserController, UserService, ...]
+  → After 150ms quiet: ONE invalidation batch
+  → ONE virtual module re-generation
+  → ONE Swagger UI refresh (spec fetched once, all new routes visible)
+  → ONE DevTools SSE event (dashboard updates once)
+```
+
+**Pattern from:** Vite itself debounces file watcher events. Nuxt batches template invalidations. Standard practice in reactive systems (Vue's `nextTick`, React's batched state updates).
+
+**Verification:**
+- `kick g module products` → Swagger UI shows new routes after ONE refresh
+- No intermediate broken states (half-registered module)
+- DevTools shows single "10 tokens invalidated" event, not 10 separate events
+- Console shows: `HMR: invalidated 6 tokens: ProductModule, ProductController, ...`
+
+---
+
+---
+
+### Step 7: Inertia-Like SPA Support — `@forinda/kickjs-inertia` (Future, 5-7 days)
+
+**Goal:** Serve a full SPA (React/Vue/Svelte) from KickJS controllers without building a
+separate API. Controllers return page components + props. The browser gets a full SPA with
+client-side navigation, but all routing and data loading lives on the server.
+
+**What is Inertia?**
+
+Inertia.js is a protocol (not a framework) that eliminates the API layer between server and SPA:
+
+```
+Traditional:    Server → JSON API → Client fetches → SPA renders
+Inertia:        Server → { component: 'Users/Index', props: { users } } → Client renders
+```
+
+- First request: server returns full HTML (SSR'd component + hydration props)
+- Subsequent navigations: client sends `X-Inertia: true` header → server returns JSON page object
+- Client swaps component without full page reload (SPA-like UX)
+- Server-side redirects, validation, flash messages — all work through the protocol
+
+**Why it fits KickJS perfectly:**
+
+KickJS is already decorator-driven with controllers. Inertia just changes what controllers return:
+
+```typescript
+// BEFORE (API mode):
+@Controller('/users')
+class UserController {
+  @Get('/')
+  async index(ctx: RequestContext) {
+    const users = await this.userService.findAll()
+    return ctx.json({ users })  // Returns JSON for API consumers
+  }
+}
+
+// AFTER (Inertia mode):
+@Controller('/users')
+class UserController {
+  @Get('/')
+  async index(ctx: RequestContext) {
+    const users = await this.userService.findAll()
+    return ctx.inertia('Users/Index', { users })  // Returns SPA page!
+    //                  ^^^^^^^^^^^   ^^^^^^^^^
+    //                  Component     Props (serialized, type-safe)
+  }
+}
+```
+
+**Architecture — How It Connects to V3:**
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│                    Vite Dev Server (port 3000)                  │
+│                                                                │
+│  ┌──────────────────┐  ┌─────────────────────────────────────┐│
+│  │ Client Vite Env  │  │ SSR Vite Env                        ││
+│  │ (browser target) │  │ (server target)                     ││
+│  │                  │  │                                     ││
+│  │ React/Vue/Svelte │  │ KickJS controllers                  ││
+│  │ page components  │  │   ↓                                 ││
+│  │ HMR for UI       │  │ ctx.inertia('Users/Index', props)   ││
+│  │                  │  │   ↓                                 ││
+│  │ ← hydrates from  │  │ InertiaAdapter:                     ││
+│  │   server render   │  │   First request → SSR render HTML   ││
+│  │                  │  │   X-Inertia → JSON page response    ││
+│  └──────────────────┘  └─────────────────────────────────────┘│
+└────────────────────────────────────────────────────────────────┘
+
+Request Flow:
+
+1. GET /users (first visit, no X-Inertia header)
+   → Controller: ctx.inertia('Users/Index', { users: [...] })
+   → InertiaAdapter intercepts response
+   → SSR: ssrLoadModule('Users/Index') → renderToString(component, props)
+   → Returns full HTML: <html>...<div id="app">{SSR'd content}</div>
+     <script>__INERTIA_PAGE__ = { component: 'Users/Index', props: {...} }</script>
+     <script type="module" src="/src/app.tsx"></script>  ← Vite client entry
+     </html>
+   → Browser hydrates SPA
+
+2. Click link → GET /users/123 (X-Inertia: true, X-Inertia-Version: abc123)
+   → Controller: ctx.inertia('Users/Show', { user: {...} })
+   → InertiaAdapter sees X-Inertia header
+   → Returns JSON: { component: 'Users/Show', props: { user }, url: '/users/123', version: 'abc123' }
+   → Client-side Inertia router swaps component (no full page reload)
+
+3. POST /users (form submit, X-Inertia: true)
+   → Controller: creates user, then ctx.inertia.redirect('/users/123')
+   → InertiaAdapter returns 303 redirect
+   → Client follows redirect → gets JSON page for /users/123
+```
+
+**Package Structure (informed by AdonisJS Inertia at `/home/forinda/dev/open-source/adonis-js-inertia`):**
+
+```
+packages/inertia/
+  src/
+    index.ts
+    inertia.ts               → Core Inertia class (per-request instance, render logic)
+    inertia-adapter.ts       → AppAdapter (lifecycle hooks, version tracking)
+    inertia-middleware.ts     → Protocol handling (409, 303, validation errors)
+    server-renderer.ts       → SSR via Vite ModuleRunner (dev) or pre-built bundle (prod)
+    props.ts                 → defer(), optional(), always(), merge() — Symbol-branded helpers
+    symbols.ts               → DEFERRED_PROP, OPTIONAL_PROP, ALWAYS_PROP, TO_BE_MERGED
+    define-config.ts         → defineInertiaConfig() with defaults
+    types.ts                 → InertiaPage, InertiaConfig, SharedData, PageObject
+    context-extension.ts     → Adds ctx.inertia to RequestContext
+    page-indexer.ts          → Scan src/pages/ → generate typed InertiaPages interface
+    client/
+      helpers.ts             → resolvePageComponent() for lazy imports
+      react/
+        index.tsx            → createInertiaApp() wrapper
+        link.tsx             → <Link route="users.show" routeParams={{ id: 1 }}>
+        form.tsx             → <Form route="users.store"> (type-safe submission)
+        use-router.ts        → useRouter() hook for programmatic navigation
+      vue/
+        index.ts, link.ts, form.ts, use-router.ts  → Same API for Vue 3
+      vite.ts                → Vite plugin for client + SSR builds
+```
+
+**Core Inertia Class — Per-Request Instance (from AdonisJS `src/inertia.ts`):**
+
+```typescript
+// packages/inertia/src/inertia.ts
+
+export class Inertia {
+  #ctx: RequestContext
+  #config: InertiaConfig
+  #sharedStateProviders: Array<() => Promise<Record<string, any>>> = []
+  #cachedVersion: string | null = null
+  
+  constructor(ctx: RequestContext, config: InertiaConfig) {
+    this.#ctx = ctx
+    this.#config = config
+  }
+  
+  /** Add shared data available on every page (auth user, flash, etc.) */
+  share(data: Record<string, any> | (() => Promise<Record<string, any>>)): this {
+    this.#sharedStateProviders.push(
+      typeof data === 'function' ? data : async () => data
+    )
+    return this
+  }
+  
+  /** Main render method — returns HTML or JSON based on request headers */
+  async render(component: string, pageProps?: Record<string, any>, viewProps?: any) {
+    const requestInfo = this.#parseRequestHeaders()
+    
+    // Build props: shared state + page props + resolve lazy/deferred
+    const props = await this.#buildPageProps(component, requestInfo, pageProps)
+    
+    const pageObject: PageObject = {
+      component,
+      props,
+      url: this.#ctx.req.url,
+      version: this.getVersion(),
+      deferredProps: this.#collectDeferredGroups(pageProps),
+      mergeProps: this.#collectMergeProps(pageProps),
+    }
+    
+    // ── Decision point (same as AdonisJS inertia.ts:520-542) ──
+    if (requestInfo.isInertiaRequest) {
+      // Subsequent navigation → JSON response
+      this.#ctx.res.setHeader('X-Inertia', 'true')
+      return this.#ctx.json(pageObject)
+    }
+    
+    if (await this.#ssrEnabled(component)) {
+      // First visit + SSR enabled → full HTML with SSR'd content
+      return this.#renderWithSSR(pageObject, viewProps)
+    }
+    
+    // First visit, no SSR → shell HTML for client-side rendering
+    return this.#renderClientSide(pageObject, viewProps)
+  }
+  
+  /** Asset version — MD5 of Vite manifest (same as AdonisJS) */
+  getVersion(): string {
+    if (this.#cachedVersion) return this.#cachedVersion
+    // Dev: use reactive container version (bumps on controller change)
+    // Prod: MD5 of Vite manifest
+    this.#cachedVersion = globalThis.__kickjs_inertia_version ?? 'dev'
+    return this.#cachedVersion
+  }
+}
+```
+
+**SSR Renderer — Vite ModuleRunner (from AdonisJS `src/server_renderer.ts`):**
+
+```typescript
+// packages/inertia/src/server-renderer.ts
+
+export class ServerRenderer {
+  #runtime: ModuleRunner | null = null
+  #ssrEnvironment: any = null
+  
+  async render(pageObject: PageObject): Promise<{ head: string[], body: string }> {
+    if (globalThis.__kickjs_viteServer) {
+      return this.#devRender(pageObject)
+    }
+    return this.#prodRender(pageObject)
+  }
+  
+  // Dev: Vite's ModuleRunner (newer than ssrLoadModule, used by AdonisJS)
+  async #devRender(pageObject: PageObject) {
+    const viteServer = globalThis.__kickjs_viteServer
+    const currentEnv = viteServer.environments.ssr
+    
+    // Detect Vite restart — recreate runner if environment changed
+    if (this.#ssrEnvironment !== currentEnv) {
+      this.#ssrEnvironment = currentEnv
+      const { createViteRuntime } = await import('vite')
+      this.#runtime = await createViteRuntime(currentEnv, { hmr: { logger: false } })
+    }
+    
+    const mod = await this.#runtime!.import(this.#config.ssr.entrypoint)
+    return mod.default(pageObject)  // → { head: ['<title>...'], body: '<div>...' }
+  }
+  
+  // Prod: pre-built SSR bundle
+  async #prodRender(pageObject: PageObject) {
+    const { pathToFileURL } = await import('node:url')
+    const mod = await import(pathToFileURL(this.#config.ssr.bundle).href)
+    return mod.default(pageObject)
+  }
+}
+```
+
+**Middleware — Protocol Handler (from AdonisJS `src/inertia_middleware.ts`):**
+
+```typescript
+// packages/inertia/src/inertia-middleware.ts
+
+export function inertiaMiddleware(config: InertiaConfig) {
+  return async (req, res, next) => {
+    // Create per-request Inertia instance
+    const ctx = req.__kickRequestContext
+    ctx.inertia = new Inertia(ctx, config)
+    
+    // Call shared data providers (auth user, flash messages)
+    if (config.share) {
+      ctx.inertia.share(await config.share(ctx))
+    }
+    
+    await next()
+    
+    // ── Post-handler protocol logic ──
+    if (!req.headers['x-inertia']) return
+    
+    // Version mismatch → 409 Conflict (AdonisJS middleware:181-191)
+    const clientVersion = req.headers['x-inertia-version']
+    if (clientVersion && clientVersion !== ctx.inertia.getVersion()) {
+      res.status(409).setHeader('X-Inertia-Location', req.url).end()
+      return
+    }
+    
+    // Mutation redirect: 302 → 303 for PUT/PATCH/DELETE (AdonisJS middleware:170-174)
+    if (['PUT', 'PATCH', 'DELETE'].includes(req.method) && res.statusCode === 302) {
+      res.statusCode = 303
+    }
+  }
+}
+```
+
+**Prop Helpers — Symbol-Branded (from AdonisJS `src/props.ts`):**
+
+```typescript
+// packages/inertia/src/props.ts
+
+const DEFERRED_PROP = Symbol.for('kickjs:inertia:deferred')
+const OPTIONAL_PROP = Symbol.for('kickjs:inertia:optional')
+const ALWAYS_PROP = Symbol.for('kickjs:inertia:always')
+const TO_BE_MERGED = Symbol.for('kickjs:inertia:merge')
+
+/** Prop computed lazily — only on partial reload when requested */
+export function defer<T>(fn: () => T | Promise<T>, group?: string) {
+  const prop = fn as any
+  prop[DEFERRED_PROP] = true
+  prop._group = group
+  return prop
+}
+
+/** Prop only included when explicitly requested via X-Inertia-Partial-Data */
+export function optional<T>(fn: () => T | Promise<T>) {
+  const prop = fn as any
+  prop[OPTIONAL_PROP] = true
+  return prop
+}
+
+/** Prop always included, never filtered by partial reload */
+export function always<T>(value: T) {
+  const prop = { value, [ALWAYS_PROP]: true }
+  return prop
+}
+
+/** Prop merged with existing client data instead of replaced */
+export function merge<T>(value: T) {
+  const prop = { value, [TO_BE_MERGED]: true }
+  return prop
+}
+```
+
+**Usage in controllers:**
+```typescript
+@Controller('/users')
+class UserController {
+  @Get('/')
+  async index(ctx: RequestContext) {
+    return ctx.inertia.render('Users/Index', {
+      users: await this.userService.findAll(),        // Standard prop
+      stats: defer(() => this.statsService.compute()), // Lazy — only on partial reload
+      permissions: always(ctx.auth.permissions),       // Never filtered
+      notifications: optional(() => this.notifService.recent()), // Only when requested
+      infiniteScrollItems: merge(await this.getPage()), // Merged with existing client data
+    })
+  }
+}
+```
+
+**InertiaAdapter — Hooks into V3 Reactive Container:**
+
+```typescript
+// packages/inertia/src/inertia-adapter.ts
+
+export class InertiaAdapter implements AppAdapter {
+  name = 'InertiaAdapter'
+  #version = 'initial'
+  
+  constructor(private config: InertiaConfig) {}
+  
+  middleware(): AdapterMiddleware[] {
+    return [{
+      handler: inertiaMiddleware(this.config),
+      phase: 'beforeRoutes',
+    }]
+  }
+  
+  beforeStart({ container }: AdapterContext): void {
+    // ── Reactive version bumping ──
+    // When any controller changes, bump the asset version.
+    // Middleware will return 409 → client full-reloads → picks up new code.
+    container.onChange((changes) => {
+      const hasControllerChange = changes.some(c => c.kind === 'controller')
+      if (hasControllerChange) {
+        this.#version = Date.now().toString(36)
+        globalThis.__kickjs_inertia_version = this.#version
+      }
+    })
+  }
+  
+  afterStart({ server }: AdapterContext): void {
+    // httpServer is available (Vite's or ours) — no issues
+    // Inertia doesn't need the raw server, but other adapters alongside it do
+  }
+}
+```
+
+**Type Generation — Auto-Typed Page Components:**
+
+```typescript
+// packages/inertia/src/page-indexer.ts
+// Scans src/pages/ and generates .kickjs/inertia-pages.d.ts
+
+export function indexPages(config: { framework: 'react' | 'vue' | 'svelte', source?: string }) {
+  const pagesDir = config.source ?? 'src/pages'
+  const pages = glob.sync(`${pagesDir}/**/*.{tsx,vue,svelte}`)
+  
+  // Generate type declarations:
+  // declare module '@forinda/kickjs-inertia' {
+  //   interface InertiaPages {
+  //     'Users/Index': { users: User[] }
+  //     'Users/Show': { user: User }
+  //   }
+  // }
+  
+  // This makes ctx.inertia.render() type-safe:
+  // ctx.inertia.render('Users/Index', { users })  ← TS checks props match!
+  // ctx.inertia.render('Typo/Page', {})            ← TS ERROR: not in InertiaPages
+}
+```
+
+**Vite Plugin Enhancement — Dual Environment:**
+
+```typescript
+// packages/vite/src/core-plugin.ts — enhanced for Inertia mode
+config(userConfig, { command }) {
+  const isInertia = ctx.config.mode === 'inertia'
+  
+  return {
+    environments: {
+      ssr: { /* KickJS controllers — always present */ },
+      ...(isInertia ? {
+        client: {
+          // React/Vue/Svelte page components
+          consumer: 'client',
+          dev: {
+            optimizeDeps: {
+              include: ['react', 'react-dom', '@inertiajs/react']
+            }
+          },
+          build: {
+            outDir: 'build/public/assets',
+            rollupOptions: { input: 'src/app.tsx' },
+          }
+        }
+      } : {}),
+    },
+  }
+}
+```
+
+**How It Connects to Everything We Built:**
+
+| V3 Component | Inertia Usage |
+|-------------|---------------|
+| **httpServer piping** | WsAdapter + Inertia coexist — both use the same real httpServer |
+| **Reactive container** | `container.onChange()` bumps asset version → 409 → stale clients reload |
+| **Virtual modules** | `virtual:kickjs/pages` auto-discovers page components from `src/pages/` |
+| **HMR batching** | `kick g module` creates 10 files → ONE version bump, ONE 409 check |
+| **configureServer** | Client env serves React/Vue HMR, SSR env serves KickJS controllers |
+| **Persistent state** | SSR renderer + ModuleRunner persist across HMR (warm, fast) |
+| **Vite ModuleRunner** | AdonisJS uses `createViteRuntime()` — newer than `ssrLoadModule()` |
+
+**User Experience:**
+
+```bash
+# Scaffold a new Inertia project
+kick new my-app --template inertia-react
+
+# Project structure:
+src/
+  modules/
+    users/
+      user.controller.ts    ← @Controller, returns ctx.inertia.render('Users/Index', { users })
+      user.service.ts       ← @Service, business logic (same as API mode)
+      user.module.ts        ← @Module (same as API mode)
+  pages/                    ← NEW: React/Vue/Svelte page components
+    Users/
+      Index.tsx             ← Receives { users } as props
+      Show.tsx              ← Receives { user } as props
+      Create.tsx            ← Form with useForm() hook
+    Layout.tsx              ← Shared layout
+  app.tsx                   ← Inertia client entry (createInertiaApp)
+  ssr.tsx                   ← SSR entry (renderToString)
+kick.config.ts              ← { mode: 'inertia', spa: { framework: 'react' } }
+```
+
+```typescript
+// src/pages/Users/Index.tsx
+import { Link } from '@forinda/kickjs-inertia/react'
+
+export default function UsersIndex({ users }: { users: User[] }) {
+  return (
+    <div>
+      <h1>Users</h1>
+      {users.map(user => (
+        <Link key={user.id} route="users.show" routeParams={{ id: user.id }}>
+          {user.name}
+        </Link>
+      ))}
+    </div>
+  )
+}
+// No API calls. No useEffect. No loading states.
+// Props come from controller. Navigation is client-side.
+// Link is type-safe (route name validated at compile time).
+```
+
+**Pattern from:**
+- **AdonisJS `@adonisjs/inertia`** (`/home/forinda/dev/open-source/adonis-js-inertia`) — Core architecture: per-request Inertia instance, Symbol-branded props (defer/optional/always/merge), ServerRenderer with Vite ModuleRunner, middleware protocol handling (409/303), type generation from page components, React/Vue client helpers with type-safe routing
+- **Laravel Inertia** — The original protocol design
+- **Vinxi multi-router** — Separate client/SSR Vite environments
+- **React Router SSR** — Dual build strategy (client + server)
+
+---
+
+### Step 8: Extract Reflect Metadata Utilities (1-2 days)
+
+**Goal:** Replace 186 scattered `Reflect.defineMetadata()` / `Reflect.getMetadata()` calls across
+24 files with typed utility functions. Single source of truth, easier to refactor, and enables
+swapping the metadata backend later (e.g., Stage 3 decorators, or a WeakMap-based store).
+
+**The problem — 186 raw calls across 24 files:**
+
+```typescript
+// This pattern repeats EVERYWHERE:
+Reflect.defineMetadata(METADATA.CLASS_KIND, 'service', target)
+Reflect.defineMetadata(METADATA.ROUTES, routes, target.constructor)
+const routes: RouteDefinition[] = Reflect.getMetadata(METADATA.ROUTES, controllerClass) || []
+const existing = Reflect.getMetadata(METADATA.METHOD_MIDDLEWARES, target.constructor, key) || []
+Reflect.defineMetadata(METADATA.METHOD_MIDDLEWARES, [...existing, ...handlers], target.constructor, key)
+```
+
+Problems:
+- Default values (`|| []`, `|| {}`, `|| new Map()`) are inconsistent
+- No type safety on what metadata key expects what value type
+- "Get, modify, set" accumulation pattern is error-prone
+- If we ever change the metadata backend (Stage 3 decorators, WeakMap), 186 call sites to update
+
+**5 repeating patterns found:**
+
+| Pattern | Count | Example |
+|---------|-------|---------|
+| Define on class | ~40 | `Reflect.defineMetadata(KEY, value, target)` |
+| Define on method | ~25 | `Reflect.defineMetadata(KEY, value, target.constructor, prop)` |
+| Get from class (with default) | ~50 | `Reflect.getMetadata(KEY, target) \|\| []` |
+| Get from method (with default) | ~35 | `Reflect.getMetadata(KEY, target, method) \|\| []` |
+| Accumulate (get+push+set) | ~36 | Get existing array/map, append, set back |
+
+**Solution: `packages/core/src/metadata.ts`**
+
+```typescript
+// packages/core/src/metadata.ts
+
+import 'reflect-metadata'
+
+// ── Typed Setters ─────────────────────────────────────────────
+
+/** Set metadata on a class */
+export function setClassMeta<T>(key: symbol | string, value: T, target: Function): void {
+  Reflect.defineMetadata(key, value, target)
+}
+
+/** Set metadata on a method */
+export function setMethodMeta<T>(
+  key: symbol | string,
+  value: T,
+  target: Function,
+  method: string,
+): void {
+  Reflect.defineMetadata(key, value, target, method)
+}
+
+// ── Typed Getters (with defaults) ─────────────────────────────
+
+/** Get metadata from a class, with typed default */
+export function getClassMeta<T>(key: symbol | string, target: Function, fallback: T): T {
+  return Reflect.getMetadata(key, target) ?? fallback
+}
+
+/** Get metadata from a method, with typed default */
+export function getMethodMeta<T>(
+  key: symbol | string,
+  target: Function,
+  method: string,
+  fallback: T,
+): T {
+  return Reflect.getMetadata(key, target, method) ?? fallback
+}
+
+/** Check if class has metadata */
+export function hasClassMeta(key: symbol | string, target: Function): boolean {
+  return Reflect.hasMetadata(key, target)
+}
+
+// ── Accumulate Patterns (get + append + set) ──────────────────
+
+/** Push to an array stored in class metadata */
+export function pushClassMeta<T>(key: symbol | string, target: Function, ...items: T[]): void {
+  const existing: T[] = Reflect.getMetadata(key, target) ?? []
+  Reflect.defineMetadata(key, [...existing, ...items], target)
+}
+
+/** Push to an array stored in method metadata */
+export function pushMethodMeta<T>(
+  key: symbol | string,
+  target: Function,
+  method: string,
+  ...items: T[]
+): void {
+  const existing: T[] = Reflect.getMetadata(key, target, method) ?? []
+  Reflect.defineMetadata(key, [...existing, ...items], target, method)
+}
+
+/** Set a key in a Map stored in class metadata */
+export function setInClassMap<K, V>(
+  key: symbol | string,
+  target: Function,
+  mapKey: K,
+  mapValue: V,
+): void {
+  const existing: Map<K, V> = Reflect.getMetadata(key, target) ?? new Map()
+  existing.set(mapKey, mapValue)
+  Reflect.defineMetadata(key, existing, target)
+}
+
+/** Get a Map from class metadata */
+export function getClassMap<K, V>(key: symbol | string, target: Function): Map<K, V> {
+  return Reflect.getMetadata(key, target) ?? new Map()
+}
+
+/** Set a key in a Record stored in class metadata */
+export function setInClassRecord<V>(
+  key: symbol | string,
+  target: Function,
+  recKey: number | string,
+  recValue: V,
+): void {
+  const existing: Record<string | number, V> = Reflect.getMetadata(key, target) ?? {}
+  existing[recKey] = recValue
+  Reflect.defineMetadata(key, existing, target)
+}
+```
+
+**Before → After examples:**
+
+```typescript
+// ── decorators.ts ────────────────────────────────────────────
+
+// BEFORE (5 lines of raw Reflect):
+export function Service(options?: ServiceOptions): ClassDecorator {
+  return (target: any) => {
+    Reflect.defineMetadata(METADATA.CLASS_KIND, 'service', target)
+    Reflect.defineMetadata(METADATA.INJECTABLE, true, target)
+    Reflect.defineMetadata(METADATA.SCOPE, options?.scope ?? Scope.SINGLETON, target)
+    registerInContainer(target, options?.scope ?? Scope.SINGLETON)
+  }
+}
+
+// AFTER (cleaner, typed):
+export function Service(options?: ServiceOptions): ClassDecorator {
+  return (target: any) => {
+    setClassMeta(METADATA.CLASS_KIND, 'service', target)
+    setClassMeta(METADATA.INJECTABLE, true, target)
+    setClassMeta(METADATA.SCOPE, options?.scope ?? Scope.SINGLETON, target)
+    registerInContainer(target, options?.scope ?? Scope.SINGLETON)
+  }
+}
+
+
+// ── Route decorator accumulation ─────────────────────────────
+
+// BEFORE (get, push, set — error-prone):
+const routes: RouteDefinition[] =
+  Reflect.getMetadata(METADATA.ROUTES, target.constructor) || []
+routes.push(routeDef)
+Reflect.defineMetadata(METADATA.ROUTES, routes, target.constructor)
+
+// AFTER (single call):
+pushClassMeta(METADATA.ROUTES, target.constructor, routeDef)
+
+
+// ── Middleware accumulation ───────────────────────────────────
+
+// BEFORE:
+const existing =
+  Reflect.getMetadata(METADATA.METHOD_MIDDLEWARES, target.constructor, propertyKey) || []
+Reflect.defineMetadata(
+  METADATA.METHOD_MIDDLEWARES,
+  [...existing, ...handlers],
+  target.constructor,
+  propertyKey,
+)
+
+// AFTER:
+pushMethodMeta(METADATA.METHOD_MIDDLEWARES, target.constructor, propertyKey, ...handlers)
+
+
+// ── Autowired Map accumulation ───────────────────────────────
+
+// BEFORE:
+const existing: Map<string, any> = Reflect.getMetadata(METADATA.AUTOWIRED, target) || new Map()
+existing.set(propertyKey, token)
+Reflect.defineMetadata(METADATA.AUTOWIRED, existing, target)
+
+// AFTER:
+setInClassMap(METADATA.AUTOWIRED, target, propertyKey, token)
+
+
+// ── container.ts reads ───────────────────────────────────────
+
+// BEFORE:
+const paramTypes: Constructor[] = Reflect.getMetadata(METADATA.PARAM_TYPES, reg.target) || []
+const injectTokens: Record<number, any> = Reflect.getMetadata(METADATA.INJECT, reg.target) || {}
+const autowired = Reflect.getMetadata(METADATA.AUTOWIRED, target.prototype) || new Map()
+
+// AFTER:
+const paramTypes = getClassMeta<Constructor[]>(METADATA.PARAM_TYPES, reg.target, [])
+const injectTokens = getClassMeta<Record<number, any>>(METADATA.INJECT, reg.target, {})
+const autowired = getClassMap(METADATA.AUTOWIRED, target.prototype)
+
+
+// ── router-builder.ts reads ──────────────────────────────────
+
+// BEFORE:
+const routes: RouteDefinition[] = Reflect.getMetadata(METADATA.ROUTES, controllerClass) || []
+const classMiddleware = Reflect.getMetadata(METADATA.CLASS_MIDDLEWARES, controllerClass) || []
+const methodMiddleware =
+  Reflect.getMetadata(METADATA.METHOD_MIDDLEWARES, controllerClass, route.handlerName) || []
+
+// AFTER:
+const routes = getClassMeta<RouteDefinition[]>(METADATA.ROUTES, controllerClass, [])
+const classMiddleware = getClassMeta<any[]>(METADATA.CLASS_MIDDLEWARES, controllerClass, [])
+const methodMiddleware = getMethodMeta<any[]>(
+  METADATA.METHOD_MIDDLEWARES, controllerClass, route.handlerName, []
+)
+
+
+// ── swagger reads ────────────────────────────────────────────
+
+// BEFORE:
+if (Reflect.getMetadata(SWAGGER_KEYS.EXCLUDE, controllerClass)) continue
+const classTags: string[] = Reflect.getMetadata(SWAGGER_KEYS.TAGS, controllerClass) || []
+const operation: ApiOperationOptions =
+  Reflect.getMetadata(SWAGGER_KEYS.OPERATION, controllerClass, route.handlerName) || {}
+
+// AFTER:
+if (hasClassMeta(SWAGGER_KEYS.EXCLUDE, controllerClass)) continue
+const classTags = getClassMeta<string[]>(SWAGGER_KEYS.TAGS, controllerClass, [])
+const operation = getMethodMeta<ApiOperationOptions>(
+  SWAGGER_KEYS.OPERATION, controllerClass, route.handlerName, {}
+)
+```
+
+**Migration plan (mechanical, package by package):**
+
+| Package | Files | Reflect calls | Priority |
+|---------|-------|--------------|----------|
+| `core` (decorators.ts) | 1 | 24 | First — most calls, defines patterns |
+| `core` (container.ts) | 1 | 9 | Second — reads what decorators write |
+| `core` (cron.ts) | 1 | 3 | With core |
+| `http` (router-builder.ts) | 1 | 5 | Third — reads routes |
+| `http` (application.ts) | 1 | 1 | With http |
+| `swagger` (decorators.ts + builder.ts) | 2 | 20 | Fourth — biggest reader |
+| `auth` (decorators.ts + adapter.ts) | 2 | 14 | Fifth |
+| `graphql` (decorators.ts + adapter.ts) | 2 | 15 | Sixth |
+| `ws` (decorators.ts + adapter.ts) | 2 | 7 | Seventh |
+| `queue` (decorators.ts + adapter.ts) | 2 | 5 | Eighth |
+| `devtools` (adapter.ts) | 1 | 3 | Last |
+| `kickjs` (unified copies) | 3 | ~40 | Mirror core/http changes |
+
+**Total: 186 calls → ~15 utility functions. Each call site becomes shorter and typed.**
+
+**Why do this before Vite plugin work:**
+- The Vite plugin's `module-discovery.ts` and `hmr-plugin.ts` will read metadata to detect
+  which files contain `@Controller`, `@Service`, etc.
+- With utilities, the plugin uses `hasClassMeta(METADATA.CLASS_KIND, target)` instead of raw Reflect
+- If we later switch to Stage 3 decorators or a WeakMap store, we change ONE file (`metadata.ts`)
+
+**Future benefit — swappable metadata backend:**
+```typescript
+// metadata.ts can later be changed to use WeakMap:
+const metaStore = new WeakMap<object, Map<string | symbol, any>>()
+
+export function setClassMeta<T>(key: symbol | string, value: T, target: Function): void {
+  // WeakMap implementation instead of Reflect.defineMetadata
+  let map = metaStore.get(target)
+  if (!map) { map = new Map(); metaStore.set(target, map) }
+  map.set(key, value)
+}
+```
+All 186 call sites updated by changing ONE file. Zero changes in decorators/container/adapters.
+
+**Verification:**
+- `pnpm build` succeeds
+- `pnpm test` passes (all 836+ tests)
+- `pnpm format:check` passes
+- No remaining raw `Reflect.defineMetadata` or `Reflect.getMetadata` in src/ (only in metadata.ts)
+
+---
+
 ## What This Doesn't Cover (Future Work)
 
 - **Typegen** (`kick typegen` for typed `container.resolve()`) — after plugin is stable
 - **Build system migration** (tsdown + wireit) — independent parallel track
-- **Multi-router Vinxi-style** (separate client/devtools Vite instances) — future if needed
-- **Server function RPC** (TanStack-style compile-time transforms) — not needed for backend framework
-- **Import protection** (prevent server code in client) — not applicable (no client bundle)
+- **Server function RPC** (TanStack-style compile-time transforms) — not needed yet
+- **Import protection** (prevent server code in client) — needed once Inertia ships
 
 ## Risk Mitigation
 
