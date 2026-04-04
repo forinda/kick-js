@@ -33,7 +33,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: pnpm turbo build --filter='./packages/*'
+        run: pnpm build
 
       - name: Test
         run: pnpm test
@@ -63,7 +63,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: pnpm turbo build --filter='./packages/*'
+        run: pnpm build
 
       - name: Determine npm dist-tag
         id: dist-tag
