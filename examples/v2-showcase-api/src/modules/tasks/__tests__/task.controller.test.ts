@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { Container } from '@forinda/kickjs'
 
-describe('CatController', () => {
+describe('TaskController', () => {
   beforeEach(() => {
     Container.reset()
   })
@@ -10,41 +10,41 @@ describe('CatController', () => {
     expect(true).toBe(true)
   })
 
-  describe('POST /cats', () => {
-    it('should create a new cat', async () => {
+  describe('POST /tasks', () => {
+    it('should create a new task', async () => {
       // TODO: Set up test module, call create endpoint, assert 201
       expect(true).toBe(true)
     })
   })
 
-  describe('GET /cats', () => {
-    it('should return paginated cats', async () => {
+  describe('GET /tasks', () => {
+    it('should return paginated tasks', async () => {
       // TODO: Set up test module, call list endpoint, assert { data, meta }
       expect(true).toBe(true)
     })
   })
 
-  describe('GET /cats/:id', () => {
-    it('should return a cat by id', async () => {
-      // TODO: Create a cat, then fetch by id, assert match
+  describe('GET /tasks/:id', () => {
+    it('should return a task by id', async () => {
+      // TODO: Create a task, then fetch by id, assert match
       expect(true).toBe(true)
     })
 
-    it('should return 404 for non-existent cat', async () => {
+    it('should return 404 for non-existent task', async () => {
       // TODO: Fetch non-existent id, assert 404
       expect(true).toBe(true)
     })
   })
 
-  describe('PUT /cats/:id', () => {
-    it('should update an existing cat', async () => {
+  describe('PUT /tasks/:id', () => {
+    it('should update an existing task', async () => {
       // TODO: Create, update, assert changes
       expect(true).toBe(true)
     })
   })
 
-  describe('DELETE /cats/:id', () => {
-    it('should delete a cat', async () => {
+  describe('DELETE /tasks/:id', () => {
+    it('should delete a task', async () => {
       // TODO: Create, delete, assert gone
       expect(true).toBe(true)
     })

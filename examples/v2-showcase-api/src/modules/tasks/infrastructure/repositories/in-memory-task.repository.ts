@@ -1,5 +1,5 @@
 /**
- * In-Memory Cat Repository
+ * In-Memory Task Repository
  *
  * Implements the repository interface using a Map.
  * Useful for prototyping and testing. Replace with a database implementation
@@ -10,32 +10,32 @@
 import { randomUUID } from 'node:crypto'
 import { Repository, HttpException } from '@forinda/kickjs'
 import type { ParsedQuery } from '@forinda/kickjs'
-import type { ICatRepository } from '../../domain/repositories/cat.repository'
-import type { CatResponseDTO } from '../../application/dtos/cat-response.dto'
-import type { CreateCatDTO } from '../../application/dtos/create-cat.dto'
-import type { UpdateCatDTO } from '../../application/dtos/update-cat.dto'
+import type { ITaskRepository } from '../../domain/repositories/task.repository'
+import type { TaskResponseDTO } from '../../application/dtos/task-response.dto'
+import type { CreateTaskDTO } from '../../application/dtos/create-task.dto'
+import type { UpdateTaskDTO } from '../../application/dtos/update-task.dto'
 
 @Repository()
-export class InMemoryCatRepository implements ICatRepository {
-  private store = new Map<string, CatResponseDTO>()
+export class InMemoryTaskRepository implements ITaskRepository {
+  private store = new Map<string, TaskResponseDTO>()
 
-  async findById(id: string): Promise<CatResponseDTO | null> {
+  async findById(id: string): Promise<TaskResponseDTO | null> {
     return this.store.get(id) ?? null
   }
 
-  async findAll(): Promise<CatResponseDTO[]> {
+  async findAll(): Promise<TaskResponseDTO[]> {
     return Array.from(this.store.values())
   }
 
-  async findPaginated(parsed: ParsedQuery): Promise<{ data: CatResponseDTO[]; total: number }> {
+  async findPaginated(parsed: ParsedQuery): Promise<{ data: TaskResponseDTO[]; total: number }> {
     const all = Array.from(this.store.values())
     const data = all.slice(parsed.pagination.offset, parsed.pagination.offset + parsed.pagination.limit)
     return { data, total: all.length }
   }
 
-  async create(dto: CreateCatDTO): Promise<CatResponseDTO> {
+  async create(dto: CreateTaskDTO): Promise<TaskResponseDTO> {
     const now = new Date().toISOString()
-    const entity: CatResponseDTO = {
+    const entity: TaskResponseDTO = {
       id: randomUUID(),
       name: dto.name,
       createdAt: now,
@@ -45,16 +45,16 @@ export class InMemoryCatRepository implements ICatRepository {
     return entity
   }
 
-  async update(id: string, dto: UpdateCatDTO): Promise<CatResponseDTO> {
+  async update(id: string, dto: UpdateTaskDTO): Promise<TaskResponseDTO> {
     const existing = this.store.get(id)
-    if (!existing) throw HttpException.notFound('Cat not found')
+    if (!existing) throw HttpException.notFound('Task not found')
     const updated = { ...existing, ...dto, updatedAt: new Date().toISOString() }
     this.store.set(id, updated)
     return updated
   }
 
   async delete(id: string): Promise<void> {
-    if (!this.store.has(id)) throw HttpException.notFound('Cat not found')
+    if (!this.store.has(id)) throw HttpException.notFound('Task not found')
     this.store.delete(id)
   }
 }

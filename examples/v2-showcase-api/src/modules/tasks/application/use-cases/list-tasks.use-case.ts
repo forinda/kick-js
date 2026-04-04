@@ -1,11 +1,11 @@
 import { Service, Inject } from '@forinda/kickjs'
-import { CAT_REPOSITORY, type ICatRepository } from '../../domain/repositories/cat.repository'
+import { TASK_REPOSITORY, type ITaskRepository } from '../../domain/repositories/task.repository'
 import type { ParsedQuery } from '@forinda/kickjs'
 
 @Service()
-export class ListCatsUseCase {
+export class ListTasksUseCase {
   constructor(
-    @Inject(CAT_REPOSITORY) private readonly repo: ICatRepository,
+    @Inject(TASK_REPOSITORY) private readonly repo: ITaskRepository,
   ) {}
 
   async execute(parsed: ParsedQuery) {

@@ -1,34 +1,34 @@
 /**
- * Cat ID Value Object
+ * Task ID Value Object
  *
  * Domain layer — wraps a primitive ID with type safety and validation.
  * Value objects are immutable and compared by value, not reference.
  *
- *   CatId.create()    — generate a new UUID
- *   CatId.from(id)    — wrap an existing ID string (validates non-empty)
+ *   TaskId.create()    — generate a new UUID
+ *   TaskId.from(id)    — wrap an existing ID string (validates non-empty)
  *   id.equals(other)  — compare two IDs by value
  */
 import { randomUUID } from 'node:crypto'
 
-export class CatId {
+export class TaskId {
   private constructor(private readonly value: string) {}
 
-  static create(): CatId {
-    return new CatId(randomUUID())
+  static create(): TaskId {
+    return new TaskId(randomUUID())
   }
 
-  static from(id: string): CatId {
+  static from(id: string): TaskId {
     if (!id || id.trim().length === 0) {
-      throw new Error('CatId cannot be empty')
+      throw new Error('TaskId cannot be empty')
     }
-    return new CatId(id)
+    return new TaskId(id)
   }
 
   toString(): string {
     return this.value
   }
 
-  equals(other: CatId): boolean {
+  equals(other: TaskId): boolean {
     return this.value === other.value
   }
 }
