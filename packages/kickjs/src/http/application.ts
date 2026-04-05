@@ -93,6 +93,15 @@ export class Application {
 
   private plugins: KickPlugin[]
 
+  /** Number of HTTP requests currently being processed */
+  private _inFlightRequests = 0
+  /** Whether the application is draining (shutting down gracefully) */
+  private _draining = false
+  /** Whether shutdown has already been initiated (prevents double-shutdown) */
+  private _shutdownInitiated = false
+  /** Resolvers waiting for in-flight requests to reach zero */
+  private _drainResolvers: Array<() => void> = []
+
   constructor(private readonly options: ApplicationOptions) {
     this.app = express()
     this.container = Container.getInstance()
@@ -109,6 +118,16 @@ export class Application {
       const store = requestStore.getStore()
       return store ? { requestId: store.requestId } : null
     }
+  }
+
+  /** Whether the application is currently draining in-flight requests */
+  get isDraining(): boolean {
+    return this._draining
+  }
+
+  /** Number of HTTP requests currently being processed */
+  get inFlightRequests(): number {
+    return this._inFlightRequests
   }
 
   /** Get the DI container instance */
@@ -198,6 +217,9 @@ export class Application {
     // ── 2. Hardened defaults ──────────────────────────────────────────
     this.app.disable('x-powered-by')
     this.app.set('trust proxy', this.options.trustProxy ?? false)
+
+    // ── 2a. In-flight request tracking ──────────────────────────────
+    this.app.use(this.requestTrackingMiddleware())
 
     // ── 2b. Health check endpoints (before middleware, at root) ──────
     this.mountHealthEndpoints()
@@ -447,25 +469,66 @@ export class Application {
     }
   }
 
-  /** Graceful shutdown — runs all adapter shutdowns in parallel, resilient to failures */
+  /**
+   * Graceful shutdown with request draining.
+   *
+   * 1. Stops accepting new connections (server.close())
+   * 2. Waits for in-flight requests to complete (up to shutdownTimeout)
+   * 3. Calls adapter.shutdown() for all registered adapters
+   * 4. Force-closes after timeout
+   *
+   * Safe to call multiple times — subsequent calls return the same promise.
+   */
   async shutdown(): Promise<void> {
-    log.info('Shutting down...')
+    // Prevent double-shutdown — return immediately if already initiated
+    if (this._shutdownInitiated) {
+      log.info('Shutdown already in progress, skipping duplicate call')
+      return
+    }
+    this._shutdownInitiated = true
+    this._draining = true
+
+    log.info('Shutting down — draining in-flight requests...')
 
     const timeoutMs = this.options.shutdownTimeout ?? 30_000
     let timer: ReturnType<typeof setTimeout> | undefined
 
     // Start a force-exit timer if timeout is configured
-    if (timeoutMs > 0) {
-      timer = setTimeout(() => {
-        log.warn(`Shutdown timeout (${timeoutMs}ms) reached, forcing exit`)
-        process.exit(1)
-      }, timeoutMs)
-      // Don't let the timer keep the process alive if shutdown completes
-      timer.unref()
-    }
+    const forceExitPromise =
+      timeoutMs > 0
+        ? new Promise<'timeout'>((resolve) => {
+            timer = setTimeout(() => resolve('timeout'), timeoutMs)
+            timer.unref()
+          })
+        : new Promise<never>(() => {}) // never resolves — no forced exit
 
     try {
-      // Run all plugin + adapter shutdowns concurrently
+      // Step 1: Stop accepting new connections.
+      // server.close() prevents new connections. Its callback fires only when
+      // ALL existing connections are fully closed, so we do NOT await it here —
+      // we track request draining separately via the tracking middleware.
+      if (this.httpServer) {
+        this.httpServer.close(() => {})
+      }
+
+      // Step 2: Wait for in-flight requests to drain (or timeout)
+      if (this._inFlightRequests > 0) {
+        log.info(`Waiting for ${this._inFlightRequests} in-flight request(s) to complete...`)
+        const drainPromise = new Promise<'drained'>((resolve) => {
+          this._drainResolvers.push(() => resolve('drained'))
+        })
+
+        const result = await Promise.race([drainPromise, forceExitPromise])
+        if (result === 'timeout') {
+          log.warn(
+            `Shutdown timeout (${timeoutMs}ms) reached with ${this._inFlightRequests} request(s) still in-flight, forcing shutdown`,
+          )
+        } else {
+          log.info('All in-flight requests completed')
+        }
+      }
+
+      // Step 3: Run all plugin + adapter shutdowns concurrently
       const results = await Promise.allSettled([
         ...this.plugins.map((plugin) => Promise.resolve(plugin.shutdown?.())),
         ...this.adapters.map((adapter) => Promise.resolve(adapter.shutdown?.())),
@@ -474,10 +537,6 @@ export class Application {
         if (result.status === 'rejected') {
           log.error({ err: result.reason }, 'Adapter shutdown failed')
         }
-      }
-
-      if (this.httpServer) {
-        await new Promise<void>((resolve) => this.httpServer!.close(() => resolve()))
       }
     } finally {
       if (timer) clearTimeout(timer)
@@ -536,13 +595,43 @@ export class Application {
     }
   }
 
+  /** Middleware that tracks in-flight requests for graceful draining */
+  private requestTrackingMiddleware(): RequestHandler {
+    return (_req, res, next) => {
+      this._inFlightRequests++
+      const onFinish = () => {
+        res.removeListener('finish', onFinish)
+        res.removeListener('close', onFinish)
+        this._inFlightRequests--
+        // If draining and no more in-flight requests, resolve all waiters
+        if (this._draining && this._inFlightRequests === 0) {
+          for (const resolve of this._drainResolvers) {
+            resolve()
+          }
+          this._drainResolvers = []
+        }
+      }
+      res.on('finish', onFinish)
+      res.on('close', onFinish)
+      next()
+    }
+  }
+
   /** Mount /health/live and /health/ready endpoints at the root (no API prefix) */
   private mountHealthEndpoints(): void {
     this.app.get('/health/live', (_req, res) => {
-      res.json({ status: 'ok', uptime: process.uptime() })
+      if (this._draining) {
+        res.status(503).json({ status: 'draining', uptime: process.uptime() })
+      } else {
+        res.json({ status: 'ok', uptime: process.uptime() })
+      }
     })
 
     this.app.get('/health/ready', async (_req, res) => {
+      if (this._draining) {
+        res.status(503).json({ status: 'draining', checks: [] })
+        return
+      }
       const adaptersWithHealth = this.adapters.filter((a) => a.onHealthCheck)
       const checks = await Promise.allSettled(adaptersWithHealth.map((a) => a.onHealthCheck!()))
       const results = checks.map((c, i) => {
