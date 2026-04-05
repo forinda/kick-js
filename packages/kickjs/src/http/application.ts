@@ -99,6 +99,41 @@ export interface ApplicationOptions {
    * ```
    */
   cluster?: boolean | { workers?: number }
+
+  /**
+   * Custom 404 handler for unmatched routes. Receives the raw Express
+   * `(req, res, next)` args. When omitted, the built-in handler returns
+   * `{ message: 'Not Found' }` with status 404.
+   *
+   * @example
+   * ```ts
+   * bootstrap({
+   *   modules,
+   *   onNotFound: (req, res) => {
+   *     res.status(404).json({ error: 'Route not found', path: req.originalUrl })
+   *   },
+   * })
+   * ```
+   */
+  onNotFound?: (req: any, res: any, next: any) => void
+
+  /**
+   * Custom global error handler. Receives `(err, req, res, next)` — the
+   * standard Express error-handling signature. When omitted, the built-in
+   * handler formats ZodError, HttpException, and unexpected errors.
+   *
+   * @example
+   * ```ts
+   * bootstrap({
+   *   modules,
+   *   onError: (err, req, res, next) => {
+   *     logger.error(err)
+   *     res.status(err.status ?? 500).json({ error: err.message })
+   *   },
+   * })
+   * ```
+   */
+  onError?: (err: any, req: any, res: any, next: any) => void
 }
 
 /**
@@ -380,8 +415,8 @@ export class Application {
     this.mountMiddlewareList(adapterMw.afterRoutes)
 
     // ── 10. Error handlers ───────────────────────────────────────────
-    this.app.use(notFoundHandler())
-    this.app.use(errorHandler())
+    this.app.use(this.options.onNotFound ?? notFoundHandler())
+    this.app.use(this.options.onError ?? errorHandler())
 
     // ── 11. Adapter beforeStart hooks ────────────────────────────────
     for (const adapter of this.adapters) {
