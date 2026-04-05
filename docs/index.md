@@ -3,7 +3,7 @@ layout: home
 hero:
   name: KickJS
   text: The Adaptive Node.js Framework
-  tagline: Build REST, GraphQL, WebSocket, or microservice APIs — your way. Decorator-driven, pluggable, and production-ready on Express 5.
+  tagline: Decorator-driven APIs on Express 5. REST, GraphQL, WebSocket, queues — pick what you need. TypeScript-first, pluggable, production-ready.
   image:
     src: /logo.svg
     alt: KickJS
@@ -12,27 +12,35 @@ hero:
       text: Get Started
       link: /guide/getting-started
     - theme: alt
-      text: Migration from Express
-      link: /guide/migration-from-express
+      text: Why KickJS?
+      link: /guide/what-is-kickjs
     - theme: alt
-      text: GitHub
+      text: View on GitHub
       link: https://github.com/forinda/kick-js
 
 features:
-  - title: "🔌 Adaptive Architecture"
-    details: "REST, GraphQL, WebSocket, SSE, or queues — pick what you need. Swap adapters without changing your code. One framework, every pattern."
-  - title: "🎯 Decorator-Driven DX"
-    details: "@Controller, @Query, @WsController, @Job — familiar patterns from Spring Boot and NestJS. TypeScript-first with full type safety."
-  - title: "📦 16 Packages, Pick What You Need"
-    details: "Core, HTTP, Swagger, GraphQL, WebSocket, Drizzle, Prisma, Queue (BullMQ/RabbitMQ/Kafka), OTel, Multi-tenant, and more. Install only what you use."
-  - title: "⚡ Vite HMR + DevTools Dashboard"
-    details: "Zero-downtime hot reload in dev. Built-in web dashboard at /_debug with health, metrics, routes, DI state, and WebSocket stats."
-  - title: "🛠 CLI That Scaffolds Everything"
-    details: "kick new (5 templates), kick g module/resolver/job (18+ files), kick add (16 packages), kick inspect (live debugging). One command to rule them all."
-  - title: "🔍 Auto OpenAPI + GraphiQL"
-    details: "Swagger UI and ReDoc from decorators + Zod. GraphiQL playground with zero config. @ApiQueryParams documents filterable/sortable fields."
-  - title: "🏗 Pluggable Everything"
-    details: "Template engines (EJS, Pug, Handlebars), queue providers (BullMQ, RabbitMQ, Kafka, Redis Pub/Sub), DB adapters, custom decorators, and a plugin system."
-  - title: "🚀 Production-Ready"
-    details: "Vue-inspired reactivity, OpenTelemetry tracing, rate limiting, sessions, CSRF, file uploads, multi-tenancy, graceful shutdown, and VS Code extension."
+  - icon: 🔌
+    title: Adaptive Architecture
+    details: REST, GraphQL, WebSocket, SSE, or queues — swap adapters without changing your code. One framework, every pattern.
+  - icon: 🎯
+    title: Decorator-Driven DX
+    details: "@Controller, @Service, @Inject, @Cron, @Job — familiar patterns from Spring Boot and NestJS with full TypeScript type safety."
+  - icon: ⚡
+    title: Vite HMR + DevTools
+    details: Zero-downtime hot reload in dev. Built-in debug dashboard at /_debug with health metrics, route inspector, and dependency graph.
+  - icon: 📦
+    title: Modular by Design
+    details: 18 packages under @forinda/kickjs-*. Install only what you use — auth, queue, cron, mailer, Prisma, Drizzle, OTel, and more.
+  - icon: 🛠
+    title: CLI That Scaffolds Everything
+    details: "kick new (5 templates), kick g module (4 patterns: minimal, REST, DDD, CQRS), kick add, kick inspect. One command to rule them all."
+  - icon: 🔍
+    title: Auto OpenAPI + GraphiQL
+    details: Swagger UI and ReDoc generated from decorators + Zod schemas. GraphiQL playground with zero config.
+  - icon: 🏗
+    title: Pluggable Everything
+    details: Template engines, queue providers (BullMQ, RabbitMQ, Kafka), DB adapters (Prisma, Drizzle, Mongoose), custom decorators, and a plugin system.
+  - icon: 🚀
+    title: Production-Ready
+    details: Graceful shutdown, cluster mode, circuit breaker, rate limiting, CSRF, health probes, OpenTelemetry tracing, and request-scoped DI.
 ---
