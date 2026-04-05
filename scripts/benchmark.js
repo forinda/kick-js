@@ -3,19 +3,23 @@
 /**
  * KickJS Benchmark Suite
  *
- * Measures framework overhead using autocannon against realistic endpoints.
- * Compares: minimal (hello world), JSON response, middleware stack, and DI resolution.
+ * Self-contained load testing script using autocannon.
+ * Starts a minimal KickJS-style Express 5 app, runs benchmarks, then shuts down.
+ *
+ * Routes tested:
+ *   GET  /api/v1/json         — returns { ok: true }
+ *   GET  /api/v1/echo/:id     — returns { id: params.id }
+ *   POST /api/v1/validate     — Zod body validation
  *
  * Usage:
  *   node scripts/benchmark.js                    # Run all benchmarks
  *   node scripts/benchmark.js --connections 200   # Custom concurrency
  *   node scripts/benchmark.js --duration 60       # Custom duration (seconds)
  *
- * Results are saved to benchmark-results.json for tracking over time.
+ * Results are saved to benchmarks/results.json for tracking over time.
  */
 
 const http = require('http')
-const { execSync } = require('child_process')
 const path = require('path')
 const fs = require('fs')
 
@@ -35,64 +39,36 @@ function getArg(name, defaultVal) {
 // ── Test Server ─────────────────────────────────────────────────────────
 
 function createTestServer() {
-  // We create a raw Express 5 app with KickJS patterns to measure overhead
   const express = require('express')
+  const { z } = require('zod')
   const app = express()
 
   app.use(express.json())
 
-  // Endpoint 1: Minimal — measures raw framework overhead
-  app.get('/bench/minimal', (_req, res) => {
-    res.send('ok')
+  // Route 1: GET /api/v1/json — returns { ok: true }
+  app.get('/api/v1/json', (_req, res) => {
+    res.json({ ok: true })
   })
 
-  // Endpoint 2: JSON — typical API response
-  app.get('/bench/json', (_req, res) => {
-    res.json({
-      id: '1',
-      name: 'Benchmark Test',
-      email: 'bench@test.com',
-      roles: ['user', 'admin'],
-      createdAt: new Date().toISOString(),
-      metadata: { score: 42, active: true },
-    })
+  // Route 2: GET /api/v1/echo/:id — returns { id: params.id }
+  app.get('/api/v1/echo/:id', (req, res) => {
+    res.json({ id: req.params.id })
   })
 
-  // Endpoint 3: JSON array — list endpoint
-  app.get('/bench/list', (_req, res) => {
-    const items = Array.from({ length: 50 }, (_, i) => ({
-      id: String(i + 1),
-      name: `Item ${i + 1}`,
-      status: i % 3 === 0 ? 'active' : 'inactive',
-      value: Math.random() * 1000,
-    }))
-    res.json({ data: items, meta: { total: 50, page: 1, limit: 50 } })
+  // Route 3: POST /api/v1/validate — Zod body validation
+  const validateSchema = z.object({
+    name: z.string().min(1),
+    email: z.string().email(),
+    age: z.number().int().min(0).max(150).optional(),
   })
 
-  // Endpoint 4: Middleware stack — simulates real-world middleware chain
-  const middleware1 = (_req, _res, next) => {
-    // Simulate request ID
-    _req.id = Math.random().toString(36).slice(2)
-    next()
-  }
-  const middleware2 = (_req, _res, next) => {
-    // Simulate auth check
-    _req.user = { id: '1', role: 'admin' }
-    next()
-  }
-  const middleware3 = (_req, _res, next) => {
-    // Simulate timing
-    _req.startTime = Date.now()
-    next()
-  }
-
-  app.get('/bench/middleware', middleware1, middleware2, middleware3, (req, res) => {
-    res.json({ ok: true, requestId: req.id, user: req.user })
-  })
-
-  // Endpoint 5: POST with body parsing
-  app.post('/bench/create', (req, res) => {
-    res.status(201).json({ id: Math.random().toString(36).slice(2), ...req.body })
+  app.post('/api/v1/validate', (req, res) => {
+    const result = validateSchema.safeParse(req.body)
+    if (!result.success) {
+      res.status(400).json({ errors: result.error.flatten().fieldErrors })
+      return
+    }
+    res.json({ validated: true, data: result.data })
   })
 
   return app
@@ -144,6 +120,7 @@ async function runBenchmark(url, name, method = 'GET', body = undefined) {
         const summary = {
           name,
           url,
+          method,
           connections: CONNECTIONS,
           duration: DURATION,
           requests: {
@@ -152,14 +129,14 @@ async function runBenchmark(url, name, method = 'GET', body = undefined) {
             mean: Math.round(result.requests.mean),
           },
           throughput: {
-            totalMB: (result.throughput.total / 1024 / 1024).toFixed(2),
-            averageMBps: (result.throughput.average / 1024 / 1024).toFixed(2),
+            totalMB: +(result.throughput.total / 1024 / 1024).toFixed(2),
+            averageMBps: +(result.throughput.average / 1024 / 1024).toFixed(2),
           },
           latency: {
             p50: result.latency.p50,
-            p97_5: result.latency.p97_5,
+            p95: result.latency.p97_5, // autocannon reports p97.5; closest to p95
             p99: result.latency.p99,
-            average: result.latency.average.toFixed(2),
+            average: +result.latency.average.toFixed(2),
             max: result.latency.max,
           },
           errors: result.errors,
@@ -179,12 +156,12 @@ async function runBenchmark(url, name, method = 'GET', body = undefined) {
 
 async function main() {
   console.log(`
-╔══════════════════════════════════════════════════════╗
-║           KickJS Benchmark Suite                     ║
-╠══════════════════════════════════════════════════════╣
-║  Connections: ${String(CONNECTIONS).padEnd(6)} Duration: ${DURATION}s              ║
-║  Warmup: ${WARMUP}s       Pipelining: 10               ║
-╚══════════════════════════════════════════════════════╝
++======================================================+
+|           KickJS Benchmark Suite                      |
++======================================================+
+|  Connections: ${String(CONNECTIONS).padEnd(6)} Duration: ${String(DURATION).padEnd(4)}s             |
+|  Warmup: ${WARMUP}s       Pipelining: 10                  |
++------------------------------------------------------+
 `)
 
   // Start server
@@ -203,15 +180,13 @@ async function main() {
 
   // Run benchmarks
   const benchmarks = [
-    { url: `${baseUrl}/bench/minimal`, name: 'Minimal (text)' },
-    { url: `${baseUrl}/bench/json`, name: 'JSON object' },
-    { url: `${baseUrl}/bench/list`, name: 'JSON array (50 items)' },
-    { url: `${baseUrl}/bench/middleware`, name: 'Middleware stack (3 layers)' },
+    { url: `${baseUrl}/api/v1/json`, name: 'GET /api/v1/json' },
+    { url: `${baseUrl}/api/v1/echo/42`, name: 'GET /api/v1/echo/:id' },
     {
-      url: `${baseUrl}/bench/create`,
-      name: 'POST + body parse',
+      url: `${baseUrl}/api/v1/validate`,
+      name: 'POST /api/v1/validate',
       method: 'POST',
-      body: { name: 'Test', email: 'test@bench.com' },
+      body: { name: 'Test User', email: 'test@bench.com', age: 25 },
     },
   ]
 
@@ -221,31 +196,45 @@ async function main() {
   }
 
   // Close server
-  server.close()
+  await new Promise((resolve) => server.close(resolve))
 
   // Print summary
   console.log(`
-╔══════════════════════════════════════════════════════╗
-║                    Results                           ║
-╠══════════════════════════════════════════════════════╣`)
++======================================================+
+|                    Results                            |
++------------------------------------------------------+`)
 
   for (const r of results) {
-    console.log(`║  ${r.name.padEnd(30)} ${String(r.rps.toLocaleString()).padStart(10)} req/s ║`)
+    console.log(`|  ${r.name.padEnd(30)} ${String(r.rps.toLocaleString()).padStart(10)} req/s |`)
   }
-  console.log(`╠══════════════════════════════════════════════════════╣`)
 
-  // Latency table
-  console.log(`║  ${'Endpoint'.padEnd(28)} ${'p50'.padStart(6)} ${'p97.5'.padStart(6)} ${'p99'.padStart(6)} ║`)
-  console.log(`║  ${'─'.repeat(28)} ${'─'.repeat(6)} ${'─'.repeat(6)} ${'─'.repeat(6)} ║`)
+  console.log(`+------------------------------------------------------+`)
+  console.log(`|  ${'Endpoint'.padEnd(28)} ${'p50'.padStart(6)} ${'p95'.padStart(6)} ${'p99'.padStart(6)} |`)
+  console.log(`|  ${''.padEnd(28, '-')} ${''.padEnd(6, '-')} ${''.padEnd(6, '-')} ${''.padEnd(6, '-')} |`)
   for (const r of results) {
     console.log(
-      `║  ${r.name.padEnd(28)} ${String(r.latency.p50 + 'ms').padStart(6)} ${String(r.latency.p97_5 + 'ms').padStart(6)} ${String(r.latency.p99 + 'ms').padStart(6)} ║`,
+      `|  ${r.name.padEnd(28)} ${String(r.latency.p50 + 'ms').padStart(6)} ${String(r.latency.p95 + 'ms').padStart(6)} ${String(r.latency.p99 + 'ms').padStart(6)} |`,
     )
   }
-  console.log(`╚══════════════════════════════════════════════════════╝`)
+  console.log(`+------------------------------------------------------+`)
+
+  // Throughput table
+  console.log(`|  ${'Endpoint'.padEnd(28)} ${'Avg MB/s'.padStart(10)} ${'Total MB'.padStart(10)} |`)
+  console.log(`|  ${''.padEnd(28, '-')} ${''.padEnd(10, '-')} ${''.padEnd(10, '-')} |`)
+  for (const r of results) {
+    console.log(
+      `|  ${r.name.padEnd(28)} ${String(r.throughput.averageMBps).padStart(10)} ${String(r.throughput.totalMB).padStart(10)} |`,
+    )
+  }
+  console.log(`+======================================================+`)
 
   // Save results
-  const outputPath = path.join(__dirname, '..', 'benchmark-results.json')
+  const benchDir = path.join(__dirname, '..', 'benchmarks')
+  if (!fs.existsSync(benchDir)) {
+    fs.mkdirSync(benchDir, { recursive: true })
+  }
+
+  const outputPath = path.join(benchDir, 'results.json')
   const output = {
     timestamp: new Date().toISOString(),
     node: process.version,
@@ -255,14 +244,29 @@ async function main() {
     results,
   }
 
-  fs.writeFileSync(outputPath, JSON.stringify(output, null, 2))
-  console.log(`\n  Results saved to benchmark-results.json`)
+  // Append to history if file exists, otherwise create new
+  let history = []
+  if (fs.existsSync(outputPath)) {
+    try {
+      const existing = JSON.parse(fs.readFileSync(outputPath, 'utf-8'))
+      history = Array.isArray(existing) ? existing : [existing]
+    } catch {
+      // corrupted file, start fresh
+    }
+  }
+  history.push(output)
+
+  fs.writeFileSync(outputPath, JSON.stringify(history, null, 2))
+  console.log(`\n  Results saved to benchmarks/results.json`)
 
   if (results.some((r) => r.errors > 0)) {
-    console.log(`\n  ⚠ Some benchmarks had errors — check results for details`)
+    console.log(`\n  WARNING: Some benchmarks had errors - check results for details`)
   }
 
   console.log()
 }
 
-main().catch(console.error)
+main().catch((err) => {
+  console.error('Benchmark failed:', err)
+  process.exit(1)
+})

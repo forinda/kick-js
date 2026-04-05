@@ -133,6 +133,24 @@ kick g module users --repo drizzle  # With Drizzle repository
 | Logging | Pino | Fastest Node.js logger, structured JSON |
 | Monorepo | pnpm + Turborepo | Efficient deps, build caching |
 
+## Runtime Compatibility
+
+| Feature | Node 20+ | Node 22+ | Node 24+ | Bun | Deno |
+|---------|----------|----------|----------|-----|------|
+| Production | Yes | Yes | Yes | Experimental | No |
+| Dev Mode (HMR) | Yes | Yes | Yes | No | No |
+| Tests (Vitest) | Yes | Yes | Yes* | Partial | No |
+| CLI (`kick`) | Yes | Yes | Yes | Experimental | No |
+| Pure ESM Import | Yes | Yes | Yes | Yes | Yes |
+
+> **Node 20** is the minimum supported version (LTS with native ESM).
+>
+> **Node 24**: mailer tests need `server.deps.external` for nodemailer CJS.
+>
+> **Bun**: core DI and decorators work; full HTTP pipeline is experimental.
+>
+> **Deno**: blocked by `reflect-metadata` and `pino` dependencies. Use `Logger.setProvider()` for core-only usage.
+
 ## Documentation
 
 **[forinda.github.io/kick-js](https://forinda.github.io/kick-js/)**
