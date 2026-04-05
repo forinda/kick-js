@@ -180,9 +180,123 @@ If the env var is missing and no default is provided, accessing the property thr
 ## Scopes
 
 | Scope | Behavior |
-|-------|----------|
+| ------- | ---------- |
 | `SINGLETON` (default) | One instance shared across the application |
 | `TRANSIENT` | New instance created on every `resolve()` call |
+| `REQUEST` | One instance per HTTP request, cached for the request lifetime |
+
+## Request-Scoped DI
+
+Request-scoped services get a fresh instance for each HTTP request. Within the same request, every `resolve()` call returns the same cached instance. When the request ends, the instance is automatically garbage collected — no manual cleanup needed.
+
+Under the hood this uses Node's `AsyncLocalStorage`, so it works correctly even with concurrent requests.
+
+### Setup
+
+Mount `requestScopeMiddleware()` early in your middleware pipeline (before route handlers):
+
+```typescript
+import { bootstrap, requestScopeMiddleware } from '@forinda/kickjs'
+
+bootstrap({
+  modules: [/* ... */],
+  middleware: [
+    requestScopeMiddleware(),  // enables REQUEST-scoped DI
+    // ... other middleware
+  ],
+})
+```
+
+### Declaring a Request-Scoped Service
+
+```typescript
+import { Service, Scope, Autowired } from '@forinda/kickjs'
+import { getRequestStore } from '@forinda/kickjs'
+
+@Service({ scope: Scope.REQUEST })
+class TenantContext {
+  get tenantId(): string {
+    return getRequestStore().values.get('tenantId')
+  }
+}
+
+@Service({ scope: Scope.REQUEST })
+class RequestTransaction {
+  private tx: DbTransaction | null = null
+
+  async begin() {
+    this.tx = await db.beginTransaction()
+  }
+
+  async commit() {
+    await this.tx?.commit()
+    this.tx = null
+  }
+
+  get transaction() {
+    return this.tx
+  }
+}
+
+@Controller('/orders')
+class OrderController {
+  @Autowired() private tenantCtx!: TenantContext
+  @Autowired() private txn!: RequestTransaction
+
+  @Post('/')
+  async create(ctx: RequestContext) {
+    // tenantCtx and txn are unique to this request
+    await this.txn.begin()
+    // ...
+  }
+}
+```
+
+### When to Use Request Scope
+
+- **Tenant context** — resolve the current tenant once per request and inject it everywhere
+- **Database transactions** — share a single transaction across services within one request
+- **Session / auth state** — carry authenticated user info without passing it through every method
+- **Request-local caches** — avoid redundant lookups within the same request
+
+### Pre-Registered Request Values
+
+Middleware can store values in the request store before controllers run. Use `getRequestStore().values.set()` to make data available for injection:
+
+```typescript
+import { getRequestStore } from '@forinda/kickjs'
+
+// In auth middleware
+function authMiddleware() {
+  return async (req, res, next) => {
+    const user = await verifyToken(req.headers.authorization)
+    getRequestStore().values.set('currentUser', user)
+    getRequestStore().values.set('tenantId', user.tenantId)
+    next()
+  }
+}
+```
+
+These values can then be read inside any request-scoped service via `getRequestStore().values.get()`.
+
+### Scope Compatibility Rules
+
+Not all scope combinations are valid. The container enforces these rules at resolve time:
+
+| Parent scope | Can inject SINGLETON? | Can inject TRANSIENT? | Can inject REQUEST? |
+| --- | --- | --- | --- |
+| `SINGLETON` | Yes | Yes | **No** — throws error |
+| `TRANSIENT` | Yes | Yes | Yes |
+| `REQUEST` | Yes | Yes | Yes |
+
+A `SINGLETON` lives for the entire application lifetime, while a `REQUEST`-scoped instance is destroyed after each request. If a singleton held a reference to a request-scoped service, it would point to a stale instance after the request ends. The container prevents this by throwing:
+
+```
+Error: Cannot inject REQUEST-scoped "TenantContext" into SINGLETON "OrderService".
+Singletons outlive requests. Use TRANSIENT or REQUEST scope for the parent.
+```
+
+If a singleton needs request-scoped data, resolve it explicitly inside a method call rather than injecting it as a dependency.
 
 ## Circular Dependency Detection
 
