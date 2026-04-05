@@ -166,7 +166,22 @@ export default defineVersionedConfig(
       'A production-grade, decorator-driven Node.js framework built on Express 5 and TypeScript',
     base: '/kick-js/',
     ignoreDeadLinks: true,
-    head: [['link', { rel: 'icon', type: 'image/svg+xml', href: '/kick-js/logo.svg' }]],
+    head: [
+      ['link', { rel: 'icon', type: 'image/svg+xml', href: '/kick-js/logo.svg' }],
+      ['meta', { name: 'theme-color', content: '#3b82f6' }],
+      ['meta', { property: 'og:type', content: 'website' }],
+      ['meta', { property: 'og:title', content: 'KickJS — The Adaptive Node.js Framework' }],
+      [
+        'meta',
+        {
+          property: 'og:description',
+          content:
+            'Decorator-driven APIs on Express 5. REST, GraphQL, WebSocket, queues — pick what you need.',
+        },
+      ],
+      ['meta', { property: 'og:url', content: 'https://forinda.github.io/kick-js/' }],
+      ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
+    ],
 
     locales: {
       root: {
@@ -238,20 +253,28 @@ export default defineVersionedConfig(
 
       sidebar: sharedSidebar,
 
-      socialLinks: [{ icon: 'github', link: 'https://github.com/forinda/kick-js' }],
+      socialLinks: [
+        { icon: 'github', link: 'https://github.com/forinda/kick-js' },
+        { icon: 'npm', link: 'https://www.npmjs.com/package/@forinda/kickjs' },
+      ],
 
       editLink: {
         pattern: 'https://github.com/forinda/kick-js/edit/main/docs/:path',
-        text: 'Edit this page on GitHub',
+        text: 'Suggest changes to this page',
       },
 
       footer: {
-        message: 'Released under the MIT License.',
-        copyright: `Copyright ${new Date().getFullYear()} Felix Orinda`,
+        message:
+          'Released under the <a href="https://github.com/forinda/kick-js/blob/main/LICENSE">MIT License</a>. Built with TypeScript + Express 5.',
+        copyright: `Copyright &copy; ${new Date().getFullYear()} <a href="https://github.com/forinda">Felix Orinda</a>`,
       },
 
       search: {
         provider: 'local',
+        options: {
+          detailedView: true,
+          placeholder: 'Search docs...',
+        },
       },
     },
   },
