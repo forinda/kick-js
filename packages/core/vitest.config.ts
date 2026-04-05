@@ -14,12 +14,15 @@ export default defineConfig({
   resolve: {
     alias: {
       '@forinda/kickjs': path.resolve(__dirname, '../kickjs/src/index.ts'),
-      '@forinda/kickjs-core': path.resolve(__dirname, 'src/index.ts'),
+      '@forinda/kickjs-core': path.resolve(__dirname, '../kickjs/src/core/index.ts'),
     },
   },
   test: {
+    typecheck: {
+      tsconfig: './tsconfig.test.json',
+    },
     environment: 'node',
-    include: ['tests/**/*.test.ts'],
+    include: ['__tests__/**/*.test.ts'],
     globals: false,
     pool: 'threads',
     maxConcurrency: 1,

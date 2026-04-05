@@ -2,12 +2,5 @@
   "extends": "./tsconfig.test.json",
   "compilerOptions": {
     "noEmit": true
-  },
-  "references": [
-    { "path": "packages/core" },
-    { "path": "packages/http" },
-    { "path": "packages/config" },
-    { "path": "packages/cli" },
-    { "path": "packages/testing" }
-  ]
+  }
 }

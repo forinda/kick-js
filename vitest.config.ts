@@ -16,11 +16,12 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
+      '@forinda/kickjs': path.resolve(__dirname, 'packages/kickjs/src/index.ts'),
       '@forinda/kickjs-auth': path.resolve(__dirname, 'packages/auth/src/index.ts'),
       '@forinda/kickjs-mailer': path.resolve(__dirname, 'packages/mailer/src/index.ts'),
-      '@forinda/kickjs-core': path.resolve(__dirname, 'packages/core/src/index.ts'),
+      '@forinda/kickjs-core': path.resolve(__dirname, 'packages/kickjs/src/core/index.ts'),
       '@forinda/kickjs-cron': path.resolve(__dirname, 'packages/cron/src/index.ts'),
-      '@forinda/kickjs-http': path.resolve(__dirname, 'packages/http/src/index.ts'),
+      '@forinda/kickjs-http': path.resolve(__dirname, 'packages/kickjs/src/index.ts'),
       '@forinda/kickjs-config': path.resolve(__dirname, 'packages/config/src/index.ts'),
       '@forinda/kickjs-swagger': path.resolve(__dirname, 'packages/swagger/src/index.ts'),
       '@forinda/kickjs-testing': path.resolve(__dirname, 'packages/testing/src/index.ts'),
@@ -35,7 +36,7 @@ export default defineConfig({
       tsconfig: './tsconfig.test.json',
     },
     environment: 'node',
-    include: ['packages/*/tests/**/*.test.ts', 'tests/**/*.test.ts'],
+    include: ['packages/*/__tests__/**/*.test.ts', '__tests__/**/*.test.ts'],
     globals: false,
     pool: 'threads',
     poolOptions: {
