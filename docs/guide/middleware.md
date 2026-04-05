@@ -199,3 +199,128 @@ export function requireRole(role: string): MiddlewareHandler {
 @Middleware(authMiddleware, requireRole('admin'))
 export class AdminController { ... }
 ```
+
+## Circuit Breaker
+
+The `CircuitBreaker` class implements the [circuit breaker pattern](https://martinfowler.com/bliki/CircuitBreaker.html) for external service calls. It protects your application from cascading failures when a downstream service is unhealthy by short-circuiting requests after a configurable failure threshold.
+
+### States
+
+| State | Description |
+|---|---|
+| **CLOSED** | Normal operation. Requests pass through. Failures are counted. |
+| **OPEN** | Failures exceeded the threshold. All requests are immediately rejected with `CircuitOpenError`. |
+| **HALF_OPEN** | After `resetTimeout` elapses the circuit allows a limited number of probe requests. If they succeed the circuit closes; if any fail it re-opens. |
+
+### Configuration options
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `failureThreshold` | `number` | *(required)* | Consecutive failures before the circuit opens. |
+| `resetTimeout` | `number` | *(required)* | Milliseconds to wait in OPEN state before transitioning to HALF_OPEN. |
+| `halfOpenMax` | `number` | `1` | Maximum probe requests allowed while HALF_OPEN. |
+
+### Usage
+
+```ts
+import { CircuitBreaker, CircuitOpenError } from '@forinda/kickjs'
+
+const breaker = new CircuitBreaker('payment-api', {
+  failureThreshold: 5,
+  resetTimeout: 30_000, // 30 seconds
+  halfOpenMax: 2,
+})
+
+// Wrap any async call
+try {
+  const res = await breaker.execute(() =>
+    fetch('https://payment.example.com/charge', {
+      method: 'POST',
+      body: JSON.stringify({ amount: 1999 }),
+    }),
+  )
+  const data = await res.json()
+} catch (err) {
+  if (err instanceof CircuitOpenError) {
+    // The circuit is open — fail fast without hitting the remote service
+    console.warn(err.message)
+  }
+}
+```
+
+### Inspecting and resetting
+
+```ts
+breaker.getState()
+// => 'closed' | 'open' | 'half_open'
+
+breaker.getStats()
+// => { failures: 3, successes: 12, state: 'closed', lastFailure?: Date }
+
+// Manually reset to CLOSED (e.g. after deploying a fix upstream)
+breaker.reset()
+```
+
+## Trace Context
+
+The `traceContext()` middleware implements [W3C Trace Context](https://www.w3.org/TR/trace-context/) propagation. It parses an incoming `traceparent` header and, if none is present, generates a new trace ID so every request is always correlated.
+
+### Setup
+
+`traceContext()` must be mounted **after** `requestScopeMiddleware()` because it stores values in the request's `AsyncLocalStorage` store.
+
+```ts
+import express from 'express'
+import { bootstrap, requestScopeMiddleware, traceContext, requestLogger } from '@forinda/kickjs'
+
+bootstrap({
+  modules,
+  middleware: [
+    requestScopeMiddleware(),
+    traceContext(),        // extracts or generates traceId
+    requestLogger(),       // logger automatically includes traceId
+    express.json(),
+  ],
+})
+```
+
+### How it works
+
+1. Reads the `traceparent` header (e.g. `00-4bf92f3577b6a27ff0753a3a97bb3345-00f067aa0ba902b7-01`).
+2. If valid, extracts `traceId`, `parentSpanId`, `version`, and `flags`.
+3. If missing or invalid, generates a random 32-hex trace ID and 16-hex span ID.
+4. Stores `traceId`, `spanId`, `traceFlags`, and `traceVersion` in the request-scoped `AsyncLocalStorage` store, making them available to the built-in logger and any downstream code.
+5. Also exposes `req.traceId` and `req.spanId` directly on the Express request object for convenience.
+
+### Options
+
+| Option              | Type      | Default | Description                                                                                                                               |
+| ------------------- | --------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `propagateResponse` | `boolean` | `false` | When `true`, sets a `traceresponse` header on the outgoing response containing the trace ID. Useful for debugging client-side requests. |
+
+```ts
+traceContext({ propagateResponse: true })
+// Response will include:  traceresponse: 4bf92f3577b6a27ff0753a3a97bb3345
+```
+
+### Accessing the trace ID in application code
+
+Inside a controller or service you can read the trace values from the request store:
+
+```ts
+import { requestStore } from '@forinda/kickjs'
+
+const store = requestStore.getStore()
+const traceId = store?.values.get('traceId')
+const spanId = store?.values.get('spanId')
+```
+
+Or directly from the request object:
+
+```ts
+@Get('/health')
+async health(ctx: RequestContext) {
+  const traceId = (ctx.req as any).traceId
+  ctx.json({ status: 'ok', traceId })
+}
+```
