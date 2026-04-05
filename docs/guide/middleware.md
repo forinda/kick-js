@@ -164,7 +164,7 @@ The full middleware pipeline executes in this order:
 | 6    | `beforeRoutes`   | Adapter middleware    |
 | 7    | routes           | Module route mounting |
 | 8    | `afterRoutes`    | Adapter middleware    |
-| 9    | error handlers   | Built-in 404 + global error handler |
+| 9    | error handlers   | `onNotFound` + `onError` (or built-in defaults) |
 
 ### AdapterMiddleware interface
 
@@ -177,6 +177,43 @@ interface AdapterMiddleware {
 ```
 
 If `phase` is omitted, it defaults to `'afterGlobal'`.
+
+## Custom Error Handlers
+
+By default, KickJS returns `{ message: 'Not Found' }` for unmatched routes and formats `ZodError`, `HttpException`, and unexpected errors. You can override both handlers:
+
+### Custom 404 handler
+
+```ts
+bootstrap({
+  modules,
+  onNotFound: (req, res) => {
+    res.status(404).json({
+      error: 'Route not found',
+      path: req.originalUrl,
+      timestamp: new Date().toISOString(),
+    })
+  },
+})
+```
+
+### Custom error handler
+
+```ts
+bootstrap({
+  modules,
+  onError: (err, req, res, next) => {
+    const status = err.status ?? 500
+    logger.error({ err, method: req.method, url: req.originalUrl })
+    res.status(status).json({
+      error: err.message,
+      code: err.code ?? 'INTERNAL_ERROR',
+    })
+  },
+})
+```
+
+Both use the standard Express signature: `onNotFound` receives `(req, res, next)` and `onError` receives `(err, req, res, next)`. When omitted, the built-in handlers are used.
 
 ## Writing Reusable Middleware
 
