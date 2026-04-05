@@ -16,3 +16,4 @@ yarn-error.log*
 **/.vitepress/cache/
 RELEASE_NOTES_*.md
 benchmark-results.json
+benchmarks/results.json
