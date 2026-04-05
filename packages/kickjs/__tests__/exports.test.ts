@@ -195,3 +195,68 @@ describe('DI: implementation swapping via unified package', () => {
     expect(res2.body[0].source).toBe('mock')
   })
 })
+
+// ── Custom error handlers ────────────────────────────────────────────
+
+describe('Custom error handlers (onNotFound, onError)', () => {
+  beforeEach(() => Container.reset())
+
+  it('onNotFound overrides the default 404 handler', async () => {
+    const { Application } = await import('../src/index')
+    const express = (await import('express')).default
+
+    const app = new Application({
+      modules: [],
+      middleware: [express.json()],
+      onNotFound: (req: any, res: any) => {
+        res.status(404).json({ custom: true, path: req.originalUrl })
+      },
+    })
+    await app.setup()
+
+    const res = await request(app.getExpressApp()).get('/nonexistent')
+    expect(res.status).toBe(404)
+    expect(res.body.custom).toBe(true)
+    expect(res.body.path).toBe('/nonexistent')
+  })
+
+  it('onError overrides the default error handler', async () => {
+    const { Application, HttpException } = await import('../src/index')
+    const express = (await import('express')).default
+
+    const app = new Application({
+      modules: [],
+      middleware: [
+        express.json(),
+        // Middleware that always throws
+        (_req: any, _res: any, _next: any) => {
+          throw new HttpException(422, 'Custom validation failed')
+        },
+      ],
+      onError: (err: any, _req: any, res: any, _next: any) => {
+        res.status(err.status ?? 500).json({ customError: true, detail: err.message })
+      },
+    })
+    await app.setup()
+
+    const res = await request(app.getExpressApp()).get('/anything')
+    expect(res.status).toBe(422)
+    expect(res.body.customError).toBe(true)
+    expect(res.body.detail).toBe('Custom validation failed')
+  })
+
+  it('uses built-in handlers when onNotFound and onError are not provided', async () => {
+    const { Application } = await import('../src/index')
+    const express = (await import('express')).default
+
+    const app = new Application({
+      modules: [],
+      middleware: [express.json()],
+    })
+    await app.setup()
+
+    const res = await request(app.getExpressApp()).get('/nonexistent')
+    expect(res.status).toBe(404)
+    expect(res.body.message).toBe('Not Found')
+  })
+})
