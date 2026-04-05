@@ -13,6 +13,9 @@ export { Application, type ApplicationOptions, type MiddlewareEntry } from './ht
 
 export { bootstrap } from './http/bootstrap'
 
+// Cluster
+export { isClusterPrimary, type ClusterOptions } from './http/cluster'
+
 export { RequestContext } from './http/context'
 
 export { buildRoutes, getControllerPath } from './http/router-builder'
@@ -44,6 +47,15 @@ export {
   buildUploadMiddleware,
   type UploadOptions,
 } from './http/middleware/upload'
+
+// Trace Context (W3C traceparent propagation)
+export {
+  traceContext,
+  parseTraceparent,
+  TRACEPARENT_HEADER,
+  type TraceContextOptions,
+  type TraceContext,
+} from './http/middleware/trace-context'
 
 // Query String Parsing
 export {

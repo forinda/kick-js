@@ -79,6 +79,26 @@ export interface ApplicationOptions {
    * Default: 30000 (30 seconds). Set to 0 to disable forced exit.
    */
   shutdownTimeout?: number
+
+  /**
+   * Enable cluster mode for multi-core utilization.
+   *
+   * When enabled, the primary process forks worker processes that share the
+   * same port via Node's built-in `cluster` module (OS load balancing).
+   *
+   * - `true` — use all available CPU cores
+   * - `{ workers: N }` — use exactly N workers
+   *
+   * Workers are auto-restarted on crash. SIGTERM/SIGINT on the primary is
+   * forwarded to all workers.
+   *
+   * @example
+   * ```ts
+   * bootstrap({ modules, cluster: true })
+   * bootstrap({ modules, cluster: { workers: 4 } })
+   * ```
+   */
+  cluster?: boolean | { workers?: number }
 }
 
 /**
@@ -116,7 +136,13 @@ export class Application {
     // Wire logger context provider so logs auto-include requestId
     Logger._contextProvider = () => {
       const store = requestStore.getStore()
-      return store ? { requestId: store.requestId } : null
+      if (!store) return null
+      const ctx: Record<string, any> = { requestId: store.requestId }
+      const traceId = store.values.get('traceId')
+      if (traceId) ctx.traceId = traceId
+      const spanId = store.values.get('spanId')
+      if (spanId) ctx.spanId = spanId
+      return ctx
     }
   }
 

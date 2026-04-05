@@ -17,6 +17,7 @@
     "test": "pnpm run --filter=\"./packages/**\" test",
     "test:integration": "vitest run __tests__/",
     "test:all": "pnpm run --filter=\"./packages/**\" test && vitest run __tests__/",
+    "test:bun": "bun test scripts/bun-smoke.ts",
     "test:watch": "pnpm -r --parallel run test:watch",
     "typecheck": "pnpm -r run typecheck",
     "lint": "pnpm -r run lint",

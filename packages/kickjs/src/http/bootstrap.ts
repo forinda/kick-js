@@ -1,5 +1,7 @@
+import cluster from 'node:cluster'
 import { createLogger, Container } from '../core'
 import { Application, type ApplicationOptions } from './application'
+import { setupClusterPrimary, type ClusterOptions } from './cluster'
 
 /** Try to reload env from .env file if config package is available */
 function tryReloadEnv(): void {
@@ -49,6 +51,18 @@ const log = createLogger('Process')
  * ```
  */
 export async function bootstrap(options: ApplicationOptions): Promise<Application> {
+  // ── Cluster mode ─────────────────────────────────────────────────────
+  // In cluster mode the primary process forks workers and never runs the
+  // Express application itself.  Only workers proceed past this block.
+  if (options.cluster && cluster.isPrimary) {
+    const clusterOpts: ClusterOptions = typeof options.cluster === 'object' ? options.cluster : {}
+    setupClusterPrimary(clusterOpts)
+
+    // Return a placeholder — the primary never serves HTTP traffic.
+    // The Application is created only so callers get a valid reference.
+    return new Application(options)
+  }
+
   const g = globalThis as any
 
   // ── Global error handlers ────────────────────────────────────────────

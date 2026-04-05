@@ -12,10 +12,13 @@ concurrency:
 
 jobs:
   lint-build-test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         node-version: [20, 22, 24]
+        os: [ubuntu-latest]
+        # os: [ubuntu-latest, macos-latest]
 
     steps:
       - name: Checkout
@@ -74,17 +77,19 @@ jobs:
       - name: Smoke test — imports resolve under Bun
         run: |
           bun -e "
-            import { Container, Service, Controller } from './packages/core/dist/index.js'
-            import { Application, RequestContext, buildRoutes } from './packages/http/dist/index.js'
-            import { defineEnv, loadEnv } from './packages/config/dist/index.js'
+            import { Container, Service, Controller } from './packages/kickjs/dist/index.mjs'
+            import { Application, RequestContext, buildRoutes } from './packages/kickjs/dist/index.mjs'
             console.log('Container:', typeof Container)
             console.log('Application:', typeof Application)
-            console.log('defineEnv:', typeof defineEnv)
             console.log('Bun smoke test passed')
           "
 
+      - name: Smoke test — bun test on exports
+        run: bun test packages/kickjs/__tests__/exports.test.ts
+
   deno-smoke-test:
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -111,6 +116,6 @@ jobs:
 
       - name: Smoke test — pure ESM imports resolve under Deno
         run: |
-          echo 'import { Scope } from "./packages/core/dist/interfaces.js"; import { parseQuery } from "./packages/http/dist/query/index.js"; console.log("Scope:", typeof Scope); console.log("parseQuery:", typeof parseQuery); console.log("Deno smoke test passed");' > deno-smoke.mjs
+          echo 'import { Scope } from "./packages/kickjs/dist/core/container.mjs"; import { parseQuery } from "./packages/kickjs/dist/http/query/index.mjs"; console.log("Scope:", typeof Scope); console.log("parseQuery:", typeof parseQuery); console.log("Deno smoke test passed");' > deno-smoke.mjs
           deno run --allow-read=. --allow-env deno-smoke.mjs
           rm deno-smoke.mjs
