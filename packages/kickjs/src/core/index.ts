@@ -82,7 +82,14 @@ export {
 } from './cache'
 
 // Logger
-export { Logger, createLogger, rootLogger, logger } from './logger'
+export {
+  Logger,
+  createLogger,
+  rootLogger,
+  logger,
+  ConsoleLoggerProvider,
+  type LoggerProvider,
+} from './logger'
 
 // Errors
 export { HttpException, HttpStatus, type HttpStatusCode, type ValidationError } from './errors'
@@ -106,6 +113,15 @@ export {
   setInMetaRecord,
   getMetaRecord,
 } from './metadata'
+
+// Circuit Breaker
+export {
+  CircuitBreaker,
+  CircuitOpenError,
+  type CircuitBreakerOptions,
+  type CircuitBreakerState,
+  type CircuitBreakerStats,
+} from './circuit-breaker'
 
 // Reactivity
 export {

@@ -12,6 +12,7 @@ import {
   Controller,
   Get,
   type AppAdapter,
+  type AdapterContext,
   type AdapterMiddleware,
 } from '@forinda/kickjs-core'
 import { Application, buildRoutes, RequestContext } from '@forinda/kickjs-http'
@@ -49,8 +50,8 @@ describe('Adapters: lifecycle hooks', () => {
 
     const adapter: AppAdapter = {
       name: 'LifecycleAdapter',
-      beforeMount: () => order.push('beforeMount'),
-      beforeStart: () => order.push('beforeStart'),
+      beforeMount: (_ctx) => { order.push('beforeMount') },
+      beforeStart: (_ctx) => { order.push('beforeStart') },
     }
 
     const { Module } = createSimpleModule()
@@ -59,23 +60,24 @@ describe('Adapters: lifecycle hooks', () => {
     expect(order).toEqual(['beforeMount', 'beforeStart'])
   })
 
-  it('beforeMount receives the express app and container', async () => {
-    let receivedApp: any = null
-    let receivedContainer: any = null
+  it('beforeMount receives AdapterContext with app, container, env, and isProduction', async () => {
+    let receivedCtx: any = null
 
     const adapter: AppAdapter = {
       name: 'InspectAdapter',
-      beforeMount: (app, container) => {
-        receivedApp = app
-        receivedContainer = container
+      beforeMount: (ctx) => {
+        receivedCtx = ctx
       },
     }
 
     const { Module } = createSimpleModule()
     await createTestApp({ modules: [Module], adapters: [adapter] })
 
-    expect(receivedApp).toBeDefined()
-    expect(receivedContainer).toBeInstanceOf(Container)
+    expect(receivedCtx).toBeDefined()
+    expect(receivedCtx.app).toBeDefined()
+    expect(receivedCtx.container).toBeInstanceOf(Container)
+    expect(typeof receivedCtx.env).toBe('string')
+    expect(typeof receivedCtx.isProduction).toBe('boolean')
   })
 
   it('shutdown is called and can be awaited', async () => {
@@ -289,14 +291,14 @@ describe('Adapters: multiple adapters', () => {
 
     const adapterA: AppAdapter = {
       name: 'A',
-      beforeMount: () => events.push('A:beforeMount'),
-      beforeStart: () => events.push('A:beforeStart'),
+      beforeMount: (_ctx: AdapterContext) => { events.push('A:beforeMount') },
+      beforeStart: (_ctx: AdapterContext) => { events.push('A:beforeStart') },
     }
 
     const adapterB: AppAdapter = {
       name: 'B',
-      beforeMount: () => events.push('B:beforeMount'),
-      beforeStart: () => events.push('B:beforeStart'),
+      beforeMount: (_ctx: AdapterContext) => { events.push('B:beforeMount') },
+      beforeStart: (_ctx: AdapterContext) => { events.push('B:beforeStart') },
     }
 
     const { Module } = createSimpleModule()

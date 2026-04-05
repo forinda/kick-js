@@ -21,6 +21,102 @@ export const rootLogger = pino({
     : {}),
 })
 
+// ── LoggerProvider interface ───────────────────────────────────────────
+
+/**
+ * Pluggable logger backend.
+ *
+ * Implement this interface to replace the default pino-based logging
+ * with any logging library (winston, bunyan, console, etc.).
+ */
+export interface LoggerProvider {
+  info(msg: string, ...args: any[]): void
+  warn(msg: string, ...args: any[]): void
+  error(msg: string, ...args: any[]): void
+  debug(msg: string, ...args: any[]): void
+  trace?(msg: string, ...args: any[]): void
+  fatal?(msg: string, ...args: any[]): void
+  /** Return a child provider scoped to the given component name */
+  child(bindings: { component: string }): LoggerProvider
+}
+
+// ── PinoLoggerProvider (default) ───────────────────────────────────────
+
+/** Default provider that delegates to the root pino instance */
+class PinoLoggerProvider implements LoggerProvider {
+  private log: pino.Logger
+
+  constructor(pinoInstance?: pino.Logger) {
+    this.log = pinoInstance ?? rootLogger
+  }
+
+  info(msg: string, ...args: any[]) {
+    this.log.info(msg, ...args)
+  }
+  warn(msg: string, ...args: any[]) {
+    this.log.warn(msg, ...args)
+  }
+  error(msg: string, ...args: any[]) {
+    this.log.error(msg, ...args)
+  }
+  debug(msg: string, ...args: any[]) {
+    this.log.debug(msg, ...args)
+  }
+  trace(msg: string, ...args: any[]) {
+    this.log.trace(msg, ...args)
+  }
+  fatal(msg: string, ...args: any[]) {
+    this.log.fatal(msg, ...args)
+  }
+  child(bindings: { component: string }): LoggerProvider {
+    return new PinoLoggerProvider(this.log.child(bindings))
+  }
+}
+
+// ── ConsoleLoggerProvider ──────────────────────────────────────────────
+
+/**
+ * Built-in fallback provider that uses `console.*` methods.
+ * Useful for environments where pino is unavailable or undesired.
+ */
+export class ConsoleLoggerProvider implements LoggerProvider {
+  private prefix: string
+
+  constructor(prefix?: string) {
+    this.prefix = prefix ?? ''
+  }
+
+  private fmt(msg: string): string {
+    return this.prefix ? `[${this.prefix}] ${msg}` : msg
+  }
+
+  info(msg: string, ...args: any[]) {
+    console.log(this.fmt(msg), ...args)
+  }
+  warn(msg: string, ...args: any[]) {
+    console.warn(this.fmt(msg), ...args)
+  }
+  error(msg: string, ...args: any[]) {
+    console.error(this.fmt(msg), ...args)
+  }
+  debug(msg: string, ...args: any[]) {
+    console.debug(this.fmt(msg), ...args)
+  }
+  trace(msg: string, ...args: any[]) {
+    console.trace(this.fmt(msg), ...args)
+  }
+  fatal(msg: string, ...args: any[]) {
+    console.error(this.fmt(msg), ...args)
+  }
+  child(bindings: { component: string }): LoggerProvider {
+    return new ConsoleLoggerProvider(bindings.component)
+  }
+}
+
+// ── Active provider ────────────────────────────────────────────────────
+
+let activeProvider: LoggerProvider = new PinoLoggerProvider()
+
 /** Cache of named loggers to avoid creating duplicates */
 const loggerCache = new Map<string, Logger>()
 
@@ -37,6 +133,9 @@ const loggerCache = new Map<string, Logger>()
  * // Shorthand function
  * const log = createLogger('OrderService')
  *
+ * // Pluggable backend
+ * Logger.setProvider(new ConsoleLoggerProvider())
+ *
  * // Injectable — auto-named from class
  * class MyService {
  *   @Autowired() private logger!: Logger
@@ -46,7 +145,9 @@ const loggerCache = new Map<string, Logger>()
  * ```
  */
 export class Logger {
-  private log: pino.Logger
+  private _provider: LoggerProvider
+  private _providerVersion: number
+  private _name?: string
 
   /**
    * Optional context provider for request-scoped log enrichment.
@@ -55,8 +156,53 @@ export class Logger {
    */
   static _contextProvider: (() => Record<string, any> | null) | null = null
 
+  /** Incremented on every setProvider/resetProvider so instances know to refresh */
+  private static _providerVersion = 0
+
   constructor(name?: string) {
-    this.log = name ? rootLogger.child({ component: name }) : rootLogger
+    this._name = name
+    this._providerVersion = Logger._providerVersion
+    this._provider = name ? activeProvider.child({ component: name }) : activeProvider
+  }
+
+  /** Re-derive the provider if setProvider() was called since construction/last access */
+  private get provider(): LoggerProvider {
+    if (this._providerVersion !== Logger._providerVersion) {
+      this._providerVersion = Logger._providerVersion
+      this._provider = this._name ? activeProvider.child({ component: this._name }) : activeProvider
+    }
+    return this._provider
+  }
+
+  /**
+   * Replace the logging backend for **all** Logger instances created after
+   * this call.  Clears the logger cache so subsequent `Logger.for()` calls
+   * pick up the new provider.
+   *
+   * @example
+   * ```ts
+   * Logger.setProvider(new ConsoleLoggerProvider())
+   * ```
+   */
+  static setProvider(provider: LoggerProvider): void {
+    activeProvider = provider
+    Logger._providerVersion++
+    loggerCache.clear()
+  }
+
+  /** Return the currently active provider (useful for testing) */
+  static getProvider(): LoggerProvider {
+    return activeProvider
+  }
+
+  /**
+   * Reset the provider back to the default pino-based implementation.
+   * Primarily intended for test teardown.
+   */
+  static resetProvider(): void {
+    activeProvider = new PinoLoggerProvider()
+    Logger._providerVersion++
+    loggerCache.clear()
   }
 
   /** Create or retrieve a cached named logger */
@@ -80,39 +226,33 @@ export class Logger {
   }
 
   info(msg: string, ...args: any[]) {
-    const c = this.ctx()
-    c ? this.log.info(c, msg, ...args) : this.log.info(msg, ...args)
+    this.provider.info(msg, ...args)
   }
 
   warn(msg: string, ...args: any[]) {
-    const c = this.ctx()
-    c ? this.log.warn(c, msg, ...args) : this.log.warn(msg, ...args)
+    this.provider.warn(msg, ...args)
   }
 
   error(msgOrObj: any, msg?: string, ...args: any[]) {
     if (typeof msgOrObj === 'string') {
-      const c = this.ctx()
-      c ? this.log.error(c, msgOrObj) : this.log.error(msgOrObj)
+      this.provider.error(msgOrObj)
+    } else if (msg) {
+      this.provider.error(msg, ...args)
     } else {
-      const c = this.ctx()
-      const obj = c ? { ...msgOrObj, ...c } : msgOrObj
-      this.log.error(obj, msg, ...args)
+      this.provider.error(String(msgOrObj))
     }
   }
 
   debug(msg: string, ...args: any[]) {
-    const c = this.ctx()
-    c ? this.log.debug(c, msg, ...args) : this.log.debug(msg, ...args)
+    this.provider.debug(msg, ...args)
   }
 
   trace(msg: string, ...args: any[]) {
-    const c = this.ctx()
-    c ? this.log.trace(c, msg, ...args) : this.log.trace(msg, ...args)
+    this.provider.trace ? this.provider.trace(msg, ...args) : this.provider.debug(msg, ...args)
   }
 
   fatal(msg: string, ...args: any[]) {
-    const c = this.ctx()
-    c ? this.log.fatal(c, msg, ...args) : this.log.fatal(msg, ...args)
+    this.provider.fatal ? this.provider.fatal(msg, ...args) : this.provider.error(msg, ...args)
   }
 }
 
