@@ -55,6 +55,7 @@
   "scripts": {
     "build": "wireit",
     "dev": "tsdown --watch",
+    "test": "vitest run --passWithNoTests",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist .wireit",
     "lint": "tsc --noEmit"
