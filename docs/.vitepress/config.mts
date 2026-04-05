@@ -148,14 +148,6 @@ const sharedSidebar = {
   '/examples/': examplesSidebar,
 }
 
-function localeSidebar(code: string) {
-  return {
-    [`/${code}/guide/`]: guideSidebar,
-    [`/${code}/api/`]: apiSidebar,
-    [`/${code}/examples/`]: examplesSidebar,
-  }
-}
-
 export default defineVersionedConfig(
   {
     versioning: {
@@ -183,68 +175,12 @@ export default defineVersionedConfig(
       ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
     ],
 
-    locales: {
-      root: {
-        label: 'English',
-        lang: 'en',
-      },
-      fr: {
-        label: 'Français',
-        lang: 'fr-FR',
-        link: '/fr/',
-        themeConfig: { sidebar: localeSidebar('fr') },
-      },
-      es: {
-        label: 'Español',
-        lang: 'es-ES',
-        link: '/es/',
-        themeConfig: { sidebar: localeSidebar('es') },
-      },
-      de: {
-        label: 'Deutsch',
-        lang: 'de-DE',
-        link: '/de/',
-        themeConfig: { sidebar: localeSidebar('de') },
-      },
-      zh: {
-        label: '中文',
-        lang: 'zh-CN',
-        link: '/zh/',
-        themeConfig: { sidebar: localeSidebar('zh') },
-      },
-      ja: {
-        label: '日本語',
-        lang: 'ja-JP',
-        link: '/ja/',
-        themeConfig: { sidebar: localeSidebar('ja') },
-      },
-      pt: {
-        label: 'Português',
-        lang: 'pt-BR',
-        link: '/pt/',
-        themeConfig: { sidebar: localeSidebar('pt') },
-      },
-      ar: {
-        label: 'العربية',
-        lang: 'ar-SA',
-        link: '/ar/',
-        themeConfig: { sidebar: localeSidebar('ar') },
-      },
-    },
-
     themeConfig: {
       versionSwitcher: false,
       nav: [
         { text: 'Guide', link: '/guide/getting-started' },
         { text: 'API', link: '/api/core' },
         { text: 'Examples', link: '/examples/' },
-        {
-          text: `v${pkg.version}`,
-          items: [
-            { text: 'Changelog', link: '/changelog' },
-            { text: 'Roadmap', link: '/roadmap' },
-          ],
-        },
         { component: 'VersionSwitcher' },
       ],
 
@@ -273,7 +209,9 @@ export default defineVersionedConfig(
         provider: 'local',
         options: {
           detailedView: true,
-          placeholder: 'Search docs...',
+          miniSearch: {
+            searchOptions: {},
+          },
         },
       },
     },
