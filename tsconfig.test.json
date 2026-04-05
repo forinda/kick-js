@@ -4,11 +4,14 @@
     "noEmit": true,
     "rootDir": ".",
     "baseUrl": ".",
+    "types": [],
     "paths": {
-      "@forinda/kickjs-core": ["packages/core/src/index.ts"],
-      "@forinda/kickjs-core/*": ["packages/core/src/*"],
-      "@forinda/kickjs-http": ["packages/http/src/index.ts"],
-      "@forinda/kickjs-http/*": ["packages/http/src/*"],
+      "@forinda/kickjs": ["packages/kickjs/src/index.ts"],
+      "@forinda/kickjs/*": ["packages/kickjs/src/*"],
+      "@forinda/kickjs-core": ["packages/kickjs/src/core/index.ts"],
+      "@forinda/kickjs-core/*": ["packages/kickjs/src/core/*"],
+      "@forinda/kickjs-http": ["packages/kickjs/src/index.ts"],
+      "@forinda/kickjs-http/*": ["packages/kickjs/src/*"],
       "@forinda/kickjs-auth": ["packages/auth/src/index.ts"],
       "@forinda/kickjs-auth/*": ["packages/auth/src/*"],
       "@forinda/kickjs-config": ["packages/config/src/index.ts"],
@@ -32,12 +35,16 @@
       "@forinda/kickjs-prisma": ["packages/prisma/src/index.ts"],
       "@forinda/kickjs-prisma/*": ["packages/prisma/src/*"],
       "@forinda/kickjs-drizzle": ["packages/drizzle/src/index.ts"],
-      "@forinda/kickjs-drizzle/*": ["packages/drizzle/src/*"]
+      "@forinda/kickjs-drizzle/*": ["packages/drizzle/src/*"],
+      "@forinda/kickjs-vite": ["packages/vite/src/index.ts"],
+      "@forinda/kickjs-vite/*": ["packages/vite/src/*"],
+      "@forinda/kickjs-notifications": ["packages/notifications/src/index.ts"],
+      "@forinda/kickjs-notifications/*": ["packages/notifications/src/*"]
     }
   },
   "include": [
-    "tests/**/*.ts",
-    "packages/*/tests/**/*.ts",
+    "__tests__/**/*.ts",
+    "packages/*/__tests__/**/*.ts",
     "packages/*/src/**/*.ts"
   ]
 }

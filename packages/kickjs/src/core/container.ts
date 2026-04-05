@@ -227,8 +227,18 @@ export class Container {
   registerFactory(token: any, factory: () => any, scope: Scope = Scope.SINGLETON): void {
     const store = getPersistentStore()
     const name = tokenName(token)
-    // Check if we already have a resolved instance from a previous HMR cycle
-    const existingInstance = store.resolvedInstances.get(name)
+    // Check if we already have a resolved instance from a previous HMR cycle.
+    // Only reuse if the factory hasn't changed (same reference). When a new
+    // factory is provided (e.g. swapping implementations), clear the stale
+    // instance so the new factory runs on next resolve.
+    const existingEntry = store.factories.find((r) => tokenName(r.token) === name)
+    const factoryUnchanged = existingEntry?.factory === factory
+    const existingInstance = factoryUnchanged ? store.resolvedInstances.get(name) : undefined
+
+    // Clear stale resolved instance when factory changes
+    if (!factoryUnchanged) {
+      store.resolvedInstances.delete(name)
+    }
 
     this.registrations.set(
       token,

@@ -18,8 +18,11 @@ export default defineConfig({
     },
   },
   test: {
+    typecheck: {
+      tsconfig: './tsconfig.test.json',
+    },
     environment: 'node',
-    include: ['tests/**/*.test.ts'],
+    include: ['__tests__/**/*.test.ts'],
     globals: false,
     pool: 'threads',
     maxConcurrency: 1,

@@ -74,6 +74,17 @@ export async function createTestApp(options: CreateTestAppOptions): Promise<{
   // Awaited to support future async adapter hooks.
   await Promise.resolve(app.setup())
 
+  // When using an isolated container, Application.setup() registers modules
+  // on the global singleton (Container.getInstance()). Re-register them on
+  // the isolated container so that bindings are available there too.
+  if (options.isolated) {
+    for (const ModuleClass of options.modules) {
+      const mod = new ModuleClass()
+      mod.register(container)
+    }
+    container.bootstrap()
+  }
+
   // Apply DI overrides AFTER setup so they take precedence over
   // bindings registered by modules during register().
   if (options.overrides) {
@@ -108,12 +119,13 @@ export function createTestModule(config: {
   register: (container: Container) => void
   routes: () => ModuleRoutes | ModuleRoutes[] | null
 }): AppModuleClass {
-  return class TestModule implements AppModule {
+  class TestModule implements AppModule {
     register(container: Container) {
       config.register(container)
     }
     routes() {
       return config.routes()
     }
-  } as AppModuleClass
+  }
+  return TestModule
 }

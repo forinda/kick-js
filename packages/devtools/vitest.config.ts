@@ -13,8 +13,8 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      '@forinda/kickjs': path.resolve(__dirname, 'src/index.ts'),
-      '@forinda/kickjs-testing': path.resolve(__dirname, '../testing/src/index.ts'),
+      '@forinda/kickjs': path.resolve(__dirname, '../kickjs/src/index.ts'),
+      '@forinda/kickjs-devtools': path.resolve(__dirname, 'src/index.ts'),
     },
   },
   test: {
@@ -24,5 +24,7 @@ export default defineConfig({
     environment: 'node',
     include: ['__tests__/**/*.test.ts'],
     globals: false,
+    pool: 'threads',
+    maxConcurrency: 1,
   },
 })
