@@ -25,7 +25,7 @@ kick dev
 | Endpoint | Description |
 |----------|-------------|
 | `GET /api/v1/tasks` | List all tasks |
-| `POST /api/v1/tasks` | Create a task (JSON body: `{ title, description? }`) |
+| `POST /api/v1/tasks` | Create a task (JSON body: `{ name }`) |
 | `GET /api/v1/tasks/:id` | Get task by ID |
 | `PUT /api/v1/tasks/:id` | Update task |
 | `DELETE /api/v1/tasks/:id` | Delete task |
