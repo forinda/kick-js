@@ -57,7 +57,7 @@ export function getMethodMetaOrUndefined<T>(
 
 /** Append items to an array stored in class metadata */
 export function pushClassMeta<T>(key: MetaKey, target: object, ...items: T[]): void {
-  const existing: T[] = Reflect.getMetadata(key, target) ?? []
+  const existing: T[] = Reflect.getOwnMetadata(key, target) ?? []
   Reflect.defineMetadata(key, [...existing, ...items], target)
 }
 
@@ -68,7 +68,7 @@ export function pushMethodMeta<T>(
   method: string,
   ...items: T[]
 ): void {
-  const existing: T[] = Reflect.getMetadata(key, target, method) ?? []
+  const existing: T[] = Reflect.getOwnMetadata(key, target, method) ?? []
   Reflect.defineMetadata(key, [...existing, ...items], target, method)
 }
 
@@ -76,9 +76,10 @@ export function pushMethodMeta<T>(
 
 /** Set a key/value in a Map stored in class metadata */
 export function setInMetaMap<K, V>(key: MetaKey, target: object, mapKey: K, mapValue: V): void {
-  const existing: Map<K, V> = Reflect.getMetadata(key, target) ?? new Map()
-  existing.set(mapKey, mapValue)
-  Reflect.defineMetadata(key, existing, target)
+  const inherited: Map<K, V> | undefined = Reflect.getOwnMetadata(key, target)
+  const map = inherited ? new Map(inherited) : new Map<K, V>()
+  map.set(mapKey, mapValue)
+  Reflect.defineMetadata(key, map, target)
 }
 
 /** Get a Map from class metadata (returns empty Map if absent) */
@@ -95,9 +96,10 @@ export function setInMetaRecord<V>(
   recKey: string | number,
   recValue: V,
 ): void {
-  const existing: Record<string | number, V> = Reflect.getMetadata(key, target) ?? {}
-  existing[recKey] = recValue
-  Reflect.defineMetadata(key, existing, target)
+  const inherited: Record<string | number, V> | undefined = Reflect.getOwnMetadata(key, target)
+  const rec = inherited ? { ...inherited } : {}
+  rec[recKey] = recValue
+  Reflect.defineMetadata(key, rec, target)
 }
 
 /** Get a Record from class metadata (returns empty object if absent) */

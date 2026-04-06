@@ -96,6 +96,11 @@ export class Logger {
       // When called as error('msg', arg1, arg2), msg is the format string's first value
       const restArgs = msg !== undefined ? [msg, ...args] : args
       c ? this.log.error(c, msgOrObj, ...restArgs) : this.log.error(msgOrObj, ...restArgs)
+    } else if (msgOrObj instanceof Error) {
+      const c = this.ctx()
+      c
+        ? this.log.error({ ...c, err: msgOrObj }, msg, ...args)
+        : this.log.error(msgOrObj, msg, ...args)
     } else {
       const c = this.ctx()
       const obj = c ? { ...msgOrObj, ...c } : msgOrObj
