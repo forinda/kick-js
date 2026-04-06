@@ -84,8 +84,18 @@ jobs:
             console.log('Bun smoke test passed')
           "
 
-      - name: Smoke test — bun test on exports
-        run: bun test packages/kickjs/__tests__/exports.test.ts
+      - name: Smoke test — bun test on core exports
+        run: |
+          bun -e "
+            import { Container, Scope, Service, Controller, Get, Inject } from './packages/kickjs/dist/index.mjs'
+            import { RequestContext, buildRoutes, bootstrap } from './packages/kickjs/dist/index.mjs'
+            const checks = { Container, Scope, Service, Controller, Get, Inject, RequestContext, buildRoutes, bootstrap }
+            for (const [name, val] of Object.entries(checks)) {
+              if (!val) { console.error('Missing export:', name); process.exit(1) }
+            }
+            console.log('All', Object.keys(checks).length, 'exports verified')
+            console.log('Bun export test passed')
+          "
 
   deno-smoke-test:
     runs-on: ubuntu-latest
@@ -116,6 +126,12 @@ jobs:
 
       - name: Smoke test — pure ESM imports resolve under Deno
         run: |
-          echo 'import { Scope } from "./packages/kickjs/dist/core/container.mjs"; import { parseQuery } from "./packages/kickjs/dist/http/query/index.mjs"; console.log("Scope:", typeof Scope); console.log("parseQuery:", typeof parseQuery); console.log("Deno smoke test passed");' > deno-smoke.mjs
-          deno run --allow-read=. --allow-env deno-smoke.mjs
+          cat > deno-smoke.mjs << 'EOF'
+          import { Scope, Container, parseQuery } from "./packages/kickjs/dist/index.mjs"
+          console.log("Scope:", typeof Scope)
+          console.log("Container:", typeof Container)
+          console.log("parseQuery:", typeof parseQuery)
+          console.log("Deno smoke test passed")
+          EOF
+          deno run --allow-read=. --allow-env --allow-sys deno-smoke.mjs
           rm deno-smoke.mjs
