@@ -99,6 +99,7 @@ export class SwaggerAdapter implements AppAdapter {
     const docsPath = this.options.docsPath ?? '/docs'
     const redocPath = this.options.redocPath ?? '/redoc'
     const specPath = this.options.specPath ?? '/openapi.json'
+    let UI_DIST_AVAILABLE = false
 
     const docsRouter = Router()
 
@@ -109,6 +110,7 @@ export class SwaggerAdapter implements AppAdapter {
     try {
       const swaggerDistDir = getSwaggerUiDistPath()
       docsRouter.use(swaggerAssetsPath, express.static(swaggerDistDir))
+      UI_DIST_AVAILABLE = true
     } catch {
       log.warn('swagger-ui-dist not found — Swagger UI will load from CDN (requires internet).')
       //   We now fall back to the CDN version of the HTML, which references the CDN assets.
@@ -136,7 +138,15 @@ export class SwaggerAdapter implements AppAdapter {
 
     // Swagger UI — uses local assets if available, CDN fallback
     docsRouter.get(docsPath, (_req, res) => {
-      res.type('html').send(swaggerUIHtml(specPath, this.options.info?.title, swaggerAssetsPath))
+      res
+        .type('html')
+        .send(
+          swaggerUIHtml(
+            specPath,
+            this.options.info?.title,
+            UI_DIST_AVAILABLE ? swaggerAssetsPath : undefined,
+          ),
+        )
     })
 
     // ReDoc — still CDN-based (no npm package for standalone bundle)
