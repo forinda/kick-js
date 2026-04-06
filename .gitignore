@@ -17,3 +17,4 @@ yarn-error.log*
 RELEASE_NOTES_*.md
 benchmark-results.json
 benchmarks/results.json
+.ignored
