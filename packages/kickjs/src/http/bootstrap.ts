@@ -75,8 +75,6 @@ export async function bootstrap(options: ApplicationOptions): Promise<Applicatio
       log.error(reason as any, 'Unhandled rejection')
     })
 
-    // Only register shutdown handlers if Vite is NOT managing the server.
-    // When Vite manages the server, the CLI handles shutdown via server.close().
     if (!g.__kickjs_httpServer) {
       for (const signal of ['SIGINT', 'SIGTERM'] as const) {
         process.on(signal, async () => {
@@ -91,10 +89,6 @@ export async function bootstrap(options: ApplicationOptions): Promise<Applicatio
   }
 
   // ── HMR rebuild ──────────────────────────────────────────────────────
-  // When Vite re-evaluates the entry file, bootstrap() is called again
-  // with FRESH options (new module list, new adapters, etc.).
-  // We create a brand new Application with these fresh options instead of
-  // reusing the old one — this ensures new modules/controllers are picked up.
   if (g.__app) {
     log.info('HMR: Rebuilding application...')
     tryReloadEnv()
@@ -104,8 +98,6 @@ export async function bootstrap(options: ApplicationOptions): Promise<Applicatio
     g.__app = freshApp
     g.__kickjs_container = freshApp.getContainer()
 
-    // start() detects Vite httpServer and skips listen()
-    // It re-runs the full setup pipeline with the fresh module list
     await freshApp.start()
     log.info('HMR: Application rebuilt with fresh modules')
     return freshApp
@@ -114,11 +106,8 @@ export async function bootstrap(options: ApplicationOptions): Promise<Applicatio
   // ── First boot ───────────────────────────────────────────────────────
   const app = new Application(options)
   g.__app = app
-
-  // Store the container on globalThis so the HMR plugin can call invalidate()
   g.__kickjs_container = app.getContainer()
 
-  // In tinker mode, register modules and DI but skip starting the HTTP server
   if (process.env.KICK_TINKER) {
     await app.registerOnly()
     return app

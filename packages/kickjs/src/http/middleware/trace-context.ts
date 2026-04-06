@@ -87,17 +87,19 @@ export function traceContext(options: TraceContextOptions = {}) {
   return (req: Request, res: Response, next: NextFunction) => {
     const store = requestStore.getStore()
 
-    const raw = req.headers[TRACEPARENT_HEADER] as string | undefined
+    const traceparentHeader = req.headers[TRACEPARENT_HEADER]
+    const raw = Array.isArray(traceparentHeader) ? traceparentHeader[0] : traceparentHeader
     const parsed = raw ? parseTraceparent(raw) : null
 
     const traceId = parsed?.traceId ?? generateTraceId()
-    const spanId = parsed?.parentSpanId ?? generateSpanId()
+    const spanId = generateSpanId()
 
     // Attach to the request store so logger + downstream code can access it
     if (store) {
       store.values.set('traceId', traceId)
       store.values.set('spanId', spanId)
       if (parsed) {
+        store.values.set('parentSpanId', parsed.parentSpanId)
         store.values.set('traceFlags', parsed.flags)
         store.values.set('traceVersion', parsed.version)
       }

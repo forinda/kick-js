@@ -134,16 +134,22 @@ export function setupClusterPrimary(opts: ClusterOptions): void {
     log.debug(`Worker ${worker.process.pid} disconnected (id=${worker.id})`)
   })
 
-  // Forward shutdown signals to workers
+  // Forward shutdown signals to workers (disconnect so exitedAfterDisconnect is set)
+  let shuttingDown = false
   for (const signal of ['SIGTERM', 'SIGINT'] as const) {
     process.on(signal, () => {
-      log.info(`Primary received ${signal}, forwarding to workers...`)
-      for (const id in cluster.workers) {
-        const worker = cluster.workers[id]
-        if (worker) {
-          worker.process.kill(signal)
-        }
-      }
+      if (shuttingDown) return
+      shuttingDown = true
+      log.info(`Primary received ${signal}, disconnecting workers...`)
+      cluster.disconnect(() => {
+        log.info('All workers disconnected, exiting primary')
+        process.exit(0)
+      })
+      // Force kill after graceful timeout
+      setTimeout(() => {
+        log.warn('Graceful shutdown timed out, forcing exit')
+        process.exit(1)
+      }, gracefulTimeout).unref()
     })
   }
 }

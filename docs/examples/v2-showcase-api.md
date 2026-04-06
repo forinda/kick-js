@@ -64,11 +64,11 @@ v2-showcase-api/
 
 ```ts
 import { defineConfig } from 'vite'
-import { kickjs } from '@forinda/kickjs-vite'
+import { kickjsVitePlugin } from '@forinda/kickjs-vite'
 import swc from 'unplugin-swc'
 
 export default defineConfig({
-  plugins: [kickjs(), swc.vite()],
+  plugins: [kickjsVitePlugin(), swc.vite()],
   // ...
 })
 ```

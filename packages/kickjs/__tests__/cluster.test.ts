@@ -121,26 +121,19 @@ describe('Cluster module', () => {
       forkSpy.mockRestore()
     })
 
-    it('SIGTERM on primary is forwarded to all workers', async () => {
+    it('SIGTERM on primary calls cluster.disconnect()', async () => {
       vi.spyOn(cluster, 'fork').mockReturnValue({ process: { pid: 1 } } as any)
       vi.spyOn(cluster, 'on').mockImplementation(() => cluster)
+      const disconnectSpy = vi.spyOn(cluster, 'disconnect').mockImplementation((cb?: () => void) => {
+        cb?.()
+      })
+      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never)
 
       // Capture signal handlers registered by setupClusterPrimary
-      const signalHandlers: Record<string, Function> = {}
-      vi.spyOn(process, 'on').mockImplementation((event: string, handler: Function) => {
-        signalHandlers[event] = handler
+      const signalHandlers: Record<string | symbol, Function> = {}
+      vi.spyOn(process, 'on').mockImplementation((event: string | symbol, handler: (...args: any[]) => void) => {
+        signalHandlers[event as string] = handler
         return process
-      })
-
-      // Mock cluster.workers
-      const killSpy1 = vi.fn()
-      const killSpy2 = vi.fn()
-      Object.defineProperty(cluster, 'workers', {
-        value: {
-          '1': { process: { pid: 100, kill: killSpy1 } },
-          '2': { process: { pid: 200, kill: killSpy2 } },
-        },
-        configurable: true,
       })
 
       const { setupClusterPrimary } = await import('../src/http/cluster')
@@ -151,11 +144,11 @@ describe('Cluster module', () => {
       expect(signalHandlers['SIGTERM']).toBeDefined()
       signalHandlers['SIGTERM']()
 
-      expect(killSpy1).toHaveBeenCalledWith('SIGTERM')
-      expect(killSpy2).toHaveBeenCalledWith('SIGTERM')
+      expect(disconnectSpy).toHaveBeenCalled()
+      expect(exitSpy).toHaveBeenCalledWith(0)
 
-      // Restore
-      Object.defineProperty(cluster, 'workers', { value: {}, configurable: true })
+      disconnectSpy.mockRestore()
+      exitSpy.mockRestore()
     })
   })
 
