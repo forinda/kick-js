@@ -7,6 +7,14 @@ const log = createLogger('Cluster')
 export interface ClusterOptions {
   /** Number of worker processes (default: os.cpus().length) */
   workers?: number
+  /** Delay before forcefully killing a worker during shutdown (ms), default: 5000 */
+  gracefulShutdownTimeout?: number
+  /** Delay between worker restarts (ms), default: 1000 */
+  restartDelay?: number
+  /** Max failures in restartWindow before refusing to restart, default: 5 */
+  maxFailures?: number
+  /** Time window for counting failures (ms), default: 30000 */
+  restartWindow?: number
 }
 
 /** Returns true if the current process is the cluster primary */
@@ -14,39 +22,119 @@ export function isClusterPrimary(): boolean {
   return cluster.isPrimary
 }
 
-/** Delay between worker restarts to avoid crash loops (ms) */
-const RESTART_DELAY = 1000
-
 /**
  * Fork worker processes and manage the cluster lifecycle.
  *
- * The primary process forks `workers` child processes.  Each worker
+ * The primary process forks `workers` child processes. Each worker
  * shares the same port via Node's built-in `cluster` module (OS
  * round-robin load balancing).
  *
- * - Dead workers are automatically restarted after a short delay.
- * - SIGTERM/SIGINT on the primary is forwarded to all workers.
+ * Features:
+ * - Graceful shutdown with timeout fallback to forceful kill
+ * - Auto-restart dead workers (respects voluntary disconnects)
+ * - Startup timeout detection (stuck workers)
+ * - Crash loop prevention (backoff on rapid failures)
+ * - Comprehensive lifecycle logging
  */
 export function setupClusterPrimary(opts: ClusterOptions): void {
   const numWorkers = opts.workers ?? os.cpus().length
+  const gracefulTimeout = opts.gracefulShutdownTimeout ?? 5000
+  const restartDelay = opts.restartDelay ?? 1000
+  const maxFailures = opts.maxFailures ?? 5
+  const restartWindow = opts.restartWindow ?? 30000
+
+  // Track startup timeouts and crash history
+  const startupTimeouts = new Map<number, NodeJS.Timeout>()
+  const failureHistory = new Map<number, number[]>() // timestamp array per worker ID
 
   log.info(`Primary ${process.pid} starting ${numWorkers} worker(s)`)
 
+  // Initial fork
   for (let i = 0; i < numWorkers; i++) {
     cluster.fork()
   }
 
-  // Auto-restart dead workers
-  cluster.on('exit', (worker, code, signal) => {
-    log.warn(
-      `Worker ${worker.process.pid} died (code=${code}, signal=${signal}), restarting in ${RESTART_DELAY}ms...`,
-    )
-    setTimeout(() => {
-      cluster.fork()
-    }, RESTART_DELAY)
+  // Detect stuck workers (no 'listening' event within timeout)
+  cluster.on('fork', (worker) => {
+    const timeout = setTimeout(() => {
+      log.error(`Worker ${worker.process.pid} did not respond within 10s, killing...`)
+      worker.kill()
+    }, 10000)
+
+    startupTimeouts.set(worker.id, timeout)
+    log.debug(`Worker ${worker.process.pid} forked (id=${worker.id})`)
   })
 
-  // Forward shutdown signals to all workers
+  // Clear startup timeout when worker is ready
+  cluster.on('listening', (worker, address) => {
+    const timeout = startupTimeouts.get(worker.id)
+    if (timeout) {
+      clearTimeout(timeout)
+      startupTimeouts.delete(worker.id)
+    }
+    log.info(`Worker ${worker.process.pid} listening on ${address.address}:${address.port}`)
+  })
+
+  // Log when worker comes online
+  cluster.on('online', (worker) => {
+    log.debug(`Worker ${worker.process.pid} online (id=${worker.id})`)
+  })
+
+  // Auto-restart dead workers (unless intentionally disconnected)
+  cluster.on('exit', (worker, code, signal) => {
+    // Clear startup timeout if still pending
+    const timeout = startupTimeouts.get(worker.id)
+    if (timeout) {
+      clearTimeout(timeout)
+      startupTimeouts.delete(worker.id)
+    }
+
+    // Don't restart if worker was intentionally disconnected
+    if (worker.exitedAfterDisconnect) {
+      log.info(`Worker ${worker.process.pid} exited gracefully (id=${worker.id})`)
+      return
+    }
+
+    // Check crash history for this worker ID
+    const now = Date.now()
+    const history = failureHistory.get(worker.id) ?? []
+
+    // Keep only recent failures within the time window
+    const recent = history.filter((timestamp) => now - timestamp < restartWindow)
+    recent.push(now)
+    failureHistory.set(worker.id, recent)
+
+    // Prevent restart loops
+    if (recent.length > maxFailures) {
+      log.error(
+        `Worker ${worker.process.pid} failed ${recent.length} times in ${restartWindow}ms, giving up`,
+      )
+      // Optionally exit the primary if too many workers are crashing
+      if (Object.keys(cluster.workers ?? {}).length === 0) {
+        log.error('All workers have crashed, exiting primary')
+        process.exit(1)
+      }
+      return
+    }
+
+    log.warn(
+      `Worker ${worker.process.pid} died (code=${code}, signal=${signal}), restarting in ${restartDelay}ms... (failures: ${recent.length}/${maxFailures})`,
+    )
+
+    setTimeout(() => {
+      // Only restart if we still need more workers
+      if (Object.keys(cluster.workers ?? {}).length < numWorkers) {
+        cluster.fork()
+      }
+    }, restartDelay)
+  })
+
+  // Log when worker disconnects (can happen before exit)
+  cluster.on('disconnect', (worker) => {
+    log.debug(`Worker ${worker.process.pid} disconnected (id=${worker.id})`)
+  })
+
+  // Forward shutdown signals to workers
   for (const signal of ['SIGTERM', 'SIGINT'] as const) {
     process.on(signal, () => {
       log.info(`Primary received ${signal}, forwarding to workers...`)
