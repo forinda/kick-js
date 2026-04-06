@@ -17,46 +17,7 @@ import { modules } from './modules'
 bootstrap({ modules })
 ```
 
-Internally, `bootstrap()` does the following:
-
-**First boot:**
-1. Registers global error handlers (`uncaughtException`, `unhandledRejection`)
-2. Registers shutdown handlers for `SIGINT` and `SIGTERM`
-3. Creates a new `Application` instance
-4. Stores it on `globalThis.__app`
-5. Calls `app.start()` which runs `setup()` then starts the HTTP server
-6. Calls `import.meta.hot.accept()` to tell Vite this module handles its own updates
-
-**Subsequent reloads (HMR):**
-1. Detects `globalThis.__app` already exists
-2. Calls `app.rebuild()` instead of `app.start()`
-3. Returns immediately -- no new server is created
-
-### The rebuild() Method
-
-`Application.rebuild()` performs a surgical swap:
-
-```ts
-rebuild(): void {
-  Container.reset()
-  this.container = Container.getInstance()
-  this.app = express()
-  this.setup()
-
-  if (this.httpServer) {
-    this.httpServer.removeAllListeners('request')
-    this.httpServer.on('request', this.app)
-  }
-}
-```
-
-Step by step:
-
-1. **Reset the DI container** -- clears all singletons so they are re-created with fresh code
-2. **Get a fresh container instance**
-3. **Create a new Express app** -- clean middleware and route stack
-4. **Run the full setup pipeline** -- adapters, middleware, modules, routes, error handlers
-5. **Swap the request handler** -- remove old listeners on the `http.Server`, attach the new Express app
+On the first call, `bootstrap()` creates the application, registers error/shutdown handlers, and starts the HTTP server. On subsequent calls (triggered by HMR), it rebuilds the Express app and swaps the request handler on the existing server — no restart needed.
 
 ### What Is Preserved
 
@@ -69,29 +30,7 @@ Step by step:
 | Redis clients | Controller instances |
 | Socket.IO server | Service instances |
 
-The `http.Server` is created once during the first `app.start()` call and never recreated. Only the request handler function is swapped, so existing connections and listeners remain intact.
-
-### globalThis Storage
-
-KickJS uses `globalThis` to persist state across Vite module re-executions:
-
-- `globalThis.__app` -- the Application instance (created once, rebuilt on HMR)
-- `globalThis.__kickBootstrapped` -- flag to prevent re-registering process handlers
-
-This pattern works because `globalThis` survives Vite's module invalidation, while module-level variables are reset.
-
-## Vite HMR Acceptance
-
-The key line is `import.meta.hot.accept()` at the end of `bootstrap()`:
-
-```ts
-const meta = import.meta as any
-if (meta.hot) {
-  meta.hot.accept()
-}
-```
-
-This tells Vite that the entry module handles its own updates. Without this call, Vite would perform a full server restart on every change.
+The HTTP server is created once and never recreated. Only the request handler is swapped, so existing connections and listeners remain intact.
 
 ## Configuring Vite
 

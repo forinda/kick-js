@@ -60,7 +60,7 @@ class HelloModule implements AppModule {
   }
 }
 
-bootstrap({ modules: [HelloModule] })
+const app = await bootstrap({ modules: [HelloModule] })
 ```
 
 ## Highlights

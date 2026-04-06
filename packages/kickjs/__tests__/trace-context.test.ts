@@ -77,7 +77,9 @@ describe('traceContext middleware', () => {
       .set('traceparent', '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01')
 
     expect(capturedTraceId).toBe('4bf92f3577b34da6a3ce929d0e0e4736')
-    expect(capturedSpanId).toBe('00f067aa0ba902b7')
+    // spanId is always freshly generated per W3C spec (incoming parent-id is stored as parentSpanId)
+    expect(capturedSpanId).toMatch(/^[0-9a-f]{16}$/)
+    expect(capturedSpanId).not.toBe('00f067aa0ba902b7')
   })
 
   it('generates a traceId when no traceparent header is present', async () => {
@@ -135,7 +137,9 @@ describe('traceContext middleware', () => {
       .set('traceparent', '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01')
 
     expect(reqTraceId).toBe('4bf92f3577b34da6a3ce929d0e0e4736')
-    expect(reqSpanId).toBe('00f067aa0ba902b7')
+    // spanId is always freshly generated per W3C spec
+    expect(reqSpanId).toMatch(/^[0-9a-f]{16}$/)
+    expect(reqSpanId).not.toBe('00f067aa0ba902b7')
   })
 
   it('sets traceresponse header when propagateResponse is true', async () => {
@@ -219,7 +223,8 @@ describe('traceId in Logger context', () => {
 
     expect(loggerContext).not.toBeNull()
     expect(loggerContext!.traceId).toBe('abcdef1234567890abcdef1234567890')
-    expect(loggerContext!.spanId).toBe('1234567890abcdef')
+    // spanId is always freshly generated per W3C spec
+    expect(loggerContext!.spanId).toMatch(/^[0-9a-f]{16}$/)
     expect(loggerContext!.requestId).toBeDefined()
   })
 

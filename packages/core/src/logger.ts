@@ -92,7 +92,10 @@ export class Logger {
   error(msgOrObj: any, msg?: string, ...args: any[]) {
     if (typeof msgOrObj === 'string') {
       const c = this.ctx()
-      c ? this.log.error(c, msgOrObj) : this.log.error(msgOrObj)
+      // Preserve full pino signature: error(msg, ...interpolationValues)
+      // When called as error('msg', arg1, arg2), msg is the format string's first value
+      const restArgs = msg !== undefined ? [msg, ...args] : args
+      c ? this.log.error(c, msgOrObj, ...restArgs) : this.log.error(msgOrObj, ...restArgs)
     } else {
       const c = this.ctx()
       const obj = c ? { ...msgOrObj, ...c } : msgOrObj

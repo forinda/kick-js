@@ -79,21 +79,9 @@ Jobs started piling up in the queue. Nothing was processing them.
 
 ## The Root Cause: Decorators Set Metadata, They Don't Register
 
-To understand what happened, I had to trace what `@Service()` actually does at runtime. Here is the simplified version:
+`@Service()` marks a class as injectable — it does not register it in the container by itself. Registration happens later when another component (like `buildRoutes()` or an adapter) discovers the class and registers it. This is a common pattern in decorator-based DI systems.
 
-```typescript
-// What @Service() does internally (simplified)
-function Service(): ClassDecorator {
-  return (target) => {
-    Reflect.defineMetadata('injectable', true, target);
-    Reflect.defineMetadata('scope', 'singleton', target);
-  };
-}
-```
-
-That is it. It marks the class as injectable. It does not call `container.register(target)`. Registration happens later, when some other piece of code reads that metadata and calls the container.
-
-For controllers, `buildRoutes(TasksController)` reads the metadata and registers the class. For repositories, `@Repository()` works similarly -- and then the module's `register()` method explicitly binds the token:
+For controllers, `buildRoutes(TasksController)` discovers and registers the class. For repositories, the module's `register()` method explicitly binds the token:
 
 ```typescript
 // src/modules/tasks/tasks.module.ts
@@ -146,57 +134,11 @@ export class QueueModule implements AppModule {
 
 This works but defeats the purpose of `@Service()`. You are doing manually what the decorator was supposed to do.
 
-**Workaround 2: @AutoRegister decorator with deferred registration.** I wrote a custom decorator that hooks into the container directly:
-
-```typescript
-function AutoRegister(): ClassDecorator {
-  return (target: any) => {
-    // Defer registration until the container is available
-    const originalMetadata = Reflect.getMetadata('injectable', target);
-    if (!originalMetadata) {
-      Reflect.defineMetadata('injectable', true, target);
-    }
-
-    // Queue for registration on next tick (container may not exist yet)
-    queueMicrotask(() => {
-      const container = Container.getInstance();
-      if (!container.has(target)) {
-        container.register(target);
-      }
-    });
-  };
-}
-
-// Usage:
-@AutoRegister()
-@Service()
-@Job('email')
-export class EmailProcessor {
-  // ...
-}
-```
-
-The `queueMicrotask` ensures the container exists before we try to register. This is hacky. It depends on timing. I did not love it.
+**Workaround 2: Deferred registration with `queueMicrotask`.** I wrote a custom decorator that defers `container.register()` to the next microtask, ensuring the container exists before registration. This worked but was fragile and timing-dependent — not recommended.
 
 ## The Fix: QueueAdapter Auto-Registration (v1.2.6)
 
-KickJS v1.2.6 changed the `QueueAdapter` to auto-register `@Job` classes in the container before resolving them:
-
-```typescript
-// Inside QueueAdapter.beforeStart() — simplified from v1.2.6
-async beforeStart(container: Container) {
-  for (const [queueName, jobClass] of jobRegistry.entries()) {
-    // Register the class if it's not already in the container
-    if (!container.has(jobClass)) {
-      container.register(jobClass);
-    }
-    const processor = container.resolve(jobClass);
-    this.setupWorker(queueName, processor);
-  }
-}
-```
-
-This means the side-effect imports still need to run (so the `@Job()` decorator populates the registry), but the adapter handles registration. The QueueModule becomes minimal:
+KickJS v1.2.6 changed the `QueueAdapter` to auto-register `@Job` classes in the container before resolving them. The side-effect imports still need to run (so the `@Job()` decorator populates the registry), but the adapter handles registration. The QueueModule becomes minimal:
 
 ```typescript
 // src/modules/queue/queue.module.ts — current version
@@ -212,22 +154,14 @@ export class QueueModule implements AppModule {
 }
 ```
 
-## The HMR Fix: Container._onReset and allRegistrations (v1.2.7)
+## The HMR Fix (v1.2.7)
 
-The cold boot problem was solved, but HMR still broke processors. KickJS v1.2.7 addressed this with two changes:
+The cold boot problem was solved, but HMR still broke processors. KickJS v1.2.7 addressed this by making the container and adapters HMR-aware:
 
-**1. An `allRegistrations` map that survives `Container.reset()`.** When HMR triggers a rebuild, the container calls `reset()` to clear all bindings. Previously, this wiped everything. Now, an `allRegistrations` map stores every class that was ever registered, keyed by class name (string), not class identity (object reference). After reset, the container can re-register classes even though their object identity has changed.
+- **String-keyed registration persistence** — registered classes survive container resets using name-based keys instead of object identity, so classes re-created by HMR are matched to their previous bindings.
+- **Adapter reset hooks** — adapters like `QueueAdapter` are notified after a container reset and re-register their managed classes with the fresh class identities.
 
-**2. A `_onReset` hook.** Adapters like `QueueAdapter` can register a callback that runs after `Container.reset()`. The callback re-reads the job registry and re-registers processor classes with the new class identities.
-
-This is the sequence now:
-
-1. HMR re-evaluates `email.processor.ts`
-2. JavaScript creates `NewEmailProcessor` (new object identity)
-3. `@Job('email')` decorator updates the job registry with `NewEmailProcessor`
-4. `Container.reset()` fires, clearing bindings
-5. `_onReset` callback runs, QueueAdapter re-registers `NewEmailProcessor`
-6. Workers resolve the fresh class and continue processing
+The result: HMR re-evaluates your processor file, the adapter picks up the new class, and workers continue processing without interruption.
 
 ## Lessons Learned About Decorator-Based DI
 

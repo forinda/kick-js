@@ -113,22 +113,23 @@ export class SwaggerAdapter implements AppAdapter {
       UI_DIST_AVAILABLE = true
     } catch {
       log.warn('swagger-ui-dist not found — Swagger UI will load from CDN (requires internet).')
-      //   We now fall back to the CDN version of the HTML, which references the CDN assets.
-      docsRouter.use((req, res, next) => {
-        res.setHeader(
-          'Content-Security-Policy',
-          [
-            "default-src 'self'",
-            "script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.redoc.ly https://cdn.jsdelivr.net",
-            "style-src 'self' 'unsafe-inline' https://unpkg.com https://fonts.googleapis.com",
-            "font-src 'self' https://fonts.gstatic.com",
-            "img-src 'self' data: https://unpkg.com",
-            "connect-src 'self'",
-          ].join('; '),
-        )
-        next()
-      })
     }
+
+    // Relax CSP for Swagger UI in both local and CDN modes (inline script is used in both)
+    docsRouter.use((_req, res, next) => {
+      res.setHeader(
+        'Content-Security-Policy',
+        [
+          "default-src 'self'",
+          "script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.redoc.ly https://cdn.jsdelivr.net",
+          "style-src 'self' 'unsafe-inline' https://unpkg.com https://fonts.googleapis.com",
+          "font-src 'self' https://fonts.gstatic.com",
+          "img-src 'self' data: https://unpkg.com",
+          "connect-src 'self'",
+        ].join('; '),
+      )
+      next()
+    })
 
     // Spec endpoint (JSON)
     docsRouter.get(specPath, (_req, res) => {
