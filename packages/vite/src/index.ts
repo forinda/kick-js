@@ -111,12 +111,14 @@ export function kickjsVitePlugin(options: KickJSPluginOptions = {}): Plugin[] {
     root: process.cwd(),
   }
 
-  // Wrapper plugin that resolves the root directory before sub-plugins run
+  // Resolve root and entry as early as possible so sub-plugin config() hooks
+  // (e.g., warmup) see the correct absolute entry path.
   const rootResolver: Plugin = {
     name: 'kickjs:root-resolver',
-    configResolved(config) {
-      ctx.root = config.root
-      ctx.entry = resolve(config.root, entry)
+    config(config) {
+      const root = config.root ?? process.cwd()
+      ctx.root = root
+      ctx.entry = resolve(root, entry)
     },
   }
 

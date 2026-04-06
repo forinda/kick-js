@@ -10,8 +10,11 @@ import { requestStore, type RequestStore } from '../request-store'
  */
 export function requestScopeMiddleware() {
   return (req: Request, _res: Response, next: NextFunction) => {
+    const requestIdHeader = req.headers['x-request-id']
+    const requestId =
+      (Array.isArray(requestIdHeader) ? requestIdHeader[0] : requestIdHeader) || crypto.randomUUID()
     const store: RequestStore = {
-      requestId: (req.headers['x-request-id'] as string) || crypto.randomUUID(),
+      requestId,
       instances: new Map(),
       values: new Map(),
     }

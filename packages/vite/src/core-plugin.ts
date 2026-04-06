@@ -49,10 +49,9 @@ export function kickjsCorePlugin(ctx: PluginContext): Plugin {
           },
         },
 
-        // Optimize common dependencies for faster dev startup
+        // Disable dep optimization discovery — KickJS is SSR-only, not a client app
         optimizeDeps: {
-          // Only run optimizeDeps for the client environment (not SSR)
-          noDiscovery: command === 'serve',
+          noDiscovery: true,
         },
 
         // SSR-specific settings

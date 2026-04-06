@@ -128,14 +128,12 @@ describe('kickjs:core plugin', () => {
     expect(config.ssr.external).toContain('reflect-metadata')
   })
 
-  it('sets noDiscovery for optimizeDeps on serve command', () => {
-    const config = callConfigHook(corePlugin, 'serve')
-    expect(config.optimizeDeps.noDiscovery).toBe(true)
-  })
+  it('disables optimizeDeps discovery for SSR-only apps', () => {
+    const serveConfig = callConfigHook(corePlugin, 'serve')
+    expect(serveConfig.optimizeDeps.noDiscovery).toBe(true)
 
-  it('does not set noDiscovery for optimizeDeps on build command', () => {
-    const config = callConfigHook(corePlugin, 'build')
-    expect(config.optimizeDeps.noDiscovery).toBe(false)
+    const buildConfig = callConfigHook(corePlugin, 'build')
+    expect(buildConfig.optimizeDeps.noDiscovery).toBe(true)
   })
 
   it('configures SSR environment with warmup for entry', () => {
@@ -459,23 +457,23 @@ describe('kickjs:root-resolver plugin', () => {
     expect(rootPlugin).toBeDefined()
   })
 
-  it('has a configResolved hook', () => {
-    expect(rootPlugin.configResolved).toBeDefined()
-    expect(typeof rootPlugin.configResolved).toBe('function')
+  it('has a config hook', () => {
+    expect(rootPlugin.config).toBeDefined()
+    expect(typeof rootPlugin.config).toBe('function')
   })
 
-  it('updates context root from resolved config', () => {
-    const hook = rootPlugin.configResolved as (config: any) => void
-    // Simulate Vite calling configResolved with a resolved config
-    hook({ root: '/custom/project/root' })
+  it('updates context root from config', () => {
+    const hook = rootPlugin.config as (config: any, env: any) => any
+    // Simulate Vite calling config with user config
+    hook({ root: '/custom/project/root' }, {})
 
-    // After configResolved, the virtual-modules plugin should use the new root.
+    // After config, the virtual-modules plugin should use the new root.
     // We verify indirectly: the entry should now be resolved against the new root.
     const plugins = kickjsVitePlugin()
     const resolver = findPlugin(plugins, 'kickjs:root-resolver')!
     const vm = findPlugin(plugins, 'kickjs:virtual-modules')!
 
-    ;(resolver.configResolved as any)({ root: '/test/root' })
+    ;(resolver.config as any)({ root: '/test/root' }, {})
 
     const code = callLoad(vm, '\0virtual:kickjs/app') as string
     expect(code).toContain('/test/root')
