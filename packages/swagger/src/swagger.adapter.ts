@@ -99,7 +99,7 @@ export class SwaggerAdapter implements AppAdapter {
     const docsPath = this.options.docsPath ?? '/docs'
     const redocPath = this.options.redocPath ?? '/redoc'
     const specPath = this.options.specPath ?? '/openapi.json'
-    let UI_DIST_AVAILABLE = false
+    let uiDistAvailable = false
 
     const docsRouter = Router()
 
@@ -110,7 +110,7 @@ export class SwaggerAdapter implements AppAdapter {
     try {
       const swaggerDistDir = getSwaggerUiDistPath()
       docsRouter.use(swaggerAssetsPath, express.static(swaggerDistDir))
-      UI_DIST_AVAILABLE = true
+      uiDistAvailable = true
     } catch {
       log.warn('swagger-ui-dist not found — Swagger UI will load from CDN (requires internet).')
     }
@@ -145,7 +145,7 @@ export class SwaggerAdapter implements AppAdapter {
           swaggerUIHtml(
             specPath,
             this.options.info?.title,
-            UI_DIST_AVAILABLE ? swaggerAssetsPath : undefined,
+            uiDistAvailable ? swaggerAssetsPath : undefined,
           ),
         )
     })

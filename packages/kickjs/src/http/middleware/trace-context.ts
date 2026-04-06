@@ -54,12 +54,22 @@ function generateSpanId(): string {
 export function parseTraceparent(header: string): TraceContext | null {
   const match = TRACEPARENT_RE.exec(header.trim().toLowerCase())
   if (!match) return null
-  return {
-    version: match[1],
-    traceId: match[2],
-    parentSpanId: match[3],
-    flags: match[4],
+
+  const version = match[1]
+  const traceId = match[2]
+  const parentSpanId = match[3]
+  const flags = match[4]
+
+  // W3C spec: version ff is invalid, all-zero trace-id and parent-id are invalid
+  if (
+    version === 'ff' ||
+    traceId === '00000000000000000000000000000000' ||
+    parentSpanId === '0000000000000000'
+  ) {
+    return null
   }
+
+  return { version, traceId, parentSpanId, flags }
 }
 
 /**

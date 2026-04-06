@@ -1,6 +1,7 @@
 import cluster from 'node:cluster'
 import os from 'node:os'
 import { createLogger } from '../core'
+import { reactive, ref } from '../core/reactivity'
 
 const log = createLogger('Cluster')
 
@@ -43,9 +44,12 @@ export function setupClusterPrimary(opts: ClusterOptions): void {
   const maxFailures = opts.maxFailures ?? 5
   const restartWindow = opts.restartWindow ?? 30000
 
-  // Track startup timeouts and crash history
   const startupTimeouts = new Map<number, NodeJS.Timeout>()
-  const failureHistory = new Map<number, number[]>() // timestamp array per worker ID
+  const state = reactive({
+    failureTimestamps: [] as number[],
+    shuttingDown: false,
+  })
+  const activeWorkers = ref(0)
 
   log.info(`Primary ${process.pid} starting ${numWorkers} worker(s)`)
 
@@ -62,6 +66,7 @@ export function setupClusterPrimary(opts: ClusterOptions): void {
     }, 10000)
 
     startupTimeouts.set(worker.id, timeout)
+    activeWorkers.value++
     log.debug(`Worker ${worker.process.pid} forked (id=${worker.id})`)
   })
 
@@ -90,27 +95,31 @@ export function setupClusterPrimary(opts: ClusterOptions): void {
     }
 
     // Don't restart if worker was intentionally disconnected
+    activeWorkers.value--
+
     if (worker.exitedAfterDisconnect) {
       log.info(`Worker ${worker.process.pid} exited gracefully (id=${worker.id})`)
       return
     }
 
-    // Check crash history for this worker ID
+    // Track crash history globally (worker IDs change on restart)
     const now = Date.now()
-    const history = failureHistory.get(worker.id) ?? []
-
-    // Keep only recent failures within the time window
-    const recent = history.filter((timestamp) => now - timestamp < restartWindow)
-    recent.push(now)
-    failureHistory.set(worker.id, recent)
+    // Remove timestamps outside the window, then add the current failure
+    while (
+      state.failureTimestamps.length > 0 &&
+      now - state.failureTimestamps[0] >= restartWindow
+    ) {
+      state.failureTimestamps.shift()
+    }
+    state.failureTimestamps.push(now)
 
     // Prevent restart loops
-    if (recent.length > maxFailures) {
+    if (state.failureTimestamps.length > maxFailures) {
       log.error(
-        `Worker ${worker.process.pid} failed ${recent.length} times in ${restartWindow}ms, giving up`,
+        `${state.failureTimestamps.length} worker failures in ${restartWindow}ms, giving up`,
       )
       // Optionally exit the primary if too many workers are crashing
-      if (Object.keys(cluster.workers ?? {}).length === 0) {
+      if (activeWorkers.value === 0) {
         log.error('All workers have crashed, exiting primary')
         process.exit(1)
       }
@@ -118,12 +127,12 @@ export function setupClusterPrimary(opts: ClusterOptions): void {
     }
 
     log.warn(
-      `Worker ${worker.process.pid} died (code=${code}, signal=${signal}), restarting in ${restartDelay}ms... (failures: ${recent.length}/${maxFailures})`,
+      `Worker ${worker.process.pid} died (code=${code}, signal=${signal}), restarting in ${restartDelay}ms... (failures: ${state.failureTimestamps.length}/${maxFailures})`,
     )
 
     setTimeout(() => {
       // Only restart if we still need more workers
-      if (Object.keys(cluster.workers ?? {}).length < numWorkers) {
+      if (activeWorkers.value < numWorkers) {
         cluster.fork()
       }
     }, restartDelay)
@@ -135,11 +144,10 @@ export function setupClusterPrimary(opts: ClusterOptions): void {
   })
 
   // Forward shutdown signals to workers (disconnect so exitedAfterDisconnect is set)
-  let shuttingDown = false
   for (const signal of ['SIGTERM', 'SIGINT'] as const) {
     process.on(signal, () => {
-      if (shuttingDown) return
-      shuttingDown = true
+      if (state.shuttingDown) return
+      state.shuttingDown = true
       log.info(`Primary received ${signal}, disconnecting workers...`)
       cluster.disconnect(() => {
         log.info('All workers disconnected, exiting primary')
