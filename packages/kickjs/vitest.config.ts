@@ -22,7 +22,7 @@ export default defineConfig({
       tsconfig: './tsconfig.test.json',
     },
     environment: 'node',
-    include: ['__tests__/**/*.test.ts'],
+    include: ['__tests__/**/*.test.ts', '**/__tests__/**/*.test.ts','**/*.test.ts'],
     globals: false,
   },
 })
