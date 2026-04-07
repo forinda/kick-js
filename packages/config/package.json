@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-config",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "Zod-based environment validation and typed configuration for KickJS",
   "keywords": [
     "kickjs",
@@ -61,8 +61,15 @@
   "wireit": {
     "build": {
       "command": "tsdown",
-      "files": ["src/**/*.ts", "tsdown.config.ts", "tsconfig.json", "package.json"],
-      "output": ["dist/**"]
+      "files": [
+        "src/**/*.ts",
+        "tsdown.config.ts",
+        "tsconfig.json",
+        "package.json"
+      ],
+      "output": [
+        "dist/**"
+      ]
     }
   },
   "dependencies": {

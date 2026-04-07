@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-prisma",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "Prisma ORM adapter with DI integration, transaction support, and query building for KickJS",
   "keywords": [
     "kickjs",
@@ -61,9 +61,18 @@
   "wireit": {
     "build": {
       "command": "tsdown",
-      "files": ["src/**/*.ts", "tsdown.config.ts", "tsconfig.json", "package.json"],
-      "output": ["dist/**"],
-      "dependencies": ["../core:build"]
+      "files": [
+        "src/**/*.ts",
+        "tsdown.config.ts",
+        "tsconfig.json",
+        "package.json"
+      ],
+      "output": [
+        "dist/**"
+      ],
+      "dependencies": [
+        "../core:build"
+      ]
     }
   },
   "dependencies": {

@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "A production-grade, decorator-driven Node.js framework built on Express 5 and TypeScript.",
   "keywords": [
     "kickjs",
@@ -121,8 +121,15 @@
   "wireit": {
     "build": {
       "command": "tsdown",
-      "files": ["src/**/*.ts", "tsdown.config.ts", "tsconfig.json", "package.json"],
-      "output": ["dist/**"]
+      "files": [
+        "src/**/*.ts",
+        "tsdown.config.ts",
+        "tsconfig.json",
+        "package.json"
+      ],
+      "output": [
+        "dist/**"
+      ]
     }
   },
   "dependencies": {

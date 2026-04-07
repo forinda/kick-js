@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-testing",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "Test utilities, TestModule builder, and helpers for KickJS applications",
   "keywords": [
     "kickjs",
@@ -60,9 +60,19 @@
   "wireit": {
     "build": {
       "command": "tsdown",
-      "files": ["src/**/*.ts", "tsdown.config.ts", "tsconfig.json", "package.json"],
-      "output": ["dist/**"],
-      "dependencies": ["../core:build", "../http:build"]
+      "files": [
+        "src/**/*.ts",
+        "tsdown.config.ts",
+        "tsconfig.json",
+        "package.json"
+      ],
+      "output": [
+        "dist/**"
+      ],
+      "dependencies": [
+        "../core:build",
+        "../http:build"
+      ]
     }
   },
   "dependencies": {

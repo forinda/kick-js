@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-vite",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "Vite plugin for KickJS — dev server integration, HMR, virtual modules, httpServer piping",
   "keywords": [
     "kickjs",
@@ -37,9 +37,18 @@
   "wireit": {
     "build": {
       "command": "tsdown",
-      "files": ["src/**/*.ts", "tsdown.config.ts", "tsconfig.json", "package.json"],
-      "output": ["dist/**"],
-      "dependencies": ["../kickjs:build"]
+      "files": [
+        "src/**/*.ts",
+        "tsdown.config.ts",
+        "tsconfig.json",
+        "package.json"
+      ],
+      "output": [
+        "dist/**"
+      ],
+      "dependencies": [
+        "../kickjs:build"
+      ]
     }
   },
   "dependencies": {

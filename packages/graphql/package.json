@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-graphql",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "GraphQL module for KickJS with decorator-based resolvers, schema generation, and playground",
   "keywords": [
     "kickjs",
@@ -59,9 +59,19 @@
   "wireit": {
     "build": {
       "command": "tsdown",
-      "files": ["src/**/*.ts", "tsdown.config.ts", "tsconfig.json", "package.json"],
-      "output": ["dist/**"],
-      "dependencies": ["../core:build", "../http:build"]
+      "files": [
+        "src/**/*.ts",
+        "tsdown.config.ts",
+        "tsconfig.json",
+        "package.json"
+      ],
+      "output": [
+        "dist/**"
+      ],
+      "dependencies": [
+        "../core:build",
+        "../http:build"
+      ]
     }
   },
   "dependencies": {

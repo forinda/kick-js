@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-cli",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "CLI for KickJS — project scaffolding, DDD module generation, dev/build/start",
   "keywords": [
     "kickjs",
@@ -65,9 +65,19 @@
   "wireit": {
     "build": {
       "command": "tsdown",
-      "files": ["src/**/*.ts", "tsdown.config.ts", "tsconfig.json", "package.json"],
-      "output": ["dist/**"],
-      "dependencies": ["../core:build", "../http:build"]
+      "files": [
+        "src/**/*.ts",
+        "tsdown.config.ts",
+        "tsconfig.json",
+        "package.json"
+      ],
+      "output": [
+        "dist/**"
+      ],
+      "dependencies": [
+        "../core:build",
+        "../http:build"
+      ]
     }
   },
   "dependencies": {
