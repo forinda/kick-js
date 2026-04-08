@@ -118,7 +118,7 @@ export async function generateScaffold(options: ScaffoldOptions): Promise<string
   }
 
   // ── Module Index
-  await write('index.ts', genModuleIndex(pascal, kebab, plural, repo))
+  await write('index.ts', genModuleIndex(pascal, kebab, plural))
 
   // ── Constants
   await write('constants.ts', genConstants(pascal, fields))
@@ -373,23 +373,38 @@ export class ${pascal}Id {
 
 // These reuse the same patterns as the existing module generator
 
-function genModuleIndex(pascal: string, kebab: string, plural: string, repo: string): string {
-  return `import type { AppModule, AppModuleClass } from '@forinda/kickjs'
+function genModuleIndex(pascal: string, kebab: string, plural: string): string {
+  return `import { type AppModule, type ModuleRoutes, Container, buildRoutes } from '@forinda/kickjs'
 import { ${pascal}Controller } from './presentation/${kebab}.controller'
-import { ${pascal}DomainService } from './domain/services/${kebab}-domain.service'
 import { ${pascal.toUpperCase()}_REPOSITORY } from './domain/repositories/${kebab}.repository'
 import { InMemory${pascal}Repository } from './infrastructure/repositories/in-memory-${kebab}.repository'
 
+// Eagerly load decorated classes so @Service()/@Repository() decorators
+// register in the DI container before the application bootstraps.
+import.meta.glob(
+  ['./domain/services/**/*.ts', './application/use-cases/**/*.ts', '!./**/*.test.ts'],
+  { eager: true },
+)
+
 export class ${pascal}Module implements AppModule {
-  register(container: any): void {
+  /**
+   * Bind the repository token to its concrete implementation.
+   * Decorator-managed classes (@Service, @Controller, @Repository) are
+   * registered automatically — only token-to-impl bindings need to live here.
+   */
+  register(container: Container): void {
     container.registerFactory(
       ${pascal.toUpperCase()}_REPOSITORY,
       () => container.resolve(InMemory${pascal}Repository),
     )
   }
 
-  routes() {
-    return { prefix: '/${plural}', controllers: [${pascal}Controller] }
+  routes(): ModuleRoutes {
+    return {
+      path: '/${plural}',
+      router: buildRoutes(${pascal}Controller),
+      controller: ${pascal}Controller,
+    }
   }
 }
 `

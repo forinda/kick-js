@@ -331,7 +331,9 @@ export class Application {
     ]
     const modules = allModuleClasses.map((ModuleClass) => {
       const mod = new ModuleClass()
-      mod.register(this.container)
+      // `register()` is optional — modules whose classes are entirely
+      // decorator-managed (@Service, @Controller, @Repository) don't need it.
+      mod.register?.(this.container)
       return mod
     })
     this.container.bootstrap()

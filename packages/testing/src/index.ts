@@ -80,7 +80,8 @@ export async function createTestApp(options: CreateTestAppOptions): Promise<{
   if (options.isolated) {
     for (const ModuleClass of options.modules) {
       const mod = new ModuleClass()
-      mod.register(container)
+      // register() is optional — see AppModule docs
+      mod.register?.(container)
     }
     container.bootstrap()
   }
