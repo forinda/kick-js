@@ -15,11 +15,14 @@ pnpm add mongoose
 ```ts
 // src/adapters/mongoose.adapter.ts
 import mongoose from 'mongoose'
-import { Logger, type AppAdapter, type AdapterContext } from '@forinda/kickjs'
+import { createToken, Logger, type AppAdapter, type AdapterContext } from '@forinda/kickjs'
 
 const log = Logger.for('MongooseAdapter')
 
-export const MONGOOSE = Symbol('Mongoose')
+// Type-safe DI token — `container.resolve(MONGOOSE)` returns `typeof mongoose`
+// without a manual generic. See the DI Token Hardening section in
+// docs/guide/dependency-injection.md.
+export const MONGOOSE = createToken<typeof mongoose>('Mongoose')
 
 export interface MongooseAdapterOptions {
   uri: string
@@ -142,10 +145,7 @@ import { MongooseUserRepository } from './infrastructure/mongoose-user.repositor
 
 export class UserModule implements AppModule {
   register(container: any) {
-    container.registerFactory(
-      USER_REPOSITORY,
-      () => container.resolve(MongooseUserRepository),
-    )
+    container.registerFactory(USER_REPOSITORY, () => container.resolve(MongooseUserRepository))
   }
 
   routes() {
@@ -171,12 +171,14 @@ pnpm add mongodb
 ```ts
 // src/adapters/mongodb.adapter.ts
 import { MongoClient, type Db } from 'mongodb'
-import { Logger, type AppAdapter, type AdapterContext } from '@forinda/kickjs'
+import { createToken, Logger, type AppAdapter, type AdapterContext } from '@forinda/kickjs'
 
 const log = Logger.for('MongoDBAdapter')
 
-export const MONGO_DB = Symbol('MongoDb')
-export const MONGO_CLIENT = Symbol('MongoClient')
+// Typed DI tokens — `container.resolve(MONGO_DB)` returns `Db`,
+// `container.resolve(MONGO_CLIENT)` returns `MongoClient`. No casts.
+export const MONGO_DB = createToken<Db>('MongoDb')
+export const MONGO_CLIENT = createToken<MongoClient>('MongoClient')
 
 export interface MongoDBAdapterOptions {
   uri: string
@@ -292,14 +294,14 @@ bootstrap({
 
 ## Which Approach?
 
-| | Mongoose | Native Driver |
-|---|---|---|
-| **Best for** | Schema validation, middleware hooks, populate | Full control, performance-critical |
-| **Schema** | Defined in Mongoose schemas | Defined in TypeScript interfaces |
-| **Validation** | Built-in schema validation | Use Zod DTOs (already have them) |
-| **Relations** | `.populate()` for references | Manual `$lookup` or app-level joins |
-| **Migrations** | Schema-level (auto-sync) | Manual or use `migrate-mongo` |
-| **Bundle size** | ~1.5MB | ~500KB |
+|                 | Mongoose                                      | Native Driver                       |
+| --------------- | --------------------------------------------- | ----------------------------------- |
+| **Best for**    | Schema validation, middleware hooks, populate | Full control, performance-critical  |
+| **Schema**      | Defined in Mongoose schemas                   | Defined in TypeScript interfaces    |
+| **Validation**  | Built-in schema validation                    | Use Zod DTOs (already have them)    |
+| **Relations**   | `.populate()` for references                  | Manual `$lookup` or app-level joins |
+| **Migrations**  | Schema-level (auto-sync)                      | Manual or use `migrate-mongo`       |
+| **Bundle size** | ~1.5MB                                        | ~500KB                              |
 
 Both approaches follow the same KickJS pattern: create an adapter, register the connection in DI, implement a repository, and swap it in your module's `register()`.
 
@@ -317,14 +319,30 @@ function buildMongoFilter(parsed: ParsedQuery): Record<string, any> {
 
   for (const f of parsed.filters) {
     switch (f.operator) {
-      case 'eq':  filter[f.field] = f.value; break
-      case 'ne':  filter[f.field] = { $ne: f.value }; break
-      case 'gt':  filter[f.field] = { $gt: Number(f.value) }; break
-      case 'gte': filter[f.field] = { $gte: Number(f.value) }; break
-      case 'lt':  filter[f.field] = { $lt: Number(f.value) }; break
-      case 'lte': filter[f.field] = { $lte: Number(f.value) }; break
-      case 'in':  filter[f.field] = { $in: f.value.split(',') }; break
-      case 'like': filter[f.field] = { $regex: f.value, $options: 'i' }; break
+      case 'eq':
+        filter[f.field] = f.value
+        break
+      case 'ne':
+        filter[f.field] = { $ne: f.value }
+        break
+      case 'gt':
+        filter[f.field] = { $gt: Number(f.value) }
+        break
+      case 'gte':
+        filter[f.field] = { $gte: Number(f.value) }
+        break
+      case 'lt':
+        filter[f.field] = { $lt: Number(f.value) }
+        break
+      case 'lte':
+        filter[f.field] = { $lte: Number(f.value) }
+        break
+      case 'in':
+        filter[f.field] = { $in: f.value.split(',') }
+        break
+      case 'like':
+        filter[f.field] = { $regex: f.value, $options: 'i' }
+        break
     }
   }
 
@@ -394,15 +412,13 @@ export class ProductController {
   @Get('/')
   @ApiQueryParams(PRODUCT_QUERY)
   async list(ctx: RequestContext) {
-    return ctx.paginate(
-      (parsed) => this.repo.findPaginated(parsed),
-      PRODUCT_QUERY,
-    )
+    return ctx.paginate((parsed) => this.repo.findPaginated(parsed), PRODUCT_QUERY)
   }
 }
 ```
 
 This gives you URLs like:
+
 ```
 GET /products?filter=category:eq:electronics&sort=price:desc&page=2&limit=10
 GET /products?q=phone&filter=price:lte:1000

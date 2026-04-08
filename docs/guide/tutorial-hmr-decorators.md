@@ -1,7 +1,7 @@
 ---
-title: "Surviving Vite HMR in KickJS Decorator-Heavy Backends"
-description: "What happens when Vite HMR meets TypeScript decorators and DI containers — class identity problems, Mongoose model crashes, and practical solutions from building Vibed."
-tags: ["kickjs", "nodejs", "typescript", "hmr", "vite"]
+title: 'Surviving Vite HMR in KickJS Decorator-Heavy Backends'
+description: 'What happens when Vite HMR meets TypeScript decorators and DI containers — class identity problems, Mongoose model crashes, and practical solutions from building Vibed.'
+tags: ['kickjs', 'nodejs', 'typescript', 'hmr', 'vite']
 canonical_url: null
 published: false
 ---
@@ -38,19 +38,17 @@ When Vite re-evaluates a module, JavaScript creates **new class objects**. Consi
 @Middleware(authBridgeMiddleware)
 @Controller()
 export class TasksController {
-  @Autowired() private createTaskUseCase!: CreateTaskUseCase;
-  @Autowired() private taskRepo!: MongoTaskRepository;
+  @Autowired() private createTaskUseCase!: CreateTaskUseCase
+  @Autowired() private taskRepo!: MongoTaskRepository
 
   @Post('/projects/:projectId/tasks', {
     params: z.object({ projectId: z.string() }),
     body: createTaskSchema,
   })
   async create(ctx: RequestContext) {
-    const user = ctx.get('user');
-    const result = await this.createTaskUseCase.execute(
-      ctx.params.projectId, user.id, ctx.body
-    );
-    ctx.created(successResponse(result, 'Task created'));
+    const user = ctx.get('user')
+    const result = await this.createTaskUseCase.execute(ctx.params.projectId, user.id, ctx.body)
+    ctx.created(successResponse(result, 'Task created'))
   }
 }
 ```
@@ -69,8 +67,8 @@ Mongoose compiles schemas into models, and it keeps a global registry of compile
 
 ```typescript
 // WRONG: crashes on HMR reload
-const taskSchema = new Schema({ title: String, status: String });
-export const TaskModel = mongoose.model('Task', taskSchema);
+const taskSchema = new Schema({ title: String, status: String })
+export const TaskModel = mongoose.model('Task', taskSchema)
 ```
 
 The first time this runs, Mongoose creates the `Task` model. The second time (after HMR re-evaluates the file), Mongoose throws:
@@ -93,7 +91,11 @@ const taskSchema = new Schema<TaskDocument>(
     title: { type: String, required: true, trim: true },
     description: { type: String },
     status: { type: String, default: 'todo' },
-    priority: { type: String, enum: ['critical', 'high', 'medium', 'low', 'none'], default: 'none' },
+    priority: {
+      type: String,
+      enum: ['critical', 'high', 'medium', 'low', 'none'],
+      default: 'none',
+    },
     assigneeIds: [{ type: Schema.Types.ObjectId, ref: 'User' }],
     reporterId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     labelIds: [{ type: Schema.Types.ObjectId, ref: 'Label' }],
@@ -105,16 +107,16 @@ const taskSchema = new Schema<TaskDocument>(
     commentCount: { type: Number, default: 0 },
   },
   { timestamps: true },
-);
+)
 
-taskSchema.index({ projectId: 1, status: 1 });
-taskSchema.index({ assigneeIds: 1 });
-taskSchema.index({ dueDate: 1 });
-taskSchema.index({ title: 'text', description: 'text' });
+taskSchema.index({ projectId: 1, status: 1 })
+taskSchema.index({ assigneeIds: 1 })
+taskSchema.index({ dueDate: 1 })
+taskSchema.index({ title: 'text', description: 'text' })
 
 export const TaskModel =
   (mongoose.models.Task as mongoose.Model<TaskDocument>) ||
-  mongoose.model<TaskDocument>('Task', taskSchema);
+  mongoose.model<TaskDocument>('Task', taskSchema)
 ```
 
 The `mongoose.models.Task || mongoose.model(...)` pattern returns the existing model on re-evaluation instead of trying to create a new one. This is required on **every schema file** in your project. Miss one, and HMR crashes.
@@ -129,25 +131,27 @@ Queue processors in Vibed use `@Job()` and `@Service()` decorators:
 @Service()
 @Job('email')
 export class EmailProcessor {
-  @Autowired(MAILER) private mailer!: MailerService;
+  @Autowired(MAILER) private mailer!: MailerService
 
   @Process('send-welcome-email')
   async sendWelcome(job: BullMQJob<{ email: string; firstName: string }>) {
-    logger.info(`Sending welcome email to ${job.data.email}`);
+    logger.info(`Sending welcome email to ${job.data.email}`)
     await this.mailer.send({
       to: job.data.email,
       subject: `Welcome to Vibed, ${job.data.firstName}!`,
       html: `<h1>Welcome to Vibed!</h1>`,
-    });
+    })
   }
 
   @Process('send-task-assigned')
-  async sendTaskAssigned(job: BullMQJob<{ email: string; taskKey: string; taskTitle: string; assignerName: string }>) {
+  async sendTaskAssigned(
+    job: BullMQJob<{ email: string; taskKey: string; taskTitle: string; assignerName: string }>,
+  ) {
     await this.mailer.send({
       to: job.data.email,
       subject: `You were assigned to ${job.data.taskKey}: ${job.data.taskTitle}`,
       html: `<p>${job.data.assignerName} assigned you to <strong>${job.data.taskKey}</strong></p>`,
-    });
+    })
   }
 }
 ```
@@ -211,17 +215,17 @@ const queueAdapter = new QueueAdapter({
     password: redisUrl.password || undefined,
   },
   queues: ['email', 'notifications', 'activity'],
-  concurrency: 5,  // Changing this? Restart.
-});
+  concurrency: 5, // Changing this? Restart.
+})
 
 export const adapters = [
-  new MongooseAdapter(env.MONGODB_URI),  // Changing URI? Restart.
+  new MongooseAdapter(env.MONGODB_URI), // Changing URI? Restart.
   new AuthAdapter({
-    strategies: [new JwtStrategy({ secret: env.JWT_SECRET })],  // New secret? Restart.
-    defaultPolicy: 'protected',  // Changing policy? Restart.
+    strategies: [new JwtStrategy({ secret: env.JWT_SECRET })], // New secret? Restart.
+    defaultPolicy: 'protected', // Changing policy? Restart.
   }),
   // ...
-];
+]
 ```
 
 ### New modules added to the modules array
@@ -236,7 +240,7 @@ export const modules: AppModuleClass[] = [
   UsersModule,
   WorkspacesModule,
   // Adding ProjectsModule here? Restart.
-];
+]
 ```
 
 Editing an **existing** module's code (controller logic, use case logic, guard logic) works fine with HMR. It is only adding or removing modules from the array that requires a restart.
@@ -257,8 +261,7 @@ Template:
 
 ```typescript
 export const XModel =
-  (mongoose.models.X as mongoose.Model<XDocument>) ||
-  mongoose.model<XDocument>('X', xSchema);
+  (mongoose.models.X as mongoose.Model<XDocument>) || mongoose.model<XDocument>('X', xSchema)
 ```
 
 Paste this pattern the moment you create a schema file. Every time.
@@ -278,30 +281,46 @@ In controllers, always use `@Autowired()`:
 ```typescript
 @Controller()
 export class WorkspacesController {
-  @Autowired() private createWorkspaceUseCase!: CreateWorkspaceUseCase;
-  @Autowired() private memberRepo!: MongoWorkspaceMemberRepository;
+  @Autowired() private createWorkspaceUseCase!: CreateWorkspaceUseCase
+  @Autowired() private memberRepo!: MongoWorkspaceMemberRepository
   // ...
 }
 ```
 
 In use case constructors, `@Inject(TOKEN)` is necessary for interface-based injection. That is fine -- use cases are re-instantiated on resolve, so the constructor runs with fresh tokens.
 
-### 4. Centralize your DI tokens
+### 4. Use `createToken<T>` and export it from the file that owns the interface
 
-All of Vibed's tokens live in one file:
+Modern KickJS uses `createToken<T>(name)` for DI tokens, not raw `Symbol()`. Two practical reasons that matter for HMR specifically:
+
+1. **Type safety.** `container.resolve(USER_REPOSITORY)` returns `IUserRepository` instead of `any`, so a refactor that misses an injection site fails at compile time, not at runtime after HMR has reshuffled the container.
+2. **Same-file ownership.** The token lives next to the interface it represents, and is re-imported by everything that needs it. There's no separate `TOKENS` object to keep in sync.
 
 ```typescript
-// src/shared/constants/tokens.ts
-export const TOKENS = {
-  USER_REPOSITORY: Symbol('UserRepository'),
-  WORKSPACE_REPOSITORY: Symbol('WorkspaceRepository'),
-  TASK_REPOSITORY: Symbol('TaskRepository'),
-  COMMENT_REPOSITORY: Symbol('CommentRepository'),
-  // ...
-} as const;
+// src/modules/users/domain/repositories/user.repository.ts
+import { createToken } from '@forinda/kickjs'
+
+export interface IUserRepository {
+  findById(id: string): Promise<User | null>
+}
+
+// One typed token, owned by the same file as the interface.
+export const USER_REPOSITORY = createToken<IUserRepository>('User/Repository')
 ```
 
-Symbols in a separate file are stable across HMR because the file is only re-evaluated if it changes directly. If tokens were defined inline in each module, HMR could create new Symbol instances (since `Symbol('x') !== Symbol('x')`), breaking all DI bindings.
+```typescript
+// Anywhere it's needed
+import { USER_REPOSITORY, type IUserRepository } from '../domain/repositories/user.repository'
+
+@Service()
+class GetUserUseCase {
+  constructor(@Inject(USER_REPOSITORY) private readonly repo: IUserRepository) {}
+}
+```
+
+**HMR stability:** the token file is only re-evaluated when _that_ file changes. Because every other consumer imports the named export, they all get the same frozen object reference even after HMR rebuilds the use case. The `Symbol('x') !== Symbol('x')` foot-gun is gone — `createToken` returns an object identified by reference, so two import sites in different files share the same identity by construction.
+
+If you're maintaining an older project that still uses a centralized `TOKENS` object of `Symbol()` instances, the migration is mechanical: replace each `Symbol('Foo')` with `createToken<IFoo>('Foo')` and import the token from the interface file directly. Both forms work side-by-side during the migration.
 
 ### 5. Ignore cosmetic HMR errors
 
@@ -312,7 +331,7 @@ No binding found for: EmailProcessor
 No binding found for: NotificationProcessor
 ```
 
-These are cosmetic. The workers from cold boot are still running. Jobs are still processing. The error means the *new* class object could not be resolved, but the *old* instance is still alive in the BullMQ worker closure.
+These are cosmetic. The workers from cold boot are still running. Jobs are still processing. The error means the _new_ class object could not be resolved, but the _old_ instance is still alive in the BullMQ worker closure.
 
 Do not chase these errors during active development. They resolve on the next full restart.
 

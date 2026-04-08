@@ -9,17 +9,17 @@ KickJS has a built-in lightweight IoC container with no external dependencies. I
 ```typescript
 import { Service, Repository, Component, Injectable } from '@forinda/kickjs'
 
-@Service()     // Semantic alias — business logic (singleton)
-class UserService { }
+@Service() // Semantic alias — business logic (singleton)
+class UserService {}
 
-@Repository()  // Semantic alias — data access (singleton)
-class UserRepository { }
+@Repository() // Semantic alias — data access (singleton)
+class UserRepository {}
 
-@Component()   // Generic managed component (singleton)
-class EmailClient { }
+@Component() // Generic managed component (singleton)
+class EmailClient {}
 
-@Injectable({ scope: Scope.TRANSIENT })  // New instance per resolve
-class RequestLogger { }
+@Injectable({ scope: Scope.TRANSIENT }) // New instance per resolve
+class RequestLogger {}
 ```
 
 All four decorators register the class in the DI container. The difference is semantic — use the one that best describes your class's purpose.
@@ -40,15 +40,27 @@ TypeScript's `emitDecoratorMetadata` resolves constructor parameter types automa
 
 ### Explicit Token Override
 
-Use `@Inject` when the type doesn't match the token (e.g., interface bindings). **`@Inject` is for constructor parameters only** — it does not work as a property decorator.
+Use `@Inject` when the type doesn't match the token — typically for **interface bindings**. **`@Inject` is for constructor parameters only** — it does not work as a property decorator.
+
+The recommended way to declare a non-class token is `createToken<T>(name)`. The returned token is a frozen object identified by reference, so collisions are impossible by construction, and the phantom type parameter `T` flows through `container.resolve()` and `@Inject()` automatically:
 
 ```typescript
-const ORDER_REPO = Symbol('OrderRepository')
+import { createToken, Inject, Service } from '@forinda/kickjs'
+
+interface IOrderRepository {
+  findById(id: string): Promise<Order | null>
+}
+
+// Type-safe DI token. The `<IOrderRepository>` is the contract;
+// the `'OrderRepository'` string is just a label for error messages.
+export const ORDER_REPO = createToken<IOrderRepository>('OrderRepository')
 
 @Service()
 class OrderService {
   constructor(
     @Inject(ORDER_REPO) private repo: IOrderRepository,
+    //                              ↑ this annotation is now just documentation —
+    //                                container.resolve(ORDER_REPO) already returns IOrderRepository
   ) {}
 }
 ```
@@ -60,9 +72,9 @@ Use `@Autowired` for lazy property injection. For token-based property injection
 ```typescript
 @Controller()
 class OrderController {
-  @Autowired() private orderService!: OrderService         // resolved by class type
-  @Autowired() private logger!: Logger                     // resolved by class type
-  @Autowired(ORDER_REPO) private repo!: IOrderRepository   // resolved by token
+  @Autowired() private orderService!: OrderService // resolved by class type
+  @Autowired() private logger!: Logger // resolved by class type
+  @Autowired(ORDER_REPO) private repo!: IOrderRepository // resolved by typed token
 }
 ```
 
@@ -71,12 +83,27 @@ Properties are resolved lazily on first access, not at construction time.
 ::: tip @Inject vs @Autowired
 | Decorator | Where | Resolves by |
 |---|---|---|
-| `@Inject(token)` | Constructor parameters only | Explicit token (Symbol, string) |
+| `@Inject(token)` | Constructor parameters only | Explicit token (`createToken<T>`, class, or string) |
 | `@Autowired()` | Class properties only | Class type (from TypeScript metadata) |
 | `@Autowired(token)` | Class properties only | Explicit token |
 
 Using `@Inject` on a property causes a TypeScript compile error (`TS1240`). Use `@Autowired(token)` instead.
 :::
+
+## DI Token Hardening
+
+KickJS supports four kinds of DI tokens, listed from safest to riskiest. Pick the safest one that fits your case:
+
+| Token kind                  | Example                          | Collision risk                                                                    | Type safety                                        |
+| --------------------------- | -------------------------------- | --------------------------------------------------------------------------------- | -------------------------------------------------- |
+| **Class identity**          | `container.resolve(UserService)` | None — JS reference equality                                                      | Full (via `Constructor<T>` overload)               |
+| **`createToken<T>(name)`**  | `container.resolve(USER_REPO)`   | None — frozen object identity                                                     | Full (via `InjectionToken<T>` overload)            |
+| **`Symbol('foo')`**         | `container.resolve(SYM)`         | Only `Symbol.for(...)` collides; per-call `Symbol(...)` is unique but **untyped** | None                                               |
+| **Raw `@Inject('string')`** | `@Inject('foo')`                 | High — silent override on register                                                | None unless typegen has populated `KickJsRegistry` |
+
+**Use `createToken<T>` for everything that isn't a class.** It removes both collision risk and the need for separate type annotations on every injection site. The `Symbol`-based pattern is still supported for back-compat but no longer recommended — `container.resolve(SOME_SYMBOL)` returns `any` and a refactor that misses one usage site won't be caught at compile time.
+
+The CLI generators (`kick g module`, `kick g scaffold`) emit `createToken<T>` by default for repository tokens.
 
 ## When You Need Manual Registration
 
@@ -92,15 +119,17 @@ class UserController {
 }
 ```
 
-However, when injecting by **token** (Symbol) — typically for interface-based bindings — you **must** register the token → implementation mapping in your module's `register()` method. Interfaces don't exist at runtime, so the container has no way to resolve them automatically:
+However, when injecting by **token** — typically for interface-based bindings — you **must** register the token → implementation mapping in your module's `register()` method. Interfaces don't exist at runtime, so the container has no way to resolve them automatically:
 
 ```typescript
-// 1. Define the interface and token
-const USER_REPO = Symbol('UserRepository')
+import { createToken, Repository, type AppModule } from '@forinda/kickjs'
 
+// 1. Define the interface and a typed token
 interface IUserRepository {
   findById(id: string): Promise<User | null>
 }
+
+export const USER_REPO = createToken<IUserRepository>('UserRepository')
 
 // 2. Implement it (auto-registered as a class, but NOT bound to the token)
 @Repository()
@@ -113,10 +142,10 @@ class UserModule implements AppModule {
       container.resolve(InMemoryUserRepository),
     )
   }
-  // ...
+  // routes() { ... }
 }
 
-// 4. Now inject by token
+// 4. Now inject by token — fully typed, no manual annotation
 @Controller()
 class UserController {
   @Autowired(USER_REPO) private repo!: IUserRepository  // resolved via module binding
@@ -124,6 +153,8 @@ class UserController {
 ```
 
 This pattern lets you swap implementations (e.g., `InMemoryUserRepository` → `DrizzleUserRepository`) by changing only the module registration — no changes needed in controllers or services.
+
+> **`AppModule.register()` is optional.** Modules whose classes are entirely decorator-managed (`@Service`, `@Controller`, `@Repository`) don't need to implement it — only declare it when you need to bind a token to a concrete implementation.
 
 ## Factory Registration
 
@@ -165,13 +196,16 @@ class CacheService {
 
 ## Environment Injection
 
-Use `@Value` to inject environment variables:
+Use `@Value` to inject environment variables. When `kick typegen` has populated the project's `KickEnv` global from `src/env.ts`, the key autocompletes and the `Env<K>` type alias resolves to the schema-inferred type — see [Configuration](configuration.md) and [Type Generation](typegen.md#how-env-vars-are-typed) for the full pipeline.
 
 ```typescript
+import { Service, Value, type Env } from '@forinda/kickjs'
+
 @Service()
 class ApiClient {
-  @Value('API_BASE_URL') baseUrl!: string
-  @Value('API_TIMEOUT', '5000') timeout!: string
+  @Value('API_BASE_URL') baseUrl!: Env<'API_BASE_URL'>
+  @Value('API_TIMEOUT', '5000') timeout!: Env<'API_TIMEOUT'>
+  // @Value('NOPE') bad!: string  // ❌ tsc error if KickEnv is populated
 }
 ```
 
@@ -179,11 +213,11 @@ If the env var is missing and no default is provided, accessing the property thr
 
 ## Scopes
 
-| Scope | Behavior |
-| ------- | ---------- |
-| `SINGLETON` (default) | One instance shared across the application |
-| `TRANSIENT` | New instance created on every `resolve()` call |
-| `REQUEST` | One instance per HTTP request, cached for the request lifetime |
+| Scope                 | Behavior                                                       |
+| --------------------- | -------------------------------------------------------------- |
+| `SINGLETON` (default) | One instance shared across the application                     |
+| `TRANSIENT`           | New instance created on every `resolve()` call                 |
+| `REQUEST`             | One instance per HTTP request, cached for the request lifetime |
 
 ## Request-Scoped DI
 
@@ -199,9 +233,11 @@ Mount `requestScopeMiddleware()` early in your middleware pipeline (before route
 import { bootstrap, requestScopeMiddleware } from '@forinda/kickjs'
 
 bootstrap({
-  modules: [/* ... */],
+  modules: [
+    /* ... */
+  ],
   middleware: [
-    requestScopeMiddleware(),  // enables REQUEST-scoped DI
+    requestScopeMiddleware(), // enables REQUEST-scoped DI
     // ... other middleware
   ],
 })
@@ -283,11 +319,11 @@ These values can then be read inside any request-scoped service via `getRequestS
 
 Not all scope combinations are valid. The container enforces these rules at resolve time:
 
-| Parent scope | Can inject SINGLETON? | Can inject TRANSIENT? | Can inject REQUEST? |
-| --- | --- | --- | --- |
-| `SINGLETON` | Yes | Yes | **No** — throws error |
-| `TRANSIENT` | Yes | Yes | Yes |
-| `REQUEST` | Yes | Yes | Yes |
+| Parent scope | Can inject SINGLETON? | Can inject TRANSIENT? | Can inject REQUEST?   |
+| ------------ | --------------------- | --------------------- | --------------------- |
+| `SINGLETON`  | Yes                   | Yes                   | **No** — throws error |
+| `TRANSIENT`  | Yes                   | Yes                   | Yes                   |
+| `REQUEST`    | Yes                   | Yes                   | Yes                   |
 
 A `SINGLETON` lives for the entire application lifetime, while a `REQUEST`-scoped instance is destroyed after each request. If a singleton held a reference to a request-scoped service, it would point to a stale instance after the request ends. The container prevents this by throwing:
 

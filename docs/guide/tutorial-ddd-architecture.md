@@ -1,6 +1,6 @@
 # DDD Module Architecture with a Decorator-Driven Framework
 
-*Part 2 of "Building a Jira Clone with KickJS + Drizzle ORM"*
+_Part 2 of "Building a Jira Clone with KickJS + Drizzle ORM"_
 
 ---
 
@@ -45,6 +45,7 @@ kick g module task --pattern ddd --repo drizzle
 ```
 
 This generates 18 files:
+
 - Module index with DI registration and route declaration
 - Controller with CRUD endpoints and Swagger decorators
 - DTOs with Zod schemas
@@ -64,6 +65,7 @@ The generator also auto-updates `src/modules/index.ts` to register the new modul
 When we started with v1.2.8, the generator produced string-based query configs. After upgrading to v1.2.10, the scaffolded code improved significantly:
 
 **Constants** — uses actual Drizzle Column objects:
+
 ```typescript
 import type { DrizzleQueryParamsConfig } from '@forinda/kickjs-drizzle'
 // TODO: Import your schema table and reference actual columns
@@ -84,6 +86,7 @@ export const TASK_QUERY_CONFIG: DrizzleQueryParamsConfig = {
 ```
 
 **Repository** — uses `buildFromColumns()` with the shared query adapter:
+
 ```typescript
 const query = queryAdapter.buildFromColumns(parsed, TASK_QUERY_CONFIG)
 ```
@@ -95,6 +98,7 @@ The TODOs are clear — uncomment and point to your actual schema columns. Much 
 The generator gives you a working skeleton. Here's what we changed for each module:
 
 ### 1. Constants — Fill in the columns
+
 ```typescript
 import { tasks } from '@/db/schema'
 
@@ -113,6 +117,7 @@ export const TASK_QUERY_CONFIG: DrizzleQueryParamsConfig = {
 ```
 
 ### 2. Repository interface — Use `$inferSelect` instead of manual DTOs
+
 ```typescript
 import type { tasks } from '@/db/schema'
 
@@ -150,7 +155,19 @@ import { eq, ne, gt, gte, lt, lte, ilike, inArray, between, and, or, asc, desc }
 import { DrizzleQueryAdapter } from '@forinda/kickjs-drizzle'
 
 const queryAdapter = new DrizzleQueryAdapter({
-  eq, ne, gt, gte, lt, lte, ilike, inArray, between, and, or, asc, desc,
+  eq,
+  ne,
+  gt,
+  gte,
+  lt,
+  lte,
+  ilike,
+  inArray,
+  between,
+  and,
+  or,
+  asc,
+  desc,
 })
 ```
 
@@ -162,38 +179,70 @@ import { eq, ne, gt, gte, lt, lte, ilike, inArray, between, and, or, asc, desc }
 import { DrizzleQueryAdapter } from '@forinda/kickjs-drizzle'
 
 export const queryAdapter = new DrizzleQueryAdapter({
-  eq, ne, gt, gte, lt, lte, ilike, inArray, between, and, or, asc, desc,
+  eq,
+  ne,
+  gt,
+  gte,
+  lt,
+  lte,
+  ilike,
+  inArray,
+  between,
+  and,
+  or,
+  asc,
+  desc,
 })
 ```
 
 Now every repository imports just what it needs directly:
 
 ```typescript
-import { eq, sql } from 'drizzle-orm'  // only operators used in this file
+import { eq, sql } from 'drizzle-orm' // only operators used in this file
 import { queryAdapter } from '@/shared/infrastructure/query-adapter'
 ```
 
 **Recommendation**: When generating a new module, immediately replace the scaffolded `DrizzleQueryAdapter` instantiation with the shared import.
 
-## DI Token Strategy: TOKENS vs Module-Local Symbols
+## DI Token Strategy: One Token Per Interface
 
-We hit an inconsistency during the build. The workspace module uses centralized tokens:
+In earlier versions we hit an inconsistency during the build — some modules used a centralized `TOKENS` object, others declared module-local `Symbol()` instances. Because every `Symbol('CommentRepository')` call returns a _different_ symbol, code that injected `TOKENS.COMMENT_REPOSITORY` couldn't find a binding under the locally-declared `COMMENT_REPOSITORY`. Silent runtime failures, no compile-time signal.
 
-```typescript
-// Workspace use cases
-@Inject(TOKENS.WORKSPACE_REPOSITORY) private readonly repo: IWorkspaceRepository
-```
-
-While generated modules (comments, labels, etc.) use local symbols from the repository interface:
+**The current pattern, used by `kick g module` and `kick g scaffold` automatically**, is to declare one typed token per interface and import it everywhere it's needed:
 
 ```typescript
-// Comment use cases
-@Inject(COMMENT_REPOSITORY) private readonly repo: ICommentRepository
+// src/modules/comments/domain/repositories/comment.repository.ts
+import { createToken } from '@forinda/kickjs'
+
+export interface ICommentRepository {
+  findById(id: string): Promise<Comment | null>
+  // ...
+}
+
+// One typed token, exported, imported everywhere it's needed.
+// container.resolve(COMMENT_REPOSITORY) returns ICommentRepository directly —
+// no manual generic, no `any` cast, no risk of two parallel symbols.
+export const COMMENT_REPOSITORY = createToken<ICommentRepository>('Comment/Repository')
 ```
 
-These are different `Symbol()` instances. A guard that resolves `TOKENS.COMMENT_REPOSITORY` won't find a registration under the local `COMMENT_REPOSITORY` symbol.
+```typescript
+// src/modules/comments/application/use-cases/get-comment.use-case.ts
+import {
+  COMMENT_REPOSITORY,
+  type ICommentRepository,
+} from '../../domain/repositories/comment.repository'
 
-**Our recommendation**: Use `TOKENS` for any repository that's referenced cross-module (guards, processors). Use local symbols only for module-internal wiring that will never be accessed from outside.
+@Service()
+export class GetCommentUseCase {
+  constructor(@Inject(COMMENT_REPOSITORY) private readonly repo: ICommentRepository) {}
+  // ↑ The type annotation is just documentation now —
+  //   container.resolve(COMMENT_REPOSITORY) already returns ICommentRepository.
+}
+```
+
+`createToken<T>` returns a frozen object identified by reference, so two import sites in different files share the same token instance regardless of how many times the file is re-evaluated under HMR. And because the token carries its `T` parameter, **cross-module guards and processors can reuse the same token without risking the `Symbol()` collision issue at all** — there's no parallel `TOKENS` object, no two-source-of-truth confusion.
+
+See [DI Token Hardening](dependency-injection.md#di-token-hardening) for the full token hierarchy (class identity → `createToken<T>` → symbol → raw string).
 
 ## Modules Without Routes
 

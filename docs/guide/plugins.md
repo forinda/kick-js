@@ -4,12 +4,12 @@ Plugins are the highest-level extension mechanism in KickJS. A single plugin can
 
 ## Why Plugins?
 
-| Extension | Scope | Use Case |
-|-----------|-------|----------|
-| **Middleware** | Single function in the pipeline | CORS, compression, logging |
-| **Adapter** | Lifecycle hooks + middleware | Database, Swagger, DevTools |
-| **Module** | Routes + DI bindings | Feature modules (users, products) |
-| **Plugin** | All of the above | Auth system, admin panel, monitoring suite |
+| Extension      | Scope                           | Use Case                                   |
+| -------------- | ------------------------------- | ------------------------------------------ |
+| **Middleware** | Single function in the pipeline | CORS, compression, logging                 |
+| **Adapter**    | Lifecycle hooks + middleware    | Database, Swagger, DevTools                |
+| **Module**     | Routes + DI bindings            | Feature modules (users, products)          |
+| **Plugin**     | All of the above                | Auth system, admin panel, monitoring suite |
 
 ## Creating a Plugin
 
@@ -39,14 +39,14 @@ interface KickPlugin {
 }
 ```
 
-| Method | When it runs | Use Case |
-|--------|-------------|----------|
-| `register()` | Before modules load | Bind services in DI |
-| `modules()` | Before user modules | Add feature modules |
-| `adapters()` | Before user adapters | Add lifecycle adapters |
-| `middleware()` | Before user middleware | Add global middleware |
-| `onReady()` | After server starts | Post-startup tasks |
-| `shutdown()` | On SIGINT/SIGTERM | Cleanup resources |
+| Method         | When it runs           | Use Case               |
+| -------------- | ---------------------- | ---------------------- |
+| `register()`   | Before modules load    | Bind services in DI    |
+| `modules()`    | Before user modules    | Add feature modules    |
+| `adapters()`   | Before user adapters   | Add lifecycle adapters |
+| `middleware()` | Before user middleware | Add global middleware  |
+| `onReady()`    | After server starts    | Post-startup tasks     |
+| `shutdown()`   | On SIGINT/SIGTERM      | Cleanup resources      |
 
 ## Usage
 
@@ -69,15 +69,23 @@ Plugins run before user-defined modules, adapters, and middleware, so they can p
 ## Full Example: Auth Plugin
 
 ```ts
-import type { KickPlugin, Container, AppModuleClass, AppAdapter } from '@forinda/kickjs'
+import {
+  createToken,
+  type KickPlugin,
+  type Container,
+  type AppModuleClass,
+  type AppAdapter,
+} from '@forinda/kickjs'
 import passport from 'passport'
-
-export const AUTH_SERVICE = Symbol('AuthService')
 
 interface AuthConfig {
   secret: string
   expiresIn?: string
 }
+
+// Typed DI token — `container.resolve(AUTH_SERVICE)` returns AuthConfig
+// without any manual generic.
+export const AUTH_SERVICE = createToken<AuthConfig>('AuthService')
 
 export class AuthPlugin implements KickPlugin {
   name = 'AuthPlugin'
@@ -92,7 +100,7 @@ export class AuthPlugin implements KickPlugin {
   }
 
   modules(): AppModuleClass[] {
-    return [AuthModule]  // provides /auth/login, /auth/register routes
+    return [AuthModule] // provides /auth/login, /auth/register routes
   }
 
   middleware() {

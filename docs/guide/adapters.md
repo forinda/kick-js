@@ -11,10 +11,10 @@ import type { AppAdapter, AdapterContext } from '@forinda/kickjs'
 
 // AdapterContext — populated by the framework, passed to all hooks
 interface AdapterContext {
-  app: any              // Express application instance
-  container: Container  // DI container
-  server?: any          // http.Server (only in afterStart)
-  env: string           // NODE_ENV (default: 'development')
+  app: any // Express application instance
+  container: Container // DI container
+  server?: any // http.Server (only in afterStart)
+  env: string // NODE_ENV (default: 'development')
   isProduction: boolean // true when NODE_ENV === 'production'
 }
 
@@ -46,12 +46,12 @@ interface AdapterMiddleware {
 }
 ```
 
-| Phase | When it runs |
-|-------|-------------|
-| `beforeGlobal` | Before any user-defined global middleware |
-| `afterGlobal` | After global middleware, before module routes (default) |
-| `beforeRoutes` | Just before module routes are mounted |
-| `afterRoutes` | After module routes, before error handlers |
+| Phase          | When it runs                                            |
+| -------------- | ------------------------------------------------------- |
+| `beforeGlobal` | Before any user-defined global middleware               |
+| `afterGlobal`  | After global middleware, before module routes (default) |
+| `beforeRoutes` | Just before module routes are mounted                   |
+| `afterRoutes`  | After module routes, before error handlers              |
 
 ## Application Setup Pipeline
 
@@ -131,10 +131,11 @@ export class RateLimitAdapter implements AppAdapter {
 Connect on start, clean up on shutdown:
 
 ```ts
-import type { AppAdapter, AdapterContext } from '@forinda/kickjs'
-import { createClient } from 'redis'
+import { createToken, type AppAdapter, type AdapterContext } from '@forinda/kickjs'
+import { createClient, type RedisClientType } from 'redis'
 
-const REDIS = Symbol('Redis')
+// Typed DI token — `container.resolve(REDIS)` returns RedisClientType.
+export const REDIS = createToken<RedisClientType>('Redis')
 
 export class RedisAdapter implements AppAdapter {
   name = 'RedisAdapter'

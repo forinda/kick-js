@@ -13,7 +13,7 @@ pnpm add socket.io
 ```ts
 // src/adapters/socketio.adapter.ts
 import { Server, type Socket } from 'socket.io'
-import { Logger, type AppAdapter, type AdapterContext } from '@forinda/kickjs'
+import { createToken, Logger, type AppAdapter, type AdapterContext } from '@forinda/kickjs'
 
 const log = Logger.for('SocketIOAdapter')
 
@@ -79,8 +79,11 @@ export class SocketIOAdapter implements AppAdapter {
   }
 }
 
-/** DI token for injecting the Socket.IO server */
-export const SOCKET_IO = Symbol('SocketIO')
+/**
+ * Typed DI token for injecting the Socket.IO server.
+ * `container.resolve(SOCKET_IO)` returns `Server` without a manual generic.
+ */
+export const SOCKET_IO = createToken<Server>('SocketIO')
 ```
 
 ## Register in Bootstrap
@@ -194,17 +197,17 @@ chat.emit('join-room', 'general')
 
 ## Socket.IO vs ws
 
-| | `@forinda/kickjs-ws` | Socket.IO |
-|---|---|---|
-| **Protocol** | Raw WebSocket | Custom protocol over WebSocket/polling |
-| **Reconnection** | Manual | Automatic |
-| **Rooms** | Via `RoomManager` | Built-in |
-| **Acknowledgements** | Manual | Built-in callbacks |
-| **Binary** | Manual | Automatic |
-| **Fallback** | WebSocket only | Long-polling fallback |
-| **Bundle size** | ~50KB | ~300KB (client + server) |
-| **Decorators** | `@WsController`, `@OnMessage` | Use adapter pattern above |
-| **Best for** | Lightweight, low-level control | Full-featured real-time apps |
+|                      | `@forinda/kickjs-ws`           | Socket.IO                              |
+| -------------------- | ------------------------------ | -------------------------------------- |
+| **Protocol**         | Raw WebSocket                  | Custom protocol over WebSocket/polling |
+| **Reconnection**     | Manual                         | Automatic                              |
+| **Rooms**            | Via `RoomManager`              | Built-in                               |
+| **Acknowledgements** | Manual                         | Built-in callbacks                     |
+| **Binary**           | Manual                         | Automatic                              |
+| **Fallback**         | WebSocket only                 | Long-polling fallback                  |
+| **Bundle size**      | ~50KB                          | ~300KB (client + server)               |
+| **Decorators**       | `@WsController`, `@OnMessage`  | Use adapter pattern above              |
+| **Best for**         | Lightweight, low-level control | Full-featured real-time apps           |
 
 ## With Authentication
 
