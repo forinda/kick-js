@@ -147,17 +147,28 @@ const url = getEnv('DATABASE_URL') // string
 
 You can still pass an explicit schema as the second argument when you need a one-off shape outside the project default.
 
-### resetEnvCache
+### reloadEnv vs resetEnvCache
 
-Clear the cached config. Useful in tests when you need to reload with different environment values:
+`reloadEnv()` and `resetEnvCache()` look similar but answer different questions, and using the wrong one in dev produces a subtle "user keys disappear" bug. Pick the right tool:
+
+| Function | Clears parsed values? | Clears registered schema? | Use when |
+| --- | --- | --- | --- |
+| `reloadEnv()` | yes | **no** | a `.env` file changed; you want fresh values against the *same* schema. Called automatically by `envWatchPlugin()` and the kickjs HMR rebuild path. |
+| `resetEnvCache()` | yes | yes | a test wants a totally fresh slate, e.g. swapping `envSchema` between cases. |
+
+`reloadEnv()` deliberately keeps the registered schema so the next read re-parses `process.env` against your extended shape instead of falling back to the base schema. If it dropped the schema instead, every `ConfigService.get('CUSTOM_KEY')` after a `.env` save would silently start returning `undefined` — which is exactly the bug HMR users would hit on every reload before this fix.
+
+If you need to swap schemas between cases (typically only in tests), call `resetEnvCache()` then `loadEnv(newSchema)`:
 
 ```ts
 import { resetEnvCache, loadEnv } from '@forinda/kickjs'
 
 resetEnvCache()
 process.env.PORT = '4000'
-const env = loadEnv(envSchema) // re-parsed with new PORT
+const env = loadEnv(envSchema) // re-parsed with new PORT against fresh schema
 ```
+
+For the normal "edit `.env`, want the new value" flow, do nothing — `envWatchPlugin()` calls `reloadEnv()` for you and `ConfigService.get()` immediately returns the new value.
 
 ## Accessing Config in Services
 

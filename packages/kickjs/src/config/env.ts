@@ -79,20 +79,21 @@ export function defineEnv<T extends z.ZodRawShape>(
 }
 
 /**
- * Parse and validate process.env against a Zod schema. Caches result per schema.
+ * Parse and validate `process.env` against a Zod schema. Caches result per schema.
  *
  * **No-arg behaviour is sticky.** The first time `loadEnv(schema)` is called
  * with an extended schema, the cache holds that schema. Subsequent
  * `loadEnv()` calls (no arg) will reuse the cached extended schema rather
- * than falling back to `baseEnvSchema` and clobbering the env resolver.
+ * than falling back to `baseEnvSchema`.
  *
- * This matters because `ConfigService` (and the bare `Container._envResolver`)
- * call `loadEnv()` without an argument inside their constructors. Without
- * stickiness, instantiating `ConfigService` after a `loadEnv(extendedSchema)`
- * call would silently downgrade the env to the base shape.
+ * Stickiness matters because `ConfigService` and the `@Value()` decorator
+ * both read through the no-arg form internally. Without it, resolving
+ * either of them after a `loadEnv(extendedSchema)` call would silently
+ * downgrade the env to the base shape and drop every user-defined key.
  *
  * To force a re-parse with a different schema, pass the new schema explicitly.
- * To start fresh, call `resetEnvCache()` or `reloadEnv()`.
+ * To start fresh, call `resetEnvCache()` (full reset) or `reloadEnv()`
+ * (re-parse against the same schema after a `.env` file change).
  *
  * **Typing:**
  * - With an explicit schema → returns `z.infer<typeof schema>`.
@@ -149,8 +150,19 @@ export function getEnv(key: string, schema?: z.ZodObject<any>): any {
 }
 
 /**
- * Reload env from process.env (re-reads dotenv if installed, clears cache).
- * Called during HMR rebuild to pick up .env file changes.
+ * Reload env from `process.env`. Re-reads `.env` via dotenv (if
+ * installed), then re-parses the result against the **same** schema
+ * the project registered at startup. Called during HMR rebuild and by
+ * `envWatchPlugin` to pick up `.env` file changes mid-session.
+ *
+ * Crucially, this preserves the registered schema. Wiping it would
+ * silently downgrade `ConfigService` and `@Value()` back to the base
+ * schema on the next read, so every user-defined key would start
+ * resolving as `undefined` after the first `.env` save — which was the
+ * original "config disappears in dev" bug.
+ *
+ * If you need to fully forget the schema (e.g. tests that swap schemas
+ * between cases), call {@link resetEnvCache} instead.
  */
 export function reloadEnv(): void {
   // Re-read .env file into process.env if dotenv is installed.
@@ -162,12 +174,23 @@ export function reloadEnv(): void {
     // environment directly.
   }
 
-  // Clear the parse cache so next loadEnv() re-validates
+  // Drop the parsed snapshot but keep the schema. Re-parse eagerly so
+  // existing consumers (including ConfigService getters and @Value
+  // resolvers that may already hold references to the env state) see
+  // the new values on their very next read instead of having to
+  // re-trigger any cache-population step.
   cachedEnv = null
-  cachedSchema = null
+  if (cachedSchema) {
+    loadEnv(cachedSchema)
+  }
 }
 
-/** Reset cached env (useful for testing) */
+/**
+ * Fully reset the env cache, including the registered schema. Use this
+ * in tests that need to swap schemas between cases — `reloadEnv()`
+ * deliberately preserves the schema to avoid the "user keys vanish on
+ * `.env` reload" footgun.
+ */
 export function resetEnvCache(): void {
   cachedEnv = null
   cachedSchema = null
