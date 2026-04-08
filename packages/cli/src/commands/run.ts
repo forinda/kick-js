@@ -23,10 +23,11 @@ async function startDevServer(_entry: string, port?: string): Promise<void> {
 
   // Generate `.kickjs/types/*.d.ts` once before Vite starts so the
   // user's tsc has fresh type info from the very first request.
-  // Failures here are non-fatal — we don't want a typegen bug to
-  // block the dev server.
+  // `allowDuplicates: true` so an in-progress class rename can never
+  // block the dev server — the colliding entries are auto-namespaced
+  // and the warning is printed instead.
   try {
-    await runTypegen({ cwd: process.cwd() })
+    await runTypegen({ cwd: process.cwd(), allowDuplicates: true })
   } catch (err: any) {
     console.warn(`  kick typegen: skipped (${err?.message ?? err})`)
   }

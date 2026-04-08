@@ -9,11 +9,18 @@
  */
 
 import { resolve } from 'node:path'
-import { scanProject, type DiscoveredClass } from './scanner'
-import { generateTypes, type GenerateResult } from './generator'
+import { scanProject, type ScanResult } from './scanner'
+import { generateTypes, type GenerateResult, TokenCollisionError } from './generator'
 
-export type { DiscoveredClass } from './scanner'
+export type {
+  DiscoveredClass,
+  DiscoveredToken,
+  DiscoveredInject,
+  ClassCollision,
+  ScanResult,
+} from './scanner'
 export type { GenerateResult } from './generator'
+export { TokenCollisionError } from './generator'
 
 /** Options for `runTypegen` */
 export interface RunTypegenOptions {
@@ -25,6 +32,12 @@ export interface RunTypegenOptions {
   outDir?: string
   /** Suppress console output */
   silent?: boolean
+  /**
+   * When `true`, duplicate class names are auto-namespaced by file path
+   * instead of throwing. `kick dev` enables this so the dev server is
+   * never blocked by an in-progress rename. CLI default is `false` so
+   * `kick typegen` (and CI) catches collisions early. */
+  allowDuplicates?: boolean
 }
 
 /** Resolve options to absolute paths */
@@ -33,6 +46,7 @@ function resolveOptions(opts: RunTypegenOptions): {
   srcDir: string
   outDir: string
   silent: boolean
+  allowDuplicates: boolean
 } {
   const cwd = opts.cwd ?? process.cwd()
   return {
@@ -40,34 +54,47 @@ function resolveOptions(opts: RunTypegenOptions): {
     srcDir: resolve(cwd, opts.srcDir ?? 'src'),
     outDir: resolve(cwd, opts.outDir ?? '.kickjs/types'),
     silent: opts.silent ?? false,
+    allowDuplicates: opts.allowDuplicates ?? false,
   }
 }
 
 /**
  * Run a single typegen pass: scan source files, generate `.d.ts` files.
  *
- * Returns the discovered classes alongside the generation result so
- * callers (`kick dev`) can log them or feed them to other tools.
+ * Returns the discovered scan result alongside the generation result so
+ * callers (`kick dev`, devtools) can log them or feed them to other tools.
+ *
+ * Throws `TokenCollisionError` if duplicate class names are found and
+ * `allowDuplicates` is false.
  */
 export async function runTypegen(opts: RunTypegenOptions = {}): Promise<{
-  classes: DiscoveredClass[]
+  scan: ScanResult
   result: GenerateResult
 }> {
-  const { cwd, srcDir, outDir, silent } = resolveOptions(opts)
+  const { cwd, srcDir, outDir, silent, allowDuplicates } = resolveOptions(opts)
 
   const start = Date.now()
-  const classes = await scanProject({ root: srcDir, cwd })
-  const result = await generateTypes({ classes, outDir })
+  const scan = await scanProject({ root: srcDir, cwd })
+  const result = await generateTypes({
+    classes: scan.classes,
+    tokens: scan.tokens,
+    injects: scan.injects,
+    collisions: scan.collisions,
+    outDir,
+    allowDuplicates,
+  })
   const elapsed = Date.now() - start
 
   if (!silent) {
     const where = outDir.replace(cwd + '/', '')
+    const collisionNote =
+      result.resolvedCollisions > 0 ? `, ${result.resolvedCollisions} collisions namespaced` : ''
     console.log(
-      `  kick typegen → ${result.registryEntries} services, ${result.moduleTokens} modules → ${where} (${elapsed}ms)`,
+      `  kick typegen → ${result.serviceTokens} services, ${result.moduleTokens} modules${collisionNote} → ${where} (${elapsed}ms)`,
     )
   }
 
-  return { classes, result }
+  return { scan, result }
 }
 
 /**
@@ -79,13 +106,21 @@ export async function runTypegen(opts: RunTypegenOptions = {}): Promise<{
  * Debounces re-runs by 100ms so a bulk file change (e.g. `kick g module`
  * creating 5 files at once) emits one regen, not five.
  *
+ * In watch mode collisions are reported but never thrown — the watcher
+ * keeps running so the user can fix the rename and the next scan
+ * recovers automatically.
+ *
  * Returns a `stop()` function that closes the watcher.
  */
 export async function watchTypegen(opts: RunTypegenOptions = {}): Promise<() => void> {
-  const { cwd, srcDir, outDir, silent } = resolveOptions(opts)
+  const resolved = resolveOptions(opts)
+  const { srcDir, silent } = resolved
+  // Watch mode always tolerates collisions — otherwise an in-progress
+  // rename would crash the dev loop. The error is still printed.
+  const runOpts: RunTypegenOptions = { ...resolved, allowDuplicates: true }
 
   // Initial run
-  await runTypegen({ cwd, srcDir, outDir, silent })
+  await safeRun(runOpts, silent)
 
   const { watch } = await import('node:fs')
 
@@ -99,9 +134,7 @@ export async function watchTypegen(opts: RunTypegenOptions = {}): Promise<() => 
 
     if (timer) clearTimeout(timer)
     timer = setTimeout(() => {
-      runTypegen({ cwd, srcDir, outDir, silent }).catch((err) => {
-        if (!silent) console.error('  kick typegen failed:', err?.message ?? err)
-      })
+      safeRun(runOpts, silent)
     }, 100)
   }
 
@@ -118,7 +151,7 @@ export async function watchTypegen(opts: RunTypegenOptions = {}): Promise<() => 
     }
     // Polling fallback — re-scan every 2s
     const interval = setInterval(() => {
-      runTypegen({ cwd, srcDir, outDir, silent: true }).catch(() => {})
+      safeRun({ ...runOpts, silent: true }, true)
     }, 2000)
     return () => clearInterval(interval)
   }
@@ -126,5 +159,20 @@ export async function watchTypegen(opts: RunTypegenOptions = {}): Promise<() => 
   return () => {
     if (timer) clearTimeout(timer)
     watcher.close()
+  }
+}
+
+/** Run typegen swallowing errors so the watcher loop never dies */
+async function safeRun(opts: RunTypegenOptions, silent: boolean): Promise<void> {
+  try {
+    await runTypegen(opts)
+  } catch (err) {
+    if (silent) return
+    if (err instanceof TokenCollisionError) {
+      console.error('\n' + err.message + '\n')
+    } else {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error(`  kick typegen failed: ${msg}`)
+    }
   }
 }

@@ -9,7 +9,15 @@
  */
 
 import type { Command } from 'commander'
-import { runTypegen, watchTypegen } from '../typegen'
+import { runTypegen, TokenCollisionError, watchTypegen } from '../typegen'
+
+interface TypegenCliOptions {
+  watch?: boolean
+  src: string
+  out: string
+  silent?: boolean
+  allowDuplicates?: boolean
+}
 
 export function registerTypegenCommand(program: Command): void {
   program
@@ -19,13 +27,17 @@ export function registerTypegenCommand(program: Command): void {
     .option('-s, --src <dir>', 'Source directory to scan', 'src')
     .option('-o, --out <dir>', 'Output directory', '.kickjs/types')
     .option('--silent', 'Suppress output')
-    .action(async (opts: { watch?: boolean; src: string; out: string; silent?: boolean }) => {
-      const cwd = process.cwd()
+    .option(
+      '--allow-duplicates',
+      'Auto-namespace duplicate class names instead of failing (use with caution)',
+    )
+    .action(async (opts: TypegenCliOptions) => {
       const baseOpts = {
-        cwd,
+        cwd: process.cwd(),
         srcDir: opts.src,
         outDir: opts.out,
         silent: opts.silent,
+        allowDuplicates: opts.allowDuplicates,
       }
 
       try {
@@ -45,8 +57,14 @@ export function registerTypegenCommand(program: Command): void {
         } else {
           await runTypegen(baseOpts)
         }
-      } catch (err: any) {
-        console.error('\n  kick typegen failed:', err?.message ?? err)
+      } catch (err: unknown) {
+        if (err instanceof TokenCollisionError) {
+          console.error('\n' + err.message + '\n')
+        } else if (err instanceof Error) {
+          console.error(`\n  kick typegen failed: ${err.message}`)
+        } else {
+          console.error(`\n  kick typegen failed: ${JSON.stringify(err)}`)
+        }
         process.exit(1)
       }
     })

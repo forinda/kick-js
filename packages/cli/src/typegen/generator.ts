@@ -1,7 +1,7 @@
 /**
  * Generates `.d.ts` files inside `.kickjs/types/` from the discovered
- * decorated classes. Pattern modeled on React Router's `.react-router/types/`
- * directory.
+ * decorated classes and DI tokens. Pattern modeled on React Router's
+ * `.react-router/types/` directory.
  *
  * Outputs:
  * - `.kickjs/types/registry.d.ts` — module augmentation for `KickJsRegistry`
@@ -14,12 +14,24 @@
  * - `.kickjs/.gitignore` — gitignores the whole folder so generated files
  *   never get committed.
  *
+ * ## Collision behaviour
+ *
+ * If `findCollisions()` returns any duplicate class names:
+ * - **Default (`allowDuplicates: false`)** — `generateTypes` throws a
+ *   `TokenCollisionError` with a clear message listing every conflicting
+ *   file. The caller (CLI) prints it and exits non-zero. Nothing is
+ *   written to disk.
+ * - **`allowDuplicates: true`** — colliding classes are auto-namespaced
+ *   by their relative file path so the registry keys become e.g.
+ *   `'modules/users/UserService'` instead of `'UserService'`. Non-colliding
+ *   classes still get bare `'ClassName'` keys (smart default).
+ *
  * @module @forinda/kickjs-cli/typegen/generator
  */
 
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, join, relative, sep } from 'node:path'
-import type { DiscoveredClass } from './scanner'
+import type { ClassCollision, DiscoveredClass, DiscoveredInject, DiscoveredToken } from './scanner'
 
 /** Header written to every generated file */
 const HEADER = `/* eslint-disable */
@@ -30,34 +42,89 @@ const HEADER = `/* eslint-disable */
 /** Decorators whose classes participate in the DI registry augmentation */
 const REGISTRY_DECORATORS = new Set(['Service', 'Repository', 'Injectable', 'Component'])
 
+/** Thrown by `generateTypes` when collisions are found and not allowed */
+export class TokenCollisionError extends Error {
+  readonly collisions: ClassCollision[]
+  constructor(collisions: ClassCollision[]) {
+    super(formatCollisionMessage(collisions))
+    this.name = 'TokenCollisionError'
+    this.collisions = collisions
+  }
+}
+
+/** Build a human-readable message describing every collision */
+function formatCollisionMessage(collisions: ClassCollision[]): string {
+  const lines: string[] = ['kick typegen: token collision detected']
+  for (const c of collisions) {
+    lines.push('')
+    lines.push(`  ${c.classes.length} classes named '${c.className}':`)
+    for (const cls of c.classes) {
+      lines.push(`    - ${cls.relativePath}`)
+    }
+  }
+  lines.push('')
+  lines.push('Resolutions:')
+  lines.push('  (a) Rename one of the classes')
+  lines.push(
+    "  (b) Use createToken<T>('namespaced/Name') and import the token explicitly — see @forinda/kickjs",
+  )
+  lines.push('  (c) Pass --allow-duplicates to namespace the registry keys automatically')
+  lines.push("      (e.g. 'modules/users/UserService' instead of 'UserService')")
+  return lines.join('\n')
+}
+
 /** Compute the module specifier (without extension) used inside `import('...')` */
 function importSpecifierFor(targetFile: string, fromFile: string): string {
   const fromDir = dirname(fromFile)
   let rel = relative(fromDir, targetFile).split(sep).join('/')
-  // Strip the file extension — TS resolves it.
   rel = rel.replace(/\.(ts|tsx|mts|cts)$/i, '')
-  // Ensure relative paths start with `./` or `../`
   if (!rel.startsWith('.')) rel = './' + rel
   return rel
 }
 
 /**
+ * Build the namespaced registry key for a colliding class.
+ * Strips the `src/` prefix and the file extension, then appends the
+ * class name. Example: `src/modules/users/user.service.ts` + `UserService`
+ * → `modules/users/UserService`.
+ */
+function namespacedKeyFor(cls: DiscoveredClass): string {
+  const rel = cls.relativePath.replace(/^src\//, '').replace(/\.(ts|tsx|mts|cts)$/i, '')
+  // Drop the trailing filename if it's just the class in kebab/snake form —
+  // keep the directory path as the namespace.
+  const parts = rel.split('/')
+  parts.pop()
+  const ns = parts.join('/')
+  return ns ? `${ns}/${cls.className}` : cls.className
+}
+
+/**
  * Render the `KickJsRegistry` module augmentation. Each entry maps a
- * string token (the class name) to the imported class type.
+ * string token to the imported class type.
  *
  * Default-exported classes are imported as `import('...').default`.
+ *
+ * `collidingNames` lists class names that should be auto-namespaced;
+ * everything else gets a bare key.
  */
-function renderRegistry(classes: DiscoveredClass[], outFile: string): string {
+function renderRegistry(
+  classes: DiscoveredClass[],
+  outFile: string,
+  collidingNames: Set<string>,
+): string {
   const seen = new Set<string>()
   const entries: string[] = []
 
   for (const c of classes) {
     if (!REGISTRY_DECORATORS.has(c.decorator)) continue
-    if (seen.has(c.className)) continue
-    seen.add(c.className)
+
+    const key = collidingNames.has(c.className) ? namespacedKeyFor(c) : c.className
+    if (seen.has(key)) continue
+    seen.add(key)
+
     const spec = importSpecifierFor(c.filePath, outFile)
     const ref = c.isDefault ? `import('${spec}').default` : `import('${spec}').${c.className}`
-    entries.push(`    '${c.className}': ${ref}`)
+    entries.push(`    '${key}': ${ref}`)
   }
 
   const body = entries.length
@@ -107,25 +174,50 @@ import './registry'
 export interface GenerateResult {
   /** Number of registry entries written */
   registryEntries: number
-  /** Number of service tokens written */
+  /** Number of service tokens (classes + createToken + @Inject literals) */
   serviceTokens: number
   /** Number of module tokens written */
   moduleTokens: number
   /** Files that were written */
   written: string[]
+  /** Number of collisions that were auto-namespaced (only > 0 with allowDuplicates) */
+  resolvedCollisions: number
 }
 
 /** Options for `generateTypes` */
 export interface GenerateOptions {
   /** Discovered classes from the scanner */
   classes: DiscoveredClass[]
+  /** Discovered `createToken('name')` calls */
+  tokens?: DiscoveredToken[]
+  /** Discovered `@Inject('literal')` calls */
+  injects?: DiscoveredInject[]
+  /** Detected duplicate class names from the scanner */
+  collisions?: ClassCollision[]
   /** Output directory (typically `<cwd>/.kickjs/types`) */
   outDir: string
+  /**
+   * When `true`, colliding class names are auto-namespaced by file path
+   * instead of throwing. Default: `false`.
+   */
+  allowDuplicates?: boolean
 }
 
 /** Write all generated `.d.ts` files to `outDir` */
 export async function generateTypes(opts: GenerateOptions): Promise<GenerateResult> {
-  const { classes, outDir } = opts
+  const {
+    classes,
+    tokens = [],
+    injects = [],
+    collisions = [],
+    outDir,
+    allowDuplicates = false,
+  } = opts
+
+  if (collisions.length > 0 && !allowDuplicates) {
+    throw new TokenCollisionError(collisions)
+  }
+
   await mkdir(outDir, { recursive: true })
 
   const registryFile = join(outDir, 'registry.d.ts')
@@ -133,16 +225,24 @@ export async function generateTypes(opts: GenerateOptions): Promise<GenerateResu
   const modulesFile = join(outDir, 'modules.d.ts')
   const indexFile = join(outDir, 'index.d.ts')
 
-  const registryContent = renderRegistry(classes, registryFile)
-  const services = classes
+  const collidingNames = new Set(collisions.map((c) => c.className))
+  const registryContent = renderRegistry(classes, registryFile, collidingNames)
+
+  // ServiceToken union — combines class names, createToken literals, and
+  // @Inject literals so tooling autocomplete sees every known token.
+  const classTokens = classes
     .filter((c) => REGISTRY_DECORATORS.has(c.decorator))
-    .map((c) => c.className)
+    .map((c) => (collidingNames.has(c.className) ? namespacedKeyFor(c) : c.className))
+  const tokenLiterals = tokens.map((t) => t.name)
+  const injectLiterals = injects.map((i) => i.name)
+  const allServices = [...classTokens, ...tokenLiterals, ...injectLiterals]
+
   const modules = classes.filter((c) => c.decorator === 'Module').map((c) => c.className)
 
   const servicesContent = renderUnion(
     'ServiceToken',
-    services,
-    '(no services discovered — `kick g service <name>` to add one)',
+    allServices,
+    '(no tokens discovered — declare with createToken<T>() or `kick g service <name>`)',
   )
   const modulesContent = renderUnion(
     'ModuleToken',
@@ -161,9 +261,10 @@ export async function generateTypes(opts: GenerateOptions): Promise<GenerateResu
   await writeFile(join(kickjsRoot, '.gitignore'), '# Auto-generated by kick typegen\n*\n', 'utf-8')
 
   return {
-    registryEntries: services.length,
-    serviceTokens: services.length,
+    registryEntries: classTokens.length,
+    serviceTokens: new Set(allServices).size,
     moduleTokens: modules.length,
     written: [registryFile, servicesFile, modulesFile, indexFile],
+    resolvedCollisions: collisions.length,
   }
 }
