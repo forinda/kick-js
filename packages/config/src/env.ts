@@ -18,27 +18,43 @@ let cachedEnv: any = null
 let cachedSchema: any = null
 
 /**
- * Define a custom env schema by extending the base.
- * Returns a Zod schema that validates process.env.
+ * Define a custom env schema. The base schema (`PORT`, `NODE_ENV`,
+ * `LOG_LEVEL`) is always merged in, so users never need to remember to
+ * extend it themselves — both styles below produce the same result and
+ * both surface the base keys in `KickEnv`.
+ *
+ * Returns a Zod schema that validates `process.env`.
  *
  * @example
  * ```ts
- * const envSchema = defineEnv((base) =>
- *   base.extend({
+ * // Style A — return a fresh object; base fields are merged automatically
+ * export default defineEnv(() =>
+ *   z.object({
  *     DATABASE_URL: z.string().url(),
  *     JWT_SECRET: z.string().min(32),
- *     REDIS_URL: z.string().url().optional(),
  *   })
  * )
  *
- * const env = loadEnv(envSchema)
- * env.DATABASE_URL // string — fully typed, autocompletes
+ * // Style B — explicitly extend `base` (still works, identical result)
+ * export default defineEnv((base) =>
+ *   base.extend({
+ *     DATABASE_URL: z.string().url(),
+ *   })
+ * )
  * ```
+ *
+ * User-defined keys override base keys when they collide, so a project
+ * can re-type `PORT` or tighten `NODE_ENV` without losing the rest of
+ * the base shape.
  */
 export function defineEnv<T extends z.ZodRawShape>(
   extend: (base: typeof baseEnvSchema) => z.ZodObject<T>,
-): z.ZodObject<T> {
-  return extend(baseEnvSchema)
+): z.ZodObject<typeof baseEnvSchema.shape & T> {
+  const userSchema = extend(baseEnvSchema)
+  // Always merge the base in. `extend` lets the user's shape override
+  // any colliding base keys, which preserves the escape hatch for
+  // projects that want to re-type `PORT` etc.
+  return baseEnvSchema.extend(userSchema.shape) as z.ZodObject<typeof baseEnvSchema.shape & T>
 }
 
 /**
