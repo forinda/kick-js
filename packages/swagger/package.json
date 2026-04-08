@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-swagger",
-  "version": "2.2.2",
+  "version": "2.2.3",
   "description": "OpenAPI spec generation from decorators, Swagger UI and ReDoc serving for KickJS",
   "keywords": [
     "kickjs",

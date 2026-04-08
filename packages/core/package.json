@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-core",
-  "version": "2.2.2",
+  "version": "2.2.3",
   "description": "Core DI container, decorators, module system, and logger for KickJS",
   "keywords": [
     "kickjs",
