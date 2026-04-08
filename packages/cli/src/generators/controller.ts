@@ -34,7 +34,7 @@ import type { RequestContext } from '@forinda/kickjs'
 
 @Controller()
 export class ${pascal}Controller {
-  // @Autowired() private myService!: MyService
+  // @Autowired() private readonly myService!: MyService
 
   @Get('/')
   async list(ctx: RequestContext) {

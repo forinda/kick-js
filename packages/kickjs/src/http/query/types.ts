@@ -56,6 +56,51 @@ export interface ParsedQuery {
 }
 
 /**
+ * Helper that extracts the literal field union from a `QueryFieldConfig`
+ * key. When the user passes `{ filterable: ['status', 'category'] } as const`,
+ * `FieldsOf<typeof config, 'filterable'>` resolves to `'status' | 'category'`.
+ *
+ * Without `as const`, the arrays widen to `string[]` and the union falls
+ * back to `string`. This is the documented escape hatch.
+ */
+export type FieldsOf<
+  TConfig extends QueryFieldConfig | undefined,
+  K extends 'filterable' | 'sortable' | 'searchable',
+> = TConfig extends { readonly [P in K]: readonly (infer F)[] }
+  ? F extends string
+    ? F
+    : string
+  : TConfig extends { columns: infer C }
+    ? K extends 'filterable'
+      ? keyof C & string
+      : string
+    : string
+
+/**
+ * Narrowed `ParsedQuery` whose `filters[].field` and `sort[].field`
+ * unions are constrained to the literal whitelist passed to
+ * `ctx.qs()` / `parseQuery()`. Extends `ParsedQuery`, so any function
+ * accepting `ParsedQuery` accepts a `TypedParsedQuery<X>` automatically
+ * (subtype assignment, no codegen, backward compatible).
+ *
+ * @example
+ * ```ts
+ * const parsed = ctx.qs({
+ *   filterable: ['status', 'priority'],
+ *   sortable: ['createdAt'],
+ * } as const)
+ * parsed.filters[0]?.field // 'status' | 'priority'
+ * parsed.sort[0]?.field    // 'createdAt'
+ * ```
+ */
+export interface TypedParsedQuery<
+  TConfig extends QueryFieldConfig | undefined,
+> extends ParsedQuery {
+  filters: Array<FilterItem & { field: FieldsOf<TConfig, 'filterable'> }>
+  sort: Array<SortItem & { field: FieldsOf<TConfig, 'sortable'> }>
+}
+
+/**
  * Restrict which fields can be filtered, sorted, or searched.
  * Fields not in the allow-list are silently ignored.
  *

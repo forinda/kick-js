@@ -17,11 +17,11 @@ import { ${pascal.toUpperCase()}_QUERY_CONFIG } from '../constants'
 
 @Controller()
 export class ${pascal}Controller {
-  @Autowired() private create${pascal}UseCase!: Create${pascal}UseCase
-  @Autowired() private get${pascal}UseCase!: Get${pascal}UseCase
-  @Autowired() private list${pluralPascal}UseCase!: List${pluralPascal}UseCase
-  @Autowired() private update${pascal}UseCase!: Update${pascal}UseCase
-  @Autowired() private delete${pascal}UseCase!: Delete${pascal}UseCase
+  @Autowired() private readonly create${pascal}UseCase!: Create${pascal}UseCase
+  @Autowired() private readonly get${pascal}UseCase!: Get${pascal}UseCase
+  @Autowired() private readonly list${pluralPascal}UseCase!: List${pluralPascal}UseCase
+  @Autowired() private readonly update${pascal}UseCase!: Update${pascal}UseCase
+  @Autowired() private readonly delete${pascal}UseCase!: Delete${pascal}UseCase
 
   @Get('/')
   @ApiTags('${pascal}')

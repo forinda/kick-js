@@ -12,11 +12,11 @@ import { TASK_QUERY_CONFIG } from '../constants'
 
 @Controller()
 export class TaskController {
-  @Autowired() private createTaskUseCase!: CreateTaskUseCase
-  @Autowired() private getTaskUseCase!: GetTaskUseCase
-  @Autowired() private listTasksUseCase!: ListTasksUseCase
-  @Autowired() private updateTaskUseCase!: UpdateTaskUseCase
-  @Autowired() private deleteTaskUseCase!: DeleteTaskUseCase
+  @Autowired() private readonly createTaskUseCase!: CreateTaskUseCase
+  @Autowired() private readonly getTaskUseCase!: GetTaskUseCase
+  @Autowired() private readonly listTasksUseCase!: ListTasksUseCase
+  @Autowired() private readonly updateTaskUseCase!: UpdateTaskUseCase
+  @Autowired() private readonly deleteTaskUseCase!: DeleteTaskUseCase
 
   @Get('/')
   @ApiTags('Task')

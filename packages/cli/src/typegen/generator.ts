@@ -179,14 +179,46 @@ import './routes'
 }
 
 /**
+ * Render the `query` field's TypeScript type for a single route.
+ *
+ * - When `@ApiQueryParams` is absent (`queryFilterable === null`), emits
+ *   `unknown` so the user gets nothing extra.
+ * - When the decorator is present, emits an object literal whose keys
+ *   are the standard query string keys (`filter`, `sort`, `q`, `page`,
+ *   `limit`). `sort` is narrowed to a string-literal union of allowed
+ *   field names with optional `-` direction prefix.
+ */
+function renderQueryShape(m: DiscoveredRoute): string {
+  if (m.queryFilterable === null) return 'unknown'
+  const sortable = m.querySortable ?? []
+  const sortType =
+    sortable.length > 0 ? sortable.flatMap((f) => [`'${f}'`, `'-${f}'`]).join(' | ') : 'string'
+  return `{ filter?: string | string[]; sort?: ${sortType}; q?: string; page?: string; limit?: string }`
+}
+
+/** Render JSDoc lines summarising the @ApiQueryParams whitelist */
+function renderQueryDocLines(m: DiscoveredRoute): string[] {
+  const lines: string[] = []
+  if (m.queryFilterable && m.queryFilterable.length > 0) {
+    lines.push(`Filterable: ${m.queryFilterable.join(', ')}`)
+  }
+  if (m.querySortable && m.querySortable.length > 0) {
+    lines.push(`Sortable: ${m.querySortable.join(', ')}`)
+  }
+  if (m.querySearchable && m.querySearchable.length > 0) {
+    lines.push(`Searchable: ${m.querySearchable.join(', ')}`)
+  }
+  return lines
+}
+
+/**
  * Render the `KickRoutes` global namespace augmentation. Each interface
  * inside corresponds to a controller class; each property is a single
  * route method on that controller, conforming to `RouteShape`.
  *
- * Phase A only fills `params` (from URL pattern). `body`, `query`, and
- * `response` are emitted as `unknown` placeholders that later phases
- * narrow as more information becomes available (Phase B = ApiQueryParams,
- * Phase C = schema adapter system).
+ * Fills `params` from URL patterns and `query` from `@ApiQueryParams`.
+ * `body` and `response` are emitted as `unknown` placeholders until
+ * Phase C (schema adapter system) lands.
  */
 function renderRoutes(routes: DiscoveredRoute[]): string {
   if (routes.length === 0) {
@@ -220,12 +252,17 @@ export {}
       // unfortunately is assignable to anything and silently passes.
       const paramsType =
         m.pathParams.length > 0 ? `{ ${m.pathParams.map((p) => `${p}: string`).join('; ')} }` : '{}'
+      const queryType = renderQueryShape(m)
+      const docLines = renderQueryDocLines(m)
       lines.push(
-        `      /** ${m.httpMethod} ${m.path} */`,
+        `      /**`,
+        `       * ${m.httpMethod} ${m.path}`,
+        ...docLines.map((d) => `       * ${d}`),
+        `       */`,
         `      ${m.method}: {`,
         `        params: ${paramsType}`,
         `        body: unknown`,
-        `        query: unknown`,
+        `        query: ${queryType}`,
         `        response: unknown`,
         `      }`,
       )

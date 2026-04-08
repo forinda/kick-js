@@ -67,6 +67,16 @@ export interface DiscoveredRoute {
   path: string
   /** URL path parameter names extracted from `:placeholder` segments */
   pathParams: string[]
+  /**
+   * Whitelisted query field names extracted from `@ApiQueryParams({...})`.
+   * `null` means no `@ApiQueryParams` was found on this method (so the
+   * generator emits an unconstrained `query` shape). An empty array means
+   * the decorator existed but no fields could be statically extracted
+   * (e.g. an opaque imported config).
+   */
+  queryFilterable: string[] | null
+  querySortable: string[] | null
+  querySearchable: string[] | null
   /** Absolute file path of the controller */
   filePath: string
   /** Path relative to scan root, with forward slashes */
@@ -184,6 +194,80 @@ const ROUTE_METHOD_REGEX = new RegExp(
 function extractPathParams(path: string): string[] {
   const matches = path.match(/:([a-zA-Z_]\w*)/g) ?? []
   return matches.map((m) => m.slice(1))
+}
+
+/**
+ * Extract whitelist arrays from an `@ApiQueryParams(...)` decorator
+ * within `decoratorBlock`. Handles two forms:
+ *
+ * - Inline literal: `@ApiQueryParams({ filterable: ['a', 'b'], ... })`
+ * - Const reference: `@ApiQueryParams(SOME_CONFIG)` — looks up
+ *   `const SOME_CONFIG = { ... }` in the same file (`fullSource`).
+ *
+ * Returns `null` if no `@ApiQueryParams` is present. Returns
+ * `{ filterable: [], sortable: [], searchable: [] }` if the decorator
+ * is present but no fields could be statically extracted (opaque
+ * imports, column-object configs, function calls, etc.).
+ */
+function extractApiQueryParams(
+  decoratorBlock: string,
+  fullSource: string,
+): { filterable: string[]; sortable: string[]; searchable: string[] } | null {
+  const apiMatch = /@ApiQueryParams\s*\(\s*([\s\S]*?)\s*\)\s*$/.exec(decoratorBlock)
+  if (!apiMatch) {
+    // Try without anchoring to the end (decorator may not be the last in the block)
+    const loose = /@ApiQueryParams\s*\(([\s\S]*?)\)/.exec(decoratorBlock)
+    if (!loose) return null
+    return parseApiQueryParamsArg(loose[1].trim(), fullSource)
+  }
+  return parseApiQueryParamsArg(apiMatch[1].trim(), fullSource)
+}
+
+function parseApiQueryParamsArg(
+  arg: string,
+  fullSource: string,
+): { filterable: string[]; sortable: string[]; searchable: string[] } {
+  // Inline literal — starts with `{`
+  if (arg.startsWith('{')) {
+    return parseInlineConfigLiteral(arg)
+  }
+  // Const reference — bare identifier (possibly with type assertion)
+  const idMatch = /^([A-Za-z_]\w*)/.exec(arg)
+  if (idMatch) {
+    const ident = idMatch[1]
+    // Look for `const IDENT = { ... }` in the same source file
+    const constRe = new RegExp(
+      String.raw`const\s+${ident}\s*(?::\s*[^=]+)?=\s*(\{[\s\S]*?\n\})`,
+      'm',
+    )
+    const constMatch = constRe.exec(fullSource)
+    if (constMatch) {
+      return parseInlineConfigLiteral(constMatch[1])
+    }
+  }
+  // Fallback: decorator present but extraction failed
+  return { filterable: [], sortable: [], searchable: [] }
+}
+
+/** Extract a string array literal for one config key from an inline object literal */
+function extractStringArray(literal: string, key: string): string[] {
+  const re = new RegExp(String.raw`${key}\s*:\s*\[([\s\S]*?)\]`)
+  const m = re.exec(literal)
+  if (!m) return []
+  return Array.from(m[1].matchAll(/['"`]([^'"`]+)['"`]/g)).map((x) => x[1])
+}
+
+/** Parse an inline `{ filterable: [...], sortable: [...], searchable: [...] }` literal */
+function parseInlineConfigLiteral(literal: string): {
+  filterable: string[]
+  sortable: string[]
+  searchable: string[]
+} {
+  return {
+    filterable: extractStringArray(literal, 'filterable'),
+    sortable: extractStringArray(literal, 'sortable'),
+    searchable: extractStringArray(literal, 'searchable'),
+  }
 }
 
 /** Recursively walk a directory and yield matching file paths */
@@ -321,14 +405,23 @@ export function extractRoutesFromSource(
     ROUTE_METHOD_REGEX.lastIndex = 0
     let match: RegExpExecArray | null
     while ((match = ROUTE_METHOD_REGEX.exec(block)) !== null) {
-      const [, verb, pathLiteral, methodName] = match
+      const [matchedText, verb, pathLiteral, methodName] = match
       const path = pathLiteral && pathLiteral.length > 0 ? pathLiteral : '/'
+
+      // The route regex already greedily matched any stacked decorators
+      // BETWEEN the route decorator and the method declaration. Inspect
+      // the matched substring for an `@ApiQueryParams(...)` call.
+      const apiQp = extractApiQueryParams(matchedText, source)
+
       out.push({
         controller: cls.className,
         method: methodName,
         httpMethod: verb.toUpperCase() as DiscoveredRoute['httpMethod'],
         path,
         pathParams: extractPathParams(path),
+        queryFilterable: apiQp?.filterable ?? null,
+        querySortable: apiQp?.sortable ?? null,
+        querySearchable: apiQp?.searchable ?? null,
         filePath,
         relativePath: relPath,
       })

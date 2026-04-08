@@ -1,9 +1,9 @@
 import type { Request, Response, NextFunction } from 'express'
 import {
   parseQuery,
-  type ParsedQuery,
   type QueryFieldConfig,
   type PaginatedResponse,
+  type TypedParsedQuery,
 } from './query'
 
 /**
@@ -75,6 +75,11 @@ export class RequestContext<TBody = any, TParams = any, TQuery = any> {
    * Parse the request query string into structured filters, sort, pagination, and search.
    * Pass the result to an ORM query builder adapter (Drizzle, Prisma, Sequelize, etc.).
    *
+   * Generic over the field config: when passed an inline literal (or
+   * `as const`), `filters[].field` and `sort[].field` are narrowed to
+   * the exact whitelisted field names. Pass nothing or a non-literal
+   * config and you get the loose `string` fallback.
+   *
    * @param fieldConfig - Optional whitelist for filterable, sortable, and searchable fields
    *
    * @example
@@ -84,14 +89,16 @@ export class RequestContext<TBody = any, TParams = any, TQuery = any> {
    *   const parsed = ctx.qs({
    *     filterable: ['status', 'priority'],
    *     sortable: ['createdAt', 'title'],
-   *   })
-   *   const q = drizzleAdapter.build(parsed, { columns })
-   *   // ... use q.where, q.orderBy, q.limit, q.offset
+   *   } as const)
+   *   parsed.filters[0].field // typed as 'status' | 'priority'
+   *   parsed.sort[0].field    // typed as 'createdAt' | 'title'
    * }
    * ```
    */
-  qs(fieldConfig?: QueryFieldConfig): ParsedQuery {
-    return parseQuery(this.req.query as Record<string, any>, fieldConfig)
+  qs<TConfig extends QueryFieldConfig | undefined = undefined>(
+    fieldConfig?: TConfig,
+  ): TypedParsedQuery<TConfig> {
+    return parseQuery<TConfig>(this.req.query as Record<string, any>, fieldConfig)
   }
 
   // ── File Uploads ────────────────────────────────────────────────────
@@ -189,11 +196,11 @@ export class RequestContext<TBody = any, TParams = any, TQuery = any> {
    * }
    * ```
    */
-  async paginate<T>(
-    fetcher: (parsed: ParsedQuery) => Promise<{ data: T[]; total: number }>,
-    fieldConfig?: QueryFieldConfig,
+  async paginate<T, TConfig extends QueryFieldConfig | undefined = undefined>(
+    fetcher: (parsed: TypedParsedQuery<TConfig>) => Promise<{ data: T[]; total: number }>,
+    fieldConfig?: TConfig,
   ) {
-    const parsed = this.qs(fieldConfig)
+    const parsed = this.qs<TConfig>(fieldConfig)
     const { data, total } = await fetcher(parsed)
     const { page, limit } = parsed.pagination
     const totalPages = Math.ceil(total / limit) || 1

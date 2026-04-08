@@ -13,6 +13,8 @@ export type {
   SortItem,
   PaginationParams,
   ParsedQuery,
+  TypedParsedQuery,
+  FieldsOf,
   QueryFieldConfig,
   StringQueryFieldConfig,
   ColumnQueryFieldConfig,

@@ -6,6 +6,7 @@ export { bootstrap } from './bootstrap'
 
 // Request Context
 export { RequestContext, type Ctx, type RouteShape } from './context'
+export type { TypedParsedQuery, FieldsOf } from './query'
 
 // Router Builder
 export { buildRoutes, getControllerPath } from './router-builder'

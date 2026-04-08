@@ -71,6 +71,8 @@ export {
   type SortItem,
   type PaginationParams,
   type ParsedQuery,
+  type TypedParsedQuery,
+  type FieldsOf,
   type QueryFieldConfig,
   type QueryBuilderAdapter,
   type PaginatedResponse,

@@ -7,6 +7,7 @@ import {
   type ParsedQuery,
   type QueryFieldConfig,
   type StringQueryFieldConfig,
+  type TypedParsedQuery,
 } from './types'
 
 const MAX_SEARCH_LENGTH = 200
@@ -84,12 +85,16 @@ export function parsePagination(params: {
   limit?: string | number
 }): PaginationParams {
   let page =
-    typeof params.page === 'string' ? parseInt(params.page, 10) : (params.page ?? DEFAULT_PAGE)
+    typeof params.page === 'string'
+      ? Number.parseInt(params.page, 10)
+      : (params.page ?? DEFAULT_PAGE)
   let limit =
-    typeof params.limit === 'string' ? parseInt(params.limit, 10) : (params.limit ?? DEFAULT_LIMIT)
+    typeof params.limit === 'string'
+      ? Number.parseInt(params.limit, 10)
+      : (params.limit ?? DEFAULT_LIMIT)
 
-  if (isNaN(page) || page < 1) page = DEFAULT_PAGE
-  if (isNaN(limit) || limit < 1) limit = DEFAULT_LIMIT
+  if (Number.isNaN(page) || page < 1) page = DEFAULT_PAGE
+  if (Number.isNaN(limit) || limit < 1) limit = DEFAULT_LIMIT
   if (limit > MAX_LIMIT) limit = MAX_LIMIT
 
   return { page, limit, offset: (page - 1) * limit }
@@ -154,17 +159,17 @@ function normalizeFieldConfig(config?: QueryFieldConfig): StringQueryFieldConfig
  *
  * Filter operators: eq, neq, gt, gte, lt, lte, between, in, contains, starts, ends
  */
-export function parseQuery(
+export function parseQuery<TConfig extends QueryFieldConfig | undefined = undefined>(
   query: Record<string, any>,
-  fieldConfig?: QueryFieldConfig,
-): ParsedQuery {
+  fieldConfig?: TConfig,
+): TypedParsedQuery<TConfig> {
   const normalized = normalizeFieldConfig(fieldConfig)
   return {
     filters: parseFilters(query.filter, normalized?.filterable),
     sort: parseSort(query.sort, normalized?.sortable),
     pagination: parsePagination({ page: query.page, limit: query.limit }),
     search: parseSearchQuery(query.q),
-  }
+  } as TypedParsedQuery<TConfig>
 }
 
 // ── Query URL builder (for client-side or testing) ──────────────────────
