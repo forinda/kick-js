@@ -92,8 +92,8 @@
     "package": "vsce package"
   },
   "devDependencies": {
-    "@types/vscode": "^1.85.0",
-    "@types/node": "^25.0.0",
+    "@types/vscode": "^1.115.0",
+    "@types/node": "^25.5.2",
     "typescript": "^5.9.2"
   },
   "private": true

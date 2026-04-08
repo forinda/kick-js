@@ -86,7 +86,7 @@
   },
   "devDependencies": {
     "graphql": "^16.13.2",
-    "@types/node": "^25.0.0",
+    "@types/node": "^25.5.2",
     "typescript": "^5.9.2"
   },
   "publishConfig": {
