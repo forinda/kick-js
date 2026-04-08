@@ -86,8 +86,11 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
 
   await writeFileSafe(join(dir, '.env.example'), generateEnvExample())
 
-  // ── src/env.ts — typed env schema (read by `kick typegen`) ─────────
-  await writeFileSafe(join(dir, 'src/env.ts'), generateEnvFile())
+  // ── src/config/index.ts — typed env schema (read by `kick typegen`) ─
+  // Lives under `src/config/` so the framework's "config" concept has a
+  // single, conventional home. Old projects with `src/env.ts` still
+  // work — `detectEnvFile()` searches both locations.
+  await writeFileSafe(join(dir, 'src/config/index.ts'), generateEnvFile())
 
   // ── src/index.ts — template-aware entry point ─────────────────────
   await writeFileSafe(join(dir, 'src/index.ts'), generateEntryFile(name, template, cliPkg.version))

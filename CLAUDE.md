@@ -282,3 +282,4 @@ test: description      # Test changes
 - Vite configs: `minify: 'esbuild'`, all runtime deps in `rollupOptions.external`
 - `@prisma/client` peer dep is optional (Prisma 7 generates client locally)
 - Old top-level config fields (`modulesDir`, `defaultRepo`, etc.) are deprecated — use `modules` block
+- **Env wiring**: `src/env.ts` must call `loadEnv(envSchema)` as a side effect AND be imported from `src/index.ts` (`import './env'`) before `bootstrap()` runs. Otherwise `ConfigService.get('CUSTOM_KEY')` returns `undefined` while `@Value('CUSTOM_KEY')` *appears* to work via its `process.env` fallback. The CLI generators wire both halves automatically; manual upgrades must add both. See `docs/guide/configuration.md#wiring-the-schema-at-startup`.

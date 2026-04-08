@@ -254,7 +254,20 @@ kick add --list        # Show all available packages
 
 ## Environment Configuration
 
-Edit \`.env\` for environment variables. Access them with \`@Value()\` decorator:
+The project's typed env schema lives in **\`src/config/index.ts\`** —
+extend the base schema there with your application-specific keys, and
+the schema is auto-registered with kickjs at module load. The companion
+\`src/index.ts\` imports it as a side effect (\`import './config'\`) **before**
+\`bootstrap()\` runs, so every \`@Service\`, \`@Controller\`, \`@Value\`, and
+\`ConfigService\` resolution sees the validated extended values.
+
+> **Do not delete \`import './config'\` from \`src/index.ts\`.** It is the
+> registration step that wires \`ConfigService\` to your env schema.
+> Without it, \`config.get('YOUR_KEY')\` returns \`undefined\` for every
+> user-defined key and \`@Value('YOUR_KEY')\` only works because of a
+> raw \`process.env\` fallback (Zod coercion + defaults are skipped).
+
+Edit \`.env\` for variable values. Access them with \`@Value()\`:
 
 \`\`\`ts
 import { Value } from '@forinda/kickjs'
@@ -272,7 +285,7 @@ export class ApiService {
 Or use \`ConfigService\`:
 
 \`\`\`ts
-import { ConfigService } from '@forinda/kickjs'
+import { Service, Autowired, ConfigService } from '@forinda/kickjs'
 
 @Service()
 export class AppService {
@@ -280,10 +293,15 @@ export class AppService {
   private config!: ConfigService
 
   getPort() {
-    return this.config.get('PORT', 3000)
+    // typed: number, Zod-coerced from baseEnvSchema
+    return this.config.get('PORT')
   }
 }
 \`\`\`
+
+Hot-reload of \`.env\` changes during dev is wired up automatically via
+\`envWatchPlugin()\` in \`vite.config.ts\` — edit \`.env\`, the dev server
+reloads, and the next \`config.get()\` re-parses with the new values.
 
 ## Testing
 
@@ -354,6 +372,7 @@ ${
 3. **Always use \`ctx.body\`** — never \`req.body\` directly
 4. **DI requires \`reflect-metadata\`** — already imported in \`src/index.ts\`
 5. **Vite HMR requires proper cleanup** — adapters should implement \`shutdown()\`
+6. **Never delete \`import './config'\` from \`src/index.ts\`** — that side-effect import registers the env schema with kickjs. Without it \`ConfigService.get('YOUR_KEY')\` returns \`undefined\` for every user-defined key. \`@Value('YOUR_KEY')\` *appears* to keep working but only via a raw \`process.env\` fallback (Zod coercion + schema defaults are silently skipped).
 
 ## Learn More
 
@@ -386,7 +405,8 @@ This guide helps AI agents (Claude, Copilot, etc.) work effectively on this Kick
 | Entry point | \`src/index.ts\` |
 | Module registry | \`src/modules/index.ts\` |
 | Feature modules | \`src/modules/<module-name>/\` |
-${template === 'graphql' ? '| GraphQL resolvers | `src/resolvers/` |\n' : ''}| Environment config | \`.env\` |
+${template === 'graphql' ? '| GraphQL resolvers | `src/resolvers/` |\n' : ''}| Env values | \`.env\` |
+| Env schema (Zod) | \`src/config/index.ts\` |
 | TypeScript config | \`tsconfig.json\` |
 | Vite config (HMR) | \`vite.config.ts\` |
 | Vitest config | \`vitest.config.ts\` |
@@ -606,26 +626,37 @@ Run tests:
 
 ## Environment Variables
 
-Managed via \`.env\` file. Access with:
+Schema is declared in \`src/config/index.ts\` (extends the base
+\`PORT\`/\`NODE_ENV\`/\`LOG_LEVEL\` shape via \`defineEnv\`) and registered
+with kickjs at module load. \`src/index.ts\` imports it via
+\`import './config'\` **before** \`bootstrap()\` so the cache is populated
+in time for DI. Add new keys to the schema, drop their values into
+\`.env\`, and they're typed everywhere.
 
-1. **@Value() decorator** (recommended):
+Access patterns:
+
+1. **@Value() decorator** (recommended for known-at-construction keys):
 \`\`\`ts
 @Value('DATABASE_URL')
 private dbUrl!: string
 \`\`\`
 
-2. **ConfigService** (for dynamic access):
+2. **ConfigService** (recommended for dynamic / method-scoped access):
 \`\`\`ts
 @Autowired()
 private config!: ConfigService
 
-const port = this.config.get('PORT', 3000)
+const port = this.config.get('PORT')  // typed: number
 \`\`\`
 
-3. **Direct access** (avoid in app code):
-\`\`\`ts
-process.env.PORT
-\`\`\`
+3. **Direct \`process.env\`** — avoid in app code; bypasses Zod
+   coercion and the typed \`KickEnv\` registry.
+
+> **Pitfall**: never delete \`import './config'\` from \`src/index.ts\`.
+> If the schema is not registered before DI runs, \`config.get()\`
+> returns \`undefined\` for user keys (the base shape only) and
+> \`@Value()\` only works because of its raw \`process.env\` fallback —
+> Zod coercion + schema defaults are silently skipped.
 
 ## Key Decorators
 
@@ -680,6 +711,7 @@ ${
 4. **Routes not found** — Check controller path and module registration
 5. **HMR not working** — Verify \`vite.config.ts\` has \`hmr: true\`
 6. **Decorators not working** — Check \`tsconfig.json\` has \`experimentalDecorators: true\`
+7. **\`config.get('YOUR_KEY')\` returns \`undefined\`** — \`src/index.ts\` is missing \`import './config'\`. That side-effect import registers the env schema with kickjs (\`loadEnv(envSchema)\` runs at module load). Without it, \`ConfigService\` falls back to the base schema (\`PORT\`/\`NODE_ENV\`/\`LOG_LEVEL\` only) and every user-defined key reads as \`undefined\`. \`@Value()\` may *appear* to work because of a raw \`process.env\` fallback, but Zod coercion and schema defaults are silently skipped — investigate \`src/index.ts\` and \`src/config/index.ts\` first.
 
 ## CLI Commands Reference
 

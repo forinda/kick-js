@@ -1112,6 +1112,9 @@ importers:
       '@forinda/kickjs-cli':
         specifier: workspace:*
         version: link:../../packages/cli
+      '@forinda/kickjs-testing':
+        specifier: workspace:*
+        version: link:../../packages/testing
       '@forinda/kickjs-vite':
         specifier: workspace:*
         version: link:../../packages/vite

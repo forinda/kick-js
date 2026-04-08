@@ -15,6 +15,11 @@ export function generateEntryFile(
   switch (template) {
     case 'graphql':
       return `import 'reflect-metadata'
+// Side-effect import — registers the extended env schema with kickjs
+// **before** any controller / service / @Value gets resolved. Without
+// this line ConfigService.get('YOUR_KEY') returns undefined because the
+// cached schema would still be the base shape. See guide/configuration.
+import './config'
 import { bootstrap } from '@forinda/kickjs'
 import { DevToolsAdapter } from '@forinda/kickjs-devtools'
 import { GraphQLAdapter } from '@forinda/kickjs-graphql'
@@ -39,6 +44,11 @@ export const app = await bootstrap({
 
     case 'cqrs':
       return `import 'reflect-metadata'
+// Side-effect import — registers the extended env schema with kickjs
+// **before** any controller / service / @Value gets resolved. Without
+// this line ConfigService.get('YOUR_KEY') returns undefined because the
+// cached schema would still be the base shape. See guide/configuration.
+import './config'
 import { bootstrap } from '@forinda/kickjs'
 import { DevToolsAdapter } from '@forinda/kickjs-devtools'
 import { SwaggerAdapter } from '@forinda/kickjs-swagger'
@@ -68,6 +78,11 @@ export const app = await bootstrap({
 
     case 'minimal':
       return `import 'reflect-metadata'
+// Side-effect import — registers the extended env schema with kickjs
+// **before** any controller / service / @Value gets resolved. Without
+// this line ConfigService.get('YOUR_KEY') returns undefined because the
+// cached schema would still be the base shape. See guide/configuration.
+import './config'
 import { bootstrap } from '@forinda/kickjs'
 import { modules } from './modules'
 
@@ -79,6 +94,11 @@ export const app = await bootstrap({ modules })
     case 'rest':
     default:
       return `import 'reflect-metadata'
+// Side-effect import — registers the extended env schema with kickjs
+// **before** any controller / service / @Value gets resolved. Without
+// this line ConfigService.get('YOUR_KEY') returns undefined because the
+// cached schema would still be the base shape. See guide/configuration.
+import './config'
 import express from 'express'
 import {
   bootstrap,
@@ -123,10 +143,17 @@ export const modules: AppModuleClass[] = [HelloModule]
 }
 
 /**
- * Generate `src/env.ts` — the project's typed env schema.
+ * Generate `src/config/index.ts` — the project's typed env schema.
  *
  * Default-exports a `defineEnv(...)` schema so `kick typegen` can
- * infer it into the global `KickEnv` registry. After typegen runs:
+ * infer it into the global `KickEnv` registry, and *also* calls
+ * `loadEnv(envSchema)` as a module-load side effect so `ConfigService`
+ * and `@Value()` see the extended shape from the very first DI
+ * resolution. The companion `src/index.ts` template adds
+ * `import './config'` immediately after `reflect-metadata` so the
+ * registration runs before `bootstrap()` constructs anything.
+ *
+ * After typegen runs:
  *
  *   @Value('DATABASE_URL') private url!: Env<'DATABASE_URL'>
  *   process.env.DATABASE_URL  // typed as string
@@ -134,7 +161,7 @@ export const modules: AppModuleClass[] = [HelloModule]
  * Both autocomplete and type-check at compile time.
  */
 export function generateEnvFile(): string {
-  return `import { defineEnv } from '@forinda/kickjs/config'
+  return `import { defineEnv, loadEnv } from '@forinda/kickjs/config'
 import { z } from 'zod'
 
 /**
@@ -150,11 +177,25 @@ import { z } from 'zod'
  *   JWT_SECRET: z.string().min(32),
  *   REDIS_URL: z.string().url().optional(),
  */
-export default defineEnv((base) =>
+const envSchema = defineEnv((base) =>
   base.extend({
     // DATABASE_URL: z.string().url(),
   }),
 )
+
+/**
+ * IMPORTANT — side effect: register the schema with kickjs's env cache
+ * **at module-load time**. \`ConfigService\` and \`@Value()\` both consume
+ * this cache, and they will fall back to the base schema (or undefined)
+ * if no extended schema has been registered before they're resolved.
+ *
+ * As long as \`src/index.ts\` imports this file (\`import './env'\`) at the
+ * top — before \`bootstrap()\` runs — every controller and service in the
+ * app sees the typed extended values.
+ */
+export const env = loadEnv(envSchema)
+
+export default envSchema
 `
 }
 

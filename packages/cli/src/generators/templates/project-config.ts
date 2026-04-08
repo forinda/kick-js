@@ -88,13 +88,16 @@ export function generateViteConfig(): string {
   return `import { defineConfig } from 'vite'
 import { resolve } from 'node:path'
 import swc from 'unplugin-swc'
-import { kickjsVitePlugin } from '@forinda/kickjs-vite'
+import { kickjsVitePlugin, envWatchPlugin } from '@forinda/kickjs-vite'
 
 export default defineConfig({
   oxc: false,
   plugins: [
     swc.vite(),
     kickjsVitePlugin({ entry: 'src/index.ts' }),
+    // Watches .env files and triggers a full reload on change so the
+    // dev server picks up env tweaks without a manual restart.
+    envWatchPlugin(),
   ],
   resolve: {
     alias: {

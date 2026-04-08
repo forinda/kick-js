@@ -594,35 +594,61 @@ export function extractInjectsFromSource(
 }
 
 /**
- * Look for an env schema file at `<cwd>/<envFile>`. Returns a
- * `DiscoveredEnv` if the file exists and contains both a
+ * Default search order for the env schema file. Newer projects keep
+ * the schema under `src/config/` so the framework's "config" concept
+ * has a single home; older scaffolds dropped it at `src/env.ts` (kept
+ * here for back-compat). The first match wins.
+ */
+const DEFAULT_ENV_FILE_CANDIDATES = [
+  'src/config/index.ts',
+  'src/config/env.ts',
+  'src/config.ts',
+  'src/env.ts',
+] as const
+
+/**
+ * Look for an env schema file. When `envFile` is the string default
+ * (`'src/env.ts'`) or omitted, every entry in `DEFAULT_ENV_FILE_CANDIDATES`
+ * is tried in order. When the caller passes an explicit path, only that
+ * path is tried (so projects can opt out of the search by setting
+ * `kick.config.ts → typegen.envFile`).
+ *
+ * Returns a `DiscoveredEnv` if the file exists and contains both a
  * `defineEnv(...)` call and a default export — the two markers we
  * need before it's safe to emit `import type schema from '...'` in
- * the generator.
- *
- * Returns `null` for any other state (file missing, no defineEnv, no
- * default export) so the generator skips env typing silently. Users
- * who want env typing must opt in by writing `src/env.ts` to the
- * documented shape.
+ * the generator. Returns `null` for any other state (no candidate
+ * found, no defineEnv, no default export) so the generator skips env
+ * typing silently.
  */
 export async function detectEnvFile(cwd: string, envFile: string): Promise<DiscoveredEnv | null> {
-  const abs = resolve(cwd, envFile)
-  let source: string
-  try {
-    source = await readFile(abs, 'utf-8')
-  } catch {
-    return null
+  // The CLI passes the literal default `'src/env.ts'` when the user
+  // hasn't overridden it. Treat that as "use the search list" rather
+  // than pinning to one path, so newer scaffolds at src/config/ keep
+  // working without forcing every project to set typegen.envFile.
+  const candidates: readonly string[] =
+    envFile === 'src/env.ts' ? DEFAULT_ENV_FILE_CANDIDATES : [envFile]
+
+  for (const candidate of candidates) {
+    const abs = resolve(cwd, candidate)
+    let source: string
+    try {
+      source = await readFile(abs, 'utf-8')
+    } catch {
+      continue
+    }
+    // Cheap heuristic: defineEnv(...) call AND a default export.
+    // We don't try to evaluate the file — the generator emits an
+    // `import type schema from '...'` and lets the user's tsc do the
+    // actual schema-to-type inference.
+    if (!/\bdefineEnv\s*\(/.test(source)) continue
+    if (!/export\s+default\b/.test(source)) continue
+    return {
+      filePath: abs,
+      relativePath: toRelative(abs, cwd),
+    }
   }
-  // Cheap heuristic: defineEnv(...) call AND a default export.
-  // We don't try to evaluate the file — the generator emits an
-  // `import type schema from '...'` and lets the user's tsc do the
-  // actual schema-to-type inference.
-  if (!/\bdefineEnv\s*\(/.test(source)) return null
-  if (!/export\s+default\b/.test(source)) return null
-  return {
-    filePath: abs,
-    relativePath: toRelative(abs, cwd),
-  }
+
+  return null
 }
 
 /** Detect duplicate class names across files */

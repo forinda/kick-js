@@ -1,4 +1,4 @@
-import { defineEnv } from '@forinda/kickjs-config'
+import { defineEnv } from '@forinda/kickjs'
 import { z } from 'zod'
 
 /**
@@ -16,6 +16,7 @@ import { z } from 'zod'
  */
 export default defineEnv((base) =>
   base.extend({
-    // DATABASE_URL: z.string().url(),
+    APP_NAME: z.string().default('v3-preview'),
+    APP_GREETING: z.string().min(1),
   }),
 )

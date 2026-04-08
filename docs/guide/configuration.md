@@ -10,12 +10,12 @@ Earlier releases shipped these APIs in a separate `@forinda/kickjs-config` packa
 
 ## Defining an Environment Schema
 
-The recommended pattern: put your schema in **`src/env.ts`** as a default export. `kick init` scaffolds this file for you, and `kick typegen` (auto-run on `kick dev`) reads it once and populates the global `KickEnv` interface — that's what makes `ConfigService.get`, `loadEnv`, `getEnv`, `process.env`, and `@Value` all type-safe across the project.
+The recommended pattern: put your schema in **`src/config/index.ts`** as a default export (older scaffolds put it at `src/env.ts` — both still work; the typegen scanner searches both). `kick new` creates this file for you, and `kick typegen` (auto-run on `kick dev`) reads it once and populates the global `KickEnv` interface — that's what makes `ConfigService.get`, `loadEnv`, `getEnv`, `process.env`, and `@Value` all type-safe across the project.
 
 Use `defineEnv()` to extend the base schema with your application-specific variables. The base schema includes `PORT`, `NODE_ENV`, and `LOG_LEVEL`:
 
 ```ts
-// src/env.ts
+// src/config/index.ts
 import { defineEnv } from '@forinda/kickjs'
 import { z } from 'zod'
 
@@ -29,6 +29,79 @@ export default defineEnv((base) =>
 ```
 
 Once this file exists, run `kick typegen` once (or just start `kick dev`) and the schema flows through to every consumer automatically. See [Type Generation](typegen.md#how-env-vars-are-typed) for the full pipeline.
+
+## Wiring the schema at startup
+
+::: danger Required: side-effect import
+The schema in `src/env.ts` is a **declaration only**. You must also call `loadEnv(envSchema)` (the canonical pattern below does this for you) **and** make sure that file is imported as a side effect from `src/index.ts` *before* `bootstrap()` runs. If you skip this:
+
+- `ConfigService.get('YOUR_KEY')` returns `undefined` for every user-defined key.
+- `loadEnv()` (no-arg) falls back to `baseEnvSchema` and only knows `PORT`, `NODE_ENV`, `LOG_LEVEL`.
+- `@Value('YOUR_KEY')` *appears* to keep working — but only because it has a raw `process.env` fallback baked in. The Zod-validated typed value is not available, the schema's defaults never apply, and `z.coerce.number()` etc. silently drop their type coercion. This is the divergence that causes "ConfigService doesn't see my env" bug reports.
+
+`kick new` scaffolds both halves of the wiring for you. If you're upgrading an older project by hand, follow the canonical pattern below.
+:::
+
+The canonical `src/config/index.ts` calls `loadEnv(envSchema)` itself so the file does double duty as both a schema declaration *and* a runtime registration:
+
+```ts
+// src/config/index.ts
+import { defineEnv, loadEnv } from '@forinda/kickjs/config'
+import { z } from 'zod'
+
+const envSchema = defineEnv((base) =>
+  base.extend({
+    DATABASE_URL: z.string().url(),
+    JWT_SECRET: z.string().min(32),
+  }),
+)
+
+// Side-effect: register the extended schema with kickjs's env cache
+// **at module-load time**. ConfigService and @Value() both consume
+// this cache.
+export const env = loadEnv(envSchema)
+
+export default envSchema
+```
+
+And `src/index.ts` pulls it in **before** `bootstrap()`:
+
+```ts
+// src/index.ts
+import 'reflect-metadata'
+// Side-effect import — must come BEFORE any kickjs imports that pull
+// in @Service / @Controller / @Value, so the env cache is populated
+// when DI starts wiring instances.
+import './config'
+
+import { bootstrap } from '@forinda/kickjs'
+import { modules } from './modules'
+
+export const app = await bootstrap({ modules })
+```
+
+To pick up `.env` file changes during dev without restarting the server, add `envWatchPlugin()` to `vite.config.ts` (the `kick new` scaffold does this for you):
+
+```ts
+// vite.config.ts
+import { defineConfig } from 'vite'
+import swc from 'unplugin-swc'
+import { kickjsVitePlugin, envWatchPlugin } from '@forinda/kickjs-vite'
+
+export default defineConfig({
+  plugins: [
+    swc.vite(),
+    kickjsVitePlugin({ entry: 'src/index.ts' }),
+    envWatchPlugin(),
+  ],
+})
+```
+
+### Why this matters
+
+`ConfigService` reads through `loadEnv()` lazily on every `get` call — so once `loadEnv(extendedSchema)` has been called *anywhere* in the app, every `ConfigService` instance (whether resolved before or after) sees the extended values. The catch is "anywhere": if `src/env.ts` is never imported, `loadEnv(extendedSchema)` never runs and the cached schema stays empty (or downgrades to the base shape).
+
+`@Value()` masks this bug because it has a defensive `process.env[key]` fallback. `ConfigService` deliberately does **not** — it returns whatever the validated env cache holds, so calls to `config.get('CUSTOM_KEY')` come back `undefined` until the schema has been registered. Treat `ConfigService.get` returning `undefined` for a known-good `.env` value as a strong signal that `src/env.ts` is not being imported at startup.
 
 The base schema provides these defaults:
 
