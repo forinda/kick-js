@@ -300,8 +300,38 @@ new SwaggerAdapter({
   docsPath: '/docs',          // Swagger UI path (default: '/docs')
   redocPath: '/redoc',        // ReDoc path (default: '/redoc')
   specPath: '/openapi.json',  // JSON spec path (default: '/openapi.json')
+  disableInProd: true,        // Skip mounting docs/spec/assets when NODE_ENV=production
 })
 ```
+
+### Disabling docs in production
+
+Set `disableInProd: true` to keep API docs out of production builds without
+conditionally constructing the adapter. When `NODE_ENV === 'production'`, the
+adapter becomes a no-op:
+
+- `/docs`, `/redoc`, and `/openapi.json` are not mounted
+- Controller route metadata is not collected
+- Server URL auto-discovery is skipped
+
+```typescript
+new SwaggerAdapter({
+  info: { title: 'My API', version: '1.0.0' },
+  disableInProd: true,
+})
+```
+
+In every other environment (`development`, `test`, unset, etc.) the adapter
+behaves normally.
+
+### CSP and "Try it out"
+
+The adapter sets a relaxed CSP on its routes so Swagger UI's "Try it out"
+button works across common dev origins. `connect-src` includes `'self'`,
+`http(s)://localhost:*`, `http(s)://127.0.0.1:*`, `ws://localhost:*`,
+`ws://127.0.0.1:*`, plus the origin of every URL in `options.servers`. If you
+serve docs from a custom host in production, add it via `servers` and it will
+be allowed automatically.
 
 ## Examples
 

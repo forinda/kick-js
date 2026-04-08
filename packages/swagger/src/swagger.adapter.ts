@@ -1,7 +1,6 @@
 import { dirname } from 'node:path'
 import { createRequire } from 'node:module'
-import { Router } from 'express'
-import express from 'express'
+import express, { Router } from 'express'
 import { Logger, type AppAdapter, type AdapterContext } from '@forinda/kickjs'
 import {
   buildOpenAPISpec,
@@ -31,6 +30,12 @@ export interface SwaggerAdapterOptions extends SwaggerOptions {
   specPath?: string
   /** Other adapters to discover (e.g., WsAdapter for WebSocket server URLs) */
   adapters?: any[]
+  /**
+   * When true, the adapter is a no-op while `NODE_ENV === 'production'` —
+   * docs, spec, and assets are not mounted. Useful for keeping API docs
+   * out of production builds without conditionally constructing the adapter.
+   */
+  disableInProd?: boolean
 }
 
 /**
@@ -59,10 +64,16 @@ export interface SwaggerAdapterOptions extends SwaggerOptions {
 export class SwaggerAdapter implements AppAdapter {
   name = 'SwaggerAdapter'
 
-  constructor(private options: SwaggerAdapterOptions = {}) {}
+  constructor(private readonly options: SwaggerAdapterOptions = {}) {}
+
+  /** Whether the adapter should skip mounting in the current environment */
+  private get disabled(): boolean {
+    return Boolean(this.options.disableInProd) && process.env.NODE_ENV === 'production'
+  }
 
   /** Auto-detect server URLs from the running HTTP server and peer adapters */
   afterStart({ server }: AdapterContext): void {
+    if (this.disabled) return
     const addr = server?.address?.()
     if (!addr || typeof addr !== 'object') return
 
@@ -80,7 +91,7 @@ export class SwaggerAdapter implements AppAdapter {
     if (wsAdapter) {
       const stats = wsAdapter.getStats()
       for (const namespace of Object.keys(stats.namespaces || {})) {
-        this.options.servers!.push({
+        this.options.servers?.push({
           url: `ws://${host}:${addr.port}${namespace}`,
           description: `WebSocket: ${namespace}`,
         })
@@ -90,10 +101,15 @@ export class SwaggerAdapter implements AppAdapter {
 
   /** Collect controller metadata as routes are mounted */
   onRouteMount(controllerClass: any, mountPath: string): void {
+    if (this.disabled) return
     registerControllerForDocs(controllerClass, mountPath)
   }
 
   beforeMount({ app }: AdapterContext): void {
+    if (this.disabled) {
+      log.info('Swagger disabled in production (disableInProd=true)')
+      return
+    }
     // Clear previous registrations (supports HMR rebuild)
     clearRegisteredRoutes()
     const docsPath = this.options.docsPath ?? '/docs'
@@ -117,6 +133,28 @@ export class SwaggerAdapter implements AppAdapter {
 
     // Relax CSP for Swagger UI in both local and CDN modes (inline script is used in both)
     docsRouter.use((_req, res, next) => {
+      // Build connect-src dynamically so "Try it out" can call any configured server URL.
+      // Includes dev-friendly localhost/127.0.0.1 origins so docs served from one host
+      // can call an API spec'd at the other (a common cross-origin gotcha).
+      const serverOrigins = new Set<string>()
+      for (const s of this.options.servers ?? []) {
+        try {
+          serverOrigins.add(new URL(s.url).origin)
+        } catch {
+          // ignore relative or malformed URLs
+        }
+      }
+      const connectSrc = [
+        "'self'",
+        'http://localhost:*',
+        'http://127.0.0.1:*',
+        'https://localhost:*',
+        'https://127.0.0.1:*',
+        'ws://localhost:*',
+        'ws://127.0.0.1:*',
+        ...serverOrigins,
+      ].join(' ')
+
       res.setHeader(
         'Content-Security-Policy',
         [
@@ -125,7 +163,7 @@ export class SwaggerAdapter implements AppAdapter {
           "style-src 'self' 'unsafe-inline' https://unpkg.com https://fonts.googleapis.com",
           "font-src 'self' https://fonts.gstatic.com",
           "img-src 'self' data: https://unpkg.com",
-          "connect-src 'self'",
+          `connect-src ${connectSrc}`,
         ].join('; '),
       )
       next()

@@ -17,6 +17,8 @@ interface SwaggerAdapterOptions extends SwaggerOptions {
   docsPath?: string     // default: '/docs'
   redocPath?: string    // default: '/redoc'
   specPath?: string     // default: '/openapi.json'
+  adapters?: any[]      // peer adapters to discover (e.g. WsAdapter)
+  disableInProd?: boolean // skip mounting when NODE_ENV === 'production'
 }
 ```
 
