@@ -2,7 +2,7 @@
   "name": "kickjs-devtools",
   "displayName": "KickJS DevTools",
   "description": "VS Code extension for inspecting KickJS applications — routes, DI container, metrics, and health",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "publisher": "forinda",
   "engines": {
     "vscode": "^1.85.0"
