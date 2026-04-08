@@ -13,8 +13,7 @@
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "outDir": "dist",
-    "rootDir": "src",
     "paths": { "@/*": ["./src/*"] }
   },
-  "include": ["src"]
+  "include": ["src", ".kickjs/types/**/*.d.ts", ".kickjs/types/**/*.ts"]
 }

@@ -26,8 +26,17 @@ async function startDevServer(_entry: string, port?: string): Promise<void> {
   // `allowDuplicates: true` so an in-progress class rename can never
   // block the dev server — the colliding entries are auto-namespaced
   // and the warning is printed instead.
+  const cwd = process.cwd()
+  const devConfig = await loadKickConfig(cwd)
+  const schemaValidator = devConfig?.typegen?.schemaValidator ?? 'zod'
   try {
-    await runTypegen({ cwd: process.cwd(), allowDuplicates: true })
+    await runTypegen({
+      cwd,
+      allowDuplicates: true,
+      schemaValidator,
+      srcDir: devConfig?.typegen?.srcDir,
+      outDir: devConfig?.typegen?.outDir,
+    })
   } catch (err: any) {
     console.warn(`  kick typegen: skipped (${err?.message ?? err})`)
   }
@@ -56,7 +65,14 @@ async function startDevServer(_entry: string, port?: string): Promise<void> {
     if (file.endsWith('.d.ts')) return
     if (typegenTimer) clearTimeout(typegenTimer)
     typegenTimer = setTimeout(() => {
-      runTypegen({ cwd: process.cwd(), silent: true }).catch(() => {})
+      runTypegen({
+        cwd,
+        silent: true,
+        allowDuplicates: true,
+        schemaValidator,
+        srcDir: devConfig?.typegen?.srcDir,
+        outDir: devConfig?.typegen?.outDir,
+      }).catch(() => {})
     }, 100)
   }
   server.watcher.on('add', scheduleTypegen)

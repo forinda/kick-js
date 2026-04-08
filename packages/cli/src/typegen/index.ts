@@ -38,6 +38,13 @@ export interface RunTypegenOptions {
    * never blocked by an in-progress rename. CLI default is `false` so
    * `kick typegen` (and CI) catches collisions early. */
   allowDuplicates?: boolean
+  /**
+   * Schema validator used to derive `body`/`query`/`params` types from
+   * route metadata. Currently only `'zod'` is supported; `false` (the
+   * default) leaves these fields as `unknown`. Loaded from
+   * `kick.config.ts` `typegen.schemaValidator` when invoked via the CLI.
+   */
+  schemaValidator?: 'zod' | false
 }
 
 /** Resolve options to absolute paths */
@@ -47,6 +54,7 @@ function resolveOptions(opts: RunTypegenOptions): {
   outDir: string
   silent: boolean
   allowDuplicates: boolean
+  schemaValidator: 'zod' | false
 } {
   const cwd = opts.cwd ?? process.cwd()
   return {
@@ -55,6 +63,7 @@ function resolveOptions(opts: RunTypegenOptions): {
     outDir: resolve(cwd, opts.outDir ?? '.kickjs/types'),
     silent: opts.silent ?? false,
     allowDuplicates: opts.allowDuplicates ?? false,
+    schemaValidator: opts.schemaValidator ?? false,
   }
 }
 
@@ -71,7 +80,7 @@ export async function runTypegen(opts: RunTypegenOptions = {}): Promise<{
   scan: ScanResult
   result: GenerateResult
 }> {
-  const { cwd, srcDir, outDir, silent, allowDuplicates } = resolveOptions(opts)
+  const { cwd, srcDir, outDir, silent, allowDuplicates, schemaValidator } = resolveOptions(opts)
 
   const start = Date.now()
   const scan = await scanProject({ root: srcDir, cwd })
@@ -83,6 +92,7 @@ export async function runTypegen(opts: RunTypegenOptions = {}): Promise<{
     collisions: scan.collisions,
     outDir,
     allowDuplicates,
+    schemaValidator,
   })
   const elapsed = Date.now() - start
 

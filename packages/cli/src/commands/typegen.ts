@@ -10,6 +10,7 @@
 
 import type { Command } from 'commander'
 import { runTypegen, TokenCollisionError, watchTypegen } from '../typegen'
+import { loadKickConfig } from '../config'
 
 interface TypegenCliOptions {
   watch?: boolean
@@ -17,6 +18,23 @@ interface TypegenCliOptions {
   out: string
   silent?: boolean
   allowDuplicates?: boolean
+  schemaValidator?: string
+}
+
+/**
+ * Parse the `--schema-validator` CLI flag. Returns `undefined` if the
+ * flag was not passed (so the config default applies), `'zod'` if a
+ * supported value was passed, or `false` if explicitly disabled.
+ */
+function parseSchemaValidatorFlag(value: string | undefined): 'zod' | false | undefined {
+  if (value === undefined) return undefined
+  if (value === 'false' || value === 'off' || value === 'none') return false
+  if (value === 'zod') return 'zod'
+  console.warn(
+    `  kick typegen: unknown --schema-validator '${value}' (only 'zod' and 'false' are supported). ` +
+      `Falling back to project config.`,
+  )
+  return undefined
 }
 
 export function registerTypegenCommand(program: Command): void {
@@ -31,13 +49,25 @@ export function registerTypegenCommand(program: Command): void {
       '--allow-duplicates',
       'Auto-namespace duplicate class names instead of failing (use with caution)',
     )
+    .option(
+      '--schema-validator <name>',
+      "Schema validator for body/query/params typing (currently 'zod' or 'false')",
+    )
     .action(async (opts: TypegenCliOptions) => {
+      const cwd = process.cwd()
+
+      // CLI flag wins over kick.config.ts; the config sets the project default.
+      const config = await loadKickConfig(cwd)
+      const cliValidator = parseSchemaValidatorFlag(opts.schemaValidator)
+      const schemaValidator = cliValidator ?? config?.typegen?.schemaValidator ?? 'zod'
+
       const baseOpts = {
-        cwd: process.cwd(),
-        srcDir: opts.src,
-        outDir: opts.out,
+        cwd,
+        srcDir: opts.src ?? config?.typegen?.srcDir,
+        outDir: opts.out ?? config?.typegen?.outDir,
         silent: opts.silent,
         allowDuplicates: opts.allowDuplicates,
+        schemaValidator,
       }
 
       try {

@@ -77,10 +77,31 @@ export interface DiscoveredRoute {
   queryFilterable: string[] | null
   querySortable: string[] | null
   querySearchable: string[] | null
+  /**
+   * Schema identifiers referenced from the route decorator's second arg
+   * (e.g. `@Post('/', { body: createTaskSchema })`). `null` means no
+   * such reference; the value carries the identifier and the resolved
+   * import source (relative module path) if known.
+   */
+  bodySchema: SchemaRef | null
+  querySchema: SchemaRef | null
+  paramsSchema: SchemaRef | null
   /** Absolute file path of the controller */
   filePath: string
   /** Path relative to scan root, with forward slashes */
   relativePath: string
+}
+
+/** A statically-resolved schema identifier reference */
+export interface SchemaRef {
+  /** The identifier as written (e.g. `createTaskSchema`) */
+  identifier: string
+  /**
+   * Resolved module specifier (relative path or bare module name) where
+   * the identifier is defined. `null` means the source could not be
+   * statically determined (the generator falls back to `unknown`).
+   */
+  source: string | null
 }
 
 /** A `createToken<T>('name')` call discovered in source */
@@ -194,6 +215,88 @@ const ROUTE_METHOD_REGEX = new RegExp(
 function extractPathParams(path: string): string[] {
   const matches = path.match(/:([a-zA-Z_]\w*)/g) ?? []
   return matches.map((m) => m.slice(1))
+}
+
+/**
+ * Given the matched text of a route decorator + method declaration, return
+ * the substring inside the route decorator's argument list (between the
+ * outermost `(` and `)`). Returns `null` if no parens are found.
+ *
+ * Example input:
+ *   `@Post('/', { body: createTaskSchema, name: 'CreateTask' }) async create(`
+ * Returns:
+ *   `'/', { body: createTaskSchema, name: 'CreateTask' }`
+ */
+function extractRouteOptionsArg(matchedText: string): string | null {
+  const open = matchedText.indexOf('(')
+  if (open < 0) return null
+  let depth = 1
+  for (let i = open + 1; i < matchedText.length; i++) {
+    const ch = matchedText[i]
+    if (ch === '(') depth++
+    else if (ch === ')') {
+      depth--
+      if (depth === 0) return matchedText.slice(open + 1, i)
+    }
+  }
+  return null
+}
+
+/**
+ * Extract a bare identifier value from a single field in an object literal
+ * embedded in a string. Returns `null` if the field is missing or its value
+ * isn't a bare identifier (e.g. an inline object, function call, etc.).
+ *
+ * Example: `extractObjectFieldIdentifier("'/' , { body: createTaskSchema }", 'body')`
+ * returns `'createTaskSchema'`.
+ */
+function extractObjectFieldIdentifier(text: string, field: string): string | null {
+  // Look for `field: <identifier>` not followed by `(` (function call) or `{` (inline object)
+  const re = new RegExp(String.raw`\b${field}\s*:\s*([A-Za-z_$][\w$]*)`, 'g')
+  const m = re.exec(text)
+  if (!m) return null
+  return m[1]
+}
+
+/**
+ * Resolve a bare identifier to its module source by inspecting the file's
+ * top-level imports and same-file `const` declarations.
+ *
+ * - `import { X } from './path'` → returns `'./path'`
+ * - `import X from './path'` (default import) → returns `'./path'`
+ * - `import * as X from './path'` → returns `'./path'`
+ * - `const X = z.object(...)` (same file) → returns `null` (caller emits a self-import)
+ *
+ * Returns `null` when the identifier cannot be resolved.
+ */
+function resolveImportSource(source: string, identifier: string): string | null {
+  // Named import: `import { X, Y as Z } from './path'`
+  const namedRe = new RegExp(
+    String.raw`import\s*(?:type\s+)?\{[^}]*\b${identifier}\b[^}]*\}\s*from\s*['"\`]([^'"\`]+)['"\`]`,
+  )
+  const named = namedRe.exec(source)
+  if (named) return named[1]
+
+  // Default import: `import X from './path'`
+  const defaultRe = new RegExp(
+    String.raw`import\s+(?:type\s+)?${identifier}\s+from\s*['"\`]([^'"\`]+)['"\`]`,
+  )
+  const def = defaultRe.exec(source)
+  if (def) return def[1]
+
+  // Namespace import: `import * as X from './path'`
+  const nsRe = new RegExp(
+    String.raw`import\s*\*\s*as\s+${identifier}\s+from\s*['"\`]([^'"\`]+)['"\`]`,
+  )
+  const ns = nsRe.exec(source)
+  if (ns) return ns[1]
+
+  // Same-file const declaration — return empty string as a sentinel meaning
+  // "current file". The generator turns this into a self-relative reference.
+  const constRe = new RegExp(String.raw`(?:^|\n)\s*(?:export\s+)?const\s+${identifier}\b`)
+  if (constRe.test(source)) return ''
+
+  return null
 }
 
 /**
@@ -413,6 +516,14 @@ export function extractRoutesFromSource(
       // the matched substring for an `@ApiQueryParams(...)` call.
       const apiQp = extractApiQueryParams(matchedText, source)
 
+      // The route decorator's second argument carries body/query/params
+      // schema references. Extract them from the leading slice of the
+      // matched text (the part before any stacked decorators).
+      const routeArgs = extractRouteOptionsArg(matchedText)
+      const bodyId = routeArgs ? extractObjectFieldIdentifier(routeArgs, 'body') : null
+      const queryId = routeArgs ? extractObjectFieldIdentifier(routeArgs, 'query') : null
+      const paramsId = routeArgs ? extractObjectFieldIdentifier(routeArgs, 'params') : null
+
       out.push({
         controller: cls.className,
         method: methodName,
@@ -422,6 +533,15 @@ export function extractRoutesFromSource(
         queryFilterable: apiQp?.filterable ?? null,
         querySortable: apiQp?.sortable ?? null,
         querySearchable: apiQp?.searchable ?? null,
+        bodySchema: bodyId
+          ? { identifier: bodyId, source: resolveImportSource(source, bodyId) }
+          : null,
+        querySchema: queryId
+          ? { identifier: queryId, source: resolveImportSource(source, queryId) }
+          : null,
+        paramsSchema: paramsId
+          ? { identifier: paramsId, source: resolveImportSource(source, paramsId) }
+          : null,
         filePath,
         relativePath: relPath,
       })

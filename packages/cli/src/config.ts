@@ -36,6 +36,42 @@ export interface CustomRepoType {
 /** Repository type — built-in string or custom object */
 export type RepoTypeConfig = BuiltinRepoType | CustomRepoType
 
+/**
+ * Supported schema validators for `kick typegen` body/query/params
+ * type extraction. Only `'zod'` ships built-in for now; other libraries
+ * (Joi, Yup, JSON Schema) will be added later as the adapter system
+ * grows. Set to `false` (or omit) to disable schema-driven body typing
+ * entirely (the route entries will keep `body: unknown`).
+ */
+export type SchemaValidator = 'zod' | false
+
+/** Typegen settings — controls .kickjs/types/* generation */
+export interface TypegenConfig {
+  /**
+   * Source directory to scan for controllers and decorators.
+   * Defaults to `'src'`.
+   */
+  srcDir?: string
+  /**
+   * Output directory for generated `.d.ts` files.
+   * Defaults to `'.kickjs/types'`.
+   */
+  outDir?: string
+  /**
+   * Schema validator used to derive `body` types from route metadata.
+   *
+   * - `'zod'` — emit `z.infer<typeof <importedSchema>>` for any schema
+   *   referenced as a named identifier in `@Get/@Post/...({ body, query, params })`.
+   * - `false` — disable schema-driven body typing.
+   *
+   * Future: `'joi' | 'yup' | 'json-schema'` plus a `{ name; module }`
+   * escape hatch for custom adapters.
+   *
+   * @default 'zod'
+   */
+  schemaValidator?: SchemaValidator
+}
+
 /** Module generation settings — controls how `kick g module` produces code */
 export interface ModuleConfig {
   /** Where modules live (default: 'src/modules') */
@@ -121,6 +157,18 @@ export interface KickConfig {
    * ```
    */
   copyDirs?: Array<string | { src: string; dest?: string }>
+  /**
+   * Typegen settings — controls `.kickjs/types/*` generation including
+   * the schema validator used for body type extraction.
+   *
+   * @example
+   * ```ts
+   * typegen: {
+   *   schemaValidator: 'zod',
+   * }
+   * ```
+   */
+  typegen?: TypegenConfig
   /** Custom commands that extend the CLI */
   commands?: KickCommandDefinition[]
   /** Code style overrides (auto-detected from prettier when possible) */
