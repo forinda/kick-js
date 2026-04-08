@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import 'dotenv/config'
-import { Container } from '@forinda/kickjs'
+import { Container, type EnvKey } from '@forinda/kickjs'
 
 /**
  * Base environment schema with common server variables.
@@ -41,9 +41,34 @@ export function defineEnv<T extends z.ZodRawShape>(
   return extend(baseEnvSchema)
 }
 
-/** Parse and validate process.env against a Zod schema. Caches result per schema. */
-export function loadEnv<T extends z.ZodObject<any>>(schema?: T): z.infer<T> {
-  const s = schema || baseEnvSchema
+/**
+ * Parse and validate process.env against a Zod schema. Caches result per schema.
+ *
+ * **No-arg behaviour is sticky.** The first time `loadEnv(schema)` is called
+ * with an extended schema, the cache holds that schema. Subsequent
+ * `loadEnv()` calls (no arg) will reuse the cached extended schema rather
+ * than falling back to `baseEnvSchema` and clobbering the env resolver.
+ *
+ * This matters because `ConfigService` (and the bare `Container._envResolver`)
+ * call `loadEnv()` without an argument inside their constructors. Without
+ * stickiness, instantiating `ConfigService` after a `loadEnv(extendedSchema)`
+ * call would silently downgrade the env to the base shape.
+ *
+ * To force a re-parse with a different schema, pass the new schema explicitly.
+ * To start fresh, call `resetEnvCache()` or `reloadEnv()`.
+ *
+ * **Typing:**
+ * - With an explicit schema → returns `z.infer<typeof schema>`.
+ * - With no schema and `KickEnv` populated by typegen → returns
+ *   `KickEnv` (the project-wide typed env shape).
+ * - With no schema and `KickEnv` empty → returns the base `Env`.
+ */
+export function loadEnv<T extends z.ZodObject<any>>(schema: T): z.infer<T>
+export function loadEnv(): [EnvKey] extends [never] ? Env : KickEnv
+export function loadEnv<T extends z.ZodObject<any>>(schema?: T): any {
+  // Sticky: when called with no arg, prefer the most recently cached
+  // schema over re-parsing with the base schema.
+  const s = schema ?? cachedSchema ?? baseEnvSchema
   // Re-parse if schema changed or no cache yet
   if (cachedEnv && cachedSchema === s) return cachedEnv
   cachedSchema = s
@@ -58,20 +83,31 @@ export function loadEnv<T extends z.ZodObject<any>>(schema?: T): z.infer<T> {
 /**
  * Get a single typed environment variable value.
  *
+ * Three forms:
+ * - **No-arg, KickEnv populated** (`kick typegen` has run) → key is
+ *   constrained to known `KickEnv` keys; return type inferred from
+ *   the schema.
+ * - **With explicit schema** → key constrained to that schema's keys;
+ *   return type is `z.infer<typeof schema>[K]`.
+ * - **No-arg, KickEnv empty** → loose `string` key, `any` return.
+ *
  * @example
  * ```ts
- * // Without schema — returns `any`
- * const port = getEnv('PORT')
+ * // After `kick typegen` (KickEnv populated):
+ * const port = getEnv('PORT')              // typed as number
+ * const url = getEnv('DATABASE_URL')       // typed as string
  *
- * // With schema — fully typed key + return value
+ * // With an inline schema (legacy / one-off):
  * const dbUrl = getEnv('DATABASE_URL', envSchema)
  * ```
  */
+export function getEnv<K extends EnvKey>(key: K): KickEnv[K]
 export function getEnv<T extends z.ZodObject<any>, K extends string & keyof z.infer<T>>(
   key: K,
-  schema?: T,
-): z.infer<T>[K] {
-  const env = loadEnv(schema)
+  schema: T,
+): z.infer<T>[K]
+export function getEnv(key: string, schema?: z.ZodObject<any>): any {
+  const env = schema ? loadEnv(schema) : (loadEnv() as Record<string, any>)
   return env[key]
 }
 
