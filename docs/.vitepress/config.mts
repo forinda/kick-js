@@ -19,6 +19,7 @@ const guideSidebar = [
       { text: 'Dependency Injection', link: '/guide/dependency-injection' },
       { text: 'Modules', link: '/guide/modules' },
       { text: 'Controllers & Routes', link: '/guide/controllers' },
+      { text: 'Type Generation', link: '/guide/typegen' },
       { text: 'Middleware', link: '/guide/middleware' },
       { text: 'Validation', link: '/guide/validation' },
       { text: 'Error Handling', link: '/guide/error-handling' },

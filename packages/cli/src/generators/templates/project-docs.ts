@@ -139,20 +139,22 @@ ${template === 'graphql' ? '├── resolvers/         # GraphQL resolvers\n' 
 
 ### Controllers
 
-Use decorators to define routes:
+Use decorators to define routes. Annotate \`ctx\` with \`Ctx<KickRoutes.X['method']>\`
+to get fully-typed \`ctx.params\`, \`ctx.body\`, and \`ctx.query\` from the
+generated \`KickRoutes\` namespace (refreshed on \`kick dev\` and \`kick typegen\`).
 
 \`\`\`ts
-import { Controller, Get, Post, RequestContext } from '@forinda/kickjs'
+import { Controller, Get, Post, type Ctx } from '@forinda/kickjs'
 
 @Controller('/users')
 export class UserController {
   @Get('/')
-  async findAll(ctx: RequestContext) {
+  async findAll(ctx: Ctx<KickRoutes.UserController['findAll']>) {
     return ctx.json({ users: [] })
   }
 
   @Post('/')
-  async create(ctx: RequestContext) {
+  async create(ctx: Ctx<KickRoutes.UserController['create']>) {
     const data = ctx.body
     return ctx.created({ user: data })
   }
@@ -195,7 +197,8 @@ export class UserModule {}
 
 ### RequestContext
 
-Every controller method receives \`ctx: RequestContext\`:
+Every controller method receives a \`ctx\` (alias \`Ctx<TRoute>\` or the
+loose \`RequestContext\`):
 
 \`\`\`ts
 ctx.body           // Request body (parsed JSON)

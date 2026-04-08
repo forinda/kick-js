@@ -143,6 +143,17 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
     }
   }
 
+  // ── Initial typegen ────────────────────────────────────────────────
+  // Run typegen once so the freshly-scaffolded HelloController's
+  // `Ctx<KickRoutes.HelloController['index']>` references resolve in
+  // the user's editor immediately. Failures are non-fatal.
+  try {
+    const { runTypegen } = await import('../typegen')
+    await runTypegen({ cwd: dir, allowDuplicates: true, silent: true })
+  } catch {
+    // First-run typegen errors are non-fatal — `kick dev` will retry.
+  }
+
   console.log('\n  Project scaffolded successfully!')
   console.log()
 

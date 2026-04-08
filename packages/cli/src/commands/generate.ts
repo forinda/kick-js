@@ -15,6 +15,7 @@ import { generateScaffold, parseFields } from '../generators/scaffold'
 import { generateTest } from '../generators/test'
 import { loadKickConfig, resolveModuleConfig } from '../config'
 import { setDryRun } from '../utils/fs'
+import { runTypegen } from '../typegen'
 
 /** Check if --dry-run was passed on the parent generate command */
 function isDryRun(cmd: any): boolean {
@@ -30,6 +31,32 @@ function printGenerated(files: string[], dryRun = false): void {
   }
   if (dryRun) console.log('\n  (dry run — no files were written)')
   console.log()
+}
+
+/**
+ * Refresh `.kickjs/types/*` after a generator that emitted controllers,
+ * so the new `Ctx<KickRoutes.X['method']>` references resolve in the
+ * user's editor without waiting for `kick dev`.
+ *
+ * Loads `kick.config.ts` for `typegen.schemaValidator`. Failures are
+ * non-fatal — typegen problems should never block code generation.
+ */
+async function runPostTypegen(dryRun: boolean): Promise<void> {
+  if (dryRun) return
+  try {
+    const cfg = await loadKickConfig(process.cwd())
+    await runTypegen({
+      cwd: process.cwd(),
+      allowDuplicates: true,
+      silent: true,
+      schemaValidator: cfg?.typegen?.schemaValidator ?? 'zod',
+      srcDir: cfg?.typegen?.srcDir,
+      outDir: cfg?.typegen?.outDir,
+    })
+  } catch {
+    // Typegen failures are surfaced when the user runs `kick typegen`
+    // explicitly. Don't block scaffolding on a regex bug.
+  }
 }
 
 const GENERATORS = [
@@ -111,6 +138,7 @@ export function registerGenerateCommand(program: Command): void {
         allFiles.push(...files)
       }
       printGenerated(allFiles, dryRun)
+      await runPostTypegen(dryRun)
     })
 
   // ── kick g adapter <name> ──────────────────────────────────────────
@@ -219,6 +247,7 @@ export function registerGenerateCommand(program: Command): void {
         pattern: config?.pattern,
       })
       printGenerated(files, dryRun)
+      await runPostTypegen(dryRun)
     })
 
   // ── kick g dto <name> ──────────────────────────────────────────────
@@ -334,6 +363,7 @@ export function registerGenerateCommand(program: Command): void {
         console.log(`    ${f.name}: ${f.type}${f.optional ? ' (optional)' : ''}`)
       }
       printGenerated(files, dryRun)
+      await runPostTypegen(dryRun)
     })
 
   // ── kick g config ────────────────────────────────────────────────────

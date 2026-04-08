@@ -7,8 +7,7 @@ KickJS validates request data using Zod schemas. Validation can be declared inli
 The route decorators (`@Get`, `@Post`, `@Put`, `@Delete`, `@Patch`) accept a second argument with Zod schemas for `body`, `query`, and `params`:
 
 ```ts
-import { Controller, Post, Put, Get } from '@forinda/kickjs'
-import { RequestContext } from '@forinda/kickjs'
+import { Controller, Post, Put, Get, type Ctx } from '@forinda/kickjs'
 import { z } from 'zod'
 
 const createTodoSchema = z.object({
@@ -29,24 +28,24 @@ const searchQuerySchema = z.object({
 @Controller()
 export class TodoController {
   @Post('/', { body: createTodoSchema })
-  async create(ctx: RequestContext) {
-    // ctx.body is validated and typed
+  async create(ctx: Ctx<KickRoutes.TodoController['create']>) {
+    // ctx.body is validated AND typed as { title: string; priority: 'low' | 'medium' | 'high' }
     ctx.created(ctx.body)
   }
 
   @Put('/:id', { body: updateTodoSchema })
-  async update(ctx: RequestContext) {
+  async update(ctx: Ctx<KickRoutes.TodoController['update']>) {
     ctx.json(ctx.body)
   }
 
   @Get('/search', { query: searchQuerySchema })
-  async search(ctx: RequestContext) {
+  async search(ctx: Ctx<KickRoutes.TodoController['search']>) {
     ctx.json({ query: ctx.query })
   }
 }
 ```
 
-When validation is declared on a route, KickJS automatically inserts the `validate()` middleware before any class-level or method-level middleware.
+When validation is declared on a route, KickJS automatically inserts the `validate()` middleware before any class-level or method-level middleware. The `Ctx<KickRoutes.X['method']>` annotation also makes `ctx.body`, `ctx.params`, and `ctx.query` typed at compile time via the generated `KickRoutes` namespace — see [Type Generation](typegen.md).
 
 ## Validating Params
 
@@ -58,7 +57,7 @@ const idParamsSchema = z.object({
 })
 
 @Get('/:id', { params: idParamsSchema })
-async getById(ctx: RequestContext) {
+async getById(ctx: Ctx<KickRoutes.TodoController['getById']>) {
   ctx.json({ id: ctx.params.id })
 }
 ```
@@ -73,8 +72,8 @@ All three can be validated on the same route:
   body: updateTodoSchema,
   query: z.object({ notify: z.coerce.boolean().optional() }),
 })
-async update(ctx: RequestContext) {
-  // ctx.params.id, ctx.body, ctx.query.notify are all validated
+async update(ctx: Ctx<KickRoutes.TodoController['update']>) {
+  // ctx.params.id, ctx.body, ctx.query.notify are all validated AND typed
 }
 ```
 
@@ -86,17 +85,14 @@ Under the hood, route validation uses the `validate()` function from `@forinda/k
 import { validate } from '@forinda/kickjs'
 
 // As standalone Express middleware
-app.post('/custom',
-  validate({ body: createTodoSchema }),
-  (req, res) => res.json(req.body),
-)
+app.post('/custom', validate({ body: createTodoSchema }), (req, res) => res.json(req.body))
 ```
 
 The `validate()` function accepts a `ValidationSchema`:
 
 ```ts
 interface ValidationSchema {
-  body?: any    // Zod schema (or any object with .safeParse())
+  body?: any // Zod schema (or any object with .safeParse())
   query?: any
   params?: any
 }
