@@ -71,6 +71,35 @@ interface KickJSPluginOptions {
 }
 ```
 
+## `envWatchPlugin()` — `.env` file hot-reload
+
+Watches `.env`, `.env.local`, `.env.development`, `.env.production`, and
+`.env.test`, and triggers a full Vite reload whenever any of them change.
+Compose it alongside `kickjsVitePlugin()`:
+
+```ts
+// vite.config.ts
+import { defineConfig } from 'vite'
+import { kickjsVitePlugin, envWatchPlugin } from '@forinda/kickjs-vite'
+import swc from 'unplugin-swc'
+
+export default defineConfig({
+  plugins: [
+    swc.vite({ tsconfigFile: 'tsconfig.json' }),
+    kickjsVitePlugin({ entry: 'src/index.ts' }),
+    envWatchPlugin(),
+  ],
+})
+```
+
+> **Moved.** This used to live in `@forinda/kickjs-config`. The old export
+> still exists as a back-compat shim and prints a deprecation warning;
+> migrate to `@forinda/kickjs-vite` before v3.
+
+`envWatchPlugin()` pairs naturally with the merged `ConfigService`
+(`@forinda/kickjs`) — once a `.env` change triggers a reload, the next
+`loadEnv()` call re-validates `process.env` against your Zod schema.
+
 ## With the CLI
 
 If you use `kick dev` from `@forinda/kickjs-cli`, this plugin is wired up

@@ -1,7 +1,8 @@
 {
   "name": "@forinda/kickjs-config",
   "version": "2.2.1",
-  "description": "Zod-based environment validation and typed configuration for KickJS",
+  "description": "DEPRECATED — moved into @forinda/kickjs. This package is a thin re-export shim and will be removed in v3.",
+  "deprecated": "@forinda/kickjs-config has been merged into @forinda/kickjs. Import { defineEnv, loadEnv, ConfigService } from '@forinda/kickjs' instead, and { envWatchPlugin } from '@forinda/kickjs-vite'. This shim will be removed in v3.",
   "keywords": [
     "kickjs",
     "nodejs",
@@ -76,9 +77,7 @@
     }
   },
   "dependencies": {
-    "@forinda/kickjs": "workspace:*",
-    "dotenv": "^17.3.1",
-    "zod": "^4.3.6"
+    "@forinda/kickjs": "workspace:*"
   },
   "peerDependencies": {
     "vite": ">=8.0.0"

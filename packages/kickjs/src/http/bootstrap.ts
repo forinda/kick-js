@@ -1,15 +1,15 @@
 import cluster from 'node:cluster'
 import { createLogger, Container } from '../core'
+import { reloadEnv } from '../config/env'
 import { Application, type ApplicationOptions } from './application'
 import { setupClusterPrimary, type ClusterOptions } from './cluster'
 
-/** Try to reload env from .env file if config package is available */
+/** Reload env from .env file (HMR rebuild) — config now lives in-tree. */
 function tryReloadEnv(): void {
   try {
-    const config = require('@forinda/kickjs-config')
-    config.reloadEnv?.()
+    reloadEnv()
   } catch {
-    // Config package not installed — skip
+    // Best-effort: never crash bootstrap because env reload failed.
   }
 }
 

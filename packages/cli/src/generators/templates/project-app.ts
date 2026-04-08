@@ -134,7 +134,7 @@ export const modules: AppModuleClass[] = [HelloModule]
  * Both autocomplete and type-check at compile time.
  */
 export function generateEnvFile(): string {
-  return `import { defineEnv } from '@forinda/kickjs-config'
+  return `import { defineEnv } from '@forinda/kickjs/config'
 import { z } from 'zod'
 
 /**

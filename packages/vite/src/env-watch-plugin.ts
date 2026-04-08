@@ -7,9 +7,9 @@ import type { Plugin } from 'vite'
  * when they change. This ensures the dev server picks up environment
  * variable changes without a manual restart.
  *
- * @deprecated Import from `@forinda/kickjs-vite` instead — all Vite-only
- * concerns now live in that package. This export remains as a back-compat
- * shim and will be removed in a future major.
+ * Lives in `@forinda/kickjs-vite` so all Vite-only concerns are in one
+ * place — the older re-export from `@forinda/kickjs-config` is kept as
+ * a deprecated thin shim for back-compat.
  *
  * @example
  * ```ts

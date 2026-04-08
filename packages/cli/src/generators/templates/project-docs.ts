@@ -10,7 +10,7 @@ export function generateReadme(name: string, template: ProjectTemplate, pm: stri
     minimal: 'Minimal',
   }
 
-  const packages = ['@forinda/kickjs', '@forinda/kickjs-vite', '@forinda/kickjs-config']
+  const packages = ['@forinda/kickjs', '@forinda/kickjs-vite']
   if (template !== 'minimal') {
     packages.push('@forinda/kickjs-swagger', '@forinda/kickjs-devtools')
   }
@@ -257,7 +257,7 @@ kick add --list        # Show all available packages
 Edit \`.env\` for environment variables. Access them with \`@Value()\` decorator:
 
 \`\`\`ts
-import { Value } from '@forinda/kickjs-config'
+import { Value } from '@forinda/kickjs'
 
 @Service()
 export class ApiService {
@@ -272,7 +272,7 @@ export class ApiService {
 Or use \`ConfigService\`:
 
 \`\`\`ts
-import { ConfigService } from '@forinda/kickjs-config'
+import { ConfigService } from '@forinda/kickjs'
 
 @Service()
 export class AppService {

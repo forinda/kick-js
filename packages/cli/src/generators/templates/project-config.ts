@@ -8,7 +8,10 @@ export function generatePackageJson(
 ): string {
   const baseDeps: Record<string, string> = {
     '@forinda/kickjs': kickjsVersion,
-    '@forinda/kickjs-config': kickjsVersion,
+    // `dotenv` is an optional peer of @forinda/kickjs — scaffolded apps
+    // get it pre-installed so `.env` files Just Work. Apps that load
+    // env from the shell or a secret manager can drop this safely.
+    dotenv: '^17.3.1',
     express: '^5.1.0',
     'reflect-metadata': '^0.2.2',
     zod: '^4.3.6',

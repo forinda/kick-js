@@ -1,81 +1,49 @@
-# @forinda/kickjs-config
+# Config — moved
 
-Type-safe environment configuration with Zod validation and an injectable config service.
+The configuration APIs (`defineEnv`, `loadEnv`, `getEnv`, `ConfigService`,
+`createConfigService`, `baseEnvSchema`, `resetEnvCache`, `reloadEnv`)
+no longer live under `API → Packages` because they are no longer a
+standalone package — they ship inside `@forinda/kickjs` itself.
 
-## defineEnv
+➡️ **See the [Configuration guide](../guide/configuration.md)** for the
+full reference and worked examples.
 
-Define a custom env schema by extending the base schema (PORT, NODE_ENV, LOG_LEVEL).
+## Quick import map
 
-```typescript
-function defineEnv<T extends z.ZodRawShape>(
-  extend: (base: typeof baseEnvSchema) => z.ZodObject<any>,
-): z.ZodObject<any>
+```ts
+// All of these come from the unified package now
+import {
+  defineEnv,
+  loadEnv,
+  getEnv,
+  reloadEnv,
+  resetEnvCache,
+  baseEnvSchema,
+  ConfigService,
+  createConfigService,
+} from '@forinda/kickjs'
 ```
 
-**Example:**
+The Vite-only `envWatchPlugin` moved to `@forinda/kickjs-vite`:
 
-```typescript
-const envSchema = defineEnv((base) =>
-  base.extend({
-    DATABASE_URL: z.string().url(),
-    JWT_SECRET: z.string().min(32),
-  })
-)
+```ts
+import { envWatchPlugin } from '@forinda/kickjs-vite'
 ```
 
-## loadEnv
+::: warning Deprecated package
+`@forinda/kickjs-config` still exists as a thin re-export shim for one
+release so existing apps don't break — it will be **removed in v3**.
+Migrate to `@forinda/kickjs` now.
 
-Parse and validate `process.env` against a Zod schema. Result is cached after first call.
+`.env` file loading is provided by [`dotenv`](https://github.com/motdotla/dotenv),
+which is now an **optional peer dependency** of `@forinda/kickjs`. New
+projects scaffolded with `kick new` get it pre-installed; existing apps
+that rely on `.env` files should add it explicitly:
 
-```typescript
-function loadEnv<T extends z.ZodObject<any>>(schema?: T): z.infer<T>
+```bash
+pnpm add dotenv
 ```
 
-## getEnv
-
-Get a single environment variable value from the cached config.
-
-```typescript
-function getEnv<K extends string>(key: K): any
-```
-
-## resetEnvCache
-
-Clear the cached env config. Useful in tests to re-parse with different values.
-
-```typescript
-function resetEnvCache(): void
-```
-
-## baseEnvSchema
-
-Built-in Zod schema with common server variables.
-
-```typescript
-const baseEnvSchema: z.ZodObject<{
-  PORT: z.ZodDefault<z.ZodNumber>           // default: 3000
-  NODE_ENV: z.ZodDefault<z.ZodEnum<['development', 'production', 'test']>>  // default: 'development'
-  LOG_LEVEL: z.ZodDefault<z.ZodString>      // default: 'info'
-}>
-```
-
-## ConfigService
-
-Injectable service for accessing typed environment configuration. Registered automatically via `@Service()`.
-
-```typescript
-@Service()
-class ConfigService {
-  get<T = any>(key: string): T
-  getAll(): Readonly<Record<string, any>>
-  isProduction(): boolean
-  isDevelopment(): boolean
-  isTest(): boolean
-}
-```
-
-## Types
-
-```typescript
-type Env = { PORT: number; NODE_ENV: 'development' | 'production' | 'test'; LOG_LEVEL: string }
-```
+Apps that load env via the shell, Docker, or a secret manager don't need
+`dotenv` at all.
+:::

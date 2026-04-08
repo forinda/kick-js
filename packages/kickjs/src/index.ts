@@ -81,3 +81,27 @@ export {
 // View & SPA Adapters
 export { ViewAdapter, type ViewAdapterOptions } from './http/middleware/views'
 export { SpaAdapter, type SpaAdapterOptions } from './http/middleware/spa'
+
+// ── Config (env validation + ConfigService) ────────────────────────────
+// Formerly published as `@forinda/kickjs-config`. Lives here now; the
+// standalone package will be removed in v3.
+//
+// NOTE: We do NOT re-export `type Env` from `./config` here, even though
+// the standalone package used to. `core/decorators` already exports a
+// generic `Env<K extends EnvKey>` helper that user code uses with
+// `@Value('FOO') x!: Env<'FOO'>` — barrel-merging the two would
+// shadow the generic with the concrete `z.infer<typeof baseEnvSchema>`
+// alias and break every existing typed `@Value` site. Apps that need
+// the base shape can still pull it from `@forinda/kickjs/config` or
+// derive it inline via `z.infer<typeof baseEnvSchema>`.
+export {
+  baseEnvSchema,
+  defineEnv,
+  loadEnv,
+  getEnv,
+  reloadEnv,
+  resetEnvCache,
+  ConfigService,
+  createConfigService,
+  type TypedConfigService,
+} from './config'

@@ -101,7 +101,6 @@ const apiSidebar = [
     items: [
       { text: '@forinda/kickjs-core', link: '/api/core' },
       { text: '@forinda/kickjs-http', link: '/api/http' },
-      { text: '@forinda/kickjs-config', link: '/api/config' },
       { text: '@forinda/kickjs-swagger', link: '/api/swagger' },
       { text: '@forinda/kickjs-cli', link: '/api/cli' },
       { text: '@forinda/kickjs-testing', link: '/api/testing' },

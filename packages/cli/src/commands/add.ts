@@ -20,7 +20,11 @@ const PACKAGE_REGISTRY: Record<
     description: 'Vite plugin: dev server, HMR, module discovery',
     dev: true,
   },
-  config: { pkg: '@forinda/kickjs-config', peers: [], description: 'Zod-based env validation' },
+  config: {
+    pkg: 'dotenv',
+    peers: [],
+    description: 'Optional .env file loader (kickjs ConfigService now ships in @forinda/kickjs)',
+  },
   cli: {
     pkg: '@forinda/kickjs-cli',
     peers: [],

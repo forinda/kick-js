@@ -1,6 +1,12 @@
 # Configuration
 
-The `@forinda/kickjs-config` package provides Zod-validated environment configuration with caching, an injectable typed service, and tight integration with `kick typegen` so every API in this guide is type-safe with no manual schema passing.
+`@forinda/kickjs` ships Zod-validated environment configuration with caching, an injectable typed service, and tight integration with `kick typegen` — every API in this guide is type-safe with no manual schema passing. No extra package install is required.
+
+::: tip Moved from `@forinda/kickjs-config`
+Earlier releases shipped these APIs in a separate `@forinda/kickjs-config` package. They now live inside `@forinda/kickjs` itself. The standalone package still exists as a thin re-export shim for one release and will be removed in v3 — migrate your imports to `@forinda/kickjs`.
+
+`.env` file loading uses [`dotenv`](https://github.com/motdotla/dotenv), which is now an **optional peer dependency**. New projects scaffolded with `kick new` get it pre-installed; existing projects should add it explicitly if they rely on `.env` files (`pnpm add dotenv`). Apps that load env via the shell, Docker, or a secret manager can skip it entirely.
+:::
 
 ## Defining an Environment Schema
 
@@ -10,7 +16,7 @@ Use `defineEnv()` to extend the base schema with your application-specific varia
 
 ```ts
 // src/env.ts
-import { defineEnv } from '@forinda/kickjs-config'
+import { defineEnv } from '@forinda/kickjs'
 import { z } from 'zod'
 
 export default defineEnv((base) =>
@@ -39,7 +45,7 @@ The base schema provides these defaults:
 Parse and validate `process.env` against your schema. The result is cached — subsequent calls return the same object without re-parsing:
 
 ```ts
-import { loadEnv } from '@forinda/kickjs-config'
+import { loadEnv } from '@forinda/kickjs'
 
 // No-arg form — returns KickEnv when typegen has populated it,
 // otherwise returns the base Env shape.
@@ -59,7 +65,7 @@ The cache is **sticky**: once you've called `loadEnv(extendedSchema)` once, subs
 Retrieve a single variable. With typegen active, the key is constrained to known `KickEnv` keys and the return type is inferred:
 
 ```ts
-import { getEnv } from '@forinda/kickjs-config'
+import { getEnv } from '@forinda/kickjs'
 
 const port = getEnv('PORT') // number (Zod-coerced)
 const url = getEnv('DATABASE_URL') // string
@@ -73,7 +79,7 @@ You can still pass an explicit schema as the second argument when you need a one
 Clear the cached config. Useful in tests when you need to reload with different environment values:
 
 ```ts
-import { resetEnvCache, loadEnv } from '@forinda/kickjs-config'
+import { resetEnvCache, loadEnv } from '@forinda/kickjs'
 
 resetEnvCache()
 process.env.PORT = '4000'
@@ -85,8 +91,7 @@ const env = loadEnv(envSchema) // re-parsed with new PORT
 `ConfigService` is the recommended way to read env config from a DI-managed class. It's an injectable singleton that consumes the `KickEnv` global populated by `kick typegen`, so as long as your `src/env.ts` is in place you get full type safety with **zero extra setup** — no schema to pass around, no separate typed-service factory, no manual casts.
 
 ```ts
-import { Service, Autowired } from '@forinda/kickjs'
-import { ConfigService } from '@forinda/kickjs-config'
+import { Service, Autowired, ConfigService } from '@forinda/kickjs'
 
 @Service()
 class DatabaseService {
@@ -121,7 +126,7 @@ The two-generic form `get<K, T>` lets you supply a return type when typegen isn'
 For module-scope access (utilities, startup code, scripts), use `loadEnv()` and `getEnv()` directly. Both consume `KickEnv` when available:
 
 ```ts
-import { loadEnv, getEnv } from '@forinda/kickjs-config'
+import { loadEnv, getEnv } from '@forinda/kickjs'
 
 // loadEnv() with no arg returns KickEnv when typegen has run
 const env = loadEnv()
