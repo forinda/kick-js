@@ -31,10 +31,14 @@ bootstrap({
     new SwaggerAdapter({
       info: { title: 'My API', version: '1.0.0' },
       bearerAuth: true,
+      disableInProd: true, // skip mounting docs when NODE_ENV=production
     }),
   ],
 })
 ```
+
+Set `disableInProd: true` to skip mounting docs, the spec, and assets when
+`NODE_ENV === 'production'`.
 
 ### Custom Schema Parser (Joi)
 
