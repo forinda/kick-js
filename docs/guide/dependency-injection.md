@@ -92,18 +92,21 @@ Using `@Inject` on a property causes a TypeScript compile error (`TS1240`). Use 
 
 ## DI Token Hardening
 
-KickJS supports four kinds of DI tokens, listed from safest to riskiest. Pick the safest one that fits your case:
+KickJS supports four kinds of DI tokens. Pick the safest one that fits your case — the list below is ordered from safest to riskiest.
 
-| Token kind                  | Example                          | Collision risk                                                                    | Type safety                                        |
-| --------------------------- | -------------------------------- | --------------------------------------------------------------------------------- | -------------------------------------------------- |
-| **Class identity**          | `container.resolve(UserService)` | None — JS reference equality                                                      | Full (via `Constructor<T>` overload)               |
-| **`createToken<T>(name)`**  | `container.resolve(USER_REPO)`   | None — frozen object identity                                                     | Full (via `InjectionToken<T>` overload)            |
-| **`Symbol('foo')`**         | `container.resolve(SYM)`         | Only `Symbol.for(...)` collides; per-call `Symbol(...)` is unique but **untyped** | None                                               |
-| **Raw `@Inject('string')`** | `@Inject('foo')`                 | High — silent override on register                                                | None unless typegen has populated `KickJsRegistry` |
+- **Class identity** — `container.resolve(UserService)` returns `UserService`. JS reference equality means two classes can never collide; type safety comes from the `Constructor<T>` overload on `Container.resolve`. Use this whenever the thing you want to resolve **is** a class.
 
-**Use `createToken<T>` for everything that isn't a class.** It removes both collision risk and the need for separate type annotations on every injection site. The `Symbol`-based pattern is still supported for back-compat but no longer recommended — `container.resolve(SOME_SYMBOL)` returns `any` and a refactor that misses one usage site won't be caught at compile time.
+- **`createToken<T>(name)`** — `container.resolve(USER_REPO)` returns `IUserRepository`. Each call returns a unique frozen object identified by reference, not by the `name` string, so two `createToken<X>('foo')` calls in different files produce two distinct tokens. Type safety comes from the `InjectionToken<T>` overload. **Use this for interface bindings, third-party clients, factory results, and anything else that isn't a class.**
 
-The CLI generators (`kick g module`, `kick g scaffold`) emit `createToken<T>` by default for repository tokens.
+  ```ts
+  export const USER_REPO = createToken<IUserRepository>('UserRepository')
+  ```
+
+- **`Symbol('foo')`** — `container.resolve(SYM)` returns `any`. Discouraged. The symbol is unique per call (no collisions in practice) but the call site is untyped — you have to add a generic at every injection site, and a refactor that misses one usage site won't be caught at compile time. Note: `Symbol.for(...)` is interned and **does** collide across files; never use it for DI tokens.
+
+- **Raw string `@Inject('string')`** — high collision risk. Untyped unless `kick typegen` has populated `KickJsRegistry`. Another developer registering `'config'` somewhere else silently overrides yours. Only use this for runtime-computed token names where the literal string genuinely isn't known at compile time.
+
+**Recommendation: use `createToken<T>` for everything that isn't a class.** It removes both collision risk and the need for separate type annotations on every injection site. The CLI generators (`kick g module`, `kick g scaffold`) emit `createToken<T>` by default for repository tokens.
 
 ## When You Need Manual Registration
 
