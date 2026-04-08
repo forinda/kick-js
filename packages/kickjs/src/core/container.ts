@@ -77,6 +77,25 @@ export interface ContainerChangeEvent {
 /** Listener that receives batched change events */
 export type ContainerChangeListener = (changes: ContainerChangeEvent[]) => void
 
+/**
+ * Type-safe registry of string DI tokens. Augmented by `kick typegen` —
+ * the generated `.kickjs/types/registry.d.ts` adds entries like:
+ *
+ * ```ts
+ * declare module '@forinda/kickjs' {
+ *   interface KickJsRegistry {
+ *     UserService: import('../../src/modules/users/user.service').UserService
+ *   }
+ * }
+ * ```
+ *
+ * Once typegen has run, `container.resolve('UserService')` returns the
+ * correct type instead of `any`. Class-token resolution
+ * (`container.resolve(UserService)`) is already type-safe via the
+ * `Constructor<T>` overload and does not need typegen.
+ */
+export interface KickJsRegistry {}
+
 interface PersistentStore {
   factories: Array<{ token: any; factory: () => any; scope: Scope }>
   instances: Array<{ token: any; instance: any }>
@@ -329,7 +348,20 @@ export class Container {
     return entries
   }
 
-  /** Resolve a dependency by its token */
+  /**
+   * Resolve a dependency by its token.
+   *
+   * Three overloads:
+   * - **String token in `KickJsRegistry`** (populated by `kick typegen`) →
+   *   returns the augmented type.
+   * - **Class constructor** → returns an instance of that class. Always
+   *   type-safe; no codegen required.
+   * - **Anything else** → returns `any`. Use this for legacy code or for
+   *   string tokens that haven't been registered with typegen yet.
+   */
+  resolve<K extends keyof KickJsRegistry & string>(token: K): KickJsRegistry[K]
+  resolve<T>(token: Constructor<T>): T
+  resolve<T = any>(token: any): T
   resolve<T = any>(token: any): T {
     let reg = this.registrations.get(token)
     // HMR fallback: when Vite re-evaluates a module, decorated classes get new

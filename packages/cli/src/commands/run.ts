@@ -3,6 +3,7 @@ import { resolve, join } from 'node:path'
 import type { Command } from 'commander'
 import { runShellCommand } from '../utils/shell'
 import { loadKickConfig } from '../config'
+import { runTypegen } from '../typegen'
 
 /**
  * Start the Vite dev server with @forinda/kickjs-vite plugin.
@@ -20,6 +21,16 @@ import { loadKickConfig } from '../config'
 async function startDevServer(_entry: string, port?: string): Promise<void> {
   if (port) process.env.PORT = port
 
+  // Generate `.kickjs/types/*.d.ts` once before Vite starts so the
+  // user's tsc has fresh type info from the very first request.
+  // Failures here are non-fatal — we don't want a typegen bug to
+  // block the dev server.
+  try {
+    await runTypegen({ cwd: process.cwd() })
+  } catch (err: any) {
+    console.warn(`  kick typegen: skipped (${err?.message ?? err})`)
+  }
+
   // Resolve vite from the user's project, not the CLI package
   const { createRequire } = await import('node:module')
   const require = createRequire(resolve('package.json'))
@@ -34,6 +45,23 @@ async function startDevServer(_entry: string, port?: string): Promise<void> {
     },
   })
 
+  // Re-run typegen whenever a source file changes. Vite already
+  // owns a chokidar watcher, so we piggy-back on it instead of
+  // adding our own — same files, no extra fd cost.
+  let typegenTimer: ReturnType<typeof setTimeout> | null = null
+  const scheduleTypegen = (file: string) => {
+    if (!/\.(ts|tsx|mts|cts)$/.test(file)) return
+    if (file.includes('.kickjs')) return
+    if (file.endsWith('.d.ts')) return
+    if (typegenTimer) clearTimeout(typegenTimer)
+    typegenTimer = setTimeout(() => {
+      runTypegen({ cwd: process.cwd(), silent: true }).catch(() => {})
+    }, 100)
+  }
+  server.watcher.on('add', scheduleTypegen)
+  server.watcher.on('unlink', scheduleTypegen)
+  server.watcher.on('change', scheduleTypegen)
+
   await server.listen()
   server.printUrls()
 
@@ -41,6 +69,7 @@ async function startDevServer(_entry: string, port?: string): Promise<void> {
 
   // Graceful shutdown — Vite closes the server + all HMR connections
   const shutdown = async () => {
+    if (typegenTimer) clearTimeout(typegenTimer)
     await server.close()
     process.exit(0)
   }

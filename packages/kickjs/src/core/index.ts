@@ -6,6 +6,7 @@ export {
   tokenName,
   type ContainerChangeEvent,
   type ContainerChangeListener,
+  type KickJsRegistry,
 } from './container'
 
 // Interfaces & Constants
