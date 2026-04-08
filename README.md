@@ -36,12 +36,14 @@ cd my-api && pnpm dev
 import 'reflect-metadata'
 import {
   Controller, Get, Service, Autowired, bootstrap,
-  buildRoutes, type AppModule, type ModuleRoutes, type RequestContext,
+  buildRoutes, type AppModule, type ModuleRoutes, type Ctx,
 } from '@forinda/kickjs'
 
 @Service()
 class GreetService {
-  greet(name: string) { return { message: `Hello ${name}!`, timestamp: new Date().toISOString() } }
+  greet(name: string) {
+    return { message: `Hello ${name}!`, timestamp: new Date().toISOString() }
+  }
 }
 
 @Controller()
@@ -49,7 +51,7 @@ class HelloController {
   @Autowired() private greetService!: GreetService
 
   @Get('/')
-  handle(ctx: RequestContext) {
+  handle(ctx: Ctx) {
     ctx.json(this.greetService.greet('KickJS'))
   }
 }
@@ -60,8 +62,12 @@ class HelloModule implements AppModule {
   }
 }
 
-const app = await bootstrap({ modules: [HelloModule] })
+await bootstrap({ modules: [HelloModule] })
 ```
+
+> Run `kick typegen` to generate `KickRoutes` and `KickEnv`, then handlers
+> become `ctx: Ctx<KickRoutes['GET /hello']>` for fully typed body, query,
+> params, and `@Value` env injection.
 
 ## Highlights
 
@@ -100,14 +106,20 @@ const app = await bootstrap({ modules: [HelloModule] })
 
 ## Example Apps
 
-| Example | Stack |
-|---------|-------|
-| [jira-drizzle-api](examples/jira-drizzle-api/) | PostgreSQL + Drizzle, 14 DDD modules, 144 tests |
-| [jira-prisma-api](examples/jira-prisma-api/) | PostgreSQL + Prisma, 134 tests |
-| [jira-mongoose-api](examples/jira-mongoose-api/) | MongoDB + Mongoose, 53 tests |
-| [minimal-api](examples/minimal-api/) | Simplest possible app |
+| Example | What it shows |
+|---------|---------------|
+| [minimal-api](examples/minimal-api/) | Simplest possible app — bootstrap + one controller |
+| [v2-showcase-api](examples/v2-showcase-api/) | Full v2 feature tour: typed `Ctx<KickRoutes>`, `KickEnv`, `createToken`, DDD modules |
+| [v3-preview](examples/v3-preview/) | Preview of upcoming v3 APIs |
+| [jira-drizzle-api](examples/jira-drizzle-api/) | Full Jira clone — PostgreSQL + Drizzle, 14 DDD modules |
+| [jira-prisma-api](examples/jira-prisma-api/) | Full Jira clone — PostgreSQL + Prisma 6 |
+| [jira-prisma-v7-api](examples/jira-prisma-v7-api/) | Full Jira clone — PostgreSQL + Prisma 7 (driver adapters) |
+| [jira-mongoose-api](examples/jira-mongoose-api/) | Full Jira clone — MongoDB + Mongoose |
+| [graphql-api](examples/graphql-api/) | GraphQL with `@Resolver`, `@Query`, `@Mutation` |
 | [devtools-api](examples/devtools-api/) | DevTools dashboard + reactive state |
-| [graphql-api](examples/graphql-api/) | GraphQL with resolvers |
+| [microservice-api](examples/microservice-api/) | OTel + DevTools + Swagger template |
+| [otel-api](examples/otel-api/) | OpenTelemetry console tracing |
+| [joi-api](examples/joi-api/) | Custom Joi `SchemaParser` for Swagger + Joi validation middleware |
 
 ## CLI
 
