@@ -50,6 +50,7 @@ async function runPostTypegen(dryRun: boolean): Promise<void> {
       allowDuplicates: true,
       silent: true,
       schemaValidator: cfg?.typegen?.schemaValidator ?? 'zod',
+      envFile: cfg?.typegen?.envFile,
       srcDir: cfg?.typegen?.srcDir,
       outDir: cfg?.typegen?.outDir,
     })

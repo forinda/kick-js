@@ -154,6 +154,55 @@ export function Inject(token: any): ParameterDecorator {
 }
 
 /**
+ * Global ambient registry of typed environment variables, populated by
+ * `kick typegen` from the project's env schema (typically
+ * `src/env.ts`'s `export default defineEnv(...)`).
+ *
+ * Empty by default — declarations come from `.kickjs/types/env.ts`
+ * generated alongside the rest of the typegen output. Once populated,
+ * `@Value('PORT')` autocompletes the key, type-checks the default
+ * value, and `process.env.PORT` is also typed via the parallel
+ * `NodeJS.ProcessEnv` augmentation in the same generated file.
+ */
+declare global {
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
+  interface KickEnv {}
+}
+
+/** A string key known to the typed env registry (`never` until typegen runs) */
+export type EnvKey = keyof KickEnv & string
+
+/**
+ * Look up the type of a typed env entry.
+ *
+ * Decorators can't propagate the property type from the key, so users
+ * still need to write the property's type — but `Env<K>` lets them
+ * derive it from `KickEnv` instead of duplicating the schema:
+ *
+ * ```ts
+ * @Service()
+ * class MyService {
+ *   @Value('PORT')
+ *   private port!: Env<'PORT'>  // → number, narrowed from KickEnv['PORT']
+ * }
+ * ```
+ */
+export type Env<K extends EnvKey = EnvKey> = KickEnv[K]
+
+/**
+ * Constraint that allows any string when the typed env registry is
+ * empty (no `kick typegen` has run yet, so existing code with raw
+ * string keys keeps working) but locks the argument down to known
+ * `EnvKey` literals once the registry is populated.
+ *
+ * Implementation: when `EnvKey` is `never`, the conditional resolves
+ * to the user's `K`, accepting anything. Once typegen has populated
+ * `KickEnv`, `EnvKey` becomes a real union and the conditional forces
+ * `K` to be assignable to it.
+ */
+type ValueKey<K extends string> = [EnvKey] extends [never] ? K : K & EnvKey
+
+/**
  * Inject an environment variable value. Evaluated lazily so the env
  * is available at access time, not at decoration time.
  *
@@ -161,8 +210,17 @@ export function Inject(token: any): ParameterDecorator {
  * to catch misconfiguration early instead of returning undefined.
  *
  * Uses metadata + instance getter to work correctly with `useDefineForClassFields`.
+ *
+ * Type-safety:
+ * - Without `kick typegen` run, any string key is accepted (back-compat).
+ * - After typegen, `KickEnv` is populated and unknown keys become a tsc
+ *   error. The optional `defaultValue` is type-checked against the
+ *   schema's inferred type for that key.
  */
-export function Value(envKey: string, defaultValue?: any): PropertyDecorator {
+export function Value<K extends string>(
+  envKey: ValueKey<K>,
+  defaultValue?: K extends EnvKey ? KickEnv[K] : unknown,
+): PropertyDecorator {
   return (target, propertyKey) => {
     setInMetaMap(METADATA.VALUE, target, propertyKey as string, { envKey, defaultValue })
   }

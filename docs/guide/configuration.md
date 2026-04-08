@@ -15,17 +15,17 @@ const envSchema = defineEnv((base) =>
     DATABASE_URL: z.string().url(),
     JWT_SECRET: z.string().min(32),
     REDIS_URL: z.string().url().optional(),
-  })
+  }),
 )
 ```
 
 The base schema provides these defaults:
 
-| Variable | Type | Default |
-| --- | --- | --- |
-| `PORT` | `number` | `3000` |
-| `NODE_ENV` | `'development' \| 'production' \| 'test'` | `'development'` |
-| `LOG_LEVEL` | `string` | `'info'` |
+| Variable    | Type                                      | Default         |
+| ----------- | ----------------------------------------- | --------------- |
+| `PORT`      | `number`                                  | `3000`          |
+| `NODE_ENV`  | `'development' \| 'production' \| 'test'` | `'development'` |
+| `LOG_LEVEL` | `string`                                  | `'info'`        |
 
 ## Loading and Accessing Environment Variables
 
@@ -100,14 +100,14 @@ export const envSchema = defineEnv((base) =>
     DATABASE_URL: z.string().url(),
     JWT_SECRET: z.string().min(32),
     REDIS_URL: z.string().url().optional(),
-  })
+  }),
 )
 
 // Direct access (no DI needed)
 export const env = loadEnv(envSchema)
-env.DATABASE_URL  // string — fully typed
-env.JWT_SECRET    // string — fully typed
-env.REDIS_URL     // string | undefined — fully typed
+env.DATABASE_URL // string — fully typed
+env.JWT_SECRET // string — fully typed
+env.REDIS_URL // string | undefined — fully typed
 
 // Injectable service (for DI)
 export const AppConfigService = createConfigService(envSchema)
@@ -125,53 +125,57 @@ class DatabaseService {
   @Autowired() private config!: AppConfigService
 
   connect() {
-    const url = this.config.get('DATABASE_URL')  // string — autocompletes!
-    const bad = this.config.get('NOPE')           // TS error — key doesn't exist
+    const url = this.config.get('DATABASE_URL') // string — autocompletes!
+    const bad = this.config.get('NOPE') // TS error — key doesn't exist
   }
 }
 ```
 
 ### Which to use?
 
-| | `loadEnv()` | `ConfigService` | `createConfigService()` |
-| --- | --- | --- | --- |
-| **Type safety** | Full | None (manual cast) | Full |
-| **DI injectable** | No | Yes | Yes |
-| **Key autocomplete** | Yes | No | Yes |
-| **Best for** | Module-scope access | Quick prototyping | Production services |
+|                      | `loadEnv()`         | `ConfigService`    | `createConfigService()` |
+| -------------------- | ------------------- | ------------------ | ----------------------- |
+| **Type safety**      | Full                | None (manual cast) | Full                    |
+| **DI injectable**    | No                  | Yes                | Yes                     |
+| **Key autocomplete** | Yes                 | No                 | Yes                     |
+| **Best for**         | Module-scope access | Quick prototyping  | Production services     |
 
 ### Available Methods
 
 Both `ConfigService` and `createConfigService` instances provide:
 
-| Method | Return | Description |
-| --- | --- | --- |
-| `get(key)` | typed value | Get a single env variable by key |
-| `getAll()` | `Readonly<TEnv>` | Get a frozen copy of all config values |
-| `reload()` | `void` | Re-read `.env` and re-validate (for HMR) |
-| `isProduction()` | `boolean` | `NODE_ENV === 'production'` |
-| `isDevelopment()` | `boolean` | `NODE_ENV === 'development'` |
-| `isTest()` | `boolean` | `NODE_ENV === 'test'` |
+| Method            | Return           | Description                              |
+| ----------------- | ---------------- | ---------------------------------------- |
+| `get(key)`        | typed value      | Get a single env variable by key         |
+| `getAll()`        | `Readonly<TEnv>` | Get a frozen copy of all config values   |
+| `reload()`        | `void`           | Re-read `.env` and re-validate (for HMR) |
+| `isProduction()`  | `boolean`        | `NODE_ENV === 'production'`              |
+| `isDevelopment()` | `boolean`        | `NODE_ENV === 'development'`             |
+| `isTest()`        | `boolean`        | `NODE_ENV === 'test'`                    |
 
 ## @Value Decorator
 
 The `@Value` decorator injects an environment variable directly into a class property. It is evaluated lazily -- the value is read from `process.env` at access time, not at decoration time.
 
 ```ts
-import { Service, Value } from '@forinda/kickjs'
+import { Service, Value, type Env } from '@forinda/kickjs'
 
 @Service()
 class MailService {
   @Value('SMTP_HOST', 'localhost')
-  private smtpHost!: string
+  private smtpHost!: Env<'SMTP_HOST'>
 
   @Value('SMTP_PORT', '587')
-  private smtpPort!: string
+  private smtpPort!: Env<'SMTP_PORT'>
 
   @Value('SMTP_API_KEY')
-  private apiKey!: string // throws if SMTP_API_KEY is not set
+  private apiKey!: Env<'SMTP_API_KEY'> // throws if SMTP_API_KEY is not set
 }
 ```
+
+When `kick typegen` has populated the `KickEnv` global from your `src/env.ts`, `@Value` is constrained to known keys (`@Value('NOPE')` becomes a tsc error) and `Env<K>` resolves to the schema's inferred type for that key — so `Env<'PORT'>` is `number` rather than `string`. See [Type Generation](typegen.md#how-env-vars-are-typed) for the full pipeline.
+
+For projects that don't use the env schema, raw string keys still work — `@Value` falls back to accepting any string when `KickEnv` is empty.
 
 If no default is provided and the environment variable is missing, accessing the property throws an error to catch misconfiguration early:
 

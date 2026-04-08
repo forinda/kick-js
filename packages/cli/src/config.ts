@@ -70,6 +70,16 @@ export interface TypegenConfig {
    * @default 'zod'
    */
   schemaValidator?: SchemaValidator
+  /**
+   * Path to the project's env schema file (relative to project root).
+   * Must default-export a `defineEnv(...)` schema for typegen to emit
+   * the typed `KickEnv` global registry.
+   *
+   * Set to `false` to disable env typing entirely.
+   *
+   * @default 'src/env.ts'
+   */
+  envFile?: string | false
 }
 
 /** Module generation settings — controls how `kick g module` produces code */

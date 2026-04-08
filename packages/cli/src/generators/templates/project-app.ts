@@ -122,6 +122,42 @@ export const modules: AppModuleClass[] = [HelloModule]
 `
 }
 
+/**
+ * Generate `src/env.ts` — the project's typed env schema.
+ *
+ * Default-exports a `defineEnv(...)` schema so `kick typegen` can
+ * infer it into the global `KickEnv` registry. After typegen runs:
+ *
+ *   @Value('DATABASE_URL') private url!: Env<'DATABASE_URL'>
+ *   process.env.DATABASE_URL  // typed as string
+ *
+ * Both autocomplete and type-check at compile time.
+ */
+export function generateEnvFile(): string {
+  return `import { defineEnv } from '@forinda/kickjs-config'
+import { z } from 'zod'
+
+/**
+ * Project environment schema.
+ *
+ * Extend the base schema with your application's variables. The
+ * default export is the contract \`kick typegen\` reads to populate
+ * the global \`KickEnv\` registry — that's what makes \`@Value('FOO')\`
+ * autocomplete and \`process.env.FOO\` typed.
+ *
+ * @example
+ *   DATABASE_URL: z.string().url(),
+ *   JWT_SECRET: z.string().min(32),
+ *   REDIS_URL: z.string().url().optional(),
+ */
+export default defineEnv((base) =>
+  base.extend({
+    // DATABASE_URL: z.string().url(),
+  }),
+)
+`
+}
+
 /** Generate src/modules/hello/hello.service.ts */
 export function generateHelloService(): string {
   return `import { Service } from '@forinda/kickjs'

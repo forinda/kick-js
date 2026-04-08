@@ -17,6 +17,7 @@ import {
 } from './templates/project-config'
 import {
   generateEntryFile,
+  generateEnvFile,
   generateModulesIndex,
   generateKickConfig,
   generateHelloService,
@@ -84,6 +85,9 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
   await writeFileSafe(join(dir, '.env'), generateEnv())
 
   await writeFileSafe(join(dir, '.env.example'), generateEnvExample())
+
+  // ── src/env.ts — typed env schema (read by `kick typegen`) ─────────
+  await writeFileSafe(join(dir, 'src/env.ts'), generateEnvFile())
 
   // ── src/index.ts — template-aware entry point ─────────────────────
   await writeFileSafe(join(dir, 'src/index.ts'), generateEntryFile(name, template, cliPkg.version))

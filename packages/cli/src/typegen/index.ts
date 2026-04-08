@@ -16,6 +16,7 @@ export type {
   DiscoveredClass,
   DiscoveredToken,
   DiscoveredInject,
+  DiscoveredEnv,
   ClassCollision,
   ScanResult,
 } from './scanner'
@@ -45,6 +46,13 @@ export interface RunTypegenOptions {
    * `kick.config.ts` `typegen.schemaValidator` when invoked via the CLI.
    */
   schemaValidator?: 'zod' | false
+  /**
+   * Path to the env schema file (relative to `cwd`). The file must
+   * default-export a `defineEnv(...)` schema for the typed `KickEnv`
+   * augmentation to be emitted. Defaults to `'src/env.ts'`. Set to
+   * `false` to disable env typing entirely.
+   */
+  envFile?: string | false
 }
 
 /** Resolve options to absolute paths */
@@ -55,6 +63,7 @@ function resolveOptions(opts: RunTypegenOptions): {
   silent: boolean
   allowDuplicates: boolean
   schemaValidator: 'zod' | false
+  envFile: string | false
 } {
   const cwd = opts.cwd ?? process.cwd()
   return {
@@ -64,6 +73,7 @@ function resolveOptions(opts: RunTypegenOptions): {
     silent: opts.silent ?? false,
     allowDuplicates: opts.allowDuplicates ?? false,
     schemaValidator: opts.schemaValidator ?? false,
+    envFile: opts.envFile ?? 'src/env.ts',
   }
 }
 
@@ -80,16 +90,23 @@ export async function runTypegen(opts: RunTypegenOptions = {}): Promise<{
   scan: ScanResult
   result: GenerateResult
 }> {
-  const { cwd, srcDir, outDir, silent, allowDuplicates, schemaValidator } = resolveOptions(opts)
+  const { cwd, srcDir, outDir, silent, allowDuplicates, schemaValidator, envFile } =
+    resolveOptions(opts)
 
   const start = Date.now()
-  const scan = await scanProject({ root: srcDir, cwd })
+  const scan = await scanProject({
+    root: srcDir,
+    cwd,
+    // Pass through unless explicitly disabled
+    envFile: envFile === false ? undefined : envFile,
+  })
   const result = await generateTypes({
     classes: scan.classes,
     routes: scan.routes,
     tokens: scan.tokens,
     injects: scan.injects,
     collisions: scan.collisions,
+    env: envFile === false ? null : scan.env,
     outDir,
     allowDuplicates,
     schemaValidator,
@@ -100,8 +117,9 @@ export async function runTypegen(opts: RunTypegenOptions = {}): Promise<{
     const where = outDir.replace(cwd + '/', '')
     const collisionNote =
       result.resolvedCollisions > 0 ? `, ${result.resolvedCollisions} collisions namespaced` : ''
+    const envNote = result.envWritten ? ', env typed' : ''
     console.log(
-      `  kick typegen → ${result.serviceTokens} services, ${result.routeEntries} routes, ${result.moduleTokens} modules${collisionNote} → ${where} (${elapsed}ms)`,
+      `  kick typegen → ${result.serviceTokens} services, ${result.routeEntries} routes, ${result.moduleTokens} modules${envNote}${collisionNote} → ${where} (${elapsed}ms)`,
     )
   }
 

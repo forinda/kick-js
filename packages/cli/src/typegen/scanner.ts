@@ -134,6 +134,20 @@ export interface ClassCollision {
   classes: DiscoveredClass[]
 }
 
+/**
+ * Information about a discovered env schema file. The typegen
+ * generator uses this to emit a `KickEnv` + `NodeJS.ProcessEnv`
+ * augmentation that flows through to `@Value` and `process.env`.
+ *
+ * `null` means no env file was found at the configured location.
+ */
+export interface DiscoveredEnv {
+  /** Absolute path to the env schema file */
+  filePath: string
+  /** Path relative to scan root, with forward slashes */
+  relativePath: string
+}
+
 /** Aggregated scanner output */
 export interface ScanResult {
   classes: DiscoveredClass[]
@@ -141,6 +155,8 @@ export interface ScanResult {
   tokens: DiscoveredToken[]
   injects: DiscoveredInject[]
   collisions: ClassCollision[]
+  /** Discovered env schema file (or null if none found at the configured path) */
+  env: DiscoveredEnv | null
 }
 
 /** Options for the scanner */
@@ -153,6 +169,14 @@ export interface ScanOptions {
   extensions?: string[]
   /** Substrings that exclude a path (matched against relative path) */
   exclude?: string[]
+  /**
+   * Path to the env schema file, relative to `cwd`. Defaults to
+   * `'src/env.ts'`. The file must contain a `defineEnv(...)` call
+   * with a default export for the typegen to emit a typed `KickEnv`
+   * augmentation. If the file does not exist or doesn't match the
+   * expected shape, env typing is skipped silently.
+   */
+  envFile?: string
 }
 
 const DEFAULT_EXTENSIONS = ['.ts', '.tsx', '.mts', '.cts']
@@ -569,6 +593,38 @@ export function extractInjectsFromSource(
   return out
 }
 
+/**
+ * Look for an env schema file at `<cwd>/<envFile>`. Returns a
+ * `DiscoveredEnv` if the file exists and contains both a
+ * `defineEnv(...)` call and a default export — the two markers we
+ * need before it's safe to emit `import type schema from '...'` in
+ * the generator.
+ *
+ * Returns `null` for any other state (file missing, no defineEnv, no
+ * default export) so the generator skips env typing silently. Users
+ * who want env typing must opt in by writing `src/env.ts` to the
+ * documented shape.
+ */
+export async function detectEnvFile(cwd: string, envFile: string): Promise<DiscoveredEnv | null> {
+  const abs = resolve(cwd, envFile)
+  let source: string
+  try {
+    source = await readFile(abs, 'utf-8')
+  } catch {
+    return null
+  }
+  // Cheap heuristic: defineEnv(...) call AND a default export.
+  // We don't try to evaluate the file — the generator emits an
+  // `import type schema from '...'` and lets the user's tsc do the
+  // actual schema-to-type inference.
+  if (!/\bdefineEnv\s*\(/.test(source)) return null
+  if (!/export\s+default\b/.test(source)) return null
+  return {
+    filePath: abs,
+    relativePath: toRelative(abs, cwd),
+  }
+}
+
 /** Detect duplicate class names across files */
 export function findCollisions(classes: DiscoveredClass[]): ClassCollision[] {
   const groups = new Map<string, DiscoveredClass[]>()
@@ -644,6 +700,7 @@ export async function scanProject(opts: ScanOptions): Promise<ScanResult> {
   )
 
   const collisions = findCollisions(classes)
+  const env = await detectEnvFile(opts.cwd, opts.envFile ?? 'src/env.ts')
 
-  return { classes, routes, tokens, injects, collisions }
+  return { classes, routes, tokens, injects, collisions, env }
 }

@@ -19,6 +19,7 @@ interface TypegenCliOptions {
   silent?: boolean
   allowDuplicates?: boolean
   schemaValidator?: string
+  envFile?: string
 }
 
 /**
@@ -37,6 +38,17 @@ function parseSchemaValidatorFlag(value: string | undefined): 'zod' | false | un
   return undefined
 }
 
+/**
+ * Parse the `--env-file` CLI flag. Returns `undefined` to fall through
+ * to the config default, `false` when the user disables env typing
+ * with `--env-file false`, or the literal path string otherwise.
+ */
+function parseEnvFileFlag(value: string | undefined): string | false | undefined {
+  if (value === undefined) return undefined
+  if (value === 'false' || value === 'off' || value === 'none') return false
+  return value
+}
+
 export function registerTypegenCommand(program: Command): void {
   program
     .command('typegen')
@@ -53,6 +65,10 @@ export function registerTypegenCommand(program: Command): void {
       '--schema-validator <name>',
       "Schema validator for body/query/params typing (currently 'zod' or 'false')",
     )
+    .option(
+      '--env-file <path>',
+      "Path to env schema file for KickEnv typing (default 'src/env.ts'; pass 'false' to disable)",
+    )
     .action(async (opts: TypegenCliOptions) => {
       const cwd = process.cwd()
 
@@ -60,6 +76,7 @@ export function registerTypegenCommand(program: Command): void {
       const config = await loadKickConfig(cwd)
       const cliValidator = parseSchemaValidatorFlag(opts.schemaValidator)
       const schemaValidator = cliValidator ?? config?.typegen?.schemaValidator ?? 'zod'
+      const envFile = parseEnvFileFlag(opts.envFile) ?? config?.typegen?.envFile
 
       const baseOpts = {
         cwd,
@@ -68,6 +85,7 @@ export function registerTypegenCommand(program: Command): void {
         silent: opts.silent,
         allowDuplicates: opts.allowDuplicates,
         schemaValidator,
+        envFile,
       }
 
       try {

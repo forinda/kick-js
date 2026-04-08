@@ -29,11 +29,13 @@ async function startDevServer(_entry: string, port?: string): Promise<void> {
   const cwd = process.cwd()
   const devConfig = await loadKickConfig(cwd)
   const schemaValidator = devConfig?.typegen?.schemaValidator ?? 'zod'
+  const envFile = devConfig?.typegen?.envFile
   try {
     await runTypegen({
       cwd,
       allowDuplicates: true,
       schemaValidator,
+      envFile,
       srcDir: devConfig?.typegen?.srcDir,
       outDir: devConfig?.typegen?.outDir,
     })
@@ -70,6 +72,7 @@ async function startDevServer(_entry: string, port?: string): Promise<void> {
         silent: true,
         allowDuplicates: true,
         schemaValidator,
+        envFile,
         srcDir: devConfig?.typegen?.srcDir,
         outDir: devConfig?.typegen?.outDir,
       }).catch(() => {})

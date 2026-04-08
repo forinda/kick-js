@@ -34,6 +34,7 @@ import { dirname, join, relative, resolve, sep } from 'node:path'
 import type {
   ClassCollision,
   DiscoveredClass,
+  DiscoveredEnv,
   DiscoveredInject,
   DiscoveredRoute,
   DiscoveredToken,
@@ -164,18 +165,19 @@ ${sorted.map((n) => `  | '${n}'`).join('\n')}
 }
 
 /** Render the barrel index that re-exports the union types */
-function renderIndex(): string {
+function renderIndex(includeEnv: boolean): string {
+  const envImport = includeEnv ? "import './env'\n" : ''
   return `${HEADER}
 export type { ServiceToken } from './services'
 export type { ModuleToken } from './modules'
 
-// The registry + routes augmentations are loaded as side-effects —
+// The registry, routes, and env augmentations are loaded as side-effects —
 // importing this file (or having it on tsconfig include) is enough for
-// \`container.resolve()\` to pick up the typed overload AND for
-// \`Ctx<KickRoutes.UserController['getUser']>\` to resolve.
+// \`container.resolve()\`, \`Ctx<KickRoutes.UserController['getUser']>\`,
+// and \`@Value('PORT')\` to resolve.
 import './registry'
 import './routes'
-`
+${envImport}`
 }
 
 /**
@@ -298,6 +300,62 @@ function resolveSchemaImportSpecifier(
 }
 
 /**
+ * Render the `KickEnv` + `NodeJS.ProcessEnv` augmentation file from a
+ * detected env schema. Mirrors the routes.ts pattern: emits as a `.ts`
+ * file (not `.d.ts`) so the top-level `import type schema from '...'`
+ * actually resolves under `moduleResolution: 'bundler'`.
+ *
+ * Returns `null` when no env file was discovered, so the caller can
+ * skip writing the file altogether (rather than emitting an empty
+ * augmentation that would shadow `KickEnv` to a useless `{}`).
+ */
+function renderEnv(env: DiscoveredEnv | null, envOutFile: string): string | null {
+  if (!env) return null
+  // Compute the relative import path from .kickjs/types/env.ts back
+  // to the user's env schema file, stripping the extension so TS can
+  // resolve it.
+  const envOutDir = dirname(envOutFile)
+  let rel = relative(envOutDir, env.filePath).split(sep).join('/')
+  rel = rel.replace(/\.(ts|tsx|mts|cts)$/i, '')
+  if (!rel.startsWith('.')) rel = './' + rel
+
+  return `${HEADER}
+// Importing the schema as a type lets us infer its shape without
+// pulling in any runtime code. \`Awaited<>\` strips an accidental
+// Promise wrap on dynamic-imported defaults.
+import type _envSchema from '${rel}'
+
+// Local type alias — interfaces can only \`extend\` an identifier,
+// not an inline import expression, so we resolve the schema's
+// inferred shape into a named type first.
+type _KickEnvShape = import('zod').infer<typeof _envSchema>
+
+declare global {
+  /**
+   * Typed environment registry. Augmented from \`${env.relativePath}\`
+   * so \`@Value('PORT')\`, \`Env<'PORT'>\`, and \`process.env.PORT\` are
+   * all type-safe and autocomplete.
+   */
+  interface KickEnv extends _KickEnvShape {}
+
+  // eslint-disable-next-line @typescript-eslint/no-namespace
+  namespace NodeJS {
+    /**
+     * Narrow \`process.env\` so known keys exist as \`string\` (the raw
+     * pre-Zod-coercion form). \`@Value\` and the \`ConfigService\` apply
+     * the schema's transforms internally; access \`process.env\` directly
+     * only when you need the raw string. Unknown keys still resolve to
+     * \`string | undefined\` via the base @types/node declaration.
+     */
+    interface ProcessEnv extends Record<keyof KickEnv, string> {}
+  }
+}
+
+export {}
+`
+}
+
+/**
  * Render the `KickRoutes` global namespace augmentation. Each interface
  * inside corresponds to a controller class; each property is a single
  * route method on that controller, conforming to `RouteShape`.
@@ -415,6 +473,8 @@ export interface GenerateResult {
   moduleTokens: number
   /** Number of route entries written into KickRoutes */
   routeEntries: number
+  /** Whether a typed env augmentation was emitted */
+  envWritten: boolean
   /** Files that were written */
   written: string[]
   /** Number of collisions that were auto-namespaced (only > 0 with allowDuplicates) */
@@ -433,6 +493,8 @@ export interface GenerateOptions {
   injects?: DiscoveredInject[]
   /** Detected duplicate class names from the scanner */
   collisions?: ClassCollision[]
+  /** Discovered env schema file (or null if none) */
+  env?: DiscoveredEnv | null
   /** Output directory (typically `<cwd>/.kickjs/types`) */
   outDir: string
   /**
@@ -461,6 +523,7 @@ export async function generateTypes(opts: GenerateOptions): Promise<GenerateResu
     tokens = [],
     injects = [],
     collisions = [],
+    env = null,
     outDir,
     allowDuplicates = false,
     schemaValidator = false,
@@ -482,6 +545,8 @@ export async function generateTypes(opts: GenerateOptions): Promise<GenerateResu
   // produces a proper type. The file contains only type declarations
   // so it has zero runtime impact.
   const routesFile = join(outDir, 'routes.ts')
+  // env.ts (same .ts vs .d.ts story as routes.ts)
+  const envFile = join(outDir, 'env.ts')
   const indexFile = join(outDir, 'index.d.ts')
 
   const collidingNames = new Set(collisions.map((c) => c.className))
@@ -508,15 +573,21 @@ export async function generateTypes(opts: GenerateOptions): Promise<GenerateResu
     modules,
     '(no @Module classes discovered — `kick g module <name>` to add one)',
   )
-  const indexContent = renderIndex()
-
   const routesContent = renderRoutes(routes, routesFile, schemaValidator)
+  const envContent = renderEnv(env, envFile)
+  const indexContent = renderIndex(envContent !== null)
 
   await writeFile(registryFile, registryContent, 'utf-8')
   await writeFile(servicesFile, servicesContent, 'utf-8')
   await writeFile(modulesFile, modulesContent, 'utf-8')
   await writeFile(routesFile, routesContent, 'utf-8')
   await writeFile(indexFile, indexContent, 'utf-8')
+
+  const written = [registryFile, servicesFile, modulesFile, routesFile, indexFile]
+  if (envContent) {
+    await writeFile(envFile, envContent, 'utf-8')
+    written.push(envFile)
+  }
 
   // Write `.gitignore` at the .kickjs root (one level up from outDir)
   const kickjsRoot = dirname(outDir)
@@ -527,7 +598,8 @@ export async function generateTypes(opts: GenerateOptions): Promise<GenerateResu
     serviceTokens: new Set(allServices).size,
     moduleTokens: modules.length,
     routeEntries: routes.length,
-    written: [registryFile, servicesFile, modulesFile, routesFile, indexFile],
+    envWritten: envContent !== null,
+    written,
     resolvedCollisions: collisions.length,
   }
 }

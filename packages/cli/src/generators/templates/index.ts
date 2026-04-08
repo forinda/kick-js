@@ -25,4 +25,9 @@ export {
 } from './cqrs'
 export { generateDrizzleRepository, generateDrizzleConstants } from './drizzle'
 export { generatePrismaRepository } from './prisma'
-export { generateHelloService, generateHelloController, generateHelloModule } from './project-app'
+export {
+  generateHelloService,
+  generateHelloController,
+  generateHelloModule,
+  generateEnvFile,
+} from './project-app'
