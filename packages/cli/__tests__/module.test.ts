@@ -57,6 +57,18 @@ describe('kick g module', () => {
     expect(content).toContain("from './tasks'")
   })
 
+  it('emits a collision-safe createToken for the repository token', () => {
+    runCli(fixture, ['g', 'module', 'task'])
+
+    const repoInterface = readFileSync(
+      join(fixture, 'src/modules/tasks/domain/repositories/task.repository.ts'),
+      'utf-8',
+    )
+    expect(repoInterface).toContain("import { createToken } from '@forinda/kickjs'")
+    expect(repoInterface).toContain('createToken<ITaskRepository>(')
+    expect(repoInterface).not.toContain("Symbol('ITaskRepository')")
+  })
+
   it('passes tsc --noEmit', () => {
     runCli(fixture, ['g', 'module', 'task'])
     const tsc = runTsc(fixture)

@@ -11,6 +11,7 @@ export function generateRepositoryInterface(ctx: TemplateContext): string {
  *
  * To swap implementations, change the factory in the module's register() method.
  */
+import { createToken } from '@forinda/kickjs'
 import type { ${pascal}ResponseDTO } from '${dtoPrefix}/${kebab}-response.dto'
 import type { Create${pascal}DTO } from '${dtoPrefix}/create-${kebab}.dto'
 import type { Update${pascal}DTO } from '${dtoPrefix}/update-${kebab}.dto'
@@ -25,7 +26,13 @@ export interface I${pascal}Repository {
   delete(id: string): Promise<void>
 }
 
-export const ${pascal.toUpperCase()}_REPOSITORY = Symbol('I${pascal}Repository')
+/**
+ * Collision-safe DI token bound to \`I${pascal}Repository\`.
+ * \`container.resolve(${pascal.toUpperCase()}_REPOSITORY)\` and
+ * \`@Inject(${pascal.toUpperCase()}_REPOSITORY)\` both return the typed
+ * interface — no manual generic, no \`any\` cast.
+ */
+export const ${pascal.toUpperCase()}_REPOSITORY = createToken<I${pascal}Repository>('${pascal}/Repository')
 `
 }
 

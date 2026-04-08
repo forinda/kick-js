@@ -483,7 +483,8 @@ export class ${pascal}Controller {
 }
 
 function genRepositoryInterface(pascal: string, kebab: string): string {
-  return `import type { ${pascal}ResponseDTO } from '../../application/dtos/${kebab}-response.dto'
+  return `import { createToken } from '@forinda/kickjs'
+import type { ${pascal}ResponseDTO } from '../../application/dtos/${kebab}-response.dto'
 import type { Create${pascal}DTO } from '../../application/dtos/create-${kebab}.dto'
 import type { Update${pascal}DTO } from '../../application/dtos/update-${kebab}.dto'
 import type { ParsedQuery } from '@forinda/kickjs'
@@ -497,7 +498,13 @@ export interface I${pascal}Repository {
   delete(id: string): Promise<void>
 }
 
-export const ${pascal.toUpperCase()}_REPOSITORY = Symbol('I${pascal}Repository')
+/**
+ * Collision-safe DI token bound to \`I${pascal}Repository\`.
+ * \`container.resolve(${pascal.toUpperCase()}_REPOSITORY)\` and
+ * \`@Inject(${pascal.toUpperCase()}_REPOSITORY)\` both return the typed
+ * interface — no manual generic, no \`any\` cast.
+ */
+export const ${pascal.toUpperCase()}_REPOSITORY = createToken<I${pascal}Repository>('${pascal}/Repository')
 `
 }
 

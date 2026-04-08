@@ -92,6 +92,22 @@ describe('kick g scaffold', () => {
     expect(inMemoryRepo).toContain('tags: dto.tags')
   })
 
+  it('emits a collision-safe createToken for the repository token', () => {
+    runCli(fixture, ['g', 'scaffold', 'widget', 'title:string'])
+
+    const repoInterface = readFileSync(
+      join(fixture, 'src/modules/widgets/domain/repositories/widget.repository.ts'),
+      'utf-8',
+    )
+    // Repository token should use createToken<IWidgetRepository>(...) so
+    // container.resolve(WIDGET_REPOSITORY) returns the typed interface,
+    // not `any`. This is the project's standard hardening pattern.
+    expect(repoInterface).toContain("import { createToken } from '@forinda/kickjs'")
+    expect(repoInterface).toContain('createToken<IWidgetRepository>(')
+    // The legacy Symbol() pattern must NOT appear
+    expect(repoInterface).not.toContain("Symbol('IWidgetRepository')")
+  })
+
   it('emits a module index with the correct ModuleRoutes shape', () => {
     runCli(fixture, ['g', 'scaffold', 'widget', 'title:string'])
 
