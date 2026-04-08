@@ -77,6 +77,7 @@ export async function runTypegen(opts: RunTypegenOptions = {}): Promise<{
   const scan = await scanProject({ root: srcDir, cwd })
   const result = await generateTypes({
     classes: scan.classes,
+    routes: scan.routes,
     tokens: scan.tokens,
     injects: scan.injects,
     collisions: scan.collisions,
@@ -90,7 +91,7 @@ export async function runTypegen(opts: RunTypegenOptions = {}): Promise<{
     const collisionNote =
       result.resolvedCollisions > 0 ? `, ${result.resolvedCollisions} collisions namespaced` : ''
     console.log(
-      `  kick typegen → ${result.serviceTokens} services, ${result.moduleTokens} modules${collisionNote} → ${where} (${elapsed}ms)`,
+      `  kick typegen → ${result.serviceTokens} services, ${result.routeEntries} routes, ${result.moduleTokens} modules${collisionNote} → ${where} (${elapsed}ms)`,
     )
   }
 

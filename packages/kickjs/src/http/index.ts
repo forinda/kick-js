@@ -5,7 +5,7 @@ export { Application, type ApplicationOptions, type MiddlewareEntry } from './ap
 export { bootstrap } from './bootstrap'
 
 // Request Context
-export { RequestContext } from './context'
+export { RequestContext, type Ctx, type RouteShape } from './context'
 
 // Router Builder
 export { buildRoutes, getControllerPath } from './router-builder'

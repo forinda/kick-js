@@ -31,7 +31,13 @@
 
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, join, relative, sep } from 'node:path'
-import type { ClassCollision, DiscoveredClass, DiscoveredInject, DiscoveredToken } from './scanner'
+import type {
+  ClassCollision,
+  DiscoveredClass,
+  DiscoveredInject,
+  DiscoveredRoute,
+  DiscoveredToken,
+} from './scanner'
 
 /** Header written to every generated file */
 const HEADER = `/* eslint-disable */
@@ -163,10 +169,80 @@ function renderIndex(): string {
 export type { ServiceToken } from './services'
 export type { ModuleToken } from './modules'
 
-// The registry augmentation is loaded as a side-effect — importing this
-// file (or having it on tsconfig include) is enough for \`container.resolve()\`
-// to pick up the typed overload.
+// The registry + routes augmentations are loaded as side-effects —
+// importing this file (or having it on tsconfig include) is enough for
+// \`container.resolve()\` to pick up the typed overload AND for
+// \`Ctx<KickRoutes.UserController['getUser']>\` to resolve.
 import './registry'
+import './routes'
+`
+}
+
+/**
+ * Render the `KickRoutes` global namespace augmentation. Each interface
+ * inside corresponds to a controller class; each property is a single
+ * route method on that controller, conforming to `RouteShape`.
+ *
+ * Phase A only fills `params` (from URL pattern). `body`, `query`, and
+ * `response` are emitted as `unknown` placeholders that later phases
+ * narrow as more information becomes available (Phase B = ApiQueryParams,
+ * Phase C = schema adapter system).
+ */
+function renderRoutes(routes: DiscoveredRoute[]): string {
+  if (routes.length === 0) {
+    return `${HEADER}
+// (no routes discovered yet — annotate a controller method with
+//  @Get/@Post/@Put/@Delete/@Patch and re-run \`kick typegen\`)
+declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
+  namespace KickRoutes {}
+}
+
+export {}
+`
+  }
+
+  // Group routes by controller for emission
+  const byController = new Map<string, DiscoveredRoute[]>()
+  for (const r of routes) {
+    const arr = byController.get(r.controller) ?? []
+    arr.push(r)
+    byController.set(r.controller, arr)
+  }
+
+  const interfaces: string[] = []
+  for (const [controller, methods] of byController) {
+    const lines: string[] = [`    interface ${controller} {`]
+    for (const m of methods) {
+      // Empty `{}` (rather than `Record<string, never>`) so that accessing
+      // an unknown property on a paramless route is a type error in strict
+      // mode. `Record<string, never>` returns `never` for any access which
+      // unfortunately is assignable to anything and silently passes.
+      const paramsType =
+        m.pathParams.length > 0 ? `{ ${m.pathParams.map((p) => `${p}: string`).join('; ')} }` : '{}'
+      lines.push(
+        `      /** ${m.httpMethod} ${m.path} */`,
+        `      ${m.method}: {`,
+        `        params: ${paramsType}`,
+        `        body: unknown`,
+        `        query: unknown`,
+        `        response: unknown`,
+        `      }`,
+      )
+    }
+    lines.push('    }')
+    interfaces.push(lines.join('\n'))
+  }
+
+  return `${HEADER}
+declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
+  namespace KickRoutes {
+${interfaces.join('\n')}
+  }
+}
+
+export {}
 `
 }
 
@@ -178,6 +254,8 @@ export interface GenerateResult {
   serviceTokens: number
   /** Number of module tokens written */
   moduleTokens: number
+  /** Number of route entries written into KickRoutes */
+  routeEntries: number
   /** Files that were written */
   written: string[]
   /** Number of collisions that were auto-namespaced (only > 0 with allowDuplicates) */
@@ -188,6 +266,8 @@ export interface GenerateResult {
 export interface GenerateOptions {
   /** Discovered classes from the scanner */
   classes: DiscoveredClass[]
+  /** Discovered route handlers from the scanner */
+  routes?: DiscoveredRoute[]
   /** Discovered `createToken('name')` calls */
   tokens?: DiscoveredToken[]
   /** Discovered `@Inject('literal')` calls */
@@ -207,6 +287,7 @@ export interface GenerateOptions {
 export async function generateTypes(opts: GenerateOptions): Promise<GenerateResult> {
   const {
     classes,
+    routes = [],
     tokens = [],
     injects = [],
     collisions = [],
@@ -223,6 +304,7 @@ export async function generateTypes(opts: GenerateOptions): Promise<GenerateResu
   const registryFile = join(outDir, 'registry.d.ts')
   const servicesFile = join(outDir, 'services.d.ts')
   const modulesFile = join(outDir, 'modules.d.ts')
+  const routesFile = join(outDir, 'routes.d.ts')
   const indexFile = join(outDir, 'index.d.ts')
 
   const collidingNames = new Set(collisions.map((c) => c.className))
@@ -251,9 +333,12 @@ export async function generateTypes(opts: GenerateOptions): Promise<GenerateResu
   )
   const indexContent = renderIndex()
 
+  const routesContent = renderRoutes(routes)
+
   await writeFile(registryFile, registryContent, 'utf-8')
   await writeFile(servicesFile, servicesContent, 'utf-8')
   await writeFile(modulesFile, modulesContent, 'utf-8')
+  await writeFile(routesFile, routesContent, 'utf-8')
   await writeFile(indexFile, indexContent, 'utf-8')
 
   // Write `.gitignore` at the .kickjs root (one level up from outDir)
@@ -264,7 +349,8 @@ export async function generateTypes(opts: GenerateOptions): Promise<GenerateResu
     registryEntries: classTokens.length,
     serviceTokens: new Set(allServices).size,
     moduleTokens: modules.length,
-    written: [registryFile, servicesFile, modulesFile, indexFile],
+    routeEntries: routes.length,
+    written: [registryFile, servicesFile, modulesFile, routesFile, indexFile],
     resolvedCollisions: collisions.length,
   }
 }

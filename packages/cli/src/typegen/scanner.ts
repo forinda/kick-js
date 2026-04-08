@@ -55,6 +55,24 @@ export interface DiscoveredClass {
   isDefault: boolean
 }
 
+/** A single route handler discovered on a controller class */
+export interface DiscoveredRoute {
+  /** Owning controller class name (e.g. 'UserController') */
+  controller: string
+  /** Handler method name on the controller (e.g. 'getUser') */
+  method: string
+  /** HTTP verb (uppercase) */
+  httpMethod: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
+  /** Route path including parameter placeholders (e.g. '/:id/posts/:postId') */
+  path: string
+  /** URL path parameter names extracted from `:placeholder` segments */
+  pathParams: string[]
+  /** Absolute file path of the controller */
+  filePath: string
+  /** Path relative to scan root, with forward slashes */
+  relativePath: string
+}
+
 /** A `createToken<T>('name')` call discovered in source */
 export interface DiscoveredToken {
   /** The literal string passed to `createToken()` */
@@ -88,6 +106,7 @@ export interface ClassCollision {
 /** Aggregated scanner output */
 export interface ScanResult {
   classes: DiscoveredClass[]
+  routes: DiscoveredRoute[]
   tokens: DiscoveredToken[]
   injects: DiscoveredInject[]
   collisions: ClassCollision[]
@@ -135,6 +154,37 @@ const BARE_CREATE_TOKEN_REGEX = /createToken\s*(?:<[^>]*>)?\s*\(\s*['"`]([^'"`]+
 
 /** Match `@Inject('literal')` — only literals; computed args are skipped */
 const INJECT_LITERAL_REGEX = /@Inject\s*\(\s*['"`]([^'"`]+)['"`]\s*\)/g
+
+/** HTTP route decorator names recognised by the scanner */
+const HTTP_DECORATORS = ['Get', 'Post', 'Put', 'Delete', 'Patch'] as const
+
+/**
+ * Match a route decorator immediately followed by a method declaration.
+ * Captures the HTTP verb, path literal (or empty), and method name.
+ *
+ * Tolerates:
+ * - Optional second arg to the route decorator (`@Get('/path', { ... })`)
+ * - Stacked decorators between the route and the method (`@Get('/') @Use(...)`)
+ * - Path-less decorators (`@Get()` → defaults to `/`)
+ * - `async` modifier on the method
+ *
+ * Run within a class body slice (see extractRoutesFromSource) so the
+ * captured method name is unambiguously a method on that class.
+ */
+const ROUTE_METHOD_REGEX = new RegExp(
+  String.raw`@(${HTTP_DECORATORS.join('|')})\s*\(` +
+    String.raw`(?:\s*['"\`]([^'"\`]*)['"\`])?[^)]*\)` +
+    String.raw`(?:\s*@[A-Z]\w*(?:\s*\([^)]*\))?)*` +
+    String.raw`\s*(?:public\s+|private\s+|protected\s+)?(?:async\s+)?` +
+    String.raw`([a-zA-Z_]\w*)\s*\(`,
+  'g',
+)
+
+/** Extract `:placeholder` segments from an Express route path */
+function extractPathParams(path: string): string[] {
+  const matches = path.match(/:([a-zA-Z_]\w*)/g) ?? []
+  return matches.map((m) => m.slice(1))
+}
 
 /** Recursively walk a directory and yield matching file paths */
 async function walk(dir: string, opts: ScanOptions): Promise<string[]> {
@@ -231,6 +281,63 @@ export function extractTokensFromSource(
   return out
 }
 
+/**
+ * Extract route handlers from a source file.
+ *
+ * For each decorated class in `classesInFile`, slices the source from
+ * the class declaration to the next class (or EOF) and runs the route
+ * decorator regex within that slice. The result is a list of routes
+ * tagged with their owning controller.
+ *
+ * Heuristic note: this assumes classes are not nested. KickJS controllers
+ * are top-level by convention so this holds in practice.
+ */
+export function extractRoutesFromSource(
+  source: string,
+  filePath: string,
+  cwd: string,
+  classesInFile: DiscoveredClass[],
+): DiscoveredRoute[] {
+  const out: DiscoveredRoute[] = []
+  if (classesInFile.length === 0) return out
+  const relPath = toRelative(filePath, cwd)
+
+  // Locate each class declaration's offset in the source
+  const positions: Array<{ cls: DiscoveredClass; start: number }> = []
+  for (const cls of classesInFile) {
+    const re = new RegExp(String.raw`class\s+${cls.className}\b`)
+    const m = re.exec(source)
+    if (m?.index !== undefined) {
+      positions.push({ cls, start: m.index })
+    }
+  }
+  positions.sort((a, b) => a.start - b.start)
+
+  for (let i = 0; i < positions.length; i++) {
+    const { cls, start } = positions[i]
+    const end = i + 1 < positions.length ? positions[i + 1].start : source.length
+    const block = source.slice(start, end)
+
+    ROUTE_METHOD_REGEX.lastIndex = 0
+    let match: RegExpExecArray | null
+    while ((match = ROUTE_METHOD_REGEX.exec(block)) !== null) {
+      const [, verb, pathLiteral, methodName] = match
+      const path = pathLiteral && pathLiteral.length > 0 ? pathLiteral : '/'
+      out.push({
+        controller: cls.className,
+        method: methodName,
+        httpMethod: verb.toUpperCase() as DiscoveredRoute['httpMethod'],
+        path,
+        pathParams: extractPathParams(path),
+        filePath,
+        relativePath: relPath,
+      })
+    }
+  }
+
+  return out
+}
+
 /** Extract `@Inject('literal')` calls from a single source file */
 export function extractInjectsFromSource(
   source: string,
@@ -282,9 +389,14 @@ export async function scanProject(opts: ScanOptions): Promise<ScanResult> {
   const files = await walk(root, opts)
 
   const classes: DiscoveredClass[] = []
+  const routes: DiscoveredRoute[] = []
   const tokens: DiscoveredToken[] = []
   const injects: DiscoveredInject[] = []
 
+  // Two passes: first collect all classes, then a second pass extracts
+  // routes per file using the per-file class list as scoping context.
+  // This keeps class discovery and route discovery independent.
+  const sources = new Map<string, string>()
   for (const file of files) {
     let source: string
     try {
@@ -292,9 +404,15 @@ export async function scanProject(opts: ScanOptions): Promise<ScanResult> {
     } catch {
       continue
     }
+    sources.set(file, source)
     classes.push(...extractClassesFromSource(source, file, opts.cwd))
     tokens.push(...extractTokensFromSource(source, file, opts.cwd))
     injects.push(...extractInjectsFromSource(source, file, opts.cwd))
+  }
+
+  for (const [file, source] of sources) {
+    const classesInFile = classes.filter((c) => c.filePath === file)
+    routes.push(...extractRoutesFromSource(source, file, opts.cwd, classesInFile))
   }
 
   // Deterministic ordering for stable .d.ts output
@@ -308,8 +426,11 @@ export async function scanProject(opts: ScanOptions): Promise<ScanResult> {
   injects.sort(
     (a, b) => a.name.localeCompare(b.name) || a.relativePath.localeCompare(b.relativePath),
   )
+  routes.sort(
+    (a, b) => a.controller.localeCompare(b.controller) || a.method.localeCompare(b.method),
+  )
 
   const collisions = findCollisions(classes)
 
-  return { classes, tokens, injects, collisions }
+  return { classes, routes, tokens, injects, collisions }
 }

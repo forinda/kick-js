@@ -16,7 +16,7 @@ export { bootstrap } from './http/bootstrap'
 // Cluster
 export { isClusterPrimary, type ClusterOptions } from './http/cluster'
 
-export { RequestContext } from './http/context'
+export { RequestContext, type Ctx, type RouteShape } from './http/context'
 
 export { buildRoutes, getControllerPath } from './http/router-builder'
 
