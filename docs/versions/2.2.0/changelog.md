@@ -8,14 +8,14 @@ All notable changes to KickJS are documented here.
 
 - feat: add v3 preview for the new APIs ([c36fffc](https://github.com/forinda/kick-js/commit/c36fffc3fa6febc28002bc31fd9e5294b627a02b)) — [@Felix Orinda](https://github.com/Felix Orinda)
 - feat(config): defineEnv always merges base schema ([118e84e](https://github.com/forinda/kick-js/commit/118e84e69a946c85d28460ac5cb89e8e860deb9c)) — [@Felix Orinda](https://github.com/Felix Orinda)
-- feat(cli): scaffolds emit createToken<T> for repository tokens ([377fd6f](https://github.com/forinda/kick-js/commit/377fd6f272f943bbfcbc1dd0e7d77e1467fde03b)) — [@Felix Orinda](https://github.com/Felix Orinda)
+- feat(cli): scaffolds emit createToken&lt;T&gt; for repository tokens ([377fd6f](https://github.com/forinda/kick-js/commit/377fd6f272f943bbfcbc1dd0e7d77e1467fde03b)) — [@Felix Orinda](https://github.com/Felix Orinda)
 - feat(config): ConfigService consumes KickEnv (no createConfigService needed) ([ff0d0c0](https://github.com/forinda/kick-js/commit/ff0d0c05e26e925117023e1847d316e7aeaf1090)) — [@Felix Orinda](https://github.com/Felix Orinda)
 - feat: typed @Value + KickEnv from src/env.ts via typegen ([c85acc2](https://github.com/forinda/kick-js/commit/c85acc2335ea1961cbc93ad4851a266ff756de02)) — [@Felix Orinda](https://github.com/Felix Orinda)
-- feat(cli, docs): scaffolds use Ctx<KickRoutes...> + typegen guide ([2c1bcb7](https://github.com/forinda/kick-js/commit/2c1bcb79802850421772b4baf8eaa041c553772a)) — [@Felix Orinda](https://github.com/Felix Orinda)
+- feat(cli, docs): scaffolds use Ctx&lt;KickRoutes...&gt; + typegen guide ([2c1bcb7](https://github.com/forinda/kick-js/commit/2c1bcb79802850421772b4baf8eaa041c553772a)) — [@Felix Orinda](https://github.com/Felix Orinda)
 - feat: typed body via Zod schemas (typegen.schemaValidator) ([31d66dc](https://github.com/forinda/kick-js/commit/31d66dcb0b390abd3f26fd8843d3a72585f0899b)) — [@Felix Orinda](https://github.com/Felix Orinda)
-- feat: typed ctx.qs<TConfig>() + @ApiQueryParams typegen ([bef8152](https://github.com/forinda/kick-js/commit/bef81527c127b7a9ddd1bdeb29d5b3efd4f686ae)) — [@Felix Orinda](https://github.com/Felix Orinda)
+- feat: typed ctx.qs&lt;TConfig&gt;() + @ApiQueryParams typegen ([bef8152](https://github.com/forinda/kick-js/commit/bef81527c127b7a9ddd1bdeb29d5b3efd4f686ae)) — [@Felix Orinda](https://github.com/Felix Orinda)
 - feat: typed RequestContext + URL pattern param typegen ([74c1e68](https://github.com/forinda/kick-js/commit/74c1e6861b7eef0987f3187122e0f845001b4ef0)) — [@Felix Orinda](https://github.com/Felix Orinda)
-- feat: add createToken<T> for collision-safe DI tokens ([068ff45](https://github.com/forinda/kick-js/commit/068ff45da1738f0d3f6dc0533d3e8f62594d9f26)) — [@Felix Orinda](https://github.com/Felix Orinda)
+- feat: add createToken&lt;T&gt; for collision-safe DI tokens ([068ff45](https://github.com/forinda/kick-js/commit/068ff45da1738f0d3f6dc0533d3e8f62594d9f26)) — [@Felix Orinda](https://github.com/Felix Orinda)
 - feat: add static typegen for type-safe DI resolution ([17e5a33](https://github.com/forinda/kick-js/commit/17e5a3345dcee34ae19ad4d1bdea148aeef0169d)) — [@Felix Orinda](https://github.com/Felix Orinda)
 
 ## Bug Fixes
@@ -29,7 +29,7 @@ All notable changes to KickJS are documented here.
 - docs(readme): refresh hello world and example list ([2b42fb2](https://github.com/forinda/kick-js/commit/2b42fb226e394e2fe12adb0711f3b07582add377)) — [@Felix Orinda](https://github.com/Felix Orinda)
 - docs(readmes): refresh kickjs/swagger/config READMEs ([2866d94](https://github.com/forinda/kick-js/commit/2866d94461f53186e96267919967d7b626b123c3)) — [@Felix Orinda](https://github.com/Felix Orinda)
 - docs: replace overflowing token-hardening table with a list ([52acd95](https://github.com/forinda/kick-js/commit/52acd950758176d541eb51c0465ee7ddb2e6583b)) — [@Felix Orinda](https://github.com/Felix Orinda)
-- docs: lead with createToken<T> instead of raw Symbol() for DI tokens ([e977234](https://github.com/forinda/kick-js/commit/e977234c8b5d54fb2fdf79f65381d919603b518b)) — [@Felix Orinda](https://github.com/Felix Orinda)
+- docs: lead with createToken&lt;T&gt; instead of raw Symbol() for DI tokens ([e977234](https://github.com/forinda/kick-js/commit/e977234c8b5d54fb2fdf79f65381d919603b518b)) — [@Felix Orinda](https://github.com/Felix Orinda)
 
 ## Tests
 

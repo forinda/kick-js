@@ -216,12 +216,37 @@ function categorizeCommits(commits) {
   return categories
 }
 
+/**
+ * Escape `<` / `>` in commit messages so VitePress (Vue MD compiler) does not
+ * interpret things like `createToken<T>` or `Ctx<KickRoutes>` as unclosed HTML
+ * tags. We only escape angle brackets that look like a type/generic — anything
+ * already inside backticks is left alone.
+ */
+function escapeForMarkdown(text) {
+  let out = ''
+  let inCode = false
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]
+    if (ch === '`') {
+      inCode = !inCode
+      out += ch
+      continue
+    }
+    if (!inCode && (ch === '<' || ch === '>')) {
+      out += ch === '<' ? '&lt;' : '&gt;'
+      continue
+    }
+    out += ch
+  }
+  return out
+}
+
 function formatCommit(commit) {
   const hashLink = `[${commit.hash}](${REPO_URL}/commit/${commit.fullHash})`
   const authorLink = commit.email.includes('noreply')
     ? `@${commit.author}`
     : `[@${commit.author}](https://github.com/${commit.author})`
-  return `- ${commit.message} (${hashLink}) — ${authorLink}`
+  return `- ${escapeForMarkdown(commit.message)} (${hashLink}) — ${authorLink}`
 }
 
 function generateReleaseNotes(version, fromRef) {
