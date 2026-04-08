@@ -9,6 +9,9 @@ export {
   type KickJsRegistry,
 } from './container'
 
+// Type-safe injection tokens
+export { createToken, isInjectionToken, INJECTION_TOKEN, type InjectionToken } from './token'
+
 // Interfaces & Constants
 export {
   Scope,

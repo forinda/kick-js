@@ -14,6 +14,7 @@ import {
   getMetaRecord,
   getMethodMetaOrUndefined,
 } from './metadata'
+import { isInjectionToken, type InjectionToken } from './token'
 
 const log = createLogger('Container')
 
@@ -49,6 +50,7 @@ function createReg(
 /** Format a token for display in error messages */
 export function tokenName(token: any): string {
   if (typeof token === 'symbol') return token.toString()
+  if (isInjectionToken(token)) return token.name
   return token?.name || String(token)
 }
 
@@ -351,16 +353,19 @@ export class Container {
   /**
    * Resolve a dependency by its token.
    *
-   * Three overloads:
-   * - **String token in `KickJsRegistry`** (populated by `kick typegen`) →
-   *   returns the augmented type.
+   * Four overloads, in order of preference:
+   * - **`InjectionToken<T>`** (from `createToken<T>(name)`) → returns `T`.
+   *   Collision-safe by construction; no codegen required.
    * - **Class constructor** → returns an instance of that class. Always
    *   type-safe; no codegen required.
-   * - **Anything else** → returns `any`. Use this for legacy code or for
+   * - **String token in `KickJsRegistry`** (populated by `kick typegen`) →
+   *   returns the augmented type.
+   * - **Anything else** → returns `any`. Use this only for legacy code or
    *   string tokens that haven't been registered with typegen yet.
    */
-  resolve<K extends keyof KickJsRegistry & string>(token: K): KickJsRegistry[K]
+  resolve<T>(token: InjectionToken<T>): T
   resolve<T>(token: Constructor<T>): T
+  resolve<K extends keyof KickJsRegistry & string>(token: K): KickJsRegistry[K]
   resolve<T = any>(token: any): T
   resolve<T = any>(token: any): T {
     let reg = this.registrations.get(token)
