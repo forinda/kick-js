@@ -14,17 +14,17 @@ function tryReloadEnv(): void {
 const log = createLogger('Process')
 
 /**
- * Bootstrap a KickJS application with zero boilerplate.
+ * Bootstrap a KickJS application.
  *
- * Handles:
- * - Vite HMR (hot-swaps Express handler without restarting the server)
- * - Graceful shutdown on SIGINT / SIGTERM
- * - Global uncaughtException / unhandledRejection handlers
- * - globalThis app storage for HMR rebuild
+ * Creates the Express app, registers modules and adapters, and starts
+ * the HTTP server. In dev mode (`kick dev`), the Vite plugin manages
+ * the server and HMR — source changes are picked up instantly without
+ * losing database connections or WebSocket state. Graceful shutdown
+ * is handled automatically on SIGINT / SIGTERM.
  *
  * @example
  * ```ts
- * // src/index.ts — that's it, the whole file
+ * // src/index.ts
  * import 'reflect-metadata'
  * import { bootstrap } from '@forinda/kickjs-http'
  * import { modules } from './modules'
@@ -33,6 +33,8 @@ const log = createLogger('Process')
  * ```
  */
 export async function bootstrap(options: ApplicationOptions): Promise<void> {
+  // Internal: globalThis stores the app across HMR rebuilds so the
+  // Express handler can be hot-swapped without restarting the server.
   const g = globalThis as any
 
   // ── Global error handlers ────────────────────────────────────────────
@@ -58,7 +60,7 @@ export async function bootstrap(options: ApplicationOptions): Promise<void> {
 
   // ── HMR rebuild ──────────────────────────────────────────────────────
   if (g.__app) {
-    log.info('HMR: Rebuilding application...')
+    log.debug('HMR rebuild triggered')
     tryReloadEnv()
     await g.__app.rebuild()
     return

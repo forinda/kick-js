@@ -260,7 +260,7 @@ export class Application {
   }
 
   async setup(): Promise<void> {
-    log.info('Bootstrapping application...')
+    log.debug('Bootstrapping application...')
 
     // Collect adapter middleware by phase
     const adapterMw = this.collectAdapterMiddleware()
@@ -385,7 +385,7 @@ export class Application {
       }
 
       let totalRoutes = 0
-      log.info('Routes:')
+      log.debug('Routes:')
 
       for (const { controller, mountPath } of mountedRoutes) {
         const defs: RouteDefinition[] = getClassMeta<RouteDefinition[]>(
@@ -407,10 +407,10 @@ export class Application {
           .map(([m, n]) => `${n} ${m}`)
           .join(', ')
         const name = controller.name || 'Controller'
-        log.info(`  ${name.padEnd(30)} ${mountPath.padEnd(25)} ${defs.length} routes (${methods})`)
+        log.debug(`  ${name.padEnd(30)} ${mountPath.padEnd(25)} ${defs.length} routes (${methods})`)
       }
 
-      log.info(`  Total: ${totalRoutes} routes`)
+      log.debug(`  Total: ${totalRoutes} routes`)
     }
 
     // ── 9. Adapter middleware: afterRoutes ────────────────────────────
@@ -450,7 +450,7 @@ export class Application {
       // Don't create a new server or listen — Vite is already listening.
       // Just wire up adapters with the Vite-created server.
       this.httpServer = g.__kickjs_httpServer
-      log.info('Attached to Vite dev server (adapters use Vite httpServer)')
+      log.debug('Attached to Vite dev server')
 
       for (const adapter of this.adapters) {
         const ctx = this.adapterCtx(this.httpServer!)
@@ -528,7 +528,7 @@ export class Application {
     if (this.httpServer) {
       this.httpServer.removeAllListeners('request')
       this.httpServer.on('request', this.app)
-      log.info('HMR: Express app rebuilt and swapped')
+      log.debug('HMR: Express app rebuilt and swapped')
     }
   }
 
@@ -545,13 +545,13 @@ export class Application {
   async shutdown(): Promise<void> {
     // Prevent double-shutdown — return immediately if already initiated
     if (this._shutdownInitiated) {
-      log.info('Shutdown already in progress, skipping duplicate call')
+      log.debug('Shutdown already in progress, skipping duplicate call')
       return
     }
     this._shutdownInitiated = true
     this._draining = true
 
-    log.info('Shutting down — draining in-flight requests...')
+    log.debug('Shutting down — draining in-flight requests...')
 
     const timeoutMs = this.options.shutdownTimeout ?? 30_000
     let timer: ReturnType<typeof setTimeout> | undefined
@@ -576,7 +576,7 @@ export class Application {
 
       // Step 2: Wait for in-flight requests to drain (or timeout)
       if (this._inFlightRequests > 0) {
-        log.info(`Waiting for ${this._inFlightRequests} in-flight request(s) to complete...`)
+        log.debug(`Waiting for ${this._inFlightRequests} in-flight request(s) to complete...`)
         const drainPromise = new Promise<'drained'>((resolve) => {
           this._drainResolvers.push(() => resolve('drained'))
         })
@@ -587,7 +587,7 @@ export class Application {
             `Shutdown timeout (${timeoutMs}ms) reached with ${this._inFlightRequests} request(s) still in-flight, forcing shutdown`,
           )
         } else {
-          log.info('All in-flight requests completed')
+          log.debug('All in-flight requests completed')
         }
       }
 

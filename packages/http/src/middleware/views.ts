@@ -83,6 +83,6 @@ export class ViewAdapter implements AppAdapter {
     app.set('view engine', ext)
     app.set('views', resolve(viewsDir))
 
-    log.info(`View engine: ${ext} (${resolve(viewsDir)})`)
+    log.debug(`View engine: ${ext} (${resolve(viewsDir)})`)
   }
 }

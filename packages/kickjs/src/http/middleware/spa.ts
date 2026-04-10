@@ -144,7 +144,7 @@ export class SpaAdapter implements AppAdapter {
       return
     }
 
-    log.info(`Serving SPA from ${this.clientDir}`)
+    log.debug(`Serving SPA from ${this.clientDir}`)
   }
 
   beforeStart({ app }: AdapterContext): void {

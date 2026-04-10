@@ -16,28 +16,14 @@ function tryReloadEnv(): void {
 const log = createLogger('Process')
 
 /**
- * Bootstrap a KickJS application with zero boilerplate.
+ * Bootstrap a KickJS application.
  *
- * ## Dev Mode (with @forinda/kickjs-vite)
+ * Creates the Express app, registers modules and adapters, and starts
+ * the HTTP server. In dev mode (`kick dev`), the Vite plugin manages
+ * the server and HMR — source changes are picked up instantly without
+ * losing database connections or WebSocket state.
  *
- * When the Vite plugin is active (`globalThis.__kickjs_httpServer` is set),
- * `bootstrap()` sets up the Express app and adapters but does NOT start
- * the HTTP server — Vite owns the port. The returned `app` object has a
- * `.handle(req, res, next)` method that the Vite dev-server plugin calls
- * on each request via `ssrLoadModule()`.
- *
- * ## Production Mode
- *
- * Without the Vite plugin, `bootstrap()` creates its own `http.Server`,
- * binds to the port, and starts listening — same behavior as before.
- *
- * ## HMR
- *
- * On subsequent calls (module re-evaluation), `bootstrap()` rebuilds the
- * Express app and swaps the request handler without restarting the server.
- *
- * @returns The Application instance. In Vite dev mode, the Express handler
- *   is accessible at `app.handle` for the dev-server plugin to use.
+ * @returns The {@link Application} instance.
  *
  * @example
  * ```ts
@@ -46,7 +32,6 @@ const log = createLogger('Process')
  * import { bootstrap } from '@forinda/kickjs'
  * import { modules } from './modules'
  *
- * // Export for Vite plugin (dev) — also works standalone (prod)
  * export const app = await bootstrap({ modules })
  * ```
  */
@@ -63,6 +48,11 @@ export async function bootstrap(options: ApplicationOptions): Promise<Applicatio
     return new Application(options)
   }
 
+  // Internal: globalThis stores the app instance and Vite's HTTP server
+  // reference across HMR rebuilds. When __kickjs_httpServer is set, the
+  // Vite plugin owns the port and bootstrap() skips server creation.
+  // On subsequent calls (HMR), the Express handler is swapped without
+  // restarting the server — preserving DB connections and port bindings.
   const g = globalThis as any
 
   // ── Global error handlers ────────────────────────────────────────────
@@ -90,7 +80,7 @@ export async function bootstrap(options: ApplicationOptions): Promise<Applicatio
 
   // ── HMR rebuild ──────────────────────────────────────────────────────
   if (g.__app) {
-    log.info('HMR: Rebuilding application...')
+    log.debug('HMR rebuild triggered')
     tryReloadEnv()
     Container.reset()
 
@@ -99,7 +89,7 @@ export async function bootstrap(options: ApplicationOptions): Promise<Applicatio
     g.__kickjs_container = freshApp.getContainer()
 
     await freshApp.start()
-    log.info('HMR: Application rebuilt with fresh modules')
+    log.debug('HMR rebuild complete')
     return freshApp
   }
 

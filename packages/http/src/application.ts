@@ -152,7 +152,7 @@ export class Application {
   }
 
   async setup(): Promise<void> {
-    log.info('Bootstrapping application...')
+    log.debug('Bootstrapping application...')
 
     // Collect adapter middleware by phase
     const adapterMw = this.collectAdapterMiddleware()
@@ -272,7 +272,7 @@ export class Application {
       }
 
       let totalRoutes = 0
-      log.info('Routes:')
+      log.debug('Routes:')
 
       for (const { controller, mountPath } of mountedRoutes) {
         const defs: RouteDefinition[] = Reflect.getMetadata(METADATA.ROUTES, controller) || []
@@ -290,10 +290,10 @@ export class Application {
           .map(([m, n]) => `${n} ${m}`)
           .join(', ')
         const name = controller.name || 'Controller'
-        log.info(`  ${name.padEnd(30)} ${mountPath.padEnd(25)} ${defs.length} routes (${methods})`)
+        log.debug(`  ${name.padEnd(30)} ${mountPath.padEnd(25)} ${defs.length} routes (${methods})`)
       }
 
-      log.info(`  Total: ${totalRoutes} routes`)
+      log.debug(`  Total: ${totalRoutes} routes`)
     }
 
     // ── 9. Adapter middleware: afterRoutes ────────────────────────────
@@ -381,13 +381,13 @@ export class Application {
     if (this.httpServer) {
       this.httpServer.removeAllListeners('request')
       this.httpServer.on('request', this.app)
-      log.info('HMR: Express app rebuilt and swapped')
+      log.debug('HMR: Express app rebuilt and swapped')
     }
   }
 
   /** Graceful shutdown — runs all adapter shutdowns in parallel, resilient to failures */
   async shutdown(): Promise<void> {
-    log.info('Shutting down...')
+    log.debug('Shutting down...')
 
     const timeoutMs = this.options.shutdownTimeout ?? 30_000
     let timer: ReturnType<typeof setTimeout> | undefined

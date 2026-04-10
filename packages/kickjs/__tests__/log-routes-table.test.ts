@@ -75,21 +75,22 @@ function makeModule(controllers: { cls: any; path: string }[]) {
 // ── Helpers ───────────────────────────────────────────────────────────────
 
 let originalNodeEnv: string | undefined
-let infoCalls: string[]
+let logCalls: string[]
 
 function setupLogCapture() {
-  infoCalls = []
+  logCalls = []
+  const capture = (msg: string) => { logCalls.push(String(msg)) }
   const noop = () => {}
   Logger.setProvider({
-    info: (msg: string) => { infoCalls.push(String(msg)) },
+    info: capture,
     warn: noop,
     error: noop,
-    debug: noop,
+    debug: capture,
     child: () => ({
-      info: (msg: string) => { infoCalls.push(String(msg)) },
+      info: capture,
       warn: noop,
       error: noop,
-      debug: noop,
+      debug: capture,
       child: () => ({} as any),
     }),
   })
@@ -143,7 +144,7 @@ describe('logRoutesTable option', () => {
   it('logs routes by default when NODE_ENV is not production', async () => {
     await buildApp({ nodeEnv: 'development' })
 
-    const messages = infoCalls
+    const messages = logCalls
     const hasRoutesHeader = messages.some((m: string) => m.includes('Routes:'))
     const hasTotalLine = messages.some((m: string) => m.includes('Total:'))
 
@@ -156,7 +157,7 @@ describe('logRoutesTable option', () => {
   it('does not log routes by default when NODE_ENV is production', async () => {
     await buildApp({ nodeEnv: 'production' })
 
-    const messages = infoCalls
+    const messages = logCalls
     const hasRoutesHeader = messages.some((m: string) => m.includes('Routes:'))
 
     expect(hasRoutesHeader).toBe(false)
@@ -167,7 +168,7 @@ describe('logRoutesTable option', () => {
   it('logs routes when logRoutesTable is true even in production', async () => {
     await buildApp({ nodeEnv: 'production', logRoutesTable: true })
 
-    const messages = infoCalls
+    const messages = logCalls
     const hasRoutesHeader = messages.some((m: string) => m.includes('Routes:'))
     const hasTotalLine = messages.some((m: string) => m.includes('Total:'))
 
@@ -180,7 +181,7 @@ describe('logRoutesTable option', () => {
   it('does not log routes when logRoutesTable is false even in development', async () => {
     await buildApp({ nodeEnv: 'development', logRoutesTable: false })
 
-    const messages = infoCalls
+    const messages = logCalls
     const hasRoutesHeader = messages.some((m: string) => m.includes('Routes:'))
 
     expect(hasRoutesHeader).toBe(false)
@@ -191,7 +192,7 @@ describe('logRoutesTable option', () => {
   it('logs correct HTTP methods and mount paths for each controller', async () => {
     await buildApp({ nodeEnv: 'development' })
 
-    const messages = infoCalls
+    const messages = logCalls
 
     // ItemController has GET, POST, DELETE on /items
     const itemLine = messages.find((m: string) => m.includes('ItemController'))
@@ -221,7 +222,7 @@ describe('logRoutesTable option', () => {
   it('sorts methods in deterministic order: GET, POST, PUT, PATCH, DELETE', async () => {
     await buildApp({ nodeEnv: 'development' })
 
-    const messages = infoCalls
+    const messages = logCalls
 
     // ItemController has GET, POST, DELETE — should appear in that order
     const itemLine = messages.find((m: string) => m.includes('ItemController'))
@@ -248,7 +249,7 @@ describe('logRoutesTable option', () => {
     delete process.env.NODE_ENV
     await buildApp({})
 
-    const messages = infoCalls
+    const messages = logCalls
     const hasRoutesHeader = messages.some((m: string) => m.includes('Routes:'))
 
     expect(hasRoutesHeader).toBe(true)
