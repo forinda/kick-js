@@ -39,7 +39,15 @@ export async function bootstrap(options: ApplicationOptions): Promise<Applicatio
   // ── Cluster mode ─────────────────────────────────────────────────────
   // In cluster mode the primary process forks workers and never runs the
   // Express application itself.  Only workers proceed past this block.
-  if (options.cluster && cluster.isPrimary) {
+  // Cluster is disabled in Vite dev mode — Vite owns the HTTP server and
+  // forked workers would each create their own Vite instance on separate ports.
+  const isViteDev = !!(globalThis as any).__kickjs_httpServer
+  if (options.cluster && isViteDev) {
+    log.warn(
+      'Cluster mode is ignored in dev — Vite owns the server. Cluster applies in production (kick start).',
+    )
+  }
+  if (options.cluster && cluster.isPrimary && !isViteDev) {
     const clusterOpts: ClusterOptions = typeof options.cluster === 'object' ? options.cluster : {}
     setupClusterPrimary(clusterOpts)
 
