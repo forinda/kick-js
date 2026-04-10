@@ -6,22 +6,26 @@ Running `kick new my-api` scaffolds a complete project:
 
 ```text
 my-api/
-  src/
-    index.ts                  # Entry point — calls bootstrap()
-    modules/
-      index.ts                # Exports the modules array
-      hello/                  # Sample module
-        index.ts
-        hello.controller.ts
-        hello.service.ts
-  vite.config.ts              # Vite config with kickjsVitePlugin()
-  kick.config.ts              # CLI configuration (pattern, repo, modules dir)
-  vitest.config.ts            # Test runner config
-  tsconfig.json
-  package.json
-  .env / .env.example
-  CLAUDE.md / AGENTS.md       # AI development guides
-  README.md
+├── src/
+│   ├── config/
+│   │   └── index.ts              # Env schema (defineEnv + loadEnv)
+│   ├── index.ts                  # Entry point — calls bootstrap()
+│   └── modules/
+│       ├── hello/                # Sample module
+│       │   ├── hello.controller.ts
+│       │   ├── hello.module.ts
+│       │   └── hello.service.ts
+│       └── index.ts              # Exports the modules array
+├── .env / .env.example
+├── .prettierrc
+├── AGENTS.md                     # AI agent guide
+├── CLAUDE.md                     # AI development guide
+├── README.md
+├── kick.config.ts                # CLI configuration (pattern, repo, modules dir)
+├── package.json
+├── tsconfig.json
+├── vite.config.ts                # Vite config with kickjsVitePlugin()
+└── vitest.config.ts              # Test runner config
 ```
 
 ## Entry Point

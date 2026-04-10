@@ -91,7 +91,7 @@ kick new my-api --template rest --pm pnpm --no-git --install
 ```
 
 When run without flags, the CLI prompts for:
-1. **Project template** — REST, GraphQL, DDD, Microservice, or Minimal
+1. **Project template** — REST, GraphQL, DDD, CQRS, or Minimal
 2. **Package manager** — pnpm, npm, or yarn
 3. **Default repository** — Prisma, Drizzle, In-Memory, or Custom ORM
 4. **Git init** — initialize a git repository with an initial commit
@@ -100,6 +100,7 @@ When run without flags, the CLI prompts for:
 | Flag | Description | Default |
 |------|-------------|---------|
 | `-t, --template <type>` | Project template: `rest`, `graphql`, `ddd`, `cqrs`, `minimal` | Prompted |
+| `-r, --repo <type>` | Default repository: `prisma`, `drizzle`, `inmemory`, `custom` | Prompted |
 | `-d, --directory <dir>` | Target directory | Project name |
 | `--pm <manager>` | Package manager: `pnpm`, `npm`, or `yarn` | Prompted |
 | `--git / --no-git` | Initialize git repository | Prompted |
@@ -108,13 +109,13 @@ When run without flags, the CLI prompts for:
 
 ### Templates
 
-| Template | Adapters | Initial deps |
-|----------|----------|-------------|
-| `rest` (default) | Swagger + DevTools | core, http, config, swagger |
-| `graphql` | GraphQLAdapter + DevTools | core, http, graphql |
-| `ddd` | Swagger + DevTools | core, http, config, swagger |
-| `cqrs` | Swagger + OTel + WS + DevTools | core, http, swagger, otel, ws, queue |
-| `minimal` | None | core, http |
+| Template | Adapters | Packages installed |
+|----------|----------|-------------------|
+| `rest` (default) | Swagger + DevTools | kickjs, kickjs-vite, kickjs-swagger |
+| `graphql` | GraphQLAdapter + DevTools | kickjs, kickjs-vite, kickjs-graphql |
+| `ddd` | Swagger + DevTools | kickjs, kickjs-vite, kickjs-swagger |
+| `cqrs` | Swagger + OTel + WS + DevTools | kickjs, kickjs-vite, kickjs-swagger, kickjs-otel, kickjs-ws, kickjs-queue |
+| `minimal` | None | kickjs, kickjs-vite |
 
 Use `.` as the project name to scaffold in the current directory (the folder name becomes the project name).
 
@@ -137,19 +138,19 @@ kick dev -p 4000
 | `-e, --entry <file>` | Entry file | `src/index.ts` |
 | `-p, --port <port>` | Port number | `3000` (or `PORT` env) |
 
-Under the hood this starts a Vite dev server with `RunnableDevEnvironment`. The `Application.rebuild()` method swaps the Express handler on the existing HTTP server, so database connections and port bindings survive reloads.
+Changes to your source files are picked up instantly — database connections, WebSocket state, and port bindings survive reloads.
 
 
 ## kick dev:debug
 
-Start the dev server with the Node.js inspector attached:
+Start the dev server with the Node.js debugger attached:
 
 ```bash
 kick dev:debug
 kick dev:debug -p 4000
 ```
 
-Same flags as `kick dev`. Attaches `NODE_OPTIONS=--inspect` to the Vite Environment Runner.
+Same flags as `kick dev`. Opens a debug port so you can attach Chrome DevTools or your IDE's debugger.
 
 ## kick build
 
@@ -215,27 +216,27 @@ Output shows each package name, description, and required peer dependencies:
 ```
   Available KickJS packages:
 
-    core            DI container, decorators, reactivity
-    http            Express 5, routing, middleware
-    config          Zod-based env validation
-    cli             CLI tool and code generators
-    swagger         OpenAPI spec + Swagger UI + ReDoc
-    graphql         GraphQL resolvers + GraphiQL (+ graphql)
-    drizzle         Drizzle ORM adapter + query builder (+ drizzle-orm)
-    prisma          Prisma adapter + query builder (+ @prisma/client)
-    ws              WebSocket with @WsController decorators (+ socket.io)
-    otel            OpenTelemetry tracing + metrics (+ @opentelemetry/api)
-    devtools        Development dashboard — routes, DI, metrics, health
-    auth            Authentication — JWT, API key, and custom strategies (+ jsonwebtoken)
-    mailer          Email sending — SMTP, Resend, SES, or custom provider (+ nodemailer)
-    cron            Cron job scheduling (+ croner)
-    queue           Queue adapter (BullMQ/RabbitMQ/Kafka)
-    queue:bullmq    Queue with BullMQ + Redis (+ bullmq, ioredis)
-    queue:rabbitmq  Queue with RabbitMQ (+ amqplib)
-    queue:kafka     Queue with Kafka (+ kafkajs)
-    multi-tenant    Tenant resolution middleware
-    notifications   Multi-channel notifications — email, Slack, Discord, webhook
-    testing         Test utilities and TestModule builder
+    kickjs           Unified framework: DI, decorators, routing, middleware (+ express)
+    vite             Vite plugin: dev server, HMR, module discovery (+ vite)
+    config           Optional .env file loader (kickjs ConfigService now ships in @forinda/kickjs)
+    cli              CLI tool and code generators
+    swagger          OpenAPI spec + Swagger UI + ReDoc
+    graphql          GraphQL resolvers + GraphiQL (+ graphql)
+    drizzle          Drizzle ORM adapter + query builder (+ drizzle-orm)
+    prisma           Prisma adapter + query builder (+ @prisma/client)
+    ws               WebSocket with @WsController decorators (+ socket.io)
+    otel             OpenTelemetry tracing + metrics (+ @opentelemetry/api)
+    devtools         Development dashboard — routes, DI, metrics, health
+    auth             Authentication — JWT, API key, and custom strategies (+ jsonwebtoken)
+    mailer           Email sending — SMTP, Resend, SES, or custom provider (+ nodemailer)
+    cron             Cron job scheduling (production-grade with croner) (+ croner)
+    queue            Queue adapter (BullMQ/RabbitMQ/Kafka)
+    queue:bullmq     Queue with BullMQ + Redis (+ bullmq, ioredis)
+    queue:rabbitmq   Queue with RabbitMQ (+ amqplib)
+    queue:kafka      Queue with Kafka (+ kafkajs)
+    multi-tenant     Tenant resolution middleware
+    notifications    Multi-channel notifications — email, Slack, Discord, webhook
+    testing          Test utilities and TestModule builder
 ```
 
 ## kick add
@@ -265,6 +266,7 @@ kick g module user       # Structure depends on pattern in kick.config.ts
 kick g module user --pattern rest  # Force flat REST structure
 kick g resolver product  # GraphQL resolver with @Query/@Mutation/@Arg
 kick g job email         # Queue job processor with @Job/@Process
+kick g scaffold Post title:string body:text:optional  # CRUD from fields
 kick g controller auth
 kick g service payment
 kick g middleware logger
@@ -273,6 +275,47 @@ kick g adapter websocket
 kick g dto create-user
 kick g config
 ```
+
+### kick g scaffold
+
+Generate a full CRUD module from field definitions. Fields use `name:type` format. Append `:optional` for optional fields (shell-safe).
+
+```bash
+kick g scaffold Post title:string body:text:optional published:boolean:optional
+kick g scaffold User name:string email:email:optional role:enum:admin,user,guest
+```
+
+#### Field Types
+
+| Type | TypeScript | Zod | Example |
+|------|-----------|-----|---------|
+| `string` | `string` | `z.string()` | `title:string` |
+| `text` | `string` | `z.string()` | `body:text` |
+| `number` | `number` | `z.number()` | `price:number` |
+| `int` | `number` | `z.number().int()` | `age:int` |
+| `float` | `number` | `z.number()` | `rating:float` |
+| `boolean` | `boolean` | `z.boolean()` | `active:boolean` |
+| `date` | `string` | `z.string().datetime()` | `createdAt:date` |
+| `email` | `string` | `z.string().email()` | `email:email` |
+| `url` | `string` | `z.string().url()` | `website:url` |
+| `uuid` | `string` | `z.string().uuid()` | `externalId:uuid` |
+| `json` | `any` | `z.any()` | `metadata:json` |
+| `enum:a,b,c` | `'a' \| 'b' \| 'c'` | `z.enum(['a','b','c'])` | `status:enum:draft,published` |
+
+#### Scaffold Flags
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--no-entity` | Skip entity and value object generation | `false` |
+| `--no-tests` | Skip test file generation | `false` |
+| `--no-pluralize` | Use singular names | from config |
+| `--modules-dir <dir>` | Modules directory | `src/modules` |
+
+::: tip Shell-safe optional syntax
+Use `name:type:optional` instead of `"name:type?"` — the `?` character is a shell glob in bash/zsh and needs quoting.
+:::
+
+See [Generators — kick g scaffold](./generators.md#kick-g-scaffold) for full details.
 
 ### kick g config
 

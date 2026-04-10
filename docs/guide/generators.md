@@ -293,6 +293,107 @@ export class ProductModule implements AppModule {
 }
 ```
 
+## kick g scaffold
+
+Generate a full CRUD module from field definitions. Unlike `kick g module`, which creates empty DTOs, scaffold generates Zod schemas with concrete fields, typed entities, and a working repository — ready to use immediately.
+
+```bash
+kick g scaffold Post title:string body:text:optional published:boolean:optional
+```
+
+### Field Syntax
+
+Each field uses the format `name:type` or `name:type:optional`:
+
+| Type | TypeScript | Zod | Example |
+|------|-----------|-----|---------|
+| `string` | `string` | `z.string()` | `title:string` |
+| `text` | `string` | `z.string()` | `body:text` |
+| `number` | `number` | `z.number()` | `price:number` |
+| `int` | `number` | `z.number().int()` | `age:int` |
+| `float` | `number` | `z.number()` | `rating:float` |
+| `boolean` | `boolean` | `z.boolean()` | `active:boolean` |
+| `date` | `string` | `z.string().datetime()` | `createdAt:date` |
+| `email` | `string` | `z.string().email()` | `email:email` |
+| `url` | `string` | `z.string().url()` | `website:url` |
+| `uuid` | `string` | `z.string().uuid()` | `externalId:uuid` |
+| `json` | `any` | `z.any()` | `metadata:json` |
+| `enum:a,b,c` | `'a' \| 'b' \| 'c'` | `z.enum(['a','b','c'])` | `status:enum:draft,published` |
+
+### Optional Fields
+
+Append `:optional` to make a field optional (shell-safe, no quoting needed):
+
+```bash
+kick g scaffold Post title:string body:text:optional published:boolean:optional
+```
+
+The `?` syntax also works but requires quoting in bash/zsh because `?` is a shell glob character:
+
+```bash
+# These need quotes — ? triggers shell glob expansion without them
+kick g scaffold Post title:string "body:text?" "published:boolean?"
+kick g scaffold Post title:string "body?:text" "published?:boolean"
+```
+
+::: warning Shell glob expansion
+`body:text?` without quotes is interpreted by bash/zsh as a file glob pattern — the `?` matches any single character. Always use `:optional` for unquoted usage, or wrap the field in quotes.
+:::
+
+### Generated Structure
+
+Scaffold generates a DDD module structure inside `posts/`:
+
+| File | Layer | Description |
+|------|-------|-------------|
+| `index.ts` | Module | Module class (register + routes) |
+| `constants.ts` | Module | Query config (filterable, sortable, searchable) |
+| `presentation/post.controller.ts` | Presentation | Full CRUD with typed `Ctx` |
+| `application/dtos/create-post.dto.ts` | Application | Zod schema from fields |
+| `application/dtos/update-post.dto.ts` | Application | All fields optional |
+| `application/dtos/post-response.dto.ts` | Application | Response interface |
+| `application/use-cases/create-post.use-case.ts` | Application | Create use case |
+| `application/use-cases/get-post.use-case.ts` | Application | Get by ID use case |
+| `application/use-cases/list-posts.use-case.ts` | Application | Paginated list use case |
+| `application/use-cases/update-post.use-case.ts` | Application | Update use case |
+| `application/use-cases/delete-post.use-case.ts` | Application | Delete use case |
+| `domain/entities/post.entity.ts` | Domain | Entity with factory methods |
+| `domain/value-objects/post-id.vo.ts` | Domain | Typed ID value object |
+| `domain/repositories/post.repository.ts` | Domain | Interface + `createToken` |
+| `domain/services/post-domain.service.ts` | Domain | Domain logic |
+| `infrastructure/repositories/in-memory-post.repository.ts` | Infrastructure | Working Map-based store |
+
+### Scaffold Flags
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--no-entity` | Skip entity and value object generation | `false` |
+| `--no-tests` | Skip test file generation | `false` |
+| `--no-pluralize` | Use singular names | from config or `false` |
+| `--modules-dir <dir>` | Modules directory | from config or `src/modules` |
+
+### Example
+
+```bash
+kick g scaffold User name:string email:email:optional age:int role:enum:admin,user,guest
+```
+
+Generates DTOs like:
+
+```ts
+// create-user.dto.ts
+import { z } from 'zod'
+
+export const createUserSchema = z.object({
+  name: z.string(),
+  email: z.string().email().optional(),
+  age: z.number().int(),
+  role: z.enum(['admin', 'user', 'guest']),
+})
+
+export type CreateUserDTO = z.infer<typeof createUserSchema>
+```
+
 ## kick rm module
 
 Remove one or more modules. Deletes the module directory and unregisters it from `src/modules/index.ts`.
