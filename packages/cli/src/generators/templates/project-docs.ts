@@ -181,18 +181,30 @@ export class UserService {
 
 ### Modules
 
-Register controllers and providers in modules:
+Modules implement \`AppModule\` and wire controllers via \`buildRoutes()\`:
 
 \`\`\`ts
-import { Module } from '@forinda/kickjs'
+import { type AppModule, type ModuleRoutes, buildRoutes } from '@forinda/kickjs'
 import { UserController } from './user.controller'
-import { UserService } from './user.service'
 
-@Module({
-  controllers: [UserController],
-  providers: [UserService],
-})
-export class UserModule {}
+export class UserModule implements AppModule {
+  routes(): ModuleRoutes {
+    return {
+      path: '/users',
+      router: buildRoutes(UserController),
+      controller: UserController,
+    }
+  }
+}
+\`\`\`
+
+Register all modules in \`src/modules/index.ts\`:
+
+\`\`\`ts
+import type { AppModuleClass } from '@forinda/kickjs'
+import { UserModule } from './user/user.module'
+
+export const modules: AppModuleClass[] = [UserModule]
 \`\`\`
 
 ### RequestContext
@@ -303,6 +315,86 @@ Hot-reload of \`.env\` changes during dev is wired up automatically via
 \`envWatchPlugin()\` in \`vite.config.ts\` — edit \`.env\`, the dev server
 reloads, and the next \`config.get()\` re-parses with the new values.
 
+### Standalone Env Utilities (No DI Required)
+
+These functions work anywhere — scripts, CLI tools, plain files, outside \`@Service\`/\`@Controller\`:
+
+\`\`\`ts
+import { defineEnv, loadEnv, getEnv, reloadEnv, resetEnvCache, baseEnvSchema } from '@forinda/kickjs/config'
+import { z } from 'zod'
+
+// Define and parse schema
+const schema = defineEnv((base) =>
+  base.extend({ DATABASE_URL: z.string().url() })
+)
+const env = loadEnv(schema)      // Parse + validate process.env
+console.log(env.PORT)            // 3000 (coerced to number)
+console.log(env.DATABASE_URL)    // validated URL string
+
+// Get single value
+const port = getEnv('PORT')      // typed after kick typegen
+
+// Reload after .env changes (HMR calls this automatically)
+reloadEnv()
+
+// Reset cache in tests that swap schemas
+resetEnvCache()
+\`\`\`
+
+| Function | Purpose |
+|----------|---------|
+| \`defineEnv(fn)\` | Extend base schema with custom Zod keys |
+| \`loadEnv(schema?)\` | Parse \`process.env\`, validate, cache, return typed object |
+| \`getEnv(key, schema?)\` | Get single validated env value |
+| \`reloadEnv()\` | Re-read \`.env\` from disk, re-parse with same schema |
+| \`resetEnvCache()\` | Clear parsed cache AND registered schema (for tests) |
+| \`baseEnvSchema\` | Base Zod schema: \`PORT\`, \`NODE_ENV\`, \`LOG_LEVEL\` |
+
+## Standalone Utilities (No DI Required)
+
+These utilities work outside decorated classes:
+
+### Logger
+
+\`\`\`ts
+import { Logger, createLogger } from '@forinda/kickjs'
+
+const log = Logger.for('MyScript')    // Static factory
+log.info('Processing started')
+log.error('Something failed')
+
+const log2 = createLogger('Worker')   // Function form
+\`\`\`
+
+### Injection Tokens
+
+\`\`\`ts
+import { createToken } from '@forinda/kickjs'
+
+// Type-safe DI tokens for factory/interface binding
+const DB_URL = createToken<string>('config.database.url')
+const FEATURE_FLAGS = createToken<FeatureFlags>('app.features')
+\`\`\`
+
+### Reactivity
+
+\`\`\`ts
+import { ref, computed, watch, reactive } from '@forinda/kickjs'
+
+const count = ref(0)
+const doubled = computed(() => count.value * 2)
+const stop = watch(() => count.value, (val) => console.log(val))
+count.value++  // logs 1
+\`\`\`
+
+### HTTP Errors
+
+\`\`\`ts
+import { HttpException, HttpStatus } from '@forinda/kickjs'
+
+throw new HttpException(HttpStatus.NOT_FOUND, 'User not found')
+\`\`\`
+
 ## Testing
 
 Tests live in \`src/**/*.test.ts\`:
@@ -337,7 +429,6 @@ Run tests:
 - \`@Roles('admin', 'user')\` — role-based access control
 
 ### DI Decorators
-- \`@Module({ controllers, providers, imports })\` — define module
 - \`@Service()\` — singleton service (DI-registered)
 - \`@Repository()\` — repository (semantic alias for @Service)
 - \`@Autowired()\` — property injection
@@ -426,7 +517,7 @@ ${
 ├── <name>.repository.ts     # Data access (@Repository)
 ├── <name>.dto.ts            # Request/response schemas (Zod)
 ├── <name>.entity.ts         # Domain entity (optional)
-└── <name>.module.ts         # Module definition (@Module)
+└── <name>.module.ts         # Module definition (implements AppModule)
 \`\`\`
 `
     : template === 'cqrs'
@@ -442,7 +533,7 @@ ${
 │   └── <name>-created.event.ts
 ├── <name>.controller.ts     # HTTP routes
 ├── <name>.repository.ts     # Data access
-└── <name>.module.ts         # Module definition
+└── <name>.module.ts         # Module definition (implements AppModule)
 \`\`\`
 `
       : template === 'graphql'
@@ -459,7 +550,7 @@ resolvers/
 ├── <name>.controller.ts     # HTTP routes (@Controller)
 ├── <name>.service.ts        # Business logic (@Service)
 ├── <name>.dto.ts            # Request/response schemas (Zod)
-└── <name>.module.ts         # Module definition (@Module)
+└── <name>.module.ts         # Module definition (implements AppModule)
 \`\`\`
 `
           : `\`\`\`
@@ -497,8 +588,8 @@ If not using generators:
 - [ ] Create \`src/modules/<name>/<name>.controller.ts\`
 - [ ] Add \`@Controller('/path')\` decorator
 - [ ] Add route handlers with \`@Get()\`, \`@Post()\`, etc.
-- [ ] Create module file with \`@Module({ controllers: [NameController] })\`
-- [ ] Register module in \`src/modules/index.ts\`
+- [ ] Create module file implementing \`AppModule\` with \`routes()\` returning \`{ path, router: buildRoutes(Controller), controller }\`
+- [ ] Register module in \`src/modules/index.ts\` (\`AppModuleClass[]\` array)
 - [ ] Test with \`kick dev\`
 
 ### Manual Service
@@ -506,7 +597,7 @@ If not using generators:
 - [ ] Create \`src/modules/<name>/<name>.service.ts\`
 - [ ] Add \`@Service()\` decorator
 - [ ] Inject dependencies with \`@Autowired()\`
-- [ ] Register in module \`providers\` array
+- [ ] Inject via \`@Autowired()\` where needed
 - [ ] Write unit tests
 
 ### New Middleware
@@ -531,8 +622,11 @@ Use \`kick add\` to install KickJS packages with correct peer dependencies:
 ### Generate CRUD Module
 
 \`\`\`bash
-kick g scaffold user name:string email:string age:number
+kick g scaffold user name:string email:string:optional age:number
 \`\`\`
+
+Append \`:optional\` for optional fields (shell-safe, no quoting needed).
+Quoted \`?\` syntax also works: \`"email:string?"\` or \`"email?:string"\`.
 
 This creates a full CRUD module with:
 - Controller with GET, POST, PUT, DELETE routes
@@ -649,7 +743,17 @@ private config!: ConfigService
 const port = this.config.get('PORT')  // typed: number
 \`\`\`
 
-3. **Direct \`process.env\`** — avoid in app code; bypasses Zod
+3. **Standalone utilities** (no DI — works in scripts, CLI, plain files):
+\`\`\`ts
+import { loadEnv, getEnv, reloadEnv, resetEnvCache } from '@forinda/kickjs/config'
+
+const env = loadEnv(schema)         // Parse + validate all vars
+const port = getEnv('PORT')         // Single value lookup
+reloadEnv()                         // Re-read .env from disk
+resetEnvCache()                     // Full reset (for tests)
+\`\`\`
+
+4. **Direct \`process.env\`** — avoid in app code; bypasses Zod
    coercion and the typed \`KickEnv\` registry.
 
 > **Pitfall**: never delete \`import './config'\` from \`src/index.ts\`.
@@ -657,6 +761,22 @@ const port = this.config.get('PORT')  // typed: number
 > returns \`undefined\` for user keys (the base shape only) and
 > \`@Value()\` only works because of its raw \`process.env\` fallback —
 > Zod coercion + schema defaults are silently skipped.
+
+## Standalone Utilities (No DI Required)
+
+These work anywhere — scripts, plain files, outside \`@Service\`/\`@Controller\`:
+
+| Utility | Import | Example |
+|---------|--------|---------|
+| \`Logger.for(name)\` | \`@forinda/kickjs\` | \`const log = Logger.for('MyScript')\` |
+| \`createLogger(name)\` | \`@forinda/kickjs\` | \`const log = createLogger('Worker')\` |
+| \`createToken<T>(name)\` | \`@forinda/kickjs\` | \`const TOKEN = createToken<string>('db.url')\` |
+| \`ref(value)\` | \`@forinda/kickjs\` | \`const count = ref(0)\` |
+| \`computed(fn)\` | \`@forinda/kickjs\` | \`const doubled = computed(() => count.value * 2)\` |
+| \`watch(source, cb)\` | \`@forinda/kickjs\` | \`watch(() => count.value, (v) => log(v))\` |
+| \`reactive(obj)\` | \`@forinda/kickjs\` | \`const state = reactive({ count: 0 })\` |
+| \`HttpException\` | \`@forinda/kickjs\` | \`throw new HttpException(404, 'Not found')\` |
+| \`HttpStatus\` | \`@forinda/kickjs\` | \`HttpStatus.NOT_FOUND // 404\` |
 
 ## Key Decorators
 
@@ -672,7 +792,7 @@ const port = this.config.get('PORT')  // typed: number
 ### Dependency Injection
 | Decorator | Purpose |
 |-----------|---------|
-| \`@Module({})\` | Define feature module |
+| \`AppModule\` interface | Define feature module (implements \`routes()\`) |
 | \`@Service()\` | Register singleton service |
 | \`@Repository()\` | Register repository |
 | \`@Autowired()\` | Property injection |
