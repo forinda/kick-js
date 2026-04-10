@@ -1,3 +1,5 @@
+import pkg from 'pluralize'
+
 /** Convert a name to PascalCase */
 export function toPascalCase(name: string): string {
   return name
@@ -21,25 +23,17 @@ export function toKebabCase(name: string): string {
 
 /**
  * Pluralize a kebab-case name for directory/file names.
- * If already plural (ends in 's'), returns as-is.
+ * Uses the `pluralize` npm package for correct English pluralization
+ * including irregulars (person → people, status → statuses, child → children).
  */
 export function pluralize(name: string): string {
-  if (name.endsWith('s')) return name
-  if (name.endsWith('x') || name.endsWith('z')) return name + 'es'
-  if (name.endsWith('sh') || name.endsWith('ch')) return name + 'es'
-  if (name.endsWith('y') && !/[aeiou]y$/.test(name)) return name.slice(0, -1) + 'ies'
-  return name + 's'
+  return pkg.plural(name)
 }
 
 /**
  * Pluralize a PascalCase name for class identifiers.
- * If already plural (ends in 's'), returns as-is.
  * Used for `List${pluralPascal}UseCase` to avoid `ListUserssUseCase`.
  */
 export function pluralizePascal(name: string): string {
-  if (name.endsWith('s')) return name
-  if (name.endsWith('x') || name.endsWith('z')) return name + 'es'
-  if (name.endsWith('sh') || name.endsWith('ch')) return name + 'es'
-  if (name.endsWith('y') && !/[aeiou]y$/i.test(name)) return name.slice(0, -1) + 'ies'
-  return name + 's'
+  return pkg.plural(name)
 }

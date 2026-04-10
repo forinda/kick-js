@@ -84,13 +84,15 @@
     }
   },
   "dependencies": {
-    "commander": "^14.0.3"
+    "commander": "^14.0.3",
+    "pluralize": "^8.0.0"
   },
   "devDependencies": {
     "@swc/core": "^1.15.21",
     "@types/node": "^25.0.0",
-    "vite": "^8.0.3",
+    "@types/pluralize": "^0.0.33",
     "typescript": "^5.9.2",
+    "vite": "^8.0.3",
     "vitest": "^4.1.2"
   },
   "publishConfig": {

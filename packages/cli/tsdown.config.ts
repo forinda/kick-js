@@ -12,7 +12,7 @@ export default defineConfig([
     format: ['esm'],
     platform: 'node',
     dts: true,
-    external: ['commander', 'vite', /^node:/],
+    external: ['commander', 'pluralize', 'vite', /^node:/],
     banner: { js: banner },
   },
   {
@@ -22,7 +22,7 @@ export default defineConfig([
     format: ['esm'],
     platform: 'node',
     dts: false,
-    external: ['commander', 'vite', /^node:/],
+    external: ['commander', 'pluralize', 'vite', /^node:/],
     banner: { js: banner },
   },
 ])
