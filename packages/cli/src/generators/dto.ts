@@ -10,6 +10,7 @@ interface GenerateDtoOptions {
   moduleName?: string
   modulesDir?: string
   pattern?: ProjectPattern
+  pluralize?: boolean
 }
 
 export async function generateDto(options: GenerateDtoOptions): Promise<string[]> {
@@ -21,6 +22,7 @@ export async function generateDto(options: GenerateDtoOptions): Promise<string[]
     modulesDir,
     defaultDir: 'src/dtos',
     pattern,
+    shouldPluralize: options.pluralize ?? true,
   })
   const kebab = toKebabCase(name)
   const pascal = toPascalCase(name)

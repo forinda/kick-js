@@ -10,6 +10,7 @@ interface GenerateControllerOptions {
   moduleName?: string
   modulesDir?: string
   pattern?: ProjectPattern
+  pluralize?: boolean
 }
 
 export async function generateController(options: GenerateControllerOptions): Promise<string[]> {
@@ -21,6 +22,7 @@ export async function generateController(options: GenerateControllerOptions): Pr
     modulesDir,
     defaultDir: 'src/controllers',
     pattern,
+    shouldPluralize: options.pluralize ?? true,
   })
   const kebab = toKebabCase(name)
   const pascal = toPascalCase(name)

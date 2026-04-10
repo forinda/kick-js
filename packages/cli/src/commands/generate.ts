@@ -167,13 +167,15 @@ export function registerGenerateCommand(program: Command): void {
       const dryRun = isDryRun(cmd)
       setDryRun(dryRun)
       const config = await loadKickConfig(process.cwd())
-      const modulesDir = resolveModuleConfig(config).dir ?? 'src/modules'
+      const mc = resolveModuleConfig(config)
+      const modulesDir = mc.dir ?? 'src/modules'
       const files = await generateMiddleware({
         name,
         outDir: opts.out,
         moduleName: opts.module,
         modulesDir,
         pattern: config?.pattern,
+        pluralize: mc.pluralize ?? true,
       })
       printGenerated(files, dryRun)
     })
@@ -191,13 +193,15 @@ export function registerGenerateCommand(program: Command): void {
       const dryRun = isDryRun(cmd)
       setDryRun(dryRun)
       const config = await loadKickConfig(process.cwd())
-      const modulesDir = resolveModuleConfig(config).dir ?? 'src/modules'
+      const mc = resolveModuleConfig(config)
+      const modulesDir = mc.dir ?? 'src/modules'
       const files = await generateGuard({
         name,
         outDir: opts.out,
         moduleName: opts.module,
         modulesDir,
         pattern: config?.pattern,
+        pluralize: mc.pluralize ?? true,
       })
       printGenerated(files, dryRun)
     })
@@ -215,13 +219,15 @@ export function registerGenerateCommand(program: Command): void {
       const dryRun = isDryRun(cmd)
       setDryRun(dryRun)
       const config = await loadKickConfig(process.cwd())
-      const modulesDir = resolveModuleConfig(config).dir ?? 'src/modules'
+      const mc = resolveModuleConfig(config)
+      const modulesDir = mc.dir ?? 'src/modules'
       const files = await generateService({
         name,
         outDir: opts.out,
         moduleName: opts.module,
         modulesDir,
         pattern: config?.pattern,
+        pluralize: mc.pluralize ?? true,
       })
       printGenerated(files, dryRun)
     })
@@ -239,13 +245,15 @@ export function registerGenerateCommand(program: Command): void {
       const dryRun = isDryRun(cmd)
       setDryRun(dryRun)
       const config = await loadKickConfig(process.cwd())
-      const modulesDir = resolveModuleConfig(config).dir ?? 'src/modules'
+      const mc = resolveModuleConfig(config)
+      const modulesDir = mc.dir ?? 'src/modules'
       const files = await generateController({
         name,
         outDir: opts.out,
         moduleName: opts.module,
         modulesDir,
         pattern: config?.pattern,
+        pluralize: mc.pluralize ?? true,
       })
       printGenerated(files, dryRun)
       await runPostTypegen(dryRun)
@@ -264,13 +272,15 @@ export function registerGenerateCommand(program: Command): void {
       const dryRun = isDryRun(cmd)
       setDryRun(dryRun)
       const config = await loadKickConfig(process.cwd())
-      const modulesDir = resolveModuleConfig(config).dir ?? 'src/modules'
+      const mc = resolveModuleConfig(config)
+      const modulesDir = mc.dir ?? 'src/modules'
       const files = await generateDto({
         name,
         outDir: opts.out,
         moduleName: opts.module,
         modulesDir,
         pattern: config?.pattern,
+        pluralize: mc.pluralize ?? true,
       })
       printGenerated(files, dryRun)
     })
@@ -288,12 +298,14 @@ export function registerGenerateCommand(program: Command): void {
       const dryRun = isDryRun(cmd)
       setDryRun(dryRun)
       const config = await loadKickConfig(process.cwd())
-      const modulesDir = resolveModuleConfig(config).dir ?? 'src/modules'
+      const mc = resolveModuleConfig(config)
+      const modulesDir = mc.dir ?? 'src/modules'
       const files = await generateTest({
         name,
         outDir: opts.out,
         moduleName: opts.module,
         modulesDir,
+        pluralize: mc.pluralize ?? true,
       })
       printGenerated(files, dryRun)
     })
@@ -328,9 +340,10 @@ export function registerGenerateCommand(program: Command): void {
     .command('scaffold <name> [fields...]')
     .description(
       'Generate a full CRUD module from field definitions\n' +
-        '  Example: kick g scaffold Post title:string body:text published:boolean?\n' +
+        '  Example: kick g scaffold Post title:string body:text:optional published:boolean:optional\n' +
         '  Types: string, text, number, int, float, boolean, date, email, url, uuid, json, enum:a,b,c\n' +
-        '  Append ? for optional fields: description:text?',
+        '  Optional: append :optional (shell-safe):  description:text:optional\n' +
+        '            or use ? with quoting:           "description:text?" or "description?:text"',
     )
     .option('--no-entity', 'Skip entity and value object generation')
     .option('--no-tests', 'Skip test file generation')
@@ -343,7 +356,8 @@ export function registerGenerateCommand(program: Command): void {
         console.error(
           '\n  Error: At least one field is required.\n' +
             '  Usage: kick g scaffold <name> <field:type> [field:type...]\n' +
-            '  Example: kick g scaffold Post title:string body:text published:boolean\n',
+            '  Example: kick g scaffold Post title:string body:text:optional published:boolean:optional\n' +
+            '  Optional: append :optional (shell-safe, no quoting needed)\n',
         )
         process.exit(1)
       }

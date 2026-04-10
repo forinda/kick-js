@@ -52,6 +52,8 @@ export interface ResolveOutDirOptions {
   defaultDir: string
   /** Project pattern — determines folder structure inside modules */
   pattern?: ProjectPattern
+  /** Whether to pluralize the module folder name (default: true) */
+  shouldPluralize?: boolean
 }
 
 /**
@@ -70,6 +72,7 @@ export function resolveOutDir(options: ResolveOutDirOptions): string {
     modulesDir = 'src/modules',
     defaultDir,
     pattern = 'ddd',
+    shouldPluralize = true,
   } = options
 
   // Explicit --out always wins
@@ -80,9 +83,9 @@ export function resolveOutDir(options: ResolveOutDirOptions): string {
     const folderMap =
       pattern === 'ddd' ? DDD_FOLDER_MAP : pattern === 'cqrs' ? CQRS_FOLDER_MAP : FLAT_FOLDER_MAP
     const kebab = toKebabCase(moduleName)
-    const plural = pluralize(kebab)
+    const folder = shouldPluralize ? pluralize(kebab) : kebab
     const subfolder = folderMap[type] ?? ''
-    const base = join(modulesDir, plural)
+    const base = join(modulesDir, folder)
     return resolve(subfolder ? join(base, subfolder) : base)
   }
 

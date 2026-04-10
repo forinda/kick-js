@@ -10,6 +10,7 @@ interface GenerateGuardOptions {
   moduleName?: string
   modulesDir?: string
   pattern?: ProjectPattern
+  pluralize?: boolean
 }
 
 export async function generateGuard(options: GenerateGuardOptions): Promise<string[]> {
@@ -21,6 +22,7 @@ export async function generateGuard(options: GenerateGuardOptions): Promise<stri
     modulesDir,
     defaultDir: 'src/guards',
     pattern,
+    shouldPluralize: options.pluralize ?? true,
   })
   const kebab = toKebabCase(name)
   const camel = toCamelCase(name)

@@ -10,6 +10,7 @@ interface GenerateMiddlewareOptions {
   moduleName?: string
   modulesDir?: string
   pattern?: ProjectPattern
+  pluralize?: boolean
 }
 
 export async function generateMiddleware(options: GenerateMiddlewareOptions): Promise<string[]> {
@@ -21,6 +22,7 @@ export async function generateMiddleware(options: GenerateMiddlewareOptions): Pr
     modulesDir,
     defaultDir: 'src/middleware',
     pattern,
+    shouldPluralize: options.pluralize ?? true,
   })
   const kebab = toKebabCase(name)
   const camel = toCamelCase(name)

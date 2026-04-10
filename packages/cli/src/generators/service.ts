@@ -10,6 +10,7 @@ interface GenerateServiceOptions {
   moduleName?: string
   modulesDir?: string
   pattern?: ProjectPattern
+  pluralize?: boolean
 }
 
 export async function generateService(options: GenerateServiceOptions): Promise<string[]> {
@@ -21,6 +22,7 @@ export async function generateService(options: GenerateServiceOptions): Promise<
     modulesDir,
     defaultDir: 'src/services',
     pattern,
+    shouldPluralize: options.pluralize ?? true,
   })
   const kebab = toKebabCase(name)
   const pascal = toPascalCase(name)

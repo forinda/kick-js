@@ -28,7 +28,10 @@ export interface FieldDef {
  *   json      → z.any()
  *   enum:a,b  → z.enum(['a','b'])
  *
- * Append ? for optional: title:string  body:text?  published:boolean?
+ * Mark optional fields — three equivalent syntaxes:
+ *   body:text:optional  ← recommended (shell-safe, no quoting needed)
+ *   body?:text          ← needs quoting in bash/zsh ("body?:text")
+ *   body:text?          ← needs quoting in bash/zsh ("body:text?")
  */
 const TYPE_MAP: Record<string, { ts: string; zod: string }> = {
   string: { ts: 'string', zod: 'z.string()' },
@@ -50,14 +53,37 @@ export function parseFields(raw: string[]): FieldDef[] {
     if (colonIdx === -1) {
       throw new Error(`Invalid field: "${f}". Use format: name:type (e.g. title:string)`)
     }
-    const namePart = f.slice(0, colonIdx)
-    const typePart = f.slice(colonIdx + 1)
+    let namePart = f.slice(0, colonIdx)
+    let typePart = f.slice(colonIdx + 1)
     if (!namePart || !typePart) {
       throw new Error(`Invalid field: "${f}". Use format: name:type (e.g. title:string)`)
     }
 
-    const optional = typePart.endsWith('?')
-    const cleanType = optional ? typePart.slice(0, -1) : typePart
+    // Support three optional syntaxes:
+    //   name:type:optional  ← shell-safe (recommended)
+    //   name?:type          ← needs quoting in bash/zsh
+    //   name:type?          ← needs quoting in bash/zsh
+    let optional = false
+
+    // Check for trailing :optional segment (but not enum:val1,val2)
+    if (typePart.endsWith(':optional')) {
+      typePart = typePart.slice(0, -':optional'.length)
+      optional = true
+    }
+
+    // Check for ? on the name side: "body?:text"
+    if (namePart.endsWith('?')) {
+      namePart = namePart.slice(0, -1)
+      optional = true
+    }
+
+    // Check for ? on the type side: "body:text?"
+    if (typePart.endsWith('?')) {
+      typePart = typePart.slice(0, -1)
+      optional = true
+    }
+
+    const cleanType = typePart
 
     // Handle enum:val1,val2
     if (cleanType.startsWith('enum:')) {

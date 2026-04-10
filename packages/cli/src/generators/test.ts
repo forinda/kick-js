@@ -7,10 +7,12 @@ interface GenerateTestOptions {
   outDir?: string
   moduleName?: string
   modulesDir?: string
+  pluralize?: boolean
 }
 
 export async function generateTest(options: GenerateTestOptions): Promise<string[]> {
   const { name, moduleName, modulesDir } = options
+  const shouldPluralize = options.pluralize ?? true
   const kebab = toKebabCase(name)
   const pascal = toPascalCase(name)
   const files: string[] = []
@@ -21,9 +23,9 @@ export async function generateTest(options: GenerateTestOptions): Promise<string
     outDir = resolve(options.outDir)
   } else if (moduleName) {
     const modKebab = toKebabCase(moduleName)
-    const modPlural = pluralize(modKebab)
+    const modFolder = shouldPluralize ? pluralize(modKebab) : modKebab
     const modDir = modulesDir ?? 'src/modules'
-    outDir = resolve(join(modDir, modPlural, '__tests__'))
+    outDir = resolve(join(modDir, modFolder, '__tests__'))
   } else {
     outDir = resolve('src/__tests__')
   }
