@@ -121,6 +121,47 @@ await bootstrap({ modules: [HelloModule] })
 | [otel-api](examples/otel-api/) | OpenTelemetry console tracing |
 | [joi-api](examples/joi-api/) | Custom Joi `SchemaParser` for Swagger + Joi validation middleware |
 
+## Adding an Example App
+
+1. Build the CLI first (if not already built):
+
+   ```bash
+   pnpm build
+   ```
+
+2. Scaffold the example using the local CLI from the `examples/` directory (pass all flags to avoid interactive prompts):
+
+   ```bash
+   cd examples
+   node ../packages/cli/bin.js new my-example-api \
+     --template minimal --pm pnpm --repo inmemory --no-git --no-install --force
+   ```
+
+   Available flags:
+   - `--template <type>` — `rest | graphql | ddd | cqrs | minimal`
+   - `--pm <manager>` — `pnpm | npm | yarn`
+   - `--repo <type>` — `prisma | drizzle | inmemory | custom`
+   - `--no-git` — skip git init (use repo root's git)
+   - `--no-install` — skip install (run `pnpm install` from root instead)
+   - `--force` — overwrite existing directory without prompting
+
+   This generates `package.json`, `tsconfig.json`, `vite.config.ts`, `kick.config.ts`, `src/index.ts`, and all boilerplate.
+
+3. The workspace already includes `examples/*` in `pnpm-workspace.yaml` — no changes needed there.
+
+4. Update the generated `package.json`:
+   - Rename to `@forinda/kickjs-example-<name>`
+   - Set `"private": true`
+   - Replace published `@forinda/kickjs*` deps with `workspace:*` references
+
+5. Add a row to the **Example Apps** table in this README.
+
+6. Run from the repo root to link workspace deps and verify:
+
+   ```bash
+   pnpm install && pnpm build
+   ```
+
 ## CLI
 
 ```bash

@@ -102,7 +102,7 @@ When adding new features, use these as templates:
 
 ### New Example App
 
-- [ ] Scaffold with CLI: `cd examples && kick new <name> -t ddd --pm pnpm --no-git --no-install -f`
+- [ ] Scaffold with CLI: `cd examples && node ../packages/cli/bin.js new <name> --template ddd --pm pnpm --repo inmemory --no-git --no-install --force`
 - [ ] Add `package.json` (private: true, version: lockstep, `workspace:*` deps)
 - [ ] Add to `scripts/release.js` EXAMPLES array
 - [ ] Add docs page at `docs/examples/<name>.md`
@@ -138,12 +138,17 @@ Do NOT consider a feature complete until its docs are written and the sidebar is
 # Build the CLI first
 pnpm build
 
-# Scaffold from the repo root
+# Scaffold from examples/ directory — pass all flags to avoid interactive prompts
 cd examples
-npx kick new upload-api -t ddd --pm pnpm --no-git --no-install -f
+node ../packages/cli/bin.js new upload-api \
+  --template ddd --pm pnpm --repo inmemory --no-git --no-install --force
+
+# Generate modules inside the example
 cd upload-api
-npx kick g module upload
+node ../../packages/cli/bin.js g module upload
 ```
+
+Available flags for `new`: `--template rest|graphql|ddd|cqrs|minimal`, `--pm pnpm|npm|yarn`, `--repo prisma|drizzle|inmemory|custom`, `--no-git`, `--no-install`, `--force`.
 
 After scaffolding, customize the generated code for the example's purpose.
 

@@ -96,6 +96,30 @@ Implement `AppAdapter` from `@forinda/kickjs/adapter`:
 - `shutdown?(): Promise<void>`
 - `middleware?(): AdapterMiddleware[]`
 
+### Adding an Example App
+
+Use the built CLI to scaffold — never create files manually.
+
+```bash
+# 1. Build CLI first (if not already built)
+pnpm build
+
+# 2. Scaffold from examples/ directory (all flags required to avoid interactive prompts)
+cd examples
+node ../packages/cli/bin.js new my-example-api \
+  --template minimal --pm pnpm --repo inmemory --no-git --no-install --force
+```
+
+Available flags: `--template rest|graphql|ddd|cqrs|minimal`, `--pm pnpm|npm|yarn`, `--repo prisma|drizzle|inmemory|custom`, `--no-git`, `--no-install`, `--force`.
+
+3. Update generated `package.json`:
+   - Rename to `@forinda/kickjs-example-<name>`
+   - Set `"private": true`
+   - Replace published `@forinda/kickjs*` deps with `workspace:*` references
+4. `pnpm-workspace.yaml` already includes `examples/*` — no change needed
+5. Add row to Example Apps table in `README.md`
+6. Run `pnpm install && pnpm build` from root to verify
+
 ### Decorators
 
 ```ts
