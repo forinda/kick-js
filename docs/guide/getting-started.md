@@ -65,9 +65,8 @@ src/modules/users/
 
 ## Your First Controller
 
-```typescript
-import { Controller, Get, Post } from '@forinda/kickjs'
-import { RequestContext } from '@forinda/kickjs'
+```ts
+import { Controller, Get, Post, type Ctx } from '@forinda/kickjs'
 import { z } from 'zod'
 
 const createUserSchema = z.object({
@@ -78,13 +77,13 @@ const createUserSchema = z.object({
 @Controller()
 export class UserController {
   @Get('/')
-  async list(ctx: RequestContext) {
+  async list(ctx: Ctx<KickRoutes.UserController['list']>) {
     ctx.json([{ id: '1', name: 'Alice' }])
   }
 
-  @Post('/', { body: createUserSchema })
-  async create(ctx: RequestContext) {
-    // ctx.body is validated and typed
+  @Post('/', { body: createUserSchema, name: 'CreateUser' })
+  async create(ctx: Ctx<KickRoutes.UserController['create']>) {
+    // ctx.body is validated and typed from the Zod schema
     ctx.created({ id: '2', ...ctx.body })
   }
 }
@@ -92,16 +91,11 @@ export class UserController {
 
 ## Your First Module
 
-```typescript
-import { Container, type AppModule, type ModuleRoutes } from '@forinda/kickjs'
-import { buildRoutes } from '@forinda/kickjs'
-import { UserController } from './presentation/user.controller'
+```ts
+import { type AppModule, type ModuleRoutes, buildRoutes } from '@forinda/kickjs'
+import { UserController } from './user.controller'
 
 export class UserModule implements AppModule {
-  register(container: Container): void {
-    // Bind interfaces to implementations
-  }
-
   routes(): ModuleRoutes {
     return {
       path: '/users',
@@ -112,17 +106,34 @@ export class UserModule implements AppModule {
 }
 ```
 
+Register it in `src/modules/index.ts`:
+
+```ts
+import type { AppModuleClass } from '@forinda/kickjs'
+import { UserModule } from './users/user.module'
+
+export const modules: AppModuleClass[] = [UserModule]
+```
+
 ## Bootstrap
 
-```typescript
+```ts
+// src/index.ts
 import 'reflect-metadata'
+import './config' // registers env schema before bootstrap
 import { bootstrap } from '@forinda/kickjs'
-import { UserModule } from './modules/users'
+import { modules } from './modules'
 
-bootstrap({
-  modules: [UserModule],
-})
+// Export the app so the Vite plugin can pick it up in dev mode.
+// In production, bootstrap() auto-starts the HTTP server.
+export const app = await bootstrap({ modules })
 ```
+
+::: warning Always export the app
+The Vite dev plugin reads the `app` export to wire HMR. Skipping the
+`export` works in production but breaks `kick dev` — controllers won't
+update on file changes.
+:::
 
 That's it. Your API is running at `http://localhost:3000/api/v1/users`.
 
@@ -139,8 +150,8 @@ In dev mode, a compact route summary is logged at startup:
 This is enabled by default when `NODE_ENV !== 'production'`. Override with `logRoutesTable`:
 
 ```ts
-bootstrap({
-  modules: [UserModule],
+export const app = await bootstrap({
+  modules,
   logRoutesTable: true,   // always log (even in production)
   // logRoutesTable: false, // never log
 })
@@ -152,11 +163,11 @@ bootstrap({
 pnpm add @forinda/kickjs-swagger
 ```
 
-```typescript
+```ts
 import { SwaggerAdapter } from '@forinda/kickjs-swagger'
 
-bootstrap({
-  modules: [UserModule],
+export const app = await bootstrap({
+  modules,
   adapters: [
     new SwaggerAdapter({
       info: { title: 'My API', version: '1.0.0' },

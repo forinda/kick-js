@@ -51,7 +51,9 @@ app.listen(3000, () => console.log('Server running'))
 ### After (KickJS)
 
 ```ts
+// src/index.ts
 import 'reflect-metadata'
+import './config' // registers env schema before bootstrap
 import cors from 'cors'
 import helmet from 'helmet'
 import express from 'express'
@@ -59,7 +61,9 @@ import { bootstrap } from '@forinda/kickjs'
 import { SwaggerAdapter } from '@forinda/kickjs-swagger'
 import { modules } from './modules'
 
-bootstrap({
+// Export the app so the Vite plugin can pick it up in dev mode.
+// In production, bootstrap() auto-starts the HTTP server.
+export const app = await bootstrap({
   modules,
   middleware: [cors(), helmet(), express.json()],
   adapters: [
@@ -69,6 +73,12 @@ bootstrap({
 ```
 
 You keep your existing middleware — KickJS doesn't replace them.
+
+::: warning Always export the app
+The Vite dev plugin reads the `app` export to wire HMR. Skipping the
+`export` works in production but breaks `kick dev` — controllers won't
+update on file changes.
+:::
 
 ## Step 3: Convert Routes to Controllers
 
@@ -104,9 +114,8 @@ export default router
 ### After (KickJS)
 
 ```ts
-// modules/users/controller.ts
-import { Controller, Get, Post, Autowired } from '@forinda/kickjs'
-import type { RequestContext } from '@forinda/kickjs'
+// src/modules/users/user.controller.ts
+import { Controller, Get, Post, Autowired, type Ctx } from '@forinda/kickjs'
 import { UserService } from './user.service'
 
 @Controller()
@@ -114,21 +123,21 @@ export class UserController {
   @Autowired() private userService!: UserService
 
   @Get('/')
-  async list(ctx: RequestContext) {
-    return ctx.json(await this.userService.findAll())
+  async list(ctx: Ctx<KickRoutes.UserController['list']>) {
+    ctx.json(await this.userService.findAll())
   }
 
   @Get('/:id')
-  async getById(ctx: RequestContext) {
+  async getById(ctx: Ctx<KickRoutes.UserController['getById']>) {
     const user = await this.userService.findById(ctx.params.id)
     if (!user) return ctx.notFound()
-    return ctx.json(user)
+    ctx.json(user)
   }
 
   @Post('/')
-  async create(ctx: RequestContext) {
+  async create(ctx: Ctx<KickRoutes.UserController['create']>) {
     const user = await this.userService.create(ctx.body)
-    return ctx.created(user)
+    ctx.created(user)
   }
 }
 ```
@@ -193,18 +202,22 @@ router.get('/profile', authMiddleware, (req, res) => { ... })
 
 ```ts
 // You can still use Express middleware directly:
+import { Controller, Get, Middleware, HttpException, type Ctx } from '@forinda/kickjs'
+
+const requireAuth = (req, res, next) => {
+  const token = req.headers.authorization?.split(' ')[1]
+  if (!token) throw new HttpException(401, 'Unauthorized')
+  ;(req as any).user = verifyToken(token)
+  next()
+}
+
 @Controller()
 export class ProfileController {
   @Get('/profile')
-  @Middleware((ctx, next) => {
-    const token = ctx.headers.authorization?.split(' ')[1]
-    if (!token) return ctx.res.status(401).json({ message: 'Unauthorized' })
-    ctx.set('user', verifyToken(token))
-    next()
-  })
-  async getProfile(ctx: RequestContext) {
-    const user = ctx.get('user')
-    return ctx.json(user)
+  @Middleware(requireAuth)
+  async getProfile(ctx: Ctx<KickRoutes.ProfileController['getProfile']>) {
+    const user = (ctx.req as any).user
+    ctx.json(user)
   }
 }
 ```
@@ -212,7 +225,7 @@ export class ProfileController {
 Or keep your Express middleware as-is and apply it globally:
 
 ```ts
-bootstrap({
+export const app = await bootstrap({
   modules,
   middleware: [authMiddleware, express.json()],
 })
@@ -233,19 +246,33 @@ app.use('/api/v1/products', productsRouter)
 ### After (KickJS)
 
 ```ts
-// modules/users/index.ts
-export class UsersModule implements AppModule {
-  register(container) {}
-  routes() {
-    return { path: '/users', router: buildRoutes(UserController), controller: UserController }
+// src/modules/users/user.module.ts
+import { type AppModule, type ModuleRoutes, buildRoutes } from '@forinda/kickjs'
+import { UserController } from './user.controller'
+
+export class UserModule implements AppModule {
+  routes(): ModuleRoutes {
+    return {
+      path: '/users',
+      router: buildRoutes(UserController),
+      controller: UserController,
+    }
   }
 }
 
-// modules/index.ts
-export const modules = [UsersModule, ProductsModule]
+// src/modules/index.ts
+import type { AppModuleClass } from '@forinda/kickjs'
+import { UserModule } from './users/user.module'
+import { ProductModule } from './products/product.module'
+
+export const modules: AppModuleClass[] = [UserModule, ProductModule]
 
 // src/index.ts — apiPrefix + versioning are automatic
-bootstrap({ modules, apiPrefix: '/api', defaultVersion: 1 })
+export const app = await bootstrap({
+  modules,
+  apiPrefix: '/api',
+  defaultVersion: 1,
+})
 // Routes: /api/v1/users, /api/v1/products
 ```
 
@@ -272,8 +299,8 @@ You don't have to convert everything at once. KickJS runs on Express 5, so you c
 4. Keep raw Express routes alongside KickJS modules
 
 ```ts
-bootstrap({
-  modules: [UsersModule], // converted module
+export const app = await bootstrap({
+  modules, // converted modules from src/modules/index.ts
   middleware: [
     cors(),
     express.json(),

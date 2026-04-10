@@ -34,26 +34,78 @@ kick new my-api && cd my-api && kick dev
 
 ## Hello World
 
-```typescript
-import 'reflect-metadata'
-import { Controller, Get, Service, Autowired, bootstrap, type Ctx } from '@forinda/kickjs'
+A fresh `kick new my-api` scaffolds a complete project. Here are the files
+that matter, exactly as the CLI generates them:
+
+```ts
+// src/modules/hello/hello.service.ts
+import { Service } from '@forinda/kickjs'
 
 @Service()
-class GreetService {
-  greet(name: string) { return `Hello ${name}` }
-}
+export class HelloService {
+  greet(name: string) {
+    return { message: `Hello ${name} from KickJS!`, timestamp: new Date().toISOString() }
+  }
 
-@Controller()
-class HelloController {
-  @Autowired() private greet!: GreetService
-
-  @Get('/')
-  handle(ctx: Ctx) {
-    ctx.json({ message: this.greet.greet('KickJS') })
+  healthCheck() {
+    return { status: 'ok', uptime: process.uptime() }
   }
 }
+```
 
-bootstrap({ modules: [/* your modules */] })
+```ts
+// src/modules/hello/hello.controller.ts
+import { Controller, Get, Autowired, type Ctx } from '@forinda/kickjs'
+import { HelloService } from './hello.service'
+
+@Controller()
+export class HelloController {
+  @Autowired() private readonly helloService!: HelloService
+
+  @Get('/')
+  index(ctx: Ctx<KickRoutes.HelloController['index']>) {
+    ctx.json(this.helloService.greet('World'))
+  }
+
+  @Get('/health')
+  health(ctx: Ctx<KickRoutes.HelloController['health']>) {
+    ctx.json(this.helloService.healthCheck())
+  }
+}
+```
+
+```ts
+// src/modules/hello/hello.module.ts
+import { type AppModule, type ModuleRoutes, buildRoutes } from '@forinda/kickjs'
+import { HelloController } from './hello.controller'
+
+export class HelloModule implements AppModule {
+  routes(): ModuleRoutes {
+    return {
+      path: '/hello',
+      router: buildRoutes(HelloController),
+      controller: HelloController,
+    }
+  }
+}
+```
+
+```ts
+// src/modules/index.ts
+import type { AppModuleClass } from '@forinda/kickjs'
+import { HelloModule } from './hello/hello.module'
+
+export const modules: AppModuleClass[] = [HelloModule]
+```
+
+```ts
+// src/index.ts
+import 'reflect-metadata'
+import './config' // registers env schema before bootstrap
+import { bootstrap } from '@forinda/kickjs'
+import { modules } from './modules'
+
+export const app = await bootstrap({ modules })
 ```
 
 ## What's Included
@@ -90,23 +142,23 @@ import {
 
 ## Typed Routes, Body, Query, and Env
 
-Run `kick typegen` (via the CLI) to generate `KickRoutes` and `KickEnv` from
-your codebase. Once generated, route handlers, request bodies, query strings,
-and `@Value` injections are all type-checked end-to-end:
+`kick typegen` (auto-runs on `kick dev`) generates `KickRoutes` and `KickEnv`
+from your codebase. Route handlers, request bodies, query strings, and
+`@Value` injections are all type-checked end-to-end:
 
-```typescript
-import { Controller, Post, Autowired, Value, type Ctx } from '@forinda/kickjs'
+```ts
+import { Controller, Post, Value, type Ctx } from '@forinda/kickjs'
 import { z } from 'zod'
 
 const createUserBody = z.object({ name: z.string(), email: z.string().email() })
 
 @Controller('/users')
 class UserController {
-  // Typed env injection — keys come from KickEnv (your src/env.ts)
+  // Typed env injection — keys come from KickEnv (your src/config/index.ts)
   @Value('DATABASE_URL') private dbUrl!: string
 
-  @Post('/', { body: createUserBody })
-  create(ctx: Ctx<KickRoutes['POST /users']>) {
+  @Post('/', { body: createUserBody, name: 'CreateUser' })
+  create(ctx: Ctx<KickRoutes.UserController['create']>) {
     ctx.body.email // ✅ string — inferred from the Zod schema
     ctx.created({ id: '1', ...ctx.body })
   }
