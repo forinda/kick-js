@@ -123,23 +123,8 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
   // ── AGENTS.md ────────────────────────────────────────────────────────
   await writeFileSafe(join(dir, 'AGENTS.md'), generateAgents(name, template, packageManager))
 
-  // ── Git Init ─────────────────────────────────────────────────────────
-  if (options.initGit) {
-    try {
-      execSync('git init', { cwd: dir, stdio: 'pipe' })
-      execSync('git branch -M main', { cwd: dir, stdio: 'pipe' })
-      execSync('git add -A', { cwd: dir, stdio: 'pipe' })
-      execSync('git commit -m "chore: initial commit from kick new"', {
-        cwd: dir,
-        stdio: 'pipe',
-      })
-      log('Git repository initialized')
-    } catch {
-      log('Warning: git init failed (git may not be installed)')
-    }
-  }
-
   // ── Install Dependencies ────────────────────────────────────────────
+  // Install BEFORE git init so the lockfile is included in the first commit.
   if (options.installDeps) {
     console.log(`\n  Installing dependencies with ${packageManager}...\n`)
     try {
@@ -159,6 +144,24 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
     await runTypegen({ cwd: dir, allowDuplicates: true, silent: true })
   } catch {
     // First-run typegen errors are non-fatal — `kick dev` will retry.
+  }
+
+  // ── Git Init ─────────────────────────────────────────────────────────
+  // Runs after install + typegen so lockfile and generated types are
+  // included in the initial commit.
+  if (options.initGit) {
+    try {
+      execSync('git init', { cwd: dir, stdio: 'pipe' })
+      execSync('git branch -M main', { cwd: dir, stdio: 'pipe' })
+      execSync('git add -A', { cwd: dir, stdio: 'pipe' })
+      execSync('git commit -m "chore: initial commit from kick new"', {
+        cwd: dir,
+        stdio: 'pipe',
+      })
+      log('Git repository initialized')
+    } catch {
+      log('Warning: git init failed (git may not be installed)')
+    }
   }
 
   console.log('\n  Project scaffolded successfully!')
