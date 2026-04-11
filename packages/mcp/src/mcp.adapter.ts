@@ -74,13 +74,25 @@ export class McpAdapter implements AppAdapter {
   }> = []
 
   /** Discovered tool definitions, built during `beforeStart`. */
-  private tools: McpToolDefinition[] = []
+  private readonly tools: McpToolDefinition[] = []
 
   /** Active MCP server instance, created in `afterStart`. */
   private mcpServer: McpServer | null = null
 
   /** Active streamable HTTP transport, created in `afterStart`. */
   private transport: StreamableHTTPServerTransport | null = null
+
+  /**
+   * Base URL of the running KickJS HTTP server, captured in `afterStart`
+   * once the server is listening. Tool dispatch makes internal HTTP
+   * requests against this base URL so calls flow through the normal
+   * Express pipeline (middleware, validation, auth, logging, error
+   * handling) rather than bypassing it.
+   *
+   * Format: `http://127.0.0.1:<port>`. Set to `null` until afterStart
+   * runs and reset to `null` on shutdown.
+   */
+  private serverBaseUrl: string | null = null
 
   constructor(options: McpAdapterOptions) {
     this.options = {
@@ -158,6 +170,12 @@ export class McpAdapter implements AppAdapter {
       return
     }
 
+    // Capture the running server's address so tool dispatch can make
+    // internal HTTP requests against the actual port. The framework
+    // calls afterStart only once the server is listening, so
+    // server.address() returns a real AddressInfo at this point.
+    this.serverBaseUrl = this.resolveServerBaseUrl(ctx.server)
+
     this.mcpServer = this.buildMcpServer()
     this.transport = new StreamableHTTPServerTransport({
       // Stateless mode for v0 — every request gets a fresh session. We can
@@ -193,6 +211,7 @@ export class McpAdapter implements AppAdapter {
     }
     this.transport = null
     this.mcpServer = null
+    this.serverBaseUrl = null
     log.debug('McpAdapter shutdown complete')
   }
 
@@ -296,12 +315,11 @@ export class McpAdapter implements AppAdapter {
    * `zodInputSchema` straight through and skip the JSON Schema form
    * here (the JSON Schema is for inspection / docs).
    *
-   * The tool dispatch callback is a placeholder for v0: it returns a
-   * structured "not yet wired" response so MCP clients can discover
-   * tools and exercise the protocol round-trip without crashing. Real
-   * dispatch (resolving the controller from the DI container and
-   * invoking the handler through the Express pipeline) is the next
-   * iteration.
+   * Tool calls dispatch through the Express pipeline via internal HTTP
+   * requests against the running server's address (captured in
+   * `afterStart`). This preserves middleware, validation, auth, and
+   * logging — tool calls behave exactly like external HTTP requests
+   * to the same route.
    */
   private buildMcpServer(): McpServer {
     const server = new McpServer({
@@ -332,32 +350,148 @@ export class McpAdapter implements AppAdapter {
       if (tool.zodInputSchema) {
         config.inputSchema = tool.zodInputSchema
       }
-      registerTool(tool.name, config, async (args) => this.placeholderToolResponse(tool.name, args))
+      registerTool(tool.name, config, async (args) => this.dispatchTool(tool, args))
     }
 
     return server
   }
 
   /**
-   * Placeholder tool response used until real dispatch is wired.
+   * Dispatch a tool call through the Express pipeline.
    *
-   * Returns a structured `CallToolResult` so MCP clients see the tool
-   * existed and was called, but learn that dispatch is not yet implemented.
-   * The next iteration replaces this with a real call into the Express
-   * pipeline (resolving the controller from the DI container or making
-   * an internal HTTP request to the route's mountPath).
+   * Builds an HTTP request that matches the tool's underlying route
+   * (method + path + body or query string from the args) and sends it
+   * to the running server's `serverBaseUrl`. The request goes through
+   * every middleware the route normally hits — auth, validation,
+   * logging, error handling — so tool calls observe exactly the same
+   * guarantees as external HTTP clients.
+   *
+   * Path parameters (e.g. `/:id`) are substituted from `args` before
+   * the request fires; matching keys are removed from the body/query
+   * to avoid sending them twice.
+   *
+   * Returns a `CallToolResult` whose `content` contains the response
+   * body as text. Non-2xx responses are flagged with `isError: true`
+   * so the calling LLM can react.
    */
-  private placeholderToolResponse(toolName: string, args: unknown) {
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text:
-            `Tool ${toolName} was called but dispatch is not yet wired. ` +
-            `Arguments received: ${JSON.stringify(args ?? {})}`,
-        },
-      ],
+  private async dispatchTool(
+    tool: McpToolDefinition,
+    rawArgs: unknown,
+  ): Promise<{
+    content: Array<{ type: 'text'; text: string }>
+    isError?: boolean
+  }> {
+    if (!this.serverBaseUrl) {
+      return {
+        isError: true,
+        content: [
+          {
+            type: 'text' as const,
+            text: `Cannot dispatch ${tool.name}: HTTP server address not yet captured`,
+          },
+        ],
+      }
     }
+
+    const args = (rawArgs ?? {}) as Record<string, unknown>
+    const { path, remainingArgs } = this.substitutePathParams(tool.mountPath, args)
+    const method = tool.httpMethod.toUpperCase()
+    const hasBody = method === 'POST' || method === 'PUT' || method === 'PATCH'
+
+    let url = `${this.serverBaseUrl}${path}`
+    const init: RequestInit = {
+      method,
+      headers: {
+        accept: 'application/json',
+        'x-mcp-tool': tool.name,
+      },
+    }
+
+    if (hasBody) {
+      ;(init.headers as Record<string, string>)['content-type'] = 'application/json'
+      init.body = JSON.stringify(remainingArgs)
+    } else if (Object.keys(remainingArgs).length > 0) {
+      // GET / DELETE: serialize args as a query string
+      const qs = new URLSearchParams()
+      for (const [key, value] of Object.entries(remainingArgs)) {
+        if (value === undefined || value === null) continue
+        qs.append(key, typeof value === 'string' ? value : JSON.stringify(value))
+      }
+      const sep = url.includes('?') ? '&' : '?'
+      url = `${url}${sep}${qs.toString()}`
+    }
+
+    try {
+      const res = await fetch(url, init)
+      const text = await res.text()
+      return {
+        isError: res.status >= 400,
+        content: [
+          {
+            type: 'text' as const,
+            text: text || `(${res.status} ${res.statusText})`,
+          },
+        ],
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      log.error(err as Error, `McpAdapter: dispatch failed for ${tool.name}`)
+      return {
+        isError: true,
+        content: [
+          {
+            type: 'text' as const,
+            text: `Tool dispatch error: ${message}`,
+          },
+        ],
+      }
+    }
+  }
+
+  /**
+   * Substitute Express-style path parameters (`:id`) in `mountPath`
+   * with values from `args`. Returns the resolved path plus the args
+   * that were NOT consumed by parameters, so they can be sent as the
+   * request body or query string.
+   *
+   * If a `:param` is referenced in the path but missing from args,
+   * the placeholder is left in place — the request will hit a 404 from
+   * the underlying route, which is reported back as an MCP error.
+   */
+  private substitutePathParams(
+    mountPath: string,
+    args: Record<string, unknown>,
+  ): { path: string; remainingArgs: Record<string, unknown> } {
+    const remaining: Record<string, unknown> = { ...args }
+    const path = mountPath.replace(/:([a-zA-Z_][a-zA-Z0-9_]*)/g, (_match, param: string) => {
+      if (param in remaining) {
+        const value = remaining[param]
+        delete remaining[param]
+        return encodeURIComponent(String(value))
+      }
+      return `:${param}`
+    })
+    return { path, remainingArgs: remaining }
+  }
+
+  /**
+   * Resolve the running server's base URL from a Node `http.Server`
+   * instance. Returns null if the server isn't listening or its
+   * address can't be determined (e.g. when the adapter is mounted
+   * standalone for testing).
+   *
+   * IPv6 addresses are wrapped in brackets per RFC 3986. The hostname
+   * `0.0.0.0` (Linux default) is rewritten to `127.0.0.1` because the
+   * former is not a valid request target on all platforms.
+   */
+  private resolveServerBaseUrl(server: AdapterContext['server']): string | null {
+    if (!server) return null
+    const address = server.address()
+    if (!address || typeof address === 'string') return null
+    let host = address.address
+    if (host === '::' || host === '0.0.0.0' || host === '') host = '127.0.0.1'
+    if (host.includes(':') && !host.startsWith('[')) host = `[${host}]`
+    return `http://${host}:${address.port}`
   }
 
   /**
