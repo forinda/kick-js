@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-config",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "description": "DEPRECATED — moved into @forinda/kickjs. This package is a thin re-export shim and will be removed in v3.",
   "deprecated": "@forinda/kickjs-config has been merged into @forinda/kickjs. Import { defineEnv, loadEnv, ConfigService } from '@forinda/kickjs' instead, and { envWatchPlugin } from '@forinda/kickjs-vite'. This shim will be removed in v3.",
   "keywords": [

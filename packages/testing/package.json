@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-testing",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "description": "Test utilities, TestModule builder, and helpers for KickJS applications",
   "keywords": [
     "kickjs",
