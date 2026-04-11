@@ -11,9 +11,11 @@ import {
 import type { Express } from 'express'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
+import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
 import { getMcpToolMeta } from './decorators'
 import { zodToJsonSchema } from './zod-to-json-schema'
-import type { McpAdapterOptions, McpToolDefinition } from './types'
+import type { McpAdapterOptions, McpToolDefinition, McpTransport } from './types'
 
 const log = Logger.for('McpAdapter')
 
@@ -79,8 +81,13 @@ export class McpAdapter implements AppAdapter {
   /** Active MCP server instance, created in `afterStart`. */
   private mcpServer: McpServer | null = null
 
-  /** Active streamable HTTP transport, created in `afterStart`. */
-  private transport: StreamableHTTPServerTransport | null = null
+  /**
+   * Active MCP transport, created in `afterStart`. Can be either a
+   * `StreamableHTTPServerTransport` (the default for HTTP-based MCP)
+   * or a `StdioServerTransport` (when running via the `kick mcp` CLI
+   * or with `KICK_MCP_STDIO=1`).
+   */
+  private transport: Transport | null = null
 
   /**
    * Base URL of the running KickJS HTTP server, captured in `afterStart`
@@ -153,12 +160,23 @@ export class McpAdapter implements AppAdapter {
    *   transport so dev logs don't interfere.
    */
   async afterStart(ctx: AdapterContext): Promise<void> {
-    if (this.options.transport === 'stdio') {
-      log.debug('Stdio transport requested — skipping in-process Express mount')
+    // Capture the running server's address so tool dispatch can make
+    // internal HTTP requests against the actual port. The framework
+    // calls afterStart only once the server is listening, so
+    // server.address() returns a real AddressInfo at this point.
+    // We capture this regardless of transport mode because dispatch
+    // always uses the local HTTP listener — even in stdio mode it's
+    // the internal route into the Express pipeline.
+    this.serverBaseUrl = this.resolveServerBaseUrl(ctx.server)
+
+    const effectiveTransport = this.resolveTransportMode()
+
+    if (effectiveTransport === 'stdio') {
+      await this.startStdioTransport()
       return
     }
 
-    if (this.options.transport === 'sse') {
+    if (effectiveTransport === 'sse') {
       log.warn(
         'sse transport is deprecated upstream; using StreamableHTTP transport, which supports the same SSE wire format under the hood',
       )
@@ -170,25 +188,60 @@ export class McpAdapter implements AppAdapter {
       return
     }
 
-    // Capture the running server's address so tool dispatch can make
-    // internal HTTP requests against the actual port. The framework
-    // calls afterStart only once the server is listening, so
-    // server.address() returns a real AddressInfo at this point.
-    this.serverBaseUrl = this.resolveServerBaseUrl(ctx.server)
-
     this.mcpServer = this.buildMcpServer()
-    this.transport = new StreamableHTTPServerTransport({
+    const httpTransport = new StreamableHTTPServerTransport({
       // Stateless mode for v0 — every request gets a fresh session. We can
       // switch to a stateful generator (sessionIdGenerator: randomUUID) once
       // we add session-aware tool dispatch.
       sessionIdGenerator: () => randomUUID(),
     })
+    this.transport = httpTransport
 
-    await this.mcpServer.connect(this.transport)
-    this.mountHttpRoutes(expressApp)
+    await this.mcpServer.connect(httpTransport)
+    this.mountHttpRoutes(expressApp, httpTransport)
 
     log.info(
       `McpAdapter ready — ${this.tools.length} tool(s) registered, listening at ${this.options.basePath}/messages`,
+    )
+  }
+
+  /**
+   * Decide which transport to actually start.
+   *
+   * Precedence: an explicit `KICK_MCP_STDIO=1` environment variable
+   * always wins, because that's how the `kick mcp` CLI command tells
+   * the running process to switch to stdio mode without requiring the
+   * user to edit their bootstrap. Otherwise the constructor option is
+   * honored as-is.
+   */
+  private resolveTransportMode(): McpTransport {
+    if (process.env.KICK_MCP_STDIO === '1' || process.env.KICK_MCP_STDIO === 'true') {
+      return 'stdio'
+    }
+    return this.options.transport
+  }
+
+  /**
+   * Start the MCP server bound to process stdio.
+   *
+   * Used by the `kick mcp` CLI: the parent process pipes its stdin/
+   * stdout to this adapter so MCP clients (Claude Code, Cursor) can
+   * speak the protocol over the wire. Logs MUST go to stderr in this
+   * mode — anything written to stdout corrupts the JSON-RPC stream.
+   *
+   * The HTTP server is still running (the framework called start()
+   * before afterStart), but we don't mount the MCP routes on it. Tool
+   * dispatch routes through fetch against `serverBaseUrl` exactly the
+   * same way it does in HTTP mode, so dispatch behavior is uniform
+   * across transports.
+   */
+  private async startStdioTransport(): Promise<void> {
+    this.mcpServer = this.buildMcpServer()
+    this.transport = new StdioServerTransport()
+    await this.mcpServer.connect(this.transport)
+    // Use stderr-friendly log level so we don't break the protocol
+    log.info(
+      `McpAdapter ready (stdio) — ${this.tools.length} tool(s) registered, dispatching against ${this.serverBaseUrl ?? 'unknown'}`,
     )
   }
 
@@ -505,12 +558,10 @@ export class McpAdapter implements AppAdapter {
    * We mount all three on `${basePath}/messages` so a single URL is
    * the entire MCP surface area.
    */
-  private mountHttpRoutes(app: Express): void {
-    const transport = this.transport
-    if (!transport) return
-
+  private mountHttpRoutes(app: Express, transport: StreamableHTTPServerTransport): void {
     const path = `${this.options.basePath}/messages`
 
+    /* eslint-disable @typescript-eslint/no-explicit-any */
     const handleRequest = async (req: any, res: any): Promise<void> => {
       try {
         await transport.handleRequest(req, res, req.body)
@@ -521,6 +572,7 @@ export class McpAdapter implements AppAdapter {
         }
       }
     }
+    /* eslint-enable @typescript-eslint/no-explicit-any */
 
     app.post(path, handleRequest)
     app.get(path, handleRequest)

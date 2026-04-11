@@ -135,6 +135,13 @@ const PACKAGE_REGISTRY: Record<
     description: 'Multi-channel notifications — email, Slack, Discord, webhook',
   },
 
+  // MCP — Model Context Protocol server
+  mcp: {
+    pkg: '@forinda/kickjs-mcp',
+    peers: ['@modelcontextprotocol/sdk'],
+    description: 'Model Context Protocol server — expose @Controller endpoints as AI tools',
+  },
+
   // Testing
   testing: {
     pkg: '@forinda/kickjs-testing',
