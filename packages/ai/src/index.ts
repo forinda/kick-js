@@ -3,6 +3,14 @@ export { AiTool, getAiToolMeta, isAiTool } from './decorators'
 export { AI_PROVIDER, AI_TOOL_METADATA, VECTOR_STORE } from './constants'
 export { OpenAIProvider, type OpenAIProviderOptions } from './providers/openai'
 export { ProviderError } from './providers/base'
+export { createPrompt, Prompt } from './prompts'
+export type { CreatePromptOptions } from './prompts'
+export { InMemoryChatMemory, SlidingWindowChatMemory } from './memory'
+export type {
+  ChatMemory,
+  RunAgentWithMemoryOptions,
+  SlidingWindowChatMemoryOptions,
+} from './memory'
 export {
   InMemoryVectorStore,
   PgVectorStore,

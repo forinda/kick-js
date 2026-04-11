@@ -10,6 +10,7 @@ import {
 } from '@forinda/kickjs'
 import { AI_PROVIDER } from './constants'
 import { getAiToolMeta } from './decorators'
+import type { RunAgentWithMemoryOptions } from './memory/types'
 import { zodToJsonSchema } from './zod-to-json-schema'
 import type {
   AiAdapterOptions,
@@ -273,6 +274,94 @@ export class AiAdapter implements AppAdapter {
       usage: usage.totalTokens > 0 ? usage : undefined,
       maxStepsReached: true,
     }
+  }
+
+  /**
+   * Memory-aware agent turn.
+   *
+   * Wraps `runAgent` with an automatic "read history → append user
+   * message → run loop → persist assistant response" cycle. Services
+   * that want multi-turn conversations don't need to manage the
+   * plumbing themselves — pass a `ChatMemory` and a user message,
+   * get back the agent's response, and the memory is updated.
+   *
+   * System prompt handling:
+   *   - If the memory is empty AND `systemPrompt` is provided, the
+   *     system prompt is persisted as the first message in the
+   *     session. It stays put for every subsequent turn.
+   *   - On follow-up turns, the existing system prompt is reused
+   *     from memory; the `systemPrompt` option is ignored to keep
+   *     the session persona stable.
+   *
+   * Tool result persistence:
+   *   - By default, tool messages are NOT persisted to memory —
+   *     they're usually large API responses the user doesn't need
+   *     on later turns, and including them blows up prompt tokens
+   *     unnecessarily. Set `persistToolResults: true` to keep them
+   *     (useful for debugging / full-transcript replay).
+   *   - Assistant messages with tool calls ARE persisted so the
+   *     conversation shows what the agent did.
+   *
+   * @example
+   * ```ts
+   * @Service()
+   * class ChatService {
+   *   @Autowired() private ai!: AiAdapter
+   *   private readonly memory = new InMemoryChatMemory()
+   *
+   *   async handle(userMessage: string) {
+   *     const result = await this.ai.runAgentWithMemory({
+   *       memory: this.memory,
+   *       userMessage,
+   *       systemPrompt: 'You are a helpful assistant.',
+   *       tools: 'auto',
+   *     })
+   *     return result.content
+   *   }
+   * }
+   * ```
+   */
+  async runAgentWithMemory(options: RunAgentWithMemoryOptions): Promise<RunAgentResult> {
+    const history = await options.memory.get()
+    const messages: ChatMessage[] = [...history]
+
+    // First-turn system prompt — only injected if the memory is
+    // empty. Later turns rely on the persisted system prompt.
+    const isFirstTurn = messages.length === 0
+    if (isFirstTurn && options.systemPrompt) {
+      const systemMessage: ChatMessage = { role: 'system', content: options.systemPrompt }
+      messages.push(systemMessage)
+      await options.memory.add(systemMessage)
+    }
+
+    const userMessage: ChatMessage = { role: 'user', content: options.userMessage }
+    messages.push(userMessage)
+    await options.memory.add(userMessage)
+
+    const result = await this.runAgent({
+      messages,
+      model: options.model,
+      tools: options.tools,
+      maxSteps: options.maxSteps,
+      temperature: options.temperature,
+      maxTokens: options.maxTokens,
+      topP: options.topP,
+      stopSequences: options.stopSequences,
+      signal: options.signal,
+    })
+
+    // Persist every message the loop produced AFTER the user turn.
+    // Slice starts at messages.length because everything up to there
+    // is already in memory.
+    const newMessages = result.messages.slice(messages.length)
+    const toPersist = options.persistToolResults
+      ? newMessages
+      : newMessages.filter((m) => m.role !== 'tool')
+    if (toPersist.length > 0) {
+      await options.memory.add(toPersist)
+    }
+
+    return result
   }
 
   // ── Tool resolution and dispatch ────────────────────────────────────────
