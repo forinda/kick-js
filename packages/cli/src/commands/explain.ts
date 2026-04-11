@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { Command } from 'commander'
 import { findBestMatch, type Diagnosis, type ExplainContext } from '../explain/known-issues'
+import { askAi, type AskAiResult } from '../explain/ai-fallback'
 
 /**
  * `kick explain` — explain a KickJS error and suggest a fix.
@@ -35,6 +36,7 @@ export function registerExplainCommand(program: Command): void {
     .description('Explain a KickJS error and suggest a fix')
     .option('-m, --message <text>', 'Error message to explain (alternative to positional arg)')
     .option('--ai', 'Fall back to LLM if no known-issue matches (requires @forinda/kickjs-ai)')
+    .option('--model <name>', 'Model name for the --ai fallback', 'gpt-4o-mini')
     .option('--json', 'Output the diagnosis as JSON for tooling integration')
     .action(async (positional: string | undefined, opts: ExplainOptions) => {
       const input = await resolveInput(positional, opts.message)
@@ -53,24 +55,80 @@ export function registerExplainCommand(program: Command): void {
       const ctx = buildExplainContext()
       const match = findBestMatch(input, ctx)
 
-      if (opts.json) {
-        process.stdout.write(JSON.stringify({ matched: !!match, ...match }, null, 2) + '\n')
+      if (opts.json && match) {
+        process.stdout.write(JSON.stringify({ matched: true, ...match }, null, 2) + '\n')
         return
       }
 
-      if (!match) {
-        printNoMatch(input, opts.ai)
-        process.exit(opts.ai ? 0 : 2)
+      if (match) {
+        printDiagnosis(input, match.diagnosis, match.confidence)
+        return
       }
 
-      printDiagnosis(input, match.diagnosis, match.confidence)
+      // No local match. If --ai was set, try the LLM fallback; otherwise
+      // print the "no match" guidance and exit with code 2 so callers can
+      // detect "I have no answer" programmatically.
+      if (!opts.ai) {
+        if (opts.json) {
+          process.stdout.write(JSON.stringify({ matched: false }, null, 2) + '\n')
+          process.exit(2)
+        }
+        printNoMatch(input, false)
+        process.exit(2)
+      }
+
+      const result = await askAi({
+        input,
+        model: opts.model,
+        cwd: ctx.cwd,
+      })
+
+      if (opts.json) {
+        process.stdout.write(JSON.stringify(aiResultToJson(result), null, 2) + '\n')
+        process.exit(result.kind === 'ok' ? 0 : 2)
+      }
+
+      printAiResult(input, result)
+      process.exit(result.kind === 'ok' ? 0 : 2)
     })
 }
 
 interface ExplainOptions {
   message?: string
   ai?: boolean
+  model?: string
   json?: boolean
+}
+
+/** Serialize an AskAiResult for `--json` output. */
+function aiResultToJson(result: AskAiResult): Record<string, unknown> {
+  if (result.kind === 'ok') {
+    return { matched: true, source: 'ai', diagnosis: result.diagnosis }
+  }
+  if (result.kind === 'unavailable') {
+    return { matched: false, aiUnavailable: true, reason: result.reason }
+  }
+  return { matched: false, aiError: true, error: result.message }
+}
+
+/** Render an AskAiResult to stdout using the same formatting as local matches. */
+function printAiResult(input: string, result: AskAiResult): void {
+  if (result.kind === 'ok') {
+    // Confidence for the AI path is not numeric — the LLM doesn't
+    // surface a probability we can trust. Use a fixed label that
+    // clearly marks the answer as AI-generated rather than pattern-
+    // matched, so users know to sanity-check it.
+    printDiagnosis(input, result.diagnosis, -1, /* aiLabel */ true)
+    return
+  }
+  if (result.kind === 'unavailable') {
+    process.stdout.write(`\n  Explaining: ${truncate(input.trim(), 200)}\n\n`)
+    process.stdout.write(`  AI fallback unavailable: ${result.reason}\n\n`)
+    process.stdout.write(`${indent(result.suggestion, '  ')}\n\n`)
+    return
+  }
+  process.stdout.write(`\n  Explaining: ${truncate(input.trim(), 200)}\n\n`)
+  process.stdout.write(`  AI fallback error: ${result.message}\n\n`)
 }
 
 // ── Input resolution ──────────────────────────────────────────────────────
@@ -122,12 +180,12 @@ function buildExplainContext(): ExplainContext {
 
 // ── Output ────────────────────────────────────────────────────────────────
 
-function printDiagnosis(input: string, d: Diagnosis, confidence: number): void {
+function printDiagnosis(input: string, d: Diagnosis, confidence: number, aiLabel = false): void {
   const inputSnippet = truncate(input.trim(), 200)
-  const confidenceLabel = labelConfidence(confidence)
+  const label = aiLabel ? 'AI-generated — verify before applying' : labelConfidence(confidence)
 
   process.stdout.write(`\n  Explaining: ${inputSnippet}\n`)
-  process.stdout.write(`\n  Match: ${d.id}  (${confidenceLabel})\n`)
+  process.stdout.write(`\n  Match: ${d.id}  (${label})\n`)
   process.stdout.write(`  Title: ${d.title}\n`)
   process.stdout.write(`\n  Diagnosis:\n${indent(d.explanation, '    ')}\n`)
   process.stdout.write(`\n  Fix:\n${indent(d.fix, '    ')}\n`)

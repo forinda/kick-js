@@ -37,15 +37,26 @@ interface RunResult {
  * from arguments / stdin. We also need to feed stdin, which the
  * shared helper doesn't support.
  */
-function runExplain(args: string[], opts: { stdin?: string } = {}): RunResult {
+function runExplain(
+  args: string[],
+  opts: { stdin?: string; unsetEnv?: string[] } = {},
+): RunResult {
   if (!existsSync(CLI_BIN)) {
     throw new Error(`CLI binary not found at ${CLI_BIN}. Run pnpm --filter cli build first.`)
   }
+  const env: Record<string, string | undefined> = { ...process.env, NO_COLOR: '1' }
+  for (const key of opts.unsetEnv ?? []) {
+    delete env[key]
+  }
+  // spawnSync wants a clean `string` record — filter out the undefineds
+  const cleanEnv = Object.fromEntries(
+    Object.entries(env).filter(([, v]) => typeof v === 'string'),
+  ) as Record<string, string>
   const result = spawnSync('node', [CLI_BIN, ...args], {
     encoding: 'utf-8',
     stdio: ['pipe', 'pipe', 'pipe'],
     input: opts.stdin,
-    env: { ...process.env, NO_COLOR: '1' },
+    env: cleanEnv,
   })
   return {
     exitCode: result.status ?? -1,
@@ -169,10 +180,16 @@ describe('kick explain command', () => {
     expect(result.stdout).toContain('No known-issue matched')
   })
 
-  it('exits with code 0 on no-match WITH --ai (placeholder behavior)', () => {
-    const result = runExplain(['explain', '--ai', 'unrelated rocket motor error'])
-    expect(result.exitCode).toBe(0)
-    expect(result.stdout).toContain('not yet wired')
+  it('reports AI fallback unavailable when no API key is set', () => {
+    // The --ai flag now invokes the real fallback. Without OPENAI_API_KEY
+    // the fallback returns `unavailable` and the command exits with code 2
+    // so scripts can detect "I have no answer" without succeeding.
+    const result = runExplain(['explain', '--ai', 'unrelated rocket motor error'], {
+      unsetEnv: ['OPENAI_API_KEY'],
+    })
+    expect(result.exitCode).toBe(2)
+    expect(result.stdout).toContain('AI fallback unavailable')
+    expect(result.stdout).toContain('OPENAI_API_KEY')
   })
 
   it('errors with a helpful message on completely empty input', () => {

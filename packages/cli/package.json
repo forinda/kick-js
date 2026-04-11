@@ -88,6 +88,7 @@
     "pluralize": "^8.0.0"
   },
   "devDependencies": {
+    "@forinda/kickjs-ai": "workspace:*",
     "@swc/core": "^1.15.21",
     "@types/node": "^25.0.0",
     "@types/pluralize": "^0.0.33",

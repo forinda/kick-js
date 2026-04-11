@@ -1205,6 +1205,9 @@ importers:
         specifier: ^8.0.0
         version: 8.0.0
     devDependencies:
+      '@forinda/kickjs-ai':
+        specifier: workspace:*
+        version: link:../ai
       '@swc/core':
         specifier: ^1.15.21
         version: 1.15.21
