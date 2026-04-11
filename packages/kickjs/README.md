@@ -221,6 +221,10 @@ class MyAdapter implements AppAdapter {
 | [`@forinda/kickjs-graphql`](https://www.npmjs.com/package/@forinda/kickjs-graphql) | `@Resolver`, `@Query`, `@Mutation` |
 | [`@forinda/kickjs-otel`](https://www.npmjs.com/package/@forinda/kickjs-otel) | OpenTelemetry tracing + metrics |
 | [`@forinda/kickjs-devtools`](https://www.npmjs.com/package/@forinda/kickjs-devtools) | Debug dashboard at `/_debug` |
+| [`@forinda/kickjs-notifications`](https://www.npmjs.com/package/@forinda/kickjs-notifications) | Email, Slack, Discord, webhook |
+| [`@forinda/kickjs-multi-tenant`](https://www.npmjs.com/package/@forinda/kickjs-multi-tenant) | Tenant resolution middleware |
+| [`@forinda/kickjs-ai`](https://www.npmjs.com/package/@forinda/kickjs-ai) | Providers (OpenAI, Anthropic), `@AiTool`, memory, RAG, agent loop |
+| [`@forinda/kickjs-mcp`](https://www.npmjs.com/package/@forinda/kickjs-mcp) | Model Context Protocol server adapter + `kick mcp` CLI |
 
 ## CLI
 

@@ -144,6 +144,8 @@ export const app = await bootstrap({ modules })
 | [`@forinda/kickjs-devtools`](packages/devtools/) | Debug dashboard at `/_debug` |
 | [`@forinda/kickjs-notifications`](packages/notifications/) | Email, Slack, Discord, webhook |
 | [`@forinda/kickjs-multi-tenant`](packages/multi-tenant/) | Tenant resolution middleware |
+| [`@forinda/kickjs-ai`](packages/ai/) | Providers (OpenAI, Anthropic), `@AiTool`, memory, RAG, agent loop |
+| [`@forinda/kickjs-mcp`](packages/mcp/) | Model Context Protocol server adapter + `kick mcp` CLI |
 
 ## Example Apps
 
