@@ -139,6 +139,12 @@ export interface McpToolOptions {
  * This is the shape the adapter hands to the MCP SDK when registering
  * tools. Users don't construct this directly — it's derived from
  * `@McpTool` metadata plus route metadata from `@Controller`.
+ *
+ * Both the raw Zod schema (`zodInputSchema`) and the converted JSON
+ * Schema (`inputSchema`) are kept on the definition. The MCP SDK
+ * accepts the Zod form directly, while the JSON Schema is exposed via
+ * `getTools()` for inspection, the `kick mcp --list` command, and
+ * documentation surfaces.
  */
 export interface McpToolDefinition {
   /** Resolved tool name (either from options.name or derived). */
@@ -147,6 +153,13 @@ export interface McpToolDefinition {
   description: string
   /** JSON Schema for tool inputs, derived from the Zod body schema. */
   inputSchema: Record<string, unknown>
+  /**
+   * Original Zod schema for the tool input, when one was attached to
+   * the route via `body` (or via `@McpTool({ inputSchema })`). The MCP
+   * SDK accepts this form directly via `registerTool`. May be undefined
+   * for routes without a body schema.
+   */
+  zodInputSchema?: unknown
   /** Optional JSON Schema for tool outputs. */
   outputSchema?: Record<string, unknown>
   /** HTTP method of the underlying route. */

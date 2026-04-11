@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import {
   Logger,
   METADATA,
@@ -7,6 +8,9 @@ import {
   type Constructor,
   type RouteDefinition,
 } from '@forinda/kickjs'
+import type { Express } from 'express'
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { getMcpToolMeta } from './decorators'
 import { zodToJsonSchema } from './zod-to-json-schema'
 import type { McpAdapterOptions, McpToolDefinition } from './types'
@@ -72,6 +76,12 @@ export class McpAdapter implements AppAdapter {
   /** Discovered tool definitions, built during `beforeStart`. */
   private tools: McpToolDefinition[] = []
 
+  /** Active MCP server instance, created in `afterStart`. */
+  private mcpServer: McpServer | null = null
+
+  /** Active streamable HTTP transport, created in `afterStart`. */
+  private transport: StreamableHTTPServerTransport | null = null
+
   constructor(options: McpAdapterOptions) {
     this.options = {
       mode: options.mode ?? 'explicit',
@@ -119,26 +129,48 @@ export class McpAdapter implements AppAdapter {
   /**
    * Start the MCP server on the configured transport.
    *
-   * - `stdio`: typically handled by a separate `kick mcp` entrypoint,
-   *   since stdio conflicts with dev-server logs if run in-process.
-   * - `sse` / `http`: mount on the existing Express app at `basePath`
-   *   (default `/_mcp`).
+   * - `http` (recommended): mounts a `StreamableHTTPServerTransport` on
+   *   the existing Express app at `${basePath}/messages`. This is the
+   *   modern, spec-compliant way to expose MCP over HTTP.
+   * - `sse` (deprecated): currently aliases to `http` and emits a warning.
+   *   The MCP SSE transport class is deprecated upstream in favor of
+   *   StreamableHTTP, which already supports SSE-style streaming under
+   *   the hood.
+   * - `stdio`: skipped here. The standalone `kick mcp` CLI command
+   *   instantiates the adapter directly and connects it to a stdio
+   *   transport so dev logs don't interfere.
    */
-  async afterStart(_ctx: AdapterContext): Promise<void> {
-    // TODO: Instantiate `Server` from `@modelcontextprotocol/sdk/server`
-    // and register each of `this.tools` via `server.setRequestHandler`.
-    //
-    // For `sse`: use `SSEServerTransport` and mount
-    //   app.get(`${basePath}/sse`, ...)
-    //   app.post(`${basePath}/messages`, ...)
-    //
-    // For `http`: use `StreamableHTTPServerTransport` mounted on a
-    //   single POST endpoint.
-    //
-    // For `stdio`: skip Express entirely (handled by the CLI command).
+  async afterStart(ctx: AdapterContext): Promise<void> {
+    if (this.options.transport === 'stdio') {
+      log.debug('Stdio transport requested — skipping in-process Express mount')
+      return
+    }
+
+    if (this.options.transport === 'sse') {
+      log.warn(
+        'sse transport is deprecated upstream; using StreamableHTTP transport, which supports the same SSE wire format under the hood',
+      )
+    }
+
+    const expressApp = ctx.app as Express | undefined
+    if (!expressApp) {
+      log.warn('McpAdapter: AdapterContext.app is unavailable, cannot mount HTTP transport')
+      return
+    }
+
+    this.mcpServer = this.buildMcpServer()
+    this.transport = new StreamableHTTPServerTransport({
+      // Stateless mode for v0 — every request gets a fresh session. We can
+      // switch to a stateful generator (sessionIdGenerator: randomUUID) once
+      // we add session-aware tool dispatch.
+      sessionIdGenerator: () => randomUUID(),
+    })
+
+    await this.mcpServer.connect(this.transport)
+    this.mountHttpRoutes(expressApp)
 
     log.info(
-      `McpAdapter ready — ${this.tools.length} tool(s) registered (mode=${this.options.mode})`,
+      `McpAdapter ready — ${this.tools.length} tool(s) registered, listening at ${this.options.basePath}/messages`,
     )
   }
 
@@ -149,7 +181,18 @@ export class McpAdapter implements AppAdapter {
    * `shutdown` more than once under error conditions.
    */
   async shutdown(): Promise<void> {
-    // TODO: Close the MCP server and any open SSE connections.
+    try {
+      await this.transport?.close()
+    } catch (err) {
+      log.error(err as Error, 'McpAdapter: failed to close transport')
+    }
+    try {
+      await this.mcpServer?.close()
+    } catch (err) {
+      log.error(err as Error, 'McpAdapter: failed to close server')
+    }
+    this.transport = null
+    this.mcpServer = null
     log.debug('McpAdapter shutdown complete')
   }
 
@@ -211,6 +254,10 @@ export class McpAdapter implements AppAdapter {
       name,
       description,
       inputSchema,
+      // Keep the original Zod schema alongside the JSON Schema. The MCP
+      // SDK accepts Zod directly via `registerTool`, while `inputSchema`
+      // (above) is what `getTools()` and inspection surfaces consume.
+      zodInputSchema: candidateSchema,
       outputSchema: outputSchema ?? undefined,
       httpMethod: route.method.toUpperCase(),
       mountPath: this.joinMountPath(mountPath, route.path),
@@ -241,5 +288,108 @@ export class McpAdapter implements AppAdapter {
     if (!routePath || routePath === '/') return base
     const sub = routePath.startsWith('/') ? routePath : `/${routePath}`
     return `${base}${sub}`
+  }
+
+  /**
+   * Construct the underlying `McpServer` and register every discovered
+   * tool against it. The SDK accepts Zod schemas natively, so we pass
+   * `zodInputSchema` straight through and skip the JSON Schema form
+   * here (the JSON Schema is for inspection / docs).
+   *
+   * The tool dispatch callback is a placeholder for v0: it returns a
+   * structured "not yet wired" response so MCP clients can discover
+   * tools and exercise the protocol round-trip without crashing. Real
+   * dispatch (resolving the controller from the DI container and
+   * invoking the handler through the Express pipeline) is the next
+   * iteration.
+   */
+  private buildMcpServer(): McpServer {
+    const server = new McpServer({
+      name: this.options.name,
+      version: this.options.version,
+      ...(this.options.description ? { description: this.options.description } : {}),
+    })
+
+    // The SDK's `registerTool` is heavily overloaded with deep generic
+    // inference over Zod input/output shapes. The McpToolDefinition
+    // intentionally types `zodInputSchema` as `unknown` to keep our
+    // public surface free of SDK internal types, which makes the
+    // overload picker unhappy. Cast through `any` once, here, so the
+    // call sites stay clean. The SDK validates the schema at register
+    // time anyway, so the `any` is bounded to this loop.
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const registerTool = server.registerTool.bind(server) as (
+      name: string,
+      config: { description: string; inputSchema?: unknown },
+      cb: (args: unknown) => any,
+    ) => unknown
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+
+    for (const tool of this.tools) {
+      const config: { description: string; inputSchema?: unknown } = {
+        description: tool.description,
+      }
+      if (tool.zodInputSchema) {
+        config.inputSchema = tool.zodInputSchema
+      }
+      registerTool(tool.name, config, async (args) => this.placeholderToolResponse(tool.name, args))
+    }
+
+    return server
+  }
+
+  /**
+   * Placeholder tool response used until real dispatch is wired.
+   *
+   * Returns a structured `CallToolResult` so MCP clients see the tool
+   * existed and was called, but learn that dispatch is not yet implemented.
+   * The next iteration replaces this with a real call into the Express
+   * pipeline (resolving the controller from the DI container or making
+   * an internal HTTP request to the route's mountPath).
+   */
+  private placeholderToolResponse(toolName: string, args: unknown) {
+    return {
+      content: [
+        {
+          type: 'text' as const,
+          text:
+            `Tool ${toolName} was called but dispatch is not yet wired. ` +
+            `Arguments received: ${JSON.stringify(args ?? {})}`,
+        },
+      ],
+    }
+  }
+
+  /**
+   * Mount the StreamableHTTP transport endpoints on the existing
+   * Express app. The transport handles three HTTP verbs at a single
+   * URL:
+   *   - POST: client → server messages (initialize, tool calls, etc.)
+   *   - GET:  server → client SSE stream for notifications
+   *   - DELETE: client tells the server to terminate a session
+   *
+   * We mount all three on `${basePath}/messages` so a single URL is
+   * the entire MCP surface area.
+   */
+  private mountHttpRoutes(app: Express): void {
+    const transport = this.transport
+    if (!transport) return
+
+    const path = `${this.options.basePath}/messages`
+
+    const handleRequest = async (req: any, res: any): Promise<void> => {
+      try {
+        await transport.handleRequest(req, res, req.body)
+      } catch (err) {
+        log.error(err as Error, `McpAdapter: error handling ${req.method} ${path}`)
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'MCP transport error' })
+        }
+      }
+    }
+
+    app.post(path, handleRequest)
+    app.get(path, handleRequest)
+    app.delete(path, handleRequest)
   }
 }
