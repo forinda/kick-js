@@ -1,0 +1,93 @@
+{
+  "name": "@forinda/kickjs-ai",
+  "version": "2.2.5",
+  "description": "AI runtime for KickJS — providers, @AiTool decorator, streaming, RAG, and agent loops",
+  "keywords": [
+    "kickjs",
+    "nodejs",
+    "typescript",
+    "express",
+    "decorators",
+    "dependency-injection",
+    "backend",
+    "api",
+    "framework",
+    "ai",
+    "llm",
+    "openai",
+    "anthropic",
+    "gemini",
+    "ollama",
+    "tool-calling",
+    "streaming",
+    "rag",
+    "vector-search",
+    "agent",
+    "@forinda/kickjs",
+    "@forinda/kickjs-mcp"
+  ],
+  "type": "module",
+  "main": "dist/index.mjs",
+  "types": "dist/index.d.mts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "types": "./dist/index.d.mts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "wireit",
+    "dev": "tsdown --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist .wireit"
+  },
+  "wireit": {
+    "build": {
+      "command": "tsdown",
+      "files": [
+        "src/**/*.ts",
+        "tsdown.config.ts",
+        "tsconfig.json",
+        "package.json"
+      ],
+      "output": [
+        "dist/**"
+      ],
+      "dependencies": [
+        "../kickjs:build"
+      ]
+    }
+  },
+  "dependencies": {
+    "@forinda/kickjs": "workspace:*",
+    "reflect-metadata": "^0.2.2"
+  },
+  "peerDependencies": {
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.0",
+    "typescript": "^5.9.2",
+    "zod": "^4.3.6"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT",
+  "author": "Felix Orinda",
+  "engines": {
+    "node": ">=20.0"
+  },
+  "homepage": "https://forinda.github.io/kick-js/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/forinda/kick-js.git",
+    "directory": "packages/ai"
+  },
+  "bugs": {
+    "url": "https://github.com/forinda/kick-js/issues"
+  }
+}

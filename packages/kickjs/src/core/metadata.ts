@@ -1,4 +1,5 @@
 import 'reflect-metadata'
+import type { InjectionToken } from './token'
 
 /**
  * Typed utilities for reflect-metadata operations.
@@ -6,9 +7,13 @@ import 'reflect-metadata'
  * Replaces scattered Reflect.defineMetadata/getMetadata calls with a single
  * source of truth. If we later move to Stage 3 decorators or a WeakMap-based
  * store, only this file changes — all 24+ consumer files stay untouched.
+ *
+ * Keys may be symbols, strings, or `InjectionToken<T>` objects produced by
+ * `createToken()`. Using `createToken` is the preferred pattern because the
+ * token's phantom type flows through the helpers, enabling type-safe reads.
  */
 
-type MetaKey = symbol | string
+type MetaKey = symbol | string | InjectionToken<unknown>
 
 // ── Setters ─────────────────────────────────────────────────────
 
