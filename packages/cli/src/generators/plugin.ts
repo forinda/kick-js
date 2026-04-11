@@ -69,7 +69,7 @@ export interface ${pascal}PluginOptions {
  *
  * export const app = await bootstrap({
  *   modules,
- *   plugins: [${factoryName}({ /* options */ })],
+ *   plugins: [${factoryName}({})],
  * })
  * \`\`\`
  */
