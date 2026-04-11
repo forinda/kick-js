@@ -20,6 +20,8 @@
  */
 
 export { InMemoryVectorStore, cosineSimilarity } from './in-memory'
+export { PgVectorStore, toPgVector, buildWhereClause } from './pgvector'
+export type { PgVectorStoreOptions, SqlExecutor } from './pgvector'
 export { RagService } from './rag-service'
 export type {
   VectorStore,
