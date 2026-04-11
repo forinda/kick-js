@@ -2,7 +2,7 @@ import { cpSync, existsSync, mkdirSync } from 'node:fs'
 import { resolve, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { Command } from 'commander'
-import { runShellCommand } from '../utils/shell'
+import { runShellCommand, runNodeWithEnv } from '../utils/shell'
 import { loadKickConfig } from '../config'
 import { runTypegen } from '../typegen'
 
@@ -171,9 +171,13 @@ export function registerRunCommands(program: Command): void {
     .option('-e, --entry <file>', 'Entry file', 'dist/index.js')
     .option('-p, --port <port>', 'Port number')
     .action((opts: any) => {
-      const envVars: string[] = ['NODE_ENV=production']
-      if (opts.port) envVars.push(`PORT=${opts.port}`)
-      runShellCommand(`${envVars.join(' ')} node ${opts.entry}`)
+      // Use `runNodeWithEnv` so env vars go through `child_process.env`
+      // instead of a POSIX `FOO=bar node ...` prefix — the prefix form
+      // only works under bash/zsh and breaks on Windows cmd.exe and
+      // PowerShell, which is what broke `kick start` on Windows dev.
+      const env: NodeJS.ProcessEnv = { NODE_ENV: 'production' }
+      if (opts.port) env.PORT = String(opts.port)
+      runNodeWithEnv(opts.entry, env)
     })
 
   program
