@@ -22,6 +22,10 @@
 export { InMemoryVectorStore, cosineSimilarity } from './in-memory'
 export { PgVectorStore, toPgVector, buildWhereClause } from './pgvector'
 export type { PgVectorStoreOptions, SqlExecutor } from './pgvector'
+export { QdrantVectorStore, buildQdrantFilter } from './qdrant'
+export type { QdrantVectorStoreOptions } from './qdrant'
+export { PineconeVectorStore, buildPineconeFilter } from './pinecone'
+export type { PineconeVectorStoreOptions } from './pinecone'
 export { RagService } from './rag-service'
 export type {
   VectorStore,

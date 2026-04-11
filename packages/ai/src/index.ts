@@ -15,13 +15,19 @@ export type {
 export {
   InMemoryVectorStore,
   PgVectorStore,
+  PineconeVectorStore,
+  QdrantVectorStore,
   RagService,
+  buildPineconeFilter,
+  buildQdrantFilter,
   buildWhereClause,
   cosineSimilarity,
   toPgVector,
 } from './rag'
 export type {
   PgVectorStoreOptions,
+  PineconeVectorStoreOptions,
+  QdrantVectorStoreOptions,
   RagAugmentOptions,
   RagIndexInput,
   RagSearchOptions,

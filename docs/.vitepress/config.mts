@@ -44,6 +44,8 @@ const guideSidebar = [
       { text: 'Authentication', link: '/guide/authentication' },
       { text: 'Cron Jobs', link: '/guide/cron' },
       { text: 'Mailer', link: '/guide/mailer' },
+      { text: 'AI', link: '/guide/ai' },
+      { text: 'MCP (Model Context Protocol)', link: '/guide/mcp' },
       { text: 'Caching', link: '/guide/caching' },
       { text: 'View Engines', link: '/guide/view-engines' },
       { text: 'MongoDB', link: '/guide/mongodb' },
