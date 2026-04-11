@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { reloadEnv } from '@forinda/kickjs'
 import type { Plugin } from 'vite'
 
 /**
@@ -43,6 +44,19 @@ export function envWatchPlugin(): Plugin {
           server.config.logger.info(`  .env changed (${basename}), triggering reload...`, {
             timestamp: true,
           })
+
+          // Re-read the .env file into process.env *before* invalidating
+          // modules. Without this, the next SSR evaluation parses the
+          // (stale) cached env snapshot — Zod throws on the missing key
+          // and the user has to hard-restart the dev server.
+          try {
+            reloadEnv()
+          } catch (err: any) {
+            server.config.logger.warn(
+              `  env reload failed: ${err?.message ?? err} — restart may be required`,
+              { timestamp: true },
+            )
+          }
 
           // Invalidate all modules to trigger full HMR rebuild
           const mods = server.moduleGraph.getModulesByFile(path.resolve(root, 'src/index.ts'))

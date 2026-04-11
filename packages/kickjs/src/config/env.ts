@@ -3,19 +3,25 @@ import { Container } from '../core/container'
 import type { EnvKey } from '../core/decorators'
 
 /**
- * Lazily load `dotenv/config` if it is installed in the consumer app.
+ * Lazily load `.env` via dotenv if it is installed in the consumer app.
  * `dotenv` is an **optional peer dependency** of `@forinda/kickjs` —
  * apps that want `.env` file support install it themselves (the CLI
  * generators add it to every scaffolded `package.json`). Apps that
  * inject env via the shell, Docker, or a secret manager can skip it
  * entirely and `process.env` is read as-is.
  *
- * This module-load side effect runs exactly once.
+ * We call `dotenv.config()` directly rather than `require('dotenv/config')`
+ * so that a re-evaluation of this module (e.g. Vite SSR full-reload after
+ * editing `.env`) can re-read the file. `dotenv/config` is a side-effect
+ * shim that CJS caches aggressively, so the second `require` is a no-op
+ * and new keys never reach `process.env` — the root cause of the
+ * "DATABASE_URL undefined until restart" bug on Windows dev.
  */
 function tryLoadDotenv(): void {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    require('dotenv/config')
+    const dotenv = require('dotenv')
+    dotenv.config({ override: false })
   } catch {
     // dotenv not installed — fall through, env vars must come from
     // the environment directly. This is a valid deployment style.

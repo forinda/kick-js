@@ -21,6 +21,12 @@ function escapeHtml(str: string): string {
  */
 export function swaggerUIHtml(specUrl: string, title = 'API Docs', assetsPath?: string): string {
   const safeTitle = escapeHtml(title)
+  // JSON-stringify for safe inlining into the `<script>` block. The inline
+  // script below resolves this to an absolute URL against
+  // `window.location.origin` before passing it to SwaggerUIBundle —
+  // some swagger-ui-dist builds call `new URL(url)` without a base and
+  // crash with `Failed to construct 'URL': Invalid URL` when the value
+  // is a bare path like `/openapi.json`.
   const safeUrl = JSON.stringify(specUrl).replace(/</g, '\\u003c')
 
   // Use local assets if available, CDN as fallback
@@ -47,14 +53,23 @@ export function swaggerUIHtml(specUrl: string, title = 'API Docs', assetsPath?: 
   <script src="${bundleSrc}"></script>
   <script src="${presetSrc}"></script>
   <script>
-    SwaggerUIBundle({
-      url: ${safeUrl},
-      dom_id: '#swagger-ui',
-      deepLinking: true,
-      presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
-      plugins: [SwaggerUIBundle.plugins.DownloadUrl],
-      layout: 'StandaloneLayout',
-    });
+    (function () {
+      var rawUrl = ${safeUrl};
+      var specUrl;
+      try {
+        specUrl = new URL(rawUrl, window.location.origin).href;
+      } catch (_e) {
+        specUrl = rawUrl;
+      }
+      SwaggerUIBundle({
+        url: specUrl,
+        dom_id: '#swagger-ui',
+        deepLinking: true,
+        presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
+        plugins: [SwaggerUIBundle.plugins.DownloadUrl],
+        layout: 'StandaloneLayout',
+      });
+    })();
   </script>
 </body>
 </html>`

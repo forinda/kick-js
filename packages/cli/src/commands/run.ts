@@ -1,5 +1,6 @@
 import { cpSync, existsSync, mkdirSync } from 'node:fs'
 import { resolve, join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import type { Command } from 'commander'
 import { runShellCommand } from '../utils/shell'
 import { loadKickConfig } from '../config'
@@ -43,11 +44,15 @@ async function startDevServer(_entry: string, port?: string): Promise<void> {
     console.warn(`  kick typegen: skipped (${err?.message ?? err})`)
   }
 
-  // Resolve vite from the user's project, not the CLI package
+  // Resolve vite from the user's project, not the CLI package.
+  // On Windows, require.resolve returns an absolute path like
+  // `C:\...\vite\dist\node\index.js`, which Node's ESM loader rejects
+  // (`Received protocol 'c:'`). Wrap in `pathToFileURL` so the loader
+  // gets a valid `file://` URL on every platform.
   const { createRequire } = await import('node:module')
   const require = createRequire(resolve('package.json'))
   const vitePath = require.resolve('vite')
-  const { createServer } = await import(vitePath)
+  const { createServer } = await import(pathToFileURL(vitePath).href)
 
   const server = await createServer({
     configFile: resolve('vite.config.ts'),
@@ -124,11 +129,13 @@ export function registerRunCommands(program: Command): void {
     .action(async () => {
       console.log('\n  Building for production...\n')
 
-      // Resolve vite from the user's project, not the CLI package
+      // Resolve vite from the user's project, not the CLI package.
+      // `pathToFileURL` fixes the Windows ESM loader rejection of bare
+      // absolute paths (see `startDevServer` above).
       const { createRequire } = await import('node:module')
       const require = createRequire(resolve('package.json'))
       const vitePath = require.resolve('vite')
-      const { build } = await import(vitePath)
+      const { build } = await import(pathToFileURL(vitePath).href)
       await build({ configFile: resolve('vite.config.ts') })
 
       // Copy static directories to dist (e.g., templates, public assets)

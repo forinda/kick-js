@@ -108,7 +108,25 @@ export function buildOpenAPISpec(options: SwaggerOptions = {}): any {
   }
 
   if (options.servers) {
-    spec.servers = options.servers
+    // Drop entries whose URL can't be parsed by the browser's URL
+    // constructor. Swagger UI runs `new URL(server.url)` on the client
+    // and crashes with `Failed to construct 'URL': Invalid URL` if any
+    // entry is malformed — which can happen on Windows dev when an
+    // adapter hook populates servers with a path that was never meant
+    // to be a URL. Relative URLs (e.g. '/') are allowed through.
+    const validServers = options.servers.filter((s) => {
+      if (!s?.url || typeof s.url !== 'string') return false
+      if (s.url.startsWith('/')) return true
+      try {
+        new URL(s.url)
+        return true
+      } catch {
+        return false
+      }
+    })
+    if (validServers.length > 0) {
+      spec.servers = validServers
+    }
   }
 
   const allTags = new Set<string>()
