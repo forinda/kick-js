@@ -507,6 +507,29 @@ kick g adapter websocket
 
 Generates an `AppAdapter` class with all lifecycle hooks stubbed out. Default output: `src/adapters/`.
 
+### kick g plugin
+
+```bash
+kick g plugin analytics                      # → src/plugins/analytics.plugin.ts
+kick g plugin feature-flags -o ./src/plugins # explicit output dir
+```
+
+Generates a `KickPlugin` factory function with every optional hook (`register`, `modules`, `adapters`, `middleware`, `onReady`, `shutdown`) stubbed out and commented, plus an options interface. Default output: `src/plugins/`.
+
+The generated factory is camelCased from the plugin name — `kick g plugin feature-flags` emits `featureFlagsPlugin` so it can be imported and called inline at bootstrap time:
+
+```ts
+import { bootstrap } from '@forinda/kickjs'
+import { featureFlagsPlugin } from './plugins/feature-flags.plugin'
+
+export const app = await bootstrap({
+  modules,
+  plugins: [featureFlagsPlugin({ enabled: true })],
+})
+```
+
+Plugins are the canonical place to wire DI bindings, contribute modules or adapters, and register middleware without writing a full adapter. See the [plugins guide](./plugins) for the full lifecycle and patterns.
+
 ### kick g dto
 
 ```bash

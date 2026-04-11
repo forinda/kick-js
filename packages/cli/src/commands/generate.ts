@@ -3,6 +3,7 @@ import type { Command } from 'commander'
 import { generateModule } from '../generators/module'
 import { resolveRepoType, type RepoType } from '../generators/module'
 import { generateAdapter } from '../generators/adapter'
+import { generatePlugin } from '../generators/plugin'
 import { generateMiddleware } from '../generators/middleware'
 import { generateGuard } from '../generators/guard'
 import { generateService } from '../generators/service'
@@ -151,6 +152,20 @@ export function registerGenerateCommand(program: Command): void {
       const dryRun = isDryRun(cmd)
       setDryRun(dryRun)
       const files = await generateAdapter({ name, outDir: resolve(opts.out) })
+      printGenerated(files, dryRun)
+    })
+
+  // ── kick g plugin <name> ────────────────────────────────────────────
+  gen
+    .command('plugin <name>')
+    .description(
+      'Generate a KickPlugin with DI, modules, adapters, middleware, and lifecycle hooks',
+    )
+    .option('-o, --out <dir>', 'Output directory', 'src/plugins')
+    .action(async (name: string, opts: any, cmd: any) => {
+      const dryRun = isDryRun(cmd)
+      setDryRun(dryRun)
+      const files = await generatePlugin({ name, outDir: resolve(opts.out) })
       printGenerated(files, dryRun)
     })
 

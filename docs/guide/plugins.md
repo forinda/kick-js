@@ -13,6 +13,43 @@ Plugins are the highest-level extension mechanism in KickJS. A single plugin can
 
 ## Creating a Plugin
 
+The fastest way is the generator:
+
+```bash
+kick g plugin analytics
+# → src/plugins/analytics.plugin.ts
+```
+
+This scaffolds a factory function with every optional `KickPlugin` hook stubbed out and commented — uncomment the ones you need, delete the rest. The factory name is camelCased from the plugin name so it drops straight into `bootstrap({ plugins })`:
+
+```ts
+import { bootstrap } from '@forinda/kickjs'
+import { analyticsPlugin } from './plugins/analytics.plugin'
+
+export const app = await bootstrap({
+  modules,
+  plugins: [analyticsPlugin({ /* options */ })],
+})
+```
+
+Under the hood a plugin is any object that satisfies the `KickPlugin` interface — factories, classes, and inline literals all work. Here's the simplest possible plugin written by hand:
+
+```ts
+import type { KickPlugin } from '@forinda/kickjs'
+import { cors } from '@forinda/kickjs'
+
+export function corsPlugin(): KickPlugin {
+  return {
+    name: 'cors',
+    middleware() {
+      return [cors({ origin: '*' })]
+    },
+  }
+}
+```
+
+Class-based plugins are equivalent and can still implement `KickPlugin` directly if you prefer that style:
+
 ```ts
 import type { KickPlugin } from '@forinda/kickjs'
 
@@ -112,6 +149,38 @@ export class AuthPlugin implements KickPlugin {
   }
 }
 ```
+
+## Inline Plugins for DI Bindings
+
+For one-off DI bindings — things like binding a `VECTOR_STORE` token to a specific backend, or registering a connection pool a service depends on — you don't need to create a dedicated file. Inline plugin literals work everywhere a generated plugin does:
+
+```ts
+import { bootstrap } from '@forinda/kickjs'
+import { AiAdapter, QdrantVectorStore, VECTOR_STORE } from '@forinda/kickjs-ai'
+
+const store = new QdrantVectorStore({
+  url: getEnv('QDRANT_URL'),
+  collection: 'docs',
+  dimensions: 1536,
+})
+
+export const app = await bootstrap({
+  modules,
+  adapters: [new AiAdapter({ provider })],
+  plugins: [
+    {
+      name: 'vector-store',
+      register(container) {
+        container.registerInstance(VECTOR_STORE, store)
+      },
+    },
+  ],
+})
+```
+
+The inline form is the canonical answer whenever you see docs that say "bind X in the container" — there is no top-level `register:` option on `bootstrap`, so DI wiring always flows through a plugin's `register(container)` hook.
+
+Promote an inline plugin to a generated file as soon as it grows beyond two or three lines, or the moment you want to share it across apps.
 
 ## Execution Order
 
