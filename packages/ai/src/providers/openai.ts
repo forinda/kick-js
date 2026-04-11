@@ -54,15 +54,15 @@ export interface OpenAIProviderOptions {
  *
  * @example
  * ```ts
- * import { AiAdapter } from '@forinda/kickjs-ai'
- * import { OpenAIProvider } from '@forinda/kickjs-ai/providers/openai'
+ * import { bootstrap, getEnv } from '@forinda/kickjs'
+ * import { AiAdapter, OpenAIProvider } from '@forinda/kickjs-ai'
  *
  * export const app = await bootstrap({
  *   modules,
  *   adapters: [
  *     new AiAdapter({
  *       provider: new OpenAIProvider({
- *         apiKey: process.env.OPENAI_API_KEY!,
+ *         apiKey: getEnv('OPENAI_API_KEY'),
  *         defaultChatModel: 'gpt-4o-mini',
  *       }),
  *     }),
@@ -73,22 +73,29 @@ export interface OpenAIProviderOptions {
 export class OpenAIProvider implements AiProvider {
   readonly name: string
 
-  private readonly apiKey: string
   private readonly baseURL: string
   private readonly defaultChatModel: string
   private readonly defaultEmbedModel: string
-  private readonly extraHeaders: Record<string, string>
+  /**
+   * Full header map passed to every request. Includes the bearer auth
+   * header and the optional openai-organization header. Constructed
+   * once in the constructor so per-call code just spreads it into the
+   * fetch init.
+   */
+  private readonly headers: Record<string, string>
 
   constructor(options: OpenAIProviderOptions) {
     if (!options.apiKey) {
       throw new Error('OpenAIProvider: apiKey is required')
     }
-    this.apiKey = options.apiKey
     this.baseURL = (options.baseURL ?? 'https://api.openai.com/v1').replace(/\/$/, '')
     this.defaultChatModel = options.defaultChatModel ?? 'gpt-4o-mini'
     this.defaultEmbedModel = options.defaultEmbedModel ?? 'text-embedding-3-small'
     this.name = options.name ?? 'openai'
-    this.extraHeaders = options.organization ? { 'openai-organization': options.organization } : {}
+    this.headers = {
+      authorization: `Bearer ${options.apiKey}`,
+      ...(options.organization ? { 'openai-organization': options.organization } : {}),
+    }
   }
 
   /**
@@ -102,8 +109,7 @@ export class OpenAIProvider implements AiProvider {
   async chat(input: ChatInput, options: ChatOptions = {}): Promise<ChatResponse> {
     const payload = this.buildChatPayload(input, options, /* stream */ false)
     const data = await postJson<OpenAIChatResponse>(`${this.baseURL}/chat/completions`, payload, {
-      apiKey: this.apiKey,
-      headers: this.extraHeaders,
+      headers: this.headers,
       signal: options.signal,
     })
     return this.normalizeChatResponse(data)
@@ -121,8 +127,7 @@ export class OpenAIProvider implements AiProvider {
   async *stream(input: ChatInput, options: ChatOptions = {}): AsyncIterable<ChatChunk> {
     const payload = this.buildChatPayload(input, options, /* stream */ true)
     const events = postJsonStream(`${this.baseURL}/chat/completions`, payload, {
-      apiKey: this.apiKey,
-      headers: this.extraHeaders,
+      headers: this.headers,
       signal: options.signal,
     })
 
@@ -184,8 +189,7 @@ export class OpenAIProvider implements AiProvider {
         input: inputs,
       },
       {
-        apiKey: this.apiKey,
-        headers: this.extraHeaders,
+        headers: this.headers,
       },
     )
 

@@ -107,17 +107,23 @@ export interface PgVectorStoreOptions {
  * @example
  * ```ts
  * import { Pool } from 'pg'
+ * import { getEnv } from '@forinda/kickjs'
  * import { AiAdapter, PgVectorStore, VECTOR_STORE } from '@forinda/kickjs-ai'
  *
- * const pool = new Pool({ connectionString: process.env.DATABASE_URL })
+ * const pool = new Pool({ connectionString: getEnv('DATABASE_URL') })
  * const store = new PgVectorStore({ client: pool, dimensions: 1536 })
  *
  * export const app = await bootstrap({
  *   modules,
  *   adapters: [new AiAdapter({ provider })],
- *   register: (container) => {
- *     container.registerInstance(VECTOR_STORE, store)
- *   },
+ *   plugins: [
+ *     {
+ *       name: 'pgvector',
+ *       register: (container) => {
+ *         container.registerInstance(VECTOR_STORE, store)
+ *       },
+ *     },
+ *   ],
  * })
  * ```
  */

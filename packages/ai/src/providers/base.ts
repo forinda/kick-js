@@ -35,24 +35,28 @@ export class ProviderError extends Error {
 }
 
 /**
- * POST a JSON payload to a URL with bearer auth and parse the JSON
- * response. Throws a `ProviderError` on non-2xx status codes so the
- * caller never has to check `res.ok` itself.
+ * POST a JSON payload to a URL and parse the JSON response. Throws a
+ * `ProviderError` on non-2xx status codes so the caller never has to
+ * check `res.ok` itself.
+ *
+ * Auth headers are the caller's responsibility. Different providers
+ * use different conventions — OpenAI uses `Authorization: Bearer ...`,
+ * Anthropic uses `x-api-key: ...`, Google uses `?key=...` in the URL —
+ * so this helper stays neutral and lets each provider build exactly
+ * the headers it needs.
  */
 export async function postJson<T>(
   url: string,
   body: unknown,
   options: {
-    apiKey: string
     headers?: Record<string, string>
     signal?: AbortSignal
-  },
+  } = {},
 ): Promise<T> {
   const res = await fetch(url, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      authorization: `Bearer ${options.apiKey}`,
       ...options.headers,
     },
     body: JSON.stringify(body),
@@ -88,17 +92,15 @@ export async function* postJsonStream(
   url: string,
   body: unknown,
   options: {
-    apiKey: string
     headers?: Record<string, string>
     signal?: AbortSignal
-  },
+  } = {},
 ): AsyncGenerator<string> {
   const res = await fetch(url, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
       accept: 'text/event-stream',
-      authorization: `Bearer ${options.apiKey}`,
       ...options.headers,
     },
     body: JSON.stringify(body),

@@ -52,19 +52,24 @@ export const AI_PROVIDER = createToken<AiProvider>('kickjs.ai.provider')
  *
  * @example
  * ```ts
- * import { bootstrap } from '@forinda/kickjs'
+ * import { bootstrap, getEnv } from '@forinda/kickjs'
  * import { AiAdapter, InMemoryVectorStore, VECTOR_STORE } from '@forinda/kickjs-ai'
  *
  * export const app = await bootstrap({
  *   modules,
  *   adapters: [
  *     new AiAdapter({
- *       provider: new OpenAIProvider({ apiKey: process.env.OPENAI_API_KEY! }),
+ *       provider: new OpenAIProvider({ apiKey: getEnv('OPENAI_API_KEY') }),
  *     }),
  *   ],
- *   register: (container) => {
- *     container.registerInstance(VECTOR_STORE, new InMemoryVectorStore())
- *   },
+ *   plugins: [
+ *     {
+ *       name: 'vector-store',
+ *       register: (container) => {
+ *         container.registerInstance(VECTOR_STORE, new InMemoryVectorStore())
+ *       },
+ *     },
+ *   ],
  * })
  * ```
  */

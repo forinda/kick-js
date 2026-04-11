@@ -37,14 +37,14 @@ const log = Logger.for('AiAdapter')
  *
  * @example
  * ```ts
- * import { bootstrap } from '@forinda/kickjs'
+ * import { bootstrap, getEnv } from '@forinda/kickjs'
  * import { AiAdapter, OpenAIProvider } from '@forinda/kickjs-ai'
  *
  * export const app = await bootstrap({
  *   modules,
  *   adapters: [
  *     new AiAdapter({
- *       provider: new OpenAIProvider({ apiKey: process.env.OPENAI_API_KEY! }),
+ *       provider: new OpenAIProvider({ apiKey: getEnv('OPENAI_API_KEY') }),
  *     }),
  *   ],
  * })
