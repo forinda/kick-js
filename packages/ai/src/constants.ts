@@ -1,4 +1,5 @@
 import { createToken } from '@forinda/kickjs'
+import type { VectorStore } from './rag/types'
 import type { AiProvider, AiToolOptions } from './types'
 
 /**
@@ -39,3 +40,32 @@ export const AI_TOOL_METADATA = createToken<AiToolOptions>('kickjs.ai.tool')
  * ```
  */
 export const AI_PROVIDER = createToken<AiProvider>('kickjs.ai.provider')
+
+/**
+ * DI token for the active vector store backend.
+ *
+ * Injected via `@Inject(VECTOR_STORE)` in services that need
+ * retrieval-augmented generation. The adapter does not register a
+ * default — users bind the backend they want at bootstrap time,
+ * typically `InMemoryVectorStore` for development/tests and
+ * `PgVectorStore` / `QdrantStore` / `PineconeStore` for production.
+ *
+ * @example
+ * ```ts
+ * import { bootstrap } from '@forinda/kickjs'
+ * import { AiAdapter, InMemoryVectorStore, VECTOR_STORE } from '@forinda/kickjs-ai'
+ *
+ * export const app = await bootstrap({
+ *   modules,
+ *   adapters: [
+ *     new AiAdapter({
+ *       provider: new OpenAIProvider({ apiKey: process.env.OPENAI_API_KEY! }),
+ *     }),
+ *   ],
+ *   register: (container) => {
+ *     container.registerInstance(VECTOR_STORE, new InMemoryVectorStore())
+ *   },
+ * })
+ * ```
+ */
+export const VECTOR_STORE = createToken<VectorStore>('kickjs.ai.vector_store')
