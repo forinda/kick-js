@@ -41,6 +41,8 @@
   "scripts": {
     "build": "wireit",
     "dev": "tsdown --watch",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist .wireit"
   },
@@ -69,8 +71,11 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@swc/core": "^1.15.21",
     "@types/node": "^25.0.0",
     "typescript": "^5.9.2",
+    "unplugin-swc": "^1.5.9",
+    "vitest": "^4.1.2",
     "zod": "^4.3.6"
   },
   "publishConfig": {
