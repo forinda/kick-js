@@ -17,6 +17,30 @@ export interface ChatMessage {
 }
 
 /**
+ * A resolved tool definition that providers can include in their
+ * wire-format request payload. This is the shape `ChatInput.tools`
+ * carries once `AiAdapter.runAgent` has expanded `'auto'` against
+ * the registry of `@AiTool`-decorated controller methods.
+ *
+ * Providers translate this into their native tool-calling format
+ * (OpenAI's `tools`, Anthropic's `tools`, Google's function declarations,
+ * etc.). The shape is deliberately minimal — anything provider-specific
+ * lives in the provider implementation, not on this type.
+ */
+export interface ChatToolDefinition {
+  /** Stable tool identifier, e.g. "TaskController.create". */
+  name: string
+  /** Human-readable description shown to the model at call time. */
+  description: string
+  /**
+   * JSON Schema for the tool input, converted from the Zod body schema
+   * on the underlying route. Providers pass this through to the wire
+   * payload verbatim; the schema only needs to be valid JSON Schema.
+   */
+  inputSchema: Record<string, unknown>
+}
+
+/**
  * Input to `AiProvider.chat()` and `AiProvider.stream()`.
  *
  * Providers accept this shape, map it to their native format, call the
@@ -32,11 +56,17 @@ export interface ChatInput {
    */
   model?: string
   /**
-   * Tool registry reference. `'auto'` means "use every tool registered
-   * via `@AiTool` in the current DI container". An array selects a
-   * specific subset.
+   * Tools the model can call.
+   *
+   * - `'auto'` — only meaningful when passed to `AiAdapter.runAgent`,
+   *   which resolves it against the `@AiTool` registry before handing
+   *   the request to the provider. Raw providers that receive `'auto'`
+   *   directly omit tools entirely rather than doing a hidden lookup.
+   * - An array of `ChatToolDefinition` — providers include these in
+   *   the wire payload directly.
+   * - Omitted — no tool-calling in this request.
    */
-  tools?: 'auto' | string[]
+  tools?: 'auto' | ChatToolDefinition[]
 }
 
 /** Runtime options for a chat call. */
@@ -141,4 +171,61 @@ export interface AiToolOptions {
   description: string
   /** Optional input schema override if the route has no Zod body. */
   inputSchema?: ZodTypeAny
+}
+
+/**
+ * Resolved AI tool definition built by the adapter's startup scan.
+ *
+ * Bundles the tool's wire-format definition (`ChatToolDefinition`)
+ * with the HTTP routing info needed for dispatch (`httpMethod` +
+ * `mountPath`). `AiAdapter.runAgent` hands `ChatToolDefinition[]` to
+ * the provider and keeps `httpMethod`/`mountPath` internal for the
+ * dispatch loop.
+ */
+export interface AiToolDefinition extends ChatToolDefinition {
+  /** HTTP method of the underlying route. */
+  httpMethod: string
+  /** Full mount path of the underlying route (after apiPrefix + version). */
+  mountPath: string
+}
+
+/**
+ * Options for `AiAdapter.runAgent()`.
+ *
+ * Runs a tool-calling loop: the provider responds, any tool calls are
+ * dispatched through the Express pipeline, results are fed back, and
+ * the loop continues until the model returns plain text or the
+ * `maxSteps` cap is hit.
+ */
+export interface RunAgentOptions extends ChatOptions {
+  /** Starting conversation. System prompt can be the first message. */
+  messages: ChatMessage[]
+  /** Model override. Defaults to the provider's configured default. */
+  model?: string
+  /**
+   * Tools the agent can call. Defaults to `'auto'` — every tool in
+   * the adapter's `@AiTool` registry. Pass an explicit array to
+   * restrict the agent to a subset.
+   */
+  tools?: 'auto' | ChatToolDefinition[]
+  /**
+   * Maximum number of chat → tool-call → dispatch → feedback cycles
+   * before the loop gives up. Prevents runaway loops on broken tool
+   * call behavior. Defaults to 8.
+   */
+  maxSteps?: number
+}
+
+/** Result of `AiAdapter.runAgent()` — the final assistant response. */
+export interface RunAgentResult {
+  /** The assistant's final text output after all tool calls resolved. */
+  content: string
+  /** The full message history including tool calls and results. */
+  messages: ChatMessage[]
+  /** Number of chat iterations the loop ran before terminating. */
+  steps: number
+  /** Aggregated usage across every provider call in the loop. */
+  usage?: { promptTokens: number; completionTokens: number; totalTokens: number }
+  /** True if the loop stopped because `maxSteps` was reached. */
+  maxStepsReached?: boolean
 }

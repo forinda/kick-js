@@ -216,6 +216,22 @@ export class OpenAIProvider implements AiProvider {
     if (options.stopSequences && options.stopSequences.length > 0) {
       payload.stop = options.stopSequences
     }
+
+    // Tools: only include when the caller passes an explicit array.
+    // `'auto'` at the provider level is a no-op — it's only meaningful
+    // inside `AiAdapter.runAgent`, which expands it against the
+    // `@AiTool` registry before calling the provider.
+    if (Array.isArray(input.tools) && input.tools.length > 0) {
+      payload.tools = input.tools.map((t) => ({
+        type: 'function',
+        function: {
+          name: t.name,
+          description: t.description,
+          parameters: t.inputSchema,
+        },
+      }))
+    }
+
     return payload
   }
 
@@ -325,6 +341,14 @@ interface OpenAIChatRequest {
   max_tokens?: number
   top_p?: number
   stop?: string[]
+  tools?: Array<{
+    type: 'function'
+    function: {
+      name: string
+      description: string
+      parameters: Record<string, unknown>
+    }
+  }>
 }
 
 type OpenAIMessage =
