@@ -9,6 +9,7 @@ import { registerInfoCommand } from './commands/info'
 import { registerCustomCommands } from './commands/custom'
 import { registerInspectCommand } from './commands/inspect'
 import { registerAddCommand, registerListCommand } from './commands/add'
+import { registerExplainCommand } from './commands/explain'
 import { registerMcpCommand } from './commands/mcp'
 import { registerTinkerCommand } from './commands/tinker'
 import { registerRemoveCommand } from './commands/remove'
@@ -36,6 +37,7 @@ async function main() {
   registerInspectCommand(program)
   registerAddCommand(program)
   registerListCommand(program)
+  registerExplainCommand(program)
   registerMcpCommand(program)
   registerTinkerCommand(program)
   registerRemoveCommand(program)
