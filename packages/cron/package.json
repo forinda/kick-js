@@ -90,10 +90,10 @@
     }
   },
   "devDependencies": {
-    "@types/node": "^25.0.0",
+    "@types/node": "^25.6.0",
     "croner": "^10.0.1",
     "typescript": "^5.9.2",
-    "vitest": "^4.1.2"
+    "vitest": "^4.1.4"
   },
   "publishConfig": {
     "access": "public"
