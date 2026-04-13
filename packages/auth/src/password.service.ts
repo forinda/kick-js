@@ -1,5 +1,6 @@
 import { randomBytes, scrypt as scryptCb, timingSafeEqual } from 'node:crypto'
 import type { ScryptOptions } from 'node:crypto'
+import { Service } from '@forinda/kickjs'
 
 function scryptAsync(
   password: string | Buffer,
@@ -119,6 +120,7 @@ const DEFAULT_POLICY: Required<PasswordPolicy> = {
  * const pw = new PasswordService({ algorithm: 'argon2id' })
  * ```
  */
+@Service()
 export class PasswordService {
   private readonly config: Required<PasswordConfig>
 
