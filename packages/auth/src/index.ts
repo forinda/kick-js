@@ -1,13 +1,28 @@
 import 'reflect-metadata'
 
 // Types & interfaces
-export { AUTH_META, type AuthUser, type AuthStrategy, type AuthAdapterOptions } from './types'
+export {
+  AUTH_META,
+  CSRF_META,
+  type AuthUser,
+  type AuthStrategy,
+  type AuthAdapterOptions,
+  type CsrfConfig,
+} from './types'
 
 // Decorators
-export { Authenticated, Public, Roles } from './decorators'
+export { Authenticated, Public, Roles, CsrfExempt } from './decorators'
 
 // Adapter
 export { AuthAdapter, AUTH_USER } from './adapter'
+
+// Password service
+export {
+  PasswordService,
+  type PasswordConfig,
+  type PasswordPolicy,
+  type PasswordValidationResult,
+} from './password.service'
 
 // Built-in strategies
 export {

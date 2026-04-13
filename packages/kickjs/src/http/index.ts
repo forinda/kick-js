@@ -5,7 +5,7 @@ export { Application, type ApplicationOptions, type MiddlewareEntry } from './ap
 export { bootstrap } from './bootstrap'
 
 // Request Context
-export { RequestContext, type Ctx, type RouteShape } from './context'
+export { RequestContext, type ContextMeta, type Ctx, type RouteShape } from './context'
 export type { TypedParsedQuery, FieldsOf } from './query'
 
 // Router Builder

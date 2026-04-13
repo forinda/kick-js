@@ -11,7 +11,15 @@ import {
   type RouteDefinition,
 } from '@forinda/kickjs'
 
-import { AUTH_META, type AuthAdapterOptions, type AuthStrategy, type AuthUser } from './types'
+import { randomBytes } from 'node:crypto'
+import {
+  AUTH_META,
+  CSRF_META,
+  type AuthAdapterOptions,
+  type AuthStrategy,
+  type AuthUser,
+  type CsrfConfig,
+} from './types'
 
 const log = Logger.for('AuthAdapter')
 
@@ -44,13 +52,15 @@ export const AUTH_USER = Symbol('AuthUser')
  */
 export class AuthAdapter implements AppAdapter {
   name = 'AuthAdapter'
-  private strategies: AuthStrategy[]
-  private defaultPolicy: 'protected' | 'open'
-  private onUnauthorized: (req: any, res: any) => void
-  private onForbidden: (req: any, res: any) => void
+  private readonly strategies: AuthStrategy[]
+  private readonly defaultPolicy: 'protected' | 'open'
+  private readonly onUnauthorized: (req: any, res: any) => void
+  private readonly onForbidden: (req: any, res: any) => void
+  private readonly csrfEnabled: boolean
+  private readonly csrfConfig: CsrfConfig
 
   // Collected route metadata for auth resolution
-  private routeControllers = new Map<string, any>()
+  private readonly routeControllers = new Map<string, any>()
 
   constructor(private options: AuthAdapterOptions) {
     this.strategies = options.strategies
@@ -75,6 +85,23 @@ export class AuthAdapter implements AppAdapter {
           message: 'Insufficient permissions',
         })
       })
+
+    // CSRF: resolve enabled state and config
+    const csrfOption = options.csrf
+    if (csrfOption === true) {
+      this.csrfEnabled = true
+      this.csrfConfig = {}
+    } else if (csrfOption === false) {
+      this.csrfEnabled = false
+      this.csrfConfig = {}
+    } else if (typeof csrfOption === 'object') {
+      this.csrfEnabled = true
+      this.csrfConfig = csrfOption
+    } else {
+      // Auto-detect: enable if any strategy uses cookies
+      this.csrfEnabled = this.hasCookieBasedStrategy()
+      this.csrfConfig = {}
+    }
   }
 
   onRouteMount(controllerClass: any, mountPath: string): void {
@@ -82,17 +109,29 @@ export class AuthAdapter implements AppAdapter {
   }
 
   middleware(): AdapterMiddleware[] {
-    return [
+    const middlewares: AdapterMiddleware[] = [
       {
         handler: this.createAuthMiddleware(),
         phase: 'beforeRoutes',
       },
     ]
+
+    if (this.csrfEnabled) {
+      middlewares.push({
+        handler: this.createCsrfMiddleware(),
+        phase: 'beforeRoutes',
+      })
+    }
+
+    return middlewares
   }
 
   beforeStart({}: AdapterContext): void {
     const strategyNames = this.strategies.map((s) => s.name).join(', ')
     log.info(`Auth enabled [${strategyNames}] (default: ${this.defaultPolicy})`)
+    if (this.csrfEnabled) {
+      log.info('CSRF protection enabled (double-submit cookie)')
+    }
   }
 
   // ── Core Auth Middleware ─────────────────────────────────────────────
@@ -276,5 +315,81 @@ export class AuthAdapter implements AppAdapter {
 
     // Class-level strategy
     return getClassMetaOrUndefined<string>(AUTH_META.STRATEGY, controllerClass)
+  }
+
+  // ── CSRF Protection ─────────────────────────────────────────────────
+
+  /**
+   * Detect if any configured strategy reads tokens from cookies,
+   * which means the app is vulnerable to CSRF and needs protection.
+   */
+  private hasCookieBasedStrategy(): boolean {
+    return this.strategies.some((s) => {
+      // SessionStrategy always uses cookies
+      if (s.name === 'session') return true
+      // JwtStrategy with tokenFrom='cookie'
+      if ('options' in s) {
+        const opts = (s as any).options
+        if (opts?.tokenFrom === 'cookie') return true
+      }
+      return false
+    })
+  }
+
+  /**
+   * Create CSRF middleware that respects @CsrfExempt() decorators.
+   * Uses the double-submit cookie pattern.
+   */
+  private createCsrfMiddleware() {
+    const cookieName = this.csrfConfig.cookie ?? '_csrf'
+    const headerName = this.csrfConfig.header ?? 'x-csrf-token'
+    const protectedMethods = new Set(
+      (this.csrfConfig.methods ?? ['POST', 'PUT', 'PATCH', 'DELETE']).map((m) => m.toUpperCase()),
+    )
+    const tokenLength = this.csrfConfig.tokenLength ?? 32
+
+    return (req: any, res: any, next: any) => {
+      // Generate or reuse CSRF token cookie
+      const cookies = req.cookies || {}
+      let token = cookies[cookieName]
+
+      if (!token) {
+        token = randomBytes(tokenLength).toString('hex')
+        res.cookie(cookieName, token, {
+          httpOnly: true,
+          sameSite: 'strict',
+          secure: process.env.NODE_ENV === 'production',
+          path: '/',
+        })
+      }
+
+      // Skip for safe methods
+      if (!protectedMethods.has(req.method.toUpperCase())) {
+        return next()
+      }
+
+      // Check @CsrfExempt() on the matched handler
+      const { controllerClass, handlerName } = this.resolveHandler(req)
+      if (controllerClass && handlerName) {
+        const exempt = getMethodMetaOrUndefined<boolean>(
+          CSRF_META.EXEMPT,
+          controllerClass,
+          handlerName,
+        )
+        if (exempt) return next()
+      }
+
+      // Validate: header must match cookie
+      const headerToken = req.headers[headerName]
+      if (!headerToken || headerToken !== token) {
+        return res.status(HttpStatus.FORBIDDEN).json({
+          statusCode: HttpStatus.FORBIDDEN,
+          error: 'Forbidden',
+          message: 'CSRF token mismatch',
+        })
+      }
+
+      next()
+    }
   }
 }

@@ -1,5 +1,5 @@
 import { setClassMeta, setMethodMeta } from '@forinda/kickjs'
-import { AUTH_META } from './types'
+import { AUTH_META, CSRF_META } from './types'
 
 /**
  * Mark a controller or method as requiring authentication.
@@ -88,5 +88,26 @@ export function Roles(...roles: string[]): MethodDecorator {
   return (target: any, propertyKey: string | symbol) => {
     setMethodMeta(AUTH_META.AUTHENTICATED, true, target.constructor, propertyKey as string)
     setMethodMeta(AUTH_META.ROLES, roles, target.constructor, propertyKey as string)
+  }
+}
+
+/**
+ * Exempt a route from CSRF validation.
+ * Use on webhook endpoints or other routes that receive external POST requests
+ * without a browser context.
+ *
+ * Only meaningful when CSRF protection is enabled via AuthAdapter's `csrf` option
+ * or auto-detected from cookie-based auth strategies.
+ *
+ * @example
+ * ```ts
+ * @Post('/webhook')
+ * @CsrfExempt()
+ * handleWebhook(ctx) { ... }
+ * ```
+ */
+export function CsrfExempt(): MethodDecorator {
+  return (target: any, propertyKey: string | symbol) => {
+    setMethodMeta(CSRF_META.EXEMPT, true, target.constructor, propertyKey as string)
   }
 }

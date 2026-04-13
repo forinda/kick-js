@@ -9,6 +9,10 @@ export const AUTH_META = {
   STRATEGY: Symbol('auth:strategy'),
 } as const
 
+export const CSRF_META = {
+  EXEMPT: Symbol('csrf:exempt'),
+} as const
+
 // ── AuthUser ────────────────────────────────────────────────────────────
 
 /**
@@ -99,4 +103,28 @@ export interface AuthAdapterOptions {
    * Default: responds with 403 JSON error.
    */
   onForbidden?: (req: any, res: any) => void
+
+  /**
+   * CSRF protection for cookie-based auth strategies.
+   *
+   * - `true` — enable with default options
+   * - `false` — disable explicitly
+   * - `CsrfConfig` object — enable with custom options
+   * - `undefined` (default) — auto-detect: enable if any strategy uses
+   *   cookies (SessionStrategy, JWT with `tokenFrom: 'cookie'`)
+   *
+   * Routes decorated with `@CsrfExempt()` bypass CSRF checks.
+   */
+  csrf?: boolean | CsrfConfig
+}
+
+export interface CsrfConfig {
+  /** Cookie name for the CSRF token (default: '_csrf') */
+  cookie?: string
+  /** Header name to check for the token (default: 'x-csrf-token') */
+  header?: string
+  /** HTTP methods that require CSRF validation (default: POST, PUT, PATCH, DELETE) */
+  methods?: string[]
+  /** Token byte length before hex encoding (default: 32) */
+  tokenLength?: number
 }

@@ -84,10 +84,22 @@
     "reflect-metadata": "^0.2.2"
   },
   "peerDependencies": {
-    "jsonwebtoken": "^9.0.0"
+    "jsonwebtoken": "^9.0.0",
+    "argon2": ">=0.31.0",
+    "bcryptjs": ">=2.4.0",
+    "bcrypt": ">=5.0.0"
   },
   "peerDependenciesMeta": {
     "jsonwebtoken": {
+      "optional": true
+    },
+    "argon2": {
+      "optional": true
+    },
+    "bcryptjs": {
+      "optional": true
+    },
+    "bcrypt": {
       "optional": true
     }
   },
