@@ -38,11 +38,13 @@ export {
 // Built-in strategies
 export {
   JwtStrategy,
+  keycloakMapPayload,
   ApiKeyStrategy,
   OAuthStrategy,
   PassportBridge,
   SessionStrategy,
   type JwtStrategyOptions,
+  type KeycloakMapOptions,
   type ApiKeyStrategyOptions,
   type ApiKeyUser,
   type OAuthStrategyOptions,

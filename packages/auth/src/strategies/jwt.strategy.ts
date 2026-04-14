@@ -1,9 +1,31 @@
+import { createPublicKey } from 'node:crypto'
 import type { AuthStrategy, AuthUser } from '../types'
 import type { TokenStore } from '../token-store'
 
 export interface JwtStrategyOptions {
-  /** JWT secret key for HS256 or public key for RS256 */
-  secret: string | Buffer
+  /**
+   * JWT secret key for HS256 or public key for RS256.
+   * Required unless `jwksUri` is provided.
+   */
+  secret?: string | Buffer
+
+  /**
+   * JWKS (JSON Web Key Set) URI for fetching public keys.
+   * Used with RS256/RS384/RS512 for providers like Keycloak, Auth0, Okta.
+   * Keys are cached and refreshed when a `kid` (key ID) is not found.
+   *
+   * @example
+   * ```ts
+   * jwksUri: 'https://keycloak.example.com/realms/my-realm/protocol/openid-connect/certs'
+   * ```
+   */
+  jwksUri?: string
+
+  /**
+   * Cache TTL for JWKS keys in milliseconds (default: 600000 = 10 minutes).
+   * Set to 0 to disable caching (not recommended in production).
+   */
+  jwksCacheTtl?: number
 
   /**
    * Algorithm (default: 'HS256').
@@ -89,7 +111,14 @@ export class JwtStrategy implements AuthStrategy {
   private jwt: any
   private readonly options: JwtStrategyOptions
 
+  /** Cached JWKS keys: kid → PEM public key */
+  private jwksCache = new Map<string, string>()
+  private jwksCacheTime = 0
+
   constructor(options: JwtStrategyOptions) {
+    if (!options.secret && !options.jwksUri) {
+      throw new Error('JwtStrategy requires either "secret" or "jwksUri"')
+    }
     this.options = options
   }
 
@@ -110,14 +139,15 @@ export class JwtStrategy implements AuthStrategy {
     if (!token) return null
 
     try {
-      // Resolve per-tenant secret when available
-      let secret = this.options.secret
-      if (this.options.secretResolver && req.tenant?.id) {
-        secret = await this.options.secretResolver(req.tenant.id)
-      }
+      // Resolve the signing key
+      const secret = await this.resolveSecret(token, req)
+      if (!secret) return null
+
+      // Default to RS256 when using JWKS, HS256 when using static secret
+      const defaultAlgorithms = this.options.jwksUri ? ['RS256'] : ['HS256']
 
       const payload = this.jwt.verify(token, secret, {
-        algorithms: this.options.algorithms ?? ['HS256'],
+        algorithms: this.options.algorithms ?? defaultAlgorithms,
       })
 
       // Check token revocation if a store is configured
@@ -132,6 +162,88 @@ export class JwtStrategy implements AuthStrategy {
       return this.options.mapPayload ? this.options.mapPayload(payload) : payload
     } catch {
       return null
+    }
+  }
+
+  /**
+   * Resolve the signing key for a token.
+   * Priority: secretResolver (per-tenant) > jwksUri (by kid) > static secret
+   */
+  private async resolveSecret(token: string, req: any): Promise<string | Buffer | null> {
+    // Per-tenant secret resolver takes precedence
+    if (this.options.secretResolver && req.tenant?.id) {
+      return this.options.secretResolver(req.tenant.id)
+    }
+
+    // JWKS URI: decode header to get kid, fetch matching key
+    if (this.options.jwksUri) {
+      const header = this.decodeHeader(token)
+      if (!header?.kid) return null
+      return this.getJwksKey(header.kid)
+    }
+
+    return this.options.secret ?? null
+  }
+
+  /**
+   * Decode the JWT header without verification to extract the `kid`.
+   */
+  private decodeHeader(token: string): { kid?: string; alg?: string } | null {
+    try {
+      const headerB64 = token.split('.')[0]
+      if (!headerB64) return null
+      return JSON.parse(Buffer.from(headerB64, 'base64url').toString('utf-8'))
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * Get a public key from the JWKS cache by `kid`. If the key is not
+   * cached or the cache has expired, fetches fresh keys from the JWKS URI.
+   * If the kid is still not found after refresh, returns null.
+   */
+  private async getJwksKey(kid: string): Promise<string | null> {
+    const ttl = this.options.jwksCacheTtl ?? 600_000
+
+    // Check cache
+    if (this.jwksCache.has(kid) && Date.now() - this.jwksCacheTime < ttl) {
+      return this.jwksCache.get(kid)!
+    }
+
+    // Fetch and cache
+    await this.refreshJwks()
+
+    return this.jwksCache.get(kid) ?? null
+  }
+
+  /**
+   * Fetch the JWKS from the configured URI and cache all keys.
+   * Converts JWK RSA keys to PEM format for jsonwebtoken compatibility.
+   */
+  private async refreshJwks(): Promise<void> {
+    if (!this.options.jwksUri) return
+
+    try {
+      const res = await fetch(this.options.jwksUri, {
+        headers: { accept: 'application/json' },
+        signal: AbortSignal.timeout(10_000),
+      })
+
+      if (!res.ok) return
+
+      const data: { keys?: JwkKey[] } = await res.json()
+      if (!data.keys) return
+
+      this.jwksCache.clear()
+      for (const key of data.keys) {
+        if (key.kid && key.kty === 'RSA' && key.n && key.e) {
+          this.jwksCache.set(key.kid, jwkToPem(key))
+        }
+      }
+      this.jwksCacheTime = Date.now()
+    } catch {
+      // JWKS fetch failure — keep stale cache if available
     }
   }
 
@@ -158,5 +270,98 @@ export class JwtStrategy implements AuthStrategy {
     }
 
     return null
+  }
+}
+
+// ── JWK Utilities ──────────────────────────────────────────────────────
+
+interface JwkKey {
+  kid?: string
+  kty: string
+  n?: string
+  e?: string
+  alg?: string
+  use?: string
+}
+
+/**
+ * Convert an RSA JWK to PEM format using Node's crypto module.
+ * This avoids external dependencies like `jwk-to-pem`.
+ */
+function jwkToPem(jwk: JwkKey): string {
+  const key = createPublicKey({
+    key: { kty: jwk.kty, n: jwk.n!, e: jwk.e! },
+    format: 'jwk',
+  })
+  return key.export({ type: 'spki', format: 'pem' }) as string
+}
+
+// ── Keycloak Helpers ───────────────────────────────────────────────────
+
+export interface KeycloakMapOptions {
+  /**
+   * Keycloak client ID — used to extract client-specific roles from
+   * `resource_access[clientId].roles`.
+   */
+  clientId: string
+  /** Include realm-level roles from `realm_access.roles` (default: true) */
+  includeRealmRoles?: boolean
+  /** Include client-specific roles from `resource_access[clientId].roles` (default: true) */
+  includeClientRoles?: boolean
+  /**
+   * Prefix roles with their source: `'realm:admin'`, `'client:editor'`.
+   * Useful when realm and client roles overlap. Default: false.
+   */
+  rolePrefix?: boolean
+}
+
+/**
+ * Create a `mapPayload` function that extracts Keycloak's nested role
+ * structure into a flat `AuthUser.roles` array.
+ *
+ * Keycloak JWTs store roles in:
+ * - `realm_access.roles` — global realm roles
+ * - `resource_access[clientId].roles` — per-client roles
+ *
+ * @example
+ * ```ts
+ * import { JwtStrategy, keycloakMapPayload } from '@forinda/kickjs-auth'
+ *
+ * new JwtStrategy({
+ *   jwksUri: 'https://keycloak.example.com/realms/my-realm/protocol/openid-connect/certs',
+ *   mapPayload: keycloakMapPayload({ clientId: 'my-app' }),
+ * })
+ * ```
+ */
+export function keycloakMapPayload(options: KeycloakMapOptions): (payload: any) => AuthUser {
+  const {
+    clientId,
+    includeRealmRoles = true,
+    includeClientRoles = true,
+    rolePrefix = false,
+  } = options
+
+  return (payload: any): AuthUser => {
+    const roles: string[] = []
+
+    if (includeRealmRoles && payload.realm_access?.roles) {
+      for (const role of payload.realm_access.roles) {
+        roles.push(rolePrefix ? `realm:${role}` : role)
+      }
+    }
+
+    if (includeClientRoles && payload.resource_access?.[clientId]?.roles) {
+      for (const role of payload.resource_access[clientId].roles) {
+        roles.push(rolePrefix ? `client:${role}` : role)
+      }
+    }
+
+    return {
+      id: payload.sub,
+      email: payload.email,
+      name: payload.name ?? payload.preferred_username,
+      emailVerified: payload.email_verified,
+      roles,
+    }
   }
 }

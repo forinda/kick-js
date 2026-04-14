@@ -1,4 +1,9 @@
-export { JwtStrategy, type JwtStrategyOptions } from './jwt.strategy'
+export {
+  JwtStrategy,
+  keycloakMapPayload,
+  type JwtStrategyOptions,
+  type KeycloakMapOptions,
+} from './jwt.strategy'
 export { ApiKeyStrategy, type ApiKeyStrategyOptions, type ApiKeyUser } from './api-key.strategy'
 export {
   OAuthStrategy,
