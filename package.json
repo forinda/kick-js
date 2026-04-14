@@ -81,5 +81,8 @@
       "better-sqlite3",
       "esbuild"
     ]
+  },
+  "dependencies": {
+    "picocolors": "^1.1.1"
   }
 }

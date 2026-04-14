@@ -84,7 +84,9 @@
     }
   },
   "dependencies": {
+    "@clack/prompts": "^1.2.0",
     "commander": "^14.0.3",
+    "picocolors": "^1.1.1",
     "pluralize": "^8.0.0"
   },
   "devDependencies": {
