@@ -205,15 +205,37 @@ const googleAuth = new OAuthStrategy({
 })
 ```
 
-Use it in your controller:
+Use it in your controller with **state validation** (CSRF protection):
 
 ```ts
+import { randomBytes } from 'node:crypto'
+
+const googleAuth = new OAuthStrategy({
+  provider: 'google',
+  clientId: process.env.GOOGLE_CLIENT_ID!,
+  clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+  callbackUrl: 'http://localhost:3000/auth/google/callback',
+  mapProfile: (profile) => ({
+    id: profile.id,
+    email: profile.email,
+    name: profile.name,
+    roles: ['user'],
+  }),
+  // Validate state parameter on callback (prevents CSRF)
+  stateValidator: async (state, req) => {
+    return req.session?.data?.oauthState === state
+  },
+})
+
 @Controller('/auth')
 class SocialAuthController {
   @Get('/google')
   @Public()
   loginWithGoogle(ctx: RequestContext) {
-    const url = googleAuth.getAuthorizationUrl()
+    // Generate cryptographic state and store in session
+    const state = randomBytes(32).toString('hex')
+    ctx.session.data.oauthState = state
+    const url = googleAuth.getAuthorizationUrl(state)
     return ctx.res.redirect(url)
   }
 
@@ -222,10 +244,55 @@ class SocialAuthController {
   async googleCallback(ctx: RequestContext) {
     const user = await googleAuth.validate(ctx.req)
     if (!user) return ctx.res.status(401).json({ error: 'Auth failed' })
+    // Clean up state
+    delete ctx.session.data.oauthState
     // Issue your own JWT after social login
     const token = jwt.sign(user, JWT_SECRET, { expiresIn: '24h' })
     return ctx.json({ token, user })
   }
+}
+```
+
+> **Important:** Always use `stateValidator` in production. Without it, your OAuth callback is vulnerable to CSRF attacks.
+
+### PKCE (Mobile & SPA)
+
+For public clients that cannot securely store a client secret, use PKCE:
+
+```ts
+const googleAuth = new OAuthStrategy({
+  provider: 'google',
+  clientId: process.env.GOOGLE_CLIENT_ID!,
+  clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+  callbackUrl: 'http://localhost:3000/auth/google/callback',
+  pkce: true,
+  stateValidator: async (state, req) => req.session?.data?.oauthState === state,
+  mapProfile: (profile) => ({
+    id: profile.id,
+    email: profile.email,
+    roles: ['user'],
+  }),
+})
+
+@Get('/google')
+@Public()
+loginWithGoogle(ctx: RequestContext) {
+  const state = randomBytes(32).toString('hex')
+  const { url, codeVerifier } = googleAuth.getAuthorizationUrlWithPkce(state)
+  ctx.session.data.oauthState = state
+  ctx.session.data.oauthCodeVerifier = codeVerifier
+  return ctx.res.redirect(url)
+}
+
+@Get('/google/callback')
+@Public()
+async googleCallback(ctx: RequestContext) {
+  // PKCE verifier is read automatically from req.session.data.oauthCodeVerifier
+  const user = await googleAuth.validate(ctx.req)
+  if (!user) return ctx.res.status(401).json({ error: 'Auth failed' })
+  delete ctx.session.data.oauthState
+  delete ctx.session.data.oauthCodeVerifier
+  return ctx.json({ token: jwt.sign(user, JWT_SECRET), user })
 }
 ```
 

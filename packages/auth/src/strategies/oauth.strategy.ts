@@ -1,7 +1,18 @@
+import { randomBytes, createHash } from 'node:crypto'
 import { Logger } from '@forinda/kickjs'
 import type { AuthStrategy, AuthUser } from '../types'
 
 const log = Logger.for('OAuthStrategy')
+
+/** Generate a cryptographically random code verifier for PKCE */
+function generateCodeVerifier(): string {
+  return randomBytes(32).toString('base64url')
+}
+
+/** Derive the S256 code challenge from a code verifier */
+function generateCodeChallenge(verifier: string): string {
+  return createHash('sha256').update(verifier).digest('base64url')
+}
 
 /** Supported OAuth providers with pre-configured endpoints */
 export type OAuthProvider = 'google' | 'github' | 'discord' | 'microsoft' | 'custom'
@@ -78,6 +89,33 @@ export interface OAuthStrategyOptions {
    * ```
    */
   mapProfile?: (profile: any, tokens: OAuthTokens) => AuthUser | Promise<AuthUser>
+
+  /**
+   * Validate the OAuth state parameter on callback to prevent CSRF attacks.
+   * Called with the `state` value from the callback query string.
+   * Return `true` if the state is valid (matches what you stored in session/cache).
+   *
+   * When set, `validate()` will reject callbacks with missing or invalid state.
+   *
+   * @example
+   * ```ts
+   * stateValidator: async (state, req) => {
+   *   const stored = req.session?.data?.oauthState
+   *   return !!stored && stored === state
+   * }
+   * ```
+   */
+  stateValidator?: (state: string, req: any) => boolean | Promise<boolean>
+
+  /**
+   * Enable PKCE (Proof Key for Code Exchange) for the OAuth flow.
+   * Recommended for public clients (mobile apps, SPAs) to prevent
+   * authorization code interception attacks.
+   *
+   * When enabled, `getAuthorizationUrl()` returns an object with the URL
+   * and a `codeVerifier` that must be stored and passed to `validate()`.
+   */
+  pkce?: boolean
 }
 
 export interface OAuthTokens {
@@ -166,6 +204,21 @@ export class OAuthStrategy implements AuthStrategy {
   /**
    * Get the authorization URL to redirect the user to the OAuth provider.
    * Pass an optional `state` parameter for CSRF protection.
+   *
+   * When PKCE is enabled, returns an object with the URL and `codeVerifier`.
+   * Store the `codeVerifier` in the session — it must be passed to `validate()`.
+   *
+   * @example
+   * ```ts
+   * // Without PKCE
+   * const url = strategy.getAuthorizationUrl(state)
+   * res.redirect(url)
+   *
+   * // With PKCE
+   * const { url, codeVerifier } = strategy.getAuthorizationUrlWithPkce(state)
+   * req.session.data.codeVerifier = codeVerifier
+   * res.redirect(url)
+   * ```
    */
   getAuthorizationUrl(state?: string): string {
     const scopes = Array.isArray(this.endpoints.scopes)
@@ -180,20 +233,81 @@ export class OAuthStrategy implements AuthStrategy {
       ...(state ? { state } : {}),
     })
 
+    if (this.options.pkce) {
+      const verifier = generateCodeVerifier()
+      const challenge = generateCodeChallenge(verifier)
+      params.set('code_challenge', challenge)
+      params.set('code_challenge_method', 'S256')
+      // Store verifier — caller must retrieve it from the return value
+      // of getAuthorizationUrlWithPkce() instead
+    }
+
     return `${this.endpoints.authorizeUrl}?${params.toString()}`
+  }
+
+  /**
+   * Get the authorization URL with PKCE support.
+   * Returns the URL and the `codeVerifier` that must be stored in session
+   * and passed to `validate()` via `req.oauthCodeVerifier`.
+   */
+  getAuthorizationUrlWithPkce(state?: string): { url: string; codeVerifier: string } {
+    const scopes = Array.isArray(this.endpoints.scopes)
+      ? this.endpoints.scopes.join(' ')
+      : (this.endpoints.scopes ?? '')
+
+    const codeVerifier = generateCodeVerifier()
+    const codeChallenge = generateCodeChallenge(codeVerifier)
+
+    const params = new URLSearchParams({
+      client_id: this.options.clientId,
+      redirect_uri: this.options.callbackUrl,
+      response_type: 'code',
+      scope: scopes,
+      code_challenge: codeChallenge,
+      code_challenge_method: 'S256',
+      ...(state ? { state } : {}),
+    })
+
+    return {
+      url: `${this.endpoints.authorizeUrl}?${params.toString()}`,
+      codeVerifier,
+    }
   }
 
   /**
    * Validate the callback request — exchange the authorization code for
    * tokens and fetch the user profile.
+   *
+   * When `stateValidator` is configured, the `state` query parameter is
+   * validated before proceeding. Callbacks with missing or invalid state
+   * are rejected with null.
+   *
+   * For PKCE flows, pass the stored code verifier via `req.oauthCodeVerifier`.
    */
   async validate(req: any): Promise<AuthUser | null> {
     const code = req.query?.code
     if (!code) return null
 
     try {
+      // Validate state parameter (CSRF protection)
+      if (this.options.stateValidator) {
+        const state = req.query?.state
+        if (!state) {
+          log.warn('OAuth callback missing state parameter')
+          return null
+        }
+        const valid = await this.options.stateValidator(state, req)
+        if (!valid) {
+          log.warn('OAuth callback state validation failed')
+          return null
+        }
+      }
+
+      // Get PKCE code verifier if available
+      const codeVerifier = req.oauthCodeVerifier ?? req.session?.data?.oauthCodeVerifier
+
       // Exchange code for tokens
-      const tokens = await this.exchangeCode(code)
+      const tokens = await this.exchangeCode(code, codeVerifier)
       if (!tokens) return null
 
       // Fetch user profile
@@ -213,14 +327,21 @@ export class OAuthStrategy implements AuthStrategy {
   }
 
   /** Exchange authorization code for access/refresh tokens */
-  private async exchangeCode(code: string): Promise<OAuthTokens | null> {
-    const body = new URLSearchParams({
+  private async exchangeCode(code: string, codeVerifier?: string): Promise<OAuthTokens | null> {
+    const params: Record<string, string> = {
       client_id: this.options.clientId,
       client_secret: this.options.clientSecret,
       code,
       grant_type: 'authorization_code',
       redirect_uri: this.options.callbackUrl,
-    })
+    }
+
+    // Include PKCE code_verifier if available
+    if (codeVerifier) {
+      params.code_verifier = codeVerifier
+    }
+
+    const body = new URLSearchParams(params)
 
     const response = await fetch(this.endpoints.tokenUrl, {
       method: 'POST',
