@@ -12,7 +12,7 @@ export default defineConfig([
     format: ['esm'],
     platform: 'node',
     dts: true,
-    external: ['@forinda/kickjs-ai', 'commander', 'pluralize', 'vite', /^node:/],
+    external: ['@forinda/kickjs-ai', '@clack/prompts', 'picocolors', 'commander', 'pluralize', 'vite', /^node:/],
     banner: { js: banner },
   },
   {
@@ -22,7 +22,7 @@ export default defineConfig([
     format: ['esm'],
     platform: 'node',
     dts: false,
-    external: ['@forinda/kickjs-ai', 'commander', 'pluralize', 'vite', /^node:/],
+    external: ['@forinda/kickjs-ai', '@clack/prompts', 'picocolors', 'commander', 'pluralize', 'vite', /^node:/],
     banner: { js: banner },
   },
 ])

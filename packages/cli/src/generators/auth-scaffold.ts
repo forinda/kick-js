@@ -6,8 +6,6 @@ export interface AuthScaffoldOptions {
   strategy?: 'jwt' | 'session'
   /** Output directory. Default: 'src/modules/auth' */
   outDir?: string
-  /** Token storage: 'cookie' | 'header' | 'both'. Default: 'header' */
-  tokenStorage?: 'cookie' | 'header' | 'both'
   /** Generate role-based guards. Default: true */
   roleGuards?: boolean
 }

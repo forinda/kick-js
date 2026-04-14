@@ -16,16 +16,17 @@ export function httpMethodColor(method: string): string {
   return fn(method.padEnd(7))
 }
 
-/** Color a severity tag for terminal display */
+/** Color a severity tag for terminal display (padded to 10 chars) */
 export function severityColor(severity: string): string {
+  const tag = `[${severity}]`.padEnd(10)
   switch (severity) {
     case 'CRITICAL':
-      return pc.red(`[CRITICAL]`)
+      return pc.red(tag)
     case 'WARNING':
-      return pc.yellow(`[WARNING] `)
+      return pc.yellow(tag)
     case 'INFO':
-      return pc.blue(pc.dim(`[INFO]    `))
+      return pc.blue(pc.dim(tag))
     default:
-      return `[${severity}]`
+      return tag
   }
 }

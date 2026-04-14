@@ -406,7 +406,6 @@ export function registerGenerateCommand(program: Command): void {
         '  Includes controller, service, DTOs, and test stubs.',
     )
     .option('-s, --strategy <type>', 'Auth strategy: jwt | session')
-    .option('--token-storage <type>', 'Token storage: cookie | header | both')
     .option('--role-guards', 'Generate role-based guards (default: true)')
     .option('--no-role-guards', 'Skip role-based guard generation')
     .option('-o, --out <dir>', 'Output directory', 'src/modules/auth')
@@ -426,18 +425,6 @@ export function registerGenerateCommand(program: Command): void {
         })
       }
 
-      let tokenStorage = opts.tokenStorage
-      if (!tokenStorage && strategy === 'jwt') {
-        tokenStorage = await select({
-          message: 'Token storage',
-          options: [
-            { value: 'header', label: 'Header', hint: 'Authorization: Bearer <token>' },
-            { value: 'cookie', label: 'Cookie', hint: 'httpOnly secure cookie' },
-            { value: 'both', label: 'Both', hint: 'header + cookie fallback' },
-          ],
-        })
-      }
-
       let roleGuards = opts.roleGuards
       if (roleGuards === undefined) {
         roleGuards = await promptConfirm({
@@ -449,7 +436,6 @@ export function registerGenerateCommand(program: Command): void {
       const files = await generateAuthScaffold({
         strategy,
         outDir: opts.out,
-        tokenStorage,
         roleGuards,
       })
       printGenerated(files, dryRun)

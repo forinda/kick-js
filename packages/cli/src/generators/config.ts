@@ -31,8 +31,15 @@ export async function generateConfig(options: GenerateConfigOptions): Promise<st
     `import { defineConfig } from '@forinda/kickjs-cli'
 
 export default defineConfig({
-  modulesDir: '${modulesDir}',
-  defaultRepo: '${defaultRepo}',
+  modules: {
+    dir: '${modulesDir}',
+    repo: '${defaultRepo}',
+    pluralize: true,
+  },
+
+  typegen: {
+    schemaValidator: 'zod',
+  },
 
   commands: [
     {

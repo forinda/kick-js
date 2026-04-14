@@ -54,7 +54,7 @@ export async function removeModule(options: RemoveModuleOptions): Promise<void> 
 
     // Remove import line
     const importPattern = new RegExp(
-      `^import\\s*\\{\\s*${pascal}Module\\s*\\}\\s*from\\s*['\\./${plural}']+.*\\n?`,
+      `^import\\s*\\{\\s*${pascal}Module\\s*\\}\\s*from\\s*['"][^'"]*${plural}['"].*\\n?`,
       'gm',
     )
     content = content.replace(importPattern, '')
