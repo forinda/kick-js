@@ -83,6 +83,7 @@
     "ws": "^8.20.0"
   },
   "devDependencies": {
+    "@forinda/kickjs": "workspace:*",
     "@swc/core": "^1.15.21",
     "@types/node": "^25.0.0",
     "@types/ws": "^8.18.0",

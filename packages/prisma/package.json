@@ -96,6 +96,7 @@
     }
   },
   "devDependencies": {
+    "@forinda/kickjs": "workspace:*",
     "@types/node": "^25.0.0",
     "typescript": "^5.9.2"
   },

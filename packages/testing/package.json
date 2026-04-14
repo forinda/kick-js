@@ -84,6 +84,7 @@
     "@forinda/kickjs": ">=2.3.0"
   },
   "devDependencies": {
+    "@forinda/kickjs": "workspace:*",
     "@swc/core": "^1.15.21",
     "@types/express": "^5.0.6",
     "@types/node": "^25.0.0",

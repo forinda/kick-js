@@ -85,8 +85,9 @@
     "@forinda/kickjs": ">=2.3.0"
   },
   "devDependencies": {
-    "graphql": "^16.13.2",
+    "@forinda/kickjs": "workspace:*",
     "@types/node": "^25.0.0",
+    "graphql": "^16.13.2",
     "typescript": "^5.9.2"
   },
   "publishConfig": {

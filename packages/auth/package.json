@@ -104,6 +104,7 @@
     }
   },
   "devDependencies": {
+    "@forinda/kickjs": "workspace:*",
     "@types/jsonwebtoken": "^9.0.9",
     "@types/node": "^25.0.0",
     "jsonwebtoken": "^9.0.2",

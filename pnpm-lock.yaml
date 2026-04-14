@@ -1332,13 +1332,13 @@ importers:
 
   packages/ai:
     dependencies:
-      '@forinda/kickjs':
-        specifier: '>=2.3.0'
-        version: 2.3.3(dotenv@17.3.1)(express@5.2.1)
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
     devDependencies:
+      '@forinda/kickjs':
+        specifier: workspace:*
+        version: link:../kickjs
       '@swc/core':
         specifier: ^1.15.21
         version: 1.15.21
@@ -1360,9 +1360,6 @@ importers:
 
   packages/auth:
     dependencies:
-      '@forinda/kickjs':
-        specifier: '>=2.3.0'
-        version: 2.3.3(dotenv@17.3.1)(express@5.2.1)
       argon2:
         specifier: '>=0.31.0'
         version: 0.44.0
@@ -1376,6 +1373,9 @@ importers:
         specifier: ^0.2.2
         version: 0.2.2
     devDependencies:
+      '@forinda/kickjs':
+        specifier: workspace:*
+        version: link:../kickjs
       '@types/jsonwebtoken':
         specifier: ^9.0.9
         version: 9.0.10
@@ -1478,13 +1478,13 @@ importers:
 
   packages/cron:
     dependencies:
-      '@forinda/kickjs':
-        specifier: '>=2.3.0'
-        version: 2.3.3(dotenv@17.3.1)(express@5.2.1)
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
     devDependencies:
+      '@forinda/kickjs':
+        specifier: workspace:*
+        version: link:../kickjs
       '@types/node':
         specifier: ^25.0.0
         version: 25.5.0
@@ -1500,13 +1500,13 @@ importers:
 
   packages/devtools:
     dependencies:
-      '@forinda/kickjs':
-        specifier: '>=2.3.0'
-        version: 2.3.3(dotenv@17.3.1)(express@5.2.1)
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
     devDependencies:
+      '@forinda/kickjs':
+        specifier: workspace:*
+        version: link:../kickjs
       '@types/express':
         specifier: ^5.0.6
         version: 5.0.6
@@ -1525,9 +1525,6 @@ importers:
 
   packages/drizzle:
     dependencies:
-      '@forinda/kickjs':
-        specifier: '>=2.3.0'
-        version: 2.3.3(dotenv@17.3.1)(express@5.2.1)
       '@forinda/kickjs-multi-tenant':
         specifier: '>=2.0.0'
         version: 2.3.3(dotenv@17.3.1)(express@5.2.1)
@@ -1538,6 +1535,9 @@ importers:
         specifier: ^0.2.2
         version: 0.2.2
     devDependencies:
+      '@forinda/kickjs':
+        specifier: workspace:*
+        version: link:../kickjs
       '@types/node':
         specifier: ^25.0.0
         version: 25.5.0
@@ -1547,13 +1547,13 @@ importers:
 
   packages/graphql:
     dependencies:
-      '@forinda/kickjs':
-        specifier: '>=2.3.0'
-        version: 2.3.3(dotenv@17.3.1)(express@5.2.1)
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
     devDependencies:
+      '@forinda/kickjs':
+        specifier: workspace:*
+        version: link:../kickjs
       '@types/node':
         specifier: ^25.0.0
         version: 25.5.0
@@ -1658,13 +1658,13 @@ importers:
 
   packages/mailer:
     dependencies:
-      '@forinda/kickjs':
-        specifier: '>=2.3.0'
-        version: 2.3.3(dotenv@17.3.1)(express@5.2.1)
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
     devDependencies:
+      '@forinda/kickjs':
+        specifier: workspace:*
+        version: link:../kickjs
       '@types/node':
         specifier: ^25.0.0
         version: 25.5.0
@@ -1683,13 +1683,13 @@ importers:
 
   packages/mcp:
     dependencies:
-      '@forinda/kickjs':
-        specifier: '>=2.3.0'
-        version: 2.3.3(dotenv@17.3.1)(express@5.2.1)
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
     devDependencies:
+      '@forinda/kickjs':
+        specifier: workspace:*
+        version: link:../kickjs
       '@modelcontextprotocol/sdk':
         specifier: ^1.0.0
         version: 1.29.0(zod@4.3.6)
@@ -1726,13 +1726,13 @@ importers:
 
   packages/multi-tenant:
     dependencies:
-      '@forinda/kickjs':
-        specifier: '>=2.3.0'
-        version: 2.3.3(dotenv@17.3.1)(express@5.2.1)
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
     devDependencies:
+      '@forinda/kickjs':
+        specifier: workspace:*
+        version: link:../kickjs
       '@types/node':
         specifier: ^25.0.0
         version: 25.5.0
@@ -1742,13 +1742,13 @@ importers:
 
   packages/notifications:
     dependencies:
-      '@forinda/kickjs':
-        specifier: '>=2.3.0'
-        version: 2.3.3(dotenv@17.3.1)(express@5.2.1)
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
     devDependencies:
+      '@forinda/kickjs':
+        specifier: workspace:*
+        version: link:../kickjs
       '@types/node':
         specifier: ^25.0.0
         version: 25.5.0
@@ -1761,9 +1761,6 @@ importers:
 
   packages/otel:
     dependencies:
-      '@forinda/kickjs':
-        specifier: '>=2.3.0'
-        version: 2.3.3(dotenv@17.3.1)(express@5.2.1)
       '@opentelemetry/sdk-node':
         specifier: '>=0.50.0'
         version: 0.213.0(@opentelemetry/api@1.9.1)
@@ -1771,6 +1768,9 @@ importers:
         specifier: ^0.2.2
         version: 0.2.2
     devDependencies:
+      '@forinda/kickjs':
+        specifier: workspace:*
+        version: link:../kickjs
       '@opentelemetry/api':
         specifier: ^1.9.1
         version: 1.9.1
@@ -1792,9 +1792,6 @@ importers:
 
   packages/prisma:
     dependencies:
-      '@forinda/kickjs':
-        specifier: '>=2.3.0'
-        version: 2.3.3(dotenv@17.3.1)(express@5.2.1)
       '@forinda/kickjs-multi-tenant':
         specifier: '>=2.0.0'
         version: 2.3.3(dotenv@17.3.1)(express@5.2.1)
@@ -1805,6 +1802,9 @@ importers:
         specifier: ^0.2.2
         version: 0.2.2
     devDependencies:
+      '@forinda/kickjs':
+        specifier: workspace:*
+        version: link:../kickjs
       '@types/node':
         specifier: ^25.0.0
         version: 25.5.0
@@ -1814,9 +1814,6 @@ importers:
 
   packages/queue:
     dependencies:
-      '@forinda/kickjs':
-        specifier: '>=2.3.0'
-        version: 2.3.3(dotenv@17.3.1)(express@5.2.1)
       bullmq:
         specifier: '>=5.0.0'
         version: 5.71.0
@@ -1827,6 +1824,9 @@ importers:
         specifier: ^0.2.2
         version: 0.2.2
     devDependencies:
+      '@forinda/kickjs':
+        specifier: workspace:*
+        version: link:../kickjs
       '@types/node':
         specifier: ^25.0.0
         version: 25.5.0
@@ -1836,9 +1836,6 @@ importers:
 
   packages/swagger:
     dependencies:
-      '@forinda/kickjs':
-        specifier: '>=2.3.0'
-        version: 2.3.3(dotenv@17.3.1)(express@5.2.1)
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
@@ -1846,6 +1843,9 @@ importers:
         specifier: ^5.32.1
         version: 5.32.1
     devDependencies:
+      '@forinda/kickjs':
+        specifier: workspace:*
+        version: link:../kickjs
       '@swc/core':
         specifier: ^1.15.21
         version: 1.15.21
@@ -1869,11 +1869,10 @@ importers:
         version: 4.3.6
 
   packages/testing:
-    dependencies:
-      '@forinda/kickjs':
-        specifier: '>=2.3.0'
-        version: 2.3.3(dotenv@17.3.1)(express@5.2.1)
     devDependencies:
+      '@forinda/kickjs':
+        specifier: workspace:*
+        version: link:../kickjs
       '@swc/core':
         specifier: ^1.15.21
         version: 1.15.21
@@ -1894,11 +1893,10 @@ importers:
         version: 4.1.2(@opentelemetry/api@1.9.1)(@types/node@25.5.0)(vite@8.0.3(@emnapi/core@1.9.1)(@emnapi/runtime@1.9.1)(@types/node@25.5.0)(esbuild@0.27.4)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.3))
 
   packages/vite:
-    dependencies:
-      '@forinda/kickjs':
-        specifier: '>=2.3.0'
-        version: 2.3.3(dotenv@17.3.1)(express@5.2.1)
     devDependencies:
+      '@forinda/kickjs':
+        specifier: workspace:*
+        version: link:../kickjs
       '@types/express':
         specifier: ^5.0.6
         version: 5.0.6
@@ -1935,9 +1933,6 @@ importers:
 
   packages/ws:
     dependencies:
-      '@forinda/kickjs':
-        specifier: '>=2.3.0'
-        version: 2.3.3(dotenv@17.3.1)(express@5.2.1)
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
@@ -1945,6 +1940,9 @@ importers:
         specifier: ^8.20.0
         version: 8.20.0
     devDependencies:
+      '@forinda/kickjs':
+        specifier: workspace:*
+        version: link:../kickjs
       '@swc/core':
         specifier: ^1.15.21
         version: 1.15.21

@@ -85,6 +85,7 @@
     }
   },
   "devDependencies": {
+    "@forinda/kickjs": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.0.0",
     "@swc/core": "^1.15.21",
     "@types/express": "^5.0.6",
