@@ -17,8 +17,8 @@
  *    change, Vite invalidates the module graph and the next request
  *    gets fresh code — no process restart needed.
  *
- * 3. **Stores the Vite server reference** on `globalThis` so the SSR
- *    renderer (for future Inertia support) can use `createViteRuntime()`.
+ * 3. **Stores the Vite server reference** on `globalThis` so SSR
+ *    renderers can use `createViteRuntime()`.
  *
  * ## Why NOT middlewareMode
  *
@@ -84,7 +84,7 @@ export function kickjsDevServerPlugin(ctx: PluginContext): Plugin {
      * The `configureServer` hook runs after Vite creates the HTTP server.
      * We use it to:
      * 1. Store the httpServer on globalThis (for WsAdapter, Socket.IO, etc.)
-     * 2. Store the Vite server reference (for SSR rendering in Inertia)
+     * 2. Store the Vite server reference (for SSR rendering)
      * 3. Return a post-middleware that loads the KickJS app on each request
      *
      * Returning a function from `configureServer` registers it as a

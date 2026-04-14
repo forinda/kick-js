@@ -390,10 +390,7 @@ export class Application {
 
       for (const route of routeSets) {
         const version = route.version ?? defaultVersion
-        const mountPath =
-          route.prefix === false
-            ? normalizePath(route.path)
-            : `${apiPrefix}/v${version}${normalizePath(route.path)}`
+        const mountPath = `${apiPrefix}/v${version}${normalizePath(route.path)}`
         this.app.use(mountPath, route.router)
 
         // Notify adapters (e.g. SwaggerAdapter for OpenAPI spec generation)

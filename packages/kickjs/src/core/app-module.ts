@@ -13,8 +13,6 @@ export interface ModuleRoutes {
   version?: number
   /** Controller class for OpenAPI introspection */
   controller?: any
-  /** Set to false to skip the global apiPrefix + version for this route set. The path is mounted as-is. */
-  prefix?: boolean
 }
 
 /**

@@ -39,9 +39,7 @@
       "@forinda/kickjs-vite": ["packages/vite/src/index.ts"],
       "@forinda/kickjs-vite/*": ["packages/vite/src/*"],
       "@forinda/kickjs-notifications": ["packages/notifications/src/index.ts"],
-      "@forinda/kickjs-notifications/*": ["packages/notifications/src/*"],
-      "@forinda/kickjs-inertia": ["packages/inertia/src/index.ts"],
-      "@forinda/kickjs-inertia/*": ["packages/inertia/src/*"]
+      "@forinda/kickjs-notifications/*": ["packages/notifications/src/*"]
     }
   },
   "include": [

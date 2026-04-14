@@ -142,13 +142,6 @@ const PACKAGE_REGISTRY: Record<
     description: 'Model Context Protocol server — expose @Controller endpoints as AI tools',
   },
 
-  // Inertia — SPA protocol
-  inertia: {
-    pkg: '@forinda/kickjs-inertia',
-    peers: [],
-    description: 'Inertia protocol — serve SPA pages from controllers',
-  },
-
   // Testing
   testing: {
     pkg: '@forinda/kickjs-testing',
