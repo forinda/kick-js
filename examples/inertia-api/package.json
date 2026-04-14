@@ -12,12 +12,15 @@
   },
   "dependencies": {
     "@forinda/kickjs": "workspace:*",
+    "@forinda/kickjs-core": "workspace:*",
+    "@forinda/kickjs-http": "workspace:*",
     "@forinda/kickjs-inertia": "workspace:*",
     "express": "^5.1.0",
     "reflect-metadata": "^0.2.2"
   },
   "devDependencies": {
     "@forinda/kickjs-cli": "workspace:*",
+    "@forinda/kickjs-vite": "workspace:*",
     "@swc/core": "^1.15.21",
     "@types/express": "^5.0.6",
     "@types/node": "^25.0.0",

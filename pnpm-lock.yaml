@@ -221,6 +221,12 @@ importers:
       '@forinda/kickjs':
         specifier: workspace:*
         version: link:../../packages/kickjs
+      '@forinda/kickjs-core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@forinda/kickjs-http':
+        specifier: workspace:*
+        version: link:../../packages/http
       '@forinda/kickjs-inertia':
         specifier: workspace:*
         version: link:../../packages/inertia
@@ -234,6 +240,9 @@ importers:
       '@forinda/kickjs-cli':
         specifier: workspace:*
         version: link:../../packages/cli
+      '@forinda/kickjs-vite':
+        specifier: workspace:*
+        version: link:../../packages/vite
       '@swc/core':
         specifier: ^1.15.21
         version: 1.15.21
