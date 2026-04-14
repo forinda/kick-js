@@ -38,6 +38,44 @@ export function Policy(resource: string): ClassDecorator {
   }
 }
 
+// ── Policy Auto-Discovery ────────────────────────────────────────────
+
+/**
+ * Eagerly import all policy files so `@Policy()` decorators fire and
+ * register in the global `policyRegistry`. Without this, policy classes
+ * that are never explicitly imported remain unregistered.
+ *
+ * Uses `import.meta.glob` (Vite) for zero-config discovery.
+ *
+ * @example
+ * ```ts
+ * // src/index.ts — call before bootstrap()
+ * import { loadPolicies } from '@forinda/kickjs-auth'
+ *
+ * // Eagerly import all *.policy.ts files under src/
+ * loadPolicies(import.meta.glob('./modules/** /*.policy.ts', { eager: true }))
+ *
+ * // Or use a custom pattern
+ * loadPolicies(import.meta.glob('./policies/** /*.ts', { eager: true }))
+ * ```
+ *
+ * @param modules - The result of `import.meta.glob(..., { eager: true })`
+ * @returns The number of policy classes discovered
+ */
+export function loadPolicies(modules: Record<string, any>): number {
+  const before = policyRegistry.size
+  // Eager glob imports are already executed — the @Policy() decorators
+  // have fired and registered themselves. We just need to iterate to
+  // ensure the modules are referenced (prevents tree-shaking).
+  for (const mod of Object.values(modules)) {
+    // Touch each export to ensure side effects ran
+    if (mod && typeof mod === 'object') {
+      Object.keys(mod)
+    }
+  }
+  return policyRegistry.size - before
+}
+
 // ── AuthorizationService ──────────────────────────────────────────────
 
 /**

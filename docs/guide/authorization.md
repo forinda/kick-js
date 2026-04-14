@@ -74,6 +74,27 @@ class PostPolicy {
 
 Each method receives the authenticated user and optionally the resource instance. Return `true` to allow, `false` to deny.
 
+### Auto-Discovering Policies
+
+`@Policy()` decorators only register when their file is imported. If you forget to import a policy file, `@Can()` checks will silently deny (policy not found = deny by default).
+
+Use `loadPolicies()` with `import.meta.glob` to auto-discover all policy files:
+
+```ts
+// src/index.ts — before bootstrap()
+import { loadPolicies } from '@forinda/kickjs-auth'
+
+// Eagerly import all *.policy.ts files across all modules
+loadPolicies(import.meta.glob('./modules/**/*.policy.ts', { eager: true }))
+
+// Or if policies live in a dedicated folder
+loadPolicies(import.meta.glob('./policies/**/*.ts', { eager: true }))
+```
+
+This uses Vite's `import.meta.glob` with `{ eager: true }` to import all matching files at startup. The `@Policy()` decorators fire as a side effect, registering each class in the global policy registry.
+
+> **Recommended convention:** Name policy files `*.policy.ts` (e.g., `post.policy.ts`, `user.policy.ts`) so the glob pattern is specific and predictable.
+
 ### @Can() Decorator
 
 Use `@Can()` on controller methods to enforce a policy check before the handler runs:
@@ -140,7 +161,59 @@ You can use `@Roles()` and `@Can()` together. Roles are checked first:
 remove(ctx) { ... }
 ```
 
+## Guards (Custom Middleware)
+
+`kick g guard <name>` generates a middleware function for custom authorization logic that doesn't fit `@Roles()` or `@Can()`. Guards are raw Express middleware applied via `@Middleware()`.
+
+```bash
+kick g guard ip-whitelist
+```
+
+```ts
+// src/guards/ip-whitelist.guard.ts
+export async function ipWhitelistGuard(ctx: RequestContext, next: () => void) {
+  const allowed = ['10.0.0.0/8', '192.168.1.0/24']
+  if (!allowed.some(range => isInSubnet(ctx.req.ip, range))) {
+    ctx.res.status(403).json({ message: 'IP not allowed' })
+    return
+  }
+  next()
+}
+```
+
+Apply it with `@Middleware()`:
+
+```ts
+import { Middleware } from '@forinda/kickjs'
+import { ipWhitelistGuard } from '../guards/ip-whitelist.guard'
+
+@Controller('/internal')
+@Middleware(ipWhitelistGuard)
+class InternalController {
+  @Get('/metrics')
+  metrics(ctx) { ... }
+}
+```
+
+### When to Use What
+
+| Mechanism | Use When | Example |
+|-----------|----------|---------|
+| `@Roles('admin')` | Check user has a string role | Admin panel access |
+| `@Can('update', 'post')` | Check user can act on a specific resource | "Can this user edit THIS post?" |
+| `@Middleware(guard)` | Custom logic not tied to roles or resources | IP whitelist, feature flags, API versioning |
+| `@RateLimit()` | Throttle specific endpoints | Login endpoint, search API |
+
+**Precedence in the auth middleware:**
+1. `@Public()` — skips all auth
+2. `@Authenticated()` / `defaultPolicy` — user must be authenticated
+3. `@Roles()` — user must have at least one required role
+4. `@Can()` — policy method must return `true`
+5. `@RateLimit()` — request count within window
+6. `@Middleware()` guards — run as Express middleware (before or after auth depending on order)
+
 ## See Also
 
 - [Authentication](/guide/authentication) — strategies, decorators, events
-- [Multi-Tenancy](/api/multi-tenant) — tenant-scoped role resolution
+- [Multi-Tenancy](/guide/multi-tenancy) — tenant-scoped role resolution
+- [Middleware](/guide/middleware) — custom middleware and guards
