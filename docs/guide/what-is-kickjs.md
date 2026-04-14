@@ -29,16 +29,26 @@ KickJS is a production-grade, decorator-driven Node.js framework built on Expres
 ## Architecture
 
 ```
-@forinda/kickjs-testing --> @forinda/kickjs-http --> @forinda/kickjs-core
-                                         ^
-@forinda/kickjs-config --------------------------+
-@forinda/kickjs-swagger --> @forinda/kickjs-core
+@forinda/kickjs (unified: core + http + config)
+       ↓ (peer dependency)
+┌──────┼──────────┬───────────┬──────────┐
+auth  swagger  inertia  graphql  ws  ...
+                                    (18 adapter packages)
 
 @forinda/kickjs-cli (standalone)
+@forinda/kickjs-vite (dev tooling)
 ```
 
-- **@forinda/kickjs** — Unified framework: DI container, 20+ decorators, Express 5, middleware, routing, logger
-- **@forinda/kickjs-config** — Zod-based env validation, ConfigService
+- **@forinda/kickjs** — Unified framework: DI container, 20+ decorators, Express 5, middleware, routing, logger, Zod env config
 - **@forinda/kickjs-swagger** — OpenAPI spec generation, Swagger UI, ReDoc
+- **@forinda/kickjs-auth** — JWT, API key, OAuth strategies, JWKS URI support
+- **@forinda/kickjs-inertia** — Inertia.js adapter for server-driven SPAs
+- **@forinda/kickjs-graphql** — GraphQL with @Resolver, @Query, @Mutation, GraphiQL
+- **@forinda/kickjs-ws** — WebSocket with @WsController, rooms, heartbeat
+- **@forinda/kickjs-notifications** — Multi-channel: email, Slack, Discord, webhook
+- **@forinda/kickjs-devtools** — Debug dashboard at /_debug
+- **@forinda/kickjs-ai** — AI/LLM integration adapter
+- **@forinda/kickjs-mcp** — Model Context Protocol adapter
 - **@forinda/kickjs-cli** — Project scaffolding, DDD code generators, custom commands
+- **@forinda/kickjs-vite** — Vite HMR plugin, envWatchPlugin, dev tooling
 - **@forinda/kickjs-testing** — Test utilities for integration testing

@@ -209,7 +209,7 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
   log('  kick add <pkg>            Install a KickJS package + peers')
   log('  kick add --list           Show all available packages')
   log('')
-  log('Available: auth, swagger, graphql, drizzle, prisma, ws,')
-  log('           cron, queue, mailer, otel, multi-tenant, notifications, testing')
+  log('Available: auth, swagger, graphql, drizzle, prisma, ws, inertia,')
+  log('           cron, queue, mailer, otel, devtools, multi-tenant, notifications, mcp, testing')
   log('')
 }

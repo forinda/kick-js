@@ -273,4 +273,34 @@ If no default is provided and the environment variable is missing, accessing the
 @Value('SMTP_API_KEY'): Environment variable "SMTP_API_KEY" is not set and no default was provided.
 ```
 
-The container wires up `@Value` properties through `Object.defineProperty` getters during instance creation, alongside `@Autowired` property injection.
+The container resolves `@Value` properties during instance creation, alongside `@Autowired` property injection.
+
+## CLI Configuration (kick.config.ts)
+
+The `kick.config.ts` file configures the CLI's code generators. Key options:
+
+```ts
+import { defineConfig } from '@forinda/kickjs-cli'
+
+export default defineConfig({
+  pattern: 'ddd',                           // 'rest' | 'graphql' | 'ddd' | 'cqrs' | 'minimal'
+  modules: {
+    dir: 'src/modules',                     // where modules live
+    repo: 'prisma',                         // 'drizzle' | 'inmemory' | 'prisma' | { name: 'custom' }
+    pluralize: true,                        // pluralize module names
+    schemaDir: 'prisma/',                   // schema directory for ORM
+    prismaClientPath: '@/generated/prisma/client',  // Prisma 7+ client path
+  },
+  commands: [],                             // custom CLI commands
+})
+```
+
+::: warning Deprecated Fields
+The following top-level fields are deprecated in favor of the `modules` block:
+- `modulesDir` → `modules.dir`
+- `defaultRepo` → `modules.repo`
+- `schemaDir` → `modules.schemaDir`
+- `pluralize` → `modules.pluralize`
+
+They still work but will be removed in a future major version.
+:::

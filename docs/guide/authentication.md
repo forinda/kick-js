@@ -145,6 +145,43 @@ Options:
 | `queryParam` | `'token'` | Query parameter name |
 | `cookieName` | `'jwt'` | Cookie name |
 | `mapPayload` | identity | Transform decoded JWT to AuthUser |
+| `jwksUri` | — | JWKS endpoint URL for key rotation (e.g., Keycloak, Auth0) |
+| `jwksCacheTtl` | `3600000` | JWKS cache TTL in ms (default: 1 hour) |
+
+#### JWKS URI (Key Rotation)
+
+For identity providers that rotate keys (Keycloak, Auth0, Okta), use `jwksUri` instead of a static `secret`. The strategy fetches public keys from the JWKS endpoint and caches them.
+
+```ts
+new JwtStrategy({
+  jwksUri: 'https://keycloak.example.com/realms/myrealm/protocol/openid-connect/certs',
+  algorithms: ['RS256'],
+  mapPayload: (payload) => ({
+    id: payload.sub,
+    email: payload.email,
+    roles: payload.realm_access?.roles ?? ['user'],
+  }),
+})
+```
+
+#### Keycloak Integration
+
+Use the built-in `keycloakMapPayload` helper to extract roles from Keycloak's nested JWT structure:
+
+```ts
+import { JwtStrategy, keycloakMapPayload } from '@forinda/kickjs-auth'
+
+new JwtStrategy({
+  jwksUri: `${KEYCLOAK_URL}/realms/${REALM}/protocol/openid-connect/certs`,
+  algorithms: ['RS256'],
+  mapPayload: keycloakMapPayload({
+    clientId: 'my-app',           // extracts client-level roles
+    includeRealmRoles: true,       // includes realm-level roles
+  }),
+})
+```
+
+The helper extracts `realm_access.roles` and `resource_access[clientId].roles` from the Keycloak token and merges them into a flat `roles` array.
 
 ### ApiKeyStrategy
 
