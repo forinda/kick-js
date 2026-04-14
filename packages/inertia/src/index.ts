@@ -1,3 +1,5 @@
+import './context-augmentation'
+
 export { DEFERRED_PROP, OPTIONAL_PROP, ALWAYS_PROP, TO_BE_MERGED } from './symbols'
 export type {
   PageObject,
@@ -11,4 +13,6 @@ export { defer, optional, always, merge } from './props'
 export type { DeferredProp, OptionalProp, AlwaysProp, MergeProp } from './props'
 export { defineInertiaConfig } from './define-config'
 export { Inertia } from './inertia'
+export { createInertiaMiddleware } from './inertia-middleware'
 export { ServerRenderer } from './server-renderer'
+export { InertiaAdapter } from './inertia-adapter'
