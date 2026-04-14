@@ -23,6 +23,7 @@ const guideSidebar = [
       { text: 'Middleware', link: '/guide/middleware' },
       { text: 'Validation', link: '/guide/validation' },
       { text: 'Error Handling', link: '/guide/error-handling' },
+      { text: 'Request Lifecycle', link: '/guide/lifecycle' },
     ],
   },
   {
