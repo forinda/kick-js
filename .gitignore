@@ -19,3 +19,4 @@ benchmark-results.json
 benchmarks/results.json
 .ignored
 superpowers/
+*.vsix
