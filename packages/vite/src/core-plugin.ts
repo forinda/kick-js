@@ -31,8 +31,15 @@ export function kickjsCorePlugin(ctx: PluginContext): Plugin {
      * Vite config hook — runs before config is resolved.
      * Sets the foundational configuration for a backend Node.js framework.
      */
-    config(_config, { command }) {
+    config(userConfig, { command }) {
+      const envPort = process.env.PORT ? parseInt(process.env.PORT, 10) : undefined
+      const port = envPort ?? 3000
+
       return {
+        server: {
+          port,
+        },
+
         // 'custom' tells Vite this is not a SPA or MPA — we handle all requests
         appType: 'custom' as const,
 

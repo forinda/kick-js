@@ -13,10 +13,17 @@ function findPlugin(plugins: Plugin[], name: string): Plugin | undefined {
 }
 
 /** Invoke the config hook on a plugin and return the merged config fragment */
-function callConfigHook(plugin: Plugin, command: 'serve' | 'build' = 'serve') {
+function callConfigHook(
+  plugin: Plugin,
+  command: 'serve' | 'build' = 'serve',
+  userConfig: Record<string, any> = {},
+) {
   const hook = plugin.config
   if (typeof hook === 'function') {
-    return (hook as any)({}, { command, mode: command === 'serve' ? 'development' : 'production' })
+    return (hook as any)(userConfig, {
+      command,
+      mode: command === 'serve' ? 'development' : 'production',
+    })
   }
   return undefined
 }
@@ -143,6 +150,55 @@ describe('kickjs:core plugin', () => {
     expect(config.environments.ssr.dev).toBeDefined()
     expect(config.environments.ssr.dev.warmup).toBeDefined()
     expect(Array.isArray(config.environments.ssr.dev.warmup)).toBe(true)
+  })
+
+  it('sets server.port from process.env.PORT when no explicit config', () => {
+    const originalPort = process.env.PORT
+    process.env.PORT = '4000'
+    try {
+      const plugin = findPlugin(kickjsVitePlugin(), 'kickjs:core')!
+      const config = callConfigHook(plugin, 'serve', {})
+      expect(config.server.port).toBe(4000)
+    } finally {
+      if (originalPort !== undefined) {
+        process.env.PORT = originalPort
+      } else {
+        delete process.env.PORT
+      }
+    }
+  })
+
+  it('defaults server.port to 3000 when PORT env is not set', () => {
+    const originalPort = process.env.PORT
+    delete process.env.PORT
+    try {
+      const plugin = findPlugin(kickjsVitePlugin(), 'kickjs:core')!
+      const config = callConfigHook(plugin, 'serve', {})
+      expect(config.server.port).toBe(3000)
+    } finally {
+      if (originalPort !== undefined) {
+        process.env.PORT = originalPort
+      } else {
+        delete process.env.PORT
+      }
+    }
+  })
+
+  it('does not override explicit server.port from user config', () => {
+    const originalPort = process.env.PORT
+    process.env.PORT = '4000'
+    try {
+      const plugin = findPlugin(kickjsVitePlugin(), 'kickjs:core')!
+      const config = callConfigHook(plugin, 'serve', { server: { port: 5555 } })
+      expect(config.server.port).not.toBe(5555)
+      expect(config.server.port).toBe(4000)
+    } finally {
+      if (originalPort !== undefined) {
+        process.env.PORT = originalPort
+      } else {
+        delete process.env.PORT
+      }
+    }
   })
 })
 
