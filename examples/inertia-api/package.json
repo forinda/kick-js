@@ -12,8 +12,6 @@
   },
   "dependencies": {
     "@forinda/kickjs": "workspace:*",
-    "@forinda/kickjs-core": "workspace:*",
-    "@forinda/kickjs-http": "workspace:*",
     "@forinda/kickjs-inertia": "workspace:*",
     "express": "^5.1.0",
     "reflect-metadata": "^0.2.2"

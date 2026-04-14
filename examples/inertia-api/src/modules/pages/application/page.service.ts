@@ -1,4 +1,4 @@
-import { Service } from '@forinda/kickjs-core'
+import { Service } from '@forinda/kickjs'
 
 @Service()
 export class PageService {

@@ -1,5 +1,4 @@
-import { Container, type AppModule, type ModuleRoutes } from '@forinda/kickjs-core'
-import { buildRoutes } from '@forinda/kickjs-http'
+import { Container, type AppModule, type ModuleRoutes, buildRoutes } from '@forinda/kickjs'
 import { HomeController } from './presentation/home.controller'
 import { AboutController } from './presentation/about.controller'
 

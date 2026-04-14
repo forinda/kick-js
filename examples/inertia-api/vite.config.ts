@@ -1,13 +1,14 @@
 import { defineConfig } from 'vite'
 import { resolve } from 'node:path'
 import swc from 'unplugin-swc'
-import { kickjsVitePlugin } from '@forinda/kickjs-vite'
+import { kickjsVitePlugin, envWatchPlugin } from '@forinda/kickjs-vite'
 
 export default defineConfig({
   oxc: false,
   plugins: [
     swc.vite(),
     kickjsVitePlugin({ entry: 'src/index.ts' }),
+    envWatchPlugin(),
   ],
   resolve: {
     alias: {

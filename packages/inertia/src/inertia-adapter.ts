@@ -19,10 +19,32 @@ export class InertiaAdapter implements AppAdapter {
   }
 
   beforeMount(_ctx: AdapterContext): void {
+    const config = this.config
+
     if (!Object.getOwnPropertyDescriptor(RequestContext.prototype, 'inertia')) {
       Object.defineProperty(RequestContext.prototype, 'inertia', {
         get(this: InstanceType<typeof RequestContext>) {
-          return (this as any).get('inertia') as Inertia
+          // Lazily create the Inertia instance on first access per request.
+          // The middleware sets it early if it can, but if RequestContext is
+          // created after middleware runs (router-builder), we create it here.
+          let inertia = (this as any).get('inertia') as Inertia | undefined
+          if (!inertia) {
+            inertia = new Inertia(this, config)
+            ;(this as any).set('inertia', inertia)
+
+            // Apply config-level shared data
+            if (config.share) {
+              const shared = config.share(this)
+              if (
+                shared &&
+                typeof shared === 'object' &&
+                typeof (shared as any).then !== 'function'
+              ) {
+                inertia.share(shared as Record<string, any>)
+              }
+            }
+          }
+          return inertia
         },
         configurable: true,
       })

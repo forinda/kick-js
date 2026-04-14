@@ -1,5 +1,4 @@
-import { Controller, Get, Autowired } from '@forinda/kickjs-core'
-import type { RequestContext } from '@forinda/kickjs-http'
+import { Controller, Get, Autowired, type RequestContext } from '@forinda/kickjs'
 import { PageService } from '../application/page.service'
 
 @Controller()
