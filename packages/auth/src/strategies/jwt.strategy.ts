@@ -232,7 +232,7 @@ export class JwtStrategy implements AuthStrategy {
 
       if (!res.ok) return
 
-      const data: { keys?: JwkKey[] } = await res.json()
+      const data = (await res.json()) as { keys?: JwkKey[] }
       if (!data.keys) return
 
       this.jwksCache.clear()

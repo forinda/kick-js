@@ -330,6 +330,8 @@ export class PasswordService {
       return mod.default ?? mod
     } catch {
       try {
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-expect-error bcrypt has no type declarations — optional peer dep
         const mod: any = await import('bcrypt')
         return mod.default ?? mod
       } catch {
