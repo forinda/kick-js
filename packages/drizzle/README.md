@@ -15,8 +15,10 @@ pnpm add @forinda/kickjs-drizzle drizzle-orm
 ## Features
 
 - `DrizzleAdapter` — lifecycle adapter that manages the Drizzle connection
-- `DRIZZLE_DB` token for injecting the database instance via DI
-- `DrizzleQueryAdapter` — translates `ParsedQuery` from `@forinda/kickjs-http` into Drizzle queries
+- `DrizzleTenantAdapter` — multi-tenant adapter with per-tenant connection caching
+- `DRIZZLE_DB` token — singleton, provider/single-tenant database
+- `DRIZZLE_TENANT_DB` token — transient, current tenant's database via AsyncLocalStorage
+- `DrizzleQueryAdapter` — translates `ParsedQuery` from `@forinda/kickjs` into Drizzle queries
 - `toQueryFieldConfig` helper for field mapping
 
 ## Quick Example
@@ -45,6 +47,49 @@ class UserService {
     return this.db.select().from(users)
   }
 }
+```
+
+## Multi-Tenant
+
+Use `DrizzleTenantAdapter` alongside `TenantAdapter` for database-per-tenant:
+
+```typescript
+import { DrizzleTenantAdapter, DRIZZLE_TENANT_DB } from '@forinda/kickjs-drizzle'
+import { TenantAdapter } from '@forinda/kickjs-multi-tenant'
+
+bootstrap({
+  modules,
+  adapters: [
+    new TenantAdapter({ strategy: 'subdomain' }),
+    new DrizzleTenantAdapter({
+      providerDb: drizzle(providerPool, { schema }),
+      tenantFactory: async (tenantId) => {
+        const url = await lookupTenantDbUrl(tenantId)
+        return drizzle(new Pool({ connectionString: url }), { schema })
+      },
+      onTenantShutdown: (db, tenantId) => {
+        // Close the pool when shutting down
+      },
+    }),
+  ],
+})
+
+// In a service — resolves to the current tenant's typed DB
+@Service()
+class ProjectService {
+  @Inject(DRIZZLE_TENANT_DB) private db!: NodePgDatabase<typeof schema>
+
+  async findAll() {
+    return this.db.select().from(projects)
+  }
+}
+```
+
+Use both adapters together for interop:
+
+```typescript
+@Inject(DRIZZLE_DB) private providerDb!: typeof db          // always provider
+@Inject(DRIZZLE_TENANT_DB) private tenantDb!: typeof db     // current tenant
 ```
 
 ## Query Adapter

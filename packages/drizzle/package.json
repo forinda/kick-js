@@ -85,7 +85,13 @@
     "reflect-metadata": "^0.2.2"
   },
   "peerDependencies": {
-    "drizzle-orm": ">=0.30.0"
+    "drizzle-orm": ">=0.30.0",
+    "@forinda/kickjs-multi-tenant": ">=2.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@forinda/kickjs-multi-tenant": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/node": "^25.0.0",

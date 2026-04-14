@@ -16,6 +16,7 @@ export default defineConfig({
     '@forinda/kickjs-http',
     'reflect-metadata',
     'drizzle-orm',
+    '@forinda/kickjs-multi-tenant',
     /^node:/,
   ],
   banner: { js: createBanner(pkg.name, pkg.version) },

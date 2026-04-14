@@ -1,7 +1,10 @@
 import type { MaybePromise } from '@forinda/kickjs'
 
-/** DI token for resolving the Drizzle database instance from the container */
+/** DI token for resolving the Drizzle database instance from the container (single-tenant) */
 export const DRIZZLE_DB = Symbol('DrizzleDB')
+
+/** DI token for resolving the current tenant's Drizzle database instance (multi-tenant) */
+export const DRIZZLE_TENANT_DB = Symbol('DrizzleTenantDB')
 
 export interface DrizzleAdapterOptions<TDb = unknown> {
   /**
@@ -42,4 +45,41 @@ export interface DrizzleAdapterOptions<TDb = unknown> {
    * ```
    */
   onShutdown?: () => MaybePromise<any>
+}
+
+export interface DrizzleTenantAdapterOptions<TDb = unknown> {
+  /**
+   * The provider (default) database instance. Used when no tenant is
+   * resolved or when accessing the tenant registry.
+   */
+  providerDb: TDb
+
+  /**
+   * Factory that creates a typed Drizzle instance for a given tenant.
+   * Called once per tenant — the result is cached for subsequent requests.
+   *
+   * @example
+   * ```ts
+   * tenantFactory: async (tenantId) => {
+   *   const url = await lookupTenantDbUrl(tenantId)
+   *   return drizzle(new Pool({ connectionString: url }), { schema })
+   * }
+   * ```
+   */
+  tenantFactory: (tenantId: string) => TDb | Promise<TDb>
+
+  /**
+   * Optional function to close a tenant DB connection.
+   * Called for each cached connection during shutdown.
+   */
+  onTenantShutdown?: (db: TDb, tenantId: string) => MaybePromise<any>
+
+  /** Enable query logging (default: false) */
+  logging?: boolean
+
+  /**
+   * Cache TTL in milliseconds. Tenant connections idle beyond this
+   * duration are evicted. Default: no eviction (connections live until shutdown).
+   */
+  cacheTtl?: number
 }
