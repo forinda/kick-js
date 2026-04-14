@@ -15,44 +15,51 @@ pnpm add @forinda/kickjs-auth jsonwebtoken
 ## Features
 
 - `AuthAdapter` — lifecycle adapter with configurable strategies
-- Built-in strategies: `JwtStrategy`, `ApiKeyStrategy`, `OAuthStrategy`, `PassportBridge`
-- Decorators: `@Authenticated`, `@Public`, `@Roles`
-- Protected-by-default or opt-in authentication policies
-- `AUTH_USER` token for injecting the authenticated user
+- Built-in strategies: `JwtStrategy`, `ApiKeyStrategy`, `OAuthStrategy`, `PassportBridge`, `SessionStrategy`
+- Decorators: `@Authenticated`, `@Public`, `@Roles`, `@Can`, `@CsrfExempt`, `@RateLimit`
+- `PasswordService` — secure hashing with scrypt/argon2/bcrypt + validation
+- `TokenStore` / `MemoryTokenStore` — pluggable token revocation
+- `@Policy` / `AuthorizationService` — resource-level authorization
+- Auth lifecycle events (`onAuthenticated`, `onAuthFailed`, `onForbidden`)
+- CSRF auto-detection for cookie-based strategies
+- Per-route rate limiting with `@RateLimit()`
+- Tenant-scoped RBAC via `roleResolver`
+- `AuthAdapter.testMode()` for test suites
+- Protected-by-default policy
 
 ## Quick Example
 
 ```typescript
-import { AuthAdapter, Public, Roles } from '@forinda/kickjs-auth'
+import { AuthAdapter, JwtStrategy, Public, Roles } from '@forinda/kickjs-auth'
 
-// Bootstrap with JWT auth
 bootstrap({
   modules,
   adapters: [
     new AuthAdapter({
-      strategy: 'jwt',
-      secret: process.env.JWT_SECRET!,
-      defaultPolicy: 'protected',
+      strategies: [
+        new JwtStrategy({
+          secret: process.env.JWT_SECRET!,
+          mapPayload: (p) => ({ id: p.sub, email: p.email, roles: p.roles }),
+        }),
+      ],
     }),
   ],
 })
 
-// All routes are protected by default
+// All routes protected by default
 @Controller('/users')
 class UserController {
-  @Get('/')
-  async list(ctx: RequestContext) {
-    ctx.json(await this.userService.findAll())
+  @Get('/me')
+  me(ctx: RequestContext) {
+    return ctx.json({ user: ctx.user })
   }
 
-  // Opt out of auth for public routes
   @Get('/public')
   @Public()
-  async publicEndpoint(ctx: RequestContext) {
-    ctx.json({ message: 'No auth required' })
+  publicEndpoint(ctx: RequestContext) {
+    return ctx.json({ message: 'No auth required' })
   }
 
-  // Role-based access
   @Delete('/:id')
   @Roles('admin')
   async delete(ctx: RequestContext) {

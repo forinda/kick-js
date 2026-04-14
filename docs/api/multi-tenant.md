@@ -27,7 +27,7 @@ pnpm add @forinda/kickjs-multi-tenant
 | Export | Description |
 |--------|-------------|
 | `TenantAdapterOptions` | Configuration options for `TenantAdapter` |
-| `TenantContext` | The resolved tenant object available via DI |
+| `TenantInfo` | The resolved tenant object available via DI |
 | `TenantStrategy` | Union type of built-in strategy names |
 
 ## TenantAdapter Options
@@ -110,14 +110,60 @@ new TenantAdapter({
 
 ## TENANT_CONTEXT
 
-The resolved tenant context is available via DI using the `TENANT_CONTEXT` injection token. It is request-scoped and contains the tenant identifier resolved by the configured strategy.
+The resolved tenant is available via DI using the `TENANT_CONTEXT` injection token. It uses `AsyncLocalStorage` internally so each request gets the correct tenant — even under concurrent requests.
 
 ```ts
-interface TenantContext {
-  /** The resolved tenant identifier */
-  tenantId: string
+interface TenantInfo {
+  id: string
+  name?: string
+  metadata?: Record<string, any>
 }
 ```
+
+### getCurrentTenant()
+
+For code that can't use DI (utilities, middleware), use the functional helper:
+
+```ts
+import { getCurrentTenant } from '@forinda/kickjs-multi-tenant'
+
+function logForTenant(message: string) {
+  const tenant = getCurrentTenant()
+  console.log(`[${tenant?.id ?? 'no-tenant'}] ${message}`)
+}
+```
+
+Returns `undefined` outside request scope.
+
+## Per-Tenant Database Switching
+
+Configure database isolation per tenant via the `database` option:
+
+```ts
+new TenantAdapter({
+  strategy: 'header',
+  database: {
+    mode: 'database',
+    resolve: async (tenantId) => ({
+      host: 'db.example.com',
+      database: `tenant_${tenantId}`,
+      user: 'app',
+      password: process.env.DB_PASSWORD!,
+    }),
+    cache: { ttl: 300_000 },
+  },
+})
+```
+
+Three isolation modes:
+
+| Mode | Description |
+|------|-------------|
+| `database` | Each tenant gets a separate database |
+| `schema` | Shared database, separate PostgreSQL schemas |
+| `discriminator` | Shared tables with a `tenant_id` column |
+
+The `TENANT_DB` DI token resolves to the current tenant's connection.
 
 ## Example
 
@@ -146,19 +192,19 @@ bootstrap({
 ```ts
 import { Controller, Get } from '@forinda/kickjs'
 import { Inject } from '@forinda/kickjs'
-import { TENANT_CONTEXT, TenantContext } from '@forinda/kickjs-multi-tenant'
+import { TENANT_CONTEXT, TenantInfo } from '@forinda/kickjs-multi-tenant'
 import type { RequestContext } from '@forinda/kickjs'
 
 @Controller('/users')
 export class UserController {
   @Inject(TENANT_CONTEXT)
-  private tenant!: TenantContext
+  private tenant!: TenantInfo
 
   @Get('/')
   async list(ctx: RequestContext) {
     // Use tenant ID to scope database queries
     const users = await db.users.findMany({
-      where: { tenantId: this.tenant.tenantId },
+      where: { tenantId: this.tenant.id },
     })
     return ctx.json(users)
   }
@@ -170,16 +216,16 @@ export class UserController {
 ```ts
 import { Service } from '@forinda/kickjs'
 import { Inject } from '@forinda/kickjs'
-import { TENANT_CONTEXT, TenantContext } from '@forinda/kickjs-multi-tenant'
+import { TENANT_CONTEXT, TenantInfo } from '@forinda/kickjs-multi-tenant'
 
 @Service()
 export class UserService {
   @Inject(TENANT_CONTEXT)
-  private tenant!: TenantContext
+  private tenant!: TenantInfo
 
   async findAll() {
     return db.users.findMany({
-      where: { tenantId: this.tenant.tenantId },
+      where: { tenantId: this.tenant.id },
     })
   }
 }

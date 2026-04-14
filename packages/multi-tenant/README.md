@@ -15,15 +15,18 @@ pnpm add @forinda/kickjs-multi-tenant
 ## Features
 
 - `TenantAdapter` — lifecycle adapter that resolves tenant from requests
-- `TENANT_CONTEXT` token for injecting tenant info via DI
-- Pluggable resolution strategies: header, subdomain, path, or custom
-- Scoped DI for per-tenant service instances
+- `TENANT_CONTEXT` token for injecting tenant info via DI (request-scoped via AsyncLocalStorage)
+- `getCurrentTenant()` — functional helper for use outside DI
+- Pluggable resolution strategies: header, subdomain, path, query, or custom
+- Per-tenant database switching: database, schema, or discriminator modes
+- `TENANT_DB` token for injecting per-tenant database connections
+- Integration with `@forinda/kickjs-auth` for tenant-scoped RBAC
 
 ## Quick Example
 
 ```typescript
 import { TenantAdapter, TENANT_CONTEXT, type TenantInfo } from '@forinda/kickjs-multi-tenant'
-import { Inject, Service } from '@forinda/kickjs-core'
+import { Inject, Service } from '@forinda/kickjs'
 
 bootstrap({
   modules,

@@ -547,6 +547,38 @@ kick g test user-service -m users         # → src/modules/users/__tests__/user
 
 Generates a Vitest test scaffold with `Container.reset()` setup. Default output: `src/__tests__/`.
 
+### kick g auth-scaffold
+
+Generate a complete auth module with registration, login, logout, and password hashing.
+
+```bash
+kick g auth-scaffold                          # JWT strategy (default)
+kick g auth-scaffold --strategy session       # Session-based auth
+kick g auth-scaffold --out src/modules/auth   # Custom output dir
+```
+
+Generated files:
+
+```
+src/modules/auth/
+  auth.module.ts          # Module registration
+  auth.controller.ts      # POST /register, /login, /logout + GET /me
+  auth.service.ts         # Business logic with PasswordService
+  dto/
+    register.dto.ts       # Zod schema for registration
+    login.dto.ts          # Zod schema for login
+  auth.test.ts            # Test stubs
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-s, --strategy` | `jwt` | Auth strategy: `jwt` or `session` |
+| `-o, --out` | `src/modules/auth` | Output directory |
+
+The **JWT** variant generates token-based auth. The **session** variant uses `sessionLogin()` / `sessionLogout()` from `@forinda/kickjs-auth` for cookie-based sessions.
+
+Both variants use `PasswordService` for secure password hashing (scrypt by default, with optional argon2/bcrypt support).
+
 ## Common Options
 
 All standalone generators accept:

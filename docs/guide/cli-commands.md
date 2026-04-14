@@ -273,6 +273,8 @@ kick g middleware logger
 kick g guard admin
 kick g adapter websocket
 kick g dto create-user
+kick g auth-scaffold             # Complete auth module (register/login/logout)
+kick g auth-scaffold -s session  # Session-based variant
 kick g config
 ```
 
