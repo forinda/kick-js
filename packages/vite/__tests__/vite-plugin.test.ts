@@ -184,14 +184,14 @@ describe('kickjs:core plugin', () => {
     }
   })
 
-  it('does not override explicit server.port from user config', () => {
+  it('yields to explicit server.port from user config', () => {
     const originalPort = process.env.PORT
     process.env.PORT = '4000'
     try {
       const plugin = findPlugin(kickjsVitePlugin(), 'kickjs:core')!
       const config = callConfigHook(plugin, 'serve', { server: { port: 5555 } })
-      expect(config.server.port).not.toBe(5555)
-      expect(config.server.port).toBe(4000)
+      // User's explicit port wins over .env PORT
+      expect(config.server.port).toBe(5555)
     } finally {
       if (originalPort !== undefined) {
         process.env.PORT = originalPort

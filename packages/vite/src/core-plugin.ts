@@ -31,9 +31,12 @@ export function kickjsCorePlugin(ctx: PluginContext): Plugin {
      * Vite config hook — runs before config is resolved.
      * Sets the foundational configuration for a backend Node.js framework.
      */
-    config(_userConfig, _env) {
+    config(userConfig, _env) {
+      // Respect explicit server.port from user's vite.config.ts.
+      // Only inject .env PORT when the user hasn't set one.
+      const explicitPort = userConfig.server?.port
       const envPort = process.env.PORT ? parseInt(process.env.PORT, 10) : undefined
-      const port = envPort ?? 3000
+      const port = explicitPort ?? envPort ?? 3000
 
       return {
         server: {
