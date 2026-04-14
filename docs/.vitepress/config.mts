@@ -53,7 +53,6 @@ const guideSidebar = [
       { text: 'View Engines', link: '/guide/view-engines' },
       { text: 'MongoDB', link: '/guide/mongodb' },
       { text: 'SPA Integration', link: '/guide/spa' },
-      { text: 'Inertia (SPA from Controllers)', link: '/guide/inertia' },
       { text: 'Plugins', link: '/guide/plugins' },
       { text: 'Decorators Reference', link: '/guide/decorators' },
       { text: 'Custom Decorators', link: '/guide/custom-decorators' },
