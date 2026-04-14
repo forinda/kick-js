@@ -57,7 +57,15 @@ import { runShellCommand } from '../utils/shell'
 export function registerCustomCommands(program: Command, config: KickConfig | null): void {
   if (!config?.commands?.length) return
 
+  const builtinNames = new Set(program.commands.map((c) => c.name()))
+
   for (const cmd of config.commands) {
+    if (builtinNames.has(cmd.name)) {
+      console.warn(
+        `  Warning: custom command '${cmd.name}' skipped — conflicts with a built-in command`,
+      )
+      continue
+    }
     registerSingleCommand(program, cmd)
   }
 }

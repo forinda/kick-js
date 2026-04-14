@@ -389,10 +389,10 @@ export default defineConfig({
       steps: 'npx prettier --check src/',
     },
     {
-      name: 'check',
+      name: 'ci:check',
       description: 'Run typecheck + format check',
       steps: ['npx tsc --noEmit', 'npx prettier --check src/'],
-      aliases: ['verify', 'ci'],
+      aliases: ['verify'],
     },
   ],
 })
