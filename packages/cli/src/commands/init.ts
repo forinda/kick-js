@@ -18,6 +18,7 @@ const OPTIONAL_PACKAGES = [
   { value: 'devtools', label: 'DevTools', hint: 'debug dashboard' },
   { value: 'notifications', label: 'Notifications', hint: 'email, Slack, Discord' },
   { value: 'multi-tenant', label: 'Multi-Tenant', hint: 'tenant resolution' },
+  { value: 'inertia', label: 'Inertia', hint: 'SPA pages from controllers (experimental)' },
 ] as const
 
 export function registerInitCommand(program: Command): void {
