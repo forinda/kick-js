@@ -78,11 +78,10 @@
       ]
     }
   },
-  "dependencies": {
-    "@forinda/kickjs": "workspace:*"
-  },
+  "dependencies": {},
   "peerDependencies": {
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "@forinda/kickjs": ">=2.3.0"
   },
   "devDependencies": {
     "@swc/core": "^1.15.21",
@@ -108,5 +107,6 @@
   },
   "bugs": {
     "url": "https://github.com/forinda/kick-js/issues"
-  }
+  },
+  "peerDependenciesMeta": {}
 }

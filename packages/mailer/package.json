@@ -78,11 +78,11 @@
     }
   },
   "dependencies": {
-    "@forinda/kickjs": "workspace:*",
     "reflect-metadata": "^0.2.2"
   },
   "peerDependencies": {
-    "nodemailer": ">=7.0.11"
+    "nodemailer": ">=7.0.11",
+    "@forinda/kickjs": ">=2.3.0"
   },
   "peerDependenciesMeta": {
     "nodemailer": {

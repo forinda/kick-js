@@ -1,6 +1,12 @@
 import { describe, it, expect, vi } from 'vitest'
 import 'reflect-metadata'
-import { AuthAdapter, ApiKeyStrategy, Public, type AuthStrategy } from '@forinda/kickjs-auth'
+import {
+  AuthAdapter,
+  ApiKeyStrategy,
+  Authenticated,
+  Public,
+  type AuthStrategy,
+} from '@forinda/kickjs-auth'
 import { Controller, Get, Post } from '@forinda/kickjs'
 
 describe('AuthAdapter', () => {
@@ -164,6 +170,48 @@ describe('AuthAdapter', () => {
     const protectedRes = { status: vi.fn().mockReturnThis(), json: vi.fn() }
     const protectedNext = vi.fn()
 
+    await handler(protectedReq, protectedRes, protectedNext)
+    expect(protectedNext).not.toHaveBeenCalled()
+    expect(protectedRes.status).toHaveBeenCalledWith(401)
+  })
+
+  it('@Public() inside @Authenticated() controller bypasses auth (v3 regression test)', async () => {
+    @Controller()
+    @Authenticated()
+    class ExampleController {
+      @Get('/protected')
+      protectedRoute() {}
+
+      @Get('/health')
+      @Public()
+      health() {}
+    }
+
+    const adapter = new AuthAdapter({
+      strategies: [new ApiKeyStrategy({ keys: { 'sk-valid': { name: 'Bot' } } })],
+      defaultPolicy: 'protected',
+    })
+
+    adapter.onRouteMount!(ExampleController, '/api/v1/example')
+
+    const handler = adapter.middleware!()[0].handler
+
+    // @Public() health route should NOT require auth
+    const healthReq = { path: '/api/v1/example/health', method: 'GET', headers: {}, baseUrl: '' }
+    const healthRes = { status: vi.fn().mockReturnThis(), json: vi.fn() }
+    const healthNext = vi.fn()
+    await handler(healthReq, healthRes, healthNext)
+    expect(healthNext).toHaveBeenCalled()
+
+    // Protected route should require auth
+    const protectedReq = {
+      path: '/api/v1/example/protected',
+      method: 'GET',
+      headers: {},
+      baseUrl: '',
+    }
+    const protectedRes = { status: vi.fn().mockReturnThis(), json: vi.fn() }
+    const protectedNext = vi.fn()
     await handler(protectedReq, protectedRes, protectedNext)
     expect(protectedNext).not.toHaveBeenCalled()
     expect(protectedRes.status).toHaveBeenCalledWith(401)

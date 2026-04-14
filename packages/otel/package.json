@@ -80,7 +80,6 @@
     }
   },
   "dependencies": {
-    "@forinda/kickjs": "workspace:*",
     "reflect-metadata": "^0.2.2"
   },
   "peerDependencies": {
@@ -88,7 +87,8 @@
     "@opentelemetry/sdk-node": ">=0.50.0",
     "@opentelemetry/sdk-trace-base": ">=1.20.0",
     "@opentelemetry/sdk-metrics": ">=1.20.0",
-    "@opentelemetry/semantic-conventions": ">=1.20.0"
+    "@opentelemetry/semantic-conventions": ">=1.20.0",
+    "@forinda/kickjs": ">=2.3.0"
   },
   "peerDependenciesMeta": {
     "@opentelemetry/sdk-node": {

@@ -80,10 +80,10 @@
     }
   },
   "dependencies": {
-    "@forinda/kickjs": "workspace:*",
     "reflect-metadata": "^0.2.2"
   },
   "peerDependencies": {
+    "@forinda/kickjs": ">=2.3.0",
     "jsonwebtoken": "^9.0.0",
     "argon2": ">=0.31.0",
     "bcryptjs": ">=2.4.0",

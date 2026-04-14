@@ -80,13 +80,13 @@
     }
   },
   "dependencies": {
-    "@forinda/kickjs": "workspace:*",
     "reflect-metadata": "^0.2.2",
     "swagger-ui-dist": "^5.32.1"
   },
   "peerDependencies": {
     "express": "^5.1.0",
-    "zod": ">=4.0.0"
+    "zod": ">=4.0.0",
+    "@forinda/kickjs": ">=2.3.0"
   },
   "peerDependenciesMeta": {
     "zod": {

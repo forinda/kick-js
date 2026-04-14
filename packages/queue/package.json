@@ -79,12 +79,12 @@
     }
   },
   "dependencies": {
-    "@forinda/kickjs": "workspace:*",
     "reflect-metadata": "^0.2.2"
   },
   "peerDependencies": {
     "bullmq": ">=5.0.0",
-    "ioredis": ">=5.0.0"
+    "ioredis": ">=5.0.0",
+    "@forinda/kickjs": ">=2.3.0"
   },
   "devDependencies": {
     "@types/node": "^25.0.0",
@@ -106,5 +106,6 @@
   },
   "bugs": {
     "url": "https://github.com/forinda/kick-js/issues"
-  }
+  },
+  "peerDependenciesMeta": {}
 }

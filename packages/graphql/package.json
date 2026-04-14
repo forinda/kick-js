@@ -78,11 +78,11 @@
     }
   },
   "dependencies": {
-    "@forinda/kickjs": "workspace:*",
     "reflect-metadata": "^0.2.2"
   },
   "peerDependencies": {
-    "graphql": ">=16.0.0"
+    "graphql": ">=16.0.0",
+    "@forinda/kickjs": ">=2.3.0"
   },
   "devDependencies": {
     "graphql": "^16.13.2",
@@ -105,5 +105,6 @@
   },
   "bugs": {
     "url": "https://github.com/forinda/kick-js/issues"
-  }
+  },
+  "peerDependenciesMeta": {}
 }

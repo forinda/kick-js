@@ -72,12 +72,12 @@
     }
   },
   "dependencies": {
-    "@forinda/kickjs": "workspace:*",
     "reflect-metadata": "^0.2.2"
   },
   "peerDependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
-    "zod": "^4.3.6"
+    "zod": "^4.3.6",
+    "@forinda/kickjs": ">=2.3.0"
   },
   "peerDependenciesMeta": {
     "@modelcontextprotocol/sdk": {

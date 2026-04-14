@@ -80,12 +80,12 @@
     }
   },
   "dependencies": {
-    "@forinda/kickjs": "workspace:*",
     "reflect-metadata": "^0.2.2"
   },
   "peerDependencies": {
     "@prisma/client": ">=5.0.0",
-    "@forinda/kickjs-multi-tenant": ">=2.0.0"
+    "@forinda/kickjs-multi-tenant": ">=2.0.0",
+    "@forinda/kickjs": ">=2.3.0"
   },
   "peerDependenciesMeta": {
     "@prisma/client": {
