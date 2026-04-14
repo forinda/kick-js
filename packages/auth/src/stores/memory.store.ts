@@ -30,6 +30,13 @@ interface RevocationEntry {
 export class MemoryTokenStore implements TokenStore {
   private readonly revoked = new Map<string, RevocationEntry>()
 
+  /**
+   * Per-user "revoke all" timestamps. Any token for this user issued
+   * before this timestamp is considered revoked (checked by `isRevoked`
+   * when the token carries a `userId` + `issuedAt`).
+   */
+  private readonly userRevokedAt = new Map<string, Date>()
+
   async isRevoked(identifier: string): Promise<boolean> {
     const entry = this.revoked.get(identifier)
     if (!entry) return false
@@ -43,16 +50,48 @@ export class MemoryTokenStore implements TokenStore {
     return true
   }
 
+  /**
+   * Check if all tokens for a user were bulk-revoked after a given time.
+   * Call this with the token's `iat` (issued-at) claim to check if the
+   * user's tokens were revoked after the token was issued.
+   *
+   * @param userId - The user's ID
+   * @param issuedAt - When the token was issued (from JWT `iat` claim)
+   * @returns true if the user's tokens were bulk-revoked after issuedAt
+   */
+  isUserRevoked(userId: string, issuedAt: Date): boolean {
+    const revokedAt = this.userRevokedAt.get(userId)
+    if (!revokedAt) return false
+    return issuedAt < revokedAt
+  }
+
   async revoke(identifier: string, expiresAt?: Date, userId?: string): Promise<void> {
     this.revoked.set(identifier, { expiresAt, userId })
   }
 
+  /**
+   * Revoke all tokens for a user by recording a timestamp. Any token
+   * issued before this timestamp is considered revoked.
+   *
+   * Also removes individual revocation entries for this user (cleanup).
+   */
   async revokeAllForUser(userId: string): Promise<void> {
+    this.userRevokedAt.set(userId, new Date())
+
+    // Clean up individual entries for this user — they're now redundant
     for (const [key, entry] of this.revoked) {
       if (entry.userId === userId) {
         this.revoked.delete(key)
       }
     }
+  }
+
+  /**
+   * Check if all tokens for a user have been bulk-revoked.
+   * Returns the revocation timestamp, or null if not revoked.
+   */
+  getUserRevokedAt(userId: string): Date | null {
+    return this.userRevokedAt.get(userId) ?? null
   }
 
   async cleanup(): Promise<void> {
@@ -64,7 +103,7 @@ export class MemoryTokenStore implements TokenStore {
     }
   }
 
-  /** Number of active revocation entries (useful in tests). */
+  /** Number of active individual revocation entries (useful in tests). */
   get size(): number {
     return this.revoked.size
   }

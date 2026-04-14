@@ -27,17 +27,44 @@ describe('MemoryTokenStore', () => {
     expect(await store.isRevoked('token-valid')).toBe(true)
   })
 
-  it('revokeAllForUser removes all user tokens', async () => {
+  it('revokeAllForUser records bulk revocation timestamp', async () => {
     const store = new MemoryTokenStore()
     await store.revoke('t1', undefined, 'user-1')
     await store.revoke('t2', undefined, 'user-1')
     await store.revoke('t3', undefined, 'user-2')
 
+    expect(store.getUserRevokedAt('user-1')).toBeNull()
+
     await store.revokeAllForUser('user-1')
 
+    // Bulk revocation timestamp is recorded
+    const revokedAt = store.getUserRevokedAt('user-1')
+    expect(revokedAt).toBeInstanceOf(Date)
+
+    // Individual entries for user-1 are cleaned up (redundant)
     expect(await store.isRevoked('t1')).toBe(false)
     expect(await store.isRevoked('t2')).toBe(false)
+
+    // user-2 tokens unaffected
     expect(await store.isRevoked('t3')).toBe(true)
+    expect(store.getUserRevokedAt('user-2')).toBeNull()
+  })
+
+  it('isUserRevoked checks if token was issued before bulk revocation', async () => {
+    const store = new MemoryTokenStore()
+
+    const issuedBefore = new Date(Date.now() - 60_000)
+    await store.revokeAllForUser('user-1')
+
+    // Token issued before revokeAll → revoked
+    expect(store.isUserRevoked('user-1', issuedBefore)).toBe(true)
+
+    // Token issued after revokeAll → not revoked
+    const issuedAfter = new Date(Date.now() + 1000)
+    expect(store.isUserRevoked('user-1', issuedAfter)).toBe(false)
+
+    // User without bulk revocation → not revoked
+    expect(store.isUserRevoked('user-2', issuedBefore)).toBe(false)
   })
 
   it('cleanup removes expired entries', async () => {
