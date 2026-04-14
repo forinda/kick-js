@@ -6,6 +6,10 @@ export interface AuthScaffoldOptions {
   strategy?: 'jwt' | 'session'
   /** Output directory. Default: 'src/modules/auth' */
   outDir?: string
+  /** Token storage: 'cookie' | 'header' | 'both'. Default: 'header' */
+  tokenStorage?: 'cookie' | 'header' | 'both'
+  /** Generate role-based guards. Default: true */
+  roleGuards?: boolean
 }
 
 /**
@@ -97,6 +101,27 @@ describe('Auth Module', () => {
 `,
   )
   files.push(testPath)
+
+  // ── auth.guard.ts (optional) ────────────────────────────────────────
+  if (options.roleGuards !== false) {
+    const guardPath = join(outDir, 'auth.guard.ts')
+    await writeFileSafe(
+      guardPath,
+      `import { Roles } from '@forinda/kickjs-auth'
+
+/**
+ * Role-based access guard.
+ * Usage: @Roles('admin') on a controller method.
+ *
+ * The AuthAdapter extracts the user's roles from the JWT/session
+ * and the framework checks them automatically.
+ */
+export const AdminOnly = Roles('admin')
+export const ManagerOnly = Roles('manager')
+`,
+    )
+    files.push(guardPath)
+  }
 
   return files
 }

@@ -1,7 +1,8 @@
 import { join } from 'node:path'
 import { readFile, writeFile, rm } from 'node:fs/promises'
-import { createInterface } from 'node:readline'
 import { toPascalCase, toKebabCase, pluralize } from '../utils/naming'
+import { confirm } from '../utils/prompts'
+import { colors } from '../utils/colors'
 import { fileExists } from '../utils/fs'
 
 interface RemoveModuleOptions {
@@ -9,16 +10,6 @@ interface RemoveModuleOptions {
   modulesDir: string
   force?: boolean
   pluralize?: boolean
-}
-
-function promptConfirm(message: string): Promise<boolean> {
-  const rl = createInterface({ input: process.stdin, output: process.stdout })
-  return new Promise((resolve) => {
-    rl.question(`  ${message} (y/N) `, (answer) => {
-      rl.close()
-      resolve(answer.trim().toLowerCase() === 'y')
-    })
-  })
 }
 
 /**
@@ -41,9 +32,10 @@ export async function removeModule(options: RemoveModuleOptions): Promise<void> 
 
   // Confirm deletion unless --force
   if (!force) {
-    const confirmed = await promptConfirm(
-      `Delete module '${plural}' at ${moduleDir}? This cannot be undone.`,
-    )
+    const confirmed = await confirm({
+      message: colors.red(`Delete module '${plural}' at ${moduleDir}? This cannot be undone.`),
+      initialValue: false,
+    })
     if (!confirmed) {
       console.log('\n  Cancelled.\n')
       return

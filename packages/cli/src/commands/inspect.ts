@@ -1,29 +1,7 @@
 import type { Command } from 'commander'
+import { colors, httpMethodColor } from '../utils/colors'
 
-// ── ANSI helpers (no deps) ──────────────────────────────────────────────────
-const esc = (code: string) => `\x1b[${code}m`
-const reset = esc('0')
-const bold = (s: string) => `${esc('1')}${s}${reset}`
-const dim = (s: string) => `${esc('2')}${s}${reset}`
-const green = (s: string) => `${esc('32')}${s}${reset}`
-const red = (s: string) => `${esc('31')}${s}${reset}`
-const yellow = (s: string) => `${esc('33')}${s}${reset}`
-const cyan = (s: string) => `${esc('36')}${s}${reset}`
-const magenta = (s: string) => `${esc('35')}${s}${reset}`
-const blue = (s: string) => `${esc('34')}${s}${reset}`
-
-const METHOD_COLORS: Record<string, (s: string) => string> = {
-  GET: green,
-  POST: cyan,
-  PUT: yellow,
-  PATCH: magenta,
-  DELETE: red,
-}
-
-function colorMethod(method: string): string {
-  const fn = METHOD_COLORS[method] ?? dim
-  return fn(method.padEnd(7))
-}
+const { bold, dim, green, red, yellow, cyan, blue } = colors
 
 function formatUptime(seconds: number): string {
   const d = Math.floor(seconds / 86400)
@@ -122,7 +100,7 @@ function printSummary(base: string, data: InspectData): void {
     console.log(`  ${dim('METHOD')}  ${dim('PATH'.padEnd(36))} ${dim('CONTROLLER')}`)
     for (const r of routes.routes) {
       const path = r.path.length > 36 ? r.path.slice(0, 33) + '...' : r.path.padEnd(36)
-      console.log(`  ${colorMethod(r.method)} ${path} ${blue(r.controller)}.${dim(r.handler)}`)
+      console.log(`  ${httpMethodColor(r.method)} ${path} ${blue(r.controller)}.${dim(r.handler)}`)
     }
   }
 

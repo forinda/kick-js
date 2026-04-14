@@ -1,6 +1,7 @@
 import { join } from 'node:path'
-import { createInterface } from 'node:readline'
 import { writeFileSafe, fileExists } from '../utils/fs'
+import { confirm, log } from '../utils/prompts'
+import { colors } from '../utils/colors'
 import { toPascalCase, toKebabCase, pluralize, pluralizePascal } from '../utils/naming'
 import { readFile, writeFile } from 'node:fs/promises'
 import type { ProjectPattern, RepoTypeConfig } from '../config'
@@ -38,17 +39,6 @@ interface GenerateModuleOptions {
   prismaClientPath?: string
 }
 
-/** Prompt the user for a single-line answer via stdin */
-function promptUser(question: string): Promise<string> {
-  const rl = createInterface({ input: process.stdin, output: process.stdout })
-  return new Promise((resolve) => {
-    rl.question(question, (answer) => {
-      rl.close()
-      resolve(answer.trim().toLowerCase())
-    })
-  })
-}
-
 /**
  * Generate a module — structure depends on the project pattern.
  *
@@ -82,13 +72,12 @@ export async function generateModule(options: GenerateModuleOptions): Promise<st
       return
     }
     if (!overwriteAll && (await fileExists(fullPath))) {
-      const answer = await promptUser(
-        `  File already exists: ${relativePath}\n  Overwrite? (y/n/a = yes/no/all) `,
-      )
-      if (answer === 'a') {
-        overwriteAll = true
-      } else if (answer !== 'y') {
-        console.log(`  Skipped: ${relativePath}`)
+      const shouldOverwrite = await confirm({
+        message: `File exists: ${colors.dim(relativePath)}. Overwrite?`,
+        initialValue: false,
+      })
+      if (!shouldOverwrite) {
+        log.warn(`Skipped: ${relativePath}`)
         return
       }
     }

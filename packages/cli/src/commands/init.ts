@@ -1,37 +1,24 @@
 import { resolve, basename } from 'node:path'
-import { createInterface } from 'node:readline'
 import { existsSync, readdirSync, rmSync } from 'node:fs'
 import type { Command } from 'commander'
 import { initProject } from '../generators/project'
+import { intro, outro, text, select, multiSelect, confirm, log } from '../utils/prompts'
+import { colors } from '../utils/colors'
 
-function ask(question: string, defaultValue?: string): Promise<string> {
-  const rl = createInterface({ input: process.stdin, output: process.stdout })
-  const suffix = defaultValue ? ` (${defaultValue})` : ''
-  return new Promise((res) => {
-    rl.question(`  ${question}${suffix}: `, (answer) => {
-      rl.close()
-      res(answer.trim() || defaultValue || '')
-    })
-  })
-}
-
-async function choose(question: string, options: string[], defaultIdx = 0): Promise<string> {
-  console.log(`  ${question}`)
-  for (let i = 0; i < options.length; i++) {
-    const marker = i === defaultIdx ? '>' : ' '
-    console.log(`   ${marker} ${i + 1}. ${options[i]}`)
-  }
-  const answer = await ask('Choose', String(defaultIdx + 1))
-  const idx = parseInt(answer, 10) - 1
-  return options[idx] ?? options[defaultIdx]
-}
-
-async function confirm(question: string, defaultYes = true): Promise<boolean> {
-  const hint = defaultYes ? 'Y/n' : 'y/N'
-  const answer = await ask(`${question} (${hint})`)
-  if (!answer) return defaultYes
-  return answer.toLowerCase().startsWith('y')
-}
+/** All optional packages available for selection */
+const OPTIONAL_PACKAGES = [
+  { value: 'auth', label: 'Auth', hint: 'JWT, OAuth, API keys' },
+  { value: 'swagger', label: 'Swagger', hint: 'OpenAPI docs' },
+  { value: 'otel', label: 'OpenTelemetry', hint: 'tracing & metrics' },
+  { value: 'ws', label: 'WebSocket', hint: 'rooms, heartbeat' },
+  { value: 'queue', label: 'Queue', hint: 'BullMQ/RabbitMQ/Kafka' },
+  { value: 'cron', label: 'Cron', hint: 'scheduled jobs' },
+  { value: 'mailer', label: 'Mailer', hint: 'SMTP, Resend, SES' },
+  { value: 'graphql', label: 'GraphQL', hint: 'resolvers, GraphiQL' },
+  { value: 'devtools', label: 'DevTools', hint: 'debug dashboard' },
+  { value: 'notifications', label: 'Notifications', hint: 'email, Slack, Discord' },
+  { value: 'multi-tenant', label: 'Multi-Tenant', hint: 'tenant resolution' },
+] as const
 
 export function registerInitCommand(program: Command): void {
   program
@@ -47,12 +34,17 @@ export function registerInitCommand(program: Command): void {
     .option('-f, --force', 'Remove existing files without prompting')
     .option('-t, --template <type>', 'Project template: rest | graphql | ddd | cqrs | minimal')
     .option('-r, --repo <type>', 'Default repository: prisma | drizzle | inmemory | custom')
+    .option('--packages <packages>', 'Comma-separated packages to include (e.g. auth,swagger,otel)')
     .action(async (name: string | undefined, opts: any) => {
-      console.log()
+      intro('KickJS — Create a new project')
 
-      // Resolve project name — support "." for current directory
+      // ── Project name ──────────────────────────────────────────────
       if (!name) {
-        name = await ask('Project name', 'my-api')
+        name = await text({
+          message: 'Project name',
+          placeholder: 'my-api',
+          defaultValue: 'my-api',
+        })
       }
 
       let directory: string
@@ -63,105 +55,120 @@ export function registerInitCommand(program: Command): void {
         directory = resolve(opts.directory || name)
       }
 
-      // Check if target directory exists and is non-empty
+      // ── Check existing directory ──────────────────────────────────
       if (existsSync(directory)) {
         const entries = readdirSync(directory)
         if (entries.length > 0) {
           if (opts.force) {
-            console.log(`  Clearing existing files in ${directory}...\n`)
+            log.warn(`Clearing existing files in ${directory}`)
           } else {
-            console.log(`  Directory "${name}" is not empty:`)
+            log.warn(`Directory "${name}" is not empty:`)
             const shown = entries.slice(0, 5)
             for (const entry of shown) {
-              console.log(`    - ${entry}`)
+              log.message(`  - ${entry}`)
             }
             if (entries.length > 5) {
-              console.log(`    ... and ${entries.length - 5} more`)
+              log.message(`  ... and ${entries.length - 5} more`)
             }
-            console.log()
-            const shouldClear = await confirm('Remove all existing files and proceed?', false)
+            const shouldClear = await confirm({
+              message: colors.red('Remove all existing files and proceed?'),
+              initialValue: false,
+            })
             if (!shouldClear) {
-              console.log('  Aborted.\n')
+              outro('Aborted.')
               return
             }
           }
-          // Remove contents but keep the directory itself
           for (const entry of entries) {
             rmSync(resolve(directory, entry), { recursive: true, force: true })
           }
         }
       }
 
-      // Template — prompt if not provided via --template
+      // ── Template ──────────────────────────────────────────────────
       let template = opts.template
       if (!template) {
-        template = await choose(
-          'Project template:',
-          [
-            'REST API (Express + Swagger)',
-            'GraphQL API (GraphQL + GraphiQL)',
-            'DDD (Domain-Driven Design modules)',
-            'CQRS (Commands, Queries, Events + WS/Queue)',
-            'Minimal (bare Express)',
+        template = await select({
+          message: 'Project template',
+          options: [
+            { value: 'rest', label: 'REST API', hint: 'Express + Swagger' },
+            { value: 'graphql', label: 'GraphQL API', hint: 'GraphQL + GraphiQL' },
+            { value: 'ddd', label: 'DDD', hint: 'Domain-Driven Design modules' },
+            { value: 'cqrs', label: 'CQRS', hint: 'Commands, Queries, Events + WS/Queue' },
+            { value: 'minimal', label: 'Minimal', hint: 'bare Express' },
           ],
-          0,
-        )
-        // Map display names to config values
-        const templateMap: Record<string, string> = {
-          'REST API (Express + Swagger)': 'rest',
-          'GraphQL API (GraphQL + GraphiQL)': 'graphql',
-          'DDD (Domain-Driven Design modules)': 'ddd',
-          'CQRS (Commands, Queries, Events + WS/Queue)': 'cqrs',
-          'Minimal (bare Express)': 'minimal',
-        }
-        template = templateMap[template] ?? 'rest'
+        })
       }
 
-      // Package manager — prompt if not provided via --pm
+      // ── Package manager ───────────────────────────────────────────
       let packageManager = opts.pm
       if (!packageManager) {
-        packageManager = await choose('Package manager:', ['pnpm', 'npm', 'yarn'], 0)
+        packageManager = await select({
+          message: 'Package manager',
+          options: [
+            { value: 'pnpm', label: 'pnpm' },
+            { value: 'npm', label: 'npm' },
+            { value: 'yarn', label: 'yarn' },
+          ],
+        })
       }
 
-      // Repository type — prompt if not provided via --repo
+      // ── Repository type ───────────────────────────────────────────
       let defaultRepo = opts.repo
       if (!defaultRepo) {
-        const repoChoice = await choose(
-          'Default repository/ORM:',
-          ['Prisma', 'Drizzle', 'In-Memory', 'Custom (specify later)'],
-          0,
-        )
-        const repoMap: Record<string, string> = {
-          Prisma: 'prisma',
-          Drizzle: 'drizzle',
-          'In-Memory': 'inmemory',
-          'Custom (specify later)': 'custom',
-        }
-        defaultRepo = repoMap[repoChoice] ?? 'inmemory'
+        defaultRepo = await select({
+          message: 'Default repository/ORM',
+          options: [
+            { value: 'prisma', label: 'Prisma' },
+            { value: 'drizzle', label: 'Drizzle' },
+            { value: 'inmemory', label: 'In-Memory' },
+            { value: 'custom', label: 'Custom', hint: 'specify later' },
+          ],
+        })
 
-        // If custom, ask for the name
         if (defaultRepo === 'custom') {
-          const customName = await ask('Custom repository name', 'custom')
-          defaultRepo = customName
+          defaultRepo = await text({
+            message: 'Custom repository name',
+            defaultValue: 'custom',
+          })
         }
       }
 
-      // Git init — prompt if not explicitly set
+      // ── Optional packages ─────────────────────────────────────────
+      let selectedPackages: string[]
+      if (opts.packages) {
+        selectedPackages = opts.packages.split(',').map((p: string) => p.trim())
+      } else {
+        selectedPackages = await multiSelect({
+          message: 'Select packages to include',
+          options: [...OPTIONAL_PACKAGES],
+          required: false,
+        })
+      }
+
+      // ── Git init ──────────────────────────────────────────────────
       let initGit: boolean
       if (opts.git === undefined) {
-        initGit = await confirm('Initialize git repository?', true)
+        initGit = await confirm({
+          message: 'Initialize git repository?',
+          initialValue: true,
+        })
       } else {
         initGit = opts.git
       }
 
-      // Install deps — prompt if not explicitly set
+      // ── Install deps ──────────────────────────────────────────────
       let installDeps: boolean
       if (opts.install === undefined) {
-        installDeps = await confirm('Install dependencies?', true)
+        installDeps = await confirm({
+          message: 'Install dependencies?',
+          initialValue: true,
+        })
       } else {
         installDeps = opts.install
       }
 
+      // ── Scaffold ──────────────────────────────────────────────────
       await initProject({
         name,
         directory,
@@ -170,6 +177,9 @@ export function registerInitCommand(program: Command): void {
         installDeps,
         template,
         defaultRepo,
+        packages: selectedPackages,
       })
+
+      outro(`Done! Next steps: ${colors.cyan(`cd ${name} && ${packageManager} dev`)}`)
     })
 }

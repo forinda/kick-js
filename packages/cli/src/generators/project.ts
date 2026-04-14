@@ -40,6 +40,7 @@ interface InitProjectOptions {
   installDeps?: boolean
   template?: ProjectTemplate
   defaultRepo?: string
+  packages?: string[]
 }
 
 /** Scaffold a new KickJS project */
@@ -50,6 +51,7 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
     packageManager = 'pnpm',
     template = 'rest',
     defaultRepo = 'inmemory',
+    packages = [],
   } = options
   const dir = directory
 
@@ -60,7 +62,7 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
   // ── package.json — template-aware deps ────────────────────────────
   await writeFileSafe(
     join(dir, 'package.json'),
-    generatePackageJson(name, template, KICKJS_VERSION),
+    generatePackageJson(name, template, KICKJS_VERSION, packages),
   )
 
   // ── vite.config.ts — enables HMR + SWC for decorators ──────────────
@@ -93,7 +95,10 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
   await writeFileSafe(join(dir, 'src/config/index.ts'), generateEnvFile())
 
   // ── src/index.ts — template-aware entry point ─────────────────────
-  await writeFileSafe(join(dir, 'src/index.ts'), generateEntryFile(name, template, cliPkg.version))
+  await writeFileSafe(
+    join(dir, 'src/index.ts'),
+    generateEntryFile(name, template, cliPkg.version, packages),
+  )
 
   // ── src/modules/index.ts ────────────────────────────────────────────
   await writeFileSafe(join(dir, 'src/modules/index.ts'), generateModulesIndex())

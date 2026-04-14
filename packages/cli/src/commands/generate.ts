@@ -18,6 +18,7 @@ import { generateTest } from '../generators/test'
 import { loadKickConfig, resolveModuleConfig } from '../config'
 import { setDryRun } from '../utils/fs'
 import { runTypegen } from '../typegen'
+import { select, confirm as promptConfirm } from '../utils/prompts'
 
 /** Check if --dry-run was passed on the parent generate command */
 function isDryRun(cmd: any): boolean {
@@ -404,14 +405,52 @@ export function registerGenerateCommand(program: Command): void {
       'Generate a complete auth module (register, login, logout, password hashing)\n' +
         '  Includes controller, service, DTOs, and test stubs.',
     )
-    .option('-s, --strategy <type>', 'Auth strategy: jwt | session', 'jwt')
+    .option('-s, --strategy <type>', 'Auth strategy: jwt | session')
+    .option('--token-storage <type>', 'Token storage: cookie | header | both')
+    .option('--role-guards', 'Generate role-based guards (default: true)')
+    .option('--no-role-guards', 'Skip role-based guard generation')
     .option('-o, --out <dir>', 'Output directory', 'src/modules/auth')
     .action(async (opts: any, cmd: any) => {
       const dryRun = isDryRun(cmd)
       setDryRun(dryRun)
+
+      // Interactive prompts when flags not provided
+      let strategy = opts.strategy
+      if (!strategy) {
+        strategy = await select({
+          message: 'Auth strategy',
+          options: [
+            { value: 'jwt', label: 'JWT', hint: 'stateless token-based auth' },
+            { value: 'session', label: 'Session', hint: 'server-side session with cookies' },
+          ],
+        })
+      }
+
+      let tokenStorage = opts.tokenStorage
+      if (!tokenStorage && strategy === 'jwt') {
+        tokenStorage = await select({
+          message: 'Token storage',
+          options: [
+            { value: 'header', label: 'Header', hint: 'Authorization: Bearer <token>' },
+            { value: 'cookie', label: 'Cookie', hint: 'httpOnly secure cookie' },
+            { value: 'both', label: 'Both', hint: 'header + cookie fallback' },
+          ],
+        })
+      }
+
+      let roleGuards = opts.roleGuards
+      if (roleGuards === undefined) {
+        roleGuards = await promptConfirm({
+          message: 'Generate role-based guards?',
+          initialValue: true,
+        })
+      }
+
       const files = await generateAuthScaffold({
-        strategy: opts.strategy,
+        strategy,
         outDir: opts.out,
+        tokenStorage,
+        roleGuards,
       })
       printGenerated(files, dryRun)
     })

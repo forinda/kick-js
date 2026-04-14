@@ -1,6 +1,8 @@
-import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs'
-import { join, relative } from 'node:path'
+import { readFileSync, existsSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
 import type { Command } from 'commander'
+import { colors, severityColor } from '../utils/colors'
+import { intro, outro, spinner as createSpinner, log } from '../utils/prompts'
 
 /* ── Severity levels ──────────────────────────────────────────────── */
 
@@ -9,37 +11,6 @@ type Severity = 'CRITICAL' | 'WARNING' | 'INFO'
 interface CheckResult {
   severity: Severity
   message: string
-}
-
-/* ── ANSI colors ──────────────────────────────────────────────────── */
-
-const RED = '\x1b[31m'
-const YELLOW = '\x1b[33m'
-const BLUE = '\x1b[34m'
-const DIM = '\x1b[2m'
-const BOLD = '\x1b[1m'
-const RESET = '\x1b[0m'
-
-function colorize(severity: Severity, text: string): string {
-  switch (severity) {
-    case 'CRITICAL':
-      return `${RED}${text}${RESET}`
-    case 'WARNING':
-      return `${YELLOW}${text}${RESET}`
-    case 'INFO':
-      return `${BLUE}${DIM}${text}${RESET}`
-  }
-}
-
-function severityTag(severity: Severity): string {
-  switch (severity) {
-    case 'CRITICAL':
-      return colorize('CRITICAL', '[CRITICAL]')
-    case 'WARNING':
-      return colorize('WARNING', '[WARNING] ')
-    case 'INFO':
-      return colorize('INFO', '[INFO]    ')
-  }
 }
 
 /* ── File scanner ─────────────────────────────────────────────────── */
@@ -264,29 +235,37 @@ export function registerCheckCommand(program: Command): void {
 
       const cwd = process.cwd()
 
-      console.log(`\n  ${BOLD}🔒 KickJS Deploy Check${RESET}\n`)
+      intro('KickJS Deploy Check')
 
+      const s = createSpinner()
+      s.start('Scanning project...')
       const results = runDeployChecks(cwd)
+      s.stop('Scan complete')
 
       // Sort: CRITICAL first, then WARNING, then INFO
       const order: Record<Severity, number> = { CRITICAL: 0, WARNING: 1, INFO: 2 }
       results.sort((a, b) => order[a.severity] - order[b.severity])
 
       for (const r of results) {
-        console.log(`  ${severityTag(r.severity)} ${r.message}`)
+        log.message(`${severityColor(r.severity)} ${r.message}`)
       }
 
       const critical = results.filter((r) => r.severity === 'CRITICAL').length
       const warnings = results.filter((r) => r.severity === 'WARNING').length
       const info = results.filter((r) => r.severity === 'INFO').length
 
-      console.log(
-        `\n  ${critical} critical, ${warnings} warning${warnings !== 1 ? 's' : ''}, ${info} info\n`,
-      )
+      const warnLabel = warnings === 1 ? 'warning' : 'warnings'
+      const criticalText =
+        critical > 0 ? colors.red(`${critical} critical`) : `${critical} critical`
+      const warningText =
+        warnings > 0 ? colors.yellow(`${warnings} ${warnLabel}`) : `${warnings} ${warnLabel}`
+      const summary = [criticalText, warningText, `${info} info`].join(', ')
 
       if (critical > 0) {
-        console.log(`  ${RED}Fix critical issues before deploying to production.${RESET}\n`)
+        outro(colors.red(`${summary} — fix critical issues before deploying`))
         process.exit(1)
+      } else {
+        outro(colors.green(`${summary} — looking good!`))
       }
     })
 }

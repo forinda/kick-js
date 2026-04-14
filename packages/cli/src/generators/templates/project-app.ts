@@ -11,9 +11,30 @@ export function generateEntryFile(
   name: string,
   template: ProjectTemplate,
   version: string,
+  packages: string[] = [],
 ): string {
   switch (template) {
-    case 'graphql':
+    case 'graphql': {
+      // graphql template already includes DevTools + GraphQL; add otel/swagger if selected
+      const gqlExtraImports: string[] = []
+      const gqlExtraAdapters: string[] = []
+
+      if (packages.includes('otel')) {
+        gqlExtraImports.push(`import { OtelAdapter } from '@forinda/kickjs-otel'`)
+        gqlExtraAdapters.push(`    new OtelAdapter({ serviceName: '${name}' }),`)
+      }
+      if (packages.includes('swagger')) {
+        gqlExtraImports.push(`import { SwaggerAdapter } from '@forinda/kickjs-swagger'`)
+        gqlExtraAdapters.push(
+          `    new SwaggerAdapter({ info: { title: '${name}', version: '${version}' } }),`,
+        )
+      }
+
+      const gqlExtraImportsBlock = gqlExtraImports.length ? gqlExtraImports.join('\n') + '\n' : ''
+      const gqlExtraAdaptersBlock = gqlExtraAdapters.length
+        ? gqlExtraAdapters.join('\n') + '\n'
+        : ''
+
       return `import 'reflect-metadata'
 // Side-effect import — registers the extended env schema with kickjs
 // **before** any controller / service / @Value gets resolved. Without
@@ -23,7 +44,7 @@ import './config'
 import { bootstrap } from '@forinda/kickjs'
 import { DevToolsAdapter } from '@forinda/kickjs-devtools'
 import { GraphQLAdapter } from '@forinda/kickjs-graphql'
-import { modules } from './modules'
+${gqlExtraImportsBlock}import { modules } from './modules'
 
 // Import your resolvers here
 // import { UserResolver } from './resolvers/user.resolver'
@@ -32,7 +53,7 @@ import { modules } from './modules'
 export const app = await bootstrap({
   modules,
   adapters: [
-    new DevToolsAdapter(),
+${gqlExtraAdaptersBlock}    new DevToolsAdapter(),
     new GraphQLAdapter({
       resolvers: [/* UserResolver */],
       // Add custom type definitions here:
@@ -41,8 +62,25 @@ export const app = await bootstrap({
   ],
 })
 `
+    }
 
-    case 'cqrs':
+    case 'cqrs': {
+      // cqrs template already includes DevTools, Swagger, Otel; add graphql if selected
+      const cqrsExtraImports: string[] = []
+      const cqrsExtraAdapters: string[] = []
+
+      if (packages.includes('graphql')) {
+        cqrsExtraImports.push(`import { GraphQLAdapter } from '@forinda/kickjs-graphql'`)
+        cqrsExtraAdapters.push(`    new GraphQLAdapter({ resolvers: [] }),`)
+      }
+
+      const cqrsExtraImportsBlock = cqrsExtraImports.length
+        ? cqrsExtraImports.join('\n') + '\n'
+        : ''
+      const cqrsExtraAdaptersBlock = cqrsExtraAdapters.length
+        ? cqrsExtraAdapters.join('\n') + '\n'
+        : ''
+
       return `import 'reflect-metadata'
 // Side-effect import — registers the extended env schema with kickjs
 // **before** any controller / service / @Value gets resolved. Without
@@ -55,7 +93,7 @@ import { SwaggerAdapter } from '@forinda/kickjs-swagger'
 import { OtelAdapter } from '@forinda/kickjs-otel'
 // import { WsAdapter } from '@forinda/kickjs-ws'
 // import { QueueAdapter, BullMQProvider } from '@forinda/kickjs-queue'
-import { modules } from './modules'
+${cqrsExtraImportsBlock}import { modules } from './modules'
 
 // Export the app for the Vite plugin (dev mode)
 export const app = await bootstrap({
@@ -66,7 +104,7 @@ export const app = await bootstrap({
     new SwaggerAdapter({
       info: { title: '${name}', version: '${version}' },
     }),
-    // Uncomment for WebSocket support:
+${cqrsExtraAdaptersBlock}    // Uncomment for WebSocket support:
     // new WsAdapter(),
     // Uncomment when Redis is available:
     // new QueueAdapter({
@@ -75,8 +113,34 @@ export const app = await bootstrap({
   ],
 })
 `
+    }
 
-    case 'minimal':
+    case 'minimal': {
+      const imports: string[] = []
+      const adapters: string[] = []
+
+      if (packages.includes('swagger')) {
+        imports.push(`import { SwaggerAdapter } from '@forinda/kickjs-swagger'`)
+        adapters.push(
+          `    new SwaggerAdapter({ info: { title: '${name}', version: '${version}' } }),`,
+        )
+      }
+      if (packages.includes('devtools')) {
+        imports.push(`import { DevToolsAdapter } from '@forinda/kickjs-devtools'`)
+        adapters.push(`    new DevToolsAdapter(),`)
+      }
+      if (packages.includes('otel')) {
+        imports.push(`import { OtelAdapter } from '@forinda/kickjs-otel'`)
+        adapters.push(`    new OtelAdapter({ serviceName: '${name}' }),`)
+      }
+      if (packages.includes('graphql')) {
+        imports.push(`import { GraphQLAdapter } from '@forinda/kickjs-graphql'`)
+        adapters.push(`    new GraphQLAdapter({ resolvers: [] }),`)
+      }
+
+      const importsBlock = imports.length ? imports.join('\n') + '\n' : ''
+      const adaptersBlock = adapters.length ? `,\n  adapters: [\n${adapters.join('\n')}\n  ]` : ''
+
       return `import 'reflect-metadata'
 // Side-effect import — registers the extended env schema with kickjs
 // **before** any controller / service / @Value gets resolved. Without
@@ -84,15 +148,28 @@ export const app = await bootstrap({
 // cached schema would still be the base shape. See guide/configuration.
 import './config'
 import { bootstrap } from '@forinda/kickjs'
-import { modules } from './modules'
+${importsBlock}import { modules } from './modules'
 
 // Export the app for the Vite plugin (dev mode)
-export const app = await bootstrap({ modules })
+export const app = await bootstrap({ modules${adaptersBlock} })
 `
+    }
 
     case 'ddd':
     case 'rest':
-    default:
+    default: {
+      // Extra adapters from user-selected packages (beyond template defaults)
+      const extraImports: string[] = []
+      const extraAdapters: string[] = []
+
+      if (packages.includes('otel')) {
+        extraImports.push(`import { OtelAdapter } from '@forinda/kickjs-otel'`)
+        extraAdapters.push(`    new OtelAdapter({ serviceName: '${name}' }),`)
+      }
+
+      const extraImportsBlock = extraImports.length ? extraImports.join('\n') + '\n' : ''
+      const extraAdaptersBlock = extraAdapters.length ? '\n' + extraAdapters.join('\n') : ''
+
       return `import 'reflect-metadata'
 // Side-effect import — registers the extended env schema with kickjs
 // **before** any controller / service / @Value gets resolved. Without
@@ -109,12 +186,12 @@ import {
 } from '@forinda/kickjs'
 import { DevToolsAdapter } from '@forinda/kickjs-devtools'
 import { SwaggerAdapter } from '@forinda/kickjs-swagger'
-import { modules } from './modules'
+${extraImportsBlock}import { modules } from './modules'
 
 // Export the app for the Vite plugin (dev mode)
 export const app = await bootstrap({
   modules,
-  adapters: [
+  adapters: [${extraAdaptersBlock}
     new DevToolsAdapter(),
     new SwaggerAdapter({
       info: { title: '${name}', version: '${version}' },
@@ -129,6 +206,7 @@ export const app = await bootstrap({
   ],
 })
 `
+    }
   }
 }
 

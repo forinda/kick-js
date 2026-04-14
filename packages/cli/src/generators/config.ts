@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 import { existsSync } from 'node:fs'
-import { createInterface } from 'node:readline'
 import { writeFileSafe } from '../utils/fs'
+import { confirm } from '../utils/prompts'
 
 interface GenerateConfigOptions {
   outDir: string
@@ -10,23 +10,16 @@ interface GenerateConfigOptions {
   force?: boolean
 }
 
-async function confirm(message: string): Promise<boolean> {
-  const rl = createInterface({ input: process.stdin, output: process.stdout })
-  return new Promise((resolve) => {
-    rl.question(`  ${message} (y/N) `, (answer) => {
-      rl.close()
-      resolve(answer.trim().toLowerCase() === 'y')
-    })
-  })
-}
-
 export async function generateConfig(options: GenerateConfigOptions): Promise<string[]> {
   const filePath = join(options.outDir, 'kick.config.ts')
   const modulesDir = options.modulesDir ?? 'src/modules'
   const defaultRepo = options.defaultRepo ?? 'inmemory'
 
   if (existsSync(filePath) && !options.force) {
-    const overwrite = await confirm('kick.config.ts already exists. Overwrite?')
+    const overwrite = await confirm({
+      message: 'kick.config.ts already exists. Overwrite?',
+      initialValue: false,
+    })
     if (!overwrite) {
       console.log('\n  Skipped — existing kick.config.ts preserved.')
       return []
