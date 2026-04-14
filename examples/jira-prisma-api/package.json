@@ -47,7 +47,7 @@
     "@types/node": "^25.0.0",
     "@types/supertest": "^6.0.2",
     "prettier": "^3.8.1",
-    "prisma": "^6.9.0",
+    "prisma": "^7.7.0",
     "supertest": "^7.1.0",
     "typescript": "^5.9.2",
     "unplugin-swc": "^1.5.9",
