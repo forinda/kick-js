@@ -133,6 +133,14 @@ const examplesSidebar = [
     ],
   },
   {
+    text: 'Multi-Tenant',
+    items: [
+      { text: 'Multi-Tenant (Drizzle)', link: '/examples/multi-tenant-drizzle-api' },
+      { text: 'Multi-Tenant (Prisma)', link: '/examples/multi-tenant-prisma-api' },
+      { text: 'Multi-Tenant (Mongoose)', link: '/examples/multi-tenant-mongoose-api' },
+    ],
+  },
+  {
     text: 'Focused Examples',
     items: [
       { text: 'v2 Showcase', link: '/examples/v2-showcase-api' },
