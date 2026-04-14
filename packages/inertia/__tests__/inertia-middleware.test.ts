@@ -29,6 +29,10 @@ function createMockReqRes(
     }),
     setHeader: vi.fn().mockReturnThis(),
     end: vi.fn(),
+    writeHead: vi.fn(function (this: any, code: number, ...args: any[]) {
+      this.statusCode = code
+      return this
+    }),
   }
   req.__kickRequestContext.res = res
   return { req, res, ctx: req.__kickRequestContext, metadata }
@@ -118,11 +122,12 @@ describe('createInertiaMiddleware()', () => {
       const config = createConfig()
       const middleware = createInertiaMiddleware(config)
       const { req, res } = createMockReqRes({ 'x-inertia': 'true' }, method)
-      res.statusCode = 302
       const next = vi.fn()
 
       await middleware(req as any, res as any, next)
 
+      // Simulate Express calling writeHead with 302
+      res.writeHead(302)
       expect(res.statusCode).toBe(303)
     }
   })
@@ -131,11 +136,12 @@ describe('createInertiaMiddleware()', () => {
     const config = createConfig()
     const middleware = createInertiaMiddleware(config)
     const { req, res } = createMockReqRes({ 'x-inertia': 'true' }, 'GET')
-    res.statusCode = 302
     const next = vi.fn()
 
     await middleware(req as any, res as any, next)
 
+    // writeHead should not be intercepted for GET
+    res.writeHead(302)
     expect(res.statusCode).toBe(302)
   })
 })

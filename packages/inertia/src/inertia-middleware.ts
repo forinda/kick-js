@@ -31,15 +31,19 @@ export function createInertiaMiddleware(config: InertiaConfig) {
       }
     }
 
-    next()
-
-    // Post-handler: rewrite 302 → 303 for mutation methods
-    if (
-      isInertiaRequest &&
-      ['PUT', 'PATCH', 'DELETE'].includes(req.method) &&
-      res.statusCode === 302
-    ) {
-      res.statusCode = 303
+    // Intercept writeHead to rewrite 302 → 303 for mutation methods
+    // before the response is flushed. The post-next() approach races
+    // with Express's response pipeline — headers may already be sent.
+    if (isInertiaRequest && ['PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+      const originalWriteHead = res.writeHead.bind(res)
+      res.writeHead = function (statusCode: number, ...args: any[]) {
+        if (statusCode === 302) {
+          statusCode = 303
+        }
+        return originalWriteHead(statusCode, ...args)
+      }
     }
+
+    next()
   }
 }
