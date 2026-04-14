@@ -97,8 +97,7 @@ export class DrizzleTenantAdapter<TDb = unknown> implements AppAdapter {
     let getCurrentTenant: (() => { id: string } | undefined) | undefined
 
     try {
-      // @ts-expect-error optional peer dependency
-      const mt = await import('@forinda/kickjs-multi-tenant')
+      const mt: any = await import('@forinda/kickjs-multi-tenant')
       getCurrentTenant = mt.getCurrentTenant
     } catch {
       log.warn(

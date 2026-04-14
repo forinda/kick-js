@@ -33,7 +33,7 @@ export async function text(opts: {
   defaultValue?: string
   validate?: (value: string) => string | void
 }): Promise<string> {
-  const value = await clack.text(opts)
+  const value = await clack.text(opts as any)
   handleCancel(value)
   return value as string
 }
@@ -44,7 +44,7 @@ export async function select<T>(opts: {
   options: { value: T; label: string; hint?: string }[]
   initialValue?: T
 }): Promise<T> {
-  const value = await clack.select(opts)
+  const value = await clack.select(opts as any)
   handleCancel(value)
   return value as T
 }
@@ -56,7 +56,7 @@ export async function multiSelect<T>(opts: {
   required?: boolean
   initialValues?: T[]
 }): Promise<T[]> {
-  const value = await clack.multiselect(opts)
+  const value = await clack.multiselect(opts as any)
   handleCancel(value)
   return value as T[]
 }

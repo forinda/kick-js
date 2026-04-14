@@ -403,7 +403,7 @@ export class McpAdapter implements AppAdapter {
       if (tool.zodInputSchema) {
         config.inputSchema = tool.zodInputSchema
       }
-      registerTool(tool.name, config, async (args, extra) => this.dispatchTool(tool, args, extra))
+      registerTool(tool.name, config, async (args: unknown) => this.dispatchTool(tool, args))
     }
 
     return server

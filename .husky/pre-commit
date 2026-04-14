@@ -1,1 +1,1 @@
-pnpm build && pnpm test && pnpm format:check
+pnpm build && pnpm test && pnpm -r --filter='./packages/*' run typecheck && pnpm format:check
