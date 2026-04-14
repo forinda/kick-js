@@ -34,8 +34,8 @@ export interface ApplicationOptions {
   adapters?: AppAdapter[]
   /** Server port (falls back to PORT env var, then 3000) */
   port?: number
-  /** Global API prefix (default: '/api') */
-  apiPrefix?: string
+  /** Global API prefix (default: '/api'). Set to false to mount routes without prefix or version. */
+  apiPrefix?: string | false
   /** Default API version (default: 1) — routes become /{prefix}/v{version}/{path} */
   defaultVersion?: number
 
@@ -375,7 +375,9 @@ export class Application {
     this.mountMiddlewareList(adapterMw.beforeRoutes)
 
     // ── 8. Mount module routes with versioning ───────────────────────
-    const apiPrefix = this.options.apiPrefix ?? '/api'
+    const apiPrefix = this.options.apiPrefix
+    const noPrefix = apiPrefix === false
+    const prefix = noPrefix ? '' : (apiPrefix ?? '/api')
     const defaultVersion = this.options.defaultVersion ?? 1
     const shouldLogRoutes = this.options.logRoutesTable ?? process.env.NODE_ENV !== 'production'
 
@@ -390,7 +392,9 @@ export class Application {
 
       for (const route of routeSets) {
         const version = route.version ?? defaultVersion
-        const mountPath = `${apiPrefix}/v${version}${normalizePath(route.path)}`
+        const mountPath = noPrefix
+          ? normalizePath(route.path)
+          : `${prefix}/v${version}${normalizePath(route.path)}`
         this.app.use(mountPath, route.router)
 
         // Notify adapters (e.g. SwaggerAdapter for OpenAPI spec generation)
