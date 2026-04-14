@@ -111,15 +111,15 @@ export class ProjectController {
 
 ### Examples
 
-Complete working implementations with each ORM:
+Complete working implementations in the `examples/` directory:
 
-| Example | ORM | Description |
-|---------|-----|-------------|
-| [multi-tenant-drizzle](/examples/) | Drizzle | Type-safe `NodePgDatabase<typeof schema>` per tenant |
-| [multi-tenant-prisma](/examples/) | Prisma | `PrismaClient` per tenant with `datasourceUrl` switching |
-| [multi-tenant-mongoose](/examples/) | Mongoose | `Connection` per tenant with model-per-connection pattern |
+| Example | ORM | DB Type |
+|---------|-----|---------|
+| `multi-tenant-drizzle-api` | Drizzle | `NodePgDatabase<typeof schema>` per tenant |
+| `multi-tenant-prisma-api` | Prisma | `PrismaClient` per tenant with `datasourceUrl` switching |
+| `multi-tenant-mongoose-api` | Mongoose | `mongoose.Connection` per tenant with model-per-connection |
 
-Each example includes the `TenantConnectionManager`, `TenantDbService`, bootstrap wiring, and controller usage.
+Each example includes `TenantConnectionManager<TDb>`, `TenantDbService`, bootstrap wiring with `TenantAdapter` + `AuthAdapter`, and a `ProjectController` demonstrating tenant-scoped queries.
 
 ## Security Considerations
 

@@ -921,6 +921,189 @@ importers:
         specifier: ^4.1.2
         version: 4.1.2(@opentelemetry/api@1.9.1)(@types/node@25.5.0)(vite@8.0.3(@emnapi/core@1.9.1)(@emnapi/runtime@1.9.1)(@types/node@25.5.0)(esbuild@0.27.4)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.3))
 
+  examples/multi-tenant-drizzle-api:
+    dependencies:
+      '@forinda/kickjs':
+        specifier: workspace:*
+        version: link:../../packages/kickjs
+      '@forinda/kickjs-auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@forinda/kickjs-multi-tenant':
+        specifier: workspace:*
+        version: link:../../packages/multi-tenant
+      dotenv:
+        specifier: ^17.3.1
+        version: 17.3.1
+      express:
+        specifier: ^5.1.0
+        version: 5.2.1
+      pino:
+        specifier: ^10.3.1
+        version: 10.3.1
+      pino-pretty:
+        specifier: ^13.1.3
+        version: 13.1.3
+      reflect-metadata:
+        specifier: ^0.2.2
+        version: 0.2.2
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
+    devDependencies:
+      '@forinda/kickjs-cli':
+        specifier: workspace:*
+        version: link:../../packages/cli
+      '@forinda/kickjs-vite':
+        specifier: workspace:*
+        version: link:../../packages/vite
+      '@swc/core':
+        specifier: ^1.15.21
+        version: 1.15.21
+      '@types/express':
+        specifier: ^5.0.6
+        version: 5.0.6
+      '@types/node':
+        specifier: ^25.0.0
+        version: 25.5.0
+      prettier:
+        specifier: ^3.8.1
+        version: 3.8.1
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+      unplugin-swc:
+        specifier: ^1.5.9
+        version: 1.5.9(@swc/core@1.15.21)(rollup@4.59.0)
+      vite:
+        specifier: ^8.0.3
+        version: 8.0.3(@emnapi/core@1.9.1)(@emnapi/runtime@1.9.1)(@types/node@25.5.0)(esbuild@0.27.4)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.3)
+      vitest:
+        specifier: ^4.1.2
+        version: 4.1.2(@opentelemetry/api@1.9.1)(@types/node@25.5.0)(vite@8.0.3(@emnapi/core@1.9.1)(@emnapi/runtime@1.9.1)(@types/node@25.5.0)(esbuild@0.27.4)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.3))
+
+  examples/multi-tenant-mongoose-api:
+    dependencies:
+      '@forinda/kickjs':
+        specifier: workspace:*
+        version: link:../../packages/kickjs
+      '@forinda/kickjs-auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@forinda/kickjs-multi-tenant':
+        specifier: workspace:*
+        version: link:../../packages/multi-tenant
+      dotenv:
+        specifier: ^17.3.1
+        version: 17.3.1
+      express:
+        specifier: ^5.1.0
+        version: 5.2.1
+      pino:
+        specifier: ^10.3.1
+        version: 10.3.1
+      pino-pretty:
+        specifier: ^13.1.3
+        version: 13.1.3
+      reflect-metadata:
+        specifier: ^0.2.2
+        version: 0.2.2
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
+    devDependencies:
+      '@forinda/kickjs-cli':
+        specifier: workspace:*
+        version: link:../../packages/cli
+      '@forinda/kickjs-vite':
+        specifier: workspace:*
+        version: link:../../packages/vite
+      '@swc/core':
+        specifier: ^1.15.21
+        version: 1.15.21
+      '@types/express':
+        specifier: ^5.0.6
+        version: 5.0.6
+      '@types/node':
+        specifier: ^25.0.0
+        version: 25.5.0
+      prettier:
+        specifier: ^3.8.1
+        version: 3.8.1
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+      unplugin-swc:
+        specifier: ^1.5.9
+        version: 1.5.9(@swc/core@1.15.21)(rollup@4.59.0)
+      vite:
+        specifier: ^8.0.3
+        version: 8.0.3(@emnapi/core@1.9.1)(@emnapi/runtime@1.9.1)(@types/node@25.5.0)(esbuild@0.27.4)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.3)
+      vitest:
+        specifier: ^4.1.2
+        version: 4.1.2(@opentelemetry/api@1.9.1)(@types/node@25.5.0)(vite@8.0.3(@emnapi/core@1.9.1)(@emnapi/runtime@1.9.1)(@types/node@25.5.0)(esbuild@0.27.4)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.3))
+
+  examples/multi-tenant-prisma-api:
+    dependencies:
+      '@forinda/kickjs':
+        specifier: workspace:*
+        version: link:../../packages/kickjs
+      '@forinda/kickjs-auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@forinda/kickjs-multi-tenant':
+        specifier: workspace:*
+        version: link:../../packages/multi-tenant
+      dotenv:
+        specifier: ^17.3.1
+        version: 17.3.1
+      express:
+        specifier: ^5.1.0
+        version: 5.2.1
+      pino:
+        specifier: ^10.3.1
+        version: 10.3.1
+      pino-pretty:
+        specifier: ^13.1.3
+        version: 13.1.3
+      reflect-metadata:
+        specifier: ^0.2.2
+        version: 0.2.2
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
+    devDependencies:
+      '@forinda/kickjs-cli':
+        specifier: workspace:*
+        version: link:../../packages/cli
+      '@forinda/kickjs-vite':
+        specifier: workspace:*
+        version: link:../../packages/vite
+      '@swc/core':
+        specifier: ^1.15.21
+        version: 1.15.21
+      '@types/express':
+        specifier: ^5.0.6
+        version: 5.0.6
+      '@types/node':
+        specifier: ^25.0.0
+        version: 25.5.0
+      prettier:
+        specifier: ^3.8.1
+        version: 3.8.1
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+      unplugin-swc:
+        specifier: ^1.5.9
+        version: 1.5.9(@swc/core@1.15.21)(rollup@4.59.0)
+      vite:
+        specifier: ^8.0.3
+        version: 8.0.3(@emnapi/core@1.9.1)(@emnapi/runtime@1.9.1)(@types/node@25.5.0)(esbuild@0.27.4)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.3)
+      vitest:
+        specifier: ^4.1.2
+        version: 4.1.2(@opentelemetry/api@1.9.1)(@types/node@25.5.0)(vite@8.0.3(@emnapi/core@1.9.1)(@emnapi/runtime@1.9.1)(@types/node@25.5.0)(esbuild@0.27.4)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.3))
+
   examples/otel-api:
     dependencies:
       '@forinda/kickjs':
@@ -1176,6 +1359,15 @@ importers:
       '@forinda/kickjs':
         specifier: workspace:*
         version: link:../kickjs
+      argon2:
+        specifier: '>=0.31.0'
+        version: 0.44.0
+      bcrypt:
+        specifier: '>=5.0.0'
+        version: 6.0.0
+      bcryptjs:
+        specifier: '>=2.4.0'
+        version: 3.0.3
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
@@ -1933,6 +2125,9 @@ packages:
 
   '@emnapi/wasi-threads@1.2.0':
     resolution: {integrity: sha512-N10dEJNSsUx41Z6pZsXU8FjPjpBEplgH24sfkmITrBED1/U2Esum9F3lfLrMjKHHjmi557zQn7kR9R+XWXu5Rg==}
+
+  '@epic-web/invariant@1.0.0':
+    resolution: {integrity: sha512-lrTPqgvfFQtR/eY/qkIzp98OGdNJu0m5ji3q/nJI8v3SXkRKEnWiOxMmbvcSoAIzv/cGiuvRy57k4suKQSAdwA==}
 
   '@esbuild-kit/core-utils@3.3.2':
     resolution: {integrity: sha512-sPRAnw9CdSsRmEtnsl2WXWdyquogVpB3yZ3dgwJfe8zrOzTsV7cJvmwrKVa+0ma5BoiGJ+BoqkMvawbayKUsqQ==}
@@ -3000,6 +3195,10 @@ packages:
   '@paralleldrive/cuid2@2.3.1':
     resolution: {integrity: sha512-XO7cAxhnTZl0Yggq6jOgjiOHhbgcO4NqFqwSmQpjK3b6TEE6Uj/jfSk6wzYyemh3+I0sHirKSetjQwn5cZktFw==}
 
+  '@phc/format@1.0.0':
+    resolution: {integrity: sha512-m7X9U6BG2+J+R1lSOdCiITLLrxm+cWlNI3HUFA92oLO77ObGNzaKdh8pMLqdZcshtkKuV84olNNXDfMc4FezBQ==}
+    engines: {node: '>=10'}
+
   '@pinojs/redact@0.4.0':
     resolution: {integrity: sha512-k2ENnmBugE/rzQfEcdWHcCY+/FM3VLzH9cYEsbdsoqrvzAKRhUZeRNhAZvB8OitQJ1TBed3yqWtdjzS6wJKBwg==}
 
@@ -3868,6 +4067,10 @@ packages:
   append-field@1.0.0:
     resolution: {integrity: sha512-klpgFSWLW1ZEs8svjfb7g4qWY0YS5imI82dTg+QahUvJ8YqAY0P10Uk8tTyh9ZGuYEZEMaeJYCF5BFuX552hsw==}
 
+  argon2@0.44.0:
+    resolution: {integrity: sha512-zHPGN3S55sihSQo0dBbK0A5qpi2R31z7HZDZnry3ifOyj8bZZnpZND2gpmhnRGO1V/d555RwBqIK5W4Mrmv3ig==}
+    engines: {node: '>=16.17.0'}
+
   asap@2.0.6:
     resolution: {integrity: sha512-BSHWgDSAiKs50o2Re8ppvp3seVHXSRM44cdSsT9FfNEUUZLOGWVCsiWaRPWM1Znn+mqZ1OfVZ3z3DWEzSp7hRA==}
 
@@ -3908,6 +4111,10 @@ packages:
   basic-auth@2.0.1:
     resolution: {integrity: sha512-NF+epuEdnUYVlGuhaxbbq+dvJttwLnGY+YixlXlME5KpQ5W3CnXA5cVTneY3SPbPDRkcjMbifrwmFYcClgOZeg==}
     engines: {node: '>= 0.8'}
+
+  bcrypt@6.0.0:
+    resolution: {integrity: sha512-cU8v/EGSrnH+HnxV2z0J7/blxH8gq7Xh2JFT6Aroax7UohdmiJJlxApMxtKfuI7z68NvvVcmR78k2LbT6efhRg==}
+    engines: {node: '>= 18'}
 
   bcryptjs@3.0.3:
     resolution: {integrity: sha512-GlF5wPWnSa/X5LKM1o0wz0suXIINz1iHRLvTS+sLyi7XPbe5ycmYI3DlZqVGZZtDgl4DmasFg7gOB3JYbphV5g==}
@@ -4139,6 +4346,11 @@ packages:
 
   cross-argv@2.0.0:
     resolution: {integrity: sha512-YIaY9TR5Nxeb8SMdtrU8asWVM4jqJDNDYlKV21LxtYcfNJhp1kEsgSa6qXwXgzN0WQWGODps0+TlGp2xQSHwOg==}
+
+  cross-env@10.1.0:
+    resolution: {integrity: sha512-GsYosgnACZTADcmEyJctkJIoqAhHjttw7RsFrVoJNXbsWWqaq6Ym+7kZjq6mS45O0jij6vtiReppKQEtqWy6Dw==}
+    engines: {node: '>=20'}
+    hasBin: true
 
   cross-spawn@7.0.6:
     resolution: {integrity: sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==}
@@ -5234,6 +5446,10 @@ packages:
   node-abort-controller@3.1.1:
     resolution: {integrity: sha512-AGK2yQKIjRuqnc6VkX2Xj5d+QW8xZ87pa1UK6yA6ouUyuxfHuMP6umE5QK7UmTeOAymo+Zx1Fxiuw9rVx8taHQ==}
 
+  node-addon-api@8.7.0:
+    resolution: {integrity: sha512-9MdFxmkKaOYVTV+XVRG8ArDwwQ77XIgIPyKASB1k3JPq3M8fGQQQE3YpMOrKm6g//Ktx8ivZr8xo1Qmtqub+GA==}
+    engines: {node: ^18 || ^20 || >= 21}
+
   node-fetch-native@1.6.7:
     resolution: {integrity: sha512-g9yhqoedzIUm0nTnTqAQvueMPVOuIY16bqgAJJC8XOOubYFNwz6IER9qs0Gq2Xd0+CecCKFjtdDTMA4u4xG06Q==}
 
@@ -5248,6 +5464,10 @@ packages:
 
   node-gyp-build-optional-packages@5.2.2:
     resolution: {integrity: sha512-s+w+rBWnpTMwSFbaE0UXsRlg7hU4FjekKU4eyAih5T8nJuNZT1nNsskXpxmeqSK9UzkBl6UgRlnKc8hz8IEqOw==}
+    hasBin: true
+
+  node-gyp-build@4.8.4:
+    resolution: {integrity: sha512-LA4ZjwlnUblHVgq0oBF3Jl/6h/Nvs5fzBLwdEF4nuxnFdsfajde4WfxtJr3CaiH+F6ewcIB/q4jQ4UzPyid+CQ==}
     hasBin: true
 
   nodemailer@8.0.4:
@@ -6548,6 +6768,8 @@ snapshots:
       tslib: 2.8.1
     optional: true
 
+  '@epic-web/invariant@1.0.0': {}
+
   '@esbuild-kit/core-utils@3.3.2':
     dependencies:
       esbuild: 0.18.20
@@ -7465,6 +7687,8 @@ snapshots:
     dependencies:
       '@noble/hashes': 1.8.0
 
+  '@phc/format@1.0.0': {}
+
   '@pinojs/redact@0.4.0': {}
 
   '@prisma/adapter-pg@7.6.0':
@@ -8305,6 +8529,13 @@ snapshots:
 
   append-field@1.0.0: {}
 
+  argon2@0.44.0:
+    dependencies:
+      '@phc/format': 1.0.0
+      cross-env: 10.1.0
+      node-addon-api: 8.7.0
+      node-gyp-build: 4.8.4
+
   asap@2.0.6: {}
 
   assertion-error@2.0.1: {}
@@ -8356,6 +8587,11 @@ snapshots:
   basic-auth@2.0.1:
     dependencies:
       safe-buffer: 5.1.2
+
+  bcrypt@6.0.0:
+    dependencies:
+      node-addon-api: 8.7.0
+      node-gyp-build: 4.8.4
 
   bcryptjs@3.0.3: {}
 
@@ -8614,6 +8850,11 @@ snapshots:
   croner@10.0.1: {}
 
   cross-argv@2.0.0: {}
+
+  cross-env@10.1.0:
+    dependencies:
+      '@epic-web/invariant': 1.0.0
+      cross-spawn: 7.0.6
 
   cross-spawn@7.0.6:
     dependencies:
@@ -9629,6 +9870,8 @@ snapshots:
 
   node-abort-controller@3.1.1: {}
 
+  node-addon-api@8.7.0: {}
+
   node-fetch-native@1.6.7: {}
 
   node-fetch@2.7.0:
@@ -9639,6 +9882,8 @@ snapshots:
     dependencies:
       detect-libc: 2.1.2
     optional: true
+
+  node-gyp-build@4.8.4: {}
 
   nodemailer@8.0.4: {}
 
