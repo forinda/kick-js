@@ -483,7 +483,15 @@ export class Application {
       // Don't create a new server or listen — Vite is already listening.
       // Just wire up adapters with the Vite-created server.
       this.httpServer = g.__kickjs_httpServer
-      log.debug('Attached to Vite dev server')
+
+      // Log the actual port Vite is listening on
+      const addr = this.httpServer?.address()
+      const port = typeof addr === 'object' && addr ? addr.port : undefined
+      if (port) {
+        log.info(`Server running on http://localhost:${port} (Vite dev)`)
+      } else {
+        log.debug('Attached to Vite dev server')
+      }
 
       for (const adapter of this.adapters) {
         const ctx = this.adapterCtx(this.httpServer!)
