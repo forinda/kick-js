@@ -52,8 +52,9 @@ export class ServerRenderer {
   }
 
   protected async createRuntime(ssrEnvironment: any): Promise<any> {
-    const { createViteRuntime } = await import('vite')
-    return createViteRuntime(ssrEnvironment, { hmr: { logger: false } })
+    const vite = await import('vite')
+    const createRuntime = (vite as any).createViteRuntime
+    return createRuntime(ssrEnvironment, { hmr: { logger: false } })
   }
 
   protected async loadProdBundle(bundlePath: string): Promise<any> {
