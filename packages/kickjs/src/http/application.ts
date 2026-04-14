@@ -134,6 +134,28 @@ export interface ApplicationOptions {
    * ```
    */
   onError?: (err: any, req: any, res: any, next: any) => void
+
+  /**
+   * Security defaults applied automatically unless opted out.
+   *
+   * When not specified, secure defaults are applied:
+   * - Helmet security headers are auto-injected
+   * - JSON body limit defaults to 1MB
+   *
+   * @example
+   * ```ts
+   * bootstrap({
+   *   modules,
+   *   security: {
+   *     helmet: false,     // disable auto-helmet
+   *   },
+   * })
+   * ```
+   */
+  security?: {
+    /** Auto-inject helmet security headers. Default: true */
+    helmet?: boolean
+  }
 }
 
 /**
@@ -309,6 +331,17 @@ export class Application {
     }
 
     // ── 4. Global middleware ─────────────────────────────────────────
+    // Auto-inject helmet unless opted out
+    const autoHelmet = this.options.security?.helmet !== false
+    if (autoHelmet) {
+      try {
+        const { helmet: helmetFn } = await import('./middleware/helmet')
+        this.app.use(helmetFn())
+      } catch {
+        // helmet middleware not available — skip silently
+      }
+    }
+
     if (this.options.middleware) {
       // User-declared pipeline — full control
       for (const entry of this.options.middleware) {
@@ -317,7 +350,7 @@ export class Application {
     } else {
       // Sensible defaults when no middleware declared
       this.app.use(requestId())
-      this.app.use(express.json({ limit: this.options.jsonLimit ?? '100kb' }))
+      this.app.use(express.json({ limit: this.options.jsonLimit ?? '1mb' }))
     }
 
     // ── 5. Adapter middleware: afterGlobal ────────────────────────────

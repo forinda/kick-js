@@ -10,6 +10,7 @@ import { generateService } from '../generators/service'
 import { generateController } from '../generators/controller'
 import { generateDto } from '../generators/dto'
 import { generateConfig } from '../generators/config'
+import { generateAuthScaffold } from '../generators/auth-scaffold'
 import { generateResolver } from '../generators/resolver'
 import { generateJob } from '../generators/job'
 import { generateScaffold, parseFields } from '../generators/scaffold'
@@ -394,6 +395,25 @@ export function registerGenerateCommand(program: Command): void {
       }
       printGenerated(files, dryRun)
       await runPostTypegen(dryRun)
+    })
+
+  // ── kick g auth-scaffold ─────────────────────────────────────────────
+  gen
+    .command('auth-scaffold')
+    .description(
+      'Generate a complete auth module (register, login, logout, password hashing)\n' +
+        '  Includes controller, service, DTOs, and test stubs.',
+    )
+    .option('-s, --strategy <type>', 'Auth strategy: jwt | session', 'jwt')
+    .option('-o, --out <dir>', 'Output directory', 'src/modules/auth')
+    .action(async (opts: any, cmd: any) => {
+      const dryRun = isDryRun(cmd)
+      setDryRun(dryRun)
+      const files = await generateAuthScaffold({
+        strategy: opts.strategy,
+        outDir: opts.out,
+      })
+      printGenerated(files, dryRun)
     })
 
   // ── kick g config ────────────────────────────────────────────────────

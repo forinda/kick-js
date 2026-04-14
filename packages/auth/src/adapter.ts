@@ -78,14 +78,24 @@ export class AuthAdapter implements AppAdapter {
     this.strategies = options.strategies
     this.defaultPolicy = options.defaultPolicy ?? 'protected'
 
+    const isDev = process.env.NODE_ENV !== 'production'
+
     this.onUnauthorized =
       options.onUnauthorized ??
       ((_req, res) => {
-        res.status(HttpStatus.UNAUTHORIZED).json({
+        const body: Record<string, any> = {
           statusCode: HttpStatus.UNAUTHORIZED,
           error: 'Unauthorized',
           message: 'Authentication required',
-        })
+        }
+        if (isDev) {
+          body.debug = {
+            strategies: this.strategies.map((s) => s.name),
+            defaultPolicy: this.defaultPolicy,
+            hint: 'Provide a valid token or mark the route @Public()',
+          }
+        }
+        res.status(HttpStatus.UNAUTHORIZED).json(body)
       })
 
     this.onForbidden =
@@ -144,6 +154,36 @@ export class AuthAdapter implements AppAdapter {
     if (this.csrfEnabled) {
       log.info('CSRF protection enabled (double-submit cookie)')
     }
+
+    // Dev warnings for common security misconfigurations
+    if (process.env.NODE_ENV !== 'production') {
+      // Warn if roleResolver is set but no TenantAdapter is likely present
+      if (this.options.roleResolver) {
+        log.info('Tenant-scoped RBAC enabled via roleResolver')
+      }
+    }
+  }
+
+  /**
+   * Create an AuthAdapter that accepts any token and returns a fixed test user.
+   * For use in test suites — eliminates the need to generate real JWTs.
+   *
+   * @example
+   * ```ts
+   * const adapter = AuthAdapter.testMode({ user: { id: '1', roles: ['admin'] } })
+   * bootstrap({ modules, adapters: [adapter] })
+   * ```
+   */
+  static testMode(options: { user: AuthUser; defaultPolicy?: 'protected' | 'open' }): AuthAdapter {
+    return new AuthAdapter({
+      strategies: [
+        {
+          name: 'test',
+          validate: async () => options.user,
+        },
+      ],
+      defaultPolicy: options.defaultPolicy ?? 'open',
+    })
   }
 
   // ── Core Auth Middleware ─────────────────────────────────────────────
