@@ -302,7 +302,6 @@ export class PasswordService {
 
   private async loadArgon2(): Promise<any> {
     try {
-      // @ts-expect-error optional peer dependency
       return await import('argon2')
     } catch {
       throw new Error(
@@ -325,14 +324,12 @@ export class PasswordService {
 
   private async loadBcrypt(): Promise<any> {
     // Prefer bcryptjs (pure JS, no native compilation) over bcrypt (native).
-    // These are optional peer deps — @ts-expect-error suppresses TS2307.
+    // These are optional peer deps — dynamic import throws at runtime if absent.
     try {
-      // @ts-expect-error optional peer dependency
       const mod: any = await import('bcryptjs')
       return mod.default ?? mod
     } catch {
       try {
-        // @ts-expect-error optional peer dependency
         const mod: any = await import('bcrypt')
         return mod.default ?? mod
       } catch {
