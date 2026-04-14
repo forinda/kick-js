@@ -32,8 +32,9 @@ const config = defineInertiaConfig({
   rootView: readFileSync('src/views/app.html', 'utf-8'),
 })
 
-bootstrap({
+export const app = await bootstrap({
   modules: [...],
+  apiPrefix: false,  // Inertia pages live at / not /api/v1/
   adapters: [new InertiaAdapter(config)],
 })
 ```

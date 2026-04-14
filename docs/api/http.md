@@ -21,7 +21,7 @@ interface ApplicationOptions {
   modules: AppModuleClass[]
   adapters?: AppAdapter[]
   port?: number
-  apiPrefix?: string            // default: '/api'
+  apiPrefix?: string | false    // default: '/api', false to disable prefix + versioning
   defaultVersion?: number       // default: 1
   middleware?: MiddlewareEntry[]
   trustProxy?: boolean | number | string | ((ip: string, hopIndex: number) => boolean)
