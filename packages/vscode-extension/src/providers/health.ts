@@ -5,14 +5,48 @@ export class HealthTreeProvider implements vscode.TreeDataProvider<vscode.TreeIt
   private _onDidChangeTreeData = new vscode.EventEmitter<void>()
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event
   private data: any = null
+  private connected = false
 
-  constructor(private baseUrl: string) {}
+  /** Status bar item showing connection state */
+  readonly statusBarItem: vscode.StatusBarItem
+
+  constructor(private baseUrl: string) {
+    this.statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100)
+    this.statusBarItem.command = 'kickjs.inspect'
+    this.updateStatusBar()
+    this.statusBarItem.show()
+  }
 
   refresh(): void {
     fetchDebugData(this.baseUrl, '/health').then((d) => {
       this.data = d
+      this.connected = d !== null
+      this.updateStatusBar()
       this._onDidChangeTreeData.fire()
     })
+  }
+
+  isConnected(): boolean {
+    return this.connected
+  }
+
+  private updateStatusBar(): void {
+    if (!this.connected) {
+      this.statusBarItem.text = '$(debug-disconnect) KickJS: Disconnected'
+      this.statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground')
+      this.statusBarItem.tooltip = `Cannot reach ${this.baseUrl}\nClick to open dashboard`
+      return
+    }
+
+    const status = this.data?.status ?? 'unknown'
+    if (status === 'healthy') {
+      this.statusBarItem.text = '$(check) KickJS: Healthy'
+      this.statusBarItem.backgroundColor = undefined
+    } else {
+      this.statusBarItem.text = `$(warning) KickJS: ${status}`
+      this.statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground')
+    }
+    this.statusBarItem.tooltip = `Status: ${status}\nUptime: ${this.data?.uptime ?? 0}s\nClick to open dashboard`
   }
 
   getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
@@ -20,7 +54,11 @@ export class HealthTreeProvider implements vscode.TreeDataProvider<vscode.TreeIt
   }
 
   getChildren(): vscode.TreeItem[] {
-    if (!this.data) return [new vscode.TreeItem('Loading...')]
+    if (!this.data) {
+      const item = new vscode.TreeItem('Disconnected — check server URL')
+      item.iconPath = new vscode.ThemeIcon('debug-disconnect')
+      return [item]
+    }
 
     const items: vscode.TreeItem[] = []
     const status = new vscode.TreeItem(
@@ -41,5 +79,9 @@ export class HealthTreeProvider implements vscode.TreeDataProvider<vscode.TreeIt
     }
 
     return items
+  }
+
+  dispose(): void {
+    this.statusBarItem.dispose()
   }
 }

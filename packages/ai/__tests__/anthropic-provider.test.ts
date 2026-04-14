@@ -332,13 +332,14 @@ describe('AnthropicProvider.chat()', () => {
       provider.chat({ messages: [{ role: 'user', content: 'hi' }] }),
     ).rejects.toThrow(ProviderError)
 
-    fetchSpy.mockResolvedValueOnce(mockErrorResponse('{"error":"rate limit"}', 429))
+    // Non-retryable error — check status and body are captured
+    fetchSpy.mockResolvedValueOnce(mockErrorResponse('{"error":"rate limit"}', 400))
     try {
       await provider.chat({ messages: [{ role: 'user', content: 'hi' }] })
       expect.fail('should have thrown')
     } catch (err) {
       expect(err).toBeInstanceOf(ProviderError)
-      expect((err as ProviderError).status).toBe(429)
+      expect((err as ProviderError).status).toBe(400)
       expect((err as ProviderError).body).toContain('rate limit')
     }
   })

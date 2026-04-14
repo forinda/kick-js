@@ -19,6 +19,15 @@ export function activate(context: vscode.ExtensionContext) {
   vscode.window.registerTreeDataProvider('kickjs.routes', routesProvider)
   vscode.window.registerTreeDataProvider('kickjs.container', containerProvider)
 
+  // Status bar item managed by health provider
+  context.subscriptions.push(healthProvider.statusBarItem)
+
+  const refreshAll = () => {
+    healthProvider.refresh()
+    routesProvider.refresh()
+    containerProvider.refresh()
+  }
+
   // Commands
   context.subscriptions.push(
     vscode.commands.registerCommand('kickjs.inspect', () => {
@@ -27,25 +36,17 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('kickjs.showRoutes', () => routesProvider.refresh()),
     vscode.commands.registerCommand('kickjs.showContainer', () => containerProvider.refresh()),
     vscode.commands.registerCommand('kickjs.showMetrics', () => healthProvider.refresh()),
+    vscode.commands.registerCommand('kickjs.refreshAll', refreshAll),
   )
 
   // Auto-refresh
   if (config.get<boolean>('autoRefresh', true)) {
-    const interval = setInterval(() => {
-      healthProvider.refresh()
-      routesProvider.refresh()
-      containerProvider.refresh()
-    }, 30000)
-
+    const interval = setInterval(refreshAll, 30000)
     context.subscriptions.push({ dispose: () => clearInterval(interval) })
   }
 
   // Initial fetch
-  healthProvider.refresh()
-  routesProvider.refresh()
-  containerProvider.refresh()
-
-  vscode.window.showInformationMessage('KickJS DevTools activated')
+  refreshAll()
 }
 
 export function deactivate() {}

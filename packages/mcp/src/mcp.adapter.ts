@@ -403,7 +403,7 @@ export class McpAdapter implements AppAdapter {
       if (tool.zodInputSchema) {
         config.inputSchema = tool.zodInputSchema
       }
-      registerTool(tool.name, config, async (args) => this.dispatchTool(tool, args))
+      registerTool(tool.name, config, async (args, extra) => this.dispatchTool(tool, args, extra))
     }
 
     return server
@@ -427,9 +427,17 @@ export class McpAdapter implements AppAdapter {
    * body as text. Non-2xx responses are flagged with `isError: true`
    * so the calling LLM can react.
    */
+  /**
+   * Dispatch a tool call through the Express pipeline.
+   *
+   * @param tool - The tool definition
+   * @param rawArgs - Arguments from the MCP client
+   * @param extra - Optional MCP SDK extra context (contains request info for auth forwarding)
+   */
   private async dispatchTool(
     tool: McpToolDefinition,
     rawArgs: unknown,
+    extra?: unknown,
   ): Promise<{
     content: Array<{ type: 'text'; text: string }>
     isError?: boolean
@@ -451,13 +459,21 @@ export class McpAdapter implements AppAdapter {
     const method = tool.httpMethod.toUpperCase()
     const hasBody = method === 'POST' || method === 'PUT' || method === 'PATCH'
 
+    // Forward auth headers from the MCP transport request to the internal dispatch.
+    // This ensures tool calls through MCP respect the same auth middleware as direct HTTP.
+    const forwardedHeaders: Record<string, string> = {
+      accept: 'application/json',
+      'x-mcp-tool': tool.name,
+    }
+    const authToken = this.extractAuthToken(extra)
+    if (authToken) {
+      forwardedHeaders.authorization = authToken
+    }
+
     let url = `${this.serverBaseUrl}${path}`
     const init: RequestInit = {
       method,
-      headers: {
-        accept: 'application/json',
-        'x-mcp-tool': tool.name,
-      },
+      headers: forwardedHeaders,
     }
 
     if (hasBody) {
@@ -499,6 +515,26 @@ export class McpAdapter implements AppAdapter {
         ],
       }
     }
+  }
+
+  /**
+   * Extract the Authorization header from the MCP SDK extra context.
+   * The StreamableHTTPServerTransport passes the original request headers
+   * in `extra.requestInfo.headers`, allowing us to forward auth tokens
+   * through to the internal HTTP dispatch.
+   */
+  private extractAuthToken(extra: unknown): string | null {
+    if (!extra || typeof extra !== 'object') return null
+    const info = (extra as Record<string, unknown>).requestInfo
+    if (!info || typeof info !== 'object') return null
+    const headers = (info as Record<string, unknown>).headers
+    if (!headers || typeof headers !== 'object') return null
+    // Support both Map-like and plain object headers
+    if (headers instanceof Map) return headers.get('authorization') ?? null
+    if (typeof (headers as Record<string, unknown>).get === 'function') {
+      return (headers as { get: (k: string) => string | null }).get('authorization')
+    }
+    return (headers as Record<string, string>).authorization ?? null
   }
 
   /**

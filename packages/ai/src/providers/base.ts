@@ -34,10 +34,55 @@ export class ProviderError extends Error {
   }
 }
 
+/** Status codes that indicate a transient failure worth retrying. */
+const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504])
+
+/** Default retry configuration. */
+const DEFAULT_MAX_RETRIES = 3
+const DEFAULT_BASE_DELAY_MS = 1000
+const DEFAULT_MAX_DELAY_MS = 30_000
+
+export interface RetryOptions {
+  /** Maximum number of retry attempts (default: 3). Set to 0 to disable retries. */
+  maxRetries?: number
+  /** Base delay in ms before first retry (default: 1000). Doubles each attempt. */
+  baseDelayMs?: number
+  /** Maximum delay cap in ms (default: 30000). */
+  maxDelayMs?: number
+}
+
+/**
+ * Sleep for `ms` milliseconds, respecting an optional AbortSignal.
+ * Resolves to `false` if aborted, `true` if the delay completed.
+ */
+function delay(ms: number, signal?: AbortSignal): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (signal?.aborted) return resolve(false)
+    const timer = setTimeout(() => resolve(true), ms)
+    signal?.addEventListener('abort', () => {
+      clearTimeout(timer)
+      resolve(false)
+    })
+  })
+}
+
+/**
+ * Calculate retry delay with exponential backoff + jitter.
+ * Jitter prevents thundering herd when multiple clients retry simultaneously.
+ */
+function retryDelay(attempt: number, baseMs: number, maxMs: number): number {
+  const exponential = baseMs * 2 ** attempt
+  const jitter = exponential * (0.5 + Math.random() * 0.5)
+  return Math.min(jitter, maxMs)
+}
+
 /**
  * POST a JSON payload to a URL and parse the JSON response. Throws a
  * `ProviderError` on non-2xx status codes so the caller never has to
  * check `res.ok` itself.
+ *
+ * Retries transient failures (429, 500, 502, 503, 504) with exponential
+ * backoff and jitter. Honors `Retry-After` headers from rate-limited responses.
  *
  * Auth headers are the caller's responsibility. Different providers
  * use different conventions — OpenAI uses `Authorization: Bearer ...`,
@@ -51,24 +96,55 @@ export async function postJson<T>(
   options: {
     headers?: Record<string, string>
     signal?: AbortSignal
+    retry?: RetryOptions
   } = {},
 ): Promise<T> {
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      ...options.headers,
-    },
-    body: JSON.stringify(body),
-    signal: options.signal,
-  })
+  const maxRetries = options.retry?.maxRetries ?? DEFAULT_MAX_RETRIES
+  const baseDelayMs = options.retry?.baseDelayMs ?? DEFAULT_BASE_DELAY_MS
+  const maxDelayMs = options.retry?.maxDelayMs ?? DEFAULT_MAX_DELAY_MS
 
-  if (!res.ok) {
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        ...options.headers,
+      },
+      body: JSON.stringify(body),
+      signal: options.signal,
+    })
+
+    if (res.ok) {
+      return (await res.json()) as T
+    }
+
     const text = await res.text()
+
+    // Retry on transient failures
+    if (attempt < maxRetries && RETRYABLE_STATUSES.has(res.status)) {
+      const retryAfter = parseRetryAfter(res.headers.get('retry-after'))
+      const waitMs = retryAfter ?? retryDelay(attempt, baseDelayMs, maxDelayMs)
+      const ok = await delay(waitMs, options.signal)
+      if (!ok) throw new ProviderError(res.status, text) // Aborted
+      continue
+    }
+
     throw new ProviderError(res.status, text)
   }
+}
 
-  return (await res.json()) as T
+/**
+ * Parse the `Retry-After` header value into milliseconds.
+ * Supports both seconds (integer) and HTTP-date formats.
+ * Returns null if the header is missing or unparseable.
+ */
+function parseRetryAfter(value: string | null): number | null {
+  if (!value) return null
+  const seconds = Number(value)
+  if (!Number.isNaN(seconds)) return seconds * 1000
+  const date = Date.parse(value)
+  if (!Number.isNaN(date)) return Math.max(0, date - Date.now())
+  return null
 }
 
 /**
@@ -94,21 +170,38 @@ export async function* postJsonStream(
   options: {
     headers?: Record<string, string>
     signal?: AbortSignal
+    retry?: RetryOptions
   } = {},
 ): AsyncGenerator<string> {
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      accept: 'text/event-stream',
-      ...options.headers,
-    },
-    body: JSON.stringify(body),
-    signal: options.signal,
-  })
+  const maxRetries = options.retry?.maxRetries ?? DEFAULT_MAX_RETRIES
+  const baseDelayMs = options.retry?.baseDelayMs ?? DEFAULT_BASE_DELAY_MS
+  const maxDelayMs = options.retry?.maxDelayMs ?? DEFAULT_MAX_DELAY_MS
 
-  if (!res.ok) {
+  let res: Response | undefined
+  for (let attempt = 0; ; attempt++) {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'text/event-stream',
+        ...options.headers,
+      },
+      body: JSON.stringify(body),
+      signal: options.signal,
+    })
+
+    if (res.ok) break
+
     const text = await res.text()
+
+    if (attempt < maxRetries && RETRYABLE_STATUSES.has(res.status)) {
+      const retryAfter = parseRetryAfter(res.headers.get('retry-after'))
+      const waitMs = retryAfter ?? retryDelay(attempt, baseDelayMs, maxDelayMs)
+      const ok = await delay(waitMs, options.signal)
+      if (!ok) throw new ProviderError(res.status, text)
+      continue
+    }
+
     throw new ProviderError(res.status, text)
   }
   if (!res.body) {
