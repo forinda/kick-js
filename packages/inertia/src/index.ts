@@ -10,3 +10,5 @@ export type {
 export { defer, optional, always, merge } from './props'
 export type { DeferredProp, OptionalProp, AlwaysProp, MergeProp } from './props'
 export { defineInertiaConfig } from './define-config'
+export { Inertia } from './inertia'
+export { ServerRenderer } from './server-renderer'
