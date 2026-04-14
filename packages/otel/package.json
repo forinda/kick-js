@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-otel",
-  "version": "2.3.3",
+  "version": "3.0.0",
   "description": "OpenTelemetry adapter for KickJS — automatic tracing, metrics, and export to any OTel backend",
   "keywords": [
     "kickjs",
