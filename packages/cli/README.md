@@ -35,6 +35,25 @@ kick add <pkg>            # Install a KickJS package + peers
 kick add --list           # Show all available packages
 ```
 
+## Interactive Project Scaffolding
+
+`kick new` uses [@clack/prompts](https://github.com/natemoo-re/clack) for a rich interactive experience with colored output:
+
+- **Template selection** — REST, GraphQL, DDD, CQRS, Minimal
+- **Package manager** — pnpm, npm, yarn
+- **Repository/ORM** — Prisma, Drizzle, In-Memory, Custom
+- **Multi-select packages** — auth, swagger, otel, ws, queue, cron, mailer, graphql, devtools, notifications, multi-tenant
+- **Git init + dependency install** confirmations
+
+Selected packages are automatically wired into the generated `package.json` dependencies and `src/index.ts` adapter registrations.
+
+All prompts can be skipped with flags for CI/scripting:
+
+```bash
+kick new my-api --template rest --pm pnpm --repo prisma \
+  --packages auth,swagger,otel --no-git --no-install
+```
+
 ## Generator Flags
 
 ```bash

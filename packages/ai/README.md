@@ -14,6 +14,7 @@ AI runtime for KickJS. Ships provider bindings, an `@AiTool` decorator that turn
   - `QdrantVectorStore` — REST client with lazy collection bootstrap and equality-map filter translation
   - `PineconeVectorStore` — REST client with namespace support and MongoDB-style filter DSL passthrough
 - **`RagService`** — ties a provider's embeddings to any `VectorStore` and adds `index`, `search`, and `augmentChatInput` helpers.
+- **Retry with backoff** — `postJson` and `postJsonStream` automatically retry transient failures (429, 500, 502, 503, 504) with exponential backoff, jitter, and `Retry-After` header support. Configurable via `RetryOptions`.
 
 ## Install
 

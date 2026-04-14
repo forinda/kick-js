@@ -26,6 +26,9 @@ pnpm add @forinda/kickjs-auth jsonwebtoken
 - Tenant-scoped RBAC via `roleResolver`
 - `AuthAdapter.testMode()` for test suites
 - Protected-by-default policy
+- OAuth CSRF protection via `stateValidator`
+- PKCE support for mobile/SPA OAuth flows
+- `loadPolicies()` — auto-discover `@Policy` classes via `import.meta.glob`
 
 ## Quick Example
 
@@ -67,6 +70,37 @@ class UserController {
     ctx.noContent()
   }
 }
+```
+
+## OAuth Security
+
+Use `stateValidator` to prevent CSRF attacks on OAuth callbacks:
+
+```ts
+new OAuthStrategy({
+  provider: 'google',
+  clientId: process.env.GOOGLE_CLIENT_ID!,
+  clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+  callbackUrl: 'http://localhost:3000/auth/google/callback',
+  stateValidator: async (state, req) => req.session?.data?.oauthState === state,
+})
+```
+
+For mobile/SPA clients, enable PKCE:
+
+```ts
+const { url, codeVerifier } = strategy.getAuthorizationUrlWithPkce(state)
+// Store codeVerifier in session — it's sent automatically during token exchange
+```
+
+## Policy Auto-Discovery
+
+`@Policy()` decorators only register when their file is imported. Use `loadPolicies()` to auto-discover all policy files at startup:
+
+```ts
+import { loadPolicies } from '@forinda/kickjs-auth'
+
+loadPolicies(import.meta.glob('./modules/**/*.policy.ts', { eager: true }))
 ```
 
 ## Documentation

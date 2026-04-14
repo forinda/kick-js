@@ -8,7 +8,7 @@
 - **Zero schema duplication** — the route's Zod `body` schema is converted to JSON Schema automatically and used as the tool's input shape.
 - **Three transports** — `stdio` for local CLI clients, `http` for remote clients behind a load balancer, and `sse` for legacy long-lived connections.
 - **`explicit` and `auto` exposure modes** — either opt-in via `@McpTool` or expose every route subject to `include`/`exclude` filters.
-- **Internal HTTP dispatch** — tool invocations flow through the normal Express pipeline, so middleware, auth guards, validation, and logging apply identically to external callers.
+- **Internal HTTP dispatch** — tool invocations flow through the normal Express pipeline, so middleware, auth guards, validation, and logging apply identically to external callers. Auth tokens from the MCP transport request are forwarded automatically.
 - **`kick mcp` CLI** — `kick mcp start` runs your app in stdio mode; `kick mcp init` scaffolds a `.mcp.json` config for client registration.
 
 ## Install
