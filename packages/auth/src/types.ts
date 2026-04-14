@@ -13,6 +13,24 @@ export const CSRF_META = {
   EXEMPT: Symbol('csrf:exempt'),
 } as const
 
+export const RATE_LIMIT_META = {
+  OPTIONS: Symbol('rateLimit:options'),
+} as const
+
+export interface RateLimitDecoratorOptions {
+  /** Time window in milliseconds (default: 60_000). */
+  windowMs?: number
+  /** Maximum requests per window (default: 100). */
+  max?: number
+  /**
+   * Key to identify the client:
+   * - `'ip'` — rate-limit by IP address (default)
+   * - `'user'` — rate-limit by authenticated user ID (requires auth)
+   * - function — custom key extractor receiving the raw request
+   */
+  key?: 'ip' | 'user' | ((req: any) => string)
+}
+
 // ── AuthUser ────────────────────────────────────────────────────────────
 
 /**

@@ -1,4 +1,5 @@
 import type { AuthStrategy, AuthUser } from '../types'
+import type { TokenStore } from '../token-store'
 
 export interface ApiKeyUser {
   /** Display name for the API key holder */
@@ -51,6 +52,12 @@ export interface ApiKeyStrategyOptions {
 
   /** Query parameter name (default: 'api_key') */
   queryParam?: string
+
+  /**
+   * Optional token revocation store. When provided, every API key is
+   * checked against the store before being accepted.
+   */
+  tokenStore?: TokenStore
 }
 
 /**
@@ -87,6 +94,13 @@ export class ApiKeyStrategy implements AuthStrategy {
   async validate(req: any): Promise<AuthUser | null> {
     const key = this.extractKey(req)
     if (!key) return null
+
+    // Check revocation before validating
+    if (this.options.tokenStore) {
+      if (await this.options.tokenStore.isRevoked(key)) {
+        return null
+      }
+    }
 
     // Async validator takes precedence
     if (this.options.validate) {

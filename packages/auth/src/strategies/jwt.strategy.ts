@@ -1,4 +1,5 @@
 import type { AuthStrategy, AuthUser } from '../types'
+import type { TokenStore } from '../token-store'
 
 export interface JwtStrategyOptions {
   /** JWT secret key for HS256 or public key for RS256 */
@@ -39,6 +40,20 @@ export interface JwtStrategyOptions {
    * ```
    */
   mapPayload?: (payload: any) => AuthUser
+
+  /**
+   * Optional token revocation store. When provided, every validated
+   * token is checked against the store before being accepted.
+   */
+  tokenStore?: TokenStore
+
+  /**
+   * Which identifier to use for revocation lookups.
+   * - `'jti'` — use the JWT `jti` claim (recommended, requires tokens to include `jti`)
+   * - `'token'` — use the full raw token string
+   * Default: `'jti'` with fallback to `'token'` if `jti` claim is missing.
+   */
+  revokeBy?: 'jti' | 'token'
 }
 
 /**
@@ -65,7 +80,7 @@ export interface JwtStrategyOptions {
 export class JwtStrategy implements AuthStrategy {
   name = 'jwt'
   private jwt: any
-  private options: JwtStrategyOptions
+  private readonly options: JwtStrategyOptions
 
   constructor(options: JwtStrategyOptions) {
     this.options = options
@@ -91,6 +106,15 @@ export class JwtStrategy implements AuthStrategy {
       const payload = this.jwt.verify(token, this.options.secret, {
         algorithms: this.options.algorithms ?? ['HS256'],
       })
+
+      // Check token revocation if a store is configured
+      if (this.options.tokenStore) {
+        const revokeBy = this.options.revokeBy ?? 'jti'
+        const identifier = revokeBy === 'jti' && payload.jti ? payload.jti : token
+        if (await this.options.tokenStore.isRevoked(identifier)) {
+          return null
+        }
+      }
 
       return this.options.mapPayload ? this.options.mapPayload(payload) : payload
     } catch {

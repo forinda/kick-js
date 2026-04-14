@@ -15,13 +15,20 @@ import { randomBytes } from 'node:crypto'
 import {
   AUTH_META,
   CSRF_META,
+  RATE_LIMIT_META,
   type AuthAdapterOptions,
   type AuthStrategy,
   type AuthUser,
   type CsrfConfig,
+  type RateLimitDecoratorOptions,
 } from './types'
 
 const log = Logger.for('AuthAdapter')
+
+interface RateLimitCounter {
+  hits: number
+  resetTime: number
+}
 
 /** DI token to resolve the current authenticated user from the container */
 export const AUTH_USER = Symbol('AuthUser')
@@ -62,7 +69,10 @@ export class AuthAdapter implements AppAdapter {
   // Collected route metadata for auth resolution
   private readonly routeControllers = new Map<string, any>()
 
-  constructor(private options: AuthAdapterOptions) {
+  // Per-route rate limit counters: routeKey → clientKey → counter
+  private readonly rateLimitCounters = new Map<string, Map<string, RateLimitCounter>>()
+
+  constructor(private readonly options: AuthAdapterOptions) {
     this.strategies = options.strategies
     this.defaultPolicy = options.defaultPolicy ?? 'protected'
 
@@ -167,6 +177,12 @@ export class AuthAdapter implements AppAdapter {
         if (!hasRole) {
           return this.onForbidden(req, res)
         }
+      }
+
+      // Per-route rate limiting via @RateLimit()
+      if (controllerClass && handlerName) {
+        const rateLimitBlocked = this.checkRateLimit(controllerClass, handlerName, req, res, user)
+        if (rateLimitBlocked) return
       }
 
       next()
@@ -391,5 +407,74 @@ export class AuthAdapter implements AppAdapter {
 
       next()
     }
+  }
+
+  // ── Per-Route Rate Limiting ─────────────────────────────────────────
+
+  /**
+   * Check @RateLimit() metadata on the matched handler. Returns `true`
+   * if the request was blocked (429 sent), `false` if it passed.
+   */
+  private checkRateLimit(
+    controllerClass: any,
+    handlerName: string,
+    req: any,
+    res: any,
+    user: AuthUser,
+  ): boolean {
+    const options = getMethodMetaOrUndefined<RateLimitDecoratorOptions>(
+      RATE_LIMIT_META.OPTIONS,
+      controllerClass,
+      handlerName,
+    )
+    if (!options) return false
+
+    const windowMs = options.windowMs ?? 60_000
+    const max = options.max ?? 100
+
+    // Resolve client key
+    let clientKey: string
+    if (typeof options.key === 'function') {
+      clientKey = options.key(req)
+    } else if (options.key === 'user') {
+      clientKey = `user:${(user as any).id ?? 'anonymous'}`
+    } else {
+      clientKey = `ip:${req.ip ?? '127.0.0.1'}`
+    }
+
+    // Route key for independent counters per decorated method
+    const routeKey = `${controllerClass.name ?? 'Controller'}.${handlerName}`
+
+    if (!this.rateLimitCounters.has(routeKey)) {
+      this.rateLimitCounters.set(routeKey, new Map())
+    }
+    const routeCounters = this.rateLimitCounters.get(routeKey)!
+
+    const now = Date.now()
+    const entry = routeCounters.get(clientKey)
+
+    if (!entry || now > entry.resetTime) {
+      routeCounters.set(clientKey, { hits: 1, resetTime: now + windowMs })
+    } else {
+      entry.hits++
+    }
+
+    const current = routeCounters.get(clientKey)!
+    const remaining = Math.max(0, max - current.hits)
+
+    res.setHeader('RateLimit-Limit', max)
+    res.setHeader('RateLimit-Remaining', remaining)
+    res.setHeader('RateLimit-Reset', Math.ceil(current.resetTime / 1000))
+
+    if (current.hits > max) {
+      res.status(429).json({
+        statusCode: 429,
+        error: 'Too Many Requests',
+        message: 'Rate limit exceeded',
+      })
+      return true
+    }
+
+    return false
   }
 }

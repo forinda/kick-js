@@ -8,3 +8,4 @@ export {
   type OAuthTokens,
 } from './oauth.strategy'
 export { PassportBridge } from './passport.bridge'
+export { SessionStrategy, type SessionStrategyOptions } from './session.strategy'

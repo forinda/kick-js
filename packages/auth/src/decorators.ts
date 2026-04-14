@@ -1,5 +1,5 @@
 import { setClassMeta, setMethodMeta } from '@forinda/kickjs'
-import { AUTH_META, CSRF_META } from './types'
+import { AUTH_META, CSRF_META, RATE_LIMIT_META, type RateLimitDecoratorOptions } from './types'
 
 /**
  * Mark a controller or method as requiring authentication.
@@ -109,5 +109,32 @@ export function Roles(...roles: string[]): MethodDecorator {
 export function CsrfExempt(): MethodDecorator {
   return (target: any, propertyKey: string | symbol) => {
     setMethodMeta(CSRF_META.EXEMPT, true, target.constructor, propertyKey as string)
+  }
+}
+
+/**
+ * Apply per-route rate limiting.
+ *
+ * Each decorated method gets its own independent rate-limit counter.
+ * The `key` option controls what identifies a client — IP address
+ * (default), authenticated user ID, or a custom function.
+ *
+ * Requires the AuthAdapter to be configured (it reads this metadata
+ * and applies rate limiting in its middleware chain).
+ *
+ * @example
+ * ```ts
+ * @Get('/search')
+ * @RateLimit({ windowMs: 60_000, max: 30 })
+ * search(ctx) { ... }
+ *
+ * @Post('/upload')
+ * @RateLimit({ windowMs: 3_600_000, max: 10, key: 'user' })
+ * upload(ctx) { ... }
+ * ```
+ */
+export function RateLimit(options: RateLimitDecoratorOptions = {}): MethodDecorator {
+  return (target: any, propertyKey: string | symbol) => {
+    setMethodMeta(RATE_LIMIT_META.OPTIONS, options, target.constructor, propertyKey as string)
   }
 }
