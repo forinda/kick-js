@@ -59,6 +59,6 @@ export class ServerRenderer {
 
   protected async loadProdBundle(bundlePath: string): Promise<any> {
     const { pathToFileURL } = await import('node:url')
-    return import(pathToFileURL(bundlePath).href)
+    return import(/* @vite-ignore */ pathToFileURL(bundlePath).href)
   }
 }
