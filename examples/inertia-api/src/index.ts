@@ -16,6 +16,5 @@ const inertiaConfig = defineInertiaConfig({
 
 export const app = await bootstrap({
   modules,
-  apiPrefix: false,
   adapters: [new InertiaAdapter(inertiaConfig)],
 })

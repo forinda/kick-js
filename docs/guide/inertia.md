@@ -34,7 +34,6 @@ const config = defineInertiaConfig({
 
 export const app = await bootstrap({
   modules: [...],
-  apiPrefix: false,  // Inertia pages live at / not /api/v1/
   adapters: [new InertiaAdapter(config)],
 })
 ```
@@ -80,6 +79,25 @@ export class DashboardController {
 ```
 
 The first argument to `render` is the component name — it must match the component path your client adapter is configured to resolve (e.g. `Dashboard/Index` → `src/pages/Dashboard/Index.tsx`).
+
+### Mounting Without API Prefix
+
+Inertia pages typically live at `/`, `/about`, `/dashboard` — not `/api/v1/...`. Set `prefix: false` on your module's route set to skip the global API prefix:
+
+```ts
+export class PagesModule implements AppModule {
+  routes(): ModuleRoutes {
+    return {
+      path: '/',
+      prefix: false,  // mounted at / instead of /api/v1/
+      router: buildRoutes(HomeController),
+      controller: HomeController,
+    }
+  }
+}
+```
+
+This lets you mix Inertia pages with API endpoints in the same app — API modules keep the default prefix, page modules opt out.
 
 ### Inertia Redirects
 

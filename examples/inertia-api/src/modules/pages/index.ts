@@ -10,6 +10,7 @@ export class PagesModule implements AppModule {
   routes(): ModuleRoutes {
     return {
       path: '/pages',
+      prefix: false,
       router: buildRoutes(HomeController),
       controller: HomeController,
     }
@@ -22,6 +23,7 @@ export class AboutModule implements AppModule {
   routes(): ModuleRoutes {
     return {
       path: '/about',
+      prefix: false,
       router: buildRoutes(AboutController),
       controller: AboutController,
     }

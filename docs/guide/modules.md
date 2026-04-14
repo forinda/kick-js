@@ -82,14 +82,22 @@ interface ModuleRoutes {
 
 Routes are mounted at `/{apiPrefix}/v{version}{path}`. With the defaults (`apiPrefix: '/api'`, `defaultVersion: 1`), a module returning `path: '/todos'` mounts at `/api/v1/todos`.
 
-Set `apiPrefix: false` to disable the prefix and version entirely — routes mount directly at their module path. This is useful for Inertia apps or any app where you want full control over the URL structure:
+### Opting Out of the Prefix
+
+Set `prefix: false` on a route set to skip the global `apiPrefix` and version for that module. The path is mounted as-is:
 
 ```ts
-bootstrap({
-  modules,
-  apiPrefix: false,  // /todos instead of /api/v1/todos
-})
+routes(): ModuleRoutes {
+  return {
+    path: '/',
+    prefix: false,   // mounted at / instead of /api/v1/
+    router: buildRoutes(HomeController),
+    controller: HomeController,
+  }
+}
 ```
+
+This lets you mix Inertia pages (at `/`, `/about`) with API endpoints (at `/api/v1/users`) in the same app — each module controls its own prefix.
 
 ## Multiple Route Sets
 
