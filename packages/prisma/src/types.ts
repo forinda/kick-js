@@ -1,3 +1,45 @@
+import type { MaybePromise } from '@forinda/kickjs'
+
+/** DI token for resolving the current tenant's PrismaClient (multi-tenant) */
+export const PRISMA_TENANT_CLIENT = Symbol('PrismaTenantDB')
+
+export interface PrismaTenantAdapterOptions<TDb = unknown> {
+  /**
+   * The provider (default) PrismaClient. Used when no tenant is
+   * resolved or when accessing the tenant registry.
+   */
+  providerDb: TDb
+
+  /**
+   * Factory that creates a PrismaClient for a given tenant.
+   * Called once per tenant — the result is cached for subsequent requests.
+   *
+   * @example
+   * ```ts
+   * tenantFactory: async (tenantId) => {
+   *   const url = await lookupTenantDbUrl(tenantId)
+   *   return new PrismaClient({ datasourceUrl: url })
+   * }
+   * ```
+   */
+  tenantFactory: (tenantId: string) => TDb | Promise<TDb>
+
+  /**
+   * Optional function to close a tenant PrismaClient connection.
+   * Called for each cached connection during shutdown.
+   */
+  onTenantShutdown?: (db: TDb, tenantId: string) => MaybePromise<any>
+
+  /** Enable query logging (default: false) */
+  logging?: boolean
+
+  /**
+   * Cache TTL in milliseconds. Tenant connections idle beyond this
+   * duration are evicted. Default: no eviction (connections live until shutdown).
+   */
+  cacheTtl?: number
+}
+
 export interface PrismaAdapterOptions {
   /**
    * PrismaClient instance — typed as `any` to avoid version coupling.

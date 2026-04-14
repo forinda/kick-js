@@ -16,6 +16,7 @@ export default defineConfig({
     '@forinda/kickjs-http',
     'reflect-metadata',
     '@prisma/client',
+    '@forinda/kickjs-multi-tenant',
     /^node:/,
   ],
   banner: { js: createBanner(pkg.name, pkg.version) },

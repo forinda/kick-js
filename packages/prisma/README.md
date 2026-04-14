@@ -5,10 +5,12 @@ Prisma ORM adapter for the [KickJS](https://forinda.github.io/kick-js/) framewor
 ## Features
 
 - **PrismaAdapter** — registers `PrismaClient` in the DI container, handles graceful disconnect on shutdown
+- **PrismaTenantAdapter** — multi-tenant adapter with per-tenant connection caching
 - **PrismaQueryAdapter** — translates `ParsedQuery` into Prisma-compatible `findMany` arguments (`where`, `orderBy`, `skip`, `take`)
 - **PrismaQueryConfig\<TModel\>** — generic type validates `searchColumns` against model field names at compile time
 - **PrismaModelDelegate** — typed interface for Prisma model operations, eliminates `as any` in repositories
-- **PRISMA_CLIENT** token for DI injection
+- **PRISMA_CLIENT** token — singleton, provider/single-tenant database
+- **PRISMA_TENANT_CLIENT** token — transient, current tenant's database via AsyncLocalStorage
 - Supports Prisma 5, 6, and 7+ (auto-detects logging method)
 
 ## Install
@@ -26,7 +28,7 @@ pnpm add @forinda/kickjs-prisma @prisma/client
 ```ts
 import { PrismaClient } from '@prisma/client'
 import { PrismaAdapter, PRISMA_CLIENT } from '@forinda/kickjs-prisma'
-import { Inject, Service } from '@forinda/kickjs-core'
+import { Inject, Service } from '@forinda/kickjs'
 
 bootstrap({
   modules,
@@ -73,7 +75,7 @@ bootstrap({
 A typed interface for common Prisma model CRUD operations. Use it to type-narrow the injected `PrismaClient` to a specific model without `as any` casts.
 
 ```ts
-import { Repository, Inject } from '@forinda/kickjs-core'
+import { Repository, Inject } from '@forinda/kickjs'
 import { PRISMA_CLIENT, type PrismaModelDelegate } from '@forinda/kickjs-prisma'
 
 @Repository()
@@ -116,6 +118,48 @@ import type { PrismaClient } from '@prisma/client' // or '@/generated/prisma/cli
 | `deleteMany` | `(args?: { where? }) => Promise<{ count }>` | Delete multiple records |
 | `count` | `(args?: { where? }) => Promise<number>` | Count matching records |
 
+## Multi-Tenant
+
+Use `PrismaTenantAdapter` alongside `TenantAdapter` for database-per-tenant:
+
+```ts
+import { PrismaTenantAdapter, PRISMA_TENANT_CLIENT } from '@forinda/kickjs-prisma'
+import { TenantAdapter } from '@forinda/kickjs-multi-tenant'
+import { PrismaClient } from '@prisma/client'
+
+bootstrap({
+  modules,
+  adapters: [
+    new TenantAdapter({ strategy: 'subdomain' }),
+    new PrismaTenantAdapter({
+      providerDb: new PrismaClient({ datasourceUrl: PROVIDER_URL }),
+      tenantFactory: async (tenantId) => {
+        const url = await lookupTenantDbUrl(tenantId)
+        return new PrismaClient({ datasourceUrl: url })
+      },
+      onTenantShutdown: (db) => db.$disconnect(),
+    }),
+  ],
+})
+
+// In a service — resolves to the current tenant's PrismaClient
+@Service()
+class ProjectService {
+  @Inject(PRISMA_TENANT_CLIENT) private prisma!: PrismaClient
+
+  async findAll() {
+    return this.prisma.project.findMany()
+  }
+}
+```
+
+Use both adapters together for interop:
+
+```ts
+@Inject(PRISMA_CLIENT) private providerPrisma!: PrismaClient       // always provider
+@Inject(PRISMA_TENANT_CLIENT) private tenantPrisma!: PrismaClient      // current tenant
+```
+
 ## Query Adapter
 
 Translate parsed query strings into Prisma `findMany` arguments:
@@ -149,10 +193,13 @@ const config: PrismaQueryConfig = {
 | Export | Type | Description |
 |--------|------|-------------|
 | `PrismaAdapter` | class | Lifecycle adapter for DI registration and shutdown |
+| `PrismaTenantAdapter` | class | Multi-tenant adapter with per-tenant connection caching |
 | `PrismaQueryAdapter` | class | Translates `ParsedQuery` to Prisma `findMany` args |
-| `PRISMA_CLIENT` | symbol | DI token for injecting PrismaClient |
+| `PRISMA_CLIENT` | symbol | DI token for injecting PrismaClient (single-tenant) |
+| `PRISMA_TENANT_CLIENT` | symbol | DI token for injecting current tenant's PrismaClient |
 | `PrismaModelDelegate` | interface | Typed CRUD operations for a single Prisma model |
 | `PrismaAdapterOptions` | type | Options for `PrismaAdapter` constructor |
+| `PrismaTenantAdapterOptions` | type | Options for `PrismaTenantAdapter` constructor |
 | `PrismaQueryConfig<T>` | type | Config for `PrismaQueryAdapter.build()` with generic field validation |
 | `PrismaQueryResult` | type | Result shape from `PrismaQueryAdapter.build()` |
 
