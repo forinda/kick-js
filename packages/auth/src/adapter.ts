@@ -525,7 +525,10 @@ export class AuthAdapter implements AppAdapter {
         return next()
       }
 
-      // Check @CsrfExempt() on the matched handler
+      // Check @CsrfExempt() or @Public() on the matched handler.
+      // @Public() routes have no authenticated session to protect,
+      // so CSRF validation is meaningless and would block legitimate
+      // unauthenticated POST requests (e.g., login, registration).
       const { controllerClass, handlerName } = this.resolveHandler(req)
       if (controllerClass && handlerName) {
         const exempt = getMethodMetaOrUndefined<boolean>(
@@ -534,6 +537,13 @@ export class AuthAdapter implements AppAdapter {
           handlerName,
         )
         if (exempt) return next()
+
+        const isPublic = getMethodMetaOrUndefined<boolean>(
+          AUTH_META.PUBLIC,
+          controllerClass,
+          handlerName,
+        )
+        if (isPublic) return next()
       }
 
       // Validate: header must match cookie

@@ -175,6 +175,59 @@ describe('CSRF Integration', () => {
     })
   })
 
+  describe('@Public auto-exempts CSRF', () => {
+    it('skips CSRF validation for @Public() POST routes', async () => {
+      @Controller()
+      class AuthCtrl {
+        @Post('/login')
+        @Public()
+        login() {}
+
+        @Post('/update-profile')
+        updateProfile() {}
+      }
+
+      const adapter = new AuthAdapter({
+        strategies: [{ name: 'test', validate: async () => ({ id: '1' }) }],
+        defaultPolicy: 'protected',
+        csrf: true,
+      })
+
+      adapter.onRouteMount!(AuthCtrl, '/auth')
+
+      const csrfMiddleware = adapter.middleware!()[1].handler
+
+      // @Public() login route: POST without CSRF token should pass
+      const loginReq = {
+        method: 'POST',
+        path: '/auth/login',
+        cookies: { _csrf: 'token' },
+        headers: {},
+        baseUrl: '',
+      }
+      const loginRes = { status: vi.fn().mockReturnThis(), json: vi.fn(), cookie: vi.fn() }
+      const loginNext = vi.fn()
+
+      await csrfMiddleware(loginReq, loginRes, loginNext)
+      expect(loginNext).toHaveBeenCalled()
+
+      // Protected route: POST without CSRF token should be blocked
+      const profileReq = {
+        method: 'POST',
+        path: '/auth/update-profile',
+        cookies: { _csrf: 'token' },
+        headers: {},
+        baseUrl: '',
+      }
+      const profileRes = { status: vi.fn().mockReturnThis(), json: vi.fn(), cookie: vi.fn() }
+      const profileNext = vi.fn()
+
+      await csrfMiddleware(profileReq, profileRes, profileNext)
+      expect(profileNext).not.toHaveBeenCalled()
+      expect(profileRes.status).toHaveBeenCalledWith(403)
+    })
+  })
+
   describe('@CsrfExempt decorator', () => {
     it('exempts decorated route from CSRF', async () => {
       @Controller()
