@@ -16,12 +16,14 @@ import {
   AUTH_META,
   CSRF_META,
   RATE_LIMIT_META,
+  POLICY_META,
   type AuthAdapterOptions,
   type AuthStrategy,
   type AuthUser,
   type CsrfConfig,
   type RateLimitDecoratorOptions,
 } from './types'
+import { AuthorizationService } from './policy'
 
 const log = Logger.for('AuthAdapter')
 
@@ -147,6 +149,8 @@ export class AuthAdapter implements AppAdapter {
   // ── Core Auth Middleware ─────────────────────────────────────────────
 
   private createAuthMiddleware() {
+    const authzService = new AuthorizationService()
+
     return async (req: any, res: any, next: any) => {
       // Find which controller + method handles this route
       const { controllerClass, handlerName } = this.resolveHandler(req)
@@ -161,21 +165,72 @@ export class AuthAdapter implements AppAdapter {
       const strategyName = this.getStrategyName(controllerClass, handlerName)
 
       // Try to authenticate
-      const user = await this.authenticate(req, strategyName)
+      const { user, matchedStrategy } = await this.authenticate(req, strategyName)
       if (!user) {
+        this.emitEvent('onAuthFailed', {
+          timestamp: new Date(),
+          reason: 'No strategy returned a user',
+          req: { ip: req.ip, method: req.method, url: req.url },
+        })
         return this.onUnauthorized(req, res)
+      }
+
+      // Tenant-scoped role resolution
+      if (req.tenant && this.options.roleResolver) {
+        try {
+          const tenantRoles = await this.options.roleResolver(user, req.tenant.id)
+          ;(user as any).tenantId = req.tenant.id
+          ;(user as any).tenantRoles = tenantRoles
+        } catch (err: any) {
+          log.warn(`roleResolver failed for tenant ${req.tenant.id}: ${err.message}`)
+        }
       }
 
       // Attach user to request
       req.user = user
 
-      // Check roles if required
+      // Emit success event
+      this.emitEvent('onAuthenticated', {
+        timestamp: new Date(),
+        user,
+        strategy: matchedStrategy ?? 'unknown',
+        req: { ip: req.ip, method: req.method, url: req.url },
+      })
+
+      // Check roles if required — use tenantRoles when available
       const requiredRoles = this.getRequiredRoles(controllerClass, handlerName)
       if (requiredRoles && requiredRoles.length > 0) {
-        const userRoles: string[] = (user as any).roles ?? []
+        const userRoles: string[] = (user as any).tenantRoles ?? (user as any).roles ?? []
         const hasRole = requiredRoles.some((role) => userRoles.includes(role))
         if (!hasRole) {
+          this.emitEvent('onForbidden', {
+            timestamp: new Date(),
+            user,
+            requiredRoles,
+            userRoles,
+            req: { ip: req.ip, method: req.method, url: req.url },
+          })
           return this.onForbidden(req, res)
+        }
+      }
+
+      // Policy-based authorization via @Can()
+      if (controllerClass && handlerName) {
+        const policyAction = getMethodMetaOrUndefined<string>(
+          POLICY_META.ACTION,
+          controllerClass,
+          handlerName,
+        )
+        const policyResource = getMethodMetaOrUndefined<string>(
+          POLICY_META.RESOURCE,
+          controllerClass,
+          handlerName,
+        )
+        if (policyAction && policyResource) {
+          const allowed = await authzService.can(user, policyAction, policyResource)
+          if (!allowed) {
+            return this.onForbidden(req, res)
+          }
         }
       }
 
@@ -191,7 +246,10 @@ export class AuthAdapter implements AppAdapter {
 
   // ── Strategy Execution ──────────────────────────────────────────────
 
-  private async authenticate(req: any, strategyName?: string): Promise<AuthUser | null> {
+  private async authenticate(
+    req: any,
+    strategyName?: string,
+  ): Promise<{ user: AuthUser | null; matchedStrategy: string | null }> {
     const strategies = strategyName
       ? this.strategies.filter((s) => s.name === strategyName)
       : this.strategies
@@ -199,13 +257,37 @@ export class AuthAdapter implements AppAdapter {
     for (const strategy of strategies) {
       try {
         const user = await strategy.validate(req)
-        if (user) return user
+        if (user) return { user, matchedStrategy: strategy.name }
       } catch (err: any) {
         log.debug(`Strategy ${strategy.name} failed: ${err.message}`)
       }
     }
 
-    return null
+    return { user: null, matchedStrategy: null }
+  }
+
+  // ── Event Emission ──────────────────────────────────────────────────
+
+  /**
+   * Fire-and-forget event emission. Errors are swallowed so event
+   * handlers never break the auth flow.
+   */
+  private emitEvent<K extends keyof NonNullable<AuthAdapterOptions['events']>>(
+    name: K,
+    event: any,
+  ): void {
+    try {
+      const handler = this.options.events?.[name]
+      if (handler) {
+        const result = (handler as any)(event)
+        // Swallow promise rejections
+        if (result && typeof result.catch === 'function') {
+          result.catch(() => {})
+        }
+      }
+    } catch {
+      // Swallow sync errors
+    }
   }
 
   // ── Metadata Resolution ─────────────────────────────────────────────

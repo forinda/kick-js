@@ -1,5 +1,11 @@
 import { setClassMeta, setMethodMeta } from '@forinda/kickjs'
-import { AUTH_META, CSRF_META, RATE_LIMIT_META, type RateLimitDecoratorOptions } from './types'
+import {
+  AUTH_META,
+  CSRF_META,
+  RATE_LIMIT_META,
+  POLICY_META,
+  type RateLimitDecoratorOptions,
+} from './types'
 
 /**
  * Mark a controller or method as requiring authentication.
@@ -136,5 +142,30 @@ export function CsrfExempt(): MethodDecorator {
 export function RateLimit(options: RateLimitDecoratorOptions = {}): MethodDecorator {
   return (target: any, propertyKey: string | symbol) => {
     setMethodMeta(RATE_LIMIT_META.OPTIONS, options, target.constructor, propertyKey as string)
+  }
+}
+
+/**
+ * Check a policy action before the handler runs.
+ *
+ * Requires a matching `@Policy('resource')` class to be registered.
+ * The handler is only called if the policy method returns `true`.
+ *
+ * @param action - Policy method to call (e.g., 'update', 'delete')
+ * @param resource - Resource name matching a `@Policy()` registration
+ *
+ * @example
+ * ```ts
+ * @Delete('/:id')
+ * @Can('delete', 'post')
+ * async remove(ctx: RequestContext) { ... }
+ * ```
+ */
+export function Can(action: string, resource: string): MethodDecorator {
+  return (target: any, propertyKey: string | symbol) => {
+    setMethodMeta(POLICY_META.ACTION, action, target.constructor, propertyKey as string)
+    setMethodMeta(POLICY_META.RESOURCE, resource, target.constructor, propertyKey as string)
+    // Implies authentication required
+    setMethodMeta(AUTH_META.AUTHENTICATED, true, target.constructor, propertyKey as string)
   }
 }

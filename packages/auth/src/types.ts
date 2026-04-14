@@ -17,6 +17,12 @@ export const RATE_LIMIT_META = {
   OPTIONS: Symbol('rateLimit:options'),
 } as const
 
+export const POLICY_META = {
+  ACTION: Symbol('policy:action'),
+  RESOURCE: Symbol('policy:resource'),
+  RESOLVER: Symbol('policy:resolver'),
+} as const
+
 export interface RateLimitDecoratorOptions {
   /** Time window in milliseconds (default: 60_000). */
   windowMs?: number
@@ -134,6 +140,48 @@ export interface AuthAdapterOptions {
    * Routes decorated with `@CsrfExempt()` bypass CSRF checks.
    */
   csrf?: boolean | CsrfConfig
+
+  /**
+   * Auth lifecycle event handlers for audit logging, lockout, metrics.
+   * Errors in handlers are swallowed — they never break the auth flow.
+   */
+  events?: AuthEventHandlers
+
+  /**
+   * Resolve tenant-scoped roles for the authenticated user.
+   * Called after authentication when `req.tenant` is present.
+   * The resolved roles are stored in `user.tenantRoles` and used
+   * by `@Roles()` instead of the global `user.roles`.
+   */
+  roleResolver?: (user: AuthUser, tenantId: string) => string[] | Promise<string[]>
+}
+
+// ── Auth Events ──────────────────────────────────────────────────────
+
+export interface AuthEvent {
+  timestamp: Date
+  req: { ip: string; method: string; url: string }
+}
+
+export interface AuthSuccessEvent extends AuthEvent {
+  user: AuthUser
+  strategy: string
+}
+
+export interface AuthFailedEvent extends AuthEvent {
+  reason: string
+}
+
+export interface AuthForbiddenEvent extends AuthEvent {
+  user: AuthUser
+  requiredRoles: string[]
+  userRoles: string[]
+}
+
+export interface AuthEventHandlers {
+  onAuthenticated?: (event: AuthSuccessEvent) => void | Promise<void>
+  onAuthFailed?: (event: AuthFailedEvent) => void | Promise<void>
+  onForbidden?: (event: AuthForbiddenEvent) => void | Promise<void>
 }
 
 export interface CsrfConfig {

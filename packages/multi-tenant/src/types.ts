@@ -47,4 +47,11 @@ export interface MultiTenantOptions {
 
   /** Routes to skip tenant resolution (e.g., health checks) */
   excludeRoutes?: string[]
+
+  /**
+   * Per-tenant database switching configuration.
+   * When set, a TENANT_DB DI token is registered that resolves to
+   * the current tenant's database connection.
+   */
+  database?: import('./database').TenantDatabase
 }

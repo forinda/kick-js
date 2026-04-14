@@ -5,15 +5,24 @@ export {
   AUTH_META,
   CSRF_META,
   RATE_LIMIT_META,
+  POLICY_META,
   type AuthUser,
   type AuthStrategy,
   type AuthAdapterOptions,
   type CsrfConfig,
   type RateLimitDecoratorOptions,
+  type AuthEvent,
+  type AuthSuccessEvent,
+  type AuthFailedEvent,
+  type AuthForbiddenEvent,
+  type AuthEventHandlers,
 } from './types'
 
 // Decorators
-export { Authenticated, Public, Roles, CsrfExempt, RateLimit } from './decorators'
+export { Authenticated, Public, Roles, CsrfExempt, RateLimit, Can } from './decorators'
+
+// Policy-based authorization
+export { Policy, AuthorizationService, policyRegistry } from './policy'
 
 // Adapter
 export { AuthAdapter, AUTH_USER } from './adapter'

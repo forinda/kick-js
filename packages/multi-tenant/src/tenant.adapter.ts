@@ -12,6 +12,7 @@ import {
   type MultiTenantOptions,
   type TenantResolutionStrategy,
 } from './types'
+import { tenantStorage, getCurrentTenant } from './tenant.context'
 
 const log = Logger.for('MultiTenant')
 
@@ -90,7 +91,10 @@ export class TenantAdapter implements AppAdapter {
             await this.options.onTenantResolved(tenant, req)
           }
 
-          next()
+          // Wrap the rest of the request in AsyncLocalStorage so
+          // @Inject(TENANT_CONTEXT) and getCurrentTenant() return
+          // the correct tenant for this request.
+          tenantStorage.run(tenant, () => next())
         },
         phase: 'beforeGlobal',
       },
@@ -98,12 +102,20 @@ export class TenantAdapter implements AppAdapter {
   }
 
   beforeStart({ container }: AdapterContext): void {
-    // Register a factory that reads the tenant from the current request context
-    // This requires request-scoped resolution — for now, register as a placeholder
+    // Register as TRANSIENT so each resolution reads from AsyncLocalStorage
     container.registerFactory(
       TENANT_CONTEXT,
-      () => ({ id: 'default', name: 'Default Tenant' }) as TenantInfo,
-      Scope.SINGLETON,
+      () => {
+        const tenant = getCurrentTenant()
+        if (!tenant) {
+          throw new Error(
+            'TENANT_CONTEXT resolved outside request scope. ' +
+              'Ensure TenantAdapter middleware is active and the code runs within a request.',
+          )
+        }
+        return tenant
+      },
+      Scope.TRANSIENT,
     )
     log.info(
       `Tenant resolution: ${typeof this.options.strategy === 'function' ? 'custom' : this.options.strategy}`,

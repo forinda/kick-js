@@ -54,6 +54,13 @@ export interface JwtStrategyOptions {
    * Default: `'jti'` with fallback to `'token'` if `jti` claim is missing.
    */
   revokeBy?: 'jti' | 'token'
+
+  /**
+   * Resolve a per-tenant JWT secret. When set and `req.tenant` exists,
+   * this secret is used instead of the global `secret`.
+   * Enables multi-tenant apps to have tenant-isolated JWT signing.
+   */
+  secretResolver?: (tenantId: string) => string | Buffer | Promise<string | Buffer>
 }
 
 /**
@@ -103,7 +110,13 @@ export class JwtStrategy implements AuthStrategy {
     if (!token) return null
 
     try {
-      const payload = this.jwt.verify(token, this.options.secret, {
+      // Resolve per-tenant secret when available
+      let secret = this.options.secret
+      if (this.options.secretResolver && req.tenant?.id) {
+        secret = await this.options.secretResolver(req.tenant.id)
+      }
+
+      const payload = this.jwt.verify(token, secret, {
         algorithms: this.options.algorithms ?? ['HS256'],
       })
 
