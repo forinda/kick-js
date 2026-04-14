@@ -43,6 +43,7 @@ const guideSidebar = [
       { text: 'Adapters', link: '/guide/adapters' },
       { text: 'Authentication', link: '/guide/authentication' },
       { text: 'Authorization', link: '/guide/authorization' },
+      { text: 'Multi-Tenancy', link: '/guide/multi-tenancy' },
       { text: 'Cron Jobs', link: '/guide/cron' },
       { text: 'Mailer', link: '/guide/mailer' },
       { text: 'AI', link: '/guide/ai' },
