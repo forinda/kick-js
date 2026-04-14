@@ -14,6 +14,7 @@ import { registerMcpCommand } from './commands/mcp'
 import { registerTinkerCommand } from './commands/tinker'
 import { registerRemoveCommand } from './commands/remove'
 import { registerTypegenCommand } from './commands/typegen'
+import { registerCheckCommand } from './commands/check'
 import { loadKickConfig } from './config'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -42,6 +43,7 @@ async function main() {
   registerTinkerCommand(program)
   registerRemoveCommand(program)
   registerTypegenCommand(program)
+  registerCheckCommand(program)
   registerCustomCommands(program, config)
 
   program.showHelpAfterError()

@@ -148,19 +148,38 @@ export class AuthAdapter implements AppAdapter {
     return middlewares
   }
 
-  beforeStart({}: AdapterContext): void {
+  beforeStart({ app }: AdapterContext): void {
     const strategyNames = this.strategies.map((s) => s.name).join(', ')
     log.info(`Auth enabled [${strategyNames}] (default: ${this.defaultPolicy})`)
     if (this.csrfEnabled) {
       log.info('CSRF protection enabled (double-submit cookie)')
     }
 
-    // Dev warnings for common security misconfigurations
+    // Dev-only features
     if (process.env.NODE_ENV !== 'production') {
-      // Warn if roleResolver is set but no TenantAdapter is likely present
       if (this.options.roleResolver) {
         log.info('Tenant-scoped RBAC enabled via roleResolver')
       }
+
+      // Register debug endpoint directly on Express app (not as adapter middleware)
+      app.get('/__auth/debug', (_req: any, res: any) => {
+        res.json({
+          strategies: this.strategies.map((s) => s.name),
+          defaultPolicy: this.defaultPolicy,
+          csrf: { enabled: this.csrfEnabled, config: this.csrfConfig },
+          events: {
+            onAuthenticated: !!this.options.events?.onAuthenticated,
+            onAuthFailed: !!this.options.events?.onAuthFailed,
+            onForbidden: !!this.options.events?.onForbidden,
+          },
+          roleResolver: !!this.options.roleResolver,
+          routes: Array.from(this.routeControllers.entries()).map(([path, ctrl]) => ({
+            path,
+            controller: ctrl.name ?? 'Anonymous',
+          })),
+        })
+      })
+      log.info('Auth debug endpoint registered at GET /__auth/debug')
     }
   }
 

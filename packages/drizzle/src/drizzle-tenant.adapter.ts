@@ -49,12 +49,21 @@ export class DrizzleTenantAdapter<TDb = unknown> implements AppAdapter {
   private readonly providerDb: TDb
   private readonly tenantFactory: (tenantId: string) => TDb | Promise<TDb>
   private readonly connections = new Map<string, TDb>()
+  private readonly lastAccessed = new Map<string, number>()
   private readonly options: DrizzleTenantAdapterOptions<TDb>
+  private readonly evictionTimer?: ReturnType<typeof setInterval>
 
   constructor(options: DrizzleTenantAdapterOptions<TDb>) {
     this.options = options
     this.providerDb = options.providerDb
     this.tenantFactory = options.tenantFactory
+
+    // Start cache eviction timer if cacheTtl is configured
+    if (options.cacheTtl && options.cacheTtl > 0) {
+      const interval = Math.min(options.cacheTtl, 60_000)
+      this.evictionTimer = setInterval(() => this.evictStale(), interval)
+      this.evictionTimer.unref()
+    }
   }
 
   /**
@@ -66,10 +75,14 @@ export class DrizzleTenantAdapter<TDb = unknown> implements AppAdapter {
     if (!tenantId) return this.providerDb
 
     const cached = this.connections.get(tenantId)
-    if (cached) return cached
+    if (cached) {
+      this.lastAccessed.set(tenantId, Date.now())
+      return cached
+    }
 
     const db = await this.tenantFactory(tenantId)
     this.connections.set(tenantId, db)
+    this.lastAccessed.set(tenantId, Date.now())
 
     if (this.options.logging) {
       log.info(`Tenant DB created: ${tenantId} (${this.connections.size} total)`)
@@ -108,8 +121,36 @@ export class DrizzleTenantAdapter<TDb = unknown> implements AppAdapter {
     )
   }
 
+  /** Evict connections that haven't been accessed within cacheTtl */
+  private async evictStale(): Promise<void> {
+    const ttl = this.options.cacheTtl
+    if (!ttl) return
+
+    const now = Date.now()
+    for (const [tenantId, lastTime] of this.lastAccessed) {
+      if (now - lastTime > ttl) {
+        const db = this.connections.get(tenantId)
+        if (db && this.options.onTenantShutdown) {
+          try {
+            await this.options.onTenantShutdown(db, tenantId)
+          } catch (err) {
+            log.error(`Failed to evict tenant DB ${tenantId}: ${err}`)
+          }
+        }
+        this.connections.delete(tenantId)
+        this.lastAccessed.delete(tenantId)
+
+        if (this.options.logging) {
+          log.info(`Tenant DB evicted (idle): ${tenantId}`)
+        }
+      }
+    }
+  }
+
   /** Close all tenant connections on shutdown */
   async shutdown(): Promise<void> {
+    if (this.evictionTimer) clearInterval(this.evictionTimer)
+
     if (this.options.onTenantShutdown) {
       for (const [tenantId, db] of this.connections) {
         try {
@@ -121,6 +162,7 @@ export class DrizzleTenantAdapter<TDb = unknown> implements AppAdapter {
     }
 
     this.connections.clear()
+    this.lastAccessed.clear()
     log.info('All tenant DB connections closed')
   }
 

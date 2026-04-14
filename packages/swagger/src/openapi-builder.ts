@@ -11,6 +11,37 @@ import {
 import { SWAGGER_KEYS, type ApiOperationOptions, type ApiResponseOptions } from './decorators'
 import { zodSchemaParser, type SchemaParser } from './schema-parser'
 
+// ── Auth metadata bridge ──────────────────────────────────────────────
+// Check @forinda/kickjs-auth decorators without importing the auth package.
+// Symbols are matched by description to avoid a hard dependency.
+
+const R = Reflect as any
+
+function getAuthMeta(key: string, target: any, propertyKey?: string): any {
+  if (typeof R.getMetadataKeys !== 'function') return undefined
+  const proto = target.prototype ?? target
+  const keys: any[] = propertyKey
+    ? R.getMetadataKeys(proto, propertyKey)
+    : R.getMetadataKeys(target)
+
+  const sym = keys.find((k: any) => typeof k === 'symbol' && k.description === key)
+  if (!sym) return undefined
+
+  return propertyKey ? R.getMetadata(sym, proto, propertyKey) : R.getMetadata(sym, target)
+}
+
+function isAuthAuthenticated(controllerClass: any, handlerName?: string): boolean {
+  if (handlerName) {
+    const val = getAuthMeta('auth:authenticated', controllerClass, handlerName)
+    if (val !== undefined) return !!val
+  }
+  return !!getAuthMeta('auth:authenticated', controllerClass)
+}
+
+function isAuthPublic(controllerClass: any, handlerName: string): boolean {
+  return !!getAuthMeta('auth:public', controllerClass, handlerName)
+}
+
 export interface OpenAPIInfo {
   title: string
   version: string
@@ -381,11 +412,19 @@ export function buildOpenAPISpec(options: SwaggerOptions = {}): any {
         }
       }
 
-      // Security
+      // Security — check Swagger @BearerAuth() first, then fall back to
+      // @forinda/kickjs-auth decorators (@Authenticated, @Public, @Roles)
       const authName = methodAuth || classAuth
-      if (authName) {
-        op.security = [{ [authName]: [] }]
-        securitySchemes[authName] = {
+      const isPublicRoute = isAuthPublic(controllerClass, route.handlerName)
+      const isAuthRequired =
+        authName ||
+        isAuthAuthenticated(controllerClass, route.handlerName) ||
+        isAuthAuthenticated(controllerClass)
+
+      if (!isPublicRoute && isAuthRequired) {
+        const schemeName = authName || 'BearerAuth'
+        op.security = [{ [schemeName]: [] }]
+        securitySchemes[schemeName] = securitySchemes[schemeName] || {
           type: 'http',
           scheme: 'bearer',
           bearerFormat: 'JWT',
