@@ -35,22 +35,10 @@ export function generatePackageJson(
     'pino-pretty': '^13.1.3',
   }
 
-  // Add template-specific deps
-  if (template !== 'minimal') {
-    baseDeps['@forinda/kickjs-swagger'] = kickjsVersion
-    baseDeps['@forinda/kickjs-devtools'] = kickjsVersion
-  }
+  // graphql template always needs the graphql runtime
   if (template === 'graphql') {
     baseDeps['@forinda/kickjs-graphql'] = kickjsVersion
     baseDeps['graphql'] = '^16.11.0'
-  }
-  if (template === 'cqrs') {
-    baseDeps['@forinda/kickjs-queue'] = kickjsVersion
-    baseDeps['@forinda/kickjs-ws'] = kickjsVersion
-    baseDeps['@forinda/kickjs-otel'] = kickjsVersion
-  }
-  if (template === 'ddd') {
-    baseDeps['@forinda/kickjs-swagger'] = kickjsVersion
   }
 
   // Add user-selected optional packages

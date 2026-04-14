@@ -15,25 +15,27 @@ export function generateEntryFile(
 ): string {
   switch (template) {
     case 'graphql': {
-      // graphql template already includes DevTools + GraphQL; add otel/swagger if selected
-      const gqlExtraImports: string[] = []
-      const gqlExtraAdapters: string[] = []
+      // GraphQL adapter is always included (it's the template); others only if selected
+      const gqlImports: string[] = []
+      const gqlAdapters: string[] = []
 
+      if (packages.includes('devtools')) {
+        gqlImports.push(`import { DevToolsAdapter } from '@forinda/kickjs-devtools'`)
+        gqlAdapters.push(`    new DevToolsAdapter(),`)
+      }
       if (packages.includes('otel')) {
-        gqlExtraImports.push(`import { OtelAdapter } from '@forinda/kickjs-otel'`)
-        gqlExtraAdapters.push(`    new OtelAdapter({ serviceName: '${name}' }),`)
+        gqlImports.push(`import { OtelAdapter } from '@forinda/kickjs-otel'`)
+        gqlAdapters.push(`    new OtelAdapter({ serviceName: '${name}' }),`)
       }
       if (packages.includes('swagger')) {
-        gqlExtraImports.push(`import { SwaggerAdapter } from '@forinda/kickjs-swagger'`)
-        gqlExtraAdapters.push(
+        gqlImports.push(`import { SwaggerAdapter } from '@forinda/kickjs-swagger'`)
+        gqlAdapters.push(
           `    new SwaggerAdapter({ info: { title: '${name}', version: '${version}' } }),`,
         )
       }
 
-      const gqlExtraImportsBlock = gqlExtraImports.length ? gqlExtraImports.join('\n') + '\n' : ''
-      const gqlExtraAdaptersBlock = gqlExtraAdapters.length
-        ? gqlExtraAdapters.join('\n') + '\n'
-        : ''
+      const gqlImportsBlock = gqlImports.length ? gqlImports.join('\n') + '\n' : ''
+      const gqlAdaptersBlock = gqlAdapters.length ? gqlAdapters.join('\n') + '\n' : ''
 
       return `import 'reflect-metadata'
 // Side-effect import — registers the extended env schema with kickjs
@@ -42,9 +44,8 @@ export function generateEntryFile(
 // cached schema would still be the base shape. See guide/configuration.
 import './config'
 import { bootstrap } from '@forinda/kickjs'
-import { DevToolsAdapter } from '@forinda/kickjs-devtools'
 import { GraphQLAdapter } from '@forinda/kickjs-graphql'
-${gqlExtraImportsBlock}import { modules } from './modules'
+${gqlImportsBlock}import { modules } from './modules'
 
 // Import your resolvers here
 // import { UserResolver } from './resolvers/user.resolver'
@@ -53,8 +54,7 @@ ${gqlExtraImportsBlock}import { modules } from './modules'
 export const app = await bootstrap({
   modules,
   adapters: [
-${gqlExtraAdaptersBlock}    new DevToolsAdapter(),
-    new GraphQLAdapter({
+${gqlAdaptersBlock}    new GraphQLAdapter({
       resolvers: [/* UserResolver */],
       // Add custom type definitions here:
       // typeDefs: userTypeDefs,
@@ -65,21 +65,33 @@ ${gqlExtraAdaptersBlock}    new DevToolsAdapter(),
     }
 
     case 'cqrs': {
-      // cqrs template already includes DevTools, Swagger, Otel; add graphql if selected
-      const cqrsExtraImports: string[] = []
-      const cqrsExtraAdapters: string[] = []
+      // Build adapters based on user-selected packages
+      const cqrsImports: string[] = []
+      const cqrsAdapters: string[] = []
 
+      if (packages.includes('otel')) {
+        cqrsImports.push(`import { OtelAdapter } from '@forinda/kickjs-otel'`)
+        cqrsAdapters.push(`    new OtelAdapter({ serviceName: '${name}' }),`)
+      }
+      if (packages.includes('devtools')) {
+        cqrsImports.push(`import { DevToolsAdapter } from '@forinda/kickjs-devtools'`)
+        cqrsAdapters.push(`    new DevToolsAdapter(),`)
+      }
+      if (packages.includes('swagger')) {
+        cqrsImports.push(`import { SwaggerAdapter } from '@forinda/kickjs-swagger'`)
+        cqrsAdapters.push(
+          `    new SwaggerAdapter({\n      info: { title: '${name}', version: '${version}' },\n    }),`,
+        )
+      }
       if (packages.includes('graphql')) {
-        cqrsExtraImports.push(`import { GraphQLAdapter } from '@forinda/kickjs-graphql'`)
-        cqrsExtraAdapters.push(`    new GraphQLAdapter({ resolvers: [] }),`)
+        cqrsImports.push(`import { GraphQLAdapter } from '@forinda/kickjs-graphql'`)
+        cqrsAdapters.push(`    new GraphQLAdapter({ resolvers: [] }),`)
       }
 
-      const cqrsExtraImportsBlock = cqrsExtraImports.length
-        ? cqrsExtraImports.join('\n') + '\n'
-        : ''
-      const cqrsExtraAdaptersBlock = cqrsExtraAdapters.length
-        ? cqrsExtraAdapters.join('\n') + '\n'
-        : ''
+      const cqrsImportsBlock = cqrsImports.length ? cqrsImports.join('\n') + '\n' : ''
+      const cqrsAdaptersBlock = cqrsImports.length
+        ? `\n  adapters: [\n${cqrsAdapters.join('\n')}\n    // Uncomment for WebSocket support:\n    // new WsAdapter(),\n    // Uncomment when Redis is available:\n    // new QueueAdapter({\n    //   provider: new BullMQProvider({ host: 'localhost', port: 6379 }),\n    // }),\n  ],`
+        : `\n  adapters: [\n    // Uncomment for WebSocket support:\n    // new WsAdapter(),\n    // Uncomment when Redis is available:\n    // new QueueAdapter({\n    //   provider: new BullMQProvider({ host: 'localhost', port: 6379 }),\n    // }),\n  ],`
 
       return `import 'reflect-metadata'
 // Side-effect import — registers the extended env schema with kickjs
@@ -88,29 +100,13 @@ ${gqlExtraAdaptersBlock}    new DevToolsAdapter(),
 // cached schema would still be the base shape. See guide/configuration.
 import './config'
 import { bootstrap } from '@forinda/kickjs'
-import { DevToolsAdapter } from '@forinda/kickjs-devtools'
-import { SwaggerAdapter } from '@forinda/kickjs-swagger'
-import { OtelAdapter } from '@forinda/kickjs-otel'
 // import { WsAdapter } from '@forinda/kickjs-ws'
 // import { QueueAdapter, BullMQProvider } from '@forinda/kickjs-queue'
-${cqrsExtraImportsBlock}import { modules } from './modules'
+${cqrsImportsBlock}import { modules } from './modules'
 
 // Export the app for the Vite plugin (dev mode)
 export const app = await bootstrap({
-  modules,
-  adapters: [
-    new OtelAdapter({ serviceName: '${name}' }),
-    new DevToolsAdapter(),
-    new SwaggerAdapter({
-      info: { title: '${name}', version: '${version}' },
-    }),
-${cqrsExtraAdaptersBlock}    // Uncomment for WebSocket support:
-    // new WsAdapter(),
-    // Uncomment when Redis is available:
-    // new QueueAdapter({
-    //   provider: new BullMQProvider({ host: 'localhost', port: 6379 }),
-    // }),
-  ],
+  modules,${cqrsAdaptersBlock}
 })
 `
     }
@@ -158,17 +154,29 @@ export const app = await bootstrap({ modules${adaptersBlock} })
     case 'ddd':
     case 'rest':
     default: {
-      // Extra adapters from user-selected packages (beyond template defaults)
-      const extraImports: string[] = []
-      const extraAdapters: string[] = []
+      // Build adapters based on user-selected packages
+      const restImports: string[] = []
+      const restAdapters: string[] = []
 
+      if (packages.includes('devtools')) {
+        restImports.push(`import { DevToolsAdapter } from '@forinda/kickjs-devtools'`)
+        restAdapters.push(`    new DevToolsAdapter(),`)
+      }
+      if (packages.includes('swagger')) {
+        restImports.push(`import { SwaggerAdapter } from '@forinda/kickjs-swagger'`)
+        restAdapters.push(
+          `    new SwaggerAdapter({\n      info: { title: '${name}', version: '${version}' },\n    }),`,
+        )
+      }
       if (packages.includes('otel')) {
-        extraImports.push(`import { OtelAdapter } from '@forinda/kickjs-otel'`)
-        extraAdapters.push(`    new OtelAdapter({ serviceName: '${name}' }),`)
+        restImports.push(`import { OtelAdapter } from '@forinda/kickjs-otel'`)
+        restAdapters.push(`    new OtelAdapter({ serviceName: '${name}' }),`)
       }
 
-      const extraImportsBlock = extraImports.length ? extraImports.join('\n') + '\n' : ''
-      const extraAdaptersBlock = extraAdapters.length ? '\n' + extraAdapters.join('\n') : ''
+      const restImportsBlock = restImports.length ? restImports.join('\n') + '\n' : ''
+      const restAdaptersBlock = restAdapters.length
+        ? `\n  adapters: [\n${restAdapters.join('\n')}\n  ],`
+        : ''
 
       return `import 'reflect-metadata'
 // Side-effect import — registers the extended env schema with kickjs
@@ -184,19 +192,11 @@ import {
   helmet,
   cors,
 } from '@forinda/kickjs'
-import { DevToolsAdapter } from '@forinda/kickjs-devtools'
-import { SwaggerAdapter } from '@forinda/kickjs-swagger'
-${extraImportsBlock}import { modules } from './modules'
+${restImportsBlock}import { modules } from './modules'
 
 // Export the app for the Vite plugin (dev mode)
 export const app = await bootstrap({
-  modules,
-  adapters: [${extraAdaptersBlock}
-    new DevToolsAdapter(),
-    new SwaggerAdapter({
-      info: { title: '${name}', version: '${version}' },
-    }),
-  ],
+  modules,${restAdaptersBlock}
   middleware: [
     helmet(),
     cors({ origin: '*' }),
