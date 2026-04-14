@@ -1,7 +1,9 @@
 {
   "name": "@forinda/kickjs-http",
-  "version": "3.0.0",
-  "description": "Express 5 integration, router builder, RequestContext, and middleware for KickJS",
+  "version": "3.0.1",
+  "private": true,
+  "deprecated": "@forinda/kickjs-http has been merged into @forinda/kickjs. Import from '@forinda/kickjs' instead. This package is no longer published.",
+  "description": "DEPRECATED — merged into @forinda/kickjs. This package exists only as an internal build dependency.",
   "keywords": [
     "kickjs",
     "nodejs",
