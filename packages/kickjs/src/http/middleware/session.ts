@@ -46,8 +46,8 @@ export interface SessionOptions {
 // ── In-Memory Store ───────────────────────────────────────────────────
 
 class MemoryStore implements SessionStore {
-  private sessions = new Map<string, { data: SessionData; expires: number }>()
-  private cleanupInterval: ReturnType<typeof setInterval>
+  private readonly sessions = new Map<string, { data: SessionData; expires: number }>()
+  private readonly cleanupInterval: ReturnType<typeof setInterval>
 
   constructor() {
     // Purge expired sessions every 60 seconds
@@ -90,6 +90,28 @@ class MemoryStore implements SessionStore {
   }
 }
 
+// ── Cookie Header Parsing ─────────────────────────────────────────────
+
+function parseCookieHeader(header: string): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const pair of header.split(';')) {
+    const eq = pair.indexOf('=')
+    if (eq === -1) continue
+    const key = pair.slice(0, eq).trim()
+    if (!key) continue
+    let value = pair.slice(eq + 1).trim()
+    if (value.startsWith('"') && value.endsWith('"')) {
+      value = value.slice(1, -1)
+    }
+    try {
+      out[key] = decodeURIComponent(value)
+    } catch {
+      out[key] = value
+    }
+  }
+  return out
+}
+
 // ── Cookie Signing ────────────────────────────────────────────────────
 
 function sign(value: string, secret: string): string {
@@ -126,14 +148,17 @@ function unsign(signed: string, secret: string): string | false {
  * `destroy()`, and `save()` methods. Session IDs are signed with
  * HMAC-SHA256 to prevent cookie tampering.
  *
+ * Reads the session cookie from `req.cookies` when an upstream cookie
+ * parser is present; otherwise parses `req.headers.cookie` directly, so
+ * no cookie parser is required upstream.
+ *
  * @example
  * ```ts
- * import { session } from '@forinda/kickjs-http'
+ * import { session } from '@forinda/kickjs'
  *
  * bootstrap({
  *   modules,
  *   middleware: [
- *     cookieParser(),
  *     session({ secret: process.env.SESSION_SECRET! }),
  *     // ... other middleware
  *   ],
@@ -161,7 +186,11 @@ export function session(options: SessionOptions) {
   }
 
   return async (req: Request, res: Response, next: NextFunction) => {
-    const cookies = (req as any).cookies || {}
+    let cookies = (req as any).cookies as Record<string, string> | undefined
+    if (!cookies) {
+      const header = req.headers.cookie
+      cookies = header ? parseCookieHeader(header) : {}
+    }
     const signedCookie = cookies[cookieName]
     let sid: string | false = false
     let sessionData: SessionData | null = null
@@ -182,7 +211,7 @@ export function session(options: SessionOptions) {
       isNew = true
     }
 
-    let currentSid = sid as string
+    let currentSid = sid
     let currentData = { ...sessionData }
     let destroyed = false
 

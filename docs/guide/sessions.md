@@ -5,17 +5,20 @@ KickJS provides cookie-based session middleware with HMAC-SHA256 signing, automa
 ## Basic Usage
 
 ```ts
-import cookieParser from 'cookie-parser'
 import { session } from '@forinda/kickjs'
 
 bootstrap({
   modules,
   middleware: [
-    cookieParser(),
     session({ secret: process.env.SESSION_SECRET! }),
   ],
 })
 ```
+
+`session()` parses the incoming `Cookie` header itself, so no upstream
+cookie parser is required. If one is already installed (e.g.
+`cookie-parser` or another middleware that sets `req.cookies`), the
+session middleware reuses it and will not re-parse.
 
 ## Options
 
@@ -126,4 +129,4 @@ session({ secret: 'my-secret', store: new RedisSessionStore(redis) })
 - Always use a strong, random `secret` — at least 32 characters
 - Set `cookie.secure: true` in production (done automatically when `NODE_ENV === 'production'`)
 - Call `session.regenerate()` after login to prevent session fixation
-- Use `cookie-parser` middleware before `session()` in the middleware pipeline
+- `session()` parses cookies internally — `cookie-parser` is optional, not required
