@@ -1,28 +1,42 @@
 import express from 'express'
 import {
+  Application,
   Container,
   type AppAdapter,
   type AppModule,
   type AppModuleClass,
+  type ApplicationOptions,
   type ModuleRoutes,
 } from '@forinda/kickjs'
-import { Application, type ApplicationOptions } from '@forinda/kickjs'
+
+/**
+ * Bootstrap options forwarded verbatim to the underlying Application so
+ * test apps exercise the same HTTP pipeline shape as production.
+ */
+type BootstrapPassthroughOptions = Pick<
+  ApplicationOptions,
+  | 'port'
+  | 'apiPrefix'
+  | 'defaultVersion'
+  | 'middleware'
+  | 'onError'
+  | 'onNotFound'
+  | 'plugins'
+  | 'trustProxy'
+  | 'jsonLimit'
+  | 'security'
+>
 
 /**
  * Options for creating a test application.
  * Disables helmet, cors, compression, and morgan by default.
  */
-export interface CreateTestAppOptions {
+export interface CreateTestAppOptions extends BootstrapPassthroughOptions {
   modules: AppModuleClass[]
   /** Adapters to attach (auth, queue, devtools, etc.) */
   adapters?: AppAdapter[]
   /** DI overrides applied after module registration. Supports both string and symbol keys. */
   overrides?: Record<symbol | string, any>
-  port?: number
-  apiPrefix?: string
-  defaultVersion?: number
-  /** Express middleware pipeline. When provided, replaces the default (express.json()). */
-  middleware?: express.RequestHandler[]
   /**
    * Use an isolated container instead of the global singleton.
    * Prevents concurrent tests from interfering with each other's DI state.
@@ -68,6 +82,12 @@ export async function createTestApp(options: CreateTestAppOptions): Promise<{
     defaultVersion: options.defaultVersion,
     // Use provided middleware, or default to JSON body parsing only
     middleware: options.middleware ?? [express.json()],
+    onError: options.onError,
+    onNotFound: options.onNotFound,
+    plugins: options.plugins,
+    trustProxy: options.trustProxy,
+    jsonLimit: options.jsonLimit,
+    security: options.security,
   })
 
   // Run setup — mounts routes, registers modules, initializes adapters.

@@ -1882,9 +1882,18 @@ importers:
       '@types/node':
         specifier: ^25.0.0
         version: 25.5.0
+      '@types/supertest':
+        specifier: ^6.0.3
+        version: 6.0.3
       express:
         specifier: ^5.1.0
         version: 5.2.1
+      reflect-metadata:
+        specifier: ^0.2.2
+        version: 0.2.2
+      supertest:
+        specifier: ^7.2.2
+        version: 7.2.2
       typescript:
         specifier: ^5.9.2
         version: 5.9.3

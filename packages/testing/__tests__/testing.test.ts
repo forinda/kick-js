@@ -1,5 +1,6 @@
 import 'reflect-metadata'
 import { describe, it, expect, beforeEach } from 'vitest'
+import request from 'supertest'
 import { createTestApp, createTestModule } from '@forinda/kickjs-testing'
 import {
   Container,
@@ -277,5 +278,73 @@ describe('createTestApp options', () => {
 
     const { container } = await createTestApp({ modules: [TestModule] })
     expect(container.resolve('key')).toBe('value')
+  })
+})
+
+// ── Bootstrap option forwarding ────────────────────────────────────────
+
+describe('createTestApp bootstrap option forwarding', () => {
+  beforeEach(() => {
+    Container.reset()
+  })
+
+  it('forwards onNotFound to replace the default 404 handler', async () => {
+    const TestModule = createTestModule({
+      register: () => {},
+      routes: () => null,
+    })
+
+    const { expressApp } = await createTestApp({
+      modules: [TestModule],
+      onNotFound: (_req, res) => {
+        res.status(404).json({ error: 'custom-not-found', code: 'E_404' })
+      },
+    })
+
+    const res = await request(expressApp).get('/api/v1/nope')
+    expect(res.status).toBe(404)
+    expect(res.body).toEqual({ error: 'custom-not-found', code: 'E_404' })
+  })
+
+  it('forwards onError to replace the default error handler', async () => {
+    @Controller('/boom')
+    class BoomController {
+      @Get('/')
+      blow() {
+        throw new Error('kaboom')
+      }
+    }
+
+    const TestModule = createTestModule({
+      register: (c) => {
+        c.register(BoomController, BoomController)
+      },
+      routes: () => ({ path: '/boom', router: buildRoutes(BoomController) }),
+    })
+
+    const { expressApp } = await createTestApp({
+      modules: [TestModule],
+      onError: (err, _req, res, _next) => {
+        res.status(500).json({ error: 'custom-envelope', message: err.message })
+      },
+    })
+
+    const res = await request(expressApp).get('/api/v1/boom')
+    expect(res.status).toBe(500)
+    expect(res.body).toEqual({ error: 'custom-envelope', message: 'kaboom' })
+  })
+
+  it('falls back to built-in handlers when onError/onNotFound are omitted', async () => {
+    const TestModule = createTestModule({
+      register: () => {},
+      routes: () => null,
+    })
+
+    const { expressApp } = await createTestApp({ modules: [TestModule] })
+
+    const res = await request(expressApp).get('/api/v1/missing')
+    expect(res.status).toBe(404)
+    // Built-in handler returns { message: 'Not Found' }
+    expect(res.body).toHaveProperty('message')
   })
 })
