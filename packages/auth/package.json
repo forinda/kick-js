@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-auth",
-  "version": "3.0.7",
+  "version": "3.0.8",
   "description": "Pluggable authentication for KickJS — JWT, API key, and custom strategies",
   "keywords": [
     "kickjs",
