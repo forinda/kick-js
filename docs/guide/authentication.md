@@ -532,6 +532,48 @@ new AuthAdapter({
 })
 ```
 
+### How auto-detection works
+
+`AuthAdapter` enables CSRF when **any** registered strategy reads tokens from cookies:
+
+- `SessionStrategy` — always cookie-based
+- `JwtStrategy` with `tokenFrom: 'cookie'`
+
+Once enabled, the middleware runs **globally on every request** — it does not know which strategy will actually match. For `POST`/`PUT`/`PATCH`/`DELETE`, it requires the `x-csrf-token` header to echo the `_csrf` cookie. Only `@Public()` and `@CsrfExempt()` routes bypass.
+
+### CSRF with mixed strategies (BFF / gateway pattern)
+
+A common setup: browsers authenticate with cookies (session), while a Web server forwards calls to the API with a `Bearer` JWT. When you register **both** strategies on the same `AuthAdapter`, CSRF auto-enables — and fires on the server-to-server JWT calls too, which don't send cookies or the CSRF header.
+
+```ts
+// ❌ Every Web → API write fails with "CSRF token mismatch"
+new AuthAdapter({
+  strategies: [
+    new SessionStrategy({ ... }),   // browser → Web
+    new JwtStrategy({ ... }),        // Web → API (Bearer)
+  ],
+  // csrf auto-enabled → blocks server-to-server JWT calls
+})
+```
+
+Pick one of the following based on where cookies actually travel:
+
+**1. Split the surfaces.** If the API never sees cookie auth directly (all browser traffic goes through the Web/BFF), disable CSRF on the API — the Web tier owns the CSRF surface via its own session + same-origin forms:
+
+```ts
+// API gateway — JWT-only, no browser cookies
+new AuthAdapter({
+  strategies: [new JwtStrategy({ ... })],
+  csrf: false,
+})
+```
+
+**2. Exempt the JWT routes.** If some routes accept JWT while others accept cookies on the same app, mark the JWT routes with `@CsrfExempt()` (or use `@Strategy('jwt')` on a whole controller and exempt the class).
+
+**3. Keep CSRF, add the header.** If browsers *do* call the API directly with cookies, keep CSRF on and make sure every mutating fetch reads `_csrf` and sends it as `x-csrf-token`.
+
+Rule of thumb: CSRF protects **ambient credentials** (cookies the browser attaches automatically). Pure `Authorization: Bearer` calls aren't vulnerable and shouldn't go through CSRF validation.
+
 ## Per-Route Rate Limiting
 
 Apply rate limits to individual routes:

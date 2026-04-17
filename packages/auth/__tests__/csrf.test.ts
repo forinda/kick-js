@@ -228,6 +228,115 @@ describe('CSRF Integration', () => {
     })
   })
 
+  describe('BFF / gateway pattern (mixed strategies)', () => {
+    const sessionStrategy: AuthStrategy = {
+      name: 'session',
+      validate: async (req) => (req.cookies?.sid ? { id: '1' } : null),
+    }
+    const bearerJwt: AuthStrategy = {
+      name: 'jwt',
+      validate: async (req) =>
+        req.headers?.authorization?.startsWith('Bearer ') ? { id: '1' } : null,
+    }
+
+    it('auto-enables CSRF when session is mixed with header-only JWT', () => {
+      const adapter = new AuthAdapter({ strategies: [sessionStrategy, bearerJwt] })
+      expect(adapter.middleware!()).toHaveLength(2)
+    })
+
+    it('fires CSRF on Bearer-only server-to-server requests (documents the gotcha)', async () => {
+      const adapter = new AuthAdapter({
+        strategies: [sessionStrategy, bearerJwt],
+        defaultPolicy: 'open',
+      })
+      const csrfMiddleware = adapter.middleware!()[1].handler
+
+      const req = {
+        method: 'POST',
+        path: '/tasks',
+        baseUrl: '',
+        cookies: { _csrf: 'token' },
+        headers: { authorization: 'Bearer jwt.token.here' },
+      }
+      const res = { status: vi.fn().mockReturnThis(), json: vi.fn(), cookie: vi.fn() }
+      const next = vi.fn()
+
+      await csrfMiddleware(req, res, next)
+      expect(next).not.toHaveBeenCalled()
+      expect(res.status).toHaveBeenCalledWith(403)
+    })
+
+    it('fix 1: csrf:false on JWT-only API tier lets Bearer requests through', () => {
+      const adapter = new AuthAdapter({ strategies: [bearerJwt], csrf: false })
+      expect(adapter.middleware!()).toHaveLength(1)
+    })
+
+    it('fix 2: @CsrfExempt on JWT-strategy route bypasses CSRF while session routes stay protected', async () => {
+      @Controller()
+      class MixedCtrl {
+        @Post('/s2s/sync')
+        @CsrfExempt()
+        serverSync() {}
+
+        @Post('/me')
+        updateMe() {}
+      }
+
+      const adapter = new AuthAdapter({
+        strategies: [sessionStrategy, bearerJwt],
+        defaultPolicy: 'open',
+      })
+      adapter.onRouteMount!(MixedCtrl, '/api')
+      const csrfMiddleware = adapter.middleware!()[1].handler
+
+      const s2sReq = {
+        method: 'POST',
+        path: '/api/s2s/sync',
+        baseUrl: '',
+        cookies: { _csrf: 'token' },
+        headers: { authorization: 'Bearer jwt' },
+      }
+      const s2sRes = { status: vi.fn().mockReturnThis(), json: vi.fn(), cookie: vi.fn() }
+      const s2sNext = vi.fn()
+      await csrfMiddleware(s2sReq, s2sRes, s2sNext)
+      expect(s2sNext).toHaveBeenCalled()
+
+      const meReq = {
+        method: 'POST',
+        path: '/api/me',
+        baseUrl: '',
+        cookies: { sid: 'abc', _csrf: 'token' },
+        headers: {},
+      }
+      const meRes = { status: vi.fn().mockReturnThis(), json: vi.fn(), cookie: vi.fn() }
+      const meNext = vi.fn()
+      await csrfMiddleware(meReq, meRes, meNext)
+      expect(meNext).not.toHaveBeenCalled()
+      expect(meRes.status).toHaveBeenCalledWith(403)
+    })
+
+    it('fix 3: keeping CSRF on and echoing the cookie header still works for cookie clients', async () => {
+      const adapter = new AuthAdapter({
+        strategies: [sessionStrategy, bearerJwt],
+        defaultPolicy: 'open',
+      })
+      const csrfMiddleware = adapter.middleware!()[1].handler
+
+      const token = 'matching-token'
+      const req = {
+        method: 'POST',
+        path: '/me',
+        baseUrl: '',
+        cookies: { sid: 'abc', _csrf: token },
+        headers: { 'x-csrf-token': token },
+      }
+      const res = { status: vi.fn().mockReturnThis(), json: vi.fn(), cookie: vi.fn() }
+      const next = vi.fn()
+      await csrfMiddleware(req, res, next)
+      expect(next).toHaveBeenCalled()
+    })
+  })
+
   describe('@CsrfExempt decorator', () => {
     it('exempts decorated route from CSRF', async () => {
       @Controller()
