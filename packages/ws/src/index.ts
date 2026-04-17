@@ -10,10 +10,16 @@ export { WsController, OnConnect, OnDisconnect, OnMessage, OnError } from './dec
 // Room Manager
 export { RoomManager } from './room-manager'
 
-// Types
+// Types + DI tokens
 export {
+  WS_ADAPTER,
   WS_METADATA,
+  WS_ROOM_MANAGER,
+  WS_USER_BROADCASTER,
   type WsAdapterOptions,
+  type WsAuthConfig,
+  type WsAuthenticatedUser,
   type WsHandlerDefinition,
   type WsHandlerType,
+  type WsUserBroadcaster,
 } from './interfaces'

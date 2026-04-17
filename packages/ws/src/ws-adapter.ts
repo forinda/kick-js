@@ -13,10 +13,15 @@ import {
   getClassMeta,
 } from '@forinda/kickjs'
 import {
+  WS_ADAPTER,
   WS_METADATA,
+  WS_ROOM_MANAGER,
+  WS_USER_BROADCASTER,
   wsControllerRegistry,
   type WsAdapterOptions,
+  type WsAuthConfig,
   type WsHandlerDefinition,
+  type WsUserBroadcaster,
 } from './interfaces'
 import { WsContext } from './ws-context'
 import { RoomManager } from './room-manager'
@@ -56,6 +61,8 @@ export class WsAdapter implements AppAdapter {
   private basePath: string
   private heartbeatInterval: number
   private maxPayload: number | undefined
+  private auth?: WsAuthConfig
+  private userRoomPrefix: string
   private wss: WebSocketServer | null = null
   private container: Container | null = null
   private namespaces = new Map<string, NamespaceEntry>()
@@ -78,6 +85,8 @@ export class WsAdapter implements AppAdapter {
     this.basePath = options.path ?? '/ws'
     this.heartbeatInterval = options.heartbeatInterval ?? 30000
     this.maxPayload = options.maxPayload
+    this.auth = options.auth
+    this.userRoomPrefix = options.auth?.userRoomPrefix ?? 'user:'
 
     this.totalConnections = ref(0)
     this.activeConnections = ref(0)
@@ -106,8 +115,33 @@ export class WsAdapter implements AppAdapter {
     }
   }
 
+  /** Room name used for per-user broadcasting. */
+  userRoom(userId: string): string {
+    return this.userRoomPrefix + userId
+  }
+
+  /** Broadcast a single event to every socket in `user:<id>` (across namespaces). */
+  broadcastToUser(userId: string, event: string, data: unknown): void {
+    this.roomManager.broadcast(this.userRoom(userId), event, data)
+  }
+
+  private buildUserBroadcaster(): WsUserBroadcaster {
+    const self = this
+    return {
+      roomFor: (id) => self.userRoom(id),
+      broadcastToUser: (id, event, data) => self.broadcastToUser(id, event, data),
+      toUser: (id) => ({
+        send: (event, data) => self.broadcastToUser(id, event, data),
+      }),
+    }
+  }
+
   beforeStart({ container }: AdapterContext): void {
     this.container = container
+
+    container.registerInstance(WS_ADAPTER, this)
+    container.registerInstance(WS_ROOM_MANAGER, this.roomManager)
+    container.registerInstance(WS_USER_BROADCASTER, this.buildUserBroadcaster())
 
     // Discover all @WsController classes and build routing table
     for (const controllerClass of wsControllerRegistry) {
@@ -156,7 +190,7 @@ export class WsAdapter implements AppAdapter {
       }
 
       this.wss!.handleUpgrade(request, socket, head, (ws) => {
-        this.handleConnection(ws, entry)
+        this.handleConnection(ws, entry, request)
       })
     })
 
@@ -202,7 +236,7 @@ export class WsAdapter implements AppAdapter {
 
   // ── Internal ───────────────────────────────────────────────────────────
 
-  private handleConnection(ws: WebSocket, entry: NamespaceEntry): void {
+  private handleConnection(ws: WebSocket, entry: NamespaceEntry, request: IncomingMessage): void {
     const socketId = randomUUID()
     ;(ws as any).__alive = true
 
@@ -217,6 +251,7 @@ export class WsAdapter implements AppAdapter {
       entry.sockets,
       socketId,
       entry.namespace,
+      request,
     )
     entry.contexts.set(socketId, ctx)
 
@@ -228,11 +263,21 @@ export class WsAdapter implements AppAdapter {
       ;(ws as any).__alive = true
     })
 
-    // @OnConnect handlers
-    this.invokeHandlers(controller, entry.handlers, 'connect', ctx)
+    // Authenticated handshake (optional). Messages received before auth
+    // resolves are buffered on the socket; we gate dispatch on `authed`.
+    let authed = this.auth === undefined
+    const authPromise = this.auth ? this.authenticate(ctx) : Promise.resolve(true)
+
+    authPromise.then((ok) => {
+      if (!ok) return
+      authed = true
+      // @OnConnect handlers
+      this.invokeHandlers(controller, entry.handlers, 'connect', ctx)
+    })
 
     // Message handler
     ws.on('message', (raw: Buffer | string) => {
+      if (!authed) return
       this.messagesReceived.value++
       try {
         const parsed = JSON.parse(raw.toString())
@@ -280,6 +325,34 @@ export class WsAdapter implements AppAdapter {
       ctx.data = { message: err.message, name: err.name }
       this.invokeHandlers(controller, entry.handlers, 'error', ctx)
     })
+  }
+
+  /**
+   * Runs the configured auth hook against the upgrade request. Stashes the
+   * resolved user on the context (as `user`, plus mirrored keys) and, when
+   * `autoJoinUserRoom` is enabled, joins the socket to `user:<id>`.
+   * Returns `false` (and closes the socket with code 4401) on failure.
+   */
+  private async authenticate(ctx: WsContext): Promise<boolean> {
+    const cfg = this.auth
+    if (!cfg) return true
+    try {
+      const user = await cfg.resolveUser(ctx.request)
+      if (!user || !user.id) {
+        ctx.socket.close(4401, 'Unauthorized')
+        return false
+      }
+      ctx.set('user', user)
+      ctx.set('userId', user.id)
+      if (cfg.autoJoinUserRoom !== false) {
+        ctx.join(this.userRoom(user.id))
+      }
+      return true
+    } catch (err) {
+      log.warn('WS auth failed', err)
+      ctx.socket.close(4401, 'Unauthorized')
+      return false
+    }
   }
 
   private invokeHandlers(

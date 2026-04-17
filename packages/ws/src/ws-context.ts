@@ -1,3 +1,4 @@
+import type { IncomingMessage } from 'node:http'
 import type { WebSocket, WebSocketServer } from 'ws'
 import type { RoomManager } from './room-manager'
 
@@ -26,6 +27,9 @@ export class WsContext {
   event: string
   /** The namespace this connection belongs to */
   readonly namespace: string
+  /** The HTTP upgrade request — available from @OnConnect onward. Use to read
+   * cookies, headers, query string, and client IP for authenticated handshakes. */
+  readonly request: IncomingMessage
 
   private metadata = new Map<string, any>()
 
@@ -36,11 +40,28 @@ export class WsContext {
     private readonly namespaceSockets: Map<string, WebSocket>,
     id: string,
     namespace: string,
+    request: IncomingMessage,
   ) {
     this.id = id
     this.namespace = namespace
+    this.request = request
     this.data = null
     this.event = ''
+  }
+
+  /** Parsed cookies from the upgrade request (raw `Cookie` header parse). */
+  get cookies(): Record<string, string> {
+    const header = this.request.headers.cookie
+    if (!header) return {}
+    const out: Record<string, string> = {}
+    for (const part of header.split(';')) {
+      const idx = part.indexOf('=')
+      if (idx === -1) continue
+      const k = part.slice(0, idx).trim()
+      const v = part.slice(idx + 1).trim()
+      if (k) out[k] = decodeURIComponent(v)
+    }
+    return out
   }
 
   /** Get a metadata value */

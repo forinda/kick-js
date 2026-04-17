@@ -105,6 +105,8 @@ Every handler receives a `WsContext` with these properties and methods:
 | `ctx.event` | Event name from the message |
 | `ctx.namespace` | Namespace path |
 | `ctx.socket` | Raw WebSocket instance |
+| `ctx.request` | The HTTP upgrade `IncomingMessage` — read cookies, headers, query, client IP |
+| `ctx.cookies` | Parsed cookie map from the upgrade `Cookie` header |
 | `ctx.get(key)` | Get metadata value |
 | `ctx.set(key, value)` | Set metadata (persists for connection lifetime) |
 | `ctx.send(event, data)` | Send to this client |
@@ -163,6 +165,81 @@ new WsAdapter({
   heartbeatInterval: 30000, // Ping interval in ms (default: 30000, 0 to disable)
   maxPayload: 1048576,      // Max message size in bytes
 })
+```
+
+## Authenticated Handshake
+
+Pass an `auth` block to authenticate sockets at upgrade time using cookies, headers, or query string. The hook runs once per socket before any `@OnConnect` handler fires. Return `null` (or throw) to reject — the socket closes with code `4401`.
+
+```ts
+import { WsAdapter } from '@forinda/kickjs-ws'
+
+new WsAdapter({
+  path: '/ws',
+  auth: {
+    resolveUser: async (request) => {
+      const token = parseCookie(request.headers.cookie).sid
+      return token ? await sessions.verify(token) : null
+    },
+    autoJoinUserRoom: true,   // opt sockets into `user:<id>` (default: true)
+    userRoomPrefix: 'user:',  // room prefix (default: 'user:')
+  },
+})
+```
+
+Inside handlers, the resolved user is stashed on the context:
+
+```ts
+@OnConnect()
+handleConnect(ctx: WsContext) {
+  const user = ctx.get<{ id: string }>('user')
+  ctx.send('welcome', { userId: user?.id })
+}
+```
+
+## Dependency Injection
+
+The adapter registers three tokens on the DI container during startup so any service can broadcast without holding a `WsContext` reference:
+
+| Token | Type | Purpose |
+|-------|------|---------|
+| `WS_ADAPTER` | `WsAdapter` | The live adapter — call `broadcastToUser(id, event, data)` directly |
+| `WS_ROOM_MANAGER` | `RoomManager` | Low-level room broadcast primitive |
+| `WS_USER_BROADCASTER` | `WsUserBroadcaster` | High-level per-user helper (`toUser(id).send(...)`) |
+
+```ts
+import { Service, Inject } from '@forinda/kickjs'
+import { WS_USER_BROADCASTER, type WsUserBroadcaster } from '@forinda/kickjs-ws'
+
+@Service()
+export class NotificationService {
+  constructor(
+    @Inject(WS_USER_BROADCASTER) private readonly ws: WsUserBroadcaster,
+  ) {}
+
+  async notify(userId: string, message: string) {
+    this.ws.toUser(userId).send('notification', { message })
+  }
+}
+```
+
+Equivalent call styles:
+
+```ts
+this.ws.toUser(userId).send('notification', payload)
+this.ws.broadcastToUser(userId, 'notification', payload)
+```
+
+### When `auth.autoJoinUserRoom` is off
+
+The broadcaster still works — you just need the controller to join the room manually:
+
+```ts
+@OnConnect()
+handleConnect(ctx: WsContext) {
+  const userId = ctx.get<string>('userId')
+  if (userId) ctx.join(`user:${userId}`)
+}
 ```
 
 ## Heartbeat
