@@ -1,7 +1,8 @@
 import { execSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { Command } from 'commander'
+import { loadKickConfig, PACKAGE_MANAGERS, type PackageManager } from '../config'
 
 /** Registry of KickJS packages and their required peer dependencies */
 const PACKAGE_REGISTRY: Record<
@@ -151,10 +152,48 @@ const PACKAGE_REGISTRY: Record<
   },
 }
 
-function detectPackageManager(): string {
+function detectPackageManager(): PackageManager {
   if (existsSync(resolve('pnpm-lock.yaml'))) return 'pnpm'
   if (existsSync(resolve('yarn.lock'))) return 'yarn'
+  if (existsSync(resolve('bun.lockb')) || existsSync(resolve('bun.lock'))) return 'bun'
   return 'npm'
+}
+
+/** Read `packageManager` from package.json (corepack convention: "pnpm@10.0.0") */
+function packageManagerFromPackageJson(): PackageManager | null {
+  try {
+    const pkg = JSON.parse(readFileSync(resolve('package.json'), 'utf-8'))
+    const field: unknown = pkg.packageManager
+    if (typeof field !== 'string') return null
+    const name = field.split('@')[0] as PackageManager
+    return PACKAGE_MANAGERS.includes(name) ? name : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Resolve which package manager to use, in priority order:
+ * 1. `--pm` CLI flag
+ * 2. `packageManager` in kick.config
+ * 3. `packageManager` in package.json (corepack)
+ * 4. Lockfile detection
+ * 5. `'npm'`
+ */
+export async function resolvePackageManager(flagPm: string | undefined): Promise<PackageManager> {
+  if (flagPm && PACKAGE_MANAGERS.includes(flagPm as PackageManager)) {
+    return flagPm as PackageManager
+  }
+
+  const config = await loadKickConfig(process.cwd())
+  if (config?.packageManager && PACKAGE_MANAGERS.includes(config.packageManager)) {
+    return config.packageManager
+  }
+
+  const fromPkg = packageManagerFromPackageJson()
+  if (fromPkg) return fromPkg
+
+  return detectPackageManager()
 }
 
 export function printPackageList(): void {
@@ -194,7 +233,7 @@ export function registerAddCommand(program: Command): void {
         return
       }
 
-      const pm = opts.pm ?? detectPackageManager()
+      const pm = await resolvePackageManager(opts.pm)
       const forceDevFlag = opts.dev
       const prodDeps = new Set<string>()
       const devDeps = new Set<string>()

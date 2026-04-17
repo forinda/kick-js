@@ -349,6 +349,7 @@ export class HelloModule implements AppModule {
 export function generateKickConfig(
   template: ProjectTemplate,
   defaultRepo: string = 'inmemory',
+  packageManager: 'pnpm' | 'npm' | 'yarn' | 'bun' = 'pnpm',
 ): string {
   const builtinRepos = ['drizzle', 'inmemory', 'prisma']
   const repoValue = builtinRepos.includes(defaultRepo)
@@ -359,6 +360,9 @@ export function generateKickConfig(
 
 export default defineConfig({
   pattern: '${template}',
+  // Pinned so \`kick add\` and other dep-installing commands always use the
+  // project's intended package manager, regardless of which lockfile exists.
+  packageManager: '${packageManager}',
   modules: {
     dir: 'src/modules',
     repo: ${repoValue},

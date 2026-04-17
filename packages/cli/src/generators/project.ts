@@ -114,7 +114,10 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
   }
 
   // ── kick.config.ts — CLI configuration ─────────────────────────────
-  await writeFileSafe(join(dir, 'kick.config.ts'), generateKickConfig(template, defaultRepo))
+  await writeFileSafe(
+    join(dir, 'kick.config.ts'),
+    generateKickConfig(template, defaultRepo, packageManager),
+  )
 
   // ── vitest.config.ts ────────────────────────────────────────────────
   await writeFileSafe(join(dir, 'vitest.config.ts'), generateVitestConfig())

@@ -23,6 +23,11 @@ export interface KickCommandDefinition {
 /** Project pattern — controls what generators produce and which deps are installed */
 export type ProjectPattern = 'rest' | 'graphql' | 'ddd' | 'cqrs' | 'minimal'
 
+/** Package manager used for `kick add` and other dep-installing commands */
+export type PackageManager = 'pnpm' | 'npm' | 'yarn' | 'bun'
+
+export const PACKAGE_MANAGERS: readonly PackageManager[] = ['pnpm', 'npm', 'yarn', 'bun']
+
 /** Built-in repository types with first-class code generation support */
 export type BuiltinRepoType = 'drizzle' | 'inmemory' | 'prisma'
 
@@ -143,6 +148,22 @@ export interface KickConfig {
    * }
    */
   modules?: ModuleConfig
+  /**
+   * Package manager used by `kick add` (and any future dep-installing command)
+   * to install dependencies. When set, overrides lockfile auto-detection so
+   * commands always use the project's intended package manager.
+   *
+   * Priority (highest first):
+   * 1. `--pm` flag on the CLI
+   * 2. `packageManager` in kick.config
+   * 3. `packageManager` field in package.json (corepack convention)
+   * 4. Lockfile detection (pnpm-lock.yaml → pnpm, yarn.lock → yarn)
+   * 5. `'npm'`
+   *
+   * @example
+   * packageManager: 'pnpm'
+   */
+  packageManager?: PackageManager
 
   // ── Backward-compatible top-level aliases (deprecated, use modules.* instead) ──
   /** @deprecated Use `modules.dir` instead */
