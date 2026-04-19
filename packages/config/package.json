@@ -91,7 +91,7 @@
   "devDependencies": {
     "@swc/core": "^1.15.21",
     "@types/node": "^25.0.0",
-    "typescript": "^5.9.2",
+    "typescript": "^6.0.2",
     "vitest": "^4.1.2"
   },
   "publishConfig": {
