@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-cli",
-  "version": "3.0.8",
+  "version": "3.1.0",
   "description": "CLI for KickJS — project scaffolding, DDD module generation, dev/build/start",
   "keywords": [
     "kickjs",

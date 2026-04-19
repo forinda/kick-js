@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-http",
-  "version": "3.0.8",
+  "version": "3.1.0",
   "private": true,
   "deprecated": "@forinda/kickjs-http has been merged into @forinda/kickjs. Import from '@forinda/kickjs' instead. This is the final release.",
   "description": "DEPRECATED — merged into @forinda/kickjs. This package exists only as an internal build dependency.",
