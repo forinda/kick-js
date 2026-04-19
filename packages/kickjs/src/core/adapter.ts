@@ -100,13 +100,31 @@ export interface AppAdapter {
   onRouteMount?(controllerClass: Constructor, mountPath: string): void
 
   /**
-   * Called after modules registered, before HTTP server starts.
+   * Called after modules are registered and the DI container is bootstrapped,
+   * before the HTTP server starts listening. **This is the correct hook for
+   * adapters that register DI bindings, resolve services, or otherwise prepare
+   * container-side state** (e.g. `container.registerInstance(MAILER, ...)`).
+   *
+   * `beforeStart` runs inside `app.setup()`, which means it also fires under
+   * `createTestApp` — adapters using this hook work in unit tests without
+   * needing a live HTTP server. See {@link afterStart} for the contrast.
+   *
    * May return a Promise — async rejections are caught and logged.
    */
   beforeStart?(ctx: AdapterContext): void | Promise<void>
 
   /**
-   * Called after the HTTP server is listening — attach to the raw http.Server.
+   * Called after the HTTP server is listening — `ctx.server` is the live
+   * `http.Server`. **Use this hook only for work that genuinely needs a
+   * listening server**: attaching Socket.IO / WS upgrades, reading the bound
+   * port via `server.address()`, dispatching to the local server over HTTP,
+   * etc.
+   *
+   * `afterStart` does NOT fire under `createTestApp`, since tests call
+   * `app.setup()` and never `app.start()`. If your adapter only registers DI
+   * bindings or resolves services, use {@link beforeStart} — that hook runs
+   * in both production (`start()`) and tests (`setup()`).
+   *
    * May return a Promise — async rejections are caught and logged.
    */
   afterStart?(ctx: AdapterContext): void | Promise<void>

@@ -23,13 +23,13 @@ const log = Logger.for('MailerAdapter')
  */
 export class MailerAdapter implements AppAdapter {
   name = 'MailerAdapter'
-  private mailer: MailerService
+  private readonly mailer: MailerService
 
-  constructor(private options: MailerOptions) {
+  constructor(private readonly options: MailerOptions) {
     this.mailer = new MailerService(options)
   }
 
-  afterStart({ container }: AdapterContext): void {
+  beforeStart({ container }: AdapterContext): void {
     container.registerInstance(MAILER, this.mailer)
     log.info(
       `Mail provider: ${this.options.provider.name}${this.options.enabled === false ? ' (disabled)' : ''}`,

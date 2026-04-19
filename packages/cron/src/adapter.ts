@@ -83,12 +83,17 @@ export interface CronAdapterOptions {
 export class CronAdapter implements AppAdapter {
   name = 'CronAdapter'
   private scheduler: CronScheduler | null = null
-  private enabled: boolean
+  private readonly enabled: boolean
 
-  constructor(private options: CronAdapterOptions) {
+  constructor(private readonly options: CronAdapterOptions) {
     this.enabled = options.enabled ?? true
   }
 
+  // Intentionally uses `afterStart` rather than `beforeStart`, even though
+  // scheduling does not need the live HTTP server. `afterStart` is skipped by
+  // `createTestApp` (which only runs `app.setup()`), and we want that skip:
+  // unit tests should not start cron schedulers that fire jobs during the
+  // test run. Production paths that call `app.start()` get full scheduling.
   async afterStart({ container }: AdapterContext): Promise<void> {
     if (!this.enabled) {
       log.info('Cron disabled')
