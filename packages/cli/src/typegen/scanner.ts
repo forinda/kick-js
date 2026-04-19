@@ -214,56 +214,88 @@ const INJECT_LITERAL_REGEX = /@Inject\s*\(\s*['"`]([^'"`]+)['"`]\s*\)/g
 const HTTP_DECORATORS = ['Get', 'Post', 'Put', 'Delete', 'Patch'] as const
 
 /**
- * Match a route decorator immediately followed by a method declaration.
- * Captures the HTTP verb, path literal (or empty), and method name.
- *
- * Tolerates:
- * - Optional second arg to the route decorator (`@Get('/path', { ... })`)
- * - Stacked decorators between the route and the method (`@Get('/') @Use(...)`)
- * - Path-less decorators (`@Get()` → defaults to `/`)
- * - `async` modifier on the method
- *
- * Run within a class body slice (see extractRoutesFromSource) so the
- * captured method name is unambiguously a method on that class.
+ * Locate the start of a route decorator: `@Get(`, `@Post(`, etc.
+ * Used by `extractRoutesFromSource`; the rest of the route declaration
+ * (balanced parens, stacked decorators, method name) is parsed by walking
+ * the source forward from this match. The previous all-in-one regex
+ * couldn't handle nested parens in stacked decorator args (e.g.
+ * `@ApiResponse(201, { schema: z.object({ id: z.string() }) })`) — see
+ * forinda/kick-js#108.
  */
-const ROUTE_METHOD_REGEX = new RegExp(
-  String.raw`@(${HTTP_DECORATORS.join('|')})\s*\(` +
-    String.raw`(?:\s*['"\`]([^'"\`]*)['"\`])?[^)]*\)` +
-    String.raw`(?:\s*@[A-Z]\w*(?:\s*\([^)]*\))?)*` +
-    String.raw`\s*(?:public\s+|private\s+|protected\s+)?(?:async\s+)?` +
-    String.raw`([a-zA-Z_]\w*)\s*\(`,
-  'g',
-)
+const ROUTE_DECORATOR_START = new RegExp(String.raw`@(${HTTP_DECORATORS.join('|')})\s*\(`, 'g')
+
+/**
+ * Find the index of the `)` that balances the `(` at `openPos`.
+ * Returns -1 if no matching `)` exists. Counts balanced parens only;
+ * does not understand string literals, so a `(` or `)` inside a string
+ * inside the args will skew the depth counter (matches the limitation
+ * of `extractRouteOptionsArg`).
+ */
+function findBalancedClose(text: string, openPos: number): number {
+  let depth = 1
+  for (let i = openPos + 1; i < text.length; i++) {
+    const ch = text[i]
+    if (ch === '(') depth++
+    else if (ch === ')') {
+      depth--
+      if (depth === 0) return i
+    }
+  }
+  return -1
+}
+
+/**
+ * Walk forward from the end of a route decorator past any stacked
+ * decorators (`@ApiOperation(...)`, `@ApiResponse(...)`, `@Middleware(fn)`,
+ * etc.), then past optional `public`/`private`/`protected` and `async`,
+ * and capture the method name + opening `(`.
+ *
+ * Returns the method name and the position immediately after the method's
+ * opening `(`, or `null` if the source between the route decorator and
+ * the method body doesn't fit the expected shape.
+ */
+function readMethodAfterDecorators(
+  block: string,
+  startPos: number,
+): { methodName: string; endPos: number } | null {
+  let pos = startPos
+  // Stacked decorators: @PascalCase optionally followed by balanced (...)
+  while (pos < block.length) {
+    while (pos < block.length && /\s/.test(block[pos])) pos++
+    if (block[pos] !== '@') break
+    const decMatch = block.slice(pos).match(/^@([A-Z]\w*)/)
+    if (!decMatch) break
+    pos += decMatch[0].length
+    while (pos < block.length && /\s/.test(block[pos])) pos++
+    if (block[pos] === '(') {
+      const close = findBalancedClose(block, pos)
+      if (close < 0) return null
+      pos = close + 1
+    }
+  }
+  // Modifiers + async
+  while (pos < block.length && /\s/.test(block[pos])) pos++
+  for (const mod of ['public', 'private', 'protected'] as const) {
+    if (block.slice(pos, pos + mod.length) === mod && /\s/.test(block.charAt(pos + mod.length))) {
+      pos += mod.length
+      while (pos < block.length && /\s/.test(block[pos])) pos++
+      break
+    }
+  }
+  if (block.slice(pos, pos + 5) === 'async' && /\s/.test(block.charAt(pos + 5))) {
+    pos += 5
+    while (pos < block.length && /\s/.test(block[pos])) pos++
+  }
+  // Method name + `(`
+  const methodMatch = block.slice(pos).match(/^([a-zA-Z_]\w*)\s*\(/)
+  if (!methodMatch) return null
+  return { methodName: methodMatch[1], endPos: pos + methodMatch[0].length }
+}
 
 /** Extract `:placeholder` segments from an Express route path */
 function extractPathParams(path: string): string[] {
   const matches = path.match(/:([a-zA-Z_]\w*)/g) ?? []
   return matches.map((m) => m.slice(1))
-}
-
-/**
- * Given the matched text of a route decorator + method declaration, return
- * the substring inside the route decorator's argument list (between the
- * outermost `(` and `)`). Returns `null` if no parens are found.
- *
- * Example input:
- *   `@Post('/', { body: createTaskSchema, name: 'CreateTask' }) async create(`
- * Returns:
- *   `'/', { body: createTaskSchema, name: 'CreateTask' }`
- */
-function extractRouteOptionsArg(matchedText: string): string | null {
-  const open = matchedText.indexOf('(')
-  if (open < 0) return null
-  let depth = 1
-  for (let i = open + 1; i < matchedText.length; i++) {
-    const ch = matchedText[i]
-    if (ch === '(') depth++
-    else if (ch === ')') {
-      depth--
-      if (depth === 0) return matchedText.slice(open + 1, i)
-    }
-  }
-  return null
 }
 
 /**
@@ -529,24 +561,38 @@ export function extractRoutesFromSource(
     const end = i + 1 < positions.length ? positions[i + 1].start : source.length
     const block = source.slice(start, end)
 
-    ROUTE_METHOD_REGEX.lastIndex = 0
-    let match: RegExpExecArray | null
-    while ((match = ROUTE_METHOD_REGEX.exec(block)) !== null) {
-      const [matchedText, verb, pathLiteral, methodName] = match
-      const path = pathLiteral && pathLiteral.length > 0 ? pathLiteral : '/'
+    // Two-pass walk: locate each route decorator start, then balance-parse
+    // forward through args and any stacked decorators to find the method
+    // name. Replaces the previous single regex which mis-parsed nested
+    // parens (forinda/kick-js#108).
+    ROUTE_DECORATOR_START.lastIndex = 0
+    let startMatch: RegExpExecArray | null
+    while ((startMatch = ROUTE_DECORATOR_START.exec(block)) !== null) {
+      const verb = startMatch[1]
+      const decoratorStart = startMatch.index
+      const openParen = ROUTE_DECORATOR_START.lastIndex - 1
+      const closeParen = findBalancedClose(block, openParen)
+      if (closeParen < 0) continue
 
-      // The route regex already greedily matched any stacked decorators
-      // BETWEEN the route decorator and the method declaration. Inspect
-      // the matched substring for an `@ApiQueryParams(...)` call.
+      const routeArgs = block.slice(openParen + 1, closeParen)
+
+      const pathLiteralMatch = routeArgs.match(/^\s*['"`]([^'"`]*)['"`]/)
+      const path = pathLiteralMatch && pathLiteralMatch[1].length > 0 ? pathLiteralMatch[1] : '/'
+
+      const methodInfo = readMethodAfterDecorators(block, closeParen + 1)
+      if (!methodInfo) continue
+      const { methodName, endPos } = methodInfo
+
+      // Advance the regex iterator past this method so the next iteration
+      // starts looking after the consumed region.
+      ROUTE_DECORATOR_START.lastIndex = endPos
+
+      const matchedText = block.slice(decoratorStart, endPos)
       const apiQp = extractApiQueryParams(matchedText, source)
 
-      // The route decorator's second argument carries body/query/params
-      // schema references. Extract them from the leading slice of the
-      // matched text (the part before any stacked decorators).
-      const routeArgs = extractRouteOptionsArg(matchedText)
-      const bodyId = routeArgs ? extractObjectFieldIdentifier(routeArgs, 'body') : null
-      const queryId = routeArgs ? extractObjectFieldIdentifier(routeArgs, 'query') : null
-      const paramsId = routeArgs ? extractObjectFieldIdentifier(routeArgs, 'params') : null
+      const bodyId = extractObjectFieldIdentifier(routeArgs, 'body')
+      const queryId = extractObjectFieldIdentifier(routeArgs, 'query')
+      const paramsId = extractObjectFieldIdentifier(routeArgs, 'params')
 
       out.push({
         controller: cls.className,

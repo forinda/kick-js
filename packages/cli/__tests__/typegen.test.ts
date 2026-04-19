@@ -153,4 +153,43 @@ export class UserController {
     }
     expect(tsc.exitCode).toBe(0)
   })
+
+  // Regression for forinda/kick-js#108
+  it('preserves method name when swagger decorators stack above the route', () => {
+    writeController(
+      'src/things/things.controller.ts',
+      `import { Controller, Post, Get } from '@forinda/kickjs'
+import { ApiOperation, ApiResponse, ApiTags } from '@forinda/kickjs-swagger'
+import { z } from 'zod'
+
+const bodySchema = z.object({ name: z.string() })
+
+@Controller('/things')
+@ApiTags('things')
+export class ThingsController {
+  @Post('/', { body: bodySchema })
+  @ApiOperation({ summary: 'Create a thing' })
+  @ApiResponse(201, { schema: z.object({ id: z.string() }) })
+  async create() {}
+
+  @Get('/:id')
+  @ApiOperation({ summary: 'Get one thing', operationId: 'getOne' })
+  async getById() {}
+}
+`,
+    )
+
+    runCli(fixture, ['typegen'])
+
+    const routes = readFileSync(join(fixture, '.kickjs/types/routes.ts'), 'utf-8')
+
+    // Both methods must appear by their real source names — not minifier-style
+    // single letters or operationId values pulled from decorator arguments.
+    expect(routes).toContain('interface ThingsController')
+    expect(routes).toMatch(/\bcreate:\s*\{/)
+    expect(routes).toMatch(/\bgetById:\s*\{/)
+    // Negative: nothing got named after a single letter or after `operationId`.
+    expect(routes).not.toMatch(/\b[a-z]:\s*\{[^}]*method:\s*'POST'/)
+    expect(routes).not.toMatch(/\bgetOne:\s*\{/)
+  })
 })
