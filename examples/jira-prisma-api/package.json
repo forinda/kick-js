@@ -25,7 +25,7 @@
     "@forinda/kickjs-queue": "workspace:*",
     "@forinda/kickjs-swagger": "workspace:*",
     "@forinda/kickjs-ws": "workspace:*",
-    "@prisma/client": "^6.9.0",
+    "@prisma/client": "^7.6.0",
     "bcryptjs": "^3.0.3",
     "bullmq": "^5.71.1",
     "express": "^5.1.0",
