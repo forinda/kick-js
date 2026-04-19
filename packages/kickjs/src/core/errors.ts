@@ -45,7 +45,7 @@ export const HttpStatus = {
 
 export type HttpStatusCode = (typeof HttpStatus)[keyof typeof HttpStatus]
 
-/** Validation error detail */
+/** Validation error detail — shape used by `unprocessable()` and `fromZodError()`. */
 export interface ValidationError {
   field: string
   message: string
@@ -53,40 +53,61 @@ export interface ValidationError {
 }
 
 /**
- * Typed HTTP exception with status code and optional validation details.
- * Provides static factory methods for common HTTP errors.
+ * Typed HTTP exception with status code, free-form details, and optional
+ * response headers. Provides static factory methods for common HTTP errors.
+ *
+ * `details` is intentionally typed as `unknown` — it serializes straight into
+ * the response body's `errors` field, so any JSON-compatible shape works
+ * (string, object, array of mixed values, ValidationError[]).
+ *
+ * `headers` are merged into the response by the global error handler so
+ * spec-mandated headers (Retry-After, WWW-Authenticate, Allow, Location)
+ * stay on the exception, not on ad-hoc try/catch chains.
  */
 export class HttpException extends Error {
   constructor(
     public readonly status: number,
     message: string,
-    public readonly details?: ValidationError[],
+    public readonly details?: unknown,
+    public readonly headers?: Record<string, string>,
   ) {
     super(message)
     this.name = 'HttpException'
   }
 
+  /** Return a new exception with `headers` shallow-merged onto this one. */
+  withHeaders(headers: Record<string, string>): HttpException {
+    return new HttpException(this.status, this.message, this.details, {
+      ...this.headers,
+      ...headers,
+    })
+  }
+
   /** Create from a Zod error */
   static fromZodError(error: any, message?: string): HttpException {
     const firstIssue = error.issues?.[0]
+    const details: ValidationError[] = (error.issues || []).map((issue: any) => ({
+      field: issue.path?.join('.') || '',
+      message: issue.message,
+      code: issue.code,
+    }))
     return new HttpException(
       HttpStatus.UNPROCESSABLE_ENTITY,
       message || firstIssue?.message || 'Validation failed',
-      [
-        ...(error.issues || []).map((issue: any) => ({
-          field: issue.path?.join('.') || '',
-          message: issue.message,
-          code: issue.code,
-        })),
-      ],
+      details,
     )
   }
 
   static badRequest(message = 'Bad Request') {
     return new HttpException(HttpStatus.BAD_REQUEST, message)
   }
-  static unauthorized(message = 'Unauthorized') {
-    return new HttpException(HttpStatus.UNAUTHORIZED, message)
+  static unauthorized(message = 'Unauthorized', wwwAuthenticate?: string) {
+    return new HttpException(
+      HttpStatus.UNAUTHORIZED,
+      message,
+      undefined,
+      wwwAuthenticate ? { 'WWW-Authenticate': wwwAuthenticate } : undefined,
+    )
   }
   static forbidden(message = 'Forbidden') {
     return new HttpException(HttpStatus.FORBIDDEN, message)
@@ -94,14 +115,32 @@ export class HttpException extends Error {
   static notFound(message = 'Not Found') {
     return new HttpException(HttpStatus.NOT_FOUND, message)
   }
+  static methodNotAllowed(allowedMethods: string[], message = 'Method Not Allowed') {
+    return new HttpException(HttpStatus.METHOD_NOT_ALLOWED, message, undefined, {
+      Allow: allowedMethods.join(', '),
+    })
+  }
   static conflict(message = 'Conflict') {
     return new HttpException(HttpStatus.CONFLICT, message)
   }
   static unprocessable(message = 'Unprocessable Entity', details?: ValidationError[]) {
     return new HttpException(HttpStatus.UNPROCESSABLE_ENTITY, message, details)
   }
-  static tooManyRequests(message = 'Too Many Requests') {
-    return new HttpException(HttpStatus.TOO_MANY_REQUESTS, message)
+  static tooManyRequests(message = 'Too Many Requests', retryAfterSeconds?: number) {
+    return new HttpException(
+      HttpStatus.TOO_MANY_REQUESTS,
+      message,
+      undefined,
+      retryAfterSeconds !== undefined ? { 'Retry-After': String(retryAfterSeconds) } : undefined,
+    )
+  }
+  static serviceUnavailable(message = 'Service Unavailable', retryAfterSeconds?: number) {
+    return new HttpException(
+      HttpStatus.SERVICE_UNAVAILABLE,
+      message,
+      undefined,
+      retryAfterSeconds !== undefined ? { 'Retry-After': String(retryAfterSeconds) } : undefined,
+    )
   }
   static internal(message = 'Internal Server Error') {
     return new HttpException(HttpStatus.INTERNAL_SERVER_ERROR, message)

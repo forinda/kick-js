@@ -33,9 +33,14 @@ export function errorHandler() {
       if (err.status >= 500) {
         log.error(err, err.message)
       }
+      if (err.headers) {
+        for (const [k, v] of Object.entries(err.headers)) {
+          res.setHeader(k, v)
+        }
+      }
       return res.status(err.status).json({
         message: err.message,
-        ...(err.details ? { errors: err.details } : {}),
+        ...(err.details !== undefined ? { errors: err.details } : {}),
       })
     }
 
