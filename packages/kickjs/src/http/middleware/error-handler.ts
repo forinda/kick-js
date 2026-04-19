@@ -10,8 +10,18 @@ export function notFoundHandler() {
   }
 }
 
-/** Global error handler */
+/**
+ * Global error handler.
+ *
+ * Default behavior strips error `details` from the response in production
+ * (NODE_ENV === 'production') so internal context (DB errors, validation
+ * issues, custom payloads) does not leak to clients. Apps that want to
+ * expose details in production — for client-facing field-level validation,
+ * for example — should pass their own `onError` to `bootstrap()` and decide
+ * the policy explicitly.
+ */
 export function errorHandler() {
+  const isProduction = process.env.NODE_ENV === 'production'
   return (err: any, req: Request, res: Response, _next: NextFunction) => {
     // Don't write after headers are already sent
     if (res.headersSent) {
@@ -24,7 +34,7 @@ export function errorHandler() {
       const firstIssue = err.issues?.[0]
       return res.status(422).json({
         message: firstIssue?.message || 'Validation failed',
-        errors: err.issues,
+        ...(isProduction ? {} : { errors: err.issues }),
       })
     }
 
@@ -38,9 +48,10 @@ export function errorHandler() {
           res.setHeader(k, v)
         }
       }
+      const exposeDetails = !isProduction && err.details !== undefined
       return res.status(err.status).json({
         message: err.message,
-        ...(err.details !== undefined ? { errors: err.details } : {}),
+        ...(exposeDetails ? { errors: err.details } : {}),
       })
     }
 
