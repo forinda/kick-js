@@ -154,6 +154,36 @@ export class UserController {
     expect(tsc.exitCode).toBe(0)
   })
 
+  it('emits ModuleToken union from classes that implement AppModule', () => {
+    writeController(
+      'src/modules/users/users.module.ts',
+      `import type { AppModule, Container } from '@forinda/kickjs'
+
+export class UsersModule implements AppModule {
+  register(container: Container) {}
+  routes() { return null }
+}
+`,
+    )
+    writeController(
+      'src/modules/auth/auth.module.ts',
+      `import type { AppModule } from '@forinda/kickjs'
+
+export class AuthModule implements AppModule {
+  routes() { return null }
+}
+`,
+    )
+
+    runCli(fixture, ['typegen'])
+
+    const modules = readFileSync(join(fixture, '.kickjs/types/modules.d.ts'), 'utf-8')
+    expect(modules).toContain('ModuleToken')
+    expect(modules).toContain("'UsersModule'")
+    expect(modules).toContain("'AuthModule'")
+    expect(modules).not.toMatch(/=\s*never/)
+  })
+
   // Regression for forinda/kick-js#108
   it('preserves method name when swagger decorators stack above the route', () => {
     writeController(

@@ -194,6 +194,22 @@ const DECORATED_CLASS_REGEX = new RegExp(
 )
 
 /**
+ * Match an exported class declaration that implements `AppModule`.
+ * KickJS modules are not decorated — they implement the `AppModule`
+ * interface — so the decorated-class scanner never picks them up. This
+ * regex captures them by name so `ModuleToken` can be populated.
+ *
+ * Tolerates an `extends BaseClass` clause before `implements`, multiple
+ * implements clauses (`implements Foo, AppModule`), and `default` exports.
+ */
+const APP_MODULE_CLASS_REGEX = new RegExp(
+  String.raw`export\s+(default\s+)?(?:abstract\s+)?class\s+(\w+)` +
+    String.raw`(?:\s+extends\s+\w+(?:<[^>]*>)?)?` +
+    String.raw`\s+implements\s+[^{]*\bAppModule\b`,
+  'g',
+)
+
+/**
  * Match a `createToken<T>('name')` call with optional `export const X =`
  * or `const X =` prefix. Tolerates whitespace and the type parameter
  * being absent (`createToken('name')`).
@@ -481,6 +497,23 @@ export function extractClassesFromSource(
     out.push({
       className,
       decorator: decorator as DecoratorName,
+      filePath,
+      relativePath: relPath,
+      isDefault: Boolean(defaultMarker),
+    })
+  }
+
+  // KickJS modules are undecorated classes that `implements AppModule`.
+  // Tag them with the synthetic `Module` decorator so downstream code that
+  // already filters by `c.decorator === 'Module'` keeps working.
+  APP_MODULE_CLASS_REGEX.lastIndex = 0
+  let modMatch: RegExpExecArray | null
+  while ((modMatch = APP_MODULE_CLASS_REGEX.exec(source)) !== null) {
+    const [, defaultMarker, className] = modMatch
+    if (out.some((c) => c.className === className && c.filePath === filePath)) continue
+    out.push({
+      className,
+      decorator: 'Module',
       filePath,
       relativePath: relPath,
       isDefault: Boolean(defaultMarker),
