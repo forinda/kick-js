@@ -39,9 +39,6 @@ export const app = bootstrap({
   middleware: [express.json()],
 })
 
-if (process.env.NODE_ENV === 'production') {
-  app.start()
-}
 ```
 
 Then run `vite` (or `kick dev`) and the Express app is mounted on Vite's HTTP

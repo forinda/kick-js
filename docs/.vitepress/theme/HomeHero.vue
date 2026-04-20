@@ -39,7 +39,7 @@ import { VPButton } from 'vitepress/theme'
                 <pre class="code-body"><span class="hl-keyword">import</span> { bootstrap, helmet, cors } <span class="hl-keyword">from</span> <span class="hl-string">'@forinda/kickjs'</span>
 <span class="hl-keyword">import</span> { modules } <span class="hl-keyword">from</span> <span class="hl-string">'./modules'</span>
 
-bootstrap({
+export const app = bootstrap({
   modules,
   middleware: [helmet(), cors(), express.json()],
 })</pre>
