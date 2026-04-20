@@ -1,9 +1,9 @@
-import { Logger } from '@forinda/kickjs'
+import { Logger, ref } from '@forinda/kickjs'
 import type { MailProvider, MailMessage, MailResult } from '../types'
 
 const log = Logger.for('ConsoleMail')
 
-let counter = 0
+let counter = ref(0)
 
 /**
  * Console mail provider — logs emails instead of sending them.
@@ -21,7 +21,7 @@ export class ConsoleProvider implements MailProvider {
   name = 'console'
 
   async send(message: MailMessage): Promise<MailResult> {
-    const id = `console-${++counter}`
+    const id = `console-${++counter.value}`
     const to = Array.isArray(message.to)
       ? message.to.map((r) => (typeof r === 'string' ? r : r.address)).join(', ')
       : typeof message.to === 'string'
