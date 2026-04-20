@@ -143,8 +143,8 @@ export async function generateScaffold(options: ScaffoldOptions): Promise<string
     files.push(fullPath)
   }
 
-  // ── Module Index
-  await write('index.ts', genModuleIndex(pascal, kebab, plural))
+  // ── Module file (named `<kebab>.module.ts` so Vite's module-discovery plugin picks it up)
+  await write(`${kebab}.module.ts`, genModuleIndex(pascal, kebab, plural))
 
   // ── Constants
   await write('constants.ts', genConstants(pascal, fields))
@@ -187,7 +187,7 @@ export async function generateScaffold(options: ScaffoldOptions): Promise<string
   }
 
   // ── Auto-register in modules index
-  await autoRegisterModule(modulesDir, pascal, plural)
+  await autoRegisterModule(modulesDir, pascal, plural, kebab)
 
   return files
 }
@@ -631,20 +631,22 @@ async function autoRegisterModule(
   modulesDir: string,
   pascal: string,
   plural: string,
+  kebab: string,
 ): Promise<void> {
   const indexPath = join(modulesDir, 'index.ts')
   const exists = await fileExists(indexPath)
+  const importPath = `./${plural}/${kebab}.module`
 
   if (!exists) {
     await writeFileSafe(
       indexPath,
-      `import type { AppModuleClass } from '@forinda/kickjs'\nimport { ${pascal}Module } from './${plural}'\n\nexport const modules: AppModuleClass[] = [${pascal}Module]\n`,
+      `import type { AppModuleClass } from '@forinda/kickjs'\nimport { ${pascal}Module } from '${importPath}'\n\nexport const modules: AppModuleClass[] = [${pascal}Module]\n`,
     )
     return
   }
 
   let content = await readFile(indexPath, 'utf-8')
-  const importLine = `import { ${pascal}Module } from './${plural}'`
+  const importLine = `import { ${pascal}Module } from '${importPath}'`
 
   if (!content.includes(`${pascal}Module`)) {
     const lastImportIdx = content.lastIndexOf('import ')

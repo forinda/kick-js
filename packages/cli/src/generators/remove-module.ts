@@ -52,9 +52,9 @@ export async function removeModule(options: RemoveModuleOptions): Promise<void> 
     let content = await readFile(indexPath, 'utf-8')
     const originalContent = content
 
-    // Remove import line
+    // Remove import line — matches both legacy `'./<plural>'` and current `'./<plural>/<kebab>.module'`
     const importPattern = new RegExp(
-      `^import\\s*\\{\\s*${pascal}Module\\s*\\}\\s*from\\s*['"][^'"]*${plural}['"].*\\n?`,
+      `^import\\s*\\{\\s*${pascal}Module\\s*\\}\\s*from\\s*['"][^'"]*${plural}(?:/[^'"]*)?['"].*\\n?`,
       'gm',
     )
     content = content.replace(importPattern, '')

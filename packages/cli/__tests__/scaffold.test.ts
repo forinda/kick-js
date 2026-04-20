@@ -39,7 +39,7 @@ describe('kick g scaffold', () => {
 
     // Spot-check the file tree — every layer of the DDD pattern.
     const expectedFiles = [
-      'src/modules/widgets/index.ts',
+      'src/modules/widgets/widget.module.ts',
       'src/modules/widgets/constants.ts',
       'src/modules/widgets/presentation/widget.controller.ts',
       'src/modules/widgets/application/dtos/create-widget.dto.ts',
@@ -111,7 +111,7 @@ describe('kick g scaffold', () => {
   it('emits a module index with the correct ModuleRoutes shape', () => {
     runCli(fixture, ['g', 'scaffold', 'widget', 'title:string'])
 
-    const moduleIndex = readFileSync(join(fixture, 'src/modules/widgets/index.ts'), 'utf-8')
+    const moduleIndex = readFileSync(join(fixture, 'src/modules/widgets/widget.module.ts'), 'utf-8')
     // Regression: we previously emitted { prefix, controllers } which
     // was the legacy shape and broke the framework. The current shape
     // must include path/router/controller — verified by the assertions

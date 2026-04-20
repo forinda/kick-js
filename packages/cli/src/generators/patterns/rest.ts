@@ -20,8 +20,8 @@ import {
 export async function generateRestFiles(ctx: ModuleContext): Promise<void> {
   const { pascal, kebab, plural, pluralPascal, repo, noTests, prismaClientPath, write } = ctx
 
-  // Module index
-  await write('index.ts', generateRestModuleIndex({ pascal, kebab, plural, repo }))
+  // Module file (named `<kebab>.module.ts` so Vite's module-discovery plugin picks it up)
+  await write(`${kebab}.module.ts`, generateRestModuleIndex({ pascal, kebab, plural, repo }))
 
   // Constants
   await write(`${kebab}.constants.ts`, generateRestConstants({ pascal, kebab }))

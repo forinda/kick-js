@@ -26,7 +26,7 @@ describe('kick g module', () => {
     assertCliOk(result, 'kick g module task')
 
     const expectedFiles = [
-      'src/modules/tasks/index.ts',
+      'src/modules/tasks/task.module.ts',
       'src/modules/tasks/constants.ts',
       'src/modules/tasks/presentation/task.controller.ts',
       'src/modules/tasks/application/dtos/create-task.dto.ts',
@@ -54,7 +54,7 @@ describe('kick g module', () => {
     expect(existsSync(indexPath)).toBe(true)
     const content = readFileSync(indexPath, 'utf-8')
     expect(content).toContain('TaskModule')
-    expect(content).toContain("from './tasks'")
+    expect(content).toContain("from './tasks/task.module'")
   })
 
   it('emits a collision-safe createToken for the repository token', () => {
@@ -82,8 +82,8 @@ describe('kick g module', () => {
     const result = runCli(fixture, ['g', 'module', 'user', 'post'])
     assertCliOk(result, 'kick g module user post')
 
-    expect(existsSync(join(fixture, 'src/modules/users/index.ts'))).toBe(true)
-    expect(existsSync(join(fixture, 'src/modules/posts/index.ts'))).toBe(true)
+    expect(existsSync(join(fixture, 'src/modules/users/user.module.ts'))).toBe(true)
+    expect(existsSync(join(fixture, 'src/modules/posts/post.module.ts'))).toBe(true)
 
     const indexContent = readFileSync(join(fixture, 'src/modules/index.ts'), 'utf-8')
     expect(indexContent).toContain('UserModule')

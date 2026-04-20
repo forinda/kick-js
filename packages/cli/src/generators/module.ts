@@ -118,7 +118,7 @@ export async function generateModule(options: GenerateModuleOptions): Promise<st
 
   // Auto-register in modules index (all patterns need this)
   if (!dryRun) {
-    await autoRegisterModule(modulesDir, pascal, plural)
+    await autoRegisterModule(modulesDir, pascal, plural, kebab)
   }
 
   return files
@@ -131,15 +131,17 @@ async function autoRegisterModule(
   modulesDir: string,
   pascal: string,
   plural: string,
+  kebab: string,
 ): Promise<void> {
   const indexPath = join(modulesDir, 'index.ts')
   const exists = await fileExists(indexPath)
+  const importPath = `./${plural}/${kebab}.module`
 
   if (!exists) {
     await writeFileSafe(
       indexPath,
       `import type { AppModuleClass } from '@forinda/kickjs'
-import { ${pascal}Module } from './${plural}'
+import { ${pascal}Module } from '${importPath}'
 
 export const modules: AppModuleClass[] = [${pascal}Module]
 `,
@@ -150,7 +152,7 @@ export const modules: AppModuleClass[] = [${pascal}Module]
   let content = await readFile(indexPath, 'utf-8')
 
   // Add import if not present
-  const importLine = `import { ${pascal}Module } from './${plural}'`
+  const importLine = `import { ${pascal}Module } from '${importPath}'`
   if (!content.includes(`${pascal}Module`)) {
     // Insert import after last existing import
     const lastImportIdx = content.lastIndexOf('import ')
