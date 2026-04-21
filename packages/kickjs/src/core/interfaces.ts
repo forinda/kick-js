@@ -57,6 +57,8 @@ export const METADATA = {
   ROUTES: Symbol('kick:routes'),
   CLASS_MIDDLEWARES: Symbol('kick:class:middlewares'),
   METHOD_MIDDLEWARES: Symbol('kick:method:middlewares'),
+  CLASS_CONTRIBUTORS: Symbol('kick:class:contributors'),
+  METHOD_CONTRIBUTORS: Symbol('kick:method:contributors'),
   FILE_UPLOAD: Symbol('kick:file:upload'),
   VALUE: Symbol('kick:value'),
   // TypeScript emit metadata keys
