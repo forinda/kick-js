@@ -25,7 +25,11 @@ interface AuthUser {
 function Authenticated(strategy?: string): ClassDecorator & MethodDecorator
 function Public(): MethodDecorator
 function Roles(...roles: string[]): MethodDecorator
+function Can(action: string, resource: string): MethodDecorator
+function Policy(resource: string): ClassDecorator
 ```
+
+`@Can` checks `AuthorizationService.can(user, action, resource)` before the handler runs and returns 403 on deny. `@Policy('name')` registers a class whose methods are actions (`view`, `update`, `delete`, …) that back `can()`.
 
 ## AuthAdapter
 
@@ -106,6 +110,127 @@ class PassportBridge implements AuthStrategy {
   constructor(name: string, passportStrategy: any)
 }
 ```
+
+## AuthorizationService
+
+Programmatic authorization checks against `@Policy()`-registered classes. Registered as a DI singleton (`@Service()`) — inject via the class token (`AuthorizationService`); there is no separate symbol token.
+
+```typescript
+@Service()
+class AuthorizationService {
+  can(
+    user: AuthUser,
+    action: string,
+    resource: string,
+    resourceInstance?: any,
+  ): Promise<boolean>
+}
+```
+
+- Returns `false` when no `@Policy(resource)` is registered, when the policy class has no method named `action`, or when the method returns a falsy value.
+- `resourceInstance` is forwarded as the second argument to the policy method (first argument is the user).
+- `@Can(action, resource)` is the decorator equivalent for controller methods and is enforced by `AuthAdapter`.
+
+```ts
+@Service()
+class PostService {
+  @Autowired() private authz!: AuthorizationService
+
+  async update(user: AuthUser, id: string, data: UpdateDto) {
+    const post = await this.repo.findById(id)
+    if (!(await this.authz.can(user, 'update', 'post', post))) {
+      throw new HttpException(HttpStatus.FORBIDDEN)
+    }
+    return this.repo.update(id, data)
+  }
+}
+```
+
+### Policy auto-discovery
+
+```typescript
+function loadPolicies(modules: Record<string, unknown>): number
+```
+
+Policy classes only self-register when their file is imported. Call `loadPolicies(import.meta.glob('./modules/**/*.policy.ts', { eager: true }))` once at startup (before `bootstrap()`) so `@Policy()` decorators fire. Returns the number of classes discovered.
+
+## PasswordService
+
+Password hashing, verification, rehash detection, and plaintext policy validation. Registered as a DI singleton — inject via the class token (`PasswordService`); there is no separate symbol token.
+
+```typescript
+@Service()
+class PasswordService {
+  constructor(config?: PasswordConfig)
+
+  hash(password: string): Promise<string>
+  verify(hash: string, password: string): Promise<boolean>
+  needsRehash(hash: string): boolean
+  validate(password: string, policy?: PasswordPolicy): PasswordValidationResult
+}
+
+interface PasswordConfig {
+  /** Hashing algorithm (default: 'scrypt'). */
+  algorithm?: 'scrypt' | 'argon2id' | 'bcrypt'
+
+  // scrypt options
+  /** CPU/memory cost N (default: 16384) */
+  cost?: number
+  /** Block size r (default: 8) */
+  blockSize?: number
+  /** Parallelism p (default: 1) */
+  parallelism?: number
+  /** Derived key length in bytes (default: 64) */
+  keyLength?: number
+  /** Salt length in bytes for scrypt (default: 16) */
+  saltLength?: number
+
+  // argon2id options
+  /** Memory cost in KiB (default: 65536 = 64 MiB) */
+  memoryCost?: number
+  /** Iterations (default: 3) */
+  timeCost?: number
+
+  // bcrypt options
+  /** Salt rounds (default: 12) */
+  rounds?: number
+}
+
+interface PasswordPolicy {
+  minLength?: number          // default 8
+  maxLength?: number          // default 128
+  requireUppercase?: boolean
+  requireLowercase?: boolean
+  requireDigit?: boolean
+  requireSpecial?: boolean
+}
+
+interface PasswordValidationResult {
+  valid: boolean
+  errors: string[]
+}
+```
+
+### Algorithms and peer dependencies
+
+- `scrypt` (default) — Node built-in, no extra install.
+- `argon2id` — requires `pnpm add argon2`.
+- `bcrypt` — requires `pnpm add bcryptjs` (preferred, pure JS) or `pnpm add bcrypt` (native).
+
+Missing peer deps surface as a runtime error on the first `hash()`/`verify()` call.
+
+### Rehash on login
+
+`verify()` auto-detects the algorithm encoded in the stored hash, so rotating `algorithm` or tuning cost parameters does not break existing users. Call `needsRehash(hash)` after a successful `verify()` and persist a fresh hash when it returns `true`:
+
+```ts
+const ok = await pw.verify(user.passwordHash, plaintext)
+if (ok && pw.needsRehash(user.passwordHash)) {
+  await userRepo.update(user.id, { passwordHash: await pw.hash(plaintext) })
+}
+```
+
+`needsRehash()` returns `true` when the hash's algorithm differs from `config.algorithm`, or when the encoded cost parameters (scrypt `cost`/`blockSize`/`parallelism`/`keyLength`, argon2 `memoryCost`/`timeCost`, bcrypt `rounds`) no longer match the configured values.
 
 ## Constants
 
