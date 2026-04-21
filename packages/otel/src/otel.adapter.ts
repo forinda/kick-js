@@ -45,6 +45,7 @@ export class OtelAdapter implements AppAdapter {
   private meter: any = null
   private requestCounter: any = null
   private requestDuration: any = null
+  private readonly redact: (key: string, value: unknown) => unknown
 
   constructor(options: OtelAdapterOptions = {}) {
     this.options = {
@@ -54,6 +55,7 @@ export class OtelAdapter implements AppAdapter {
       metrics: options.metrics ?? true,
       ...options,
     }
+    this.redact = buildRedactor(this.options.sensitiveKeys, this.options.redactAttribute)
   }
 
   beforeStart({}: AdapterContext): void {
@@ -103,14 +105,14 @@ export class OtelAdapter implements AppAdapter {
           if (this.tracer) {
             const otelApi = require('@opentelemetry/api')
             span = this.tracer.startSpan(`${req.method} ${req.route?.path ?? req.path}`, {
-              attributes: {
+              attributes: this.applyRedaction({
                 'http.method': req.method,
                 'http.url': req.originalUrl,
                 'http.target': req.path,
                 'http.user_agent': req.get('user-agent') ?? '',
                 'net.host.name': req.hostname,
                 ...(this.options.customAttributes?.(req) ?? {}),
-              },
+              }),
             })
 
             // Set span on context so downstream code can add attributes
@@ -142,10 +144,12 @@ export class OtelAdapter implements AppAdapter {
 
       // End span
       if (span) {
-        span.setAttributes({
-          'http.status_code': res.statusCode,
-          'http.route': route,
-        })
+        span.setAttributes(
+          this.applyRedaction({
+            'http.status_code': res.statusCode,
+            'http.route': route,
+          }),
+        )
         if (res.statusCode >= 400) {
           span.setStatus({ code: 2, message: `HTTP ${res.statusCode}` })
         }
@@ -172,7 +176,51 @@ export class OtelAdapter implements AppAdapter {
     })
   }
 
+  /**
+   * Run the configured redactor over an attribute bag. Exposed so
+   * downstream code that adds attributes directly on a span
+   * (`span.setAttributes(...)`) can share the same redaction contract.
+   */
+  applyRedaction<T extends Record<string, unknown>>(attrs: T): Record<string, unknown> {
+    const out: Record<string, unknown> = {}
+    for (const key of Object.keys(attrs)) {
+      out[key] = this.redact(key, attrs[key])
+    }
+    return out
+  }
+
   async shutdown(): Promise<void> {
     log.info('OTel adapter shutdown')
+  }
+}
+
+/**
+ * Build an attribute redactor from `sensitiveKeys` + optional
+ * `redactAttribute` override. String keys match case-insensitively
+ * against the attribute name; `RegExp` entries are matched verbatim.
+ * A custom `redactAttribute` runs after the key-based mask so users
+ * can inspect values too.
+ */
+function buildRedactor(
+  sensitiveKeys: (string | RegExp)[] | undefined,
+  custom: ((key: string, value: unknown) => unknown) | undefined,
+): (key: string, value: unknown) => unknown {
+  if (custom) return custom
+  if (!sensitiveKeys || sensitiveKeys.length === 0) return (_k, v) => v
+
+  const lowered = new Set<string>()
+  const patterns: RegExp[] = []
+  for (const entry of sensitiveKeys) {
+    if (typeof entry === 'string') lowered.add(entry.toLowerCase())
+    else patterns.push(entry)
+  }
+
+  return (key: string, value: unknown) => {
+    const lower = key.toLowerCase()
+    if (lowered.has(lower)) return '[REDACTED]'
+    for (const p of patterns) {
+      if (p.test(key)) return '[REDACTED]'
+    }
+    return value
   }
 }
