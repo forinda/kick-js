@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-prisma",
-  "version": "3.1.2",
+  "version": "3.1.3",
   "description": "Prisma ORM adapter with DI integration, transaction support, and query building for KickJS",
   "keywords": [
     "kickjs",
