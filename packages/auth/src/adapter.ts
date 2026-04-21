@@ -208,7 +208,7 @@ export class AuthAdapter implements AppAdapter {
   // ── Core Auth Middleware ─────────────────────────────────────────────
 
   private createAuthMiddleware() {
-    const authzService = new AuthorizationService()
+    const authzService = new AuthorizationService(this.options.policy)
 
     return async (req: any, res: any, next: any) => {
       // Find which controller + method handles this route

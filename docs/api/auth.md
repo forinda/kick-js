@@ -118,6 +118,8 @@ Programmatic authorization checks against `@Policy()`-registered classes. Regist
 ```typescript
 @Service()
 class AuthorizationService {
+  constructor(options?: AuthorizationServiceOptions)
+
   can(
     user: AuthUser,
     action: string,
@@ -125,6 +127,32 @@ class AuthorizationService {
     resourceInstance?: any,
   ): Promise<boolean>
 }
+
+interface AuthorizationServiceOptions {
+  /**
+   * How to handle `@Can()` calls that reference a missing policy or action.
+   *
+   * - `'warn'` (default) — log once per (resource, action) and deny. Catches
+   *   typos and renamed methods without breaking prod traffic.
+   * - `'error'` — throw `PolicyMissingError`. Use in CI/test builds.
+   * - `'silent'` — legacy behavior; deny with no log.
+   */
+  onMiss?: 'warn' | 'error' | 'silent'
+}
+
+class PolicyMissingError extends Error {
+  readonly resource: string
+  readonly action: string
+}
+```
+
+`AuthAdapter` forwards `options.policy` to its internal `AuthorizationService`:
+
+```ts
+new AuthAdapter({
+  strategies: [...],
+  policy: { onMiss: process.env.NODE_ENV === 'test' ? 'error' : 'warn' },
+})
 ```
 
 - Returns `false` when no `@Policy(resource)` is registered, when the policy class has no method named `action`, or when the method returns a falsy value.

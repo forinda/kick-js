@@ -1,5 +1,7 @@
-import { Service } from '@forinda/kickjs'
+import { Logger, Service } from '@forinda/kickjs'
 import type { AuthUser } from './types'
+
+const log = Logger.for('AuthorizationService')
 
 // ── Policy Registry ───────────────────────────────────────────────────
 
@@ -79,6 +81,39 @@ export function loadPolicies(modules: Record<string, any>): number {
 // ── AuthorizationService ──────────────────────────────────────────────
 
 /**
+ * How `AuthorizationService` responds when a `@Can(action, resource)` call
+ * targets a resource with no registered policy, or a policy class with no
+ * matching action method.
+ *
+ * - `'warn'` (default) — log once per (resource, action) and deny. Catches
+ *   typos and renamed methods without breaking prod traffic.
+ * - `'error'` — throw a `PolicyMissingError`. Use in strict CI/test builds
+ *   to fail loud on missing coverage.
+ * - `'silent'` — deny with no log. Matches legacy behavior.
+ */
+export type PolicyMissBehavior = 'warn' | 'error' | 'silent'
+
+export interface AuthorizationServiceOptions {
+  /** How to handle `@Can()` calls that reference a missing policy or action. Default: `'warn'`. */
+  onMiss?: PolicyMissBehavior
+}
+
+/**
+ * Thrown by `AuthorizationService.can()` when `onMiss: 'error'` is configured
+ * and a policy or action method is missing.
+ */
+export class PolicyMissingError extends Error {
+  readonly resource: string
+  readonly action: string
+  constructor(message: string, resource: string, action: string) {
+    super(message)
+    this.name = 'PolicyMissingError'
+    this.resource = resource
+    this.action = action
+  }
+}
+
+/**
  * Programmatic authorization checks against registered policies.
  *
  * @example
@@ -99,6 +134,13 @@ export function loadPolicies(modules: Record<string, any>): number {
  */
 @Service()
 export class AuthorizationService {
+  private readonly onMiss: PolicyMissBehavior
+  private readonly warnedMisses = new Set<string>()
+
+  constructor(options: AuthorizationServiceOptions = {}) {
+    this.onMiss = options.onMiss ?? 'warn'
+  }
+
   /**
    * Check if a user can perform an action on a resource.
    *
@@ -107,6 +149,9 @@ export class AuthorizationService {
    * @param resource - The resource name (matches @Policy('name'))
    * @param resourceInstance - Optional resource instance passed to the policy method
    * @returns `true` if allowed, `false` if denied or no policy found
+   *
+   * @throws {PolicyMissingError} when `onMiss: 'error'` and the policy class
+   *   or action method is missing.
    */
   async can(
     user: AuthUser,
@@ -115,12 +160,40 @@ export class AuthorizationService {
     resourceInstance?: any,
   ): Promise<boolean> {
     const PolicyClass = policyRegistry.get(resource)
-    if (!PolicyClass) return false
+    if (!PolicyClass) {
+      this.reportMiss(
+        resource,
+        action,
+        `No @Policy('${resource}') registered — denying ${resource}.${action}. ` +
+          `Check that the policy file is imported (use loadPolicies()) and the resource name matches.`,
+      )
+      return false
+    }
 
     const policy = new PolicyClass()
     const method = policy[action]
-    if (typeof method !== 'function') return false
+    if (typeof method !== 'function') {
+      this.reportMiss(
+        resource,
+        action,
+        `@Policy('${resource}') has no '${action}' method — denying ${resource}.${action}. ` +
+          `Add \`${action}(user, instance)\` to ${PolicyClass.name} or rename the @Can() action.`,
+      )
+      return false
+    }
 
     return method.call(policy, user, resourceInstance)
+  }
+
+  private reportMiss(resource: string, action: string, message: string): void {
+    if (this.onMiss === 'error') {
+      throw new PolicyMissingError(message, resource, action)
+    }
+    if (this.onMiss === 'warn') {
+      const key = `${resource}.${action}`
+      if (this.warnedMisses.has(key)) return
+      this.warnedMisses.add(key)
+      log.warn(message)
+    }
   }
 }

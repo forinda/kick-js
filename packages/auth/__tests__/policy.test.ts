@@ -1,6 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import 'reflect-metadata'
-import { Policy, AuthorizationService, policyRegistry } from '../src/policy'
+import { Logger } from '@forinda/kickjs'
+import {
+  Policy,
+  AuthorizationService,
+  PolicyMissingError,
+  policyRegistry,
+} from '../src/policy'
 import { AuthAdapter, Can, type AuthStrategy } from '@forinda/kickjs-auth'
 import { Controller, Delete, Get } from '@forinda/kickjs'
 
@@ -42,7 +48,7 @@ describe('Policy & AuthorizationService', () => {
   })
 
   it('returns false for unknown resource', async () => {
-    const authz = new AuthorizationService()
+    const authz = new AuthorizationService({ onMiss: 'silent' })
     expect(await authz.can({ id: '1' }, 'view', 'nonexistent')).toBe(false)
   })
 
@@ -54,8 +60,80 @@ describe('Policy & AuthorizationService', () => {
       }
     }
 
-    const authz = new AuthorizationService()
+    const authz = new AuthorizationService({ onMiss: 'silent' })
     expect(await authz.can({ id: '1' }, 'destroy', 'item')).toBe(false)
+  })
+
+  describe('onMiss behavior', () => {
+    it('warns once per (resource, action) when policy class is missing', async () => {
+      const warn = vi
+        .spyOn(Logger.for('AuthorizationService'), 'warn')
+        .mockImplementation(() => {})
+      const authz = new AuthorizationService() // default 'warn'
+
+      await authz.can({ id: '1' }, 'view', 'ghost')
+      await authz.can({ id: '1' }, 'view', 'ghost') // second call deduped
+      await authz.can({ id: '1' }, 'edit', 'ghost') // different action → second warn
+
+      expect(warn).toHaveBeenCalledTimes(2)
+      expect(warn.mock.calls[0][0]).toMatch(/no @Policy\('ghost'\) registered/i)
+
+      warn.mockRestore()
+    })
+
+    it('warns once per (resource, action) when method is missing', async () => {
+      @Policy('flock')
+      class FlockPolicy {
+        view() {
+          return true
+        }
+      }
+
+      const warn = vi
+        .spyOn(Logger.for('AuthorizationService'), 'warn')
+        .mockImplementation(() => {})
+      const authz = new AuthorizationService()
+
+      await authz.can({ id: '1' }, 'delete', 'flock')
+      await authz.can({ id: '1' }, 'delete', 'flock') // deduped
+      expect(warn).toHaveBeenCalledTimes(1)
+      expect(warn.mock.calls[0][0]).toMatch(/no 'delete' method/i)
+
+      warn.mockRestore()
+    })
+
+    it("strict mode ('error') throws PolicyMissingError on missing policy", async () => {
+      const authz = new AuthorizationService({ onMiss: 'error' })
+      await expect(authz.can({ id: '1' }, 'view', 'ghost')).rejects.toBeInstanceOf(
+        PolicyMissingError,
+      )
+    })
+
+    it("strict mode ('error') throws PolicyMissingError on missing method", async () => {
+      @Policy('widget')
+      class WidgetPolicy {
+        view() {
+          return true
+        }
+      }
+
+      const authz = new AuthorizationService({ onMiss: 'error' })
+      await expect(authz.can({ id: '1' }, 'destroy', 'widget')).rejects.toMatchObject({
+        name: 'PolicyMissingError',
+        resource: 'widget',
+        action: 'destroy',
+      })
+    })
+
+    it("'silent' mode never logs", async () => {
+      const warn = vi
+        .spyOn(Logger.for('AuthorizationService'), 'warn')
+        .mockImplementation(() => {})
+      const authz = new AuthorizationService({ onMiss: 'silent' })
+      await authz.can({ id: '1' }, 'view', 'nope')
+      expect(warn).not.toHaveBeenCalled()
+      warn.mockRestore()
+    })
   })
 
   it('policy method receives resource instance', async () => {

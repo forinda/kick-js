@@ -154,6 +154,20 @@ export interface AuthAdapterOptions {
    * by `@Roles()` instead of the global `user.roles`.
    */
   roleResolver?: (user: AuthUser, tenantId: string) => string[] | Promise<string[]>
+
+  /**
+   * Behavior of `@Can(action, resource)` when the resource has no
+   * registered `@Policy()` class, or the policy class has no method
+   * named `action`. See `AuthorizationServiceOptions.onMiss`.
+   *
+   * - `'warn'` (default) — log once per (resource, action) and 403 the request.
+   * - `'error'` — return 500 (the underlying `PolicyMissingError` bubbles up).
+   *   Useful in CI/test builds to fail loud on missing coverage.
+   * - `'silent'` — legacy behavior; deny with no log.
+   */
+  policy?: {
+    onMiss?: 'warn' | 'error' | 'silent'
+  }
 }
 
 // ── Auth Events ──────────────────────────────────────────────────────

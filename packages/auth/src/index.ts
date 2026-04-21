@@ -22,7 +22,15 @@ export {
 export { Authenticated, Public, Roles, CsrfExempt, RateLimit, Can } from './decorators'
 
 // Policy-based authorization
-export { Policy, AuthorizationService, policyRegistry, loadPolicies } from './policy'
+export {
+  Policy,
+  AuthorizationService,
+  PolicyMissingError,
+  policyRegistry,
+  loadPolicies,
+  type AuthorizationServiceOptions,
+  type PolicyMissBehavior,
+} from './policy'
 
 // Adapter
 export { AuthAdapter, AUTH_USER } from './adapter'
