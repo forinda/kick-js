@@ -64,3 +64,33 @@ describe('RequestContext.user', () => {
     expect(ctx.get('user')).toEqual(user)
   })
 })
+
+describe('RequestContext.tenantId / .roles', () => {
+  it('tenantId is undefined when no user is set', () => {
+    const ctx = mockCtx()
+    expect(ctx.tenantId).toBeUndefined()
+    expect(ctx.roles).toEqual([])
+  })
+
+  it('tenantId reads user.tenantId', () => {
+    const ctx = mockCtx({ user: { id: '1', tenantId: 't-9' } })
+    expect(ctx.tenantId).toBe('t-9')
+  })
+
+  it('roles prefers user.tenantRoles over user.roles', () => {
+    const ctx = mockCtx({
+      user: { id: '1', roles: ['user'], tenantRoles: ['owner', 'editor'] },
+    })
+    expect(ctx.roles).toEqual(['owner', 'editor'])
+  })
+
+  it('roles falls back to user.roles when tenantRoles is missing', () => {
+    const ctx = mockCtx({ user: { id: '1', roles: ['admin'] } })
+    expect(ctx.roles).toEqual(['admin'])
+  })
+
+  it('roles returns empty array when user has neither field', () => {
+    const ctx = mockCtx({ user: { id: '1' } })
+    expect(ctx.roles).toEqual([])
+  })
+})

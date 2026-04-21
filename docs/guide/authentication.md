@@ -105,12 +105,44 @@ For full type safety, augment the `ContextMeta` interface:
 // src/types.ts
 declare module '@forinda/kickjs' {
   interface ContextMeta {
-    user: { id: string; email: string; roles: string[] }
+    user: { id: string; email: string; roles: string[]; tenantId?: string }
   }
 }
 ```
 
 Now `ctx.user` and `ctx.get('user')` are fully typed across your app.
+
+### Tenant and role accessors
+
+Multi-tenant apps commonly read `tenantId` and effective `roles` off the user. `RequestContext` exposes these directly:
+
+```ts
+@Get('/flocks')
+list(ctx: RequestContext) {
+  return ctx.json({
+    tenant: ctx.tenantId,   // reads user.tenantId
+    roles: ctx.roles,       // prefers user.tenantRoles, falls back to user.roles
+  })
+}
+```
+
+- `ctx.tenantId` — `string | undefined`, reads `user.tenantId`.
+- `ctx.roles` — `string[]`, prefers `user.tenantRoles` (set by `AuthAdapterOptions.roleResolver` when `req.tenant` is present), falls back to `user.roles`, empty array otherwise.
+
+For tenant-scoped RBAC, populate `tenantRoles` via `AuthAdapterOptions.roleResolver`:
+
+```ts
+new AuthAdapter({
+  strategies: [...],
+  roleResolver: async (user, tenantId) => {
+    return db.query.memberships.findFirst({
+      where: { userId: user.id, tenantId },
+    }).then((m) => m?.roles ?? [])
+  },
+})
+```
+
+After this, `@Roles('owner')` and `ctx.roles` both see the tenant-scoped list instead of the global user roles.
 
 ## Built-in Strategies
 

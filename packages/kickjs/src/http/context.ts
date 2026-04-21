@@ -123,6 +123,30 @@ export class RequestContext<TBody = any, TParams = any, TQuery = any> {
     return this.metadata.get('user') ?? (this.req as any).user
   }
 
+  /**
+   * Tenant identifier for multi-tenant apps. Reads `user.tenantId` —
+   * populated either by `AuthAdapter.testMode({ tenantId })`, a tenant
+   * resolver middleware, or manually on the strategy's `mapPayload`.
+   *
+   * Augment `AuthUser` (or `ContextMeta['user']`) to widen the return
+   * type if your user shape guarantees a non-`string | undefined` id.
+   */
+  get tenantId(): string | undefined {
+    const u = this.user as Record<string, any> | undefined
+    return u?.tenantId
+  }
+
+  /**
+   * Effective role list for the current user. Prefers `user.tenantRoles`
+   * (populated by `AuthAdapterOptions.roleResolver` under a tenant) and
+   * falls back to `user.roles`. Returns an empty array when the user is
+   * absent or the shape has neither field.
+   */
+  get roles(): string[] {
+    const u = this.user as Record<string, any> | undefined
+    return u?.tenantRoles ?? u?.roles ?? []
+  }
+
   // ── Query String Parsing ───────────────────────────────────────────
 
   /**
