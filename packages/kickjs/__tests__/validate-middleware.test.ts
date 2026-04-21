@@ -143,6 +143,43 @@ describe('validate() middleware', () => {
     expect(observed).toEqual({ name: 'parsed' })
   })
 
+  it('assigns parsed data to req.query on Express 5 (getter-only property)', async () => {
+    // Regression for #130 — Express 5 installs req.query as a getter, so
+    // direct assignment throws in strict mode. validate() must use
+    // defineProperty so validated query data reaches the handler.
+    const app = express()
+    let observed: any = null
+    app.get(
+      '/search',
+      validate({ query: schemaThatPasses({ page: 2, limit: 50 }) }),
+      (req, res) => {
+        observed = req.query
+        res.json({ ok: true })
+      },
+    )
+
+    const res = await request(app).get('/search?page=abc')
+    expect(res.status).toBe(200)
+    expect(observed).toEqual({ page: 2, limit: 50 })
+  })
+
+  it('assigns parsed data to req.params when validation passes', async () => {
+    const app = express()
+    let observed: any = null
+    app.get(
+      '/users/:id',
+      validate({ params: schemaThatPasses({ id: 'normalized-uuid' }) }),
+      (req, res) => {
+        observed = req.params
+        res.json({ ok: true })
+      },
+    )
+
+    const res = await request(app).get('/users/raw-id')
+    expect(res.status).toBe(200)
+    expect(observed).toEqual({ id: 'normalized-uuid' })
+  })
+
   it('still calls next(err) when safeParse itself throws', async () => {
     const throwingSchema = {
       safeParse() {

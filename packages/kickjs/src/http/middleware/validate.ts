@@ -22,6 +22,25 @@ function toValidationException(
 }
 
 /**
+ * Express 5 installs `req.query` as a getter-only property (so pluggable
+ * `query parser` functions can run lazily). Direct assignment throws in
+ * strict mode: `Cannot set property query of #<IncomingMessage> which
+ * has only a getter`. `Object.defineProperty` replaces the getter with
+ * a plain value slot and sidesteps the throw. Used for `query` and
+ * defensively for `params` too — Express 5 currently leaves `params`
+ * writable, but swapping the descriptor costs the same and future-proofs
+ * against upstream changes.
+ */
+function assignReqProperty(req: Request, key: 'query' | 'params', value: unknown): void {
+  Object.defineProperty(req, key, {
+    value,
+    writable: true,
+    configurable: true,
+    enumerable: true,
+  })
+}
+
+/**
  * Express middleware that validates request body/query/params against schemas.
  * Works with any validation library that exposes `.safeParse(data)` returning
  * `{ success: true, data }` or `{ success: false, error: { issues } }`.
@@ -47,7 +66,7 @@ export function validate(schema: ValidationSchema) {
         if (!result.success) {
           return next(toValidationException(result.error, 'Invalid query parameters', false))
         }
-        ;(req as any).query = result.data
+        assignReqProperty(req, 'query', result.data)
       }
 
       if (schema.params) {
@@ -55,7 +74,7 @@ export function validate(schema: ValidationSchema) {
         if (!result.success) {
           return next(toValidationException(result.error, 'Invalid path parameters', false))
         }
-        ;(req as any).params = result.data
+        assignReqProperty(req, 'params', result.data)
       }
 
       next()
