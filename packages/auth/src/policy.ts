@@ -110,6 +110,31 @@ export interface AuthorizationServiceOptions {
    * `allow` when an entry matches both.
    */
   deny?: string[]
+  /**
+   * Resolve the set of resource IDs a user can `action`. The mirror
+   * operation of `can()` — used by list endpoints that need
+   * `WHERE id IN (...)` pushdown instead of fetching everything and
+   * filtering with `can()` row-by-row.
+   *
+   * Intended for ReBAC engines (OpenFGA, SpiceDB, Cedar). Callers that
+   * only use class-based `@Policy` (attribute checks, no ID enumeration)
+   * should leave this unset — `AuthorizationService.listObjects()` then
+   * throws `NotImplementedError` so callers can fall back to a
+   * find-all + `.can()` loop.
+   */
+  listObjects?: (user: AuthUser, action: string, resource: string) => Promise<readonly string[]>
+}
+
+/**
+ * Thrown by `AuthorizationService.listObjects()` when no `listObjects`
+ * implementation was provided. Callers should catch this and fall back
+ * to `findAll + filter with can()`.
+ */
+export class NotImplementedError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'NotImplementedError'
+  }
 }
 
 /**
@@ -152,11 +177,17 @@ export class AuthorizationService {
   private readonly allow: ReadonlySet<string>
   private readonly deny: ReadonlySet<string>
   private readonly warnedMisses = new Set<string>()
+  private readonly listObjectsImpl?: (
+    user: AuthUser,
+    action: string,
+    resource: string,
+  ) => Promise<readonly string[]>
 
   constructor(options: AuthorizationServiceOptions = {}) {
     this.onMiss = options.onMiss ?? 'warn'
     this.allow = new Set(options.allow ?? [])
     this.deny = new Set(options.deny ?? [])
+    this.listObjectsImpl = options.listObjects
   }
 
   /**
@@ -205,6 +236,30 @@ export class AuthorizationService {
     }
 
     return method.call(policy, user, resourceInstance)
+  }
+
+  /**
+   * Return the set of resource IDs the user can `action`. Requires a
+   * `listObjects` implementation to be supplied via constructor options
+   * — typically backed by a ReBAC engine (OpenFGA, SpiceDB, Cedar).
+   *
+   * @throws {NotImplementedError} when no implementation is registered.
+   *   Callers should catch and fall back to `findAll + filter with can()`.
+   */
+  async listObjects(user: AuthUser, action: string, resource: string): Promise<readonly string[]> {
+    if (!this.listObjectsImpl) {
+      throw new NotImplementedError(
+        `listObjects(${resource}.${action}) is not implemented — ` +
+          'supply AuthorizationServiceOptions.listObjects (e.g. an OpenFGA client) ' +
+          'or fall back to findAll + can().',
+      )
+    }
+    return this.listObjectsImpl(user, action, resource)
+  }
+
+  /** True iff a `listObjects` implementation was supplied. */
+  supportsListObjects(): boolean {
+    return !!this.listObjectsImpl
   }
 
   private reportMiss(resource: string, action: string, message: string): void {

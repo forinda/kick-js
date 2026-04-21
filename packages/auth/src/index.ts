@@ -26,6 +26,7 @@ export {
   Policy,
   AuthorizationService,
   PolicyMissingError,
+  NotImplementedError,
   policyRegistry,
   loadPolicies,
   type AuthorizationServiceOptions,

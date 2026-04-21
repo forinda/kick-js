@@ -165,13 +165,63 @@ interface AuthorizationServiceOptions {
   allow?: string[]
   /** Short-circuit deny-list — takes precedence over `allow`. */
   deny?: string[]
+  /**
+   * Resolve the set of resource IDs a user can `action`. Back this with
+   * a ReBAC engine (OpenFGA, SpiceDB, Cedar). If unset,
+   * `AuthorizationService.listObjects()` throws `NotImplementedError`
+   * so callers can fall back to `findAll + filter with can()`.
+   */
+  listObjects?: (
+    user: AuthUser,
+    action: string,
+    resource: string,
+  ) => Promise<readonly string[]>
 }
 
 class PolicyMissingError extends Error {
   readonly resource: string
   readonly action: string
 }
+
+class NotImplementedError extends Error {}
 ```
+
+### listObjects — ReBAC seam
+
+`listObjects(user, action, resource): Promise<readonly string[]>` returns the set of resource IDs the user can `action`. Mirror of `can()` for list endpoints that need `WHERE id IN (...)` pushdown instead of row-by-row filtering.
+
+Back it with a ReBAC engine:
+
+```ts
+import { OpenFGAClient } from '@openfga/sdk'
+const fga = new OpenFGAClient({ ... })
+
+new AuthAdapter({
+  strategies: [...],
+  policy: {
+    listObjects: async (user, action, resource) => {
+      const res = await fga.listObjects({
+        user: `user:${user.id}`,
+        relation: action,
+        type: resource,
+      })
+      return res.objects.map((o) => o.replace(`${resource}:`, ''))
+    },
+  },
+})
+```
+
+In a handler:
+
+```ts
+@Get('/flocks')
+async list(ctx: RequestContext) {
+  const ids = await this.authz.listObjects(ctx.user!, 'view', 'flock')
+  return ctx.json(await db.query.flocks.findMany({ where: inArray(flocks.id, ids) }))
+}
+```
+
+Use `authz.supportsListObjects()` to branch into a `findAll + filter with can()` fallback when no implementation is configured.
 
 `AuthAdapter` forwards `options.policy` to its internal `AuthorizationService`:
 

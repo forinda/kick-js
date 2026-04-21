@@ -5,6 +5,7 @@ import {
   Policy,
   AuthorizationService,
   PolicyMissingError,
+  NotImplementedError,
   policyRegistry,
 } from '../src/policy'
 import { AuthAdapter, Can, type AuthStrategy } from '@forinda/kickjs-auth'
@@ -133,6 +134,25 @@ describe('Policy & AuthorizationService', () => {
       await authz.can({ id: '1' }, 'view', 'nope')
       expect(warn).not.toHaveBeenCalled()
       warn.mockRestore()
+    })
+  })
+
+  describe('listObjects', () => {
+    it('throws NotImplementedError when no implementation is supplied', async () => {
+      const authz = new AuthorizationService()
+      await expect(authz.listObjects({ id: '1' }, 'view', 'flock')).rejects.toBeInstanceOf(
+        NotImplementedError,
+      )
+      expect(authz.supportsListObjects()).toBe(false)
+    })
+
+    it('forwards to the configured implementation', async () => {
+      const impl = vi.fn(async (_u, _a, _r) => ['f-1', 'f-2'] as const)
+      const authz = new AuthorizationService({ listObjects: impl })
+      const ids = await authz.listObjects({ id: 'u1' }, 'view', 'flock')
+      expect(ids).toEqual(['f-1', 'f-2'])
+      expect(impl).toHaveBeenCalledWith({ id: 'u1' }, 'view', 'flock')
+      expect(authz.supportsListObjects()).toBe(true)
     })
   })
 

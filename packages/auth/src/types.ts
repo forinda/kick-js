@@ -171,6 +171,12 @@ export interface AuthAdapterOptions {
     allow?: string[]
     /** Short-circuit deny-list — takes precedence over `allow`. */
     deny?: string[]
+    /**
+     * Resolve the set of resource IDs a user can `action` — mirror of
+     * `can()` for list-endpoint pushdown. Back this with a ReBAC engine
+     * (OpenFGA, SpiceDB, Cedar). See `AuthorizationServiceOptions.listObjects`.
+     */
+    listObjects?: (user: AuthUser, action: string, resource: string) => Promise<readonly string[]>
   }
 }
 
