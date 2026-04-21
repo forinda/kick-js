@@ -15,14 +15,66 @@ import { generateResolver } from '../generators/resolver'
 import { generateJob } from '../generators/job'
 import { generateScaffold, parseFields } from '../generators/scaffold'
 import { generateTest } from '../generators/test'
-import { loadKickConfig, resolveModuleConfig } from '../config'
+import { loadKickConfig, resolveModuleConfig, type ProjectPattern } from '../config'
 import { setDryRun } from '../utils/fs'
 import { runTypegen } from '../typegen'
 import { select, confirm as promptConfirm } from '../utils/prompts'
 
+/** Options accepted by `kick g module` and the bare `kick g <name>` shortcut. */
+interface ModuleGenOpts {
+  entity?: boolean
+  tests?: boolean
+  repo?: RepoType
+  pattern?: ProjectPattern
+  minimal?: boolean
+  modulesDir?: string
+  pluralize?: boolean
+  force?: boolean
+}
+
+/** Options on the parent `generate` command — module flags + global flags. */
+interface GenerateRootOpts extends ModuleGenOpts {
+  list?: boolean
+  dryRun?: boolean
+}
+
+/** Generators that drop a single file at a configurable directory. */
+interface OutDirOpts {
+  out: string
+}
+
+/** Generators that scope output into a module folder. */
+interface ModuleScopedOpts {
+  out?: string
+  module?: string
+}
+
+interface JobOpts extends OutDirOpts {
+  queue?: string
+}
+
+interface ScaffoldOpts {
+  entity?: boolean
+  tests?: boolean
+  pluralize?: boolean
+  modulesDir?: string
+}
+
+interface AuthScaffoldOpts {
+  strategy?: 'jwt' | 'session'
+  roleGuards?: boolean
+  out: string
+}
+
+interface ConfigOpts {
+  modulesDir: string
+  repo: string
+  force?: boolean
+}
+
 /** Check if --dry-run was passed on the parent generate command */
-function isDryRun(cmd: any): boolean {
-  return cmd.parent?.opts()?.dryRun ?? false
+function isDryRun(cmd: Command): boolean {
+  return (cmd.parent?.opts() as { dryRun?: boolean } | undefined)?.dryRun ?? false
 }
 
 function printGenerated(files: string[], dryRun = false): void {
@@ -87,19 +139,72 @@ function printGeneratorList(): void {
   console.log()
 }
 
+/**
+ * Generate one or more modules. Shared by `kick g module <names...>` and
+ * the bare `kick g <names...>` shortcut.
+ */
+async function runModuleGeneration(
+  names: string[],
+  opts: ModuleGenOpts,
+  dryRun: boolean,
+): Promise<void> {
+  const config = await loadKickConfig(process.cwd())
+  const mc = resolveModuleConfig(config)
+  const modulesDir = opts.modulesDir ?? mc.dir ?? 'src/modules'
+  const repo: RepoType = opts.repo ?? resolveRepoType(mc.repo)
+  const pattern = opts.pattern ?? config?.pattern ?? 'ddd'
+  const shouldPluralize = opts.pluralize === false ? false : (mc.pluralize ?? true)
+
+  const allFiles: string[] = []
+  for (const name of names) {
+    const files = await generateModule({
+      name,
+      modulesDir: resolve(modulesDir),
+      noEntity: opts.entity === false,
+      noTests: opts.tests === false,
+      repo,
+      minimal: opts.minimal,
+      force: opts.force,
+      pattern,
+      dryRun,
+      pluralize: shouldPluralize,
+      prismaClientPath: mc.prismaClientPath,
+    })
+    allFiles.push(...files)
+  }
+  printGenerated(allFiles, dryRun)
+  await runPostTypegen(dryRun)
+}
+
 export function registerGenerateCommand(program: Command): void {
   const gen = program
-    .command('generate')
+    .command('generate [names...]')
     .alias('g')
-    .description('Generate code scaffolds')
+    .description(
+      'Generate code scaffolds — bare form `kick g <name>` is shorthand for `kick g module <name>`',
+    )
     .option('--list', 'List all available generators')
     .option('--dry-run', 'Preview files that would be generated without writing them')
-    .action((opts: any) => {
+    .option('--no-entity', 'Skip entity and value object generation (module shortcut)')
+    .option('--no-tests', 'Skip test file generation (module shortcut)')
+    .option('--repo <type>', 'Repository implementation: inmemory | drizzle | prisma')
+    .option('--pattern <pattern>', 'Override project pattern: rest | ddd | cqrs | minimal')
+    .option('--minimal', 'Shorthand for --pattern minimal')
+    .option('--modules-dir <dir>', 'Modules directory')
+    .option('--no-pluralize', 'Use singular names (skip auto-pluralization)')
+    .option('-f, --force', 'Overwrite existing files without prompting')
+    .action(async (names: string[], opts: GenerateRootOpts, cmd: Command) => {
       if (opts.list) {
         printGeneratorList()
-      } else {
-        gen.help()
+        return
       }
+      if (!names || names.length === 0) {
+        gen.help()
+        return
+      }
+      const dryRun = isDryRun(cmd)
+      setDryRun(dryRun)
+      await runModuleGeneration(names, opts, dryRun)
     })
 
   // ── kick g module <name> ────────────────────────────────────────────
@@ -114,35 +219,10 @@ export function registerGenerateCommand(program: Command): void {
     .option('--modules-dir <dir>', 'Modules directory')
     .option('--no-pluralize', 'Use singular names (skip auto-pluralization)')
     .option('-f, --force', 'Overwrite existing files without prompting')
-    .action(async (names: string[], opts: any, cmd: any) => {
+    .action(async (names: string[], opts: ModuleGenOpts, cmd: Command) => {
       const dryRun = isDryRun(cmd)
       setDryRun(dryRun)
-      const config = await loadKickConfig(process.cwd())
-      const mc = resolveModuleConfig(config)
-      const modulesDir = opts.modulesDir ?? mc.dir ?? 'src/modules'
-      const repo: RepoType = opts.repo ?? resolveRepoType(mc.repo)
-      const pattern = opts.pattern ?? config?.pattern ?? 'ddd'
-      const shouldPluralize = opts.pluralize === false ? false : (mc.pluralize ?? true)
-
-      const allFiles: string[] = []
-      for (const name of names) {
-        const files = await generateModule({
-          name,
-          modulesDir: resolve(modulesDir),
-          noEntity: opts.entity === false,
-          noTests: opts.tests === false,
-          repo,
-          minimal: opts.minimal,
-          force: opts.force,
-          pattern,
-          dryRun,
-          pluralize: shouldPluralize,
-          prismaClientPath: mc.prismaClientPath,
-        })
-        allFiles.push(...files)
-      }
-      printGenerated(allFiles, dryRun)
-      await runPostTypegen(dryRun)
+      await runModuleGeneration(names, opts, dryRun)
     })
 
   // ── kick g adapter <name> ──────────────────────────────────────────
@@ -150,7 +230,7 @@ export function registerGenerateCommand(program: Command): void {
     .command('adapter <name>')
     .description('Generate an AppAdapter with lifecycle hooks and middleware support')
     .option('-o, --out <dir>', 'Output directory', 'src/adapters')
-    .action(async (name: string, opts: any, cmd: any) => {
+    .action(async (name: string, opts: OutDirOpts, cmd: Command) => {
       const dryRun = isDryRun(cmd)
       setDryRun(dryRun)
       const files = await generateAdapter({ name, outDir: resolve(opts.out) })
@@ -164,7 +244,7 @@ export function registerGenerateCommand(program: Command): void {
       'Generate a KickPlugin with DI, modules, adapters, middleware, and lifecycle hooks',
     )
     .option('-o, --out <dir>', 'Output directory', 'src/plugins')
-    .action(async (name: string, opts: any, cmd: any) => {
+    .action(async (name: string, opts: OutDirOpts, cmd: Command) => {
       const dryRun = isDryRun(cmd)
       setDryRun(dryRun)
       const files = await generatePlugin({ name, outDir: resolve(opts.out) })
@@ -180,7 +260,7 @@ export function registerGenerateCommand(program: Command): void {
     )
     .option('-o, --out <dir>', 'Output directory (overrides --module)')
     .option('-m, --module <module>', 'Place inside a module folder')
-    .action(async (name: string, opts: any, cmd: any) => {
+    .action(async (name: string, opts: ModuleScopedOpts, cmd: Command) => {
       const dryRun = isDryRun(cmd)
       setDryRun(dryRun)
       const config = await loadKickConfig(process.cwd())
@@ -206,7 +286,7 @@ export function registerGenerateCommand(program: Command): void {
     )
     .option('-o, --out <dir>', 'Output directory (overrides --module)')
     .option('-m, --module <module>', 'Place inside a module folder')
-    .action(async (name: string, opts: any, cmd: any) => {
+    .action(async (name: string, opts: ModuleScopedOpts, cmd: Command) => {
       const dryRun = isDryRun(cmd)
       setDryRun(dryRun)
       const config = await loadKickConfig(process.cwd())
@@ -232,7 +312,7 @@ export function registerGenerateCommand(program: Command): void {
     )
     .option('-o, --out <dir>', 'Output directory (overrides --module)')
     .option('-m, --module <module>', 'Place inside a module folder')
-    .action(async (name: string, opts: any, cmd: any) => {
+    .action(async (name: string, opts: ModuleScopedOpts, cmd: Command) => {
       const dryRun = isDryRun(cmd)
       setDryRun(dryRun)
       const config = await loadKickConfig(process.cwd())
@@ -258,7 +338,7 @@ export function registerGenerateCommand(program: Command): void {
     )
     .option('-o, --out <dir>', 'Output directory (overrides --module)')
     .option('-m, --module <module>', 'Place inside a module folder')
-    .action(async (name: string, opts: any, cmd: any) => {
+    .action(async (name: string, opts: ModuleScopedOpts, cmd: Command) => {
       const dryRun = isDryRun(cmd)
       setDryRun(dryRun)
       const config = await loadKickConfig(process.cwd())
@@ -285,7 +365,7 @@ export function registerGenerateCommand(program: Command): void {
     )
     .option('-o, --out <dir>', 'Output directory (overrides --module)')
     .option('-m, --module <module>', 'Place inside a module folder')
-    .action(async (name: string, opts: any, cmd: any) => {
+    .action(async (name: string, opts: ModuleScopedOpts, cmd: Command) => {
       const dryRun = isDryRun(cmd)
       setDryRun(dryRun)
       const config = await loadKickConfig(process.cwd())
@@ -311,7 +391,7 @@ export function registerGenerateCommand(program: Command): void {
     )
     .option('-o, --out <dir>', 'Output directory (overrides --module)')
     .option('-m, --module <module>', "Place inside a module's __tests__/ folder")
-    .action(async (name: string, opts: any, cmd: any) => {
+    .action(async (name: string, opts: ModuleScopedOpts, cmd: Command) => {
       const dryRun = isDryRun(cmd)
       setDryRun(dryRun)
       const config = await loadKickConfig(process.cwd())
@@ -332,7 +412,7 @@ export function registerGenerateCommand(program: Command): void {
     .command('resolver <name>')
     .description('Generate a GraphQL @Resolver class with @Query and @Mutation methods')
     .option('-o, --out <dir>', 'Output directory', 'src/resolvers')
-    .action(async (name: string, opts: any, cmd: any) => {
+    .action(async (name: string, opts: OutDirOpts, cmd: Command) => {
       const dryRun = isDryRun(cmd)
       setDryRun(dryRun)
       const files = await generateResolver({ name, outDir: resolve(opts.out) })
@@ -345,7 +425,7 @@ export function registerGenerateCommand(program: Command): void {
     .description('Generate a @Job queue processor with @Process handlers')
     .option('-o, --out <dir>', 'Output directory', 'src/jobs')
     .option('-q, --queue <name>', 'Queue name (default: <name>-queue)')
-    .action(async (name: string, opts: any, cmd: any) => {
+    .action(async (name: string, opts: JobOpts, cmd: Command) => {
       const dryRun = isDryRun(cmd)
       setDryRun(dryRun)
       const files = await generateJob({ name, outDir: resolve(opts.out), queue: opts.queue })
@@ -366,7 +446,7 @@ export function registerGenerateCommand(program: Command): void {
     .option('--no-tests', 'Skip test file generation')
     .option('--no-pluralize', 'Use singular names (skip auto-pluralization)')
     .option('--modules-dir <dir>', 'Modules directory')
-    .action(async (name: string, rawFields: string[], opts: any, cmd: any) => {
+    .action(async (name: string, rawFields: string[], opts: ScaffoldOpts, cmd: Command) => {
       const dryRun = isDryRun(cmd)
       setDryRun(dryRun)
       if (rawFields.length === 0) {
@@ -409,7 +489,7 @@ export function registerGenerateCommand(program: Command): void {
     .option('--role-guards', 'Generate role-based guards (default: true)')
     .option('--no-role-guards', 'Skip role-based guard generation')
     .option('-o, --out <dir>', 'Output directory', 'src/modules/auth')
-    .action(async (opts: any, cmd: any) => {
+    .action(async (opts: AuthScaffoldOpts, cmd: Command) => {
       const dryRun = isDryRun(cmd)
       setDryRun(dryRun)
 
@@ -448,7 +528,7 @@ export function registerGenerateCommand(program: Command): void {
     .option('--modules-dir <dir>', 'Modules directory path', 'src/modules')
     .option('--repo <type>', 'Default repository type: inmemory | drizzle | prisma', 'inmemory')
     .option('-f, --force', 'Overwrite existing kick.config.ts without prompting')
-    .action(async (opts: any, cmd: any) => {
+    .action(async (opts: ConfigOpts, cmd: Command) => {
       const dryRun = isDryRun(cmd)
       setDryRun(dryRun)
       const files = await generateConfig({
