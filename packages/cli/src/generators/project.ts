@@ -35,7 +35,7 @@ type ProjectTemplate = 'rest' | 'graphql' | 'ddd' | 'cqrs' | 'minimal'
 interface InitProjectOptions {
   name: string
   directory: string
-  packageManager?: 'pnpm' | 'npm' | 'yarn'
+  packageManager?: 'pnpm' | 'npm' | 'yarn' | 'bun'
   initGit?: boolean
   installDeps?: boolean
   template?: ProjectTemplate

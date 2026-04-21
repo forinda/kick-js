@@ -26,7 +26,7 @@ export function registerInitCommand(program: Command): void {
     .alias('init')
     .description('Create a new KickJS project (use "." for current directory)')
     .option('-d, --directory <dir>', 'Target directory (defaults to project name)')
-    .option('--pm <manager>', 'Package manager: pnpm | npm | yarn')
+    .option('--pm <manager>', 'Package manager: pnpm | npm | yarn | bun')
     .option('--git', 'Initialize git repository')
     .option('--no-git', 'Skip git initialization')
     .option('--install', 'Install dependencies after scaffolding')
@@ -109,6 +109,7 @@ export function registerInitCommand(program: Command): void {
             { value: 'pnpm', label: 'pnpm' },
             { value: 'npm', label: 'npm' },
             { value: 'yarn', label: 'yarn' },
+            { value: 'bun', label: 'bun' },
           ],
         })
       }
