@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-notifications",
-  "version": "3.1.1",
+  "version": "3.1.2",
   "description": "Multi-channel notifications for KickJS — email, Slack, Discord, webhook, custom",
   "keywords": [
     "kickjs",
