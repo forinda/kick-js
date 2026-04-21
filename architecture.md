@@ -3107,3 +3107,231 @@ export default defineConfig({
 17. **Fix CORS defaults** - Change from `origin: '*'` to `origin: false` for production safety
 18. **Add distributed rate limiting** - Redis store adapter for multi-process deployments
 19. **Validate async `@PostConstruct`** - Either reject or properly await
+
+---
+
+## 20. Context Contributor Pipeline (issue #107)
+
+> Tracking issue: [#107 — Context Contributor pipeline (typed pre-handler ctx-extension primitive)](https://github.com/forinda/kick-js/issues/107).
+>
+> This section captures the architectural flow of the change so reviewers can assess blast radius before Phase 1 lands. It is descriptive, not prescriptive — it documents what the pipeline *is* and what it touches, not the style of the implementation.
+
+### 20.1 Why
+
+Today, "compute X before the handler runs and stash it on the request" is done via `@Middleware(fn)` or bespoke Express middleware. That pattern has four gaps:
+
+1. **No typing.** `req.user`, `req.tenant`, etc. are `any` unless the user augments `RequestContext` manually.
+2. **No ordering contract.** If `loadProject` needs `tenant`, both middlewares have to be registered in the right array position by hand. Breakage is silent until a request hits the broken order.
+3. **No reuse ergonomics.** Authoring a middleware that takes config + has DI dependencies requires a factory closure — awkward to share across apps.
+4. **No cross-transport story.** WS, queue, cron all need the same "populate context before handler" step, but Express-style middleware doesn't port cleanly.
+
+The Context Contributor pipeline addresses all four: typed `ctx.set('key', value)` with `ContextMeta` narrowing the value type, `dependsOn` declarations enforced at startup via topo-sort, decorator-as-factory ergonomics, and an `ExecutionContext` interface that WS/queue/cron can adopt in V2.
+
+### 20.2 Mental model
+
+A **context decorator** is a typed, ordered, declarative way to populate `ctx.set('key', value)` *before* the handler runs:
+
+```ts
+@LoadTenant()
+@LoadProject({ dependsOn: ['tenant'] })
+@Get('/projects/:id')
+getProject(ctx: Ctx) {
+  ctx.get('tenant')   // typed via ContextMeta, guaranteed present
+  ctx.get('project')  // typed via ContextMeta, guaranteed present
+}
+```
+
+**Old way:** 2 custom middlewares, untyped, manually ordered, no DI access without closure tricks.
+**New way:** 2 decorators, typed via `ContextMeta`, deps declared, startup runner enforces order.
+
+### 20.3 Request lifecycle — before vs after
+
+**Today** (`packages/http/src/application.ts:154-310` + `packages/kickjs/src/http/router-builder.ts`):
+
+```
+HTTP request
+  └─ app middleware          (requestScope ALS, body parse, auth, …)
+  └─ router match
+  └─ route validation middleware
+  └─ file-upload middleware
+  └─ class + method @Middleware()   (each constructs its own RequestContext)
+  └─ main handler            (constructs RequestContext, resolves controller, calls method)
+  └─ error handler
+```
+
+**After Phase 4**:
+
+```
+HTTP request
+  └─ app middleware          (requestScope ALS auto-injected at position 0)
+  └─ router match
+  └─ route validation middleware
+  └─ file-upload middleware
+  └─ class + method @Middleware()
+  └─ CONTRIBUTOR RUNNER      ← NEW
+       for each contributor in topo order:
+         resolve `deps` from container
+         call `resolve(ctx, deps)`
+         write result into requestStore.getStore().values  (== ctx metadata)
+         on throw: optional → skip, onError hook → user code, else → next(err)
+  └─ main handler            (RequestContext, controller resolve, method call)
+  └─ error handler
+```
+
+One new runtime stage. Sequential within a route. No change to existing middleware semantics.
+
+### 20.4 Build-time flow (startup)
+
+```
+Application.setup()
+  ├─ register modules → DI bootstrap            (unchanged)
+  ├─ for each controller method being mounted:
+  │    collect contributors:
+  │      method-decorator metadata              (highest precedence)
+  │      class-decorator metadata
+  │      module.contributors?()                 (per-module)
+  │      adapter.contributors?()                (cross-cutting)
+  │      ApplicationOptions.contributors        (global, lowest precedence)
+  │    dedup by `key`, keep highest precedence
+  │    topo-sort by `dependsOn` (Kahn's algorithm)
+  │    validate: missing deps, cycles, duplicates
+  │       ON FAILURE: throw with route + key context  ← startup-time fail-fast
+  │    cache resolved pipeline on the route
+  └─ mount routes
+```
+
+Validation runs **once at startup**, never per request. A bad cycle takes the server down at boot, not at request time — preserves the Spring-style "fail at composition time" property that the DI container already has.
+
+### 20.5 Storage unification (Phase 3) — the riskiest change
+
+**Today** there are **two parallel per-request maps**:
+
+| Store                              | Key                    | Used by                                                               |
+|---                                 |---                     |---                                                                    |
+| `req.__ctxMeta` (lazy Map on `req`)| `'user'`, `'tenant'`, …| `ctx.get/set` (`packages/kickjs/src/http/context.ts:70-74`)           |
+| `requestStore.getStore().values`   | `Map<any,any>`         | reserved by `RequestStore` (`packages/kickjs/src/http/request-store.ts:9`), currently unused |
+
+After Phase 3 they become **the same Map**. `ctx.metadata` returns `requestStore.getStore()?.values` when a store exists, falling back to `req.__ctxMeta` (back-compat for code that runs outside ALS — tests, manually constructed ctx).
+
+**Why it matters:**
+- Services injected into contributors can read/write request state via `requestStore.getStore().values.get('user')` without holding a `ctx` reference.
+- Logger, multi-tenant, OTel adapters read tenant/user from the unified store regardless of who set it.
+- WS / queue / cron transports get the same story in V2 — they only need to populate `values` and the same code reads it.
+
+**Breakage surface to audit before merging Phase 3:**
+- Anything that assumes `req.__ctxMeta` is distinct from anything else (none spotted in-repo, but grep `__ctxMeta` before the PR).
+- Multi-tenant adapter's own ALS — see §20.8.
+
+### 20.6 ALS auto-injection (Phase 4)
+
+`requestScopeMiddleware()` is already mounted unconditionally by `Application.setup()` (`packages/http/src/application.ts:178`) before user middleware. Phase 4 adds an **opt-out** (`bootstrap({ contextStore: 'manual' })`) for users who want to install their own ALS wrapper. Default behaviour unchanged — existing apps keep working without touching config.
+
+### 20.7 Files touched (estimate per phase)
+
+| Phase | New files | Modified files |
+|---|---|---|
+| 1 | `packages/kickjs/src/core/execution-context.ts`, `…/context-decorator.ts`, `…/context-errors.ts` | `core/index.ts` (re-exports), `core/interfaces.ts` (new METADATA keys: `METHOD_CONTRIBUTORS`, `CLASS_CONTRIBUTORS`) |
+| 2 | `…/contributor-builder.ts`, `…/topo-sort.ts`, `…/contributor-runner.ts` | — |
+| 3 | — | `http/context.ts` (metadata getter), `http/request-store.ts` (contract docs only, no shape change) |
+| 4 | — | `http/router-builder.ts:30-98` (insert runner step), `http/application.ts` (opt-out flag, position-0 detection) |
+| 5 | — | `core/app-module.ts` (`contributors?()` hook), `core/adapter.ts` (`contributors?()` hook), `http/application.ts` (`ApplicationOptions.contributors`) |
+| 6 | `packages/testing/src/run-contributor.ts` | `packages/testing/src/create-test-app.ts` (accept `contributors`) |
+| 7 | `docs/guide/context-decorators.md` | `docs/guide/middleware.md`, `docs/guide/decorators.md`, `docs/guide/custom-decorators.md`, `CLAUDE.md` |
+| 8 | example contributor (new file in an existing example app) | one example app |
+
+### 20.8 Cross-cutting impact
+
+| System | Impact |
+|---|---|
+| **DI / Container** | None. Contributors resolve their `deps` array via `container.resolve(token)`. Already supported. |
+| **RequestContext** | Gains `implements ExecutionContext`. `metadata` getter swaps backing Map. Public API (`ctx.get/set/user/tenantId/roles`) unchanged at the call site. |
+| **`@Middleware()`** | Unchanged. Coexists with contributors — contributors run *after* method middleware, *before* the handler. |
+| **Validation middleware** | Unchanged. Still runs first so contributors can read validated `body/query/params` off `ctx`. |
+| **Multi-tenant adapter** (`packages/multi-tenant/src/tenant.context.ts`) | Currently uses its own ALS. Two options: **(a)** migrate to read tenant from unified `requestStore.getStore().values` post-Phase 3, **(b)** keep its own ALS and ship a contributor that copies into `ctx.set('tenant', …)`. Decision needed before Phase 3. |
+| **Auth adapter** (`packages/auth/src/adapter.ts`) | Already writes `user` to request metadata. Migrate to write to `requestStore.values` in Phase 3 (one-liner) so downstream services can read it without `req`. |
+| **OTel adapter** | Sensitive-key redaction contract already lives at `requestStore.getStore()`. No change needed; bonus that contributors become automatically traceable (each one is a logical span boundary). |
+| **WS / queue / cron** | Not touched in V1. `ExecutionContext` interface lands so V2 can wire these up without a second refactor. |
+| **Testing** | `createTestApp` grows a `contributors` option. New `runContributor(decorator, partialCtx)` helper for unit-testing in isolation. Existing tests unchanged. |
+| **CLI generators** | No change in V1. Could grow a `kick g contributor <name>` command in a follow-up. |
+
+### 20.9 Failure modes & error matrix
+
+| Failure | When caught | Behaviour |
+|---|---|---|
+| `dependsOn: ['tenant']` but no contributor produces `'tenant'` | Startup | Throw `MissingContributorError` with route + key |
+| Cycle: `A dependsOn B`, `B dependsOn A` | Startup | Throw `ContributorCycleError` with the cycle path |
+| Two contributors produce the same `key` at the same precedence | Startup | Throw `DuplicateContributorError` |
+| Contributor throws at runtime, `optional: false` | Per request | `next(err)` — standard error handler takes over |
+| Contributor throws at runtime, `optional: true` | Per request | Skip, continue pipeline, `ctx.get(key)` returns `undefined` |
+| Contributor throws at runtime, `onError` hook provided | Per request | Hook runs; decides whether to swallow, rewrite, or re-throw |
+
+### 20.10 Non-goals (V1, explicit)
+
+- WS / queue / cron transport adoption (interface ready, integration deferred to V2).
+- Typegen-based `ContextMeta` augmentation — manual `declare module '@forinda/kickjs'` for V1.
+- Cross-request contributor result caching.
+- Parallel execution within a topo level. Sequential is fine until profiling says otherwise.
+
+### 20.11 Migration path for existing code
+
+Zero migration required. The pipeline is additive:
+
+- Existing `@Middleware()` decorators keep working.
+- Existing `ctx.set/get` keeps working — it just happens to share a Map with `requestStore.values` after Phase 3.
+- Existing `req.__ctxMeta` reads keep working via the fallback path.
+
+Adopters opt in by replacing a middleware with a `defineContextDecorator({ key, resolve })` call. The old middleware can be deleted once the decorator is in place.
+
+### 20.12 Decisions (locked)
+
+All four design questions are locked. Phase 1 implementation can proceed against this contract.
+
+1. **Multi-tenant ALS — merge into `requestStore.values`.** `packages/multi-tenant/src/tenant.context.ts` drops its dedicated `AsyncLocalStorage<TenantInfo>` and `getCurrentTenant()` becomes a thin reader over `requestStore.getStore()?.values.get('tenant')`. Public API (`getCurrentTenant`, `TENANT_CONTEXT` token, `@Inject(TENANT_CONTEXT)`) is preserved — only the backing store changes. Consumers who imported `tenantStorage` directly (none in-repo) get a compile error and must migrate.
+
+2. **`req.__ctxMeta` — kept as fallback, marked deprecated, removed in next major.** `ctx.metadata` returns `requestStore.getStore()?.values` when ALS is active, falls back to `req.__ctxMeta` otherwise. Add a `@deprecated` JSDoc tag on the `__ctxMeta` getter and a one-line dev-only `Logger.warn` the first time the fallback is hit per process. Removal targeted for the major after V1 ships.
+
+3. **`onError` hook — async-permitted (`MaybePromise<void | unknown>`).** Hooks may return a Promise; the runner awaits it inside its own try/catch so a hook throwing or rejecting forwards to `next(err)`. Cost is ~3 extra runner lines and one error-path test. Rationale: switching sync→async later is a typing breaking-change, and adopters legitimately want to `await auditService.log(err)` or `await cache.fallback(...)` inside hooks. Document "keep it short" — the hook runs on the request hot path even though only on error.
+
+4. **Key type — `string` only.** `Map<string, unknown>` backing store. `ContextMeta` augmentation provides type safety per key. Plugin authors namespace with prefix convention (`'auth.user'`, `'@my-plugin/cache'`) — same approach Pino, Express `res.locals`, and OpenTelemetry semantic conventions ship with. Rationale: V2 cross-transport (WS / queue / cron) will need to serialize context for job replay and inspection — symbols don't survive JSON, so requiring symbols would force a string-conversion layer at every transport boundary, defeating their collision-safety. OTel span attributes are also string-keyed, so contributor keys flow through `setAttributes` cleanly. Symbol keys would have demanded a parallel `ContextMetaSymbols` registry or a `createContextKey<T>` branded-symbol factory — two ways to declare the same thing, with worse devtools/observability.
+
+### 20.13 Affected packages
+
+Audit results from grepping `__ctxMeta`, `requestStore`, `tenantStorage`, `getCurrentTenant`, `RequestContext` across the workspace. Per the memory feedback rule, **only `packages/kickjs` is the source of truth** for core/http changes — `packages/core` and `packages/http` are frozen mirrors and are not edited directly.
+
+**Direct edits required:**
+
+| Package | Phases | What changes |
+|---|---|---|
+| `@forinda/kickjs` | 1, 2, 3, 4, 5 | Core types + factory, topo-sort + runner, RequestContext metadata-getter unification, router-builder runner step, ApplicationOptions + AppModule + AppAdapter `contributors?()` hooks |
+| `@forinda/kickjs-multi-tenant` | 3 | Drop dedicated ALS in `tenant.context.ts`; rewrite `getCurrentTenant()` to read from `requestStore.values.get('tenant')`; `TenantAdapter.middleware()` writes tenant into `requestStore.values` instead of calling `tenantStorage.run()` |
+| `@forinda/kickjs-testing` | 6 | New `runContributor(decorator, partialCtx)` helper; `createTestApp({ contributors: [...] })` option |
+
+**Indirect — consume unchanged public API but need a smoke test after Phase 3:**
+
+| Package | Why | Action |
+|---|---|---|
+| `@forinda/kickjs-prisma` | `prisma-tenant.adapter.ts:94-117` dynamically imports `getCurrentTenant` from multi-tenant | Verify `getCurrentTenant()` returns the same value post-migration; one integration test covering tenant resolution → Prisma client switch |
+| `@forinda/kickjs-drizzle` | `drizzle-tenant.adapter.ts:96-119` does the same dynamic import | Same as prisma — one tenant-resolution integration test |
+| `@forinda/kickjs-auth` | Already writes user to request metadata (`__ctxMeta` via `ctx.set`) | Migrate the write to land in `requestStore.values` so contributors can `dependsOn: ['user']`. Reads via `ctx.user` keep working unchanged thanks to the fallback chain |
+
+**Likely no change (verify, then leave alone):**
+
+| Package | Notes |
+|---|---|
+| `@forinda/kickjs-otel` | Already reads from `requestStore` for trace context. Unified storage is a bonus, no required change |
+| `@forinda/kickjs-ws` | Has its own `ws-context.ts`; V1 is HTTP-only. WS gets `ExecutionContext` adoption in V2 |
+| `@forinda/kickjs-graphql`, `-queue`, `-cron`, `-swagger`, `-devtools`, `-notifications`, `-cli`, `-config`, `-mailer`, `-vite` | Don't touch RequestContext internals or tenant ALS. No changes expected |
+
+**Frozen (per memory feedback — never edit):**
+
+| Package | Status |
+|---|---|
+| `packages/core` | Mirror of `packages/kickjs/src/core` — all changes go to `packages/kickjs` |
+| `packages/http` | Mirror of `packages/kickjs/src/http` — all changes go to `packages/kickjs` |
+
+**Examples to update (Phase 8):**
+
+| App | What |
+|---|---|
+| `examples/jira-drizzle-api` (or new example) | Add `LoadTenant` contributor showing class-level + method-level + adapter-level use in one app |
+| `examples/multi-tenant-{drizzle,prisma,mongoose}-api` | Optional: convert hand-written tenant resolution middleware to a contributor (showcases migration path) |
