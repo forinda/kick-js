@@ -629,6 +629,21 @@ const adapter = AuthAdapter.testMode({
 bootstrap({ modules, adapters: [adapter] })
 ```
 
+`testMode` also wires the auth axes multi-tenant apps need to mock in tests:
+
+```ts
+AuthAdapter.testMode({
+  user: { id: '1', email: 'a@b.com' },
+  tenantId: 't1',              // → user.tenantId
+  roles: ['owner'],            // → user.tenantRoles (with tenantId) or user.roles
+  allow: ['flock.view'],       // @Can('view', 'flock') → true, skips @Policy
+  deny: ['flock.delete'],      // @Can('delete', 'flock') → 403, deny wins ties
+})
+```
+
+- `tenantId` / `roles` populate `user.tenantId` and `user.tenantRoles` and feed the default `roleResolver`, so `@Roles('owner')` sees them.
+- `allow` / `deny` short-circuit `@Can(action, resource)` checks without consulting `@Policy` classes. Entries are `'resource.action'` for an exact match or bare `'resource'` to match any action on that resource. Useful when you want to exercise denied paths without constructing policy classes for the test.
+
 ## Custom Strategy
 
 Implement `AuthStrategy` for any auth mechanism:

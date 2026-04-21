@@ -184,24 +184,70 @@ export class AuthAdapter implements AppAdapter {
   }
 
   /**
-   * Create an AuthAdapter that accepts any token and returns a fixed test user.
-   * For use in test suites — eliminates the need to generate real JWTs.
+   * Create an AuthAdapter that accepts any request and returns a fixed test
+   * user — removes the need to mint real JWTs in controller tests.
+   *
+   * `tenantId` / `roles` populate `user.tenantId` / `user.tenantRoles` so
+   * `@Roles()` and tenant-aware handlers see the values they would in prod.
+   * `allow` / `deny` short-circuit `@Can(action, resource)` decisions by
+   * full name (`'flock.delete'`) or resource-only (`'flock'` = match any
+   * action on that resource) — no need to stand up `@Policy` classes just
+   * to exercise denial paths.
    *
    * @example
    * ```ts
-   * const adapter = AuthAdapter.testMode({ user: { id: '1', roles: ['admin'] } })
+   * const adapter = AuthAdapter.testMode({
+   *   user: { id: '1', email: 'a@b.com' },
+   *   tenantId: 't1',
+   *   roles: ['owner'],
+   *   allow: ['flock.view'],
+   *   deny: ['flock.delete'],
+   * })
    * bootstrap({ modules, adapters: [adapter] })
    * ```
    */
-  static testMode(options: { user: AuthUser; defaultPolicy?: 'protected' | 'open' }): AuthAdapter {
+  static testMode(options: {
+    user: AuthUser
+    defaultPolicy?: 'protected' | 'open'
+    /** Populates `user.tenantId` and is forwarded to `roleResolver`. */
+    tenantId?: string
+    /**
+     * Populates `user.tenantRoles` (if `tenantId` is set) or `user.roles`.
+     * Also becomes the `roleResolver` return value so `@Roles()` sees them.
+     */
+    roles?: string[]
+    /**
+     * `@Can(action, resource)` calls matching these short-circuit to allow
+     * without consulting the policy registry. Entries are `'resource.action'`
+     * or just `'resource'` (matches any action on that resource).
+     */
+    allow?: string[]
+    /**
+     * `@Can(action, resource)` calls matching these short-circuit to deny
+     * without consulting the policy registry. Takes precedence over `allow`.
+     */
+    deny?: string[]
+  }): AuthAdapter {
+    const user: AuthUser = {
+      ...options.user,
+      ...(options.tenantId ? { tenantId: options.tenantId } : {}),
+      ...(options.roles && !options.tenantId ? { roles: options.roles } : {}),
+      ...(options.roles && options.tenantId ? { tenantRoles: options.roles } : {}),
+    }
+
+    const policy =
+      options.allow || options.deny ? { allow: options.allow, deny: options.deny } : undefined
+
     return new AuthAdapter({
       strategies: [
         {
           name: 'test',
-          validate: async () => options.user,
+          validate: async () => user,
         },
       ],
       defaultPolicy: options.defaultPolicy ?? 'open',
+      roleResolver: options.roles ? () => options.roles! : undefined,
+      policy,
     })
   }
 

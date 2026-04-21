@@ -161,6 +161,10 @@ interface AuthorizationServiceOptions {
    * - `'silent'` — legacy behavior; deny with no log.
    */
   onMiss?: 'warn' | 'error' | 'silent'
+  /** Short-circuit allow-list — `'resource.action'` or just `'resource'`. */
+  allow?: string[]
+  /** Short-circuit deny-list — takes precedence over `allow`. */
+  deny?: string[]
 }
 
 class PolicyMissingError extends Error {

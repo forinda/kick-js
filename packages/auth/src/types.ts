@@ -167,6 +167,10 @@ export interface AuthAdapterOptions {
    */
   policy?: {
     onMiss?: 'warn' | 'error' | 'silent'
+    /** Short-circuit allow-list — `'resource.action'` or `'resource'`. See `AuthorizationServiceOptions.allow`. */
+    allow?: string[]
+    /** Short-circuit deny-list — takes precedence over `allow`. */
+    deny?: string[]
   }
 }
 

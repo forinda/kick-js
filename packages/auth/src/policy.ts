@@ -96,6 +96,20 @@ export type PolicyMissBehavior = 'warn' | 'error' | 'silent'
 export interface AuthorizationServiceOptions {
   /** How to handle `@Can()` calls that reference a missing policy or action. Default: `'warn'`. */
   onMiss?: PolicyMissBehavior
+  /**
+   * Short-circuit list. Any `can(user, action, resource)` whose
+   * `'resource.action'` (or bare `'resource'`) appears here returns `true`
+   * without consulting the policy registry. Useful in tests and for
+   * feature-flag overrides.
+   */
+  allow?: string[]
+  /**
+   * Short-circuit list. Any `can(user, action, resource)` whose
+   * `'resource.action'` (or bare `'resource'`) appears here returns `false`
+   * without consulting the policy registry. `deny` takes precedence over
+   * `allow` when an entry matches both.
+   */
+  deny?: string[]
 }
 
 /**
@@ -135,10 +149,14 @@ export class PolicyMissingError extends Error {
 @Service()
 export class AuthorizationService {
   private readonly onMiss: PolicyMissBehavior
+  private readonly allow: ReadonlySet<string>
+  private readonly deny: ReadonlySet<string>
   private readonly warnedMisses = new Set<string>()
 
   constructor(options: AuthorizationServiceOptions = {}) {
     this.onMiss = options.onMiss ?? 'warn'
+    this.allow = new Set(options.allow ?? [])
+    this.deny = new Set(options.deny ?? [])
   }
 
   /**
@@ -159,6 +177,10 @@ export class AuthorizationService {
     resource: string,
     resourceInstance?: any,
   ): Promise<boolean> {
+    const qualified = `${resource}.${action}`
+    if (this.deny.has(qualified) || this.deny.has(resource)) return false
+    if (this.allow.has(qualified) || this.allow.has(resource)) return true
+
     const PolicyClass = policyRegistry.get(resource)
     if (!PolicyClass) {
       this.reportMiss(
