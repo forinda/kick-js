@@ -52,6 +52,7 @@ export {
   PassportBridge,
   SessionStrategy,
   type JwtStrategyOptions,
+  type JwtVerifyOptions,
   type KeycloakMapOptions,
   type ApiKeyStrategyOptions,
   type ApiKeyUser,

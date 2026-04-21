@@ -118,4 +118,72 @@ describe('JwtStrategy', () => {
     const strategy = new JwtStrategy({ secret: SECRET })
     expect(strategy.name).toBe('jwt')
   })
+
+  describe('verifyOptions forwarding', () => {
+    it('rejects a token whose issuer does not match verifyOptions.issuer', async () => {
+      const strategy = new JwtStrategy({
+        secret: SECRET,
+        verifyOptions: { issuer: 'expected-iss' },
+      })
+      const token = createToken({ sub: '1', iss: 'wrong-iss' })
+      const req = { headers: { authorization: `Bearer ${token}` } }
+      expect(await strategy.validate(req)).toBeNull()
+    })
+
+    it('accepts a token whose issuer matches verifyOptions.issuer', async () => {
+      const strategy = new JwtStrategy({
+        secret: SECRET,
+        verifyOptions: { issuer: 'my-app' },
+      })
+      const token = createToken({ sub: '1', iss: 'my-app' })
+      const req = { headers: { authorization: `Bearer ${token}` } }
+      const user = await strategy.validate(req)
+      expect(user!.sub).toBe('1')
+    })
+
+    it('enforces audience via verifyOptions.audience', async () => {
+      const strategy = new JwtStrategy({
+        secret: SECRET,
+        verifyOptions: { audience: 'api.example.com' },
+      })
+      const good = createToken({ sub: '1', aud: 'api.example.com' })
+      const bad = createToken({ sub: '1', aud: 'other.example.com' })
+
+      expect(
+        await strategy.validate({ headers: { authorization: `Bearer ${good}` } }),
+      ).toBeTruthy()
+      expect(
+        await strategy.validate({ headers: { authorization: `Bearer ${bad}` } }),
+      ).toBeNull()
+    })
+
+    it('clockTolerance allows a just-expired token through', async () => {
+      const strategy = new JwtStrategy({
+        secret: SECRET,
+        verifyOptions: { clockTolerance: 5 },
+      })
+      const token = createToken({ sub: '1' }, { expiresIn: '-2s' })
+      const req = { headers: { authorization: `Bearer ${token}` } }
+      const user = await strategy.validate(req)
+      expect(user!.sub).toBe('1')
+    })
+
+    it('maxAge caps token age regardless of exp', async () => {
+      // Token signed 10 minutes ago with 1h exp — still valid by exp, but
+      // maxAge: '1m' should reject it.
+      const iat = Math.floor(Date.now() / 1000) - 600
+      const token = jwt.sign({ sub: '1', iat }, SECRET, {
+        algorithm: 'HS256',
+        expiresIn: '1h',
+        noTimestamp: true,
+      })
+      const strategy = new JwtStrategy({
+        secret: SECRET,
+        verifyOptions: { maxAge: '1m' },
+      })
+      expect(
+        await strategy.validate({ headers: { authorization: `Bearer ${token}` } }),
+      ).toBeNull()
+    })
+  })
 })

@@ -2,6 +2,7 @@ export {
   JwtStrategy,
   keycloakMapPayload,
   type JwtStrategyOptions,
+  type JwtVerifyOptions,
   type KeycloakMapOptions,
 } from './jwt.strategy'
 export { ApiKeyStrategy, type ApiKeyStrategyOptions, type ApiKeyUser } from './api-key.strategy'

@@ -63,7 +63,30 @@ interface JwtStrategyOptions {
   queryParam?: string
   cookieName?: string
   mapPayload?: (payload: any) => AuthUser
+  /**
+   * Extra `jsonwebtoken.verify()` options — issuer/audience/subject,
+   * clockTolerance, maxAge, ignoreExpiration, ignoreNotBefore, etc.
+   * `algorithms` is excluded (already top-level).
+   */
+  verifyOptions?: JwtVerifyOptions
 }
+
+type JwtVerifyOptions = Omit<import('jsonwebtoken').VerifyOptions, 'algorithms' | 'complete'>
+```
+
+Forward `jsonwebtoken`'s claim-validation options without abusing `mapPayload`:
+
+```ts
+new JwtStrategy({
+  secret: process.env.JWT_SECRET!,
+  algorithms: ['HS256'],
+  verifyOptions: {
+    issuer: process.env.JWT_ISSUER,
+    audience: process.env.JWT_AUDIENCE,
+    clockTolerance: 30,
+    maxAge: '15m',
+  },
+})
 ```
 
 ## ApiKeyStrategy

@@ -1,6 +1,15 @@
 import { createPublicKey } from 'node:crypto'
+import type { VerifyOptions } from 'jsonwebtoken'
 import type { AuthStrategy, AuthUser } from '../types'
 import type { TokenStore } from '../token-store'
+
+/**
+ * Subset of `jsonwebtoken`'s `VerifyOptions` that `JwtStrategy` forwards
+ * to `jwt.verify()`. `algorithms` is excluded because it's already a
+ * top-level strategy option (it also drives JWKS key resolution); set
+ * it there, not here.
+ */
+export type JwtVerifyOptions = Omit<VerifyOptions, 'algorithms' | 'complete'>
 
 export interface JwtStrategyOptions {
   /**
@@ -83,6 +92,31 @@ export interface JwtStrategyOptions {
    * Enables multi-tenant apps to have tenant-isolated JWT signing.
    */
   secretResolver?: (tenantId: string) => string | Buffer | Promise<string | Buffer>
+
+  /**
+   * Extra `jsonwebtoken.verify()` options forwarded verbatim. Lets you
+   * enforce `issuer` / `audience` / `subject`, set `clockTolerance`, or
+   * cap token age via `maxAge` without abusing `mapPayload`.
+   *
+   * `algorithms` and `complete` are excluded — `algorithms` is already
+   * a top-level strategy option, and `complete: true` would break the
+   * payload shape the rest of the strategy assumes.
+   *
+   * @example
+   * ```ts
+   * new JwtStrategy({
+   *   secret: process.env.JWT_SECRET!,
+   *   algorithms: ['HS256'],
+   *   verifyOptions: {
+   *     issuer: process.env.JWT_ISSUER,
+   *     audience: process.env.JWT_AUDIENCE,
+   *     clockTolerance: 30,
+   *     maxAge: '15m',
+   *   },
+   * })
+   * ```
+   */
+  verifyOptions?: JwtVerifyOptions
 }
 
 /**
@@ -147,6 +181,7 @@ export class JwtStrategy implements AuthStrategy {
       const defaultAlgorithms = this.options.jwksUri ? ['RS256'] : ['HS256']
 
       const payload = this.jwt.verify(token, secret, {
+        ...this.options.verifyOptions,
         algorithms: this.options.algorithms ?? defaultAlgorithms,
       })
 
