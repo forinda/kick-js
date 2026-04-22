@@ -36,7 +36,7 @@ import { Inject, Service } from '@forinda/kickjs-core'
 bootstrap({
   modules,
   adapters: [
-    new NotificationAdapter({
+    NotificationAdapter({
       channels: [
         new SlackChannel({ webhookUrl: process.env.SLACK_WEBHOOK! }),
         new EmailChannel({ mailer }),
