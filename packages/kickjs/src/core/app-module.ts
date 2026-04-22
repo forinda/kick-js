@@ -1,4 +1,5 @@
 import type { Container } from './container'
+import type { ContributorRegistration } from './context-decorator'
 
 /**
  * Route set returned by a module's routes() method.
@@ -29,6 +30,15 @@ export interface ModuleRoutes {
 export interface AppModule {
   /** Optional — bind interfaces to implementations in the container */
   register?(container: Container): void
+  /**
+   * Return Context Contributors (#107) that apply to every route this
+   * module mounts. Module-level contributors are merged into the per-route
+   * pipeline at the `'module'` precedence level — they win over adapter
+   * and global contributors but lose to method and class decorators.
+   *
+   * Optional — modules without per-module contributors omit this hook.
+   */
+  contributors?(): ContributorRegistration[] | readonly ContributorRegistration[]
   /** Return route definitions for this module, or null for non-HTTP modules */
   routes(): ModuleRoutes | ModuleRoutes[] | null
 }

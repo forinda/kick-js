@@ -21,6 +21,39 @@ export function getControllerPath(controllerClass: any): string {
 }
 
 /**
+ * Per-module SourcedRegistration[] threaded through the route-mount loop by
+ * Application.setup(). Carries module + adapter + global contributors so
+ * buildRoutes() can merge them with class + method ones into a single pipeline.
+ *
+ * Module setup is sequential, so this slot is race-free. Cleared in a finally
+ * block after each module mounts. Outside of Application setup the slot is
+ * empty — direct buildRoutes() callers (mostly tests) see only class + method
+ * contributors unless they pass `externalSources` explicitly.
+ *
+ * Same idiom as `Container._requestStoreProvider` and `Logger._contextProvider`:
+ * an internal escape hatch for cross-module wiring without inversion-of-control
+ * gymnastics.
+ *
+ * @internal
+ */
+let _externalContributorSources: readonly SourcedRegistration[] = []
+
+/** @internal — set by Application.setup() before each `mod.routes()` call. */
+export function _setExternalContributorSources(sources: readonly SourcedRegistration[]): void {
+  _externalContributorSources = sources
+}
+
+export interface BuildRoutesOptions {
+  /**
+   * Extra contributors to merge into the per-route pipeline at their declared
+   * precedence levels. Pass explicitly when calling buildRoutes outside the
+   * Application route-mount loop (typically in tests). When omitted, falls
+   * back to the slot set by Application.setup().
+   */
+  externalSources?: readonly SourcedRegistration[]
+}
+
+/**
  * Build an Express Router from a controller class decorated with @Get, @Post, etc.
  * Resolves the controller from the DI container, wraps handlers in RequestContext,
  * and applies class-level and method-level middleware.
@@ -31,9 +64,10 @@ export function getControllerPath(controllerClass: any): string {
  * The module's routes().path is the single source of truth for the mount prefix,
  * which avoids path doubling when both the module and controller specify the same path.
  */
-export function buildRoutes(controllerClass: any): Router {
+export function buildRoutes(controllerClass: any, options: BuildRoutesOptions = {}): Router {
   const router = Router()
   const container = Container.getInstance()
+  const externalSources = options.externalSources ?? _externalContributorSources
   const routes: RouteDefinition[] = getClassMeta<RouteDefinition[]>(
     METADATA.ROUTES,
     controllerClass,
@@ -102,15 +136,12 @@ export function buildRoutes(controllerClass: any): Router {
       [],
     )
 
-    if (classContributors.length > 0 || methodContributors.length > 0) {
+    if (
+      classContributors.length > 0 ||
+      methodContributors.length > 0 ||
+      externalSources.length > 0
+    ) {
       const sources: SourcedRegistration[] = [
-        ...classContributors.map(
-          (registration): SourcedRegistration => ({
-            source: 'class',
-            registration,
-            label: `${controllerClass.name}.@class`,
-          }),
-        ),
         ...methodContributors.map(
           (registration): SourcedRegistration => ({
             source: 'method',
@@ -118,6 +149,14 @@ export function buildRoutes(controllerClass: any): Router {
             label: `${controllerClass.name}.${String(route.handlerName)}`,
           }),
         ),
+        ...classContributors.map(
+          (registration): SourcedRegistration => ({
+            source: 'class',
+            registration,
+            label: `${controllerClass.name}.@class`,
+          }),
+        ),
+        ...externalSources,
       ]
       const pipeline = buildPipeline(sources, {
         route: `${route.method.toUpperCase()} ${fullPath}`,

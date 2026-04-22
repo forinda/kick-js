@@ -6,17 +6,21 @@ import {
   Logger,
   normalizePath,
   METADATA,
+  type AppModule,
   type AppModuleClass,
   type AppAdapter,
   type AdapterContext,
   type AdapterMiddleware,
+  type ContributorRegistration,
   type KickPlugin,
   type RouteDefinition,
+  type SourcedRegistration,
 } from '../core'
 import { getClassMeta } from '../core/metadata'
 import { requestId } from './middleware/request-id'
 import { notFoundHandler, errorHandler } from './middleware/error-handler'
 import { requestScopeMiddleware, isRequestScopeMiddleware } from './middleware/request-scope'
+import { _setExternalContributorSources } from './router-builder'
 import { requestStore, getRequestStore } from './request-store'
 
 const log = createLogger('Application')
@@ -64,6 +68,28 @@ export interface ApplicationOptions {
 
   /** Plugins that bundle modules, adapters, middleware, and DI bindings */
   plugins?: KickPlugin[]
+
+  /**
+   * Global Context Contributors (#107) that apply to every route in the
+   * application. Merge into the per-route pipeline at the `'global'`
+   * precedence level — they lose to module, adapter, class, and method
+   * contributors with the same key, providing app-wide defaults that any
+   * narrower scope can override.
+   *
+   * @example
+   * ```ts
+   * const StartedAt = defineContextDecorator({
+   *   key: 'requestStartedAt',
+   *   resolve: () => Date.now(),
+   * })
+   *
+   * bootstrap({
+   *   modules,
+   *   contributors: [StartedAt.registration],
+   * })
+   * ```
+   */
+  contributors?: ContributorRegistration[] | readonly ContributorRegistration[]
 
   /**
    * Backing store strategy for {@link RequestContext} `set/get` and the
@@ -405,8 +431,43 @@ export class Application {
     // Collect route metadata during mounting (avoids calling mod.routes() twice)
     const mountedRoutes: Array<{ controller: any; mountPath: string }> = []
 
+    // Context Contributors (#107) — collect adapter + global once; per-module
+    // sources are computed inside the loop so module isolation is preserved.
+    const adapterSources: SourcedRegistration[] = []
+    for (const adapter of this.adapters) {
+      const adapterContribs = adapter.contributors?.() ?? []
+      const adapterLabel = adapter.name ?? adapter.constructor.name ?? 'adapter'
+      for (const registration of adapterContribs) {
+        adapterSources.push({ source: 'adapter', registration, label: adapterLabel })
+      }
+    }
+    const globalSources: SourcedRegistration[] = (this.options.contributors ?? []).map(
+      (registration): SourcedRegistration => ({
+        source: 'global',
+        registration,
+        label: 'bootstrap',
+      }),
+    )
+
     for (const mod of modules) {
-      const result = mod.routes()
+      const moduleSources: SourcedRegistration[] = (mod.contributors?.() ?? []).map(
+        (registration): SourcedRegistration => ({
+          source: 'module',
+          registration,
+          label: mod.constructor?.name ?? 'module',
+        }),
+      )
+
+      // Thread per-module + adapter + global sources to buildRoutes via the
+      // module-scoped slot. Module setup is sequential, so the slot is
+      // race-free; the finally block clears it even if mod.routes() throws.
+      _setExternalContributorSources([...moduleSources, ...adapterSources, ...globalSources])
+      let result: ReturnType<AppModule['routes']>
+      try {
+        result = mod.routes()
+      } finally {
+        _setExternalContributorSources([])
+      }
       if (!result) continue // Non-HTTP modules (queues, cron) may return null
 
       const routeSets = Array.isArray(result) ? result : [result]
