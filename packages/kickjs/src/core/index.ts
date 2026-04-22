@@ -142,3 +142,22 @@ export {
   type ComputedRef,
   type WatchOptions,
 } from './reactivity'
+
+// Execution Context (transport-agnostic)
+export { type ContextMeta, type MetaValue, type ExecutionContext } from './execution-context'
+
+// Context Contributor pipeline (#107) — Phase 1: types + factory only.
+// Topo-sort, runner, and HTTP integration land in Phases 2 and 4.
+export {
+  defineContextDecorator,
+  type ContextDecoratorSpec,
+  type ContributorRegistration,
+  type ContextDecorator,
+  type ResolvedDeps,
+} from './context-decorator'
+
+export {
+  MissingContributorError,
+  ContributorCycleError,
+  DuplicateContributorError,
+} from './context-errors'
