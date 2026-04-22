@@ -161,3 +161,12 @@ export {
   ContributorCycleError,
   DuplicateContributorError,
 } from './context-errors'
+
+// Phase 2 — pipeline builder + topo-sort + validation.
+export {
+  buildPipeline,
+  type ContributorSource,
+  type SourcedRegistration,
+  type ContributorPipeline,
+  type BuildPipelineOptions,
+} from './contributor-pipeline'
