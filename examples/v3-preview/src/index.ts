@@ -16,7 +16,7 @@ export const app = await bootstrap({
   modules,
   adapters: [
     new DevToolsAdapter(),
-    new SwaggerAdapter({
+    SwaggerAdapter({
       info: { title: 'v3-preview', version: '2.1.0' },
     }),
   ],

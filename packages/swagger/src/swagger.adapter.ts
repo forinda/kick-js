@@ -1,7 +1,7 @@
 import { dirname } from 'node:path'
 import { createRequire } from 'node:module'
 import express, { Router } from 'express'
-import { Logger, type AppAdapter, type AdapterContext } from '@forinda/kickjs'
+import { Logger, defineAdapter } from '@forinda/kickjs'
 import {
   buildOpenAPISpec,
   registerControllerForDocs,
@@ -49,7 +49,7 @@ export interface SwaggerAdapterOptions extends SwaggerOptions {
  * bootstrap({
  *   modules,
  *   adapters: [
- *     new SwaggerAdapter({
+ *     SwaggerAdapter({
  *       info: { title: 'My API', version: '1.0.0' },
  *     }),
  *   ],
@@ -61,145 +61,148 @@ export interface SwaggerAdapterOptions extends SwaggerOptions {
  *   GET /redoc        — ReDoc (CDN — no local package available)
  *   GET /openapi.json — Raw OpenAPI 3.0.3 spec
  */
-export class SwaggerAdapter implements AppAdapter {
-  name = 'SwaggerAdapter'
+export const SwaggerAdapter = defineAdapter<SwaggerAdapterOptions>({
+  name: 'SwaggerAdapter',
+  defaults: {
+    docsPath: '/docs',
+    redocPath: '/redoc',
+    specPath: '/openapi.json',
+  },
+  build: (config) => {
+    const isDisabled = (): boolean =>
+      Boolean(config.disableInProd) && process.env.NODE_ENV === 'production'
 
-  constructor(private readonly options: SwaggerAdapterOptions = {}) {}
+    return {
+      onRouteMount(controllerClass, mountPath) {
+        if (isDisabled()) return
+        registerControllerForDocs(controllerClass, mountPath)
+      },
 
-  /** Whether the adapter should skip mounting in the current environment */
-  private get disabled(): boolean {
-    return Boolean(this.options.disableInProd) && process.env.NODE_ENV === 'production'
-  }
+      afterStart({ server }) {
+        if (isDisabled()) return
+        const addr = server?.address?.()
+        if (!addr || typeof addr !== 'object') return
 
-  /** Auto-detect server URLs from the running HTTP server and peer adapters */
-  afterStart({ server }: AdapterContext): void {
-    if (this.disabled) return
-    const addr = server?.address?.()
-    if (!addr || typeof addr !== 'object') return
+        const host =
+          addr.address === '::' || addr.address === '0.0.0.0' ? 'localhost' : addr.address
 
-    const host = addr.address === '::' || addr.address === '0.0.0.0' ? 'localhost' : addr.address
-
-    // Auto-add HTTP server URL if none configured
-    if (!this.options.servers || this.options.servers.length === 0) {
-      this.options.servers = [{ url: `http://${host}:${addr.port}`, description: 'HTTP server' }]
-    }
-
-    // Auto-add WebSocket server URLs from WsAdapter
-    const wsAdapter = this.options.adapters?.find(
-      (a) => a.name === 'WsAdapter' && typeof a.getStats === 'function',
-    )
-    if (wsAdapter) {
-      const stats = wsAdapter.getStats()
-      for (const namespace of Object.keys(stats.namespaces || {})) {
-        this.options.servers?.push({
-          url: `ws://${host}:${addr.port}${namespace}`,
-          description: `WebSocket: ${namespace}`,
-        })
-      }
-    }
-  }
-
-  /** Collect controller metadata as routes are mounted */
-  onRouteMount(controllerClass: any, mountPath: string): void {
-    if (this.disabled) return
-    registerControllerForDocs(controllerClass, mountPath)
-  }
-
-  beforeMount({ app }: AdapterContext): void {
-    if (this.disabled) {
-      log.info('Swagger disabled in production (disableInProd=true)')
-      return
-    }
-    // Clear previous registrations (supports HMR rebuild)
-    clearRegisteredRoutes()
-    const docsPath = this.options.docsPath ?? '/docs'
-    const redocPath = this.options.redocPath ?? '/redoc'
-    const specPath = this.options.specPath ?? '/openapi.json'
-    let uiDistAvailable = false
-
-    const docsRouter = Router()
-
-    // ── Serve swagger-ui-dist static assets locally ──────────────────
-    // This makes Swagger UI work offline — no CDN needed.
-    // Assets served at /_swagger-assets/ (CSS, JS, fonts, etc.)
-    const swaggerAssetsPath = '/_swagger-assets'
-    try {
-      const swaggerDistDir = getSwaggerUiDistPath()
-      docsRouter.use(swaggerAssetsPath, express.static(swaggerDistDir))
-      uiDistAvailable = true
-    } catch {
-      log.warn('swagger-ui-dist not found — Swagger UI will load from CDN (requires internet).')
-    }
-
-    // Relax CSP for Swagger UI in both local and CDN modes (inline script is used in both)
-    docsRouter.use((_req, res, next) => {
-      // Build connect-src dynamically so "Try it out" can call any configured server URL.
-      // Includes dev-friendly localhost/127.0.0.1 origins so docs served from one host
-      // can call an API spec'd at the other (a common cross-origin gotcha).
-      const serverOrigins = new Set<string>()
-      for (const s of this.options.servers ?? []) {
-        try {
-          serverOrigins.add(new URL(s.url).origin)
-        } catch {
-          // ignore relative or malformed URLs
+        // Auto-add HTTP server URL if none configured
+        if (!config.servers || config.servers.length === 0) {
+          config.servers = [{ url: `http://${host}:${addr.port}`, description: 'HTTP server' }]
         }
-      }
-      const connectSrc = [
-        "'self'",
-        'http://localhost:*',
-        'http://127.0.0.1:*',
-        'https://localhost:*',
-        'https://127.0.0.1:*',
-        'ws://localhost:*',
-        'ws://127.0.0.1:*',
-        ...serverOrigins,
-      ].join(' ')
 
-      res.setHeader(
-        'Content-Security-Policy',
-        [
-          "default-src 'self'",
-          "script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.redoc.ly https://cdn.jsdelivr.net",
-          "style-src 'self' 'unsafe-inline' https://unpkg.com https://fonts.googleapis.com",
-          "font-src 'self' https://fonts.gstatic.com",
-          "img-src 'self' data: https://unpkg.com",
-          `connect-src ${connectSrc}`,
-        ].join('; '),
-      )
-      next()
-    })
-
-    // Spec endpoint (JSON)
-    docsRouter.get(specPath, (_req, res) => {
-      const spec = buildOpenAPISpec(this.options)
-      res.json(spec)
-    })
-
-    // Swagger UI — uses local assets if available, CDN fallback
-    docsRouter.get(docsPath, (_req, res) => {
-      res
-        .type('html')
-        .send(
-          swaggerUIHtml(
-            specPath,
-            this.options.info?.title,
-            uiDistAvailable ? swaggerAssetsPath : undefined,
-          ),
+        // Auto-add WebSocket server URLs from WsAdapter
+        const wsAdapter = config.adapters?.find(
+          (a) => a.name === 'WsAdapter' && typeof a.getStats === 'function',
         )
-    })
+        if (wsAdapter) {
+          const stats = wsAdapter.getStats()
+          for (const namespace of Object.keys(stats.namespaces || {})) {
+            config.servers?.push({
+              url: `ws://${host}:${addr.port}${namespace}`,
+              description: `WebSocket: ${namespace}`,
+            })
+          }
+        }
+      },
 
-    // ReDoc — still CDN-based (no npm package for standalone bundle)
-    docsRouter.get(redocPath, (_req, res) => {
-      res.type('html').send(redocHtml(specPath, this.options.info?.title))
-    })
+      beforeMount({ app }) {
+        if (isDisabled()) {
+          log.info('Swagger disabled in production (disableInProd=true)')
+          return
+        }
+        // Clear previous registrations (supports HMR rebuild)
+        clearRegisteredRoutes()
+        const docsPath = config.docsPath!
+        const redocPath = config.redocPath!
+        const specPath = config.specPath!
+        let uiDistAvailable = false
 
-    app.use(docsRouter)
+        const docsRouter = Router()
 
-    log.info(`Swagger UI:  ${docsPath}`)
-    log.info(`ReDoc:       ${redocPath}`)
-    log.info(`OpenAPI spec: ${specPath}`)
-  }
-}
+        // ── Serve swagger-ui-dist static assets locally ──────────────────
+        // This makes Swagger UI work offline — no CDN needed.
+        // Assets served at /_swagger-assets/ (CSS, JS, fonts, etc.)
+        const swaggerAssetsPath = '/_swagger-assets'
+        try {
+          const swaggerDistDir = getSwaggerUiDistPath()
+          docsRouter.use(swaggerAssetsPath, express.static(swaggerDistDir))
+          uiDistAvailable = true
+        } catch {
+          log.warn('swagger-ui-dist not found — Swagger UI will load from CDN (requires internet).')
+        }
+
+        // Relax CSP for Swagger UI in both local and CDN modes (inline script is used in both)
+        docsRouter.use((_req, res, next) => {
+          // Build connect-src dynamically so "Try it out" can call any configured server URL.
+          // Includes dev-friendly localhost/127.0.0.1 origins so docs served from one host
+          // can call an API spec'd at the other (a common cross-origin gotcha).
+          const serverOrigins = new Set<string>()
+          for (const s of config.servers ?? []) {
+            try {
+              serverOrigins.add(new URL(s.url).origin)
+            } catch {
+              // ignore relative or malformed URLs
+            }
+          }
+          const connectSrc = [
+            "'self'",
+            'http://localhost:*',
+            'http://127.0.0.1:*',
+            'https://localhost:*',
+            'https://127.0.0.1:*',
+            'ws://localhost:*',
+            'ws://127.0.0.1:*',
+            ...serverOrigins,
+          ].join(' ')
+
+          res.setHeader(
+            'Content-Security-Policy',
+            [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.redoc.ly https://cdn.jsdelivr.net",
+              "style-src 'self' 'unsafe-inline' https://unpkg.com https://fonts.googleapis.com",
+              "font-src 'self' https://fonts.gstatic.com",
+              "img-src 'self' data: https://unpkg.com",
+              `connect-src ${connectSrc}`,
+            ].join('; '),
+          )
+          next()
+        })
+
+        // Spec endpoint (JSON)
+        docsRouter.get(specPath, (_req, res) => {
+          const spec = buildOpenAPISpec(config)
+          res.json(spec)
+        })
+
+        // Swagger UI — uses local assets if available, CDN fallback
+        docsRouter.get(docsPath, (_req, res) => {
+          res
+            .type('html')
+            .send(
+              swaggerUIHtml(
+                specPath,
+                config.info?.title,
+                uiDistAvailable ? swaggerAssetsPath : undefined,
+              ),
+            )
+        })
+
+        // ReDoc — still CDN-based (no npm package for standalone bundle)
+        docsRouter.get(redocPath, (_req, res) => {
+          res.type('html').send(redocHtml(specPath, config.info?.title))
+        })
+
+        app.use(docsRouter)
+
+        log.info(`Swagger UI:  ${docsPath}`)
+        log.info(`ReDoc:       ${redocPath}`)
+        log.info(`OpenAPI spec: ${specPath}`)
+      },
+    }
+  },
+})
 
 // Re-export for use by Application when mounting module routes
 export { registerControllerForDocs, clearRegisteredRoutes }

@@ -30,7 +30,7 @@ export function generateEntryFile(
       if (packages.includes('swagger')) {
         gqlImports.push(`import { SwaggerAdapter } from '@forinda/kickjs-swagger'`)
         gqlAdapters.push(
-          `    new SwaggerAdapter({ info: { title: '${name}', version: '${version}' } }),`,
+          `    SwaggerAdapter({ info: { title: '${name}', version: '${version}' } }),`,
         )
       }
 
@@ -80,7 +80,7 @@ ${gqlAdaptersBlock}    new GraphQLAdapter({
       if (packages.includes('swagger')) {
         cqrsImports.push(`import { SwaggerAdapter } from '@forinda/kickjs-swagger'`)
         cqrsAdapters.push(
-          `    new SwaggerAdapter({\n      info: { title: '${name}', version: '${version}' },\n    }),`,
+          `    SwaggerAdapter({\n      info: { title: '${name}', version: '${version}' },\n    }),`,
         )
       }
       if (packages.includes('graphql')) {
@@ -117,9 +117,7 @@ export const app = await bootstrap({
 
       if (packages.includes('swagger')) {
         imports.push(`import { SwaggerAdapter } from '@forinda/kickjs-swagger'`)
-        adapters.push(
-          `    new SwaggerAdapter({ info: { title: '${name}', version: '${version}' } }),`,
-        )
+        adapters.push(`    SwaggerAdapter({ info: { title: '${name}', version: '${version}' } }),`)
       }
       if (packages.includes('devtools')) {
         imports.push(`import { DevToolsAdapter } from '@forinda/kickjs-devtools'`)
@@ -165,7 +163,7 @@ export const app = await bootstrap({ modules${adaptersBlock} })
       if (packages.includes('swagger')) {
         restImports.push(`import { SwaggerAdapter } from '@forinda/kickjs-swagger'`)
         restAdapters.push(
-          `    new SwaggerAdapter({\n      info: { title: '${name}', version: '${version}' },\n    }),`,
+          `    SwaggerAdapter({\n      info: { title: '${name}', version: '${version}' },\n    }),`,
         )
       }
       if (packages.includes('otel')) {
