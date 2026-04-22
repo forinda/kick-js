@@ -1,7 +1,6 @@
 import type http from 'node:http'
 import type { Express } from 'express'
 import type { Container } from './container'
-import type { ContributorRegistration } from './context-decorator'
 import type { MaybePromise, Constructor } from './interfaces'
 
 /**
@@ -87,17 +86,6 @@ export interface AppAdapter {
    * The `phase` controls ordering relative to global middleware and routes.
    */
   middleware?(): AdapterMiddleware[]
-
-  /**
-   * Return Context Contributors (#107) that apply to every route in the
-   * application. Adapter-level contributors merge into the per-route
-   * pipeline at the `'adapter'` precedence level — they win over global
-   * contributors but lose to module, class, and method decorators.
-   *
-   * Useful for cross-cutting concerns: an auth adapter contributing
-   * `user`, a multi-tenant adapter contributing `tenant`, etc. Optional.
-   */
-  contributors?(): ContributorRegistration[] | readonly ContributorRegistration[]
 
   /**
    * Called before global middleware — register early routes (docs UI, health).
