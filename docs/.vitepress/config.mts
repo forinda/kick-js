@@ -136,9 +136,9 @@ const examplesSidebar = [
     text: 'Full Applications',
     items: [
       { text: 'Overview', link: '/examples/' },
-      { text: 'Jira Clone (Drizzle)', link: '/examples/jira-drizzle-api' },
-      { text: 'Jira Clone (Prisma)', link: '/examples/jira-prisma-v7-api' },
-      { text: 'Jira Clone (Mongoose)', link: '/examples/jira-mongoose-api' },
+      { text: 'Task Management (Drizzle)', link: '/examples/task-drizzle-api' },
+      { text: 'Task Management (Prisma)', link: '/examples/task-prisma-api' },
+      { text: 'Task Management (Mongoose)', link: '/examples/task-mongoose-api' },
     ],
   },
   {

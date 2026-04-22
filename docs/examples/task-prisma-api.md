@@ -15,7 +15,7 @@ A full-featured task management API built with KickJS, **Prisma 7**, and Postgre
 ## Running
 
 ```bash
-cd examples/jira-prisma-v7-api
+cd examples/task-prisma-api
 
 # Set up Postgres + Redis connection
 cp .env.example .env  # edit DATABASE_URL and REDIS_URL
@@ -58,5 +58,5 @@ kick dev
 
 ## Source
 
-- [examples/jira-prisma-v7-api/](https://github.com/forinda/kick-js/tree/main/examples/jira-prisma-v7-api)
+- [examples/task-prisma-api/](https://github.com/forinda/kick-js/tree/main/examples/task-prisma-api)
 - [Prisma 7 Upgrade Guide](https://www.prisma.io/docs/orm/more/upgrade-guides/upgrading-versions/upgrading-to-prisma-7)

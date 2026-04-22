@@ -12,11 +12,11 @@ KickJS integrates with external services through **adapters** and **middleware**
 
 - [Prisma](../../api/prisma.md) — Type-safe ORM with migration support
 - [Drizzle](../../api/drizzle.md) — Lightweight type-safe query builder
-- MongoDB/Mongoose — via custom adapter (see [jira-mongoose-api example](https://github.com/forinda/kick-js/tree/main/examples/jira-mongoose-api))
+- MongoDB/Mongoose — via custom adapter (see [task-mongoose-api example](https://github.com/forinda/kick-js/tree/main/examples/task-mongoose-api))
 
 ## Caching
 
-- Redis — via `ioredis` (see [jira-drizzle-api example](https://github.com/forinda/kick-js/tree/main/examples/jira-drizzle-api))
+- Redis — via `ioredis` (see [task-drizzle-api example](https://github.com/forinda/kick-js/tree/main/examples/task-drizzle-api))
 - Upstash *(coming soon)*
 
 ## Email
