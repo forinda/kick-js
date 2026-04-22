@@ -230,11 +230,8 @@ export interface RunContributorResult<K extends string> {
  * expect(value).toEqual({ id: 'p-1', tenantId: 't-1' })
  * ```
  */
-export async function runContributor<
-  K extends string,
-  D extends Record<string, any> = Record<string, never>,
->(
-  decorator: ContextDecorator<K, D, ExecutionContext>,
+export async function runContributor<K extends string>(
+  decorator: ContextDecorator<K, Record<string, any>, ExecutionContext>,
   options: RunContributorOptions = {},
 ): Promise<RunContributorResult<K>> {
   const meta = new Map<string, unknown>(Object.entries(options.initial ?? {}))
