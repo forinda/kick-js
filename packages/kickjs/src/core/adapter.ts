@@ -79,8 +79,33 @@ export interface AdapterContext {
  * ```
  */
 export interface AppAdapter {
-  /** Human-readable name for logging */
+  /**
+   * Human-readable name for logging and `dependsOn` resolution.
+   * Required when the adapter (or any other in the same set) declares
+   * `dependsOn` — sort errors will reference adapters by name.
+   */
   name?: string
+
+  /**
+   * Other adapter names that must mount before this one. The framework
+   * topologically sorts adapters at boot — cycles or unknown names throw
+   * via `MountCycleError` / `MissingMountDepError` so bad configurations
+   * fail boot rather than corrupt live traffic.
+   *
+   * Common pattern: `TenantAdapter` populates `req.tenant` and
+   * `AuthAdapter` reads it for tenant-scoped RBAC, so AuthAdapter
+   * declares `dependsOn = ['TenantAdapter']`. Adapters without
+   * `dependsOn` retain their declaration order.
+   *
+   * @example
+   * ```ts
+   * class AuthAdapter implements AppAdapter {
+   *   name = 'AuthAdapter'
+   *   dependsOn = ['TenantAdapter']
+   * }
+   * ```
+   */
+  dependsOn?: readonly string[]
 
   /**
    * Return middleware entries to be inserted into the pipeline.
