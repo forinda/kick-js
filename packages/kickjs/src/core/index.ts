@@ -173,3 +173,13 @@ export {
 
 // Phase 2 — sequential async runner with the §20.9 error matrix.
 export { runContributors, type RunContributorsOptions } from './contributor-runner'
+
+// Plugin/adapter dependsOn topo-sort (architecture.md §21.2.1).
+export {
+  mountSort,
+  DuplicateMountNameError,
+  MissingMountDepError,
+  MountCycleError,
+  type MountSortItem,
+  type MountKind,
+} from './mount-sort'

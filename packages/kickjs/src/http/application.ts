@@ -15,6 +15,7 @@ import {
   type KickPlugin,
   type RouteDefinition,
   type SourcedRegistration,
+  mountSort,
 } from '../core'
 import { getClassMeta } from '../core/metadata'
 import { requestId } from './middleware/request-id'
@@ -229,12 +230,35 @@ export class Application {
   constructor(private readonly options: ApplicationOptions) {
     this.app = express()
     this.container = Container.getInstance()
-    this.plugins = options.plugins ?? []
-    this.adapters = [
-      // Plugin adapters first
+
+    // Sort plugins by `dependsOn` declarations BEFORE reading their adapters/etc.
+    // Plugins without `dependsOn` keep their declaration order — this is a
+    // pure refinement; no behaviour change for apps that don't use the field.
+    this.plugins = mountSort(options.plugins ?? [], 'plugin')
+
+    // Build adapter list from plugin adapters + user adapters, synthesize
+    // a stable name for any anonymous adapter (so duplicate-name detection
+    // and `dependsOn` resolution have something to key on), then sort by
+    // adapter `dependsOn`. Plugin-shipped adapters keep their plugin's
+    // relative order unless their own `dependsOn` says otherwise.
+    const allAdapters = [
       ...this.plugins.flatMap((p) => p.adapters?.() ?? []),
       ...(options.adapters ?? []),
     ]
+    let anonAdapterCount = 0
+    const namedAdapters: Array<AppAdapter & { name: string }> = allAdapters.map((adapter) => {
+      if (!adapter.name) {
+        // `constructor.name === 'Object'` for plain object-literal adapters —
+        // useless as an identity since two anonymous literals would collide.
+        // Only borrow the constructor name when it's an actual class.
+        const ctorName = adapter.constructor?.name
+        const fallback =
+          ctorName && ctorName !== 'Object' ? ctorName : `AnonymousAdapter#${anonAdapterCount++}`
+        return Object.assign(adapter, { name: fallback })
+      }
+      return adapter as AppAdapter & { name: string }
+    })
+    this.adapters = mountSort(namedAdapters, 'adapter')
     // Wire the request store provider so Container can resolve REQUEST-scoped deps
     Container._requestStoreProvider = () => requestStore.getStore() ?? null
     // Wire logger context provider so logs auto-include requestId

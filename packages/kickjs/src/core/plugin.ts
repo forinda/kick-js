@@ -56,8 +56,28 @@ import type { ContributorRegistration } from './context-decorator'
  * ```
  */
 export interface KickPlugin {
-  /** Human-readable name for logging and debugging */
+  /** Human-readable name for logging, debugging, and `dependsOn` resolution. */
   name: string
+
+  /**
+   * Other plugin names that must mount before this one. The framework
+   * topologically sorts plugins at boot — cycles or unknown names throw
+   * via {@link MountCycleError} / {@link MissingMountDepError} so bad
+   * configurations fail boot rather than corrupt live traffic.
+   *
+   * Plugins with no `dependsOn` retain their declaration order, so
+   * existing apps that don't use this field see no behaviour change.
+   *
+   * @example
+   * ```ts
+   * class MonitoringPlugin implements KickPlugin {
+   *   name = 'MonitoringPlugin'
+   *   // OTel must initialize traces before request logger reads them
+   *   dependsOn = ['OtelPlugin']
+   * }
+   * ```
+   */
+  dependsOn?: readonly string[]
 
   /**
    * Register DI bindings before modules load.
