@@ -21,6 +21,7 @@ const guideSidebar = [
       { text: 'Controllers & Routes', link: '/guide/controllers' },
       { text: 'Type Generation', link: '/guide/typegen' },
       { text: 'Middleware', link: '/guide/middleware' },
+      { text: 'Context Decorators', link: '/guide/context-decorators' },
       { text: 'Validation', link: '/guide/validation' },
       { text: 'Error Handling', link: '/guide/error-handling' },
       { text: 'Request Lifecycle', link: '/guide/lifecycle' },

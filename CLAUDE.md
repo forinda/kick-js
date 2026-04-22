@@ -136,6 +136,31 @@ Available flags: `--template rest|graphql|ddd|cqrs|minimal`, `--pm pnpm|npm|yarn
 @Cron('0 * * * *')        // Cron schedule
 ```
 
+### Context Contributors (#107)
+
+Typed, ordered, declarative way to populate `ctx.set('key', value)` before a handler runs. Use this **instead of `@Middleware()`** when the only job is to compute a value other code reads off `ctx`.
+
+```ts
+const LoadTenant = defineContextDecorator({
+  key: 'tenant',
+  deps: { repo: TENANT_REPO },              // typed DI
+  resolve: (ctx, { repo }) => repo.findById(ctx.req.headers['x-tenant-id'] as string),
+})
+
+const LoadProject = defineContextDecorator({
+  key: 'project',
+  dependsOn: ['tenant'],                    // topo-sorted at startup; cycles fail boot
+  resolve: (ctx) => projectsRepo.find(ctx.get('tenant')!.id, ctx.params.id),
+})
+
+@LoadTenant
+@LoadProject
+@Get('/projects/:id')
+getProject(ctx: RequestContext) { ctx.json(ctx.get('project')) }
+```
+
+Five registration sites, precedence high→low: **method > class > module > adapter > global**. Apply via `@`-decorator (method/class), `AppModule.contributors?()`, `AppAdapter.contributors?()`, or `bootstrap({ contributors })`. Full guide at `docs/guide/context-decorators.md`. Do NOT use this for short-circuiting responses, response-stream mutation, or pre-route-matching middleware — keep using `@Middleware()` / global middleware for those.
+
 ### RequestContext
 
 Every controller method receives `ctx: RequestContext` with:
