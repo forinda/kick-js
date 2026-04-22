@@ -11,7 +11,7 @@ import { WsAdapter } from '@forinda/kickjs-ws'
 bootstrap({
   modules: [ChatModule],
   adapters: [
-    new WsAdapter({ path: '/ws' }),
+    WsAdapter({ path: '/ws' }),
   ],
 })
 ```
@@ -160,7 +160,7 @@ export class NotificationController { /* ... */ }
 ## Configuration
 
 ```ts
-new WsAdapter({
+WsAdapter({
   path: '/ws',              // Base path (default: '/ws')
   heartbeatInterval: 30000, // Ping interval in ms (default: 30000, 0 to disable)
   maxPayload: 1048576,      // Max message size in bytes
@@ -174,7 +174,7 @@ Pass an `auth` block to authenticate sockets at upgrade time using cookies, head
 ```ts
 import { WsAdapter } from '@forinda/kickjs-ws'
 
-new WsAdapter({
+WsAdapter({
   path: '/ws',
   auth: {
     resolveUser: async (request) => {

@@ -40,7 +40,7 @@ class ChatHandler {
 // In bootstrap
 bootstrap({
   modules,
-  adapters: [new WsAdapter()],
+  adapters: [WsAdapter()],
 })
 ```
 

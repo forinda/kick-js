@@ -34,7 +34,7 @@ const prismaAdapter = new PrismaAdapter({
   logging: true,
 })
 
-const wsAdapter = new WsAdapter({
+const wsAdapter = WsAdapter({
   path: '/ws',
   heartbeatInterval: 30000,
   maxPayload: 1048576,
