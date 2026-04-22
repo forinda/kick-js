@@ -45,7 +45,7 @@ describe('McpAdapter — tool discovery', () => {
   beforeEach(() => Container.reset())
 
   it('discovers @McpTool-decorated methods in explicit mode', () => {
-    const adapter = new McpAdapter({ name: 'test', mode: 'explicit' })
+    const adapter = McpAdapter({ name: 'test', mode: 'explicit' })
 
     adapter.onRouteMount(TaskController, '/api/v1/tasks')
     adapter.beforeStart({} as any)
@@ -59,7 +59,7 @@ describe('McpAdapter — tool discovery', () => {
   })
 
   it('skips routes without @McpTool when mode is explicit', () => {
-    const adapter = new McpAdapter({ name: 'test', mode: 'explicit' })
+    const adapter = McpAdapter({ name: 'test', mode: 'explicit' })
 
     adapter.onRouteMount(HiddenController, '/api/v1/hidden')
     adapter.beforeStart({} as any)
@@ -68,7 +68,7 @@ describe('McpAdapter — tool discovery', () => {
   })
 
   it('honors hidden: true on @McpTool', () => {
-    const adapter = new McpAdapter({ name: 'test', mode: 'explicit' })
+    const adapter = McpAdapter({ name: 'test', mode: 'explicit' })
 
     adapter.onRouteMount(TaskController, '/api/v1/tasks')
     adapter.beforeStart({} as any)
@@ -78,7 +78,7 @@ describe('McpAdapter — tool discovery', () => {
   })
 
   it('exposes every route in auto mode and respects include filter', () => {
-    const adapter = new McpAdapter({
+    const adapter = McpAdapter({
       name: 'test',
       mode: 'auto',
       include: ['POST'],
@@ -94,7 +94,7 @@ describe('McpAdapter — tool discovery', () => {
   })
 
   it('respects exclude prefixes in auto mode', () => {
-    const adapter = new McpAdapter({
+    const adapter = McpAdapter({
       name: 'test',
       mode: 'auto',
       exclude: ['/api/v1/tasks'],
@@ -107,7 +107,7 @@ describe('McpAdapter — tool discovery', () => {
   })
 
   it('converts the Zod body schema into a JSON Schema input', () => {
-    const adapter = new McpAdapter({ name: 'test', mode: 'explicit' })
+    const adapter = McpAdapter({ name: 'test', mode: 'explicit' })
 
     adapter.onRouteMount(TaskController, '/api/v1/tasks')
     adapter.beforeStart({} as any)
@@ -131,7 +131,7 @@ describe('McpAdapter — tool discovery', () => {
       action() {}
     }
 
-    const adapter = new McpAdapter({ name: 'test', mode: 'explicit' })
+    const adapter = McpAdapter({ name: 'test', mode: 'explicit' })
     adapter.onRouteMount(NoBodyController, '/api/v1/nobody')
     adapter.beforeStart({} as any)
 

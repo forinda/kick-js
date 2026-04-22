@@ -33,7 +33,7 @@ async function buildAdapterOnApp(): Promise<{ adapter: McpAdapter; app: Express 
   const app = express()
   app.use(express.json())
 
-  const adapter = new McpAdapter({
+  const adapter = McpAdapter({
     name: 'test-server',
     version: '0.1.0',
     description: 'Test MCP server',
@@ -121,7 +121,7 @@ describe('McpAdapter — StreamableHTTP transport', () => {
 
   it('skips Express mount when transport is stdio', async () => {
     const app = express()
-    const adapter = new McpAdapter({
+    const adapter = McpAdapter({
       name: 'stdio-test',
       version: '0.1.0',
       transport: 'stdio',

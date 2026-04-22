@@ -70,7 +70,7 @@ async function startRig(): Promise<ServerRig> {
   app.post('/api/v1/tasks/', TaskController.prototype.create)
   app.delete('/api/v1/tasks/:id', TaskController.prototype.remove)
 
-  const adapter = new McpAdapter({
+  const adapter = McpAdapter({
     name: 'dispatch-test',
     version: '0.1.0',
     mode: 'auto',
@@ -211,7 +211,7 @@ describe('McpAdapter — tool dispatch via internal HTTP', () => {
   it('returns a transport error when serverBaseUrl was never captured', async () => {
     // No server passed in — adapter cannot resolve the base URL
     const app = express()
-    const adapter = new McpAdapter({
+    const adapter = McpAdapter({
       name: 'no-server',
       version: '0.1.0',
       mode: 'auto',
