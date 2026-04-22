@@ -37,7 +37,7 @@ const queueAdapter = new QueueAdapter({
 export const adapters = [
   new MongooseAdapter(env.MONGODB_URI),
   new RedisAdapter(env.REDIS_URL),
-  new AuthAdapter({
+  AuthAdapter({
     strategies: [
       new JwtStrategy({
         secret: env.JWT_SECRET,

@@ -17,7 +17,7 @@ describe('@RateLimit decorator', () => {
       search() {}
     }
 
-    const adapter = new AuthAdapter({
+    const adapter = AuthAdapter({
       strategies: [alwaysAuthStrategy],
       defaultPolicy: 'protected',
     })
@@ -53,7 +53,7 @@ describe('@RateLimit decorator', () => {
       limited() {}
     }
 
-    const adapter = new AuthAdapter({
+    const adapter = AuthAdapter({
       strategies: [alwaysAuthStrategy],
       defaultPolicy: 'protected',
     })
@@ -91,7 +91,7 @@ describe('@RateLimit decorator', () => {
       h() {}
     }
 
-    const adapter = new AuthAdapter({
+    const adapter = AuthAdapter({
       strategies: [alwaysAuthStrategy],
       defaultPolicy: 'protected',
     })
@@ -121,7 +121,7 @@ describe('@RateLimit decorator', () => {
       action() {}
     }
 
-    const adapter = new AuthAdapter({
+    const adapter = AuthAdapter({
       strategies: [alwaysAuthStrategy],
       defaultPolicy: 'protected',
     })
@@ -162,7 +162,7 @@ describe('@RateLimit decorator', () => {
       free() {}
     }
 
-    const adapter = new AuthAdapter({
+    const adapter = AuthAdapter({
       strategies: [alwaysAuthStrategy],
       defaultPolicy: 'protected',
     })

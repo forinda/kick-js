@@ -20,7 +20,7 @@ This article walks through the full implementation with real code from the Vibed
 KickJS provides an `AuthAdapter` that runs during the `beforeRoutes` lifecycle phase. You configure it with a JWT strategy and a default policy:
 
 ```typescript
-new AuthAdapter({
+AuthAdapter({
   strategies: [
     new JwtStrategy({
       secret: env.JWT_SECRET,
@@ -53,7 +53,7 @@ I set `defaultPolicy: 'protected'` and configured it in our adapters:
 export const adapters = [
   new MongooseAdapter(env.MONGODB_URI),
   new RedisAdapter(env.REDIS_URL),
-  new AuthAdapter({
+  AuthAdapter({
     strategies: [
       new JwtStrategy({
         secret: env.JWT_SECRET,

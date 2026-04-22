@@ -14,7 +14,7 @@ pnpm add @forinda/kickjs-auth jsonwebtoken
 
 ## Features
 
-- `AuthAdapter` — lifecycle adapter with configurable strategies
+- `AuthAdapter` — `defineAdapter`-built factory with configurable strategies; supports `.scoped()` for multi-realm setups and `.testMode()` for tests
 - Built-in strategies: `JwtStrategy`, `ApiKeyStrategy`, `OAuthStrategy`, `PassportBridge`, `SessionStrategy`
 - Decorators: `@Authenticated`, `@Public`, `@Roles`, `@Can`, `@CsrfExempt`, `@RateLimit`
 - `PasswordService` — secure hashing with scrypt/argon2/bcrypt + validation
@@ -38,7 +38,7 @@ import { AuthAdapter, JwtStrategy, Public, Roles } from '@forinda/kickjs-auth'
 bootstrap({
   modules,
   adapters: [
-    new AuthAdapter({
+    AuthAdapter({
       strategies: [
         new JwtStrategy({
           secret: process.env.JWT_SECRET!,

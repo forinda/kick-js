@@ -2,12 +2,14 @@ import {
   Logger,
   HttpStatus,
   METADATA,
+  defineAdapter,
   getClassMeta,
   getClassMetaOrUndefined,
   getMethodMetaOrUndefined,
-  type AppAdapter,
   type AdapterContext,
+  type AdapterFactory,
   type AdapterMiddleware,
+  type AppAdapter,
   type RouteDefinition,
 } from '@forinda/kickjs'
 
@@ -36,31 +38,12 @@ interface RateLimitCounter {
 export const AUTH_USER = Symbol('AuthUser')
 
 /**
- * Authentication adapter — plugs into the KickJS lifecycle to protect
- * routes based on @Authenticated, @Public, and @Roles decorators.
- *
- * Supports multiple strategies (JWT, API key, custom) with first-match semantics.
- *
- * @example
- * ```ts
- * import { AuthAdapter, JwtStrategy, ApiKeyStrategy } from '@forinda/kickjs-auth'
- *
- * bootstrap({
- *   modules: [...],
- *   adapters: [
- *     new AuthAdapter({
- *       strategies: [
- *         new JwtStrategy({ secret: process.env.JWT_SECRET! }),
- *         new ApiKeyStrategy({ keys: { 'sk-123': { name: 'Bot', roles: ['api'] } } }),
- *       ],
- *       defaultPolicy: 'protected', // secure by default
- *     }),
- *   ],
- * })
- * ```
+ * Internal implementation of the auth adapter. Holds the per-instance
+ * state Maps (`routeControllers`, `rateLimitCounters`) and the resolved
+ * config callbacks. Wrapped by the {@link AuthAdapter} factory below —
+ * not exported.
  */
-export class AuthAdapter implements AppAdapter {
-  name = 'AuthAdapter'
+class AuthAdapterImpl implements Omit<AppAdapter, 'name'> {
   private readonly strategies: AuthStrategy[]
   private readonly defaultPolicy: 'protected' | 'open'
   private readonly onUnauthorized: (req: any, res: any) => void
@@ -181,74 +164,6 @@ export class AuthAdapter implements AppAdapter {
       })
       log.info('Auth debug endpoint registered at GET /__auth/debug')
     }
-  }
-
-  /**
-   * Create an AuthAdapter that accepts any request and returns a fixed test
-   * user — removes the need to mint real JWTs in controller tests.
-   *
-   * `tenantId` / `roles` populate `user.tenantId` / `user.tenantRoles` so
-   * `@Roles()` and tenant-aware handlers see the values they would in prod.
-   * `allow` / `deny` short-circuit `@Can(action, resource)` decisions by
-   * full name (`'flock.delete'`) or resource-only (`'flock'` = match any
-   * action on that resource) — no need to stand up `@Policy` classes just
-   * to exercise denial paths.
-   *
-   * @example
-   * ```ts
-   * const adapter = AuthAdapter.testMode({
-   *   user: { id: '1', email: 'a@b.com' },
-   *   tenantId: 't1',
-   *   roles: ['owner'],
-   *   allow: ['flock.view'],
-   *   deny: ['flock.delete'],
-   * })
-   * bootstrap({ modules, adapters: [adapter] })
-   * ```
-   */
-  static testMode(options: {
-    user: AuthUser
-    defaultPolicy?: 'protected' | 'open'
-    /** Populates `user.tenantId` and is forwarded to `roleResolver`. */
-    tenantId?: string
-    /**
-     * Populates `user.tenantRoles` (if `tenantId` is set) or `user.roles`.
-     * Also becomes the `roleResolver` return value so `@Roles()` sees them.
-     */
-    roles?: string[]
-    /**
-     * `@Can(action, resource)` calls matching these short-circuit to allow
-     * without consulting the policy registry. Entries are `'resource.action'`
-     * or just `'resource'` (matches any action on that resource).
-     */
-    allow?: string[]
-    /**
-     * `@Can(action, resource)` calls matching these short-circuit to deny
-     * without consulting the policy registry. Takes precedence over `allow`.
-     */
-    deny?: string[]
-  }): AuthAdapter {
-    const user: AuthUser = {
-      ...options.user,
-      ...(options.tenantId ? { tenantId: options.tenantId } : {}),
-      ...(options.roles && !options.tenantId ? { roles: options.roles } : {}),
-      ...(options.roles && options.tenantId ? { tenantRoles: options.roles } : {}),
-    }
-
-    const policy =
-      options.allow || options.deny ? { allow: options.allow, deny: options.deny } : undefined
-
-    return new AuthAdapter({
-      strategies: [
-        {
-          name: 'test',
-          validate: async () => user,
-        },
-      ],
-      defaultPolicy: options.defaultPolicy ?? 'open',
-      roleResolver: options.roles ? () => options.roles! : undefined,
-      policy,
-    })
   }
 
   // ── Core Auth Middleware ─────────────────────────────────────────────
@@ -675,3 +590,119 @@ export class AuthAdapter implements AppAdapter {
     return false
   }
 }
+
+/**
+ * Options for {@link AuthAdapter.testMode} — opt-in convenience for
+ * controller tests that need a fake authenticated user without minting
+ * real JWTs.
+ */
+export interface AuthTestModeOptions {
+  user: AuthUser
+  defaultPolicy?: 'protected' | 'open'
+  /** Populates `user.tenantId` and is forwarded to `roleResolver`. */
+  tenantId?: string
+  /**
+   * Populates `user.tenantRoles` (if `tenantId` is set) or `user.roles`.
+   * Also becomes the `roleResolver` return value so `@Roles()` sees them.
+   */
+  roles?: string[]
+  /**
+   * `@Can(action, resource)` calls matching these short-circuit to allow
+   * without consulting the policy registry. Entries are `'resource.action'`
+   * or just `'resource'` (matches any action on that resource).
+   */
+  allow?: string[]
+  /**
+   * `@Can(action, resource)` calls matching these short-circuit to deny
+   * without consulting the policy registry. Takes precedence over `allow`.
+   */
+  deny?: string[]
+}
+
+/** Factory shape for {@link AuthAdapter} — extends the default {@link AdapterFactory} surface with the {@link AuthAdapter.testMode} static. */
+export type AuthAdapterFactory = AdapterFactory<AuthAdapterOptions> & {
+  /**
+   * Create an AuthAdapter that accepts any request and returns a fixed test
+   * user — removes the need to mint real JWTs in controller tests.
+   *
+   * `tenantId` / `roles` populate `user.tenantId` / `user.tenantRoles` so
+   * `@Roles()` and tenant-aware handlers see the values they would in prod.
+   * `allow` / `deny` short-circuit `@Can(action, resource)` decisions by
+   * full name (`'flock.delete'`) or resource-only (`'flock'` = match any
+   * action on that resource) — no need to stand up `@Policy` classes just
+   * to exercise denial paths.
+   *
+   * @example
+   * ```ts
+   * const adapter = AuthAdapter.testMode({
+   *   user: { id: '1', email: 'a@b.com' },
+   *   tenantId: 't1',
+   *   roles: ['owner'],
+   *   allow: ['flock.view'],
+   *   deny: ['flock.delete'],
+   * })
+   * bootstrap({ modules, adapters: [adapter] })
+   * ```
+   */
+  testMode(options: AuthTestModeOptions): AppAdapter
+}
+
+/**
+ * Authentication adapter — plugs into the KickJS lifecycle to protect
+ * routes based on @Authenticated, @Public, and @Roles decorators.
+ *
+ * Supports multiple strategies (JWT, API key, custom) with first-match
+ * semantics. Built with {@link defineAdapter} so callers get the factory
+ * call surface (singleton + `.scoped()` + `.async()`) plus the
+ * {@link AuthAdapter.testMode} static for tests.
+ *
+ * @example
+ * ```ts
+ * import { AuthAdapter, JwtStrategy, ApiKeyStrategy } from '@forinda/kickjs-auth'
+ *
+ * bootstrap({
+ *   modules: [...],
+ *   adapters: [
+ *     AuthAdapter({
+ *       strategies: [
+ *         new JwtStrategy({ secret: process.env.JWT_SECRET! }),
+ *         new ApiKeyStrategy({ keys: { 'sk-123': { name: 'Bot', roles: ['api'] } } }),
+ *       ],
+ *       defaultPolicy: 'protected', // secure by default
+ *     }),
+ *   ],
+ * })
+ * ```
+ */
+export const AuthAdapter = (() => {
+  const factory = defineAdapter<AuthAdapterOptions>({
+    name: 'AuthAdapter',
+    build: (config) => new AuthAdapterImpl(config),
+  }) as AuthAdapterFactory
+
+  factory.testMode = (options: AuthTestModeOptions): AppAdapter => {
+    const user: AuthUser = {
+      ...options.user,
+      ...(options.tenantId ? { tenantId: options.tenantId } : {}),
+      ...(options.roles && !options.tenantId ? { roles: options.roles } : {}),
+      ...(options.roles && options.tenantId ? { tenantRoles: options.roles } : {}),
+    }
+
+    const policy =
+      options.allow || options.deny ? { allow: options.allow, deny: options.deny } : undefined
+
+    return factory({
+      strategies: [
+        {
+          name: 'test',
+          validate: async () => user,
+        },
+      ],
+      defaultPolicy: options.defaultPolicy ?? 'open',
+      roleResolver: options.roles ? () => options.roles! : undefined,
+      policy,
+    })
+  }
+
+  return factory
+})()

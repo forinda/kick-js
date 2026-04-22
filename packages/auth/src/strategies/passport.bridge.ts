@@ -25,7 +25,7 @@ import type { AuthStrategy, AuthUser } from '../types'
  *   done(null, user)
  * }))
  *
- * new AuthAdapter({
+ * AuthAdapter({
  *   strategies: [jwtStrategy, google],
  * })
  * ```

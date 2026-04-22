@@ -26,7 +26,7 @@ const headerStrategy: AuthStrategy = {
 describe('CSRF Integration', () => {
   describe('auto-detection', () => {
     it('enables CSRF when strategy uses cookies', () => {
-      const adapter = new AuthAdapter({
+      const adapter = AuthAdapter({
         strategies: [cookieJwtStrategy],
       })
 
@@ -36,7 +36,7 @@ describe('CSRF Integration', () => {
     })
 
     it('does not enable CSRF for header-only auth', () => {
-      const adapter = new AuthAdapter({
+      const adapter = AuthAdapter({
         strategies: [headerStrategy],
       })
 
@@ -50,7 +50,7 @@ describe('CSRF Integration', () => {
         validate: async () => null,
       }
 
-      const adapter = new AuthAdapter({
+      const adapter = AuthAdapter({
         strategies: [sessionStrategy],
       })
 
@@ -61,7 +61,7 @@ describe('CSRF Integration', () => {
 
   describe('explicit csrf option', () => {
     it('csrf: true forces CSRF on', () => {
-      const adapter = new AuthAdapter({
+      const adapter = AuthAdapter({
         strategies: [headerStrategy],
         csrf: true,
       })
@@ -70,7 +70,7 @@ describe('CSRF Integration', () => {
     })
 
     it('csrf: false forces CSRF off even with cookie strategy', () => {
-      const adapter = new AuthAdapter({
+      const adapter = AuthAdapter({
         strategies: [cookieJwtStrategy],
         csrf: false,
       })
@@ -79,7 +79,7 @@ describe('CSRF Integration', () => {
     })
 
     it('csrf: object enables with custom config', () => {
-      const adapter = new AuthAdapter({
+      const adapter = AuthAdapter({
         strategies: [headerStrategy],
         csrf: { cookie: '_xsrf', header: 'x-xsrf-token' },
       })
@@ -90,7 +90,7 @@ describe('CSRF Integration', () => {
 
   describe('CSRF middleware behavior', () => {
     function createCsrfAdapter() {
-      return new AuthAdapter({
+      return AuthAdapter({
         strategies: [{ name: 'test', validate: async () => ({ id: '1' }) }],
         defaultPolicy: 'open',
         csrf: true,
@@ -187,7 +187,7 @@ describe('CSRF Integration', () => {
         updateProfile() {}
       }
 
-      const adapter = new AuthAdapter({
+      const adapter = AuthAdapter({
         strategies: [{ name: 'test', validate: async () => ({ id: '1' }) }],
         defaultPolicy: 'protected',
         csrf: true,
@@ -240,12 +240,12 @@ describe('CSRF Integration', () => {
     }
 
     it('auto-enables CSRF when session is mixed with header-only JWT', () => {
-      const adapter = new AuthAdapter({ strategies: [sessionStrategy, bearerJwt] })
+      const adapter = AuthAdapter({ strategies: [sessionStrategy, bearerJwt] })
       expect(adapter.middleware!()).toHaveLength(2)
     })
 
     it('fires CSRF on Bearer-only server-to-server requests (documents the gotcha)', async () => {
-      const adapter = new AuthAdapter({
+      const adapter = AuthAdapter({
         strategies: [sessionStrategy, bearerJwt],
         defaultPolicy: 'open',
       })
@@ -267,7 +267,7 @@ describe('CSRF Integration', () => {
     })
 
     it('fix 1: csrf:false on JWT-only API tier lets Bearer requests through', () => {
-      const adapter = new AuthAdapter({ strategies: [bearerJwt], csrf: false })
+      const adapter = AuthAdapter({ strategies: [bearerJwt], csrf: false })
       expect(adapter.middleware!()).toHaveLength(1)
     })
 
@@ -282,7 +282,7 @@ describe('CSRF Integration', () => {
         updateMe() {}
       }
 
-      const adapter = new AuthAdapter({
+      const adapter = AuthAdapter({
         strategies: [sessionStrategy, bearerJwt],
         defaultPolicy: 'open',
       })
@@ -316,7 +316,7 @@ describe('CSRF Integration', () => {
     })
 
     it('fix 3: keeping CSRF on and echoing the cookie header still works for cookie clients', async () => {
-      const adapter = new AuthAdapter({
+      const adapter = AuthAdapter({
         strategies: [sessionStrategy, bearerJwt],
         defaultPolicy: 'open',
       })
@@ -349,7 +349,7 @@ describe('CSRF Integration', () => {
         doSomething() {}
       }
 
-      const adapter = new AuthAdapter({
+      const adapter = AuthAdapter({
         strategies: [{ name: 'test', validate: async () => ({ id: '1' }) }],
         defaultPolicy: 'open',
         csrf: true,

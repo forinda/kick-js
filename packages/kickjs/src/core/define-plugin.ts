@@ -100,8 +100,11 @@ export function definePlugin<TConfig = Record<string, unknown>>(
     overrides?: Partial<TConfig>,
   ): KickPlugin => {
     const config = mergeConfig(options.defaults, overrides)
-    const built = options.build(config, { name: instanceName, scoped })
-    return { ...built, name: instanceName }
+    // Mutate `name` on the build result instead of spreading — spread
+    // strips prototype methods when `build()` returns a class instance.
+    const built = options.build(config, { name: instanceName, scoped }) as KickPlugin
+    built.name = instanceName
+    return built
   }
 
   const buildAsync = (instanceName: string, opts: PluginAsyncOptions<TConfig>): KickPlugin => {
