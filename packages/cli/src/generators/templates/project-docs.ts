@@ -183,9 +183,12 @@ export class UserService {
 
 ### Modules
 
-Modules implement \`AppModule\` and wire controllers via \`buildRoutes()\`:
+Modules implement \`AppModule\` and wire controllers via \`buildRoutes()\`.
+
+> **Naming matters.** Module files **must** be named \`<name>.module.ts\` and live under \`src/modules/\`. The Vite plugin auto-discovers files matching \`*.module.[tj]sx?\` for HMR — a misnamed file (e.g., \`projects.ts\`) won't trigger a graceful module rebuild on save and will require a full server restart. The CLI generator (\`kick g module <name>\`) follows this convention automatically.
 
 \`\`\`ts
+// src/modules/users/users.module.ts   (named <feature>.module.ts)
 import { type AppModule, type ModuleRoutes, buildRoutes } from '@forinda/kickjs'
 import { UserController } from './user.controller'
 
@@ -509,6 +512,8 @@ ${template === 'graphql' ? '| GraphQL resolvers | `src/resolvers/` |\n' : ''}| E
 | CLI config | \`kick.config.ts\` |
 
 ### Module Pattern (${template.toUpperCase()})
+
+> **Vite HMR auto-discovery contract:** module files **must** be named \`<name>.module.ts\` (or \`.tsx\`/\`.js\`/\`.jsx\`) and live under \`src/modules/\`. The Vite plugin scans for \`*.module.[tj]sx?\` to drive graceful HMR rebuilds; renaming a file to \`projects.ts\` (no \`.module\`) silently breaks HMR — saves trigger a full restart instead of a swap. The CLI generator (\`kick g module <name>\`) follows the convention; manual files must too.
 
 Each module in \`src/modules/<name>/\` typically contains:
 
@@ -854,7 +859,7 @@ ${
 2. **DI not working** — Ensure \`reflect-metadata\` is imported in \`src/index.ts\`
 3. **Tests failing randomly** — Missing \`Container.reset()\` in \`beforeEach\`
 4. **Routes not found** — Check controller path and module registration
-5. **HMR not working** — Verify \`vite.config.ts\` has \`hmr: true\`
+5. **HMR not working** — Two checks: (a) \`vite.config.ts\` has \`hmr: true\`; (b) module file is named \`<name>.module.ts\` (or \`.tsx\`/\`.js\`/\`.jsx\`) and lives under \`src/modules/\`. The Vite plugin auto-discovers \`*.module.[tj]sx?\` for graceful HMR — a misnamed module file (e.g., \`projects.ts\`) silently degrades to a full restart on every save.
 6. **Decorators not working** — Check \`tsconfig.json\` has \`experimentalDecorators: true\`
 7. **\`config.get('YOUR_KEY')\` returns \`undefined\`** — \`src/index.ts\` is missing \`import './config'\`. That side-effect import registers the env schema with kickjs (\`loadEnv(envSchema)\` runs at module load). Without it, \`ConfigService\` falls back to the base schema (\`PORT\`/\`NODE_ENV\`/\`LOG_LEVEL\` only) and every user-defined key reads as \`undefined\`. \`@Value()\` may *appear* to work because of a raw \`process.env\` fallback, but Zod coercion and schema defaults are silently skipped — investigate \`src/index.ts\` and \`src/config/index.ts\` first.
 8. **Used \`@Middleware()\` to compute a value for \`ctx\`** — prefer \`defineContextDecorator()\` (see Context Decorators above). It's typed via \`ContextMeta\`, supports \`dependsOn\` for ordering, and validates the pipeline at boot. \`@Middleware()\` is for response short-circuiting, stream mutation, and pre-route-matching work.
