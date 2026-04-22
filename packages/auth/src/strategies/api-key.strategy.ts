@@ -1,5 +1,6 @@
-import type { AuthStrategy, AuthUser } from '../types'
+import type { AuthUser } from '../types'
 import type { TokenStore } from '../token-store'
+import { createAuthStrategy } from './define'
 
 export interface ApiKeyUser {
   /** Display name for the API key holder */
@@ -60,6 +61,26 @@ export interface ApiKeyStrategyOptions {
   tokenStore?: TokenStore
 }
 
+const extractKey = (req: any, options: ApiKeyStrategyOptions): string | null => {
+  const sources = options.from ?? ['header']
+
+  for (const source of sources) {
+    if (source === 'header') {
+      const headerName = options.headerName!
+      const value = req.headers?.[headerName] ?? req.headers?.[headerName.toLowerCase()]
+      if (value && typeof value === 'string') return value
+    }
+
+    if (source === 'query') {
+      const param = options.queryParam!
+      const value = req.query?.[param]
+      if (value && typeof value === 'string') return value
+    }
+  }
+
+  return null
+}
+
 /**
  * API key authentication strategy.
  * Validates keys from headers or query parameters against a static map
@@ -68,71 +89,54 @@ export interface ApiKeyStrategyOptions {
  * @example
  * ```ts
  * // Static keys
- * new ApiKeyStrategy({
+ * ApiKeyStrategy({
  *   keys: {
  *     'sk-prod-123': { name: 'CI Bot', roles: ['api'] },
  *   },
  * })
  *
  * // Database lookup
- * new ApiKeyStrategy({
+ * ApiKeyStrategy({
  *   validate: async (key) => {
  *     const record = await db.apiKeys.findByKey(key)
  *     return record ? { name: record.name, roles: record.roles } : null
  *   },
  * })
+ *
+ * // Multi-realm via .scoped()
+ * ApiKeyStrategy.scoped('admin', { keys: adminKeys, headerName: 'x-admin-key' })
  * ```
  */
-export class ApiKeyStrategy implements AuthStrategy {
-  name = 'api-key'
-  private options: ApiKeyStrategyOptions
+export const ApiKeyStrategy = createAuthStrategy<ApiKeyStrategyOptions>({
+  name: 'api-key',
+  defaults: {
+    headerName: 'x-api-key',
+    queryParam: 'api_key',
+  },
+  build: (options) => ({
+    async validate(req: any): Promise<AuthUser | null> {
+      const key = extractKey(req, options)
+      if (!key) return null
 
-  constructor(options: ApiKeyStrategyOptions) {
-    this.options = options
-  }
-
-  async validate(req: any): Promise<AuthUser | null> {
-    const key = this.extractKey(req)
-    if (!key) return null
-
-    // Check revocation before validating
-    if (this.options.tokenStore) {
-      if (await this.options.tokenStore.isRevoked(key)) {
-        return null
-      }
-    }
-
-    // Async validator takes precedence
-    if (this.options.validate) {
-      return this.options.validate(key)
-    }
-
-    // Static key lookup
-    if (this.options.keys) {
-      const user = this.options.keys[key]
-      return user ?? null
-    }
-
-    return null
-  }
-
-  private extractKey(req: any): string | null {
-    const sources = this.options.from ?? ['header']
-
-    for (const source of sources) {
-      if (source === 'header') {
-        const headerName = this.options.headerName ?? 'x-api-key'
-        const value = req.headers?.[headerName] ?? req.headers?.[headerName.toLowerCase()]
-        if (value && typeof value === 'string') return value
+      // Check revocation before validating
+      if (options.tokenStore) {
+        if (await options.tokenStore.isRevoked(key)) {
+          return null
+        }
       }
 
-      if (source === 'query') {
-        const param = this.options.queryParam ?? 'api_key'
-        const value = req.query?.[param]
-        if (value && typeof value === 'string') return value
+      // Async validator takes precedence
+      if (options.validate) {
+        return options.validate(key)
       }
-    }
 
-    return null
-  }
-}
+      // Static key lookup
+      if (options.keys) {
+        const user = options.keys[key]
+        return user ?? null
+      }
+
+      return null
+    },
+  }),
+})

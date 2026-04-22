@@ -41,7 +41,7 @@ describe('Auth: @Public() routes bypass auth (KICK-010)', () => {
     })
 
     const authAdapter = new AuthAdapter({
-      strategies: [new ApiKeyStrategy({ keys: { 'sk-valid': { name: 'Bot' } } })],
+      strategies: [ApiKeyStrategy({ keys: { 'sk-valid': { name: 'Bot' } } })],
       defaultPolicy: 'protected',
     })
 
@@ -82,7 +82,7 @@ describe('Auth: API key strategy', () => {
 
     const authAdapter = new AuthAdapter({
       strategies: [
-        new ApiKeyStrategy({
+        ApiKeyStrategy({
           keys: { 'sk-abc': { name: 'Alice', roles: ['admin'] } },
         }),
       ],
@@ -122,7 +122,7 @@ describe('Auth: API key strategy', () => {
     })
 
     const authAdapter = new AuthAdapter({
-      strategies: [new ApiKeyStrategy({ keys: { 'sk-real': { name: 'Bot' } } })],
+      strategies: [ApiKeyStrategy({ keys: { 'sk-real': { name: 'Bot' } } })],
       defaultPolicy: 'protected',
     })
 

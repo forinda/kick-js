@@ -1,4 +1,5 @@
-import type { AuthStrategy, AuthUser } from '../types'
+import type { AuthUser } from '../types'
+import { createAuthStrategy } from './define'
 
 export interface SessionStrategyOptions {
   /**
@@ -40,34 +41,31 @@ export interface SessionStrategyOptions {
  * @example
  * ```ts
  * // Simple: session.data IS the user
- * new SessionStrategy()
+ * SessionStrategy()
  *
  * // With DB lookup
- * new SessionStrategy({
+ * SessionStrategy({
  *   userKey: 'userId',
  *   resolveUser: async (data) => db.users.findById(data.userId),
  * })
  * ```
  */
-export class SessionStrategy implements AuthStrategy {
-  name = 'session'
-  private readonly options: SessionStrategyOptions
+export const SessionStrategy = createAuthStrategy<SessionStrategyOptions>({
+  name: 'session',
+  defaults: { userKey: 'userId' },
+  build: (options) => ({
+    async validate(req: any): Promise<AuthUser | null> {
+      const session = req.session
+      if (!session?.data) return null
 
-  constructor(options: SessionStrategyOptions = {}) {
-    this.options = options
-  }
+      const userKey = options.userKey!
+      if (!session.data[userKey]) return null
 
-  async validate(req: any): Promise<AuthUser | null> {
-    const session = req.session
-    if (!session?.data) return null
+      if (options.resolveUser) {
+        return options.resolveUser(session.data)
+      }
 
-    const userKey = this.options.userKey ?? 'userId'
-    if (!session.data[userKey]) return null
-
-    if (this.options.resolveUser) {
-      return this.options.resolveUser(session.data)
-    }
-
-    return session.data as AuthUser
-  }
-}
+      return session.data as AuthUser
+    },
+  }),
+})

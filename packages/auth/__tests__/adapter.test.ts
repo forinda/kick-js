@@ -12,7 +12,7 @@ import { Controller, Get, Post } from '@forinda/kickjs'
 describe('AuthAdapter', () => {
   it('creates adapter with strategies', () => {
     const adapter = AuthAdapter({
-      strategies: [new ApiKeyStrategy({ keys: { 'sk-test': { name: 'Bot' } } })],
+      strategies: [ApiKeyStrategy({ keys: { 'sk-test': { name: 'Bot' } } })],
     })
 
     expect(adapter.name).toBe('AuthAdapter')
@@ -20,7 +20,7 @@ describe('AuthAdapter', () => {
 
   it('provides auth middleware at beforeRoutes phase', () => {
     const adapter = AuthAdapter({
-      strategies: [new ApiKeyStrategy({ keys: { 'sk-test': { name: 'Bot' } } })],
+      strategies: [ApiKeyStrategy({ keys: { 'sk-test': { name: 'Bot' } } })],
     })
 
     const middlewares = adapter.middleware!()
@@ -46,7 +46,7 @@ describe('AuthAdapter', () => {
 
   it('blocks unauthenticated requests with protected policy', async () => {
     const adapter = AuthAdapter({
-      strategies: [new ApiKeyStrategy({ keys: { 'sk-valid': { name: 'Bot' } } })],
+      strategies: [ApiKeyStrategy({ keys: { 'sk-valid': { name: 'Bot' } } })],
       defaultPolicy: 'protected',
     })
 
@@ -62,7 +62,7 @@ describe('AuthAdapter', () => {
 
   it('passes authenticated requests and attaches user to req', async () => {
     const adapter = AuthAdapter({
-      strategies: [new ApiKeyStrategy({ keys: { 'sk-valid': { name: 'Bot' } } })],
+      strategies: [ApiKeyStrategy({ keys: { 'sk-valid': { name: 'Bot' } } })],
       defaultPolicy: 'protected',
     })
 
@@ -147,7 +147,7 @@ describe('AuthAdapter', () => {
     }
 
     const adapter = AuthAdapter({
-      strategies: [new ApiKeyStrategy({ keys: { 'sk-valid': { name: 'Bot' } } })],
+      strategies: [ApiKeyStrategy({ keys: { 'sk-valid': { name: 'Bot' } } })],
       defaultPolicy: 'protected',
     })
 
@@ -188,7 +188,7 @@ describe('AuthAdapter', () => {
     }
 
     const adapter = AuthAdapter({
-      strategies: [new ApiKeyStrategy({ keys: { 'sk-valid': { name: 'Bot' } } })],
+      strategies: [ApiKeyStrategy({ keys: { 'sk-valid': { name: 'Bot' } } })],
       defaultPolicy: 'protected',
     })
 

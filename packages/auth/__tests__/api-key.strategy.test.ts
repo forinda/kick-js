@@ -4,7 +4,7 @@ import { ApiKeyStrategy } from '@forinda/kickjs-auth'
 
 describe('ApiKeyStrategy', () => {
   it('validates a valid static key', async () => {
-    const strategy = new ApiKeyStrategy({
+    const strategy = ApiKeyStrategy({
       keys: {
         'sk-test-123': { name: 'Test Bot', roles: ['api'] },
       },
@@ -17,7 +17,7 @@ describe('ApiKeyStrategy', () => {
   })
 
   it('returns null for invalid key', async () => {
-    const strategy = new ApiKeyStrategy({
+    const strategy = ApiKeyStrategy({
       keys: { 'sk-valid': { name: 'Bot' } },
     })
 
@@ -26,7 +26,7 @@ describe('ApiKeyStrategy', () => {
   })
 
   it('returns null when no key provided', async () => {
-    const strategy = new ApiKeyStrategy({
+    const strategy = ApiKeyStrategy({
       keys: { 'sk-valid': { name: 'Bot' } },
     })
 
@@ -35,7 +35,7 @@ describe('ApiKeyStrategy', () => {
   })
 
   it('supports custom header name', async () => {
-    const strategy = new ApiKeyStrategy({
+    const strategy = ApiKeyStrategy({
       keys: { 'key-123': { name: 'Bot' } },
       headerName: 'authorization',
     })
@@ -46,7 +46,7 @@ describe('ApiKeyStrategy', () => {
   })
 
   it('supports query parameter', async () => {
-    const strategy = new ApiKeyStrategy({
+    const strategy = ApiKeyStrategy({
       keys: { 'key-123': { name: 'Bot' } },
       from: ['query'],
       queryParam: 'key',
@@ -58,7 +58,7 @@ describe('ApiKeyStrategy', () => {
   })
 
   it('supports async validate function', async () => {
-    const strategy = new ApiKeyStrategy({
+    const strategy = ApiKeyStrategy({
       validate: async (key) => {
         if (key === 'db-key-456') return { name: 'DB User', roles: ['read'] }
         return null
@@ -71,7 +71,7 @@ describe('ApiKeyStrategy', () => {
   })
 
   it('async validate takes precedence over static keys', async () => {
-    const strategy = new ApiKeyStrategy({
+    const strategy = ApiKeyStrategy({
       keys: { 'sk-static': { name: 'Static' } },
       validate: async () => ({ name: 'Dynamic' }),
     })
@@ -82,7 +82,7 @@ describe('ApiKeyStrategy', () => {
   })
 
   it('tries header then query in order', async () => {
-    const strategy = new ApiKeyStrategy({
+    const strategy = ApiKeyStrategy({
       keys: { 'from-query': { name: 'Query Bot' } },
       from: ['header', 'query'],
     })
