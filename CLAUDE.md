@@ -46,16 +46,14 @@ packages/               # Published @forinda/kickjs-* packages
   devtools/             # Debug dashboard at /_debug
   notifications/        # Multi-channel: email, Slack, Discord, webhook
   multi-tenant/         # Tenant resolution middleware
-examples/               # Non-published example apps (private, not on npm)
-  task-drizzle-api/     # Full task management app — PostgreSQL + Drizzle ORM
-  task-mongoose-api/    # Full task management app — MongoDB + Mongoose
-  task-prisma-api/   # Full task management app — PostgreSQL + Prisma 7 (driver adapters)
-  minimal-api/          # Simplest possible app (~10 lines)
-  graphql-api/          # GraphQL with @Resolver decorators
-  devtools-api/         # DevTools dashboard + reactive state
-  joi-api/              # Custom Joi schema parser for Swagger
-  microservice-api/     # OTel + DevTools + Swagger template
-  otel-api/             # OpenTelemetry console tracing
+examples/                       # Non-published example apps (private, not on npm)
+  minimal-api/                  # Simplest possible app (~10 lines)
+  task-drizzle-api/             # Full task management app — PostgreSQL + Drizzle
+  task-mongoose-api/            # Full task management app — MongoDB + Mongoose
+  task-prisma-api/              # Full task management app — PostgreSQL + Prisma 7
+  multi-tenant-drizzle-api/     # Multi-tenant pattern — PostgreSQL + Drizzle
+  multi-tenant-mongoose-api/    # Multi-tenant pattern — MongoDB + Mongoose
+  multi-tenant-prisma-api/      # Multi-tenant pattern — PostgreSQL + Prisma
 articles/               # Blog articles (dev.to)
 scripts/                # release.js (versioning)
 docs/                   # VitePress documentation site

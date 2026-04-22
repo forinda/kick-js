@@ -1,101 +1,36 @@
 # Examples
 
-KickJS ships with example applications that demonstrate different features and patterns. Each example was scaffolded using the CLI (`kick new` + `kick g module`) and then customized.
+Realistic, runnable applications that exercise full KickJS patterns end-to-end. Each example was scaffolded with the CLI (`kick new` + `kick g module`) and customized.
 
-## Full Applications
+## Task Management Apps
 
-### Task Management App (Drizzle)
+Production-shaped DDD apps with 14 modules, JWT auth, real-time WebSocket, BullMQ queues, cron jobs, Swagger, and DevTools — same scope across three database stacks so you can compare ORM choices.
 
-**What it shows:** A full-featured project management API with PostgreSQL and Drizzle ORM.
+| App | Database | ORM |
+|---|---|---|
+| [task-drizzle-api](./task-drizzle-api) | PostgreSQL | Drizzle |
+| [task-prisma-api](./task-prisma-api) | PostgreSQL | Prisma 7 (driver adapters) |
+| [task-mongoose-api](./task-mongoose-api) | MongoDB | Mongoose |
 
-- 14 DDD modules: auth, users, workspaces, projects, tasks, labels, comments, attachments, channels, messages, notifications, activities, stats
-- JWT authentication with refresh token rotation
-- Real-time updates via WebSocket and SSE
-- Background jobs (BullMQ) for email, notifications, activity logging
-- Cron jobs for token cleanup, overdue reminders, daily digests
-- Swagger UI at `/docs`, DevTools at `/_debug`
+## Multi-Tenant Apps
 
-[View source](https://github.com/forinda/kick-js/tree/main/examples/task-drizzle-api) | [Full docs](./task-drizzle-api)
+Demonstrate the `@forinda/kickjs-multi-tenant` resolution + per-tenant connection caching pattern.
 
-### Task Management App (Prisma)
+| App | Database | ORM |
+|---|---|---|
+| [multi-tenant-drizzle-api](./multi-tenant-drizzle-api) | PostgreSQL | Drizzle |
+| [multi-tenant-prisma-api](./multi-tenant-prisma-api) | PostgreSQL | Prisma |
+| [multi-tenant-mongoose-api](./multi-tenant-mongoose-api) | MongoDB | Mongoose |
 
-**What it shows:** The same task management app using Prisma ORM with PostgreSQL instead of Drizzle.
+## Starter
 
-- Same 14 modules with Prisma Client repositories
-- Declarative `schema.prisma` with auto-generated client
-- `@forinda/kickjs-prisma` adapter with `PRISMA_CLIENT` DI token
-- Prisma 7 driver adapters (e.g. `PrismaPg`) for explicit pool wiring
-- `prisma db push` for schema sync, `prisma migrate` for production
+The simplest possible app — `bootstrap()` and one route in ~10 lines.
 
-[View source](https://github.com/forinda/kick-js/tree/main/examples/task-prisma-api)
-
-### Task Management App (Mongoose)
-
-**What it shows:** The same task management app using MongoDB and Mongoose instead of PostgreSQL.
-
-- Same 14 modules with MongoDB document schemas
-- Uses `@forinda/kickjs-auth` adapter with `@Public()` decorator
-- Per-module schema files in `infrastructure/schemas/`
-- Resend email provider integration
-- CORS, Helmet, Morgan middleware
-
-[View source](https://github.com/forinda/kick-js/tree/main/examples/task-mongoose-api) | [Full docs](./task-mongoose-api)
-
-## Focused Examples
-
-### v2 Showcase
-
-**What it shows:** All major v2.0 features in one app — Vite plugin, health checks, DI observability, async lifecycle, DevTools enhancements.
-
-- `@forinda/kickjs-vite` plugin in `vite.config.ts`
-- `/health/live` and `/health/ready` endpoints (built-in)
-- Enhanced DevTools: dependency graph (`/_debug/graph`), SSE stream (`/_debug/stream`), p50/p95/p99 latency
-- In-memory task CRUD with DDD architecture
-- Interface-based DI with `@Inject(TASK_REPOSITORY)`
-- `kick typegen` for fully typed `container.resolve()`
-
-[View source](https://github.com/forinda/kick-js/tree/main/examples/v2-showcase-api) | [Full docs](./v2-showcase-api)
-
-### Minimal
-
-The simplest possible KickJS app — `bootstrap()` and one route, ~10 lines of code.
-
-[View source](https://github.com/forinda/kick-js/tree/main/examples/minimal-api) | [Full docs](./minimal-api)
-
-### Joi Validation
-
-Swagger integration using Joi schemas instead of Zod via a custom `SchemaParser`.
-
-[View source](https://github.com/forinda/kick-js/tree/main/examples/joi-api) | [Full docs](./joi-api)
-
-### DevTools
-
-`DevToolsAdapter` with reactive state, debug endpoints, and config exposure.
-
-[View source](https://github.com/forinda/kick-js/tree/main/examples/devtools-api) | [Full docs](./devtools-api)
-
-### GraphQL
-
-GraphQL API with `@Resolver`, `@Query`, `@Mutation` decorators and GraphiQL playground.
-
-[View source](https://github.com/forinda/kick-js/tree/main/examples/graphql-api) | [Full docs](./graphql-api)
-
-### Microservice
-
-REST API with OpenTelemetry, DevTools, and Swagger — the microservice template.
-
-[View source](https://github.com/forinda/kick-js/tree/main/examples/microservice-api) | [Full docs](./microservice-api)
-
-### OpenTelemetry
-
-Task CRUD API with automatic request tracing via console span exporter.
-
-[View source](https://github.com/forinda/kick-js/tree/main/examples/otel-api) | [Full docs](./otel-api)
+[minimal-api](./minimal-api)
 
 ## Running Examples
 
 ```bash
-# Clone the repo
 git clone https://github.com/forinda/kick-js.git
 cd kick-js
 pnpm install

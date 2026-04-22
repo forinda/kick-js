@@ -213,6 +213,5 @@ Generates `user.resolver.ts` with CRUD queries/mutations and `user.typedefs.ts` 
 
 ## Related
 
-- [GraphQL Example](../examples/graphql-api.md) — full working example
 - [Custom Decorators](../guide/custom-decorators.md) — extend the decorator system
 - [@forinda/kickjs-core](./core.md) — DI container, decorators

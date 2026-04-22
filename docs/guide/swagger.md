@@ -335,8 +335,4 @@ be allowed automatically.
 
 ## Examples
 
-| Example | What it shows |
-|---------|---------------|
-| [swagger-api](../examples/swagger-api) | Rich Zod schemas: nested objects, arrays, enums, UUID, datetime, regex, partial, paginated responses |
-| [joi-api](../examples/joi-api) | Custom `joiSchemaParser`, Joi validation middleware, Joi schemas in Swagger |
-| [validated-api](../examples/validated-api) | Query parsing with `ctx.qs()` + Swagger decorators |
+For a full app exercising Swagger end-to-end with rich Zod schemas, see the [task-drizzle-api](../examples/task-drizzle-api) and [task-prisma-api](../examples/task-prisma-api) examples — they wire Swagger over the standard 14-module DDD layout.
