@@ -15,7 +15,7 @@ import { modules } from './modules'
 export const app = await bootstrap({
   modules,
   adapters: [
-    new DevToolsAdapter(),
+    DevToolsAdapter(),
     SwaggerAdapter({
       info: { title: 'v3-preview', version: '2.1.0' },
     }),

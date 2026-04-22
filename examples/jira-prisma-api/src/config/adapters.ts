@@ -65,7 +65,7 @@ export const adapters: AppAdapter[] = [
     ],
     enabled: true,
   }),
-  new DevToolsAdapter({ adapters: [wsAdapter, queueAdapter] }),
+  DevToolsAdapter({ adapters: [wsAdapter, queueAdapter] }),
   new SwaggerAdapter({
     info: { title: 'Vibed (Prisma Edition)', version: '1.0.0' },
   }),

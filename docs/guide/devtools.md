@@ -11,7 +11,7 @@ import { DevToolsAdapter } from '@forinda/kickjs-devtools'
 bootstrap({
   modules: [UserModule, ProductModule],
   adapters: [
-    new DevToolsAdapter({
+    DevToolsAdapter({
       enabled: process.env.NODE_ENV !== 'production',
     }),
   ],
@@ -164,7 +164,7 @@ Sanitized environment variables. Only variables matching configured prefixes are
 ## Configuration
 
 ```ts
-new DevToolsAdapter({
+DevToolsAdapter({
   // Base path for debug endpoints (default: '/_debug')
   basePath: '/_debug',
 
@@ -192,7 +192,7 @@ new DevToolsAdapter({
 The adapter exposes its reactive state as public properties, so you can compose with it:
 
 ```ts
-const devtools = new DevToolsAdapter()
+const devtools = DevToolsAdapter()
 
 // Read reactive values
 console.log(devtools.requestCount.value)

@@ -52,7 +52,7 @@ watch(activeConcurrency, (current) => {
 })
 
 // DevTools adapter with config
-const devtools = new DevToolsAdapter({
+const devtools = DevToolsAdapter({
   enabled: true,
   exposeConfig: true,
   configPrefixes: ['APP_', 'NODE_ENV', 'PORT'],

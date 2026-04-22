@@ -11,7 +11,7 @@ import { typeDefs } from './resolvers/typedefs'
 bootstrap({
   modules,
   adapters: [
-    new DevToolsAdapter(),
+    DevToolsAdapter(),
     new GraphQLAdapter({
       graphql,
       resolvers: [UserResolver, PostResolver],

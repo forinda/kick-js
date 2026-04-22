@@ -14,7 +14,7 @@ import type { Request, Response, NextFunction } from 'express'
 // ── Helpers ────────────────────────────────────────────────────────────
 
 function createAdapter(opts: DevToolsOptions = {}) {
-  return new DevToolsAdapter({ enabled: true, ...opts })
+  return DevToolsAdapter({ enabled: true, ...opts })
 }
 
 /** Build a minimal mock Request */
@@ -179,7 +179,7 @@ describe('DevToolsAdapter', () => {
         list() {}
       }
 
-      const adapter = new DevToolsAdapter({ enabled: false })
+      const adapter = DevToolsAdapter({ enabled: false })
       // Should be a no-op
       adapter.onRouteMount(ItemController, '/api/items')
       expect(adapter).toBeDefined()
@@ -208,7 +208,7 @@ describe('DevToolsAdapter', () => {
 
   describe('middleware', () => {
     it('should return empty array when disabled', () => {
-      const adapter = new DevToolsAdapter({ enabled: false })
+      const adapter = DevToolsAdapter({ enabled: false })
       expect(adapter.middleware()).toEqual([])
     })
 
@@ -586,7 +586,7 @@ describe('DevToolsAdapter', () => {
 
   describe('disabled mode', () => {
     it('should return empty middleware when disabled', () => {
-      const adapter = new DevToolsAdapter({ enabled: false })
+      const adapter = DevToolsAdapter({ enabled: false })
       expect(adapter.middleware()).toEqual([])
     })
 
@@ -597,7 +597,7 @@ describe('DevToolsAdapter', () => {
         index() {}
       }
 
-      const adapter = new DevToolsAdapter({ enabled: false })
+      const adapter = DevToolsAdapter({ enabled: false })
       // Should be a no-op, no error
       adapter.onRouteMount(NoopController, '/noop')
     })
