@@ -224,7 +224,7 @@ The adapter array in `config/adapters.ts` runs `beforeStart()` in order. Depende
 export const adapters = [
   drizzleAdapter,           // 1. Database — everything depends on this
   wsAdapter,                // 2. WebSocket — before DevTools
-  new MailerAdapter({...}), // 3. Email — before queue (processors need MAILER)
+  MailerAdapter({...}), // 3. Email — before queue (processors need MAILER)
   queueAdapter,             // 4. Queues — after Redis, Mailer
   new CronAdapter({...}),   // 5. Cron — after queue (cron jobs dispatch to queues)
   new DevToolsAdapter({     // 6. DevTools — after ws, queue (monitors them)
@@ -241,7 +241,7 @@ If you put `CronAdapter` before `QueueAdapter`, the overdue reminders cron will 
 Development uses `ConsoleProvider` which logs emails to stdout:
 
 ```typescript
-new MailerAdapter({
+MailerAdapter({
   provider: new ConsoleProvider(),
   defaultFrom: { name: env.MAIL_FROM_NAME, address: env.MAIL_FROM_EMAIL },
 })
@@ -250,7 +250,7 @@ new MailerAdapter({
 For production, swap to Resend:
 
 ```typescript
-new MailerAdapter({
+MailerAdapter({
   provider: env.NODE_ENV === 'production'
     ? new ResendMailProvider(env.RESEND_API_KEY)
     : new ConsoleProvider(),

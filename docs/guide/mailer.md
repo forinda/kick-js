@@ -26,7 +26,7 @@ import { MailerAdapter, SmtpProvider } from '@forinda/kickjs-mailer'
 bootstrap({
   modules: [...],
   adapters: [
-    new MailerAdapter({
+    MailerAdapter({
       provider: new SmtpProvider({
         host: 'smtp.gmail.com',
         port: 587,
@@ -91,7 +91,7 @@ Logs emails to the console — perfect for development.
 ```ts
 import { ConsoleProvider } from '@forinda/kickjs-mailer'
 
-new MailerAdapter({
+MailerAdapter({
   provider: new ConsoleProvider(),
   defaultFrom: 'dev@localhost',
 })
@@ -129,7 +129,7 @@ class ResendProvider implements MailProvider {
 }
 
 // Use it
-new MailerAdapter({
+MailerAdapter({
   provider: new ResendProvider(process.env.RESEND_API_KEY!),
 })
 ```
@@ -170,7 +170,7 @@ const engine = new HandlebarsEngine()
 engine.register('welcome', '<h1>Welcome {{name}}</h1><p>Your account is ready.</p>')
 engine.register('invoice', '<h1>Invoice #{{number}}</h1><p>Total: ${{total}}</p>')
 
-new MailerAdapter({
+MailerAdapter({
   provider: new SmtpProvider({ ... }),
   templateEngine: engine,
 })
@@ -205,7 +205,7 @@ type MailRecipient = string | { name?: string; address: string }
 ## Disable for Testing
 
 ```ts
-new MailerAdapter({
+MailerAdapter({
   provider: new SmtpProvider({ ... }),
   enabled: process.env.NODE_ENV !== 'test', // logs instead of sending
 })

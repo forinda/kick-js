@@ -51,7 +51,7 @@ export const adapters = [
     defaultPolicy: 'protected',
   }),
   wsAdapter,
-  new MailerAdapter({
+  MailerAdapter({
     provider: env.NODE_ENV === 'production'
       ? new ResendMailProvider(env.RESEND_API_KEY)
       : new ConsoleProvider(),

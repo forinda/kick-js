@@ -47,7 +47,7 @@ const queueAdapter = new QueueAdapter({
 export const adapters: AppAdapter[] = [
   drizzleAdapter,
   wsAdapter,
-  new MailerAdapter({
+  MailerAdapter({
     provider: new ConsoleProvider(),
     defaultFrom: { name: env.MAIL_FROM_NAME, address: env.MAIL_FROM_EMAIL },
   }),
