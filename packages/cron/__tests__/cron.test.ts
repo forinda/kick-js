@@ -144,7 +144,7 @@ describe('Custom CronScheduler', () => {
     const container = Container.getInstance()
     container.register(Svc, Svc, Scope.SINGLETON)
 
-    const adapter = new CronAdapter({
+    const adapter = CronAdapter({
       services: [Svc],
       scheduler: customScheduler,
     })
@@ -188,7 +188,7 @@ describe('CronAdapter', () => {
     const container = Container.getInstance()
     container.register(ScheduledService, ScheduledService, Scope.SINGLETON)
 
-    const adapter = new CronAdapter({
+    const adapter = CronAdapter({
       services: [ScheduledService],
       scheduler: new IntervalScheduler(),
     })
@@ -218,7 +218,7 @@ describe('CronAdapter', () => {
     const container = Container.getInstance()
     container.register(EagerService, EagerService, Scope.SINGLETON)
 
-    const adapter = new CronAdapter({
+    const adapter = CronAdapter({
       services: [EagerService],
       scheduler: new IntervalScheduler(),
     })
@@ -242,7 +242,7 @@ describe('CronAdapter', () => {
     const container = Container.getInstance()
     container.register(Svc, Svc, Scope.SINGLETON)
 
-    const adapter = new CronAdapter({
+    const adapter = CronAdapter({
       services: [Svc],
       enabled: false,
       scheduler: new IntervalScheduler(),
@@ -266,7 +266,7 @@ describe('CronAdapter', () => {
     const container = Container.getInstance()
     container.register(Svc, Svc, Scope.SINGLETON)
 
-    const adapter = new CronAdapter({
+    const adapter = CronAdapter({
       services: [Svc],
       scheduler: new IntervalScheduler(),
     })
@@ -289,7 +289,7 @@ describe('CronAdapter', () => {
     const container = Container.getInstance()
     container.register(FailingService, FailingService, Scope.SINGLETON)
 
-    const adapter = new CronAdapter({
+    const adapter = CronAdapter({
       services: [FailingService],
       scheduler: new IntervalScheduler(),
     })
@@ -308,7 +308,7 @@ describe('CronAdapter', () => {
     const container = Container.getInstance()
     container.register(PlainService, PlainService, Scope.SINGLETON)
 
-    const adapter = new CronAdapter({
+    const adapter = CronAdapter({
       services: [PlainService],
       scheduler: new IntervalScheduler(),
     })

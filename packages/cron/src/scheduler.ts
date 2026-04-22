@@ -69,7 +69,7 @@ export interface CronScheduler {
  * ```ts
  * import { CronAdapter, CronerScheduler } from '@forinda/kickjs-cron'
  *
- * new CronAdapter({
+ * CronAdapter({
  *   services: [ReportService],
  *   scheduler: new CronerScheduler(),
  * })
@@ -152,7 +152,7 @@ export class CronerScheduler implements CronScheduler {
  * ```ts
  * import { CronAdapter, IntervalScheduler } from '@forinda/kickjs-cron'
  *
- * new CronAdapter({
+ * CronAdapter({
  *   services: [ReportService],
  *   scheduler: new IntervalScheduler(),
  * })

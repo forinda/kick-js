@@ -58,7 +58,7 @@ export const adapters = [
     defaultFrom: { name: env.MAIL_FROM_NAME, address: env.MAIL_FROM_EMAIL },
   }),
   queueAdapter,
-  new CronAdapter({
+  CronAdapter({
     services: [TaskCronJobs, DigestCronJobs, CleanupCronJobs, PresenceCronJobs, HealthCheckCronJobs],
     enabled: true,
   }),
