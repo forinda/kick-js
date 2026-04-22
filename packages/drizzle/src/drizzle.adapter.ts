@@ -1,4 +1,4 @@
-import { Logger, type AppAdapter, type AdapterContext, Scope } from '@forinda/kickjs'
+import { Logger, defineAdapter, Scope } from '@forinda/kickjs'
 import { DRIZZLE_DB, type DrizzleAdapterOptions } from './types'
 
 const log = Logger.for('DrizzleAdapter')
@@ -9,9 +9,6 @@ const log = Logger.for('DrizzleAdapter')
  *
  * Works with any Drizzle driver: `drizzle-orm/postgres-js`, `drizzle-orm/node-postgres`,
  * `drizzle-orm/mysql2`, `drizzle-orm/better-sqlite3`, `drizzle-orm/libsql`, etc.
- *
- * The adapter is generic — the db type is inferred from what you pass in,
- * so services can inject the fully-typed database instance.
  *
  * @example
  * ```ts
@@ -24,7 +21,7 @@ const log = Logger.for('DrizzleAdapter')
  * bootstrap({
  *   modules,
  *   adapters: [
- *     new DrizzleAdapter({ db, onShutdown: () => sqlite.close() }),
+ *     DrizzleAdapter({ db, onShutdown: () => sqlite.close() }),
  *   ],
  * })
  * ```
@@ -40,32 +37,29 @@ const log = Logger.for('DrizzleAdapter')
  * }
  * ```
  */
-export class DrizzleAdapter<TDb = unknown> implements AppAdapter {
-  name = 'DrizzleAdapter'
-  private db: TDb
-  private onShutdown?: () => void | Promise<void>
+export const DrizzleAdapter = defineAdapter<DrizzleAdapterOptions<unknown>>({
+  name: 'DrizzleAdapter',
+  build: (options) => {
+    const db = options.db
+    const onShutdown = options.onShutdown
 
-  constructor(private options: DrizzleAdapterOptions<TDb>) {
-    this.db = options.db
-    this.onShutdown = options.onShutdown
-  }
+    return {
+      beforeStart({ container }) {
+        if (options.logging) {
+          log.info('Query logging enabled')
+        }
 
-  /** Register the Drizzle db instance in the DI container */
-  beforeStart({ container }: AdapterContext): void {
-    if (this.options.logging) {
-      log.info('Query logging enabled')
+        container.registerFactory(DRIZZLE_DB, () => db, Scope.SINGLETON)
+
+        log.info('Drizzle database registered in DI container')
+      },
+
+      async shutdown() {
+        if (onShutdown) {
+          await onShutdown()
+          log.info('Drizzle connection closed')
+        }
+      },
     }
-
-    container.registerFactory(DRIZZLE_DB, () => this.db, Scope.SINGLETON)
-
-    log.info('Drizzle database registered in DI container')
-  }
-
-  /** Close the underlying connection on shutdown */
-  async shutdown(): Promise<void> {
-    if (this.onShutdown) {
-      await this.onShutdown()
-      log.info('Drizzle connection closed')
-    }
-  }
-}
+  },
+})

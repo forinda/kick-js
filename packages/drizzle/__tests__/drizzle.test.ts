@@ -66,13 +66,13 @@ describe('DrizzleAdapter', () => {
   })
 
   it('should have the name "DrizzleAdapter"', () => {
-    const adapter = new DrizzleAdapter({ db: {} })
+    const adapter = DrizzleAdapter({ db: {} })
     expect(adapter.name).toBe('DrizzleAdapter')
   })
 
   it('should register the db instance in the DI container via beforeStart', () => {
     const fakeDb = { query: vi.fn() }
-    const adapter = new DrizzleAdapter({ db: fakeDb })
+    const adapter = DrizzleAdapter({ db: fakeDb })
 
     const container = Container.getInstance()
     adapter.beforeStart({ container } as any)
@@ -83,7 +83,7 @@ describe('DrizzleAdapter', () => {
 
   it('should call onShutdown when shutdown is invoked', async () => {
     const onShutdown = vi.fn()
-    const adapter = new DrizzleAdapter({ db: {}, onShutdown })
+    const adapter = DrizzleAdapter({ db: {}, onShutdown })
 
     await adapter.shutdown()
 
@@ -91,13 +91,13 @@ describe('DrizzleAdapter', () => {
   })
 
   it('should not throw when shutdown is called without onShutdown', async () => {
-    const adapter = new DrizzleAdapter({ db: {} })
+    const adapter = DrizzleAdapter({ db: {} })
     await expect(adapter.shutdown()).resolves.toBeUndefined()
   })
 
   it('should await an async onShutdown', async () => {
     let closed = false
-    const adapter = new DrizzleAdapter({
+    const adapter = DrizzleAdapter({
       db: {},
       onShutdown: async () => {
         closed = true

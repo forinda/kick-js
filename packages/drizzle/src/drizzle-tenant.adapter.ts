@@ -1,7 +1,23 @@
-import { Logger, type AppAdapter, type AdapterContext, Scope } from '@forinda/kickjs'
+import { Logger, defineAdapter, Scope } from '@forinda/kickjs'
 import { DRIZZLE_TENANT_DB, type DrizzleTenantAdapterOptions } from './types'
 
 const log = Logger.for('DrizzleTenantAdapter')
+
+/**
+ * Public extension methods exposed by a DrizzleTenantAdapter instance.
+ * `getDb()` returns the (possibly newly-created) Drizzle instance for
+ * a tenant; `connectionCount` reports the cache size for monitoring.
+ */
+export interface DrizzleTenantAdapterExtensions<TDb = unknown> {
+  /**
+   * Get the database for a specific tenant. Creates and caches the
+   * connection on first access. Returns the provider DB when tenantId
+   * is undefined/null.
+   */
+  getDb(tenantId?: string | null): Promise<TDb>
+  /** Number of cached tenant connections (useful for monitoring). */
+  readonly connectionCount: number
+}
 
 /**
  * Multi-tenant Drizzle adapter — manages per-tenant database connections
@@ -25,7 +41,7 @@ const log = Logger.for('DrizzleTenantAdapter')
  * bootstrap({
  *   adapters: [
  *     TenantAdapter({ strategy: 'subdomain' }),
- *     new DrizzleTenantAdapter({
+ *     DrizzleTenantAdapter({
  *       providerDb,
  *       tenantFactory: async (tenantId) => {
  *         const url = await lookupTenantDbUrl(tenantId)
@@ -44,129 +60,120 @@ const log = Logger.for('DrizzleTenantAdapter')
  * }
  * ```
  */
-export class DrizzleTenantAdapter<TDb = unknown> implements AppAdapter {
-  name = 'DrizzleTenantAdapter'
-  private readonly providerDb: TDb
-  private readonly tenantFactory: (tenantId: string) => TDb | Promise<TDb>
-  private readonly connections = new Map<string, TDb>()
-  private readonly lastAccessed = new Map<string, number>()
-  private readonly options: DrizzleTenantAdapterOptions<TDb>
-  private readonly evictionTimer?: ReturnType<typeof setInterval>
+export const DrizzleTenantAdapter = defineAdapter<
+  DrizzleTenantAdapterOptions<unknown>,
+  DrizzleTenantAdapterExtensions<unknown>
+>({
+  name: 'DrizzleTenantAdapter',
+  build: (options) => {
+    const providerDb = options.providerDb
+    const tenantFactory = options.tenantFactory
+    const connections = new Map<string, unknown>()
+    const lastAccessed = new Map<string, number>()
+    let evictionTimer: ReturnType<typeof setInterval> | undefined
 
-  constructor(options: DrizzleTenantAdapterOptions<TDb>) {
-    this.options = options
-    this.providerDb = options.providerDb
-    this.tenantFactory = options.tenantFactory
-
-    // Start cache eviction timer if cacheTtl is configured
     if (options.cacheTtl && options.cacheTtl > 0) {
       const interval = Math.min(options.cacheTtl, 60_000)
-      this.evictionTimer = setInterval(() => this.evictStale(), interval)
-      this.evictionTimer.unref()
-    }
-  }
-
-  /**
-   * Get the database for a specific tenant.
-   * Creates and caches the connection on first access.
-   * Returns the provider DB when tenantId is undefined/null.
-   */
-  async getDb(tenantId?: string | null): Promise<TDb> {
-    if (!tenantId) return this.providerDb
-
-    const cached = this.connections.get(tenantId)
-    if (cached) {
-      this.lastAccessed.set(tenantId, Date.now())
-      return cached
+      evictionTimer = setInterval(() => evictStale(), interval)
+      evictionTimer.unref()
     }
 
-    const db = await this.tenantFactory(tenantId)
-    this.connections.set(tenantId, db)
-    this.lastAccessed.set(tenantId, Date.now())
+    const getDb = async (tenantId?: string | null): Promise<unknown> => {
+      if (!tenantId) return providerDb
 
-    if (this.options.logging) {
-      log.info(`Tenant DB created: ${tenantId} (${this.connections.size} total)`)
+      const cached = connections.get(tenantId)
+      if (cached) {
+        lastAccessed.set(tenantId, Date.now())
+        return cached
+      }
+
+      const db = await tenantFactory(tenantId)
+      connections.set(tenantId, db)
+      lastAccessed.set(tenantId, Date.now())
+
+      if (options.logging) {
+        log.info(`Tenant DB created: ${tenantId} (${connections.size} total)`)
+      }
+
+      return db
     }
 
-    return db
-  }
+    async function evictStale(): Promise<void> {
+      const ttl = options.cacheTtl
+      if (!ttl) return
 
-  /** Register DRIZZLE_TENANT_DB as a transient factory in DI */
-  async beforeStart({ container }: AdapterContext): Promise<void> {
-    // Dynamically import getCurrentTenant to avoid hard dep on multi-tenant package
-    let getCurrentTenant: (() => { id: string } | undefined) | undefined
+      const now = Date.now()
+      for (const [tenantId, lastTime] of lastAccessed) {
+        if (now - lastTime > ttl) {
+          const db = connections.get(tenantId)
+          if (db && options.onTenantShutdown) {
+            try {
+              await options.onTenantShutdown(db, tenantId)
+            } catch (err) {
+              log.error(`Failed to evict tenant DB ${tenantId}: ${err}`)
+            }
+          }
+          connections.delete(tenantId)
+          lastAccessed.delete(tenantId)
 
-    try {
-      const mt: any = await import('@forinda/kickjs-multi-tenant')
-      getCurrentTenant = mt.getCurrentTenant
-    } catch {
-      log.warn(
-        'DrizzleTenantAdapter: @forinda/kickjs-multi-tenant not found. ' +
-          'DRIZZLE_TENANT_DB will always resolve to the provider database.',
-      )
-    }
-
-    container.registerFactory(
-      DRIZZLE_TENANT_DB,
-      () => {
-        const tenant = getCurrentTenant?.()
-        return this.getDb(tenant?.id)
-      },
-      Scope.TRANSIENT,
-    )
-
-    log.info(
-      `Drizzle tenant DB registered (${getCurrentTenant ? 'multi-tenant mode' : 'provider-only mode'})`,
-    )
-  }
-
-  /** Evict connections that haven't been accessed within cacheTtl */
-  private async evictStale(): Promise<void> {
-    const ttl = this.options.cacheTtl
-    if (!ttl) return
-
-    const now = Date.now()
-    for (const [tenantId, lastTime] of this.lastAccessed) {
-      if (now - lastTime > ttl) {
-        const db = this.connections.get(tenantId)
-        if (db && this.options.onTenantShutdown) {
-          try {
-            await this.options.onTenantShutdown(db, tenantId)
-          } catch (err) {
-            log.error(`Failed to evict tenant DB ${tenantId}: ${err}`)
+          if (options.logging) {
+            log.info(`Tenant DB evicted (idle): ${tenantId}`)
           }
         }
-        this.connections.delete(tenantId)
-        this.lastAccessed.delete(tenantId)
-
-        if (this.options.logging) {
-          log.info(`Tenant DB evicted (idle): ${tenantId}`)
-        }
       }
     }
-  }
 
-  /** Close all tenant connections on shutdown */
-  async shutdown(): Promise<void> {
-    if (this.evictionTimer) clearInterval(this.evictionTimer)
+    return {
+      getDb,
+      get connectionCount() {
+        return connections.size
+      },
 
-    if (this.options.onTenantShutdown) {
-      for (const [tenantId, db] of this.connections) {
+      async beforeStart({ container }) {
+        // Dynamically import getCurrentTenant to avoid hard dep on multi-tenant package
+        let getCurrentTenant: (() => { id: string } | undefined) | undefined
+
         try {
-          await this.options.onTenantShutdown(db, tenantId)
-        } catch (err) {
-          log.error(`Failed to close tenant DB ${tenantId}: ${err}`)
+          const mt: any = await import('@forinda/kickjs-multi-tenant')
+          getCurrentTenant = mt.getCurrentTenant
+        } catch {
+          log.warn(
+            'DrizzleTenantAdapter: @forinda/kickjs-multi-tenant not found. ' +
+              'DRIZZLE_TENANT_DB will always resolve to the provider database.',
+          )
         }
-      }
+
+        container.registerFactory(
+          DRIZZLE_TENANT_DB,
+          () => {
+            const tenant = getCurrentTenant?.()
+            return getDb(tenant?.id)
+          },
+          Scope.TRANSIENT,
+        )
+
+        log.info(
+          `Drizzle tenant DB registered (${getCurrentTenant ? 'multi-tenant mode' : 'provider-only mode'})`,
+        )
+      },
+
+      async shutdown() {
+        if (evictionTimer) clearInterval(evictionTimer)
+
+        if (options.onTenantShutdown) {
+          for (const [tenantId, db] of connections) {
+            try {
+              await options.onTenantShutdown(db, tenantId)
+            } catch (err) {
+              log.error(`Failed to close tenant DB ${tenantId}: ${err}`)
+            }
+          }
+        }
+
+        connections.clear()
+        lastAccessed.clear()
+        log.info('All tenant DB connections closed')
+      },
     }
-
-    this.connections.clear()
-    this.lastAccessed.clear()
-    log.info('All tenant DB connections closed')
-  }
-
-  /** Number of cached tenant connections (useful for monitoring) */
-  get connectionCount(): number {
-    return this.connections.size
-  }
-}
+  },
+})

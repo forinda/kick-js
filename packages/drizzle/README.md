@@ -34,7 +34,7 @@ const db = drizzle(client)
 bootstrap({
   modules,
   adapters: [
-    new DrizzleAdapter({ db }),
+    DrizzleAdapter({ db }),
   ],
 })
 
@@ -61,7 +61,7 @@ bootstrap({
   modules,
   adapters: [
     TenantAdapter({ strategy: 'subdomain' }),
-    new DrizzleTenantAdapter({
+    DrizzleTenantAdapter({
       providerDb: drizzle(providerPool, { schema }),
       tenantFactory: async (tenantId) => {
         const url = await lookupTenantDbUrl(tenantId)
