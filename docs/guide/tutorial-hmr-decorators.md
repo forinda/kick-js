@@ -208,7 +208,7 @@ The adapters are created once in `config/adapters.ts` and `app.rebuild()` reuses
 
 ```typescript
 // src/config/adapters.ts — changes here need a restart
-const queueAdapter = new QueueAdapter({
+const queueAdapter = QueueAdapter({
   redis: {
     host: redisUrl.hostname,
     port: Number(redisUrl.port) || 6379,

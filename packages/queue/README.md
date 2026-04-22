@@ -55,7 +55,7 @@ class UserService {
 bootstrap({
   modules,
   adapters: [
-    new QueueAdapter({
+    QueueAdapter({
       connection: { host: 'localhost', port: 6379 },
     }),
   ],
