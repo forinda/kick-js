@@ -127,7 +127,7 @@ bootstrap({
     new AuthPlugin({ secret: process.env.JWT_SECRET! }),
     new MonitoringPlugin({ service: 'my-api' }),
   ],
-  adapters: [new SwaggerAdapter({ ... })],
+  adapters: [SwaggerAdapter({ ... })],
 })
 ```
 

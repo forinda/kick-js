@@ -87,7 +87,7 @@ bootstrap({
       dsn: env.SENTRY_DSN,
       tracesSampleRate: 0.1,
     }),
-    new SwaggerAdapter({
+    SwaggerAdapter({
       info: { title: 'My API', version: '1.0.0' },
     }),
   ],
@@ -267,7 +267,7 @@ Only enable Sentry when a DSN is configured:
 const env = loadEnv(envSchema)
 
 const adapters = [
-  new SwaggerAdapter({ info: { title: 'My API', version: '1.0.0' } }),
+  SwaggerAdapter({ info: { title: 'My API', version: '1.0.0' } }),
 ]
 
 if (env.SENTRY_DSN) {

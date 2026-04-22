@@ -122,7 +122,7 @@ Scheduled tasks use `@forinda/kickjs-cron`. Unlike queue processors, cron jobs a
 
 ```typescript
 // config/adapters.ts
-new CronAdapter({
+CronAdapter({
   services: [
     TaskCronJobs,
     CleanupCronJobs,
@@ -226,11 +226,11 @@ export const adapters = [
   wsAdapter,                // 2. WebSocket — before DevTools
   MailerAdapter({...}), // 3. Email — before queue (processors need MAILER)
   queueAdapter,             // 4. Queues — after Redis, Mailer
-  new CronAdapter({...}),   // 5. Cron — after queue (cron jobs dispatch to queues)
+  CronAdapter({...}),   // 5. Cron — after queue (cron jobs dispatch to queues)
   DevToolsAdapter({     // 6. DevTools — after ws, queue (monitors them)
     adapters: [wsAdapter, queueAdapter],
   }),
-  new SwaggerAdapter({...}),// 7. Swagger — last (reads all routes)
+  SwaggerAdapter({...}),// 7. Swagger — last (reads all routes)
 ]
 ```
 

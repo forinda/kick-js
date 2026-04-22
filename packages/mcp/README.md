@@ -29,7 +29,7 @@ import { modules } from './modules'
 export const app = await bootstrap({
   modules,
   adapters: [
-    new McpAdapter({
+    McpAdapter({
       name: 'task-api',
       version: '1.0.0',
       description: 'Task management MCP server',

@@ -32,7 +32,7 @@ const joiParser: SchemaParser = {
   toJsonSchema: (schema) => joiToJson(schema),
 }
 
-new SwaggerAdapter({
+SwaggerAdapter({
   info: { title: 'Joi API', version: '1.0.0' },
   schemaParser: joiParser,
 })

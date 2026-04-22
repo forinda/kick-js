@@ -46,7 +46,7 @@ import { loadEnv } from '@forinda/kickjs-config'
 const env = loadEnv(envSchema)
 
 const adapters = [
-  new SwaggerAdapter({ info: { title: 'My API', version: '1.0.0' } }),
+  SwaggerAdapter({ info: { title: 'My API', version: '1.0.0' } }),
 ]
 
 // Conditionally add Sentry when DSN is configured

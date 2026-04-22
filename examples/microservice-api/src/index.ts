@@ -11,7 +11,7 @@ bootstrap({
   adapters: [
     OtelAdapter({ serviceName: 'microservice-api' }),
     DevToolsAdapter(),
-    new SwaggerAdapter({
+    SwaggerAdapter({
       info: { title: 'microservice-api', version: '0.7.0' },
     }),
     // Uncomment when Redis is available:

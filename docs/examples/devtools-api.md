@@ -71,7 +71,7 @@ devtools.requestCount.subscribe((count) => {
 
 bootstrap({
   modules,
-  adapters: [devtools, new SwaggerAdapter({ ... })],
+  adapters: [devtools, SwaggerAdapter({ ... })],
 })
 ```
 

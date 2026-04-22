@@ -64,7 +64,7 @@ bootstrap({
 
   adapters: [
     devtools,
-    new SwaggerAdapter({
+    SwaggerAdapter({
       info: {
         title: 'DevTools Example API',
         version: '1.0.0',

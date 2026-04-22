@@ -43,7 +43,7 @@ export interface McpAuthOptions {
  *
  * @example
  * ```ts
- * new McpAdapter({
+ * McpAdapter({
  *   name: 'task-api',
  *   version: '1.0.0',
  *   description: 'Task management MCP server',

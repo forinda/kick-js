@@ -29,7 +29,7 @@ import { modules } from './modules'
 export const app = await bootstrap({
   modules,
   adapters: [
-    new McpAdapter({
+    McpAdapter({
       name: 'task-api',
       version: '1.0.0',
       description: 'Task management MCP server',
@@ -58,7 +58,7 @@ an MCP server to your Express pipeline at `/_mcp` (configurable via
 
 ```ts
 // Auto mode — expose every GET/POST route except admin paths
-new McpAdapter({
+McpAdapter({
   name: 'internal-api',
   mode: 'auto',
   include: ['GET', 'POST'],
@@ -162,7 +162,7 @@ Add it to your client's MCP config as an HTTP server. Pair with
 `auth` to require a bearer token or API key:
 
 ```ts
-new McpAdapter({
+McpAdapter({
   name: 'task-api',
   transport: 'http',
   auth: {
