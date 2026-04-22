@@ -77,33 +77,12 @@ describe('buildPipeline — precedence dedup', () => {
     const classReg = reg({ key: 'tenant' })
     const moduleReg = reg({ key: 'tenant' })
 
-    const pipeline = buildPipeline([sourced('module', moduleReg), sourced('class', classReg)])
-
-    expect(pipeline.contributors[0]).toBe(classReg)
-  })
-
-  it('module beats adapter beats global for the same key', () => {
-    const moduleReg = reg({ key: 'tenant' })
-    const adapterReg = reg({ key: 'tenant' })
-    const globalReg = reg({ key: 'tenant' })
-
     const pipeline = buildPipeline([
-      sourced('global', globalReg),
-      sourced('adapter', adapterReg),
       sourced('module', moduleReg),
+      sourced('class', classReg),
     ])
 
-    expect(pipeline.contributors).toHaveLength(1)
-    expect(pipeline.contributors[0]).toBe(moduleReg)
-  })
-
-  it('adapter beats global when no module-level entry exists', () => {
-    const adapterReg = reg({ key: 'tenant' })
-    const globalReg = reg({ key: 'tenant' })
-
-    const pipeline = buildPipeline([sourced('global', globalReg), sourced('adapter', adapterReg)])
-
-    expect(pipeline.contributors[0]).toBe(adapterReg)
+    expect(pipeline.contributors[0]).toBe(classReg)
   })
 
   it('keeps non-conflicting contributors from every level', () => {
@@ -114,7 +93,12 @@ describe('buildPipeline — precedence dedup', () => {
       sourced('global', reg({ key: 'requestStartedAt' })),
     ])
 
-    expect([...pipeline.keys].sort()).toEqual(['flags', 'requestStartedAt', 'tenant', 'user'])
+    expect([...pipeline.keys].sort()).toEqual([
+      'flags',
+      'requestStartedAt',
+      'tenant',
+      'user',
+    ])
   })
 })
 
@@ -147,7 +131,10 @@ describe('buildPipeline — duplicate detection (intra-source)', () => {
   it('falls back to "<source>#<index>" labels when none provided', () => {
     let captured: unknown
     try {
-      buildPipeline([sourced('class', reg({ key: 'x' })), sourced('class', reg({ key: 'x' }))])
+      buildPipeline([
+        sourced('class', reg({ key: 'x' })),
+        sourced('class', reg({ key: 'x' })),
+      ])
     } catch (err) {
       captured = err
     }
@@ -176,9 +163,10 @@ describe('buildPipeline — dependsOn validation', () => {
   it('error reports the dependent and route in the message', () => {
     let captured: unknown
     try {
-      buildPipeline([sourced('method', reg({ key: 'project', dependsOn: ['tenant'] }))], {
-        route: 'GET /projects/:id',
-      })
+      buildPipeline(
+        [sourced('method', reg({ key: 'project', dependsOn: ['tenant'] }))],
+        { route: 'GET /projects/:id' },
+      )
     } catch (err) {
       captured = err
     }

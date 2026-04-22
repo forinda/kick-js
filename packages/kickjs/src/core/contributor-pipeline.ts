@@ -8,25 +8,11 @@ import {
 /**
  * Where a contributor was registered, ordered by precedence
  * (lower index wins). Mirrors `architecture.md` §20.4.
- *
- * Levels (highest → lowest precedence):
- * - `'method'` — `@LoadX` on a controller method.
- * - `'class'`  — `@LoadX` on a controller class.
- * - `'module'` — returned by `AppModule.contributors?()`. Per-module scope.
- * - `'adapter'` — returned by `AppAdapter.contributors?()`. Cross-cutting, applies
- *   to every module's routes.
- * - `'global'` — `ApplicationOptions.contributors`. App-wide default.
  */
-export type ContributorSource = 'method' | 'class' | 'module' | 'adapter' | 'global'
+export type ContributorSource = 'method' | 'class' | 'module' | 'global'
 
 /** Precedence-ranked source list. Index = precedence; method (0) wins ties. */
-const PRECEDENCE_ORDER: readonly ContributorSource[] = [
-  'method',
-  'class',
-  'module',
-  'adapter',
-  'global',
-]
+const PRECEDENCE_ORDER: readonly ContributorSource[] = ['method', 'class', 'module', 'global']
 
 /**
  * Input row to {@link buildPipeline}. Pairs a registration with its origin
