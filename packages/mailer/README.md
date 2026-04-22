@@ -1,59 +1,48 @@
 # @forinda/kickjs-mailer
 
-Pluggable email sending for KickJS — SMTP, Resend, SES, and custom providers.
+Pluggable email for KickJS — SMTP (`nodemailer`), Resend, SES, Console (dev), or any custom `MailProvider`.
 
 ## Install
 
 ```bash
-# Using the KickJS CLI (recommended — auto-installs peer dependencies)
 kick add mailer
-
-# Manual install
-pnpm add @forinda/kickjs-mailer nodemailer
 ```
-
-## Features
-
-- `MailerAdapter` — lifecycle adapter that registers the mailer in DI
-- `MailerService` — injectable service for sending email
-- Built-in providers: `SmtpProvider` (nodemailer), `ConsoleProvider` (dev logging)
-- `MAILER` token for DI injection
-- Pluggable `MailProvider` interface for custom transports (Resend, SES, etc.)
 
 ## Quick Example
 
-```typescript
-import { MailerAdapter, SmtpProvider, ConsoleProvider } from '@forinda/kickjs-mailer'
+```ts
+import { bootstrap, getEnv, Inject, Service } from '@forinda/kickjs'
+import { MailerAdapter, SmtpProvider, ConsoleProvider, MAILER, type MailerService } from '@forinda/kickjs-mailer'
+import { modules } from './modules'
 
-bootstrap({
+export const app = await bootstrap({
   modules,
   adapters: [
     MailerAdapter({
-      provider: process.env.NODE_ENV === 'production'
-        ? new SmtpProvider({ host: 'smtp.example.com', port: 587, auth: { user: '...', pass: '...' } })
+      provider: getEnv('NODE_ENV') === 'production'
+        ? new SmtpProvider({
+            host: 'smtp.example.com',
+            port: 587,
+            auth: { user: getEnv('SMTP_USER'), pass: getEnv('SMTP_PASS') },
+          })
         : new ConsoleProvider(),
     }),
   ],
 })
 
-// In a service
 @Service()
 class NotifyService {
-  @Inject(MAILER) private mailer!: MailerService
+  constructor(@Inject(MAILER) private mailer: MailerService) {}
 
-  async sendWelcome(email: string) {
-    await this.mailer.send({
-      to: email,
-      subject: 'Welcome!',
-      html: '<h1>Welcome to our app</h1>',
-    })
+  sendWelcome(to: string) {
+    return this.mailer.send({ to, subject: 'Welcome', html: '<h1>Welcome</h1>' })
   }
 }
 ```
 
 ## Documentation
 
-[Full documentation](https://forinda.github.io/kick-js/guide/mailer)
+[forinda.github.io/kick-js/guide/mailer](https://forinda.github.io/kick-js/guide/mailer)
 
 ## License
 

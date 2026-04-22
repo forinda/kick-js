@@ -1,52 +1,38 @@
 # @forinda/kickjs-cron
 
-Production-grade cron job scheduling with pluggable backends for KickJS.
+Cron scheduling for KickJS — `@Cron` decorator on `@Service` methods, pluggable schedulers (`CronerScheduler` for full cron syntax, `IntervalScheduler` zero-dep fallback).
 
 ## Install
 
 ```bash
-# Using the KickJS CLI (recommended — auto-installs peer dependencies)
 kick add cron
-
-# Manual install
-pnpm add @forinda/kickjs-cron croner
 ```
-
-## Features
-
-- `CronAdapter` — lifecycle adapter that discovers and runs cron jobs
-- `@Cron` decorator for scheduling methods
-- Built-in schedulers: `CronerScheduler` (cron expressions), `IntervalScheduler` (simple intervals)
-- `getCronJobs()` to inspect registered jobs
 
 ## Quick Example
 
-```typescript
+```ts
+import { Service, Cron, bootstrap } from '@forinda/kickjs'
 import { CronAdapter } from '@forinda/kickjs-cron'
-import { Cron, Service } from '@forinda/kickjs-core'
+import { modules } from './modules'
 
 @Service()
 class CleanupService {
-  @Cron('0 */6 * * *') // Every 6 hours
-  async cleanExpiredTokens() {
-    console.log('Cleaning up expired tokens...')
-  }
+  @Cron('0 */6 * * *') // every 6h
+  async cleanExpiredTokens() { /* ... */ }
 
-  @Cron('0 9 * * 1') // Monday at 9am
-  async weeklyDigest() {
-    console.log('Sending weekly digest...')
-  }
+  @Cron('0 9 * * 1', { timezone: 'UTC' }) // Mon 09:00 UTC
+  async weeklyDigest() { /* ... */ }
 }
 
-bootstrap({
+export const app = await bootstrap({
   modules,
-  adapters: [CronAdapter()],
+  adapters: [CronAdapter({ services: [CleanupService] })],
 })
 ```
 
 ## Documentation
 
-[Full documentation](https://forinda.github.io/kick-js/guide/cron)
+[forinda.github.io/kick-js/guide/cron](https://forinda.github.io/kick-js/guide/cron)
 
 ## License
 

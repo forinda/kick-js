@@ -1,52 +1,50 @@
 # @forinda/kickjs-ws
 
-WebSocket support with decorators, namespaces, rooms, and DI integration for KickJS.
+WebSocket adapter for KickJS — decorator-driven handlers (`@WsController`, `@OnConnect`, `@OnDisconnect`, `@OnMessage`, `@OnError`), namespaces, rooms, heartbeat, optional auth resolver.
 
 ## Install
 
 ```bash
-# Using the KickJS CLI (recommended — auto-installs peer dependencies)
 kick add ws
-
-# Manual install
-pnpm add @forinda/kickjs-ws ws
 ```
-
-## Features
-
-- `WsAdapter` — lifecycle adapter that attaches a WebSocket server to your app
-- Decorator-driven handlers: `@WsController`, `@OnConnect`, `@OnDisconnect`, `@OnMessage`, `@OnError`
-- `WsContext` — typed context for WebSocket handlers
-- `RoomManager` — built-in room/namespace management
 
 ## Quick Example
 
-```typescript
-import { WsAdapter, WsController, OnConnect, OnMessage, WsContext } from '@forinda/kickjs-ws'
+```ts
+// chat.ws-controller.ts
+import { WsController, OnConnect, OnMessage, WsContext } from '@forinda/kickjs-ws'
 
 @WsController('/chat')
-class ChatHandler {
+export class ChatController {
   @OnConnect()
   onConnect(ctx: WsContext) {
-    console.log('Client connected')
+    ctx.send('welcome', { id: ctx.socketId })
   }
 
-  @OnMessage('message')
-  onMessage(ctx: WsContext) {
-    ctx.broadcast(ctx.data)
+  @OnMessage('say')
+  onSay(ctx: WsContext) {
+    ctx.broadcast('say', ctx.data)
   }
 }
+```
 
-// In bootstrap
-bootstrap({
+```ts
+// src/index.ts
+import { bootstrap } from '@forinda/kickjs'
+import { WsAdapter } from '@forinda/kickjs-ws'
+import { modules } from './modules'
+
+export const app = await bootstrap({
   modules,
-  adapters: [WsAdapter()],
+  adapters: [WsAdapter({ path: '/ws' })],
 })
 ```
 
+Clients connect to `ws://localhost:3000/ws/chat`.
+
 ## Documentation
 
-[Full documentation](https://forinda.github.io/kick-js/guide/websockets)
+[forinda.github.io/kick-js/guide/websockets](https://forinda.github.io/kick-js/guide/websockets)
 
 ## License
 

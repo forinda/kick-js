@@ -1,62 +1,37 @@
 # @forinda/kickjs-swagger
 
-Auto-generated OpenAPI spec from decorators, Swagger UI, and ReDoc for KickJS.
+Auto-generated OpenAPI spec from decorators + Zod schemas. Serves Swagger UI at `/docs`, ReDoc at `/redoc`, raw JSON at `/openapi.json`.
 
 ## Install
 
 ```bash
-# Using the KickJS CLI (recommended)
 kick add swagger
-
-# Manual install
-pnpm add @forinda/kickjs-swagger @forinda/kickjs-core
 ```
-
-## Features
-
-- `SwaggerAdapter` — `defineAdapter`-built factory; serves Swagger UI at `/docs`, ReDoc at `/redoc`, JSON at `/openapi.json`
-- Decorators: `@ApiTags`, `@ApiOperation`, `@ApiResponse`, `@ApiBearerAuth`, `@ApiExclude`
-- Auto-converts Zod validation schemas to OpenAPI JSON Schema
-- Pluggable `SchemaParser` — use Joi, Yup, Valibot instead of Zod
-- Schemas registered in `components.schemas` for the Models section
 
 ## Quick Example
 
-```typescript
+```ts
+import { bootstrap } from '@forinda/kickjs'
 import { SwaggerAdapter } from '@forinda/kickjs-swagger'
+import { modules } from './modules'
 
-bootstrap({
+export const app = await bootstrap({
   modules,
   adapters: [
     SwaggerAdapter({
       info: { title: 'My API', version: '1.0.0' },
       bearerAuth: true,
-      disableInProd: true, // skip mounting docs when NODE_ENV=production
+      disableInProd: true,
     }),
   ],
 })
 ```
 
-Set `disableInProd: true` to skip mounting docs, the spec, and assets when
-`NODE_ENV === 'production'`.
-
-### Custom Schema Parser (Joi)
-
-```typescript
-import { type SchemaParser } from '@forinda/kickjs-swagger'
-
-const joiParser: SchemaParser = {
-  name: 'joi',
-  supports: (schema) => Joi.isSchema(schema),
-  toJsonSchema: (schema) => joiToJson(schema),
-}
-
-SwaggerAdapter({ schemaParser: joiParser })
-```
+Decorators (`@ApiTags`, `@ApiOperation`, `@ApiResponse`, `@ApiBearerAuth`, `@ApiExclude`) refine the generated spec. For non-Zod schemas, plug a custom `SchemaParser` (Joi, Yup, Valibot, etc.).
 
 ## Documentation
 
-[Full documentation](https://github.com/forinda/kick-js)
+[forinda.github.io/kick-js/guide/swagger](https://forinda.github.io/kick-js/guide/swagger)
 
 ## License
 

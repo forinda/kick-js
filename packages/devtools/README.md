@@ -1,60 +1,37 @@
 # @forinda/kickjs-devtools
 
-Development introspection dashboard for KickJS — routes, DI container, metrics, and health.
+Dev introspection dashboard — routes, DI container state, request metrics, p50/p95/p99 latency, error-rate alerts, dependency graph, SSE stream. Mounted under `/_debug` and gated by an auto-generated token.
 
 ## Install
 
 ```bash
-# Using the KickJS CLI (recommended — installs as dev dependency)
 kick add devtools
-
-# Manual install
-pnpm add -D @forinda/kickjs-devtools
 ```
-
-## Features
-
-- `DevToolsAdapter` — lifecycle adapter that mounts debug endpoints
-- Route inspection, DI container state, request metrics, health checks
-- Config exposure with prefix-based redaction
-- Error rate threshold alerts
-- Reactive state snapshot via `/_debug/state`
-
-## Debug Endpoints
-
-| Endpoint | Description |
-|----------|-------------|
-| `GET /_debug/routes` | All registered routes with middleware |
-| `GET /_debug/container` | DI container state |
-| `GET /_debug/metrics` | Request counts, error rate, latency |
-| `GET /_debug/health` | Health status (200 or 503) |
-| `GET /_debug/state` | Full reactive state snapshot |
-| `GET /_debug/config` | Sanitized environment variables |
 
 ## Quick Example
 
-```typescript
+```ts
+import { bootstrap, getEnv } from '@forinda/kickjs'
 import { DevToolsAdapter } from '@forinda/kickjs-devtools'
+import { modules } from './modules'
 
-bootstrap({
+export const app = await bootstrap({
   modules,
   adapters: [
     DevToolsAdapter({
-      enabled: true,
+      secret: getEnv('NODE_ENV') === 'production' ? undefined : false,
       exposeConfig: true,
       configPrefixes: ['APP_', 'NODE_ENV', 'PORT'],
-      errorRateThreshold: 0.3,
-      onErrorRateExceeded: (rate) => {
-        console.warn(`Error rate: ${(rate * 100).toFixed(1)}%`)
-      },
     }),
   ],
 })
 ```
 
+Endpoints (token-gated unless `secret: false`): `/_debug/{routes,container,metrics,health,state,config,graph,stream,ws,queues}` — plus a Vue + Tailwind dashboard at `/_debug/`.
+
 ## Documentation
 
-[Full documentation](https://forinda.github.io/kick-js/guide/devtools)
+[forinda.github.io/kick-js/guide/devtools](https://forinda.github.io/kick-js/guide/devtools)
 
 ## License
 
