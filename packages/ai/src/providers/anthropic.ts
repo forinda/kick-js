@@ -82,7 +82,7 @@ export interface AnthropicProviderOptions {
  * export const app = await bootstrap({
  *   modules,
  *   adapters: [
- *     new AiAdapter({
+ *     AiAdapter({
  *       provider: new AnthropicProvider({
  *         apiKey: getEnv('ANTHROPIC_API_KEY'),
  *         defaultChatModel: 'claude-opus-4-6',

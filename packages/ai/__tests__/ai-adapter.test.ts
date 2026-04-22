@@ -120,7 +120,7 @@ async function startRig(scriptedResponses: ChatResponse[]): Promise<Rig> {
   app.post('/api/v1/tasks/', TaskController.prototype.create)
 
   const provider = new ScriptedProvider(scriptedResponses)
-  const adapter = new AiAdapter({ provider })
+  const adapter = AiAdapter({ provider })
 
   adapter.onRouteMount(TaskController, '/api/v1/tasks')
   adapter.beforeStart({ container: new Container() } as never)
@@ -153,7 +153,7 @@ describe('AiAdapter — tool discovery', () => {
   })
 
   it('discovers every @AiTool-decorated method after beforeStart', () => {
-    const adapter = new AiAdapter({ provider: new ScriptedProvider([]) })
+    const adapter = AiAdapter({ provider: new ScriptedProvider([]) })
     adapter.onRouteMount(TaskController, '/api/v1/tasks')
     adapter.beforeStart({ container: new Container() } as never)
 
@@ -163,7 +163,7 @@ describe('AiAdapter — tool discovery', () => {
   })
 
   it('skips methods without @AiTool', () => {
-    const adapter = new AiAdapter({ provider: new ScriptedProvider([]) })
+    const adapter = AiAdapter({ provider: new ScriptedProvider([]) })
     adapter.onRouteMount(TaskController, '/api/v1/tasks')
     adapter.beforeStart({ container: new Container() } as never)
 
@@ -172,7 +172,7 @@ describe('AiAdapter — tool discovery', () => {
   })
 
   it('converts the Zod body schema to a JSON Schema input', () => {
-    const adapter = new AiAdapter({ provider: new ScriptedProvider([]) })
+    const adapter = AiAdapter({ provider: new ScriptedProvider([]) })
     adapter.onRouteMount(TaskController, '/api/v1/tasks')
     adapter.beforeStart({ container: new Container() } as never)
 
@@ -190,7 +190,7 @@ describe('AiAdapter — tool discovery', () => {
   })
 
   it('uses an empty object schema for routes without a body', () => {
-    const adapter = new AiAdapter({ provider: new ScriptedProvider([]) })
+    const adapter = AiAdapter({ provider: new ScriptedProvider([]) })
     adapter.onRouteMount(TaskController, '/api/v1/tasks')
     adapter.beforeStart({ container: new Container() } as never)
 
@@ -216,7 +216,7 @@ describe('AiAdapter.runAgent — unit', () => {
     const provider = new ScriptedProvider([
       { content: 'Hello there!', finishReason: 'stop' },
     ])
-    const adapter = new AiAdapter({ provider })
+    const adapter = AiAdapter({ provider })
     adapter.onRouteMount(TaskController, '/api/v1/tasks')
     adapter.beforeStart({ container: new Container() } as never)
 
@@ -233,7 +233,7 @@ describe('AiAdapter.runAgent — unit', () => {
     const provider = new ScriptedProvider([
       { content: 'nothing to do', finishReason: 'stop' },
     ])
-    const adapter = new AiAdapter({ provider })
+    const adapter = AiAdapter({ provider })
     adapter.onRouteMount(TaskController, '/api/v1/tasks')
     adapter.beforeStart({ container: new Container() } as never)
 
@@ -252,7 +252,7 @@ describe('AiAdapter.runAgent — unit', () => {
 
   it('omits tools from the provider call when none are discovered', async () => {
     const provider = new ScriptedProvider([{ content: 'ok', finishReason: 'stop' }])
-    const adapter = new AiAdapter({ provider })
+    const adapter = AiAdapter({ provider })
     // No onRouteMount → no tools discovered
     adapter.beforeStart({ container: new Container() } as never)
 
@@ -278,7 +278,7 @@ describe('AiAdapter.runAgent — unit', () => {
     const rig = await startRig([])
     // Swap the adapter's provider by building a fresh adapter on the
     // same HTTP server so dispatch still works.
-    const adapter = new AiAdapter({ provider })
+    const adapter = AiAdapter({ provider })
     adapter.onRouteMount(TaskController, '/api/v1/tasks')
     adapter.beforeStart({ container: new Container() } as never)
     adapter.setServerBaseUrl(`http://127.0.0.1:${rig.port}`)
@@ -303,7 +303,7 @@ describe('AiAdapter.runAgent — unit', () => {
       },
       { content: "sorry, I couldn't do that", finishReason: 'stop' },
     ])
-    const adapter = new AiAdapter({ provider })
+    const adapter = AiAdapter({ provider })
     adapter.onRouteMount(TaskController, '/api/v1/tasks')
     adapter.beforeStart({ container: new Container() } as never)
 

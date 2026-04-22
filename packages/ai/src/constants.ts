@@ -1,6 +1,6 @@
 import { createToken } from '@forinda/kickjs'
 import type { VectorStore } from './rag/types'
-import type { AiProvider, AiToolOptions } from './types'
+import type { AiAdapterInstance, AiProvider, AiToolOptions } from './types'
 
 /**
  * Metadata key for the `@AiTool` decorator.
@@ -42,6 +42,33 @@ export const AI_TOOL_METADATA = createToken<AiToolOptions>('kickjs.ai.tool')
 export const AI_PROVIDER = createToken<AiProvider>('kickjs.ai.provider')
 
 /**
+ * DI token for the AiAdapter instance — exposes the agent loop (`runAgent`,
+ * `runAgentWithMemory`) and tool inspection (`getTools`, `getProvider`).
+ *
+ * Injected via `@Inject(AI_ADAPTER)` in services that need to dispatch
+ * tool-calling agent loops. The adapter registers itself under this
+ * token during `beforeStart`. Use {@link AI_PROVIDER} when you only
+ * need the raw `chat` / `embed` calls and don't need agent loops.
+ *
+ * @example
+ * ```ts
+ * @Service()
+ * export class AgentService {
+ *   constructor(@Inject(AI_ADAPTER) private ai: AiAdapterInstance) {}
+ *
+ *   async handleQuery(prompt: string) {
+ *     const result = await this.ai.runAgent({
+ *       messages: [{ role: 'user', content: prompt }],
+ *       tools: 'auto',
+ *     })
+ *     return result.content
+ *   }
+ * }
+ * ```
+ */
+export const AI_ADAPTER = createToken<AiAdapterInstance>('kickjs.ai.adapter')
+
+/**
  * DI token for the active vector store backend.
  *
  * Injected via `@Inject(VECTOR_STORE)` in services that need
@@ -58,7 +85,7 @@ export const AI_PROVIDER = createToken<AiProvider>('kickjs.ai.provider')
  * export const app = await bootstrap({
  *   modules,
  *   adapters: [
- *     new AiAdapter({
+ *     AiAdapter({
  *       provider: new OpenAIProvider({ apiKey: getEnv('OPENAI_API_KEY') }),
  *     }),
  *   ],

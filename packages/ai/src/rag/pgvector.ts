@@ -115,7 +115,7 @@ export interface PgVectorStoreOptions {
  *
  * export const app = await bootstrap({
  *   modules,
- *   adapters: [new AiAdapter({ provider })],
+ *   adapters: [AiAdapter({ provider })],
  *   plugins: [
  *     {
  *       name: 'pgvector',

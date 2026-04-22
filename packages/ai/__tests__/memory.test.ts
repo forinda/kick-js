@@ -241,7 +241,7 @@ describe('AiAdapter.runAgentWithMemory', () => {
     const provider = new ScriptedProvider([
       { content: 'Nice to meet you.', finishReason: 'stop' },
     ])
-    const adapter = new AiAdapter({ provider })
+    const adapter = AiAdapter({ provider })
     adapter.beforeStart({ container: { registerFactory: () => {}, registerInstance: () => {} } } as never)
     const memory = new InMemoryChatMemory()
 
@@ -266,7 +266,7 @@ describe('AiAdapter.runAgentWithMemory', () => {
       { content: 'First reply', finishReason: 'stop' },
       { content: 'Second reply', finishReason: 'stop' },
     ])
-    const adapter = new AiAdapter({ provider })
+    const adapter = AiAdapter({ provider })
     adapter.beforeStart({ container: { registerFactory: () => {}, registerInstance: () => {} } } as never)
     const memory = new InMemoryChatMemory()
 
@@ -302,7 +302,7 @@ describe('AiAdapter.runAgentWithMemory', () => {
       { content: 'two', finishReason: 'stop' },
       { content: 'three', finishReason: 'stop' },
     ])
-    const adapter = new AiAdapter({ provider })
+    const adapter = AiAdapter({ provider })
     adapter.beforeStart({ container: { registerFactory: () => {}, registerInstance: () => {} } } as never)
     const memory = new InMemoryChatMemory()
 
@@ -327,7 +327,7 @@ describe('AiAdapter.runAgentWithMemory', () => {
       },
       { content: 'done', finishReason: 'stop' },
     ])
-    const adapter = new AiAdapter({ provider })
+    const adapter = AiAdapter({ provider })
     adapter.beforeStart({ container: { registerFactory: () => {}, registerInstance: () => {} } } as never)
     const memory = new InMemoryChatMemory()
 
@@ -354,7 +354,7 @@ describe('AiAdapter.runAgentWithMemory', () => {
       },
       { content: 'done', finishReason: 'stop' },
     ])
-    const adapter = new AiAdapter({ provider })
+    const adapter = AiAdapter({ provider })
     adapter.beforeStart({ container: { registerFactory: () => {}, registerInstance: () => {} } } as never)
     const memory = new InMemoryChatMemory()
 
@@ -376,7 +376,7 @@ describe('AiAdapter.runAgentWithMemory', () => {
       { content: 'reply 2', finishReason: 'stop' },
       { content: 'reply 3', finishReason: 'stop' },
     ])
-    const adapter = new AiAdapter({ provider })
+    const adapter = AiAdapter({ provider })
     adapter.beforeStart({ container: { registerFactory: () => {}, registerInstance: () => {} } } as never)
 
     const memory = new SlidingWindowChatMemory({
