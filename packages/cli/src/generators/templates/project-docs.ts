@@ -96,8 +96,6 @@ export function generateClaude(name: string, template: ProjectTemplate, pm: stri
 
   return `# CLAUDE.md — ${name} Development Guide
 
-> **Read \`AGENTS.md\` first.** It is the canonical, multi-agent reference for this project (Claude, Copilot, Codex, Gemini, etc.). This file contains the same project context distilled for Claude, plus Claude-specific notes. When the two disagree on anything substantive, treat \`AGENTS.md\` as authoritative and flag the discrepancy.
-
 ## Project Overview
 
 This is a **${templateLabels[template] ?? 'REST API'}** application built with [KickJS](https://forinda.github.io/kick-js/) — a decorator-driven Node.js framework on Express 5 and TypeScript.
@@ -235,8 +233,6 @@ ctx.noContent()           // 204 No Content
 ctx.notFound()            // 404 Not Found
 ctx.badRequest(msg)       // 400 Bad Request
 \`\`\`
-
-> **Context decorators** — when a middleware's only job is to populate \`ctx.set/get\` for the handler to read, prefer \`defineContextDecorator()\` over \`@Middleware()\`. Typed via \`ContextMeta\`, supports \`dependsOn\` ordering, validates the pipeline at boot. Full pattern reference in \`AGENTS.md\` and at <https://forinda.github.io/kick-js/guide/context-decorators>.
 
 ## CLI Generators
 
@@ -803,27 +799,6 @@ These work anywhere — scripts, plain files, outside \`@Service\`/\`@Controller
 | \`@Inject('token')\` | Token-based injection |
 | \`@Value('VAR')\` | Inject env variable |
 
-### Context Decorators
-
-Typed, ordered way to populate \`ctx.set/get\` keys before the handler runs.
-Use this **instead of \`@Middleware()\`** when the middleware's only output
-is a value other code reads off \`ctx\`.
-
-| Concept | Where it lives |
-|---------|----------------|
-| \`defineContextDecorator({ key, deps, dependsOn, optional, onError, resolve })\` | \`@forinda/kickjs\` |
-| Method/class decorator | \`@LoadX\` on a controller method/class |
-| Module hook | \`AppModule.contributors?(): ContributorRegistration[]\` |
-| Adapter hook | \`AppAdapter.contributors?(): ContributorRegistration[]\` |
-| Global registration | \`bootstrap({ contributors: [LoadX.registration] })\` |
-| Type augmentation | \`declare module '@forinda/kickjs' { interface ContextMeta { ... } }\` |
-
-Precedence high → low: **method > class > module > adapter > global**.
-Cycles and missing \`dependsOn\` keys throw at \`app.setup()\` (boot fails
-fast). The \`onError\` hook is async-permitted.
-
-Full guide: <https://forinda.github.io/kick-js/guide/context-decorators>.
-
 ${
   template === 'graphql'
     ? `### GraphQL
@@ -857,8 +832,6 @@ ${
 5. **HMR not working** — Verify \`vite.config.ts\` has \`hmr: true\`
 6. **Decorators not working** — Check \`tsconfig.json\` has \`experimentalDecorators: true\`
 7. **\`config.get('YOUR_KEY')\` returns \`undefined\`** — \`src/index.ts\` is missing \`import './config'\`. That side-effect import registers the env schema with kickjs (\`loadEnv(envSchema)\` runs at module load). Without it, \`ConfigService\` falls back to the base schema (\`PORT\`/\`NODE_ENV\`/\`LOG_LEVEL\` only) and every user-defined key reads as \`undefined\`. \`@Value()\` may *appear* to work because of a raw \`process.env\` fallback, but Zod coercion and schema defaults are silently skipped — investigate \`src/index.ts\` and \`src/config/index.ts\` first.
-8. **Used \`@Middleware()\` to compute a value for \`ctx\`** — prefer \`defineContextDecorator()\` (see Context Decorators above). It's typed via \`ContextMeta\`, supports \`dependsOn\` for ordering, and validates the pipeline at boot. \`@Middleware()\` is for response short-circuiting, stream mutation, and pre-route-matching work.
-9. **Context contributor's \`dependsOn\` key not produced anywhere** — boot throws \`MissingContributorError\` naming the dependent and the route. Either remove the dep or register a contributor that produces the key (at any precedence level: method/class/module/adapter/global).
 
 ## CLI Commands Reference
 
