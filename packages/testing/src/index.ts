@@ -6,6 +6,9 @@ import {
   type AppModule,
   type AppModuleClass,
   type ApplicationOptions,
+  type ContextDecorator,
+  type ExecutionContext,
+  type MetaValue,
   type ModuleRoutes,
 } from '@forinda/kickjs'
 
@@ -25,6 +28,8 @@ type BootstrapPassthroughOptions = Pick<
   | 'trustProxy'
   | 'jsonLimit'
   | 'security'
+  | 'contributors'
+  | 'contextStore'
 >
 
 /**
@@ -88,6 +93,8 @@ export async function createTestApp(options: CreateTestAppOptions): Promise<{
     trustProxy: options.trustProxy,
     jsonLimit: options.jsonLimit,
     security: options.security,
+    contributors: options.contributors,
+    contextStore: options.contextStore,
   })
 
   // Run setup — mounts routes, registers modules, initializes adapters.
@@ -149,4 +156,97 @@ export function createTestModule(config: {
     }
   }
   return TestModule
+}
+
+// ── Context Contributor unit-test helper (#107) ─────────────────────────
+
+/**
+ * Options for {@link runContributor}.
+ */
+export interface RunContributorOptions {
+  /**
+   * Resolved deps passed to `resolve(ctx, deps)`. Skips the DI container
+   * entirely — bypass for unit tests that want to assert pure resolve()
+   * behaviour without standing up a container.
+   *
+   * Property names must match the spec's `deps` keys; values can be real
+   * service instances, mocks, or test doubles.
+   */
+  deps?: Record<string, unknown>
+
+  /**
+   * Pre-populate the fake context's metadata Map. Useful for testing
+   * contributors with `dependsOn` without running the full pipeline:
+   * pre-populate the dependency keys, then assert that `resolve()` reads
+   * them and produces the expected output.
+   */
+  initial?: Record<string, unknown>
+
+  /** Override the fake context's `requestId` (default: `'test-req'`). */
+  requestId?: string
+}
+
+/**
+ * Result of {@link runContributor}.
+ */
+export interface RunContributorResult<K extends string> {
+  /** Value returned by the contributor's `resolve()` call. */
+  value: MetaValue<K>
+  /** The fake `ExecutionContext` used during the run. */
+  ctx: ExecutionContext
+  /**
+   * Final state of the fake context's metadata Map after `resolve()`.
+   * Includes any `ctx.set(...)` calls the resolver made plus the final
+   * resolved value under the contributor's own key.
+   */
+  meta: Map<string, unknown>
+}
+
+/**
+ * Run a single context contributor in isolation against a fake
+ * {@link ExecutionContext}. Skips the container, the topo-sort, and the
+ * §20.9 error matrix — calls `decorator.registration.resolve(ctx, deps)`
+ * directly so unit tests can assert pure resolve behaviour.
+ *
+ * Errors thrown by `resolve()` propagate so tests can `expect(...).rejects`
+ * or `await expect(...).rejects.toThrow()` against them. To exercise the
+ * full error matrix (optional skip, onError replacement, etc.), build a
+ * one-element pipeline with `buildPipeline()` and use `runContributors()`
+ * directly.
+ *
+ * @example
+ * ```ts
+ * const LoadProject = defineContextDecorator({
+ *   key: 'project',
+ *   dependsOn: ['tenant'],
+ *   deps: { repo: ProjectRepo },
+ *   resolve: (ctx, { repo }) => repo.findByTenant(ctx.get('tenant')!.id),
+ * })
+ *
+ * const { value } = await runContributor(LoadProject, {
+ *   initial: { tenant: { id: 't-1' } },
+ *   deps: { repo: new InMemoryProjectRepo([{ id: 'p-1', tenantId: 't-1' }]) },
+ * })
+ * expect(value).toEqual({ id: 'p-1', tenantId: 't-1' })
+ * ```
+ */
+export async function runContributor<K extends string>(
+  decorator: ContextDecorator<K, Record<string, any>, ExecutionContext>,
+  options: RunContributorOptions = {},
+): Promise<RunContributorResult<K>> {
+  const meta = new Map<string, unknown>(Object.entries(options.initial ?? {}))
+  const ctx: ExecutionContext = {
+    get(key) {
+      return meta.get(key) as never
+    },
+    set(key, value) {
+      meta.set(key, value)
+    },
+    requestId: options.requestId ?? 'test-req',
+  }
+
+  const value = await decorator.registration.resolve(ctx, (options.deps ?? {}) as never)
+  meta.set(decorator.registration.key, value)
+
+  return { value: value as MetaValue<K>, ctx, meta }
 }

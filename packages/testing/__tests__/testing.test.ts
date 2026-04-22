@@ -1,14 +1,17 @@
 import 'reflect-metadata'
 import { describe, it, expect, beforeEach } from 'vitest'
 import request from 'supertest'
-import { createTestApp, createTestModule } from '@forinda/kickjs-testing'
+import { createTestApp, createTestModule, runContributor } from '@forinda/kickjs-testing'
 import {
   Container,
   Service,
   Controller,
   Get,
   Inject,
+  RequestContext,
   buildRoutes,
+  defineContextDecorator,
+  type ContributorRegistration,
   type ModuleRoutes,
 } from '@forinda/kickjs'
 
@@ -346,5 +349,173 @@ describe('createTestApp bootstrap option forwarding', () => {
     expect(res.status).toBe(404)
     // Built-in handler returns { message: 'Not Found' }
     expect(res.body).toHaveProperty('message')
+  })
+})
+
+// ── runContributor (#107 Phase 6) ───────────────────────────────────────
+
+describe('runContributor', () => {
+  it('returns the value resolved by the contributor', async () => {
+    const LoadTenant = defineContextDecorator({
+      key: 'tenant',
+      resolve: () => ({ id: 't-1' }),
+    })
+
+    const { value } = await runContributor(LoadTenant)
+    expect(value).toEqual({ id: 't-1' })
+  })
+
+  it('passes deps through to resolve(ctx, deps)', async () => {
+    const Greet = defineContextDecorator({
+      key: 'greeting',
+      deps: { service: GreetingService },
+      resolve: (_ctx, { service }) => (service as GreetingService).greet('Phase6'),
+    })
+
+    const { value } = await runContributor(Greet, {
+      deps: { service: new GreetingService() },
+    })
+    expect(value).toBe('Hello, Phase6!')
+  })
+
+  it('pre-populates initial metadata so dependsOn-style reads succeed', async () => {
+    const LoadProject = defineContextDecorator({
+      key: 'project',
+      dependsOn: ['tenant'],
+      resolve: (ctx) => {
+        const tenant = ctx.get('tenant') as { id: string } | undefined
+        return { id: 'p-1', tenantId: tenant?.id }
+      },
+    })
+
+    const { value } = await runContributor(LoadProject, {
+      initial: { tenant: { id: 't-7' } },
+    })
+    expect(value).toEqual({ id: 'p-1', tenantId: 't-7' })
+  })
+
+  it('captures ctx.set side effects in the returned meta map', async () => {
+    const Multi = defineContextDecorator({
+      key: 'primary',
+      resolve: (ctx) => {
+        ctx.set('side-effect', 'extra')
+        return 'main-value'
+      },
+    })
+
+    const { value, meta } = await runContributor(Multi)
+    expect(value).toBe('main-value')
+    expect(meta.get('side-effect')).toBe('extra')
+    expect(meta.get('primary')).toBe('main-value')
+  })
+
+  it('awaits async resolve before returning', async () => {
+    const Slow = defineContextDecorator({
+      key: 'slow',
+      resolve: async () => {
+        await new Promise((r) => setTimeout(r, 5))
+        return 'awaited'
+      },
+    })
+
+    const { value } = await runContributor(Slow)
+    expect(value).toBe('awaited')
+  })
+
+  it('propagates resolve() errors so tests can assert against them', async () => {
+    const Bad = defineContextDecorator({
+      key: 'bad',
+      resolve: () => {
+        throw new Error('boom')
+      },
+    })
+
+    await expect(runContributor(Bad)).rejects.toThrow('boom')
+  })
+
+  it('does not invoke onError — runContributor bypasses the §20.9 matrix', async () => {
+    let onErrorCalled = false
+    const Bypass = defineContextDecorator({
+      key: 'bypass',
+      resolve: () => {
+        throw new Error('original')
+      },
+      onError: () => {
+        onErrorCalled = true
+        return 'recovered'
+      },
+    })
+
+    await expect(runContributor(Bypass)).rejects.toThrow('original')
+    expect(onErrorCalled).toBe(false)
+  })
+
+  it('exposes a fake ExecutionContext with overridable requestId', async () => {
+    let captured: string | undefined
+    const Probe = defineContextDecorator({
+      key: 'probe',
+      resolve: (ctx) => {
+        captured = ctx.requestId
+        return 'ok'
+      },
+    })
+
+    const { ctx } = await runContributor(Probe, { requestId: 'custom-req-42' })
+    expect(captured).toBe('custom-req-42')
+    expect(ctx.requestId).toBe('custom-req-42')
+  })
+})
+
+// ── createTestApp.contributors (#107 Phase 6) ───────────────────────────
+
+describe('createTestApp — contributors', () => {
+  it('forwards global contributors so they reach handlers', async () => {
+    const StartedAt: ContributorRegistration = defineContextDecorator({
+      key: 'requestStartedAt',
+      resolve: () => 12345,
+    }).registration
+
+    @Controller('/probe')
+    class ProbeController {
+      @Get('/')
+      probe(ctx: RequestContext) {
+        return ctx.json({ startedAt: ctx.get('requestStartedAt') })
+      }
+    }
+
+    const TestModule = createTestModule({
+      register: () => {},
+      routes: () => ({ path: '/probe', router: buildRoutes(ProbeController) }),
+    })
+
+    const { expressApp } = await createTestApp({
+      modules: [TestModule],
+      contributors: [StartedAt],
+    })
+
+    const res = await request(expressApp).get('/api/v1/probe')
+    expect(res.body).toEqual({ startedAt: 12345 })
+  })
+
+  it('omitting contributors leaves the route unchanged', async () => {
+    @Controller('/plain')
+    class PlainController {
+      @Get('/')
+      plain(ctx: RequestContext) {
+        return ctx.json({
+          tenant: ctx.get('tenant') ?? null,
+          ok: true,
+        })
+      }
+    }
+
+    const TestModule = createTestModule({
+      register: () => {},
+      routes: () => ({ path: '/plain', router: buildRoutes(PlainController) }),
+    })
+
+    const { expressApp } = await createTestApp({ modules: [TestModule] })
+    const res = await request(expressApp).get('/api/v1/plain')
+    expect(res.body).toEqual({ tenant: null, ok: true })
   })
 })
