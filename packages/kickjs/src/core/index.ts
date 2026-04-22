@@ -170,3 +170,6 @@ export {
   type ContributorPipeline,
   type BuildPipelineOptions,
 } from './contributor-pipeline'
+
+// Phase 2 — sequential async runner with the §20.9 error matrix.
+export { runContributors, type RunContributorsOptions } from './contributor-runner'
