@@ -1,5 +1,5 @@
 import type { labels } from '@/db/schema'
-import type { ParsedQuery } from '@forinda/kickjs-http'
+import type { ParsedQuery } from '@forinda/kickjs'
 
 export type Label = typeof labels.$inferSelect
 export type NewLabel = typeof labels.$inferInsert

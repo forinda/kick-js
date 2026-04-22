@@ -1,4 +1,4 @@
-import { Service, Inject, HttpException } from '@forinda/kickjs-core'
+import { Service, Inject, HttpException } from '@forinda/kickjs'
 import {
   ATTACHMENT_REPOSITORY,
   type IAttachmentRepository,

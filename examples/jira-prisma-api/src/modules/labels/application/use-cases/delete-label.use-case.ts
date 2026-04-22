@@ -1,4 +1,4 @@
-import { Service, Inject } from '@forinda/kickjs-core'
+import { Service, Inject } from '@forinda/kickjs'
 import { LABEL_REPOSITORY, type ILabelRepository } from '../../domain/repositories/label.repository'
 
 @Service()

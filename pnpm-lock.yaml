@@ -142,12 +142,6 @@ importers:
       '@forinda/kickjs-config':
         specifier: workspace:*
         version: link:../../packages/config
-      '@forinda/kickjs-core':
-        specifier: workspace:*
-        version: link:../../packages/core
-      '@forinda/kickjs-http':
-        specifier: workspace:*
-        version: link:../../packages/http
       '@forinda/kickjs-swagger':
         specifier: workspace:*
         version: link:../../packages/swagger
@@ -212,15 +206,9 @@ importers:
       '@forinda/kickjs-config':
         specifier: workspace:*
         version: link:../../packages/config
-      '@forinda/kickjs-core':
-        specifier: workspace:*
-        version: link:../../packages/core
       '@forinda/kickjs-graphql':
         specifier: workspace:*
         version: link:../../packages/graphql
-      '@forinda/kickjs-http':
-        specifier: workspace:*
-        version: link:../../packages/http
       '@forinda/kickjs-swagger':
         specifier: workspace:*
         version: link:../../packages/swagger
@@ -282,9 +270,6 @@ importers:
       '@forinda/kickjs-config':
         specifier: workspace:*
         version: link:../../packages/config
-      '@forinda/kickjs-core':
-        specifier: workspace:*
-        version: link:../../packages/core
       '@forinda/kickjs-cron':
         specifier: workspace:*
         version: link:../../packages/cron
@@ -294,9 +279,6 @@ importers:
       '@forinda/kickjs-drizzle':
         specifier: workspace:*
         version: link:../../packages/drizzle
-      '@forinda/kickjs-http':
-        specifier: workspace:*
-        version: link:../../packages/http
       '@forinda/kickjs-mailer':
         specifier: workspace:*
         version: link:../../packages/mailer
@@ -400,18 +382,12 @@ importers:
       '@forinda/kickjs-config':
         specifier: workspace:*
         version: link:../../packages/config
-      '@forinda/kickjs-core':
-        specifier: workspace:*
-        version: link:../../packages/core
       '@forinda/kickjs-cron':
         specifier: workspace:*
         version: link:../../packages/cron
       '@forinda/kickjs-devtools':
         specifier: workspace:*
         version: link:../../packages/devtools
-      '@forinda/kickjs-http':
-        specifier: workspace:*
-        version: link:../../packages/http
       '@forinda/kickjs-mailer':
         specifier: workspace:*
         version: link:../../packages/mailer
@@ -533,18 +509,12 @@ importers:
       '@forinda/kickjs-config':
         specifier: workspace:*
         version: link:../../packages/config
-      '@forinda/kickjs-core':
-        specifier: workspace:*
-        version: link:../../packages/core
       '@forinda/kickjs-cron':
         specifier: workspace:*
         version: link:../../packages/cron
       '@forinda/kickjs-devtools':
         specifier: workspace:*
         version: link:../../packages/devtools
-      '@forinda/kickjs-http':
-        specifier: workspace:*
-        version: link:../../packages/http
       '@forinda/kickjs-mailer':
         specifier: workspace:*
         version: link:../../packages/mailer
@@ -645,18 +615,12 @@ importers:
       '@forinda/kickjs-config':
         specifier: workspace:*
         version: link:../../packages/config
-      '@forinda/kickjs-core':
-        specifier: workspace:*
-        version: link:../../packages/core
       '@forinda/kickjs-cron':
         specifier: workspace:*
         version: link:../../packages/cron
       '@forinda/kickjs-devtools':
         specifier: workspace:*
         version: link:../../packages/devtools
-      '@forinda/kickjs-http':
-        specifier: workspace:*
-        version: link:../../packages/http
       '@forinda/kickjs-mailer':
         specifier: workspace:*
         version: link:../../packages/mailer
@@ -769,12 +733,6 @@ importers:
       '@forinda/kickjs-config':
         specifier: workspace:*
         version: link:../../packages/config
-      '@forinda/kickjs-core':
-        specifier: workspace:*
-        version: link:../../packages/core
-      '@forinda/kickjs-http':
-        specifier: workspace:*
-        version: link:../../packages/http
       '@forinda/kickjs-swagger':
         specifier: workspace:*
         version: link:../../packages/swagger
@@ -845,12 +803,6 @@ importers:
       '@forinda/kickjs-config':
         specifier: workspace:*
         version: link:../../packages/config
-      '@forinda/kickjs-core':
-        specifier: workspace:*
-        version: link:../../packages/core
-      '@forinda/kickjs-http':
-        specifier: workspace:*
-        version: link:../../packages/http
       '@forinda/kickjs-otel':
         specifier: workspace:*
         version: link:../../packages/otel
@@ -924,12 +876,6 @@ importers:
       '@forinda/kickjs-config':
         specifier: workspace:*
         version: link:../../packages/config
-      '@forinda/kickjs-core':
-        specifier: workspace:*
-        version: link:../../packages/core
-      '@forinda/kickjs-http':
-        specifier: workspace:*
-        version: link:../../packages/http
       express:
         specifier: ^5.1.0
         version: 5.2.1
@@ -1174,12 +1120,6 @@ importers:
       '@forinda/kickjs-config':
         specifier: workspace:*
         version: link:../../packages/config
-      '@forinda/kickjs-core':
-        specifier: workspace:*
-        version: link:../../packages/core
-      '@forinda/kickjs-http':
-        specifier: workspace:*
-        version: link:../../packages/http
       '@forinda/kickjs-otel':
         specifier: workspace:*
         version: link:../../packages/otel

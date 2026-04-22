@@ -1,4 +1,4 @@
-import { Service, Inject, HttpException, Logger } from '@forinda/kickjs-core';
+import { Service, Inject, HttpException, Logger } from '@forinda/kickjs';
 import { QUEUE_MANAGER, type QueueService } from '@forinda/kickjs-queue';
 import { TOKENS } from '@/shared/constants/tokens';
 import { ErrorCode } from '@/shared/constants/error-codes';

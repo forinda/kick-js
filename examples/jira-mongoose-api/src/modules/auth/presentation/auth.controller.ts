@@ -1,6 +1,6 @@
-import { Controller, Get, Post, Middleware, Autowired } from '@forinda/kickjs-core';
+import { Controller, Get, Post, Middleware, Autowired } from '@forinda/kickjs';
 import { Public } from '@forinda/kickjs-auth';
-import type { RequestContext } from '@forinda/kickjs-http';
+import type { RequestContext } from '@forinda/kickjs';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@forinda/kickjs-swagger';
 import { registerSchema } from '../application/dtos/register.dto';
 import { loginSchema } from '../application/dtos/login.dto';

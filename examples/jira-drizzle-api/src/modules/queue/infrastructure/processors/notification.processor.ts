@@ -1,4 +1,4 @@
-import { Service, Autowired, Logger } from '@forinda/kickjs-core'
+import { Service, Autowired, Logger } from '@forinda/kickjs'
 import { Job, Process } from '@forinda/kickjs-queue'
 import type { Job as BullMQJob } from 'bullmq'
 import { DrizzleNotificationRepository } from '@/modules/notifications/infrastructure/repositories/drizzle-notification.repository'

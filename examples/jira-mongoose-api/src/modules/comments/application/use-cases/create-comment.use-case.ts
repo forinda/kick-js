@@ -1,4 +1,4 @@
-import { Service, Inject, Logger } from '@forinda/kickjs-core';
+import { Service, Inject, Logger } from '@forinda/kickjs';
 import { QUEUE_MANAGER, type QueueService } from '@forinda/kickjs-queue';
 import { TOKENS } from '@/shared/constants/tokens';
 import type { ICommentRepository } from '../../domain/repositories/comment.repository';

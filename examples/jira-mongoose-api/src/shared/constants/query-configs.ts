@@ -4,7 +4,7 @@
  * Centralized so Swagger docs and controllers stay in sync.
  */
 
-import type { ApiQueryParamsConfig } from "@forinda/kickjs-core";
+import type { ApiQueryParamsConfig } from "@forinda/kickjs";
 
 export const TASK_QUERY_CONFIG: ApiQueryParamsConfig = {
   filterable: ['status', 'priority', 'assigneeId', 'labelId', 'projectId'],

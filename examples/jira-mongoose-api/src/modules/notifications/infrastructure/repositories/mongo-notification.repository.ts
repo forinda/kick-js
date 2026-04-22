@@ -1,4 +1,4 @@
-import { Repository } from '@forinda/kickjs-core';
+import { Repository } from '@forinda/kickjs';
 import type { INotificationRepository } from '../../domain/repositories/notification.repository';
 import type { NotificationEntity } from '../../domain/entities/notification.entity';
 import { buildMongoFilter, buildMongoSort } from '@/shared/infrastructure/database/query-helpers';

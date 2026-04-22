@@ -1,6 +1,6 @@
-import { Service, Inject } from '@forinda/kickjs-core'
+import { Service, Inject } from '@forinda/kickjs'
 import { TOKENS } from '@/shared/constants/tokens'
-import type { ParsedQuery } from '@forinda/kickjs-http'
+import type { ParsedQuery } from '@forinda/kickjs'
 import type { ITaskRepository } from '../../domain/repositories/task.repository'
 
 @Service()

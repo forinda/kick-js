@@ -1,4 +1,4 @@
-import { Service, Inject, HttpException } from '@forinda/kickjs-core'
+import { Service, Inject, HttpException } from '@forinda/kickjs'
 import { TOKENS } from '@/shared/constants/tokens'
 import type { IMessageRepository } from '../repositories/message.repository'
 

@@ -1,5 +1,5 @@
 import type { attachments } from '@/db/schema'
-import type { ParsedQuery } from '@forinda/kickjs-http'
+import type { ParsedQuery } from '@forinda/kickjs'
 
 export type Attachment = typeof attachments.$inferSelect
 export type NewAttachment = typeof attachments.$inferInsert

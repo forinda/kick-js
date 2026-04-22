@@ -1,7 +1,7 @@
-import { Repository, Inject } from '@forinda/kickjs-core'
+import { Repository, Inject } from '@forinda/kickjs'
 import { PRISMA_CLIENT } from '@forinda/kickjs-prisma'
 import type { PrismaClient } from '@prisma/client'
-import type { ParsedQuery } from '@forinda/kickjs-http'
+import type { ParsedQuery } from '@forinda/kickjs'
 import type { IAttachmentRepository } from '../../domain/repositories/attachment.repository'
 
 import { queryAdapter } from '@/shared/infrastructure/query-adapter'

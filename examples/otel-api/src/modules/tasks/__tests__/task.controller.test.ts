@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { Container } from '@forinda/kickjs-core'
+import { Container } from '@forinda/kickjs'
 
 describe('TaskController', () => {
   beforeEach(() => {

@@ -11,7 +11,7 @@
 import type { TaskResponseDTO } from '../../application/dtos/task-response.dto'
 import type { CreateTaskDTO } from '../../application/dtos/create-task.dto'
 import type { UpdateTaskDTO } from '../../application/dtos/update-task.dto'
-import type { ParsedQuery } from '@forinda/kickjs-http'
+import type { ParsedQuery } from '@forinda/kickjs'
 
 export interface ITaskRepository {
   findById(id: string): Promise<TaskResponseDTO | null>

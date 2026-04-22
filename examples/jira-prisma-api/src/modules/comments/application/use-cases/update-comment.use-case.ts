@@ -1,4 +1,4 @@
-import { Service, Inject } from '@forinda/kickjs-core'
+import { Service, Inject } from '@forinda/kickjs'
 import {
   COMMENT_REPOSITORY,
   type ICommentRepository,

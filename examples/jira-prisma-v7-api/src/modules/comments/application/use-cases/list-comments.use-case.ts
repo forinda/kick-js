@@ -1,9 +1,9 @@
-import { Service, Inject } from '@forinda/kickjs-core'
+import { Service, Inject } from '@forinda/kickjs'
 import {
   COMMENT_REPOSITORY,
   type ICommentRepository,
 } from '../../domain/repositories/comment.repository'
-import type { ParsedQuery } from '@forinda/kickjs-http'
+import type { ParsedQuery } from '@forinda/kickjs'
 
 @Service()
 export class ListCommentsUseCase {

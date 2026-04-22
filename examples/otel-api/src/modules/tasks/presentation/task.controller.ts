@@ -1,5 +1,5 @@
-import { Controller, Get, Post, Put, Delete, Autowired, ApiQueryParams } from '@forinda/kickjs-core'
-import type { RequestContext } from '@forinda/kickjs-http'
+import { Controller, Get, Post, Put, Delete, Autowired, ApiQueryParams } from '@forinda/kickjs'
+import type { RequestContext } from '@forinda/kickjs'
 import { ApiTags } from '@forinda/kickjs-swagger'
 import { CreateTaskUseCase } from '../application/use-cases/create-task.use-case'
 import { GetTaskUseCase } from '../application/use-cases/get-task.use-case'

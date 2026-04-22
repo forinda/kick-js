@@ -1,4 +1,4 @@
-import type { QueryParamsConfig } from '@forinda/kickjs-core'
+import type { QueryParamsConfig } from '@forinda/kickjs'
 
 export const TASK_QUERY_CONFIG: QueryParamsConfig = {
   filterable: ['status', 'priority', 'projectId', 'reporterId'],

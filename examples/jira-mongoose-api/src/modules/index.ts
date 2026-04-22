@@ -1,4 +1,4 @@
-import type { AppModuleClass } from '@forinda/kickjs-core'
+import type { AppModuleClass } from '@forinda/kickjs'
 import { AuthModule } from './auth/auth.module'
 import { UsersModule } from './users/users.module'
 import { WorkspacesModule } from './workspaces/workspaces.module'

@@ -1,4 +1,4 @@
-import type { ParsedQuery } from '@forinda/kickjs-http'
+import type { ParsedQuery } from '@forinda/kickjs'
 import type { users } from '@/db/schema'
 
 export type User = typeof users.$inferSelect

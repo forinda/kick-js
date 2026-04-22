@@ -1,5 +1,5 @@
-import type { RequestContext } from '@forinda/kickjs-http';
-import { HttpException } from '@forinda/kickjs-core';
+import type { RequestContext } from '@forinda/kickjs';
+import { HttpException } from '@forinda/kickjs';
 
 export interface AuthUser {
   id: string;
