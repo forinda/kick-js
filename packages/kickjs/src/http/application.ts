@@ -16,7 +16,7 @@ import {
 import { getClassMeta } from '../core/metadata'
 import { requestId } from './middleware/request-id'
 import { notFoundHandler, errorHandler } from './middleware/error-handler'
-import { requestScopeMiddleware, isRequestScopeMiddleware } from './middleware/request-scope'
+import { requestScopeMiddleware } from './middleware/request-scope'
 import { requestStore, getRequestStore } from './request-store'
 
 const log = createLogger('Application')
@@ -64,25 +64,6 @@ export interface ApplicationOptions {
 
   /** Plugins that bundle modules, adapters, middleware, and DI bindings */
   plugins?: KickPlugin[]
-
-  /**
-   * Backing store strategy for {@link RequestContext} `set/get` and the
-   * Context Contributor pipeline (#107).
-   *
-   * - `'auto'` (default) — Application mounts {@link requestScopeMiddleware}
-   *   automatically before any user middleware. If the user-supplied
-   *   `middleware` list already includes `requestScopeMiddleware()`,
-   *   detection skips the auto-mount so adopters can control its position.
-   * - `'manual'` — Application never mounts the wrapper. The caller is
-   *   responsible for ensuring an `AsyncLocalStorage` frame surrounds
-   *   each request, otherwise contributors won't run and `ctx.set/get`
-   *   falls back to the deprecated `req.__ctxMeta` path.
-   *
-   * Use `'manual'` only when wrapping requests in your own ALS frame
-   * (rare — multi-tenant adapters used to do this; post-Phase 3 they
-   * share the framework's frame instead).
-   */
-  contextStore?: 'auto' | 'manual'
 
   /** Express `trust proxy` setting */
   trustProxy?: boolean | number | string | ((ip: string, hopIndex: number) => boolean)
@@ -185,9 +166,9 @@ export class Application {
   private app: Express
   private container: Container
   private httpServer: http.Server | null = null
-  private readonly adapters: AppAdapter[]
+  private adapters: AppAdapter[]
 
-  private readonly plugins: KickPlugin[]
+  private plugins: KickPlugin[]
 
   /** Number of HTTP requests currently being processed */
   private _inFlightRequests = 0
@@ -327,11 +308,7 @@ export class Application {
     this.mountHealthEndpoints()
 
     // ── 2c. Request scope (AsyncLocalStorage) ────────────────────────
-    // Auto-mounted unless the user opted out (`contextStore: 'manual'`)
-    // or already included one in their middleware list.
-    if (this.shouldAutoMountRequestScope()) {
-      this.app.use(requestScopeMiddleware())
-    }
+    this.app.use(requestScopeMiddleware())
 
     // ── 3. Adapter middleware: beforeGlobal ───────────────────────────
     this.mountMiddlewareList(adapterMw.beforeGlobal)
@@ -676,30 +653,6 @@ export class Application {
   }
 
   // ── Internal helpers ────────────────────────────────────────────────
-
-  /**
-   * Decide whether {@link Application} should auto-mount the
-   * {@link requestScopeMiddleware} ALS wrapper.
-   *
-   * Returns `false` when:
-   * - `contextStore: 'manual'` was set (caller manages ALS frames), or
-   * - the user-supplied `middleware` list already includes a
-   *   `requestScopeMiddleware()` (detected via the symbol marker stamped
-   *   in `middleware/request-scope.ts`).
-   *
-   * Otherwise `true` — preserves the historical default of "always wrap
-   * requests in an ALS frame" so existing apps see no behavior change.
-   */
-  private shouldAutoMountRequestScope(): boolean {
-    if (this.options.contextStore === 'manual') return false
-
-    const userEntries = this.options.middleware ?? []
-    for (const entry of userEntries) {
-      const handler = typeof entry === 'function' ? entry : entry.handler
-      if (isRequestScopeMiddleware(handler)) return false
-    }
-    return true
-  }
 
   private collectAdapterMiddleware() {
     const result = {
