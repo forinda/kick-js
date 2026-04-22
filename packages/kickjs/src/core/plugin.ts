@@ -2,6 +2,7 @@ import type { Container } from './container'
 import type { AppAdapter } from './adapter'
 import type { AppModuleClass } from './app-module'
 import type { ContributorRegistration } from './context-decorator'
+import type { KickJsPluginName } from './augmentation'
 
 /**
  * Plugin interface for extending KickJS applications.
@@ -77,7 +78,7 @@ export interface KickPlugin {
    * }
    * ```
    */
-  dependsOn?: readonly string[]
+  dependsOn?: readonly KickJsPluginName[]
 
   /**
    * Register DI bindings before modules load.

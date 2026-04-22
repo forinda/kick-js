@@ -3480,6 +3480,17 @@ Two payoffs:
 
 Implementation slots cleanly into the existing `kick typegen` pipeline (the same machinery that populates `KickJsRegistry` for DI tokens). Tracked as part of Phase B §21.3.3 (standardized augmentation registry + typegen integration) — the runtime mechanism (this section) ships first; the typegen layer rides on top once the runtime contract is stable.
 
+##### Implementation status
+
+Shipped under `@forinda/kickjs-cli`'s typegen pipeline + the `@forinda/kickjs` core:
+
+- `KickJsPluginRegistry` interface lives in `packages/kickjs/src/core/augmentation.ts` — empty by default, augmented by `kick typegen`.
+- `KickJsPluginName` type alias degrades to `string` when the registry is empty so fresh projects (no typegen run yet) still compile.
+- `KickPlugin.dependsOn` and `AppAdapter.dependsOn` are typed as `readonly KickJsPluginName[]` instead of `readonly string[]`, narrowing autocompletion + flagging typos at compile time.
+- `kick typegen` scanner discovers `defineAdapter({ name })`, `definePlugin({ name })`, and `class X implements AppAdapter { name = '…' }` declarations across `src/`.
+- Generator emits `.kickjs/types/plugins.d.ts` with the discovered names as keys + a `'plugin' | 'adapter'` value tag, alongside the existing `registry.d.ts` / `routes.ts` / `modules.d.ts` outputs.
+- `kick typegen` log line gained a `, N plugins/adapters` segment when entries are non-empty.
+
 #### 21.2.2 Factory config pattern — bare call + `.scoped()`
 
 **Problem.** Every config-driven plugin reinvents instantiation. `new TenantAdapter({ strategy: 'subdomain', required: true })` vs `new AuthAdapter({ strategies: [...] })` vs `new MailerAdapter({ provider: ... })`. Multi-instance is ad-hoc — registering two BullMQ queues with different configs requires instantiating the adapter twice or DI factory plumbing.
@@ -3673,6 +3684,16 @@ defineAugmentation('FeatureFlags', {
 `kick typegen` reads these and generates a single `.kickjs/types/augmentations.d.ts` listing every augmentation surface the project's plugins offer. Adopters get one file to look at to understand "what can I augment?".
 
 **Impact.** Lowers the cliff for first-time plugin adopters. Today they have to read each plugin's README to learn the augmentation pattern; tomorrow they run `kick typegen --augmentations` and see the menu.
+
+##### Implementation status
+
+Shipped together with §21.2.1's typegen layer:
+
+- `defineAugmentation(name, meta?)` exported from `@forinda/kickjs` (`packages/kickjs/src/core/augmentation.ts`). Runtime no-op — exists purely as a marker the scanner picks up.
+- `kick typegen` scanner discovers `defineAugmentation('Name', { description, example })` calls, including the literal-only metadata fields.
+- Generator emits `.kickjs/types/augmentations.d.ts` — a documentation-only file with one block per discovered augmentation, including description, example snippet, and `@see` link to the source. Empty calls render an instructional placeholder explaining the pattern.
+- `kick typegen` log line gained a `, N augmentations` segment when entries are non-empty.
+- The dedicated `kick typegen --augmentations` flag from the original spec is unnecessary because the catalogue is generated on every run alongside the other artifacts; adopters open the file directly.
 
 #### 21.3.4 `defineAdapter()` — same factory ergonomics for adapters
 

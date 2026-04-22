@@ -331,6 +331,56 @@ TypeScript silently degrades top-level `import('...')` calls inside `.d.ts` file
 
 This is why your tsconfig include needs to match both extensions.
 
+## Plugin & adapter registry
+
+`kick typegen` walks your `src/` for `defineAdapter({ name: '...' })`, `definePlugin({ name: '...' })`, and `class X implements AppAdapter` declarations and writes the discovered names into `.kickjs/types/plugins.d.ts` as a `KickJsPluginRegistry` augmentation:
+
+```ts
+// .kickjs/types/plugins.d.ts (generated)
+declare module '@forinda/kickjs' {
+  interface KickJsPluginRegistry {
+    'TenantAdapter': 'adapter'
+    'AuthAdapter': 'adapter'
+    'FlagsPlugin': 'plugin'
+  }
+}
+```
+
+Once the registry is populated, the `dependsOn` field on plugins and adapters narrows from `readonly string[]` to `readonly (keyof KickJsPluginRegistry)[]`:
+
+```ts
+export const AuthAdapter = defineAdapter({
+  name: 'AuthAdapter',
+  dependsOn: ['TenantAdapter'],   // ✓ — autocompletes from the registry
+  // dependsOn: ['Tennant'],      // ✗ — TS error: not assignable to keyof KickJsPluginRegistry
+  build: (config) => ({ /* ... */ }),
+})
+```
+
+Two payoffs:
+
+- **Typo-killing.** Misspelled `dependsOn` references become compile errors instead of boot-time `MissingMountDepError`.
+- **Discoverability.** IDE autocomplete inside `dependsOn: [...]` lists every plugin/adapter name in scope.
+
+When the registry is empty (fresh project, never ran `kick typegen`), `keyof KickJsPluginRegistry` resolves to `never` and the runtime falls back to `string` so existing code keeps compiling. Run `kick typegen` once and the narrowing kicks in.
+
+## Augmentation catalogue
+
+Plugins advertise augmentable interfaces by calling `defineAugmentation('Name', meta)` — a runtime no-op that exists purely for `kick typegen` to discover:
+
+```ts
+import { defineAugmentation } from '@forinda/kickjs'
+
+export interface FeatureFlags {} // augmentable
+
+defineAugmentation('FeatureFlags', {
+  description: 'Flags consumed by FlagsPlugin',
+  example: '{ beta: boolean; rolloutPercentage: number }',
+})
+```
+
+Each call surfaces in `.kickjs/types/augmentations.d.ts` as a documentation-only block with the description, an example snippet, and a `@see` link back to the source file. Adopters jumping into one file see every augmentable interface their plugins offer rather than grepping each plugin's README.
+
 ## Limitations
 
 These are known and deliberate for the current release; some will be lifted in follow-up work:

@@ -199,3 +199,12 @@ export {
   type AdapterAsyncOptions,
   type AdapterFactory,
 } from './define-adapter'
+
+// Augmentation registry (architecture.md §21.3.3) and typegen-narrowed
+// `dependsOn` (architecture.md §21.2.1).
+export {
+  defineAugmentation,
+  type KickJsPluginRegistry,
+  type KickJsPluginName,
+  type AugmentationMeta,
+} from './augmentation'

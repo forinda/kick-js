@@ -33,9 +33,11 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import type {
   ClassCollision,
+  DiscoveredAugmentation,
   DiscoveredClass,
   DiscoveredEnv,
   DiscoveredInject,
+  DiscoveredPluginOrAdapter,
   DiscoveredRoute,
   DiscoveredToken,
 } from './scanner'
@@ -171,12 +173,14 @@ function renderIndex(includeEnv: boolean): string {
 export type { ServiceToken } from './services'
 export type { ModuleToken } from './modules'
 
-// The registry, routes, and env augmentations are loaded as side-effects —
-// importing this file (or having it on tsconfig include) is enough for
-// \`container.resolve()\`, \`Ctx<KickRoutes.UserController['getUser']>\`,
-// and \`@Value('PORT')\` to resolve.
+// The registry, routes, plugins, and env augmentations are loaded as
+// side-effects — importing this file (or having it on tsconfig include)
+// is enough for \`container.resolve()\`, \`Ctx<KickRoutes.UserController['getUser']>\`,
+// \`dependsOn: ['TenantAdapter']\`, and \`@Value('PORT')\` to resolve.
 import './registry'
 import './routes'
+import './plugins'
+import './augmentations'
 ${envImport}`
 }
 
@@ -463,6 +467,104 @@ export {}
 `
 }
 
+/**
+ * Render the `KickJsPluginRegistry` augmentation. Each entry maps the
+ * literal `name` field of a plugin/adapter to a marker type (the
+ * registry value isn't load-bearing at runtime — `dependsOn` only cares
+ * about `keyof`, so any non-`never` type works). We emit `'plugin'` /
+ * `'adapter'` strings so DevTools can later read the registry to tell
+ * the kinds apart without a second source of truth.
+ *
+ * When the project has no discoverable plugins/adapters, the augmentation
+ * is intentionally empty rather than skipped so the `keyof` constraint
+ * resolves to `never` (which is harmless — `dependsOn: []` still works).
+ */
+function renderPlugins(items: DiscoveredPluginOrAdapter[]): string {
+  // Dedupe by name — two declarations with the same name are a runtime
+  // boot-time error in `mount-sort.ts`; we surface the conflict via a
+  // single registry entry rather than a duplicate-key TS error.
+  const byName = new Map<string, DiscoveredPluginOrAdapter>()
+  for (const item of items) {
+    if (!byName.has(item.name)) byName.set(item.name, item)
+  }
+
+  const sorted = [...byName.values()].sort((a, b) => a.name.localeCompare(b.name))
+  const entries = sorted.map((item) => `    '${item.name}': '${item.kind}'`).join('\n')
+
+  const body = entries
+    ? entries
+    : '    // (no plugins/adapters discovered yet — `defineAdapter`/`definePlugin` calls feed this)'
+
+  return `${HEADER}
+declare module '@forinda/kickjs' {
+  /**
+   * Map of every plugin/adapter \`name\` discovered in the project. The
+   * value type is the kind tag (\`'plugin'\` or \`'adapter'\`); the
+   * \`keyof\` of this interface narrows \`dependsOn\` so misspelled deps
+   * become compile errors instead of boot-time \`MissingMountDepError\`.
+   */
+  interface KickJsPluginRegistry {
+${body}
+  }
+}
+
+export {}
+`
+}
+
+/**
+ * Render the augmentation manifest — one block per `defineAugmentation`
+ * call discovered in the project. The output is a `.d.ts` file that
+ * does nothing at runtime but acts as in-IDE documentation: adopters
+ * jumping into it see every interface their plugins offer for
+ * augmentation, alongside any `description` / `example` the plugin
+ * authors provided.
+ */
+function renderAugmentations(items: DiscoveredAugmentation[]): string {
+  if (items.length === 0) {
+    return `${HEADER}
+// No augmentations discovered.
+//
+// Plugins advertise augmentable interfaces via:
+//
+//   import { defineAugmentation } from '@forinda/kickjs'
+//   defineAugmentation('FeatureFlags', {
+//     description: 'Feature flag shape consumed by FlagsPlugin',
+//     example: '{ beta: boolean; rolloutPercentage: number }',
+//   })
+//
+// See \`docs/guide/typegen.md#augmentations\` for the full pattern.
+export {}
+`
+  }
+
+  // Dedupe by name — multiple plugins shouldn't claim the same name,
+  // but if they do we keep the first.
+  const byName = new Map<string, DiscoveredAugmentation>()
+  for (const item of items) {
+    if (!byName.has(item.name)) byName.set(item.name, item)
+  }
+
+  const blocks: string[] = []
+  for (const item of [...byName.values()].sort((a, b) => a.name.localeCompare(b.name))) {
+    const docLines: string[] = []
+    if (item.description) docLines.push(` * ${item.description}`)
+    if (item.example) docLines.push(` * @example`, ` * \`\`\`ts`, ` * ${item.example}`, ` * \`\`\``)
+    docLines.push(` * @see ${item.relativePath}`)
+    blocks.push(
+      ['/**', ...docLines, ' */', `export interface ${item.name}Augmentation {}`].join('\n'),
+    )
+  }
+
+  return `${HEADER}
+// Catalogue of augmentable interfaces in this project. The interfaces
+// below are documentation only — augment the source-of-truth interfaces
+// in your own \`d.ts\` files (the framework declares the actual types).
+
+${blocks.join('\n\n')}
+`
+}
+
 /** Result of a typegen run — useful for logging and tests */
 export interface GenerateResult {
   /** Number of registry entries written */
@@ -473,6 +575,10 @@ export interface GenerateResult {
   moduleTokens: number
   /** Number of route entries written into KickRoutes */
   routeEntries: number
+  /** Number of plugin/adapter names registered into KickJsPluginRegistry */
+  pluginEntries: number
+  /** Number of `defineAugmentation` calls catalogued */
+  augmentationEntries: number
   /** Whether a typed env augmentation was emitted */
   envWritten: boolean
   /** Files that were written */
@@ -495,6 +601,10 @@ export interface GenerateOptions {
   collisions?: ClassCollision[]
   /** Discovered env schema file (or null if none) */
   env?: DiscoveredEnv | null
+  /** Plugins/adapters discovered via `defineAdapter`/`definePlugin`/`implements AppAdapter` */
+  pluginsAndAdapters?: DiscoveredPluginOrAdapter[]
+  /** `defineAugmentation` calls discovered in the project */
+  augmentations?: DiscoveredAugmentation[]
   /** Output directory (typically `<cwd>/.kickjs/types`) */
   outDir: string
   /**
@@ -524,6 +634,8 @@ export async function generateTypes(opts: GenerateOptions): Promise<GenerateResu
     injects = [],
     collisions = [],
     env = null,
+    pluginsAndAdapters = [],
+    augmentations = [],
     outDir,
     allowDuplicates = false,
     schemaValidator = false,
@@ -547,6 +659,8 @@ export async function generateTypes(opts: GenerateOptions): Promise<GenerateResu
   const routesFile = join(outDir, 'routes.ts')
   // env.ts (same .ts vs .d.ts story as routes.ts)
   const envFile = join(outDir, 'env.ts')
+  const pluginsFile = join(outDir, 'plugins.d.ts')
+  const augmentationsFile = join(outDir, 'augmentations.d.ts')
   const indexFile = join(outDir, 'index.d.ts')
 
   const collidingNames = new Set(collisions.map((c) => c.className))
@@ -575,15 +689,27 @@ export async function generateTypes(opts: GenerateOptions): Promise<GenerateResu
   )
   const routesContent = renderRoutes(routes, routesFile, schemaValidator)
   const envContent = renderEnv(env, envFile)
+  const pluginsContent = renderPlugins(pluginsAndAdapters)
+  const augmentationsContent = renderAugmentations(augmentations)
   const indexContent = renderIndex(envContent !== null)
 
   await writeFile(registryFile, registryContent, 'utf-8')
   await writeFile(servicesFile, servicesContent, 'utf-8')
   await writeFile(modulesFile, modulesContent, 'utf-8')
   await writeFile(routesFile, routesContent, 'utf-8')
+  await writeFile(pluginsFile, pluginsContent, 'utf-8')
+  await writeFile(augmentationsFile, augmentationsContent, 'utf-8')
   await writeFile(indexFile, indexContent, 'utf-8')
 
-  const written = [registryFile, servicesFile, modulesFile, routesFile, indexFile]
+  const written = [
+    registryFile,
+    servicesFile,
+    modulesFile,
+    routesFile,
+    pluginsFile,
+    augmentationsFile,
+    indexFile,
+  ]
   if (envContent) {
     await writeFile(envFile, envContent, 'utf-8')
     written.push(envFile)
@@ -593,11 +719,19 @@ export async function generateTypes(opts: GenerateOptions): Promise<GenerateResu
   const kickjsRoot = dirname(outDir)
   await writeFile(join(kickjsRoot, '.gitignore'), '# Auto-generated by kick typegen\n*\n', 'utf-8')
 
+  // Dedupe the plugin/adapter count — two declarations with the same
+  // name collapse to one registry entry (mount-sort still throws at
+  // boot, but the typegen layer reports the unique surface).
+  const uniquePluginNames = new Set(pluginsAndAdapters.map((p) => p.name)).size
+  const uniqueAugmentations = new Set(augmentations.map((a) => a.name)).size
+
   return {
     registryEntries: classTokens.length,
     serviceTokens: new Set(allServices).size,
     moduleTokens: modules.length,
     routeEntries: routes.length,
+    pluginEntries: uniquePluginNames,
+    augmentationEntries: uniqueAugmentations,
     envWritten: envContent !== null,
     written,
     resolvedCollisions: collisions.length,

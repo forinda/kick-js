@@ -3,6 +3,7 @@ import type { Express } from 'express'
 import type { Container } from './container'
 import type { ContributorRegistration } from './context-decorator'
 import type { MaybePromise, Constructor } from './interfaces'
+import type { KickJsPluginName } from './augmentation'
 
 /**
  * Where in the middleware pipeline an adapter's middleware should be inserted.
@@ -105,7 +106,7 @@ export interface AppAdapter {
    * }
    * ```
    */
-  dependsOn?: readonly string[]
+  dependsOn?: readonly KickJsPluginName[]
 
   /**
    * Return middleware entries to be inserted into the pipeline.
