@@ -58,10 +58,9 @@ export class ContributorCycleError extends Error {
 /**
  * Two contributors at the same precedence level both produce the same key
  * for the same route. Precedence resolution (method > class > module >
- * adapter > global, per architecture.md §20.4) silently drops
- * lower-precedence duplicates; this error fires only when ties occur
- * within a single level — e.g., two method-level decorators declaring
- * `key: 'tenant'`.
+ * global, per architecture.md §20.4) silently drops lower-precedence
+ * duplicates; this error fires only when ties occur within a single level
+ * — e.g., two method-level decorators declaring `key: 'tenant'`.
  *
  * `sources` is best-effort identifying labels for each conflicting
  * registration (typically the decorator's call site or registering
