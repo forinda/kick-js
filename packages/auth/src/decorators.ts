@@ -10,12 +10,28 @@ import {
 } from './types'
 
 /**
+ * Detect `any` so the {@link Role} fallback fires correctly. The base
+ * {@link AuthUser} interface has `[key: string]: any`, so an unaugmented
+ * `AuthUser['roles']` resolves to `any` — and `any` extends every
+ * conditional branch, which would make `Role = any` and silently weaken
+ * `@Roles(...)` to accept non-strings. The `0 extends (1 & T)` pivot is
+ * the canonical TS detection: only `T = any` makes the intersection
+ * collapse to `1 & any = any`, which `0` extends.
+ */
+type IsAny<T> = 0 extends 1 & T ? true : false
+
+/**
  * Resolves to the element type of {@link AuthUser}'s `roles` array when the
  * app has augmented `AuthUser` to a typed shape (e.g. `roles: ('admin' |
  * 'editor')[]`). Falls back to `string` for unaugmented apps so existing
  * `@Roles('admin', 'editor')` calls continue to typecheck unchanged.
  */
-type Role = AuthUser['roles'] extends readonly (infer T)[] ? T : string
+type Role =
+  IsAny<AuthUser['roles']> extends true
+    ? string
+    : NonNullable<AuthUser['roles']> extends readonly (infer T extends string)[]
+      ? T
+      : string
 
 /**
  * Set of resource keys declared in {@link PolicyRegistry}. Falls back to
