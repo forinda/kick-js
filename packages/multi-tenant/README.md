@@ -14,7 +14,7 @@ pnpm add @forinda/kickjs-multi-tenant
 
 ## Features
 
-- `TenantAdapter` — lifecycle adapter that resolves tenant from requests
+- `TenantAdapter` — `defineAdapter`-built factory that resolves tenant from requests; supports `.scoped()` for sharded/multi-instance setups
 - `TENANT_CONTEXT` token for injecting tenant info via DI (request-scoped via AsyncLocalStorage)
 - `getCurrentTenant()` — functional helper for use outside DI
 - Pluggable resolution strategies: header, subdomain, path, query, or custom
@@ -31,7 +31,7 @@ import { Inject, Service } from '@forinda/kickjs'
 bootstrap({
   modules,
   adapters: [
-    new TenantAdapter({
+    TenantAdapter({
       strategy: 'header',
       headerName: 'X-Tenant-ID',
     }),
@@ -47,6 +47,17 @@ class DataService {
     return this.repo.findByTenant(this.tenant.id)
   }
 }
+```
+
+### Multi-instance with `.scoped()`
+
+For sharded tenants or independent tenant pipelines, use `TenantAdapter.scoped(scopeName, config)` to create an adapter instance with a namespaced name (`TenantAdapter:<scope>`) so `dependsOn` lookups stay unambiguous:
+
+```typescript
+adapters: [
+  TenantAdapter.scoped('eu', { strategy: 'header', headerName: 'x-eu-tenant' }),
+  TenantAdapter.scoped('us', { strategy: 'header', headerName: 'x-us-tenant' }),
+]
 ```
 
 ## Documentation
