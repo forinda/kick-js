@@ -67,7 +67,7 @@ export const app = await bootstrap({
   modules,
   middleware: [cors(), helmet(), express.json()],
   adapters: [
-    new SwaggerAdapter({ info: { title: 'My API', version: '1.0.0' } }),
+    SwaggerAdapter({ info: { title: 'My API', version: '1.0.0' } }),
   ],
 })
 ```

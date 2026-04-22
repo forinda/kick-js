@@ -169,7 +169,7 @@ import { SwaggerAdapter } from '@forinda/kickjs-swagger'
 export const app = await bootstrap({
   modules,
   adapters: [
-    new SwaggerAdapter({
+    SwaggerAdapter({
       info: { title: 'My API', version: '1.0.0' },
     }),
   ],

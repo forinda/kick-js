@@ -59,7 +59,7 @@ interface TenantAdapterOptions {
 Reads the tenant ID from a request header.
 
 ```ts
-new TenantAdapter({ strategy: 'header', header: 'x-tenant-id' })
+TenantAdapter({ strategy: 'header', header: 'x-tenant-id' })
 // Request: GET /users  -H "x-tenant-id: acme"
 // Tenant ID: "acme"
 ```
@@ -69,7 +69,7 @@ new TenantAdapter({ strategy: 'header', header: 'x-tenant-id' })
 Extracts the tenant ID from the first subdomain.
 
 ```ts
-new TenantAdapter({ strategy: 'subdomain' })
+TenantAdapter({ strategy: 'subdomain' })
 // Request: GET https://acme.example.com/users
 // Tenant ID: "acme"
 ```
@@ -79,7 +79,7 @@ new TenantAdapter({ strategy: 'subdomain' })
 Extracts the tenant ID from the first URL path segment.
 
 ```ts
-new TenantAdapter({ strategy: 'path' })
+TenantAdapter({ strategy: 'path' })
 // Request: GET /acme/users
 // Tenant ID: "acme"
 ```
@@ -89,7 +89,7 @@ new TenantAdapter({ strategy: 'path' })
 Reads the tenant ID from a query parameter.
 
 ```ts
-new TenantAdapter({ strategy: 'query', queryParam: 'tenant' })
+TenantAdapter({ strategy: 'query', queryParam: 'tenant' })
 // Request: GET /users?tenant=acme
 // Tenant ID: "acme"
 ```
@@ -99,7 +99,7 @@ new TenantAdapter({ strategy: 'query', queryParam: 'tenant' })
 Provide a function for full control over tenant resolution.
 
 ```ts
-new TenantAdapter({
+TenantAdapter({
   strategy: (req: Request) => {
     // Resolve from JWT, database lookup, etc.
     const token = req.headers.authorization?.split(' ')[1]
@@ -140,7 +140,7 @@ Returns `undefined` outside request scope.
 Configure database isolation per tenant via the `database` option:
 
 ```ts
-new TenantAdapter({
+TenantAdapter({
   strategy: 'header',
   database: {
     mode: 'database',
@@ -176,7 +176,7 @@ import { TenantAdapter } from '@forinda/kickjs-multi-tenant'
 bootstrap({
   modules,
   adapters: [
-    new TenantAdapter({
+    TenantAdapter({
       strategy: 'header',
       header: 'x-tenant-id',
       onTenantNotFound: () => {

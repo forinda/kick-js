@@ -77,7 +77,7 @@ type JwtVerifyOptions = Omit<import('jsonwebtoken').VerifyOptions, 'algorithms' 
 Forward `jsonwebtoken`'s claim-validation options without abusing `mapPayload`:
 
 ```ts
-new JwtStrategy({
+JwtStrategy({
   secret: process.env.JWT_SECRET!,
   algorithms: ['HS256'],
   verifyOptions: {

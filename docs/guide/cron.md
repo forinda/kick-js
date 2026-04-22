@@ -65,7 +65,7 @@ Features:
 ```ts
 import { CronAdapter, CronerScheduler } from '@forinda/kickjs-cron'
 
-new CronAdapter({
+CronAdapter({
   services: [ReportService],
   scheduler: new CronerScheduler(),
 })
@@ -78,7 +78,7 @@ Lightweight fallback using `setInterval`. No extra dependencies needed.
 ```ts
 import { CronAdapter, IntervalScheduler } from '@forinda/kickjs-cron'
 
-new CronAdapter({
+CronAdapter({
   services: [ReportService],
   scheduler: new IntervalScheduler(),
 })
@@ -121,7 +121,7 @@ class NodeCronScheduler implements CronScheduler {
 }
 
 // Use it
-new CronAdapter({
+CronAdapter({
   services: [ReportService],
   scheduler: new NodeCronScheduler(),
 })
@@ -191,7 +191,7 @@ interface CronAdapterOptions {
 Set `enabled: false` to disable all cron jobs — useful for separating web and worker processes:
 
 ```ts
-new CronAdapter({
+CronAdapter({
   services: [ReportService],
   enabled: process.env.ROLE === 'worker', // only run on worker
 })

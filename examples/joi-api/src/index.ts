@@ -20,7 +20,7 @@ bootstrap({
   defaultVersion: 1,
 
   adapters: [
-    new SwaggerAdapter({
+    SwaggerAdapter({
       info: {
         title: 'Joi Validation API',
         version: '1.0.0',

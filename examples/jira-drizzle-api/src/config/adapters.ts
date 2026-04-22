@@ -63,7 +63,7 @@ export const adapters: AppAdapter[] = [
     enabled: true,
   }),
   DevToolsAdapter({ adapters: [wsAdapter, queueAdapter] }),
-  new SwaggerAdapter({
+  SwaggerAdapter({
     info: { title: 'Vibed (Drizzle Edition)', version: '1.0.0' },
   }),
 ]

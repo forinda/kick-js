@@ -16,7 +16,7 @@ const devtools = DevToolsAdapter({
   configPrefixes: ['APP_', 'NODE_ENV'],
 })
 
-const swagger = new SwaggerAdapter({
+const swagger = SwaggerAdapter({
   info: {
     title: 'v2 Showcase API',
     version: '2.0.1',
