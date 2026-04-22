@@ -32,8 +32,17 @@ export function requestScopeMiddleware() {
     const store: RequestStore = {
       requestId,
       instances: new Map(),
-      values: new Map(),
+      // Explicit generic locks the "string keys only" decision
+      // (architecture.md §20.12 #4) at construction time, so accidental
+      // non-string keys can't slip in via the inferred Map<any, any>.
+      values: new Map<string, unknown>(),
     }
+    // Surface the requestId on req so the standalone requestId() middleware
+    // (when also mounted) reuses this value instead of generating a divergent
+    // second one. Without this, log lines that read from the ALS store would
+    // disagree with the X-Request-Id response header for any request that
+    // didn't carry an inbound x-request-id header.
+    ;(req as Request & { requestId?: string }).requestId = requestId
     requestStore.run(store, () => next())
   }
   ;(mw as unknown as Record<symbol, unknown>)[REQUEST_SCOPE_MIDDLEWARE_MARKER] = true

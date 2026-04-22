@@ -141,19 +141,23 @@ export function buildRoutes(controllerClass: any, options: BuildRoutesOptions = 
       methodContributors.length > 0 ||
       externalSources.length > 0
     ) {
+      // Labels are surfaced in DuplicateContributorError messages — include
+      // the registration's key + the original index so a same-key collision
+      // at one precedence level points at the conflicting decorator slot,
+      // not just the host method/class.
       const sources: SourcedRegistration[] = [
         ...methodContributors.map(
-          (registration): SourcedRegistration => ({
+          (registration, i): SourcedRegistration => ({
             source: 'method',
             registration,
-            label: `${controllerClass.name}.${String(route.handlerName)}`,
+            label: `${controllerClass.name}.${String(route.handlerName)}#${i}(${registration.key})`,
           }),
         ),
         ...classContributors.map(
-          (registration): SourcedRegistration => ({
+          (registration, i): SourcedRegistration => ({
             source: 'class',
             registration,
-            label: `${controllerClass.name}.@class`,
+            label: `${controllerClass.name}.@class#${i}(${registration.key})`,
           }),
         ),
         ...externalSources,

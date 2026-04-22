@@ -42,17 +42,18 @@ React Router's Vite integration lives in `packages/react-router-dev/vite/plugin.
 
 **Server-relevant plugins:**
 
-| Plugin Name | Responsibility |
-|---|---|
-| `react-router` | Core config, environment setup, child compiler init |
+| Plugin Name                    | Responsibility                                           |
+| ------------------------------ | -------------------------------------------------------- |
+| `react-router`                 | Core config, environment setup, child compiler init      |
 | `react-router:virtual-modules` | Resolves/loads virtual modules (server-build, manifests) |
-| `react-router:route-exports` | Analyzes route module exports via Babel AST |
-| `react-router:hmr-updates` | Detects module metadata changes, sends custom HMR events |
-| `react-router:dot-server` | Validates server-only file boundaries |
+| `react-router:route-exports`   | Analyzes route module exports via Babel AST              |
+| `react-router:hmr-updates`     | Detects module metadata changes, sends custom HMR events |
+| `react-router:dot-server`      | Validates server-only file boundaries                    |
 
 ### Key Pattern: Plugin Array Composition
 
 Rather than one monolithic plugin, React Router composes many small plugins into an array. This:
+
 - Keeps each plugin focused and testable
 - Allows plugins to run at different Vite lifecycle stages
 - Makes it easy to conditionally include plugins (e.g., HMR plugins only in `serve` mode)
@@ -60,14 +61,14 @@ Rather than one monolithic plugin, React Router composes many small plugins into
 ```typescript
 // Simplified pattern
 export function reactRouterVitePlugin(options): Vite.Plugin[] {
-  let ctx = createPluginContext(options);
+  let ctx = createPluginContext(options)
   return [
     corePlugin(ctx),
     virtualModulesPlugin(ctx),
     hmrPlugin(ctx),
     moduleExportsPlugin(ctx),
     // ...
-  ];
+  ]
 }
 ```
 
@@ -78,16 +79,19 @@ React Router creates a **second Vite dev server** (child compiler) specifically 
 ```typescript
 viteChildCompiler = await vite.createServer({
   ...viteUserConfig,
-  cacheDir: "node_modules/.vite-child-compiler",
+  cacheDir: 'node_modules/.vite-child-compiler',
   server: {
     preTransformRequests: false,
     hmr: false, // No HMR for the analyzer
   },
-  plugins: [/* excludes react-router plugin to avoid infinite loop */],
-});
+  plugins: [
+    /* excludes react-router plugin to avoid infinite loop */
+  ],
+})
 ```
 
 This is used to:
+
 - Parse files and extract export names (loader, action, middleware, etc.)
 - Compile modules through Vite's transform pipeline for metadata extraction
 - Keep the analysis isolated from the running dev server
@@ -148,9 +152,9 @@ The critical insight: **Vite's SSR module graph tracks dependencies**. When a fi
 
 ```typescript
 export async function dev(root: string, options: DevOptions) {
-  let viteDevServer = await vite.createServer({ root, ...options });
+  let viteDevServer = await vite.createServer({ root, ...options })
   // Validate react-router plugin is loaded
-  await viteDevServer.listen(port);
+  await viteDevServer.listen(port)
 }
 ```
 
@@ -189,14 +193,16 @@ Key insight: **every request loads a fresh server build** in dev mode via `ssrLo
 ### Module Loading Strategies
 
 **Vite v6+ (Environment API):**
+
 ```typescript
-let ssrEnvironment = viteDevServer.environments.ssr;
-build = await ssrEnvironment.runner.import(virtual.serverBuild.id);
+let ssrEnvironment = viteDevServer.environments.ssr
+build = await ssrEnvironment.runner.import(virtual.serverBuild.id)
 ```
 
 **Vite v5 (Legacy):**
+
 ```typescript
-build = await viteDevServer.ssrLoadModule(virtual.serverBuild.id);
+build = await viteDevServer.ssrLoadModule(virtual.serverBuild.id)
 ```
 
 Both approaches give you fresh module evaluation on each call after invalidation.
@@ -209,9 +215,9 @@ React Router uses Vite's virtual module convention (`\0` prefix) to generate cod
 
 ```typescript
 let virtual = {
-  serverBuild:    VirtualModule.create("server-build"),
-  serverManifest: VirtualModule.create("server-manifest"),
-};
+  serverBuild: VirtualModule.create('server-build'),
+  serverManifest: VirtualModule.create('server-manifest'),
+}
 ```
 
 ### Server Build Virtual Module
@@ -220,14 +226,14 @@ Generated dynamically based on config, aggregating all modules into a single imp
 
 ```typescript
 // Generated code (simplified)
-import * as entryServer from "./entry.server.ts";
-import * as route0 from "./routes/users.ts";
-import * as route1 from "./routes/tasks.ts";
+import * as entryServer from './entry.server.ts'
+import * as route0 from './routes/users.ts'
+import * as route1 from './routes/tasks.ts'
 
 export const routes = {
-  "routes/users": { id: "routes/users", path: "/users", module: route0 },
-  "routes/tasks": { id: "routes/tasks", path: "/tasks", module: route1 },
-};
+  'routes/users': { id: 'routes/users', path: '/users', module: route0 },
+  'routes/tasks': { id: 'routes/tasks', path: '/tasks', module: route1 },
+}
 ```
 
 ### Invalidation
@@ -237,9 +243,9 @@ When config changes, all virtual modules are invalidated in Vite's module graph:
 ```typescript
 function invalidateVirtualModules(viteDevServer) {
   Object.values(virtual).forEach((vmod) => {
-    let mod = viteDevServer.moduleGraph.getModuleById(vmod.resolvedId);
-    if (mod) viteDevServer.moduleGraph.invalidateModule(mod);
-  });
+    let mod = viteDevServer.moduleGraph.getModuleById(vmod.resolvedId)
+    if (mod) viteDevServer.moduleGraph.invalidateModule(mod)
+  })
 }
 ```
 
@@ -252,17 +258,17 @@ This forces Vite to re-execute the virtual module's `load()` hook on next import
 ### Build Strategy
 
 **Vite v8 (Environment API):**
+
 ```typescript
-let builder = await vite.createBuilder(viteConfig);
-await builder.buildApp(); // Builds all environments in one pass
+let builder = await vite.createBuilder(viteConfig)
+await builder.buildApp() // Builds all environments in one pass
 ```
 
 **Vite v5 (separate builds):**
+
 ```typescript
 // Server builds can run in parallel for multiple bundles
-await Promise.all(
-  serverBundles.map(bundle => viteBuild({ ...config, environment: bundle.id }))
-);
+await Promise.all(serverBundles.map((bundle) => viteBuild({ ...config, environment: bundle.id })))
 ```
 
 ### Build Manifest Generation
@@ -284,10 +290,10 @@ After build, React Router generates a manifest mapping modules to their built as
 ```typescript
 configLoader.onChange(({ configChanged, routeConfigChanged }) => {
   if (configChanged || routeConfigChanged) {
-    invalidateVirtualModules(viteDevServer);
+    invalidateVirtualModules(viteDevServer)
     // Log changes to dev terminal
   }
-});
+})
 ```
 
 ### Module-Level Server Reload
@@ -303,6 +309,7 @@ In dev mode, the server build is loaded via `ssrLoadModule()` or `runner.import(
 ### Why This Matters for KickJS
 
 KickJS currently does a full `Container._onReset()` on every file change, replaying ALL decorator registrations. React Router's approach is more surgical:
+
 - Only invalidate what changed (via Vite's module graph)
 - Only re-evaluate on next use (lazy, not eager)
 - Virtual modules regenerate only when metadata actually changed
@@ -318,14 +325,14 @@ Based on React Router's patterns, here's how a `@forinda/kickjs-vite` plugin cou
 ```typescript
 // packages/vite/src/plugin.ts
 export function kickjsVitePlugin(options?: KickJSPluginOptions): Vite.Plugin[] {
-  let ctx = createPluginContext(options);
+  let ctx = createPluginContext(options)
   return [
-    kickjsCorePlugin(ctx),           // Config, SSR environment setup
-    kickjsVirtualModules(ctx),       // Virtual module resolution
-    kickjsModuleDiscovery(ctx),      // Auto-discover @Controller, @Service, etc.
-    kickjsHmrPlugin(ctx),           // DI container selective invalidation
-    kickjsDevServerPlugin(ctx),      // Express dev server middleware
-  ];
+    kickjsCorePlugin(ctx), // Config, SSR environment setup
+    kickjsVirtualModules(ctx), // Virtual module resolution
+    kickjsModuleDiscovery(ctx), // Auto-discover @Controller, @Service, etc.
+    kickjsHmrPlugin(ctx), // DI container selective invalidation
+    kickjsDevServerPlugin(ctx), // Express dev server middleware
+  ]
 }
 ```
 
@@ -334,22 +341,24 @@ export function kickjsVitePlugin(options?: KickJSPluginOptions): Vite.Plugin[] {
 ```typescript
 // Virtual module: virtual:kickjs/app-modules
 // Generated from scanning decorated classes
-import { UserModule } from "./src/modules/users/user.module";
-import { TaskModule } from "./src/modules/tasks/task.module";
+import { UserModule } from './src/modules/users/user.module'
+import { TaskModule } from './src/modules/tasks/task.module'
 
-export const modules = [UserModule, TaskModule];
-export const config = { /* kick.config.ts contents */ };
+export const modules = [UserModule, TaskModule]
+export const config = {
+  /* kick.config.ts contents */
+}
 ```
 
 ```typescript
 // Virtual module: virtual:kickjs/container-registry
 // Auto-generated DI registrations from decorator scanning
-import { UserService } from "./src/modules/users/user.service";
-import { UserRepository } from "./src/modules/users/user.repository";
+import { UserService } from './src/modules/users/user.service'
+import { UserRepository } from './src/modules/users/user.repository'
 
 export function registerAll(container: Container) {
-  container.register("UserService", UserService, Scope.SINGLETON);
-  container.register("UserRepository", UserRepository, Scope.SINGLETON);
+  container.register('UserService', UserService, Scope.SINGLETON)
+  container.register('UserRepository', UserRepository, Scope.SINGLETON)
 }
 ```
 
@@ -388,17 +397,17 @@ handleHotUpdate({ file, server }) {
 
 ```typescript
 // src/index.ts (app entry)
-import { bootstrap } from "@forinda/kickjs-http";
+import { bootstrap } from '@forinda/kickjs-http'
 
-const app = bootstrap({ modules: [UserModule, TaskModule] });
+const app = bootstrap({ modules: [UserModule, TaskModule] })
 
 if (import.meta.hot) {
   import.meta.hot.accept(() => {
     // Selective container invalidation instead of full _onReset()
     // Express handler swapped without restarting HTTP server
     // DB/Redis connections preserved via globalThis.__app
-    app.rebuild();
-  });
+    app.rebuild()
+  })
 }
 ```
 
@@ -438,14 +447,14 @@ configureServer(viteDevServer) {
 
 ### 7.6 Comparison: Current KickJS vs Proposed Vite Plugin
 
-| Aspect | Current (`kick dev`) | Proposed Vite Plugin |
-|---|---|---|
-| Dev server | CLI spawns Vite + imports entry | Plugin installs middleware on Vite's server |
-| Module discovery | Runtime decorator reflection | Build-time AST scanning + virtual modules |
-| HMR | `import.meta.hot.accept()` in bootstrap | Plugin-managed with selective invalidation |
-| DI reset | `Container._onReset()` replays ALL decorators | Targeted invalidation of changed + dependents only |
-| Config reload | Watches `kick.config.ts`, restarts | Same behavior via plugin |
-| Build | `vite build --ssr` | Plugin configures SSR environment |
+| Aspect           | Current (`kick dev`)                          | Proposed Vite Plugin                               |
+| ---------------- | --------------------------------------------- | -------------------------------------------------- |
+| Dev server       | CLI spawns Vite + imports entry               | Plugin installs middleware on Vite's server        |
+| Module discovery | Runtime decorator reflection                  | Build-time AST scanning + virtual modules          |
+| HMR              | `import.meta.hot.accept()` in bootstrap       | Plugin-managed with selective invalidation         |
+| DI reset         | `Container._onReset()` replays ALL decorators | Targeted invalidation of changed + dependents only |
+| Config reload    | Watches `kick.config.ts`, restarts            | Same behavior via plugin                           |
+| Build            | `vite build --ssr`                            | Plugin configures SSR environment                  |
 
 ---
 
@@ -463,6 +472,7 @@ React Router uses **pnpm workspaces** + **wireit** (no Turbo):
 ```
 
 Each package uses **wireit** in `package.json` to declare build inputs/outputs and dependencies:
+
 ```json
 "wireit": {
   "build": {
@@ -481,27 +491,29 @@ Every package uses **tsup** (esbuild-based bundler) instead of raw Vite or Rollu
 
 ```typescript
 // Typical tsup.config.ts (e.g., react-router-serve)
-export default defineConfig([{
-  clean: true,
-  entry: ["cli.ts"],
-  format: ["cjs"],
-  outDir: "dist",
-  dts: true,
-  banner: { js: createBanner(pkg.name, pkg.version) },
-}]);
+export default defineConfig([
+  {
+    clean: true,
+    entry: ['cli.ts'],
+    format: ['cjs'],
+    outDir: 'dist',
+    dts: true,
+    banner: { js: createBanner(pkg.name, pkg.version) },
+  },
+])
 ```
 
 **Key: tsup handles both JS bundling AND type generation via `dts: true`** - no separate `tsc` step needed.
 
 ### 8.3 Package Build Patterns
 
-| Package | Entry Points | Format | DTS | Special Notes |
-|---|---|---|---|---|
-| **react-router** | 4 entries | CJS + ESM | Yes | Separate dev/prod builds |
-| **react-router-dev** | 6 (`cli`, `config`, `routes`, `vite`, etc.) | CJS only | Yes | Post-build copies static files |
-| **react-router-serve** | 1 (`cli.ts`) | CJS only | Yes | Simple CLI entry |
-| **react-router-express** | 1 (`index.ts`) | CJS + ESM | Yes | Standard pattern |
-| **react-router-node** | 1 (`index.ts`) | CJS + ESM | Yes | Standard pattern |
+| Package                  | Entry Points                                | Format    | DTS | Special Notes                  |
+| ------------------------ | ------------------------------------------- | --------- | --- | ------------------------------ |
+| **react-router**         | 4 entries                                   | CJS + ESM | Yes | Separate dev/prod builds       |
+| **react-router-dev**     | 6 (`cli`, `config`, `routes`, `vite`, etc.) | CJS only  | Yes | Post-build copies static files |
+| **react-router-serve**   | 1 (`cli.ts`)                                | CJS only  | Yes | Simple CLI entry               |
+| **react-router-express** | 1 (`index.ts`)                              | CJS + ESM | Yes | Standard pattern               |
+| **react-router-node**    | 1 (`index.ts`)                              | CJS + ESM | Yes | Standard pattern               |
 
 ### 8.4 Multi-Entry Point Build (react-router-dev)
 
@@ -509,20 +521,22 @@ The most relevant pattern for KickJS - multiple entry points from a single tsup 
 
 ```typescript
 // tsup.config.ts
-export default defineConfig([{
-  entry: {
-    "cli/index": "cli/index.ts",
-    config: "config.ts",
-    internal: "internal.ts",
-    routes: "routes.ts",
-    vite: "vite.ts",
-    "vite/cloudflare": "vite/cloudflare.ts",
+export default defineConfig([
+  {
+    entry: {
+      'cli/index': 'cli/index.ts',
+      config: 'config.ts',
+      internal: 'internal.ts',
+      routes: 'routes.ts',
+      vite: 'vite.ts',
+      'vite/cloudflare': 'vite/cloudflare.ts',
+    },
+    format: ['cjs'],
+    outDir: 'dist',
+    dts: true,
+    external: [/\.json$/, './static/refresh-utils.mjs'],
   },
-  format: ["cjs"],
-  outDir: "dist",
-  dts: true,
-  external: [/\.json$/, "./static/refresh-utils.mjs"],
-}]);
+])
 ```
 
 ### 8.5 Dev/Prod Build Splits
@@ -532,16 +546,16 @@ The core package generates separate development and production builds:
 ```typescript
 function createConfig(format, env) {
   return {
-    entry: { "react-router": "index.ts" },
+    entry: { 'react-router': 'index.ts' },
     format: [format],
-    outDir: `dist/${env}`,      // dist/development/ or dist/production/
+    outDir: `dist/${env}`, // dist/development/ or dist/production/
     splitting: true,
     define: {
-      __DEV__: String(env === "development"),
+      __DEV__: String(env === 'development'),
       REACT_ROUTER_VERSION: `"${version}"`,
     },
     dts: true,
-  };
+  }
 }
 ```
 
@@ -568,15 +582,17 @@ function createConfig(format, env) {
 The `react-router-dev` package uses a tsup plugin to copy files that can't be bundled:
 
 ```typescript
-plugins: [{
-  name: "copy",
-  async buildEnd() {
-    // Copy files loaded at runtime by Vite (can't be bundled)
-    copy("vite/static/refresh-utils.mjs", "dist/static/");
-    // Copy config templates for scaffolding
-    copy("config/defaults/**", "dist/config/defaults/");
-  }
-}]
+plugins: [
+  {
+    name: 'copy',
+    async buildEnd() {
+      // Copy files loaded at runtime by Vite (can't be bundled)
+      copy('vite/static/refresh-utils.mjs', 'dist/static/')
+      // Copy config templates for scaffolding
+      copy('config/defaults/**', 'dist/config/defaults/')
+    },
+  },
+]
 ```
 
 ### 8.8 TypeScript Config Pattern
@@ -611,6 +627,7 @@ React Router generates TypeScript declaration files **at dev time** that provide
 **Step 1: Parse config** - Load module config, build dependency tree
 
 **Step 2: Extract metadata** - Parse module paths for typed parameters:
+
 ```typescript
 // Route: "products/:id/:variant?"
 // Generates:
@@ -620,10 +637,11 @@ type Params = { id: string; variant?: string }
 **Step 3: Build type AST with Babel** - Constructs TypeScript declarations programmatically using Babel AST builders (not string templates)
 
 **Step 4: Use a `GetAnnotations` generic** that infers all types from module exports:
+
 ```typescript
 type Annotations = GetAnnotations<
-  Info & { module: typeof import("./routes/products.$id"); matches: Matches }
->;
+  Info & { module: typeof import('./routes/products.$id'); matches: Matches }
+>
 ```
 
 This single generic reads the module's exports and computes the correct types for everything.
@@ -633,8 +651,8 @@ This single generic reads the module's exports and computes the correct types fo
 The Vite plugin starts typegen in watch mode during development:
 
 ```typescript
-if (viteCommand === "serve") {
-  typegenWatcherPromise = Typegen.watch(rootDirectory, { mode, logger });
+if (viteCommand === 'serve') {
+  typegenWatcherPromise = Typegen.watch(rootDirectory, { mode, logger })
 }
 ```
 
@@ -660,15 +678,15 @@ kick typegen --watch  # Dev mode (integrated into kick dev)
 
 ```typescript
 // Auto-generated from scanning @Service, @Controller, etc.
-declare module "@forinda/kickjs-core" {
+declare module '@forinda/kickjs-core' {
   interface ContainerTokenMap {
-    "UserService": import("./src/modules/users/user.service").UserService;
-    "UserRepository": import("./src/modules/users/user.repository").UserRepository;
-    "TaskService": import("./src/modules/tasks/task.service").TaskService;
+    UserService: import('./src/modules/users/user.service').UserService
+    UserRepository: import('./src/modules/users/user.repository').UserRepository
+    TaskService: import('./src/modules/tasks/task.service').TaskService
   }
 
   interface Container {
-    resolve<K extends keyof ContainerTokenMap>(token: K): ContainerTokenMap[K];
+    resolve<K extends keyof ContainerTokenMap>(token: K): ContainerTokenMap[K]
   }
 }
 ```
@@ -689,15 +707,15 @@ KickJS uses **Turbo + Vite + tsc** (two-step):
 "build:types": "tsc -p tsconfig.build.json"
 ```
 
-| Aspect | KickJS (Current) | React Router | KickJS (Proposed) |
-|---|---|---|---|
-| **Orchestrator** | Turbo | pnpm + wireit | pnpm + wireit |
-| **Bundler** | Vite (library mode) | tsup (esbuild) | tsdown (Rolldown/Rust) |
-| **Type generation** | Separate `tsc -p tsconfig.build.json` | `dts: true` in tsup (tsc) | `dts: true` in tsdown (oxc) |
-| **Output format** | ESM only | CJS + ESM (dual) | **ESM only** (see below) |
-| **Target** | Node 20 | ES2022 | Node 20 (auto from `engines`) |
-| **Dev/Prod splits** | No | Yes (dist/development, dist/production) | Yes |
-| **Incremental** | Turbo cache | wireit input/output tracking | wireit |
+| Aspect              | KickJS (Current)                      | React Router                            | KickJS (Proposed)             |
+| ------------------- | ------------------------------------- | --------------------------------------- | ----------------------------- |
+| **Orchestrator**    | Turbo                                 | pnpm + wireit                           | pnpm + wireit                 |
+| **Bundler**         | Vite (library mode)                   | tsup (esbuild)                          | tsdown (Rolldown/Rust)        |
+| **Type generation** | Separate `tsc -p tsconfig.build.json` | `dts: true` in tsup (tsc)               | `dts: true` in tsdown (oxc)   |
+| **Output format**   | ESM only                              | CJS + ESM (dual)                        | **ESM only** (see below)      |
+| **Target**          | Node 20                               | ES2022                                  | Node 20 (auto from `engines`) |
+| **Dev/Prod splits** | No                                    | Yes (dist/development, dist/production) | Yes                           |
+| **Incremental**     | Turbo cache                           | wireit input/output tracking            | wireit                        |
 
 #### Why ESM-Only (Not Dual CJS+ESM)
 
@@ -712,6 +730,7 @@ React Router ships dual CJS+ESM because it's consumed by millions of unknown pro
 If external npm consumers later need CJS, it can be added per-package. Until then, ESM-only keeps builds fast and avoids the dual package hazard entirely.
 
 **Package.json pattern:**
+
 ```json
 {
   "type": "module",
@@ -751,8 +770,8 @@ export default defineConfig({
     reactivity: 'src/reactivity.ts',
     path: 'src/path.ts',
   },
-  format: ['esm'],       // ESM-only (no CJS)
-  dts: true,              // oxc-transform with isolatedDeclarations
+  format: ['esm'], // ESM-only (no CJS)
+  dts: true, // oxc-transform with isolatedDeclarations
   platform: 'node',
   shims: true,
 })
@@ -774,6 +793,7 @@ export default defineConfig({
 ```
 
 **Benefits:**
+
 - Single build step (JS + DTS in one pass)
 - ~80% faster with `isolatedDeclarations` (oxc-transform, not tsc)
 - wireit skips unchanged packages (file-level caching)
@@ -808,10 +828,14 @@ export default defineConfig([
 ```
 
 Then in package.json exports:
+
 ```json
 {
   ".": {
-    "development": { "import": "./dist/development/index.js", "types": "./dist/development/index.d.ts" },
+    "development": {
+      "import": "./dist/development/index.js",
+      "types": "./dist/development/index.d.ts"
+    },
     "default": { "import": "./dist/production/index.js", "types": "./dist/development/index.d.ts" }
   }
 }
@@ -853,14 +877,21 @@ handleHotUpdate({ file, server }) {
 ```
 
 **Requires adding to Container:**
+
 ```typescript
 class Container {
   // Track which tokens depend on which other tokens
-  private dependencyGraph: Map<string, Set<string>> = new Map();
+  private dependencyGraph: Map<string, Set<string>> = new Map()
 
-  getDependentsOf(token: string): string[] { /* reverse graph walk */ }
-  invalidate(token: string): void { /* clear cached instance */ }
-  reRegister(token: string, target: any): void { /* replace binding */ }
+  getDependentsOf(token: string): string[] {
+    /* reverse graph walk */
+  }
+  invalidate(token: string): void {
+    /* clear cached instance */
+  }
+  reRegister(token: string, target: any): void {
+    /* replace binding */
+  }
 }
 ```
 
@@ -884,23 +915,24 @@ While React Router uses **tsup** (esbuild-based), KickJS should consider **tsdow
 
 ### 11.2 tsdown vs tsup
 
-| Feature | tsup (esbuild) | tsdown (Rolldown/Rust) |
-|---|---|---|
-| **Bundler engine** | esbuild (Go) | Rolldown (Rust) |
-| **DTS generation** | tsc under the hood (slow) | `rolldown-plugin-dts` + oxc-transform (fast) |
-| **With `isolatedDeclarations`** | Still uses tsc | Uses oxc-transform ("extremely fast") |
-| **Plugin system** | esbuild plugins | Rolldown + Rollup + Unplugin (larger ecosystem) |
-| **Vite alignment** | Separate tool | Same engine as Vite's future bundler |
-| **Auto target from package.json** | No | Yes (`engines.node` auto-detected) |
-| **CJS/ESM shims** | Manual | Auto (`__dirname`/`__filename` in ESM, `import.meta` in CJS) |
-| **Glob entry patterns** | No | Yes (`src/**/*.ts`, negation patterns) |
-| **Tree shaking** | esbuild tree shaking | Rolldown tree shaking (more aggressive) |
-| **Config reuse** | No | `--from-vite` / `--from-vite vitest` (experimental) |
-| **Maturity** | Stable, widely used | v0.21.x (beta, but production-viable for libraries) |
+| Feature                           | tsup (esbuild)            | tsdown (Rolldown/Rust)                                       |
+| --------------------------------- | ------------------------- | ------------------------------------------------------------ |
+| **Bundler engine**                | esbuild (Go)              | Rolldown (Rust)                                              |
+| **DTS generation**                | tsc under the hood (slow) | `rolldown-plugin-dts` + oxc-transform (fast)                 |
+| **With `isolatedDeclarations`**   | Still uses tsc            | Uses oxc-transform ("extremely fast")                        |
+| **Plugin system**                 | esbuild plugins           | Rolldown + Rollup + Unplugin (larger ecosystem)              |
+| **Vite alignment**                | Separate tool             | Same engine as Vite's future bundler                         |
+| **Auto target from package.json** | No                        | Yes (`engines.node` auto-detected)                           |
+| **CJS/ESM shims**                 | Manual                    | Auto (`__dirname`/`__filename` in ESM, `import.meta` in CJS) |
+| **Glob entry patterns**           | No                        | Yes (`src/**/*.ts`, negation patterns)                       |
+| **Tree shaking**                  | esbuild tree shaking      | Rolldown tree shaking (more aggressive)                      |
+| **Config reuse**                  | No                        | `--from-vite` / `--from-vite vitest` (experimental)          |
+| **Maturity**                      | Stable, widely used       | v0.21.x (beta, but production-viable for libraries)          |
 
 ### 11.3 tsdown Configuration for KickJS
 
 **Installation:**
+
 ```bash
 pnpm add -D tsdown
 ```
@@ -924,18 +956,19 @@ export default defineConfig({
     path: 'src/path.ts',
   },
   format: ['esm'],
-  dts: true,              // Auto-generates .d.ts via rolldown-plugin-dts
-  platform: 'node',       // Auto-resolves node: built-ins
+  dts: true, // Auto-generates .d.ts via rolldown-plugin-dts
+  platform: 'node', // Auto-resolves node: built-ins
   // target auto-read from package.json engines.node
   sourcemap: false,
-  shims: true,            // Auto __dirname/__filename in ESM
+  shims: true, // Auto __dirname/__filename in ESM
 })
 ```
 
 **Glob entry patterns (unique to tsdown):**
+
 ```typescript
 export default defineConfig({
-  entry: ['src/*.ts', '!src/*.test.ts'],  // All .ts except tests
+  entry: ['src/*.ts', '!src/*.test.ts'], // All .ts except tests
   format: ['esm'],
   dts: true,
   platform: 'node',
@@ -969,13 +1002,14 @@ export default defineConfig([
 
 tsdown's DTS is significantly faster than tsup's:
 
-| Approach | Engine | Speed |
-|---|---|---|
-| tsup `dts: true` | TypeScript compiler (tsc) | Slow (~3-5s per package) |
-| tsdown `dts: true` (without `isolatedDeclarations`) | TypeScript compiler | Similar to tsup |
-| tsdown `dts: true` (with `isolatedDeclarations`) | **oxc-transform (Rust)** | **Extremely fast** (~200ms) |
+| Approach                                            | Engine                    | Speed                       |
+| --------------------------------------------------- | ------------------------- | --------------------------- |
+| tsup `dts: true`                                    | TypeScript compiler (tsc) | Slow (~3-5s per package)    |
+| tsdown `dts: true` (without `isolatedDeclarations`) | TypeScript compiler       | Similar to tsup             |
+| tsdown `dts: true` (with `isolatedDeclarations`)    | **oxc-transform (Rust)**  | **Extremely fast** (~200ms) |
 
 To unlock maximum DTS speed, add to `tsconfig.json`:
+
 ```json
 {
   "compilerOptions": {
@@ -1033,13 +1067,13 @@ Per KickJS package:
 
 ### 11.10 Risk Assessment
 
-| Concern | Assessment |
-|---|---|
-| **Beta status (v0.21.x)** | Low risk for library builds; output is standard ESM/CJS |
-| **Stage 2 decorators** | Supported via `experimentalDecorators` in tsconfig |
-| **reflect-metadata** | Works fine - it's a runtime import, not a build transform |
-| **Rolldown stability** | Backed by Evan You / Vite team, actively developed |
-| **Fallback plan** | Can always switch to tsup - config shape is nearly identical |
+| Concern                   | Assessment                                                   |
+| ------------------------- | ------------------------------------------------------------ |
+| **Beta status (v0.21.x)** | Low risk for library builds; output is standard ESM/CJS      |
+| **Stage 2 decorators**    | Supported via `experimentalDecorators` in tsconfig           |
+| **reflect-metadata**      | Works fine - it's a runtime import, not a build transform    |
+| **Rolldown stability**    | Backed by Evan You / Vite team, actively developed           |
+| **Fallback plan**         | Can always switch to tsup - config shape is nearly identical |
 
 ---
 
@@ -1048,11 +1082,13 @@ Per KickJS package:
 ### 12.1 Why Remove Turbo
 
 Turbo currently provides three things for KickJS:
+
 1. `^build` topological ordering (core before http before cli)
 2. Output caching (skip builds if inputs unchanged)
 3. Parallel task execution
 
 **All three are replaceable:**
+
 - pnpm `-r` already runs in topological order based on workspace `dependencies`
 - wireit provides per-package input/output caching (same as React Router uses)
 - pnpm `--parallel` handles concurrent execution
@@ -1064,6 +1100,7 @@ With tsdown builds taking ~1s per package, a global build daemon is overkill for
 wireit (by Google) tracks file inputs and outputs per-package. If inputs haven't changed since last build, the step is skipped entirely. This is exactly what React Router uses.
 
 **Install:**
+
 ```bash
 pnpm add -D wireit -w
 ```
@@ -1073,6 +1110,7 @@ pnpm add -D wireit -w
 Each package's `package.json` gets a `wireit` section:
 
 **packages/core/package.json:**
+
 ```json
 {
   "scripts": {
@@ -1092,6 +1130,7 @@ Each package's `package.json` gets a `wireit` section:
 ```
 
 **packages/http/package.json** (depends on core):
+
 ```json
 {
   "scripts": {
@@ -1109,6 +1148,7 @@ Each package's `package.json` gets a `wireit` section:
 ```
 
 **packages/cli/package.json** (depends on core + http):
+
 ```json
 {
   "wireit": {
@@ -1213,16 +1253,16 @@ wireit handles the dependency graph — if core hasn't changed, it skips core's 
 
 ### 12.8 wireit vs Turbo Comparison
 
-| Feature | Turbo | wireit |
-|---|---|---|
-| **Dependency ordering** | `^build` in turbo.json | `dependencies` per package |
-| **Caching** | Global daemon, remote cache | Per-package file hashing |
-| **Config location** | Single turbo.json | Each package.json (colocated) |
-| **Install size** | ~20MB (Rust binary) | ~200KB (pure Node.js) |
-| **Remote cache** | Yes (Vercel) | No (local only) |
-| **Overhead** | Daemon process | None (runs inline) |
-| **Granularity** | Task-level | File-level input/output tracking |
-| **Used by** | Next.js, Turborepo users | React Router, Lit, Google projects |
+| Feature                 | Turbo                       | wireit                             |
+| ----------------------- | --------------------------- | ---------------------------------- |
+| **Dependency ordering** | `^build` in turbo.json      | `dependencies` per package         |
+| **Caching**             | Global daemon, remote cache | Per-package file hashing           |
+| **Config location**     | Single turbo.json           | Each package.json (colocated)      |
+| **Install size**        | ~20MB (Rust binary)         | ~200KB (pure Node.js)              |
+| **Remote cache**        | Yes (Vercel)                | No (local only)                    |
+| **Overhead**            | Daemon process              | None (runs inline)                 |
+| **Granularity**         | Task-level                  | File-level input/output tracking   |
+| **Used by**             | Next.js, Turborepo users    | React Router, Lit, Google projects |
 
 For KickJS's scale (18 packages, ~1s builds), wireit's lightweight file-level caching is more than sufficient. Remote caching (Turbo's main advantage) isn't needed for a project of this size.
 
@@ -1766,7 +1806,7 @@ Audit of the current KickJS HMR rebuild system (`packages/http/src/bootstrap.ts`
 ```typescript
 const postConstruct = Reflect.getMetadata(METADATA.POST_CONSTRUCT, reg.target.prototype)
 if (postConstruct && typeof instance[postConstruct] === 'function') {
-  instance[postConstruct]()  // No try/catch - if this throws, rebuild is broken
+  instance[postConstruct]() // No try/catch - if this throws, rebuild is broken
 }
 ```
 
@@ -1790,6 +1830,7 @@ rebuild(): void {
 `Container.reset()` creates a **completely new container**. Any manually registered instances (DB pool, Redis client, Prisma client) are lost. Only `@Service`/`@Controller` decorated classes are replayed via `allRegistrations`.
 
 **Fix:** Add a preservation API:
+
 ```typescript
 Container.reset({ preserve: [DB_TOKEN, REDIS_TOKEN] })
 // or
@@ -1803,7 +1844,7 @@ container.markPersistent(DB_TOKEN)
 class CacheService {
   @PostConstruct()
   async warmCache() {
-    this.data = await redis.hgetall('cache')  // Never awaited!
+    this.data = await redis.hgetall('cache') // Never awaited!
   }
 }
 ```
@@ -1818,7 +1859,8 @@ class CacheService {
 
 ```typescript
 Container._onReset = (container) => {
-  for (const [target, scope] of allRegistrations) {  // Only decorated classes
+  for (const [target, scope] of allRegistrations) {
+    // Only decorated classes
     container.register(target, target, scope)
   }
 }
@@ -1867,6 +1909,7 @@ rebuild(): void {
 If `setup()` throws (bad decorator, missing dependency), the old listeners are already removed but new ones aren't attached. The HTTP server is alive but unresponsive.
 
 **Fix:** Build the new app fully before swapping:
+
 ```typescript
 rebuild(): void {
   const newContainer = Container.reset()
@@ -1982,20 +2025,20 @@ getRegistrations() {
 
 ### 15.2 What the Container Doesn't Track (But Should)
 
-| Data | Currently Tracked | Needed For DevTools |
-|---|---|---|
-| Registration exists | Yes (`has()`) | Yes |
-| Scope (singleton/transient) | Yes | Yes |
-| Singleton instantiated | Yes (`reg.instance !== undefined`) | Yes |
-| Transient ever instantiated | **No** | Yes |
-| Transient instantiation count | **No** | Yes |
-| Class type (service/controller/repo) | **Partial** (only controller via `CONTROLLER_PATH` metadata) | Yes |
-| Registration method (decorator/factory/instance) | **No** | Yes |
-| Instantiation timestamp | **No** | Yes |
-| Dependencies (what it injects) | **No** (only in resolve chain) | Yes |
-| Dependents (what injects it) | **No** | Yes |
-| `@PostConstruct` status | **No** | Yes |
-| Resolution time (ms) | **No** | Yes |
+| Data                                             | Currently Tracked                                            | Needed For DevTools |
+| ------------------------------------------------ | ------------------------------------------------------------ | ------------------- |
+| Registration exists                              | Yes (`has()`)                                                | Yes                 |
+| Scope (singleton/transient)                      | Yes                                                          | Yes                 |
+| Singleton instantiated                           | Yes (`reg.instance !== undefined`)                           | Yes                 |
+| Transient ever instantiated                      | **No**                                                       | Yes                 |
+| Transient instantiation count                    | **No**                                                       | Yes                 |
+| Class type (service/controller/repo)             | **Partial** (only controller via `CONTROLLER_PATH` metadata) | Yes                 |
+| Registration method (decorator/factory/instance) | **No**                                                       | Yes                 |
+| Instantiation timestamp                          | **No**                                                       | Yes                 |
+| Dependencies (what it injects)                   | **No** (only in resolve chain)                               | Yes                 |
+| Dependents (what injects it)                     | **No**                                                       | Yes                 |
+| `@PostConstruct` status                          | **No**                                                       | Yes                 |
+| Resolution time (ms)                             | **No**                                                       | Yes                 |
 
 ### 15.3 Proposed Container Enhancements
 
@@ -2007,7 +2050,7 @@ Currently decorators like `@Service`, `@Repository`, `@Component` all call the s
 // In decorators.ts
 export const METADATA = {
   // ... existing
-  CLASS_KIND: Symbol('kick:class-kind'),  // NEW
+  CLASS_KIND: Symbol('kick:class-kind'), // NEW
 }
 
 // In each decorator
@@ -2042,13 +2085,20 @@ interface Registration {
   instance?: any
   factory?: () => any
   // NEW fields:
-  kind: 'service' | 'controller' | 'repository' | 'component' | 'injectable' | 'factory' | 'instance'
-  resolveCount: number          // How many times resolve() was called
-  lastResolvedAt?: number       // Timestamp of last resolution
-  firstResolvedAt?: number      // Timestamp of first resolution
-  resolveDurationMs?: number    // Last resolution time
+  kind:
+    | 'service'
+    | 'controller'
+    | 'repository'
+    | 'component'
+    | 'injectable'
+    | 'factory'
+    | 'instance'
+  resolveCount: number // How many times resolve() was called
+  lastResolvedAt?: number // Timestamp of last resolution
+  firstResolvedAt?: number // Timestamp of first resolution
+  resolveDurationMs?: number // Last resolution time
   postConstructStatus?: 'pending' | 'completed' | 'failed' | 'skipped'
-  dependencies: string[]        // Tokens this class injects (from constructor params)
+  dependencies: string[] // Tokens this class injects (from constructor params)
 }
 ```
 
@@ -2169,7 +2219,7 @@ app.get('/_debug/stream', (req, res) => {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
     Connection: 'keep-alive',
-  });
+  })
 
   const interval = setInterval(() => {
     const data = {
@@ -2177,12 +2227,12 @@ app.get('/_debug/stream', (req, res) => {
       errorCount: this.errorCount.value,
       errorRate: this.errorRate.value,
       uptimeSeconds: this.uptimeSeconds.value,
-    };
-    res.write(`data: ${JSON.stringify(data)}\n\n`);
-  }, 1000);
+    }
+    res.write(`data: ${JSON.stringify(data)}\n\n`)
+  }, 1000)
 
-  req.on('close', () => clearInterval(interval));
-});
+  req.on('close', () => clearInterval(interval))
+})
 ```
 
 Or better — use the existing reactivity system's `subscribe()`:
@@ -2206,17 +2256,21 @@ Track and expose the status of lifecycle hooks:
 ```typescript
 // In container.ts createInstance()
 try {
-  const result = instance[postConstruct]();
+  const result = instance[postConstruct]()
   if (result instanceof Promise) {
-    reg.postConstructStatus = 'pending';
+    reg.postConstructStatus = 'pending'
     result
-      .then(() => { reg.postConstructStatus = 'completed'; })
-      .catch(() => { reg.postConstructStatus = 'failed'; });
+      .then(() => {
+        reg.postConstructStatus = 'completed'
+      })
+      .catch(() => {
+        reg.postConstructStatus = 'failed'
+      })
   } else {
-    reg.postConstructStatus = 'completed';
+    reg.postConstructStatus = 'completed'
   }
 } catch (err) {
-  reg.postConstructStatus = 'failed';
+  reg.postConstructStatus = 'failed'
   // log error but don't crash
 }
 ```
@@ -2230,18 +2284,18 @@ Replace min/max with percentile tracking:
 interface RouteStats {
   count: number
   totalMs: number
-  samples: number[]     // Ring buffer of last N durations
+  samples: number[] // Ring buffer of last N durations
   p50: number
   p95: number
   p99: number
 }
 
 // After each request
-stats.samples.push(elapsed);
-if (stats.samples.length > 1000) stats.samples.shift();  // Keep last 1000
-stats.p50 = percentile(stats.samples, 0.50);
-stats.p95 = percentile(stats.samples, 0.95);
-stats.p99 = percentile(stats.samples, 0.99);
+stats.samples.push(elapsed)
+if (stats.samples.length > 1000) stats.samples.shift() // Keep last 1000
+stats.p50 = percentile(stats.samples, 0.5)
+stats.p95 = percentile(stats.samples, 0.95)
+stats.p99 = percentile(stats.samples, 0.99)
 ```
 
 ### 15.5 Implementation Priority
@@ -2289,21 +2343,21 @@ This is a **bandaid** — it forces eager instantiation of all singletons. The r
 
 ### 16.1 Scorecard
 
-| Area | Score | Status | Notes |
-|---|---|---|---|
-| Graceful Shutdown | 9/10 | Excellent | SIGTERM/SIGINT, adapter shutdown via `Promise.allSettled()`, DB disconnect |
-| Configuration | 8.5/10 | Very Good | Zod env validation, `@Value()` decorator, `ConfigService` |
-| Database Lifecycle | 8.5/10 | Very Good | Prisma/Drizzle adapters, proper `$disconnect()`, query adapters |
-| Testing | 8.5/10 | Very Good | `createTestApp()`, container isolation, supertest integration |
-| Request Validation | 8.5/10 | Very Good | Zod middleware, 422 error responses, type inference |
-| Logging | 8.5/10 | Very Good | Pino structured JSON, named loggers, request ID middleware |
-| Security | 8/10 | Good | Helmet-like headers, CORS, CSRF, rate limiting |
-| Queue Reliability | 8/10 | Good | BullMQ, worker concurrency, graceful worker shutdown |
-| OpenTelemetry | 7.5/10 | Good | HTTP spans + metrics, custom attributes, route ignore |
-| Error Handling | 7/10 | Good | Global handlers, Zod/HttpException catches, 500 fallback |
-| Process Management | 2/10 | **Minimal** | No clustering, no PM2 guide, no K8s probes |
-| Health Checks | 1/10 | **Missing** | No built-in endpoint at all |
-| **OVERALL** | **7.2/10** | **Production-viable with gaps** | |
+| Area               | Score      | Status                          | Notes                                                                      |
+| ------------------ | ---------- | ------------------------------- | -------------------------------------------------------------------------- |
+| Graceful Shutdown  | 9/10       | Excellent                       | SIGTERM/SIGINT, adapter shutdown via `Promise.allSettled()`, DB disconnect |
+| Configuration      | 8.5/10     | Very Good                       | Zod env validation, `@Value()` decorator, `ConfigService`                  |
+| Database Lifecycle | 8.5/10     | Very Good                       | Prisma/Drizzle adapters, proper `$disconnect()`, query adapters            |
+| Testing            | 8.5/10     | Very Good                       | `createTestApp()`, container isolation, supertest integration              |
+| Request Validation | 8.5/10     | Very Good                       | Zod middleware, 422 error responses, type inference                        |
+| Logging            | 8.5/10     | Very Good                       | Pino structured JSON, named loggers, request ID middleware                 |
+| Security           | 8/10       | Good                            | Helmet-like headers, CORS, CSRF, rate limiting                             |
+| Queue Reliability  | 8/10       | Good                            | BullMQ, worker concurrency, graceful worker shutdown                       |
+| OpenTelemetry      | 7.5/10     | Good                            | HTTP spans + metrics, custom attributes, route ignore                      |
+| Error Handling     | 7/10       | Good                            | Global handlers, Zod/HttpException catches, 500 fallback                   |
+| Process Management | 2/10       | **Minimal**                     | No clustering, no PM2 guide, no K8s probes                                 |
+| Health Checks      | 1/10       | **Missing**                     | No built-in endpoint at all                                                |
+| **OVERALL**        | **7.2/10** | **Production-viable with gaps** |                                                                            |
 
 ### 16.2 Critical Gaps (Must Fix)
 
@@ -2319,24 +2373,24 @@ Required by every load balancer, Kubernetes, and monitoring system. Nothing exis
 // GET /health/ready  → 200/503              (deps checked)
 
 app.get('/health/live', (req, res) => {
-  res.json({ status: 'ok', uptime: process.uptime() });
-});
+  res.json({ status: 'ok', uptime: process.uptime() })
+})
 
 app.get('/health/ready', async (req, res) => {
   const checks = await Promise.allSettled([
     container.resolve('PrismaClient').$queryRaw`SELECT 1`,
     container.has('RedisClient') ? container.resolve('RedisClient').ping() : null,
     container.has('QueueService') ? container.resolve('QueueService').isReady() : null,
-  ]);
-  const healthy = checks.every(c => c.status === 'fulfilled');
+  ])
+  const healthy = checks.every((c) => c.status === 'fulfilled')
   res.status(healthy ? 200 : 503).json({
     status: healthy ? 'ready' : 'degraded',
     checks: checks.map((c, i) => ({
       name: ['database', 'redis', 'queue'][i],
       status: c.status === 'fulfilled' ? 'up' : 'down',
     })),
-  });
-});
+  })
+})
 ```
 
 #### B. No Request Context in Logs
@@ -2346,18 +2400,18 @@ Request ID exists in middleware but is NOT propagated to service/repository logs
 **Fix:** Use Node.js `AsyncLocalStorage`:
 
 ```typescript
-import { AsyncLocalStorage } from 'node:async_hooks';
+import { AsyncLocalStorage } from 'node:async_hooks'
 
-export const requestContext = new AsyncLocalStorage<{ requestId: string }>();
+export const requestContext = new AsyncLocalStorage<{ requestId: string }>()
 
 // Middleware: wrap each request
 app.use((req, res, next) => {
-  const requestId = req.headers['x-request-id'] || crypto.randomUUID();
-  requestContext.run({ requestId }, () => next());
-});
+  const requestId = req.headers['x-request-id'] || crypto.randomUUID()
+  requestContext.run({ requestId }, () => next())
+})
 
 // Logger: auto-inject request ID
-Logger.for('UserService').info('User created');
+Logger.for('UserService').info('User created')
 // Output: { requestId: "abc-123", name: "UserService", msg: "User created" }
 ```
 
@@ -2366,6 +2420,7 @@ Logger.for('UserService').info('User created');
 `server.close()` waits indefinitely for connections to drain. A slow client keeps the server alive forever.
 
 **Fix:**
+
 ```typescript
 async shutdown(timeoutMs = 30_000): Promise<void> {
   const timer = setTimeout(() => {
@@ -2384,6 +2439,7 @@ async shutdown(timeoutMs = 30_000): Promise<void> {
 CORS defaults to `origin: '*'` (allow all). Production apps should fail closed.
 
 **Fix:** Default to restrictive, require explicit opt-in:
+
 ```typescript
 // Default: reject cross-origin
 cors({ origin: false })
@@ -2399,13 +2455,14 @@ cors({ origin: process.env.NODE_ENV === 'development' ? '*' : false })
 The default `MemoryStore` for rate limiting doesn't work with multiple processes or containers. Each instance has its own counter.
 
 **Fix:** Provide a Redis rate-limit store adapter:
+
 ```typescript
 class RedisRateLimitStore implements RateLimitStore {
   constructor(private redis: RedisClient) {}
   async increment(key: string): Promise<{ count: number; resetTime: number }> {
-    const count = await this.redis.incr(key);
-    if (count === 1) await this.redis.pexpire(key, this.windowMs);
-    return { count, resetTime: Date.now() + this.windowMs };
+    const count = await this.redis.incr(key)
+    if (count === 1) await this.redis.pexpire(key, this.windowMs)
+    return { count, resetTime: Date.now() + this.windowMs }
   }
 }
 ```
@@ -2415,6 +2472,7 @@ class RedisRateLimitStore implements RateLimitStore {
 Prisma/Drizzle adapters don't verify connectivity after initial connection. A dropped connection is only discovered when a request fails.
 
 **Fix:** Add periodic health pings in adapters:
+
 ```typescript
 // In PrismaAdapter
 private healthInterval?: NodeJS.Timeout;
@@ -2432,13 +2490,17 @@ afterStart() {
 No automatic spans for database queries, queue jobs, or cache operations. Makes distributed tracing incomplete.
 
 **Fix:** Add instrumentation hooks in Prisma/Drizzle/Queue adapters:
+
 ```typescript
 // Prisma middleware for auto-tracing
 this.prisma.$use(async (params, next) => {
-  const span = tracer.startSpan(`prisma.${params.model}.${params.action}`);
-  try { return await next(params); }
-  finally { span.end(); }
-});
+  const span = tracer.startSpan(`prisma.${params.model}.${params.action}`)
+  try {
+    return await next(params)
+  } finally {
+    span.end()
+  }
+})
 ```
 
 #### H. No Process Management Documentation
@@ -2446,6 +2508,7 @@ this.prisma.$use(async (params, next) => {
 No guidance on clustering, Docker, Kubernetes, or PM2. Users are left to figure it out.
 
 **Fix:** Add a deployment guide covering:
+
 - Dockerfile example (multi-stage, non-root user)
 - Kubernetes deployment + service + probes YAML
 - PM2 ecosystem.config.js
@@ -2588,7 +2651,7 @@ interface AppAdapter {
 for (const plugin of this.plugins) {
   const mw = plugin.middleware?.() ?? []
   for (const handler of mw) {
-    this.app.use(handler)  // Direct, no try/catch
+    this.app.use(handler) // Direct, no try/catch
   }
 }
 ```
@@ -2600,7 +2663,7 @@ If `plugin.middleware()` throws synchronously, the entire setup crashes with no 
 **File:** `application.ts` line 229
 
 ```typescript
-adapter.onRouteMount?.(route.controller, mountPath)  // Direct call
+adapter.onRouteMount?.(route.controller, mountPath) // Direct call
 ```
 
 If the devtools adapter's `onRouteMount` throws, route mounting stops for all subsequent adapters.
@@ -2613,7 +2676,7 @@ If the devtools adapter's `onRouteMount` throws, route mounting stops for all su
 this.httpServer.listen(port, async () => {
   // ...
   for (const plugin of this.plugins) {
-    await plugin.onReady?.(this.container)  // Awaited here...
+    await plugin.onReady?.(this.container) // Awaited here...
   }
 })
 // ...but listen() callback is fire-and-forget. Caller never knows.
@@ -2626,22 +2689,22 @@ If `onReady` rejects, it becomes an unhandled rejection caught only by the globa
 **File:** `container.ts` line 187
 
 ```typescript
-instance[postConstruct]()  // No await. Async @PostConstruct returns ignored Promise.
+instance[postConstruct]() // No await. Async @PostConstruct returns ignored Promise.
 ```
 
 Async initialization hooks silently don't work. Routes mount before async setup completes.
 
 ### 17.3 Missing Lifecycle Hooks
 
-| Phase | Exists | What's Missing |
-|---|---|---|
-| `beforeMount` | Yes | Works correctly |
-| `afterMount` | **No** | No hook after DI bootstrap + routes but before `beforeStart` |
-| `beforeStart` | Yes | Async errors swallowed |
-| `afterStart` | Yes | Inside listen callback (errors don't propagate) |
-| `onRebuild` | **No** | Adapters can't react to HMR rebuild specifically |
-| `onHealthCheck` | **No** | Adapters can't contribute to health check results |
-| `onRequest` | **No** | Per-request hook before middleware chain (for request-scoped DI setup) |
+| Phase           | Exists | What's Missing                                                         |
+| --------------- | ------ | ---------------------------------------------------------------------- |
+| `beforeMount`   | Yes    | Works correctly                                                        |
+| `afterMount`    | **No** | No hook after DI bootstrap + routes but before `beforeStart`           |
+| `beforeStart`   | Yes    | Async errors swallowed                                                 |
+| `afterStart`    | Yes    | Inside listen callback (errors don't propagate)                        |
+| `onRebuild`     | **No** | Adapters can't react to HMR rebuild specifically                       |
+| `onHealthCheck` | **No** | Adapters can't contribute to health check results                      |
+| `onRequest`     | **No** | Per-request hook before middleware chain (for request-scoped DI setup) |
 
 ### 17.4 Proposed Lifecycle Fix
 
@@ -2705,9 +2768,9 @@ class UserController {
 
   @Get('/')
   async list(ctx: RequestContext) {
-    const user = ctx.req.user;           // Manual extraction
-    const tenant = ctx.req.tenant;       // Manual extraction
-    return this.userService.list(user, tenant);  // Pass explicitly
+    const user = ctx.req.user // Manual extraction
+    const tenant = ctx.req.tenant // Manual extraction
+    return this.userService.list(user, tenant) // Pass explicitly
   }
 }
 ```
@@ -2719,14 +2782,14 @@ class UserController {
 class UserController {
   constructor(
     private userService: UserService,
-    @Inject(AUTH_USER) private currentUser: User,       // Injected per-request
+    @Inject(AUTH_USER) private currentUser: User, // Injected per-request
     @Inject(TENANT_CONTEXT) private tenant: TenantInfo, // Injected per-request
   ) {}
 
   @Get('/')
   async list(ctx: RequestContext) {
     // currentUser and tenant are already available via DI
-    return this.userService.list();
+    return this.userService.list()
   }
 }
 ```
@@ -2739,7 +2802,7 @@ class UserController {
 container.registerFactory(
   TENANT_CONTEXT,
   () => ({ id: 'default', name: 'Default Tenant' }) as TenantInfo,
-  Scope.SINGLETON,  // ← SINGLETON! Returns hardcoded default, not request tenant
+  Scope.SINGLETON, // ← SINGLETON! Returns hardcoded default, not request tenant
 )
 ```
 
@@ -2756,7 +2819,7 @@ The cleanest approach for a server-side Node.js framework. No child containers n
 export enum Scope {
   SINGLETON = 'singleton',
   TRANSIENT = 'transient',
-  REQUEST = 'request',       // NEW
+  REQUEST = 'request', // NEW
 }
 ```
 
@@ -2764,20 +2827,23 @@ export enum Scope {
 
 ```typescript
 // packages/http/src/request-store.ts
-import { AsyncLocalStorage } from 'node:async_hooks';
+import { AsyncLocalStorage } from 'node:async_hooks'
 
 export interface RequestStore {
-  requestId: string;
-  instances: Map<any, any>;   // Per-request singleton cache
-  values: Map<any, any>;      // Per-request registered values (user, tenant)
+  requestId: string
+  instances: Map<any, any> // Per-request singleton cache
+  values: Map<any, any> // Per-request registered values (user, tenant)
 }
 
-export const requestStore = new AsyncLocalStorage<RequestStore>();
+export const requestStore = new AsyncLocalStorage<RequestStore>()
 
 export function getRequestStore(): RequestStore {
-  const store = requestStore.getStore();
-  if (!store) throw new Error('No active request context. REQUEST-scoped services can only be resolved during a request.');
-  return store;
+  const store = requestStore.getStore()
+  if (!store)
+    throw new Error(
+      'No active request context. REQUEST-scoped services can only be resolved during a request.',
+    )
+  return store
 }
 ```
 
@@ -2785,7 +2851,7 @@ export function getRequestStore(): RequestStore {
 
 ```typescript
 // packages/http/src/middleware/request-scope.ts
-import { requestStore, RequestStore } from '../request-store';
+import { requestStore, RequestStore } from '../request-store'
 
 export function requestScopeMiddleware() {
   return (req: Request, res: Response, next: NextFunction) => {
@@ -2793,9 +2859,9 @@ export function requestScopeMiddleware() {
       requestId: req.requestId || crypto.randomUUID(),
       instances: new Map(),
       values: new Map(),
-    };
-    requestStore.run(store, () => next());
-  };
+    }
+    requestStore.run(store, () => next())
+  }
 }
 ```
 
@@ -2845,17 +2911,17 @@ resolve<T>(token: any): T {
 
 ```typescript
 // packages/auth/src/adapter.ts - after authenticating
-import { getRequestStore } from '@forinda/kickjs-http/request-store';
+import { getRequestStore } from '@forinda/kickjs-http/request-store'
 
 // In auth middleware, after resolving user:
-const store = getRequestStore();
-store.values.set(AUTH_USER, resolvedUser);
+const store = getRequestStore()
+store.values.set(AUTH_USER, resolvedUser)
 ```
 
 ```typescript
 // packages/multi-tenant/src/tenant.adapter.ts - after resolving tenant
-const store = getRequestStore();
-store.values.set(TENANT_CONTEXT, resolvedTenant);
+const store = getRequestStore()
+store.values.set(TENANT_CONTEXT, resolvedTenant)
 ```
 
 #### Step 6: Use in controllers and services
@@ -2866,13 +2932,13 @@ store.values.set(TENANT_CONTEXT, resolvedTenant);
 class UserController {
   constructor(
     private userService: UserService,
-    @Inject(AUTH_USER) private currentUser: User,           // REQUEST-scoped
-    @Inject(TENANT_CONTEXT) private tenant: TenantInfo,     // REQUEST-scoped
+    @Inject(AUTH_USER) private currentUser: User, // REQUEST-scoped
+    @Inject(TENANT_CONTEXT) private tenant: TenantInfo, // REQUEST-scoped
   ) {}
 
   @Get('/me')
   async me(ctx: RequestContext) {
-    return ctx.json(this.currentUser);  // Injected automatically
+    return ctx.json(this.currentUser) // Injected automatically
   }
 }
 
@@ -2885,7 +2951,7 @@ class AuditLogger {
   ) {}
 
   log(action: string) {
-    logger.info({ userId: this.user.id, requestId: this.requestId, action });
+    logger.info({ userId: this.user.id, requestId: this.requestId, action })
   }
 }
 ```
@@ -2920,8 +2986,8 @@ class AuditLogger {
 if (reg.scope === Scope.SINGLETON && depReg.scope === Scope.REQUEST) {
   throw new Error(
     `Cannot inject REQUEST-scoped "${tokenName(depToken)}" into SINGLETON "${tokenName(token)}". ` +
-    `Singletons outlive requests. Use TRANSIENT or REQUEST scope for the parent.`
-  );
+      `Singletons outlive requests. Use TRANSIENT or REQUEST scope for the parent.`,
+  )
 }
 ```
 
@@ -2931,15 +2997,13 @@ With AsyncLocalStorage in place, the logger automatically gets request context:
 
 ```typescript
 // packages/core/src/logger.ts
-import { requestStore } from '@forinda/kickjs-http/request-store';
+import { requestStore } from '@forinda/kickjs-http/request-store'
 
 class Logger {
   info(msg: string, data?: any) {
-    const store = requestStore.getStore();
-    const context = store
-      ? { requestId: store.requestId, ...data }
-      : data;
-    this.pino.info(context, msg);
+    const store = requestStore.getStore()
+    const context = store ? { requestId: store.requestId, ...data } : data
+    this.pino.info(context, msg)
   }
 }
 ```
@@ -2984,18 +3048,19 @@ export function createBanner(packageName: string, version: string) {
  * LICENSE.md file in the root directory of this source tree.
  *
  * @license MIT
- */`;
+ */`
 }
 ```
 
 Used in each package's tsup config:
+
 ```typescript
-import { createBanner } from "../../build.utils";
-import pkg from "./package.json";
+import { createBanner } from '../../build.utils'
+import pkg from './package.json'
 
 export default defineConfig({
   banner: { js: createBanner(pkg.name, pkg.version) },
-});
+})
 ```
 
 ### 19.2 KickJS Banner Utility
@@ -3004,7 +3069,7 @@ Create a shared build utility at the monorepo root:
 
 ```typescript
 // build.utils.ts
-import { readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs'
 
 export function createBanner(packageName: string, version: string) {
   return `/**
@@ -3016,12 +3081,12 @@ export function createBanner(packageName: string, version: string) {
  * LICENSE.md file in the root directory of this source tree.
  *
  * @license MIT
- */`;
+ */`
 }
 
 // Helper to read version from package.json
 export function readPkg(dir: string) {
-  return JSON.parse(readFileSync(`${dir}/package.json`, 'utf-8'));
+  return JSON.parse(readFileSync(`${dir}/package.json`, 'utf-8'))
 }
 ```
 
@@ -3044,6 +3109,7 @@ export default defineConfig({
 ```
 
 Every built JS file in `dist/` will start with:
+
 ```javascript
 /**
  * @forinda/kickjs-core v2.0.1
@@ -3084,6 +3150,7 @@ export default defineConfig({
 ## Key Takeaways for KickJS
 
 **Build & DX:**
+
 1. **Replace Turbo with pnpm + wireit** - Lighter orchestration, per-package caching, no daemon
 2. **Migrate library builds to tsdown** - Rolldown/Rust, single-step JS+DTS, `isolatedDeclarations` for near-instant types
 3. **Add build banners** - Shared `createBanner()` utility, injected via tsdown `banner` option
@@ -3094,19 +3161,9 @@ export default defineConfig({
 8. **Typegen for DI** - Generate `ContainerTokenMap` for fully typed `container.resolve()` calls
 9. **Fix devtools "not instantiated"** - Store `CLASS_KIND`, track `resolveCount`, add SSE + dependency graph
 
-**Lifecycle & DI:**
-10. **Make lifecycle hooks async-safe** - `callHook()` must propagate errors, not just log them. Make `setup()` and `start()` async
-11. **Add REQUEST scope** - AsyncLocalStorage-based per-request DI. Fixes auth user injection, tenant context, and request ID propagation
-12. **Fix TenantAdapter** - Currently registers a hardcoded default as SINGLETON; must use REQUEST scope with AsyncLocalStorage
-13. **Add scope validation** - Prevent SINGLETON from injecting REQUEST-scoped services (throw at resolution time)
-14. **Add missing lifecycle hooks** - `onRebuild`, `onHealthCheck`, `afterMount`
+**Lifecycle & DI:** 10. **Make lifecycle hooks async-safe** - `callHook()` must propagate errors, not just log them. Make `setup()` and `start()` async 11. **Add REQUEST scope** - AsyncLocalStorage-based per-request DI. Fixes auth user injection, tenant context, and request ID propagation 12. **Fix TenantAdapter** - Currently registers a hardcoded default as SINGLETON; must use REQUEST scope with AsyncLocalStorage 13. **Add scope validation** - Prevent SINGLETON from injecting REQUEST-scoped services (throw at resolution time) 14. **Add missing lifecycle hooks** - `onRebuild`, `onHealthCheck`, `afterMount`
 
-**Production Runtime:**
-15. **Add health check endpoint** - `/health/live` + `/health/ready` with DB/Redis/queue checks (P0, blocking)
-16. **Add shutdown timeout** - Configurable timeout (default 30s) with forced exit
-17. **Fix CORS defaults** - Change from `origin: '*'` to `origin: false` for production safety
-18. **Add distributed rate limiting** - Redis store adapter for multi-process deployments
-19. **Validate async `@PostConstruct`** - Either reject or properly await
+**Production Runtime:** 15. **Add health check endpoint** - `/health/live` + `/health/ready` with DB/Redis/queue checks (P0, blocking) 16. **Add shutdown timeout** - Configurable timeout (default 30s) with forced exit 17. **Fix CORS defaults** - Change from `origin: '*'` to `origin: false` for production safety 18. **Add distributed rate limiting** - Redis store adapter for multi-process deployments 19. **Validate async `@PostConstruct`** - Either reject or properly await
 
 ---
 
@@ -3114,7 +3171,7 @@ export default defineConfig({
 
 > Tracking issue: [#107 — Context Contributor pipeline (typed pre-handler ctx-extension primitive)](https://github.com/forinda/kick-js/issues/107).
 >
-> This section captures the architectural flow of the change so reviewers can assess blast radius before Phase 1 lands. It is descriptive, not prescriptive — it documents what the pipeline *is* and what it touches, not the style of the implementation.
+> This section captures the architectural flow of the change so reviewers can assess blast radius before Phase 1 lands. It is descriptive, not prescriptive — it documents what the pipeline _is_ and what it touches, not the style of the implementation.
 
 ### 20.1 Why
 
@@ -3129,11 +3186,11 @@ The Context Contributor pipeline addresses all four: typed `ctx.set('key', value
 
 ### 20.2 Mental model
 
-A **context decorator** is a typed, ordered, declarative way to populate `ctx.set('key', value)` *before* the handler runs:
+A **context decorator** is a typed, ordered, declarative way to populate `ctx.set('key', value)` _before_ the handler runs:
 
 ```ts
-@LoadTenant()
-@LoadProject({ dependsOn: ['tenant'] })
+@LoadTenant
+@LoadProject  // dependsOn: ['tenant'] declared inside defineContextDecorator
 @Get('/projects/:id')
 getProject(ctx: Ctx) {
   ctx.get('tenant')   // typed via ContextMeta, guaranteed present
@@ -3207,19 +3264,21 @@ Validation runs **once at startup**, never per request. A bad cycle takes the se
 
 **Today** there are **two parallel per-request maps**:
 
-| Store                              | Key                    | Used by                                                               |
-|---                                 |---                     |---                                                                    |
-| `req.__ctxMeta` (lazy Map on `req`)| `'user'`, `'tenant'`, …| `ctx.get/set` (`packages/kickjs/src/http/context.ts:70-74`)           |
-| `requestStore.getStore().values`   | `Map<any,any>`         | reserved by `RequestStore` (`packages/kickjs/src/http/request-store.ts:9`), currently unused |
+| Store                               | Key                     | Used by                                                                                      |
+| ----------------------------------- | ----------------------- | -------------------------------------------------------------------------------------------- |
+| `req.__ctxMeta` (lazy Map on `req`) | `'user'`, `'tenant'`, … | `ctx.get/set` (`packages/kickjs/src/http/context.ts:70-74`)                                  |
+| `requestStore.getStore().values`    | `Map<any,any>`          | reserved by `RequestStore` (`packages/kickjs/src/http/request-store.ts:9`), currently unused |
 
 After Phase 3 they become **the same Map**. `ctx.metadata` returns `requestStore.getStore()?.values` when a store exists, falling back to `req.__ctxMeta` (back-compat for code that runs outside ALS — tests, manually constructed ctx).
 
 **Why it matters:**
+
 - Services injected into contributors can read/write request state via `requestStore.getStore().values.get('user')` without holding a `ctx` reference.
 - Logger, multi-tenant, OTel adapters read tenant/user from the unified store regardless of who set it.
 - WS / queue / cron transports get the same story in V2 — they only need to populate `values` and the same code reads it.
 
 **Breakage surface to audit before merging Phase 3:**
+
 - Anything that assumes `req.__ctxMeta` is distinct from anything else (none spotted in-repo, but grep `__ctxMeta` before the PR).
 - Multi-tenant adapter's own ALS — see §20.8.
 
@@ -3229,42 +3288,42 @@ After Phase 3 they become **the same Map**. `ctx.metadata` returns `requestStore
 
 ### 20.7 Files touched (estimate per phase)
 
-| Phase | New files | Modified files |
-|---|---|---|
-| 1 | `packages/kickjs/src/core/execution-context.ts`, `…/context-decorator.ts`, `…/context-errors.ts` | `core/index.ts` (re-exports), `core/interfaces.ts` (new METADATA keys: `METHOD_CONTRIBUTORS`, `CLASS_CONTRIBUTORS`) |
-| 2 | `…/contributor-builder.ts`, `…/topo-sort.ts`, `…/contributor-runner.ts` | — |
-| 3 | — | `http/context.ts` (metadata getter), `http/request-store.ts` (contract docs only, no shape change) |
-| 4 | — | `http/router-builder.ts:30-98` (insert runner step), `http/application.ts` (opt-out flag, position-0 detection) |
-| 5 | — | `core/app-module.ts` (`contributors?()` hook), `core/adapter.ts` (`contributors?()` hook), `http/application.ts` (`ApplicationOptions.contributors`) |
-| 6 | `packages/testing/src/run-contributor.ts` | `packages/testing/src/create-test-app.ts` (accept `contributors`) |
-| 7 | `docs/guide/context-decorators.md` | `docs/guide/middleware.md`, `docs/guide/decorators.md`, `docs/guide/custom-decorators.md`, `CLAUDE.md` |
-| 8 | example contributor (new file in an existing example app) | one example app |
+| Phase | New files                                                                                        | Modified files                                                                                                                                       |
+| ----- | ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | `packages/kickjs/src/core/execution-context.ts`, `…/context-decorator.ts`, `…/context-errors.ts` | `core/index.ts` (re-exports), `core/interfaces.ts` (new METADATA keys: `METHOD_CONTRIBUTORS`, `CLASS_CONTRIBUTORS`)                                  |
+| 2     | `…/contributor-builder.ts`, `…/topo-sort.ts`, `…/contributor-runner.ts`                          | —                                                                                                                                                    |
+| 3     | —                                                                                                | `http/context.ts` (metadata getter), `http/request-store.ts` (contract docs only, no shape change)                                                   |
+| 4     | —                                                                                                | `http/router-builder.ts:30-98` (insert runner step), `http/application.ts` (opt-out flag, position-0 detection)                                      |
+| 5     | —                                                                                                | `core/app-module.ts` (`contributors?()` hook), `core/adapter.ts` (`contributors?()` hook), `http/application.ts` (`ApplicationOptions.contributors`) |
+| 6     | `packages/testing/src/run-contributor.ts`                                                        | `packages/testing/src/create-test-app.ts` (accept `contributors`)                                                                                    |
+| 7     | `docs/guide/context-decorators.md`                                                               | `docs/guide/middleware.md`, `docs/guide/decorators.md`, `docs/guide/custom-decorators.md`, `CLAUDE.md`                                               |
+| 8     | example contributor (new file in an existing example app)                                        | one example app                                                                                                                                      |
 
 ### 20.8 Cross-cutting impact
 
-| System | Impact |
-|---|---|
-| **DI / Container** | None. Contributors resolve their `deps` array via `container.resolve(token)`. Already supported. |
-| **RequestContext** | Gains `implements ExecutionContext`. `metadata` getter swaps backing Map. Public API (`ctx.get/set/user/tenantId/roles`) unchanged at the call site. |
-| **`@Middleware()`** | Unchanged. Coexists with contributors — contributors run *after* method middleware, *before* the handler. |
-| **Validation middleware** | Unchanged. Still runs first so contributors can read validated `body/query/params` off `ctx`. |
+| System                                                                   | Impact                                                                                                                                                                                                                                                       |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **DI / Container**                                                       | None. Contributors resolve their `deps` array via `container.resolve(token)`. Already supported.                                                                                                                                                             |
+| **RequestContext**                                                       | Gains `implements ExecutionContext`. `metadata` getter swaps backing Map. Public API (`ctx.get/set/user/tenantId/roles`) unchanged at the call site.                                                                                                         |
+| **`@Middleware()`**                                                      | Unchanged. Coexists with contributors — contributors run _after_ method middleware, _before_ the handler.                                                                                                                                                    |
+| **Validation middleware**                                                | Unchanged. Still runs first so contributors can read validated `body/query/params` off `ctx`.                                                                                                                                                                |
 | **Multi-tenant adapter** (`packages/multi-tenant/src/tenant.context.ts`) | Currently uses its own ALS. Two options: **(a)** migrate to read tenant from unified `requestStore.getStore().values` post-Phase 3, **(b)** keep its own ALS and ship a contributor that copies into `ctx.set('tenant', …)`. Decision needed before Phase 3. |
-| **Auth adapter** (`packages/auth/src/adapter.ts`) | Already writes `user` to request metadata. Migrate to write to `requestStore.values` in Phase 3 (one-liner) so downstream services can read it without `req`. |
-| **OTel adapter** | Sensitive-key redaction contract already lives at `requestStore.getStore()`. No change needed; bonus that contributors become automatically traceable (each one is a logical span boundary). |
-| **WS / queue / cron** | Not touched in V1. `ExecutionContext` interface lands so V2 can wire these up without a second refactor. |
-| **Testing** | `createTestApp` grows a `contributors` option. New `runContributor(decorator, partialCtx)` helper for unit-testing in isolation. Existing tests unchanged. |
-| **CLI generators** | No change in V1. Could grow a `kick g contributor <name>` command in a follow-up. |
+| **Auth adapter** (`packages/auth/src/adapter.ts`)                        | Already writes `user` to request metadata. Migrate to write to `requestStore.values` in Phase 3 (one-liner) so downstream services can read it without `req`.                                                                                                |
+| **OTel adapter**                                                         | Sensitive-key redaction contract already lives at `requestStore.getStore()`. No change needed; bonus that contributors become automatically traceable (each one is a logical span boundary).                                                                 |
+| **WS / queue / cron**                                                    | Not touched in V1. `ExecutionContext` interface lands so V2 can wire these up without a second refactor.                                                                                                                                                     |
+| **Testing**                                                              | `createTestApp` grows a `contributors` option. New `runContributor(decorator, partialCtx)` helper for unit-testing in isolation. Existing tests unchanged.                                                                                                   |
+| **CLI generators**                                                       | No change in V1. Could grow a `kick g contributor <name>` command in a follow-up.                                                                                                                                                                            |
 
 ### 20.9 Failure modes & error matrix
 
-| Failure | When caught | Behaviour |
-|---|---|---|
-| `dependsOn: ['tenant']` but no contributor produces `'tenant'` | Startup | Throw `MissingContributorError` with route + key |
-| Cycle: `A dependsOn B`, `B dependsOn A` | Startup | Throw `ContributorCycleError` with the cycle path |
-| Two contributors produce the same `key` at the same precedence | Startup | Throw `DuplicateContributorError` |
-| Contributor throws at runtime, `optional: false` | Per request | `next(err)` — standard error handler takes over |
-| Contributor throws at runtime, `optional: true` | Per request | Skip, continue pipeline, `ctx.get(key)` returns `undefined` |
-| Contributor throws at runtime, `onError` hook provided | Per request | Hook runs; decides whether to swallow, rewrite, or re-throw |
+| Failure                                                        | When caught | Behaviour                                                   |
+| -------------------------------------------------------------- | ----------- | ----------------------------------------------------------- |
+| `dependsOn: ['tenant']` but no contributor produces `'tenant'` | Startup     | Throw `MissingContributorError` with route + key            |
+| Cycle: `A dependsOn B`, `B dependsOn A`                        | Startup     | Throw `ContributorCycleError` with the cycle path           |
+| Two contributors produce the same `key` at the same precedence | Startup     | Throw `DuplicateContributorError`                           |
+| Contributor throws at runtime, `optional: false`               | Per request | `next(err)` — standard error handler takes over             |
+| Contributor throws at runtime, `optional: true`                | Per request | Skip, continue pipeline, `ctx.get(key)` returns `undefined` |
+| Contributor throws at runtime, `onError` hook provided         | Per request | Hook runs; decides whether to swallow, rewrite, or re-throw |
 
 ### 20.10 Non-goals (V1, explicit)
 
@@ -3301,38 +3360,38 @@ Audit results from grepping `__ctxMeta`, `requestStore`, `tenantStorage`, `getCu
 
 **Direct edits required:**
 
-| Package | Phases | What changes |
-|---|---|---|
-| `@forinda/kickjs` | 1, 2, 3, 4, 5 | Core types + factory, topo-sort + runner, RequestContext metadata-getter unification, router-builder runner step, ApplicationOptions + AppModule + AppAdapter `contributors?()` hooks |
-| `@forinda/kickjs-multi-tenant` | 3 | Drop dedicated ALS in `tenant.context.ts`; rewrite `getCurrentTenant()` to read from `requestStore.values.get('tenant')`; `TenantAdapter.middleware()` writes tenant into `requestStore.values` instead of calling `tenantStorage.run()` |
-| `@forinda/kickjs-testing` | 6 | New `runContributor(decorator, partialCtx)` helper; `createTestApp({ contributors: [...] })` option |
+| Package                        | Phases        | What changes                                                                                                                                                                                                                             |
+| ------------------------------ | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@forinda/kickjs`              | 1, 2, 3, 4, 5 | Core types + factory, topo-sort + runner, RequestContext metadata-getter unification, router-builder runner step, ApplicationOptions + AppModule + AppAdapter `contributors?()` hooks                                                    |
+| `@forinda/kickjs-multi-tenant` | 3             | Drop dedicated ALS in `tenant.context.ts`; rewrite `getCurrentTenant()` to read from `requestStore.values.get('tenant')`; `TenantAdapter.middleware()` writes tenant into `requestStore.values` instead of calling `tenantStorage.run()` |
+| `@forinda/kickjs-testing`      | 6             | New `runContributor(decorator, partialCtx)` helper; `createTestApp({ contributors: [...] })` option                                                                                                                                      |
 
 **Indirect — consume unchanged public API but need a smoke test after Phase 3:**
 
-| Package | Why | Action |
-|---|---|---|
-| `@forinda/kickjs-prisma` | `prisma-tenant.adapter.ts:94-117` dynamically imports `getCurrentTenant` from multi-tenant | Verify `getCurrentTenant()` returns the same value post-migration; one integration test covering tenant resolution → Prisma client switch |
-| `@forinda/kickjs-drizzle` | `drizzle-tenant.adapter.ts:96-119` does the same dynamic import | Same as prisma — one tenant-resolution integration test |
-| `@forinda/kickjs-auth` | Already writes user to request metadata (`__ctxMeta` via `ctx.set`) | Migrate the write to land in `requestStore.values` so contributors can `dependsOn: ['user']`. Reads via `ctx.user` keep working unchanged thanks to the fallback chain |
+| Package                   | Why                                                                                        | Action                                                                                                                                                                 |
+| ------------------------- | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@forinda/kickjs-prisma`  | `prisma-tenant.adapter.ts:94-117` dynamically imports `getCurrentTenant` from multi-tenant | Verify `getCurrentTenant()` returns the same value post-migration; one integration test covering tenant resolution → Prisma client switch                              |
+| `@forinda/kickjs-drizzle` | `drizzle-tenant.adapter.ts:96-119` does the same dynamic import                            | Same as prisma — one tenant-resolution integration test                                                                                                                |
+| `@forinda/kickjs-auth`    | Already writes user to request metadata (`__ctxMeta` via `ctx.set`)                        | Migrate the write to land in `requestStore.values` so contributors can `dependsOn: ['user']`. Reads via `ctx.user` keep working unchanged thanks to the fallback chain |
 
 **Likely no change (verify, then leave alone):**
 
-| Package | Notes |
-|---|---|
-| `@forinda/kickjs-otel` | Already reads from `requestStore` for trace context. Unified storage is a bonus, no required change |
-| `@forinda/kickjs-ws` | Has its own `ws-context.ts`; V1 is HTTP-only. WS gets `ExecutionContext` adoption in V2 |
-| `@forinda/kickjs-graphql`, `-queue`, `-cron`, `-swagger`, `-devtools`, `-notifications`, `-cli`, `-config`, `-mailer`, `-vite` | Don't touch RequestContext internals or tenant ALS. No changes expected |
+| Package                                                                                                                        | Notes                                                                                               |
+| ------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- |
+| `@forinda/kickjs-otel`                                                                                                         | Already reads from `requestStore` for trace context. Unified storage is a bonus, no required change |
+| `@forinda/kickjs-ws`                                                                                                           | Has its own `ws-context.ts`; V1 is HTTP-only. WS gets `ExecutionContext` adoption in V2             |
+| `@forinda/kickjs-graphql`, `-queue`, `-cron`, `-swagger`, `-devtools`, `-notifications`, `-cli`, `-config`, `-mailer`, `-vite` | Don't touch RequestContext internals or tenant ALS. No changes expected                             |
 
 **Frozen (per memory feedback — never edit):**
 
-| Package | Status |
-|---|---|
+| Package         | Status                                                                     |
+| --------------- | -------------------------------------------------------------------------- |
 | `packages/core` | Mirror of `packages/kickjs/src/core` — all changes go to `packages/kickjs` |
 | `packages/http` | Mirror of `packages/kickjs/src/http` — all changes go to `packages/kickjs` |
 
 **Examples to update (Phase 8):**
 
-| App | What |
-|---|---|
-| `examples/jira-drizzle-api` (or new example) | Add `LoadTenant` contributor showing class-level + method-level + adapter-level use in one app |
+| App                                                   | What                                                                                                    |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `examples/jira-drizzle-api` (or new example)          | Add `LoadTenant` contributor showing class-level + method-level + adapter-level use in one app          |
 | `examples/multi-tenant-{drizzle,prisma,mongoose}-api` | Optional: convert hand-written tenant resolution middleware to a contributor (showcases migration path) |
