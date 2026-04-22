@@ -64,7 +64,7 @@ describe('createTestModule', () => {
 
     const container = Container.getInstance()
     const mod = new TestModule()
-    mod.register(container)
+    mod?.register!(container)
 
     expect(receivedContainer).toBe(container)
   })
