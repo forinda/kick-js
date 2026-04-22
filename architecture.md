@@ -3395,3 +3395,409 @@ Audit results from grepping `__ctxMeta`, `requestStore`, `tenantStorage`, `getCu
 | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
 | `examples/jira-drizzle-api` (or new example)          | Add `LoadTenant` contributor showing class-level + method-level + adapter-level use in one app          |
 | `examples/multi-tenant-{drizzle,prisma,mongoose}-api` | Optional: convert hand-written tenant resolution middleware to a contributor (showcases migration path) |
+
+---
+
+## 21. Plugin Ecosystem — improvement landscape
+
+> **Status:** strategic notes, not yet a tracking issue. Ranked by leverage.
+> Captures patterns observed across the 24 first-party packages, the
+> Context Contributor pipeline work (#107), and how plugins/adapters
+> compose today. Use this as the source spec when filing follow-up
+> issues; sequencing recommendations at the end.
+
+### 21.1 Current state of the plugin surface
+
+What KickJS already has:
+
+- **`KickPlugin`** (`packages/kickjs/src/core/plugin.ts`) — bundles modules, adapters, middleware, DI bindings, lifecycle hooks. Gained `contributors?()` in #107 Phase 5b.
+- **`AppAdapter`** — separate but overlapping concept; plugins ship adapters and adapters can independently expose middleware/contributors/lifecycle hooks.
+- **DI Container** — typed tokens (`createToken<T>`), singleton/transient/REQUEST scopes, factories, instances. Plugins register via `register?(container)`.
+- **18 first-party packages** all using these primitives differently — `auth`, `multi-tenant`, `swagger`, `prisma`/`drizzle`, `ws`, `queue`/`cron`, `otel`, `devtools`, `mailer`, `notifications`, `mcp`, `ai`, `graphql`.
+
+Cross-cutting patterns observed:
+
+1. **Augmentation as the type-safety primitive.** `ContextMeta`, `AuthUser`, `PolicyRegistry`, `KickJsRegistry`, `Env`. Each adopted independently with slightly different conventions.
+2. **Decorators-as-metadata.** Every package adds its own `@SomeName` decorator that writes Reflect metadata. Discovery is consistent (`getMethodMeta`, `getClassMeta`); registration is ad-hoc (each package owns its `METADATA` constants).
+3. **DI tokens proliferate.** `TENANT_CONTEXT`, `AUTH_USER`, `DRIZZLE_DB`, `PROVIDER_TENANT`, etc. No central registry, no discovery story.
+4. **Adapter lifecycle hooks are well-defined** (`beforeMount`, `beforeStart`, `afterStart`, `shutdown`, `onHealthCheck`, `onRouteMount`) — but `KickPlugin` only has 5 hooks, missing the `beforeStart`/`afterStart` symmetry.
+5. **Cross-package compatibility is implicit.** `TenantAdapter` must mount before `AuthAdapter`; `OtelAdapter` before `RequestLoggerMiddleware`. Rules live in adapter README files, never in code. Wrong order silently corrupts behaviour at runtime.
+6. **Generators are siloed.** `kick g <thing>` generates module/controller/service/etc. but plugins can't extend the generator surface — no way to ship `kick g resolver` from `@forinda/kickjs-graphql`.
+7. **No plugin registry / discovery.** `kick add <name>` exists for first-party packages; third-party plugins have no listing or install path.
+8. **Testing surface for plugin authors is missing.** `runContributor` (Phase 6) and `createTestApp.contributors` exist but there's no unified `createTestPlugin` harness.
+9. **Plugin observability is ad-hoc.** DevTools is an adapter that introspects the container; plugins have no standard way to expose internal state for DevTools to render.
+10. **Versioning + compat is uncoordinated.** Plugins ship as separate packages with `@forinda/kickjs` peer dep. No formal "minimum framework version" check, no compatibility matrix.
+
+### 21.2 Top 3 — high impact, low-medium effort
+
+#### 21.2.1 Plugin dependency declaration
+
+**Problem.** `TenantAdapter` must mount before `AuthAdapter` so `req.tenant` is available for tenant-scoped RBAC. Same story for `OtelAdapter` before `RequestLoggerMiddleware`, `Auth` before `Devtools`, etc. Wrong order silently corrupts behaviour.
+
+**Proposal.** Add to `KickPlugin` and `AppAdapter`:
+
+```ts
+interface KickPlugin {
+  name: string
+  /** Plugin/adapter names that must mount before this one. */
+  dependsOn?: readonly string[]
+  /** Plugin/adapter names that must mount after this one (rare; advisory ordering). */
+  before?: readonly string[]
+  // ... existing fields
+}
+```
+
+`Application.setup()` topologically sorts plugins/adapters before any mounting (reuse the Kahn algorithm + cycle reconstruction already in `contributor-pipeline.ts:topoSort`). Cycle or missing dep throws at boot — same UX as `MissingContributorError` / `ContributorCycleError`.
+
+**Impact.** Eliminates a whole class of "works on my machine" mounting-order bugs. Existing plugins that don't declare deps continue working (default `[]`). The topo-sort code is already written and tested in #107 Phase 2 — pure reuse.
+
+#### 21.2.2 `forRoot` / `forFeature` config pattern (DynamicModule)
+
+**Problem.** Every config-driven plugin reinvents instantiation. `new TenantAdapter({ strategy: 'subdomain', required: true })` vs `new AuthAdapter({ strategies: [...] })` vs `new MailerAdapter({ provider: ... })`. Multi-instance is ad-hoc — registering two BullMQ queues with different configs requires instantiating the adapter twice or DI factory plumbing.
+
+**Proposal.** Standard static factory protocol + `definePlugin` helper that mirrors `defineContextDecorator`'s ergonomics:
+
+```ts
+export const FlagsPlugin = definePlugin<FlagsConfig>({
+  name: 'FlagsPlugin',
+  defaults: { defaultTtl: 60_000 },
+  build(config, ctx) {
+    return {
+      register(container) {
+        container.registerInstance(FLAGS, makeProvider(config))
+      },
+      contributors: () => [LoadFlags.registration],
+    }
+  },
+})
+
+// Caller:
+bootstrap({
+  plugins: [
+    FlagsPlugin({ provider: launchDarkly }),
+    BullMQPlugin.forFeature('emails', { workers: 3 }),
+    BullMQPlugin.forFeature('webhooks', { workers: 1, maxAttempts: 5 }),
+  ],
+})
+```
+
+`forRoot(config)` → singleton plugin instance; `forFeature(scope, overrides?)` → per-feature instance scoped to a context. Convention only — not enforced by an interface.
+
+**Impact.** Massive ergonomic win — no more hand-written factory classes, no more `new XxxAdapter({...})` boilerplate, and `forFeature` solves the multi-instance problem cleanly. Aligns with NestJS's `DynamicModule` pattern that ecosystem authors already know.
+
+##### Naming alternatives — `forRoot` / `forFeature` are not the only option
+
+NestJS chose `forRoot` / `forFeature` because they ported Angular's `RouterModule.forRoot()` / `RouterModule.forChild()` patterns. The names are historical, not semantic. Substitutable forms worth considering:
+
+| NestJS-borrowed name             | Substitute                                      | Trade-off                                                                                                          |
+| -------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `MyPlugin.forRoot(config)`       | **Bare call:** `MyPlugin(config)`               | Drops a useless method name. Matches `defineContextDecorator` ergonomics already in the framework.                 |
+| `MyPlugin.forFeature(scope, c)`  | `MyPlugin.scoped(scope, c)`                     | "scoped" reads more directly and matches KickJS's existing DI `Scope` terminology (`SINGLETON / TRANSIENT / REQUEST`). |
+| `MyPlugin.forRootAsync({ ... })` | `MyPlugin.async({ ... })`                       | Drops the `forRoot` prefix once it's implied by the bare-call default.                                             |
+
+KickJS already prefers terse, framework-idiom names (`defineContextDecorator`, `createToken`, `createLogger`, `bootstrap`). Following that convention, the recommended **primary** API is:
+
+```ts
+// Singleton (most common case)
+plugins: [AuthPlugin({ jwtSecret: env.JWT_SECRET })]
+
+// Per-scope multi-instance
+plugins: [QueuePlugin.scoped('emails', { workers: 3 })]
+
+// Deferred async config
+plugins: [
+  DatabasePlugin.async({
+    inject: [ConfigService],
+    useFactory: (cfg) => ({ url: cfg.get('DB_URL') }),
+  }),
+]
+```
+
+Because NestJS users will muscle-memory reach for `forRoot` / `forFeature`, **also expose them as aliases** so ecosystem familiarity isn't lost:
+
+```ts
+AuthPlugin.forRoot(config)        // alias for AuthPlugin(config)
+QueuePlugin.forFeature(scope, c)  // alias for QueuePlugin.scoped(scope, c)
+DatabasePlugin.forRootAsync(opts) // alias for DatabasePlugin.async(opts)
+```
+
+Cost: ~3 lines in the factory shim. Benefit: zero-friction migration for adopters coming from NestJS. The architecture sections that follow use `.scoped()` / `.async()` as the primary names but treat both forms as supported.
+
+#### 21.2.3 Plugin generator extension API
+
+**Problem.** `kick g <thing>` is hardcoded in the CLI. A plugin author can't ship `kick g resolver` for `@forinda/kickjs-graphql` or `kick g job` for `@forinda/kickjs-queue`. Generator templates live in `packages/cli/src/generators/templates/` — outside any plugin's reach.
+
+**Proposal.** Plugins declare generators via a `kickjs.generators` field in `package.json` pointing at a discovery file:
+
+```json
+{
+  "name": "@my-org/kickjs-cqrs",
+  "kickjs": {
+    "generators": "./dist/generators.js"
+  }
+}
+```
+
+The discovery file exports a typed manifest:
+
+```ts
+import { defineGenerator } from '@forinda/kickjs-cli'
+
+export default [
+  defineGenerator({
+    name: 'command',
+    description: 'Generate a CQRS command + handler',
+    args: [{ name: 'name', required: true }],
+    files: (ctx) => [
+      {
+        path: `src/modules/${ctx.kebab}/commands/create-${ctx.kebab}.command.ts`,
+        content: ...,
+      },
+      {
+        path: `src/modules/${ctx.kebab}/commands/create-${ctx.kebab}.handler.ts`,
+        content: ...,
+      },
+    ],
+  }),
+]
+```
+
+`kick g <name>` walks `node_modules/@*/kickjs-*/package.json`, loads the generator manifests, dispatches by name. First-party generators use the same API.
+
+**Impact.** Plugins become genuinely first-class — they can ship the same scaffolding ergonomics the framework does. Stops every plugin author from documenting "create a file at this path with this content" manually.
+
+### 21.3 Tier 2 — high impact, more design work
+
+#### 21.3.1 `definePlugin()` factory + plugin metadata
+
+Pair with §21.2.2. Beyond `forRoot`, plugins ship structured metadata for tooling:
+
+```ts
+definePlugin({
+  name: 'FlagsPlugin',
+  version: '1.0.0',
+  requires: { kickjs: '^3.2.0' },
+  tags: ['feature-flags', 'observability'],
+  /** Health check exposed automatically through onHealthCheck. */
+  health: async (container) => ({ status: 'up', stats: { ... } }),
+  /** What the plugin contributes to ContextMeta — for typegen. */
+  contextMeta: { flags: 'FlagsValue' },
+  build: (config) => ({ /* the actual KickPlugin object */ }),
+})
+```
+
+This metadata feeds three things:
+
+- **DevTools** can render a "plugins loaded" panel with version + health.
+- **`kick add`** can validate `requires` at install time (warn if framework version is incompatible).
+- **`kick typegen`** can read `contextMeta` and generate the augmentation declarations automatically — no more manual `declare module` per plugin.
+
+#### 21.3.2 `createTestPlugin` + plugin test harness
+
+Symmetric with `runContributor` and `createTestApp`. Right now testing a plugin in isolation requires standing up a full test app.
+
+```ts
+import { testPlugin } from '@forinda/kickjs-testing'
+
+const harness = await testPlugin(FlagsPlugin({ provider: scriptedFlags }))
+
+// Resolve what the plugin registered
+const flags = harness.container.resolve(FLAGS_SERVICE)
+
+// Trigger lifecycle hooks
+await harness.callBeforeStart()
+await harness.callOnReady()
+
+// Run a request through any contributors the plugin shipped
+const ctx = harness.makeContext()
+await harness.runContributors(ctx)
+expect(ctx.get('flags')).toEqual({ beta: true })
+
+await harness.shutdown()
+```
+
+**Impact.** Plugin authors get a sensible TDD loop without supertest gymnastics. Same value `runContributor` brought to contributor authors.
+
+#### 21.3.3 Standardized augmentation registry
+
+**Problem.** Four different augmentation conventions in the wild today:
+
+- `interface ContextMeta {}` (kickjs)
+- `interface AuthUser {}` (auth)
+- `interface PolicyRegistry {}` (auth)
+- `interface KickJsRegistry {}` (kickjs typegen)
+
+Each plugin invents its own. New adopters can't tell which convention to follow.
+
+**Proposal.** Document the canonical pattern explicitly and ship a code generator:
+
+```ts
+// In every plugin that supports type-safe augmentation:
+import { defineAugmentation } from '@forinda/kickjs'
+
+export interface FeatureFlags {} // augmentable
+
+defineAugmentation('FeatureFlags', {
+  description: 'Flags consumed by FlagsPlugin',
+  example: '{ beta: boolean; rolloutPercentage: number }',
+})
+```
+
+`kick typegen` reads these and generates a single `.kickjs/types/augmentations.d.ts` listing every augmentation surface the project's plugins offer. Adopters get one file to look at to understand "what can I augment?".
+
+**Impact.** Lowers the cliff for first-time plugin adopters. Today they have to read each plugin's README to learn the augmentation pattern; tomorrow they run `kick typegen --augmentations` and see the menu.
+
+#### 21.3.4 `defineAdapter()` — same factory ergonomics for adapters
+
+`AppAdapter` is the simpler primitive of the two — middleware + lifecycle hooks + contributors, no module/plugin envelope. **Most first-party packages today ship adapters, not plugins** (`auth`, `multi-tenant`, `swagger`, `prisma`, `drizzle`, `mailer`, `notifications`, `otel`, `devtools`, `mcp`, `ai`, `ws`, `queue`, `cron`). They all have the same `new XxxAdapter({...})` boilerplate that `definePlugin` removes for plugins.
+
+`defineAdapter()` mirrors `definePlugin()` exactly — same call/scoped/async API, same metadata fields, same alias surface — but returns `AppAdapter` instead of `KickPlugin`:
+
+```ts
+import { defineAdapter, type AdapterContext } from '@forinda/kickjs'
+
+export const TenantAdapter = defineAdapter<TenantConfig>({
+  name: 'TenantAdapter',
+  defaults: { strategy: 'header', required: true },
+  build: (config) => ({
+    middleware: () => [tenantResolverMiddleware(config)],
+    contributors: () => [LoadTenant.registration],
+    beforeStart: (ctx: AdapterContext) => {
+      // ...register tenant DB factory, etc.
+    },
+    onHealthCheck: () => ({ name: 'tenant', status: 'up' }),
+    shutdown: () => closeTenantConnections(),
+  }),
+})
+
+// Caller — adapters go in `adapters: []`, not `plugins: []`
+bootstrap({
+  modules,
+  adapters: [
+    TenantAdapter({ strategy: 'subdomain' }),
+    // multi-instance — each scoped tenant adapter gets its own DI tokens
+    TenantAdapter.scoped('shard-eu', { strategy: 'header', headerName: 'x-eu-tenant' }),
+    TenantAdapter.scoped('shard-us', { strategy: 'header', headerName: 'x-us-tenant' }),
+  ],
+})
+```
+
+The factory shape, the naming alternatives (§21.2.2), the `.scoped()` semantics, the `.async()` deferred-config form, the `.forRoot()` / `.forFeature()` aliases — **all identical** to `definePlugin`. Adopters learn one mental model and apply it to whichever primitive their use case wants.
+
+##### When to use which
+
+The output type is the cleanest decision boundary:
+
+| Use `defineAdapter()` when…                            | Use `definePlugin()` when…                                                |
+| ------------------------------------------------------ | ------------------------------------------------------------------------- |
+| You ship a single cross-cutting concern                | You bundle modules + adapters + middleware + DI bindings                  |
+| Output is one set of lifecycle hooks                   | Output is a feature unit (auth system, monitoring suite, admin panel)     |
+| No feature modules of your own                         | You ship `modules?()` returning `AppModuleClass[]`                        |
+| Most first-party adapters today (~14 of 18 packages)   | `AuthPlugin`, `MonitoringPlugin`, `AdminPanelPlugin`-shaped offerings     |
+| You go in `bootstrap({ adapters: [...] })`             | You go in `bootstrap({ plugins: [...] })`                                 |
+
+A package that today ships an adapter + a single module + middleware can pick either:
+
+- **Adapter only** — leave the module/middleware as side-exports the user wires manually
+- **Plugin** — bundle everything so `bootstrap({ plugins: [MyPlugin(config)] })` is the entire setup
+
+The plugin form is friendlier for adopters; the adapter form is more flexible if consumers want to mix-and-match the parts.
+
+##### Migration impact across the workspace
+
+Today's 18 packages map roughly:
+
+| Package         | Today                                   | After `defineAdapter()`                        |
+| --------------- | --------------------------------------- | ---------------------------------------------- |
+| `auth`          | `class AuthAdapter implements AppAdapter` | `defineAdapter<AuthConfig>({ ... })`           |
+| `multi-tenant`  | `class TenantAdapter implements AppAdapter` | `defineAdapter<TenantConfig>({ ... })` + supports `.scoped()` for multi-tenant DB sharding |
+| `swagger`       | `class SwaggerAdapter implements AppAdapter` | `defineAdapter<SwaggerOptions>({ ... })`       |
+| `prisma`/`drizzle` | `class PrismaAdapter implements AppAdapter` + tenant variant | One `defineAdapter` with `.scoped()` for the per-tenant case |
+| `queue`         | `class QueueAdapter implements AppAdapter` + adapter-per-queue gymnastics | `defineAdapter<QueueConfig>({ ... })` + `.scoped('emails')` etc. |
+| `mailer`        | `class MailerAdapter implements AppAdapter` | `defineAdapter<MailerConfig>({ ... })`         |
+| `otel`, `devtools`, `mcp`, `ai`, `ws`, `cron`, `notifications` | Same constructor pattern | All collapse to `defineAdapter()` calls         |
+
+**Net code reduction estimate:** ~12-15% per adapter file (no class scaffolding, no constructor, no `name` field, no manual factory plumbing for multi-instance variants).
+
+**Impact.** This is the single change that makes the most code in the workspace simpler — every adapter package gets the same factory ergonomics, multi-instance becomes free for any adapter, and the `defineAdapter` / `definePlugin` symmetry means there's exactly one mental model for "how do I make a configurable extension?"
+
+### 21.4 Tier 3 — polish + ecosystem maturity
+
+#### 21.4.1 Plugin marketplace + discovery
+
+`kick add <name>` already exists for first-party packages. Extend to third-party:
+
+- **Convention:** any npm package matching `kickjs-plugin-*` or with `keywords: ['kickjs-plugin']` in `package.json` is discoverable.
+- **`kick search <term>`** queries the npm registry by keyword.
+- **`kick add <name>`** installs + runs the plugin's `kickjs.install` script (also defined via the package.json `kickjs` field).
+
+Worth doing **after** §21.2 + §21.3 because the discoverability story needs maturity in the surface area first. No point listing plugins if every plugin reinvents lifecycle ordering.
+
+#### 21.4.2 Plugin-aware HMR
+
+The Vite plugin re-evaluates the entry on file change, which triggers `bootstrap()` which goes through HMR-rebuild branch. Individual plugin modules don't have a "I'm changing — preserve my state, re-init lightly" hook. Adapters with persistent connections (DB pools, WebSocket servers) lose state on every save.
+
+**Proposal.** Add `accept?(prev: KickPlugin): boolean | Promise<boolean>` to `KickPlugin`. When HMR detects a file change, the new plugin instance is asked whether it can adopt the previous instance's state. If yes, the framework swaps the implementation but keeps the connection. If no, full teardown + recreate.
+
+Real win for DB adapters, queue adapters, anything holding sockets.
+
+#### 21.4.3 Plugin observability hooks for DevTools
+
+DevTools is its own adapter that knows how to introspect `Container`. Plugins have no standard way to expose internal state.
+
+**Proposal.** Plugins implement an optional `inspect?(): Promise<PluginInspector>` returning a structured snapshot:
+
+```ts
+interface PluginInspector {
+  state: Record<string, unknown> // Key/value pairs DevTools renders
+  metrics?: Record<string, number> // Counters/gauges
+  recentEvents?: Array<{
+    timestamp: number
+    level: 'info' | 'warn' | 'error'
+    message: string
+  }>
+  actions?: Record<string, () => Promise<void>> // Buttons in the DevTools UI
+}
+```
+
+DevTools auto-discovers `inspect()` on every plugin and renders a panel per plugin. Flags plugin shows current rollout percentages with a "refresh" action; queue plugin shows job counts with a "drain" action; etc.
+
+#### 21.4.4 Plugin compatibility checks
+
+Tied to §21.3.1 metadata. At boot time, the framework reads each plugin's `requires` field and validates against installed versions. Mismatch logs a warning at startup with upgrade guidance. Optional strict mode (`bootstrap({ strictPluginCompat: true })`) escalates to a throw.
+
+Cheap to add, prevents subtle "plugin X expects framework feature Y added in 3.2 but you're on 3.1" runtime breakage.
+
+### 21.5 What to skip / deprioritize
+
+- **Lazy/deferred plugin loading.** Sounds appealing for cold-start optimization but adds significant complexity to the lifecycle. Plugins are configuration; loading them eagerly is fine.
+- **Plugin sandboxing / isolation.** Node doesn't make this easy without VM contexts that break decorators + `reflect-metadata`. Trust contract: plugins run with full app privileges. Not worth fighting.
+- **Plugin scoring/ratings in marketplace.** Too early — establish the discovery surface (§21.4.1) first.
+
+### 21.6 Suggested sequencing
+
+**Phase A** (one PR each, ~1-2 weeks total — highest ROI, mechanical work):
+
+1. `dependsOn` on plugins/adapters + topo-sort at mount (§21.2.1)
+2. `definePlugin()` + `defineAdapter()` factories + metadata fields (§21.3.1 + §21.3.4 lite — just `name`, `version`, `requires`, plus the `.scoped()` / `.async()` / `.forRoot` aliases from §21.2.2)
+3. `createTestPlugin` (§21.3.2)
+
+**Phase B** (~2-3 weeks each — design work + first-party migrations):
+
+4. Migrate first-party adapters to `defineAdapter()` (§21.3.4) — ~14 packages, mechanical but touches every adapter; do as one PR per package so HMR/peer-dep regressions are bisectable
+5. Plugin generator extension API (§21.2.3) — touches CLI deeply, needs careful design
+6. Standardized augmentation registry + typegen integration (§21.3.3)
+
+**Phase C** (when ecosystem starts forming):
+
+7-10. Observability hooks, marketplace, HMR-aware `accept()`, compat checks.
+
+### 21.7 Audit summary — why these specifically
+
+The Phase A trio (§21.2.1 / §21.3.1+§21.3.4 / §21.3.2) would have made every plugin and adapter touched while building the Context Contributor pipeline (#107) noticeably better:
+
+- **`dependsOn`** — would have replaced the "TenantAdapter must come before AuthAdapter" README warnings with a compile-time-checked declaration.
+- **`definePlugin` + `defineAdapter`** — every adapter constructor in the workspace (`new TenantAdapter({...})`, `new AuthAdapter({...})`, `new MailerAdapter({...})`, ~14 of them) is identical boilerplate that the factory pair removes. `defineAdapter` is the higher-value of the two because most first-party packages are adapters, not plugins. Both share the same call/scoped/async API — adopters learn one mental model.
+- **`createTestPlugin`** — Phase 6's `runContributor` showed how much faster TDD becomes when authors don't have to spin up a whole HTTP layer to test one piece in isolation. The plugin/adapter equivalent is the same payoff for the rest of the workspace.
+
+They're the highest signal-to-cost ratio and don't require coordinated design work — each can ship as one PR.
