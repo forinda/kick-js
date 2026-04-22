@@ -185,30 +185,6 @@ describe('definePlugin — .async()', () => {
   })
 })
 
-describe('definePlugin — NestJS-style aliases', () => {
-  it('forRoot is the bare call', () => {
-    const FlagsPlugin = definePlugin(baseOptions())
-    expect(FlagsPlugin.forRoot).toBe(FlagsPlugin)
-  })
-
-  it('forFeature is .scoped', () => {
-    const FlagsPlugin = definePlugin(baseOptions())
-    expect(FlagsPlugin.forFeature).toBe(FlagsPlugin.scoped)
-  })
-
-  it('forRootAsync is .async', () => {
-    const FlagsPlugin = definePlugin(baseOptions())
-    expect(FlagsPlugin.forRootAsync).toBe(FlagsPlugin.async)
-  })
-
-  it('aliases produce the same plugin shapes as the primary names', () => {
-    const FlagsPlugin = definePlugin(baseOptions())
-    const viaPrimary = FlagsPlugin.scoped('emails', { provider: 'x' })
-    const viaAlias = FlagsPlugin.forFeature('emails', { provider: 'x' })
-    expect(viaPrimary.name).toBe(viaAlias.name)
-  })
-})
-
 describe('definePlugin — metadata exposure', () => {
   it('exposes a frozen `definition` for tooling', () => {
     const FlagsPlugin = definePlugin({

@@ -33,17 +33,13 @@ export interface AdapterAsyncOptions<TConfig> {
 
 /**
  * Factory returned by {@link defineAdapter}. Same surface as
- * {@link PluginFactory} (call / `.scoped()` / `.async()` + NestJS-style
- * `.forRoot()` / `.forFeature()` / `.forRootAsync()` aliases) so adopters
- * learn one mental model for both primitives.
+ * {@link PluginFactory} (call / `.scoped()` / `.async()`) so adopters learn
+ * one mental model for both primitives.
  */
 export interface AdapterFactory<TConfig> {
   (config?: Partial<TConfig>): AppAdapter
   scoped(scopeName: string, config?: Partial<TConfig>): AppAdapter
   async(opts: AdapterAsyncOptions<TConfig>): AppAdapter
-  forRoot(config?: Partial<TConfig>): AppAdapter
-  forFeature(scopeName: string, config?: Partial<TConfig>): AppAdapter
-  forRootAsync(opts: AdapterAsyncOptions<TConfig>): AppAdapter
   readonly definition: Readonly<DefineAdapterOptions<TConfig>>
 }
 
@@ -122,10 +118,6 @@ export function defineAdapter<TConfig = Record<string, unknown>>(
     buildSync(composeName(options.name, scopeName), true, config)
 
   factory.async = (opts: AdapterAsyncOptions<TConfig>) => buildAsync(options.name, opts)
-
-  factory.forRoot = factory
-  factory.forFeature = factory.scoped
-  factory.forRootAsync = factory.async
 
   Object.defineProperty(factory, 'definition', { value: Object.freeze({ ...options }) })
 

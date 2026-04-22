@@ -178,23 +178,6 @@ describe('defineAdapter — .async()', () => {
   })
 })
 
-describe('defineAdapter — NestJS-style aliases', () => {
-  it('forRoot is the bare call', () => {
-    const TenantAdapter = defineAdapter(baseOptions())
-    expect(TenantAdapter.forRoot).toBe(TenantAdapter)
-  })
-
-  it('forFeature is .scoped', () => {
-    const TenantAdapter = defineAdapter(baseOptions())
-    expect(TenantAdapter.forFeature).toBe(TenantAdapter.scoped)
-  })
-
-  it('forRootAsync is .async', () => {
-    const TenantAdapter = defineAdapter(baseOptions())
-    expect(TenantAdapter.forRootAsync).toBe(TenantAdapter.async)
-  })
-})
-
 describe('defineAdapter — metadata exposure', () => {
   it('exposes a frozen `definition` for tooling', () => {
     const TenantAdapter = defineAdapter({
