@@ -52,7 +52,7 @@ export const adapters: AppAdapter[] = [
     defaultFrom: { name: env.MAIL_FROM_NAME, address: env.MAIL_FROM_EMAIL },
   }),
   queueAdapter,
-  new CronAdapter({
+  CronAdapter({
     services: [
       TaskCronJobs,
       CleanupCronJobs,

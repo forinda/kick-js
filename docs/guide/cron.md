@@ -40,7 +40,7 @@ class ReportService {
 bootstrap({
   modules: [...],
   adapters: [
-    new CronAdapter({ services: [ReportService] }),
+    CronAdapter({ services: [ReportService] }),
   ],
 })
 ```
