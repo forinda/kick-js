@@ -43,6 +43,11 @@ export interface RateLimitDecoratorOptions {
  * The authenticated user object attached to the request.
  * Extend this via module augmentation for your app's user shape.
  *
+ * The base shape ships only the canonical `id` field (string | number to
+ * cover both DB-generated numerics and UUID-style strings) plus an
+ * arbitrary index signature so apps can attach anything until they
+ * augment a typed shape.
+ *
  * @example
  * ```ts
  * declare module '@forinda/kickjs-auth' {
@@ -55,6 +60,8 @@ export interface RateLimitDecoratorOptions {
  * ```
  */
 export interface AuthUser {
+  /** Canonical user identifier — `string` for UUIDs, `number` for serial PKs. */
+  id?: string | number
   [key: string]: any
 }
 
