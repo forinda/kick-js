@@ -20,7 +20,7 @@ kick add mailer
 ## Quick Start
 
 ```ts
-import { bootstrap } from '@forinda/kickjs'
+import { bootstrap, getEnv } from '@forinda/kickjs'
 import { MailerAdapter, SmtpProvider } from '@forinda/kickjs-mailer'
 
 bootstrap({
@@ -30,7 +30,7 @@ bootstrap({
       provider: new SmtpProvider({
         host: 'smtp.gmail.com',
         port: 587,
-        auth: { user: process.env.SMTP_USER!, pass: process.env.SMTP_PASS! },
+        auth: { user: getEnv('SMTP_USER'), pass: getEnv('SMTP_PASS') },
       }),
       defaultFrom: { name: 'My App', address: 'noreply@myapp.com' },
     }),
@@ -77,7 +77,7 @@ new SmtpProvider({
   host: 'smtp.resend.com',
   port: 465,
   secure: true,
-  auth: { user: 'resend', pass: process.env.RESEND_API_KEY! },
+  auth: { user: 'resend', pass: getEnv('RESEND_API_KEY') },
 })
 
 // Local dev (Mailpit, MailHog)
@@ -130,7 +130,7 @@ class ResendProvider implements MailProvider {
 
 // Use it
 MailerAdapter({
-  provider: new ResendProvider(process.env.RESEND_API_KEY!),
+  provider: new ResendProvider(getEnv('RESEND_API_KEY')),
 })
 ```
 
@@ -207,6 +207,6 @@ type MailRecipient = string | { name?: string; address: string }
 ```ts
 MailerAdapter({
   provider: new SmtpProvider({ ... }),
-  enabled: process.env.NODE_ENV !== 'test', // logs instead of sending
+  enabled: getEnv('NODE_ENV') !== 'test', // logs instead of sending
 })
 ```

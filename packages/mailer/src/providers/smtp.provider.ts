@@ -38,7 +38,7 @@ export interface SmtpOptions {
  *   host: 'smtp.resend.com',
  *   port: 465,
  *   secure: true,
- *   auth: { user: 'resend', pass: process.env.RESEND_API_KEY! },
+ *   auth: { user: 'resend', pass: getEnv('RESEND_API_KEY') },
  * })
  *
  * // Mailpit (local dev)
