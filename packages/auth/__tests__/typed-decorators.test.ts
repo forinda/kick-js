@@ -14,10 +14,16 @@ import { Roles, Can, AUTH_META, POLICY_META } from '@forinda/kickjs-auth'
 
 // ── Augmentation under test ─────────────────────────────────────────────
 
+// `id` and `roles` are declared optional here because module augmentation
+// is GLOBAL across the project — making them required would force every
+// AuthUser literal in every other test file (csrf, adapter, api-key, etc.)
+// to satisfy the augmented shape. `Role` narrowing still works against
+// `NonNullable<AuthUser['roles']>` so the @Roles assertions below remain
+// strict.
 declare module '@forinda/kickjs-auth' {
   interface AuthUser {
-    id: string
-    roles: ('admin' | 'editor' | 'viewer')[]
+    id?: string | number
+    roles?: ('admin' | 'editor' | 'viewer')[]
   }
 
   interface PolicyRegistry {

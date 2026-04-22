@@ -681,12 +681,16 @@ export const AuthAdapter = (() => {
   }) as AuthAdapterFactory
 
   factory.testMode = (options: AuthTestModeOptions): AppAdapter => {
-    const user: AuthUser = {
+    // Cast through unknown — the augmented `AuthUser['roles']` may narrow
+    // to a literal union (e.g. `'admin' | 'editor'`) that test fixtures
+    // can't satisfy with arbitrary string arrays. The test-mode helper
+    // intentionally accepts any role string.
+    const user = {
       ...options.user,
       ...(options.tenantId ? { tenantId: options.tenantId } : {}),
       ...(options.roles && !options.tenantId ? { roles: options.roles } : {}),
       ...(options.roles && options.tenantId ? { tenantRoles: options.roles } : {}),
-    }
+    } as unknown as AuthUser
 
     const policy =
       options.allow || options.deny ? { allow: options.allow, deny: options.deny } : undefined
