@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-graphql",
-  "version": "3.1.3",
+  "version": "3.2.0",
   "description": "GraphQL module for KickJS with decorator-based resolvers, schema generation, and playground",
   "keywords": [
     "kickjs",
