@@ -6,7 +6,13 @@ export interface RequestStore {
   requestId: string
   /** Per-request singleton cache for REQUEST-scoped services */
   instances: Map<any, any>
-  /** Per-request values set by middleware (auth user, tenant, etc.) */
+  /**
+   * Per-request key/value bag. Canonical backing store for
+   * `RequestContext.set/get` and the Context Contributor pipeline (#107)
+   * since Phase 3. Anything written here is visible to every concrete
+   * execution context constructed for the same request, regardless of
+   * which middleware/contributor wrote it.
+   */
   values: Map<any, any>
 }
 
