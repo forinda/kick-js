@@ -27,7 +27,7 @@ export interface DefinePluginOptions<TConfig> {
 
 /**
  * Hook context handed to a plugin/adapter `build` function. `name` is the
- * resolved instance name (the bare definition name for `forRoot`/bare-call,
+ * resolved instance name (the bare definition name for the bare call,
  * or `${defName}:${scope}` for `.scoped()`). `scoped` is the discriminator
  * authors use to namespace DI tokens or resource keys.
  */
@@ -53,16 +53,12 @@ export interface PluginAsyncOptions<TConfig> {
 /**
  * Factory returned by {@link definePlugin}. Callable form is the singleton
  * (`AuthPlugin(config)`); `.scoped()` and `.async()` are the multi-instance
- * and deferred-config forms. NestJS-style `.forRoot()` / `.forFeature()` /
- * `.forRootAsync()` aliases are exposed for migration ergonomics.
+ * and deferred-config forms.
  */
 export interface PluginFactory<TConfig> {
   (config?: Partial<TConfig>): KickPlugin
   scoped(scopeName: string, config?: Partial<TConfig>): KickPlugin
   async(opts: PluginAsyncOptions<TConfig>): KickPlugin
-  forRoot(config?: Partial<TConfig>): KickPlugin
-  forFeature(scopeName: string, config?: Partial<TConfig>): KickPlugin
-  forRootAsync(opts: PluginAsyncOptions<TConfig>): KickPlugin
   /** Read-only access to the original definition — useful for DevTools introspection. */
   readonly definition: Readonly<DefinePluginOptions<TConfig>>
 }
@@ -76,7 +72,7 @@ const composeName = (base: string, scope: string): string => `${base}:${scope}`
 
 /**
  * Build a {@link KickPlugin} factory from a typed definition. See
- * `architecture.md` §21.2.2 for the full naming-alternative rationale.
+ * `architecture.md` §21.2.2 for the design rationale.
  *
  * @example
  * ```ts
@@ -142,10 +138,6 @@ export function definePlugin<TConfig = Record<string, unknown>>(
     buildSync(composeName(options.name, scopeName), true, config)
 
   factory.async = (opts: PluginAsyncOptions<TConfig>) => buildAsync(options.name, opts)
-
-  factory.forRoot = factory
-  factory.forFeature = factory.scoped
-  factory.forRootAsync = factory.async
 
   Object.defineProperty(factory, 'definition', { value: Object.freeze({ ...options }) })
 

@@ -3480,7 +3480,7 @@ Two payoffs:
 
 Implementation slots cleanly into the existing `kick typegen` pipeline (the same machinery that populates `KickJsRegistry` for DI tokens). Tracked as part of Phase B §21.3.3 (standardized augmentation registry + typegen integration) — the runtime mechanism (this section) ships first; the typegen layer rides on top once the runtime contract is stable.
 
-#### 21.2.2 `forRoot` / `forFeature` config pattern (DynamicModule)
+#### 21.2.2 Factory config pattern — bare call + `.scoped()`
 
 **Problem.** Every config-driven plugin reinvents instantiation. `new TenantAdapter({ strategy: 'subdomain', required: true })` vs `new AuthAdapter({ strategies: [...] })` vs `new MailerAdapter({ provider: ... })`. Multi-instance is ad-hoc — registering two BullMQ queues with different configs requires instantiating the adapter twice or DI factory plumbing.
 
@@ -3504,36 +3504,30 @@ export const FlagsPlugin = definePlugin<FlagsConfig>({
 bootstrap({
   plugins: [
     FlagsPlugin({ provider: launchDarkly }),
-    BullMQPlugin.forFeature('emails', { workers: 3 }),
-    BullMQPlugin.forFeature('webhooks', { workers: 1, maxAttempts: 5 }),
+    BullMQPlugin.scoped('emails', { workers: 3 }),
+    BullMQPlugin.scoped('webhooks', { workers: 1, maxAttempts: 5 }),
   ],
 })
 ```
 
-`forRoot(config)` → singleton plugin instance; `forFeature(scope, overrides?)` → per-feature instance scoped to a context. Convention only — not enforced by an interface.
+Bare call → singleton plugin instance; `.scoped(scope, overrides?)` → per-scope multi-instance whose name composes as `${defName}:${scope}` so `dependsOn` lookups stay unambiguous across shards. Convention only — not enforced by an interface.
 
-**Impact.** Massive ergonomic win — no more hand-written factory classes, no more `new XxxAdapter({...})` boilerplate, and `forFeature` solves the multi-instance problem cleanly. Aligns with NestJS's `DynamicModule` pattern that ecosystem authors already know.
+**Impact.** Massive ergonomic win — no more hand-written factory classes, no more `new XxxAdapter({...})` boilerplate, and `.scoped()` solves the multi-instance problem cleanly without the per-package factory plumbing each adapter currently invents.
 
-##### Naming alternatives — `forRoot` / `forFeature` are not the only option
+##### Surface — bare call, `.scoped()`, `.async()`
 
-NestJS chose `forRoot` / `forFeature` because they ported Angular's `RouterModule.forRoot()` / `RouterModule.forChild()` patterns. The names are historical, not semantic. Substitutable forms worth considering:
-
-| NestJS-borrowed name             | Substitute                        | Trade-off                                                                                                              |
-| -------------------------------- | --------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `MyPlugin.forRoot(config)`       | **Bare call:** `MyPlugin(config)` | Drops a useless method name. Matches `defineContextDecorator` ergonomics already in the framework.                     |
-| `MyPlugin.forFeature(scope, c)`  | `MyPlugin.scoped(scope, c)`       | "scoped" reads more directly and matches KickJS's existing DI `Scope` terminology (`SINGLETON / TRANSIENT / REQUEST`). |
-| `MyPlugin.forRootAsync({ ... })` | `MyPlugin.async({ ... })`         | Drops the `forRoot` prefix once it's implied by the bare-call default.                                                 |
-
-KickJS already prefers terse, framework-idiom names (`defineContextDecorator`, `createToken`, `createLogger`, `bootstrap`). Following that convention, the recommended **primary** API is:
+KickJS prefers terse, framework-idiom names (`defineContextDecorator`, `createToken`, `createLogger`, `bootstrap`). Following that convention, every factory exposes exactly three call shapes — no compat aliases:
 
 ```ts
 // Singleton (most common case)
 plugins: [AuthPlugin({ jwtSecret: env.JWT_SECRET })]
 
-// Per-scope multi-instance
+// Per-scope multi-instance — name composes as `${defName}:${scope}` so
+// dependsOn lookups stay unambiguous across shards.
 plugins: [QueuePlugin.scoped('emails', { workers: 3 })]
 
-// Deferred async config
+// Deferred async config — `inject` lists DI tokens, `useFactory` produces
+// the config once those tokens resolve.
 plugins: [
   DatabasePlugin.async({
     inject: [ConfigService],
@@ -3542,15 +3536,7 @@ plugins: [
 ]
 ```
 
-Because NestJS users will muscle-memory reach for `forRoot` / `forFeature`, **also expose them as aliases** so ecosystem familiarity isn't lost:
-
-```ts
-AuthPlugin.forRoot(config) // alias for AuthPlugin(config)
-QueuePlugin.forFeature(scope, c) // alias for QueuePlugin.scoped(scope, c)
-DatabasePlugin.forRootAsync(opts) // alias for DatabasePlugin.async(opts)
-```
-
-Cost: ~3 lines in the factory shim. Benefit: zero-friction migration for adopters coming from NestJS. The architecture sections that follow use `.scoped()` / `.async()` as the primary names but treat both forms as supported.
+Bare call covers the singleton case (no ceremony method needed); `.scoped()` covers the multi-instance case ("scoped" matches the existing DI `Scope` terminology — `SINGLETON / TRANSIENT / REQUEST`); `.async()` covers the deferred-config case. Three names, no synonyms.
 
 #### 21.2.3 Plugin generator extension API
 
@@ -3599,7 +3585,7 @@ export default [
 
 #### 21.3.1 `definePlugin()` factory + plugin metadata
 
-Pair with §21.2.2. Beyond `forRoot`, plugins ship structured metadata for tooling:
+Pair with §21.2.2. Beyond the call surface itself, plugins ship structured metadata for tooling:
 
 ```ts
 definePlugin({
@@ -3711,7 +3697,7 @@ bootstrap({
 })
 ```
 
-The factory shape, the naming alternatives (§21.2.2), the `.scoped()` semantics, the `.async()` deferred-config form, the `.forRoot()` / `.forFeature()` aliases — **all identical** to `definePlugin`. Adopters learn one mental model and apply it to whichever primitive their use case wants.
+The factory shape, the bare-call/`.scoped()`/`.async()` surface (§21.2.2), the `.scoped()` semantics, the `.async()` deferred-config form — **all identical** to `definePlugin`. Adopters learn one mental model and apply it to whichever primitive their use case wants.
 
 ##### When to use which
 
@@ -3808,7 +3794,7 @@ Cheap to add, prevents subtle "plugin X expects framework feature Y added in 3.2
 **Phase A** (one PR each, ~1-2 weeks total — highest ROI, mechanical work):
 
 1. `dependsOn` on plugins/adapters + topo-sort at mount (§21.2.1)
-2. `definePlugin()` + `defineAdapter()` factories + metadata fields (§21.3.1 + §21.3.4 lite — just `name`, `version`, `requires`, plus the `.scoped()` / `.async()` / `.forRoot` aliases from §21.2.2)
+2. `definePlugin()` + `defineAdapter()` factories + metadata fields (§21.3.1 + §21.3.4 lite — just `name`, `version`, `requires`, plus the bare-call / `.scoped()` / `.async()` surface from §21.2.2)
 3. `createTestPlugin` (§21.3.2)
 
 **Phase B** (~2-3 weeks each — design work + first-party migrations):
