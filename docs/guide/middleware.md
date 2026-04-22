@@ -72,29 +72,9 @@ export class TodoController {
 For a given route, middleware executes in this order:
 
 1. Validation middleware (from route decorator `{ body, query, params }`)
-2. File-upload middleware (from `@FileUpload`)
-3. Class-level `@Middleware()` handlers (in declaration order)
-4. Method-level `@Middleware()` handlers (in declaration order)
-5. **Context Contributor pipeline** ([context decorators](./context-decorators.md)) — runs after middleware, before the handler. Class + method + module + adapter + global contributors merge into one pipeline, topo-sorted by `dependsOn`.
-6. The route handler
-
-Steps 1-4 use the `@Middleware()` mechanism described above. Step 5 is the typed `defineContextDecorator()` primitive — use it when the only job of a middleware is to compute a value and stash it on `ctx`.
-
-## Middleware vs context decorators
-
-KickJS has two ways to "do something before the handler runs". Picking the right one matters for type safety, ordering, and reusability.
-
-| Concern | `@Middleware()` | `defineContextDecorator()` |
-|---|---|---|
-| Compute a typed value to stash on `ctx` | Possible, untyped | Built for this; types via `ContextMeta` |
-| Short-circuit the response | Yes (`return ctx.notFound()`) | Not the right tool |
-| Mutate the response stream | Yes (compression, etc.) | No |
-| Run before route matching | Yes (global middleware) | No (per-route only) |
-| Declare ordering against another middleware | Manual array position | `dependsOn: ['otherKey']` enforced at startup |
-| Reusable across plugins/adapters | Pass closures around | Built-in `contributors?()` hook |
-| Errors abort boot if misconfigured | No (silent until requests hit) | Yes (cycles/missing deps fail `app.setup()`) |
-
-Rule of thumb: **if the middleware's only job is to compute a value other code reads off `ctx`, use a context decorator.** For everything else, use `@Middleware()`. See [Context Decorators](./context-decorators.md) for the full guide.
+2. Class-level `@Middleware()` handlers (in declaration order)
+3. Method-level `@Middleware()` handlers (in declaration order)
+4. The route handler
 
 ## Global Middleware
 
@@ -182,7 +162,7 @@ The full middleware pipeline executes in this order:
 | 4    | `afterGlobal`    | Adapter middleware    |
 | 5    | DI bootstrap     | Module `register()` calls |
 | 6    | `beforeRoutes`   | Adapter middleware    |
-| 7    | routes           | Module route mounting (per-route: validation → upload → `@Middleware()` → [contributor pipeline](./context-decorators.md) → handler) |
+| 7    | routes           | Module route mounting |
 | 8    | `afterRoutes`    | Adapter middleware    |
 | 9    | error handlers   | `onNotFound` + `onError` (or built-in defaults) |
 

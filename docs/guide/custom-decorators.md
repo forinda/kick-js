@@ -306,6 +306,5 @@ Then use it with the existing adapter by passing your provider, or create a cust
 ## Related
 
 - [Decorators Reference](./decorators.md) — all built-in decorators
-- [Context Decorators](./context-decorators.md) — the typed `defineContextDecorator()` factory; preferred over a hand-written class/method decorator when the goal is to populate `ctx.set/get` keys before the handler
 - [DI Container](../api/core.md) — how `Container`, `@Service`, `@Inject` work
 - [Middleware](./getting-started.md) — `@Middleware` decorator for Express middleware
