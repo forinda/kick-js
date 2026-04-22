@@ -2,12 +2,16 @@ import express from 'express'
 import {
   Application,
   Container,
+  buildPipeline,
+  runContributors,
   type AppAdapter,
   type AppModule,
   type AppModuleClass,
   type ApplicationOptions,
   type ContextDecorator,
+  type ContributorRegistration,
   type ExecutionContext,
+  type KickPlugin,
   type MetaValue,
   type ModuleRoutes,
 } from '@forinda/kickjs'
@@ -253,3 +257,179 @@ export async function runContributor<
 
   return { value: value as MetaValue<K>, ctx, meta }
 }
+
+// ── Plugin unit-test harness (architecture.md §21.3.2) ──────────────────
+
+/**
+ * Options for {@link createTestPlugin}.
+ */
+export interface CreateTestPluginOptions {
+  /**
+   * Use an isolated container (default: `true`). Isolated harnesses never
+   * touch the global `Container.getInstance()` singleton, so concurrent
+   * tests can run without stomping each other's DI state.
+   */
+  isolated?: boolean
+
+  /**
+   * Skip auto-invoking `plugin.register(container)` — useful when a test
+   * wants to assert container state *before* the plugin touches it.
+   * Defaults to `false` (register is called eagerly).
+   */
+  skipRegister?: boolean
+}
+
+/**
+ * Result of {@link createTestPlugin}. Mirrors the spec sketch in
+ * `architecture.md` §21.3.2 — `.container`, lifecycle invokers, and a
+ * `runContributors()` helper that builds a one-plugin pipeline against a
+ * fake `ExecutionContext`.
+ */
+export interface PluginTestHarness {
+  /** The plugin under test — exposed for direct introspection. */
+  readonly plugin: KickPlugin
+  /** Isolated (or shared) DI container the plugin registered into. */
+  readonly container: Container
+
+  /**
+   * Invoke `plugin.onReady(container)`. No-op if the plugin does not
+   * define the hook.
+   */
+  callOnReady(): Promise<void>
+
+  /**
+   * Invoke `plugin.shutdown()`. No-op if the plugin does not define the
+   * hook.
+   */
+  shutdown(): Promise<void>
+
+  /**
+   * Returns the module classes the plugin ships via `plugin.modules?()`.
+   * The harness does **not** auto-instantiate them — use `createTestApp`
+   * for that. Useful for assertions like "the plugin exposes the module I
+   * expect".
+   */
+  modules(): AppModuleClass[]
+
+  /**
+   * Returns adapter instances the plugin ships via `plugin.adapters?()`.
+   * Useful for testing the adapters alongside the plugin's DI bindings.
+   */
+  adapters(): AppAdapter[]
+
+  /**
+   * Returns middleware entries the plugin ships via `plugin.middleware?()`.
+   */
+  middleware(): any[]
+
+  /**
+   * Returns contributor registrations the plugin ships via
+   * `plugin.contributors?()`.
+   */
+  contributors(): ContributorRegistration[]
+
+  /**
+   * Build a fake {@link ExecutionContext} pre-populated with the given
+   * metadata. Symmetric with {@link runContributor}'s fake context.
+   */
+  makeContext(initial?: Record<string, unknown>): ExecutionContext
+
+  /**
+   * Run every contributor the plugin ships through a built pipeline
+   * against the given context. Dependencies resolve through the harness's
+   * container (same path production uses). Throws if the plugin's
+   * contributors reference `dependsOn` keys no one in the plugin provides.
+   */
+  runContributors(ctx: ExecutionContext): Promise<void>
+}
+
+/**
+ * Build an isolated test harness around a single {@link KickPlugin}.
+ * Skips the full HTTP layer — symmetric with {@link runContributor} for
+ * contributors and {@link createTestApp} for integration runs.
+ *
+ * @example
+ * ```ts
+ * const harness = await createTestPlugin(FlagsPlugin({ provider: scripted }))
+ *
+ * // The plugin's register() already ran — resolve any bindings.
+ * const flags = harness.container.resolve(FLAGS_SERVICE)
+ *
+ * // Drive the post-bootstrap lifecycle.
+ * await harness.callOnReady()
+ *
+ * // Exercise contributors shipped by the plugin.
+ * const ctx = harness.makeContext({ requestId: 'req-1' })
+ * await harness.runContributors(ctx)
+ * expect(ctx.get('flags')).toEqual({ beta: true })
+ *
+ * await harness.shutdown()
+ * ```
+ */
+export async function createTestPlugin(
+  plugin: KickPlugin,
+  options: CreateTestPluginOptions = {},
+): Promise<PluginTestHarness> {
+  const isolated = options.isolated ?? true
+
+  const container = isolated ? Container.create() : (Container.reset(), Container.getInstance())
+
+  if (!options.skipRegister) plugin.register?.(container)
+
+  return {
+    plugin,
+    container,
+
+    async callOnReady() {
+      await plugin.onReady?.(container)
+    },
+
+    async shutdown() {
+      await plugin.shutdown?.()
+    },
+
+    modules() {
+      return plugin.modules?.() ?? []
+    },
+
+    adapters() {
+      return plugin.adapters?.() ?? []
+    },
+
+    middleware() {
+      return plugin.middleware?.() ?? []
+    },
+
+    contributors() {
+      return [...(plugin.contributors?.() ?? [])]
+    },
+
+    makeContext(initial: Record<string, unknown> = {}) {
+      const meta = new Map<string, unknown>(Object.entries(initial))
+      const ctx: ExecutionContext = {
+        get(key) {
+          return meta.get(key) as never
+        },
+        set(key, value) {
+          meta.set(key, value)
+        },
+        requestId: 'test-req',
+      }
+      return ctx
+    },
+
+    async runContributors(ctx: ExecutionContext) {
+      const regs = plugin.contributors?.() ?? []
+      const sources = [...regs].map((registration) => ({
+        registration,
+        source: 'adapter' as const,
+        label: plugin.name,
+      }))
+      const pipeline = buildPipeline(sources)
+      await runContributors({ pipeline, ctx, container })
+    },
+  }
+}
+
+/** Alias for {@link createTestPlugin}, matching the `testPlugin` name used in the architecture spec. */
+export const testPlugin = createTestPlugin
