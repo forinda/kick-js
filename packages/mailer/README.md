@@ -28,7 +28,7 @@ import { MailerAdapter, SmtpProvider, ConsoleProvider } from '@forinda/kickjs-ma
 bootstrap({
   modules,
   adapters: [
-    new MailerAdapter({
+    MailerAdapter({
       provider: process.env.NODE_ENV === 'production'
         ? new SmtpProvider({ host: 'smtp.example.com', port: 587, auth: { user: '...', pass: '...' } })
         : new ConsoleProvider(),

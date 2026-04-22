@@ -11,7 +11,7 @@ let counter = ref(0)
  *
  * @example
  * ```ts
- * new MailerAdapter({
+ * MailerAdapter({
  *   provider: new ConsoleProvider(),
  *   defaultFrom: 'dev@localhost',
  * })
