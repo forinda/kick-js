@@ -18,7 +18,7 @@ import { HealthCheckCronJobs } from '@/modules/cron/infrastructure/jobs/health-c
 
 const redisUrl = new URL(env.REDIS_URL);
 
-const wsAdapter = new WsAdapter({
+const wsAdapter = WsAdapter({
   path: '/ws',
   heartbeatInterval: 30000,
   maxPayload: 1048576,

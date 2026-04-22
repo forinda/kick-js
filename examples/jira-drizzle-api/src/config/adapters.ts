@@ -28,7 +28,7 @@ const drizzleAdapter = new DrizzleAdapter({
   onShutdown: () => client.end(),
 })
 
-const wsAdapter = new WsAdapter({
+const wsAdapter = WsAdapter({
   path: '/ws',
   heartbeatInterval: 30000,
   maxPayload: 1048576,

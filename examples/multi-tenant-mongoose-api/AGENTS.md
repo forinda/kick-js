@@ -155,7 +155,7 @@ import { WsAdapter } from '@forinda/kickjs-ws'
 
 bootstrap({
   modules,
-  adapters: [new WsAdapter()],
+  adapters: [WsAdapter()],
 })
 ```
 
