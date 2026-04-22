@@ -26,7 +26,7 @@ const prismaClient = new PrismaClient({
   log: ['query'],
 })
 
-const prismaAdapter = new PrismaAdapter({
+const prismaAdapter = PrismaAdapter({
   client: prismaClient,
   logging: true,
 })

@@ -21,7 +21,7 @@ import { PrismaAdapter } from '@forinda/kickjs-prisma'
 bootstrap({
   modules,
   adapters: [
-    new PrismaAdapter({ client: new PrismaClient(), logging: true }),
+    PrismaAdapter({ client: new PrismaClient(), logging: true }),
   ],
 })
 ```
@@ -40,7 +40,7 @@ const client = new PrismaClient({ adapter: new PrismaPg(pool) })
 bootstrap({
   modules,
   adapters: [
-    new PrismaAdapter({ client, logging: true }),
+    PrismaAdapter({ client, logging: true }),
   ],
 })
 ```
