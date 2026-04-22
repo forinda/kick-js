@@ -34,7 +34,7 @@ import { modules } from './modules'
 export const app = await bootstrap({
   modules,
   adapters: [
-    new AiAdapter({
+    AiAdapter({
       provider: new OpenAIProvider({
         apiKey: getEnv('OPENAI_API_KEY'),
         defaultChatModel: 'gpt-4o-mini',
@@ -164,7 +164,7 @@ const store = new QdrantVectorStore({
 export const app = await bootstrap({
   modules,
   adapters: [
-    new AiAdapter({
+    AiAdapter({
       provider: new OpenAIProvider({ apiKey: getEnv('OPENAI_API_KEY') }),
     }),
   ],

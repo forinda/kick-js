@@ -229,3 +229,35 @@ export interface RunAgentResult {
   /** True if the loop stopped because `maxSteps` was reached. */
   maxStepsReached?: boolean
 }
+
+/**
+ * Public extension surface exposed by an AiAdapter instance — agent
+ * loops, tool inspection, and the active provider. Surfaced via
+ * `defineAdapter`'s `TExtra` generic so consumers that
+ * `@Inject(AI_ADAPTER)` get the full API on the resolved instance.
+ */
+export interface AiAdapterExtensions {
+  /** Return the active provider. Useful for services that want the raw API. */
+  getProvider(): AiProvider
+  /** Return the discovered tool registry. Primarily for tests and debug UIs. */
+  getTools(): readonly AiToolDefinition[]
+  /**
+   * Override the server base URL. Used by tests that spin up an
+   * ephemeral http.Server and can't rely on the framework's `afterStart`
+   * hook to supply it.
+   */
+  setServerBaseUrl(url: string | null): void
+  /** Run a tool-calling agent loop. */
+  runAgent(options: RunAgentOptions): Promise<RunAgentResult>
+  /** Memory-aware agent turn — wraps `runAgent` with persisted history. */
+  runAgentWithMemory(
+    options: import('./memory/types').RunAgentWithMemoryOptions,
+  ): Promise<RunAgentResult>
+}
+
+/**
+ * Resolved AiAdapter type — the value returned by `AiAdapter(options)`.
+ * Carries both the standard {@link AppAdapter} contract and the
+ * {@link AiAdapterExtensions} agent-loop / tool-inspection surface.
+ */
+export type AiAdapterInstance = import('@forinda/kickjs').AppAdapter & AiAdapterExtensions

@@ -196,7 +196,7 @@ const store = new QdrantVectorStore({
 
 export const app = await bootstrap({
   modules,
-  adapters: [new AiAdapter({ provider })],
+  adapters: [AiAdapter({ provider })],
   plugins: [
     {
       name: 'vector-store',
