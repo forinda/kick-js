@@ -1,6 +1,6 @@
 # DDD Module Architecture with a Decorator-Driven Framework
 
-_Part 2 of "Building a Jira Clone with KickJS + Drizzle ORM"_
+_Part 2 of "Building a Task Management App with KickJS + Drizzle ORM"_
 
 ---
 

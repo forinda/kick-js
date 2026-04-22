@@ -10,7 +10,7 @@ published: false
 
 I spent two days debugging a problem that boiled down to this: decorating a class with `@Service()` does not register it in the DI container. It sets metadata. Registration is a separate step that happens somewhere else, and if that "somewhere else" does not run, your class exists in memory but is invisible to the rest of your application.
 
-This article covers what I learned building queue processors for Vibed, a Jira-like task management backend built with KickJS. The lessons apply to any decorator-based DI system in TypeScript -- NestJS, InversifyJS, tsyringe, or custom implementations.
+This article covers what I learned building queue processors for Vibed, a task management backend built with KickJS. The lessons apply to any decorator-based DI system in TypeScript -- NestJS, InversifyJS, tsyringe, or custom implementations.
 
 ## The Setup: Queue Processors That Worked on Restart but Broke on Cold Boot
 

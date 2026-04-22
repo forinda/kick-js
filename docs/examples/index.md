@@ -4,7 +4,7 @@ KickJS ships with example applications that demonstrate different features and p
 
 ## Full Applications
 
-### Jira Clone (Drizzle)
+### Task Management App (Drizzle)
 
 **What it shows:** A full-featured project management API with PostgreSQL and Drizzle ORM.
 
@@ -17,20 +17,21 @@ KickJS ships with example applications that demonstrate different features and p
 
 [View source](https://github.com/forinda/kick-js/tree/main/examples/jira-drizzle-api) | [Full docs](./jira-drizzle-api)
 
-### Jira Clone (Prisma)
+### Task Management App (Prisma)
 
-**What it shows:** The same Jira clone using Prisma ORM with PostgreSQL instead of Drizzle.
+**What it shows:** The same task management app using Prisma ORM with PostgreSQL instead of Drizzle.
 
 - Same 14 modules with Prisma Client repositories
 - Declarative `schema.prisma` with auto-generated client
 - `@forinda/kickjs-prisma` adapter with `PRISMA_CLIENT` DI token
+- Prisma 7 driver adapters (e.g. `PrismaPg`) for explicit pool wiring
 - `prisma db push` for schema sync, `prisma migrate` for production
 
-[View source](https://github.com/forinda/kick-js/tree/main/examples/jira-prisma-api) | [Full docs](./jira-prisma-api)
+[View source](https://github.com/forinda/kick-js/tree/main/examples/jira-prisma-v7-api)
 
-### Jira Clone (Mongoose)
+### Task Management App (Mongoose)
 
-**What it shows:** The same Jira clone using MongoDB and Mongoose instead of PostgreSQL.
+**What it shows:** The same task management app using MongoDB and Mongoose instead of PostgreSQL.
 
 - Same 14 modules with MongoDB document schemas
 - Uses `@forinda/kickjs-auth` adapter with `@Public()` decorator

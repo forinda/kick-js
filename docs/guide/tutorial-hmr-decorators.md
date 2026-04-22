@@ -12,7 +12,7 @@ Hot Module Replacement was supposed to make backend development faster. Edit a f
 
 But when your backend uses TypeScript decorators for controllers, services, and repositories -- when you have a DI container managing 50+ bindings -- when Mongoose models are compiled from schemas at import time -- HMR becomes a minefield. Every file save can break your DI graph, crash Mongoose, or silently disconnect your queue processors.
 
-I spent weeks learning these lessons while building Vibed, a Jira-like backend using KickJS (a decorator-driven framework on Express 5 + Vite). Here is everything I know about making HMR and decorators coexist.
+I spent weeks learning these lessons while building Vibed, a task management backend using KickJS (a decorator-driven framework on Express 5 + Vite). Here is everything I know about making HMR and decorators coexist.
 
 ## What HMR Actually Does to Your Backend
 

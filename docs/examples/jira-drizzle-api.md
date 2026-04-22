@@ -1,4 +1,4 @@
-# Jira Clone (Drizzle + PostgreSQL)
+# Task Management App (Drizzle + PostgreSQL)
 
 A full-featured project management API built with KickJS, PostgreSQL, and Drizzle ORM. This is the most comprehensive example in the repo — it exercises nearly every framework package.
 

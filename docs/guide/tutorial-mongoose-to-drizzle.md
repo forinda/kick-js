@@ -1,10 +1,10 @@
 # Why We Switched from Mongoose to Drizzle ORM
 
-*Part 1 of "Building a Jira Clone with KickJS + Drizzle ORM"*
+*Part 1 of "Building a Task Management App with KickJS + Drizzle ORM"*
 
 ---
 
-We built Vibed — a Jira-like task management backend — twice. The first time with MongoDB and Mongoose. The second with PostgreSQL and Drizzle ORM. This article covers why we made the switch and what changed.
+We built Vibed — a task management backend — twice. The first time with MongoDB and Mongoose. The second with PostgreSQL and Drizzle ORM. This article covers why we made the switch and what changed.
 
 ## The Original Stack
 

@@ -1,4 +1,4 @@
-# Jira Clone — Prisma 7 Edition
+# Task Management App — Prisma 7 Edition
 
 A full-featured project management API built with [KickJS](https://forinda.github.io/kick-js/), **Prisma 7**, and PostgreSQL. Demonstrates the Prisma 7 driver adapter pattern with `@prisma/adapter-pg`.
 

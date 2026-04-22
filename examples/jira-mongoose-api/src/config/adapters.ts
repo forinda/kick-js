@@ -67,6 +67,6 @@ export const adapters = [
     adapters: [wsAdapter, queueAdapter],
   }),
   SwaggerAdapter({
-    info: { title: 'Vibed API', version: '1.0.0', description: 'Task management API like Jira' },
+    info: { title: 'Vibed API', version: '1.0.0', description: 'Task management API' },
   }),
 ];

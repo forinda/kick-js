@@ -11,7 +11,7 @@ cover_image: ""
 
 Every project accumulates scripts. First it is `npm run seed`. Then `npm run db:reset`. Then `npm run seed:staging`, `npm run test:integration`, `npm run format:check`, and before you know it, your `package.json` has 18 scripts and nobody remembers what half of them do.
 
-For Vibed, our Jira-like task management backend built on KickJS, I moved all operational commands into the framework's `kick.config.ts` file. The result: `kick seed`, `kick db:reset`, `kick check` -- discoverable, documented, and composable. No extra CLI framework, no commander.js, no yargs. Just a config file and the `kick` binary you already have.
+For Vibed, our task management backend built on KickJS, I moved all operational commands into the framework's `kick.config.ts` file. The result: `kick seed`, `kick db:reset`, `kick check` -- discoverable, documented, and composable. No extra CLI framework, no commander.js, no yargs. Just a config file and the `kick` binary you already have.
 
 Here is how it works, what the seed and reset scripts look like, and why CLI-level commands beat npm scripts for developer experience.
 
