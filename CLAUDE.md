@@ -1,5 +1,10 @@
 # CLAUDE.md — KickJS Development Guide
 
+> **This file is the canonical agent reference for the KickJS monorepo.**
+> Other agent-tool files (`AGENTS.md`, `GEMINI.md`, etc.) point back here for
+> the full picture and only carry tool-specific addenda. When an agent file
+> disagrees with this one, treat this file as authoritative.
+
 ## Project Overview
 
 KickJS is a decorator-driven Node.js framework built on Express 5 and TypeScript. Monorepo managed with pnpm workspaces and Turbo.
@@ -91,6 +96,7 @@ docs/                   # VitePress documentation site
 ### Adding an Adapter
 
 Implement `AppAdapter` from `@forinda/kickjs/adapter`:
+
 - `name: string`
 - `beforeMount?({ app }: AdapterContext)`, `beforeStart?({ container }: AdapterContext)`, `afterStart?({ server }: AdapterContext)`
 - `shutdown?(): Promise<void>`
@@ -164,6 +170,7 @@ Five registration sites, precedence high→low: **method > class > module > adap
 ### RequestContext
 
 Every controller method receives `ctx: RequestContext` with:
+
 - `ctx.body`, `ctx.params`, `ctx.query`, `ctx.headers`
 - `ctx.requestId`, `ctx.session`, `ctx.file`, `ctx.files`
 - `ctx.qs(fieldConfig)` — parsed query with filters/sort/pagination
@@ -177,15 +184,17 @@ import express from 'express'
 import { bootstrap, helmet, cors, requestId, requestLogger, csrf, rateLimit } from '@forinda/kickjs'
 
 bootstrap({
-  modules: [/* your modules */],
+  modules: [
+    /* your modules */
+  ],
   middleware: [
-    helmet(),           // Security headers (X-Frame-Options, HSTS, etc.)
-    cors({ origin: ['https://app.example.com'] }),  // CORS with spec-correct behavior
-    requestId(),        // X-Request-Id generation/propagation
-    requestLogger(),    // Pino-based request logging (method, URL, status, duration)
-    csrf(),             // CSRF protection (double-submit cookie)
-    rateLimit(),        // Rate limiting with pluggable store
-    express.json(),     // Body parsing
+    helmet(), // Security headers (X-Frame-Options, HSTS, etc.)
+    cors({ origin: ['https://app.example.com'] }), // CORS with spec-correct behavior
+    requestId(), // X-Request-Id generation/propagation
+    requestLogger(), // Pino-based request logging (method, URL, status, duration)
+    csrf(), // CSRF protection (double-submit cookie)
+    rateLimit(), // Rate limiting with pluggable store
+    express.json(), // Body parsing
   ],
 })
 ```
@@ -195,6 +204,7 @@ Also available: `validate()` (Zod body/query/params), `upload()` (multer file ha
 ### Git Workflow
 
 Use feature branches — never commit directly to `main` or `dev`:
+
 - **Stable work** → branch from `main`, PR to `main`
 - **Experimental work** → branch from `dev`, PR to `dev`
 - **Promote** → PR `dev` → `main` when stable
@@ -255,16 +265,17 @@ export default defineConfig({
 ### Template Functions
 
 All template generators accept `TemplateContext`:
+
 ```ts
 interface TemplateContext {
-  pascal: string          // PascalCase name
-  kebab: string           // kebab-case name
-  plural?: string         // Pluralized kebab
-  pluralPascal?: string   // Pluralized Pascal
-  repoPrefix?: string     // Repository import prefix
-  dtoPrefix?: string      // DTO import prefix
+  pascal: string // PascalCase name
+  kebab: string // kebab-case name
+  plural?: string // Pluralized kebab
+  pluralPascal?: string // Pluralized Pascal
+  repoPrefix?: string // Repository import prefix
+  dtoPrefix?: string // DTO import prefix
   prismaClientPath?: string
-  repoType?: string       // Custom repo type name
+  repoType?: string // Custom repo type name
 }
 ```
 
@@ -331,4 +342,4 @@ test: description      # Test changes
 - Vite configs: `minify: 'esbuild'`, all runtime deps in `rollupOptions.external`
 - `@prisma/client` peer dep is optional (Prisma 7 generates client locally)
 - Old top-level config fields (`modulesDir`, `defaultRepo`, etc.) are deprecated — use `modules` block
-- **Env wiring**: `src/env.ts` must call `loadEnv(envSchema)` as a side effect AND be imported from `src/index.ts` (`import './env'`) before `bootstrap()` runs. Otherwise `ConfigService.get('CUSTOM_KEY')` returns `undefined` while `@Value('CUSTOM_KEY')` *appears* to work via its `process.env` fallback. The CLI generators wire both halves automatically; manual upgrades must add both. See `docs/guide/configuration.md#wiring-the-schema-at-startup`.
+- **Env wiring**: `src/env.ts` must call `loadEnv(envSchema)` as a side effect AND be imported from `src/index.ts` (`import './env'`) before `bootstrap()` runs. Otherwise `ConfigService.get('CUSTOM_KEY')` returns `undefined` while `@Value('CUSTOM_KEY')` _appears_ to work via its `process.env` fallback. The CLI generators wire both halves automatically; manual upgrades must add both. See `docs/guide/configuration.md#wiring-the-schema-at-startup`.
