@@ -3191,6 +3191,7 @@ Application.setup()
   │      class-decorator metadata
   │      module.contributors?()                 (per-module)
   │      adapter.contributors?()                (cross-cutting)
+  │      plugin.contributors?()                 (cross-cutting; merges at adapter precedence)
   │      ApplicationOptions.contributors        (global, lowest precedence)
   │    dedup by `key`, keep highest precedence
   │    topo-sort by `dependsOn` (Kahn's algorithm)

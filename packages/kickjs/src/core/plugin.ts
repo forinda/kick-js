@@ -1,6 +1,7 @@
 import type { Container } from './container'
 import type { AppAdapter } from './adapter'
 import type { AppModuleClass } from './app-module'
+import type { ContributorRegistration } from './context-decorator'
 
 /**
  * Plugin interface for extending KickJS applications.
@@ -81,6 +82,38 @@ export interface KickPlugin {
    * Plugin middleware runs before user-defined middleware.
    */
   middleware?(): any[]
+
+  /**
+   * Return Context Contributors (#107) the plugin ships. Contributors
+   * returned here merge into the per-route pipeline at the **`'adapter'`
+   * precedence level** — same as those returned by adapters the plugin
+   * ships via {@link KickPlugin.adapters}, and for the same reason: a
+   * plugin is a cross-cutting bundle, narrower than the global default
+   * but broader than a per-module hook.
+   *
+   * Use when a plugin wants to ship a typed contributor without standing
+   * up an accompanying adapter. For full coverage of the precedence
+   * matrix (method > class > module > adapter > global) see
+   * `docs/guide/context-decorators.md`.
+   *
+   * @example
+   * ```ts
+   * import { defineContextDecorator, type KickPlugin } from '@forinda/kickjs'
+   *
+   * const LoadFlags = defineContextDecorator({
+   *   key: 'flags',
+   *   resolve: (ctx) => fetchFlags(ctx.requestId!),
+   * })
+   *
+   * export class FlagsPlugin implements KickPlugin {
+   *   name = 'FlagsPlugin'
+   *   contributors() {
+   *     return [LoadFlags.registration]
+   *   }
+   * }
+   * ```
+   */
+  contributors?(): ContributorRegistration[] | readonly ContributorRegistration[]
 
   /**
    * Called after the application has fully bootstrapped.
