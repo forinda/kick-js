@@ -33,7 +33,7 @@ import { Inject, Service } from '@forinda/kickjs'
 bootstrap({
   modules,
   adapters: [
-    new PrismaAdapter({ client: new PrismaClient(), logging: true }),
+    PrismaAdapter({ client: new PrismaClient(), logging: true }),
   ],
 })
 
@@ -63,7 +63,7 @@ const client = new PrismaClient({ adapter: new PrismaPg(pool) })
 bootstrap({
   modules,
   adapters: [
-    new PrismaAdapter({ client, logging: true }),
+    PrismaAdapter({ client, logging: true }),
   ],
 })
 ```
@@ -131,7 +131,7 @@ bootstrap({
   modules,
   adapters: [
     TenantAdapter({ strategy: 'subdomain' }),
-    new PrismaTenantAdapter({
+    PrismaTenantAdapter({
       providerDb: new PrismaClient({ datasourceUrl: PROVIDER_URL }),
       tenantFactory: async (tenantId) => {
         const url = await lookupTenantDbUrl(tenantId)

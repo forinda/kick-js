@@ -99,7 +99,7 @@ const prisma = new PrismaClient()
 bootstrap({
   modules,
   adapters: [
-    new PrismaAdapter({ client: prisma, logging: true }),
+    PrismaAdapter({ client: prisma, logging: true }),
   ],
 })
 ```

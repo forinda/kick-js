@@ -1,4 +1,4 @@
-import { Logger, type AppAdapter, type AdapterContext, Scope } from '@forinda/kickjs'
+import { Logger, defineAdapter, Scope } from '@forinda/kickjs'
 import { PRISMA_CLIENT, type PrismaAdapterOptions } from './types'
 
 const log = Logger.for('PrismaAdapter')
@@ -13,7 +13,7 @@ const log = Logger.for('PrismaAdapter')
  * ```ts
  * import { PrismaClient } from '@prisma/client'
  *
- * new PrismaAdapter({ client: new PrismaClient(), logging: true })
+ * PrismaAdapter({ client: new PrismaClient(), logging: true })
  * ```
  *
  * @example Prisma 7+ (driver adapters)
@@ -22,9 +22,9 @@ const log = Logger.for('PrismaAdapter')
  * import { PrismaPg } from '@prisma/adapter-pg'
  * import pg from 'pg'
  *
- * const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL })
+ * const pool = new pg.Pool({ connectionString: getEnv('DATABASE_URL') })
  * const client = new PrismaClient({ adapter: new PrismaPg(pool) })
- * new PrismaAdapter({ client, logging: true })
+ * PrismaAdapter({ client, logging: true })
  * ```
  *
  * Inject the client in services:
@@ -35,53 +35,51 @@ const log = Logger.for('PrismaAdapter')
  * }
  * ```
  */
-export class PrismaAdapter implements AppAdapter {
-  name = 'PrismaAdapter'
-  private client: any
+export const PrismaAdapter = defineAdapter<PrismaAdapterOptions>({
+  name: 'PrismaAdapter',
+  build: (options) => {
+    let client = options.client
 
-  constructor(private options: PrismaAdapterOptions) {
-    this.client = options.client
-  }
+    return {
+      beforeStart({ container }) {
+        // Set up query logging if requested
+        if (options.logging) {
+          if (typeof client.$on === 'function') {
+            // Prisma 5/6: event-based logging
+            client.$on('query', (event: any) => {
+              log.debug(`Query: ${event.query}`)
+              log.debug(`Params: ${event.params}`)
+              log.debug(`Duration: ${event.duration}ms`)
+            })
+          } else if (typeof client.$extends === 'function') {
+            // Prisma 7+: Client Extensions for logging ($on removed)
+            client = client.$extends({
+              query: {
+                $allOperations({ operation, model, args, query }: any) {
+                  const start = performance.now()
+                  return query(args).then((result: any) => {
+                    const duration = Math.round(performance.now() - start)
+                    log.debug(`${model}.${operation} — ${duration}ms`)
+                    return result
+                  })
+                },
+              },
+            })
+          }
+        }
 
-  /** Register the PrismaClient in the DI container */
-  beforeStart({ container }: AdapterContext): void {
-    // Set up query logging if requested
-    if (this.options.logging) {
-      if (typeof this.client.$on === 'function') {
-        // Prisma 5/6: event-based logging
-        this.client.$on('query', (event: any) => {
-          log.debug(`Query: ${event.query}`)
-          log.debug(`Params: ${event.params}`)
-          log.debug(`Duration: ${event.duration}ms`)
-        })
-      } else if (typeof this.client.$extends === 'function') {
-        // Prisma 7+: Client Extensions for logging ($on removed)
-        this.client = this.client.$extends({
-          query: {
-            $allOperations({ operation, model, args, query }: any) {
-              const start = performance.now()
-              return query(args).then((result: any) => {
-                const duration = Math.round(performance.now() - start)
-                log.debug(`${model}.${operation} — ${duration}ms`)
-                return result
-              })
-            },
-          },
-        })
-      }
+        // Register the client instance as a singleton factory in the container
+        container.registerFactory(PRISMA_CLIENT, () => client, Scope.SINGLETON)
+
+        log.info('PrismaClient registered in DI container')
+      },
+
+      async shutdown() {
+        if (typeof client.$disconnect === 'function') {
+          await client.$disconnect()
+          log.info('PrismaClient disconnected')
+        }
+      },
     }
-
-    // Register the client instance as a singleton factory in the container
-    container.registerFactory(PRISMA_CLIENT, () => this.client, Scope.SINGLETON)
-
-    log.info('PrismaClient registered in DI container')
-  }
-
-  /** Disconnect the PrismaClient on shutdown */
-  async shutdown(): Promise<void> {
-    if (typeof this.client.$disconnect === 'function') {
-      await this.client.$disconnect()
-      log.info('PrismaClient disconnected')
-    }
-  }
-}
+  },
+})

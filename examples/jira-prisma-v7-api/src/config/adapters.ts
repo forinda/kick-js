@@ -29,7 +29,7 @@ const prismaClient = new PrismaClient({
   adapter: new PrismaPg(pool),
 })
 
-const prismaAdapter = new PrismaAdapter({
+const prismaAdapter = PrismaAdapter({
   client: prismaClient,
   logging: true,
 })
