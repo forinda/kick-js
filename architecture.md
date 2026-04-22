@@ -3577,9 +3577,21 @@ export default [
 ]
 ```
 
-`kick g <name>` walks `node_modules/@*/kickjs-*/package.json`, loads the generator manifests, dispatches by name. First-party generators use the same API.
+`kick g <name>` walks the project's direct dependencies, loads the generator manifests declared via `kickjs.generators`, and dispatches by name. First-party generators use the same API.
 
 **Impact.** Plugins become genuinely first-class — they can ship the same scaffolding ergonomics the framework does. Stops every plugin author from documenting "create a file at this path with this content" manually.
+
+##### Implementation status
+
+Shipped in `@forinda/kickjs-cli` under `src/generator-extension/`:
+
+- `defineGenerator(spec)` — typed identity factory, exported from the package root for plugin authors
+- `discoverPluginGenerators(cwd)` — shallow walk of the project's direct deps, resolves each through `createRequire().resolve('<dep>/package.json')`, dynamic-imports any manifest whose default export is `GeneratorSpec[]`. Cached per-cwd within a single CLI invocation
+- `tryDispatchPluginGenerator({ generatorName, itemName, args, flags })` — first-match-wins lookup, runs `spec.files(ctx)`, writes the returned `GeneratorFile[]` via the same `writeFileSafe` path that built-in generators use (so `--dry-run` works automatically)
+- `kick g --list` extended to surface plugin generators alongside built-ins, with the source package name in brackets, plus a "Failed to load" section for malformed manifests
+- `kick g <name> <itemName>` action tries plugin dispatch first; falls through to the bare-module shortcut when no plugin claims the name
+
+The discovery scope is direct deps only — transitive plugins must be re-exported by a direct dep to be visible. The shallow walk keeps invocation latency predictable (one `package.json` read + at most one dynamic import per dep) and avoids surprises from generators a project didn't deliberately install.
 
 ### 21.3 Tier 2 — high impact, more design work
 

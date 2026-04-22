@@ -1,5 +1,6 @@
 import { resolve } from 'node:path'
 import type { Command } from 'commander'
+import { listPluginGenerators, tryDispatchPluginGenerator } from '../generator-extension'
 import { generateModule } from '../generators/module'
 import { resolveRepoType, type RepoType } from '../generators/module'
 import { generateAdapter } from '../generators/adapter'
@@ -130,12 +131,32 @@ const GENERATORS = [
   { name: 'config', description: 'Generate kick.config.ts' },
 ]
 
-function printGeneratorList(): void {
-  console.log('\n  Available generators:\n')
+async function printGeneratorList(): Promise<void> {
+  console.log('\n  Built-in generators:\n')
   const maxName = Math.max(...GENERATORS.map((g) => g.name.length))
   for (const g of GENERATORS) {
     console.log(`    kick g ${g.name.padEnd(maxName + 2)} ${g.description}`)
   }
+
+  // Surface plugin-shipped generators alongside the built-ins so adopters
+  // can discover what's available without grepping their node_modules.
+  const discovery = await listPluginGenerators(process.cwd())
+  if (discovery.generators.length > 0) {
+    console.log('\n  Plugin generators:\n')
+    const pluginMax = Math.max(...discovery.generators.map((g) => `${g.spec.name} <name>`.length))
+    for (const { source, spec } of discovery.generators) {
+      const usage = `${spec.name} <name>`
+      console.log(`    kick g ${usage.padEnd(pluginMax + 2)} ${spec.description}  [${source}]`)
+    }
+  }
+
+  if (discovery.failed.length > 0) {
+    console.log('\n  Failed to load:\n')
+    for (const { source, reason } of discovery.failed) {
+      console.log(`    ${source} — ${reason}`)
+    }
+  }
+
   console.log()
 }
 
@@ -195,7 +216,7 @@ export function registerGenerateCommand(program: Command): void {
     .option('-f, --force', 'Overwrite existing files without prompting')
     .action(async (names: string[], opts: GenerateRootOpts, cmd: Command) => {
       if (opts.list) {
-        printGeneratorList()
+        await printGeneratorList()
         return
       }
       if (!names || names.length === 0) {
@@ -204,6 +225,26 @@ export function registerGenerateCommand(program: Command): void {
       }
       const dryRun = isDryRun(cmd)
       setDryRun(dryRun)
+
+      // Try plugin generators first — `kick g <name> <itemName>` where
+      // `<name>` matches a discovered plugin generator wins over the
+      // bare-module shortcut. This lets `kick g command Order` route
+      // to a CQRS plugin without colliding with `kick g <module-name>`.
+      if (names.length >= 2) {
+        const [generatorName, itemName, ...rest] = names
+        const result = await tryDispatchPluginGenerator({
+          generatorName,
+          itemName,
+          args: rest,
+          flags: opts as unknown as Record<string, string | boolean>,
+          cwd: process.cwd(),
+        })
+        if (result) {
+          printGenerated(result.files, dryRun)
+          return
+        }
+      }
+
       await runModuleGeneration(names, opts, dryRun)
     })
 
