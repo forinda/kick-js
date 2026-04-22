@@ -66,6 +66,7 @@ const guideSidebar = [
       { text: 'Commands', link: '/guide/cli-commands' },
       { text: 'Tinker (REPL)', link: '/guide/tinker' },
       { text: 'Code Generators', link: '/guide/generators' },
+      { text: 'Plugin Generators', link: '/guide/plugin-generators' },
       { text: 'Custom Commands', link: '/guide/custom-commands' },
     ],
   },
