@@ -63,7 +63,7 @@ export interface BuildPipelineOptions {
  *
  * Pipeline:
  *
- * 1. Group sources by precedence (method > class > module > global).
+ * 1. Group sources by precedence (method > class > module > adapter > global).
  * 2. Within each precedence level, two contributors with the same `key`
  *    raise {@link DuplicateContributorError}.
  * 3. Across levels, the highest-precedence contributor wins each key

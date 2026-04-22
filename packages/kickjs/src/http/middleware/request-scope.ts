@@ -11,7 +11,10 @@ import { requestStore, type RequestStore } from '../request-store'
  * the exact position of the ALS frame in their pipeline (e.g., after a custom
  * tracing wrapper) without ending up with two nested frames.
  */
-const REQUEST_SCOPE_MIDDLEWARE_MARKER: unique symbol = Symbol.for('@kickjs/requestScopeMiddleware')
+// `Symbol.for(...)` returns a plain `symbol` (not `unique symbol`), but the
+// runtime detection marker doesn't need the unique nominal property — it only
+// needs the interned-slot reference equality that `Symbol.for` already provides.
+const REQUEST_SCOPE_MIDDLEWARE_MARKER = Symbol.for('@kickjs/requestScopeMiddleware')
 
 /**
  * Wraps each request in an AsyncLocalStorage context.
