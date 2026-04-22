@@ -10,8 +10,8 @@
  *   domain/          — Entities, value objects, repository interfaces, domain services
  *   infrastructure/  — Repository implementations (in-memory, Drizzle, Prisma, etc.)
  */
-import { Container, type AppModule, type ModuleRoutes } from '@forinda/kickjs-core'
-import { buildRoutes } from '@forinda/kickjs-http'
+import { Container, type AppModule, type ModuleRoutes } from '@forinda/kickjs'
+import { buildRoutes } from '@forinda/kickjs'
 import { ATTACHMENT_REPOSITORY } from './domain/repositories/attachment.repository'
 import { DrizzleAttachmentRepository } from './infrastructure/repositories/drizzle-attachment.repository'
 import { AttachmentController } from './presentation/attachment.controller'

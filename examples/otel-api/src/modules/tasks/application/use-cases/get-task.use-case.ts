@@ -1,4 +1,4 @@
-import { Service, Inject } from '@forinda/kickjs-core'
+import { Service, Inject } from '@forinda/kickjs'
 import { TASK_REPOSITORY, type ITaskRepository } from '../../domain/repositories/task.repository'
 import type { TaskResponseDTO } from '../dtos/task-response.dto'
 

@@ -11,7 +11,7 @@
 import type { HealthResponseDTO } from '../../application/dtos/health-response.dto'
 import type { CreateHealthDTO } from '../../application/dtos/create-health.dto'
 import type { UpdateHealthDTO } from '../../application/dtos/update-health.dto'
-import type { ParsedQuery } from '@forinda/kickjs-http'
+import type { ParsedQuery } from '@forinda/kickjs'
 
 export interface IHealthRepository {
   findById(id: string): Promise<HealthResponseDTO | null>

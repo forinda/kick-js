@@ -1,4 +1,4 @@
-import { Repository } from '@forinda/kickjs-core';
+import { Repository } from '@forinda/kickjs';
 import mongoose from 'mongoose';
 import type { IWorkspaceMemberRepository } from '../../domain/repositories/workspace-member.repository';
 import type { WorkspaceMemberEntity } from '../../domain/entities/workspace-member.entity';

@@ -1,7 +1,7 @@
-import { Repository, HttpException, Inject } from '@forinda/kickjs-core'
+import { Repository, HttpException, Inject } from '@forinda/kickjs'
 import { PRISMA_CLIENT } from '@forinda/kickjs-prisma'
 import type { PrismaClient } from '@prisma/client'
-import type { ParsedQuery } from '@forinda/kickjs-http'
+import type { ParsedQuery } from '@forinda/kickjs'
 import type { ILabelRepository, NewLabel } from '../../domain/repositories/label.repository'
 
 import { queryAdapter } from '@/shared/infrastructure/query-adapter'

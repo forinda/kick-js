@@ -1,5 +1,5 @@
-import { Controller, Get, Autowired, Middleware, ApiQueryParams } from '@forinda/kickjs-core'
-import type { RequestContext } from '@forinda/kickjs-http'
+import { Controller, Get, Autowired, Middleware, ApiQueryParams } from '@forinda/kickjs'
+import type { RequestContext } from '@forinda/kickjs'
 import { ApiTags, ApiBearerAuth } from '@forinda/kickjs-swagger'
 import { authBridgeMiddleware } from '@/shared/presentation/middlewares/auth-bridge.middleware'
 import { ListActivitiesUseCase } from '../application/use-cases/list-activities.use-case'

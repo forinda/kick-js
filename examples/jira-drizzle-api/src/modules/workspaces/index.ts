@@ -1,5 +1,5 @@
-import { Container, type AppModule, type ModuleRoutes } from '@forinda/kickjs-core'
-import { buildRoutes } from '@forinda/kickjs-http'
+import { Container, type AppModule, type ModuleRoutes } from '@forinda/kickjs'
+import { buildRoutes } from '@forinda/kickjs'
 import { TOKENS } from '@/shared/constants/tokens'
 import { WORKSPACE_REPOSITORY } from './domain/repositories/workspace.repository'
 import { DrizzleWorkspaceRepository } from './infrastructure/repositories/drizzle-workspace.repository'

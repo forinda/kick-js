@@ -1,9 +1,9 @@
-import { Service, Inject } from '@forinda/kickjs-core'
+import { Service, Inject } from '@forinda/kickjs'
 import {
   NOTIFICATION_REPOSITORY,
   type INotificationRepository,
 } from '../../domain/repositories/notification.repository'
-import type { ParsedQuery } from '@forinda/kickjs-http'
+import type { ParsedQuery } from '@forinda/kickjs'
 
 @Service()
 export class ListNotificationsUseCase {

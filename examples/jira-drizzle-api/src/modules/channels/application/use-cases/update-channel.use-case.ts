@@ -1,4 +1,4 @@
-import { Service, Inject } from '@forinda/kickjs-core'
+import { Service, Inject } from '@forinda/kickjs'
 import { TOKENS } from '@/shared/constants/tokens'
 import type { IChannelRepository } from '../../domain/repositories/channel.repository'
 import type { UpdateChannelDTO } from '../dtos/update-channel.dto'

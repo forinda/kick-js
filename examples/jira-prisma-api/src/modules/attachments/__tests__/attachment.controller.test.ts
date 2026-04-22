@@ -1,9 +1,9 @@
 import 'reflect-metadata'
 import { describe, it, expect, beforeEach } from 'vitest'
 import request from 'supertest'
-import { Container, Controller, Get, Delete, Inject } from '@forinda/kickjs-core'
-import type { RequestContext } from '@forinda/kickjs-http'
-import { buildRoutes } from '@forinda/kickjs-http'
+import { Container, Controller, Get, Delete, Inject } from '@forinda/kickjs'
+import type { RequestContext } from '@forinda/kickjs'
+import { buildRoutes } from '@forinda/kickjs'
 import { createTestApp, createTestModule } from '@forinda/kickjs-testing'
 import {
   ATTACHMENT_REPOSITORY,

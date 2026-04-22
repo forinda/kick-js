@@ -1,5 +1,5 @@
 import { Resend } from 'resend';
-import { Logger } from '@forinda/kickjs-core';
+import { Logger } from '@forinda/kickjs';
 import type { MailProvider, MailMessage, MailResult } from '@forinda/kickjs-mailer';
 
 const logger = Logger.for('ResendMailProvider');

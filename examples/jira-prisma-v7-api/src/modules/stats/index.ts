@@ -1,5 +1,5 @@
-import { Container, type AppModule, type ModuleRoutes } from '@forinda/kickjs-core'
-import { buildRoutes } from '@forinda/kickjs-http'
+import { Container, type AppModule, type ModuleRoutes } from '@forinda/kickjs'
+import { buildRoutes } from '@forinda/kickjs'
 import { STATS_REPOSITORY } from './domain/repositories/stat.repository'
 import { PrismaStatsRepository } from './infrastructure/repositories/prisma-stat.repository'
 import { StatController } from './presentation/stat.controller'

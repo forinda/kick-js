@@ -1,5 +1,5 @@
-import { Controller, Get, Post, Put, Delete, Autowired, ApiQueryParams } from '@forinda/kickjs-core'
-import type { RequestContext } from '@forinda/kickjs-http'
+import { Controller, Get, Post, Put, Delete, Autowired, ApiQueryParams } from '@forinda/kickjs'
+import type { RequestContext } from '@forinda/kickjs'
 import { ApiTags } from '@forinda/kickjs-swagger'
 import { CreateHealthUseCase } from '../application/use-cases/create-health.use-case'
 import { GetHealthUseCase } from '../application/use-cases/get-health.use-case'

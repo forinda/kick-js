@@ -5,7 +5,7 @@
  * Use cases are thin: validate input (via DTO), call domain/repo, return response.
  * Keep business rules in the domain service, not here.
  */
-import { Service, Inject } from '@forinda/kickjs-core'
+import { Service, Inject } from '@forinda/kickjs'
 import { HEALTH_REPOSITORY, type IHealthRepository } from '../../domain/repositories/health.repository'
 import type { CreateHealthDTO } from '../dtos/create-health.dto'
 import type { HealthResponseDTO } from '../dtos/health-response.dto'

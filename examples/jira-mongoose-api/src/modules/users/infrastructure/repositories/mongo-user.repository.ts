@@ -1,4 +1,4 @@
-import { Repository } from '@forinda/kickjs-core';
+import { Repository } from '@forinda/kickjs';
 import type { IUserRepository } from '../../domain/repositories/user.repository';
 import type { UserEntity } from '../../domain/entities/user.entity';
 import { buildMongoFilter, buildMongoSort, buildMongoSearch } from '@/shared/infrastructure/database/query-helpers';

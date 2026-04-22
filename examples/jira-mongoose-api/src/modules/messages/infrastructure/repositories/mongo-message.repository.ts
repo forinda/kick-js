@@ -1,4 +1,4 @@
-import { Repository } from '@forinda/kickjs-core';
+import { Repository } from '@forinda/kickjs';
 import mongoose from 'mongoose';
 import type { IMessageRepository } from '../../domain/repositories/message.repository';
 import type { MessageEntity } from '../../domain/entities/message.entity';

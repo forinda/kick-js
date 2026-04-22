@@ -1,9 +1,9 @@
-import { Service, Inject } from '@forinda/kickjs-core'
+import { Service, Inject } from '@forinda/kickjs'
 import {
   ATTACHMENT_REPOSITORY,
   type IAttachmentRepository,
 } from '../../domain/repositories/attachment.repository'
-import type { ParsedQuery } from '@forinda/kickjs-http'
+import type { ParsedQuery } from '@forinda/kickjs'
 
 @Service()
 export class ListAttachmentsUseCase {

@@ -1,6 +1,6 @@
-import { Service } from '@forinda/kickjs-core';
+import { Service } from '@forinda/kickjs';
 import { Cron } from '@forinda/kickjs-cron';
-import { Logger } from '@forinda/kickjs-core';
+import { Logger } from '@forinda/kickjs';
 
 const logger = Logger.for('PresenceCronJobs');
 

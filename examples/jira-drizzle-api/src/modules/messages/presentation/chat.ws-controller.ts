@@ -1,6 +1,6 @@
 import { WsController, OnConnect, OnDisconnect, OnMessage } from '@forinda/kickjs-ws'
 import type { WsContext } from '@forinda/kickjs-ws'
-import { Autowired, Logger } from '@forinda/kickjs-core'
+import { Autowired, Logger } from '@forinda/kickjs'
 import jwt from 'jsonwebtoken'
 import { env } from '@/config/env'
 import { DrizzleMessageRepository } from '../infrastructure/repositories/drizzle-message.repository'

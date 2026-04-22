@@ -1,6 +1,6 @@
 import Redis from 'ioredis';
-import { Logger } from '@forinda/kickjs-core';
-import type { AppAdapter, Container } from '@forinda/kickjs-core';
+import { Logger } from '@forinda/kickjs';
+import type { AppAdapter, Container } from '@forinda/kickjs';
 import { TOKENS } from '@/shared/constants/tokens';
 
 const logger = Logger.for('RedisAdapter');

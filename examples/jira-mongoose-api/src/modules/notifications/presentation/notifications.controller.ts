@@ -1,5 +1,5 @@
-import { Controller, Get, Patch, Post, ApiQueryParams, Middleware, Autowired } from '@forinda/kickjs-core';
-import type { RequestContext } from '@forinda/kickjs-http';
+import { Controller, Get, Patch, Post, ApiQueryParams, Middleware, Autowired } from '@forinda/kickjs';
+import type { RequestContext } from '@forinda/kickjs';
 import { z } from 'zod';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@forinda/kickjs-swagger';
 import { NOTIFICATION_QUERY_CONFIG } from '@/shared/constants/query-configs';

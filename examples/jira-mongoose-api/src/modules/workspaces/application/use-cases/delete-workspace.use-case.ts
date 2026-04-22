@@ -1,4 +1,4 @@
-import { Service, Inject, HttpException } from '@forinda/kickjs-core';
+import { Service, Inject, HttpException } from '@forinda/kickjs';
 import { TOKENS } from '@/shared/constants/tokens';
 import { ErrorCode } from '@/shared/constants/error-codes';
 import type { IWorkspaceRepository } from '../../domain/repositories/workspace.repository';

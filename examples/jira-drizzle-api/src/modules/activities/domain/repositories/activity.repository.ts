@@ -1,5 +1,5 @@
 import type { activities } from '@/db/schema'
-import type { ParsedQuery } from '@forinda/kickjs-http'
+import type { ParsedQuery } from '@forinda/kickjs'
 
 export type Activity = typeof activities.$inferSelect
 export type NewActivity = typeof activities.$inferInsert

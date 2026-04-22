@@ -1,5 +1,5 @@
-import type { AppModule, ModuleRoutes, Container } from '@forinda/kickjs-core';
-import { buildRoutes } from '@forinda/kickjs-http';
+import type { AppModule, ModuleRoutes, Container } from '@forinda/kickjs';
+import { buildRoutes } from '@forinda/kickjs';
 import { TOKENS } from '@/shared/constants/tokens';
 import { MongoUserRepository } from './infrastructure/repositories/mongo-user.repository';
 import { UsersController } from './presentation/users.controller';
