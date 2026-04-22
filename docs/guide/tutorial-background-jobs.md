@@ -1,6 +1,6 @@
 # Background Jobs and Scheduled Tasks in Node.js
 
-*Part 5 of "Building a Jira Clone with KickJS + Drizzle ORM"*
+*Part 5 of "Building a Task Management App with KickJS + Drizzle ORM"*
 
 ---
 

@@ -19,7 +19,7 @@ cover_image: ""
 
 ## The Problem: Types Stop at the API Boundary
 
-Building Vibed — a Jira-like task management backend — I ended up with some of the most well-typed backend code I've ever written. Every route has Zod validation. Every request body and query parameter is schema-validated before the handler sees it. Every response is typed through Swagger annotations.
+Building Vibed — a task management backend — I ended up with some of the most well-typed backend code I've ever written. Every route has Zod validation. Every request body and query parameter is schema-validated before the handler sees it. Every response is typed through Swagger annotations.
 
 Here's what a typical controller method looks like:
 
@@ -457,4 +457,4 @@ I've filed this as [KICK-018](./framework-filed-issues/KICK-018.md) in the frame
 
 ---
 
-*This is part of a series on building a Jira-like backend with KickJS. Next up: implementing real-time typing indicators and presence tracking with Socket.IO rooms.*
+*This is part of a series on building a task management backend with KickJS. Next up: implementing real-time typing indicators and presence tracking with Socket.IO rooms.*

@@ -9,7 +9,7 @@ cover_image: ""
 
 # Building JWT Auth with Refresh Token Rotation Without a Framework Auth Adapter
 
-Most Node.js frameworks ship with an authentication adapter. You configure it, decorate your public routes, and everything just works. That was the plan when I started building Vibed, a Jira-like task management backend with KickJS. The framework has an `AuthAdapter` with JWT strategy support, a `@Public()` decorator, and configurable default policies.
+Most Node.js frameworks ship with an authentication adapter. You configure it, decorate your public routes, and everything just works. That was the plan when I started building Vibed, a task management backend with KickJS. The framework has an `AuthAdapter` with JWT strategy support, a `@Public()` decorator, and configurable default policies.
 
 I configured all of it. Then I spent a day figuring out why none of it worked the way I expected. In the end, I threw out the built-in auth adapter for route protection and built the entire JWT auth flow by hand -- registration, login, access tokens, refresh token rotation, and a layered guard system for workspace and project access.
 

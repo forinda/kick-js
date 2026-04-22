@@ -1,6 +1,6 @@
 # Type-Safe Filtering, Sorting & Pagination with DrizzleQueryParamsConfig
 
-*Part 3 of "Building a Jira Clone with KickJS + Drizzle ORM"*
+*Part 3 of "Building a Task Management App with KickJS + Drizzle ORM"*
 
 ---
 

@@ -1,6 +1,6 @@
 # Real-Time Features: SSE Streams and WebSocket Chat
 
-*Part 4 of "Building a Jira Clone with KickJS + Drizzle ORM"*
+*Part 4 of "Building a Task Management App with KickJS + Drizzle ORM"*
 
 ---
 

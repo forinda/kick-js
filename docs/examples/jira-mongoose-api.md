@@ -1,4 +1,4 @@
-# Jira Clone (Mongoose + MongoDB)
+# Task Management App (Mongoose + MongoDB)
 
 A full-featured project management API built with KickJS, MongoDB, and Mongoose. Same scope as the Drizzle edition but demonstrates MongoDB patterns and the `@forinda/kickjs-auth` adapter.
 
