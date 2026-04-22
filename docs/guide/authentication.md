@@ -259,7 +259,7 @@ Supported providers: **Google**, **GitHub**, **Discord**, **Microsoft**, or any 
 ```ts
 import { OAuthStrategy } from '@forinda/kickjs-auth'
 
-const googleAuth = new OAuthStrategy({
+const googleAuth = OAuthStrategy({
   provider: 'google',
   clientId: process.env.GOOGLE_CLIENT_ID!,
   clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
@@ -279,7 +279,7 @@ Use it in your controller with **state validation** (CSRF protection):
 ```ts
 import { randomBytes } from 'node:crypto'
 
-const googleAuth = new OAuthStrategy({
+const googleAuth = OAuthStrategy({
   provider: 'google',
   clientId: process.env.GOOGLE_CLIENT_ID!,
   clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
@@ -329,7 +329,7 @@ class SocialAuthController {
 For public clients that cannot securely store a client secret, use PKCE:
 
 ```ts
-const googleAuth = new OAuthStrategy({
+const googleAuth = OAuthStrategy({
   provider: 'google',
   clientId: process.env.GOOGLE_CLIENT_ID!,
   clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
@@ -368,7 +368,7 @@ async googleCallback(ctx: RequestContext) {
 Custom OAuth provider:
 
 ```ts
-new OAuthStrategy({
+OAuthStrategy({
   provider: 'custom',
   clientId: 'id',
   clientSecret: 'secret',
@@ -394,14 +394,20 @@ pnpm add passport passport-google-oauth20
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20'
 import { PassportBridge } from '@forinda/kickjs-auth'
 
-const google = new PassportBridge('google', new GoogleStrategy({
-  clientID: process.env.GOOGLE_CLIENT_ID!,
-  clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-  callbackURL: '/auth/google/callback',
-}, async (accessToken, refreshToken, profile, done) => {
-  const user = await findOrCreateUser(profile)
-  done(null, user)
-}))
+const google = PassportBridge({
+  name: 'google',
+  strategy: new GoogleStrategy(
+    {
+      clientID: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      callbackURL: '/auth/google/callback',
+    },
+    async (accessToken, refreshToken, profile, done) => {
+      const user = await findOrCreateUser(profile)
+      done(null, user)
+    },
+  ),
+})
 
 AuthAdapter({
   strategies: [jwtStrategy, google],

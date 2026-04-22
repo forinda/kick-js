@@ -4,8 +4,9 @@ import { PassportBridge } from '@forinda/kickjs-auth'
 
 describe('PassportBridge', () => {
   it('has the correct name', () => {
-    const bridge = new PassportBridge('test', {
-      authenticate: vi.fn(),
+    const bridge = PassportBridge({
+      name: 'test',
+      strategy: { authenticate: vi.fn() },
     })
     expect(bridge.name).toBe('test')
   })
@@ -18,7 +19,7 @@ describe('PassportBridge', () => {
       },
     }
 
-    const bridge = new PassportBridge('mock', passportStrategy)
+    const bridge = PassportBridge({ name: 'mock', strategy: passportStrategy })
     const req = { headers: { authorization: 'Bearer token' } }
     const user = await bridge.validate(req)
 
@@ -32,7 +33,7 @@ describe('PassportBridge', () => {
       },
     }
 
-    const bridge = new PassportBridge('mock-fail', passportStrategy)
+    const bridge = PassportBridge({ name: 'mock-fail', strategy: passportStrategy })
     const user = await bridge.validate({ headers: {} })
     expect(user).toBeNull()
   })
@@ -44,7 +45,7 @@ describe('PassportBridge', () => {
       },
     }
 
-    const bridge = new PassportBridge('mock-error', passportStrategy)
+    const bridge = PassportBridge({ name: 'mock-error', strategy: passportStrategy })
     const user = await bridge.validate({ headers: {} })
     expect(user).toBeNull()
   })
@@ -56,7 +57,7 @@ describe('PassportBridge', () => {
       },
     }
 
-    const bridge = new PassportBridge('mock-throw', passportStrategy)
+    const bridge = PassportBridge({ name: 'mock-throw', strategy: passportStrategy })
     const user = await bridge.validate({ headers: {} })
     expect(user).toBeNull()
   })
@@ -68,7 +69,7 @@ describe('PassportBridge', () => {
       },
     }
 
-    const bridge = new PassportBridge('mock-pass', passportStrategy)
+    const bridge = PassportBridge({ name: 'mock-pass', strategy: passportStrategy })
     const user = await bridge.validate({ headers: {} })
     expect(user).toBeNull()
   })
