@@ -78,7 +78,7 @@ class UserController {
 Use `stateValidator` to prevent CSRF attacks on OAuth callbacks:
 
 ```ts
-new OAuthStrategy({
+OAuthStrategy({
   provider: 'google',
   clientId: process.env.GOOGLE_CLIENT_ID!,
   clientSecret: process.env.GOOGLE_CLIENT_SECRET!,

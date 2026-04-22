@@ -1,6 +1,7 @@
 import { randomBytes, createHash } from 'node:crypto'
 import { Logger } from '@forinda/kickjs'
-import type { AuthStrategy, AuthUser } from '../types'
+import type { AuthUser } from '../types'
+import { createAuthStrategy } from './define'
 
 const log = Logger.for('OAuthStrategy')
 
@@ -127,12 +128,33 @@ export interface OAuthTokens {
 }
 
 /**
+ * Public methods exposed by an OAuth strategy beyond the standard
+ * {@link AuthStrategy.validate} contract — `getAuthorizationUrl` and
+ * `getAuthorizationUrlWithPkce` are called from controllers to build
+ * the redirect URL the user follows to the provider's login page.
+ */
+export interface OAuthStrategyExtensions {
+  /**
+   * Get the authorization URL to redirect the user to the OAuth provider.
+   * Pass an optional `state` parameter for CSRF protection.
+   */
+  getAuthorizationUrl(state?: string): string
+
+  /**
+   * Get the authorization URL with PKCE support. Returns the URL and the
+   * `codeVerifier` that must be stored in session and passed to
+   * `validate()` via `req.oauthCodeVerifier`.
+   */
+  getAuthorizationUrlWithPkce(state?: string): { url: string; codeVerifier: string }
+}
+
+/**
  * Built-in OAuth 2.0 strategy with pre-configured providers.
  * No Passport dependency — KickJS handles the entire OAuth flow.
  *
  * Supports: Google, GitHub, Discord, Microsoft, or any custom OAuth 2.0 provider.
  *
- * This strategy validates the callback request (the one with `?code=...`),
+ * The strategy validates the callback request (the one with `?code=...`),
  * exchanges the code for tokens, fetches the user profile, and returns it.
  *
  * You need two routes:
@@ -143,7 +165,7 @@ export interface OAuthTokens {
  * ```ts
  * import { OAuthStrategy } from '@forinda/kickjs-auth'
  *
- * const googleAuth = new OAuthStrategy({
+ * const googleAuth = OAuthStrategy({
  *   provider: 'google',
  *   clientId: process.env.GOOGLE_CLIENT_ID!,
  *   clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
@@ -174,214 +196,169 @@ export interface OAuthTokens {
  * }
  * ```
  */
-export class OAuthStrategy implements AuthStrategy {
-  name: string
-  private options: OAuthStrategyOptions
-  private endpoints: OAuthEndpoints
-
-  constructor(options: OAuthStrategyOptions) {
-    this.options = options
-    this.name = `oauth-${options.provider}`
+export const OAuthStrategy = createAuthStrategy<OAuthStrategyOptions, OAuthStrategyExtensions>({
+  // Dynamic name preserves the historic `oauth-google` / `oauth-github` /
+  // `oauth-custom` shape so AuthAdapter strategy matching keeps working
+  // unchanged across the migration.
+  name: (options) => `oauth-${options.provider}`,
+  build: (options) => {
+    let endpoints: OAuthEndpoints
 
     if (options.provider === 'custom') {
       if (!options.endpoints) {
         throw new Error('OAuthStrategy: "endpoints" required when provider is "custom"')
       }
-      this.endpoints = options.endpoints
+      endpoints = options.endpoints
     } else {
-      this.endpoints = {
+      endpoints = {
         ...PROVIDER_ENDPOINTS[options.provider],
         ...(options.endpoints ?? {}),
       }
     }
 
-    // Override scopes if provided
     if (options.scopes) {
-      this.endpoints.scopes = options.scopes
-    }
-  }
-
-  /**
-   * Get the authorization URL to redirect the user to the OAuth provider.
-   * Pass an optional `state` parameter for CSRF protection.
-   *
-   * When PKCE is enabled, returns an object with the URL and `codeVerifier`.
-   * Store the `codeVerifier` in the session — it must be passed to `validate()`.
-   *
-   * @example
-   * ```ts
-   * // Without PKCE
-   * const url = strategy.getAuthorizationUrl(state)
-   * res.redirect(url)
-   *
-   * // With PKCE
-   * const { url, codeVerifier } = strategy.getAuthorizationUrlWithPkce(state)
-   * req.session.data.codeVerifier = codeVerifier
-   * res.redirect(url)
-   * ```
-   */
-  getAuthorizationUrl(state?: string): string {
-    const scopes = Array.isArray(this.endpoints.scopes)
-      ? this.endpoints.scopes.join(' ')
-      : (this.endpoints.scopes ?? '')
-
-    const params = new URLSearchParams({
-      client_id: this.options.clientId,
-      redirect_uri: this.options.callbackUrl,
-      response_type: 'code',
-      scope: scopes,
-      ...(state ? { state } : {}),
-    })
-
-    if (this.options.pkce) {
-      const verifier = generateCodeVerifier()
-      const challenge = generateCodeChallenge(verifier)
-      params.set('code_challenge', challenge)
-      params.set('code_challenge_method', 'S256')
-      // Store verifier — caller must retrieve it from the return value
-      // of getAuthorizationUrlWithPkce() instead
+      endpoints.scopes = options.scopes
     }
 
-    return `${this.endpoints.authorizeUrl}?${params.toString()}`
-  }
-
-  /**
-   * Get the authorization URL with PKCE support.
-   * Returns the URL and the `codeVerifier` that must be stored in session
-   * and passed to `validate()` via `req.oauthCodeVerifier`.
-   */
-  getAuthorizationUrlWithPkce(state?: string): { url: string; codeVerifier: string } {
-    const scopes = Array.isArray(this.endpoints.scopes)
-      ? this.endpoints.scopes.join(' ')
-      : (this.endpoints.scopes ?? '')
-
-    const codeVerifier = generateCodeVerifier()
-    const codeChallenge = generateCodeChallenge(codeVerifier)
-
-    const params = new URLSearchParams({
-      client_id: this.options.clientId,
-      redirect_uri: this.options.callbackUrl,
-      response_type: 'code',
-      scope: scopes,
-      code_challenge: codeChallenge,
-      code_challenge_method: 'S256',
-      ...(state ? { state } : {}),
-    })
-
-    return {
-      url: `${this.endpoints.authorizeUrl}?${params.toString()}`,
-      codeVerifier,
-    }
-  }
-
-  /**
-   * Validate the callback request — exchange the authorization code for
-   * tokens and fetch the user profile.
-   *
-   * When `stateValidator` is configured, the `state` query parameter is
-   * validated before proceeding. Callbacks with missing or invalid state
-   * are rejected with null.
-   *
-   * For PKCE flows, pass the stored code verifier via `req.oauthCodeVerifier`.
-   */
-  async validate(req: any): Promise<AuthUser | null> {
-    const code = req.query?.code
-    if (!code) return null
-
-    try {
-      // Validate state parameter (CSRF protection)
-      if (this.options.stateValidator) {
-        const state = req.query?.state
-        if (!state) {
-          log.warn('OAuth callback missing state parameter')
-          return null
-        }
-        const valid = await this.options.stateValidator(state, req)
-        if (!valid) {
-          log.warn('OAuth callback state validation failed')
-          return null
-        }
+    const exchangeCode = async (
+      code: string,
+      codeVerifier?: string,
+    ): Promise<OAuthTokens | null> => {
+      const params: Record<string, string> = {
+        client_id: options.clientId,
+        client_secret: options.clientSecret,
+        code,
+        grant_type: 'authorization_code',
+        redirect_uri: options.callbackUrl,
       }
 
-      // Get PKCE code verifier if available
-      const codeVerifier = req.oauthCodeVerifier ?? req.session?.data?.oauthCodeVerifier
-
-      // Exchange code for tokens
-      const tokens = await this.exchangeCode(code, codeVerifier)
-      if (!tokens) return null
-
-      // Fetch user profile
-      const profile = await this.fetchUserInfo(tokens.accessToken)
-      if (!profile) return null
-
-      // Map profile to AuthUser
-      if (this.options.mapProfile) {
-        return this.options.mapProfile(profile, tokens)
+      if (codeVerifier) {
+        params.code_verifier = codeVerifier
       }
 
-      return profile
-    } catch (err: any) {
-      log.error({ err }, `OAuth ${this.options.provider} callback failed`)
-      return null
-    }
-  }
+      const body = new URLSearchParams(params)
 
-  /** Exchange authorization code for access/refresh tokens */
-  private async exchangeCode(code: string, codeVerifier?: string): Promise<OAuthTokens | null> {
-    const params: Record<string, string> = {
-      client_id: this.options.clientId,
-      client_secret: this.options.clientSecret,
-      code,
-      grant_type: 'authorization_code',
-      redirect_uri: this.options.callbackUrl,
-    }
+      const response = await fetch(endpoints.tokenUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Accept: 'application/json',
+        },
+        body: body.toString(),
+      })
 
-    // Include PKCE code_verifier if available
-    if (codeVerifier) {
-      params.code_verifier = codeVerifier
-    }
+      if (!response.ok) {
+        log.error(`Token exchange failed: ${response.status} ${response.statusText}`)
+        return null
+      }
 
-    const body = new URLSearchParams(params)
+      const data: any = await response.json()
 
-    const response = await fetch(this.endpoints.tokenUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Accept: 'application/json',
-      },
-      body: body.toString(),
-    })
-
-    if (!response.ok) {
-      log.error(`Token exchange failed: ${response.status} ${response.statusText}`)
-      return null
+      return {
+        accessToken: data.access_token,
+        refreshToken: data.refresh_token,
+        tokenType: data.token_type ?? 'Bearer',
+        expiresIn: data.expires_in,
+        scope: data.scope,
+      }
     }
 
-    const data: any = await response.json()
+    const fetchUserInfo = async (accessToken: string): Promise<any | null> => {
+      const response = await fetch(endpoints.userInfoUrl, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/json',
+        },
+      })
+
+      if (!response.ok) {
+        log.error(`User info fetch failed: ${response.status} ${response.statusText}`)
+        return null
+      }
+
+      return response.json()
+    }
+
+    const buildAuthorizeUrl = (state: string | undefined, pkceChallenge?: string): string => {
+      const scopes = Array.isArray(endpoints.scopes)
+        ? endpoints.scopes.join(' ')
+        : (endpoints.scopes ?? '')
+
+      const params = new URLSearchParams({
+        client_id: options.clientId,
+        redirect_uri: options.callbackUrl,
+        response_type: 'code',
+        scope: scopes,
+        ...(state ? { state } : {}),
+        ...(pkceChallenge ? { code_challenge: pkceChallenge, code_challenge_method: 'S256' } : {}),
+      })
+
+      return `${endpoints.authorizeUrl}?${params.toString()}`
+    }
 
     return {
-      accessToken: data.access_token,
-      refreshToken: data.refresh_token,
-      tokenType: data.token_type ?? 'Bearer',
-      expiresIn: data.expires_in,
-      scope: data.scope,
-    }
-  }
+      async validate(req: any): Promise<AuthUser | null> {
+        const code = req.query?.code
+        if (!code) return null
 
-  /** Fetch user profile from the provider's userinfo endpoint */
-  private async fetchUserInfo(accessToken: string): Promise<any | null> {
-    const response = await fetch(this.endpoints.userInfoUrl, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: 'application/json',
+        try {
+          // Validate state parameter (CSRF protection)
+          if (options.stateValidator) {
+            const state = req.query?.state
+            if (!state) {
+              log.warn('OAuth callback missing state parameter')
+              return null
+            }
+            const valid = await options.stateValidator(state, req)
+            if (!valid) {
+              log.warn('OAuth callback state validation failed')
+              return null
+            }
+          }
+
+          // Get PKCE code verifier if available
+          const codeVerifier = req.oauthCodeVerifier ?? req.session?.data?.oauthCodeVerifier
+
+          // Exchange code for tokens
+          const tokens = await exchangeCode(code, codeVerifier)
+          if (!tokens) return null
+
+          // Fetch user profile
+          const profile = await fetchUserInfo(tokens.accessToken)
+          if (!profile) return null
+
+          // Map profile to AuthUser
+          if (options.mapProfile) {
+            return options.mapProfile(profile, tokens)
+          }
+
+          return profile
+        } catch (err: any) {
+          log.error({ err }, `OAuth ${options.provider} callback failed`)
+          return null
+        }
       },
-    })
 
-    if (!response.ok) {
-      log.error(`User info fetch failed: ${response.status} ${response.statusText}`)
-      return null
+      getAuthorizationUrl(state?: string): string {
+        if (options.pkce) {
+          // Bare getAuthorizationUrl with pkce=true emits a challenge but
+          // throws away the verifier — callers that need to pair the
+          // verifier with the callback should use getAuthorizationUrlWithPkce.
+          const verifier = generateCodeVerifier()
+          const challenge = generateCodeChallenge(verifier)
+          return buildAuthorizeUrl(state, challenge)
+        }
+        return buildAuthorizeUrl(state)
+      },
+
+      getAuthorizationUrlWithPkce(state?: string): { url: string; codeVerifier: string } {
+        const codeVerifier = generateCodeVerifier()
+        const codeChallenge = generateCodeChallenge(codeVerifier)
+        return {
+          url: buildAuthorizeUrl(state, codeChallenge),
+          codeVerifier,
+        }
+      },
     }
-
-    return response.json()
-  }
-}
+  },
+})

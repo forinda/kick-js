@@ -4,7 +4,7 @@ import { OAuthStrategy } from '@forinda/kickjs-auth'
 
 describe('OAuthStrategy', () => {
   it('creates strategy with pre-configured provider', () => {
-    const strategy = new OAuthStrategy({
+    const strategy = OAuthStrategy({
       provider: 'google',
       clientId: 'test-client-id',
       clientSecret: 'test-secret',
@@ -17,7 +17,7 @@ describe('OAuthStrategy', () => {
   it('creates strategy for each built-in provider', () => {
     const providers = ['google', 'github', 'discord', 'microsoft'] as const
     for (const provider of providers) {
-      const strategy = new OAuthStrategy({
+      const strategy = OAuthStrategy({
         provider,
         clientId: 'id',
         clientSecret: 'secret',
@@ -30,7 +30,7 @@ describe('OAuthStrategy', () => {
   it('throws when custom provider has no endpoints', () => {
     expect(
       () =>
-        new OAuthStrategy({
+        OAuthStrategy({
           provider: 'custom',
           clientId: 'id',
           clientSecret: 'secret',
@@ -40,7 +40,7 @@ describe('OAuthStrategy', () => {
   })
 
   it('creates custom provider with endpoints', () => {
-    const strategy = new OAuthStrategy({
+    const strategy = OAuthStrategy({
       provider: 'custom',
       clientId: 'id',
       clientSecret: 'secret',
@@ -58,7 +58,7 @@ describe('OAuthStrategy', () => {
   // ── Authorization URL ───────────────────────────────────────────────
 
   it('generates authorization URL with correct params', () => {
-    const strategy = new OAuthStrategy({
+    const strategy = OAuthStrategy({
       provider: 'google',
       clientId: 'my-client-id',
       clientSecret: 'secret',
@@ -74,7 +74,7 @@ describe('OAuthStrategy', () => {
   })
 
   it('includes state parameter when provided', () => {
-    const strategy = new OAuthStrategy({
+    const strategy = OAuthStrategy({
       provider: 'github',
       clientId: 'id',
       clientSecret: 'secret',
@@ -86,7 +86,7 @@ describe('OAuthStrategy', () => {
   })
 
   it('allows custom scopes to override provider defaults', () => {
-    const strategy = new OAuthStrategy({
+    const strategy = OAuthStrategy({
       provider: 'google',
       clientId: 'id',
       clientSecret: 'secret',
@@ -102,7 +102,7 @@ describe('OAuthStrategy', () => {
   // ── Validate (callback) ─────────────────────────────────────────────
 
   it('returns null when no code in query', async () => {
-    const strategy = new OAuthStrategy({
+    const strategy = OAuthStrategy({
       provider: 'google',
       clientId: 'id',
       clientSecret: 'secret',
@@ -114,7 +114,7 @@ describe('OAuthStrategy', () => {
   })
 
   it('exchanges code and returns user profile', async () => {
-    const strategy = new OAuthStrategy({
+    const strategy = OAuthStrategy({
       provider: 'github',
       clientId: 'id',
       clientSecret: 'secret',
@@ -162,7 +162,7 @@ describe('OAuthStrategy', () => {
   })
 
   it('returns null when token exchange fails', async () => {
-    const strategy = new OAuthStrategy({
+    const strategy = OAuthStrategy({
       provider: 'google',
       clientId: 'id',
       clientSecret: 'secret',
@@ -183,7 +183,7 @@ describe('OAuthStrategy', () => {
   })
 
   it('returns null when user info fetch fails', async () => {
-    const strategy = new OAuthStrategy({
+    const strategy = OAuthStrategy({
       provider: 'google',
       clientId: 'id',
       clientSecret: 'secret',
@@ -211,7 +211,7 @@ describe('OAuthStrategy', () => {
   // ── State Validation (CSRF) ─────────────────────────────────────────
 
   it('rejects callback when stateValidator is set and state is missing', async () => {
-    const strategy = new OAuthStrategy({
+    const strategy = OAuthStrategy({
       provider: 'google',
       clientId: 'id',
       clientSecret: 'secret',
@@ -224,7 +224,7 @@ describe('OAuthStrategy', () => {
   })
 
   it('rejects callback when stateValidator returns false', async () => {
-    const strategy = new OAuthStrategy({
+    const strategy = OAuthStrategy({
       provider: 'google',
       clientId: 'id',
       clientSecret: 'secret',
@@ -237,7 +237,7 @@ describe('OAuthStrategy', () => {
   })
 
   it('proceeds when stateValidator returns true', async () => {
-    const strategy = new OAuthStrategy({
+    const strategy = OAuthStrategy({
       provider: 'github',
       clientId: 'id',
       clientSecret: 'secret',
@@ -269,7 +269,7 @@ describe('OAuthStrategy', () => {
   })
 
   it('supports async stateValidator', async () => {
-    const strategy = new OAuthStrategy({
+    const strategy = OAuthStrategy({
       provider: 'google',
       clientId: 'id',
       clientSecret: 'secret',
@@ -305,7 +305,7 @@ describe('OAuthStrategy', () => {
   // ── PKCE ────────────────────────────────────────────────────────────
 
   it('getAuthorizationUrlWithPkce returns url and codeVerifier', () => {
-    const strategy = new OAuthStrategy({
+    const strategy = OAuthStrategy({
       provider: 'google',
       clientId: 'id',
       clientSecret: 'secret',
@@ -322,7 +322,7 @@ describe('OAuthStrategy', () => {
   })
 
   it('passes code_verifier in token exchange when provided', async () => {
-    const strategy = new OAuthStrategy({
+    const strategy = OAuthStrategy({
       provider: 'github',
       clientId: 'id',
       clientSecret: 'secret',
@@ -363,7 +363,7 @@ describe('OAuthStrategy', () => {
   })
 
   it('skips state validation when stateValidator not configured', async () => {
-    const strategy = new OAuthStrategy({
+    const strategy = OAuthStrategy({
       provider: 'github',
       clientId: 'id',
       clientSecret: 'secret',

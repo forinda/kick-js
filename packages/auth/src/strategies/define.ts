@@ -4,24 +4,32 @@ import type { AuthStrategy } from '../types'
  * Options passed to {@link createAuthStrategy}. Mirrors the
  * `defineAdapter` / `definePlugin` shape from the framework so adopters
  * learn one mental model for both adapter and strategy authoring.
+ *
+ * The optional `TExtra` generic lets a strategy ship public methods
+ * beyond `validate` (e.g. OAuth's `getAuthorizationUrl`) — they're
+ * preserved on the returned strategy instance so callers can invoke
+ * them directly.
  */
-export interface CreateAuthStrategyOptions<TOptions> {
+export interface CreateAuthStrategyOptions<TOptions, TExtra = unknown> {
   /**
    * Stable identity used for logging and `.scoped()` namespacing.
-   * Conventionally lowercase (`'jwt'`, `'api-key'`, `'session'`) so the
-   * name flows directly into `AuthAdapter.strategies` matching.
+   *
+   * Conventionally a lowercase string (`'jwt'`, `'api-key'`, `'session'`).
+   * Pass a function instead when the name depends on the resolved
+   * options — e.g. OAuth derives `'oauth-google'` from `options.provider`.
    */
-  name: string
+  name: string | ((options: TOptions) => string)
 
   /** Default options merged under any caller overrides. */
   defaults?: Partial<TOptions>
 
   /**
    * Builds the underlying {@link AuthStrategy.validate} function from the
-   * resolved options. The returned object's `validate` is wired into an
-   * AuthStrategy instance with the resolved name.
+   * resolved options. May return additional public methods (`TExtra`)
+   * that get spread onto the resulting strategy instance — see OAuth's
+   * `getAuthorizationUrl()` for the canonical use case.
    */
-  build(options: TOptions, ctx: StrategyBuildContext): Pick<AuthStrategy, 'validate'>
+  build(options: TOptions, ctx: StrategyBuildContext): Pick<AuthStrategy, 'validate'> & TExtra
 }
 
 /**
@@ -39,13 +47,15 @@ export interface StrategyBuildContext {
  * Factory returned by {@link createAuthStrategy}. Callable form is the
  * singleton strategy instance; `.scoped()` is the namespaced
  * multi-instance form for cases like multiple JWT realms or per-tenant
- * API key tables.
+ * API key tables. Returned instances carry both the standard
+ * {@link AuthStrategy} contract and any `TExtra` public methods the
+ * `build` function exposed.
  */
-export interface AuthStrategyFactory<TOptions> {
-  (options?: Partial<TOptions>): AuthStrategy
-  scoped(scopeName: string, options?: Partial<TOptions>): AuthStrategy
+export interface AuthStrategyFactory<TOptions, TExtra = unknown> {
+  (options?: Partial<TOptions>): AuthStrategy & TExtra
+  scoped(scopeName: string, options?: Partial<TOptions>): AuthStrategy & TExtra
   /** Read-only access to the original definition — useful for tooling. */
-  readonly definition: Readonly<CreateAuthStrategyOptions<TOptions>>
+  readonly definition: Readonly<CreateAuthStrategyOptions<TOptions, TExtra>>
 }
 
 const mergeOptions = <TOptions>(
@@ -99,24 +109,31 @@ const composeName = (base: string, scope: string): string => `${base}:${scope}`
  * ]
  * ```
  */
-export function createAuthStrategy<TOptions = Record<string, unknown>>(
-  options: CreateAuthStrategyOptions<TOptions>,
-): AuthStrategyFactory<TOptions> {
+export function createAuthStrategy<TOptions = Record<string, unknown>, TExtra = unknown>(
+  options: CreateAuthStrategyOptions<TOptions, TExtra>,
+): AuthStrategyFactory<TOptions, TExtra> {
+  const resolveBaseName = (merged: TOptions): string =>
+    typeof options.name === 'function' ? options.name(merged) : options.name
+
   const buildSync = (
-    instanceName: string,
-    scoped: boolean,
+    scopeName: string | null,
     overrides?: Partial<TOptions>,
-  ): AuthStrategy => {
+  ): AuthStrategy & TExtra => {
     const merged = mergeOptions(options.defaults, overrides)
-    const built = options.build(merged, { name: instanceName, scoped })
-    return { name: instanceName, validate: built.validate }
+    const baseName = resolveBaseName(merged)
+    const instanceName = scopeName === null ? baseName : composeName(baseName, scopeName)
+    const built = options.build(merged, { name: instanceName, scoped: scopeName !== null })
+    // Spread `built` to preserve any extension methods the strategy ships
+    // (e.g. OAuth's getAuthorizationUrl), then overwrite `name` and
+    // `validate` with the canonical values from this factory call.
+    return { ...built, name: instanceName, validate: built.validate } as AuthStrategy & TExtra
   }
 
   const factory = ((overrides?: Partial<TOptions>) =>
-    buildSync(options.name, false, overrides)) as AuthStrategyFactory<TOptions>
+    buildSync(null, overrides)) as AuthStrategyFactory<TOptions, TExtra>
 
   factory.scoped = (scopeName: string, overrides?: Partial<TOptions>) =>
-    buildSync(composeName(options.name, scopeName), true, overrides)
+    buildSync(scopeName, overrides)
 
   Object.defineProperty(factory, 'definition', { value: Object.freeze({ ...options }) })
 
