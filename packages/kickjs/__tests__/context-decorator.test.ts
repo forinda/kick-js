@@ -7,8 +7,13 @@ import {
   type ExecutionContext,
 } from '../src/core'
 
-function getMethodContributors(target: object, method: string): ContributorRegistration[] {
-  return Reflect.getMetadata(METADATA.METHOD_CONTRIBUTORS, target, method) ?? []
+/**
+ * Method-level contributor metadata is stored on the constructor (matches the
+ * @Middleware convention consumed by router-builder.ts). Tests querying via
+ * the prototype would read nothing.
+ */
+function getMethodContributors(constructor: object, method: string): ContributorRegistration[] {
+  return Reflect.getMetadata(METADATA.METHOD_CONTRIBUTORS, constructor, method) ?? []
 }
 
 function getClassContributors(target: object): ContributorRegistration[] {
@@ -100,7 +105,7 @@ describe('defineContextDecorator — method decorator', () => {
       }
     }
 
-    const contributors = getMethodContributors(FooController.prototype, 'handler')
+    const contributors = getMethodContributors(FooController, 'handler')
     expect(contributors).toHaveLength(1)
     expect(contributors[0]).toBe(LoadTenant.registration)
   })
@@ -123,7 +128,7 @@ describe('defineContextDecorator — method decorator', () => {
       }
     }
 
-    const contributors = getMethodContributors(BarController.prototype, 'handler')
+    const contributors = getMethodContributors(BarController, 'handler')
     expect(contributors).toHaveLength(2)
     const keys = contributors.map((c) => c.key)
     expect(keys).toContain('tenant')
@@ -147,12 +152,8 @@ describe('defineContextDecorator — method decorator', () => {
       b() {}
     }
 
-    expect(getMethodContributors(SplitController.prototype, 'a').map((c) => c.key)).toEqual([
-      'tenant',
-    ])
-    expect(getMethodContributors(SplitController.prototype, 'b').map((c) => c.key)).toEqual([
-      'project',
-    ])
+    expect(getMethodContributors(SplitController, 'a').map((c) => c.key)).toEqual(['tenant'])
+    expect(getMethodContributors(SplitController, 'b').map((c) => c.key)).toEqual(['project'])
   })
 })
 
@@ -206,9 +207,7 @@ describe('defineContextDecorator — class decorator', () => {
     }
 
     expect(getClassContributors(MixedController).map((c) => c.key)).toEqual(['tenant'])
-    expect(getMethodContributors(MixedController.prototype, 'handler').map((c) => c.key)).toEqual([
-      'project',
-    ])
+    expect(getMethodContributors(MixedController, 'handler').map((c) => c.key)).toEqual(['project'])
   })
 })
 
