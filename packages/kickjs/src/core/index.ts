@@ -183,3 +183,19 @@ export {
   type MountSortItem,
   type MountKind,
 } from './mount-sort'
+
+// Plugin/adapter factories (architecture.md §21.2.2 + §21.3.1 + §21.3.4).
+export {
+  definePlugin,
+  type DefinePluginOptions,
+  type PluginAsyncOptions,
+  type PluginFactory,
+  type BuildContext,
+} from './define-plugin'
+
+export {
+  defineAdapter,
+  type DefineAdapterOptions,
+  type AdapterAsyncOptions,
+  type AdapterFactory,
+} from './define-adapter'
