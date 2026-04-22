@@ -69,6 +69,14 @@ export {
   type SessionStrategyOptions,
 } from './strategies'
 
+// Custom strategy factory — symmetric with defineAdapter for adapters.
+export {
+  createAuthStrategy,
+  type CreateAuthStrategyOptions,
+  type AuthStrategyFactory,
+  type StrategyBuildContext,
+} from './strategies'
+
 // Token revocation
 export type { TokenStore } from './token-store'
 export { MemoryTokenStore } from './stores/memory.store'
