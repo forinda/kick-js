@@ -375,3 +375,8 @@ class TaskController {
 | `@ApiBearerAuth` | Class/Method | swagger | Bearer auth scheme |
 | `@ApiQueryParams` | Method | core | Declare filterable/sortable/searchable query fields |
 | `@ApiExclude` | Class/Method | swagger | Hide from spec |
+
+## See also
+
+- [Context Decorators](./context-decorators.md) — the typed `defineContextDecorator()` primitive for populating `ctx.set/get` keys before the handler. Use this instead of `@Middleware()` when the only job is to compute a value other code reads off `ctx`.
+- [Custom Decorators](./custom-decorators.md) — patterns for authoring your own decorators using `reflect-metadata`.
