@@ -16,6 +16,11 @@ export {
   type AuthFailedEvent,
   type AuthForbiddenEvent,
   type AuthEventHandlers,
+  // PolicyRegistry is the augmentation target for the type-narrowed @Can
+  // and AuthorizationService.{can,listObjects}. Re-exporting from the root
+  // ensures `declare module '@forinda/kickjs-auth'` merges with the same
+  // interface the decorator/service signatures reference.
+  type PolicyRegistry,
 } from './types'
 
 // Decorators

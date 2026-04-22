@@ -154,11 +154,11 @@ declare module '@forinda/kickjs-auth' {
 @Can('invite', 'post')      // ✗ TS error: 'invite' is not assignable to actions of 'post' (it's on 'user')
 ```
 
-The same narrowing applies to `AuthorizationService.can()` and `AuthorizationService.listObjects()` — pass `<R extends PolicyResource>` to get type-safe runtime checks:
+The same `PolicyRegistry`-based narrowing also applies to `AuthorizationService.can()` and `AuthorizationService.listObjects()`, so the runtime checks stay type-safe too:
 
 ```ts
-const allowed = await authz.can(user, 'delete', 'post')   // ✓
-const ids = await authz.listObjects(user, 'view', 'post') // ✓
+const allowed = await authz.can(user, 'delete', 'post')     // ✓
+const ids = await authz.listObjects(user, 'delete', 'post') // ✓
 ```
 
 Apps that don't augment `PolicyRegistry` get the loose `(string, string)` fallback — full backwards compatibility.
