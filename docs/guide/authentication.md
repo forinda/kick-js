@@ -28,7 +28,7 @@ bootstrap({
   adapters: [
     AuthAdapter({
       strategies: [
-        new JwtStrategy({ secret: process.env.JWT_SECRET! }),
+        JwtStrategy({ secret: process.env.JWT_SECRET! }),
       ],
     }),
   ],
@@ -153,7 +153,7 @@ Production-grade JWT authentication using `jsonwebtoken`.
 ```ts
 import { JwtStrategy } from '@forinda/kickjs-auth'
 
-new JwtStrategy({
+JwtStrategy({
   secret: process.env.JWT_SECRET!,
 
   // Transform decoded payload to your user shape
@@ -185,7 +185,7 @@ Options:
 For identity providers that rotate keys (Keycloak, Auth0, Okta), use `jwksUri` instead of a static `secret`. The strategy fetches public keys from the JWKS endpoint and caches them.
 
 ```ts
-new JwtStrategy({
+JwtStrategy({
   jwksUri: 'https://keycloak.example.com/realms/myrealm/protocol/openid-connect/certs',
   algorithms: ['RS256'],
   mapPayload: (payload) => ({
@@ -203,7 +203,7 @@ Use the built-in `keycloakMapPayload` helper to extract roles from Keycloak's ne
 ```ts
 import { JwtStrategy, keycloakMapPayload } from '@forinda/kickjs-auth'
 
-new JwtStrategy({
+JwtStrategy({
   jwksUri: `${KEYCLOAK_URL}/realms/${REALM}/protocol/openid-connect/certs`,
   algorithms: ['RS256'],
   mapPayload: keycloakMapPayload({
@@ -514,7 +514,7 @@ import { JwtStrategy, MemoryTokenStore } from '@forinda/kickjs-auth'
 
 const tokenStore = new MemoryTokenStore()
 
-new JwtStrategy({
+JwtStrategy({
   secret: process.env.JWT_SECRET!,
   tokenStore,                  // check revocation on every request
   revokeBy: 'jti',            // use JWT jti claim (recommended)
@@ -582,7 +582,7 @@ A common setup: browsers authenticate with cookies (session), while a Web server
 AuthAdapter({
   strategies: [
     SessionStrategy({ ... }),   // browser → Web
-    new JwtStrategy({ ... }),        // Web → API (Bearer)
+    JwtStrategy({ ... }),        // Web → API (Bearer)
   ],
   // csrf auto-enabled → blocks server-to-server JWT calls
 })
@@ -595,7 +595,7 @@ Pick one of the following based on where cookies actually travel:
 ```ts
 // API gateway — JWT-only, no browser cookies
 AuthAdapter({
-  strategies: [new JwtStrategy({ ... })],
+  strategies: [JwtStrategy({ ... })],
   csrf: false,
 })
 ```
@@ -699,7 +699,7 @@ Register multiple strategies — the first one that returns a user wins:
 ```ts
 AuthAdapter({
   strategies: [
-    new JwtStrategy({ secret: JWT_SECRET }),       // Try JWT first
+    JwtStrategy({ secret: JWT_SECRET }),       // Try JWT first
     ApiKeyStrategy({ keys: API_KEYS }),         // Fall back to API key
     SessionStrategy(),                          // Then session
   ],
@@ -778,7 +778,7 @@ bootstrap({
   adapters: [
     AuthAdapter({
       strategies: [
-        new JwtStrategy({
+        JwtStrategy({
           secret: JWT_SECRET,
           mapPayload: (p) => ({ id: p.sub, email: p.email, roles: p.roles }),
         }),

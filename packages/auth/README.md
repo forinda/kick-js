@@ -41,7 +41,7 @@ bootstrap({
   adapters: [
     AuthAdapter({
       strategies: [
-        new JwtStrategy({
+        JwtStrategy({
           secret: process.env.JWT_SECRET!,
           mapPayload: (p) => ({ id: p.sub, email: p.email, roles: p.roles }),
         }),

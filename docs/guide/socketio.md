@@ -239,7 +239,7 @@ If you're using `@forinda/kickjs-auth`, you can reuse your JWT strategy:
 ```ts
 import { JwtStrategy } from '@forinda/kickjs-auth'
 
-const jwtStrategy = new JwtStrategy({ secret: JWT_SECRET })
+const jwtStrategy = JwtStrategy({ secret: JWT_SECRET })
 
 io.use(async (socket, next) => {
   // Create a mock request object for the strategy

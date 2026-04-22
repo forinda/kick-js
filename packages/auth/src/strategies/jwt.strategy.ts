@@ -1,7 +1,8 @@
 import { createPublicKey } from 'node:crypto'
 import type { VerifyOptions } from 'jsonwebtoken'
-import type { AuthStrategy, AuthUser } from '../types'
+import type { AuthUser } from '../types'
 import type { TokenStore } from '../token-store'
+import { createAuthStrategy } from './define'
 
 /**
  * Subset of `jsonwebtoken`'s `VerifyOptions` that `JwtStrategy` forwards
@@ -104,7 +105,7 @@ export interface JwtStrategyOptions {
    *
    * @example
    * ```ts
-   * new JwtStrategy({
+   * JwtStrategy({
    *   secret: process.env.JWT_SECRET!,
    *   algorithms: ['HS256'],
    *   verifyOptions: {
@@ -130,7 +131,7 @@ export interface JwtStrategyOptions {
  *
  * @example
  * ```ts
- * new JwtStrategy({
+ * JwtStrategy({
  *   secret: process.env.JWT_SECRET!,
  *   mapPayload: (payload) => ({
  *     id: payload.sub,
@@ -138,175 +139,165 @@ export interface JwtStrategyOptions {
  *     roles: payload.roles ?? ['user'],
  *   }),
  * })
+ *
+ * // Multi-realm via .scoped() — different secrets per audience
+ * JwtStrategy.scoped('admin', { secret: ADMIN_JWT_SECRET, audience: 'admin' })
+ * JwtStrategy.scoped('mobile', { secret: MOBILE_JWT_SECRET, audience: 'mobile' })
  * ```
  */
-export class JwtStrategy implements AuthStrategy {
-  name = 'jwt'
-  private jwt: any
-  private readonly options: JwtStrategyOptions
-
-  /** Cached JWKS keys: kid → PEM public key */
-  private jwksCache = new Map<string, string>()
-  private jwksCacheTime = 0
-
-  constructor(options: JwtStrategyOptions) {
+export const JwtStrategy = createAuthStrategy<JwtStrategyOptions>({
+  name: 'jwt',
+  defaults: {
+    tokenFrom: 'header',
+    headerName: 'authorization',
+    headerPrefix: 'Bearer',
+    queryParam: 'token',
+    cookieName: 'jwt',
+    jwksCacheTtl: 600_000,
+  },
+  build: (options) => {
     if (!options.secret && !options.jwksUri) {
       throw new Error('JwtStrategy requires either "secret" or "jwksUri"')
     }
-    this.options = options
-  }
 
-  private async ensureJwt(): Promise<void> {
-    if (this.jwt) return
-    try {
-      const mod: any = await import('jsonwebtoken')
-      this.jwt = mod.default ?? mod
-    } catch {
-      throw new Error('JwtStrategy requires "jsonwebtoken" package. Install: pnpm add jsonwebtoken')
+    let jwt: any
+    const jwksCache = new Map<string, string>()
+    let jwksCacheTime = 0
+
+    const ensureJwt = async (): Promise<void> => {
+      if (jwt) return
+      try {
+        const mod: any = await import('jsonwebtoken')
+        jwt = mod.default ?? mod
+      } catch {
+        throw new Error(
+          'JwtStrategy requires "jsonwebtoken" package. Install: pnpm add jsonwebtoken',
+        )
+      }
     }
-  }
 
-  async validate(req: any): Promise<AuthUser | null> {
-    await this.ensureJwt()
+    const decodeHeader = (token: string): { kid?: string; alg?: string } | null => {
+      try {
+        const headerB64 = token.split('.')[0]
+        if (!headerB64) return null
+        return JSON.parse(Buffer.from(headerB64, 'base64url').toString('utf-8'))
+      } catch {
+        return null
+      }
+    }
 
-    const token = this.extractToken(req)
-    if (!token) return null
+    const refreshJwks = async (): Promise<void> => {
+      if (!options.jwksUri) return
 
-    try {
-      // Resolve the signing key
-      const secret = await this.resolveSecret(token, req)
-      if (!secret) return null
+      try {
+        const res = await fetch(options.jwksUri, {
+          headers: { accept: 'application/json' },
+          signal: AbortSignal.timeout(10_000),
+        })
 
-      // Default to RS256 when using JWKS, HS256 when using static secret
-      const defaultAlgorithms = this.options.jwksUri ? ['RS256'] : ['HS256']
+        if (!res.ok) return
 
-      const payload = this.jwt.verify(token, secret, {
-        ...this.options.verifyOptions,
-        algorithms: this.options.algorithms ?? defaultAlgorithms,
-      })
+        const data = (await res.json()) as { keys?: JwkKey[] }
+        if (!data.keys) return
 
-      // Check token revocation if a store is configured
-      if (this.options.tokenStore) {
-        const revokeBy = this.options.revokeBy ?? 'jti'
-        const identifier = revokeBy === 'jti' && payload.jti ? payload.jti : token
-        if (await this.options.tokenStore.isRevoked(identifier)) {
+        jwksCache.clear()
+        for (const key of data.keys) {
+          if (key.kid && key.kty === 'RSA' && key.n && key.e) {
+            jwksCache.set(key.kid, jwkToPem(key))
+          }
+        }
+        jwksCacheTime = Date.now()
+      } catch {
+        // JWKS fetch failure — keep stale cache if available
+      }
+    }
+
+    const getJwksKey = async (kid: string): Promise<string | null> => {
+      const ttl = options.jwksCacheTtl!
+
+      if (jwksCache.has(kid) && Date.now() - jwksCacheTime < ttl) {
+        return jwksCache.get(kid)!
+      }
+
+      await refreshJwks()
+      return jwksCache.get(kid) ?? null
+    }
+
+    const resolveSecret = async (token: string, req: any): Promise<string | Buffer | null> => {
+      // Per-tenant secret resolver takes precedence
+      if (options.secretResolver && req.tenant?.id) {
+        return options.secretResolver(req.tenant.id)
+      }
+
+      // JWKS URI: decode header to get kid, fetch matching key
+      if (options.jwksUri) {
+        const header = decodeHeader(token)
+        if (!header?.kid) return null
+        return getJwksKey(header.kid)
+      }
+
+      return options.secret ?? null
+    }
+
+    const extractToken = (req: any): string | null => {
+      const from = options.tokenFrom!
+
+      if (from === 'header') {
+        const headerName = options.headerName!
+        const prefix = options.headerPrefix!
+        const header = req.headers?.[headerName] ?? req.headers?.[headerName.toLowerCase()]
+        if (!header || typeof header !== 'string') return null
+        if (!header.startsWith(`${prefix} `)) return null
+        return header.slice(prefix.length + 1)
+      }
+
+      if (from === 'query') {
+        return req.query?.[options.queryParam!] ?? null
+      }
+
+      if (from === 'cookie') {
+        return req.cookies?.[options.cookieName!] ?? null
+      }
+
+      return null
+    }
+
+    return {
+      async validate(req: any): Promise<AuthUser | null> {
+        await ensureJwt()
+
+        const token = extractToken(req)
+        if (!token) return null
+
+        try {
+          const secret = await resolveSecret(token, req)
+          if (!secret) return null
+
+          // Default to RS256 when using JWKS, HS256 when using static secret
+          const defaultAlgorithms = options.jwksUri ? ['RS256'] : ['HS256']
+
+          const payload = jwt.verify(token, secret, {
+            ...options.verifyOptions,
+            algorithms: options.algorithms ?? defaultAlgorithms,
+          })
+
+          // Check token revocation if a store is configured
+          if (options.tokenStore) {
+            const revokeBy = options.revokeBy ?? 'jti'
+            const identifier = revokeBy === 'jti' && payload.jti ? payload.jti : token
+            if (await options.tokenStore.isRevoked(identifier)) {
+              return null
+            }
+          }
+
+          return options.mapPayload ? options.mapPayload(payload) : payload
+        } catch {
           return null
         }
-      }
-
-      return this.options.mapPayload ? this.options.mapPayload(payload) : payload
-    } catch {
-      return null
+      },
     }
-  }
-
-  /**
-   * Resolve the signing key for a token.
-   * Priority: secretResolver (per-tenant) > jwksUri (by kid) > static secret
-   */
-  private async resolveSecret(token: string, req: any): Promise<string | Buffer | null> {
-    // Per-tenant secret resolver takes precedence
-    if (this.options.secretResolver && req.tenant?.id) {
-      return this.options.secretResolver(req.tenant.id)
-    }
-
-    // JWKS URI: decode header to get kid, fetch matching key
-    if (this.options.jwksUri) {
-      const header = this.decodeHeader(token)
-      if (!header?.kid) return null
-      return this.getJwksKey(header.kid)
-    }
-
-    return this.options.secret ?? null
-  }
-
-  /**
-   * Decode the JWT header without verification to extract the `kid`.
-   */
-  private decodeHeader(token: string): { kid?: string; alg?: string } | null {
-    try {
-      const headerB64 = token.split('.')[0]
-      if (!headerB64) return null
-      return JSON.parse(Buffer.from(headerB64, 'base64url').toString('utf-8'))
-    } catch {
-      return null
-    }
-  }
-
-  /**
-   * Get a public key from the JWKS cache by `kid`. If the key is not
-   * cached or the cache has expired, fetches fresh keys from the JWKS URI.
-   * If the kid is still not found after refresh, returns null.
-   */
-  private async getJwksKey(kid: string): Promise<string | null> {
-    const ttl = this.options.jwksCacheTtl ?? 600_000
-
-    // Check cache
-    if (this.jwksCache.has(kid) && Date.now() - this.jwksCacheTime < ttl) {
-      return this.jwksCache.get(kid)!
-    }
-
-    // Fetch and cache
-    await this.refreshJwks()
-
-    return this.jwksCache.get(kid) ?? null
-  }
-
-  /**
-   * Fetch the JWKS from the configured URI and cache all keys.
-   * Converts JWK RSA keys to PEM format for jsonwebtoken compatibility.
-   */
-  private async refreshJwks(): Promise<void> {
-    if (!this.options.jwksUri) return
-
-    try {
-      const res = await fetch(this.options.jwksUri, {
-        headers: { accept: 'application/json' },
-        signal: AbortSignal.timeout(10_000),
-      })
-
-      if (!res.ok) return
-
-      const data = (await res.json()) as { keys?: JwkKey[] }
-      if (!data.keys) return
-
-      this.jwksCache.clear()
-      for (const key of data.keys) {
-        if (key.kid && key.kty === 'RSA' && key.n && key.e) {
-          this.jwksCache.set(key.kid, jwkToPem(key))
-        }
-      }
-      this.jwksCacheTime = Date.now()
-    } catch {
-      // JWKS fetch failure — keep stale cache if available
-    }
-  }
-
-  private extractToken(req: any): string | null {
-    const from = this.options.tokenFrom ?? 'header'
-
-    if (from === 'header') {
-      const headerName = this.options.headerName ?? 'authorization'
-      const prefix = this.options.headerPrefix ?? 'Bearer'
-      const header = req.headers?.[headerName] ?? req.headers?.[headerName.toLowerCase()]
-      if (!header || typeof header !== 'string') return null
-      if (!header.startsWith(`${prefix} `)) return null
-      return header.slice(prefix.length + 1)
-    }
-
-    if (from === 'query') {
-      const param = this.options.queryParam ?? 'token'
-      return req.query?.[param] ?? null
-    }
-
-    if (from === 'cookie') {
-      const cookieName = this.options.cookieName ?? 'jwt'
-      return req.cookies?.[cookieName] ?? null
-    }
-
-    return null
-  }
-}
+  },
+})
 
 // ── JWK Utilities ──────────────────────────────────────────────────────
 
@@ -362,7 +353,7 @@ export interface KeycloakMapOptions {
  * ```ts
  * import { JwtStrategy, keycloakMapPayload } from '@forinda/kickjs-auth'
  *
- * new JwtStrategy({
+ * JwtStrategy({
  *   jwksUri: 'https://keycloak.example.com/realms/my-realm/protocol/openid-connect/certs',
  *   mapPayload: keycloakMapPayload({ clientId: 'my-app' }),
  * })

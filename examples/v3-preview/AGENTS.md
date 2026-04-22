@@ -123,7 +123,7 @@ bootstrap({
   modules,
   adapters: [
     AuthAdapter({
-      strategies: [new JwtStrategy({ secret: process.env.JWT_SECRET! })],
+      strategies: [JwtStrategy({ secret: process.env.JWT_SECRET! })],
     }),
   ],
 })

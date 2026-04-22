@@ -42,7 +42,7 @@ export const app = await bootstrap({
 
     AuthAdapter({
       strategies: [
-        new JwtStrategy({
+        JwtStrategy({
           secret: process.env.JWT_SECRET ?? 'dev-secret-change-me',
           mapPayload: (p) => ({ id: p.sub, email: p.email, roles: p.roles ?? ['user'] }),
         }),
