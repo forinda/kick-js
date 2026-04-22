@@ -40,7 +40,7 @@ class CleanupService {
 
 bootstrap({
   modules,
-  adapters: [new CronAdapter()],
+  adapters: [CronAdapter()],
 })
 ```
 
