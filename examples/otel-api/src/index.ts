@@ -11,7 +11,7 @@ import { modules } from './modules'
 bootstrap({
   modules,
   adapters: [
-    new OtelAdapter({
+    OtelAdapter({
       serviceName: 'otel-api-example',
       serviceVersion: '0.5.2',
       ignoreRoutes: ['/_debug/*', '/health'],

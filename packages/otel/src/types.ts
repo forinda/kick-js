@@ -33,7 +33,7 @@ export interface OtelAdapterOptions {
    * import { sensitiveKeys } from './config/redaction'
    *
    * pino({ redact: { paths: sensitiveKeys } })
-   * new OtelAdapter({ sensitiveKeys })
+   * OtelAdapter({ sensitiveKeys })
    * ```
    *
    * String entries do case-insensitive exact match on the attribute

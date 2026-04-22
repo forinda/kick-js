@@ -5,8 +5,14 @@ import type { BuildContext } from './define-plugin'
  * Options passed to {@link defineAdapter}. Mirrors {@link DefinePluginOptions}
  * exactly — see `architecture.md` §21.3.4 for the definePlugin/defineAdapter
  * symmetry rationale.
+ *
+ * The optional `TExtra` generic lets an adapter ship public methods
+ * beyond the standard {@link AppAdapter} contract — they're preserved
+ * on the returned adapter instance so external callers (tests, peer
+ * adapters) can invoke them directly. See `OtelAdapter.applyRedaction`
+ * for the canonical use case.
  */
-export interface DefineAdapterOptions<TConfig> {
+export interface DefineAdapterOptions<TConfig, TExtra = unknown> {
   /**
    * Stable identity used for logging, `dependsOn` lookups, and `.scoped()`
    * namespacing. Required for adapters that participate in `dependsOn`
@@ -16,7 +22,7 @@ export interface DefineAdapterOptions<TConfig> {
   version?: string
   requires?: { kickjs?: string }
   defaults?: Partial<TConfig>
-  build(config: TConfig, ctx: BuildContext): Omit<AppAdapter, 'name'>
+  build(config: TConfig, ctx: BuildContext): Omit<AppAdapter, 'name'> & TExtra
 }
 
 /**
@@ -34,13 +40,15 @@ export interface AdapterAsyncOptions<TConfig> {
 /**
  * Factory returned by {@link defineAdapter}. Same surface as
  * {@link PluginFactory} (call / `.scoped()` / `.async()`) so adopters learn
- * one mental model for both primitives.
+ * one mental model for both primitives. Returned instances carry both
+ * the standard {@link AppAdapter} contract and any `TExtra` extension
+ * methods the `build` function exposed.
  */
-export interface AdapterFactory<TConfig> {
-  (config?: Partial<TConfig>): AppAdapter
-  scoped(scopeName: string, config?: Partial<TConfig>): AppAdapter
+export interface AdapterFactory<TConfig, TExtra = unknown> {
+  (config?: Partial<TConfig>): AppAdapter & TExtra
+  scoped(scopeName: string, config?: Partial<TConfig>): AppAdapter & TExtra
   async(opts: AdapterAsyncOptions<TConfig>): AppAdapter
-  readonly definition: Readonly<DefineAdapterOptions<TConfig>>
+  readonly definition: Readonly<DefineAdapterOptions<TConfig, TExtra>>
 }
 
 const mergeConfig = <TConfig>(
@@ -75,19 +83,21 @@ const composeName = (base: string, scope: string): string => `${base}:${scope}`
  * })
  * ```
  */
-export function defineAdapter<TConfig = Record<string, unknown>>(
-  options: DefineAdapterOptions<TConfig>,
-): AdapterFactory<TConfig> {
+export function defineAdapter<TConfig = Record<string, unknown>, TExtra = unknown>(
+  options: DefineAdapterOptions<TConfig, TExtra>,
+): AdapterFactory<TConfig, TExtra> {
   const buildSync = (
     instanceName: string,
     scoped: boolean,
     overrides?: Partial<TConfig>,
-  ): AppAdapter => {
+  ): AppAdapter & TExtra => {
     const config = mergeConfig(options.defaults, overrides)
     // Mutate `name` on the build result instead of spreading — spread
     // strips prototype methods when `build()` returns a class instance.
-    const built = options.build(config, { name: instanceName, scoped }) as AppAdapter
-    built.name = instanceName
+    // Extension methods declared by the build function (`TExtra`) survive
+    // the mutation since they're own properties on the build result.
+    const built = options.build(config, { name: instanceName, scoped }) as AppAdapter & TExtra
+    ;(built as AppAdapter).name = instanceName
     return built
   }
 
@@ -115,7 +125,7 @@ export function defineAdapter<TConfig = Record<string, unknown>>(
   }
 
   const factory = ((config?: Partial<TConfig>) =>
-    buildSync(options.name, false, config)) as AdapterFactory<TConfig>
+    buildSync(options.name, false, config)) as AdapterFactory<TConfig, TExtra>
 
   factory.scoped = (scopeName: string, config?: Partial<TConfig>) =>
     buildSync(composeName(options.name, scopeName), true, config)

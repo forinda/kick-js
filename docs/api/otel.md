@@ -19,7 +19,7 @@ import { OtelAdapter } from '@forinda/kickjs-otel'
 bootstrap({
   modules,
   adapters: [
-    new OtelAdapter({
+    OtelAdapter({
       serviceName: 'my-api',
       serviceVersion: '1.0.0',
       ignoreRoutes: ['/health', '/_debug/*'],
@@ -53,13 +53,13 @@ export const sensitiveKeys = ['password', 'token', 'authorization', /^x-api-key/
 pino({ redact: { paths: sensitiveKeys } })
 
 // src/index.ts
-new OtelAdapter({ sensitiveKeys })
+OtelAdapter({ sensitiveKeys })
 ```
 
 String entries match the attribute key case-insensitively; `RegExp` entries match verbatim. Matching attributes export as `'[REDACTED]'`. For value-aware redaction (e.g. look inside strings for card numbers), use `redactAttribute`:
 
 ```ts
-new OtelAdapter({
+OtelAdapter({
   redactAttribute: (key, value) =>
     typeof value === 'string' && /\d{16}/.test(value) ? '[REDACTED]' : value,
 })

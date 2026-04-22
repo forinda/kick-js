@@ -28,7 +28,7 @@ import { OtelAdapter } from '@forinda/kickjs-otel'
 bootstrap({
   modules,
   adapters: [
-    new OtelAdapter({
+    OtelAdapter({
       serviceName: 'my-api',
       enabled: true,
     }),

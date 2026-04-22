@@ -3,13 +3,13 @@ import { OtelAdapter } from '@forinda/kickjs-otel'
 
 describe('OtelAdapter.applyRedaction', () => {
   it('is identity when no sensitiveKeys or redactAttribute is configured', () => {
-    const a = new OtelAdapter()
+    const a = OtelAdapter()
     const attrs = { 'http.method': 'GET', 'http.status_code': 200, foo: 'bar' }
     expect(a.applyRedaction(attrs)).toEqual(attrs)
   })
 
   it('masks string-key matches case-insensitively', () => {
-    const a = new OtelAdapter({ sensitiveKeys: ['password', 'token'] })
+    const a = OtelAdapter({ sensitiveKeys: ['password', 'token'] })
     const out = a.applyRedaction({
       password: 'hunter2',
       PASSWORD: 'HUNTER2',
@@ -25,7 +25,7 @@ describe('OtelAdapter.applyRedaction', () => {
   })
 
   it('masks RegExp key matches verbatim (no case coercion)', () => {
-    const a = new OtelAdapter({ sensitiveKeys: [/^x-api-key/i, /^authorization$/i] })
+    const a = OtelAdapter({ sensitiveKeys: [/^x-api-key/i, /^authorization$/i] })
     const out = a.applyRedaction({
       'X-API-Key': 'sk_live_1',
       'x-api-key-v2': 'sk_live_2',
@@ -46,7 +46,7 @@ describe('OtelAdapter.applyRedaction', () => {
     const redact = vi.fn((_key: string, value: unknown) =>
       typeof value === 'string' && /\d{16}/.test(value) ? '[REDACTED]' : value,
     )
-    const a = new OtelAdapter({
+    const a = OtelAdapter({
       sensitiveKeys: ['should-be-ignored-when-custom-set'],
       redactAttribute: redact,
     })
@@ -63,7 +63,7 @@ describe('OtelAdapter.applyRedaction', () => {
   })
 
   it('preserves non-string attribute values', () => {
-    const a = new OtelAdapter({ sensitiveKeys: ['password'] })
+    const a = OtelAdapter({ sensitiveKeys: ['password'] })
     const out = a.applyRedaction({
       'http.status_code': 200,
       'http.is_error': false,
@@ -77,7 +77,7 @@ describe('OtelAdapter.applyRedaction', () => {
   })
 
   it('empty sensitiveKeys array is treated as no-op', () => {
-    const a = new OtelAdapter({ sensitiveKeys: [] })
+    const a = OtelAdapter({ sensitiveKeys: [] })
     expect(a.applyRedaction({ password: 'x' })).toEqual({ password: 'x' })
   })
 })
