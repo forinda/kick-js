@@ -151,8 +151,12 @@ export function defineContextDecorator<
       // Class decorator — `target` is the constructor.
       pushClassMeta(METADATA.CLASS_CONTRIBUTORS, target, registration)
     } else {
-      // Method decorator — `target` is the prototype, propertyKey is the route handler.
-      pushMethodMeta(METADATA.METHOD_CONTRIBUTORS, target, String(propertyKey), registration)
+      // Method decorator — `target` is the prototype; we write to its
+      // constructor so reads can use the controller class as the lookup
+      // key, matching the convention used by @Middleware and consumed by
+      // router-builder.ts.
+      const constructor = (target as { constructor: object }).constructor
+      pushMethodMeta(METADATA.METHOD_CONTRIBUTORS, constructor, String(propertyKey), registration)
     }
   }
 
