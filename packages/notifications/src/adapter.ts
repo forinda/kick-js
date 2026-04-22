@@ -1,4 +1,4 @@
-import { Logger, type AppAdapter, type AdapterContext } from '@forinda/kickjs'
+import { Logger, defineAdapter } from '@forinda/kickjs'
 import { NotificationService, NOTIFICATIONS } from './service'
 import type { NotificationServiceOptions } from './types'
 
@@ -13,27 +13,35 @@ const log = Logger.for('NotificationAdapter')
  *
  * bootstrap({
  *   adapters: [
- *     new NotificationAdapter({
+ *     NotificationAdapter({
  *       channels: [
- *         new SlackChannel({ url: process.env.SLACK_WEBHOOK! }),
+ *         new SlackChannel({ url: getEnv('SLACK_WEBHOOK') }),
  *         new EmailChannel({ mailer }),
  *       ],
  *       defaultChannels: ['slack'],
  *     }),
  *   ],
  * })
+ *
+ * // Multi-instance via .scoped() — separate channel sets per audience:
+ * bootstrap({
+ *   adapters: [
+ *     NotificationAdapter.scoped('alerts', { channels: [pagerDuty, opsSlack] }),
+ *     NotificationAdapter.scoped('marketing', { channels: [emailChannel] }),
+ *   ],
+ * })
  * ```
  */
-export class NotificationAdapter implements AppAdapter {
-  name = 'NotificationAdapter'
-  private service: NotificationService
+export const NotificationAdapter = defineAdapter<NotificationServiceOptions>({
+  name: 'NotificationAdapter',
+  build: (options) => {
+    const service = new NotificationService(options)
 
-  constructor(options: NotificationServiceOptions) {
-    this.service = new NotificationService(options)
-  }
-
-  afterStart({ container }: AdapterContext): void {
-    container.registerInstance(NOTIFICATIONS, this.service)
-    log.info(`Channels: ${this.service.getChannelNames().join(', ')}`)
-  }
-}
+    return {
+      afterStart({ container }) {
+        container.registerInstance(NOTIFICATIONS, service)
+        log.info(`Channels: ${service.getChannelNames().join(', ')}`)
+      },
+    }
+  },
+})
