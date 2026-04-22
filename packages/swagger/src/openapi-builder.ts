@@ -60,7 +60,7 @@ export interface SwaggerOptions {
    *
    * @example
    * ```ts
-   * new SwaggerAdapter({
+   * SwaggerAdapter({
    *   schemaParser: myYupParser,
    * })
    * ```

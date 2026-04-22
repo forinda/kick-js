@@ -16,7 +16,7 @@
  *   toJsonSchema: (schema) => joiToJson(schema),
  * }
  *
- * new SwaggerAdapter({ schemaParser: joiParser })
+ * SwaggerAdapter({ schemaParser: joiParser })
  * ```
  */
 export interface SchemaParser {

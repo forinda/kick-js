@@ -10,7 +10,7 @@ import { SwaggerAdapter } from '@forinda/kickjs-swagger'
 bootstrap({
   modules,
   adapters: [
-    new SwaggerAdapter({
+    SwaggerAdapter({
       info: {
         title: 'My API',
         version: '1.0.0',
@@ -204,7 +204,7 @@ export const joiSchemaParser: SchemaParser = {
 Pass it to the adapter:
 
 ```typescript
-new SwaggerAdapter({
+SwaggerAdapter({
   info: { title: 'My API', version: '1.0.0' },
   schemaParser: joiSchemaParser,
 })
@@ -292,7 +292,7 @@ async create(ctx: RequestContext) {
 ## Configuration Options
 
 ```typescript
-new SwaggerAdapter({
+SwaggerAdapter({
   info: { title, version, description },
   servers: [{ url, description }],
   bearerAuth: true,           // Add global BearerAuth security scheme
@@ -315,7 +315,7 @@ adapter becomes a no-op:
 - Server URL auto-discovery is skipped
 
 ```typescript
-new SwaggerAdapter({
+SwaggerAdapter({
   info: { title: 'My API', version: '1.0.0' },
   disableInProd: true,
 })

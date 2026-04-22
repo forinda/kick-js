@@ -14,7 +14,7 @@ pnpm add @forinda/kickjs-swagger @forinda/kickjs-core
 
 ## Features
 
-- `SwaggerAdapter` — serves Swagger UI at `/docs`, ReDoc at `/redoc`, JSON at `/openapi.json`
+- `SwaggerAdapter` — `defineAdapter`-built factory; serves Swagger UI at `/docs`, ReDoc at `/redoc`, JSON at `/openapi.json`
 - Decorators: `@ApiTags`, `@ApiOperation`, `@ApiResponse`, `@ApiBearerAuth`, `@ApiExclude`
 - Auto-converts Zod validation schemas to OpenAPI JSON Schema
 - Pluggable `SchemaParser` — use Joi, Yup, Valibot instead of Zod
@@ -28,7 +28,7 @@ import { SwaggerAdapter } from '@forinda/kickjs-swagger'
 bootstrap({
   modules,
   adapters: [
-    new SwaggerAdapter({
+    SwaggerAdapter({
       info: { title: 'My API', version: '1.0.0' },
       bearerAuth: true,
       disableInProd: true, // skip mounting docs when NODE_ENV=production
@@ -51,7 +51,7 @@ const joiParser: SchemaParser = {
   toJsonSchema: (schema) => joiToJson(schema),
 }
 
-new SwaggerAdapter({ schemaParser: joiParser })
+SwaggerAdapter({ schemaParser: joiParser })
 ```
 
 ## Documentation
