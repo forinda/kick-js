@@ -152,16 +152,12 @@ export const app = await bootstrap({ modules })
 | Example | What it shows |
 |---------|---------------|
 | [minimal-api](examples/minimal-api/) | Simplest possible app — bootstrap + one controller |
-| [v2-showcase-api](examples/v2-showcase-api/) | Full v2 feature tour: typed `Ctx<KickRoutes>`, `KickEnv`, `createToken`, DDD modules |
-| [v3-preview](examples/v3-preview/) | Preview of upcoming v3 APIs |
 | [task-drizzle-api](examples/task-drizzle-api/) | Full task management app — PostgreSQL + Drizzle, 14 DDD modules |
 | [task-prisma-api](examples/task-prisma-api/) | Full task management app — PostgreSQL + Prisma 7 (driver adapters) |
 | [task-mongoose-api](examples/task-mongoose-api/) | Full task management app — MongoDB + Mongoose |
-| [graphql-api](examples/graphql-api/) | GraphQL with `@Resolver`, `@Query`, `@Mutation` |
-| [devtools-api](examples/devtools-api/) | DevTools dashboard + reactive state |
-| [microservice-api](examples/microservice-api/) | OTel + DevTools + Swagger template |
-| [otel-api](examples/otel-api/) | OpenTelemetry console tracing |
-| [joi-api](examples/joi-api/) | Custom Joi `SchemaParser` for Swagger + Joi validation middleware |
+| [multi-tenant-drizzle-api](examples/multi-tenant-drizzle-api/) | Multi-tenant pattern — PostgreSQL + Drizzle |
+| [multi-tenant-prisma-api](examples/multi-tenant-prisma-api/) | Multi-tenant pattern — PostgreSQL + Prisma |
+| [multi-tenant-mongoose-api](examples/multi-tenant-mongoose-api/) | Multi-tenant pattern — MongoDB + Mongoose |
 
 ## Adding an Example App
 

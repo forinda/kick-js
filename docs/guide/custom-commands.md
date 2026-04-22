@@ -206,9 +206,6 @@ kick build
 - **Email templates** loaded at runtime by the mailer
 - **Migration files** or seed scripts that need to ship with the build
 
-::: tip Reference
-See the [devtools-api example](https://github.com/forinda/kick-js/tree/main/examples/devtools-api) for a working `copyDirs` setup with EJS views and public assets.
-:::
 
 ## Config File Resolution
 

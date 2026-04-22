@@ -150,16 +150,8 @@ const examplesSidebar = [
     ],
   },
   {
-    text: 'Focused Examples',
-    items: [
-      { text: 'v2 Showcase', link: '/examples/v2-showcase-api' },
-      { text: 'Minimal', link: '/examples/minimal-api' },
-      { text: 'Joi Validation', link: '/examples/joi-api' },
-      { text: 'DevTools', link: '/examples/devtools-api' },
-      { text: 'GraphQL', link: '/examples/graphql-api' },
-      { text: 'Microservice', link: '/examples/microservice-api' },
-      { text: 'OpenTelemetry', link: '/examples/otel-api' },
-    ],
+    text: 'Starter',
+    items: [{ text: 'Minimal', link: '/examples/minimal-api' }],
   },
 ]
 
