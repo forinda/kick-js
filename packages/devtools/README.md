@@ -39,7 +39,7 @@ import { DevToolsAdapter } from '@forinda/kickjs-devtools'
 bootstrap({
   modules,
   adapters: [
-    new DevToolsAdapter({
+    DevToolsAdapter({
       enabled: true,
       exposeConfig: true,
       configPrefixes: ['APP_', 'NODE_ENV', 'PORT'],

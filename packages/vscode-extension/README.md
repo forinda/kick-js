@@ -20,7 +20,7 @@ import { DevToolsAdapter } from '@forinda/kickjs-devtools'
 
 bootstrap({
   modules,
-  adapters: [new DevToolsAdapter()],
+  adapters: [DevToolsAdapter()],
 })
 ```
 

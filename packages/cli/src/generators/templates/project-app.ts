@@ -21,7 +21,7 @@ export function generateEntryFile(
 
       if (packages.includes('devtools')) {
         gqlImports.push(`import { DevToolsAdapter } from '@forinda/kickjs-devtools'`)
-        gqlAdapters.push(`    new DevToolsAdapter(),`)
+        gqlAdapters.push(`    DevToolsAdapter(),`)
       }
       if (packages.includes('otel')) {
         gqlImports.push(`import { OtelAdapter } from '@forinda/kickjs-otel'`)
@@ -75,7 +75,7 @@ ${gqlAdaptersBlock}    new GraphQLAdapter({
       }
       if (packages.includes('devtools')) {
         cqrsImports.push(`import { DevToolsAdapter } from '@forinda/kickjs-devtools'`)
-        cqrsAdapters.push(`    new DevToolsAdapter(),`)
+        cqrsAdapters.push(`    DevToolsAdapter(),`)
       }
       if (packages.includes('swagger')) {
         cqrsImports.push(`import { SwaggerAdapter } from '@forinda/kickjs-swagger'`)
@@ -121,7 +121,7 @@ export const app = await bootstrap({
       }
       if (packages.includes('devtools')) {
         imports.push(`import { DevToolsAdapter } from '@forinda/kickjs-devtools'`)
-        adapters.push(`    new DevToolsAdapter(),`)
+        adapters.push(`    DevToolsAdapter(),`)
       }
       if (packages.includes('otel')) {
         imports.push(`import { OtelAdapter } from '@forinda/kickjs-otel'`)
@@ -158,7 +158,7 @@ export const app = await bootstrap({ modules${adaptersBlock} })
 
       if (packages.includes('devtools')) {
         restImports.push(`import { DevToolsAdapter } from '@forinda/kickjs-devtools'`)
-        restAdapters.push(`    new DevToolsAdapter(),`)
+        restAdapters.push(`    DevToolsAdapter(),`)
       }
       if (packages.includes('swagger')) {
         restImports.push(`import { SwaggerAdapter } from '@forinda/kickjs-swagger'`)

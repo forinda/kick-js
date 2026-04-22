@@ -11,7 +11,7 @@ import { DevToolsAdapter } from '@forinda/kickjs-devtools'
 import { SwaggerAdapter } from '@forinda/kickjs-swagger'
 import { modules } from './modules'
 
-const devtools = new DevToolsAdapter({
+const devtools = DevToolsAdapter({
   exposeConfig: true,
   configPrefixes: ['APP_', 'NODE_ENV'],
 })

@@ -16,7 +16,7 @@ bootstrap({
       serviceVersion: '0.5.2',
       ignoreRoutes: ['/_debug/*', '/health'],
     }),
-    new DevToolsAdapter(),
+    DevToolsAdapter(),
     new SwaggerAdapter({
       info: {
         title: 'OTel Example API',

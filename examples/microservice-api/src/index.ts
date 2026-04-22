@@ -10,7 +10,7 @@ bootstrap({
   modules,
   adapters: [
     OtelAdapter({ serviceName: 'microservice-api' }),
-    new DevToolsAdapter(),
+    DevToolsAdapter(),
     new SwaggerAdapter({
       info: { title: 'microservice-api', version: '0.7.0' },
     }),

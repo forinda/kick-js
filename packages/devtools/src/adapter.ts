@@ -5,11 +5,10 @@ import { fileURLToPath } from 'node:url'
 import { existsSync, readFileSync } from 'node:fs'
 import { randomBytes } from 'node:crypto'
 import {
-  type AppAdapter,
-  type AdapterContext,
   type AdapterMiddleware,
   type Container,
   METADATA,
+  defineAdapter,
   ref,
   computed,
   reactive,
@@ -86,10 +85,32 @@ export interface DevToolsOptions {
    *
    * @example
    * ```ts
-   * new DevToolsAdapter({ secret: process.env.DEVTOOLS_SECRET })
+   * DevToolsAdapter({ secret: getEnv('DEVTOOLS_SECRET') })
    * ```
    */
   secret?: string | false
+}
+
+/**
+ * Public reactive surface exposed by a DevToolsAdapter instance —
+ * counters, computed metrics, and the route latency map. Tests and
+ * peer adapters consume these directly to drive their own behavior.
+ */
+export interface DevToolsAdapterExtensions {
+  /** Total requests received. */
+  readonly requestCount: Ref<number>
+  /** Total responses with status >= 500. */
+  readonly errorCount: Ref<number>
+  /** Total responses with status >= 400 and < 500. */
+  readonly clientErrorCount: Ref<number>
+  /** Server start time. */
+  readonly startedAt: Ref<number>
+  /** Computed error rate (server errors / total requests). */
+  readonly errorRate: ComputedRef<number>
+  /** Computed uptime in seconds. */
+  readonly uptimeSeconds: ComputedRef<number>
+  /** Per-route latency tracking. */
+  readonly routeLatency: Record<string, RouteStats>
 }
 
 /**
@@ -110,7 +131,7 @@ export interface DevToolsOptions {
  * bootstrap({
  *   modules: [UserModule],
  *   adapters: [
- *     new DevToolsAdapter({
+ *     DevToolsAdapter({
  *       enabled: process.env.NODE_ENV !== 'production',
  *       exposeConfig: true,
  *       configPrefixes: ['APP_', 'DATABASE_'],
@@ -119,439 +140,415 @@ export interface DevToolsOptions {
  * })
  * ```
  */
-export class DevToolsAdapter implements AppAdapter {
-  readonly name = 'DevToolsAdapter'
-
-  private basePath: string
-  private enabled: boolean
-  private exposeConfig: boolean
-  private configPrefixes: string[]
-  private errorRateThreshold: number
-  private secret: string | false
-
-  // ── Reactive State ───────────────────────────────────────────────────
-  /** Total requests received */
-  readonly requestCount: Ref<number>
-  /** Total responses with status >= 500 */
-  readonly errorCount: Ref<number>
-  /** Total responses with status >= 400 and < 500 */
-  readonly clientErrorCount: Ref<number>
-  /** Server start time */
-  readonly startedAt: Ref<number>
-  /** Computed error rate (server errors / total requests) */
-  readonly errorRate: ComputedRef<number>
-  /** Computed uptime in seconds */
-  readonly uptimeSeconds: ComputedRef<number>
-  /** Per-route latency tracking */
-  readonly routeLatency: Record<string, RouteStats>
-
-  // ── Internal State ───────────────────────────────────────────────────
-  private routes: RouteInfo[] = []
-  private container: Container | null = null
-  private appRef: any = null
-  private adapterStatuses: Record<string, string> = {}
-  private stopErrorWatch: (() => void) | null = null
-  private peerAdapters: any[] = []
-
-  constructor(options: DevToolsOptions = {}) {
-    this.basePath = options.basePath ?? '/_debug'
-    this.enabled = options.enabled ?? process.env.NODE_ENV !== 'production'
-    this.exposeConfig = options.exposeConfig ?? false
-    this.configPrefixes = options.configPrefixes ?? ['APP_', 'NODE_ENV']
-    this.errorRateThreshold = options.errorRateThreshold ?? 0.5
-    this.peerAdapters = options.adapters ?? []
+export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExtensions>({
+  name: 'DevToolsAdapter',
+  defaults: {
+    basePath: '/_debug',
+    errorRateThreshold: 0.5,
+    exposeConfig: false,
+    configPrefixes: ['APP_', 'NODE_ENV'],
+  },
+  build: (options) => {
+    const basePath = options.basePath!
+    const enabled = options.enabled ?? process.env.NODE_ENV !== 'production'
+    const exposeConfig = options.exposeConfig!
+    const configPrefixes = options.configPrefixes!
+    const errorRateThreshold = options.errorRateThreshold!
+    const peerAdapters = options.adapters ?? []
 
     // Secret token guard
+    let secret: string | false
     if (options.secret === false) {
-      this.secret = false
+      secret = false
     } else if (options.secret) {
-      this.secret = options.secret
+      secret = options.secret
     } else {
-      // Auto-generate a random token
-      this.secret = randomBytes(16).toString('hex')
+      secret = randomBytes(16).toString('hex')
     }
 
-    // Initialize reactive state
-    this.requestCount = ref(0)
-    this.errorCount = ref(0)
-    this.clientErrorCount = ref(0)
-    this.startedAt = ref(Date.now())
-    this.routeLatency = reactive({})
+    // ── Reactive state ─────────────────────────────────────────────
+    const requestCount = ref(0)
+    const errorCount = ref(0)
+    const clientErrorCount = ref(0)
+    const startedAt = ref(Date.now())
+    const routeLatency = reactive<Record<string, RouteStats>>({})
 
-    this.errorRate = computed(() =>
-      this.requestCount.value > 0 ? this.errorCount.value / this.requestCount.value : 0,
+    const errorRate = computed(() =>
+      requestCount.value > 0 ? errorCount.value / requestCount.value : 0,
     )
 
-    this.uptimeSeconds = computed(() => Math.floor((Date.now() - this.startedAt.value) / 1000))
+    const uptimeSeconds = computed(() => Math.floor((Date.now() - startedAt.value) / 1000))
+
+    // ── Internal mutable state ─────────────────────────────────────
+    let routes: RouteInfo[] = []
+    let container: Container | null = null
+    let appRef: any = null
+    const adapterStatuses: Record<string, string> = {}
+    let stopErrorWatch: (() => void) | null = null
 
     // Watch error rate — log warnings when elevated
     if (options.onErrorRateExceeded) {
       const callback = options.onErrorRateExceeded
-      const threshold = this.errorRateThreshold
-      this.stopErrorWatch = watch(this.errorRate, (rate) => {
-        if (rate > threshold) {
+      stopErrorWatch = watch(errorRate, (rate) => {
+        if (rate > errorRateThreshold) {
           callback(rate)
         }
       })
     } else {
-      this.stopErrorWatch = watch(this.errorRate, (rate) => {
-        if (rate > this.errorRateThreshold) {
+      stopErrorWatch = watch(errorRate, (rate) => {
+        if (rate > errorRateThreshold) {
           log.warn(`Error rate elevated: ${(rate * 100).toFixed(1)}%`)
         }
       })
     }
-  }
 
-  // ── Adapter Lifecycle ────────────────────────────────────────────────
-
-  /**
-   * Resolve peer adapters at request time. Prefers live adapters from the
-   * Application registry (survives HMR rebuild) and falls back to the
-   * constructor-provided refs.
-   */
-  private getPeerAdapters(): any[] {
-    const kickApp = this.appRef?.__kickApp
-    if (kickApp && typeof kickApp.getAdapters === 'function') {
-      return kickApp.getAdapters()
-    }
-    return this.peerAdapters
-  }
-
-  beforeMount({ app, container }: AdapterContext): void {
-    if (!this.enabled) return
-
-    this.appRef = app
-    this.container = container
-    this.startedAt.value = Date.now()
-    // Clear routes on rebuild/restart to prevent HMR duplication
-    this.routes = []
-    this.adapterStatuses[this.name] = 'running'
-
-    const router = Router()
-
-    // ── Access guard — require secret token ──────────────────────────
-    if (this.secret !== false) {
-      const token = this.secret
-      router.use((req: Request, res: Response, next: NextFunction) => {
-        const provided = req.headers['x-devtools-token'] ?? req.query?.token
-        if (provided === token) return next()
-        // Allow the dashboard HTML itself (it will include the token in API calls)
-        if (req.path === '/' && req.method === 'GET' && !req.query?.token) {
-          return next() // serve dashboard, it handles auth via token
-        }
-        // Serve static assets for the dashboard (js files)
-        if (req.path.endsWith('.js') || req.path.endsWith('.css')) {
-          return next()
-        }
-        res.status(403).json({ error: 'Forbidden — invalid or missing devtools token' })
-      })
+    /** Find the public/devtools directory relative to the built dist or source */
+    const resolvePublicDir = (): string | null => {
+      const thisDir = dirname(fileURLToPath(import.meta.url))
+      const candidates = [
+        join(thisDir, '..', 'public', 'devtools'), // dist/ -> public/devtools
+        join(thisDir, '..', '..', 'public', 'devtools'), // src/ -> public/devtools
+      ]
+      for (const dir of candidates) {
+        if (existsSync(join(dir, 'index.html'))) return dir
+      }
+      return null
     }
 
-    router.get('/routes', (_req: Request, res: Response) => {
-      res.json({ routes: this.routes })
-    })
-
-    router.get('/container', (_req: Request, res: Response) => {
-      const registrations = this.container?.getRegistrations() ?? []
-      res.json({ registrations, count: registrations.length })
-    })
-
-    router.get('/metrics', (_req: Request, res: Response) => {
-      // Build latency with percentiles, omitting raw samples from response
-      const latency: Record<string, any> = {}
-      for (const [key, stats] of Object.entries(this.routeLatency)) {
-        const { samples: _, ...rest } = stats
-        latency[key] = { ...rest, ...computePercentiles(stats) }
+    /**
+     * Resolve peer adapters at request time. Prefers live adapters from the
+     * Application registry (survives HMR rebuild) and falls back to the
+     * constructor-provided refs.
+     */
+    const getPeerAdapters = (): any[] => {
+      const kickApp = appRef?.__kickApp
+      if (kickApp && typeof kickApp.getAdapters === 'function') {
+        return kickApp.getAdapters()
       }
-      res.json({
-        requests: this.requestCount.value,
-        serverErrors: this.errorCount.value,
-        clientErrors: this.clientErrorCount.value,
-        errorRate: this.errorRate.value,
-        uptimeSeconds: this.uptimeSeconds.value,
-        startedAt: new Date(this.startedAt.value).toISOString(),
-        routeLatency: latency,
-      })
-    })
+      return peerAdapters
+    }
 
-    router.get('/health', (_req: Request, res: Response) => {
-      const healthy = this.errorRate.value < this.errorRateThreshold
-      const status = healthy ? 'healthy' : 'degraded'
+    return {
+      // ── Extensions (TExtra) ───────────────────────────────────────
+      requestCount,
+      errorCount,
+      clientErrorCount,
+      startedAt,
+      errorRate,
+      uptimeSeconds,
+      routeLatency,
 
-      res.status(healthy ? 200 : 503).json({
-        status,
-        errorRate: this.errorRate.value,
-        uptime: this.uptimeSeconds.value,
-        adapters: this.adapterStatuses,
-      })
-    })
+      // ── Lifecycle ─────────────────────────────────────────────────
 
-    router.get('/state', (_req: Request, res: Response) => {
-      const wsAdapter = this.getPeerAdapters().find(
-        (a) => a.name === 'WsAdapter' && typeof a.getStats === 'function',
-      )
-      res.json({
-        reactive: {
-          requestCount: this.requestCount.value,
-          errorCount: this.errorCount.value,
-          clientErrorCount: this.clientErrorCount.value,
-          errorRate: this.errorRate.value,
-          uptimeSeconds: this.uptimeSeconds.value,
-          startedAt: new Date(this.startedAt.value).toISOString(),
-        },
-        routes: this.routes.length,
-        container: this.container?.getRegistrations().length ?? 0,
-        routeLatency: this.routeLatency,
-        ...(wsAdapter ? { ws: wsAdapter.getStats() } : {}),
-      })
-    })
+      beforeMount({ app, container: containerArg }) {
+        if (!enabled) return
 
-    router.get('/ws', (_req: Request, res: Response) => {
-      const wsAdapter = this.getPeerAdapters().find(
-        (a) => a.name === 'WsAdapter' && typeof a.getStats === 'function',
-      )
-      if (!wsAdapter) {
-        res.json({ enabled: false, message: 'WsAdapter not found' })
-        return
-      }
-      res.json({ enabled: true, ...wsAdapter.getStats() })
-    })
+        appRef = app
+        container = containerArg
+        startedAt.value = Date.now()
+        // Clear routes on rebuild/restart to prevent HMR duplication
+        routes = []
+        adapterStatuses['DevToolsAdapter'] = 'running'
 
-    router.get('/queues', async (_req: Request, res: Response) => {
-      const queueAdapter = this.getPeerAdapters().find(
-        (a) => a.name === 'QueueAdapter' && typeof a.getQueueNames === 'function',
-      )
-      if (!queueAdapter) {
-        res.json({ enabled: false, message: 'QueueAdapter not found' })
-        return
-      }
-      try {
-        const names: string[] = queueAdapter.getQueueNames?.() ?? []
-        const queues: any[] = []
-        for (const name of names) {
-          const stats = await queueAdapter.getQueueStats?.(name)
-          queues.push({ name, ...stats })
+        const router = Router()
+
+        // ── Access guard — require secret token ──────────────────
+        if (secret !== false) {
+          const token = secret
+          router.use((req: Request, res: Response, next: NextFunction) => {
+            const provided = req.headers['x-devtools-token'] ?? req.query?.token
+            if (provided === token) return next()
+            // Allow the dashboard HTML itself (it will include the token in API calls)
+            if (req.path === '/' && req.method === 'GET' && !req.query?.token) {
+              return next() // serve dashboard, it handles auth via token
+            }
+            // Serve static assets for the dashboard (js files)
+            if (req.path.endsWith('.js') || req.path.endsWith('.css')) {
+              return next()
+            }
+            res.status(403).json({ error: 'Forbidden — invalid or missing devtools token' })
+          })
         }
-        res.json({ enabled: true, queues })
-      } catch {
-        res.json({ enabled: true, queues: [], error: 'Failed to fetch queue stats' })
-      }
-    })
 
-    // ── Dependency graph ────────────────────────────────────────────
-    router.get('/graph', (_req: Request, res: Response) => {
-      const registrations = this.container?.getRegistrations() ?? []
-      const nodes = registrations
-        .filter((r) => !r.token.startsWith('__hmr__'))
-        .map((r) => ({
-          id: r.token,
-          kind: r.kind,
-          scope: r.scope,
-          resolveCount: r.resolveCount,
-        }))
-      const nodeIds = new Set(nodes.map((n) => n.id))
-      const edges: Array<{ from: string; to: string }> = []
-      for (const r of registrations) {
-        if (r.token.startsWith('__hmr__')) continue
-        for (const dep of r.dependencies) {
-          if (nodeIds.has(dep)) {
-            edges.push({ from: r.token, to: dep })
+        router.get('/routes', (_req: Request, res: Response) => {
+          res.json({ routes })
+        })
+
+        router.get('/container', (_req: Request, res: Response) => {
+          const registrations = container?.getRegistrations() ?? []
+          res.json({ registrations, count: registrations.length })
+        })
+
+        router.get('/metrics', (_req: Request, res: Response) => {
+          // Build latency with percentiles, omitting raw samples from response
+          const latency: Record<string, any> = {}
+          for (const [key, stats] of Object.entries(routeLatency)) {
+            const { samples: _, ...rest } = stats
+            latency[key] = { ...rest, ...computePercentiles(stats) }
           }
-        }
-      }
-      res.json({ nodes, edges })
-    })
+          res.json({
+            requests: requestCount.value,
+            serverErrors: errorCount.value,
+            clientErrors: clientErrorCount.value,
+            errorRate: errorRate.value,
+            uptimeSeconds: uptimeSeconds.value,
+            startedAt: new Date(startedAt.value).toISOString(),
+            routeLatency: latency,
+          })
+        })
 
-    // ── SSE stream for real-time updates ───────────────────────
-    // Uses container.onChange() to push events only when something
-    // actually changes — no polling. Also sends periodic heartbeats
-    // to keep the connection alive through proxies.
-    router.get('/stream', (req: Request, res: Response) => {
-      res.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        Connection: 'keep-alive',
-      })
+        router.get('/health', (_req: Request, res: Response) => {
+          const healthy = errorRate.value < errorRateThreshold
+          const status = healthy ? 'healthy' : 'degraded'
 
-      // Send initial state
-      const sendMetrics = () => {
-        const data = {
-          type: 'metrics',
-          requestCount: this.requestCount.value,
-          errorCount: this.errorCount.value,
-          clientErrorCount: this.clientErrorCount.value,
-          errorRate: this.errorRate.value,
-          uptimeSeconds: this.uptimeSeconds.value,
-        }
-        res.write(`data: ${JSON.stringify(data)}\n\n`)
-      }
-      sendMetrics()
+          res.status(healthy ? 200 : 503).json({
+            status,
+            errorRate: errorRate.value,
+            uptime: uptimeSeconds.value,
+            adapters: adapterStatuses,
+          })
+        })
 
-      // Subscribe to container changes (batched, ~50ms debounce)
-      const unsubContainer = this.container?.onChange?.((changes) => {
-        res.write(
-          `data: ${JSON.stringify({ type: 'container', changes, timestamp: Date.now() })}\n\n`,
-        )
-        // Also send updated metrics after container changes
-        sendMetrics()
-      })
+        router.get('/state', (_req: Request, res: Response) => {
+          const wsAdapter = getPeerAdapters().find(
+            (a) => a.name === 'WsAdapter' && typeof a.getStats === 'function',
+          )
+          res.json({
+            reactive: {
+              requestCount: requestCount.value,
+              errorCount: errorCount.value,
+              clientErrorCount: clientErrorCount.value,
+              errorRate: errorRate.value,
+              uptimeSeconds: uptimeSeconds.value,
+              startedAt: new Date(startedAt.value).toISOString(),
+            },
+            routes: routes.length,
+            container: container?.getRegistrations().length ?? 0,
+            routeLatency,
+            ...(wsAdapter ? { ws: wsAdapter.getStats() } : {}),
+          })
+        })
 
-      // Watch reactive metrics — push on change (request count, errors)
-      const stopRequestWatch = watch(this.requestCount, () => sendMetrics())
-      const stopErrorWatch = watch(this.errorCount, () => sendMetrics())
+        router.get('/ws', (_req: Request, res: Response) => {
+          const wsAdapter = getPeerAdapters().find(
+            (a) => a.name === 'WsAdapter' && typeof a.getStats === 'function',
+          )
+          if (!wsAdapter) {
+            res.json({ enabled: false, message: 'WsAdapter not found' })
+            return
+          }
+          res.json({ enabled: true, ...wsAdapter.getStats() })
+        })
 
-      // Heartbeat every 30s to keep connection alive through proxies/LBs
-      const heartbeat = setInterval(() => {
-        res.write(`: heartbeat\n\n`)
-      }, 30000)
+        router.get('/queues', async (_req: Request, res: Response) => {
+          const queueAdapter = getPeerAdapters().find(
+            (a) => a.name === 'QueueAdapter' && typeof a.getQueueNames === 'function',
+          )
+          if (!queueAdapter) {
+            res.json({ enabled: false, message: 'QueueAdapter not found' })
+            return
+          }
+          try {
+            const names: string[] = queueAdapter.getQueueNames?.() ?? []
+            const queues: any[] = []
+            for (const name of names) {
+              const stats = await queueAdapter.getQueueStats?.(name)
+              queues.push({ name, ...stats })
+            }
+            res.json({ enabled: true, queues })
+          } catch {
+            res.json({ enabled: true, queues: [], error: 'Failed to fetch queue stats' })
+          }
+        })
 
-      req.on('close', () => {
-        unsubContainer?.()
-        stopRequestWatch()
-        stopErrorWatch()
-        clearInterval(heartbeat)
-      })
-    })
-
-    if (this.exposeConfig) {
-      router.get('/config', (_req: Request, res: Response) => {
-        const config: Record<string, string> = {}
-        for (const [key, value] of Object.entries(process.env)) {
-          if (value === undefined) continue
-          const allowed = this.configPrefixes.some((prefix) => key.startsWith(prefix))
-          config[key] = allowed ? value : '[REDACTED]'
-        }
-        res.json({ config })
-      })
-    }
-
-    // Dashboard UI — Vue + Tailwind from public/devtools directory
-    const publicDir = this.resolvePublicDir()
-    if (publicDir) {
-      // Serve static assets (vue.global.min.js, tailwind-cdn.js)
-      router.use(serveStatic(publicDir))
-
-      // Serve index.html with base path injected
-      const indexHtml = readFileSync(join(publicDir, 'index.html'), 'utf-8')
-      router.get('/', (_req: Request, res: Response) => {
-        // Inject basePath as data attribute for the Vue app
-        const html = indexHtml.replace('<body', `<body data-base="${this.basePath}"`)
-        res.type('html').send(html)
-      })
-    } else {
-      router.get('/', (_req: Request, res: Response) => {
-        res.type('html').send('<h1>DevTools: public directory not found</h1>')
-      })
-    }
-
-    app.use(this.basePath, router)
-
-    if (this.secret) {
-      log.info(`DevTools mounted at ${this.basePath} [token: ${this.secret}]`)
-      log.info(`Access: ${this.basePath}?token=${this.secret}`)
-    } else {
-      log.info(`DevTools mounted at ${this.basePath} [no guard]`)
-    }
-  }
-
-  middleware(): AdapterMiddleware[] {
-    if (!this.enabled) return []
-
-    return [
-      {
-        handler: (req: Request, res: Response, next: NextFunction) => {
-          const start = Date.now()
-          this.requestCount.value++
-
-          res.on('finish', () => {
-            if (res.statusCode >= 500) this.errorCount.value++
-            else if (res.statusCode >= 400) this.clientErrorCount.value++
-
-            // Track per-route latency
-            const routeKey = `${req.method} ${req.route?.path ?? req.path}`
-            const elapsed = Date.now() - start
-
-            if (!this.routeLatency[routeKey]) {
-              this.routeLatency[routeKey] = {
-                count: 0,
-                totalMs: 0,
-                minMs: Infinity,
-                maxMs: 0,
-                samples: [],
+        // ── Dependency graph ────────────────────────────────────────
+        router.get('/graph', (_req: Request, res: Response) => {
+          const registrations = container?.getRegistrations() ?? []
+          const nodes = registrations
+            .filter((r) => !r.token.startsWith('__hmr__'))
+            .map((r) => ({
+              id: r.token,
+              kind: r.kind,
+              scope: r.scope,
+              resolveCount: r.resolveCount,
+            }))
+          const nodeIds = new Set(nodes.map((n) => n.id))
+          const edges: Array<{ from: string; to: string }> = []
+          for (const r of registrations) {
+            if (r.token.startsWith('__hmr__')) continue
+            for (const dep of r.dependencies) {
+              if (nodeIds.has(dep)) {
+                edges.push({ from: r.token, to: dep })
               }
             }
-            const stats = this.routeLatency[routeKey]
-            stats.count++
-            stats.totalMs += elapsed
-            stats.minMs = Math.min(stats.minMs, elapsed)
-            stats.maxMs = Math.max(stats.maxMs, elapsed)
-            stats.samples.push(elapsed)
-            if (stats.samples.length > MAX_SAMPLES) stats.samples.shift()
+          }
+          res.json({ nodes, edges })
+        })
+
+        // ── SSE stream for real-time updates ────────────────────────
+        router.get('/stream', (req: Request, res: Response) => {
+          res.writeHead(200, {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            Connection: 'keep-alive',
           })
 
-          next()
-        },
-        phase: 'beforeGlobal',
+          const sendMetrics = () => {
+            const data = {
+              type: 'metrics',
+              requestCount: requestCount.value,
+              errorCount: errorCount.value,
+              clientErrorCount: clientErrorCount.value,
+              errorRate: errorRate.value,
+              uptimeSeconds: uptimeSeconds.value,
+            }
+            res.write(`data: ${JSON.stringify(data)}\n\n`)
+          }
+          sendMetrics()
+
+          const unsubContainer = container?.onChange?.((changes) => {
+            res.write(
+              `data: ${JSON.stringify({ type: 'container', changes, timestamp: Date.now() })}\n\n`,
+            )
+            sendMetrics()
+          })
+
+          const stopRequestWatch = watch(requestCount, () => sendMetrics())
+          const stopErrWatch = watch(errorCount, () => sendMetrics())
+
+          const heartbeat = setInterval(() => {
+            res.write(`: heartbeat\n\n`)
+          }, 30000)
+
+          req.on('close', () => {
+            unsubContainer?.()
+            stopRequestWatch()
+            stopErrWatch()
+            clearInterval(heartbeat)
+          })
+        })
+
+        if (exposeConfig) {
+          router.get('/config', (_req: Request, res: Response) => {
+            const config: Record<string, string> = {}
+            for (const [key, value] of Object.entries(process.env)) {
+              if (value === undefined) continue
+              const allowed = configPrefixes.some((prefix) => key.startsWith(prefix))
+              config[key] = allowed ? value : '[REDACTED]'
+            }
+            res.json({ config })
+          })
+        }
+
+        // Dashboard UI — Vue + Tailwind from public/devtools directory
+        const publicDir = resolvePublicDir()
+        if (publicDir) {
+          router.use(serveStatic(publicDir))
+
+          const indexHtml = readFileSync(join(publicDir, 'index.html'), 'utf-8')
+          router.get('/', (_req: Request, res: Response) => {
+            const html = indexHtml.replace('<body', `<body data-base="${basePath}"`)
+            res.type('html').send(html)
+          })
+        } else {
+          router.get('/', (_req: Request, res: Response) => {
+            res.type('html').send('<h1>DevTools: public directory not found</h1>')
+          })
+        }
+
+        app.use(basePath, router)
+
+        if (secret) {
+          log.info(`DevTools mounted at ${basePath} [token: ${secret}]`)
+          log.info(`Access: ${basePath}?token=${secret}`)
+        } else {
+          log.info(`DevTools mounted at ${basePath} [no guard]`)
+        }
       },
-    ]
-  }
 
-  onRouteMount(controllerClass: any, mountPath: string): void {
-    if (!this.enabled) return
+      middleware(): AdapterMiddleware[] {
+        if (!enabled) return []
 
-    const routes = getClassMeta<Array<{ method: string; path: string; handlerName: string }>>(
-      METADATA.ROUTES,
-      controllerClass,
-      [],
-    )
+        return [
+          {
+            handler: (req: Request, res: Response, next: NextFunction) => {
+              const start = Date.now()
+              requestCount.value++
 
-    const classMiddleware = getClassMeta<any[]>(METADATA.CLASS_MIDDLEWARES, controllerClass, [])
+              res.on('finish', () => {
+                if (res.statusCode >= 500) errorCount.value++
+                else if (res.statusCode >= 400) clientErrorCount.value++
 
-    for (const route of routes) {
-      const methodMiddleware = getMethodMeta<any[]>(
-        METADATA.METHOD_MIDDLEWARES,
-        controllerClass.prototype,
-        route.handlerName,
-        [],
-      )
+                const routeKey = `${req.method} ${req.route?.path ?? req.path}`
+                const elapsed = Date.now() - start
 
-      this.routes.push({
-        method: route.method.toUpperCase(),
-        path: `${mountPath}${route.path === '/' ? '' : route.path}`,
-        controller: controllerClass.name,
-        handler: route.handlerName,
-        middleware: [
-          ...classMiddleware.map((m: any) => m.name || 'anonymous'),
-          ...methodMiddleware.map((m: any) => m.name || 'anonymous'),
-        ],
-      })
+                if (!routeLatency[routeKey]) {
+                  routeLatency[routeKey] = {
+                    count: 0,
+                    totalMs: 0,
+                    minMs: Infinity,
+                    maxMs: 0,
+                    samples: [],
+                  }
+                }
+                const stats = routeLatency[routeKey]
+                stats.count++
+                stats.totalMs += elapsed
+                stats.minMs = Math.min(stats.minMs, elapsed)
+                stats.maxMs = Math.max(stats.maxMs, elapsed)
+                stats.samples.push(elapsed)
+                if (stats.samples.length > MAX_SAMPLES) stats.samples.shift()
+              })
+
+              next()
+            },
+            phase: 'beforeGlobal',
+          },
+        ]
+      },
+
+      onRouteMount(controllerClass, mountPath) {
+        if (!enabled) return
+
+        const collectedRoutes = getClassMeta<
+          Array<{ method: string; path: string; handlerName: string }>
+        >(METADATA.ROUTES, controllerClass, [])
+
+        const classMiddleware = getClassMeta<any[]>(METADATA.CLASS_MIDDLEWARES, controllerClass, [])
+
+        for (const route of collectedRoutes) {
+          const methodMiddleware = getMethodMeta<any[]>(
+            METADATA.METHOD_MIDDLEWARES,
+            controllerClass.prototype,
+            route.handlerName,
+            [],
+          )
+
+          routes.push({
+            method: route.method.toUpperCase(),
+            path: `${mountPath}${route.path === '/' ? '' : route.path}`,
+            controller: controllerClass.name,
+            handler: route.handlerName,
+            middleware: [
+              ...classMiddleware.map((m: any) => m.name || 'anonymous'),
+              ...methodMiddleware.map((m: any) => m.name || 'anonymous'),
+            ],
+          })
+        }
+      },
+
+      afterStart() {
+        if (!enabled) return
+        log.info(
+          `DevTools ready — ${routes.length} routes tracked, ` +
+            `${container?.getRegistrations().length ?? 0} DI bindings`,
+        )
+      },
+
+      shutdown() {
+        stopErrorWatch?.()
+        adapterStatuses['DevToolsAdapter'] = 'stopped'
+      },
     }
-  }
-
-  afterStart({}: AdapterContext): void {
-    if (!this.enabled) return
-    log.info(
-      `DevTools ready — ${this.routes.length} routes tracked, ` +
-        `${this.container?.getRegistrations().length ?? 0} DI bindings`,
-    )
-  }
-
-  shutdown(): void {
-    this.stopErrorWatch?.()
-    this.adapterStatuses[this.name] = 'stopped'
-  }
-
-  /** Find the public/devtools directory relative to the built dist or source */
-  private resolvePublicDir(): string | null {
-    // Try relative to this file's location (works in dist/)
-    const thisDir = dirname(fileURLToPath(import.meta.url))
-    const candidates = [
-      join(thisDir, '..', 'public', 'devtools'), // dist/ -> public/devtools
-      join(thisDir, '..', '..', 'public', 'devtools'), // src/ -> public/devtools
-    ]
-    for (const dir of candidates) {
-      if (existsSync(join(dir, 'index.html'))) return dir
-    }
-    return null
-  }
-}
+  },
+})

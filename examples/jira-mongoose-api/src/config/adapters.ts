@@ -62,7 +62,7 @@ export const adapters = [
     services: [TaskCronJobs, DigestCronJobs, CleanupCronJobs, PresenceCronJobs, HealthCheckCronJobs],
     enabled: true,
   }),
-  new DevToolsAdapter({
+  DevToolsAdapter({
     secret: env.NODE_ENV === 'production' ? undefined : false,
     adapters: [wsAdapter, queueAdapter],
   }),
