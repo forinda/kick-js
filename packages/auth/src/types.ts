@@ -135,7 +135,7 @@ export interface AuthAdapterOptions {
    * ```ts
    * AuthAdapter({
    *   strategies: [
-   *     new JwtStrategy({ secret: process.env.JWT_SECRET! }),
+   *     JwtStrategy({ secret: process.env.JWT_SECRET! }),
    *     ApiKeyStrategy({ keys: { 'sk-123': { name: 'CI bot', roles: ['api'] } } }),
    *   ],
    * })

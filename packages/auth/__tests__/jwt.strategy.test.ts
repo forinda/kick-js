@@ -11,7 +11,7 @@ function createToken(payload: any, options?: jwt.SignOptions): string {
 
 describe('JwtStrategy', () => {
   it('validates a valid Bearer token from header', async () => {
-    const strategy = new JwtStrategy({ secret: SECRET })
+    const strategy = JwtStrategy({ secret: SECRET })
     const token = createToken({ sub: 'user-1', email: 'alice@test.com' })
 
     const req = { headers: { authorization: `Bearer ${token}` } }
@@ -23,34 +23,34 @@ describe('JwtStrategy', () => {
   })
 
   it('returns null for missing Authorization header', async () => {
-    const strategy = new JwtStrategy({ secret: SECRET })
+    const strategy = JwtStrategy({ secret: SECRET })
     const req = { headers: {} }
     expect(await strategy.validate(req)).toBeNull()
   })
 
   it('returns null for malformed header (no Bearer prefix)', async () => {
-    const strategy = new JwtStrategy({ secret: SECRET })
+    const strategy = JwtStrategy({ secret: SECRET })
     const token = createToken({ sub: '1' })
     const req = { headers: { authorization: token } }
     expect(await strategy.validate(req)).toBeNull()
   })
 
   it('returns null for expired token', async () => {
-    const strategy = new JwtStrategy({ secret: SECRET })
+    const strategy = JwtStrategy({ secret: SECRET })
     const token = createToken({ sub: '1' }, { expiresIn: '-1s' })
     const req = { headers: { authorization: `Bearer ${token}` } }
     expect(await strategy.validate(req)).toBeNull()
   })
 
   it('returns null for token signed with wrong secret', async () => {
-    const strategy = new JwtStrategy({ secret: SECRET })
+    const strategy = JwtStrategy({ secret: SECRET })
     const token = jwt.sign({ sub: '1' }, 'wrong-secret', { algorithm: 'HS256' })
     const req = { headers: { authorization: `Bearer ${token}` } }
     expect(await strategy.validate(req)).toBeNull()
   })
 
   it('applies mapPayload to transform the decoded token', async () => {
-    const strategy = new JwtStrategy({
+    const strategy = JwtStrategy({
       secret: SECRET,
       mapPayload: (payload) => ({
         id: payload.sub,
@@ -67,7 +67,7 @@ describe('JwtStrategy', () => {
   })
 
   it('reads token from query parameter', async () => {
-    const strategy = new JwtStrategy({ secret: SECRET, tokenFrom: 'query' })
+    const strategy = JwtStrategy({ secret: SECRET, tokenFrom: 'query' })
     const token = createToken({ sub: 'user-1' })
 
     const req = { headers: {}, query: { token } }
@@ -78,7 +78,7 @@ describe('JwtStrategy', () => {
   })
 
   it('reads token from cookie', async () => {
-    const strategy = new JwtStrategy({ secret: SECRET, tokenFrom: 'cookie' })
+    const strategy = JwtStrategy({ secret: SECRET, tokenFrom: 'cookie' })
     const token = createToken({ sub: 'user-1' })
 
     const req = { headers: {}, cookies: { jwt: token } }
@@ -89,7 +89,7 @@ describe('JwtStrategy', () => {
   })
 
   it('supports custom cookie name', async () => {
-    const strategy = new JwtStrategy({
+    const strategy = JwtStrategy({
       secret: SECRET,
       tokenFrom: 'cookie',
       cookieName: 'session_token',
@@ -102,7 +102,7 @@ describe('JwtStrategy', () => {
   })
 
   it('supports custom query param name', async () => {
-    const strategy = new JwtStrategy({
+    const strategy = JwtStrategy({
       secret: SECRET,
       tokenFrom: 'query',
       queryParam: 'access_token',
@@ -115,13 +115,13 @@ describe('JwtStrategy', () => {
   })
 
   it('has name "jwt"', () => {
-    const strategy = new JwtStrategy({ secret: SECRET })
+    const strategy = JwtStrategy({ secret: SECRET })
     expect(strategy.name).toBe('jwt')
   })
 
   describe('verifyOptions forwarding', () => {
     it('rejects a token whose issuer does not match verifyOptions.issuer', async () => {
-      const strategy = new JwtStrategy({
+      const strategy = JwtStrategy({
         secret: SECRET,
         verifyOptions: { issuer: 'expected-iss' },
       })
@@ -131,7 +131,7 @@ describe('JwtStrategy', () => {
     })
 
     it('accepts a token whose issuer matches verifyOptions.issuer', async () => {
-      const strategy = new JwtStrategy({
+      const strategy = JwtStrategy({
         secret: SECRET,
         verifyOptions: { issuer: 'my-app' },
       })
@@ -142,7 +142,7 @@ describe('JwtStrategy', () => {
     })
 
     it('enforces audience via verifyOptions.audience', async () => {
-      const strategy = new JwtStrategy({
+      const strategy = JwtStrategy({
         secret: SECRET,
         verifyOptions: { audience: 'api.example.com' },
       })
@@ -158,7 +158,7 @@ describe('JwtStrategy', () => {
     })
 
     it('clockTolerance allows a just-expired token through', async () => {
-      const strategy = new JwtStrategy({
+      const strategy = JwtStrategy({
         secret: SECRET,
         verifyOptions: { clockTolerance: 5 },
       })
@@ -177,7 +177,7 @@ describe('JwtStrategy', () => {
         expiresIn: '1h',
         noTimestamp: true,
       })
-      const strategy = new JwtStrategy({
+      const strategy = JwtStrategy({
         secret: SECRET,
         verifyOptions: { maxAge: '1m' },
       })

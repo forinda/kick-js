@@ -39,7 +39,7 @@ export const adapters = [
   new RedisAdapter(env.REDIS_URL),
   AuthAdapter({
     strategies: [
-      new JwtStrategy({
+      JwtStrategy({
         secret: env.JWT_SECRET,
         mapPayload: (payload: any) => ({
           id: payload.sub,

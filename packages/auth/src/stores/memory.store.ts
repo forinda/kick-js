@@ -18,7 +18,7 @@ interface RevocationEntry {
  *
  * const tokenStore = new MemoryTokenStore()
  *
- * new JwtStrategy({
+ * JwtStrategy({
  *   secret: process.env.JWT_SECRET!,
  *   tokenStore,
  * })
