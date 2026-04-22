@@ -15,7 +15,7 @@ KickJS ships with example applications that demonstrate different features and p
 - Cron jobs for token cleanup, overdue reminders, daily digests
 - Swagger UI at `/docs`, DevTools at `/_debug`
 
-[View source](https://github.com/forinda/kick-js/tree/main/examples/jira-drizzle-api) | [Full docs](./jira-drizzle-api)
+[View source](https://github.com/forinda/kick-js/tree/main/examples/task-drizzle-api) | [Full docs](./task-drizzle-api)
 
 ### Task Management App (Prisma)
 
@@ -27,7 +27,7 @@ KickJS ships with example applications that demonstrate different features and p
 - Prisma 7 driver adapters (e.g. `PrismaPg`) for explicit pool wiring
 - `prisma db push` for schema sync, `prisma migrate` for production
 
-[View source](https://github.com/forinda/kick-js/tree/main/examples/jira-prisma-v7-api)
+[View source](https://github.com/forinda/kick-js/tree/main/examples/task-prisma-api)
 
 ### Task Management App (Mongoose)
 
@@ -39,7 +39,7 @@ KickJS ships with example applications that demonstrate different features and p
 - Resend email provider integration
 - CORS, Helmet, Morgan middleware
 
-[View source](https://github.com/forinda/kick-js/tree/main/examples/jira-mongoose-api) | [Full docs](./jira-mongoose-api)
+[View source](https://github.com/forinda/kick-js/tree/main/examples/task-mongoose-api) | [Full docs](./task-mongoose-api)
 
 ## Focused Examples
 

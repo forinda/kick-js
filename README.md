@@ -154,9 +154,9 @@ export const app = await bootstrap({ modules })
 | [minimal-api](examples/minimal-api/) | Simplest possible app — bootstrap + one controller |
 | [v2-showcase-api](examples/v2-showcase-api/) | Full v2 feature tour: typed `Ctx<KickRoutes>`, `KickEnv`, `createToken`, DDD modules |
 | [v3-preview](examples/v3-preview/) | Preview of upcoming v3 APIs |
-| [jira-drizzle-api](examples/jira-drizzle-api/) | Full task management app — PostgreSQL + Drizzle, 14 DDD modules |
-| [jira-prisma-v7-api](examples/jira-prisma-v7-api/) | Full task management app — PostgreSQL + Prisma 7 (driver adapters) |
-| [jira-mongoose-api](examples/jira-mongoose-api/) | Full task management app — MongoDB + Mongoose |
+| [task-drizzle-api](examples/task-drizzle-api/) | Full task management app — PostgreSQL + Drizzle, 14 DDD modules |
+| [task-prisma-api](examples/task-prisma-api/) | Full task management app — PostgreSQL + Prisma 7 (driver adapters) |
+| [task-mongoose-api](examples/task-mongoose-api/) | Full task management app — MongoDB + Mongoose |
 | [graphql-api](examples/graphql-api/) | GraphQL with `@Resolver`, `@Query`, `@Mutation` |
 | [devtools-api](examples/devtools-api/) | DevTools dashboard + reactive state |
 | [microservice-api](examples/microservice-api/) | OTel + DevTools + Swagger template |

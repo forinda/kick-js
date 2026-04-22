@@ -1,5 +1,5 @@
 {
-  "name": "@forinda/kickjs-example-jira-mongoose-api",
+  "name": "@forinda/kickjs-example-task-mongoose-api",
   "version": "3.2.0",
   "private": true,
   "type": "module",

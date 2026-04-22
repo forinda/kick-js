@@ -15,7 +15,7 @@ A full-featured project management API built with KickJS, MongoDB, and Mongoose.
 ## Running
 
 ```bash
-cd examples/jira-mongoose-api
+cd examples/task-mongoose-api
 
 # Set up MongoDB and Redis connection
 cp .env.example .env  # edit MONGO_URI and REDIS_URL
@@ -173,4 +173,4 @@ bootstrap({
 
 ## Source
 
-- [examples/jira-mongoose-api/](https://github.com/forinda/kick-js/tree/main/examples/jira-mongoose-api)
+- [examples/task-mongoose-api/](https://github.com/forinda/kick-js/tree/main/examples/task-mongoose-api)

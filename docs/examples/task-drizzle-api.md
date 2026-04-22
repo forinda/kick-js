@@ -15,7 +15,7 @@ A full-featured project management API built with KickJS, PostgreSQL, and Drizzl
 ## Running
 
 ```bash
-cd examples/jira-drizzle-api
+cd examples/task-drizzle-api
 
 # Set up PostgreSQL and Redis connection
 cp .env.example .env  # edit DATABASE_URL and REDIS_URL
@@ -151,4 +151,4 @@ async list(ctx: RequestContext) {
 
 ## Source
 
-- [examples/jira-drizzle-api/](https://github.com/forinda/kick-js/tree/main/examples/jira-drizzle-api)
+- [examples/task-drizzle-api/](https://github.com/forinda/kick-js/tree/main/examples/task-drizzle-api)

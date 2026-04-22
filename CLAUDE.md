@@ -47,9 +47,9 @@ packages/               # Published @forinda/kickjs-* packages
   notifications/        # Multi-channel: email, Slack, Discord, webhook
   multi-tenant/         # Tenant resolution middleware
 examples/               # Non-published example apps (private, not on npm)
-  jira-drizzle-api/     # Full task management app — PostgreSQL + Drizzle ORM
-  jira-mongoose-api/    # Full task management app — MongoDB + Mongoose
-  jira-prisma-v7-api/   # Full task management app — PostgreSQL + Prisma 7 (driver adapters)
+  task-drizzle-api/     # Full task management app — PostgreSQL + Drizzle ORM
+  task-mongoose-api/    # Full task management app — MongoDB + Mongoose
+  task-prisma-api/   # Full task management app — PostgreSQL + Prisma 7 (driver adapters)
   minimal-api/          # Simplest possible app (~10 lines)
   graphql-api/          # GraphQL with @Resolver decorators
   devtools-api/         # DevTools dashboard + reactive state

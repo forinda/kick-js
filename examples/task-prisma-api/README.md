@@ -2,9 +2,9 @@
 
 A full-featured project management API built with [KickJS](https://forinda.github.io/kick-js/), **Prisma 7**, and PostgreSQL. Demonstrates the Prisma 7 driver adapter pattern with `@prisma/adapter-pg`.
 
-## What's Different from jira-prisma-api (v6)?
+## What's Different from task-prisma-api (v6)?
 
-| Aspect | Prisma 6 (jira-prisma-api) | Prisma 7 (this example) |
+| Aspect | Prisma 6 (task-prisma-api) | Prisma 7 (this example) |
 |--------|---------------------------|------------------------|
 | Generator | `prisma-client-js` | `prisma-client` with `output` |
 | Client import | `from '@prisma/client'` | `from '@/generated/prisma'` |

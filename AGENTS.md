@@ -68,7 +68,7 @@ When adding new features, use these as templates:
 | New middleware | `packages/http/src/middleware/csrf.ts` |
 | New adapter | `packages/swagger/src/swagger.adapter.ts` |
 | New package | `packages/prisma/` (full package structure) |
-| New example app | `examples/minimal-api/` (simple) or `examples/jira-prisma-v7-api/` (full) |
+| New example app | `examples/minimal-api/` (simple) or `examples/task-prisma-api/` (full) |
 | New test file | `tests/container.test.ts` |
 | Package exports | `packages/http/package.json` (exports map) |
 | Vite build config | `packages/http/vite.config.ts` (multi-entry) |
@@ -107,7 +107,7 @@ When adding new features, use these as templates:
 - [ ] Add to `scripts/release.js` EXAMPLES array
 - [ ] Add docs page at `docs/examples/<name>.md`
 - [ ] Add to sidebar in `docs/.vitepress/config.mts`
-- [ ] Reference examples: `minimal-api/` (simple), `jira-prisma-v7-api/` (full DDD)
+- [ ] Reference examples: `minimal-api/` (simple), `task-prisma-api/` (full DDD)
 
 ### Documentation Changes
 

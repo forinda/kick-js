@@ -3393,7 +3393,7 @@ Audit results from grepping `__ctxMeta`, `requestStore`, `tenantStorage`, `getCu
 
 | App                                                   | What                                                                                                    |
 | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `examples/jira-drizzle-api` (or new example)          | Add `LoadTenant` contributor showing class-level + method-level + adapter-level use in one app          |
+| `examples/task-drizzle-api` (or new example)          | Add `LoadTenant` contributor showing class-level + method-level + adapter-level use in one app          |
 | `examples/multi-tenant-{drizzle,prisma,mongoose}-api` | Optional: convert hand-written tenant resolution middleware to a contributor (showcases migration path) |
 
 ---
