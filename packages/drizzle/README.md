@@ -1,112 +1,51 @@
 # @forinda/kickjs-drizzle
 
-Drizzle ORM adapter with DI integration, transaction support, and query building for KickJS.
+Drizzle ORM adapter for KickJS — DI integration, lifecycle management, and a `DrizzleQueryAdapter` that translates `ParsedQuery` into Drizzle `where` / `orderBy` / `limit` / `offset`.
 
 ## Install
 
 ```bash
-# Using the KickJS CLI (recommended — auto-installs peer dependencies)
 kick add drizzle
-
-# Manual install
-pnpm add @forinda/kickjs-drizzle drizzle-orm
 ```
-
-## Features
-
-- `DrizzleAdapter` — lifecycle adapter that manages the Drizzle connection
-- `DrizzleTenantAdapter` — multi-tenant adapter with per-tenant connection caching
-- `DRIZZLE_DB` token — singleton, provider/single-tenant database
-- `DRIZZLE_TENANT_DB` token — transient, current tenant's database via AsyncLocalStorage
-- `DrizzleQueryAdapter` — translates `ParsedQuery` from `@forinda/kickjs` into Drizzle queries
-- `toQueryFieldConfig` helper for field mapping
 
 ## Quick Example
 
-```typescript
-import { DrizzleAdapter, DRIZZLE_DB, DrizzleQueryAdapter } from '@forinda/kickjs-drizzle'
+```ts
 import { drizzle } from 'drizzle-orm/postgres-js'
 import postgres from 'postgres'
+import { bootstrap, getEnv } from '@forinda/kickjs'
+import { DrizzleAdapter } from '@forinda/kickjs-drizzle'
+import * as schema from './schema'
+import { modules } from './modules'
 
-const client = postgres(process.env.DATABASE_URL!)
-const db = drizzle(client)
+const client = postgres(getEnv('DATABASE_URL'))
+const db = drizzle(client, { schema })
 
-bootstrap({
+export const app = await bootstrap({
   modules,
-  adapters: [
-    DrizzleAdapter({ db }),
-  ],
+  adapters: [DrizzleAdapter({ db, onShutdown: () => client.end() })],
 })
+```
 
-// In a service, inject the DB
+Inject the typed db in services:
+
+```ts
+import { Inject, Service } from '@forinda/kickjs'
+import { DRIZZLE_DB } from '@forinda/kickjs-drizzle'
+import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
+import * as schema from './schema'
+
 @Service()
 class UserService {
-  @Inject(DRIZZLE_DB) private db!: typeof db
-
-  async findAll() {
-    return this.db.select().from(users)
-  }
+  constructor(@Inject(DRIZZLE_DB) private db: PostgresJsDatabase<typeof schema>) {}
 }
 ```
 
-## Multi-Tenant
-
-Use `DrizzleTenantAdapter` alongside `TenantAdapter` for database-per-tenant:
-
-```typescript
-import { DrizzleTenantAdapter, DRIZZLE_TENANT_DB } from '@forinda/kickjs-drizzle'
-import { TenantAdapter } from '@forinda/kickjs-multi-tenant'
-
-bootstrap({
-  modules,
-  adapters: [
-    TenantAdapter({ strategy: 'subdomain' }),
-    DrizzleTenantAdapter({
-      providerDb: drizzle(providerPool, { schema }),
-      tenantFactory: async (tenantId) => {
-        const url = await lookupTenantDbUrl(tenantId)
-        return drizzle(new Pool({ connectionString: url }), { schema })
-      },
-      onTenantShutdown: (db, tenantId) => {
-        // Close the pool when shutting down
-      },
-    }),
-  ],
-})
-
-// In a service — resolves to the current tenant's typed DB
-@Service()
-class ProjectService {
-  @Inject(DRIZZLE_TENANT_DB) private db!: NodePgDatabase<typeof schema>
-
-  async findAll() {
-    return this.db.select().from(projects)
-  }
-}
-```
-
-Use both adapters together for interop:
-
-```typescript
-@Inject(DRIZZLE_DB) private providerDb!: typeof db          // always provider
-@Inject(DRIZZLE_TENANT_DB) private tenantDb!: typeof db     // current tenant
-```
-
-## Query Adapter
-
-```typescript
-import { DrizzleQueryAdapter } from '@forinda/kickjs-drizzle'
-
-const adapter = new DrizzleQueryAdapter()
-const query = adapter.build(parsedQuery, {
-  columns: { name: users.name, email: users.email },
-  searchColumns: [users.name, users.email],
-})
-```
+For the multi-tenant `DrizzleTenantAdapter` see the [examples/multi-tenant-drizzle-api](https://github.com/forinda/kick-js/tree/main/examples/multi-tenant-drizzle-api) app.
 
 ## Documentation
 
-[Full documentation](https://forinda.github.io/kick-js/)
+[forinda.github.io/kick-js/api/drizzle](https://forinda.github.io/kick-js/api/drizzle)
 
 ## License
 

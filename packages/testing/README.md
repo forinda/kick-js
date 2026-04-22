@@ -1,37 +1,27 @@
 # @forinda/kickjs-testing
 
-Test utilities for KickJS — `createTestApp` and `createTestModule` helpers.
+Test utilities for KickJS — `createTestApp`, `createTestModule`, `runContributor` (single contributor in isolation), and `createTestPlugin` (plugin harness with isolated container + lifecycle invokers).
 
 ## Install
 
 ```bash
-# Using the KickJS CLI (recommended — installs as dev dependency)
-kick add testing
-
-# Manual install
 pnpm add -D @forinda/kickjs-testing
 ```
 
-## Features
-
-- `createTestApp()` — creates an Application instance for testing (resets container, empty middleware)
-- `createTestModule()` — builds a dynamic test module with custom DI registrations
-- DI overrides for mocking repositories and services (supports symbol keys)
-
 ## Quick Example
 
-```typescript
-import { createTestApp } from '@forinda/kickjs-testing'
+```ts
 import { describe, it, expect } from 'vitest'
 import supertest from 'supertest'
+import { createTestApp } from '@forinda/kickjs-testing'
+import { UserModule, USER_REPO } from './modules/users'
+import { MockUserRepository } from './mocks'
 
 describe('UserController', () => {
   it('lists users', async () => {
-    const { expressApp } = createTestApp({
+    const { expressApp } = await createTestApp({
       modules: [UserModule],
-      overrides: {
-        [USER_REPO]: new MockUserRepository(),
-      },
+      overrides: { [USER_REPO]: new MockUserRepository() },
     })
 
     const res = await supertest(expressApp).get('/api/v1/users')
@@ -42,7 +32,7 @@ describe('UserController', () => {
 
 ## Documentation
 
-[Full documentation](https://github.com/forinda/kick-js)
+[forinda.github.io/kick-js/guide/testing](https://forinda.github.io/kick-js/guide/testing)
 
 ## License
 

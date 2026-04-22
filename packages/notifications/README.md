@@ -1,70 +1,51 @@
 # @forinda/kickjs-notifications
 
-Multi-channel notifications for KickJS — email, Slack, Discord, webhook, and custom channels.
+Multi-channel notifications for KickJS — email, Slack, Discord, webhook, console, plus a pluggable `NotificationChannel` interface for custom transports.
 
 ## Install
 
 ```bash
-# Using the KickJS CLI (recommended)
 kick add notifications
-
-# Manual install
-pnpm add @forinda/kickjs-notifications
 ```
-
-## Features
-
-- `NotificationAdapter` — lifecycle adapter that registers the notification service
-- `NotificationService` — injectable service for dispatching notifications
-- Built-in channels: `EmailChannel`, `SlackChannel`, `DiscordChannel`, `WebhookChannel`, `ConsoleChannel`
-- `NOTIFICATIONS` token for DI injection
-- Pluggable `NotificationChannel` interface for custom transports
 
 ## Quick Example
 
-```typescript
+```ts
+import { bootstrap, getEnv, Inject, Service } from '@forinda/kickjs'
 import {
   NotificationAdapter,
   NotificationService,
   SlackChannel,
-  EmailChannel,
   ConsoleChannel,
   NOTIFICATIONS,
 } from '@forinda/kickjs-notifications'
-import { Inject, Service } from '@forinda/kickjs-core'
+import { modules } from './modules'
 
-bootstrap({
+export const app = await bootstrap({
   modules,
   adapters: [
     NotificationAdapter({
       channels: [
-        new SlackChannel({ webhookUrl: process.env.SLACK_WEBHOOK! }),
-        new EmailChannel({ mailer }),
+        new SlackChannel({ webhookUrl: getEnv('SLACK_WEBHOOK') }),
         new ConsoleChannel(),
       ],
     }),
   ],
 })
 
-// Send notifications from any service
 @Service()
 class AlertService {
-  @Inject(NOTIFICATIONS) private notifications!: NotificationService
+  constructor(@Inject(NOTIFICATIONS) private notifications: NotificationService) {}
 
-  async alertTeam(message: string) {
-    await this.notifications.send({
-      channels: ['slack', 'email'],
-      subject: 'Alert',
-      body: message,
-      to: 'team@example.com',
-    })
+  alertTeam(message: string) {
+    return this.notifications.send({ channels: ['slack'], subject: 'Alert', body: message })
   }
 }
 ```
 
 ## Documentation
 
-[Full documentation](https://forinda.github.io/kick-js/)
+[forinda.github.io/kick-js/api/notifications](https://forinda.github.io/kick-js/api/notifications)
 
 ## License
 

@@ -1,58 +1,46 @@
 # @forinda/kickjs-otel
 
-OpenTelemetry adapter for KickJS — automatic tracing, metrics, and export to any OTel backend.
+OpenTelemetry adapter for KickJS — auto request spans + counter/histogram metrics, route ignore list, span-attribute redaction. Works with any OTel backend (Jaeger, Grafana Tempo, Datadog, Honeycomb, etc.).
 
 ## Install
 
 ```bash
-# Using the KickJS CLI (recommended — auto-installs peer dependencies)
 kick add otel
-
-# Manual install
-pnpm add @forinda/kickjs-otel @opentelemetry/api @opentelemetry/semantic-conventions
-# Optional SDK packages
-pnpm add @opentelemetry/sdk-node @opentelemetry/sdk-trace-base @opentelemetry/sdk-metrics
 ```
-
-## Features
-
-- `OtelAdapter` — lifecycle adapter that instruments requests with spans and metrics
-- Works with any OpenTelemetry-compatible backend (Jaeger, Grafana Tempo, Datadog, etc.)
-- Zero-config console exporter for development
 
 ## Quick Example
 
-```typescript
+```ts
+import { bootstrap } from '@forinda/kickjs'
 import { OtelAdapter } from '@forinda/kickjs-otel'
+import { modules } from './modules'
 
-bootstrap({
+export const app = await bootstrap({
   modules,
   adapters: [
     OtelAdapter({
       serviceName: 'my-api',
-      enabled: true,
+      ignoreRoutes: ['/health', '/_debug/*'],
+      sensitiveKeys: ['authorization', /^x-api-key/i],
     }),
   ],
 })
 ```
 
-For production, initialize the OTel SDK before bootstrap:
+For production, initialize the OTel SDK before `bootstrap()`:
 
-```typescript
+```ts
 import { NodeSDK } from '@opentelemetry/sdk-node'
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http'
 
-const sdk = new NodeSDK({
-  traceExporter: new OTLPTraceExporter({
-    url: 'http://localhost:4318/v1/traces',
-  }),
-})
-sdk.start()
+new NodeSDK({
+  traceExporter: new OTLPTraceExporter({ url: 'http://localhost:4318/v1/traces' }),
+}).start()
 ```
 
 ## Documentation
 
-[Full documentation](https://forinda.github.io/kick-js/)
+[forinda.github.io/kick-js/api/otel](https://forinda.github.io/kick-js/api/otel)
 
 ## License
 
