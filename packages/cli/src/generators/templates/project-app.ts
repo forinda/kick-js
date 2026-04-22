@@ -90,8 +90,8 @@ ${gqlAdaptersBlock}    new GraphQLAdapter({
 
       const cqrsImportsBlock = cqrsImports.length ? cqrsImports.join('\n') + '\n' : ''
       const cqrsAdaptersBlock = cqrsImports.length
-        ? `\n  adapters: [\n${cqrsAdapters.join('\n')}\n    // Uncomment for WebSocket support:\n    // WsAdapter(),\n    // Uncomment when Redis is available:\n    // new QueueAdapter({\n    //   provider: new BullMQProvider({ host: 'localhost', port: 6379 }),\n    // }),\n  ],`
-        : `\n  adapters: [\n    // Uncomment for WebSocket support:\n    // WsAdapter(),\n    // Uncomment when Redis is available:\n    // new QueueAdapter({\n    //   provider: new BullMQProvider({ host: 'localhost', port: 6379 }),\n    // }),\n  ],`
+        ? `\n  adapters: [\n${cqrsAdapters.join('\n')}\n    // Uncomment for WebSocket support:\n    // WsAdapter(),\n    // Uncomment when Redis is available:\n    // QueueAdapter({\n    //   provider: new BullMQProvider({ host: 'localhost', port: 6379 }),\n    // }),\n  ],`
+        : `\n  adapters: [\n    // Uncomment for WebSocket support:\n    // WsAdapter(),\n    // Uncomment when Redis is available:\n    // QueueAdapter({\n    //   provider: new BullMQProvider({ host: 'localhost', port: 6379 }),\n    // }),\n  ],`
 
       return `import 'reflect-metadata'
 // Side-effect import — registers the extended env schema with kickjs

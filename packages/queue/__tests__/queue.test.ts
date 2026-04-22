@@ -280,12 +280,12 @@ describe('QueueAdapter', () => {
   const redisOpts = { host: 'localhost', port: 6379 }
 
   it('has the name "QueueAdapter"', () => {
-    const adapter = new QueueAdapter({ redis: redisOpts })
+    const adapter = QueueAdapter({ redis: redisOpts })
     expect(adapter.name).toBe('QueueAdapter')
   })
 
   it('pre-creates queues listed in options', () => {
-    const adapter = new QueueAdapter({
+    const adapter = QueueAdapter({
       redis: redisOpts,
       queues: ['email', 'sms'],
     })
@@ -304,7 +304,7 @@ describe('QueueAdapter', () => {
       async handle() {}
     }
 
-    const adapter = new QueueAdapter({
+    const adapter = QueueAdapter({
       redis: redisOpts,
       queues: [],
     })
@@ -320,7 +320,7 @@ describe('QueueAdapter', () => {
     @Job('empty-queue')
     class EmptyProcessor {}
 
-    const adapter = new QueueAdapter({ redis: redisOpts })
+    const adapter = QueueAdapter({ redis: redisOpts })
     const container = Container.getInstance()
     adapter.beforeStart({ container } as any)
 
@@ -329,7 +329,7 @@ describe('QueueAdapter', () => {
   })
 
   it('registers QueueService in the DI container', () => {
-    const adapter = new QueueAdapter({ redis: redisOpts })
+    const adapter = QueueAdapter({ redis: redisOpts })
     const container = Container.getInstance()
     adapter.beforeStart({ container } as any)
 
@@ -339,7 +339,7 @@ describe('QueueAdapter', () => {
 
   describe('getQueueStats', () => {
     it('returns stats for a registered queue', async () => {
-      const adapter = new QueueAdapter({
+      const adapter = QueueAdapter({
         redis: redisOpts,
         queues: ['stats-q'],
       })
@@ -354,7 +354,7 @@ describe('QueueAdapter', () => {
     })
 
     it('returns error for an unknown queue', async () => {
-      const adapter = new QueueAdapter({ redis: redisOpts })
+      const adapter = QueueAdapter({ redis: redisOpts })
       const container = Container.getInstance()
       adapter.beforeStart({ container } as any)
 
@@ -371,7 +371,7 @@ describe('QueueAdapter', () => {
         async handle() {}
       }
 
-      const adapter = new QueueAdapter({
+      const adapter = QueueAdapter({
         redis: redisOpts,
         queues: ['shutdown-q'],
       })

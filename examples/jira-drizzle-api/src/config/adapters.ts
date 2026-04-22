@@ -34,7 +34,7 @@ const wsAdapter = WsAdapter({
   maxPayload: 1048576,
 })
 
-const queueAdapter = new QueueAdapter({
+const queueAdapter = QueueAdapter({
   redis: {
     host: redisUrl.hostname,
     port: Number(redisUrl.port) || 6379,

@@ -30,7 +30,7 @@ export const QUEUE_MANAGER = Symbol('QueueManager')
  *   async shutdown() { ... }
  * }
  *
- * new QueueAdapter({ provider: new RabbitMQProvider(amqpUrl) })
+ * QueueAdapter({ provider: new RabbitMQProvider(amqpUrl) })
  * ```
  */
 export interface QueueProvider {

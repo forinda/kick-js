@@ -164,7 +164,7 @@ import { QueueAdapter } from '@forinda/kickjs-queue'
 bootstrap({
   modules,
   adapters: [
-    new QueueAdapter({
+    QueueAdapter({
       redis: {
         host: 'localhost',
         port: 6379,

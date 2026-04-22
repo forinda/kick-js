@@ -15,7 +15,7 @@ bootstrap({
       info: { title: 'microservice-api', version: '0.7.0' },
     }),
     // Uncomment when Redis is available:
-    // new QueueAdapter({
+    // QueueAdapter({
     //   provider: new BullMQProvider({ host: 'localhost', port: 6379 }),
     // }),
   ],
