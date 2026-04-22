@@ -33,7 +33,7 @@ const baseOptions = (
 
 const fakeAdapterCtx = (): AdapterContext =>
   ({
-    container: new (Container as never)() as never,
+    container: Container.create(),
     app: {} as never,
     env: 'test',
     isProduction: false,
@@ -129,8 +129,7 @@ describe('defineAdapter — .async()', () => {
     })
 
     const ctx = fakeAdapterCtx()
-    ;(ctx.container as unknown as { resolve: (t: unknown) => unknown }).resolve = (token) =>
-      token === CONFIG_TOKEN ? { url: 'postgres://injected' } : null
+    ctx.container.registerInstance(CONFIG_TOKEN, { url: 'postgres://injected' })
 
     const adapter = DbAdapter.async({
       inject: [CONFIG_TOKEN],

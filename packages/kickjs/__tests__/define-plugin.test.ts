@@ -43,7 +43,7 @@ describe('definePlugin — bare call (singleton)', () => {
     const plugin = FlagsPlugin({ provider: 'split.io', ttl: 10_000 }) as KickPlugin & {
       __config?: FlagsConfig
     }
-    plugin.register?.(new (Container as never)() as never)
+    plugin.register?.(Container.create())
     expect(plugin.__config).toEqual({ provider: 'split.io', ttl: 10_000 })
   })
 
@@ -52,7 +52,7 @@ describe('definePlugin — bare call (singleton)', () => {
     const plugin = FlagsPlugin({ provider: 'launchDarkly' }) as KickPlugin & {
       __config?: FlagsConfig
     }
-    plugin.register?.(new (Container as never)() as never)
+    plugin.register?.(Container.create())
     expect(plugin.__config).toEqual({ provider: 'launchDarkly', ttl: 60_000 })
   })
 
@@ -61,7 +61,7 @@ describe('definePlugin — bare call (singleton)', () => {
     const plugin = FlagsPlugin({ provider: 'x' }) as KickPlugin & {
       __ctx?: { name: string; scoped: boolean }
     }
-    plugin.register?.(new (Container as never)() as never)
+    plugin.register?.(Container.create())
     expect(plugin.__ctx).toEqual({ name: 'FlagsPlugin', scoped: false })
   })
 })
@@ -120,7 +120,7 @@ describe('definePlugin — .async()', () => {
       }),
     })
 
-    const container = new (Container as never)() as never
+    const container = Container.create()
     const plugin = FlagsPlugin.async({
       useFactory: () => ({ provider: 'launchDarkly' }),
     })
@@ -145,9 +145,8 @@ describe('definePlugin — .async()', () => {
       }),
     })
 
-    const container = {
-      resolve: (token: unknown) => (token === FAKE_TOKEN ? { url: 'https://flags.test' } : null),
-    } as unknown as Container
+    const container = Container.create()
+    container.registerInstance(FAKE_TOKEN, { url: 'https://flags.test' })
 
     const plugin = FlagsPlugin.async({
       inject: [FAKE_TOKEN],
@@ -173,7 +172,7 @@ describe('definePlugin — .async()', () => {
       },
     })
 
-    const container = new (Container as never)() as never
+    const container = Container.create()
     const plugin = FlagsPlugin.async({
       useFactory: () => ({ provider: 'x' }),
     })
