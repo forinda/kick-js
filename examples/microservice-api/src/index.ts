@@ -9,7 +9,7 @@ import { modules } from './modules'
 bootstrap({
   modules,
   adapters: [
-    new OtelAdapter({ serviceName: 'microservice-api' }),
+    OtelAdapter({ serviceName: 'microservice-api' }),
     new DevToolsAdapter(),
     new SwaggerAdapter({
       info: { title: 'microservice-api', version: '0.7.0' },

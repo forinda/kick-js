@@ -25,7 +25,7 @@ export function generateEntryFile(
       }
       if (packages.includes('otel')) {
         gqlImports.push(`import { OtelAdapter } from '@forinda/kickjs-otel'`)
-        gqlAdapters.push(`    new OtelAdapter({ serviceName: '${name}' }),`)
+        gqlAdapters.push(`    OtelAdapter({ serviceName: '${name}' }),`)
       }
       if (packages.includes('swagger')) {
         gqlImports.push(`import { SwaggerAdapter } from '@forinda/kickjs-swagger'`)
@@ -71,7 +71,7 @@ ${gqlAdaptersBlock}    new GraphQLAdapter({
 
       if (packages.includes('otel')) {
         cqrsImports.push(`import { OtelAdapter } from '@forinda/kickjs-otel'`)
-        cqrsAdapters.push(`    new OtelAdapter({ serviceName: '${name}' }),`)
+        cqrsAdapters.push(`    OtelAdapter({ serviceName: '${name}' }),`)
       }
       if (packages.includes('devtools')) {
         cqrsImports.push(`import { DevToolsAdapter } from '@forinda/kickjs-devtools'`)
@@ -125,7 +125,7 @@ export const app = await bootstrap({
       }
       if (packages.includes('otel')) {
         imports.push(`import { OtelAdapter } from '@forinda/kickjs-otel'`)
-        adapters.push(`    new OtelAdapter({ serviceName: '${name}' }),`)
+        adapters.push(`    OtelAdapter({ serviceName: '${name}' }),`)
       }
       if (packages.includes('graphql')) {
         imports.push(`import { GraphQLAdapter } from '@forinda/kickjs-graphql'`)
@@ -168,7 +168,7 @@ export const app = await bootstrap({ modules${adaptersBlock} })
       }
       if (packages.includes('otel')) {
         restImports.push(`import { OtelAdapter } from '@forinda/kickjs-otel'`)
-        restAdapters.push(`    new OtelAdapter({ serviceName: '${name}' }),`)
+        restAdapters.push(`    OtelAdapter({ serviceName: '${name}' }),`)
       }
 
       const restImportsBlock = restImports.length ? restImports.join('\n') + '\n' : ''
