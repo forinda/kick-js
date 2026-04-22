@@ -58,6 +58,33 @@ export interface AuthUser {
   [key: string]: any
 }
 
+// ── PolicyRegistry ──────────────────────────────────────────────────────
+
+/**
+ * Augmentable registry of policy resources and the actions each one supports.
+ *
+ * When extended via module augmentation, narrows {@link Can}'s `(action, resource)`
+ * pair to the declared union — typos at decoration sites become compile errors.
+ * Apps that don't augment this registry get the loose `(string, string)` fallback,
+ * preserving full backwards compatibility.
+ *
+ * @example
+ * ```ts
+ * declare module '@forinda/kickjs-auth' {
+ *   interface PolicyRegistry {
+ *     post: 'create' | 'update' | 'delete' | 'publish'
+ *     user: 'invite' | 'suspend'
+ *   }
+ * }
+ *
+ * @Can('delete', 'post')   // ✓ typechecks
+ * @Can('typo', 'post')     // ✗ compile error: 'typo' is not assignable
+ * @Can('delete', 'unknown') // ✗ compile error: 'unknown' is not a known resource
+ * ```
+ */
+// eslint-disable-next-line @typescript-eslint/no-empty-interface
+export interface PolicyRegistry {}
+
 // ── AuthStrategy Interface ──────────────────────────────────────────────
 
 /**

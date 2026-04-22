@@ -1,5 +1,15 @@
 import { Logger, Service } from '@forinda/kickjs'
-import type { AuthUser } from './types'
+import type { AuthUser, PolicyRegistry } from './types'
+
+/** Resource keys declared in {@link PolicyRegistry}; falls back to `string` when unaugmented. */
+type PolicyResource = keyof PolicyRegistry extends never ? string : keyof PolicyRegistry & string
+
+/** Action union for a given resource from {@link PolicyRegistry}; falls back to `string`. */
+type PolicyAction<R> = R extends keyof PolicyRegistry
+  ? PolicyRegistry[R] extends string
+    ? PolicyRegistry[R]
+    : string
+  : string
 
 const log = Logger.for('AuthorizationService')
 
@@ -202,10 +212,10 @@ export class AuthorizationService {
    * @throws {PolicyMissingError} when `onMiss: 'error'` and the policy class
    *   or action method is missing.
    */
-  async can(
+  async can<R extends PolicyResource>(
     user: AuthUser,
-    action: string,
-    resource: string,
+    action: PolicyAction<R>,
+    resource: R,
     resourceInstance?: any,
   ): Promise<boolean> {
     const qualified = `${resource}.${action}`
@@ -246,7 +256,11 @@ export class AuthorizationService {
    * @throws {NotImplementedError} when no implementation is registered.
    *   Callers should catch and fall back to `findAll + filter with can()`.
    */
-  async listObjects(user: AuthUser, action: string, resource: string): Promise<readonly string[]> {
+  async listObjects<R extends PolicyResource>(
+    user: AuthUser,
+    action: PolicyAction<R>,
+    resource: R,
+  ): Promise<readonly string[]> {
     if (!this.listObjectsImpl) {
       throw new NotImplementedError(
         `listObjects(${resource}.${action}) is not implemented — ` +
