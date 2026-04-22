@@ -130,7 +130,7 @@ import { PrismaClient } from '@prisma/client'
 bootstrap({
   modules,
   adapters: [
-    new TenantAdapter({ strategy: 'subdomain' }),
+    TenantAdapter({ strategy: 'subdomain' }),
     new PrismaTenantAdapter({
       providerDb: new PrismaClient({ datasourceUrl: PROVIDER_URL }),
       tenantFactory: async (tenantId) => {

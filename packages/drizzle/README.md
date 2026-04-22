@@ -60,7 +60,7 @@ import { TenantAdapter } from '@forinda/kickjs-multi-tenant'
 bootstrap({
   modules,
   adapters: [
-    new TenantAdapter({ strategy: 'subdomain' }),
+    TenantAdapter({ strategy: 'subdomain' }),
     new DrizzleTenantAdapter({
       providerDb: drizzle(providerPool, { schema }),
       tenantFactory: async (tenantId) => {

@@ -21,7 +21,7 @@ export const app = await bootstrap({
   modules,
   middleware: [express.json()],
   adapters: [
-    new TenantAdapter({
+    TenantAdapter({
       strategy: 'subdomain',
       required: false,
       onTenantResolved: async (tenant) => {

@@ -24,7 +24,7 @@ Three built-in strategies determine which tenant a request belongs to:
 ### Subdomain
 
 ```ts
-new TenantAdapter({ strategy: 'subdomain' })
+TenantAdapter({ strategy: 'subdomain' })
 // acme.app.example.com → tenant: 'acme'
 // app.example.com       → tenant: null (falls back to provider)
 ```
@@ -32,14 +32,14 @@ new TenantAdapter({ strategy: 'subdomain' })
 ### Header
 
 ```ts
-new TenantAdapter({ strategy: 'header', headerName: 'x-tenant-id' })
+TenantAdapter({ strategy: 'header', headerName: 'x-tenant-id' })
 // X-Tenant-Id: acme → tenant: 'acme'
 ```
 
 ### Custom Function
 
 ```ts
-new TenantAdapter({
+TenantAdapter({
   strategy: async (req) => {
     const token = req.headers.authorization?.split(' ')[1]
     if (!token) return null

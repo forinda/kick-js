@@ -24,7 +24,7 @@ const log = Logger.for('DrizzleTenantAdapter')
  *
  * bootstrap({
  *   adapters: [
- *     new TenantAdapter({ strategy: 'subdomain' }),
+ *     TenantAdapter({ strategy: 'subdomain' }),
  *     new DrizzleTenantAdapter({
  *       providerDb,
  *       tenantFactory: async (tenantId) => {
