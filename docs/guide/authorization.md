@@ -28,7 +28,7 @@ The user object must have a `roles: string[]` property.
 When using multi-tenancy, roles can be resolved per-tenant:
 
 ```ts
-new AuthAdapter({
+AuthAdapter({
   strategies,
   roleResolver: async (user, tenantId) => {
     const roles = await db.userRoles

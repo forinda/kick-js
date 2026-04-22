@@ -95,7 +95,7 @@ modules/{name}/
 Uses the framework's auth adapter with a protected-by-default policy:
 
 ```ts
-new AuthAdapter({
+AuthAdapter({
   strategy: 'jwt',
   secret: env.JWT_SECRET,
   defaultPolicy: 'protected',

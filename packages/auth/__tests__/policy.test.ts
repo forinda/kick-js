@@ -194,7 +194,7 @@ describe('Policy & AuthorizationService', () => {
         list() {}
       }
 
-      const adapter = new AuthAdapter({
+      const adapter = AuthAdapter({
         strategies: [alwaysAuth],
         defaultPolicy: 'protected',
       })
@@ -224,7 +224,7 @@ describe('Policy & AuthorizationService', () => {
         remove() {}
       }
 
-      const adapter = new AuthAdapter({
+      const adapter = AuthAdapter({
         strategies: [alwaysAuth], // user has ['user'] role, not admin
         defaultPolicy: 'protected',
       })

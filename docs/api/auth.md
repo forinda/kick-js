@@ -196,7 +196,7 @@ Back it with a ReBAC engine:
 import { OpenFGAClient } from '@openfga/sdk'
 const fga = new OpenFGAClient({ ... })
 
-new AuthAdapter({
+AuthAdapter({
   strategies: [...],
   policy: {
     listObjects: async (user, action, resource) => {
@@ -226,7 +226,7 @@ Use `authz.supportsListObjects()` to branch into a `findAll + filter with can()`
 `AuthAdapter` forwards `options.policy` to its internal `AuthorizationService`:
 
 ```ts
-new AuthAdapter({
+AuthAdapter({
   strategies: [...],
   policy: { onMiss: process.env.NODE_ENV === 'test' ? 'error' : 'warn' },
 })

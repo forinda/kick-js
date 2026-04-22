@@ -11,7 +11,7 @@ import { Controller, Get, Post } from '@forinda/kickjs'
 
 describe('AuthAdapter', () => {
   it('creates adapter with strategies', () => {
-    const adapter = new AuthAdapter({
+    const adapter = AuthAdapter({
       strategies: [new ApiKeyStrategy({ keys: { 'sk-test': { name: 'Bot' } } })],
     })
 
@@ -19,7 +19,7 @@ describe('AuthAdapter', () => {
   })
 
   it('provides auth middleware at beforeRoutes phase', () => {
-    const adapter = new AuthAdapter({
+    const adapter = AuthAdapter({
       strategies: [new ApiKeyStrategy({ keys: { 'sk-test': { name: 'Bot' } } })],
     })
 
@@ -30,7 +30,7 @@ describe('AuthAdapter', () => {
   })
 
   it('passes through with open policy when no route info', async () => {
-    const adapter = new AuthAdapter({
+    const adapter = AuthAdapter({
       strategies: [],
       defaultPolicy: 'open',
     })
@@ -45,7 +45,7 @@ describe('AuthAdapter', () => {
   })
 
   it('blocks unauthenticated requests with protected policy', async () => {
-    const adapter = new AuthAdapter({
+    const adapter = AuthAdapter({
       strategies: [new ApiKeyStrategy({ keys: { 'sk-valid': { name: 'Bot' } } })],
       defaultPolicy: 'protected',
     })
@@ -61,7 +61,7 @@ describe('AuthAdapter', () => {
   })
 
   it('passes authenticated requests and attaches user to req', async () => {
-    const adapter = new AuthAdapter({
+    const adapter = AuthAdapter({
       strategies: [new ApiKeyStrategy({ keys: { 'sk-valid': { name: 'Bot' } } })],
       defaultPolicy: 'protected',
     })
@@ -83,7 +83,7 @@ describe('AuthAdapter', () => {
 
   it('supports custom onUnauthorized handler', async () => {
     const customHandler = vi.fn()
-    const adapter = new AuthAdapter({
+    const adapter = AuthAdapter({
       strategies: [],
       defaultPolicy: 'protected',
       onUnauthorized: customHandler,
@@ -109,7 +109,7 @@ describe('AuthAdapter', () => {
       validate: async () => ({ id: '1', name: 'User' }),
     }
 
-    const adapter = new AuthAdapter({
+    const adapter = AuthAdapter({
       strategies: [strategy1, strategy2],
       defaultPolicy: 'protected',
     })
@@ -126,7 +126,7 @@ describe('AuthAdapter', () => {
 
   it('supports custom onForbidden handler', async () => {
     const customHandler = vi.fn()
-    const adapter = new AuthAdapter({
+    const adapter = AuthAdapter({
       strategies: [{ name: 'test', validate: async () => ({ roles: [] }) }],
       defaultPolicy: 'protected',
       onForbidden: customHandler,
@@ -146,7 +146,7 @@ describe('AuthAdapter', () => {
       create() {}
     }
 
-    const adapter = new AuthAdapter({
+    const adapter = AuthAdapter({
       strategies: [new ApiKeyStrategy({ keys: { 'sk-valid': { name: 'Bot' } } })],
       defaultPolicy: 'protected',
     })
@@ -187,7 +187,7 @@ describe('AuthAdapter', () => {
       health() {}
     }
 
-    const adapter = new AuthAdapter({
+    const adapter = AuthAdapter({
       strategies: [new ApiKeyStrategy({ keys: { 'sk-valid': { name: 'Bot' } } })],
       defaultPolicy: 'protected',
     })
@@ -225,7 +225,7 @@ describe('AuthAdapter', () => {
       getById() {}
     }
 
-    const adapter = new AuthAdapter({
+    const adapter = AuthAdapter({
       strategies: [],
       defaultPolicy: 'protected',
     })

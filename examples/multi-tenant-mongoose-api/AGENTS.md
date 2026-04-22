@@ -124,7 +124,7 @@ import { AuthAdapter, JwtStrategy } from '@forinda/kickjs-auth'
 bootstrap({
   modules,
   adapters: [
-    new AuthAdapter({
+    AuthAdapter({
       strategies: [new JwtStrategy({ secret: process.env.JWT_SECRET! })],
     }),
   ],

@@ -16,7 +16,7 @@ describe('Auth Events', () => {
 
   it('fires onAuthenticated on successful auth', async () => {
     const onAuthenticated = vi.fn()
-    const adapter = new AuthAdapter({
+    const adapter = AuthAdapter({
       strategies: [validStrategy],
       defaultPolicy: 'protected',
       events: { onAuthenticated },
@@ -45,7 +45,7 @@ describe('Auth Events', () => {
 
   it('fires onAuthFailed when no strategy matches', async () => {
     const onAuthFailed = vi.fn()
-    const adapter = new AuthAdapter({
+    const adapter = AuthAdapter({
       strategies: [validStrategy],
       defaultPolicy: 'protected',
       events: { onAuthFailed },
@@ -89,7 +89,7 @@ describe('Auth Events', () => {
       secret() {}
     }
 
-    const adapter = new AuthAdapter({
+    const adapter = AuthAdapter({
       strategies: [validStrategy],
       defaultPolicy: 'protected',
       events: { onForbidden },
@@ -119,7 +119,7 @@ describe('Auth Events', () => {
 
   it('event handler error does not break auth flow', async () => {
     const onAuthenticated = vi.fn().mockRejectedValue(new Error('handler crash'))
-    const adapter = new AuthAdapter({
+    const adapter = AuthAdapter({
       strategies: [validStrategy],
       defaultPolicy: 'protected',
       events: { onAuthenticated },
@@ -153,7 +153,7 @@ describe('Auth Events', () => {
       open() {}
     }
 
-    const adapter = new AuthAdapter({
+    const adapter = AuthAdapter({
       strategies: [validStrategy],
       defaultPolicy: 'protected',
       events: { onAuthenticated, onAuthFailed },

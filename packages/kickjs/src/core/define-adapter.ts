@@ -84,8 +84,11 @@ export function defineAdapter<TConfig = Record<string, unknown>>(
     overrides?: Partial<TConfig>,
   ): AppAdapter => {
     const config = mergeConfig(options.defaults, overrides)
-    const built = options.build(config, { name: instanceName, scoped })
-    return { ...built, name: instanceName }
+    // Mutate `name` on the build result instead of spreading — spread
+    // strips prototype methods when `build()` returns a class instance.
+    const built = options.build(config, { name: instanceName, scoped }) as AppAdapter
+    built.name = instanceName
+    return built
   }
 
   const buildAsync = (instanceName: string, opts: AdapterAsyncOptions<TConfig>): AppAdapter => {

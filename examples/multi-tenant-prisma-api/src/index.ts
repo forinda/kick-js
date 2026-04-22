@@ -40,7 +40,7 @@ export const app = await bootstrap({
       },
     }),
 
-    new AuthAdapter({
+    AuthAdapter({
       strategies: [
         new JwtStrategy({
           secret: process.env.JWT_SECRET ?? 'dev-secret-change-me',

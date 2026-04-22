@@ -26,7 +26,7 @@ import { AuthAdapter, JwtStrategy } from '@forinda/kickjs-auth'
 bootstrap({
   modules: [...],
   adapters: [
-    new AuthAdapter({
+    AuthAdapter({
       strategies: [
         new JwtStrategy({ secret: process.env.JWT_SECRET! }),
       ],
@@ -132,7 +132,7 @@ list(ctx: RequestContext) {
 For tenant-scoped RBAC, populate `tenantRoles` via `AuthAdapterOptions.roleResolver`:
 
 ```ts
-new AuthAdapter({
+AuthAdapter({
   strategies: [...],
   roleResolver: async (user, tenantId) => {
     return db.query.memberships.findFirst({
@@ -403,7 +403,7 @@ const google = new PassportBridge('google', new GoogleStrategy({
   done(null, user)
 }))
 
-new AuthAdapter({
+AuthAdapter({
   strategies: [jwtStrategy, google],
 })
 ```
@@ -423,7 +423,7 @@ bootstrap({
   modules,
   middleware: [session({ secret: process.env.SESSION_SECRET! }), express.json()],
   adapters: [
-    new AuthAdapter({
+    AuthAdapter({
       strategies: [new SessionStrategy()],
     }),
   ],
@@ -555,7 +555,7 @@ handleWebhook(ctx) { ... }
 Control explicitly:
 
 ```ts
-new AuthAdapter({
+AuthAdapter({
   strategies,
   csrf: true,                    // force on
   csrf: false,                   // force off
@@ -579,7 +579,7 @@ A common setup: browsers authenticate with cookies (session), while a Web server
 
 ```ts
 // ❌ Every Web → API write fails with "CSRF token mismatch"
-new AuthAdapter({
+AuthAdapter({
   strategies: [
     new SessionStrategy({ ... }),   // browser → Web
     new JwtStrategy({ ... }),        // Web → API (Bearer)
@@ -594,7 +594,7 @@ Pick one of the following based on where cookies actually travel:
 
 ```ts
 // API gateway — JWT-only, no browser cookies
-new AuthAdapter({
+AuthAdapter({
   strategies: [new JwtStrategy({ ... })],
   csrf: false,
 })
@@ -629,7 +629,7 @@ Keys: `'ip'` (default), `'user'` (by authenticated user ID), or a custom functio
 Monitor auth lifecycle for audit logging, account lockout, or metrics:
 
 ```ts
-new AuthAdapter({
+AuthAdapter({
   strategies,
   events: {
     onAuthenticated: (event) => {
@@ -697,7 +697,7 @@ class MyStrategy implements AuthStrategy {
 Register multiple strategies — the first one that returns a user wins:
 
 ```ts
-new AuthAdapter({
+AuthAdapter({
   strategies: [
     new JwtStrategy({ secret: JWT_SECRET }),       // Try JWT first
     new ApiKeyStrategy({ keys: API_KEYS }),         // Fall back to API key
@@ -715,16 +715,16 @@ new AuthAdapter({
 
 ```ts
 // Secure by default (recommended)
-new AuthAdapter({ strategies, defaultPolicy: 'protected' })
+AuthAdapter({ strategies, defaultPolicy: 'protected' })
 
 // Open by default
-new AuthAdapter({ strategies, defaultPolicy: 'open' })
+AuthAdapter({ strategies, defaultPolicy: 'open' })
 ```
 
 ## Custom Error Handlers
 
 ```ts
-new AuthAdapter({
+AuthAdapter({
   strategies,
   onUnauthorized: (req, res) => {
     res.status(401).json({ error: 'Please log in' })
@@ -776,7 +776,7 @@ class AuthController {
 bootstrap({
   modules: [...],
   adapters: [
-    new AuthAdapter({
+    AuthAdapter({
       strategies: [
         new JwtStrategy({
           secret: JWT_SECRET,
