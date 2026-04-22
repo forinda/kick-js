@@ -17,6 +17,8 @@ export type {
   DiscoveredToken,
   DiscoveredInject,
   DiscoveredEnv,
+  DiscoveredPluginOrAdapter,
+  DiscoveredAugmentation,
   ClassCollision,
   ScanResult,
 } from './scanner'
@@ -107,6 +109,8 @@ export async function runTypegen(opts: RunTypegenOptions = {}): Promise<{
     injects: scan.injects,
     collisions: scan.collisions,
     env: envFile === false ? null : scan.env,
+    pluginsAndAdapters: scan.pluginsAndAdapters,
+    augmentations: scan.augmentations,
     outDir,
     allowDuplicates,
     schemaValidator,
@@ -118,8 +122,11 @@ export async function runTypegen(opts: RunTypegenOptions = {}): Promise<{
     const collisionNote =
       result.resolvedCollisions > 0 ? `, ${result.resolvedCollisions} collisions namespaced` : ''
     const envNote = result.envWritten ? ', env typed' : ''
+    const pluginNote = result.pluginEntries > 0 ? `, ${result.pluginEntries} plugins/adapters` : ''
+    const augNote =
+      result.augmentationEntries > 0 ? `, ${result.augmentationEntries} augmentations` : ''
     console.log(
-      `  kick typegen → ${result.serviceTokens} services, ${result.routeEntries} routes, ${result.moduleTokens} modules${envNote}${collisionNote} → ${where} (${elapsed}ms)`,
+      `  kick typegen → ${result.serviceTokens} services, ${result.routeEntries} routes, ${result.moduleTokens} modules${pluginNote}${augNote}${envNote}${collisionNote} → ${where} (${elapsed}ms)`,
     )
   }
 

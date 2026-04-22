@@ -148,6 +148,44 @@ export interface DiscoveredEnv {
   relativePath: string
 }
 
+/**
+ * A plugin or adapter discovered in source — either via `defineAdapter({ name })`
+ * / `definePlugin({ name })` calls, or via a class that `implements AppAdapter`
+ * and declares a string-literal `name` field.
+ *
+ * The `name` here is the literal string passed to the framework (the value
+ * `dependsOn` references), NOT the symbol on the LHS. `defineAdapter` lets
+ * authors choose any name they want; the symbol is irrelevant at runtime.
+ */
+export interface DiscoveredPluginOrAdapter {
+  /** Whether this is a plugin (`definePlugin`) or adapter (`defineAdapter` / class) */
+  kind: 'plugin' | 'adapter'
+  /** The string literal passed as `name` (the value `dependsOn` references) */
+  name: string
+  /** Absolute file path */
+  filePath: string
+  /** Path relative to scan root, with forward slashes */
+  relativePath: string
+}
+
+/**
+ * A `defineAugmentation('Name', meta)` call discovered in source. Plugins
+ * call this to advertise an augmentable interface so the typegen can list
+ * every augmentation surface in one generated file.
+ */
+export interface DiscoveredAugmentation {
+  /** The literal string passed as the first arg to `defineAugmentation` */
+  name: string
+  /** Optional `description` extracted from the second-arg object literal */
+  description: string | null
+  /** Optional `example` extracted from the second-arg object literal */
+  example: string | null
+  /** Absolute file path */
+  filePath: string
+  /** Path relative to scan root, with forward slashes */
+  relativePath: string
+}
+
 /** Aggregated scanner output */
 export interface ScanResult {
   classes: DiscoveredClass[]
@@ -157,6 +195,10 @@ export interface ScanResult {
   collisions: ClassCollision[]
   /** Discovered env schema file (or null if none found at the configured path) */
   env: DiscoveredEnv | null
+  /** Plugins/adapters discovered via `defineAdapter`/`definePlugin`/`implements AppAdapter` */
+  pluginsAndAdapters: DiscoveredPluginOrAdapter[]
+  /** Augmentation interfaces declared via `defineAugmentation('Name', meta)` */
+  augmentations: DiscoveredAugmentation[]
 }
 
 /** Options for the scanner */
@@ -225,6 +267,37 @@ const BARE_CREATE_TOKEN_REGEX = /createToken\s*(?:<[^>]*>)?\s*\(\s*['"`]([^'"`]+
 
 /** Match `@Inject('literal')` — only literals; computed args are skipped */
 const INJECT_LITERAL_REGEX = /@Inject\s*\(\s*['"`]([^'"`]+)['"`]\s*\)/g
+
+/**
+ * Match the start of a `defineAdapter(...)` or `definePlugin(...)` call,
+ * tolerating optional `<TConfig, TExtra>` generics. Captures the helper
+ * name. The callsite's first-arg object is parsed forward via
+ * `findBalancedClose` so nested objects/parens don't confuse us.
+ */
+const DEFINE_HELPER_START = /\b(defineAdapter|definePlugin)\s*(?:<[^>]*>)?\s*\(/g
+
+/**
+ * Match a class declaration whose `implements` clause includes `AppAdapter`.
+ * Captures the class name. Used to pick up the (rare, post-defineAdapter)
+ * legacy class-style adapters so their literal `name = '...'` field can
+ * still feed `KickJsPluginRegistry`.
+ */
+const APP_ADAPTER_CLASS_REGEX = new RegExp(
+  String.raw`export\s+(?:default\s+)?(?:abstract\s+)?class\s+(\w+)` +
+    String.raw`(?:\s+extends\s+\w+(?:<[^>]*>)?)?` +
+    String.raw`\s+implements\s+[^{]*\bAppAdapter\b`,
+  'g',
+)
+
+/** Match a string-literal `name = '...'` field on a class body. */
+const CLASS_NAME_FIELD_REGEX = /\bname\s*(?::\s*[^=]+)?=\s*['"`]([^'"`]+)['"`]/
+
+/**
+ * Match the start of a `defineAugmentation('Name', ...)` call. Captures
+ * the literal name. The optional second-arg object is parsed forward so
+ * `description` / `example` can be pulled out.
+ */
+const DEFINE_AUGMENTATION_START = /\bdefineAugmentation\s*\(\s*['"`]([^'"`]+)['"`]\s*(,\s*\{)?/g
 
 /** HTTP route decorator names recognised by the scanner */
 const HTTP_DECORATORS = ['Get', 'Post', 'Put', 'Delete', 'Patch'] as const
@@ -673,6 +746,132 @@ export function extractInjectsFromSource(
 }
 
 /**
+ * Extract the bounds of an object literal that begins at `openBracePos`
+ * (the index of the `{` character). Returns the index of the matching `}`
+ * or -1 if no match is found. Counts balanced braces only — does not
+ * understand string literals so a `{` or `}` inside a string inside the
+ * object will skew the depth counter (matches `findBalancedClose`).
+ */
+function findBalancedBrace(text: string, openBracePos: number): number {
+  let depth = 1
+  for (let i = openBracePos + 1; i < text.length; i++) {
+    const ch = text[i]
+    if (ch === '{') depth++
+    else if (ch === '}') {
+      depth--
+      if (depth === 0) return i
+    }
+  }
+  return -1
+}
+
+/**
+ * Extract plugins/adapters declared via `defineAdapter({ name: '...' })`
+ * or `definePlugin({ name: '...' })` calls and via class-style adapters
+ * (`class XxxAdapter implements AppAdapter` with a string-literal `name`
+ * field).
+ *
+ * Only the literal `name:` field feeds the result — the symbol on the LHS
+ * is irrelevant since `dependsOn` references the runtime name.
+ */
+export function extractPluginsAndAdaptersFromSource(
+  source: string,
+  filePath: string,
+  cwd: string,
+): DiscoveredPluginOrAdapter[] {
+  const out: DiscoveredPluginOrAdapter[] = []
+  const relPath = toRelative(filePath, cwd)
+  const seen = new Set<string>()
+
+  // Pass 1: defineAdapter / definePlugin calls
+  DEFINE_HELPER_START.lastIndex = 0
+  let helperMatch: RegExpExecArray | null
+  while ((helperMatch = DEFINE_HELPER_START.exec(source)) !== null) {
+    const helper = helperMatch[1] as 'defineAdapter' | 'definePlugin'
+    const openParen = DEFINE_HELPER_START.lastIndex - 1
+    const closeParen = findBalancedClose(source, openParen)
+    if (closeParen < 0) continue
+    const callArgs = source.slice(openParen + 1, closeParen)
+    // Look for the first `name: 'literal'` in the call args
+    const nameMatch = /\bname\s*:\s*['"`]([^'"`]+)['"`]/.exec(callArgs)
+    if (!nameMatch) continue
+    const name = nameMatch[1]
+    const dedupeKey = `${helper}::${name}::${filePath}`
+    if (seen.has(dedupeKey)) continue
+    seen.add(dedupeKey)
+    out.push({
+      kind: helper === 'definePlugin' ? 'plugin' : 'adapter',
+      name,
+      filePath,
+      relativePath: relPath,
+    })
+  }
+
+  // Pass 2: class-style adapters (`class X implements AppAdapter { name = 'X' }`)
+  APP_ADAPTER_CLASS_REGEX.lastIndex = 0
+  let classMatch: RegExpExecArray | null
+  while ((classMatch = APP_ADAPTER_CLASS_REGEX.exec(source)) !== null) {
+    const classStart = classMatch.index
+    // Find the class body opening brace
+    const bracePos = source.indexOf('{', classStart)
+    if (bracePos < 0) continue
+    const closeBrace = findBalancedBrace(source, bracePos)
+    if (closeBrace < 0) continue
+    const body = source.slice(bracePos + 1, closeBrace)
+    const nameMatch = CLASS_NAME_FIELD_REGEX.exec(body)
+    if (!nameMatch) continue
+    const name = nameMatch[1]
+    const dedupeKey = `class::${name}::${filePath}`
+    if (seen.has(dedupeKey)) continue
+    seen.add(dedupeKey)
+    out.push({ kind: 'adapter', name, filePath, relativePath: relPath })
+  }
+
+  return out
+}
+
+/**
+ * Extract `defineAugmentation('Name', { description, example })` calls
+ * from a source file. The metadata object is optional — when absent both
+ * `description` and `example` resolve to `null`.
+ */
+export function extractAugmentationsFromSource(
+  source: string,
+  filePath: string,
+  cwd: string,
+): DiscoveredAugmentation[] {
+  const out: DiscoveredAugmentation[] = []
+  const relPath = toRelative(filePath, cwd)
+
+  DEFINE_AUGMENTATION_START.lastIndex = 0
+  let match: RegExpExecArray | null
+  while ((match = DEFINE_AUGMENTATION_START.exec(source)) !== null) {
+    const name = match[1]
+    let description: string | null = null
+    let example: string | null = null
+
+    // If the regex matched a metadata object opening (`, {`), parse it
+    if (match[2]) {
+      const bracePos = source.indexOf('{', match.index + match[0].length - 1)
+      if (bracePos >= 0) {
+        const closeBrace = findBalancedBrace(source, bracePos)
+        if (closeBrace >= 0) {
+          const body = source.slice(bracePos + 1, closeBrace)
+          const descMatch = /\bdescription\s*:\s*['"`]([^'"`]+)['"`]/.exec(body)
+          const exampleMatch = /\bexample\s*:\s*['"`]([^'"`]+)['"`]/.exec(body)
+          description = descMatch ? descMatch[1] : null
+          example = exampleMatch ? exampleMatch[1] : null
+        }
+      }
+    }
+
+    out.push({ name, description, example, filePath, relativePath: relPath })
+  }
+
+  return out
+}
+
+/**
  * Default search order for the env schema file. Newer projects keep
  * the schema under `src/config/` so the framework's "config" concept
  * has a single home; older scaffolds dropped it at `src/env.ts` (kept
@@ -766,6 +965,8 @@ export async function scanProject(opts: ScanOptions): Promise<ScanResult> {
   const routes: DiscoveredRoute[] = []
   const tokens: DiscoveredToken[] = []
   const injects: DiscoveredInject[] = []
+  const pluginsAndAdapters: DiscoveredPluginOrAdapter[] = []
+  const augmentations: DiscoveredAugmentation[] = []
 
   // Two passes: first collect all classes, then a second pass extracts
   // routes per file using the per-file class list as scoping context.
@@ -782,6 +983,8 @@ export async function scanProject(opts: ScanOptions): Promise<ScanResult> {
     classes.push(...extractClassesFromSource(source, file, opts.cwd))
     tokens.push(...extractTokensFromSource(source, file, opts.cwd))
     injects.push(...extractInjectsFromSource(source, file, opts.cwd))
+    pluginsAndAdapters.push(...extractPluginsAndAdaptersFromSource(source, file, opts.cwd))
+    augmentations.push(...extractAugmentationsFromSource(source, file, opts.cwd))
   }
 
   for (const [file, source] of sources) {
@@ -803,9 +1006,24 @@ export async function scanProject(opts: ScanOptions): Promise<ScanResult> {
   routes.sort(
     (a, b) => a.controller.localeCompare(b.controller) || a.method.localeCompare(b.method),
   )
+  pluginsAndAdapters.sort(
+    (a, b) => a.name.localeCompare(b.name) || a.relativePath.localeCompare(b.relativePath),
+  )
+  augmentations.sort(
+    (a, b) => a.name.localeCompare(b.name) || a.relativePath.localeCompare(b.relativePath),
+  )
 
   const collisions = findCollisions(classes)
   const env = await detectEnvFile(opts.cwd, opts.envFile ?? 'src/env.ts')
 
-  return { classes, routes, tokens, injects, collisions, env }
+  return {
+    classes,
+    routes,
+    tokens,
+    injects,
+    collisions,
+    env,
+    pluginsAndAdapters,
+    augmentations,
+  }
 }
