@@ -75,9 +75,17 @@ Request In
   │           └─ Header ≠ cookie → 403
   │
   ├─ Express Router matches route
-  │   └─ RequestContext created (ctx.user, ctx.get, ctx.session)
-  │       └─ Controller method executes
-  │           └─ Response (ctx.json, ctx.created, etc.)
+  │   ├─ Validation middleware (Zod schemas)
+  │   ├─ File-upload middleware (@FileUpload)
+  │   ├─ @Middleware() handlers (class then method)
+  │   ├─ ▸ Context Contributor pipeline (#107)
+  │   │   ├─ topo-sorted at boot — method > class > module > adapter > global
+  │   │   ├─ each contributor's resolve() runs sequentially (await)
+  │   │   ├─ ctx.set(key, value) writes flow into requestStore.values
+  │   │   └─ optional / onError matrix on resolve throws (architecture.md §20.9)
+  │   │
+  │   └─ RequestContext created → Controller method executes
+  │       └─ Response (ctx.json, ctx.created, etc.)
   │
   ├─ ▸ afterRoutes adapters
   │
