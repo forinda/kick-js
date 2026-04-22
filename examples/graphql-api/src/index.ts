@@ -8,7 +8,7 @@ import { UserResolver } from './resolvers/user.resolver'
 import { PostResolver } from './resolvers/post.resolver'
 import { typeDefs } from './resolvers/typedefs'
 
-bootstrap({
+export const app = await bootstrap({
   modules,
   adapters: [
     DevToolsAdapter(),

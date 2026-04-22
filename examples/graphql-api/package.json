@@ -28,6 +28,7 @@
   },
   "devDependencies": {
     "@forinda/kickjs-cli": "workspace:*",
+    "@forinda/kickjs-vite": "workspace:*",
     "@forinda/kickjs-devtools": "workspace:*",
     "@swc/core": "^1.15.21",
     "@types/express": "^5.0.6",

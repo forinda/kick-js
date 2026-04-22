@@ -14,7 +14,7 @@ import { SwaggerAdapter } from '@forinda/kickjs-swagger'
 import { modules } from './modules'
 import { joiSchemaParser } from './parsers/joi-schema-parser'
 
-bootstrap({
+export const app = await bootstrap({
   modules,
   apiPrefix: '/api',
   defaultVersion: 1,

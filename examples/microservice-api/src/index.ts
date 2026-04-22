@@ -6,7 +6,7 @@ import { OtelAdapter } from '@forinda/kickjs-otel'
 // import { QueueAdapter, BullMQProvider } from '@forinda/kickjs-queue'
 import { modules } from './modules'
 
-bootstrap({
+export const app = await bootstrap({
   modules,
   adapters: [
     OtelAdapter({ serviceName: 'microservice-api' }),

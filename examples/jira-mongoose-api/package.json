@@ -45,6 +45,7 @@
   },
   "devDependencies": {
     "@forinda/kickjs-cli": "workspace:*",
+    "@forinda/kickjs-vite": "workspace:*",
     "@forinda/kickjs-testing": "workspace:*",
     "@swc/core": "^1.15.21",
     "@types/cors": "^2.8.19",

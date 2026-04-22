@@ -27,6 +27,7 @@
   },
   "devDependencies": {
     "@forinda/kickjs-cli": "workspace:*",
+    "@forinda/kickjs-vite": "workspace:*",
     "@forinda/kickjs-testing": "workspace:*",
     "supertest": "^7.2.2",
     "@types/supertest": "^7.2.0",

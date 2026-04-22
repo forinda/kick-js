@@ -57,7 +57,7 @@ devtools.requestCount.subscribe((count) => {
 })
 
 // ── Bootstrap ────────────────────────────────────────────────────────
-bootstrap({
+export const app = await bootstrap({
   modules,
   apiPrefix: '/api',
   defaultVersion: 1,

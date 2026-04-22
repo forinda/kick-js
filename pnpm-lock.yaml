@@ -170,6 +170,9 @@ importers:
       '@forinda/kickjs-testing':
         specifier: workspace:*
         version: link:../../packages/testing
+      '@forinda/kickjs-vite':
+        specifier: workspace:*
+        version: link:../../packages/vite
       '@swc/core':
         specifier: ^1.15.21
         version: 1.15.21
@@ -237,6 +240,9 @@ importers:
       '@forinda/kickjs-devtools':
         specifier: workspace:*
         version: link:../../packages/devtools
+      '@forinda/kickjs-vite':
+        specifier: workspace:*
+        version: link:../../packages/vite
       '@swc/core':
         specifier: ^1.15.21
         version: 1.15.21
@@ -334,6 +340,9 @@ importers:
       '@forinda/kickjs-testing':
         specifier: workspace:*
         version: link:../../packages/testing
+      '@forinda/kickjs-vite':
+        specifier: workspace:*
+        version: link:../../packages/vite
       '@swc/core':
         specifier: ^1.15.21
         version: 1.15.21
@@ -461,6 +470,9 @@ importers:
       '@forinda/kickjs-testing':
         specifier: workspace:*
         version: link:../../packages/testing
+      '@forinda/kickjs-vite':
+        specifier: workspace:*
+        version: link:../../packages/vite
       '@swc/core':
         specifier: ^1.15.21
         version: 1.15.21
@@ -570,6 +582,9 @@ importers:
       '@forinda/kickjs-testing':
         specifier: workspace:*
         version: link:../../packages/testing
+      '@forinda/kickjs-vite':
+        specifier: workspace:*
+        version: link:../../packages/vite
       '@swc/core':
         specifier: ^1.15.21
         version: 1.15.21
@@ -685,6 +700,9 @@ importers:
       '@forinda/kickjs-testing':
         specifier: workspace:*
         version: link:../../packages/testing
+      '@forinda/kickjs-vite':
+        specifier: workspace:*
+        version: link:../../packages/vite
       '@swc/core':
         specifier: ^1.15.21
         version: 1.15.21
@@ -764,6 +782,9 @@ importers:
       '@forinda/kickjs-testing':
         specifier: workspace:*
         version: link:../../packages/testing
+      '@forinda/kickjs-vite':
+        specifier: workspace:*
+        version: link:../../packages/vite
       '@swc/core':
         specifier: ^1.15.21
         version: 1.15.21
@@ -837,6 +858,9 @@ importers:
       '@forinda/kickjs-testing':
         specifier: workspace:*
         version: link:../../packages/testing
+      '@forinda/kickjs-vite':
+        specifier: workspace:*
+        version: link:../../packages/vite
       '@swc/core':
         specifier: ^1.15.21
         version: 1.15.21
@@ -898,6 +922,9 @@ importers:
       '@forinda/kickjs-testing':
         specifier: workspace:*
         version: link:../../packages/testing
+      '@forinda/kickjs-vite':
+        specifier: workspace:*
+        version: link:../../packages/vite
       '@swc/core':
         specifier: ^1.15.21
         version: 1.15.21
@@ -1169,6 +1196,9 @@ importers:
       '@forinda/kickjs-testing':
         specifier: workspace:*
         version: link:../../packages/testing
+      '@forinda/kickjs-vite':
+        specifier: workspace:*
+        version: link:../../packages/vite
       '@swc/core':
         specifier: ^1.15.21
         version: 1.15.21

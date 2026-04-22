@@ -3,7 +3,7 @@ import { bootstrap } from '@forinda/kickjs'
 import { modules } from './modules'
 import { adapters, middleware } from './config'
 
-bootstrap({
+export const app = await bootstrap({
   modules,
   adapters,
   middleware,
