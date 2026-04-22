@@ -666,7 +666,7 @@ export type AuthAdapterFactory = AdapterFactory<AuthAdapterOptions> & {
  *     AuthAdapter({
  *       strategies: [
  *         new JwtStrategy({ secret: process.env.JWT_SECRET! }),
- *         new ApiKeyStrategy({ keys: { 'sk-123': { name: 'Bot', roles: ['api'] } } }),
+ *         ApiKeyStrategy({ keys: { 'sk-123': { name: 'Bot', roles: ['api'] } } }),
  *       ],
  *       defaultPolicy: 'protected', // secure by default
  *     }),

@@ -223,7 +223,7 @@ Authenticate via API keys from headers or query parameters.
 import { ApiKeyStrategy } from '@forinda/kickjs-auth'
 
 // Static key map
-new ApiKeyStrategy({
+ApiKeyStrategy({
   keys: {
     'sk-prod-abc123': { name: 'CI Bot', roles: ['api', 'deploy'] },
     'sk-prod-xyz789': { name: 'Monitoring', roles: ['api', 'read'] },
@@ -231,7 +231,7 @@ new ApiKeyStrategy({
 })
 
 // Database lookup
-new ApiKeyStrategy({
+ApiKeyStrategy({
   validate: async (key) => {
     const record = await db.apiKeys.findByKey(key)
     if (!record || record.revokedAt) return null
@@ -424,7 +424,7 @@ bootstrap({
   middleware: [session({ secret: process.env.SESSION_SECRET! }), express.json()],
   adapters: [
     AuthAdapter({
-      strategies: [new SessionStrategy()],
+      strategies: [SessionStrategy()],
     }),
   ],
 })
@@ -581,7 +581,7 @@ A common setup: browsers authenticate with cookies (session), while a Web server
 // ❌ Every Web → API write fails with "CSRF token mismatch"
 AuthAdapter({
   strategies: [
-    new SessionStrategy({ ... }),   // browser → Web
+    SessionStrategy({ ... }),   // browser → Web
     new JwtStrategy({ ... }),        // Web → API (Bearer)
   ],
   // csrf auto-enabled → blocks server-to-server JWT calls
@@ -700,8 +700,8 @@ Register multiple strategies — the first one that returns a user wins:
 AuthAdapter({
   strategies: [
     new JwtStrategy({ secret: JWT_SECRET }),       // Try JWT first
-    new ApiKeyStrategy({ keys: API_KEYS }),         // Fall back to API key
-    new SessionStrategy(),                          // Then session
+    ApiKeyStrategy({ keys: API_KEYS }),         // Fall back to API key
+    SessionStrategy(),                          // Then session
   ],
 })
 ```
