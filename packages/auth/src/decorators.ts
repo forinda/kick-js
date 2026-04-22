@@ -4,8 +4,36 @@ import {
   CSRF_META,
   RATE_LIMIT_META,
   POLICY_META,
+  type AuthUser,
+  type PolicyRegistry,
   type RateLimitDecoratorOptions,
 } from './types'
+
+/**
+ * Resolves to the element type of {@link AuthUser}'s `roles` array when the
+ * app has augmented `AuthUser` to a typed shape (e.g. `roles: ('admin' |
+ * 'editor')[]`). Falls back to `string` for unaugmented apps so existing
+ * `@Roles('admin', 'editor')` calls continue to typecheck unchanged.
+ */
+type Role = AuthUser['roles'] extends readonly (infer T)[] ? T : string
+
+/**
+ * Set of resource keys declared in {@link PolicyRegistry}. Falls back to
+ * `string` when the registry is empty (no augmentation), preserving the
+ * loose typing that existing `@Can('action', 'resource')` calls rely on.
+ */
+type PolicyResource = keyof PolicyRegistry extends never ? string : keyof PolicyRegistry & string
+
+/**
+ * Per-resource action union from {@link PolicyRegistry}. When `R` is a
+ * registered resource, narrows to that resource's declared actions; falls
+ * back to `string` otherwise (unregistered resource OR no augmentation).
+ */
+type PolicyAction<R> = R extends keyof PolicyRegistry
+  ? PolicyRegistry[R] extends string
+    ? PolicyRegistry[R]
+    : string
+  : string
 
 /**
  * Mark a controller or method as requiring authentication.
@@ -79,6 +107,11 @@ export function Public(): MethodDecorator {
  *
  * The user object must have a `roles` property (string array).
  *
+ * **Type narrowing.** When the app augments `AuthUser['roles']` to a literal
+ * union (e.g. `roles: ('admin' | 'editor')[]`), `@Roles(...)` rejects roles
+ * outside that union at the decoration site. Unaugmented apps get the loose
+ * `string[]` fallback — no breaking change.
+ *
  * @example
  * ```ts
  * @Get('/admin/dashboard')
@@ -88,9 +121,16 @@ export function Public(): MethodDecorator {
  * @Delete('/:id')
  * @Roles('admin')
  * deleteUser(ctx) { ... }
+ *
+ * // With augmentation:
+ * declare module '@forinda/kickjs-auth' {
+ *   interface AuthUser { roles: ('admin' | 'editor')[] }
+ * }
+ * @Roles('admin')   // ✓
+ * @Roles('typo')    // ✗ compile error
  * ```
  */
-export function Roles(...roles: string[]): MethodDecorator {
+export function Roles<R extends Role>(...roles: R[]): MethodDecorator {
   return (target: any, propertyKey: string | symbol) => {
     setMethodMeta(AUTH_META.AUTHENTICATED, true, target.constructor, propertyKey as string)
     setMethodMeta(AUTH_META.ROLES, roles, target.constructor, propertyKey as string)
@@ -151,6 +191,11 @@ export function RateLimit(options: RateLimitDecoratorOptions = {}): MethodDecora
  * Requires a matching `@Policy('resource')` class to be registered.
  * The handler is only called if the policy method returns `true`.
  *
+ * **Type narrowing.** When the app augments `PolicyRegistry`, both `action`
+ * and `resource` narrow to the declared union for that resource — typos
+ * become compile errors. Unaugmented apps get the loose `(string, string)`
+ * fallback unchanged.
+ *
  * @param action - Policy method to call (e.g., 'update', 'delete')
  * @param resource - Resource name matching a `@Policy()` registration
  *
@@ -159,9 +204,22 @@ export function RateLimit(options: RateLimitDecoratorOptions = {}): MethodDecora
  * @Delete('/:id')
  * @Can('delete', 'post')
  * async remove(ctx: RequestContext) { ... }
+ *
+ * // With augmentation:
+ * declare module '@forinda/kickjs-auth' {
+ *   interface PolicyRegistry {
+ *     post: 'create' | 'update' | 'delete' | 'publish'
+ *   }
+ * }
+ * @Can('delete', 'post')   // ✓
+ * @Can('typo', 'post')     // ✗ compile error: action 'typo' not allowed for 'post'
+ * @Can('delete', 'unknown') // ✗ compile error: 'unknown' is not a registered resource
  * ```
  */
-export function Can(action: string, resource: string): MethodDecorator {
+export function Can<R extends PolicyResource>(
+  action: PolicyAction<R>,
+  resource: R,
+): MethodDecorator {
   return (target: any, propertyKey: string | symbol) => {
     setMethodMeta(POLICY_META.ACTION, action, target.constructor, propertyKey as string)
     setMethodMeta(POLICY_META.RESOURCE, resource, target.constructor, propertyKey as string)

@@ -41,6 +41,25 @@ new AuthAdapter({
 
 When `roleResolver` is set and `req.tenant` exists, `@Roles()` checks the tenant-scoped roles instead of the user's global roles.
 
+### Type-narrowing roles via `AuthUser` augmentation
+
+`@Roles()` is generic over `AuthUser['roles'][number]`. Augment `AuthUser` to a literal-string array and typos at decoration sites become compile errors — no runtime check needed:
+
+```ts
+declare module '@forinda/kickjs-auth' {
+  interface AuthUser {
+    id: string
+    email: string
+    roles: ('admin' | 'editor' | 'viewer')[]
+  }
+}
+
+@Roles('admin', 'editor')   // ✓ typechecks
+@Roles('typo')              // ✗ TS error: 'typo' is not assignable to '"admin" | "editor" | "viewer"'
+```
+
+Apps that don't augment `AuthUser['roles']` get the loose `string[]` fallback — full backwards compatibility.
+
 ## Policy-Based Authorization
 
 For resource-level permissions ("can this user edit THIS post?"), use policies.
@@ -116,6 +135,33 @@ class PostController {
 ```
 
 `@Can()` implies `@Authenticated()` — no need to add both. If the policy returns `false`, the request gets a 403 Forbidden response.
+
+### Type-narrowing `@Can` and `AuthorizationService.can` via `PolicyRegistry`
+
+`@Can(action, resource)` is generic over `PolicyRegistry`. Augment the registry with the (resource → actions) map and both arguments narrow at decoration sites:
+
+```ts
+declare module '@forinda/kickjs-auth' {
+  interface PolicyRegistry {
+    post: 'create' | 'update' | 'delete' | 'publish'
+    user: 'invite' | 'suspend'
+  }
+}
+
+@Can('delete', 'post')      // ✓ typechecks
+@Can('typo', 'post')        // ✗ TS error: 'typo' is not assignable to '"create" | "update" | "delete" | "publish"'
+@Can('delete', 'unknown')   // ✗ TS error: 'unknown' is not assignable to '"post" | "user"'
+@Can('invite', 'post')      // ✗ TS error: 'invite' is not assignable to actions of 'post' (it's on 'user')
+```
+
+The same narrowing applies to `AuthorizationService.can()` and `AuthorizationService.listObjects()` — pass `<R extends PolicyResource>` to get type-safe runtime checks:
+
+```ts
+const allowed = await authz.can(user, 'delete', 'post')   // ✓
+const ids = await authz.listObjects(user, 'view', 'post') // ✓
+```
+
+Apps that don't augment `PolicyRegistry` get the loose `(string, string)` fallback — full backwards compatibility.
 
 ### Programmatic Checks
 
