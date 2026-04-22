@@ -22,7 +22,7 @@ import { PresenceCronJobs } from '@/modules/cron/infrastructure/jobs/presence-cl
 
 const redisUrl = new URL(env.REDIS_URL)
 
-const drizzleAdapter = new DrizzleAdapter({
+const drizzleAdapter = DrizzleAdapter({
   db,
   logging: true,
   onShutdown: () => client.end(),

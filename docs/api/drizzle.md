@@ -58,7 +58,7 @@ const db = drizzle(client)
 bootstrap({
   modules,
   adapters: [
-    new DrizzleAdapter({
+    DrizzleAdapter({
       db,
       logging: true,
       onShutdown: () => client.end(),

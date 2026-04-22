@@ -14,7 +14,7 @@ describe('DrizzleTenantAdapter', () => {
   describe('getDb()', () => {
     it('returns provider DB when no tenantId', async () => {
       const providerDb = createMockDb('provider')
-      const adapter = new DrizzleTenantAdapter({
+      const adapter = DrizzleTenantAdapter({
         providerDb,
         tenantFactory: (id) => createMockDb(id),
       })
@@ -25,7 +25,7 @@ describe('DrizzleTenantAdapter', () => {
 
     it('returns provider DB when tenantId is null', async () => {
       const providerDb = createMockDb('provider')
-      const adapter = new DrizzleTenantAdapter({
+      const adapter = DrizzleTenantAdapter({
         providerDb,
         tenantFactory: (id) => createMockDb(id),
       })
@@ -36,7 +36,7 @@ describe('DrizzleTenantAdapter', () => {
 
     it('creates tenant DB on first access', async () => {
       const factory = vi.fn((id: string) => createMockDb(id))
-      const adapter = new DrizzleTenantAdapter({
+      const adapter = DrizzleTenantAdapter({
         providerDb: createMockDb('provider'),
         tenantFactory: factory,
       })
@@ -49,7 +49,7 @@ describe('DrizzleTenantAdapter', () => {
 
     it('caches tenant DB on subsequent access', async () => {
       const factory = vi.fn((id: string) => createMockDb(id))
-      const adapter = new DrizzleTenantAdapter({
+      const adapter = DrizzleTenantAdapter({
         providerDb: createMockDb('provider'),
         tenantFactory: factory,
       })
@@ -61,7 +61,7 @@ describe('DrizzleTenantAdapter', () => {
     })
 
     it('creates separate connections per tenant', async () => {
-      const adapter = new DrizzleTenantAdapter({
+      const adapter = DrizzleTenantAdapter({
         providerDb: createMockDb('provider'),
         tenantFactory: (id) => createMockDb(id),
       })
@@ -76,7 +76,7 @@ describe('DrizzleTenantAdapter', () => {
     })
 
     it('supports async tenantFactory', async () => {
-      const adapter = new DrizzleTenantAdapter({
+      const adapter = DrizzleTenantAdapter({
         providerDb: createMockDb('provider'),
         tenantFactory: async (id) => {
           // Simulate async DB lookup
@@ -92,7 +92,7 @@ describe('DrizzleTenantAdapter', () => {
   describe('shutdown()', () => {
     it('calls onTenantShutdown for each cached connection', async () => {
       const onTenantShutdown = vi.fn()
-      const adapter = new DrizzleTenantAdapter({
+      const adapter = DrizzleTenantAdapter({
         providerDb: createMockDb('provider'),
         tenantFactory: (id) => createMockDb(id),
         onTenantShutdown,
@@ -115,7 +115,7 @@ describe('DrizzleTenantAdapter', () => {
     })
 
     it('clears connections even without onTenantShutdown', async () => {
-      const adapter = new DrizzleTenantAdapter({
+      const adapter = DrizzleTenantAdapter({
         providerDb: createMockDb('provider'),
         tenantFactory: (id) => createMockDb(id),
       })
@@ -128,7 +128,7 @@ describe('DrizzleTenantAdapter', () => {
 
   describe('connectionCount', () => {
     it('starts at 0', () => {
-      const adapter = new DrizzleTenantAdapter({
+      const adapter = DrizzleTenantAdapter({
         providerDb: createMockDb('provider'),
         tenantFactory: (id) => createMockDb(id),
       })

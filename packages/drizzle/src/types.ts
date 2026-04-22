@@ -19,7 +19,7 @@ export interface DrizzleAdapterOptions<TDb = unknown> {
    * const db = drizzle({ client: sqlite, schema })
    * // db is BetterSQLite3Database<typeof schema>
    *
-   * new DrizzleAdapter({ db })
+   * DrizzleAdapter({ db })
    * // TDb is inferred as BetterSQLite3Database<typeof schema>
    * ```
    */
@@ -38,7 +38,7 @@ export interface DrizzleAdapterOptions<TDb = unknown> {
    * const pool = new Pool({ connectionString: '...' })
    * const db = drizzle(pool)
    *
-   * new DrizzleAdapter({
+   * DrizzleAdapter({
    *   db,
    *   onShutdown: () => pool.end(),
    * })
