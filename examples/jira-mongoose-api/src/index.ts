@@ -4,7 +4,7 @@ import { modules } from './modules';
 import { adapters } from './config/adapters';
 import { middleware } from './config/middleware';
 
-bootstrap({
+export const app = await bootstrap({
   modules,
   apiPrefix: '/api',
   defaultVersion: 1,

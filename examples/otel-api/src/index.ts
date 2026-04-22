@@ -8,7 +8,7 @@ import { SwaggerAdapter } from '@forinda/kickjs-swagger'
 import { OtelAdapter } from '@forinda/kickjs-otel'
 import { modules } from './modules'
 
-bootstrap({
+export const app = await bootstrap({
   modules,
   adapters: [
     OtelAdapter({

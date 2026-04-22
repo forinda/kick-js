@@ -24,4 +24,4 @@ class HelloModule implements AppModule {
   }
 }
 
-bootstrap({ modules: [HelloModule] })
+export const app = await bootstrap({ modules: [HelloModule] })
