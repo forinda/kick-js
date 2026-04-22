@@ -12,6 +12,7 @@ import {
   requestScopeMiddleware,
   type AppModule,
   type AppAdapter,
+  type KickPlugin,
   type ModuleRoutes,
   type ContributorRegistration,
   type SourcedRegistration,
@@ -324,6 +325,157 @@ describe('contributor sources — Application threading + per-module isolation',
       global: 'global-value',
       a: null,
       b: 'B-value',
+    })
+  })
+})
+
+// ── Plugin-level contributors (#107) ────────────────────────────────────
+
+describe('contributor sources — plugin level (KickPlugin.contributors)', () => {
+  it('a plugin contributing directly behaves like an adapter contributor', async () => {
+    const PluginCtx: ContributorRegistration = defineContextDecorator({
+      key: 'fromPlugin',
+      resolve: () => 'plugin-value',
+    }).registration
+
+    @Controller('/probe')
+    class Ctrl {
+      @Get('/')
+      probe(ctx: RequestContext) {
+        return ctx.json({ fromPlugin: ctx.get('fromPlugin') })
+      }
+    }
+
+    class TestModule implements AppModule {
+      routes(): ModuleRoutes {
+        return { path: '/probe', router: buildRoutes(Ctrl), controller: Ctrl }
+      }
+    }
+
+    class TestPlugin implements KickPlugin {
+      name = 'TestPlugin'
+      contributors() {
+        return [PluginCtx]
+      }
+    }
+
+    const { Application } = await import('../src/index')
+    const app = new Application({
+      modules: [TestModule],
+      plugins: [new TestPlugin()],
+      apiPrefix: '/api',
+      defaultVersion: 1,
+    })
+    await app.setup()
+
+    const res = await request(app.getExpressApp()).get('/api/v1/probe')
+    expect(res.body).toEqual({ fromPlugin: 'plugin-value' })
+  })
+
+  it('module-level contributor overrides a plugin-level one with the same key', async () => {
+    const PluginVersion: ContributorRegistration = defineContextDecorator({
+      key: 'tenant',
+      resolve: () => ({ id: 'plugin-loses' }),
+    }).registration
+    const ModuleVersion: ContributorRegistration = defineContextDecorator({
+      key: 'tenant',
+      resolve: () => ({ id: 'module-wins' }),
+    }).registration
+
+    @Controller('/probe')
+    class Ctrl {
+      @Get('/')
+      probe(ctx: RequestContext) {
+        return ctx.json(ctx.get('tenant'))
+      }
+    }
+
+    class OverrideModule implements AppModule {
+      contributors() {
+        return [ModuleVersion]
+      }
+      routes(): ModuleRoutes {
+        return { path: '/probe', router: buildRoutes(Ctrl), controller: Ctrl }
+      }
+    }
+
+    class TestPlugin implements KickPlugin {
+      name = 'TestPlugin'
+      contributors() {
+        return [PluginVersion]
+      }
+    }
+
+    const { Application } = await import('../src/index')
+    const app = new Application({
+      modules: [OverrideModule],
+      plugins: [new TestPlugin()],
+      apiPrefix: '/api',
+      defaultVersion: 1,
+    })
+    await app.setup()
+
+    const res = await request(app.getExpressApp()).get('/api/v1/probe')
+    expect(res.body).toEqual({ id: 'module-wins' })
+  })
+
+  it('a plugin-shipped adapter and a plugin-direct contributor coexist', async () => {
+    const FromAdapter: ContributorRegistration = defineContextDecorator({
+      key: 'fromAdapter',
+      resolve: () => 'adapter-value',
+    }).registration
+    const FromPlugin: ContributorRegistration = defineContextDecorator({
+      key: 'fromPlugin',
+      resolve: () => 'plugin-value',
+    }).registration
+
+    @Controller('/probe')
+    class Ctrl {
+      @Get('/')
+      probe(ctx: RequestContext) {
+        return ctx.json({
+          fromAdapter: ctx.get('fromAdapter'),
+          fromPlugin: ctx.get('fromPlugin'),
+        })
+      }
+    }
+
+    class TestModule implements AppModule {
+      routes(): ModuleRoutes {
+        return { path: '/probe', router: buildRoutes(Ctrl), controller: Ctrl }
+      }
+    }
+
+    class BundledAdapter implements AppAdapter {
+      name = 'BundledAdapter'
+      contributors() {
+        return [FromAdapter]
+      }
+    }
+
+    class BundlePlugin implements KickPlugin {
+      name = 'BundlePlugin'
+      adapters() {
+        return [new BundledAdapter()]
+      }
+      contributors() {
+        return [FromPlugin]
+      }
+    }
+
+    const { Application } = await import('../src/index')
+    const app = new Application({
+      modules: [TestModule],
+      plugins: [new BundlePlugin()],
+      apiPrefix: '/api',
+      defaultVersion: 1,
+    })
+    await app.setup()
+
+    const res = await request(app.getExpressApp()).get('/api/v1/probe')
+    expect(res.body).toEqual({
+      fromAdapter: 'adapter-value',
+      fromPlugin: 'plugin-value',
     })
   })
 })

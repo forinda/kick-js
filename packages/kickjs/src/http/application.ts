@@ -431,14 +431,27 @@ export class Application {
     // Collect route metadata during mounting (avoids calling mod.routes() twice)
     const mountedRoutes: Array<{ controller: any; mountPath: string }> = []
 
-    // Context Contributors (#107) — collect adapter + global once; per-module
-    // sources are computed inside the loop so module isolation is preserved.
+    // Context Contributors (#107) — collect adapter + plugin + global once;
+    // per-module sources are computed inside the loop so module isolation is
+    // preserved.
+    //
+    // Plugin contributors merge at the same `'adapter'` precedence as adapter
+    // contributors. Plugins are conceptually "bundles of adapters + extras",
+    // so a plugin that ships a typed contributor without standing up an
+    // accompanying adapter behaves identically to one that does.
     const adapterSources: SourcedRegistration[] = []
     for (const adapter of this.adapters) {
       const adapterContribs = adapter.contributors?.() ?? []
       const adapterLabel = adapter.name ?? adapter.constructor.name ?? 'adapter'
       for (const registration of adapterContribs) {
         adapterSources.push({ source: 'adapter', registration, label: adapterLabel })
+      }
+    }
+    for (const plugin of this.plugins) {
+      const pluginContribs = plugin.contributors?.() ?? []
+      const pluginLabel = plugin.name ?? plugin.constructor?.name ?? 'plugin'
+      for (const registration of pluginContribs) {
+        adapterSources.push({ source: 'adapter', registration, label: pluginLabel })
       }
     }
     const globalSources: SourcedRegistration[] = (this.options.contributors ?? []).map(
