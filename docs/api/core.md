@@ -165,6 +165,81 @@ interface AdapterMiddleware {
 }
 ```
 
+## Context Contributors (#107)
+
+Typed, ordered, declarative way to populate `ctx.set('key', value)` before a controller handler runs. See the full guide at [Context Decorators](../guide/context-decorators.md); this section is a reference.
+
+### defineContextDecorator
+
+```typescript
+function defineContextDecorator<
+  K extends string,
+  D extends Record<string, unknown> = Record<string, never>,
+  Ctx extends ExecutionContext = ExecutionContext,
+>(spec: ContextDecoratorSpec<K, D, Ctx>): ContextDecorator<K, D, Ctx>
+
+interface ContextDecoratorSpec<K, D, Ctx> {
+  key: K
+  deps?: D                                                // typed DI map
+  dependsOn?: readonly string[]                           // topo-sorted at boot
+  optional?: boolean                                      // skip on resolve throw
+  onError?: (err, ctx) => MaybePromise<Value | undefined> // async-permitted
+  resolve: (ctx, deps) => MaybePromise<Value>
+}
+```
+
+The returned function is callable as both a method/class decorator and exposes `.registration` for non-decorator registration sites (module / adapter / plugin / global hooks).
+
+### buildPipeline / runContributors
+
+Pure functions for programmatic use (tests, custom transports). The HTTP router calls these automatically during route mount + per request.
+
+```typescript
+function buildPipeline(
+  sources: readonly SourcedRegistration[],
+  options?: { route?: string },
+): ContributorPipeline
+
+function runContributors(opts: {
+  pipeline: ContributorPipeline
+  ctx: ExecutionContext
+  container: Container
+}): Promise<void>
+
+type ContributorSource = 'method' | 'class' | 'module' | 'adapter' | 'global'
+```
+
+Precedence (high → low): `method > class > module > adapter > global`. Plugin contributors merge at `'adapter'`. Same-precedence collisions throw `DuplicateContributorError` at boot.
+
+### Errors
+
+All three are startup-time errors raised by `buildPipeline()` / route mount — never per request.
+
+```typescript
+class MissingContributorError extends Error { key; dependent; route? }
+class ContributorCycleError    extends Error { cycle: readonly string[]; route? }
+class DuplicateContributorError extends Error { key; sources: readonly string[] }
+```
+
+### ContextMeta + ExecutionContext
+
+```typescript
+// Augment to type-safely extend ctx.get/set
+interface ContextMeta {}
+
+interface ExecutionContext {
+  get<K extends string>(key: K): MetaValue<K> | undefined
+  set<K extends string>(key: K, value: MetaValue<K>): void
+  readonly requestId: string | undefined
+}
+
+type MetaValue<K extends string, Fallback = unknown> = K extends keyof ContextMeta
+  ? ContextMeta[K]
+  : Fallback
+```
+
+`RequestContext` (HTTP) implements `ExecutionContext`. Future `WsContext` / `QueueContext` / `CronContext` (V2) will too.
+
 ## Logger
 
 Named logger built on pino with component context.

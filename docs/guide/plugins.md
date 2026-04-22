@@ -71,19 +71,49 @@ interface KickPlugin {
   modules?(): AppModuleClass[]
   adapters?(): AppAdapter[]
   middleware?(): any[]
+  contributors?(): ContributorRegistration[]
   onReady?(container: Container): void | Promise<void>
   shutdown?(): void | Promise<void>
 }
 ```
 
-| Method         | When it runs           | Use Case               |
-| -------------- | ---------------------- | ---------------------- |
-| `register()`   | Before modules load    | Bind services in DI    |
-| `modules()`    | Before user modules    | Add feature modules    |
-| `adapters()`   | Before user adapters   | Add lifecycle adapters |
-| `middleware()` | Before user middleware | Add global middleware  |
-| `onReady()`    | After server starts    | Post-startup tasks     |
-| `shutdown()`   | On SIGINT/SIGTERM      | Cleanup resources      |
+| Method           | When it runs           | Use Case                                          |
+| ---------------- | ---------------------- | ------------------------------------------------- |
+| `register()`     | Before modules load    | Bind services in DI                               |
+| `modules()`      | Before user modules    | Add feature modules                               |
+| `adapters()`     | Before user adapters   | Add lifecycle adapters                            |
+| `middleware()`   | Before user middleware | Add global middleware                             |
+| `contributors()` | Per-route, at mount    | Ship typed [Context Contributors](./context-decorators.md) the plugin owns |
+| `onReady()`      | After server starts    | Post-startup tasks                                |
+| `shutdown()`     | On SIGINT/SIGTERM      | Cleanup resources                                 |
+
+### Plugin Contributors
+
+Plugins can ship [Context Contributors](./context-decorators.md) directly without standing up an accompanying adapter. Returned contributors merge into the per-route pipeline at the **`'adapter'` precedence level** — they win over global (bootstrap) contributors but lose to module / class / method ones with the same key.
+
+```ts
+import { defineContextDecorator, type KickPlugin } from '@forinda/kickjs'
+
+const LoadFlags = defineContextDecorator({
+  key: 'flags',
+  resolve: (ctx) => fetchFlags(ctx.requestId!),
+})
+
+declare module '@forinda/kickjs' {
+  interface ContextMeta {
+    flags: { beta: boolean }
+  }
+}
+
+export class FlagsPlugin implements KickPlugin {
+  name = 'FlagsPlugin'
+  contributors() {
+    return [LoadFlags.registration]
+  }
+}
+```
+
+A plugin that bundles both an adapter and a direct contributor is fine — the adapter's `contributors?()` and the plugin's `contributors?()` both feed the same `'adapter'` precedence bucket. Use whichever is more natural for the bundle's shape.
 
 ## Usage
 
