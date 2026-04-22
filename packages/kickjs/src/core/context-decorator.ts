@@ -133,9 +133,15 @@ export function defineContextDecorator<
   D extends Record<string, unknown> = Record<string, never>,
   Ctx extends ExecutionContext = ExecutionContext,
 >(spec: ContextDecoratorSpec<K, D, Ctx>): ContextDecorator<K, D, Ctx> {
+  // Shallow-clone + freeze `deps` so a caller mutating their original
+  // map (e.g. `someDeps.cache = NewCache`) cannot reach into a registration
+  // that is documented as frozen and shared across every use site.
+  // `Object.freeze` is shallow — the values inside (DI tokens, constructors)
+  // are intentionally untouched; freezing them would prevent the container
+  // from doing legitimate per-instance bookkeeping.
   const registration: ContributorRegistration<K, D, Ctx> = Object.freeze({
     key: spec.key,
-    deps: spec.deps ?? ({} as D),
+    deps: Object.freeze({ ...(spec.deps ?? ({} as D)) }) as D,
     dependsOn: Object.freeze([...(spec.dependsOn ?? [])]),
     optional: spec.optional ?? false,
     onError: spec.onError,

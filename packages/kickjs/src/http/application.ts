@@ -99,14 +99,16 @@ export interface ApplicationOptions {
    *   automatically before any user middleware. If the user-supplied
    *   `middleware` list already includes `requestScopeMiddleware()`,
    *   detection skips the auto-mount so adopters can control its position.
-   * - `'manual'` — Application never mounts the wrapper. The caller is
-   *   responsible for ensuring an `AsyncLocalStorage` frame surrounds
-   *   each request, otherwise contributors won't run and `ctx.set/get`
-   *   falls back to the deprecated `req.__ctxMeta` path.
-   *
-   * Use `'manual'` only when wrapping requests in your own ALS frame
-   * (rare — multi-tenant adapters used to do this; post-Phase 3 they
-   * share the framework's frame instead).
+   * - `'manual'` — Application never mounts the wrapper. The Context
+   *   Contributor pipeline still runs on every route — the runner is
+   *   inserted by `router-builder` regardless of ALS state. What degrades
+   *   without an ALS frame is the *backing store*: REQUEST-scoped DI
+   *   throws (no `requestStore.getStore()` to read from), `Logger`
+   *   loses its requestId context, and `RequestContext.set/get` falls
+   *   back to the deprecated `req.__ctxMeta` map. Use `'manual'` only
+   *   when you genuinely intend to wrap requests in your own ALS frame
+   *   (rare — multi-tenant adapters used to do this; post-Phase 3 they
+   *   share the framework's frame instead).
    */
   contextStore?: 'auto' | 'manual'
 
