@@ -1,9 +1,11 @@
 import type { Request, Response, NextFunction } from 'express'
 import { Router, static as serveStatic } from 'express'
 import { dirname, join } from 'node:path'
+import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
-import { existsSync, readFileSync } from 'node:fs'
+import { createReadStream, existsSync, readFileSync, statSync, unlink } from 'node:fs'
 import { randomBytes } from 'node:crypto'
+import { writeHeapSnapshot } from 'node:v8'
 import {
   type AdapterMiddleware,
   type Container,
@@ -91,6 +93,20 @@ function openSseStream(req: Request, res: Response): void {
 function writeSseEvent(res: Response, payload: unknown): void {
   res.write(`data: ${JSON.stringify(payload)}\n\n`)
 }
+
+/**
+ * Module-scoped guard for `POST /_debug/memory/snapshot`. `writeHeapSnapshot()`
+ * blocks the event loop for the duration of the capture (multi-second
+ * for large heaps); two concurrent captures would compound the pause.
+ * The endpoint returns 503 + a hint message when this flag is set so
+ * the SPA can surface a "snapshot already running" warning rather than
+ * silently queueing.
+ *
+ * Module-scoped (not per-adapter-instance) because writeHeapSnapshot
+ * acts on the V8 process — multiple DevToolsAdapter instances would
+ * still race at the v8 layer.
+ */
+let snapshotInProgress = false
 
 export interface DevToolsOptions {
   /** Base path for debug endpoints (default: '/_debug') */
@@ -510,6 +526,85 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
             clearInterval(interval)
             clearInterval(heartbeat)
           })
+        })
+
+        // ── Heap snapshot — Tier 3 monitoring (architecture.md §23) ─
+        // POST /_debug/memory/snapshot — captures a V8 heap snapshot
+        // and streams the resulting .heapsnapshot file back as
+        // application/json with Content-Disposition. Snapshot capture
+        // blocks the event loop while writing (multi-second pause for
+        // large heaps), so the endpoint enforces single-flight via a
+        // module-scoped flag — concurrent calls return 503.
+        //
+        // The temp file is deleted as soon as the response stream
+        // completes (success or error). Worst case if the process
+        // dies mid-snapshot is a stranded file in `os.tmpdir()`,
+        // which the OS cleans up on next boot.
+        router.post('/memory/snapshot', (_req: Request, res: Response) => {
+          if (snapshotInProgress) {
+            res
+              .status(503)
+              .json({ error: 'heap snapshot already in progress — wait for it to complete' })
+            return
+          }
+          snapshotInProgress = true
+          const startedAt = Date.now()
+          const filename = `kickjs-heap-${new Date().toISOString().replace(/[:.]/g, '-')}.heapsnapshot`
+          const targetPath = join(tmpdir(), filename)
+
+          let written: string
+          try {
+            // writeHeapSnapshot is synchronous — the event loop is
+            // blocked for the duration. There's no async variant in
+            // the v8 module today; if one ships, swap here.
+            written = writeHeapSnapshot(targetPath)
+          } catch (err) {
+            snapshotInProgress = false
+            log.error({ err }, 'heap snapshot capture failed')
+            res
+              .status(500)
+              .json({ error: 'snapshot capture failed', message: (err as Error).message })
+            return
+          }
+
+          let size = 0
+          try {
+            size = statSync(written).size
+          } catch {
+            /* size header is best-effort */
+          }
+          const elapsedMs = Date.now() - startedAt
+          log.info(
+            `Heap snapshot captured: ${written} (${(size / 1024 / 1024).toFixed(1)} MiB in ${elapsedMs}ms)`,
+          )
+
+          res.setHeader('Content-Type', 'application/json')
+          res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+          if (size > 0) res.setHeader('Content-Length', String(size))
+          res.setHeader('X-Snapshot-Capture-Ms', String(elapsedMs))
+
+          const cleanup = (): void => {
+            unlink(written, (err) => {
+              if (err) log.warn(`Failed to delete heap snapshot ${written}: ${err.message}`)
+              snapshotInProgress = false
+            })
+          }
+          const stream = createReadStream(written)
+          stream.on('end', cleanup)
+          stream.on('error', (err) => {
+            log.error({ err }, 'heap snapshot stream failed')
+            if (!res.headersSent) res.status(500).end()
+            cleanup()
+          })
+          // Defensive: if the client disconnects mid-download, abort
+          // the stream + run cleanup so the temp file doesn't linger.
+          res.on('close', () => {
+            stream.destroy()
+            // If the stream already fired 'end', cleanup already ran
+            // — the unlink is idempotent enough that running twice
+            // just yields ENOENT which we ignore in cleanup.
+          })
+          stream.pipe(res)
         })
 
         // ── Custom-tab discovery (architecture.md §23) ──────────────

@@ -1,7 +1,7 @@
 import { createMemo, createSignal, onCleanup, onMount, Show, type Component, For } from 'solid-js'
 import type { MemoryHealth, RuntimeSnapshot } from '@forinda/kickjs-devtools-kit'
 import { Sparkline } from '../lib/sparkline'
-import { rpc, subscribe } from '../lib/rpc'
+import { getBasePath, getToken, rpc, subscribe } from '../lib/rpc'
 import { formatBytes, formatBytesPerSec, formatPercent } from '../lib/format'
 
 interface MemoryStream {
@@ -111,16 +111,7 @@ export const MemoryTab: Component = () => {
               </Show>
             </div>
 
-            <div class="card">
-              <div class="card-header">
-                <div class="card-title">Heap snapshot</div>
-              </div>
-              <p style="margin:0;color:var(--text-dim);font-size:12px">
-                Heap snapshot capture is queued for a follow-up release. Use{' '}
-                <code>node --inspect</code> + Chrome DevTools for retained-size analysis in the
-                meantime.
-              </p>
-            </div>
+            <HeapSnapshotCard heapTotal={data().snapshot.memory.heapTotal} />
           </>
         )}
       </Show>
@@ -143,3 +134,109 @@ const Card: Component<{ title: string; value: string }> = (props) => (
     </div>
   </div>
 )
+
+/**
+ * "Take heap snapshot" button. POSTs to /_debug/memory/snapshot, waits
+ * for the streamed `.heapsnapshot` file, then triggers a download via
+ * an in-memory Blob URL (revoked immediately after the click handler
+ * runs). Server-side single-flight prevents concurrent captures; this
+ * UI also disables the button during capture so users can't queue
+ * a second click.
+ */
+const HeapSnapshotCard: Component<{ heapTotal: number }> = (props) => {
+  const [pending, setPending] = createSignal(false)
+  const [error, setError] = createSignal<string | null>(null)
+  const [lastSnapshot, setLastSnapshot] = createSignal<{ name: string; sizeBytes: number } | null>(
+    null,
+  )
+
+  const capture = async (): Promise<void> => {
+    setPending(true)
+    setError(null)
+    try {
+      const token = getToken()
+      const url = `${getBasePath()}/memory/snapshot${token ? `?token=${encodeURIComponent(token)}` : ''}`
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: token ? { 'x-devtools-token': token } : undefined,
+      })
+      if (!res.ok) {
+        let serverMessage = `${res.status} ${res.statusText}`
+        try {
+          const body = (await res.json()) as { error?: string }
+          if (body.error) serverMessage = body.error
+        } catch {
+          /* non-JSON response, keep status line */
+        }
+        throw new Error(serverMessage)
+      }
+      const blob = await res.blob()
+      const filename =
+        parseFilename(res.headers.get('content-disposition')) ??
+        `kickjs-heap-${Date.now()}.heapsnapshot`
+      triggerDownload(blob, filename)
+      setLastSnapshot({ name: filename, sizeBytes: blob.size })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setPending(false)
+    }
+  }
+
+  return (
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Heap snapshot</div>
+        <div class="card-value" style="font-size:13px;color:var(--text-dim)">
+          ~{formatBytes(props.heapTotal)} estimate
+        </div>
+      </div>
+      <p style="margin:0 0 12px;color:var(--text-dim);font-size:12px">
+        Captures a V8 heap snapshot for retained-size analysis in Chrome DevTools (Memory tab, Load
+        profile). Capture blocks the event loop for several seconds — avoid in production.
+      </p>
+      <div style="display:flex;align-items:center;gap:12px">
+        <button
+          type="button"
+          class="tab"
+          style="border:1px solid var(--accent);border-radius:4px;padding:6px 14px;border-bottom-color:var(--accent);color:var(--accent)"
+          disabled={pending()}
+          onClick={() => void capture()}
+        >
+          {pending() ? 'Capturing…' : 'Take snapshot'}
+        </button>
+        <Show when={lastSnapshot()}>
+          {(snap) => (
+            <span style="color:var(--text-dim);font-size:12px;font-family:var(--font-mono)">
+              Last: {snap().name} ({formatBytes(snap().sizeBytes)})
+            </span>
+          )}
+        </Show>
+      </div>
+      <Show when={error()}>
+        {(msg) => (
+          <p style="margin:8px 0 0;color:var(--critical);font-size:12px;font-family:var(--font-mono)">
+            {msg()}
+          </p>
+        )}
+      </Show>
+    </div>
+  )
+}
+
+function parseFilename(header: string | null): string | null {
+  if (!header) return null
+  const match = /filename="?([^";]+)"?/.exec(header)
+  return match ? match[1] : null
+}
+
+function triggerDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  document.body.appendChild(anchor)
+  anchor.click()
+  document.body.removeChild(anchor)
+  URL.revokeObjectURL(url)
+}
