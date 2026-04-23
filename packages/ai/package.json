@@ -1,7 +1,7 @@
 {
   "name": "@forinda/kickjs-ai",
-  "version": "3.2.0",
-  "description": "AI runtime for KickJS \u2014 providers, @AiTool decorator, streaming, RAG, and agent loops",
+  "version": "4.0.0",
+  "description": "AI runtime for KickJS — providers, @AiTool decorator, streaming, RAG, and agent loops",
   "keywords": [
     "kickjs",
     "nodejs",

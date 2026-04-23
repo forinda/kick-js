@@ -1,7 +1,7 @@
 {
   "name": "@forinda/kickjs-vite",
-  "version": "3.2.0",
-  "description": "Vite plugin for KickJS \u2014 dev server integration, HMR, virtual modules, httpServer piping",
+  "version": "4.0.0",
+  "description": "Vite plugin for KickJS — dev server integration, HMR, virtual modules, httpServer piping",
   "keywords": [
     "kickjs",
     "nodejs",

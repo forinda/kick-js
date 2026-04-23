@@ -1,7 +1,7 @@
 {
   "name": "@forinda/kickjs-mcp",
-  "version": "3.2.0",
-  "description": "Model Context Protocol server adapter for KickJS \u2014 expose @Controller endpoints as MCP tools",
+  "version": "4.0.0",
+  "description": "Model Context Protocol server adapter for KickJS — expose @Controller endpoints as MCP tools",
   "keywords": [
     "kickjs",
     "nodejs",
