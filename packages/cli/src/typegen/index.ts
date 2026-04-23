@@ -12,6 +12,8 @@ import { resolve } from 'node:path'
 import { scanProject, type ScanResult } from './scanner'
 import { generateTypes, type GenerateResult, TokenCollisionError } from './generator'
 import { validateTokenConventions, type TokenConventionWarning } from './token-conventions'
+import { discoverAssets } from './asset-types'
+import type { AssetMapEntry } from '../config'
 
 export type {
   DiscoveredClass,
@@ -57,6 +59,13 @@ export interface RunTypegenOptions {
    * `false` to disable env typing entirely.
    */
   envFile?: string | false
+  /**
+   * Asset map from `kick.config.ts`. When set, `runTypegen` walks
+   * each entry's `src` directory + emits `.kickjs/types/assets.d.ts`
+   * augmenting `KickAssets` for autocomplete on `assets.x.y()` and
+   * `@Asset('x/y')`. Omit to skip the asset typegen pass entirely.
+   */
+  assetMap?: Record<string, AssetMapEntry>
 }
 
 /** Resolve options to absolute paths */
@@ -106,6 +115,7 @@ export async function runTypegen(opts: RunTypegenOptions = {}): Promise<{
     // Pass through unless explicitly disabled
     envFile: envFile === false ? undefined : envFile,
   })
+  const assets = discoverAssets(opts.assetMap, cwd)
   const result = await generateTypes({
     classes: scan.classes,
     routes: scan.routes,
@@ -115,6 +125,7 @@ export async function runTypegen(opts: RunTypegenOptions = {}): Promise<{
     env: envFile === false ? null : scan.env,
     pluginsAndAdapters: scan.pluginsAndAdapters,
     augmentations: scan.augmentations,
+    assets,
     outDir,
     allowDuplicates,
     schemaValidator,
@@ -130,8 +141,9 @@ export async function runTypegen(opts: RunTypegenOptions = {}): Promise<{
     const pluginNote = result.pluginEntries > 0 ? `, ${result.pluginEntries} plugins/adapters` : ''
     const augNote =
       result.augmentationEntries > 0 ? `, ${result.augmentationEntries} augmentations` : ''
+    const assetNote = result.assetEntries > 0 ? `, ${result.assetEntries} assets` : ''
     console.log(
-      `  kick typegen → ${result.serviceTokens} services, ${result.routeEntries} routes, ${result.moduleTokens} modules${pluginNote}${augNote}${envNote}${collisionNote} → ${where} (${elapsed}ms)`,
+      `  kick typegen → ${result.serviceTokens} services, ${result.routeEntries} routes, ${result.moduleTokens} modules${pluginNote}${augNote}${assetNote}${envNote}${collisionNote} → ${where} (${elapsed}ms)`,
     )
     if (tokenWarnings.length > 0) {
       console.warn(
