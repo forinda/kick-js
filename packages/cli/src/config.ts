@@ -1,5 +1,6 @@
+import { existsSync } from 'node:fs'
 import { readFile, access } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 
 /** A custom command that developers can register via kick.config.ts */
 export interface KickCommandDefinition {
@@ -49,6 +50,34 @@ export type RepoTypeConfig = BuiltinRepoType | CustomRepoType
  * entirely (the route entries will keep `body: unknown`).
  */
 export type SchemaValidator = 'zod' | false
+
+/**
+ * One entry in the typed `assetMap` config record (`assets-plan.md`).
+ * Each entry names a source directory whose files become addressable
+ * via the `assets.<name>.*` typed accessor at runtime.
+ */
+export interface AssetMapEntry {
+  /**
+   * Source directory, relative to project root. Required. The directory
+   * must exist when `kick build` runs — `loadKickConfig` warns when an
+   * entry points at a missing directory but doesn't fail the load
+   * (the typegen + build steps surface the error in context instead).
+   */
+  src: string
+  /**
+   * Destination directory inside `dist/`. Defaults to `dist/<name>/`
+   * where `<name>` is the assetMap key. Override when the consumer of
+   * the assets expects a non-standard layout (e.g. an existing
+   * downstream tool reads from `dist/templates/...`).
+   */
+  dest?: string
+  /**
+   * Glob pattern for which files to include. Defaults to `**\/*` (all
+   * files). Files that don't match are NOT copied — `assetMap` is
+   * selective by design (unlike `copyDirs` which copies everything).
+   */
+  glob?: string
+}
 
 /** Typegen settings — controls .kickjs/types/* generation */
 export interface TypegenConfig {
@@ -189,6 +218,28 @@ export interface KickConfig {
    */
   copyDirs?: Array<string | { src: string; dest?: string }>
   /**
+   * Typed, addressable assets — see `assets-plan.md`. Each entry maps
+   * a logical namespace name to a source directory. The build pipeline
+   * auto-derives the necessary copy step + emits a manifest at
+   * `dist/.kickjs-assets.json`; the runtime exposes
+   * `import { assets } from '@forinda/kickjs'` so adopters can resolve
+   * paths without dev/prod branching.
+   *
+   * `copyDirs` is unchanged — `assetMap` is a separate, opt-in surface.
+   * Adopters who want raw directory copies keep using `copyDirs`; those
+   * who want typed addressable assets add `assetMap` entries.
+   *
+   * @example
+   * ```ts
+   * assetMap: {
+   *   mails: { src: 'src/templates/mails' },
+   *   reports: { src: 'src/templates/reports', glob: '**\/*.{ejs,html}' },
+   *   schemas: { src: 'src/schemas', glob: '**\/*.json' },
+   * }
+   * ```
+   */
+  assetMap?: Record<string, AssetMapEntry>
+  /**
    * Typegen settings — controls `.kickjs/types/*` generation including
    * the schema validator used for body type extraction.
    *
@@ -259,7 +310,13 @@ export async function loadKickConfig(cwd: string): Promise<KickConfig | null> {
     try {
       const { pathToFileURL } = await import('node:url')
       const mod = await import(pathToFileURL(filepath).href)
-      return mod.default ?? mod
+      const config = (mod.default ?? mod) as KickConfig
+      // Surface assetMap mistakes at config-load time so they aren't
+      // hidden inside the build pipeline. Warnings only — a typo
+      // shouldn't block `kick g`, `kick typegen`, etc.
+      const warnings = validateAssetMap(config, cwd)
+      for (const warning of warnings) console.warn(`  Warning: ${warning}`)
+      return config
     } catch (err) {
       if (filename.endsWith('.ts')) {
         console.warn(
@@ -271,4 +328,55 @@ export async function loadKickConfig(cwd: string): Promise<KickConfig | null> {
     }
   }
   return null
+}
+
+/**
+ * Validate `assetMap` entries on a loaded config. Returns a list of
+ * human-readable warnings; the caller decides how to surface them
+ * (typically `console.warn`). Never throws — `kick g` and other
+ * unrelated commands should keep working even when the assetMap is
+ * misconfigured.
+ *
+ * Checks:
+ *
+ * - Each entry's `src` is a non-empty string.
+ * - The `src` directory exists on disk (otherwise the typegen + build
+ *   steps will fail later with cryptic errors).
+ * - `dest` doesn't escape the project root (defensive — a `dest:
+ *   '../../etc'` typo could write files outside the workspace).
+ * - The namespace key is a non-empty string and doesn't include a
+ *   `/` (would conflict with the `<namespace>/<key>` manifest format).
+ */
+export function validateAssetMap(config: KickConfig | null, cwd: string): string[] {
+  const warnings: string[] = []
+  if (!config?.assetMap) return warnings
+
+  const root = resolve(cwd)
+  for (const [namespace, entry] of Object.entries(config.assetMap)) {
+    if (!namespace || namespace.includes('/')) {
+      warnings.push(
+        `assetMap key '${namespace}' is invalid — must be a non-empty string without '/'`,
+      )
+      continue
+    }
+    if (typeof entry?.src !== 'string' || entry.src.length === 0) {
+      warnings.push(`assetMap.${namespace} is missing a non-empty 'src' field`)
+      continue
+    }
+    const srcAbs = resolve(cwd, entry.src)
+    if (!existsSync(srcAbs)) {
+      warnings.push(
+        `assetMap.${namespace}.src ('${entry.src}') does not exist — typegen + build will fail`,
+      )
+    }
+    if (entry.dest) {
+      const destAbs = resolve(cwd, entry.dest)
+      if (!destAbs.startsWith(root)) {
+        warnings.push(
+          `assetMap.${namespace}.dest ('${entry.dest}') resolves outside the project root — refusing to copy`,
+        )
+      }
+    }
+  }
+  return warnings
 }
