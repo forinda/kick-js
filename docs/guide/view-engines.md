@@ -19,18 +19,23 @@ The `ViewAdapter` registers a template engine with the underlying Express app an
 The `ViewAdapter` ships with `@forinda/kickjs`. Import it from the main barrel or the sub-path `@forinda/kickjs/views`. You only need to install the template engine of your choice:
 
 ::: code-group
+
 ```bash [EJS]
 pnpm add ejs
 ```
+
 ```bash [Pug]
 pnpm add pug
 ```
+
 ```bash [Handlebars]
 pnpm add express-handlebars
 ```
+
 ```bash [Nunjucks]
 pnpm add nunjucks
 ```
+
 :::
 
 ## Quick Start (EJS)
@@ -42,11 +47,13 @@ Create `src/views/home.ejs`:
 ```html
 <!DOCTYPE html>
 <html>
-<head><title><%= title %></title></head>
-<body>
-  <h1>Welcome, <%= name %>!</h1>
-  <p>Rendered by KickJS + EJS</p>
-</body>
+  <head>
+    <title><%= title %></title>
+  </head>
+  <body>
+    <h1>Welcome, <%= name %>!</h1>
+    <p>Rendered by KickJS + EJS</p>
+  </body>
 </html>
 ```
 
@@ -60,7 +67,7 @@ import { bootstrap } from '@forinda/kickjs'
 bootstrap({
   modules,
   adapters: [
-    new ViewAdapter({
+    ViewAdapter({
       engine: ejs,
       ext: 'ejs',
       viewsDir: 'src/views',
@@ -88,12 +95,12 @@ Visit `http://localhost:3000/` and you will see the rendered HTML.
 
 ## ViewAdapter Options
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `engine` | `any` | *required* | The template engine module or a custom render function |
-| `ext` | `string` | *required* | File extension for templates (e.g., `'ejs'`, `'pug'`, `'hbs'`) |
-| `viewsDir` | `string` | `'src/views'` | Directory containing template files |
-| `layout` | `string` | `undefined` | Default layout template (engine-dependent) |
+| Option     | Type     | Default       | Description                                                    |
+| ---------- | -------- | ------------- | -------------------------------------------------------------- |
+| `engine`   | `any`    | _required_    | The template engine module or a custom render function         |
+| `ext`      | `string` | _required_    | File extension for templates (e.g., `'ejs'`, `'pug'`, `'hbs'`) |
+| `viewsDir` | `string` | `'src/views'` | Directory containing template files                            |
+| `layout`   | `string` | `undefined`   | Default layout template (engine-dependent)                     |
 
 ## Engine Examples
 
@@ -103,7 +110,7 @@ Visit `http://localhost:3000/` and you will see the rendered HTML.
 import ejs from 'ejs'
 import { ViewAdapter } from '@forinda/kickjs/views'
 
-new ViewAdapter({ engine: ejs, ext: 'ejs', viewsDir: 'src/views' })
+ViewAdapter({ engine: ejs, ext: 'ejs', viewsDir: 'src/views' })
 ```
 
 Template (`src/views/dashboard.ejs`):
@@ -112,7 +119,7 @@ Template (`src/views/dashboard.ejs`):
 <h1><%= title %></h1>
 <ul>
   <% for (const item of items) { %>
-    <li><%= item.name %> &mdash; <%= item.status %></li>
+  <li><%= item.name %> &mdash; <%= item.status %></li>
   <% } %>
 </ul>
 ```
@@ -123,7 +130,7 @@ Template (`src/views/dashboard.ejs`):
 import pug from 'pug'
 import { ViewAdapter } from '@forinda/kickjs/views'
 
-new ViewAdapter({ engine: pug, ext: 'pug', viewsDir: 'src/views' })
+ViewAdapter({ engine: pug, ext: 'pug', viewsDir: 'src/views' })
 ```
 
 Template (`src/views/dashboard.pug`):
@@ -141,7 +148,7 @@ ul
 import { engine } from 'express-handlebars'
 import { ViewAdapter } from '@forinda/kickjs/views'
 
-new ViewAdapter({ engine: engine(), ext: 'handlebars', viewsDir: 'src/views' })
+ViewAdapter({ engine: engine(), ext: 'handlebars', viewsDir: 'src/views' })
 ```
 
 Template (`src/views/dashboard.handlebars`):
@@ -164,7 +171,7 @@ import { ViewAdapter } from '@forinda/kickjs/views'
 // Configure nunjucks with the views directory
 nunjucks.configure('src/views', { autoescape: true })
 
-new ViewAdapter({ engine: nunjucks, ext: 'njk', viewsDir: 'src/views' })
+ViewAdapter({ engine: nunjucks, ext: 'njk', viewsDir: 'src/views' })
 ```
 
 Template (`src/views/dashboard.njk`):
@@ -173,7 +180,7 @@ Template (`src/views/dashboard.njk`):
 <h1>{{ title }}</h1>
 <ul>
   {% for item in items %}
-    <li>{{ item.name }} &mdash; {{ item.status }}</li>
+  <li>{{ item.name }} &mdash; {{ item.status }}</li>
   {% endfor %}
 </ul>
 ```
@@ -224,7 +231,7 @@ In EJS, these are accessed directly:
 <h1><%= title %></h1>
 <p>Hello, <%= user.name %></p>
 <% if (isAdmin) { %>
-  <a href="/admin">Admin Panel</a>
+<a href="/admin">Admin Panel</a>
 <% } %>
 ```
 
@@ -238,9 +245,9 @@ import { defineConfig } from '@forinda/kickjs-cli'
 
 export default defineConfig({
   copyDirs: [
-    'src/views',                              // copies to dist/src/views
+    'src/views', // copies to dist/src/views
     { src: 'src/views', dest: 'dist/views' }, // custom destination
-    'src/emails',                             // additional template dirs
+    'src/emails', // additional template dirs
   ],
 })
 ```

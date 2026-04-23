@@ -10,17 +10,17 @@ If you bypass the framework consts and hand-roll `Symbol('PrismaClient')` somewh
 
 Every first-party DI token now uses `createToken<T>(name)` returning a typed `InjectionToken<T>`, with names under the reserved `kick/` prefix.
 
-| v3 (Symbol)                                       | v4 (createToken)                                              |
-| ------------------------------------------------- | ------------------------------------------------------------- |
-| `MAILER = Symbol('MailerService')`                | `MAILER = createToken<MailerService>('kick/mailer/Service')`  |
+| v3 (Symbol)                                       | v4 (createToken)                                                                 |
+| ------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `MAILER = Symbol('MailerService')`                | `MAILER = createToken<MailerService>('kick/mailer/Service')`                     |
 | `NOTIFICATIONS = Symbol('NotificationService')`   | `NOTIFICATIONS = createToken<NotificationService>('kick/notifications/Service')` |
-| `QUEUE_MANAGER = Symbol('QueueManager')`          | `QUEUE_MANAGER = createToken<QueueService>('kick/queue/Manager')` |
-| `PRISMA_CLIENT = Symbol('PrismaClient')`          | `PRISMA_CLIENT = createToken<unknown>('kick/prisma/Client')`  |
-| `PRISMA_TENANT_CLIENT = Symbol('PrismaTenantDB')` | `PRISMA_TENANT_CLIENT = createToken<unknown>('kick/prisma/Client:tenant')` |
-| `DRIZZLE_DB = Symbol('DrizzleDB')`                | `DRIZZLE_DB = createToken<unknown>('kick/drizzle/DB')`        |
-| `DRIZZLE_TENANT_DB = Symbol('DrizzleTenantDB')`   | `DRIZZLE_TENANT_DB = createToken<unknown>('kick/drizzle/DB:tenant')` |
-| `AUTH_USER = Symbol('AuthUser')`                  | `AUTH_USER = createToken<AuthUser>('kick/auth/User')`         |
-| `TENANT_CONTEXT = Symbol('TenantContext')`        | `TENANT_CONTEXT = createToken<TenantInfo>('kick/tenant/Context')` |
+| `QUEUE_MANAGER = Symbol('QueueManager')`          | `QUEUE_MANAGER = createToken<QueueService>('kick/queue/Manager')`                |
+| `PRISMA_CLIENT = Symbol('PrismaClient')`          | `PRISMA_CLIENT = createToken<unknown>('kick/prisma/Client')`                     |
+| `PRISMA_TENANT_CLIENT = Symbol('PrismaTenantDB')` | `PRISMA_TENANT_CLIENT = createToken<unknown>('kick/prisma/Client:tenant')`       |
+| `DRIZZLE_DB = Symbol('DrizzleDB')`                | `DRIZZLE_DB = createToken<unknown>('kick/drizzle/DB')`                           |
+| `DRIZZLE_TENANT_DB = Symbol('DrizzleTenantDB')`   | `DRIZZLE_TENANT_DB = createToken<unknown>('kick/drizzle/DB:tenant')`             |
+| `AUTH_USER = Symbol('AuthUser')`                  | `AUTH_USER = createToken<AuthUser>('kick/auth/User')`                            |
+| `TENANT_CONTEXT = Symbol('TenantContext')`        | `TENANT_CONTEXT = createToken<TenantInfo>('kick/tenant/Context')`                |
 
 The const names (left column) didn't change. The values they bind to did.
 
@@ -105,6 +105,25 @@ kick-lint
 ```
 
 The framework itself runs `pnpm lint:tokens` (which delegates to `kick-lint --first-party`) in pre-commit and CI. Adopters can do the same — the rule set is identical, only the `--first-party` flag flips the prefix-enforcement direction. See the package's [README](https://github.com/forinda/kick-js/blob/main/packages/lint/README.md) for the rule list.
+
+## ViewAdapter — drop the `new` keyword
+
+`ViewAdapter` migrated from a `class implements AppAdapter` to a `defineAdapter()` factory in v4. Adopters who configure a template engine call it without `new`:
+
+```diff
+  import ejs from 'ejs'
+  import { ViewAdapter } from '@forinda/kickjs'
+
+  bootstrap({
+    modules,
+    adapters: [
+-     new ViewAdapter({ engine: ejs, ext: 'ejs', viewsDir: 'src/views' }),
++     ViewAdapter({ engine: ejs, ext: 'ejs', viewsDir: 'src/views' }),
+    ],
+  })
+```
+
+The shape of `ViewAdapterOptions` is unchanged. Only the construction syntax differs.
 
 ## What didn't change
 

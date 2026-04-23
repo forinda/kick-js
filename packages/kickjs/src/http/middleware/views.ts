@@ -1,5 +1,5 @@
 import { resolve } from 'node:path'
-import { Logger, type AppAdapter, type AdapterContext } from '../../core'
+import { Logger, defineAdapter } from '../../core'
 
 const log = Logger.for('ViewEngine')
 
@@ -12,10 +12,10 @@ export interface ViewAdapterOptions {
    * @example
    * ```ts
    * import ejs from 'ejs'
-   * new ViewAdapter({ engine: ejs, ext: 'ejs' })
+   * ViewAdapter({ engine: ejs, ext: 'ejs' })
    *
    * import pug from 'pug'
-   * new ViewAdapter({ engine: pug, ext: 'pug' })
+   * ViewAdapter({ engine: pug, ext: 'pug' })
    * ```
    */
   engine: any
@@ -36,15 +36,19 @@ export interface ViewAdapterOptions {
  * Registers an Express view engine and sets the views directory.
  * Use `ctx.render()` in controllers to render templates.
  *
+ * Migrated to the `defineAdapter()` factory in v4 — call without `new`.
+ * The pre-v4 `new ViewAdapter({...})` form is gone; see
+ * `docs/guide/migration-v3-to-v4.md` for the rename.
+ *
  * @example
  * ```ts
  * import ejs from 'ejs'
- * import { ViewAdapter } from '@forinda/kickjs-http/views'
+ * import { ViewAdapter } from '@forinda/kickjs'
  *
  * bootstrap({
  *   modules,
  *   adapters: [
- *     new ViewAdapter({ engine: ejs, ext: 'ejs', viewsDir: 'src/views' }),
+ *     ViewAdapter({ engine: ejs, ext: 'ejs', viewsDir: 'src/views' }),
  *   ],
  * })
  *
@@ -55,34 +59,37 @@ export interface ViewAdapterOptions {
  * }
  * ```
  */
-export class ViewAdapter implements AppAdapter {
-  name = 'ViewAdapter'
+export const ViewAdapter = defineAdapter<ViewAdapterOptions>({
+  name: 'ViewAdapter',
+  build: (options) => ({
+    beforeMount({ app }) {
+      const { engine, ext, viewsDir = 'src/views' } = options
 
-  constructor(private options: ViewAdapterOptions) {}
+      // Register the engine. Three resolution paths cover every
+      // mainstream template engine + a fall-through for custom ones.
+      if (engine.__express) {
+        // EJS, Pug — have __express method
+        app.engine(ext, engine.__express)
+      } else if (typeof engine.renderFile === 'function') {
+        // Engines with renderFile (nunjucks-style)
+        app.engine(
+          ext,
+          (path: string, opts: any, callback: (err: Error | null, html?: string) => void) => {
+            engine.renderFile(path, opts, callback)
+          },
+        )
+      } else if (typeof engine === 'function') {
+        // Custom render function: (path, options, callback) => void
+        app.engine(ext, engine)
+      } else {
+        log.warn(`Engine for .${ext} does not have __express or renderFile. Trying as-is.`)
+        app.engine(ext, engine)
+      }
 
-  beforeMount({ app }: AdapterContext): void {
-    const { engine, ext, viewsDir = 'src/views' } = this.options
+      app.set('view engine', ext)
+      app.set('views', resolve(viewsDir))
 
-    // Register the engine
-    if (engine.__express) {
-      // EJS, Pug — have __express method
-      app.engine(ext, engine.__express)
-    } else if (typeof engine.renderFile === 'function') {
-      // Engines with renderFile (nunjucks-style)
-      app.engine(ext, (path: string, options: any, callback: Function) => {
-        engine.renderFile(path, options, callback)
-      })
-    } else if (typeof engine === 'function') {
-      // Custom render function: (path, options, callback) => void
-      app.engine(ext, engine)
-    } else {
-      log.warn(`Engine for .${ext} does not have __express or renderFile. Trying as-is.`)
-      app.engine(ext, engine)
-    }
-
-    app.set('view engine', ext)
-    app.set('views', resolve(viewsDir))
-
-    log.debug(`View engine: ${ext} (${resolve(viewsDir)})`)
-  }
-}
+      log.debug(`View engine: ${ext} (${resolve(viewsDir)})`)
+    },
+  }),
+})
