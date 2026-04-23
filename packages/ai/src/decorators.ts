@@ -21,7 +21,7 @@ import type { AiToolOptions } from './types'
  * import { AiTool } from '@forinda/kickjs-ai'
  * import { createTaskSchema } from './dtos/create-task.dto'
  *
- * @Controller('/tasks')
+ * @Controller()
  * export class TaskController {
  *   @Post('/', { body: createTaskSchema, name: 'CreateTask' })
  *   @AiTool({ description: 'Create a new task' })

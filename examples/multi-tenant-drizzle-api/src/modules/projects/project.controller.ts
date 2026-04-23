@@ -3,7 +3,7 @@ import type { RequestContext } from '@forinda/kickjs'
 import { Authenticated } from '@forinda/kickjs-auth'
 import { TenantDbService } from '../../db/tenant-db.service'
 
-@Controller('/projects')
+@Controller()
 @Authenticated()
 export class ProjectController {
   @Autowired() private readonly tenantDb!: TenantDbService

@@ -137,7 +137,7 @@ export interface TypedConfigService<TEnv extends Record<string, any>> {
  * export type AppConfigService = InstanceType<typeof AppConfigService>
  *
  * // In a controller or service — inject it:
- * @Controller('/users')
+ * @Controller()
  * class UserController {
  *   constructor(@Inject(AppConfigService) private config: AppConfigService) {
  *     const dbUrl = config.get('DATABASE_URL')  // string — autocompletes!

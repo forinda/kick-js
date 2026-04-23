@@ -194,7 +194,7 @@ import { z } from 'zod'
 
 const bodySchema = z.object({ name: z.string() })
 
-@Controller('/things')
+@Controller()
 @ApiTags('things')
 export class ThingsController {
   @Post('/', { body: bodySchema })

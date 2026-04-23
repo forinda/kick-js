@@ -137,7 +137,7 @@ describe('DevToolsAdapter', () => {
 
   describe('onRouteMount', () => {
     it('should track routes from decorated controllers', () => {
-      @Controller('/users')
+      @Controller()
       class UserController {
         @Get('/')
         list() {}
@@ -166,7 +166,7 @@ describe('DevToolsAdapter', () => {
     })
 
     it('should not track routes when disabled', () => {
-      @Controller('/items')
+      @Controller()
       class ItemController {
         @Get('/')
         list() {}
@@ -183,7 +183,7 @@ describe('DevToolsAdapter', () => {
         next()
       }
 
-      @Controller('/secured')
+      @Controller()
       @Middleware(authGuard)
       class SecuredController {
         @Get('/')
@@ -584,7 +584,7 @@ describe('DevToolsAdapter', () => {
     })
 
     it('should skip onRouteMount when disabled', () => {
-      @Controller('/noop')
+      @Controller()
       class NoopController {
         @Get('/')
         index() {}

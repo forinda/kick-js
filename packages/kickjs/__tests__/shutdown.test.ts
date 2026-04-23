@@ -10,7 +10,7 @@ import type { AppAdapter } from '../src/core'
 
 // ── Fixtures ──────────────────────────────────────────────────────────
 
-@Controller('/slow')
+@Controller()
 class SlowController {
   @Get('/')
   async slow(ctx: RequestContext) {
@@ -20,7 +20,7 @@ class SlowController {
   }
 }
 
-@Controller('/fast')
+@Controller()
 class FastController {
   @Get('/')
   fast(ctx: RequestContext) {

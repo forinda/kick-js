@@ -46,7 +46,7 @@ describe('contributor sources — module level', () => {
       resolve: () => ({ id: 't-from-module' }),
     }).registration
 
-    @Controller('/')
+    @Controller()
     class C {
       @Get('/me')
       me(ctx: RequestContext) {
@@ -69,7 +69,7 @@ describe('contributor sources — adapter level', () => {
       resolve: () => ({ beta: true }),
     }).registration
 
-    @Controller('/')
+    @Controller()
     class C {
       @Get('/me')
       me(ctx: RequestContext) {
@@ -92,7 +92,7 @@ describe('contributor sources — global level', () => {
       resolve: () => 12345,
     }).registration
 
-    @Controller('/')
+    @Controller()
     class C {
       @Get('/me')
       me(ctx: RequestContext) {
@@ -121,7 +121,7 @@ describe('contributor sources — cross-level precedence', () => {
       resolve: () => ({ id: 'global-loses' }),
     }).registration
 
-    @Controller('/')
+    @Controller()
     class C {
       @MethodLoad
       @Get('/me')
@@ -151,7 +151,7 @@ describe('contributor sources — cross-level precedence', () => {
       resolve: () => ({ id: 'global-loses' }),
     }).registration
 
-    @Controller('/')
+    @Controller()
     class C {
       @Get('/me')
       me(ctx: RequestContext) {
@@ -178,7 +178,7 @@ describe('contributor sources — cross-level precedence', () => {
       resolve: () => ({ id: 'global-loses' }),
     }).registration
 
-    @Controller('/')
+    @Controller()
     class C {
       @Get('/me')
       me(ctx: RequestContext) {
@@ -212,7 +212,7 @@ describe('contributor sources — dependsOn across levels', () => {
       },
     })
 
-    @Controller('/')
+    @Controller()
     class C {
       @LoadProject
       @Get('/me')
@@ -250,7 +250,7 @@ describe('contributor sources — Application threading + per-module isolation',
       resolve: () => 'B-value',
     }).registration
 
-    @Controller('/')
+    @Controller()
     class ControllerA {
       @Get('/probe')
       probe(ctx: RequestContext) {
@@ -263,7 +263,7 @@ describe('contributor sources — Application threading + per-module isolation',
       }
     }
 
-    @Controller('/')
+    @Controller()
     class ControllerB {
       @Get('/probe')
       probe(ctx: RequestContext) {
@@ -338,7 +338,7 @@ describe('contributor sources — plugin level (KickPlugin.contributors)', () =>
       resolve: () => 'plugin-value',
     }).registration
 
-    @Controller('/probe')
+    @Controller()
     class Ctrl {
       @Get('/')
       probe(ctx: RequestContext) {
@@ -382,7 +382,7 @@ describe('contributor sources — plugin level (KickPlugin.contributors)', () =>
       resolve: () => ({ id: 'module-wins' }),
     }).registration
 
-    @Controller('/probe')
+    @Controller()
     class Ctrl {
       @Get('/')
       probe(ctx: RequestContext) {
@@ -429,7 +429,7 @@ describe('contributor sources — plugin level (KickPlugin.contributors)', () =>
       resolve: () => 'plugin-value',
     }).registration
 
-    @Controller('/probe')
+    @Controller()
     class Ctrl {
       @Get('/')
       probe(ctx: RequestContext) {

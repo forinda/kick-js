@@ -133,7 +133,7 @@ import type { RequestContext } from '@forinda/kickjs'
 import { Autowired } from '@forinda/kickjs'
 import { AuthService } from './auth.service'
 
-@Controller('/auth')
+@Controller()
 @Authenticated()
 export class AuthController {
   @Autowired() private authService!: AuthService
@@ -219,7 +219,7 @@ import type { RequestContext } from '@forinda/kickjs'
 import { Autowired } from '@forinda/kickjs'
 import { AuthService } from './auth.service'
 
-@Controller('/auth')
+@Controller()
 @Authenticated()
 export class AuthController {
   @Autowired() private authService!: AuthService

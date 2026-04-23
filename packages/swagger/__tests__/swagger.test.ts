@@ -26,7 +26,7 @@ describe('Swagger Decorators', () => {
 
   describe('@ApiOperation', () => {
     it('should store operation metadata on handler', () => {
-      @Controller('/test')
+      @Controller()
       class TestController {
         @ApiOperation({ summary: 'Get items', description: 'Returns all items', operationId: 'getItems' })
         @Get('/')
@@ -46,7 +46,7 @@ describe('Swagger Decorators', () => {
     it('should include operation metadata in spec output', () => {
       clearRegisteredRoutes()
 
-      @Controller('/ops')
+      @Controller()
       class OpsController {
         @ApiOperation({
           summary: 'Do something',
@@ -74,7 +74,7 @@ describe('Swagger Decorators', () => {
     it('should include response metadata in spec output', () => {
       clearRegisteredRoutes()
 
-      @Controller('/resp')
+      @Controller()
       class RespController {
         @ApiResponse({ status: 200, description: 'Success' })
         @ApiResponse({ status: 404, description: 'Not found' })
@@ -93,7 +93,7 @@ describe('Swagger Decorators', () => {
     it('should support schema in response', () => {
       clearRegisteredRoutes()
 
-      @Controller('/schema-resp')
+      @Controller()
       class SchemaRespController {
         @ApiResponse({
           status: 200,
@@ -119,7 +119,7 @@ describe('Swagger Decorators', () => {
       clearRegisteredRoutes()
 
       @ApiTags('Users', 'Admin')
-      @Controller('/users')
+      @Controller()
       class UsersController {
         @Get('/')
         list() {}
@@ -141,7 +141,7 @@ describe('Swagger Decorators', () => {
       clearRegisteredRoutes()
 
       @ApiTags('General')
-      @Controller('/mixed')
+      @Controller()
       class MixedController {
         @Get('/')
         list() {}
@@ -164,7 +164,7 @@ describe('Swagger Decorators', () => {
       clearRegisteredRoutes()
 
       @ApiBearerAuth()
-      @Controller('/secure')
+      @Controller()
       class SecureController {
         @Get('/')
         list() {}
@@ -185,7 +185,7 @@ describe('Swagger Decorators', () => {
     it('should support custom auth name', () => {
       clearRegisteredRoutes()
 
-      @Controller('/custom-auth')
+      @Controller()
       class CustomAuthController {
         @ApiBearerAuth('ApiKeyAuth')
         @Get('/')
@@ -206,7 +206,7 @@ describe('Swagger Decorators', () => {
       clearRegisteredRoutes()
 
       @ApiExclude()
-      @Controller('/hidden')
+      @Controller()
       class HiddenController {
         @Get('/')
         list() {}
@@ -221,7 +221,7 @@ describe('Swagger Decorators', () => {
     it('should exclude individual methods from spec', () => {
       clearRegisteredRoutes()
 
-      @Controller('/partial')
+      @Controller()
       class PartialController {
         @Get('/')
         list() {}
@@ -288,7 +288,7 @@ describe('buildOpenAPISpec', () => {
   })
 
   it('should convert Express :param to OpenAPI {param}', () => {
-    @Controller('/items')
+    @Controller()
     class ItemsController {
       @Get('/:id')
       findOne() {}
@@ -305,7 +305,7 @@ describe('buildOpenAPISpec', () => {
   })
 
   it('should generate default responses based on HTTP method', () => {
-    @Controller('/defaults')
+    @Controller()
     class DefaultsController {
       @Get('/')
       list() {}
@@ -332,7 +332,7 @@ describe('buildOpenAPISpec', () => {
   })
 
   it('should remove empty parameters array', () => {
-    @Controller('/no-params')
+    @Controller()
     class NoParamsController {
       @Get('/')
       list() {}
@@ -345,13 +345,13 @@ describe('buildOpenAPISpec', () => {
   })
 
   it('should handle multiple controllers', () => {
-    @Controller('/cats')
+    @Controller()
     class CatsController {
       @Get('/')
       list() {}
     }
 
-    @Controller('/dogs')
+    @Controller()
     class DogsController {
       @Get('/')
       list() {}
@@ -382,7 +382,7 @@ describe('registerControllerForDocs / clearRegisteredRoutes', () => {
   })
 
   it('should register and clear routes', () => {
-    @Controller('/test')
+    @Controller()
     class TestController {
       @Get('/')
       list() {}
@@ -455,7 +455,7 @@ describe('zodSchemaParser', () => {
         }),
       }
 
-      @Controller('/custom')
+      @Controller()
       class CustomController {
         @Post('/', { body: { custom: { properties: { email: { type: 'string' } } } } })
         create() {}

@@ -18,7 +18,7 @@ import { createTestModule } from '@forinda/kickjs-testing'
 
 // ── Fixtures ──────────────────────────────────────────────────────────────
 
-@Controller('/items')
+@Controller()
 class ItemController {
   @Get('/')
   list() {
@@ -36,7 +36,7 @@ class ItemController {
   }
 }
 
-@Controller('/users')
+@Controller()
 class UserController {
   @Get('/')
   list() {

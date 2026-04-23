@@ -43,7 +43,7 @@ import { RESOLVED_APP } from './virtual-modules'
 
 /**
  * Regex patterns that detect KickJS decorator usage in source files.
- * Matches `@Service()`, `@Controller('/path')`, `@Repository()`, etc.
+ * Matches `@Service()`, `@Controller()`, `@Repository()`, etc.
  * followed by an exported class declaration.
  *
  * Pattern: decorator → optional whitespace → export? class ClassName

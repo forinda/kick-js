@@ -37,7 +37,7 @@ describe('contributor pipeline → router-builder integration', () => {
       resolve: () => ({ id: 't-7', name: 'Acme' }),
     })
 
-    @Controller('/')
+    @Controller()
     class TenantController {
       @LoadTenant
       @Get('/me')
@@ -62,7 +62,7 @@ describe('contributor pipeline → router-builder integration', () => {
     })
 
     @LoadTenantClass
-    @Controller('/')
+    @Controller()
     class MixedController {
       @LoadProjectMethod
       @Get('/data')
@@ -103,7 +103,7 @@ describe('contributor pipeline → router-builder integration', () => {
     })
 
     @LoadTenant
-    @Controller('/')
+    @Controller()
     class ChainController {
       @LoadProject
       @Get('/chain')
@@ -127,7 +127,7 @@ describe('contributor pipeline → router-builder integration', () => {
       },
     })
 
-    @Controller('/')
+    @Controller()
     class OptionalController {
       @FailingOptional
       @Get('/lenient')
@@ -149,7 +149,7 @@ describe('contributor pipeline → router-builder integration', () => {
       },
     })
 
-    @Controller('/')
+    @Controller()
     class StrictController {
       @Hard
       @Get('/strict')
@@ -171,7 +171,7 @@ describe('contributor pipeline → router-builder integration', () => {
   })
 
   it('controller with no contributors skips the runner middleware entirely', async () => {
-    @Controller('/')
+    @Controller()
     class PlainController {
       @Get('/plain')
       plain(ctx: RequestContext) {
@@ -196,7 +196,7 @@ describe('contributor pipeline → mount-time validation', () => {
       resolve: () => ({ id: 'p-1' }),
     })
 
-    @Controller('/')
+    @Controller()
     class BrokenController {
       @NeedsTenant
       @Get('/x')
@@ -220,7 +220,7 @@ describe('contributor pipeline → mount-time validation', () => {
       resolve: () => 'b',
     })
 
-    @Controller('/')
+    @Controller()
     class CycleController {
       @A
       @B

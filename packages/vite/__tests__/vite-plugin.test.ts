@@ -352,7 +352,7 @@ export class UserService {
 
     it('detects @Controller() decorator', () => {
       const code = `
-@Controller('/users')
+@Controller()
 export class UserController {
   index() {}
 }
@@ -423,7 +423,7 @@ export class PlainHelper {
     })
 
     it('handles decorator with arguments on same line as class', () => {
-      const code = `@Controller('/api/v1/users') export class UserController {}`
+      const code = `@Controller() export class UserController {}`
       // The regex expects newline/whitespace between decorator and class — this
       // may or may not match depending on exact formatting. We verify it does
       // not crash either way.

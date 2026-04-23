@@ -110,16 +110,16 @@ export function Repository(options?: ServiceOptions): ClassDecorator {
 /**
  * Mark a class as an HTTP controller and register it in the DI container.
  *
- * @param path - **Deprecated.** The path parameter is no longer used for routing.
- *   Route prefixes are defined by the module's `routes().path` — the single source
- *   of truth for where routes are mounted. This parameter will be removed in a
- *   future major version.
+ * Route prefixes are defined by the module's `routes().path` — the single
+ * source of truth for where routes mount. The legacy
+ * `@Controller('/path')` parameter was removed in v4; if your code
+ * still passes a string, see `docs/guide/migration-v3-to-v4.md` for
+ * the rename map.
  */
-export function Controller(path?: string): ClassDecorator {
+export function Controller(): ClassDecorator {
   return (target: any) => {
     setClassMeta(METADATA.CLASS_KIND, 'controller', target)
     registerInContainer(target, Scope.SINGLETON)
-    setClassMeta(METADATA.CONTROLLER_PATH, path || '/', target)
   }
 }
 

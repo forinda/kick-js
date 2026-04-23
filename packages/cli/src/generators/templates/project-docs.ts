@@ -148,7 +148,7 @@ generated \`KickRoutes\` namespace (refreshed on \`kick dev\` and \`kick typegen
 \`\`\`ts
 import { Controller, Get, Post, type Ctx } from '@forinda/kickjs'
 
-@Controller('/users')
+@Controller()
 export class UserController {
   @Get('/')
   async findAll(ctx: Ctx<KickRoutes.UserController['findAll']>) {
@@ -429,7 +429,7 @@ Run tests:
 ## Decorators Reference
 
 ### Route Decorators
-- \`@Controller('/path')\` — define controller prefix
+- \`@Controller()\` — mark a class as an HTTP controller (path comes from \`routes().path\`)
 - \`@Get('/'), @Post('/'), @Put('/'), @Delete('/'), @Patch('/')\` — HTTP methods
 - \`@Middleware(fn)\` — attach middleware
 - \`@Public()\` — skip authentication (requires @forinda/kickjs-auth)
@@ -595,7 +595,7 @@ Then:
 If not using generators:
 
 - [ ] Create \`src/modules/<name>/<name>.controller.ts\`
-- [ ] Add \`@Controller('/path')\` decorator
+- [ ] Add \`@Controller()\` decorator
 - [ ] Add route handlers with \`@Get()\`, \`@Post()\`, etc.
 - [ ] Create module file implementing \`AppModule\` with \`routes()\` returning \`{ path, router: buildRoutes(Controller), controller }\`
 - [ ] Register module in \`src/modules/index.ts\` (\`AppModuleClass[]\` array)
@@ -792,7 +792,7 @@ These work anywhere — scripts, plain files, outside \`@Service\`/\`@Controller
 ### HTTP Routes
 | Decorator | Purpose |
 |-----------|---------|
-| \`@Controller('/path')\` | Define route prefix |
+| \`@Controller()\` | Define route prefix |
 | \`@Get('/'), @Post('/')\` | HTTP method handlers |
 | \`@Middleware(fn)\` | Attach middleware |
 | \`@Public()\` | Skip auth (requires auth adapter) |

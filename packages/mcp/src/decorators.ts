@@ -15,7 +15,7 @@ import type { McpToolOptions } from './types'
  * import { McpTool } from '@forinda/kickjs-mcp'
  * import { createTaskSchema } from './dtos/create-task.dto'
  *
- * @Controller('/tasks')
+ * @Controller()
  * export class TaskController {
  *   @Post('/', { body: createTaskSchema, name: 'CreateTask' })
  *   @McpTool({ description: 'Create a new task' })

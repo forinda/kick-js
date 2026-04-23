@@ -59,7 +59,7 @@ type PolicyAction<R> = R extends keyof PolicyRegistry
  *
  * @example
  * ```ts
- * @Controller('/users')
+ * @Controller()
  * @Authenticated()        // All routes require auth
  * class UserController {
  *   @Get('/')
@@ -98,7 +98,7 @@ export function Authenticated(strategy?: string): ClassDecorator & MethodDecorat
  *
  * @example
  * ```ts
- * @Controller('/auth')
+ * @Controller()
  * @Authenticated()
  * class AuthController {
  *   @Post('/login')

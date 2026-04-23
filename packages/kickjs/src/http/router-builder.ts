@@ -15,7 +15,7 @@ import { RequestContext } from './context'
 import { validate } from './middleware/validate'
 import { buildUploadMiddleware } from './middleware/upload'
 
-/** Get the controller path set by @Controller('/path') */
+/** Get the controller path set by @Controller() */
 export function getControllerPath(controllerClass: any): string {
   return getClassMeta<string>(METADATA.CONTROLLER_PATH, controllerClass, '/')
 }

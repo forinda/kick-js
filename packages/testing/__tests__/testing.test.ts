@@ -26,7 +26,7 @@ class GreetingService {
   }
 }
 
-@Controller('/hello')
+@Controller()
 class HelloController {
   @Get('/')
   sayHello() {
@@ -310,7 +310,7 @@ describe('createTestApp bootstrap option forwarding', () => {
   })
 
   it('forwards onError to replace the default error handler', async () => {
-    @Controller('/boom')
+    @Controller()
     class BoomController {
       @Get('/')
       blow() {
@@ -475,7 +475,7 @@ describe('createTestApp — contributors', () => {
       resolve: () => 12345,
     }).registration
 
-    @Controller('/probe')
+    @Controller()
     class ProbeController {
       @Get('/')
       probe(ctx: RequestContext) {
@@ -498,7 +498,7 @@ describe('createTestApp — contributors', () => {
   })
 
   it('omitting contributors leaves the route unchanged', async () => {
-    @Controller('/plain')
+    @Controller()
     class PlainController {
       @Get('/')
       plain(ctx: RequestContext) {
