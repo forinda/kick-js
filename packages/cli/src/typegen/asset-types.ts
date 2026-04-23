@@ -12,8 +12,9 @@
  * @module @forinda/kickjs-cli/typegen/asset-types
  */
 
-import { readdirSync, statSync } from 'node:fs'
-import { extname, resolve, sep } from 'node:path'
+import { statSync } from 'node:fs'
+import { extname, resolve } from 'node:path'
+import { globSync } from 'glob'
 import type { AssetMapEntry } from '../config'
 
 export interface DiscoveredAssetEntry {
@@ -37,9 +38,16 @@ export function discoverAssets(
     if (!entry || typeof entry.src !== 'string') continue
     const srcAbs = resolve(cwd, entry.src)
     if (!isDir(srcAbs)) continue
-    const matches = walk(srcAbs, srcAbs).filter((rel) =>
-      entry.glob ? matchesLite(rel, entry.glob) : true,
-    )
+    // Mirror build.ts: same `glob` engine, same defaults — typegen +
+    // build agree on what counts as an asset, including full minimatch
+    // patterns (extglob, negation, etc.) that the old lite matcher
+    // silently treated as match-all.
+    const matches = globSync(entry.glob ?? '**/*', {
+      cwd: srcAbs,
+      nodir: true,
+      dot: false,
+      posix: true,
+    })
     matches.sort()
     for (const rel of matches) {
       const key = stripExt(rel)
@@ -152,43 +160,7 @@ function isDir(path: string): boolean {
   }
 }
 
-function walk(root: string, dir: string): string[] {
-  let entries
-  try {
-    entries = readdirSync(dir, { withFileTypes: true })
-  } catch {
-    return []
-  }
-  const out: string[] = []
-  for (const entry of entries) {
-    if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue
-    const full = `${dir}${sep}${entry.name}`
-    if (entry.isDirectory()) {
-      out.push(...walk(root, full))
-    } else if (entry.isFile()) {
-      const rel = full
-        .slice(root.length + 1)
-        .split(sep)
-        .join('/')
-      out.push(rel)
-    }
-  }
-  return out
-}
-
 function stripExt(path: string): string {
   const ext = extname(path)
   return ext ? path.slice(0, -ext.length) : path
-}
-
-function matchesLite(relPath: string, pattern: string): boolean {
-  if (pattern === '**/*' || pattern === '**') return true
-  const singleExt = /^\*\*\/\*\.(\w+)$/.exec(pattern)
-  if (singleExt) return relPath.endsWith(`.${singleExt[1]}`)
-  const braceExt = /^\*\*\/\*\.\{([^}]+)\}$/.exec(pattern)
-  if (braceExt) {
-    const exts = braceExt[1].split(',').map((e) => e.trim())
-    return exts.some((ext) => relPath.endsWith(`.${ext}`))
-  }
-  return true
 }

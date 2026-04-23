@@ -194,10 +194,21 @@ describe('Variant A — assets Proxy ambient', () => {
     expect(path).toBe(join(cwd, 'dist/mails/orders/confirmation.ejs'))
   })
 
-  it('returns undefined for reserved Proxy keys (then, toString, etc.)', () => {
+  it('returns undefined for thenable detection (Promise.resolve unwrap)', () => {
+    // `then` MUST return undefined so `await assets` resolves to the
+    // Proxy itself instead of going recursive.
     expect((assets as any).then).toBeUndefined()
-    expect((assets as any).toString).toBeUndefined()
+    // Vitest matchers probe `asymmetricMatch` to detect partial matchers;
+    // returning a Proxy here breaks deep-equality assertions.
     expect((assets as any).asymmetricMatch).toBeUndefined()
+  })
+
+  it('passes coercion keys through to Object.prototype defaults', () => {
+    // toString / valueOf / Symbol.toPrimitive must return their default
+    // function so `String(assets)`, template literals, etc. produce
+    // `[object Object]` rather than triggering a recursive resolve attempt.
+    expect(typeof (assets as any).toString).toBe('function')
+    expect(String(assets)).toBe('[object Object]')
   })
 
   it('supports computed namespace lookups via bracket access', () => {

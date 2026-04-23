@@ -102,13 +102,29 @@ function discoverManifest(): ResolvedManifest | null {
   }
 
   const cwd = process.cwd()
-  for (const candidate of ['dist', 'build', 'out']) {
+
+  // Honour `kick.config.build.outDir` BEFORE the standard probe list
+  // so adopters with non-default Vite outputs (e.g. `output/`,
+  // `target/`, anything else) don't have to set KICK_ASSETS_ROOT
+  // every time. Cached config load — same loader the dev fallback
+  // uses. Skip when outDir matches one of the standard candidates;
+  // it'd be probed redundantly otherwise.
+  const config = loadConfigSync(cwd)
+  const configOutDir = config?.build?.outDir
+  if (configOutDir && !(STANDARD_OUT_DIRS as readonly string[]).includes(configOutDir)) {
+    const found = readBuiltManifest(resolve(cwd, configOutDir))
+    if (found) return found
+  }
+
+  for (const candidate of STANDARD_OUT_DIRS) {
     const found = readBuiltManifest(join(cwd, candidate))
     if (found) return found
   }
 
-  return synthesiseDevManifest(cwd)
+  return synthesiseDevManifest(cwd, config)
 }
+
+const STANDARD_OUT_DIRS = ['dist', 'build', 'out'] as const
 
 function readBuiltManifest(dir: string): ResolvedManifest | null {
   const path = join(dir, '.kickjs-assets.json')
@@ -129,8 +145,11 @@ interface AssetMapConfigShape {
   build?: { outDir?: string }
 }
 
-function synthesiseDevManifest(cwd: string): ResolvedManifest | null {
-  const config = loadConfigSync(cwd)
+function synthesiseDevManifest(
+  cwd: string,
+  preloadedConfig?: AssetMapConfigShape | null,
+): ResolvedManifest | null {
+  const config = preloadedConfig === undefined ? loadConfigSync(cwd) : preloadedConfig
   if (!config?.assetMap) return null
 
   const entries: Record<string, string> = {}
@@ -253,8 +272,27 @@ function loadConfigSync(cwd: string): AssetMapConfigShape | null {
   return null
 }
 
-const RESERVED_KEYS: ReadonlySet<string | symbol> = new Set<string | symbol>([
-  'then',
+/**
+ * Keys we MUST return `undefined` for: returning anything truthy
+ * here causes Promise resolution to treat the Proxy as a thenable
+ * and `await` it (resolving to whatever `then.call(...)` produces).
+ * Two-element list deliberately — every other coercion-related key
+ * goes through {@link PASSTHROUGH_KEYS} below so `String(assets)`,
+ * template literals, and `util.inspect` keep working.
+ */
+const PROMISE_DETECTION_KEYS: ReadonlySet<string | symbol> = new Set<string | symbol>(['then'])
+
+/**
+ * Keys we let fall through to the proxy target (a function-shaped
+ * object). The default `Object.prototype` implementations of
+ * `toString` / `valueOf` etc. are correct for these — returning
+ * `undefined` here would break `String(assets)` and template
+ * literals (`${assets}`) because `Symbol.toPrimitive` falling through
+ * to a missing `toString` throws. Adopters that hit `assets.toString`
+ * get `'function () {}'` back, which is fine — the contract is
+ * "asset access returns paths"; everything else is incidental.
+ */
+const PASSTHROUGH_KEYS: ReadonlySet<string | symbol> = new Set<string | symbol>([
   'toString',
   'valueOf',
   'constructor',
@@ -279,8 +317,9 @@ function createNamespaceProxy(parts: readonly string[]): unknown {
       const [namespace, ...rest] = parts
       return resolveAsset(namespace, rest.join('/'))
     },
-    get(_, prop) {
-      if (RESERVED_KEYS.has(prop)) return undefined
+    get(t, prop) {
+      if (PROMISE_DETECTION_KEYS.has(prop)) return undefined
+      if (PASSTHROUGH_KEYS.has(prop)) return Reflect.get(t, prop)
       if (typeof prop === 'symbol') return undefined
       return createNamespaceProxy([...parts, prop])
     },
@@ -289,8 +328,9 @@ function createNamespaceProxy(parts: readonly string[]): unknown {
 
 function createAssetProxy(): KickAssets {
   return new Proxy({} as Record<string, unknown>, {
-    get(_, prop) {
-      if (RESERVED_KEYS.has(prop)) return undefined
+    get(t, prop) {
+      if (PROMISE_DETECTION_KEYS.has(prop)) return undefined
+      if (PASSTHROUGH_KEYS.has(prop)) return Reflect.get(t, prop)
       if (typeof prop === 'symbol') return undefined
       return createNamespaceProxy([prop])
     },

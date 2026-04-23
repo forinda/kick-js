@@ -185,7 +185,9 @@ export function registerRunCommands(program: Command): void {
 
   program
     .command('build:assets')
-    .description('Rebuild dist/.kickjs-assets.json from kick.config assetMap (no JS rebuild)')
+    .description(
+      'Rebuild the .kickjs-assets.json manifest under the configured outDir (no JS rebuild)',
+    )
     .action(async () => {
       const config = await loadKickConfig(process.cwd())
       if (!config?.assetMap || Object.keys(config.assetMap).length === 0) {

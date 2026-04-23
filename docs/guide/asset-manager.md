@@ -159,7 +159,7 @@ Escape hatch for cases where the typed Proxy's shape doesn't fit (CMS-style temp
 The resolver's discovery pipeline (cached after first call):
 
 1. **`KICK_ASSETS_ROOT` env override** — if set, treated as the manifest directory and loaded directly. Useful for test fixtures and Docker mount overrides.
-2. **Built manifest** — probes `<cwd>/{dist,build,out}/.kickjs-assets.json` in order. Manifest existence = "we're running from a built dist"; mapped paths returned verbatim. Fast path; dominant in production.
+2. **Built manifest** — first tries the manifest under your configured `build.outDir` (when `kick.config.ts` declares one), then falls back to `dist/`, `build/`, `out/` under `cwd` in order. Manifest existence = "we're running from a built dist"; mapped paths returned verbatim. Fast path; dominant in production.
 3. **Dev fallback** — synthesises an in-memory manifest by reading `kick.config.{json,cjs,js}` + walking each assetMap src dir. Cached after the walk.
 
 `kick build` writes the manifest at `<config.build.outDir>/.kickjs-assets.json`. If your project uses a non-default Vite output directory, set it in your config so the resolver lines up:

@@ -14,7 +14,7 @@
  * @module @forinda/kickjs-cli/asset-manager/build
  */
 
-import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, extname, isAbsolute, join, relative, resolve } from 'node:path'
 import { glob } from 'glob'
 import type { AssetMapEntry, KickConfig } from '../config'
@@ -134,7 +134,26 @@ async function processEntry(
   const srcAbs = resolve(cwd, entry.src)
   const destAbs = entry.dest ? resolve(cwd, entry.dest) : join(distAbs, namespace)
 
-  if (!existsSync(srcAbs)) {
+  // Defensive: refuse to write outside the project root (cwd) even
+  // though validateAssetMap warned about it at config-load time. The
+  // build step shouldn't trust upstream warnings — a typo like
+  // `dest: '../../'` would otherwise sprinkle files outside the
+  // workspace despite the warning being printed.
+  if (escapesRoot(destAbs, cwd)) {
+    console.warn(
+      `  ⚠ assetMap.${namespace}.dest ('${entry.dest}') resolves outside the project root — skipping copy`,
+    )
+    return {
+      entrySummary: { namespace, src: entry.src, dest: relative(cwd, destAbs), filesCopied: 0 },
+      manifestSlice: {},
+    }
+  }
+
+  // Treat src-not-a-directory the same as src-missing — `glob` would
+  // throw if pointed at a file, surfacing as a generic build failure
+  // instead of a clean 0-files entry. Matches the validator's warning
+  // shape (already emitted at config-load time for the missing case).
+  if (!existsSync(srcAbs) || !isDirectorySync(srcAbs)) {
     return {
       entrySummary: { namespace, src: entry.src, dest: relative(cwd, destAbs), filesCopied: 0 },
       manifestSlice: {},
@@ -237,7 +256,23 @@ export function readAssetManifest(distDir: string): AssetManifest | null {
   }
 }
 
-/** Marker check used by the runtime — true if the path is under any dist tree. */
-export function isAbsolutePathHelper(p: string): boolean {
-  return isAbsolute(p)
+/**
+ * Project-root escape check that's safe across symlinks + drive letters.
+ * `path.relative` returns `..` segments when the target sits above root,
+ * and an absolute path when the two live on different roots (Windows).
+ * `startsWith(root)` would miss both cases.
+ */
+function escapesRoot(path: string, root: string): boolean {
+  const rel = relative(root, path)
+  if (rel === '') return false
+  return rel.startsWith('..') || isAbsolute(rel)
+}
+
+/** Pure helper — `false` for missing, non-dir, or unreadable paths. */
+function isDirectorySync(path: string): boolean {
+  try {
+    return statSync(path).isDirectory()
+  } catch {
+    return false
+  }
 }
