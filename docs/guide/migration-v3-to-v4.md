@@ -106,6 +106,33 @@ kick-lint
 
 The framework itself runs `pnpm lint:tokens` (which delegates to `kick-lint --first-party`) in pre-commit and CI. Adopters can do the same — the rule set is identical, only the `--first-party` flag flips the prefix-enforcement direction. See the package's [README](https://github.com/forinda/kick-js/blob/main/packages/lint/README.md) for the rule list.
 
+## `@Controller` — drop the path argument
+
+The `path` parameter on `@Controller` has been documented as deprecated since the modules.routes() refactor — it was stored as metadata but never read by the router or any adapter. v4 removes the parameter entirely.
+
+```diff
+- @Controller('/users')
++ @Controller()
+  export class UsersController {
+    @Get('/:id')
+    getById(ctx: RequestContext) { ... }
+  }
+```
+
+The mount prefix has always come from the module's `routes().path` — a single source of truth that avoids the path-doubling footgun where both the controller and the module spec'd a prefix. If your code passed a string here it was silently ignored at runtime; deletion is mechanical.
+
+If you have many controllers to update, this regex finds and rewrites them in one pass:
+
+```bash
+# Dry-run first to see what would change
+grep -rn "@Controller(['\"]" --include="*.ts" src/
+
+# Apply (or use your editor's project-wide find/replace)
+find src -name '*.ts' -exec sed -i "s/@Controller(['\"][^'\"]*['\"])/@Controller()/g" {} +
+```
+
+The framework also drops the now-unused `getControllerPath()` helper and the `METADATA.CONTROLLER_PATH` enum entry. Adopters who imported either (rare — both were unreferenced in adapters and tests) should remove the imports.
+
 ## ViewAdapter — drop the `new` keyword
 
 `ViewAdapter` migrated from a `class implements AppAdapter` to a `defineAdapter()` factory in v4. Adopters who configure a template engine call it without `new`:
