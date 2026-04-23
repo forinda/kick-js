@@ -43,25 +43,40 @@ export type ClassKind =
 /** PostConstruct lifecycle status */
 export type PostConstructStatus = 'pending' | 'completed' | 'failed' | 'skipped'
 
-/** Symbol-based metadata keys for the DI system */
+/**
+ * String metadata keys for the DI system + decorator subsystem. All
+ * keys use the `kick:area:thing` colon-delimited form — consistent
+ * with the §22 v4 convention of avoiding Symbols (Symbols don't
+ * survive JSON serialisation, can't be addressed by string from
+ * worker threads, and don't show up in DevTools snapshots).
+ *
+ * `reflect-metadata` accepts both Symbol and string keys identically,
+ * so the consumer-side change is internal — references go through
+ * `METADATA.<NAME>`, not the underlying value.
+ *
+ * The `design:*` entries match what TypeScript's
+ * `emitDecoratorMetadata` writes; those names are fixed by the
+ * compiler + must stay as-is.
+ */
 export const METADATA = {
-  INJECTABLE: Symbol('kick:injectable'),
-  SCOPE: Symbol('kick:scope'),
-  CLASS_KIND: Symbol('kick:class-kind'),
-  AUTOWIRED: Symbol('kick:autowired'),
-  INJECT: Symbol('kick:inject'),
-  POST_CONSTRUCT: Symbol('kick:post_construct'),
-  BUILDER: Symbol('kick:builder'),
-  QUERY_PARAMS: Symbol('kick:query:params'),
-  CONTROLLER_PATH: Symbol('kick:controller:path'),
-  ROUTES: Symbol('kick:routes'),
-  CLASS_MIDDLEWARES: Symbol('kick:class:middlewares'),
-  METHOD_MIDDLEWARES: Symbol('kick:method:middlewares'),
-  CLASS_CONTRIBUTORS: Symbol('kick:class:contributors'),
-  METHOD_CONTRIBUTORS: Symbol('kick:method:contributors'),
-  FILE_UPLOAD: Symbol('kick:file:upload'),
-  VALUE: Symbol('kick:value'),
-  // TypeScript emit metadata keys
+  INJECTABLE: 'kick:injectable',
+  SCOPE: 'kick:scope',
+  CLASS_KIND: 'kick:class-kind',
+  AUTOWIRED: 'kick:autowired',
+  INJECT: 'kick:inject',
+  POST_CONSTRUCT: 'kick:post_construct',
+  BUILDER: 'kick:builder',
+  QUERY_PARAMS: 'kick:query:params',
+  CONTROLLER_PATH: 'kick:controller:path',
+  ROUTES: 'kick:routes',
+  CLASS_MIDDLEWARES: 'kick:class:middlewares',
+  METHOD_MIDDLEWARES: 'kick:method:middlewares',
+  CLASS_CONTRIBUTORS: 'kick:class:contributors',
+  METHOD_CONTRIBUTORS: 'kick:method:contributors',
+  FILE_UPLOAD: 'kick:file:upload',
+  VALUE: 'kick:value',
+  ASSET: 'kick:asset',
+  // TypeScript emit metadata keys — fixed by the compiler.
   PARAM_TYPES: 'design:paramtypes',
   PROPERTY_TYPE: 'design:type',
   RETURN_TYPE: 'design:returntype',

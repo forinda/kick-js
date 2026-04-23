@@ -36,6 +36,7 @@ export {
   Autowired,
   Inject,
   Value,
+  Asset,
   Get,
   Post,
   Put,
@@ -55,6 +56,7 @@ export {
   type ColumnApiQueryParamsConfig,
   type EnvKey,
   type Env,
+  type AssetKey,
   normalizeApiQueryParamsConfig,
 } from './decorators'
 

@@ -6,6 +6,7 @@ import {
   type ClassKind,
   type PostConstructStatus,
 } from './interfaces'
+import { resolveAsset } from './assets'
 import { createLogger } from './logger'
 import {
   getClassMeta,
@@ -677,6 +678,33 @@ export class Container {
         enumerable: true,
         configurable: true,
       })
+    }
+
+    // @Asset — lazy asset path injection (assets-plan.md). Same lazy-
+    // getter pattern as @Value: resolve on every property access via
+    // the asset manager's cached resolver, not at class instantiation.
+    // Splits the key on the FIRST '/' so `mails/orders/confirmation`
+    // becomes namespace=`mails` + key=`orders/confirmation`.
+    const assetProps = getMetaMap<string, { assetKey: string }>(METADATA.ASSET, target.prototype)
+
+    if (assetProps.size > 0) {
+      for (const [prop, config] of assetProps) {
+        const slashIdx = config.assetKey.indexOf('/')
+        if (slashIdx === -1) {
+          throw new Error(
+            `@Asset('${config.assetKey}'): asset key must include a '/' separator (e.g. 'mails/welcome').`,
+          )
+        }
+        const namespace = config.assetKey.slice(0, slashIdx)
+        const key = config.assetKey.slice(slashIdx + 1)
+        Object.defineProperty(instance, prop, {
+          get() {
+            return resolveAsset(namespace, key)
+          },
+          enumerable: true,
+          configurable: true,
+        })
+      }
     }
   }
 }

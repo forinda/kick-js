@@ -234,6 +234,95 @@ describe('ASSETS DI token', () => {
   })
 })
 
+describe('@Asset decorator', () => {
+  it('injects the resolved path into a class field on access', async () => {
+    writeManifest('dist', { 'mails/welcome': 'mails/welcome.ejs' })
+    writeFile('dist/mails/welcome.ejs')
+    const { Asset, Container, Service } = await import('../src')
+    Container.reset()
+
+    @Service()
+    class MailService {
+      @Asset('mails/welcome')
+      welcomeTemplate!: string
+    }
+
+    Container.getInstance().register(MailService, MailService)
+    const svc = Container.getInstance().resolve(MailService)
+    expect(svc.welcomeTemplate).toBe(join(cwd, 'dist/mails/welcome.ejs'))
+  })
+
+  it('resolves nested-path assets (mails/orders/confirmation)', async () => {
+    writeManifest('dist', { 'mails/orders/confirmation': 'mails/orders/confirmation.ejs' })
+    writeFile('dist/mails/orders/confirmation.ejs')
+    const { Asset, Container, Service } = await import('../src')
+    Container.reset()
+
+    @Service()
+    class MailService {
+      @Asset('mails/orders/confirmation')
+      orderConfirmation!: string
+    }
+
+    Container.getInstance().register(MailService, MailService)
+    const svc = Container.getInstance().resolve(MailService)
+    expect(svc.orderConfirmation).toBe(join(cwd, 'dist/mails/orders/confirmation.ejs'))
+  })
+
+  it('is lazy — resolves on access, not at instantiation', async () => {
+    const { Asset, Container, Service } = await import('../src')
+    Container.reset()
+
+    @Service()
+    class Lazy {
+      @Asset('mails/welcome')
+      template!: string
+    }
+
+    // Instantiation must NOT throw even though the asset doesn't exist yet
+    Container.getInstance().register(Lazy, Lazy)
+    const inst = Container.getInstance().resolve(Lazy)
+
+    // Set up the asset AFTER the class is constructed
+    writeManifest('dist', { 'mails/welcome': 'mails/welcome.ejs' })
+    writeFile('dist/mails/welcome.ejs')
+    clearAssetCache()
+
+    expect(inst.template).toBe(join(cwd, 'dist/mails/welcome.ejs'))
+  })
+
+  it('throws UnknownAssetError on access for missing assets', async () => {
+    writeManifest('dist', { 'mails/welcome': 'mails/welcome.ejs' })
+    writeFile('dist/mails/welcome.ejs')
+    const { Asset, Container, Service } = await import('../src')
+    Container.reset()
+
+    @Service()
+    class Bad {
+      @Asset('mails/nonexistent')
+      template!: string
+    }
+
+    Container.getInstance().register(Bad, Bad)
+    const inst = Container.getInstance().resolve(Bad)
+    expect(() => inst.template).toThrow(UnknownAssetError)
+  })
+
+  it("throws at instantiation when the key has no '/' separator", async () => {
+    const { Asset, Container, Service } = await import('../src')
+    Container.reset()
+
+    @Service()
+    class Malformed {
+      @Asset('no-slash-here')
+      template!: string
+    }
+
+    Container.getInstance().register(Malformed, Malformed)
+    expect(() => Container.getInstance().resolve(Malformed)).toThrow(/must include a '\/'/)
+  })
+})
+
 describe('clearAssetCache — manifest swap', () => {
   it('observes manifest changes after a clear', () => {
     writeManifest('dist', { 'mails/welcome': 'mails/welcome.ejs' })
