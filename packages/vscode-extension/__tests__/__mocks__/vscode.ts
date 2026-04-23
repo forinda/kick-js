@@ -54,7 +54,8 @@ export enum StatusBarAlignment {
   Right = 2,
 }
 
-export const window = {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const window: Record<string, any> = {
   createStatusBarItem: vi.fn(() => ({
     text: '',
     tooltip: '',
@@ -75,7 +76,8 @@ export const workspace = {
   })),
 }
 
-export const commands = {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const commands: Record<string, any> = {
   registerCommand: vi.fn(),
 }
 
