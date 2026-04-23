@@ -2,8 +2,10 @@ import { defineConfig } from '@forinda/kickjs-cli'
 
 export default defineConfig({
   pattern: 'ddd',
-  modulesDir: 'src/modules',
-  defaultRepo: 'drizzle',
+  modules: {
+    dir: 'src/modules',
+    repo: 'drizzle',
+  },
 
   // Asset Manager (assets-plan.md). Mail templates live next to the
   // code in dev (`src/templates/mails/*.ejs`); `kick build` copies

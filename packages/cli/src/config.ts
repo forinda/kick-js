@@ -194,15 +194,6 @@ export interface KickConfig {
    */
   packageManager?: PackageManager
 
-  // ── Backward-compatible top-level aliases (deprecated, use modules.* instead) ──
-  /** @deprecated Use `modules.dir` instead */
-  modulesDir?: string
-  /** @deprecated Use `modules.repo` instead */
-  defaultRepo?: RepoTypeConfig
-  /** @deprecated Use `modules.schemaDir` instead */
-  schemaDir?: string
-  /** @deprecated Use `modules.pluralize` instead */
-  pluralize?: boolean
   /**
    * Directories to copy to dist/ after build.
    * Useful for EJS templates, email templates, static assets, etc.
@@ -287,14 +278,14 @@ export function defineConfig(config: KickConfig): KickConfig {
   return config
 }
 
-/** Resolve module config with backward-compatible fallbacks from top-level fields */
+/** Resolve module config from `modules.*` block. */
 export function resolveModuleConfig(config: KickConfig | null): ModuleConfig {
   if (!config) return {}
   const mc: ModuleConfig = {
-    dir: config.modules?.dir ?? config.modulesDir,
-    repo: config.modules?.repo ?? config.defaultRepo,
-    schemaDir: config.modules?.schemaDir ?? config.schemaDir,
-    pluralize: config.modules?.pluralize ?? config.pluralize,
+    dir: config.modules?.dir,
+    repo: config.modules?.repo,
+    schemaDir: config.modules?.schemaDir,
+    pluralize: config.modules?.pluralize,
     prismaClientPath: config.modules?.prismaClientPath,
   }
 
