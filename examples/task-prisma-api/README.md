@@ -29,7 +29,7 @@ kick dev
 
 ## Packages
 
-- `@forinda/kickjs-core`, `@forinda/kickjs-http`, `@forinda/kickjs-config`
+- `@forinda/kickjs` — unified core, HTTP layer, env validation
 - `@forinda/kickjs-prisma` — adapter with Prisma 5/6/7 support
 - `@forinda/kickjs-swagger`, `@forinda/kickjs-devtools`
 - `@forinda/kickjs-ws`, `@forinda/kickjs-queue`, `@forinda/kickjs-cron`, `@forinda/kickjs-mailer`

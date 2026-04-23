@@ -89,7 +89,7 @@ class MemoryStore implements RateLimitStore {
  *
  * @example
  * ```ts
- * import { rateLimit } from '@forinda/kickjs-http'
+ * import { rateLimit } from '@forinda/kickjs'
  *
  * bootstrap({
  *   modules,

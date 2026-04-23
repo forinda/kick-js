@@ -13,7 +13,7 @@ import type { KickJsPluginName } from './augmentation'
  *
  * @example
  * ```ts
- * import type { KickPlugin } from '@forinda/kickjs-core'
+ * import type { KickPlugin } from '@forinda/kickjs'
  *
  * export class CorsPlugin implements KickPlugin {
  *   name = 'CorsPlugin'

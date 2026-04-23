@@ -33,9 +33,6 @@ src/
 
 ## Packages
 
-- `@forinda/kickjs-core`
-- `@forinda/kickjs-http`
-- `@forinda/kickjs-config`
 
 ## Adding Features
 

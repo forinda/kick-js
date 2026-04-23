@@ -1,7 +1,7 @@
 {
   "name": "@forinda/kickjs-cli",
   "version": "3.2.0",
-  "description": "CLI for KickJS — project scaffolding, DDD module generation, dev/build/start",
+  "description": "CLI for KickJS \u2014 project scaffolding, DDD module generation, dev/build/start",
   "keywords": [
     "kickjs",
     "nodejs",
@@ -22,13 +22,10 @@
     "@forinda/kickjs",
     "@forinda/kickjs-auth",
     "@forinda/kickjs-cli",
-    "@forinda/kickjs-config",
-    "@forinda/kickjs-core",
     "@forinda/kickjs-cron",
     "@forinda/kickjs-devtools",
     "@forinda/kickjs-drizzle",
     "@forinda/kickjs-graphql",
-    "@forinda/kickjs-http",
     "@forinda/kickjs-mailer",
     "@forinda/kickjs-multi-tenant",
     "@forinda/kickjs-notifications",
@@ -77,10 +74,7 @@
       "output": [
         "dist/**"
       ],
-      "dependencies": [
-        "../core:build",
-        "../http:build"
-      ]
+      "dependencies": []
     }
   },
   "dependencies": {

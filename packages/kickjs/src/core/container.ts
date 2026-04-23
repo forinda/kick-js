@@ -144,14 +144,16 @@ export class Container {
   /** Callback invoked on reset so decorators can update their container reference */
   static _onReset: ((container: Container) => void) | null = null
   /**
-   * Environment resolver for @Value decorator. Set by @forinda/kickjs-config
-   * to return Zod-validated, type-coerced env values instead of raw process.env strings.
+   * Environment resolver for @Value decorator. Set by the unified
+   * `@forinda/kickjs` config layer to return Zod-validated, type-coerced
+   * env values instead of raw process.env strings.
    */
   static _envResolver: ((key: string) => any) | null = null
   /**
-   * Request store provider for REQUEST-scoped DI. Set by @forinda/kickjs-http
-   * to return the current request's AsyncLocalStorage store.
-   * Returns { instances: Map, values: Map } or null if outside a request.
+   * Request store provider for REQUEST-scoped DI. Set by the HTTP layer
+   * inside `@forinda/kickjs` to return the current request's
+   * AsyncLocalStorage store. Returns { instances: Map, values: Map } or
+   * null if outside a request.
    */
   static _requestStoreProvider:
     | (() => { instances: Map<any, any>; values: Map<any, any> } | null)
@@ -660,14 +662,15 @@ export class Container {
     for (const [prop, config] of valueProps) {
       Object.defineProperty(instance, prop, {
         get() {
-          // Use the registered env resolver if available (set by @forinda/kickjs-config)
-          // This returns Zod-validated, type-coerced values (e.g. PORT as number)
+          // Use the registered env resolver if available (wired by the
+          // config layer in @forinda/kickjs). Returns Zod-validated,
+          // type-coerced values (e.g. PORT as number).
           if (Container._envResolver) {
             const val = Container._envResolver(config.envKey)
             if (val !== undefined) return val
           }
 
-          // Fallback to raw process.env for apps not using @forinda/kickjs-config
+          // Fallback to raw process.env for apps that haven't called loadEnv()
           const val = process.env[config.envKey]
           if (val !== undefined) return val
           if (config.defaultValue !== undefined) return config.defaultValue

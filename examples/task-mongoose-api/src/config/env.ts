@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { defineEnv, loadEnv } from '@forinda/kickjs-config';
+import { defineEnv, loadEnv } from '@forinda/kickjs';
 
 const envSchema = defineEnv((base) =>
   base.extend({

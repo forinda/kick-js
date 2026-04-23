@@ -15,9 +15,6 @@ body:
       description: Which package would this feature belong to?
       multiple: true
       options:
-        - "@forinda/kickjs-core"
-        - "@forinda/kickjs-http"
-        - "@forinda/kickjs-config"
         - "@forinda/kickjs-cli"
         - "@forinda/kickjs-swagger"
         - "@forinda/kickjs-testing"

@@ -1,7 +1,7 @@
 {
   "name": "@forinda/kickjs-multi-tenant",
   "version": "3.2.0",
-  "description": "Multi-tenancy helpers for KickJS — tenant resolution, scoped DI, and database routing",
+  "description": "Multi-tenancy helpers for KickJS \u2014 tenant resolution, scoped DI, and database routing",
   "keywords": [
     "kickjs",
     "nodejs",
@@ -21,13 +21,10 @@
     "@forinda/kickjs",
     "@forinda/kickjs-auth",
     "@forinda/kickjs-cli",
-    "@forinda/kickjs-config",
-    "@forinda/kickjs-core",
     "@forinda/kickjs-cron",
     "@forinda/kickjs-devtools",
     "@forinda/kickjs-drizzle",
     "@forinda/kickjs-graphql",
-    "@forinda/kickjs-http",
     "@forinda/kickjs-mailer",
     "@forinda/kickjs-multi-tenant",
     "@forinda/kickjs-notifications",
@@ -70,9 +67,7 @@
       "output": [
         "dist/**"
       ],
-      "dependencies": [
-        "../core:build"
-      ]
+      "dependencies": []
     }
   },
   "dependencies": {

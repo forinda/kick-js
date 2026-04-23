@@ -16,7 +16,6 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { execSync } from 'node:child_process'
 import { join } from 'node:path'
 import {
   assertCliOk,
@@ -24,7 +23,6 @@ import {
   createFixtureProject,
   runCli,
   runTsc,
-  WORKSPACE_ROOT,
 } from './helpers'
 
 describe('typed env (KickEnv)', () => {
@@ -42,7 +40,7 @@ describe('typed env (KickEnv)', () => {
     mkdirSync(join(fixture, 'src'), { recursive: true })
     writeFileSync(
       join(fixture, 'src/env.ts'),
-      `import { defineEnv } from '@forinda/kickjs-config'
+      `import { defineEnv } from '@forinda/kickjs'
 import { z } from 'zod'
 
 export default defineEnv((base) =>
@@ -55,19 +53,8 @@ export default defineEnv((base) =>
     )
   }
 
-  function linkConfigPackage() {
-    // The config package isn't symlinked by createFixtureProject because
-    // it's not used by the standard scaffolds. Wire it up here.
-    const configPath = join(fixture, 'node_modules/@forinda/kickjs-config')
-    if (!existsSync(configPath)) {
-      const target = join(WORKSPACE_ROOT, 'packages/config')
-      execSync(`ln -sf "${target}" "${configPath}"`)
-    }
-  }
-
   it('emits .kickjs/types/env.ts when src/env.ts exists', () => {
     writeEnvSchema()
-    linkConfigPackage()
 
     const result = runCli(fixture, ['typegen'])
     assertCliOk(result, 'kick typegen')
@@ -99,7 +86,6 @@ export default defineEnv((base) =>
 
   it('@Value compiles for known keys and rejects unknown ones', () => {
     writeEnvSchema()
-    linkConfigPackage()
     runCli(fixture, ['typegen'])
 
     // Positive case — known keys, with Env<K> type lookup
@@ -146,7 +132,6 @@ export class NegativeService {
 
   it('process.env.KNOWN_KEY is typed as string', () => {
     writeEnvSchema()
-    linkConfigPackage()
     runCli(fixture, ['typegen'])
 
     writeFileSync(

@@ -18,10 +18,9 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
-import { execSync } from 'node:child_process'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { cleanupFixture, createFixtureProject, runCli, runTsc, WORKSPACE_ROOT } from './helpers'
+import { cleanupFixture, createFixtureProject, runCli, runTsc } from './helpers'
 
 describe('typed ConfigService (KickEnv)', () => {
   let fixture: string
@@ -38,7 +37,7 @@ describe('typed ConfigService (KickEnv)', () => {
     mkdirSync(join(fixture, 'src'), { recursive: true })
     writeFileSync(
       join(fixture, 'src/env.ts'),
-      `import { defineEnv } from '@forinda/kickjs-config'
+      `import { defineEnv } from '@forinda/kickjs'
 import { z } from 'zod'
 
 export default defineEnv((base) =>
@@ -51,23 +50,14 @@ export default defineEnv((base) =>
     )
   }
 
-  function linkConfigPackage() {
-    const configPath = join(fixture, 'node_modules/@forinda/kickjs-config')
-    if (!existsSync(configPath)) {
-      const target = join(WORKSPACE_ROOT, 'packages/config')
-      execSync(`ln -sf "${target}" "${configPath}"`)
-    }
-  }
-
   it('ConfigService.get is typed against KickEnv after typegen', () => {
     writeEnvSchema()
-    linkConfigPackage()
     runCli(fixture, ['typegen'])
 
     writeFileSync(
       join(fixture, 'src/positive.ts'),
       `import { Service, Autowired } from '@forinda/kickjs'
-import { ConfigService } from '@forinda/kickjs-config'
+import { ConfigService } from '@forinda/kickjs'
 
 @Service()
 export class DatabaseService {
@@ -94,13 +84,12 @@ export class DatabaseService {
 
   it('ConfigService.get rejects unknown keys at compile time', () => {
     writeEnvSchema()
-    linkConfigPackage()
     runCli(fixture, ['typegen'])
 
     writeFileSync(
       join(fixture, 'src/negative.ts'),
       `import { Service, Autowired } from '@forinda/kickjs'
-import { ConfigService } from '@forinda/kickjs-config'
+import { ConfigService } from '@forinda/kickjs'
 
 @Service()
 export class BadService {
@@ -119,13 +108,12 @@ export class BadService {
 
   it('ConfigService.getAll() returns Readonly<KickEnv>', () => {
     writeEnvSchema()
-    linkConfigPackage()
     runCli(fixture, ['typegen'])
 
     writeFileSync(
       join(fixture, 'src/getall.ts'),
       `import { Service, Autowired } from '@forinda/kickjs'
-import { ConfigService } from '@forinda/kickjs-config'
+import { ConfigService } from '@forinda/kickjs'
 
 @Service()
 export class AllService {
@@ -150,12 +138,11 @@ export class AllService {
 
   it('loadEnv() no-arg and getEnv(key) no-arg return KickEnv-typed values', () => {
     writeEnvSchema()
-    linkConfigPackage()
     runCli(fixture, ['typegen'])
 
     writeFileSync(
       join(fixture, 'src/load.ts'),
-      `import { loadEnv, getEnv } from '@forinda/kickjs-config'
+      `import { loadEnv, getEnv } from '@forinda/kickjs'
 
 // loadEnv() no-arg → KickEnv
 const env = loadEnv()
@@ -177,14 +164,13 @@ export { url, port, port2, secret }
   })
 
   it('back-compat: empty KickEnv accepts any string in ConfigService.get', () => {
-    linkConfigPackage()
     // No src/env.ts → KickEnv stays empty → any string is accepted.
     runCli(fixture, ['typegen'])
 
     writeFileSync(
       join(fixture, 'src/legacy.ts'),
       `import { Service, Autowired } from '@forinda/kickjs'
-import { ConfigService } from '@forinda/kickjs-config'
+import { ConfigService } from '@forinda/kickjs'
 
 @Service()
 export class LegacyService {

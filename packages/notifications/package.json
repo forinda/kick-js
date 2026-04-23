@@ -1,7 +1,7 @@
 {
   "name": "@forinda/kickjs-notifications",
   "version": "3.2.0",
-  "description": "Multi-channel notifications for KickJS — email, Slack, Discord, webhook, custom",
+  "description": "Multi-channel notifications for KickJS \u2014 email, Slack, Discord, webhook, custom",
   "keywords": [
     "kickjs",
     "nodejs",
@@ -22,13 +22,10 @@
     "@forinda/kickjs",
     "@forinda/kickjs-auth",
     "@forinda/kickjs-cli",
-    "@forinda/kickjs-config",
-    "@forinda/kickjs-core",
     "@forinda/kickjs-cron",
     "@forinda/kickjs-devtools",
     "@forinda/kickjs-drizzle",
     "@forinda/kickjs-graphql",
-    "@forinda/kickjs-http",
     "@forinda/kickjs-mailer",
     "@forinda/kickjs-multi-tenant",
     "@forinda/kickjs-notifications",
@@ -71,9 +68,7 @@
       "output": [
         "dist/**"
       ],
-      "dependencies": [
-        "../core:build"
-      ]
+      "dependencies": []
     }
   },
   "dependencies": {

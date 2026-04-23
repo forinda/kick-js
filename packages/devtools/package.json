@@ -1,7 +1,7 @@
 {
   "name": "@forinda/kickjs-devtools",
   "version": "3.2.0",
-  "description": "Development introspection dashboard for KickJS — routes, DI container, metrics, health",
+  "description": "Development introspection dashboard for KickJS \u2014 routes, DI container, metrics, health",
   "keywords": [
     "kickjs",
     "nodejs",
@@ -23,13 +23,10 @@
     "@forinda/kickjs",
     "@forinda/kickjs-auth",
     "@forinda/kickjs-cli",
-    "@forinda/kickjs-config",
-    "@forinda/kickjs-core",
     "@forinda/kickjs-cron",
     "@forinda/kickjs-devtools",
     "@forinda/kickjs-drizzle",
     "@forinda/kickjs-graphql",
-    "@forinda/kickjs-http",
     "@forinda/kickjs-mailer",
     "@forinda/kickjs-multi-tenant",
     "@forinda/kickjs-notifications",
@@ -75,10 +72,7 @@
       "output": [
         "dist/**"
       ],
-      "dependencies": [
-        "../core:build",
-        "../http:build"
-      ]
+      "dependencies": []
     }
   },
   "dependencies": {

@@ -12,7 +12,6 @@ export default defineConfig({
   dts: true,
   external: [
     '@forinda/kickjs',
-    '@forinda/kickjs-core',
     'reflect-metadata',
     /^node:/,
   ],

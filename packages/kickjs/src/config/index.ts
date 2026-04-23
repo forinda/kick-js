@@ -1,8 +1,7 @@
 /**
  * Environment validation and typed config — formerly published as
- * `@forinda/kickjs-config`. Now lives inside `@forinda/kickjs` so apps
- * pick it up with no extra install. The standalone package will be
- * removed in v3.
+ * `@forinda/kickjs-config` (removed in v4). Now lives inside
+ * `@forinda/kickjs` so apps pick it up with no extra install.
  */
 
 export {

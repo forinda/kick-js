@@ -60,7 +60,7 @@ export interface AdapterContext {
  *
  * @example
  * ```ts
- * import type { AppAdapter, AdapterContext } from '@forinda/kickjs-core/adapter'
+ * import type { AppAdapter, AdapterContext } from '@forinda/kickjs/adapter'
  *
  * class SentryAdapter implements AppAdapter {
  *   name = 'SentryAdapter'

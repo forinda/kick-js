@@ -1,7 +1,7 @@
 {
   "name": "@forinda/kickjs-otel",
   "version": "3.2.0",
-  "description": "OpenTelemetry adapter for KickJS — automatic tracing, metrics, and export to any OTel backend",
+  "description": "OpenTelemetry adapter for KickJS \u2014 automatic tracing, metrics, and export to any OTel backend",
   "keywords": [
     "kickjs",
     "nodejs",
@@ -24,13 +24,10 @@
     "@forinda/kickjs",
     "@forinda/kickjs-auth",
     "@forinda/kickjs-cli",
-    "@forinda/kickjs-config",
-    "@forinda/kickjs-core",
     "@forinda/kickjs-cron",
     "@forinda/kickjs-devtools",
     "@forinda/kickjs-drizzle",
     "@forinda/kickjs-graphql",
-    "@forinda/kickjs-http",
     "@forinda/kickjs-mailer",
     "@forinda/kickjs-multi-tenant",
     "@forinda/kickjs-notifications",
@@ -74,10 +71,7 @@
       "output": [
         "dist/**"
       ],
-      "dependencies": [
-        "../core:build",
-        "../http:build"
-      ]
+      "dependencies": []
     }
   },
   "dependencies": {

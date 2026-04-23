@@ -12,8 +12,6 @@ export default defineConfig({
   dts: true,
   external: [
     '@forinda/kickjs',
-    '@forinda/kickjs-core',
-    '@forinda/kickjs-http',
     'reflect-metadata',
     'drizzle-orm',
     '@forinda/kickjs-multi-tenant',

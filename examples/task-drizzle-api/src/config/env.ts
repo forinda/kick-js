@@ -1,4 +1,4 @@
-import { defineEnv, loadEnv } from '@forinda/kickjs-config'
+import { defineEnv, loadEnv } from '@forinda/kickjs'
 import { z } from 'zod'
 
 const envSchema = defineEnv((base) =>

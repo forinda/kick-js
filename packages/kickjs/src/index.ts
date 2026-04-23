@@ -83,8 +83,8 @@ export { ViewAdapter, type ViewAdapterOptions } from './http/middleware/views'
 export { SpaAdapter, type SpaAdapterOptions } from './http/middleware/spa'
 
 // ── Config (env validation + ConfigService) ────────────────────────────
-// Formerly published as `@forinda/kickjs-config`. Lives here now; the
-// standalone package will be removed in v3.
+// Formerly published as `@forinda/kickjs-config` — that package was
+// removed in v4. All env + ConfigService exports live here now.
 //
 // NOTE: We do NOT re-export `type Env` from `./config` here, even though
 // the standalone package used to. `core/decorators` already exports a

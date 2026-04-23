@@ -92,7 +92,7 @@ let _cacheProvider: CacheProvider = new MemoryCacheProvider()
  *
  * @example
  * ```ts
- * import { setCacheProvider } from '@forinda/kickjs-core'
+ * import { setCacheProvider } from '@forinda/kickjs'
  * import { RedisCacheProvider } from './redis-cache'
  *
  * setCacheProvider(new RedisCacheProvider(redisClient))

@@ -436,11 +436,11 @@ export function ApiQueryParams(
 /**
  * Middleware handler function.
  * Generic `TCtx` defaults to `any` — import `RequestContext` from
- * `@forinda/kickjs-http` for full type safety:
+ * `@forinda/kickjs` for full type safety:
  *
  * ```ts
- * import type { MiddlewareHandler } from '@forinda/kickjs-core'
- * import type { RequestContext } from '@forinda/kickjs-http'
+ * import type { MiddlewareHandler } from '@forinda/kickjs'
+ * import type { RequestContext } from '@forinda/kickjs'
  *
  * const auth: MiddlewareHandler<RequestContext> = (ctx, next) => {
  *   ctx.body  // fully typed

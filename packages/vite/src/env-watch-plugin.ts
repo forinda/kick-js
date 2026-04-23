@@ -9,8 +9,7 @@ import type { Plugin } from 'vite'
  * variable changes without a manual restart.
  *
  * Lives in `@forinda/kickjs-vite` so all Vite-only concerns are in one
- * place — the older re-export from `@forinda/kickjs-config` is kept as
- * a deprecated thin shim for back-compat.
+ * place.
  *
  * @example
  * ```ts

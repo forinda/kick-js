@@ -12,7 +12,6 @@ export default defineConfig({
   dts: true,
   external: [
     '@forinda/kickjs',
-    '@forinda/kickjs-core',
     '@forinda/kickjs-devtools-kit',
     'reflect-metadata',
     'bullmq',

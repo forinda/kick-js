@@ -1,7 +1,7 @@
 {
   "name": "@forinda/kickjs-auth",
   "version": "3.2.0",
-  "description": "Pluggable authentication for KickJS — JWT, API key, and custom strategies",
+  "description": "Pluggable authentication for KickJS \u2014 JWT, API key, and custom strategies",
   "keywords": [
     "kickjs",
     "nodejs",
@@ -25,13 +25,10 @@
     "@forinda/kickjs",
     "@forinda/kickjs-auth",
     "@forinda/kickjs-cli",
-    "@forinda/kickjs-config",
-    "@forinda/kickjs-core",
     "@forinda/kickjs-cron",
     "@forinda/kickjs-devtools",
     "@forinda/kickjs-drizzle",
     "@forinda/kickjs-graphql",
-    "@forinda/kickjs-http",
     "@forinda/kickjs-mailer",
     "@forinda/kickjs-multi-tenant",
     "@forinda/kickjs-notifications",
@@ -74,9 +71,7 @@
       "output": [
         "dist/**"
       ],
-      "dependencies": [
-        "../core:build"
-      ]
+      "dependencies": []
     }
   },
   "dependencies": {
