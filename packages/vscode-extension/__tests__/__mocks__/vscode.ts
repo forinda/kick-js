@@ -68,21 +68,49 @@ export const window: Record<string, any> = {
   registerTreeDataProvider: vi.fn(),
   createWebviewPanel: vi.fn(),
   showInformationMessage: vi.fn(),
+  showWarningMessage: vi.fn(),
+  showErrorMessage: vi.fn(),
+  showQuickPick: vi.fn(),
+  showInputBox: vi.fn(),
+  withProgress: vi.fn(async (_opts: unknown, task: () => Promise<unknown>) => task()),
 }
 
-export const workspace = {
+export const ProgressLocation = {
+  Notification: 15,
+  SourceControl: 1,
+  Window: 10,
+}
+
+export const ConfigurationTarget = {
+  Global: 1,
+  Workspace: 2,
+  WorkspaceFolder: 3,
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const env: Record<string, any> = {
+  openExternal: vi.fn(),
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const workspace: Record<string, any> = {
   getConfiguration: vi.fn(() => ({
-    get: vi.fn((key: string, defaultValue: unknown) => defaultValue),
+    get: vi.fn((_key: string, defaultValue: unknown) => defaultValue),
+    update: vi.fn(),
   })),
+  workspaceFolders: undefined,
+  onDidChangeConfiguration: vi.fn(() => ({ dispose: vi.fn() })),
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const commands: Record<string, any> = {
-  registerCommand: vi.fn(),
+  registerCommand: vi.fn((_id: string, _handler: () => void) => ({ dispose: vi.fn() })),
+  executeCommand: vi.fn(),
 }
 
 export const Uri = {
   file: (path: string) => ({ fsPath: path, scheme: 'file' }),
+  parse: (str: string) => ({ toString: () => str, scheme: str.split(':')[0] }),
 }
 
 export enum ViewColumn {

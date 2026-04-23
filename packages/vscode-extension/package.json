@@ -24,6 +24,11 @@
   "contributes": {
     "commands": [
       {
+        "command": "kickjs.connect",
+        "title": "KickJS: Connect to App…",
+        "icon": "$(plug)"
+      },
+      {
         "command": "kickjs.inspect",
         "title": "KickJS: Inspect Running App"
       },
@@ -38,8 +43,27 @@
       {
         "command": "kickjs.showMetrics",
         "title": "KickJS: Show Metrics"
+      },
+      {
+        "command": "kickjs.refreshAll",
+        "title": "KickJS: Refresh All",
+        "icon": "$(refresh)"
       }
     ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "kickjs.connect",
+          "when": "view == kickjs.health || view == kickjs.routes || view == kickjs.container",
+          "group": "navigation@1"
+        },
+        {
+          "command": "kickjs.refreshAll",
+          "when": "view == kickjs.health || view == kickjs.routes || view == kickjs.container",
+          "group": "navigation@2"
+        }
+      ]
+    },
     "configuration": {
       "title": "KickJS DevTools",
       "properties": {
