@@ -93,6 +93,10 @@ export class HomeController {
 
 Visit `http://localhost:3000/` and you will see the rendered HTML.
 
+::: tip Pair with the Asset Manager
+If you want type-safe references to individual templates (autocomplete + compile-time errors on typo'd template names), declare the views directory under `assetMap` in `kick.config.ts` and use `assets.views.dashboard()` instead of hand-rolling paths. See the [Asset Manager guide](asset-manager.md). The two work together — `ViewAdapter` registers the engine + sets the views directory; the asset manager gives you typed references when your code resolves a specific template path.
+:::
+
 ## ViewAdapter Options
 
 | Option     | Type     | Default       | Description                                                    |
