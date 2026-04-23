@@ -12,7 +12,6 @@ export class HealthTreeProvider implements vscode.TreeDataProvider<vscode.TreeIt
 
   constructor(private baseUrl: string) {
     this.statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100)
-    this.statusBarItem.command = 'kickjs.inspect'
     this.updateStatusBar()
     this.statusBarItem.show()
   }
@@ -31,10 +30,14 @@ export class HealthTreeProvider implements vscode.TreeDataProvider<vscode.TreeIt
   }
 
   private updateStatusBar(): void {
+    // Status bar action varies by connection state — disconnected
+    // routes to Connect (the only useful action when there's no app),
+    // connected routes to Inspect (opens the dashboard panel).
     if (!this.connected) {
       this.statusBarItem.text = '$(debug-disconnect) KickJS: Disconnected'
       this.statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground')
-      this.statusBarItem.tooltip = `Cannot reach ${this.baseUrl}\nClick to open dashboard`
+      this.statusBarItem.tooltip = `Cannot reach ${this.baseUrl}\nClick to connect to a running app`
+      this.statusBarItem.command = 'kickjs.connect'
       return
     }
 
@@ -47,6 +50,7 @@ export class HealthTreeProvider implements vscode.TreeDataProvider<vscode.TreeIt
       this.statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground')
     }
     this.statusBarItem.tooltip = `Status: ${status}\nUptime: ${this.data?.uptime ?? 0}s\nClick to open dashboard`
+    this.statusBarItem.command = 'kickjs.inspect'
   }
 
   getTreeItem(element: vscode.TreeItem): vscode.TreeItem {

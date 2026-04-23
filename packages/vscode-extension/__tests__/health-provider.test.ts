@@ -78,4 +78,24 @@ describe('HealthTreeProvider', () => {
     provider.dispose()
     expect(provider.statusBarItem.dispose).toHaveBeenCalled()
   })
+
+  it('routes status bar to kickjs.connect when disconnected', () => {
+    const provider = new HealthTreeProvider('http://localhost/_debug')
+    expect(provider.statusBarItem.command).toBe('kickjs.connect')
+    expect(provider.statusBarItem.tooltip).toContain('Click to connect')
+  })
+
+  it('routes status bar to kickjs.inspect once connected', async () => {
+    ;(globalThis.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ status: 'healthy', uptime: 60 }),
+    })
+
+    const provider = new HealthTreeProvider('http://localhost/_debug')
+    provider.refresh()
+    await new Promise((r) => setTimeout(r, 10))
+
+    expect(provider.statusBarItem.command).toBe('kickjs.inspect')
+    expect(provider.statusBarItem.tooltip).toContain('Click to open dashboard')
+  })
 })
