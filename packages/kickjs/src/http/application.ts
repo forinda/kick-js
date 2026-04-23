@@ -102,14 +102,14 @@ export interface ApplicationOptions {
    *   detection skips the auto-mount so adopters can control its position.
    * - `'manual'` — Application never mounts the wrapper. The Context
    *   Contributor pipeline still runs on every route — the runner is
-   *   inserted by `router-builder` regardless of ALS state. What degrades
-   *   without an ALS frame is the *backing store*: REQUEST-scoped DI
-   *   throws (no `requestStore.getStore()` to read from), `Logger`
-   *   loses its requestId context, and `RequestContext.set/get` falls
-   *   back to the deprecated `req.__ctxMeta` map. Use `'manual'` only
-   *   when you genuinely intend to wrap requests in your own ALS frame
-   *   (rare — multi-tenant adapters used to do this; post-Phase 3 they
-   *   share the framework's frame instead).
+   *   inserted by `router-builder` regardless of ALS state. What
+   *   degrades without an ALS frame is the *backing store*:
+   *   REQUEST-scoped DI throws (no `requestStore.getStore()` to read
+   *   from), `Logger` loses its requestId context, and
+   *   `RequestContext.set/get` throws. Use `'manual'` only when you
+   *   genuinely intend to wrap requests in your own ALS frame (rare —
+   *   multi-tenant adapters used to do this; post-Phase 3 they share
+   *   the framework's frame instead).
    */
   contextStore?: 'auto' | 'manual'
 

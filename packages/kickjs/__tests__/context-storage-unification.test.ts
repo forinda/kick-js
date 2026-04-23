@@ -105,34 +105,29 @@ describe('RequestContext metadata — store isolation across requests', () => {
   })
 })
 
-describe('RequestContext metadata — fallback path (deprecated)', () => {
-  it('outside an ALS frame, ctx.set lazily attaches req.__ctxMeta', () => {
+describe('RequestContext metadata — no ALS frame', () => {
+  it('ctx.set throws when called outside requestStore.run(...)', () => {
     const req = mockReq()
     const [res, next] = mockResNext()
-
     const ctx = new RequestContext(req, res, next)
-    ctx.set('legacy', 'value')
 
-    expect(req.__ctxMeta).toBeInstanceOf(Map)
-    expect(req.__ctxMeta.get('legacy')).toBe('value')
+    expect(() => ctx.set('legacy', 'value')).toThrow(/AsyncLocalStorage frame/)
   })
 
-  it('outside an ALS frame, ctx.get reads back from req.__ctxMeta', () => {
+  it('ctx.get returns undefined silently outside an ALS frame', () => {
     const req = mockReq()
     const [res, next] = mockResNext()
-    req.__ctxMeta = new Map([['preset', 'preloaded']])
-
     const ctx = new RequestContext(req, res, next)
-    expect(ctx.get('preset')).toBe('preloaded')
+
+    expect(ctx.get('anything')).toBeUndefined()
   })
 
-  it('two ctx instances on the same req share the fallback map', () => {
+  it('ctx.user falls back to req.user outside an ALS frame', () => {
     const req = mockReq()
+    req.user = { id: 'u-1' }
     const [res, next] = mockResNext()
+    const ctx = new RequestContext(req, res, next)
 
-    const a = new RequestContext(req, res, next)
-    const b = new RequestContext(req, res, next)
-    a.set('shared', 99)
-    expect(b.get('shared')).toBe(99)
+    expect(ctx.user).toEqual({ id: 'u-1' })
   })
 })
