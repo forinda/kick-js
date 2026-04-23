@@ -3849,3 +3849,198 @@ The Phase A trio (§21.2.1 / §21.3.1+§21.3.4 / §21.3.2) would have made every
 - **`createTestPlugin`** — Phase 6's `runContributor` showed how much faster TDD becomes when authors don't have to spin up a whole HTTP layer to test one piece in isolation. The plugin/adapter equivalent is the same payoff for the rest of the workspace.
 
 They're the highest signal-to-cost ratio and don't require coordinated design work — each can ship as one PR.
+
+## 22. DI token convention + symbol-to-string migration
+
+> **Status:** plan-of-record. Implementation queued behind §21 ergonomics work; lands as a single follow-up PR.
+
+### 22.1 Why this matters
+
+The B-6 typegen layer (§21.2.1 future enhancement, §21.3.3) made plugin/adapter **names** discoverable at compile time. The same predictability is missing for **DI tokens**:
+
+- ~10 packages still ship `Symbol(...)`-based tokens (`PRISMA_CLIENT`, `DRIZZLE_DB`, `AUTH_USER`, `QUEUE_MANAGER`, `TENANT_CONTEXT`, etc.). Symbols are unforgeable at runtime — great for one-process isolation, useless for everything else.
+- 41 `createToken()` calls already exist with **convention drift**: `kickjs.ai.provider` (dotted), `WsAdapter` (bare PascalCase), `Widget/Repository` (slash). No clashes today because packages are siloed, but no shared rule for adopters either.
+- `@Inject('literal')` is currently a runtime-only contract. With B-6's `KickJsRegistry` already typing `container.resolve()`, the same string-literal-union narrowing should flow to `@Inject` — and would, except half the inputs are still `Symbol`.
+
+The Symbol form blocks four concrete things, in roughly increasing order of impact:
+
+1. **Worker / process boundaries.** A `Symbol` reference can't cross `worker_threads` postMessage or be persisted to disk. Tokens that name DB clients, tenant contexts, or auth users are exactly the ones that get marshalled across boundaries in real apps.
+2. **Dependency-graph projection.** DevTools (§23) needs to render `Module → Service → Token → Plugin/Adapter`. A graph with `Symbol(AuthUser)` nodes can't be JSON-serialised to the panel, can't be diffed across snapshots, can't be searched.
+3. **Typed `@Inject`.** Once tokens are predictable strings under a single convention, `KickJsRegistry` can narrow `@Inject(name)` to a string-literal union — same payoff as `dependsOn` from §21.2.1.
+4. **Cross-package collision pressure.** Today's Symbol approach hides the conflict — two packages can both `Symbol('Client')` with no warning. As the ecosystem grows, that becomes a silent footgun. Predictable scoped strings make collisions diagnosable (and ultimately preventable in `kick typegen`).
+
+### 22.2 Convention
+
+Two separators with distinct semantics — **slash for ownership**, **colon for instance scoping**:
+
+```
+<scope>/<key>[/<suffix>]               # ownership: who declared this token
+<scope>/<key>:<instance>[:<extra>]     # instance scoping: which .scoped() shard owns it
+```
+
+| Form                       | Example                                       | Meaning                                                                        |
+| -------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------ |
+| `<scope>/<key>`            | `auth/User`, `prisma/Client`                  | Singleton token owned by the `<scope>` package                                 |
+| `<scope>/<key>/<suffix>`   | `cache/Provider/redis`                        | Multiple flavours of one role under one scope                                  |
+| `<scope>/<key>:<instance>` | `prisma/Client:tenant`, `queue/Worker:emails` | Per-`.scoped()` instance — composes the same way `defineAdapter.scoped()` does |
+| `kickjs/<area>.<key>`      | `kickjs/ai.provider`, `kickjs/mcp.tool`       | Framework-internal tokens — keep the existing dotted area for back-compat      |
+
+`<scope>` is the package short-name (`auth`, `prisma`, `tenant`, `queue`) — same word as the package's npm slug (`@forinda/kickjs-auth` → `auth`). `<key>` is PascalCase role (`User`, `Client`, `Context`, `Manager`).
+
+The colon form is **not optional ceremony** — it deliberately mirrors the `${defName}:${scope}` shape that `definePlugin.scoped()` and `defineAdapter.scoped()` already produce, so a `.scoped('tenant')` call's tokens stay grep-pairable with the adapter that owns them.
+
+### 22.3 Migration mechanics
+
+Per-package work, ~10 sites total. Each package's `tokens.ts` / `types.ts` / `constants.ts` is the single migration anchor.
+
+```ts
+// before (packages/prisma/src/types.ts)
+export const PRISMA_CLIENT = Symbol('PrismaClient')
+export const PRISMA_TENANT_CLIENT = Symbol('PrismaTenantClient')
+
+// after
+import { createToken } from '@forinda/kickjs'
+import type { PrismaClient } from '@prisma/client'
+
+export const PRISMA_CLIENT = createToken<PrismaClient>('prisma/Client')
+export const PRISMA_TENANT_CLIENT = createToken<PrismaClient>('prisma/Client:tenant')
+```
+
+**v4 breaking change.** No deprecated-alias bridge — the migration ships in the v4 release with a dedicated migration guide (`docs/guide/migration-v3-to-v4.md`, written alongside the implementation PR). Adopters update import sites once; old `Symbol(...)` consts are deleted, not re-exported.
+
+**Steps per package:**
+
+1. Replace each `Symbol(...)` with `createToken<T>('scope/key[:instance]')`. Type parameter is required for the `KickJsRegistry` narrowing to land — no `unknown`.
+2. Update the package's adapter/factory to consume the new string token. Internal call sites either keep the const reference (preferred — type still flows) or migrate to `@Inject('prisma/Client')` directly once the registry narrowing lands.
+3. Verify `kick typegen` picks up the new token (§22.4 below).
+4. Add a "before / after" entry to the v4 migration guide for every renamed export — adopters need a single file to grep against during their upgrade.
+
+**Lint:** Add a regex check to CI failing on new `Symbol(` declarations inside `packages/*/src/**/tokens.ts` / `types.ts` / `constants.ts`. Cheap, blocks regression. No codemod needed for 10 sites.
+
+### 22.4 Typegen integration
+
+`kick typegen` already discovers `createToken('literal')` calls (the `CREATE_TOKEN_REGEX` in `packages/cli/src/typegen/scanner.ts`). Three small additions wire this into the predictable-strings story:
+
+1. **Convention validator.** Warn (not fail) on tokens that don't match `^([a-z][\w-]*\/[A-Z]\w*)(\/.+)?(:[a-z][\w-]+(:[a-z][\w-]+)*)?$`. Lets adopters break the convention deliberately while making the default obvious.
+2. **`KickJsRegistry` narrows `@Inject` literal.** The registry interface already maps token strings to types. Adding a typed `@Inject<K extends keyof KickJsRegistry>(token: K)` overload narrows `@Inject('prisma/Client')` to `PrismaClient` and turns typo'd literals into compile errors. Mirrors `dependsOn` from §21.2.1.
+3. **`.kickjs/types/tokens.d.ts` (new).** Companion to `plugins.d.ts` — ScopeMap interface so DevTools/typegen/lint can group tokens by `<scope>` without re-parsing the literal.
+
+### 22.5 Out of scope
+
+- **Forcing the convention everywhere.** Stays a soft warning; existing `WsAdapter`-style bare names keep working forever. The convention is a default, not a gate.
+- **Replacing `Symbol` for non-DI use cases** (sentinels, metadata keys). Those are correctly Symbols and should stay that way.
+- **Multi-process token negotiation.** Once tokens are strings, cross-process is a follow-on possibility; not prerequisite.
+- **Backwards compatibility with v3 Symbol exports.** v4 is a clean break; the migration guide covers the rename map, not a runtime shim.
+
+---
+
+## 23. DevTools deep introspection (half-baked)
+
+> **Status:** vision-only. Sketch exists so the introspection contract can be designed alongside §21 ergonomics — every plugin/adapter migrated under §21 should expose introspection without a second migration later. **Implementation gates on §22** (string tokens) and Phase C of §21.
+
+### 23.1 The reference point
+
+[`nuxt/devtools`](https://github.com/nuxt/devtools) sets the bar: a separate `devtools-kit` package with pure types + RPC contract, `devtools` package with server hooks + integrations, and a tab-extensible UI where any module ships its own panel. The RPC surface covers timeline, telemetry, storage, custom tabs, terminals, server tasks. KickJS today has `packages/devtools` — a single `adapter.ts` with route stats and an HTML dashboard at `/_debug`. Functional, far behind.
+
+### 23.2 What "deep introspection" means
+
+Five projections, in increasing depth:
+
+1. **Topology.** Every plugin, adapter, module, controller, middleware, contributor, and DI token rendered as one navigable graph. Nodes link to source (file:line). Edges show `dependsOn` (mount order), DI resolution paths (Service → Token → Provider), and request lifecycle ordering. **Combines static (typegen) + runtime (RPC) sources.**
+2. **State.** Reactive snapshot of every plugin/adapter's current internal state (`ref`, `reactive`, `computed` already exist in core). Time-travel-able via snapshot diffing.
+3. **Memory.** Per-instance object counts (`Container.resolve` instrumentation), heap size attribution per adapter (best-effort via `process.memoryUsage()` deltas at lifecycle boundaries), top-N retainers when budget exceeded.
+4. **Metrics.** Latency, throughput, error rate per controller method + per adapter middleware. Histogram-backed (HDR-style), not just rolling means like today.
+5. **Timeline.** Every request as one row; expand to see middleware → contributors → handler → adapter shutdown. Click to drill into individual span attributes (`@forinda/kickjs-otel` already produces these — surface them in the panel).
+
+### 23.3 The introspection contract
+
+Every plugin/adapter exposes a single optional method:
+
+```ts
+interface IntrospectionSnapshot {
+  /** Stable identity (matches the `name` from definePlugin/defineAdapter). */
+  name: string
+  /** Plugin / adapter / contributor / middleware. */
+  kind: 'plugin' | 'adapter' | 'middleware' | 'contributor'
+  /** Optional version (from definePlugin/defineAdapter metadata). */
+  version?: string
+  /** Reactive state surface — snapshotable, JSON-serialisable. */
+  state?: Record<string, unknown>
+  /** DI tokens this primitive registered or consumes. */
+  tokens?: { provides: string[]; requires: string[] }
+  /** Per-instance counters (active connections, in-flight jobs, etc.). */
+  metrics?: Record<string, number>
+  /** Self-reported memory footprint estimate (bytes). */
+  memoryBytes?: number
+}
+
+interface IntrospectableAdapter extends AppAdapter {
+  introspect?(): IntrospectionSnapshot | Promise<IntrospectionSnapshot>
+}
+```
+
+`defineAdapter()` / `definePlugin()` get an optional `introspect()` slot in the build result. DevTools polls (or subscribes via an event channel) and aggregates. Plugins that don't implement it still appear in the topology — just without state/metrics rows.
+
+### 23.4 Why this depends on §22
+
+Three places where the topology projection breaks under Symbol tokens:
+
+- **Token nodes** in the graph need string IDs. Symbols can't be node keys without arbitrary stringification (`Symbol(AuthUser)` collides with `Symbol(AuthUser)` from a different package).
+- **Edge labels** ("Service X requires token Y") need a stable string; typegen already walks `@Inject('literal')` but stops at Symbols.
+- **DevTools snapshots** are JSON. Symbols don't survive `JSON.stringify`.
+
+The token migration (§22) is the unblock; it isn't gating §21's remaining ergonomics work, but it does gate this section's full-fidelity dep-graph projection.
+
+### 23.5 Architecture sketch
+
+Mirror nuxt-devtools' split:
+
+```
+@forinda/kickjs-devtools-kit/    # NEW — pure types + RPC contract + introspection types
+  src/
+    introspection.ts             # IntrospectionSnapshot, IntrospectableAdapter
+    rpc.ts                       # Client ↔ server RPC surface (typed)
+    panels.ts                    # defineDevtoolsTab(opts) — extensibility entry point
+
+@forinda/kickjs-devtools/        # EXISTING — refactor to consume the kit
+  src/
+    adapter.ts                   # introspection collector + RPC server
+    server-rpc/
+      topology.ts                # walks Application + KickJsPluginRegistry + KickJsRegistry
+      state.ts                   # subscribes to plugin/adapter `state` reactive surfaces
+      metrics.ts                 # HDR histograms; replaces today's percentile ring buffer
+      timeline.ts                # consumes OTel spans when otel adapter is mounted
+    ui/                          # the panel itself (Vue 3 / web components / TBD)
+```
+
+`defineDevtoolsTab(opts)` lets any plugin ship its own panel:
+
+```ts
+import { defineDevtoolsTab } from '@forinda/kickjs-devtools-kit'
+
+export const QueueTab = defineDevtoolsTab({
+  id: 'queue',
+  title: 'Queue',
+  icon: 'tabler:list-tree',
+  component: () => import('./QueueTab.vue'),
+  // RPC handlers the panel can call from the browser
+  rpc: {
+    listJobs: () => container.resolve('queue/Worker:emails').listJobs(),
+    retry: (jobId: string) => container.resolve('queue/Worker:emails').retry(jobId),
+  },
+})
+```
+
+### 23.6 Sequencing notes
+
+This entry stays half-baked deliberately — not enough is locked down to commit to interfaces. What **is** load-bearing right now:
+
+- The `introspect()` slot in `defineAdapter()` / `definePlugin()` should be added during §21 work even if no plugins implement it yet. Cheap to add, expensive to retrofit.
+- Token migration (§22) lands before any deep work here.
+- The kit/runtime split happens **first** — refactor the existing `packages/devtools` to consume `@forinda/kickjs-devtools-kit` types before piling features on.
+
+### 23.7 Out of scope
+
+- **Production-mode DevTools.** Same as nuxt — dev only; opt-in for staging via flag. The `/_debug` endpoint stays gated by the existing dev-auth token.
+- **Replacing OTel.** DevTools surfaces OTel data when present; doesn't try to be a tracing backend.
+- **Cross-process aggregation in DevTools v1.** Single-process introspection first; multi-worker view is a follow-on.
