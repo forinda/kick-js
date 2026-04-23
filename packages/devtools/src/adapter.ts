@@ -67,6 +67,30 @@ function computePercentiles(stats: RouteStats): { p50: number; p95: number; p99:
   }
 }
 
+/**
+ * Open an SSE response — sets the headers, flushes them, and disables
+ * any compression middleware that may have been registered upstream
+ * (compression buffers SSE chunks indefinitely; we need flush-on-write).
+ */
+function openSseStream(req: Request, res: Response): void {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  })
+  res.flushHeaders?.()
+  // Defensive: the compression middleware checks this header. Some
+  // setups also wrap res.write — calling res.flush after each write
+  // is safe even when no compression is in play.
+  void req
+}
+
+/** Write a single SSE `data:` event with a JSON payload + double newline. */
+function writeSseEvent(res: Response, payload: unknown): void {
+  res.write(`data: ${JSON.stringify(payload)}\n\n`)
+}
+
 export interface DevToolsOptions {
   /** Base path for debug endpoints (default: '/_debug') */
   basePath?: string
@@ -252,12 +276,19 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
       })
     }
 
-    /** Find the public/devtools directory relative to the built dist or source */
+    /**
+     * Find the dashboard's public directory. Prefers the new Solid SPA
+     * (public/spa/, shipped from PR 4 of §23); falls back to the legacy
+     * Vue+Tailwind dashboard (public/devtools/) for environments that
+     * haven't run `pnpm --filter @forinda/kickjs-devtools build:spa`.
+     */
     const resolvePublicDir = (): string | null => {
       const thisDir = dirname(fileURLToPath(import.meta.url))
       const candidates = [
-        join(thisDir, '..', 'public', 'devtools'), // dist/ -> public/devtools
-        join(thisDir, '..', '..', 'public', 'devtools'), // src/ -> public/devtools
+        join(thisDir, '..', 'public', 'spa'), // dist/ -> public/spa
+        join(thisDir, '..', '..', 'public', 'spa'), // src/ -> public/spa
+        join(thisDir, '..', 'public', 'devtools'), // legacy Vue dashboard
+        join(thisDir, '..', '..', 'public', 'devtools'), // legacy from src/
       ]
       for (const dir of candidates) {
         if (existsSync(join(dir, 'index.html'))) return dir
@@ -430,6 +461,53 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
             latest,
             history,
             health,
+          })
+        })
+
+        // ── SSE: live runtime snapshots (architecture.md §23) ───────
+        // Pushes the latest RuntimeSnapshot every `intervalMs`. SSE
+        // (not WebSocket) avoids the http.Server `upgrade`-event
+        // coordination cost — see devtools-flows.md §3 for rationale.
+        router.get('/runtime/stream', (req: Request, res: Response) => {
+          if (!runtimeSampler) {
+            res.status(404).json({ error: 'runtime sampler disabled' })
+            return
+          }
+          openSseStream(req, res)
+          const intervalMs = options.runtime?.intervalMs ?? 1000
+          const tick = (): void => {
+            const snap = runtimeSampler.latest()
+            if (snap) writeSseEvent(res, snap)
+          }
+          tick()
+          const interval = setInterval(tick, intervalMs)
+          const heartbeat = setInterval(() => res.write(': heartbeat\n\n'), 30_000)
+          req.on('close', () => {
+            clearInterval(interval)
+            clearInterval(heartbeat)
+          })
+        })
+
+        // ── SSE: memory health composite (architecture.md §23) ──────
+        router.get('/memory/stream', (req: Request, res: Response) => {
+          if (!runtimeSampler || !memoryAnalyzer) {
+            res.status(404).json({ error: 'runtime sampler disabled' })
+            return
+          }
+          openSseStream(req, res)
+          const intervalMs = options.runtime?.intervalMs ?? 1000
+          const tick = (): void => {
+            const snap = runtimeSampler.latest()
+            if (!snap) return
+            const health = memoryAnalyzer.health(runtimeSampler.history())
+            writeSseEvent(res, { snapshot: snap, health })
+          }
+          tick()
+          const interval = setInterval(tick, intervalMs)
+          const heartbeat = setInterval(() => res.write(': heartbeat\n\n'), 30_000)
+          req.on('close', () => {
+            clearInterval(interval)
+            clearInterval(heartbeat)
           })
         })
 

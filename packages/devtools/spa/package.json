@@ -1,0 +1,17 @@
+{
+  "name": "@forinda/kickjs-devtools-spa",
+  "version": "3.2.0",
+  "private": true,
+  "description": "DevTools panel SPA — built with Vite + Solid, output committed to ../public/spa/",
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite"
+  },
+  "devDependencies": {
+    "@forinda/kickjs-devtools-kit": "workspace:*",
+    "solid-js": "^1.9.12",
+    "vite": "^8.0.3",
+    "vite-plugin-solid": "^2.11.12"
+  }
+}
