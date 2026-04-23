@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { readFile, access } from 'node:fs/promises'
-import { join, resolve } from 'node:path'
+import { isAbsolute, join, relative, resolve } from 'node:path'
 
 /** A custom command that developers can register via kick.config.ts */
 export interface KickCommandDefinition {
@@ -391,7 +391,14 @@ export function validateAssetMap(config: KickConfig | null, cwd: string): string
     }
     if (entry.dest) {
       const destAbs = resolve(cwd, entry.dest)
-      if (!destAbs.startsWith(root)) {
+      // path.relative is the right primitive for "is X inside Y?" —
+      // a raw startsWith() prefix match has two failure modes the
+      // earlier version hit: (a) `/app` is a prefix of `/app2/...`
+      // even though they're different directories, and (b) it's
+      // case-sensitive on filesystems that aren't (macOS default,
+      // Windows). path.relative handles both correctly + accounts
+      // for `..` traversal in the destination.
+      if (escapesRoot(destAbs, root)) {
         warnings.push(
           `assetMap.${namespace}.dest ('${entry.dest}') resolves outside the project root — refusing to copy`,
         )
@@ -399,4 +406,21 @@ export function validateAssetMap(config: KickConfig | null, cwd: string): string
     }
   }
   return warnings
+}
+
+/**
+ * Returns true when `path` (absolute) resolves outside of `root`
+ * (also absolute). Uses `path.relative` for accuracy:
+ *
+ * - The result is empty when paths are identical (inside).
+ * - It starts with `..` when the path traverses outside the root.
+ * - It's absolute (Windows: cross-drive) when there's no relative
+ *   path between them.
+ *
+ * Avoids the prefix-match pitfalls of `startsWith` (e.g. `/app`
+ * matching `/app2/...`, or case-mismatches on macOS / Windows).
+ */
+function escapesRoot(path: string, root: string): boolean {
+  const rel = relative(root, path)
+  return rel === '' ? false : rel.startsWith('..') || isAbsolute(rel)
 }

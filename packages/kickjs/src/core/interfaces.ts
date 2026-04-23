@@ -44,15 +44,18 @@ export type ClassKind =
 export type PostConstructStatus = 'pending' | 'completed' | 'failed' | 'skipped'
 
 /**
- * String metadata keys for the DI system + decorator subsystem. All
- * keys use the `kick:area:thing` colon-delimited form — consistent
- * with the §22 v4 convention of avoiding Symbols (Symbols don't
- * survive JSON serialisation, can't be addressed by string from
- * worker threads, and don't show up in DevTools snapshots).
+ * String metadata keys for the DI system + decorator subsystem. Every
+ * key starts with the `kick:` prefix; the suffix is a short identifier
+ * that may itself contain `:`, `-`, or `_` separators (historical —
+ * keys grew alongside the framework). The §22 v4 convention is "no
+ * Symbols", not "use a strict naming scheme" — Symbols don't survive
+ * JSON serialisation, can't be addressed by string from worker
+ * threads, and don't show up in DevTools snapshots.
  *
  * `reflect-metadata` accepts both Symbol and string keys identically,
- * so the consumer-side change is internal — references go through
- * `METADATA.<NAME>`, not the underlying value.
+ * so the consumer-side change is internal — references go through the
+ * `METADATA` enum's named members (e.g. `METADATA.INJECT`), not the
+ * underlying string.
  *
  * The `design:*` entries match what TypeScript's
  * `emitDecoratorMetadata` writes; those names are fixed by the
