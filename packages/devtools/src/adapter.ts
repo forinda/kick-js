@@ -26,6 +26,7 @@ import {
   type IntrospectionSnapshot,
 } from '@forinda/kickjs-devtools-kit'
 import { collectTopologySnapshot, type TopologyApplicationLike } from './topology'
+import { collectDevtoolsTabs } from './devtools-tabs'
 
 const log = createLogger('DevTools')
 
@@ -509,6 +510,20 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
             clearInterval(interval)
             clearInterval(heartbeat)
           })
+        })
+
+        // ── Custom-tab discovery (architecture.md §23) ──────────────
+        // Walks every plugin/adapter `devtoolsTabs?()` contribution
+        // and serves the deduped + validated list. The SPA fetches
+        // this once at boot to render dynamic tabs after the four
+        // built-ins.
+        router.get('/tabs', (_req: Request, res: Response) => {
+          const kickApp = appRef?.__kickApp as TopologyApplicationLike | undefined
+          if (!kickApp) {
+            res.status(503).json({ error: 'tabs unavailable — application surface not exposed' })
+            return
+          }
+          res.json(collectDevtoolsTabs(kickApp))
         })
 
         // ── Topology RPC (architecture.md §23) ──────────────────────

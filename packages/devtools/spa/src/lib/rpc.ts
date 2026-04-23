@@ -5,7 +5,12 @@
  * adapter when serving the dashboard).
  */
 
-import type { RuntimeSnapshot, MemoryHealth, TopologySnapshot } from '@forinda/kickjs-devtools-kit'
+import type {
+  DevtoolsTabDescriptor,
+  MemoryHealth,
+  RuntimeSnapshot,
+  TopologySnapshot,
+} from '@forinda/kickjs-devtools-kit'
 
 /** Resolve the base path the adapter mounted the dashboard under. */
 export function getBasePath(): string {
@@ -74,6 +79,11 @@ export const rpc = {
       uptime: number
       adapters: Record<string, string>
     }>('/health'),
+  tabs: () =>
+    get<{
+      tabs: DevtoolsTabDescriptor[]
+      errors: ReadonlyArray<{ source: string; reason: string }>
+    }>('/tabs'),
 }
 
 /**
