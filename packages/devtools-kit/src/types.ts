@@ -130,6 +130,80 @@ export interface RuntimeSnapshot {
 }
 
 /**
+ * Coarse DI-token entry for the topology graph — mirrors
+ * `Container.getRegistrations()` but trimmed to the fields the panel
+ * actually renders. Full registration data (resolve counts, post-
+ * construct status) stays available via the existing
+ * `/_debug/container` endpoint.
+ */
+export interface TopologyTokenEntry {
+  /** Token string identifier (DI registry key). */
+  token: string
+  /** Resolution scope — `'singleton' | 'transient' | 'request'` (or framework custom). */
+  scope: string
+  /** Kind tag — `'class' | 'value' | 'factory'` etc. */
+  kind: string
+  /** Whether the token has been resolved at least once. */
+  instantiated: boolean
+}
+
+/**
+ * Coarse Context Contributor entry for the topology graph. The full
+ * pipeline (with deps, sources, etc.) is documented in
+ * `architecture.md` §20; this surface is just enough for the panel to
+ * draw the Module → Contributor edge.
+ */
+export interface TopologyContributorEntry {
+  /** Contributor key — what it sets on `ctx.set(...)`. */
+  key: string
+  /** Source layer — `'method' | 'class' | 'module' | 'adapter' | 'global'`. */
+  source: string
+  /** Other contributor keys this one depends on. */
+  dependsOn: readonly string[]
+}
+
+/**
+ * Aggregate topology snapshot — combines plugins, adapters, contributors,
+ * and DI tokens into one JSON-serialisable graph. Returned by the
+ * DevTools `/_debug/topology` endpoint and consumed by the Topology tab
+ * to render the plugin → adapter → contributor → token tree.
+ *
+ * Each plugin/adapter slot carries the full `IntrospectionSnapshot`
+ * when the primitive implements `introspect()`; primitives that don't
+ * are reduced to a stub with `protocolVersion + name + kind` only.
+ */
+export interface TopologySnapshot {
+  protocolVersion: typeof PROTOCOL_VERSION
+  /** Wall-clock timestamp when the snapshot was taken (ms since epoch). */
+  timestamp: number
+  /** All registered plugins, in mount order (post-dependsOn topo-sort). */
+  plugins: IntrospectionSnapshot[]
+  /** All registered adapters, in mount order (post-dependsOn topo-sort). */
+  adapters: IntrospectionSnapshot[]
+  /** All discovered Context Contributors. */
+  contributors: TopologyContributorEntry[]
+  /** All registered DI tokens. */
+  diTokens: TopologyTokenEntry[]
+  /**
+   * Per-primitive introspection failures — a non-empty list signals
+   * that one or more `introspect()` calls threw. The topology endpoint
+   * still returns a 200 with the partial graph; tests assert this is
+   * empty on the happy path.
+   */
+  errors: readonly TopologyError[]
+}
+
+/** A single introspection failure surfaced in {@link TopologySnapshot.errors}. */
+export interface TopologyError {
+  /** The plugin/adapter name whose introspect() threw. */
+  name: string
+  /** Discriminator. */
+  kind: 'plugin' | 'adapter'
+  /** Error message (`err.message`); never the stack to keep snapshots compact. */
+  message: string
+}
+
+/**
  * Composite memory health signal derived from a window of
  * {@link RuntimeSnapshot}s plus the active-handle inventory. The Memory
  * tab uses this to drive the leak-warning badge.

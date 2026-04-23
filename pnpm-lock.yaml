@@ -1047,6 +1047,9 @@ importers:
 
   packages/mailer:
     dependencies:
+      '@forinda/kickjs-devtools-kit':
+        specifier: workspace:*
+        version: link:../devtools-kit
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
@@ -1115,6 +1118,9 @@ importers:
 
   packages/multi-tenant:
     dependencies:
+      '@forinda/kickjs-devtools-kit':
+        specifier: workspace:*
+        version: link:../devtools-kit
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
@@ -1221,6 +1227,9 @@ importers:
 
   packages/queue:
     dependencies:
+      '@forinda/kickjs-devtools-kit':
+        specifier: workspace:*
+        version: link:../devtools-kit
       bullmq:
         specifier: '>=5.0.0'
         version: 5.71.0

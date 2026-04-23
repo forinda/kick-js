@@ -6,6 +6,7 @@ import {
   getClassMetaOrUndefined,
   getClassMeta,
 } from '@forinda/kickjs'
+import { PROTOCOL_VERSION, type IntrospectionSnapshot } from '@forinda/kickjs-devtools-kit'
 import {
   QUEUE_MANAGER,
   QUEUE_METADATA,
@@ -81,6 +82,28 @@ export const QueueAdapter = defineAdapter<QueueAdapterOptions, QueueAdapterExten
     return {
       getQueueNames,
       getQueueStats,
+
+      // ── DevTools introspection (architecture.md §23) ─────────────
+      // Cheap snapshot — counts only, no Redis round trip. The full
+      // per-queue stats are still served via the existing
+      // `/_debug/queues` endpoint for adopters who need them.
+      introspect(): IntrospectionSnapshot {
+        return {
+          protocolVersion: PROTOCOL_VERSION,
+          name: 'QueueAdapter',
+          kind: 'adapter',
+          state: {
+            redisHost: options.redis.host,
+            redisPort: options.redis.port,
+          },
+          tokens: { provides: ['kick/queue/Manager'], requires: [] },
+          metrics: {
+            registeredQueues: queueService.getQueueNames().length,
+            activeWorkers: workers.length,
+            registeredJobClasses: jobRegistry.size,
+          },
+        }
+      },
 
       beforeStart({ container }) {
         const { redis, queues: preCreateQueues = [], concurrency = 1 } = options

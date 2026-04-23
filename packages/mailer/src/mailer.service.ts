@@ -41,10 +41,20 @@ export const MAILER = createToken<MailerService>('kick/mailer/Service')
  * ```
  */
 export class MailerService {
-  private provider: MailProvider
-  private defaultFrom?: MailRecipient
-  private templateEngine?: MailTemplateEngine
-  private enabled: boolean
+  private readonly provider: MailProvider
+  private readonly defaultFrom?: MailRecipient
+  private readonly templateEngine?: MailTemplateEngine
+  private readonly enabled: boolean
+
+  // Counters surfaced via the MailerAdapter's introspect() to DevTools
+  // (architecture.md §23). Public + readonly externally so the adapter
+  // wrapper reads them without coupling to internal field layout.
+  /** Total messages successfully accepted by the provider. */
+  public sentCount = 0
+  /** Total messages that threw inside provider.send(). */
+  public failedCount = 0
+  /** Total messages skipped because `enabled = false` (dry-run mode). */
+  public dryRunCount = 0
 
   constructor(options: MailerOptions) {
     this.provider = options.provider
@@ -66,15 +76,18 @@ export class MailerService {
     }
 
     if (!this.enabled) {
+      this.dryRunCount++
       log.info(`[dry-run] → ${formatRecipient(msg.to)} | ${msg.subject}`)
       return { messageId: 'dry-run', accepted: true }
     }
 
     try {
       const result = await this.provider.send(msg)
+      this.sentCount++
       log.info(`Sent → ${formatRecipient(msg.to)} | ${msg.subject} [${result.messageId}]`)
       return result
     } catch (err: any) {
+      this.failedCount++
       log.error({ err }, `Failed → ${formatRecipient(msg.to)} | ${msg.subject}`)
       throw err
     }

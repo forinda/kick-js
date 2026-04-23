@@ -21,6 +21,10 @@ export {
   type RpcResponse,
   type RpcSuccess,
   type RuntimeSnapshot,
+  type TopologyContributorEntry,
+  type TopologyError,
+  type TopologySnapshot,
+  type TopologyTokenEntry,
 } from './types'
 
 export { RuntimeSampler, type RuntimeSamplerOptions } from './runtime-sampler'
