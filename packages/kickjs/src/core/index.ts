@@ -94,7 +94,6 @@ export {
   Logger,
   createLogger,
   rootLogger,
-  logger,
   ConsoleLoggerProvider,
   type LoggerProvider,
 } from './logger'

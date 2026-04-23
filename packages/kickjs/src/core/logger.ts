@@ -260,6 +260,3 @@ export class Logger {
 export function createLogger(name: string): Logger {
   return Logger.for(name)
 }
-
-/** @deprecated Use rootLogger instead */
-export const logger = rootLogger
