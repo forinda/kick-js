@@ -5,6 +5,7 @@ import type { Command } from 'commander'
 import { runShellCommand, runNodeWithEnv } from '../utils/shell'
 import { loadKickConfig } from '../config'
 import { runTypegen } from '../typegen'
+import { buildAssets } from '../asset-manager/build'
 
 /**
  * Start the Vite dev server with @forinda/kickjs-vite plugin.
@@ -162,7 +163,41 @@ export function registerRunCommands(program: Command): void {
         }
       }
 
+      // Asset manager (assets-plan.md PR 2). Drives its own copy +
+      // emits dist/.kickjs-assets.json for the runtime resolver. No-op
+      // when assetMap is missing — silent for adopters who don't use it.
+      if (config?.assetMap && Object.keys(config.assetMap).length > 0) {
+        console.log('\n  Building asset map...')
+        try {
+          await buildAssets(config, { cwd: process.cwd() })
+        } catch (err) {
+          console.error(
+            `    ✗ asset build failed: ${err instanceof Error ? err.message : String(err)}`,
+          )
+          process.exit(1)
+        }
+      }
+
       console.log('\n  Build complete.\n')
+    })
+
+  program
+    .command('build:assets')
+    .description('Rebuild dist/.kickjs-assets.json from kick.config assetMap (no JS rebuild)')
+    .action(async () => {
+      const config = await loadKickConfig(process.cwd())
+      if (!config?.assetMap || Object.keys(config.assetMap).length === 0) {
+        console.log('  No assetMap entries — nothing to build.')
+        return
+      }
+      console.log('\n  Building asset map...')
+      try {
+        await buildAssets(config, { cwd: process.cwd() })
+        console.log('\n  Asset build complete.\n')
+      } catch (err) {
+        console.error(`  ✗ ${err instanceof Error ? err.message : String(err)}`)
+        process.exit(1)
+      }
     })
 
   program

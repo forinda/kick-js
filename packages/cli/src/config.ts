@@ -218,6 +218,26 @@ export interface KickConfig {
    */
   copyDirs?: Array<string | { src: string; dest?: string }>
   /**
+   * Build output settings. The asset manager + `kick build`'s copy
+   * steps honour these — adopters who use Vite's `build.outDir =
+   * 'out'` (or any non-default) should mirror the value here so
+   * `assets.x.y()` paths line up with where Vite actually wrote.
+   *
+   * @example
+   * ```ts
+   * build: { outDir: 'out' }
+   * ```
+   */
+  build?: {
+    /**
+     * Output directory, relative to project root. Defaults to
+     * `'dist'`. The asset manager emits its manifest + copies
+     * assetMap entries into this directory (under a per-namespace
+     * subdirectory by default; override per-entry via `dest`).
+     */
+    outDir?: string
+  }
+  /**
    * Typed, addressable assets — see `assets-plan.md`. Each entry maps
    * a logical namespace name to a source directory. The build pipeline
    * auto-derives the necessary copy step + emits a manifest at
