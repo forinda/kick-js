@@ -86,6 +86,9 @@ export function registerTypegenCommand(program: Command): void {
         allowDuplicates: opts.allowDuplicates,
         schemaValidator,
         envFile,
+        // Asset typegen (assets-plan.md PR 4) — drives `KickAssets`
+        // augmentation generation. No-op when assetMap is empty.
+        assetMap: config?.assetMap,
       }
 
       try {

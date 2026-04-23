@@ -41,6 +41,7 @@ import type {
   DiscoveredRoute,
   DiscoveredToken,
 } from './scanner'
+import { renderAssetTypes, type DiscoveredAssets } from './asset-types'
 
 /** Header written to every generated file */
 const HEADER = `/* eslint-disable */
@@ -173,14 +174,17 @@ function renderIndex(includeEnv: boolean): string {
 export type { ServiceToken } from './services'
 export type { ModuleToken } from './modules'
 
-// The registry, routes, plugins, and env augmentations are loaded as
-// side-effects — importing this file (or having it on tsconfig include)
-// is enough for \`container.resolve()\`, \`Ctx<KickRoutes.UserController['getUser']>\`,
-// \`dependsOn: ['TenantAdapter']\`, and \`@Value('PORT')\` to resolve.
+// The registry, routes, plugins, assets, and env augmentations are
+// loaded as side-effects — importing this file (or having it on
+// tsconfig include) is enough for \`container.resolve()\`,
+// \`Ctx<KickRoutes.UserController['getUser']>\`,
+// \`dependsOn: ['TenantAdapter']\`, \`assets.mails.welcome()\`, and
+// \`@Value('PORT')\` to resolve.
 import './registry'
 import './routes'
 import './plugins'
 import './augmentations'
+import './assets'
 ${envImport}`
 }
 
@@ -579,6 +583,8 @@ export interface GenerateResult {
   pluginEntries: number
   /** Number of `defineAugmentation` calls catalogued */
   augmentationEntries: number
+  /** Number of typed asset entries (every file in every assetMap dir) */
+  assetEntries: number
   /** Whether a typed env augmentation was emitted */
   envWritten: boolean
   /** Files that were written */
@@ -605,6 +611,8 @@ export interface GenerateOptions {
   pluginsAndAdapters?: DiscoveredPluginOrAdapter[]
   /** `defineAugmentation` calls discovered in the project */
   augmentations?: DiscoveredAugmentation[]
+  /** Discovered typed assets from the assetMap walker (PR 4 of asset-manager). */
+  assets?: DiscoveredAssets
   /** Output directory (typically `<cwd>/.kickjs/types`) */
   outDir: string
   /**
@@ -636,6 +644,7 @@ export async function generateTypes(opts: GenerateOptions): Promise<GenerateResu
     env = null,
     pluginsAndAdapters = [],
     augmentations = [],
+    assets = { entries: [], count: 0 } as DiscoveredAssets,
     outDir,
     allowDuplicates = false,
     schemaValidator = false,
@@ -661,6 +670,7 @@ export async function generateTypes(opts: GenerateOptions): Promise<GenerateResu
   const envFile = join(outDir, 'env.ts')
   const pluginsFile = join(outDir, 'plugins.d.ts')
   const augmentationsFile = join(outDir, 'augmentations.d.ts')
+  const assetsFile = join(outDir, 'assets.d.ts')
   const indexFile = join(outDir, 'index.d.ts')
 
   const collidingNames = new Set(collisions.map((c) => c.className))
@@ -691,6 +701,7 @@ export async function generateTypes(opts: GenerateOptions): Promise<GenerateResu
   const envContent = renderEnv(env, envFile)
   const pluginsContent = renderPlugins(pluginsAndAdapters)
   const augmentationsContent = renderAugmentations(augmentations)
+  const assetsContent = renderAssetTypes(assets)
   const indexContent = renderIndex(envContent !== null)
 
   await writeFile(registryFile, registryContent, 'utf-8')
@@ -699,6 +710,7 @@ export async function generateTypes(opts: GenerateOptions): Promise<GenerateResu
   await writeFile(routesFile, routesContent, 'utf-8')
   await writeFile(pluginsFile, pluginsContent, 'utf-8')
   await writeFile(augmentationsFile, augmentationsContent, 'utf-8')
+  await writeFile(assetsFile, assetsContent, 'utf-8')
   await writeFile(indexFile, indexContent, 'utf-8')
 
   const written = [
@@ -708,6 +720,7 @@ export async function generateTypes(opts: GenerateOptions): Promise<GenerateResu
     routesFile,
     pluginsFile,
     augmentationsFile,
+    assetsFile,
     indexFile,
   ]
   if (envContent) {
@@ -732,6 +745,7 @@ export async function generateTypes(opts: GenerateOptions): Promise<GenerateResu
     routeEntries: routes.length,
     pluginEntries: uniquePluginNames,
     augmentationEntries: uniqueAugmentations,
+    assetEntries: assets.count,
     envWritten: envContent !== null,
     written,
     resolvedCollisions: collisions.length,

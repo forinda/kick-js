@@ -40,6 +40,7 @@ async function startDevServer(_entry: string, port?: string): Promise<void> {
       envFile,
       srcDir: devConfig?.typegen?.srcDir,
       outDir: devConfig?.typegen?.outDir,
+      assetMap: devConfig?.assetMap,
     })
   } catch (err: any) {
     console.warn(`  kick typegen: skipped (${err?.message ?? err})`)
@@ -81,6 +82,7 @@ async function startDevServer(_entry: string, port?: string): Promise<void> {
         envFile,
         srcDir: devConfig?.typegen?.srcDir,
         outDir: devConfig?.typegen?.outDir,
+        assetMap: devConfig?.assetMap,
       }).catch(() => {})
     }, 100)
   }
