@@ -19,6 +19,12 @@ import {
   getClassMeta,
   getMethodMeta,
 } from '@forinda/kickjs'
+import {
+  MemoryAnalyzer,
+  PROTOCOL_VERSION,
+  RuntimeSampler,
+  type IntrospectionSnapshot,
+} from '@forinda/kickjs-devtools-kit'
 
 const log = createLogger('DevTools')
 
@@ -89,6 +95,24 @@ export interface DevToolsOptions {
    * ```
    */
   secret?: string | false
+
+  /**
+   * Tuning for the runtime sampler that powers `/_debug/runtime` and
+   * the upcoming Memory tab (architecture.md §23). Defaults to
+   * 1-second polling with a 60-sample (~1 minute) ring buffer.
+   *
+   * Set `runtime.enabled = false` to skip starting the sampler — the
+   * `/_debug/runtime` endpoint then returns 404 instead of an empty
+   * snapshot, signalling deliberate opt-out rather than a startup race.
+   */
+  runtime?: {
+    /** Whether to start the runtime sampler at all. Default: true. */
+    enabled?: boolean
+    /** Polling interval in milliseconds. Default: 1000. */
+    intervalMs?: number
+    /** Ring-buffer size — number of past samples retained. Default: 60. */
+    bufferSize?: number
+  }
 }
 
 /**
@@ -111,6 +135,18 @@ export interface DevToolsAdapterExtensions {
   readonly uptimeSeconds: ComputedRef<number>
   /** Per-route latency tracking. */
   readonly routeLatency: Record<string, RouteStats>
+  /**
+   * Tier-1 runtime sampler from `@forinda/kickjs-devtools-kit`. `null`
+   * when `runtime.enabled` is `false`. Tests can `latest()` and
+   * `history()` directly without going through the HTTP endpoint.
+   */
+  readonly runtimeSampler: RuntimeSampler | null
+  /**
+   * Memory analyzer fed by the runtime sampler. `null` when the
+   * sampler is disabled. Use `analyzer.health(sampler.history())` to
+   * compose a composite memory-health snapshot.
+   */
+  readonly memoryAnalyzer: MemoryAnalyzer | null
 }
 
 /**
@@ -165,6 +201,19 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
     } else {
       secret = randomBytes(16).toString('hex')
     }
+
+    // ── Runtime sampler + memory analyzer (kit) ────────────────────
+    // Lazily instantiated so an adopter that disables runtime monitoring
+    // doesn't pay the perf_hooks histogram cost. Lifecycle: start in
+    // `beforeMount`, stop in `shutdown`.
+    const runtimeEnabled = options.runtime?.enabled ?? true
+    const runtimeSampler = runtimeEnabled
+      ? new RuntimeSampler({
+          intervalMs: options.runtime?.intervalMs ?? 1000,
+          bufferSize: options.runtime?.bufferSize ?? 60,
+        })
+      : null
+    const memoryAnalyzer = runtimeEnabled ? new MemoryAnalyzer() : null
 
     // ── Reactive state ─────────────────────────────────────────────
     const requestCount = ref(0)
@@ -237,6 +286,33 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
       errorRate,
       uptimeSeconds,
       routeLatency,
+      runtimeSampler,
+      memoryAnalyzer,
+
+      // ── DevTools introspection (architecture.md §23) ─────────────
+      // Cheap snapshot — counters + flags only. Anything that requires
+      // a container walk or DB hit belongs in the per-endpoint RPCs
+      // (`/_debug/container`, `/_debug/graph`), not here.
+      introspect(): IntrospectionSnapshot {
+        return {
+          protocolVersion: PROTOCOL_VERSION,
+          name: 'DevToolsAdapter',
+          kind: 'adapter',
+          state: {
+            basePath,
+            enabled,
+            runtimeEnabled,
+            secret: secret === false ? false : 'present',
+          },
+          metrics: {
+            requestCount: requestCount.value,
+            serverErrors: errorCount.value,
+            clientErrors: clientErrorCount.value,
+            uptimeSeconds: uptimeSeconds.value,
+            routesTracked: routes.length,
+          },
+        }
+      },
 
       // ── Lifecycle ─────────────────────────────────────────────────
 
@@ -249,6 +325,12 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
         // Clear routes on rebuild/restart to prevent HMR duplication
         routes = []
         adapterStatuses['DevToolsAdapter'] = 'running'
+
+        // Start the runtime sampler + memory analyzer here (rather than
+        // at construction) so test harnesses that build the adapter but
+        // never mount it don't leak interval timers.
+        runtimeSampler?.start()
+        memoryAnalyzer?.start()
 
         const router = Router()
 
@@ -326,6 +408,27 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
             container: container?.getRegistrations().length ?? 0,
             routeLatency,
             ...(wsAdapter ? { ws: wsAdapter.getStats() } : {}),
+          })
+        })
+
+        // ── Tier-1 runtime monitoring (architecture.md §23) ─────────
+        // Returns the latest RuntimeSnapshot + a composite MemoryHealth
+        // computed from the sampler's ring buffer. Returns 404 when the
+        // sampler is disabled so adopters can distinguish "off" from
+        // "starting up".
+        router.get('/runtime', (_req: Request, res: Response) => {
+          if (!runtimeSampler || !memoryAnalyzer) {
+            res.status(404).json({ error: 'runtime sampler disabled — set runtime.enabled = true' })
+            return
+          }
+          const latest = runtimeSampler.latest()
+          const history = runtimeSampler.history()
+          const health = memoryAnalyzer.health(history)
+          res.json({
+            protocolVersion: PROTOCOL_VERSION,
+            latest,
+            history,
+            health,
           })
         })
 
@@ -547,6 +650,8 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
 
       shutdown() {
         stopErrorWatch?.()
+        runtimeSampler?.stop()
+        memoryAnalyzer?.stop()
         adapterStatuses['DevToolsAdapter'] = 'stopped'
       },
     }

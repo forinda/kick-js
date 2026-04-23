@@ -859,6 +859,9 @@ importers:
 
   packages/devtools:
     dependencies:
+      '@forinda/kickjs-devtools-kit':
+        specifier: workspace:*
+        version: link:../devtools-kit
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
