@@ -1,7 +1,12 @@
-import type { MaybePromise } from '@forinda/kickjs'
+import { createToken, type MaybePromise } from '@forinda/kickjs'
 
-/** DI token for resolving the current tenant's PrismaClient (multi-tenant) */
-export const PRISMA_TENANT_CLIENT = Symbol('PrismaTenantDB')
+/**
+ * DI token for resolving the current tenant's PrismaClient (multi-tenant).
+ *
+ * Typed as `unknown` because Prisma 5/6/7 produce different client shapes;
+ * cast at the use site (e.g. `@Inject(PRISMA_TENANT_CLIENT) private db!: PrismaClient`).
+ */
+export const PRISMA_TENANT_CLIENT = createToken<unknown>('kick/prisma/Client:tenant')
 
 export interface PrismaTenantAdapterOptions<TDb = unknown> {
   /**
@@ -55,8 +60,13 @@ export interface PrismaAdapterOptions {
   logging?: boolean
 }
 
-/** DI token for resolving the PrismaClient from the container */
-export const PRISMA_CLIENT = Symbol('PrismaClient')
+/**
+ * DI token for resolving the PrismaClient from the container.
+ *
+ * Typed as `unknown` because Prisma 5/6/7 produce different client shapes;
+ * cast at the use site (e.g. `@Inject(PRISMA_CLIENT) private prisma!: PrismaClient`).
+ */
+export const PRISMA_CLIENT = createToken<unknown>('kick/prisma/Client')
 
 /**
  * Common Prisma model delegate operations.

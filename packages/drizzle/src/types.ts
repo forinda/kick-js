@@ -1,10 +1,20 @@
-import type { MaybePromise } from '@forinda/kickjs'
+import { createToken, type MaybePromise } from '@forinda/kickjs'
 
-/** DI token for resolving the Drizzle database instance from the container (single-tenant) */
-export const DRIZZLE_DB = Symbol('DrizzleDB')
+/**
+ * DI token for resolving the Drizzle database instance from the container (single-tenant).
+ *
+ * Typed as `unknown` because Drizzle's database type depends on the user's
+ * driver + schema; cast at the use site
+ * (e.g. `@Inject(DRIZZLE_DB) private db!: BetterSQLite3Database<typeof schema>`).
+ */
+export const DRIZZLE_DB = createToken<unknown>('kick/drizzle/DB')
 
-/** DI token for resolving the current tenant's Drizzle database instance (multi-tenant) */
-export const DRIZZLE_TENANT_DB = Symbol('DrizzleTenantDB')
+/**
+ * DI token for resolving the current tenant's Drizzle database instance (multi-tenant).
+ *
+ * Same typing caveat as {@link DRIZZLE_DB} — cast at the use site.
+ */
+export const DRIZZLE_TENANT_DB = createToken<unknown>('kick/drizzle/DB:tenant')
 
 export interface DrizzleAdapterOptions<TDb = unknown> {
   /**

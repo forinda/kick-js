@@ -1,4 +1,6 @@
 import 'reflect-metadata'
+import { createToken } from '@forinda/kickjs'
+import type { QueueService } from './queue.service'
 
 /** Options for configuring the QueueAdapter */
 export interface QueueAdapterOptions {
@@ -14,8 +16,8 @@ export interface QueueAdapterOptions {
   concurrency?: number
 }
 
-/** DI token for resolving the QueueService from the container */
-export const QUEUE_MANAGER = Symbol('QueueManager')
+/** DI token for resolving the QueueService from the container. */
+export const QUEUE_MANAGER = createToken<QueueService>('kick/queue/Manager')
 
 /**
  * Abstract interface for queue providers.

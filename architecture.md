@@ -3878,14 +3878,17 @@ Two separators with distinct semantics — **slash for ownership**, **colon for 
 <scope>/<key>:<instance>[:<extra>]     # instance scoping: which .scoped() shard owns it
 ```
 
-| Form                       | Example                                       | Meaning                                                                        |
-| -------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------ |
-| `<scope>/<key>`            | `auth/User`, `prisma/Client`                  | Singleton token owned by the `<scope>` package                                 |
-| `<scope>/<key>/<suffix>`   | `cache/Provider/redis`                        | Multiple flavours of one role under one scope                                  |
-| `<scope>/<key>:<instance>` | `prisma/Client:tenant`, `queue/Worker:emails` | Per-`.scoped()` instance — composes the same way `defineAdapter.scoped()` does |
-| `kickjs/<area>.<key>`      | `kickjs/ai.provider`, `kickjs/mcp.tool`       | Framework-internal tokens — keep the existing dotted area for back-compat      |
+| Form                                | Example                                            | Meaning                                                                        |
+| ----------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `kick/<area>/<key>`                 | `kick/auth/User`, `kick/prisma/Client`             | **Reserved** — first-party `@forinda/kickjs-*` adapters and services           |
+| `kick/<area>/<key>:<instance>`      | `kick/prisma/Client:tenant`, `kick/queue/Manager`  | First-party `.scoped()` variant — same `${name}:${scope}` shape as adapters    |
+| `<scope>/<key>`                     | `mycorp/Cache`, `acme/AuditLog`                    | Third-party plugin token — `<scope>` is the org or product short-name          |
+| `<scope>/<key>/<suffix>`            | `mycorp/Cache/redis`, `mycorp/Cache/memory`        | Multiple flavours of one role under one third-party scope                      |
+| `<scope>/<key>:<instance>`          | `mycorp/Worker:emails`, `mycorp/Worker:webhooks`   | Per-`.scoped()` instance — composes the same way `defineAdapter.scoped()` does |
 
-`<scope>` is the package short-name (`auth`, `prisma`, `tenant`, `queue`) — same word as the package's npm slug (`@forinda/kickjs-auth` → `auth`). `<key>` is PascalCase role (`User`, `Client`, `Context`, `Manager`).
+**`kick/` is a reserved prefix** for the framework's own packages (`@forinda/kickjs`, `@forinda/kickjs-auth`, `@forinda/kickjs-prisma`, etc.). Third-party plugins **must not** start their tokens with `kick/` — the typegen layer (§22.4) will warn on third-party tokens that squat the framework namespace. Pick an org-scoped prefix instead (`mycorp/...`, `acme/...`).
+
+For first-party tokens, `<area>` is the package short-name (`auth`, `prisma`, `drizzle`, `queue`, `mailer`) — same word as the package's npm slug minus `@forinda/kickjs-`. `<key>` is PascalCase role (`User`, `Client`, `Manager`, `Service`).
 
 The colon form is **not optional ceremony** — it deliberately mirrors the `${defName}:${scope}` shape that `definePlugin.scoped()` and `defineAdapter.scoped()` already produce, so a `.scoped('tenant')` call's tokens stay grep-pairable with the adapter that owns them.
 
@@ -3898,13 +3901,14 @@ Per-package work, ~10 sites total. Each package's `tokens.ts` / `types.ts` / `co
 export const PRISMA_CLIENT = Symbol('PrismaClient')
 export const PRISMA_TENANT_CLIENT = Symbol('PrismaTenantClient')
 
-// after
+// after — first-party uses the kick/ prefix
 import { createToken } from '@forinda/kickjs'
-import type { PrismaClient } from '@prisma/client'
 
-export const PRISMA_CLIENT = createToken<PrismaClient>('prisma/Client')
-export const PRISMA_TENANT_CLIENT = createToken<PrismaClient>('prisma/Client:tenant')
+export const PRISMA_CLIENT = createToken<unknown>('kick/prisma/Client')
+export const PRISMA_TENANT_CLIENT = createToken<unknown>('kick/prisma/Client:tenant')
 ```
+
+(Prisma's client type is `unknown` because Prisma 5/6/7 produce different client shapes; the user casts at the use site. Most other packages can use a concrete `T`.)
 
 **v4 breaking change.** No deprecated-alias bridge — the migration ships in the v4 release with a dedicated migration guide (`docs/guide/migration-v3-to-v4.md`, written alongside the implementation PR). Adopters update import sites once; old `Symbol(...)` consts are deleted, not re-exported.
 
@@ -3915,15 +3919,22 @@ export const PRISMA_TENANT_CLIENT = createToken<PrismaClient>('prisma/Client:ten
 3. Verify `kick typegen` picks up the new token (§22.4 below).
 4. Add a "before / after" entry to the v4 migration guide for every renamed export — adopters need a single file to grep against during their upgrade.
 
-**Lint:** Add a regex check to CI failing on new `Symbol(` declarations inside `packages/*/src/**/tokens.ts` / `types.ts` / `constants.ts`. Cheap, blocks regression. No codemod needed for 10 sites.
+**Lint:** Shipped as `@forinda/kickjs-lint` (`packages/lint/`) with three rules:
+
+- `di-token-symbol` (error) — fails on new `Symbol(...)` DI token declarations in token-bearing files (`tokens.ts` / `types.ts` / `constants.ts` / `service.ts` / `adapter.ts`).
+- `token-kick-prefix` (error, first-party only) — every `createToken('literal')` literal must start with `kick/`.
+- `token-reserved-prefix` (warn, third-party only) — adopters who squat `kick/` get a friendly nudge to pick their own scope.
+
+Adopters install the package and run `kick-lint`; the framework runs `kick-lint --first-party` in pre-commit + CI. Programmatic API (`runLint`, `formatViolations`) is exposed for editor extensions and DevTools (§23) to consume the same rule set.
 
 ### 22.4 Typegen integration
 
 `kick typegen` already discovers `createToken('literal')` calls (the `CREATE_TOKEN_REGEX` in `packages/cli/src/typegen/scanner.ts`). Three small additions wire this into the predictable-strings story:
 
-1. **Convention validator.** Warn (not fail) on tokens that don't match `^([a-z][\w-]*\/[A-Z]\w*)(\/.+)?(:[a-z][\w-]+(:[a-z][\w-]+)*)?$`. Lets adopters break the convention deliberately while making the default obvious.
-2. **`KickJsRegistry` narrows `@Inject` literal.** The registry interface already maps token strings to types. Adding a typed `@Inject<K extends keyof KickJsRegistry>(token: K)` overload narrows `@Inject('prisma/Client')` to `PrismaClient` and turns typo'd literals into compile errors. Mirrors `dependsOn` from §21.2.1.
-3. **`.kickjs/types/tokens.d.ts` (new).** Companion to `plugins.d.ts` — ScopeMap interface so DevTools/typegen/lint can group tokens by `<scope>` without re-parsing the literal.
+1. **Convention validator.** Warn (not fail) on tokens that don't match `^(kick\/)?([a-z][\w-]*\/[A-Z]\w*)(\/.+)?(:[a-z][\w-]+(:[a-z][\w-]+)*)?$`. Lets adopters break the convention deliberately while making the default obvious.
+2. **Reserved-namespace warning.** Third-party tokens starting with `kick/` get an explicit warning (separate from the convention check) — that prefix is reserved for first-party adapters and squatting it would shadow `kick typegen --augmentations` discovery output.
+3. **`KickJsRegistry` narrows `@Inject` literal.** The registry interface already maps token strings to types. Adding a typed `@Inject<K extends keyof KickJsRegistry>(token: K)` overload narrows `@Inject('kick/prisma/Client')` to the resolved client type and turns typo'd literals into compile errors. Mirrors `dependsOn` from §21.2.1.
+4. **`.kickjs/types/tokens.d.ts` (new).** Companion to `plugins.d.ts` — ScopeMap interface so DevTools/typegen/lint can group tokens by `<scope>` (`kick`, `mycorp`, etc.) without re-parsing the literal.
 
 ### 22.5 Out of scope
 
