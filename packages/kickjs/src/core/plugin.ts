@@ -147,4 +147,18 @@ export interface KickPlugin {
    * Clean up plugin resources (connections, intervals, etc.).
    */
   shutdown?(): void | Promise<void>
+
+  /**
+   * Optional DevTools introspection hook (architecture.md §23). Returns
+   * a snapshot describing this plugin's current state, metrics, and DI
+   * tokens. DevTools awaits the result, so async work is fine — but keep
+   * the implementation cheap (counters + flags, no DB round trips) since
+   * the topology endpoint polls on a short interval.
+   *
+   * The return type is intentionally untyped at this layer to avoid
+   * `@forinda/kickjs` taking on a runtime dep on `@forinda/kickjs-devtools-kit`.
+   * Plugin authors should import and return `IntrospectionSnapshot`
+   * from `@forinda/kickjs-devtools-kit` directly.
+   */
+  introspect?(): unknown | Promise<unknown>
 }
