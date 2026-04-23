@@ -251,6 +251,79 @@ export function Value<K extends string>(
   }
 }
 
+// ── @Asset — typed asset path injection (assets-plan.md PR 3+) ─────────
+
+import type { KickAssets } from './assets'
+
+/**
+ * Flatten the nested `KickAssets` augmentation (typegen-emitted in
+ * PR 4) into a string-literal union of dot/slash-joined paths.
+ *
+ * `interface KickAssets { mails: { welcome: () => string; orders: {
+ * confirmation: () => string } } }` becomes
+ * `'mails/welcome' | 'mails/orders/confirmation'`.
+ *
+ * Returns `never` when `KickAssets` is empty (no typegen has run yet)
+ * so `AssetKeyArg` falls through to accept any string.
+ */
+type FlattenAssets<T, Prefix extends string = ''> = {
+  [K in keyof T & string]: T[K] extends () => string
+    ? `${Prefix}${K}`
+    : T[K] extends Record<string, unknown>
+      ? FlattenAssets<T[K], `${Prefix}${K}/`>
+      : never
+}[keyof T & string]
+
+/** Flat union of every known `<namespace>/<key>` path. */
+export type AssetKey = FlattenAssets<KickAssets>
+
+/**
+ * Constraint mirroring `ValueKey<K>` — accepts any string when
+ * `AssetKey` is `never` (back-compat for adopters who haven't run
+ * `kick typegen` yet) but locks the argument to known literals once
+ * the typegen-augmented `KickAssets` interface is populated.
+ */
+type AssetKeyArg<K extends string> = [AssetKey] extends [never] ? K : K & AssetKey
+
+/**
+ * Inject the resolved file-system path for a typed asset. Mirrors
+ * `@Value`'s lazy-getter pattern — the asset is resolved on every
+ * property access, NOT at class instantiation, so:
+ *
+ * - Tests can swap fixtures + clear the cache without re-instantiating
+ *   the consuming class.
+ * - The first access cost is paid once per process (the manifest cache
+ *   in `core/assets.ts` makes subsequent calls cheap).
+ *
+ * Type-safety:
+ *
+ * - Without typegen, any string key is accepted (back-compat — same
+ *   trick as `@Value`).
+ * - After typegen, `KickAssets` is populated and `AssetKey` is a
+ *   union of every flattened `<namespace>/<key>` path. Unknown keys
+ *   become a TS error.
+ *
+ * @example
+ * ```ts
+ * import { Service, Asset } from '@forinda/kickjs'
+ *
+ * `@Service()`
+ * class MailService {
+ *   `@Asset('mails/welcome')`
+ *   private welcomeTemplate!: string
+ *
+ *   send(user: User) {
+ *     return ejs.renderFile(this.welcomeTemplate, { user })
+ *   }
+ * }
+ * ```
+ */
+export function Asset<K extends string>(assetKey: AssetKeyArg<K>): PropertyDecorator {
+  return (target, propertyKey) => {
+    setInMetaMap(METADATA.ASSET, target, propertyKey as string, { assetKey })
+  }
+}
+
 // ── HTTP Route Decorators ───────────────────────────────────────────────
 
 export interface RouteDefinition {
