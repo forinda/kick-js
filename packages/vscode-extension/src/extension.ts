@@ -42,10 +42,27 @@ export async function activate(context: vscode.ExtensionContext) {
     { dispose: () => disposeProviders() },
   )
 
-  if (vscode.workspace.getConfiguration('kickjs').get<boolean>('autoRefresh', true)) {
-    const interval = setInterval(refreshAll, 30000)
-    context.subscriptions.push({ dispose: () => clearInterval(interval) })
-  }
+  let interval = startAutoRefresh()
+  context.subscriptions.push({ dispose: () => stopAutoRefresh(interval) })
+
+  // React to URL / debugPath / autoRefresh changes without a window
+  // reload. Settings.json edits + per-folder overrides + the Connect
+  // command's update() all funnel through here.
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (!e.affectsConfiguration('kickjs')) return
+      if (
+        e.affectsConfiguration('kickjs.serverUrl') ||
+        e.affectsConfiguration('kickjs.debugPath')
+      ) {
+        rebuildProviders(context)
+      }
+      if (e.affectsConfiguration('kickjs.autoRefresh')) {
+        stopAutoRefresh(interval)
+        interval = startAutoRefresh()
+      }
+    }),
+  )
 
   // First-run auto-detect: if the user hasn't yet picked a URL AND the
   // workspace looks like a KickJS project, race the standard candidate
@@ -138,6 +155,15 @@ function setConnected(connected: boolean): void {
   // Drives the `when: '!kickjs.connected'` clause on the welcome views
   // declared in package.json — flips them off the moment a probe lands.
   vscode.commands.executeCommand('setContext', 'kickjs.connected', connected)
+}
+
+function startAutoRefresh(): ReturnType<typeof setInterval> | null {
+  if (!vscode.workspace.getConfiguration('kickjs').get<boolean>('autoRefresh', true)) return null
+  return setInterval(refreshAll, 30000)
+}
+
+function stopAutoRefresh(handle: ReturnType<typeof setInterval> | null): void {
+  if (handle) clearInterval(handle)
 }
 
 function trimRightSlash(s: string): string {
