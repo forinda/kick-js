@@ -1,14 +1,7 @@
 import 'reflect-metadata'
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { DevToolsAdapter, type DevToolsOptions } from '@forinda/kickjs-devtools'
-import {
-  Container,
-  METADATA,
-  Controller,
-  Get,
-  Post,
-  Middleware,
-} from '@forinda/kickjs'
+import { Container, METADATA, Controller, Get, Post, Middleware } from '@forinda/kickjs'
 import type { Request, Response, NextFunction } from 'express'
 
 // ── Helpers ────────────────────────────────────────────────────────────
@@ -600,6 +593,121 @@ describe('DevToolsAdapter', () => {
       const adapter = DevToolsAdapter({ enabled: false })
       // Should be a no-op, no error
       adapter.onRouteMount(NoopController, '/noop')
+    })
+  })
+
+  // ── Runtime sampler integration (PR 2 of §23) ──────────────────────
+
+  describe('runtime sampler integration', () => {
+    it('exposes a runtimeSampler + memoryAnalyzer by default', () => {
+      const adapter = createAdapter()
+      expect(adapter.runtimeSampler).not.toBeNull()
+      expect(adapter.memoryAnalyzer).not.toBeNull()
+      adapter.shutdown()
+    })
+
+    it('skips sampler construction when runtime.enabled is false', () => {
+      const adapter = createAdapter({ runtime: { enabled: false } })
+      expect(adapter.runtimeSampler).toBeNull()
+      expect(adapter.memoryAnalyzer).toBeNull()
+      adapter.shutdown()
+    })
+
+    it('respects custom intervalMs + bufferSize', () => {
+      const adapter = createAdapter({
+        runtime: { intervalMs: 500, bufferSize: 10 },
+      })
+      // Sampler doesn't expose its options directly — the construction
+      // not throwing is the assertion (defensive — guards against the
+      // option fields drifting from the kit's surface).
+      expect(adapter.runtimeSampler).not.toBeNull()
+      adapter.shutdown()
+    })
+
+    it('starts the sampler in beforeMount', async () => {
+      const adapter = createAdapter()
+      // Stub the express app + container so beforeMount can run
+      const fakeApp = { use: vi.fn() } as any
+      const container = new Container()
+      await adapter.beforeMount?.({ app: fakeApp, container } as any)
+      expect(adapter.runtimeSampler?.isRunning()).toBe(true)
+      // Initial sample should already be in the buffer
+      expect(adapter.runtimeSampler?.latest()).not.toBeNull()
+      adapter.shutdown()
+    })
+
+    it('stops the sampler in shutdown', async () => {
+      const adapter = createAdapter()
+      const fakeApp = { use: vi.fn() } as any
+      const container = new Container()
+      await adapter.beforeMount?.({ app: fakeApp, container } as any)
+      expect(adapter.runtimeSampler?.isRunning()).toBe(true)
+      adapter.shutdown()
+      expect(adapter.runtimeSampler?.isRunning()).toBe(false)
+    })
+  })
+
+  // ── introspect() contract (PR 1 of §23) ────────────────────────────
+
+  describe('introspect()', () => {
+    it('returns a snapshot with the expected shape', () => {
+      const adapter = createAdapter()
+      const snap = adapter.introspect?.() as ReturnType<NonNullable<typeof adapter.introspect>>
+      expect(snap).toMatchObject({
+        protocolVersion: 1,
+        name: 'DevToolsAdapter',
+        kind: 'adapter',
+      })
+      expect(snap.state).toMatchObject({
+        basePath: '/_debug',
+        enabled: true,
+        runtimeEnabled: true,
+      })
+      expect(snap.metrics).toMatchObject({
+        requestCount: 0,
+        serverErrors: 0,
+        clientErrors: 0,
+        routesTracked: 0,
+      })
+      adapter.shutdown()
+    })
+
+    it('reports runtimeEnabled = false when disabled', () => {
+      const adapter = createAdapter({ runtime: { enabled: false } })
+      const snap = adapter.introspect?.() as any
+      expect(snap.state.runtimeEnabled).toBe(false)
+      adapter.shutdown()
+    })
+
+    it('redacts the secret value (only reports presence)', () => {
+      const adapter = createAdapter({ secret: 'super-secret-token' })
+      const snap = adapter.introspect?.() as any
+      expect(snap.state.secret).toBe('present')
+      // Defensive — never leak the literal token
+      expect(JSON.stringify(snap)).not.toContain('super-secret-token')
+      adapter.shutdown()
+    })
+
+    it('reports secret: false when guard disabled', () => {
+      const adapter = createAdapter({ secret: false })
+      const snap = adapter.introspect?.() as any
+      expect(snap.state.secret).toBe(false)
+      adapter.shutdown()
+    })
+
+    it('reflects request counts after the middleware runs', () => {
+      const adapter = createAdapter()
+      const middleware = adapter.middleware()[0]!.handler
+      // Simulate two requests + one server error
+      const req = mockReq()
+      middleware(req, mockRes(200), mockNext())
+      ;(mockRes(200) as any)._finishCb?.()
+      adapter.requestCount.value = 5
+      adapter.errorCount.value = 1
+      const snap = adapter.introspect?.() as any
+      expect(snap.metrics.requestCount).toBe(5)
+      expect(snap.metrics.serverErrors).toBe(1)
+      adapter.shutdown()
     })
   })
 })

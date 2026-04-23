@@ -80,6 +80,7 @@
     }
   },
   "dependencies": {
+    "@forinda/kickjs-devtools-kit": "workspace:*",
     "reflect-metadata": "^0.2.2"
   },
   "peerDependencies": {
