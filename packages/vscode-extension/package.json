@@ -7,6 +7,7 @@
   "engines": {
     "vscode": "^1.85.0"
   },
+  "icon": "resources/icon.png",
   "categories": [
     "Other",
     "Debuggers"
@@ -19,7 +20,12 @@
     "typescript",
     "decorator"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onStartupFinished",
+    "workspaceContains:**/kick.config.ts",
+    "workspaceContains:**/kick.config.js",
+    "workspaceContains:**/kick.config.json"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
@@ -108,7 +114,24 @@
           "name": "DI Container"
         }
       ]
-    }
+    },
+    "viewsWelcome": [
+      {
+        "view": "kickjs.health",
+        "contents": "No KickJS app connected.\n\n[$(plug) Connect to App](command:kickjs.connect)\n\nThis probes common dev ports + your workspace `.env` for a running app.\n\n[Open settings](command:workbench.action.openSettings?%22kickjs.serverUrl%22)\n\nLearn more in the [DevTools docs](https://forinda.github.io/kick-js/guide/devtools).",
+        "when": "!kickjs.connected"
+      },
+      {
+        "view": "kickjs.routes",
+        "contents": "No KickJS app connected.\n\n[$(plug) Connect to App](command:kickjs.connect)",
+        "when": "!kickjs.connected"
+      },
+      {
+        "view": "kickjs.container",
+        "contents": "No KickJS app connected.\n\n[$(plug) Connect to App](command:kickjs.connect)",
+        "when": "!kickjs.connected"
+      }
+    ]
   },
   "repository": {
     "type": "git",
@@ -117,14 +140,16 @@
   },
   "license": "MIT",
   "scripts": {
-    "build": "vite build",
+    "build": "pnpm build:icons && vite build",
+    "build:icons": "node scripts/build-icons.mjs",
     "dev": "vite build --watch",
     "test": "vitest run --passWithNoTests",
-    "package": "vsce package"
+    "package": "pnpm build && vsce package"
   },
   "devDependencies": {
     "@types/vscode": "^1.85.0",
     "@types/node": "^25.6.0",
+    "sharp": "^0.34.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.5"
   },

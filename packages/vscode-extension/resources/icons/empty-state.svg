@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.5">
+  <!-- Decorative empty-state graphic shown in welcome views when no app is connected.
+       Combines the brand bolt with a stylized 'unplugged' indicator so the meaning is
+       clear without text. Uses currentColor so it adapts to light + dark themes. -->
+  <polygon points="36 6 12 36 28 36 24 58 52 28 36 28 36 6"/>
+  <line x1="6" y1="6" x2="58" y2="58" stroke-dasharray="2 4" opacity="0.4"/>
+</svg>

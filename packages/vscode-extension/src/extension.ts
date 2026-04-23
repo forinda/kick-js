@@ -4,7 +4,13 @@ import { RoutesTreeProvider } from './providers/routes'
 import { ContainerTreeProvider } from './providers/container'
 import { DashboardPanel } from './panels/dashboard'
 import { registerConnectCommand } from './commands/connect'
-import { DEFAULT_DEBUG_PATH } from './connection'
+import {
+  DEFAULT_DEBUG_PATH,
+  autoDetect,
+  buildCandidates,
+  isKickJsWorkspace,
+  probeConnection,
+} from './connection'
 
 interface ProviderTrio {
   health: HealthTreeProvider
@@ -16,10 +22,7 @@ interface ProviderTrio {
 let current: ProviderTrio | null = null
 let providerDisposables: vscode.Disposable[] = []
 
-export function activate(context: vscode.ExtensionContext) {
-  // Provider trio is rebuilt every time the URL changes (commit 4 wires
-  // a config-change listener) so we keep the wiring in a helper that
-  // both initial activate + connect-command success can call.
+export async function activate(context: vscode.ExtensionContext) {
   rebuildProviders(context)
 
   context.subscriptions.push(
@@ -43,6 +46,51 @@ export function activate(context: vscode.ExtensionContext) {
     const interval = setInterval(refreshAll, 30000)
     context.subscriptions.push({ dispose: () => clearInterval(interval) })
   }
+
+  // First-run auto-detect: if the user hasn't yet picked a URL AND the
+  // workspace looks like a KickJS project, race the standard candidate
+  // list silently. A successful probe writes the URL to workspace
+  // settings and pops a non-blocking 'connected' notification; failures
+  // stay silent so the welcome view remains the primary affordance.
+  await maybeAutoConnect(context)
+}
+
+async function maybeAutoConnect(context: vscode.ExtensionContext): Promise<void> {
+  const config = vscode.workspace.getConfiguration('kickjs')
+  const inspectedUrl = config.inspect<string>('serverUrl')
+  const userPicked =
+    inspectedUrl?.workspaceValue !== undefined ||
+    inspectedUrl?.workspaceFolderValue !== undefined ||
+    inspectedUrl?.globalValue !== undefined
+  if (userPicked) {
+    // Honour the explicit choice — verify it but don't probe alternatives.
+    const result = await probeConnection(
+      config.get<string>('serverUrl', 'http://localhost:3000'),
+      config.get<string>('debugPath', DEFAULT_DEBUG_PATH),
+    )
+    setConnected(result.ok)
+    return
+  }
+
+  const roots = (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath)
+  if (!isKickJsWorkspace(roots)) {
+    setConnected(false)
+    return
+  }
+
+  const candidates = buildCandidates(roots, config.get<string>('debugPath', DEFAULT_DEBUG_PATH))
+  const result = await autoDetect(candidates)
+  if (!result?.ok) {
+    setConnected(false)
+    return
+  }
+
+  // Auto-detected — record the choice + tell the user without a modal.
+  const debugPath = config.get<string>('debugPath', DEFAULT_DEBUG_PATH)
+  const serverUrl = result.baseUrl.replace(new RegExp(escapeRegex(debugPath) + '$'), '')
+  await config.update('serverUrl', serverUrl, vscode.ConfigurationTarget.Workspace)
+  rebuildProviders(context)
+  vscode.window.showInformationMessage(`KickJS: auto-detected app at ${result.baseUrl}`)
 }
 
 function rebuildProviders(context: vscode.ExtensionContext): void {
@@ -65,6 +113,11 @@ function rebuildProviders(context: vscode.ExtensionContext): void {
   current = { health, routes, container, baseUrl }
   context.subscriptions.push(...providerDisposables)
   refreshAll()
+
+  // The first refresh resolves async; mark connected eagerly so the
+  // welcome view dismisses without a flash. The provider's own
+  // disconnected handling will surface real failures via the status bar.
+  setConnected(true)
 }
 
 function refreshAll(): void {
@@ -78,10 +131,21 @@ function disposeProviders(): void {
   for (const d of providerDisposables) d.dispose()
   providerDisposables = []
   current = null
+  setConnected(false)
+}
+
+function setConnected(connected: boolean): void {
+  // Drives the `when: '!kickjs.connected'` clause on the welcome views
+  // declared in package.json — flips them off the moment a probe lands.
+  vscode.commands.executeCommand('setContext', 'kickjs.connected', connected)
 }
 
 function trimRightSlash(s: string): string {
   return s.endsWith('/') ? s.slice(0, -1) : s
+}
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 export function deactivate() {
