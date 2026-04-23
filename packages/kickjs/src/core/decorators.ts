@@ -1,6 +1,6 @@
 import 'reflect-metadata'
 import { METADATA, Scope, type ServiceOptions } from './interfaces'
-import { Container } from './container'
+import { Container, type KickJsRegistry } from './container'
 import {
   setClassMeta,
   setMethodMeta,
@@ -146,8 +146,33 @@ export function Autowired(token?: any): PropertyDecorator {
  *
  * **Constructor parameters only** — does not work as a property decorator.
  * For property injection with a token, use `@Autowired(token)` instead.
+ *
+ * ## Typed string-literal overload (architecture.md §22.4 #3)
+ *
+ * When called with a string literal that matches a key of the
+ * augmented `KickJsRegistry`, TypeScript narrows the parameter type
+ * to the registered type. Typo'd literals become compile errors
+ * (the string isn't `keyof KickJsRegistry`). Class identities and
+ * `InjectionToken<T>` keep working unchanged via the second overload.
+ *
+ * @example
+ * ```ts
+ * import { Service, Inject } from '@forinda/kickjs'
+ * import type { PrismaClient } from '@prisma/client'
+ *
+ * `@Service()`
+ * class UserRepo {
+ *   constructor(@Inject('kick/prisma/Client') private db: PrismaClient) {}
+ * }
+ * ```
+ *
+ * After `kick typegen` populates `.kickjs/types/registry.d.ts` the
+ * literal autocompletes from the registry, and a typo
+ * (`@Inject('kick/prisma/Cleint')`) becomes a TS2345 error.
  */
-export function Inject(token: any): ParameterDecorator {
+export function Inject<K extends keyof KickJsRegistry & string>(token: K): ParameterDecorator
+export function Inject(token: unknown): ParameterDecorator
+export function Inject(token: unknown): ParameterDecorator {
   return (target, _propertyKey, parameterIndex) => {
     setInMetaRecord(METADATA.INJECT, target as object, parameterIndex, token)
   }
