@@ -1,0 +1,79 @@
+{
+  "name": "@forinda/kickjs-lint",
+  "version": "3.2.0",
+  "description": "Lint rules for KickJS — DI token convention, plugin/adapter naming, and other framework conventions",
+  "keywords": [
+    "kickjs",
+    "lint",
+    "convention",
+    "di",
+    "token",
+    "static-analysis",
+    "@forinda/kickjs",
+    "@forinda/kickjs-cli"
+  ],
+  "type": "module",
+  "main": "dist/index.mjs",
+  "types": "dist/index.d.mts",
+  "bin": {
+    "kick-lint": "bin.mjs"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "types": "./dist/index.d.mts"
+    },
+    "./rules": {
+      "import": "./dist/rules.mjs",
+      "types": "./dist/rules.d.mts"
+    }
+  },
+  "files": [
+    "dist",
+    "bin.mjs"
+  ],
+  "scripts": {
+    "build": "wireit",
+    "dev": "tsdown --watch",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist .wireit"
+  },
+  "wireit": {
+    "build": {
+      "command": "tsdown",
+      "files": [
+        "src/**/*.ts",
+        "tsdown.config.ts",
+        "tsconfig.json",
+        "package.json"
+      ],
+      "output": [
+        "dist/**"
+      ]
+    }
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^25.0.0",
+    "typescript": "^5.9.2",
+    "vitest": "^4.1.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT",
+  "author": "Felix Orinda",
+  "engines": {
+    "node": ">=20.0"
+  },
+  "homepage": "https://forinda.github.io/kick-js/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/forinda/kick-js.git",
+    "directory": "packages/lint"
+  },
+  "bugs": {
+    "url": "https://github.com/forinda/kick-js/issues"
+  }
+}

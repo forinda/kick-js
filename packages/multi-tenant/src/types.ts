@@ -1,5 +1,4 @@
-/** DI token for the current tenant context */
-export const TENANT_CONTEXT = Symbol('TenantContext')
+import { createToken } from '@forinda/kickjs'
 
 /** Tenant information resolved from the request */
 export interface TenantInfo {
@@ -10,6 +9,15 @@ export interface TenantInfo {
   /** Optional tenant-specific config/metadata */
   metadata?: Record<string, any>
 }
+
+/**
+ * DI token for the current tenant context.
+ *
+ * Backed by AsyncLocalStorage — registered as `Scope.TRANSIENT` so each
+ * resolution returns the request-scoped tenant. Throws if resolved
+ * outside a request that ran the tenant middleware.
+ */
+export const TENANT_CONTEXT = createToken<TenantInfo>('kick/tenant/Context')
 
 /** Strategy for resolving the tenant from a request */
 export type TenantResolutionStrategy =

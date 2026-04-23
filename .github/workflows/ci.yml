@@ -50,6 +50,9 @@ jobs:
       - name: Format check
         run: pnpm format:check
 
+      - name: Token convention lint
+        run: pnpm lint:tokens
+
   bun-smoke-test:
     runs-on: ubuntu-latest
     steps:

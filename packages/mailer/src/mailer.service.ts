@@ -1,4 +1,4 @@
-import { Logger } from '@forinda/kickjs'
+import { Logger, createToken } from '@forinda/kickjs'
 import type {
   MailProvider,
   MailMessage,
@@ -10,8 +10,8 @@ import type {
 
 const log = Logger.for('Mailer')
 
-/** DI token for resolving MailerService from the container */
-export const MAILER = Symbol('MailerService')
+/** DI token for resolving MailerService from the container. */
+export const MAILER = createToken<MailerService>('kick/mailer/Service')
 
 /**
  * Central mail service — send emails through any provider.

@@ -1,4 +1,4 @@
-import { Logger } from '@forinda/kickjs'
+import { Logger, createToken } from '@forinda/kickjs'
 import type {
   NotificationChannel,
   Notification,
@@ -8,8 +8,8 @@ import type {
 
 const log = Logger.for('Notifications')
 
-/** DI token for resolving NotificationService */
-export const NOTIFICATIONS = Symbol('NotificationService')
+/** DI token for resolving NotificationService. */
+export const NOTIFICATIONS = createToken<NotificationService>('kick/notifications/Service')
 
 /**
  * Multi-channel notification service.

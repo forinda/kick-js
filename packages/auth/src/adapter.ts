@@ -2,6 +2,7 @@ import {
   Logger,
   HttpStatus,
   METADATA,
+  createToken,
   defineAdapter,
   getClassMeta,
   getClassMetaOrUndefined,
@@ -34,8 +35,13 @@ interface RateLimitCounter {
   resetTime: number
 }
 
-/** DI token to resolve the current authenticated user from the container */
-export const AUTH_USER = Symbol('AuthUser')
+/**
+ * DI token to resolve the current authenticated user from the container.
+ *
+ * Typed as `AuthUser` — adopters augment the framework-level `AuthUser`
+ * interface to add their own claims (see `docs/guide/authentication.md`).
+ */
+export const AUTH_USER = createToken<AuthUser>('kick/auth/User')
 
 /**
  * Internal implementation of the auth adapter. Holds the per-instance

@@ -21,6 +21,7 @@
     "test:watch": "pnpm -r --parallel run test:watch",
     "typecheck": "pnpm -r run typecheck",
     "lint": "pnpm -r run lint",
+    "lint:tokens": "node packages/lint/bin.mjs --first-party --scope packages --cwd .",
     "clean": "pnpm -r run clean",
     "format": "prettier --write \"packages/*/src/**/*.ts\"",
     "format:check": "prettier --check \"packages/*/src/**/*.ts\"",

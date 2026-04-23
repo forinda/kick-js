@@ -9,6 +9,7 @@ const guideSidebar = [
       { text: 'Inspiration', link: '/guide/inspiration' },
       { text: 'Getting Started', link: '/guide/getting-started' },
       { text: 'Migration from Express', link: '/guide/migration-from-express' },
+      { text: 'Migrating v3 → v4', link: '/guide/migration-v3-to-v4' },
       { text: 'Project Structure', link: '/guide/project-structure' },
     ],
   },
