@@ -354,7 +354,7 @@ importers:
         version: 5.71.1
       drizzle-orm:
         specifier: ^0.45.2
-        version: 0.45.2(@electric-sql/pglite@0.3.15)(@opentelemetry/api@1.9.1)(@prisma/client@7.5.0(prisma@7.5.0(@types/react@19.2.14)(better-sqlite3@11.10.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3))(typescript@6.0.3))(@types/better-sqlite3@7.6.13)(@types/pg@8.20.0)(better-sqlite3@11.10.0)(mysql2@3.15.3)(pg@8.20.0)(postgres@3.4.8)(prisma@7.5.0(@types/react@19.2.14)(better-sqlite3@11.10.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3))
+        version: 0.45.2(@electric-sql/pglite@0.3.15)(@opentelemetry/api@1.9.1)(@prisma/client@7.8.0(prisma@7.5.0(@types/react@19.2.14)(better-sqlite3@11.10.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3))(typescript@6.0.3))(@types/better-sqlite3@7.6.13)(@types/pg@8.20.0)(better-sqlite3@11.10.0)(mysql2@3.15.3)(pg@8.20.0)(postgres@3.4.8)(prisma@7.5.0(@types/react@19.2.14)(better-sqlite3@11.10.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3))
       express:
         specifier: ^5.1.0
         version: 5.2.1
@@ -589,8 +589,8 @@ importers:
         specifier: ^7.6.0
         version: 7.6.0
       '@prisma/client':
-        specifier: ^7.5.0
-        version: 7.5.0(prisma@7.5.0(@types/react@19.2.14)(better-sqlite3@11.10.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3))(typescript@6.0.3)
+        specifier: ^7.8.0
+        version: 7.8.0(prisma@7.5.0(@types/react@19.2.14)(better-sqlite3@11.10.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3))(typescript@6.0.3)
       bcryptjs:
         specifier: ^3.0.3
         version: 3.0.3
@@ -860,7 +860,7 @@ importers:
         version: 2.3.3(dotenv@17.3.1)(express@5.2.1)
       drizzle-orm:
         specifier: '>=0.30.0'
-        version: 0.45.1(@electric-sql/pglite@0.3.15)(@opentelemetry/api@1.9.1)(@prisma/client@7.5.0(prisma@7.5.0(@types/react@19.2.14)(better-sqlite3@11.10.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3))(@types/better-sqlite3@7.6.13)(@types/pg@8.20.0)(better-sqlite3@11.10.0)(mysql2@3.15.3)(pg@8.20.0)(postgres@3.4.8)(prisma@7.5.0(@types/react@19.2.14)(better-sqlite3@11.10.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))
+        version: 0.45.1(@electric-sql/pglite@0.3.15)(@opentelemetry/api@1.9.1)(@prisma/client@7.8.0(prisma@7.5.0(@types/react@19.2.14)(better-sqlite3@11.10.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3))(@types/better-sqlite3@7.6.13)(@types/pg@8.20.0)(better-sqlite3@11.10.0)(mysql2@3.15.3)(pg@8.20.0)(postgres@3.4.8)(prisma@7.5.0(@types/react@19.2.14)(better-sqlite3@11.10.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
@@ -2640,8 +2640,23 @@ packages:
   '@prisma/client-runtime-utils@7.5.0':
     resolution: {integrity: sha512-KnJ2b4Si/pcWEtK68uM+h0h1oh80CZt2suhLTVuLaSKg4n58Q9jBF/A42Kw6Ma+aThy1yAhfDeTC0JvEmeZnFQ==}
 
+  '@prisma/client-runtime-utils@7.8.0':
+    resolution: {integrity: sha512-5NQZztQ0oY/ADFkmd9gPuweH5A1/CCY8YQPorLLO0Mu6a87mY5gsnDkzmFmIHs9NFaLnZojzgddFVN4RpKYrdw==}
+
   '@prisma/client@7.5.0':
     resolution: {integrity: sha512-h4hF9ctp+kSRs7ENHGsFQmHAgHcfkOCxbYt6Ti9Xi8x7D+kP4tTi9x51UKmiTH/OqdyJAO+8V+r+JA5AWdav7w==}
+    engines: {node: ^20.19 || ^22.12 || >=24.0}
+    peerDependencies:
+      prisma: '*'
+      typescript: '>=5.4.0'
+    peerDependenciesMeta:
+      prisma:
+        optional: true
+      typescript:
+        optional: true
+
+  '@prisma/client@7.8.0':
+    resolution: {integrity: sha512-HFp3Dawv/3sU3JtlPha90IB+48lS7zHiH4LKZPjmcE8YH5P9DOXGPvo8dqOtO7MqLDd1p2hOWMcFlRT1DMblHw==}
     engines: {node: ^20.19 || ^22.12 || >=24.0}
     peerDependencies:
       prisma: '*'
@@ -7376,6 +7391,8 @@ snapshots:
 
   '@prisma/client-runtime-utils@7.5.0': {}
 
+  '@prisma/client-runtime-utils@7.8.0': {}
+
   '@prisma/client@7.5.0(prisma@7.5.0(@types/react@19.2.14)(better-sqlite3@11.10.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3)':
     dependencies:
       '@prisma/client-runtime-utils': 7.5.0
@@ -7383,9 +7400,17 @@ snapshots:
       prisma: 7.5.0(@types/react@19.2.14)(better-sqlite3@11.10.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
       typescript: 5.9.3
 
-  '@prisma/client@7.5.0(prisma@7.5.0(@types/react@19.2.14)(better-sqlite3@11.10.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3))(typescript@6.0.3)':
+  '@prisma/client@7.8.0(prisma@7.5.0(@types/react@19.2.14)(better-sqlite3@11.10.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3)':
     dependencies:
-      '@prisma/client-runtime-utils': 7.5.0
+      '@prisma/client-runtime-utils': 7.8.0
+    optionalDependencies:
+      prisma: 7.5.0(@types/react@19.2.14)(better-sqlite3@11.10.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
+      typescript: 5.9.3
+    optional: true
+
+  '@prisma/client@7.8.0(prisma@7.5.0(@types/react@19.2.14)(better-sqlite3@11.10.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3))(typescript@6.0.3)':
+    dependencies:
+      '@prisma/client-runtime-utils': 7.8.0
     optionalDependencies:
       prisma: 7.5.0(@types/react@19.2.14)(better-sqlite3@11.10.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3)
       typescript: 6.0.3
@@ -8691,11 +8716,11 @@ snapshots:
       esbuild: 0.25.12
       tsx: 4.21.0
 
-  drizzle-orm@0.45.1(@electric-sql/pglite@0.3.15)(@opentelemetry/api@1.9.1)(@prisma/client@7.5.0(prisma@7.5.0(@types/react@19.2.14)(better-sqlite3@11.10.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3))(@types/better-sqlite3@7.6.13)(@types/pg@8.20.0)(better-sqlite3@11.10.0)(mysql2@3.15.3)(pg@8.20.0)(postgres@3.4.8)(prisma@7.5.0(@types/react@19.2.14)(better-sqlite3@11.10.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)):
+  drizzle-orm@0.45.1(@electric-sql/pglite@0.3.15)(@opentelemetry/api@1.9.1)(@prisma/client@7.8.0(prisma@7.5.0(@types/react@19.2.14)(better-sqlite3@11.10.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3))(@types/better-sqlite3@7.6.13)(@types/pg@8.20.0)(better-sqlite3@11.10.0)(mysql2@3.15.3)(pg@8.20.0)(postgres@3.4.8)(prisma@7.5.0(@types/react@19.2.14)(better-sqlite3@11.10.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)):
     optionalDependencies:
       '@electric-sql/pglite': 0.3.15
       '@opentelemetry/api': 1.9.1
-      '@prisma/client': 7.5.0(prisma@7.5.0(@types/react@19.2.14)(better-sqlite3@11.10.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3)
+      '@prisma/client': 7.8.0(prisma@7.5.0(@types/react@19.2.14)(better-sqlite3@11.10.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3)
       '@types/better-sqlite3': 7.6.13
       '@types/pg': 8.20.0
       better-sqlite3: 11.10.0
@@ -8704,11 +8729,11 @@ snapshots:
       postgres: 3.4.8
       prisma: 7.5.0(@types/react@19.2.14)(better-sqlite3@11.10.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
 
-  drizzle-orm@0.45.2(@electric-sql/pglite@0.3.15)(@opentelemetry/api@1.9.1)(@prisma/client@7.5.0(prisma@7.5.0(@types/react@19.2.14)(better-sqlite3@11.10.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3))(typescript@6.0.3))(@types/better-sqlite3@7.6.13)(@types/pg@8.20.0)(better-sqlite3@11.10.0)(mysql2@3.15.3)(pg@8.20.0)(postgres@3.4.8)(prisma@7.5.0(@types/react@19.2.14)(better-sqlite3@11.10.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3)):
+  drizzle-orm@0.45.2(@electric-sql/pglite@0.3.15)(@opentelemetry/api@1.9.1)(@prisma/client@7.8.0(prisma@7.5.0(@types/react@19.2.14)(better-sqlite3@11.10.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3))(typescript@6.0.3))(@types/better-sqlite3@7.6.13)(@types/pg@8.20.0)(better-sqlite3@11.10.0)(mysql2@3.15.3)(pg@8.20.0)(postgres@3.4.8)(prisma@7.5.0(@types/react@19.2.14)(better-sqlite3@11.10.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3)):
     optionalDependencies:
       '@electric-sql/pglite': 0.3.15
       '@opentelemetry/api': 1.9.1
-      '@prisma/client': 7.5.0(prisma@7.5.0(@types/react@19.2.14)(better-sqlite3@11.10.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3))(typescript@6.0.3)
+      '@prisma/client': 7.8.0(prisma@7.5.0(@types/react@19.2.14)(better-sqlite3@11.10.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3))(typescript@6.0.3)
       '@types/better-sqlite3': 7.6.13
       '@types/pg': 8.20.0
       better-sqlite3: 11.10.0
