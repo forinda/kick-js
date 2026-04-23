@@ -79,7 +79,10 @@ function writeJson(filePath, data) {
 // ── Version Logic ───────────────────────────────────────────────────────
 
 function getCurrentVersion() {
-  return readJson('packages/core/package.json').version
+  // packages/kickjs is the canonical version source after the v4 shim
+  // package deletion (kickjs-core/config/http were removed). Lockstep
+  // bumps still apply the new version to every package.
+  return readJson('packages/kickjs/package.json').version
 }
 
 /** Derive the npm dist-tag from a version string */
