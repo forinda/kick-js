@@ -175,6 +175,20 @@ export interface AppAdapter {
 
   /** Called on shutdown — clean up connections */
   shutdown?(): MaybePromise
+
+  /**
+   * Optional DevTools introspection hook (architecture.md §23). Returns
+   * a snapshot describing this adapter's current state, metrics, and DI
+   * tokens. DevTools awaits the result, so async work is fine — but keep
+   * the implementation cheap (counters + flags, no DB round trips) since
+   * the topology endpoint polls on a short interval.
+   *
+   * The return type is intentionally untyped at this layer to avoid
+   * `@forinda/kickjs` taking on a runtime dep on `@forinda/kickjs-devtools-kit`.
+   * Adapter authors should import and return `IntrospectionSnapshot`
+   * from `@forinda/kickjs-devtools-kit` directly.
+   */
+  introspect?(): unknown | Promise<unknown>
 }
 
 /** Constructor type for AppAdapter classes */

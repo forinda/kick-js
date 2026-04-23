@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "baseUrl": ".",
+    "types": [],
+    "paths": {
+      "@forinda/kickjs-devtools-kit": ["src/index.ts"],
+      "@forinda/kickjs-devtools-kit/*": ["src/*"]
+    }
+  },
+  "include": ["src", "__tests__"]
+}

@@ -1,0 +1,88 @@
+{
+  "name": "@forinda/kickjs-devtools-kit",
+  "version": "3.2.0",
+  "description": "Types, RPC envelopes, runtime sampler, and memory analyzer used by KickJS DevTools and any plugin that integrates with it",
+  "keywords": [
+    "kickjs",
+    "devtools",
+    "introspection",
+    "memory",
+    "leak-detection",
+    "monitoring",
+    "@forinda/kickjs",
+    "@forinda/kickjs-devtools"
+  ],
+  "type": "module",
+  "main": "dist/index.mjs",
+  "types": "dist/index.d.mts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "types": "./dist/index.d.mts"
+    },
+    "./runtime": {
+      "import": "./dist/runtime.mjs",
+      "types": "./dist/runtime.d.mts"
+    },
+    "./types": {
+      "import": "./dist/types.mjs",
+      "types": "./dist/types.d.mts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "wireit",
+    "dev": "tsdown --watch",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist .wireit"
+  },
+  "wireit": {
+    "build": {
+      "command": "tsdown",
+      "files": [
+        "src/**/*.ts",
+        "tsdown.config.ts",
+        "tsconfig.json",
+        "package.json"
+      ],
+      "output": [
+        "dist/**"
+      ]
+    }
+  },
+  "dependencies": {},
+  "peerDependencies": {
+    "@forinda/kickjs": ">=2.3.0"
+  },
+  "peerDependenciesMeta": {
+    "@forinda/kickjs": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@forinda/kickjs": "workspace:*",
+    "@types/node": "^25.0.0",
+    "typescript": "^5.9.2",
+    "vitest": "^4.1.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT",
+  "author": "Felix Orinda",
+  "engines": {
+    "node": ">=20.0"
+  },
+  "homepage": "https://forinda.github.io/kick-js/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/forinda/kick-js.git",
+    "directory": "packages/devtools-kit"
+  },
+  "bugs": {
+    "url": "https://github.com/forinda/kick-js/issues"
+  }
+}
