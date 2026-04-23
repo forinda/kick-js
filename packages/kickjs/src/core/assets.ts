@@ -134,13 +134,28 @@ function synthesiseDevManifest(cwd: string): ResolvedManifest | null {
   if (!config?.assetMap) return null
 
   const entries: Record<string, string> = {}
+  // Per-namespace owner tracker — same collision semantics as the
+  // build pipeline (last-write-wins by walk order, warn on collision).
+  // Walk order is filesystem-dependent in dev so the "winner" isn't
+  // strictly alphabetical, but the warning still surfaces the conflict
+  // so adopters can fix it before shipping.
+  const keyOwners = new Map<string, string>()
   for (const [namespace, entry] of Object.entries(config.assetMap)) {
     if (!entry || typeof entry.src !== 'string') continue
     const srcAbs = resolve(cwd, entry.src)
     if (!existsSync(srcAbs)) continue
     walkSync(srcAbs, srcAbs, (relPath, absPath) => {
       if (entry.glob && !matchesGlobLite(relPath, entry.glob, namespace)) return
-      entries[`${namespace}/${stripExt(relPath)}`] = absPath
+      const logicalKey = `${namespace}/${stripExt(relPath)}`
+      const previous = keyOwners.get(logicalKey)
+      if (previous && previous !== relPath) {
+        console.warn(
+          `[kickjs/assets] Dev collision in '${namespace}': '${previous}' and '${relPath}' both flatten to key '${logicalKey}'. ` +
+            `Resolved to '${relPath}'. Rename one of them or filter via assetMap.${namespace}.glob.`,
+        )
+      }
+      keyOwners.set(logicalKey, relPath)
+      entries[logicalKey] = absPath
     })
   }
 

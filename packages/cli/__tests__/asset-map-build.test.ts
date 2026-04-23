@@ -6,7 +6,7 @@
  * vite, no Express — just the asset-manager pipeline in isolation.
  */
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -202,6 +202,49 @@ describe('buildAssets — manifest format', () => {
     const raw1 = readFileSync(join(cwd, 'dist/.kickjs-assets.json'), 'utf-8')
     expect(raw1).toBe(JSON.stringify(r1!.manifest, null, 2) + '\n')
     expect(JSON.stringify(r1!.manifest)).toBe(JSON.stringify(r2!.manifest))
+  })
+})
+
+describe('buildAssets — collision handling', () => {
+  it('warns when two files in a folder flatten to the same key (index.html + index.js)', async () => {
+    writeFile('src/spa/index.html', '<html/>')
+    writeFile('src/spa/index.js', 'export {}')
+
+    const config: KickConfig = {
+      assetMap: { spa: { src: 'src/spa' } },
+    }
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const result = await buildAssets(config, { cwd, silent: true })
+      // Both files copied verbatim; the manifest holds only one entry
+      // for the colliding logical key (last-alphabetical wins).
+      expect(existsSync(join(cwd, 'dist/spa/index.html'))).toBe(true)
+      expect(existsSync(join(cwd, 'dist/spa/index.js'))).toBe(true)
+      expect(result!.manifest.entries['spa/index']).toBe('spa/index.js')
+      expect(warnSpy).toHaveBeenCalled()
+      const warning = warnSpy.mock.calls[0][0] as string
+      expect(warning).toContain('collision')
+      expect(warning).toContain('index.html')
+      expect(warning).toContain('index.js')
+    } finally {
+      warnSpy.mockRestore()
+    }
+  })
+
+  it('does not warn when same basename lives in different sub-dirs', async () => {
+    writeFile('src/spa/foo/index.html')
+    writeFile('src/spa/bar/index.html')
+
+    const config: KickConfig = { assetMap: { spa: { src: 'src/spa' } } }
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const result = await buildAssets(config, { cwd, silent: true })
+      expect(result!.manifest.entries['spa/foo/index']).toBe('spa/foo/index.html')
+      expect(result!.manifest.entries['spa/bar/index']).toBe('spa/bar/index.html')
+      expect(warnSpy).not.toHaveBeenCalled()
+    } finally {
+      warnSpy.mockRestore()
+    }
   })
 })
 

@@ -154,12 +154,26 @@ async function processEntry(
   mkdirSync(destAbs, { recursive: true })
 
   const manifestSlice: Record<string, string> = {}
+  // Track which source file currently owns each logical key so we can
+  // surface a collision warning when two files in the same dir map to
+  // the same `<basename>` (e.g. `index.html` + `index.js`). Sorted-input
+  // order means last-alphabetical wins — deterministic + documented.
+  const keyOwner = new Map<string, string>()
   for (const relPath of matches.sort()) {
     const srcFile = join(srcAbs, relPath)
     const destFile = join(destAbs, relPath)
     mkdirSync(dirname(destFile), { recursive: true })
     cpSync(srcFile, destFile)
-    manifestSlice[`${namespace}/${stripExt(relPath)}`] = toManifestRelative(distAbs, destFile)
+    const logicalKey = `${namespace}/${stripExt(relPath)}`
+    const previous = keyOwner.get(logicalKey)
+    if (previous) {
+      console.warn(
+        `  ⚠ assetMap collision in '${namespace}': '${previous}' and '${relPath}' both flatten to key '${logicalKey}'. ` +
+          `Last-alphabetical wins ('${relPath}'). Rename one of them or set assetMap.${namespace}.glob to filter by extension.`,
+      )
+    }
+    keyOwner.set(logicalKey, relPath)
+    manifestSlice[logicalKey] = toManifestRelative(distAbs, destFile)
   }
 
   return {
