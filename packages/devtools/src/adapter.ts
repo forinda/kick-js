@@ -25,6 +25,7 @@ import {
   RuntimeSampler,
   type IntrospectionSnapshot,
 } from '@forinda/kickjs-devtools-kit'
+import { collectTopologySnapshot, type TopologyApplicationLike } from './topology'
 
 const log = createLogger('DevTools')
 
@@ -430,6 +431,32 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
             history,
             health,
           })
+        })
+
+        // ── Topology RPC (architecture.md §23) ──────────────────────
+        // Aggregates plugins + adapters + contributors + DI tokens
+        // into one snapshot; calls each primitive's introspect() in
+        // parallel with a per-call timeout so a misbehaving adapter
+        // can't block the endpoint. Errors are collected, not thrown.
+        router.get('/topology', async (_req: Request, res: Response) => {
+          if (!container) {
+            res.status(503).json({ error: 'topology unavailable — container not bound yet' })
+            return
+          }
+          const kickApp = appRef?.__kickApp as TopologyApplicationLike | undefined
+          if (!kickApp) {
+            res
+              .status(503)
+              .json({ error: 'topology unavailable — application surface not exposed' })
+            return
+          }
+          try {
+            const snapshot = await collectTopologySnapshot({ app: kickApp, container })
+            res.json(snapshot)
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err)
+            res.status(500).json({ error: 'topology collection failed', message })
+          }
         })
 
         router.get('/ws', (_req: Request, res: Response) => {

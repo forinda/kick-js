@@ -13,6 +13,7 @@ export default defineConfig({
   external: [
     '@forinda/kickjs',
     '@forinda/kickjs-core',
+    '@forinda/kickjs-devtools-kit',
     'reflect-metadata',
     'nodemailer',
     /^node:/,

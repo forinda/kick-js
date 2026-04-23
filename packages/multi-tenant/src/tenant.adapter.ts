@@ -1,4 +1,5 @@
 import { Logger, Scope, defineAdapter, type AdapterMiddleware } from '@forinda/kickjs'
+import { PROTOCOL_VERSION, type IntrospectionSnapshot } from '@forinda/kickjs-devtools-kit'
 import type { Request, Response, NextFunction } from 'express'
 import { TENANT_CONTEXT, type TenantInfo, type MultiTenantOptions } from './types'
 import { tenantStorage, getCurrentTenant } from './tenant.context'
@@ -53,64 +54,95 @@ export const TenantAdapter = defineAdapter<MultiTenantOptions>({
     headerName: 'x-tenant-id',
     queryParam: 'tenantId',
   },
-  build: (options) => ({
-    middleware(): AdapterMiddleware[] {
-      return [
-        {
-          handler: async (req: Request, res: Response, next: NextFunction) => {
-            if (options.excludeRoutes?.some((r) => req.path.startsWith(r))) {
-              return next()
-            }
+  build: (options) => {
+    // Tracked across the request middleware so introspect() can report
+    // a coarse "tenants resolved since boot" counter to DevTools without
+    // any per-request overhead beyond the increment itself.
+    let tenantsResolved = 0
+    let tenantsRejected = 0
 
-            const tenant = await resolveTenant(req, options)
-
-            if (!tenant) {
-              if (options.required) {
-                res
-                  .status(403)
-                  .json({ message: 'Tenant not found. Provide a valid tenant identifier.' })
-                return
-              }
-              return next()
-            }
-
-            ;(req as unknown as { tenant: TenantInfo }).tenant = tenant
-
-            if (options.onTenantResolved) {
-              await options.onTenantResolved(tenant, req)
-            }
-
-            // Wrap the rest of the request in AsyncLocalStorage so
-            // @Inject(TENANT_CONTEXT) and getCurrentTenant() return the
-            // correct tenant for this request.
-            tenantStorage.run(tenant, () => next())
+    return {
+      // ── DevTools introspection (architecture.md §23) ───────────────
+      introspect(): IntrospectionSnapshot {
+        return {
+          protocolVersion: PROTOCOL_VERSION,
+          name: 'TenantAdapter',
+          kind: 'adapter',
+          state: {
+            strategy:
+              typeof options.strategy === 'function' ? 'custom' : (options.strategy ?? null),
+            required: options.required ?? true,
+            headerName: options.headerName ?? null,
+            queryParam: options.queryParam ?? null,
           },
-          phase: 'beforeGlobal',
-        },
-      ]
-    },
+          tokens: { provides: ['kick/tenant/Context'], requires: [] },
+          metrics: {
+            tenantsResolved,
+            tenantsRejected,
+          },
+        }
+      },
 
-    beforeStart({ container }) {
-      // TRANSIENT so each resolution reads from AsyncLocalStorage.
-      container.registerFactory(
-        TENANT_CONTEXT,
-        () => {
-          const tenant = getCurrentTenant()
-          if (!tenant) {
-            throw new Error(
-              'TENANT_CONTEXT resolved outside request scope. ' +
-                'Ensure TenantAdapter middleware is active and the code runs within a request.',
-            )
-          }
-          return tenant
-        },
-        Scope.TRANSIENT,
-      )
-      log.info(
-        `Tenant resolution: ${typeof options.strategy === 'function' ? 'custom' : options.strategy}`,
-      )
-    },
-  }),
+      middleware(): AdapterMiddleware[] {
+        return [
+          {
+            handler: async (req: Request, res: Response, next: NextFunction) => {
+              if (options.excludeRoutes?.some((r) => req.path.startsWith(r))) {
+                return next()
+              }
+
+              const tenant = await resolveTenant(req, options)
+
+              if (!tenant) {
+                if (options.required) {
+                  tenantsRejected++
+                  res
+                    .status(403)
+                    .json({ message: 'Tenant not found. Provide a valid tenant identifier.' })
+                  return
+                }
+                return next()
+              }
+
+              tenantsResolved++
+              ;(req as unknown as { tenant: TenantInfo }).tenant = tenant
+
+              if (options.onTenantResolved) {
+                await options.onTenantResolved(tenant, req)
+              }
+
+              // Wrap the rest of the request in AsyncLocalStorage so
+              // @Inject(TENANT_CONTEXT) and getCurrentTenant() return the
+              // correct tenant for this request.
+              tenantStorage.run(tenant, () => next())
+            },
+            phase: 'beforeGlobal',
+          },
+        ]
+      },
+
+      beforeStart({ container }) {
+        // TRANSIENT so each resolution reads from AsyncLocalStorage.
+        container.registerFactory(
+          TENANT_CONTEXT,
+          () => {
+            const tenant = getCurrentTenant()
+            if (!tenant) {
+              throw new Error(
+                'TENANT_CONTEXT resolved outside request scope. ' +
+                  'Ensure TenantAdapter middleware is active and the code runs within a request.',
+              )
+            }
+            return tenant
+          },
+          Scope.TRANSIENT,
+        )
+        log.info(
+          `Tenant resolution: ${typeof options.strategy === 'function' ? 'custom' : options.strategy}`,
+        )
+      },
+    }
+  },
 })
 
 async function resolveTenant(

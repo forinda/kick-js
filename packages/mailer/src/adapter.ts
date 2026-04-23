@@ -1,4 +1,5 @@
 import { Logger, defineAdapter } from '@forinda/kickjs'
+import { PROTOCOL_VERSION, type IntrospectionSnapshot } from '@forinda/kickjs-devtools-kit'
 import { MailerService, MAILER } from './mailer.service'
 import type { MailerOptions } from './types'
 
@@ -35,6 +36,26 @@ export const MailerAdapter = defineAdapter<MailerOptions>({
     const mailer = new MailerService(options)
 
     return {
+      // ── DevTools introspection (architecture.md §23) ───────────────
+      introspect(): IntrospectionSnapshot {
+        return {
+          protocolVersion: PROTOCOL_VERSION,
+          name: 'MailerAdapter',
+          kind: 'adapter',
+          state: {
+            provider: options.provider.name,
+            enabled: options.enabled !== false,
+            hasTemplateEngine: !!options.templateEngine,
+          },
+          tokens: { provides: ['kick/mailer/Service'], requires: [] },
+          metrics: {
+            sent: mailer.sentCount,
+            failed: mailer.failedCount,
+            dryRun: mailer.dryRunCount,
+          },
+        }
+      },
+
       beforeStart({ container }) {
         container.registerInstance(MAILER, mailer)
         log.info(

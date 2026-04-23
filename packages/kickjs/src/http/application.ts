@@ -771,6 +771,15 @@ export class Application {
     return this.adapters
   }
 
+  /**
+   * Get registered plugins — used by DevToolsAdapter for topology
+   * introspection (architecture.md §23). Read-only; returns the
+   * already-sorted plugin list (post-`dependsOn` topo-sort).
+   */
+  getPlugins(): readonly KickPlugin[] {
+    return this.plugins
+  }
+
   getHttpServer(): http.Server | null {
     return this.httpServer
   }
