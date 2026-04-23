@@ -15,11 +15,6 @@ import { RequestContext } from './context'
 import { validate } from './middleware/validate'
 import { buildUploadMiddleware } from './middleware/upload'
 
-/** Get the controller path set by @Controller() */
-export function getControllerPath(controllerClass: any): string {
-  return getClassMeta<string>(METADATA.CONTROLLER_PATH, controllerClass, '/')
-}
-
 /**
  * Per-module SourcedRegistration[] threaded through the route-mount loop by
  * Application.setup(). Carries module + adapter + global contributors so

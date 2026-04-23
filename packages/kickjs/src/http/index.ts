@@ -9,7 +9,7 @@ export { RequestContext, type ContextMeta, type Ctx, type RouteShape } from './c
 export type { TypedParsedQuery, FieldsOf } from './query'
 
 // Router Builder
-export { buildRoutes, getControllerPath } from './router-builder'
+export { buildRoutes } from './router-builder'
 
 // Middleware
 export { requestId, REQUEST_ID_HEADER } from './middleware/request-id'

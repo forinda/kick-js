@@ -70,7 +70,6 @@ export const METADATA = {
   POST_CONSTRUCT: 'kick:post_construct',
   BUILDER: 'kick:builder',
   QUERY_PARAMS: 'kick:query:params',
-  CONTROLLER_PATH: 'kick:controller:path',
   ROUTES: 'kick:routes',
   CLASS_MIDDLEWARES: 'kick:class:middlewares',
   METHOD_MIDDLEWARES: 'kick:method:middlewares',

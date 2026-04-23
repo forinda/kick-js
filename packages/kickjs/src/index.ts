@@ -18,7 +18,7 @@ export { isClusterPrimary, type ClusterOptions } from './http/cluster'
 
 export { RequestContext, type Ctx, type RouteShape } from './http/context'
 
-export { buildRoutes, getControllerPath } from './http/router-builder'
+export { buildRoutes } from './http/router-builder'
 
 // Request-Scoped DI
 export { requestStore, getRequestStore, type RequestStore } from './http/request-store'
