@@ -607,6 +607,43 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
           stream.pipe(res)
         })
 
+        // ── Force GC — Tier 3 monitoring (architecture.md §23) ──────
+        // POST /_debug/memory/gc — calls `global.gc()` if Node was
+        // started with --expose-gc, returning before/after heap size
+        // so the panel can show how much was reclaimed. Useful for
+        // confirming "is this growth real or just delayed GC?".
+        //
+        // Returns 412 Precondition Failed (with hint) when the flag
+        // wasn't set, so the SPA can show "Run with --expose-gc to
+        // enable this button" instead of a generic 5xx.
+        router.post('/memory/gc', (_req: Request, res: Response) => {
+          const gc = (globalThis as { gc?: () => void }).gc
+          if (typeof gc !== 'function') {
+            res.status(412).json({
+              error: 'global.gc unavailable — start Node with --expose-gc to enable this endpoint',
+            })
+            return
+          }
+          const before = process.memoryUsage().heapUsed
+          const startedAt = Date.now()
+          try {
+            gc()
+          } catch (err) {
+            res.status(500).json({
+              error: 'forced GC failed',
+              message: err instanceof Error ? err.message : String(err),
+            })
+            return
+          }
+          const after = process.memoryUsage().heapUsed
+          const reclaimedBytes = Math.max(0, before - after)
+          const elapsedMs = Date.now() - startedAt
+          log.info(
+            `Forced GC reclaimed ${(reclaimedBytes / 1024 / 1024).toFixed(2)} MiB in ${elapsedMs}ms`,
+          )
+          res.json({ before, after, reclaimedBytes, elapsedMs })
+        })
+
         // ── Custom-tab discovery (architecture.md §23) ──────────────
         // Walks every plugin/adapter `devtoolsTabs?()` contribution
         // and serves the deduped + validated list. The SPA fetches

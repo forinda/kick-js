@@ -112,6 +112,7 @@ export const MemoryTab: Component = () => {
             </div>
 
             <HeapSnapshotCard heapTotal={data().snapshot.memory.heapTotal} />
+            <ForceGcCard />
           </>
         )}
       </Show>
@@ -239,4 +240,92 @@ function triggerDownload(blob: Blob, filename: string): void {
   anchor.click()
   document.body.removeChild(anchor)
   URL.revokeObjectURL(url)
+}
+
+interface GcResult {
+  before: number
+  after: number
+  reclaimedBytes: number
+  elapsedMs: number
+}
+
+/**
+ * "Force GC" button. Calls `global.gc()` server-side via
+ * /_debug/memory/gc. Only works when Node was started with
+ * `--expose-gc`; the button surfaces a clear hint when it isn't.
+ *
+ * Use case: confirm "is my heap actually leaking, or is GC just lazy?".
+ * If forcing a GC drops the heap back to baseline, growth was just
+ * uncollected garbage; if not, you've got real retention.
+ */
+const ForceGcCard: Component = () => {
+  const [pending, setPending] = createSignal(false)
+  const [result, setResult] = createSignal<GcResult | null>(null)
+  const [error, setError] = createSignal<string | null>(null)
+
+  const trigger = async (): Promise<void> => {
+    setPending(true)
+    setError(null)
+    try {
+      const token = getToken()
+      const url = `${getBasePath()}/memory/gc${token ? `?token=${encodeURIComponent(token)}` : ''}`
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: token ? { 'x-devtools-token': token } : undefined,
+      })
+      if (!res.ok) {
+        let serverMessage = `${res.status} ${res.statusText}`
+        try {
+          const body = (await res.json()) as { error?: string }
+          if (body.error) serverMessage = body.error
+        } catch {
+          /* non-JSON response, keep status line */
+        }
+        throw new Error(serverMessage)
+      }
+      setResult((await res.json()) as GcResult)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setPending(false)
+    }
+  }
+
+  return (
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Force GC</div>
+      </div>
+      <p style="margin:0 0 12px;color:var(--text-dim);font-size:12px">
+        Triggers a synchronous V8 GC pass to confirm whether heap growth is real retention or just
+        uncollected garbage. Requires <code>node --expose-gc</code>.
+      </p>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <button
+          type="button"
+          class="tab"
+          style="border:1px solid var(--accent);border-radius:4px;padding:6px 14px;border-bottom-color:var(--accent);color:var(--accent)"
+          disabled={pending()}
+          onClick={() => void trigger()}
+        >
+          {pending() ? 'Collecting…' : 'Run GC'}
+        </button>
+        <Show when={result()}>
+          {(r) => (
+            <span style="color:var(--text-dim);font-size:12px;font-family:var(--font-mono)">
+              Reclaimed {formatBytes(r().reclaimedBytes)} ({formatBytes(r().before)} →{' '}
+              {formatBytes(r().after)}) in {r().elapsedMs}ms
+            </span>
+          )}
+        </Show>
+      </div>
+      <Show when={error()}>
+        {(msg) => (
+          <p style="margin:8px 0 0;color:var(--critical);font-size:12px;font-family:var(--font-mono)">
+            {msg()}
+          </p>
+        )}
+      </Show>
+    </div>
+  )
 }
