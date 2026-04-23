@@ -53,6 +53,7 @@ const guideSidebar = [
       { text: 'MCP (Model Context Protocol)', link: '/guide/mcp' },
       { text: 'Caching', link: '/guide/caching' },
       { text: 'View Engines', link: '/guide/view-engines' },
+      { text: 'Asset Manager', link: '/guide/asset-manager' },
       { text: 'MongoDB', link: '/guide/mongodb' },
       { text: 'SPA Integration', link: '/guide/spa' },
       { text: 'Plugins', link: '/guide/plugins' },

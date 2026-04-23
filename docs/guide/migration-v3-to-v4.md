@@ -125,11 +125,53 @@ The framework itself runs `pnpm lint:tokens` (which delegates to `kick-lint --fi
 
 The shape of `ViewAdapterOptions` is unchanged. Only the construction syntax differs.
 
+## Context Contributors API — typed `dependsOn` (no source change required)
+
+The Context Contributor pipeline ([architecture.md §20](https://github.com/forinda/kick-js/blob/main/architecture.md#20-context-contributor-pipeline-issue-107)) didn't change shape in v4 — `defineContextDecorator()`, `contributors()` on adapters / plugins / modules, the precedence ordering, and the topo-sort all behave exactly as in v3. **Adopter code keeps working with zero edits.**
+
+What v4 adds on top is **typed narrowing for `dependsOn`** ([architecture.md §21.2.1](https://github.com/forinda/kick-js/blob/main/architecture.md#2121-plugin-dependency-declaration)). After `kick typegen` runs, the framework's `KickJsPluginRegistry` interface is augmented with every plugin/adapter name the project boots, and the `dependsOn` field on plugins/adapters narrows from `readonly string[]` to `readonly (keyof KickJsPluginRegistry)[]`:
+
+```ts
+// Before typegen runs — accepts any string (back-compat).
+class AuthAdapter implements AppAdapter {
+  name = 'AuthAdapter'
+  dependsOn = ['TenantAdapter'] // ✓ accepted as string[]
+}
+
+// After `kick typegen` populates KickJsPluginRegistry:
+class AuthAdapter implements AppAdapter {
+  name = 'AuthAdapter'
+  dependsOn = ['TenantAdapter'] // ✓ narrowed to a known name
+  // dependsOn = ['Tennant']     // ✗ TS error: not assignable to keyof KickJsPluginRegistry
+}
+```
+
+Same `[Type] extends [never]` back-compat trick used by `@Value` and the typed `@Inject('literal')` overload — fresh projects that haven't run typegen yet keep compiling; once typegen lands, typo'd names become compile errors instead of boot-time `MissingMountDepError`.
+
+**Migration steps:** none required. The narrowing is opt-in via `kick typegen`. To benefit:
+
+1. Run `kick typegen` (or let `kick dev` do it on every save).
+2. Existing `dependsOn` literals get type-checked from the next compile pass.
+3. Add `'.kickjs/types/**/*.d.ts'` to your `tsconfig.json` `include` if you haven't already (most adopters did this when first using typegen for `KickRoutes` / `KickJsRegistry`).
+
+Plugins that ship contributors via `contributors()` and depend on another plugin's contributors via `dependsOn` get the same typed list with no source change.
+
+## Related v4 surfaces — also opt-in, no breaks
+
+The `dependsOn` narrowing is one slice of the broader v4 push to make plugin/adapter coordination type-safe. Other v4 surfaces already shipped:
+
+- **`defineAugmentation()`** for advertising augmentable interfaces ([architecture.md §21.3.3](https://github.com/forinda/kick-js/blob/main/architecture.md#2133-standardized-augmentation-registry)).
+- **`introspect()`** slot on `defineAdapter()` / `definePlugin()` for DevTools (architecture.md §23) — optional; existing adapters/plugins keep working.
+- **Asset Manager** — `assetMap` config + `assets.x.y()` typed accessor + `@Asset` decorator ([guide](asset-manager.md)).
+- **DevTools v2 panel** with topology, runtime, memory, and routes tabs (architecture.md §23) — gated by mounting `DevToolsAdapter`; no behaviour change for adopters who don't.
+
+None of these break v3 source. They're all opt-in surfaces that light up when you adopt them.
+
 ## What didn't change
 
 - `container.resolve(token)`, `container.registerFactory(token, fn, scope)`, `@Inject(token)` — same signatures, same semantics.
 - All scope behaviour (`Scope.SINGLETON`, `Scope.TRANSIENT`, request-scoped via AsyncLocalStorage) — unchanged.
-- `Symbol`-based metadata keys, decorator metadata, framework-internal sentinels — all still `Symbol`. Only **DI tokens** moved.
+- Decorator metadata addressing — still works through the `METADATA` enum; the underlying values switched from `Symbol` to plain strings (consumers reference `METADATA.<NAME>` not the underlying value, so the change is internal).
 - Your own application's tokens — keep working as-is. The migration is opt-in at your end (Step 4 is a nudge, not a requirement).
 
 ## Related

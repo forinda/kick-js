@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Welcome, <%= user.name %></title>
+  </head>
+  <body style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">
+    <h1>Welcome, <%= user.name %>!</h1>
+    <p>
+      Your account at <strong><%= app.name %></strong> is ready. Sign in any time at
+      <a href="<%= app.url %>"><%= app.url %></a>.
+    </p>
+    <p>
+      Need help? Reply to this email or browse our docs at
+      <a href="<%= app.docs %>"><%= app.docs %></a>.
+    </p>
+    <p style="color: #6b7280; font-size: 12px; margin-top: 32px;">
+      Sent from the asset-manager-managed mail templates of an example KickJS app. See
+      <code>kick.config.ts</code>'s <code>assetMap</code> entry + <code>src/templates/mails/</code>.
+    </p>
+  </body>
+</html>

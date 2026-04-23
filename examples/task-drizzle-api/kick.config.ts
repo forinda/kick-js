@@ -5,42 +5,17 @@ export default defineConfig({
   modulesDir: 'src/modules',
   defaultRepo: 'drizzle',
 
-  commands: [
-    {
-      name: 'test',
-      description: 'Run tests with Vitest',
-      steps: 'npx vitest run',
-    },
-    {
-      name: 'format',
-      description: 'Format code with Prettier',
-      steps: 'npx prettier --write src/',
-    },
-    {
-      name: 'format:check',
-      description: 'Check formatting without writing',
-      steps: 'npx prettier --check src/',
-    },
-    {
-      name: 'check',
-      description: 'Run typecheck + format check',
-      steps: ['npx tsc --noEmit', 'npx prettier --check src/'],
-      aliases: ['verify', 'ci'],
-    },
-    {
-      name: 'seed',
-      description: 'Seed database with sample data',
-      steps: 'npx tsx src/db/seed.ts',
-    },
-    {
-      name: 'db:reset',
-      description: 'Truncate all tables and reseed',
-      steps: ['npx tsx src/db/reset.ts', 'npx tsx src/db/seed.ts'],
-    },
-    {
-      name: 'db:migrate',
-      description: 'Push schema changes to database',
-      steps: 'npx drizzle-kit push',
-    },
-  ],
+  // Asset Manager (assets-plan.md). Mail templates live next to the
+  // code in dev (`src/templates/mails/*.ejs`); `kick build` copies
+  // them to `dist/mails/` + emits a manifest so the runtime resolver
+  // returns the right path in either mode without dev/prod branching
+  // at the call site.
+  //
+  // Usage in code:
+  //   import { assets } from '@forinda/kickjs'
+  //   const path = assets.mails.welcome()
+  //   const html = await ejs.renderFile(path, { user })
+  assetMap: {
+    mails: { src: 'src/templates/mails', glob: '**/*.ejs' },
+  },
 })
