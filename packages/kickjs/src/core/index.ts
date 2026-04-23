@@ -208,3 +208,17 @@ export {
   type KickJsPluginName,
   type AugmentationMeta,
 } from './augmentation'
+
+// Asset manager (assets-plan.md). Three accessor variants over one
+// resolver engine — the typed `assets` Proxy, the `useAssets()` hook,
+// and the string `resolveAsset()` for dynamic dispatch.
+export {
+  assets,
+  useAssets,
+  resolveAsset,
+  clearAssetCache,
+  ASSETS,
+  ASSET_MANIFEST_VERSION,
+  UnknownAssetError,
+  type KickAssets,
+} from './assets'
