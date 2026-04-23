@@ -11,6 +11,7 @@
 import { resolve } from 'node:path'
 import { scanProject, type ScanResult } from './scanner'
 import { generateTypes, type GenerateResult, TokenCollisionError } from './generator'
+import { validateTokenConventions, type TokenConventionWarning } from './token-conventions'
 
 export type {
   DiscoveredClass,
@@ -24,6 +25,7 @@ export type {
 } from './scanner'
 export type { GenerateResult } from './generator'
 export { TokenCollisionError } from './generator'
+export { validateTokenConventions, type TokenConventionWarning } from './token-conventions'
 
 /** Options for `runTypegen` */
 export interface RunTypegenOptions {
@@ -91,6 +93,8 @@ function resolveOptions(opts: RunTypegenOptions): {
 export async function runTypegen(opts: RunTypegenOptions = {}): Promise<{
   scan: ScanResult
   result: GenerateResult
+  /** Token convention warnings — empty when every literal matches §22.2. */
+  tokenWarnings: TokenConventionWarning[]
 }> {
   const { cwd, srcDir, outDir, silent, allowDuplicates, schemaValidator, envFile } =
     resolveOptions(opts)
@@ -115,6 +119,7 @@ export async function runTypegen(opts: RunTypegenOptions = {}): Promise<{
     allowDuplicates,
     schemaValidator,
   })
+  const tokenWarnings = validateTokenConventions(scan.tokens)
   const elapsed = Date.now() - start
 
   if (!silent) {
@@ -128,9 +133,23 @@ export async function runTypegen(opts: RunTypegenOptions = {}): Promise<{
     console.log(
       `  kick typegen → ${result.serviceTokens} services, ${result.routeEntries} routes, ${result.moduleTokens} modules${pluginNote}${augNote}${envNote}${collisionNote} → ${where} (${elapsed}ms)`,
     )
+    if (tokenWarnings.length > 0) {
+      console.warn(
+        `  kick typegen: ${tokenWarnings.length} token(s) don't match the §22.2 convention:`,
+      )
+      for (const warning of tokenWarnings) {
+        const variableNote = warning.variable ? ` [${warning.variable}]` : ''
+        console.warn(
+          `    '${warning.token}' (${warning.filePath})${variableNote} — ${warning.reason}`,
+        )
+        if (warning.suggestion) {
+          console.warn(`      → suggestion: ${warning.suggestion}`)
+        }
+      }
+    }
   }
 
-  return { scan, result }
+  return { scan, result, tokenWarnings }
 }
 
 /**
