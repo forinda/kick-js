@@ -161,4 +161,11 @@ export interface KickPlugin {
    * from `@forinda/kickjs-devtools-kit` directly.
    */
   introspect?(): unknown | Promise<unknown>
+
+  /**
+   * Optional DevTools tabs this plugin contributes (architecture.md §23).
+   * Same shape as {@link AppAdapter.devtoolsTabs}; the kit's
+   * `DevtoolsTabDescriptor` types it for plugin authors.
+   */
+  devtoolsTabs?(): readonly unknown[]
 }

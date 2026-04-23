@@ -67,6 +67,34 @@ const health = analyzer.health(window) // composite memory health signal
 
 Plugin authors integrating with DevTools should not need to take a dependency on the DevTools runtime, the panel UI, or any HTTP / WebSocket transport. The kit ships only types + a tiny runtime (sampler + analyzer); zero runtime deps, no peer requirements except `@forinda/kickjs` itself.
 
+## Recommended dependency shape (third-party plugins)
+
+Framework-internal `@forinda/kickjs-*` adapters list this kit as a **regular `dependencies`** entry — lockstep versioning means every release of every package matches, so dedup happens automatically and the ~1KB type install is negligible.
+
+For **third-party plugins** the recommended shape is **peer-optional**:
+
+```jsonc
+{
+  "peerDependencies": {
+    "@forinda/kickjs-devtools-kit": ">=3.2.0"
+  },
+  "peerDependenciesMeta": {
+    "@forinda/kickjs-devtools-kit": { "optional": true }
+  },
+  "devDependencies": {
+    "@forinda/kickjs-devtools-kit": "^3.2.0"
+  }
+}
+```
+
+Why peer-optional:
+
+- Adopters who don't use DevTools never install the kit — your plugin's `devtoolsTabs()` / `introspect()` methods become dead code, never invoked because the DevTools aggregator isn't mounted.
+- Adopters who do use DevTools install the kit at the top of their dependency tree alongside `@forinda/kickjs-devtools` — version coordination is explicit and deduped.
+- Your plugin still gets full type-checking via the `devDependencies` entry.
+
+The `IntrospectionSnapshot.protocolVersion` field (currently `1`) means version skew across major bumps is wire-compatible — adopters mixing your plugin's pinned version with a newer kit will keep working as long as both report the same protocol version.
+
 ## See also
 
 - [architecture.md §23](https://github.com/forinda/kick-js/blob/main/architecture.md#23-devtools-deep-introspection-half-baked) — design rationale for v2.

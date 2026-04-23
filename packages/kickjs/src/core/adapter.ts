@@ -189,6 +189,18 @@ export interface AppAdapter {
    * from `@forinda/kickjs-devtools-kit` directly.
    */
   introspect?(): unknown | Promise<unknown>
+
+  /**
+   * Optional DevTools tabs this adapter contributes (architecture.md §23).
+   * Returns an array of `DevtoolsTabDescriptor` shapes — typically one
+   * entry per adapter-owned panel (iframe / launch / html view).
+   *
+   * Same untyped-at-this-layer convention as {@link introspect}: adapter
+   * authors import `defineDevtoolsTab` (or the bare type) from
+   * `@forinda/kickjs-devtools-kit` so `@forinda/kickjs` doesn't take on
+   * a runtime dep on the kit.
+   */
+  devtoolsTabs?(): readonly unknown[]
 }
 
 /** Constructor type for AppAdapter classes */
