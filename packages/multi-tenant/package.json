@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-multi-tenant",
-  "version": "4.1.0",
+  "version": "4.2.0",
   "description": "[DEPRECATED] Multi-tenancy helpers for KickJS — tenant resolution, scoped DI, and database routing — see https://forinda.github.io/kick-js/guide/multi-tenancy for the BYO replacement (going private in v4.1.2).",
   "keywords": [
     "kickjs",

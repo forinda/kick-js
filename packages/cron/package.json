@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-cron",
-  "version": "4.1.0",
+  "version": "4.2.0",
   "description": "[DEPRECATED] Production-grade cron job scheduling with pluggable backends for KickJS — see https://forinda.github.io/kick-js/guide/cron for the BYO replacement (going private in v4.1.2).",
   "keywords": [
     "kickjs",

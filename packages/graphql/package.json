@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-graphql",
-  "version": "4.1.0",
+  "version": "4.2.0",
   "description": "[DEPRECATED] GraphQL module for KickJS with decorator-based resolvers, schema generation, and playground — see https://forinda.github.io/kick-js/guide/graphql for the BYO replacement (going private in v4.1.2).",
   "keywords": [
     "kickjs",
