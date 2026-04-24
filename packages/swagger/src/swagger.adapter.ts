@@ -184,7 +184,26 @@ export const SwaggerAdapter = defineAdapter<SwaggerAdapterOptions>({
           log.warn('swagger-ui-dist not found — Swagger UI will load from CDN (requires internet).')
         }
 
-        // Relax CSP for Swagger UI in both local and CDN modes (inline script is used in both)
+        // Tightened CSP: only whitelist the CDN entries we actually
+        // need. The default Swagger UI renderer needs unpkg.com for
+        // CDN fallback (when swagger-ui-dist isn't installed) AND for
+        // the inline script. The default ReDoc renderer needs
+        // cdn.redoc.ly for the standalone bundle. Custom renderers
+        // (renderSwaggerUI / renderReDoc overrides) get only the
+        // baseline policy — adopters set their own headers there.
+        const customSwaggerRenderer = Boolean(config.renderSwaggerUI)
+        const customReDocRenderer = Boolean(config.renderReDoc)
+        const swaggerOrigins = uiDistAvailable || customSwaggerRenderer ? [] : ['https://unpkg.com']
+        const redocOrigins = customReDocRenderer
+          ? []
+          : ['https://cdn.redoc.ly', 'https://cdn.jsdelivr.net']
+        const scriptOrigins = [...swaggerOrigins, ...redocOrigins]
+        const styleOrigins =
+          uiDistAvailable || customSwaggerRenderer
+            ? ['https://fonts.googleapis.com']
+            : ['https://unpkg.com', 'https://fonts.googleapis.com']
+        const imgOrigins = uiDistAvailable || customSwaggerRenderer ? [] : ['https://unpkg.com']
+
         docsRouter.use((_req, res, next) => {
           // Build connect-src dynamically so "Try it out" can call any configured server URL.
           // Includes dev-friendly localhost/127.0.0.1 origins so docs served from one host
@@ -208,14 +227,18 @@ export const SwaggerAdapter = defineAdapter<SwaggerAdapterOptions>({
             ...serverOrigins,
           ].join(' ')
 
+          // Inline script in swaggerUIHtml is required by SwaggerUIBundle's
+          // bootstrapping pattern. We can't drop 'unsafe-inline' without
+          // refactoring to a hashed/nonced inline script; until then, keep
+          // 'unsafe-inline' but minimise CDN whitelist.
           res.setHeader(
             'Content-Security-Policy',
             [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.redoc.ly https://cdn.jsdelivr.net",
-              "style-src 'self' 'unsafe-inline' https://unpkg.com https://fonts.googleapis.com",
+              `script-src 'self' 'unsafe-inline'${scriptOrigins.length ? ' ' + scriptOrigins.join(' ') : ''}`,
+              `style-src 'self' 'unsafe-inline'${styleOrigins.length ? ' ' + styleOrigins.join(' ') : ''}`,
               "font-src 'self' https://fonts.gstatic.com",
-              "img-src 'self' data: https://unpkg.com",
+              `img-src 'self' data:${imgOrigins.length ? ' ' + imgOrigins.join(' ') : ''}`,
               `connect-src ${connectSrc}`,
             ].join('; '),
           )
