@@ -1,325 +1,189 @@
-/**
- * Minimal dark+light theme. CSS variables only — components reference
- * the vars so light/dark switches via prefers-color-scheme without
- * any JS. No CSS framework — every selector is a plain class.
- */
+@import 'tailwindcss';
 
-:root {
-  --bg: #0f1115;
-  --bg-elev: #161922;
-  --bg-hover: #1c2030;
-  --border: #2a2f3d;
-  --text: #d8dde6;
-  --text-dim: #7e8696;
-  --text-faint: #5b6070;
-  --accent: #5b9dff;
-  --ok: #4ade80;
-  --warn: #facc15;
-  --critical: #f87171;
+/**
+ * Tailwind v4 design tokens for the DevTools SPA.
+ *
+ * Mirrors the legacy Vue dashboard palette (slate-950 background +
+ * sky/kick-500 accent) so the visual identity stays consistent
+ * across both surfaces while we port the missing tabs.
+ *
+ * v4's `@theme` block defines CSS variables AND extends Tailwind's
+ * default scale at the same time — `--color-kick-500` gives us
+ * `bg-kick-500`, `text-kick-500`, etc., automatically.
+ */
+@theme {
+  --color-kick-50: #f0f9ff;
+  --color-kick-500: #38bdf8;
+  --color-kick-600: #0284c7;
+  --color-kick-900: #0c4a6e;
+
   --font-mono:
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
     monospace;
-  --font-sans:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    --bg: #ffffff;
-    --bg-elev: #f7f8fa;
-    --bg-hover: #ecf0f7;
-    --border: #e2e6ee;
-    --text: #1c2030;
-    --text-dim: #5b6070;
-    --text-faint: #9aa1b0;
-    --accent: #2563eb;
+/**
+ * Legacy class names used by existing tabs (.card, .table, .tab, .empty,
+ * .badge-*, etc.) preserved as @apply rules so already-shipped tabs
+ * keep rendering while the new tabs use plain Tailwind utilities.
+ *
+ * Once every tab is ported these can come out — for now they're the
+ * compatibility shim that lets us land Tailwind without rewriting
+ * Runtime/Memory/Topology in the same commit.
+ */
+@layer components {
+  /* App shell */
+  .app {
+    @apply min-h-screen flex flex-col bg-slate-950 text-slate-200 font-sans;
+  }
+  .tabs {
+    @apply flex gap-1 px-4 pt-3 border-b border-slate-800 bg-slate-900;
+  }
+  .tab {
+    @apply px-4 py-2 text-sm font-medium rounded-t-lg cursor-pointer border border-transparent
+           text-slate-400 transition-colors;
+    background: transparent;
+  }
+  .tab:hover {
+    @apply bg-slate-800/60 text-slate-200;
+  }
+  .tab.active {
+    @apply bg-slate-800 text-kick-500 border-slate-700 border-b-slate-800;
+  }
+  .tab-body {
+    @apply p-6 flex-1;
+  }
+
+  /* Cards */
+  .card {
+    @apply bg-slate-900 rounded-xl border border-slate-800 p-5 mb-4;
+  }
+  .card-header {
+    @apply flex items-center justify-between mb-3;
+  }
+  .card-title {
+    @apply text-xs font-semibold uppercase tracking-wider text-slate-500;
+  }
+  .card-value {
+    @apply text-base font-semibold tabular-nums text-slate-200;
+  }
+
+  /* Grid */
+  .grid {
+    @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4;
+  }
+
+  /* Tables */
+  table {
+    @apply w-full text-sm;
+  }
+  thead tr {
+    @apply border-b-2 border-slate-700;
+  }
+  th {
+    @apply text-left py-2 px-3 text-slate-400 font-semibold;
+  }
+  tbody tr {
+    @apply border-b border-slate-800;
+  }
+  tbody tr:hover {
+    @apply bg-slate-800/40;
+  }
+  td {
+    @apply py-2 px-3;
+  }
+
+  /* Badges */
+  .badge {
+    @apply px-2 py-0.5 rounded text-xs font-semibold;
+  }
+  .badge-ok {
+    @apply bg-emerald-900/50 text-emerald-300;
+  }
+  .badge-warn {
+    @apply bg-amber-900/50 text-amber-300;
+  }
+  .badge-critical {
+    @apply bg-red-900/50 text-red-300;
+  }
+
+  /* Empty + tree fragments used by Topology */
+  .empty {
+    @apply text-slate-500 italic text-center py-8;
+  }
+  .tree-node {
+    @apply py-2 border-b border-slate-800 last:border-b-0;
+  }
+  .tree-key {
+    @apply font-mono text-sm text-slate-200;
+  }
+  .tree-meta {
+    @apply text-xs text-slate-500 mt-1;
+  }
+
+  /* Status row at bottom of Runtime/Memory tabs */
+  .status {
+    @apply flex items-center justify-between text-xs text-slate-500 mt-4 px-2;
+  }
+  .status-dot {
+    @apply inline-block w-2 h-2 rounded-full mr-1;
+  }
+  .status-dot.connected {
+    @apply bg-emerald-400;
+  }
+  .status-dot.disconnected {
+    @apply bg-red-400;
   }
 }
 
-* {
-  box-sizing: border-box;
-}
-
-html,
-body {
-  margin: 0;
-  padding: 0;
-  height: 100%;
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--font-sans);
-  font-size: 14px;
-  line-height: 1.5;
-}
-
-#root {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
-/* App shell */
-.app {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-.tabs {
-  display: flex;
-  gap: 2px;
-  background: var(--bg-elev);
-  border-bottom: 1px solid var(--border);
-  padding: 0 12px;
-}
-.tab {
-  padding: 10px 16px;
-  background: transparent;
-  border: none;
-  color: var(--text-dim);
-  cursor: pointer;
-  font: inherit;
-  border-bottom: 2px solid transparent;
-}
-.tab:hover {
-  color: var(--text);
-  background: var(--bg-hover);
-}
-.tab.active {
-  color: var(--text);
-  border-bottom-color: var(--accent);
-}
-.tab-body {
-  flex: 1;
-  overflow: auto;
-  padding: 16px;
-}
-
-/* Card layout */
-.card {
-  background: var(--bg-elev);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 12px 16px;
-  margin-bottom: 12px;
-}
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  margin-bottom: 8px;
-}
-.card-title {
-  font-weight: 600;
-  font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-dim);
-}
-.card-value {
-  font-family: var(--font-mono);
-  font-size: 18px;
-  color: var(--text);
-}
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-/* Severity badges */
-.badge {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 12px;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-}
-.badge-ok {
-  background: color-mix(in srgb, var(--ok) 20%, transparent);
-  color: var(--ok);
-}
-.badge-warn {
-  background: color-mix(in srgb, var(--warn) 20%, transparent);
-  color: var(--warn);
-}
-.badge-critical {
-  background: color-mix(in srgb, var(--critical) 25%, transparent);
-  color: var(--critical);
-}
-
-/* Tables */
-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-family: var(--font-mono);
-  font-size: 13px;
-}
-th,
-td {
-  text-align: left;
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--border);
-}
-th {
-  font-weight: 600;
-  color: var(--text-dim);
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-tr:hover td {
-  background: var(--bg-hover);
-}
-
-/* Topology tree */
-.tree {
-  font-family: var(--font-mono);
-  font-size: 13px;
-}
-.tree-node {
-  padding: 4px 0 4px 16px;
-  border-left: 1px solid var(--border);
-  margin-left: 8px;
-}
-.tree-key {
-  color: var(--accent);
-}
-.tree-meta {
-  color: var(--text-faint);
-  margin-left: 8px;
-}
-
-/* Sparkline */
-.sparkline {
-  display: block;
-  width: 100%;
-  height: 40px;
-}
-.sparkline path {
-  fill: none;
-  stroke: var(--accent);
-  stroke-width: 1.5;
-}
-
-/* Status bar at bottom */
-.status {
-  display: flex;
-  justify-content: space-between;
-  padding: 6px 12px;
-  background: var(--bg-elev);
-  border-top: 1px solid var(--border);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--text-dim);
-}
-.status-dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  margin-right: 4px;
-}
-.status-dot.connected {
-  background: var(--ok);
-}
-.status-dot.disconnected {
-  background: var(--critical);
-}
-
-/* Empty state */
-.empty {
-  color: var(--text-dim);
-  text-align: center;
-  padding: 32px;
-  font-style: italic;
-}
-
-/* ── Global header (commit 7) ─────────────────────────────────── */
-.dt-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-elev);
-}
-.dt-header-brand {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.dt-header-brand h1 {
-  font-size: 14px;
-  font-weight: 600;
-  margin: 0;
-  letter-spacing: 0.02em;
-}
-.dt-bolt {
-  color: var(--accent);
-  font-size: 16px;
-  line-height: 1;
-}
-
-/* Connection pill (live / polling / connecting / disconnected) */
-.dt-conn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: var(--text-dim);
-}
-.dt-conn-label {
-  font-weight: 600;
-  color: var(--text);
-}
-.dt-conn-sep {
-  color: var(--text-faint);
-}
-.dt-pulse {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-}
-.dt-pulse-live {
-  background: var(--ok);
-  animation: dt-pulse-anim 2s ease-in-out infinite;
-}
-.dt-pulse-polling {
-  background: var(--warn);
-  animation: dt-pulse-anim 2s ease-in-out infinite;
-}
-.dt-pulse-connecting {
-  background: var(--text-faint);
-}
-.dt-pulse-disconnected {
-  background: var(--critical);
-}
-@keyframes dt-pulse-anim {
-  0%,
-  100% {
-    opacity: 1;
+/**
+ * New header / pill / tab-badge from commit 7 — keep them as plain
+ * .dt-* classes for now (App.tsx uses them by name); the next tab
+ * commits start using direct Tailwind utilities.
+ */
+@layer components {
+  .dt-header {
+    @apply flex items-center justify-between px-4 py-3 border-b border-slate-800 bg-slate-900;
   }
-  50% {
-    opacity: 0.5;
+  .dt-header-brand {
+    @apply flex items-center gap-2;
   }
-}
+  .dt-header-brand h1 {
+    @apply text-sm font-semibold tracking-wide;
+  }
+  .dt-bolt {
+    @apply text-kick-500 text-base leading-none;
+  }
+  .dt-conn {
+    @apply flex items-center gap-1.5 text-xs text-slate-500;
+  }
+  .dt-conn-label {
+    @apply font-semibold text-slate-300;
+  }
+  .dt-conn-sep {
+    @apply text-slate-600;
+  }
+  .dt-pulse {
+    @apply inline-block w-2 h-2 rounded-full;
+  }
+  .dt-pulse-live {
+    @apply bg-emerald-400 animate-pulse;
+  }
+  .dt-pulse-polling {
+    @apply bg-amber-400 animate-pulse;
+  }
+  .dt-pulse-connecting {
+    @apply bg-slate-500;
+  }
+  .dt-pulse-disconnected {
+    @apply bg-red-400;
+  }
 
-/* Tab count badge */
-.tab-badge {
-  display: inline-block;
-  margin-left: 6px;
-  padding: 1px 6px;
-  font-size: 10px;
-  font-weight: 600;
-  border-radius: 999px;
-  background: var(--bg-hover);
-  color: var(--text-dim);
-  vertical-align: middle;
-}
-.tab.active .tab-badge {
-  background: var(--accent);
-  color: white;
+  .tab-badge {
+    @apply ml-1.5 px-1.5 py-0.5 text-[10px] font-semibold rounded-full
+           bg-slate-700 text-slate-300 align-middle;
+  }
+  .tab.active .tab-badge {
+    @apply bg-kick-500 text-white;
+  }
 }

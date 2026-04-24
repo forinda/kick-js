@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import solid from 'vite-plugin-solid'
+import tailwind from '@tailwindcss/vite'
 import { resolve } from 'node:path'
 
 /**
@@ -11,7 +12,7 @@ import { resolve } from 'node:path'
  * than HTTP/2 chunk parallelism for a single-page admin tool.
  */
 export default defineConfig({
-  plugins: [solid()],
+  plugins: [solid(), tailwind()],
   base: '/_debug/',
   build: {
     outDir: resolve(__dirname, '..', 'public', 'spa'),

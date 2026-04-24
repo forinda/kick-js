@@ -81,7 +81,7 @@ export function generatePackageJson(
         'unplugin-swc': '^1.5.9',
         vite: '^8.0.3',
         vitest: '^4.1.2',
-        typescript: '^5.9.2',
+        typescript: '^6.0.3',
         prettier: '^3.8.1',
       },
     },
