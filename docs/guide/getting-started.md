@@ -18,8 +18,11 @@ This scaffolds a project with:
 - `src/modules/` — feature modules directory
 - `vite.config.ts` — Vite config for HMR dev server
 - `kick.config.ts` — CLI configuration (optional)
-- `CLAUDE.md` — AI development guide with patterns and conventions
-- `AGENTS.md` — AI agent guide with checklists and file locations
+- `AGENTS.md` — canonical multi-agent reference (Claude, Copilot, Codex, Gemini, …) — conventions, patterns, gotchas
+- `CLAUDE.md` — thin Claude-specific layer that points at `AGENTS.md`
+- `kickjs-skills.md` — task-oriented skill index for AI agents (`add-module`, `bootstrap-export`, `deny-list`, …)
+
+After a framework upgrade, refresh all three with `kick g agents -f` (see [Generators → kick g agents](./generators.md#kick-g-agents)).
 - `README.md` — project documentation
 
 ## Start Development

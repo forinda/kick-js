@@ -276,6 +276,7 @@ kick g dto create-user
 kick g auth-scaffold             # Complete auth module (register/login/logout)
 kick g auth-scaffold -s session  # Session-based variant
 kick g config
+kick g agents -f                 # Refresh AGENTS.md / CLAUDE.md / kickjs-skills.md
 ```
 
 ### kick g scaffold
@@ -337,6 +338,31 @@ kick g config --repo drizzle         # Default repo type
 | `--repo <type>` | Default repository type: `inmemory`, `drizzle`, or `prisma` | `inmemory` |
 
 If `kick.config.ts` already exists, the CLI prompts for confirmation before overwriting.
+
+### kick g agents
+
+Regenerate the AI-agent documentation trio (`AGENTS.md`, `CLAUDE.md`, `kickjs-skills.md`) from the latest CLI templates. Use after a KickJS upgrade to pull in new conventions and gotchas without copy-pasting between projects.
+
+```bash
+kick g agents                      # All three (prompts before overwrite)
+kick g agents -f                   # All three, no prompt
+kick g agents -f --only skills     # Just kickjs-skills.md
+kick g agents -f --only claude     # Just CLAUDE.md
+kick g agents -f --only agents     # Just AGENTS.md
+kick g agents -f --only both       # AGENTS.md + CLAUDE.md (skip skills)
+```
+
+Aliases: `kick g agent-docs`, `kick g ai-docs`. Auto-detects project name (from `package.json`), package manager (corepack `packageManager` field), and template (from `kick.config.ts` `pattern`).
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--only <which>` | `agents` \| `claude` \| `skills` \| `both` \| `all` | `all` |
+| `--name <name>` | Project name override | from `package.json` |
+| `--pm <pm>` | Package manager override | from `package.json` |
+| `--template <template>` | `rest` \| `graphql` \| `ddd` \| `cqrs` \| `minimal` | from `kick.config.ts` |
+| `-f, --force` | Overwrite without prompting | `false` |
+
+See [Generators — kick g agents](./generators.md#kick-g-agents) for what each file contains and how to keep local customisations from being overwritten.
 
 ## Custom Commands
 

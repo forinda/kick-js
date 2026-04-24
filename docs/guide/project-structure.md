@@ -18,8 +18,9 @@ my-api/
 │       └── index.ts              # Exports the modules array
 ├── .env / .env.example
 ├── .prettierrc
-├── AGENTS.md                     # AI agent guide
-├── CLAUDE.md                     # AI development guide
+├── AGENTS.md                     # Canonical multi-agent reference (Claude, Copilot, Codex, …)
+├── CLAUDE.md                     # Thin Claude-specific layer pointing at AGENTS.md
+├── kickjs-skills.md              # Task-oriented skill recipes for AI agents
 ├── README.md
 ├── kick.config.ts                # CLI configuration (pattern, repo, modules dir)
 ├── package.json

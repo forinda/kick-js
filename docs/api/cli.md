@@ -42,6 +42,7 @@ cd packages/cli && pnpm link --global
 | `kick generate job <name>` | `kick g job` | Generate a `@Job` queue processor |
 | `kick generate test <name>` | `kick g test` | Generate a Vitest test scaffold |
 | `kick generate config` | `kick g config` | Generate `kick.config.ts` |
+| `kick generate agents` | `kick g agents` (also `agent-docs`, `ai-docs`) | Regenerate `AGENTS.md` / `CLAUDE.md` / `kickjs-skills.md` from upstream templates |
 | `kick info` | | Print system and framework info |
 | `kick inspect` | | Inspect a running KickJS application |
 | `kick tinker` | | Interactive REPL |
@@ -73,6 +74,13 @@ cd packages/cli && pnpm link --global
 
 **kick g adapter / resolver / job**
 - `-o, --out <dir>` -- Output directory (defaults vary per generator)
+
+**kick g agents** (aliases: `kick g agent-docs`, `kick g ai-docs`)
+- `--only <which>` -- Scope: `agents` | `claude` | `skills` | `both` | `all` (default: `all`)
+- `--name <name>` -- Project name override (default: from `package.json`)
+- `--pm <pm>` -- Package manager override (default: from corepack `packageManager` field)
+- `--template <template>` -- Template: `rest` | `graphql` | `ddd` | `cqrs` | `minimal` (default: from `kick.config.ts` `pattern`)
+- `-f, --force` -- Overwrite without prompting
 
 ## defineConfig
 

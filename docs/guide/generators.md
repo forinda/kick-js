@@ -406,6 +406,46 @@ kick rm module user --force          # skip confirmation prompt
 
 The command also supports `kick remove module` as the full form.
 
+## kick g agents
+
+Regenerate the AI-agent documentation trio (`AGENTS.md`, `CLAUDE.md`, `kickjs-skills.md`) from the latest CLI templates. Use this after a KickJS upgrade to pull in new conventions, decorator changes, and gotchas without manually copy-pasting between projects.
+
+```bash
+kick g agents                          # Refresh all three (prompts before overwrite)
+kick g agents -f                       # Refresh all three, no prompt
+kick g agents -f --only skills         # Just kickjs-skills.md
+kick g agents -f --only claude         # Just CLAUDE.md
+kick g agents -f --only agents         # Just AGENTS.md
+kick g agents -f --only both           # AGENTS.md + CLAUDE.md (skip skills)
+```
+
+Aliases: `kick g agent-docs`, `kick g ai-docs`.
+
+The generator auto-detects:
+- **Project name** from `package.json` `name` (strips `@scope/` prefix).
+- **Package manager** from `package.json` `packageManager` (corepack convention).
+- **Template** from `kick.config.ts` `pattern` field (defaults to `ddd`).
+
+Override any of those with `--name`, `--pm`, `--template`.
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--only <which>` | `agents` \| `claude` \| `skills` \| `both` \| `all` | `all` |
+| `--name <name>` | Project name (overrides `package.json`) | auto |
+| `--pm <pm>` | Package manager (overrides `package.json`) | auto |
+| `--template <template>` | `rest` \| `graphql` \| `ddd` \| `cqrs` \| `minimal` | from `kick.config.ts` |
+| `-f, --force` | Overwrite without prompting | `false` |
+
+::: tip Local customisations
+The three files are overwritten on regeneration. Keep project-specific notes in `AGENTS.local.md` (or any other filename) so they survive `kick g agents -f`.
+:::
+
+### What's in each file
+
+- **`AGENTS.md`** — narrative reference: project structure, v4 conventions, decorator patterns, env wiring, common pitfalls. Read first by every AI agent.
+- **`CLAUDE.md`** — thin redirect to `AGENTS.md` plus Claude-specific affordances (slash commands, persistent memory, `/loop`, `/schedule`).
+- **`kickjs-skills.md`** — short rigid recipes keyed to triggers (`add-module`, `add-adapter`, `write-controller-test`, `bootstrap-export`, `thin-entry-file`, `context-contributor`, `env-wiring-check`, `refresh-agent-docs`, `deny-list`). Designed for agents that read skills from a top-level index (Claude superpowers, Copilot, …).
+
 ## Module-Scoped vs Global Generation
 
 ::: tip When to use `kick g module` vs standalone generators
