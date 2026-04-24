@@ -39,13 +39,6 @@ const PACKAGE_REGISTRY: Record<
     peers: [],
     description: 'OpenAPI spec + Swagger UI + ReDoc',
   },
-  graphql: {
-    pkg: '@forinda/kickjs-graphql',
-    peers: ['graphql'],
-    description:
-      '[DEPRECATED — removed in v5] GraphQL resolvers + GraphiQL. See guide/graphql for the BYO recipe (graphql-http / Yoga / Apollo / Pothos).',
-  },
-
   // Database
   drizzle: {
     pkg: '@forinda/kickjs-drizzle',
@@ -210,7 +203,7 @@ export function printPackageList(): void {
     const peers = info.peers.length ? ` (+ ${info.peers.join(', ')})` : ''
     console.log(`    ${padded} ${info.description}${peers}`)
   }
-  console.log('\n  Usage: kick add graphql drizzle otel')
+  console.log('\n  Usage: kick add auth drizzle swagger')
   console.log('         kick add queue:bullmq')
   console.log()
 }

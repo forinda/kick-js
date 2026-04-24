@@ -867,9 +867,6 @@ importers:
 
   packages/drizzle:
     dependencies:
-      '@forinda/kickjs-multi-tenant':
-        specifier: '>=2.0.0'
-        version: 2.3.3(dotenv@17.3.1)(express@5.2.1)
       drizzle-orm:
         specifier: '>=0.30.0'
         version: 0.45.1(@electric-sql/pglite@0.3.15)(@opentelemetry/api@1.9.1)(@prisma/client@7.5.0(prisma@7.5.0(@types/react@19.2.14)(better-sqlite3@11.10.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3))(@types/better-sqlite3@7.6.13)(@types/pg@8.20.0)(better-sqlite3@11.10.0)(mysql2@3.15.3)(pg@8.20.0)(postgres@3.4.8)(prisma@7.5.0(@types/react@19.2.14)(better-sqlite3@11.10.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))
@@ -883,25 +880,6 @@ importers:
       '@types/node':
         specifier: ^25.6.0
         version: 25.6.0
-      typescript:
-        specifier: ^5.9.2
-        version: 5.9.3
-
-  packages/graphql:
-    dependencies:
-      reflect-metadata:
-        specifier: ^0.2.2
-        version: 0.2.2
-    devDependencies:
-      '@forinda/kickjs':
-        specifier: workspace:*
-        version: link:../kickjs
-      '@types/node':
-        specifier: ^25.6.0
-        version: 25.6.0
-      graphql:
-        specifier: ^16.13.2
-        version: 16.13.2
       typescript:
         specifier: ^5.9.2
         version: 5.9.3
@@ -1130,9 +1108,6 @@ importers:
 
   packages/prisma:
     dependencies:
-      '@forinda/kickjs-multi-tenant':
-        specifier: '>=2.0.0'
-        version: 2.3.3(dotenv@17.3.1)(express@5.2.1)
       '@prisma/client':
         specifier: '>=5.0.0'
         version: 7.5.0(prisma@7.5.0(@types/react@19.2.14)(better-sqlite3@11.10.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3)
@@ -2162,20 +2137,6 @@ packages:
   '@forinda/kickjs-monorepo@file:':
     resolution: {directory: '', type: directory}
     engines: {node: '>=20.0'}
-
-  '@forinda/kickjs-multi-tenant@2.3.3':
-    resolution: {integrity: sha512-hQ2v3DUjOOS/1KRXSolMmweiE9gQMCEJi92MMjBSn8dfik7IenYonAwkn6UQTQdDhRejaXWm419FEIyCyB9NeA==}
-    engines: {node: '>=20.0'}
-
-  '@forinda/kickjs@2.3.3':
-    resolution: {integrity: sha512-Pu/hbMc94ZZA2sBpLPb1KcCIbaQrmt4tUdCteilUYoqYwU5a/XW7/C4ku4hsekQmo+G9XWMKCOlSHTYMLA+zog==}
-    engines: {node: '>=20.0'}
-    peerDependencies:
-      dotenv: ^17.0.0
-      express: ^5.1.0
-    peerDependenciesMeta:
-      dotenv:
-        optional: true
 
   '@grpc/grpc-js@1.14.3':
     resolution: {integrity: sha512-Iq8QQQ/7X3Sac15oB6p0FmUg/klxQvXLeileoqrTRGJYLV+/9tubbr9ipz0GKHjmXVsgFPo/+W+2cA8eNcR+XA==}
@@ -4573,10 +4534,6 @@ packages:
   graphmatch@1.1.1:
     resolution: {integrity: sha512-5ykVn/EXM1hF0XCaWh05VbYvEiOL2lY1kBxZtaYsyvjp7cmWOU1XsAdfQBwClraEofXDT197lFbXOEVMHpvQOg==}
 
-  graphql@16.13.2:
-    resolution: {integrity: sha512-5bJ+nf/UCpAjHM8i06fl7eLyVC9iuNAjm9qzkiu2ZGhM0VscSvS6WDPfAwkdkBuoXGM9FJSbKl6wylMwP9Ktig==}
-    engines: {node: ^12.22.0 || ^14.16.0 || ^16.0.0 || >=17.0.0}
-
   has-async-hooks@1.0.0:
     resolution: {integrity: sha512-YF0VPGjkxr7AyyQQNykX8zK4PvtEDsUJAPqwu06UFz1lb6EvI53sPh5H1kWxg8NXI5LsfRCZ8uX9NkYDZBb/mw==}
 
@@ -6961,26 +6918,6 @@ snapshots:
     dependencies:
       picocolors: 1.1.1
 
-  '@forinda/kickjs-multi-tenant@2.3.3(dotenv@17.3.1)(express@5.2.1)':
-    dependencies:
-      '@forinda/kickjs': 2.3.3(dotenv@17.3.1)(express@5.2.1)
-      reflect-metadata: 0.2.2
-    transitivePeerDependencies:
-      - dotenv
-      - express
-
-  '@forinda/kickjs@2.3.3(dotenv@17.3.1)(express@5.2.1)':
-    dependencies:
-      cookie-parser: 1.4.7
-      express: 5.2.1
-      multer: 2.1.1
-      pino: 10.3.1
-      pino-pretty: 13.1.3
-      reflect-metadata: 0.2.2
-      zod: 4.3.6
-    optionalDependencies:
-      dotenv: 17.3.1
-
   '@grpc/grpc-js@1.14.3':
     dependencies:
       '@grpc/proto-loader': 0.8.0
@@ -9343,8 +9280,6 @@ snapshots:
   grammex@3.1.12: {}
 
   graphmatch@1.1.1: {}
-
-  graphql@16.13.2: {}
 
   has-async-hooks@1.0.0: {}
 
