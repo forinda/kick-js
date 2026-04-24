@@ -194,6 +194,31 @@ The `dependsOn` narrowing is one slice of the broader v4 push to make plugin/ada
 
 None of these break v3 source. They're all opt-in surfaces that light up when you adopt them.
 
+## Dropped packages — bring-your-own via `defineAdapter` / `definePlugin`
+
+A handful of v3 packages were thin wrappers around fast-moving ecosystems where adopters consistently swapped the wrapper for direct upstream usage within weeks. v4 stops shipping them and replaces each with a guide page showing how to compose the same behaviour using `defineAdapter` / `definePlugin` / `defineHttpContextDecorator` / `getRequestValue` and the upstream library directly. The framework keeps the small, stable interfaces; adopters keep control of the ecosystem-specific glue.
+
+| v3 package | v4 status | What to do | BYO recipe |
+|---|---|---|---|
+| `@forinda/kickjs-graphql` | **dropped** | Pick `graphql-http` / `graphql-yoga` / Apollo / Pothos and wrap with a `definePlugin` factory. | [GraphQL with KickJS](./graphql.md) |
+| `@forinda/kickjs-otel` | **dropped** | Install the `@opentelemetry/sdk-node` setup you want and wrap with a `defineAdapter` factory. Set `processHooks: 'errors-only'` on `bootstrap()` so the OTel SDK's SIGTERM handler owns shutdown without racing the framework's. | [OpenTelemetry with KickJS](./otel.md) |
+| `@forinda/kickjs-cron` | **dropped** | Pick `croner` (or `node-cron`, or raw `setInterval`) and wrap in a `defineAdapter` that reads `@Cron` decorator metadata via `Reflect`. | [Scheduled tasks with KickJS](./cron.md) |
+| `@forinda/kickjs-mailer` | **dropped** | Pick `nodemailer` / Resend / SES SDK directly and register via `definePlugin`'s `register(container)` hook. | [Mailers with KickJS](./mailer.md) |
+| `@forinda/kickjs-notifications` | **dropped** | Define a `Notifier` interface in your app and bind a backend via `definePlugin`. | [Notifications with KickJS](./notifications.md) |
+| `@forinda/kickjs-multi-tenant` | **dropped** | Resolve the tenant in a `defineHttpContextDecorator` (typed via `ContextMeta`); read it anywhere via `getRequestValue('tenant')`. | [Multi-tenancy with KickJS](./multi-tenancy.md) |
+
+Each BYO guide ships a complete copy-paste recipe under 100 lines, plus a "what you give up" callout listing the conveniences the wrapper used to provide so you can decide whether to inline them.
+
+::: tip `processHooks` controls signal-handler ownership
+The single biggest reason an observability SDK conflicts with a framework is that both register `process.on('SIGTERM', ...)` and race to call `process.exit(0)` — truncating the SDK's in-flight flush. v4 adds `bootstrap({ processHooks: ... })`:
+
+- `'auto'` (default) — KickJS owns SIGINT/SIGTERM → `app.shutdown()` → exit. Use when KickJS is the only thing in the process that needs graceful shutdown.
+- `'errors-only'` — KickJS keeps the `uncaughtException` / `unhandledRejection` loggers, skips signal handlers. Use this when you bring an SDK that owns shutdown (OpenTelemetry, Sentry, custom orchestrator).
+- `'manual'` — skip everything; you own both error logging and shutdown.
+
+The Vite dev plugin already suppresses signal registration in dev mode, so this option only matters in production / `kick start`.
+:::
+
 ## What didn't change
 
 - `container.resolve(token)`, `container.registerFactory(token, fn, scope)`, `@Inject(token)` — same signatures, same semantics.

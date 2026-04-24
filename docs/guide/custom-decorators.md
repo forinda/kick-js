@@ -36,19 +36,25 @@ TypeScript has four decorator types. Each receives different arguments:
 
 Store metadata on a class or method for later retrieval. This is how `@Controller`, `@Get`, and `@ApiOperation` work.
 
+::: tip Use kickjs's metadata helpers, not raw `Reflect`
+The framework re-exports `setClassMeta` / `pushClassMeta` / `getClassMeta` / `setMethodMeta` / `getMethodMeta` from `@forinda/kickjs`. They wrap `Reflect.defineMetadata` / `Reflect.getMetadata` with typed returns, sensible fallbacks, and the v4 string-key convention (`'app/<area>/<key>'` for adopter code, `'kick/<area>/<key>'` for first-party). Round-tripping through the same helpers means DevTools introspection, typegen, and the lint rules can see your metadata. Don't import `reflect-metadata` yourself — the framework already does at startup.
+:::
+
 ```ts
-const ROLES_KEY = Symbol('roles')
+import { setMethodMeta, getMethodMetaOrUndefined } from '@forinda/kickjs'
+
+const ROLES_KEY = 'app/auth/roles'
 
 /** Restrict a route to specific roles */
 function Roles(...roles: string[]): MethodDecorator {
   return (target, propertyKey) => {
-    Reflect.defineMetadata(ROLES_KEY, roles, target, propertyKey)
+    setMethodMeta<string[]>(ROLES_KEY, roles, target, propertyKey as string)
   }
 }
 
 /** Read roles from a handler */
-function getRoles(target: any, handlerName: string): string[] {
-  return Reflect.getMetadata(ROLES_KEY, target.prototype, handlerName) ?? []
+function getRoles(target: object, handlerName: string): string[] {
+  return getMethodMetaOrUndefined<string[]>(ROLES_KEY, target, handlerName) ?? []
 }
 ```
 
@@ -191,19 +197,20 @@ Combine with Zod for type-safe input validation:
 
 ```ts
 import { z } from 'zod'
+import { setMethodMeta, getMethodMetaOrUndefined } from '@forinda/kickjs'
 
-const SCHEMA_KEY = Symbol('bodySchema')
+const SCHEMA_KEY = 'app/validation/body'
 
 /** Attach a Zod schema for request body validation */
 function Body(schema: z.ZodType): MethodDecorator {
   return (target, propertyKey) => {
-    Reflect.defineMetadata(SCHEMA_KEY, schema, target, propertyKey)
+    setMethodMeta<z.ZodType>(SCHEMA_KEY, schema, target, propertyKey as string)
   }
 }
 
 /** Read the schema (used by middleware or route builder) */
-function getBodySchema(target: any, handlerName: string): z.ZodType | undefined {
-  return Reflect.getMetadata(SCHEMA_KEY, target.prototype, handlerName)
+function getBodySchema(target: object, handlerName: string): z.ZodType | undefined {
+  return getMethodMetaOrUndefined<z.ZodType>(SCHEMA_KEY, target, handlerName)
 }
 ```
 
@@ -297,10 +304,10 @@ Then use it with the existing adapter by passing your provider, or create a cust
 
 ## Tips
 
-- **Use Symbols for metadata keys** — avoids collisions between libraries
+- **Use slash-delimited string keys** — `'app/<area>/<key>'` for adopter code, `'kick/<area>/<key>'` for framework code (lint enforces the second). Symbols were the v3 convention; v4 standardised on strings so DevTools / typegen / lint can introspect them
 - **Keep decorators small** — a decorator should do one thing; compose for complex behavior
 - **Don't mutate the class** — decorators should add metadata or wrap methods, not change class structure
-- **Test with `Reflect.getMetadata()`** — verify your decorator stores the right data
+- **Test with `getClassMeta()` / `getMethodMeta()`** — verify your decorator stores the right data through the same helpers your reader uses
 - **Use `descriptor.value` for sync, handle async** — check if the original returns a Promise
 
 ## Related

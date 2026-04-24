@@ -1,212 +1,343 @@
-# Mailer
+# Mailers (BYO)
 
-KickJS provides pluggable email sending through `@forinda/kickjs-mailer`. Implement the `MailProvider` interface to use any email service — SMTP, Resend, AWS SES, SendGrid, Postmark, or your own.
+KickJS doesn't ship a first-party mailer package — the previous wrapper was 70 lines of DI registration around a provider interface adopters consistently swapped for direct upstream usage. This guide shows how to wire your mailer of choice via a `definePlugin` factory.
 
-## Installation
+::: tip Pick any provider
+The recipe below uses [`nodemailer`](https://nodemailer.com/) (works with SMTP, SES, Mailgun, Mailtrap…). Swap in [Resend](https://resend.com/), AWS SES SDK, SendGrid, Postmark, or anything else with an async `send(message)` API.
+:::
 
-```bash
-pnpm add @forinda/kickjs-mailer
-
-# For SMTP (nodemailer)
-pnpm add nodemailer @types/nodemailer
-```
-
-Or via CLI:
+## Setup
 
 ```bash
-kick add mailer
+pnpm add nodemailer
+pnpm add -D @types/nodemailer
 ```
 
-## Quick Start
+## Service + DI plugin
 
 ```ts
-import { bootstrap, getEnv } from '@forinda/kickjs'
-import { MailerAdapter, SmtpProvider } from '@forinda/kickjs-mailer'
+// src/services/mailer.service.ts
+import nodemailer, { type Transporter } from 'nodemailer'
+import { Service } from '@forinda/kickjs'
 
-bootstrap({
-  modules: [...],
-  adapters: [
-    MailerAdapter({
-      provider: new SmtpProvider({
-        host: 'smtp.gmail.com',
-        port: 587,
-        auth: { user: getEnv('SMTP_USER'), pass: getEnv('SMTP_PASS') },
-      }),
-      defaultFrom: { name: 'My App', address: 'noreply@myapp.com' },
+export interface MailMessage {
+  to: string
+  subject: string
+  html?: string
+  text?: string
+}
+
+@Service()
+export class MailerService {
+  constructor(private readonly transporter: Transporter, private readonly defaultFrom: string) {}
+
+  async send(message: MailMessage): Promise<void> {
+    await this.transporter.sendMail({ from: this.defaultFrom, ...message })
+  }
+}
+
+export interface MailerConfig {
+  smtpUrl: string         // e.g. 'smtps://user:pass@smtp.example.com:465'
+  defaultFrom: string     // e.g. 'noreply@example.com'
+}
+
+export function buildMailer(config: MailerConfig): MailerService {
+  const transporter = nodemailer.createTransport(config.smtpUrl)
+  return new MailerService(transporter, config.defaultFrom)
+}
+```
+
+```ts
+// src/plugins/mailer.plugin.ts
+import { definePlugin } from '@forinda/kickjs'
+import { buildMailer, MailerService, type MailerConfig } from '../services/mailer.service'
+
+export const MailerPlugin = definePlugin<MailerConfig>({
+  name: 'MailerPlugin',
+  build: (config) => ({
+    register(container) {
+      // One transporter per process; share it across every consumer.
+      container.registerInstance(MailerService, buildMailer(config))
+    },
+  }),
+})
+```
+
+## Usage
+
+```ts
+// src/index.ts
+import { bootstrap } from '@forinda/kickjs'
+import { MailerPlugin } from './plugins/mailer.plugin'
+
+export const app = await bootstrap({
+  modules,
+  plugins: [
+    MailerPlugin({
+      smtpUrl: process.env.SMTP_URL!,
+      defaultFrom: 'noreply@example.com',
     }),
   ],
 })
 ```
 
-Then inject `MailerService` anywhere:
+```ts
+// In any service / controller
+@Service()
+export class WelcomeEmail {
+  constructor(private mailer: MailerService) {}
+
+  async sendTo(user: { email: string; name: string }) {
+    await this.mailer.send({
+      to: user.email,
+      subject: 'Welcome',
+      html: `<p>Hi ${user.name}, welcome aboard.</p>`,
+    })
+  }
+}
+```
+
+## Worked example: Console mailer driven by the Asset Manager
+
+A drop-in dev provider that doesn't actually send mail — it renders templates from `assetMap` and prints them to the console. Useful for local development and tests, and a good demonstration of how the [Asset Manager](./asset-manager.md) keeps templates typed without runtime imports.
+
+### 1. Wire the asset map
+
+Drop your templates anywhere and point `assetMap` at it in `kick.config.ts`:
 
 ```ts
-import { Service, Inject } from '@forinda/kickjs'
-import { MAILER, type MailerService } from '@forinda/kickjs-mailer'
+// kick.config.ts
+import { defineConfig } from '@forinda/kickjs-cli'
+
+export default defineConfig({
+  assetMap: {
+    mails: { src: 'src/templates/mails' },
+  },
+})
+```
+
+```
+src/templates/mails/
+├── welcome.txt
+├── password-reset.txt
+└── order-confirmation.txt
+```
+
+```text
+// src/templates/mails/welcome.txt
+Hi {{ name }},
+
+Welcome to {{ appName }}! Your account is ready.
+
+— The team
+```
+
+`kick dev` regenerates `KickAssets` automatically as files come and go — `assets.mails.welcome` becomes a typed string-literal key.
+
+### 2. Console mailer service
+
+```ts
+// src/services/console-mailer.service.ts
+import { readFile } from 'node:fs/promises'
+import { Service, useAssets } from '@forinda/kickjs'
+import type { MailMessage } from './notifier'
+
+export interface MailProvider {
+  send(message: MailMessage & { template?: string; data?: Record<string, unknown> }): Promise<void>
+}
 
 @Service()
-class UserService {
-  constructor(@Inject(MAILER) private mailer: MailerService) {}
+export class ConsoleMailer implements MailProvider {
+  // `useAssets()` returns the typed Proxy. After typegen runs,
+  // `assets.mails.welcome` is a `KickAssets['mails']['welcome']`
+  // string literal that resolves to an absolute file path at read time.
+  private assets = useAssets()
 
-  async sendWelcome(email: string, name: string) {
+  async send(message: MailMessage & { template?: string; data?: Record<string, unknown> }) {
+    const body = message.template
+      ? await this.render(message.template, message.data ?? {})
+      : (message.html ?? message.text ?? '')
+
+    console.log('━'.repeat(60))
+    console.log(`📨 ${message.subject ?? '(no subject)'}`)
+    console.log(`To: ${message.to}`)
+    console.log('─'.repeat(60))
+    console.log(body)
+    console.log('━'.repeat(60))
+  }
+
+  /**
+   * Render a template by reading the file the asset manager points
+   * at, then doing a tiny `{{ var }}` substitution. Swap in eta /
+   * Handlebars / Mustache for anything beyond toy interpolation.
+   *
+   * The dev-mode asset resolver doesn't cache, so editing
+   * `src/templates/mails/welcome.txt` and saving lands in the next
+   * call without a server restart.
+   */
+  private async render(name: string, data: Record<string, unknown>): Promise<string> {
+    // `(this.assets as any).mails[name]` because `name` is a runtime
+    // string here — the typed surface is on direct property access
+    // (`this.assets.mails.welcome`). Use the typed form whenever you
+    // know the key at compile time.
+    const filePath = (this.assets as any).mails[name] as string
+    const raw = await readFile(filePath, 'utf-8')
+    return raw.replace(/\{\{\s*(\w+)\s*\}\}/g, (_m, k) => String(data[k] ?? ''))
+  }
+}
+```
+
+### 3. Plugin registration
+
+```ts
+// src/plugins/console-mailer.plugin.ts
+import { definePlugin } from '@forinda/kickjs'
+import { ConsoleMailer } from '../services/console-mailer.service'
+
+export const ConsoleMailerPlugin = definePlugin({
+  name: 'ConsoleMailerPlugin',
+  build: () => ({
+    register(container) {
+      container.registerInstance(ConsoleMailer, new ConsoleMailer())
+    },
+  }),
+})
+```
+
+```ts
+// src/index.ts
+import { bootstrap } from '@forinda/kickjs'
+import { ConsoleMailerPlugin } from './plugins/console-mailer.plugin'
+
+export const app = await bootstrap({
+  modules,
+  plugins: [ConsoleMailerPlugin()],
+})
+```
+
+### 4. Use it (typed template names)
+
+```ts
+@Service()
+export class WelcomeFlow {
+  constructor(private mailer: ConsoleMailer) {}
+
+  async greet(user: { email: string; name: string }) {
     await this.mailer.send({
-      to: email,
-      subject: 'Welcome!',
-      html: `<h1>Hello ${name}</h1><p>Welcome to our platform.</p>`,
+      to: user.email,
+      subject: 'Welcome',
+      template: 'welcome',
+      data: { name: user.name, appName: 'Acme' },
     })
   }
 }
 ```
 
-## Built-in Providers
+The output:
 
-### SmtpProvider
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📨 Welcome
+To: alice@example.com
+────────────────────────────────────────────────────────────
+Hi Alice,
 
-SMTP via nodemailer. Works with any SMTP server.
+Welcome to Acme! Your account is ready.
 
-```ts
-// Gmail
-new SmtpProvider({
-  host: 'smtp.gmail.com',
-  port: 587,
-  auth: { user: 'you@gmail.com', pass: 'app-password' },
-})
-
-// Resend via SMTP
-new SmtpProvider({
-  host: 'smtp.resend.com',
-  port: 465,
-  secure: true,
-  auth: { user: 'resend', pass: getEnv('RESEND_API_KEY') },
-})
-
-// Local dev (Mailpit, MailHog)
-new SmtpProvider({ host: 'localhost', port: 1025 })
+— The team
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
-### ConsoleProvider
+### Swapping in a real provider for production
 
-Logs emails to the console — perfect for development.
+`ConsoleMailer` and a real `NodeMailerProvider` both implement the same `MailProvider` interface. Bind by environment in the plugin:
 
 ```ts
-import { ConsoleProvider } from '@forinda/kickjs-mailer'
-
-MailerAdapter({
-  provider: new ConsoleProvider(),
-  defaultFrom: 'dev@localhost',
-})
+build: (config) => ({
+  register(container) {
+    container.registerInstance(
+      MAILER,
+      process.env.NODE_ENV === 'production'
+        ? new NodeMailerProvider(config.smtpUrl)
+        : new ConsoleMailer(),
+    )
+  },
+}),
 ```
 
-## Custom Provider
+Now `pnpm dev` shows mails in your terminal; `pnpm start` posts them through SMTP. Same template files, same call sites — only the binding flips.
 
-Implement `MailProvider` for any email service:
+## Pluggable providers
+
+The `MailerService` above hard-codes nodemailer. To support multiple providers (Resend, SES) without forking the service, wrap them in a common interface:
 
 ```ts
-import type { MailProvider, MailMessage, MailResult } from '@forinda/kickjs-mailer'
-import { Resend } from 'resend'
-
-class ResendProvider implements MailProvider {
-  name = 'resend'
-  private client: Resend
-
-  constructor(apiKey: string) {
-    this.client = new Resend(apiKey)
-  }
-
-  async send(message: MailMessage): Promise<MailResult> {
-    const { data, error } = await this.client.emails.send({
-      from: formatAddress(message.from),
-      to: Array.isArray(message.to)
-        ? message.to.map(r => typeof r === 'string' ? r : r.address)
-        : [typeof message.to === 'string' ? message.to : message.to.address],
-      subject: message.subject,
-      html: message.html,
-      text: message.text,
-    })
-    if (error) throw error
-    return { messageId: data!.id, accepted: true, raw: data }
-  }
+export interface MailProvider {
+  send(message: MailMessage): Promise<void>
 }
 
-// Use it
-MailerAdapter({
-  provider: new ResendProvider(getEnv('RESEND_API_KEY')),
+class NodeMailerProvider implements MailProvider { /* ... */ }
+class ResendProvider implements MailProvider { /* ... */ }
+```
+
+Then `MailerService` constructor accepts a `MailProvider` instead of a raw transporter, and `MailerPlugin` builds the right provider based on a `provider: 'smtp' | 'resend'` config field.
+
+## DevTools integration
+
+Surface delivery counters on the DevTools dashboard via the `introspect()` slot on a wrapping adapter (since this recipe uses a plugin for DI registration, the metrics live on the adapter for the topology view):
+
+```ts
+import { defineAdapter } from '@forinda/kickjs'
+import type { IntrospectionSnapshot } from '@forinda/kickjs-devtools-kit'
+import { MailerService } from '../services/mailer.service'
+
+export const MailerObservabilityAdapter = defineAdapter({
+  name: 'MailerObservabilityAdapter',
+  build: () => {
+    let sent = 0
+    let failed = 0
+
+    return {
+      beforeStart({ container }) {
+        const mailer = container.resolve(MailerService)
+        const original = mailer.send.bind(mailer)
+        mailer.send = async (msg) => {
+          try {
+            await original(msg)
+            sent++
+          } catch (err) {
+            failed++
+            throw err
+          }
+        }
+      },
+
+      introspect(): IntrospectionSnapshot {
+        return {
+          protocolVersion: 1,
+          name: 'MailerObservabilityAdapter',
+          kind: 'adapter',
+          metrics: { sent, failed },
+        }
+      },
+    }
+  },
 })
 ```
 
-### MailProvider Interface
+Mount alongside `MailerPlugin()`. The DevTools topology view shows `sent` / `failed` counters live.
 
-```ts
-interface MailProvider {
-  name: string
-  send(message: MailMessage): Promise<MailResult>
-  shutdown?(): Promise<void>
-}
-```
+## What you give up by going BYO
 
-## Templates
+The previous `@forinda/kickjs-mailer` package added:
 
-Configure a template engine for rendering HTML emails:
+1. **Built-in provider classes** for SMTP, Resend, SendGrid, SES, and a Console provider for dev — all 30-50 lines each. Inline the ones you actually use; pull from the package's [archived source](https://github.com/forinda/kick-js/tree/main/packages/mailer/src/providers) if you want a starting point.
+2. **A `MailTemplateEngine` interface** for rendering MJML / Handlebars templates. Most adopters use [react-email](https://react.email/) or inline templates today; wire whichever via your `MailerService.send` body.
 
-```ts
-import Handlebars from 'handlebars'
-import type { MailTemplateEngine } from '@forinda/kickjs-mailer'
+Everything else was DI registration.
 
-class HandlebarsEngine implements MailTemplateEngine {
-  private templates = new Map<string, HandlebarsTemplateDelegate>()
+## Related
 
-  register(name: string, source: string) {
-    this.templates.set(name, Handlebars.compile(source))
-  }
-
-  render(template: string, data: Record<string, any>): string {
-    const fn = this.templates.get(template)
-    if (!fn) throw new Error(`Template "${template}" not found`)
-    return fn(data)
-  }
-}
-
-const engine = new HandlebarsEngine()
-engine.register('welcome', '<h1>Welcome {{name}}</h1><p>Your account is ready.</p>')
-engine.register('invoice', '<h1>Invoice #{{number}}</h1><p>Total: ${{total}}</p>')
-
-MailerAdapter({
-  provider: new SmtpProvider({ ... }),
-  templateEngine: engine,
-})
-
-// Then in your service:
-await this.mailer.sendTemplate('welcome', {
-  to: user.email,
-  subject: 'Welcome!',
-}, { name: user.name })
-```
-
-## Mail Message
-
-```ts
-interface MailMessage {
-  from?: MailRecipient
-  to: MailRecipient | MailRecipient[]
-  cc?: MailRecipient | MailRecipient[]
-  bcc?: MailRecipient | MailRecipient[]
-  replyTo?: MailRecipient
-  subject: string
-  text?: string
-  html?: string
-  attachments?: MailAttachment[]
-  headers?: Record<string, string>
-  metadata?: Record<string, any>   // provider-specific options
-}
-
-type MailRecipient = string | { name?: string; address: string }
-```
-
-## Disable for Testing
-
-```ts
-MailerAdapter({
-  provider: new SmtpProvider({ ... }),
-  enabled: getEnv('NODE_ENV') !== 'test', // logs instead of sending
-})
-```
+- [Plugins](./plugins.md) — `definePlugin` factory reference
+- [DI](./dependency-injection.md) — `@Service` + `@Autowired` patterns
+- [nodemailer docs](https://nodemailer.com/)

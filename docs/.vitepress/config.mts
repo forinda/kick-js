@@ -41,6 +41,7 @@ const guideSidebar = [
       { text: 'WebSockets', link: '/guide/websockets' },
       { text: 'Socket.IO', link: '/guide/socketio' },
       { text: 'Server-Sent Events', link: '/guide/sse' },
+      { text: 'GraphQL (BYO adapter)', link: '/guide/graphql' },
       { text: 'Reactivity', link: '/guide/reactivity' },
       { text: 'DevTools', link: '/guide/devtools' },
       { text: 'Adapters', link: '/guide/adapters' },
@@ -49,6 +50,8 @@ const guideSidebar = [
       { text: 'Multi-Tenancy', link: '/guide/multi-tenancy' },
       { text: 'Cron Jobs', link: '/guide/cron' },
       { text: 'Mailer', link: '/guide/mailer' },
+      { text: 'Notifications', link: '/guide/notifications' },
+      { text: 'OpenTelemetry', link: '/guide/otel' },
       { text: 'AI', link: '/guide/ai' },
       { text: 'MCP (Model Context Protocol)', link: '/guide/mcp' },
       { text: 'Caching', link: '/guide/caching' },
@@ -113,7 +116,6 @@ const apiSidebar = [
       { text: '@forinda/kickjs-http', link: '/api/http' },
       { text: '@forinda/kickjs-auth', link: '/api/auth' },
       { text: '@forinda/kickjs-swagger', link: '/api/swagger' },
-      { text: '@forinda/kickjs-graphql', link: '/api/graphql' },
       { text: '@forinda/kickjs-inertia', link: '/api/inertia' },
       { text: '@forinda/kickjs-prisma', link: '/api/prisma' },
       { text: '@forinda/kickjs-drizzle', link: '/api/drizzle' },
@@ -184,7 +186,7 @@ export default defineVersionedConfig(
         {
           property: 'og:description',
           content:
-            'Decorator-driven APIs on Express 5. REST, GraphQL, WebSocket, queues — pick what you need.',
+            'Decorator-driven APIs on Express 5. REST, WebSocket, queues, scheduled jobs — pick what you need.',
         },
       ],
       ['meta', { property: 'og:url', content: 'https://forinda.github.io/kick-js/' }],

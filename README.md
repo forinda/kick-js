@@ -125,27 +125,42 @@ export const app = await bootstrap({ modules })
 
 ## Ecosystem
 
+KickJS deliberately ships a small, stable core. The "right" extension surface is `defineAdapter()` / `definePlugin()` / `defineHttpContextDecorator()` plus `getRequestValue` / `processHooks` from `@forinda/kickjs` — adopters compose ecosystem-specific glue (GraphQL runtimes, OTel SDKs, mail providers) on top of those primitives via short copy-paste recipes. Six wrappers are deprecated for v5 because the BYO recipe is shorter and ages better than a thin first-party wrapper around a fast-moving upstream.
+
+### Supported
+
 | Package | Description |
 |---------|-------------|
-| [`@forinda/kickjs`](packages/kickjs/) | Core framework — DI, decorators, Express 5, middleware, routing |
-| [`@forinda/kickjs-config`](packages/config/) | Zod-based env validation, ConfigService, `@Value` |
+| [`@forinda/kickjs`](packages/kickjs/) | Core framework — DI, decorators, Express 5, routing, middleware, contributors, request store, `processHooks` |
+| [`@forinda/kickjs-cli`](packages/cli/) | Scaffolding, DDD generators, custom commands, `kick g agents` |
+| [`@forinda/kickjs-vite`](packages/vite/) | Vite plugin — single-port HMR, typegen watcher, customizable HMR log |
+| [`@forinda/kickjs-testing`](packages/testing/) | `createTestApp`, `createTestModule`, `runContributor` |
 | [`@forinda/kickjs-swagger`](packages/swagger/) | Auto OpenAPI from decorators + Zod |
-| [`@forinda/kickjs-cli`](packages/cli/) | Scaffolding, DDD generators, custom commands |
-| [`@forinda/kickjs-testing`](packages/testing/) | `createTestApp`, `createTestModule` |
+| [`@forinda/kickjs-auth`](packages/auth/) | JWT, API key, OAuth strategies + RBAC |
 | [`@forinda/kickjs-prisma`](packages/prisma/) | Prisma adapter (v5/6/7) |
 | [`@forinda/kickjs-drizzle`](packages/drizzle/) | Drizzle adapter, query builder |
-| [`@forinda/kickjs-auth`](packages/auth/) | JWT, API key, OAuth strategies |
 | [`@forinda/kickjs-ws`](packages/ws/) | WebSocket with `@WsController` |
 | [`@forinda/kickjs-queue`](packages/queue/) | BullMQ, RabbitMQ, Kafka |
-| [`@forinda/kickjs-cron`](packages/cron/) | `@Cron` decorator scheduling |
-| [`@forinda/kickjs-mailer`](packages/mailer/) | SMTP, Resend, SES |
-| [`@forinda/kickjs-graphql`](packages/graphql/) | `@Resolver`, `@Query`, `@Mutation` |
-| [`@forinda/kickjs-otel`](packages/otel/) | OpenTelemetry tracing + metrics |
 | [`@forinda/kickjs-devtools`](packages/devtools/) | Debug dashboard at `/_debug` |
-| [`@forinda/kickjs-notifications`](packages/notifications/) | Email, Slack, Discord, webhook |
-| [`@forinda/kickjs-multi-tenant`](packages/multi-tenant/) | Tenant resolution middleware |
+| [`@forinda/kickjs-devtools-kit`](packages/devtools-kit/) | `IntrospectionSnapshot`, `defineDevtoolsTab` for adapter authors |
 | [`@forinda/kickjs-ai`](packages/ai/) | Providers (OpenAI, Anthropic), `@AiTool`, memory, RAG, agent loop |
 | [`@forinda/kickjs-mcp`](packages/mcp/) | Model Context Protocol server adapter + `kick mcp` CLI |
+| [`@forinda/kickjs-lint`](packages/lint/) | Lint rules — DI token shape, `kick/` prefix enforcement |
+
+### Deprecated — going private in v5
+
+These packages are still installable in v4.1.x and emit deprecation notices. The replacement for each is a copy-paste recipe under 100 lines that uses the supported core primitives directly. v5 removes them from the public registry; the in-tree source either disappears or stays as a private internal dep.
+
+| Package | BYO replacement |
+|---------|----------------|
+| [`@forinda/kickjs-graphql`](packages/graphql/) | [guide/graphql](https://forinda.github.io/kick-js/guide/graphql) — wrap `graphql-http` / `graphql-yoga` / Apollo / Pothos via `definePlugin` |
+| [`@forinda/kickjs-otel`](packages/otel/) | [guide/otel](https://forinda.github.io/kick-js/guide/otel) — own the OpenTelemetry NodeSDK lifecycle; pair with `bootstrap({ processHooks: 'errors-only' })` so the SDK's SIGTERM handler doesn't race the framework's |
+| [`@forinda/kickjs-cron`](packages/cron/) | [guide/cron](https://forinda.github.io/kick-js/guide/cron) — wrap `croner` via `defineAdapter` + framework metadata helpers |
+| [`@forinda/kickjs-mailer`](packages/mailer/) | [guide/mailer](https://forinda.github.io/kick-js/guide/mailer) — `nodemailer` / Resend / SES via `definePlugin`, plus a console-mailer asset-manager example |
+| [`@forinda/kickjs-multi-tenant`](packages/multi-tenant/) | [guide/multi-tenancy](https://forinda.github.io/kick-js/guide/multi-tenancy) — `defineHttpContextDecorator` + `Scope.REQUEST` per-tenant DB factory |
+| [`@forinda/kickjs-notifications`](packages/notifications/) | [guide/notifications](https://forinda.github.io/kick-js/guide/notifications) — channel interface + `definePlugin` registration |
+
+**Why the cut:** thin wrappers around fast-moving ecosystems were costing more in CI/build time than they were saving adopters. Each shipped wrapper made an opinionated choice (which OTel exporter, which mail provider, which GraphQL runtime) that adopters consistently swapped within weeks. The BYO recipes use the same primitives the framework itself exposes — so adopters keep typed DI, lifecycle hooks, the contributor pipeline, and DevTools `introspect()` — and stop paying for an extra layer they were going to bypass anyway. See [comparison.md](comparison.md) for the strategic positioning.
 
 ## Example Apps
 

@@ -1,136 +1,203 @@
-# Multi-Tenancy
+# Multi-Tenancy (BYO)
 
-KickJS supports multi-tenant architectures where a single application serves multiple tenants (organizations, teams, customers) with isolated data. The `@forinda/kickjs-multi-tenant` package handles tenant resolution, and you wire it to your ORM of choice for database isolation.
+KickJS doesn't ship a first-party multi-tenant package — tenant resolution, scoping, and per-tenant DB switching are app-specific enough that the previous wrapper rarely fit a real adopter without modification. This guide shows how to compose tenant resolution from the framework's existing primitives: a `defineHttpContextDecorator` for resolution, `ContextMeta` augmentation for typing, and `getRequestValue` for service-level access.
 
-## Installation
+::: tip This pattern is not tenant-only
+"Tenant" here is a placeholder for any per-request scope your app cares about — workspace, organisation, team, project, room, deployment, region. Same recipe, different ContextMeta key.
+:::
 
-```bash
-kick add multi-tenant
-```
-
-## Core Concepts
-
-| Term | Meaning |
-|------|---------|
-| **Provider** | The default/root tenant that owns the tenant registry (e.g., your SaaS platform) |
-| **Tenant** | A customer organization resolved from the request |
-| **Tenant DB** | A database (or schema) scoped to a single tenant |
-| **Provider DB** | The default database that stores all tenant records |
-
-## Tenant Resolution
-
-Three built-in strategies determine which tenant a request belongs to:
-
-### Subdomain
+## Resolve the tenant via a Context Contributor
 
 ```ts
-TenantAdapter({ strategy: 'subdomain' })
-// acme.app.example.com → tenant: 'acme'
-// app.example.com       → tenant: null (falls back to provider)
-```
+// src/contributors/tenant.context.ts
+import {
+  createToken,
+  defineHttpContextDecorator,
+  HttpException,
+} from '@forinda/kickjs'
 
-### Header
+export interface Tenant {
+  id: string
+  name: string
+  plan: 'free' | 'pro' | 'enterprise'
+}
 
-```ts
-TenantAdapter({ strategy: 'header', headerName: 'x-tenant-id' })
-// X-Tenant-Id: acme → tenant: 'acme'
-```
+export interface TenantRepo {
+  findBySlug(slug: string): Promise<Tenant | null>
+}
 
-### Custom Function
+export const TENANT_REPO = createToken<TenantRepo>('app/tenants/repository')
 
-```ts
-TenantAdapter({
-  strategy: async (req) => {
-    const token = req.headers.authorization?.split(' ')[1]
-    if (!token) return null
-    const payload = jwt.decode(token)
-    return payload?.tenantId ? { id: payload.tenantId } : null
+declare module '@forinda/kickjs' {
+  interface ContextMeta {
+    tenant: Tenant
+  }
+}
+
+export const LoadTenant = defineHttpContextDecorator({
+  key: 'tenant',
+  deps: { repo: TENANT_REPO },
+  resolve: async (ctx, { repo }) => {
+    // Pick whatever resolution strategy fits — header, subdomain, JWT claim, URL param.
+    const slug =
+      (ctx.req.headers['x-tenant'] as string | undefined) ??
+      ctx.req.hostname.split('.')[0]
+
+    const tenant = await repo.findBySlug(slug)
+    if (!tenant) throw new HttpException(404, `Unknown tenant: ${slug}`)
+    return tenant
   },
 })
 ```
 
-All examples below assume one of these strategies is configured. The resolution method doesn't affect the database wiring.
-
-## Database-per-Tenant Pattern
-
-The most common pattern: each tenant has its own database, and a provider database stores the tenant registry.
-
-### Architecture
-
-```
-Request → Resolve Tenant (subdomain/header/jwt)
-        → Look up tenant in Provider DB
-        → Get or create tenant DB connection
-        → Controller uses tenant-scoped DB
-```
-
-### Type-Safe Connection Manager
-
-The connection manager maintains a cache of typed database instances keyed by tenant ID, defaulting to the provider when no tenant is resolved. The implementation is ORM-specific — see the [example apps](#examples) for complete Drizzle, Prisma, and MongoDB implementations.
-
-The core pattern:
+Mount it globally so every route has `tenant` resolved:
 
 ```ts
-// Generic — works with any ORM
-class TenantConnectionManager<TDb> {
-  private connections = new Map<string, TDb>()
+// src/index.ts
+import { bootstrap } from '@forinda/kickjs'
+import { LoadTenant } from './contributors/tenant.context'
 
-  constructor(
-    private factory: (tenantId: string) => TDb | Promise<TDb>,
-    private defaultTenantId = 'provider',
-  ) {}
-
-  async getDb(tenantId?: string): Promise<TDb> {
-    const key = tenantId ?? this.defaultTenantId
-    if (!this.connections.has(key)) {
-      this.connections.set(key, await this.factory(key))
-    }
-    return this.connections.get(key)!
-  }
-}
+export const app = await bootstrap({
+  modules,
+  contributors: [LoadTenant.registration],
+})
 ```
 
-### Controller Usage
-
-Regardless of ORM, the controller pattern is the same:
+## Read it from anywhere
 
 ```ts
+// In a controller
 @Controller()
-@Authenticated()
-export class ProjectController {
-  @Autowired() private tenantDb!: TenantDbService
+class DashboardController {
+  @Get('/dashboard')
+  show(ctx: RequestContext) {
+    const tenant = ctx.get('tenant')                    // typed
+    ctx.json({ tenant })
+  }
+}
 
-  @Get('/')
-  async list(ctx: RequestContext) {
-    const db = await this.tenantDb.current()
-    // db is fully typed for your ORM
-    return ctx.json(await db.select().from(projects))
+// In a service (no ctx reference)
+@Service()
+class BillingService {
+  async chargeForFeature(feature: string) {
+    const tenant = getRequestValue('tenant')            // typed via ContextMeta
+    if (!tenant) throw new Error('Outside a request frame')
+    // ...
   }
 }
 ```
 
-### Examples
+## Per-tenant database switching
 
-Complete working implementations in the `examples/` directory:
+Bind a tenant-scoped DB factory in a plugin, then resolve it inside any service that needs to query as the active tenant:
 
-| Example | ORM | DB Type |
-|---------|-----|---------|
-| `multi-tenant-drizzle-api` | Drizzle | `NodePgDatabase<typeof schema>` per tenant |
-| `multi-tenant-prisma-api` | Prisma | `PrismaClient` per tenant with `datasourceUrl` switching |
-| `multi-tenant-mongoose-api` | Mongoose | `mongoose.Connection` per tenant with model-per-connection |
+```ts
+// src/plugins/tenant-db.plugin.ts
+import { createToken, definePlugin, getRequestValue, Scope } from '@forinda/kickjs'
+import type { Database } from 'your-orm'
+import { resolveDbForTenant } from './lib/db'
 
-Each example includes `TenantConnectionManager<TDb>`, `TenantDbService`, bootstrap wiring with `TenantAdapter` + `AuthAdapter`, and a `ProjectController` demonstrating tenant-scoped queries.
+export const TENANT_DB = createToken<Database>('app/db/tenant')
 
-## Security Considerations
+export const TenantDbPlugin = definePlugin({
+  name: 'TenantDbPlugin',
+  build: () => ({
+    register(container) {
+      // REQUEST-scoped: one Database instance per request, per tenant.
+      // The resolver runs once per request thanks to scope caching.
+      container.registerFactory(
+        TENANT_DB,
+        () => {
+          const tenant = getRequestValue('tenant')
+          if (!tenant) throw new Error('TENANT_DB resolved outside a request frame')
+          return resolveDbForTenant(tenant.id)
+        },
+        Scope.REQUEST,
+      )
+    },
+  }),
+})
+```
 
-- Always resolve the tenant **before** authentication — `TenantAdapter` runs at `beforeGlobal`, `AuthAdapter` at `beforeRoutes`
-- Use `roleResolver` on `AuthAdapter` for tenant-scoped roles (see [Authorization](/guide/authorization))
-- Never trust tenant IDs from the client without validating against the provider DB
-- Set connection pool limits per tenant to prevent a single tenant from exhausting resources
-- Use `secretResolver` on `JwtStrategy` for per-tenant JWT signing keys in high-isolation environments
+```ts
+// In a repository
+@Repository()
+class OrdersRepo {
+  constructor(@Inject(TENANT_DB) private readonly db: Database) {}
+  // every query here runs against the active tenant's DB
+}
+```
 
-## See Also
+The `Scope.REQUEST` registration ensures the factory runs once per request and the result is cached for the rest of the request lifecycle, regardless of how many services inject `TENANT_DB`.
 
-- [Authentication](/guide/authentication) — strategies, CSRF, events
-- [Authorization](/guide/authorization) — tenant-scoped RBAC, @Policy/@Can
-- [API Reference](/api/multi-tenant) — TenantAdapter options, TENANT_CONTEXT, database types
+## Three isolation strategies
+
+The previous package surfaced three modes; all three are still natural with the recipe above — just swap the `resolveDbForTenant` body:
+
+| Mode | What `resolveDbForTenant(id)` returns | Trade-offs |
+|---|---|---|
+| **database-per-tenant** | A fresh Drizzle/Prisma client connected to that tenant's database. Cache the client by tenant id at module scope so we don't reconnect per request. | Strongest isolation; most ops overhead (one DB per tenant). |
+| **schema-per-tenant** (Postgres) | The shared client with `schema: 'tenant_<id>'` set. | Strong isolation; one DB cluster. |
+| **discriminator column** | The shared client; every query gets a `WHERE tenant_id = $id` clause via a query builder hook. | Cheapest; relies on app code never forgetting the predicate. |
+
+Pick at the application boundary; the contributor + plugin recipe stays the same.
+
+## DevTools integration
+
+Track resolved-tenant traffic on the DevTools dashboard by wrapping the contributor in a tiny adapter that exposes `introspect()`:
+
+```ts
+import { defineAdapter } from '@forinda/kickjs'
+import type { IntrospectionSnapshot } from '@forinda/kickjs-devtools-kit'
+import { LoadTenant } from '../contributors/tenant.context'
+
+export const TenantObservabilityAdapter = defineAdapter({
+  name: 'TenantObservabilityAdapter',
+  build: () => {
+    const requestsByTenant = new Map<string, number>()
+
+    return {
+      contributors() {
+        // Re-export the contributor through the adapter so adopters
+        // mount this single adapter to get both the tenant resolution
+        // AND the DevTools panel.
+        return [LoadTenant.registration]
+      },
+
+      introspect(): IntrospectionSnapshot {
+        const sortedTop = [...requestsByTenant.entries()]
+          .sort(([, a], [, b]) => b - a)
+          .slice(0, 10)
+        return {
+          protocolVersion: 1,
+          name: 'TenantObservabilityAdapter',
+          kind: 'adapter',
+          state: { topTenants: Object.fromEntries(sortedTop) },
+          metrics: {
+            uniqueTenants: requestsByTenant.size,
+            totalRequests: [...requestsByTenant.values()].reduce((s, n) => s + n, 0),
+          },
+        }
+      },
+    }
+  },
+})
+```
+
+Increment `requestsByTenant` from a follow-up contributor that depends on `'tenant'` (or from a global middleware that reads `getRequestValue('tenant')`).
+
+## What you give up by going BYO
+
+The previous `@forinda/kickjs-multi-tenant` package added:
+
+1. **Subdomain / header / custom resolver helpers** — replaced by your one-line resolution inside `resolve()`.
+2. **`req.tenant` mutation + 403 short-circuit** — replaced by throwing `HttpException(404)` from the resolver, which lands in the global error handler.
+3. **Tenant-aware RBAC integration** — wire your `AuthAdapter` to `getRequestValue('tenant')` from inside a custom strategy.
+
+Everything else was middleware glue.
+
+## Related
+
+- [Context Decorators](./context-decorators.md) — typed per-request values, full pipeline reference
+- [Plugins](./plugins.md) — `definePlugin` for DI registration
+- [Dependency Injection](./dependency-injection.md) — `Scope.REQUEST` semantics
