@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-example-task-mongoose-api",
-  "version": "4.2.0",
+  "version": "5.0.0",
   "private": true,
   "type": "module",
   "scripts": {
