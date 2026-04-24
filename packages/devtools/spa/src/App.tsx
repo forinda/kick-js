@@ -1,5 +1,6 @@
 import { createSignal, For, onCleanup, onMount, Show, type Component } from 'solid-js'
 import type { DevtoolsTabDescriptor } from '@forinda/kickjs-devtools-kit'
+import { OverviewTab } from './tabs/OverviewTab'
 import { RuntimeTab } from './tabs/RuntimeTab'
 import { MemoryTab } from './tabs/MemoryTab'
 import { TopologyTab } from './tabs/TopologyTab'
@@ -15,6 +16,7 @@ import { store } from './lib/store'
 import { DetailModalHost } from './lib/detail-modal'
 
 type BuiltInTabId =
+  | 'overview'
   | 'runtime'
   | 'memory'
   | 'topology'
@@ -38,6 +40,7 @@ interface BuiltInTabSpec {
  */
 function builtInTabs(): readonly BuiltInTabSpec[] {
   return [
+    { id: 'overview', label: 'Overview' },
     { id: 'runtime', label: 'Runtime' },
     { id: 'memory', label: 'Memory' },
     { id: 'topology', label: 'Topology' },
@@ -72,7 +75,7 @@ export const App: Component = () => {
     } catch {
       // localStorage may throw in private mode — ignore
     }
-    return 'runtime'
+    return 'overview'
   })()
 
   const [active, setActive] = createSignal<string>(initial)
@@ -172,6 +175,9 @@ export const App: Component = () => {
         </For>
       </nav>
       <main class="tab-body">
+        <Show when={active() === 'overview'}>
+          <OverviewTab />
+        </Show>
         <Show when={active() === 'runtime'}>
           <RuntimeTab />
         </Show>
@@ -197,7 +203,7 @@ export const App: Component = () => {
           <GraphTab />
         </Show>
         <Show when={activeCustom()}>{(tab) => <CustomTab tab={tab()} />}</Show>
-        <Show when={tabErrors().length > 0 && active() === 'runtime'}>
+        <Show when={tabErrors().length > 0 && active() === 'overview'}>
           <div class="card" style="border-color:var(--warn);margin-top:16px">
             <div class="card-title" style="color:var(--warn)">
               {tabErrors().length} custom-tab issue(s)
