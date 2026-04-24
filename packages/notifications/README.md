@@ -1,5 +1,10 @@
 # @forinda/kickjs-notifications
 
+> [!WARNING] Deprecated — going private in v4.1.2.
+> This package is being retired. The replacement is a short BYO recipe using `defineAdapter` / `definePlugin` from `@forinda/kickjs` directly — see **[guide/notifications](https://forinda.github.io/kick-js/guide/notifications)** for the copy-paste alternative.
+>
+> The package still works in v4.1.x; v4.1.2 will remove it from the public registry. Migrate at your convenience.
+
 Multi-channel notifications for KickJS — email, Slack, Discord, webhook, console, plus a pluggable `NotificationChannel` interface for custom transports.
 
 ## Install

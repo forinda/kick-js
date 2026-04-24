@@ -1,6 +1,6 @@
 import {
   Logger,
-  type AppAdapter,
+  defineAdapter,
   type AdapterContext,
   type Container,
   getClassMetaOrUndefined,
@@ -46,182 +46,124 @@ export interface GraphQLAdapterOptions {
  * @example
  * ```ts
  * import { GraphQLAdapter } from '@forinda/kickjs-graphql'
+ * import * as graphql from 'graphql'
  *
  * bootstrap({
  *   modules,
  *   adapters: [
- *     new GraphQLAdapter({
+ *     GraphQLAdapter({
  *       resolvers: [UserResolver, PostResolver],
+ *       graphql,
  *     }),
  *   ],
  * })
  * ```
  */
-export class GraphQLAdapter implements AppAdapter {
-  name = 'GraphQLAdapter'
-  private options: GraphQLAdapterOptions
-  private container: Container | null = null
+export const GraphQLAdapter = defineAdapter<GraphQLAdapterOptions>({
+  name: 'GraphQLAdapter',
+  defaults: {
+    path: '/graphql',
+  },
+  build: (config) => {
+    // `playground` defaults are environment-aware so each instance reads
+    // NODE_ENV at construction time (matches the legacy class behaviour
+    // — production builds default to playground off without the adopter
+    // having to pass a flag).
+    const playground = config.playground ?? process.env.NODE_ENV !== 'production'
+    const path = config.path ?? '/graphql'
 
-  constructor(options: GraphQLAdapterOptions) {
-    this.options = {
-      path: options.path ?? '/graphql',
-      playground: options.playground ?? process.env.NODE_ENV !== 'production',
-      ...options,
-    }
-  }
-
-  beforeMount({ app, container }: AdapterContext): void {
-    this.container = container
-
-    // Register resolver classes in DI
-    for (const ResolverClass of this.options.resolvers) {
-      container.register(ResolverClass, ResolverClass)
-    }
-
-    const graphqlLib = this.options.graphql
-    if (!graphqlLib?.buildSchema) {
-      log.warn(
-        'graphql module not provided. Pass { graphql: require("graphql") } to GraphQLAdapter.',
-      )
-      return
+    function buildArgString(ResolverClass: any, handlerName: string): string {
+      const argMeta: ArgMeta[] = getMethodMeta<ArgMeta[]>(ARG_META, ResolverClass, handlerName, [])
+      if (argMeta.length === 0) return ''
+      const args = argMeta
+        .sort((a, b) => a.paramIndex - b.paramIndex)
+        .map((a) => `${a.name}: ${a.type ?? 'String'}`)
+        .join(', ')
+      return `(${args})`
     }
 
-    const { schema, rootValue } = this.buildSchema(graphqlLib, container)
-    log.info(`GraphQL endpoint: ${this.options.path}`)
-    if (this.options.playground) {
-      log.info(`GraphQL Playground: ${this.options.path} (GET)`)
-    }
+    function buildSchema(graphqlLib: any, container: Container) {
+      const queryFields: string[] = []
+      const mutationFields: string[] = []
+      const rootValue: Record<string, any> = {}
 
-    const jsonParser = express.json()
+      for (const ResolverClass of config.resolvers) {
+        const meta = getClassMetaOrUndefined<ResolverMeta>(RESOLVER_META, ResolverClass)
+        if (!meta) continue
 
-    app.post(this.options.path!, jsonParser, async (req: Request, res: Response) => {
-      const { query, variables, operationName } = req.body ?? {}
-      if (!query) {
-        res.status(400).json({ errors: [{ message: 'Query is required' }] })
-        return
-      }
+        const queries = getClassMeta<FieldMeta[]>(QUERY_META, ResolverClass, [])
+        const mutations = getClassMeta<FieldMeta[]>(MUTATION_META, ResolverClass, [])
 
-      try {
-        const result = await graphqlLib.graphql({
-          schema,
-          source: query,
-          rootValue,
-          variableValues: variables,
-          operationName,
-          contextValue: { req, res, container },
-        })
-        res.json(result)
-      } catch (err: any) {
-        res.status(500).json({ errors: [{ message: err.message }] })
-      }
-    })
+        for (const q of queries) {
+          const args = buildArgString(ResolverClass, q.handlerName)
+          const returnType = q.returnType ?? 'String'
+          queryFields.push(`  ${q.name}${args}: ${returnType}`)
 
-    // GET for playground/introspection
-    app.get(this.options.path!, (_req: Request, res: Response) => {
-      if (this.options.playground) {
-        res.type('html').send(this.renderPlayground())
-      } else {
-        res.status(404).json({ message: 'GraphQL Playground disabled' })
-      }
-    })
-  }
-
-  private buildSchema(graphql: any, container: Container) {
-    const queryFields: string[] = []
-    const mutationFields: string[] = []
-    const rootValue: Record<string, any> = {}
-
-    for (const ResolverClass of this.options.resolvers) {
-      const meta = getClassMetaOrUndefined<ResolverMeta>(RESOLVER_META, ResolverClass)
-      if (!meta) continue
-
-      const queries = getClassMeta<FieldMeta[]>(QUERY_META, ResolverClass, [])
-      const mutations = getClassMeta<FieldMeta[]>(MUTATION_META, ResolverClass, [])
-
-      for (const q of queries) {
-        const args = this.buildArgString(ResolverClass, q.handlerName)
-        const returnType = q.returnType ?? 'String'
-        queryFields.push(`  ${q.name}${args}: ${returnType}`)
-
-        rootValue[q.name] = async (argsObj: any, context: any) => {
-          const instance = container.resolve(ResolverClass)
-          const argMeta: ArgMeta[] = getMethodMeta<ArgMeta[]>(
-            ARG_META,
-            ResolverClass,
-            q.handlerName,
-            [],
-          )
-          const params = argMeta
-            .sort((a, b) => a.paramIndex - b.paramIndex)
-            .map((a) => argsObj[a.name])
-
-          if (params.length === 0) {
-            return instance[q.handlerName](argsObj, context)
+          rootValue[q.name] = async (argsObj: any, context: any) => {
+            const instance = container.resolve(ResolverClass)
+            const argMeta: ArgMeta[] = getMethodMeta<ArgMeta[]>(
+              ARG_META,
+              ResolverClass,
+              q.handlerName,
+              [],
+            )
+            const params = argMeta
+              .sort((a, b) => a.paramIndex - b.paramIndex)
+              .map((a) => argsObj[a.name])
+            if (params.length === 0) {
+              return instance[q.handlerName](argsObj, context)
+            }
+            return instance[q.handlerName](...params, context)
           }
-          return instance[q.handlerName](...params, context)
+        }
+
+        for (const m of mutations) {
+          const args = buildArgString(ResolverClass, m.handlerName)
+          const returnType = m.returnType ?? 'String'
+          mutationFields.push(`  ${m.name}${args}: ${returnType}`)
+
+          rootValue[m.name] = async (argsObj: any, context: any) => {
+            const instance = container.resolve(ResolverClass)
+            const argMeta: ArgMeta[] = getMethodMeta<ArgMeta[]>(
+              ARG_META,
+              ResolverClass,
+              m.handlerName,
+              [],
+            )
+            const params = argMeta
+              .sort((a, b) => a.paramIndex - b.paramIndex)
+              .map((a) => argsObj[a.name])
+            if (params.length === 0) {
+              return instance[m.handlerName](argsObj, context)
+            }
+            return instance[m.handlerName](...params, context)
+          }
         }
       }
 
-      for (const m of mutations) {
-        const args = this.buildArgString(ResolverClass, m.handlerName)
-        const returnType = m.returnType ?? 'String'
-        mutationFields.push(`  ${m.name}${args}: ${returnType}`)
-
-        rootValue[m.name] = async (argsObj: any, context: any) => {
-          const instance = container.resolve(ResolverClass)
-          const argMeta: ArgMeta[] = getMethodMeta<ArgMeta[]>(
-            ARG_META,
-            ResolverClass,
-            m.handlerName,
-            [],
-          )
-          const params = argMeta
-            .sort((a, b) => a.paramIndex - b.paramIndex)
-            .map((a) => argsObj[a.name])
-
-          if (params.length === 0) {
-            return instance[m.handlerName](argsObj, context)
-          }
-          return instance[m.handlerName](...params, context)
-        }
+      let typeDefs = ''
+      if (queryFields.length > 0) {
+        typeDefs += `type Query {\n${queryFields.join('\n')}\n}\n\n`
       }
+      if (mutationFields.length > 0) {
+        typeDefs += `type Mutation {\n${mutationFields.join('\n')}\n}\n\n`
+      }
+
+      // Merge custom typeDefs
+      if (config.typeDefs) {
+        typeDefs = config.typeDefs + '\n\n' + typeDefs
+      }
+
+      if (!typeDefs.trim()) {
+        typeDefs = 'type Query { _empty: String }'
+      }
+
+      const schema = graphqlLib.buildSchema(typeDefs)
+      return { schema, rootValue }
     }
 
-    let typeDefs = ''
-    if (queryFields.length > 0) {
-      typeDefs += `type Query {\n${queryFields.join('\n')}\n}\n\n`
-    }
-    if (mutationFields.length > 0) {
-      typeDefs += `type Mutation {\n${mutationFields.join('\n')}\n}\n\n`
-    }
-
-    // Merge custom typeDefs
-    if (this.options.typeDefs) {
-      typeDefs = this.options.typeDefs + '\n\n' + typeDefs
-    }
-
-    if (!typeDefs.trim()) {
-      typeDefs = 'type Query { _empty: String }'
-    }
-
-    const schema = graphql.buildSchema(typeDefs)
-    return { schema, rootValue }
-  }
-
-  private buildArgString(ResolverClass: any, handlerName: string): string {
-    const argMeta: ArgMeta[] = getMethodMeta<ArgMeta[]>(ARG_META, ResolverClass, handlerName, [])
-    if (argMeta.length === 0) return ''
-
-    const args = argMeta
-      .sort((a, b) => a.paramIndex - b.paramIndex)
-      .map((a) => `${a.name}: ${a.type ?? 'String'}`)
-      .join(', ')
-
-    return `(${args})`
-  }
-
-  private renderPlayground(): string {
-    return `<!DOCTYPE html>
+    function renderPlayground(): string {
+      return `<!DOCTYPE html>
 <html>
 <head>
   <title>GraphQL Playground</title>
@@ -240,5 +182,61 @@ export class GraphQLAdapter implements AppAdapter {
   </script>
 </body>
 </html>`
-  }
-}
+    }
+
+    return {
+      beforeMount({ app, container }: AdapterContext): void {
+        // Register resolver classes in DI
+        for (const ResolverClass of config.resolvers) {
+          container.register(ResolverClass, ResolverClass)
+        }
+
+        const graphqlLib = config.graphql
+        if (!graphqlLib?.buildSchema) {
+          log.warn(
+            'graphql module not provided. Pass { graphql: require("graphql") } to GraphQLAdapter.',
+          )
+          return
+        }
+
+        const { schema, rootValue } = buildSchema(graphqlLib, container)
+        log.info(`GraphQL endpoint: ${path}`)
+        if (playground) {
+          log.info(`GraphQL Playground: ${path} (GET)`)
+        }
+
+        const jsonParser = express.json()
+
+        app.post(path, jsonParser, async (req: Request, res: Response) => {
+          const { query, variables, operationName } = req.body ?? {}
+          if (!query) {
+            res.status(400).json({ errors: [{ message: 'Query is required' }] })
+            return
+          }
+          try {
+            const result = await graphqlLib.graphql({
+              schema,
+              source: query,
+              rootValue,
+              variableValues: variables,
+              operationName,
+              contextValue: { req, res, container },
+            })
+            res.json(result)
+          } catch (err: any) {
+            res.status(500).json({ errors: [{ message: err.message }] })
+          }
+        })
+
+        // GET for playground/introspection
+        app.get(path, (_req: Request, res: Response) => {
+          if (playground) {
+            res.type('html').send(renderPlayground())
+          } else {
+            res.status(404).json({ message: 'GraphQL Playground disabled' })
+          }
+        })
+      },
+    }
+  },
+})

@@ -13,7 +13,6 @@ import { generateDto } from '../generators/dto'
 import { generateConfig } from '../generators/config'
 import { generateAgentDocs } from '../generators/agent-docs'
 import { generateAuthScaffold } from '../generators/auth-scaffold'
-import { generateResolver } from '../generators/resolver'
 import { generateJob } from '../generators/job'
 import { generateScaffold, parseFields } from '../generators/scaffold'
 import { generateTest } from '../generators/test'
@@ -78,7 +77,7 @@ interface AgentDocsOpts {
   only?: 'agents' | 'claude' | 'skills' | 'both' | 'all'
   name?: string
   pm?: string
-  template?: 'rest' | 'graphql' | 'ddd' | 'cqrs' | 'minimal'
+  template?: 'rest' | 'ddd' | 'cqrs' | 'minimal'
   force?: boolean
 }
 
@@ -137,7 +136,6 @@ const GENERATORS = [
   { name: 'dto <name>', description: 'Zod DTO schema                  [-m module]' },
   { name: 'adapter <name>', description: 'AppAdapter with lifecycle hooks (app-level only)' },
   { name: 'test <name>', description: 'Vitest test scaffold            [-m module]' },
-  { name: 'resolver <name>', description: 'GraphQL @Resolver class' },
   { name: 'job <name>', description: 'Queue @Job processor' },
   { name: 'config', description: 'Generate kick.config.ts' },
   {
@@ -463,18 +461,6 @@ export function registerGenerateCommand(program: Command): void {
       printGenerated(files, dryRun)
     })
 
-  // ── kick g resolver <name> ────────────────────────────────────────────
-  gen
-    .command('resolver <name>')
-    .description('Generate a GraphQL @Resolver class with @Query and @Mutation methods')
-    .option('-o, --out <dir>', 'Output directory', 'src/resolvers')
-    .action(async (name: string, opts: OutDirOpts, cmd: Command) => {
-      const dryRun = isDryRun(cmd)
-      setDryRun(dryRun)
-      const files = await generateResolver({ name, outDir: resolve(opts.out) })
-      printGenerated(files, dryRun)
-    })
-
   // ── kick g job <name> ────────────────────────────────────────────────
   gen
     .command('job <name>')
@@ -616,7 +602,7 @@ export function registerGenerateCommand(program: Command): void {
     )
     .option('--name <name>', 'Project name (defaults to package.json name)')
     .option('--pm <pm>', 'Package manager (defaults to package.json packageManager)')
-    .option('--template <template>', 'Template: rest | graphql | ddd | cqrs | minimal')
+    .option('--template <template>', 'Template: rest | ddd | cqrs | minimal')
     .option('-f, --force', 'Overwrite existing files without prompting')
     .action(async (opts: AgentDocsOpts, cmd: Command) => {
       const dryRun = isDryRun(cmd)

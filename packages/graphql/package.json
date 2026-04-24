@@ -1,7 +1,7 @@
 {
   "name": "@forinda/kickjs-graphql",
   "version": "4.1.0",
-  "description": "GraphQL module for KickJS with decorator-based resolvers, schema generation, and playground",
+  "description": "[DEPRECATED] GraphQL module for KickJS with decorator-based resolvers, schema generation, and playground — see https://forinda.github.io/kick-js/guide/graphql for the BYO replacement (going private in v4.1.2).",
   "keywords": [
     "kickjs",
     "nodejs",
@@ -101,5 +101,6 @@
   "bugs": {
     "url": "https://github.com/forinda/kick-js/issues"
   },
-  "peerDependenciesMeta": {}
+  "peerDependenciesMeta": {},
+  "deprecated": "Deprecated — going private in v4.1.2. Replaced by a BYO recipe using defineAdapter/definePlugin from @forinda/kickjs directly. See https://forinda.github.io/kick-js/guide/graphql for the migration."
 }

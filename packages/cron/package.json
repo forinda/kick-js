@@ -1,7 +1,7 @@
 {
   "name": "@forinda/kickjs-cron",
   "version": "4.1.0",
-  "description": "Production-grade cron job scheduling with pluggable backends for KickJS",
+  "description": "[DEPRECATED] Production-grade cron job scheduling with pluggable backends for KickJS — see https://forinda.github.io/kick-js/guide/cron for the BYO replacement (going private in v4.1.2).",
   "keywords": [
     "kickjs",
     "nodejs",
@@ -107,5 +107,6 @@
   },
   "bugs": {
     "url": "https://github.com/forinda/kick-js/issues"
-  }
+  },
+  "deprecated": "Deprecated — going private in v4.1.2. Replaced by a BYO recipe using defineAdapter/definePlugin from @forinda/kickjs directly. See https://forinda.github.io/kick-js/guide/cron for the migration."
 }

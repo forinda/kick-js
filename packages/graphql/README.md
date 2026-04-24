@@ -1,5 +1,10 @@
 # @forinda/kickjs-graphql
 
+> [!WARNING] Deprecated — going private in v4.1.2.
+> This package is being retired. The replacement is a short BYO recipe using `defineAdapter` / `definePlugin` from `@forinda/kickjs` directly — see **[guide/graphql](https://forinda.github.io/kick-js/guide/graphql)** for the copy-paste alternative (plus recipes for wrapping `graphql-http`, Apollo, Yoga, or Pothos).
+>
+> The package still works in v4.1.x; v4.1.2 will remove it from the public registry. Migrate at your convenience.
+
 GraphQL adapter for KickJS — decorator-driven resolvers (`@Resolver`, `@Query`, `@Mutation`, `@Subscription`, `@Arg`), auto schema generation, GraphiQL playground at `/graphql`.
 
 ## Install

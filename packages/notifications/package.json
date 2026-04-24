@@ -1,7 +1,7 @@
 {
   "name": "@forinda/kickjs-notifications",
   "version": "4.1.0",
-  "description": "Multi-channel notifications for KickJS — email, Slack, Discord, webhook, custom",
+  "description": "[DEPRECATED] Multi-channel notifications for KickJS — email, Slack, Discord, webhook, custom — see https://forinda.github.io/kick-js/guide/notifications for the BYO replacement (going private in v4.1.2).",
   "keywords": [
     "kickjs",
     "nodejs",
@@ -100,5 +100,6 @@
   "peerDependencies": {
     "@forinda/kickjs": ">=2.3.0"
   },
-  "peerDependenciesMeta": {}
+  "peerDependenciesMeta": {},
+  "deprecated": "Deprecated — going private in v4.1.2. Replaced by a BYO recipe using defineAdapter/definePlugin from @forinda/kickjs directly. See https://forinda.github.io/kick-js/guide/notifications for the migration."
 }

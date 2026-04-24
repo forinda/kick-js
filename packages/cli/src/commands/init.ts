@@ -12,12 +12,19 @@ const OPTIONAL_PACKAGES = [
   { value: 'otel', label: 'OpenTelemetry', hint: 'tracing & metrics' },
   { value: 'ws', label: 'WebSocket', hint: 'rooms, heartbeat' },
   { value: 'queue', label: 'Queue', hint: 'BullMQ/RabbitMQ/Kafka' },
-  { value: 'cron', label: 'Cron', hint: 'scheduled jobs' },
-  { value: 'mailer', label: 'Mailer', hint: 'SMTP, Resend, SES' },
-  { value: 'graphql', label: 'GraphQL', hint: 'resolvers, GraphiQL' },
+  { value: 'cron', label: 'Cron [deprecated, see /guide/cron]', hint: 'scheduled jobs' },
+  { value: 'mailer', label: 'Mailer [deprecated, see /guide/mailer]', hint: 'SMTP, Resend, SES' },
   { value: 'devtools', label: 'DevTools', hint: 'debug dashboard' },
-  { value: 'notifications', label: 'Notifications', hint: 'email, Slack, Discord' },
-  { value: 'multi-tenant', label: 'Multi-Tenant', hint: 'tenant resolution' },
+  {
+    value: 'notifications',
+    label: 'Notifications [deprecated, see /guide/notifications]',
+    hint: 'email, Slack, Discord',
+  },
+  {
+    value: 'multi-tenant',
+    label: 'Multi-Tenant [deprecated, see /guide/multi-tenancy]',
+    hint: 'tenant resolution',
+  },
 ] as const
 
 export function registerInitCommand(program: Command): void {
@@ -32,7 +39,7 @@ export function registerInitCommand(program: Command): void {
     .option('--install', 'Install dependencies after scaffolding')
     .option('--no-install', 'Skip dependency installation')
     .option('-f, --force', 'Remove existing files without prompting')
-    .option('-t, --template <type>', 'Project template: rest | graphql | ddd | cqrs | minimal')
+    .option('-t, --template <type>', 'Project template: rest | ddd | cqrs | minimal')
     .option('-r, --repo <type>', 'Default repository: prisma | drizzle | inmemory | custom')
     .option('--packages <packages>', 'Comma-separated packages to include (e.g. auth,swagger,otel)')
     .action(async (name: string | undefined, opts: any) => {
@@ -92,7 +99,6 @@ export function registerInitCommand(program: Command): void {
           message: 'Project template',
           options: [
             { value: 'rest', label: 'REST API', hint: 'Express + Swagger' },
-            { value: 'graphql', label: 'GraphQL API', hint: 'GraphQL + GraphiQL' },
             { value: 'ddd', label: 'DDD', hint: 'Domain-Driven Design modules' },
             { value: 'cqrs', label: 'CQRS', hint: 'Commands, Queries, Events + WS/Queue' },
             { value: 'minimal', label: 'Minimal', hint: 'bare Express' },

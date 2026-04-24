@@ -35,7 +35,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const cliPkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'))
 const KICKJS_VERSION = `^${cliPkg.version}`
 
-type ProjectTemplate = 'rest' | 'graphql' | 'ddd' | 'cqrs' | 'minimal'
+type ProjectTemplate = 'rest' | 'ddd' | 'cqrs' | 'minimal'
 
 interface InitProjectOptions {
   name: string
@@ -112,11 +112,6 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
   await writeFileSafe(join(dir, 'src/modules/hello/hello.service.ts'), generateHelloService())
   await writeFileSafe(join(dir, 'src/modules/hello/hello.controller.ts'), generateHelloController())
   await writeFileSafe(join(dir, 'src/modules/hello/hello.module.ts'), generateHelloModule())
-
-  // ── Template-specific files ─────────────────────────────────────────
-  if (template === 'graphql') {
-    await writeFileSafe(join(dir, 'src/resolvers/.gitkeep'), '')
-  }
 
   // ── kick.config.ts — CLI configuration ─────────────────────────────
   await writeFileSafe(
@@ -196,7 +191,6 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
 
   const genHint: Record<string, string> = {
     rest: 'kick g module user',
-    graphql: 'kick g resolver user',
     ddd: 'kick g module user --repo drizzle',
     cqrs: 'kick g module user --pattern cqrs',
     minimal: '# add your routes to src/index.ts',
@@ -218,7 +212,6 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
   log('  kick g guard <name>       Route guard (auth, roles, etc.)')
   log('  kick g adapter <name>     AppAdapter with lifecycle hooks')
   log('  kick g dto <name>         Zod DTO schema')
-  if (template === 'graphql') log('  kick g resolver <name>    GraphQL resolver')
   if (template === 'cqrs') log('  kick g job <name>         Queue job processor')
   log('  kick g config             Generate kick.config.ts')
   log('')
@@ -226,7 +219,7 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
   log('  kick add <pkg>            Install a KickJS package + peers')
   log('  kick add --list           Show all available packages')
   log('')
-  log('Available: auth, swagger, graphql, drizzle, prisma, ws, cron,')
+  log('Available: auth, swagger, drizzle, prisma, ws, cron,')
   log('           queue, mailer, otel, devtools, multi-tenant, notifications, mcp, testing')
   log('')
 }

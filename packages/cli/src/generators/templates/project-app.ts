@@ -1,4 +1,4 @@
-type ProjectTemplate = 'rest' | 'graphql' | 'ddd' | 'cqrs' | 'minimal'
+type ProjectTemplate = 'rest' | 'ddd' | 'cqrs' | 'minimal'
 
 /**
  * Generate src/index.ts entry file with template-specific bootstrap.
@@ -14,56 +14,6 @@ export function generateEntryFile(
   packages: string[] = [],
 ): string {
   switch (template) {
-    case 'graphql': {
-      // GraphQL adapter is always included (it's the template); others only if selected
-      const gqlImports: string[] = []
-      const gqlAdapters: string[] = []
-
-      if (packages.includes('devtools')) {
-        gqlImports.push(`import { DevToolsAdapter } from '@forinda/kickjs-devtools'`)
-        gqlAdapters.push(`    DevToolsAdapter(),`)
-      }
-      if (packages.includes('otel')) {
-        gqlImports.push(`import { OtelAdapter } from '@forinda/kickjs-otel'`)
-        gqlAdapters.push(`    OtelAdapter({ serviceName: '${name}' }),`)
-      }
-      if (packages.includes('swagger')) {
-        gqlImports.push(`import { SwaggerAdapter } from '@forinda/kickjs-swagger'`)
-        gqlAdapters.push(
-          `    SwaggerAdapter({ info: { title: '${name}', version: '${version}' } }),`,
-        )
-      }
-
-      const gqlImportsBlock = gqlImports.length ? gqlImports.join('\n') + '\n' : ''
-      const gqlAdaptersBlock = gqlAdapters.length ? gqlAdapters.join('\n') + '\n' : ''
-
-      return `import 'reflect-metadata'
-// Side-effect import — registers the extended env schema with kickjs
-// **before** any controller / service / @Value gets resolved. Without
-// this line ConfigService.get('YOUR_KEY') returns undefined because the
-// cached schema would still be the base shape. See guide/configuration.
-import './config'
-import { bootstrap } from '@forinda/kickjs'
-import { GraphQLAdapter } from '@forinda/kickjs-graphql'
-${gqlImportsBlock}import { modules } from './modules'
-
-// Import your resolvers here
-// import { UserResolver } from './resolvers/user.resolver'
-
-// Export the app for the Vite plugin (dev mode)
-export const app = await bootstrap({
-  modules,
-  adapters: [
-${gqlAdaptersBlock}    new GraphQLAdapter({
-      resolvers: [/* UserResolver */],
-      // Add custom type definitions here:
-      // typeDefs: userTypeDefs,
-    }),
-  ],
-})
-`
-    }
-
     case 'cqrs': {
       // Build adapters based on user-selected packages
       const cqrsImports: string[] = []
@@ -83,11 +33,6 @@ ${gqlAdaptersBlock}    new GraphQLAdapter({
           `    SwaggerAdapter({\n      info: { title: '${name}', version: '${version}' },\n    }),`,
         )
       }
-      if (packages.includes('graphql')) {
-        cqrsImports.push(`import { GraphQLAdapter } from '@forinda/kickjs-graphql'`)
-        cqrsAdapters.push(`    new GraphQLAdapter({ resolvers: [] }),`)
-      }
-
       const cqrsImportsBlock = cqrsImports.length ? cqrsImports.join('\n') + '\n' : ''
       const cqrsAdaptersBlock = cqrsImports.length
         ? `\n  adapters: [\n${cqrsAdapters.join('\n')}\n    // Uncomment for WebSocket support:\n    // WsAdapter(),\n    // Uncomment when Redis is available:\n    // QueueAdapter({\n    //   provider: new BullMQProvider({ host: 'localhost', port: 6379 }),\n    // }),\n  ],`
@@ -127,11 +72,6 @@ export const app = await bootstrap({
         imports.push(`import { OtelAdapter } from '@forinda/kickjs-otel'`)
         adapters.push(`    OtelAdapter({ serviceName: '${name}' }),`)
       }
-      if (packages.includes('graphql')) {
-        imports.push(`import { GraphQLAdapter } from '@forinda/kickjs-graphql'`)
-        adapters.push(`    new GraphQLAdapter({ resolvers: [] }),`)
-      }
-
       const importsBlock = imports.length ? imports.join('\n') + '\n' : ''
       const adaptersBlock = adapters.length ? `,\n  adapters: [\n${adapters.join('\n')}\n  ]` : ''
 

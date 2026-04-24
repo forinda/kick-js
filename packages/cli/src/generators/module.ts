@@ -45,7 +45,6 @@ interface GenerateModuleOptions {
  * Patterns:
  *   rest         — flat folder: controller + service + DTOs + repo
  *   ddd          — nested DDD: presentation/ application/ domain/ infrastructure/
- *   graphql      — flat folder: resolver + service + DTOs + repo (future)
  *   cqrs         — commands, queries, events with WS/queue integration
  *   minimal      — just controller + module index
  */
@@ -109,7 +108,6 @@ export async function generateModule(options: GenerateModuleOptions): Promise<st
     case 'cqrs':
       await generateCqrsFiles(ctx)
       break
-    case 'graphql':
     case 'ddd':
     default:
       await generateDddFiles(ctx)

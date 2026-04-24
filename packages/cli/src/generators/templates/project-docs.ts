@@ -1,10 +1,9 @@
-type ProjectTemplate = 'rest' | 'graphql' | 'ddd' | 'cqrs' | 'minimal'
+type ProjectTemplate = 'rest' | 'ddd' | 'cqrs' | 'minimal'
 
 /** Generate README.md with project documentation */
 export function generateReadme(name: string, template: ProjectTemplate, pm: string): string {
   const templateLabels: Record<string, string> = {
     rest: 'REST API',
-    graphql: 'GraphQL API',
     ddd: 'Domain-Driven Design',
     cqrs: 'CQRS + Event-Driven',
     minimal: 'Minimal',
@@ -14,7 +13,6 @@ export function generateReadme(name: string, template: ProjectTemplate, pm: stri
   if (template !== 'minimal') {
     packages.push('@forinda/kickjs-swagger', '@forinda/kickjs-devtools')
   }
-  if (template === 'graphql') packages.push('@forinda/kickjs-graphql')
   if (template === 'cqrs') {
     packages.push('@forinda/kickjs-queue', '@forinda/kickjs-ws', '@forinda/kickjs-otel')
   }
@@ -176,7 +174,6 @@ function _LEGACY_FULL_CLAUDE_TEMPLATE_UNUSED(
 ): string {
   const templateLabels: Record<string, string> = {
     rest: 'REST API',
-    graphql: 'GraphQL API',
     ddd: 'Domain-Driven Design',
     cqrs: 'CQRS + Event-Driven',
     minimal: 'Minimal Express',
@@ -209,7 +206,7 @@ src/
 ├── index.ts           # Application bootstrap
 ├── modules/           # Feature modules (DDD/CQRS pattern)
 │   └── index.ts       # Module registry
-${template === 'graphql' ? '├── resolvers/         # GraphQL resolvers\n' : ''}└── ...
+└── ...
 \`\`\`
 
 ## Package Manager
@@ -342,7 +339,7 @@ kick g middleware <name>          # Express middleware
 kick g guard <name>               # Route guard (auth, roles)
 kick g adapter <name>             # AppAdapter with lifecycle hooks
 kick g dto <name>                 # Zod DTO schema
-${template === 'graphql' ? 'kick g resolver <name>           # GraphQL resolver\n' : ''}${template === 'cqrs' ? 'kick g job <name>                # Queue job processor\n' : ''}\`\`\`
+${template === 'cqrs' ? 'kick g job <name>                # Queue job processor\n' : ''}\`\`\`
 
 ## Adding Packages
 
@@ -542,17 +539,7 @@ ${
 
 `
     : ''
-}${
-    template === 'graphql'
-      ? `### GraphQL Decorators
-- \`@Resolver()\` — GraphQL resolver
-- \`@Query()\` — GraphQL query
-- \`@Mutation()\` — GraphQL mutation
-- \`@Arg('name')\` — resolver argument
-
-`
-      : ''
-  }## Common Pitfalls
+}## Common Pitfalls
 
 1. **Decorators fire at import time** — make sure to import module classes in \`src/modules/index.ts\`
 2. **Tests need \`Container.reset()\`** — call in \`beforeEach\` to isolate DI state
@@ -650,8 +637,8 @@ mistakes:
     property assignment (\`ctx.tenant = …\`) sticks to the contributor
     instance only — the handler instance never sees it.
   - **Read across instances via \`ctx.set\` / \`ctx.get\`** (or
-    \`requestStore.getStore()?.values.get('key')\` from a service that
-    has no \`ctx\` reference). \`ctx.req\` works because the underlying
+    \`getRequestValue(key)\` from a service that has no \`ctx\` reference
+    — typed via \`MetaValue<K>\`). \`ctx.req\` works because the underlying
     Express request is shared; bespoke property assignments don't.
 
 - **Test isolation** — default to \`Container.create()\` for fresh DI state.
@@ -719,7 +706,7 @@ package additions, env access patterns, troubleshooting) is detailed below.
 | Module registry | \`src/modules/index.ts\` |
 | Feature modules | \`src/modules/<module-name>/\` |
 | **Module entry file** | \`src/modules/<name>/<name>.module.ts\` (filename suffix is required — see Vite HMR contract below) |
-${template === 'graphql' ? '| GraphQL resolvers | `src/resolvers/` |\n' : ''}| Env values | \`.env\` |
+| Env values | \`.env\` |
 | Env schema (Zod) | \`src/config/index.ts\` |
 | TypeScript config | \`tsconfig.json\` |
 | Vite config (HMR) | \`vite.config.ts\` |
@@ -761,16 +748,8 @@ ${
 └── <name>.module.ts         # Module definition (implements AppModule)
 \`\`\`
 `
-      : template === 'graphql'
+      : template === 'rest'
         ? `\`\`\`
-resolvers/
-├── <name>.resolver.ts       # @Resolver, @Query, @Mutation
-├── <name>.types.ts          # GraphQL type definitions
-└── <name>.service.ts        # Business logic
-\`\`\`
-`
-        : template === 'rest'
-          ? `\`\`\`
 <name>/
 ├── <name>.controller.ts     # HTTP routes (@Controller)
 ├── <name>.service.ts        # Business logic (@Service)
@@ -778,7 +757,7 @@ resolvers/
 └── <name>.module.ts         # Module definition (implements AppModule)
 \`\`\`
 `
-          : `\`\`\`
+        : `\`\`\`
 src/
 ├── index.ts                 # Add routes here
 └── ...                      # Custom structure
@@ -1045,20 +1024,8 @@ fast). The \`onError\` hook is async-permitted.
 Full guide: <https://forinda.github.io/kick-js/guide/context-decorators>.
 
 ${
-  template === 'graphql'
-    ? `### GraphQL
-| Decorator | Purpose |
-|-----------|---------|
-| \`@Resolver()\` | GraphQL resolver class |
-| \`@Query()\` | Query handler |
-| \`@Mutation()\` | Mutation handler |
-| \`@Arg('name')\` | Resolver argument |
-
-`
-    : ''
-}${
-    template === 'cqrs'
-      ? `### Background Jobs
+  template === 'cqrs'
+    ? `### Background Jobs
 | Decorator | Purpose |
 |-----------|---------|
 | \`@Job('name')\` | Queue job handler |
@@ -1067,8 +1034,8 @@ ${
 | \`@WsController()\` | WebSocket controller |
 
 `
-      : ''
-  }## Common Pitfalls
+    : ''
+}## Common Pitfalls
 
 1. **Forgot to register module** — Add to \`src/modules/index.ts\` exports array
 2. **DI not working** — Ensure \`reflect-metadata\` is imported in \`src/index.ts\`
@@ -1319,10 +1286,11 @@ Precedence high → low: **method > class > module > adapter > global**.
 Cycles or unmet \`dependsOn\` keys throw \`MissingContributorError\` at boot.
 
 **Critical rules — all stem from the same shared-via-ALS instance model**:
-- Every per-request stage (middleware → contributors → handler) gets its OWN \`RequestContext\` instance, but they all read/write the SAME \`AsyncLocalStorage\`-backed Map (\`requestStore.getStore().values\`).
+- Every per-request stage (middleware → contributors → handler) gets its OWN \`RequestContext\` instance, but they all read/write the SAME \`AsyncLocalStorage\`-backed bag.
 - **\`resolve\` and \`onError\` must RETURN the value** — the runner writes it via \`ctx.set(key, value)\`. Direct property assignment (\`ctx.tenant = …\`) sticks to one instance only and the handler instance never sees it.
 - \`ctx.set('tenant', x)\` then \`ctx.get('tenant')\` works across instances. \`ctx.req.headers[...]\` works (the underlying Express request is shared).
-- Services can read contributor output without a \`ctx\` reference via \`requestStore.getStore()?.values.get('tenant')\` — same Map, no DI plumbing needed.
+- Services with no \`ctx\` reference: \`getRequestValue('tenant')\` returns \`MetaValue<'tenant'> | undefined\` (typed via the augmented \`ContextMeta\`). For \`requestId\` use \`getRequestStore()\`.
+- **No \`setRequestValue\` — writes flow through \`ctx.set\` or a contributor's return value.** Avoids "spooky action at a distance" where any service can pollute the per-request bag.
 
 **Don't use this for**: response short-circuit, stream mutation, or
 pre-route-matching work — keep \`@Middleware()\` for those.

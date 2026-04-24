@@ -1,5 +1,10 @@
 # @forinda/kickjs-mailer
 
+> [!WARNING] Deprecated — going private in v4.1.2.
+> This package is being retired. The replacement is a short BYO recipe using `defineAdapter` / `definePlugin` from `@forinda/kickjs` directly — see **[guide/mailer](https://forinda.github.io/kick-js/guide/mailer)** for the copy-paste alternative.
+>
+> The package still works in v4.1.x; v4.1.2 will remove it from the public registry. Migrate at your convenience.
+
 Pluggable email for KickJS — SMTP (`nodemailer`), Resend, SES, Console (dev), or any custom `MailProvider`.
 
 ## Install

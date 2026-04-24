@@ -42,7 +42,8 @@ const PACKAGE_REGISTRY: Record<
   graphql: {
     pkg: '@forinda/kickjs-graphql',
     peers: ['graphql'],
-    description: 'GraphQL resolvers + GraphiQL',
+    description:
+      '[DEPRECATED — removed in v5] GraphQL resolvers + GraphiQL. See guide/graphql for the BYO recipe (graphql-http / Yoga / Apollo / Pothos).',
   },
 
   // Database
@@ -68,7 +69,8 @@ const PACKAGE_REGISTRY: Record<
   otel: {
     pkg: '@forinda/kickjs-otel',
     peers: ['@opentelemetry/api'],
-    description: 'OpenTelemetry tracing + metrics',
+    description:
+      '[DEPRECATED — removed in v5] OpenTelemetry tracing + metrics. See guide/otel for the BYO recipe (also covers the processHooks: errors-only setting for SDK shutdown).',
   },
 
   // DevTools
@@ -90,14 +92,16 @@ const PACKAGE_REGISTRY: Record<
   mailer: {
     pkg: '@forinda/kickjs-mailer',
     peers: ['nodemailer'],
-    description: 'Email sending — SMTP, Resend, SES, or custom provider',
+    description:
+      '[DEPRECATED — removed in v5] Email sending. See guide/mailer for the BYO recipe + console-mailer asset-manager example.',
   },
 
   // Cron
   cron: {
     pkg: '@forinda/kickjs-cron',
     peers: ['croner'],
-    description: 'Cron job scheduling (production-grade with croner)',
+    description:
+      '[DEPRECATED — removed in v5] Cron job scheduling. See guide/cron for the BYO recipe (croner + framework metadata helpers).',
   },
 
   // Queue
@@ -126,14 +130,16 @@ const PACKAGE_REGISTRY: Record<
   'multi-tenant': {
     pkg: '@forinda/kickjs-multi-tenant',
     peers: [],
-    description: 'Tenant resolution middleware',
+    description:
+      '[DEPRECATED — removed in v5] Tenant resolution middleware. See guide/multi-tenancy for the BYO recipe (defineHttpContextDecorator + Scope.REQUEST DI).',
   },
 
   // Notifications
   notifications: {
     pkg: '@forinda/kickjs-notifications',
     peers: [],
-    description: 'Multi-channel notifications — email, Slack, Discord, webhook',
+    description:
+      '[DEPRECATED — removed in v5] Multi-channel notifications. See guide/notifications for the BYO recipe.',
   },
 
   // MCP — Model Context Protocol server

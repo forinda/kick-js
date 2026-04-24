@@ -1,4 +1,4 @@
-type ProjectTemplate = 'rest' | 'graphql' | 'ddd' | 'cqrs' | 'minimal'
+type ProjectTemplate = 'rest' | 'ddd' | 'cqrs' | 'minimal'
 
 /** Map of optional package names to their npm package identifiers */
 const PACKAGE_DEPS: Record<string, string> = {
@@ -7,12 +7,7 @@ const PACKAGE_DEPS: Record<string, string> = {
   otel: '@forinda/kickjs-otel',
   ws: '@forinda/kickjs-ws',
   queue: '@forinda/kickjs-queue',
-  cron: '@forinda/kickjs-cron',
-  mailer: '@forinda/kickjs-mailer',
-  graphql: '@forinda/kickjs-graphql',
   devtools: '@forinda/kickjs-devtools',
-  notifications: '@forinda/kickjs-notifications',
-  'multi-tenant': '@forinda/kickjs-multi-tenant',
 }
 
 /** Generate package.json with template-aware dependencies */
@@ -35,23 +30,12 @@ export function generatePackageJson(
     'pino-pretty': '^13.1.3',
   }
 
-  // graphql template always needs the graphql runtime
-  if (template === 'graphql') {
-    baseDeps['@forinda/kickjs-graphql'] = kickjsVersion
-    baseDeps['graphql'] = '^16.11.0'
-  }
-
   // Add user-selected optional packages
   for (const pkg of packages) {
     const dep = PACKAGE_DEPS[pkg]
     if (dep && !baseDeps[dep]) {
       baseDeps[dep] = kickjsVersion
     }
-  }
-
-  // graphql package needs the graphql peer dep
-  if (packages.includes('graphql') && !baseDeps['graphql']) {
-    baseDeps['graphql'] = '^16.11.0'
   }
 
   return JSON.stringify(

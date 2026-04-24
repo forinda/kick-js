@@ -5,7 +5,7 @@ import { confirm } from '../utils/prompts'
 import { generateClaude, generateAgents, generateKickJsSkills } from './templates/project-docs'
 import { loadKickConfig } from '../config'
 
-type ProjectTemplate = 'rest' | 'graphql' | 'ddd' | 'cqrs' | 'minimal'
+type ProjectTemplate = 'rest' | 'ddd' | 'cqrs' | 'minimal'
 
 export interface GenerateAgentDocsOptions {
   outDir: string
@@ -28,7 +28,7 @@ export interface GenerateAgentDocsOptions {
   force?: boolean
 }
 
-const VALID_TEMPLATES = new Set<ProjectTemplate>(['rest', 'graphql', 'ddd', 'cqrs', 'minimal'])
+const VALID_TEMPLATES = new Set<ProjectTemplate>(['rest', 'ddd', 'cqrs', 'minimal'])
 
 function detectName(outDir: string, override?: string): string {
   if (override) return override
