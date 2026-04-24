@@ -21,6 +21,18 @@ function getSwaggerUiDistPath(): string {
   return dirname(require.resolve('swagger-ui-dist/package.json'))
 }
 
+/**
+ * UI renderer signature — receives the spec URL and an optional title,
+ * returns a complete HTML document. Both the built-in `swaggerUIHtml`
+ * and `redocHtml` match this shape (the optional `assetsPath` arg
+ * is opt-in for the offline-asset case and ignored by ReDoc).
+ *
+ * Adopters who want corporate branding, dark-mode default, custom
+ * logos, or a third-party UI bundle (Stoplight Elements, RapiDoc,
+ * Scalar) replace either renderer with their own.
+ */
+export type UIRenderer = (specUrl: string, title?: string, assetsPath?: string) => string
+
 export interface SwaggerAdapterOptions extends SwaggerOptions {
   /** Path to serve Swagger UI (default: '/docs') */
   docsPath?: string
@@ -36,6 +48,25 @@ export interface SwaggerAdapterOptions extends SwaggerOptions {
    * out of production builds without conditionally constructing the adapter.
    */
   disableInProd?: boolean
+  /**
+   * Override the Swagger UI HTML renderer. Defaults to the built-in
+   * {@link swaggerUIHtml}. Useful for adopters who want corporate
+   * branding, a custom theme, or to swap in a third-party UI bundle
+   * (Stoplight Elements, RapiDoc, Scalar).
+   *
+   * @example
+   * ```ts
+   * SwaggerAdapter({
+   *   renderSwaggerUI: (specUrl, title) => myBrandedHtml(specUrl, title),
+   * })
+   * ```
+   */
+  renderSwaggerUI?: UIRenderer
+  /**
+   * Override the ReDoc HTML renderer. Defaults to the built-in
+   * {@link redocHtml}. Same shape as {@link renderSwaggerUI}.
+   */
+  renderReDoc?: UIRenderer
 }
 
 /**
@@ -197,12 +228,16 @@ export const SwaggerAdapter = defineAdapter<SwaggerAdapterOptions>({
           res.json(spec)
         })
 
-        // Swagger UI — uses local assets if available, CDN fallback
+        // Swagger UI — uses local assets if available, CDN fallback.
+        // Adopters can override `renderSwaggerUI` to swap the bundle
+        // (Stoplight Elements, RapiDoc, Scalar) or apply branding.
+        const renderSwagger = config.renderSwaggerUI ?? swaggerUIHtml
+        const renderReDoc = config.renderReDoc ?? redocHtml
         docsRouter.get(docsPath, (_req, res) => {
           res
             .type('html')
             .send(
-              swaggerUIHtml(
+              renderSwagger(
                 specPath,
                 config.info?.title,
                 uiDistAvailable ? swaggerAssetsPath : undefined,
@@ -210,9 +245,11 @@ export const SwaggerAdapter = defineAdapter<SwaggerAdapterOptions>({
             )
         })
 
-        // ReDoc — still CDN-based (no npm package for standalone bundle)
+        // ReDoc — still CDN-based for the default renderer (no npm
+        // package for the standalone bundle). Custom renderers can
+        // self-host whatever they like.
         docsRouter.get(redocPath, (_req, res) => {
-          res.type('html').send(redocHtml(specPath, config.info?.title))
+          res.type('html').send(renderReDoc(specPath, config.info?.title))
         })
 
         app.use(docsRouter)

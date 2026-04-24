@@ -22,7 +22,7 @@ export {
 } from './openapi-builder'
 
 // Adapter
-export { SwaggerAdapter, type SwaggerAdapterOptions } from './swagger.adapter'
+export { SwaggerAdapter, type SwaggerAdapterOptions, type UIRenderer } from './swagger.adapter'
 
 // UI Generators
 export { swaggerUIHtml, redocHtml } from './ui'
