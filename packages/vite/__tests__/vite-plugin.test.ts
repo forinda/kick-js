@@ -411,15 +411,47 @@ export class RepoB {}
       expect(result).toEqual([])
     })
 
-    it('does not detect files without decorator patterns', () => {
+    it('still handles project source files without kickjs patterns', () => {
+      // Plain helper / utility / side-effect modules don't carry decorators
+      // or v4 factories, but they're imported by the running app — a change
+      // to one MUST invalidate the virtual app or HMR silently misses it.
+      // Returning [] tells Vite "we handled it" and our debounced flush
+      // will invalidate the virtual:kickjs/app module.
       const code = `
 export class PlainHelper {
   help() { return 'help' }
 }
 `
       const result = simulateTransformAndHmr(code, '/src/helper.ts')
-      // Should return undefined (handleHotUpdate returns nothing — not handled)
-      expect(result).toBeUndefined()
+      expect(result).toEqual([])
+    })
+
+    it('ignores non-source files (typegen .d.ts output, dist artefacts)', () => {
+      const code = `export declare const FOO: string`
+      const dts = simulateTransformAndHmr(code, '/src/foo.d.ts')
+      const dist = simulateTransformAndHmr(code, '/project/dist/index.js')
+      const kickjs = simulateTransformAndHmr(code, '/project/.kickjs/types/registry.d.ts')
+      expect(dts).toBeUndefined()
+      expect(dist).toBeUndefined()
+      expect(kickjs).toBeUndefined()
+    })
+
+    it('detects v4 factory declarations (defineAdapter / definePlugin / defineContextDecorator)', () => {
+      const adapter = `
+import { defineAdapter } from '@forinda/kickjs'
+export const MyAdapter = defineAdapter({ name: 'MyAdapter', build: () => ({}) })
+`
+      const plugin = `
+import { definePlugin } from '@forinda/kickjs'
+export const MyPlugin = definePlugin({ name: 'MyPlugin', build: () => ({}) })
+`
+      const contributor = `
+import { defineContextDecorator } from '@forinda/kickjs'
+const Load = defineContextDecorator({ key: 'x', resolve: () => 1 })
+`
+      expect(simulateTransformAndHmr(adapter, '/src/my.adapter.ts')).toEqual([])
+      expect(simulateTransformAndHmr(plugin, '/src/my.plugin.ts')).toEqual([])
+      expect(simulateTransformAndHmr(contributor, '/src/load.ts')).toEqual([])
     })
 
     it('handles decorator with arguments on same line as class', () => {

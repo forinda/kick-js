@@ -1,7 +1,7 @@
 import type { Container } from './container'
 import type { AppAdapter } from './adapter'
 import type { AppModuleClass } from './app-module'
-import type { ContributorRegistration } from './context-decorator'
+import type { ContributorRegistrations } from './context-decorator'
 import type { KickJsPluginName } from './augmentation'
 
 /**
@@ -134,7 +134,7 @@ export interface KickPlugin {
    * }
    * ```
    */
-  contributors?(): ContributorRegistration[] | readonly ContributorRegistration[]
+  contributors?(): ContributorRegistrations
 
   /**
    * Called after the application has fully bootstrapped.

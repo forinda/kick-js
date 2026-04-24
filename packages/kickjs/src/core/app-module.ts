@@ -1,5 +1,5 @@
 import type { Container } from './container'
-import type { ContributorRegistration } from './context-decorator'
+import type { ContributorRegistrations } from './context-decorator'
 
 /**
  * Route set returned by a module's routes() method.
@@ -38,7 +38,7 @@ export interface AppModule {
    *
    * Optional — modules without per-module contributors omit this hook.
    */
-  contributors?(): ContributorRegistration[] | readonly ContributorRegistration[]
+  contributors?(): ContributorRegistrations
   /** Return route definitions for this module, or null for non-HTTP modules */
   routes(): ModuleRoutes | ModuleRoutes[] | null
 }

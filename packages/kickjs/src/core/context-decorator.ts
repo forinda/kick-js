@@ -2,7 +2,31 @@ import 'reflect-metadata'
 import { METADATA, type Constructor, type MaybePromise } from './interfaces'
 import { pushClassMeta, pushMethodMeta } from './metadata'
 import type { InjectionToken } from './token'
-import type { ExecutionContext, MetaValue } from './execution-context'
+import type { ContextMeta, ExecutionContext, MetaValue } from './execution-context'
+
+/**
+ * String-literal union of every key declared on the augmentable
+ * {@link ContextMeta} interface. Resolves to `string` when the
+ * project hasn't augmented `ContextMeta` yet (so a first-day project
+ * keeps compiling), and narrows to the concrete keys once the
+ * `declare module '@forinda/kickjs' { interface ContextMeta { ... } }`
+ * blocks land.
+ *
+ * Used as the element type of `dependsOn`, so a typo like
+ * `dependsOn: ['tenent']` becomes a TS error instead of a boot-time
+ * `MissingContributorError`.
+ */
+export type ContextMetaKey = keyof ContextMeta extends never ? string : keyof ContextMeta & string
+
+/**
+ * What a single `deps` entry is allowed to be — the runtime calls
+ * `container.resolve(value)`, which accepts an injection token brand
+ * or a constructor (decorated class). Anything else (a string literal,
+ * an array, a plain object) silently fails at boot when the runner
+ * tries to resolve it; constraining at the type level surfaces the
+ * mistake in the editor instead.
+ */
+export type DepValue = InjectionToken<unknown> | Constructor<unknown>
 
 /**
  * Maps a `deps` declaration object to its resolved-instance shape.
@@ -11,12 +35,12 @@ import type { ExecutionContext, MetaValue } from './execution-context'
  * `{ db: Db, cache: CacheService }` — the runner resolves each value
  * against the DI container and hands the result to `resolve()`.
  */
-export type ResolvedDeps<D extends Record<string, unknown>> = {
+export type ResolvedDeps<D extends Record<string, DepValue>> = {
   [K in keyof D]: D[K] extends InjectionToken<infer T>
     ? T
     : D[K] extends Constructor<infer T>
       ? T
-      : unknown
+      : never
 }
 
 /**
@@ -31,7 +55,7 @@ export type ResolvedDeps<D extends Record<string, unknown>> = {
  */
 export interface ContextDecoratorSpec<
   K extends string = string,
-  D extends Record<string, unknown> = Record<string, never>,
+  D extends Record<string, DepValue> = Record<string, never>,
   Ctx extends ExecutionContext = ExecutionContext,
 > {
   /** ContextMeta key the resolved value is written to. */
@@ -45,8 +69,15 @@ export interface ContextDecoratorSpec<
   /**
    * Other contributor keys that must populate before this one runs.
    * Enforced via topo-sort at startup; missing deps and cycles fail boot.
+   *
+   * Typed against `keyof ContextMeta` once the project augments it — so
+   * `dependsOn: ['tenent']` (typo) is a TS error, not a boot-time
+   * `MissingContributorError`. Falls back to plain `string[]` when the
+   * registry is empty (no augmentation yet) so first-day projects keep
+   * compiling. Cast-as-any escape hatch:
+   * `dependsOn: ['custom-key' as keyof ContextMeta]`.
    */
-  dependsOn?: readonly string[]
+  dependsOn?: readonly ContextMetaKey[]
   /**
    * If `true`, a thrown `resolve` skips the contributor instead of
    * forwarding to the request error handler. The key is left unset
@@ -76,16 +107,47 @@ export interface ContextDecoratorSpec<
  */
 export interface ContributorRegistration<
   K extends string = string,
-  D extends Record<string, unknown> = Record<string, never>,
+  D extends Record<string, DepValue> = Record<string, never>,
   Ctx extends ExecutionContext = ExecutionContext,
 > {
   readonly key: K
   readonly deps: D
-  readonly dependsOn: readonly string[]
+  readonly dependsOn: readonly ContextMetaKey[]
   readonly optional: boolean
   readonly onError?: ContextDecoratorSpec<K, D, Ctx>['onError']
   readonly resolve: ContextDecoratorSpec<K, D, Ctx>['resolve']
 }
+
+/**
+ * Type-erased registration shape used in the public collection slots
+ * (`AppModule.contributors?()`, `AppAdapter.contributors?()`,
+ * `KickPlugin.contributors?()`, `bootstrap({ contributors })`).
+ *
+ * The narrow `ContributorRegistration` carries a `Ctx` parameter so
+ * `resolve(ctx, deps)` is typed at the *definition* site, but `Ctx`
+ * sits in a contravariant position on `resolve` — meaning a
+ * `ContributorRegistration<…, RequestContext>` is *not* assignable to
+ * `ContributorRegistration<…, ExecutionContext>` even though every
+ * `RequestContext` is-a `ExecutionContext`. That's TS-sound but
+ * useless: the runner only ever calls a contributor with the same
+ * concrete ctx the route mounts under, so an HTTP-typed contributor
+ * never sees a non-HTTP ctx. Erasing `Ctx` to `any` in the collection
+ * type lets adopters store contributors typed against `RequestContext`
+ * (or any future transport-specific ctx) in the same array without
+ * casting.
+ */
+export type AnyContributorRegistration = ContributorRegistration<
+  string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  any
+>
+
+/** Convenience alias for `AnyContributorRegistration[]` collections. */
+export type ContributorRegistrations =
+  | AnyContributorRegistration[]
+  | readonly AnyContributorRegistration[]
 
 /**
  * The value returned by {@link defineContextDecorator}. Callable as either
@@ -95,7 +157,7 @@ export interface ContributorRegistration<
  */
 export interface ContextDecorator<
   K extends string = string,
-  D extends Record<string, unknown> = Record<string, never>,
+  D extends Record<string, DepValue> = Record<string, never>,
   Ctx extends ExecutionContext = ExecutionContext,
 > {
   (target: object, propertyKey?: string | symbol, descriptor?: PropertyDescriptor): void
@@ -130,7 +192,7 @@ export interface ContextDecorator<
  */
 export function defineContextDecorator<
   K extends string,
-  D extends Record<string, unknown> = Record<string, never>,
+  D extends Record<string, DepValue> = Record<string, never>,
   Ctx extends ExecutionContext = ExecutionContext,
 >(spec: ContextDecoratorSpec<K, D, Ctx>): ContextDecorator<K, D, Ctx> {
   // Shallow-clone + freeze `deps` so a caller mutating their original

@@ -552,8 +552,21 @@ export {}
   const blocks: string[] = []
   for (const item of [...byName.values()].sort((a, b) => a.name.localeCompare(b.name))) {
     const docLines: string[] = []
-    if (item.description) docLines.push(` * ${item.description}`)
-    if (item.example) docLines.push(` * @example`, ` * \`\`\`ts`, ` * ${item.example}`, ` * \`\`\``)
+    if (item.description) {
+      // Description may itself be multi-line — preserve line breaks
+      // so JSDoc renderers wrap intent correctly.
+      for (const line of item.description.split('\n')) docLines.push(` * ${line}`)
+    }
+    if (item.example) {
+      // Split the example so each line is prefixed with ` * ` — without
+      // this, raw newlines inside the example string broke the JSDoc
+      // comment and IDEs rendered the whole block as one mangled line.
+      // This is what made `defineAugmentation({ example: '<huge object>' })`
+      // unusable for anything beyond a one-liner.
+      docLines.push(` * @example`, ` * \`\`\`ts`)
+      for (const line of item.example.split('\n')) docLines.push(` * ${line}`)
+      docLines.push(` * \`\`\``)
+    }
     docLines.push(` * @see ${item.relativePath}`)
     blocks.push(
       ['/**', ...docLines, ' */', `export interface ${item.name}Augmentation {}`].join('\n'),

@@ -11,7 +11,7 @@ import {
   type AppAdapter,
   type AdapterContext,
   type AdapterMiddleware,
-  type ContributorRegistration,
+  type ContributorRegistrations,
   type KickPlugin,
   type RouteDefinition,
   type SourcedRegistration,
@@ -90,7 +90,7 @@ export interface ApplicationOptions {
    * })
    * ```
    */
-  contributors?: ContributorRegistration[] | readonly ContributorRegistration[]
+  contributors?: ContributorRegistrations
 
   /**
    * Backing store strategy for {@link RequestContext} `set/get` and the

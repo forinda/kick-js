@@ -126,14 +126,19 @@ export function kickjsVitePlugin(options: KickJSPluginOptions = {}): Plugin[] {
     rootResolver,
     kickjsCorePlugin(ctx),
     kickjsModuleDiscoveryPlugin(ctx),
-    kickjsHmrPlugin(ctx),
+    kickjsHmrPlugin(ctx, options.hmr),
     kickjsVirtualModulesPlugin(ctx),
     kickjsDevServerPlugin(ctx),
   ]
 }
 
 // Re-export types for consumers
-export type { KickJSPluginOptions, PluginContext } from './types'
+export type {
+  KickJSPluginOptions,
+  PluginContext,
+  HmrOptions,
+  HmrInvalidationContext,
+} from './types'
 
 // Standalone plugins users can compose alongside `kickjsVitePlugin()`
 export { envWatchPlugin } from './env-watch-plugin'

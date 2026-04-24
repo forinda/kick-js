@@ -38,30 +38,65 @@ export type KickJsPluginName = keyof KickJsPluginRegistry extends never
  * documentation-only — `kick typegen` surfaces them in the generated
  * `.kickjs/types/augmentations.d.ts` so adopters can browse every
  * augmentable interface from one place.
+ *
+ * `description` and `example` may both be multi-line — typegen preserves
+ * line breaks when rendering them as JSDoc. There is no upper limit on
+ * the example size; entire shape definitions or worked snippets are fine.
  */
 export interface AugmentationMeta {
-  /** One-line description of what the augmentation customises. */
+  /**
+   * Free-form description of what the augmentation customises. May be
+   * multi-line — newlines are preserved in the generated JSDoc.
+   */
   description?: string
-  /** Tiny TS snippet showing a typical shape (`'{ foo: string }'`). */
+  /**
+   * TS snippet showing a typical shape. May be multi-line; rendered
+   * inside a fenced code block in the generated catalogue. Use this
+   * for anything from `'{ foo: string }'` up to a full interface body
+   * — typegen no longer flattens newlines.
+   */
   example?: string
 }
 
 /**
  * Advertise an augmentable interface so `kick typegen` can list it in
- * `.kickjs/types/augmentations.d.ts`. Runtime no-op — exists purely as
- * a static marker for the typegen scanner to discover.
+ * `.kickjs/types/augmentations.d.ts` for project-wide discovery.
  *
- * @example
+ * **This function is a runtime AND type-level no-op.** It does NOT
+ * augment the interface for TypeScript. The actual augmentation is
+ * the `declare module` block — `defineAugmentation` only adds an
+ * entry to the typegen catalogue so other contributors / adopters
+ * can find the interface and know its expected shape.
+ *
+ * Both calls are needed:
+ *
  * ```ts
  * import { defineAugmentation } from '@forinda/kickjs'
  *
- * export interface FeatureFlags {} // augmentable
+ * // (1) The actual TS augmentation — what `ctx.get('tenant')` reads.
+ * declare module '@forinda/kickjs' {
+ *   interface ContextMeta {
+ *     tenant: { id: string; name: string }
+ *   }
+ * }
  *
- * defineAugmentation('FeatureFlags', {
- *   description: 'Flags consumed by FlagsPlugin',
- *   example: '{ beta: boolean; rolloutPercentage: number }',
+ * // (2) Catalogue entry — what `kick typegen` lists in
+ * //     `.kickjs/types/augmentations.d.ts` for browseability.
+ * defineAugmentation('ContextMeta', {
+ *   description: 'Tenant resolved from x-tenant-id by TenantAdapter',
+ *   example: `{
+ *     tenant: {
+ *       id: string
+ *       name: string
+ *       plan: 'free' | 'pro' | 'enterprise'
+ *       featureFlags: Record<string, boolean>
+ *     }
+ *   }`,
  * })
  * ```
+ *
+ * Skip `defineAugmentation` if you don't care about the catalogue — the
+ * `declare module` block alone is enough for runtime + type behaviour.
  */
 export function defineAugmentation(name: string, meta?: AugmentationMeta): void {
   // No-op at runtime — `kick typegen` discovers the call statically and

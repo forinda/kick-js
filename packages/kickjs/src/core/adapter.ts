@@ -1,7 +1,7 @@
 import type http from 'node:http'
 import type { Express } from 'express'
 import type { Container } from './container'
-import type { ContributorRegistration } from './context-decorator'
+import type { ContributorRegistrations } from './context-decorator'
 import type { MaybePromise, Constructor } from './interfaces'
 import type { KickJsPluginName } from './augmentation'
 
@@ -123,7 +123,7 @@ export interface AppAdapter {
    * Useful for cross-cutting concerns: an auth adapter contributing
    * `user`, a multi-tenant adapter contributing `tenant`, etc. Optional.
    */
-  contributors?(): ContributorRegistration[] | readonly ContributorRegistration[]
+  contributors?(): ContributorRegistrations
 
   /**
    * Called before global middleware — register early routes (docs UI, health).

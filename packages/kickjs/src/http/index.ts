@@ -6,6 +6,7 @@ export { bootstrap } from './bootstrap'
 
 // Request Context
 export { RequestContext, type ContextMeta, type Ctx, type RouteShape } from './context'
+export { defineHttpContextDecorator } from './define-http-context-decorator'
 export type { TypedParsedQuery, FieldsOf } from './query'
 
 // Router Builder

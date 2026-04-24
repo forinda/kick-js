@@ -36,6 +36,61 @@ export interface KickJSPluginOptions {
    * ```
    */
   entry?: string
+
+  /** HMR logger / behaviour overrides (see {@link HmrOptions}). */
+  hmr?: HmrOptions
+}
+
+/**
+ * Payload handed to {@link HmrOptions.onInvalidation}.
+ *
+ * `tokens` is the deduplicated batch flushed for one debounce window —
+ * a mix of class names (`'UserController'`), v4 factory entries
+ * (`'MyAdapter (defineAdapter)'`), and bare basenames (`'hello.ts'`)
+ * for plain source files without kickjs patterns. `timestamp` matches
+ * the value broadcast on the `kickjs:hmr` HMR client event so dev tools
+ * can correlate.
+ */
+export interface HmrInvalidationContext {
+  /** Token names / file basenames flushed in this debounce window. */
+  tokens: readonly string[]
+  /** Epoch ms when the batch was flushed. */
+  timestamp: number
+}
+
+/**
+ * HMR-related plugin options.
+ *
+ * Defaults preserve the existing `HMR invalidated N tokens: …` log line.
+ * Adopters with custom dev tooling (Discord webhooks, structured JSON
+ * logs, in-app overlays) override `onInvalidation`; tests / CI dev runs
+ * usually want `silent: true`.
+ */
+export interface HmrOptions {
+  /**
+   * Suppress the built-in console log entirely. The `kickjs:hmr` HMR
+   * event is still broadcast — DevTools / Swagger UI continue to react
+   * to invalidations, only the terminal stays quiet.
+   */
+  silent?: boolean
+
+  /**
+   * Replace the built-in dev-console line with a custom function. When
+   * provided, the default log is *not* printed (your function owns the
+   * channel). Returning a string emits a single `console.log`; returning
+   * `undefined` / `void` suppresses output entirely so you can route
+   * elsewhere (pino, OTel span events, websocket, etc.).
+   *
+   * @example
+   * ```ts
+   * kickjsVitePlugin({
+   *   hmr: {
+   *     onInvalidation: ({ tokens }) => `↻ rebuilt: ${tokens.join(' · ')}`,
+   *   },
+   * })
+   * ```
+   */
+  onInvalidation?: (context: HmrInvalidationContext) => string | undefined | void
 }
 
 /**

@@ -17,6 +17,7 @@ export { bootstrap } from './http/bootstrap'
 export { isClusterPrimary, type ClusterOptions } from './http/cluster'
 
 export { RequestContext, type Ctx, type RouteShape } from './http/context'
+export { defineHttpContextDecorator } from './http/define-http-context-decorator'
 
 export { buildRoutes } from './http/router-builder'
 

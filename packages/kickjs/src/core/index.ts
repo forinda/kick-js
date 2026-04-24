@@ -152,8 +152,12 @@ export { type ContextMeta, type MetaValue, type ExecutionContext } from './execu
 export {
   defineContextDecorator,
   type ContextDecoratorSpec,
+  type ContextMetaKey,
   type ContributorRegistration,
+  type AnyContributorRegistration,
+  type ContributorRegistrations,
   type ContextDecorator,
+  type DepValue,
   type ResolvedDeps,
 } from './context-decorator'
 

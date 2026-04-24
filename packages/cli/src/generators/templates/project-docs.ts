@@ -636,10 +636,23 @@ mistakes:
   no manual build step.
 
 - **Context over \`@Middleware()\`** — when a middleware's only job is to
-  populate \`ctx.set('key', value)\`, use \`defineContextDecorator()\` instead
-  (typed via \`ContextMeta\`, ordered via \`dependsOn\`, validated at boot).
+  populate \`ctx.set('key', value)\`, use \`defineHttpContextDecorator()\`
+  (HTTP) or \`defineContextDecorator()\` (transport-agnostic) instead.
+  Typed via \`ContextMeta\`, ordered via \`dependsOn\`, validated at boot.
   Reserve \`@Middleware()\` for response short-circuit / stream mutation /
   pre-route-matching work.
+
+  Two ground rules around the data flow — both stem from the fact that
+  every per-request stage gets its OWN \`RequestContext\` instance, all
+  reading/writing the SAME \`AsyncLocalStorage\`-backed Map:
+  - **\`resolve\` and \`onError\` must RETURN the value.** The runner
+    writes it via \`ctx.set(reg.key, value)\` on your behalf. Direct
+    property assignment (\`ctx.tenant = …\`) sticks to the contributor
+    instance only — the handler instance never sees it.
+  - **Read across instances via \`ctx.set\` / \`ctx.get\`** (or
+    \`requestStore.getStore()?.values.get('key')\` from a service that
+    has no \`ctx\` reference). \`ctx.req\` works because the underlying
+    Express request is shared; bespoke property assignments don't.
 
 - **Test isolation** — default to \`Container.create()\` for fresh DI state.
   Never \`new Container()\` and never \`getInstance().reset()\` — both leak
@@ -1274,19 +1287,21 @@ export const app = await bootstrap({ modules, middleware, plugins, adapters })
 
 \`\`\`yaml
 name: kickjs-context-contributor
-description: Use when a middleware's only job is to set ctx values consumed elsewhere — replace with defineContextDecorator.
+description: Use when a middleware's only job is to set ctx values consumed elsewhere — replace with defineHttpContextDecorator (HTTP) or defineContextDecorator (transport-agnostic).
 \`\`\`
 
-**Pattern**:
+**Pattern** (HTTP — most common):
 
 \`\`\`ts
-const LoadTenant = defineContextDecorator({
+import { defineHttpContextDecorator, type RequestContext } from '@forinda/kickjs'
+
+const LoadTenant = defineHttpContextDecorator({
   key: 'tenant',
   deps: { repo: TENANT_REPO },
   resolve: (ctx, { repo }) => repo.findById(ctx.req.headers['x-tenant-id'] as string),
 })
 
-const LoadProject = defineContextDecorator({
+const LoadProject = defineHttpContextDecorator({
   key: 'project',
   dependsOn: ['tenant'],
   resolve: (ctx) => projectsRepo.find(ctx.get('tenant')!.id, ctx.params.id),
@@ -1298,8 +1313,16 @@ const LoadProject = defineContextDecorator({
 getProject(ctx: RequestContext) { ctx.json(ctx.get('project')) }
 \`\`\`
 
+Use \`defineContextDecorator\` (no Http prefix) when authoring a contributor that must run across HTTP, WebSocket, queue, and cron transports — \`Ctx\` defaults to the smaller \`ExecutionContext\` surface (\`get\` / \`set\` / \`requestId\` only, no \`req\`).
+
 Precedence high → low: **method > class > module > adapter > global**.
 Cycles or unmet \`dependsOn\` keys throw \`MissingContributorError\` at boot.
+
+**Critical rules — all stem from the same shared-via-ALS instance model**:
+- Every per-request stage (middleware → contributors → handler) gets its OWN \`RequestContext\` instance, but they all read/write the SAME \`AsyncLocalStorage\`-backed Map (\`requestStore.getStore().values\`).
+- **\`resolve\` and \`onError\` must RETURN the value** — the runner writes it via \`ctx.set(key, value)\`. Direct property assignment (\`ctx.tenant = …\`) sticks to one instance only and the handler instance never sees it.
+- \`ctx.set('tenant', x)\` then \`ctx.get('tenant')\` works across instances. \`ctx.req.headers[...]\` works (the underlying Express request is shared).
+- Services can read contributor output without a \`ctx\` reference via \`requestStore.getStore()?.values.get('tenant')\` — same Map, no DI plumbing needed.
 
 **Don't use this for**: response short-circuit, stream mutation, or
 pre-route-matching work — keep \`@Middleware()\` for those.
