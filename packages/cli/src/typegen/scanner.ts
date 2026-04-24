@@ -857,10 +857,8 @@ export function extractAugmentationsFromSource(
         const closeBrace = findBalancedBrace(source, bracePos)
         if (closeBrace >= 0) {
           const body = source.slice(bracePos + 1, closeBrace)
-          const descMatch = /\bdescription\s*:\s*['"`]([^'"`]+)['"`]/.exec(body)
-          const exampleMatch = /\bexample\s*:\s*['"`]([^'"`]+)['"`]/.exec(body)
-          description = descMatch ? descMatch[1] : null
-          example = exampleMatch ? exampleMatch[1] : null
+          description = readStringField(body, 'description')
+          example = readStringField(body, 'example')
         }
       }
     }
@@ -869,6 +867,54 @@ export function extractAugmentationsFromSource(
   }
 
   return out
+}
+
+/**
+ * Pull a string-valued field out of a JS object-literal body, respecting
+ * the opening quote so the value isn't truncated at the first foreign
+ * quote character. Handles backslash escapes inside the literal.
+ *
+ * Why a custom parser instead of one regex per delimiter: real-world
+ * `defineAugmentation` calls embed all three quote characters at once
+ * — backtick template literals carrying TS shapes like
+ * `'free' | 'pro'` (single quotes) AND `\`ctx.get(...)\`` (escaped
+ * backticks). A character-class regex like `[^'"`]+` truncates on the
+ * first foreign quote it sees. This walker scans char-by-char from
+ * the matched delimiter and only stops on the matching one.
+ */
+function readStringField(body: string, field: string): string | null {
+  // Locate `field:` followed by an opening quote. Tolerate any whitespace.
+  const fieldRe = new RegExp(`\\b${field}\\s*:\\s*(['"\`])`, 'g')
+  const m = fieldRe.exec(body)
+  if (!m) return null
+  const quote = m[1]
+  const start = m.index + m[0].length
+  let i = start
+  let raw: string | null = null
+  while (i < body.length) {
+    const ch = body[i]
+    if (ch === '\\') {
+      // Skip the escaped char — supports \`, \', \", \n, \\ etc.
+      i += 2
+      continue
+    }
+    if (ch === quote) {
+      raw = body.slice(start, i)
+      break
+    }
+    i++
+  }
+  if (raw === null) return null
+  // Unescape JS string-literal escapes so the JSDoc renderer sees the
+  // value the source author actually intended (`\`` → `` ` ``, `\'` →
+  // `'`, etc). Without this, escaped backticks in a backtick template
+  // literal would surface as literal backslashes in the catalogue.
+  return raw.replace(/\\(.)/g, (_m, c) => {
+    if (c === 'n') return '\n'
+    if (c === 't') return '\t'
+    if (c === 'r') return '\r'
+    return c
+  })
 }
 
 /**

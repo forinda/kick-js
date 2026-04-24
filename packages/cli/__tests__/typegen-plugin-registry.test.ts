@@ -182,6 +182,59 @@ describe('scanner — extractAugmentationsFromSource', () => {
     const out = extractAugmentationsFromSource(source, '/fake/x.ts', '/fake')
     expect(out.map((x) => x.name)).toEqual(['A', 'B'])
   })
+
+  it('preserves backtick-string values containing single quotes (real-world example shape)', () => {
+    // Regression: prior regex `[^'"\`]+` truncated at the first foreign
+    // quote, so a backtick-delimited example like
+    // `{ plan: 'free' | 'pro' }` would clip at the first `'`. Both the
+    // description and example should round-trip the full source text.
+    const source = [
+      "import { defineAugmentation } from '@forinda/kickjs'",
+      "defineAugmentation('ContextMeta', {",
+      '  description: `Tenant resolved by TenantAdapter.`,',
+      '  example: `{',
+      "    tenant: { id: string; plan: 'free' | 'pro' | 'enterprise' }",
+      '  }`,',
+      '})',
+    ].join('\n')
+    const out = extractAugmentationsFromSource(source, '/fake/aug.ts', '/fake')
+    expect(out).toHaveLength(1)
+    expect(out[0].description).toBe('Tenant resolved by TenantAdapter.')
+    expect(out[0].example).toContain("plan: 'free' | 'pro' | 'enterprise'")
+  })
+
+  it('unescapes backslash escapes inside backtick string values', () => {
+    // Regression: previously `\\\`` survived into the catalogue as a
+    // literal backslash + backtick, breaking the JSDoc render. The
+    // parser should strip the backslash so the output is clean markdown.
+    // Using String.raw so the test fixture is a faithful copy of what
+    // a user would actually type into a `.ts` file.
+    const source = String.raw`
+      import { defineAugmentation } from '@forinda/kickjs'
+      defineAugmentation('Foo', {
+        description: ${'`'}Use \`ctx.get(\'foo\')\` to read it.${'`'},
+      })
+    `
+    const out = extractAugmentationsFromSource(source, '/fake/aug.ts', '/fake')
+    expect(out).toHaveLength(1)
+    expect(out[0].description).toBe("Use `ctx.get('foo')` to read it.")
+  })
+
+  it('preserves multi-line description and example through line-prefixed JSDoc', () => {
+    // Multi-line backtick literals must survive verbatim — the
+    // generator splits on \n and prefixes each line with ` * `.
+    const source = [
+      "import { defineAugmentation } from '@forinda/kickjs'",
+      "defineAugmentation('Multi', {",
+      '  description: `line one',
+      'line two',
+      'line three`,',
+      '})',
+    ].join('\n')
+    const out = extractAugmentationsFromSource(source, '/fake/aug.ts', '/fake')
+    expect(out).toHaveLength(1)
+    expect(out[0].description).toBe('line one\nline two\nline three')
+  })
 })
 
 describe('kick typegen — plugins.d.ts + augmentations.d.ts E2E', () => {
