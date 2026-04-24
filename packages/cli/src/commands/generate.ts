@@ -11,6 +11,7 @@ import { generateService } from '../generators/service'
 import { generateController } from '../generators/controller'
 import { generateDto } from '../generators/dto'
 import { generateConfig } from '../generators/config'
+import { generateAgentDocs } from '../generators/agent-docs'
 import { generateAuthScaffold } from '../generators/auth-scaffold'
 import { generateResolver } from '../generators/resolver'
 import { generateJob } from '../generators/job'
@@ -73,6 +74,16 @@ interface ConfigOpts {
   force?: boolean
 }
 
+interface AgentDocsOpts {
+  only?: 'agents' | 'claude' | 'skills' | 'both' | 'all'
+  name?: string
+  pm?: string
+  template?: 'rest' | 'graphql' | 'ddd' | 'cqrs' | 'minimal'
+  force?: boolean
+}
+
+const AGENT_DOCS_ONLY_VALUES = ['agents', 'claude', 'skills', 'both', 'all'] as const
+
 /** Check if --dry-run was passed on the parent generate command */
 function isDryRun(cmd: Command): boolean {
   return (cmd.parent?.opts() as { dryRun?: boolean } | undefined)?.dryRun ?? false
@@ -129,6 +140,10 @@ const GENERATORS = [
   { name: 'resolver <name>', description: 'GraphQL @Resolver class' },
   { name: 'job <name>', description: 'Queue @Job processor' },
   { name: 'config', description: 'Generate kick.config.ts' },
+  {
+    name: 'agents',
+    description: 'Regenerate AGENTS.md + CLAUDE.md + kickjs-skills.md from upstream templates',
+  },
 ]
 
 async function printGeneratorList(): Promise<void> {
@@ -576,6 +591,50 @@ export function registerGenerateCommand(program: Command): void {
         outDir: resolve('.'),
         modulesDir: opts.modulesDir,
         defaultRepo: opts.repo,
+        force: opts.force,
+      })
+      printGenerated(files, dryRun)
+    })
+
+  // ── kick g agents ───────────────────────────────────────────────────
+  // Regenerate AGENTS.md and/or CLAUDE.md from the latest CLI templates.
+  // Runs against the project root by design — these files always live at
+  // the top level and serve as the canonical AI-agent reference. Aliases
+  // include `agent-docs` and `ai-docs` so users can pick whichever name
+  // sticks; the docs/pitfalls list points at `kick g agents`.
+  gen
+    .command('agents')
+    .alias('agent-docs')
+    .alias('ai-docs')
+    .description(
+      'Regenerate AGENTS.md + CLAUDE.md + kickjs-skills.md (sync after framework upgrades)',
+    )
+    .option(
+      '--only <which>',
+      'Limit scope: agents | claude | skills | both (agents+claude) | all (default: all)',
+      'all',
+    )
+    .option('--name <name>', 'Project name (defaults to package.json name)')
+    .option('--pm <pm>', 'Package manager (defaults to package.json packageManager)')
+    .option('--template <template>', 'Template: rest | graphql | ddd | cqrs | minimal')
+    .option('-f, --force', 'Overwrite existing files without prompting')
+    .action(async (opts: AgentDocsOpts, cmd: Command) => {
+      const dryRun = isDryRun(cmd)
+      setDryRun(dryRun)
+      const only = opts.only ?? 'all'
+      if (!AGENT_DOCS_ONLY_VALUES.includes(only as (typeof AGENT_DOCS_ONLY_VALUES)[number])) {
+        console.error(
+          `  Invalid --only value: ${only}. Expected: ${AGENT_DOCS_ONLY_VALUES.join(' | ')}`,
+        )
+        process.exitCode = 1
+        return
+      }
+      const files = await generateAgentDocs({
+        outDir: resolve('.'),
+        only: only as AgentDocsOpts['only'],
+        name: opts.name,
+        pm: opts.pm,
+        template: opts.template,
         force: opts.force,
       })
       printGenerated(files, dryRun)

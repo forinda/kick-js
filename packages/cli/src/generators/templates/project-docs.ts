@@ -84,8 +84,96 @@ Copy \`.env.example\` to \`.env\` and configure:
 `
 }
 
-/** Generate CLAUDE.md with AI development guide */
-export function generateClaude(name: string, template: ProjectTemplate, pm: string): string {
+/**
+ * Generate CLAUDE.md.
+ *
+ * v4 update: this file is intentionally thin. AGENTS.md is the
+ * canonical, multi-agent project reference (Claude / Copilot /
+ * Codex / Gemini / etc.) — duplicating it here meant two files
+ * drifting out of sync after every framework change. The generated
+ * CLAUDE.md now redirects there + adds Claude-specific affordances
+ * only.
+ */
+export function generateClaude(name: string, _template: ProjectTemplate, pm: string): string {
+  return `# CLAUDE.md — ${name}
+
+**Read \`./AGENTS.md\` first.** It is the canonical, multi-agent
+reference for this project (Claude, Copilot, Codex, Gemini, etc.) —
+project conventions, structure, decorator patterns, env wiring, CLI
+generators, every gotcha.
+
+**Then read \`./kickjs-skills.md\`.** That file is the task-oriented
+skill index — short, rigid recipes keyed to triggers ("add-module",
+"write-controller-test", "bootstrap-export", "deny-list", …). Use it
+as the playbook when executing common KickJS workflows.
+
+This file is a thin Claude-specific layer on top of those two; when
+they disagree on anything substantive, treat \`AGENTS.md\` as
+authoritative and flag the discrepancy.
+
+## Why two files
+
+\`AGENTS.md\` is what every agent reads. \`CLAUDE.md\` is what
+Claude Code automatically loads as project context on each
+conversation. Keeping CLAUDE.md slim avoids two files drifting; the
+redirect above ensures Claude pulls the canonical content without
+us copy-pasting.
+
+## Claude-specific notes
+
+- **Slash commands** — \`/help\` for Claude Code commands; \`/init\`
+  to refresh project memory if AGENTS.md changes substantially.
+- **Feedback** — file issues at <https://github.com/anthropics/claude-code/issues>.
+- **Persistent memory** — Claude maintains user/feedback/project/
+  reference memories under \`.claude/memory/\`. If you ask for
+  something that contradicts a remembered preference, Claude flags
+  it before acting; corrections update memory automatically.
+- **Long-running tasks** — \`/loop\` and \`/schedule\` for recurring
+  or background work. Useful for "wait for the deploy then open a
+  cleanup PR" or "every Monday triage the issue board" patterns.
+
+## Quick reference (full version in AGENTS.md)
+
+\`\`\`bash
+${pm} install            # Install dependencies
+kick dev                 # Dev server with HMR + typegen
+kick build && kick start # Production
+${pm} run test           # Vitest
+${pm} run typecheck      # tsc --noEmit
+${pm} run format         # Prettier
+\`\`\`
+
+## v4 framework reminders
+
+When generating or modifying code in this project, stay aligned with the v4 conventions documented in \`AGENTS.md\`:
+
+- **Adapters**: \`defineAdapter()\` factory — never \`class implements AppAdapter\`.
+- **Plugins**: \`definePlugin()\` factory — never plain function returning \`KickPlugin\`.
+- **DI tokens**: slash-delimited \`<scope>/<area>/<key>\` (e.g. \`'app/users/repository'\`). First-party uses the reserved \`'kick/'\` prefix; this project owns its own scope.
+- **Decorators**: \`@Controller()\` (no path arg — mount prefix comes from \`routes().path\`).
+- **Module entry file** MUST be named \`<name>.module.ts\` and live under \`src/modules/<name>/\`. The Vite plugin auto-discovers \`*.module.[tj]sx?\` for graceful HMR — a misnamed \`projects.ts\` silently degrades every save into a full restart.
+- **Env**: schema lives in \`src/config/index.ts\`; \`import './config'\` MUST be the first import in \`src/index.ts\` (side-effect registers the schema before any \`@Value\` resolves).
+- **Assets**: drop new template files into \`src/templates/<namespace>/\`; the dev watcher auto-rebuilds the \`KickAssets\` augmentation + \`assets.x.y()\` re-walks on next call. No restart, no manual build.
+- **Context Contributors** (\`defineContextDecorator\`) over \`@Middleware()\` for ctx-population work.
+- **Repos under tests**: \`Container.create()\` for isolation — never \`new Container()\` or \`getInstance().reset()\`.
+- **Bootstrap export**: \`src/index.ts\` must end with \`export const app = await bootstrap({ ... })\`. The Vite plugin and \`createTestApp\` import the named \`app\`; without the export, HMR silently degrades to full restarts.
+- **Thin entry file**: aggregate \`modules\`, \`middleware\`, \`plugins\`, \`adapters\` in their own folders (\`src/modules/index.ts\`, \`src/middleware/index.ts\`, …) and pass them by name to \`bootstrap()\` — never inline the lists in \`src/index.ts\`.
+- **Refresh these files**: \`kick g agents -f\` regenerates \`AGENTS.md\` + \`CLAUDE.md\` from the latest CLI templates. Hand-edited content is overwritten — keep customisation in \`AGENTS.local.md\`.
+
+For everything else (controllers, services, modules, RequestContext API, generators, CLI commands, package additions, env wiring, troubleshooting) → \`AGENTS.md\`.
+`
+}
+
+// Legacy reference left as a comment for the v4 doc — the original
+// generator embedded ~400 lines of patterns here that duplicated
+// AGENTS.md. The chunk below is the unused remnant of that template
+// kept under a `false &&` guard so the diff stays reviewable; it can
+// be deleted in the next minor.
+function _LEGACY_FULL_CLAUDE_TEMPLATE_UNUSED(
+  name: string,
+  template: ProjectTemplate,
+  pm: string,
+): string {
   const templateLabels: Record<string, string> = {
     rest: 'REST API',
     graphql: 'GraphQL API',
@@ -486,14 +574,127 @@ ${
 export function generateAgents(name: string, template: ProjectTemplate, pm: string): string {
   return `# AGENTS.md — AI Agent Guide for ${name}
 
-This guide helps AI agents (Claude, Copilot, etc.) work effectively on this KickJS application.
+This guide is the **canonical, multi-agent reference** for this KickJS
+application — Claude, Copilot, Codex, Gemini, etc. all read it first.
+Per-agent files (\`CLAUDE.md\`, \`GEMINI.md\`, etc.) are thin layers that
+add tool-specific affordances on top.
 
 ## Before You Start
 
-1. Read \`CLAUDE.md\` for project conventions and commands
-2. Run \`${pm} install\` to install dependencies
-3. Run \`kick dev\` to verify the app starts
-4. Read the [KickJS documentation](https://forinda.github.io/kick-js/) for framework details
+1. Run \`${pm} install\` to install dependencies
+2. Run \`kick dev\` to verify the app starts
+3. Read the [KickJS documentation](https://forinda.github.io/kick-js/) for framework details
+
+## v4 Conventions (don't skip)
+
+KickJS v4 made a handful of structural changes from v3. Internalise these
+before generating or modifying code — they are the source of most agent
+mistakes:
+
+- **Adapters** — \`defineAdapter()\` factory. Never write \`class Foo implements AppAdapter\`.
+
+  \`\`\`ts
+  export const MyAdapter = defineAdapter<MyOptions>({
+    name: 'MyAdapter',
+    defaults: { ... },
+    build: (config) => ({
+      beforeMount({ app }) { /* ... */ },
+      afterStart({ server }) { /* ... */ },
+    }),
+  })
+  \`\`\`
+
+- **Plugins** — \`definePlugin()\` factory. Same shape, never plain function returning \`KickPlugin\`.
+
+- **DI tokens** — slash-delimited \`<scope>/<area>/<key>\`, lower-case, no \`:\` separators:
+
+  \`\`\`ts
+  const USERS_REPO = createToken<UsersRepo>('app/users/repository')
+  const DB         = createToken<Database>('app/db/connection')
+  \`\`\`
+
+  The \`kick/\` prefix is reserved for first-party packages; this project
+  owns its own scope (\`app/\`, your domain name, etc.).
+
+- **\`@Controller()\`** takes **no path argument**. Mount prefix comes from
+  the module's \`routes()\` return value, not the decorator. \`@Controller('/users')\`
+  is a v3 leftover; the linter and codegen reject it.
+
+- **Env wiring** — \`src/config/index.ts\` calls \`loadEnv(envSchema)\` as a
+  side effect. \`src/index.ts\` MUST have \`import './config'\` as its **first**
+  import (before \`bootstrap()\`). Without it, \`ConfigService.get('YOUR_KEY')\`
+  returns \`undefined\` and \`@Value()\` only works via raw \`process.env\` fallback
+  (Zod coercion + defaults silently skipped).
+
+- **Module entry files MUST be named \`<name>.module.ts\`** — see the Vite
+  HMR contract at the top of "Module Pattern" below. The CLI enforces this;
+  hand-rolled files must too.
+
+- **Assets** — drop new template files into \`src/templates/<namespace>/\`
+  (or wherever \`kick.config.ts\` points). The dev watcher auto-rebuilds the
+  \`KickAssets\` augmentation; \`assets.x.y()\` re-walks on next call. No restart,
+  no manual build step.
+
+- **Context over \`@Middleware()\`** — when a middleware's only job is to
+  populate \`ctx.set('key', value)\`, use \`defineContextDecorator()\` instead
+  (typed via \`ContextMeta\`, ordered via \`dependsOn\`, validated at boot).
+  Reserve \`@Middleware()\` for response short-circuit / stream mutation /
+  pre-route-matching work.
+
+- **Test isolation** — default to \`Container.create()\` for fresh DI state.
+  Never \`new Container()\` and never \`getInstance().reset()\` — both leak
+  registrations between tests.
+
+  \`\`\`ts
+  const container = Container.create()
+  // ... register test-scoped providers, run, discard
+  \`\`\`
+
+- **Bootstrap export** — \`src/index.ts\` MUST end with
+  \`export const app = await bootstrap({ ... })\`. The Vite plugin imports
+  the named \`app\` symbol to drive HMR module swaps; testing helpers
+  (\`createTestApp\`) and the OpenAPI introspector also rely on it. Drop
+  the \`export\` and \`kick dev\` will silently fall back to a full restart
+  on every save while \`createTestApp\` complains about a missing handle.
+
+- **Keep \`src/index.ts\` thin** — collect plugins, modules, middleware, and
+  adapters in dedicated folders and re-export aggregated arrays. Do **not**
+  inline registration in the entry file:
+
+  \`\`\`ts
+  // src/modules/index.ts
+  export const modules: AppModuleClass[] = [HelloModule, UsersModule, ...]
+
+  // src/middleware/index.ts
+  export const middleware = [helmet(), cors(), requestId(), ...]
+
+  // src/plugins/index.ts
+  export const plugins = [MetricsPlugin(), AuditPlugin()]
+
+  // src/adapters/index.ts
+  export const adapters = [SwaggerAdapter({ ... }), DevToolsAdapter()]
+  \`\`\`
+
+  \`\`\`ts
+  // src/index.ts — stays small; one import per category
+  import 'reflect-metadata'
+  import './config'
+  import { bootstrap } from '@forinda/kickjs'
+  import { modules } from './modules'
+  import { middleware } from './middleware'
+  import { plugins } from './plugins'
+  import { adapters } from './adapters'
+
+  export const app = await bootstrap({ modules, middleware, plugins, adapters })
+  \`\`\`
+
+  This keeps the entry file diff-friendly, scales to dozens of modules
+  without git churn, and lets each domain own its own registration list.
+  The generators (\`kick g module\`, \`kick g middleware\`, \`kick g plugin\`,
+  \`kick g adapter\`) follow this layout — manual additions should too.
+
+Everything else (controllers, services, modules, RequestContext API, generators,
+package additions, env access patterns, troubleshooting) is detailed below.
 
 ## Where to Find Things
 
@@ -504,6 +705,7 @@ This guide helps AI agents (Claude, Copilot, etc.) work effectively on this Kick
 | Entry point | \`src/index.ts\` |
 | Module registry | \`src/modules/index.ts\` |
 | Feature modules | \`src/modules/<module-name>/\` |
+| **Module entry file** | \`src/modules/<name>/<name>.module.ts\` (filename suffix is required — see Vite HMR contract below) |
 ${template === 'graphql' ? '| GraphQL resolvers | `src/resolvers/` |\n' : ''}| Env values | \`.env\` |
 | Env schema (Zod) | \`src/config/index.ts\` |
 | TypeScript config | \`tsconfig.json\` |
@@ -709,14 +911,13 @@ import { Container } from '@forinda/kickjs'
 import { createTestApp } from '@forinda/kickjs-testing'
 
 describe('UserController', () => {
-  beforeEach(() => {
-    Container.reset()  // Important: isolate DI state
-  })
-
   it('should return users', async () => {
-    const app = await createTestApp([UserModule])
+    // Container.create() — isolated DI state per test, never new Container()
+    // and never getInstance().reset() (both leak registrations between tests).
+    const container = Container.create()
+    const app = await createTestApp([UserModule], { container })
     const res = await app.get('/users')
-    
+
     expect(res.status).toBe(200)
     expect(res.body).toHaveProperty('users')
   })
@@ -858,13 +1059,15 @@ ${
 
 1. **Forgot to register module** — Add to \`src/modules/index.ts\` exports array
 2. **DI not working** — Ensure \`reflect-metadata\` is imported in \`src/index.ts\`
-3. **Tests failing randomly** — Missing \`Container.reset()\` in \`beforeEach\`
+3. **Tests failing randomly** — Sharing the global container between tests. Default to \`Container.create()\` per test (or per \`beforeEach\`) instead of \`new Container()\` / \`getInstance().reset()\`
 4. **Routes not found** — Check controller path and module registration
 5. **HMR not working** — Two checks: (a) \`vite.config.ts\` has \`hmr: true\`; (b) module file is named \`<name>.module.ts\` (or \`.tsx\`/\`.js\`/\`.jsx\`) and lives under \`src/modules/\`. The Vite plugin auto-discovers \`*.module.[tj]sx?\` for graceful HMR — a misnamed module file (e.g., \`projects.ts\`) silently degrades to a full restart on every save.
 6. **Decorators not working** — Check \`tsconfig.json\` has \`experimentalDecorators: true\`
 7. **\`config.get('YOUR_KEY')\` returns \`undefined\`** — \`src/index.ts\` is missing \`import './config'\`. That side-effect import registers the env schema with kickjs (\`loadEnv(envSchema)\` runs at module load). Without it, \`ConfigService\` falls back to the base schema (\`PORT\`/\`NODE_ENV\`/\`LOG_LEVEL\` only) and every user-defined key reads as \`undefined\`. \`@Value()\` may *appear* to work because of a raw \`process.env\` fallback, but Zod coercion and schema defaults are silently skipped — investigate \`src/index.ts\` and \`src/config/index.ts\` first.
 8. **Used \`@Middleware()\` to compute a value for \`ctx\`** — prefer \`defineContextDecorator()\` (see Context Decorators above). It's typed via \`ContextMeta\`, supports \`dependsOn\` for ordering, and validates the pipeline at boot. \`@Middleware()\` is for response short-circuiting, stream mutation, and pre-route-matching work.
 9. **Context contributor's \`dependsOn\` key not produced anywhere** — boot throws \`MissingContributorError\` naming the dependent and the route. Either remove the dep or register a contributor that produces the key (at any precedence level: method/class/module/adapter/global).
+10. **\`bootstrap()\` not exported** — \`src/index.ts\` calls \`await bootstrap({ ... })\` but discards the return value (no \`export const app = ...\`). Vite HMR can't locate the running instance, so module saves degrade to full restarts; \`createTestApp\`/\`@forinda/kickjs-testing\` consumers can't import the handle either. Always: \`export const app = await bootstrap({ ... })\`.
+11. **Refresh AGENTS.md / CLAUDE.md after a framework upgrade** — these files are scaffolded by the CLI and don't auto-update. Run \`kick g agents -f\` (or \`kick g agent-docs -f\`) to regenerate from the latest CLI templates after \`kick add\` / version bumps. Hand-edited sections will be overwritten — keep customisation in a separate file like \`AGENTS.local.md\`.
 
 ## CLI Commands Reference
 
@@ -894,6 +1097,252 @@ ${
 - [CLI Reference](https://forinda.github.io/kick-js/api/cli.html)
 - [Decorators Guide](https://forinda.github.io/kick-js/guide/decorators.html)
 - [DI System](https://forinda.github.io/kick-js/guide/dependency-injection.html)
+- [Testing](https://forinda.github.io/kick-js/api/testing.html)
+`
+}
+
+/**
+ * Generate `kickjs-skills.md` — task-oriented "skill" recipes for AI
+ * agents (Claude superpowers, Copilot, etc.). Where AGENTS.md is the
+ * narrative reference, this file lists short, rigid workflows the agent
+ * should follow when it sees the corresponding trigger.
+ */
+export function generateKickJsSkills(name: string, _template: ProjectTemplate, pm: string): string {
+  return `# kickjs-skills.md — Task Skills for AI Agents (${name})
+
+This file is the agent-facing **skills index** for KickJS work in this
+repo. Each block below is a short, rigid workflow keyed to a specific
+trigger ("user wants to add a module", "tests are leaking state", etc.).
+
+- Reference docs (narrative, exhaustive) → \`AGENTS.md\`.
+- Tool-specific notes → \`CLAUDE.md\`, \`GEMINI.md\`, etc.
+- **This file** → step-by-step recipes the agent should *execute*.
+
+Re-run \`kick g agents -f --only skills\` after framework upgrades to refresh.
+
+---
+
+## Skill: add-module
+
+\`\`\`yaml
+name: kickjs-add-module
+description: Use when the user asks to add a new feature module (controller + service + repo + DTOs).
+\`\`\`
+
+**Trigger phrases**: "add a users module", "scaffold tasks", "new feature for X".
+
+**Steps**:
+1. Run \`kick g module <name>\` (use plural form if the project pluralizes — check \`kick.config.ts\`).
+2. Verify the new folder under \`src/modules/<name>/\` contains \`<name>.module.ts\` (filename suffix is mandatory for HMR).
+3. Confirm the module appears in \`src/modules/index.ts\` exports — generator does this automatically; verify if you bypassed it.
+4. Open \`<name>.dto.ts\` and tighten the Zod schemas to real fields (the generator emits placeholders).
+5. Run \`${pm} run typecheck\` and \`${pm} run test\` before claiming done.
+
+**Red flags** (stop and ask):
+- File created as \`<name>.ts\` instead of \`<name>.module.ts\` — Vite won't HMR it.
+- Module not registered in \`src/modules/index.ts\`.
+- \`@Controller('/path')\` with a path argument — that's a v3 pattern; remove it (mount comes from \`routes().path\`).
+
+---
+
+## Skill: add-adapter
+
+\`\`\`yaml
+name: kickjs-add-adapter
+description: Use when wiring a new lifecycle integration (Swagger, DevTools, Auth, custom).
+\`\`\`
+
+**Steps**:
+1. \`kick g adapter <name>\` to scaffold the boilerplate, OR install via \`kick add <package>\` for first-party adapters.
+2. The generated file uses \`defineAdapter()\` — never \`class implements AppAdapter\`.
+3. Add the adapter instance to \`src/adapters/index.ts\` (don't inline in \`src/index.ts\`).
+4. If the adapter contributes to \`ctx.set/get\`, prefer \`AppAdapter.contributors?()\` over a wrapping middleware.
+5. Verify with \`kick dev\` that the adapter's lifecycle logs fire.
+
+**Red flags**:
+- Inlining the adapter list directly in \`src/index.ts\` (entry file should stay thin).
+- Returning a plain object instead of going through \`defineAdapter()\` — type inference for \`config\` will be wrong.
+
+---
+
+## Skill: write-controller-test
+
+\`\`\`yaml
+name: kickjs-write-controller-test
+description: Use when adding a Vitest test that exercises an HTTP route or DI graph.
+\`\`\`
+
+**Template** (copy/paste, adjust):
+
+\`\`\`ts
+import { describe, it, expect } from 'vitest'
+import { Container } from '@forinda/kickjs'
+import { createTestApp } from '@forinda/kickjs-testing'
+
+describe('UserController', () => {
+  it('returns users', async () => {
+    const container = Container.create()           // isolated DI per test
+    const app = await createTestApp([UserModule], { container })
+    const res = await app.get('/users')
+    expect(res.status).toBe(200)
+  })
+})
+\`\`\`
+
+**Red flags**:
+- \`new Container()\` — wrong; use \`Container.create()\`.
+- \`Container.getInstance().reset()\` — wrong; same fix.
+- Sharing a container across \`it()\` blocks — leaks registrations.
+
+---
+
+## Skill: env-wiring-check
+
+\`\`\`yaml
+name: kickjs-env-wiring-check
+description: Use when ConfigService.get('SOME_KEY') returns undefined or @Value silently falls back to process.env.
+\`\`\`
+
+**Diagnosis**:
+1. Open \`src/index.ts\`. The **first non-\`reflect-metadata\`** import MUST be \`import './config'\`.
+2. Open \`src/config/index.ts\`. It MUST call \`loadEnv(envSchema)\` as a top-level side effect.
+3. The new key MUST be declared in the Zod schema there. \`@Value('NEW_KEY')\` won't work without a schema entry (it'll fall back to raw \`process.env\` and skip Zod coercion silently).
+
+**Fix**: add the key to the schema; ensure both side-effect imports above are present.
+
+---
+
+## Skill: bootstrap-export
+
+\`\`\`yaml
+name: kickjs-bootstrap-export
+description: Use when HMR is silently doing full restarts on every save, or createTestApp can't find the app handle.
+\`\`\`
+
+**Check** \`src/index.ts\`'s last line:
+
+\`\`\`ts
+// CORRECT
+export const app = await bootstrap({ ... })
+
+// WRONG (HMR degrades to full restart, createTestApp loses the handle)
+await bootstrap({ ... })
+\`\`\`
+
+The Vite plugin imports the named \`app\` symbol; testing helpers do too.
+
+---
+
+## Skill: thin-entry-file
+
+\`\`\`yaml
+name: kickjs-thin-entry-file
+description: Use when src/index.ts is accumulating module/middleware/plugin/adapter literals.
+\`\`\`
+
+**Refactor target**:
+
+\`\`\`ts
+// src/modules/index.ts
+export const modules: AppModuleClass[] = [HelloModule, UsersModule, ...]
+
+// src/middleware/index.ts
+export const middleware = [helmet(), cors(), requestId(), ...]
+
+// src/plugins/index.ts
+export const plugins = [MetricsPlugin(), ...]
+
+// src/adapters/index.ts
+export const adapters = [SwaggerAdapter({ ... }), DevToolsAdapter()]
+
+// src/index.ts — stays small
+import 'reflect-metadata'
+import './config'
+import { bootstrap } from '@forinda/kickjs'
+import { modules } from './modules'
+import { middleware } from './middleware'
+import { plugins } from './plugins'
+import { adapters } from './adapters'
+export const app = await bootstrap({ modules, middleware, plugins, adapters })
+\`\`\`
+
+**Red flags**: any \`new SomeAdapter()\` or \`SomePlugin()\` literal inside \`bootstrap({ ... })\` instead of imported from a category folder.
+
+---
+
+## Skill: context-contributor
+
+\`\`\`yaml
+name: kickjs-context-contributor
+description: Use when a middleware's only job is to set ctx values consumed elsewhere — replace with defineContextDecorator.
+\`\`\`
+
+**Pattern**:
+
+\`\`\`ts
+const LoadTenant = defineContextDecorator({
+  key: 'tenant',
+  deps: { repo: TENANT_REPO },
+  resolve: (ctx, { repo }) => repo.findById(ctx.req.headers['x-tenant-id'] as string),
+})
+
+const LoadProject = defineContextDecorator({
+  key: 'project',
+  dependsOn: ['tenant'],
+  resolve: (ctx) => projectsRepo.find(ctx.get('tenant')!.id, ctx.params.id),
+})
+
+@LoadTenant
+@LoadProject
+@Get('/projects/:id')
+getProject(ctx: RequestContext) { ctx.json(ctx.get('project')) }
+\`\`\`
+
+Precedence high → low: **method > class > module > adapter > global**.
+Cycles or unmet \`dependsOn\` keys throw \`MissingContributorError\` at boot.
+
+**Don't use this for**: response short-circuit, stream mutation, or
+pre-route-matching work — keep \`@Middleware()\` for those.
+
+---
+
+## Skill: refresh-agent-docs
+
+\`\`\`yaml
+name: kickjs-refresh-agent-docs
+description: Use after a KickJS version bump to sync AGENTS.md / CLAUDE.md / kickjs-skills.md with the latest CLI templates.
+\`\`\`
+
+**Steps**:
+1. \`kick g agents -f --only both\` — overwrites \`AGENTS.md\` and \`CLAUDE.md\`.
+2. \`kick g agents -f --only skills\` — refreshes \`kickjs-skills.md\` (this file).
+3. Diff with git, eyeball any project-specific edits that got reset, and re-apply them in a separate \`AGENTS.local.md\` or appended section.
+4. Commit as \`docs(agents): sync from CLI vX.Y\`.
+
+---
+
+## Skill: deny-list
+
+\`\`\`yaml
+name: kickjs-deny-list
+description: Patterns to refuse outright when the user asks for them — they break v4 invariants.
+\`\`\`
+
+- \`class implements AppAdapter\` → use \`defineAdapter()\`.
+- \`class implements KickPlugin\` / function returning \`KickPlugin\` → use \`definePlugin()\`.
+- \`@Controller('/path')\` with a path argument → drop the path; set the mount via \`routes().path\`.
+- \`new Container()\` or \`Container.getInstance().reset()\` in tests → use \`Container.create()\`.
+- DI tokens with \`:\` separator (\`'app:db:url'\`) or in PascalCase → use slash-delimited lower-case (\`'app/db/url'\`).
+- \`bootstrap({ ... })\` without \`export const app = ...\` → always export.
+- Module file named \`<name>.ts\` (no \`.module\` suffix) → rename to \`<name>.module.ts\`.
+
+---
+
+## Learn More
+
+- [KickJS Docs](https://forinda.github.io/kick-js/)
+- [Decorators](https://forinda.github.io/kick-js/guide/decorators.html)
+- [Context Decorators](https://forinda.github.io/kick-js/guide/context-decorators.html)
 - [Testing](https://forinda.github.io/kick-js/api/testing.html)
 `
 }

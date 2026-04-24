@@ -24,7 +24,12 @@ import {
   generateHelloController,
   generateHelloModule,
 } from './templates/project-app'
-import { generateReadme, generateClaude, generateAgents } from './templates/project-docs'
+import {
+  generateReadme,
+  generateClaude,
+  generateAgents,
+  generateKickJsSkills,
+} from './templates/project-docs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const cliPkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'))
@@ -130,6 +135,15 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
 
   // ── AGENTS.md ────────────────────────────────────────────────────────
   await writeFileSafe(join(dir, 'AGENTS.md'), generateAgents(name, template, packageManager))
+
+  // ── kickjs-skills.md ────────────────────────────────────────────────
+  // Task-oriented "skill" recipes for AI agents — short rigid workflows
+  // keyed to triggers (add-module, write-test, env-wiring-check, …).
+  // Regenerate later with `kick g agents -f --only skills`.
+  await writeFileSafe(
+    join(dir, 'kickjs-skills.md'),
+    generateKickJsSkills(name, template, packageManager),
+  )
 
   // ── Install Dependencies ────────────────────────────────────────────
   // Install BEFORE git init so the lockfile is included in the first commit.
