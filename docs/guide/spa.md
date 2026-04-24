@@ -11,7 +11,7 @@ import { SpaAdapter } from '@forinda/kickjs/spa'
 bootstrap({
   modules: [...],
   adapters: [
-    new SpaAdapter({
+    SpaAdapter({
       clientDir: 'dist/client',
       apiPrefix: '/api',
     }),
@@ -61,7 +61,7 @@ cd client && npx vite build --outDir ../dist/client
 ```
 
 ```ts
-new SpaAdapter({ clientDir: 'dist/client' })
+SpaAdapter({ clientDir: 'dist/client' })
 ```
 
 ### React (Vite)
@@ -71,7 +71,7 @@ cd client && npx vite build --outDir ../dist/client
 ```
 
 ```ts
-new SpaAdapter({ clientDir: 'dist/client' })
+SpaAdapter({ clientDir: 'dist/client' })
 ```
 
 ### Angular
@@ -81,7 +81,7 @@ cd client && npx ng build --output-path ../dist/client
 ```
 
 ```ts
-new SpaAdapter({ clientDir: 'dist/client' })
+SpaAdapter({ clientDir: 'dist/client' })
 ```
 
 ### Svelte (SvelteKit static)
@@ -91,13 +91,13 @@ cd client && npx vite build --outDir ../dist/client
 ```
 
 ```ts
-new SpaAdapter({ clientDir: 'dist/client' })
+SpaAdapter({ clientDir: 'dist/client' })
 ```
 
 ## Multiple API Prefixes
 
 ```ts
-new SpaAdapter({
+SpaAdapter({
   clientDir: 'dist/client',
   apiPrefix: ['/api', '/graphql', '/_debug'],
   exclude: ['/health', '/ws'],
@@ -107,7 +107,7 @@ new SpaAdapter({
 ## Disable Asset Caching
 
 ```ts
-new SpaAdapter({
+SpaAdapter({
   clientDir: 'dist/client',
   cacheControl: false, // no cache headers on assets
 })

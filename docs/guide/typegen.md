@@ -333,7 +333,7 @@ This is why your tsconfig include needs to match both extensions.
 
 ## Plugin & adapter registry
 
-`kick typegen` walks your `src/` for `defineAdapter({ name: '...' })`, `definePlugin({ name: '...' })`, and `class X implements AppAdapter` declarations and writes the discovered names into `.kickjs/types/plugins.d.ts` as a `KickJsPluginRegistry` augmentation:
+`kick typegen` walks your `src/` for `defineAdapter({ name: '...' })` and `definePlugin({ name: '...' })` calls and writes the discovered names into `.kickjs/types/plugins.d.ts` as a `KickJsPluginRegistry` augmentation. Class-style declarations (`class X implements AppAdapter`) are *not* scanned — those are the v3 pattern and were removed in v4.
 
 ```ts
 // .kickjs/types/plugins.d.ts (generated)

@@ -128,12 +128,24 @@ describe('kick g <leaf>', () => {
       const file = join(fixture, 'src/adapters/metrics.adapter.ts')
       expect(existsSync(file)).toBe(true)
       const content = readFileSync(file, 'utf-8')
-      expect(content).toContain("import { defineAdapter,")
+      expect(content).toMatch(/import\s*\{[\s\S]*\bdefineAdapter\b/)
       expect(content).toContain('export const MetricsAdapter = defineAdapter')
       expect(content).toContain("name: 'MetricsAdapter'")
       // Legacy v3 class shape MUST NOT be emitted
       expect(content).not.toContain('class MetricsAdapter')
       expect(content).not.toContain('implements AppAdapter')
+      // Full-surface generator: every lifecycle hook present for "delete-what-you-don't-need" discovery
+      for (const hook of [
+        'middleware(',
+        'beforeMount(',
+        'onRouteMount(',
+        'beforeStart(',
+        'afterStart(',
+        'contributors(',
+        'shutdown(',
+      ]) {
+        expect(content).toContain(hook)
+      }
     })
 
     it('passes tsc --noEmit', () => {
@@ -160,6 +172,18 @@ describe('kick g <leaf>', () => {
       // Legacy v3 plain-function-returns-KickPlugin form MUST NOT be emitted
       expect(content).not.toContain('): KickPlugin {')
       expect(content).not.toContain('export function flagsPlugin')
+      // Full-surface generator: every lifecycle hook present for "delete-what-you-don't-need" discovery
+      for (const hook of [
+        'register(',
+        'modules(',
+        'adapters(',
+        'middleware(',
+        'contributors(',
+        'onReady(',
+        'shutdown(',
+      ]) {
+        expect(content).toContain(hook)
+      }
     })
 
     it('passes tsc --noEmit', () => {

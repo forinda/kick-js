@@ -51,8 +51,8 @@ I set `defaultPolicy: 'protected'` and configured it in our adapters:
 
 ```typescript
 export const adapters = [
-  new MongooseAdapter(env.MONGODB_URI),
-  new RedisAdapter(env.REDIS_URL),
+  MongooseAdapter(env.MONGODB_URI),
+  RedisAdapter(env.REDIS_URL),
   AuthAdapter({
     strategies: [
       JwtStrategy({

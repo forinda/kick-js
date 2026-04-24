@@ -148,26 +148,22 @@ middleware: [
 
 ## Adapter Middleware Phases
 
-Adapters (database, rate limiting, CORS, Swagger, etc.) can inject middleware at four phases in the pipeline. This is done by implementing the `middleware()` method on `AppAdapter`:
+Adapters (database, rate limiting, CORS, Swagger, etc.) can inject middleware at four phases in the pipeline by returning a `middleware()` array from `defineAdapter()`'s `build`:
 
 ```ts
-import type { AppAdapter, AdapterMiddleware } from '@forinda/kickjs'
+import { defineAdapter, type AdapterMiddleware } from '@forinda/kickjs'
 
-class RateLimitAdapter implements AppAdapter {
-  middleware(): AdapterMiddleware[] {
-    return [
-      {
-        handler: rateLimit({ max: 200 }),
-        phase: 'beforeRoutes',
-      },
-      {
-        path: '/api/v1/auth',
-        handler: rateLimit({ max: 10 }),
-        phase: 'beforeRoutes',
-      },
-    ]
-  }
-}
+const RateLimitAdapter = defineAdapter({
+  name: 'RateLimitAdapter',
+  build: () => ({
+    middleware(): AdapterMiddleware[] {
+      return [
+        { handler: rateLimit({ max: 200 }), phase: 'beforeRoutes' },
+        { path: '/api/v1/auth', handler: rateLimit({ max: 10 }), phase: 'beforeRoutes' },
+      ]
+    },
+  }),
+})
 ```
 
 ### Phase order

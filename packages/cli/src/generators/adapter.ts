@@ -27,7 +27,13 @@ export async function generateAdapter(options: GenerateAdapterOptions): Promise<
   const filePath = join(outDir, `${kebab}.adapter.ts`)
   await writeFileSafe(
     filePath,
-    `import { defineAdapter, type AdapterContext, type AdapterMiddleware } from '@forinda/kickjs'
+    `import {
+  defineAdapter,
+  type AdapterContext,
+  type AdapterMiddleware,
+  type ContributorRegistrations,
+  type Constructor,
+} from '@forinda/kickjs'
 
 /**
  * Configuration for the ${pascal} adapter.
@@ -48,7 +54,12 @@ export interface ${pascal}AdapterConfig {
  * factory's call / \`.scoped()\` / \`.async()\` surfaces for free.
  *
  * Hooks into the Application lifecycle to add middleware, routes,
- * or external service connections.
+ * Context Contributors, or external service connections.
+ *
+ * Every lifecycle hook below is OPTIONAL. The scaffold emits all of
+ * them so adopters can browse what's available and delete what they
+ * don't need — \`build()\` returning \`{}\` is also valid for an adapter
+ * that only contributes config defaults.
  *
  * @example
  * \`\`\`ts
@@ -64,59 +75,126 @@ export interface ${pascal}AdapterConfig {
 export const ${pascal}Adapter = defineAdapter<${pascal}AdapterConfig>({
   name: '${pascal}Adapter',
   defaults: {
-    // Default config values go here
+    // Default config values go here. The adopter's overrides shallow-merge
+    // on top of these before \`build()\` runs.
   },
-  build: (_config, { name: _name }) => ({
-    /**
-     * Return middleware entries that the Application will mount.
-     * \`phase\` controls where in the pipeline they run:
-     * 'beforeGlobal' | 'afterGlobal' | 'beforeRoutes' | 'afterRoutes'.
-     */
-    middleware(): AdapterMiddleware[] {
-      return [
-        // Example: add a custom header to all responses
-        // {
-        //   phase: 'beforeGlobal',
-        //   handler: (_req, res, next) => {
-        //     res.setHeader('X-${pascal}', 'true')
-        //     next()
-        //   },
-        // },
-      ]
-    },
+  build: (_config, { name: _name }) => {
+    // Closures inside \`build()\` are how each adapter instance owns its
+    // own state (database client, Map, timer handle, …). The same
+    // \`_config\` is visible to every hook below.
 
-    /**
-     * Called before global middleware. Use this to mount routes that
-     * bypass the middleware stack (health checks, docs UI, static
-     * assets).
-     */
-    beforeMount(_ctx: AdapterContext): void {
-      // Example:
-      // _ctx.app.get('/${kebab}/status', (_req, res) => res.json({ status: 'ok' }))
-    },
+    return {
+      /**
+       * Express middleware entries the Application mounts at named phases.
+       *
+       * \`phase\` controls where each handler sits in the pipeline:
+       *   'beforeGlobal' | 'afterGlobal' | 'beforeRoutes' | 'afterRoutes'.
+       *
+       * \`path\` (optional) scopes the entry to a path prefix.
+       *
+       * Delete this hook entirely if you don't add middleware.
+       */
+      middleware(): AdapterMiddleware[] {
+        return [
+          // Example: add a custom header to all responses
+          // {
+          //   phase: 'beforeGlobal',
+          //   handler: (_req, res, next) => {
+          //     res.setHeader('X-${pascal}', 'true')
+          //     next()
+          //   },
+          // },
+          // Example: scope a rate limiter to one path prefix
+          // {
+          //   phase: 'beforeRoutes',
+          //   path: '/api/v1/auth',
+          //   handler: rateLimit({ max: 10 }),
+          // },
+        ]
+      },
 
-    /**
-     * Called after modules and routes are registered, before the
-     * server starts. Use this for late-stage DI registrations or
-     * config validation.
-     */
-    beforeStart(_ctx: AdapterContext): void {
-      // Example: _ctx.container.bindToken(MY_TOKEN, new MyService(_config))
-    },
+      /**
+       * Runs BEFORE global middleware. Mount routes that should bypass the
+       * middleware stack — health checks, docs UI, static assets, OAuth
+       * callbacks. Anything you want reachable even if a global middleware
+       * later in the chain rejects requests.
+       *
+       * Delete this hook if you have no early routes.
+       */
+      beforeMount(_ctx: AdapterContext): void {
+        // Example:
+        // _ctx.app.get('/${kebab}/status', (_req, res) => res.json({ status: 'ok' }))
+      },
 
-    /**
-     * Called after the HTTP server is listening. Use this to attach
-     * to the raw http.Server (Socket.IO, gRPC, etc).
-     */
-    afterStart(_ctx: AdapterContext): void {
-      // Example: const io = new Server(_ctx.server)
-    },
+      /**
+       * Fires once per controller class as the router mounts. Use this to
+       * collect route metadata for OpenAPI specs, dependency graphs, route
+       * inventories, devtools dashboards.
+       *
+       * Delete this hook unless your adapter introspects the route registry.
+       */
+      onRouteMount(_controllerClass: Constructor, _mountPath: string): void {
+        // Example (Swagger-style): collect routes for the spec.
+        // openApiSpec.addController(_controllerClass, _mountPath)
+      },
 
-    /** Called on graceful shutdown. Clean up connections. */
-    async shutdown(): Promise<void> {
-      // Example: await this.pool.end()
-    },
-  }),
+      /**
+       * Runs AFTER modules + routes are wired, BEFORE the server starts.
+       * Right place for late-stage DI registrations or final config validation.
+       *
+       * Delete this hook if there's nothing to wire post-modules.
+       */
+      beforeStart(_ctx: AdapterContext): void {
+        // Example: _ctx.container.registerInstance(MY_TOKEN, new MyService(_config))
+      },
+
+      /**
+       * Runs AFTER the HTTP server is listening. The raw \`http.Server\` is
+       * available on \`ctx.server\` — attach upgrade handlers (Socket.IO,
+       * gRPC, GraphQL subscriptions), warm caches, log a banner.
+       *
+       * Delete this hook if you don't need the running server reference.
+       */
+      afterStart(_ctx: AdapterContext): void {
+        // Example: const io = new Server(_ctx.server)
+      },
+
+      /**
+       * Returns Context Contributors to merge into every route's pipeline
+       * at the \`'adapter'\` precedence level. Per-route handlers can
+       * override the value at the method / class / module level.
+       *
+       * Delete this hook unless your adapter ships typed per-request values
+       * (auth user, tenant, locale, feature flags, geo, etc).
+       */
+      contributors(): ContributorRegistrations {
+        return [
+          // Example:
+          // import { defineHttpContextDecorator } from '@forinda/kickjs'
+          // declare module '@forinda/kickjs' { interface ContextMeta { ${kebab}: { id: string } } }
+          // const Load${pascal} = defineHttpContextDecorator({
+          //   key: '${kebab}',
+          //   resolve: (ctx) => ({ id: ctx.req.headers['x-${kebab}-id'] as string }),
+          // })
+          // return [Load${pascal}.registration]
+        ]
+      },
+
+      /**
+       * Runs on graceful shutdown (SIGINT/SIGTERM). Clean up long-lived
+       * resources the adapter owns: close connections, flush buffers,
+       * cancel timers. The framework runs every adapter's \`shutdown\`
+       * concurrently via \`Promise.allSettled\` — one failure won't block
+       * sibling adapters.
+       *
+       * Delete this hook if your adapter holds no resources.
+       */
+      async shutdown(): Promise<void> {
+        // Example: await this.pool.end()
+        // Example: clearInterval(this.heartbeatTimer)
+      },
+    }
+  },
 })
 `,
   )

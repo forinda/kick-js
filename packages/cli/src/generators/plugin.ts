@@ -30,6 +30,7 @@ export async function generatePlugin(options: GeneratePluginOptions): Promise<st
   type AppAdapter,
   type AppModuleClass,
   type Container,
+  type ContributorRegistrations,
 } from '@forinda/kickjs'
 
 /**
@@ -61,8 +62,9 @@ export interface ${pascal}PluginConfig {
  *   2. \`modules()\`            — plugin modules load before user modules.
  *   3. \`adapters()\`           — plugin adapters mount before user adapters.
  *   4. \`middleware()\`         — plugin middleware runs before user middleware.
- *   5. \`onReady(container)\`   — runs after the app has fully bootstrapped.
- *   6. \`shutdown()\`           — runs on graceful shutdown.
+ *   5. \`contributors()\`       — Context Contributors merged into every route.
+ *   6. \`onReady(container)\`   — runs after the app has fully bootstrapped.
+ *   7. \`shutdown()\`           — runs on graceful shutdown.
  *
  * @example
  * \`\`\`ts
@@ -120,6 +122,27 @@ export const ${pascal}Plugin = definePlugin<${pascal}PluginConfig>({
       return [
         // helmet(),
         // myCustomMiddleware(_config),
+      ]
+    },
+
+    /**
+     * Return Context Contributors to merge into every route's pipeline.
+     * Plugins contribute at the same \`'adapter'\` precedence level as
+     * adapters — overrideable per-route at the method / class / module
+     * level. See https://forinda.github.io/kick-js/guide/context-decorators
+     *
+     * Delete this hook if your plugin doesn't ship typed per-request values.
+     */
+    contributors(): ContributorRegistrations {
+      return [
+        // Example:
+        // import { defineHttpContextDecorator } from '@forinda/kickjs'
+        // declare module '@forinda/kickjs' { interface ContextMeta { ${kebab}: { foo: string } } }
+        // const Load${pascal} = defineHttpContextDecorator({
+        //   key: '${kebab}',
+        //   resolve: (ctx) => ({ foo: ctx.req.headers['x-${kebab}'] as string }),
+        // })
+        // return [Load${pascal}.registration]
       ]
     },
 

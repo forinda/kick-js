@@ -13,7 +13,13 @@ pnpm add socket.io
 ```ts
 // src/adapters/socketio.adapter.ts
 import { Server, type Socket } from 'socket.io'
-import { createToken, Logger, type AppAdapter, type AdapterContext } from '@forinda/kickjs'
+import {
+  createToken,
+  defineAdapter,
+  Logger,
+  type AdapterContext,
+  type Container,
+} from '@forinda/kickjs'
 
 const log = Logger.for('SocketIOAdapter')
 
@@ -37,53 +43,54 @@ export interface SocketIONamespace {
   setup: (nsp: any, container: Container) => void
 }
 
-export class SocketIOAdapter implements AppAdapter {
-  name = 'SocketIOAdapter'
-  private io: Server | null = null
-
-  constructor(private options: SocketIOAdapterOptions = {}) {}
-
-  afterStart({ server, container }: AdapterContext): void {
-    this.io = new Server(server, {
-      cors: this.options.cors ?? { origin: '*' },
-      path: this.options.path ?? '/socket.io',
-    })
-
-    // Default namespace
-    this.io.on('connection', (socket: Socket) => {
-      log.info(`Connected: ${socket.id}`)
-
-      socket.on('disconnect', (reason) => {
-        log.info(`Disconnected: ${socket.id} (${reason})`)
-      })
-    })
-
-    // Custom namespaces
-    for (const ns of this.options.namespaces ?? []) {
-      const nsp = this.io.of(ns.namespace)
-      ns.setup(nsp, container)
-      log.info(`Namespace registered: ${ns.namespace}`)
-    }
-
-    // Register io instance in DI for injection
-    container.registerInstance(SOCKET_IO, this.io)
-
-    log.info(`Socket.IO listening at ${this.options.path ?? '/socket.io'}`)
-  }
-
-  async shutdown(): Promise<void> {
-    if (this.io) {
-      await new Promise<void>((resolve) => this.io!.close(() => resolve()))
-      log.info('Socket.IO server closed')
-    }
-  }
-}
-
 /**
  * Typed DI token for injecting the Socket.IO server.
  * `container.resolve(SOCKET_IO)` returns `Server` without a manual generic.
  */
-export const SOCKET_IO = createToken<Server>('SocketIO')
+export const SOCKET_IO = createToken<Server>('kick/socketio/server')
+
+export const SocketIOAdapter = defineAdapter<SocketIOAdapterOptions>({
+  name: 'SocketIOAdapter',
+  defaults: { path: '/socket.io' },
+  build: (options) => {
+    let io: Server | undefined
+
+    return {
+      afterStart({ server, container }: AdapterContext): void {
+        io = new Server(server, {
+          cors: options.cors ?? { origin: '*' },
+          path: options.path,
+        })
+
+        // Default namespace
+        io.on('connection', (socket: Socket) => {
+          log.info(`Connected: ${socket.id}`)
+          socket.on('disconnect', (reason) => {
+            log.info(`Disconnected: ${socket.id} (${reason})`)
+          })
+        })
+
+        // Custom namespaces
+        for (const ns of options.namespaces ?? []) {
+          const nsp = io.of(ns.namespace)
+          ns.setup(nsp, container)
+          log.info(`Namespace registered: ${ns.namespace}`)
+        }
+
+        // Register io instance in DI for injection
+        container.registerInstance(SOCKET_IO, io)
+        log.info(`Socket.IO listening at ${options.path}`)
+      },
+
+      async shutdown(): Promise<void> {
+        if (io) {
+          await new Promise<void>((resolve) => io!.close(() => resolve()))
+          log.info('Socket.IO server closed')
+        }
+      },
+    }
+  },
+})
 ```
 
 ## Register in Bootstrap
@@ -96,7 +103,7 @@ import { modules } from './modules'
 bootstrap({
   modules,
   adapters: [
-    new SocketIOAdapter({
+    SocketIOAdapter({
       cors: { origin: 'http://localhost:5173', credentials: true },
       namespaces: [
         {

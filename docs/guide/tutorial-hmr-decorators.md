@@ -219,7 +219,7 @@ const queueAdapter = QueueAdapter({
 })
 
 export const adapters = [
-  new MongooseAdapter(env.MONGODB_URI), // Changing URI? Restart.
+  MongooseAdapter(env.MONGODB_URI), // Changing URI? Restart.
   AuthAdapter({
     strategies: [JwtStrategy({ secret: env.JWT_SECRET })], // New secret? Restart.
     defaultPolicy: 'protected', // Changing policy? Restart.

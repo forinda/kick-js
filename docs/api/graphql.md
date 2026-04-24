@@ -30,7 +30,7 @@ const typeDefs = `
 bootstrap({
   modules: [],
   adapters: [
-    new GraphQLAdapter({
+    GraphQLAdapter({
       graphql,                          // pass the graphql module
       resolvers: [UserResolver],
       typeDefs,                         // only custom types — Query/Mutation auto-generated

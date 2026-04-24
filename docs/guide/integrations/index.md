@@ -51,7 +51,7 @@ const adapters = [
 
 // Conditionally add Sentry when DSN is configured
 if (env.SENTRY_DSN) {
-  adapters.unshift(new SentryAdapter({ dsn: env.SENTRY_DSN }))
+  adapters.unshift(SentryAdapter({ dsn: env.SENTRY_DSN }))
 }
 
 bootstrap({

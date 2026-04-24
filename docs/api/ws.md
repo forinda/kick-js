@@ -108,27 +108,31 @@ The built-in WS package uses the lightweight `ws` library. If you prefer Socket.
 
 ```ts
 import { Server } from 'socket.io'
-import type { AppAdapter, AdapterContext } from '@forinda/kickjs'
+import { defineAdapter, type AdapterContext } from '@forinda/kickjs'
 
-export class SocketIOAdapter implements AppAdapter {
-  readonly name = 'SocketIOAdapter'
-  private io!: Server
+export const SocketIOAdapter = defineAdapter({
+  name: 'SocketIOAdapter',
+  build: () => {
+    let io: Server | undefined
 
-  afterStart({ server }: AdapterContext) {
-    this.io = new Server(server, {
-      cors: { origin: '*' },
-    })
+    return {
+      afterStart({ server }: AdapterContext) {
+        io = new Server(server, {
+          cors: { origin: '*' },
+        })
 
-    this.io.on('connection', (socket) => {
-      console.log(`Connected: ${socket.id}`)
-      socket.on('disconnect', () => console.log(`Disconnected: ${socket.id}`))
-    })
-  }
+        io.on('connection', (socket) => {
+          console.log(`Connected: ${socket.id}`)
+          socket.on('disconnect', () => console.log(`Disconnected: ${socket.id}`))
+        })
+      },
 
-  async shutdown() {
-    this.io?.close()
-  }
-}
+      async shutdown() {
+        io?.close()
+      },
+    }
+  },
+})
 ```
 
 Register it in `bootstrap()`:
@@ -136,7 +140,7 @@ Register it in `bootstrap()`:
 ```ts
 bootstrap({
   modules,
-  adapters: [new SocketIOAdapter()],
+  adapters: [SocketIOAdapter()],
 })
 ```
 

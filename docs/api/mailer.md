@@ -74,9 +74,7 @@ const MAILER: symbol // DI token
 ## MailerAdapter
 
 ```typescript
-class MailerAdapter implements AppAdapter {
-  constructor(options: MailerOptions)
-}
+const MailerAdapter: AdapterFactory<MailerOptions>
 
 interface MailerOptions {
   provider: MailProvider
@@ -85,6 +83,8 @@ interface MailerOptions {
   enabled?: boolean
 }
 ```
+
+Built with `defineAdapter()` — call it as `MailerAdapter({ provider, … })` and pass the result to `bootstrap({ adapters: [...] })`.
 
 ## SmtpProvider
 

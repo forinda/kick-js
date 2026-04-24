@@ -15,7 +15,7 @@ Create a Sentry adapter that hooks into the KickJS lifecycle:
 ```ts
 // src/adapters/sentry.adapter.ts
 import * as Sentry from '@sentry/node'
-import type { AppAdapter, AdapterContext } from '@forinda/kickjs'
+import { defineAdapter, type AdapterContext } from '@forinda/kickjs'
 
 export interface SentryAdapterOptions {
   /** Sentry DSN from your project settings */
@@ -28,42 +28,41 @@ export interface SentryAdapterOptions {
   debug?: boolean
 }
 
-export class SentryAdapter implements AppAdapter {
-  readonly name = 'SentryAdapter'
+export const SentryAdapter = defineAdapter<SentryAdapterOptions>({
+  name: 'SentryAdapter',
+  build: (options) => ({
+    beforeMount({ app, env, isProduction }: AdapterContext): void {
+      Sentry.init({
+        dsn: options.dsn,
+        environment: options.environment ?? env,
+        tracesSampleRate: options.tracesSampleRate ?? (isProduction ? 0.1 : 1.0),
+        debug: options.debug ?? false,
+        integrations: [
+          // Automatically instrument Express routes
+          Sentry.expressIntegration(),
+        ],
+      })
 
-  constructor(private options: SentryAdapterOptions) {}
+      // Sentry request handler must be the first middleware
+      app.use(Sentry.expressRequestHandler())
+    },
 
-  beforeMount({ app, env, isProduction }: AdapterContext): void {
-    Sentry.init({
-      dsn: this.options.dsn,
-      environment: this.options.environment ?? env,
-      tracesSampleRate: this.options.tracesSampleRate ?? (isProduction ? 0.1 : 1.0),
-      debug: this.options.debug ?? false,
-      integrations: [
-        // Automatically instrument Express routes
-        Sentry.expressIntegration(),
-      ],
-    })
+    middleware() {
+      return [
+        {
+          // Sentry error handler runs after routes but before KickJS error handler
+          handler: Sentry.expressErrorHandler(),
+          phase: 'afterRoutes' as const,
+        },
+      ]
+    },
 
-    // Sentry request handler must be the first middleware
-    app.use(Sentry.expressRequestHandler())
-  }
-
-  middleware() {
-    return [
-      {
-        // Sentry error handler runs after routes but before KickJS error handler
-        handler: Sentry.expressErrorHandler(),
-        phase: 'afterRoutes' as const,
-      },
-    ]
-  }
-
-  async shutdown(): Promise<void> {
-    // Flush pending events before process exit
-    await Sentry.close(2000)
-  }
-}
+    async shutdown(): Promise<void> {
+      // Flush pending events before process exit
+      await Sentry.close(2000)
+    },
+  }),
+})
 ```
 
 ## Bootstrap
@@ -83,7 +82,7 @@ const env = loadEnv()
 bootstrap({
   modules,
   adapters: [
-    new SentryAdapter({
+    SentryAdapter({
       dsn: env.SENTRY_DSN,
       tracesSampleRate: 0.1,
     }),
@@ -166,7 +165,7 @@ Add it before the default error handler:
 ```ts
 bootstrap({
   modules,
-  adapters: [new SentryAdapter({ dsn: env.SENTRY_DSN })],
+  adapters: [SentryAdapter({ dsn: env.SENTRY_DSN })],
   middleware: [
     helmet(),
     cors(),
@@ -272,7 +271,7 @@ const adapters = [
 
 if (env.SENTRY_DSN) {
   adapters.unshift(
-    new SentryAdapter({
+    SentryAdapter({
       dsn: env.SENTRY_DSN,
       // tracesSampleRate uses isProduction from AdapterContext automatically
     }),

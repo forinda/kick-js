@@ -7,11 +7,7 @@ Auto-generates an OpenAPI 3.0.3 spec from controller decorators and serves Swagg
 Application adapter that collects route metadata during mount and serves documentation endpoints.
 
 ```typescript
-class SwaggerAdapter implements AppAdapter {
-  constructor(options?: SwaggerAdapterOptions)
-  onRouteMount(controllerClass: any, mountPath: string): void
-  beforeMount({ app }: AdapterContext): void
-}
+const SwaggerAdapter: AdapterFactory<SwaggerAdapterOptions>
 
 interface SwaggerAdapterOptions extends SwaggerOptions {
   docsPath?: string     // default: '/docs'
@@ -21,6 +17,8 @@ interface SwaggerAdapterOptions extends SwaggerOptions {
   disableInProd?: boolean // skip mounting when NODE_ENV === 'production'
 }
 ```
+
+Built with `defineAdapter()` — call it as `SwaggerAdapter({ … })` and pass the result to `bootstrap({ adapters: [...] })`. The factory wires `onRouteMount` (route metadata collection) and `beforeMount` (mount the docs UI) internally.
 
 ## SchemaParser
 

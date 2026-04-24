@@ -65,9 +65,7 @@ Zero-dependency fallback using `setInterval`.
 ## CronAdapter
 
 ```typescript
-class CronAdapter implements AppAdapter {
-  constructor(options: CronAdapterOptions)
-}
+const CronAdapter: AdapterFactory<CronAdapterOptions>
 
 interface CronAdapterOptions {
   services: any[]
@@ -75,3 +73,5 @@ interface CronAdapterOptions {
   scheduler?: CronScheduler
 }
 ```
+
+Built with `defineAdapter()` — call it as `CronAdapter({ services: [...] })` and pass the result to `bootstrap({ adapters: [...] })`.

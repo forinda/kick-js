@@ -2,37 +2,69 @@
 
 Adapters plug into the KickJS application lifecycle. Use them to add health checks, CORS, rate limiting, WebSocket support, database connections, Swagger docs, or any cross-cutting concern.
 
-## The AppAdapter Interface
+## The `defineAdapter()` factory
 
-Every adapter implements part (or all) of the `AppAdapter` interface from `@forinda/kickjs`:
+v4 declares adapters with `defineAdapter({ name, defaults?, build })` — never `class Foo implements AppAdapter`. The factory captures three things:
+
+- `name` — string, used for diagnostics and the `KickJsPluginRegistry` typegen output. Required.
+- `defaults?` — partial config the factory pre-applies before merging the caller's options. Optional.
+- `build(config, meta)` — runs once per adapter instance and returns the lifecycle object. Closures inside `build` are how each adapter instance owns its own state (Redis client, database pool, internal Map, etc.).
+
+The returned object implements any subset of the lifecycle hooks below. Every hook is optional — emit only what your adapter actually needs.
 
 ```ts
-import type { AppAdapter, AdapterContext } from '@forinda/kickjs'
+import { defineAdapter, type AdapterContext, type AdapterMiddleware } from '@forinda/kickjs'
 
-// AdapterContext — populated by the framework, passed to all hooks
-interface AdapterContext {
-  app: any // Express application instance
-  container: Container // DI container
-  server?: any // http.Server (only in afterStart)
-  env: string // NODE_ENV (default: 'development')
-  isProduction: boolean // true when NODE_ENV === 'production'
+interface MyAdapterConfig {
+  apiKey?: string
 }
 
-// AppAdapter — implement the hooks you need
-interface AppAdapter {
-  name?: string
-  middleware?(): AdapterMiddleware[]
-  beforeMount?(ctx: AdapterContext): void | Promise<void>
-  onRouteMount?(controllerClass: any, mountPath: string): void
-  beforeStart?(ctx: AdapterContext): void | Promise<void>
-  afterStart?(ctx: AdapterContext): void | Promise<void>
-  shutdown?(): void | Promise<void>
+export const MyAdapter = defineAdapter<MyAdapterConfig>({
+  name: 'MyAdapter',
+  defaults: { /* config defaults */ },
+  build: (config, { name }) => ({
+    /** Express middleware entries to insert at named phases. */
+    middleware(): AdapterMiddleware[] { return [] },
+
+    /** Runs before global middleware — mount routes that bypass the stack. */
+    beforeMount({ app }: AdapterContext): void | Promise<void> {},
+
+    /** Fires once per controller class as the router mounts. Useful for
+     *  building OpenAPI specs, dependency graphs, route inventories. */
+    onRouteMount(controllerClass: any, mountPath: string): void {},
+
+    /** Runs after modules + routes are wired, before the server starts. */
+    beforeStart({ container }: AdapterContext): void | Promise<void> {},
+
+    /** Runs after the HTTP server is listening — attach upgrade handlers
+     *  (Socket.IO, gRPC), warm caches, log a banner. */
+    afterStart({ server }: AdapterContext): void | Promise<void> {},
+
+    /** Runs on graceful shutdown. Close connections, flush buffers,
+     *  cancel timers. Promises resolve via `Promise.allSettled` so
+     *  one failure won't block sibling adapters. */
+    async shutdown(): Promise<void> {},
+
+    /** Returns Context Contributors to merge into every route's pipeline.
+     *  See ./context-decorators.md. */
+    contributors() { return [] },
+  }),
+})
+```
+
+`AdapterContext` (passed to every hook that takes it) is:
+
+```ts
+interface AdapterContext {
+  app: Express                  // Express application instance
+  container: Container          // DI container
+  server?: http.Server          // populated only inside afterStart
+  env: string                   // NODE_ENV (default 'development')
+  isProduction: boolean         // true when NODE_ENV === 'production'
 }
 ```
 
-All hooks receive an `AdapterContext` — no need to import Express or http types. Destructure only what you need.
-
-All methods are optional. Implement only what you need.
+No need to import Express or http types — destructure only what you use.
 
 ## Middleware Phases
 
@@ -78,33 +110,34 @@ After setup, when the HTTP server starts listening, `afterStart` is called. On s
 Register routes that bypass the global middleware stack:
 
 ```ts
-import type { AppAdapter, AdapterContext } from '@forinda/kickjs'
+import { defineAdapter, type AdapterContext, type AdapterMiddleware } from '@forinda/kickjs'
 
-export class HealthAdapter implements AppAdapter {
-  name = 'HealthAdapter'
-
-  beforeMount({ app }: AdapterContext): void {
-    app.get('/health', (_req, res) => {
-      res.json({
-        status: 'ok',
-        timestamp: new Date().toISOString(),
-        uptime: process.uptime(),
+export const HealthAdapter = defineAdapter({
+  name: 'HealthAdapter',
+  build: () => ({
+    beforeMount({ app }: AdapterContext): void {
+      app.get('/health', (_req, res) => {
+        res.json({
+          status: 'ok',
+          timestamp: new Date().toISOString(),
+          uptime: process.uptime(),
+        })
       })
-    })
-  }
+    },
 
-  middleware(): AdapterMiddleware[] {
-    return [
-      {
-        phase: 'beforeGlobal',
-        handler: (_req: any, res: any, next: any) => {
-          res.setHeader('X-Powered-By', 'KickJS')
-          next()
+    middleware(): AdapterMiddleware[] {
+      return [
+        {
+          phase: 'beforeGlobal',
+          handler: (_req, res, next) => {
+            res.setHeader('X-Powered-By', 'KickJS')
+            next()
+          },
         },
-      },
-    ]
-  }
-}
+      ]
+    },
+  }),
+})
 ```
 
 ### Rate Limit Adapter
@@ -112,44 +145,50 @@ export class HealthAdapter implements AppAdapter {
 Scope middleware to specific paths using the `path` property:
 
 ```ts
-import type { AppAdapter, AdapterMiddleware } from '@forinda/kickjs'
+import { defineAdapter, type AdapterMiddleware } from '@forinda/kickjs'
 
-export class RateLimitAdapter implements AppAdapter {
-  name = 'RateLimitAdapter'
-
-  middleware(): AdapterMiddleware[] {
-    return [
-      { path: '/api/v1/auth', handler: rateLimit({ max: 10 }), phase: 'beforeRoutes' },
-      { handler: rateLimit({ max: 200 }), phase: 'beforeRoutes' },
-    ]
-  }
-}
+export const RateLimitAdapter = defineAdapter({
+  name: 'RateLimitAdapter',
+  build: () => ({
+    middleware(): AdapterMiddleware[] {
+      return [
+        { path: '/api/v1/auth', handler: rateLimit({ max: 10 }), phase: 'beforeRoutes' },
+        { handler: rateLimit({ max: 200 }), phase: 'beforeRoutes' },
+      ]
+    },
+  }),
+})
 ```
 
 ### Redis Adapter with Shutdown
 
-Connect on start, clean up on shutdown:
+Connect on start, clean up on shutdown — note how `build()` owns the
+client reference, so each instance of the adapter has its own
+connection (and `shutdown` closes the right one):
 
 ```ts
-import { createToken, type AppAdapter, type AdapterContext } from '@forinda/kickjs'
+import { createToken, defineAdapter, type AdapterContext } from '@forinda/kickjs'
 import { createClient, type RedisClientType } from 'redis'
 
 // Typed DI token — `container.resolve(REDIS)` returns RedisClientType.
-export const REDIS = createToken<RedisClientType>('Redis')
+export const REDIS = createToken<RedisClientType>('kick/redis/client')
 
-export class RedisAdapter implements AppAdapter {
-  name = 'RedisAdapter'
-  private client = createClient()
+export const RedisAdapter = defineAdapter({
+  name: 'RedisAdapter',
+  build: () => {
+    const client = createClient()
 
-  async beforeStart({ container }: AdapterContext): Promise<void> {
-    await this.client.connect()
-    container.registerInstance(REDIS, this.client)
-  }
-
-  async shutdown(): Promise<void> {
-    await this.client.quit()
-  }
-}
+    return {
+      async beforeStart({ container }: AdapterContext): Promise<void> {
+        await client.connect()
+        container.registerInstance(REDIS, client)
+      },
+      async shutdown(): Promise<void> {
+        await client.quit()
+      },
+    }
+  },
+})
 ```
 
 ## Registering Adapters
@@ -164,7 +203,7 @@ import { CorsAdapter } from './adapters/cors.adapter'
 
 bootstrap({
   modules,
-  adapters: [new HealthAdapter(), new CorsAdapter({ origin: '*' })],
+  adapters: [HealthAdapter(), CorsAdapter({ origin: '*' })],
 })
 ```
 

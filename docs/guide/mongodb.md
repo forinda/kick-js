@@ -15,36 +15,34 @@ pnpm add mongoose
 ```ts
 // src/adapters/mongoose.adapter.ts
 import mongoose from 'mongoose'
-import { createToken, Logger, type AppAdapter, type AdapterContext } from '@forinda/kickjs'
+import { createToken, defineAdapter, Logger, type AdapterContext } from '@forinda/kickjs'
 
 const log = Logger.for('MongooseAdapter')
 
 // Type-safe DI token — `container.resolve(MONGOOSE)` returns `typeof mongoose`
 // without a manual generic. See the DI Token Hardening section in
 // docs/guide/dependency-injection.md.
-export const MONGOOSE = createToken<typeof mongoose>('Mongoose')
+export const MONGOOSE = createToken<typeof mongoose>('kick/mongoose/client')
 
 export interface MongooseAdapterOptions {
   uri: string
   options?: mongoose.ConnectOptions
 }
 
-export class MongooseAdapter implements AppAdapter {
-  name = 'MongooseAdapter'
-
-  constructor(private opts: MongooseAdapterOptions) {}
-
-  async afterStart({ container }: AdapterContext): Promise<void> {
-    await mongoose.connect(this.opts.uri, this.opts.options)
-    container.registerInstance(MONGOOSE, mongoose)
-    log.info(`Connected to MongoDB: ${this.opts.uri}`)
-  }
-
-  async shutdown(): Promise<void> {
-    await mongoose.disconnect()
-    log.info('MongoDB disconnected')
-  }
-}
+export const MongooseAdapter = defineAdapter<MongooseAdapterOptions>({
+  name: 'MongooseAdapter',
+  build: (opts) => ({
+    async afterStart({ container }: AdapterContext): Promise<void> {
+      await mongoose.connect(opts.uri, opts.options)
+      container.registerInstance(MONGOOSE, mongoose)
+      log.info(`Connected to MongoDB: ${opts.uri}`)
+    },
+    async shutdown(): Promise<void> {
+      await mongoose.disconnect()
+      log.info('MongoDB disconnected')
+    },
+  }),
+})
 ```
 
 ### Define Models
@@ -127,7 +125,7 @@ import { modules } from './modules'
 bootstrap({
   modules,
   adapters: [
-    new MongooseAdapter({
+    MongooseAdapter({
       uri: process.env.MONGODB_URI || 'mongodb://localhost:27017/myapp',
     }),
   ],
@@ -171,42 +169,42 @@ pnpm add mongodb
 ```ts
 // src/adapters/mongodb.adapter.ts
 import { MongoClient, type Db } from 'mongodb'
-import { createToken, Logger, type AppAdapter, type AdapterContext } from '@forinda/kickjs'
+import { createToken, defineAdapter, Logger, type AdapterContext } from '@forinda/kickjs'
 
 const log = Logger.for('MongoDBAdapter')
 
 // Typed DI tokens — `container.resolve(MONGO_DB)` returns `Db`,
 // `container.resolve(MONGO_CLIENT)` returns `MongoClient`. No casts.
-export const MONGO_DB = createToken<Db>('MongoDb')
-export const MONGO_CLIENT = createToken<MongoClient>('MongoClient')
+export const MONGO_DB = createToken<Db>('kick/mongodb/db')
+export const MONGO_CLIENT = createToken<MongoClient>('kick/mongodb/client')
 
 export interface MongoDBAdapterOptions {
   uri: string
   dbName: string
 }
 
-export class MongoDBAdapter implements AppAdapter {
-  name = 'MongoDBAdapter'
-  private client: MongoClient | null = null
+export const MongoDBAdapter = defineAdapter<MongoDBAdapterOptions>({
+  name: 'MongoDBAdapter',
+  build: (opts) => {
+    let client: MongoClient | undefined
 
-  constructor(private opts: MongoDBAdapterOptions) {}
+    return {
+      async afterStart({ container }: AdapterContext): Promise<void> {
+        client = new MongoClient(opts.uri)
+        await client.connect()
 
-  async afterStart({ container }: AdapterContext): Promise<void> {
-    this.client = new MongoClient(this.opts.uri)
-    await this.client.connect()
-
-    const db = this.client.db(this.opts.dbName)
-    container.registerInstance(MONGO_CLIENT, this.client)
-    container.registerInstance(MONGO_DB, db)
-
-    log.info(`Connected to MongoDB: ${this.opts.dbName}`)
-  }
-
-  async shutdown(): Promise<void> {
-    await this.client?.close()
-    log.info('MongoDB disconnected')
-  }
-}
+        const db = client.db(opts.dbName)
+        container.registerInstance(MONGO_CLIENT, client)
+        container.registerInstance(MONGO_DB, db)
+        log.info(`Connected to MongoDB: ${opts.dbName}`)
+      },
+      async shutdown(): Promise<void> {
+        await client?.close()
+        log.info('MongoDB disconnected')
+      },
+    }
+  },
+})
 ```
 
 ### Repository Using Native Driver
@@ -284,7 +282,7 @@ export class MongoProductRepository {
 bootstrap({
   modules,
   adapters: [
-    new MongoDBAdapter({
+    MongoDBAdapter({
       uri: process.env.MONGODB_URI || 'mongodb://localhost:27017',
       dbName: 'myapp',
     }),

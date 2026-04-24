@@ -247,10 +247,12 @@ class TenantsModule implements AppModule {
 }
 
 // Adapter-level
-class TenantAdapter implements AppAdapter {
-  name = 'TenantAdapter'
-  contributors() { return [LoadTenant.registration] }
-}
+const TenantAdapter = defineAdapter({
+  name: 'TenantAdapter',
+  build: () => ({
+    contributors: () => [LoadTenant.registration],
+  }),
+})
 
 // Global (bootstrap)
 bootstrap({

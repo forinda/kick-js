@@ -34,9 +34,7 @@ function Policy(resource: string): ClassDecorator
 ## AuthAdapter
 
 ```typescript
-class AuthAdapter implements AppAdapter {
-  constructor(options: AuthAdapterOptions)
-}
+const AuthAdapter: AdapterFactory<AuthAdapterOptions>
 
 interface AuthAdapterOptions {
   strategies: AuthStrategy[]
@@ -45,6 +43,8 @@ interface AuthAdapterOptions {
   onForbidden?: (req: any, res: any) => void
 }
 ```
+
+Built with `defineAdapter()` — call it as `AuthAdapter({ strategies: [...] })` and pass the result to `bootstrap({ adapters: [...] })`.
 
 ## JwtStrategy
 
