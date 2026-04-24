@@ -221,8 +221,68 @@ The DevToolsAdapter uses three layers:
 
 Because the state is reactive, the computed values (error rate, uptime) are always consistent and only recalculate when their dependencies change.
 
+## Browser Dashboard
+
+When you visit `/_debug` in a browser, the DevTools adapter serves a single-page dashboard built with Solid + Tailwind. It connects to the JSON endpoints documented above and adds live UI on top — there's nothing to install client-side.
+
+### Connection state
+
+A pill in the global header shows what the dashboard is doing:
+
+| State | Meaning |
+|---|---|
+| **Live** (green pulse) | Subscribed to `/stream` SSE — metrics + container changes push in real time |
+| **Polling** (amber pulse) | SSE dropped, falling back to a 5-second `/health` + `/metrics` poll |
+| **Connecting…** (grey) | First request hasn't returned yet |
+| **Disconnected** (red) | Teardown — open the dashboard again to reconnect |
+
+The trailing `Updated HH:MM:SS` timestamp is the last successful refresh, so you can tell at a glance the page isn't frozen.
+
+### Tabs
+
+Each tab subscribes to a slice of the shared store; nothing owns its own polling loop.
+
+| Tab | What it shows |
+|---|---|
+| **Overview** | Three-card landing — Health (status / uptime / error rate / adapters), Metrics (request counts / 5xx / 4xx / started-at), WebSocket (active / total / msgs in+out / namespaces). Default tab on first visit. |
+| **Runtime** | Heap / RSS / event-loop p99 / GC stats with sparklines, streamed via `/runtime/stream`. |
+| **Memory** | Leak-risk panel (heap-growth slope + GC reclaim ratio + heap utilization), heap-snapshot capture button, force-GC button. |
+| **Topology** | Plugin / adapter / contributor / DI-token introspection from `/topology`. |
+| **Routes** | Method / path / controller / handler / middleware registry. Search input + method filter pills (ALL / GET / POST / PUT / DELETE / PATCH) + paginated (20/page). |
+| **Metrics** | Per-route latency table (avg / p50 / p95 / p99 / max). |
+| **Container** | DI registry — search by token + filter pills (kind: controller / service / repository / other; scope: singleton / transient / request). Expand-row reveals dependency chips, resolve stats, PostConstruct status. |
+| **Queues** | Per-queue cards (waiting / active / completed / failed / delayed / paused) when `@forinda/kickjs-queue` is mounted. |
+| **Graph** | DI dependency graph kind-grouped (controllers / services / repositories / other) with outgoing-edge arrows. Click any node OR edge target → opens detail modal. |
+
+The tab nav scrolls horizontally when there are too many tabs to fit; switching to a tab via localStorage restore scrolls it into view automatically.
+
+### Detail modal
+
+Click a token row in **Container** (or the "View full details" button), or any node in **Graph** — opens a modal with:
+
+- Token + kind/scope/status badges
+- Dependencies (outgoing edges) as clickable chips
+- Dependents (incoming edges) as clickable chips
+- Resolve stats (count / first / last / duration)
+- PostConstruct status
+
+Clicking a dependency or dependent navigates to that token's modal in place. The in-modal Back arrow pops one level; Escape or outside-click closes the whole stack.
+
+### Beginner-friendly tooltips
+
+Most metric labels carry a small ⓘ icon — hover for a one-line definition. Denser panels (Memory's "Leak risk", PostConstruct status) open a modal with the full explanation, severity bucket boundaries, and worked examples. Wording lives in `lib/info.tsx`'s `METRIC_DEFS` registry.
+
+### Auth gate
+
+If the server runs `DevToolsAdapter({ requireToken: true })` and you open the dashboard without a `?token=…` query param OR the `kickjs_devtools_token` cookie, a paste-token modal appears. The token is validated against `/health`, then persisted to a 30-day cookie. Subsequent visits skip the prompt.
+
+### VSCode extension
+
+The same `/_debug/*` JSON endpoints power the [KickJS DevTools VSCode extension](https://marketplace.visualstudio.com/items?itemName=forinda.kickjs-devtools) — install it, run **KickJS: Connect to App…** from the palette, and the Activity Bar gets Health / Routes / DI Container tree views without leaving the editor. When the server requires a token, run **KickJS: Set DevTools Token…** to paste it.
+
 ## Security
 
 - DevTools is **disabled by default in production** (`NODE_ENV === 'production'`)
 - Config endpoint is **opt-in** and redacts all variables not matching your prefix list
 - Consider adding authentication middleware if exposing in staging environments
+- The browser dashboard's auth gate (above) is the front door for `requireToken: true` mounts; the token is sent as `x-devtools-token` header on every request
