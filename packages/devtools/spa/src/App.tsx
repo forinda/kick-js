@@ -112,6 +112,14 @@ export const App: Component = () => {
     } catch {
       // ignore
     }
+    // Scroll the activated tab into view — important on narrow
+    // viewports where the tab bar overflows; otherwise a programmatic
+    // switch (or a localStorage restore) lands on a tab the user
+    // can't see without manually scrolling first.
+    queueMicrotask(() => {
+      const el = document.querySelector(`[role="tab"][data-tab-id="${id}"]`)
+      el?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
+    })
   }
 
   const activeCustom = (): DevtoolsTabDescriptor | undefined =>
@@ -134,6 +142,7 @@ export const App: Component = () => {
             <button
               type="button"
               role="tab"
+              data-tab-id={tab.id}
               class={`tab ${active() === tab.id ? 'active' : ''}`}
               aria-selected={active() === tab.id}
               onClick={() => switchTo(tab.id)}
@@ -151,6 +160,7 @@ export const App: Component = () => {
             <button
               type="button"
               role="tab"
+              data-tab-id={tab.id}
               class={`tab ${active() === tab.id ? 'active' : ''}`}
               aria-selected={active() === tab.id}
               onClick={() => switchTo(tab.id)}

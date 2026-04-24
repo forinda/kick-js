@@ -37,11 +37,26 @@
     @apply min-h-screen flex flex-col bg-slate-950 text-slate-200 font-sans;
   }
   .tabs {
-    @apply flex gap-1 px-4 pt-3 border-b border-slate-800 bg-slate-900;
+    @apply flex gap-1 px-4 pt-3 border-b border-slate-800 bg-slate-900
+           overflow-x-auto whitespace-nowrap;
+    /* Thin scrollbar so the bar height stays consistent on Linux/Win
+       (where the default ~12px scrollbar would offset the divider). */
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-slate-700) transparent;
+  }
+  .tabs::-webkit-scrollbar {
+    height: 6px;
+  }
+  .tabs::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .tabs::-webkit-scrollbar-thumb {
+    background: var(--color-slate-700);
+    border-radius: 3px;
   }
   .tab {
     @apply px-4 py-2 text-sm font-medium rounded-t-lg cursor-pointer border border-transparent
-           text-slate-400 transition-colors;
+           text-slate-400 transition-colors flex-shrink-0;
     background: transparent;
   }
   .tab:hover {
