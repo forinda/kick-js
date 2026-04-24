@@ -20,9 +20,53 @@ export function getBasePath(): string {
   return document.body.dataset.base ?? '/_debug'
 }
 
-/** Resolve the auth token, in order: query param `?token=`, then nothing. */
+const TOKEN_COOKIE = 'kickjs_devtools_token'
+const TOKEN_TTL_DAYS = 30
+
+/**
+ * Resolve the auth token in priority order:
+ *   1. URL query param `?token=...` — also writes to cookie + cleans
+ *      the URL so refreshes work without re-pasting AND the token
+ *      doesn't sit in browser history / shoulder-surfed screenshots.
+ *   2. Cookie persisted from a previous URL visit OR the auth-gate
+ *      modal.
+ *   3. In-memory override set via {@link setToken} — used by the
+ *      auth-gate after the user pastes a token; persisted to cookie
+ *      simultaneously.
+ *   4. null when none of the above resolve.
+ */
+let _runtimeToken: string | null = null
+
 export function getToken(): string | null {
-  return new URLSearchParams(location.search).get('token')
+  if (_runtimeToken) return _runtimeToken
+  const fromUrl = new URLSearchParams(location.search).get('token')
+  if (fromUrl) {
+    setToken(fromUrl)
+    const url = new URL(location.href)
+    url.searchParams.delete('token')
+    history.replaceState({}, '', url.toString())
+    return fromUrl
+  }
+  const match = document.cookie.match(new RegExp(`${TOKEN_COOKIE}=([^;]+)`))
+  if (match) {
+    _runtimeToken = decodeURIComponent(match[1])
+    return _runtimeToken
+  }
+  return null
+}
+
+/** Persist + activate a token. Used by the auth-gate after a successful probe. */
+export function setToken(token: string): void {
+  _runtimeToken = token
+  document.cookie = `${TOKEN_COOKIE}=${encodeURIComponent(token)}; path=/; max-age=${
+    60 * 60 * 24 * TOKEN_TTL_DAYS
+  }; SameSite=Lax`
+}
+
+/** Wipe the cached token + cookie. */
+export function clearToken(): void {
+  _runtimeToken = null
+  document.cookie = `${TOKEN_COOKIE}=; path=/; max-age=0; SameSite=Lax`
 }
 
 function withToken(url: string): string {
@@ -32,17 +76,32 @@ function withToken(url: string): string {
   return `${url}${sep}token=${encodeURIComponent(token)}`
 }
 
-/** One-shot GET — throws on non-2xx so callers can rely on the typed return. */
+/** Sentinel error code so callers can detect "needs token" without parsing strings. */
+export class AuthRequiredError extends Error {
+  constructor() {
+    super('AUTH_REQUIRED')
+    this.name = 'AuthRequiredError'
+  }
+}
+
+/**
+ * One-shot GET — throws on non-2xx so callers can rely on the typed
+ * return. 401/403 responses throw {@link AuthRequiredError} instead
+ * of the generic message so the auth-gate signal can detect them.
+ */
 async function get<T>(path: string): Promise<T> {
   const url = withToken(`${getBasePath()}${path}`)
-  const res = await fetch(url, { headers: token() })
+  const res = await fetch(url, { headers: tokenHeaders() })
+  if (res.status === 401 || res.status === 403) {
+    throw new AuthRequiredError()
+  }
   if (!res.ok) {
     throw new Error(`GET ${path} failed: ${res.status} ${res.statusText}`)
   }
   return (await res.json()) as T
 }
 
-function token(): Record<string, string> {
+function tokenHeaders(): Record<string, string> {
   const t = getToken()
   return t ? { 'x-devtools-token': t } : {}
 }

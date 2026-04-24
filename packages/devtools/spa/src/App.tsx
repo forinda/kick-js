@@ -14,6 +14,7 @@ import { rpc } from './lib/rpc'
 import { startUnifiedStream } from './lib/unified-stream'
 import { store } from './lib/store'
 import { DetailModalHost } from './lib/detail-modal'
+import { AuthGate } from './lib/auth-gate'
 
 type BuiltInTabId =
   | 'overview'
@@ -221,6 +222,7 @@ export const App: Component = () => {
         </Show>
       </main>
       <DetailModalHost />
+      <AuthGate />
     </div>
   )
 }

@@ -11,7 +11,7 @@
  * network themselves — keeps connection bookkeeping in one place.
  */
 
-import { rpc, subscribe } from './rpc'
+import { rpc, subscribe, AuthRequiredError } from './rpc'
 import { store, storeActions } from './store'
 
 let _disposed = false
@@ -85,7 +85,7 @@ export async function startUnifiedStream(): Promise<() => void> {
  * adapter isn't mounted) leave the previous slice in place.
  */
 async function refetchSnapshots(): Promise<void> {
-  const [health, metrics, routes, container, queues, ws] = await Promise.allSettled([
+  const results = await Promise.allSettled([
     rpc.health(),
     rpc.metrics(),
     rpc.routeRegistry(),
@@ -93,6 +93,25 @@ async function refetchSnapshots(): Promise<void> {
     rpc.queues(),
     rpc.ws(),
   ])
+  // If every fetch came back AUTH_REQUIRED, raise the auth gate so
+  // the user can paste a token. Per-endpoint 403 (e.g. devtools
+  // gates only /container) shouldn't trip the global gate; the
+  // 'every fetch failed with auth' check is the right signal.
+  const allAuth = results.every(
+    (r) => r.status === 'rejected' && r.reason instanceof AuthRequiredError,
+  )
+  if (allAuth) {
+    storeActions.setAuthRequired(true)
+    storeActions.setConnectionStatus('disconnected')
+    return
+  }
+  // Lower the gate as soon as any endpoint succeeds — covers the
+  // case where the user just pasted a valid token via the modal.
+  if (store.authRequired()) {
+    storeActions.setAuthRequired(false)
+    storeActions.setAuthError(null)
+  }
+  const [health, metrics, routes, container, queues, ws] = results
   if (health.status === 'fulfilled') {
     storeActions.setHealth({
       status: health.value.status,

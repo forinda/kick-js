@@ -72,6 +72,8 @@ export interface WsStats {
 
 const [connectionStatus, setConnectionStatus] = createSignal<ConnectionStatus>('connecting')
 const [lastUpdate, setLastUpdate] = createSignal<Date | null>(null)
+const [authRequired, setAuthRequired] = createSignal(false)
+const [authError, setAuthError] = createSignal<string | null>(null)
 const [health, setHealth] = createSignal<HealthSnapshot | null>(null)
 const [metrics, setMetrics] = createSignal<MetricsSnapshot | null>(null)
 const [routes, setRoutes] = createSignal<RouteEntry[]>([])
@@ -85,6 +87,8 @@ const [ws, setWs] = createSignal<WsStats>({ enabled: false })
 export const store = {
   connectionStatus,
   lastUpdate,
+  authRequired,
+  authError,
   health,
   metrics,
   routes,
@@ -96,6 +100,8 @@ export const store = {
 export const storeActions = {
   setConnectionStatus,
   setLastUpdate,
+  setAuthRequired,
+  setAuthError,
   setHealth,
   setMetrics,
   setRoutes,
