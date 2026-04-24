@@ -535,9 +535,10 @@ ${
     ? `### CQRS/Event Decorators
 - \`@Job('job-name')\` — queue job handler
 - \`@Process('queue-name')\` — queue processor
-- \`@Cron('0 * * * *')\` — cron schedule
 - \`@WsController('/path')\` — WebSocket controller
 - \`@Subscribe('event')\` — WebSocket event handler
+
+> Cron scheduling is BYO — define your own \`@Cron('0 * * * *')\` decorator backed by \`croner\` (or any scheduler) per the [cron guide](https://forinda.github.io/kick-js/guide/cron). Same applies to mailer, OpenTelemetry, multi-tenant, and notifications.
 
 `
     : ''

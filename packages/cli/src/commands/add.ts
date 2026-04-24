@@ -111,6 +111,39 @@ const PACKAGE_REGISTRY: Record<
   },
 }
 
+const BYO_GUIDES: Record<string, { guide: string; url: string; upstream: string }> = {
+  cron: {
+    guide: 'Scheduled tasks',
+    url: 'https://forinda.github.io/kick-js/guide/cron',
+    upstream: 'croner',
+  },
+  mailer: {
+    guide: 'Mailers',
+    url: 'https://forinda.github.io/kick-js/guide/mailer',
+    upstream: 'nodemailer (or Resend / SES SDK)',
+  },
+  otel: {
+    guide: 'OpenTelemetry',
+    url: 'https://forinda.github.io/kick-js/guide/otel',
+    upstream: '@opentelemetry/sdk-node',
+  },
+  'multi-tenant': {
+    guide: 'Multi-tenancy',
+    url: 'https://forinda.github.io/kick-js/guide/multi-tenancy',
+    upstream: 'defineHttpContextDecorator + getRequestValue (no extra dep)',
+  },
+  notifications: {
+    guide: 'Notifications',
+    url: 'https://forinda.github.io/kick-js/guide/notifications',
+    upstream: 'your chosen backend (SMTP / Slack / Discord / webhook)',
+  },
+  graphql: {
+    guide: 'GraphQL',
+    url: 'https://forinda.github.io/kick-js/guide/graphql',
+    upstream: 'graphql-http (or graphql-yoga / Apollo / Pothos)',
+  },
+}
+
 function detectPackageManager(): PackageManager {
   if (existsSync(resolve('pnpm-lock.yaml'))) return 'pnpm'
   if (existsSync(resolve('yarn.lock'))) return 'yarn'
@@ -197,11 +230,13 @@ export function registerAddCommand(program: Command): void {
       const prodDeps = new Set<string>()
       const devDeps = new Set<string>()
       const unknown: string[] = []
+      const byo: string[] = []
 
       for (const name of packages) {
         const entry = PACKAGE_REGISTRY[name]
         if (!entry) {
-          unknown.push(name)
+          if (BYO_GUIDES[name]) byo.push(name)
+          else unknown.push(name)
           continue
         }
         const target = forceDevFlag || entry.dev ? devDeps : prodDeps
@@ -209,6 +244,18 @@ export function registerAddCommand(program: Command): void {
         for (const peer of entry.peers) {
           target.add(peer)
         }
+      }
+
+      if (byo.length > 0) {
+        console.log(`\n  ${byo.length} package(s) are BYO in v5 — no wrapper to install:`)
+        for (const name of byo) {
+          const hint = BYO_GUIDES[name]
+          console.log(`    ${name.padEnd(14)} → ${hint.guide}: ${hint.url}`)
+          console.log(`    ${' '.padEnd(14)}   upstream: ${hint.upstream}`)
+        }
+        console.log('\n  These used to be @forinda/kickjs-* wrappers. v5 ships them as guide-based')
+        console.log('  recipes that wire the upstream library through defineAdapter /')
+        console.log('  definePlugin directly — ~60 lines you own in src/adapters/.\n')
       }
 
       if (unknown.length > 0) {
