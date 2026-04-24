@@ -58,14 +58,6 @@ const PACKAGE_REGISTRY: Record<
     description: 'WebSocket with @WsController decorators',
   },
 
-  // Observability
-  otel: {
-    pkg: '@forinda/kickjs-otel',
-    peers: ['@opentelemetry/api'],
-    description:
-      '[DEPRECATED — removed in v5] OpenTelemetry tracing + metrics. See guide/otel for the BYO recipe (also covers the processHooks: errors-only setting for SDK shutdown).',
-  },
-
   // DevTools
   devtools: {
     pkg: '@forinda/kickjs-devtools',
@@ -79,22 +71,6 @@ const PACKAGE_REGISTRY: Record<
     pkg: '@forinda/kickjs-auth',
     peers: ['jsonwebtoken'],
     description: 'Authentication — JWT, API key, and custom strategies',
-  },
-
-  // Mailer
-  mailer: {
-    pkg: '@forinda/kickjs-mailer',
-    peers: ['nodemailer'],
-    description:
-      '[DEPRECATED — removed in v5] Email sending. See guide/mailer for the BYO recipe + console-mailer asset-manager example.',
-  },
-
-  // Cron
-  cron: {
-    pkg: '@forinda/kickjs-cron',
-    peers: ['croner'],
-    description:
-      '[DEPRECATED — removed in v5] Cron job scheduling. See guide/cron for the BYO recipe (croner + framework metadata helpers).',
   },
 
   // Queue
@@ -117,22 +93,6 @@ const PACKAGE_REGISTRY: Record<
     pkg: '@forinda/kickjs-queue',
     peers: ['kafkajs'],
     description: 'Queue with Kafka',
-  },
-
-  // Multi-tenancy
-  'multi-tenant': {
-    pkg: '@forinda/kickjs-multi-tenant',
-    peers: [],
-    description:
-      '[DEPRECATED — removed in v5] Tenant resolution middleware. See guide/multi-tenancy for the BYO recipe (defineHttpContextDecorator + Scope.REQUEST DI).',
-  },
-
-  // Notifications
-  notifications: {
-    pkg: '@forinda/kickjs-notifications',
-    peers: [],
-    description:
-      '[DEPRECATED — removed in v5] Multi-channel notifications. See guide/notifications for the BYO recipe.',
   },
 
   // MCP — Model Context Protocol server

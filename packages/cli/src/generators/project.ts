@@ -219,7 +219,6 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
   log('  kick add <pkg>            Install a KickJS package + peers')
   log('  kick add --list           Show all available packages')
   log('')
-  log('Available: auth, swagger, drizzle, prisma, ws, cron,')
-  log('           queue, mailer, otel, devtools, multi-tenant, notifications, mcp, testing')
+  log('Available: auth, swagger, drizzle, prisma, ws, queue, devtools, mcp, testing')
   log('')
 }

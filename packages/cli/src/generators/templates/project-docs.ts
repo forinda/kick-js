@@ -348,12 +348,14 @@ kick add auth          # JWT, API key, OAuth strategies
 kick add swagger       # OpenAPI docs from decorators
 kick add ws            # WebSocket support
 kick add queue         # Background jobs (BullMQ/RabbitMQ/Kafka)
-kick add mailer        # Email (SMTP, Resend, SES)
-kick add cron          # Scheduled tasks
 kick add prisma        # Prisma ORM adapter
 kick add drizzle       # Drizzle ORM adapter
-kick add otel          # OpenTelemetry tracing
+kick add devtools      # Browser debug dashboard
 kick add --list        # Show all available packages
+
+# For email, scheduled tasks, multi-tenancy, OpenTelemetry, GraphQL, and
+# notifications use the BYO recipes in https://forinda.github.io/kick-js/guide/
+# — they wire the upstream library through defineAdapter()/definePlugin() directly.
 \`\`\`
 
 ## Environment Configuration

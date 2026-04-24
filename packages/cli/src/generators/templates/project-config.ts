@@ -4,7 +4,6 @@ type ProjectTemplate = 'rest' | 'ddd' | 'cqrs' | 'minimal'
 const PACKAGE_DEPS: Record<string, string> = {
   auth: '@forinda/kickjs-auth',
   swagger: '@forinda/kickjs-swagger',
-  otel: '@forinda/kickjs-otel',
   ws: '@forinda/kickjs-ws',
   queue: '@forinda/kickjs-queue',
   devtools: '@forinda/kickjs-devtools',

@@ -19,10 +19,6 @@ export function generateEntryFile(
       const cqrsImports: string[] = []
       const cqrsAdapters: string[] = []
 
-      if (packages.includes('otel')) {
-        cqrsImports.push(`import { OtelAdapter } from '@forinda/kickjs-otel'`)
-        cqrsAdapters.push(`    OtelAdapter({ serviceName: '${name}' }),`)
-      }
       if (packages.includes('devtools')) {
         cqrsImports.push(`import { DevToolsAdapter } from '@forinda/kickjs-devtools'`)
         cqrsAdapters.push(`    DevToolsAdapter(),`)
@@ -68,10 +64,6 @@ export const app = await bootstrap({
         imports.push(`import { DevToolsAdapter } from '@forinda/kickjs-devtools'`)
         adapters.push(`    DevToolsAdapter(),`)
       }
-      if (packages.includes('otel')) {
-        imports.push(`import { OtelAdapter } from '@forinda/kickjs-otel'`)
-        adapters.push(`    OtelAdapter({ serviceName: '${name}' }),`)
-      }
       const importsBlock = imports.length ? imports.join('\n') + '\n' : ''
       const adaptersBlock = adapters.length ? `,\n  adapters: [\n${adapters.join('\n')}\n  ]` : ''
 
@@ -106,11 +98,6 @@ export const app = await bootstrap({ modules${adaptersBlock} })
           `    SwaggerAdapter({\n      info: { title: '${name}', version: '${version}' },\n    }),`,
         )
       }
-      if (packages.includes('otel')) {
-        restImports.push(`import { OtelAdapter } from '@forinda/kickjs-otel'`)
-        restAdapters.push(`    OtelAdapter({ serviceName: '${name}' }),`)
-      }
-
       const restImportsBlock = restImports.length ? restImports.join('\n') + '\n' : ''
       const restAdaptersBlock = restAdapters.length
         ? `\n  adapters: [\n${restAdapters.join('\n')}\n  ],`

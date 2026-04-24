@@ -32,7 +32,8 @@ kick dev
 - `@forinda/kickjs` — unified core, HTTP layer, env validation
 - `@forinda/kickjs-prisma` — adapter with Prisma 5/6/7 support
 - `@forinda/kickjs-swagger`, `@forinda/kickjs-devtools`
-- `@forinda/kickjs-ws`, `@forinda/kickjs-queue`, `@forinda/kickjs-cron`, `@forinda/kickjs-mailer`
+- `@forinda/kickjs-ws`, `@forinda/kickjs-queue`
+- `croner`, `nodemailer` — BYO cron + mailer adapters (see [guide/cron](https://forinda.github.io/kick-js/guide/cron) + [guide/mailer](https://forinda.github.io/kick-js/guide/mailer))
 - `@prisma/adapter-pg` + `pg` — Prisma 7 driver adapter for PostgreSQL
 
 ## Learn More

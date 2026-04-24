@@ -9,22 +9,9 @@ import { colors } from '../utils/colors'
 const OPTIONAL_PACKAGES = [
   { value: 'auth', label: 'Auth', hint: 'JWT, OAuth, API keys' },
   { value: 'swagger', label: 'Swagger', hint: 'OpenAPI docs' },
-  { value: 'otel', label: 'OpenTelemetry', hint: 'tracing & metrics' },
   { value: 'ws', label: 'WebSocket', hint: 'rooms, heartbeat' },
   { value: 'queue', label: 'Queue', hint: 'BullMQ/RabbitMQ/Kafka' },
-  { value: 'cron', label: 'Cron [deprecated, see /guide/cron]', hint: 'scheduled jobs' },
-  { value: 'mailer', label: 'Mailer [deprecated, see /guide/mailer]', hint: 'SMTP, Resend, SES' },
   { value: 'devtools', label: 'DevTools', hint: 'debug dashboard' },
-  {
-    value: 'notifications',
-    label: 'Notifications [deprecated, see /guide/notifications]',
-    hint: 'email, Slack, Discord',
-  },
-  {
-    value: 'multi-tenant',
-    label: 'Multi-Tenant [deprecated, see /guide/multi-tenancy]',
-    hint: 'tenant resolution',
-  },
 ] as const
 
 export function registerInitCommand(program: Command): void {
@@ -41,7 +28,10 @@ export function registerInitCommand(program: Command): void {
     .option('-f, --force', 'Remove existing files without prompting')
     .option('-t, --template <type>', 'Project template: rest | ddd | cqrs | minimal')
     .option('-r, --repo <type>', 'Default repository: prisma | drizzle | inmemory | custom')
-    .option('--packages <packages>', 'Comma-separated packages to include (e.g. auth,swagger,otel)')
+    .option(
+      '--packages <packages>',
+      'Comma-separated packages to include (e.g. auth,swagger,ws,queue)',
+    )
     .action(async (name: string | undefined, opts: any) => {
       intro('KickJS — Create a new project')
 
