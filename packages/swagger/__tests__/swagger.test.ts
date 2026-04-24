@@ -534,3 +534,67 @@ describe('redocHtml', () => {
     expect(html).toContain('&quot;')
   })
 })
+
+describe('buildOpenAPISpec — caching', () => {
+  beforeEach(() => {
+    Container.reset()
+    clearRegisteredRoutes()
+  })
+
+  it('returns the same spec object on repeat calls with the same options', () => {
+    @Controller()
+    class CachedController {
+      @Get('/cached')
+      handler() {}
+    }
+    registerControllerForDocs(CachedController, '/cache')
+
+    const opts = { info: { title: 'Cached', version: '1.0' } }
+    const first = buildOpenAPISpec(opts)
+    const second = buildOpenAPISpec(opts)
+
+    // Same reference — cache hit short-circuited the rebuild.
+    expect(second).toBe(first)
+  })
+
+  it('rebuilds after registerControllerForDocs invalidates the cache', () => {
+    @Controller()
+    class FirstController {
+      @Get('/first')
+      h1() {}
+    }
+    registerControllerForDocs(FirstController, '/a')
+    const opts = { info: { title: 'Inv', version: '1.0' } }
+    const first = buildOpenAPISpec(opts)
+
+    @Controller()
+    class SecondController {
+      @Get('/second')
+      h2() {}
+    }
+    registerControllerForDocs(SecondController, '/b')
+    const second = buildOpenAPISpec(opts)
+
+    expect(second).not.toBe(first)
+    expect(second.paths['/a/first']).toBeDefined()
+    expect(second.paths['/b/second']).toBeDefined()
+  })
+
+  it('rebuilds after clearRegisteredRoutes invalidates the cache', () => {
+    @Controller()
+    class TempController {
+      @Get('/tmp')
+      h() {}
+    }
+    registerControllerForDocs(TempController, '/t')
+    const opts = { info: { title: 'Clr', version: '1.0' } }
+    const before = buildOpenAPISpec(opts)
+    expect(before.paths['/t/tmp']).toBeDefined()
+
+    clearRegisteredRoutes()
+    const after = buildOpenAPISpec(opts)
+
+    expect(after).not.toBe(before)
+    expect(after.paths['/t/tmp']).toBeUndefined()
+  })
+})
