@@ -121,7 +121,7 @@ Use `@Can()` on controller methods to enforce a policy check before the handler 
 ```ts
 import { Can } from '@forinda/kickjs-auth'
 
-@Controller('/posts')
+@Controller()
 @Authenticated()
 class PostController {
   @Get('/')
@@ -233,7 +233,7 @@ Apply it with `@Middleware()`:
 import { Middleware } from '@forinda/kickjs'
 import { ipWhitelistGuard } from '../guards/ip-whitelist.guard'
 
-@Controller('/internal')
+@Controller()
 @Middleware(ipWhitelistGuard)
 class InternalController {
   @Get('/metrics')

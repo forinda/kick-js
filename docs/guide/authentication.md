@@ -46,7 +46,7 @@ Mark a controller or method as requiring authentication.
 ```ts
 import { Authenticated, Public, Roles } from '@forinda/kickjs-auth'
 
-@Controller('/users')
+@Controller()
 @Authenticated()              // All routes require auth
 class UserController {
   @Get('/')
@@ -296,7 +296,7 @@ const googleAuth = OAuthStrategy({
   },
 })
 
-@Controller('/auth')
+@Controller()
 class SocialAuthController {
   @Get('/google')
   @Public()
@@ -751,7 +751,7 @@ import jwt from 'jsonwebtoken'
 
 const JWT_SECRET = process.env.JWT_SECRET!
 
-@Controller('/auth')
+@Controller()
 @Authenticated()
 class AuthController {
   @Post('/login')

@@ -41,7 +41,7 @@ session middleware reuses it and will not re-parse.
 Access the session via `ctx.session`:
 
 ```ts
-@Controller('/auth')
+@Controller()
 class AuthController {
   @Post('/login')
   async login(ctx: RequestContext) {

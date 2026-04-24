@@ -277,7 +277,7 @@ class RequestTransaction {
   }
 }
 
-@Controller('/orders')
+@Controller()
 class OrderController {
   @Autowired() private tenantCtx!: TenantContext
   @Autowired() private txn!: RequestTransaction

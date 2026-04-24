@@ -46,7 +46,7 @@ The loose `RequestContext` type still works for backward compatibility — `Ctx<
 `@Controller(path?)` registers the class in the DI container as a singleton and marks it as a controller. The optional path serves as **metadata only** (used by adapters like Swagger for OpenAPI spec generation) — it is **not** baked into the Express router.
 
 ```ts
-@Controller('/admin')
+@Controller()
 export class AdminController { ... }
 ```
 

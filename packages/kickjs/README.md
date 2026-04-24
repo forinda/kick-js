@@ -19,11 +19,24 @@ pnpm add -D @forinda/kickjs-cli
 // src/modules/hello/hello.controller.ts
 import { Controller, Get, type RequestContext } from '@forinda/kickjs'
 
-@Controller('/hello')
+@Controller()
 export class HelloController {
   @Get('/')
   hello(ctx: RequestContext) {
     ctx.json({ message: 'Hello from KickJS' })
+  }
+}
+```
+
+```ts
+// src/modules/hello/hello.module.ts
+import { buildRoutes, type AppModule, type ModuleRoutes } from '@forinda/kickjs'
+import { HelloController } from './hello.controller'
+
+export class HelloModule implements AppModule {
+  routes(): ModuleRoutes {
+    // Mount prefix lives here — single source of truth for where routes mount.
+    return { path: '/hello', router: buildRoutes(HelloController), controller: HelloController }
   }
 }
 ```

@@ -8,7 +8,7 @@ KickJS provides a built-in `ctx.sse()` helper for streaming real-time events to 
 import { Controller, Get } from '@forinda/kickjs'
 import type { RequestContext } from '@forinda/kickjs'
 
-@Controller('/events')
+@Controller()
 class EventsController {
   @Get('/clock')
   stream(ctx: RequestContext) {
@@ -107,7 +107,7 @@ import { ref, watch } from '@forinda/kickjs'
 
 const notifications = ref<string[]>([])
 
-@Controller('/events')
+@Controller()
 class NotificationController {
   @Get('/notifications')
   stream(ctx: RequestContext) {

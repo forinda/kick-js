@@ -33,7 +33,7 @@ Mark which controller methods get exposed:
 ```ts
 import { McpTool } from '@forinda/kickjs-mcp'
 
-@Controller('/tasks')
+@Controller()
 class TaskController {
   @Post('/')
   @McpTool({ description: 'Create a task with title + priority' })

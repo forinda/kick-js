@@ -11,7 +11,7 @@ Marks a class as an HTTP controller and registers it in the DI container.
 ```ts
 import { Controller } from '@forinda/kickjs'
 
-@Controller('/users')
+@Controller()
 class UserController { ... }
 
 @Controller()  // defaults to '/'
@@ -72,7 +72,7 @@ import { z } from 'zod'
 const createUserSchema = z.object({ name: z.string(), email: z.string().email() })
 const updateUserSchema = createUserSchema.partial()
 
-@Controller('/users')
+@Controller()
 class UserController {
   @Get('/')
   async list(ctx: RequestContext) { ... }
@@ -128,7 +128,7 @@ Attach middleware to a class (all routes) or a specific method. Handlers receive
 import { Controller, Get, Middleware } from '@forinda/kickjs'
 
 // Class-level — applies to all routes
-@Controller('/admin')
+@Controller()
 @Middleware(authMiddleware, roleMiddleware('admin'))
 class AdminController {
   @Get('/')
@@ -148,7 +148,7 @@ Configures file upload handling. The router builder auto-attaches the upload mid
 ```ts
 import { Controller, Post, FileUpload } from '@forinda/kickjs'
 
-@Controller('/files')
+@Controller()
 class FileController {
   @Post('/avatar')
   @FileUpload({
@@ -190,7 +190,7 @@ class FileController {
 Inject a dependency by type or token. Resolved lazily from the DI container.
 
 ```ts
-@Controller('/users')
+@Controller()
 class UserController {
   @Autowired() private userService!: UserService          // By type
   @Autowired(CACHE_TOKEN) private cache!: CacheService    // By token
@@ -275,7 +275,7 @@ async create(ctx: RequestContext) { ... }
 Group endpoints under tags in the Swagger UI. Works on classes or methods.
 
 ```ts
-@Controller('/users')
+@Controller()
 @ApiTags('Users')
 class UserController { ... }
 ```
@@ -285,7 +285,7 @@ class UserController { ... }
 Mark endpoints as requiring Bearer token authentication.
 
 ```ts
-@Controller('/admin')
+@Controller()
 @ApiBearerAuth()
 class AdminController { ... }
 ```
@@ -311,7 +311,7 @@ import { Controller, Get, ApiQueryParams } from '@forinda/kickjs'
 import { RequestContext } from '@forinda/kickjs'
 
 // String-based config
-@Controller('/tasks')
+@Controller()
 class TaskController {
   @Get('/')
   @ApiQueryParams({
@@ -333,7 +333,7 @@ class TaskController {
 ```ts
 import { TASK_QUERY_CONFIG } from '../constants'
 
-@Controller('/tasks')
+@Controller()
 class TaskController {
   @Get('/')
   @ApiQueryParams(TASK_QUERY_CONFIG) // Column objects → field names extracted automatically

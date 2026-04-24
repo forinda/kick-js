@@ -37,7 +37,7 @@ Decorate routes:
 import { Controller, Get, Delete, type RequestContext } from '@forinda/kickjs'
 import { Public, Roles } from '@forinda/kickjs-auth'
 
-@Controller('/users')
+@Controller()
 class UserController {
   @Get('/me')
   me(ctx: RequestContext) {

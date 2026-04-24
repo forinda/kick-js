@@ -95,7 +95,7 @@ class TenantConnectionManager<TDb> {
 Regardless of ORM, the controller pattern is the same:
 
 ```ts
-@Controller('/projects')
+@Controller()
 @Authenticated()
 export class ProjectController {
   @Autowired() private tenantDb!: TenantDbService

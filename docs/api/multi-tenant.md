@@ -195,7 +195,7 @@ import { Inject } from '@forinda/kickjs'
 import { TENANT_CONTEXT, TenantInfo } from '@forinda/kickjs-multi-tenant'
 import type { RequestContext } from '@forinda/kickjs'
 
-@Controller('/users')
+@Controller()
 export class UserController {
   @Inject(TENANT_CONTEXT)
   private tenant!: TenantInfo

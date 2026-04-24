@@ -46,7 +46,7 @@ Apply different limits to specific routes using the `@Middleware` decorator:
 ```ts
 import { rateLimit } from '@forinda/kickjs'
 
-@Controller('/auth')
+@Controller()
 class AuthController {
   @Post('/login')
   @Middleware(rateLimit({ max: 5, windowMs: 15 * 60_000 }))

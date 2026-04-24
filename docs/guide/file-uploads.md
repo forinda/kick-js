@@ -54,7 +54,7 @@ The `@FileUpload` decorator is a declarative alternative. The router builder aut
 import { Controller, Post, FileUpload } from '@forinda/kickjs'
 import { RequestContext } from '@forinda/kickjs'
 
-@Controller('/files')
+@Controller()
 class FileController {
   @Post('/upload')
   @FileUpload({ mode: 'single', fieldName: 'document', maxSize: 10_000_000, allowedTypes: ['pdf', 'docx'] })

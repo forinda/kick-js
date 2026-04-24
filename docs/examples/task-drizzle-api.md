@@ -98,7 +98,7 @@ modules/{name}/
 Uses a custom auth bridge middleware rather than `@forinda/kickjs-auth`:
 
 ```ts
-@Controller('/auth')
+@Controller()
 export class AuthController {
   @Autowired() private loginUseCase!: LoginUseCase
   @Autowired() private registerUseCase!: RegisterUseCase

@@ -2,19 +2,30 @@
 
 Context decorators are a typed, ordered, declarative way to populate `ctx.set('key', value)` *before* a controller handler runs. They replace hand-written middleware whose only job is "compute X and stash it on the request".
 
+Good fits span well beyond multi-tenancy — anything you repeatedly compute from the incoming request is a candidate:
+
+- request-tracing metadata (`requestStartedAt`, span / trace id)
+- locale / timezone resolved from headers or user prefs
+- feature flags / experiment buckets
+- rate-limit or idempotency-key derivation
+- geo or device info from CDN headers
+- workspace / organisation / project scoping for collaboration apps
+- warmed user profile or permission sets from a cache
+- whatever per-request value your handlers keep re-deriving
+
 ```ts
-@LoadTenant
-@LoadProject  // depends on 'tenant' — runs after LoadTenant automatically
-@Get('/projects/:id')
-getProject(ctx: RequestContext) {
-  ctx.get('tenant')   // typed via ContextMeta, guaranteed present
-  ctx.get('project')  // typed via ContextMeta, guaranteed present
+@ResolveLocale
+@LoadFeatureFlags   // depends on 'locale' — runs after ResolveLocale automatically
+@Get('/home')
+home(ctx: RequestContext) {
+  ctx.get('locale')        // typed via ContextMeta, guaranteed present
+  ctx.get('featureFlags')  // typed via ContextMeta, guaranteed present
 }
 ```
 
 Compared to writing two custom middlewares for the same job, you get:
 
-- **Type safety** — `ctx.get('tenant')` returns the type you declared in `ContextMeta`, not `any`.
+- **Type safety** — `ctx.get('locale')` returns the type you declared in `ContextMeta`, not `any`.
 - **Ordering enforced at startup** — declare `dependsOn` and the framework topo-sorts; cycles and missing dependencies fail boot, not requests.
 - **DI integration** — the resolver receives a typed `deps` object resolved from the container.
 - **Reusable across registration sites** — the same decorator works on a method, a class, a module, an adapter, or globally in `bootstrap()`.
@@ -35,6 +46,38 @@ Stick with `@Middleware()` (or raw Express middleware) when:
 
 See [Middleware vs context decorators](./middleware.md#middleware-vs-context-decorators).
 
+## Ten use cases — and why contributors beat middleware
+
+Anything you repeatedly compute from the incoming request is a candidate. The pattern is NOT multi-tenancy-specific — here are ten distinct domains where contributors remove a lot of boilerplate, with the rationale for each:
+
+| # | Use case | Typical key + shape | Why it wins over middleware |
+|---|---|---|---|
+| 1 | **Request tracing** — timestamp / trace id / span id for every handler and service on the chain | `requestStartedAt: number`, `traceId: string` | Transport-agnostic (HTTP + WS + queue + cron share the same primitive). Services read via `requestStore` without a `ctx` reference. |
+| 2 | **Locale / i18n negotiation** — resolve from `Accept-Language`, user prefs, cookie, in that order | `locale: { language: string; region: string \| null }` | Typed once via `ContextMeta`, never re-derived. Replaced per-route (a `/admin` endpoint forces `en`) without forking the middleware stack. |
+| 3 | **Feature flags** — evaluate flags once, cache the result for the request's lifetime | `featureFlags: Record<string, boolean>` | `deps: { flags: FLAG_SERVICE }` pulls the evaluator from DI — no `container.getInstance()` boilerplate. `dependsOn: ['featureFlags']` downstream gives guaranteed-present flags. |
+| 4 | **A/B test bucket assignment** — stable-hash the user into a variant, reusing feature-flag state | `abBucket: 'control' \| 'variantA' \| 'variantB'` | `dependsOn` encodes the "flags must resolve first" relationship once; framework topo-sorts. Middleware order bugs (forgetting to mount B before C) become startup errors, not silent 500s. |
+| 5 | **Rate-limit key derivation** — combine user id + IP + route to produce the limiter key | `rateLimitKey: string` | The contributor returns one string; the downstream rate-limit middleware reads it and does the enforcement. Separation of computation (typed, tested) from enforcement (side-effectful). |
+| 6 | **Idempotency key validation** — pluck `Idempotency-Key` header, reject mutations missing it | `idempotencyKey: string \| null` | `onError` captures the "missing on POST/PUT" case cleanly — return `null` or throw, per your policy. Pipeline enforces the check at boot: forgetting to mount it globally is surfaced by TypeScript if another contributor `dependsOn`s it. |
+| 7 | **Geolocation from CDN headers** — parse Cloudflare / Fastly / Vercel headers once | `geo: { country \| null; city \| null; lat \| null; lng \| null }` | Adapter authors ship `@ResolveGeo` + `GeoAdapter` — adopters pick per-route opt-in OR cross-cutting activation. No "wrap the app in a context provider" boilerplate. |
+| 8 | **Workspace / organisation / project scoping** — resolve the active scope from URL param or header | `workspace: { id; name; members }` (or `org`, `project`, `team`, `room` — whatever your domain calls it) | Not just a tenant loader. Any scoped app (collab tools, chat, kanban, CI) owns its scope name. Multi-level scoping (`workspace` → `project` → `task`) composes via `dependsOn`. |
+| 9 | **Warmed user profile / permission set** — read once from cache, share across handler + services | `user: { id; email; roles }`, `permissions: Set<string>` | Auth middleware sets the user; a contributor warms the profile and cached permission set. Services read via `requestStore` without threading the user through every method signature. |
+| 10 | **Correlation ID for distributed tracing / saga state** — propagate an inbound `X-Correlation-ID`, or generate one | `correlationId: string`, `sagaContext: { step: number; …}` | The contributor runs before every route AND every queue job (same registration, different transport). Downstream logs, outbound HTTP clients, and emitted events all pick up the same id. |
+
+### Why this is more flexible than middleware
+
+| Middleware pattern | Contributor advantage |
+|---|---|
+| Mutates `req.user` / `(req as any).tenant` — all typed `any` | `ctx.get('user')` / `ctx.get('tenant')` typed via `ContextMeta` augmentation |
+| Declared as an array in `bootstrap({ middleware: [...] })` — order is whatever you wrote | `dependsOn: ['x']` — topo-sorted at boot; missing deps + cycles fail startup, not per-request |
+| DI access via `Container.getInstance()` inside the middleware body | `deps: { repo: TOKEN }` typed, resolved once, handed to `resolve(ctx, deps)` |
+| Tested with `supertest` + the whole Express stack | `runContributor` (from `@forinda/kickjs-testing`) tests a single resolver against a stub ctx |
+| Global: every route pays the cost, no opt-out per endpoint | Five precedence levels (method > class > module > adapter > global) — override per-route without forking the stack |
+| HTTP-only — WebSocket / queue / cron use different lifecycles | `defineContextDecorator` (transport-agnostic) registrations reuse across every ctx the pipeline supports |
+| Plugin authors ship `app.use(myMiddleware())` and hope you call it in the right spot | Plugin authors ship `MyAdapter` (which registers via `contributors?()`) AND the raw decorator — adopters pick the ergonomic |
+| Augmentation (`declare global { namespace Express { interface Request { ... } } }`) leaks across every handler in the app | `ContextMeta` augmentation is typed; `defineAugmentation` advertises it in the typegen catalogue for discovery |
+| Error handling: throw → 500 unless you wrote `try/catch` around every middleware | `optional: true` skips silently; `onError` hook returns a fallback value; both typed against `MetaValue<K>` |
+| "Remove the rate-limit middleware on `/health`" = fork the stack or use a path check inside the middleware | Mount `@SkipRateLimit` at method level — higher precedence wins, adapter's registration silently drops for that one route |
+
 ## Quickstart
 
 ```ts
@@ -46,32 +89,33 @@ import {
 } from '@forinda/kickjs'
 
 // 1. Declare the value's type via ContextMeta augmentation.
-//    This is what TypeScript reads to type `ctx.get('tenant')`.
+//    This is what TypeScript reads to type `ctx.get('locale')`.
 declare module '@forinda/kickjs' {
   interface ContextMeta {
-    tenant: { id: string; name: string }
+    locale: { language: string; region: string | null }
   }
 }
 
 // 2. Define the decorator with a resolver.
 //    `defineHttpContextDecorator` pre-binds `Ctx` to `RequestContext` so
 //    `ctx.req`, `ctx.headers`, `ctx.params`, etc. are typed in the resolver.
-const LoadTenant = defineHttpContextDecorator({
-  key: 'tenant',
-  resolve: (ctx) => ({
-    id: ctx.req.headers['x-tenant-id'] as string,
-    name: 'Acme',
-  }),
+const ResolveLocale = defineHttpContextDecorator({
+  key: 'locale',
+  resolve: (ctx) => {
+    const header = (ctx.req.headers['accept-language'] as string | undefined) ?? 'en'
+    const [language, region] = header.split(',')[0].trim().split('-')
+    return { language, region: region ?? null }
+  },
 })
 
 // 3. Apply it on a controller method (or class)
 @Controller()
-class MeController {
-  @LoadTenant
+class HomeController {
+  @ResolveLocale
   @Get('/')
-  me(ctx: RequestContext) {
-    const tenant = ctx.get('tenant')   // typed: { id: string; name: string }
-    return ctx.json({ tenant })
+  home(ctx: RequestContext) {
+    const locale = ctx.get('locale')   // typed: { language: string; region: string | null }
+    return ctx.json({ greeting: greetingFor(locale) })
   }
 }
 ```
@@ -438,6 +482,331 @@ Three considerations:
 - **Use namespaced keys** for plugin-specific values to avoid collisions with app-defined keys: `'@my-plugin/state'` rather than `'state'`. Same convention as Pino fields and OpenTelemetry semantic conventions.
 
 - **Document the override path.** Users can replace your adapter-level contributor with their own at the module, class, or method level — that's a feature, not a bug. Make it clear in the adapter README.
+
+## Examples and recipes
+
+Nine worked examples across different domains so you can see the pattern applies to anything per-request-computed, not just tenant resolution. Each is a complete copy-paste — imports and the `declare module` block are shown once at the top of each.
+
+### 1. Request tracing — timestamp every handler gets
+
+The transport-agnostic case. Produces a value every handler (and every service via `requestStore`) can read:
+
+```ts
+import { defineContextDecorator } from '@forinda/kickjs'
+
+declare module '@forinda/kickjs' {
+  interface ContextMeta { requestStartedAt: number }
+}
+
+const TraceStart = defineContextDecorator({
+  key: 'requestStartedAt',
+  resolve: () => Date.now(),
+})
+
+bootstrap({
+  modules,
+  contributors: [TraceStart.registration],   // global — every route, every transport
+})
+```
+
+Any handler: `ctx.get('requestStartedAt')`. Any service: `requestStore.getStore()?.values.get('requestStartedAt')`.
+
+### 2. Locale negotiation from `Accept-Language`
+
+Headers-only, no DI needed — classic middleware replacement:
+
+```ts
+import { defineHttpContextDecorator } from '@forinda/kickjs'
+
+declare module '@forinda/kickjs' {
+  interface ContextMeta {
+    locale: { language: string; region: string | null; fallback: boolean }
+  }
+}
+
+const ResolveLocale = defineHttpContextDecorator({
+  key: 'locale',
+  resolve: (ctx) => {
+    const header = (ctx.req.headers['accept-language'] as string | undefined) ?? ''
+    const first = header.split(',')[0]?.trim()
+    if (!first) return { language: 'en', region: null, fallback: true }
+    const [language, region] = first.split('-')
+    return { language, region: region ?? null, fallback: false }
+  },
+})
+```
+
+### 3. Feature flags from a service with DI
+
+The resolver pulls a service out of the container. Downstream contributors can `dependsOn: ['featureFlags']` to branch on them:
+
+```ts
+import { createToken, defineHttpContextDecorator } from '@forinda/kickjs'
+
+interface FlagService { evaluate(userId: string | undefined): Promise<Record<string, boolean>> }
+export const FLAG_SERVICE = createToken<FlagService>('app/flags/service')
+
+declare module '@forinda/kickjs' {
+  interface ContextMeta { featureFlags: Record<string, boolean> }
+}
+
+const LoadFeatureFlags = defineHttpContextDecorator({
+  key: 'featureFlags',
+  deps: { flags: FLAG_SERVICE },
+  resolve: async (ctx, { flags }) => {
+    const userId = ctx.req.headers['x-user-id'] as string | undefined
+    return flags.evaluate(userId)
+  },
+  onError: () => ({}),   // fallback: no flags enabled if the service blows up
+})
+```
+
+### 4. Workspace scoping for a collaboration app (not "tenant")
+
+Same shape a tenant loader would have, but framed around a collaboration context — workspace is just one possible scope among many (organisation, team, project, community, room, board…):
+
+```ts
+import { createToken, defineHttpContextDecorator, HttpException } from '@forinda/kickjs'
+
+interface WorkspaceRepo {
+  findBySlug(slug: string): Promise<{ id: string; name: string; members: string[] } | null>
+}
+
+export const WORKSPACE_REPO = createToken<WorkspaceRepo>('app/workspaces/repository')
+
+declare module '@forinda/kickjs' {
+  interface ContextMeta {
+    workspace: { id: string; name: string; members: string[] }
+  }
+}
+
+const LoadWorkspace = defineHttpContextDecorator({
+  key: 'workspace',
+  deps: { repo: WORKSPACE_REPO },
+  resolve: async (ctx, { repo }) => {
+    const slug = ctx.req.params.workspaceSlug
+    const ws = await repo.findBySlug(slug)
+    if (!ws) throw new HttpException(404, `Workspace '${slug}' not found`)
+    return ws
+  },
+})
+
+@Controller()
+class WorkspaceController {
+  @LoadWorkspace
+  @Get('/:workspaceSlug')
+  show(ctx: RequestContext) {
+    ctx.json({ workspace: ctx.get('workspace') })
+  }
+}
+```
+
+### 5. Chained lookup with `dependsOn`
+
+`A/B test bucket` depends on `featureFlags` being resolved first. The framework topo-sorts — you declare the edge, the runner does the rest:
+
+```ts
+declare module '@forinda/kickjs' {
+  interface ContextMeta { abBucket: 'control' | 'variantA' | 'variantB' }
+}
+
+const AssignAbBucket = defineHttpContextDecorator({
+  key: 'abBucket',
+  dependsOn: ['featureFlags'],   // typed against ContextMeta — typos are TS errors
+  resolve: (ctx) => {
+    const flags = ctx.get('featureFlags')!   // guaranteed by dependsOn
+    if (!flags['new-checkout']) return 'control'
+    // Stable per-user bucket from a hash of the user id — kept here for brevity
+    const userId = ctx.req.headers['x-user-id'] as string | undefined
+    return hashBucket(userId, ['variantA', 'variantB'])
+  },
+})
+
+@Controller()
+class CheckoutController {
+  @LoadFeatureFlags
+  @AssignAbBucket
+  @Get('/checkout')
+  show(ctx: RequestContext) {
+    ctx.json({ variant: ctx.get('abBucket') })
+  }
+}
+```
+
+Boot fails with `MissingContributorError` if a route uses `@AssignAbBucket` without anything producing `'featureFlags'` at or above that route's precedence level.
+
+### 6. Factory: a parameterised reusable contributor
+
+Most reusable contributors take options. Wrap the factory:
+
+```ts
+interface IdempotencyOptions {
+  /** Header carrying the client-supplied key. Default: `idempotency-key`. */
+  header?: string
+  /** Require the header on mutating methods? Default: `true`. */
+  required?: boolean
+}
+
+export function createIdempotencyLoader(opts: IdempotencyOptions = {}) {
+  const header = opts.header ?? 'idempotency-key'
+  const required = opts.required ?? true
+
+  return defineHttpContextDecorator({
+    key: 'idempotencyKey',
+    resolve: (ctx) => {
+      const key = ctx.req.headers[header] as string | undefined
+      if (!key && required && MUTATING_METHODS.has(ctx.req.method)) {
+        throw new HttpException(400, `Missing ${header} header`)
+      }
+      return key ?? null
+    },
+  })
+}
+
+declare module '@forinda/kickjs' {
+  interface ContextMeta { idempotencyKey: string | null }
+}
+
+// Per-route opt-in or pass to an adapter's contributors() hook
+const CheckIdempotency = createIdempotencyLoader({ required: true })
+```
+
+### 7. Composition: one custom decorator that bundles several contributors
+
+When one logical concern (`@RequiresCheckoutContext`) needs several contributors chained, bundle them. Two forms — registration bundle for module/adapter hooks, and a composed decorator for per-route/per-class use:
+
+```ts
+import type { AnyContributorRegistration } from '@forinda/kickjs'
+
+// Adapter / module hook form — pass this array straight to contributors()
+export const CheckoutContextRegistrations: AnyContributorRegistration[] = [
+  LoadFeatureFlags.registration,
+  AssignAbBucket.registration,
+  CheckIdempotency.registration,
+]
+
+// Decorator form — apply to a method / class to attach all three at once
+export function RequiresCheckoutContext(target: object, propertyKey?: string | symbol): void {
+  LoadFeatureFlags(target as never, propertyKey as never)
+  AssignAbBucket(target as never, propertyKey as never)
+  CheckIdempotency(target as never, propertyKey as never)
+}
+
+@Controller()
+class CheckoutController {
+  @RequiresCheckoutContext
+  @Post('/checkout')
+  checkout(ctx: RequestContext) {
+    const flags = ctx.get('featureFlags')
+    const bucket = ctx.get('abBucket')
+    const key    = ctx.get('idempotencyKey')
+    ...
+  }
+}
+```
+
+### 8. Third-party package ships a contributor + a custom decorator wrapping it
+
+The pattern most reusable packages will follow — expose both the registration (for `contributors?()` hooks) *and* a decorator alias (for per-route opt-in). Adopters pick the ergonomic that fits their call site:
+
+```ts
+// packages/geo/src/index.ts
+import {
+  defineAdapter,
+  defineAugmentation,
+  defineHttpContextDecorator,
+} from '@forinda/kickjs'
+
+declare module '@forinda/kickjs' {
+  interface ContextMeta {
+    geo: { country: string | null; city: string | null; latitude: number | null; longitude: number | null }
+  }
+}
+
+defineAugmentation('ContextMeta', {
+  description: 'Geolocation resolved from CDN headers (Cloudflare / Fastly / Vercel) by GeoAdapter.',
+  example: `{ geo: { country: string | null; city: string | null; latitude: number | null; longitude: number | null } }`,
+})
+
+const ResolveGeo = defineHttpContextDecorator({
+  key: 'geo',
+  resolve: (ctx) => ({
+    country: (ctx.req.headers['cf-ipcountry'] as string | undefined) ?? null,
+    city:    (ctx.req.headers['cf-ipcity']    as string | undefined) ?? null,
+    latitude:  parseOrNull(ctx.req.headers['cf-iplatitude']),
+    longitude: parseOrNull(ctx.req.headers['cf-iplongitude']),
+  }),
+})
+
+// Public API
+export { ResolveGeo }
+export const GeoAdapter = defineAdapter({
+  name: 'GeoAdapter',
+  build: () => ({
+    contributors: () => [ResolveGeo.registration],
+  }),
+})
+```
+
+Consumer code — pick the ergonomic:
+
+```ts
+// Cross-cutting — every route gets `geo` populated
+bootstrap({ modules, adapters: [GeoAdapter()] })
+
+// OR per-route opt-in — only this handler pays for the header read
+@ResolveGeo
+@Get('/nearby')
+nearby(ctx: RequestContext) {
+  ctx.json({ country: ctx.get('geo')!.country })
+}
+```
+
+### 9. Reading contributor output from a service that has no `ctx`
+
+Any service can read what contributors wrote — no `ctx` parameter needed — by going through the request store directly:
+
+```ts
+import { Service, requestStore } from '@forinda/kickjs'
+
+@Service()
+class AuditService {
+  log(action: string) {
+    const store = requestStore.getStore()
+    if (!store) return   // outside a request (background job, startup)
+    db.audit.insert({
+      action,
+      locale:     store.values.get('locale')?.language,
+      geoCountry: store.values.get('geo')?.country,
+      bucket:     store.values.get('abBucket'),
+      requestId:  store.requestId,
+    })
+  }
+}
+```
+
+Same Map `ctx.get` / `ctx.set` already wraps — `requestStore.getStore()?.values` is the raw container. Always null-check; the store is `undefined` outside a request (background jobs, startup, tests without `requestScopeMiddleware()`).
+
+### Overriding an adapter-shipped contributor for one route
+
+The precedence rule (method > class > module > adapter > global) lets you replace a cross-cutting default per-route without touching the adapter:
+
+```ts
+// GeoAdapter is mounted globally — real CDN header reads on every route.
+// For a health-check endpoint we don't want the CDN lookup (it'll be null
+// anyway behind a load balancer), so stub it at the method level:
+
+const StubGeo = defineHttpContextDecorator({
+  key: 'geo',
+  resolve: () => ({ country: null, city: null, latitude: null, longitude: null }),
+})
+
+@StubGeo              // wins — adapter version silently dropped for this route
+@Get('/health')
+health(ctx: RequestContext) {
+  ctx.json({ ok: true })
+}
+```
 
 ## Testing in isolation
 

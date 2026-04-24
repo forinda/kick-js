@@ -8,7 +8,7 @@ KickJS includes an ORM-agnostic query string parser that turns URL parameters in
 import { Controller, Get } from '@forinda/kickjs'
 import { RequestContext } from '@forinda/kickjs'
 
-@Controller('/tasks')
+@Controller()
 class TaskController {
   @Get('/')
   async list(ctx: RequestContext) {
@@ -232,7 +232,7 @@ Then in your controller, call `ctx.paginate()` with the parsed query and the ser
 import { Controller, Get } from '@forinda/kickjs'
 import { RequestContext } from '@forinda/kickjs'
 
-@Controller('/tasks')
+@Controller()
 class TaskController {
   @Autowired() private taskService!: TaskService
 

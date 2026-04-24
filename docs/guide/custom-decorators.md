@@ -55,7 +55,7 @@ function getRoles(target: any, handlerName: string): string[] {
 Usage:
 
 ```ts
-@Controller('/admin')
+@Controller()
 class AdminController {
   @Get('/')
   @Roles('admin', 'superadmin')

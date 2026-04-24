@@ -83,7 +83,7 @@ const createTaskSchema = z.object({
   priority: z.enum(['low', 'medium', 'high']).optional(),
 })
 
-@Controller('/tasks')
+@Controller()
 export class TaskController {
   @Post('/', { body: createTaskSchema, name: 'CreateTask' })
   @McpTool({

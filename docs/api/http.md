@@ -99,7 +99,7 @@ function getControllerPath(controllerClass: any): string
 ```
 
 - **buildRoutes** -- Builds an Express Router from a decorated controller class, resolving it from the DI container.
-- **getControllerPath** -- Returns the path prefix set by `@Controller('/path')`.
+- **getControllerPath** -- Returns the path prefix set by `@Controller()`.
 
 ## Middleware
 

@@ -252,7 +252,7 @@ export function requireRole(role: string): MiddlewareHandler {
 ```
 
 ```ts
-@Controller('/admin')
+@Controller()
 @Middleware(authMiddleware, requireRole('admin'))
 export class AdminController { ... }
 ```

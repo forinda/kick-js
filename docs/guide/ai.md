@@ -133,7 +133,7 @@ import { Controller, Get, type RequestContext } from '@forinda/kickjs'
 import { Autowired } from '@forinda/kickjs'
 import { AiAdapter } from '@forinda/kickjs-ai'
 
-@Controller('/chat')
+@Controller()
 export class ChatController {
   @Autowired() private readonly ai!: AiAdapter
 
@@ -162,7 +162,7 @@ import { z } from 'zod'
 import { Controller, Post, type RequestContext } from '@forinda/kickjs'
 import { AiTool } from '@forinda/kickjs-ai'
 
-@Controller('/tasks')
+@Controller()
 export class TaskController {
   @Post('/')
   @AiTool({

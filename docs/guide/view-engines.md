@@ -82,7 +82,7 @@ bootstrap({
 import { Controller, Get } from '@forinda/kickjs'
 import type { RequestContext } from '@forinda/kickjs'
 
-@Controller('/')
+@Controller()
 export class HomeController {
   @Get('/')
   index(ctx: RequestContext) {

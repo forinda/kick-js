@@ -105,7 +105,7 @@ AuthAdapter({
 Public routes opt out with `@Public()`:
 
 ```ts
-@Controller('/auth')
+@Controller()
 export class AuthController {
   @Post('/login')
   @Public()
