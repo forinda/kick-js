@@ -7,6 +7,7 @@ import { RoutesTab } from './tabs/RoutesTab'
 import { MetricsTab } from './tabs/MetricsTab'
 import { ContainerTab } from './tabs/ContainerTab'
 import { QueuesTab } from './tabs/QueuesTab'
+import { GraphTab } from './tabs/GraphTab'
 import { CustomTab } from './tabs/CustomTab'
 import { rpc } from './lib/rpc'
 import { startUnifiedStream } from './lib/unified-stream'
@@ -21,6 +22,7 @@ type BuiltInTabId =
   | 'metrics'
   | 'container'
   | 'queues'
+  | 'graph'
 
 interface BuiltInTabSpec {
   id: BuiltInTabId
@@ -50,6 +52,11 @@ function builtInTabs(): readonly BuiltInTabSpec[] {
       id: 'queues',
       label: 'Queues',
       count: () => store.queues().queues.length || undefined,
+    },
+    {
+      id: 'graph',
+      label: 'Graph',
+      count: () => store.container().length || undefined,
     },
   ]
 }
@@ -175,6 +182,9 @@ export const App: Component = () => {
         </Show>
         <Show when={active() === 'queues'}>
           <QueuesTab />
+        </Show>
+        <Show when={active() === 'graph'}>
+          <GraphTab />
         </Show>
         <Show when={activeCustom()}>{(tab) => <CustomTab tab={tab()} />}</Show>
         <Show when={tabErrors().length > 0 && active() === 'runtime'}>
