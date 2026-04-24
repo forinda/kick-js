@@ -84,7 +84,10 @@ export const SwaggerAdapter = defineAdapter<SwaggerAdapterOptions>({
     return {
       onRouteMount(controllerClass, mountPath) {
         if (isDisabled()) return
-        registerControllerForDocs(controllerClass, mountPath)
+        // Pass `config` as the scope key so each SwaggerAdapter instance
+        // owns its own route bag — two bootstraps in one process can't
+        // cross-contaminate each other's specs.
+        registerControllerForDocs(controllerClass, mountPath, config)
       },
 
       afterStart({ server }) {
@@ -125,8 +128,9 @@ export const SwaggerAdapter = defineAdapter<SwaggerAdapterOptions>({
           log.info('Swagger disabled in production (disableInProd=true)')
           return
         }
-        // Clear previous registrations (supports HMR rebuild)
-        clearRegisteredRoutes()
+        // Clear previous registrations for THIS adapter (supports HMR
+        // rebuild). Sibling adapters' route bags stay untouched.
+        clearRegisteredRoutes(config)
         const docsPath = config.docsPath!
         const redocPath = config.redocPath!
         const specPath = config.specPath!

@@ -649,3 +649,61 @@ describe('buildOpenAPISpec — auth bridge (cross-package metadata)', () => {
   })
 })
 
+describe('registerControllerForDocs — per-scope isolation', () => {
+  beforeEach(() => {
+    Container.reset()
+    clearRegisteredRoutes()
+  })
+
+  it('two scoped registrations stay independent across spec builds', () => {
+    @Controller()
+    class TenantAController {
+      @Get('/a')
+      ha() {}
+    }
+    @Controller()
+    class TenantBController {
+      @Get('/b')
+      hb() {}
+    }
+
+    const optsA = { info: { title: 'Tenant A', version: '1' } }
+    const optsB = { info: { title: 'Tenant B', version: '1' } }
+
+    registerControllerForDocs(TenantAController, '/api', optsA)
+    registerControllerForDocs(TenantBController, '/api', optsB)
+
+    const specA = buildOpenAPISpec(optsA)
+    const specB = buildOpenAPISpec(optsB)
+
+    expect(specA.paths['/api/a']).toBeDefined()
+    expect(specA.paths['/api/b']).toBeUndefined()
+    expect(specB.paths['/api/b']).toBeDefined()
+    expect(specB.paths['/api/a']).toBeUndefined()
+  })
+
+  it('scoped clearRegisteredRoutes only flushes that scope', () => {
+    @Controller()
+    class KeepController {
+      @Get('/keep')
+      h() {}
+    }
+    @Controller()
+    class DropController {
+      @Get('/drop')
+      h() {}
+    }
+
+    const keepOpts = { info: { title: 'Keep', version: '1' } }
+    const dropOpts = { info: { title: 'Drop', version: '1' } }
+
+    registerControllerForDocs(KeepController, '/api', keepOpts)
+    registerControllerForDocs(DropController, '/api', dropOpts)
+
+    clearRegisteredRoutes(dropOpts)
+
+    expect(buildOpenAPISpec(keepOpts).paths['/api/keep']).toBeDefined()
+    expect(buildOpenAPISpec(dropOpts).paths['/api/drop']).toBeUndefined()
+  })
+})
+

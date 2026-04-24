@@ -74,7 +74,33 @@ interface RegisteredRoute {
   mountPath: string
 }
 
-const registeredRoutes: RegisteredRoute[] = []
+/**
+ * Default route bag used when callers don't pass a config-scoped key.
+ * Kept for back-compat with code that imports `registerControllerForDocs`
+ * directly without going through SwaggerAdapter — those callers see the
+ * legacy "global single list" behaviour.
+ */
+const DEFAULT_SCOPE = Symbol('kick:swagger:default-scope')
+
+/**
+ * Per-adapter route storage. The adapter's `build` closure passes its
+ * config object as the scope key so two SwaggerAdapter instances in
+ * the same process (test harnesses, multi-tenant pre-fork) keep
+ * independent route lists. Without this, two bootstraps in one process
+ * cross-contaminate each other's specs.
+ */
+const routesByScope = new Map<object | symbol, RegisteredRoute[]>()
+routesByScope.set(DEFAULT_SCOPE, [])
+
+function getScopeBag(scope: object | symbol | undefined): RegisteredRoute[] {
+  const key = scope ?? DEFAULT_SCOPE
+  let bag = routesByScope.get(key)
+  if (!bag) {
+    bag = []
+    routesByScope.set(key, bag)
+  }
+  return bag
+}
 
 /**
  * Memoised spec — built lazily on the first {@link buildOpenAPISpec}
@@ -95,20 +121,51 @@ const registeredRoutes: RegisteredRoute[] = []
 const specCache = new WeakMap<object, unknown>()
 const cacheKeys = new Set<object>()
 
-function invalidateSpecCache(): void {
+function invalidateSpecCache(scope?: object | symbol): void {
+  if (scope && typeof scope === 'object') {
+    // Targeted invalidation — only the spec keyed on this config is stale.
+    if (cacheKeys.has(scope)) {
+      specCache.delete(scope)
+      cacheKeys.delete(scope)
+    }
+    return
+  }
+  // Fallback: flush every cached spec (legacy untyped invalidation).
   for (const key of cacheKeys) specCache.delete(key)
   cacheKeys.clear()
 }
 
-/** Register a controller for OpenAPI introspection (called by Application during route mounting) */
-export function registerControllerForDocs(controllerClass: any, mountPath: string): void {
-  registeredRoutes.push({ controllerClass, mountPath })
-  invalidateSpecCache()
+/**
+ * Register a controller for OpenAPI introspection. Called by Application
+ * during route mounting via the adapter's onRouteMount hook.
+ *
+ * The optional `scope` argument keys the registration to a specific
+ * adapter instance — pass the adapter's own config object as the key
+ * (the SwaggerAdapter does this automatically). Omit for legacy
+ * single-list behaviour, which is fine for single-bootstrap apps.
+ */
+export function registerControllerForDocs(
+  controllerClass: any,
+  mountPath: string,
+  scope?: object,
+): void {
+  getScopeBag(scope).push({ controllerClass, mountPath })
+  invalidateSpecCache(scope)
 }
 
-/** Clear all registered routes (for HMR) */
-export function clearRegisteredRoutes(): void {
-  registeredRoutes.length = 0
+/**
+ * Clear registered routes — supports HMR rebuilds. Pass the adapter's
+ * config object to clear only that adapter's routes; omit to clear
+ * every scope (legacy/global behaviour).
+ */
+export function clearRegisteredRoutes(scope?: object): void {
+  if (scope && typeof scope === 'object') {
+    routesByScope.delete(scope)
+    invalidateSpecCache(scope)
+    return
+  }
+  routesByScope.clear()
+  routesByScope.set(DEFAULT_SCOPE, [])
   invalidateSpecCache()
 }
 
@@ -210,7 +267,17 @@ function buildOpenAPISpecUncached(options: SwaggerOptions = {}): any {
   const allTags = new Set<string>()
   const securitySchemes: Record<string, any> = {}
 
-  for (const { controllerClass, mountPath } of registeredRoutes) {
+  // Routes scoped to this adapter's config (when adapter passed itself
+  // as the scope) plus the legacy default-scope bag (for direct
+  // registerControllerForDocs callers without a scope arg).
+  const scopedRoutes = getScopeBag(options as object)
+  const defaultRoutes = options ? getScopeBag(DEFAULT_SCOPE) : []
+  const routesToWalk =
+    scopedRoutes.length > 0
+      ? scopedRoutes
+      : defaultRoutes /* fall back to legacy single-list when adapter didn't scope */
+
+  for (const { controllerClass, mountPath } of routesToWalk) {
     // Skip excluded controllers
     if (hasClassMeta(SWAGGER_KEYS.EXCLUDE, controllerClass)) continue
 
