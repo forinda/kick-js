@@ -5,14 +5,14 @@ import type { AiAdapterInstance, AiProvider, AiToolOptions } from './types'
 /**
  * Metadata key for the `@AiTool` decorator.
  *
- * Using `createToken` for metadata keys (rather than a raw `Symbol`)
- * gives a collision-safe, type-carrying identifier: the phantom type
- * parameter flows through `getMethodMetaOrUndefined` so consumers get
- * `AiToolOptions` back without a manual cast, and reference-equality
- * guarantees that two separate definitions can never shadow each other
- * even if the package is loaded more than once.
+ * Using `createToken` for metadata keys (rather than a raw `Symbol` or
+ * a bare string) gives a collision-safe, type-carrying identifier: the
+ * phantom type parameter flows through `getMethodMetaOrUndefined` so
+ * consumers get `AiToolOptions` back without a manual cast, and the
+ * reserved `kick/` prefix prevents two separate definitions from
+ * shadowing each other even if the package is loaded more than once.
  */
-export const AI_TOOL_METADATA = createToken<AiToolOptions>('kickjs.ai.tool')
+export const AI_TOOL_METADATA = createToken<AiToolOptions>('kick/ai/tool')
 
 /**
  * DI token for the active AI provider.
@@ -39,7 +39,7 @@ export const AI_TOOL_METADATA = createToken<AiToolOptions>('kickjs.ai.tool')
  * }
  * ```
  */
-export const AI_PROVIDER = createToken<AiProvider>('kickjs.ai.provider')
+export const AI_PROVIDER = createToken<AiProvider>('kick/ai/provider')
 
 /**
  * DI token for the AiAdapter instance — exposes the agent loop (`runAgent`,
@@ -66,7 +66,7 @@ export const AI_PROVIDER = createToken<AiProvider>('kickjs.ai.provider')
  * }
  * ```
  */
-export const AI_ADAPTER = createToken<AiAdapterInstance>('kickjs.ai.adapter')
+export const AI_ADAPTER = createToken<AiAdapterInstance>('kick/ai/adapter')
 
 /**
  * DI token for the active vector store backend.
@@ -100,4 +100,4 @@ export const AI_ADAPTER = createToken<AiAdapterInstance>('kickjs.ai.adapter')
  * })
  * ```
  */
-export const VECTOR_STORE = createToken<VectorStore>('kickjs.ai.vector_store')
+export const VECTOR_STORE = createToken<VectorStore>('kick/ai/vector-store')

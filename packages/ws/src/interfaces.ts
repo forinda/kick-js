@@ -4,9 +4,12 @@ import type { RoomManager } from './room-manager'
 
 type Constructor = new (...args: any[]) => any
 
+// String metadata keys (post-Symbol migration). Slash-delimited under
+// `kick/ws/` for consistency with other framework decorators and to keep
+// Reflect.metadata storage collision-safe.
 export const WS_METADATA = {
-  WS_CONTROLLER: Symbol('kick:ws:controller'),
-  WS_HANDLERS: Symbol('kick:ws:handlers'),
+  WS_CONTROLLER: 'kick/ws/controller',
+  WS_HANDLERS: 'kick/ws/handlers',
 } as const
 
 export type WsHandlerType = 'connect' | 'disconnect' | 'message' | 'error'

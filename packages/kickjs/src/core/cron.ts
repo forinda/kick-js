@@ -1,6 +1,8 @@
 import { pushClassMeta, getClassMeta } from './metadata'
 
-const CRON_META = Symbol('kick:cron')
+// String metadata key (post-Symbol migration). Slash-delimited
+// `kick/cron` so it can't collide with adopter metadata keys.
+const CRON_META = 'kick/cron'
 
 export interface CronJobMeta {
   expression: string

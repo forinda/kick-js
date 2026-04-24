@@ -1,6 +1,8 @@
 import 'reflect-metadata'
 
-const CACHEABLE_META = Symbol('kick:cacheable')
+// String metadata key (post-Symbol migration). Slash-delimited
+// `kick/cacheable` so it can't collide with adopter metadata keys.
+const CACHEABLE_META = 'kick/cacheable'
 
 // ── CacheProvider Interface ─────────────────────────────────────────────
 

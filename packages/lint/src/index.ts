@@ -23,6 +23,10 @@ export { diTokenSymbol, tokenKickPrefix, tokenReservedPrefix, rules as defaultRu
  * Filenames that historically declare DI tokens. Lint runs only on
  * these to keep false positives out of unrelated files (e.g. a class
  * named `Symbol` in a math library).
+ *
+ * `database.ts`, `interfaces.ts`, `client.ts` were added after a
+ * regression where `TENANT_DB = Symbol(...)` slipped past the rule by
+ * living in `database.ts` rather than `tokens.ts` / `constants.ts`.
  */
 export const TOKEN_FILE_NAMES = new Set([
   'types.ts',
@@ -30,6 +34,9 @@ export const TOKEN_FILE_NAMES = new Set([
   'constants.ts',
   'service.ts',
   'adapter.ts',
+  'database.ts',
+  'interfaces.ts',
+  'client.ts',
 ])
 
 /** Directories the walker skips wholesale. */

@@ -1,11 +1,14 @@
 import { setClassMeta, pushClassMeta, pushMethodMeta } from '@forinda/kickjs'
 
-const RESOLVER_META = Symbol('gql:resolver')
-const QUERY_META = Symbol('gql:query')
-const MUTATION_META = Symbol('gql:mutation')
-const SUBSCRIPTION_META = Symbol('gql:subscription')
-const FIELD_META = Symbol('gql:field')
-const ARG_META = Symbol('gql:arg')
+// String keys (post-Symbol migration). Namespaced under `kick/graphql/` so
+// they can never collide with adopter metadata keys or other framework
+// packages reusing the same Reflect.metadata storage on a target.
+const RESOLVER_META = 'kick/graphql/resolver'
+const QUERY_META = 'kick/graphql/query'
+const MUTATION_META = 'kick/graphql/mutation'
+const SUBSCRIPTION_META = 'kick/graphql/subscription'
+const FIELD_META = 'kick/graphql/field'
+const ARG_META = 'kick/graphql/arg'
 
 export interface ResolverMeta {
   typeName?: string

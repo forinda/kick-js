@@ -52,10 +52,14 @@ export interface QueueProvider {
   shutdown(): Promise<void>
 }
 
-/** Metadata keys for queue decorators */
+/**
+ * Metadata keys for queue decorators (post-Symbol migration). Namespaced
+ * under `kick/queue/` so they can't collide with adopter metadata keys
+ * or other framework packages writing to the same Reflect storage.
+ */
 export const QUEUE_METADATA = {
-  JOB: Symbol('queue:job'),
-  PROCESS: Symbol('queue:process'),
+  JOB: 'kick/queue/job',
+  PROCESS: 'kick/queue/process',
 } as const
 
 /** Metadata stored by @Process decorator */

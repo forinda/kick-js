@@ -7,6 +7,8 @@
  * - `discriminator` — shared tables with a tenant_id column
  */
 
+import { createToken } from '@forinda/kickjs'
+
 export interface DatabaseConnectionInfo {
   host: string
   port?: number
@@ -43,5 +45,18 @@ export interface DiscriminatorConfig {
 
 export type TenantDatabase = DatabasePerTenantConfig | SchemaPerTenantConfig | DiscriminatorConfig
 
-/** DI token for the current tenant's database connection */
-export const TENANT_DB = Symbol('TenantDB')
+/**
+ * DI token for the current tenant's database connection.
+ *
+ * Typed as `unknown` because the concrete database type depends on the
+ * adopter's ORM (Drizzle, Prisma, raw client, …); cast at the use site:
+ *
+ * @example
+ * ```ts
+ * @Service()
+ * class UserRepo {
+ *   constructor(@Inject(TENANT_DB) private db: NodePgDatabase<typeof schema>) {}
+ * }
+ * ```
+ */
+export const TENANT_DB = createToken<unknown>('kick/multi-tenant/db')
