@@ -762,6 +762,24 @@ describe('registerControllerForDocs — per-scope isolation', () => {
     expect(schemas.Body).not.toEqual(schemas.Body_2)
   })
 
+  it('path-param regex captures digits-after-first-char identifiers', () => {
+    @Controller()
+    class V2Controller {
+      @Get('/users/:userId/posts/:v2post')
+      h() {}
+    }
+    registerControllerForDocs(V2Controller, '/api')
+    const spec = buildOpenAPISpec()
+
+    // Both `:userId` AND `:v2post` (digit in the middle) become path
+    // parameters in the OpenAPI spec. The legacy `[a-zA-Z_]+` regex
+    // dropped the digit-bearing one silently.
+    expect(spec.paths['/api/users/{userId}/posts/{v2post}']?.get).toBeDefined()
+    const params = spec.paths['/api/users/{userId}/posts/{v2post}'].get.parameters
+    expect(params.find((p: any) => p.name === 'userId')).toBeDefined()
+    expect(params.find((p: any) => p.name === 'v2post')).toBeDefined()
+  })
+
   it('two registrations of structurally-identical DTOs collapse to one entry', () => {
     @Controller()
     class IdenticalController {

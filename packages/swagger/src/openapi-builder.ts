@@ -1,4 +1,5 @@
 import {
+  Logger,
   METADATA,
   joinPaths,
   type RouteDefinition,
@@ -10,6 +11,27 @@ import {
 } from '@forinda/kickjs'
 import { SWAGGER_KEYS, type ApiOperationOptions, type ApiResponseOptions } from './decorators'
 import { zodSchemaParser, type SchemaParser } from './schema-parser'
+
+const log = Logger.for('SwaggerSpec')
+
+/** HTTP methods that DO carry a request body in OpenAPI 3. */
+const BODY_METHODS = new Set(['post', 'put', 'patch'])
+
+/**
+ * One-time warning per (controller, handler) pair so a single
+ * misconfigured route doesn't spam the boot log on every spec rebuild.
+ */
+const warnedBodyOnReadMethod = new Set<string>()
+
+/**
+ * Express path-to-regexp param-name rule:
+ * `[A-Za-z_][A-Za-z0-9_]*` (identifier-like; digits allowed after the
+ * first char). Used in both directions — discovering params via
+ * `match` and rewriting Express's `:name` to OpenAPI's `{name}` via
+ * `replace`. Hyphens are NOT included because path-to-regexp uses
+ * them as separators in patterns like `/:foo-:bar`.
+ */
+const EXPRESS_PARAM_RE = /:([A-Za-z_][A-Za-z0-9_]*)/g
 
 // ── Auth metadata bridge ──────────────────────────────────────────────
 // Check @forinda/kickjs-auth decorators without importing the auth
@@ -317,7 +339,7 @@ function buildOpenAPISpecUncached(options: SwaggerOptions = {}): any {
         // emit may still be undefined here.
         let openApiPath: string
         try {
-          openApiPath = joinPaths(mountPath, route.path).replace(/:([a-zA-Z_]+)/g, '{$1}')
+          openApiPath = joinPaths(mountPath, route.path).replace(EXPRESS_PARAM_RE, '{$1}')
         } catch {
           openApiPath = `${mountPath}/__spec_error__`
         }
@@ -343,8 +365,13 @@ function buildOpenAPISpecUncached(options: SwaggerOptions = {}): any {
       // because buildRoutes does not bake it into the router.
       const fullPath = joinPaths(mountPath, route.path)
 
-      // Convert Express :param to OpenAPI {param}
-      const openApiPath = fullPath.replace(/:([a-zA-Z_]+)/g, '{$1}')
+      // Convert Express :param to OpenAPI {param}. Express's
+      // path-to-regexp param-name rule is `[A-Za-z_][A-Za-z0-9_]*` —
+      // identifier-like, digits allowed after the first char. The
+      // previous regex (`[a-zA-Z_]+`) silently dropped digits, so
+      // `:v2endpoint` became `:v` + literal `2endpoint` and the
+      // generated docs missed the path-param entry entirely.
+      const openApiPath = fullPath.replace(EXPRESS_PARAM_RE, '{$1}')
       const method = route.method.toLowerCase()
 
       // Gather metadata
@@ -390,7 +417,7 @@ function buildOpenAPISpecUncached(options: SwaggerOptions = {}): any {
       const parameters: any[] = []
 
       // Path parameters
-      const paramMatches = fullPath.match(/:([a-zA-Z_]+)/g) || []
+      const paramMatches = fullPath.match(EXPRESS_PARAM_RE) || []
       for (const match of paramMatches) {
         const paramName = match.slice(1)
         let schema: any = { type: 'string' }
@@ -486,14 +513,29 @@ function buildOpenAPISpecUncached(options: SwaggerOptions = {}): any {
       if (parameters.length > 0) op.parameters = parameters
 
       // Request body
-      if (route.validation?.body && ['post', 'put', 'patch'].includes(method)) {
-        const bodySchema = toJsonSchema(route.validation.body)
-        if (bodySchema) {
-          const bodyName = route.validation.name || `${route.handlerName}Body`
-          const ref = registerSchema(bodySchema, bodyName)
-          op.requestBody = {
-            required: true,
-            content: { 'application/json': { schema: ref } },
+      if (route.validation?.body) {
+        if (BODY_METHODS.has(method)) {
+          const bodySchema = toJsonSchema(route.validation.body)
+          if (bodySchema) {
+            const bodyName = route.validation.name || `${route.handlerName}Body`
+            const ref = registerSchema(bodySchema, bodyName)
+            op.requestBody = {
+              required: true,
+              content: { 'application/json': { schema: ref } },
+            }
+          }
+        } else {
+          // Body validation on a method that OpenAPI 3 doesn't allow a
+          // body for (GET / HEAD / DELETE / OPTIONS). Silently dropping
+          // surprised adopters whose request schema vanished from docs;
+          // warn once per route so they can switch to query validation
+          // or rethink the route shape.
+          const warnKey = `${controllerClass.name}.${route.handlerName}`
+          if (!warnedBodyOnReadMethod.has(warnKey)) {
+            warnedBodyOnReadMethod.add(warnKey)
+            log.warn(
+              `body validation on ${method.toUpperCase()} ${fullPath} (${warnKey}) is dropped from the OpenAPI spec — OpenAPI 3 does not allow a request body on ${method.toUpperCase()}. Move the schema to validation.query or change the route method.`,
+            )
           }
         }
       }
@@ -533,26 +575,19 @@ function buildOpenAPISpecUncached(options: SwaggerOptions = {}): any {
       // Responses
       if (responses.length > 0) {
         for (const resp of responses) {
-          op.responses[String(resp.status)] = {
-            description: resp.description || '',
-            ...(resp.schema
-              ? (() => {
-                  const converted =
-                    typeof resp.schema === 'function' || typeof resp.schema === 'object'
-                      ? toJsonSchema(resp.schema)
-                      : null
-                  const schemaName = resp.name || `${route.handlerName}Response${resp.status}`
-                  const finalSchema = converted
-                    ? registerSchema(converted, schemaName)
-                    : typeof resp.schema === 'object'
-                      ? resp.schema
-                      : undefined
-                  return finalSchema
-                    ? { content: { 'application/json': { schema: finalSchema } } }
-                    : {}
-                })()
-              : {}),
+          const entry: Record<string, unknown> = { description: resp.description || '' }
+          if (resp.schema && typeof resp.schema === 'object') {
+            // Try the validation parser first (Zod / Yup / etc.). If
+            // that returns null the schema is plain JSON Schema and we
+            // pass it through as-is — that's the escape hatch for
+            // adopters who hand-write OpenAPI shapes without going
+            // through the schema-parser layer.
+            const converted = toJsonSchema(resp.schema)
+            const schemaName = resp.name || `${route.handlerName}Response${resp.status}`
+            const finalSchema = converted ? registerSchema(converted, schemaName) : resp.schema
+            entry.content = { 'application/json': { schema: finalSchema } }
           }
+          op.responses[String(resp.status)] = entry
         }
       } else {
         // Auto-generate default responses
