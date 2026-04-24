@@ -21,7 +21,7 @@ KickJS integrates with external services through **adapters** and **middleware**
 
 ## Email
 
-- [Mailer](../../api/mailer.md) — SMTP, Resend, SES via `@forinda/kickjs-mailer`
+- [Mailers](../mailer.md) — BYO recipe wrapping nodemailer, Resend, or SES with `definePlugin`
 
 ## Message Queues
 
@@ -33,7 +33,23 @@ KickJS integrates with external services through **adapters** and **middleware**
 
 ## Observability
 
-- [OpenTelemetry](../../api/otel.md) — Traces and metrics via `@forinda/kickjs-otel`
+- [OpenTelemetry](../otel.md) — BYO recipe wrapping `@opentelemetry/sdk-node` with `defineAdapter`
+
+## Scheduled Tasks
+
+- [Cron](../cron.md) — BYO recipe wrapping `croner` (or `node-cron`) with `defineAdapter`
+
+## Multi-tenancy
+
+- [Multi-tenancy](../multi-tenancy.md) — BYO recipe using `defineHttpContextDecorator` + `getRequestValue`
+
+## Notifications
+
+- [Notifications](../notifications.md) — BYO recipe defining a `Notifier` interface bound via `definePlugin`
+
+## GraphQL
+
+- [GraphQL](../graphql.md) — BYO recipe wrapping `graphql-http` / Yoga / Apollo / Pothos with `definePlugin`
 
 ## Integration Pattern
 

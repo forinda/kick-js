@@ -14,7 +14,9 @@
   <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen" alt="node version" /></a>
 </p>
 
-NestJS ergonomics without the complexity — decorators, DI, module system, and code generators, powered by Zod and Vite.
+NestJS ergonomics without the complexity — decorators, DI, module system, code generators, and end-to-end type safety, powered by Zod and Vite.
+
+> **Heads-up — v4.2.0 just shipped.** Six wrappers (`graphql`, `otel`, `cron`, `mailer`, `multi-tenant`, `notifications`) are now flagged for removal in **v5.0.0**. Each is replaced by a 100-LOC BYO recipe that uses the framework's own primitives. See [Migration v4 → v5 guide](https://forinda.github.io/kick-js/guide/migration-v3-to-v4#dropped-packages-bring-your-own-via-defineadapter-defineplugin) for the cutover; [comparison.md](comparison.md) for why this is the strategic shape.
 
 ## Install
 
@@ -112,16 +114,20 @@ export const app = await bootstrap({ modules })
 
 ## Highlights
 
-- **Custom DI container** — constructor and property injection, no external dependency
-- **Decorator-driven** — `@Controller`, `@Get`, `@Post`, `@Service`, `@Autowired`, `@Middleware`
+- **Factory-first extensibility** — `defineAdapter()` / `definePlugin()` / `defineHttpContextDecorator()` are the entire extension surface; no class hierarchies to inherit from
+- **Custom DI container** — constructor and property injection, slash-delimited tokens (`createToken<T>('app/users/repository')`), three scopes (singleton / transient / request), no external dependency
+- **Typed Context Contributors** — `defineHttpContextDecorator()` populates `ctx.set('key', value)` once per request; `dependsOn` is typed against `keyof ContextMeta` (typos are TS errors, not boot-time `MissingContributorError`); same registration runs across HTTP / WS / queue / cron
+- **End-to-end type safety via typegen** — `kick typegen` (auto on `kick dev`) emits `KickRoutes`, `KickJsPluginRegistry`, `KickAssets`, `KickEnv` augmentations from source scan; `ctx.params/body/query`, `@Inject` literals, and asset paths all narrow as you save
+- **Decorator-driven** — `@Controller`, `@Get`/`@Post`/`@Put`/`@Delete`/`@Patch`, `@Service`, `@Autowired`, `@Middleware`, `@Roles`, `@Public`, `@Cacheable`
 - **Zod-native validation** — schemas double as OpenAPI documentation
-- **Vite HMR** — zero-downtime hot reload, preserves DB/Redis/Socket connections
-- **DDD generators** — `kick g module users` scaffolds 18 files in 2 seconds
-- **Auto OpenAPI** — Swagger UI and ReDoc from decorators + Zod schemas
-- **Built-in middleware** — helmet, CORS, CSRF, rate limiting, file uploads, request logging
-- **Typed adapters** — `AdapterContext` with `Express`, `http.Server`, `env`, `isProduction`
-- **Pluggable** — adapters for database, auth, cache, swagger, queues, WebSocket, cron
-- **Extensible CLI** — custom commands in `kick.config.ts`
+- **Vite HMR** — single-port dev server, zero-downtime hot reload, preserves DB/Redis/Socket connections, customizable HMR log
+- **DDD generators** — `kick g module users` scaffolds 18 files in 2 seconds; `kick g adapter` / `kick g plugin` emit the full hook surface so you delete what you don't need
+- **`kick g agents`** — regenerates `AGENTS.md` / `CLAUDE.md` / `kickjs-skills.md` in every project; one CLI command keeps every AI coding agent in sync with the latest framework conventions
+- **Auto OpenAPI** — Swagger UI and ReDoc from decorators + Zod schemas; pluggable schema parser + UI renderer for adopters who want corporate branding
+- **Built-in middleware** — helmet, CORS, CSRF, rate limiting, file uploads, request logging, request scope (AsyncLocalStorage)
+- **Cooperative shutdown** — `bootstrap({ processHooks: 'errors-only' })` lets observability SDKs (OpenTelemetry, Sentry) own SIGTERM without racing the framework; `Promise.allSettled` for adapter shutdown so one slow flush can't block siblings
+- **DevTools dashboard** — `/_debug` browser panel with topology, container, routes, metrics; adapter authors expose state via `introspect()` + `devtoolsTabs()` from `@forinda/kickjs-devtools-kit`
+- **Extensible CLI** — custom commands in `kick.config.ts`, plugin generators discovered from `node_modules`
 
 ## Ecosystem
 
@@ -191,8 +197,8 @@ These packages are still installable in v4.1.x and emit deprecation notices. The
    ```
 
    Available flags:
-   - `--template <type>` — `rest | graphql | ddd | cqrs | minimal`
-   - `--pm <manager>` — `pnpm | npm | yarn`
+   - `--template <type>` — `rest | ddd | cqrs | minimal`
+   - `--pm <manager>` — `pnpm | npm | yarn | bun`
    - `--repo <type>` — `prisma | drizzle | inmemory | custom`
    - `--no-git` — skip git init (use repo root's git)
    - `--no-install` — skip install (run `pnpm install` from root instead)
@@ -218,13 +224,34 @@ These packages are still installable in v4.1.x and emit deprecation notices. The
 ## CLI
 
 ```bash
-kick new my-api              # Scaffold project
-kick dev                     # Vite HMR dev server (~200ms reload)
-kick build                   # Production build
-kick start                   # Run production
-kick g module users          # Generate DDD module (18 files)
-kick g module users --repo prisma   # With Prisma repository
-kick g module users --repo drizzle  # With Drizzle repository
+# Project lifecycle
+kick new my-api                      # Scaffold project (rest | ddd | cqrs | minimal)
+kick dev                             # Vite HMR dev server (~200ms reload)
+kick build && kick start             # Production build + run
+
+# Code generation
+kick g module users                  # Full DDD module (18 files)
+kick g module users --repo prisma    # …with a Prisma repository
+kick g module users --repo drizzle   # …with a Drizzle repository
+kick g scaffold post title:string body:text:optional  # CRUD from field defs
+kick g controller auth               # Single @Controller class
+kick g service payment               # Single @Service class
+kick g adapter websocket             # AppAdapter — every hook stubbed + JSDoc
+kick g plugin analytics              # KickPlugin — every hook stubbed + JSDoc
+kick g resolver / job / dto / guard / middleware / test  # one-file scaffolds
+
+# AI agent docs (regenerate from upstream templates after framework upgrades)
+kick g agents                        # Refresh AGENTS.md / CLAUDE.md / kickjs-skills.md
+kick g agents --only skills -f       # Just the skills file
+
+# Package management
+kick add auth swagger drizzle        # Install KickJS packages with peer deps
+kick add --list                      # Show all available packages (deprecated ones are flagged)
+
+# Introspection
+kick info                            # System + framework version
+kick inspect                         # Inspect a running KickJS app
+kick tinker                          # Interactive REPL with full DI graph
 ```
 
 ## Technical Decisions

@@ -14,7 +14,7 @@ Production-shaped DDD apps with 14 modules, JWT auth, real-time WebSocket, BullM
 
 ## Multi-Tenant Apps
 
-Demonstrate the `@forinda/kickjs-multi-tenant` resolution + per-tenant connection caching pattern.
+Demonstrate the BYO multi-tenancy resolution + per-tenant connection caching pattern. See the [Multi-tenancy with KickJS](../guide/multi-tenancy.md) guide for the underlying recipe.
 
 | App | Database | ORM |
 |---|---|---|

@@ -1,5 +1,5 @@
 import { Service, Autowired, Logger } from '@forinda/kickjs';
-import { Cron } from '@forinda/kickjs-cron';
+import { Cron } from '../../cron.decorator';
 import { TOKENS } from '@/shared/constants/tokens';
 import type { IRefreshTokenRepository } from '@/modules/auth/domain/repositories/refresh-token.repository';
 

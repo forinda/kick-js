@@ -2,14 +2,11 @@ import { DevToolsAdapter } from '@forinda/kickjs-devtools';
 import { SwaggerAdapter } from '@forinda/kickjs-swagger';
 import { AuthAdapter, JwtStrategy } from '@forinda/kickjs-auth';
 import { WsAdapter } from '@forinda/kickjs-ws';
-import { MailerAdapter } from '@forinda/kickjs-mailer';
 import { QueueAdapter } from '@forinda/kickjs-queue';
-import { CronAdapter } from '@forinda/kickjs-cron';
+import { CronAdapter } from '@/modules/cron/cron.adapter';
 import { env } from './env';
 import { MongooseAdapter } from '@/shared/infrastructure/database/mongoose.adapter';
 import { RedisAdapter } from '@/shared/infrastructure/redis/redis.config';
-import { ConsoleProvider } from '@forinda/kickjs-mailer';
-import { ResendMailProvider } from '@/shared/infrastructure/mail/resend.provider';
 import { TaskCronJobs } from '@/modules/cron/infrastructure/jobs/overdue-reminders.cron';
 import { DigestCronJobs } from '@/modules/cron/infrastructure/jobs/daily-digest.cron';
 import { CleanupCronJobs } from '@/modules/cron/infrastructure/jobs/token-cleanup.cron';
@@ -51,12 +48,6 @@ export const adapters = [
     defaultPolicy: 'protected',
   }),
   wsAdapter,
-  MailerAdapter({
-    provider: env.NODE_ENV === 'production'
-      ? new ResendMailProvider(env.RESEND_API_KEY)
-      : new ConsoleProvider(),
-    defaultFrom: { name: env.MAIL_FROM_NAME, address: env.MAIL_FROM_EMAIL },
-  }),
   queueAdapter,
   CronAdapter({
     services: [TaskCronJobs, DigestCronJobs, CleanupCronJobs, PresenceCronJobs, HealthCheckCronJobs],

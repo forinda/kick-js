@@ -4,6 +4,10 @@
 
 ---
 
+::: warning Tutorial uses dropped-in-v5 packages
+This tutorial uses `@forinda/kickjs-mailer` and `@forinda/kickjs-cron`, which are deprecated in v4 and dropped in v5. The job queue and dispatch patterns shown still apply unchanged. Replace the mailer/cron pieces with the BYO recipes in [Mailers with KickJS](./mailer.md) and [Scheduled tasks with KickJS](./cron.md) — the queue producer/consumer code reads identically against the BYO factories.
+:::
+
 Vibed sends emails, creates notification records, logs activity, and runs scheduled cleanup — all outside the HTTP request cycle. This article covers how we structured background jobs with BullMQ and scheduled tasks with cron, and the patterns that keep them maintainable.
 
 ## Why Background Jobs?

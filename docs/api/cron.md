@@ -2,6 +2,10 @@
 
 Production-grade cron job scheduling with pluggable backends.
 
+::: danger Deprecated — dropped in v5
+This package is deprecated and will be removed in v5. New projects should use the BYO recipe in [Scheduled tasks with KickJS](../guide/cron.md), which wraps `croner` (or `node-cron`, or raw `setInterval`) with a `defineAdapter()` that reads `@Cron` decorator metadata via `Reflect`. The API below documents v4.2.0 behaviour for adopters mid-migration.
+:::
+
 ## @Cron
 
 ```typescript

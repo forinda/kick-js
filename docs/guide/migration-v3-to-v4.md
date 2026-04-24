@@ -36,12 +36,14 @@ Architecture-doc rationale lives in [§22 of `architecture.md`](https://github.c
 
 ```bash
 pnpm up @forinda/kickjs@^4 @forinda/kickjs-auth@^4 @forinda/kickjs-prisma@^4 \
-        @forinda/kickjs-drizzle@^4 @forinda/kickjs-multi-tenant@^4 \
-        @forinda/kickjs-queue@^4 @forinda/kickjs-mailer@^4 \
-        @forinda/kickjs-notifications@^4
+        @forinda/kickjs-drizzle@^4 @forinda/kickjs-queue@^4
 ```
 
 (Adjust the package list to whatever your project actually uses.)
+
+::: warning v3-only packages
+`@forinda/kickjs-graphql`, `@forinda/kickjs-otel`, `@forinda/kickjs-cron`, `@forinda/kickjs-mailer`, `@forinda/kickjs-multi-tenant`, and `@forinda/kickjs-notifications` are **dropped in v4** — see the [Dropped packages](#dropped-packages-bring-your-own-via-defineadapter-defineplugin) table below for BYO replacements. They still publish a final v4 release for migration timing, but new projects should use the BYO recipe instead.
+:::
 
 ## Step 2 — rebuild + run typegen
 

@@ -2,6 +2,10 @@
 
 OpenTelemetry adapter for KickJS — automatic HTTP tracing and request metrics.
 
+::: danger Deprecated — dropped in v5
+This package is deprecated and will be removed in v5. New projects should use the BYO recipe in [OpenTelemetry with KickJS](../guide/otel.md), which wraps `@opentelemetry/sdk-node` with a `defineAdapter()` factory and gives you full control over the SDK lifecycle. The API below documents v4.2.0 behaviour for adopters mid-migration.
+:::
+
 ## Installation
 
 ```bash

@@ -16,9 +16,7 @@
   },
   "dependencies": {
     "@forinda/kickjs-auth": "workspace:*",
-    "@forinda/kickjs-cron": "workspace:*",
     "@forinda/kickjs-devtools": "workspace:*",
-    "@forinda/kickjs-mailer": "workspace:*",
     "@forinda/kickjs-queue": "workspace:*",
     "@forinda/kickjs-swagger": "workspace:*",
     "@forinda/kickjs-ws": "workspace:*",

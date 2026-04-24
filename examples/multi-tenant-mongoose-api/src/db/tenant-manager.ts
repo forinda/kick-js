@@ -33,7 +33,7 @@ export class TenantConnectionManager<TDb> {
       this.connections.set(key, db)
     }
 
-    return this.connections.get(key)
+    return this.connections.get(key)!
   }
 
   async closeAll(closeFn: (db: TDb) => Promise<void>): Promise<void> {

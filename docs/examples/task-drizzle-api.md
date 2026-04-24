@@ -37,8 +37,8 @@ kick dev
 | `@forinda/kickjs-devtools` | Debug dashboard |
 | `@forinda/kickjs-drizzle` | Drizzle adapter, DI integration |
 | `@forinda/kickjs-queue` | BullMQ job processing |
-| `@forinda/kickjs-cron` | Scheduled tasks |
-| `@forinda/kickjs-mailer` | Email transport |
+| BYO cron via `defineAdapter` + `croner` | Scheduled tasks — see [Cron guide](../guide/cron.md) |
+| BYO mailer via `definePlugin` + nodemailer/Resend | Email transport — see [Mailer guide](../guide/mailer.md) |
 | `@forinda/kickjs-ws` | WebSocket adapter |
 
 ## Project Structure

@@ -14,7 +14,7 @@ export function generateReadme(name: string, template: ProjectTemplate, pm: stri
     packages.push('@forinda/kickjs-swagger', '@forinda/kickjs-devtools')
   }
   if (template === 'cqrs') {
-    packages.push('@forinda/kickjs-queue', '@forinda/kickjs-ws', '@forinda/kickjs-otel')
+    packages.push('@forinda/kickjs-queue', '@forinda/kickjs-ws')
   }
 
   return `# ${name}
@@ -61,10 +61,10 @@ kick add auth          # Authentication (JWT, API key, OAuth)
 kick add swagger       # OpenAPI documentation
 kick add ws            # WebSocket support
 kick add queue         # Background job processing
-kick add mailer        # Email sending
-kick add cron          # Scheduled tasks
 kick add --list        # Show all available packages
 \`\`\`
+
+For email, scheduled tasks, multi-tenancy, OpenTelemetry, GraphQL, and notifications use the BYO recipes in the [KickJS guides](https://forinda.github.io/kick-js/guide/) — they wire the upstream library through \`defineAdapter()\` / \`definePlugin()\` directly, so you keep control of the integration.
 
 ## Environment Variables
 

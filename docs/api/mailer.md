@@ -2,6 +2,10 @@
 
 Pluggable email sending with template support.
 
+::: danger Deprecated — dropped in v5
+This package is deprecated and will be removed in v5. New projects should use the BYO recipe in [Mailers with KickJS](../guide/mailer.md), which wires nodemailer / Resend / SES directly via a `definePlugin()` factory. The API below documents v4.2.0 behaviour for adopters mid-migration.
+:::
+
 ## MailProvider
 
 ```typescript

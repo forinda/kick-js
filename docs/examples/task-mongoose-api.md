@@ -36,8 +36,8 @@ No migrations needed — Mongoose creates collections automatically.
 | `@forinda/kickjs-devtools` | Debug dashboard |
 | `@forinda/kickjs-auth` | JWT auth with `@Public()` decorator |
 | `@forinda/kickjs-queue` | BullMQ job processing |
-| `@forinda/kickjs-cron` | Scheduled tasks |
-| `@forinda/kickjs-mailer` | Email transport (Console or Resend) |
+| BYO cron via `defineAdapter` + `croner` | Scheduled tasks — see [Cron guide](../guide/cron.md) |
+| BYO mailer via `definePlugin` + nodemailer/Resend | Email transport — see [Mailer guide](../guide/mailer.md) |
 | `@forinda/kickjs-ws` | WebSocket adapter |
 
 ## Project Structure

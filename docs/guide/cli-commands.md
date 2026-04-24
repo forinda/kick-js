@@ -112,9 +112,9 @@ When run without flags, the CLI prompts for:
 | Template | Adapters | Packages installed |
 |----------|----------|-------------------|
 | `rest` (default) | Swagger + DevTools | kickjs, kickjs-vite, kickjs-swagger |
-| `graphql` | GraphQLAdapter + DevTools | kickjs, kickjs-vite, kickjs-graphql |
+| `graphql` | GraphQL via BYO `definePlugin` recipe (see [GraphQL guide](./graphql.md)) | kickjs, kickjs-vite |
 | `ddd` | Swagger + DevTools | kickjs, kickjs-vite, kickjs-swagger |
-| `cqrs` | Swagger + OTel + WS + DevTools | kickjs, kickjs-vite, kickjs-swagger, kickjs-otel, kickjs-ws, kickjs-queue |
+| `cqrs` | Swagger + WS + Queue + DevTools | kickjs, kickjs-vite, kickjs-swagger, kickjs-ws, kickjs-queue |
 | `minimal` | None | kickjs, kickjs-vite |
 
 Use `.` as the project name to scaffold in the current directory (the folder name becomes the project name).
@@ -244,8 +244,8 @@ Output shows each package name, description, and required peer dependencies:
 Add KickJS packages with their required peer dependencies automatically resolved.
 
 ```bash
-kick add graphql          # installs @forinda/kickjs-graphql + graphql
-kick add drizzle otel     # installs multiple packages at once
+kick add swagger          # installs @forinda/kickjs-swagger
+kick add drizzle auth     # installs multiple packages at once
 kick add queue:bullmq     # installs queue package + bullmq + ioredis
 kick add --list           # show all available packages (same as kick list)
 ```

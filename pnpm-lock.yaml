@@ -145,9 +145,6 @@ importers:
       '@forinda/kickjs-auth':
         specifier: workspace:*
         version: link:../../packages/auth
-      '@forinda/kickjs-multi-tenant':
-        specifier: workspace:*
-        version: link:../../packages/multi-tenant
       dotenv:
         specifier: ^17.3.1
         version: 17.3.1
@@ -206,9 +203,6 @@ importers:
       '@forinda/kickjs-auth':
         specifier: workspace:*
         version: link:../../packages/auth
-      '@forinda/kickjs-multi-tenant':
-        specifier: workspace:*
-        version: link:../../packages/multi-tenant
       dotenv:
         specifier: ^17.3.1
         version: 17.3.1
@@ -267,9 +261,6 @@ importers:
       '@forinda/kickjs-auth':
         specifier: workspace:*
         version: link:../../packages/auth
-      '@forinda/kickjs-multi-tenant':
-        specifier: workspace:*
-        version: link:../../packages/multi-tenant
       dotenv:
         specifier: ^17.3.1
         version: 17.3.1
@@ -325,18 +316,12 @@ importers:
       '@forinda/kickjs':
         specifier: workspace:*
         version: link:../../packages/kickjs
-      '@forinda/kickjs-cron':
-        specifier: workspace:*
-        version: link:../../packages/cron
       '@forinda/kickjs-devtools':
         specifier: workspace:*
         version: link:../../packages/devtools
       '@forinda/kickjs-drizzle':
         specifier: workspace:*
         version: link:../../packages/drizzle
-      '@forinda/kickjs-mailer':
-        specifier: workspace:*
-        version: link:../../packages/mailer
       '@forinda/kickjs-queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -352,6 +337,9 @@ importers:
       bullmq:
         specifier: ^5.71.1
         version: 5.71.1
+      croner:
+        specifier: ^10.0.1
+        version: 10.0.1
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(@electric-sql/pglite@0.3.15)(@opentelemetry/api@1.9.1)(@prisma/client@7.5.0(prisma@7.5.0(@types/react@19.2.14)(better-sqlite3@11.10.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3))(typescript@6.0.3))(@types/better-sqlite3@7.6.13)(@types/pg@8.20.0)(better-sqlite3@11.10.0)(mysql2@3.15.3)(pg@8.20.0)(postgres@3.4.8)(prisma@7.5.0(@types/react@19.2.14)(better-sqlite3@11.10.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3))
@@ -364,6 +352,9 @@ importers:
       jsonwebtoken:
         specifier: ^9.0.3
         version: 9.0.3
+      nodemailer:
+        specifier: ^8.0.4
+        version: 8.0.4
       pino:
         specifier: ^10.3.1
         version: 10.3.1
@@ -404,6 +395,9 @@ importers:
       '@types/node':
         specifier: ^25.6.0
         version: 25.6.0
+      '@types/nodemailer':
+        specifier: ^7.0.11
+        version: 7.0.11
       '@types/supertest':
         specifier: ^7.2.0
         version: 7.2.0
@@ -437,15 +431,9 @@ importers:
       '@forinda/kickjs-auth':
         specifier: workspace:*
         version: link:../../packages/auth
-      '@forinda/kickjs-cron':
-        specifier: workspace:*
-        version: link:../../packages/cron
       '@forinda/kickjs-devtools':
         specifier: workspace:*
         version: link:../../packages/devtools
-      '@forinda/kickjs-mailer':
-        specifier: workspace:*
-        version: link:../../packages/mailer
       '@forinda/kickjs-queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -564,15 +552,9 @@ importers:
       '@forinda/kickjs':
         specifier: workspace:*
         version: link:../../packages/kickjs
-      '@forinda/kickjs-cron':
-        specifier: workspace:*
-        version: link:../../packages/cron
       '@forinda/kickjs-devtools':
         specifier: workspace:*
         version: link:../../packages/devtools
-      '@forinda/kickjs-mailer':
-        specifier: workspace:*
-        version: link:../../packages/mailer
       '@forinda/kickjs-prisma':
         specifier: workspace:*
         version: link:../../packages/prisma
@@ -597,6 +579,9 @@ importers:
       bullmq:
         specifier: ^5.71.1
         version: 5.71.1
+      croner:
+        specifier: ^10.0.1
+        version: 10.0.1
       dotenv:
         specifier: ^17.3.1
         version: 17.3.1
@@ -609,6 +594,9 @@ importers:
       jsonwebtoken:
         specifier: ^9.0.3
         version: 9.0.3
+      nodemailer:
+        specifier: ^8.0.4
+        version: 8.0.4
       pg:
         specifier: ^8.16.0
         version: 8.20.0
@@ -649,6 +637,9 @@ importers:
       '@types/node':
         specifier: ^25.6.0
         version: 25.6.0
+      '@types/nodemailer':
+        specifier: ^7.0.11
+        version: 7.0.11
       '@types/pg':
         specifier: 8.20.0
         version: 8.20.0

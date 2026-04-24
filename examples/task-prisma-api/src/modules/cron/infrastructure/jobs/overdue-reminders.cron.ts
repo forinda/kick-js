@@ -1,5 +1,5 @@
 import { Service, Inject, Logger } from '@forinda/kickjs'
-import { Cron } from '@forinda/kickjs-cron'
+import { Cron } from '../../cron.decorator'
 import { PRISMA_CLIENT } from '@forinda/kickjs-prisma'
 import { QUEUE_MANAGER, type QueueService } from '@forinda/kickjs-queue'
 import type { PrismaClient } from '@/generated/prisma/client'

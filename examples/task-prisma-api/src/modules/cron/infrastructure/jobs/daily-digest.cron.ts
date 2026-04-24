@@ -1,5 +1,5 @@
 import { Service, Logger } from '@forinda/kickjs'
-import { Cron } from '@forinda/kickjs-cron'
+import { Cron } from '../../cron.decorator'
 
 const logger = Logger.for('DigestCronJobs')
 

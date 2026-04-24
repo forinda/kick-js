@@ -5,9 +5,8 @@ import { PrismaAdapter } from '@forinda/kickjs-prisma'
 import { DevToolsAdapter } from '@forinda/kickjs-devtools'
 import { SwaggerAdapter } from '@forinda/kickjs-swagger'
 import { WsAdapter } from '@forinda/kickjs-ws'
-import { MailerAdapter, ConsoleProvider } from '@forinda/kickjs-mailer'
 import { QueueAdapter } from '@forinda/kickjs-queue'
-import { CronAdapter } from '@forinda/kickjs-cron'
+import { CronAdapter } from '@/modules/cron/cron.adapter'
 import { AppAdapter } from '@forinda/kickjs'
 import { env } from './env'
 
@@ -53,10 +52,6 @@ const queueAdapter = QueueAdapter({
 export const adapters: AppAdapter[] = [
   prismaAdapter,
   wsAdapter,
-  MailerAdapter({
-    provider: new ConsoleProvider(),
-    defaultFrom: { name: env.MAIL_FROM_NAME, address: env.MAIL_FROM_EMAIL },
-  }),
   queueAdapter,
   CronAdapter({
     services: [

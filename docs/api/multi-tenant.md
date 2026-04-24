@@ -2,6 +2,10 @@
 
 Multi-tenancy support for KickJS applications with multiple tenant resolution strategies.
 
+::: danger Deprecated — dropped in v5
+This package is deprecated and will be removed in v5. New projects should use the BYO recipe in [Multi-tenancy with KickJS](../guide/multi-tenancy.md), which resolves the tenant in a `defineHttpContextDecorator()` (typed via `ContextMeta`) and reads it anywhere via `getRequestValue('tenant')`. The API below documents v4.2.0 behaviour for adopters mid-migration.
+:::
+
 ## Installation
 
 ```bash
