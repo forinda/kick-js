@@ -13,6 +13,7 @@ import { createMemo, createSignal, For, Show, type Component } from 'solid-js'
 import { store, type ContainerRegistration } from '../lib/store'
 import { Pagination, usePagination } from '../lib/pagination'
 import { InfoTip } from '../lib/info'
+import { openDetailModal } from '../lib/detail-modal'
 
 const KINDS = ['ALL', 'controller', 'service', 'repository', 'other'] as const
 const SCOPES = ['ALL', 'singleton', 'transient', 'request'] as const
@@ -233,9 +234,17 @@ const ExpandedDetail: Component<{ registration: ContainerRegistration }> = (prop
           <div class="flex flex-wrap gap-1">
             <For each={props.registration.dependencies}>
               {(dep) => (
-                <span class="bg-slate-700/50 text-kick-500 px-2 py-0.5 rounded text-xs font-mono">
+                <button
+                  type="button"
+                  class="bg-slate-700/50 text-kick-500 hover:bg-slate-700 px-2 py-0.5 rounded text-xs font-mono transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    openDetailModal(dep)
+                  }}
+                  title={`Open detail for ${dep}`}
+                >
                   {dep}
-                </span>
+                </button>
               )}
             </For>
           </div>
@@ -286,6 +295,18 @@ const ExpandedDetail: Component<{ registration: ContainerRegistration }> = (prop
         )}`}>
           {props.registration.postConstructStatus ?? 'none'}
         </span>
+      </div>
+      <div class="md:col-span-2 flex justify-end">
+        <button
+          type="button"
+          class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-kick-500/20 text-kick-500 border border-kick-500/30 hover:bg-kick-500/30 transition-colors"
+          onClick={(e) => {
+            e.stopPropagation()
+            openDetailModal(props.registration.token)
+          }}
+        >
+          View full details
+        </button>
       </div>
     </div>
   )

@@ -10,6 +10,7 @@ import { CustomTab } from './tabs/CustomTab'
 import { rpc } from './lib/rpc'
 import { startUnifiedStream } from './lib/unified-stream'
 import { store } from './lib/store'
+import { DetailModalHost } from './lib/detail-modal'
 
 type BuiltInTabId = 'runtime' | 'memory' | 'topology' | 'routes' | 'metrics' | 'container'
 
@@ -177,6 +178,7 @@ export const App: Component = () => {
           </div>
         </Show>
       </main>
+      <DetailModalHost />
     </div>
   )
 }
