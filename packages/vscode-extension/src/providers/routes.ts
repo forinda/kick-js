@@ -51,10 +51,13 @@ export class RoutesTreeProvider implements vscode.TreeDataProvider<ControllerIte
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event
   private routes: any[] = []
 
-  constructor(private baseUrl: string) {}
+  constructor(
+    private baseUrl: string,
+    private token?: string,
+  ) {}
 
   refresh(): void {
-    fetchDebugData(this.baseUrl, '/routes').then((d) => {
+    fetchDebugData(this.baseUrl, '/routes', this.token).then((d) => {
       this.routes = d?.routes ?? []
       this._onDidChangeTreeData.fire()
     })

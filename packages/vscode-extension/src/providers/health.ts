@@ -10,14 +10,17 @@ export class HealthTreeProvider implements vscode.TreeDataProvider<vscode.TreeIt
   /** Status bar item showing connection state */
   readonly statusBarItem: vscode.StatusBarItem
 
-  constructor(private baseUrl: string) {
+  constructor(
+    private baseUrl: string,
+    private token?: string,
+  ) {
     this.statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100)
     this.updateStatusBar()
     this.statusBarItem.show()
   }
 
   refresh(): void {
-    fetchDebugData(this.baseUrl, '/health').then((d) => {
+    fetchDebugData(this.baseUrl, '/health', this.token).then((d) => {
       this.data = d
       this.connected = d !== null
       this.updateStatusBar()

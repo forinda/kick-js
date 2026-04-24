@@ -54,6 +54,15 @@
         "command": "kickjs.refreshAll",
         "title": "KickJS: Refresh All",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "kickjs.setToken",
+        "title": "KickJS: Set DevTools Token…",
+        "icon": "$(key)"
+      },
+      {
+        "command": "kickjs.clearToken",
+        "title": "KickJS: Clear DevTools Token"
       }
     ],
     "menus": {
@@ -87,6 +96,11 @@
           "type": "boolean",
           "default": true,
           "description": "Auto-refresh data every 30 seconds"
+        },
+        "kickjs.token": {
+          "type": "string",
+          "default": "",
+          "description": "Optional DevTools auth token. Leave empty when the server runs the DevTools adapter with `requireToken: false` (the default). When the server requires a token (printed as `[token: …]` in the startup console), paste it here OR run `KickJS: Set DevTools Token…` from the palette."
         }
       }
     },

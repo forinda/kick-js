@@ -47,6 +47,15 @@ export interface ProbeOptions {
   timeoutMs?: number
   /** Injectable fetcher for tests; defaults to globalThis.fetch. */
   fetchImpl?: typeof fetch
+  /**
+   * Auth token to send as `x-devtools-token`. Optional — devtools
+   * adapter defaults to no-token, so callers omit when the user
+   * hasn't configured `kickjs.token` in workspace settings. When
+   * the server requires a token and none is sent, the probe
+   * surfaces an `unauthorized` error so the connect command can
+   * prompt for one.
+   */
+  token?: string
 }
 
 /**
@@ -62,8 +71,13 @@ export async function probeConnection(
   const baseUrl = `${trimRightSlash(serverUrl)}${debugPath}`
   const url = `${baseUrl}/health`
   const fetchImpl = opts.fetchImpl ?? globalThis.fetch
+  const headers: Record<string, string> = {}
+  if (opts.token) headers['x-devtools-token'] = opts.token
   try {
-    const res = await fetchImpl(url, { signal: AbortSignal.timeout(opts.timeoutMs ?? 2500) })
+    const res = await fetchImpl(url, {
+      signal: AbortSignal.timeout(opts.timeoutMs ?? 2500),
+      headers,
+    })
     if (res.status === 404) {
       return {
         ok: false,
@@ -79,6 +93,7 @@ export async function probeConnection(
       }
     }
     if (res.status === 401 || res.status === 403) {
+      const hasToken = Boolean(opts.token)
       return {
         ok: false,
         baseUrl,
@@ -86,7 +101,9 @@ export async function probeConnection(
           kind: 'unauthorized',
           url,
           status: res.status,
-          message: `Devtools endpoint returned ${res.status}. Check the auth gate around /_debug.`,
+          message: hasToken
+            ? `Devtools endpoint rejected the configured token (${res.status}). Update kickjs.token in settings or run "KickJS: Set Token" from the palette.`
+            : `Devtools endpoint requires a token (${res.status}). Run "KickJS: Set Token" from the palette to paste the token printed in the server console (or set requireToken: false in your DevToolsAdapter config to disable auth).`,
         },
       }
     }

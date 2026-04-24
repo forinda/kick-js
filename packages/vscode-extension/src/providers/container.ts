@@ -6,10 +6,13 @@ export class ContainerTreeProvider implements vscode.TreeDataProvider<vscode.Tre
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event
   private registrations: any[] = []
 
-  constructor(private baseUrl: string) {}
+  constructor(
+    private baseUrl: string,
+    private token?: string,
+  ) {}
 
   refresh(): void {
-    fetchDebugData(this.baseUrl, '/container').then((d) => {
+    fetchDebugData(this.baseUrl, '/container', this.token).then((d) => {
       this.registrations = d?.registrations ?? []
       this._onDidChangeTreeData.fire()
     })
