@@ -6,13 +6,21 @@ import { TopologyTab } from './tabs/TopologyTab'
 import { RoutesTab } from './tabs/RoutesTab'
 import { MetricsTab } from './tabs/MetricsTab'
 import { ContainerTab } from './tabs/ContainerTab'
+import { QueuesTab } from './tabs/QueuesTab'
 import { CustomTab } from './tabs/CustomTab'
 import { rpc } from './lib/rpc'
 import { startUnifiedStream } from './lib/unified-stream'
 import { store } from './lib/store'
 import { DetailModalHost } from './lib/detail-modal'
 
-type BuiltInTabId = 'runtime' | 'memory' | 'topology' | 'routes' | 'metrics' | 'container'
+type BuiltInTabId =
+  | 'runtime'
+  | 'memory'
+  | 'topology'
+  | 'routes'
+  | 'metrics'
+  | 'container'
+  | 'queues'
 
 interface BuiltInTabSpec {
   id: BuiltInTabId
@@ -37,6 +45,11 @@ function builtInTabs(): readonly BuiltInTabSpec[] {
       id: 'container',
       label: 'Container',
       count: () => store.container().length || undefined,
+    },
+    {
+      id: 'queues',
+      label: 'Queues',
+      count: () => store.queues().queues.length || undefined,
     },
   ]
 }
@@ -159,6 +172,9 @@ export const App: Component = () => {
         </Show>
         <Show when={active() === 'container'}>
           <ContainerTab />
+        </Show>
+        <Show when={active() === 'queues'}>
+          <QueuesTab />
         </Show>
         <Show when={activeCustom()}>{(tab) => <CustomTab tab={tab()} />}</Show>
         <Show when={tabErrors().length > 0 && active() === 'runtime'}>
