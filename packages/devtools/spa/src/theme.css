@@ -235,3 +235,91 @@ tr:hover td {
   padding: 32px;
   font-style: italic;
 }
+
+/* ── Global header (commit 7) ─────────────────────────────────── */
+.dt-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elev);
+}
+.dt-header-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dt-header-brand h1 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: 0.02em;
+}
+.dt-bolt {
+  color: var(--accent);
+  font-size: 16px;
+  line-height: 1;
+}
+
+/* Connection pill (live / polling / connecting / disconnected) */
+.dt-conn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.dt-conn-label {
+  font-weight: 600;
+  color: var(--text);
+}
+.dt-conn-sep {
+  color: var(--text-faint);
+}
+.dt-pulse {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.dt-pulse-live {
+  background: var(--ok);
+  animation: dt-pulse-anim 2s ease-in-out infinite;
+}
+.dt-pulse-polling {
+  background: var(--warn);
+  animation: dt-pulse-anim 2s ease-in-out infinite;
+}
+.dt-pulse-connecting {
+  background: var(--text-faint);
+}
+.dt-pulse-disconnected {
+  background: var(--critical);
+}
+@keyframes dt-pulse-anim {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Tab count badge */
+.tab-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 999px;
+  background: var(--bg-hover);
+  color: var(--text-dim);
+  vertical-align: middle;
+}
+.tab.active .tab-badge {
+  background: var(--accent);
+  color: white;
+}

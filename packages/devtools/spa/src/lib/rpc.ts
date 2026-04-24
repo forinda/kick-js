@@ -51,6 +51,29 @@ export const rpc = {
   runtime: () =>
     get<{ latest: RuntimeSnapshot; history: RuntimeSnapshot[]; health: MemoryHealth }>('/runtime'),
   topology: () => get<TopologySnapshot>('/topology'),
+  /** Per-route latency table — separate concept from the route registry below. */
+  metrics: () =>
+    get<{
+      requests: number
+      serverErrors: number
+      clientErrors: number
+      errorRate: number
+      uptimeSeconds: number
+      startedAt: string
+      routeLatency: Record<
+        string,
+        {
+          count: number
+          totalMs: number
+          minMs: number
+          maxMs: number
+          p50: number
+          p95: number
+          p99: number
+        }
+      >
+    }>('/metrics'),
+  /** Backwards-compatible alias for `metrics()` — pre-existing callers. */
   routes: () =>
     get<{
       requests: number
@@ -72,6 +95,34 @@ export const rpc = {
         }
       >
     }>('/metrics'),
+  /** Route registry — method/path/controller/handler/middleware per route. */
+  routeRegistry: () =>
+    get<{
+      routes: Array<{
+        method: string
+        path: string
+        controller: string
+        handler: string
+        middleware: string[]
+      }>
+    }>('/routes'),
+  /** DI container registrations with kind/scope/status/dependencies. */
+  container: () =>
+    get<{
+      registrations: Array<{
+        token: string
+        kind?: string
+        scope?: string
+        instantiated?: boolean
+        resolveCount?: number
+        firstResolved?: number
+        lastResolved?: number
+        resolveDurationMs?: number
+        postConstructStatus?: 'done' | 'failed' | 'none'
+        dependencies?: string[]
+      }>
+      count: number
+    }>('/container'),
   health: () =>
     get<{
       status: 'healthy' | 'degraded'
@@ -79,6 +130,31 @@ export const rpc = {
       uptime: number
       adapters: Record<string, string>
     }>('/health'),
+  /** Queue stats — present only when QueueAdapter is mounted. */
+  queues: () =>
+    get<{
+      enabled: boolean
+      queues?: Array<{
+        name: string
+        waiting?: number
+        active?: number
+        completed?: number
+        failed?: number
+        delayed?: number
+        paused?: number
+        error?: string
+      }>
+    }>('/queues'),
+  /** WebSocket stats — present only when WsAdapter is mounted. */
+  ws: () =>
+    get<{
+      enabled: boolean
+      activeConnections?: number
+      totalConnections?: number
+      messagesReceived?: number
+      messagesSent?: number
+      namespaces?: Record<string, { connections: number; handlers: number }>
+    }>('/ws'),
   tabs: () =>
     get<{
       tabs: DevtoolsTabDescriptor[]

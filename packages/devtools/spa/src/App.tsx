@@ -1,4 +1,4 @@
-import { createSignal, For, onMount, Show, type Component } from 'solid-js'
+import { createSignal, For, onCleanup, onMount, Show, type Component } from 'solid-js'
 import type { DevtoolsTabDescriptor } from '@forinda/kickjs-devtools-kit'
 import { RuntimeTab } from './tabs/RuntimeTab'
 import { MemoryTab } from './tabs/MemoryTab'
@@ -6,23 +6,34 @@ import { TopologyTab } from './tabs/TopologyTab'
 import { RoutesTab } from './tabs/RoutesTab'
 import { CustomTab } from './tabs/CustomTab'
 import { rpc } from './lib/rpc'
+import { startUnifiedStream } from './lib/unified-stream'
+import { store } from './lib/store'
 
 type BuiltInTabId = 'runtime' | 'memory' | 'topology' | 'routes'
 
 interface BuiltInTabSpec {
   id: BuiltInTabId
   label: string
+  /** Reactive count thunk; renders as a badge next to the tab label when truthy. */
+  count?: () => number | undefined
 }
 
-const BUILT_INS: readonly BuiltInTabSpec[] = [
-  { id: 'runtime', label: 'Runtime' },
-  { id: 'memory', label: 'Memory' },
-  { id: 'topology', label: 'Topology' },
-  { id: 'routes', label: 'Routes' },
-]
+/**
+ * Build the static built-in tab list. `count` is a thunk so each tab
+ * keeps its own reactive read of the shared store; the App body just
+ * renders whatever number is current.
+ */
+function builtInTabs(): readonly BuiltInTabSpec[] {
+  return [
+    { id: 'runtime', label: 'Runtime' },
+    { id: 'memory', label: 'Memory' },
+    { id: 'topology', label: 'Topology' },
+    { id: 'routes', label: 'Routes', count: () => store.routes().length || undefined },
+  ]
+}
 
 /** Reserved built-in IDs so a custom tab can't shadow them. */
-const RESERVED: ReadonlySet<string> = new Set(BUILT_INS.map((t) => t.id))
+const RESERVED: ReadonlySet<string> = new Set(builtInTabs().map((t) => t.id))
 
 export const App: Component = () => {
   const initial = (() => {
@@ -41,12 +52,12 @@ export const App: Component = () => {
     [],
   )
 
+  const BUILT_INS = builtInTabs()
+
   onMount(() => {
     void rpc
       .tabs()
       .then(({ tabs, errors }) => {
-        // Defensive: drop any tab whose id collides with a built-in
-        // even though the server-side aggregator should never emit one.
         setCustomTabs(tabs.filter((t) => !RESERVED.has(t.id)))
         setTabErrors(errors)
       })
@@ -55,6 +66,14 @@ export const App: Component = () => {
         // built-ins-only. The Topology tab will surface the same
         // error if the issue is persistent.
       })
+
+    // Boot the shared SSE consumer + initial snapshot. Tabs read from
+    // `store` and never own their own polling/subscription anymore.
+    let dispose: (() => void) | null = null
+    void startUnifiedStream().then((d) => {
+      dispose = d
+    })
+    onCleanup(() => dispose?.())
   })
 
   const switchTo = (id: string): void => {
@@ -71,6 +90,15 @@ export const App: Component = () => {
 
   return (
     <div class="app">
+      <header class="dt-header">
+        <div class="dt-header-brand">
+          <span class="dt-bolt" aria-hidden="true">
+            ⚡
+          </span>
+          <h1>KickJS DevTools</h1>
+        </div>
+        <ConnectionPill />
+      </header>
       <nav class="tabs" role="tablist">
         <For each={BUILT_INS}>
           {(tab) => (
@@ -82,6 +110,7 @@ export const App: Component = () => {
               onClick={() => switchTo(tab.id)}
             >
               {tab.label}
+              <Show when={tab.count?.()}>{(n) => <span class="tab-badge">{n()}</span>}</Show>
             </button>
           )}
         </For>
@@ -134,6 +163,34 @@ export const App: Component = () => {
           </div>
         </Show>
       </main>
+    </div>
+  )
+}
+
+/**
+ * Live-status pill in the header. Mirrors the legacy Vue dashboard:
+ * green pulse "Live" when SSE is connected, amber pulse "Polling"
+ * after a fallback, grey "Connecting…" before first response, red
+ * "Disconnected" after teardown. The trailing "Updated HH:MM:SS"
+ * tells the user the page isn't frozen even when nothing is changing.
+ */
+const ConnectionPill: Component = () => {
+  const labelFor = (s: ReturnType<typeof store.connectionStatus>): string => {
+    if (s === 'live') return 'Live'
+    if (s === 'polling') return 'Polling'
+    if (s === 'disconnected') return 'Disconnected'
+    return 'Connecting…'
+  }
+  const fmt = (d: Date | null): string => {
+    if (!d) return 'never'
+    return d.toLocaleTimeString()
+  }
+  return (
+    <div class="dt-conn">
+      <span class={`dt-pulse dt-pulse-${store.connectionStatus()}`} aria-hidden="true" />
+      <span class="dt-conn-label">{labelFor(store.connectionStatus())}</span>
+      <span class="dt-conn-sep">·</span>
+      <span class="dt-conn-ts">Updated {fmt(store.lastUpdate())}</span>
     </div>
   )
 }
