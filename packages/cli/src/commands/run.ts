@@ -64,14 +64,38 @@ async function startDevServer(_entry: string, port?: string): Promise<void> {
     },
   })
 
+  // Resolve the absolute paths of every assetMap.<ns>.src directory so
+  // the watcher can treat any file change beneath them as an asset
+  // change — regardless of extension, since adopters drop .ejs / .html
+  // / .json / .md / .pug / etc. into a templates folder.
+  const assetSrcRoots: readonly string[] = devConfig?.assetMap
+    ? Object.values(devConfig.assetMap)
+        .map((entry) => entry?.src)
+        .filter((src): src is string => typeof src === 'string' && src.length > 0)
+        .map((src) => resolve(cwd, src))
+    : []
+  const isAssetFile = (file: string): boolean =>
+    assetSrcRoots.some((root) => file === root || file.startsWith(`${root}/`))
+
   // Re-run typegen whenever a source file changes. Vite already
   // owns a chokidar watcher, so we piggy-back on it instead of
   // adding our own — same files, no extra fd cost.
+  //
+  // Two trigger paths share one debounced run:
+  //   1. .ts/.tsx/.mts/.cts changes → controllers / services / @Asset
+  //      keys re-discovered, registry + augmentation files refresh.
+  //   2. anything inside an `assetMap.<ns>.src` dir → KickAssets
+  //      augmentation refreshes so TypeScript sees newly added templates.
+  // Runtime resolution of new templates is handled in @forinda/kickjs
+  // itself — the dev-mode resolver skips its module-level cache so each
+  // `assets.x.y()` call re-walks. No Vite full-reload needed.
   let typegenTimer: ReturnType<typeof setTimeout> | null = null
   const scheduleTypegen = (file: string) => {
-    if (!/\.(ts|tsx|mts|cts)$/.test(file)) return
     if (file.includes('.kickjs')) return
     if (file.endsWith('.d.ts')) return
+    const isTs = /\.(ts|tsx|mts|cts)$/.test(file)
+    const isAsset = isAssetFile(file)
+    if (!isTs && !isAsset) return
     if (typegenTimer) clearTimeout(typegenTimer)
     typegenTimer = setTimeout(() => {
       runTypegen({
@@ -89,6 +113,12 @@ async function startDevServer(_entry: string, port?: string): Promise<void> {
   server.watcher.on('add', scheduleTypegen)
   server.watcher.on('unlink', scheduleTypegen)
   server.watcher.on('change', scheduleTypegen)
+  // Vite's default watcher ignores extensions it doesn't compile;
+  // explicitly subscribe asset src dirs so .ejs / .html changes land
+  // in the typegen pipeline.
+  if (assetSrcRoots.length > 0) {
+    server.watcher.add(assetSrcRoots)
+  }
 
   await server.listen()
   server.printUrls()

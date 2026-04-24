@@ -23,11 +23,18 @@ import {
 let cwd: string
 let originalCwd: string
 let originalEnvRoot: string | undefined
+let originalNodeEnv: string | undefined
 
 beforeEach(() => {
   cwd = mkdtempSync(join(tmpdir(), 'kick-assets-runtime-'))
   originalCwd = process.cwd()
   originalEnvRoot = process.env.KICK_ASSETS_ROOT
+  // The runtime resolver intentionally skips its module-level cache
+  // outside production so adding/removing template files in dev shows
+  // up immediately. These tests assert cache-aware behaviour (manifest
+  // discovery, swap-via-clear, etc.) and need the prod codepath.
+  originalNodeEnv = process.env.NODE_ENV
+  process.env.NODE_ENV = 'production'
   process.chdir(cwd)
   clearAssetCache()
 })
@@ -38,6 +45,11 @@ afterEach(() => {
     delete process.env.KICK_ASSETS_ROOT
   } else {
     process.env.KICK_ASSETS_ROOT = originalEnvRoot
+  }
+  if (originalNodeEnv === undefined) {
+    delete process.env.NODE_ENV
+  } else {
+    process.env.NODE_ENV = originalNodeEnv
   }
   clearAssetCache()
   try {
@@ -348,5 +360,25 @@ describe('clearAssetCache — manifest swap', () => {
 
     clearAssetCache()
     expect(resolveAsset('mails', 'welcome2')).toContain('mails/welcome2.ejs')
+  })
+})
+
+describe('dev-mode cache skip — file changes visible without restart', () => {
+  it('observes a fresh file on the next call without manual cache clear', () => {
+    process.env.NODE_ENV = 'development'
+    writeManifest('dist', { 'mails/welcome': 'mails/welcome.ejs' })
+    writeFile('dist/mails/welcome.ejs')
+    expect(resolveAsset('mails', 'welcome')).toContain('mails/welcome.ejs')
+
+    // Drop a new template + add it to the manifest — in dev the next
+    // `resolveAsset` call must re-discover, no `clearAssetCache()` call
+    // required from user code or the dev watcher.
+    cpSync(join(cwd, 'dist/mails/welcome.ejs'), join(cwd, 'dist/mails/follow-up.ejs'))
+    writeManifest('dist', {
+      'mails/welcome': 'mails/welcome.ejs',
+      'mails/follow-up': 'mails/follow-up.ejs',
+    })
+
+    expect(resolveAsset('mails', 'follow-up')).toContain('mails/follow-up.ejs')
   })
 })

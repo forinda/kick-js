@@ -89,6 +89,16 @@ export function clearAssetCache(): void {
 }
 
 function loadManifest(): ResolvedManifest | null {
+  // In development we deliberately skip the cache so adding or removing
+  // a template file (e.g. dropping `welcome-back.ejs` into
+  // `src/templates/mails/`) takes effect without a server restart. The
+  // synthesise-dev-manifest path walks ~10 files; the cost is negligible
+  // compared to the user-visible surprise of "I added a file but
+  // assets.x.y() throws". Production keeps the cache because the built
+  // manifest under `dist/.kickjs-assets.json` doesn't change at runtime.
+  if (process.env.NODE_ENV !== 'production') {
+    return discoverManifest()
+  }
   if (manifestCache !== undefined) return manifestCache
   manifestCache = discoverManifest()
   return manifestCache
