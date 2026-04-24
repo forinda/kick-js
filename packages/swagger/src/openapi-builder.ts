@@ -12,34 +12,35 @@ import { SWAGGER_KEYS, type ApiOperationOptions, type ApiResponseOptions } from 
 import { zodSchemaParser, type SchemaParser } from './schema-parser'
 
 // ── Auth metadata bridge ──────────────────────────────────────────────
-// Check @forinda/kickjs-auth decorators without importing the auth package.
-// Symbols are matched by description to avoid a hard dependency.
+// Check @forinda/kickjs-auth decorators without importing the auth
+// package. Auth's metadata keys (AUTH_META.AUTHENTICATED etc.) are
+// string literals under the §22 'kick:auth:*' convention; we read them
+// here via Reflect.getMetadata directly. The previous Symbol-by-
+// description shim broke silently when either side migrated; string
+// literals are byte-stable across packages.
+const AUTH_KEY_AUTHENTICATED = 'kick:auth:authenticated'
+const AUTH_KEY_PUBLIC = 'kick:auth:public'
 
-const R = Reflect as any
+const R = Reflect as {
+  getMetadata?: (key: string, target: object, propertyKey?: string) => unknown
+}
 
-function getAuthMeta(key: string, target: any, propertyKey?: string): any {
-  if (typeof R.getMetadataKeys !== 'function') return undefined
+function getAuthMeta(key: string, target: any, propertyKey?: string): unknown {
+  if (typeof R.getMetadata !== 'function') return undefined
   const proto = target.prototype ?? target
-  const keys: any[] = propertyKey
-    ? R.getMetadataKeys(proto, propertyKey)
-    : R.getMetadataKeys(target)
-
-  const sym = keys.find((k: any) => typeof k === 'symbol' && k.description === key)
-  if (!sym) return undefined
-
-  return propertyKey ? R.getMetadata(sym, proto, propertyKey) : R.getMetadata(sym, target)
+  return propertyKey ? R.getMetadata(key, proto, propertyKey) : R.getMetadata(key, target)
 }
 
 function isAuthAuthenticated(controllerClass: any, handlerName?: string): boolean {
   if (handlerName) {
-    const val = getAuthMeta('auth:authenticated', controllerClass, handlerName)
+    const val = getAuthMeta(AUTH_KEY_AUTHENTICATED, controllerClass, handlerName)
     if (val !== undefined) return !!val
   }
-  return !!getAuthMeta('auth:authenticated', controllerClass)
+  return !!getAuthMeta(AUTH_KEY_AUTHENTICATED, controllerClass)
 }
 
 function isAuthPublic(controllerClass: any, handlerName: string): boolean {
-  return !!getAuthMeta('auth:public', controllerClass, handlerName)
+  return !!getAuthMeta(AUTH_KEY_PUBLIC, controllerClass, handlerName)
 }
 
 export interface OpenAPIInfo {

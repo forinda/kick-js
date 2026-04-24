@@ -2,25 +2,37 @@ import 'reflect-metadata'
 
 // ── Auth Metadata Keys ──────────────────────────────────────────────────
 
+/**
+ * String metadata keys for the auth-package decorators. All keys
+ * follow the §22 v4 'kick:area:thing' convention so they survive
+ * JSON serialisation, can be addressed by literal from worker
+ * threads, and show up in DevTools snapshots — Symbols can't do
+ * any of those.
+ *
+ * Cross-package consumers (swagger, devtools, multi-tenant) read
+ * these via `Reflect.getMetadata('kick:auth:authenticated', target)`
+ * directly. The named member access (e.g. `AUTH_META.AUTHENTICATED`)
+ * is the stable surface; the literal is the load-bearing part.
+ */
 export const AUTH_META = {
-  AUTHENTICATED: Symbol('auth:authenticated'),
-  PUBLIC: Symbol('auth:public'),
-  ROLES: Symbol('auth:roles'),
-  STRATEGY: Symbol('auth:strategy'),
+  AUTHENTICATED: 'kick:auth:authenticated',
+  PUBLIC: 'kick:auth:public',
+  ROLES: 'kick:auth:roles',
+  STRATEGY: 'kick:auth:strategy',
 } as const
 
 export const CSRF_META = {
-  EXEMPT: Symbol('csrf:exempt'),
+  EXEMPT: 'kick:csrf:exempt',
 } as const
 
 export const RATE_LIMIT_META = {
-  OPTIONS: Symbol('rateLimit:options'),
+  OPTIONS: 'kick:rate-limit:options',
 } as const
 
 export const POLICY_META = {
-  ACTION: Symbol('policy:action'),
-  RESOURCE: Symbol('policy:resource'),
-  RESOLVER: Symbol('policy:resolver'),
+  ACTION: 'kick:policy:action',
+  RESOURCE: 'kick:policy:resource',
+  RESOLVER: 'kick:policy:resolver',
 } as const
 
 export interface RateLimitDecoratorOptions {

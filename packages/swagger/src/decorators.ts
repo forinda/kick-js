@@ -1,12 +1,18 @@
 import { setMethodMeta, setClassMeta, pushMethodMeta } from '@forinda/kickjs'
 
+/**
+ * String metadata keys for the swagger decorators. Follows the §22
+ * v4 'kick:area:thing' convention — survives JSON serialisation,
+ * addressable by literal from cross-package consumers, visible in
+ * DevTools snapshots.
+ */
 const SWAGGER_KEYS = {
-  OPERATION: Symbol('kick:swagger:operation'),
-  RESPONSES: Symbol('kick:swagger:responses'),
-  TAGS: Symbol('kick:swagger:tags'),
-  BEARER_AUTH: Symbol('kick:swagger:bearer'),
-  EXCLUDE: Symbol('kick:swagger:exclude'),
-}
+  OPERATION: 'kick:swagger:operation',
+  RESPONSES: 'kick:swagger:responses',
+  TAGS: 'kick:swagger:tags',
+  BEARER_AUTH: 'kick:swagger:bearer',
+  EXCLUDE: 'kick:swagger:exclude',
+} as const
 
 export { SWAGGER_KEYS }
 

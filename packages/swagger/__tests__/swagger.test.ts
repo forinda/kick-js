@@ -598,3 +598,58 @@ describe('buildOpenAPISpec — caching', () => {
     expect(after.paths['/t/tmp']).toBeUndefined()
   })
 })
+
+describe('buildOpenAPISpec — auth bridge (cross-package metadata)', () => {
+  beforeEach(() => {
+    Container.reset()
+    clearRegisteredRoutes()
+  })
+
+  /**
+   * Simulates @forinda/kickjs-auth setting its metadata via the
+   * canonical 'kick:auth:*' string keys (AUTH_META post-migration).
+   * The swagger builder should pick these up without importing the
+   * auth package — string literals are the contract.
+   */
+  it('marks routes secured when kick:auth:authenticated is set on the class', () => {
+    @Controller()
+    class SecuredController {
+      @Get('/secret')
+      secret() {}
+    }
+    Reflect.defineMetadata('kick:auth:authenticated', true, SecuredController)
+
+    registerControllerForDocs(SecuredController, '/api')
+    const spec = buildOpenAPISpec()
+
+    const op = spec.paths['/api/secret']?.get
+    expect(op.security).toEqual([{ BearerAuth: [] }])
+    expect(spec.components?.securitySchemes?.BearerAuth).toMatchObject({
+      type: 'http',
+      scheme: 'bearer',
+    })
+  })
+
+  it('respects method-level kick:auth:public override on a class-secured controller', () => {
+    @Controller()
+    class MixedController {
+      @Get('/private')
+      priv() {}
+      @Get('/public')
+      pub() {}
+    }
+    Reflect.defineMetadata('kick:auth:authenticated', true, MixedController)
+    Reflect.defineMetadata(
+      'kick:auth:public',
+      true,
+      MixedController.prototype,
+      'pub',
+    )
+
+    registerControllerForDocs(MixedController, '/api')
+    const spec = buildOpenAPISpec()
+
+    expect(spec.paths['/api/private']?.get?.security).toEqual([{ BearerAuth: [] }])
+    expect(spec.paths['/api/public']?.get?.security).toBeUndefined()
+  })
+})
