@@ -22,7 +22,12 @@ export { defineHttpContextDecorator } from './http/define-http-context-decorator
 export { buildRoutes } from './http/router-builder'
 
 // Request-Scoped DI
-export { requestStore, getRequestStore, type RequestStore } from './http/request-store'
+export {
+  requestStore,
+  getRequestStore,
+  getRequestValue,
+  type RequestStore,
+} from './http/request-store'
 export { requestScopeMiddleware } from './http/middleware/request-scope'
 
 // Middleware

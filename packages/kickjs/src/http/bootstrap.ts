@@ -63,17 +63,34 @@ export async function bootstrap(options: ApplicationOptions): Promise<Applicatio
   // restarting the server — preserving DB connections and port bindings.
   const g = globalThis as any
 
-  // ── Global error handlers ────────────────────────────────────────────
+  // ── Global error handlers + signal hooks ─────────────────────────────
+  // `processHooks` controls whether KickJS registers its own
+  // process-level handlers. Defaults to `'auto'` — register everything.
+  // Adopters that bring their own observability stack (OpenTelemetry SDK,
+  // Sentry, custom shutdown choreographer) often register their own
+  // SIGINT/SIGTERM handlers and need to opt out of ours so the two don't
+  // race to call `process.exit(0)`. Three modes:
+  //   - 'auto' (default): register uncaughtException/unhandledRejection
+  //     loggers + SIGINT/SIGTERM → `app.shutdown()` → `process.exit(0)`.
+  //   - 'errors-only': register the error loggers; skip signal handlers.
+  //     Use this when you have your own shutdown choreographer that calls
+  //     `app.shutdown()` itself.
+  //   - 'manual': skip everything. Adopter is responsible for both error
+  //     logging and signal-driven shutdown.
+  const processHooks = options.processHooks ?? 'auto'
+
   if (!g.__kickBootstrapped) {
-    process.on('uncaughtException', (err) => {
-      log.error(err, 'Uncaught exception')
-    })
+    if (processHooks !== 'manual') {
+      process.on('uncaughtException', (err) => {
+        log.error(err, 'Uncaught exception')
+      })
 
-    process.on('unhandledRejection', (reason) => {
-      log.error(reason as any, 'Unhandled rejection')
-    })
+      process.on('unhandledRejection', (reason) => {
+        log.error(reason as any, 'Unhandled rejection')
+      })
+    }
 
-    if (!g.__kickjs_httpServer) {
+    if (processHooks === 'auto' && !g.__kickjs_httpServer) {
       for (const signal of ['SIGINT', 'SIGTERM'] as const) {
         process.on(signal, async () => {
           log.info(`Received ${signal}, shutting down...`)

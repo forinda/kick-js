@@ -113,6 +113,33 @@ export interface ApplicationOptions {
    */
   contextStore?: 'auto' | 'manual'
 
+  /**
+   * Controls whether KickJS registers process-level handlers at bootstrap.
+   *
+   * - `'auto'` (default) — register `uncaughtException` /
+   *   `unhandledRejection` loggers AND `SIGINT` / `SIGTERM` →
+   *   `app.shutdown()` → `process.exit(0)`.
+   * - `'errors-only'` — register the error loggers; skip the signal
+   *   handlers. Use this when you have your own shutdown choreographer
+   *   (OpenTelemetry SDK, Sentry, custom orchestrator) that calls
+   *   `app.shutdown()` itself and you don't want two listeners racing
+   *   to call `process.exit`.
+   * - `'manual'` — skip everything. Adopter is responsible for both
+   *   error logging and signal-driven shutdown.
+   *
+   * Background: many observability SDKs install their own SIGTERM
+   * handler to flush spans/metrics before the process exits. Two
+   * separate handlers calling `process.exit(0)` race each other and
+   * can truncate the in-flight flush. Setting this to `'errors-only'`
+   * or `'manual'` lets the SDK own the lifecycle while still letting
+   * KickJS surface uncaught exceptions / rejections via the logger.
+   *
+   * The dev mode auto-detect (`__kickjs_httpServer` set by the Vite
+   * plugin) suppresses signal registration regardless of this option,
+   * since Vite owns the lifecycle in development.
+   */
+  processHooks?: 'auto' | 'errors-only' | 'manual'
+
   /** Express `trust proxy` setting */
   trustProxy?: boolean | number | string | ((ip: string, hopIndex: number) => boolean)
   /** Maximum JSON body size (only used when middleware is not provided) */
