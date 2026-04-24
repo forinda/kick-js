@@ -1,4 +1,4 @@
-import { Logger, defineAdapter, Scope } from '@forinda/kickjs'
+import { Logger, defineAdapter, Scope, getRequestValue } from '@forinda/kickjs'
 import { DRIZZLE_TENANT_DB, type DrizzleTenantAdapterOptions } from './types'
 
 const log = Logger.for('DrizzleTenantAdapter')
@@ -130,31 +130,28 @@ export const DrizzleTenantAdapter = defineAdapter<
       },
 
       async beforeStart({ container }) {
-        // Dynamically import getCurrentTenant to avoid hard dep on multi-tenant package
-        let getCurrentTenant: (() => { id: string } | undefined) | undefined
-
-        try {
-          const mt: any = await import('@forinda/kickjs-multi-tenant')
-          getCurrentTenant = mt.getCurrentTenant
-        } catch {
-          log.warn(
-            'DrizzleTenantAdapter: @forinda/kickjs-multi-tenant not found. ' +
-              'DRIZZLE_TENANT_DB will always resolve to the provider database.',
-          )
-        }
-
+        // Reads the per-request tenant from the framework's request bag
+        // (populated by an upstream contributor that augments
+        // `ContextMeta` with `tenant: { id: string; … }`). See
+        // https://forinda.github.io/kick-js/guide/multi-tenancy for the
+        // full pattern. Outside an active request — singleton boot,
+        // background jobs, tests without `requestScopeMiddleware()` —
+        // `getRequestValue` returns `undefined` and the factory falls
+        // back to the provider database.
         container.registerFactory(
           DRIZZLE_TENANT_DB,
           () => {
-            const tenant = getCurrentTenant?.()
+            // Cast because the adopter's `ContextMeta` augmentation
+            // owns the canonical `tenant` shape; this package only
+            // needs `tenant.id` and intentionally doesn't widen the
+            // augmentation surface.
+            const tenant = getRequestValue('tenant') as { id?: string } | undefined
             return getDb(tenant?.id)
           },
           Scope.TRANSIENT,
         )
 
-        log.info(
-          `Drizzle tenant DB registered (${getCurrentTenant ? 'multi-tenant mode' : 'provider-only mode'})`,
-        )
+        log.info('Drizzle tenant DB registered (resolves via getRequestValue("tenant"))')
       },
 
       async shutdown() {

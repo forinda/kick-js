@@ -1,4 +1,4 @@
-import { Logger, defineAdapter, Scope } from '@forinda/kickjs'
+import { Logger, defineAdapter, Scope, getRequestValue } from '@forinda/kickjs'
 import { PRISMA_TENANT_CLIENT, type PrismaTenantAdapterOptions } from './types'
 
 const log = Logger.for('PrismaTenantAdapter')
@@ -134,31 +134,28 @@ export const PrismaTenantAdapter = defineAdapter<
       // ── Lifecycle ───────────────────────────────────────────────
 
       async beforeStart({ container }) {
-        // Dynamically import getCurrentTenant to avoid hard dep on multi-tenant package
-        let getCurrentTenant: (() => { id: string } | undefined) | undefined
-
-        try {
-          const mt: any = await import('@forinda/kickjs-multi-tenant')
-          getCurrentTenant = mt.getCurrentTenant
-        } catch {
-          log.warn(
-            'PrismaTenantAdapter: @forinda/kickjs-multi-tenant not found. ' +
-              'PRISMA_TENANT_CLIENT will always resolve to the provider database.',
-          )
-        }
-
+        // Reads the per-request tenant from the framework's request bag
+        // (populated by an upstream contributor that augments
+        // `ContextMeta` with `tenant: { id: string; … }`). See
+        // https://forinda.github.io/kick-js/guide/multi-tenancy for the
+        // full pattern. Outside an active request — singleton boot,
+        // background jobs, tests without `requestScopeMiddleware()` —
+        // `getRequestValue` returns `undefined` and the factory falls
+        // back to the provider database.
         container.registerFactory(
           PRISMA_TENANT_CLIENT,
           () => {
-            const tenant = getCurrentTenant?.()
+            // Cast because the adopter's `ContextMeta` augmentation
+            // owns the canonical `tenant` shape; this package only
+            // needs `tenant.id` and intentionally doesn't widen the
+            // augmentation surface.
+            const tenant = getRequestValue('tenant') as { id?: string } | undefined
             return getDb(tenant?.id)
           },
           Scope.TRANSIENT,
         )
 
-        log.info(
-          `Prisma tenant DB registered (${getCurrentTenant ? 'multi-tenant mode' : 'provider-only mode'})`,
-        )
+        log.info('Prisma tenant DB registered (resolves via getRequestValue("tenant"))')
       },
 
       async shutdown() {

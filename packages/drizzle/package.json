@@ -74,14 +74,9 @@
   },
   "peerDependencies": {
     "drizzle-orm": ">=0.30.0",
-    "@forinda/kickjs-multi-tenant": ">=2.0.0",
     "@forinda/kickjs": ">=2.3.0"
   },
-  "peerDependenciesMeta": {
-    "@forinda/kickjs-multi-tenant": {
-      "optional": true
-    }
-  },
+  "peerDependenciesMeta": {},
   "devDependencies": {
     "@forinda/kickjs": "workspace:*",
     "@types/node": "^25.6.0",
