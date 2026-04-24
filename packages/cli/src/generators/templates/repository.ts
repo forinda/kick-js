@@ -32,7 +32,7 @@ export interface I${pascal}Repository {
  * \`@Inject(${pascal.toUpperCase()}_REPOSITORY)\` both return the typed
  * interface — no manual generic, no \`any\` cast.
  */
-export const ${pascal.toUpperCase()}_REPOSITORY = createToken<I${pascal}Repository>('${pascal}/Repository')
+export const ${pascal.toUpperCase()}_REPOSITORY = createToken<I${pascal}Repository>('app/${kebab}/repository')
 `
 }
 

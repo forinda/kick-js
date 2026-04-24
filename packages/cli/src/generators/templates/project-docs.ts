@@ -378,9 +378,10 @@ const log2 = createLogger('Worker')   // Function form
 \`\`\`ts
 import { createToken } from '@forinda/kickjs'
 
-// Type-safe DI tokens for factory/interface binding
-const DB_URL = createToken<string>('config.database.url')
-const FEATURE_FLAGS = createToken<FeatureFlags>('app.features')
+// Type-safe DI tokens for factory/interface binding.
+// Convention: '<orgScope>/<area>/<key>' — slash-delimited, lowercase.
+const DB_URL = createToken<string>('app/config/database-url')
+const FEATURE_FLAGS = createToken<FeatureFlags>('app/features')
 \`\`\`
 
 ### Reactivity
@@ -779,7 +780,7 @@ These work anywhere — scripts, plain files, outside \`@Service\`/\`@Controller
 |---------|--------|---------|
 | \`Logger.for(name)\` | \`@forinda/kickjs\` | \`const log = Logger.for('MyScript')\` |
 | \`createLogger(name)\` | \`@forinda/kickjs\` | \`const log = createLogger('Worker')\` |
-| \`createToken<T>(name)\` | \`@forinda/kickjs\` | \`const TOKEN = createToken<string>('db.url')\` |
+| \`createToken<T>(name)\` | \`@forinda/kickjs\` | \`const TOKEN = createToken<string>('app/db/url')\` |
 | \`ref(value)\` | \`@forinda/kickjs\` | \`const count = ref(0)\` |
 | \`computed(fn)\` | \`@forinda/kickjs\` | \`const doubled = computed(() => count.value * 2)\` |
 | \`watch(source, cb)\` | \`@forinda/kickjs\` | \`watch(() => count.value, (v) => log(v))\` |
