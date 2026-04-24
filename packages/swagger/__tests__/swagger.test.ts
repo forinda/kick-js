@@ -639,12 +639,7 @@ describe('buildOpenAPISpec — auth bridge (cross-package metadata)', () => {
       pub() {}
     }
     Reflect.defineMetadata('kick:auth:authenticated', true, MixedController)
-    Reflect.defineMetadata(
-      'kick:auth:public',
-      true,
-      MixedController.prototype,
-      'pub',
-    )
+    Reflect.defineMetadata('kick:auth:public', true, MixedController.prototype, 'pub')
 
     registerControllerForDocs(MixedController, '/api')
     const spec = buildOpenAPISpec()
@@ -653,3 +648,4 @@ describe('buildOpenAPISpec — auth bridge (cross-package metadata)', () => {
     expect(spec.paths['/api/public']?.get?.security).toBeUndefined()
   })
 })
+

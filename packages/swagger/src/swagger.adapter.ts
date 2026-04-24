@@ -72,6 +72,15 @@ export const SwaggerAdapter = defineAdapter<SwaggerAdapterOptions>({
     const isDisabled = (): boolean =>
       Boolean(config.disableInProd) && process.env.NODE_ENV === 'production'
 
+    // Snapshot the user-supplied servers list once per adapter instance
+    // so subsequent afterStart runs (HMR reload, dev-mode restart loops,
+    // multi-instance pre-fork in tests) re-derive the auto-detected
+    // entries from a clean baseline instead of stacking duplicates onto
+    // the previous run's accretion.
+    const userSuppliedServers: ReadonlyArray<{ url: string; description?: string }> = config.servers
+      ? [...config.servers]
+      : []
+
     return {
       onRouteMount(controllerClass, mountPath) {
         if (isDisabled()) return
@@ -86,24 +95,29 @@ export const SwaggerAdapter = defineAdapter<SwaggerAdapterOptions>({
         const host =
           addr.address === '::' || addr.address === '0.0.0.0' ? 'localhost' : addr.address
 
-        // Auto-add HTTP server URL if none configured
-        if (!config.servers || config.servers.length === 0) {
-          config.servers = [{ url: `http://${host}:${addr.port}`, description: 'HTTP server' }]
-        }
+        const autoDetected: { url: string; description?: string }[] = []
+        // HTTP server URL is always auto-added — adopters who passed an
+        // explicit HTTP URL keep their entry first because we restart
+        // from the user snapshot above.
+        autoDetected.push({ url: `http://${host}:${addr.port}`, description: 'HTTP server' })
 
-        // Auto-add WebSocket server URLs from WsAdapter
+        // Auto-add WebSocket server URLs from WsAdapter (one per namespace)
         const wsAdapter = config.adapters?.find(
           (a) => a.name === 'WsAdapter' && typeof a.getStats === 'function',
         )
         if (wsAdapter) {
           const stats = wsAdapter.getStats()
           for (const namespace of Object.keys(stats.namespaces || {})) {
-            config.servers?.push({
+            autoDetected.push({
               url: `ws://${host}:${addr.port}${namespace}`,
               description: `WebSocket: ${namespace}`,
             })
           }
         }
+
+        // Always rebuild from the snapshot — replaces any leftover
+        // auto-detected entries from a previous afterStart run.
+        config.servers = [...userSuppliedServers, ...autoDetected]
       },
 
       beforeMount({ app }) {
