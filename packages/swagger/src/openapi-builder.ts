@@ -292,9 +292,36 @@ function buildOpenAPISpecUncached(options: SwaggerOptions = {}): any {
       controllerClass,
     )
     for (const route of routes) {
+      try {
+        emitRouteOperation(route)
+      } catch (err) {
+        // One bad operation must not blank the whole docs page. Emit a
+        // marker summary so the broken op shows up in Swagger UI with
+        // a visible warning, and the rest of the spec stays valid.
+        // Defensive resolution — the same fields that crashed inside
+        // emit may still be undefined here.
+        let openApiPath: string
+        try {
+          openApiPath = joinPaths(mountPath, route.path).replace(/:([a-zA-Z_]+)/g, '{$1}')
+        } catch {
+          openApiPath = `${mountPath}/__spec_error__`
+        }
+        const method = typeof route.method === 'string' ? route.method.toLowerCase() : 'get'
+        if (!spec.paths[openApiPath]) spec.paths[openApiPath] = {}
+        spec.paths[openApiPath][method] = {
+          summary: `⚠ spec generation failed: ${err instanceof Error ? err.message : String(err)}`,
+          responses: { default: { description: 'Spec generation failed for this operation.' } },
+        }
+      }
+    }
+
+    // Per-route emit hoisted to a closure so the try/catch above can
+    // wrap each route in isolation. Closes over loop-locals (operation,
+    // routes, classTags, classAuth, etc.) so the body reads the same
+    // way it did before the wrap.
+    function emitRouteOperation(route: RouteDefinition): void {
       // Skip excluded methods
-      if (getMethodMetaOrUndefined(SWAGGER_KEYS.EXCLUDE, controllerClass, route.handlerName))
-        continue
+      if (getMethodMetaOrUndefined(SWAGGER_KEYS.EXCLUDE, controllerClass, route.handlerName)) return
 
       // Build the full path — mountPath is the actual Express mount prefix (from onRouteMount),
       // and route.path is the method-level path. @Controller path is not included here

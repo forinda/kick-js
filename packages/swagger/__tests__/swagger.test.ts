@@ -682,6 +682,49 @@ describe('registerControllerForDocs — per-scope isolation', () => {
     expect(specB.paths['/api/a']).toBeUndefined()
   })
 
+  it('one operation throwing during build does not blank the whole spec', () => {
+    @Controller()
+    class HealthyController {
+      @Get('/healthy')
+      h() {}
+    }
+    @Controller()
+    class BrokenController {
+      @Get('/boom')
+      h() {}
+    }
+
+    // Force the spec builder to throw on the broken controller's only
+    // route by injecting a parser that throws when called for a body
+    // schema that doesn't exist on these handlers — easier:
+    // pre-stamp a broken validation block onto the route so the path
+    // regex throws.
+    registerControllerForDocs(HealthyController, '/api')
+    registerControllerForDocs(BrokenController, '/api')
+
+    // Inject a route definition that has `method = undefined` — the
+    // emit hits `route.method.toLowerCase()` and throws TypeError. The
+    // broken op should land as a marker, the healthy op should still
+    // be present.
+    const brokenRoutes = (Reflect.getMetadata('kick:routes', BrokenController) ?? []) as Array<{
+      method: unknown
+    }>
+    if (brokenRoutes[0]) brokenRoutes[0].method = undefined as unknown as string
+
+    const spec = buildOpenAPISpec()
+
+    expect(spec.paths['/api/healthy']?.get).toBeDefined()
+    // The broken op landed under SOME path with a marker summary —
+    // exact path depends on what joinPaths(mountPath, undefined) does,
+    // we just assert at least one operation has the marker prefix.
+    const markerSeen = Object.values(spec.paths as Record<string, any>).some((pathItem: any) =>
+      Object.values(pathItem ?? {}).some(
+        (op: any) => typeof op?.summary === 'string' && op.summary.includes('spec generation failed'),
+      ),
+    )
+    expect(markerSeen).toBe(true)
+  })
+
   it('scoped clearRegisteredRoutes only flushes that scope', () => {
     @Controller()
     class KeepController {
