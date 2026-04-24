@@ -187,3 +187,69 @@
     @apply bg-kick-500 text-white;
   }
 }
+
+/* ── Info tooltip / button (commit 11) ───────────────────────── */
+.dt-tip {
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+  margin-left: 4px;
+  vertical-align: middle;
+  color: var(--color-slate-500);
+  cursor: help;
+}
+.dt-tip-clickable {
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: var(--color-slate-500);
+}
+.dt-tip-clickable:hover {
+  color: var(--color-kick-500);
+}
+.dt-tip:hover {
+  color: var(--color-kick-500);
+}
+.dt-tip-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+.dt-tip-pop {
+  position: absolute;
+  z-index: 100;
+  visibility: hidden;
+  opacity: 0;
+  transition:
+    opacity 120ms ease,
+    visibility 120ms ease;
+  width: max-content;
+  max-width: 240px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--color-slate-200);
+  background: var(--color-slate-800);
+  border: 1px solid var(--color-slate-700);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+  white-space: normal;
+}
+.dt-tip-pop-top {
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+}
+.dt-tip-pop-bottom {
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+}
+.dt-tip:hover .dt-tip-pop,
+.dt-tip:focus-within .dt-tip-pop {
+  visibility: visible;
+  opacity: 1;
+}

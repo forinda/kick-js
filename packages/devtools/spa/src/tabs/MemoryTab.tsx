@@ -3,6 +3,9 @@ import type { MemoryHealth, RuntimeSnapshot } from '@forinda/kickjs-devtools-kit
 import { Sparkline } from '../lib/sparkline'
 import { getBasePath, getToken, rpc, subscribe } from '../lib/rpc'
 import { formatBytes, formatBytesPerSec, formatPercent } from '../lib/format'
+import { InfoButton, InfoTip, METRIC_DEFS } from '../lib/info'
+
+type MetricKey = keyof typeof METRIC_DEFS
 
 interface MemoryStream {
   snapshot: RuntimeSnapshot
@@ -57,7 +60,29 @@ export const MemoryTab: Component = () => {
           <>
             <div class="card">
               <div class="card-header">
-                <div class="card-title">Leak risk</div>
+                <div class="card-title">
+                  Leak risk
+                  <InfoButton title="What is leak risk?">
+                    <p>{METRIC_DEFS['leak.risk'].short}</p>
+                    <p>{METRIC_DEFS['leak.risk'].detail}</p>
+                    <p>
+                      <strong>Severity buckets</strong> (heap-growth in MB/min):
+                    </p>
+                    <ul class="list-disc pl-5 space-y-1">
+                      <li>
+                        <span class="badge badge-ok">ok</span> &lt; 5 MB/min — typical operation.
+                      </li>
+                      <li>
+                        <span class="badge badge-warn">warn</span> &lt; 20 MB/min — investigate
+                        if sustained &gt; 5 minutes.
+                      </li>
+                      <li>
+                        <span class="badge badge-critical">critical</span> ≥ 20 MB/min — capture
+                        a heap snapshot now.
+                      </li>
+                    </ul>
+                  </InfoButton>
+                </div>
                 <span class={`badge badge-${data().health.heapGrowthSeverity}`}>
                   {data().health.heapGrowthSeverity}
                 </span>
@@ -67,18 +92,33 @@ export const MemoryTab: Component = () => {
                   {formatBytesPerSec(data().health.heapGrowthBytesPerSec)} growth
                 </div>
                 <div class="card-value" style="font-size:13px;color:var(--text-dim)">
-                  GC reclaim {formatPercent(data().health.gcReclaimRatio)} • heap util{' '}
-                  {formatPercent(data().health.heapUtilization)}
+                  GC reclaim
+                  <InfoTip metric="gc.reclaim" />
+                  {' '}{formatPercent(data().health.gcReclaimRatio)} • heap util
+                  <InfoTip metric="heap.utilization" />
+                  {' '}{formatPercent(data().health.heapUtilization)}
                 </div>
               </div>
               <Sparkline values={heap()} />
             </div>
 
             <div class="grid">
-              <Card title="Heap used" value={formatBytes(data().snapshot.memory.heapUsed)} />
-              <Card title="Heap total" value={formatBytes(data().snapshot.memory.heapTotal)} />
-              <Card title="RSS" value={formatBytes(data().snapshot.memory.rss)} />
-              <Card title="External" value={formatBytes(data().snapshot.memory.external)} />
+              <Card
+                title="Heap used"
+                metric="heap.used"
+                value={formatBytes(data().snapshot.memory.heapUsed)}
+              />
+              <Card
+                title="Heap total"
+                metric="heap.total"
+                value={formatBytes(data().snapshot.memory.heapTotal)}
+              />
+              <Card title="RSS" metric="rss" value={formatBytes(data().snapshot.memory.rss)} />
+              <Card
+                title="External"
+                metric="external"
+                value={formatBytes(data().snapshot.memory.external)}
+              />
             </div>
 
             <div class="card">
@@ -127,10 +167,13 @@ export const MemoryTab: Component = () => {
   )
 }
 
-const Card: Component<{ title: string; value: string }> = (props) => (
+const Card: Component<{ title: string; value: string; metric?: MetricKey }> = (props) => (
   <div class="card">
     <div class="card-header">
-      <div class="card-title">{props.title}</div>
+      <div class="card-title">
+        {props.title}
+        <Show when={props.metric}>{(m) => <InfoTip metric={m()} />}</Show>
+      </div>
       <div class="card-value">{props.value}</div>
     </div>
   </div>

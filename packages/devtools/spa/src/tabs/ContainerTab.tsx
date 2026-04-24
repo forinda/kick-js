@@ -12,6 +12,7 @@
 import { createMemo, createSignal, For, Show, type Component } from 'solid-js'
 import { store, type ContainerRegistration } from '../lib/store'
 import { Pagination, usePagination } from '../lib/pagination'
+import { InfoTip } from '../lib/info'
 
 const KINDS = ['ALL', 'controller', 'service', 'repository', 'other'] as const
 const SCOPES = ['ALL', 'singleton', 'transient', 'request'] as const
@@ -144,7 +145,10 @@ export const ContainerTab: Component = () => {
                 <th>Kind</th>
                 <th>Scope</th>
                 <th>Status</th>
-                <th class="text-right">Resolves</th>
+                <th class="text-right">
+                  Resolves
+                  <InfoTip metric="resolve.count" placement="bottom" />
+                </th>
                 <th class="text-right">Deps</th>
               </tr>
             </thead>
@@ -275,6 +279,7 @@ const ExpandedDetail: Component<{ registration: ContainerRegistration }> = (prop
       <div>
         <h4 class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
           PostConstruct
+          <InfoTip metric="post-construct" />
         </h4>
         <span class={`px-2 py-0.5 rounded text-xs font-semibold ${postConstructBadge(
           props.registration.postConstructStatus,

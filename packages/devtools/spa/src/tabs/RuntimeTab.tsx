@@ -3,6 +3,9 @@ import type { RuntimeSnapshot } from '@forinda/kickjs-devtools-kit'
 import { Sparkline } from '../lib/sparkline'
 import { rpc, subscribe } from '../lib/rpc'
 import { formatBytes, formatMs, formatUptime } from '../lib/format'
+import { InfoTip, METRIC_DEFS } from '../lib/info'
+
+type MetricKey = keyof typeof METRIC_DEFS
 
 const HISTORY_CAP = 60
 
@@ -48,16 +51,20 @@ export const RuntimeTab: Component = () => {
         {(snap) => (
           <>
             <div class="grid">
-              <Card title="Heap used" value={formatBytes(snap().memory.heapUsed)}>
+              <Card title="Heap used" metric="heap.used" value={formatBytes(snap().memory.heapUsed)}>
                 <Sparkline values={heap()} />
               </Card>
-              <Card title="RSS" value={formatBytes(snap().memory.rss)}>
+              <Card title="RSS" metric="rss" value={formatBytes(snap().memory.rss)}>
                 <Sparkline values={rss()} />
               </Card>
-              <Card title="Event loop p99" value={formatMs(snap().eventLoop.p99)}>
+              <Card
+                title="Event loop p99"
+                metric="event-loop.p99"
+                value={formatMs(snap().eventLoop.p99)}
+              >
                 <Sparkline values={eventLoopP99()} />
               </Card>
-              <Card title="Uptime" value={formatUptime(snap().uptimeSec)}>
+              <Card title="Uptime" metric="uptime" value={formatUptime(snap().uptimeSec)}>
                 <div class="empty" style="padding:0;text-align:left;font-size:11px">
                   GC: {snap().gc.count} runs, {formatMs(snap().gc.totalPauseMs)} total
                 </div>
@@ -65,9 +72,17 @@ export const RuntimeTab: Component = () => {
             </div>
 
             <div class="grid">
-              <Card title="External" value={formatBytes(snap().memory.external)} />
-              <Card title="Array buffers" value={formatBytes(snap().memory.arrayBuffers)} />
-              <Card title="Heap total" value={formatBytes(snap().memory.heapTotal)} />
+              <Card
+                title="External"
+                metric="external"
+                value={formatBytes(snap().memory.external)}
+              />
+              <Card
+                title="Array buffers"
+                metric="array-buffers"
+                value={formatBytes(snap().memory.arrayBuffers)}
+              />
+              <Card title="Heap total" metric="heap.total" value={formatBytes(snap().memory.heapTotal)} />
               <Card
                 title="CPU (last sample)"
                 value={`${(snap().cpu.userMicros / 1000).toFixed(1)} ms u / ${(snap().cpu.systemMicros / 1000).toFixed(1)} ms s`}
@@ -87,10 +102,20 @@ export const RuntimeTab: Component = () => {
   )
 }
 
-const Card: Component<{ title: string; value: string; children?: unknown }> = (props) => (
+const Card: Component<{
+  title: string
+  value: string
+  metric?: MetricKey
+  children?: unknown
+}> = (props) => (
   <div class="card">
     <div class="card-header">
-      <div class="card-title">{props.title}</div>
+      <div class="card-title">
+        {props.title}
+        <Show when={props.metric}>
+          {(m) => <InfoTip metric={m()} />}
+        </Show>
+      </div>
       <div class="card-value">{props.value}</div>
     </div>
     {props.children as unknown as Element}

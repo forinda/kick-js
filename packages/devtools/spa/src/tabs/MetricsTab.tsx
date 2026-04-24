@@ -1,6 +1,9 @@
 import { createMemo, createSignal, For, onMount, Show, type Component } from 'solid-js'
 import { rpc } from '../lib/rpc'
 import { formatMs, formatPercent, formatUptime } from '../lib/format'
+import { InfoTip, METRIC_DEFS } from '../lib/info'
+
+type MetricKey = keyof typeof METRIC_DEFS
 
 interface MetricsResponse {
   requests: number
@@ -75,11 +78,23 @@ export const MetricsTab: Component = () => {
         {(data) => (
           <>
             <div class="grid">
-              <Card title="Requests" value={data().requests.toString()} />
-              <Card title="Server errors" value={data().serverErrors.toString()} />
-              <Card title="Client errors" value={data().clientErrors.toString()} />
-              <Card title="Error rate" value={formatPercent(data().errorRate)} />
-              <Card title="Uptime" value={formatUptime(data().uptimeSeconds)} />
+              <Card title="Requests" metric="requests" value={data().requests.toString()} />
+              <Card
+                title="Server errors"
+                metric="server-errors"
+                value={data().serverErrors.toString()}
+              />
+              <Card
+                title="Client errors"
+                metric="client-errors"
+                value={data().clientErrors.toString()}
+              />
+              <Card
+                title="Error rate"
+                metric="error-rate"
+                value={formatPercent(data().errorRate)}
+              />
+              <Card title="Uptime" metric="uptime" value={formatUptime(data().uptimeSeconds)} />
             </div>
 
             <div class="card">
@@ -95,11 +110,26 @@ export const MetricsTab: Component = () => {
                     <tr>
                       <th>Route</th>
                       <th style="text-align:right">Calls</th>
-                      <th style="text-align:right">Avg</th>
-                      <th style="text-align:right">p50</th>
-                      <th style="text-align:right">p95</th>
-                      <th style="text-align:right">p99</th>
-                      <th style="text-align:right">Max</th>
+                      <th style="text-align:right">
+                        Avg
+                        <InfoTip metric="latency.avg" placement="bottom" />
+                      </th>
+                      <th style="text-align:right">
+                        p50
+                        <InfoTip metric="latency.p50" placement="bottom" />
+                      </th>
+                      <th style="text-align:right">
+                        p95
+                        <InfoTip metric="latency.p95" placement="bottom" />
+                      </th>
+                      <th style="text-align:right">
+                        p99
+                        <InfoTip metric="latency.p99" placement="bottom" />
+                      </th>
+                      <th style="text-align:right">
+                        Max
+                        <InfoTip metric="latency.max" placement="bottom" />
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -127,10 +157,13 @@ export const MetricsTab: Component = () => {
   )
 }
 
-const Card: Component<{ title: string; value: string }> = (props) => (
+const Card: Component<{ title: string; value: string; metric?: MetricKey }> = (props) => (
   <div class="card">
     <div class="card-header">
-      <div class="card-title">{props.title}</div>
+      <div class="card-title">
+        {props.title}
+        <Show when={props.metric}>{(m) => <InfoTip metric={m()} />}</Show>
+      </div>
       <div class="card-value">{props.value}</div>
     </div>
   </div>
