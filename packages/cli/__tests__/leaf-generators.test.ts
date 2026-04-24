@@ -146,6 +146,32 @@ describe('kick g <leaf>', () => {
     })
   })
 
+  describe('plugin', () => {
+    it('generates a definePlugin() factory (not a plain object literal)', () => {
+      const result = runCli(fixture, ['g', 'plugin', 'flags'])
+      assertCliOk(result, 'kick g plugin flags')
+      const file = join(fixture, 'src/plugins/flags.plugin.ts')
+      expect(existsSync(file)).toBe(true)
+      const content = readFileSync(file, 'utf-8')
+      expect(content).toContain('import {')
+      expect(content).toContain('definePlugin')
+      expect(content).toContain('export const FlagsPlugin = definePlugin')
+      expect(content).toContain("name: 'FlagsPlugin'")
+      // Legacy v3 plain-function-returns-KickPlugin form MUST NOT be emitted
+      expect(content).not.toContain('): KickPlugin {')
+      expect(content).not.toContain('export function flagsPlugin')
+    })
+
+    it('passes tsc --noEmit', () => {
+      runCli(fixture, ['g', 'plugin', 'flags'])
+      const tsc = runTsc(fixture)
+      if (tsc.exitCode !== 0) {
+        throw new Error(`tsc failed:\n${tsc.stdout}\n${tsc.stderr}`)
+      }
+      expect(tsc.exitCode).toBe(0)
+    })
+  })
+
   describe('test', () => {
     it('generates a vitest test scaffold', () => {
       const result = runCli(fixture, ['g', 'test', 'user-service'])

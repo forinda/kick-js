@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { writeFileSafe } from '../utils/fs'
-import { toPascalCase, toKebabCase, toCamelCase } from '../utils/naming'
+import { toPascalCase, toKebabCase } from '../utils/naming'
 
 interface GeneratePluginOptions {
   name: string
@@ -8,84 +8,87 @@ interface GeneratePluginOptions {
 }
 
 /**
- * Scaffold a `KickPlugin` under `src/plugins/<name>.plugin.ts`.
+ * Scaffold a `definePlugin()` factory under `src/plugins/<name>.plugin.ts`.
  *
- * Plugins are the canonical place to wire DI bindings, load extra
- * modules, add middleware, or attach startup hooks without writing a
- * full adapter. The generated template implements every optional
- * `KickPlugin` hook with commented examples so users can uncomment
- * the ones they need and delete the rest.
+ * v4 standardised on the `definePlugin()` factory pattern (architecture
+ * §21.2.2) — same surface as `defineAdapter()`, so adopters learn one
+ * mental model. The generated template uses the factory shape with a
+ * typed config object, defaults block, and a build function returning
+ * the underlying KickPlugin hooks.
  */
 export async function generatePlugin(options: GeneratePluginOptions): Promise<string[]> {
   const { name, outDir } = options
   const kebab = toKebabCase(name)
   const pascal = toPascalCase(name)
-  const camel = toCamelCase(name)
-  const factoryName = `${camel}Plugin`
   const files: string[] = []
 
   const filePath = join(outDir, `${kebab}.plugin.ts`)
   await writeFileSafe(
     filePath,
-    `import type { KickPlugin, Container, AppAdapter, AppModuleClass } from '@forinda/kickjs'
+    `import {
+  definePlugin,
+  type AppAdapter,
+  type AppModuleClass,
+  type Container,
+} from '@forinda/kickjs'
 
 /**
- * Options for the ${pascal} plugin.
+ * Configuration for the ${pascal} plugin.
  *
- * Plugins typically take a small options object in their factory so
- * callers can configure them inline at bootstrap time. Keep the
- * shape narrow — anything derived from the environment should be
- * read via \`getEnv\` inside the plugin itself, not forced onto the
- * caller.
+ * Plugins typically take a small config object so callers can tune
+ * behaviour at bootstrap time. Keep the shape narrow — anything
+ * derived from the environment should be read inside the build
+ * function via getEnv(), not forced onto the caller.
  */
-export interface ${pascal}PluginOptions {
-  // Add your plugin options here, for example:
+export interface ${pascal}PluginConfig {
+  // Add your plugin config here, e.g.:
   // enabled?: boolean
   // apiKey?: string
 }
 
 /**
- * ${pascal} plugin.
+ * ${pascal} plugin — built via \`definePlugin()\` so callers get the
+ * factory's call / \`.scoped()\` / \`.async()\` surfaces for free.
  *
- * A \`KickPlugin\` bundles DI bindings, modules, adapters, and
- * middleware into one object that can be added to \`bootstrap({ plugins })\`.
- * Every hook is optional — delete the ones you don't need and keep
- * only the surface your plugin actually uses.
+ * A plugin bundles DI bindings, modules, adapters, and middleware
+ * into one object that can be added to \`bootstrap({ plugins })\`.
  *
- * Lifecycle order:
+ * Lifecycle order (each hook is optional — delete the ones you don't
+ * need and keep only the surface your plugin actually uses):
  *
- *   1. \`register(container)\`   — runs before user modules load. Use
+ *   1. \`register(container)\` — runs before user modules load. Use
  *      it to bind services that modules depend on.
- *   2. \`modules()\`               — plugin modules load before user modules.
- *   3. \`adapters()\`              — plugin adapters are added before user adapters.
- *   4. \`middleware()\`            — plugin middleware runs before user middleware.
- *   5. \`onReady(container)\`     — runs after the app has fully bootstrapped.
- *   6. \`shutdown()\`              — runs on graceful shutdown.
+ *   2. \`modules()\`            — plugin modules load before user modules.
+ *   3. \`adapters()\`           — plugin adapters mount before user adapters.
+ *   4. \`middleware()\`         — plugin middleware runs before user middleware.
+ *   5. \`onReady(container)\`   — runs after the app has fully bootstrapped.
+ *   6. \`shutdown()\`           — runs on graceful shutdown.
  *
  * @example
  * \`\`\`ts
  * import { bootstrap } from '@forinda/kickjs'
- * import { ${factoryName} } from './plugins/${kebab}.plugin'
+ * import { ${pascal}Plugin } from './plugins/${kebab}.plugin'
  *
  * export const app = await bootstrap({
  *   modules,
- *   plugins: [${factoryName}({})],
+ *   plugins: [${pascal}Plugin({ /* config overrides *\\/ })],
  * })
  * \`\`\`
  */
-export function ${factoryName}(options: ${pascal}PluginOptions = {}): KickPlugin {
-  return {
-    name: '${kebab}',
-
+export const ${pascal}Plugin = definePlugin<${pascal}PluginConfig>({
+  name: '${pascal}Plugin',
+  defaults: {
+    // Default config values go here
+  },
+  build: (_config, { name: _name }) => ({
     /**
      * Register DI bindings before modules load.
      * Use \`container.registerInstance(TOKEN, value)\` for singletons
      * and \`container.registerFactory(TOKEN, () => ...)\` for lazy
      * constructions.
      */
-    register(container: Container): void {
-      // Example: bind a configured service to a DI token
-      // container.registerInstance(MY_TOKEN, new MyService(options))
+    register(_container: Container): void {
+      // Example: _container.registerInstance(MY_TOKEN, new MyService(_config))
     },
 
     /**
@@ -101,11 +104,11 @@ export function ${factoryName}(options: ${pascal}PluginOptions = {}): KickPlugin
 
     /**
      * Return adapter instances to be added to the application.
-     * Plugin adapters are added before user adapters.
+     * Plugin adapters mount before user adapters.
      */
     adapters(): AppAdapter[] {
       return [
-        // new MyAdapter({ ... }),
+        // MyAdapter({ ... }),
       ]
     },
 
@@ -113,10 +116,10 @@ export function ${factoryName}(options: ${pascal}PluginOptions = {}): KickPlugin
      * Return Express middleware entries to be added to the global
      * pipeline. Plugin middleware runs before user-defined middleware.
      */
-    middleware(): any[] {
+    middleware(): unknown[] {
       return [
         // helmet(),
-        // myCustomMiddleware(options),
+        // myCustomMiddleware(_config),
       ]
     },
 
@@ -125,9 +128,9 @@ export function ${factoryName}(options: ${pascal}PluginOptions = {}): KickPlugin
      * for post-startup work like logging, health checks, or warming
      * a cache. Runs once per process.
      */
-    async onReady(container: Container): Promise<void> {
-      // const logger = container.resolve(Logger)
-      // logger.info('${pascal} plugin ready')
+    async onReady(_container: Container): Promise<void> {
+      // const log = _container.resolve(Logger)
+      // log.info('${pascal} plugin ready')
     },
 
     /**
@@ -135,10 +138,10 @@ export function ${factoryName}(options: ${pascal}PluginOptions = {}): KickPlugin
      * resources this plugin owns (connections, timers, subscriptions).
      */
     async shutdown(): Promise<void> {
-      // await this.connection?.close()
+      // Example: await this.connection?.close()
     },
-  }
-}
+  }),
+})
 `,
   )
   files.push(filePath)
