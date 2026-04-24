@@ -122,13 +122,18 @@ describe('kick g <leaf>', () => {
   })
 
   describe('adapter', () => {
-    it('generates an AppAdapter class', () => {
+    it('generates a defineAdapter() factory (not the legacy class form)', () => {
       const result = runCli(fixture, ['g', 'adapter', 'metrics'])
       assertCliOk(result, 'kick g adapter metrics')
       const file = join(fixture, 'src/adapters/metrics.adapter.ts')
       expect(existsSync(file)).toBe(true)
       const content = readFileSync(file, 'utf-8')
-      expect(content).toContain('class MetricsAdapter')
+      expect(content).toContain("import { defineAdapter,")
+      expect(content).toContain('export const MetricsAdapter = defineAdapter')
+      expect(content).toContain("name: 'MetricsAdapter'")
+      // Legacy v3 class shape MUST NOT be emitted
+      expect(content).not.toContain('class MetricsAdapter')
+      expect(content).not.toContain('implements AppAdapter')
     })
 
     it('passes tsc --noEmit', () => {
