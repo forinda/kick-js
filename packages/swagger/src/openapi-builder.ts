@@ -212,21 +212,36 @@ function buildOpenAPISpecUncached(options: SwaggerOptions = {}): any {
    */
   const registerSchema = (jsonSchema: Record<string, unknown>, hint?: string): any => {
     // Try to extract a name from the schema
-    let name = (jsonSchema.title as string) || (jsonSchema.label as string) || hint || ''
-    if (!name) {
-      name = `Schema${++schemaCounter}`
+    let baseName = (jsonSchema.title as string) || (jsonSchema.label as string) || hint || ''
+    if (!baseName) {
+      baseName = `Schema${++schemaCounter}`
     }
     // Sanitize name for OpenAPI (remove spaces, special chars)
-    name = name.replace(/[^a-zA-Z0-9]/g, '')
+    baseName = baseName.replace(/[^a-zA-Z0-9]/g, '')
 
-    // Avoid duplicates — if already registered with same name, reuse
-    if (!componentSchemas[name]) {
-      const clean = { ...jsonSchema }
-      delete clean.title
-      delete clean.label
-      delete clean.$schema
-      componentSchemas[name] = clean
+    const clean = { ...jsonSchema }
+    delete clean.title
+    delete clean.label
+    delete clean.$schema
+    const cleanJson = JSON.stringify(clean)
+
+    // Resolve name collisions: if `baseName` already maps to a different
+    // schema body, suffix with `_2`, `_3`, etc. until a free slot or a
+    // structural duplicate is found. Two semantically-identical schemas
+    // (`CreateUserDTO` registered twice) collapse to one entry by
+    // JSON-equality, preserving the existing dedupe behaviour for the
+    // common case while preventing the silent overwrite that produced
+    // wrong-shape docs when two distinct DTOs hit the same hint.
+    let name = baseName
+    let suffix = 2
+    while (componentSchemas[name]) {
+      if (JSON.stringify(componentSchemas[name]) === cleanJson) {
+        // Same schema body — reuse the existing slot.
+        return { $ref: `#/components/schemas/${name}` }
+      }
+      name = `${baseName}_${suffix++}`
     }
+    componentSchemas[name] = clean
     return { $ref: `#/components/schemas/${name}` }
   }
 
@@ -361,16 +376,18 @@ function buildOpenAPISpecUncached(options: SwaggerOptions = {}): any {
       const tags = methodTags.length > 0 ? methodTags : classTags
       tags.forEach((t) => allTags.add(t))
 
-      // Build operation object
+      // Build operation object — `parameters` and `responses` are
+      // attached below only when they have entries, so we don't emit
+      // empty arrays/objects only to delete them later.
       const op: any = {
         ...(tags.length > 0 ? { tags } : {}),
         ...(operation.summary ? { summary: operation.summary } : {}),
         ...(operation.description ? { description: operation.description } : {}),
         ...(operation.operationId ? { operationId: operation.operationId } : {}),
         ...(operation.deprecated ? { deprecated: true } : {}),
-        parameters: [],
         responses: {},
       }
+      const parameters: any[] = []
 
       // Path parameters
       const paramMatches = fullPath.match(/:([a-zA-Z_]+)/g) || []
@@ -389,12 +406,7 @@ function buildOpenAPISpecUncached(options: SwaggerOptions = {}): any {
           }
         }
 
-        op.parameters.push({
-          name: paramName,
-          in: 'path',
-          required: true,
-          schema,
-        })
+        parameters.push({ name: paramName, in: 'path', required: true, schema })
       }
 
       // Query parameters
@@ -405,7 +417,7 @@ function buildOpenAPISpecUncached(options: SwaggerOptions = {}): any {
           for (const [name, propSchema] of Object.entries(
             jsonSchema.properties as Record<string, any>,
           )) {
-            op.parameters.push({
+            parameters.push({
               name,
               in: 'query',
               required: required.includes(name),
@@ -423,7 +435,7 @@ function buildOpenAPISpecUncached(options: SwaggerOptions = {}): any {
       )
       if (queryParamsConfig) {
         if (queryParamsConfig.filterable?.length) {
-          op.parameters.push({
+          parameters.push({
             name: 'filter',
             in: 'query',
             required: false,
@@ -434,7 +446,7 @@ function buildOpenAPISpecUncached(options: SwaggerOptions = {}): any {
           })
         }
         if (queryParamsConfig.sortable?.length) {
-          op.parameters.push({
+          parameters.push({
             name: 'sort',
             in: 'query',
             required: false,
@@ -445,7 +457,7 @@ function buildOpenAPISpecUncached(options: SwaggerOptions = {}): any {
           })
         }
         if (queryParamsConfig.searchable?.length) {
-          op.parameters.push({
+          parameters.push({
             name: 'q',
             in: 'query',
             required: false,
@@ -453,7 +465,7 @@ function buildOpenAPISpecUncached(options: SwaggerOptions = {}): any {
             schema: { type: 'string' },
           })
         }
-        op.parameters.push(
+        parameters.push(
           {
             name: 'page',
             in: 'query',
@@ -471,8 +483,7 @@ function buildOpenAPISpecUncached(options: SwaggerOptions = {}): any {
         )
       }
 
-      // Remove empty parameters array
-      if (op.parameters.length === 0) delete op.parameters
+      if (parameters.length > 0) op.parameters = parameters
 
       // Request body
       if (route.validation?.body && ['post', 'put', 'patch'].includes(method)) {

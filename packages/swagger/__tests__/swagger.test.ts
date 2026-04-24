@@ -725,6 +725,66 @@ describe('registerControllerForDocs — per-scope isolation', () => {
     expect(markerSeen).toBe(true)
   })
 
+  it('two different DTOs with the same hint suffix-disambiguate, no overwrite', () => {
+    @Controller()
+    class CollisionController {
+      @Post('/a')
+      a() {}
+      @Post('/b')
+      b() {}
+    }
+    // Inject two distinct validation schemas under the same generated
+    // hint (`aBody` / `bBody`) with custom `name: 'Body'` to force the
+    // collision path. Both should land in components.schemas under
+    // disambiguated keys (Body + Body_2), not silently overwrite.
+    const aSchema = {
+      _def: {},
+      safeParse: () => ({ success: true }),
+      toJSONSchema: () => ({ type: 'object', properties: { a: { type: 'string' } } }),
+    }
+    const bSchema = {
+      _def: {},
+      safeParse: () => ({ success: true }),
+      toJSONSchema: () => ({ type: 'object', properties: { b: { type: 'number' } } }),
+    }
+    const routes: any[] = Reflect.getMetadata('kick:routes', CollisionController) ?? []
+    if (routes[0]) routes[0].validation = { body: aSchema, name: 'Body' }
+    if (routes[1]) routes[1].validation = { body: bSchema, name: 'Body' }
+
+    registerControllerForDocs(CollisionController, '/api')
+    const spec = buildOpenAPISpec()
+
+    const schemas = spec.components?.schemas ?? {}
+    expect(Object.keys(schemas)).toContain('Body')
+    expect(Object.keys(schemas)).toContain('Body_2')
+    // The two schema bodies must remain distinct — overwrite would have
+    // collapsed both into one.
+    expect(schemas.Body).not.toEqual(schemas.Body_2)
+  })
+
+  it('two registrations of structurally-identical DTOs collapse to one entry', () => {
+    @Controller()
+    class IdenticalController {
+      @Post('/a')
+      a() {}
+      @Post('/b')
+      b() {}
+    }
+    const sameSchema = {
+      _def: {},
+      safeParse: () => ({ success: true }),
+      toJSONSchema: () => ({ type: 'object', properties: { x: { type: 'string' } } }),
+    }
+    const routes: any[] = Reflect.getMetadata('kick:routes', IdenticalController) ?? []
+    if (routes[0]) routes[0].validation = { body: sameSchema, name: 'Shared' }
+    if (routes[1]) routes[1].validation = { body: sameSchema, name: 'Shared' }
+
+    registerControllerForDocs(IdenticalController, '/api')
+    const spec = buildOpenAPISpec()
+
+    expect(Object.keys(spec.components?.schemas ?? {})).toEqual(['Shared'])
+  })
+
   it('scoped clearRegisteredRoutes only flushes that scope', () => {
     @Controller()
     class KeepController {

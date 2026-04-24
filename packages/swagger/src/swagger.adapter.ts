@@ -69,8 +69,11 @@ export const SwaggerAdapter = defineAdapter<SwaggerAdapterOptions>({
     specPath: '/openapi.json',
   },
   build: (config) => {
-    const isDisabled = (): boolean =>
-      Boolean(config.disableInProd) && process.env.NODE_ENV === 'production'
+    // Resolved once at build time — config.disableInProd is set at
+    // construction; NODE_ENV doesn't change at runtime. Checking on
+    // every onRouteMount call (which fires per-controller) is noise.
+    const disabled = Boolean(config.disableInProd) && process.env.NODE_ENV === 'production'
+    const isDisabled = (): boolean => disabled
 
     // Snapshot the user-supplied servers list once per adapter instance
     // so subsequent afterStart runs (HMR reload, dev-mode restart loops,
