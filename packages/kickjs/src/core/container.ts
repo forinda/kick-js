@@ -413,6 +413,22 @@ export class Container {
         reg.lastResolvedAt = Date.now()
         return store.instances.get(token) as T
       }
+      // Factory-registered binding: invoke the factory once per request
+      // and cache the result alongside class-instantiated REQUEST tokens.
+      // Without this branch, registerFactory(token, fn, Scope.REQUEST)
+      // silently falls through to createInstance(reg) which `new`s the
+      // factory's placeholder `target: Object` and returns an empty {}
+      // — the factory function never runs.
+      if (reg.factory) {
+        const start = performance.now()
+        const instance = reg.factory()
+        reg.resolveDurationMs = performance.now() - start
+        reg.resolveCount++
+        reg.lastResolvedAt = Date.now()
+        if (!reg.firstResolvedAt) reg.firstResolvedAt = Date.now()
+        store.instances.set(token, instance)
+        return instance as T
+      }
       // Create instance and cache for this request only
       const start = performance.now()
       const instance = this.createInstance(reg)
