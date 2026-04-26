@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs",
-  "version": "5.0.0",
+  "version": "5.0.1",
   "description": "A production-grade, decorator-driven Node.js framework built on Express 5 and TypeScript.",
   "keywords": [
     "kickjs",
