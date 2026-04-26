@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-devtools",
-  "version": "5.0.1",
+  "version": "5.0.2",
   "description": "Development introspection dashboard for KickJS — routes, DI container, metrics, health",
   "keywords": [
     "kickjs",
