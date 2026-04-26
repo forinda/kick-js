@@ -13,6 +13,7 @@ import {
   requestStore,
   requestScopeMiddleware,
   type RequestStore,
+  createToken,
 } from '../src/index'
 import { createTestApp, createTestModule } from '@forinda/kickjs-testing'
 import express from 'express'
@@ -157,7 +158,7 @@ describe('REQUEST scope — Container unit tests', () => {
   })
 
   it('pre-registered values in request store resolve correctly', () => {
-    const USER_TOKEN = Symbol('USER')
+    const USER_TOKEN = createToken('USER')
 
     const container = Container.getInstance()
     // Register a placeholder so the container knows about the token and its scope
@@ -166,11 +167,61 @@ describe('REQUEST scope — Container unit tests', () => {
     const store: RequestStore = {
       requestId: 'req-with-user',
       instances: new Map(),
-      values: new Map([[USER_TOKEN, { id: 42, name: 'Alice' }]]),
+      values: new Map<any, any>([[USER_TOKEN, { id: 42, name: 'Alice' }]]),
     }
 
     const user = requestStore.run(store, () => container.resolve<any>(USER_TOKEN))
     expect(user).toEqual({ id: 42, name: 'Alice' })
+  })
+
+  it('factory-registered REQUEST token invokes the factory once per request', () => {
+    // Regression: the REQUEST branch of Container.resolve previously fell
+    // through to createInstance(reg) without checking reg.factory, so
+    // registerFactory(token, fn, Scope.REQUEST) would silently return
+    // an empty `{}` (the result of `new Object()` against the factory's
+    // placeholder target) instead of the factory's return value.
+    interface TenantDb {
+      db: { query: () => string }
+    }
+    const TENANT_DB = createToken<TenantDb>('app/tenant/db')
+    let factoryCalls = 0
+
+    const container = Container.getInstance()
+    container.registerFactory(
+      TENANT_DB,
+      (): TenantDb => {
+        factoryCalls += 1
+        return { db: { query: () => 'tenant-row' } }
+      },
+      Scope.REQUEST,
+    )
+
+    const reqA: RequestStore = {
+      requestId: 'req-a',
+      instances: new Map(),
+      values: new Map(),
+    }
+    const reqB: RequestStore = {
+      requestId: 'req-b',
+      instances: new Map(),
+      values: new Map(),
+    }
+
+    // First resolve in request A — factory runs once.
+    const handleA1 = requestStore.run(reqA, () => container.resolve(TENANT_DB))
+    expect(handleA1.db.query()).toBe('tenant-row')
+    expect(factoryCalls).toBe(1)
+
+    // Second resolve in the same request — cached, factory does NOT re-run.
+    const handleA2 = requestStore.run(reqA, () => container.resolve(TENANT_DB))
+    expect(handleA2).toBe(handleA1)
+    expect(factoryCalls).toBe(1)
+
+    // Resolve in a different request — factory runs again, fresh instance.
+    const handleB = requestStore.run(reqB, () => container.resolve(TENANT_DB))
+    expect(handleB).not.toBe(handleA1)
+    expect(handleB.db.query()).toBe('tenant-row')
+    expect(factoryCalls).toBe(2)
   })
 
   it('concurrent requests have isolated instance caches', async () => {
@@ -183,18 +234,20 @@ describe('REQUEST scope — Container unit tests', () => {
     container.register(IsolatedService, IsolatedService, Scope.REQUEST)
 
     const results = await Promise.all(
-      Array.from({ length: 5 }, (_, i) =>
-        new Promise<{ reqId: string; instanceId: number }>((resolve) => {
-          const store: RequestStore = {
-            requestId: `concurrent-${i}`,
-            instances: new Map(),
-            values: new Map(),
-          }
-          requestStore.run(store, () => {
-            const svc = container.resolve<IsolatedService>(IsolatedService)
-            resolve({ reqId: `concurrent-${i}`, instanceId: svc.id })
-          })
-        }),
+      Array.from(
+        { length: 5 },
+        (_, i) =>
+          new Promise<{ reqId: string; instanceId: number }>((resolve) => {
+            const store: RequestStore = {
+              requestId: `concurrent-${i}`,
+              instances: new Map(),
+              values: new Map(),
+            }
+            requestStore.run(store, () => {
+              const svc = container.resolve<IsolatedService>(IsolatedService)
+              resolve({ reqId: `concurrent-${i}`, instanceId: svc.id })
+            })
+          }),
       ),
     )
 
@@ -333,8 +386,6 @@ describe('REQUEST scope — HTTP integration', () => {
       }
     }
 
-    const SHARED_TOKEN = 'SHARED_SVC'
-
     const TestModule = createTestModule({
       register: (c) => {
         c.register(SharedInRequest, SharedInRequest, Scope.REQUEST)
@@ -433,9 +484,7 @@ describe('REQUEST scope — HTTP integration', () => {
       middleware: [express.json(), requestScopeMiddleware()],
     })
 
-    const res = await request(expressApp)
-      .get('/api/v1/reqid/')
-      .set('x-request-id', 'trace-abc-123')
+    const res = await request(expressApp).get('/api/v1/reqid/').set('x-request-id', 'trace-abc-123')
 
     expect(res.body.requestId).toBe('trace-abc-123')
   })
