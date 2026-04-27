@@ -46,13 +46,16 @@ function extractTable(t: TableDecl<string, Record<string, ColumnBuilder>>): Tabl
       })
     }
     if (state.references) {
+      // Resolve the FK thunk lazily — by extract time the table const has
+      // been bound, so self-references (`() => self.id`) work.
+      const ref = state.references.thunk()
       foreignKeys.push({
         name: `${t.__name}_${colKey}_fk`,
         columns: [colKey],
-        refTable: state.references.table,
-        refColumns: [state.references.column],
-        onDelete: state.references.onDelete as ForeignKeySnapshot['onDelete'],
-        onUpdate: state.references.onUpdate as ForeignKeySnapshot['onUpdate'],
+        refTable: ref.__tableName,
+        refColumns: [ref.__name],
+        onDelete: state.references.onDelete,
+        onUpdate: state.references.onUpdate,
       })
     }
   }

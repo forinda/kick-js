@@ -1,4 +1,44 @@
-import type { ColumnSnapshot } from '../../snapshot/types'
+import type { ColumnSnapshot, FkAction } from '../../snapshot/types'
+
+/**
+ * Runtime + type representation of a column reference (e.g. `users.id`).
+ * Carries the parent table name, the column's own name, plus runtime
+ * accessors used by FK thunks and constraint builders.
+ *
+ * Exported so adopters can annotate self-referencing thunks without
+ * spelling the shape inline:
+ *
+ *   parentId: uuid().references((): ColumnRef => categories.id)
+ *
+ * Without the annotation the initializer of a self-referencing const
+ * trips TS7022 — TS needs to infer the const while the initializer
+ * already references it.
+ */
+export interface ColumnRef {
+  __tableName: string
+  __name: string
+  __builder: ColumnBuilder
+  __state: () => ReturnType<ColumnBuilder['__state']>
+}
+
+/**
+ * Resolved FK spec — `table` / `column` are pulled by invoking `thunk()`
+ * lazily. The thunk pattern lets self-referencing tables work:
+ *
+ *   const categories = table('categories', {
+ *     id: uuid().primaryKey().defaultRandom(),
+ *     parentId: uuid().references((): ColumnRef => categories.id),
+ *   })
+ *
+ * If we resolved at `.references()` call time, `categories` would TDZ-fail
+ * inside its own initializer. Storing the thunk and resolving on read
+ * (extract / render / emit) defers until after the const binding lands.
+ */
+export interface FkSpec {
+  thunk: () => ColumnRef
+  onDelete: FkAction
+  onUpdate: FkAction
+}
 
 export interface ColumnState {
   type: string
@@ -6,7 +46,7 @@ export interface ColumnState {
   default: string | null
   primaryKey: boolean
   unique: boolean
-  references: { table: string; column: string; onDelete: string; onUpdate: string } | null
+  references: FkSpec | null
 }
 
 /**
@@ -85,13 +125,13 @@ export class ColumnBuilder<T = unknown> {
   }
 
   references(
-    target: () => { __tableName: string; __name: string },
-    opts: { onDelete?: string; onUpdate?: string } = {},
+    target: () => ColumnRef,
+    opts: { onDelete?: FkAction; onUpdate?: FkAction } = {},
   ): this {
-    const ref = target()
+    // Store the thunk — do NOT invoke it here. Self-referencing tables
+    // pass `() => self.id` whose binding does not exist yet.
     this.state.references = {
-      table: ref.__tableName,
-      column: ref.__name,
+      thunk: target,
       onDelete: opts.onDelete ?? 'no_action',
       onUpdate: opts.onUpdate ?? 'no_action',
     }

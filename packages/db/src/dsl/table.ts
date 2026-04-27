@@ -1,12 +1,7 @@
-import type { ColumnBuilder } from './columns/types'
+import type { ColumnBuilder, ColumnRef } from './columns/types'
 import type { IndexDecl } from './constraints'
 
-export interface ColumnRef {
-  __tableName: string
-  __name: string
-  __builder: ColumnBuilder
-  __state: () => ReturnType<ColumnBuilder['__state']>
-}
+export type { ColumnRef }
 
 export interface TableDecl<
   TName extends string = string,

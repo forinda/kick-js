@@ -1,5 +1,5 @@
-export { ColumnBuilder, KICK_GENERATED } from './types'
-export type { ColumnState, GeneratedBrand } from './types'
+export { ColumnBuilder, KICK_GENERATED, KICK_NOT_NULL } from './types'
+export type { ColumnState, ColumnRef, FkSpec, GeneratedBrand, NotNullBrand } from './types'
 export {
   serial,
   bigSerial,

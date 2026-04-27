@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { table, serial, integer, varchar, index, unique } from '@forinda/kickjs-db'
+import { table, serial, integer, varchar, index, unique, ColumnRef } from '@forinda/kickjs-db'
 
 describe('table() factory', () => {
   const users = table(
@@ -44,12 +44,26 @@ describe('FK references', () => {
   })
 
   it('records FK on the column state', () => {
-    expect(posts.authorId.__state().references).toEqual({
-      table: 'users',
-      column: 'id',
-      onDelete: 'cascade',
-      onUpdate: 'no_action',
+    const fk = posts.authorId.__state().references
+    expect(fk).not.toBeNull()
+    const ref = fk!.thunk()
+    expect(ref.__tableName).toBe('users')
+    expect(ref.__name).toBe('id')
+    expect(fk!.onDelete).toBe('cascade')
+    expect(fk!.onUpdate).toBe('no_action')
+  })
+
+  it('supports self-referencing tables (lazy thunk)', () => {
+    const categories = table('categories', {
+      id: serial().primaryKey(),
+      parentId: integer().references(():ColumnRef => categories.id, { onDelete: 'set_null' }),
     })
+    const fk = categories.parentId.__state().references
+    expect(fk).not.toBeNull()
+    const ref = fk!.thunk()
+    expect(ref.__tableName).toBe('categories')
+    expect(ref.__name).toBe('id')
+    expect(fk!.onDelete).toBe('set_null')
   })
 })
 
