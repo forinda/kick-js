@@ -30,6 +30,18 @@ export function diff(prev: SchemaSnapshot, next: SchemaSnapshot): ChangeSet {
   return changes
 }
 
-function diffTable(_prev: TableSnapshot, _next: TableSnapshot, _changes: Change[]) {
-  // Filled in Tasks 10-12
+function diffTable(prev: TableSnapshot, next: TableSnapshot, changes: Change[]) {
+  const prevCols = new Set(Object.keys(prev.columns))
+  const nextCols = new Set(Object.keys(next.columns))
+
+  for (const c of prevCols) {
+    if (!nextCols.has(c)) {
+      changes.push({ kind: 'dropColumn', table: next.name, column: prev.columns[c] })
+    }
+  }
+  for (const c of nextCols) {
+    if (!prevCols.has(c)) {
+      changes.push({ kind: 'addColumn', table: next.name, column: next.columns[c] })
+    }
+  }
 }
