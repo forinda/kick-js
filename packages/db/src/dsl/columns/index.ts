@@ -22,4 +22,7 @@ export {
   interval,
   uuid,
   UuidBuilder,
+  json,
+  jsonb,
+  bytea,
 } from './builders'

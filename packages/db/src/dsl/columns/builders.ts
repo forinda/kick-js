@@ -70,6 +70,18 @@ export function uuid(): UuidBuilder {
   return new UuidBuilder()
 }
 
+export function json<_T = unknown>(): ColumnBuilder {
+  return new ColumnBuilder('json')
+}
+
+export function jsonb<_T = unknown>(): ColumnBuilder {
+  return new ColumnBuilder('jsonb')
+}
+
+export function bytea(): ColumnBuilder {
+  return new ColumnBuilder('bytea')
+}
+
 export function bigSerial(): ColumnBuilder {
   return new ColumnBuilder('bigserial', { nullable: false })
 }

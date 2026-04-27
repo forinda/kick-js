@@ -44,6 +44,11 @@ export class ColumnBuilder {
     return this
   }
 
+  array(): this {
+    this.state.type = `${this.state.type}[]`
+    return this
+  }
+
   references(
     target: () => { __tableName: string; __name: string },
     opts: { onDelete?: string; onUpdate?: string } = {},
