@@ -14,10 +14,19 @@ export function diff(prev: SchemaSnapshot, next: SchemaSnapshot): ChangeSet {
     }
   }
 
-  // Creates second
+  // Creates second — emit createTable, then addIndex/addForeignKey for the
+  // new table's secondary objects so each statement has a 1:1 mapping with a
+  // change kind. This keeps forward and reverse symmetric and lets the emitter
+  // stay simple (createTable only renders columns + primary key).
   for (const name of nextTables) {
-    if (!prevTables.has(name)) {
-      changes.push({ kind: 'createTable', table: next.tables[name] })
+    if (prevTables.has(name)) continue
+    const t = next.tables[name]
+    changes.push({ kind: 'createTable', table: t })
+    for (const i of t.indexes) {
+      changes.push({ kind: 'addIndex', table: name, index: i })
+    }
+    for (const f of t.foreignKeys) {
+      changes.push({ kind: 'addForeignKey', table: name, fk: f })
     }
   }
 
