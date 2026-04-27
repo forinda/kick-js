@@ -9,6 +9,8 @@ export type {
   SchemaSnapshot,
 } from './snapshot/types'
 
+export { extractSnapshot } from './snapshot/extract'
+
 export * from './dsl/columns'
 export * from './dsl/table'
 export * from './dsl/constraints'
