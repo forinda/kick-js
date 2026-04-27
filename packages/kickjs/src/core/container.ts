@@ -643,14 +643,37 @@ export class Container {
     return instance
   }
 
-  /** Extract dependency token names from constructor metadata */
+  /**
+   * Extract every dependency token name a class declares — both
+   * constructor params (`@Inject` + emitted `design:paramtypes`) and
+   * `@Autowired` properties (read lazily at injection time, but
+   * captured here so devtools surfaces a complete dependency graph).
+   *
+   * Without the property branch, classes that rely entirely on
+   * `@Autowired` show `dependencies: []` in the introspection panel
+   * even though they have real DI deps — see /_debug topology.
+   */
   private extractDependencies(target: Constructor): string[] {
     const paramTypes = getClassMeta<Constructor[]>(METADATA.PARAM_TYPES, target, [])
     const injectTokens = getMetaRecord<any>(METADATA.INJECT, target)
-    return paramTypes.map((type, index) => {
+    const ctorDeps = paramTypes.map((type, index) => {
       const token = injectTokens[index] || type
       return tokenName(token)
     })
+
+    // @Autowired properties live on `target.prototype`. Token may be
+    // explicit (`@Autowired('SOME_TOKEN')`) or fall back to the
+    // emitted `design:type` metadata of the property.
+    const autowiredProps = getMetaMap<string, any>(METADATA.AUTOWIRED, target.prototype)
+    const propDeps: string[] = []
+    for (const [prop, token] of autowiredProps) {
+      const resolvedToken =
+        token || getMethodMetaOrUndefined(METADATA.PROPERTY_TYPE, target.prototype, prop)
+      if (resolvedToken) propDeps.push(tokenName(resolvedToken))
+    }
+
+    // De-dupe — a class can declare the same token in both surfaces.
+    return [...new Set([...ctorDeps, ...propDeps])]
   }
 
   private injectProperties(instance: any, target: Constructor): void {
