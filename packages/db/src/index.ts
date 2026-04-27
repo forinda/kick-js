@@ -43,7 +43,14 @@ export {
 } from './migrate/schema'
 export { MemoryMigrationAdapter } from './migrate/memory-adapter'
 
-export { migrateLatest, migrateUp, type RunnerOptions, type AppliedSummary } from './migrate/runner'
+export {
+  migrateLatest,
+  migrateUp,
+  migrateDown,
+  type RunnerOptions,
+  type AppliedSummary,
+  type ReversedSummary,
+} from './migrate/runner'
 
 export { emitPg } from './emit/pg'
 

@@ -126,3 +126,40 @@ export async function migrateUp(opts: RunnerOptions): Promise<AppliedSummary> {
     return runForward(opts, pending.slice(0, 1))
   })
 }
+
+export interface ReversedSummary {
+  reversed: string | null
+}
+
+async function applyReverse(id: string, opts: RunnerOptions): Promise<void> {
+  const dir = path.join(opts.migrationsDir, id)
+  const downSql = await readFile(path.join(dir, 'down.sql'), 'utf8')
+  const meta = JSON.parse(await readFile(path.join(dir, 'meta.json'), 'utf8'))
+  const requireReviewed = opts.requireReviewed ?? process.env.NODE_ENV !== 'development'
+  if (requireReviewed && meta.reviewed !== true) {
+    throw new UnreviewedMigrationError(id)
+  }
+  const useTx = meta.transaction !== false
+  if (useTx) {
+    await opts.adapter.applySqlInTx(downSql)
+  } else {
+    await opts.adapter.applySqlNoTx(downSql)
+  }
+  await opts.adapter.removeApplied(id)
+}
+
+export async function migrateDown(opts: RunnerOptions): Promise<ReversedSummary> {
+  await opts.adapter.ensureMigrationTables()
+  return withLock(opts, async () => {
+    const applied = await opts.adapter.listApplied()
+    if (applied.length === 0) return { reversed: null }
+    // Sort by batch then appliedAt so 'most recent' is unambiguous even if
+    // two migrations share a batch number (same `migrate latest` run).
+    const sorted = [...applied].sort((a, b) =>
+      a.batch !== b.batch ? a.batch - b.batch : a.appliedAt.localeCompare(b.appliedAt),
+    )
+    const last = sorted[sorted.length - 1]
+    await applyReverse(last.id, opts)
+    return { reversed: last.id }
+  })
+}
