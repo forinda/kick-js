@@ -1,6 +1,8 @@
 import path from 'node:path'
 import type { Command } from 'commander'
 
+import { writeFile } from 'node:fs/promises'
+
 import {
   generate,
   resolveDbConfig,
@@ -9,6 +11,7 @@ import {
   migrateDown,
   migrateRollback,
   migrateStatus,
+  renderSchemaSource,
   type DbConfig,
   type MigrationAdapter,
 } from '@forinda/kickjs-db'
@@ -196,6 +199,31 @@ export function registerDbCommands(program: Command): void {
       try {
         const status = await migrateStatus({ adapter, migrationsDir: config.migrationsDir })
         printStatusTable(status)
+      } finally {
+        await cleanup()
+      }
+    })
+
+  // ── kick db introspect ─────────────────────────────────────────────────
+  db.command('introspect')
+    .description('Generate a TypeScript schema file from a live database')
+    .option('-c, --config <path>', 'Path to kick.config.ts', 'kick.config.ts')
+    .option('--out <path>', 'Output file (defaults to db.schemaPath from config)')
+    .option('--json', 'Print the raw SchemaSnapshot JSON to stdout instead of writing TS source')
+    .action(async (opts: BaseOpts & { out?: string; json?: boolean }) => {
+      const config = await loadConfig(opts)
+      const { adapter, cleanup } = await resolveAdapter(config)
+      try {
+        const snapshot = await adapter.introspect()
+        if (opts.json) {
+          console.log(JSON.stringify(snapshot, null, 2))
+          return
+        }
+        const out = opts.out ?? config.schemaPath
+        const source = renderSchemaSource(snapshot)
+        await writeFile(out, source, 'utf8')
+        const tableCount = Object.keys(snapshot.tables).length
+        console.log(`Wrote ${out} (${tableCount} table${tableCount === 1 ? '' : 's'}).`)
       } finally {
         await cleanup()
       }

@@ -840,8 +840,8 @@ importers:
         specifier: ^8.11.10
         version: 8.20.0
       kysely:
-        specifier: ^0.27.5
-        version: 0.27.6
+        specifier: ^0.28.16
+        version: 0.28.16
       pg:
         specifier: ^8.13.1
         version: 8.20.0
@@ -4686,10 +4686,6 @@ packages:
   kareem@3.2.0:
     resolution: {integrity: sha512-VS8MWZz/cT+SqBCpVfNN4zoVz5VskR3N4+sTmUXme55e9avQHntpwpNq0yjnosISXqwJ3AQVjlbI4Dyzv//JtA==}
     engines: {node: '>=18.0.0'}
-
-  kysely@0.27.6:
-    resolution: {integrity: sha512-FIyV/64EkKhJmjgC0g2hygpBv5RNWVPyNCqSAD7eTCv6eFWNIi4PN1UvdSJGicN/o35bnevgis4Y0UDC0qi8jQ==}
-    engines: {node: '>=14.0.0'}
 
   kysely@0.28.16:
     resolution: {integrity: sha512-3i5pmOiZvMDj00qhrIVbH0AnioVTx22DMP7Vn5At4yJO46iy+FM8Y/g61ltenLVSo3fiO8h8Q3QOFgf/gQ72ww==}
@@ -9509,8 +9505,6 @@ snapshots:
       safe-buffer: 5.2.1
 
   kareem@3.2.0: {}
-
-  kysely@0.27.6: {}
 
   kysely@0.28.16: {}
 

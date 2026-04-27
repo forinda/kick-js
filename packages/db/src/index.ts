@@ -10,6 +10,7 @@ export type {
 } from './snapshot/types'
 
 export { extractSnapshot } from './snapshot/extract'
+export { renderSchemaSource } from './snapshot/render'
 
 export type * from './diff/types'
 export { diff } from './diff/engine'

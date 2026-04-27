@@ -1,12 +1,14 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers/postgresql'
 import pg from 'pg'
-import { PostgresDialect } from 'kysely'
+import { PostgresDialect, type Generated } from 'kysely'
 
 import { createDbClient, table, serial, varchar, type KickDbClient } from '@forinda/kickjs-db'
 
 interface DB {
-  users: { id: number; email: string }
+  // Generated<T> tells Kysely 'id' is auto-assigned by the DB (serial), so
+  // it's optional on insert but always-present on select.
+  users: { id: Generated<number>; email: string }
 }
 
 let container: StartedPostgreSqlContainer
@@ -86,8 +88,13 @@ describe('KickDbClient over Kysely (PG)', () => {
 
   it('transactionStart/Commit events fire in order', async () => {
     const seen: string[] = []
-    const onStart = () => seen.push('start')
-    const onCommit = () => seen.push('commit')
+    // Explicit block so the listeners return void, not the array length push() yields.
+    const onStart = () => {
+      seen.push('start')
+    }
+    const onCommit = () => {
+      seen.push('commit')
+    }
     db.on('transactionStart', onStart)
     db.on('transactionCommit', onCommit)
     try {
