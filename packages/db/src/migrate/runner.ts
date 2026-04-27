@@ -3,7 +3,9 @@ import { readFile } from 'node:fs/promises'
 
 import { readJournal, computeMigrationHash } from './journal'
 import { MigrationLockError, MigrationHashError, UnreviewedMigrationError } from './errors'
+import { checkDrift, type DriftBehavior, type DriftLogger } from './drift'
 import type { MigrationAdapter } from './adapter'
+import type { SchemaSnapshot } from '../snapshot/types'
 
 export interface RunnerOptions {
   adapter: MigrationAdapter
@@ -12,6 +14,10 @@ export interface RunnerOptions {
   requireReviewed?: boolean
   /** Owner string written into the lock table for diagnostics. */
   owner?: string
+  /** Drift detection mode. Default 'error'. */
+  driftCheck?: DriftBehavior
+  /** Logger surface for drift warnings. Defaults to console. */
+  log?: DriftLogger
 }
 
 export interface AppliedSummary {
@@ -111,9 +117,31 @@ async function listPending(opts: RunnerOptions): Promise<PreparedEntry[]> {
     .map((e) => ({ id: e.id, tag: e.tag, hash: e.hash }))
 }
 
+async function maybeCheckDrift(opts: RunnerOptions): Promise<void> {
+  const behavior = opts.driftCheck ?? 'error'
+  if (behavior === 'ignore') return
+  const applied = await opts.adapter.listApplied()
+  if (applied.length === 0) return // nothing to compare against
+  const sorted = [...applied].sort((a, b) =>
+    a.batch !== b.batch ? a.batch - b.batch : a.appliedAt.localeCompare(b.appliedAt),
+  )
+  const last = sorted[sorted.length - 1]
+  let expected: SchemaSnapshot
+  try {
+    expected = JSON.parse(
+      await readFile(path.join(opts.migrationsDir, last.id, 'snapshot.json'), 'utf8'),
+    )
+  } catch {
+    return // snapshot missing — diagnostic, not fatal here
+  }
+  const live = await opts.adapter.introspect()
+  await checkDrift(live, expected, behavior, opts.log)
+}
+
 export async function migrateLatest(opts: RunnerOptions): Promise<AppliedSummary> {
   await opts.adapter.ensureMigrationTables()
   return withLock(opts, async () => {
+    await maybeCheckDrift(opts)
     const pending = await listPending(opts)
     return runForward(opts, pending)
   })
@@ -122,6 +150,7 @@ export async function migrateLatest(opts: RunnerOptions): Promise<AppliedSummary
 export async function migrateUp(opts: RunnerOptions): Promise<AppliedSummary> {
   await opts.adapter.ensureMigrationTables()
   return withLock(opts, async () => {
+    await maybeCheckDrift(opts)
     const pending = await listPending(opts)
     return runForward(opts, pending.slice(0, 1))
   })

@@ -44,6 +44,7 @@ export {
 export { MemoryMigrationAdapter } from './migrate/memory-adapter'
 export { introspectPg } from './migrate/introspect-pg'
 export type { IntrospectPgOptions, PgQueryRunner } from './migrate/introspect-types'
+export { checkDrift, type DriftBehavior, type DriftLogger } from './migrate/drift'
 
 export {
   migrateLatest,
