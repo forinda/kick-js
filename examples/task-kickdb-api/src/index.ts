@@ -4,7 +4,8 @@ import 'reflect-metadata'
 import './config'
 // Side-effect import — KickDbRegister-augments KickDbClient so every
 // consumer of `@Inject(DB_PRIMARY) private db!: KickDbClient` widens to
-// the typed schema automatically.
+// the typed schema automatically. Becomes redundant once `kick typegen`
+// runs (the kick/db plugin emits the same augmentation under .kickjs/types).
 import './db/register'
 
 import { bootstrap, Container } from '@forinda/kickjs'
