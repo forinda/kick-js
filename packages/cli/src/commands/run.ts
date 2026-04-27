@@ -5,6 +5,7 @@ import type { Command } from 'commander'
 import { runShellCommand, runNodeWithEnv } from '../utils/shell'
 import { loadKickConfig } from '../config'
 import { runTypegen } from '../typegen'
+import { runAllPluginTypegens } from '../typegen/run-plugins'
 import { buildAssets } from '../asset-manager/build'
 
 /**
@@ -45,6 +46,11 @@ async function startDevServer(_entry: string, port?: string): Promise<void> {
   } catch (err: any) {
     console.warn(`  kick typegen: skipped (${err?.message ?? err})`)
   }
+
+  // Plugin typegens (kick/db + adopter plugins from kick.config.ts).
+  // Same swallow-on-error semantics as the legacy pass — a broken
+  // plugin shouldn't block the dev server from coming up.
+  await runAllPluginTypegens({ cwd, config: devConfig })
 
   // Resolve vite from the user's project, not the CLI package.
   // On Windows, require.resolve returns an absolute path like
@@ -108,6 +114,10 @@ async function startDevServer(_entry: string, port?: string): Promise<void> {
         outDir: devConfig?.typegen?.outDir,
         assetMap: devConfig?.assetMap,
       }).catch(() => {})
+      // Plugin typegens piggy-back on the same debounce — kick/db
+      // re-emits kick__db.d.ts when the schema (or anything else
+      // touched) changes. silent so the dev console stays quiet.
+      runAllPluginTypegens({ cwd, config: devConfig, silent: true }).catch(() => {})
     }, 100)
   }
   server.watcher.on('add', scheduleTypegen)

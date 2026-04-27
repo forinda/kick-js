@@ -10,6 +10,7 @@
     "start": "kick start",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
+    "pretypecheck": "kick typegen --silent",
     "typecheck": "tsc --noEmit",
     "typegen": "kick typegen",
     "db:generate": "kick db generate",

@@ -2,11 +2,11 @@ import 'reflect-metadata'
 // Side-effect import — registers the extended env schema with kickjs
 // **before** any controller / service / @Value gets resolved.
 import './config'
-// Side-effect import — KickDbRegister-augments KickDbClient so every
-// consumer of `@Inject(DB_PRIMARY) private db!: KickDbClient` widens to
-// the typed schema automatically. Becomes redundant once `kick typegen`
-// runs (the kick/db plugin emits the same augmentation under .kickjs/types).
-import './db/register'
+
+// KickDbClient widens automatically to the schema-derived shape via
+// `.kickjs/types/kick__db.d.ts` (emitted by the kick/db typegen
+// plugin). `kick dev` regenerates it on schema changes; `kick typegen`
+// produces it once.
 
 import { bootstrap, Container } from '@forinda/kickjs'
 import { kickDbAdapter, DB_PRIMARY } from '@forinda/kickjs-db'
