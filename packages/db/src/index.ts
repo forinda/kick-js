@@ -14,6 +14,8 @@ export { extractSnapshot } from './snapshot/extract'
 export type * from './diff/types'
 export { diff } from './diff/engine'
 
+export { emitPg } from './emit/pg'
+
 export * from './dsl/columns'
 export * from './dsl/table'
 export * from './dsl/constraints'
