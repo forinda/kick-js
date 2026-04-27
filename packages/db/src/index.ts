@@ -43,6 +43,8 @@ export {
 } from './migrate/schema'
 export { MemoryMigrationAdapter } from './migrate/memory-adapter'
 
+export { migrateLatest, type RunnerOptions, type AppliedSummary } from './migrate/runner'
+
 export { emitPg } from './emit/pg'
 
 export { resolveDbConfig, type DbConfig } from './cli/config'
