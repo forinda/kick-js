@@ -48,6 +48,8 @@ export { checkDrift, type DriftBehavior, type DriftLogger } from './migrate/drif
 
 export { kickDbAdapter, type KickDbAdapterConfig, type MigrationsOnBoot } from './adapter'
 
+export { DB_PRIMARY, DB_REPLICA, DB_CLIENT, type KickDbClient } from './tokens'
+
 export {
   migrateLatest,
   migrateUp,
