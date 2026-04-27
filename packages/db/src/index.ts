@@ -8,3 +8,5 @@ export type {
   TableSnapshot,
   SchemaSnapshot,
 } from './snapshot/types'
+
+export * from './dsl/columns'
