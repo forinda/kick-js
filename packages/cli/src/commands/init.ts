@@ -133,8 +133,17 @@ export function registerInitCommand(program: Command): void {
 
       // ── Optional packages ─────────────────────────────────────────
       let selectedPackages: string[]
-      if (opts.packages) {
-        selectedPackages = opts.packages.split(',').map((p: string) => p.trim())
+      if (opts.packages !== undefined) {
+        // Accept empty string / "none" / "false" as "skip the prompt, no packages".
+        const raw = opts.packages.trim().toLowerCase()
+        if (raw === '' || raw === 'none' || raw === 'false') {
+          selectedPackages = []
+        } else {
+          selectedPackages = opts.packages
+            .split(',')
+            .map((p: string) => p.trim())
+            .filter(Boolean)
+        }
       } else {
         selectedPackages = await multiSelect({
           message: 'Select packages to include',
