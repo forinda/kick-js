@@ -163,3 +163,31 @@ export async function migrateDown(opts: RunnerOptions): Promise<ReversedSummary>
     return { reversed: last.id }
   })
 }
+
+export interface RollbackSummary {
+  reversed: string[]
+  batch: number | null
+}
+
+export async function migrateRollback(opts: RunnerOptions): Promise<RollbackSummary> {
+  await opts.adapter.ensureMigrationTables()
+  return withLock(opts, async () => {
+    const applied = await opts.adapter.listApplied()
+    if (applied.length === 0) return { reversed: [], batch: null }
+
+    const lastBatch = Math.max(...applied.map((r) => r.batch))
+    // Reverse-applied order so teardown matches dependencies (drop FK before
+    // drop table etc).
+    const targets = applied
+      .filter((r) => r.batch === lastBatch)
+      .sort((a, b) => a.appliedAt.localeCompare(b.appliedAt))
+      .reverse()
+
+    const reversed: string[] = []
+    for (const row of targets) {
+      await applyReverse(row.id, opts)
+      reversed.push(row.id)
+    }
+    return { reversed, batch: lastBatch }
+  })
+}

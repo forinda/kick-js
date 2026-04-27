@@ -47,9 +47,11 @@ export {
   migrateLatest,
   migrateUp,
   migrateDown,
+  migrateRollback,
   type RunnerOptions,
   type AppliedSummary,
   type ReversedSummary,
+  type RollbackSummary,
 } from './migrate/runner'
 
 export { emitPg } from './emit/pg'
