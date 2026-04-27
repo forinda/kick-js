@@ -1,22 +1,23 @@
-export { ColumnBuilder } from './types'
-export type { ColumnState } from './types'
+export { ColumnBuilder, KICK_GENERATED } from './types'
+export type { ColumnState, GeneratedBrand } from './types'
 export {
   serial,
-  integer,
-  varchar,
-  text,
-  boolean,
-  timestamp,
-  timestamptz,
-  TimestampBuilder,
   bigSerial,
+  smallSerial,
+  integer,
   bigint,
   smallint,
   decimal,
   numeric,
   real,
   doublePrecision,
+  varchar,
   char,
+  text,
+  boolean,
+  timestamp,
+  timestamptz,
+  TimestampBuilder,
   date,
   time,
   interval,

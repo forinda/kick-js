@@ -9,7 +9,35 @@ export interface ColumnState {
   references: { table: string; column: string; onDelete: string; onUpdate: string } | null
 }
 
-export class ColumnBuilder {
+/**
+ * Type-only brand attached to a column when it's auto-assigned by the
+ * database (serial / bigserial / smallserial), has a runtime default
+ * (`.default(...)`), or carries an expression default (`uuid().defaultRandom()`,
+ * `timestamp().defaultNow()`). `SchemaToKysely<S>` reads this marker and
+ * wraps the column type in Kysely's `Generated<T>` so adopters can omit
+ * the column on insert.
+ *
+ * Runtime is a no-op — the symbol never reaches a value.
+ */
+export const KICK_GENERATED = Symbol.for('@forinda/kickjs-db/Generated')
+export type GeneratedBrand = { readonly [KICK_GENERATED]: true }
+
+/**
+ * Phantom-typed column builder. The `T` generic carries the column's TS
+ * value type (number / string / Date / etc.) and `TNullable` carries the
+ * nullable flag. Both are erased at runtime; they exist purely so
+ * `SchemaToKysely<S>` can pull them out per column.
+ *
+ * The chain methods that affect the type (`notNull()`, `primaryKey()`,
+ * `array()`) return widened/narrowed phantoms; everything else returns
+ * `this` so the chain stays callable.
+ */
+export class ColumnBuilder<T = unknown, TNullable extends boolean = true> {
+  // The phantom param `T` shows up in the public surface so the type system
+  // sees it; reading it at runtime is intentionally not supported.
+  declare readonly __t?: T
+  declare readonly __nullable?: TNullable
+
   protected state: ColumnState
 
   constructor(type: string, defaults: Partial<ColumnState> = {}) {
@@ -23,20 +51,15 @@ export class ColumnBuilder {
     }
   }
 
-  notNull(): this {
+  notNull(): ColumnBuilder<T, false> {
     this.state.nullable = false
-    return this
+    return this as unknown as ColumnBuilder<T, false>
   }
 
-  default(value: string): this {
-    this.state.default = value
-    return this
-  }
-
-  primaryKey(): this {
+  primaryKey(): ColumnBuilder<T, false> {
     this.state.primaryKey = true
     this.state.nullable = false
-    return this
+    return this as unknown as ColumnBuilder<T, false>
   }
 
   unique(): this {
@@ -44,9 +67,9 @@ export class ColumnBuilder {
     return this
   }
 
-  array(): this {
+  array(): ColumnBuilder<T[], TNullable> {
     this.state.type = `${this.state.type}[]`
-    return this
+    return this as unknown as ColumnBuilder<T[], TNullable>
   }
 
   references(
@@ -61,6 +84,16 @@ export class ColumnBuilder {
       onUpdate: opts.onUpdate ?? 'no_action',
     }
     return this
+  }
+
+  /**
+   * Mark the column as having a runtime / DB-assigned default. The
+   * `GeneratedBrand` flows into `SchemaToKysely<S>` so the column wraps
+   * in `Generated<T>` — adopters can `INSERT` without specifying it.
+   */
+  default(value: string): this & GeneratedBrand {
+    this.state.default = value
+    return this as this & GeneratedBrand
   }
 
   toJSON(name: string): ColumnSnapshot {
