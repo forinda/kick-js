@@ -50,6 +50,32 @@ function diffTable(prev: TableSnapshot, next: TableSnapshot, changes: Change[]) 
       changes.push({ kind: 'alterColumn', table: next.name, column: c, before, after })
     }
   }
+
+  diffByName(
+    prev.indexes,
+    next.indexes,
+    (i) => changes.push({ kind: 'dropIndex', table: next.name, index: i }),
+    (i) => changes.push({ kind: 'addIndex', table: next.name, index: i }),
+  )
+
+  diffByName(
+    prev.foreignKeys,
+    next.foreignKeys,
+    (f) => changes.push({ kind: 'dropForeignKey', table: next.name, fk: f }),
+    (f) => changes.push({ kind: 'addForeignKey', table: next.name, fk: f }),
+  )
+}
+
+function diffByName<T extends { name: string }>(
+  prev: T[],
+  next: T[],
+  onDrop: (item: T) => void,
+  onAdd: (item: T) => void,
+) {
+  const prevByName = new Map(prev.map((p) => [p.name, p]))
+  const nextByName = new Map(next.map((n) => [n.name, n]))
+  for (const [n, p] of prevByName) if (!nextByName.has(n)) onDrop(p)
+  for (const [n, x] of nextByName) if (!prevByName.has(n)) onAdd(x)
 }
 
 function columnsEqual(
