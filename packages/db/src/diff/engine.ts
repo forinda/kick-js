@@ -14,18 +14,22 @@ export function diff(prev: SchemaSnapshot, next: SchemaSnapshot): ChangeSet {
     }
   }
 
-  // Creates second — emit createTable, then addIndex/addForeignKey for the
-  // new table's secondary objects so each statement has a 1:1 mapping with a
-  // change kind. This keeps forward and reverse symmetric and lets the emitter
-  // stay simple (createTable only renders columns + primary key).
-  for (const name of nextTables) {
-    if (prevTables.has(name)) continue
-    const t = next.tables[name]
-    changes.push({ kind: 'createTable', table: t })
-    for (const i of t.indexes) {
+  // Creates — three passes so secondary objects only land after every new
+  // table exists. Pass 1: every CREATE TABLE. Pass 2: every CREATE INDEX.
+  // Pass 3: every ADD FOREIGN KEY. This keeps the order safe regardless of
+  // ESM namespace iteration (which is alphabetical, not declaration order)
+  // and lets each change kind map 1:1 to a SQL statement.
+  const newTableNames = [...nextTables].filter((n) => !prevTables.has(n))
+  for (const name of newTableNames) {
+    changes.push({ kind: 'createTable', table: next.tables[name] })
+  }
+  for (const name of newTableNames) {
+    for (const i of next.tables[name].indexes) {
       changes.push({ kind: 'addIndex', table: name, index: i })
     }
-    for (const f of t.foreignKeys) {
+  }
+  for (const name of newTableNames) {
+    for (const f of next.tables[name].foreignKeys) {
       changes.push({ kind: 'addForeignKey', table: name, fk: f })
     }
   }
