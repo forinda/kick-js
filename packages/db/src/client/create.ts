@@ -1,6 +1,7 @@
 import { Kysely, sql, type Dialect as KyselyDialect } from 'kysely'
 
 import type { CreateDbClientOptions, KickDbClient, TransactionEvent } from './types'
+import type { SchemaToKysely } from './schema-types'
 import { KickDbEventEmitter } from './events'
 
 interface InternalContext {
@@ -10,7 +11,13 @@ interface InternalContext {
   savepointCounter: { value: number }
 }
 
-export function createDbClient<TSchema, DB = unknown>(
+// DB defaults to SchemaToKysely<TSchema> so the returned client is typed
+// directly from the schema parameter — no KickDbRegister lookup at the call
+// site. This breaks the `dbClient → RegisteredDB → KickDbRegister['db'] →
+// typeof dbClient` cycle that would otherwise resolve to `unknown`.
+// KickDbRegister is only consulted when consumers reference `KickDbClient`
+// with no explicit generic.
+export function createDbClient<TSchema, DB = SchemaToKysely<TSchema>>(
   opts: CreateDbClientOptions<TSchema, DB>,
 ): KickDbClient<DB> {
   const events = opts.events ? new KickDbEventEmitter() : null

@@ -1,8 +1,6 @@
 import { Service, Inject } from '@forinda/kickjs'
 import { DB_PRIMARY, type KickDbClient } from '@forinda/kickjs-db'
 
-import type { Db } from '../../db/client'
-
 export interface NewTask {
   workspaceId: string
   title: string
@@ -10,19 +8,15 @@ export interface NewTask {
   status?: string
   priority?: string
   estimatePoints?: number | null
-  metadata?: Record<string, unknown> | null
+  metadata?: { tags?: string[]; customFields?: Record<string, string> } | null
 }
 
 @Service()
 export class TasksRepository {
   constructor(@Inject(DB_PRIMARY) private readonly db: KickDbClient) {}
 
-  private get typed(): Db {
-    return this.db as Db
-  }
-
-  async listByWorkspace(workspaceId: string): Promise<unknown[]> {
-    return this.typed
+  listByWorkspace(workspaceId: string) {
+    return this.db
       .selectFrom('tasks')
       .selectAll()
       .where('workspaceId', '=', workspaceId)
@@ -30,26 +24,30 @@ export class TasksRepository {
       .execute()
   }
 
-  async create(input: NewTask): Promise<unknown> {
-    return this.typed
+  // status / priority / metadata are all defaulted or nullable in the schema,
+  // so the spread is the natural insert shape — Generated columns (id,
+  // createdAt) and explicit DB defaults (status='todo', priority='none')
+  // can be omitted; the DB fills them in.
+  create(input: NewTask) {
+    return this.db
       .insertInto('tasks')
       .values({
         workspaceId: input.workspaceId,
         title: input.title,
         description: input.description ?? null,
-        status: input.status ?? 'todo',
-        priority: input.priority ?? 'none',
+        ...(input.status !== undefined ? { status: input.status } : {}),
+        ...(input.priority !== undefined ? { priority: input.priority } : {}),
         estimatePoints: input.estimatePoints ?? null,
         metadata: input.metadata ?? null,
-      } as never)
+      })
       .returningAll()
       .executeTakeFirstOrThrow()
   }
 
-  async updateStatus(id: string, status: string): Promise<unknown | undefined> {
-    return this.typed
+  updateStatus(id: string, status: string) {
+    return this.db
       .updateTable('tasks')
-      .set({ status } as never)
+      .set({ status })
       .where('id', '=', id)
       .returningAll()
       .executeTakeFirst()

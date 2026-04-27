@@ -15,12 +15,12 @@ type AppDB = SchemaToKysely<typeof _appSchema>
 // not file-local. This single test file owns the augmentation; if other
 // tests need different shapes they should redeclare here.
 declare module '@forinda/kickjs-db' {
-  interface Register {
+  interface KickDbRegister {
     db: KickDbClient<AppDB>
   }
 }
 
-describe('Register augmentation', () => {
+describe('KickDbRegister augmentation', () => {
   it('KickDbClient with no explicit generic exposes the registered DB', () => {
     // Type-only: pull DB out of the inferred default and assert it widened
     // to the schema-derived shape.
@@ -31,7 +31,7 @@ describe('Register augmentation', () => {
     }>()
   })
 
-  it('explicit DB generic overrides Register', () => {
+  it('explicit DB generic overrides KickDbRegister', () => {
     interface ExplicitDB {
       readonly things: { id: number; payload: string }
     }

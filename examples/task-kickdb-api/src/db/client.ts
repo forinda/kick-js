@@ -9,41 +9,10 @@
 
 import { Pool } from 'pg'
 import { PostgresDialect } from 'kysely'
-import { createDbClient, type KickDbClient } from '@forinda/kickjs-db'
+import { createDbClient } from '@forinda/kickjs-db'
 import { pgAdapter } from '@forinda/kickjs-db-pg'
 
 import * as schema from './schema'
-
-interface Schema {
-  users: {
-    id: string
-    email: string
-    firstName: string
-    lastName: string
-    avatarUrl: string | null
-    isActive: boolean
-    createdAt: Date | string
-  }
-  workspaces: {
-    id: string
-    name: string
-    slug: string
-    description: string | null
-    ownerId: string
-    createdAt: Date | string
-  }
-  tasks: {
-    id: string
-    workspaceId: string
-    title: string
-    description: string | null
-    status: string
-    priority: string
-    estimatePoints: number | null
-    metadata: { tags?: string[]; customFields?: Record<string, string> } | null
-    createdAt: Date | string
-  }
-}
 
 const connectionString = process.env.DATABASE_URL
 
@@ -54,7 +23,10 @@ if (!connectionString) {
 
 export const pool = new Pool({ connectionString })
 
-export const dbClient: KickDbClient<Schema> = createDbClient<typeof schema, Schema>({
+// No explicit DB generic — SchemaToKysely<typeof schema> is inferred end-to-end.
+// Adopters who want to widen `KickDbClient` (no generic) globally to this
+// shape declare the KickDbRegister augmentation in ./register.ts.
+export const dbClient = createDbClient({
   schema,
   dialect: new PostgresDialect({ pool }),
   events: true,

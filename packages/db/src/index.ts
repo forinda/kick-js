@@ -63,7 +63,7 @@ export type {
   CreateDbClientOptions,
 } from './client/types'
 export type { SchemaToKysely } from './client/schema-types'
-export type { Register, RegisteredDB } from './client/register'
+export type { KickDbRegister, RegisteredDB } from './client/register'
 
 export {
   migrateLatest,

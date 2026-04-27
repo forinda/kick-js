@@ -1,8 +1,6 @@
 import { Service, Inject } from '@forinda/kickjs'
 import { DB_PRIMARY, type KickDbClient } from '@forinda/kickjs-db'
 
-import type { Db } from '../../db/client'
-
 export interface NewUser {
   email: string
   firstName: string
@@ -12,38 +10,33 @@ export interface NewUser {
 
 @Service()
 export class UsersRepository {
-  // Constructor parameter injection — @Inject is a ParameterDecorator.
-  // The Db cast narrows the M1-permissive `unknown` columns to the schema
-  // declared in src/db/client.ts; M2-S1 tightens via column-builder generics
-  // and the cast goes away.
+  // KickDbRegister augmentation in src/db/register.ts widens KickDbClient to the
+  // schema-derived shape automatically — no Db cast needed at the call site.
+  // id, isActive, createdAt are Generated<T> in the schema (serial PK +
+  // boolean default + timestamp defaultNow), so insert values can omit them.
   constructor(@Inject(DB_PRIMARY) private readonly db: KickDbClient) {}
 
-  private get typed(): Db {
-    return this.db as Db
+  list() {
+    return this.db.selectFrom('users').selectAll().orderBy('createdAt', 'asc').execute()
   }
 
-  async list(): Promise<unknown[]> {
-    return this.typed.selectFrom('users').selectAll().orderBy('createdAt', 'asc').execute()
+  findById(id: string) {
+    return this.db.selectFrom('users').selectAll().where('id', '=', id).executeTakeFirst()
   }
 
-  async findById(id: string): Promise<unknown | undefined> {
-    return this.typed.selectFrom('users').selectAll().where('id', '=', id).executeTakeFirst()
+  findByEmail(email: string) {
+    return this.db.selectFrom('users').selectAll().where('email', '=', email).executeTakeFirst()
   }
 
-  async findByEmail(email: string): Promise<unknown | undefined> {
-    return this.typed.selectFrom('users').selectAll().where('email', '=', email).executeTakeFirst()
-  }
-
-  async create(input: NewUser): Promise<unknown> {
-    return this.typed
+  create(input: NewUser) {
+    return this.db
       .insertInto('users')
       .values({
         email: input.email,
         firstName: input.firstName,
         lastName: input.lastName,
         avatarUrl: input.avatarUrl ?? null,
-        isActive: true,
-      } as never)
+      })
       .returningAll()
       .executeTakeFirstOrThrow()
   }

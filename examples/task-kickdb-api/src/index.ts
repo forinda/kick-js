@@ -2,6 +2,11 @@ import 'reflect-metadata'
 // Side-effect import — registers the extended env schema with kickjs
 // **before** any controller / service / @Value gets resolved.
 import './config'
+// Side-effect import — KickDbRegister-augments KickDbClient so every
+// consumer of `@Inject(DB_PRIMARY) private db!: KickDbClient` widens to
+// the typed schema automatically.
+import './db/register'
+
 import { bootstrap, Container } from '@forinda/kickjs'
 import { kickDbAdapter, DB_PRIMARY } from '@forinda/kickjs-db'
 
