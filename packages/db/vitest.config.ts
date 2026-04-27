@@ -14,6 +14,9 @@ export default defineConfig({
   resolve: {
     alias: {
       '@forinda/kickjs': path.resolve(__dirname, '../kickjs/src/index.ts'),
+      // More-specific subpath aliases must come before the bare package alias
+      // — vitest resolves prefixes top-down.
+      '@forinda/kickjs-db/pg': path.resolve(__dirname, 'src/dsl/columns/pg.ts'),
       '@forinda/kickjs-db': path.resolve(__dirname, 'src/index.ts'),
     },
   },

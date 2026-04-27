@@ -8,6 +8,7 @@
       "@forinda/kickjs": ["../kickjs/src/index.ts"],
       "@forinda/kickjs/*": ["../kickjs/src/*"],
       "@forinda/kickjs-db": ["src/index.ts"],
+      "@forinda/kickjs-db/pg": ["src/dsl/columns/pg.ts"],
       "@forinda/kickjs-db/*": ["src/*"]
     }
   },

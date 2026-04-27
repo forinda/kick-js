@@ -21,6 +21,10 @@
     ".": {
       "import": "./dist/index.mjs",
       "types": "./dist/index.d.mts"
+    },
+    "./pg": {
+      "import": "./dist/pg.mjs",
+      "types": "./dist/pg.d.mts"
     }
   },
   "files": [

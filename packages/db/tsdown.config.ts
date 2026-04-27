@@ -6,13 +6,11 @@ const pkg = readPkg(import.meta.dirname)
 export default defineConfig({
   entry: {
     index: 'src/index.ts',
+    pg: 'src/dsl/columns/pg.ts',
   },
   format: ['esm'],
   platform: 'node',
   dts: true,
-  external: [
-    '@forinda/kickjs',
-    /^node:/,
-  ],
+  external: ['@forinda/kickjs', /^node:/],
   banner: { js: createBanner(pkg.name, pkg.version) },
 })
