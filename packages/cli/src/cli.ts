@@ -27,7 +27,11 @@ async function main() {
   const allPlugins = [...builtinCliPlugins, ...(config?.plugins ?? [])]
   const merged = mergeCliPlugins(allPlugins, config?.commands ?? [])
 
-  await merged.register(program)
+  await merged.register(program, {
+    cwd: process.cwd(),
+    config: config ?? null,
+    log: (msg) => console.log(msg),
+  })
 
   // Adopter declarative commands (kick.config.ts `commands`) + plugin
   // declarative commands flow through registerCustomCommands. The

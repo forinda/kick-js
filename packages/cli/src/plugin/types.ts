@@ -1,20 +1,24 @@
-// CLI Plugin shape (v1).
+// CLI Plugin shape.
 //
 // The kick CLI is itself a composition of plugins — every built-in
 // command (init, generate, run, typegen, db, …) ships as a KickCliPlugin
 // internally. Adopters extend the same surface from kick.config.ts to
-// add commands and typegens; the merging + conflict detection runs the
-// same way for built-ins and user plugins.
+// add commands, generators, and typegens; the merging + conflict
+// detection runs the same way for built-ins and user plugins.
 //
-// Three contribution kinds:
+// Four contribution kinds:
 //
-//   • commands[]  — declarative shell-handler commands (same shape as
-//                   the existing kick.config.ts `commands` field).
-//   • register()  — programmatic commander registration (the only way
-//                   to express built-ins like `kick generate <pattern>
-//                   <name>` whose chain has options, subcommands, etc.).
-//   • typegens[]  — TypegenPlugin instances that the `kick typegen`
-//                   command runs after the legacy pass.
+//   • commands[]   — declarative shell-handler commands (same shape as
+//                    the existing kick.config.ts `commands` field).
+//   • register()   — programmatic commander registration. Called with
+//                    `(program, ctx)` so the callback has cwd + config
+//                    without re-loading.
+//   • typegens[]   — TypegenPlugin instances that `kick typegen` runs
+//                    after the legacy pass.
+//   • generators[] — `kick g <name>` scaffolders (defineGenerator).
+//                    Replaces the `package.json > kickjs.generators`
+//                    discovery; that path stays as a deprecated
+//                    fallback for one minor version.
 //
 // Mirrors `definePlugin` / `defineAdapter` factory parity so adopters
 // don't have to learn a new helper-naming convention.
@@ -22,15 +26,29 @@
 import type { Command } from 'commander'
 
 import type { TypegenPlugin } from '../typegen/plugin'
-import type { KickCommandDefinition } from '../config'
+import type { KickCommandDefinition, KickConfig } from '../config'
+import type { GeneratorSpec } from '../generator-extension/define'
+
+/**
+ * Runtime context handed to `register()` — saves callbacks from
+ * re-loading config or guessing cwd. Forward-compatible: future fields
+ * land here without changing the callback signature.
+ */
+export interface KickCliPluginContext {
+  cwd: string
+  /** Resolved kick.config.ts (null if the project has none). */
+  config: KickConfig | null
+  log: (msg: string) => void
+}
 
 export interface KickCliPlugin {
   /** Stable identifier — used in error messages on conflict + de-dup. */
   name: string
   commands?: KickCommandDefinition[]
   /** Programmatic command registration. Called once at CLI startup. */
-  register?: (program: Command) => void | Promise<void>
+  register?: (program: Command, ctx: KickCliPluginContext) => void | Promise<void>
   typegens?: TypegenPlugin[]
+  generators?: GeneratorSpec[]
 }
 
 /** Identity helper — exists for type inference + parity with definePlugin. */
@@ -39,7 +57,7 @@ export function defineCliPlugin(p: KickCliPlugin): KickCliPlugin {
 }
 
 export class KickPluginConflictError extends Error {
-  constructor(kind: 'plugin' | 'command' | 'typegen', id: string, owners: string[]) {
+  constructor(kind: 'plugin' | 'command' | 'typegen' | 'generator', id: string, owners: string[]) {
     super(
       `Two plugins registered the same ${kind} '${id}': ${owners.join(', ')}. ` +
         `Plugins must use unique ${kind} names.`,

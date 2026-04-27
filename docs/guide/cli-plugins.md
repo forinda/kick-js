@@ -22,19 +22,28 @@ shape is for distributable packages.
 ```ts
 import type { Command } from 'commander'
 
+interface KickCliPluginContext {
+  cwd: string
+  config: KickConfig | null
+  log: (msg: string) => void
+}
+
 interface KickCliPlugin {
   /** Stable id — used in error messages on conflict, must be unique. */
   name: string
   /** Declarative commands — same shape as kick.config.ts `commands`. */
   commands?: KickCommandDefinition[]
-  /** Programmatic registration — full commander API. */
-  register?: (program: Command) => void | Promise<void>
+  /** Programmatic registration — full commander API. Receives ctx. */
+  register?: (program: Command, ctx: KickCliPluginContext) => void | Promise<void>
   /** Typegen emitters that run during `kick typegen`. */
   typegens?: TypegenPlugin[]
+  /** `kick g <name>` scaffolders (defineGenerator). Replaces the
+   *  legacy `package.json > kickjs.generators` discovery path. */
+  generators?: GeneratorSpec[]
 }
 ```
 
-All three contribution kinds are optional; pick whichever fit. Use
+All four contribution kinds are optional; pick whichever fit. Use
 `defineCliPlugin` so types flow:
 
 ```ts
@@ -71,11 +80,12 @@ merges with the built-ins. Plugin commands appear first; adopter
 
 ## Conflict handling
 
-The CLI fails fast at startup on three duplicate signals:
+The CLI fails fast at startup on four duplicate signals:
 
 - two plugins sharing the same `name`
 - two plugins registering the same command name
 - two plugins registering the same typegen `id`
+- two plugins registering the same generator `name`
 
 The error message lists both plugin names so the source is obvious.
 Adopter `commands` in `kick.config.ts` overriding a plugin command is
@@ -89,23 +99,57 @@ options with parsers, async actions, etc.):
 ```ts
 defineCliPlugin({
   name: 'my-tool',
-  register(program) {
+  register(program, ctx) {
     program
       .command('my-tool')
       .description('Do the thing')
       .option('--watch', 'Watch mode')
       .action(async (opts) => {
-        // ...
+        ctx.log(`running my-tool from ${ctx.cwd}`)
+        // ctx.config is the loaded kick.config.ts
       })
   },
 })
 ```
 
 `register` runs once at CLI startup with the same `Command` instance
-the built-ins use. Don't re-register the same command name another
-plugin already owns — there's no automatic conflict detection inside
-`register` callbacks (only on declarative `commands[]`). Pick a
-namespaced prefix (`my-tool:foo`) to stay safe.
+the built-ins use, plus a `KickCliPluginContext` so the callback has
+cwd + config without re-loading. Don't re-register the same command
+name another plugin already owns — there's no automatic conflict
+detection inside `register` callbacks (only on declarative
+`commands[]`). Pick a namespaced prefix (`my-tool:foo`) to stay safe.
+
+## Generator plugins
+
+`generators?: GeneratorSpec[]` ships `kick g <name>` scaffolders the
+same way the framework's built-ins do. Use `defineGenerator` to author
+the spec, then expose it via the plugin:
+
+```ts
+import { defineCliPlugin, defineGenerator } from '@forinda/kickjs-cli'
+
+const cqrsCommandGen = defineGenerator({
+  name: 'command',
+  description: 'Generate a CQRS command + handler',
+  args: [{ name: 'name', required: true }],
+  files: (ctx) => [
+    {
+      path: `src/modules/${ctx.kebab}/commands/create-${ctx.kebab}.command.ts`,
+      content: `// generated for ${ctx.pascal}\n`,
+    },
+  ],
+})
+
+export const cqrsPlugin = defineCliPlugin({
+  name: 'kickjs-cli-cqrs',
+  generators: [cqrsCommandGen],
+})
+```
+
+`kick g command Order` then dispatches against the registered spec —
+config-supplied generators take priority over the legacy
+`package.json > kickjs.generators` discovery path, which stays around
+as a deprecated fallback for one minor version.
 
 ## Typegen plugins
 

@@ -22,13 +22,24 @@ import type { Command } from 'commander'
 
 import type { KickCommandDefinition } from '../config'
 import type { TypegenPlugin } from '../typegen/plugin'
-import { KickPluginConflictError, type KickCliPlugin } from './types'
+import type { GeneratorSpec } from '../generator-extension/define'
+import type { DiscoveredGenerator } from '../generator-extension/discover'
+import { KickPluginConflictError, type KickCliPlugin, type KickCliPluginContext } from './types'
 
 export interface MergedPlugins {
   commands: KickCommandDefinition[]
   typegens: TypegenPlugin[]
-  /** Apply every plugin's register() in input order. */
-  register: (program: Command) => Promise<void>
+  /** DiscoveredGenerator shape so this list slots into the existing
+   * dispatch path next to package.json-discovered entries. `source`
+   * carries the plugin name for error attribution. */
+  generators: DiscoveredGenerator[]
+  /**
+   * Apply every plugin's register() in input order. ctx is optional so
+   * tests + lightweight callers can invoke `register(program)` without
+   * constructing a full context; it falls back to cwd=process.cwd(),
+   * config=null, log=no-op.
+   */
+  register: (program: Command, ctx?: KickCliPluginContext) => Promise<void>
 }
 
 export function mergeCliPlugins(
@@ -75,11 +86,29 @@ export function mergeCliPlugins(
     }
   }
 
-  const register = async (program: Command): Promise<void> => {
-    for (const p of plugins) {
-      if (p.register) await p.register(program)
+  const generatorOwners = new Map<string, string>()
+  const generators: DiscoveredGenerator[] = []
+  for (const p of plugins) {
+    for (const spec of p.generators ?? []) {
+      const prior = generatorOwners.get(spec.name)
+      if (prior) {
+        throw new KickPluginConflictError('generator', spec.name, [prior, p.name])
+      }
+      generatorOwners.set(spec.name, p.name)
+      generators.push({ source: p.name, spec: spec satisfies GeneratorSpec })
     }
   }
 
-  return { commands, typegens, register }
+  const register = async (program: Command, ctx?: KickCliPluginContext): Promise<void> => {
+    const resolved: KickCliPluginContext = ctx ?? {
+      cwd: process.cwd(),
+      config: null,
+      log: () => {},
+    }
+    for (const p of plugins) {
+      if (p.register) await p.register(program, resolved)
+    }
+  }
+
+  return { commands, typegens, generators, register }
 }

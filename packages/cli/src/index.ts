@@ -15,7 +15,7 @@ export type { KickConfig, KickCommandDefinition } from './config'
 // CLI Plugin contract — adopters write `defineCliPlugin({...})` and add
 // it to `kick.config.ts > plugins[]`. Built-in commands use the same
 // shape internally.
-export type { KickCliPlugin } from './plugin/types'
+export type { KickCliPlugin, KickCliPluginContext } from './plugin/types'
 export { defineCliPlugin, KickPluginConflictError } from './plugin/types'
 
 // Typegen plugin contract — passed via `KickCliPlugin.typegens`.

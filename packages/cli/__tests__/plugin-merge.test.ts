@@ -72,17 +72,44 @@ describe('mergeCliPlugins', () => {
     expect(calls).toEqual(['a', 'b'])
   })
 
-  it('register() forwards the same program to every plugin', async () => {
-    const seen: Command[] = []
+  it('register() forwards the same program + ctx to every plugin', async () => {
+    const seen: Array<{ p: Command; cwd: string }> = []
     const a = defineCliPlugin({
       name: 'a',
-      register: (p) => {
-        seen.push(p)
+      register: (p, ctx) => {
+        seen.push({ p, cwd: ctx.cwd })
       },
     })
     const r = mergeCliPlugins([a])
     const program = new Command()
-    await r.register(program)
-    expect(seen[0]).toBe(program)
+    await r.register(program, { cwd: '/tmp/x', config: null, log: () => {} })
+    expect(seen[0].p).toBe(program)
+    expect(seen[0].cwd).toBe('/tmp/x')
+  })
+
+  it('throws on duplicate generator name across two plugins', () => {
+    const spec = (name: string) => ({
+      name,
+      description: '',
+      args: [],
+      files: () => [],
+    })
+    const a = defineCliPlugin({ name: 'a', generators: [spec('command')] })
+    const b = defineCliPlugin({ name: 'b', generators: [spec('command')] })
+    expect(() => mergeCliPlugins([a, b])).toThrow(KickPluginConflictError)
+  })
+
+  it('exposes plugin generators in DiscoveredGenerator shape', () => {
+    const spec = {
+      name: 'command',
+      description: 'Generate a CQRS command',
+      args: [],
+      files: () => [],
+    }
+    const p = defineCliPlugin({ name: 'cqrs-plugin', generators: [spec] })
+    const r = mergeCliPlugins([p])
+    expect(r.generators).toHaveLength(1)
+    expect(r.generators[0].source).toBe('cqrs-plugin')
+    expect(r.generators[0].spec).toBe(spec)
   })
 })
