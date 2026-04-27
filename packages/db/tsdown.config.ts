@@ -11,6 +11,6 @@ export default defineConfig({
   format: ['esm'],
   platform: 'node',
   dts: true,
-  external: ['@forinda/kickjs', /^node:/],
+  external: ['@forinda/kickjs', 'kysely', /^node:/],
   banner: { js: createBanner(pkg.name, pkg.version) },
 })

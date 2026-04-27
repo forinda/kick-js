@@ -55,13 +55,15 @@
   },
   "dependencies": {},
   "peerDependencies": {
-    "@forinda/kickjs": ">=5.0.0"
+    "@forinda/kickjs": ">=5.0.0",
+    "kysely": ">=0.27.0 <1.0.0"
   },
   "devDependencies": {
     "@forinda/kickjs": "workspace:*",
     "@testcontainers/postgresql": "^10.16.0",
     "@types/node": "^25.6.0",
     "@types/pg": "^8.11.10",
+    "kysely": "^0.28.16",
     "pg": "^8.13.1",
     "typescript": "^5.9.2"
   },

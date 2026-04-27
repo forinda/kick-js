@@ -1,13 +1,6 @@
 import { createToken, type InjectionToken } from '@forinda/kickjs'
 
-/**
- * Forward-declared client type. The full surface lands in T19b — until then
- * the token's phantom param is a structural placeholder so adopter code can
- * declare `@Inject(DB_PRIMARY) private db!: KickDbClient` against the same
- * token reference both before and after the wider client surface lands.
- */
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export interface KickDbClient {}
+import type { KickDbClient } from './client/types'
 
 // First-party tokens own the reserved `kick/` namespace. Adopter-defined
 // tokens (e.g. additional shards / read replicas beyond the default pair)

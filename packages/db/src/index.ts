@@ -48,7 +48,20 @@ export { checkDrift, type DriftBehavior, type DriftLogger } from './migrate/drif
 
 export { kickDbAdapter, type KickDbAdapterConfig, type MigrationsOnBoot } from './adapter'
 
-export { DB_PRIMARY, DB_REPLICA, DB_CLIENT, type KickDbClient } from './tokens'
+export { DB_PRIMARY, DB_REPLICA, DB_CLIENT } from './tokens'
+
+export { createDbClient } from './client/create'
+export type {
+  KickDbClient,
+  KickDbClientEvents,
+  QueryEvent,
+  QueryErrorEvent,
+  BeforeQueryEvent,
+  TransactionEvent,
+  TransactionRollbackEvent,
+  CreateDbClientOptions,
+} from './client/types'
+export type { SchemaToKysely } from './client/schema-types'
 
 export {
   migrateLatest,
