@@ -12,3 +12,4 @@ export type {
 export * from './dsl/columns'
 export * from './dsl/table'
 export * from './dsl/constraints'
+export * from './dsl/relations'
