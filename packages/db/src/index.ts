@@ -11,6 +11,8 @@ export type {
 
 export { extractSnapshot } from './snapshot/extract'
 
+export type * from './diff/types'
+
 export * from './dsl/columns'
 export * from './dsl/table'
 export * from './dsl/constraints'
