@@ -15,7 +15,7 @@ interface MaybeTable {
   __indexes?: IndexSnapshot[]
 }
 
-function isTable(v: unknown): v is TableDecl<Record<string, ColumnBuilder>> {
+function isTable(v: unknown): v is TableDecl<string, Record<string, ColumnBuilder>> {
   return Boolean(v && typeof v === 'object' && (v as MaybeTable).__isTable === true)
 }
 
@@ -30,7 +30,7 @@ export function extractSnapshot(schema: Record<string, unknown>, dialect: Dialec
   return { version: 1, dialect, tables }
 }
 
-function extractTable(t: TableDecl<Record<string, ColumnBuilder>>): TableSnapshot {
+function extractTable(t: TableDecl<string, Record<string, ColumnBuilder>>): TableSnapshot {
   const columns: TableSnapshot['columns'] = {}
   const indexes: IndexSnapshot[] = [...t.__indexes]
   const foreignKeys: ForeignKeySnapshot[] = []

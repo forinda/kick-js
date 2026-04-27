@@ -1,15 +1,17 @@
-import { ColumnBuilder, type GeneratedBrand } from './types'
+import { ColumnBuilder, type GeneratedBrand, type NotNullBrand } from './types'
 
 // ── helpers ───────────────────────────────────────────────────────────────
 
 /**
- * Type-level brand stamp. Runtime is identity; the cast attaches the
- * `GeneratedBrand` so `SchemaToKysely<S>` wraps the column in `Generated<T>`.
- * Used by serial-shaped constructors and the `defaultNow` / `defaultRandom`
- * subtype methods.
+ * Type-level brand stamps. Runtime is identity; the cast attaches the
+ * relevant brand so `SchemaToKysely<S>` reads them per column.
  */
 function brandGenerated<C>(col: C): C & GeneratedBrand {
   return col as C & GeneratedBrand
+}
+
+function brandNotNull<C>(col: C): C & NotNullBrand {
+  return col as C & NotNullBrand
 }
 
 function formatNumeric(base: string, precision?: number, scale?: number): string {
@@ -19,17 +21,21 @@ function formatNumeric(base: string, precision?: number, scale?: number): string
 }
 
 // ── auto-assigned identity columns (DB picks the value) ───────────────────
+//
+// Auto-identity columns are always NOT NULL by SQL semantics, so we stamp
+// both NotNullBrand (drop the `| null`) and GeneratedBrand (wrap in
+// Generated<T>) at the constructor.
 
-export function serial(): ColumnBuilder<number, false> & GeneratedBrand {
-  return brandGenerated(new ColumnBuilder<number, false>('serial', { nullable: false }))
+export function serial(): ColumnBuilder<number> & GeneratedBrand & NotNullBrand {
+  return brandNotNull(brandGenerated(new ColumnBuilder<number>('serial', { nullable: false })))
 }
 
-export function bigSerial(): ColumnBuilder<bigint, false> & GeneratedBrand {
-  return brandGenerated(new ColumnBuilder<bigint, false>('bigserial', { nullable: false }))
+export function bigSerial(): ColumnBuilder<bigint> & GeneratedBrand & NotNullBrand {
+  return brandNotNull(brandGenerated(new ColumnBuilder<bigint>('bigserial', { nullable: false })))
 }
 
-export function smallSerial(): ColumnBuilder<number, false> & GeneratedBrand {
-  return brandGenerated(new ColumnBuilder<number, false>('smallserial', { nullable: false }))
+export function smallSerial(): ColumnBuilder<number> & GeneratedBrand & NotNullBrand {
+  return brandNotNull(brandGenerated(new ColumnBuilder<number>('smallserial', { nullable: false })))
 }
 
 // ── numeric ───────────────────────────────────────────────────────────────
@@ -87,12 +93,10 @@ export function boolean(): ColumnBuilder<boolean> {
 /**
  * Subtype builder so `defaultNow()` can mark the resulting column as
  * generated — when the DB will fill in `CURRENT_TIMESTAMP` if the adopter
- * omits the column on insert.
+ * omits the column on insert. Returns `this & GeneratedBrand` so the
+ * subclass identity is preserved through the chain.
  */
-export class TimestampBuilder<TNullable extends boolean = true> extends ColumnBuilder<
-  Date,
-  TNullable
-> {
+export class TimestampBuilder extends ColumnBuilder<Date> {
   constructor(typeName: string = 'timestamp') {
     super(typeName)
   }
@@ -128,11 +132,11 @@ export function interval(): ColumnBuilder<string> {
 /**
  * Subtype builder so `defaultRandom()` can mark the resulting column as
  * generated — when the DB fills in `gen_random_uuid()` for omitted columns.
+ * Returns `this & GeneratedBrand` so chaining works in either order:
+ *   uuid().defaultRandom().primaryKey()
+ *   uuid().primaryKey().defaultRandom()  ← also works
  */
-export class UuidBuilder<TNullable extends boolean = true> extends ColumnBuilder<
-  string,
-  TNullable
-> {
+export class UuidBuilder extends ColumnBuilder<string> {
   constructor() {
     super('uuid')
   }
@@ -150,7 +154,7 @@ export function uuid(): UuidBuilder {
 // ── structured / binary ───────────────────────────────────────────────────
 
 /**
- * The `_T` generic exists so adopters can declare their JSON shape:
+ * The `T` generic exists so adopters can declare their JSON shape:
  *
  *   meta: jsonb<{ tags: string[] }>()
  *

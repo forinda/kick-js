@@ -3,14 +3,14 @@ import type { ColumnBuilder } from './columns/types'
 
 export interface RelationOne {
   kind: 'one'
-  target: TableDecl<Record<string, ColumnBuilder>>
+  target: TableDecl<string, Record<string, ColumnBuilder>>
   fields: ColumnRef[]
   references: ColumnRef[]
 }
 
 export interface RelationMany {
   kind: 'many'
-  target: TableDecl<Record<string, ColumnBuilder>>
+  target: TableDecl<string, Record<string, ColumnBuilder>>
 }
 
 export type Relation = RelationOne | RelationMany
@@ -23,13 +23,13 @@ export interface RelationsDecl {
 
 interface Helpers {
   one: (
-    target: TableDecl<Record<string, ColumnBuilder>>,
+    target: TableDecl<string, Record<string, ColumnBuilder>>,
     opts: { fields: ColumnRef[]; references: ColumnRef[] },
   ) => RelationOne
-  many: (target: TableDecl<Record<string, ColumnBuilder>>) => RelationMany
+  many: (target: TableDecl<string, Record<string, ColumnBuilder>>) => RelationMany
 }
 
-export function relations<T extends TableDecl<Record<string, ColumnBuilder>>>(
+export function relations<T extends TableDecl<string, Record<string, ColumnBuilder>>>(
   source: T,
   builder: (h: Helpers) => Record<string, Relation>,
 ): RelationsDecl {

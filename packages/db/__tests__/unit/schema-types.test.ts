@@ -24,21 +24,35 @@ const users = table('users', {
   metadata: jsonb<{ tags: string[] }>(),
 })
 
+// Two posts-shaped tables to verify the chain order doesn't matter — both
+// `uuid().primaryKey().defaultRandom()` and `uuid().defaultRandom().primaryKey()`
+// must produce `Generated<string>` because the brand intersection preserves
+// the subclass identity through chain methods.
 const posts = table('posts', {
   id: uuid().primaryKey().defaultRandom(),
   authorId: integer().notNull(),
   body: text().notNull(),
 })
 
-type DB = SchemaToKysely<{ users: typeof users; posts: typeof posts }>
+const comments = table('comments', {
+  id: uuid().defaultRandom().primaryKey(),
+  postId: integer().notNull(),
+  body: text().notNull(),
+})
+
+type DB = SchemaToKysely<{ users: typeof users; posts: typeof posts; comments: typeof comments }>
 
 describe('SchemaToKysely', () => {
   it('serial primary key wraps in Generated<number>', () => {
     expectTypeOf<DB['users']['id']>().toEqualTypeOf<Generated<number>>()
   })
 
-  it('uuid primary key with defaultRandom wraps in Generated<string>', () => {
+  it('uuid().primaryKey().defaultRandom() works (chain preserves UuidBuilder)', () => {
     expectTypeOf<DB['posts']['id']>().toEqualTypeOf<Generated<string>>()
+  })
+
+  it('uuid().defaultRandom().primaryKey() also works (reverse order)', () => {
+    expectTypeOf<DB['comments']['id']>().toEqualTypeOf<Generated<string>>()
   })
 
   it('timestamp with defaultNow wraps in Generated<Date>', () => {
@@ -65,7 +79,7 @@ describe('SchemaToKysely', () => {
     expectTypeOf<DB['users']['metadata']>().toEqualTypeOf<{ tags: string[] } | null>()
   })
 
-  it('row only contains schema tables (no relations / non-table exports)', () => {
-    expectTypeOf<keyof DB>().toEqualTypeOf<'users' | 'posts'>()
+  it('table names are inferred as literals (no widening to string)', () => {
+    expectTypeOf<keyof DB>().toEqualTypeOf<'users' | 'posts' | 'comments'>()
   })
 })

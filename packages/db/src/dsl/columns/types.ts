@@ -12,31 +12,43 @@ export interface ColumnState {
 /**
  * Type-only brand attached to a column when it's auto-assigned by the
  * database (serial / bigserial / smallserial), has a runtime default
- * (`.default(...)`), or carries an expression default (`uuid().defaultRandom()`,
- * `timestamp().defaultNow()`). `SchemaToKysely<S>` reads this marker and
- * wraps the column type in Kysely's `Generated<T>` so adopters can omit
- * the column on insert.
+ * (`.default(...)`), or carries an expression default
+ * (`uuid().defaultRandom()`, `timestamp().defaultNow()`). `SchemaToKysely<S>`
+ * reads this marker and wraps the column type in Kysely's `Generated<T>` so
+ * adopters can omit the column on insert.
  *
  * Runtime is a no-op — the symbol never reaches a value.
  */
 export const KICK_GENERATED = Symbol.for('@forinda/kickjs-db/Generated')
-export type GeneratedBrand = { readonly [KICK_GENERATED]: true }
+export type GeneratedBrand = { readonly [KICK_GENERATED]?: true }
+
+/**
+ * Type-only brand attached to a column when `.notNull()` or `.primaryKey()`
+ * is called. `SchemaToKysely<S>` reads this brand to decide whether the
+ * column type is `T` (NOT NULL) or `T | null` (default nullable).
+ *
+ * Why a brand instead of a class generic: chained methods (notNull,
+ * primaryKey) can return `this & NotNullBrand` to narrow nullability while
+ * preserving the subclass identity — so `uuid().primaryKey().defaultRandom()`
+ * still resolves `defaultRandom()` on `UuidBuilder`. A class generic
+ * `<TNullable>` would collapse the subclass back to the parent.
+ */
+export const KICK_NOT_NULL = Symbol.for('@forinda/kickjs-db/NotNull')
+export type NotNullBrand = { readonly [KICK_NOT_NULL]?: true }
 
 /**
  * Phantom-typed column builder. The `T` generic carries the column's TS
- * value type (number / string / Date / etc.) and `TNullable` carries the
- * nullable flag. Both are erased at runtime; they exist purely so
- * `SchemaToKysely<S>` can pull them out per column.
+ * value type (number / string / Date / etc.); nullability is tracked via
+ * the `NotNullBrand` intersection rather than a class generic so chain
+ * methods preserve subclass identity.
  *
- * The chain methods that affect the type (`notNull()`, `primaryKey()`,
- * `array()`) return widened/narrowed phantoms; everything else returns
- * `this` so the chain stays callable.
+ * Both `T` and the brand are erased at runtime; they exist purely so
+ * `SchemaToKysely<S>` can pull them out per column.
  */
-export class ColumnBuilder<T = unknown, TNullable extends boolean = true> {
-  // The phantom param `T` shows up in the public surface so the type system
-  // sees it; reading it at runtime is intentionally not supported.
+export class ColumnBuilder<T = unknown> {
+  // Phantom param shows up in the public surface so the type system sees
+  // it. Reading it at runtime is intentionally not supported.
   declare readonly __t?: T
-  declare readonly __nullable?: TNullable
 
   protected state: ColumnState
 
@@ -51,15 +63,15 @@ export class ColumnBuilder<T = unknown, TNullable extends boolean = true> {
     }
   }
 
-  notNull(): ColumnBuilder<T, false> {
+  notNull(): this & NotNullBrand {
     this.state.nullable = false
-    return this as unknown as ColumnBuilder<T, false>
+    return this as this & NotNullBrand
   }
 
-  primaryKey(): ColumnBuilder<T, false> {
+  primaryKey(): this & NotNullBrand {
     this.state.primaryKey = true
     this.state.nullable = false
-    return this as unknown as ColumnBuilder<T, false>
+    return this as this & NotNullBrand
   }
 
   unique(): this {
@@ -67,9 +79,9 @@ export class ColumnBuilder<T = unknown, TNullable extends boolean = true> {
     return this
   }
 
-  array(): ColumnBuilder<T[], TNullable> {
+  array(): ColumnBuilder<T[]> {
     this.state.type = `${this.state.type}[]`
-    return this as unknown as ColumnBuilder<T[], TNullable>
+    return this as unknown as ColumnBuilder<T[]>
   }
 
   references(
