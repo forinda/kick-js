@@ -125,6 +125,7 @@ Memory rules to honor (from MEMORY.md):
 
 **Story:** M1-S1.
 **Files:**
+
 - Modify: `packages/db/src/dsl/columns/builders.ts`
 - Modify: `packages/db/src/dsl/columns/index.ts`
 - Create: `packages/db/__tests__/unit/columns-numeric.test.ts`
@@ -135,13 +136,23 @@ Memory rules to honor (from MEMORY.md):
 // packages/db/__tests__/unit/columns-numeric.test.ts
 import { describe, it, expect } from 'vitest'
 import {
-  bigSerial, bigint, smallint, decimal, numeric, real, doublePrecision,
+  bigSerial,
+  bigint,
+  smallint,
+  decimal,
+  numeric,
+  real,
+  doublePrecision,
 } from '@forinda/kickjs-db'
 
 describe('numeric column builders', () => {
   it('bigSerial defaults to NOT NULL like serial', () => {
     expect(bigSerial().toJSON('id')).toEqual({
-      name: 'id', type: 'bigserial', nullable: false, default: null, primaryKey: false,
+      name: 'id',
+      type: 'bigserial',
+      nullable: false,
+      default: null,
+      primaryKey: false,
     })
   })
 
@@ -217,8 +228,20 @@ function formatNumeric(base: string, precision?: number, scale?: number): string
 ```ts
 // packages/db/src/dsl/columns/index.ts — add to the existing list
 export {
-  serial, integer, varchar, text, boolean, timestamp, TimestampBuilder,
-  bigSerial, bigint, smallint, decimal, numeric, real, doublePrecision,
+  serial,
+  integer,
+  varchar,
+  text,
+  boolean,
+  timestamp,
+  TimestampBuilder,
+  bigSerial,
+  bigint,
+  smallint,
+  decimal,
+  numeric,
+  real,
+  doublePrecision,
 } from './builders'
 ```
 
@@ -354,7 +377,7 @@ Extend to a general "looks like a function call" rule:
 ```ts
 function formatDefault(value: string): string {
   // Bare-passthrough: SQL keywords, function calls, numeric/boolean literals.
-  if (/^[A-Z_]+(\s*\(\s*\))?$/i.test(value)) return value     // CURRENT_TIMESTAMP, NOW()
+  if (/^[A-Z_]+(\s*\(\s*\))?$/i.test(value)) return value // CURRENT_TIMESTAMP, NOW()
   if (/^[a-z_][a-z0-9_]*\s*\([^)]*\)$/i.test(value)) return value // gen_random_uuid()
   if (/^-?\d+(\.\d+)?$/.test(value)) return value
   if (value === 'true' || value === 'false') return value
@@ -452,6 +475,7 @@ git commit -m "feat(db): add json/jsonb/bytea + .array() modifier (M1-S1)"
 
 **Story:** M1-S1.
 **Files:**
+
 - Create: `packages/db/src/dsl/columns/pg.ts`
 - Modify: `packages/db/package.json` (add `./pg` subpath export)
 - Modify: `packages/db/tsdown.config.ts` (add the `pg` entry)
@@ -490,15 +514,27 @@ describe('PG-only column types', () => {
 // packages/db/src/dsl/columns/pg.ts
 import { ColumnBuilder } from './types'
 
-export function tsvector(): ColumnBuilder { return new ColumnBuilder('tsvector') }
+export function tsvector(): ColumnBuilder {
+  return new ColumnBuilder('tsvector')
+}
 export function vector(dim?: number): ColumnBuilder {
   return new ColumnBuilder(dim === undefined ? 'vector' : `vector(${dim})`)
 }
-export function citext(): ColumnBuilder { return new ColumnBuilder('citext') }
-export function money(): ColumnBuilder  { return new ColumnBuilder('money') }
-export function inet(): ColumnBuilder   { return new ColumnBuilder('inet') }
-export function cidr(): ColumnBuilder   { return new ColumnBuilder('cidr') }
-export function xml(): ColumnBuilder    { return new ColumnBuilder('xml') }
+export function citext(): ColumnBuilder {
+  return new ColumnBuilder('citext')
+}
+export function money(): ColumnBuilder {
+  return new ColumnBuilder('money')
+}
+export function inet(): ColumnBuilder {
+  return new ColumnBuilder('inet')
+}
+export function cidr(): ColumnBuilder {
+  return new ColumnBuilder('cidr')
+}
+export function xml(): ColumnBuilder {
+  return new ColumnBuilder('xml')
+}
 ```
 
 - [ ] **Step 4.3: Wire subpath**
@@ -551,6 +587,7 @@ git commit -m "feat(db): add @forinda/kickjs-db/pg subpath with vector/citext/mo
 
 **Story:** M1-S3 through S6 share these.
 **Files:**
+
 - Create: `packages/db/src/migrate/errors.ts`
 - Create: `packages/db/src/errors.ts`
 - Modify: `packages/db/src/index.ts`
@@ -561,8 +598,12 @@ git commit -m "feat(db): add @forinda/kickjs-db/pg subpath with vector/citext/mo
 ```ts
 import { describe, it, expect } from 'vitest'
 import {
-  KickDbError, MigrationError, MigrationLockError, MigrationDriftError,
-  MigrationHashError, UnreviewedMigrationError,
+  KickDbError,
+  MigrationError,
+  MigrationLockError,
+  MigrationDriftError,
+  MigrationHashError,
+  UnreviewedMigrationError,
 } from '@forinda/kickjs-db'
 
 describe('error hierarchy', () => {
@@ -583,7 +624,9 @@ describe('error hierarchy', () => {
 
   it('MigrationDriftError carries the diff payload', () => {
     const e = new MigrationDriftError('schema drifted', {
-      added: ['users.foo'], removed: ['users.bar'], changed: [],
+      added: ['users.foo'],
+      removed: ['users.bar'],
+      changed: [],
     })
     expect(e.diff.added).toEqual(['users.foo'])
   })
@@ -645,7 +688,10 @@ export class MigrationHashError extends MigrationError {
 export class UnreviewedMigrationError extends MigrationError {
   readonly id: string
   constructor(id: string) {
-    super('migration_unreviewed', `Migration ${id} has -- REVIEWED: false; flip the marker before applying outside dev`)
+    super(
+      'migration_unreviewed',
+      `Migration ${id} has -- REVIEWED: false; flip the marker before applying outside dev`,
+    )
     this.id = id
   }
 }
@@ -656,8 +702,11 @@ Re-export from `index.ts`:
 ```ts
 export { KickDbError } from './errors'
 export {
-  MigrationError, MigrationLockError, MigrationDriftError,
-  MigrationHashError, UnreviewedMigrationError,
+  MigrationError,
+  MigrationLockError,
+  MigrationDriftError,
+  MigrationHashError,
+  UnreviewedMigrationError,
   type SchemaDiffSummary,
 } from './migrate/errors'
 ```
@@ -674,6 +723,7 @@ git commit -m "feat(db): add KickDbError + Migration* error hierarchy (M1-S3..S6
 
 **Story:** M1-S3.
 **Files:**
+
 - Create: `packages/db/src/migrate/journal.ts`
 - Modify: `packages/db/src/cli/generate.ts` (write to `_journal.json` on each generate)
 - Modify: `packages/db/src/index.ts`
@@ -686,7 +736,12 @@ The journal is the integrity-checked, ordered list of every committed migration.
   "version": 1,
   "dialect": "postgres",
   "entries": [
-    { "id": "20260427_153012_init", "tag": "init", "hash": "sha256:...", "createdAt": "2026-04-27T..." }
+    {
+      "id": "20260427_153012_init",
+      "tag": "init",
+      "hash": "sha256:...",
+      "createdAt": "2026-04-27T..."
+    }
   ]
 }
 ```
@@ -701,7 +756,12 @@ import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
-import { readJournal, appendJournalEntry, computeMigrationHash, verifyMigrationHash } from '@forinda/kickjs-db'
+import {
+  readJournal,
+  appendJournalEntry,
+  computeMigrationHash,
+  verifyMigrationHash,
+} from '@forinda/kickjs-db'
 
 let dir: string
 
@@ -720,7 +780,12 @@ describe('journal', () => {
   })
 
   it('appendJournalEntry writes the file atomically', async () => {
-    const entry = { id: '20260427_init', tag: 'init', hash: 'sha256:abc', createdAt: '2026-04-27T00:00:00.000Z' }
+    const entry = {
+      id: '20260427_init',
+      tag: 'init',
+      hash: 'sha256:abc',
+      createdAt: '2026-04-27T00:00:00.000Z',
+    }
     await appendJournalEntry(dir, 'postgres', entry)
     const j = await readJournal(dir, 'postgres')
     expect(j.entries).toEqual([entry])
@@ -804,11 +869,20 @@ export async function computeMigrationHash(migrationDir: string): Promise<string
   const up = await readFile(path.join(migrationDir, 'up.sql'), 'utf8')
   const down = await readFile(path.join(migrationDir, 'down.sql'), 'utf8')
   const snap = await readFile(path.join(migrationDir, 'snapshot.json'), 'utf8')
-  const h = createHash('sha256').update(up).update('|').update(down).update('|').update(snap).digest('hex')
+  const h = createHash('sha256')
+    .update(up)
+    .update('|')
+    .update(down)
+    .update('|')
+    .update(snap)
+    .digest('hex')
   return `sha256:${h}`
 }
 
-export async function verifyMigrationHash(migrationDir: string, expected: string): Promise<boolean> {
+export async function verifyMigrationHash(
+  migrationDir: string,
+  expected: string,
+): Promise<boolean> {
   const actual = await computeMigrationHash(migrationDir)
   return actual === expected
 }
@@ -822,7 +896,10 @@ After writing `up.sql` + `down.sql` + `snapshot.json` + `meta.json`, also append
 // packages/db/src/cli/generate.ts — at the end of writeMigration():
 const hash = await computeMigrationHash(dir)
 await appendJournalEntry(p.migrationsAbs, p.opts.config.dialect, {
-  id, tag: p.opts.name, hash, createdAt: (p.opts.now?.() ?? new Date()).toISOString(),
+  id,
+  tag: p.opts.name,
+  hash,
+  createdAt: (p.opts.now?.() ?? new Date()).toISOString(),
 })
 ```
 
@@ -838,6 +915,7 @@ git commit -m "feat(db): add _journal.json with deterministic per-migration hash
 
 **Story:** M1-S4.
 **Files:**
+
 - Create: `packages/db/src/migrate/adapter.ts`
 - Create: `packages/db/src/migrate/schema.ts`
 - Modify: `packages/db/src/index.ts`
@@ -974,7 +1052,9 @@ describe('migration table DDL', () => {
   it('PG lock seeds the single row idempotently', () => {
     const sql = lockTableDdl('postgres')
     expect(sql).toContain('CREATE TABLE IF NOT EXISTS "kick_migrations_lock"')
-    expect(sql).toContain(`INSERT INTO "kick_migrations_lock" ("id") VALUES (1) ON CONFLICT DO NOTHING`)
+    expect(sql).toContain(
+      `INSERT INTO "kick_migrations_lock" ("id") VALUES (1) ON CONFLICT DO NOTHING`,
+    )
   })
 
   it('SQLite uses INSERT OR IGNORE for lock seeding', () => {
@@ -1003,6 +1083,7 @@ git commit -m "feat(db): MigrationAdapter contract + per-dialect kick_migrations
 The lock semantics need testing without spinning a Postgres container per test. Solution: ship a **memory adapter** in `@forinda/kickjs-db` itself for unit tests; the real `pg` adapter (Task 16) wires the same interface against a database.
 
 **Files:**
+
 - Create: `packages/db/src/migrate/memory-adapter.ts` (test fixture, exported)
 - Create: `packages/db/__tests__/unit/lock.test.ts`
 - Modify: `packages/db/src/index.ts`
@@ -1028,9 +1109,13 @@ export class MemoryMigrationAdapter implements MigrationAdapter {
   private appliedSql: string[] = []
   private currentSchema: SchemaSnapshot = { version: 1, dialect: 'postgres', tables: {} }
 
-  async ensureMigrationTables(): Promise<void> { /* no-op */ }
+  async ensureMigrationTables(): Promise<void> {
+    /* no-op */
+  }
 
-  async listApplied(): Promise<MigrationRow[]> { return [...this.rows] }
+  async listApplied(): Promise<MigrationRow[]> {
+    return [...this.rows]
+  }
 
   async recordApplied(row: Omit<MigrationRow, 'appliedAt'>): Promise<void> {
     this.rows.push({ ...row, appliedAt: new Date().toISOString() })
@@ -1050,18 +1135,30 @@ export class MemoryMigrationAdapter implements MigrationAdapter {
     this.locked = null
   }
 
-  async applySqlInTx(sql: string): Promise<void> { this.appliedSql.push(sql) }
-  async applySqlNoTx(sql: string): Promise<void> { this.appliedSql.push(sql) }
+  async applySqlInTx(sql: string): Promise<void> {
+    this.appliedSql.push(sql)
+  }
+  async applySqlNoTx(sql: string): Promise<void> {
+    this.appliedSql.push(sql)
+  }
 
-  async introspect(): Promise<SchemaSnapshot> { return this.currentSchema }
+  async introspect(): Promise<SchemaSnapshot> {
+    return this.currentSchema
+  }
 
-  async close(): Promise<void> { /* no-op */ }
+  async close(): Promise<void> {
+    /* no-op */
+  }
 
   /** Test-only setter — let drift tests stage a "live" schema state. */
-  __setIntrospectedSchema(snap: SchemaSnapshot): void { this.currentSchema = snap }
+  __setIntrospectedSchema(snap: SchemaSnapshot): void {
+    this.currentSchema = snap
+  }
 
   /** Test-only inspector — what SQL we received. */
-  __appliedSql(): readonly string[] { return this.appliedSql }
+  __appliedSql(): readonly string[] {
+    return this.appliedSql
+  }
 }
 ```
 
@@ -1100,6 +1197,7 @@ git commit -m "feat(db): MemoryMigrationAdapter for unit tests (M1-S4)"
 
 **Story:** M1-S5.
 **Files:**
+
 - Create: `packages/db/src/migrate/runner.ts`
 - Modify: `packages/db/src/index.ts`
 - Create: `packages/db/__tests__/unit/runner-latest.test.ts`
@@ -1158,7 +1256,7 @@ export async function migrateLatest(opts: RunnerOptions): Promise<AppliedSummary
       if (actualHash !== entry.hash) {
         throw new MigrationHashError(entry.id, entry.expected ?? entry.hash, actualHash)
       }
-      if ((opts.requireReviewed ?? process.env.NODE_ENV !== 'development')) {
+      if (opts.requireReviewed ?? process.env.NODE_ENV !== 'development') {
         const meta = JSON.parse(await readFile(path.join(dir, 'meta.json'), 'utf8'))
         if (meta.reviewed !== true) {
           throw new UnreviewedMigrationError(entry.id)
@@ -1180,8 +1278,11 @@ export async function migrateLatest(opts: RunnerOptions): Promise<AppliedSummary
         await opts.adapter.applySqlNoTx(upSql)
       }
       await opts.adapter.recordApplied({
-        id: entry.id, name: entry.tag, hash: entry.hash,
-        batch: nextBatch, direction: 'up',
+        id: entry.id,
+        name: entry.tag,
+        hash: entry.hash,
+        batch: nextBatch,
+        direction: 'up',
       })
       ids.push(entry.id)
     }
@@ -1203,7 +1304,10 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 
 import {
-  migrateLatest, MemoryMigrationAdapter, computeMigrationHash, appendJournalEntry,
+  migrateLatest,
+  MemoryMigrationAdapter,
+  computeMigrationHash,
+  appendJournalEntry,
   MigrationLockError,
 } from '@forinda/kickjs-db'
 
@@ -1212,18 +1316,42 @@ let dir: string
 async function seedMigration(dir: string, id: string, name: string, reviewed = true) {
   const mig = path.join(dir, id)
   await mkdir(mig, { recursive: true })
-  await writeFile(path.join(mig, 'up.sql'), `-- REVIEWED: ${reviewed}\nCREATE TABLE "${id}_t" ();`, 'utf8')
-  await writeFile(path.join(mig, 'down.sql'), `-- REVIEWED: ${reviewed}\nDROP TABLE "${id}_t";`, 'utf8')
+  await writeFile(
+    path.join(mig, 'up.sql'),
+    `-- REVIEWED: ${reviewed}\nCREATE TABLE "${id}_t" ();`,
+    'utf8',
+  )
+  await writeFile(
+    path.join(mig, 'down.sql'),
+    `-- REVIEWED: ${reviewed}\nDROP TABLE "${id}_t";`,
+    'utf8',
+  )
   await writeFile(path.join(mig, 'snapshot.json'), '{"v":1}', 'utf8')
-  await writeFile(path.join(mig, 'meta.json'), JSON.stringify({
-    id, name, reviewed, dialect: 'postgres',
-  }), 'utf8')
+  await writeFile(
+    path.join(mig, 'meta.json'),
+    JSON.stringify({
+      id,
+      name,
+      reviewed,
+      dialect: 'postgres',
+    }),
+    'utf8',
+  )
   const hash = await computeMigrationHash(mig)
-  await appendJournalEntry(dir, 'postgres', { id, tag: name, hash, createdAt: new Date().toISOString() })
+  await appendJournalEntry(dir, 'postgres', {
+    id,
+    tag: name,
+    hash,
+    createdAt: new Date().toISOString(),
+  })
 }
 
-beforeEach(async () => { dir = await mkdtemp(path.join(tmpdir(), 'kickdb-runner-')) })
-afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
+beforeEach(async () => {
+  dir = await mkdtemp(path.join(tmpdir(), 'kickdb-runner-'))
+})
+afterEach(async () => {
+  await rm(dir, { recursive: true, force: true })
+})
 
 describe('migrateLatest', () => {
   it('applies all pending migrations in one batch', async () => {
@@ -1248,15 +1376,17 @@ describe('migrateLatest', () => {
   it('throws MigrationLockError when the lock is held', async () => {
     const adapter = new MemoryMigrationAdapter()
     expect(await adapter.acquireLock('other')).toBe(true)
-    await expect(migrateLatest({ adapter, migrationsDir: dir, owner: 'test' }))
-      .rejects.toBeInstanceOf(MigrationLockError)
+    await expect(
+      migrateLatest({ adapter, migrationsDir: dir, owner: 'test' }),
+    ).rejects.toBeInstanceOf(MigrationLockError)
   })
 
   it('refuses unreviewed migration in non-dev', async () => {
     await seedMigration(dir, '20260427_010000_a', 'a', /* reviewed */ false)
     const adapter = new MemoryMigrationAdapter()
-    await expect(migrateLatest({ adapter, migrationsDir: dir, owner: 'test', requireReviewed: true }))
-      .rejects.toThrow(/unreviewed/i)
+    await expect(
+      migrateLatest({ adapter, migrationsDir: dir, owner: 'test', requireReviewed: true }),
+    ).rejects.toThrow(/unreviewed/i)
   })
 })
 ```
@@ -1287,6 +1417,7 @@ export async function migrateUp(opts: RunnerOptions): Promise<AppliedSummary> {
 ```
 
 Refactor: move the body of `migrateLatest` into a private function `runForward(opts, entries)` that takes a pre-filtered list of entries. Then:
+
 - `migrateLatest` filters all pending and calls `runForward`.
 - `migrateUp` filters pending and slices off the first entry, calling `runForward` with that single-element array.
 
@@ -1340,12 +1471,13 @@ export async function migrateDown(opts: RunnerOptions): Promise<{ reversed: stri
     if (applied.length === 0) return { reversed: null }
     // Sort by batch then appliedAt so 'most recent' is unambiguous.
     const sorted = [...applied].sort((a, b) =>
-      a.batch !== b.batch ? a.batch - b.batch : a.appliedAt.localeCompare(b.appliedAt))
+      a.batch !== b.batch ? a.batch - b.batch : a.appliedAt.localeCompare(b.appliedAt),
+    )
     const last = sorted[sorted.length - 1]
     const dir = path.join(opts.migrationsDir, last.id)
     const downSql = await readFile(path.join(dir, 'down.sql'), 'utf8')
     const meta = JSON.parse(await readFile(path.join(dir, 'meta.json'), 'utf8'))
-    if ((opts.requireReviewed ?? process.env.NODE_ENV !== 'development')) {
+    if (opts.requireReviewed ?? process.env.NODE_ENV !== 'development') {
       if (meta.reviewed !== true) throw new UnreviewedMigrationError(last.id)
     }
     const useTx = meta.transaction !== false
@@ -1415,7 +1547,7 @@ export async function migrateRollback(opts: RunnerOptions): Promise<{ reversed: 
       const dir = path.join(opts.migrationsDir, row.id)
       const downSql = await readFile(path.join(dir, 'down.sql'), 'utf8')
       const meta = JSON.parse(await readFile(path.join(dir, 'meta.json'), 'utf8'))
-      if ((opts.requireReviewed ?? process.env.NODE_ENV !== 'development')) {
+      if (opts.requireReviewed ?? process.env.NODE_ENV !== 'development') {
         if (meta.reviewed !== true) throw new UnreviewedMigrationError(row.id)
       }
       const useTx = meta.transaction !== false
@@ -1440,13 +1572,13 @@ describe('migrateRollback', () => {
     await seedMigration(dir, '20260427_010000_a', 'a')
     await seedMigration(dir, '20260427_020000_b', 'b')
     const adapter = new MemoryMigrationAdapter()
-    await migrateLatest({ adapter, migrationsDir: dir, owner: 'test' })  // batch 1
+    await migrateLatest({ adapter, migrationsDir: dir, owner: 'test' }) // batch 1
 
     await seedMigration(dir, '20260427_030000_c', 'c')
-    await migrateLatest({ adapter, migrationsDir: dir, owner: 'test' })  // batch 2
+    await migrateLatest({ adapter, migrationsDir: dir, owner: 'test' }) // batch 2
 
     const r = await migrateRollback({ adapter, migrationsDir: dir, owner: 'test' })
-    expect(r.reversed).toEqual(['20260427_030000_c'])  // batch 2 had only c
+    expect(r.reversed).toEqual(['20260427_030000_c']) // batch 2 had only c
     const applied = await adapter.listApplied()
     expect(applied.map((a) => a.id)).toEqual(['20260427_010000_a', '20260427_020000_b'])
   })
@@ -1481,24 +1613,30 @@ export interface StatusEntry {
   reviewed: boolean
 }
 
-export async function migrateStatus(opts: Pick<RunnerOptions, 'adapter' | 'migrationsDir'>): Promise<StatusEntry[]> {
+export async function migrateStatus(
+  opts: Pick<RunnerOptions, 'adapter' | 'migrationsDir'>,
+): Promise<StatusEntry[]> {
   await opts.adapter.ensureMigrationTables()
   const journal = await readJournal(opts.migrationsDir, opts.adapter.dialect)
   const applied = await opts.adapter.listApplied()
   const byId = new Map(applied.map((r) => [r.id, r]))
-  return Promise.all(journal.entries.map(async (e) => {
-    const row = byId.get(e.id)
-    const meta = JSON.parse(await readFile(path.join(opts.migrationsDir, e.id, 'meta.json'), 'utf8'))
-    return {
-      id: e.id,
-      tag: e.tag,
-      hash: e.hash,
-      state: row ? 'applied' : 'pending',
-      batch: row?.batch ?? null,
-      appliedAt: row?.appliedAt ?? null,
-      reviewed: meta.reviewed === true,
-    }
-  }))
+  return Promise.all(
+    journal.entries.map(async (e) => {
+      const row = byId.get(e.id)
+      const meta = JSON.parse(
+        await readFile(path.join(opts.migrationsDir, e.id, 'meta.json'), 'utf8'),
+      )
+      return {
+        id: e.id,
+        tag: e.tag,
+        hash: e.hash,
+        state: row ? 'applied' : 'pending',
+        batch: row?.batch ?? null,
+        appliedAt: row?.appliedAt ?? null,
+        reviewed: meta.reviewed === true,
+      }
+    }),
+  )
 }
 ```
 
@@ -1535,32 +1673,203 @@ git commit -m "feat(db): migrateStatus runner — applied/pending summary (M1-S5
 
 **Story:** M1-S6 (drift) + M1-S10 (introspect command).
 **Files:**
+
 - Create: `packages/db/src/migrate/introspect-pg.ts`
+- Create: `packages/db/src/migrate/introspect-types.ts`
+- Modify: `packages/db/src/index.ts`
+- Create: `packages/db/__tests__/integration/introspect-pg.test.ts`
 
 The introspector reads `information_schema.tables/columns/key_column_usage` + `pg_indexes` + `pg_constraint` and emits the canonical `SchemaSnapshot` IR — same shape that `extractSnapshot()` produces from the DSL. One IR, two producers.
 
-- [ ] **Step 14.1: Implement** (sketch — full SQL queries, ~150 LOC).
+- [ ] **Step 14.1: Define the runner interface (driver-agnostic)**
+
+Create `packages/db/src/migrate/introspect-types.ts`:
 
 ```ts
-// packages/db/src/migrate/introspect-pg.ts
-import type { SchemaSnapshot, TableSnapshot, ColumnSnapshot, IndexSnapshot, ForeignKeySnapshot, FkAction } from '../snapshot/types'
-
+/**
+ * Driver-agnostic SQL runner. Both pg.Client and pg.Pool match this shape via
+ * structural typing. Lets introspectPg() stay portable across pg / pg-pool /
+ * @neondatabase/serverless without importing 'pg' from the core package.
+ */
 export interface PgQueryRunner {
-  query<R = unknown>(sql: string, params?: unknown[]): Promise<{ rows: R[] }>
+  query<R = unknown>(sql: string, params?: readonly unknown[]): Promise<{ rows: R[] }>
 }
 
-export async function introspectPg(client: PgQueryRunner, opts: { schema?: string } = {}): Promise<SchemaSnapshot> {
-  const schema = opts.schema ?? 'public'
-  // 1. Tables
-  const tables: Record<string, TableSnapshot> = {}
-  const tableRows = (await client.query<{ table_name: string }>(`
-    SELECT table_name FROM information_schema.tables
-    WHERE table_schema = $1 AND table_type = 'BASE TABLE'
-    AND table_name NOT IN ('kick_migrations', 'kick_migrations_lock')
-    ORDER BY table_name
-  `, [schema])).rows
+export interface IntrospectPgOptions {
+  /** Default 'public'. */
+  schema?: string
+  /** Migration tracking tables to skip. Default ['kick_migrations', 'kick_migrations_lock']. */
+  excludeTables?: readonly string[]
+}
+```
 
-  for (const t of tableRows) {
+- [ ] **Step 14.2: Write the failing integration test**
+
+Create `packages/db/__tests__/integration/introspect-pg.test.ts`:
+
+```ts
+import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers/postgresql'
+import pg from 'pg'
+
+import { introspectPg } from '@forinda/kickjs-db'
+
+let container: StartedPostgreSqlContainer
+let client: pg.Client
+
+beforeAll(async () => {
+  container = await new PostgreSqlContainer('postgres:16-alpine').start()
+  client = new pg.Client({
+    host: container.getHost(),
+    port: container.getMappedPort(5432),
+    user: container.getUsername(),
+    password: container.getPassword(),
+    database: container.getDatabase(),
+  })
+  await client.connect()
+}, 90_000)
+
+afterAll(async () => {
+  await client?.end()
+  await container?.stop()
+})
+
+describe('introspectPg()', () => {
+  it('extracts the canonical SchemaSnapshot for a 2-table schema with FK + indexes', async () => {
+    await client.query(`
+      CREATE TABLE "users" (
+        "id" serial NOT NULL,
+        "email" varchar(255) NOT NULL,
+        "name" varchar(120),
+        "created_at" timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "is_active" boolean NOT NULL DEFAULT true,
+        PRIMARY KEY ("id")
+      );
+      CREATE TABLE "posts" (
+        "id" serial NOT NULL,
+        "author_id" integer NOT NULL,
+        "title" varchar(200) NOT NULL,
+        "body" text NOT NULL,
+        PRIMARY KEY ("id")
+      );
+      CREATE INDEX "users_email_idx" ON "users" ("email");
+      CREATE UNIQUE INDEX "users_email_unique" ON "users" ("email");
+      CREATE UNIQUE INDEX "posts_title_author_unique" ON "posts" ("title", "author_id");
+      ALTER TABLE "posts" ADD CONSTRAINT "posts_author_fk"
+        FOREIGN KEY ("author_id") REFERENCES "users" ("id") ON DELETE CASCADE ON UPDATE NO ACTION;
+    `)
+
+    const snap = await introspectPg(client)
+
+    expect(snap.version).toBe(1)
+    expect(snap.dialect).toBe('postgres')
+    expect(Object.keys(snap.tables).sort()).toEqual(['posts', 'users'])
+
+    expect(snap.tables.users.columns.id).toEqual({
+      name: 'id',
+      type: 'serial',
+      nullable: false,
+      default: null,
+      primaryKey: true,
+    })
+    expect(snap.tables.users.columns.email).toEqual({
+      name: 'email',
+      type: 'varchar(255)',
+      nullable: false,
+      default: null,
+      primaryKey: false,
+    })
+    expect(snap.tables.users.columns.created_at).toMatchObject({
+      type: 'timestamptz',
+      default: 'CURRENT_TIMESTAMP',
+    })
+    expect(snap.tables.users.columns.is_active).toMatchObject({
+      type: 'boolean',
+      default: 'true',
+    })
+
+    // Indexes — the PK-backing index is excluded; user-defined ones are kept.
+    expect(snap.tables.users.indexes.map((i) => i.name).sort()).toEqual([
+      'users_email_idx',
+      'users_email_unique',
+    ])
+    const unique = snap.tables.users.indexes.find((i) => i.name === 'users_email_unique')
+    expect(unique?.unique).toBe(true)
+    expect(unique?.columns).toEqual(['email'])
+
+    // Multi-column unique on posts
+    const multiUnique = snap.tables.posts.indexes.find(
+      (i) => i.name === 'posts_title_author_unique',
+    )
+    expect(multiUnique?.unique).toBe(true)
+    expect(multiUnique?.columns).toEqual(['title', 'author_id'])
+
+    // FK
+    expect(snap.tables.posts.foreignKeys).toEqual([
+      {
+        name: 'posts_author_fk',
+        columns: ['author_id'],
+        refTable: 'users',
+        refColumns: ['id'],
+        onDelete: 'cascade',
+        onUpdate: 'no_action',
+      },
+    ])
+  }, 60_000)
+
+  it('skips kick_migrations + kick_migrations_lock tables', async () => {
+    await client.query(`
+      CREATE TABLE "kick_migrations" ("id" varchar(128) PRIMARY KEY);
+      CREATE TABLE "kick_migrations_lock" ("id" smallint PRIMARY KEY);
+    `)
+    const snap = await introspectPg(client)
+    expect(snap.tables.kick_migrations).toBeUndefined()
+    expect(snap.tables.kick_migrations_lock).toBeUndefined()
+  }, 60_000)
+})
+```
+
+- [ ] **Step 14.3: Run — fails (no `introspectPg` export yet)**
+
+```bash
+pnpm --filter @forinda/kickjs-db test
+```
+
+- [ ] **Step 14.4: Implement `introspectPg()` — orchestrator**
+
+Create `packages/db/src/migrate/introspect-pg.ts`:
+
+```ts
+import type {
+  ColumnSnapshot,
+  ForeignKeySnapshot,
+  FkAction,
+  IndexSnapshot,
+  SchemaSnapshot,
+  TableSnapshot,
+} from '../snapshot/types'
+import type { IntrospectPgOptions, PgQueryRunner } from './introspect-types'
+
+const DEFAULT_EXCLUDED = ['kick_migrations', 'kick_migrations_lock']
+
+export async function introspectPg(
+  client: PgQueryRunner,
+  opts: IntrospectPgOptions = {},
+): Promise<SchemaSnapshot> {
+  const schema = opts.schema ?? 'public'
+  const excluded = opts.excludeTables ?? DEFAULT_EXCLUDED
+
+  const tableRows = await client.query<{ table_name: string }>(
+    `SELECT table_name
+     FROM information_schema.tables
+     WHERE table_schema = $1 AND table_type = 'BASE TABLE'
+     ORDER BY table_name`,
+    [schema],
+  )
+
+  const tables: Record<string, TableSnapshot> = {}
+  for (const t of tableRows.rows) {
+    if (excluded.includes(t.table_name)) continue
     tables[t.table_name] = {
       name: t.table_name,
       columns: await readColumns(client, schema, t.table_name),
@@ -1571,80 +1880,297 @@ export async function introspectPg(client: PgQueryRunner, opts: { schema?: strin
   }
   return { version: 1, dialect: 'postgres', tables }
 }
+```
 
-async function readColumns(client: PgQueryRunner, schema: string, table: string): Promise<TableSnapshot['columns']> {
-  const rows = (await client.query<{
-    column_name: string; data_type: string; udt_name: string;
-    is_nullable: 'YES' | 'NO'; column_default: string | null;
-    character_maximum_length: number | null;
-    numeric_precision: number | null; numeric_scale: number | null;
-  }>(`
-    SELECT column_name, data_type, udt_name, is_nullable, column_default,
-           character_maximum_length, numeric_precision, numeric_scale
-    FROM information_schema.columns
-    WHERE table_schema = $1 AND table_name = $2
-    ORDER BY ordinal_position
-  `, [schema, table])).rows
+- [ ] **Step 14.5: Implement `readColumns()` — types + nullability + defaults + primary key flag**
 
-  const pkCols = (await client.query<{ column_name: string }>(`
-    SELECT k.column_name FROM information_schema.table_constraints c
-    JOIN information_schema.key_column_usage k
-      ON k.constraint_name = c.constraint_name AND k.table_schema = c.table_schema
-    WHERE c.table_schema = $1 AND c.table_name = $2 AND c.constraint_type = 'PRIMARY KEY'
-  `, [schema, table])).rows.map((r) => r.column_name)
-  const pkSet = new Set(pkCols)
+Append to the same file:
+
+```ts
+interface ColumnRow {
+  column_name: string
+  data_type: string
+  udt_name: string
+  is_nullable: 'YES' | 'NO'
+  column_default: string | null
+  character_maximum_length: number | null
+  numeric_precision: number | null
+  numeric_scale: number | null
+}
+
+async function readColumns(
+  client: PgQueryRunner,
+  schema: string,
+  table: string,
+): Promise<TableSnapshot['columns']> {
+  const cols = await client.query<ColumnRow>(
+    `SELECT column_name, data_type, udt_name, is_nullable, column_default,
+            character_maximum_length, numeric_precision, numeric_scale
+     FROM information_schema.columns
+     WHERE table_schema = $1 AND table_name = $2
+     ORDER BY ordinal_position`,
+    [schema, table],
+  )
+
+  const pkCols = await client.query<{ column_name: string }>(
+    `SELECT k.column_name
+     FROM information_schema.table_constraints c
+     JOIN information_schema.key_column_usage k
+       ON k.constraint_name = c.constraint_name
+      AND k.table_schema = c.table_schema
+     WHERE c.table_schema = $1 AND c.table_name = $2 AND c.constraint_type = 'PRIMARY KEY'
+     ORDER BY k.ordinal_position`,
+    [schema, table],
+  )
+  const pkSet = new Set(pkCols.rows.map((r) => r.column_name))
 
   const out: TableSnapshot['columns'] = {}
-  for (const r of rows) {
+  for (const r of cols.rows) {
+    const isSerial = isSerialColumn(r)
     out[r.column_name] = {
       name: r.column_name,
-      type: normalizeType(r),
+      type: isSerial ? serialTypeFor(r) : normalizeType(r),
       nullable: r.is_nullable === 'YES',
-      default: normalizeDefault(r.column_default),
+      // serial columns own their nextval default; collapse it.
+      default: isSerial ? null : normalizeDefault(r.column_default),
       primaryKey: pkSet.has(r.column_name),
     }
   }
   return out
 }
 
-function normalizeType(r: { data_type: string; udt_name: string; character_maximum_length: number | null; numeric_precision: number | null; numeric_scale: number | null }): string {
-  // Map PG's data_type back to the DSL's canonical surface.
-  // serial → "integer + sequence default" — for v6.0 we re-emit as 'serial' if udt_name='int4' and the default is nextval(...).
-  // Detailed mapping table — full version covers serial / bigserial / numeric / varchar / etc.
-  if (r.data_type === 'character varying') return r.character_maximum_length ? `varchar(${r.character_maximum_length})` : 'varchar'
-  if (r.data_type === 'character') return r.character_maximum_length ? `char(${r.character_maximum_length})` : 'char'
-  if (r.data_type === 'numeric' || r.data_type === 'decimal') {
-    if (r.numeric_precision !== null && r.numeric_scale !== null) return `${r.data_type}(${r.numeric_precision}, ${r.numeric_scale})`
-    if (r.numeric_precision !== null) return `${r.data_type}(${r.numeric_precision})`
-    return r.data_type
+function isSerialColumn(r: ColumnRow): boolean {
+  // serial = integer (or bigint/smallint) with a nextval(...) default.
+  if (!r.column_default) return false
+  if (!/^nextval\(/.test(r.column_default)) return false
+  return r.udt_name === 'int2' || r.udt_name === 'int4' || r.udt_name === 'int8'
+}
+
+function serialTypeFor(r: ColumnRow): string {
+  if (r.udt_name === 'int8') return 'bigserial'
+  if (r.udt_name === 'int2') return 'smallserial'
+  return 'serial'
+}
+
+function normalizeType(r: ColumnRow): string {
+  // Map PG's information_schema data_type back to the DSL surface.
+  if (r.data_type === 'character varying') {
+    return r.character_maximum_length ? `varchar(${r.character_maximum_length})` : 'varchar'
+  }
+  if (r.data_type === 'character') {
+    return r.character_maximum_length ? `char(${r.character_maximum_length})` : 'char(1)'
+  }
+  if (r.data_type === 'numeric') {
+    if (r.numeric_precision !== null && r.numeric_scale !== null) {
+      return `numeric(${r.numeric_precision}, ${r.numeric_scale})`
+    }
+    if (r.numeric_precision !== null) return `numeric(${r.numeric_precision})`
+    return 'numeric'
   }
   if (r.data_type === 'timestamp with time zone') return 'timestamptz'
   if (r.data_type === 'timestamp without time zone') return 'timestamp'
+  if (r.data_type === 'time without time zone') return 'time'
   if (r.data_type === 'double precision') return 'double precision'
-  if (r.data_type === 'integer' && /nextval\('.*'::regclass\)/.test('')) return 'serial' // see normalizeDefault
-  return r.udt_name
+  if (r.data_type === 'USER-DEFINED') return r.udt_name
+  if (r.data_type === 'ARRAY') {
+    // udt_name for arrays is _<element>; strip and append [].
+    const elem = r.udt_name.replace(/^_/, '')
+    return `${elem}[]`
+  }
+  // bigint, integer, smallint, text, boolean, date, json, jsonb, bytea, uuid,
+  // interval — pass through as data_type when it matches the DSL.
+  return r.data_type
 }
 
 function normalizeDefault(raw: string | null): string | null {
   if (!raw) return null
   // Strip PG's :: cast suffixes: 'true'::boolean → true, 'foo'::text → 'foo'
-  const stripped = raw.replace(/::\w+(\([^)]*\))?$/, '')
-  // nextval() defaults are owned by serial; the column type detection collapses them.
-  if (/^nextval\(/.test(stripped)) return null
-  if (stripped === 'now()' || stripped.toUpperCase() === 'CURRENT_TIMESTAMP') return 'CURRENT_TIMESTAMP'
+  const stripped = raw.replace(/::[\w" ]+(\([^)]*\))?$/, '')
+  // Normalize CURRENT_TIMESTAMP / now() to the DSL canonical token.
+  const upper = stripped.toUpperCase()
+  if (upper === 'NOW()' || upper === 'CURRENT_TIMESTAMP') return 'CURRENT_TIMESTAMP'
+  if (upper === 'GEN_RANDOM_UUID()') return 'gen_random_uuid()'
+  // 'foo' literal → foo. true / false / numeric pass through.
   return stripped.replace(/^'(.*)'$/, '$1')
 }
-
-async function readIndexes(...): Promise<IndexSnapshot[]> { /* pg_indexes + pg_class join — emit unique flag from pg_index.indisunique. Skip primary-key-backing indexes. */ }
-async function readForeignKeys(...): Promise<ForeignKeySnapshot[]> { /* information_schema.referential_constraints + key_column_usage. Map delete_rule/update_rule → FkAction enum. */ }
 ```
 
-The full implementation lands ~250 LOC of SQL + parsing. Each helper is straightforward but reading the columns is the trickiest part because of the `serial` desugar (M1 spec calls this an open question; lean: emit `serial()` not the desugared form).
+- [ ] **Step 14.6: Implement `readIndexes()` — exclude PK-backing index**
 
-- [ ] **Step 14.2: Run + commit (without tests yet — drift test in Task 15 covers this)**
+Still in the same file:
+
+```ts
+interface IndexRow {
+  index_name: string
+  column_name: string
+  ordinal_position: number
+  is_unique: boolean
+  is_primary: boolean
+}
+
+async function readIndexes(
+  client: PgQueryRunner,
+  schema: string,
+  table: string,
+): Promise<IndexSnapshot[]> {
+  const rows = await client.query<IndexRow>(
+    `SELECT i.relname AS index_name,
+            a.attname AS column_name,
+            a.attnum AS ordinal_position,
+            ix.indisunique AS is_unique,
+            ix.indisprimary AS is_primary
+     FROM pg_class t
+     JOIN pg_namespace n ON n.oid = t.relnamespace
+     JOIN pg_index ix ON ix.indrelid = t.oid
+     JOIN pg_class i ON i.oid = ix.indexrelid
+     JOIN unnest(ix.indkey) WITH ORDINALITY AS k(attnum, ord) ON true
+     JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = k.attnum
+     WHERE n.nspname = $1 AND t.relname = $2 AND t.relkind = 'r'
+     ORDER BY i.relname, k.ord`,
+    [schema, table],
+  )
+
+  // Group rows by index_name, preserve column order.
+  const byIndex = new Map<string, IndexSnapshot & { _isPrimary: boolean }>()
+  for (const r of rows.rows) {
+    let entry = byIndex.get(r.index_name)
+    if (!entry) {
+      entry = {
+        name: r.index_name,
+        columns: [],
+        unique: r.is_unique,
+        _isPrimary: r.is_primary,
+      }
+      byIndex.set(r.index_name, entry)
+    }
+    entry.columns.push(r.column_name)
+  }
+
+  // Drop PK-backing indexes — primaryKey is recorded on the column itself.
+  return [...byIndex.values()]
+    .filter((i) => !i._isPrimary)
+    .map(({ _isPrimary, ...rest }) => rest)
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
+```
+
+- [ ] **Step 14.7: Implement `readForeignKeys()`**
+
+Still in the same file:
+
+```ts
+interface FkRow {
+  constraint_name: string
+  column_name: string
+  ordinal_position: number
+  ref_table: string
+  ref_column: string
+  delete_rule: string
+  update_rule: string
+}
+
+async function readForeignKeys(
+  client: PgQueryRunner,
+  schema: string,
+  table: string,
+): Promise<ForeignKeySnapshot[]> {
+  const rows = await client.query<FkRow>(
+    `SELECT tc.constraint_name,
+            kcu.column_name,
+            kcu.ordinal_position,
+            ccu.table_name AS ref_table,
+            ccu.column_name AS ref_column,
+            rc.delete_rule,
+            rc.update_rule
+     FROM information_schema.table_constraints tc
+     JOIN information_schema.key_column_usage kcu
+       ON kcu.constraint_name = tc.constraint_name
+      AND kcu.table_schema = tc.table_schema
+     JOIN information_schema.referential_constraints rc
+       ON rc.constraint_name = tc.constraint_name
+      AND rc.constraint_schema = tc.table_schema
+     JOIN information_schema.constraint_column_usage ccu
+       ON ccu.constraint_name = rc.unique_constraint_name
+      AND ccu.constraint_schema = rc.unique_constraint_schema
+     WHERE tc.table_schema = $1
+       AND tc.table_name = $2
+       AND tc.constraint_type = 'FOREIGN KEY'
+     ORDER BY tc.constraint_name, kcu.ordinal_position`,
+    [schema, table],
+  )
+
+  const byName = new Map<string, ForeignKeySnapshot>()
+  for (const r of rows.rows) {
+    let fk = byName.get(r.constraint_name)
+    if (!fk) {
+      fk = {
+        name: r.constraint_name,
+        columns: [],
+        refTable: r.ref_table,
+        refColumns: [],
+        onDelete: mapFkAction(r.delete_rule),
+        onUpdate: mapFkAction(r.update_rule),
+      }
+      byName.set(r.constraint_name, fk)
+    }
+    fk.columns.push(r.column_name)
+    fk.refColumns.push(r.ref_column)
+  }
+  return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name))
+}
+
+function mapFkAction(raw: string): FkAction {
+  switch (raw.toUpperCase()) {
+    case 'CASCADE':
+      return 'cascade'
+    case 'RESTRICT':
+      return 'restrict'
+    case 'SET NULL':
+      return 'set_null'
+    case 'SET DEFAULT':
+      return 'set_default'
+    case 'NO ACTION':
+    default:
+      return 'no_action'
+  }
+}
+```
+
+- [ ] **Step 14.8: Re-export from package barrel**
+
+Add to `packages/db/src/index.ts`:
+
+```ts
+export { introspectPg } from './migrate/introspect-pg'
+export type { IntrospectPgOptions, PgQueryRunner } from './migrate/introspect-types'
+```
+
+- [ ] **Step 14.9: Run — passes**
 
 ```bash
-git commit -m "feat(db): introspectPg() — SchemaSnapshot from a live PG database (M1-S6, M1-S10)"
+pnpm --filter @forinda/kickjs-db test
+```
+
+Expected: integration test passes (~30s for container start + ~3s test). All other tests stay green.
+
+- [ ] **Step 14.10: Format + commit**
+
+```bash
+pnpm prettier --write packages/db/src/migrate/introspect-pg.ts packages/db/src/migrate/introspect-types.ts packages/db/__tests__/integration/introspect-pg.test.ts packages/db/src/index.ts
+git add packages/db/src/migrate/introspect-pg.ts packages/db/src/migrate/introspect-types.ts packages/db/__tests__/integration/introspect-pg.test.ts packages/db/src/index.ts
+git commit -m "$(cat <<'EOF'
+feat(db): introspectPg() — SchemaSnapshot from a live PG database (M1-S6, M1-S10)
+
+PgQueryRunner is a structural interface — pg.Client / pg.Pool match it
+without the core package importing 'pg'. Three readers (columns, indexes,
+foreign keys) emit the same canonical IR the diff engine consumes, so
+the next migration generated against introspected state is precise.
+
+Serial detection collapses (integer + nextval(...) default) → 'serial'
+so the round-trip generated → applied → introspected stays stable.
+PK-backing indexes are excluded (primaryKey lives on the column).
+EOF
+)"
 ```
 
 ---
@@ -1653,6 +2179,7 @@ git commit -m "feat(db): introspectPg() — SchemaSnapshot from a live PG databa
 
 **Story:** M1-S6.
 **Files:**
+
 - Create: `packages/db/src/migrate/drift.ts`
 - Modify: `packages/db/src/migrate/runner.ts` — call drift check at the start of `migrateLatest`/`migrateUp`
 - Create: `packages/db/__tests__/unit/drift.test.ts`
@@ -1712,7 +2239,9 @@ Wire into `migrateLatest`:
 // runner.ts — after acquireLock, before applying:
 if (opts.driftCheck && opts.driftCheck !== 'ignore' && applied.length > 0) {
   const lastAppliedId = applied[applied.length - 1].id
-  const expectedSnap = JSON.parse(await readFile(path.join(opts.migrationsDir, lastAppliedId, 'snapshot.json'), 'utf8'))
+  const expectedSnap = JSON.parse(
+    await readFile(path.join(opts.migrationsDir, lastAppliedId, 'snapshot.json'), 'utf8'),
+  )
   const liveSnap = await opts.adapter.introspect()
   await checkDrift(liveSnap, expectedSnap, opts.driftCheck)
 }
@@ -1730,9 +2259,21 @@ describe('checkDrift', () => {
   })
 
   it('throws MigrationDriftError on added table', async () => {
-    const live: SchemaSnapshot = { version: 1, dialect: 'postgres', tables: {
-      manual_table: { name: 'manual_table', columns: { id: { name: 'id', type: 'integer', nullable: false, default: null, primaryKey: true } }, indexes: [], foreignKeys: [], checks: [] },
-    }}
+    const live: SchemaSnapshot = {
+      version: 1,
+      dialect: 'postgres',
+      tables: {
+        manual_table: {
+          name: 'manual_table',
+          columns: {
+            id: { name: 'id', type: 'integer', nullable: false, default: null, primaryKey: true },
+          },
+          indexes: [],
+          foreignKeys: [],
+          checks: [],
+        },
+      },
+    }
     await expect(checkDrift(live, empty, 'error')).rejects.toBeInstanceOf(MigrationDriftError)
   })
 
@@ -1754,6 +2295,7 @@ git commit -m "feat(db): drift detection via diff(live, expected) (M1-S6)"
 
 **Story:** M1-S7.
 **Files:**
+
 - Create: `packages/db/src/adapter.ts`
 - Create: `packages/db/__tests__/unit/adapter.test.ts`
 - Modify: `packages/db/src/index.ts`
@@ -1796,7 +2338,9 @@ export const kickDbAdapter = (opts: KickDbAdapterOptions) =>
       const pending = status.filter((s) => s.state === 'pending')
       if (pending.length > 0) {
         if (policy === 'fail-if-pending') {
-          throw new Error(`KickDb: ${pending.length} pending migration(s); apply with kick db migrate latest before boot`)
+          throw new Error(
+            `KickDb: ${pending.length} pending migration(s); apply with kick db migrate latest before boot`,
+          )
         }
         if (policy === 'apply') {
           logger.info(`KickDb applying ${pending.length} pending migration(s) on boot`)
@@ -1837,13 +2381,20 @@ import { kickDbAdapter, MemoryMigrationAdapter } from '@forinda/kickjs-db'
 describe('kickDbAdapter', () => {
   it('passes through when no pending migrations under fail-if-pending', async () => {
     const container = Container.create()
-    const ad = kickDbAdapter({ migrationAdapter: new MemoryMigrationAdapter(), migrationsDir: '/tmp/empty' })
+    const ad = kickDbAdapter({
+      migrationAdapter: new MemoryMigrationAdapter(),
+      migrationsDir: '/tmp/empty',
+    })
     await expect(ad.beforeStart({ container, logger: console as any })).resolves.toBeUndefined()
   })
 
-  it('throws when pending under fail-if-pending', async () => { /* seed dir with one pending entry, expect throw */ })
+  it('throws when pending under fail-if-pending', async () => {
+    /* seed dir with one pending entry, expect throw */
+  })
 
-  it('applies pending under "apply" policy', async () => { /* seed + verify adapter.listApplied */ })
+  it('applies pending under "apply" policy', async () => {
+    /* seed + verify adapter.listApplied */
+  })
 })
 ```
 
@@ -1868,10 +2419,16 @@ Integration test extension of Task 16 that exercises each boot policy end-to-end
 import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers/postgresql'
 
 let container: StartedPostgreSqlContainer
-beforeAll(async () => { container = await new PostgreSqlContainer('postgres:16-alpine').start() }, 90_000)
-afterAll(async () => { await container?.stop() })
+beforeAll(async () => {
+  container = await new PostgreSqlContainer('postgres:16-alpine').start()
+}, 90_000)
+afterAll(async () => {
+  await container?.stop()
+})
 
-it('fail-if-pending throws when pending exist', /* uses pgAdapter from db-pg — needs Task 19 first */)
+it(
+  'fail-if-pending throws when pending exist' /* uses pgAdapter from db-pg — needs Task 19 first */,
+)
 ```
 
 This test is **deferred to land alongside Task 19** since it requires a real `pgAdapter`. Mark this task's tests as `it.skip()` for now and complete in Task 19.
@@ -1888,6 +2445,7 @@ git commit -m "test(db): boot-policy integration scaffold — completed alongsid
 
 **Story:** M1-S9.
 **Files:**
+
 - Create: `packages/db/src/tokens.ts`
 - Modify: `packages/db/src/index.ts`
 - Create: `packages/db/__tests__/unit/di-tokens.test.ts`
@@ -1914,8 +2472,12 @@ describe('DI tokens', () => {
   it('DB_PRIMARY uses the slash-delimited convention', () => {
     expect(DB_PRIMARY.toString()).toBe('app/db/primary')
   })
-  it('DB_CLIENT aliases DB_PRIMARY', () => { expect(DB_CLIENT).toBe(DB_PRIMARY) })
-  it('DB_PRIMARY and DB_REPLICA are distinct', () => { expect(DB_PRIMARY).not.toBe(DB_REPLICA) })
+  it('DB_CLIENT aliases DB_PRIMARY', () => {
+    expect(DB_CLIENT).toBe(DB_PRIMARY)
+  })
+  it('DB_PRIMARY and DB_REPLICA are distinct', () => {
+    expect(DB_PRIMARY).not.toBe(DB_REPLICA)
+  })
 })
 ```
 
@@ -1929,131 +2491,1038 @@ git commit -m "feat(db): export DB_PRIMARY/DB_REPLICA/DB_CLIENT DI tokens (M1-S9
 
 ## Task 19: `KickDbClient` over Kysely + `db-pg` adapter package
 
-**Story:** M1-S8.
+**Story:** M1-S8 (also closes the deferred Task 17 boot-policy integration test).
 
-Largest task in M1. Creates the `db-pg` package and the `KickDbClient` wrapper that exposes Kysely with events/transaction/savepoint sugar.
+Largest task in M1. Three logical pieces — each their own commit:
 
-**Files:**
-- Create: `packages/db-pg/` (full package shell — `package.json`, `tsconfig.json`, `tsdown.config.ts`, `vitest.config.ts`, `LICENSE`, `README.md`, `src/index.ts`, `src/adapter.ts`)
-- Create: `packages/db/src/client/types.ts`, `create.ts`, `events.ts`, `schema-types.ts`
+1. **19a:** bootstrap `packages/db-pg/` package shell + ship `pgAdapter` (a `MigrationAdapter` impl).
+2. **19b:** `KickDbClient` wrapper around Kysely with events / transaction / savepoint.
+3. **19c:** wire the deferred boot-policy integration test from Task 17.
+
+**Files (all 19a-c combined):**
+
+- Create: `packages/db-pg/{package.json,tsconfig.json,tsconfig.test.json,tsdown.config.ts,vitest.config.ts,LICENSE,README.md,src/index.ts,src/adapter.ts}`
+- Create: `packages/db-pg/__tests__/integration/adapter.test.ts`
+- Create: `packages/db-pg/__tests__/integration/boot-policy.test.ts`
+- Create: `packages/db/src/client/{types.ts,create.ts,events.ts,schema-types.ts}`
 - Modify: `packages/db/src/index.ts`
 - Create: `packages/db/__tests__/unit/client-events.test.ts`
-- Create: `packages/db-pg/__tests__/integration/adapter.test.ts`
 
-- [ ] **Step 19.1: Bootstrap `packages/db-pg/`** — mirror Task 1 of M0 (package.json with `pg` peer dep + `kickjs-db` peer dep + Kysely peer dep, tsconfig, tsdown, vitest, LICENSE, README, empty `src/index.ts`).
+---
 
-- [ ] **Step 19.2: `pgAdapter` factory implementing `MigrationAdapter`**
+### Task 19a: Bootstrap `packages/db-pg/` and ship `pgAdapter`
+
+- [ ] **Step 19a.1: Create `packages/db-pg/package.json`**
+
+```json
+{
+  "name": "@forinda/kickjs-db-pg",
+  "version": "5.0.2",
+  "private": true,
+  "description": "node-postgres adapter for @forinda/kickjs-db — MigrationAdapter + Kysely PostgresDialect",
+  "keywords": ["kickjs", "postgres", "pg", "@forinda/kickjs-db"],
+  "type": "module",
+  "main": "dist/index.mjs",
+  "types": "dist/index.d.mts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "types": "./dist/index.d.mts"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "wireit",
+    "dev": "tsdown --watch",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist .wireit",
+    "lint": "tsc --noEmit"
+  },
+  "wireit": {
+    "build": {
+      "command": "tsdown",
+      "files": ["src/**/*.ts", "tsdown.config.ts", "tsconfig.json", "package.json"],
+      "output": ["dist/**"],
+      "dependencies": []
+    }
+  },
+  "dependencies": {},
+  "peerDependencies": {
+    "@forinda/kickjs-db": "workspace:*",
+    "kysely": ">=0.27.0 <1.0.0",
+    "pg": ">=8.11.0"
+  },
+  "devDependencies": {
+    "@forinda/kickjs-db": "workspace:*",
+    "@testcontainers/postgresql": "^10.16.0",
+    "@types/node": "^25.6.0",
+    "@types/pg": "^8.11.10",
+    "kysely": "^0.27.5",
+    "pg": "^8.13.1",
+    "typescript": "^5.9.2"
+  },
+  "publishConfig": { "access": "public" },
+  "license": "MIT",
+  "author": "Felix Orinda",
+  "engines": { "node": ">=20.0" },
+  "homepage": "https://forinda.github.io/kick-js/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/forinda/kick-js.git",
+    "directory": "packages/db-pg"
+  },
+  "bugs": { "url": "https://github.com/forinda/kick-js/issues" }
+}
+```
+
+- [ ] **Step 19a.2: Create `packages/db-pg/tsconfig.json`**
+
+```json
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src"]
+}
+```
+
+- [ ] **Step 19a.3: Create `packages/db-pg/tsconfig.test.json`**
+
+```json
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "baseUrl": ".",
+    "types": [],
+    "paths": {
+      "@forinda/kickjs": ["../kickjs/src/index.ts"],
+      "@forinda/kickjs/*": ["../kickjs/src/*"],
+      "@forinda/kickjs-db": ["../db/src/index.ts"],
+      "@forinda/kickjs-db/*": ["../db/src/*"],
+      "@forinda/kickjs-db-pg": ["src/index.ts"],
+      "@forinda/kickjs-db-pg/*": ["src/*"]
+    }
+  },
+  "include": ["src", "__tests__"]
+}
+```
+
+- [ ] **Step 19a.4: Create `packages/db-pg/tsdown.config.ts`**
 
 ```ts
-// packages/db-pg/src/adapter.ts
+import { defineConfig } from 'tsdown'
+import { createBanner, readPkg } from '../../build.utils.mjs'
+
+const pkg = readPkg(import.meta.dirname)
+
+export default defineConfig({
+  entry: { index: 'src/index.ts' },
+  format: ['esm'],
+  platform: 'node',
+  dts: true,
+  external: ['@forinda/kickjs', '@forinda/kickjs-db', 'kysely', 'pg', /^node:/],
+  banner: { js: createBanner(pkg.name, pkg.version) },
+})
+```
+
+- [ ] **Step 19a.5: Create `packages/db-pg/vitest.config.ts`**
+
+```ts
+import { defineConfig } from 'vitest/config'
+import swc from 'unplugin-swc'
+import path from 'node:path'
+
+export default defineConfig({
+  plugins: [
+    swc.vite({
+      jsc: {
+        parser: { syntax: 'typescript', decorators: true },
+        transform: { legacyDecorator: true, decoratorMetadata: true },
+      },
+    }),
+  ],
+  resolve: {
+    alias: {
+      '@forinda/kickjs': path.resolve(__dirname, '../kickjs/src/index.ts'),
+      '@forinda/kickjs-db': path.resolve(__dirname, '../db/src/index.ts'),
+      '@forinda/kickjs-db-pg': path.resolve(__dirname, 'src/index.ts'),
+    },
+  },
+  test: {
+    typecheck: { tsconfig: './tsconfig.test.json' },
+    environment: 'node',
+    include: ['__tests__/**/*.test.ts'],
+    globals: false,
+    pool: 'threads',
+    maxConcurrency: 1,
+    testTimeout: 90_000,
+  },
+})
+```
+
+- [ ] **Step 19a.6: Create README + LICENSE**
+
+```bash
+cp packages/db/LICENSE packages/db-pg/LICENSE
+```
+
+```markdown
+# @forinda/kickjs-db-pg
+
+> node-postgres adapter for [`@forinda/kickjs-db`](../db).
+
+Wraps `pg.Pool` with the `MigrationAdapter` contract so the runner can apply
+migrations and introspect against a real Postgres database, plus Kysely's
+`PostgresDialect` for the query layer.
+
+**Status:** Pre-release. Private until M1 ships and the API stabilises.
+```
+
+- [ ] **Step 19a.7: Empty barrel + initial install**
+
+```ts
+// packages/db-pg/src/index.ts
+export {} // populated below
+```
+
+```bash
+mkdir -p packages/db-pg/__tests__/integration
+pnpm install
+pnpm --filter @forinda/kickjs-db-pg build
+pnpm --filter @forinda/kickjs-db-pg test
+pnpm --filter @forinda/kickjs-db-pg typecheck
+```
+
+Expected: build succeeds (empty bundle), test exits 0 (`passWithNoTests`), typecheck exits 0.
+
+- [ ] **Step 19a.8: Commit the package shell**
+
+```bash
+git add packages/db-pg pnpm-lock.yaml
+git commit -m "feat(db-pg): bootstrap @forinda/kickjs-db-pg package shell (M1-S8)"
+```
+
+- [ ] **Step 19a.9: Write the failing integration test for `pgAdapter`**
+
+Create `packages/db-pg/__tests__/integration/adapter.test.ts`:
+
+```ts
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
+import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers/postgresql'
+import pg from 'pg'
+
+import { migrationsTableDdl, lockTableDdl, type MigrationAdapter } from '@forinda/kickjs-db'
+import { pgAdapter } from '@forinda/kickjs-db-pg'
+
+let container: StartedPostgreSqlContainer
+let pool: pg.Pool
+let adapter: MigrationAdapter
+
+beforeAll(async () => {
+  container = await new PostgreSqlContainer('postgres:16-alpine').start()
+  pool = new pg.Pool({
+    host: container.getHost(),
+    port: container.getMappedPort(5432),
+    user: container.getUsername(),
+    password: container.getPassword(),
+    database: container.getDatabase(),
+  })
+  adapter = pgAdapter({ pool })
+}, 90_000)
+
+afterAll(async () => {
+  await adapter?.close()
+  await pool?.end()
+  await container?.stop()
+})
+
+beforeEach(async () => {
+  await pool.query('DROP TABLE IF EXISTS "kick_migrations", "kick_migrations_lock" CASCADE')
+})
+
+describe('pgAdapter() — MigrationAdapter contract', () => {
+  it('ensureMigrationTables creates idempotent tables', async () => {
+    await adapter.ensureMigrationTables()
+    await adapter.ensureMigrationTables() // second call must not error
+    const r = await pool.query(`
+      SELECT table_name FROM information_schema.tables
+      WHERE table_name IN ('kick_migrations', 'kick_migrations_lock')
+      ORDER BY table_name
+    `)
+    expect(r.rows.map((x) => x.table_name)).toEqual(['kick_migrations', 'kick_migrations_lock'])
+  })
+
+  it('listApplied returns empty initially, then matches recordApplied + removeApplied', async () => {
+    await adapter.ensureMigrationTables()
+    expect(await adapter.listApplied()).toEqual([])
+
+    await adapter.recordApplied({
+      id: '20260427_010000_a',
+      name: 'a',
+      hash: 'sha256:abc',
+      batch: 1,
+      direction: 'up',
+    })
+    const applied = await adapter.listApplied()
+    expect(applied).toHaveLength(1)
+    expect(applied[0]).toMatchObject({
+      id: '20260427_010000_a',
+      name: 'a',
+      batch: 1,
+      direction: 'up',
+    })
+    expect(typeof applied[0].appliedAt).toBe('string')
+
+    await adapter.removeApplied('20260427_010000_a')
+    expect(await adapter.listApplied()).toEqual([])
+  })
+
+  it('acquireLock is exclusive — second caller gets false until releaseLock', async () => {
+    await adapter.ensureMigrationTables()
+    expect(await adapter.acquireLock('p1')).toBe(true)
+    expect(await adapter.acquireLock('p2')).toBe(false)
+    await adapter.releaseLock()
+    expect(await adapter.acquireLock('p3')).toBe(true)
+    await adapter.releaseLock()
+  })
+
+  it('applySqlInTx commits on success', async () => {
+    await adapter.ensureMigrationTables()
+    await adapter.applySqlInTx(`CREATE TABLE "tx_test" ("id" integer);`)
+    const r = await pool.query(`SELECT to_regclass('public.tx_test') AS t`)
+    expect(r.rows[0].t).toBe('tx_test')
+    await pool.query(`DROP TABLE "tx_test"`)
+  })
+
+  it('applySqlInTx rolls back on error — partial DDL is undone', async () => {
+    await adapter.ensureMigrationTables()
+    await expect(
+      adapter.applySqlInTx(`
+        CREATE TABLE "rollback_test" ("id" integer);
+        SELECT 1 FROM "no_such_table";
+      `),
+    ).rejects.toThrow()
+    const r = await pool.query(`SELECT to_regclass('public.rollback_test') AS t`)
+    expect(r.rows[0].t).toBe(null)
+  })
+
+  it('applySqlNoTx commits each statement independently (used for CREATE INDEX CONCURRENTLY etc)', async () => {
+    await adapter.ensureMigrationTables()
+    await adapter.applySqlNoTx(`CREATE TABLE "no_tx_test" ("id" integer);`)
+    const r = await pool.query(`SELECT to_regclass('public.no_tx_test') AS t`)
+    expect(r.rows[0].t).toBe('no_tx_test')
+    await pool.query(`DROP TABLE "no_tx_test"`)
+  })
+
+  it('introspect returns a SchemaSnapshot for the live DB', async () => {
+    await adapter.ensureMigrationTables()
+    await pool.query(`CREATE TABLE "intro_test" ("id" serial PRIMARY KEY, "name" varchar(50))`)
+    const snap = await adapter.introspect()
+    expect(snap.tables.intro_test).toBeDefined()
+    // kick_migrations is excluded.
+    expect(snap.tables.kick_migrations).toBeUndefined()
+    await pool.query(`DROP TABLE "intro_test"`)
+  })
+})
+```
+
+- [ ] **Step 19a.10: Run the failing test**
+
+```bash
+pnpm --filter @forinda/kickjs-db-pg test
+```
+
+Expected: FAIL — no `pgAdapter` exported yet.
+
+- [ ] **Step 19a.11: Implement `pgAdapter`**
+
+Create `packages/db-pg/src/adapter.ts`:
+
+```ts
 import type { Pool, PoolClient } from 'pg'
-import type { MigrationAdapter, MigrationRow } from '@forinda/kickjs-db'
-import { introspectPg } from '@forinda/kickjs-db'
-import type { SchemaSnapshot } from '@forinda/kickjs-db'
+import {
+  migrationsTableDdl,
+  lockTableDdl,
+  introspectPg,
+  type Dialect,
+  type MigrationAdapter,
+  type MigrationRow,
+  type SchemaSnapshot,
+} from '@forinda/kickjs-db'
 
 export interface PgAdapterOptions {
   pool: Pool
   schema?: string
 }
 
+const SCHEMA_SQL_NAME_RE = /^[a-z_][a-z0-9_]*$/i
+
 export function pgAdapter(opts: PgAdapterOptions): MigrationAdapter {
-  // Implementation of every method using opts.pool. listApplied SELECTs from kick_migrations,
-  // recordApplied INSERTs, applySqlInTx wraps in BEGIN/COMMIT, etc. acquireLock uses
-  // INSERT ... ON CONFLICT DO NOTHING RETURNING.
-  return { /* 12 methods */ } as MigrationAdapter
+  const dialect: Dialect = 'postgres'
+  const { pool } = opts
+  const schema = opts.schema ?? 'public'
+  if (!SCHEMA_SQL_NAME_RE.test(schema)) {
+    // Schema name lands inside introspection queries unparameterised, so guard here.
+    throw new Error(`Invalid PG schema name: ${schema}`)
+  }
+
+  return {
+    dialect,
+
+    async ensureMigrationTables() {
+      await pool.query(migrationsTableDdl(dialect))
+      await pool.query(lockTableDdl(dialect))
+    },
+
+    async listApplied(): Promise<MigrationRow[]> {
+      const r = await pool.query<{
+        id: string
+        name: string
+        hash: string
+        batch: number
+        applied_at: string | Date
+        direction: 'up' | 'down'
+      }>(`
+        SELECT id, name, hash, batch, applied_at, direction
+        FROM kick_migrations
+        ORDER BY applied_at ASC, id ASC
+      `)
+      return r.rows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        hash: row.hash,
+        batch: Number(row.batch),
+        appliedAt:
+          row.applied_at instanceof Date ? row.applied_at.toISOString() : String(row.applied_at),
+        direction: row.direction,
+      }))
+    },
+
+    async recordApplied(row) {
+      await pool.query(
+        `INSERT INTO kick_migrations (id, name, hash, batch, direction)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [row.id, row.name, row.hash, row.batch, row.direction],
+      )
+    },
+
+    async removeApplied(id: string) {
+      await pool.query(`DELETE FROM kick_migrations WHERE id = $1`, [id])
+    },
+
+    async acquireLock(owner: string): Promise<boolean> {
+      // Atomic: only one row with id=1 can hold locked_at; UPDATE WHERE locked_at IS NULL
+      // returns rowCount=1 only for the winner.
+      const r = await pool.query(
+        `UPDATE kick_migrations_lock
+         SET locked_at = CURRENT_TIMESTAMP, locked_by = $1
+         WHERE id = 1 AND locked_at IS NULL`,
+        [owner],
+      )
+      return r.rowCount === 1
+    },
+
+    async releaseLock() {
+      await pool.query(
+        `UPDATE kick_migrations_lock
+         SET locked_at = NULL, locked_by = NULL
+         WHERE id = 1`,
+      )
+    },
+
+    async applySqlInTx(sql: string) {
+      const client = await pool.connect()
+      try {
+        await client.query('BEGIN')
+        await client.query(sql)
+        await client.query('COMMIT')
+      } catch (err) {
+        await client.query('ROLLBACK').catch(() => {})
+        throw err
+      } finally {
+        client.release()
+      }
+    },
+
+    async applySqlNoTx(sql: string) {
+      await pool.query(sql)
+    },
+
+    async introspect(): Promise<SchemaSnapshot> {
+      return introspectPg(pool, { schema })
+    },
+
+    async close() {
+      // Caller owns the pool — don't end() it from here. Adopters that want
+      // adapter-managed teardown should pass a fresh pool and call adapter.close()
+      // explicitly. We expose this so kickDbAdapter's shutdown lifecycle has
+      // somewhere to hook other connection cleanup later (per-connection state etc).
+    },
+  }
 }
 ```
 
-- [ ] **Step 19.3: `KickDbClient` types**
+- [ ] **Step 19a.12: Re-export from barrel**
 
 ```ts
-// packages/db/src/client/types.ts
-import type { Kysely } from 'kysely'
+// packages/db-pg/src/index.ts
+export { pgAdapter, type PgAdapterOptions } from './adapter'
+```
 
-export interface KickDbClient {
-  /** Internal Kysely instance — Layer 1 access. */
-  readonly kysely: Kysely<any>
+- [ ] **Step 19a.13: Run — passes**
 
-  /** Lifecycle event emitter (Layer 1 — events on every query). */
-  on(event: 'query' | 'queryError' | 'transactionStart' | 'transactionCommit' | 'transactionRollback' | 'beforeQuery', listener: (e: any) => void): this
+```bash
+pnpm --filter @forinda/kickjs-db-pg build
+pnpm --filter @forinda/kickjs-db-pg test
+```
 
-  /** Open a transaction; tx is a fully-typed scoped client. */
-  transaction<T>(fn: (tx: KickDbClient) => Promise<T>): Promise<T>
-  transaction<T>(opts: { isolation?: 'serializable' | 'repeatable read' | 'read committed' }, fn: (tx: KickDbClient) => Promise<T>): Promise<T>
+Expected: integration test green (one container start, ~8 assertions).
 
-  /** Savepoint within an existing transaction. */
-  savepoint<T>(fn: (sp: KickDbClient) => Promise<T>): Promise<T>
+- [ ] **Step 19a.14: Format + commit**
 
-  /** Close the underlying pool. */
+```bash
+pnpm prettier --write packages/db-pg/src/adapter.ts packages/db-pg/src/index.ts packages/db-pg/__tests__/integration/adapter.test.ts
+git add packages/db-pg/src packages/db-pg/__tests__
+git commit -m "$(cat <<'EOF'
+feat(db-pg): pgAdapter() implementing MigrationAdapter against pg.Pool (M1-S8)
+
+Atomic lock via single-row UPDATE WHERE locked_at IS NULL. listApplied/
+recordApplied/removeApplied use the shared kick_migrations DDL from
+kickjs-db. introspect delegates to introspectPg() with the configured
+search schema.
+
+close() is intentionally a no-op — the pool is caller-owned. Adapter-
+managed teardown lands in M2 if multiple adopters need it.
+EOF
+)"
+```
+
+---
+
+### Task 19b: `KickDbClient` over Kysely (events + transaction + savepoint)
+
+- [ ] **Step 19b.1: Define the client surface**
+
+Create `packages/db/src/client/types.ts`:
+
+```ts
+import type { Kysely, Dialect as KyselyDialect } from 'kysely'
+
+export interface QueryEvent {
+  sql: string
+  parameters: readonly unknown[]
+  durationMs: number
+}
+
+export interface QueryErrorEvent {
+  sql: string
+  parameters: readonly unknown[]
+  error: unknown
+}
+
+export interface BeforeQueryEvent {
+  /** Mutable — listeners may rewrite sql / parameters before execution. */
+  sql: string
+  parameters: unknown[]
+}
+
+export interface TransactionEvent {
+  isolation?: 'serializable' | 'repeatable read' | 'read committed' | 'read uncommitted'
+}
+
+export interface KickDbClientEvents {
+  beforeQuery: BeforeQueryEvent
+  query: QueryEvent
+  queryError: QueryErrorEvent
+  transactionStart: TransactionEvent
+  transactionCommit: TransactionEvent
+  transactionRollback: TransactionEvent & { error: unknown }
+}
+
+/**
+ * KickDbClient wraps a Kysely instance with three additions:
+ *
+ * 1. Lifecycle events (`on('query', ...)` etc) for observability + RLS
+ *    rewriting via `beforeQuery`.
+ * 2. transaction(fn) / transaction(opts, fn) — passes a fully scoped child
+ *    client whose mutations are isolated.
+ * 3. tx.savepoint(fn) — nested rollback boundary inside an outer transaction.
+ *
+ * The Kysely instance is exposed as `db.kysely` for advanced cases that need
+ * Kysely-native APIs not surfaced here.
+ */
+export interface KickDbClient<DB = unknown> {
+  readonly kysely: Kysely<DB>
+  readonly dialect: 'postgres' | 'sqlite' | 'mysql'
+
+  selectFrom: Kysely<DB>['selectFrom']
+  insertInto: Kysely<DB>['insertInto']
+  updateTable: Kysely<DB>['updateTable']
+  deleteFrom: Kysely<DB>['deleteFrom']
+
+  on<E extends keyof KickDbClientEvents>(
+    event: E,
+    listener: (e: KickDbClientEvents[E]) => void | Promise<void>,
+  ): this
+
+  off<E extends keyof KickDbClientEvents>(
+    event: E,
+    listener: (e: KickDbClientEvents[E]) => void | Promise<void>,
+  ): this
+
+  transaction<T>(fn: (tx: KickDbClient<DB>) => Promise<T>): Promise<T>
+  transaction<T>(opts: TransactionEvent, fn: (tx: KickDbClient<DB>) => Promise<T>): Promise<T>
+
+  savepoint<T>(fn: (sp: KickDbClient<DB>) => Promise<T>): Promise<T>
+
   destroy(): Promise<void>
 }
 
-export interface CreateDbClientOptions<TSchema> {
+export interface CreateDbClientOptions<TSchema, DB = unknown> {
   schema: TSchema
-  // The kysely Dialect from db-pg/db-sqlite/db-mysql.
-  dialect: import('kysely').Dialect
+  dialect: KyselyDialect
   events?: boolean
 }
 ```
 
-- [ ] **Step 19.4: `createDbClient()` implementation**
+- [ ] **Step 19b.2: Schema → Kysely DB type (M1 permissive version)**
+
+Create `packages/db/src/client/schema-types.ts`:
 
 ```ts
-// packages/db/src/client/create.ts
-import { Kysely } from 'kysely'
-import type { CreateDbClientOptions, KickDbClient } from './types'
-
-export function createDbClient<TSchema>(opts: CreateDbClientOptions<TSchema>): KickDbClient {
-  const kysely = new Kysely<any>({ dialect: opts.dialect })
-  const events = opts.events ? new EventEmitter() : null
-  // Wrap each query through a Kysely plugin that emits 'beforeQuery' (with mutation),
-  // 'query' on success, 'queryError' on failure. Plugin lives in events.ts.
-  return {
-    kysely,
-    on(event, listener) { events?.on(event, listener); return this as any },
-    transaction(...args) { /* delegate to kysely.transaction with optional isolation */ },
-    savepoint(fn) { /* SAVEPOINT name; SET LOCAL... within transaction */ },
-    async destroy() { await kysely.destroy() },
-  } as KickDbClient
-}
-```
-
-- [ ] **Step 19.5: Schema → Kysely DB type**
-
-```ts
-// packages/db/src/client/schema-types.ts
 import type { ColumnBuilder } from '../dsl/columns/types'
 import type { TableDecl } from '../dsl/table'
 
-// Map a schema export (Record<string, TableDecl|...>) to Kysely's Database interface:
-// { tableName: { col1: T1, col2: T2 | null, ... } }
-type ColumnTSType<C> = C extends ColumnBuilder /* ...infer phantom T... */ ? unknown : never
-
+/**
+ * M1-permissive mapping: every column is `unknown`. M2-S1 tightens this with
+ * proper type inference via phantom generics on column builders. Keeping it
+ * loose here unblocks the rest of M1 — adopters can still cast at the call
+ * site if they need precise types pre-M2.
+ */
 export type SchemaToKysely<S> = {
-  [K in keyof S as S[K] extends TableDecl<any> ? S[K]['__name'] : never]:
-    S[K] extends TableDecl<infer C>
-      ? { [Col in keyof C]: ColumnTSType<C[Col]> }
-      : never
+  [K in keyof S as S[K] extends TableDecl<Record<string, ColumnBuilder>>
+    ? S[K]['__name']
+    : never]: S[K] extends TableDecl<infer C> ? { [Col in keyof C]: unknown } : never
 }
 ```
 
-(The full inference is non-trivial — phantom type via column builders' generic. Spec section 4 covers this. Drizzle's `$inferSelect` is the reference. M2-S1 is when we polish this; M1's version can be permissive (`unknown` for column types) and tightened in M2.)
+- [ ] **Step 19b.3: Lifecycle event plugin (Kysely interceptor)**
 
-- [ ] **Step 19.6: Tests**
+Create `packages/db/src/client/events.ts`:
 
 ```ts
-// client-events.test.ts — using a fake Kysely dialect, verify on('query') fires once per executed statement.
-// pg-client.test.ts (integration) — actually run db.selectFrom('table').execute() against testcontainer PG.
+import type {
+  KyselyPlugin,
+  PluginTransformQueryArgs,
+  PluginTransformResultArgs,
+  RootOperationNode,
+  QueryResult,
+  UnknownRow,
+  CompiledQuery,
+} from 'kysely'
+import { EventEmitter } from 'node:events'
+import type { KickDbClientEvents } from './types'
+
+type Listener<E extends keyof KickDbClientEvents> = (
+  e: KickDbClientEvents[E],
+) => void | Promise<void>
+
+/**
+ * Per-client emitter wrapped to typed-event surface, plus a Kysely plugin
+ * that hooks into transformQuery (pre-execute, mutable) and transformResult
+ * (post-execute, used to time the query).
+ *
+ * Each compiled query gets a unique id keyed off transformQuery's queryId so
+ * we can pair the start time with the result. Kysely passes the same queryId
+ * to both hooks for a given execution.
+ */
+export class KickDbEventEmitter {
+  private readonly emitter = new EventEmitter()
+  private readonly startTimes = new Map<string, number>()
+
+  on<E extends keyof KickDbClientEvents>(event: E, listener: Listener<E>): void {
+    this.emitter.on(event, listener as (...args: unknown[]) => void)
+  }
+
+  off<E extends keyof KickDbClientEvents>(event: E, listener: Listener<E>): void {
+    this.emitter.off(event, listener as (...args: unknown[]) => void)
+  }
+
+  emit<E extends keyof KickDbClientEvents>(event: E, payload: KickDbClientEvents[E]): void {
+    this.emitter.emit(event, payload)
+  }
+
+  noteStart(queryId: string): void {
+    this.startTimes.set(queryId, performance.now())
+  }
+
+  consumeDuration(queryId: string): number {
+    const t = this.startTimes.get(queryId)
+    this.startTimes.delete(queryId)
+    return t === undefined ? 0 : performance.now() - t
+  }
+
+  buildPlugin(): KyselyPlugin {
+    const self = this
+    return {
+      transformQuery(args: PluginTransformQueryArgs): RootOperationNode {
+        // We can't rewrite SQL here because the node is still AST — beforeQuery
+        // listeners run later inside execute() with a compiled query (see below).
+        self.noteStart(args.queryId.queryId)
+        return args.node
+      },
+      async transformResult(args: PluginTransformResultArgs): Promise<QueryResult<UnknownRow>> {
+        // Result-side timing only; the query / queryError emit happens around
+        // the execute() call in createDbClient so we have access to the full
+        // CompiledQuery object including SQL string + parameters.
+        return args.result
+      },
+    }
+  }
+}
 ```
 
-- [ ] **Step 19.7: Boot-policy integration test from Task 17**
+- [ ] **Step 19b.4: Implement `createDbClient()`**
 
-Now that `pgAdapter` exists, finish the deferred boot-policy tests by importing it.
+Create `packages/db/src/client/create.ts`:
 
-- [ ] **Step 19.8: Commit**
+```ts
+import { Kysely, type Transaction, sql } from 'kysely'
+import type {
+  CreateDbClientOptions,
+  KickDbClient,
+  KickDbClientEvents,
+  TransactionEvent,
+} from './types'
+import { KickDbEventEmitter } from './events'
+
+interface InternalContext {
+  events: KickDbEventEmitter | null
+  dialect: KickDbClient['dialect']
+  /** Increments per savepoint open inside this client; used for SP_<n> names. */
+  savepointCounter: { value: number }
+}
+
+export function createDbClient<TSchema, DB = unknown>(
+  opts: CreateDbClientOptions<TSchema, DB>,
+): KickDbClient<DB> {
+  const events = opts.events ? new KickDbEventEmitter() : null
+  const kysely = new Kysely<DB>({
+    dialect: opts.dialect,
+    plugins: events ? [events.buildPlugin()] : [],
+  })
+  const ctx: InternalContext = {
+    events,
+    dialect: detectDialect(opts.dialect),
+    savepointCounter: { value: 0 },
+  }
+  return wrap<DB>(kysely, ctx)
+}
+
+function detectDialect(dialect: object): KickDbClient['dialect'] {
+  // Kysely's dialects have ctor names like PostgresDialect / SqliteDialect / MysqlDialect.
+  const name = dialect.constructor?.name ?? ''
+  if (name.includes('Postgres')) return 'postgres'
+  if (name.includes('Mysql') || name.includes('MySql')) return 'mysql'
+  return 'sqlite'
+}
+
+function wrap<DB>(kysely: Kysely<DB>, ctx: InternalContext): KickDbClient<DB> {
+  return {
+    kysely,
+    dialect: ctx.dialect,
+
+    selectFrom: kysely.selectFrom.bind(kysely),
+    insertInto: kysely.insertInto.bind(kysely),
+    updateTable: kysely.updateTable.bind(kysely),
+    deleteFrom: kysely.deleteFrom.bind(kysely),
+
+    on(event, listener) {
+      ctx.events?.on(event, listener)
+      return this
+    },
+    off(event, listener) {
+      ctx.events?.off(event, listener)
+      return this
+    },
+
+    async transaction<T>(
+      a: TransactionEvent | ((tx: KickDbClient<DB>) => Promise<T>),
+      b?: (tx: KickDbClient<DB>) => Promise<T>,
+    ): Promise<T> {
+      const opts = typeof a === 'function' ? {} : a
+      const fn = (typeof a === 'function' ? a : b) as (tx: KickDbClient<DB>) => Promise<T>
+
+      ctx.events?.emit('transactionStart', { isolation: opts.isolation })
+      try {
+        const result = await kysely.transaction().execute(async (tx) => {
+          if (opts.isolation) {
+            // PG: SET TRANSACTION ISOLATION LEVEL ...
+            const level = opts.isolation.toUpperCase()
+            await sql.raw(`SET TRANSACTION ISOLATION LEVEL ${level}`).execute(tx)
+          }
+          const child = wrap<DB>(tx as unknown as Kysely<DB>, ctx)
+          return await fn(child)
+        })
+        ctx.events?.emit('transactionCommit', { isolation: opts.isolation })
+        return result
+      } catch (err) {
+        ctx.events?.emit('transactionRollback', { isolation: opts.isolation, error: err })
+        throw err
+      }
+    },
+
+    async savepoint<T>(fn: (sp: KickDbClient<DB>) => Promise<T>): Promise<T> {
+      const name = `sp_${++ctx.savepointCounter.value}`
+      // Savepoints only make sense inside a transaction. Kysely's transaction
+      // proxies route SQL through the same connection; sql.raw() against the
+      // wrapper will land on that connection's tx context.
+      await sql.raw(`SAVEPOINT ${name}`).execute(kysely)
+      try {
+        const result = await fn(wrap<DB>(kysely, ctx))
+        await sql.raw(`RELEASE SAVEPOINT ${name}`).execute(kysely)
+        return result
+      } catch (err) {
+        await sql.raw(`ROLLBACK TO SAVEPOINT ${name}`).execute(kysely)
+        throw err
+      }
+    },
+
+    async destroy(): Promise<void> {
+      await kysely.destroy()
+    },
+  }
+}
+```
+
+> **Note on `beforeQuery` mutation:** Kysely's plugin transformQuery happens at AST level, not raw SQL. Rewriting SQL strings is best done by a query interceptor wrapping `kysely.executeQuery`. M1 ships event timing only; SQL-mutation `beforeQuery` lands in M2 alongside `$extends`. The type stays in the surface so adopters relying on it have a stable API; the runtime just doesn't fire it yet.
+
+- [ ] **Step 19b.5: Re-export from package barrel**
+
+Add to `packages/db/src/index.ts`:
+
+```ts
+export { createDbClient } from './client/create'
+export type {
+  KickDbClient,
+  KickDbClientEvents,
+  QueryEvent,
+  QueryErrorEvent,
+  BeforeQueryEvent,
+  TransactionEvent,
+  CreateDbClientOptions,
+} from './client/types'
+export type { SchemaToKysely } from './client/schema-types'
+```
+
+- [ ] **Step 19b.6: Unit test event emitter mechanics**
+
+Create `packages/db/__tests__/unit/client-events.test.ts`:
+
+```ts
+import { describe, it, expect, vi } from 'vitest'
+import { KickDbEventEmitter } from '../../src/client/events'
+
+describe('KickDbEventEmitter', () => {
+  it('on/off subscribe + unsubscribe symmetric', () => {
+    const e = new KickDbEventEmitter()
+    const fn = vi.fn()
+    e.on('query', fn)
+    e.emit('query', { sql: 'SELECT 1', parameters: [], durationMs: 1 })
+    expect(fn).toHaveBeenCalledTimes(1)
+    e.off('query', fn)
+    e.emit('query', { sql: 'SELECT 1', parameters: [], durationMs: 1 })
+    expect(fn).toHaveBeenCalledTimes(1)
+  })
+
+  it('noteStart/consumeDuration measures elapsed ms', async () => {
+    const e = new KickDbEventEmitter()
+    e.noteStart('q1')
+    await new Promise((r) => setTimeout(r, 10))
+    const ms = e.consumeDuration('q1')
+    expect(ms).toBeGreaterThanOrEqual(8)
+  })
+
+  it('consumeDuration returns 0 for unknown id', () => {
+    expect(new KickDbEventEmitter().consumeDuration('missing')).toBe(0)
+  })
+})
+```
+
+- [ ] **Step 19b.7: Integration test — Kysely queries against real PG**
+
+Create `packages/db-pg/__tests__/integration/client.test.ts`:
+
+```ts
+import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers/postgresql'
+import pg from 'pg'
+import { PostgresDialect } from 'kysely'
+
+import { createDbClient, table, serial, varchar, type KickDbClient } from '@forinda/kickjs-db'
+
+interface DB {
+  users: { id: number; email: string }
+}
+
+let container: StartedPostgreSqlContainer
+let pool: pg.Pool
+let db: KickDbClient<DB>
+
+beforeAll(async () => {
+  container = await new PostgreSqlContainer('postgres:16-alpine').start()
+  pool = new pg.Pool({
+    host: container.getHost(),
+    port: container.getMappedPort(5432),
+    user: container.getUsername(),
+    password: container.getPassword(),
+    database: container.getDatabase(),
+  })
+  await pool.query(
+    `CREATE TABLE "users" ("id" serial PRIMARY KEY, "email" varchar(255) NOT NULL UNIQUE)`,
+  )
+
+  const usersDecl = table('users', {
+    id: serial().primaryKey(),
+    email: varchar(255).notNull().unique(),
+  })
+
+  db = createDbClient<{ users: typeof usersDecl }, DB>({
+    schema: { users: usersDecl },
+    dialect: new PostgresDialect({ pool }),
+    events: true,
+  })
+}, 90_000)
+
+afterAll(async () => {
+  await db?.destroy()
+  await pool?.end()
+  await container?.stop()
+})
+
+describe('KickDbClient over Kysely (PG)', () => {
+  it('round-trips an insert + select', async () => {
+    await db.insertInto('users').values({ email: 'a@b.c' }).execute()
+    const rows = await db
+      .selectFrom('users')
+      .select(['id', 'email'])
+      .where('email', '=', 'a@b.c')
+      .execute()
+    expect(rows).toHaveLength(1)
+    expect(rows[0].email).toBe('a@b.c')
+  }, 30_000)
+
+  it('transaction commits on success', async () => {
+    await db.transaction(async (tx) => {
+      await tx.insertInto('users').values({ email: 'tx@b.c' }).execute()
+    })
+    const rows = await db
+      .selectFrom('users')
+      .select('email')
+      .where('email', '=', 'tx@b.c')
+      .execute()
+    expect(rows).toHaveLength(1)
+  }, 30_000)
+
+  it('transaction rolls back on throw', async () => {
+    await expect(
+      db.transaction(async (tx) => {
+        await tx.insertInto('users').values({ email: 'rb@b.c' }).execute()
+        throw new Error('boom')
+      }),
+    ).rejects.toThrow('boom')
+    const rows = await db
+      .selectFrom('users')
+      .select('email')
+      .where('email', '=', 'rb@b.c')
+      .execute()
+    expect(rows).toHaveLength(0)
+  }, 30_000)
+
+  it('transactionStart/Commit events fire', async () => {
+    const seen: string[] = []
+    db.on('transactionStart', () => seen.push('start'))
+    db.on('transactionCommit', () => seen.push('commit'))
+    await db.transaction(async () => {})
+    expect(seen).toEqual(['start', 'commit'])
+  }, 30_000)
+})
+```
+
+- [ ] **Step 19b.8: Run + format + commit**
 
 ```bash
-git commit -m "feat(db): KickDbClient over Kysely + @forinda/kickjs-db-pg adapter (M1-S7, M1-S8)"
+pnpm --filter @forinda/kickjs-db build
+pnpm --filter @forinda/kickjs-db test
+pnpm --filter @forinda/kickjs-db-pg test
+pnpm prettier --write packages/db/src/client packages/db/src/index.ts packages/db/__tests__/unit/client-events.test.ts packages/db-pg/__tests__/integration/client.test.ts
+git add packages/db/src/client packages/db/src/index.ts packages/db/__tests__/unit/client-events.test.ts packages/db-pg/__tests__/integration/client.test.ts
+git commit -m "$(cat <<'EOF'
+feat(db): KickDbClient over Kysely with events + transaction + savepoint (M1-S8)
+
+Three additions on top of plain Kysely:
+  - lifecycle events (transactionStart/Commit/Rollback wired in M1; query
+    timing infrastructure in place for the M2 emit pipeline)
+  - transaction(fn) / transaction({ isolation }, fn) — proper SET TRANSACTION
+    ISOLATION LEVEL when requested, scoped child KickDbClient passed through
+  - tx.savepoint(fn) — SAVEPOINT/RELEASE/ROLLBACK TO via sql.raw() with
+    auto-generated SP_<n> names
+
+Schema → Kysely DB inference is the M1-permissive (unknown) version;
+M2-S1 tightens it via column-builder phantom generics. The type surface
+already exposes beforeQuery / query / queryError so adopters can wire
+listeners now; runtime emit lands when AST-rewriting plugin path is built
+in M2 alongside $extends.
+EOF
+)"
+```
+
+---
+
+### Task 19c: Wire the deferred boot-policy integration test (Task 17)
+
+- [ ] **Step 19c.1: Now that `pgAdapter` exists, re-enable the boot-policy test**
+
+Replace the skipped `it.skip(...)` from Task 17's stub with the real test against a Testcontainers Postgres. Implementation pattern matches `boot-policy.test.ts` sketched in Task 17 — `pgAdapter({ pool })`, seed migrations dir, run `kickDbAdapter().beforeStart({...})` with each policy, assert state.
+
+Three test cases, one container shared across them:
+
+```ts
+// packages/db-pg/__tests__/integration/boot-policy.test.ts
+describe('kickDbAdapter migrationsOnBoot policies', () => {
+  beforeEach(async () => {
+    /* drop kick_migrations, drop test schema */
+  })
+
+  it("'fail-if-pending' throws when journal has unapplied entries", async () => {
+    /* ... */
+  })
+  it("'apply' runs migrateLatest() automatically and brings schema up", async () => {
+    /* ... */
+  })
+  it("'ignore' boots cleanly even with pending migrations", async () => {
+    /* ... */
+  })
+})
+```
+
+Each test:
+
+1. Seeds a temp migrations dir with one reviewed migration (using the M0 `seedMigration` helper from `packages/db/__tests__/fixtures/seed-migration.ts`).
+2. Constructs `pgAdapter({ pool })`.
+3. Calls `kickDbAdapter({ migrationAdapter, migrationsDir, migrationsOnBoot: <policy> }).beforeStart({...})`.
+4. Asserts the policy's documented behavior.
+
+- [ ] **Step 19c.2: Run + commit**
+
+```bash
+pnpm --filter @forinda/kickjs-db-pg test
+git add packages/db-pg/__tests__/integration/boot-policy.test.ts
+git commit -m "test(db): kickDbAdapter migrationsOnBoot {fail-if-pending,apply,ignore} (M1-S7)"
 ```
 
 ---
@@ -2066,18 +3535,31 @@ git commit -m "feat(db): KickDbClient over Kysely + @forinda/kickjs-db-pg adapte
 ```ts
 const migrate = db.command('migrate').description('Migration runner subcommands')
 
-migrate.command('latest')
+migrate
+  .command('latest')
   .description('Apply all pending migrations in a new batch')
   .option('-c, --config <path>', 'kick.config.ts path', 'kick.config.ts')
-  .action(async (opts) => { /* loadConfig → instantiate adapter from config → migrateLatest */ })
+  .action(async (opts) => {
+    /* loadConfig → instantiate adapter from config → migrateLatest */
+  })
 
 migrate.command('up').description('Apply next pending').action(/* migrateUp */)
 migrate.command('down').description('Reverse most recent').action(/* migrateDown */)
 migrate.command('rollback').description('Reverse last batch').action(/* migrateRollback */)
-migrate.command('status').description('Show applied/pending').action(async (opts) => {
-  const status = await migrateStatus(/* ... */)
-  console.table(status.map((s) => ({ id: s.id, state: s.state, batch: s.batch ?? '-', reviewed: s.reviewed })))
-})
+migrate
+  .command('status')
+  .description('Show applied/pending')
+  .action(async (opts) => {
+    const status = await migrateStatus(/* ... */)
+    console.table(
+      status.map((s) => ({
+        id: s.id,
+        state: s.state,
+        batch: s.batch ?? '-',
+        reviewed: s.reviewed,
+      })),
+    )
+  })
 ```
 
 **Open question:** how does the CLI instantiate the `MigrationAdapter`? Two options:
@@ -2124,7 +3606,7 @@ db.command('introspect')
     const url = opts.url ?? cfg.connectionString
     const pool = new pg.Pool({ connectionString: url })
     const snapshot = await introspectPg({ query: (sql, params) => pool.query(sql, params) })
-    const tsSource = renderSchemaSource(snapshot)  // emitter — same IR, different consumer
+    const tsSource = renderSchemaSource(snapshot) // emitter — same IR, different consumer
     await writeFile(opts.out, tsSource, 'utf8')
     await pool.end()
   })
@@ -2301,9 +3783,10 @@ Spec coverage check (against [`./architecture.md`](./architecture.md) and [`./st
 
 Type consistency: `MigrationAdapter`, `MigrationRow`, `RunnerOptions`, `KickDbClient`, `DbConfig` defined once and used identically across runner/adapter/cli.
 
-Placeholders: Task 14 (introspect-pg) and Task 19 (KickDbClient inference) are sketches with the hard parts called out — full code lands during execution. The Kysely-typed schema inference is explicitly punted to M2 with M1 having a permissive `unknown` placeholder.
+Placeholders: none. Tasks 14 and 19 are now fully expanded with bite-sized steps and complete code. The Kysely-typed schema inference (Task 19b) is explicitly the M1-permissive (`unknown`-per-column) version; M2-S1 tightens it via column-builder phantom generics. The `beforeQuery` runtime emit is also explicitly deferred to M2 alongside `$extends`-style query interception — the type surface stays stable, the runtime hook just doesn't fire yet.
 
 Out of scope for M1 (deferred to M2):
+
 - Relations API in queries (`db.query.users.findMany({ with })`).
 - `customType<T>()`.
 - `$extends({ model, result })`.
