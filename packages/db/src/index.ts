@@ -25,6 +25,15 @@ export {
   type SchemaDiffSummary,
 } from './migrate/errors'
 
+export {
+  readJournal,
+  appendJournalEntry,
+  computeMigrationHash,
+  verifyMigrationHash,
+  type Journal,
+  type JournalEntry,
+} from './migrate/journal'
+
 export { emitPg } from './emit/pg'
 
 export { resolveDbConfig, type DbConfig } from './cli/config'

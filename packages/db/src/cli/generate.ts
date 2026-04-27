@@ -7,6 +7,7 @@ import { extractSnapshot } from '../snapshot/extract'
 import { diff } from '../diff/engine'
 import { invertChanges, hasAmbiguousReverse } from '../diff/invert'
 import { emitPg } from '../emit/pg'
+import { appendJournalEntry, computeMigrationHash } from '../migrate/journal'
 import type { DbConfig } from './config'
 import type { SchemaSnapshot } from '../snapshot/types'
 
@@ -125,6 +126,17 @@ async function writeMigration(p: WriteMigrationParams): Promise<GenerateResult> 
     ) + '\n',
     'utf8',
   )
+
+  // Append to _journal.json so the runner has the canonical applied-order
+  // and integrity hash. Hash includes up + down + snapshot, so any later
+  // hand-edit of those files will surface as a MigrationHashError at apply.
+  const hash = await computeMigrationHash(dir)
+  await appendJournalEntry(p.migrationsAbs, p.opts.config.dialect, {
+    id,
+    tag: p.opts.name,
+    hash,
+    createdAt: (p.opts.now?.() ?? new Date()).toISOString(),
+  })
 
   return { status: 'created', migrationDir: dir, changeCount: p.changeCount, empty: p.empty }
 }

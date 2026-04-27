@@ -32,7 +32,7 @@ describe('generate()', () => {
     expect(r.status).toBe('created')
     expect(r.changeCount).toBe(2) // createTable + addIndex(unique)
 
-    const subdirs = await readdir(cfg.migrationsDir)
+    const subdirs = (await readdir(cfg.migrationsDir)).filter((e) => e !== '_journal.json')
     expect(subdirs).toEqual(['20260427_153012_init'])
 
     const upSql = await readFile(path.join(cfg.migrationsDir, subdirs[0], 'up.sql'), 'utf8')
@@ -86,7 +86,7 @@ describe('generate()', () => {
     expect(r.empty).toBe(true)
     expect(r.changeCount).toBe(0)
 
-    const subdirs = (await readdir(cfg.migrationsDir)).sort()
+    const subdirs = (await readdir(cfg.migrationsDir)).filter((e) => e !== '_journal.json').sort()
     expect(subdirs).toEqual(['20260427_153012_init', '20260427_160000_seed_default_users'])
 
     const seedDir = path.join(cfg.migrationsDir, '20260427_160000_seed_default_users')
