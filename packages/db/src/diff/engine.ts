@@ -1,0 +1,35 @@
+import type { SchemaSnapshot, TableSnapshot } from '../snapshot/types'
+import type { Change, ChangeSet } from './types'
+
+export function diff(prev: SchemaSnapshot, next: SchemaSnapshot): ChangeSet {
+  const changes: Change[] = []
+
+  const prevTables = new Set(Object.keys(prev.tables))
+  const nextTables = new Set(Object.keys(next.tables))
+
+  // Drops first (so FKs that depend on dropped tables are handled before drops below)
+  for (const name of prevTables) {
+    if (!nextTables.has(name)) {
+      changes.push({ kind: 'dropTable', table: prev.tables[name] })
+    }
+  }
+
+  // Creates second
+  for (const name of nextTables) {
+    if (!prevTables.has(name)) {
+      changes.push({ kind: 'createTable', table: next.tables[name] })
+    }
+  }
+
+  // Common tables — column/index/fk diff comes in Tasks 10-12
+  for (const name of nextTables) {
+    if (!prevTables.has(name)) continue
+    diffTable(prev.tables[name], next.tables[name], changes)
+  }
+
+  return changes
+}
+
+function diffTable(_prev: TableSnapshot, _next: TableSnapshot, _changes: Change[]) {
+  // Filled in Tasks 10-12
+}
