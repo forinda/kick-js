@@ -40,6 +40,15 @@ describe('generate()', () => {
     expect(upSql).toContain('CREATE TABLE "users"')
     expect(upSql).toContain('CREATE UNIQUE INDEX "users_email_unique"')
 
+    const downSql = await readFile(path.join(cfg.migrationsDir, subdirs[0], 'down.sql'), 'utf8')
+    expect(downSql.startsWith('-- REVIEWED: false\n')).toBe(true)
+    // Forward only adds — per spec §5, the reverse is clean (no DRAFT marker).
+    expect(downSql).not.toContain('-- DRAFT')
+    expect(downSql).toContain('DROP TABLE "users"')
+    expect(downSql).toContain('DROP INDEX "users_email_unique"')
+    // Order: drop index before drop table.
+    expect(downSql.indexOf('DROP INDEX')).toBeLessThan(downSql.indexOf('DROP TABLE'))
+
     const meta = JSON.parse(
       await readFile(path.join(cfg.migrationsDir, subdirs[0], 'meta.json'), 'utf8'),
     )
@@ -47,6 +56,8 @@ describe('generate()', () => {
       id: '20260427_153012_init',
       reviewed: false,
       dialect: 'postgres',
+      previousId: null,
+      downIsDraft: false,
     })
   })
 

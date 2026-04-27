@@ -5,6 +5,7 @@ import { existsSync } from 'node:fs'
 
 import { extractSnapshot } from '../snapshot/extract'
 import { diff } from '../diff/engine'
+import { invertChanges, hasAmbiguousReverse } from '../diff/invert'
 import { emitPg } from '../emit/pg'
 import type { DbConfig } from './config'
 import type { SchemaSnapshot } from '../snapshot/types'
@@ -29,7 +30,7 @@ export async function generate(opts: GenerateOptions): Promise<GenerateResult> {
   const schemaModule = await import(pathToFileURL(schemaAbs).href)
   const target = extractSnapshot(schemaModule, opts.config.dialect)
 
-  const prev = await readLatestSnapshot(migrationsAbs)
+  const { snapshot: prev, id: previousId } = await readLatestSnapshotEntry(migrationsAbs)
   const changes = diff(prev, target)
 
   if (changes.length === 0) {
@@ -42,7 +43,19 @@ export async function generate(opts: GenerateOptions): Promise<GenerateResult> {
 
   const upSql = '-- REVIEWED: false\n' + emitPg(changes) + '\n'
   await writeFile(path.join(dir, 'up.sql'), upSql, 'utf8')
+
+  const draft = hasAmbiguousReverse(changes)
+  const downSql =
+    '-- REVIEWED: false\n' +
+    (draft
+      ? '-- DRAFT: ambiguous reverses present (drop column / drop table / type change). Audit before applying.\n'
+      : '') +
+    emitPg(invertChanges(changes)) +
+    '\n'
+  await writeFile(path.join(dir, 'down.sql'), downSql, 'utf8')
+
   await writeFile(path.join(dir, 'snapshot.json'), JSON.stringify(target, null, 2) + '\n', 'utf8')
+
   await writeFile(
     path.join(dir, 'meta.json'),
     JSON.stringify(
@@ -52,6 +65,8 @@ export async function generate(opts: GenerateOptions): Promise<GenerateResult> {
         createdAt: (opts.now?.() ?? new Date()).toISOString(),
         reviewed: false,
         dialect: opts.config.dialect,
+        previousId,
+        downIsDraft: draft,
       },
       null,
       2,
@@ -62,18 +77,25 @@ export async function generate(opts: GenerateOptions): Promise<GenerateResult> {
   return { status: 'created', migrationDir: dir, changeCount: changes.length }
 }
 
-async function readLatestSnapshot(migrationsDir: string): Promise<SchemaSnapshot> {
+interface LatestEntry {
+  snapshot: SchemaSnapshot
+  id: string | null
+}
+
+async function readLatestSnapshotEntry(migrationsDir: string): Promise<LatestEntry> {
+  const empty: SchemaSnapshot = { version: 1, dialect: 'postgres', tables: {} }
   if (!existsSync(migrationsDir)) {
-    return { version: 1, dialect: 'postgres', tables: {} }
+    return { snapshot: empty, id: null }
   }
   const entries = await readdir(migrationsDir)
   const dirs = entries.filter((e) => /^\d{8}_\d{6}_/.test(e)).sort()
   if (dirs.length === 0) {
-    return { version: 1, dialect: 'postgres', tables: {} }
+    return { snapshot: empty, id: null }
   }
   const latest = dirs[dirs.length - 1]
   const file = path.join(migrationsDir, latest, 'snapshot.json')
-  return JSON.parse(await readFile(file, 'utf8')) as SchemaSnapshot
+  const snapshot = JSON.parse(await readFile(file, 'utf8')) as SchemaSnapshot
+  return { snapshot, id: latest }
 }
 
 function formatId(date: Date, name: string): string {

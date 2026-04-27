@@ -13,6 +13,7 @@ export { extractSnapshot } from './snapshot/extract'
 
 export type * from './diff/types'
 export { diff } from './diff/engine'
+export { invertChanges, hasAmbiguousReverse } from './diff/invert'
 
 export { emitPg } from './emit/pg'
 
