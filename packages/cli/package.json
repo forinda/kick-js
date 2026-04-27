@@ -73,6 +73,7 @@
   },
   "dependencies": {
     "@clack/prompts": "^1.2.0",
+    "@forinda/kickjs-db": "workspace:*",
     "commander": "^14.0.3",
     "glob": "^13.0.6",
     "picocolors": "^1.1.1",
