@@ -102,16 +102,27 @@ async function runForward(opts: RunnerOptions, pending: PreparedEntry[]): Promis
   return { applied: ids, batch: nextBatch }
 }
 
+async function listPending(opts: RunnerOptions): Promise<PreparedEntry[]> {
+  const journal = await readJournal(opts.migrationsDir, opts.adapter.dialect)
+  const applied = await opts.adapter.listApplied()
+  const appliedIds = new Set(applied.map((r) => r.id))
+  return journal.entries
+    .filter((e) => !appliedIds.has(e.id))
+    .map((e) => ({ id: e.id, tag: e.tag, hash: e.hash }))
+}
+
 export async function migrateLatest(opts: RunnerOptions): Promise<AppliedSummary> {
   await opts.adapter.ensureMigrationTables()
-
   return withLock(opts, async () => {
-    const journal = await readJournal(opts.migrationsDir, opts.adapter.dialect)
-    const applied = await opts.adapter.listApplied()
-    const appliedIds = new Set(applied.map((r) => r.id))
-    const pending = journal.entries
-      .filter((e) => !appliedIds.has(e.id))
-      .map((e) => ({ id: e.id, tag: e.tag, hash: e.hash }))
+    const pending = await listPending(opts)
     return runForward(opts, pending)
+  })
+}
+
+export async function migrateUp(opts: RunnerOptions): Promise<AppliedSummary> {
+  await opts.adapter.ensureMigrationTables()
+  return withLock(opts, async () => {
+    const pending = await listPending(opts)
+    return runForward(opts, pending.slice(0, 1))
   })
 }
