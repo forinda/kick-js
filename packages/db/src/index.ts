@@ -41,6 +41,7 @@ export {
   KICK_MIGRATIONS_TABLE,
   KICK_LOCK_TABLE,
 } from './migrate/schema'
+export { MemoryMigrationAdapter } from './migrate/memory-adapter'
 
 export { emitPg } from './emit/pg'
 
