@@ -48,10 +48,12 @@ export {
   migrateUp,
   migrateDown,
   migrateRollback,
+  migrateStatus,
   type RunnerOptions,
   type AppliedSummary,
   type ReversedSummary,
   type RollbackSummary,
+  type StatusEntry,
 } from './migrate/runner'
 
 export { emitPg } from './emit/pg'

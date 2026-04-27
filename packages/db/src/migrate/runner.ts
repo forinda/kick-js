@@ -169,6 +169,50 @@ export interface RollbackSummary {
   batch: number | null
 }
 
+export interface StatusEntry {
+  id: string
+  tag: string
+  hash: string
+  state: 'applied' | 'pending'
+  batch: number | null
+  appliedAt: string | null
+  reviewed: boolean
+}
+
+export async function migrateStatus(
+  opts: Pick<RunnerOptions, 'adapter' | 'migrationsDir'>,
+): Promise<StatusEntry[]> {
+  await opts.adapter.ensureMigrationTables()
+  const journal = await readJournal(opts.migrationsDir, opts.adapter.dialect)
+  const applied = await opts.adapter.listApplied()
+  const byId = new Map(applied.map((r) => [r.id, r]))
+
+  const entries: StatusEntry[] = []
+  for (const e of journal.entries) {
+    const row = byId.get(e.id)
+    let reviewed = false
+    try {
+      const meta = JSON.parse(
+        await readFile(path.join(opts.migrationsDir, e.id, 'meta.json'), 'utf8'),
+      )
+      reviewed = meta.reviewed === true
+    } catch {
+      // Missing meta.json — treat as un-reviewed; the runner will refuse to
+      // apply anyway. Don't fail status output for diagnostic purposes.
+    }
+    entries.push({
+      id: e.id,
+      tag: e.tag,
+      hash: e.hash,
+      state: row ? 'applied' : 'pending',
+      batch: row?.batch ?? null,
+      appliedAt: row?.appliedAt ?? null,
+      reviewed,
+    })
+  }
+  return entries
+}
+
 export async function migrateRollback(opts: RunnerOptions): Promise<RollbackSummary> {
   await opts.adapter.ensureMigrationTables()
   return withLock(opts, async () => {
