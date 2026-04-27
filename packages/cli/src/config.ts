@@ -2,6 +2,8 @@ import { existsSync } from 'node:fs'
 import { readFile, access } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 
+import type { KickCliPlugin } from './plugin/types'
+
 /** A custom command that developers can register via kick.config.ts */
 export interface KickCommandDefinition {
   /** The command name (e.g. 'db:migrate', 'seed', 'proto:gen') */
@@ -263,6 +265,20 @@ export interface KickConfig {
   typegen?: TypegenConfig
   /** Custom commands that extend the CLI */
   commands?: KickCommandDefinition[]
+  /**
+   * CLI plugins — bundled commands + typegens contributed by external
+   * packages (e.g. `@forinda/kickjs-cli-drizzle`). Plugin commands
+   * appear first; adopter `commands` overrides plugin commands of the
+   * same name. Duplicate commands or typegen ids across two plugins
+   * fail-fast at CLI startup.
+   *
+   * @example
+   * import { drizzlePlugin } from '@forinda/kickjs-cli-drizzle'
+   * export default defineConfig({
+   *   plugins: [drizzlePlugin({ schemaPath: 'src/db/schema' })],
+   * })
+   */
+  plugins?: KickCliPlugin[]
   /** Code style overrides (auto-detected from prettier when possible) */
   style?: {
     semicolons?: boolean

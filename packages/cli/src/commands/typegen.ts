@@ -10,7 +10,10 @@
 
 import type { Command } from 'commander'
 import { runTypegen, TokenCollisionError, watchTypegen } from '../typegen'
+import { runTypegen as runPluginTypegens } from '../typegen/runner'
 import { loadKickConfig } from '../config'
+import { mergeCliPlugins } from '../plugin'
+import { builtinCliPlugins } from '../plugin/builtins'
 
 interface TypegenCliOptions {
   watch?: boolean
@@ -20,6 +23,7 @@ interface TypegenCliOptions {
   allowDuplicates?: boolean
   schemaValidator?: string
   envFile?: string
+  check?: boolean
 }
 
 /**
@@ -69,6 +73,7 @@ export function registerTypegenCommand(program: Command): void {
       '--env-file <path>',
       "Path to env schema file for KickEnv typing (default 'src/env.ts'; pass 'false' to disable)",
     )
+    .option('--check', 'CI gate: fail on plugin-typegen drift instead of writing')
     .action(async (opts: TypegenCliOptions) => {
       const cwd = process.cwd()
 
@@ -107,6 +112,27 @@ export function registerTypegenCommand(program: Command): void {
           await new Promise<void>(() => {})
         } else {
           await runTypegen(baseOpts)
+
+          // Plugin-typegen pipeline runs after the legacy pass. Builtins
+          // ship the kick/db typegen; user plugins from kick.config.ts
+          // contribute their own. T8 will fold the legacy emitters into
+          // plugins and unify both paths into one runner call.
+          const allPlugins = [...builtinCliPlugins, ...(config?.plugins ?? [])]
+          const merged = mergeCliPlugins(allPlugins, config?.commands ?? [])
+          if (merged.typegens.length > 0) {
+            const results = await runPluginTypegens({
+              cwd,
+              config: config ?? ({} as never),
+              plugins: merged.typegens,
+              check: opts.check,
+            })
+            if (!opts.silent) {
+              for (const r of results) console.log(`  ${r.id}: ${r.status}`)
+            }
+            if (opts.check && results.some((r) => r.status === 'written')) {
+              process.exit(1)
+            }
+          }
         }
       } catch (err: unknown) {
         if (err instanceof TokenCollisionError) {
