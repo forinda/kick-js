@@ -42,6 +42,24 @@ function diffTable(prev: TableSnapshot, next: TableSnapshot, changes: Change[]) 
   for (const c of nextCols) {
     if (!prevCols.has(c)) {
       changes.push({ kind: 'addColumn', table: next.name, column: next.columns[c] })
+      continue
+    }
+    const before = prev.columns[c]
+    const after = next.columns[c]
+    if (!columnsEqual(before, after)) {
+      changes.push({ kind: 'alterColumn', table: next.name, column: c, before, after })
     }
   }
+}
+
+function columnsEqual(
+  a: import('../snapshot/types').ColumnSnapshot,
+  b: import('../snapshot/types').ColumnSnapshot,
+): boolean {
+  return (
+    a.type === b.type &&
+    a.nullable === b.nullable &&
+    a.default === b.default &&
+    a.primaryKey === b.primaryKey
+  )
 }
