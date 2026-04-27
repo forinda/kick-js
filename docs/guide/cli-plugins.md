@@ -175,6 +175,35 @@ const drizzleTypegen = (): TypegenPlugin => ({
 fails non-zero on drift instead of writing — wire it into CI to keep
 generated declarations in sync with code.
 
+### Inspecting + disabling typegens
+
+`kick typegen --list` prints every registered plugin id alongside its
+watched inputs. Disabled entries show `(disabled)`:
+
+```
+  Registered typegen plugins:
+
+    kick/db      inputs: src/db/schema.ts, src/db/schema/**/*.ts
+    kick/assets  inputs: kick.config.ts, kick.config.js, kick.config.mjs
+```
+
+Adopters who want to skip a built-in typegen (e.g. hand-write the
+`KickDbRegister` augmentation manually) opt out via
+`kick.config.ts > typegen.disable`:
+
+```ts
+export default defineConfig({
+  typegen: { disable: ['kick/db'] },
+})
+```
+
+The plugin still loads and merge-time conflict detection still runs;
+only the `generate()` invocation is skipped. Unknown ids surface as a
+startup warning rather than failing the run, so a typo doesn't break
+the dev loop. See [Typegen → Disabling specific plugin
+typegens](./typegen.md#disabling-specific-plugin-typegens) for the
+full pattern.
+
 ## Built-ins use the same contract
 
 Every built-in command — `init`, `generate`, `run`, `info`, `inspect`,

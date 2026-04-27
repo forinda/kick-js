@@ -293,8 +293,19 @@ export default defineConfig({
   },
   plugins: [],                              // KickCliPlugin[] — see ./cli-plugins.md
   commands: [],                             // project-local custom CLI commands
+  typegen: {
+    disable: [],                            // skip specific plugin typegens (e.g. ['kick/db'])
+  },
 })
 ```
+
+::: tip Disabling individual typegens
+`kick typegen --list` prints every registered plugin id; add any of
+them to `typegen.disable` to skip its emission while leaving the rest
+running. Useful for adopters who hand-write `KickDbRegister` instead
+of letting the `kick/db` plugin generate it. See
+[Typegen → Disabling specific plugin typegens](./typegen.md#disabling-specific-plugin-typegens).
+:::
 
 ::: tip Folder paths are conventions
 `src/modules/`, `prisma/`, `src/db/schema`, and the rest of the defaults reflect what `kick new` scaffolds. Generators read `kick.config.ts` for the live values, so renaming or relocating directories is a one-line config change — not a fork.

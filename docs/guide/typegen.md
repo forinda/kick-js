@@ -260,6 +260,7 @@ export default defineConfig({
     envFile: 'src/env.ts', // string | false (default: 'src/env.ts')
     srcDir: 'src', // optional override
     outDir: '.kickjs/types', // optional override
+    disable: ['kick/db'], // skip specific plugin typegens (see below)
   },
 })
 ```
@@ -270,8 +271,52 @@ export default defineConfig({
 | `envFile`         | `'src/env.ts'`    | Path to the project's env schema file. Must default-export a `defineEnv(...)` schema for typed `KickEnv` augmentation. Set to `false` to disable env typing. |
 | `srcDir`          | `'src'`           | Directory to scan for controllers and decorators.                                                                                                            |
 | `outDir`          | `'.kickjs/types'` | Where to write generated files.                                                                                                                              |
+| `disable`         | `[]`              | Plugin typegen ids to skip. The plugin still loads — only its `generate()` is bypassed. Discover ids with `kick typegen --list`.                             |
 
 CLI flags override the config for a single run: `--schema-validator <name>`, `--env-file <path>` (`--env-file false` disables it).
+
+## Disabling specific plugin typegens
+
+Use `typegen.disable` when an adopter wants to keep the legacy pass and most plugin typegens but opt out of one — for example, to hand-write `KickDbRegister` instead of letting the `kick/db` plugin emit `kick__db.d.ts`:
+
+```ts
+// kick.config.ts
+export default defineConfig({
+  typegen: { disable: ['kick/db'] },
+})
+```
+
+```ts
+// src/db/register.ts (hand-written, owns the augmentation)
+import type { dbClient } from './client'
+
+declare module '@forinda/kickjs-db' {
+  interface KickDbRegister {
+    db: typeof dbClient
+  }
+}
+```
+
+The plugin still loads (so merge-time conflict detection still runs); only its `generate()` invocation is skipped. Adopters disabling `kick/db` typically import their `register.ts` for the side-effect declaration.
+
+### Discover registered ids
+
+```bash
+kick typegen --list
+```
+
+Prints every typegen plugin id with its watched inputs:
+
+```
+  Registered typegen plugins:
+
+    kick/db      inputs: src/db/schema.ts, src/db/schema/**/*.ts
+    kick/assets  inputs: kick.config.ts, kick.config.js, kick.config.mjs
+```
+
+Disabled ids show `(disabled)` next to the entry. Unknown ids in `typegen.disable` (typos, removed plugins) surface as a startup warning rather than a hard error so the dev loop stays alive while you fix the config.
+
+See [CLI Plugins](./cli-plugins.md) for the full plugin contract — every typegen above ships as a `KickCliPlugin.typegens[]` entry, including the built-ins.
 
 ## Token collisions
 
