@@ -21,7 +21,10 @@ function tryLoadDotenv(): void {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const dotenv = require('dotenv')
-    dotenv.config({ override: false })
+    // `quiet: true` suppresses dotenv 17's tip banner that goes to stdout.
+    // Required for CLI tools whose stdout is parsed by callers (`kick explain
+    // --json`, etc) — the banner would otherwise corrupt the JSON output.
+    dotenv.config({ override: false, quiet: true })
   } catch {
     // dotenv not installed — fall through, env vars must come from
     // the environment directly. This is a valid deployment style.
@@ -174,7 +177,7 @@ export function reloadEnv(): void {
   // Re-read .env file into process.env if dotenv is installed.
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    require('dotenv').config({ override: true })
+    require('dotenv').config({ override: true, quiet: true })
   } catch {
     // dotenv not installed — nothing to reload, env comes from the
     // environment directly.

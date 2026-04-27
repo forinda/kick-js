@@ -46,6 +46,8 @@ export { introspectPg } from './migrate/introspect-pg'
 export type { IntrospectPgOptions, PgQueryRunner } from './migrate/introspect-types'
 export { checkDrift, type DriftBehavior, type DriftLogger } from './migrate/drift'
 
+export { kickDbAdapter, type KickDbAdapterConfig, type MigrationsOnBoot } from './adapter'
+
 export {
   migrateLatest,
   migrateUp,
