@@ -10,3 +10,5 @@ export type {
 } from './snapshot/types'
 
 export * from './dsl/columns'
+export * from './dsl/table'
+export * from './dsl/constraints'

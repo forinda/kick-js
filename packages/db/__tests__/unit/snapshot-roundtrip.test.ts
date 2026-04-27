@@ -11,11 +11,15 @@ describe('SchemaSnapshot JSON roundtrip', () => {
           name: 'users',
           columns: {
             id: { name: 'id', type: 'serial', nullable: false, default: null, primaryKey: true },
-            email: { name: 'email', type: 'varchar(255)', nullable: false, default: null, primaryKey: false },
+            email: {
+              name: 'email',
+              type: 'varchar(255)',
+              nullable: false,
+              default: null,
+              primaryKey: false,
+            },
           },
-          indexes: [
-            { name: 'users_email_unique', columns: ['email'], unique: true },
-          ],
+          indexes: [{ name: 'users_email_unique', columns: ['email'], unique: true }],
           foreignKeys: [],
           checks: [],
         },
@@ -23,7 +27,13 @@ describe('SchemaSnapshot JSON roundtrip', () => {
           name: 'posts',
           columns: {
             id: { name: 'id', type: 'serial', nullable: false, default: null, primaryKey: true },
-            authorId: { name: 'author_id', type: 'integer', nullable: false, default: null, primaryKey: false },
+            authorId: {
+              name: 'author_id',
+              type: 'integer',
+              nullable: false,
+              default: null,
+              primaryKey: false,
+            },
           },
           indexes: [],
           foreignKeys: [

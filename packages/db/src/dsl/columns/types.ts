@@ -44,6 +44,20 @@ export class ColumnBuilder {
     return this
   }
 
+  references(
+    target: () => { __tableName: string; __name: string },
+    opts: { onDelete?: string; onUpdate?: string } = {},
+  ): this {
+    const ref = target()
+    this.state.references = {
+      table: ref.__tableName,
+      column: ref.__name,
+      onDelete: opts.onDelete ?? 'no_action',
+      onUpdate: opts.onUpdate ?? 'no_action',
+    }
+    return this
+  }
+
   toJSON(name: string): ColumnSnapshot {
     return {
       name,
