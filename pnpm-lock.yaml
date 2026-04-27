@@ -770,15 +770,24 @@ importers:
       '@forinda/kickjs-ai':
         specifier: workspace:*
         version: link:../ai
+      '@forinda/kickjs-db-pg':
+        specifier: workspace:*
+        version: link:../db-pg
       '@swc/core':
         specifier: ^1.15.30
         version: 1.15.30
       '@types/node':
         specifier: ^25.6.0
         version: 25.6.0
+      '@types/pg':
+        specifier: ^8.11.10
+        version: 8.20.0
       '@types/pluralize':
         specifier: ^0.0.33
         version: 0.0.33
+      pg:
+        specifier: ^8.13.1
+        version: 8.20.0
       typescript:
         specifier: ^6.0.3
         version: 6.0.3

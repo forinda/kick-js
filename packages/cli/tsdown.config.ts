@@ -15,9 +15,11 @@ export default defineConfig([
     external: [
       '@forinda/kickjs-ai',
       '@forinda/kickjs-db',
+      '@forinda/kickjs-db-pg',
       '@clack/prompts',
       'picocolors',
       'commander',
+      'pg',
       'pluralize',
       'vite',
       /^node:/,
@@ -34,9 +36,11 @@ export default defineConfig([
     external: [
       '@forinda/kickjs-ai',
       '@forinda/kickjs-db',
+      '@forinda/kickjs-db-pg',
       '@clack/prompts',
       'picocolors',
       'commander',
+      'pg',
       'pluralize',
       'vite',
       /^node:/,
