@@ -7,4 +7,5 @@
 export * from './users'
 export * from './workspaces'
 export * from './tasks'
+export * from './categories'
 export * from './relations'

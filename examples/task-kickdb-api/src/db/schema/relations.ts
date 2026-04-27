@@ -7,6 +7,7 @@ import { relations } from '@forinda/kickjs-db'
 import { users } from './users'
 import { workspaces } from './workspaces'
 import { tasks } from './tasks'
+import { categories } from './categories'
 
 export const usersRelations = relations(users, ({ many }) => ({
   ownedWorkspaces: many(workspaces),
@@ -19,4 +20,9 @@ export const workspacesRelations = relations(workspaces, ({ one, many }) => ({
 
 export const tasksRelations = relations(tasks, ({ one }) => ({
   workspace: one(workspaces, { fields: [tasks.workspaceId], references: [workspaces.id] }),
+}))
+
+export const categoriesRelations = relations(categories, ({ one, many }) => ({
+  parent: one(categories, { fields: [categories.parentId], references: [categories.id] }),
+  children: many(categories),
 }))
