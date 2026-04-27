@@ -1,2 +1,10 @@
-// @forinda/kickjs-db — barrel. Populated as M0 progresses.
-export {}
+export type {
+  Dialect,
+  FkAction,
+  ColumnSnapshot,
+  IndexSnapshot,
+  ForeignKeySnapshot,
+  CheckSnapshot,
+  TableSnapshot,
+  SchemaSnapshot,
+} from './snapshot/types'
