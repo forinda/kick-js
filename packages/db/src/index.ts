@@ -15,6 +15,16 @@ export type * from './diff/types'
 export { diff } from './diff/engine'
 export { invertChanges, hasAmbiguousReverse } from './diff/invert'
 
+export { KickDbError } from './errors'
+export {
+  MigrationError,
+  MigrationLockError,
+  MigrationDriftError,
+  MigrationHashError,
+  UnreviewedMigrationError,
+  type SchemaDiffSummary,
+} from './migrate/errors'
+
 export { emitPg } from './emit/pg'
 
 export { resolveDbConfig, type DbConfig } from './cli/config'
