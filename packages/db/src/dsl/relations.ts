@@ -1,21 +1,21 @@
 import type { TableDecl, ColumnRef } from './table'
 import type { ColumnBuilder } from './columns/types'
 
-interface RelationOne {
+export interface RelationOne {
   kind: 'one'
   target: TableDecl<Record<string, ColumnBuilder>>
   fields: ColumnRef[]
   references: ColumnRef[]
 }
 
-interface RelationMany {
+export interface RelationMany {
   kind: 'many'
   target: TableDecl<Record<string, ColumnBuilder>>
 }
 
-type Relation = RelationOne | RelationMany
+export type Relation = RelationOne | RelationMany
 
-interface RelationsDecl {
+export interface RelationsDecl {
   __isRelations: true
   __sourceTable: string
   __relations: Record<string, Relation>
