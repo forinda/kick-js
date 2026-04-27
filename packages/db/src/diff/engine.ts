@@ -31,21 +31,37 @@ export function diff(prev: SchemaSnapshot, next: SchemaSnapshot): ChangeSet {
 }
 
 function diffTable(prev: TableSnapshot, next: TableSnapshot, changes: Change[]) {
-  const prevCols = new Set(Object.keys(prev.columns))
-  const nextCols = new Set(Object.keys(next.columns))
+  const prevCols = new Map(Object.entries(prev.columns))
+  const nextCols = new Map(Object.entries(next.columns))
 
-  for (const c of prevCols) {
-    if (!nextCols.has(c)) {
-      changes.push({ kind: 'dropColumn', table: next.name, column: prev.columns[c] })
+  const drops: string[] = []
+  const adds: string[] = []
+  for (const c of prevCols.keys()) if (!nextCols.has(c)) drops.push(c)
+  for (const c of nextCols.keys()) if (!prevCols.has(c)) adds.push(c)
+
+  // Rename heuristic — pair only if exactly one drop + one add with identical attrs.
+  if (drops.length === 1 && adds.length === 1) {
+    const before = prevCols.get(drops[0])!
+    const after = nextCols.get(adds[0])!
+    if (columnAttrsEqual(before, after)) {
+      changes.push({ kind: 'renameColumn', table: next.name, from: drops[0], to: adds[0] })
+      drops.length = 0
+      adds.length = 0
     }
   }
-  for (const c of nextCols) {
-    if (!prevCols.has(c)) {
-      changes.push({ kind: 'addColumn', table: next.name, column: next.columns[c] })
-      continue
-    }
-    const before = prev.columns[c]
-    const after = next.columns[c]
+
+  for (const c of drops) {
+    changes.push({ kind: 'dropColumn', table: next.name, column: prevCols.get(c)! })
+  }
+  for (const c of adds) {
+    changes.push({ kind: 'addColumn', table: next.name, column: nextCols.get(c)! })
+  }
+
+  // Common columns — alter detection
+  for (const c of nextCols.keys()) {
+    if (!prevCols.has(c)) continue
+    const before = prevCols.get(c)!
+    const after = nextCols.get(c)!
     if (!columnsEqual(before, after)) {
       changes.push({ kind: 'alterColumn', table: next.name, column: c, before, after })
     }
@@ -82,6 +98,19 @@ function columnsEqual(
   a: import('../snapshot/types').ColumnSnapshot,
   b: import('../snapshot/types').ColumnSnapshot,
 ): boolean {
+  return (
+    a.type === b.type &&
+    a.nullable === b.nullable &&
+    a.default === b.default &&
+    a.primaryKey === b.primaryKey
+  )
+}
+
+function columnAttrsEqual(
+  a: import('../snapshot/types').ColumnSnapshot,
+  b: import('../snapshot/types').ColumnSnapshot,
+): boolean {
+  // Like columnsEqual but ignores name (since rename is *about* name change).
   return (
     a.type === b.type &&
     a.nullable === b.nullable &&

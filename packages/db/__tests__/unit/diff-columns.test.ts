@@ -71,10 +71,12 @@ describe('diff() — column add/drop', () => {
     })
   })
 
-  it('add + drop in same diff', () => {
+  it('add + drop in same diff (different types — no rename)', () => {
+    // Differing types short-circuit the rename heuristic so this exercises
+    // the basic add/drop path even when both fire in one diff.
     const prev = wrap(
       baseTable({
-        a: { name: 'a', type: 'text', nullable: true, default: null, primaryKey: false },
+        a: { name: 'a', type: 'integer', nullable: true, default: null, primaryKey: false },
       }),
     )
     const next = wrap(
