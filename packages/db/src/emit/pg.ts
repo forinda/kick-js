@@ -80,12 +80,27 @@ function emitAlterColumn(table: string, before: ColumnSnapshot, after: ColumnSna
   return stmts.join('\n')
 }
 
-function emitAddIndex(_table: string, _i: import('../snapshot/types').IndexSnapshot): string {
-  return '-- index emit: filled in Task 17'
+function emitAddIndex(table: string, i: import('../snapshot/types').IndexSnapshot): string {
+  const cols = i.columns.map(quoteIdent).join(', ')
+  return `CREATE${i.unique ? ' UNIQUE' : ''} INDEX ${quoteIdent(i.name)} ON ${quoteIdent(table)} (${cols});`
 }
 
-function emitAddFk(_table: string, _fk: import('../snapshot/types').ForeignKeySnapshot): string {
-  return '-- fk emit: filled in Task 17'
+const FK_ACTIONS: Record<string, string> = {
+  cascade: 'CASCADE',
+  restrict: 'RESTRICT',
+  set_null: 'SET NULL',
+  set_default: 'SET DEFAULT',
+  no_action: 'NO ACTION',
+}
+
+function emitAddFk(table: string, fk: import('../snapshot/types').ForeignKeySnapshot): string {
+  const cols = fk.columns.map(quoteIdent).join(', ')
+  const refCols = fk.refColumns.map(quoteIdent).join(', ')
+  return (
+    `ALTER TABLE ${quoteIdent(table)} ADD CONSTRAINT ${quoteIdent(fk.name)} ` +
+    `FOREIGN KEY (${cols}) REFERENCES ${quoteIdent(fk.refTable)} (${refCols}) ` +
+    `ON DELETE ${FK_ACTIONS[fk.onDelete]} ON UPDATE ${FK_ACTIONS[fk.onUpdate]};`
+  )
 }
 
 function emitCreateTable(t: TableSnapshot): string {
