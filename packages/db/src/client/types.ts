@@ -1,5 +1,7 @@
 import type { Kysely, Dialect as KyselyDialect } from 'kysely'
 
+import type { RegisteredDB } from './register'
+
 export interface QueryEvent {
   sql: string
   parameters: readonly unknown[]
@@ -52,7 +54,7 @@ export interface KickDbClientEvents {
  * functions of the underlying Kysely instance — that keeps us in sync with
  * Kysely's own type evolution without manual mirroring.
  */
-export interface KickDbClient<DB = unknown> {
+export interface KickDbClient<DB = RegisteredDB> {
   readonly kysely: Kysely<DB>
   readonly dialect: 'postgres' | 'sqlite' | 'mysql'
 
