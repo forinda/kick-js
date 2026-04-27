@@ -21,8 +21,8 @@ export function boolean(): ColumnBuilder {
 }
 
 export class TimestampBuilder extends ColumnBuilder {
-  constructor() {
-    super('timestamp')
+  constructor(typeName: string = 'timestamp') {
+    super(typeName)
   }
 
   defaultNow(): this {
@@ -32,7 +32,42 @@ export class TimestampBuilder extends ColumnBuilder {
 }
 
 export function timestamp(): TimestampBuilder {
-  return new TimestampBuilder()
+  return new TimestampBuilder('timestamp')
+}
+
+export function timestamptz(): TimestampBuilder {
+  return new TimestampBuilder('timestamptz')
+}
+
+export function char(length = 1): ColumnBuilder {
+  return new ColumnBuilder(`char(${length})`)
+}
+
+export function date(): ColumnBuilder {
+  return new ColumnBuilder('date')
+}
+
+export function time(): ColumnBuilder {
+  return new ColumnBuilder('time')
+}
+
+export function interval(): ColumnBuilder {
+  return new ColumnBuilder('interval')
+}
+
+export class UuidBuilder extends ColumnBuilder {
+  constructor() {
+    super('uuid')
+  }
+
+  defaultRandom(): this {
+    this.state.default = 'gen_random_uuid()'
+    return this
+  }
+}
+
+export function uuid(): UuidBuilder {
+  return new UuidBuilder()
 }
 
 export function bigSerial(): ColumnBuilder {

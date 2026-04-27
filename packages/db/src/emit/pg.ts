@@ -121,9 +121,10 @@ function emitColumnDecl(c: ColumnSnapshot): string {
 }
 
 function formatDefault(value: string): string {
-  // SQL keywords/functions stay bare; everything else is treated as a literal.
-  const upper = value.toUpperCase()
-  if (upper === 'CURRENT_TIMESTAMP' || upper === 'NOW()') return value
+  // SQL keywords pass through bare.
+  if (/^[A-Z_]+$/.test(value)) return value // CURRENT_TIMESTAMP, CURRENT_DATE, NULL, etc.
+  // SQL function calls pass through bare: NOW(), gen_random_uuid(), etc.
+  if (/^[a-z_][a-z0-9_]*\s*\([^)]*\)$/i.test(value)) return value
   if (/^-?\d+(\.\d+)?$/.test(value)) return value // numeric
   if (value === 'true' || value === 'false') return value // boolean literal
   return quoteLiteral(value)

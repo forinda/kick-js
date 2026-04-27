@@ -7,6 +7,7 @@ export {
   text,
   boolean,
   timestamp,
+  timestamptz,
   TimestampBuilder,
   bigSerial,
   bigint,
@@ -15,4 +16,10 @@ export {
   numeric,
   real,
   doublePrecision,
+  char,
+  date,
+  time,
+  interval,
+  uuid,
+  UuidBuilder,
 } from './builders'
