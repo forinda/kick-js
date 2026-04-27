@@ -27,6 +27,16 @@ export {
   type TopologyTokenEntry,
 } from './types'
 
+// M2.C — render-based tab contract. Coexists with the legacy
+// descriptor surface above; tabs migrate one at a time.
+export {
+  defineDevtoolsRenderTab,
+  type DevtoolsRenderTab,
+  type TabProps,
+  type TabRuntimeConfig,
+} from './tab'
+export type { KickEventBus, KickDevtoolsEventName, Unsubscribe } from './bus/types'
+
 export { RuntimeSampler, type RuntimeSamplerOptions } from './runtime-sampler'
 
 export {
