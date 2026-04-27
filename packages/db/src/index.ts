@@ -42,6 +42,8 @@ export {
   KICK_LOCK_TABLE,
 } from './migrate/schema'
 export { MemoryMigrationAdapter } from './migrate/memory-adapter'
+export { introspectPg } from './migrate/introspect-pg'
+export type { IntrospectPgOptions, PgQueryRunner } from './migrate/introspect-types'
 
 export {
   migrateLatest,
