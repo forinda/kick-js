@@ -116,6 +116,24 @@ export interface TypegenConfig {
    * @default 'src/env.ts'
    */
   envFile?: string | false
+  /**
+   * Built-in or user typegen plugin ids to skip during `kick typegen`,
+   * `kick dev`, and `kick typegen --watch`.
+   *
+   * The plugin still loads and merge-time conflict detection still
+   * runs — only the `generate()` invocation is skipped — so adopters
+   * who want to hand-write `KickDbRegister` (manual typeof-schema
+   * augmentation) can disable `'kick/db'` and keep the rest:
+   *
+   * @example
+   * typegen: {
+   *   disable: ['kick/db'],   // hand-written register.ts owns the type
+   * }
+   *
+   * Unrecognised ids are ignored — the list is treated as a wishlist,
+   * not a strict registry.
+   */
+  disable?: string[]
 }
 
 /** Module generation settings — controls how `kick g module` produces code */

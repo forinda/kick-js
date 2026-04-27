@@ -10,10 +10,8 @@
 
 import type { Command } from 'commander'
 import { runTypegen, TokenCollisionError, watchTypegen } from '../typegen'
-import { runTypegen as runPluginTypegens } from '../typegen/runner'
+import { runAllPluginTypegens } from '../typegen/run-plugins'
 import { loadKickConfig } from '../config'
-import { mergeCliPlugins } from '../plugin'
-import { builtinCliPlugins } from '../plugin/builtins'
 
 interface TypegenCliOptions {
   watch?: boolean
@@ -24,6 +22,7 @@ interface TypegenCliOptions {
   schemaValidator?: string
   envFile?: string
   check?: boolean
+  list?: boolean
 }
 
 /**
@@ -74,11 +73,37 @@ export function registerTypegenCommand(program: Command): void {
       "Path to env schema file for KickEnv typing (default 'src/env.ts'; pass 'false' to disable)",
     )
     .option('--check', 'CI gate: fail on plugin-typegen drift instead of writing')
+    .option('--list', 'List every registered typegen plugin id (use to populate `typegen.disable`)')
     .action(async (opts: TypegenCliOptions) => {
       const cwd = process.cwd()
 
       // CLI flag wins over kick.config.ts; the config sets the project default.
       const config = await loadKickConfig(cwd)
+
+      // --list short-circuits: print the registered typegen ids + their
+      // owning plugin and exit. Adopters use this to discover what to
+      // put in `typegen.disable`.
+      if (opts.list) {
+        const { mergeCliPlugins } = await import('../plugin')
+        const { builtinCliPlugins } = await import('../plugin/builtins')
+        const allPlugins = [...builtinCliPlugins, ...(config?.plugins ?? [])]
+        const merged = mergeCliPlugins(allPlugins, config?.commands ?? [])
+        const disabled = new Set(config?.typegen?.disable ?? [])
+        if (merged.typegens.length === 0) {
+          console.log('  No typegen plugins registered.')
+          return
+        }
+        const idWidth = Math.max(...merged.typegens.map((t) => t.id.length))
+        console.log('\n  Registered typegen plugins:\n')
+        for (const tg of merged.typegens) {
+          const status = disabled.has(tg.id) ? ' (disabled)' : ''
+          console.log(
+            `    ${tg.id.padEnd(idWidth + 2)}inputs: ${tg.inputs.join(', ') || '(none)'}${status}`,
+          )
+        }
+        console.log()
+        return
+      }
       const cliValidator = parseSchemaValidatorFlag(opts.schemaValidator)
       const schemaValidator = cliValidator ?? config?.typegen?.schemaValidator ?? 'zod'
       const envFile = parseEnvFileFlag(opts.envFile) ?? config?.typegen?.envFile
@@ -113,25 +138,18 @@ export function registerTypegenCommand(program: Command): void {
         } else {
           await runTypegen(baseOpts)
 
-          // Plugin-typegen pipeline runs after the legacy pass. Builtins
-          // ship the kick/db typegen; user plugins from kick.config.ts
-          // contribute their own. T8 will fold the legacy emitters into
-          // plugins and unify both paths into one runner call.
-          const allPlugins = [...builtinCliPlugins, ...(config?.plugins ?? [])]
-          const merged = mergeCliPlugins(allPlugins, config?.commands ?? [])
-          if (merged.typegens.length > 0) {
-            const results = await runPluginTypegens({
-              cwd,
-              config: config ?? ({} as never),
-              plugins: merged.typegens,
-              check: opts.check,
-            })
-            if (!opts.silent) {
-              for (const r of results) console.log(`  ${r.id}: ${r.status}`)
-            }
-            if (opts.check && results.some((r) => r.status === 'written')) {
-              process.exit(1)
-            }
+          // Plugin-typegen pipeline runs after the legacy pass. The
+          // helper handles merging builtins with user plugins, applies
+          // the `typegen.disable` filter, logs per-plugin status, and
+          // surfaces drift for the --check exit code.
+          const results = await runAllPluginTypegens({
+            cwd,
+            config: config ?? null,
+            silent: opts.silent,
+            check: opts.check,
+          })
+          if (opts.check && results.some((r) => r.status === 'written')) {
+            process.exit(1)
           }
         }
       } catch (err: unknown) {
