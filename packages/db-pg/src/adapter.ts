@@ -1,4 +1,3 @@
-import type { Pool } from 'pg'
 import {
   introspectPg,
   lockTableDdl,
@@ -9,8 +8,43 @@ import {
   type SchemaSnapshot,
 } from '@forinda/kickjs-db'
 
+/**
+ * Minimal client returned by PgPoolLike.connect(). Matches the shape of
+ * pg.PoolClient and @neondatabase/serverless's PoolClient.
+ */
+export interface PgClientLike {
+  query<R = unknown>(
+    sql: string,
+    params?: readonly unknown[],
+  ): Promise<{ rows: R[]; rowCount: number | null }>
+  release(): void
+}
+
+/**
+ * Pool-shaped contract that pgAdapter consumes. Both `pg.Pool` and
+ * `@neondatabase/serverless`'s Pool match this structurally — no hard
+ * dependency on the `pg` package. Adopters pick whichever pg-protocol-
+ * compatible client fits their runtime (node-postgres / neon-serverless /
+ * pg-cloudflare / etc).
+ *
+ * Edge runtimes with a different surface (Neon HTTP single-shot,
+ * Cloudflare D1's batch-only model) have their own adapter packages that
+ * implement MigrationAdapter directly — they don't reuse this shape.
+ */
+export interface PgPoolLike {
+  query<R = unknown>(
+    sql: string,
+    params?: readonly unknown[],
+  ): Promise<{ rows: R[]; rowCount: number | null }>
+  connect(): Promise<PgClientLike>
+}
+
 export interface PgAdapterOptions {
-  pool: Pool
+  /**
+   * A pg-protocol-compatible Pool. Concretely: pg.Pool, neon-serverless Pool,
+   * any other Pool that satisfies the {@link PgPoolLike} structural shape.
+   */
+  pool: PgPoolLike
   /** PG schema name to scope the introspector and validate at construction. Default 'public'. */
   schema?: string
 }
