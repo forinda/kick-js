@@ -15,58 +15,110 @@ export interface GenerateOptions {
   config: DbConfig
   cwd: string
   now?: () => Date
+  /**
+   * When true, skip the schema diff and emit an empty migration shell
+   * (up.sql / down.sql with just the REVIEWED header, snapshot.json copying
+   * the prior schema state). Used for data migrations, seed inserts, or any
+   * change the diff engine can't author. Matches knex's `migrate:make`.
+   */
+  empty?: boolean
 }
 
 export interface GenerateResult {
   status: 'created' | 'no-changes'
   migrationDir?: string
   changeCount: number
+  empty?: boolean
 }
 
 export async function generate(opts: GenerateOptions): Promise<GenerateResult> {
-  const schemaAbs = path.resolve(opts.cwd, opts.config.schemaPath)
   const migrationsAbs = path.resolve(opts.cwd, opts.config.migrationsDir)
+  const { snapshot: prev, id: previousId } = await readLatestSnapshotEntry(migrationsAbs)
 
+  if (opts.empty) {
+    return await writeMigration({
+      opts,
+      migrationsAbs,
+      previousId,
+      // Empty migrations don't change schema state — keep the prior snapshot
+      // so the next diff-based generate stays consistent.
+      target: prev,
+      upBody: '',
+      downBody: '',
+      changeCount: 0,
+      draft: false,
+      empty: true,
+    })
+  }
+
+  const schemaAbs = path.resolve(opts.cwd, opts.config.schemaPath)
   const schemaModule = await import(pathToFileURL(schemaAbs).href)
   const target = extractSnapshot(schemaModule, opts.config.dialect)
-
-  const { snapshot: prev, id: previousId } = await readLatestSnapshotEntry(migrationsAbs)
   const changes = diff(prev, target)
 
   if (changes.length === 0) {
     return { status: 'no-changes', changeCount: 0 }
   }
 
-  const id = formatId(opts.now?.() ?? new Date(), opts.name)
-  const dir = path.join(migrationsAbs, id)
+  return await writeMigration({
+    opts,
+    migrationsAbs,
+    previousId,
+    target,
+    upBody: emitPg(changes),
+    downBody: emitPg(invertChanges(changes)),
+    changeCount: changes.length,
+    draft: hasAmbiguousReverse(changes),
+    empty: false,
+  })
+}
+
+interface WriteMigrationParams {
+  opts: GenerateOptions
+  migrationsAbs: string
+  previousId: string | null
+  target: SchemaSnapshot
+  upBody: string
+  downBody: string
+  changeCount: number
+  draft: boolean
+  empty: boolean
+}
+
+async function writeMigration(p: WriteMigrationParams): Promise<GenerateResult> {
+  const id = formatId(p.opts.now?.() ?? new Date(), p.opts.name)
+  const dir = path.join(p.migrationsAbs, id)
   await mkdir(dir, { recursive: true })
 
-  const upSql = '-- REVIEWED: false\n' + emitPg(changes) + '\n'
+  const upHeader = '-- REVIEWED: false\n'
+  const upHint = p.empty
+    ? '-- Empty migration — author SQL below (data migration, seed, etc).\n'
+    : ''
+  const upSql = upHeader + upHint + p.upBody + (p.upBody ? '\n' : '')
   await writeFile(path.join(dir, 'up.sql'), upSql, 'utf8')
 
-  const draft = hasAmbiguousReverse(changes)
-  const downSql =
-    '-- REVIEWED: false\n' +
-    (draft
-      ? '-- DRAFT: ambiguous reverses present (drop column / drop table / type change). Audit before applying.\n'
-      : '') +
-    emitPg(invertChanges(changes)) +
-    '\n'
+  const downHeader = '-- REVIEWED: false\n'
+  const downDraft = p.draft
+    ? '-- DRAFT: ambiguous reverses present (drop column / drop table / type change). Audit before applying.\n'
+    : ''
+  const downHint = p.empty ? '-- Empty migration — author the reverse SQL here.\n' : ''
+  const downSql = downHeader + downDraft + downHint + p.downBody + (p.downBody ? '\n' : '')
   await writeFile(path.join(dir, 'down.sql'), downSql, 'utf8')
 
-  await writeFile(path.join(dir, 'snapshot.json'), JSON.stringify(target, null, 2) + '\n', 'utf8')
+  await writeFile(path.join(dir, 'snapshot.json'), JSON.stringify(p.target, null, 2) + '\n', 'utf8')
 
   await writeFile(
     path.join(dir, 'meta.json'),
     JSON.stringify(
       {
         id,
-        name: opts.name,
-        createdAt: (opts.now?.() ?? new Date()).toISOString(),
+        name: p.opts.name,
+        createdAt: (p.opts.now?.() ?? new Date()).toISOString(),
         reviewed: false,
-        dialect: opts.config.dialect,
-        previousId,
-        downIsDraft: draft,
+        dialect: p.opts.config.dialect,
+        previousId: p.previousId,
+        downIsDraft: p.draft,
+        empty: p.empty,
       },
       null,
       2,
@@ -74,7 +126,7 @@ export async function generate(opts: GenerateOptions): Promise<GenerateResult> {
     'utf8',
   )
 
-  return { status: 'created', migrationDir: dir, changeCount: changes.length }
+  return { status: 'created', migrationDir: dir, changeCount: p.changeCount, empty: p.empty }
 }
 
 interface LatestEntry {

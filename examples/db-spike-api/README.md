@@ -18,11 +18,25 @@ the `kick db generate` CLI surface works end-to-end:
 From this directory:
 
 ```bash
+# Diff-based: walks the schema, emits up.sql + down.sql + snapshot.json.
 pnpm db:generate init
+
+# Empty shell: skip the diff, scaffold up.sql + down.sql you fill in.
+# Use for seeds, data migrations, anything the diff engine can't author.
+pnpm db:generate seed_default_users -- --empty
 ```
 
-First run creates `db/migrations/<timestamp>_init/`. Re-running with no
-schema change prints `No schema changes detected.` and exits 0.
+First diff-based run creates `db/migrations/<timestamp>_init/`. Re-running
+with no schema change prints `No schema changes detected.` and exits 0.
+
+`--empty` always creates a new migration regardless of schema state — the
+shell pre-loads `-- REVIEWED: false` markers and a hint comment so you
+fill in your SQL and flip the marker before applying.
+
+`meta.json` chains migrations via `previousId` (the prior migration's id,
+`null` on the first), and records `empty: true|false` and `downIsDraft`
+(true when the forward changes have ambiguous reverses — drop column,
+drop table, type change).
 
 ## What's intentionally missing
 
