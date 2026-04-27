@@ -22,6 +22,7 @@ import { registerTypegenCommand } from '../commands/typegen'
 import { registerCheckCommand } from '../commands/check'
 import { registerDbCommands } from '../commands/db'
 import { kickDbTypegen } from '../typegen/builtin/db'
+import { kickAssetsTypegen } from '../typegen/builtin/assets'
 
 import { defineCliPlugin, type KickCliPlugin } from './types'
 
@@ -40,4 +41,10 @@ export const builtinCliPlugins: readonly KickCliPlugin[] = [
   defineCliPlugin({ name: 'kick/typegen', register: registerTypegenCommand }),
   defineCliPlugin({ name: 'kick/check', register: registerCheckCommand }),
   defineCliPlugin({ name: 'kick/db', register: registerDbCommands, typegens: [kickDbTypegen()] }),
+  // kick/assets is typegen-only — the asset manager itself is wired
+  // via @forinda/kickjs runtime, not the CLI. M2.B-T8 carved it out
+  // first (smallest legacy section, cleanest extraction). Routes/env
+  // follow once their generator-side `import` strategies move to the
+  // inline `import('...')` shape that .d.ts files tolerate.
+  defineCliPlugin({ name: 'kick/assets', typegens: [kickAssetsTypegen()] }),
 ]
