@@ -34,6 +34,14 @@ export {
   type JournalEntry,
 } from './migrate/journal'
 
+export type { MigrationAdapter, MigrationRow } from './migrate/adapter'
+export {
+  migrationsTableDdl,
+  lockTableDdl,
+  KICK_MIGRATIONS_TABLE,
+  KICK_LOCK_TABLE,
+} from './migrate/schema'
+
 export { emitPg } from './emit/pg'
 
 export { resolveDbConfig, type DbConfig } from './cli/config'
