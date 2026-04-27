@@ -2,6 +2,10 @@
 
 KickJS lets you extend the CLI with project-specific commands defined in `kick.config.ts`. These appear alongside built-in commands in `kick --help`.
 
+::: tip Distributing commands as a package
+Adopter `commands` in `kick.config.ts` are the simplest path for project-local shell wrappers. If you want to ship commands (plus generators or typegens) inside a published package, write a `KickCliPlugin` and expose them via `plugins[]` instead — see [CLI Plugins](./cli-plugins.md).
+:::
+
 ## Configuration
 
 Create a `kick.config.ts` (or `.js`, `.mjs`, `.json`) in your project root:

@@ -14,6 +14,8 @@ kick g module <name> --pattern <pattern>
 
 That `--pattern` flag is where the magic lives. KickJS ships four architecture patterns: `minimal`, `rest`, `ddd`, and `cqrs`. Each one generates a different number of files with a different structural philosophy. Instead of forcing you into one way of building modules, the generator lets you pick the right level of complexity for the job at hand. I have been building Vibed, a task management backend, with KickJS for several months now. Along the way I have used all four patterns, and I want to walk through what each one gives you and when to reach for it.
 
+> All directory layouts in this article reflect the **default** that `kick g module` writes. The generator reads `kick.config.ts > modules.dir` (default `src/modules`) for the project root and respects per-invocation overrides — none of these paths are framework-enforced.
+
 ## Pattern 1: minimal (2 files)
 
 ```bash

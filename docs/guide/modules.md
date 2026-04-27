@@ -134,10 +134,10 @@ No other code changes are needed -- use cases inject via the `TODO_REPOSITORY` s
 
 ## Composing Modules
 
-Modules are collected into an array and passed to `bootstrap()`:
+Modules are collected into an array and passed to `bootstrap()`. The default scaffold collects them in `src/modules/index.ts` (matching `modules.dir` from `kick.config.ts`), but the location is just a convention — `bootstrap()` only cares that you hand it an array of module classes.
 
 ```ts
-// src/modules/index.ts
+// src/modules/index.ts (default location — configurable)
 import type { AppModuleClass } from '@forinda/kickjs'
 import { TodoModule } from './todos'
 import { UserModule } from './users'

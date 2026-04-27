@@ -4,6 +4,14 @@ The `kick generate` command (alias `kick g`) scaffolds code following KickJS con
 
 Run `kick g --list` to see all available generators at a glance.
 
+::: tip Default paths are conventions, not rules
+Generators emit files into `src/modules/`, `src/middleware/`, `src/plugins/`, `src/adapters/`, and friends because that's the layout `kick new` ships. None of these paths are hard-coded in the framework — adopters can override `modules.dir` in `kick.config.ts`, pass `-o, --out` per invocation, or rearrange entirely. The trees below show the **default layout** that the generators produce out of the box.
+:::
+
+::: tip Plugins can ship their own generators
+Third-party packages can extend `kick g` via the [CLI plugin contract](./cli-plugins.md). Generators authored with `defineGenerator` and exposed through a `KickCliPlugin.generators[]` show up in `kick g --list` for any project that wires the plugin. See [Plugin Generators](./plugin-generators.md) for the authoring path.
+:::
+
 ## kick g module
 
 Generate one or more modules. Structure depends on the project `pattern` in `kick.config.ts`.
