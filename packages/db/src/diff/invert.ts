@@ -58,6 +58,16 @@ function invert(change: Change): Change {
       return { kind: 'dropForeignKey', table: change.table, fk: change.fk }
     case 'dropForeignKey':
       return { kind: 'addForeignKey', table: change.table, fk: change.fk }
+    case 'createEnum':
+      return { kind: 'dropEnum', enum: change.enum }
+    case 'dropEnum':
+      return { kind: 'createEnum', enum: change.enum }
+    case 'addEnumValue':
+      // PG can't ALTER TYPE … DROP VALUE without recreating the type +
+      // touching every column that uses it. Down-migrations carry the
+      // forward change verbatim; the operator gets a draft + a clear
+      // signal that the down won't auto-revert.
+      return change
   }
 }
 
@@ -66,7 +76,15 @@ function invert(change: Change): Change {
  * drop table, type widen — so the generator can flag the down.sql as a draft
  * even if every individual statement is technically valid SQL.
  */
-const AMBIGUOUS_REVERSE_KINDS = new Set<Change['kind']>(['dropTable', 'dropColumn', 'alterColumn'])
+const AMBIGUOUS_REVERSE_KINDS = new Set<Change['kind']>([
+  'dropTable',
+  'dropColumn',
+  'alterColumn',
+  // PG enum value additions can't auto-reverse — drop-value isn't
+  // supported without recreating the type. The down draft surfaces
+  // the forward statement so the operator manually rewrites it.
+  'addEnumValue',
+])
 
 export function hasAmbiguousReverse(forward: ChangeSet): boolean {
   return forward.some((c) => AMBIGUOUS_REVERSE_KINDS.has(c.kind))

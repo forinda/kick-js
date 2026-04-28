@@ -30,6 +30,16 @@ function emitChange(change: Change): string {
       return emitAddFk(change.table, change.fk)
     case 'dropForeignKey':
       return `ALTER TABLE ${quoteIdent(change.table)} DROP CONSTRAINT ${quoteIdent(change.fk.name)};`
+    case 'createEnum': {
+      const values = change.enum.values.map((v) => quoteLiteral(v)).join(', ')
+      return `CREATE TYPE ${quoteIdent(change.enum.name)} AS ENUM (${values});`
+    }
+    case 'dropEnum':
+      return `DROP TYPE ${quoteIdent(change.enum.name)};`
+    case 'addEnumValue': {
+      const before = change.before ? ` BEFORE ${quoteLiteral(change.before)}` : ''
+      return `ALTER TYPE ${quoteIdent(change.enum)} ADD VALUE ${quoteLiteral(change.value)}${before};`
+    }
   }
 }
 

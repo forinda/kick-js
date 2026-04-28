@@ -1,5 +1,6 @@
 import type {
   ColumnSnapshot,
+  EnumSnapshot,
   ForeignKeySnapshot,
   IndexSnapshot,
   TableSnapshot,
@@ -72,6 +73,30 @@ export interface DropForeignKey {
   fk: ForeignKeySnapshot
 }
 
+export interface CreateEnum {
+  kind: 'createEnum'
+  enum: EnumSnapshot
+}
+
+export interface DropEnum {
+  kind: 'dropEnum'
+  enum: EnumSnapshot
+}
+
+/**
+ * PG ALTER TYPE … ADD VALUE — non-destructive value addition.
+ * Removed values + reorderings can't round-trip without dropping
+ * dependent columns; the diff engine surfaces them as a NoOp + a
+ * comment inside emit so the adopter writes a manual migration.
+ */
+export interface AddEnumValue {
+  kind: 'addEnumValue'
+  enum: string
+  value: string
+  /** When set, emit `ALTER TYPE … ADD VALUE 'x' BEFORE 'y'`. */
+  before?: string
+}
+
 export type Change =
   | CreateTable
   | DropTable
@@ -84,5 +109,8 @@ export type Change =
   | DropIndex
   | AddForeignKey
   | DropForeignKey
+  | CreateEnum
+  | DropEnum
+  | AddEnumValue
 
 export type ChangeSet = Change[]

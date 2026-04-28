@@ -38,8 +38,21 @@ export interface TableSnapshot {
   checks: CheckSnapshot[]
 }
 
+/**
+ * PostgreSQL ENUM type declaration. Currently PG-only; the field is
+ * optional on `SchemaSnapshot` so other dialects don't have to carry
+ * a phantom `enums: {}`.
+ */
+export interface EnumSnapshot {
+  name: string
+  /** Allowed values, in declaration order. PG preserves the order. */
+  values: readonly string[]
+}
+
 export interface SchemaSnapshot {
   version: 1
   dialect: Dialect
   tables: Record<string, TableSnapshot>
+  /** ENUM types declared via `pgEnum()`. PG-only; absent on other dialects. */
+  enums?: Record<string, EnumSnapshot>
 }

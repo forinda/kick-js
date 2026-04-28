@@ -7,6 +7,13 @@ export function diff(prev: SchemaSnapshot, next: SchemaSnapshot): ChangeSet {
   const prevTables = new Set(Object.keys(prev.tables))
   const nextTables = new Set(Object.keys(next.tables))
 
+  // Enum diffs run BEFORE table operations on the create side (so a new
+  // table referencing a new enum sees the type already exist) and AFTER
+  // table operations on the drop side (so a dropped enum can't have
+  // dangling column references). Order: createEnum → addEnumValue →
+  // table changes → dropEnum (appended at the end).
+  diffEnumsCreatePhase(prev, next, changes)
+
   // Drops first (so FKs that depend on dropped tables are handled before drops below)
   for (const name of prevTables) {
     if (!nextTables.has(name)) {
@@ -40,7 +47,61 @@ export function diff(prev: SchemaSnapshot, next: SchemaSnapshot): ChangeSet {
     diffTable(prev.tables[name], next.tables[name], changes)
   }
 
+  // Drop enums after every dependent table change has been emitted.
+  diffEnumsDropPhase(prev, next, changes)
+
   return changes
+}
+
+function diffEnumsCreatePhase(prev: SchemaSnapshot, next: SchemaSnapshot, changes: Change[]) {
+  const prevEnums = prev.enums ?? {}
+  const nextEnums = next.enums ?? {}
+
+  // New enums first.
+  for (const [name, e] of Object.entries(nextEnums)) {
+    if (prevEnums[name]) continue
+    changes.push({ kind: 'createEnum', enum: e })
+  }
+
+  // ALTER TYPE ADD VALUE for non-destructive value additions on
+  // existing enums. Removed / reordered values are NOT round-trippable
+  // without dropping every column that references the type — those
+  // surface as a no-op + a comment in emit so the adopter writes a
+  // manual migration.
+  for (const [name, e] of Object.entries(nextEnums)) {
+    const prior = prevEnums[name]
+    if (!prior) continue
+    const priorValues = new Set(prior.values)
+    const nextValueList = e.values
+    let lastInsertedAt = -1
+    for (let i = 0; i < nextValueList.length; i++) {
+      const value = nextValueList[i]
+      if (priorValues.has(value)) {
+        lastInsertedAt = i
+        continue
+      }
+      // New value — emit ADD VALUE. PG honours the BEFORE clause so
+      // we preserve the declaration order on existing values.
+      const before = nextValueList[i + 1]
+      const beforeIsExisting = before != null && priorValues.has(before)
+      changes.push({
+        kind: 'addEnumValue',
+        enum: name,
+        value,
+        ...(beforeIsExisting ? { before } : {}),
+      })
+      void lastInsertedAt
+    }
+  }
+}
+
+function diffEnumsDropPhase(prev: SchemaSnapshot, next: SchemaSnapshot, changes: Change[]) {
+  const prevEnums = prev.enums ?? {}
+  const nextEnums = next.enums ?? {}
+  for (const [name, e] of Object.entries(prevEnums)) {
+    if (nextEnums[name]) continue
+    changes.push({ kind: 'dropEnum', enum: e })
+  }
 }
 
 function diffTable(prev: TableSnapshot, next: TableSnapshot, changes: Change[]) {
