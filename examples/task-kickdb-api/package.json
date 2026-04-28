@@ -22,7 +22,7 @@
     "@forinda/kickjs": "workspace:*",
     "@forinda/kickjs-db": "workspace:*",
     "@forinda/kickjs-db-pg": "workspace:*",
-    "dotenv": "^17.3.1",
+    "dotenv": "^17.4.2",
     "express": "^5.1.0",
     "kysely": "^0.28.16",
     "pg": "^8.13.1",
