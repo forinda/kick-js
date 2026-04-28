@@ -59,12 +59,12 @@ export const ContainerTab: Component = () => {
   }
 
   return (
-    <div class="bg-slate-900 rounded-xl border border-slate-800 p-5">
+    <div class="bg-surface-1 rounded-xl border border-border p-5">
       {/* Toolbar — search + kind + scope */}
       <div class="flex flex-col gap-3 mb-4">
         <div class="relative">
           <svg
-            class="absolute left-3 top-2.5 w-4 h-4 text-slate-500"
+            class="absolute left-3 top-2.5 w-4 h-4 text-text-muted"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -82,13 +82,13 @@ export const ContainerTab: Component = () => {
             placeholder="Search tokens…"
             value={search()}
             onInput={(e) => setSearch(e.currentTarget.value)}
-            class="w-full bg-slate-800 border border-slate-700 rounded-lg pl-10 pr-4 py-2 text-sm
-                   text-slate-200 placeholder-slate-500 focus:outline-none focus:border-kick-500"
+            class="w-full bg-surface-2 border border-border-strong rounded-lg pl-10 pr-4 py-2 text-sm
+                   text-text-body placeholder:text-text-muted focus:outline-none focus:border-kick-500"
           />
         </div>
         <div class="flex flex-col sm:flex-row gap-3">
           <div class="flex gap-1 items-center">
-            <span class="text-xs text-slate-500 mr-1">Kind:</span>
+            <span class="text-xs text-text-muted mr-1">Kind:</span>
             <For each={KINDS}>
               {(k) => (
                 <button
@@ -97,7 +97,7 @@ export const ContainerTab: Component = () => {
                   class={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors border ${
                     kind() === k
                       ? kindActiveClass(k)
-                      : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'
+                      : 'bg-surface-2 text-text-secondary border-border-strong hover:text-text-body'
                   }`}
                 >
                   {k}
@@ -106,7 +106,7 @@ export const ContainerTab: Component = () => {
             </For>
           </div>
           <div class="flex gap-1 items-center">
-            <span class="text-xs text-slate-500 mr-1">Scope:</span>
+            <span class="text-xs text-text-muted mr-1">Scope:</span>
             <For each={SCOPES}>
               {(s) => (
                 <button
@@ -115,7 +115,7 @@ export const ContainerTab: Component = () => {
                   class={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors border ${
                     scope() === s
                       ? 'bg-kick-500/20 text-kick-500 border-kick-500/30'
-                      : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'
+                      : 'bg-surface-2 text-text-secondary border-border-strong hover:text-text-body'
                   }`}
                 >
                   {s}
@@ -163,7 +163,7 @@ export const ContainerTab: Component = () => {
                     >
                       <td>
                         <svg
-                          class={`w-3 h-3 text-slate-500 transition-transform ${
+                          class={`w-3 h-3 text-text-muted transition-transform ${
                             expanded().has(r.token) ? 'rotate-90' : ''
                           }`}
                           fill="none"
@@ -186,7 +186,7 @@ export const ContainerTab: Component = () => {
                         </span>
                       </td>
                       <td>
-                        <span class="bg-slate-700/50 text-slate-300 px-2 py-0.5 rounded text-xs font-semibold">
+                        <span class="bg-border-strong/50 text-text-strong px-2 py-0.5 rounded text-xs font-semibold">
                           {r.scope ?? '—'}
                         </span>
                       </td>
@@ -196,13 +196,13 @@ export const ContainerTab: Component = () => {
                         </span>
                       </td>
                       <td class="text-right tabular-nums">{r.resolveCount ?? 0}</td>
-                      <td class="text-right text-slate-500 text-xs">
+                      <td class="text-right text-text-muted text-xs">
                         {r.dependencies?.length ?? 0}
                       </td>
                     </tr>
                     <Show when={expanded().has(r.token)}>
                       <tr>
-                        <td colspan={7} class="bg-slate-800/30 px-6 py-4 border-b border-slate-800">
+                        <td colspan={7} class="bg-surface-2/30 px-6 py-4 border-b border-border">
                           <ExpandedDetail registration={r} />
                         </td>
                       </tr>
@@ -224,19 +224,19 @@ const ExpandedDetail: Component<{ registration: ContainerRegistration }> = (prop
   return (
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
-        <h4 class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
+        <h4 class="text-xs font-semibold uppercase tracking-wider text-text-muted mb-2">
           Dependencies
         </h4>
         <Show
           when={(props.registration.dependencies?.length ?? 0) > 0}
-          fallback={<span class="text-slate-600 text-sm">None</span>}
+          fallback={<span class="text-text-muted text-sm">None</span>}
         >
           <div class="flex flex-wrap gap-1">
             <For each={props.registration.dependencies}>
               {(dep) => (
                 <button
                   type="button"
-                  class="bg-slate-700/50 text-kick-500 hover:bg-slate-700 px-2 py-0.5 rounded text-xs font-mono transition-colors"
+                  class="bg-border-strong/50 text-kick-500 hover:bg-border-strong px-2 py-0.5 rounded text-xs font-mono transition-colors"
                   onClick={(e) => {
                     e.stopPropagation()
                     openDetailModal(dep)
@@ -251,18 +251,18 @@ const ExpandedDetail: Component<{ registration: ContainerRegistration }> = (prop
         </Show>
       </div>
       <div>
-        <h4 class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
+        <h4 class="text-xs font-semibold uppercase tracking-wider text-text-muted mb-2">
           Resolve Stats
         </h4>
         <div class="space-y-1 text-sm">
           <div class="flex justify-between">
-            <span class="text-slate-400">Resolve count</span>
+            <span class="text-text-secondary">Resolve count</span>
             <span class="tabular-nums">{props.registration.resolveCount ?? 0}</span>
           </div>
           <Show when={props.registration.firstResolved}>
             {(ts) => (
               <div class="flex justify-between">
-                <span class="text-slate-400">First resolved</span>
+                <span class="text-text-secondary">First resolved</span>
                 <span class="text-xs">{new Date(ts()).toLocaleTimeString()}</span>
               </div>
             )}
@@ -270,14 +270,14 @@ const ExpandedDetail: Component<{ registration: ContainerRegistration }> = (prop
           <Show when={props.registration.lastResolved}>
             {(ts) => (
               <div class="flex justify-between">
-                <span class="text-slate-400">Last resolved</span>
+                <span class="text-text-secondary">Last resolved</span>
                 <span class="text-xs">{new Date(ts()).toLocaleTimeString()}</span>
               </div>
             )}
           </Show>
           <Show when={props.registration.resolveDurationMs != null}>
             <div class="flex justify-between">
-              <span class="text-slate-400">Duration</span>
+              <span class="text-text-secondary">Duration</span>
               <span class="tabular-nums">
                 {(props.registration.resolveDurationMs ?? 0).toFixed(2)}ms
               </span>
@@ -286,7 +286,7 @@ const ExpandedDetail: Component<{ registration: ContainerRegistration }> = (prop
         </div>
       </div>
       <div>
-        <h4 class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
+        <h4 class="text-xs font-semibold uppercase tracking-wider text-text-muted mb-2">
           PostConstruct
           <InfoTip metric="post-construct" />
         </h4>
@@ -316,14 +316,14 @@ function kindBadge(kind: string | undefined): string {
   if (kind === 'controller') return 'bg-violet-900/50 text-violet-300'
   if (kind === 'service') return 'bg-blue-900/50 text-blue-300'
   if (kind === 'repository') return 'bg-teal-900/50 text-teal-300'
-  return 'bg-slate-700/50 text-slate-300'
+  return 'bg-border-strong/50 text-text-strong'
 }
 
 function kindActiveClass(k: KindFilter): string {
   if (k === 'controller') return 'bg-violet-900/50 text-violet-300 border-violet-700/50'
   if (k === 'service') return 'bg-blue-900/50 text-blue-300 border-blue-700/50'
   if (k === 'repository') return 'bg-teal-900/50 text-teal-300 border-teal-700/50'
-  if (k === 'other') return 'bg-slate-700/50 text-slate-300 border-slate-600/50'
+  if (k === 'other') return 'bg-border-strong/50 text-text-strong border-border-strong/50'
   return 'bg-kick-500/20 text-kick-500 border-kick-500/30'
 }
 
@@ -342,5 +342,5 @@ function statusLabel(r: ContainerRegistration): string {
 function postConstructBadge(status: string | undefined): string {
   if (status === 'done') return 'bg-emerald-900/50 text-emerald-300'
   if (status === 'failed') return 'bg-red-900/50 text-red-300'
-  return 'bg-slate-700/50 text-slate-400'
+  return 'bg-border-strong/50 text-text-secondary'
 }

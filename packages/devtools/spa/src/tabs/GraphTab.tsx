@@ -45,11 +45,11 @@ export const GraphTab: Component = () => {
   )
 
   return (
-    <div class="bg-slate-900 rounded-xl border border-slate-800 p-5">
+    <div class="bg-surface-1 rounded-xl border border-border p-5">
       {/* Search */}
       <div class="relative mb-4">
         <svg
-          class="absolute left-3 top-2.5 w-4 h-4 text-slate-500"
+          class="absolute left-3 top-2.5 w-4 h-4 text-text-muted"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -67,8 +67,8 @@ export const GraphTab: Component = () => {
           placeholder="Filter graph (token or kind)…"
           value={search()}
           onInput={(e) => setSearch(e.currentTarget.value)}
-          class="w-full bg-slate-800 border border-slate-700 rounded-lg pl-10 pr-4 py-2 text-sm
-                 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-kick-500"
+          class="w-full bg-surface-2 border border-border-strong rounded-lg pl-10 pr-4 py-2 text-sm
+                 text-text-body placeholder:text-text-muted focus:outline-none focus:border-kick-500"
         />
       </div>
 
@@ -99,7 +99,7 @@ const GroupSection: Component<{ label: string; nodes: ContainerRegistration[] }>
     <div>
       <h3 class={`text-xs font-semibold uppercase tracking-wider mb-2 ${labelColor(props.label)}`}>
         {props.label}
-        <span class="ml-2 text-slate-600 font-normal normal-case">
+        <span class="ml-2 text-text-muted font-normal normal-case">
           ({props.nodes.length})
         </span>
       </h3>
@@ -115,21 +115,21 @@ const NodeRow: Component<{ node: ContainerRegistration }> = (props) => {
   return (
     <button
       type="button"
-      class="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-800/50 transition-colors group"
+      class="w-full text-left px-3 py-2 rounded-lg hover:bg-surface-2/50 transition-colors group"
       onClick={() => openDetailModal(props.node.token)}
     >
       <div class="flex items-center gap-2">
         <span class={`px-2 py-0.5 rounded text-xs font-semibold ${kindBadge(props.node.kind)}`}>
           {kindShort(props.node.kind)}
         </span>
-        <span class="font-mono text-sm text-slate-200 break-all">{props.node.token}</span>
+        <span class="font-mono text-sm text-text-body break-all">{props.node.token}</span>
         <Show when={props.node.scope}>
-          <span class="bg-slate-700/50 text-slate-400 px-1.5 py-0.5 rounded text-xs">
+          <span class="bg-border-strong/50 text-text-secondary px-1.5 py-0.5 rounded text-xs">
             {props.node.scope}
           </span>
         </Show>
         <Show when={(props.node.resolveCount ?? 0) > 0}>
-          <span class="text-slate-600 text-xs ml-auto tabular-nums">
+          <span class="text-text-muted text-xs ml-auto tabular-nums">
             {props.node.resolveCount} resolves
           </span>
         </Show>
@@ -140,14 +140,14 @@ const NodeRow: Component<{ node: ContainerRegistration }> = (props) => {
           <For each={deps()}>
             {(dep) => (
               <div
-                class="flex items-center gap-2 text-xs text-slate-500 hover:text-slate-300"
+                class="flex items-center gap-2 text-xs text-text-muted hover:text-text-strong"
                 onClick={(e) => {
                   e.stopPropagation()
                   openDetailModal(dep)
                 }}
               >
                 <svg
-                  class="w-3 h-3 text-slate-600"
+                  class="w-3 h-3 text-text-muted"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -184,14 +184,14 @@ function kindBadge(kind: string | undefined): string {
   if (kind === 'controller') return 'bg-violet-900/50 text-violet-300'
   if (kind === 'service') return 'bg-blue-900/50 text-blue-300'
   if (kind === 'repository') return 'bg-teal-900/50 text-teal-300'
-  return 'bg-slate-700/50 text-slate-300'
+  return 'bg-border-strong/50 text-text-strong'
 }
 
 function labelColor(label: string): string {
   if (label === 'Controllers') return 'text-violet-400'
   if (label === 'Services') return 'text-blue-400'
   if (label === 'Repositories') return 'text-teal-400'
-  return 'text-slate-400'
+  return 'text-text-secondary'
 }
 
 /**
