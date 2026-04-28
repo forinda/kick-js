@@ -39,6 +39,17 @@ describe('pgEnum()', () => {
     }>()
   })
 
+  it('values stay narrow even when inferred from a stored variable', () => {
+    // Regression — without `const TValues` the array would widen to
+    // `string[]` and the phantom would resolve to plain `string`.
+    const VALUES = ['todo', 'in_progress', 'done']
+    const status = pgEnum('task_status', VALUES)
+    const col = status()
+
+    type Phantom = (typeof col)['__t']
+    expectTypeOf<Phantom>().toEqualTypeOf<('todo' | 'in_progress' | 'done') | undefined>()
+  })
+
   it('two factory invocations produce independent column instances (no shared mutation)', () => {
     const role = pgEnum('role', ['admin', 'user'])
     const a = role()

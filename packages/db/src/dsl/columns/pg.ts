@@ -54,7 +54,12 @@ export class PgEnumColumnBuilder<
   }
 }
 
-export function pgEnum<TName extends string, TValues extends readonly string[]>(
+// `const TValues` forces TS to infer the LITERAL tuple instead of
+// widening to `string[]`. Without this an adopter calling
+// `pgEnum('s', ['todo', 'done'])` would land with values typed as
+// `string[]` and the column phantom would resolve to plain `string`,
+// defeating the entire point of the helper.
+export function pgEnum<TName extends string, const TValues extends readonly string[]>(
   name: TName,
   values: TValues,
 ): PgEnumBuilder<TName, TValues> {
