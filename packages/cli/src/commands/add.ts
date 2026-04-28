@@ -1,6 +1,6 @@
 import { execSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { dirname, resolve } from 'node:path'
 import type { Command } from 'commander'
 import { loadKickConfig, PACKAGE_MANAGERS, type PackageManager } from '../config'
 
@@ -40,6 +40,16 @@ const PACKAGE_REGISTRY: Record<
     description: 'OpenAPI spec + Swagger UI + ReDoc',
   },
   // Database
+  db: {
+    pkg: '@forinda/kickjs-db',
+    peers: [],
+    description: 'kick/db core — schema DSL, migrations, KickDbClient, customType',
+  },
+  'db-pg': {
+    pkg: '@forinda/kickjs-db-pg',
+    peers: ['pg'],
+    description: 'kick/db PostgreSQL dialect + adapter (pgDialect, pgAdapter)',
+  },
   drizzle: {
     pkg: '@forinda/kickjs-drizzle',
     peers: ['drizzle-orm'],
@@ -111,48 +121,96 @@ const PACKAGE_REGISTRY: Record<
   },
 }
 
-function detectPackageManager(): PackageManager {
-  if (existsSync(resolve('pnpm-lock.yaml'))) return 'pnpm'
-  if (existsSync(resolve('yarn.lock'))) return 'yarn'
-  if (existsSync(resolve('bun.lockb')) || existsSync(resolve('bun.lock'))) return 'bun'
-  return 'npm'
-}
-
-/** Read `packageManager` from package.json (corepack convention: "pnpm@10.0.0") */
-function packageManagerFromPackageJson(): PackageManager | null {
-  try {
-    const pkg = JSON.parse(readFileSync(resolve('package.json'), 'utf-8'))
-    const field: unknown = pkg.packageManager
-    if (typeof field !== 'string') return null
-    const name = field.split('@')[0] as PackageManager
-    return PACKAGE_MANAGERS.includes(name) ? name : null
-  } catch {
-    return null
+/**
+ * Walk up from `fromDir` to filesystem root, returning the first
+ * directory that contains `name`. Lets monorepo sub-packages pick up
+ * lockfiles and `packageManager` fields living at the workspace root.
+ */
+function findUp(name: string, fromDir = process.cwd()): string | null {
+  let current = fromDir
+  while (true) {
+    if (existsSync(resolve(current, name))) return current
+    const parent = dirname(current)
+    if (parent === current) return null
+    current = parent
   }
 }
+
+function detectFromLockfile(): PackageManager | null {
+  if (findUp('pnpm-lock.yaml')) return 'pnpm'
+  if (findUp('yarn.lock')) return 'yarn'
+  if (findUp('bun.lockb') || findUp('bun.lock')) return 'bun'
+  if (findUp('package-lock.json')) return 'npm'
+  return null
+}
+
+/**
+ * Read `packageManager` from the nearest ancestor `package.json` that
+ * declares the field (corepack convention: `"pnpm@10.0.0"`). Climbs so
+ * monorepo sub-packages inherit the workspace pm even when their own
+ * package.json omits the field.
+ */
+function packageManagerFromPackageJson(): PackageManager | null {
+  let dir: string | null = process.cwd()
+  while (dir) {
+    const pkgPath = resolve(dir, 'package.json')
+    if (existsSync(pkgPath)) {
+      try {
+        const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'))
+        const field: unknown = pkg.packageManager
+        if (typeof field === 'string') {
+          const name = field.split('@')[0] as PackageManager
+          if (PACKAGE_MANAGERS.includes(name)) return name
+        }
+      } catch {
+        // ignore — keep climbing
+      }
+    }
+    const parent = dirname(dir)
+    if (parent === dir) return null
+    dir = parent
+  }
+  return null
+}
+
+export type PackageManagerSource = 'flag' | 'config' | 'package.json' | 'lockfile' | 'default'
 
 /**
  * Resolve which package manager to use, in priority order:
  * 1. `--pm` CLI flag
  * 2. `packageManager` in kick.config
- * 3. `packageManager` in package.json (corepack)
- * 4. Lockfile detection
- * 5. `'npm'`
+ * 3. `packageManager` in nearest ancestor package.json (corepack)
+ * 4. Nearest ancestor lockfile (pnpm-lock.yaml → yarn.lock → bun.lock → package-lock.json)
+ * 5. `'npm'` fallback
+ *
+ * Returns the chosen pm plus the source for callers that want to log
+ * the resolution path.
  */
-export async function resolvePackageManager(flagPm: string | undefined): Promise<PackageManager> {
+export async function resolvePackageManagerWithSource(
+  flagPm: string | undefined,
+): Promise<{ pm: PackageManager; source: PackageManagerSource }> {
   if (flagPm && PACKAGE_MANAGERS.includes(flagPm as PackageManager)) {
-    return flagPm as PackageManager
+    return { pm: flagPm as PackageManager, source: 'flag' }
   }
 
   const config = await loadKickConfig(process.cwd())
   if (config?.packageManager && PACKAGE_MANAGERS.includes(config.packageManager)) {
-    return config.packageManager
+    return { pm: config.packageManager, source: 'config' }
   }
 
   const fromPkg = packageManagerFromPackageJson()
-  if (fromPkg) return fromPkg
+  if (fromPkg) return { pm: fromPkg, source: 'package.json' }
 
-  return detectPackageManager()
+  const fromLock = detectFromLockfile()
+  if (fromLock) return { pm: fromLock, source: 'lockfile' }
+
+  return { pm: 'npm', source: 'default' }
+}
+
+/** Convenience wrapper for callers that don't care about the source. */
+export async function resolvePackageManager(flagPm: string | undefined): Promise<PackageManager> {
+  const { pm } = await resolvePackageManagerWithSource(flagPm)
+  return pm
 }
 
 export function printPackageList(): void {
@@ -192,7 +250,8 @@ export function registerAddCommand(program: Command): void {
         return
       }
 
-      const pm = await resolvePackageManager(opts.pm)
+      const { pm, source } = await resolvePackageManagerWithSource(opts.pm)
+      console.log(`\n  Using ${pm} (resolved from ${source})`)
       const forceDevFlag = opts.dev
       const prodDeps = new Set<string>()
       const devDeps = new Set<string>()
