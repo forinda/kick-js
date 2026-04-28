@@ -173,25 +173,56 @@
     @apply p-6 flex-1;
   }
 
-  /* Cards */
+  /* Cards — surface elevation via thin border + subtle shadow.
+   * Hover lift surfaces "this is interactive / hoverable" without
+   * being noisy on pages full of cards. Token references everything
+   * so light + dark resolve correctly. */
   .card {
-    @apply bg-surface-1 rounded-xl border border-border p-5 mb-4;
+    @apply bg-surface-1 rounded-xl border border-border p-5 mb-4
+           transition-shadow;
+    box-shadow:
+      0 1px 2px 0 rgb(0 0 0 / 0.04),
+      0 1px 3px 0 rgb(0 0 0 / 0.06);
+  }
+  .card:hover {
+    box-shadow:
+      0 4px 6px -1px rgb(0 0 0 / 0.08),
+      0 2px 4px -2px rgb(0 0 0 / 0.06);
+  }
+  [data-theme='dark'] .card {
+    box-shadow:
+      0 1px 2px 0 rgb(0 0 0 / 0.3),
+      0 1px 3px 0 rgb(0 0 0 / 0.2);
+  }
+  [data-theme='dark'] .card:hover {
+    box-shadow:
+      0 4px 6px -1px rgb(0 0 0 / 0.5),
+      0 2px 4px -2px rgb(0 0 0 / 0.35);
+    border-color: var(--color-border-strong);
   }
   .card-header {
     @apply flex items-center justify-between mb-3;
   }
   .card-title {
-    /* Was text-slate-500 (≈4:1) — bumped to text-text-secondary
-       which resolves slate-300/slate-600 across themes. */
-    @apply text-xs font-semibold uppercase tracking-wider text-text-secondary;
+    /* Title sits on a card; small caps + tracking gives it the
+     * "metric label" feel (Linear / Vercel / Stripe pattern). */
+    @apply text-[11px] font-semibold uppercase tracking-[0.06em] text-text-muted;
   }
   .card-value {
-    @apply text-base font-semibold tabular-nums text-text-strong;
+    /* Large, bold, tabular nums so 1234567 doesn't shift between
+     * digits when it ticks. Mono via the system mono stack would
+     * also work; tabular keeps the headline font. */
+    @apply text-2xl font-semibold tabular-nums text-text-strong leading-tight;
+  }
+  .card-subvalue {
+    /* Optional caption under .card-value (e.g. delta vs previous). */
+    @apply text-xs text-text-secondary mt-1;
   }
 
-  /* Grid */
+  /* Grid — 5px wider gap so cards breathe; matches the polished
+   * card padding / shadow above. */
   .grid {
-    @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4;
+    @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 mb-4;
   }
 
   /* Tables */
