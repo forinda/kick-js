@@ -384,6 +384,7 @@ export class Container {
     if (reg.scope === Scope.SINGLETON && reg.instance !== undefined) {
       reg.resolveCount++
       reg.lastResolvedAt = Date.now()
+      this.emit(tokenName(token), 'resolved', reg.kind)
       return reg.instance
     }
 
@@ -405,12 +406,14 @@ export class Container {
       if (store.values.has(token)) {
         reg.resolveCount++
         reg.lastResolvedAt = Date.now()
+        this.emit(tokenName(token), 'resolved', reg.kind)
         return store.values.get(token) as T
       }
       // Check per-request instance cache
       if (store.instances.has(token)) {
         reg.resolveCount++
         reg.lastResolvedAt = Date.now()
+        this.emit(tokenName(token), 'resolved', reg.kind)
         return store.instances.get(token) as T
       }
       // Factory-registered binding: invoke the factory once per request
@@ -427,6 +430,7 @@ export class Container {
         reg.lastResolvedAt = Date.now()
         if (!reg.firstResolvedAt) reg.firstResolvedAt = Date.now()
         store.instances.set(token, instance)
+        this.emit(tokenName(token), 'resolved', reg.kind)
         return instance as T
       }
       // Create instance and cache for this request only
@@ -437,6 +441,7 @@ export class Container {
       reg.lastResolvedAt = Date.now()
       if (!reg.firstResolvedAt) reg.firstResolvedAt = Date.now()
       store.instances.set(token, instance)
+      this.emit(tokenName(token), 'resolved', reg.kind)
       return instance as T
     }
 
@@ -452,6 +457,7 @@ export class Container {
         // Persist resolved factory instances so they survive module re-evaluation
         getPersistentStore().resolvedInstances.set(tokenName(token), instance)
       }
+      this.emit(tokenName(token), 'resolved', reg.kind)
       return instance
     }
 
@@ -472,6 +478,7 @@ export class Container {
       if (reg.scope === Scope.SINGLETON) {
         reg.instance = instance
       }
+      this.emit(tokenName(token), 'resolved', reg.kind)
       return instance
     } finally {
       this.resolving.delete(token)
@@ -549,7 +556,19 @@ export class Container {
 
   /** Batch-emit a change event (debounced, flushed after 50ms of quiet) */
   private emit(token: string, event: ContainerChangeEvent['event'], kind?: ClassKind): void {
-    this.pendingChanges.push({ token, event, kind, timestamp: Date.now() })
+    // Dedupe within the pending batch: a high-throughput TRANSIENT
+    // token that resolves 1000× per request would otherwise queue
+    // 1000 identical 'resolved' events. The downstream listener only
+    // cares that the token's state changed, so collapse to one entry
+    // (the earliest timestamp wins; the latest update is reflected
+    // in resolveCount/lastResolvedAt on the registration itself,
+    // which the listener reads at notify time).
+    const existing = this.pendingChanges.find((p) => p.token === token && p.event === event)
+    if (existing) {
+      existing.timestamp = Date.now()
+    } else {
+      this.pendingChanges.push({ token, event, kind, timestamp: Date.now() })
+    }
 
     if (this.notifyTimer) clearTimeout(this.notifyTimer)
     this.notifyTimer = setTimeout(() => {

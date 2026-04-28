@@ -60,6 +60,25 @@ describe('Container introspection — dependency capture', () => {
     expect(sharedHits).toBe(1)
   })
 
+  it("emits 'resolved' events with dedupe across rapid resolve calls", async () => {
+    const events: { token: string; event: string }[] = []
+    c.onChange((batch) => {
+      for (const e of batch) events.push({ token: e.token, event: e.event })
+    })
+
+    @Service()
+    class Hot {}
+    c.register(Hot, Hot)
+
+    // 100 resolves of the same token should collapse to one 'resolved'
+    // entry in the debounced batch (token+event dedupe).
+    for (let i = 0; i < 100; i++) c.resolve(Hot)
+    c.flushChanges()
+
+    const resolvedEvents = events.filter((e) => e.event === 'resolved' && e.token === 'Hot')
+    expect(resolvedEvents).toHaveLength(1)
+  })
+
   it('reports no dependencies for a class with neither @Inject nor @Autowired', () => {
     @Service()
     class Plain {
