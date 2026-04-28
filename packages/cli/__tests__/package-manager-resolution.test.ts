@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, rmSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { resolvePackageManager } from '../src/commands/add'
+import { resolvePackageManager, resolvePackageManagerWithSource } from '../src/commands/add'
 
 describe('resolvePackageManager', () => {
   let fixture: string
@@ -92,5 +92,50 @@ describe('resolvePackageManager', () => {
       JSON.stringify({ packageManager: 'pnpm' }),
     )
     expect(await resolvePackageManager('yarn')).toBe('yarn')
+  })
+
+  it('climbs to a parent package.json packageManager field (workspace sub-package)', async () => {
+    // Sub-package has no packageManager field; root does. Mimics
+    // examples/<app> sitting under a corepack-pinned monorepo root.
+    writeFileSync(
+      join(fixture, 'package.json'),
+      JSON.stringify({ name: 'root', packageManager: 'pnpm@10.0.0' }),
+    )
+    const sub = join(fixture, 'apps', 'sub')
+    mkdirSync(sub, { recursive: true })
+    writeFileSync(
+      join(sub, 'package.json'),
+      JSON.stringify({ name: 'sub', dependencies: { foo: 'workspace:*' } }),
+    )
+    process.chdir(sub)
+    expect(await resolvePackageManager(undefined)).toBe('pnpm')
+  })
+
+  it('climbs to a parent lockfile (workspace sub-package, no packageManager field)', async () => {
+    // No packageManager field anywhere; lockfile only at root.
+    writeFileSync(join(fixture, 'pnpm-lock.yaml'), '')
+    const sub = join(fixture, 'apps', 'sub')
+    mkdirSync(sub, { recursive: true })
+    writeFileSync(
+      join(sub, 'package.json'),
+      JSON.stringify({ name: 'sub' }),
+    )
+    process.chdir(sub)
+    expect(await resolvePackageManager(undefined)).toBe('pnpm')
+  })
+
+  it('reports the resolution source via resolvePackageManagerWithSource', async () => {
+    writeFileSync(
+      join(fixture, 'kick.config.json'),
+      JSON.stringify({ packageManager: 'pnpm' }),
+    )
+    expect(await resolvePackageManagerWithSource(undefined)).toEqual({
+      pm: 'pnpm',
+      source: 'config',
+    })
+    expect(await resolvePackageManagerWithSource('yarn')).toEqual({
+      pm: 'yarn',
+      source: 'flag',
+    })
   })
 })
