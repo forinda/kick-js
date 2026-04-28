@@ -3,7 +3,7 @@ import { Kysely, sql, type Dialect as KyselyDialect } from 'kysely'
 import type { CreateDbClientOptions, KickDbClient, TransactionEvent } from './types'
 import type { SchemaToTypes } from './schema-types'
 import { KickDbEventEmitter } from './events'
-import { CodecResultPlugin, buildDecoderMap } from './codec-plugin'
+import { CodecPlugin, buildDecoderMap, buildEncoderMap } from './codec-plugin'
 import { applyExtensions } from '../extend/apply'
 
 interface InternalContext {
@@ -33,14 +33,14 @@ export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
   // SQL, params, and timing. Cleanest hook for the lifecycle events;
   // a full KyselyPlugin (transformQuery / transformResult) is heavier
   // and only worth it when we need to mutate the SQL tree.
-  // Build the customType decoder map once. When no column declared
-  // a `fromDriver` codec, the decoder map is empty and the plugin's
-  // transformResult short-circuits — zero per-row cost on the hot
-  // path. Encoders (toDriver) are NOT consumed yet — that requires
-  // walking the InsertQueryNode / UpdateQueryNode trees, lands in a
-  // follow-up.
+  // Build customType codec maps once. Both transforms short-circuit
+  // when their map is empty so the plugin is free of per-row /
+  // per-query cost when no customType is in play. Plugin only
+  // attached when at least one side has work to do.
   const decoders = buildDecoderMap(opts.schema)
-  const codecPlugin = decoders.size > 0 ? new CodecResultPlugin(decoders) : null
+  const encoders = buildEncoderMap(opts.schema)
+  const codecPlugin =
+    decoders.size > 0 || encoders.size > 0 ? new CodecPlugin(encoders, decoders) : null
 
   const kysely = new Kysely<DB>({
     dialect: opts.dialect,

@@ -44,21 +44,27 @@ const row = await db.selectFrom('secrets').selectAll().where('id', '=', 1).execu
 // row?.value is already the decrypted EncryptedString — no manual mapping
 ```
 
-### `toDriver` — encode on insert
+### `toDriver` — encode on insert + update
 
-Stored on the column builder but **not yet auto-applied at insert time**. The query-tree transform that walks insert + update statements lands as a follow-up. Until then, apply `toDriver` manually before passing to `.values()`:
+Wired today. The kick/db query layer walks `INSERT` and `UPDATE` statements at compile time — every value targeting a column with a `toDriver` codec is encoded before the driver sees it. Pass plain branded values straight to `.values()` / `.set()`:
 
 ```ts
 await db
   .insertInto('secrets')
-  .values({
-    value: encrypted.toDriver?.(plaintext as EncryptedString) as EncryptedString,
-  })
+  .values({ value: plaintext as EncryptedString })
+  .execute()
+
+await db
+  .updateTable('secrets')
+  .set({ value: rotated as EncryptedString })
+  .where('id', '=', 1)
   .execute()
 ```
 
-::: tip Defer if encoding is symmetric
-For codecs where `toDriver` is identity (logging tags, branded IDs) you can skip the manual call — the brand stays in the type system, the value passes through untouched.
+`null` and `undefined` pass through untouched so codecs don't need to handle the nullable case.
+
+::: tip Insert from `SELECT`
+`db.insertInto('a').expression(db.selectFrom('b'))` skips the encoder pass — values come from a sub-select, not literals on this side. If the source rows aren't already encoded, run a one-shot transform via the query builder or precompute the encoded column before insert.
 :::
 
 ## `db.$extends({ model })`
