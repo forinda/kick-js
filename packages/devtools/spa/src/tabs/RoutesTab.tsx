@@ -39,7 +39,7 @@ export const RoutesTab: Component = () => {
     return rows
   })
 
-  const pager = usePagination<RouteEntry>(() => filtered(), { pageSize: 20 })
+  const pager = usePagination<RouteEntry>(() => filtered())
 
   return (
     <div class="bg-surface-1 rounded-xl border border-border p-5">

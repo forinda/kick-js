@@ -47,7 +47,7 @@ export const ContainerTab: Component = () => {
     return regs
   })
 
-  const pager = usePagination<ContainerRegistration>(() => filtered(), { pageSize: 20 })
+  const pager = usePagination<ContainerRegistration>(() => filtered())
 
   const toggleRow = (token: string): void => {
     setExpanded((prev) => {

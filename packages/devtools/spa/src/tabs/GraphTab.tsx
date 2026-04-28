@@ -101,7 +101,7 @@ const GroupSection: Component<{ label: string; nodes: ContainerRegistration[] }>
   // overflow one section while another is empty. 25/page matches the
   // Topology DI tokens table.
   const source = createMemo(() => props.nodes ?? [])
-  const pager = usePagination(source, { pageSize: 25 })
+  const pager = usePagination(source)
 
   // Collapsible — user toggles by clicking the section header. State
   // persists per-group in localStorage so reloads remember which
@@ -151,7 +151,7 @@ const GroupSection: Component<{ label: string; nodes: ContainerRegistration[] }>
         <div class="space-y-1">
           <For each={pager.page()}>{(node) => <NodeRow node={node} />}</For>
         </div>
-        <Show when={source().length > 25}>
+        <Show when={pager.total() > 1}>
           <Pagination pager={pager} />
         </Show>
       </Show>

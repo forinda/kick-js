@@ -94,7 +94,7 @@ const ContributorsTable: Component<{
   rows: TopologySnapshot['contributors']
 }> = (props) => {
   const source = createMemo(() => props.rows ?? [])
-  const pager = usePagination(source, { pageSize: 25 })
+  const pager = usePagination(source)
   return (
     <div class="card">
       <div class="card-header">
@@ -136,7 +136,7 @@ const DiTokensTable: Component<{
   rows: TopologySnapshot['diTokens']
 }> = (props) => {
   const source = createMemo(() => props.rows ?? [])
-  const pager = usePagination(source, { pageSize: 25 })
+  const pager = usePagination(source)
   return (
     <div class="card">
       <div class="card-header">

@@ -23,7 +23,7 @@ export const QueuesTab: Component = () => {
     return all.filter((row) => row.name.toLowerCase().includes(q))
   })
 
-  const pager = usePagination<QueueStats>(() => filtered(), { pageSize: 12 })
+  const pager = usePagination<QueueStats>(() => filtered())
 
   return (
     <Show
