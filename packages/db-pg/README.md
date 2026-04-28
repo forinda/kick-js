@@ -1,22 +1,26 @@
 # @forinda/kickjs-db-pg
 
-> node-postgres adapter for [`@forinda/kickjs-db`](https://www.npmjs.com/package/@forinda/kickjs-db).
+> PostgreSQL adapter for [`@forinda/kickjs-db`](https://www.npmjs.com/package/@forinda/kickjs-db).
 
-Wraps `pg.Pool` with the `MigrationAdapter` contract so `kick db migrate` can apply migrations and introspect against a real PostgreSQL database. Also provides the Kysely `PostgresDialect` factory for the query layer.
+Two factories:
+
+- **`pgDialect({ pool })`** — query-layer dialect for `createDbClient({ dialect })`.
+- **`pgAdapter({ pool })`** — `MigrationAdapter` for `kick db migrate` + `kickDbAdapter` boot-time apply.
+
+Both consume a pg-protocol-compatible pool (`pg.Pool`, `@neondatabase/serverless`'s `Pool`, etc.) — adopters pick whichever runtime fits.
 
 ## Install
 
 ```bash
-pnpm add @forinda/kickjs-db @forinda/kickjs-db-pg pg kysely
+pnpm add @forinda/kickjs-db @forinda/kickjs-db-pg pg
 ```
 
 ## Usage
 
 ```ts
 import { Pool } from 'pg'
-import { PostgresDialect } from 'kysely'
 import { createDbClient, kickDbAdapter } from '@forinda/kickjs-db'
-import { pgAdapter } from '@forinda/kickjs-db-pg'
+import { pgAdapter, pgDialect } from '@forinda/kickjs-db-pg'
 import { bootstrap } from '@forinda/kickjs'
 import * as schema from './db/schema'
 
@@ -24,7 +28,7 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL })
 
 export const db = createDbClient({
   schema,
-  dialect: new PostgresDialect({ pool }),
+  dialect: pgDialect({ pool }),
   events: true,
 })
 

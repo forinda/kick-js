@@ -7,7 +7,7 @@ Phantom-typed column builders, `SchemaToKysely<S>` for end-to-end row inference,
 ## Install
 
 ```bash
-pnpm add @forinda/kickjs-db kysely
+pnpm add @forinda/kickjs-db
 pnpm add @forinda/kickjs-db-pg pg          # PostgreSQL adapter
 ```
 
@@ -15,11 +15,10 @@ pnpm add @forinda/kickjs-db-pg pg          # PostgreSQL adapter
 
 ```ts
 import { table, uuid, varchar, timestamp, createDbClient } from '@forinda/kickjs-db'
-import { pgAdapter } from '@forinda/kickjs-db-pg'
-import { PostgresDialect } from 'kysely'
+import { pgAdapter, pgDialect } from '@forinda/kickjs-db-pg'
 import { Pool } from 'pg'
 
-// 1. Schema — phantom T flows through SchemaToKysely automatically.
+// 1. Schema — phantom T flows through every column automatically.
 const users = table('users', {
   id: uuid().primaryKey().defaultRandom(),
   email: varchar(255).notNull().unique(),
@@ -32,7 +31,7 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL })
 // 2. Client — DB shape inferred from schema, no manual generic.
 const db = createDbClient({
   schema,
-  dialect: new PostgresDialect({ pool }),
+  dialect: pgDialect({ pool }),
   events: true,
   slowQueryThresholdMs: 100,
 })
