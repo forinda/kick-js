@@ -46,7 +46,7 @@ describe('db.$extends({ model })', () => {
     // falls through to sqlite — value's identity is what matters,
     // not which dialect we landed on.
     expect(dbX.dialect).toBe(db.dialect)
-    expect(dbX.kysely).toBe(db.kysely)
+    expect(dbX.qb).toBe(db.qb)
     expect(typeof dbX.selectFrom).toBe('function')
     await dbX.selectFrom('users').selectAll().execute()
     await dbX.destroy()
@@ -54,11 +54,16 @@ describe('db.$extends({ model })', () => {
 
   it("inside a method, `this` is the extended client (not the original)", async () => {
     const db = createDbClient({ schema: { users }, dialect: dummy })
+    // Methods on the model bag can't carry a `this:` annotation that
+    // describes the rebound proxy — TS checks each method against the
+    // surrounding record shape, not the runtime rebinding. Cast
+    // `this` inside the body when you need the typed surface.
     const dbX = db.$extends({
       model: {
         users: {
-          findByEmail(this: typeof dbX, email: string) {
-            return this.selectFrom('users').selectAll().where('email', '=', email).execute()
+          findByEmail(email: string) {
+            const self = this as unknown as typeof db
+            return self.selectFrom('users').selectAll().where('email', '=', email).execute()
           },
         },
       },
@@ -73,11 +78,17 @@ describe('db.$extends({ model })', () => {
 
   it('methods can call other tables via this.<otherTable>.<m>', () => {
     const db = createDbClient({ schema: { users, posts }, dialect: dummy })
+    // Cross-table calls work at runtime via Function.prototype.call —
+    // `this` is the extended proxy, not the bag the method is declared
+    // in. TS can't see that, so we cast `this` inside the method to
+    // the shape the method touches. `this: typeof dbX` would self-
+    // reference the const we're declaring (TS rejects the cycle).
+    type CrossTable = { posts: { label(): string } }
     const dbX = db.$extends({
       model: {
         users: {
-          stamp(this: typeof dbX) {
-            return this.posts.label()
+          stamp() {
+            return (this as unknown as CrossTable).posts.label()
           },
         },
         posts: {
