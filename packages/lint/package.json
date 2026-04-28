@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-lint",
-  "version": "5.0.2",
+  "version": "5.1.0",
   "description": "Lint rules for KickJS — DI token convention, plugin/adapter naming, and other framework conventions",
   "keywords": [
     "kickjs",
