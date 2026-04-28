@@ -13,6 +13,7 @@
 import { createMemo, createSignal, For, Show, type Component } from 'solid-js'
 import { store, type ContainerRegistration } from '../lib/store'
 import { openDetailModal } from '../lib/detail-modal'
+import { Pagination, usePagination } from '../lib/pagination'
 
 const KIND_GROUPS = [
   { id: 'controllers', label: 'Controllers', match: (k?: string) => k === 'controller' },
@@ -95,17 +96,26 @@ export const GraphTab: Component = () => {
 }
 
 const GroupSection: Component<{ label: string; nodes: ContainerRegistration[] }> = (props) => {
+  // Each group runs its own pager — controllers, services, etc. all
+  // grow independently in real apps, so paging them in lockstep would
+  // overflow one section while another is empty. 25/page matches the
+  // Topology DI tokens table.
+  const source = createMemo(() => props.nodes ?? [])
+  const pager = usePagination(source, { pageSize: 25 })
   return (
     <div>
       <h3 class={`text-xs font-semibold uppercase tracking-wider mb-2 ${labelColor(props.label)}`}>
         {props.label}
         <span class="ml-2 text-text-muted font-normal normal-case">
-          ({props.nodes.length})
+          ({source().length})
         </span>
       </h3>
       <div class="space-y-1">
-        <For each={props.nodes}>{(node) => <NodeRow node={node} />}</For>
+        <For each={pager.page()}>{(node) => <NodeRow node={node} />}</For>
       </div>
+      <Show when={source().length > 25}>
+        <Pagination pager={pager} />
+      </Show>
     </div>
   )
 }
