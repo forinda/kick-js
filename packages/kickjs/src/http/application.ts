@@ -5,6 +5,7 @@ import {
   createLogger,
   Logger,
   normalizePath,
+  tokenName,
   METADATA,
   type AppModule,
   type AppModuleClass,
@@ -805,6 +806,60 @@ export class Application {
    */
   getPlugins(): readonly KickPlugin[] {
     return this.plugins
+  }
+
+  /**
+   * Snapshot of every Context Contributor reachable from this app —
+   * walks the four registration sites (adapters, plugins, global, and
+   * the bootstrap `contributors` option). Module-level contributors
+   * are NOT included; module instances aren't retained post-bootstrap.
+   * The devtools Topology tab consumes this for the Contributors
+   * panel; tests + adopters can call it for diagnostics.
+   *
+   * Result shape stays minimal — `{ key, source, label, dependsOn }`
+   * — so we don't leak `resolve` closures or other internal fields.
+   */
+  getContributors(): ReadonlyArray<{
+    key: string
+    source: 'adapter' | 'plugin' | 'global'
+    label: string
+    dependsOn: readonly string[]
+  }> {
+    const out: Array<{
+      key: string
+      source: 'adapter' | 'plugin' | 'global'
+      label: string
+      dependsOn: readonly string[]
+    }> = []
+    const ingest = (
+      list: ReadonlyArray<unknown> | null | undefined,
+      source: 'adapter' | 'plugin' | 'global',
+      label: string,
+    ): void => {
+      if (!list) return
+      for (const reg of list) {
+        const r = reg as { key?: unknown; dependsOn?: unknown }
+        if (r.key === undefined || r.key === null) continue
+        // `key` is typically a string but createToken<T>() yields a
+        // branded token object — normalise via tokenName so both
+        // surfaces flow through.
+        const key = typeof r.key === 'string' ? r.key : tokenName(r.key)
+        out.push({
+          key,
+          source,
+          label,
+          dependsOn: Array.isArray(r.dependsOn) ? (r.dependsOn as string[]) : [],
+        })
+      }
+    }
+    for (const adapter of this.adapters) {
+      ingest(adapter.contributors?.(), 'adapter', adapter.name ?? 'adapter')
+    }
+    for (const plugin of this.plugins) {
+      ingest(plugin.contributors?.(), 'plugin', plugin.name ?? 'plugin')
+    }
+    ingest(this.options.contributors, 'global', 'bootstrap')
+    return out
   }
 
   getHttpServer(): http.Server | null {

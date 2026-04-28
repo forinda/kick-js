@@ -25,6 +25,19 @@ import {
 export interface TopologyApplicationLike {
   getAdapters(): AppAdapter[]
   getPlugins(): readonly KickPlugin[]
+  /**
+   * Optional in older Application implementations — when present, returns
+   * the union of contributors across adapters/plugins/global with proper
+   * source labels. The topology aggregator prefers this over walking
+   * `adapter.contributors()` + `plugin.contributors()` directly because
+   * the application-level walk preserves source provenance.
+   */
+  getContributors?(): ReadonlyArray<{
+    key: string
+    source: 'adapter' | 'plugin' | 'module' | 'global'
+    label: string
+    dependsOn: readonly string[]
+  }>
 }
 
 /** Inputs to {@link collectTopologySnapshot}. */
@@ -146,15 +159,38 @@ function collectTokens(container: Container): TopologyTokenEntry[] {
 }
 
 /**
- * Best-effort contributor enumeration. Plugins + adapters can both
- * return contributor registrations via `contributors()` — we walk both
- * lists, normalise the entries, and dedupe by `key`. Module-level
- * contributors (the most common case) are not enumerable from this
- * surface; the panel will surface them per-route in a later iteration.
+ * Contributor enumeration. Prefers `app.getContributors()` (the
+ * Application-level walk that preserves adapter / plugin / global
+ * source labels) when present; falls back to walking
+ * `adapter.contributors()` + `plugin.contributors()` directly for
+ * older Application implementations that don't expose the helper.
+ *
+ * Module-level contributors are still not surfaced here — module
+ * instances aren't retained post-bootstrap. Per-route enumeration
+ * lands in a later iteration alongside the route detail panel.
  */
 function collectContributors(app: TopologyApplicationLike): TopologyContributorEntry[] {
   const seen = new Map<string, TopologyContributorEntry>()
 
+  if (typeof app.getContributors === 'function') {
+    for (const c of app.getContributors()) {
+      if (seen.has(c.key)) continue
+      // The kit's source enum currently only allows 'adapter' | 'module';
+      // 'plugin' + 'global' both map to 'adapter' provenance for now —
+      // the Topology UI labels them by `label` so the source field is
+      // mainly a coarse category. Future kit version can widen.
+      const mapped: TopologyContributorEntry['source'] =
+        c.source === 'module' ? 'module' : 'adapter'
+      seen.set(c.key, {
+        key: c.key,
+        source: mapped,
+        dependsOn: c.dependsOn as string[],
+      })
+    }
+    return [...seen.values()]
+  }
+
+  // Legacy path — direct walk.
   const ingest = (
     list: ReadonlyArray<unknown> | null | undefined,
     source: TopologyContributorEntry['source'],
