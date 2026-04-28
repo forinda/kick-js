@@ -19,13 +19,16 @@ export class TasksController {
   @Post('/')
   async create(ctx: RequestContext) {
     const body = ctx.body as {
+      projectId: string
       workspaceId: string
+      key: string
       title: string
+      reporterId: string
       description?: string | null
       status?: string
-      priority?: string
+      priority?: 'critical' | 'high' | 'medium' | 'low' | 'none'
       estimatePoints?: number | null
-      metadata?: Record<string, unknown> | null
+      parentTaskId?: string | null
     }
     const created = await this.tasks.create(body)
     ctx.created(created)

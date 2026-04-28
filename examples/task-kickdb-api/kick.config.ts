@@ -16,7 +16,9 @@ export default defineConfig({
   // wired through kickDbAdapter in src/index.ts; the CLI uses connectionString
   // (or DATABASE_URL env) to spin up its own pgAdapter for migration ops.
   db: {
-    schemaPath: 'src/db/schema.ts',
+    // Folder + barrel — explicit `/index.ts` so Node's ESM loader picks
+    // up the file (directory imports don't auto-resolve under ESM).
+    schemaPath: 'src/db/schema/index.ts',
     migrationsDir: 'db/migrations',
     dialect: 'postgres' as const,
   },

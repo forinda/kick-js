@@ -25,6 +25,7 @@ export class UsersController {
   async create(ctx: RequestContext) {
     const body = ctx.body as {
       email: string
+      passwordHash: string
       firstName: string
       lastName: string
       avatarUrl?: string | null

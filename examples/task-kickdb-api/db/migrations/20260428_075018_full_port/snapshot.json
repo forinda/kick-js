@@ -1,0 +1,1689 @@
+{
+  "version": 1,
+  "dialect": "postgres",
+  "tables": {
+    "activities": {
+      "name": "activities",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "primaryKey": true
+        },
+        "workspaceId": {
+          "name": "workspaceId",
+          "type": "uuid",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "projectId": {
+          "name": "projectId",
+          "type": "uuid",
+          "nullable": true,
+          "default": null,
+          "primaryKey": false
+        },
+        "taskId": {
+          "name": "taskId",
+          "type": "uuid",
+          "nullable": true,
+          "default": null,
+          "primaryKey": false
+        },
+        "actorId": {
+          "name": "actorId",
+          "type": "uuid",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "action": {
+          "name": "action",
+          "type": "varchar(100)",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "changes": {
+          "name": "changes",
+          "type": "jsonb",
+          "nullable": true,
+          "default": null,
+          "primaryKey": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "primaryKey": false
+        }
+      },
+      "indexes": [
+        {
+          "name": "activities_workspace_idx",
+          "columns": [
+            "workspaceId"
+          ],
+          "unique": false
+        },
+        {
+          "name": "activities_actor_idx",
+          "columns": [
+            "actorId"
+          ],
+          "unique": false
+        },
+        {
+          "name": "activities_created_idx",
+          "columns": [
+            "createdAt"
+          ],
+          "unique": false
+        }
+      ],
+      "foreignKeys": [
+        {
+          "name": "activities_workspaceId_fk",
+          "columns": [
+            "workspaceId"
+          ],
+          "refTable": "workspaces",
+          "refColumns": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no_action"
+        },
+        {
+          "name": "activities_projectId_fk",
+          "columns": [
+            "projectId"
+          ],
+          "refTable": "projects",
+          "refColumns": [
+            "id"
+          ],
+          "onDelete": "set_null",
+          "onUpdate": "no_action"
+        },
+        {
+          "name": "activities_taskId_fk",
+          "columns": [
+            "taskId"
+          ],
+          "refTable": "tasks",
+          "refColumns": [
+            "id"
+          ],
+          "onDelete": "set_null",
+          "onUpdate": "no_action"
+        },
+        {
+          "name": "activities_actorId_fk",
+          "columns": [
+            "actorId"
+          ],
+          "refTable": "users",
+          "refColumns": [
+            "id"
+          ],
+          "onDelete": "no_action",
+          "onUpdate": "no_action"
+        }
+      ],
+      "checks": []
+    },
+    "attachments": {
+      "name": "attachments",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "primaryKey": true
+        },
+        "taskId": {
+          "name": "taskId",
+          "type": "uuid",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "uploaderId": {
+          "name": "uploaderId",
+          "type": "uuid",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "fileName": {
+          "name": "fileName",
+          "type": "varchar(255)",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "fileSize": {
+          "name": "fileSize",
+          "type": "integer",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "mimeType": {
+          "name": "mimeType",
+          "type": "varchar(100)",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "data": {
+          "name": "data",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "primaryKey": false
+        }
+      },
+      "indexes": [
+        {
+          "name": "attachments_task_idx",
+          "columns": [
+            "taskId"
+          ],
+          "unique": false
+        }
+      ],
+      "foreignKeys": [
+        {
+          "name": "attachments_taskId_fk",
+          "columns": [
+            "taskId"
+          ],
+          "refTable": "tasks",
+          "refColumns": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no_action"
+        },
+        {
+          "name": "attachments_uploaderId_fk",
+          "columns": [
+            "uploaderId"
+          ],
+          "refTable": "users",
+          "refColumns": [
+            "id"
+          ],
+          "onDelete": "no_action",
+          "onUpdate": "no_action"
+        }
+      ],
+      "checks": []
+    },
+    "channel_members": {
+      "name": "channel_members",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "primaryKey": true
+        },
+        "channelId": {
+          "name": "channelId",
+          "type": "uuid",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "userId": {
+          "name": "userId",
+          "type": "uuid",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "joinedAt": {
+          "name": "joinedAt",
+          "type": "timestamp",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "primaryKey": false
+        }
+      },
+      "indexes": [
+        {
+          "name": "channel_members_channel_user_unique",
+          "columns": [
+            "channelId",
+            "userId"
+          ],
+          "unique": true
+        }
+      ],
+      "foreignKeys": [
+        {
+          "name": "channel_members_channelId_fk",
+          "columns": [
+            "channelId"
+          ],
+          "refTable": "channels",
+          "refColumns": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no_action"
+        },
+        {
+          "name": "channel_members_userId_fk",
+          "columns": [
+            "userId"
+          ],
+          "refTable": "users",
+          "refColumns": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no_action"
+        }
+      ],
+      "checks": []
+    },
+    "channels": {
+      "name": "channels",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "primaryKey": true
+        },
+        "workspaceId": {
+          "name": "workspaceId",
+          "type": "uuid",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "projectId": {
+          "name": "projectId",
+          "type": "uuid",
+          "nullable": true,
+          "default": null,
+          "primaryKey": false
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(100)",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "primaryKey": false
+        },
+        "type": {
+          "name": "type",
+          "type": "channel_type",
+          "nullable": false,
+          "default": "public",
+          "primaryKey": false
+        },
+        "createdById": {
+          "name": "createdById",
+          "type": "uuid",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "primaryKey": false
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "primaryKey": false
+        }
+      },
+      "indexes": [
+        {
+          "name": "channels_workspace_name_unique",
+          "columns": [
+            "workspaceId",
+            "name"
+          ],
+          "unique": true
+        },
+        {
+          "name": "channels_workspace_idx",
+          "columns": [
+            "workspaceId"
+          ],
+          "unique": false
+        },
+        {
+          "name": "channels_project_idx",
+          "columns": [
+            "projectId"
+          ],
+          "unique": false
+        }
+      ],
+      "foreignKeys": [
+        {
+          "name": "channels_workspaceId_fk",
+          "columns": [
+            "workspaceId"
+          ],
+          "refTable": "workspaces",
+          "refColumns": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no_action"
+        },
+        {
+          "name": "channels_projectId_fk",
+          "columns": [
+            "projectId"
+          ],
+          "refTable": "projects",
+          "refColumns": [
+            "id"
+          ],
+          "onDelete": "set_null",
+          "onUpdate": "no_action"
+        },
+        {
+          "name": "channels_createdById_fk",
+          "columns": [
+            "createdById"
+          ],
+          "refTable": "users",
+          "refColumns": [
+            "id"
+          ],
+          "onDelete": "no_action",
+          "onUpdate": "no_action"
+        }
+      ],
+      "checks": []
+    },
+    "comments": {
+      "name": "comments",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "primaryKey": true
+        },
+        "taskId": {
+          "name": "taskId",
+          "type": "uuid",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "authorId": {
+          "name": "authorId",
+          "type": "uuid",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "content": {
+          "name": "content",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "mentions": {
+          "name": "mentions",
+          "type": "jsonb",
+          "nullable": false,
+          "default": "'[]'::jsonb",
+          "primaryKey": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "primaryKey": false
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "primaryKey": false
+        }
+      },
+      "indexes": [
+        {
+          "name": "comments_task_idx",
+          "columns": [
+            "taskId"
+          ],
+          "unique": false
+        },
+        {
+          "name": "comments_author_idx",
+          "columns": [
+            "authorId"
+          ],
+          "unique": false
+        }
+      ],
+      "foreignKeys": [
+        {
+          "name": "comments_taskId_fk",
+          "columns": [
+            "taskId"
+          ],
+          "refTable": "tasks",
+          "refColumns": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no_action"
+        },
+        {
+          "name": "comments_authorId_fk",
+          "columns": [
+            "authorId"
+          ],
+          "refTable": "users",
+          "refColumns": [
+            "id"
+          ],
+          "onDelete": "no_action",
+          "onUpdate": "no_action"
+        }
+      ],
+      "checks": []
+    },
+    "labels": {
+      "name": "labels",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "primaryKey": true
+        },
+        "workspaceId": {
+          "name": "workspaceId",
+          "type": "uuid",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(100)",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "color": {
+          "name": "color",
+          "type": "char(7)",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "primaryKey": false
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "primaryKey": false
+        }
+      },
+      "indexes": [
+        {
+          "name": "labels_workspace_name_unique",
+          "columns": [
+            "workspaceId",
+            "name"
+          ],
+          "unique": true
+        }
+      ],
+      "foreignKeys": [
+        {
+          "name": "labels_workspaceId_fk",
+          "columns": [
+            "workspaceId"
+          ],
+          "refTable": "workspaces",
+          "refColumns": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no_action"
+        }
+      ],
+      "checks": []
+    },
+    "messages": {
+      "name": "messages",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "primaryKey": true
+        },
+        "channelId": {
+          "name": "channelId",
+          "type": "uuid",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "senderId": {
+          "name": "senderId",
+          "type": "uuid",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "content": {
+          "name": "content",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "mentions": {
+          "name": "mentions",
+          "type": "jsonb",
+          "nullable": false,
+          "default": "'[]'::jsonb",
+          "primaryKey": false
+        },
+        "isEdited": {
+          "name": "isEdited",
+          "type": "boolean",
+          "nullable": false,
+          "default": "false",
+          "primaryKey": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "primaryKey": false
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "primaryKey": false
+        }
+      },
+      "indexes": [
+        {
+          "name": "messages_channel_idx",
+          "columns": [
+            "channelId"
+          ],
+          "unique": false
+        },
+        {
+          "name": "messages_sender_idx",
+          "columns": [
+            "senderId"
+          ],
+          "unique": false
+        }
+      ],
+      "foreignKeys": [
+        {
+          "name": "messages_channelId_fk",
+          "columns": [
+            "channelId"
+          ],
+          "refTable": "channels",
+          "refColumns": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no_action"
+        },
+        {
+          "name": "messages_senderId_fk",
+          "columns": [
+            "senderId"
+          ],
+          "refTable": "users",
+          "refColumns": [
+            "id"
+          ],
+          "onDelete": "no_action",
+          "onUpdate": "no_action"
+        }
+      ],
+      "checks": []
+    },
+    "notifications": {
+      "name": "notifications",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "primaryKey": true
+        },
+        "recipientId": {
+          "name": "recipientId",
+          "type": "uuid",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "type": {
+          "name": "type",
+          "type": "notification_type",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "title": {
+          "name": "title",
+          "type": "varchar(255)",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "body": {
+          "name": "body",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "jsonb",
+          "nullable": false,
+          "default": "'{}'::jsonb",
+          "primaryKey": false
+        },
+        "isRead": {
+          "name": "isRead",
+          "type": "boolean",
+          "nullable": false,
+          "default": "false",
+          "primaryKey": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "primaryKey": false
+        }
+      },
+      "indexes": [
+        {
+          "name": "notifications_recipient_idx",
+          "columns": [
+            "recipientId"
+          ],
+          "unique": false
+        },
+        {
+          "name": "notifications_recipient_read_idx",
+          "columns": [
+            "recipientId",
+            "isRead"
+          ],
+          "unique": false
+        }
+      ],
+      "foreignKeys": [
+        {
+          "name": "notifications_recipientId_fk",
+          "columns": [
+            "recipientId"
+          ],
+          "refTable": "users",
+          "refColumns": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no_action"
+        }
+      ],
+      "checks": []
+    },
+    "projects": {
+      "name": "projects",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "primaryKey": true
+        },
+        "workspaceId": {
+          "name": "workspaceId",
+          "type": "uuid",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(255)",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "key": {
+          "name": "key",
+          "type": "varchar(10)",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "primaryKey": false
+        },
+        "leadId": {
+          "name": "leadId",
+          "type": "uuid",
+          "nullable": true,
+          "default": null,
+          "primaryKey": false
+        },
+        "taskCounter": {
+          "name": "taskCounter",
+          "type": "integer",
+          "nullable": false,
+          "default": "0",
+          "primaryKey": false
+        },
+        "isArchived": {
+          "name": "isArchived",
+          "type": "boolean",
+          "nullable": false,
+          "default": "false",
+          "primaryKey": false
+        },
+        "statusColumns": {
+          "name": "statusColumns",
+          "type": "jsonb",
+          "nullable": false,
+          "default": "'[{\"name\":\"todo\",\"order\":0,\"color\":\"#94a3b8\"},{\"name\":\"in_progress\",\"order\":1,\"color\":\"#3b82f6\"},{\"name\":\"in_review\",\"order\":2,\"color\":\"#f59e0b\"},{\"name\":\"done\",\"order\":3,\"color\":\"#22c55e\"}]'::jsonb",
+          "primaryKey": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "primaryKey": false
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "primaryKey": false
+        }
+      },
+      "indexes": [
+        {
+          "name": "projects_workspace_key_unique",
+          "columns": [
+            "workspaceId",
+            "key"
+          ],
+          "unique": true
+        },
+        {
+          "name": "projects_workspace_idx",
+          "columns": [
+            "workspaceId"
+          ],
+          "unique": false
+        }
+      ],
+      "foreignKeys": [
+        {
+          "name": "projects_workspaceId_fk",
+          "columns": [
+            "workspaceId"
+          ],
+          "refTable": "workspaces",
+          "refColumns": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no_action"
+        },
+        {
+          "name": "projects_leadId_fk",
+          "columns": [
+            "leadId"
+          ],
+          "refTable": "users",
+          "refColumns": [
+            "id"
+          ],
+          "onDelete": "set_null",
+          "onUpdate": "no_action"
+        }
+      ],
+      "checks": []
+    },
+    "refresh_tokens": {
+      "name": "refresh_tokens",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "primaryKey": true
+        },
+        "userId": {
+          "name": "userId",
+          "type": "uuid",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "token": {
+          "name": "token",
+          "type": "varchar(255)",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "expiresAt": {
+          "name": "expiresAt",
+          "type": "timestamp",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "primaryKey": false
+        }
+      },
+      "indexes": [
+        {
+          "name": "refresh_tokens_user_idx",
+          "columns": [
+            "userId"
+          ],
+          "unique": false
+        },
+        {
+          "name": "refresh_tokens_token_unique",
+          "columns": [
+            "token"
+          ],
+          "unique": true
+        }
+      ],
+      "foreignKeys": [
+        {
+          "name": "refresh_tokens_userId_fk",
+          "columns": [
+            "userId"
+          ],
+          "refTable": "users",
+          "refColumns": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no_action"
+        }
+      ],
+      "checks": []
+    },
+    "task_assignees": {
+      "name": "task_assignees",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "primaryKey": true
+        },
+        "taskId": {
+          "name": "taskId",
+          "type": "uuid",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "userId": {
+          "name": "userId",
+          "type": "uuid",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "assignedAt": {
+          "name": "assignedAt",
+          "type": "timestamp",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "primaryKey": false
+        }
+      },
+      "indexes": [
+        {
+          "name": "task_assignees_task_user_unique",
+          "columns": [
+            "taskId",
+            "userId"
+          ],
+          "unique": true
+        }
+      ],
+      "foreignKeys": [
+        {
+          "name": "task_assignees_taskId_fk",
+          "columns": [
+            "taskId"
+          ],
+          "refTable": "tasks",
+          "refColumns": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no_action"
+        },
+        {
+          "name": "task_assignees_userId_fk",
+          "columns": [
+            "userId"
+          ],
+          "refTable": "users",
+          "refColumns": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no_action"
+        }
+      ],
+      "checks": []
+    },
+    "task_labels": {
+      "name": "task_labels",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "primaryKey": true
+        },
+        "taskId": {
+          "name": "taskId",
+          "type": "uuid",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "labelId": {
+          "name": "labelId",
+          "type": "uuid",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "appliedAt": {
+          "name": "appliedAt",
+          "type": "timestamp",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "primaryKey": false
+        }
+      },
+      "indexes": [
+        {
+          "name": "task_labels_task_label_unique",
+          "columns": [
+            "taskId",
+            "labelId"
+          ],
+          "unique": true
+        }
+      ],
+      "foreignKeys": [
+        {
+          "name": "task_labels_taskId_fk",
+          "columns": [
+            "taskId"
+          ],
+          "refTable": "tasks",
+          "refColumns": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no_action"
+        },
+        {
+          "name": "task_labels_labelId_fk",
+          "columns": [
+            "labelId"
+          ],
+          "refTable": "labels",
+          "refColumns": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no_action"
+        }
+      ],
+      "checks": []
+    },
+    "tasks": {
+      "name": "tasks",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "primaryKey": true
+        },
+        "projectId": {
+          "name": "projectId",
+          "type": "uuid",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "workspaceId": {
+          "name": "workspaceId",
+          "type": "uuid",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "key": {
+          "name": "key",
+          "type": "varchar(20)",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "title": {
+          "name": "title",
+          "type": "varchar(500)",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "primaryKey": false
+        },
+        "status": {
+          "name": "status",
+          "type": "varchar(50)",
+          "nullable": false,
+          "default": "todo",
+          "primaryKey": false
+        },
+        "priority": {
+          "name": "priority",
+          "type": "task_priority",
+          "nullable": false,
+          "default": "none",
+          "primaryKey": false
+        },
+        "reporterId": {
+          "name": "reporterId",
+          "type": "uuid",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "parentTaskId": {
+          "name": "parentTaskId",
+          "type": "uuid",
+          "nullable": true,
+          "default": null,
+          "primaryKey": false
+        },
+        "dueDate": {
+          "name": "dueDate",
+          "type": "timestamp",
+          "nullable": true,
+          "default": null,
+          "primaryKey": false
+        },
+        "estimatePoints": {
+          "name": "estimatePoints",
+          "type": "integer",
+          "nullable": true,
+          "default": null,
+          "primaryKey": false
+        },
+        "orderIndex": {
+          "name": "orderIndex",
+          "type": "integer",
+          "nullable": false,
+          "default": "0",
+          "primaryKey": false
+        },
+        "attachmentCount": {
+          "name": "attachmentCount",
+          "type": "integer",
+          "nullable": false,
+          "default": "0",
+          "primaryKey": false
+        },
+        "commentCount": {
+          "name": "commentCount",
+          "type": "integer",
+          "nullable": false,
+          "default": "0",
+          "primaryKey": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "primaryKey": false
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "primaryKey": false
+        }
+      },
+      "indexes": [
+        {
+          "name": "tasks_project_idx",
+          "columns": [
+            "projectId"
+          ],
+          "unique": false
+        },
+        {
+          "name": "tasks_workspace_idx",
+          "columns": [
+            "workspaceId"
+          ],
+          "unique": false
+        },
+        {
+          "name": "tasks_status_idx",
+          "columns": [
+            "status"
+          ],
+          "unique": false
+        },
+        {
+          "name": "tasks_parent_idx",
+          "columns": [
+            "parentTaskId"
+          ],
+          "unique": false
+        },
+        {
+          "name": "tasks_reporter_idx",
+          "columns": [
+            "reporterId"
+          ],
+          "unique": false
+        },
+        {
+          "name": "tasks_key_unique",
+          "columns": [
+            "key"
+          ],
+          "unique": true
+        }
+      ],
+      "foreignKeys": [
+        {
+          "name": "tasks_projectId_fk",
+          "columns": [
+            "projectId"
+          ],
+          "refTable": "projects",
+          "refColumns": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no_action"
+        },
+        {
+          "name": "tasks_workspaceId_fk",
+          "columns": [
+            "workspaceId"
+          ],
+          "refTable": "workspaces",
+          "refColumns": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no_action"
+        },
+        {
+          "name": "tasks_reporterId_fk",
+          "columns": [
+            "reporterId"
+          ],
+          "refTable": "users",
+          "refColumns": [
+            "id"
+          ],
+          "onDelete": "no_action",
+          "onUpdate": "no_action"
+        },
+        {
+          "name": "tasks_parentTaskId_fk",
+          "columns": [
+            "parentTaskId"
+          ],
+          "refTable": "tasks",
+          "refColumns": [
+            "id"
+          ],
+          "onDelete": "set_null",
+          "onUpdate": "no_action"
+        }
+      ],
+      "checks": []
+    },
+    "users": {
+      "name": "users",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "primaryKey": true
+        },
+        "email": {
+          "name": "email",
+          "type": "varchar(255)",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "passwordHash": {
+          "name": "passwordHash",
+          "type": "varchar(255)",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "firstName": {
+          "name": "firstName",
+          "type": "varchar(100)",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "lastName": {
+          "name": "lastName",
+          "type": "varchar(100)",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "avatarUrl": {
+          "name": "avatarUrl",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "primaryKey": false
+        },
+        "globalRole": {
+          "name": "globalRole",
+          "type": "global_role",
+          "nullable": false,
+          "default": "user",
+          "primaryKey": false
+        },
+        "isActive": {
+          "name": "isActive",
+          "type": "boolean",
+          "nullable": false,
+          "default": "true",
+          "primaryKey": false
+        },
+        "lastLoginAt": {
+          "name": "lastLoginAt",
+          "type": "timestamp",
+          "nullable": true,
+          "default": null,
+          "primaryKey": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "primaryKey": false
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "primaryKey": false
+        }
+      },
+      "indexes": [
+        {
+          "name": "users_name_idx",
+          "columns": [
+            "firstName",
+            "lastName"
+          ],
+          "unique": false
+        },
+        {
+          "name": "users_email_unique",
+          "columns": [
+            "email"
+          ],
+          "unique": true
+        }
+      ],
+      "foreignKeys": [],
+      "checks": []
+    },
+    "workspace_members": {
+      "name": "workspace_members",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "primaryKey": true
+        },
+        "workspaceId": {
+          "name": "workspaceId",
+          "type": "uuid",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "userId": {
+          "name": "userId",
+          "type": "uuid",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "role": {
+          "name": "role",
+          "type": "workspace_role",
+          "nullable": false,
+          "default": "member",
+          "primaryKey": false
+        },
+        "joinedAt": {
+          "name": "joinedAt",
+          "type": "timestamp",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "primaryKey": false
+        }
+      },
+      "indexes": [
+        {
+          "name": "workspace_members_workspace_user_unique",
+          "columns": [
+            "workspaceId",
+            "userId"
+          ],
+          "unique": true
+        },
+        {
+          "name": "workspace_members_workspace_idx",
+          "columns": [
+            "workspaceId"
+          ],
+          "unique": false
+        },
+        {
+          "name": "workspace_members_user_idx",
+          "columns": [
+            "userId"
+          ],
+          "unique": false
+        }
+      ],
+      "foreignKeys": [
+        {
+          "name": "workspace_members_workspaceId_fk",
+          "columns": [
+            "workspaceId"
+          ],
+          "refTable": "workspaces",
+          "refColumns": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no_action"
+        },
+        {
+          "name": "workspace_members_userId_fk",
+          "columns": [
+            "userId"
+          ],
+          "refTable": "users",
+          "refColumns": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no_action"
+        }
+      ],
+      "checks": []
+    },
+    "workspaces": {
+      "name": "workspaces",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "primaryKey": true
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(255)",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "slug": {
+          "name": "slug",
+          "type": "varchar(255)",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "primaryKey": false
+        },
+        "ownerId": {
+          "name": "ownerId",
+          "type": "uuid",
+          "nullable": false,
+          "default": null,
+          "primaryKey": false
+        },
+        "logoUrl": {
+          "name": "logoUrl",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "primaryKey": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "primaryKey": false
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP",
+          "primaryKey": false
+        }
+      },
+      "indexes": [
+        {
+          "name": "workspaces_owner_idx",
+          "columns": [
+            "ownerId"
+          ],
+          "unique": false
+        },
+        {
+          "name": "workspaces_slug_unique",
+          "columns": [
+            "slug"
+          ],
+          "unique": true
+        }
+      ],
+      "foreignKeys": [
+        {
+          "name": "workspaces_ownerId_fk",
+          "columns": [
+            "ownerId"
+          ],
+          "refTable": "users",
+          "refColumns": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no_action"
+        }
+      ],
+      "checks": []
+    }
+  },
+  "enums": {
+    "channel_type": {
+      "name": "channel_type",
+      "values": [
+        "public",
+        "private",
+        "direct"
+      ]
+    },
+    "global_role": {
+      "name": "global_role",
+      "values": [
+        "superadmin",
+        "user"
+      ]
+    },
+    "notification_type": {
+      "name": "notification_type",
+      "values": [
+        "task_assigned",
+        "mentioned",
+        "workspace_invite",
+        "task_overdue",
+        "comment_added"
+      ]
+    },
+    "task_priority": {
+      "name": "task_priority",
+      "values": [
+        "critical",
+        "high",
+        "medium",
+        "low",
+        "none"
+      ]
+    },
+    "workspace_role": {
+      "name": "workspace_role",
+      "values": [
+        "admin",
+        "member"
+      ]
+    }
+  }
+}

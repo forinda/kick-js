@@ -3,6 +3,7 @@ import { DB_PRIMARY, type KickDbClient } from '@forinda/kickjs-db'
 
 export interface NewUser {
   email: string
+  passwordHash: string
   firstName: string
   lastName: string
   avatarUrl?: string | null
@@ -33,6 +34,7 @@ export class UsersRepository {
       .insertInto('users')
       .values({
         email: input.email,
+        passwordHash: input.passwordHash,
         firstName: input.firstName,
         lastName: input.lastName,
         avatarUrl: input.avatarUrl ?? null,
