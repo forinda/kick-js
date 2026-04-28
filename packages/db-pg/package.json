@@ -1,0 +1,80 @@
+{
+  "name": "@forinda/kickjs-db-pg",
+  "version": "5.0.2",
+  "private": true,
+  "description": "node-postgres adapter for @forinda/kickjs-db — MigrationAdapter + Kysely PostgresDialect",
+  "keywords": [
+    "kickjs",
+    "postgres",
+    "pg",
+    "@forinda/kickjs-db"
+  ],
+  "type": "module",
+  "main": "dist/index.mjs",
+  "types": "dist/index.d.mts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "types": "./dist/index.d.mts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "wireit",
+    "dev": "tsdown --watch",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist .wireit",
+    "lint": "tsc --noEmit"
+  },
+  "wireit": {
+    "build": {
+      "command": "tsdown",
+      "files": [
+        "src/**/*.ts",
+        "tsdown.config.ts",
+        "tsconfig.json",
+        "package.json"
+      ],
+      "output": [
+        "dist/**"
+      ],
+      "dependencies": []
+    }
+  },
+  "dependencies": {},
+  "peerDependencies": {
+    "@forinda/kickjs-db": "workspace:*",
+    "kysely": ">=0.27.0 <1.0.0",
+    "pg": ">=8.11.0"
+  },
+  "devDependencies": {
+    "@forinda/kickjs": "workspace:*",
+    "@forinda/kickjs-db": "workspace:*",
+    "@testcontainers/postgresql": "^10.16.0",
+    "@types/node": "^25.6.0",
+    "@types/pg": "^8.11.10",
+    "kysely": "^0.28.16",
+    "pg": "^8.13.1",
+    "typescript": "^5.9.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT",
+  "author": "Felix Orinda",
+  "engines": {
+    "node": ">=20.0"
+  },
+  "homepage": "https://forinda.github.io/kick-js/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/forinda/kick-js.git",
+    "directory": "packages/db-pg"
+  },
+  "bugs": {
+    "url": "https://github.com/forinda/kick-js/issues"
+  }
+}

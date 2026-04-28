@@ -175,6 +175,7 @@ These packages are still installable in v4.1.x and emit deprecation notices. The
 | [minimal-api](examples/minimal-api/) | Simplest possible app — bootstrap + one controller |
 | [task-drizzle-api](examples/task-drizzle-api/) | Full task management app — PostgreSQL + Drizzle, 14 DDD modules |
 | [task-prisma-api](examples/task-prisma-api/) | Full task management app — PostgreSQL + Prisma 7 (driver adapters) |
+| [task-kickdb-api](examples/task-kickdb-api/) | KickJS-native ORM (M1) — PostgreSQL + `@forinda/kickjs-db` |
 | [task-mongoose-api](examples/task-mongoose-api/) | Full task management app — MongoDB + Mongoose |
 | [multi-tenant-drizzle-api](examples/multi-tenant-drizzle-api/) | Multi-tenant pattern — PostgreSQL + Drizzle |
 | [multi-tenant-prisma-api](examples/multi-tenant-prisma-api/) | Multi-tenant pattern — PostgreSQL + Prisma |

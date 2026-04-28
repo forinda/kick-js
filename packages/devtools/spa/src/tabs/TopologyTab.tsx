@@ -1,6 +1,7 @@
-import { createSignal, For, onMount, Show, type Component } from 'solid-js'
+import { createMemo, createSignal, For, onMount, Show, type Component } from 'solid-js'
 import type { IntrospectionSnapshot, TopologySnapshot } from '@forinda/kickjs-devtools-kit'
 import { rpc } from '../lib/rpc'
+import { Pagination, usePagination } from '../lib/pagination'
 
 export const TopologyTab: Component = () => {
   const [snapshot, setSnapshot] = createSignal<TopologySnapshot | null>(null)
@@ -80,77 +81,98 @@ export const TopologyTab: Component = () => {
               empty="No adapters registered"
             />
 
-            <div class="card">
-              <div class="card-header">
-                <div class="card-title">Contributors ({snap().contributors.length})</div>
-              </div>
-              <Show
-                when={snap().contributors.length > 0}
-                fallback={<div class="empty">No contributors registered</div>}
-              >
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Key</th>
-                      <th>Source</th>
-                      <th>Depends on</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <For each={snap().contributors}>
-                      {(c) => (
-                        <tr>
-                          <td>
-                            <span class="tree-key">{c.key}</span>
-                          </td>
-                          <td>{c.source}</td>
-                          <td>{c.dependsOn.join(', ') || '—'}</td>
-                        </tr>
-                      )}
-                    </For>
-                  </tbody>
-                </table>
-              </Show>
-            </div>
-
-            <div class="card">
-              <div class="card-header">
-                <div class="card-title">DI tokens ({snap().diTokens.length})</div>
-              </div>
-              <Show
-                when={snap().diTokens.length > 0}
-                fallback={<div class="empty">No DI tokens registered</div>}
-              >
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Token</th>
-                      <th>Scope</th>
-                      <th>Kind</th>
-                      <th>Resolved</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <For each={snap().diTokens}>
-                      {(t) => (
-                        <tr>
-                          <td>
-                            <span class="tree-key">{t.token}</span>
-                          </td>
-                          <td>{t.scope}</td>
-                          <td>{t.kind}</td>
-                          <td>{t.instantiated ? 'yes' : 'no'}</td>
-                        </tr>
-                      )}
-                    </For>
-                  </tbody>
-                </table>
-              </Show>
-            </div>
+            <ContributorsTable rows={snap().contributors} />
+            <DiTokensTable rows={snap().diTokens} />
           </>
         )}
       </Show>
     </>
+  )
+}
+
+const ContributorsTable: Component<{
+  rows: TopologySnapshot['contributors']
+}> = (props) => {
+  const source = createMemo(() => props.rows ?? [])
+  const pager = usePagination(source)
+  return (
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Contributors ({source().length})</div>
+      </div>
+      <Show
+        when={source().length > 0}
+        fallback={<div class="empty">No contributors registered</div>}
+      >
+        <table>
+          <thead>
+            <tr>
+              <th>Key</th>
+              <th>Source</th>
+              <th>Depends on</th>
+            </tr>
+          </thead>
+          <tbody>
+            <For each={pager.page()}>
+              {(c) => (
+                <tr>
+                  <td>
+                    <span class="tree-key">{c.key}</span>
+                  </td>
+                  <td>{c.source}</td>
+                  <td>{c.dependsOn.join(', ') || '—'}</td>
+                </tr>
+              )}
+            </For>
+          </tbody>
+        </table>
+        <Pagination pager={pager} />
+      </Show>
+    </div>
+  )
+}
+
+const DiTokensTable: Component<{
+  rows: TopologySnapshot['diTokens']
+}> = (props) => {
+  const source = createMemo(() => props.rows ?? [])
+  const pager = usePagination(source)
+  return (
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">DI tokens ({source().length})</div>
+      </div>
+      <Show
+        when={source().length > 0}
+        fallback={<div class="empty">No DI tokens registered</div>}
+      >
+        <table>
+          <thead>
+            <tr>
+              <th>Token</th>
+              <th>Scope</th>
+              <th>Kind</th>
+              <th>Resolved</th>
+            </tr>
+          </thead>
+          <tbody>
+            <For each={pager.page()}>
+              {(t) => (
+                <tr>
+                  <td>
+                    <span class="tree-key">{t.token}</span>
+                  </td>
+                  <td>{t.scope}</td>
+                  <td>{t.kind}</td>
+                  <td>{t.instantiated ? 'yes' : 'no'}</td>
+                </tr>
+              )}
+            </For>
+          </tbody>
+        </table>
+        <Pagination pager={pager} />
+      </Show>
+    </div>
   )
 }
 

@@ -25,9 +25,9 @@ export const OverviewTab: Component = () => {
 const HealthCard: Component = () => {
   const [adaptersOpen, setAdaptersOpen] = createSignal(false)
   return (
-    <div class="bg-slate-900 rounded-xl border border-slate-800 p-5">
-      <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">Health</h2>
-      <Show when={store.health()} fallback={<p class="text-slate-600 italic">Loading…</p>}>
+    <div class="bg-surface-1 rounded-xl border border-border p-5">
+      <h2 class="text-xs font-semibold uppercase tracking-wider text-text-muted mb-3">Health</h2>
+      <Show when={store.health()} fallback={<p class="text-text-muted italic">Loading…</p>}>
         {(h) => (
           <>
             <Row label="Status">
@@ -43,10 +43,10 @@ const HealthCard: Component = () => {
               </span>
             </Row>
             <Show when={Object.keys(h().adapters).length > 0}>
-              <div class="border-t border-slate-800 mt-2 pt-2">
+              <div class="border-t border-border mt-2 pt-2">
                 <button
                   type="button"
-                  class="text-xs text-slate-500 hover:text-slate-300 flex items-center gap-1"
+                  class="text-xs text-text-muted hover:text-text-strong flex items-center gap-1"
                   onClick={() => setAdaptersOpen((v) => !v)}
                 >
                   <svg
@@ -70,7 +70,7 @@ const HealthCard: Component = () => {
                     <For each={Object.entries(h().adapters)}>
                       {([name, status]) => (
                         <div class="flex items-center justify-between py-1">
-                          <span class="text-slate-400 text-sm">{name}</span>
+                          <span class="text-text-secondary text-sm">{name}</span>
                           <span class={`badge ${status === 'running' ? 'badge-ok' : 'badge-warn'}`}>
                             {status}
                           </span>
@@ -90,9 +90,9 @@ const HealthCard: Component = () => {
 
 const MetricsCard: Component = () => {
   return (
-    <div class="bg-slate-900 rounded-xl border border-slate-800 p-5">
-      <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">Metrics</h2>
-      <Show when={store.metrics()} fallback={<p class="text-slate-600 italic">Loading…</p>}>
+    <div class="bg-surface-1 rounded-xl border border-border p-5">
+      <h2 class="text-xs font-semibold uppercase tracking-wider text-text-muted mb-3">Metrics</h2>
+      <Show when={store.metrics()} fallback={<p class="text-text-muted italic">Loading…</p>}>
         {(m) => (
           <>
             <Row label="Total requests">
@@ -119,11 +119,11 @@ const MetricsCard: Component = () => {
 const WsCard: Component = () => {
   const [nsOpen, setNsOpen] = createSignal(false)
   return (
-    <div class="bg-slate-900 rounded-xl border border-slate-800 p-5">
-      <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">WebSocket</h2>
+    <div class="bg-surface-1 rounded-xl border border-border p-5">
+      <h2 class="text-xs font-semibold uppercase tracking-wider text-text-muted mb-3">WebSocket</h2>
       <Show
         when={store.ws().enabled}
-        fallback={<p class="text-slate-600 italic">No WsAdapter detected</p>}
+        fallback={<p class="text-text-muted italic">No WsAdapter detected</p>}
       >
         <Row label="Active">
           <span class="font-semibold tabular-nums text-emerald-400">
@@ -140,10 +140,10 @@ const WsCard: Component = () => {
           <span class="font-semibold tabular-nums">{store.ws().messagesSent ?? 0}</span>
         </Row>
         <Show when={store.ws().namespaces && Object.keys(store.ws().namespaces ?? {}).length > 0}>
-          <div class="border-t border-slate-800 mt-2 pt-2">
+          <div class="border-t border-border mt-2 pt-2">
             <button
               type="button"
-              class="text-xs text-slate-500 hover:text-slate-300 flex items-center gap-1"
+              class="text-xs text-text-muted hover:text-text-strong flex items-center gap-1"
               onClick={() => setNsOpen((v) => !v)}
             >
               <svg
@@ -167,7 +167,7 @@ const WsCard: Component = () => {
                 <For each={Object.entries(store.ws().namespaces ?? {})}>
                   {([name, ns]) => (
                     <div class="flex items-center justify-between py-1">
-                      <span class="text-slate-400 text-sm font-mono">{name}</span>
+                      <span class="text-text-secondary text-sm font-mono">{name}</span>
                       <span class="text-sm">
                         {ns.connections} conn / {ns.handlers} handlers
                       </span>
@@ -185,7 +185,7 @@ const WsCard: Component = () => {
 
 const Row: Component<{ label: string; children: unknown }> = (props) => (
   <div class="flex items-center justify-between mb-2">
-    <span class="text-slate-400">{props.label}</span>
+    <span class="text-text-secondary">{props.label}</span>
     {props.children as unknown as Element}
   </div>
 )

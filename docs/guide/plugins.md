@@ -2,6 +2,10 @@
 
 Plugins are the highest-level extension mechanism in KickJS. A single plugin can bundle modules, adapters, middleware, and DI bindings into one reusable unit.
 
+::: tip Runtime plugins vs CLI plugins
+This page covers **runtime plugins** — `definePlugin()` factories registered via `bootstrap({ plugins: [...] })` that contribute to the running HTTP app. They are distinct from **CLI plugins** (`defineCliPlugin()`), which extend the `kick` binary with new commands, generators, and typegens. See [CLI Plugins](./cli-plugins.md) for that surface. The two contracts share the "ship-as-a-plugin" philosophy but have different shapes and registration sites.
+:::
+
 ## Why Plugins?
 
 | Extension      | Scope                           | Use Case                                   |

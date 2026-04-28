@@ -36,16 +36,28 @@ export interface DispatchResult {
  * no plugin generator matches — callers can then fall through to the
  * built-in dispatch (module / scaffold / etc.).
  *
- * The lookup is FIRST-MATCH-WINS in dependency declaration order: if
- * two plugins claim the same generator name, the one whose package was
- * resolved first wins. Adopters with conflicts should rename the
- * generator on their side or pin one of the plugins to a different
- * version.
+ * Resolution order:
+ *   1. `additional` — generators sourced from `KickCliPlugin.generators`
+ *      via `kick.config.ts > plugins[]`. Authoritative; the canonical
+ *      path going forward.
+ *   2. `package.json > kickjs.generators` discovery — first-match-wins
+ *      in dependency declaration order. Deprecated path retained for
+ *      packages that haven't migrated yet.
+ *
+ * Adopters with conflicts should rename the generator on their side or
+ * pin one of the plugins to a different version.
  */
 export async function tryDispatchPluginGenerator(
   input: DispatchInput,
+  additional: readonly DiscoveredGenerator[] = [],
 ): Promise<DispatchResult | null> {
   const cwd = input.cwd ?? process.cwd()
+
+  const fromConfig = additional.find((g) => g.spec.name === input.generatorName)
+  if (fromConfig) {
+    return runGenerator(fromConfig.spec, fromConfig.source, input, cwd)
+  }
+
   const discovery = await discoverPluginGenerators(cwd)
   const match = findGenerator(discovery, input.generatorName)
   if (!match) return null
@@ -53,9 +65,23 @@ export async function tryDispatchPluginGenerator(
   return runGenerator(match.spec, match.source, input, cwd)
 }
 
-/** Public helper for `kick g --list` — returns every discovered plugin generator. */
-export async function listPluginGenerators(cwd: string): Promise<DiscoveryResult> {
-  return discoverPluginGenerators(cwd)
+/**
+ * Public helper for `kick g --list` — returns every plugin generator
+ * the CLI knows about, merging config-supplied entries on top of the
+ * package.json discovery result. Config entries always come first.
+ */
+export async function listPluginGenerators(
+  cwd: string,
+  additional: readonly DiscoveredGenerator[] = [],
+): Promise<DiscoveryResult> {
+  const discovered = await discoverPluginGenerators(cwd)
+  const configNames = new Set(additional.map((g) => g.spec.name))
+  const filteredDiscovered = discovered.generators.filter((g) => !configNames.has(g.spec.name))
+  return {
+    generators: [...additional, ...filteredDiscovered],
+    loaded: discovered.loaded,
+    failed: discovered.failed,
+  }
 }
 
 function findGenerator(discovery: DiscoveryResult, name: string): DiscoveredGenerator | undefined {

@@ -13,9 +13,9 @@ cd my-api
 pnpm install
 ```
 
-This scaffolds a project with:
+This scaffolds a project with the **default layout** — every path below is a convention configurable through `kick.config.ts`, not a framework requirement:
 - `src/index.ts` — bootstrap entry with Vite HMR
-- `src/modules/` — feature modules directory
+- `src/modules/` — feature modules directory (configurable via `modules.dir`)
 - `vite.config.ts` — Vite config for HMR dev server
 - `kick.config.ts` — CLI configuration (optional)
 - `AGENTS.md` — canonical multi-agent reference (Claude, Copilot, Codex, Gemini, …) — conventions, patterns, gotchas
@@ -39,7 +39,7 @@ The dev server starts with Vite HMR — edit any file and the server rebuilds in
 pnpm kick g module users
 ```
 
-This generates a full DDD module structure:
+This generates a full DDD module under the configured `modules.dir` (default `src/modules`, override via `kick.config.ts`):
 
 ```
 src/modules/users/

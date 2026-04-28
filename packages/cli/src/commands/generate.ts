@@ -1,6 +1,7 @@
 import { resolve } from 'node:path'
 import type { Command } from 'commander'
 import { listPluginGenerators, tryDispatchPluginGenerator } from '../generator-extension'
+import { mergeCliPlugins } from '../plugin'
 import { generateModule } from '../generators/module'
 import { resolveRepoType, type RepoType } from '../generators/module'
 import { generateAdapter } from '../generators/adapter'
@@ -153,7 +154,12 @@ async function printGeneratorList(): Promise<void> {
 
   // Surface plugin-shipped generators alongside the built-ins so adopters
   // can discover what's available without grepping their node_modules.
-  const discovery = await listPluginGenerators(process.cwd())
+  // Config-supplied generators (kick.config.ts > plugins[]) take priority
+  // over package.json-discovered ones; the discovery merge in
+  // listPluginGenerators handles the dedup.
+  const config = await loadKickConfig(process.cwd())
+  const merged = mergeCliPlugins(config?.plugins ?? [], config?.commands ?? [])
+  const discovery = await listPluginGenerators(process.cwd(), merged.generators)
   if (discovery.generators.length > 0) {
     console.log('\n  Plugin generators:\n')
     const pluginMax = Math.max(...discovery.generators.map((g) => `${g.spec.name} <name>`.length))
@@ -243,15 +249,22 @@ export function registerGenerateCommand(program: Command): void {
       // `<name>` matches a discovered plugin generator wins over the
       // bare-module shortcut. This lets `kick g command Order` route
       // to a CQRS plugin without colliding with `kick g <module-name>`.
+      // Config-supplied generators (kick.config.ts > plugins[]) take
+      // priority over the legacy package.json discovery path.
       if (names.length >= 2) {
         const [generatorName, itemName, ...rest] = names
-        const result = await tryDispatchPluginGenerator({
-          generatorName,
-          itemName,
-          args: rest,
-          flags: opts as unknown as Record<string, string | boolean>,
-          cwd: process.cwd(),
-        })
+        const cfg = await loadKickConfig(process.cwd())
+        const merged = mergeCliPlugins(cfg?.plugins ?? [], cfg?.commands ?? [])
+        const result = await tryDispatchPluginGenerator(
+          {
+            generatorName,
+            itemName,
+            args: rest,
+            flags: opts as unknown as Record<string, string | boolean>,
+            cwd: process.cwd(),
+          },
+          merged.generators,
+        )
         if (result) {
           printGenerated(result.files, dryRun)
           return

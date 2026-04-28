@@ -2,15 +2,15 @@
 
 ## New Project
 
-Running `kick new my-api` scaffolds a complete project:
+Running `kick new my-api` scaffolds a complete project. The layout below is the **default convention** — paths like `src/modules/`, `src/config/`, and the entry file are configurable. Generators read `kick.config.ts` for the live values, so adopters who relocate or rename directories don't fight the toolchain.
 
 ```text
-my-api/
+my-api/                           # Default layout — adopters can rearrange
 ├── src/
 │   ├── config/
 │   │   └── index.ts              # Env schema (defineEnv + loadEnv)
 │   ├── index.ts                  # Entry point — calls bootstrap()
-│   └── modules/
+│   └── modules/                  # modules.dir in kick.config.ts (default 'src/modules')
 │       ├── hello/                # Sample module
 │       │   ├── hello.controller.ts
 │       │   ├── hello.module.ts
@@ -86,6 +86,8 @@ KickJS supports four module patterns. Set the pattern in `kick.config.ts` or use
 kick g module users                    # Uses kick.config.ts pattern (default: ddd)
 kick g module users --pattern minimal  # Override pattern
 ```
+
+The trees below show the **default** layout each pattern writes under `modules.dir` (default `src/modules`). The directory roots are conventional — relocate them via `kick.config.ts > modules.dir` and the generator follows.
 
 ### Minimal
 

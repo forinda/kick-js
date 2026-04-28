@@ -8,10 +8,10 @@ Vibed has 14 HTTP modules, a queue module, and a cron module. Each follows the s
 
 ## The Module Structure
 
-Every module follows the same directory layout:
+Every module in Vibed follows the same default directory layout that `kick g module --pattern ddd` writes. Nothing in KickJS forces this shape — it's the convention the DDD generator picks because it maps cleanly to layered architecture, and adopters who prefer a different cut can move things around without breaking the framework:
 
 ```
-module/
+module/                         # Default DDD layout — configurable per project
 ├── index.ts                    # Module registration + routes
 ├── constants.ts                # Query config (DrizzleQueryParamsConfig)
 ├── presentation/

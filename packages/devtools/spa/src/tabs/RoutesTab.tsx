@@ -39,15 +39,15 @@ export const RoutesTab: Component = () => {
     return rows
   })
 
-  const pager = usePagination<RouteEntry>(() => filtered(), { pageSize: 20 })
+  const pager = usePagination<RouteEntry>(() => filtered())
 
   return (
-    <div class="bg-slate-900 rounded-xl border border-slate-800 p-5">
+    <div class="bg-surface-1 rounded-xl border border-border p-5">
       {/* Toolbar — search + method pills */}
       <div class="flex flex-col sm:flex-row gap-3 mb-4">
         <div class="relative flex-1">
           <svg
-            class="absolute left-3 top-2.5 w-4 h-4 text-slate-500"
+            class="absolute left-3 top-2.5 w-4 h-4 text-text-muted"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -65,8 +65,8 @@ export const RoutesTab: Component = () => {
             placeholder="Search routes (path, controller, handler)…"
             value={search()}
             onInput={(e) => setSearch(e.currentTarget.value)}
-            class="w-full bg-slate-800 border border-slate-700 rounded-lg pl-10 pr-4 py-2 text-sm
-                   text-slate-200 placeholder-slate-500 focus:outline-none focus:border-kick-500"
+            class="w-full bg-surface-2 border border-border-strong rounded-lg pl-10 pr-4 py-2 text-sm
+                   text-text-body placeholder:text-text-muted focus:outline-none focus:border-kick-500"
           />
         </div>
         <div class="flex gap-1">
@@ -78,7 +78,7 @@ export const RoutesTab: Component = () => {
                 class={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors border ${
                   method() === m
                     ? 'bg-kick-500/20 text-kick-500 border-kick-500/30'
-                    : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'
+                    : 'bg-surface-2 text-text-secondary border-border-strong hover:text-text-body'
                 }`}
               >
                 {m}
@@ -119,8 +119,8 @@ export const RoutesTab: Component = () => {
                     </td>
                     <td class="font-mono text-sm">{r.path}</td>
                     <td>{r.controller}</td>
-                    <td class="text-slate-400">{r.handler}</td>
-                    <td class="text-slate-500 text-xs">
+                    <td class="text-text-secondary">{r.handler}</td>
+                    <td class="text-text-muted text-xs">
                       {r.middleware.length ? r.middleware.join(', ') : '—'}
                     </td>
                   </tr>
@@ -142,5 +142,5 @@ function methodColor(method: string): string {
   if (m === 'POST') return 'text-cyan-400'
   if (m === 'PUT' || m === 'PATCH') return 'text-amber-400'
   if (m === 'DELETE') return 'text-red-400'
-  return 'text-slate-400'
+  return 'text-text-secondary'
 }

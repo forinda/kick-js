@@ -366,7 +366,7 @@ See [Generators — kick g agents](./generators.md#kick-g-agents) for what each 
 
 ## Custom Commands
 
-Project-specific commands defined in `kick.config.ts` appear alongside built-in commands. See [Custom Commands](./custom-commands.md) for details.
+Project-specific commands defined in `kick.config.ts` appear alongside built-in commands. See [Custom Commands](./custom-commands.md) for project-local commands, or [CLI Plugins](./cli-plugins.md) for shipping commands, generators, and typegens as installable packages.
 
 ```bash
 kick db:migrate
@@ -505,7 +505,8 @@ Module generation settings — controls how `kick g module` produces code.
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `commands` | `KickCommandDefinition[]` | `[]` | Custom CLI commands (see [Custom Commands](./custom-commands.md)) |
+| `plugins` | `KickCliPlugin[]` | `[]` | CLI plugins contributing commands, generators, and typegens (see [CLI Plugins](./cli-plugins.md)) |
+| `commands` | `KickCommandDefinition[]` | `[]` | Project-local custom CLI commands (see [Custom Commands](./custom-commands.md)) |
 | `style` | `object` | auto-detected | Code style overrides (`semicolons`, `quotes`, `trailingComma`, `indent`) |
 
 ::: details Deprecated top-level aliases

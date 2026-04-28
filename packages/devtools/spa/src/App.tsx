@@ -1,4 +1,11 @@
 import { createSignal, For, onCleanup, onMount, Show, type Component } from 'solid-js'
+import {
+  mountThemeEffect,
+  resolvedTheme,
+  setTheme,
+  themeMode,
+  type ThemeMode,
+} from './lib/theme'
 import type { DevtoolsTabDescriptor } from '@forinda/kickjs-devtools-kit'
 import { OverviewTab } from './tabs/OverviewTab'
 import { RuntimeTab } from './tabs/RuntimeTab'
@@ -107,6 +114,9 @@ export const App: Component = () => {
       dispose = d
     })
     onCleanup(() => dispose?.())
+
+    // Apply data-theme to <html> on every resolved-theme change.
+    mountThemeEffect()
   })
 
   const switchTo = (id: string): void => {
@@ -138,7 +148,10 @@ export const App: Component = () => {
           </span>
           <h1>KickJS DevTools</h1>
         </div>
-        <ConnectionPill />
+        <div style="display:flex;align-items:center;gap:12px;">
+          <ConnectionPill />
+          <ThemeToggle />
+        </div>
       </header>
       <nav class="tabs" role="tablist">
         <For each={BUILT_INS}>
@@ -252,5 +265,45 @@ const ConnectionPill: Component = () => {
       <span class="dt-conn-sep">·</span>
       <span class="dt-conn-ts">Updated {fmt(store.lastUpdate())}</span>
     </div>
+  )
+}
+
+/**
+ * Three-state theme toggle: cycles `system → light → dark → system`.
+ * Single button keeps the header tight; long-press / right-click could
+ * surface an explicit menu later if the cycling proves confusing.
+ *
+ * Icon reflects the *resolved* theme (what's painted), not the picked
+ * mode — so `system` shows whichever the OS resolved to. The aria
+ * label spells out the picked mode for screen readers.
+ */
+const ThemeToggle: Component = () => {
+  const cycle = (): void => {
+    const next: ThemeMode =
+      themeMode() === 'system' ? 'light' : themeMode() === 'light' ? 'dark' : 'system'
+    setTheme(next)
+  }
+  const aria = (): string => {
+    const m = themeMode()
+    return `Theme: ${m === 'system' ? 'follow system' : m} (click to cycle)`
+  }
+  return (
+    <button type="button" class="dt-theme-toggle" onClick={cycle} aria-label={aria()} title={aria()}>
+      <Show
+        when={resolvedTheme() === 'dark'}
+        fallback={
+          // Sun icon — light mode active
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="4" />
+            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+          </svg>
+        }
+      >
+        {/* Moon icon — dark mode active */}
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+        </svg>
+      </Show>
+    </button>
   )
 }

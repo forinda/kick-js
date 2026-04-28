@@ -2,6 +2,8 @@ import { existsSync } from 'node:fs'
 import { readFile, access } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 
+import type { KickCliPlugin } from './plugin/types'
+
 /** A custom command that developers can register via kick.config.ts */
 export interface KickCommandDefinition {
   /** The command name (e.g. 'db:migrate', 'seed', 'proto:gen') */
@@ -114,6 +116,24 @@ export interface TypegenConfig {
    * @default 'src/env.ts'
    */
   envFile?: string | false
+  /**
+   * Built-in or user typegen plugin ids to skip during `kick typegen`,
+   * `kick dev`, and `kick typegen --watch`.
+   *
+   * The plugin still loads and merge-time conflict detection still
+   * runs — only the `generate()` invocation is skipped — so adopters
+   * who want to hand-write `KickDbRegister` (manual typeof-schema
+   * augmentation) can disable `'kick/db'` and keep the rest:
+   *
+   * @example
+   * typegen: {
+   *   disable: ['kick/db'],   // hand-written register.ts owns the type
+   * }
+   *
+   * Unrecognised ids are ignored — the list is treated as a wishlist,
+   * not a strict registry.
+   */
+  disable?: string[]
 }
 
 /** Module generation settings — controls how `kick g module` produces code */
@@ -263,6 +283,20 @@ export interface KickConfig {
   typegen?: TypegenConfig
   /** Custom commands that extend the CLI */
   commands?: KickCommandDefinition[]
+  /**
+   * CLI plugins — bundled commands + typegens contributed by external
+   * packages (e.g. `@forinda/kickjs-cli-drizzle`). Plugin commands
+   * appear first; adopter `commands` overrides plugin commands of the
+   * same name. Duplicate commands or typegen ids across two plugins
+   * fail-fast at CLI startup.
+   *
+   * @example
+   * import { drizzlePlugin } from '@forinda/kickjs-cli-drizzle'
+   * export default defineConfig({
+   *   plugins: [drizzlePlugin({ schemaPath: 'src/db/schema' })],
+   * })
+   */
+  plugins?: KickCliPlugin[]
   /** Code style overrides (auto-detected from prettier when possible) */
   style?: {
     semicolons?: boolean

@@ -1,10 +1,34 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark light" />
     <title>KickJS DevTools</title>
+    <!--
+      Inline pre-paint script — reads the persisted theme + system
+      preference and sets data-theme BEFORE the SPA bundle loads.
+      Without this, dark/light flips visibly when the SPA mounts.
+    -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('kickjs-devtools-theme')
+          var resolved = stored
+          if (!resolved || resolved === 'system') {
+            resolved =
+              window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches
+                ? 'light'
+                : 'dark'
+          }
+          if (resolved === 'light' || resolved === 'dark') {
+            document.documentElement.dataset.theme = resolved
+          }
+        } catch (e) {
+          /* localStorage unavailable — keep the SSR default. */
+        }
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

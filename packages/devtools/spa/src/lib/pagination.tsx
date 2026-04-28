@@ -44,7 +44,12 @@ export interface Pager<T> {
   setPageSize(n: number): void
 }
 
-const DEFAULT_PAGE_SIZE_CHOICES = [10, 20, 50, 100] as const
+// Page sizes step in fives so adopters scanning a list can land on
+// the size that matches their workflow (5 for "scan one screenful",
+// 25/50 for triage). Default falls on `choices[0]` — the smallest —
+// since most lists are short enough that 5 is comfortable; users
+// with long lists step up via the selector.
+const DEFAULT_PAGE_SIZE_CHOICES = [5, 10, 15, 20, 25, 50, 100] as const
 
 /**
  * Bind reactive pagination state to a row source. The source is a
@@ -60,7 +65,7 @@ export function usePagination<T>(
   opts: PaginationOptions = {},
 ): Pager<T> {
   const choices = opts.pageSizeChoices ?? DEFAULT_PAGE_SIZE_CHOICES
-  const initial = opts.pageSize ?? choices[1] ?? 20
+  const initial = opts.pageSize ?? choices[0] ?? 5
   const [pageSize, setPageSize] = createSignal(initial)
   const [current, setCurrent] = createSignal(1)
 

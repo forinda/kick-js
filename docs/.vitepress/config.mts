@@ -69,10 +69,18 @@ const guideSidebar = [
     text: 'CLI',
     items: [
       { text: 'Commands', link: '/guide/cli-commands' },
+      { text: 'CLI Plugins', link: '/guide/cli-plugins' },
       { text: 'Tinker (REPL)', link: '/guide/tinker' },
       { text: 'Code Generators', link: '/guide/generators' },
       { text: 'Plugin Generators', link: '/guide/plugin-generators' },
       { text: 'Custom Commands', link: '/guide/custom-commands' },
+    ],
+  },
+  {
+    text: 'Database (kickjs-db)',
+    items: [
+      { text: 'Schema Types', link: '/guide/db-schema-types' },
+      { text: 'Extensions', link: '/guide/db-extensions' },
     ],
   },
   {

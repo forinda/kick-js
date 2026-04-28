@@ -181,13 +181,25 @@ export async function runTypegen(opts: RunTypegenOptions = {}): Promise<{
  */
 export async function watchTypegen(opts: RunTypegenOptions = {}): Promise<() => void> {
   const resolved = resolveOptions(opts)
-  const { srcDir, silent } = resolved
+  const { srcDir, silent, cwd } = resolved
   // Watch mode always tolerates collisions — otherwise an in-progress
   // rename would crash the dev loop. The error is still printed.
   const runOpts: RunTypegenOptions = { ...resolved, allowDuplicates: true }
 
-  // Initial run
+  // Lazy-import the plugin pipeline + config loader to avoid an eager
+  // module-eval cycle (this file is reachable from plugin/builtins via
+  // commands/typegen → ../typegen).
+  const [{ runAllPluginTypegens }, { loadKickConfig }] = await Promise.all([
+    import('./run-plugins'),
+    import('../config'),
+  ])
+  const pluginConfig = await loadKickConfig(cwd)
+  const runPlugins = () =>
+    runAllPluginTypegens({ cwd, config: pluginConfig, silent: true }).catch(() => {})
+
+  // Initial run — legacy pass first, then plugin typegens.
   await safeRun(runOpts, silent)
+  await runPlugins()
 
   const { watch } = await import('node:fs')
 
@@ -202,6 +214,7 @@ export async function watchTypegen(opts: RunTypegenOptions = {}): Promise<() => 
     if (timer) clearTimeout(timer)
     timer = setTimeout(() => {
       safeRun(runOpts, silent)
+      void runPlugins()
     }, 100)
   }
 

@@ -277,7 +277,7 @@ The container resolves `@Value` properties during instance creation, alongside `
 
 ## CLI Configuration (kick.config.ts)
 
-The `kick.config.ts` file configures the CLI's code generators. Key options:
+The `kick.config.ts` file configures the CLI's code generators, project-local commands, and installable CLI plugins. Key options:
 
 ```ts
 import { defineConfig } from '@forinda/kickjs-cli'
@@ -285,15 +285,33 @@ import { defineConfig } from '@forinda/kickjs-cli'
 export default defineConfig({
   pattern: 'ddd',                           // 'rest' | 'graphql' | 'ddd' | 'cqrs' | 'minimal'
   modules: {
-    dir: 'src/modules',                     // where modules live
+    dir: 'src/modules',                     // default location (convention) — override freely
     repo: 'prisma',                         // 'drizzle' | 'inmemory' | 'prisma' | { name: 'custom' }
     pluralize: true,                        // pluralize module names
-    schemaDir: 'prisma/',                   // schema directory for ORM
+    schemaDir: 'prisma/',                   // schema directory for ORM (configurable)
     prismaClientPath: '@/generated/prisma/client',  // Prisma 7+ client path
   },
-  commands: [],                             // custom CLI commands
+  plugins: [],                              // KickCliPlugin[] — see ./cli-plugins.md
+  commands: [],                             // project-local custom CLI commands
+  typegen: {
+    disable: [],                            // skip specific plugin typegens (e.g. ['kick/db'])
+  },
 })
 ```
+
+::: tip Disabling individual typegens
+`kick typegen --list` prints every registered plugin id; add any of
+them to `typegen.disable` to skip its emission while leaving the rest
+running. Useful for adopters who hand-write `KickDbRegister` instead
+of letting the `kick/db` plugin generate it. See
+[Typegen → Disabling specific plugin typegens](./typegen.md#disabling-specific-plugin-typegens).
+:::
+
+::: tip Folder paths are conventions
+`src/modules/`, `prisma/`, `src/db/schema`, and the rest of the defaults reflect what `kick new` scaffolds. Generators read `kick.config.ts` for the live values, so renaming or relocating directories is a one-line config change — not a fork.
+:::
+
+The `plugins` field expects an array of `KickCliPlugin` instances (typically built with `defineCliPlugin()`). Each plugin can contribute `commands`, `register`, `typegens`, and `generators` — see [CLI Plugins](./cli-plugins.md) for the full shape and conflict semantics.
 
 ::: warning Deprecated Fields
 The following top-level fields are deprecated in favor of the `modules` block:

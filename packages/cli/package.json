@@ -73,6 +73,7 @@
   },
   "dependencies": {
     "@clack/prompts": "^1.2.0",
+    "@forinda/kickjs-db": "workspace:*",
     "commander": "^14.0.3",
     "glob": "^13.0.6",
     "picocolors": "^1.1.1",
@@ -80,9 +81,12 @@
   },
   "devDependencies": {
     "@forinda/kickjs-ai": "workspace:*",
+    "@forinda/kickjs-db-pg": "workspace:*",
     "@swc/core": "^1.15.30",
     "@types/node": "^25.6.0",
+    "@types/pg": "^8.11.10",
     "@types/pluralize": "^0.0.33",
+    "pg": "^8.13.1",
     "typescript": "^6.0.3",
     "vite": "^8.0.9",
     "vitest": "^4.1.5"

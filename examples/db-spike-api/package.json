@@ -1,0 +1,18 @@
+{
+  "name": "@forinda/kickjs-example-db-spike",
+  "version": "5.0.2",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "db:generate": "kick db generate",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@forinda/kickjs-db": "workspace:*"
+  },
+  "devDependencies": {
+    "@forinda/kickjs-cli": "workspace:*",
+    "@types/node": "^25.0.0",
+    "typescript": "^6.0.3"
+  }
+}

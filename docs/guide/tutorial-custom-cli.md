@@ -19,6 +19,10 @@ Here is how it works, what the seed and reset scripts look like, and why CLI-lev
 
 KickJS uses a `kick.config.ts` file at the project root for framework configuration. It tells the scaffolding generator where modules live, what patterns to follow, and -- the feature I care about here -- what custom commands to register.
 
+::: tip When to reach for a CLI plugin instead
+The `commands` array in `kick.config.ts` is for **project-local** shell wrappers — the seed/reset/check commands below all live with the project they belong to. If you want to ship commands across multiple repos, bundle them into a `KickCliPlugin` and publish it; adopters wire it via `plugins: [yourPlugin()]` in their own `kick.config.ts`. See the [CLI Plugins guide](./cli-plugins.md) for the shape.
+:::
+
 ```typescript
 // kick.config.ts
 import { defineConfig } from '@forinda/kickjs-cli'
