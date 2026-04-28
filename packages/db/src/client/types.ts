@@ -28,10 +28,22 @@ export interface TransactionRollbackEvent extends TransactionEvent {
   error: unknown
 }
 
+/**
+ * Fired when a query exceeds `createDbClient({ slowQueryThresholdMs })`.
+ * The `query` event ALSO fires for the same query — `slowQuery` is a
+ * separate channel so listeners can subscribe to slow ones only
+ * without filtering every query themselves.
+ */
+export interface SlowQueryEvent extends QueryEvent {
+  /** The configured threshold the query exceeded. */
+  thresholdMs: number
+}
+
 export interface KickDbClientEvents {
   beforeQuery: BeforeQueryEvent
   query: QueryEvent
   queryError: QueryErrorEvent
+  slowQuery: SlowQueryEvent
   transactionStart: TransactionEvent
   transactionCommit: TransactionEvent
   transactionRollback: TransactionRollbackEvent
@@ -86,6 +98,18 @@ export interface CreateDbClientOptions<TSchema, _DB = unknown> {
   schema: TSchema
   /** A Kysely Dialect — typically PostgresDialect from db-pg. */
   dialect: KyselyDialect
-  /** Enable lifecycle event emission. Default false (zero overhead path). */
+  /**
+   * Enable lifecycle event emission for `query` / `queryError` /
+   * `slowQuery` / `transactionStart` / `transactionCommit` /
+   * `transactionRollback`. Default `false` — zero overhead path; the
+   * Kysely log callback isn't even installed.
+   */
   events?: boolean
+  /**
+   * Fire the `slowQuery` event for any query whose duration exceeds
+   * this threshold (milliseconds). Default `null` — no slow-query
+   * detection. Setting a value implies `events: true` so the listener
+   * surface is attached.
+   */
+  slowQueryThresholdMs?: number | null
 }

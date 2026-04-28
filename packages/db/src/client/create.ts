@@ -20,8 +20,43 @@ interface InternalContext {
 export function createDbClient<TSchema, DB = SchemaToKysely<TSchema>>(
   opts: CreateDbClientOptions<TSchema, DB>,
 ): KickDbClient<DB> {
-  const events = opts.events ? new KickDbEventEmitter() : null
-  const kysely = new Kysely<DB>({ dialect: opts.dialect })
+  // `slowQueryThresholdMs` implies events — listeners can't subscribe to
+  // slowQuery without the emitter being live.
+  const eventsEnabled = opts.events || opts.slowQueryThresholdMs != null
+  const events = eventsEnabled ? new KickDbEventEmitter() : null
+  const slowThreshold = opts.slowQueryThresholdMs ?? null
+
+  // Kysely's `log` config fires on every query — both success
+  // (level 'query') and failure (level 'error') — with the compiled
+  // SQL, params, and timing. Cleanest hook for the lifecycle events;
+  // a full KyselyPlugin (transformQuery / transformResult) is heavier
+  // and only worth it when we need to mutate the SQL tree.
+  const kysely = new Kysely<DB>({
+    dialect: opts.dialect,
+    log: events
+      ? (event) => {
+          if (event.level === 'query') {
+            const durationMs = event.queryDurationMillis
+            const payload = {
+              sql: event.query.sql,
+              parameters: event.query.parameters,
+              durationMs,
+            }
+            events.emit('query', payload)
+            if (slowThreshold != null && durationMs >= slowThreshold) {
+              events.emit('slowQuery', { ...payload, thresholdMs: slowThreshold })
+            }
+          } else if (event.level === 'error') {
+            events.emit('queryError', {
+              sql: event.query.sql,
+              parameters: event.query.parameters,
+              error: event.error,
+            })
+          }
+        }
+      : undefined,
+  })
+
   const ctx: InternalContext = {
     events,
     dialect: detectDialect(opts.dialect),
