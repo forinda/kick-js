@@ -4,16 +4,27 @@
  * Tailwind v4 design tokens for the DevTools SPA.
  *
  * Theme strategy:
- *   • `<html data-theme>` flips `color-scheme` (`dark` | `light`).
- *   • All theme-aware colors below resolve via `light-dark()`, which
- *     auto-picks the right side based on the active `color-scheme`.
- *   • Tabs that hard-code `bg-slate-900` etc. stay dark-only (those
- *     are tracked as a follow-up); the app shell + every @apply rule
- *     here flips correctly.
+ *   • `<html data-theme="dark|light">` is set by lib/theme.ts on mount.
+ *   • The @theme block below holds the DARK defaults — palette tuned
+ *     toward a soft "near-black" (#0e1320) rather than pure slate-950
+ *     so the panel reads as a real dark UI, not a void.
+ *   • A `[data-theme='light']` block redeclares the same tokens with
+ *     light values. CSS variable resolution at use time means every
+ *     `bg-app-bg` / `text-text-secondary` / etc. utility class flips
+ *     when the attribute changes — no JS re-render required.
+ *
+ * Why explicit overrides instead of `light-dark()`?
+ *   • `light-dark()` shipped in Chrome 123 / Firefox 120 / Safari 17.5
+ *     (mid-2024). Some adopter browsers + Electron shells haven't
+ *     rolled forward yet.
+ *   • Token-level overrides debug cleanly in DevTools (you see the
+ *     actual computed value), don't depend on `color-scheme` being
+ *     set first, and let us widen one variable per theme without
+ *     touching the others.
  *
  * Contrast: prior dark-mode used `text-slate-500` for secondary
- * labels (~4.0:1 on slate-900). Bumped to `--text-muted` resolving to
- * slate-300/slate-600 — comfortable AA across both themes.
+ * labels (~4.0:1 on slate-900). Bumped to `--color-text-secondary`
+ * which resolves comfortably AA on both themes.
  */
 
 [data-theme='dark'] {
@@ -23,55 +34,95 @@
   color-scheme: light;
 }
 
+/* Default to dark scheme so the page doesn't flash light before
+   theme.ts mounts the data-theme attribute. */
+:root {
+  color-scheme: dark;
+}
+
 @theme {
   /* Brand palette — gold (primary) + purple (secondary).
-   * Gold reads well on dark backgrounds but is too washed-out on
-   * light, so the 500 token uses light-dark() to deepen on light
-   * (#a07810 ≈ 4.7:1 on slate-50). Same trick for purple. */
+   * Defaults below are the dark-mode tunings; light overrides land
+   * in the [data-theme='light'] block. */
   --color-kick-50: #fdf8e2;
-  --color-kick-400: light-dark(#b88712, #facc15); /* hover / focus ring */
-  --color-kick-500: light-dark(#a07810, #e0b020); /* primary accent */
-  --color-kick-600: light-dark(#7a5a08, #b08812);
+  --color-kick-400: #facc15;
+  --color-kick-500: #e0b020; /* primary gold, dark mode */
+  --color-kick-600: #b08812;
   --color-kick-900: #4d3608;
 
   --color-kick-purple-50: #f5f3ff;
-  --color-kick-purple-400: light-dark(#7c4ee8, #a78bfa);
-  --color-kick-purple-500: light-dark(#6d39d9, #8b5cf6);
-  --color-kick-purple-600: light-dark(#5b25c2, #7c3aed);
+  --color-kick-purple-400: #a78bfa;
+  --color-kick-purple-500: #8b5cf6;
+  --color-kick-purple-600: #7c3aed;
   --color-kick-purple-900: #4c1d95;
 
-  /* Semantic surfaces — `light-dark()` resolves at paint time. */
-  --color-app-bg: light-dark(#f8fafc, #020617); /* slate-50 / slate-950 */
-  --color-app-text: light-dark(#0f172a, #e2e8f0); /* slate-900 / slate-200 */
+  /* Semantic surfaces — DARK mode defaults (warm near-black, not
+   * pure slate-950 which reads too harsh on OLED + matte displays). */
+  --color-app-bg: #0e1320; /* ~slate-950 with a touch of blue lift */
+  --color-app-text: #e2e8f0; /* slate-200 */
 
-  --color-surface-1: light-dark(#ffffff, #0f172a); /* card / panel */
-  --color-surface-2: light-dark(#f1f5f9, #1e293b); /* header / nav */
-  --color-surface-hover: light-dark(#e2e8f0, #1e293b);
+  --color-surface-1: #161c2e; /* card / panel — one notch above app-bg */
+  --color-surface-2: #1a2236; /* header / nav — one notch above surface-1 */
+  --color-surface-hover: #232c44;
 
-  --color-border: light-dark(#e2e8f0, #1e293b); /* slate-200 / slate-800 */
-  --color-border-strong: light-dark(#cbd5e1, #334155); /* slate-300 / slate-700 */
+  --color-border: #1f2940;
+  --color-border-strong: #334155; /* slate-700 */
 
-  --color-text-strong: light-dark(#0f172a, #f1f5f9); /* slate-900 / slate-100 */
-  --color-text-body: light-dark(#1e293b, #e2e8f0); /* slate-800 / slate-200 */
-  --color-text-secondary: light-dark(#475569, #cbd5e1); /* slate-600 / slate-300 */
-  --color-text-muted: light-dark(#64748b, #94a3b8); /* slate-500 / slate-400 */
+  --color-text-strong: #f1f5f9; /* slate-100 */
+  --color-text-body: #e2e8f0; /* slate-200 */
+  --color-text-secondary: #cbd5e1; /* slate-300 */
+  --color-text-muted: #94a3b8; /* slate-400 */
 
   --color-accent: var(--color-kick-500);
-  --color-accent-on: light-dark(#ffffff, #ffffff);
+  --color-accent-on: #1a1308; /* dark text on the gold accent */
 
-  --color-tooltip-bg: light-dark(#1e293b, #0f172a);
-  --color-tooltip-text: light-dark(#f1f5f9, #e2e8f0);
-  --color-tooltip-border: light-dark(#475569, #334155);
+  --color-tooltip-bg: #0f172a;
+  --color-tooltip-text: #e2e8f0;
+  --color-tooltip-border: #334155;
 
   --font-mono:
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
     monospace;
 }
 
-/* Default to dark when no data-theme has been applied yet (before
-   theme.ts mounts). Avoids a flash of light content. */
-:root {
-  color-scheme: dark;
+/* LIGHT theme overrides — every semantic token redeclared with a
+ * light-mode value. Ordering: brand palette first, then surfaces,
+ * then text, then accents. Variable resolution at use time picks
+ * these up everywhere `bg-app-bg`, `text-text-secondary`, etc.
+ * are used. */
+[data-theme='light'] {
+  /* Brand: deepen gold so it reads on white surfaces. */
+  --color-kick-400: #b88712;
+  --color-kick-500: #a07810;
+  --color-kick-600: #7a5a08;
+
+  --color-kick-purple-400: #7c4ee8;
+  --color-kick-purple-500: #6d39d9;
+  --color-kick-purple-600: #5b25c2;
+
+  /* Surfaces */
+  --color-app-bg: #f8fafc; /* slate-50 */
+  --color-app-text: #0f172a; /* slate-900 */
+
+  --color-surface-1: #ffffff;
+  --color-surface-2: #f1f5f9; /* slate-100 */
+  --color-surface-hover: #e2e8f0; /* slate-200 */
+
+  --color-border: #e2e8f0; /* slate-200 */
+  --color-border-strong: #cbd5e1; /* slate-300 */
+
+  /* Text */
+  --color-text-strong: #0f172a; /* slate-900 */
+  --color-text-body: #1e293b; /* slate-800 */
+  --color-text-secondary: #475569; /* slate-600 */
+  --color-text-muted: #64748b; /* slate-500 */
+
+  --color-accent-on: #ffffff;
+
+  /* Tooltips on light surfaces */
+  --color-tooltip-bg: #1e293b;
+  --color-tooltip-text: #f1f5f9;
+  --color-tooltip-border: #475569;
 }
 
 /**
