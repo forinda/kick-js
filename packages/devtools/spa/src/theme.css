@@ -3,23 +3,75 @@
 /**
  * Tailwind v4 design tokens for the DevTools SPA.
  *
- * Mirrors the legacy Vue dashboard palette (slate-950 background +
- * sky/kick-500 accent) so the visual identity stays consistent
- * across both surfaces while we port the missing tabs.
+ * Theme strategy:
+ *   • `<html data-theme>` flips `color-scheme` (`dark` | `light`).
+ *   • All theme-aware colors below resolve via `light-dark()`, which
+ *     auto-picks the right side based on the active `color-scheme`.
+ *   • Tabs that hard-code `bg-slate-900` etc. stay dark-only (those
+ *     are tracked as a follow-up); the app shell + every @apply rule
+ *     here flips correctly.
  *
- * v4's `@theme` block defines CSS variables AND extends Tailwind's
- * default scale at the same time — `--color-kick-500` gives us
- * `bg-kick-500`, `text-kick-500`, etc., automatically.
+ * Contrast: prior dark-mode used `text-slate-500` for secondary
+ * labels (~4.0:1 on slate-900). Bumped to `--text-muted` resolving to
+ * slate-300/slate-600 — comfortable AA across both themes.
  */
+
+[data-theme='dark'] {
+  color-scheme: dark;
+}
+[data-theme='light'] {
+  color-scheme: light;
+}
+
 @theme {
-  --color-kick-50: #f0f9ff;
-  --color-kick-500: #38bdf8;
-  --color-kick-600: #0284c7;
-  --color-kick-900: #0c4a6e;
+  /* Brand palette — gold (primary) + purple (secondary).
+   * Gold reads well on dark backgrounds but is too washed-out on
+   * light, so the 500 token uses light-dark() to deepen on light
+   * (#a07810 ≈ 4.7:1 on slate-50). Same trick for purple. */
+  --color-kick-50: #fdf8e2;
+  --color-kick-400: light-dark(#b88712, #facc15); /* hover / focus ring */
+  --color-kick-500: light-dark(#a07810, #e0b020); /* primary accent */
+  --color-kick-600: light-dark(#7a5a08, #b08812);
+  --color-kick-900: #4d3608;
+
+  --color-kick-purple-50: #f5f3ff;
+  --color-kick-purple-400: light-dark(#7c4ee8, #a78bfa);
+  --color-kick-purple-500: light-dark(#6d39d9, #8b5cf6);
+  --color-kick-purple-600: light-dark(#5b25c2, #7c3aed);
+  --color-kick-purple-900: #4c1d95;
+
+  /* Semantic surfaces — `light-dark()` resolves at paint time. */
+  --color-app-bg: light-dark(#f8fafc, #020617); /* slate-50 / slate-950 */
+  --color-app-text: light-dark(#0f172a, #e2e8f0); /* slate-900 / slate-200 */
+
+  --color-surface-1: light-dark(#ffffff, #0f172a); /* card / panel */
+  --color-surface-2: light-dark(#f1f5f9, #1e293b); /* header / nav */
+  --color-surface-hover: light-dark(#e2e8f0, #1e293b);
+
+  --color-border: light-dark(#e2e8f0, #1e293b); /* slate-200 / slate-800 */
+  --color-border-strong: light-dark(#cbd5e1, #334155); /* slate-300 / slate-700 */
+
+  --color-text-strong: light-dark(#0f172a, #f1f5f9); /* slate-900 / slate-100 */
+  --color-text-body: light-dark(#1e293b, #e2e8f0); /* slate-800 / slate-200 */
+  --color-text-secondary: light-dark(#475569, #cbd5e1); /* slate-600 / slate-300 */
+  --color-text-muted: light-dark(#64748b, #94a3b8); /* slate-500 / slate-400 */
+
+  --color-accent: var(--color-kick-500);
+  --color-accent-on: light-dark(#ffffff, #ffffff);
+
+  --color-tooltip-bg: light-dark(#1e293b, #0f172a);
+  --color-tooltip-text: light-dark(#f1f5f9, #e2e8f0);
+  --color-tooltip-border: light-dark(#475569, #334155);
 
   --font-mono:
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
     monospace;
+}
+
+/* Default to dark when no data-theme has been applied yet (before
+   theme.ts mounts). Avoids a flash of light content. */
+:root {
+  color-scheme: dark;
 }
 
 /**
@@ -32,17 +84,17 @@
  * Runtime/Memory/Topology in the same commit.
  */
 @layer components {
-  /* App shell */
+  /* App shell — uses semantic tokens so it flips with the theme. */
   .app {
-    @apply min-h-screen flex flex-col bg-slate-950 text-slate-200 font-sans;
+    @apply min-h-screen flex flex-col bg-app-bg text-app-text font-sans;
   }
   .tabs {
-    @apply flex gap-1 px-4 pt-3 border-b border-slate-800 bg-slate-900
+    @apply flex gap-1 px-4 pt-3 border-b border-border bg-surface-2
            overflow-x-auto whitespace-nowrap;
     /* Thin scrollbar so the bar height stays consistent on Linux/Win
        (where the default ~12px scrollbar would offset the divider). */
     scrollbar-width: thin;
-    scrollbar-color: var(--color-slate-700) transparent;
+    scrollbar-color: var(--color-border-strong) transparent;
   }
   .tabs::-webkit-scrollbar {
     height: 6px;
@@ -51,19 +103,20 @@
     background: transparent;
   }
   .tabs::-webkit-scrollbar-thumb {
-    background: var(--color-slate-700);
+    background: var(--color-border-strong);
     border-radius: 3px;
   }
   .tab {
     @apply px-4 py-2 text-sm font-medium rounded-t-lg cursor-pointer border border-transparent
-           text-slate-400 transition-colors flex-shrink-0;
+           text-text-secondary transition-colors flex-shrink-0;
     background: transparent;
   }
   .tab:hover {
-    @apply bg-slate-800/60 text-slate-200;
+    @apply bg-surface-hover text-text-strong;
   }
   .tab.active {
-    @apply bg-slate-800 text-kick-500 border-slate-700 border-b-slate-800;
+    @apply bg-surface-1 text-accent border-border-strong;
+    border-bottom-color: var(--color-surface-1);
   }
   .tab-body {
     @apply p-6 flex-1;
@@ -71,16 +124,18 @@
 
   /* Cards */
   .card {
-    @apply bg-slate-900 rounded-xl border border-slate-800 p-5 mb-4;
+    @apply bg-surface-1 rounded-xl border border-border p-5 mb-4;
   }
   .card-header {
     @apply flex items-center justify-between mb-3;
   }
   .card-title {
-    @apply text-xs font-semibold uppercase tracking-wider text-slate-500;
+    /* Was text-slate-500 (≈4:1) — bumped to text-text-secondary
+       which resolves slate-300/slate-600 across themes. */
+    @apply text-xs font-semibold uppercase tracking-wider text-text-secondary;
   }
   .card-value {
-    @apply text-base font-semibold tabular-nums text-slate-200;
+    @apply text-base font-semibold tabular-nums text-text-strong;
   }
 
   /* Grid */
@@ -93,22 +148,25 @@
     @apply w-full text-sm;
   }
   thead tr {
-    @apply border-b-2 border-slate-700;
+    @apply border-b-2 border-border-strong;
   }
   th {
-    @apply text-left py-2 px-3 text-slate-400 font-semibold;
+    @apply text-left py-2 px-3 text-text-secondary font-semibold;
   }
   tbody tr {
-    @apply border-b border-slate-800;
+    @apply border-b border-border;
   }
   tbody tr:hover {
-    @apply bg-slate-800/40;
+    @apply bg-surface-hover/40;
   }
   td {
     @apply py-2 px-3;
   }
 
-  /* Badges */
+  /* Badges — semantic colours kept literal; their dark/light
+     palettes are similar enough that runtime swap isn't worth the
+     pixel-perfect retune. Adopters who want bigger contrast can
+     override per-token. */
   .badge {
     @apply px-2 py-0.5 rounded text-xs font-semibold;
   }
@@ -124,21 +182,23 @@
 
   /* Empty + tree fragments used by Topology */
   .empty {
-    @apply text-slate-500 italic text-center py-8;
+    /* Was text-slate-500 italic — bumped to text-text-secondary so
+       "no data" copy reads on light backgrounds too. */
+    @apply text-text-secondary italic text-center py-8;
   }
   .tree-node {
-    @apply py-2 border-b border-slate-800 last:border-b-0;
+    @apply py-2 border-b border-border last:border-b-0;
   }
   .tree-key {
-    @apply font-mono text-sm text-slate-200;
+    @apply font-mono text-sm text-text-strong;
   }
   .tree-meta {
-    @apply text-xs text-slate-500 mt-1;
+    @apply text-xs text-text-secondary mt-1;
   }
 
   /* Status row at bottom of Runtime/Memory tabs */
   .status {
-    @apply flex items-center justify-between text-xs text-slate-500 mt-4 px-2;
+    @apply flex items-center justify-between text-xs text-text-secondary mt-4 px-2;
   }
   .status-dot {
     @apply inline-block w-2 h-2 rounded-full mr-1;
@@ -152,31 +212,30 @@
 }
 
 /**
- * New header / pill / tab-badge from commit 7 — keep them as plain
- * .dt-* classes for now (App.tsx uses them by name); the next tab
- * commits start using direct Tailwind utilities.
+ * Header / pill / tab-badge from the dt-* family. Migrated to
+ * semantic tokens so the header reads on light themes.
  */
 @layer components {
   .dt-header {
-    @apply flex items-center justify-between px-4 py-3 border-b border-slate-800 bg-slate-900;
+    @apply flex items-center justify-between px-4 py-3 border-b border-border bg-surface-2;
   }
   .dt-header-brand {
     @apply flex items-center gap-2;
   }
   .dt-header-brand h1 {
-    @apply text-sm font-semibold tracking-wide;
+    @apply text-sm font-semibold tracking-wide text-text-strong;
   }
   .dt-bolt {
-    @apply text-kick-500 text-base leading-none;
+    @apply text-accent text-base leading-none;
   }
   .dt-conn {
-    @apply flex items-center gap-1.5 text-xs text-slate-500;
+    @apply flex items-center gap-1.5 text-xs text-text-secondary;
   }
   .dt-conn-label {
-    @apply font-semibold text-slate-300;
+    @apply font-semibold text-text-strong;
   }
   .dt-conn-sep {
-    @apply text-slate-600;
+    @apply text-text-muted;
   }
   .dt-pulse {
     @apply inline-block w-2 h-2 rounded-full;
@@ -188,7 +247,7 @@
     @apply bg-amber-400 animate-pulse;
   }
   .dt-pulse-connecting {
-    @apply bg-slate-500;
+    @apply bg-text-muted;
   }
   .dt-pulse-disconnected {
     @apply bg-red-400;
@@ -196,11 +255,24 @@
 
   .tab-badge {
     @apply ml-1.5 px-1.5 py-0.5 text-[10px] font-semibold rounded-full
-           bg-slate-700 text-slate-300 align-middle;
+           bg-border-strong text-text-secondary align-middle;
   }
   .tab.active .tab-badge {
-    @apply bg-kick-500 text-white;
+    @apply bg-accent text-accent-on;
   }
+}
+
+/* ── Theme toggle button ─────────────────────────────────────── */
+.dt-theme-toggle {
+  @apply inline-flex items-center justify-center w-7 h-7 rounded-md
+         text-text-secondary hover:text-text-strong
+         border border-transparent hover:border-border-strong
+         bg-transparent hover:bg-surface-hover
+         transition-colors cursor-pointer;
+}
+.dt-theme-toggle svg {
+  width: 16px;
+  height: 16px;
 }
 
 /* ── Info tooltip / button (commit 11) ───────────────────────── */
@@ -210,7 +282,7 @@
   position: relative;
   margin-left: 4px;
   vertical-align: middle;
-  color: var(--color-slate-500);
+  color: var(--color-text-secondary);
   cursor: help;
 }
 .dt-tip-clickable {
@@ -218,13 +290,13 @@
   background: transparent;
   border: none;
   padding: 0;
-  color: var(--color-slate-500);
+  color: var(--color-text-secondary);
 }
 .dt-tip-clickable:hover {
-  color: var(--color-kick-500);
+  color: var(--color-accent);
 }
 .dt-tip:hover {
-  color: var(--color-kick-500);
+  color: var(--color-accent);
 }
 .dt-tip-icon {
   width: 14px;
@@ -245,9 +317,9 @@
   font-size: 11px;
   font-weight: 400;
   line-height: 1.4;
-  color: var(--color-slate-200);
-  background: var(--color-slate-800);
-  border: 1px solid var(--color-slate-700);
+  color: var(--color-tooltip-text);
+  background: var(--color-tooltip-bg);
+  border: 1px solid var(--color-tooltip-border);
   border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   pointer-events: none;
