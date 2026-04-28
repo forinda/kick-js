@@ -88,3 +88,7 @@ export * from './dsl/columns'
 export * from './dsl/table'
 export * from './dsl/constraints'
 export * from './dsl/relations'
+
+// Adopter-defined column types (M2.F-T16) — lets projects introduce
+// typed columns without forking the package.
+export { customType, CustomColumnBuilder, type CustomTypeOptions } from './custom-type'
