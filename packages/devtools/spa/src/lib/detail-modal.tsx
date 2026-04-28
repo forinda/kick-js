@@ -93,12 +93,12 @@ export const DetailModalHost: Component = () => {
     <Show when={registration()}>
       {(reg) => (
         <div
-          class="fixed inset-0 z-50 bg-slate-950/80 flex items-center justify-center p-4"
+          class="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
           onClick={(e) => {
             if (e.target === e.currentTarget) close()
           }}
         >
-          <div class="bg-slate-900 border border-slate-700 rounded-2xl p-6 max-w-2xl w-full shadow-2xl max-h-[90vh] overflow-y-auto">
+          <div class="bg-surface-1 border border-border-strong rounded-2xl p-6 max-w-2xl w-full shadow-2xl max-h-[90vh] overflow-y-auto">
             {/* Header */}
             <div class="flex items-start justify-between mb-4">
               <div>
@@ -106,7 +106,7 @@ export const DetailModalHost: Component = () => {
                   <Show when={historyStack().length > 0}>
                     <button
                       type="button"
-                      class="text-slate-500 hover:text-slate-300 p-1"
+                      class="text-text-muted hover:text-text-strong p-1"
                       aria-label="Back"
                       onClick={back}
                     >
@@ -125,7 +125,7 @@ export const DetailModalHost: Component = () => {
                       </svg>
                     </button>
                   </Show>
-                  <h2 class="text-base font-semibold font-mono text-slate-200 break-all">
+                  <h2 class="text-base font-semibold font-mono text-text-body break-all">
                     {reg().token}
                   </h2>
                 </div>
@@ -133,7 +133,7 @@ export const DetailModalHost: Component = () => {
                   <span class={`px-2 py-0.5 rounded text-xs font-semibold ${kindBadge(reg().kind)}`}>
                     {reg().kind ?? 'unknown'}
                   </span>
-                  <span class="bg-slate-700/50 text-slate-300 px-2 py-0.5 rounded text-xs font-semibold">
+                  <span class="bg-border-strong/50 text-text-strong px-2 py-0.5 rounded text-xs font-semibold">
                     {reg().scope ?? 'singleton'}
                   </span>
                   <span class={`px-2 py-0.5 rounded text-xs font-semibold ${statusBadge(reg())}`}>
@@ -162,14 +162,14 @@ export const DetailModalHost: Component = () => {
             <Section title="Dependencies">
               <Show
                 when={(reg().dependencies?.length ?? 0) > 0}
-                fallback={<span class="text-slate-600 text-sm">None</span>}
+                fallback={<span class="text-text-muted text-sm">None</span>}
               >
                 <div class="flex flex-wrap gap-1">
                   <For each={reg().dependencies}>
                     {(dep) => (
                       <button
                         type="button"
-                        class="bg-slate-800 text-kick-500 hover:bg-slate-700 px-2.5 py-1 rounded text-xs font-mono border border-slate-700 transition-colors"
+                        class="bg-surface-2 text-kick-500 hover:bg-border-strong px-2.5 py-1 rounded text-xs font-mono border border-border-strong transition-colors"
                         onClick={() => navigateModalTo(dep)}
                       >
                         {dep}
@@ -184,14 +184,14 @@ export const DetailModalHost: Component = () => {
             <Section title="Dependents">
               <Show
                 when={dependents().length > 0}
-                fallback={<span class="text-slate-600 text-sm">None</span>}
+                fallback={<span class="text-text-muted text-sm">None</span>}
               >
                 <div class="flex flex-wrap gap-1">
                   <For each={dependents()}>
                     {(d) => (
                       <button
                         type="button"
-                        class="bg-slate-800 text-amber-400 hover:bg-slate-700 px-2.5 py-1 rounded text-xs font-mono border border-slate-700 transition-colors"
+                        class="bg-surface-2 text-amber-400 hover:bg-border-strong px-2.5 py-1 rounded text-xs font-mono border border-border-strong transition-colors"
                         onClick={() => navigateModalTo(d)}
                       >
                         {d}
@@ -204,7 +204,7 @@ export const DetailModalHost: Component = () => {
 
             {/* Resolve stats */}
             <Section title="Resolve stats">
-              <div class="bg-slate-800/50 rounded-lg border border-slate-700 p-3 space-y-2 text-sm">
+              <div class="bg-surface-2/50 rounded-lg border border-border-strong p-3 space-y-2 text-sm">
                 <Row label="Resolve count" value={String(reg().resolveCount ?? 0)} />
                 <Show when={reg().firstResolved}>
                   {(ts) => <Row label="First resolved" value={new Date(ts()).toLocaleString()} />}
@@ -236,7 +236,7 @@ export const DetailModalHost: Component = () => {
 
 const Section: Component<{ title: string; children: unknown }> = (props) => (
   <div class="mb-4">
-    <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
+    <h3 class="text-xs font-semibold uppercase tracking-wider text-text-muted mb-2">
       {props.title}
     </h3>
     {props.children as unknown as Element}
@@ -245,7 +245,7 @@ const Section: Component<{ title: string; children: unknown }> = (props) => (
 
 const Row: Component<{ label: string; value: string }> = (props) => (
   <div class="flex justify-between">
-    <span class="text-slate-400">{props.label}</span>
+    <span class="text-text-secondary">{props.label}</span>
     <span class="tabular-nums">{props.value}</span>
   </div>
 )
@@ -254,7 +254,7 @@ function kindBadge(kind: string | undefined): string {
   if (kind === 'controller') return 'bg-violet-900/50 text-violet-300'
   if (kind === 'service') return 'bg-blue-900/50 text-blue-300'
   if (kind === 'repository') return 'bg-teal-900/50 text-teal-300'
-  return 'bg-slate-700/50 text-slate-300'
+  return 'bg-border-strong/50 text-text-strong'
 }
 
 function statusBadge(r: ContainerRegistration): string {
@@ -272,5 +272,5 @@ function statusLabel(r: ContainerRegistration): string {
 function postConstructBadge(status: string | undefined): string {
   if (status === 'done') return 'bg-emerald-900/50 text-emerald-300'
   if (status === 'failed') return 'bg-red-900/50 text-red-300'
-  return 'bg-slate-700/50 text-slate-400'
+  return 'bg-border-strong/50 text-text-secondary'
 }

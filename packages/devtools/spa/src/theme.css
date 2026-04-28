@@ -80,6 +80,19 @@
   --color-tooltip-text: #e2e8f0;
   --color-tooltip-border: #334155;
 
+  /* Legacy aliases — older tabs reference --bg / --text / --text-dim
+   * / --accent / --critical / --warn from the pre-Tailwind era. Map
+   * them onto the semantic tokens so MemoryTab / sparkline canvas /
+   * any inline `style="color:var(--text-dim)"` flips correctly with
+   * the theme. New code should use `--color-*` directly. */
+  --bg: var(--color-app-bg);
+  --text: var(--color-app-text);
+  --text-dim: var(--color-text-secondary);
+  --accent: var(--color-kick-500);
+  --border: var(--color-border);
+  --critical: #ef4444;
+  --warn: #f59e0b;
+
   --font-mono:
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
     monospace;

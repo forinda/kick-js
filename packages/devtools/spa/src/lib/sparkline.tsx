@@ -34,6 +34,10 @@ export const Sparkline: Component<SparklineProps> = (props) => {
     return d
   })
 
+  // Default stroke pulls from --color-accent (the theme-aware brand
+   // gold), so the line flips with light/dark mode automatically.
+   // `fill="none"` is critical — without it SVG fills closed paths
+   // black, which is exactly the "solid black chart" the user sees.
   return (
     <svg
       class="sparkline"
@@ -41,7 +45,14 @@ export const Sparkline: Component<SparklineProps> = (props) => {
       preserveAspectRatio="none"
       aria-hidden="true"
     >
-      <path d={path()} stroke={props.stroke} />
+      <path
+        d={path()}
+        fill="none"
+        stroke={props.stroke ?? 'var(--color-accent)'}
+        stroke-width="1.5"
+        stroke-linejoin="round"
+        stroke-linecap="round"
+      />
     </svg>
   )
 }
