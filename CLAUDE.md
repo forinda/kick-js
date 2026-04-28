@@ -108,13 +108,20 @@ Use the built CLI to scaffold — never create files manually.
 # 1. Build CLI first (if not already built)
 pnpm build
 
-# 2. Scaffold from examples/ directory (all flags required to avoid interactive prompts)
+# 2. Scaffold from examples/ directory
 cd examples
+# Fastest — name + --yes picks all defaults (template=minimal, repo=inmemory,
+# no extras, git+install on, pm resolved from corepack/lockfile)
+node ../packages/cli/bin.js new my-example-api --yes --no-install --force
+
+# Or specify each flag explicitly when you want a non-default template/repo
 node ../packages/cli/bin.js new my-example-api \
-  --template minimal --pm pnpm --repo inmemory --no-git --no-install --force
+  --template ddd --pm pnpm --repo prisma --no-git --no-install --force
 ```
 
-Available flags: `--template rest|graphql|ddd|cqrs|minimal`, `--pm pnpm|npm|yarn`, `--repo prisma|drizzle|inmemory|custom`, `--no-git`, `--no-install`, `--force`.
+`--yes` (alias `--non-interactive`) bypasses every prompt with safe defaults; explicit flags override individual answers. Without `--yes`, every unset flag prompts interactively.
+
+Available flags: `--template rest|ddd|cqrs|minimal`, `--pm pnpm|npm|yarn|bun`, `--repo prisma|drizzle|inmemory|custom`, `--packages auth,swagger,...`, `--no-git`, `--no-install`, `--force`, `-y / --yes / --non-interactive`.
 
 3. Update generated `package.json`:
    - Rename to `@forinda/kickjs-example-<name>`

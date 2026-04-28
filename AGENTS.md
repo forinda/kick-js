@@ -138,17 +138,24 @@ Do NOT consider a feature complete until its docs are written and the sidebar is
 # Build the CLI first
 pnpm build
 
-# Scaffold from examples/ directory — pass all flags to avoid interactive prompts
+# Scaffold from examples/ directory
 cd examples
+# Fastest — `--yes` picks defaults (template=minimal, repo=inmemory, no extras,
+# pm resolved from corepack/lockfile). Add explicit flags to override any default.
+node ../packages/cli/bin.js new upload-api --yes --no-install --force
+
+# Or specify each flag for a non-default scaffold
 node ../packages/cli/bin.js new upload-api \
-  --template ddd --pm pnpm --repo inmemory --no-git --no-install --force
+  --template ddd --pm pnpm --repo prisma --no-git --no-install --force
 
 # Generate modules inside the example
 cd upload-api
 node ../../packages/cli/bin.js g module upload
 ```
 
-Available flags for `new`: `--template rest|graphql|ddd|cqrs|minimal`, `--pm pnpm|npm|yarn`, `--repo prisma|drizzle|inmemory|custom`, `--no-git`, `--no-install`, `--force`.
+`--yes` (alias `--non-interactive`, short `-y`) bypasses every prompt. Without it, missing flags trigger interactive selection.
+
+Available flags for `new`: `--template rest|ddd|cqrs|minimal`, `--pm pnpm|npm|yarn|bun`, `--repo prisma|drizzle|inmemory|custom`, `--packages auth,swagger,...`, `--no-git`, `--no-install`, `--force`, `-y / --yes / --non-interactive`.
 
 After scaffolding, customize the generated code for the example's purpose.
 

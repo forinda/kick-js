@@ -74,45 +74,58 @@ pnpm add -g @forinda/kickjs-cli
 Create a new KickJS project:
 
 ```bash
-kick new my-app            # Interactive prompts for PM, git, install
-kick new .                 # Scaffold in current directory
-kick new my-app --pm pnpm  # Skip PM prompt
-kick new my-app --git --install           # Non-interactive (defaults to rest template)
-kick new my-app --no-git --no-install     # Skip git and install
-kick new my-app -d ./custom-directory     # Custom target directory
-kick new my-app -t graphql --pm pnpm --no-git --install  # Fully scriptable
+kick new my-app                          # Interactive prompts for everything
+kick new my-app --yes                    # Pick all defaults (minimal + inmemory)
+kick new .                               # Scaffold in current directory
+kick new my-app --pm pnpm                # Skip PM prompt only
+kick new my-app -t ddd --pm pnpm --no-git --install  # Fully scriptable
 ```
 
-All prompts are skippable via flags, making `kick new` usable in **CI pipelines and shell scripts**:
+`-y, --yes` (alias `--non-interactive`) bypasses every prompt and picks safe defaults — usable in CI pipelines and one-liner shell scripts:
 
 ```bash
-# Fully non-interactive — no TTY required
-kick new my-api --template rest --pm pnpm --no-git --install
+# Single-flag fully non-interactive — no TTY required
+kick new my-api --yes
 ```
 
-When run without flags, the CLI prompts for:
-1. **Project template** — REST, GraphQL, DDD, CQRS, or Minimal
-2. **Package manager** — pnpm, npm, or yarn
+`--yes` defaults:
+
+| Setting | Default value |
+|---------|---------------|
+| Template | `minimal` |
+| Repository | `inmemory` |
+| Optional packages | none |
+| Git init | enabled |
+| Install deps | enabled |
+| Package manager | resolved via `kick add`'s chain (config → corepack `packageManager` → lockfile → npm) |
+
+Any explicit flag overrides the matching default — `--yes --template rest --repo drizzle` scaffolds a REST + Drizzle project without prompts.
+
+When run without `--yes` (and without specific flags), the CLI prompts for:
+1. **Project template** — REST, DDD, CQRS, or Minimal
+2. **Package manager** — pnpm, npm, yarn, or bun
 3. **Default repository** — Prisma, Drizzle, In-Memory, or Custom ORM
-4. **Git init** — initialize a git repository with an initial commit
-5. **Install deps** — run the selected package manager's install command
+4. **Optional packages** — auth, swagger, ws, queue, devtools
+5. **Git init** — initialize a git repository with an initial commit
+6. **Install deps** — run the selected package manager's install command
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `-t, --template <type>` | Project template: `rest`, `graphql`, `ddd`, `cqrs`, `minimal` | Prompted |
-| `-r, --repo <type>` | Default repository: `prisma`, `drizzle`, `inmemory`, `custom` | Prompted |
+| `-t, --template <type>` | Project template: `rest`, `ddd`, `cqrs`, `minimal` | Prompted (or `minimal` with `--yes`) |
+| `-r, --repo <type>` | Default repository: `prisma`, `drizzle`, `inmemory`, `custom` | Prompted (or `inmemory` with `--yes`) |
 | `-d, --directory <dir>` | Target directory | Project name |
-| `--pm <manager>` | Package manager: `pnpm`, `npm`, or `yarn` | Prompted |
-| `--git / --no-git` | Initialize git repository | Prompted |
-| `--install / --no-install` | Install dependencies | Prompted |
+| `--pm <manager>` | Package manager: `pnpm`, `npm`, `yarn`, or `bun` | Prompted (or auto-detected with `--yes`) |
+| `--packages <list>` | Comma-separated optional packages | Prompted (or none with `--yes`) |
+| `--git / --no-git` | Initialize git repository | Prompted (or `true` with `--yes`) |
+| `--install / --no-install` | Install dependencies | Prompted (or `true` with `--yes`) |
 | `-f, --force` | Clear non-empty directory without prompting | `false` |
+| `-y, --yes`, `--non-interactive` | Bypass every prompt with safe defaults | `false` |
 
 ### Templates
 
 | Template | Adapters | Packages installed |
 |----------|----------|-------------------|
 | `rest` (default) | Swagger + DevTools | kickjs, kickjs-vite, kickjs-swagger |
-| `graphql` | GraphQL via BYO `definePlugin` recipe (see [GraphQL guide](./graphql.md)) | kickjs, kickjs-vite |
 | `ddd` | Swagger + DevTools | kickjs, kickjs-vite, kickjs-swagger |
 | `cqrs` | Swagger + WS + Queue + DevTools | kickjs, kickjs-vite, kickjs-swagger, kickjs-ws, kickjs-queue |
 | `minimal` | None | kickjs, kickjs-vite |
@@ -121,7 +134,7 @@ Use `.` as the project name to scaffold in the current directory (the folder nam
 
 The `init` alias also works: `kick init my-app`.
 
-**Non-empty directory safety:** If the target directory already contains files, the CLI shows up to 5 existing entries and asks for confirmation before clearing them. Use `--force` to skip the prompt.
+**Non-empty directory safety:** If the target directory already contains files, the CLI shows up to 5 existing entries and asks for confirmation before clearing them. Use `--force` to skip the prompt. Running with `--yes` *without* `--force` aborts cleanly when the directory is non-empty — the non-interactive flag never silently destroys existing work.
 
 ## kick dev
 
@@ -198,46 +211,34 @@ Output:
 
   Packages:
     @forinda/kickjs           workspace
-    @forinda/kickjs-config   workspace
-    @forinda/kickjs-cli      workspace
+    @forinda/kickjs-vite      workspace
+    @forinda/kickjs-cli       workspace
 ```
 
 ## kick list
 
-List all available KickJS packages. Alias: `kick ls`.
+List the core KickJS packages every project ships with. Alias: `kick ls`. Pair with `--all` to dump the full optional catalog (which churns between releases — packages added, deprecated, removed — so the default view stays stable).
 
 ```bash
-kick list
-kick ls
+kick list                 # core only
+kick list --all           # full catalog
+kick ls                   # alias
 ```
 
-Output shows each package name, description, and required peer dependencies:
+Default output (3 core packages):
 
 ```
-  Available KickJS packages:
+  Core packages (always installed by `kick new`):
 
     kickjs           Unified framework: DI, decorators, routing, middleware (+ express)
     vite             Vite plugin: dev server, HMR, module discovery (+ vite)
-    config           Optional .env file loader (kickjs ConfigService now ships in @forinda/kickjs)
     cli              CLI tool and code generators
-    swagger          OpenAPI spec + Swagger UI + ReDoc
-    graphql          GraphQL resolvers + GraphiQL (+ graphql)
-    drizzle          Drizzle ORM adapter + query builder (+ drizzle-orm)
-    prisma           Prisma adapter + query builder (+ @prisma/client)
-    ws               WebSocket with @WsController decorators (+ socket.io)
-    otel             OpenTelemetry tracing + metrics (+ @opentelemetry/api)
-    devtools         Development dashboard — routes, DI, metrics, health
-    auth             Authentication — JWT, API key, and custom strategies (+ jsonwebtoken)
-    mailer           Email sending — SMTP, Resend, SES, or custom provider (+ nodemailer)
-    cron             Cron job scheduling (production-grade with croner) (+ croner)
-    queue            Queue adapter (BullMQ/RabbitMQ/Kafka)
-    queue:bullmq     Queue with BullMQ + Redis (+ bullmq, ioredis)
-    queue:rabbitmq   Queue with RabbitMQ (+ amqplib)
-    queue:kafka      Queue with Kafka (+ kafkajs)
-    multi-tenant     Tenant resolution middleware
-    notifications    Multi-channel notifications — email, Slack, Discord, webhook
-    testing          Test utilities and TestModule builder
+
+  Plus N optional packages (auth, swagger, db, queue, …).
+  Run `kick list --all` for the full catalog.
 ```
+
+`kick list --all` adds the **Optional packages** section beneath the core list — what's actually shipped in the `kick add` registry at this CLI version. Names there are stable, but membership rotates as the framework evolves, so we do not enumerate them in this guide.
 
 ## kick add
 
@@ -247,14 +248,51 @@ Add KickJS packages with their required peer dependencies automatically resolved
 kick add swagger          # installs @forinda/kickjs-swagger
 kick add drizzle auth     # installs multiple packages at once
 kick add queue:bullmq     # installs queue package + bullmq + ioredis
-kick add --list           # show all available packages (same as kick list)
+kick add --list           # show core packages (alias: kick list)
+kick add --list --all     # full optional catalog
 ```
+
+### Core packages
+
+`kick add --list` defaults to the three core packages every project always installs. The optional catalog moves between releases (packages added, deprecated, removed) so the live list lives behind `--all`:
+
+```text
+  Core packages (always installed by `kick new`):
+
+    kickjs           Unified framework: DI, decorators, routing, middleware (+ express)
+    vite             Vite plugin: dev server, HMR, module discovery (+ vite)
+    cli              CLI tool and code generators
+
+  Plus N optional packages (auth, swagger, db, queue, …).
+  Run `kick add --list --all` for the full catalog.
+```
+
+The framework runtime (`@forinda/kickjs`), the dev/build/HMR layer (`@forinda/kickjs-vite`), and the CLI (`@forinda/kickjs-cli`) are the only members of the core set. Everything else — auth, swagger, db, drizzle, prisma, ws, queue, devtools, mcp, testing — is opt-in via `kick add`.
+
+### Package manager resolution
+
+`kick add` picks the package manager from this chain (highest priority first):
+
+1. `--pm` flag
+2. `packageManager` field in `kick.config.ts`
+3. `packageManager` field in the **nearest ancestor** `package.json` (corepack)
+4. **Nearest ancestor** lockfile (`pnpm-lock.yaml` → `yarn.lock` → `bun.lock` → `package-lock.json`)
+5. `npm` fallback
+
+The "nearest ancestor" climb means a workspace sub-package inherits the workspace root's pm, even when the sub-package's own `package.json` omits `packageManager`. Run `kick add <pkg>` from any directory under a pnpm workspace and it picks pnpm. The output prints the resolved source so the path is visible:
+
+```text
+  Using pnpm (resolved from package.json)
+```
+
+### Flags
 
 | Flag | Description |
 |------|-------------|
-| `--pm <manager>` | Package manager override (auto-detected from lockfile) |
+| `--pm <manager>` | Package manager override (auto-detected via the chain above) |
 | `-D, --dev` | Install as dev dependency |
-| `--list` | List all available packages (same as `kick list`) |
+| `--list` | List packages (core only by default) |
+| `--all` | When paired with `--list`, include the full optional catalog |
 
 ## kick generate (kick g)
 
@@ -359,7 +397,7 @@ Aliases: `kick g agent-docs`, `kick g ai-docs`. Auto-detects project name (from 
 | `--only <which>` | `agents` \| `claude` \| `skills` \| `both` \| `all` | `all` |
 | `--name <name>` | Project name override | from `package.json` |
 | `--pm <pm>` | Package manager override | from `package.json` |
-| `--template <template>` | `rest` \| `graphql` \| `ddd` \| `cqrs` \| `minimal` | from `kick.config.ts` |
+| `--template <template>` | `rest` \| `ddd` \| `cqrs` \| `minimal` | from `kick.config.ts` |
 | `-f, --force` | Overwrite without prompting | `false` |
 
 See [Generators — kick g agents](./generators.md#kick-g-agents) for what each file contains and how to keep local customisations from being overwritten.
@@ -468,7 +506,6 @@ Controls the default generator behavior and project template style.
 | Value | Description |
 |-------|-------------|
 | `'rest'` | Express + Swagger (default) |
-| `'graphql'` | GraphQL + GraphiQL |
 | `'ddd'` | Full DDD modules with use cases, entities, value objects |
 | `'cqrs'` | CQRS with commands, queries, events + WS/queue |
 | `'minimal'` | Bare Express with no scaffolding |

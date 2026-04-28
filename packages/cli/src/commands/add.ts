@@ -4,33 +4,41 @@ import { dirname, resolve } from 'node:path'
 import type { Command } from 'commander'
 import { loadKickConfig, PACKAGE_MANAGERS, type PackageManager } from '../config'
 
+interface PackageEntry {
+  pkg: string
+  peers: string[]
+  description: string
+  dev?: boolean
+  /**
+   * `true` for packages every project needs (framework + Vite plugin +
+   * CLI). `kick new` installs these regardless of options chosen, and
+   * future package-removal flows refuse to drop them.
+   */
+  core?: boolean
+}
+
 /** Registry of KickJS packages and their required peer dependencies */
-const PACKAGE_REGISTRY: Record<
-  string,
-  { pkg: string; peers: string[]; description: string; dev?: boolean }
-> = {
-  // Core (already installed by kick new)
+const PACKAGE_REGISTRY: Record<string, PackageEntry> = {
+  // Core (always installed by kick new — required for the framework to run)
   kickjs: {
     pkg: '@forinda/kickjs',
     peers: ['express'],
     description: 'Unified framework: DI, decorators, routing, middleware',
+    core: true,
   },
   vite: {
     pkg: '@forinda/kickjs-vite',
     peers: ['vite'],
     description: 'Vite plugin: dev server, HMR, module discovery',
     dev: true,
-  },
-  config: {
-    pkg: 'dotenv',
-    peers: [],
-    description: 'Optional .env file loader (kickjs ConfigService now ships in @forinda/kickjs)',
+    core: true,
   },
   cli: {
     pkg: '@forinda/kickjs-cli',
     peers: [],
     description: 'CLI tool and code generators',
     dev: true,
+    core: true,
   },
 
   // API
@@ -213,14 +221,37 @@ export async function resolvePackageManager(flagPm: string | undefined): Promise
   return pm
 }
 
-export function printPackageList(): void {
-  console.log('\n  Available KickJS packages:\n')
-  const maxName = Math.max(...Object.keys(PACKAGE_REGISTRY).map((k) => k.length))
-  for (const [name, info] of Object.entries(PACKAGE_REGISTRY)) {
+/**
+ * Print the package catalog. By default shows just the three core
+ * packages every project always has — the optional list churns
+ * (packages added, deprecated, removed) and a long enumeration in CLI
+ * output / docs goes stale within a release. Pass `all = true` to dump
+ * everything; that's what `kick add --list --all` triggers when an
+ * adopter genuinely wants the live catalog.
+ */
+export function printPackageList(all = false): void {
+  const entries = Object.entries(PACKAGE_REGISTRY)
+  const maxName = Math.max(...entries.map(([k]) => k.length))
+  const core = entries.filter(([, info]) => info.core)
+  const optional = entries.filter(([, info]) => !info.core)
+
+  const formatRow = ([name, info]: [string, PackageEntry]): string => {
     const padded = name.padEnd(maxName + 2)
     const peers = info.peers.length ? ` (+ ${info.peers.join(', ')})` : ''
-    console.log(`    ${padded} ${info.description}${peers}`)
+    return `    ${padded} ${info.description}${peers}`
   }
+
+  console.log('\n  Core packages (always installed by `kick new`):\n')
+  for (const row of core) console.log(formatRow(row))
+
+  if (all) {
+    console.log('\n  Optional packages (add as needed):\n')
+    for (const row of optional) console.log(formatRow(row))
+  } else {
+    console.log(`\n  Plus ${optional.length} optional packages (auth, swagger, db, queue, …).`)
+    console.log('  Run `kick add --list --all` for the full catalog.')
+  }
+
   console.log('\n  Usage: kick add auth drizzle swagger')
   console.log('         kick add queue:bullmq')
   console.log()
@@ -230,9 +261,10 @@ export function registerListCommand(program: Command): void {
   program
     .command('list')
     .alias('ls')
-    .description('List all available KickJS packages')
-    .action(() => {
-      printPackageList()
+    .description('List KickJS packages (core only; pair with --all for the full catalog)')
+    .option('--all', 'Include the full optional catalog')
+    .action((opts: { all?: boolean }) => {
+      printPackageList(Boolean(opts.all))
     })
 }
 
@@ -242,11 +274,12 @@ export function registerAddCommand(program: Command): void {
     .description('Add KickJS packages with their required dependencies')
     .option('--pm <manager>', 'Package manager override')
     .option('-D, --dev', 'Install as dev dependency')
-    .option('--list', 'List all available packages')
+    .option('--list', 'List packages (core only by default; pair with --all)')
+    .option('--all', 'When listing, include the full optional catalog')
     .action(async (packages: string[], opts: any) => {
       // List mode
       if (opts.list || packages.length === 0) {
-        printPackageList()
+        printPackageList(Boolean(opts.all))
         return
       }
 

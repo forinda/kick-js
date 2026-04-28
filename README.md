@@ -133,25 +133,26 @@ export const app = await bootstrap({ modules })
 
 KickJS deliberately ships a small, stable core. The "right" extension surface is `defineAdapter()` / `definePlugin()` / `defineHttpContextDecorator()` plus `getRequestValue` / `processHooks` from `@forinda/kickjs` — adopters compose ecosystem-specific glue (GraphQL runtimes, OTel SDKs, mail providers) on top of those primitives via short copy-paste recipes. Six wrappers are deprecated for v5 because the BYO recipe is shorter and ages better than a thin first-party wrapper around a fast-moving upstream.
 
-### Supported
+### Core packages
+
+Three packages ship with every project — `kick new` always installs them, and `kick add` won't list them as optional. Together they're the framework runtime + the dev/build/scaffold loop:
 
 | Package | Description |
 |---------|-------------|
 | [`@forinda/kickjs`](packages/kickjs/) | Core framework — DI, decorators, Express 5, routing, middleware, contributors, request store, `processHooks` |
-| [`@forinda/kickjs-cli`](packages/cli/) | Scaffolding, DDD generators, custom commands, `kick g agents` |
 | [`@forinda/kickjs-vite`](packages/vite/) | Vite plugin — single-port HMR, typegen watcher, customizable HMR log |
-| [`@forinda/kickjs-testing`](packages/testing/) | `createTestApp`, `createTestModule`, `runContributor` |
-| [`@forinda/kickjs-swagger`](packages/swagger/) | Auto OpenAPI from decorators + Zod |
-| [`@forinda/kickjs-auth`](packages/auth/) | JWT, API key, OAuth strategies + RBAC |
-| [`@forinda/kickjs-prisma`](packages/prisma/) | Prisma adapter (v5/6/7) |
-| [`@forinda/kickjs-drizzle`](packages/drizzle/) | Drizzle adapter, query builder |
-| [`@forinda/kickjs-ws`](packages/ws/) | WebSocket with `@WsController` |
-| [`@forinda/kickjs-queue`](packages/queue/) | BullMQ, RabbitMQ, Kafka |
-| [`@forinda/kickjs-devtools`](packages/devtools/) | Debug dashboard at `/_debug` |
-| [`@forinda/kickjs-devtools-kit`](packages/devtools-kit/) | `IntrospectionSnapshot`, `defineDevtoolsTab` for adapter authors |
-| [`@forinda/kickjs-ai`](packages/ai/) | Providers (OpenAI, Anthropic), `@AiTool`, memory, RAG, agent loop |
-| [`@forinda/kickjs-mcp`](packages/mcp/) | Model Context Protocol server adapter + `kick mcp` CLI |
-| [`@forinda/kickjs-lint`](packages/lint/) | Lint rules — DI token shape, `kick/` prefix enforcement |
+| [`@forinda/kickjs-cli`](packages/cli/) | Scaffolding, DDD generators, custom commands, `kick g agents` |
+
+### Optional packages
+
+Everything else — auth, swagger, db, queue, ws, devtools, etc. — installs on demand. The catalog moves over time (new packages land, deprecated ones move out), so the live list lives next to the CLI rather than this README:
+
+```bash
+kick add --list   # current optional catalog
+kick add auth swagger drizzle   # install several at once
+```
+
+Browse `packages/` in this repo for the full source layout.
 
 ### Deprecated — going private in v5
 
