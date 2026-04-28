@@ -102,19 +102,58 @@ const GroupSection: Component<{ label: string; nodes: ContainerRegistration[] }>
   // Topology DI tokens table.
   const source = createMemo(() => props.nodes ?? [])
   const pager = usePagination(source, { pageSize: 25 })
+
+  // Collapsible — user toggles by clicking the section header. State
+  // persists per-group in localStorage so reloads remember which
+  // sections the user collapsed (typical use: collapse controllers
+  // when debugging a service-layer graph). Default open.
+  const storageKey = `kickjs-devtools-graph-collapsed-${props.label}`
+  const readPersisted = (): boolean => {
+    try {
+      return localStorage.getItem(storageKey) === '1'
+    } catch {
+      return false
+    }
+  }
+  const [collapsed, setCollapsed] = createSignal(readPersisted())
+  const toggle = (): void => {
+    const next = !collapsed()
+    setCollapsed(next)
+    try {
+      if (next) localStorage.setItem(storageKey, '1')
+      else localStorage.removeItem(storageKey)
+    } catch {
+      // localStorage unavailable — toggle still works in-memory.
+    }
+  }
+
   return (
     <div>
-      <h3 class={`text-xs font-semibold uppercase tracking-wider mb-2 ${labelColor(props.label)}`}>
-        {props.label}
-        <span class="ml-2 text-text-muted font-normal normal-case">
-          ({source().length})
-        </span>
-      </h3>
-      <div class="space-y-1">
-        <For each={pager.page()}>{(node) => <NodeRow node={node} />}</For>
-      </div>
-      <Show when={source().length > 25}>
-        <Pagination pager={pager} />
+      <button
+        type="button"
+        onClick={toggle}
+        aria-expanded={!collapsed()}
+        class={`w-full flex items-center text-left text-xs font-semibold uppercase tracking-wider mb-2 ${labelColor(props.label)} cursor-pointer hover:opacity-80 transition-opacity`}
+      >
+        <svg
+          class={`w-3 h-3 mr-1.5 transition-transform ${collapsed() ? '' : 'rotate-90'}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
+        </svg>
+        <span>{props.label}</span>
+        <span class="ml-2 text-text-muted font-normal normal-case">({source().length})</span>
+      </button>
+      <Show when={!collapsed()}>
+        <div class="space-y-1">
+          <For each={pager.page()}>{(node) => <NodeRow node={node} />}</For>
+        </div>
+        <Show when={source().length > 25}>
+          <Pagination pager={pager} />
+        </Show>
       </Show>
     </div>
   )
