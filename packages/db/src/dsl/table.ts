@@ -26,7 +26,7 @@ type ConstraintBuilder<C extends Record<string, ColumnBuilder>> = (refs: {
 
 /**
  * Declare a typed table. The `TName extends string` generic narrows to the
- * literal table name so `SchemaToKysely<S>` can index by it without losing
+ * literal table name so `SchemaToTypes<S>` can index by it without losing
  * the constant — `table('users', …)` widens to `TableDecl<'users', …>`,
  * not `TableDecl<string, …>`.
  */

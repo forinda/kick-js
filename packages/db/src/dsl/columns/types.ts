@@ -53,7 +53,7 @@ export interface ColumnState {
  * Type-only brand attached to a column when it's auto-assigned by the
  * database (serial / bigserial / smallserial), has a runtime default
  * (`.default(...)`), or carries an expression default
- * (`uuid().defaultRandom()`, `timestamp().defaultNow()`). `SchemaToKysely<S>`
+ * (`uuid().defaultRandom()`, `timestamp().defaultNow()`). `SchemaToTypes<S>`
  * reads this marker and wraps the column type in Kysely's `Generated<T>` so
  * adopters can omit the column on insert.
  *
@@ -64,7 +64,7 @@ export type GeneratedBrand = { readonly [KICK_GENERATED]?: true }
 
 /**
  * Type-only brand attached to a column when `.notNull()` or `.primaryKey()`
- * is called. `SchemaToKysely<S>` reads this brand to decide whether the
+ * is called. `SchemaToTypes<S>` reads this brand to decide whether the
  * column type is `T` (NOT NULL) or `T | null` (default nullable).
  *
  * Why a brand instead of a class generic: chained methods (notNull,
@@ -83,7 +83,7 @@ export type NotNullBrand = { readonly [KICK_NOT_NULL]?: true }
  * methods preserve subclass identity.
  *
  * Both `T` and the brand are erased at runtime; they exist purely so
- * `SchemaToKysely<S>` can pull them out per column.
+ * `SchemaToTypes<S>` can pull them out per column.
  */
 export class ColumnBuilder<T = unknown> {
   // Phantom param shows up in the public surface so the type system sees
@@ -140,7 +140,7 @@ export class ColumnBuilder<T = unknown> {
 
   /**
    * Mark the column as having a runtime / DB-assigned default. The
-   * `GeneratedBrand` flows into `SchemaToKysely<S>` so the column wraps
+   * `GeneratedBrand` flows into `SchemaToTypes<S>` so the column wraps
    * in `Generated<T>` — adopters can `INSERT` without specifying it.
    */
   default(value: string): this & GeneratedBrand {

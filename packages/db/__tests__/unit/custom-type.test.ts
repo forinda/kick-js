@@ -6,7 +6,7 @@ import {
   CustomColumnBuilder,
   table,
   serial,
-  type SchemaToKysely,
+  type SchemaToTypes,
 } from '../../src/index'
 
 // Adopter-defined opaque types — the whole point of customType.
@@ -40,7 +40,7 @@ describe('customType<T>()', () => {
     expect(col.toDriver?.('hello' as EncryptedString)).toBe('enc:hello')
   })
 
-  it('flows the phantom type through SchemaToKysely', () => {
+  it('flows the phantom type through SchemaToTypes', () => {
     const encrypted = customType<EncryptedString>({ dataType: () => 'text' })
     const ulid = customType<ULID>({ dataType: () => 'char(26)' })
 
@@ -51,7 +51,7 @@ describe('customType<T>()', () => {
       hint: encrypted(), // nullable — no .notNull()
     })
     const schema = { secrets }
-    type DB = SchemaToKysely<typeof schema>
+    type DB = SchemaToTypes<typeof schema>
 
     expectTypeOf<DB['secrets']>().toEqualTypeOf<{
       id: Generated<number>

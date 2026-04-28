@@ -58,16 +58,19 @@ export interface KickDbClientEvents {
  *    client whose mutations are isolated.
  * 3. tx.savepoint(fn) — nested rollback boundary inside an outer transaction.
  *
- * The Kysely instance is exposed as `db.kysely` for advanced cases that need
- * Kysely-native APIs not surfaced here.
+ * The underlying query builder is exposed as `db.qb` for advanced cases
+ * that need APIs not surfaced through the wrapper. Adopters typically
+ * never reach for `qb` — `selectFrom` / `insertInto` / etc. cover the
+ * common query surface.
  *
- * NB: Rather than re-typing every Kysely method on this surface, we directly
- * expose `selectFrom`/`insertInto`/`updateTable`/`deleteFrom` as bound
- * functions of the underlying Kysely instance — that keeps us in sync with
- * Kysely's own type evolution without manual mirroring.
+ * NB: Rather than re-typing every query method on this surface, we
+ * directly expose `selectFrom`/`insertInto`/`updateTable`/`deleteFrom`
+ * as bound functions of the underlying builder — keeps us in sync with
+ * upstream type evolution without manual mirroring.
  */
 export interface KickDbClient<DB = RegisteredDB> {
-  readonly kysely: Kysely<DB>
+  /** Underlying query builder — escape hatch for advanced cases. */
+  readonly qb: Kysely<DB>
   readonly dialect: 'postgres' | 'sqlite' | 'mysql'
 
   selectFrom: Kysely<DB>['selectFrom']

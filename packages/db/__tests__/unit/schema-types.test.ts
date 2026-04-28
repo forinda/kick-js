@@ -10,7 +10,7 @@ import {
   timestamp,
   uuid,
   jsonb,
-  type SchemaToKysely,
+  type SchemaToTypes,
 } from '@forinda/kickjs-db'
 
 const users = table('users', {
@@ -40,9 +40,9 @@ const comments = table('comments', {
   body: text().notNull(),
 })
 
-type DB = SchemaToKysely<{ users: typeof users; posts: typeof posts; comments: typeof comments }>
+type DB = SchemaToTypes<{ users: typeof users; posts: typeof posts; comments: typeof comments }>
 
-describe('SchemaToKysely', () => {
+describe('SchemaToTypes', () => {
   it('serial primary key wraps in Generated<number>', () => {
     expectTypeOf<DB['users']['id']>().toEqualTypeOf<Generated<number>>()
   })

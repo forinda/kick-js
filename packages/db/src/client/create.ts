@@ -1,7 +1,7 @@
 import { Kysely, sql, type Dialect as KyselyDialect } from 'kysely'
 
 import type { CreateDbClientOptions, KickDbClient, TransactionEvent } from './types'
-import type { SchemaToKysely } from './schema-types'
+import type { SchemaToTypes } from './schema-types'
 import { KickDbEventEmitter } from './events'
 import { CodecResultPlugin, buildDecoderMap } from './codec-plugin'
 import { applyExtensions } from '../extend/apply'
@@ -13,13 +13,13 @@ interface InternalContext {
   savepointCounter: { value: number }
 }
 
-// DB defaults to SchemaToKysely<TSchema> so the returned client is typed
+// DB defaults to SchemaToTypes<TSchema> so the returned client is typed
 // directly from the schema parameter — no KickDbRegister lookup at the call
 // site. This breaks the `dbClient → RegisteredDB → KickDbRegister['db'] →
 // typeof dbClient` cycle that would otherwise resolve to `unknown`.
 // KickDbRegister is only consulted when consumers reference `KickDbClient`
 // with no explicit generic.
-export function createDbClient<TSchema, DB = SchemaToKysely<TSchema>>(
+export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
   opts: CreateDbClientOptions<TSchema, DB>,
 ): KickDbClient<DB> {
   // `slowQueryThresholdMs` implies events — listeners can't subscribe to
@@ -85,15 +85,15 @@ function detectDialect(dialect: KyselyDialect): KickDbClient['dialect'] {
   return 'sqlite'
 }
 
-function wrap<DB>(kysely: Kysely<DB>, ctx: InternalContext): KickDbClient<DB> {
+function wrap<DB>(qb: Kysely<DB>, ctx: InternalContext): KickDbClient<DB> {
   const client: KickDbClient<DB> = {
-    kysely,
+    qb,
     dialect: ctx.dialect,
 
-    selectFrom: kysely.selectFrom.bind(kysely),
-    insertInto: kysely.insertInto.bind(kysely),
-    updateTable: kysely.updateTable.bind(kysely),
-    deleteFrom: kysely.deleteFrom.bind(kysely),
+    selectFrom: qb.selectFrom.bind(qb),
+    insertInto: qb.insertInto.bind(qb),
+    updateTable: qb.updateTable.bind(qb),
+    deleteFrom: qb.deleteFrom.bind(qb),
 
     on(event, listener) {
       ctx.events?.on(event, listener)
@@ -114,7 +114,7 @@ function wrap<DB>(kysely: Kysely<DB>, ctx: InternalContext): KickDbClient<DB> {
       const run = async () => {
         ctx.events?.emit('transactionStart', { isolation: txOpts.isolation })
         try {
-          const result = await kysely.transaction().execute(async (tx) => {
+          const result = await qb.transaction().execute(async (tx) => {
             if (txOpts.isolation) {
               const level = txOpts.isolation.toUpperCase()
               await sql.raw(`SET TRANSACTION ISOLATION LEVEL ${level}`).execute(tx)
@@ -141,22 +141,23 @@ function wrap<DB>(kysely: Kysely<DB>, ctx: InternalContext): KickDbClient<DB> {
 
     async savepoint(fn) {
       const name = `sp_${++ctx.savepointCounter.value}`
-      // Savepoints only make sense inside a transaction. Kysely's transaction
-      // proxies route SQL through the same connection; sql.raw() against the
-      // wrapper lands on that connection's tx context.
-      await sql.raw(`SAVEPOINT ${name}`).execute(kysely)
+      // Savepoints only make sense inside a transaction. The query
+      // builder's transaction proxies route SQL through the same
+      // connection; sql.raw() against the wrapper lands on that
+      // connection's tx context.
+      await sql.raw(`SAVEPOINT ${name}`).execute(qb)
       try {
-        const result = await fn(wrap<DB>(kysely, ctx))
-        await sql.raw(`RELEASE SAVEPOINT ${name}`).execute(kysely)
+        const result = await fn(wrap<DB>(qb, ctx))
+        await sql.raw(`RELEASE SAVEPOINT ${name}`).execute(qb)
         return result
       } catch (err) {
-        await sql.raw(`ROLLBACK TO SAVEPOINT ${name}`).execute(kysely)
+        await sql.raw(`ROLLBACK TO SAVEPOINT ${name}`).execute(qb)
         throw err
       }
     },
 
     async destroy() {
-      await kysely.destroy()
+      await qb.destroy()
     },
   }
   return client

@@ -31,7 +31,7 @@ type ColumnTSType<C> =
         : T
     : never
 
-export type SchemaToKysely<S> = {
+export type SchemaToTypes<S> = {
   [K in keyof S as S[K] extends TableDecl<string, Record<string, ColumnBuilder>>
     ? S[K]['__name']
     : never]: S[K] extends TableDecl<string, infer C>

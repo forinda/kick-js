@@ -1,6 +1,6 @@
 // Barrel — `import * as schema from './schema.ts'` resolves here.
 // 17 tables + 5 PG enums, modelled to match the task-prisma-api
-// reference. SchemaToKysely<typeof schema> filters the relations()
+// reference. SchemaToTypes<typeof schema> filters the relations()
 // + pgEnum factory entries out of the row-shape map automatically;
 // they're carried so the snapshot pipeline picks them up for emit.
 

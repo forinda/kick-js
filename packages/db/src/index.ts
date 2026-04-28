@@ -62,7 +62,7 @@ export type {
   TransactionRollbackEvent,
   CreateDbClientOptions,
 } from './client/types'
-export type { SchemaToKysely } from './client/schema-types'
+export type { SchemaToTypes } from './client/schema-types'
 export type { KickDbRegister, RegisteredDB } from './client/register'
 
 export {

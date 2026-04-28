@@ -4,7 +4,7 @@
 // folder with a barrel index) and emits `.kickjs/types/kick__db.d.ts`
 // containing two augmentations:
 //
-//   1. A global `KickDbSchema` interface set to `SchemaToKysely<typeof
+//   1. A global `KickDbSchema` interface set to `SchemaToTypes<typeof
 //      appSchema>` — TS computes the column-level shape at type-check time
 //      from the imported schema; no runtime cost, no manual mirroring.
 //   2. A `KickDbRegister` augmentation pointing `db` at
@@ -41,11 +41,11 @@ export const kickDbTypegen = (): TypegenPlugin => ({
       .replace(/\/index$/, '')
 
     return [
-      `import type { SchemaToKysely, KickDbClient } from '@forinda/kickjs-db'`,
+      `import type { SchemaToTypes, KickDbClient } from '@forinda/kickjs-db'`,
       `import type * as appSchema from '${rel}'`,
       ``,
       `declare global {`,
-      `  interface KickDbSchema extends SchemaToKysely<typeof appSchema> {}`,
+      `  interface KickDbSchema extends SchemaToTypes<typeof appSchema> {}`,
       `}`,
       ``,
       `declare module '@forinda/kickjs-db' {`,

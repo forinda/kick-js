@@ -1,6 +1,6 @@
 import { ColumnBuilder } from './types'
 
-// PG-only column types. Phantom T per builder so SchemaToKysely<S> can narrow
+// PG-only column types. Phantom T per builder so SchemaToTypes<S> can narrow
 // each column to a useful TS shape — strings for the text-y types, number[]
 // for vector embeddings, etc.
 

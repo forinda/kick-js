@@ -38,7 +38,7 @@ describe('kickDbTypegen', () => {
 
     const out = await readFile(r[0].outFile!, 'utf8')
     expect(out).toContain(`import type * as appSchema from '../../src/db/schema'`)
-    expect(out).toContain(`interface KickDbSchema extends SchemaToKysely<typeof appSchema>`)
+    expect(out).toContain(`interface KickDbSchema extends SchemaToTypes<typeof appSchema>`)
     expect(out).toContain(`declare module '@forinda/kickjs-db'`)
     expect(out).toContain(`interface KickDbRegister`)
     expect(out).toContain(`db: KickDbClient<KickDbSchema>`)

@@ -2,7 +2,7 @@ import { describe, it, expect, expectTypeOf } from 'vitest'
 
 import { table, uuid } from '../../src/index'
 import { pgEnum, PgEnumColumnBuilder } from '../../src/dsl/columns/pg'
-import type { SchemaToKysely } from '../../src/index'
+import type { SchemaToTypes } from '../../src/index'
 import type { Generated } from 'kysely'
 
 describe('pgEnum()', () => {
@@ -30,7 +30,7 @@ describe('pgEnum()', () => {
     })
 
     const schema = { tasks }
-    type DB = SchemaToKysely<typeof schema>
+    type DB = SchemaToTypes<typeof schema>
 
     expectTypeOf<DB['tasks']>().toEqualTypeOf<{
       id: Generated<string>

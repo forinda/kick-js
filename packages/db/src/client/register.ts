@@ -29,10 +29,10 @@ export interface KickDbRegister {}
  * `unknown` when the adopter hasn't declared an augmentation — keeps the
  * M1-permissive fallback intact.
  */
-export type RegisteredDB = KickDbRegister extends { db: { kysely: { __DB__?: never } } }
+export type RegisteredDB = KickDbRegister extends { db: { qb: { __DB__?: never } } }
   ? unknown // KickDbRegister['db'] is a phantom shape; this branch is unreachable.
   : KickDbRegister extends { db: infer D }
-    ? D extends { kysely: import('kysely').Kysely<infer X> }
+    ? D extends { qb: import('kysely').Kysely<infer X> }
       ? X
       : unknown
     : unknown

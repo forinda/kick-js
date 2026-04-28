@@ -1,9 +1,9 @@
 # DB Schema Types
 
-`@forinda/kickjs-db` schemas drive both runtime SQL and TypeScript inference from one declaration. The phantom-typed column builders, `SchemaToKysely<S>` distributive type, and `KickDbRegister` module augmentation make `KickDbClient` resolve to the right row shape everywhere — controllers, repositories, modules — without hand-written `interface DB`.
+`@forinda/kickjs-db` schemas drive both runtime SQL and TypeScript inference from one declaration. The phantom-typed column builders, `SchemaToTypes<S>` distributive type, and `KickDbRegister` module augmentation make `KickDbClient` resolve to the right row shape everywhere — controllers, repositories, modules — without hand-written `interface DB`.
 
 ::: tip One source of truth
-The schema file is the only place column types appear. Drift is impossible because there's no second declaration to drift against — the phantom `T` flows from `varchar(255)` through `SchemaToKysely<typeof schema>` to `db.selectFrom('users').select(...)` automatically.
+The schema file is the only place column types appear. Drift is impossible because there's no second declaration to drift against — the phantom `T` flows from `varchar(255)` through `SchemaToTypes<typeof schema>` to `db.selectFrom('users').select(...)` automatically.
 :::
 
 ## The pieces
@@ -20,13 +20,13 @@ export const users = table('users', {
 
 Each column builder carries a phantom `T` (its TypeScript value type), a `NotNullBrand` (set by `.notNull()` / `.primaryKey()`), and a `GeneratedBrand` (set when the database fills the value — `defaultRandom()`, `defaultNow()`, `serial()`, `default('...')`).
 
-`SchemaToKysely<S>` distributes over the schema record, picks the phantom T per column, and wraps generated columns in Kysely's `Generated<T>`:
+`SchemaToTypes<S>` distributes over the schema record, picks the phantom T per column, and wraps generated columns in `Generated<T>` so adopters can omit them on insert:
 
 ```ts
-import { type SchemaToKysely } from '@forinda/kickjs-db'
+import { type SchemaToTypes } from '@forinda/kickjs-db'
 
 const schema = { users }
-type DB = SchemaToKysely<typeof schema>
+type DB = SchemaToTypes<typeof schema>
 
 // DB resolves to:
 //   {
@@ -45,16 +45,15 @@ type DB = SchemaToKysely<typeof schema>
 ```ts
 // db/client.ts
 import { Pool } from 'pg'
-import { PostgresDialect } from 'kysely'
 import { createDbClient } from '@forinda/kickjs-db'
-import { pgAdapter } from '@forinda/kickjs-db-pg'
+import { pgAdapter, pgDialect } from '@forinda/kickjs-db-pg'
 import * as schema from './schema'
 
 export const pool = new Pool({ connectionString: process.env.DATABASE_URL })
 
 export const dbClient = createDbClient({
   schema,
-  dialect: new PostgresDialect({ pool }),
+  dialect: pgDialect({ pool }),
   events: true,
 })
 
@@ -62,7 +61,7 @@ export const migrationAdapter = pgAdapter({ pool })
 export type Db = typeof dbClient
 ```
 
-`createDbClient<TSchema, DB = SchemaToKysely<TSchema>>` infers the DB type directly from the `schema` parameter. No manual generic — `dbClient` resolves to `KickDbClient<SchemaToKysely<typeof schema>>` automatically.
+`createDbClient<TSchema, DB = SchemaToTypes<TSchema>>` infers the DB type directly from the `schema` parameter. No manual generic — `dbClient` resolves to `KickDbClient<SchemaToTypes<typeof schema>>` automatically.
 
 ## `KickDbRegister` — bare `KickDbClient` widening
 
@@ -89,7 +88,7 @@ import { DB_PRIMARY, type KickDbClient } from '@forinda/kickjs-db'
 export class UsersRepository {
   constructor(@Inject(DB_PRIMARY) private readonly db: KickDbClient) {}
   //                                                    ^^^^^^^^^^^^
-  //                              widens to KickDbClient<SchemaToKysely<typeof schema>>
+  //                              widens to KickDbClient<SchemaToTypes<typeof schema>>
 
   list() {
     return this.db.selectFrom('users').selectAll().execute()
@@ -115,7 +114,7 @@ Adopters who let typegen manage this can delete the hand-written `register.ts`. 
 
 ## Brand-based nullability
 
-`.notNull()` and `.primaryKey()` attach a `NotNullBrand` symbol to the column type — a phantom intersection that `SchemaToKysely<S>` reads to decide whether the column resolves to `T` or `T | null`:
+`.notNull()` and `.primaryKey()` attach a `NotNullBrand` symbol to the column type — a phantom intersection that `SchemaToTypes<S>` reads to decide whether the column resolves to `T` or `T | null`:
 
 ```ts
 const t = table('t', {
@@ -178,7 +177,7 @@ Adding values mid-list emits `ALTER TYPE … ADD VALUE … BEFORE …` so existi
 
 ## Multi-file schemas
 
-Schemas split across files work the same way — `import * as schema from './schema'` resolves the barrel and SchemaToKysely picks up every table:
+Schemas split across files work the same way — `import * as schema from './schema'` resolves the barrel and SchemaToTypes picks up every table:
 
 ```text
 src/db/schema/
@@ -189,7 +188,7 @@ src/db/schema/
 └── relations.ts    # all relations() decls — non-table entries are filtered out
 ```
 
-`SchemaToKysely<S>` uses `S[K] extends TableDecl<...>` to keep tables and drop everything else (`relations()`, helpers, types). Per-table modules can `import { otherTable } from './other'` for FK references; relations live in their own file to avoid an import cycle.
+`SchemaToTypes<S>` uses `S[K] extends TableDecl<...>` to keep tables and drop everything else (`relations()`, helpers, types). Per-table modules can `import { otherTable } from './other'` for FK references; relations live in their own file to avoid an import cycle.
 
 ## Configuring `KickDbRegister` paths
 

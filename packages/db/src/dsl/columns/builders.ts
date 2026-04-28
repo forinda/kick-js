@@ -4,7 +4,7 @@ import { ColumnBuilder, type GeneratedBrand, type NotNullBrand } from './types'
 
 /**
  * Type-level brand stamps. Runtime is identity; the cast attaches the
- * relevant brand so `SchemaToKysely<S>` reads them per column.
+ * relevant brand so `SchemaToTypes<S>` reads them per column.
  */
 function brandGenerated<C>(col: C): C & GeneratedBrand {
   return col as C & GeneratedBrand
@@ -158,7 +158,7 @@ export function uuid(): UuidBuilder {
  *
  *   meta: jsonb<{ tags: string[] }>()
  *
- * `SchemaToKysely<S>` then sees `ColumnBuilder<{ tags: string[] }>` and the
+ * `SchemaToTypes<S>` then sees `ColumnBuilder<{ tags: string[] }>` and the
  * row type narrows to `{ tags: string[] } | null`.
  */
 export function json<T = unknown>(): ColumnBuilder<T> {

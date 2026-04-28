@@ -16,7 +16,7 @@
 //     value: encrypted().notNull(),
 //   })
 //
-// `SchemaToKysely<typeof schema>` reads the phantom T from the
+// `SchemaToTypes<typeof schema>` reads the phantom T from the
 // CustomColumnBuilder so `db.selectFrom('secrets').select('value')`
 // types `value: EncryptedString` (not `string`). Driver codecs flow
 // through the lifecycle plugin landing in M2.F-T19; until then they
@@ -43,7 +43,7 @@ export interface CustomTypeOptions<TJs, TDriver = unknown> {
  * driver codecs so the (future) hooks pipeline can wire them through
  * a Kysely plugin without each consumer re-declaring its mapping.
  *
- * The phantom `T` flows through `SchemaToKysely<S>` exactly like any
+ * The phantom `T` flows through `SchemaToTypes<S>` exactly like any
  * other ColumnBuilder<T>, so adopters get full row-shape inference
  * for free.
  */

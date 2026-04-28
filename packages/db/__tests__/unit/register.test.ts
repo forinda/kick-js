@@ -1,6 +1,6 @@
 import { describe, expectTypeOf, it } from 'vitest'
 import type { Generated } from 'kysely'
-import { table, serial, varchar, type KickDbClient, type SchemaToKysely } from '@forinda/kickjs-db'
+import { table, serial, varchar, type KickDbClient, type SchemaToTypes } from '@forinda/kickjs-db'
 
 // ── Adopter-side schema declaration ─────────────────────────────────────
 const users = table('users', {
@@ -9,7 +9,7 @@ const users = table('users', {
 })
 
 const _appSchema = { users }
-type AppDB = SchemaToKysely<typeof _appSchema>
+type AppDB = SchemaToTypes<typeof _appSchema>
 
 // `declare module` lands once per TS project — it's a global augmentation,
 // not file-local. This single test file owns the augmentation; if other
