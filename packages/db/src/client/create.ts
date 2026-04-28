@@ -4,6 +4,7 @@ import type { CreateDbClientOptions, KickDbClient, TransactionEvent } from './ty
 import type { SchemaToKysely } from './schema-types'
 import { KickDbEventEmitter } from './events'
 import { CodecResultPlugin, buildDecoderMap } from './codec-plugin'
+import { applyExtensions } from '../extend/apply'
 
 interface InternalContext {
   events: KickDbEventEmitter | null
@@ -133,6 +134,10 @@ function wrap<DB>(kysely: Kysely<DB>, ctx: InternalContext): KickDbClient<DB> {
       }
       return run()
     }) as KickDbClient<DB>['transaction'],
+
+    $extends(ext) {
+      return applyExtensions(client, ext)
+    },
 
     async savepoint(fn) {
       const name = `sp_${++ctx.savepointCounter.value}`

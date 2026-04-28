@@ -33,7 +33,7 @@ export interface RunContributorsOptions {
  *
  * Container.resolve() throwing while building `deps` is treated as a
  * resolve-side throw and flows through the same matrix — adopters who
- * need different behaviour for missing-DI vs. data-fetch failures can
+ * need different behaviour for missing-DI vs. data-lookup failures can
  * wrap the container access inside their own `resolve()`.
  */
 export async function runContributors(options: RunContributorsOptions): Promise<void> {

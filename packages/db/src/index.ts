@@ -92,3 +92,6 @@ export * from './dsl/relations'
 // Adopter-defined column types (M2.F-T16) — lets projects introduce
 // typed columns without forking the package.
 export { customType, CustomColumnBuilder, type CustomTypeOptions } from './custom-type'
+
+// Per-table method extensions (M2.F-T17) — `db.$extends({ model })`.
+export type { ExtensionDefinition, ExtendedClient, ModelExtensions } from './extend/types'

@@ -90,6 +90,33 @@ export interface KickDbClient<DB = RegisteredDB> {
 
   savepoint<T>(fn: (sp: KickDbClient<DB>) => Promise<T>): Promise<T>
 
+  /**
+   * Returns a wrapped client carrying adopter-defined per-table
+   * methods. Inside each method, `this` is the extended client so
+   * call-chains stay clean:
+   *
+   *   const dbX = db.$extends({
+   *     model: {
+   *       users: {
+   *         findByEmail(this: typeof dbX, email: string) {
+   *           return this.selectFrom('users')
+   *             .where('email', '=', email)
+   *             .executeTakeFirst()
+   *         },
+   *       },
+   *     },
+   *   })
+   *
+   *   await dbX.users.findByEmail('a@b.com')
+   *
+   * Result extensions (`compute()` over selected rows) and the
+   * insert-side toDriver pass land as follow-ups; v1 ships model
+   * methods only.
+   */
+  $extends<E extends import('../extend/types').ExtensionDefinition<DB>>(
+    ext: E,
+  ): import('../extend/types').ExtendedClient<DB, E>
+
   destroy(): Promise<void>
 }
 
