@@ -9,7 +9,7 @@ import { ColumnBuilder } from './types'
  *
  * @example
  * ```ts
- * export const taskStatus = pgEnum('task_status', ['todo', 'in_progress', 'done'])
+ * export const taskStatus = pgEnum('task_status', 'todo', 'in_progress', 'done')
  *
  * export const tasks = table('tasks', {
  *   id: uuid().primaryKey().defaultRandom(),
@@ -54,14 +54,16 @@ export class PgEnumColumnBuilder<
   }
 }
 
-// `const TValues` forces TS to infer the LITERAL tuple instead of
-// widening to `string[]`. Without this an adopter calling
-// `pgEnum('s', ['todo', 'done'])` would land with values typed as
-// `string[]` and the column phantom would resolve to plain `string`,
-// defeating the entire point of the helper.
-export function pgEnum<TName extends string, const TValues extends readonly string[]>(
+// Variadic rest forces TS to infer EACH value as its literal type, so
+// `pgEnum('s', 'todo', 'done')` resolves to
+// `PgEnumBuilder<'s', ['todo', 'done']>`. Without rest, an array
+// literal stored in a variable would widen to `string[]` and the
+// column phantom would collapse to plain `string`, defeating the
+// entire point of the helper. Adopters with a pre-existing array
+// can still spread it: `pgEnum('s', ...VALUES as const)`.
+export function pgEnum<TName extends string, const TValues extends readonly [string, ...string[]]>(
   name: TName,
-  values: TValues,
+  ...values: TValues
 ): PgEnumBuilder<TName, TValues> {
   const factory = (): PgEnumColumnBuilder<TName, TValues> =>
     new PgEnumColumnBuilder<TName, TValues>(name, values)

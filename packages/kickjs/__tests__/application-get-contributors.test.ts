@@ -6,23 +6,18 @@ import {
   defineAdapter,
   definePlugin,
   defineContextDecorator,
-  createToken,
 } from '../src/index'
 
-const KEY_TENANT = createToken<{ id: string }>('tenant')
-const KEY_USER = createToken<{ id: string }>('user')
-const KEY_ANALYTICS = createToken<{ enabled: boolean }>('analytics')
-
 const tenantContrib = defineContextDecorator({
-  key: KEY_TENANT as never,
+  key: 'tenant',
   resolve: () => ({ id: 't1' }),
 })
 const userContrib = defineContextDecorator({
-  key: KEY_USER as never,
+  key: 'user',
   resolve: () => ({ id: 'u1' }),
 })
 const analyticsContrib = defineContextDecorator({
-  key: KEY_ANALYTICS as never,
+  key: 'analytics',
   resolve: () => ({ enabled: true }),
 })
 

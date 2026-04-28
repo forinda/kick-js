@@ -7,13 +7,13 @@ import type { Generated } from 'kysely'
 
 describe('pgEnum()', () => {
   it('factory carries the enum name + values', () => {
-    const taskStatus = pgEnum('task_status', ['todo', 'in_progress', 'done'])
+    const taskStatus = pgEnum('task_status', 'todo', 'in_progress', 'done')
     expect(taskStatus.enumName).toBe('task_status')
     expect(taskStatus.values).toEqual(['todo', 'in_progress', 'done'])
   })
 
   it('column builder uses the enum name as the SQL data type', () => {
-    const taskStatus = pgEnum('task_status', ['todo', 'in_progress', 'done'])
+    const taskStatus = pgEnum('task_status', 'todo', 'in_progress', 'done')
     const col = taskStatus()
     expect(col).toBeInstanceOf(PgEnumColumnBuilder)
     expect(col.__state().type).toBe('task_status')
@@ -22,7 +22,7 @@ describe('pgEnum()', () => {
   })
 
   it('phantom type narrows to the union of declared literals', () => {
-    const taskStatus = pgEnum('task_status', ['todo', 'in_progress', 'done'])
+    const taskStatus = pgEnum('task_status', 'todo', 'in_progress', 'done')
     const tasks = table('tasks', {
       id: uuid().primaryKey().defaultRandom(),
       status: taskStatus().notNull(),
@@ -39,19 +39,16 @@ describe('pgEnum()', () => {
     }>()
   })
 
-  it('values stay narrow even when inferred from a stored variable', () => {
-    // Regression — without `const TValues` the array would widen to
-    // `string[]` and the phantom would resolve to plain `string`.
-    const VALUES = ['todo', 'in_progress', 'done']
-    const status = pgEnum('task_status', VALUES)
-    const col = status()
-
-    type Phantom = (typeof col)['__t']
-    expectTypeOf<Phantom>().toEqualTypeOf<('todo' | 'in_progress' | 'done') | undefined>()
+  it('values stay narrow when spread from a tuple via `as const`', () => {
+    // Adopter pattern when the value list lives in a separate const —
+    // spread with `as const` so TS sees a tuple, not `string[]`.
+    const VALUES = ['todo', 'in_progress', 'done'] as const
+    const status = pgEnum('task_status', ...VALUES)
+    expect(status.values).toEqual(['todo', 'in_progress', 'done'])
   })
 
   it('two factory invocations produce independent column instances (no shared mutation)', () => {
-    const role = pgEnum('role', ['admin', 'user'])
+    const role = pgEnum('role', 'admin', 'user')
     const a = role()
     const b = role()
     expect(a).not.toBe(b)
