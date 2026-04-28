@@ -1,7 +1,6 @@
 {
   "name": "@forinda/kickjs-db-pg",
   "version": "5.0.2",
-  "private": true,
   "description": "node-postgres adapter for @forinda/kickjs-db — MigrationAdapter + Kysely PostgresDialect",
   "keywords": [
     "kickjs",
