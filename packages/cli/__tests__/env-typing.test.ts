@@ -4,7 +4,7 @@
  * Verifies the full pipeline:
  *   1. `src/env.ts` with a `defineEnv(...)` default export is detected
  *      by the scanner.
- *   2. `kick typegen` emits `.kickjs/types/env.ts` with a `KickEnv`
+ *   2. `kick typegen` emits `.kickjs/types/kick__env.ts` with a `KickEnv`
  *      and `NodeJS.ProcessEnv` augmentation derived from the schema.
  *   3. `@Value('KNOWN_KEY')` compiles, `@Value('UNKNOWN')` fails tsc.
  *   4. `process.env.KNOWN_KEY` is typed as `string`.
@@ -53,14 +53,14 @@ export default defineEnv((base) =>
     )
   }
 
-  it('emits .kickjs/types/env.ts when src/env.ts exists', () => {
+  it('emits .kickjs/types/kick__env.ts when src/env.ts exists', () => {
     writeEnvSchema()
 
     const result = runCli(fixture, ['typegen'])
     assertCliOk(result, 'kick typegen')
     expect(result.stdout).toContain('env typed')
 
-    const envFile = join(fixture, '.kickjs/types/env.ts')
+    const envFile = join(fixture, '.kickjs/types/kick__env.ts')
     expect(existsSync(envFile)).toBe(true)
     const content = readFileSync(envFile, 'utf-8')
     expect(content).toContain('interface KickEnv extends _KickEnvShape')
@@ -72,7 +72,7 @@ export default defineEnv((base) =>
     const result = runCli(fixture, ['typegen'])
     assertCliOk(result, 'kick typegen (no env file)')
     expect(result.stdout).not.toContain('env typed')
-    expect(existsSync(join(fixture, '.kickjs/types/env.ts'))).toBe(false)
+    expect(existsSync(join(fixture, '.kickjs/types/kick__env.ts'))).toBe(false)
   })
 
   it('skips env emission when src/env.ts exists but has no defineEnv', () => {
@@ -81,7 +81,7 @@ export default defineEnv((base) =>
 
     const result = runCli(fixture, ['typegen'])
     assertCliOk(result, 'kick typegen (invalid env file)')
-    expect(existsSync(join(fixture, '.kickjs/types/env.ts'))).toBe(false)
+    expect(existsSync(join(fixture, '.kickjs/types/kick__env.ts'))).toBe(false)
   })
 
   it('@Value compiles for known keys and rejects unknown ones', () => {

@@ -189,49 +189,6 @@ ${envImport}`
 }
 
 /**
- * Render the `KickEnv` + `NodeJS.ProcessEnv` augmentation file from a
- * detected env schema. Mirrors the routes.ts pattern: emits as a `.ts`
- * file (not `.d.ts`) so the top-level `import type schema from '...'`
- * actually resolves under `moduleResolution: 'bundler'`.
- *
- * Returns `null` when no env file was discovered, so the caller can
- * skip writing the file altogether (rather than emitting an empty
- * augmentation that would shadow `KickEnv` to a useless `{}`).
- *
- * NOTE: This still lives in the legacy generator until the M2.B-T8
- * env carve lands — kick/env plugin will pick this up next commit.
- */
-function renderEnv(env: DiscoveredEnv | null, envOutFile: string): string | null {
-  if (!env) return null
-  const envOutDir = dirname(envOutFile)
-  let rel = relative(envOutDir, env.filePath).split(sep).join('/')
-  rel = rel.replace(/\.(ts|tsx|mts|cts)$/i, '')
-  if (!rel.startsWith('.')) rel = './' + rel
-
-  return `${HEADER}
-import type _envSchema from '${rel}'
-
-type _KickEnvShape = import('zod').infer<typeof _envSchema>
-
-declare global {
-  /**
-   * Typed environment registry. Augmented from \`${env.relativePath}\`
-   * so \`@Value('PORT')\`, \`Env<'PORT'>\`, and \`process.env.PORT\` are
-   * all type-safe and autocomplete.
-   */
-  interface KickEnv extends _KickEnvShape {}
-
-  // eslint-disable-next-line @typescript-eslint/no-namespace
-  namespace NodeJS {
-    interface ProcessEnv extends Record<keyof KickEnv, string> {}
-  }
-}
-
-export {}
-`
-}
-
-/**
  * Render the `KickJsPluginRegistry` augmentation. Each entry maps the
  * literal `name` field of a plugin/adapter to a marker type (the
  * registry value isn't load-bearing at runtime — `dependsOn` only cares
@@ -432,11 +389,10 @@ export async function generateTypes(opts: GenerateOptions): Promise<GenerateResu
   const registryFile = join(outDir, 'registry.d.ts')
   const servicesFile = join(outDir, 'services.d.ts')
   const modulesFile = join(outDir, 'modules.d.ts')
-  // routes.ts is now owned by the `kick/routes` typegen plugin (M2.B-T8
-  // carve). It writes `kick__routes.ts` via the plugin runner. Legacy
-  // `routes.ts` is no longer emitted from this file.
-  // env.ts (same .ts vs .d.ts story as routes.ts)
-  const envFile = join(outDir, 'env.ts')
+  // routes.ts + env.ts are now owned by the `kick/routes` and
+  // `kick/env` typegen plugins (M2.B-T8 carve). They write
+  // `kick__routes.ts` / `kick__env.ts` via the plugin runner. Legacy
+  // emissions of those files are gone.
   const pluginsFile = join(outDir, 'plugins.d.ts')
   const augmentationsFile = join(outDir, 'augmentations.d.ts')
   const assetsFile = join(outDir, 'assets.d.ts')
@@ -466,11 +422,10 @@ export async function generateTypes(opts: GenerateOptions): Promise<GenerateResu
     modules,
     '(no @Module classes discovered — `kick g module <name>` to add one)',
   )
-  const envContent = renderEnv(env, envFile)
   const pluginsContent = renderPlugins(pluginsAndAdapters)
   const augmentationsContent = renderAugmentations(augmentations)
   const assetsContent = renderAssetTypes(assets)
-  const indexContent = renderIndex(envContent !== null)
+  const indexContent = renderIndex(env !== null)
 
   await writeFile(registryFile, registryContent, 'utf-8')
   await writeFile(servicesFile, servicesContent, 'utf-8')
@@ -489,10 +444,6 @@ export async function generateTypes(opts: GenerateOptions): Promise<GenerateResu
     assetsFile,
     indexFile,
   ]
-  if (envContent) {
-    await writeFile(envFile, envContent, 'utf-8')
-    written.push(envFile)
-  }
 
   // Write `.gitignore` at the .kickjs root (one level up from outDir)
   const kickjsRoot = dirname(outDir)
@@ -512,7 +463,7 @@ export async function generateTypes(opts: GenerateOptions): Promise<GenerateResu
     pluginEntries: uniquePluginNames,
     augmentationEntries: uniqueAugmentations,
     assetEntries: assets.count,
-    envWritten: envContent !== null,
+    envWritten: env !== null,
     written,
     resolvedCollisions: collisions.length,
   }

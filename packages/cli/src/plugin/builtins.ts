@@ -24,6 +24,7 @@ import { registerDbCommands } from '../commands/db'
 import { kickDbTypegen } from '../typegen/builtin/db'
 import { kickAssetsTypegen } from '../typegen/builtin/assets'
 import { kickRoutesTypegen } from '../typegen/builtin/routes'
+import { kickEnvTypegen } from '../typegen/builtin/env'
 
 import { defineCliPlugin, type KickCliPlugin } from './types'
 
@@ -49,4 +50,5 @@ export const builtinCliPlugins: readonly KickCliPlugin[] = [
   // `typegen/generator.ts` before the M2.B-T8 carve.
   defineCliPlugin({ name: 'kick/assets', typegens: [kickAssetsTypegen()] }),
   defineCliPlugin({ name: 'kick/routes', typegens: [kickRoutesTypegen()] }),
+  defineCliPlugin({ name: 'kick/env', typegens: [kickEnvTypegen()] }),
 ]

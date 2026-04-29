@@ -6,3 +6,4 @@
 
 export { kickDbTypegen } from './db'
 export { kickRoutesTypegen } from './routes'
+export { kickEnvTypegen } from './env'
