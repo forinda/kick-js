@@ -91,4 +91,53 @@ describe('kickDbAdapter()', () => {
     await adapter.shutdown!()
     expect(closed).toBe(true)
   })
+
+  it('emits db:migration-applied on the bus when migrations apply on boot', async () => {
+    await seedMigration(dir, '20260427_010000_a', 'a')
+    const migrationAdapter = new MemoryMigrationAdapter()
+    const container = Container.create()
+    const seen: Array<{ type: string; payload: unknown }> = []
+    const bus = {
+      on: () => () => {},
+      onAny: () => () => {},
+      emit: (type: string, payload: unknown) => {
+        seen.push({ type, payload })
+      },
+    }
+    const adapter = kickDbAdapter({
+      migrationAdapter,
+      migrationsDir: dir,
+      migrationsOnBoot: 'apply',
+      bus,
+    })
+    await adapter.beforeStart!(fakeCtx(container))
+
+    const evt = seen.find((e) => e.type === 'db:migration-applied')
+    expect(evt).toBeDefined()
+    const payload = evt!.payload as { applied: string[]; batch: number | null }
+    expect(payload.applied).toEqual(['20260427_010000_a'])
+    expect(typeof payload.batch).toBe('number')
+  })
+
+  it('does not emit when no migrations were applied (apply policy, no pending)', async () => {
+    const migrationAdapter = new MemoryMigrationAdapter()
+    const container = Container.create()
+    const seen: string[] = []
+    const bus = {
+      on: () => () => {},
+      onAny: () => () => {},
+      emit: (type: string) => {
+        seen.push(type)
+      },
+    }
+    const adapter = kickDbAdapter({
+      migrationAdapter,
+      migrationsDir: dir,
+      migrationsOnBoot: 'apply',
+      bus,
+    })
+    await adapter.beforeStart!(fakeCtx(container))
+    // No pending migrations means migrateLatest never runs, so no event.
+    expect(seen).not.toContain('db:migration-applied')
+  })
 })
