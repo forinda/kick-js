@@ -78,9 +78,9 @@ export function clearRecentEvents(): void {
 }
 
 /**
- * Imperative bus access — the activity-log tab uses this for emit()
- * (so the user can manually drop a synthetic event for testing) and
- * future tabs that publish their own events will too.
+ * Imperative access to the singleton bus for code that needs to
+ * subscribe or publish outside the buffered activity-log helpers.
+ * Returns `null` until `bootBus()` runs (called from App.tsx onMount).
  */
 export function getBus(): KickEventBus | null {
   return busInstance

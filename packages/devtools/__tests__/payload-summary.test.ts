@@ -31,8 +31,25 @@ describe('summarisePayload', () => {
     expect(out).toContain('[Circular]')
   })
 
-  it('renders BigInt as a string with `n` suffix', () => {
+  it('renders BigInt as a string with `n` suffix (nested)', () => {
     expect(summarisePayload({ n: 9007199254740993n })).toBe('{"n":"9007199254740993n"}')
+  })
+
+  it('renders BigInt as a string with `n` suffix (top-level)', () => {
+    // JSON.stringify throws on top-level BigInt, so the helper must
+    // short-circuit before reaching the stringify path.
+    expect(summarisePayload(900n)).toBe('900n')
+    expect(summarisePayload(9007199254740993n)).toBe('9007199254740993n')
+  })
+
+  it('coalesces undefined JSON.stringify results to a String() fallback', () => {
+    // Object whose toJSON() returns undefined — JSON.stringify returns
+    // `undefined`, and a naive `str.length` would throw. The helper
+    // must coalesce so the activity log doesn't crash.
+    const obj = { toJSON: () => undefined }
+    const out = summarisePayload(obj)
+    expect(typeof out).toBe('string')
+    expect(out.length).toBeGreaterThan(0)
   })
 
   it('renders Error instances with name + message', () => {
