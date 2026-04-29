@@ -12,13 +12,34 @@ export default defineConfig({
     }),
   ],
   resolve: {
-    alias: {
-      '@forinda/kickjs': path.resolve(__dirname, '../kickjs/src/index.ts'),
-      // More-specific subpath aliases must come before the bare package alias
-      // — vitest resolves prefixes top-down.
-      '@forinda/kickjs-db/pg': path.resolve(__dirname, 'src/dsl/columns/pg.ts'),
-      '@forinda/kickjs-db': path.resolve(__dirname, 'src/index.ts'),
-    },
+    alias: [
+      // Array form preserves order — more-specific subpaths must match
+      // BEFORE the bare-package alias.
+      {
+        find: '@forinda/kickjs-devtools-kit/bus',
+        replacement: path.resolve(__dirname, '../devtools-kit/src/bus.ts'),
+      },
+      {
+        find: '@forinda/kickjs-devtools-kit',
+        replacement: path.resolve(__dirname, '../devtools-kit/src/index.ts'),
+      },
+      {
+        find: '@forinda/kickjs-db/devtools-events',
+        replacement: path.resolve(__dirname, 'src/devtools-events.ts'),
+      },
+      {
+        find: '@forinda/kickjs-db/pg',
+        replacement: path.resolve(__dirname, 'src/dsl/columns/pg.ts'),
+      },
+      {
+        find: '@forinda/kickjs-db',
+        replacement: path.resolve(__dirname, 'src/index.ts'),
+      },
+      {
+        find: '@forinda/kickjs',
+        replacement: path.resolve(__dirname, '../kickjs/src/index.ts'),
+      },
+    ],
   },
   test: {
     typecheck: {

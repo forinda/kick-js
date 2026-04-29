@@ -20,6 +20,22 @@ export interface KickDbAdapterConfig {
   requireReviewed?: boolean
   /** Optional DI token to register the migrationAdapter under, for adopters who need direct access. */
   token?: InjectionToken<MigrationAdapter>
+  /**
+   * Optional KickEventBus the adapter publishes migration events to.
+   * When set, `db:migration-applied` fires after a successful
+   * `migrateLatest()` on boot (apply policy only). Pair with
+   * `DEVTOOLS_BUS` so the events surface in the DevTools panel:
+   *
+   *   import { DEVTOOLS_BUS } from '@forinda/kickjs-devtools-kit/bus'
+   *   const adapter = kickDbAdapter({
+   *     ...,
+   *     bus: container.resolve(DEVTOOLS_BUS),
+   *   })
+   *
+   * Type imported via `import type` so kickjs-db keeps devtools-kit
+   * as an optional peer.
+   */
+  bus?: import('@forinda/kickjs-devtools-kit/bus').KickEventBus
 }
 
 /**
@@ -55,12 +71,22 @@ export const kickDbAdapter = defineAdapter<KickDbAdapterConfig>({
           )
         }
         if (policy === 'apply') {
-          await migrateLatest({
+          const result = await migrateLatest({
             adapter: config.migrationAdapter,
             migrationsDir: config.migrationsDir,
             requireReviewed: config.requireReviewed,
             driftCheck: config.driftCheck,
           })
+          // Republish to DevTools when a bus is wired so the panel
+          // can surface "migrations ran on boot" without polling.
+          // `applied` is the list of migration ids the runner ran;
+          // `batch` is the batch number the journal stamped them with.
+          if (config.bus) {
+            config.bus.emit('db:migration-applied', {
+              applied: result.applied,
+              batch: result.batch,
+            })
+          }
         }
         // 'ignore' falls through.
       }

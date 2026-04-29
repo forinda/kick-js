@@ -142,4 +142,29 @@ export interface CreateDbClientOptions<TSchema, _DB = unknown> {
    * surface is attached.
    */
   slowQueryThresholdMs?: number | null
+  /**
+   * Optional KickEventBus instance the client republishes lifecycle
+   * events to. When set, the bus receives:
+   *
+   *   - `db:slow-query` — fired alongside the local `slowQuery` event;
+   *     payload `{ sql, parameters, durationMs, thresholdMs }`.
+   *   - `db:query-error` — fired alongside the local `queryError`
+   *     event; payload `{ sql, parameters, error }`.
+   *
+   * Setting a bus implies `events: true` (the publisher hangs off the
+   * existing emitter). Wire it from `DEVTOOLS_BUS` if you want the
+   * DevTools panel to pick the events up:
+   *
+   *   import { DEVTOOLS_BUS } from '@forinda/kickjs-devtools-kit/bus'
+   *   const db = createDbClient({
+   *     ...,
+   *     bus: container.resolve(DEVTOOLS_BUS),
+   *     slowQueryThresholdMs: 100,
+   *   })
+   *
+   * Type imported via `import type` so kickjs-db keeps devtools-kit
+   * as an optional peer; adopters who skip devtools never load the
+   * bus module.
+   */
+  bus?: import('@forinda/kickjs-devtools-kit/bus').KickEventBus
 }

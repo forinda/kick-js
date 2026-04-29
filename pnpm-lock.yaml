@@ -877,6 +877,9 @@ importers:
       '@forinda/kickjs':
         specifier: workspace:*
         version: link:../kickjs
+      '@forinda/kickjs-devtools-kit':
+        specifier: workspace:*
+        version: link:../devtools-kit
       '@testcontainers/postgresql':
         specifier: ^10.16.0
         version: 10.28.0

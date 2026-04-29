@@ -7,10 +7,17 @@ export default defineConfig({
   entry: {
     index: 'src/index.ts',
     pg: 'src/dsl/columns/pg.ts',
+    'devtools-events': 'src/devtools-events.ts',
   },
   format: ['esm'],
   platform: 'node',
   dts: true,
-  external: ['@forinda/kickjs', 'kysely', /^node:/],
+  external: [
+    '@forinda/kickjs',
+    '@forinda/kickjs-devtools-kit',
+    '@forinda/kickjs-devtools-kit/bus',
+    'kysely',
+    /^node:/,
+  ],
   banner: { js: createBanner(pkg.name, pkg.version) },
 })

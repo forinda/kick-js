@@ -22,11 +22,25 @@ interface InternalContext {
 export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
   opts: CreateDbClientOptions<TSchema, DB>,
 ): KickDbClient<DB> {
-  // `slowQueryThresholdMs` implies events — listeners can't subscribe to
-  // slowQuery without the emitter being live.
-  const eventsEnabled = opts.events || opts.slowQueryThresholdMs != null
+  // `slowQueryThresholdMs` and `bus` both imply events — listeners can't
+  // subscribe to slowQuery / queryError, and the bus republisher can't
+  // observe them, without the emitter being live.
+  const eventsEnabled = opts.events || opts.slowQueryThresholdMs != null || opts.bus != null
   const events = eventsEnabled ? new KickDbEventEmitter() : null
   const slowThreshold = opts.slowQueryThresholdMs ?? null
+  const bus = opts.bus ?? null
+
+  // Republish to the DevTools event bus when wired. Mirror the local
+  // event names under a `db:` namespace so adopter tabs / cross-cutting
+  // log consumers know they came from kickjs-db.
+  if (events && bus) {
+    events.on('slowQuery', (payload) => {
+      bus.emit('db:slow-query', payload)
+    })
+    events.on('queryError', (payload) => {
+      bus.emit('db:query-error', payload)
+    })
+  }
 
   // Kysely's `log` config fires on every query — both success
   // (level 'query') and failure (level 'error') — with the compiled
