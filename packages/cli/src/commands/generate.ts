@@ -17,7 +17,12 @@ import { generateAuthScaffold } from '../generators/auth-scaffold'
 import { generateJob } from '../generators/job'
 import { generateScaffold, parseFields } from '../generators/scaffold'
 import { generateTest } from '../generators/test'
-import { loadKickConfig, resolveModuleConfig, type ProjectPattern } from '../config'
+import {
+  loadKickConfig,
+  resolveModuleConfig,
+  resolveTokenScope,
+  type ProjectPattern,
+} from '../config'
 import { setDryRun } from '../utils/fs'
 import { runTypegen } from '../typegen'
 import { select, confirm as promptConfirm } from '../utils/prompts'
@@ -194,6 +199,7 @@ async function runModuleGeneration(
   const repo: RepoType = opts.repo ?? resolveRepoType(mc.repo)
   const pattern = opts.pattern ?? config?.pattern ?? 'ddd'
   const shouldPluralize = opts.pluralize === false ? false : (mc.pluralize ?? true)
+  const tokenScope = resolveTokenScope(config, process.cwd())
 
   const allFiles: string[] = []
   for (const name of names) {
@@ -209,6 +215,7 @@ async function runModuleGeneration(
       dryRun,
       pluralize: shouldPluralize,
       prismaClientPath: mc.prismaClientPath,
+      tokenScope,
     })
     allFiles.push(...files)
   }
@@ -517,6 +524,7 @@ export function registerGenerateCommand(program: Command): void {
       const mc = resolveModuleConfig(config)
       const modulesDir = opts.modulesDir ?? mc.dir ?? 'src/modules'
       const fields = parseFields(rawFields)
+      const tokenScope = resolveTokenScope(config, process.cwd())
       const files = await generateScaffold({
         name,
         fields,
@@ -524,6 +532,7 @@ export function registerGenerateCommand(program: Command): void {
         noEntity: opts.entity === false,
         noTests: opts.tests === false,
         pluralize: opts.pluralize === false ? false : (mc.pluralize ?? true),
+        tokenScope,
       })
       console.log(`\n  Scaffolded ${name} with ${fields.length} field(s):`)
       for (const f of fields) {

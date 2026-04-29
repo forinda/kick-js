@@ -123,10 +123,26 @@ interface ScaffoldOptions {
   noTests?: boolean
   repo?: 'inmemory'
   pluralize?: boolean
+  /**
+   * DI-token scope prefix (e.g. `'mycorp'`, `'app'`). Substituted into
+   * every emitted `createToken<T>('<scope>/<area>/<key>')`. Caller
+   * resolves this from `kick.config.ts > tokenScope` or package.json
+   * before invoking the scaffold; defaults to `'app'` here so existing
+   * callers stay backward-compatible.
+   */
+  tokenScope?: string
 }
 
 export async function generateScaffold(options: ScaffoldOptions): Promise<string[]> {
-  const { name, fields, modulesDir, noEntity, noTests, repo = 'inmemory' } = options
+  const {
+    name,
+    fields,
+    modulesDir,
+    noEntity,
+    noTests,
+    repo = 'inmemory',
+    tokenScope = 'app',
+  } = options
   const shouldPluralize = options.pluralize !== false
   const kebab = toKebabCase(name)
   const pascal = toPascalCase(name)
@@ -167,7 +183,10 @@ export async function generateScaffold(options: ScaffoldOptions): Promise<string
   }
 
   // ── Domain: Repository Interface
-  await write(`domain/repositories/${kebab}.repository.ts`, genRepositoryInterface(pascal, kebab))
+  await write(
+    `domain/repositories/${kebab}.repository.ts`,
+    genRepositoryInterface(pascal, kebab, tokenScope),
+  )
 
   // ── Domain: Service
   await write(`domain/services/${kebab}-domain.service.ts`, genDomainService(pascal, kebab))
@@ -508,7 +527,7 @@ export class ${pascal}Controller {
 `
 }
 
-function genRepositoryInterface(pascal: string, kebab: string): string {
+function genRepositoryInterface(pascal: string, kebab: string, tokenScope: string): string {
   return `import { createToken } from '@forinda/kickjs'
 import type { ${pascal}ResponseDTO } from '../../application/dtos/${kebab}-response.dto'
 import type { Create${pascal}DTO } from '../../application/dtos/create-${kebab}.dto'
@@ -529,8 +548,12 @@ export interface I${pascal}Repository {
  * \`container.resolve(${pascal.toUpperCase()}_REPOSITORY)\` and
  * \`@Inject(${pascal.toUpperCase()}_REPOSITORY)\` both return the typed
  * interface — no manual generic, no \`any\` cast.
+ *
+ * The \`'${tokenScope}/'\` prefix matches the project scope so
+ * \`kick-lint\`'s \`token-reserved-prefix\` rule never fires —
+ * adopters must NOT use the reserved \`'kick/'\` namespace.
  */
-export const ${pascal.toUpperCase()}_REPOSITORY = createToken<I${pascal}Repository>('app/${kebab}/repository')
+export const ${pascal.toUpperCase()}_REPOSITORY = createToken<I${pascal}Repository>('${tokenScope}/${kebab}/repository')
 `
 }
 
