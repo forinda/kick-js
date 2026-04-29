@@ -82,10 +82,19 @@ function emitRemoveEnumValueAdvisory(name: string, removed: readonly string[]): 
  * `\n` would terminate the comment early and turn the rest of the
  * line into executable SQL.
  *
- * - `\r\n`, `\r`, `\n`, `U+2028`, `U+2029` collapse to a single space
- *   so the rest of the comment stays on one line.
- * - C0 / C1 control bytes (other than tab) become `\x<hh>` so the
- *   migration file remains a plain ASCII-safe text.
+ * Scope of the sanitiser:
+ * - Line-break code points (`\r`, `\n`, `U+2028`, `U+2029`) collapse
+ *   runs to a single space so the comment stays on one line.
+ * - C0 control bytes excluding tab (0x00-0x08, 0x0B, 0x0C, 0x0E-0x1F)
+ *   plus DEL (0x7F) escape to `\x<hh>`.
+ * - Tab (0x09) passes through — visually fine inside a `--` comment.
+ *
+ * Out of scope on purpose: C1 controls (U+0080-U+009F) and other
+ * non-ASCII characters pass through unchanged. Adopters do legitimately
+ * pass UTF-8 enum names + values (`'café'`, `'naïve'`); aggressively
+ * escaping them would degrade the migration file's readability without
+ * adding security — only line terminators can break out of a `--`
+ * comment, and those are handled above.
  */
 function sanitizeForLineComment(value: string): string {
   // Walk code units rather than regex character classes \u2014 control-char
