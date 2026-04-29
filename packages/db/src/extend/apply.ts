@@ -65,7 +65,13 @@ export function applyExtensions<DB, E extends ExtensionDefinition<DB>>(
 
   proxy = new Proxy(baseClient, {
     get(target, prop) {
-      if (typeof prop === 'string' && prop in modelBag) return modelBag[prop]
+      // Own-property check — `prop in modelBag` would also match
+      // inherited keys like `toString` / `hasOwnProperty` from
+      // Object.prototype, intercepting properties we never asked to
+      // own and breaking the underlying client's own equivalents.
+      if (typeof prop === 'string' && Object.prototype.hasOwnProperty.call(modelBag, prop)) {
+        return modelBag[prop]
+      }
       // Fall through. Bound methods on the underlying KickDbClient
       // (selectFrom, transaction, etc.) keep their original `this`
       // since `wrap()` already bound them to kysely at create time.

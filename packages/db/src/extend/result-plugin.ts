@@ -14,9 +14,11 @@
 //      untouched.
 //
 // The two halves share state via a per-queryId Map so transformResult
-// only fires for queries this plugin marked in transformQuery — joined
-// or aliased selects (which we can't reliably attribute to a single
-// table) pass through both halves untouched.
+// only fires for queries this plugin marked in transformQuery — joins,
+// sub-selects, multi-table FROMs, and other shapes we can't reliably
+// attribute to a single table pass through both halves untouched.
+// Aliased single-table selects (`.from('posts as p')`) ARE supported —
+// the alias unwrap walks through to the underlying TableNode.
 
 import {
   ColumnNode,
@@ -85,10 +87,15 @@ export class ResultExtensionPlugin implements KyselyPlugin {
 
     const rows = args.result.rows.map((row) => {
       if (row === null || row === undefined) return row
-      const next: Record<string, unknown> = { ...(row as Record<string, unknown>) }
+      const base = row as Record<string, unknown>
+      const next: Record<string, unknown> = { ...base }
+      // Pass `base` (the pristine row, not `next`) into compute so
+      // computeds can't read each other's outputs by accident — order
+      // independence keeps the contract simple. Cross-computed
+      // dependencies are an explicit non-feature.
       for (const [key, ext] of computeds) {
         try {
-          next[key] = ext.compute(next as UnknownRow)
+          next[key] = ext.compute(base as UnknownRow)
         } catch {
           // A throwing compute shouldn't poison the entire row set;
           // surface as undefined so the caller still gets the
