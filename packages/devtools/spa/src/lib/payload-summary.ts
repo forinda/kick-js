@@ -12,6 +12,10 @@ const PAYLOAD_TRUNCATE = 200
 
 export function summarisePayload(payload: unknown): string {
   if (payload == null) return String(payload)
+  // Top-level BigInt — JSON.stringify can't serialise it (throws), so
+  // we'd fall through to '[unserialisable]'. Render it inline with
+  // the `n` suffix the JSON replacer applies to nested BigInts.
+  if (typeof payload === 'bigint') return `${payload.toString()}n`
   if (typeof payload !== 'object') return String(payload)
 
   const seen = new WeakSet<object>()
@@ -25,12 +29,17 @@ export function summarisePayload(payload: unknown): string {
     return value
   }
 
-  let str: string
+  let str: string | undefined
   try {
     str = JSON.stringify(payload, replacer)
   } catch {
     str = '[unserialisable]'
   }
+  // JSON.stringify returns undefined when the top-level value is a
+  // function or symbol, or when the object's toJSON() returns
+  // undefined. Coalesce so the truncate path can't crash on
+  // `str.length`.
+  if (str === undefined) str = String(payload)
   if (str.length > PAYLOAD_TRUNCATE) {
     return `${str.slice(0, PAYLOAD_TRUNCATE)}… (+${str.length - PAYLOAD_TRUNCATE} chars)`
   }
