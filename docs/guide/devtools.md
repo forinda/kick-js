@@ -20,6 +20,48 @@ bootstrap({
 
 DevTools endpoints are now available at `/_debug/*`.
 
+### Stripping DevTools from production bundles
+
+The runtime `enabled` flag above keeps the DevTools adapter inert in prod, but the import of `@forinda/kickjs-devtools` is still in the bundle — code, dependencies, and all. To drop the package entirely from the production output, gate the import behind the `__KICKJS_DEVTOOLS__` build-time flag injected by `@forinda/kickjs-vite`:
+
+```ts
+/// <reference types="@forinda/kickjs-vite/globals" />
+import { bootstrap } from '@forinda/kickjs'
+
+const adapters = [/* prod adapters… */]
+
+if (__KICKJS_DEVTOOLS__) {
+  const { DevToolsAdapter } = await import('@forinda/kickjs-devtools')
+  adapters.push(DevToolsAdapter({ basePath: '/_debug' }))
+}
+
+bootstrap({ modules: [UserModule, ProductModule], adapters })
+```
+
+Vite/Rollup substitutes `__KICKJS_DEVTOOLS__` with `true` (during `vite dev`) or `false` (during `vite build`) and tree-shakes the unreachable branch — including the dynamic `import('@forinda/kickjs-devtools')` chunk — out of the prod bundle entirely.
+
+The `kickjsVitePlugin()` registers the flag by default. Override per build via the env var `KICKJS_DEVTOOLS=0|1` or per project via plugin options:
+
+```ts
+// vite.config.ts
+import { kickjsVitePlugin } from '@forinda/kickjs-vite'
+
+export default defineConfig({
+  plugins: [
+    kickjsVitePlugin({
+      // Force-disable for a "no-devtools" build profile
+      devtools: { enabled: false },
+      // Or rename the global to avoid collisions:
+      // devtools: { flagName: '__APP_DEVTOOLS__' },
+      // Or skip the plugin entirely:
+      // devtools: false,
+    }),
+  ],
+})
+```
+
+Resolution order: explicit `enabled` option → `KICKJS_DEVTOOLS=0|1|true|false` env → Vite `command` (`'serve'` → `true`, `'build'` → `false`).
+
 ## Endpoints
 
 ### `GET /_debug/routes`

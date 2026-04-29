@@ -74,6 +74,7 @@ import { kickjsVirtualModulesPlugin } from './virtual-modules'
 import { kickjsDevServerPlugin } from './dev-server'
 import { kickjsModuleDiscoveryPlugin } from './module-discovery'
 import { kickjsHmrPlugin } from './hmr-plugin'
+import { devtoolsFlagPlugin } from './devtools-flag-plugin'
 
 /**
  * Create the KickJS Vite plugin array.
@@ -122,7 +123,7 @@ export function kickjsVitePlugin(options: KickJSPluginOptions = {}): Plugin[] {
     },
   }
 
-  return [
+  const plugins: Plugin[] = [
     rootResolver,
     kickjsCorePlugin(ctx),
     kickjsModuleDiscoveryPlugin(ctx),
@@ -130,6 +131,13 @@ export function kickjsVitePlugin(options: KickJSPluginOptions = {}): Plugin[] {
     kickjsVirtualModulesPlugin(ctx),
     kickjsDevServerPlugin(ctx),
   ]
+  // Register the devtools flag plugin by default. Adopters who don't
+  // gate their devtools imports get a harmless no-op; adopters who do
+  // get tree-shaking for free. Pass `devtools: false` to skip.
+  if (options.devtools !== false) {
+    plugins.push(devtoolsFlagPlugin(options.devtools ?? {}))
+  }
+  return plugins
 }
 
 // Re-export types for consumers
@@ -138,7 +146,13 @@ export type {
   PluginContext,
   HmrOptions,
   HmrInvalidationContext,
+  DevtoolsOptions,
 } from './types'
 
 // Standalone plugins users can compose alongside `kickjsVitePlugin()`
 export { envWatchPlugin } from './env-watch-plugin'
+export {
+  devtoolsFlagPlugin,
+  resolveDevtoolsFlag,
+  type DevtoolsFlagOptions,
+} from './devtools-flag-plugin'
