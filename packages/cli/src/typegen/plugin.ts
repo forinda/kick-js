@@ -8,6 +8,7 @@
 // `./builtin`. Adopters register additional plugins via kick.config.ts.
 
 import type { KickConfig } from '../config'
+import type { ScanOptions, ScanResult } from './scanner'
 
 export interface TypegenLogger {
   info(msg: string): void
@@ -23,6 +24,20 @@ export interface TypegenContext {
   importTs<T = unknown>(absPath: string): Promise<T>
   /** Write under `cwd`. Caller passes a relPath (e.g. `.kickjs/types/foo.d.ts`). */
   writeFile(relPath: string, contents: string): Promise<void>
+  /**
+   * Run `scanProject` once per typegen pass, memoizing the result so
+   * multiple plugins (`kick/routes`, `kick/env`, future adopter plugins)
+   * share a single fs walk + AST extraction.
+   *
+   * The cache key is a JSON serialization of the resolved options
+   * (`root`, `cwd`, `envFile`, etc.) — different opts get different
+   * results, but identical opts hit the cache. Plugins that don't
+   * need scanner data can ignore this method entirely.
+   *
+   * Implementation lives in the runner so test harnesses can inject
+   * a stub scanner; plugins only see the function.
+   */
+  getScanResult(opts: ScanOptions): Promise<ScanResult>
   log: TypegenLogger
 }
 

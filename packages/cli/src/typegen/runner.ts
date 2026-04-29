@@ -15,6 +15,7 @@ import { existsSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 
 import type { KickConfig } from '../config'
+import { scanProject, type ScanOptions, type ScanResult } from './scanner'
 import type { TypegenContext, TypegenPlugin, TypegenPluginResult } from './plugin'
 
 const TYPES_DIR = '.kickjs/types'
@@ -26,11 +27,33 @@ export interface RunTypegenOptions {
   plugins: TypegenPlugin[]
   /** When true: do not write; throw on the first plugin whose output differs. */
   check?: boolean
+  /**
+   * Optional scanner stub for tests. When set, `ctx.getScanResult()`
+   * routes here instead of running the real scanner. Production
+   * callers leave this undefined.
+   */
+  scan?: (opts: ScanOptions) => Promise<ScanResult>
 }
 
 export async function runTypegen(opts: RunTypegenOptions): Promise<TypegenPluginResult[]> {
   const typesDirAbs = path.resolve(opts.cwd, TYPES_DIR)
   await mkdir(typesDirAbs, { recursive: true })
+
+  // Per-pass memoization of scanProject. Cache keyed by a JSON-stable
+  // serialization of the resolved scan options so two plugins asking
+  // for the same scan share one walk + extraction. Different option
+  // shapes (different srcDir, different envFile) get separate scans.
+  const scanCache = new Map<string, Promise<ScanResult>>()
+  const scanFn = opts.scan ?? scanProject
+  const getScanResult = (scanOpts: ScanOptions): Promise<ScanResult> => {
+    const key = JSON.stringify(scanOpts)
+    let pending = scanCache.get(key)
+    if (!pending) {
+      pending = scanFn(scanOpts)
+      scanCache.set(key, pending)
+    }
+    return pending
+  }
 
   const ctx: TypegenContext = {
     cwd: opts.cwd,
@@ -43,6 +66,7 @@ export async function runTypegen(opts: RunTypegenOptions): Promise<TypegenPlugin
       await mkdir(path.dirname(abs), { recursive: true })
       await writeFile(abs, contents, 'utf8')
     },
+    getScanResult,
     log: console,
   }
 
