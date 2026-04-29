@@ -75,4 +75,86 @@ describe('runTypegen', () => {
     const r = await runTypegen({ cwd: dir, config: {} as never, plugins: [slashy] })
     expect(r[0].outFile).toMatch(/kick__db\.d\.ts$/)
   })
+
+  it('getScanResult memoizes across plugins within the same pass', async () => {
+    let scanCalls = 0
+    const stubScan = async () => {
+      scanCalls += 1
+      return {
+        classes: [],
+        routes: [],
+        tokens: [],
+        injects: [],
+        env: null,
+        pluginsAndAdapters: [],
+        augmentations: [],
+        collisions: [],
+      } as never
+    }
+    const a: TypegenPlugin = {
+      id: 'test/a',
+      inputs: [],
+      async generate(ctx) {
+        await ctx.getScanResult({ root: '/x', cwd: '/x' } as never)
+        return 'export type A = 1'
+      },
+    }
+    const b: TypegenPlugin = {
+      id: 'test/b',
+      inputs: [],
+      async generate(ctx) {
+        // Same opts → cache hit, no extra scan.
+        await ctx.getScanResult({ root: '/x', cwd: '/x' } as never)
+        return 'export type B = 1'
+      },
+    }
+    await runTypegen({
+      cwd: dir,
+      config: {} as never,
+      plugins: [a, b],
+      scan: stubScan,
+    })
+    expect(scanCalls).toBe(1)
+  })
+
+  it('getScanResult runs separate scans for different option shapes', async () => {
+    let scanCalls = 0
+    const stubScan = async () => {
+      scanCalls += 1
+      return {
+        classes: [],
+        routes: [],
+        tokens: [],
+        injects: [],
+        env: null,
+        pluginsAndAdapters: [],
+        augmentations: [],
+        collisions: [],
+      } as never
+    }
+    const a: TypegenPlugin = {
+      id: 'test/a',
+      inputs: [],
+      async generate(ctx) {
+        await ctx.getScanResult({ root: '/x', cwd: '/x' } as never)
+        return 'export type A = 1'
+      },
+    }
+    const b: TypegenPlugin = {
+      id: 'test/b',
+      inputs: [],
+      async generate(ctx) {
+        // Different srcDir → cache miss, fresh scan.
+        await ctx.getScanResult({ root: '/y', cwd: '/x' } as never)
+        return 'export type B = 1'
+      },
+    }
+    await runTypegen({
+      cwd: dir,
+      config: {} as never,
+      plugins: [a, b],
+      scan: stubScan,
+    })
+    expect(scanCalls).toBe(2)
+  })
 })
