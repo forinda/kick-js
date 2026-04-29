@@ -181,32 +181,60 @@ const dbX = db.$extends({
 })
 ```
 
-### Result extensions (deferred)
+### Result extensions
 
-The plan reserves a `result` field for `compute()` extensions that add derived properties to selected rows:
+Add derived properties to every selected row of a table. Each computed declares which columns it `needs` (auto-injected into the SELECT list at compile time) and a `compute(row)` function that produces the value:
 
 ```ts
-// roadmap — NOT shipped in v1
-db.$extends({
+const dbX = db.$extends({
   result: {
     posts: {
       url: { needs: { id: true, slug: true }, compute: (row) => `/posts/${row.id}/${row.slug}` },
+      excerpt: { needs: { body: true }, compute: (row) => row.body.slice(0, 140) },
     },
   },
 })
+
+const rows = await dbX.selectFrom('posts').selectAll().execute()
+//    rows[0].url:     string  — typed, computed from id + slug
+//    rows[0].excerpt: string  — typed, computed from body
 ```
 
-This needs a query-tree transform that walks select statements (to ensure `needs` columns are included) plus a result transform (to apply `compute()` per row). It ships alongside the `toDriver` insert pass since both share the same plumbing.
+**`needs` injection** — the runtime walks every `SelectQueryNode` whose `from` resolves to a table with computeds, and adds any declared `needs` column not already in the select list. Adopters who write `.select(['title'])` still get the computeds populated; they just won't see the `needs` columns on the row property unless they ask. Wildcards (`selectAll()`) skip injection entirely — every column is implicitly present.
 
-For now, derive computed fields client-side or via the query builder's `.select()` callback:
+**`compute()` semantics**
+
+- Sync only in v1 — async opens up "runtime queries inside compute" footguns. Use a model method when you need to query.
+- Each row is computed independently; computeds on the same table all run per row.
+- A throwing `compute()` degrades to `undefined` on that row's property; sibling computeds and rows still complete cleanly.
+- Single-table only: joins, sub-selects, multi-table FROM clauses pass through untouched. Cross-table computeds are roadmap.
+
+**How the rebuild works** — `$extends({ result })` calls `qb.withPlugin()` to append a Kysely plugin that owns the transform pair. The new client shares the original's event emitter, savepoint counter, and dialect tag, so `.transaction()` / `.on('slowQuery', …)` / per-call savepoints keep working transparently. `$extends({ model })` alone (no `result`) skips the rebuild — it stays a thin Proxy as before. Composing both in one call is the common path:
 
 ```ts
-const posts = await db
-  .selectFrom('posts')
-  .selectAll()
-  .execute()
-  .then((rows) => rows.map((r) => ({ ...r, url: `/posts/${r.id}/${r.slug}` })))
+const dbX = db.$extends({
+  model: {
+    posts: {
+      latest(this: typeof dbX, limit: number) {
+        return this.selectFrom('posts').selectAll().limit(limit).execute()
+      },
+    },
+  },
+  result: {
+    posts: {
+      url: { needs: { id: true, slug: true }, compute: (r) => `/posts/${r.id}/${r.slug}` },
+    },
+  },
+})
+
+await dbX.posts.latest(5) // each row carries the computed `url`
 ```
+
+::: tip Out of scope for v1
+- needs columns aren't compile-time validated against the schema — typos surface at runtime when the SELECT executes. Type-level narrowing lands once `SchemaToTypes` exposes the column-name union per table.
+- async `compute()` is rejected — keep the post-fetch transform synchronous to bound the cost of every row.
+- joined / multi-from selects pass through. Use a model method that hand-writes the JSON-aggregation path for those today.
+:::
 
 ## DI integration
 

@@ -1,31 +1,33 @@
-// $extends({ model }) — adopter-defined methods grouped by table.
+// `$extends({ model, result })` — adopter extensions for the client.
 //
-// Surface usage:
+// `model` adds per-table methods accessible as `db.users.findByEmail(...)`.
+// Inside each method, `this` is the extended client so chained calls
+// (`.transaction()`, `.users.<other>(...)`) Just Work via Proxy
+// rebinding — see ./apply.ts for the runtime.
+//
+// `result` adds COMPUTED COLUMNS to selected rows. Each compute()
+// receives the row's selected columns and returns a derived value
+// that lands on the row property under the declared key:
 //
 //   const dbX = db.$extends({
-//     model: {
-//       users: {
-//         async findByEmail(this: typeof dbX, email: string) {
-//           return this.selectFrom('users')
-//             .selectAll()
-//             .where('email', '=', email)
-//             .executeTakeFirst()
+//     result: {
+//       posts: {
+//         url: {
+//           needs: { id: true, slug: true },
+//           compute: (row) => `/posts/${row.id}/${row.slug}`,
 //         },
 //       },
 //     },
 //   })
 //
-//   await dbX.users.findByEmail('a@b.com')
+//   const rows = await dbX.selectFrom('posts').selectAll().execute()
+//   rows[0].url  // typed `string`, computed from id + slug
 //
-// Inside each method, `this` is the extended client itself — chained
-// calls (`.transaction()` on dbX, etc.) Just Work because `this`
-// includes both the original KickDbClient surface AND the model-method
-// bag from `$extends`. Methods can call other methods on the same
-// table by addressing them through `this.<table>.<method>`.
-//
-// Result extensions (compute() that runs post-fetch) are NOT shipped
-// in v1 — that needs a Kysely plugin walking select results, lands as
-// a follow-up alongside the toDriver insert path.
+// `needs` declares which columns the compute reads. The runtime
+// auto-injects them into the SELECT list at compile time so adopters
+// who write `.select(['title'])` still get every needs-column on the
+// row (the computed property fires regardless of which subset of
+// columns the caller actually selected).
 
 import type { KickDbClient } from '../client/types'
 
@@ -40,17 +42,55 @@ export type ModelExtensions<DB> = {
   [Table in keyof DB & string]?: Record<string, (...args: never[]) => unknown>
 }
 
-/** Top-level shape passed to `db.$extends(...)`. */
-export interface ExtensionDefinition<DB> {
-  model?: ModelExtensions<DB>
+/**
+ * One result extension — declares which columns the compute reads
+ * (`needs`) and the function that produces the derived value
+ * (`compute`). Sync only in v1; async opens up "runtime queries
+ * inside compute" footguns.
+ */
+export interface ResultExtension<Row> {
+  /** Map from column name → `true`. Auto-injected into SELECT list. */
+  needs: Partial<Record<keyof Row, true>>
+  /** Receives the row's selected columns; return value lands on the row. */
+  compute: (row: Row) => unknown
 }
 
 /**
- * Result type of `db.$extends({ model })` — the original client
- * intersected with a per-table method bag. Adopters who want the
- * result type to flow elsewhere can `type DbX = ReturnType<typeof
- * extend>`; the inference is structural so usage stays clean.
+ * Result extensions keyed by table name. Each entry is a record of
+ * computed-field name → ResultExtension.
  */
-export type ExtendedClient<DB, E extends ExtensionDefinition<DB>> = KickDbClient<DB> & {
+export type ResultExtensions<DB> = {
+  [Table in keyof DB & string]?: Record<string, ResultExtension<DB[Table]>>
+}
+
+/** Top-level shape passed to `db.$extends(...)`. */
+export interface ExtensionDefinition<DB> {
+  model?: ModelExtensions<DB>
+  result?: ResultExtensions<DB>
+}
+
+/**
+ * Fold result extensions into the DB row shape. For each table that
+ * has computeds, every row gains the computed properties typed by the
+ * compute function's return type.
+ */
+export type DBWithResults<DB, R> = {
+  [T in keyof DB]: T extends keyof R
+    ? R[T] extends Record<string, ResultExtension<unknown>>
+      ? DB[T] & {
+          [K in keyof R[T]]: R[T][K] extends { compute: (row: never) => infer Out } ? Out : unknown
+        }
+      : DB[T]
+    : DB[T]
+}
+
+/**
+ * Result type of `db.$extends(...)` — the client typed against the
+ * (possibly result-augmented) DB, intersected with the per-table
+ * method bag from `model`.
+ */
+export type ExtendedClient<DB, E extends ExtensionDefinition<DB>> = KickDbClient<
+  E['result'] extends ResultExtensions<DB> ? DBWithResults<DB, NonNullable<E['result']>> : DB
+> & {
   [T in keyof NonNullable<E['model']> & keyof DB & string]: NonNullable<NonNullable<E['model']>[T]>
 }

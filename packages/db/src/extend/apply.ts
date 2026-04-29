@@ -1,26 +1,54 @@
-// Runtime for `$extends({ model })`.
+// Runtime for `$extends({ model, result })`.
 //
-// Builds a Proxy over the original client whose `get` returns the
-// per-table method bag for keys that match a model entry, falling
-// through to the underlying client for everything else. Methods are
-// pre-bound (via Function.prototype.call) so `this` inside the
-// method points back at the proxy — chaining `this.<otherTable>.<m>`
-// or `this.transaction(...)` resolves naturally.
+// Two extension surfaces, applied in order:
+//
+//   1. **result extensions** rebuild the client around a Kysely
+//      instance with the ResultExtensionPlugin appended. We can't
+//      mutate plugins on a live Kysely (it freezes the plugin chain
+//      at construction), but `qb.withPlugin(plugin)` returns a fresh
+//      Kysely with the plugin added — that's what we wrap. The new
+//      client shares the same InternalContext as the parent (events
+//      emitter identity stays stable across extensions, transactions
+//      keep working), but routes queries through the plugin.
+//
+//   2. **model extensions** layer a Proxy over whatever client the
+//      previous step produced. The Proxy's `get` returns the per-
+//      table method bag for keys that match a model entry; methods
+//      are pre-bound via Function.prototype.call so `this` inside
+//      the method is the extended proxy. That way chaining
+//      `this.<otherTable>.<method>` or `this.transaction(...)`
+//      resolves naturally regardless of which extension order ran.
 //
 // Lazy proxy reference: the bound methods need to capture `proxy`
 // itself, but the proxy can't exist until its handler is built.
-// Closure over a mutable `proxy` reference solves the cycle — by
-// the time any method actually runs, the binding has landed.
+// Closure over a mutable `proxy` reference solves the cycle — by the
+// time any method actually runs, the binding has landed.
 
 import type { KickDbClient } from '../client/types'
-import type { ExtendedClient, ExtensionDefinition } from './types'
+import type { ExtendedClient, ExtensionDefinition, ResultExtensions } from './types'
+import { ResultExtensionPlugin } from './result-plugin'
+import { wrap, type InternalContext } from '../client/wrap'
 
 export function applyExtensions<DB, E extends ExtensionDefinition<DB>>(
   client: KickDbClient<DB>,
+  ctx: InternalContext,
   ext: E,
 ): ExtendedClient<DB, E> {
-  // proxy holds the eventual reference; methods capture it by
-  // closure so they receive the extended client as `this`.
+  // 1. Result extensions — rebuild Kysely around the plugin chain.
+  //    `wrap` and this module form an ESM cycle (wrap calls
+  //    applyExtensions for the client's `$extends`; we call wrap to
+  //    rebuild the client). ESM live bindings handle this fine as
+  //    long as nothing reads the binding at module top-level — both
+  //    sides only call into each other inside functions.
+  let baseClient: KickDbClient<DB> = client
+  if (hasResultExtensions(ext.result)) {
+    const plugin = new ResultExtensionPlugin(ext.result as ResultExtensions<unknown>)
+    const newQb = client.qb.withPlugin(plugin)
+    baseClient = wrap<DB>(newQb, ctx)
+  }
+
+  // 2. Model proxy — layered on top of whichever base client we got
+  //    so model methods see the result-augmented row types via `this`.
   let proxy: ExtendedClient<DB, E>
 
   const modelBag: Record<string, Record<string, (...args: unknown[]) => unknown>> = {}
@@ -35,7 +63,7 @@ export function applyExtensions<DB, E extends ExtensionDefinition<DB>>(
     modelBag[tableName as string] = bound
   }
 
-  proxy = new Proxy(client, {
+  proxy = new Proxy(baseClient, {
     get(target, prop) {
       if (typeof prop === 'string' && prop in modelBag) return modelBag[prop]
       // Fall through. Bound methods on the underlying KickDbClient
@@ -47,4 +75,12 @@ export function applyExtensions<DB, E extends ExtensionDefinition<DB>>(
   }) as ExtendedClient<DB, E>
 
   return proxy
+}
+
+function hasResultExtensions(result: unknown): boolean {
+  if (!result || typeof result !== 'object') return false
+  for (const bag of Object.values(result as Record<string, unknown>)) {
+    if (bag && typeof bag === 'object' && Object.keys(bag as object).length > 0) return true
+  }
+  return false
 }
