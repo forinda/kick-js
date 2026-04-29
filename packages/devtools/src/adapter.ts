@@ -260,27 +260,46 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
     const memoryAnalyzer = runtimeEnabled ? new MemoryAnalyzer() : null
 
     // ── Server-side event bus ──────────────────────────────────────
-    // Created up-front so plugins resolving DEVTOOLS_BUS during boot
-    // (`beforeStart`) get a live instance, not a placeholder. The WS
-    // upgrade attaches in `afterStart` once the http.Server is up;
-    // emits before that point still dispatch to in-process subs and
-    // queue toward zero clients (no error). When the devtools adapter
-    // is disabled (`enabled === false`) the bus stays a no-op stub
-    // so adopters who Inject(DEVTOOLS_BUS) under @Optional() get a
-    // safe fallback rather than `undefined`-everywhere.
-    const bus: ServerBus = enabled
-      ? createServerBus({
-          wsPath: `${basePath}/_bus`,
-          secret: secret === false ? false : secret,
-        })
-      : ({
-          on: () => () => {},
-          onAny: () => () => {},
-          emit: () => {},
-          attachUpgrade: () => {},
-          close: () => {},
-          clientCount: () => 0,
-        } as ServerBus)
+    // Lazily resolved in `beforeMount` — when the devtools adapter is
+    // rebuilt during HMR, the same `Container` may already hold a bus
+    // from a previous mount with live WebSocket clients + in-flight
+    // subscriptions. Creating a fresh bus on every rebuild would
+    // silently swap the registered instance, leaving plugins that
+    // already captured the old reference publishing into a dead bus.
+    // Using `container.has(DEVTOOLS_BUS)` to reuse instead keeps event
+    // delivery stable across rebuilds.
+    //
+    // When the devtools adapter is disabled (`enabled === false`) we
+    // register a no-op stub instead so adopters who Inject(DEVTOOLS_BUS)
+    // under @Optional() get a callable instance rather than undefined.
+    let bus: ServerBus | null = null
+
+    const ensureBus = (container: Container): ServerBus => {
+      if (container.has(DEVTOOLS_BUS)) {
+        // The token is typed `KickEventBus` but the registered instance
+        // is the wider `ServerBus` (KickEventBus + attachUpgrade /
+        // close / clientCount). Explicit generic on resolve avoids the
+        // structural-cast — Container.resolve's last overload accepts
+        // an explicit T and returns it.
+        bus = container.resolve<ServerBus>(DEVTOOLS_BUS)
+        return bus
+      }
+      bus = enabled
+        ? createServerBus({
+            wsPath: `${basePath}/_bus`,
+            secret: secret === false ? false : secret,
+          })
+        : ({
+            on: () => () => {},
+            onAny: () => () => {},
+            emit: () => {},
+            attachUpgrade: () => {},
+            close: () => {},
+            clientCount: () => 0,
+          } as ServerBus)
+      container.registerInstance(DEVTOOLS_BUS, bus)
+      return bus
+    }
 
     // ── Reactive state ─────────────────────────────────────────────
     const requestCount = ref(0)
@@ -395,11 +414,10 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
 
         appRef = app
         container = containerArg
-        // Register the bus so first-party plugins can @Inject(DEVTOOLS_BUS)
-        // before their own beforeStart fires. registerInstance is a no-op
-        // re-register if the adapter rebuilds during HMR — the existing
-        // bus instance keeps its in-flight subscriptions intact.
-        containerArg.registerInstance(DEVTOOLS_BUS, bus)
+        // Lazy resolve — reuses the existing bus when the same
+        // container is reused across HMR rebuilds, otherwise creates
+        // and registers a fresh instance. See `ensureBus` for why.
+        ensureBus(containerArg)
         startedAt.value = Date.now()
         // Clear routes on rebuild/restart to prevent HMR duplication
         routes = []
@@ -928,7 +946,7 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
         // Path-based routing inside attachUpgrade means kickjs-ws or
         // any other adapter sharing the same listener stays
         // unaffected — only `${basePath}/_bus` is claimed.
-        if (server) bus.attachUpgrade(server)
+        if (server) bus?.attachUpgrade(server)
         log.info(
           `DevTools ready — ${routes.length} routes tracked, ` +
             `${container?.getRegistrations().length ?? 0} DI bindings, ` +
@@ -940,7 +958,7 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
         stopErrorWatch?.()
         runtimeSampler?.stop()
         memoryAnalyzer?.stop()
-        bus.close()
+        bus?.close()
         adapterStatuses['DevToolsAdapter'] = 'stopped'
       },
     }

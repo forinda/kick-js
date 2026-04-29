@@ -16,7 +16,7 @@ import {
 } from 'kysely'
 
 import { createDbClient, table, serial, varchar } from '../../src/index'
-import { createInMemoryBus } from '../../../devtools-kit/src/bus.ts'
+import { createInMemoryBus } from '@forinda/kickjs-devtools-kit/bus'
 
 // `import` keeps Vitest happy without forcing a runtime augmentation —
 // the registry typing isn't asserted in these tests; the wire-level
@@ -86,35 +86,50 @@ describe('createDbClient — bus republishing', () => {
   })
 
   it('republishes queryError → db:query-error', async () => {
+    // Custom dialect whose connection.executeQuery rejects — that's
+    // the deterministic path into Kysely's error-level log callback,
+    // which is what fires the queryError event we want to observe.
+    const failingDialect: Dialect = {
+      createAdapter: () => new PostgresAdapter(),
+      createDriver: () => ({
+        init: async () => {},
+        acquireConnection: async () => ({
+          executeQuery: async () => {
+            throw new Error('synthetic driver failure')
+          },
+          streamQuery: async function* () {
+            yield { rows: [] }
+          },
+        }),
+        beginTransaction: async () => {},
+        commitTransaction: async () => {},
+        rollbackTransaction: async () => {},
+        releaseConnection: async () => {},
+        destroy: async () => {},
+      }),
+      createIntrospector: (db) => new PostgresIntrospector(db),
+      createQueryCompiler: () => new PostgresQueryCompiler(),
+    }
+
     const bus = createInMemoryBus()
     const seen: unknown[] = []
     bus.on('db:query-error', (p) => seen.push(p))
 
     const db = createDbClient({
       schema: { users },
-      dialect: dummy,
+      dialect: failingDialect,
       bus,
       events: true,
     })
-    // DummyDriver doesn't actually fail queries, so we trigger the
-    // queryError path manually via Kysely's internals through a
-    // syntactically-bad query via sql.raw().
-    try {
-      // selectFrom on an unknown table will compile fine under DummyDriver
-      // but won't trigger an error; instead, drop and recreate to invoke
-      // an explicit failure: we destroy the client and try a query
-      // afterward, which throws synchronously inside Kysely.
-      await db.destroy()
-      await db.selectFrom('users').selectAll().execute()
-    } catch {
-      // expected — Kysely emits queryError through the log callback
-      // before throwing, so the bus should have observed it.
-    }
-    // DummyDriver paths may not always trigger the error log; tolerate
-    // the no-event path without flapping.
-    if (seen.length > 0) {
-      const payload = seen[0] as Record<string, unknown>
-      expect(payload).toHaveProperty('sql')
-    }
+    await expect(db.selectFrom('users').selectAll().execute()).rejects.toThrow(
+      /synthetic driver failure/,
+    )
+    await db.destroy()
+
+    expect(seen).toHaveLength(1)
+    const payload = seen[0] as Record<string, unknown>
+    expect(payload).toHaveProperty('sql')
+    expect(payload).toHaveProperty('error')
+    expect((payload.error as Error).message).toMatch(/synthetic driver failure/)
   })
 })
