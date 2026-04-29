@@ -27,9 +27,12 @@ export interface KickDbAdapterConfig {
    * `DEVTOOLS_BUS` so the events surface in the DevTools panel:
    *
    *   import { DEVTOOLS_BUS } from '@forinda/kickjs-devtools-kit/bus'
+   *   // Resolve only when devtools is actually wired — adopters who
+   *   // skip @forinda/kickjs-devtools never register the token, and
+   *   // resolve() throws on missing tokens.
    *   const adapter = kickDbAdapter({
    *     ...,
-   *     bus: container.resolve(DEVTOOLS_BUS),
+   *     bus: container.has(DEVTOOLS_BUS) ? container.resolve(DEVTOOLS_BUS) : undefined,
    *   })
    *
    * Type imported via `import type` so kickjs-db keeps devtools-kit

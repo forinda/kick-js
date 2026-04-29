@@ -156,9 +156,12 @@ export interface CreateDbClientOptions<TSchema, _DB = unknown> {
    * DevTools panel to pick the events up:
    *
    *   import { DEVTOOLS_BUS } from '@forinda/kickjs-devtools-kit/bus'
+   *   // Resolve only when devtools is actually wired — adopters who
+   *   // skip @forinda/kickjs-devtools never register the token, and
+   *   // resolve() throws on missing tokens.
    *   const db = createDbClient({
    *     ...,
-   *     bus: container.resolve(DEVTOOLS_BUS),
+   *     bus: container.has(DEVTOOLS_BUS) ? container.resolve(DEVTOOLS_BUS) : undefined,
    *     slowQueryThresholdMs: 100,
    *   })
    *
