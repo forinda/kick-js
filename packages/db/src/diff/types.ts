@@ -86,8 +86,8 @@ export interface DropEnum {
 /**
  * PG ALTER TYPE … ADD VALUE — non-destructive value addition.
  * Removed values + reorderings can't round-trip without dropping
- * dependent columns; the diff engine surfaces them as a NoOp + a
- * comment inside emit so the adopter writes a manual migration.
+ * dependent columns; the diff engine surfaces them as a separate
+ * `RemoveEnumValue` advisory below.
  */
 export interface AddEnumValue {
   kind: 'addEnumValue'
@@ -95,6 +95,26 @@ export interface AddEnumValue {
   value: string
   /** When set, emit `ALTER TYPE … ADD VALUE 'x' BEFORE 'y'`. */
   before?: string
+}
+
+/**
+ * Advisory-only change kind raised when an enum keeps the same name
+ * but loses one or more values across the diff. PostgreSQL has no
+ * `ALTER TYPE … DROP VALUE` — round-tripping requires dropping every
+ * column that uses the type, dropping the type, recreating with the
+ * new value list, then recreating the columns and restoring data.
+ *
+ * The diff engine records the removed values; the emitter renders a
+ * multi-line SQL comment with explicit guidance instead of a no-op
+ * silently swallowed by the migration runner. Operators choosing to
+ * proceed write the multi-step migration by hand.
+ */
+export interface RemoveEnumValue {
+  kind: 'removeEnumValue'
+  /** Enum type name. */
+  enum: string
+  /** Values present in the previous snapshot but not in the next. */
+  removed: readonly string[]
 }
 
 export type Change =
@@ -112,5 +132,6 @@ export type Change =
   | CreateEnum
   | DropEnum
   | AddEnumValue
+  | RemoveEnumValue
 
 export type ChangeSet = Change[]

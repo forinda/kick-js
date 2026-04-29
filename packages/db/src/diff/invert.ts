@@ -68,6 +68,13 @@ function invert(change: Change): Change {
       // forward change verbatim; the operator gets a draft + a clear
       // signal that the down won't auto-revert.
       return change
+    case 'removeEnumValue':
+      // The forward direction of a value removal is itself an
+      // advisory + manual operation; the reverse is symmetric. Carry
+      // the change verbatim so the down draft surfaces the same
+      // SQL-comment guidance, with `removed` listing the values that
+      // would need to be re-added.
+      return change
   }
 }
 
@@ -84,6 +91,11 @@ const AMBIGUOUS_REVERSE_KINDS = new Set<Change['kind']>([
   // supported without recreating the type. The down draft surfaces
   // the forward statement so the operator manually rewrites it.
   'addEnumValue',
+  // Removed values can't auto-reverse for the symmetric reason: the
+  // value(s) that disappeared from the schema may have been held by
+  // existing rows whose state is already gone. Down draft preserves
+  // the advisory comment.
+  'removeEnumValue',
 ])
 
 export function hasAmbiguousReverse(forward: ChangeSet): boolean {
