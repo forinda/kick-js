@@ -200,7 +200,7 @@ const rows = await dbX.selectFrom('posts').selectAll().execute()
 //    rows[0].excerpt: string  — typed, computed from body
 ```
 
-**`needs` injection** — the plugin only rewrites the **top-level** `SelectQueryNode`, and only when its `from` resolves to a single table with computeds. In that case it adds any declared `needs` column not already in the select list. Adopters who write `.select(['title'])` still get the computeds populated. Joins, sub-selects, and multi-table `FROM` clauses are skipped entirely — same with nested `SelectQueryNode`s inside `with` / `union` / scalar sub-selects. The injected columns DO land on the runtime row object (they were fetched, after all) — the row's TypeScript shape only widens with the computed property itself, but a property-existence check at runtime would still find the needs columns. Wildcards (`selectAll()`) skip injection entirely — every column is implicitly present.
+**`needs` injection** — the plugin only rewrites the **top-level** `SelectQueryNode`, and only when its `from` resolves to a single table with computeds. In that case it adds any declared `needs` column not already in the select list. Adopters who write `.select(['title'])` still get the computeds populated. Joins, sub-selects, and multi-table `FROM` clauses are skipped entirely — as are nested `SelectQueryNode`s inside `WITH` / `UNION` / scalar sub-selects. The injected columns DO land on the runtime row object (they were fetched, after all) — the row's TypeScript shape only widens with the computed property itself, but a property-existence check at runtime would still find the needs columns. Wildcards (`selectAll()`) skip injection entirely — every column is implicitly present.
 
 **`compute()` semantics**
 

@@ -56,21 +56,75 @@ function emitChange(change: Change): string {
  * SQL output.
  */
 function emitRemoveEnumValueAdvisory(name: string, removed: readonly string[]): string {
-  const valuesList = removed.map((v) => quoteLiteral(v)).join(', ')
+  const safeName = sanitizeForLineComment(quoteIdent(name))
+  const valuesList = removed.map((v) => sanitizeForLineComment(quoteLiteral(v))).join(', ')
   return [
-    `-- WARNING: enum ${quoteIdent(name)} dropped value(s): ${valuesList}.`,
+    `-- WARNING: enum ${safeName} dropped value(s): ${valuesList}.`,
     `-- PostgreSQL has no ALTER TYPE ... DROP VALUE. To round-trip this`,
     `-- removal you must:`,
-    `--   1. Drop or migrate every column whose type is ${quoteIdent(name)} (or any`,
+    `--   1. Drop or migrate every column whose type is ${safeName} (or any`,
     `--      composite that references it).`,
-    `--   2. DROP TYPE ${quoteIdent(name)};`,
-    `--   3. CREATE TYPE ${quoteIdent(name)} AS ENUM (...) with the new value list.`,
+    `--   2. DROP TYPE ${safeName};`,
+    `--   3. CREATE TYPE ${safeName} AS ENUM (...) with the new value list.`,
     `--   4. Recreate the columns + restore data, mapping any rows that held`,
     `--      one of the dropped value(s) to a still-valid replacement first.`,
     `-- This migration emits no SQL for this change — write the steps above`,
     `-- by hand if the removal is intentional, or restore the value(s) in`,
     `-- the schema definition to silence this warning.`,
   ].join('\n')
+}
+
+/**
+ * Make a value safe to interpolate into a single-line `--` SQL
+ * comment. Identifiers and quoted literals normally don't carry
+ * line breaks, but the user-supplied portion (enum name + values)
+ * can contain anything an adopter passes to `pgEnum()`. A literal
+ * `\n` would terminate the comment early and turn the rest of the
+ * line into executable SQL.
+ *
+ * - `\r\n`, `\r`, `\n`, `U+2028`, `U+2029` collapse to a single space
+ *   so the rest of the comment stays on one line.
+ * - C0 / C1 control bytes (other than tab) become `\x<hh>` so the
+ *   migration file remains a plain ASCII-safe text.
+ */
+function sanitizeForLineComment(value: string): string {
+  // Walk code units rather than regex character classes \u2014 control-char
+  // regex literals trip `no-control-regex` lints and confuse some
+  // editor analysers with "unreachable" warnings on the second
+  // replace. Code-unit iteration is unambiguous: for every char we
+  // either pass it through, collapse a line-break to a space, or
+  // escape a control byte into `\x<hh>`.
+  let out = ''
+  let prevWasLineBreak = false
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i)
+    // Line-break code points \u2192 collapse runs to a single space.
+    // Includes \r (0x0D), \n (0x0A), U+2028 (LINE SEPARATOR),
+    // U+2029 (PARAGRAPH SEPARATOR).
+    const isLineBreak = code === 0x0a || code === 0x0d || code === 0x2028 || code === 0x2029
+    if (isLineBreak) {
+      if (!prevWasLineBreak) out += ' '
+      prevWasLineBreak = true
+      continue
+    }
+    prevWasLineBreak = false
+    // Tab (0x09) passes through \u2014 visually fine inside a `--` comment.
+    // Other C0 control bytes (0x00-0x08, 0x0B, 0x0C, 0x0E-0x1F) and
+    // DEL (0x7F) escape to `\x<hh>` so the migration file stays
+    // printable ASCII clean.
+    const isControl =
+      (code >= 0x00 && code <= 0x08) ||
+      code === 0x0b ||
+      code === 0x0c ||
+      (code >= 0x0e && code <= 0x1f) ||
+      code === 0x7f
+    if (isControl) {
+      out += `\\x${code.toString(16).padStart(2, '0')}`
+      continue
+    }
+    out += value[i]
+  }
+  return out
 }
 
 function emitAddColumn(table: string, c: ColumnSnapshot): string {

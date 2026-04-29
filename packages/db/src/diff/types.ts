@@ -85,9 +85,11 @@ export interface DropEnum {
 
 /**
  * PG ALTER TYPE … ADD VALUE — non-destructive value addition.
- * Removed values + reorderings can't round-trip without dropping
- * dependent columns; the diff engine surfaces them as a separate
- * `RemoveEnumValue` advisory below.
+ * Removed values can't round-trip without dropping dependent columns;
+ * the diff engine surfaces them via the separate `RemoveEnumValue`
+ * advisory below. Pure reorderings (same value set, different order)
+ * currently produce no diff at all — PG honours the canonical sort
+ * order at storage time, so user-visible behaviour is unchanged.
  */
 export interface AddEnumValue {
   kind: 'addEnumValue'
