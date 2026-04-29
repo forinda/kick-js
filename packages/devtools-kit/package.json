@@ -27,6 +27,10 @@
     "./types": {
       "import": "./dist/types.mjs",
       "types": "./dist/types.d.mts"
+    },
+    "./bus": {
+      "import": "./dist/bus.mjs",
+      "types": "./dist/bus.d.mts"
     }
   },
   "files": [

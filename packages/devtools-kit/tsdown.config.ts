@@ -8,6 +8,7 @@ export default defineConfig({
     index: 'src/index.ts',
     runtime: 'src/runtime.ts',
     types: 'src/types.ts',
+    bus: 'src/bus.ts',
   },
   format: ['esm'],
   platform: 'node',

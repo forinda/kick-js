@@ -929,6 +929,9 @@ importers:
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
+      ws:
+        specifier: ^8.20.0
+        version: 8.20.0
     devDependencies:
       '@forinda/kickjs':
         specifier: workspace:*
@@ -939,6 +942,9 @@ importers:
       '@types/node':
         specifier: ^25.6.0
         version: 25.6.0
+      '@types/ws':
+        specifier: ^8.18.0
+        version: 8.18.1
       express:
         specifier: ^5.1.0
         version: 5.2.1
