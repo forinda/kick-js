@@ -36,10 +36,14 @@
     ".": {
       "import": "./dist/index.mjs",
       "types": "./dist/index.d.mts"
+    },
+    "./globals": {
+      "types": "./globals.d.ts"
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "globals.d.ts"
   ],
   "scripts": {
     "build": "wireit",

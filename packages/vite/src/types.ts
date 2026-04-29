@@ -39,6 +39,36 @@ export interface KickJSPluginOptions {
 
   /** HMR logger / behaviour overrides (see {@link HmrOptions}). */
   hmr?: HmrOptions
+
+  /**
+   * DevTools build-time flag knob. The plugin exposes
+   * `__KICKJS_DEVTOOLS__` as a global constant adopters can guard
+   * imports of `@forinda/kickjs-devtools` behind so the entire
+   * adapter (and its dynamic-import chunk) drops out of production
+   * bundles via Vite's existing tree-shaking. Default value: `true`
+   * during `vite dev`, `false` during `vite build`.
+   *
+   * Pass `{ enabled: false }` to force-disable in any mode (useful
+   * for shipping a "no devtools" build profile alongside the dev
+   * server). Pass `{ flagName: '__APP_DEVTOOLS__' }` to rename the
+   * global if it collides with another tool. Pass `false` to skip
+   * registering the plugin entirely (no `define` entry written).
+   *
+   * @default `{}` — flag is registered with environment-based defaults
+   */
+  devtools?: DevtoolsOptions | false
+}
+
+/**
+ * DevTools-flag plugin options. Mirrors the structure of
+ * `DevtoolsFlagOptions` from `./devtools-flag-plugin` so the public
+ * type stays close to the runtime contract.
+ */
+export interface DevtoolsOptions {
+  /** Force the flag value, bypassing dev-vs-build detection. */
+  enabled?: boolean
+  /** Override the global name. Default `__KICKJS_DEVTOOLS__`. */
+  flagName?: string
 }
 
 /**
