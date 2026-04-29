@@ -130,6 +130,24 @@ export async function runTypegen(opts: RunTypegenOptions = {}): Promise<{
     allowDuplicates,
     schemaValidator,
   })
+  // M2.B-T8 carve: routes (now) + env (next commit) live in plugin
+  // typegens, not the legacy generator above. Always run the plugin
+  // pipeline as part of `runTypegen` so callers (kick g <leaf> /
+  // commands/typegen / kick dev / tests) stay on a single entry point
+  // and see a fully-refreshed `.kickjs/types/` after the call returns.
+  // Plugin failures are swallowed — same operator-explicit philosophy
+  // the legacy pass uses.
+  try {
+    const { runAllPluginTypegens } = await import('./run-plugins')
+    const { loadKickConfig } = await import('../config')
+    const pluginConfig = await loadKickConfig(cwd)
+    await runAllPluginTypegens({ cwd, config: pluginConfig, silent: true })
+  } catch {
+    // Plugin pipeline broken? The legacy pass already wrote the rest;
+    // surfacing the error here would block dev tooling, which is
+    // worse than skipping the affected augmentation file.
+  }
+
   const tokenWarnings = validateTokenConventions(scan.tokens)
   const elapsed = Date.now() - start
 

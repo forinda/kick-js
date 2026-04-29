@@ -42,10 +42,25 @@ export interface TypegenContext {
 }
 
 export interface TypegenPlugin {
-  /** Stable id — used as filename: `.kickjs/types/${id}.d.ts` (slashes → `__`). */
+  /** Stable id — used as filename: `.kickjs/types/${id}<outExtension>` (slashes → `__`). */
   id: string
   /** Glob patterns the Vite watcher subscribes to; change → re-run this plugin. */
   inputs: string[]
+  /**
+   * Output filename extension. Default `.d.ts` — the right choice for
+   * pure module-augmentation plugins (kick/db, kick/assets) since
+   * declaration files don't need the runtime-import dance.
+   *
+   * `kick/routes` overrides to `.ts` because it emits hoisted
+   * `import type {...} from '...'` lines at the top of the file. Inline
+   * `import('...').X` references inside `.d.ts` silently degrade to
+   * `unknown` under `moduleResolution: 'bundler'`; emitting `.ts`
+   * sidesteps that quirk and gets full type resolution.
+   *
+   * Adopter-supplied plugins should leave this unset unless they hit
+   * the same hoisted-import constraint.
+   */
+  outExtension?: string
   /**
    * Return the augmentation source (without banner — runner prepends).
    * Return null to skip emission (e.g. no schema file present).

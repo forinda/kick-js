@@ -34,7 +34,7 @@ describe('kick typegen', () => {
       '.kickjs/types/registry.d.ts',
       '.kickjs/types/services.d.ts',
       '.kickjs/types/modules.d.ts',
-      '.kickjs/types/routes.ts',
+      '.kickjs/types/kick__routes.ts',
       '.kickjs/types/index.d.ts',
       '.kickjs/.gitignore',
     ]) {
@@ -63,7 +63,7 @@ export class UserController {
 
     runCli(fixture, ['typegen'])
 
-    const routes = readFileSync(join(fixture, '.kickjs/types/routes.ts'), 'utf-8')
+    const routes = readFileSync(join(fixture, '.kickjs/types/kick__routes.ts'), 'utf-8')
     expect(routes).toContain('namespace KickRoutes')
     expect(routes).toContain('interface UserController')
     expect(routes).toContain('getById:')
@@ -211,7 +211,7 @@ export class ThingsController {
 
     runCli(fixture, ['typegen'])
 
-    const routes = readFileSync(join(fixture, '.kickjs/types/routes.ts'), 'utf-8')
+    const routes = readFileSync(join(fixture, '.kickjs/types/kick__routes.ts'), 'utf-8')
 
     // Both methods must appear by their real source names — not minifier-style
     // single letters or operationId values pulled from decorator arguments.
