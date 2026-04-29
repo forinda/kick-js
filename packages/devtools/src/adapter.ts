@@ -27,8 +27,10 @@ import {
   RuntimeSampler,
   type IntrospectionSnapshot,
 } from '@forinda/kickjs-devtools-kit'
+import { DEVTOOLS_BUS } from '@forinda/kickjs-devtools-kit/bus'
 import { collectTopologySnapshot, type TopologyApplicationLike } from './topology'
 import { collectDevtoolsTabs } from './devtools-tabs'
+import { createServerBus, type ServerBus } from './bus/server'
 
 const log = createLogger('DevTools')
 
@@ -257,6 +259,29 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
       : null
     const memoryAnalyzer = runtimeEnabled ? new MemoryAnalyzer() : null
 
+    // ── Server-side event bus ──────────────────────────────────────
+    // Created up-front so plugins resolving DEVTOOLS_BUS during boot
+    // (`beforeStart`) get a live instance, not a placeholder. The WS
+    // upgrade attaches in `afterStart` once the http.Server is up;
+    // emits before that point still dispatch to in-process subs and
+    // queue toward zero clients (no error). When the devtools adapter
+    // is disabled (`enabled === false`) the bus stays a no-op stub
+    // so adopters who Inject(DEVTOOLS_BUS) under @Optional() get a
+    // safe fallback rather than `undefined`-everywhere.
+    const bus: ServerBus = enabled
+      ? createServerBus({
+          wsPath: `${basePath}/_bus`,
+          secret: secret === false ? false : secret,
+        })
+      : ({
+          on: () => () => {},
+          onAny: () => () => {},
+          emit: () => {},
+          attachUpgrade: () => {},
+          close: () => {},
+          clientCount: () => 0,
+        } as ServerBus)
+
     // ── Reactive state ─────────────────────────────────────────────
     const requestCount = ref(0)
     const errorCount = ref(0)
@@ -370,6 +395,11 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
 
         appRef = app
         container = containerArg
+        // Register the bus so first-party plugins can @Inject(DEVTOOLS_BUS)
+        // before their own beforeStart fires. registerInstance is a no-op
+        // re-register if the adapter rebuilds during HMR — the existing
+        // bus instance keeps its in-flight subscriptions intact.
+        containerArg.registerInstance(DEVTOOLS_BUS, bus)
         startedAt.value = Date.now()
         // Clear routes on rebuild/restart to prevent HMR duplication
         routes = []
@@ -892,11 +922,17 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
         }
       },
 
-      afterStart() {
+      afterStart({ server }) {
         if (!enabled) return
+        // Wire the bus's WS upgrade to the framework's http.Server.
+        // Path-based routing inside attachUpgrade means kickjs-ws or
+        // any other adapter sharing the same listener stays
+        // unaffected — only `${basePath}/_bus` is claimed.
+        if (server) bus.attachUpgrade(server)
         log.info(
           `DevTools ready — ${routes.length} routes tracked, ` +
-            `${container?.getRegistrations().length ?? 0} DI bindings`,
+            `${container?.getRegistrations().length ?? 0} DI bindings, ` +
+            `event bus on ${basePath}/_bus`,
         )
       },
 
@@ -904,6 +940,7 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
         stopErrorWatch?.()
         runtimeSampler?.stop()
         memoryAnalyzer?.stop()
+        bus.close()
         adapterStatuses['DevToolsAdapter'] = 'stopped'
       },
     }
