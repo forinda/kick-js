@@ -187,5 +187,33 @@ describe('pgEnum snapshot + diff + emit pipeline', () => {
       const reversed = invertChanges([change])
       expect(reversed).toEqual([change])
     })
+
+    it('emit/pg sanitises newlines + control bytes in enum names + values', () => {
+      // Pathological input — an adopter passing pgEnum('foo\nDROP TABLE x;', ...)
+      // shouldn't be able to escape the SQL comment by stuffing newlines
+      // into the comment text.
+      const sql = emitPg([
+        {
+          kind: 'removeEnumValue',
+          enum: 'foo\nDROP TABLE evil',
+          removed: ['bad\nrm -rf', 'safe', '\x07bell'],
+        },
+      ])
+      // No raw newline survives inside the rendered text — every
+      // non-empty rendered line still starts with `--`. Without
+      // sanitisation the newline injection would terminate the
+      // comment early, producing an executable line.
+      const lines = sql.split('\n').filter((l) => l.trim() !== '')
+      for (const line of lines) {
+        expect(line.startsWith('--')).toBe(true)
+      }
+      // Newlines in user-supplied text collapse to a single space.
+      expect(sql).not.toMatch(/foo\nDROP/)
+      expect(sql).not.toMatch(/bad\nrm/)
+      // C0 control bytes (other than tab / newline) become \x<hh>.
+      // BEL is \x07 — the chosen sanitisation makes the migration
+      // file printable ASCII-clean.
+      expect(sql).toMatch(/\\x07bell/)
+    })
   })
 })
