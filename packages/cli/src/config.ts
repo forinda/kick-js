@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { readFile, access } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 
@@ -214,6 +214,26 @@ export interface KickConfig {
   packageManager?: PackageManager
 
   /**
+   * DI token scope prefix used by code generators. Every scaffolded
+   * `createToken<T>('<scope>/<area>/<key>')` substitutes this string
+   * for `<scope>`. Generators emit org-scoped tokens out of the box
+   * so adopter projects pass `kick-lint`'s `token-reserved-prefix`
+   * rule (which forbids the reserved `kick/` prefix on third-party
+   * code) without manual rename.
+   *
+   * Resolution order (highest first):
+   * 1. This field, when set
+   * 2. `package.json` `name` field — `@scope/pkg` → `'scope'`,
+   *    bare `pkg` → `'pkg'`
+   * 3. Fallback `'app'`
+   *
+   * @example
+   * tokenScope: 'mycorp'
+   * // → createToken<...>('mycorp/users/repository')
+   */
+  tokenScope?: string
+
+  /**
    * Directories to copy to dist/ after build.
    * Useful for EJS templates, email templates, static assets, etc.
    *
@@ -312,6 +332,47 @@ export function defineConfig(config: KickConfig): KickConfig {
 }
 
 /** Resolve module config from `modules.*` block. */
+/**
+ * Resolve the project's DI token scope for code generators.
+ * Falls back through kick.config.ts → package.json → `'app'`.
+ *
+ * @param config Loaded `kick.config.ts` (null when not present)
+ * @param cwd Project root — used to read package.json
+ */
+export function resolveTokenScope(config: KickConfig | null, cwd: string): string {
+  if (config?.tokenScope && typeof config.tokenScope === 'string' && config.tokenScope.length > 0) {
+    return sanitizeScope(config.tokenScope)
+  }
+
+  // Read package.json synchronously — this runs once per generator
+  // invocation, so a sync read is cheaper than the async dance + lets
+  // the call sites (template builders) stay synchronous.
+  try {
+    const pkgPath = join(cwd, 'package.json')
+    if (existsSync(pkgPath)) {
+      const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8')) as { name?: unknown }
+      if (typeof pkg.name === 'string' && pkg.name.length > 0) {
+        const scoped = pkg.name.match(/^@([^/]+)\//)
+        if (scoped) return sanitizeScope(scoped[1])
+        return sanitizeScope(pkg.name)
+      }
+    }
+  } catch {
+    // package.json missing or malformed — fall through to default
+  }
+
+  return 'app'
+}
+
+/** Lowercase + strip characters that would break a token literal. */
+function sanitizeScope(raw: string): string {
+  return raw
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, '-') // collapse anything weird to a hyphen
+    .replace(/^-+|-+$/g, '') // trim leading/trailing hyphens
+    .replace(/-{2,}/g, '-') // collapse runs of hyphens
+}
+
 export function resolveModuleConfig(config: KickConfig | null): ModuleConfig {
   if (!config) return {}
   const mc: ModuleConfig = {

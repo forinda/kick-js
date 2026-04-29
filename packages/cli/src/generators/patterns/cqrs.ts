@@ -20,7 +20,17 @@ import {
 } from '../templates'
 
 export async function generateCqrsFiles(ctx: ModuleContext): Promise<void> {
-  const { pascal, kebab, plural, pluralPascal, repo, noTests, prismaClientPath, write } = ctx
+  const {
+    pascal,
+    kebab,
+    plural,
+    pluralPascal,
+    repo,
+    noTests,
+    prismaClientPath,
+    tokenScope,
+    write,
+  } = ctx
 
   // Module file (named `<kebab>.module.ts` so Vite's module-discovery plugin picks it up)
   await write(`${kebab}.module.ts`, generateCqrsModuleIndex({ pascal, kebab, plural, repo }))
@@ -60,7 +70,7 @@ export async function generateCqrsFiles(ctx: ModuleContext): Promise<void> {
   // Repository interface (flat imports)
   await write(
     `${kebab}.repository.ts`,
-    generateRepositoryInterface({ pascal, kebab, dtoPrefix: './dtos' }),
+    generateRepositoryInterface({ pascal, kebab, dtoPrefix: './dtos', tokenScope }),
   )
 
   // Repository implementation (flat imports)

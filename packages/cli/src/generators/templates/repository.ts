@@ -1,7 +1,7 @@
 import type { TemplateContext } from './types'
 
 export function generateRepositoryInterface(ctx: TemplateContext): string {
-  const { pascal, kebab, dtoPrefix = '../../application/dtos' } = ctx
+  const { pascal, kebab, dtoPrefix = '../../application/dtos', tokenScope = 'app' } = ctx
   return `/**
  * ${pascal} Repository Interface
  *
@@ -31,8 +31,12 @@ export interface I${pascal}Repository {
  * \`container.resolve(${pascal.toUpperCase()}_REPOSITORY)\` and
  * \`@Inject(${pascal.toUpperCase()}_REPOSITORY)\` both return the typed
  * interface — no manual generic, no \`any\` cast.
+ *
+ * The \`'${tokenScope}/'\` prefix matches the project scope so
+ * \`kick-lint\`'s \`token-reserved-prefix\` rule never fires —
+ * adopters must NOT use the reserved \`'kick/'\` namespace.
  */
-export const ${pascal.toUpperCase()}_REPOSITORY = createToken<I${pascal}Repository>('app/${kebab}/repository')
+export const ${pascal.toUpperCase()}_REPOSITORY = createToken<I${pascal}Repository>('${tokenScope}/${kebab}/repository')
 `
 }
 

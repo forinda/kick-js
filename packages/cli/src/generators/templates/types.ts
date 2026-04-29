@@ -16,4 +16,13 @@ export interface TemplateContext {
   prismaClientPath?: string
   /** Custom repo type name (e.g. 'typeorm') — only for generateCustomRepository */
   repoType?: string
+  /**
+   * DI-token scope prefix used by templates that emit `createToken<T>()`
+   * literals. Default `'app'`. The orchestrating generator
+   * (module / scaffold / leaf) resolves this from `kick.config.ts`
+   * `tokenScope` or the project's `package.json` name (`@scope/pkg`
+   * → `'scope'`); template helpers should treat this as the source
+   * of truth for the `<scope>` portion of any emitted token literal.
+   */
+  tokenScope?: string
 }

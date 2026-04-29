@@ -22,8 +22,18 @@ import {
 } from '../templates'
 
 export async function generateDddFiles(ctx: ModuleContext): Promise<void> {
-  const { pascal, kebab, plural, pluralPascal, repo, noEntity, noTests, prismaClientPath, write } =
-    ctx
+  const {
+    pascal,
+    kebab,
+    plural,
+    pluralPascal,
+    repo,
+    noEntity,
+    noTests,
+    prismaClientPath,
+    tokenScope,
+    write,
+  } = ctx
 
   // Module file (named `<kebab>.module.ts` so Vite's module-discovery plugin picks it up)
   await write(`${kebab}.module.ts`, generateModuleIndex({ pascal, kebab, plural, repo }))
@@ -56,7 +66,7 @@ export async function generateDddFiles(ctx: ModuleContext): Promise<void> {
   // Repository Interface
   await write(
     `domain/repositories/${kebab}.repository.ts`,
-    generateRepositoryInterface({ pascal, kebab }),
+    generateRepositoryInterface({ pascal, kebab, tokenScope }),
   )
 
   // Domain Service

@@ -37,6 +37,14 @@ interface GenerateModuleOptions {
   pluralize?: boolean
   /** Prisma client import path (default: '@prisma/client', Prisma 7+: '@/generated/prisma/client') */
   prismaClientPath?: string
+  /**
+   * DI-token scope prefix substituted into emitted `createToken<T>()`
+   * literals. Resolved by the orchestrating command from
+   * `kick.config.ts > tokenScope` or the project's package.json.
+   * Falls back to `'app'` when not set so the generator can be called
+   * without a config in tests/fixtures.
+   */
+  tokenScope?: string
 }
 
 /**
@@ -94,6 +102,7 @@ export async function generateModule(options: GenerateModuleOptions): Promise<st
     noEntity: noEntity ?? false,
     noTests: noTests ?? false,
     prismaClientPath: options.prismaClientPath ?? '@prisma/client',
+    tokenScope: options.tokenScope ?? 'app',
     write,
     files,
   }
