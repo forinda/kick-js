@@ -23,11 +23,14 @@
 //   const rows = await dbX.selectFrom('posts').selectAll().execute()
 //   rows[0].url  // typed `string`, computed from id + slug
 //
-// `needs` declares which columns the compute reads. The runtime
-// auto-injects them into the SELECT list at compile time so adopters
-// who write `.select(['title'])` still get every needs-column on the
-// row (the computed property fires regardless of which subset of
-// columns the caller actually selected).
+// `needs` declares which columns the compute reads. The Kysely plugin
+// rewrites the query tree before SQL emit to add any declared `needs`
+// column not already in the SELECT list — adopters who write
+// `.select(['title'])` still get every needs-column fetched, so the
+// computed property fires regardless of which subset of columns the
+// caller selected. (The TypeScript row shape only widens with the
+// computed property itself; the injected needs columns aren't in the
+// declared shape unless the adopter selected them explicitly.)
 
 import type { KickDbClient } from '../client/types'
 
@@ -73,16 +76,27 @@ export interface ExtensionDefinition<DB> {
  * Fold result extensions into the DB row shape. For each table that
  * has computeds, every row gains the computed properties typed by the
  * compute function's return type.
+ *
+ * Implementation note: `compute(row: Row)` is contravariant in `Row`,
+ * so the obvious-looking `R[T] extends Record<string, ResultExtension<unknown>>`
+ * check fails — `ResultExtension<Row>` doesn't extend
+ * `ResultExtension<unknown>` under strictFunctionTypes. We use
+ * `(row: never)` as the variance-neutral position: every adopter
+ * compute extends `(row: never) => unknown`, so the check passes
+ * uniformly.
  */
 export type DBWithResults<DB, R> = {
-  [T in keyof DB]: T extends keyof R
-    ? R[T] extends Record<string, ResultExtension<unknown>>
-      ? DB[T] & {
-          [K in keyof R[T]]: R[T][K] extends { compute: (row: never) => infer Out } ? Out : unknown
-        }
-      : DB[T]
-    : DB[T]
+  [T in keyof DB]: T extends keyof R ? DB[T] & ComputedFields<R[T]> : DB[T]
 }
+
+/** Map a computed-bag to a record of computed-field name → return type. */
+type ComputedFields<Bag> =
+  Bag extends Record<string, { compute: (row: never) => unknown }>
+    ? {
+        [K in keyof Bag]: Bag[K] extends { compute: (row: never) => infer Out } ? Out : unknown
+      }
+    : // eslint-disable-next-line @typescript-eslint/no-empty-object-type
+      {}
 
 /**
  * Result type of `db.$extends(...)` — the client typed against the

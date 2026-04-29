@@ -183,7 +183,7 @@ const dbX = db.$extends({
 
 ### Result extensions
 
-Add derived properties to every selected row of a table. Each computed declares which columns it `needs` (auto-injected into the SELECT list at compile time) and a `compute(row)` function that produces the value:
+Add derived properties to every selected row of a table. Each computed declares which columns it `needs` and a `compute(row)` function that produces the value. The Kysely plugin rewrites the query tree before SQL emit so the listed columns are fetched whenever that table is selected:
 
 ```ts
 const dbX = db.$extends({
@@ -200,7 +200,7 @@ const rows = await dbX.selectFrom('posts').selectAll().execute()
 //    rows[0].excerpt: string  — typed, computed from body
 ```
 
-**`needs` injection** — the runtime walks every `SelectQueryNode` whose `from` resolves to a table with computeds, and adds any declared `needs` column not already in the select list. Adopters who write `.select(['title'])` still get the computeds populated; they just won't see the `needs` columns on the row property unless they ask. Wildcards (`selectAll()`) skip injection entirely — every column is implicitly present.
+**`needs` injection** — the plugin walks every `SelectQueryNode` whose `from` resolves to a table with computeds, and adds any declared `needs` column not already in the select list. Adopters who write `.select(['title'])` still get the computeds populated. The injected columns DO land on the runtime row object (they were fetched, after all) — the row's TypeScript shape only widens with the computed property itself, but a property-existence check at runtime would still find the needs columns. Wildcards (`selectAll()`) skip injection entirely — every column is implicitly present.
 
 **`compute()` semantics**
 

@@ -109,7 +109,7 @@ describe('ResultExtensionPlugin — transformQuery (needs-injection)', () => {
 
     const out = plugin.transformQuery({ node, queryId: fakeQueryId('q2') })
     // No additional selections — wildcard already covers everything.
-    expect((out as typeof node).selections).toHaveLength(1)
+    expect((out as { selections: ReadonlyArray<SelectionNode> }).selections).toHaveLength(1)
   })
 
   it('does not duplicate columns already present in the SELECT', () => {
@@ -236,6 +236,36 @@ describe('createDbClient + $extends({ result }) — end-to-end', () => {
     }
     expect(row.url).toBe('/p/3')
     expect(row.shouty).toBe('Hi!')
+    await dbX.destroy()
+  })
+
+  it('computeds are order-independent — each receives the pristine row, never a sibling output', async () => {
+    // If compute() were passed the in-flight `next` row, `second`
+    // could read `first`'s output via row-as-record. The contract is
+    // that each compute reads only the fetched columns; this test
+    // pins it by asserting `second` does NOT see `first` even when
+    // declared after it in the same bag.
+    const dialect = dialectReturning([{ id: 5, slug: 'q', title: 'T' }])
+    const db = createDbClient({ schema: { posts }, dialect })
+    const dbX = db.$extends({
+      result: {
+        posts: {
+          first: { needs: { id: true }, compute: () => 'FIRST' },
+          second: {
+            needs: { id: true },
+            compute: (r) => (r as Record<string, unknown>).first,
+          },
+        },
+      },
+    })
+    const row = (await dbX.selectFrom('posts').selectAll().executeTakeFirst()) as {
+      first: string
+      second: unknown
+    }
+    expect(row.first).toBe('FIRST')
+    // `second` got the pristine row — no `first` field on it — so
+    // reading row.first inside compute returns undefined.
+    expect(row.second).toBeUndefined()
     await dbX.destroy()
   })
 
