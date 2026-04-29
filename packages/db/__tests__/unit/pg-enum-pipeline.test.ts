@@ -4,7 +4,7 @@ import { table, uuid, varchar } from '../../src/index'
 import { pgEnum } from '../../src/dsl/columns/pg'
 import { extractSnapshot } from '../../src/snapshot/extract'
 import { diff } from '../../src/diff/engine'
-import { invertChanges } from '../../src/diff/invert'
+import { hasAmbiguousReverse, invertChanges } from '../../src/diff/invert'
 import { emitPg } from '../../src/emit/pg'
 
 describe('pgEnum snapshot + diff + emit pipeline', () => {
@@ -102,5 +102,90 @@ describe('pgEnum snapshot + diff + emit pipeline', () => {
     // Forward starts with createEnum then createTable; reverse should
     // start with dropTable (or its dependents) and end with dropEnum.
     expect(reverse[reverse.length - 1].kind).toBe('dropEnum')
+  })
+
+  describe('removed enum value handling', () => {
+    it('diff emits a removeEnumValue advisory when values disappear from a kept enum', () => {
+      const before = pgEnum('status', 'alpha', 'beta', 'released')
+      const after = pgEnum('status', 'alpha', 'released')
+      const prev = extractSnapshot({ status: before }, 'postgres')
+      const next = extractSnapshot({ status: after }, 'postgres')
+      const changes = diff(prev, next)
+      expect(changes).toHaveLength(1)
+      expect(changes[0]).toMatchObject({
+        kind: 'removeEnumValue',
+        enum: 'status',
+        removed: ['beta'],
+      })
+    })
+
+    it('diff records multiple removed values in their original declaration order', () => {
+      const before = pgEnum('phase', 'draft', 'review', 'staged', 'released', 'archived')
+      const after = pgEnum('phase', 'draft', 'released')
+      const prev = extractSnapshot({ phase: before }, 'postgres')
+      const next = extractSnapshot({ phase: after }, 'postgres')
+      const changes = diff(prev, next)
+      const removeChange = changes.find((c) => c.kind === 'removeEnumValue')
+      expect(removeChange).toBeDefined()
+      // Order matches the prev snapshot's value list, not the operator's
+      // (potentially ad-hoc) reasoning order.
+      expect((removeChange as { removed: readonly string[] }).removed).toEqual([
+        'review',
+        'staged',
+        'archived',
+      ])
+    })
+
+    it('diff combines additions and removals into separate changes', () => {
+      const before = pgEnum('phase', 'draft', 'staged')
+      const after = pgEnum('phase', 'draft', 'released')
+      const prev = extractSnapshot({ phase: before }, 'postgres')
+      const next = extractSnapshot({ phase: after }, 'postgres')
+      const changes = diff(prev, next)
+      const kinds = changes.map((c) => c.kind)
+      expect(kinds).toContain('addEnumValue')
+      expect(kinds).toContain('removeEnumValue')
+      expect(changes.find((c) => c.kind === 'addEnumValue')).toMatchObject({
+        value: 'released',
+      })
+      expect(changes.find((c) => c.kind === 'removeEnumValue')).toMatchObject({
+        removed: ['staged'],
+      })
+    })
+
+    it('emit/pg renders the advisory comment block (no SQL DDL)', () => {
+      const sql = emitPg([
+        { kind: 'removeEnumValue', enum: 'status', removed: ['beta', 'archived'] },
+      ])
+      expect(sql).toMatch(/-- WARNING: enum "status" dropped value\(s\): 'beta', 'archived'\./)
+      expect(sql).toMatch(/PostgreSQL has no ALTER TYPE \.\.\. DROP VALUE/)
+      expect(sql).toMatch(/DROP TYPE "status"/)
+      expect(sql).toMatch(/CREATE TYPE "status" AS ENUM/)
+      // No actual DDL — every rendered line is a SQL comment.
+      const nonComment = sql
+        .split('\n')
+        .filter((line) => line.trim() !== '')
+        .find((line) => !line.startsWith('--'))
+      expect(nonComment).toBeUndefined()
+    })
+
+    it('removeEnumValue is flagged as ambiguous-reverse so the down draft warns', () => {
+      const before = pgEnum('status', 'a', 'b')
+      const after = pgEnum('status', 'a')
+      const prev = extractSnapshot({ status: before }, 'postgres')
+      const next = extractSnapshot({ status: after }, 'postgres')
+      const forward = diff(prev, next)
+      expect(hasAmbiguousReverse(forward)).toBe(true)
+    })
+
+    it('invertChanges carries the advisory verbatim (symmetric advisory)', () => {
+      const change = {
+        kind: 'removeEnumValue' as const,
+        enum: 'status',
+        removed: ['beta'],
+      }
+      const reversed = invertChanges([change])
+      expect(reversed).toEqual([change])
+    })
   })
 })

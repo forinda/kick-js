@@ -40,7 +40,37 @@ function emitChange(change: Change): string {
       const before = change.before ? ` BEFORE ${quoteLiteral(change.before)}` : ''
       return `ALTER TYPE ${quoteIdent(change.enum)} ADD VALUE ${quoteLiteral(change.value)}${before};`
     }
+    case 'removeEnumValue':
+      return emitRemoveEnumValueAdvisory(change.enum, change.removed)
   }
+}
+
+/**
+ * PostgreSQL has no `ALTER TYPE … DROP VALUE` — emitting silently
+ * here would drop these values from the schema's intent without
+ * reflecting in the database. Instead we render a multi-line SQL
+ * comment with the manual migration steps the operator must take.
+ *
+ * The migration file still applies cleanly; the comment block makes
+ * the missing operation visible in code review and in the generated
+ * SQL output.
+ */
+function emitRemoveEnumValueAdvisory(name: string, removed: readonly string[]): string {
+  const valuesList = removed.map((v) => quoteLiteral(v)).join(', ')
+  return [
+    `-- WARNING: enum ${quoteIdent(name)} dropped value(s): ${valuesList}.`,
+    `-- PostgreSQL has no ALTER TYPE ... DROP VALUE. To round-trip this`,
+    `-- removal you must:`,
+    `--   1. Drop or migrate every column whose type is ${quoteIdent(name)} (or any`,
+    `--      composite that references it).`,
+    `--   2. DROP TYPE ${quoteIdent(name)};`,
+    `--   3. CREATE TYPE ${quoteIdent(name)} AS ENUM (...) with the new value list.`,
+    `--   4. Recreate the columns + restore data, mapping any rows that held`,
+    `--      one of the dropped value(s) to a still-valid replacement first.`,
+    `-- This migration emits no SQL for this change — write the steps above`,
+    `-- by hand if the removal is intentional, or restore the value(s) in`,
+    `-- the schema definition to silence this warning.`,
+  ].join('\n')
 }
 
 function emitAddColumn(table: string, c: ColumnSnapshot): string {

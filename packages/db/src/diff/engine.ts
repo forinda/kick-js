@@ -64,15 +64,17 @@ function diffEnumsCreatePhase(prev: SchemaSnapshot, next: SchemaSnapshot, change
   }
 
   // ALTER TYPE ADD VALUE for non-destructive value additions on
-  // existing enums. Removed / reordered values are NOT round-trippable
-  // without dropping every column that references the type — those
-  // surface as a no-op + a comment in emit so the adopter writes a
-  // manual migration.
+  // existing enums. Removed values are NOT round-trippable without
+  // dropping every column that references the type — those surface
+  // as a `removeEnumValue` advisory the emitter turns into a SQL
+  // comment with explicit operator guidance.
   for (const [name, e] of Object.entries(nextEnums)) {
     const prior = prevEnums[name]
     if (!prior) continue
     const priorValues = new Set(prior.values)
+    const nextValues = new Set(e.values)
     const nextValueList = e.values
+
     let lastInsertedAt = -1
     for (let i = 0; i < nextValueList.length; i++) {
       const value = nextValueList[i]
@@ -91,6 +93,14 @@ function diffEnumsCreatePhase(prev: SchemaSnapshot, next: SchemaSnapshot, change
         ...(beforeIsExisting ? { before } : {}),
       })
       void lastInsertedAt
+    }
+
+    // Removed values — collect in declaration order from the prior
+    // snapshot so the emitter list matches the order the operator
+    // originally wrote.
+    const removed = prior.values.filter((v) => !nextValues.has(v))
+    if (removed.length > 0) {
+      changes.push({ kind: 'removeEnumValue', enum: name, removed })
     }
   }
 }
