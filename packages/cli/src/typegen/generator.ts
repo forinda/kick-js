@@ -189,125 +189,6 @@ ${envImport}`
 }
 
 /**
- * Render the `query` field's TypeScript type for a single route.
- *
- * - When `@ApiQueryParams` is absent (`queryFilterable === null`), emits
- *   `unknown` so the user gets nothing extra.
- * - When the decorator is present, emits an object literal whose keys
- *   are the standard query string keys (`filter`, `sort`, `q`, `page`,
- *   `limit`). `sort` is narrowed to a string-literal union of allowed
- *   field names with optional `-` direction prefix.
- */
-function renderQueryShape(m: DiscoveredRoute): string {
-  if (m.queryFilterable === null) return 'unknown'
-  const sortable = m.querySortable ?? []
-  const sortType =
-    sortable.length > 0 ? sortable.flatMap((f) => [`'${f}'`, `'-${f}'`]).join(' | ') : 'string'
-  return `{ filter?: string | string[]; sort?: ${sortType}; q?: string; page?: string; limit?: string }`
-}
-
-/** Render JSDoc lines summarising the @ApiQueryParams whitelist */
-function renderQueryDocLines(m: DiscoveredRoute): string[] {
-  const lines: string[] = []
-  if (m.queryFilterable && m.queryFilterable.length > 0) {
-    lines.push(`Filterable: ${m.queryFilterable.join(', ')}`)
-  }
-  if (m.querySortable && m.querySortable.length > 0) {
-    lines.push(`Sortable: ${m.querySortable.join(', ')}`)
-  }
-  if (m.querySearchable && m.querySearchable.length > 0) {
-    lines.push(`Searchable: ${m.querySearchable.join(', ')}`)
-  }
-  return lines
-}
-
-/**
- * Plan a schema import for hoisting at the top of `routes.ts`. Returns
- * the alias the in-namespace code should use, or `null` if the schema
- * cannot be referenced (no validator configured, or source unresolvable).
- *
- * Aliases are unique per (alias-counter) so two schemas named
- * `createTaskSchema` from different modules don't collide.
- */
-function planSchemaImport(
-  schema: { identifier: string; source: string | null } | null,
-  routeFilePath: string,
-  routesOutFile: string,
-  schemaValidator: 'zod' | false,
-  imports: Map<string, { identifier: string; specifier: string }>,
-): string | null {
-  if (!schema || schemaValidator !== 'zod') return null
-  if (schema.source === null) return null
-  const specifier = resolveSchemaImportSpecifier(schema.source, routeFilePath, routesOutFile)
-  if (specifier === 'unknown') return null
-  const key = `${specifier}::${schema.identifier}`
-  let alias = imports.get(key)?.specifier
-  if (!alias) {
-    alias = `_S${imports.size}`
-    imports.set(key, { identifier: schema.identifier, specifier: alias })
-  } else {
-    alias = imports.get(key)!.specifier
-  }
-  return alias
-}
-
-/** Build the `import type { ... } from '...'` lines for hoisted schema imports */
-function renderSchemaImports(
-  imports: Map<string, { identifier: string; specifier: string }>,
-): string {
-  if (imports.size === 0) return ''
-  const lines: string[] = []
-  for (const [key, value] of imports) {
-    const [path] = key.split('::')
-    lines.push(`import type { ${value.identifier} as ${value.specifier} } from '${path}'`)
-  }
-  return lines.join('\n') + '\n'
-}
-
-/**
- * Compute the import specifier the generated `routes.d.ts` should use to
- * reach a schema declared either in the controller file (empty string)
- * or imported from elsewhere (relative path or bare module name).
- *
- * - Bare module names (`zod`, `@scope/pkg`) are returned as-is.
- * - Relative paths (`./users.dto`, `../shared/schema`) are resolved
- *   against the controller's file path, then re-relativised against the
- *   directory containing `routes.d.ts`.
- * - Empty string (same-file schema) becomes a relative path from the
- *   `routes.d.ts` directory back to the controller file.
- */
-function resolveSchemaImportSpecifier(
-  source: string | null,
-  routeFilePath: string,
-  routesOutFile: string,
-): string {
-  if (source === null) return 'unknown'
-  const routesDir = dirname(routesOutFile)
-
-  // Same-file schema — point at the controller file itself
-  if (source === '') {
-    let rel = relative(routesDir, routeFilePath).split(sep).join('/')
-    rel = rel.replace(/\.(ts|tsx|mts|cts)$/i, '')
-    if (!rel.startsWith('.')) rel = './' + rel
-    return rel
-  }
-
-  // Bare module name (no leading `.` and not absolute) → keep as-is
-  if (!source.startsWith('.') && !source.startsWith('/')) {
-    return source
-  }
-
-  // Relative import → resolve against the controller's directory, then
-  // re-relativise against the routes.d.ts directory
-  const controllerDir = dirname(routeFilePath)
-  const absoluteTarget = resolve(controllerDir, source)
-  let rel = relative(routesDir, absoluteTarget).split(sep).join('/')
-  rel = rel.replace(/\.(ts|tsx|mts|cts)$/i, '')
-  if (!rel.startsWith('.')) rel = './' + rel
-  return rel
-}
-
-/**
  * Render the `KickEnv` + `NodeJS.ProcessEnv` augmentation file from a
  * detected env schema. Mirrors the routes.ts pattern: emits as a `.ts`
  * file (not `.d.ts`) so the top-level `import type schema from '...'`
@@ -316,26 +197,20 @@ function resolveSchemaImportSpecifier(
  * Returns `null` when no env file was discovered, so the caller can
  * skip writing the file altogether (rather than emitting an empty
  * augmentation that would shadow `KickEnv` to a useless `{}`).
+ *
+ * NOTE: This still lives in the legacy generator until the M2.B-T8
+ * env carve lands — kick/env plugin will pick this up next commit.
  */
 function renderEnv(env: DiscoveredEnv | null, envOutFile: string): string | null {
   if (!env) return null
-  // Compute the relative import path from .kickjs/types/env.ts back
-  // to the user's env schema file, stripping the extension so TS can
-  // resolve it.
   const envOutDir = dirname(envOutFile)
   let rel = relative(envOutDir, env.filePath).split(sep).join('/')
   rel = rel.replace(/\.(ts|tsx|mts|cts)$/i, '')
   if (!rel.startsWith('.')) rel = './' + rel
 
   return `${HEADER}
-// Importing the schema as a type lets us infer its shape without
-// pulling in any runtime code. \`Awaited<>\` strips an accidental
-// Promise wrap on dynamic-imported defaults.
 import type _envSchema from '${rel}'
 
-// Local type alias — interfaces can only \`extend\` an identifier,
-// not an inline import expression, so we resolve the schema's
-// inferred shape into a named type first.
 type _KickEnvShape = import('zod').infer<typeof _envSchema>
 
 declare global {
@@ -348,122 +223,7 @@ declare global {
 
   // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace NodeJS {
-    /**
-     * Narrow \`process.env\` so known keys exist as \`string\` (the raw
-     * pre-Zod-coercion form). \`@Value\` and the \`ConfigService\` apply
-     * the schema's transforms internally; access \`process.env\` directly
-     * only when you need the raw string. Unknown keys still resolve to
-     * \`string | undefined\` via the base @types/node declaration.
-     */
     interface ProcessEnv extends Record<keyof KickEnv, string> {}
-  }
-}
-
-export {}
-`
-}
-
-/**
- * Render the `KickRoutes` global namespace augmentation. Each interface
- * inside corresponds to a controller class; each property is a single
- * route method on that controller, conforming to `RouteShape`.
- *
- * Fills `params` from URL patterns, `query` from `@ApiQueryParams`, and
- * `body`/`query`/`params` (when schema-validated) from the configured
- * schema validator. `response` is emitted as `unknown`.
- */
-function renderRoutes(
-  routes: DiscoveredRoute[],
-  routesOutFile: string,
-  schemaValidator: 'zod' | false,
-): string {
-  if (routes.length === 0) {
-    return `${HEADER}
-// (no routes discovered yet — annotate a controller method with
-//  @Get/@Post/@Put/@Delete/@Patch and re-run \`kick typegen\`)
-declare global {
-  // eslint-disable-next-line @typescript-eslint/no-namespace
-  namespace KickRoutes {}
-}
-
-export {}
-`
-  }
-
-  // Group routes by controller for emission
-  const byController = new Map<string, DiscoveredRoute[]>()
-  for (const r of routes) {
-    const arr = byController.get(r.controller) ?? []
-    arr.push(r)
-    byController.set(r.controller, arr)
-  }
-
-  // Hoisted schema imports — collected during interface rendering, then
-  // emitted at the top of `routes.ts` so the in-namespace type references
-  // resolve correctly. (Inline `import('...').X` inside `.d.ts` files
-  // silently degrades to `unknown` with `moduleResolution: 'bundler'`.)
-  const schemaImports = new Map<string, { identifier: string; specifier: string }>()
-
-  const renderField = (
-    schema: { identifier: string; source: string | null } | null,
-    routeFilePath: string,
-  ): string | null => {
-    const alias = planSchemaImport(
-      schema,
-      routeFilePath,
-      routesOutFile,
-      schemaValidator,
-      schemaImports,
-    )
-    return alias ? `import('zod').infer<typeof ${alias}>` : null
-  }
-
-  const interfaces: string[] = []
-  for (const [controller, methods] of byController) {
-    const lines: string[] = [`    interface ${controller} {`]
-    for (const m of methods) {
-      // Empty `{}` (rather than `Record<string, never>`) so that accessing
-      // an unknown property on a paramless route is a type error in strict
-      // mode. `Record<string, never>` returns `never` for any access which
-      // unfortunately is assignable to anything and silently passes.
-      const urlParamsType =
-        m.pathParams.length > 0 ? `{ ${m.pathParams.map((p) => `${p}: string`).join('; ')} }` : '{}'
-
-      // Schema-driven types win over the URL-pattern / `unknown` defaults
-      // when the user has wired a schema in the route decorator.
-      const bodySchemaType = renderField(m.bodySchema, m.filePath)
-      const querySchemaType = renderField(m.querySchema, m.filePath)
-      const paramsSchemaType = renderField(m.paramsSchema, m.filePath)
-
-      const paramsType = paramsSchemaType ?? urlParamsType
-      const bodyType = bodySchemaType ?? 'unknown'
-      const queryType = querySchemaType ?? renderQueryShape(m)
-      const docLines = renderQueryDocLines(m)
-      lines.push(
-        `      /**`,
-        `       * ${m.httpMethod} ${m.path}`,
-        ...docLines.map((d) => `       * ${d}`),
-        `       */`,
-        `      ${m.method}: {`,
-        `        params: ${paramsType}`,
-        `        body: ${bodyType}`,
-        `        query: ${queryType}`,
-        `        response: unknown`,
-        `      }`,
-      )
-    }
-    lines.push('    }')
-    interfaces.push(lines.join('\n'))
-  }
-
-  const importBlock = renderSchemaImports(schemaImports)
-  const interfaceBlock = interfaces.join('\n')
-
-  return `${HEADER}${importBlock}
-declare global {
-  // eslint-disable-next-line @typescript-eslint/no-namespace
-  namespace KickRoutes {
-${interfaceBlock}
   }
 }
 
@@ -672,13 +432,9 @@ export async function generateTypes(opts: GenerateOptions): Promise<GenerateResu
   const registryFile = join(outDir, 'registry.d.ts')
   const servicesFile = join(outDir, 'services.d.ts')
   const modulesFile = join(outDir, 'modules.d.ts')
-  // routes.ts (NOT .d.ts) — TypeScript silently degrades top-level
-  // imports inside `.d.ts` files to `unknown` when the user's tsconfig
-  // has `moduleResolution: 'bundler'`. Emitting as a regular `.ts` file
-  // makes the schema imports resolve correctly so `z.infer<typeof X>`
-  // produces a proper type. The file contains only type declarations
-  // so it has zero runtime impact.
-  const routesFile = join(outDir, 'routes.ts')
+  // routes.ts is now owned by the `kick/routes` typegen plugin (M2.B-T8
+  // carve). It writes `kick__routes.ts` via the plugin runner. Legacy
+  // `routes.ts` is no longer emitted from this file.
   // env.ts (same .ts vs .d.ts story as routes.ts)
   const envFile = join(outDir, 'env.ts')
   const pluginsFile = join(outDir, 'plugins.d.ts')
@@ -710,7 +466,6 @@ export async function generateTypes(opts: GenerateOptions): Promise<GenerateResu
     modules,
     '(no @Module classes discovered — `kick g module <name>` to add one)',
   )
-  const routesContent = renderRoutes(routes, routesFile, schemaValidator)
   const envContent = renderEnv(env, envFile)
   const pluginsContent = renderPlugins(pluginsAndAdapters)
   const augmentationsContent = renderAugmentations(augmentations)
@@ -720,7 +475,6 @@ export async function generateTypes(opts: GenerateOptions): Promise<GenerateResu
   await writeFile(registryFile, registryContent, 'utf-8')
   await writeFile(servicesFile, servicesContent, 'utf-8')
   await writeFile(modulesFile, modulesContent, 'utf-8')
-  await writeFile(routesFile, routesContent, 'utf-8')
   await writeFile(pluginsFile, pluginsContent, 'utf-8')
   await writeFile(augmentationsFile, augmentationsContent, 'utf-8')
   await writeFile(assetsFile, assetsContent, 'utf-8')
@@ -730,7 +484,6 @@ export async function generateTypes(opts: GenerateOptions): Promise<GenerateResu
     registryFile,
     servicesFile,
     modulesFile,
-    routesFile,
     pluginsFile,
     augmentationsFile,
     assetsFile,

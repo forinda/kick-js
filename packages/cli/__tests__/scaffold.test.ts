@@ -137,10 +137,10 @@ describe('kick g scaffold', () => {
   it('auto-runs typegen so KickRoutes references resolve', () => {
     runCli(fixture, ['g', 'scaffold', 'widget', 'title:string'])
 
-    // The post-typegen hook should have created .kickjs/types/routes.ts
-    expect(existsSync(join(fixture, '.kickjs/types/routes.ts'))).toBe(true)
+    // The post-typegen hook should have created .kickjs/types/kick__routes.ts
+    expect(existsSync(join(fixture, '.kickjs/types/kick__routes.ts'))).toBe(true)
 
-    const routes = readFileSync(join(fixture, '.kickjs/types/routes.ts'), 'utf-8')
+    const routes = readFileSync(join(fixture, '.kickjs/types/kick__routes.ts'), 'utf-8')
     expect(routes).toContain('namespace KickRoutes')
     expect(routes).toContain('interface WidgetController')
   })

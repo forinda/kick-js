@@ -79,7 +79,11 @@ export async function runTypegen(opts: RunTypegenOptions): Promise<TypegenPlugin
     }
 
     // Slashes in ids (kick/db) → __ on disk so they're valid filenames.
-    const file = path.join(typesDirAbs, `${plugin.id.replace(/\//g, '__')}.d.ts`)
+    // Default extension is .d.ts (declaration only); plugins emitting
+    // hoisted top-level imports (kick/routes) override to .ts so the
+    // bundler resolver sees them as proper modules.
+    const ext = plugin.outExtension ?? '.d.ts'
+    const file = path.join(typesDirAbs, `${plugin.id.replace(/\//g, '__')}${ext}`)
     const banner = `${BANNER_PREFIX}${plugin.id} */\n\n`
     const next = banner + out + '\n'
 
