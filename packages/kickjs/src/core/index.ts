@@ -227,3 +227,12 @@ export {
   UnknownAssetError,
   type KickAssets,
 } from './assets'
+
+export {
+  groupAssetKeys,
+  stripExt,
+  type AssetKeyStrategy,
+  type AssetKeyPair,
+  type GroupAssetKeysOptions,
+  type GroupAssetKeysResult,
+} from './asset-keys'
