@@ -16,9 +16,11 @@ import { MetricsTab } from './tabs/MetricsTab'
 import { ContainerTab } from './tabs/ContainerTab'
 import { QueuesTab } from './tabs/QueuesTab'
 import { GraphTab } from './tabs/GraphTab'
+import { ActivityLogTab } from './tabs/ActivityLogTab'
 import { CustomTab } from './tabs/CustomTab'
 import { rpc } from './lib/rpc'
 import { startUnifiedStream } from './lib/unified-stream'
+import { bootBus, recentBusEvents } from './lib/bus'
 import { store } from './lib/store'
 import { DetailModalHost } from './lib/detail-modal'
 import { AuthGate } from './lib/auth-gate'
@@ -33,6 +35,7 @@ type BuiltInTabId =
   | 'container'
   | 'queues'
   | 'graph'
+  | 'activity'
 
 interface BuiltInTabSpec {
   id: BuiltInTabId
@@ -68,6 +71,11 @@ function builtInTabs(): readonly BuiltInTabSpec[] {
       id: 'graph',
       label: 'Graph',
       count: () => store.container().length || undefined,
+    },
+    {
+      id: 'activity',
+      label: 'Activity',
+      count: () => recentBusEvents()().length || undefined,
     },
   ]
 }
@@ -113,7 +121,13 @@ export const App: Component = () => {
     void startUnifiedStream().then((d) => {
       dispose = d
     })
-    onCleanup(() => dispose?.())
+    // Boot the singleton browser bus too — eager so the activity log
+    // captures events emitted before the user opens the tab.
+    const disposeBus = bootBus()
+    onCleanup(() => {
+      dispose?.()
+      disposeBus()
+    })
 
     // Apply data-theme to <html> on every resolved-theme change.
     mountThemeEffect()
@@ -215,6 +229,9 @@ export const App: Component = () => {
         </Show>
         <Show when={active() === 'graph'}>
           <GraphTab />
+        </Show>
+        <Show when={active() === 'activity'}>
+          <ActivityLogTab />
         </Show>
         <Show when={activeCustom()}>{(tab) => <CustomTab tab={tab()} />}</Show>
         <Show when={tabErrors().length > 0 && active() === 'overview'}>
