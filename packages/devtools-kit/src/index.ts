@@ -35,7 +35,18 @@ export {
   type TabProps,
   type TabRuntimeConfig,
 } from './tab'
-export type { KickEventBus, KickDevtoolsEventName, Unsubscribe } from './bus/types'
+export type {
+  KickEventBus,
+  KickDevtoolsEvent,
+  KickDevtoolsEventName,
+  KickDevtoolsEventRegistry,
+  EventTypeKey,
+  EventPayload,
+  Unsubscribe,
+} from './bus/types'
+
+export { createInMemoryBus } from './bus/in-memory'
+export { createBrowserBus, type BrowserBusOptions } from './bus/browser'
 
 export { RuntimeSampler, type RuntimeSamplerOptions } from './runtime-sampler'
 

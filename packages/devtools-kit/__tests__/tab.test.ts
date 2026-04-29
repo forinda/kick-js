@@ -6,22 +6,26 @@ import {
   type TabProps,
 } from '../src'
 
+// Lightweight fake — the real createInMemoryBus has its own coverage;
+// here we only need a working subscribe/emit pair to assert the tab
+// surface forwards `props.bus` correctly. onAny is a no-op since the
+// suite below doesn't exercise it.
 const fakeBus = (): KickEventBus => {
   const handlers = new Map<string, Set<(p: unknown) => void>>()
   return {
-    on(event, handler) {
+    on(event: string, handler: (p: unknown) => void) {
       const set = handlers.get(event) ?? new Set()
       set.add(handler)
       handlers.set(event, set)
       return () => set.delete(handler)
     },
-    off(event, handler) {
-      handlers.get(event)?.delete(handler)
-    },
-    emit(event, payload) {
+    emit(event: string, payload: unknown) {
       handlers.get(event)?.forEach((h) => h(payload))
     },
-  }
+    onAny() {
+      return () => {}
+    },
+  } as KickEventBus
 }
 
 const fakeProps = (overrides: Partial<TabProps> = {}): TabProps => ({
@@ -78,10 +82,10 @@ describe('defineDevtoolsRenderTab', () => {
     const bus = fakeBus()
     const handler = vi.fn()
     const off = bus.on('demo:event', handler)
-    bus.emit?.('demo:event', { hello: 'world' })
+    bus.emit('demo:event', { hello: 'world' })
     expect(handler).toHaveBeenCalledWith({ hello: 'world' })
     off()
-    bus.emit?.('demo:event', { ignored: true })
+    bus.emit('demo:event', { ignored: true })
     expect(handler).toHaveBeenCalledTimes(1)
   })
 
