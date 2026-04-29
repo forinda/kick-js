@@ -21,8 +21,26 @@ import { buildAssets } from '../asset-manager/build'
  * This function just creates the Vite server, listens, and handles shutdown.
  * Vite owns the HTTP port — Express runs as post-middleware on Vite's server.
  */
-async function startDevServer(_entry: string, port?: string): Promise<void> {
+/**
+ * Resolve whether the dev server's chokidar should poll instead of
+ * relying on `fs.watch` events. CLI flag wins over env var; default
+ * is event-based (faster, lower CPU). Polling is the right choice in
+ * Docker bind mounts, WSL crossing the WSL/Windows boundary, NFS,
+ * and some old Linux kernels where new-file events get dropped.
+ */
+function resolvePolling(flag: boolean | undefined): boolean {
+  if (typeof flag === 'boolean') return flag
+  const env = process.env.KICKJS_WATCH_POLLING
+  return env === '1' || env === 'true'
+}
+
+async function startDevServer(
+  _entry: string,
+  port?: string,
+  opts: { polling?: boolean } = {},
+): Promise<void> {
   if (port) process.env.PORT = port
+  const polling = resolvePolling(opts.polling)
 
   // Generate `.kickjs/types/*.d.ts` once before Vite starts so the
   // user's tsc has fresh type info from the very first request.
@@ -67,6 +85,13 @@ async function startDevServer(_entry: string, port?: string): Promise<void> {
     server: {
       // Pass the port to Vite — it creates the httpServer
       port: port ? parseInt(port, 10) : undefined,
+      // Polling chokidar — opt-in via --polling / KICKJS_WATCH_POLLING.
+      // The default (event-based) is faster + lower CPU on bare metal,
+      // but `add` events get dropped under Docker bind mounts, WSL
+      // crossings, NFS, and some kernel/filesystem combos. Switching
+      // to polling is the standard mitigation; 100ms interval matches
+      // chokidar's documented sane default.
+      ...(polling ? { watch: { usePolling: true as const, interval: 100 } } : {}),
     },
   })
 
@@ -151,9 +176,13 @@ export function registerRunCommands(program: Command): void {
     .description('Start development server with Vite HMR (zero-downtime reload)')
     .option('-e, --entry <file>', 'Entry file', 'src/index.ts')
     .option('-p, --port <port>', 'Port number')
+    .option(
+      '--polling',
+      'Force chokidar to poll for file changes (Docker / WSL / NFS / older kernels)',
+    )
     .action(async (opts: any) => {
       try {
-        await startDevServer(opts.entry, opts.port)
+        await startDevServer(opts.entry, opts.port, { polling: opts.polling })
       } catch (err: any) {
         if (err.code === 'ERR_MODULE_NOT_FOUND' && err.message?.includes('vite')) {
           console.error(
