@@ -186,6 +186,13 @@ export async function watchTypegen(opts: RunTypegenOptions = {}): Promise<() => 
   // rename would crash the dev loop. The error is still printed.
   const runOpts: RunTypegenOptions = { ...resolved, allowDuplicates: true }
 
+  // Polling is the right strategy for Docker bind mounts, WSL crosses,
+  // NFS, and some kernel/filesystem combos where `fs.watch` returns
+  // without errors but events silently drop. Adopters opt in via
+  // `KICKJS_WATCH_POLLING=1`; default stays event-based (lower CPU).
+  const forcePolling =
+    process.env.KICKJS_WATCH_POLLING === '1' || process.env.KICKJS_WATCH_POLLING === 'true'
+
   // Lazy-import the plugin pipeline + config loader to avoid an eager
   // module-eval cycle (this file is reachable from plugin/builtins via
   // commands/typegen → ../typegen).
@@ -216,6 +223,19 @@ export async function watchTypegen(opts: RunTypegenOptions = {}): Promise<() => 
       safeRun(runOpts, silent)
       void runPlugins()
     }, 100)
+  }
+
+  // Forced-polling path — skip fs.watch entirely and just re-scan
+  // periodically. The 2s interval matches the existing fallback so
+  // adopters who flip the env var don't see a dramatic CPU jump.
+  if (forcePolling) {
+    if (!silent) {
+      console.log('  kick typegen: polling mode (KICKJS_WATCH_POLLING)')
+    }
+    const interval = setInterval(() => {
+      safeRun({ ...runOpts, silent: true }, true)
+    }, 2000)
+    return () => clearInterval(interval)
   }
 
   let watcher: ReturnType<typeof watch>
