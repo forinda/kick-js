@@ -2,7 +2,7 @@
   "name": "kickjs-devtools",
   "displayName": "KickJS DevTools",
   "description": "VS Code extension for inspecting KickJS applications — routes, DI container, metrics, and health",
-  "version": "5.1.0",
+  "version": "5.2.0",
   "publisher": "forinda",
   "engines": {
     "vscode": "^1.85.0"
@@ -139,26 +139,86 @@
         }
       ],
       "commandPalette": [
-        { "command": "kickjs.connect", "when": "kickjs.isKickProject" },
-        { "command": "kickjs.inspect", "when": "kickjs.isKickProject" },
-        { "command": "kickjs.showRoutes", "when": "kickjs.isKickProject" },
-        { "command": "kickjs.showContainer", "when": "kickjs.isKickProject" },
-        { "command": "kickjs.showMetrics", "when": "kickjs.isKickProject" },
-        { "command": "kickjs.refreshAll", "when": "kickjs.isKickProject" },
-        { "command": "kickjs.setToken", "when": "kickjs.isKickProject" },
-        { "command": "kickjs.clearToken", "when": "kickjs.isKickProject" },
-        { "command": "kickjs.dev", "when": "kickjs.isKickProject" },
-        { "command": "kickjs.build", "when": "kickjs.isKickProject" },
-        { "command": "kickjs.start", "when": "kickjs.isKickProject" },
-        { "command": "kickjs.generateModule", "when": "kickjs.isKickProject" },
-        { "command": "kickjs.generateController", "when": "kickjs.isKickProject" },
-        { "command": "kickjs.generateService", "when": "kickjs.isKickProject" },
-        { "command": "kickjs.generateScaffold", "when": "kickjs.isKickProject" },
-        { "command": "kickjs.addPackage", "when": "kickjs.isKickProject" },
-        { "command": "kickjs.removeModule", "when": "kickjs.isKickProject" },
-        { "command": "kickjs.generateAgentDocs", "when": "kickjs.isKickProject" },
-        { "command": "kickjs.mcpStart", "when": "kickjs.isKickProject" },
-        { "command": "kickjs.mcpInit", "when": "kickjs.isKickProject" }
+        {
+          "command": "kickjs.connect",
+          "when": "kickjs.isKickProject"
+        },
+        {
+          "command": "kickjs.inspect",
+          "when": "kickjs.isKickProject"
+        },
+        {
+          "command": "kickjs.showRoutes",
+          "when": "kickjs.isKickProject"
+        },
+        {
+          "command": "kickjs.showContainer",
+          "when": "kickjs.isKickProject"
+        },
+        {
+          "command": "kickjs.showMetrics",
+          "when": "kickjs.isKickProject"
+        },
+        {
+          "command": "kickjs.refreshAll",
+          "when": "kickjs.isKickProject"
+        },
+        {
+          "command": "kickjs.setToken",
+          "when": "kickjs.isKickProject"
+        },
+        {
+          "command": "kickjs.clearToken",
+          "when": "kickjs.isKickProject"
+        },
+        {
+          "command": "kickjs.dev",
+          "when": "kickjs.isKickProject"
+        },
+        {
+          "command": "kickjs.build",
+          "when": "kickjs.isKickProject"
+        },
+        {
+          "command": "kickjs.start",
+          "when": "kickjs.isKickProject"
+        },
+        {
+          "command": "kickjs.generateModule",
+          "when": "kickjs.isKickProject"
+        },
+        {
+          "command": "kickjs.generateController",
+          "when": "kickjs.isKickProject"
+        },
+        {
+          "command": "kickjs.generateService",
+          "when": "kickjs.isKickProject"
+        },
+        {
+          "command": "kickjs.generateScaffold",
+          "when": "kickjs.isKickProject"
+        },
+        {
+          "command": "kickjs.addPackage",
+          "when": "kickjs.isKickProject"
+        },
+        {
+          "command": "kickjs.removeModule",
+          "when": "kickjs.isKickProject"
+        },
+        {
+          "command": "kickjs.generateAgentDocs",
+          "when": "kickjs.isKickProject"
+        },
+        {
+          "command": "kickjs.mcpStart",
+          "when": "kickjs.isKickProject"
+        },
+        {
+          "command": "kickjs.mcpInit",
+          "when": "kickjs.isKickProject"
+        }
       ]
     },
     "configuration": {

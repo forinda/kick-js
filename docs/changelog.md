@@ -2,6 +2,90 @@
 
 All notable changes to KickJS are documented here.
 
+# Release v5.2.0
+
+## New Features
+
+- feat(kickjs): tenant-flow integration test across all 5 registration sites ([ffccd39](https://github.com/forinda/kick-js/commit/ffccd39c0c51bab8c97460f6fbeead37f6becae7)) — [@forinda](https://github.com/forinda)
+- feat(kickjs): parameterised context contributors v1 ([fbb863d](https://github.com/forinda/kick-js/commit/fbb863db7f718c0189902b7be72f1b0cda8edb14)) — [@forinda](https://github.com/forinda)
+- feat(vscode-extension): add agent palette commands (kick g agents + mcp) ([0c54cc6](https://github.com/forinda/kick-js/commit/0c54cc6162f1c1e083a83bf73e1ad74cefda72e1)) — [@forinda](https://github.com/forinda)
+- feat(vscode-extension): map kick CLI to palette + surface auth-disabled state ([93d5505](https://github.com/forinda/kick-js/commit/93d550535bd1c63024ca8021a474a6e01b3116f1)) — [@forinda](https://github.com/forinda)
+- feat(vscode-extension): gate UI on KickJS workspaces only ([2cd9bb2](https://github.com/forinda/kick-js/commit/2cd9bb2297b51a3d6d4599afa78b2959b49acb58)) — [@forinda](https://github.com/forinda)
+- feat(cli): wire typegen asset discovery through groupAssetKeys ([cf8a09b](https://github.com/forinda/kick-js/commit/cf8a09bbfe8df6b8ac1d86f02ddd39a1b9d2a201)) — [@forinda](https://github.com/forinda)
+- feat(assets): wire build + runtime through groupAssetKeys ([ded8292](https://github.com/forinda/kick-js/commit/ded82924222ed8fcba931d29b496ef3bc1cd824f)) — [@forinda](https://github.com/forinda)
+- feat(kickjs): groupAssetKeys() — extension-aware asset key strategy ([105c6e3](https://github.com/forinda/kick-js/commit/105c6e3e60b0cb8dd781ad41c27e6d63c9b0905b)) — [@forinda](https://github.com/forinda)
+- feat(cli): scaffold createToken() literals with project scope, not 'app' ([4e0da1c](https://github.com/forinda/kick-js/commit/4e0da1c4561de0d1716e08a9c14f7df9574c6756)) — [@forinda](https://github.com/forinda)
+- feat(cli): kick/env typegen plugin (M2.B-T8 carve, part 2) ([1c47a35](https://github.com/forinda/kick-js/commit/1c47a35fb57815c397c2bf2d48415d5a4b32435c)) — [@forinda](https://github.com/forinda)
+- feat(cli): kick/routes typegen plugin (M2.B-T8 carve, part 1) ([70b5212](https://github.com/forinda/kick-js/commit/70b5212e0e7e286d50944bd512dac39211179c4d)) — [@forinda](https://github.com/forinda)
+- feat(cli): memoized getScanResult on TypegenContext ([cb492ca](https://github.com/forinda/kick-js/commit/cb492ca7b4df67b7b967f256ef48331dc9bb7559)) — [@forinda](https://github.com/forinda)
+- feat(cli): polling fallback for typegen watcher (Docker / WSL / NFS) ([25a8a1e](https://github.com/forinda/kick-js/commit/25a8a1e4ad143b987dfd2f883cdb2f6687fd030f)) — [@forinda](https://github.com/forinda)
+- feat(db): detect + warn on removed pgEnum values (M2 punch list) ([a86d70c](https://github.com/forinda/kick-js/commit/a86d70c270e43b887547f4d933aea98f1a560239)) — [@forinda](https://github.com/forinda)
+- feat(vite): **KICKJS_DEVTOOLS** build-time flag for devtools tree-shaking (M2.E) ([33cbee0](https://github.com/forinda/kick-js/commit/33cbee0df3bf6c4d9d17744031f77b6f2312548f)) — [@forinda](https://github.com/forinda)
+- feat(db): \$extends({ result }) — computed columns via Kysely plugin (M2.F-T17) ([b2f1936](https://github.com/forinda/kick-js/commit/b2f1936703ef3e2d78ce12e2ab3c91eb271b8ad2)) — [@forinda](https://github.com/forinda)
+- feat(devtools): activity-log tab consuming KickEventBus end-to-end (M2.D follow-up) ([44f2068](https://github.com/forinda/kick-js/commit/44f2068db6e9b703c1a4279ccf9a655ca716ad26)) — [@forinda](https://github.com/forinda)
+- feat(db): publish db:slow-query / db:query-error / db:migration-applied (M2.D-T14) ([8d0b06e](https://github.com/forinda/kick-js/commit/8d0b06e99c6f27657626ebf85979bdf2628b8c39)) — [@forinda](https://github.com/forinda)
+- feat(devtools): server bus + WS upgrade + DEVTOOLS_BUS DI token (M2.D-T13 part 2) ([47cfb0c](https://github.com/forinda/kick-js/commit/47cfb0c073b1d2d23d28da3d967dc3b64c030ed6)) — [@forinda](https://github.com/forinda)
+- feat(devtools-kit): KickEventBus types + in-memory + browser impl (M2.D-T13 part 1) ([8325e03](https://github.com/forinda/kick-js/commit/8325e033fe47037b0a0a4ce725ffa4a02622ca09)) — [@forinda](https://github.com/forinda)
+- feat(cli): kick new --yes / --non-interactive + 3-core showcase for kick list ([82459ec](https://github.com/forinda/kick-js/commit/82459ec99b54fa47201a55ba2a982b878dd2e6f5)) — [@forinda](https://github.com/forinda)
+- feat(db): auto-apply customType.toDriver on INSERT + UPDATE (M2.F-T16 follow-up) ([3512a0a](https://github.com/forinda/kick-js/commit/3512a0a66f9025059a09b400d27bbc5d362d6544)) — [@forinda](https://github.com/forinda)
+
+## Bug Fixes
+
+- fix(kickjs): SourcedRegistration / ContributorPipeline use AnyContributorRegistration ([0304291](https://github.com/forinda/kick-js/commit/03042915b5487a86e12d55045125d4cb9092d57b)) — [@forinda](https://github.com/forinda)
+- fix(kickjs): freeze per-call params + tighten plain-object guard + dedup JSDoc ([93a8829](https://github.com/forinda/kick-js/commit/93a8829c09875693089a17ef82b626c737d4f3af)) — [@forinda](https://github.com/forinda)
+- fix(kickjs): paramDefaults snapshot + accurate guard message + zero-arg overload ([3bbe076](https://github.com/forinda/kick-js/commit/3bbe0762b19e287a0e02ef3e4efd60a362daa35f)) — [@forinda](https://github.com/forinda)
+- fix: address Copilot review + expand docs with 10 use-case comparison ([f78c13b](https://github.com/forinda/kick-js/commit/f78c13bde7d8eb66a4c3781b4855ab7c25b273f4)) — [@forinda](https://github.com/forinda)
+- fix: default-assign optional spread args (TS2698 + safer runtime) ([7630b7a](https://github.com/forinda/kick-js/commit/7630b7a7775347e0c0d17432da271449f61719f2)) — [@forinda](https://github.com/forinda)
+- fix: round-2 review fixes — plugin double-run, error visibility, doc drift ([e9e4693](https://github.com/forinda/kick-js/commit/e9e46934ef7e7a111c35edb6f1606489afe9d975)) — [@forinda](https://github.com/forinda)
+- fix(vscode-extension): keep commands registered + probe with token ([a870518](https://github.com/forinda/kick-js/commit/a8705187c16af3057c22529276d41b3a6bea554d)) — [@forinda](https://github.com/forinda)
+- fix(cli): typegen + token-scope review fixes ([7ba592e](https://github.com/forinda/kick-js/commit/7ba592e5b327d5d9266e8e4c762618174a496c2b)) — [@forinda](https://github.com/forinda)
+- fix(db): apply Copilot review feedback from PR #152 ([76bf547](https://github.com/forinda/kick-js/commit/76bf547d36a40f072b18a2b6fbd8c775159c3340)) — [@forinda](https://github.com/forinda)
+- fix(devtools): apply Copilot review feedback from PR #151 ([a710fe0](https://github.com/forinda/kick-js/commit/a710fe0789af6246737221ee500c8b600fcdf2ed)) — [@forinda](https://github.com/forinda)
+- fix(devtools+db): apply Copilot review feedback from PR #150 ([9548a65](https://github.com/forinda/kick-js/commit/9548a651a195be088a63e9738114182e9b67888c)) — [@forinda](https://github.com/forinda)
+- fix(cli): kick add walks up for lockfile + corepack pm; register db / db-pg ([ba69d63](https://github.com/forinda/kick-js/commit/ba69d639f744be155ac6a18d806d1d2f50f180bb)) — [@forinda](https://github.com/forinda)
+
+## Documentation
+
+- docs: deprecate @forinda/kickjs-auth + 4 review fixes ([6aa984a](https://github.com/forinda/kick-js/commit/6aa984aba3bd7f88ce4b4041c2cf4bee2ce77a36)) — [@forinda](https://github.com/forinda)
+- docs(context-decorators): add tenant-scoped DB worked example ([5ff3f68](https://github.com/forinda/kick-js/commit/5ff3f683c1b534f797c5628d521464bf8d99627a)) — [@forinda](https://github.com/forinda)
+- docs(context-decorators): unfold remaining wide tables ([435f58c](https://github.com/forinda/kick-js/commit/435f58c0529e84b92d52dd48073e7e3372705631)) — [@forinda](https://github.com/forinda)
+- docs(context-decorators): unfold the ContextMeta-vs-defineAugmentation table ([223c1a2](https://github.com/forinda/kick-js/commit/223c1a20a3d50bec3dae28115f96c953914ec20f)) — [@forinda](https://github.com/forinda)
+- docs(asset-manager): document keys strategy + extension-aware collisions ([0d5112b](https://github.com/forinda/kick-js/commit/0d5112bbe1762929d03a0dfa378102b9a08532b8)) — [@forinda](https://github.com/forinda)
+- docs(db): tighten sanitizeForLineComment scope claim ([c319f88](https://github.com/forinda/kick-js/commit/c319f8813cd29acf9286262fbdf4e5341db2fef5)) — [@forinda](https://github.com/forinda)
+- docs(db) + fix(db): combined Copilot review fixes from PR #155 + #156 ([82f867b](https://github.com/forinda/kick-js/commit/82f867b0e178d32f2e088f53a071a952d850d29f)) — [@forinda](https://github.com/forinda)
+- docs(db): tighten needs-injection wording for $extends({ result }) ([95fb88c](https://github.com/forinda/kick-js/commit/95fb88cfd8e110818d64b17897403430bc1b1b47)) — [@forinda](https://github.com/forinda)
+- docs: thin old docs ([8387ed8](https://github.com/forinda/kick-js/commit/8387ed8582a42b0f77217a811892bd4b99425c7c)) — [@forinda](https://github.com/forinda)
+
+## CI / Infrastructure
+
+- ci: build before typecheck + lint-tokens (cross-package dist deps) ([677d1d9](https://github.com/forinda/kick-js/commit/677d1d9d74ce8f69361d8cb52e3a7911b5869728)) — [@forinda](https://github.com/forinda)
+- ci: build before test in the matrix test job ([b8b52c4](https://github.com/forinda/kick-js/commit/b8b52c4417863166295781a5d2fe7e49a1e7135e)) — [@forinda](https://github.com/forinda)
+- ci: split lint-build-test into parallel independent jobs ([cb9aa21](https://github.com/forinda/kick-js/commit/cb9aa21e348c7cf3666e384268852984d7b94b90)) — [@forinda](https://github.com/forinda)
+
+## Maintenance
+
+- chore: format docs and changelog pre-commit ([8625c41](https://github.com/forinda/kick-js/commit/8625c41938511b9fe9f679d698b1f2907a271f24)) — [@forinda](https://github.com/forinda)
+- Add benchmark guide to README ([f418a7e](https://github.com/forinda/kick-js/commit/f418a7e29715084ca7f9a1e8ed348f5499185293)) — @Felix Orinda
+- chore: replace prettier with oxc (oxlint + oxfmt) at workspace root ([6787cb9](https://github.com/forinda/kick-js/commit/6787cb9d4948d65d4b2290e699c179344366f787)) — [@forinda](https://github.com/forinda)
+- chore: replace husky with lefthook + slim pre-commit ([a548c83](https://github.com/forinda/kick-js/commit/a548c83e3f1a502fcff94827c1713710496a3bc1)) — [@forinda](https://github.com/forinda)
+- chore: ignore devtools SPA bundle in prettier + kick-lint ([1775950](https://github.com/forinda/kick-js/commit/1775950ed46275a064f67bdf722e0f8062c36eb3)) — [@forinda](https://github.com/forinda)
+
+## Contributors
+
+- [forinda](https://github.com/forinda)
+- Felix Orinda
+
+## Stats
+
+- **51** commits
+- **2** contributor(s)
+- **18** packages published
+
+---
+
+**Full Changelog**: https://github.com/forinda/kick-js/compare/v5.1.0...v5.2.0
+**Packages**: `@forinda/kickjs-ai`, `@forinda/kickjs-auth`, `@forinda/kickjs-cli`, `@forinda/kickjs-db`, `@forinda/kickjs-db-pg`, `@forinda/kickjs-devtools`, `@forinda/kickjs-devtools-kit`, `@forinda/kickjs-drizzle`, `@forinda/kickjs-kickjs`, `@forinda/kickjs-lint`, `@forinda/kickjs-mcp`, `@forinda/kickjs-prisma`, `@forinda/kickjs-queue`, `@forinda/kickjs-swagger`, `@forinda/kickjs-testing`, `@forinda/kickjs-vite`, `@forinda/kickjs-vscode-extension`, `@forinda/kickjs-ws`
+
 # Release v5.1.0
 
 ## New Features
