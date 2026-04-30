@@ -66,6 +66,16 @@ export interface RunTypegenOptions {
    * `@Asset('x/y')`. Omit to skip the asset typegen pass entirely.
    */
   assetMap?: Record<string, AssetMapEntry>
+  /**
+   * Whether `runTypegen` should also run the TypegenPlugin pipeline
+   * (`runAllPluginTypegens`) after the legacy generator pass. Defaults
+   * to `true` so single-shot callers (kick g, commands/typegen, tests)
+   * keep getting a fully-refreshed `.kickjs/types/` from one entry
+   * point. `watchTypegen` flips this to `false` because it manages
+   * the plugin pass itself + would otherwise double-run it on every
+   * filesystem trigger.
+   */
+  runPlugins?: boolean
 }
 
 /** Resolve options to absolute paths */
@@ -130,22 +140,25 @@ export async function runTypegen(opts: RunTypegenOptions = {}): Promise<{
     allowDuplicates,
     schemaValidator,
   })
-  // M2.B-T8 carve: routes (now) + env (next commit) live in plugin
-  // typegens, not the legacy generator above. Always run the plugin
-  // pipeline as part of `runTypegen` so callers (kick g <leaf> /
-  // commands/typegen / kick dev / tests) stay on a single entry point
-  // and see a fully-refreshed `.kickjs/types/` after the call returns.
-  // Plugin failures are swallowed — same operator-explicit philosophy
-  // the legacy pass uses.
-  try {
-    const { runAllPluginTypegens } = await import('./run-plugins')
-    const { loadKickConfig } = await import('../config')
-    const pluginConfig = await loadKickConfig(cwd)
-    await runAllPluginTypegens({ cwd, config: pluginConfig, silent: true })
-  } catch {
-    // Plugin pipeline broken? The legacy pass already wrote the rest;
-    // surfacing the error here would block dev tooling, which is
-    // worse than skipping the affected augmentation file.
+  // M2.B-T8 carve: routes + env live in plugin typegens, not the
+  // legacy generator above. Run the plugin pipeline as part of
+  // `runTypegen` by default so single-shot callers (kick g <leaf> /
+  // commands/typegen / tests) stay on one entry point and see a
+  // fully-refreshed `.kickjs/types/` after the call returns. Watch
+  // mode opts out (`runPlugins: false`) because it drives the plugin
+  // pass externally and would otherwise double-run it on every
+  // filesystem trigger.
+  if (opts.runPlugins !== false) {
+    try {
+      const { runAllPluginTypegens } = await import('./run-plugins')
+      const { loadKickConfig } = await import('../config')
+      const pluginConfig = await loadKickConfig(cwd)
+      await runAllPluginTypegens({ cwd, config: pluginConfig, silent: true })
+    } catch {
+      // Plugin pipeline broken? The legacy pass already wrote the rest;
+      // surfacing the error here would block dev tooling, which is
+      // worse than skipping the affected augmentation file.
+    }
   }
 
   const tokenWarnings = validateTokenConventions(scan.tokens)
@@ -202,7 +215,10 @@ export async function watchTypegen(opts: RunTypegenOptions = {}): Promise<() => 
   const { srcDir, silent, cwd } = resolved
   // Watch mode always tolerates collisions — otherwise an in-progress
   // rename would crash the dev loop. The error is still printed.
-  const runOpts: RunTypegenOptions = { ...resolved, allowDuplicates: true }
+  // `runPlugins: false` keeps `runTypegen` from double-running the
+  // plugin pipeline; the watcher already calls `runPlugins()`
+  // explicitly after each `safeRun`.
+  const runOpts: RunTypegenOptions = { ...resolved, allowDuplicates: true, runPlugins: false }
 
   // Polling is the right strategy for Docker bind mounts, WSL crosses,
   // NFS, and some kernel/filesystem combos where `fs.watch` returns
