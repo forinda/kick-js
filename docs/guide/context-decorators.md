@@ -48,35 +48,72 @@ See [Middleware vs context decorators](./middleware.md#middleware-vs-context-dec
 
 ## Ten use cases — and why contributors beat middleware
 
-Anything you repeatedly compute from the incoming request is a candidate. The pattern is NOT multi-tenancy-specific — here are ten distinct domains where contributors remove a lot of boilerplate, with the rationale for each:
+Anything you repeatedly compute from the incoming request is a candidate. The pattern is NOT multi-tenancy-specific — here are ten distinct domains where contributors remove a lot of boilerplate.
 
-| #   | Use case                                                                                                           | Typical key + shape                                                                                      | Why it wins over middleware                                                                                                                                                                                                                 |
-| --- | ------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | **Request tracing** — timestamp / trace id / span id for every handler and service on the chain                    | `requestStartedAt: number`, `traceId: string`                                                            | Transport-agnostic (HTTP + WS + queue + cron share the same primitive). Services read via `getRequestValue('traceId')` without a `ctx` reference.                                                                                           |
-| 2   | **Locale / i18n negotiation** — resolve from `Accept-Language`, user prefs, cookie, in that order                  | `locale: { language: string; region: string \| null }`                                                   | Typed once via `ContextMeta`, never re-derived. Replaced per-route (a `/admin` endpoint forces `en`) without forking the middleware stack.                                                                                                  |
-| 3   | **Feature flags** — evaluate flags once, cache the result for the request's lifetime                               | `featureFlags: Record<string, boolean>`                                                                  | `deps: { flags: FLAG_SERVICE }` pulls the evaluator from DI — no `container.getInstance()` boilerplate. `dependsOn: ['featureFlags']` downstream gives guaranteed-present flags.                                                            |
-| 4   | **A/B test bucket assignment** — stable-hash the user into a variant, reusing feature-flag state                   | `abBucket: 'control' \| 'variantA' \| 'variantB'`                                                        | `dependsOn` encodes the "flags must resolve first" relationship once; framework topo-sorts. Middleware order bugs (forgetting to mount B before C) become startup errors, not silent 500s.                                                  |
-| 5   | **Rate-limit key derivation** — combine user id + IP + route to produce the limiter key                            | `rateLimitKey: string`                                                                                   | The contributor returns one string; the downstream rate-limit middleware reads it and does the enforcement. Separation of computation (typed, tested) from enforcement (side-effectful).                                                    |
-| 6   | **Idempotency key validation** — pluck `Idempotency-Key` header, reject mutations missing it                       | `idempotencyKey: string \| null`                                                                         | `onError` captures the "missing on POST/PUT" case cleanly — return `null` or throw, per your policy. Pipeline enforces the check at boot: forgetting to mount it globally is surfaced by TypeScript if another contributor `dependsOn`s it. |
-| 7   | **Geolocation from CDN headers** — parse Cloudflare / Fastly / Vercel headers once                                 | `geo: { country \| null; city \| null; lat \| null; lng \| null }`                                       | Adapter authors ship `@ResolveGeo` + `GeoAdapter` — adopters pick per-route opt-in OR cross-cutting activation. No "wrap the app in a context provider" boilerplate.                                                                        |
-| 8   | **Workspace / organisation / project scoping** — resolve the active scope from URL param or header                 | `workspace: { id; name; members }` (or `org`, `project`, `team`, `room` — whatever your domain calls it) | Not just a tenant loader. Any scoped app (collab tools, chat, kanban, CI) owns its scope name. Multi-level scoping (`workspace` → `project` → `task`) composes via `dependsOn`.                                                             |
-| 9   | **Warmed user profile / permission set** — read once from cache, share across handler + services                   | `user: { id; email; roles }`, `permissions: Set<string>`                                                 | Auth middleware sets the user; a contributor warms the profile and cached permission set. Services read via `getRequestValue('user')` without threading the user through every method signature.                                            |
-| 10  | **Correlation ID for distributed tracing / saga state** — propagate an inbound `X-Correlation-ID`, or generate one | `correlationId: string`, `sagaContext: { step: number; …}`                                               | The contributor runs before every route AND every queue job (same registration, different transport). Downstream logs, outbound HTTP clients, and emitted events all pick up the same id.                                                   |
+**1. Request tracing** — timestamp / trace id / span id for every handler and service on the chain.
+
+- _Shape_: `requestStartedAt: number`, `traceId: string`
+- _Why it wins_: transport-agnostic (HTTP + WS + queue + cron share the same primitive). Services read via `getRequestValue('traceId')` without a `ctx` reference.
+
+**2. Locale / i18n negotiation** — resolve from `Accept-Language`, user prefs, cookie, in that order.
+
+- _Shape_: `locale: { language: string; region: string | null }`
+- _Why it wins_: typed once via `ContextMeta`, never re-derived. Replaced per-route (`/admin` forces `en`) without forking the middleware stack.
+
+**3. Feature flags** — evaluate flags once, cache the result for the request's lifetime.
+
+- _Shape_: `featureFlags: Record<string, boolean>`
+- _Why it wins_: `deps: { flags: FLAG_SERVICE }` pulls the evaluator from DI — no `container.getInstance()` boilerplate. Downstream `dependsOn: ['featureFlags']` gives guaranteed-present flags.
+
+**4. A/B test bucket assignment** — stable-hash the user into a variant, reusing feature-flag state.
+
+- _Shape_: `abBucket: 'control' | 'variantA' | 'variantB'`
+- _Why it wins_: `dependsOn` encodes "flags must resolve first" once; framework topo-sorts. Middleware order bugs (forgetting to mount B before C) become startup errors, not silent 500s.
+
+**5. Rate-limit key derivation** — combine user id + IP + route to produce the limiter key.
+
+- _Shape_: `rateLimitKey: string`
+- _Why it wins_: contributor returns one string; downstream rate-limit middleware reads it and enforces. Separation of computation (typed, tested) from enforcement (side-effectful).
+
+**6. Idempotency key validation** — pluck `Idempotency-Key`, reject mutations missing it.
+
+- _Shape_: `idempotencyKey: string | null`
+- _Why it wins_: `onError` captures the "missing on POST/PUT" case cleanly — return `null` or throw per your policy. Pipeline enforces the check at boot: forgetting to mount it globally is surfaced by TS if another contributor `dependsOn`s it.
+
+**7. Geolocation from CDN headers** — parse Cloudflare / Fastly / Vercel headers once.
+
+- _Shape_: `geo: { country | null; city | null; lat | null; lng | null }`
+- _Why it wins_: adapter authors ship `@ResolveGeo` + `GeoAdapter` — adopters pick per-route opt-in OR cross-cutting activation. No "wrap the app in a context provider" boilerplate.
+
+**8. Workspace / organisation / project scoping** — resolve the active scope from URL param or header.
+
+- _Shape_: `workspace: { id; name; members }` (or `org`, `project`, `team`, `room` — whatever your domain calls it)
+- _Why it wins_: not just a tenant loader. Any scoped app (collab tools, chat, kanban, CI) owns its scope name. Multi-level scoping (`workspace` → `project` → `task`) composes via `dependsOn`.
+
+**9. Warmed user profile / permission set** — read once from cache, share across handler + services.
+
+- _Shape_: `user: { id; email; roles }`, `permissions: Set<string>`
+- _Why it wins_: auth middleware sets the user; a contributor warms the profile + cached permission set. Services read via `getRequestValue('user')` without threading the user through every method signature.
+
+**10. Correlation ID for distributed tracing / saga state** — propagate an inbound `X-Correlation-ID`, or generate one.
+
+- _Shape_: `correlationId: string`, `sagaContext: { step: number; ...}`
+- _Why it wins_: contributor runs before every route AND every queue job (same registration, different transport). Downstream logs, outbound HTTP clients, and emitted events all pick up the same id.
 
 ### Why this is more flexible than middleware
 
-| Middleware pattern                                                                                                        | Contributor advantage                                                                                                       |
-| ------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| Mutates `req.user` / `(req as any).tenant` — all typed `any`                                                              | `ctx.get('user')` / `ctx.get('tenant')` typed via `ContextMeta` augmentation                                                |
-| Declared as an array in `bootstrap({ middleware: [...] })` — order is whatever you wrote                                  | `dependsOn: ['x']` — topo-sorted at boot; missing deps + cycles fail startup, not per-request                               |
-| DI access via `Container.getInstance()` inside the middleware body                                                        | `deps: { repo: TOKEN }` typed, resolved once, handed to `resolve(ctx, deps)`                                                |
-| Tested with `supertest` + the whole Express stack                                                                         | `runContributor` (from `@forinda/kickjs-testing`) tests a single resolver against a stub ctx                                |
-| Global: every route pays the cost, no opt-out per endpoint                                                                | Five precedence levels (method > class > module > adapter > global) — override per-route without forking the stack          |
-| HTTP-only — WebSocket / queue / cron use different lifecycles                                                             | `defineContextDecorator` (transport-agnostic) registrations reuse across every ctx the pipeline supports                    |
-| Plugin authors ship `app.use(myMiddleware())` and hope you call it in the right spot                                      | Plugin authors ship `MyAdapter` (which registers via `contributors?()`) AND the raw decorator — adopters pick the ergonomic |
-| Augmentation (`declare global { namespace Express { interface Request { ... } } }`) leaks across every handler in the app | `ContextMeta` augmentation is typed; `defineAugmentation` advertises it in the typegen catalogue for discovery              |
-| Error handling: throw → 500 unless you wrote `try/catch` around every middleware                                          | `optional: true` skips silently; `onError` hook returns a fallback value; both typed against `MetaValue<K>`                 |
-| "Remove the rate-limit middleware on `/health`" = fork the stack or use a path check inside the middleware                | Mount `@SkipRateLimit` at method level — higher precedence wins, adapter's registration silently drops for that one route   |
+Same job, different ergonomics. Each line below maps a middleware pain point to the contributor primitive that solves it.
+
+- **Type safety** — middleware mutates `req.user` / `(req as any).tenant`, all typed `any`. Contributors expose `ctx.get('user')` / `ctx.get('tenant')` typed via `ContextMeta` augmentation.
+- **Ordering** — middleware is an array in `bootstrap({ middleware: [...] })`; order is whatever you wrote. Contributors use `dependsOn: ['x']` — topo-sorted at boot, missing deps + cycles fail startup, not per-request.
+- **DI access** — middleware reaches for `Container.getInstance()` inside the body. Contributors declare `deps: { repo: TOKEN }` typed, resolved once, handed to `resolve(ctx, deps)`.
+- **Testing** — middleware needs `supertest` + the whole Express stack. Contributors test via `runContributor` (from `@forinda/kickjs-testing`) — single resolver against a stub ctx.
+- **Per-route override** — middleware is global: every route pays the cost, no opt-out per endpoint. Contributors have five precedence levels (method > class > module > adapter > global) — override per-route without forking the stack.
+- **Transport-agnostic** — middleware is HTTP-only; WebSocket / queue / cron use different lifecycles. `defineContextDecorator` registrations reuse across every ctx the pipeline supports.
+- **Plugin distribution** — middleware authors ship `app.use(myMiddleware())` and hope you call it in the right spot. Contributor authors ship `MyAdapter` (which registers via `contributors?()`) AND the raw decorator — adopters pick the ergonomic.
+- **Augmentation surface** — middleware leaks via `declare global { namespace Express { interface Request { ... } } }` across every handler in the app. `ContextMeta` augmentation is typed; `defineAugmentation` advertises it in the typegen catalogue for discovery.
+- **Error handling** — middleware throw → 500 unless you wrote `try/catch` around every middleware. Contributors expose `optional: true` (skip silently) + `onError` (typed fallback value).
+- **Per-route opt-out** — "remove the rate-limit middleware on `/health`" forces forking the stack or path-checking inside. Mount `@SkipRateLimit` at method level — higher precedence wins, adapter's registration silently drops for that one route.
 
 ## Quickstart
 
@@ -472,13 +509,13 @@ me(ctx: RequestContext) {
 
 ### Decorator vs `contributors?()`: same runtime, different ergonomics
 
-| Registration site                                           | Best for                                                  | Trade-offs                                                                                 |
-| ----------------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `@LoadX` on a method                                        | One specific route needs an override or extra contributor | Inline, easy to spot when reading the handler                                              |
-| `@LoadX` on a class                                         | Every route in this controller needs the same value       | Avoids decorating each method individually                                                 |
-| `AppModule.contributors?()`                                 | Every route the module mounts                             | Keeps the controller files clean; lives next to module wiring                              |
-| `AppAdapter.contributors?()` / `KickPlugin.contributors?()` | Cross-cutting defaults shipped by a reusable package      | Apply everywhere, overridable by anything narrower                                         |
-| `bootstrap({ contributors: [...] })`                        | App-wide defaults you wrote in the entry file             | Lowest precedence — easy to override by accident; prefer adapter-level for shared concerns |
+Five registration sites, ranked from most-specific to most-general (which is also the precedence order — narrower wins).
+
+- **`@LoadX` on a method** — one specific route needs an override or extra contributor. Inline; easy to spot when reading the handler.
+- **`@LoadX` on a class** — every route in this controller needs the same value. Avoids decorating each method individually.
+- **`AppModule.contributors?()`** — every route the module mounts. Keeps the controller files clean; lives next to module wiring.
+- **`AppAdapter.contributors?()` / `KickPlugin.contributors?()`** — cross-cutting defaults shipped by a reusable package. Apply everywhere, overridable by anything narrower.
+- **`bootstrap({ contributors: [...] })`** — app-wide defaults you wrote in the entry file. Lowest precedence — easy to override by accident; prefer adapter-level for shared concerns.
 
 The runtime path is identical for every site: each registration ends up in the per-route pipeline, runs through `runContributors()`, and writes via `ctx.set`. Only the precedence + scope differ.
 
@@ -873,10 +910,8 @@ health(ctx: RequestContext) {
 
 Two scopes, two test helpers from `@forinda/kickjs-testing`:
 
-| Scope                                 | Helper                                     | Use when                                                                                                         |
-| ------------------------------------- | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
-| Unit — one contributor in isolation   | `runContributor(decorator, opts)`          | Asserting the resolver's pure logic (input → output), mocking deps, pre-seeding `dependsOn` keys                 |
-| Integration — full pipeline + handler | `createTestApp({ modules })` + `supertest` | Asserting the handler actually sees the contributor's value, multi-contributor topo-order, route-level overrides |
+- **Unit — one contributor in isolation.** Helper: `runContributor(decorator, opts)`. Use when asserting the resolver's pure logic (input → output), mocking deps, or pre-seeding `dependsOn` keys.
+- **Integration — full pipeline + handler.** Helper: `createTestApp({ modules })` + `supertest`. Use when asserting the handler actually sees the contributor's value, verifying multi-contributor topo-order, or testing route-level overrides.
 
 ### Unit: a bare contributor
 
@@ -1343,20 +1378,57 @@ The full end-to-end recipe — definition + four call shapes + assertions throug
 
 ### Ten use cases — old approach vs parameterised contributors
 
-Same primitive, ten domains. Each row shows the **old approach** (forking the decorator / hardcoded middleware / per-route closure) next to the **new approach** (one parameterised decorator, varied per call site). Skim the table to see if your case fits; the worked code below covers the most common ones.
+Same primitive, ten domains. Each entry shows the **old approach** (forking the decorator / hardcoded middleware / per-route closure) and the **new approach** (one parameterised decorator, varied per call site).
 
-| #   | Domain                  | Old approach (before parameterised contributors)                                                                                            | New approach (`@Foo({...})` + `.with({...}).registration`)                                                                         |
-| --- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | **Tenant resolution**   | Fork `LoadTenant` 3× (`LoadTenantFromHeader`, `LoadTenantFromSubdomain`, `LoadTenantFromJWT`) + import the right one per controller.        | One `LoadTenant`; per-route call site picks `source: 'header' \| 'subdomain' \| 'jwt'`.                                            |
-| 2   | **Custom auth policy**  | Subclass `@RequirePermission` with a different policy class baked in; copy 30 lines of boilerplate.                                         | `@RequirePermission({ policy: AdminPolicy })` — adopter passes their policy class as a param.                                      |
-| 3   | **Permission gate**     | Hardcoded permission strings inside each contributor (`@RequireUsersWrite`, `@RequireBillingAdmin`, …).                                     | `@RequirePermission({ permission: 'users:write', scope: 'org' })` — one decorator, fine-grained per route.                         |
-| 4   | **Rate-limit override** | Per-route Express middleware with `rateLimit({ window, max, key })` inlined; lost type safety + DI.                                         | `@RateLimited({ window: '1m', max: 100, keyOf: (ctx) => ctx.user?.id ?? ctx.req.ip })`. Typed, DI-resolved limiter.                |
-| 5   | **Feature flag gate**   | Two middlewares (`requireBetaSearch`, `requireExperimentalCheckout`) + a third (`requireFlag('arbitrary')`) for cases the first two missed. | `@RequireFeature({ flag: 'beta-search', fallback: 'reject' })` — one decorator, any flag, deterministic fallback.                  |
-| 6   | **Body validation**     | A `validate(schema)` middleware called per route with the schema closure-captured.                                                          | `@ValidateBody({ schema: createUserSchema })` — adopter chooses schema lib (Zod / Valibot / plain function).                       |
-| 7   | **Audit log**           | Manually call `auditService.log(action, ctx)` at the top of each handler.                                                                   | `@AuditLog({ action: 'user.update', captureFields: ['id', 'email'] })` — declarative, automatic.                                   |
-| 8   | **Locale resolution**   | Two locale middlewares (`localeFromHeader`, `localeFromCookie`) + an `if (req.headers['x-prefer-cookie'])` shim.                            | `@LoadLocale({ source: 'header' \| 'cookie', fallback: 'en-US' })`.                                                                |
-| 9   | **A/B variant**         | Inline experiment evaluation in every controller method that branches on variant.                                                           | `@LoadVariant({ experiment: 'checkout-flow', fallback: 'control' })` — pipeline writes `ctx.set('variant', ...)`.                  |
-| 10  | **Webhook signatures**  | Provider-specific middleware per integration (`stripeSignature`, `githubSignature`, `slackSignature`).                                      | `@VerifySignature({ secret: STRIPE_SECRET, header: 'stripe-signature', algorithm: 'sha256' })` — same decorator, three call sites. |
+**1. Tenant resolution**
+
+- _Old_: fork `LoadTenant` 3× (`LoadTenantFromHeader`, `LoadTenantFromSubdomain`, `LoadTenantFromJWT`) + import the right one per controller.
+- _New_: one `LoadTenant`; per-route call site picks `source: 'header' | 'subdomain' | 'jwt'`.
+
+**2. Custom auth policy**
+
+- _Old_: subclass `@RequirePermission` with a different policy class baked in; copy 30 lines of boilerplate.
+- _New_: `@RequirePermission({ policy: AdminPolicy })` — adopter passes their policy class as a param.
+
+**3. Permission gate**
+
+- _Old_: hardcoded permission strings inside each contributor (`@RequireUsersWrite`, `@RequireBillingAdmin`, …).
+- _New_: `@RequirePermission({ permission: 'users:write', scope: 'org' })` — one decorator, fine-grained per route.
+
+**4. Rate-limit override**
+
+- _Old_: per-route Express middleware with `rateLimit({ window, max, key })` inlined; lost type safety + DI.
+- _New_: `@RateLimited({ window: '1m', max: 100, keyOf: (ctx) => ctx.user?.id ?? ctx.req.ip })`. Typed, DI-resolved limiter.
+
+**5. Feature flag gate**
+
+- _Old_: two middlewares (`requireBetaSearch`, `requireExperimentalCheckout`) + a third (`requireFlag('arbitrary')`) for cases the first two missed.
+- _New_: `@RequireFeature({ flag: 'beta-search', fallback: 'reject' })` — one decorator, any flag, deterministic fallback.
+
+**6. Body validation**
+
+- _Old_: a `validate(schema)` middleware called per route with the schema closure-captured.
+- _New_: `@ValidateBody({ schema: createUserSchema })` — adopter chooses schema lib (Zod / Valibot / plain function).
+
+**7. Audit log**
+
+- _Old_: manually call `auditService.log(action, ctx)` at the top of each handler.
+- _New_: `@AuditLog({ action: 'user.update', captureFields: ['id', 'email'] })` — declarative, automatic.
+
+**8. Locale resolution**
+
+- _Old_: two locale middlewares (`localeFromHeader`, `localeFromCookie`) + an `if (req.headers['x-prefer-cookie'])` shim.
+- _New_: `@LoadLocale({ source: 'header' | 'cookie', fallback: 'en-US' })`.
+
+**9. A/B variant**
+
+- _Old_: inline experiment evaluation in every controller method that branches on variant.
+- _New_: `@LoadVariant({ experiment: 'checkout-flow', fallback: 'control' })` — pipeline writes `ctx.set('variant', ...)`.
+
+**10. Webhook signatures**
+
+- _Old_: provider-specific middleware per integration (`stripeSignature`, `githubSignature`, `slackSignature`).
+- _New_: `@VerifySignature({ secret: STRIPE_SECRET, header: 'stripe-signature', algorithm: 'sha256' })` — same decorator, three call sites.
 
 Below: the worked code for cases 1, 2, 4, 6, and 10 — covering both **decorator** form and **non-decorator registration** form (`.with()`).
 
