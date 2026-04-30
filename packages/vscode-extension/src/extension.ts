@@ -23,6 +23,33 @@ let current: ProviderTrio | null = null
 let providerDisposables: vscode.Disposable[] = []
 
 export async function activate(context: vscode.ExtensionContext) {
+  // Gate every contribution on `kickjs.isKickProject` — the views in
+  // package.json declare `when: kickjs.isKickProject`, so when this
+  // context is false the activity-bar icon disappears entirely. Keeps
+  // the extension out of unrelated workspaces (e.g. someone opens a
+  // Python repo in the same window) without forcing them to disable it.
+  await refreshKickProjectContext()
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeWorkspaceFolders(() => {
+      void refreshKickProjectContext().then(() => {
+        // Workspace flipped into kickjs territory mid-session — wire up
+        // the providers + auto-detect now so the user doesn't have to
+        // reload the window.
+        if (isKickProjectCached && !current) {
+          rebuildProviders(context)
+          void maybeAutoConnect(context)
+        }
+      })
+    }),
+  )
+
+  if (!isKickProjectCached) {
+    // Not a kickjs workspace — register the workspace-folder listener
+    // (above) but skip provider wiring + auto-refresh + auto-connect.
+    // The extension stays dormant until the user opens a kickjs folder.
+    return
+  }
+
   rebuildProviders(context)
 
   context.subscriptions.push(
@@ -73,6 +100,20 @@ export async function activate(context: vscode.ExtensionContext) {
   // settings and pops a non-blocking 'connected' notification; failures
   // stay silent so the welcome view remains the primary affordance.
   await maybeAutoConnect(context)
+}
+
+let isKickProjectCached = false
+
+/**
+ * Re-evaluate whether any open workspace folder looks like a KickJS
+ * project and broadcast the result via the `kickjs.isKickProject`
+ * context key. The key drives the `when` clauses on every view +
+ * command palette entry so non-kickjs workspaces never see the icon.
+ */
+async function refreshKickProjectContext(): Promise<void> {
+  const roots = (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath)
+  isKickProjectCached = isKickJsWorkspace(roots)
+  await vscode.commands.executeCommand('setContext', 'kickjs.isKickProject', isKickProjectCached)
 }
 
 async function maybeAutoConnect(context: vscode.ExtensionContext): Promise<void> {
