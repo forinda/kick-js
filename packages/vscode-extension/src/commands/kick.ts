@@ -77,7 +77,41 @@ export function registerKickCommands(context: vscode.ExtensionContext): vscode.D
       if (confirm !== 'Remove') return
       runKick(`rm module ${name}`)
     }),
+
+    // ── Agent surface ───────────────────────────────────────────────
+    // Three commands that wire the project into the AI-agent ecosystem
+    // (Claude Code, Cursor, Copilot agents, etc.):
+    //   - regenerate the agent docs (AGENTS.md / CLAUDE.md / skills)
+    //   - boot the MCP server so an agent can call the project's
+    //     decorated controllers as tools
+    //   - scaffold an MCP config file under .claude/ for one-click
+    //     attach from Claude Code.
+    vscode.commands.registerCommand('kickjs.generateAgentDocs', () =>
+      pickAgentDocsScope().then((only) => {
+        if (!only) return
+        runKick(only === 'all' ? 'g agents' : `g agents --only ${only}`)
+      }),
+    ),
+    vscode.commands.registerCommand('kickjs.mcpStart', () => runKick('mcp start')),
+    vscode.commands.registerCommand('kickjs.mcpInit', () => runKick('mcp init')),
   ]
+}
+
+async function pickAgentDocsScope(): Promise<string | undefined> {
+  const choice = await vscode.window.showQuickPick(
+    [
+      { label: 'all', description: 'AGENTS.md + CLAUDE.md + kickjs-skills.md (default)' },
+      { label: 'agents', description: 'AGENTS.md only' },
+      { label: 'claude', description: 'CLAUDE.md only' },
+      { label: 'skills', description: 'kickjs-skills.md only' },
+      { label: 'both', description: 'agents + claude (skip skills)' },
+    ],
+    {
+      title: 'KickJS: regenerate agent docs',
+      placeHolder: 'Pick which docs to regenerate',
+    },
+  )
+  return choice?.label
 }
 
 async function promptAndRunGenerator(
