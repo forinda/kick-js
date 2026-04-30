@@ -80,6 +80,7 @@ async function runAutoDetect(deps: ConnectCommandDeps): Promise<void> {
   const debugPath = readDebugPath()
   const roots = workspaceRoots()
   const candidates = buildCandidates(roots, debugPath)
+  const token = readToken()
 
   const result = await vscode.window.withProgress(
     {
@@ -87,7 +88,7 @@ async function runAutoDetect(deps: ConnectCommandDeps): Promise<void> {
       title: 'KickJS: probing for a running app…',
       cancellable: false,
     },
-    () => autoDetect(candidates),
+    () => autoDetect(candidates, token ? { token } : undefined),
   )
 
   if (!result || !result.ok) {
@@ -109,6 +110,7 @@ async function runAutoDetect(deps: ConnectCommandDeps): Promise<void> {
 async function runManualConnect(deps: ConnectCommandDeps): Promise<void> {
   const debugPath = readDebugPath()
   const currentUrl = readServerUrl()
+  const token = readToken()
 
   const url = await vscode.window.showInputBox({
     title: 'KickJS: server URL',
@@ -125,7 +127,7 @@ async function runManualConnect(deps: ConnectCommandDeps): Promise<void> {
       title: `KickJS: probing ${url}${debugPath}…`,
       cancellable: false,
     },
-    () => probeConnection(url, debugPath),
+    () => probeConnection(url, debugPath, token ? { token } : undefined),
   )
 
   if (!result.ok) {
@@ -150,10 +152,13 @@ async function acceptResult(
   await config.update('serverUrl', serverUrl, target)
   await config.update('debugPath', debugPath, target)
   deps.onConnected(serverUrl, debugPath)
-  // The probe sent no Authorization header; if it returned 200 with the
-  // current `kickjs.token` empty, the server is running with
-  // `secret: false`. Surface that so the user knows they don't need to
-  // hunt for a token in the startup logs.
+  // Auth note reflects what the probe actually sent + the server
+  // accepted. Both runAutoDetect + runManualConnect now forward the
+  // configured `kickjs.token` to probeConnection, so:
+  //   - token configured + 200 → server accepted the token → 'auth: token'
+  //   - no token configured + 200 → server runs with `secret: false`
+  //     (auth disabled) since a 401 would have routed to reportFailure
+  //     instead of acceptResult.
   const usingToken = !!config.get<string>('token')
   const authNote = usingToken ? 'auth: token' : 'auth: disabled'
   vscode.window.showInformationMessage(
@@ -211,6 +216,10 @@ function readServerUrl(): string {
 
 function readDebugPath(): string {
   return vscode.workspace.getConfiguration('kickjs').get<string>('debugPath', DEFAULT_DEBUG_PATH)
+}
+
+function readToken(): string | undefined {
+  return vscode.workspace.getConfiguration('kickjs').get<string>('token') || undefined
 }
 
 function validateUrl(input: string): string | null {
