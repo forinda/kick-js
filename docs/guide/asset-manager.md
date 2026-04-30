@@ -53,13 +53,35 @@ export default defineConfig({
 
 Each entry shape:
 
-| Field  | Required | Default        | Notes                                                               |
-| ------ | -------- | -------------- | ------------------------------------------------------------------- |
-| `src`  | yes      | —              | Source directory, relative to project root.                         |
-| `dest` | no       | `dist/<name>/` | Destination inside `dist/`. Useful for matching downstream layouts. |
-| `glob` | no       | `**/*`         | File filter. Common forms: `**/*.ejs`, `**/*.{ejs,html}`.           |
+| Field  | Required | Default        | Notes                                                                                             |
+| ------ | -------- | -------------- | ------------------------------------------------------------------------------------------------- |
+| `src`  | yes      | —              | Source directory, relative to project root.                                                       |
+| `dest` | no       | `dist/<name>/` | Destination inside `dist/`. Useful for matching downstream layouts.                               |
+| `glob` | no       | `**/*`         | File filter. Common forms: `**/*.ejs`, `**/*.{ejs,html}`.                                         |
+| `keys` | no       | `'auto'`       | Key strategy — `'auto'`, `'strip'`, or `'with-extension'`. See [Key strategies](#key-strategies). |
 
 `copyDirs` and `assetMap` are independent — you can use both, neither, or only one. `copyDirs` is "copy this verbatim"; `assetMap` adds typed addressing on top of its own copy step.
+
+### Key strategies
+
+The `keys` field controls how a file's source path becomes its manifest key — and therefore the property name on the typed `assets.<ns>` Proxy. Build, runtime dev resolver, and typegen all share one helper (`groupAssetKeys()` in `@forinda/kickjs`) so the three layers can never disagree.
+
+| Strategy           | Stripped on conflict-free?  | Behaviour on collisions                                  | When to pick it                                                                                                                                                       |
+| ------------------ | --------------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `'auto'` (default) | yes                         | Keeps the extension on every file in the colliding group | You don't think about it — `welcome.ejs` stays `welcome`, but if a sibling adds `welcome.html` later both files become addressable as `welcome.ejs` / `welcome.html`. |
+| `'strip'`          | yes                         | Last-walk-order wins under one stripped key (lossy)      | You're certain every basename is unique within the namespace and want short autocomplete (`mails.welcome`).                                                           |
+| `'with-extension'` | no — extensions always kept | Not applicable (no collisions possible)                  | You want uniform keys regardless of siblings — `pages.{"index.html"}`, `pages.{"index.pug"}` always quoted.                                                           |
+
+Auto-mode resolves collisions group-by-group, so a namespace can mix safe singletons with collision groups. With
+
+```
+src/templates/mails/welcome.ejs           → mails.welcome
+src/templates/pages/index.html            → pages["index.html"]
+src/templates/pages/index.pug             → pages["index.pug"]
+src/templates/pages/about.html            → pages.about
+```
+
+the build emits one informational log per collision group it auto-resolved, e.g. `assetMap.pages: auto-resolved 1 basename collision(s) by keeping extensions`. Set `keys: 'strip'` to opt back into the legacy single-survivor behaviour, or `keys: 'with-extension'` to make every key in the namespace verbose for consistency.
 
 ## Run typegen
 
@@ -191,12 +213,15 @@ Useful in dev when you've just added a template and want the manifest to pick it
 
 ## Edge cases
 
-### Same basename in one directory (`index.html` + `index.js`)
+### Same basename in one directory (`index.html` + `index.pug`)
 
-Both files copy to dist. The manifest stores the **last-alphabetical winner** under the colliding key (`<namespace>/index`); the build emits a warning naming both files. Two fixes:
+Default behaviour (`keys: 'auto'`): both files copy to dist and both are addressable — the colliding group keeps extensions, so the manifest holds `<ns>/index.html` and `<ns>/index.pug` (typed surface: `assets.<ns>['index.html']()`, `assets.<ns>['index.pug']()`). The build prints one informational log per group: `auto-resolved N basename collision(s) by keeping extensions`.
 
-- Rename one of them.
-- Tighten the `glob` to exclude one extension: `glob: '**/*.html'`.
+Three ways to opt out of auto-mode:
+
+- `keys: 'with-extension'` — keep extensions on every key in the namespace (uniform shape across the namespace, even for non-colliding files).
+- `keys: 'strip'` — restore the legacy "last-walk-order wins" behaviour under one stripped key. Lossy: only one file is addressable.
+- Tighten `glob` to a single extension (`glob: '**/*.html'`) so the second file never enters the namespace in the first place.
 
 ### Files with non-identifier names
 
