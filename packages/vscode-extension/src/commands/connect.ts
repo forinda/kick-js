@@ -150,8 +150,14 @@ async function acceptResult(
   await config.update('serverUrl', serverUrl, target)
   await config.update('debugPath', debugPath, target)
   deps.onConnected(serverUrl, debugPath)
+  // The probe sent no Authorization header; if it returned 200 with the
+  // current `kickjs.token` empty, the server is running with
+  // `secret: false`. Surface that so the user knows they don't need to
+  // hunt for a token in the startup logs.
+  const usingToken = !!config.get<string>('token')
+  const authNote = usingToken ? 'auth: token' : 'auth: disabled'
   vscode.window.showInformationMessage(
-    `KickJS: connected to ${result.baseUrl} (uptime ${result.info.uptime}s, status ${result.info.status})`,
+    `KickJS: connected to ${result.baseUrl} (${authNote}, uptime ${result.info.uptime}s, status ${result.info.status})`,
   )
 }
 

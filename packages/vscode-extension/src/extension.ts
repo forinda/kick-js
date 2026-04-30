@@ -4,6 +4,7 @@ import { RoutesTreeProvider } from './providers/routes'
 import { ContainerTreeProvider } from './providers/container'
 import { DashboardPanel } from './panels/dashboard'
 import { registerConnectCommand } from './commands/connect'
+import { registerKickCommands } from './commands/kick'
 import {
   DEFAULT_DEBUG_PATH,
   autoDetect,
@@ -68,6 +69,7 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('kickjs.refreshAll', () => refreshAll()),
     vscode.commands.registerCommand('kickjs.setToken', () => promptForToken(context)),
     vscode.commands.registerCommand('kickjs.clearToken', () => clearToken()),
+    ...registerKickCommands(context),
     { dispose: () => disposeProviders() },
   )
 
