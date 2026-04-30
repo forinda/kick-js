@@ -885,6 +885,244 @@ class AuditService {
 
 Writes still flow through `ctx.set` (or a contributor's return value) — see the warning in [Reading the same value from a service](#reading-the-same-value-from-a-service-no-ctx-in-scope) for why services don't get a service-level write helper.
 
+### 10. Tenant-scoped database — controller injects, service reads via ALS
+
+A real SaaS pattern: each tenant has their own Postgres database, and every service / use-case in the request flow needs to talk to **that tenant's** DB — not the master / control-plane DB. The contributor pipeline composes this in two stages: identity first (`@LoadTenant`), then the per-tenant DB client (`@LoadTenantDb`, depends on `tenant`).
+
+The handler doesn't need to thread the DB anywhere — services read it via `getRequestValue('tenantDb')`.
+
+#### Augment ContextMeta
+
+```ts
+// src/types/context.ts
+import type { KickDbClient } from '@forinda/kickjs-db'
+
+declare module '@forinda/kickjs' {
+  interface ContextMeta {
+    tenant: { id: string; name: string; dbUrl: string }
+    tenantDb: KickDbClient
+  }
+}
+
+import { defineAugmentation } from '@forinda/kickjs'
+
+defineAugmentation('ContextMeta', {
+  description: 'Per-request tenant identity + tenant-scoped Postgres client.',
+  example: `ctx.get('tenantDb')`,
+})
+```
+
+#### Tenant registry + connection pool — DI services
+
+```ts
+// src/tenant/tenant-registry.service.ts
+import { Service, createToken } from '@forinda/kickjs'
+import { sql } from '@forinda/kickjs-db'
+import type { KickDbClient } from '@forinda/kickjs-db'
+
+export interface TenantRecord {
+  id: string
+  name: string
+  dbUrl: string
+}
+
+export const TENANT_REGISTRY = createToken<TenantRegistryService>('app/tenant/registry')
+
+@Service()
+export class TenantRegistryService {
+  // Master DB — the "control plane" that knows where each tenant lives.
+  constructor(private readonly masterDb: KickDbClient) {}
+
+  async findById(id: string): Promise<TenantRecord | null> {
+    const row = await this.masterDb
+      .selectFrom('tenants')
+      .selectAll()
+      .where('id', '=', id)
+      .executeTakeFirst()
+    return row ?? null
+  }
+}
+```
+
+```ts
+// src/tenant/tenant-db-pool.service.ts
+import { Service, createToken } from '@forinda/kickjs'
+import { createDbClient, pgDialect, type KickDbClient } from '@forinda/kickjs-db'
+import { Pool } from 'pg'
+
+export const TENANT_DB_POOL = createToken<TenantDbPoolService>('app/tenant/db-pool')
+
+@Service()
+export class TenantDbPoolService {
+  // One KickDbClient per tenant. Created lazily on first request,
+  // cached for the life of the process. In production you'd cap the
+  // map + LRU-evict idle clients; this is the minimal shape.
+  private readonly clients = new Map<string, KickDbClient>()
+
+  for(tenant: { id: string; dbUrl: string }): KickDbClient {
+    const existing = this.clients.get(tenant.id)
+    if (existing) return existing
+    const client = createDbClient({
+      dialect: pgDialect({ pool: new Pool({ connectionString: tenant.dbUrl }) }),
+    })
+    this.clients.set(tenant.id, client)
+    return client
+  }
+}
+```
+
+#### Two parameterised contributors
+
+```ts
+// src/tenant/contributors.ts
+import { defineContextDecorator, type RequestContext } from '@forinda/kickjs'
+import { TENANT_REGISTRY } from './tenant-registry.service'
+import { TENANT_DB_POOL } from './tenant-db-pool.service'
+
+// 1. Tenant identity — parameterised by source so /admin can use a
+// different header than the public-facing routes.
+type LoadTenantParams = { source: 'header' | 'subdomain'; headerName?: string }
+
+export const LoadTenant = defineContextDecorator<
+  'tenant',
+  { registry: typeof TENANT_REGISTRY },
+  LoadTenantParams
+>({
+  key: 'tenant',
+  deps: { registry: TENANT_REGISTRY },
+  paramDefaults: { source: 'header', headerName: 'x-tenant-id' },
+  resolve: async (ctx, { registry }, params) => {
+    const id =
+      params.source === 'header'
+        ? (ctx.req.headers[params.headerName ?? 'x-tenant-id'] as string)
+        : ctx.req.hostname.split('.')[0]
+    const tenant = await registry.findById(id)
+    if (!tenant) throw new Error(`Unknown tenant: ${id}`)
+    return tenant
+  },
+})
+
+// 2. Tenant-scoped DB client. dependsOn: ['tenant'] guarantees the
+// identity contributor has already resolved when this one runs.
+type LoadTenantDbParams = { pool: 'primary' | 'replica' }
+
+export const LoadTenantDb = defineContextDecorator<
+  'tenantDb',
+  { dbPool: typeof TENANT_DB_POOL },
+  LoadTenantDbParams
+>({
+  key: 'tenantDb',
+  deps: { dbPool: TENANT_DB_POOL },
+  dependsOn: ['tenant'],
+  paramDefaults: { pool: 'primary' },
+  resolve: (ctx, { dbPool }, _params) => {
+    // `params.pool === 'replica'` would route to a read-replica DSN
+    // here — wired the same way; omitted for brevity.
+    const tenant = ctx.get('tenant')!
+    return dbPool.for(tenant)
+  },
+})
+```
+
+#### Controller stacks both decorators
+
+```ts
+// src/orders/orders.controller.ts
+import { Controller, Get, Post, type RequestContext } from '@forinda/kickjs'
+import { Autowired } from '@forinda/kickjs'
+import { LoadTenant, LoadTenantDb } from '../tenant/contributors'
+import { OrdersUseCase } from './orders.use-case'
+
+@LoadTenant
+@LoadTenantDb
+@Controller()
+export class OrdersController {
+  @Autowired() private readonly orders!: OrdersUseCase
+
+  @Get('/orders')
+  list(ctx: RequestContext) {
+    // The use case has no idea about tenants — it just calls the
+    // service, which reads the tenant DB via ALS.
+    return this.orders.list()
+  }
+
+  @Post('/orders')
+  create(ctx: RequestContext) {
+    return this.orders.create(ctx.body as { sku: string; qty: number })
+  }
+}
+```
+
+`@LoadTenant` runs first (`dependsOn` on `LoadTenantDb` enforces it). Both decorators are applied **at the class level** so every method on the controller inherits them — no per-method repetition.
+
+For an admin-facing controller that expects a different header, override at the class level:
+
+```ts
+@LoadTenant({ source: 'header', headerName: 'x-admin-tenant-id' })
+@LoadTenantDb
+@Controller()
+class AdminOrdersController {
+  // …
+}
+```
+
+#### Service / use-case reads the tenant DB without `ctx`
+
+```ts
+// src/orders/orders.service.ts
+import { Service, getRequestValue } from '@forinda/kickjs'
+
+@Service()
+export class OrdersService {
+  async list() {
+    // `tenantDb` typed via ContextMeta. No `ctx` parameter needed —
+    // we read from AsyncLocalStorage under the hood.
+    const db = getRequestValue('tenantDb')
+    if (!db) throw new Error('OrdersService called outside a tenant-scoped request')
+    return db.selectFrom('orders').selectAll().execute()
+  }
+
+  async create(input: { sku: string; qty: number }) {
+    const db = getRequestValue('tenantDb')!
+    const tenant = getRequestValue('tenant')!
+    return db
+      .insertInto('orders')
+      .values({ ...input, tenantId: tenant.id, createdAt: new Date() })
+      .returningAll()
+      .executeTakeFirstOrThrow()
+  }
+}
+```
+
+```ts
+// src/orders/orders.use-case.ts
+import { Service, Autowired } from '@forinda/kickjs'
+import { OrdersService } from './orders.service'
+
+@Service()
+export class OrdersUseCase {
+  @Autowired() private readonly orders!: OrdersService
+
+  list() {
+    return this.orders.list()
+  }
+
+  create(input: { sku: string; qty: number }) {
+    // Validation, business rules, etc — domain logic stays free of
+    // tenant plumbing because the service reads `tenantDb` from ALS.
+    if (input.qty <= 0) throw new Error('qty must be positive')
+    return this.orders.create(input)
+  }
+}
+```
+
+#### What you get
+
+- **Database isolation per tenant** — every query goes to the right DB without the controller, use case, or service threading anything. The contributor pipeline + ALS handles propagation.
+- **Override per route or controller** — `@LoadTenant({ source: 'subdomain' })` on one class, `@LoadTenant({ source: 'header' })` on another. Same `LoadTenant` definition, same DI deps, same topo position.
+- **Read replicas via param** — `@LoadTenantDb({ pool: 'replica' })` on read-only routes (extend the resolver as shown).
+- **Testable in isolation** — `runContributor(LoadTenantDb, { ctxSeed: { tenant: fakeTenant }, deps: { dbPool: fakePool } })` exercises the resolver with no Express stack.
+
 ### Overriding an adapter-shipped contributor for one route
 
 The precedence rule (method > class > module > adapter > global) lets you replace a cross-cutting default per-route without touching the adapter:
