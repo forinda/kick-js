@@ -41,6 +41,7 @@ import type { RequestContext } from './context'
 export function defineHttpContextDecorator<
   K extends string,
   D extends Record<string, DepValue> = Record<string, never>,
->(spec: ContextDecoratorSpec<K, D, RequestContext>): ContextDecorator<K, D, RequestContext> {
-  return defineContextDecorator<K, D, RequestContext>(spec)
+  P = Record<string, never>,
+>(spec: ContextDecoratorSpec<K, D, P, RequestContext>): ContextDecorator<K, D, P, RequestContext> {
+  return defineContextDecorator<K, D, P, RequestContext>(spec)
 }
