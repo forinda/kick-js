@@ -10,73 +10,116 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# CI is split into independent parallel jobs instead of one sequential
+# `lint-build-test` chain. Format/lint run in seconds and gate
+# nothing else; typecheck, test, and build run in parallel and only
+# the smoke tests (which need built artifacts) wait on `build`.
+#
+# Pre-commit (lefthook.yml) is intentionally a thin wrapper around
+# `prettier --check` + `kick-lint`. CI is the canonical verification.
+
 jobs:
-  lint-build-test:
-    runs-on: ${{ matrix.os }}
+  format:
+    name: Format check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm format:check
+
+  lint-tokens:
+    name: Token convention lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint:tokens
+
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r --filter='./packages/*' run typecheck
+
+  test:
+    name: Test (Node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         node-version: [20, 22, 24]
-        os: [ubuntu-latest]
-        # os: [ubuntu-latest, macos-latest]
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v6
-
-      - name: Setup Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v6
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node-version }}
           cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile
         env:
           DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      - run: pnpm test
 
-      - name: Build framework packages
-        run: pnpm build
-
-      - name: Typecheck
-        run: pnpm -r --filter='./packages/*' typecheck
-
-      - name: Run tests
-        run: pnpm test
-
-      - name: Format check
-        run: pnpm format:check
-
-      - name: Token convention lint
-        run: pnpm lint:tokens
+  build:
+    name: Build (Node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [20, 22, 24]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      # Cache the built dist/ trees so the smoke-test jobs below can
+      # reuse them without rebuilding from scratch on Node 24.
+      - if: matrix.node-version == 24
+        uses: actions/upload-artifact@v4
+        with:
+          name: built-packages
+          path: packages/*/dist
+          retention-days: 1
+          if-no-files-found: error
 
   bun-smoke-test:
+    name: Bun smoke test
     runs-on: ubuntu-latest
+    needs: build
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v6
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: pnpm
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build framework packages
-        run: pnpm build
-
+      - uses: oven-sh/setup-bun@v2
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@v4
+        with:
+          name: built-packages
+          path: packages
       - name: Smoke test — imports resolve under Bun
         run: |
           bun -e "
@@ -86,7 +129,6 @@ jobs:
             console.log('Application:', typeof Application)
             console.log('Bun smoke test passed')
           "
-
       - name: Smoke test — bun test on core exports
         run: |
           bun -e "
@@ -101,32 +143,25 @@ jobs:
           "
 
   deno-smoke-test:
+    name: Deno smoke test
     runs-on: ubuntu-latest
+    needs: build
     continue-on-error: true
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v6
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: pnpm
-
-      - name: Setup Deno
-        uses: denoland/setup-deno@v2
+      - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build packages
-        run: pnpm build
-
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@v4
+        with:
+          name: built-packages
+          path: packages
       - name: Smoke test — pure ESM imports resolve under Deno
         run: |
           cat > deno-smoke.mjs << 'EOF'
