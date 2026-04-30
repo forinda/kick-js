@@ -45,9 +45,17 @@ describe('defineContextDecorator — factory shape', () => {
     expect(decorator.registration.deps).toEqual({})
   })
 
-  it('preserves explicitly provided spec fields', () => {
-    const onError = () => undefined
-    const resolve = () => ({ id: 'p-1' })
+  it('preserves explicitly provided spec fields', async () => {
+    let resolveCalls = 0
+    let onErrorCalls = 0
+    const onError = (): undefined => {
+      onErrorCalls++
+      return undefined
+    }
+    const resolve = (): { id: string } => {
+      resolveCalls++
+      return { id: 'p-1' }
+    }
 
     const decorator = defineContextDecorator({
       key: 'project',
@@ -59,8 +67,16 @@ describe('defineContextDecorator — factory shape', () => {
 
     expect(decorator.registration.dependsOn).toEqual(['tenant', 'user'])
     expect(decorator.registration.optional).toBe(true)
-    expect(decorator.registration.onError).toBe(onError)
-    expect(decorator.registration.resolve).toBe(resolve)
+    // The runner-facing `resolve` and `onError` are wrappers that bake
+    // per-call params into the closure, so they're not reference-equal
+    // to the spec functions. Verify by behaviour: calling them
+    // dispatches to the spec callbacks.
+    expect(typeof decorator.registration.resolve).toBe('function')
+    expect(typeof decorator.registration.onError).toBe('function')
+    await decorator.registration.resolve({} as never, {})
+    expect(resolveCalls).toBe(1)
+    await decorator.registration.onError!(new Error('x'), {} as never)
+    expect(onErrorCalls).toBe(1)
   })
 
   it('freezes the dependsOn array independently of the spec input', () => {
@@ -225,5 +241,149 @@ describe('defineContextDecorator — type inference (compile-time only)', () => 
       {} as never,
     )
     expect(value).toBe(42)
+  })
+})
+
+describe('parameterised contributors — factory call form', () => {
+  // Minimal stub — the surface tests don't need real ALS / Express.
+  const stubCtx = (extra: Record<string, unknown> = {}): ExecutionContext =>
+    ({
+      get: () => undefined,
+      set: () => undefined,
+      requestId: 'r-1',
+      req: { headers: {} },
+      ...extra,
+    }) as unknown as ExecutionContext
+
+  it('zero-arg decorator applies paramDefaults', async () => {
+    const Trace = defineContextDecorator<'trace', Record<string, never>, { tag: string }>({
+      key: 'trace',
+      paramDefaults: { tag: 'default' },
+      resolve: (_ctx, _deps, params) => params.tag,
+    })
+
+    @Trace
+    class Ctrl {}
+
+    const reg = getClassContributors(Ctrl)
+    expect(reg).toHaveLength(1)
+    expect(await reg[0].resolve(stubCtx(), {})).toBe('default')
+  })
+
+  it('factory-call decorator merges call-site params over paramDefaults', async () => {
+    const Trace = defineContextDecorator<
+      'trace',
+      Record<string, never>,
+      { tag: string; level: number }
+    >({
+      key: 'trace',
+      paramDefaults: { tag: 'default', level: 1 },
+      resolve: (_ctx, _deps, params) => `${params.tag}:${params.level}`,
+    })
+
+    @Trace({ tag: 'method' })
+    class Ctrl {}
+
+    const reg = getClassContributors(Ctrl)
+    // `level` inherits from paramDefaults; `tag` overrides.
+    expect(await reg[0].resolve(stubCtx(), {})).toBe('method:1')
+  })
+
+  it('two factory-call decorators on different methods produce independent registrations', async () => {
+    const Trace = defineContextDecorator<'trace', Record<string, never>, { tag: string }>({
+      key: 'trace',
+      paramDefaults: { tag: 'default' },
+      resolve: (_ctx, _deps, params) => params.tag,
+    })
+
+    class Ctrl {
+      @Trace({ tag: 'a' })
+      a(): void {}
+
+      @Trace({ tag: 'b' })
+      b(): void {}
+    }
+
+    const aReg = getMethodContributors(Ctrl, 'a')
+    const bReg = getMethodContributors(Ctrl, 'b')
+    expect(await aReg[0].resolve(stubCtx(), {})).toBe('a')
+    expect(await bReg[0].resolve(stubCtx(), {})).toBe('b')
+    // Independent closures — different per-call params, same key.
+    expect(aReg[0]).not.toBe(bReg[0])
+    expect(aReg[0].key).toBe('trace')
+    expect(bReg[0].key).toBe('trace')
+  })
+
+  it('.with() builds a registration with merged params for non-decorator sites', async () => {
+    const Trace = defineContextDecorator<'trace', Record<string, never>, { tag: string }>({
+      key: 'trace',
+      paramDefaults: { tag: 'default' },
+      resolve: (_ctx, _deps, params) => params.tag,
+    })
+
+    const customised = Trace.with({ tag: 'plugin' })
+    expect(await customised.registration.resolve(stubCtx(), {})).toBe('plugin')
+  })
+
+  it('.registration uses paramDefaults — back-compat for plugin / adapter sites', async () => {
+    const Trace = defineContextDecorator<'trace', Record<string, never>, { tag: string }>({
+      key: 'trace',
+      paramDefaults: { tag: 'default' },
+      resolve: (_ctx, _deps, params) => params.tag,
+    })
+
+    expect(await Trace.registration.resolve(stubCtx(), {})).toBe('default')
+  })
+
+  it('params can carry functions / closures', async () => {
+    const Trace = defineContextDecorator<
+      'trace',
+      Record<string, never>,
+      { keyOf: (ctx: ExecutionContext) => string }
+    >({
+      key: 'trace',
+      paramDefaults: { keyOf: () => 'fallback' },
+      resolve: (ctx, _deps, params) => params.keyOf(ctx),
+    })
+
+    @Trace({
+      keyOf: (ctx) =>
+        (ctx as unknown as { req: { headers: Record<string, string> } }).req.headers[
+          'x-trace-id'
+        ] ?? 'none',
+    })
+    class Ctrl {}
+
+    const reg = getClassContributors(Ctrl)
+    const ctx = stubCtx({ req: { headers: { 'x-trace-id': 'abc' } } })
+    expect(await reg[0].resolve(ctx, {})).toBe('abc')
+  })
+
+  it('onError receives the per-call params', async () => {
+    const errors: { params: { tag: string }; err: unknown }[] = []
+    const Trace = defineContextDecorator<'trace', Record<string, never>, { tag: string }>({
+      key: 'trace',
+      paramDefaults: { tag: 'default' },
+      resolve: () => {
+        throw new Error('boom')
+      },
+      onError: (err, _ctx, params) => {
+        errors.push({ params, err })
+        return 'fallback'
+      },
+    })
+
+    @Trace({ tag: 'specific' })
+    class Ctrl {}
+
+    const reg = getClassContributors(Ctrl)
+    let value: unknown
+    try {
+      value = await reg[0].resolve(stubCtx(), {})
+    } catch (err) {
+      value = await reg[0].onError!(err, stubCtx())
+    }
+    expect(value).toBe('fallback')
+    expect(errors[0].params).toEqual({ tag: 'specific' })
   })
 })
