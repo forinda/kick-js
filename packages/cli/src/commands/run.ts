@@ -60,6 +60,9 @@ async function startDevServer(
       srcDir: devConfig?.typegen?.srcDir,
       outDir: devConfig?.typegen?.outDir,
       assetMap: devConfig?.assetMap,
+      // We invoke the plugin pipeline explicitly below; opting out
+      // here keeps it from running twice on `kick dev` startup.
+      runPlugins: false,
     })
   } catch (err: any) {
     console.warn(`  kick typegen: skipped (${err?.message ?? err})`)
@@ -138,6 +141,9 @@ async function startDevServer(
         srcDir: devConfig?.typegen?.srcDir,
         outDir: devConfig?.typegen?.outDir,
         assetMap: devConfig?.assetMap,
+        // Plugin pipeline runs separately just below; opting out here
+        // avoids double-running it on every debounced trigger.
+        runPlugins: false,
       }).catch(() => {})
       // Plugin typegens piggy-back on the same debounce — kick/db
       // re-emits kick__db.d.ts when the schema (or anything else

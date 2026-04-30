@@ -5,8 +5,10 @@
 // and any future scan-consuming plugin share the walk), then renders
 // the `KickRoutes` augmentation via `../render/routes`.
 //
-// Output filename: `.kickjs/types/kick__routes.d.ts` (the runner
-// translates the slash in the plugin id to a double underscore).
+// Output filename: `.kickjs/types/kick__routes.ts` — the plugin sets
+// `outExtension: '.ts'` so the runner writes a `.ts` (not `.d.ts`)
+// file. The runner also translates the slash in the plugin id
+// (`kick/routes`) to a double underscore on disk.
 
 import path from 'node:path'
 

@@ -143,21 +143,27 @@ export async function runTypegen(opts: RunTypegenOptions = {}): Promise<{
   // M2.B-T8 carve: routes + env live in plugin typegens, not the
   // legacy generator above. Run the plugin pipeline as part of
   // `runTypegen` by default so single-shot callers (kick g <leaf> /
-  // commands/typegen / tests) stay on one entry point and see a
-  // fully-refreshed `.kickjs/types/` after the call returns. Watch
-  // mode opts out (`runPlugins: false`) because it drives the plugin
-  // pass externally and would otherwise double-run it on every
-  // filesystem trigger.
+  // kick new / tests) stay on one entry point and see a fully-
+  // refreshed `.kickjs/types/` after the call returns. Watch mode
+  // and the `kick typegen` / `kick dev` / `kick build` CLI paths
+  // opt out (`runPlugins: false`) because they drive the plugin
+  // pass externally and would otherwise double-run it.
   if (opts.runPlugins !== false) {
     try {
       const { runAllPluginTypegens } = await import('./run-plugins')
       const { loadKickConfig } = await import('../config')
       const pluginConfig = await loadKickConfig(cwd)
       await runAllPluginTypegens({ cwd, config: pluginConfig, silent: true })
-    } catch {
-      // Plugin pipeline broken? The legacy pass already wrote the rest;
-      // surfacing the error here would block dev tooling, which is
-      // worse than skipping the affected augmentation file.
+    } catch (err) {
+      // Broken plugins shouldn't block dev tooling — generators have
+      // already written the rest of `.kickjs/types/`, and surfacing
+      // here as a throw would abort the wider command (kick g, kick
+      // new). When `silent` is false, log the message so the failure
+      // is at least visible; otherwise swallow.
+      if (!silent) {
+        const msg = err instanceof Error ? err.message : String(err)
+        console.warn(`  kick typegen: plugin pipeline failed (${msg}) — continuing`)
+      }
     }
   }
 
