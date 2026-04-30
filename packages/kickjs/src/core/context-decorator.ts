@@ -96,6 +96,22 @@ export interface ContextDecoratorSpec<
    * should perform it inside `resolve()` — keeps the framework
    * validator-agnostic so projects can plug Zod / Valibot / hand-rolled
    * checks without the framework caring.
+   *
+   * **Required-field caveat.** The factory call signature accepts
+   * `Partial<P>` so adopters can override only the fields they care
+   * about. If your `P` declares a *required* field that isn't in
+   * `paramDefaults`, the merged runtime value can be missing that
+   * field even though TypeScript types `params` as `P` inside
+   * `resolve()`. Mitigate by either:
+   *
+   * 1. Marking the field optional in `P` and `if`-checking inside
+   *    `resolve()`, or
+   * 2. Providing a default for every required field in
+   *    `paramDefaults`.
+   *
+   * The framework can't enforce option 2 at compile time without
+   * giving up the back-compat that lets `paramDefaults` be omitted
+   * entirely for `P = Record<string, never>`.
    */
   paramDefaults?: Partial<P>
   /**
@@ -341,20 +357,25 @@ export function defineContextDecorator<
 
   /**
    * Decide whether the decorator was called as a decorator
-   * (`@Foo` / `@Foo(target, key)`) or as a factory (`@Foo({...})`).
+   * (`@Foo` / `@Foo(target, key)`) or as a factory
+   * (`@Foo()` / `@Foo({...})`).
    *
    * - Class decorator: `(target)` where target is a constructor function.
    * - Method decorator: `(target, propertyKey, descriptor?)` where
    *   target is a prototype object and propertyKey is a string/symbol.
-   * - Factory: `(params)` where params is a plain object (not a
-   *   constructor function).
+   * - Factory (defaults): `()` — adopter wrote `@Foo()` (rare; usually
+   *   they write the bare `@Foo`). Returns a decorator using
+   *   `paramDefaults`.
+   * - Factory (params): `(params)` where params is a plain object.
    *
    * The legacy decorators that ship with KickJS (`@Get('/path')`,
    * `@Cron('* * * *')`, etc.) use the same heuristic, so adopters
    * already know to pass plain object literals as factory args.
    */
   const isDecoratorCall = (args: unknown[]): boolean => {
-    if (args.length === 0) return true
+    // Zero args is a factory call (`@Foo()`), not a direct decorator
+    // application — TS never invokes a decorator with zero args.
+    if (args.length === 0) return false
     if (args.length >= 2) return true
     const first = args[0]
     // Functions are class constructors at decoration time.
@@ -381,6 +402,25 @@ export function defineContextDecorator<
     }
   }
 
+  /**
+   * Merge call-site `Partial<P>` over `paramDefaults`. Guards against
+   * `@Foo(null)` / `@Foo(undefined)` from JS callers (TS would catch
+   * these via `Partial<P>`); we throw a descriptive error rather than
+   * letting `{...null}` confuse TC39 and produce silent garbage.
+   * Arrays are also rejected — they're objects, but a params array
+   * is almost never what the adopter meant.
+   */
+  const mergeParams = (override: unknown): P => {
+    if (override === undefined) return { ...defaults } as P
+    if (override === null || typeof override !== 'object' || Array.isArray(override)) {
+      throw new TypeError(
+        `defineContextDecorator(${spec.key}): factory call requires a plain object literal, ` +
+          `got ${override === null ? 'null' : Array.isArray(override) ? 'array' : typeof override}`,
+      )
+    }
+    return { ...defaults, ...(override as Partial<P>) } as P
+  }
+
   function decoratorOrFactory(...args: unknown[]): unknown {
     if (isDecoratorCall(args)) {
       const [target, propertyKey] = args as [
@@ -392,7 +432,7 @@ export function defineContextDecorator<
       return undefined
     }
     // Factory call — capture merged params and return a decorator.
-    const params = { ...defaults, ...(args[0] as Partial<P>) } as P
+    const params = mergeParams(args[0])
     const registration = buildRegistration(params)
     return (target: object, propertyKey?: string | symbol) => {
       applyAsDecorator(registration, target, propertyKey)
@@ -407,8 +447,8 @@ export function defineContextDecorator<
   })
 
   Object.defineProperty(decoratorOrFactory, 'with', {
-    value: (params: P) => ({
-      registration: buildRegistration({ ...defaults, ...params } as P),
+    value: (params: Partial<P>) => ({
+      registration: buildRegistration(mergeParams(params)),
     }),
     writable: false,
     enumerable: true,
