@@ -89,6 +89,13 @@ jobs:
       - run: pnpm install --frozen-lockfile
         env:
           DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      # Tests resolve workspace deps via package.json `exports` which
+      # points at `dist/`. Build before running so cross-package
+      # imports (e.g. @forinda/kickjs-devtools-kit referenced by
+      # @forinda/kickjs-queue) resolve to real artefacts. The dedicated
+      # `build` job above still runs in parallel — wall time is
+      # max(build, test) which is what the parallelisation buys us.
+      - run: pnpm build
       - run: pnpm test
 
   build:
