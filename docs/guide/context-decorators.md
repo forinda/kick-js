@@ -1242,7 +1242,7 @@ me(ctx: RequestContext) {}
 public(ctx: RequestContext) {}
 
 // 3. Distinct params per method on the same controller.
-@Controller('/admin')
+@Controller()
 class AdminCtrl {
   @LoadTenant({ source: 'header', headerName: 'x-org-id' })
   @Patch('/orgs/:id')
@@ -1274,7 +1274,7 @@ export const TenantPlugin = definePlugin({
 })
 ```
 
-`LoadTenant.registration` (no `.with()`) keeps working — it equals `.with({}).registration`, which yields the `paramDefaults` registration.
+`LoadTenant.registration` (no `.with()`) keeps working — behaviourally equivalent to `.with({}).registration`, which yields the `paramDefaults` registration. Note that `.with(...)` constructs a fresh frozen registration on each call, so the two are not reference-equal — only behaviourally identical.
 
 ### Function-valued params
 
@@ -1335,3 +1335,262 @@ This matches how `switch (request.method)` narrows in any HTTP handler — the c
 ### Working example
 
 The full end-to-end recipe — definition + four call shapes + assertions through `runContributors` — lives at [`packages/kickjs/__tests__/parameterised-contributors.example.test.ts`](https://github.com/forinda/kick-js/blob/main/packages/kickjs/__tests__/parameterised-contributors.example.test.ts). Copy it into a project as the canonical starting point.
+
+### Ten use cases — old approach vs parameterised contributors
+
+Same primitive, ten domains. Each row shows the **old approach** (forking the decorator / hardcoded middleware / per-route closure) next to the **new approach** (one parameterised decorator, varied per call site). Skim the table to see if your case fits; the worked code below covers the most common ones.
+
+| #   | Domain                  | Old approach (before parameterised contributors)                                                                                            | New approach (`@Foo({...})` + `.with({...}).registration`)                                                                         |
+| --- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **Tenant resolution**   | Fork `LoadTenant` 3× (`LoadTenantFromHeader`, `LoadTenantFromSubdomain`, `LoadTenantFromJWT`) + import the right one per controller.        | One `LoadTenant`; per-route call site picks `source: 'header' \| 'subdomain' \| 'jwt'`.                                            |
+| 2   | **Custom auth policy**  | Subclass `@RequirePermission` with a different policy class baked in; copy 30 lines of boilerplate.                                         | `@RequirePermission({ policy: AdminPolicy })` — adopter passes their policy class as a param.                                      |
+| 3   | **Permission gate**     | Hardcoded permission strings inside each contributor (`@RequireUsersWrite`, `@RequireBillingAdmin`, …).                                     | `@RequirePermission({ permission: 'users:write', scope: 'org' })` — one decorator, fine-grained per route.                         |
+| 4   | **Rate-limit override** | Per-route Express middleware with `rateLimit({ window, max, key })` inlined; lost type safety + DI.                                         | `@RateLimited({ window: '1m', max: 100, keyOf: (ctx) => ctx.user?.id ?? ctx.req.ip })`. Typed, DI-resolved limiter.                |
+| 5   | **Feature flag gate**   | Two middlewares (`requireBetaSearch`, `requireExperimentalCheckout`) + a third (`requireFlag('arbitrary')`) for cases the first two missed. | `@RequireFeature({ flag: 'beta-search', fallback: 'reject' })` — one decorator, any flag, deterministic fallback.                  |
+| 6   | **Body validation**     | A `validate(schema)` middleware called per route with the schema closure-captured.                                                          | `@ValidateBody({ schema: createUserSchema })` — adopter chooses schema lib (Zod / Valibot / plain function).                       |
+| 7   | **Audit log**           | Manually call `auditService.log(action, ctx)` at the top of each handler.                                                                   | `@AuditLog({ action: 'user.update', captureFields: ['id', 'email'] })` — declarative, automatic.                                   |
+| 8   | **Locale resolution**   | Two locale middlewares (`localeFromHeader`, `localeFromCookie`) + an `if (req.headers['x-prefer-cookie'])` shim.                            | `@LoadLocale({ source: 'header' \| 'cookie', fallback: 'en-US' })`.                                                                |
+| 9   | **A/B variant**         | Inline experiment evaluation in every controller method that branches on variant.                                                           | `@LoadVariant({ experiment: 'checkout-flow', fallback: 'control' })` — pipeline writes `ctx.set('variant', ...)`.                  |
+| 10  | **Webhook signatures**  | Provider-specific middleware per integration (`stripeSignature`, `githubSignature`, `slackSignature`).                                      | `@VerifySignature({ secret: STRIPE_SECRET, header: 'stripe-signature', algorithm: 'sha256' })` — same decorator, three call sites. |
+
+Below: the worked code for cases 1, 2, 4, 6, and 10 — covering both **decorator** form and **non-decorator registration** form (`.with()`).
+
+#### 1. Tenant resolution — header / subdomain / JWT
+
+**Old:**
+
+```ts
+// One decorator per source — adopter imports the right one per route.
+const LoadTenantFromHeader = defineContextDecorator({
+  key: 'tenant',
+  resolve: (ctx) => repo.findById(ctx.req.headers['x-tenant-id'] as string),
+})
+const LoadTenantFromSubdomain = defineContextDecorator({
+  key: 'tenant',
+  resolve: (ctx) => repo.findBySubdomain(ctx.req.hostname.split('.')[0]),
+})
+// … and a third for JWT.
+```
+
+**New:**
+
+```ts
+type LoadTenantParams = { source: 'header' | 'subdomain' | 'jwt'; headerName?: string }
+
+const LoadTenant = defineContextDecorator<'tenant', { repo: typeof TENANT_REPO }, LoadTenantParams>({
+  key: 'tenant',
+  deps: { repo: TENANT_REPO },
+  paramDefaults: { source: 'header', headerName: 'x-tenant-id' },
+  resolve: (ctx, { repo }, params) => {
+    if (params.source === 'header') return repo.findById(ctx.req.headers[params.headerName!])
+    if (params.source === 'subdomain') return repo.findBySubdomain(ctx.req.hostname.split('.')[0])
+    return repo.findById(ctx.req.user!.tenantId)
+  },
+})
+
+@LoadTenant({ source: 'subdomain' })
+@Get('/orgs/:slug') public(ctx) {}
+
+@LoadTenant({ source: 'header', headerName: 'x-org-id' })
+@Patch('/admin/orgs/:slug') admin(ctx) {}
+```
+
+#### 2. Custom auth policy — adopter plugs their own policy class
+
+**Old:**
+
+```ts
+// Adopter forks the framework decorator — copies the resolve body, swaps the policy import.
+const RequireAdminPolicy = defineContextDecorator({
+  key: 'authzCheck',
+  resolve: (ctx) => new AdminPolicy().check(ctx.user, ctx.req),
+})
+const RequireBillingPolicy = defineContextDecorator({
+  key: 'authzCheck',
+  resolve: (ctx) => new BillingPolicy().check(ctx.user, ctx.req),
+})
+```
+
+**New:**
+
+```ts
+interface Policy {
+  check(user: User, req: Request): MaybePromise<boolean>
+}
+
+const RequirePolicy = defineContextDecorator<'authzCheck', {}, { policy: new () => Policy }>({
+  key: 'authzCheck',
+  paramDefaults: { policy: AlwaysAllowPolicy },
+  resolve: async (ctx, _deps, params) => {
+    const result = await new params.policy().check(ctx.user, ctx.req)
+    if (!result) throw new ForbiddenError()
+    return true
+  },
+})
+
+@RequirePolicy({ policy: AdminPolicy })
+@Get('/admin') adminPanel(ctx) {}
+
+@RequirePolicy({ policy: BillingPolicy })
+@Get('/billing') billing(ctx) {}
+```
+
+The auth package's deprecation roadmap rests on this exact shape — adopters compose their own policy chain instead of inheriting framework primitives.
+
+#### 4. Rate-limit override — function-valued params
+
+**Old:**
+
+```ts
+// Inline middleware closure per route — no type safety, DI is awkward.
+import rateLimit from 'express-rate-limit'
+
+@Get('/api/expensive')
+@Middleware(rateLimit({ windowMs: 60_000, max: 100, keyGenerator: (req) => req.user?.id ?? req.ip }))
+expensive(ctx) {}
+```
+
+**New:**
+
+```ts
+type RateLimitParams = {
+  window: string
+  max: number
+  keyOf: (ctx: RequestContext) => string
+}
+
+const RateLimited = defineContextDecorator<'rate-limit', { limiter: typeof RATE_LIMITER }, RateLimitParams>({
+  key: 'rate-limit',
+  deps: { limiter: RATE_LIMITER },
+  paramDefaults: { window: '1m', max: 60, keyOf: (ctx) => ctx.req.ip },
+  resolve: (ctx, { limiter }, params) => limiter.check(params.keyOf(ctx), params),
+})
+
+@RateLimited({ window: '1m', max: 100, keyOf: (ctx) => ctx.user?.id ?? ctx.req.ip })
+@Get('/api/expensive') expensive(ctx) {}
+```
+
+The function-valued `keyOf` param is a closure — captures surrounding scope at the call site, not at decorator-definition time. The framework doesn't type-narrow this for you; pick a key strategy per route.
+
+#### 6. Body validation — schema-library agnostic
+
+**Old:**
+
+```ts
+// Adopter writes a Zod-specific decorator, then a Valibot-specific one if they switch libraries.
+const ValidateBodyZod = (schema: ZodSchema) =>
+  defineContextDecorator({
+    key: 'validatedBody',
+    resolve: (ctx) => schema.parse(ctx.body),
+  })
+
+@ValidateBodyZod(CreateUserSchema)
+@Post('/users') create(ctx) {}
+```
+
+The closure-returning-decorator pattern works but means every call site builds its own decorator value — expensive at module-load time + opaque to DevTools.
+
+**New:**
+
+```ts
+type Validator<T> = { parse(value: unknown): T }
+type ValidateBodyParams = { schema: Validator<unknown>; on?: 'throw' | 'attach-issues' }
+
+const ValidateBody = defineContextDecorator<'validatedBody', {}, ValidateBodyParams>({
+  key: 'validatedBody',
+  paramDefaults: { schema: { parse: (v) => v }, on: 'throw' },
+  resolve: (ctx, _deps, params) => {
+    try {
+      return params.schema.parse(ctx.body)
+    } catch (err) {
+      if (params.on === 'attach-issues') {
+        ctx.set('validationIssues' as never, err as never)
+        return ctx.body
+      }
+      throw err
+    }
+  },
+})
+
+@ValidateBody({ schema: CreateUserSchema })
+@Post('/users') create(ctx) {}
+
+@ValidateBody({ schema: UpdateUserSchema, on: 'attach-issues' })
+@Patch('/users/:id') update(ctx) {}
+```
+
+Adopter brings any validator that satisfies `Validator<T>` — Zod / Valibot / Yup / hand-rolled.
+
+#### 10. Webhook signature verification — per-provider, same decorator
+
+**Old:**
+
+```ts
+// One middleware per provider, cargo-culted across the codebase.
+const stripeSignatureMiddleware = (req, res, next) => {
+  /* sha256, stripe header */
+}
+const githubSignatureMiddleware = (req, res, next) => {
+  /* sha1, github header */
+}
+const slackSignatureMiddleware = (req, res, next) => {
+  /* sha256, slack header */
+}
+```
+
+**New:**
+
+```ts
+type VerifyParams = {
+  secret: string
+  header: string
+  algorithm: 'sha256' | 'sha1'
+}
+
+const VerifySignature = defineContextDecorator<'verifiedWebhook', {}, VerifyParams>({
+  key: 'verifiedWebhook',
+  paramDefaults: { secret: '', header: 'x-signature', algorithm: 'sha256' },
+  resolve: (ctx, _deps, params) => {
+    const provided = ctx.req.headers[params.header]
+    const expected = createHmac(params.algorithm, params.secret).update(ctx.rawBody).digest('hex')
+    if (provided !== expected) throw new ForbiddenError(`Invalid ${params.header}`)
+    return true
+  },
+})
+
+@VerifySignature({ secret: STRIPE_SECRET, header: 'stripe-signature' })
+@Post('/webhooks/stripe') stripe(ctx) {}
+
+@VerifySignature({ secret: GITHUB_SECRET, header: 'x-hub-signature', algorithm: 'sha1' })
+@Post('/webhooks/github') github(ctx) {}
+
+@VerifySignature({ secret: SLACK_SECRET, header: 'x-slack-signature' })
+@Post('/webhooks/slack') slack(ctx) {}
+```
+
+#### Non-decorator form — `.with()` for plugin / module / bootstrap registration
+
+Every example above can register the same parameterised contributor at the **plugin / module / bootstrap** level instead of (or in addition to) the controller level. Use `.with(params).registration`:
+
+```ts
+import { definePlugin } from '@forinda/kickjs'
+
+export const TenantPlugin = definePlugin({
+  name: 'tenant',
+  contributors: () => [
+    // Project-wide subdomain rule; method-level decorators can still override.
+    LoadTenant.with({ source: 'subdomain' }).registration,
+  ],
+})
+
+// Or at bootstrap:
+bootstrap({
+  modules: [TenantModule],
+  contributors: [
+    LoadTenant.with({ source: 'header', headerName: 'x-org-id' }).registration,
+    RateLimited.with({ window: '1m', max: 1000, keyOf: (ctx) => ctx.req.ip }).registration,
+  ],
+})
+```
+
+The same parameterised decorator drives both styles — controller-level via `@Foo({...})`, framework-level via `Foo.with({...}).registration`. Nothing about the runtime pipeline knows the difference.

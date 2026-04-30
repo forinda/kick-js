@@ -359,6 +359,39 @@ describe('parameterised contributors — factory call form', () => {
     expect(await reg[0].resolve(ctx, {})).toBe('abc')
   })
 
+  it('throws a descriptive TypeError on factory call with null / array / primitive', () => {
+    const Trace = defineContextDecorator<'trace', Record<string, never>, { tag: string }>({
+      key: 'trace',
+      paramDefaults: { tag: 'default' },
+      resolve: (_ctx, _deps, params) => params.tag,
+    })
+    // Cast to any so TS doesn't catch these — the runtime check is
+    // for JS callers (or TS callers who erase via `as any`).
+    const callable = Trace as unknown as (...args: unknown[]) => unknown
+    expect(() => callable(null)).toThrow(TypeError)
+    expect(() => callable([])).toThrow(/array/)
+    expect(() => callable(42)).toThrow(/number/)
+    // .with() applies the same guard.
+    expect(() => (Trace.with as unknown as (p: unknown) => unknown)(null)).toThrow(TypeError)
+  })
+
+  it('@Foo() (zero-arg factory call) returns a decorator using paramDefaults', async () => {
+    const Trace = defineContextDecorator<'trace', Record<string, never>, { tag: string }>({
+      key: 'trace',
+      paramDefaults: { tag: 'default' },
+      resolve: (_ctx, _deps, params) => params.tag,
+    })
+
+    // Using `Trace()` zero-arg-factory: returns the decorator value.
+    const decorator = (Trace as unknown as () => (target: object) => void)()
+    expect(typeof decorator).toBe('function')
+
+    class Ctrl {}
+    decorator(Ctrl)
+    const reg = getClassContributors(Ctrl)
+    expect(await reg[0].resolve(stubCtx(), {})).toBe('default')
+  })
+
   it('onError receives the per-call params', async () => {
     const errors: { params: { tag: string }; err: unknown }[] = []
     const Trace = defineContextDecorator<'trace', Record<string, never>, { tag: string }>({
