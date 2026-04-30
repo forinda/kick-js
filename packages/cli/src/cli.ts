@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { registerCustomCommands } from './commands/custom'
-import { loadKickConfig } from './config'
+import { loadKickConfig, type KickConfig } from './config'
 import { mergeCliPlugins } from './plugin'
 import { builtinCliPlugins } from './plugin/builtins'
 
@@ -19,17 +19,22 @@ async function main() {
     .description('KickJS — A production-grade, decorator-driven Node.js framework')
     .version(pkg.version)
 
-  const config = await loadKickConfig(process.cwd())
+  // Default to {} so spreads + the `commands`/`plugins` reads stay
+  // safe when the adopter has no kick.config.ts. The cast keeps the
+  // shape downstream — `loadKickConfig` returns `KickConfig | null`,
+  // we just substitute an empty config object instead of branching at
+  // every use site.
+  const config = (await loadKickConfig(process.cwd())) ?? ({} as KickConfig)
 
   // Compose built-ins + user plugins into a single pipeline. Conflict
   // detection on plugin name / command name / typegen id runs here —
   // a clashing user plugin fails fast before any command touches argv.
-  const allPlugins = [...builtinCliPlugins, ...(config?.plugins ?? [])]
-  const merged = mergeCliPlugins(allPlugins, config?.commands ?? [])
+  const allPlugins = [...builtinCliPlugins, ...(config.plugins ?? [])]
+  const merged = mergeCliPlugins(allPlugins, config.commands ?? [])
 
   await merged.register(program, {
     cwd: process.cwd(),
-    config: config ?? null,
+    config,
     log: (msg) => console.log(msg),
   })
 

@@ -64,8 +64,8 @@ export interface PluginFactory<TConfig> {
 }
 
 const mergeConfig = <TConfig>(
-  defaults: Partial<TConfig> | undefined,
-  overrides: Partial<TConfig> | undefined,
+  defaults: Partial<TConfig> = {},
+  overrides: Partial<TConfig> = {},
 ): TConfig => ({ ...defaults, ...overrides }) as TConfig
 
 const composeName = (base: string, scope: string): string => `${base}:${scope}`
