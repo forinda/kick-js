@@ -204,12 +204,6 @@ export type ContributorRegistrations =
   | readonly AnyContributorRegistration[]
 
 /**
- * The value returned by {@link defineContextDecorator}. Callable as either
- * a method or class decorator, and exposes the underlying frozen
- * {@link ContributorRegistration} via `.registration` for non-decorator
- * registration sites (module hooks, adapter hooks, bootstrap option).
- */
-/**
  * The decorator function returned by either a zero-arg
  * {@link ContextDecorator} application or a factory call. Overloaded
  * to satisfy both class and method decorator shapes — adopters apply
@@ -223,6 +217,15 @@ export interface ContextDecoratorTarget {
   (target: object, propertyKey: string | symbol, descriptor?: PropertyDescriptor): void
 }
 
+/**
+ * The value returned by {@link defineContextDecorator}. Callable as
+ * either a class or method decorator (with `paramDefaults` applied),
+ * as a factory (`@Foo({...})` returning a per-site decorator), or
+ * via `.with(params)` for non-decorator registration sites (module
+ * hooks, adapter hooks, bootstrap option). `.registration` exposes
+ * the underlying frozen {@link ContributorRegistration} for the
+ * default-params case.
+ */
 export interface ContextDecorator<
   K extends string = string,
   D extends Record<string, DepValue> = Record<string, never>,
@@ -345,13 +348,19 @@ export function defineContextDecorator<
    * closure, invisible to the pipeline.
    */
   const buildRegistration = (params: P): ContributorRegistration<K, D, Ctx> => {
+    // Shallow-freeze the captured params so a misbehaving `resolve()` /
+    // `onError()` can't mutate the closure and bleed into later
+    // requests through the same registration. Adopters who really need
+    // mutable per-request state should write to `ctx.set(...)` from
+    // inside the resolver instead of mutating params.
+    const frozenParams = Object.freeze({ ...params }) as P
     const onError: ContributorRegistration<K, D, Ctx>['onError'] = spec.onError
-      ? (err: unknown, ctx: Ctx) => spec.onError!(err, ctx, params)
+      ? (err: unknown, ctx: Ctx) => spec.onError!(err, ctx, frozenParams)
       : undefined
     const resolve: ContributorRegistration<K, D, Ctx>['resolve'] = (
       ctx: Ctx,
       deps: ResolvedDeps<D>,
-    ) => spec.resolve(ctx, deps, params)
+    ) => spec.resolve(ctx, deps, frozenParams)
     return Object.freeze({
       key: spec.key,
       deps: sharedDeps,
@@ -415,24 +424,47 @@ export function defineContextDecorator<
   }
 
   /**
-   * Merge call-site `Partial<P>` over `paramDefaults`. Guards against
-   * `@Foo(null)` / `@Foo(undefined)` / `@Foo(42)` / `@Foo([])` from JS
-   * callers (TS would catch these via `Partial<P>`); we throw a
-   * descriptive error rather than letting `{...null}` confuse TC39
-   * and produce silent garbage.
+   * `true` for `{...}` and `Object.create(null)`. Rejects every
+   * built-in subclass (Map / Set / Date / Error / RegExp / Promise),
+   * adopter classes, and arrays.
+   */
+  const isPlainObject = (value: object): boolean => {
+    const proto = Object.getPrototypeOf(value)
+    return proto === Object.prototype || proto === null
+  }
+
+  /**
+   * Merge call-site `Partial<P>` over `paramDefaults`. Strict guard:
+   * accepts only **plain object literals** (or `Object.create(null)`).
+   * Reject everything else with a descriptive `TypeError`.
    *
-   * Class instances, `Map`, `Date`, etc. all pass — they're objects
-   * with own properties spread cleanly. The error message reflects
-   * the actual accepted shape: "non-null object, not an array".
+   * Why strict? Object spread copies enumerable own properties only.
+   * `{ ...new Date() }` and `{ ...new Map([...])}` both produce `{}`
+   * — the params silently drop. Catching this at the boundary
+   * surfaces the mistake instead of routing the request with empty
+   * config. Adopters who genuinely need a class-instance shape can
+   * destructure it themselves: `Foo({ ...new MyParams() })`.
    */
   const mergeParams = (override: unknown): P => {
     if (override === undefined) return { ...defaults } as P
-    if (override === null || typeof override !== 'object' || Array.isArray(override)) {
+    if (
+      override === null ||
+      typeof override !== 'object' ||
+      Array.isArray(override) ||
+      !isPlainObject(override)
+    ) {
+      const got =
+        override === null
+          ? 'null'
+          : Array.isArray(override)
+            ? 'array'
+            : typeof override === 'object'
+              ? `instance of ${(override as object).constructor?.name ?? 'unknown class'}`
+              : typeof override
       throw new TypeError(
-        `defineContextDecorator(${spec.key}): factory call requires a non-null object ` +
-          `that is not an array, got ${
-            override === null ? 'null' : Array.isArray(override) ? 'array' : typeof override
-          }`,
+        `defineContextDecorator(${spec.key}): factory call requires a plain object literal, got ${got}. ` +
+          `Class instances and built-ins (Map, Date, etc) silently spread to empty objects — ` +
+          `destructure them at the call site instead: Foo({ ...new MyParams() }).`,
       )
     }
     return { ...defaults, ...(override as Partial<P>) } as P
