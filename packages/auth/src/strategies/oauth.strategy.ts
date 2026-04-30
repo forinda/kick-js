@@ -210,9 +210,10 @@ export const OAuthStrategy = createAuthStrategy<OAuthStrategyOptions, OAuthStrat
       }
       endpoints = options.endpoints
     } else {
+      const { endpoints: customEndpoints = {} } = options
       endpoints = {
         ...PROVIDER_ENDPOINTS[options.provider],
-        ...options.endpoints,
+        ...customEndpoints,
       }
     }
 

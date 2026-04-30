@@ -153,17 +153,20 @@ export class PineconeVectorStore<
       }
     }
 
-    const vectors = list.map((d) => ({
-      id: d.id,
-      values: d.vector,
-      // Pinecone flattens `content` + user metadata into one record
-      // because Pinecone doesn't support nested objects in metadata.
-      // We unflatten on read — see `query` below.
-      metadata: {
-        content: d.content,
-        ...d.metadata,
-      },
-    }))
+    const vectors = list.map((d) => {
+      const { metadata: docMetadata = {} } = d
+      return {
+        id: d.id,
+        values: d.vector,
+        // Pinecone flattens `content` + user metadata into one record
+        // because Pinecone doesn't support nested objects in metadata.
+        // We unflatten on read — see `query` below.
+        metadata: {
+          content: d.content,
+          ...docMetadata,
+        },
+      }
+    })
 
     const body: Record<string, unknown> = { vectors }
     if (this.namespace) body.namespace = this.namespace
