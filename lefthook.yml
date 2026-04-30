@@ -1,0 +1,30 @@
+# Lefthook git hooks (https://github.com/evilmartians/lefthook).
+#
+# Pre-commit is a fast gate, not a CI replica. Heavy verification —
+# `pnpm build`, the full test suite, the Node 20/22/24 matrix, the
+# Bun + Deno smoke tests — runs in `.github/workflows/ci.yml` on
+# every push and pull request, where the jobs already run in parallel
+# matrix. Re-running them per-commit blocks the developer for 1–2
+# minutes for no marginal safety: a bad commit is still caught in CI
+# before merge, and `git push --force` is the recovery for a flaw
+# discovered after the fact.
+#
+# Commands below run in parallel. Each `glob:` filters the command to
+# the files actually staged in this commit, so a commit that touches
+# only Markdown skips the token-lint pass entirely.
+
+pre-commit:
+  parallel: true
+  commands:
+    # Prettier on every text file format we own. `{staged_files}` is
+    # lefthook's path list — passing it directly keeps the run
+    # bounded by the diff, not the whole tree.
+    format:
+      glob: '*.{ts,tsx,js,mjs,cjs,json,md,yaml,yml}'
+      run: pnpm exec prettier --check {staged_files}
+    # Token-convention lint (kick-lint). Runs only when a TS file
+    # under packages/ is staged — adopters editing docs / examples
+    # don't pay this cost.
+    lint-tokens:
+      glob: 'packages/**/*.ts'
+      run: pnpm lint:tokens
