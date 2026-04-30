@@ -57,6 +57,10 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # `kick-lint` is published from packages/lint and its bin shim
+      # imports `dist/index.mjs`. Build the lint package itself before
+      # invoking — full `pnpm build` would be wasteful here.
+      - run: pnpm --filter @forinda/kickjs-lint build
       - run: pnpm lint:tokens
 
   typecheck:
@@ -70,6 +74,10 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Per-package `tsc --noEmit` resolves cross-package types via
+      # `package.json:exports → dist/index.d.mts`. Build the workspace
+      # first so those declaration files exist on disk.
+      - run: pnpm build
       - run: pnpm -r --filter='./packages/*' run typecheck
 
   test:
