@@ -1,4 +1,4 @@
-import type { ContributorRegistration } from './context-decorator'
+import type { AnyContributorRegistration } from './context-decorator'
 import {
   ContributorCycleError,
   DuplicateContributorError,
@@ -32,9 +32,17 @@ const PRECEDENCE_ORDER: readonly ContributorSource[] = [
  * Input row to {@link buildPipeline}. Pairs a registration with its origin
  * so dedup can apply the precedence rule and diagnostic errors can name
  * the offending site.
+ *
+ * `registration` is the type-erased {@link AnyContributorRegistration}
+ * — the runner doesn't care about each registration's narrow `D` /
+ * `Ctx` shape, and adopters frequently mix HTTP / transport-agnostic
+ * contributors in the same `externalSources` / `contributors()`
+ * array. The narrow generics from `defineContextDecorator` survive
+ * at the *definition* site (where `resolve` is typed); they're erased
+ * here so collections compose without `as any` casts.
  */
 export interface SourcedRegistration {
-  registration: ContributorRegistration
+  registration: AnyContributorRegistration
   source: ContributorSource
   /** Human label surfaced in DuplicateContributorError messages. */
   label?: string
@@ -49,7 +57,7 @@ export interface SourcedRegistration {
  * builder uses it for missing-dep validation.
  */
 export interface ContributorPipeline {
-  readonly contributors: readonly ContributorRegistration[]
+  readonly contributors: readonly AnyContributorRegistration[]
   readonly keys: ReadonlySet<string>
 }
 
@@ -139,14 +147,14 @@ export function buildPipeline(
  * drains; we reconstruct one cycle path for diagnostics.
  */
 function topoSort(
-  registrations: readonly ContributorRegistration[],
+  registrations: readonly AnyContributorRegistration[],
   route: string | undefined,
-): ContributorRegistration[] {
+): AnyContributorRegistration[] {
   // indegree[key] = number of unresolved dependsOn entries for key
   const indegree = new Map<string, number>()
   // dependents[depKey] = list of registrations that depend on depKey
-  const dependents = new Map<string, ContributorRegistration[]>()
-  const byKey = new Map<string, ContributorRegistration>()
+  const dependents = new Map<string, AnyContributorRegistration[]>()
+  const byKey = new Map<string, AnyContributorRegistration>()
 
   for (const reg of registrations) {
     indegree.set(reg.key, reg.dependsOn.length)
@@ -161,12 +169,12 @@ function topoSort(
   }
 
   // Initial queue: registrations with zero indegree, preserving input order.
-  const queue: ContributorRegistration[] = []
+  const queue: AnyContributorRegistration[] = []
   for (const reg of registrations) {
     if (indegree.get(reg.key) === 0) queue.push(reg)
   }
 
-  const sorted: ContributorRegistration[] = []
+  const sorted: AnyContributorRegistration[] = []
   while (queue.length > 0) {
     const node = queue.shift()!
     sorted.push(node)
@@ -194,8 +202,8 @@ function topoSort(
  * `tenant → project → tenant`.
  */
 function reconstructCycle(
-  residual: readonly ContributorRegistration[],
-  byKey: ReadonlyMap<string, ContributorRegistration>,
+  residual: readonly AnyContributorRegistration[],
+  byKey: ReadonlyMap<string, AnyContributorRegistration>,
 ): string[] {
   const residualKeys = new Set(residual.map((r) => r.key))
   const start = residual[0].key
