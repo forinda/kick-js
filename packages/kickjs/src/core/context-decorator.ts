@@ -244,6 +244,13 @@ export interface ContextDecorator<
    */
   (target: object, propertyKey: string | symbol, descriptor?: PropertyDescriptor): void
   /**
+   * Zero-arg factory usage — `@Foo()` returns a decorator with
+   * `paramDefaults` applied. Equivalent in behaviour to the bare
+   * `@Foo` form, exposed here so adopters who prefer "always call the
+   * factory" don't need an `as any` cast.
+   */
+  (): ContextDecoratorTarget
+  /**
    * Factory usage — `@Foo({ ... })` returns the actual decorator with
    * call-site params merged onto `paramDefaults`. Matches a single
    * params object; plain objects don't satisfy the `Function` /
@@ -314,7 +321,12 @@ export function defineContextDecorator<
   P = Record<string, never>,
   Ctx extends ExecutionContext = ExecutionContext,
 >(spec: ContextDecoratorSpec<K, D, P, Ctx>): ContextDecorator<K, D, P, Ctx> {
-  const defaults = (spec.paramDefaults ?? {}) as Partial<P>
+  // Snapshot + freeze paramDefaults so callers can't mutate the spec
+  // object post-definition and shift the merged params under our feet.
+  // Same immutability boundary applied to `deps` and `dependsOn`.
+  const defaults = Object.freeze({
+    ...(spec.paramDefaults ?? ({} as Partial<P>)),
+  }) as Readonly<Partial<P>>
 
   // Shared deps + dependsOn — frozen once and reused across every
   // registration produced by this decorator (one per call site).
@@ -404,18 +416,23 @@ export function defineContextDecorator<
 
   /**
    * Merge call-site `Partial<P>` over `paramDefaults`. Guards against
-   * `@Foo(null)` / `@Foo(undefined)` from JS callers (TS would catch
-   * these via `Partial<P>`); we throw a descriptive error rather than
-   * letting `{...null}` confuse TC39 and produce silent garbage.
-   * Arrays are also rejected — they're objects, but a params array
-   * is almost never what the adopter meant.
+   * `@Foo(null)` / `@Foo(undefined)` / `@Foo(42)` / `@Foo([])` from JS
+   * callers (TS would catch these via `Partial<P>`); we throw a
+   * descriptive error rather than letting `{...null}` confuse TC39
+   * and produce silent garbage.
+   *
+   * Class instances, `Map`, `Date`, etc. all pass — they're objects
+   * with own properties spread cleanly. The error message reflects
+   * the actual accepted shape: "non-null object, not an array".
    */
   const mergeParams = (override: unknown): P => {
     if (override === undefined) return { ...defaults } as P
     if (override === null || typeof override !== 'object' || Array.isArray(override)) {
       throw new TypeError(
-        `defineContextDecorator(${spec.key}): factory call requires a plain object literal, ` +
-          `got ${override === null ? 'null' : Array.isArray(override) ? 'array' : typeof override}`,
+        `defineContextDecorator(${spec.key}): factory call requires a non-null object ` +
+          `that is not an array, got ${
+            override === null ? 'null' : Array.isArray(override) ? 'array' : typeof override
+          }`,
       )
     }
     return { ...defaults, ...(override as Partial<P>) } as P
