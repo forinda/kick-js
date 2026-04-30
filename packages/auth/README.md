@@ -1,5 +1,30 @@
 # @forinda/kickjs-auth
 
+> **⚠️ Deprecated — moving to BYO (bring-your-own).**
+>
+> The framework now ships **parameterised context contributors**
+> (`defineContextDecorator` with `paramDefaults` + per-call params +
+> `.with()`), which give adopters all the primitives needed to
+> compose their own auth flow without the ergonomic loss the package
+> previously offered.
+>
+> **What to do:** follow the [BYO Auth recipe](https://forinda.github.io/kick-js/guide/byo-recipes.html#auth)
+> — it composes `@LoadAuthUser` / `@RequireRole` / `@Public` from
+> `defineContextDecorator` and `defineAdapter` (the same primitives
+> this package wraps). ~200 lines of adopter code you own end-to-end,
+> no framework upgrades silently changing your auth surface.
+>
+> Background: see the [Context Decorators guide](https://forinda.github.io/kick-js/guide/context-decorators.html)
+> for the full primitive reference.
+>
+> **Why?** `@forinda/kickjs-auth` couples the framework's release cadence
+> to a domain (auth) where every project has different requirements —
+> custom claim mapping, custom session storage, custom CSRF rules,
+> Passport-bridge edge cases. A BYO recipe lets each project own its
+> auth surface; the framework owns only the primitives.
+
+---
+
 Pluggable authentication for KickJS — JWT, API key, OAuth, Session, Passport bridge — plus `@Authenticated` / `@Public` / `@Roles` / `@Can` / `@CsrfExempt` / `@RateLimit` decorators, `@Policy` authorization, password hashing, and CSRF auto-detection.
 
 ## Install

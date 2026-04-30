@@ -56,7 +56,7 @@ export type ResolvedDeps<D extends Record<string, DepValue>> = {
 export interface ContextDecoratorSpec<
   K extends string = string,
   D extends Record<string, DepValue> = Record<string, never>,
-  P = Record<string, never>,
+  P extends Record<string, unknown> = Record<string, never>,
   Ctx extends ExecutionContext = ExecutionContext,
 > {
   /** ContextMeta key the resolved value is written to. */
@@ -229,7 +229,7 @@ export interface ContextDecoratorTarget {
 export interface ContextDecorator<
   K extends string = string,
   D extends Record<string, DepValue> = Record<string, never>,
-  P = Record<string, never>,
+  P extends Record<string, unknown> = Record<string, never>,
   Ctx extends ExecutionContext = ExecutionContext,
 > {
   /**
@@ -321,7 +321,7 @@ export interface ContextDecorator<
 export function defineContextDecorator<
   K extends string,
   D extends Record<string, DepValue> = Record<string, never>,
-  P = Record<string, never>,
+  P extends Record<string, unknown> = Record<string, never>,
   Ctx extends ExecutionContext = ExecutionContext,
 >(spec: ContextDecoratorSpec<K, D, P, Ctx>): ContextDecorator<K, D, P, Ctx> {
   // Snapshot + freeze paramDefaults so callers can't mutate the spec
@@ -464,7 +464,8 @@ export function defineContextDecorator<
       throw new TypeError(
         `defineContextDecorator(${spec.key}): factory call requires a plain object literal, got ${got}. ` +
           `Class instances and built-ins (Map, Date, etc) silently spread to empty objects — ` +
-          `destructure them at the call site instead: Foo({ ...new MyParams() }).`,
+          `call the decorator with a spread object literal instead, e.g. ` +
+          `\`MyDecorator({ ...someInstance })\`.`,
       )
     }
     return { ...defaults, ...(override as Partial<P>) } as P

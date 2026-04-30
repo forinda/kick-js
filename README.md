@@ -131,7 +131,9 @@ export const app = await bootstrap({ modules })
 
 ## Ecosystem
 
-KickJS deliberately ships a small, stable core. The "right" extension surface is `defineAdapter()` / `definePlugin()` / `defineHttpContextDecorator()` plus `getRequestValue` / `processHooks` from `@forinda/kickjs` — adopters compose ecosystem-specific glue (GraphQL runtimes, OTel SDKs, mail providers) on top of those primitives via short copy-paste recipes. Six wrappers are deprecated for v5 because the BYO recipe is shorter and ages better than a thin first-party wrapper around a fast-moving upstream.
+KickJS deliberately ships a small, stable core. The "right" extension surface is `defineAdapter()` / `definePlugin()` / `defineHttpContextDecorator()` plus `getRequestValue` / `processHooks` from `@forinda/kickjs` — adopters compose ecosystem-specific glue (GraphQL runtimes, OTel SDKs, mail providers, auth flows) on top of those primitives via short copy-paste recipes. Several wrappers are deprecated for v5 because the BYO recipe is shorter and ages better than a thin first-party wrapper around a fast-moving upstream.
+
+> **`@forinda/kickjs-auth` joins the BYO list as of this release.** The new parameterised context contributors (`@LoadX({...})` + `.with()`) cover every shape the package wrapped — JWT / API-key / OAuth / Session / Passport bridge — without coupling your auth surface to the framework's release cadence. See the [BYO Auth recipe](https://forinda.github.io/kick-js/guide/byo-recipes.html#auth) for the full migration guide and the [Context Decorators guide](https://forinda.github.io/kick-js/guide/context-decorators.html) for the underlying primitive.
 
 ### Core packages
 
