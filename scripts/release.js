@@ -616,6 +616,16 @@ async function main() {
     }
   }
 
+  // Format the changelog write + snapshot copies. Without this, the
+  // pre-commit hook's `oxfmt --check` rejects the release commit
+  // because (a) the auto-appended changelog block isn't oxfmt-shaped,
+  // and (b) docs/versions/<v>/ files inherit whatever formatting the
+  // source had when copied — drift accumulates over releases. Note
+  // that `docs/versions/` IS in `.oxfmtrc.json:ignorePatterns`, so
+  // this pass only touches the live docs (changelog.md + roadmap.md
+  // + the working `guide/`, `api/`, `examples/` dirs).
+  run('pnpm format', 'Formatting docs after changelog + snapshot')
+
   // Commit
   const filesToStage = [
     'package.json',
