@@ -382,14 +382,34 @@ describe('parameterised contributors — factory call form', () => {
       resolve: (_ctx, _deps, params) => params.tag,
     })
 
-    // Using `Trace()` zero-arg-factory: returns the decorator value.
-    const decorator = (Trace as unknown as () => (target: object) => void)()
+    // Using `Trace()` — the zero-arg factory overload picks
+    // `() => ContextDecoratorTarget`, no cast needed.
+    const decorator = Trace()
     expect(typeof decorator).toBe('function')
 
     class Ctrl {}
     decorator(Ctrl)
     const reg = getClassContributors(Ctrl)
     expect(await reg[0].resolve(stubCtx(), {})).toBe('default')
+  })
+
+  it('paramDefaults are snapshotted — caller mutating the spec object cannot affect future call sites', async () => {
+    const liveDefaults = { tag: 'initial' }
+    const Trace = defineContextDecorator<'trace', Record<string, never>, { tag: string }>({
+      key: 'trace',
+      paramDefaults: liveDefaults,
+      resolve: (_ctx, _deps, params) => params.tag,
+    })
+
+    // Mutate the original after definition — should NOT leak into
+    // future registrations.
+    liveDefaults.tag = 'mutated'
+
+    class Ctrl {}
+    Trace(Ctrl)
+
+    const reg = getClassContributors(Ctrl)
+    expect(await reg[0].resolve(stubCtx(), {})).toBe('initial')
   })
 
   it('onError receives the per-call params', async () => {
