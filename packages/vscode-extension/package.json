@@ -108,6 +108,21 @@
         "command": "kickjs.removeModule",
         "title": "KickJS: Remove Module…",
         "icon": "$(trash)"
+      },
+      {
+        "command": "kickjs.generateAgentDocs",
+        "title": "KickJS: Regenerate Agent Docs (AGENTS.md / CLAUDE.md / skills)…",
+        "icon": "$(robot)"
+      },
+      {
+        "command": "kickjs.mcpStart",
+        "title": "KickJS: Start MCP Server",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "kickjs.mcpInit",
+        "title": "KickJS: Initialise MCP Config (.claude/)",
+        "icon": "$(file-add)"
       }
     ],
     "menus": {
@@ -140,7 +155,10 @@
         { "command": "kickjs.generateService", "when": "kickjs.isKickProject" },
         { "command": "kickjs.generateScaffold", "when": "kickjs.isKickProject" },
         { "command": "kickjs.addPackage", "when": "kickjs.isKickProject" },
-        { "command": "kickjs.removeModule", "when": "kickjs.isKickProject" }
+        { "command": "kickjs.removeModule", "when": "kickjs.isKickProject" },
+        { "command": "kickjs.generateAgentDocs", "when": "kickjs.isKickProject" },
+        { "command": "kickjs.mcpStart", "when": "kickjs.isKickProject" },
+        { "command": "kickjs.mcpInit", "when": "kickjs.isKickProject" }
       ]
     },
     "configuration": {
