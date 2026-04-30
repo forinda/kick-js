@@ -369,12 +369,17 @@ Letting arbitrary services reach in and mutate the store from anywhere is "spook
 
 ### Augmenting `ContextMeta`: `declare module` vs `defineAugmentation`
 
-Two calls, two jobs, **both needed if you want both type safety and discoverability**:
+Two calls, two jobs, **both needed if you want both type safety and discoverability**.
 
-| Call                                                                         | What it does                                                                                                                                                                  | What it doesn't do                                                                                               |
-| ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `declare module '@forinda/kickjs' { interface ContextMeta { tenant: ... } }` | Tells **TypeScript** that `ctx.get('tenant')` returns your shape. Resolved at compile time by tsc / your IDE.                                                                 | Doesn't show up anywhere else in the project. Other devs reading the codebase have to grep for `declare module`. |
-| `defineAugmentation('ContextMeta', { description, example })`                | Tells **`kick typegen`** to list the interface in `.kickjs/types/augmentations.d.ts` so every augmentable surface is discoverable from one place. Runtime + type-level no-op. | Doesn't actually augment anything. Skipping the `declare module` block leaves `ctx.get('tenant')` as `unknown`.  |
+#### `declare module '@forinda/kickjs' { interface ContextMeta { ... } }`
+
+- **What it does** — tells **TypeScript** that `ctx.get('tenant')` returns your shape. Resolved at compile time by `tsc` / your IDE.
+- **What it doesn't do** — doesn't show up anywhere else in the project. Other devs reading the codebase have to grep for `declare module` to discover what keys are augmented.
+
+#### `defineAugmentation('ContextMeta', { description, example })`
+
+- **What it does** — tells **`kick typegen`** to list the interface in `.kickjs/types/augmentations.d.ts` so every augmentable surface is discoverable from one place. Runtime + type-level no-op.
+- **What it doesn't do** — doesn't actually augment anything. Skipping the `declare module` block leaves `ctx.get('tenant')` as `unknown`.
 
 In practice, the file pattern looks like this:
 
