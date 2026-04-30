@@ -375,6 +375,52 @@ describe('parameterised contributors — factory call form', () => {
     expect(() => (Trace.with as unknown as (p: unknown) => unknown)(null)).toThrow(TypeError)
   })
 
+  it('rejects class instances / Map / Date — they spread to {} and silently drop params', () => {
+    const Trace = defineContextDecorator<'trace', Record<string, never>, { tag: string }>({
+      key: 'trace',
+      paramDefaults: { tag: 'default' },
+      resolve: (_ctx, _deps, params) => params.tag,
+    })
+    const callable = Trace as unknown as (...args: unknown[]) => unknown
+
+    class MyParams {
+      tag = 'oops'
+    }
+    expect(() => callable(new MyParams())).toThrow(/MyParams/)
+    expect(() => callable(new Map())).toThrow(/Map/)
+    expect(() => callable(new Date())).toThrow(/Date/)
+
+    // Plain objects + Object.create(null) pass.
+    expect(() => callable({ tag: 'plain' })).not.toThrow()
+    const nullProto = Object.create(null) as { tag: string }
+    nullProto.tag = 'null-proto'
+    expect(() => callable(nullProto)).not.toThrow()
+  })
+
+  it('freezes captured params so a misbehaving resolver cannot mutate them across requests', async () => {
+    const Trace = defineContextDecorator<'trace', Record<string, never>, { counter: number }>({
+      key: 'trace',
+      paramDefaults: { counter: 0 },
+      resolve: (_ctx, _deps, params) => {
+        // Attempt to mutate the captured params. Object.freeze is
+        // shallow — assignment in strict mode (TS modules are strict)
+        // throws.
+        expect(() => {
+          ;(params as { counter: number }).counter += 1
+        }).toThrow(TypeError)
+        return params.counter
+      },
+    })
+
+    @Trace({ counter: 5 })
+    class Ctrl {}
+
+    const reg = getClassContributors(Ctrl)
+    expect(await reg[0].resolve(stubCtx(), {})).toBe(5)
+    // Second invocation sees the original params, not a mutated value.
+    expect(await reg[0].resolve(stubCtx(), {})).toBe(5)
+  })
+
   it('@Foo() (zero-arg factory call) returns a decorator using paramDefaults', async () => {
     const Trace = defineContextDecorator<'trace', Record<string, never>, { tag: string }>({
       key: 'trace',
