@@ -39,14 +39,18 @@ export async function runTypegen(opts: RunTypegenOptions): Promise<TypegenPlugin
   const typesDirAbs = path.resolve(opts.cwd, TYPES_DIR)
   await mkdir(typesDirAbs, { recursive: true })
 
-  // Per-pass memoization of scanProject. Cache keyed by a JSON-stable
+  // Per-pass memoization of scanProject. Cache keyed by a stable
   // serialization of the resolved scan options so two plugins asking
   // for the same scan share one walk + extraction. Different option
   // shapes (different srcDir, different envFile) get separate scans.
+  // We deliberately do NOT use JSON.stringify on the raw options: its
+  // output is sensitive to property insertion order, so two plugins
+  // that build their options object in different orders would miss
+  // the cache and trigger duplicate scans.
   const scanCache = new Map<string, Promise<ScanResult>>()
   const scanFn = opts.scan ?? scanProject
   const getScanResult = (scanOpts: ScanOptions): Promise<ScanResult> => {
-    const key = JSON.stringify(scanOpts)
+    const key = stableScanKey(scanOpts)
     let pending = scanCache.get(key)
     if (!pending) {
       pending = scanFn(scanOpts)
@@ -103,4 +107,23 @@ export async function runTypegen(opts: RunTypegenOptions): Promise<TypegenPlugin
   }
 
   return results
+}
+
+/**
+ * Order-independent cache key for `ScanOptions`. Builds the key from
+ * the known fields in a fixed order so semantically equal options
+ * always produce the same key regardless of how the caller built the
+ * object literal. Arrays (extensions / exclude) are sorted before
+ * joining so `['.ts', '.tsx']` and `['.tsx', '.ts']` collide.
+ */
+function stableScanKey(opts: ScanOptions): string {
+  const extensions = (opts.extensions ?? []).slice().sort().join(',')
+  const exclude = (opts.exclude ?? []).slice().sort().join(',')
+  return [
+    `root=${opts.root}`,
+    `cwd=${opts.cwd}`,
+    `extensions=${extensions}`,
+    `exclude=${exclude}`,
+    `envFile=${opts.envFile ?? ''}`,
+  ].join('|')
 }

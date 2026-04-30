@@ -363,7 +363,11 @@ export function defineConfig(config: KickConfig): KickConfig {
  */
 export function resolveTokenScope(config: KickConfig | null, cwd: string): string {
   if (config?.tokenScope && typeof config.tokenScope === 'string' && config.tokenScope.length > 0) {
-    return sanitizeScope(config.tokenScope)
+    const sanitised = sanitizeScope(config.tokenScope)
+    // Configured tokenScope can sanitise down to an empty string (e.g.
+    // '___' or '!!') — falling through to the package.json chain is
+    // safer than emitting an invalid `'/users/repository'` token.
+    if (sanitised.length > 0) return sanitised
   }
 
   // Read package.json synchronously — this runs once per generator
@@ -375,8 +379,9 @@ export function resolveTokenScope(config: KickConfig | null, cwd: string): strin
       const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8')) as { name?: unknown }
       if (typeof pkg.name === 'string' && pkg.name.length > 0) {
         const scoped = pkg.name.match(/^@([^/]+)\//)
-        if (scoped) return sanitizeScope(scoped[1])
-        return sanitizeScope(pkg.name)
+        const candidate = scoped ? sanitizeScope(scoped[1]) : sanitizeScope(pkg.name)
+        if (candidate.length > 0) return candidate
+        // Same empty-after-sanitize guard.
       }
     }
   } catch {

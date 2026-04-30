@@ -169,7 +169,12 @@ ${sorted.map((n) => `  | '${n}'`).join('\n')}
 
 /** Render the barrel index that re-exports the union types */
 function renderIndex(includeEnv: boolean): string {
-  const envImport = includeEnv ? "import './env'\n" : ''
+  // The kick/routes + kick/env TypegenPlugins write their output to
+  // `kick__routes.ts` / `kick__env.ts` (see typegen runner + builtin
+  // plugins). The index re-exports them via side-effect imports so
+  // `tsconfig include` of `.kickjs/types/` is enough to wire up the
+  // augmentations — same surface adopters had before the carve.
+  const envImport = includeEnv ? "import './kick__env'\n" : ''
   return `${HEADER}
 export type { ServiceToken } from './services'
 export type { ModuleToken } from './modules'
@@ -181,7 +186,7 @@ export type { ModuleToken } from './modules'
 // \`dependsOn: ['TenantAdapter']\`, \`assets.mails.welcome()\`, and
 // \`@Value('PORT')\` to resolve.
 import './registry'
-import './routes'
+import './kick__routes'
 import './plugins'
 import './augmentations'
 import './assets'
