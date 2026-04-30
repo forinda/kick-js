@@ -40,7 +40,20 @@ export const TOKEN_FILE_NAMES = new Set([
 ])
 
 /** Directories the walker skips wholesale. */
-const SKIP_DIRS = new Set(['node_modules', 'dist', '__tests__', '.kickjs'])
+const SKIP_DIRS = new Set([
+  'node_modules',
+  'dist',
+  '__tests__',
+  '.kickjs',
+  // Built static assets (e.g. devtools SPA bundle) live under `public/`
+  // and ship as-is to npm — no token literals to lint there.
+  'public',
+  // VitePress / Vite build outputs that adopters sometimes commit.
+  '.vitepress',
+  '.turbo',
+  '.wireit',
+  'coverage',
+])
 
 export interface LintOptions {
   /** Root directory to walk. Required. */
