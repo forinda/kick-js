@@ -13,12 +13,19 @@
  */
 
 import { statSync } from 'node:fs'
-import { extname, resolve } from 'node:path'
+import { resolve } from 'node:path'
 import { globSync } from 'glob'
+import { groupAssetKeys } from '@forinda/kickjs'
 import type { AssetMapEntry } from '../config'
 
 export interface DiscoveredAssetEntry {
   namespace: string
+  /**
+   * Path under the namespace — what comes after the `<namespace>/`
+   * prefix in the logical key. Stripped of extension when the file's
+   * basename was unique within the namespace, or carries the full
+   * extension when a collision was auto-resolved.
+   */
   key: string
 }
 
@@ -49,10 +56,18 @@ export function discoverAssets(
       posix: true,
     })
     matches.sort()
-    for (const rel of matches) {
-      const key = stripExt(rel)
-      const logical = `${namespace}/${key}`
-      seen.set(logical, { namespace, key })
+    // Run the same key-shaping logic the build pipeline + dev resolver
+    // use, so the emitted type matches the manifest exactly. Auto-mode
+    // keeps extensions on collision groups; singletons stay stripped.
+    const { pairs } = groupAssetKeys(namespace, matches, {
+      strategy: entry.keys ?? 'auto',
+    })
+    for (const { key: logical } of pairs) {
+      // The helper returns the full `<namespace>/<...>` form; strip
+      // the namespace prefix so the entry shape matches the legacy
+      // contract (key = path under namespace).
+      const subKey = logical.slice(namespace.length + 1)
+      seen.set(logical, { namespace, key: subKey })
     }
   }
   return { entries: [...seen.values()], count: seen.size }
@@ -158,9 +173,4 @@ function isDir(path: string): boolean {
   } catch {
     return false
   }
-}
-
-function stripExt(path: string): string {
-  const ext = extname(path)
-  return ext ? path.slice(0, -ext.length) : path
 }
