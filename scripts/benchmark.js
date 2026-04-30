@@ -209,8 +209,12 @@ async function main() {
   }
 
   console.log(`+------------------------------------------------------+`)
-  console.log(`|  ${'Endpoint'.padEnd(28)} ${'p50'.padStart(6)} ${'p95'.padStart(6)} ${'p99'.padStart(6)} |`)
-  console.log(`|  ${''.padEnd(28, '-')} ${''.padEnd(6, '-')} ${''.padEnd(6, '-')} ${''.padEnd(6, '-')} |`)
+  console.log(
+    `|  ${'Endpoint'.padEnd(28)} ${'p50'.padStart(6)} ${'p95'.padStart(6)} ${'p99'.padStart(6)} |`,
+  )
+  console.log(
+    `|  ${''.padEnd(28, '-')} ${''.padEnd(6, '-')} ${''.padEnd(6, '-')} ${''.padEnd(6, '-')} |`,
+  )
   for (const r of results) {
     console.log(
       `|  ${r.name.padEnd(28)} ${String(r.latency.p50 + 'ms').padStart(6)} ${String(r.latency.p95 + 'ms').padStart(6)} ${String(r.latency.p99 + 'ms').padStart(6)} |`,

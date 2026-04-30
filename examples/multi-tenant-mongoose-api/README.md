@@ -11,15 +11,15 @@ kick dev
 
 ## Scripts
 
-| Command | Description |
-|---|---|
-| `kick dev` | Start dev server with Vite HMR |
-| `kick build` | Production build |
-| `kick start` | Run production build |
-| `pnpm run test` | Run tests with Vitest |
-| `kick g module <name>` | Generate a DDD module |
+| Command                              | Description                          |
+| ------------------------------------ | ------------------------------------ |
+| `kick dev`                           | Start dev server with Vite HMR       |
+| `kick build`                         | Production build                     |
+| `kick start`                         | Run production build                 |
+| `pnpm run test`                      | Run tests with Vitest                |
+| `kick g module <name>`               | Generate a DDD module                |
 | `kick g scaffold <name> <fields...>` | Generate CRUD from field definitions |
-| `kick add <package>` | Add a KickJS package |
+| `kick add <package>`                 | Add a KickJS package                 |
 
 ## Project Structure
 
@@ -52,9 +52,9 @@ kick add --list        # Show all available packages
 
 Copy `.env.example` to `.env` and configure:
 
-| Variable | Default | Description |
-|---|---|---|
-| `PORT` | `3000` | Server port |
+| Variable   | Default       | Description |
+| ---------- | ------------- | ----------- |
+| `PORT`     | `3000`        | Server port |
 | `NODE_ENV` | `development` | Environment |
 
 ## Learn More

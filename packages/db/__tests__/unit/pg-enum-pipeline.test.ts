@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 
-import { table, uuid, varchar } from '../../src/index'
+import { table, uuid } from '../../src/index'
 import { pgEnum } from '../../src/dsl/columns/pg'
 import { extractSnapshot } from '../../src/snapshot/extract'
 import { diff } from '../../src/diff/engine'

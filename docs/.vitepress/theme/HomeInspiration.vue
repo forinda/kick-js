@@ -9,7 +9,8 @@ const inspirations = [
   {
     name: 'TanStack Start',
     what: 'Virtual modules for auto-discovery',
-    detail: 'Instead of manually registering every file, the framework discovers and imports them for you.',
+    detail:
+      'Instead of manually registering every file, the framework discovers and imports them for you.',
     color: '#f59e0b',
   },
   {
@@ -20,7 +21,7 @@ const inspirations = [
   },
   {
     name: 'Vue.js',
-    what: 'Reactivity isn\'t just for the frontend',
+    what: "Reactivity isn't just for the frontend",
     detail: 'Composable state management with ref, computed, and watch — anywhere in your stack.',
     color: '#42b883',
   },
@@ -55,16 +56,10 @@ const inspirations = [
   <section class="inspiration-section">
     <div class="inspiration-header">
       <h2>Built on Proven Patterns</h2>
-      <p>
-        We studied 6 frameworks in the Vite ecosystem and borrowed the best ideas from each.
-      </p>
+      <p>We studied 6 frameworks in the Vite ecosystem and borrowed the best ideas from each.</p>
     </div>
     <div class="inspiration-list">
-      <div
-        v-for="(item, i) in inspirations"
-        :key="item.name"
-        class="inspiration-row"
-      >
+      <div v-for="(item, i) in inspirations" :key="item.name" class="inspiration-row">
         <div class="row-index">{{ String(Number(i) + 1).padStart(2, '0') }}</div>
         <div class="row-accent" :style="{ background: item.color }" />
         <div class="row-source">{{ item.name }}</div>

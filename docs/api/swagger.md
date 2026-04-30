@@ -10,10 +10,10 @@ Application adapter that collects route metadata during mount and serves documen
 const SwaggerAdapter: AdapterFactory<SwaggerAdapterOptions>
 
 interface SwaggerAdapterOptions extends SwaggerOptions {
-  docsPath?: string     // default: '/docs'
-  redocPath?: string    // default: '/redoc'
-  specPath?: string     // default: '/openapi.json'
-  adapters?: any[]      // peer adapters to discover (e.g. WsAdapter)
+  docsPath?: string // default: '/docs'
+  redocPath?: string // default: '/redoc'
+  specPath?: string // default: '/openapi.json'
+  adapters?: any[] // peer adapters to discover (e.g. WsAdapter)
   disableInProd?: boolean // skip mounting when NODE_ENV === 'production'
 }
 ```
@@ -74,7 +74,10 @@ Attach operation metadata (summary, description, operationId) to a route handler
 function ApiOperation(options: ApiOperationOptions): MethodDecorator
 
 interface ApiOperationOptions {
-  summary?: string; description?: string; operationId?: string; deprecated?: boolean
+  summary?: string
+  description?: string
+  operationId?: string
+  deprecated?: boolean
 }
 ```
 
@@ -86,7 +89,9 @@ Document a response status code. Can be stacked multiple times on the same metho
 function ApiResponse(options: ApiResponseOptions): MethodDecorator
 
 interface ApiResponseOptions {
-  status: number; description?: string; schema?: any
+  status: number
+  description?: string
+  schema?: any
 }
 ```
 
@@ -117,7 +122,11 @@ function ApiExclude(): ClassDecorator & MethodDecorator
 ## Types
 
 ```typescript
-interface OpenAPIInfo { title: string; version: string; description?: string }
+interface OpenAPIInfo {
+  title: string
+  version: string
+  description?: string
+}
 
 interface SwaggerOptions {
   info?: Partial<OpenAPIInfo>

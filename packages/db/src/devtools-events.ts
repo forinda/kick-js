@@ -37,4 +37,3 @@ declare module '@forinda/kickjs-devtools-kit/bus' {
 // Module augmentation requires at least one export so TS treats the
 // file as a module. An empty `export {}` keeps the export surface
 // closed.
-export {}

@@ -20,10 +20,7 @@ import { csrf } from '@forinda/kickjs'
 
 bootstrap({
   modules,
-  middleware: [
-    cookieParser(),
-    csrf(),
-  ],
+  middleware: [cookieParser(), csrf()],
 })
 ```
 
@@ -33,28 +30,28 @@ Pass an options object to customize behavior:
 
 ```ts
 csrf({
-  cookie: '_csrf',               // cookie name (default: '_csrf')
-  header: 'x-csrf-token',       // header name to validate (default: 'x-csrf-token')
-  methods: ['POST', 'PUT', 'PATCH', 'DELETE'],  // methods that require validation
+  cookie: '_csrf', // cookie name (default: '_csrf')
+  header: 'x-csrf-token', // header name to validate (default: 'x-csrf-token')
+  methods: ['POST', 'PUT', 'PATCH', 'DELETE'], // methods that require validation
   ignorePaths: ['/webhooks/stripe', '/webhooks/github'],
-  tokenLength: 32,               // bytes before hex encoding (default: 32 = 64 hex chars)
+  tokenLength: 32, // bytes before hex encoding (default: 32 = 64 hex chars)
   cookieOptions: {
-    httpOnly: true,              // default: true
-    sameSite: 'strict',          // default: 'strict'
-    secure: true,                // default: true in production
-    path: '/',                   // default: '/'
+    httpOnly: true, // default: true
+    sameSite: 'strict', // default: 'strict'
+    secure: true, // default: true in production
+    path: '/', // default: '/'
   },
 })
 ```
 
-| Option | Type | Default |
-| --- | --- | --- |
-| `cookie` | `string` | `'_csrf'` |
-| `header` | `string` | `'x-csrf-token'` |
-| `methods` | `string[]` | `['POST', 'PUT', 'PATCH', 'DELETE']` |
-| `ignorePaths` | `string[]` | `[]` |
-| `tokenLength` | `number` | `32` |
-| `cookieOptions` | object | See above |
+| Option          | Type       | Default                              |
+| --------------- | ---------- | ------------------------------------ |
+| `cookie`        | `string`   | `'_csrf'`                            |
+| `header`        | `string`   | `'x-csrf-token'`                     |
+| `methods`       | `string[]` | `['POST', 'PUT', 'PATCH', 'DELETE']` |
+| `ignorePaths`   | `string[]` | `[]`                                 |
+| `tokenLength`   | `number`   | `32`                                 |
+| `cookieOptions` | object     | See above                            |
 
 The `secure` cookie flag defaults to `true` when `NODE_ENV` is `'production'` and `false` otherwise.
 

@@ -44,7 +44,7 @@ export const METRIC_DEFS: Record<string, MetricDefinition> = {
   'heap.total': {
     short: 'V8-allocated memory the JS heap is currently sized to use.',
     detail:
-      'Larger than heap-used; V8 reserves headroom so allocations don\'t pause to grow the heap. ' +
+      "Larger than heap-used; V8 reserves headroom so allocations don't pause to grow the heap. " +
       'Bumps up in 1-8 MiB jumps as the heap expands.',
   },
   rss: {
@@ -82,11 +82,11 @@ export const METRIC_DEFS: Record<string, MetricDefinition> = {
   'gc.reclaim': {
     short: 'Average ratio of memory freed by each GC pass.',
     detail:
-      'Trending toward zero means GC can\'t free anything — strong leak indicator. ' +
+      "Trending toward zero means GC can't free anything — strong leak indicator. " +
       'Healthy apps reclaim 20-60% on each major GC.',
   },
   'heap.utilization': {
-    short: 'Fraction of V8\'s hard heap-size limit currently in use.',
+    short: "Fraction of V8's hard heap-size limit currently in use.",
     detail:
       'Approaching 1 means the process is close to OOM. ' +
       'Use --max-old-space-size to raise the limit if your workload is memory-bound.',

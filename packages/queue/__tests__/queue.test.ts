@@ -1,18 +1,8 @@
 import 'reflect-metadata'
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import {
-  Job,
-  Process,
-  QueueService,
-  QueueAdapter,
-  QUEUE_MANAGER,
-} from '@forinda/kickjs-queue'
+import { Job, Process, QueueService, QueueAdapter, QUEUE_MANAGER } from '@forinda/kickjs-queue'
 import { QUEUE_METADATA, jobRegistry } from '../src/types'
-import {
-  getClassMetaOrUndefined,
-  getClassMeta,
-  Container,
-} from '@forinda/kickjs'
+import { getClassMetaOrUndefined, getClassMeta, Container } from '@forinda/kickjs'
 
 // ─── Mock bullmq ────────────────────────────────────────────────────────────
 vi.mock('bullmq', () => {
@@ -227,9 +217,7 @@ describe('QueueService', () => {
     })
 
     it('throws when the queue does not exist', async () => {
-      await expect(service.add('missing', 'job', {})).rejects.toThrow(
-        'Queue "missing" not found',
-      )
+      await expect(service.add('missing', 'job', {})).rejects.toThrow('Queue "missing" not found')
     })
   })
 
@@ -299,7 +287,7 @@ describe('QueueAdapter', () => {
 
   it('discovers @Job classes and creates workers', () => {
     @Job('worker-queue')
-    class WorkerProcessor {
+    class _WorkerProcessor {
       @Process('do-work')
       async handle() {}
     }
@@ -318,7 +306,7 @@ describe('QueueAdapter', () => {
 
   it('skips @Job classes that have no @Process methods', () => {
     @Job('empty-queue')
-    class EmptyProcessor {}
+    class _EmptyProcessor {}
 
     const adapter = QueueAdapter({ redis: redisOpts })
     const container = Container.getInstance()
@@ -366,7 +354,7 @@ describe('QueueAdapter', () => {
   describe('shutdown', () => {
     it('closes workers and queues without throwing', async () => {
       @Job('shutdown-q')
-      class ShutdownProcessor {
+      class _ShutdownProcessor {
         @Process()
         async handle() {}
       }

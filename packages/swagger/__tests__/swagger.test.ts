@@ -14,7 +14,7 @@ import {
   redocHtml,
   type SchemaParser,
 } from '@forinda/kickjs-swagger'
-import { Controller, Get, Post, Put, Delete, Container, METADATA } from '@forinda/kickjs'
+import { Controller, Get, Post, Delete, Container } from '@forinda/kickjs'
 
 // ── Decorator Metadata Tests ──────────────────────────────────────────
 
@@ -28,16 +28,15 @@ describe('Swagger Decorators', () => {
     it('should store operation metadata on handler', () => {
       @Controller()
       class TestController {
-        @ApiOperation({ summary: 'Get items', description: 'Returns all items', operationId: 'getItems' })
+        @ApiOperation({
+          summary: 'Get items',
+          description: 'Returns all items',
+          operationId: 'getItems',
+        })
         @Get('/')
         getItems() {}
       }
 
-      const meta = Reflect.getMetadata(
-        Symbol.for('kick:swagger:operation'),
-        TestController,
-        'getItems',
-      )
       // Symbol.for won't match the local Symbol — use the builder to verify instead
       // We verify via buildOpenAPISpec below
       expect(TestController).toBeDefined()
@@ -719,7 +718,8 @@ describe('registerControllerForDocs — per-scope isolation', () => {
     // we just assert at least one operation has the marker prefix.
     const markerSeen = Object.values(spec.paths as Record<string, any>).some((pathItem: any) =>
       Object.values(pathItem ?? {}).some(
-        (op: any) => typeof op?.summary === 'string' && op.summary.includes('spec generation failed'),
+        (op: any) =>
+          typeof op?.summary === 'string' && op.summary.includes('spec generation failed'),
       ),
     )
     expect(markerSeen).toBe(true)
@@ -827,4 +827,3 @@ describe('registerControllerForDocs — per-scope isolation', () => {
     expect(buildOpenAPISpec(dropOpts).paths['/api/drop']).toBeUndefined()
   })
 })
-

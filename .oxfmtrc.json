@@ -1,0 +1,26 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "semi": false,
+  "singleQuote": true,
+  "trailingComma": "all",
+  "printWidth": 100,
+  "tabWidth": 2,
+  "endOfLine": "lf",
+  "insertFinalNewline": true,
+  "arrowParens": "always",
+  "sortPackageJson": false,
+  "ignorePatterns": [
+    "**/dist/",
+    "**/.kickjs/",
+    "**/.turbo/",
+    "**/.wireit/",
+    "**/coverage/",
+    "packages/devtools/public/",
+    "**/.vitepress/dist/",
+    "**/.vitepress/cache/",
+    "packages/vscode-extension/resources/icon.png",
+    "**/node_modules/",
+    "pnpm-lock.yaml",
+    "docs/versions/"
+  ]
+}

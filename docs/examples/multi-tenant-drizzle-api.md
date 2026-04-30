@@ -13,13 +13,13 @@ Database-per-tenant multi-tenancy with Drizzle ORM and type-safe `TenantConnecti
 
 ## Key Files
 
-| File | Purpose |
-|------|---------|
-| `src/db/schema.ts` | Shared schema, provider tenant registry |
-| `src/db/tenant-manager.ts` | `TenantConnectionManager<TDb>` + connection factory |
-| `src/db/tenant-db.service.ts` | `@Service()` wrapping tenant DB resolution |
-| `src/index.ts` | Bootstrap with `TenantAdapter` + `AuthAdapter` |
-| `src/modules/projects/` | Controller demonstrating tenant-scoped queries |
+| File                          | Purpose                                             |
+| ----------------------------- | --------------------------------------------------- |
+| `src/db/schema.ts`            | Shared schema, provider tenant registry             |
+| `src/db/tenant-manager.ts`    | `TenantConnectionManager<TDb>` + connection factory |
+| `src/db/tenant-db.service.ts` | `@Service()` wrapping tenant DB resolution          |
+| `src/index.ts`                | Bootstrap with `TenantAdapter` + `AuthAdapter`      |
+| `src/modules/projects/`       | Controller demonstrating tenant-scoped queries      |
 
 ## Running
 

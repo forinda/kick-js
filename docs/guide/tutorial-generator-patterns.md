@@ -33,9 +33,9 @@ health/
 The `index.ts` file is your module definition. It implements `AppModule`, registers nothing in the DI container, and returns a single route pointing at the controller:
 
 ```typescript
-import type { AppModule, ModuleRoutes, Container } from '@forinda/kickjs';
-import { buildRoutes } from '@forinda/kickjs';
-import { HealthController } from './health.controller';
+import type { AppModule, ModuleRoutes, Container } from '@forinda/kickjs'
+import { buildRoutes } from '@forinda/kickjs'
+import { HealthController } from './health.controller'
 
 export class HealthModule implements AppModule {
   register(_container: Container): void {
@@ -47,7 +47,7 @@ export class HealthModule implements AppModule {
       path: '/',
       router: buildRoutes(HealthController),
       controller: HealthController,
-    };
+    }
   }
 }
 ```
@@ -55,14 +55,14 @@ export class HealthModule implements AppModule {
 The controller is equally lean. No services, no repositories, no DTOs. Just decorated route handlers returning responses directly:
 
 ```typescript
-import { Controller, Get } from '@forinda/kickjs';
-import type { RequestContext } from '@forinda/kickjs';
+import { Controller, Get } from '@forinda/kickjs'
+import type { RequestContext } from '@forinda/kickjs'
 
 @Controller()
 export class HealthController {
   @Get('/health')
   async check(ctx: RequestContext) {
-    ctx.json({ status: 'ok', timestamp: new Date().toISOString() });
+    ctx.json({ status: 'ok', timestamp: new Date().toISOString() })
   }
 }
 ```
@@ -99,24 +99,29 @@ The service wraps the repository, the controller delegates to the service, and D
 The generated repository ships with an in-memory implementation by default:
 
 ```typescript
-import type { Cat, CreateCatDto, UpdateCatDto } from './cats.types';
+import type { Cat, CreateCatDto, UpdateCatDto } from './cats.types'
 
 export class CatsRepository {
-  private items: Cat[] = [];
-  private nextId = 1;
+  private items: Cat[] = []
+  private nextId = 1
 
   async findAll(): Promise<Cat[]> {
-    return [...this.items];
+    return [...this.items]
   }
 
   async findById(id: string): Promise<Cat | null> {
-    return this.items.find(item => item.id === id) ?? null;
+    return this.items.find((item) => item.id === id) ?? null
   }
 
   async create(dto: CreateCatDto): Promise<Cat> {
-    const item: Cat = { id: String(this.nextId++), ...dto, createdAt: new Date(), updatedAt: new Date() };
-    this.items.push(item);
-    return item;
+    const item: Cat = {
+      id: String(this.nextId++),
+      ...dto,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }
+    this.items.push(item)
+    return item
   }
 
   // ... update, delete methods
@@ -128,13 +133,13 @@ This is intentional. You get a working module the instant the generator finishes
 The `cats.config.ts` file contains a `QueryFieldConfig` for pagination:
 
 ```typescript
-import type { ApiQueryParamsConfig } from '@forinda/kickjs';
+import type { ApiQueryParamsConfig } from '@forinda/kickjs'
 
 export const CATS_QUERY_CONFIG: ApiQueryParamsConfig = {
   filterable: ['breed', 'color'],
   sortable: ['name', 'createdAt'],
   searchable: ['name'],
-};
+}
 ```
 
 This integrates directly with `ctx.paginate()` and `@ApiQueryParams()` for Swagger documentation. In Vibed, we centralized these configs in `shared/constants/query-configs.ts`, but the generator gives each module its own config file so it works out of the box.
@@ -142,7 +147,7 @@ This integrates directly with `ctx.paginate()` and `@ApiQueryParams()` for Swagg
 The `_glob.ts` file is the auto-wiring mechanism:
 
 ```typescript
-import.meta.glob(['./*.ts', '!./_glob.ts', '!./*.test.ts'], { eager: true });
+import.meta.glob(['./*.ts', '!./_glob.ts', '!./*.test.ts'], { eager: true })
 ```
 
 I will explain why this matters in a dedicated section below.
@@ -203,19 +208,16 @@ export class Cat {
   ) {}
 
   static create(props: { name: string; breed: string; age: number }): Cat {
-    return new Cat(
-      CatId.generate(),
-      props.name,
-      props.breed,
-      props.age,
-      new Date(),
-      new Date(),
-    );
+    return new Cat(CatId.generate(), props.name, props.breed, props.age, new Date(), new Date())
   }
 
   static reconstitute(props: {
-    id: string; name: string; breed: string; age: number;
-    createdAt: Date; updatedAt: Date;
+    id: string
+    name: string
+    breed: string
+    age: number
+    createdAt: Date
+    updatedAt: Date
   }): Cat {
     return new Cat(
       CatId.from(props.id),
@@ -224,7 +226,7 @@ export class Cat {
       props.age,
       props.createdAt,
       props.updatedAt,
-    );
+    )
   }
 }
 ```
@@ -238,19 +240,19 @@ export class CatId {
   private constructor(private readonly value: string) {}
 
   static generate(): CatId {
-    return new CatId(crypto.randomUUID());
+    return new CatId(crypto.randomUUID())
   }
 
   static from(value: string): CatId {
-    return new CatId(value);
+    return new CatId(value)
   }
 
   toString(): string {
-    return this.value;
+    return this.value
   }
 
   equals(other: CatId): boolean {
-    return this.value === other.value;
+    return this.value === other.value
   }
 }
 ```
@@ -262,13 +264,11 @@ The repository interface lives in `domain/repositories/`, and the implementation
 ```typescript
 @Service()
 export class CreateCatUseCase {
-  constructor(
-    @Inject(TOKENS.CAT_REPOSITORY) private catRepo: ICatRepository,
-  ) {}
+  constructor(@Inject(TOKENS.CAT_REPOSITORY) private catRepo: ICatRepository) {}
 
   async execute(dto: CreateCatDto): Promise<Cat> {
-    const cat = Cat.create(dto);
-    return this.catRepo.save(cat);
+    const cat = Cat.create(dto)
+    return this.catRepo.save(cat)
   }
 }
 ```
@@ -278,13 +278,16 @@ Five use cases are generated: create, get, list, update, delete. Each one is a s
 The `_glob.ts` in the DDD pattern casts a wider net:
 
 ```typescript
-import.meta.glob([
-  './presentation/**/*.ts',
-  './application/**/*.ts',
-  './domain/services/**/*.ts',
-  './infrastructure/**/*.ts',
-  '!./**/*.test.ts',
-], { eager: true });
+import.meta.glob(
+  [
+    './presentation/**/*.ts',
+    './application/**/*.ts',
+    './domain/services/**/*.ts',
+    './infrastructure/**/*.ts',
+    '!./**/*.test.ts',
+  ],
+  { eager: true },
+)
 ```
 
 It reaches into every layer to ensure all decorated classes are loaded and registered in the DI container.
@@ -329,26 +332,26 @@ The core idea here is that reads and writes are different operations with differ
 The event emitter is strongly typed with a domain event map:
 
 ```typescript
-import { EventEmitter } from 'events';
-import type { Cat } from './cats.types';
+import { EventEmitter } from 'events'
+import type { Cat } from './cats.types'
 
 export interface CatEventMap {
-  'cat.created': [cat: Cat];
-  'cat.updated': [cat: Cat];
-  'cat.deleted': [id: string];
+  'cat.created': [cat: Cat]
+  'cat.updated': [cat: Cat]
+  'cat.deleted': [id: string]
 }
 
 class CatEventEmitter extends EventEmitter {
   emit<K extends keyof CatEventMap>(event: K, ...args: CatEventMap[K]): boolean {
-    return super.emit(event, ...args);
+    return super.emit(event, ...args)
   }
 
   on<K extends keyof CatEventMap>(event: K, listener: (...args: CatEventMap[K]) => void): this {
-    return super.on(event, listener as any);
+    return super.on(event, listener as any)
   }
 }
 
-export const catEvents = new CatEventEmitter();
+export const catEvents = new CatEventEmitter()
 ```
 
 This is not just a generic `EventEmitter`. The type parameter on `CatEventMap` means TypeScript enforces that you emit the right payload for each event name. If `cat.created` expects a `Cat` object, you cannot accidentally emit a string.
@@ -361,9 +364,9 @@ export class CreateCatCommand {
   constructor(@Inject(TOKENS.CAT_REPOSITORY) private repo: CatsRepository) {}
 
   async execute(dto: CreateCatDto): Promise<Cat> {
-    const cat = await this.repo.create(dto);
-    catEvents.emit('cat.created', cat);
-    return cat;
+    const cat = await this.repo.create(dto)
+    catEvents.emit('cat.created', cat)
+    return cat
   }
 }
 ```
@@ -371,19 +374,19 @@ export class CreateCatCommand {
 Event handlers pick up those events for side effects:
 
 ```typescript
-import { catEvents } from '../cats.event-emitter';
+import { catEvents } from '../cats.event-emitter'
 
 // WebSocket broadcast
 catEvents.on('cat.created', (cat) => {
   // Broadcast via WS adapter
-  console.log(`[WS] Broadcasting cat.created: ${cat.id}`);
-});
+  console.log(`[WS] Broadcasting cat.created: ${cat.id}`)
+})
 
 // Queue dispatch
 catEvents.on('cat.created', (cat) => {
   // Dispatch to BullMQ for async processing
-  console.log(`[Queue] Dispatching cat.created job: ${cat.id}`);
-});
+  console.log(`[Queue] Dispatching cat.created job: ${cat.id}`)
+})
 ```
 
 The handlers are stubs, but they show you where to plug in WebSocket broadcasts, queue dispatches, audit trail logging, or cache invalidation. In Vibed, we use this pattern for features like real-time notifications and activity feeds, where creating a task should trigger events that multiple subsystems consume.
@@ -391,12 +394,10 @@ The handlers are stubs, but they show you where to plug in WebSocket broadcasts,
 The `_glob.ts` for CQRS covers all the directories:
 
 ```typescript
-import.meta.glob([
-  './commands/**/*.ts',
-  './queries/**/*.ts',
-  './events/**/*.ts',
-  '!./**/*.test.ts',
-], { eager: true });
+import.meta.glob(
+  ['./commands/**/*.ts', './queries/**/*.ts', './events/**/*.ts', '!./**/*.test.ts'],
+  { eager: true },
+)
 ```
 
 **When to use it:** Event-driven features, real-time applications, systems that need audit trails, anything where the write path and read path have fundamentally different requirements.
@@ -406,10 +407,10 @@ import.meta.glob([
 When you run `kick g module`, the generator does not just create files in a new directory. It also updates `src/modules/index.ts` automatically. In Vibed, that file looks like this:
 
 ```typescript
-import type { AppModuleClass } from '@forinda/kickjs';
-import { AuthModule } from './auth/auth.module';
-import { UsersModule } from './users/users.module';
-import { WorkspacesModule } from './workspaces/workspaces.module';
+import type { AppModuleClass } from '@forinda/kickjs'
+import { AuthModule } from './auth/auth.module'
+import { UsersModule } from './users/users.module'
+import { WorkspacesModule } from './workspaces/workspaces.module'
 // ... other imports
 
 export const modules: AppModuleClass[] = [
@@ -417,7 +418,7 @@ export const modules: AppModuleClass[] = [
   UsersModule,
   WorkspacesModule,
   // ... other modules
-];
+]
 ```
 
 The generator appends your new module's import and adds it to the array. No manual wiring. This matters more than it sounds, because forgetting to register a module is one of those bugs that gives you no error message -- your routes simply do not exist, and you spend twenty minutes wondering why Postman returns 404.
@@ -427,7 +428,7 @@ The generator appends your new module's import and adds it to the array. No manu
 Every generated pattern except `minimal` includes a `_glob.ts` file (or inlines the glob in `index.ts`). This file uses Vite's `import.meta.glob` with `{ eager: true }`:
 
 ```typescript
-import.meta.glob(['./**/*.ts', '!./**/*.test.ts'], { eager: true });
+import.meta.glob(['./**/*.ts', '!./**/*.test.ts'], { eager: true })
 ```
 
 Why does this exist? In KickJS, decorated classes (`@Service()`, `@Controller()`, etc.) register themselves in the DI container as a side effect of being imported. If a file is never imported, its decorators never run, and the container does not know it exists.
@@ -447,12 +448,12 @@ This is why the pattern survives hot module replacement. The glob re-evaluates o
 
 After months of building with all four patterns, here is how I decide:
 
-| Scenario | Pattern | Why |
-|----------|---------|-----|
-| Prototype or spike | `minimal` | Two files, zero overhead, prove the concept first |
-| Standard CRUD resource | `rest` | Flat structure, fast to navigate, covers 80% of modules |
-| Complex business domain | `ddd` | Layer separation protects invariants, scales with team size |
-| Event-driven feature | `cqrs` | Command/query split, typed events, natural fit for real-time |
+| Scenario                | Pattern   | Why                                                          |
+| ----------------------- | --------- | ------------------------------------------------------------ |
+| Prototype or spike      | `minimal` | Two files, zero overhead, prove the concept first            |
+| Standard CRUD resource  | `rest`    | Flat structure, fast to navigate, covers 80% of modules      |
+| Complex business domain | `ddd`     | Layer separation protects invariants, scales with team size  |
+| Event-driven feature    | `cqrs`    | Command/query split, typed events, natural fit for real-time |
 
 The patterns are not mutually exclusive within a project. In Vibed, we have modules at different complexity levels. The stats module is essentially minimal. The workspaces module follows DDD conventions. If we were to add a live collaboration feature, CQRS would be the natural choice. KickJS does not enforce uniformity -- you pick the right tool for each module.
 

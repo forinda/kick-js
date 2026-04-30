@@ -4,13 +4,13 @@ A full-featured project management API built with [KickJS](https://forinda.githu
 
 ## What's Different from task-prisma-api (v6)?
 
-| Aspect | Prisma 6 (task-prisma-api) | Prisma 7 (this example) |
-|--------|---------------------------|------------------------|
-| Generator | `prisma-client-js` | `prisma-client` with `output` |
-| Client import | `from '@prisma/client'` | `from '@/generated/prisma'` |
-| Connection | `new PrismaClient()` | `new PrismaClient({ adapter: new PrismaPg(pool) })` |
-| Logging | `$on('query', ...)` | Auto — adapter uses `$extends` |
-| `@prisma/client` dep | Required | Not needed (client generated locally) |
+| Aspect               | Prisma 6 (task-prisma-api) | Prisma 7 (this example)                             |
+| -------------------- | -------------------------- | --------------------------------------------------- |
+| Generator            | `prisma-client-js`         | `prisma-client` with `output`                       |
+| Client import        | `from '@prisma/client'`    | `from '@/generated/prisma'`                         |
+| Connection           | `new PrismaClient()`       | `new PrismaClient({ adapter: new PrismaPg(pool) })` |
+| Logging              | `$on('query', ...)`        | Auto — adapter uses `$extends`                      |
+| `@prisma/client` dep | Required                   | Not needed (client generated locally)               |
 
 ## Getting Started
 

@@ -46,10 +46,7 @@ describe('kickDbTypegen', () => {
 
   it('resolves a barrel folder layout (src/db/schema/index.ts)', async () => {
     await mkdir(path.join(dir, 'src/db/schema'), { recursive: true })
-    await writeFile(
-      path.join(dir, 'src/db/schema/index.ts'),
-      `export * from './users'\n`,
-    )
+    await writeFile(path.join(dir, 'src/db/schema/index.ts'), `export * from './users'\n`)
     await writeFile(path.join(dir, 'src/db/schema/users.ts'), 'export const users = {}')
 
     const r = await runTypegen({

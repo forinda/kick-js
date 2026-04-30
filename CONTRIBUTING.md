@@ -25,6 +25,7 @@ We are committed to providing a welcoming and inclusive environment for everyone
 ### Our Standards
 
 **Positive behavior includes:**
+
 - Using welcoming and inclusive language
 - Being respectful of differing viewpoints and experiences
 - Gracefully accepting constructive criticism
@@ -32,6 +33,7 @@ We are committed to providing a welcoming and inclusive environment for everyone
 - Showing empathy towards other community members
 
 **Unacceptable behavior includes:**
+
 - The use of sexualized language or imagery
 - Trolling, insulting/derogatory comments, and personal or political attacks
 - Public or private harassment
@@ -80,16 +82,19 @@ Before contributing, ensure you have:
 ### Environment Setup
 
 1. **Install dependencies**:
+
    ```bash
    pnpm install
    ```
 
 2. **Build the project**:
+
    ```bash
    pnpm build
    ```
 
 3. **Run development server**:
+
    ```bash
    pnpm dev
    ```
@@ -181,19 +186,20 @@ We follow a **feature branch workflow**:
 
 ### Release Channels
 
-| Target | Command | npm tag | Example |
-|--------|---------|---------|---------|
-| `main` | `pnpm release:patch` | `latest` | `1.4.1` |
-| `main` | `pnpm release:minor` | `latest` | `1.5.0` |
-| `dev` | `pnpm release:alpha` | `alpha` | `1.5.0-alpha.0` |
-| `dev` | `pnpm release:beta` | `beta` | `1.5.0-beta.0` |
-| `dev` | `node scripts/release.js prerelease --tag rc` | `rc` | `1.5.0-rc.0` |
+| Target | Command                                       | npm tag  | Example         |
+| ------ | --------------------------------------------- | -------- | --------------- |
+| `main` | `pnpm release:patch`                          | `latest` | `1.4.1`         |
+| `main` | `pnpm release:minor`                          | `latest` | `1.5.0`         |
+| `dev`  | `pnpm release:alpha`                          | `alpha`  | `1.5.0-alpha.0` |
+| `dev`  | `pnpm release:beta`                           | `beta`   | `1.5.0-beta.0`  |
+| `dev`  | `node scripts/release.js prerelease --tag rc` | `rc`     | `1.5.0-rc.0`    |
 
 When `dev` is stable, create a PR to `main` and do a full release.
 
 ### Workflow Steps
 
 **Stable work (target: main):**
+
 ```bash
 git checkout main && git pull origin main
 git checkout -b feat/amazing-feature
@@ -202,6 +208,7 @@ gh pr create --base main
 ```
 
 **Experimental work (target: dev):**
+
 ```bash
 git checkout dev && git pull origin dev
 git checkout -b feat/experimental-feature
@@ -210,6 +217,7 @@ gh pr create --base dev
 ```
 
 **Promote dev to main:**
+
 ```bash
 gh pr create --base main --head dev --title "Release: merge dev into main"
 ```
@@ -220,6 +228,7 @@ gh pr create --base main --head dev --title "Release: merge dev into main"
    - Update documentation as needed
 
 3. **Test your changes**:
+
    ```bash
    pnpm build              # Build framework packages
    pnpm test               # Run package tests
@@ -232,6 +241,7 @@ gh pr create --base main --head dev --title "Release: merge dev into main"
    :::
 
 4. **Commit your changes**:
+
    ```bash
    git add .
    git commit -m "feat: add amazing new feature"
@@ -247,29 +257,31 @@ gh pr create --base main --head dev --title "Release: merge dev into main"
 ### TypeScript Guidelines
 
 1. **Use strict TypeScript**:
+
    ```typescript
    // ✅ Good
    interface User {
-     id: string;
-     name: string;
-     email: string;
+     id: string
+     name: string
+     email: string
    }
-   
+
    // ❌ Avoid
    interface User {
-     id: any;
-     name: any;
-     email: any;
+     id: any
+     name: any
+     email: any
    }
    ```
 
 2. **Prefer explicit types**:
+
    ```typescript
    // ✅ Good
    function createUser(data: CreateUserDto): Promise<User> {
      // implementation
    }
-   
+
    // ❌ Avoid
    function createUser(data: any): any {
      // implementation
@@ -277,31 +289,34 @@ gh pr create --base main --head dev --title "Release: merge dev into main"
    ```
 
 3. **Use meaningful names**:
+
    ```typescript
    // ✅ Good
-   const userRepository = new UserRepository();
-   const isEmailValid = validateEmail(email);
-   
+   const userRepository = new UserRepository()
+   const isEmailValid = validateEmail(email)
+
    // ❌ Avoid
-   const repo = new UserRepository();
-   const valid = validateEmail(email);
+   const repo = new UserRepository()
+   const valid = validateEmail(email)
    ```
 
 ### Decorator Guidelines
 
 1. **Follow naming conventions**:
+
    ```typescript
    // ✅ Framework decorators
    @KickController("/users")
    @KickMiddleware({ name: "Auth" })
    @KickInjectable()
-   
+
    // ✅ Route decorators
    @KickGet("/")
    @KickPost("/")
    ```
 
 2. **Provide comprehensive options**:
+
    ```typescript
    // ✅ Good - comprehensive options
    @KickMiddleware({
@@ -310,7 +325,7 @@ gh pr create --base main --head dev --title "Release: merge dev into main"
      global: false,
      tags: ["auth", "security"]
    })
-   
+
    // ❌ Avoid - minimal options
    @KickMiddleware()
    ```
@@ -324,12 +339,14 @@ gh pr create --base main --head dev --title "Release: merge dev into main"
    - Semicolons at statement ends
 
 2. **Follow ESLint rules**:
+
    ```bash
    pnpm lint        # Check for issues
    pnpm lint:fix    # Auto-fix issues
    ```
 
 3. **Use meaningful comments**:
+
    ```typescript
    /**
     * Creates a new user with the provided data
@@ -341,7 +358,7 @@ gh pr create --base main --head dev --title "Release: merge dev into main"
      if (!this.isValidEmail(userData.email)) {
        throw new ValidationError('Invalid email format');
      }
-     
+
      return this.userRepository.create(userData);
    }
    ```
@@ -363,42 +380,44 @@ tests/
 ### Writing Tests
 
 1. **Unit Tests** - Test individual functions/classes:
+
    ```typescript
-   import { describe, it, expect } from 'vitest';
-   import { UserService } from '../src/services/user.service';
-   
+   import { describe, it, expect } from 'vitest'
+   import { UserService } from '../src/services/user.service'
+
    describe('UserService', () => {
      it('should create a user successfully', async () => {
-       const userService = new UserService();
-       const userData = { name: 'John', email: 'john@example.com' };
-       
-       const user = await userService.create(userData);
-       
-       expect(user).toBeDefined();
-       expect(user.name).toBe('John');
-       expect(user.email).toBe('john@example.com');
-     });
-   });
+       const userService = new UserService()
+       const userData = { name: 'John', email: 'john@example.com' }
+
+       const user = await userService.create(userData)
+
+       expect(user).toBeDefined()
+       expect(user.name).toBe('John')
+       expect(user.email).toBe('john@example.com')
+     })
+   })
    ```
 
 2. **Integration Tests** - Test feature combinations:
+
    ```typescript
-   import { describe, it, expect } from 'vitest';
-   import { createKickApp } from '../src';
-   import { TestModule } from './fixtures/test.module';
-   
+   import { describe, it, expect } from 'vitest'
+   import { createKickApp } from '../src'
+   import { TestModule } from './fixtures/test.module'
+
    describe('KickApp Integration', () => {
      it('should register controllers and middlewares', () => {
        const server = createKickApp({
          name: 'TestApp',
-         modules: [TestModule]
-       });
-       
-       const stats = server.getStats();
-       expect(stats.controllersCount).toBeGreaterThan(0);
-       expect(stats.middlewaresCount).toBeGreaterThan(0);
-     });
-   });
+         modules: [TestModule],
+       })
+
+       const stats = server.getStats()
+       expect(stats.controllersCount).toBeGreaterThan(0)
+       expect(stats.middlewaresCount).toBeGreaterThan(0)
+     })
+   })
    ```
 
 3. **Test Naming Conventions**:
@@ -418,7 +437,8 @@ tests/
 ### Code Documentation
 
 1. **JSDoc Comments**:
-   ```typescript
+
+   ````typescript
    /**
     * Decorator to define a controller class with automatic route registration
     * @param path - Base path for all routes in this controller
@@ -434,7 +454,7 @@ tests/
    export function KickController(path: string): ClassDecorator {
      // implementation
    }
-   ```
+   ````
 
 2. **README Updates**:
    - Update examples when adding new features
@@ -442,16 +462,17 @@ tests/
    - Include migration guides for breaking changes
 
 3. **Inline Comments**:
+
    ```typescript
    // Extract middlewares from DI container after module loading
-   this.extractMiddlewaresFromContainer();
-   
+   this.extractMiddlewaresFromContainer()
+
    // Sort middleware by priority (lower numbers execute first)
    const sortedMiddleware = middleware.sort((a, b) => {
-     const priorityA = getMiddlewarePriority(a);
-     const priorityB = getMiddlewarePriority(b);
-     return priorityA - priorityB;
-   });
+     const priorityA = getMiddlewarePriority(a)
+     const priorityB = getMiddlewarePriority(b)
+     return priorityA - priorityB
+   })
    ```
 
 ## 🔀 Pull Request Process
@@ -459,6 +480,7 @@ tests/
 ### Before Submitting
 
 1. **Ensure your branch is up to date**:
+
    ```bash
    git checkout dev
    git pull upstream dev
@@ -467,6 +489,7 @@ tests/
    ```
 
 2. **Run all checks**:
+
    ```bash
    pnpm test
    pnpm lint
@@ -486,25 +509,30 @@ Use this template for your pull requests:
 
 ```markdown
 ## Description
+
 Brief description of changes and motivation.
 
 ## Type of Change
+
 - [ ] Bug fix (non-breaking change fixing an issue)
 - [ ] New feature (non-breaking change adding functionality)
 - [ ] Breaking change (fix or feature causing existing functionality to change)
 - [ ] Documentation update
 
 ## Testing
+
 - [ ] Tests pass locally
 - [ ] Added tests for new functionality
 - [ ] Updated existing tests if needed
 
 ## Documentation
+
 - [ ] Updated README if needed
 - [ ] Updated inline documentation
 - [ ] Added JSDoc comments for new functions
 
 ## Checklist
+
 - [ ] Code follows project style guidelines
 - [ ] Self-review of code completed
 - [ ] Comments added for complex logic
@@ -529,11 +557,12 @@ Brief description of changes and motivation.
 
 ### Bug Report Template
 
-```markdown
+````markdown
 **Bug Description**
 Clear description of the bug.
 
 **Steps to Reproduce**
+
 1. Step one
 2. Step two
 3. See error
@@ -545,6 +574,7 @@ What you expected to happen.
 What actually happened.
 
 **Environment**
+
 - OS: [e.g., macOS 12.0]
 - Node.js: [e.g., 18.17.0]
 - KickJS: [e.g., 1.0.0]
@@ -554,9 +584,11 @@ What actually happened.
 Any other relevant information.
 
 **Code Example**
+
 ```typescript
 // Minimal reproduction code
 ```
+````
 
 ### Issue Labels
 
@@ -582,7 +614,7 @@ We use labels to categorize issues:
 
 ### Feature Request Template
 
-```markdown
+````markdown
 **Feature Description**
 Clear description of the proposed feature.
 
@@ -602,9 +634,11 @@ Other approaches you've considered.
 Any other relevant information.
 
 **API Design** (if applicable)
+
 ```typescript
 // Proposed API usage
 ```
+````
 
 ## 🚀 Release Process
 
@@ -637,6 +671,7 @@ We use [Conventional Commits](https://conventionalcommits.org/):
 ```
 
 **Types:**
+
 - `feat`: New features
 - `fix`: Bug fixes
 - `docs`: Documentation changes
@@ -647,6 +682,7 @@ We use [Conventional Commits](https://conventionalcommits.org/):
 - `ci`: CI/CD changes
 
 **Examples:**
+
 ```bash
 feat(decorators): add @KickMiddleware decorator with priority support
 fix(routing): resolve route prefix concatenation issue
@@ -675,7 +711,7 @@ test(middleware): add integration tests for middleware system
 ### Contributing to Community
 
 - **Answer questions** in GitHub Discussions
-- **Help review PRs** from other contributors  
+- **Help review PRs** from other contributors
 - **Improve documentation** and examples
 - **Share your KickJS projects** with the community
 - **Write blog posts** or tutorials about KickJS
@@ -697,4 +733,4 @@ Thank you for contributing to KickJS! Your efforts help make this framework bett
 
 ---
 
-*For questions about this contribution guide, please [open an issue](https://github.com/forinda/kick-js/issues) or reach out to the maintainers.*
+_For questions about this contribution guide, please [open an issue](https://github.com/forinda/kick-js/issues) or reach out to the maintainers._

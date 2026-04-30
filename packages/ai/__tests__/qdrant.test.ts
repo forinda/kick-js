@@ -58,21 +58,19 @@ afterEach(() => {
 
 describe('QdrantVectorStore — construction', () => {
   it('requires a collection name', () => {
-    expect(
-      () => new QdrantVectorStore({ collection: '', dimensions: 4 }),
-    ).toThrow(/collection is required/)
+    expect(() => new QdrantVectorStore({ collection: '', dimensions: 4 })).toThrow(
+      /collection is required/,
+    )
   })
 
   it('requires positive integer dimensions', () => {
-    expect(
-      () => new QdrantVectorStore({ collection: 'docs', dimensions: 0 }),
-    ).toThrow(/dimensions/)
-    expect(
-      () => new QdrantVectorStore({ collection: 'docs', dimensions: -1 }),
-    ).toThrow(/dimensions/)
-    expect(
-      () => new QdrantVectorStore({ collection: 'docs', dimensions: 1.5 }),
-    ).toThrow(/dimensions/)
+    expect(() => new QdrantVectorStore({ collection: 'docs', dimensions: 0 })).toThrow(/dimensions/)
+    expect(() => new QdrantVectorStore({ collection: 'docs', dimensions: -1 })).toThrow(
+      /dimensions/,
+    )
+    expect(() => new QdrantVectorStore({ collection: 'docs', dimensions: 1.5 })).toThrow(
+      /dimensions/,
+    )
   })
 
   it('exposes name as "qdrant" by default', () => {
@@ -191,9 +189,9 @@ describe('QdrantVectorStore — lazy setup', () => {
     const store = new QdrantVectorStore({ collection: 'docs', dimensions: 3 })
     fetchSpy.mockResolvedValueOnce(new Response('boom', { status: 500 }))
 
-    await expect(
-      store.upsert({ id: '1', content: 'a', vector: [0.1, 0.2, 0.3] }),
-    ).rejects.toThrow(/500/)
+    await expect(store.upsert({ id: '1', content: 'a', vector: [0.1, 0.2, 0.3] })).rejects.toThrow(
+      /500/,
+    )
 
     // Next call should re-trigger setup (cache cleared on failure).
     mockAlwaysJson({ result: true })
@@ -213,9 +211,9 @@ describe('QdrantVectorStore.upsert()', () => {
       dimensions: 3,
       skipSetup: true,
     })
-    await expect(
-      store.upsert({ id: '1', content: 'a', vector: [0.1, 0.2] }),
-    ).rejects.toThrow(/dimensions/)
+    await expect(store.upsert({ id: '1', content: 'a', vector: [0.1, 0.2] })).rejects.toThrow(
+      /dimensions/,
+    )
   })
 
   it('rejects documents without an id', async () => {
@@ -224,9 +222,9 @@ describe('QdrantVectorStore.upsert()', () => {
       dimensions: 3,
       skipSetup: true,
     })
-    await expect(
-      store.upsert({ id: '', content: 'a', vector: [0.1, 0.2, 0.3] }),
-    ).rejects.toThrow(/id is required/)
+    await expect(store.upsert({ id: '', content: 'a', vector: [0.1, 0.2, 0.3] })).rejects.toThrow(
+      /id is required/,
+    )
   })
 
   it('sends the expected points payload with nested payload.metadata', async () => {

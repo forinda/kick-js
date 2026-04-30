@@ -47,7 +47,7 @@ describe('extractSnapshot()', () => {
   })
 
   it('skips relations decls (not DDL)', () => {
-    expect(Object.keys(snap.tables).sort()).toEqual(['posts', 'users'])
+    expect(Object.keys(snap.tables).toSorted()).toEqual(['posts', 'users'])
   })
 
   it('captures users.email as nullable=false varchar(255)', () => {

@@ -28,13 +28,13 @@ bootstrap({
 
 ## Options
 
-| Option | Default | Description |
-|---|---|---|
-| `clientDir` | `'dist/client'` | Directory with the built SPA files |
-| `apiPrefix` | `'/api'` | URL prefix for API routes (string or array) |
-| `exclude` | `[]` | Additional paths to exclude from fallback |
-| `cacheControl` | `'public, max-age=31536000, immutable'` | Cache header for static assets |
-| `indexCacheControl` | `'no-cache'` | Cache header for index.html |
+| Option              | Default                                 | Description                                 |
+| ------------------- | --------------------------------------- | ------------------------------------------- |
+| `clientDir`         | `'dist/client'`                         | Directory with the built SPA files          |
+| `apiPrefix`         | `'/api'`                                | URL prefix for API routes (string or array) |
+| `exclude`           | `[]`                                    | Additional paths to exclude from fallback   |
+| `cacheControl`      | `'public, max-age=31536000, immutable'` | Cache header for static assets              |
+| `indexCacheControl` | `'no-cache'`                            | Cache header for index.html                 |
 
 ## Project Structure
 

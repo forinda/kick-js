@@ -18,11 +18,7 @@ import { kickjsVitePlugin, envWatchPlugin } from '@forinda/kickjs-vite'
 
 export default defineConfig({
   oxc: false,
-  plugins: [
-    swc.vite(),
-    kickjsVitePlugin({ entry: 'src/index.ts' }),
-    envWatchPlugin(),
-  ],
+  plugins: [swc.vite(), kickjsVitePlugin({ entry: 'src/index.ts' }), envWatchPlugin()],
   ssr: { external: ['pino', 'pino-pretty'] },
   build: { target: 'node20', ssr: true, outDir: 'dist' },
 })

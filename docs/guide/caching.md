@@ -151,15 +151,15 @@ For this to work across methods, both decorators must use the same `key` prefix,
 
 ### `@Cacheable(ttl?, options?)`
 
-| Param | Type | Default | Description |
-|---|---|---|---|
-| `ttl` | `number` | `60` | Time-to-live in **seconds** |
-| `options.key` | `string` | method name | Cache key prefix |
+| Param         | Type     | Default     | Description                 |
+| ------------- | -------- | ----------- | --------------------------- |
+| `ttl`         | `number` | `60`        | Time-to-live in **seconds** |
+| `options.key` | `string` | method name | Cache key prefix            |
 
 ### `@CacheEvict(key)`
 
-| Param | Type | Description |
-|---|---|---|
+| Param | Type     | Description               |
+| ----- | -------- | ------------------------- |
 | `key` | `string` | Cache key prefix to evict |
 
 ### `setCacheProvider(provider)`

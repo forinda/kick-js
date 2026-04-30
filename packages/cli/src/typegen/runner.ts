@@ -117,8 +117,8 @@ export async function runTypegen(opts: RunTypegenOptions): Promise<TypegenPlugin
  * joining so `['.ts', '.tsx']` and `['.tsx', '.ts']` collide.
  */
 function stableScanKey(opts: ScanOptions): string {
-  const extensions = (opts.extensions ?? []).slice().sort().join(',')
-  const exclude = (opts.exclude ?? []).slice().sort().join(',')
+  const extensions = (opts.extensions ?? []).slice().toSorted().join(',')
+  const exclude = (opts.exclude ?? []).slice().toSorted().join(',')
   return [
     `root=${opts.root}`,
     `cwd=${opts.cwd}`,

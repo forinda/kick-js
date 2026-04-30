@@ -61,7 +61,7 @@ export interface AuthStrategyFactory<TOptions, TExtra = unknown> {
 const mergeOptions = <TOptions>(
   defaults: Partial<TOptions> | undefined,
   overrides: Partial<TOptions> | undefined,
-): TOptions => ({ ...(defaults ?? {}), ...(overrides ?? {}) }) as TOptions
+): TOptions => ({ ...defaults, ...overrides }) as TOptions
 
 const composeName = (base: string, scope: string): string => `${base}:${scope}`
 

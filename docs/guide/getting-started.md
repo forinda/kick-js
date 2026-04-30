@@ -14,6 +14,7 @@ pnpm install
 ```
 
 This scaffolds a project with the **default layout** — every path below is a convention configurable through `kick.config.ts`, not a framework requirement:
+
 - `src/index.ts` — bootstrap entry with Vite HMR
 - `src/modules/` — feature modules directory (configurable via `modules.dir`)
 - `vite.config.ts` — Vite config for HMR dev server
@@ -23,6 +24,7 @@ This scaffolds a project with the **default layout** — every path below is a c
 - `kickjs-skills.md` — task-oriented skill index for AI agents (`add-module`, `bootstrap-export`, `deny-list`, …)
 
 After a framework upgrade, refresh all three with `kick g agents -f` (see [Generators → kick g agents](./generators.md#kick-g-agents)).
+
 - `README.md` — project documentation
 
 ## Start Development
@@ -155,7 +157,7 @@ This is enabled by default when `NODE_ENV !== 'production'`. Override with `logR
 ```ts
 export const app = await bootstrap({
   modules,
-  logRoutesTable: true,   // always log (even in production)
+  logRoutesTable: true, // always log (even in production)
   // logRoutesTable: false, // never log
 })
 ```

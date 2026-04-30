@@ -20,7 +20,7 @@ export function invertChanges(forward: ChangeSet): ChangeSet {
   for (const change of forward) {
     reversed.push(invert(change))
   }
-  return reversed.reverse()
+  return reversed.toReversed()
 }
 
 function invert(change: Change): Change {

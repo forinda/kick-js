@@ -67,18 +67,18 @@ The `ctx` argument handed to `files()` carries pre-computed name variants and pr
 
 ```ts
 interface GeneratorContext {
-  name: string         // raw input
-  pascal: string       // 'UserPost'
-  camel: string        // 'userPost'
-  kebab: string        // 'user-post'
-  snake: string        // 'user_post'
-  pluralPascal?: string  // 'UserPosts' — present when pluralize is on
-  pluralKebab?: string   // 'user-posts'
-  pluralCamel?: string   // 'userPosts'
-  modulesDir: string   // from kick.config.ts (default 'src/modules')
-  cwd: string          // working directory
-  args: string[]       // extra positional args
-  flags: Record<string, string | boolean>  // command-line flags
+  name: string // raw input
+  pascal: string // 'UserPost'
+  camel: string // 'userPost'
+  kebab: string // 'user-post'
+  snake: string // 'user_post'
+  pluralPascal?: string // 'UserPosts' — present when pluralize is on
+  pluralKebab?: string // 'user-posts'
+  pluralCamel?: string // 'userPosts'
+  modulesDir: string // from kick.config.ts (default 'src/modules')
+  cwd: string // working directory
+  args: string[] // extra positional args
+  flags: Record<string, string | boolean> // command-line flags
 }
 ```
 

@@ -1,11 +1,6 @@
 import 'reflect-metadata'
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import {
-  Logger,
-  createLogger,
-  ConsoleLoggerProvider,
-  type LoggerProvider,
-} from '../src/index'
+import { describe, it, expect, afterEach, vi } from 'vitest'
+import { Logger, createLogger, ConsoleLoggerProvider, type LoggerProvider } from '../src/index'
 
 describe('Logger.setProvider() — pluggable logger backend', () => {
   afterEach(() => {

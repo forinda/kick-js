@@ -161,7 +161,7 @@ export class PineconeVectorStore<
       // We unflatten on read — see `query` below.
       metadata: {
         content: d.content,
-        ...(d.metadata ?? {}),
+        ...d.metadata,
       },
     }))
 

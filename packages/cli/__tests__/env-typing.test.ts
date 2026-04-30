@@ -17,13 +17,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import {
-  assertCliOk,
-  cleanupFixture,
-  createFixtureProject,
-  runCli,
-  runTsc,
-} from './helpers'
+import { assertCliOk, cleanupFixture, createFixtureProject, runCli, runTsc } from './helpers'
 
 describe('typed env (KickEnv)', () => {
   let fixture: string

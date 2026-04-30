@@ -77,15 +77,13 @@ const dbX = db.$extends({
     users: {
       async findByEmail(email: string) {
         const self = this as unknown as typeof db
-        return self.selectFrom('users')
-          .selectAll()
-          .where('email', '=', email)
-          .executeTakeFirst()
+        return self.selectFrom('users').selectAll().where('email', '=', email).executeTakeFirst()
       },
 
       async createWithDefaults(input: { email: string; name: string }) {
         const self = this as unknown as typeof db
-        return self.insertInto('users')
+        return self
+          .insertInto('users')
           .values({ ...input, isActive: true })
           .returningAll()
           .executeTakeFirstOrThrow()
@@ -156,7 +154,7 @@ const dbA = db.$extends({ model: { users: { a: () => 'A' } } })
 const dbB = dbA.$extends({ model: { users: { b: () => 'B' } } })
 
 dbB.users.b() // ✓ 'B'
-dbB.users.a   // ✗ undefined — stage A's bag isn't merged forward
+dbB.users.a // ✗ undefined — stage A's bag isn't merged forward
 dbA.users.a() // ✓ 'A' on the original layer
 ```
 
@@ -173,10 +171,19 @@ const dbX = db.$extends({
 If you genuinely need staged composition (e.g. a base layer + project-specific add-ons), spread the model bags manually:
 
 ```ts
-const baseUsers = { findByEmail() { /* ... */ } }
+const baseUsers = {
+  findByEmail() {
+    /* ... */
+  },
+}
 const dbX = db.$extends({
   model: {
-    users: { ...baseUsers, projectSpecific() { /* ... */ } },
+    users: {
+      ...baseUsers,
+      projectSpecific() {
+        /* ... */
+      },
+    },
   },
 })
 ```
@@ -231,10 +238,11 @@ await dbX.posts.latest(5) // each row carries the computed `url`
 ```
 
 ::: tip Out of scope for v1
+
 - needs columns aren't compile-time validated against the schema — typos surface at runtime when the SELECT executes. Type-level narrowing lands once `SchemaToTypes` exposes the column-name union per table.
 - async `compute()` is rejected — keep the post-fetch transform synchronous to bound the cost of every row.
 - joined / multi-from selects pass through. Use a model method that hand-writes the JSON-aggregation path for those today.
-:::
+  :::
 
 ## DI integration
 
@@ -255,7 +263,11 @@ Register the extended client under `DB_PRIMARY` instead of the bare one:
 
 ```ts
 // src/index.ts
-const dbX = dbClient.$extends({ model: { /* ... */ } })
+const dbX = dbClient.$extends({
+  model: {
+    /* ... */
+  },
+})
 
 Container.getInstance().registerFactory(DB_PRIMARY, () => dbX)
 ```

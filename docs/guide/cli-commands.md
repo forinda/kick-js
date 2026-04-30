@@ -90,18 +90,19 @@ kick new my-api --yes
 
 `--yes` defaults:
 
-| Setting | Default value |
-|---------|---------------|
-| Template | `minimal` |
-| Repository | `inmemory` |
-| Optional packages | none |
-| Git init | enabled |
-| Install deps | enabled |
-| Package manager | resolved via `kick add`'s chain (config → corepack `packageManager` → lockfile → npm) |
+| Setting           | Default value                                                                         |
+| ----------------- | ------------------------------------------------------------------------------------- |
+| Template          | `minimal`                                                                             |
+| Repository        | `inmemory`                                                                            |
+| Optional packages | none                                                                                  |
+| Git init          | enabled                                                                               |
+| Install deps      | enabled                                                                               |
+| Package manager   | resolved via `kick add`'s chain (config → corepack `packageManager` → lockfile → npm) |
 
 Any explicit flag overrides the matching default — `--yes --template rest --repo drizzle` scaffolds a REST + Drizzle project without prompts.
 
 When run without `--yes` (and without specific flags), the CLI prompts for:
+
 1. **Project template** — REST, DDD, CQRS, or Minimal
 2. **Package manager** — pnpm, npm, yarn, or bun
 3. **Default repository** — Prisma, Drizzle, In-Memory, or Custom ORM
@@ -109,32 +110,32 @@ When run without `--yes` (and without specific flags), the CLI prompts for:
 5. **Git init** — initialize a git repository with an initial commit
 6. **Install deps** — run the selected package manager's install command
 
-| Flag | Description | Default |
-|------|-------------|---------|
-| `-t, --template <type>` | Project template: `rest`, `ddd`, `cqrs`, `minimal` | Prompted (or `minimal` with `--yes`) |
-| `-r, --repo <type>` | Default repository: `prisma`, `drizzle`, `inmemory`, `custom` | Prompted (or `inmemory` with `--yes`) |
-| `-d, --directory <dir>` | Target directory | Project name |
-| `--pm <manager>` | Package manager: `pnpm`, `npm`, `yarn`, or `bun` | Prompted (or auto-detected with `--yes`) |
-| `--packages <list>` | Comma-separated optional packages | Prompted (or none with `--yes`) |
-| `--git / --no-git` | Initialize git repository | Prompted (or `true` with `--yes`) |
-| `--install / --no-install` | Install dependencies | Prompted (or `true` with `--yes`) |
-| `-f, --force` | Clear non-empty directory without prompting | `false` |
-| `-y, --yes`, `--non-interactive` | Bypass every prompt with safe defaults | `false` |
+| Flag                             | Description                                                   | Default                                  |
+| -------------------------------- | ------------------------------------------------------------- | ---------------------------------------- |
+| `-t, --template <type>`          | Project template: `rest`, `ddd`, `cqrs`, `minimal`            | Prompted (or `minimal` with `--yes`)     |
+| `-r, --repo <type>`              | Default repository: `prisma`, `drizzle`, `inmemory`, `custom` | Prompted (or `inmemory` with `--yes`)    |
+| `-d, --directory <dir>`          | Target directory                                              | Project name                             |
+| `--pm <manager>`                 | Package manager: `pnpm`, `npm`, `yarn`, or `bun`              | Prompted (or auto-detected with `--yes`) |
+| `--packages <list>`              | Comma-separated optional packages                             | Prompted (or none with `--yes`)          |
+| `--git / --no-git`               | Initialize git repository                                     | Prompted (or `true` with `--yes`)        |
+| `--install / --no-install`       | Install dependencies                                          | Prompted (or `true` with `--yes`)        |
+| `-f, --force`                    | Clear non-empty directory without prompting                   | `false`                                  |
+| `-y, --yes`, `--non-interactive` | Bypass every prompt with safe defaults                        | `false`                                  |
 
 ### Templates
 
-| Template | Adapters | Packages installed |
-|----------|----------|-------------------|
-| `rest` (default) | Swagger + DevTools | kickjs, kickjs-vite, kickjs-swagger |
-| `ddd` | Swagger + DevTools | kickjs, kickjs-vite, kickjs-swagger |
-| `cqrs` | Swagger + WS + Queue + DevTools | kickjs, kickjs-vite, kickjs-swagger, kickjs-ws, kickjs-queue |
-| `minimal` | None | kickjs, kickjs-vite |
+| Template         | Adapters                        | Packages installed                                           |
+| ---------------- | ------------------------------- | ------------------------------------------------------------ |
+| `rest` (default) | Swagger + DevTools              | kickjs, kickjs-vite, kickjs-swagger                          |
+| `ddd`            | Swagger + DevTools              | kickjs, kickjs-vite, kickjs-swagger                          |
+| `cqrs`           | Swagger + WS + Queue + DevTools | kickjs, kickjs-vite, kickjs-swagger, kickjs-ws, kickjs-queue |
+| `minimal`        | None                            | kickjs, kickjs-vite                                          |
 
 Use `.` as the project name to scaffold in the current directory (the folder name becomes the project name).
 
 The `init` alias also works: `kick init my-app`.
 
-**Non-empty directory safety:** If the target directory already contains files, the CLI shows up to 5 existing entries and asks for confirmation before clearing them. Use `--force` to skip the prompt. Running with `--yes` *without* `--force` aborts cleanly when the directory is non-empty — the non-interactive flag never silently destroys existing work.
+**Non-empty directory safety:** If the target directory already contains files, the CLI shows up to 5 existing entries and asks for confirmation before clearing them. Use `--force` to skip the prompt. Running with `--yes` _without_ `--force` aborts cleanly when the directory is non-empty — the non-interactive flag never silently destroys existing work.
 
 ## kick dev
 
@@ -146,13 +147,12 @@ kick dev -e src/main.ts
 kick dev -p 4000
 ```
 
-| Flag | Description | Default |
-|------|-------------|---------|
-| `-e, --entry <file>` | Entry file | `src/index.ts` |
-| `-p, --port <port>` | Port number | `3000` (or `PORT` env) |
+| Flag                 | Description | Default                |
+| -------------------- | ----------- | ---------------------- |
+| `-e, --entry <file>` | Entry file  | `src/index.ts`         |
+| `-p, --port <port>`  | Port number | `3000` (or `PORT` env) |
 
 Changes to your source files are picked up instantly — database connections, WebSocket state, and port bindings survive reloads.
-
 
 ## kick dev:debug
 
@@ -185,10 +185,10 @@ kick start -e dist/main.js
 kick start -p 8080
 ```
 
-| Flag | Description | Default |
-|------|-------------|---------|
-| `-e, --entry <file>` | Entry file | `dist/index.js` |
-| `-p, --port <port>` | Port number | `3000` (or `PORT` env) |
+| Flag                 | Description | Default                |
+| -------------------- | ----------- | ---------------------- |
+| `-e, --entry <file>` | Entry file  | `dist/index.js`        |
+| `-p, --port <port>`  | Port number | `3000` (or `PORT` env) |
 
 Sets `NODE_ENV=production` automatically.
 
@@ -287,12 +287,12 @@ The "nearest ancestor" climb means a workspace sub-package inherits the workspac
 
 ### Flags
 
-| Flag | Description |
-|------|-------------|
+| Flag             | Description                                                  |
+| ---------------- | ------------------------------------------------------------ |
 | `--pm <manager>` | Package manager override (auto-detected via the chain above) |
-| `-D, --dev` | Install as dev dependency |
-| `--list` | List packages (core only by default) |
-| `--all` | When paired with `--list`, include the full optional catalog |
+| `-D, --dev`      | Install as dev dependency                                    |
+| `--list`         | List packages (core only by default)                         |
+| `--all`          | When paired with `--list`, include the full optional catalog |
 
 ## kick generate (kick g)
 
@@ -328,29 +328,29 @@ kick g scaffold User name:string email:email:optional role:enum:admin,user,guest
 
 #### Field Types
 
-| Type | TypeScript | Zod | Example |
-|------|-----------|-----|---------|
-| `string` | `string` | `z.string()` | `title:string` |
-| `text` | `string` | `z.string()` | `body:text` |
-| `number` | `number` | `z.number()` | `price:number` |
-| `int` | `number` | `z.number().int()` | `age:int` |
-| `float` | `number` | `z.number()` | `rating:float` |
-| `boolean` | `boolean` | `z.boolean()` | `active:boolean` |
-| `date` | `string` | `z.string().datetime()` | `createdAt:date` |
-| `email` | `string` | `z.string().email()` | `email:email` |
-| `url` | `string` | `z.string().url()` | `website:url` |
-| `uuid` | `string` | `z.string().uuid()` | `externalId:uuid` |
-| `json` | `any` | `z.any()` | `metadata:json` |
+| Type         | TypeScript          | Zod                     | Example                       |
+| ------------ | ------------------- | ----------------------- | ----------------------------- |
+| `string`     | `string`            | `z.string()`            | `title:string`                |
+| `text`       | `string`            | `z.string()`            | `body:text`                   |
+| `number`     | `number`            | `z.number()`            | `price:number`                |
+| `int`        | `number`            | `z.number().int()`      | `age:int`                     |
+| `float`      | `number`            | `z.number()`            | `rating:float`                |
+| `boolean`    | `boolean`           | `z.boolean()`           | `active:boolean`              |
+| `date`       | `string`            | `z.string().datetime()` | `createdAt:date`              |
+| `email`      | `string`            | `z.string().email()`    | `email:email`                 |
+| `url`        | `string`            | `z.string().url()`      | `website:url`                 |
+| `uuid`       | `string`            | `z.string().uuid()`     | `externalId:uuid`             |
+| `json`       | `any`               | `z.any()`               | `metadata:json`               |
 | `enum:a,b,c` | `'a' \| 'b' \| 'c'` | `z.enum(['a','b','c'])` | `status:enum:draft,published` |
 
 #### Scaffold Flags
 
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--no-entity` | Skip entity and value object generation | `false` |
-| `--no-tests` | Skip test file generation | `false` |
-| `--no-pluralize` | Use singular names | from config |
-| `--modules-dir <dir>` | Modules directory | `src/modules` |
+| Flag                  | Description                             | Default       |
+| --------------------- | --------------------------------------- | ------------- |
+| `--no-entity`         | Skip entity and value object generation | `false`       |
+| `--no-tests`          | Skip test file generation               | `false`       |
+| `--no-pluralize`      | Use singular names                      | from config   |
+| `--modules-dir <dir>` | Modules directory                       | `src/modules` |
 
 ::: tip Shell-safe optional syntax
 Use `name:type:optional` instead of `"name:type?"` — the `?` character is a shell glob in bash/zsh and needs quoting.
@@ -369,11 +369,11 @@ kick g config --modules-dir src/mods # Custom modules directory
 kick g config --repo drizzle         # Default repo type
 ```
 
-| Flag | Description | Default |
-|------|-------------|---------|
-| `-f, --force` | Overwrite existing config without prompting | `false` |
-| `--modules-dir <dir>` | Modules directory path | `src/modules` |
-| `--repo <type>` | Default repository type: `inmemory`, `drizzle`, or `prisma` | `inmemory` |
+| Flag                  | Description                                                 | Default       |
+| --------------------- | ----------------------------------------------------------- | ------------- |
+| `-f, --force`         | Overwrite existing config without prompting                 | `false`       |
+| `--modules-dir <dir>` | Modules directory path                                      | `src/modules` |
+| `--repo <type>`       | Default repository type: `inmemory`, `drizzle`, or `prisma` | `inmemory`    |
 
 If `kick.config.ts` already exists, the CLI prompts for confirmation before overwriting.
 
@@ -392,13 +392,13 @@ kick g agents -f --only both       # AGENTS.md + CLAUDE.md (skip skills)
 
 Aliases: `kick g agent-docs`, `kick g ai-docs`. Auto-detects project name (from `package.json`), package manager (corepack `packageManager` field), and template (from `kick.config.ts` `pattern`).
 
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--only <which>` | `agents` \| `claude` \| `skills` \| `both` \| `all` | `all` |
-| `--name <name>` | Project name override | from `package.json` |
-| `--pm <pm>` | Package manager override | from `package.json` |
-| `--template <template>` | `rest` \| `ddd` \| `cqrs` \| `minimal` | from `kick.config.ts` |
-| `-f, --force` | Overwrite without prompting | `false` |
+| Flag                    | Description                                         | Default               |
+| ----------------------- | --------------------------------------------------- | --------------------- |
+| `--only <which>`        | `agents` \| `claude` \| `skills` \| `both` \| `all` | `all`                 |
+| `--name <name>`         | Project name override                               | from `package.json`   |
+| `--pm <pm>`             | Package manager override                            | from `package.json`   |
+| `--template <template>` | `rest` \| `ddd` \| `cqrs` \| `minimal`              | from `kick.config.ts` |
+| `-f, --force`           | Overwrite without prompting                         | `false`               |
 
 See [Generators — kick g agents](./generators.md#kick-g-agents) for what each file contains and how to keep local customisations from being overwritten.
 
@@ -424,11 +424,11 @@ kick inspect --watch              # Re-inspect on changes (live reload)
 kick inspect --json               # Output as JSON
 ```
 
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--port <port>` | Port of the running app to inspect | `3000` |
-| `--watch` | Continuously re-inspect when the app reloads | `false` |
-| `--json` | Output raw JSON instead of formatted tables | `false` |
+| Flag            | Description                                  | Default |
+| --------------- | -------------------------------------------- | ------- |
+| `--port <port>` | Port of the running app to inspect           | `3000`  |
+| `--watch`       | Continuously re-inspect when the app reloads | `false` |
+| `--json`        | Output raw JSON instead of formatted tables  | `false` |
 
 Example output:
 
@@ -503,12 +503,12 @@ export default defineConfig({
 
 Controls the default generator behavior and project template style.
 
-| Value | Description |
-|-------|-------------|
-| `'rest'` | Express + Swagger (default) |
-| `'ddd'` | Full DDD modules with use cases, entities, value objects |
-| `'cqrs'` | CQRS with commands, queries, events + WS/queue |
-| `'minimal'` | Bare Express with no scaffolding |
+| Value       | Description                                              |
+| ----------- | -------------------------------------------------------- |
+| `'rest'`    | Express + Swagger (default)                              |
+| `'ddd'`     | Full DDD modules with use cases, entities, value objects |
+| `'cqrs'`    | CQRS with commands, queries, events + WS/queue           |
+| `'minimal'` | Bare Express with no scaffolding                         |
 
 ### `copyDirs`
 
@@ -518,10 +518,10 @@ Each entry can be a simple string (copied to the same relative path under `dist/
 
 ```ts
 copyDirs: [
-  'src/views',                              // copies to dist/src/views
+  'src/views', // copies to dist/src/views
   { src: 'src/views', dest: 'dist/views' }, // custom destination
-  'src/emails',                             // copies to dist/src/emails
-  'public/assets',                          // copies to dist/public/assets
+  'src/emails', // copies to dist/src/emails
+  'public/assets', // copies to dist/public/assets
 ]
 ```
 
@@ -531,20 +531,20 @@ If a source directory does not exist, the CLI logs a warning and skips it.
 
 Module generation settings — controls how `kick g module` produces code.
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `modules.dir` | `string` | `'src/modules'` | Where generators place module files |
-| `modules.repo` | `string \| { name: string }` | `'inmemory'` | Default repository type. Built-in: `'drizzle'`, `'inmemory'`, `'prisma'`. Custom: `{ name: 'typeorm' }` |
-| `modules.pluralize` | `boolean` | `true` | Whether to pluralize module folder and route names |
-| `modules.schemaDir` | `string` | `undefined` | Schema output directory (e.g. `'src/db/schema'` or `'prisma/'`) |
+| Option              | Type                         | Default         | Description                                                                                             |
+| ------------------- | ---------------------------- | --------------- | ------------------------------------------------------------------------------------------------------- |
+| `modules.dir`       | `string`                     | `'src/modules'` | Where generators place module files                                                                     |
+| `modules.repo`      | `string \| { name: string }` | `'inmemory'`    | Default repository type. Built-in: `'drizzle'`, `'inmemory'`, `'prisma'`. Custom: `{ name: 'typeorm' }` |
+| `modules.pluralize` | `boolean`                    | `true`          | Whether to pluralize module folder and route names                                                      |
+| `modules.schemaDir` | `string`                     | `undefined`     | Schema output directory (e.g. `'src/db/schema'` or `'prisma/'`)                                         |
 
 ### Other Options
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `plugins` | `KickCliPlugin[]` | `[]` | CLI plugins contributing commands, generators, and typegens (see [CLI Plugins](./cli-plugins.md)) |
-| `commands` | `KickCommandDefinition[]` | `[]` | Project-local custom CLI commands (see [Custom Commands](./custom-commands.md)) |
-| `style` | `object` | auto-detected | Code style overrides (`semicolons`, `quotes`, `trailingComma`, `indent`) |
+| Option     | Type                      | Default       | Description                                                                                       |
+| ---------- | ------------------------- | ------------- | ------------------------------------------------------------------------------------------------- |
+| `plugins`  | `KickCliPlugin[]`         | `[]`          | CLI plugins contributing commands, generators, and typegens (see [CLI Plugins](./cli-plugins.md)) |
+| `commands` | `KickCommandDefinition[]` | `[]`          | Project-local custom CLI commands (see [Custom Commands](./custom-commands.md))                   |
+| `style`    | `object`                  | auto-detected | Code style overrides (`semicolons`, `quotes`, `trailingComma`, `indent`)                          |
 
 ::: details Deprecated top-level aliases
 `modulesDir`, `defaultRepo`, `schemaDir`, and `pluralize` are still accepted at the top level for backward compatibility but are deprecated. Use the `modules` block instead.

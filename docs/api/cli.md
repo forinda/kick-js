@@ -23,43 +23,46 @@ cd packages/cli && pnpm link --global
 
 ## CLI Commands
 
-| Command | Alias | Description |
-|---------|-------|-------------|
-| `kick new <name>` | `kick init` | Create a new KickJS project |
-| `kick dev` | | Start dev server with Vite HMR |
-| `kick list` | `kick ls` | List all available KickJS packages |
-| `kick add <packages...>` | | Install KickJS packages with peer deps |
-| `kick generate --list` | `kick g --list` | List all available generators |
-| `kick generate module <name>` | `kick g module` | Generate a full DDD module with all layers |
-| `kick generate scaffold <name> <fields...>` | `kick g scaffold` | CRUD module from field definitions (`name:type:optional`) |
-| `kick generate adapter <name>` | `kick g adapter` | Generate an AppAdapter scaffold |
-| `kick generate middleware <name>` | `kick g middleware` | Generate an Express middleware function |
-| `kick generate guard <name>` | `kick g guard` | Generate a route guard |
-| `kick generate service <name>` | `kick g service` | Generate a `@Service()` class |
-| `kick generate controller <name>` | `kick g controller` | Generate a `@Controller()` class with routes |
-| `kick generate dto <name>` | `kick g dto` | Generate a Zod DTO schema |
-| `kick generate resolver <name>` | `kick g resolver` | Generate a GraphQL `@Resolver` class |
-| `kick generate job <name>` | `kick g job` | Generate a `@Job` queue processor |
-| `kick generate test <name>` | `kick g test` | Generate a Vitest test scaffold |
-| `kick generate config` | `kick g config` | Generate `kick.config.ts` |
-| `kick generate agents` | `kick g agents` (also `agent-docs`, `ai-docs`) | Regenerate `AGENTS.md` / `CLAUDE.md` / `kickjs-skills.md` from upstream templates |
-| `kick info` | | Print system and framework info |
-| `kick inspect` | | Inspect a running KickJS application |
-| `kick tinker` | | Interactive REPL |
+| Command                                     | Alias                                          | Description                                                                       |
+| ------------------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------- |
+| `kick new <name>`                           | `kick init`                                    | Create a new KickJS project                                                       |
+| `kick dev`                                  |                                                | Start dev server with Vite HMR                                                    |
+| `kick list`                                 | `kick ls`                                      | List all available KickJS packages                                                |
+| `kick add <packages...>`                    |                                                | Install KickJS packages with peer deps                                            |
+| `kick generate --list`                      | `kick g --list`                                | List all available generators                                                     |
+| `kick generate module <name>`               | `kick g module`                                | Generate a full DDD module with all layers                                        |
+| `kick generate scaffold <name> <fields...>` | `kick g scaffold`                              | CRUD module from field definitions (`name:type:optional`)                         |
+| `kick generate adapter <name>`              | `kick g adapter`                               | Generate an AppAdapter scaffold                                                   |
+| `kick generate middleware <name>`           | `kick g middleware`                            | Generate an Express middleware function                                           |
+| `kick generate guard <name>`                | `kick g guard`                                 | Generate a route guard                                                            |
+| `kick generate service <name>`              | `kick g service`                               | Generate a `@Service()` class                                                     |
+| `kick generate controller <name>`           | `kick g controller`                            | Generate a `@Controller()` class with routes                                      |
+| `kick generate dto <name>`                  | `kick g dto`                                   | Generate a Zod DTO schema                                                         |
+| `kick generate resolver <name>`             | `kick g resolver`                              | Generate a GraphQL `@Resolver` class                                              |
+| `kick generate job <name>`                  | `kick g job`                                   | Generate a `@Job` queue processor                                                 |
+| `kick generate test <name>`                 | `kick g test`                                  | Generate a Vitest test scaffold                                                   |
+| `kick generate config`                      | `kick g config`                                | Generate `kick.config.ts`                                                         |
+| `kick generate agents`                      | `kick g agents` (also `agent-docs`, `ai-docs`) | Regenerate `AGENTS.md` / `CLAUDE.md` / `kickjs-skills.md` from upstream templates |
+| `kick info`                                 |                                                | Print system and framework info                                                   |
+| `kick inspect`                              |                                                | Inspect a running KickJS application                                              |
+| `kick tinker`                               |                                                | Interactive REPL                                                                  |
 
 ### Command Options
 
 **kick new [name]** (use `.` for current directory)
+
 - `-d, --directory <dir>` -- Target directory (defaults to project name)
 - `--pm <manager>` -- Package manager: `pnpm` | `npm` | `yarn` (prompted if omitted)
 - `--git / --no-git` -- Initialize git repository (prompted if omitted)
 - `--install / --no-install` -- Install dependencies (prompted if omitted)
 
 **kick dev**
+
 - `-e, --entry <file>` -- Entry file (default: `src/index.ts`)
 - `-p, --port <port>` -- Port number
 
 **kick g module**
+
 - `--pattern <type>` -- Module structure: `rest` | `ddd` | `cqrs` | `minimal` (default: from config or `ddd`)
 - `--no-entity` -- Skip entity and value object generation (DDD only)
 - `--no-tests` -- Skip test file generation
@@ -69,13 +72,16 @@ cd packages/cli && pnpm link --global
 - `-f, --force` -- Overwrite existing files without prompting
 
 **kick g controller / service / dto / guard / middleware**
+
 - `-o, --out <dir>` -- Output directory (overrides `--module`)
 - `-m, --module <name>` -- Place inside a module's DDD folder structure
 
 **kick g adapter / resolver / job**
+
 - `-o, --out <dir>` -- Output directory (defaults vary per generator)
 
 **kick g agents** (aliases: `kick g agent-docs`, `kick g ai-docs`)
+
 - `--only <which>` -- Scope: `agents` | `claude` | `skills` | `both` | `all` (default: `all`)
 - `--name <name>` -- Project name override (default: from `package.json`)
 - `--pm <pm>` -- Package manager override (default: from corepack `packageManager` field)
@@ -96,11 +102,11 @@ function defineConfig(config: KickConfig): KickConfig
 interface KickConfig {
   pattern?: 'rest' | 'ddd' | 'cqrs' | 'minimal'
   modules?: {
-    dir?: string                          // default: 'src/modules'
+    dir?: string // default: 'src/modules'
     repo?: 'drizzle' | 'inmemory' | 'prisma' | { name: string }
-    pluralize?: boolean                   // default: true
-    schemaDir?: string                    // For Drizzle/Prisma schema files
-    prismaClientPath?: string             // Prisma 7: '@/generated/prisma/client'
+    pluralize?: boolean // default: true
+    schemaDir?: string // For Drizzle/Prisma schema files
+    prismaClientPath?: string // Prisma 7: '@/generated/prisma/client'
   }
   commands?: KickCommandDefinition[]
   style?: {
@@ -110,10 +116,10 @@ interface KickConfig {
     indent?: number
   }
   // Deprecated (use modules.* instead)
-  modulesDir?: string                     // @deprecated - use modules.dir
-  defaultRepo?: 'drizzle' | 'inmemory' | 'prisma'  // @deprecated - use modules.repo
-  pluralize?: boolean                     // @deprecated - use modules.pluralize
-  schemaDir?: string                      // @deprecated - use modules.schemaDir
+  modulesDir?: string // @deprecated - use modules.dir
+  defaultRepo?: 'drizzle' | 'inmemory' | 'prisma' // @deprecated - use modules.repo
+  pluralize?: boolean // @deprecated - use modules.pluralize
+  schemaDir?: string // @deprecated - use modules.schemaDir
 }
 ```
 
@@ -123,9 +129,9 @@ Register custom CLI commands via `kick.config.ts`.
 
 ```typescript
 interface KickCommandDefinition {
-  name: string              // e.g. 'db:migrate'
+  name: string // e.g. 'db:migrate'
   description: string
-  steps: string | string[]  // shell command(s) to run
+  steps: string | string[] // shell command(s) to run
   aliases?: string[]
 }
 ```
@@ -146,7 +152,11 @@ function generateDto(options: { name: string; outDir: string }): Promise<string[
 function generateResolver(options: { name: string; outDir: string }): Promise<string[]>
 function generateJob(options: { name: string; outDir: string; queue?: string }): Promise<string[]>
 function generateConfig(options: ConfigOptions): Promise<string[]>
-function initProject(options: { name: string; directory: string; packageManager: string }): Promise<void>
+function initProject(options: {
+  name: string
+  directory: string
+  packageManager: string
+}): Promise<void>
 function loadKickConfig(cwd: string): Promise<KickConfig | null>
 ```
 

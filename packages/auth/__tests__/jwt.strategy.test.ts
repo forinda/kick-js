@@ -149,12 +149,8 @@ describe('JwtStrategy', () => {
       const good = createToken({ sub: '1', aud: 'api.example.com' })
       const bad = createToken({ sub: '1', aud: 'other.example.com' })
 
-      expect(
-        await strategy.validate({ headers: { authorization: `Bearer ${good}` } }),
-      ).toBeTruthy()
-      expect(
-        await strategy.validate({ headers: { authorization: `Bearer ${bad}` } }),
-      ).toBeNull()
+      expect(await strategy.validate({ headers: { authorization: `Bearer ${good}` } })).toBeTruthy()
+      expect(await strategy.validate({ headers: { authorization: `Bearer ${bad}` } })).toBeNull()
     })
 
     it('clockTolerance allows a just-expired token through', async () => {
@@ -181,9 +177,7 @@ describe('JwtStrategy', () => {
         secret: SECRET,
         verifyOptions: { maxAge: '1m' },
       })
-      expect(
-        await strategy.validate({ headers: { authorization: `Bearer ${token}` } }),
-      ).toBeNull()
+      expect(await strategy.validate({ headers: { authorization: `Bearer ${token}` } })).toBeNull()
     })
   })
 })

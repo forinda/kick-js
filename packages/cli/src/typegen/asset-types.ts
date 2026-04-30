@@ -147,7 +147,7 @@ const LEAF = Symbol('asset-leaf')
 type TreeNode = { [key: string]: TreeNode | typeof LEAF }
 
 function renderTree(node: TreeNode, indent: string): string {
-  const keys = Object.keys(node).sort()
+  const keys = Object.keys(node).toSorted()
   const lines: string[] = []
   for (const key of keys) {
     const child = node[key]

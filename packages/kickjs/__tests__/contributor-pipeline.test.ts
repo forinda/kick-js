@@ -114,7 +114,7 @@ describe('buildPipeline — precedence dedup', () => {
       sourced('global', reg({ key: 'requestStartedAt' })),
     ])
 
-    expect([...pipeline.keys].sort()).toEqual(['flags', 'requestStartedAt', 'tenant', 'user'])
+    expect([...pipeline.keys].toSorted()).toEqual(['flags', 'requestStartedAt', 'tenant', 'user'])
   })
 })
 

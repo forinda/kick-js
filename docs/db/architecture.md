@@ -90,31 +90,52 @@ Code-first. A single `schema.ts` (or aggregated multi-file export) is the source
 
 ```ts
 import {
-  table, serial, varchar, text, timestamp, boolean, integer, json, uuid,
-  relations, primaryKey, index, unique,
+  table,
+  serial,
+  varchar,
+  text,
+  timestamp,
+  boolean,
+  integer,
+  json,
+  uuid,
+  relations,
+  primaryKey,
+  index,
+  unique,
 } from '@forinda/kickjs-db'
 
-export const users = table('users', {
-  id:        serial().primaryKey(),
-  email:     varchar(255).notNull().unique(),
-  name:      varchar(120),
-  createdAt: timestamp().defaultNow().notNull(),
-  isActive:  boolean().default(true).notNull(),
-}, (t) => ({
-  emailIdx: index('users_email_idx').on(t.email),
-}))
+export const users = table(
+  'users',
+  {
+    id: serial().primaryKey(),
+    email: varchar(255).notNull().unique(),
+    name: varchar(120),
+    createdAt: timestamp().defaultNow().notNull(),
+    isActive: boolean().default(true).notNull(),
+  },
+  (t) => ({
+    emailIdx: index('users_email_idx').on(t.email),
+  }),
+)
 
-export const posts = table('posts', {
-  id:           serial().primaryKey(),
-  authorId:     integer().notNull().references(() => users.id, { onDelete: 'cascade' }),
-  title:        varchar(200).notNull(),
-  body:         text().notNull(),
-  meta:         json<{ tags: string[] }>(),
-  publishedAt:  timestamp(),
-}, (t) => ({
-  authorIdx:  index('posts_author_idx').on(t.authorId),
-  uniqueSlug: unique('posts_slug_unique').on(t.title, t.authorId),
-}))
+export const posts = table(
+  'posts',
+  {
+    id: serial().primaryKey(),
+    authorId: integer()
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    title: varchar(200).notNull(),
+    body: text().notNull(),
+    meta: json<{ tags: string[] }>(),
+    publishedAt: timestamp(),
+  },
+  (t) => ({
+    authorIdx: index('posts_author_idx').on(t.authorId),
+    uniqueSlug: unique('posts_slug_unique').on(t.title, t.authorId),
+  }),
+)
 
 export const usersRelations = relations(users, ({ many }) => ({
   posts: many(posts),
@@ -146,7 +167,7 @@ import { customType } from '@forinda/kickjs-db'
 
 const encrypted = customType<string>({
   dataType: () => 'text',
-  toDriver:   (v) => encrypt(v),
+  toDriver: (v) => encrypt(v),
   fromDriver: (v) => decrypt(v as string),
 })
 ```
@@ -162,8 +183,8 @@ Declared separately from `table(...)`, after both tables exist. This avoids forw
 ### Type extraction
 
 ```ts
-type User       = typeof users.$inferSelect
-type NewUser    = typeof users.$inferInsert
+type User = typeof users.$inferSelect
+type NewUser = typeof users.$inferInsert
 type UserUpdate = typeof users.$inferUpdate
 ```
 
@@ -197,7 +218,12 @@ db/
   "version": 1,
   "dialect": "postgres",
   "entries": [
-    { "id": "20260427_153012_add_users", "tag": "add_users", "hash": "sha256:...", "createdAt": "..." }
+    {
+      "id": "20260427_153012_add_users",
+      "tag": "add_users",
+      "hash": "sha256:...",
+      "createdAt": "..."
+    }
   ]
 }
 ```
@@ -220,16 +246,16 @@ db/
 
 For each ambiguous reverse, the down draft makes a defensible choice and surfaces it via the DRAFT marker:
 
-| Forward change                       | Down draft                                            | Marker  |
-|--------------------------------------|-------------------------------------------------------|---------|
-| Drop column `email`                  | `ADD COLUMN email VARCHAR(255)` (last-known type)     | DRAFT   |
-| Drop table                           | Re-CREATE from snapshot (no data)                     | DRAFT   |
-| Type widen `varchar(50)→text`        | `ALTER COLUMN ... TYPE varchar(50)` (lossy)           | DRAFT   |
-| Add NOT NULL without default         | `ALTER COLUMN ... DROP NOT NULL`                      | DRAFT   |
-| Rename column                        | Renamed reverse                                       | clean   |
-| Add column / index / FK / check      | Drop them                                             | clean   |
+| Forward change                  | Down draft                                        | Marker |
+| ------------------------------- | ------------------------------------------------- | ------ |
+| Drop column `email`             | `ADD COLUMN email VARCHAR(255)` (last-known type) | DRAFT  |
+| Drop table                      | Re-CREATE from snapshot (no data)                 | DRAFT  |
+| Type widen `varchar(50)→text`   | `ALTER COLUMN ... TYPE varchar(50)` (lossy)       | DRAFT  |
+| Add NOT NULL without default    | `ALTER COLUMN ... DROP NOT NULL`                  | DRAFT  |
+| Rename column                   | Renamed reverse                                   | clean  |
+| Add column / index / FK / check | Drop them                                         | clean  |
 
-**Marker enforcement.** Runner refuses to apply any migration where `meta.json.reviewed === false` unless `NODE_ENV === 'development'` *and* `kick.config.ts: db.requireReviewedMigrations` is not `'error'`. Default `'error'` everywhere except dev. CI hook (`kick db migrate verify`) fails the build on any committed unreviewed migration.
+**Marker enforcement.** Runner refuses to apply any migration where `meta.json.reviewed === false` unless `NODE_ENV === 'development'` _and_ `kick.config.ts: db.requireReviewedMigrations` is not `'error'`. Default `'error'` everywhere except dev. CI hook (`kick db migrate verify`) fails the build on any committed unreviewed migration.
 
 Reviewing: `kick db migrate review <id>` flips `meta.json.reviewed` to `true` and strips the `-- REVIEWED: false` markers. Manual edit also works.
 
@@ -246,18 +272,18 @@ Reviewing: `kick db migrate review <id>` flips `meta.json.reviewed` to `true` an
 
 ### Subcommands
 
-| Command                                | Behavior                                           |
-|----------------------------------------|----------------------------------------------------|
-| `kick db migrate latest`               | Apply all pending; new batch.                      |
-| `kick db migrate up`                   | Apply next single pending; same batch as `latest`. |
-| `kick db migrate down`                 | Roll back single most recent applied.              |
-| `kick db migrate rollback`             | Roll back entire last batch (one transaction).     |
-| `kick db migrate rollback --all`       | Roll back everything; `--force` in non-dev.        |
-| `kick db migrate status`               | Print applied + pending tables.                    |
-| `kick db migrate reset`                | Drop all + reapply from zero; non-prod only.       |
-| `kick db migrate make <name>`          | Generate empty up/down shell (data migrations).    |
-| `kick db migrate verify`               | CI hook — fail on unreviewed or hash-mismatched.   |
-| `kick db migrate review <id>`          | Mark migration reviewed.                           |
+| Command                          | Behavior                                           |
+| -------------------------------- | -------------------------------------------------- |
+| `kick db migrate latest`         | Apply all pending; new batch.                      |
+| `kick db migrate up`             | Apply next single pending; same batch as `latest`. |
+| `kick db migrate down`           | Roll back single most recent applied.              |
+| `kick db migrate rollback`       | Roll back entire last batch (one transaction).     |
+| `kick db migrate rollback --all` | Roll back everything; `--force` in non-dev.        |
+| `kick db migrate status`         | Print applied + pending tables.                    |
+| `kick db migrate reset`          | Drop all + reapply from zero; non-prod only.       |
+| `kick db migrate make <name>`    | Generate empty up/down shell (data migrations).    |
+| `kick db migrate verify`         | CI hook — fail on unreviewed or hash-mismatched.   |
+| `kick db migrate review <id>`    | Mark migration reviewed.                           |
 
 ### TS escape hatch
 
@@ -325,7 +351,7 @@ Same Kysely engine underneath. The schema export `users` is accepted in place of
 ```ts
 await db.query.users.findMany({
   where: (u, { eq }) => eq(u.isActive, true),
-  with:  { posts: { where: (p, { isNotNull }) => isNotNull(p.publishedAt), limit: 5 } },
+  with: { posts: { where: (p, { isNotNull }) => isNotNull(p.publishedAt), limit: 5 } },
   orderBy: (u, { desc }) => desc(u.createdAt),
   limit: 20,
 })
@@ -351,9 +377,7 @@ await db.transaction(async (tx) => {
 ### Conditional builder (`.modify()`-port)
 
 ```ts
-const q = db.selectFrom('users').selectAll()
-  .modify(filterByActive, true)
-  .modify(orderByName, 'asc')
+const q = db.selectFrom('users').selectAll().modify(filterByActive, true).modify(orderByName, 'asc')
 
 function filterByActive(qb, active: boolean) {
   return active ? qb.where('isActive', '=', true) : qb
@@ -375,9 +399,11 @@ Backed by the adapter's cursor / streaming protocol. Adapters that don't support
 ### Lifecycle hooks
 
 ```ts
-db.on('query',          ({ sql, parameters, ms })   => logger.debug({ sql }, 'query'))
-db.on('queryError',     ({ sql, error })            => sentry.captureException(error))
-db.on('beforeQuery',    (event)                      => { event.sql = rewriteForRls(event.sql) })  // mutation allowed
+db.on('query', ({ sql, parameters, ms }) => logger.debug({ sql }, 'query'))
+db.on('queryError', ({ sql, error }) => sentry.captureException(error))
+db.on('beforeQuery', (event) => {
+  event.sql = rewriteForRls(event.sql)
+}) // mutation allowed
 ```
 
 Events: `beforeQuery` (mutation point), `query`, `queryError`, `transactionStart`, `transactionCommit`, `transactionRollback`, `slowQuery`. Hooks are `(event) => void | Promise<void>`. Async hooks awaited in order. Listener errors are caught + logged; query is not aborted — except `beforeQuery` errors, which abort (since the hook is mutating).
@@ -389,20 +415,25 @@ const dbX = db.$extends({
   model: {
     users: {
       async findActiveByEmail(email: string) {
-        return this.findFirst({ where: (u, { eq, and }) => and(eq(u.email, email), eq(u.isActive, true)) })
+        return this.findFirst({
+          where: (u, { eq, and }) => and(eq(u.email, email), eq(u.isActive, true)),
+        })
       },
     },
   },
   result: {
     users: {
-      fullName: { needs: { firstName: true, lastName: true }, compute: (u) => `${u.firstName} ${u.lastName}` },
+      fullName: {
+        needs: { firstName: true, lastName: true },
+        compute: (u) => `${u.firstName} ${u.lastName}`,
+      },
     },
   },
 })
 
 await dbX.users.findActiveByEmail('x@y.z')
 const u = await dbX.query.users.findFirst({ where: (u, { eq }) => eq(u.id, 1) })
-u.fullName   // computed
+u.fullName // computed
 ```
 
 - `model.<name>.<method>` — bolts methods onto `dbX.<name>` (top-level access, distinct from `dbX.query.<name>`).
@@ -414,7 +445,7 @@ u.fullName   // computed
 - Active-record patterns. Tables are values, not classes. No `user.save()`.
 - Implicit relation-include defaults. Joins are explicit. Performance is predictable.
 - `findOrCreate` / `firstOrCreate` magic. Compose `findFirst` + `insert`, or use `onConflict`.
-- Raw-SQL helpers that interpolate without binding. `sql\`...\`` template tag binds via Kysely's `sql` helper.
+- Raw-SQL helpers that interpolate without binding. `sql\`...\``template tag binds via Kysely's`sql` helper.
 
 ## 7. KickJS integration
 
@@ -452,15 +483,23 @@ export const app = await bootstrap({
 ```ts
 export const DB_PRIMARY = createToken<KickDbClient>('app/db/primary')
 export const DB_REPLICA = createToken<KickDbClient>('app/db/replica')
-export const DB_CLIENT  = DB_PRIMARY   // alias
+export const DB_CLIENT = DB_PRIMARY // alias
 ```
 
 `kickDbAdapter()` registers itself against `DB_PRIMARY` by default. Multi-DB apps register additional adapters explicitly:
 
 ```ts
 adapters: [
-  kickDbAdapter({ token: DB_PRIMARY, schema, adapter: pgAdapter({ connectionString: env.PRIMARY_URL }) }),
-  kickDbAdapter({ token: DB_REPLICA, schema, adapter: pgAdapter({ connectionString: env.REPLICA_URL }) }),
+  kickDbAdapter({
+    token: DB_PRIMARY,
+    schema,
+    adapter: pgAdapter({ connectionString: env.PRIMARY_URL }),
+  }),
+  kickDbAdapter({
+    token: DB_REPLICA,
+    schema,
+    adapter: pgAdapter({ connectionString: env.REPLICA_URL }),
+  }),
 ]
 ```
 
@@ -479,8 +518,12 @@ class UserRepo {
   @Inject(DB_PRIMARY) private db!: KickDbClient
   @Inject(DB_REPLICA) private read!: KickDbClient
 
-  findById(id: number) { return this.read.query.users.findFirst({ where: (u, { eq }) => eq(u.id, id) }) }
-  create(data: NewUser) { return this.db.insert(users).values(data).returningAll().executeTakeFirstOrThrow() }
+  findById(id: number) {
+    return this.read.query.users.findFirst({ where: (u, { eq }) => eq(u.id, id) })
+  }
+  create(data: NewUser) {
+    return this.db.insert(users).values(data).returningAll().executeTakeFirstOrThrow()
+  }
 }
 ```
 
@@ -606,7 +649,7 @@ Three topics through Pino, module `kickjs-db`:
 
 ### OpenTelemetry tracing (BYO SDK)
 
-Per the v5 strategic shape (the deprecated `kickjs-otel` was replaced by BYO recipes), `kickjs-db` ships *spans*, not the SDK:
+Per the v5 strategic shape (the deprecated `kickjs-otel` was replaced by BYO recipes), `kickjs-db` ships _spans_, not the SDK:
 
 ```ts
 kickDbAdapter({ tracer: trace.getTracer('kickjs-db') })
@@ -648,7 +691,7 @@ DevTools writes are blocked in production (UI hidden + runtime endpoint refuses 
 ### Slow query detection
 
 ```ts
-kickDbAdapter({ slowQueryThresholdMs: 50 })   // default 200; null = disabled
+kickDbAdapter({ slowQueryThresholdMs: 50 }) // default 200; null = disabled
 ```
 
 Emits `slowQuery` event + warn-level log per query above threshold.
@@ -659,7 +702,7 @@ Not built-in. Documented one-liner pattern:
 
 ```ts
 db.on('queryError', ({ error, sql, parameters }) =>
-  Sentry.captureException(error, { extra: { sql, parameters } })
+  Sentry.captureException(error, { extra: { sql, parameters } }),
 )
 ```
 
@@ -758,7 +801,7 @@ Prove the diff engine works.
 - Diff: snapshot-vs-snapshot → change set → PG SQL.
 - Hand-author one migration manually, apply, verify.
 - No client, no Kysely yet.
-- *Exit:* `kick db generate` produces correct PG up.sql for a known delta.
+- _Exit:_ `kick db generate` produces correct PG up.sql for a known delta.
 
 ### M1 — Walking skeleton (4 weeks)
 
@@ -769,7 +812,7 @@ End-to-end happy path on PG.
 - `kickDbAdapter()` in DI; one example app boots.
 - Migration runner: `latest`, `up`, `down`, `rollback`, `status`. Lock. Batches. Reviewed enforcement.
 - `kick db generate` + `kick db introspect`.
-- *Exit:* port `examples/task-prisma-api` to `task-kickdb-api`; all endpoints green.
+- _Exit:_ port `examples/task-prisma-api` to `task-kickdb-api`; all endpoints green.
 
 ### M2 — Type story + relational query (3 weeks)
 
@@ -779,7 +822,7 @@ End-to-end happy path on PG.
 - `$extends({ model, result })`.
 - Lifecycle hooks (`on('query'|'queryError'|...)`).
 - Slow query threshold + DevTools tab.
-- *Exit:* drizzle's headline DX surface matched.
+- _Exit:_ drizzle's headline DX surface matched.
 
 ### M3 — SQLite + multi-dialect (3 weeks)
 
@@ -787,7 +830,7 @@ End-to-end happy path on PG.
 - SQLite quirks: no real ALTER TYPE, foreign_keys=ON pragma, in-memory mode.
 - Per-dialect SQL emitter for change set IR.
 - Capability flags wired and asserted.
-- *Exit:* full integration suite green on both PG and SQLite.
+- _Exit:_ full integration suite green on both PG and SQLite.
 
 ### M4 — KickJS ecosystem fit (3 weeks)
 
@@ -796,7 +839,7 @@ End-to-end happy path on PG.
 - DevTools tab complete.
 - `createTestDb()`.
 - Documentation pass: this file + guide pages (getting-started, schema, migrations, queries, transactions, multi-tenant, testing, extensions, introspection, errors, observability).
-- *Exit:* zero-friction `kick new --repo kickdb`.
+- _Exit:_ zero-friction `kick new --repo kickdb`.
 
 ### M5 — Hardening + v6.0.0 (2 weeks)
 
@@ -827,7 +870,7 @@ Ordered by likelihood × impact.
 
 1. **Type inference complexity exceeds estimate.** Drizzle's `SelectResult` distributive conditional took years. Mitigation: lean hard on Kysely; only original type-wiring is at `$inferSelect`, which is well-trodden.
 2. **Diff engine ambiguity at scale.** Renames vs drop+add are ambiguous; type coercions where data semantics matter. Mitigation: REVIEWED marker (never auto-apply down drafts); fuzz testing in M5; "give up and emit empty up/down with TODO" mode for unrepresentable changes.
-3. **Migration drift detection false positives.** PG introspection sees auto-generated index names, sequence ownership chains the snapshot doesn't capture verbatim. Mitigation: snapshot stores *normalized* schema; drift compares normalized form.
+3. **Migration drift detection false positives.** PG introspection sees auto-generated index names, sequence ownership chains the snapshot doesn't capture verbatim. Mitigation: snapshot stores _normalized_ schema; drift compares normalized form.
 4. **Kysely breaking changes during M0–M5.** Mitigation: pin to a minor at start, peer-dep range from M5, contribute upstream when our needs converge.
 5. **Performance regressions in `db.query` joins.** JSON aggregation cost varies per dialect. Mitigation: M5 benchmarks; documented per-dialect notes; escape hatch to layers 1/2 always available.
 6. **Adopter migration from prisma/drizzle to kickdb harder than predicted.** Mitigation: codemod tools in M6; introspection lets adopters bootstrap a kickdb schema from existing DB and incrementally swap repos.

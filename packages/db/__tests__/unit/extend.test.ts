@@ -52,7 +52,7 @@ describe('db.$extends({ model })', () => {
     await dbX.destroy()
   })
 
-  it("inside a method, `this` is the extended client (not the original)", async () => {
+  it('inside a method, `this` is the extended client (not the original)', async () => {
     const db = createDbClient({ schema: { users }, dialect: dummy })
     // Methods on the model bag can't carry a `this:` annotation that
     // describes the rebound proxy — TS checks each method against the

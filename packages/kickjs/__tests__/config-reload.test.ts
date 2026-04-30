@@ -21,14 +21,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest'
 import { z } from 'zod'
-import {
-  ConfigService,
-  Container,
-  defineEnv,
-  loadEnv,
-  reloadEnv,
-  resetEnvCache,
-} from '../src'
+import { ConfigService, Container, defineEnv, loadEnv, reloadEnv, resetEnvCache } from '../src'
 
 describe('reloadEnv() preserves the user-registered schema', () => {
   beforeEach(() => {

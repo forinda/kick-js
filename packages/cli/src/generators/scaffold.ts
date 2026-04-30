@@ -139,14 +139,14 @@ export async function generateScaffold(options: ScaffoldOptions): Promise<string
     fields,
     modulesDir,
     noEntity,
-    noTests,
+    noTests: _noTests,
     repo = 'inmemory',
     tokenScope = 'app',
   } = options
   const shouldPluralize = options.pluralize !== false
   const kebab = toKebabCase(name)
   const pascal = toPascalCase(name)
-  const camel = toCamelCase(name)
+  const _camel = toCamelCase(name)
   const plural = shouldPluralize ? pluralize(kebab) : kebab
   const pluralPascal = shouldPluralize ? pluralizePascal(pascal) : pascal
   const moduleDir = join(modulesDir, plural)
@@ -258,7 +258,7 @@ ${tsFields}
 
 function genConstants(pascal: string, fields: FieldDef[]): string {
   const stringFields = fields.filter((f) => f.tsType === 'string').map((f) => `'${f.name}'`)
-  const numberFields = fields.filter((f) => f.tsType === 'number').map((f) => `'${f.name}'`)
+  const _numberFields = fields.filter((f) => f.tsType === 'number').map((f) => `'${f.name}'`)
   const allFieldNames = fields.map((f) => `'${f.name}'`)
 
   const filterable = [...allFieldNames].join(', ')

@@ -1,10 +1,10 @@
 ---
-title: "The Case for a tRPC-like Typed Client in KickJS"
+title: 'The Case for a tRPC-like Typed Client in KickJS'
 published: false
 description: "KickJS backends already define fully typed routes with Zod DTOs and Swagger decorators. Here's why a typed client generator would close the full-stack type safety loop — and what the DX should look like."
 tags: kickjs, typescript, trpc, api-design, mongodb
-series: "Building with KickJS"
-cover_image: ""
+series: 'Building with KickJS'
+cover_image: ''
 ---
 
 ## TL;DR
@@ -47,7 +47,7 @@ async create(ctx: RequestContext) {
 The `createTaskSchema` is a Zod schema:
 
 ```typescript
-import { z } from 'zod';
+import { z } from 'zod'
 
 export const createTaskSchema = z.object({
   title: z.string().min(1).max(200),
@@ -59,9 +59,9 @@ export const createTaskSchema = z.object({
   parentTaskId: z.string().optional(),
   dueDate: z.string().datetime().optional(),
   estimatePoints: z.number().int().positive().optional(),
-});
+})
 
-export type CreateTaskDto = z.infer<typeof createTaskSchema>;
+export type CreateTaskDto = z.infer<typeof createTaskSchema>
 ```
 
 The query config defines filterable, sortable, and searchable fields:
@@ -71,7 +71,7 @@ export const TASK_QUERY_CONFIG: ApiQueryParamsConfig = {
   filterable: ['status', 'priority', 'assigneeId', 'labelId', 'projectId'],
   sortable: ['createdAt', 'title', 'priority', 'dueDate', 'orderIndex'],
   searchable: ['title', 'description'],
-};
+}
 ```
 
 All of this metadata exists. It's precise. It's validated at runtime. And then what happens on the frontend?
@@ -88,8 +88,8 @@ const response = await fetch('/api/v1/projects/123/tasks', {
     title: 'Fix bug',
     priorty: 'high', // typo — no one catches this until runtime
   }),
-});
-const data = await response.json(); // any
+})
+const data = await response.json() // any
 ```
 
 There's a typo in `priorty`. TypeScript doesn't catch it. The API returns a 400 validation error at runtime. We have Zod on the backend specifically to prevent this kind of mistake, but the safety doesn't extend to the consumer.
@@ -126,8 +126,8 @@ The downside: tRPC requires both server and client to be TypeScript, and the ser
 Hono takes a similar approach with `hc<AppType>()`:
 
 ```typescript
-const client = hc<AppType>('http://localhost:3000');
-const res = await client.api.tasks.$post({ json: { title: 'Fix bug' } });
+const client = hc<AppType>('http://localhost:3000')
+const res = await client.api.tasks.$post({ json: { title: 'Fix bug' } })
 ```
 
 This works because Hono's route definitions carry type information through method chaining. But again, it requires the Hono-specific route definition pattern.
@@ -204,15 +204,15 @@ This would scan the codebase — reading decorator metadata from controllers, Zo
 
 ### What the Generator Would Read
 
-| Source | What It Extracts |
-|--------|-----------------|
-| `@Get('/')`, `@Post('/')`, etc. | HTTP method + path |
-| Route option `{ body: schema }` | Request body type (from Zod) |
-| Route option `{ params: schema }` | Path parameter types |
-| Route option `{ query: schema }` | Query parameter types |
-| `@ApiResponse({ status, schema })` | Response type |
-| `@ApiQueryParams(config)` | Filterable/sortable/searchable fields |
-| Module `routes()` path | URL prefix for grouping |
+| Source                             | What It Extracts                      |
+| ---------------------------------- | ------------------------------------- |
+| `@Get('/')`, `@Post('/')`, etc.    | HTTP method + path                    |
+| Route option `{ body: schema }`    | Request body type (from Zod)          |
+| Route option `{ params: schema }`  | Path parameter types                  |
+| Route option `{ query: schema }`   | Query parameter types                 |
+| `@ApiResponse({ status, schema })` | Response type                         |
+| `@ApiQueryParams(config)`          | Filterable/sortable/searchable fields |
+| Module `routes()` path             | URL prefix for grouping               |
 
 ### What It Would Produce
 
@@ -220,39 +220,39 @@ A TypeScript file (or package) with a typed client factory:
 
 ```typescript
 // Generated: client/index.ts
-import { createClient } from '@forinda/kickjs-client';
+import { createClient } from '@forinda/kickjs-client'
 
 export interface AppRoutes {
   auth: {
     register: {
-      method: 'POST';
-      path: '/auth/register';
-      body: { email: string; password: string; firstName: string; lastName: string };
-      response: { accessToken: string; refreshToken: string; user: User };
-    };
+      method: 'POST'
+      path: '/auth/register'
+      body: { email: string; password: string; firstName: string; lastName: string }
+      response: { accessToken: string; refreshToken: string; user: User }
+    }
     login: {
-      method: 'POST';
-      path: '/auth/login';
-      body: { email: string; password: string };
-      response: { accessToken: string; refreshToken: string; user: User };
-    };
-  };
+      method: 'POST'
+      path: '/auth/login'
+      body: { email: string; password: string }
+      response: { accessToken: string; refreshToken: string; user: User }
+    }
+  }
   tasks: {
     create: {
-      method: 'POST';
-      path: '/projects/:projectId/tasks';
-      params: { projectId: string };
-      body: CreateTaskDto;
-      response: TaskResponse;
-    };
+      method: 'POST'
+      path: '/projects/:projectId/tasks'
+      params: { projectId: string }
+      body: CreateTaskDto
+      response: TaskResponse
+    }
     list: {
-      method: 'GET';
-      path: '/projects/:projectId/tasks';
-      params: { projectId: string };
-      query: { status?: string; priority?: string; sort?: string; limit?: number };
-      response: PaginatedResponse<TaskResponse>;
-    };
-  };
+      method: 'GET'
+      path: '/projects/:projectId/tasks'
+      params: { projectId: string }
+      query: { status?: string; priority?: string; sort?: string; limit?: number }
+      response: PaginatedResponse<TaskResponse>
+    }
+  }
   // ... all other routes
 }
 ```
@@ -264,12 +264,12 @@ export interface AppRoutes {
 Here's the experience I want on the frontend:
 
 ```typescript
-import { createApiClient } from '@vibed/api-client';
+import { createApiClient } from '@vibed/api-client'
 
 const api = createApiClient({
   baseUrl: '/api/v1',
   token: accessToken,
-});
+})
 
 // Body typed as CreateTaskDto, response typed as TaskResponse
 const { data: task } = await api.tasks.create({
@@ -279,23 +279,23 @@ const { data: task } = await api.tasks.create({
     priority: 'high',
     assigneeIds: ['user_456'],
   },
-});
+})
 // task is typed as TaskResponse — autocomplete for task.key, task.status, etc.
 
 // Query params typed from ApiQueryParamsConfig
 const { data: tasks, meta } = await api.tasks.list({
   params: { projectId: 'proj_123' },
   query: { status: 'open', sort: '-createdAt', limit: 20 },
-});
+})
 // meta is typed as { page, limit, total, totalPages, hasNext, hasPrev }
 
 // Path params typed from route definition
 const { data: workspace } = await api.workspaces.getById({
   params: { workspaceId: 'ws_789' },
-});
+})
 
 // Auth handled automatically via the token in createApiClient
-const { data: me } = await api.users.me();
+const { data: me } = await api.users.me()
 ```
 
 Key properties of this DX:
@@ -393,10 +393,16 @@ Create a shared types package that exports your Zod schemas:
 
 ```typescript
 // shared/api-types.ts
-export { createTaskSchema, type CreateTaskDto } from '../modules/tasks/application/dtos/create-task.dto';
-export { updateTaskSchema, type UpdateTaskDto } from '../modules/tasks/application/dtos/update-task.dto';
-export { registerSchema, type RegisterDto } from '../modules/auth/application/dtos/register.dto';
-export { loginSchema, type LoginDto } from '../modules/auth/application/dtos/login.dto';
+export {
+  createTaskSchema,
+  type CreateTaskDto,
+} from '../modules/tasks/application/dtos/create-task.dto'
+export {
+  updateTaskSchema,
+  type UpdateTaskDto,
+} from '../modules/tasks/application/dtos/update-task.dto'
+export { registerSchema, type RegisterDto } from '../modules/auth/application/dtos/register.dto'
+export { loginSchema, type LoginDto } from '../modules/auth/application/dtos/login.dto'
 // ... export all DTOs
 ```
 
@@ -404,17 +410,17 @@ Then build a typed fetch wrapper on the frontend:
 
 ```typescript
 // frontend/src/api.ts
-import type { CreateTaskDto } from '../../shared/api-types';
+import type { CreateTaskDto } from '../../shared/api-types'
 
 interface ApiResponse<T> {
-  success: boolean;
-  data: T;
-  message?: string;
+  success: boolean
+  data: T
+  message?: string
 }
 
 interface PaginatedResponse<T> {
-  data: T[];
-  meta: { page: number; limit: number; total: number; totalPages: number };
+  data: T[]
+  meta: { page: number; limit: number; total: number; totalPages: number }
 }
 
 async function post<TBody, TResponse>(
@@ -429,8 +435,8 @@ async function post<TBody, TResponse>(
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(body),
-  });
-  return res.json();
+  })
+  return res.json()
 }
 
 // Usage — typed body, but manual path
@@ -438,7 +444,7 @@ const result = await post<CreateTaskDto, TaskResponse>(
   '/projects/123/tasks',
   { title: 'Fix bug', priority: 'high' },
   token,
-);
+)
 ```
 
 This gives you typed request bodies (from the shared Zod schemas) but not typed paths, params, or responses. It's a stepping stone, not the destination.
@@ -457,4 +463,4 @@ I've filed this as [KICK-018](./framework-filed-issues/KICK-018.md) in the frame
 
 ---
 
-*This is part of a series on building a task management backend with KickJS. Next up: implementing real-time typing indicators and presence tracking with Socket.IO rooms.*
+_This is part of a series on building a task management backend with KickJS. Next up: implementing real-time typing indicators and presence tracking with Socket.IO rooms._

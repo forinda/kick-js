@@ -1,6 +1,6 @@
 # Type-Safe Filtering, Sorting & Pagination with DrizzleQueryParamsConfig
 
-*Part 3 of "Building a Task Management App with KickJS + Drizzle ORM"*
+_Part 3 of "Building a Task Management App with KickJS + Drizzle ORM"_
 
 ---
 
@@ -103,6 +103,7 @@ async findPaginated(parsed: ParsedQuery, projectId?: string) {
 ```
 
 `buildFromColumns()` converts the parsed query into Drizzle-compatible SQL fragments:
+
 - `query.where` — a combined SQL condition (filters + search + baseCondition)
 - `query.orderBy` — an array of `asc()`/`desc()` calls
 - `query.limit` / `query.offset` — pagination values
@@ -189,7 +190,19 @@ import { eq, ne, gt, gte, lt, lte, ilike, inArray, between, and, or, asc, desc }
 import { DrizzleQueryAdapter } from '@forinda/kickjs-drizzle'
 
 export const queryAdapter = new DrizzleQueryAdapter({
-  eq, ne, gt, gte, lt, lte, ilike, inArray, between, and, or, asc, desc,
+  eq,
+  ne,
+  gt,
+  gte,
+  lt,
+  lte,
+  ilike,
+  inArray,
+  between,
+  and,
+  or,
+  asc,
+  desc,
 })
 ```
 

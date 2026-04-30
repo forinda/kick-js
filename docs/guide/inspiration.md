@@ -30,13 +30,13 @@ That's the energy I wanted. So I named it **KipJS** — after Kipchoge.
 
 One problem: `kipjs` was already taken on npm.
 
-So **KickJS** was born. Same energy. Same speed. A name that hits harder. *Kick* as in kickstart your project, kick the complexity out, kick past the barriers.
+So **KickJS** was born. Same energy. Same speed. A name that hits harder. _Kick_ as in kickstart your project, kick the complexity out, kick past the barriers.
 
 ## Why KickJS?
 
 Every framework is opinionated. Rails has its way. Spring Boot has its way. NestJS has its way. KickJS is no different — it's a collection of patterns and practices I've encountered across frontend and backend ecosystems, shaped into something I believe makes building Node.js APIs enjoyable and productive.
 
-This isn't a claim that KickJS is the *only* way or the *best* way. It's *a* way — one that works well for the kinds of applications I've built, and hopefully for yours too.
+This isn't a claim that KickJS is the _only_ way or the _best_ way. It's _a_ way — one that works well for the kinds of applications I've built, and hopefully for yours too.
 
 ## Standing on the Shoulders of Giants
 
@@ -62,11 +62,11 @@ We studied 6 frameworks in the Vite ecosystem to understand how modern tools sol
 
 - **[NestJS](https://nestjs.com)** — Proved that decorators and DI can work beautifully in TypeScript. Module system and guard patterns that scale from small APIs to large applications.
 
-- **[Laravel](https://laravel.com)** — The idea that a framework should ship with *everything* you need — auth, mail, queues, caching, scheduling. Plus an artisan-inspired CLI that scaffolds entire features.
+- **[Laravel](https://laravel.com)** — The idea that a framework should ship with _everything_ you need — auth, mail, queues, caching, scheduling. Plus an artisan-inspired CLI that scaffolds entire features.
 
 - **[Vue.js](https://vuejs.org)** — The Composition API proved that reactivity isn't just for the frontend. Clean, composable state management that works anywhere.
 
-- **[Express.js](https://expressjs.com)** — The foundation. KickJS is built *on* Express 5, not *instead of* it. We add structure on top without hiding the tool underneath.
+- **[Express.js](https://expressjs.com)** — The foundation. KickJS is built _on_ Express 5, not _instead of_ it. We add structure on top without hiding the tool underneath.
 
 - **[TanStack](https://tanstack.com)** — Framework-agnostic, type-safe, composable — Tanner Linsley's suite of tools is a masterclass in developer experience and pluggable design.
 

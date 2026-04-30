@@ -20,9 +20,7 @@ import { PrismaAdapter } from '@forinda/kickjs-prisma'
 
 bootstrap({
   modules,
-  adapters: [
-    PrismaAdapter({ client: new PrismaClient(), logging: true }),
-  ],
+  adapters: [PrismaAdapter({ client: new PrismaClient(), logging: true })],
 })
 ```
 
@@ -39,9 +37,7 @@ const client = new PrismaClient({ adapter: new PrismaPg(pool) })
 
 bootstrap({
   modules,
-  adapters: [
-    PrismaAdapter({ client, logging: true }),
-  ],
+  adapters: [PrismaAdapter({ client, logging: true })],
 })
 ```
 
@@ -65,10 +61,10 @@ Implements `AppAdapter` to manage the Prisma lifecycle:
 
 ### Options
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `client` | `any` | **required** | PrismaClient instance (any Prisma version) |
-| `logging` | `boolean` | `false` | Log queries — uses `$on('query')` for Prisma 5/6, `$extends` for Prisma 7+ |
+| Option    | Type      | Default      | Description                                                                |
+| --------- | --------- | ------------ | -------------------------------------------------------------------------- |
+| `client`  | `any`     | **required** | PrismaClient instance (any Prisma version)                                 |
+| `logging` | `boolean` | `false`      | Log queries — uses `$on('query')` for Prisma 5/6, `$extends` for Prisma 7+ |
 
 ## Repository Approaches
 
@@ -180,27 +176,27 @@ export class PrismaUserRepository {
 
 ### When to Use Which
 
-| Scenario | Recommended |
-|----------|-------------|
-| Scaffolding a new module quickly | **PrismaModelDelegate** — works immediately |
+| Scenario                            | Recommended                                             |
+| ----------------------------------- | ------------------------------------------------------- |
+| Scaffolding a new module quickly    | **PrismaModelDelegate** — works immediately             |
 | Production app with complex queries | **Full PrismaClient** — field validation + autocomplete |
-| Multi-model repos with relations | **Full PrismaClient** — typed `include` |
-| Libraries or generic code | **PrismaModelDelegate** — no schema dependency |
+| Multi-model repos with relations    | **Full PrismaClient** — typed `include`                 |
+| Libraries or generic code           | **PrismaModelDelegate** — no schema dependency          |
 
 ## PrismaModelDelegate Methods
 
 ### PrismaModelDelegate Methods
 
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| `findUnique` | `({ where, include? }) => Promise<unknown>` | Find by unique field |
-| `findFirst` | `(args?) => Promise<unknown>` | Find first match |
-| `findMany` | `(args?) => Promise<unknown[]>` | Find multiple records |
-| `create` | `({ data }) => Promise<unknown>` | Create a record |
-| `update` | `({ where, data }) => Promise<unknown>` | Update a record |
-| `delete` | `({ where }) => Promise<unknown>` | Delete a record |
-| `deleteMany` | `({ where? }) => Promise<{ count }>` | Delete multiple records |
-| `count` | `({ where? }) => Promise<number>` | Count records |
+| Method       | Signature                                   | Description             |
+| ------------ | ------------------------------------------- | ----------------------- |
+| `findUnique` | `({ where, include? }) => Promise<unknown>` | Find by unique field    |
+| `findFirst`  | `(args?) => Promise<unknown>`               | Find first match        |
+| `findMany`   | `(args?) => Promise<unknown[]>`             | Find multiple records   |
+| `create`     | `({ data }) => Promise<unknown>`            | Create a record         |
+| `update`     | `({ where, data }) => Promise<unknown>`     | Update a record         |
+| `delete`     | `({ where }) => Promise<unknown>`           | Delete a record         |
+| `deleteMany` | `({ where? }) => Promise<{ count }>`        | Delete multiple records |
+| `count`      | `({ where? }) => Promise<number>`           | Count records           |
 
 ## PrismaQueryAdapter
 
@@ -231,19 +227,19 @@ const config: PrismaQueryConfig = {
 
 ### Filter Operator Mapping
 
-| Operator | Prisma Clause | Example Query |
-|----------|---------------|---------------|
-| `eq` | `{ equals: value }` | `?filter[status]=eq:active` |
-| `neq` | `{ not: value }` | `?filter[status]=neq:banned` |
-| `gt` | `{ gt: value }` | `?filter[age]=gt:18` |
-| `gte` | `{ gte: value }` | `?filter[age]=gte:21` |
-| `lt` | `{ lt: value }` | `?filter[price]=lt:100` |
-| `lte` | `{ lte: value }` | `?filter[price]=lte:50` |
-| `contains` | `{ contains: value, mode: 'insensitive' }` | `?filter[name]=contains:john` |
-| `starts` | `{ startsWith: value }` | `?filter[name]=starts:J` |
-| `ends` | `{ endsWith: value }` | `?filter[email]=ends:@gmail.com` |
-| `in` | `{ in: [...values] }` | `?filter[role]=in:admin,editor` |
-| `between` | `{ gte: min, lte: max }` | `?filter[age]=between:18,65` |
+| Operator   | Prisma Clause                              | Example Query                    |
+| ---------- | ------------------------------------------ | -------------------------------- |
+| `eq`       | `{ equals: value }`                        | `?filter[status]=eq:active`      |
+| `neq`      | `{ not: value }`                           | `?filter[status]=neq:banned`     |
+| `gt`       | `{ gt: value }`                            | `?filter[age]=gt:18`             |
+| `gte`      | `{ gte: value }`                           | `?filter[age]=gte:21`            |
+| `lt`       | `{ lt: value }`                            | `?filter[price]=lt:100`          |
+| `lte`      | `{ lte: value }`                           | `?filter[price]=lte:50`          |
+| `contains` | `{ contains: value, mode: 'insensitive' }` | `?filter[name]=contains:john`    |
+| `starts`   | `{ startsWith: value }`                    | `?filter[name]=starts:J`         |
+| `ends`     | `{ endsWith: value }`                      | `?filter[email]=ends:@gmail.com` |
+| `in`       | `{ in: [...values] }`                      | `?filter[role]=in:admin,editor`  |
+| `between`  | `{ gte: min, lte: max }`                   | `?filter[age]=between:18,65`     |
 
 ### PrismaQueryResult Shape
 

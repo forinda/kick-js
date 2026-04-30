@@ -35,9 +35,7 @@ import.meta.glob(
 
 export class TodosModule implements AppModule {
   register(container: Container): void {
-    container.registerFactory(TODOS_REPOSITORY, () =>
-      container.resolve(InMemoryTodosRepository),
-    )
+    container.registerFactory(TODOS_REPOSITORY, () => container.resolve(InMemoryTodosRepository))
   }
 
   routes(): ModuleRoutes {
@@ -73,10 +71,10 @@ You can also use plain side-effect imports as shown in the basic example above.
 
 ```ts
 interface ModuleRoutes {
-  path: string        // URL prefix, e.g. '/todos'
-  router: any         // Express Router from buildRoutes()
-  version?: number    // API version override (defaults to Application.defaultVersion)
-  controller?: any    // Controller class for OpenAPI introspection
+  path: string // URL prefix, e.g. '/todos'
+  router: any // Express Router from buildRoutes()
+  version?: number // API version override (defaults to Application.defaultVersion)
+  controller?: any // Controller class for OpenAPI introspection
 }
 ```
 

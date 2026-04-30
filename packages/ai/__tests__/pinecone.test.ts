@@ -124,9 +124,9 @@ describe('PineconeVectorStore.upsert()', () => {
       indexHost: 'x.pinecone.io',
       dimensions: 3,
     })
-    await expect(
-      store.upsert({ id: '1', content: 'a', vector: [0.1, 0.2] }),
-    ).rejects.toThrow(/dimensions/)
+    await expect(store.upsert({ id: '1', content: 'a', vector: [0.1, 0.2] })).rejects.toThrow(
+      /dimensions/,
+    )
   })
 
   it('flattens content + metadata into a single Pinecone metadata record', async () => {

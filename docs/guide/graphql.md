@@ -49,7 +49,9 @@ import { bootstrap } from '@forinda/kickjs'
 import { GraphQlPlugin } from './plugins/graphql.plugin'
 
 const typeDefs = /* GraphQL */ `
-  type Query { hello: String }
+  type Query {
+    hello: String
+  }
 `
 const rootValue = { hello: () => 'world' }
 
@@ -111,7 +113,7 @@ export const GraphqlAdapter = defineAdapter<GraphqlAdapterOptions>({
         const handler = createHandler({
           schema,
           rootValue: buildRootValue(container),
-          context: () => ({ ctx, container }),  // resolvers can pull from here
+          context: () => ({ ctx, container }), // resolvers can pull from here
         })
         handler(req, res, next)
       })
@@ -189,12 +191,12 @@ The topology view shows live query/mutation rates next to the rest of the app's 
 
 ## Recommended runtimes
 
-| Use case | Pick |
-|---|---|
-| Code-first schema with strong types | [Pothos](https://pothos-graphql.dev/) + the plugin pattern above |
-| SDL-first with custom resolvers | [`graphql-http`](https://github.com/graphql/graphql-http) + `buildSchema()` |
+| Use case                                  | Pick                                                                                               |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Code-first schema with strong types       | [Pothos](https://pothos-graphql.dev/) + the plugin pattern above                                   |
+| SDL-first with custom resolvers           | [`graphql-http`](https://github.com/graphql/graphql-http) + `buildSchema()`                        |
 | Federation / subscriptions / file uploads | [Apollo Server](https://www.apollographql.com/docs/apollo-server/) — wrap with `expressMiddleware` |
-| Edge / streaming | [GraphQL Yoga](https://the-guild.dev/graphql/yoga-server) |
+| Edge / streaming                          | [GraphQL Yoga](https://the-guild.dev/graphql/yoga-server)                                          |
 
 All four expose an Express-compatible handler, so they slot into either of the patterns above without changing the KickJS-side code.
 

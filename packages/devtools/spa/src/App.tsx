@@ -1,11 +1,5 @@
 import { createSignal, For, onCleanup, onMount, Show, type Component } from 'solid-js'
-import {
-  mountThemeEffect,
-  resolvedTheme,
-  setTheme,
-  themeMode,
-  type ThemeMode,
-} from './lib/theme'
+import { mountThemeEffect, resolvedTheme, setTheme, themeMode, type ThemeMode } from './lib/theme'
 import type { DevtoolsTabDescriptor } from '@forinda/kickjs-devtools-kit'
 import { OverviewTab } from './tabs/OverviewTab'
 import { RuntimeTab } from './tabs/RuntimeTab'
@@ -305,7 +299,13 @@ const ThemeToggle: Component = () => {
     return `Theme: ${m === 'system' ? 'follow system' : m} (click to cycle)`
   }
   return (
-    <button type="button" class="dt-theme-toggle" onClick={cycle} aria-label={aria()} title={aria()}>
+    <button
+      type="button"
+      class="dt-theme-toggle"
+      onClick={cycle}
+      aria-label={aria()}
+      title={aria()}
+    >
       <Show
         when={resolvedTheme() === 'dark'}
         fallback={

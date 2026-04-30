@@ -6,7 +6,7 @@ This example does **not** boot a real KickJS application. It exists to prove
 the `kick db generate` CLI surface works end-to-end:
 
 1. `src/db/schema.ts` declares two tables (`users`, `posts`) with FK + indexes
-   + a multi-column unique constraint, exercising every feature in M0.
+   - a multi-column unique constraint, exercising every feature in M0.
 2. `kick.config.ts` points the db tooling at the schema and a migrations
    output dir.
 3. Running `pnpm db:generate init` walks the schema → `extractSnapshot` →

@@ -9,9 +9,7 @@ import { session } from '@forinda/kickjs'
 
 bootstrap({
   modules,
-  middleware: [
-    session({ secret: process.env.SESSION_SECRET! }),
-  ],
+  middleware: [session({ secret: process.env.SESSION_SECRET! })],
 })
 ```
 
@@ -22,19 +20,19 @@ session middleware reuses it and will not re-parse.
 
 ## Options
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `secret` | `string` | **required** | Secret for signing the session cookie |
-| `cookieName` | `string` | `'kick.sid'` | Cookie name |
-| `maxAge` | `number` | `86400000` (24h) | Session TTL in milliseconds |
-| `rolling` | `boolean` | `false` | Reset TTL on every request |
-| `saveUninitialized` | `boolean` | `true` | Save empty sessions |
-| `cookie.httpOnly` | `boolean` | `true` | HTTP-only cookie |
-| `cookie.secure` | `boolean` | `true` in production | Secure cookie |
-| `cookie.sameSite` | `string` | `'lax'` | SameSite attribute |
-| `cookie.path` | `string` | `'/'` | Cookie path |
-| `cookie.domain` | `string` | — | Cookie domain |
-| `store` | `SessionStore` | In-memory | Custom session store |
+| Option              | Type           | Default              | Description                           |
+| ------------------- | -------------- | -------------------- | ------------------------------------- |
+| `secret`            | `string`       | **required**         | Secret for signing the session cookie |
+| `cookieName`        | `string`       | `'kick.sid'`         | Cookie name                           |
+| `maxAge`            | `number`       | `86400000` (24h)     | Session TTL in milliseconds           |
+| `rolling`           | `boolean`      | `false`              | Reset TTL on every request            |
+| `saveUninitialized` | `boolean`      | `true`               | Save empty sessions                   |
+| `cookie.httpOnly`   | `boolean`      | `true`               | HTTP-only cookie                      |
+| `cookie.secure`     | `boolean`      | `true` in production | Secure cookie                         |
+| `cookie.sameSite`   | `string`       | `'lax'`              | SameSite attribute                    |
+| `cookie.path`       | `string`       | `'/'`                | Cookie path                           |
+| `cookie.domain`     | `string`       | —                    | Cookie domain                         |
+| `store`             | `SessionStore` | In-memory            | Custom session store                  |
 
 ## Using Sessions in Controllers
 
@@ -72,13 +70,13 @@ class AuthController {
 
 The `req.session` (or `ctx.session`) object provides:
 
-| Property/Method | Description |
-|-----------------|-------------|
-| `id` | Current session ID |
-| `data` | Key-value session data object |
-| `regenerate()` | Create a new session ID (prevents fixation attacks) |
-| `destroy()` | Delete the session and clear the cookie |
-| `save()` | Manually save the session (auto-saves on response finish) |
+| Property/Method | Description                                               |
+| --------------- | --------------------------------------------------------- |
+| `id`            | Current session ID                                        |
+| `data`          | Key-value session data object                             |
+| `regenerate()`  | Create a new session ID (prevents fixation attacks)       |
+| `destroy()`     | Delete the session and clear the cookie                   |
+| `save()`        | Manually save the session (auto-saves on response finish) |
 
 ## Rolling Sessions
 

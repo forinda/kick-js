@@ -155,9 +155,7 @@ export const Pagination: Component<{ pager: Pager<unknown> }> = (props) => {
               value={props.pager.pageSize()}
               onChange={(e) => props.pager.setPageSize(Number(e.currentTarget.value))}
             >
-              <For each={props.pager.pageSizeChoices}>
-                {(n) => <option value={n}>{n}</option>}
-              </For>
+              <For each={props.pager.pageSizeChoices}>{(n) => <option value={n}>{n}</option>}</For>
             </select>
           </label>
         </div>

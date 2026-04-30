@@ -42,7 +42,7 @@ describe('diff() — rename heuristic', () => {
       wrap([col('a', { type: 'varchar(50)' })]),
       wrap([col('b', { type: 'text' })]),
     )
-    expect(changes.map((c) => c.kind).sort()).toEqual(['addColumn', 'dropColumn'])
+    expect(changes.map((c) => c.kind).toSorted()).toEqual(['addColumn', 'dropColumn'])
   })
 
   it('does not rename when ambiguous (multiple matching adds/drops)', () => {

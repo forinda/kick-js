@@ -33,16 +33,16 @@ Once this file exists, run `kick typegen` once (or just start `kick dev`) and th
 ## Wiring the schema at startup
 
 ::: danger Required: side-effect import
-The schema in `src/env.ts` is a **declaration only**. You must also call `loadEnv(envSchema)` (the canonical pattern below does this for you) **and** make sure that file is imported as a side effect from `src/index.ts` *before* `bootstrap()` runs. If you skip this:
+The schema in `src/env.ts` is a **declaration only**. You must also call `loadEnv(envSchema)` (the canonical pattern below does this for you) **and** make sure that file is imported as a side effect from `src/index.ts` _before_ `bootstrap()` runs. If you skip this:
 
 - `ConfigService.get('YOUR_KEY')` returns `undefined` for every user-defined key.
 - `loadEnv()` (no-arg) falls back to `baseEnvSchema` and only knows `PORT`, `NODE_ENV`, `LOG_LEVEL`.
-- `@Value('YOUR_KEY')` *appears* to keep working — but only because it has a raw `process.env` fallback baked in. The Zod-validated typed value is not available, the schema's defaults never apply, and `z.coerce.number()` etc. silently drop their type coercion. This is the divergence that causes "ConfigService doesn't see my env" bug reports.
+- `@Value('YOUR_KEY')` _appears_ to keep working — but only because it has a raw `process.env` fallback baked in. The Zod-validated typed value is not available, the schema's defaults never apply, and `z.coerce.number()` etc. silently drop their type coercion. This is the divergence that causes "ConfigService doesn't see my env" bug reports.
 
 `kick new` scaffolds both halves of the wiring for you. If you're upgrading an older project by hand, follow the canonical pattern below.
 :::
 
-The canonical `src/config/index.ts` calls `loadEnv(envSchema)` itself so the file does double duty as both a schema declaration *and* a runtime registration:
+The canonical `src/config/index.ts` calls `loadEnv(envSchema)` itself so the file does double duty as both a schema declaration _and_ a runtime registration:
 
 ```ts
 // src/config/index.ts
@@ -89,17 +89,13 @@ import swc from 'unplugin-swc'
 import { kickjsVitePlugin, envWatchPlugin } from '@forinda/kickjs-vite'
 
 export default defineConfig({
-  plugins: [
-    swc.vite(),
-    kickjsVitePlugin({ entry: 'src/index.ts' }),
-    envWatchPlugin(),
-  ],
+  plugins: [swc.vite(), kickjsVitePlugin({ entry: 'src/index.ts' }), envWatchPlugin()],
 })
 ```
 
 ### Why this matters
 
-`ConfigService` reads through `loadEnv()` lazily on every `get` call — so once `loadEnv(extendedSchema)` has been called *anywhere* in the app, every `ConfigService` instance (whether resolved before or after) sees the extended values. The catch is "anywhere": if `src/env.ts` is never imported, `loadEnv(extendedSchema)` never runs and the cached schema stays empty (or downgrades to the base shape).
+`ConfigService` reads through `loadEnv()` lazily on every `get` call — so once `loadEnv(extendedSchema)` has been called _anywhere_ in the app, every `ConfigService` instance (whether resolved before or after) sees the extended values. The catch is "anywhere": if `src/env.ts` is never imported, `loadEnv(extendedSchema)` never runs and the cached schema stays empty (or downgrades to the base shape).
 
 `@Value()` masks this bug because it has a defensive `process.env[key]` fallback. `ConfigService` deliberately does **not** — it returns whatever the validated env cache holds, so calls to `config.get('CUSTOM_KEY')` come back `undefined` until the schema has been registered. Treat `ConfigService.get` returning `undefined` for a known-good `.env` value as a strong signal that `src/env.ts` is not being imported at startup.
 
@@ -151,10 +147,10 @@ You can still pass an explicit schema as the second argument when you need a one
 
 `reloadEnv()` and `resetEnvCache()` look similar but answer different questions, and using the wrong one in dev produces a subtle "user keys disappear" bug. Pick the right tool:
 
-| Function | Clears parsed values? | Clears registered schema? | Use when |
-| --- | --- | --- | --- |
-| `reloadEnv()` | yes | **no** | a `.env` file changed; you want fresh values against the *same* schema. Called automatically by `envWatchPlugin()` and the kickjs HMR rebuild path. |
-| `resetEnvCache()` | yes | yes | a test wants a totally fresh slate, e.g. swapping `envSchema` between cases. |
+| Function          | Clears parsed values? | Clears registered schema? | Use when                                                                                                                                            |
+| ----------------- | --------------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `reloadEnv()`     | yes                   | **no**                    | a `.env` file changed; you want fresh values against the _same_ schema. Called automatically by `envWatchPlugin()` and the kickjs HMR rebuild path. |
+| `resetEnvCache()` | yes                   | yes                       | a test wants a totally fresh slate, e.g. swapping `envSchema` between cases.                                                                        |
 
 `reloadEnv()` deliberately keeps the registered schema so the next read re-parses `process.env` against your extended shape instead of falling back to the base schema. If it dropped the schema instead, every `ConfigService.get('CUSTOM_KEY')` after a `.env` save would silently start returning `undefined` — which is exactly the bug HMR users would hit on every reload before this fix.
 
@@ -283,18 +279,18 @@ The `kick.config.ts` file configures the CLI's code generators, project-local co
 import { defineConfig } from '@forinda/kickjs-cli'
 
 export default defineConfig({
-  pattern: 'ddd',                           // 'rest' | 'graphql' | 'ddd' | 'cqrs' | 'minimal'
+  pattern: 'ddd', // 'rest' | 'graphql' | 'ddd' | 'cqrs' | 'minimal'
   modules: {
-    dir: 'src/modules',                     // default location (convention) — override freely
-    repo: 'prisma',                         // 'drizzle' | 'inmemory' | 'prisma' | { name: 'custom' }
-    pluralize: true,                        // pluralize module names
-    schemaDir: 'prisma/',                   // schema directory for ORM (configurable)
-    prismaClientPath: '@/generated/prisma/client',  // Prisma 7+ client path
+    dir: 'src/modules', // default location (convention) — override freely
+    repo: 'prisma', // 'drizzle' | 'inmemory' | 'prisma' | { name: 'custom' }
+    pluralize: true, // pluralize module names
+    schemaDir: 'prisma/', // schema directory for ORM (configurable)
+    prismaClientPath: '@/generated/prisma/client', // Prisma 7+ client path
   },
-  plugins: [],                              // KickCliPlugin[] — see ./cli-plugins.md
-  commands: [],                             // project-local custom CLI commands
+  plugins: [], // KickCliPlugin[] — see ./cli-plugins.md
+  commands: [], // project-local custom CLI commands
   typegen: {
-    disable: [],                            // skip specific plugin typegens (e.g. ['kick/db'])
+    disable: [], // skip specific plugin typegens (e.g. ['kick/db'])
   },
 })
 ```
@@ -315,6 +311,7 @@ The `plugins` field expects an array of `KickCliPlugin` instances (typically bui
 
 ::: warning Deprecated Fields
 The following top-level fields are deprecated in favor of the `modules` block:
+
 - `modulesDir` → `modules.dir`
 - `defaultRepo` → `modules.repo`
 - `schemaDir` → `modules.schemaDir`

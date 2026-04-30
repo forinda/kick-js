@@ -38,7 +38,7 @@ function detectName(outDir: string, override?: string): string {
   } catch {
     // No package.json — fall back to folder name
   }
-  return outDir.split('/').filter(Boolean).pop() ?? 'app'
+  return outDir.split('/').findLast(Boolean) ?? 'app'
 }
 
 function detectPm(outDir: string, override?: string): string {

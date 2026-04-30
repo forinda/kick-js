@@ -30,7 +30,7 @@
  */
 
 import { mkdir, writeFile } from 'node:fs/promises'
-import { dirname, join, relative, resolve, sep } from 'node:path'
+import { dirname, join, relative, sep } from 'node:path'
 import type {
   ClassCollision,
   DiscoveredAugmentation,
@@ -160,7 +160,7 @@ function renderUnion(typeName: string, names: string[], emptyComment: string): s
 export type ${typeName} = never
 `
   }
-  const sorted = [...new Set(names)].sort()
+  const sorted = [...new Set(names)].toSorted()
   return `${HEADER}
 export type ${typeName} =
 ${sorted.map((n) => `  | '${n}'`).join('\n')}
@@ -214,7 +214,7 @@ function renderPlugins(items: DiscoveredPluginOrAdapter[]): string {
     if (!byName.has(item.name)) byName.set(item.name, item)
   }
 
-  const sorted = [...byName.values()].sort((a, b) => a.name.localeCompare(b.name))
+  const sorted = [...byName.values()].toSorted((a, b) => a.name.localeCompare(b.name))
   const entries = sorted.map((item) => `    '${item.name}': '${item.kind}'`).join('\n')
 
   const body = entries
@@ -272,7 +272,7 @@ export {}
   }
 
   const blocks: string[] = []
-  for (const item of [...byName.values()].sort((a, b) => a.name.localeCompare(b.name))) {
+  for (const item of [...byName.values()].toSorted((a, b) => a.name.localeCompare(b.name))) {
     const docLines: string[] = []
     if (item.description) {
       // Description may itself be multi-line — preserve line breaks
@@ -382,7 +382,7 @@ export async function generateTypes(opts: GenerateOptions): Promise<GenerateResu
     assets = { entries: [], count: 0 } as DiscoveredAssets,
     outDir,
     allowDuplicates = false,
-    schemaValidator = false,
+    schemaValidator: _schemaValidator = false,
   } = opts
 
   if (collisions.length > 0 && !allowDuplicates) {

@@ -17,12 +17,7 @@
  */
 
 import { beforeEach, describe, expect, it } from 'vitest'
-import {
-  PgVectorStore,
-  buildWhereClause,
-  toPgVector,
-  type SqlExecutor,
-} from '@forinda/kickjs-ai'
+import { PgVectorStore, buildWhereClause, toPgVector, type SqlExecutor } from '@forinda/kickjs-ai'
 
 // ── Fake SQL executor ────────────────────────────────────────────────────
 
@@ -62,9 +57,7 @@ class FakeExecutor implements SqlExecutor {
     // Filter out the schema setup calls so tests can focus on the
     // upsert/query/delete SQL they care about.
     const business = this.calls.filter(
-      (c) =>
-        !c.text.includes('CREATE EXTENSION') &&
-        !c.text.includes('CREATE TABLE IF NOT EXISTS'),
+      (c) => !c.text.includes('CREATE EXTENSION') && !c.text.includes('CREATE TABLE IF NOT EXISTS'),
     )
     return business[business.length - 1]
   }
@@ -74,30 +67,20 @@ class FakeExecutor implements SqlExecutor {
 
 describe('PgVectorStore — construction', () => {
   it('throws when neither client nor connectionString is provided', () => {
-    expect(
-      () => new PgVectorStore({ dimensions: 3 } as never),
-    ).toThrow(/client.*connectionString/)
+    expect(() => new PgVectorStore({ dimensions: 3 } as never)).toThrow(/client.*connectionString/)
   })
 
   it('throws on invalid dimensions', () => {
     const client = new FakeExecutor()
-    expect(
-      () => new PgVectorStore({ client, dimensions: 0 }),
-    ).toThrow(/dimensions.*positive/)
-    expect(
-      () => new PgVectorStore({ client, dimensions: -5 }),
-    ).toThrow(/dimensions.*positive/)
-    expect(
-      () => new PgVectorStore({ client, dimensions: 1.5 }),
-    ).toThrow(/dimensions.*positive/)
+    expect(() => new PgVectorStore({ client, dimensions: 0 })).toThrow(/dimensions.*positive/)
+    expect(() => new PgVectorStore({ client, dimensions: -5 })).toThrow(/dimensions.*positive/)
+    expect(() => new PgVectorStore({ client, dimensions: 1.5 })).toThrow(/dimensions.*positive/)
   })
 
   it('exposes default name and allows override', () => {
     const client = new FakeExecutor()
     expect(new PgVectorStore({ client, dimensions: 3 }).name).toBe('pgvector')
-    expect(
-      new PgVectorStore({ client, dimensions: 3, name: 'timescale' }).name,
-    ).toBe('timescale')
+    expect(new PgVectorStore({ client, dimensions: 3, name: 'timescale' }).name).toBe('timescale')
   })
 })
 
@@ -213,9 +196,9 @@ describe('PgVectorStore — upsert', () => {
   })
 
   it('rejects documents with missing id', async () => {
-    await expect(
-      store.upsert({ id: '', content: 'x', vector: [1, 0, 0] }),
-    ).rejects.toThrow(/id is required/)
+    await expect(store.upsert({ id: '', content: 'x', vector: [1, 0, 0] })).rejects.toThrow(
+      /id is required/,
+    )
   })
 
   it('rejects documents with a non-array vector', async () => {
@@ -229,9 +212,9 @@ describe('PgVectorStore — upsert', () => {
   })
 
   it('rejects documents whose vector length does not match dimensions', async () => {
-    await expect(
-      store.upsert({ id: '1', content: 'x', vector: [1, 2] }),
-    ).rejects.toThrow(/length 2.*dimensions 3/)
+    await expect(store.upsert({ id: '1', content: 'x', vector: [1, 2] })).rejects.toThrow(
+      /length 2.*dimensions 3/,
+    )
   })
 
   it('is a no-op when given an empty array', async () => {
@@ -334,15 +317,11 @@ describe('PgVectorStore — query', () => {
   })
 
   it('throws on dimension mismatch', async () => {
-    await expect(store.query({ vector: [1, 2] })).rejects.toThrow(
-      /length 2.*dimensions 3/,
-    )
+    await expect(store.query({ vector: [1, 2] })).rejects.toThrow(/length 2.*dimensions 3/)
   })
 
   it('surfaces metadata on returned hits', async () => {
-    client.script([
-      { id: 'a', content: 'x', metadata: { author: 'alice' }, score: 0.9 },
-    ])
+    client.script([{ id: 'a', content: 'x', metadata: { author: 'alice' }, score: 0.9 }])
 
     const hits = await store.query({ vector: [1, 0, 0] })
     expect(hits[0].metadata).toEqual({ author: 'alice' })
@@ -469,12 +448,8 @@ describe('buildWhereClause', () => {
   })
 
   it('rejects keys with unsupported characters', () => {
-    expect(() => buildWhereClause({ "name'; DROP": 'x' }, 1)).toThrow(
-      /unsupported characters/,
-    )
-    expect(() => buildWhereClause({ '$injection': 'x' }, 1)).toThrow(
-      /unsupported characters/,
-    )
+    expect(() => buildWhereClause({ "name'; DROP": 'x' }, 1)).toThrow(/unsupported characters/)
+    expect(() => buildWhereClause({ $injection: 'x' }, 1)).toThrow(/unsupported characters/)
   })
 
   it('allows keys with dots, dashes, and underscores', () => {
@@ -482,7 +457,7 @@ describe('buildWhereClause', () => {
       {
         'nested.path': 'x',
         'kebab-key': 'y',
-        'snake_key': 'z',
+        snake_key: 'z',
       },
       1,
     )

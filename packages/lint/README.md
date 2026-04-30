@@ -32,11 +32,11 @@ if (result.violations.length > 0) console.error(formatViolations(result.violatio
 
 ## Rules
 
-| Rule                        | Default  | Description                                                                        |
-| --------------------------- | -------- | ---------------------------------------------------------------------------------- |
-| `di-token-symbol`           | `error`  | DI tokens must use `createToken<T>()` instead of `Symbol(...)` in token files       |
-| `token-kick-prefix`         | `error`  | First-party tokens must start with the reserved `kick/` prefix                     |
-| `token-reserved-prefix`     | `warn`   | Third-party tokens must not squat the reserved `kick/` prefix                       |
+| Rule                    | Default | Description                                                                   |
+| ----------------------- | ------- | ----------------------------------------------------------------------------- |
+| `di-token-symbol`       | `error` | DI tokens must use `createToken<T>()` instead of `Symbol(...)` in token files |
+| `token-kick-prefix`     | `error` | First-party tokens must start with the reserved `kick/` prefix                |
+| `token-reserved-prefix` | `warn`  | Third-party tokens must not squat the reserved `kick/` prefix                 |
 
 Inline-disable a rule on a single line:
 

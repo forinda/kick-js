@@ -65,7 +65,7 @@ export type Db = typeof dbClient
 
 ## `KickDbRegister` — bare `KickDbClient` widening
 
-When a repository or service imports `KickDbClient` *without* a generic, you'd normally get the unconstrained surface (`unknown` row shapes everywhere). The `KickDbRegister` interface is a module-augmentation registry that names the canonical client globally:
+When a repository or service imports `KickDbClient` _without_ a generic, you'd normally get the unconstrained surface (`unknown` row shapes everywhere). The `KickDbRegister` interface is a module-augmentation registry that names the canonical client globally:
 
 ```ts
 // db/register.ts (manual; or generated — see below)
@@ -118,9 +118,9 @@ Adopters who let typegen manage this can delete the hand-written `register.ts`. 
 
 ```ts
 const t = table('t', {
-  required: varchar(50).notNull(),  // → string
-  optional: varchar(50),            // → string | null
-  pkey:     uuid().primaryKey(),    // → string  (primaryKey implies notNull)
+  required: varchar(50).notNull(), // → string
+  optional: varchar(50), // → string | null
+  pkey: uuid().primaryKey(), // → string  (primaryKey implies notNull)
 })
 ```
 
@@ -137,7 +137,7 @@ export const categories = table('categories', {
   id: uuid().primaryKey().defaultRandom(),
   name: varchar(255).notNull(),
   parentId: uuid().references(
-    (): ColumnRef => categories.id,    // ← explicit return type breaks TS7022
+    (): ColumnRef => categories.id, // ← explicit return type breaks TS7022
     { onDelete: 'set_null' },
   ),
 })

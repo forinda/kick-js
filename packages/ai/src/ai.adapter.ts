@@ -275,7 +275,7 @@ export const AiAdapter = defineAdapter<AiAdapterOptions, AiAdapterExtensions>({
 
       const lastAssistant = messages
         .slice()
-        .reverse()
+        .toReversed()
         .find((m) => m.role === 'assistant')
       return {
         content: lastAssistant?.content ?? '',

@@ -53,12 +53,10 @@ export const MetricsTab: Component = () => {
     const data = metrics()
     if (!data) return []
     return Object.entries(data.routeLatency)
-      .map(([key, stats]) => ({
-        key,
-        ...stats,
-        avg: stats.count > 0 ? stats.totalMs / stats.count : 0,
-      }))
-      .sort((a, b) => b.count - a.count)
+      .map(([key, stats]) =>
+        Object.assign({ key }, stats, { avg: stats.count > 0 ? stats.totalMs / stats.count : 0 }),
+      )
+      .toSorted((a, b) => b.count - a.count)
   })
 
   return (

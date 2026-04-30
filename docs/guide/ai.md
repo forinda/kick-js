@@ -196,8 +196,8 @@ const result = await this.ai.runAgent({
   maxSteps: 5,
 })
 
-console.log(result.content)    // final assistant text
-console.log(result.toolCalls)  // audit trail of what was called
+console.log(result.content) // final assistant text
+console.log(result.toolCalls) // audit trail of what was called
 ```
 
 Tool dispatch happens through internal HTTP requests against the
@@ -296,12 +296,7 @@ that consume `VECTOR_STORE` never need to know which one is wired in.
 
 ```ts
 import { bootstrap, getEnv } from '@forinda/kickjs'
-import {
-  AiAdapter,
-  OpenAIProvider,
-  QdrantVectorStore,
-  VECTOR_STORE,
-} from '@forinda/kickjs-ai'
+import { AiAdapter, OpenAIProvider, QdrantVectorStore, VECTOR_STORE } from '@forinda/kickjs-ai'
 
 const store = new QdrantVectorStore({
   url: getEnv('QDRANT_URL'),
@@ -339,10 +334,7 @@ import { AiAdapter } from '@forinda/kickjs-ai'
 export class KnowledgeService {
   private readonly rag: RagService
 
-  constructor(
-    @Autowired() ai: AiAdapter,
-    @Inject(VECTOR_STORE) store: VectorStore,
-  ) {
+  constructor(@Autowired() ai: AiAdapter, @Inject(VECTOR_STORE) store: VectorStore) {
     this.rag = new RagService({ provider: ai.getProvider(), store })
   }
 

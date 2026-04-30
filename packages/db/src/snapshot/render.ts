@@ -31,7 +31,7 @@ export function renderSchemaSource(snapshot: SchemaSnapshot): string {
     tableSources.push(renderTable(table, usedColumnHelpers))
   }
 
-  const helpers = ['table', ...Array.from(usedColumnHelpers).sort()]
+  const helpers = ['table', ...Array.from(usedColumnHelpers).toSorted()]
   // Common constraint helpers used by tables with secondary objects.
   const needsIndex = Object.values(snapshot.tables).some((t) =>
     t.indexes.some((i) => !isAutoUniqueName(t.name, i)),

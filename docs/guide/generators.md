@@ -138,22 +138,23 @@ products/
 ```
 
 The event handler includes commented-out integration points for:
+
 - **WebSocket** — broadcast changes to connected clients in real-time via `@forinda/kickjs-ws`
 - **Queue** — dispatch async jobs for background processing via `@forinda/kickjs-queue`
 - **ETL** — transform and load data to external systems
 
 ### Module Flags
 
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--pattern <type>` | Override project pattern: `rest`, `ddd`, `cqrs`, `minimal` | from config or `ddd` |
-| `--no-entity` | Skip entity and value object generation (DDD only) | false |
-| `--no-tests` | Skip test file generation | false |
-| `--repo <type>` | Repository implementation (see [Repository Variants](#repository-variants)) | from config or `inmemory` |
-| `--no-pluralize` | Use singular names for folders and routes | from config or `false` |
-| `--minimal` | Shorthand for `--pattern minimal` | false |
-| `--modules-dir <dir>` | Modules directory | from config or `src/modules` |
-| `-f, --force` | Overwrite existing files without prompting | false |
+| Flag                  | Description                                                                 | Default                      |
+| --------------------- | --------------------------------------------------------------------------- | ---------------------------- |
+| `--pattern <type>`    | Override project pattern: `rest`, `ddd`, `cqrs`, `minimal`                  | from config or `ddd`         |
+| `--no-entity`         | Skip entity and value object generation (DDD only)                          | false                        |
+| `--no-tests`          | Skip test file generation                                                   | false                        |
+| `--repo <type>`       | Repository implementation (see [Repository Variants](#repository-variants)) | from config or `inmemory`    |
+| `--no-pluralize`      | Use singular names for folders and routes                                   | from config or `false`       |
+| `--minimal`           | Shorthand for `--pattern minimal`                                           | false                        |
+| `--modules-dir <dir>` | Modules directory                                                           | from config or `src/modules` |
+| `-f, --force`         | Overwrite existing files without prompting                                  | false                        |
 
 ### Pluralization
 
@@ -222,11 +223,11 @@ The `--repo` flag generates a different infrastructure implementation:
 
 **Built-in types** generate fully working repository code:
 
-| Value | Generated file | Description |
-|-------|---------------|-------------|
-| `inmemory` | `in-memory-{name}.repository.ts` | Working Map-based store for prototyping |
-| `drizzle` | `drizzle-{name}.repository.ts` | Working Drizzle ORM queries with `DRIZZLE_DB` injection |
-| `prisma` | `prisma-{name}.repository.ts` | Working Prisma Client queries with `PRISMA_CLIENT` injection |
+| Value      | Generated file                   | Description                                                  |
+| ---------- | -------------------------------- | ------------------------------------------------------------ |
+| `inmemory` | `in-memory-{name}.repository.ts` | Working Map-based store for prototyping                      |
+| `drizzle`  | `drizzle-{name}.repository.ts`   | Working Drizzle ORM queries with `DRIZZLE_DB` injection      |
+| `prisma`   | `prisma-{name}.repository.ts`    | Working Prisma Client queries with `PRISMA_CLIENT` injection |
 
 **Custom types** accept any ORM name and generate a stub with TODO markers:
 
@@ -313,19 +314,19 @@ kick g scaffold Post title:string body:text:optional published:boolean:optional
 
 Each field uses the format `name:type` or `name:type:optional`:
 
-| Type | TypeScript | Zod | Example |
-|------|-----------|-----|---------|
-| `string` | `string` | `z.string()` | `title:string` |
-| `text` | `string` | `z.string()` | `body:text` |
-| `number` | `number` | `z.number()` | `price:number` |
-| `int` | `number` | `z.number().int()` | `age:int` |
-| `float` | `number` | `z.number()` | `rating:float` |
-| `boolean` | `boolean` | `z.boolean()` | `active:boolean` |
-| `date` | `string` | `z.string().datetime()` | `createdAt:date` |
-| `email` | `string` | `z.string().email()` | `email:email` |
-| `url` | `string` | `z.string().url()` | `website:url` |
-| `uuid` | `string` | `z.string().uuid()` | `externalId:uuid` |
-| `json` | `any` | `z.any()` | `metadata:json` |
+| Type         | TypeScript          | Zod                     | Example                       |
+| ------------ | ------------------- | ----------------------- | ----------------------------- |
+| `string`     | `string`            | `z.string()`            | `title:string`                |
+| `text`       | `string`            | `z.string()`            | `body:text`                   |
+| `number`     | `number`            | `z.number()`            | `price:number`                |
+| `int`        | `number`            | `z.number().int()`      | `age:int`                     |
+| `float`      | `number`            | `z.number()`            | `rating:float`                |
+| `boolean`    | `boolean`           | `z.boolean()`           | `active:boolean`              |
+| `date`       | `string`            | `z.string().datetime()` | `createdAt:date`              |
+| `email`      | `string`            | `z.string().email()`    | `email:email`                 |
+| `url`        | `string`            | `z.string().url()`      | `website:url`                 |
+| `uuid`       | `string`            | `z.string().uuid()`     | `externalId:uuid`             |
+| `json`       | `any`               | `z.any()`               | `metadata:json`               |
 | `enum:a,b,c` | `'a' \| 'b' \| 'c'` | `z.enum(['a','b','c'])` | `status:enum:draft,published` |
 
 ### Optional Fields
@@ -352,33 +353,33 @@ kick g scaffold Post title:string "body?:text" "published?:boolean"
 
 Scaffold generates a DDD module structure inside `posts/`:
 
-| File | Layer | Description |
-|------|-------|-------------|
-| `index.ts` | Module | Module class (register + routes) |
-| `constants.ts` | Module | Query config (filterable, sortable, searchable) |
-| `presentation/post.controller.ts` | Presentation | Full CRUD with typed `Ctx` |
-| `application/dtos/create-post.dto.ts` | Application | Zod schema from fields |
-| `application/dtos/update-post.dto.ts` | Application | All fields optional |
-| `application/dtos/post-response.dto.ts` | Application | Response interface |
-| `application/use-cases/create-post.use-case.ts` | Application | Create use case |
-| `application/use-cases/get-post.use-case.ts` | Application | Get by ID use case |
-| `application/use-cases/list-posts.use-case.ts` | Application | Paginated list use case |
-| `application/use-cases/update-post.use-case.ts` | Application | Update use case |
-| `application/use-cases/delete-post.use-case.ts` | Application | Delete use case |
-| `domain/entities/post.entity.ts` | Domain | Entity with factory methods |
-| `domain/value-objects/post-id.vo.ts` | Domain | Typed ID value object |
-| `domain/repositories/post.repository.ts` | Domain | Interface + `createToken` |
-| `domain/services/post-domain.service.ts` | Domain | Domain logic |
-| `infrastructure/repositories/in-memory-post.repository.ts` | Infrastructure | Working Map-based store |
+| File                                                       | Layer          | Description                                     |
+| ---------------------------------------------------------- | -------------- | ----------------------------------------------- |
+| `index.ts`                                                 | Module         | Module class (register + routes)                |
+| `constants.ts`                                             | Module         | Query config (filterable, sortable, searchable) |
+| `presentation/post.controller.ts`                          | Presentation   | Full CRUD with typed `Ctx`                      |
+| `application/dtos/create-post.dto.ts`                      | Application    | Zod schema from fields                          |
+| `application/dtos/update-post.dto.ts`                      | Application    | All fields optional                             |
+| `application/dtos/post-response.dto.ts`                    | Application    | Response interface                              |
+| `application/use-cases/create-post.use-case.ts`            | Application    | Create use case                                 |
+| `application/use-cases/get-post.use-case.ts`               | Application    | Get by ID use case                              |
+| `application/use-cases/list-posts.use-case.ts`             | Application    | Paginated list use case                         |
+| `application/use-cases/update-post.use-case.ts`            | Application    | Update use case                                 |
+| `application/use-cases/delete-post.use-case.ts`            | Application    | Delete use case                                 |
+| `domain/entities/post.entity.ts`                           | Domain         | Entity with factory methods                     |
+| `domain/value-objects/post-id.vo.ts`                       | Domain         | Typed ID value object                           |
+| `domain/repositories/post.repository.ts`                   | Domain         | Interface + `createToken`                       |
+| `domain/services/post-domain.service.ts`                   | Domain         | Domain logic                                    |
+| `infrastructure/repositories/in-memory-post.repository.ts` | Infrastructure | Working Map-based store                         |
 
 ### Scaffold Flags
 
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--no-entity` | Skip entity and value object generation | `false` |
-| `--no-tests` | Skip test file generation | `false` |
-| `--no-pluralize` | Use singular names | from config or `false` |
-| `--modules-dir <dir>` | Modules directory | from config or `src/modules` |
+| Flag                  | Description                             | Default                      |
+| --------------------- | --------------------------------------- | ---------------------------- |
+| `--no-entity`         | Skip entity and value object generation | `false`                      |
+| `--no-tests`          | Skip test file generation               | `false`                      |
+| `--no-pluralize`      | Use singular names                      | from config or `false`       |
+| `--modules-dir <dir>` | Modules directory                       | from config or `src/modules` |
 
 ### Example
 
@@ -430,19 +431,20 @@ kick g agents -f --only both           # AGENTS.md + CLAUDE.md (skip skills)
 Aliases: `kick g agent-docs`, `kick g ai-docs`.
 
 The generator auto-detects:
+
 - **Project name** from `package.json` `name` (strips `@scope/` prefix).
 - **Package manager** from `package.json` `packageManager` (corepack convention).
 - **Template** from `kick.config.ts` `pattern` field (defaults to `ddd`).
 
 Override any of those with `--name`, `--pm`, `--template`.
 
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--only <which>` | `agents` \| `claude` \| `skills` \| `both` \| `all` | `all` |
-| `--name <name>` | Project name (overrides `package.json`) | auto |
-| `--pm <pm>` | Package manager (overrides `package.json`) | auto |
+| Flag                    | Description                                         | Default               |
+| ----------------------- | --------------------------------------------------- | --------------------- |
+| `--only <which>`        | `agents` \| `claude` \| `skills` \| `both` \| `all` | `all`                 |
+| `--name <name>`         | Project name (overrides `package.json`)             | auto                  |
+| `--pm <pm>`             | Package manager (overrides `package.json`)          | auto                  |
 | `--template <template>` | `rest` \| `graphql` \| `ddd` \| `cqrs` \| `minimal` | from `kick.config.ts` |
-| `-f, --force` | Overwrite without prompting | `false` |
+| `-f, --force`           | Overwrite without prompting                         | `false`               |
 
 ::: tip Local customisations
 The three files are overwritten on regeneration. Keep project-specific notes in `AGENTS.local.md` (or any other filename) so they survive `kick g agents -f`.
@@ -492,22 +494,22 @@ When `--module` is used, each artifact type maps to a folder based on the projec
 
 **DDD pattern:**
 
-| Generator | Module folder |
-|-----------|--------------|
-| controller | `presentation/` |
-| service | `domain/services/` |
-| dto | `application/dtos/` |
-| guard | `presentation/guards/` |
-| middleware | `middleware/` |
+| Generator  | Module folder          |
+| ---------- | ---------------------- |
+| controller | `presentation/`        |
+| service    | `domain/services/`     |
+| dto        | `application/dtos/`    |
+| guard      | `presentation/guards/` |
+| middleware | `middleware/`          |
 
 **REST / GraphQL / Minimal patterns (flat):**
 
-| Generator | Module folder |
-|-----------|--------------|
-| controller | module root |
-| service | module root |
-| dto | `dtos/` |
-| guard | `guards/` |
+| Generator  | Module folder |
+| ---------- | ------------- |
+| controller | module root   |
+| service    | module root   |
+| dto        | `dtos/`       |
+| guard      | `guards/`     |
 | middleware | `middleware/` |
 
 ## Standalone Generators
@@ -618,10 +620,10 @@ src/modules/auth/
   auth.test.ts            # Test stubs
 ```
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `-s, --strategy` | `jwt` | Auth strategy: `jwt` or `session` |
-| `-o, --out` | `src/modules/auth` | Output directory |
+| Flag             | Default            | Description                       |
+| ---------------- | ------------------ | --------------------------------- |
+| `-s, --strategy` | `jwt`              | Auth strategy: `jwt` or `session` |
+| `-o, --out`      | `src/modules/auth` | Output directory                  |
 
 The **JWT** variant generates token-based auth. The **session** variant uses `sessionLogin()` / `sessionLogout()` from `@forinda/kickjs-auth` for cookie-based sessions.
 
@@ -631,9 +633,9 @@ Both variants use `PasswordService` for secure password hashing (scrypt by defau
 
 All standalone generators accept:
 
-| Flag | Description | Default |
-|------|-------------|---------|
-| `-o, --out <dir>` | Output directory | Varies by type |
-| `-m, --module <name>` | Place inside a module folder | - |
+| Flag                  | Description                  | Default        |
+| --------------------- | ---------------------------- | -------------- |
+| `-o, --out <dir>`     | Output directory             | Varies by type |
+| `-m, --module <name>` | Place inside a module folder | -              |
 
 Names are automatically converted: `kick g module user-profile` produces `UserProfile` (PascalCase) for classes and `user-profile` (kebab-case) for file names. Module names are pluralized for the directory (`user-profiles/`) unless `--no-pluralize` is passed or `pluralize: false` is set in config.

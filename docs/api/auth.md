@@ -143,12 +143,7 @@ Programmatic authorization checks against `@Policy()`-registered classes. Regist
 class AuthorizationService {
   constructor(options?: AuthorizationServiceOptions)
 
-  can(
-    user: AuthUser,
-    action: string,
-    resource: string,
-    resourceInstance?: any,
-  ): Promise<boolean>
+  can(user: AuthUser, action: string, resource: string, resourceInstance?: any): Promise<boolean>
 }
 
 interface AuthorizationServiceOptions {
@@ -171,11 +166,7 @@ interface AuthorizationServiceOptions {
    * `AuthorizationService.listObjects()` throws `NotImplementedError`
    * so callers can fall back to `findAll + filter with can()`.
    */
-  listObjects?: (
-    user: AuthUser,
-    action: string,
-    resource: string,
-  ) => Promise<readonly string[]>
+  listObjects?: (user: AuthUser, action: string, resource: string) => Promise<readonly string[]>
 }
 
 class PolicyMissingError extends Error {
@@ -302,8 +293,8 @@ interface PasswordConfig {
 }
 
 interface PasswordPolicy {
-  minLength?: number          // default 8
-  maxLength?: number          // default 128
+  minLength?: number // default 8
+  maxLength?: number // default 128
   requireUppercase?: boolean
   requireLowercase?: boolean
   requireDigit?: boolean
@@ -340,7 +331,7 @@ if (ok && pw.needsRehash(user.passwordHash)) {
 ## Constants
 
 ```typescript
-const AUTH_USER: symbol   // DI token for current user
+const AUTH_USER: symbol // DI token for current user
 const AUTH_META: {
   AUTHENTICATED: symbol
   PUBLIC: symbol

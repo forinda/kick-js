@@ -1,6 +1,6 @@
 # Background Jobs and Scheduled Tasks in Node.js
 
-*Part 5 of "Building a Task Management App with KickJS + Drizzle ORM"*
+_Part 5 of "Building a Task Management App with KickJS + Drizzle ORM"_
 
 ---
 
@@ -32,11 +32,11 @@ HTTP Request → Use Case → Queue (Redis/BullMQ) → Processor → Side Effect
 
 Three queue processors handle different concerns:
 
-| Queue | Processor | Jobs |
-|-------|-----------|------|
-| `email` | EmailProcessor | send-welcome, send-task-assigned, send-mentioned, send-overdue-reminder, send-workspace-invite, send-daily-digest |
-| `notifications` | NotificationProcessor | create-notification |
-| `activity` | ActivityProcessor | log-activity |
+| Queue           | Processor             | Jobs                                                                                                              |
+| --------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `email`         | EmailProcessor        | send-welcome, send-task-assigned, send-mentioned, send-overdue-reminder, send-workspace-invite, send-daily-digest |
+| `notifications` | NotificationProcessor | create-notification                                                                                               |
+| `activity`      | ActivityProcessor     | log-activity                                                                                                      |
 
 ## Queue Processor Pattern
 
@@ -113,7 +113,7 @@ export class QueueModule implements AppModule {
   }
 
   routes(): ModuleRoutes | null {
-    return null  // No HTTP routes
+    return null // No HTTP routes
   }
 }
 ```
@@ -127,13 +127,7 @@ Scheduled tasks use `@forinda/kickjs-cron`. Unlike queue processors, cron jobs a
 ```typescript
 // config/adapters.ts
 CronAdapter({
-  services: [
-    TaskCronJobs,
-    CleanupCronJobs,
-    HealthCheckCronJobs,
-    DigestCronJobs,
-    PresenceCronJobs,
-  ],
+  services: [TaskCronJobs, CleanupCronJobs, HealthCheckCronJobs, DigestCronJobs, PresenceCronJobs],
   enabled: true,
 })
 ```
@@ -153,7 +147,12 @@ export class TaskCronJobs {
   @Cron('0 9 * * *', { description: 'Send overdue task reminders', timezone: 'UTC' })
   async overdueReminders() {
     const overdueTasks = await this.db
-      .select({ taskId: tasks.id, taskKey: tasks.key, taskTitle: tasks.title, dueDate: tasks.dueDate })
+      .select({
+        taskId: tasks.id,
+        taskKey: tasks.key,
+        taskTitle: tasks.title,
+        dueDate: tasks.dueDate,
+      })
       .from(tasks)
       .where(and(lt(tasks.dueDate, new Date()), ne(tasks.status, 'done')))
 
@@ -255,9 +254,10 @@ For production, swap to Resend:
 
 ```typescript
 MailerAdapter({
-  provider: env.NODE_ENV === 'production'
-    ? new ResendMailProvider(env.RESEND_API_KEY)
-    : new ConsoleProvider(),
+  provider:
+    env.NODE_ENV === 'production'
+      ? new ResendMailProvider(env.RESEND_API_KEY)
+      : new ConsoleProvider(),
   defaultFrom: { name: env.MAIL_FROM_NAME, address: env.MAIL_FROM_EMAIL },
 })
 ```

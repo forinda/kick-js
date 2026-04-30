@@ -130,21 +130,16 @@ describe('InMemoryChatMemory', () => {
 describe('SlidingWindowChatMemory — construction', () => {
   it('requires an inner memory', () => {
     expect(
-      () => new SlidingWindowChatMemory({ inner: undefined as unknown as ChatMemory, maxMessages: 5 }),
+      () =>
+        new SlidingWindowChatMemory({ inner: undefined as unknown as ChatMemory, maxMessages: 5 }),
     ).toThrow(/inner.*required/)
   })
 
   it('requires a positive integer maxMessages', () => {
     const inner = new InMemoryChatMemory()
-    expect(
-      () => new SlidingWindowChatMemory({ inner, maxMessages: 0 }),
-    ).toThrow(/maxMessages/)
-    expect(
-      () => new SlidingWindowChatMemory({ inner, maxMessages: -1 }),
-    ).toThrow(/maxMessages/)
-    expect(
-      () => new SlidingWindowChatMemory({ inner, maxMessages: 2.5 }),
-    ).toThrow(/maxMessages/)
+    expect(() => new SlidingWindowChatMemory({ inner, maxMessages: 0 })).toThrow(/maxMessages/)
+    expect(() => new SlidingWindowChatMemory({ inner, maxMessages: -1 })).toThrow(/maxMessages/)
+    expect(() => new SlidingWindowChatMemory({ inner, maxMessages: 2.5 })).toThrow(/maxMessages/)
   })
 
   it('exposes a descriptive name that references the inner backend', () => {
@@ -238,11 +233,11 @@ describe('SlidingWindowChatMemory — eviction', () => {
 
 describe('AiAdapter.runAgentWithMemory', () => {
   it('persists the system prompt and user message on the first turn', async () => {
-    const provider = new ScriptedProvider([
-      { content: 'Nice to meet you.', finishReason: 'stop' },
-    ])
+    const provider = new ScriptedProvider([{ content: 'Nice to meet you.', finishReason: 'stop' }])
     const adapter = AiAdapter({ provider })
-    adapter.beforeStart({ container: { registerFactory: () => {}, registerInstance: () => {} } } as never)
+    adapter.beforeStart({
+      container: { registerFactory: () => {}, registerInstance: () => {} },
+    } as never)
     const memory = new InMemoryChatMemory()
 
     const result = await adapter.runAgentWithMemory({
@@ -267,7 +262,9 @@ describe('AiAdapter.runAgentWithMemory', () => {
       { content: 'Second reply', finishReason: 'stop' },
     ])
     const adapter = AiAdapter({ provider })
-    adapter.beforeStart({ container: { registerFactory: () => {}, registerInstance: () => {} } } as never)
+    adapter.beforeStart({
+      container: { registerFactory: () => {}, registerInstance: () => {} },
+    } as never)
     const memory = new InMemoryChatMemory()
 
     await adapter.runAgentWithMemory({
@@ -303,7 +300,9 @@ describe('AiAdapter.runAgentWithMemory', () => {
       { content: 'three', finishReason: 'stop' },
     ])
     const adapter = AiAdapter({ provider })
-    adapter.beforeStart({ container: { registerFactory: () => {}, registerInstance: () => {} } } as never)
+    adapter.beforeStart({
+      container: { registerFactory: () => {}, registerInstance: () => {} },
+    } as never)
     const memory = new InMemoryChatMemory()
 
     await adapter.runAgentWithMemory({ memory, userMessage: 'hi 1' })
@@ -320,15 +319,15 @@ describe('AiAdapter.runAgentWithMemory', () => {
     const provider = new ScriptedProvider([
       {
         content: '',
-        toolCalls: [
-          { id: 'call_1', name: 'NoTool', arguments: {} },
-        ],
+        toolCalls: [{ id: 'call_1', name: 'NoTool', arguments: {} }],
         finishReason: 'tool_calls',
       },
       { content: 'done', finishReason: 'stop' },
     ])
     const adapter = AiAdapter({ provider })
-    adapter.beforeStart({ container: { registerFactory: () => {}, registerInstance: () => {} } } as never)
+    adapter.beforeStart({
+      container: { registerFactory: () => {}, registerInstance: () => {} },
+    } as never)
     const memory = new InMemoryChatMemory()
 
     await adapter.runAgentWithMemory({
@@ -347,15 +346,15 @@ describe('AiAdapter.runAgentWithMemory', () => {
     const provider = new ScriptedProvider([
       {
         content: '',
-        toolCalls: [
-          { id: 'call_1', name: 'NoTool', arguments: {} },
-        ],
+        toolCalls: [{ id: 'call_1', name: 'NoTool', arguments: {} }],
         finishReason: 'tool_calls',
       },
       { content: 'done', finishReason: 'stop' },
     ])
     const adapter = AiAdapter({ provider })
-    adapter.beforeStart({ container: { registerFactory: () => {}, registerInstance: () => {} } } as never)
+    adapter.beforeStart({
+      container: { registerFactory: () => {}, registerInstance: () => {} },
+    } as never)
     const memory = new InMemoryChatMemory()
 
     await adapter.runAgentWithMemory({
@@ -377,7 +376,9 @@ describe('AiAdapter.runAgentWithMemory', () => {
       { content: 'reply 3', finishReason: 'stop' },
     ])
     const adapter = AiAdapter({ provider })
-    adapter.beforeStart({ container: { registerFactory: () => {}, registerInstance: () => {} } } as never)
+    adapter.beforeStart({
+      container: { registerFactory: () => {}, registerInstance: () => {} },
+    } as never)
 
     const memory = new SlidingWindowChatMemory({
       inner: new InMemoryChatMemory(),

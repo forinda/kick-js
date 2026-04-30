@@ -31,12 +31,12 @@ class EventsController {
 
 `ctx.sse()` sets the correct HTTP headers and returns an object with:
 
-| Method | Description |
-|--------|-------------|
+| Method                    | Description                                                               |
+| ------------------------- | ------------------------------------------------------------------------- |
 | `send(data, event?, id?)` | Send an event. `data` is JSON-serialized. Optional `event` name and `id`. |
-| `comment(text)` | Send a comment line (`:` prefix). Useful as a keep-alive ping. |
-| `onClose(fn)` | Register a callback for when the client disconnects. |
-| `close()` | End the stream from the server side. |
+| `comment(text)`           | Send a comment line (`:` prefix). Useful as a keep-alive ping.            |
+| `onClose(fn)`             | Register a callback for when the client disconnects.                      |
+| `close()`                 | End the stream from the server side.                                      |
 
 ## Headers
 
@@ -124,13 +124,13 @@ class NotificationController {
 
 ## When to use SSE vs WebSocket
 
-| Feature | SSE | WebSocket |
-|---------|-----|-----------|
-| Direction | Server → Client only | Bidirectional |
-| Protocol | HTTP | WS (upgrade) |
-| Reconnection | Built-in (`EventSource`) | Manual |
-| Binary data | No (text only) | Yes |
-| Complexity | Simple | More setup |
+| Feature      | SSE                      | WebSocket     |
+| ------------ | ------------------------ | ------------- |
+| Direction    | Server → Client only     | Bidirectional |
+| Protocol     | HTTP                     | WS (upgrade)  |
+| Reconnection | Built-in (`EventSource`) | Manual        |
+| Binary data  | No (text only)           | Yes           |
+| Complexity   | Simple                   | More setup    |
 
 Use SSE for notifications, live feeds, progress updates. Use WebSocket for chat, gaming, or when the client needs to send data back.
 

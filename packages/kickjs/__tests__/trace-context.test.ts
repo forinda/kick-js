@@ -9,16 +9,13 @@ import {
   requestScopeMiddleware,
   traceContext,
   parseTraceparent,
-  type RequestStore,
 } from '../src/index'
 
 // ── parseTraceparent unit tests ────────────────────────────────────────
 
 describe('parseTraceparent', () => {
   it('parses a valid W3C traceparent header', () => {
-    const result = parseTraceparent(
-      '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01',
-    )
+    const result = parseTraceparent('00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01')
     expect(result).toEqual({
       version: '00',
       traceId: '4bf92f3577b34da6a3ce929d0e0e4736',
@@ -32,23 +29,17 @@ describe('parseTraceparent', () => {
     expect(parseTraceparent('')).toBeNull()
     expect(parseTraceparent('00-short-id-01')).toBeNull()
     // Wrong length trace ID (31 chars instead of 32)
-    expect(
-      parseTraceparent('00-4bf92f3577b34da6a3ce929d0e0e473-00f067aa0ba902b7-01'),
-    ).toBeNull()
+    expect(parseTraceparent('00-4bf92f3577b34da6a3ce929d0e0e473-00f067aa0ba902b7-01')).toBeNull()
   })
 
   it('handles leading/trailing whitespace', () => {
-    const result = parseTraceparent(
-      '  00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01  ',
-    )
+    const result = parseTraceparent('  00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01  ')
     expect(result).not.toBeNull()
     expect(result!.traceId).toBe('4bf92f3577b34da6a3ce929d0e0e4736')
   })
 
   it('normalizes uppercase hex to lowercase', () => {
-    const result = parseTraceparent(
-      '00-4BF92F3577B34DA6A3CE929D0E0E4736-00F067AA0BA902B7-01',
-    )
+    const result = parseTraceparent('00-4BF92F3577B34DA6A3CE929D0E0E4736-00F067AA0BA902B7-01')
     expect(result).not.toBeNull()
     expect(result!.traceId).toBe('4bf92f3577b34da6a3ce929d0e0e4736')
     expect(result!.parentSpanId).toBe('00f067aa0ba902b7')

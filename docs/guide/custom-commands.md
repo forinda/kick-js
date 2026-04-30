@@ -28,10 +28,7 @@ export default defineConfig({
     {
       name: 'proto:gen',
       description: 'Generate TypeScript from protobuf definitions',
-      steps: [
-        'npx buf generate',
-        'echo "Protobuf types generated"',
-      ],
+      steps: ['npx buf generate', 'echo "Protobuf types generated"'],
     },
   ],
 })
@@ -56,7 +53,9 @@ export default defineConfig({
     trailingComma: 'all',
     indent: 2,
   },
-  commands: [ /* ... */ ],
+  commands: [
+    /* ... */
+  ],
 })
 ```
 
@@ -66,10 +65,10 @@ Each command in the `commands` array has this shape:
 
 ```ts
 interface KickCommandDefinition {
-  name: string           // Command name (e.g. 'db:migrate')
-  description: string    // Shown in --help
-  steps: string | string[]  // Shell command(s) to execute
-  aliases?: string[]     // Optional aliases (e.g. ['migrate'])
+  name: string // Command name (e.g. 'db:migrate')
+  description: string // Shown in --help
+  steps: string | string[] // Shell command(s) to execute
+  aliases?: string[] // Optional aliases (e.g. ['migrate'])
 }
 ```
 
@@ -174,14 +173,15 @@ import { defineConfig } from '@forinda/kickjs-cli'
 
 export default defineConfig({
   copyDirs: [
-    'views',                                    // views/ → dist/views/
-    'public',                                   // public/ → dist/public/
-    { src: 'templates', dest: 'dist/email' },   // templates/ → dist/email/
+    'views', // views/ → dist/views/
+    'public', // public/ → dist/public/
+    { src: 'templates', dest: 'dist/email' }, // templates/ → dist/email/
   ],
 })
 ```
 
 Each entry can be:
+
 - A **string** — copies `<name>/` to `dist/<name>/`
 - An **object** with `src` and optional `dest` — copies `src` to the specified destination
 
@@ -209,7 +209,6 @@ kick build
 - **Public assets** (CSS, JS, images) served via `express.static()`
 - **Email templates** loaded at runtime by the mailer
 - **Migration files** or seed scripts that need to ship with the build
-
 
 ## Config File Resolution
 

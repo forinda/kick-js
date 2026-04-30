@@ -96,10 +96,10 @@ class UserController {
 
 **Validation options:**
 
-| Key | Type | Description |
-|-----|------|-------------|
-| `body` | Zod schema | Validate `req.body` |
-| `query` | Zod schema | Validate `req.query` |
+| Key      | Type       | Description           |
+| -------- | ---------- | --------------------- |
+| `body`   | Zod schema | Validate `req.body`   |
+| `query`  | Zod schema | Validate `req.query`  |
 | `params` | Zod schema | Validate `req.params` |
 
 ## Method Decorators — Lifecycle & Behavior
@@ -174,14 +174,14 @@ class FileController {
 }
 ```
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `mode` | `'single' \| 'array' \| 'none'` | **required** | Upload mode |
-| `fieldName` | `string` | `'file'` | Form field name |
-| `maxCount` | `number` | `10` | Max files (array mode) |
-| `maxSize` | `number` | 5MB | Max file size in bytes |
-| `allowedTypes` | `string[] \| function` | all | Accepts extensions, MIME types, wildcards, or filter function |
-| `customMimeMap` | `Record<string, string>` | — | Extend built-in MIME map |
+| Option          | Type                            | Default      | Description                                                   |
+| --------------- | ------------------------------- | ------------ | ------------------------------------------------------------- |
+| `mode`          | `'single' \| 'array' \| 'none'` | **required** | Upload mode                                                   |
+| `fieldName`     | `string`                        | `'file'`     | Form field name                                               |
+| `maxCount`      | `number`                        | `10`         | Max files (array mode)                                        |
+| `maxSize`       | `number`                        | 5MB          | Max file size in bytes                                        |
+| `allowedTypes`  | `string[] \| function`          | all          | Accepts extensions, MIME types, wildcards, or filter function |
+| `customMimeMap` | `Record<string, string>`        | —            | Extend built-in MIME map                                      |
 
 ## Property Decorators
 
@@ -192,8 +192,8 @@ Inject a dependency by type or token. Resolved lazily from the DI container.
 ```ts
 @Controller()
 class UserController {
-  @Autowired() private userService!: UserService          // By type
-  @Autowired(CACHE_TOKEN) private cache!: CacheService    // By token
+  @Autowired() private userService!: UserService // By type
+  @Autowired(CACHE_TOKEN) private cache!: CacheService // By token
 }
 ```
 
@@ -320,10 +320,10 @@ class TaskController {
     searchable: ['title', 'description'],
   })
   async list(ctx: RequestContext) {
-    return ctx.paginate(
-      (parsed) => this.taskService.findPaginated(parsed),
-      { filterable: ['status', 'priority', 'assigneeId'], sortable: ['createdAt', 'title'] },
-    )
+    return ctx.paginate((parsed) => this.taskService.findPaginated(parsed), {
+      filterable: ['status', 'priority', 'assigneeId'],
+      sortable: ['createdAt', 'title'],
+    })
   }
 }
 ```
@@ -338,43 +338,40 @@ class TaskController {
   @Get('/')
   @ApiQueryParams(TASK_QUERY_CONFIG) // Column objects → field names extracted automatically
   async list(ctx: RequestContext) {
-    return ctx.paginate(
-      (parsed) => this.taskService.findPaginated(parsed),
-      TASK_QUERY_CONFIG,
-    )
+    return ctx.paginate((parsed) => this.taskService.findPaginated(parsed), TASK_QUERY_CONFIG)
   }
 }
 ```
 
-| String-based option | Column-based option | Description |
-|--------|------|-------------|
-| `filterable: string[]` | `columns: Record<string, Column>` | Fields that clients can filter on via `?filter=field:op:value` |
-| `sortable: string[]` | `sortable: Record<string, Column>` | Fields that clients can sort by via `?sort=field:direction` |
-| `searchable: string[]` | `searchColumns: Column[]` | Fields included in free-text `?q=` search |
+| String-based option    | Column-based option                | Description                                                    |
+| ---------------------- | ---------------------------------- | -------------------------------------------------------------- |
+| `filterable: string[]` | `columns: Record<string, Column>`  | Fields that clients can filter on via `?filter=field:op:value` |
+| `sortable: string[]`   | `sortable: Record<string, Column>` | Fields that clients can sort by via `?sort=field:direction`    |
+| `searchable: string[]` | `searchColumns: Column[]`          | Fields included in free-text `?q=` search                      |
 
 ## Summary Table
 
-| Decorator | Target | Package | Purpose |
-|-----------|--------|---------|---------|
-| `@Controller` | Class | core | HTTP controller with route prefix |
-| `@Service` | Class | core | DI-registered service |
-| `@Injectable` | Class | core | Generic DI registration |
-| `@Component` | Class | core | Alias for Injectable |
-| `@Repository` | Class | core | Data access class |
-| `@Get/Post/Put/Delete/Patch` | Method | core | HTTP route handler |
-| `@PostConstruct` | Method | core | Post-instantiation hook |
-| `@Middleware` | Class/Method | core | Attach middleware |
-| `@FileUpload` | Method | core | Configure file upload |
-| `@Autowired` | Property | core | Property injection |
-| `@Value` | Property | core | Env variable injection |
-| `@Inject` | Parameter | core | Constructor param injection |
-| `@Builder` | Class | core | Fluent builder pattern |
-| `@ApiOperation` | Method | swagger | OpenAPI operation |
-| `@ApiResponse` | Method | swagger | OpenAPI response |
-| `@ApiTags` | Class/Method | swagger | OpenAPI tags |
-| `@ApiBearerAuth` | Class/Method | swagger | Bearer auth scheme |
-| `@ApiQueryParams` | Method | core | Declare filterable/sortable/searchable query fields |
-| `@ApiExclude` | Class/Method | swagger | Hide from spec |
+| Decorator                    | Target       | Package | Purpose                                             |
+| ---------------------------- | ------------ | ------- | --------------------------------------------------- |
+| `@Controller`                | Class        | core    | HTTP controller with route prefix                   |
+| `@Service`                   | Class        | core    | DI-registered service                               |
+| `@Injectable`                | Class        | core    | Generic DI registration                             |
+| `@Component`                 | Class        | core    | Alias for Injectable                                |
+| `@Repository`                | Class        | core    | Data access class                                   |
+| `@Get/Post/Put/Delete/Patch` | Method       | core    | HTTP route handler                                  |
+| `@PostConstruct`             | Method       | core    | Post-instantiation hook                             |
+| `@Middleware`                | Class/Method | core    | Attach middleware                                   |
+| `@FileUpload`                | Method       | core    | Configure file upload                               |
+| `@Autowired`                 | Property     | core    | Property injection                                  |
+| `@Value`                     | Property     | core    | Env variable injection                              |
+| `@Inject`                    | Parameter    | core    | Constructor param injection                         |
+| `@Builder`                   | Class        | core    | Fluent builder pattern                              |
+| `@ApiOperation`              | Method       | swagger | OpenAPI operation                                   |
+| `@ApiResponse`               | Method       | swagger | OpenAPI response                                    |
+| `@ApiTags`                   | Class/Method | swagger | OpenAPI tags                                        |
+| `@ApiBearerAuth`             | Class/Method | swagger | Bearer auth scheme                                  |
+| `@ApiQueryParams`            | Method       | core    | Declare filterable/sortable/searchable query fields |
+| `@ApiExclude`                | Class/Method | swagger | Hide from spec                                      |
 
 ## See also
 

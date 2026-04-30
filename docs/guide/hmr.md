@@ -21,14 +21,14 @@ On the first call, `bootstrap()` creates the application, registers error/shutdo
 
 ### What Is Preserved
 
-| Preserved across HMR | Rebuilt on each reload |
-|-----------------------|----------------------|
-| `http.Server` instance | Express app |
-| Port binding | Middleware stack |
-| TCP connections | Route table |
+| Preserved across HMR      | Rebuilt on each reload  |
+| ------------------------- | ----------------------- |
+| `http.Server` instance    | Express app             |
+| Port binding              | Middleware stack        |
+| TCP connections           | Route table             |
 | Database connection pools | DI container singletons |
-| Redis clients | Controller instances |
-| Socket.IO server | Service instances |
+| Redis clients             | Controller instances    |
+| Socket.IO server          | Service instances       |
 
 The HTTP server is created once and never recreated. Only the request handler is swapped, so existing connections and listeners remain intact.
 
@@ -82,6 +82,7 @@ This tells Vite not to bundle these modules — Node.js resolves them at runtime
 ### `kick.config.ts` changes not picked up
 
 `kick dev` watches `kick.config.ts` and automatically restarts the Vite server when it changes. If the restart doesn't happen, ensure:
+
 - The file is named `kick.config.ts` (not `.js` or `.mjs`) — only `.ts` is watched
 - You're running `kick dev`, not `npx vite` directly
 

@@ -122,7 +122,7 @@ async function maybeCheckDrift(opts: RunnerOptions): Promise<void> {
   if (behavior === 'ignore') return
   const applied = await opts.adapter.listApplied()
   if (applied.length === 0) return // nothing to compare against
-  const sorted = [...applied].sort((a, b) =>
+  const sorted = [...applied].toSorted((a, b) =>
     a.batch !== b.batch ? a.batch - b.batch : a.appliedAt.localeCompare(b.appliedAt),
   )
   const last = sorted[sorted.length - 1]
@@ -184,7 +184,7 @@ export async function migrateDown(opts: RunnerOptions): Promise<ReversedSummary>
     if (applied.length === 0) return { reversed: null }
     // Sort by batch then appliedAt so 'most recent' is unambiguous even if
     // two migrations share a batch number (same `migrate latest` run).
-    const sorted = [...applied].sort((a, b) =>
+    const sorted = [...applied].toSorted((a, b) =>
       a.batch !== b.batch ? a.batch - b.batch : a.appliedAt.localeCompare(b.appliedAt),
     )
     const last = sorted[sorted.length - 1]
@@ -253,8 +253,8 @@ export async function migrateRollback(opts: RunnerOptions): Promise<RollbackSumm
     // drop table etc).
     const targets = applied
       .filter((r) => r.batch === lastBatch)
-      .sort((a, b) => a.appliedAt.localeCompare(b.appliedAt))
-      .reverse()
+      .toSorted((a, b) => a.appliedAt.localeCompare(b.appliedAt))
+      .toReversed()
 
     const reversed: string[] = []
     for (const row of targets) {

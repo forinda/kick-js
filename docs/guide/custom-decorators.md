@@ -25,12 +25,12 @@ import 'reflect-metadata'
 
 TypeScript has four decorator types. Each receives different arguments:
 
-| Type | Signature | Use Case |
-|------|-----------|----------|
-| **Class** | `(target: Function)` | Mark a class (e.g., `@Service`, `@Controller`) |
-| **Method** | `(target, propertyKey, descriptor)` | Wrap or annotate methods (e.g., `@Get`, `@Transactional`) |
-| **Property** | `(target, propertyKey)` | Mark properties (e.g., `@Autowired`) |
-| **Parameter** | `(target, propertyKey, parameterIndex)` | Tag constructor params (e.g., `@Inject`) |
+| Type          | Signature                               | Use Case                                                  |
+| ------------- | --------------------------------------- | --------------------------------------------------------- |
+| **Class**     | `(target: Function)`                    | Mark a class (e.g., `@Service`, `@Controller`)            |
+| **Method**    | `(target, propertyKey, descriptor)`     | Wrap or annotate methods (e.g., `@Get`, `@Transactional`) |
+| **Property**  | `(target, propertyKey)`                 | Mark properties (e.g., `@Autowired`)                      |
+| **Parameter** | `(target, propertyKey, parameterIndex)` | Tag constructor params (e.g., `@Inject`)                  |
 
 ## Pattern 1: Metadata Decorator
 
@@ -116,7 +116,10 @@ class OrderService {
     // All queries here run in a single transaction
     const order = this.db.insert(orders).values({ userId }).returning().get()
     for (const item of items) {
-      this.db.insert(orderItems).values({ orderId: order.id, ...item }).run()
+      this.db
+        .insert(orderItems)
+        .values({ orderId: order.id, ...item })
+        .run()
     }
     return order
   }
@@ -278,10 +281,7 @@ export class RabbitMQProvider implements QueueProvider {
     ch.sendToQueue(queue, Buffer.from(JSON.stringify({ name, data })))
   }
 
-  createWorker(
-    queue: string,
-    processor: (job: { name: string; data: any }) => Promise<void>,
-  ) {
+  createWorker(queue: string, processor: (job: { name: string; data: any }) => Promise<void>) {
     this.ensureChannel().then(async (ch) => {
       await ch.assertQueue(queue, { durable: true })
       ch.consume(queue, async (msg) => {

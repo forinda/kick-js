@@ -45,7 +45,9 @@ describe('registerConnectCommand', () => {
         return { dispose: vi.fn() }
       },
     )
-    registerConnectCommand(fakeContext, { onConnected: onConnected as unknown as (s: string, d: string) => void })
+    registerConnectCommand(fakeContext, {
+      onConnected: onConnected as unknown as (s: string, d: string) => void,
+    })
   })
 
   it('opens settings when the user picks "Open settings"', async () => {
@@ -92,9 +94,7 @@ describe('registerConnectCommand', () => {
     mockVscode.window.showQuickPick.mockResolvedValue({ id: 'manual' })
     mockVscode.window.showInputBox.mockResolvedValue('http://localhost:3000')
     mockVscode.window.showErrorMessage.mockResolvedValue(undefined)
-    withFakeFetch(
-      vi.fn().mockResolvedValue({ ok: false, status: 404 }) as unknown as typeof fetch,
-    )
+    withFakeFetch(vi.fn().mockResolvedValue({ ok: false, status: 404 }) as unknown as typeof fetch)
 
     await registeredHandler()
 
@@ -111,9 +111,11 @@ describe('registerConnectCommand', () => {
     mockVscode.window.showInputBox.mockResolvedValue('http://localhost:3000')
     mockVscode.window.showErrorMessage.mockResolvedValue(undefined)
     withFakeFetch(
-      vi.fn().mockRejectedValue(
-        Object.assign(new Error('refused'), { cause: { code: 'ECONNREFUSED' } }),
-      ) as unknown as typeof fetch,
+      vi
+        .fn()
+        .mockRejectedValue(
+          Object.assign(new Error('refused'), { cause: { code: 'ECONNREFUSED' } }),
+        ) as unknown as typeof fetch,
     )
 
     await registeredHandler()
@@ -150,9 +152,11 @@ describe('registerConnectCommand', () => {
     mockVscode.window.showQuickPick.mockResolvedValue({ id: 'auto' })
     mockVscode.window.showWarningMessage.mockResolvedValue(undefined)
     withFakeFetch(
-      vi.fn().mockRejectedValue(
-        Object.assign(new Error('refused'), { cause: { code: 'ECONNREFUSED' } }),
-      ) as unknown as typeof fetch,
+      vi
+        .fn()
+        .mockRejectedValue(
+          Object.assign(new Error('refused'), { cause: { code: 'ECONNREFUSED' } }),
+        ) as unknown as typeof fetch,
     )
 
     await registeredHandler()

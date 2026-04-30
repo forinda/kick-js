@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import 'reflect-metadata'
 import { OAuthStrategy } from '@forinda/kickjs-auth'
 
@@ -28,14 +28,13 @@ describe('OAuthStrategy', () => {
   })
 
   it('throws when custom provider has no endpoints', () => {
-    expect(
-      () =>
-        OAuthStrategy({
-          provider: 'custom',
-          clientId: 'id',
-          clientSecret: 'secret',
-          callbackUrl: 'http://localhost/callback',
-        }),
+    expect(() =>
+      OAuthStrategy({
+        provider: 'custom',
+        clientId: 'id',
+        clientSecret: 'secret',
+        callbackUrl: 'http://localhost/callback',
+      }),
     ).toThrow('endpoints')
   })
 
@@ -129,7 +128,8 @@ describe('OAuthStrategy', () => {
 
     // Mock fetch for token exchange and user info
     const originalFetch = globalThis.fetch
-    globalThis.fetch = vi.fn()
+    globalThis.fetch = vi
+      .fn()
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
@@ -191,7 +191,8 @@ describe('OAuthStrategy', () => {
     })
 
     const originalFetch = globalThis.fetch
-    globalThis.fetch = vi.fn()
+    globalThis.fetch = vi
+      .fn()
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({ access_token: 'token', token_type: 'bearer' }),

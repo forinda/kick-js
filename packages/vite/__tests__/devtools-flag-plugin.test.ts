@@ -9,11 +9,7 @@
 import { describe, it, expect, afterEach, beforeEach } from 'vitest'
 import type { Plugin } from 'vite'
 
-import {
-  devtoolsFlagPlugin,
-  resolveDevtoolsFlag,
-  kickjsVitePlugin,
-} from '../src/index'
+import { devtoolsFlagPlugin, resolveDevtoolsFlag, kickjsVitePlugin } from '../src/index'
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
@@ -25,10 +21,12 @@ interface ConfigEnvLike {
 function callConfig(plugin: Plugin, env: ConfigEnvLike): { define?: Record<string, string> } {
   const hook = plugin.config
   if (typeof hook !== 'function') return {}
-  const result = (hook as unknown as (
-    cfg: Record<string, unknown>,
-    env: ConfigEnvLike,
-  ) => { define?: Record<string, string> })({}, env)
+  const result = (
+    hook as unknown as (
+      cfg: Record<string, unknown>,
+      env: ConfigEnvLike,
+    ) => { define?: Record<string, string> }
+  )({}, env)
   return result ?? {}
 }
 
@@ -57,9 +55,9 @@ describe('resolveDevtoolsFlag', () => {
 
   it('explicit `enabled: false` wins over everything', () => {
     process.env.KICKJS_DEVTOOLS = '1'
-    expect(
-      resolveDevtoolsFlag({ enabled: false }, { command: 'serve', mode: 'development' }),
-    ).toBe(false)
+    expect(resolveDevtoolsFlag({ enabled: false }, { command: 'serve', mode: 'development' })).toBe(
+      false,
+    )
   })
 
   it('KICKJS_DEVTOOLS=1 wins over command=build', () => {

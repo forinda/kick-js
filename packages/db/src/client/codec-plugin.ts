@@ -124,7 +124,7 @@ export class CodecPlugin implements KyselyPlugin {
   private positionalEncoders(
     cols: ReadonlyArray<ColumnNode>,
   ): Array<((v: unknown) => unknown) | null> | null {
-    const out: Array<((v: unknown) => unknown) | null> = new Array(cols.length)
+    const out: Array<((v: unknown) => unknown) | null> = Array.from({ length: cols.length })
     let any = false
     for (let i = 0; i < cols.length; i++) {
       const enc = this.encoders.get(cols[i].column.name) ?? null

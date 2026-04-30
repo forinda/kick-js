@@ -449,7 +449,7 @@ export async function loadKickConfig(cwd: string): Promise<KickConfig | null> {
       const warnings = validateAssetMap(config, cwd)
       for (const warning of warnings) console.warn(`  Warning: ${warning}`)
       return config
-    } catch (err) {
+    } catch {
       if (filename.endsWith('.ts')) {
         console.warn(
           `Warning: Failed to load ${filename}. TypeScript config files require ` +

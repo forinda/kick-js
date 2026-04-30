@@ -36,9 +36,7 @@ afterEach(async () => {
   }
 })
 
-const startHarness = async (
-  opts: Parameters<typeof createServerBus>[0] = {},
-): Promise<Harness> => {
+const startHarness = async (opts: Parameters<typeof createServerBus>[0] = {}): Promise<Harness> => {
   const bus = createServerBus(opts)
   const server = http.createServer((_req, res) => {
     // Plain HTTP responses keep the test server quiet on non-upgrade

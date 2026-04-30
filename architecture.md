@@ -3878,13 +3878,13 @@ Two separators with distinct semantics — **slash for ownership**, **colon for 
 <scope>/<key>:<instance>[:<extra>]     # instance scoping: which .scoped() shard owns it
 ```
 
-| Form                                | Example                                            | Meaning                                                                        |
-| ----------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `kick/<area>/<key>`                 | `kick/auth/User`, `kick/prisma/Client`             | **Reserved** — first-party `@forinda/kickjs-*` adapters and services           |
-| `kick/<area>/<key>:<instance>`      | `kick/prisma/Client:tenant`, `kick/queue/Manager`  | First-party `.scoped()` variant — same `${name}:${scope}` shape as adapters    |
-| `<scope>/<key>`                     | `mycorp/Cache`, `acme/AuditLog`                    | Third-party plugin token — `<scope>` is the org or product short-name          |
-| `<scope>/<key>/<suffix>`            | `mycorp/Cache/redis`, `mycorp/Cache/memory`        | Multiple flavours of one role under one third-party scope                      |
-| `<scope>/<key>:<instance>`          | `mycorp/Worker:emails`, `mycorp/Worker:webhooks`   | Per-`.scoped()` instance — composes the same way `defineAdapter.scoped()` does |
+| Form                           | Example                                           | Meaning                                                                        |
+| ------------------------------ | ------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `kick/<area>/<key>`            | `kick/auth/User`, `kick/prisma/Client`            | **Reserved** — first-party `@forinda/kickjs-*` adapters and services           |
+| `kick/<area>/<key>:<instance>` | `kick/prisma/Client:tenant`, `kick/queue/Manager` | First-party `.scoped()` variant — same `${name}:${scope}` shape as adapters    |
+| `<scope>/<key>`                | `mycorp/Cache`, `acme/AuditLog`                   | Third-party plugin token — `<scope>` is the org or product short-name          |
+| `<scope>/<key>/<suffix>`       | `mycorp/Cache/redis`, `mycorp/Cache/memory`       | Multiple flavours of one role under one third-party scope                      |
+| `<scope>/<key>:<instance>`     | `mycorp/Worker:emails`, `mycorp/Worker:webhooks`  | Per-`.scoped()` instance — composes the same way `defineAdapter.scoped()` does |
 
 **`kick/` is a reserved prefix** for the framework's own packages (`@forinda/kickjs`, `@forinda/kickjs-auth`, `@forinda/kickjs-prisma`, etc.). Third-party plugins **must not** start their tokens with `kick/` — the typegen layer (§22.4) will warn on third-party tokens that squat the framework namespace. Pick an org-scoped prefix instead (`mycorp/...`, `acme/...`).
 

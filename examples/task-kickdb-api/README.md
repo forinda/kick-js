@@ -12,9 +12,9 @@ KickJS-native ORM. Exercises every M1 surface:
   reversible up.sql + down.sql + snapshot.json under `db/migrations/`.
 - Migration runner: `kick db migrate latest|up|down|rollback|status`.
 - `kickDbAdapter()` registered in `bootstrap()` with `migrationsOnBoot:
-  'apply'` in dev (so HMR-driven schema iteration is ergonomic) and
+'apply'` in dev (so HMR-driven schema iteration is ergonomic) and
   `'fail-if-pending'` in prod (operator must explicitly `kick db migrate
-  latest` before deploys).
+latest` before deploys).
 - `KickDbClient` injected into repositories via `@Inject(DB_PRIMARY)`.
 
 ## Run
@@ -43,17 +43,17 @@ pnpm dev
 
 ## Endpoints
 
-| Method | Path                        | Notes                                |
-|--------|-----------------------------|--------------------------------------|
-| POST   | `/users`                    | Create a user                         |
-| GET    | `/users`                    | List all users                        |
-| GET    | `/users/:id`                | Show one user                         |
-| POST   | `/workspaces`               | Create a workspace (requires ownerId) |
-| GET    | `/workspaces`               | List all workspaces                   |
-| GET    | `/workspaces/:id`           | Show one workspace                    |
-| POST   | `/tasks`                    | Create a task in a workspace          |
-| GET    | `/tasks?workspaceId=…`      | List tasks for a workspace            |
-| PATCH  | `/tasks/:id/status`         | Update task status                    |
+| Method | Path                   | Notes                                 |
+| ------ | ---------------------- | ------------------------------------- |
+| POST   | `/users`               | Create a user                         |
+| GET    | `/users`               | List all users                        |
+| GET    | `/users/:id`           | Show one user                         |
+| POST   | `/workspaces`          | Create a workspace (requires ownerId) |
+| GET    | `/workspaces`          | List all workspaces                   |
+| GET    | `/workspaces/:id`      | Show one workspace                    |
+| POST   | `/tasks`               | Create a task in a workspace          |
+| GET    | `/tasks?workspaceId=…` | List tasks for a workspace            |
+| PATCH  | `/tasks/:id/status`    | Update task status                    |
 
 ## Notable implementation details
 

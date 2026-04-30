@@ -50,7 +50,7 @@ export const MemoryTab: Component = () => {
   const handles = createMemo(() => {
     const data = latest()
     if (!data) return [] as Array<[string, number]>
-    return Object.entries(data.health.handlesByType).sort((a, b) => b[1] - a[1])
+    return Object.entries(data.health.handlesByType).toSorted((a, b) => b[1] - a[1])
   })
 
   return (
@@ -73,12 +73,12 @@ export const MemoryTab: Component = () => {
                         <span class="badge badge-ok">ok</span> &lt; 5 MB/min — typical operation.
                       </li>
                       <li>
-                        <span class="badge badge-warn">warn</span> &lt; 20 MB/min — investigate
-                        if sustained &gt; 5 minutes.
+                        <span class="badge badge-warn">warn</span> &lt; 20 MB/min — investigate if
+                        sustained &gt; 5 minutes.
                       </li>
                       <li>
-                        <span class="badge badge-critical">critical</span> ≥ 20 MB/min — capture
-                        a heap snapshot now.
+                        <span class="badge badge-critical">critical</span> ≥ 20 MB/min — capture a
+                        heap snapshot now.
                       </li>
                     </ul>
                   </InfoButton>
@@ -93,10 +93,10 @@ export const MemoryTab: Component = () => {
                 </div>
                 <div class="card-value" style="font-size:13px;color:var(--text-dim)">
                   GC reclaim
-                  <InfoTip metric="gc.reclaim" />
-                  {' '}{formatPercent(data().health.gcReclaimRatio)} • heap util
-                  <InfoTip metric="heap.utilization" />
-                  {' '}{formatPercent(data().health.heapUtilization)}
+                  <InfoTip metric="gc.reclaim" /> {formatPercent(data().health.gcReclaimRatio)} •
+                  heap util
+                  <InfoTip metric="heap.utilization" />{' '}
+                  {formatPercent(data().health.heapUtilization)}
                 </div>
               </div>
               <Sparkline values={heap()} />

@@ -127,7 +127,11 @@ function bumpVersion(current, type, tag = 'alpha') {
 // ── Version Bumping ─────────────────────────────────────────────────────
 
 function bumpAllPackages(newVersion, dryRun) {
-  const files = ['package.json', ...PACKAGES.map((p) => `${p}/package.json`), ...EXAMPLES.map((e) => `${e}/package.json`)]
+  const files = [
+    'package.json',
+    ...PACKAGES.map((p) => `${p}/package.json`),
+    ...EXAMPLES.map((e) => `${e}/package.json`),
+  ]
 
   log(`\n  Bumping all packages to ${newVersion}:`)
 
@@ -165,9 +169,7 @@ function getLastTag() {
 
 function getCommitsSince(ref) {
   try {
-    const log = exec(
-      `git log ${ref}..HEAD --no-merges --format="%H|%an|%ae|%s"`,
-    )
+    const log = exec(`git log ${ref}..HEAD --no-merges --format="%H|%an|%ae|%s"`)
     if (!log) return []
     return log.split('\n').map((line) => {
       const [hash, author, email, ...msgParts] = line.split('|')
@@ -297,9 +299,7 @@ function generateReleaseNotes(version, fromRef) {
   notes += `## Contributors\n\n`
   for (const [email, name] of contributors) {
     const profileUrl = email.includes('noreply') ? null : `https://github.com/${name}`
-    notes += profileUrl
-      ? `- [${name}](${profileUrl})\n`
-      : `- ${name}\n`
+    notes += profileUrl ? `- [${name}](${profileUrl})\n` : `- ${name}\n`
   }
   notes += '\n'
 
@@ -352,7 +352,7 @@ async function interactiveRelease() {
   log('    5) custom      — Set exact version')
 
   const typeChoice = await ask('\n  Choose (1-5): ')
-  const typeMap = { '1': 'patch', '2': 'minor', '3': 'major', '4': 'prerelease', '5': 'custom' }
+  const typeMap = { 1: 'patch', 2: 'minor', 3: 'major', 4: 'prerelease', 5: 'custom' }
   const releaseType = typeMap[typeChoice]
   if (!releaseType) {
     logError('  Invalid choice.')
@@ -368,7 +368,7 @@ async function interactiveRelease() {
     log('    3) rc')
     log('    4) custom')
     const tagChoice = await ask('\n  Choose (1-4): ')
-    const tagMap = { '1': 'alpha', '2': 'beta', '3': 'rc' }
+    const tagMap = { 1: 'alpha', 2: 'beta', 3: 'rc' }
     if (tagChoice === '4') {
       preTag = await ask('  Custom tag: ')
       if (!preTag || !/^[a-z]+$/.test(preTag)) {
@@ -385,14 +385,15 @@ async function interactiveRelease() {
   if (releaseType === 'custom') {
     customVersion = await ask('\n  Enter version (e.g. 2.0.0-rc.1): ')
     if (!/^\d+\.\d+\.\d+(-[a-zA-Z0-9]+(\.\d+)?)?$/.test(customVersion)) {
-      logError('  Invalid version format. Expected: X.Y.Z, X.Y.Z-tag, or X.Y.Z-tag.N (e.g. 2.0.0, 1.5.0-alpha, 1.5.0-rc.1)')
+      logError(
+        '  Invalid version format. Expected: X.Y.Z, X.Y.Z-tag, or X.Y.Z-tag.N (e.g. 2.0.0, 1.5.0-alpha, 1.5.0-rc.1)',
+      )
       process.exit(1)
     }
   }
 
-  const nextVersion = releaseType === 'custom'
-    ? customVersion
-    : bumpVersion(currentVersion, releaseType, preTag)
+  const nextVersion =
+    releaseType === 'custom' ? customVersion : bumpVersion(currentVersion, releaseType, preTag)
 
   // 4. Options
   log(`\n  Version: ${currentVersion} → ${nextVersion}`)
@@ -528,7 +529,9 @@ async function main() {
     const isPrerelease = nextVersion.includes('-')
     const allowedBranches = isPrerelease ? ['main', 'dev'] : ['main']
     if (!allowedBranches.includes(branch)) {
-      logError(`\nError: ${isPrerelease ? 'Pre-releases' : 'Stable releases'} must be made from ${allowedBranches.join(' or ')}. Current branch: ${branch}`)
+      logError(
+        `\nError: ${isPrerelease ? 'Pre-releases' : 'Stable releases'} must be made from ${allowedBranches.join(' or ')}. Current branch: ${branch}`,
+      )
       process.exit(1)
     }
 
@@ -562,8 +565,14 @@ async function main() {
     log(`  6. git add -A && git commit -m "chore: release v${nextVersion}"`)
     log(`  7. git tag v${nextVersion}`)
     if (!noPush) log('  8. git push --follow-tags')
-    if (githubRelease) log(`  9. gh release create v${nextVersion} --title "v${nextVersion}" --notes-file RELEASE_NOTES_v${nextVersion}.md`)
-    if (!noPublish) log(`  ${githubRelease ? '10' : '9'}. pnpm --filter='./packages/*' publish --access public --no-git-checks --tag ${getDistTag(nextVersion)}`)
+    if (githubRelease)
+      log(
+        `  9. gh release create v${nextVersion} --title "v${nextVersion}" --notes-file RELEASE_NOTES_v${nextVersion}.md`,
+      )
+    if (!noPublish)
+      log(
+        `  ${githubRelease ? '10' : '9'}. pnpm --filter='./packages/*' publish --access public --no-git-checks --tag ${getDistTag(nextVersion)}`,
+      )
     return
   }
 
@@ -618,10 +627,7 @@ async function main() {
   // Note: RELEASE_NOTES file is gitignored — used for GitHub Release body, not committed
 
   run(`git add ${filesToStage.join(' ')}`, 'Staging version bumps')
-  run(
-    `git commit -m "chore: release v${nextVersion}"`,
-    `Committing release v${nextVersion}`,
-  )
+  run(`git commit -m "chore: release v${nextVersion}"`, `Committing release v${nextVersion}`)
 
   // Tag
   run(`git tag -a v${nextVersion} -m "Release v${nextVersion}"`, 'Creating annotated tag')
@@ -644,9 +650,7 @@ async function main() {
         'gh release create',
         `v${nextVersion}`,
         `--title "v${nextVersion}"`,
-        notes && fs.existsSync(notesFile)
-          ? `--notes-file ${notesFile}`
-          : '--generate-notes',
+        notes && fs.existsSync(notesFile) ? `--notes-file ${notesFile}` : '--generate-notes',
         isPrerelease ? '--prerelease' : '',
       ]
         .filter(Boolean)
@@ -658,7 +662,10 @@ async function main() {
   // Publish
   if (!noPublish) {
     const distTag = getDistTag(nextVersion)
-    run(`pnpm --filter='./packages/*' publish --access public --no-git-checks --tag ${distTag}`, `Publishing to npm (dist-tag: ${distTag})`)
+    run(
+      `pnpm --filter='./packages/*' publish --access public --no-git-checks --tag ${distTag}`,
+      `Publishing to npm (dist-tag: ${distTag})`,
+    )
   } else {
     log('\n  Skipped publish (--no-publish)')
   }
@@ -681,7 +688,9 @@ async function main() {
     }
 
     log('\nOr use gh CLI:')
-    log(`  gh release create v${nextVersion} --title "v${nextVersion}" --notes-file RELEASE_NOTES_v${nextVersion}.md`)
+    log(
+      `  gh release create v${nextVersion} --title "v${nextVersion}" --notes-file RELEASE_NOTES_v${nextVersion}.md`,
+    )
   }
 }
 

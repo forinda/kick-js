@@ -76,12 +76,14 @@ describe('defineAdapter — .scoped()', () => {
 
   it('passes BuildContext with scoped=true and the composed name', () => {
     let captured: { name: string; scoped: boolean } | undefined
-    const TenantAdapter = defineAdapter(baseOptions({
-      build: (_config, ctx) => {
-        captured = ctx
-        return {}
-      },
-    }))
+    const TenantAdapter = defineAdapter(
+      baseOptions({
+        build: (_config, ctx) => {
+          captured = ctx
+          return {}
+        },
+      }),
+    )
     TenantAdapter.scoped('shard-eu', { strategy: 'header' })
     expect(captured).toEqual({ name: 'TenantAdapter:shard-eu', scoped: true })
   })

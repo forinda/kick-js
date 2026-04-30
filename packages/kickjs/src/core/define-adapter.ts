@@ -54,7 +54,7 @@ export interface AdapterFactory<TConfig, TExtra = unknown> {
 const mergeConfig = <TConfig>(
   defaults: Partial<TConfig> | undefined,
   overrides: Partial<TConfig> | undefined,
-): TConfig => ({ ...(defaults ?? {}), ...(overrides ?? {}) }) as TConfig
+): TConfig => ({ ...defaults, ...overrides }) as TConfig
 
 const composeName = (base: string, scope: string): string => `${base}:${scope}`
 

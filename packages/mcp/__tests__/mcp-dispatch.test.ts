@@ -125,9 +125,11 @@ async function callTool(
   // code path the MCP SDK calls when a client invokes a tool.
   const tool = adapter.getTools().find((t) => t.name === toolName)
   if (!tool) throw new Error(`tool ${toolName} not registered`)
-  const dispatchFn = (adapter as unknown as {
-    dispatchTool: (t: typeof tool, a: unknown) => Promise<any>
-  }).dispatchTool.bind(adapter)
+  const dispatchFn = (
+    adapter as unknown as {
+      dispatchTool: (t: typeof tool, a: unknown) => Promise<any>
+    }
+  ).dispatchTool.bind(adapter)
   return dispatchFn(tool, args)
 }
 

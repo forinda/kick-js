@@ -18,7 +18,9 @@ describe('probeConnection', () => {
       json: async () => ({ status: 'healthy', uptime: 42 }),
     } as Partial<Response>)
 
-    const res = await probeConnection('http://localhost:3000', '/_debug', { fetchImpl: fetchImpl as never })
+    const res = await probeConnection('http://localhost:3000', '/_debug', {
+      fetchImpl: fetchImpl as never,
+    })
     expect(res.ok).toBe(true)
     expect(res.baseUrl).toBe('http://localhost:3000/_debug')
     if (res.ok) {
@@ -29,7 +31,9 @@ describe('probeConnection', () => {
 
   it('classifies 404 as not-found with adapter remediation hint', async () => {
     const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 404 } as Partial<Response>)
-    const res = await probeConnection('http://localhost:3000', '/_debug', { fetchImpl: fetchImpl as never })
+    const res = await probeConnection('http://localhost:3000', '/_debug', {
+      fetchImpl: fetchImpl as never,
+    })
     expect(res.ok).toBe(false)
     if (!res.ok) {
       expect(res.error.kind).toBe('not-found')
@@ -39,21 +43,27 @@ describe('probeConnection', () => {
 
   it('classifies 401 as unauthorized', async () => {
     const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 401 } as Partial<Response>)
-    const res = await probeConnection('http://localhost:3000', '/_debug', { fetchImpl: fetchImpl as never })
+    const res = await probeConnection('http://localhost:3000', '/_debug', {
+      fetchImpl: fetchImpl as never,
+    })
     expect(res.ok).toBe(false)
     if (!res.ok) expect(res.error.kind).toBe('unauthorized')
   })
 
   it('classifies 403 as unauthorized', async () => {
     const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 403 } as Partial<Response>)
-    const res = await probeConnection('http://localhost:3000', '/_debug', { fetchImpl: fetchImpl as never })
+    const res = await probeConnection('http://localhost:3000', '/_debug', {
+      fetchImpl: fetchImpl as never,
+    })
     expect(res.ok).toBe(false)
     if (!res.ok) expect(res.error.kind).toBe('unauthorized')
   })
 
   it('classifies arbitrary 5xx as http', async () => {
     const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 502 } as Partial<Response>)
-    const res = await probeConnection('http://localhost:3000', '/_debug', { fetchImpl: fetchImpl as never })
+    const res = await probeConnection('http://localhost:3000', '/_debug', {
+      fetchImpl: fetchImpl as never,
+    })
     expect(res.ok).toBe(false)
     if (!res.ok) {
       expect(res.error.kind).toBe('http')
@@ -62,8 +72,12 @@ describe('probeConnection', () => {
   })
 
   it('classifies AbortError as timeout', async () => {
-    const fetchImpl = vi.fn().mockRejectedValue(Object.assign(new Error('aborted'), { name: 'AbortError' }))
-    const res = await probeConnection('http://localhost:3000', '/_debug', { fetchImpl: fetchImpl as never })
+    const fetchImpl = vi
+      .fn()
+      .mockRejectedValue(Object.assign(new Error('aborted'), { name: 'AbortError' }))
+    const res = await probeConnection('http://localhost:3000', '/_debug', {
+      fetchImpl: fetchImpl as never,
+    })
     expect(res.ok).toBe(false)
     if (!res.ok) expect(res.error.kind).toBe('timeout')
   })
@@ -71,8 +85,12 @@ describe('probeConnection', () => {
   it('classifies ECONNREFUSED (cause.code) as refused', async () => {
     const fetchImpl = vi
       .fn()
-      .mockRejectedValue(Object.assign(new Error('fetch failed'), { cause: { code: 'ECONNREFUSED' } }))
-    const res = await probeConnection('http://localhost:3000', '/_debug', { fetchImpl: fetchImpl as never })
+      .mockRejectedValue(
+        Object.assign(new Error('fetch failed'), { cause: { code: 'ECONNREFUSED' } }),
+      )
+    const res = await probeConnection('http://localhost:3000', '/_debug', {
+      fetchImpl: fetchImpl as never,
+    })
     expect(res.ok).toBe(false)
     if (!res.ok) {
       expect(res.error.kind).toBe('refused')
@@ -82,7 +100,9 @@ describe('probeConnection', () => {
 
   it('falls back to unknown for unrecognised errors', async () => {
     const fetchImpl = vi.fn().mockRejectedValue(new Error('something weird'))
-    const res = await probeConnection('http://localhost:3000', '/_debug', { fetchImpl: fetchImpl as never })
+    const res = await probeConnection('http://localhost:3000', '/_debug', {
+      fetchImpl: fetchImpl as never,
+    })
     expect(res.ok).toBe(false)
     if (!res.ok) expect(res.error.kind).toBe('unknown')
   })
@@ -93,7 +113,9 @@ describe('probeConnection', () => {
       status: 200,
       json: async () => ({ status: 'healthy', uptime: 1 }),
     } as Partial<Response>)
-    const res = await probeConnection('http://localhost:3000/', '/_debug', { fetchImpl: fetchImpl as never })
+    const res = await probeConnection('http://localhost:3000/', '/_debug', {
+      fetchImpl: fetchImpl as never,
+    })
     expect(res.baseUrl).toBe('http://localhost:3000/_debug')
   })
 })
@@ -126,7 +148,9 @@ describe('autoDetect', () => {
   })
 
   it('returns null when no candidate succeeds', async () => {
-    const fetchImpl = vi.fn().mockRejectedValue(Object.assign(new Error('refused'), { cause: { code: 'ECONNREFUSED' } }))
+    const fetchImpl = vi
+      .fn()
+      .mockRejectedValue(Object.assign(new Error('refused'), { cause: { code: 'ECONNREFUSED' } }))
     const res = await autoDetect(
       [
         { serverUrl: 'http://localhost:3000', debugPath: '/_debug' },
@@ -150,7 +174,7 @@ describe('readEnvPorts + buildCandidates + isKickJsWorkspace', () => {
   it('parses PORT from .env files', () => {
     writeFileSync(join(dir, '.env'), 'PORT=4567\nDATABASE_URL=foo')
     writeFileSync(join(dir, '.env.development'), 'PORT="4001"')
-    expect(readEnvPorts(dir).sort()).toEqual([4001, 4567])
+    expect(readEnvPorts(dir).toSorted()).toEqual([4001, 4567])
   })
 
   it('returns [] for unreadable directory', () => {

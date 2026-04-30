@@ -21,10 +21,14 @@ interface MyAdapterConfig {
 
 export const MyAdapter = defineAdapter<MyAdapterConfig>({
   name: 'MyAdapter',
-  defaults: { /* config defaults */ },
+  defaults: {
+    /* config defaults */
+  },
   build: (config, { name }) => ({
     /** Express middleware entries to insert at named phases. */
-    middleware(): AdapterMiddleware[] { return [] },
+    middleware(): AdapterMiddleware[] {
+      return []
+    },
 
     /** Runs before global middleware — mount routes that bypass the stack. */
     beforeMount({ app }: AdapterContext): void | Promise<void> {},
@@ -47,7 +51,9 @@ export const MyAdapter = defineAdapter<MyAdapterConfig>({
 
     /** Returns Context Contributors to merge into every route's pipeline.
      *  See ./context-decorators.md. */
-    contributors() { return [] },
+    contributors() {
+      return []
+    },
   }),
 })
 ```
@@ -56,11 +62,11 @@ export const MyAdapter = defineAdapter<MyAdapterConfig>({
 
 ```ts
 interface AdapterContext {
-  app: Express                  // Express application instance
-  container: Container          // DI container
-  server?: http.Server          // populated only inside afterStart
-  env: string                   // NODE_ENV (default 'development')
-  isProduction: boolean         // true when NODE_ENV === 'production'
+  app: Express // Express application instance
+  container: Container // DI container
+  server?: http.Server // populated only inside afterStart
+  env: string // NODE_ENV (default 'development')
+  isProduction: boolean // true when NODE_ENV === 'production'
 }
 ```
 

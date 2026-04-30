@@ -30,7 +30,7 @@ describe('Policy & AuthorizationService', () => {
 
   it('AuthorizationService.can() calls the correct policy method', async () => {
     @Policy('article')
-    class ArticlePolicy {
+    class _ArticlePolicy {
       view(_user: any) {
         return true
       }
@@ -55,7 +55,7 @@ describe('Policy & AuthorizationService', () => {
 
   it('returns false for unknown action', async () => {
     @Policy('item')
-    class ItemPolicy {
+    class _ItemPolicy {
       view() {
         return true
       }
@@ -67,9 +67,7 @@ describe('Policy & AuthorizationService', () => {
 
   describe('onMiss behavior', () => {
     it('warns once per (resource, action) when policy class is missing', async () => {
-      const warn = vi
-        .spyOn(Logger.for('AuthorizationService'), 'warn')
-        .mockImplementation(() => {})
+      const warn = vi.spyOn(Logger.for('AuthorizationService'), 'warn').mockImplementation(() => {})
       const authz = new AuthorizationService() // default 'warn'
 
       await authz.can({ id: '1' }, 'view', 'ghost')
@@ -84,15 +82,13 @@ describe('Policy & AuthorizationService', () => {
 
     it('warns once per (resource, action) when method is missing', async () => {
       @Policy('flock')
-      class FlockPolicy {
+      class _FlockPolicy {
         view() {
           return true
         }
       }
 
-      const warn = vi
-        .spyOn(Logger.for('AuthorizationService'), 'warn')
-        .mockImplementation(() => {})
+      const warn = vi.spyOn(Logger.for('AuthorizationService'), 'warn').mockImplementation(() => {})
       const authz = new AuthorizationService()
 
       await authz.can({ id: '1' }, 'delete', 'flock')
@@ -112,7 +108,7 @@ describe('Policy & AuthorizationService', () => {
 
     it("strict mode ('error') throws PolicyMissingError on missing method", async () => {
       @Policy('widget')
-      class WidgetPolicy {
+      class _WidgetPolicy {
         view() {
           return true
         }
@@ -127,9 +123,7 @@ describe('Policy & AuthorizationService', () => {
     })
 
     it("'silent' mode never logs", async () => {
-      const warn = vi
-        .spyOn(Logger.for('AuthorizationService'), 'warn')
-        .mockImplementation(() => {})
+      const warn = vi.spyOn(Logger.for('AuthorizationService'), 'warn').mockImplementation(() => {})
       const authz = new AuthorizationService({ onMiss: 'silent' })
       await authz.can({ id: '1' }, 'view', 'nope')
       expect(warn).not.toHaveBeenCalled()
@@ -158,7 +152,7 @@ describe('Policy & AuthorizationService', () => {
 
   it('policy method receives resource instance', async () => {
     @Policy('comment')
-    class CommentPolicy {
+    class _CommentPolicy {
       update(user: any, comment: any) {
         return user.id === comment.authorId
       }
@@ -181,7 +175,7 @@ describe('Policy & AuthorizationService', () => {
 
     it('@Can() allows when policy returns true', async () => {
       @Policy('task')
-      class TaskPolicy {
+      class _TaskPolicy {
         view() {
           return true
         }
@@ -201,7 +195,14 @@ describe('Policy & AuthorizationService', () => {
       adapter.onRouteMount!(TaskCtrl, '/api')
 
       const handler = adapter.middleware!()[0].handler
-      const req = { method: 'GET', path: '/api/tasks', baseUrl: '', headers: {}, ip: '1.1.1.1', url: '/api/tasks' }
+      const req = {
+        method: 'GET',
+        path: '/api/tasks',
+        baseUrl: '',
+        headers: {},
+        ip: '1.1.1.1',
+        url: '/api/tasks',
+      }
       const res = { status: vi.fn().mockReturnThis(), json: vi.fn(), setHeader: vi.fn() }
       const next = vi.fn()
 
@@ -211,7 +212,7 @@ describe('Policy & AuthorizationService', () => {
 
     it('@Can() blocks when policy returns false', async () => {
       @Policy('secret')
-      class SecretPolicy {
+      class _SecretPolicy {
         delete(user: any) {
           return user.roles?.includes('admin')
         }
@@ -231,7 +232,14 @@ describe('Policy & AuthorizationService', () => {
       adapter.onRouteMount!(SecretCtrl, '/api')
 
       const handler = adapter.middleware!()[0].handler
-      const req = { method: 'DELETE', path: '/api/secrets', baseUrl: '', headers: {}, ip: '1.1.1.1', url: '/api/secrets' }
+      const req = {
+        method: 'DELETE',
+        path: '/api/secrets',
+        baseUrl: '',
+        headers: {},
+        ip: '1.1.1.1',
+        url: '/api/secrets',
+      }
       const res = { status: vi.fn().mockReturnThis(), json: vi.fn(), setHeader: vi.fn() }
       const next = vi.fn()
 

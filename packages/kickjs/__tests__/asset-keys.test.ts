@@ -33,16 +33,10 @@ describe('stripExt', () => {
 
 describe('groupAssetKeys — strategy=strip (legacy behaviour)', () => {
   it('strips extensions on every key', () => {
-    const r = groupAssetKeys(
-      'mails',
-      ['welcome.ejs', 'reminder.html', 'reset.txt'],
-      { strategy: 'strip' },
-    )
-    expect(r.pairs.map((p) => p.key)).toEqual([
-      'mails/welcome',
-      'mails/reminder',
-      'mails/reset',
-    ])
+    const r = groupAssetKeys('mails', ['welcome.ejs', 'reminder.html', 'reset.txt'], {
+      strategy: 'strip',
+    })
+    expect(r.pairs.map((p) => p.key)).toEqual(['mails/welcome', 'mails/reminder', 'mails/reset'])
     expect(r.collisionGroupsResolved).toBe(0)
   })
 
@@ -56,11 +50,9 @@ describe('groupAssetKeys — strategy=strip (legacy behaviour)', () => {
 
 describe('groupAssetKeys — strategy=with-extension', () => {
   it('keeps the full extension on every key', () => {
-    const r = groupAssetKeys(
-      'pages',
-      ['index.pug', 'index.html', 'index.css', 'about.html'],
-      { strategy: 'with-extension' },
-    )
+    const r = groupAssetKeys('pages', ['index.pug', 'index.html', 'index.css', 'about.html'], {
+      strategy: 'with-extension',
+    })
     expect(r.pairs.map((p) => p.key)).toEqual([
       'pages/index.pug',
       'pages/index.html',
@@ -74,11 +66,7 @@ describe('groupAssetKeys — strategy=with-extension', () => {
 describe('groupAssetKeys — strategy=auto (default)', () => {
   it('strips when basenames are unique', () => {
     const r = groupAssetKeys('mails', ['welcome.ejs', 'reminder.html', 'reset.txt'])
-    expect(r.pairs.map((p) => p.key)).toEqual([
-      'mails/welcome',
-      'mails/reminder',
-      'mails/reset',
-    ])
+    expect(r.pairs.map((p) => p.key)).toEqual(['mails/welcome', 'mails/reminder', 'mails/reset'])
     expect(r.collisionGroupsResolved).toBe(0)
   })
 

@@ -2,7 +2,7 @@ import { cpSync, existsSync, mkdirSync } from 'node:fs'
 import { resolve, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { Command } from 'commander'
-import { runShellCommand, runNodeWithEnv } from '../utils/shell'
+import { runNodeWithEnv } from '../utils/shell'
 import { loadKickConfig } from '../config'
 import { runTypegen } from '../typegen'
 import { runAllPluginTypegens } from '../typegen/run-plugins'
@@ -191,9 +191,7 @@ export function registerRunCommands(program: Command): void {
         await startDevServer(opts.entry, opts.port, { polling: opts.polling })
       } catch (err: any) {
         if (err.code === 'ERR_MODULE_NOT_FOUND' && err.message?.includes('vite')) {
-          console.error(
-            '\n  Error: vite is not installed.\n' + '  Run: pnpm add -D vite unplugin-swc\n',
-          )
+          console.error('\n  Error: vite is not installed.\n  Run: pnpm add -D vite unplugin-swc\n')
         } else {
           console.error('\n  Dev server failed:', err.message ?? err)
         }

@@ -10,20 +10,21 @@ kick tinker --entry src/app.ts     # custom entry point
 ```
 
 Requires `tsx` as a dev dependency:
+
 ```bash
 pnpm add -D tsx
 ```
 
 ## Available Globals
 
-| Global | Description |
-|---|---|
-| `container` | DI container instance with all registered services |
-| `resolve(T)` | Shorthand for `container.resolve(T)` |
-| `Container` | Container class (for `.reset()`, `.has()`, etc.) |
-| `Logger` | Logger class |
-| `HttpException` | HTTP exception factory |
-| `HttpStatus` | HTTP status code constants |
+| Global          | Description                                        |
+| --------------- | -------------------------------------------------- |
+| `container`     | DI container instance with all registered services |
+| `resolve(T)`    | Shorthand for `container.resolve(T)`               |
+| `Container`     | Container class (for `.reset()`, `.has()`, etc.)   |
+| `Logger`        | Logger class                                       |
+| `HttpException` | HTTP exception factory                             |
+| `HttpStatus`    | HTTP status code constants                         |
 
 ## Resolving Services
 

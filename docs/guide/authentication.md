@@ -167,18 +167,18 @@ JwtStrategy({
 
 Options:
 
-| Option | Default | Description |
-|---|---|---|
-| `secret` | (required) | JWT secret or public key |
-| `algorithms` | `['HS256']` | Allowed algorithms |
-| `tokenFrom` | `'header'` | Where to read: `'header'`, `'query'`, `'cookie'` |
-| `headerName` | `'authorization'` | Header name |
-| `headerPrefix` | `'Bearer'` | Token prefix |
-| `queryParam` | `'token'` | Query parameter name |
-| `cookieName` | `'jwt'` | Cookie name |
-| `mapPayload` | identity | Transform decoded JWT to AuthUser |
-| `jwksUri` | — | JWKS endpoint URL for key rotation (e.g., Keycloak, Auth0) |
-| `jwksCacheTtl` | `3600000` | JWKS cache TTL in ms (default: 1 hour) |
+| Option         | Default           | Description                                                |
+| -------------- | ----------------- | ---------------------------------------------------------- |
+| `secret`       | (required)        | JWT secret or public key                                   |
+| `algorithms`   | `['HS256']`       | Allowed algorithms                                         |
+| `tokenFrom`    | `'header'`        | Where to read: `'header'`, `'query'`, `'cookie'`           |
+| `headerName`   | `'authorization'` | Header name                                                |
+| `headerPrefix` | `'Bearer'`        | Token prefix                                               |
+| `queryParam`   | `'token'`         | Query parameter name                                       |
+| `cookieName`   | `'jwt'`           | Cookie name                                                |
+| `mapPayload`   | identity          | Transform decoded JWT to AuthUser                          |
+| `jwksUri`      | —                 | JWKS endpoint URL for key rotation (e.g., Keycloak, Auth0) |
+| `jwksCacheTtl` | `3600000`         | JWKS cache TTL in ms (default: 1 hour)                     |
 
 #### JWKS URI (Key Rotation)
 
@@ -207,8 +207,8 @@ JwtStrategy({
   jwksUri: `${KEYCLOAK_URL}/realms/${REALM}/protocol/openid-connect/certs`,
   algorithms: ['RS256'],
   mapPayload: keycloakMapPayload({
-    clientId: 'my-app',           // extracts client-level roles
-    includeRealmRoles: true,       // includes realm-level roles
+    clientId: 'my-app', // extracts client-level roles
+    includeRealmRoles: true, // includes realm-level roles
   }),
 })
 ```
@@ -242,13 +242,13 @@ ApiKeyStrategy({
 
 Options:
 
-| Option | Default | Description |
-|---|---|---|
-| `keys` | — | Static key-to-user map |
-| `validate` | — | Async validator (takes precedence over `keys`) |
-| `from` | `['header']` | Sources: `'header'`, `'query'` |
-| `headerName` | `'x-api-key'` | Header name |
-| `queryParam` | `'api_key'` | Query parameter name |
+| Option       | Default       | Description                                    |
+| ------------ | ------------- | ---------------------------------------------- |
+| `keys`       | —             | Static key-to-user map                         |
+| `validate`   | —             | Async validator (takes precedence over `keys`) |
+| `from`       | `['header']`  | Sources: `'header'`, `'query'`                 |
+| `headerName` | `'x-api-key'` | Header name                                    |
+| `queryParam` | `'api_key'`   | Query parameter name                           |
 
 ### OAuthStrategy (Social Auth)
 
@@ -438,10 +438,10 @@ bootstrap({
 
 Options:
 
-| Option | Default | Description |
-|---|---|---|
-| `userKey` | `'userId'` | Key in `session.data` that indicates an authenticated user |
-| `resolveUser` | — | Async function to look up the full user from session data |
+| Option        | Default    | Description                                                |
+| ------------- | ---------- | ---------------------------------------------------------- |
+| `userKey`     | `'userId'` | Key in `session.data` that indicates an authenticated user |
+| `resolveUser` | —          | Async function to look up the full user from session data  |
 
 Login and logout helpers:
 
@@ -481,7 +481,7 @@ class UserService {
 
   async login(email: string, rawPassword: string) {
     const user = await this.repo.findByEmail(email)
-    if (!await this.password.verify(user.passwordHash, rawPassword)) return null
+    if (!(await this.password.verify(user.passwordHash, rawPassword))) return null
     if (this.password.needsRehash(user.passwordHash)) {
       user.passwordHash = await this.password.hash(rawPassword)
       await this.repo.update(user)
@@ -493,11 +493,11 @@ class UserService {
 
 Algorithms:
 
-| Algorithm | Package | Default |
-|---|---|---|
-| `scrypt` | Built-in (Node.js) | Yes |
-| `argon2id` | `pnpm add argon2` | No |
-| `bcrypt` | `pnpm add bcryptjs` | No |
+| Algorithm  | Package             | Default |
+| ---------- | ------------------- | ------- |
+| `scrypt`   | Built-in (Node.js)  | Yes     |
+| `argon2id` | `pnpm add argon2`   | No      |
+| `bcrypt`   | `pnpm add bcryptjs` | No      |
 
 Password validation:
 
@@ -563,9 +563,9 @@ Control explicitly:
 ```ts
 AuthAdapter({
   strategies,
-  csrf: true,                    // force on
-  csrf: false,                   // force off
-  csrf: { cookie: '_xsrf' },    // custom config
+  csrf: true, // force on
+  csrf: false, // force off
+  csrf: { cookie: '_xsrf' }, // custom config
   // undefined = auto-detect from strategies
 })
 ```
@@ -608,7 +608,7 @@ AuthAdapter({
 
 **2. Exempt the JWT routes.** If some routes accept JWT while others accept cookies on the same app, mark the JWT routes with `@CsrfExempt()` (or use `@Strategy('jwt')` on a whole controller and exempt the class).
 
-**3. Keep CSRF, add the header.** If browsers *do* call the API directly with cookies, keep CSRF on and make sure every mutating fetch reads `_csrf` and sends it as `x-csrf-token`.
+**3. Keep CSRF, add the header.** If browsers _do_ call the API directly with cookies, keep CSRF on and make sure every mutating fetch reads `_csrf` and sends it as `x-csrf-token`.
 
 Rule of thumb: CSRF protects **ambient credentials** (cookies the browser attaches automatically). Pure `Authorization: Bearer` calls aren't vulnerable and shouldn't go through CSRF validation.
 
@@ -672,10 +672,10 @@ bootstrap({ modules, adapters: [adapter] })
 ```ts
 AuthAdapter.testMode({
   user: { id: '1', email: 'a@b.com' },
-  tenantId: 't1',              // → user.tenantId
-  roles: ['owner'],            // → user.tenantRoles (with tenantId) or user.roles
-  allow: ['flock.view'],       // @Can('view', 'flock') → true, skips @Policy
-  deny: ['flock.delete'],      // @Can('delete', 'flock') → 403, deny wins ties
+  tenantId: 't1', // → user.tenantId
+  roles: ['owner'], // → user.tenantRoles (with tenantId) or user.roles
+  allow: ['flock.view'], // @Can('view', 'flock') → true, skips @Policy
+  deny: ['flock.delete'], // @Can('delete', 'flock') → 403, deny wins ties
 })
 ```
 
@@ -705,19 +705,19 @@ Register multiple strategies — the first one that returns a user wins:
 ```ts
 AuthAdapter({
   strategies: [
-    JwtStrategy({ secret: JWT_SECRET }),       // Try JWT first
-    ApiKeyStrategy({ keys: API_KEYS }),         // Fall back to API key
-    SessionStrategy(),                          // Then session
+    JwtStrategy({ secret: JWT_SECRET }), // Try JWT first
+    ApiKeyStrategy({ keys: API_KEYS }), // Fall back to API key
+    SessionStrategy(), // Then session
   ],
 })
 ```
 
 ## Default Policy
 
-| Policy | Behavior |
-|---|---|
-| `'protected'` (default) | All routes require auth unless marked `@Public()` |
-| `'open'` | All routes are public unless marked `@Authenticated()` |
+| Policy                  | Behavior                                               |
+| ----------------------- | ------------------------------------------------------ |
+| `'protected'` (default) | All routes require auth unless marked `@Public()`      |
+| `'open'`                | All routes are public unless marked `@Authenticated()` |
 
 ```ts
 // Secure by default (recommended)

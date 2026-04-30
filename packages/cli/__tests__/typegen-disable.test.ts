@@ -22,7 +22,7 @@ describe('applyDisableFilter (typegen.disable)', () => {
   it('flags unrecognised disable ids as unknown', () => {
     const r = applyDisableFilter([tg('kick/db')], ['kick/db', 'kicc/db', 'foo/bar'])
     expect(r.skipped.map((t) => t.id)).toEqual(['kick/db'])
-    expect(r.unknown.sort()).toEqual(['foo/bar', 'kicc/db'])
+    expect(r.unknown.toSorted()).toEqual(['foo/bar', 'kicc/db'])
   })
 
   it('empty disable list = everything enabled, nothing unknown', () => {

@@ -146,7 +146,7 @@ describe('Application — plugin + adapter dependsOn interaction', () => {
 
     // Declared in reverse order — plugin sort must run first so TenantPlugin.adapters()
     // fires before AuthPlugin.adapters().
-    new Application({
+    void new Application({
       modules: [],
       plugins: [authPlugin, tenantPlugin],
     })

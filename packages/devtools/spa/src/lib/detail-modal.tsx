@@ -110,12 +110,7 @@ export const DetailModalHost: Component = () => {
                       aria-label="Back"
                       onClick={back}
                     >
-                      <svg
-                        class="w-4 h-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path
                           stroke-linecap="round"
                           stroke-linejoin="round"
@@ -130,7 +125,9 @@ export const DetailModalHost: Component = () => {
                   </h2>
                 </div>
                 <div class="flex flex-wrap gap-2 mt-2">
-                  <span class={`px-2 py-0.5 rounded text-xs font-semibold ${kindBadge(reg().kind)}`}>
+                  <span
+                    class={`px-2 py-0.5 rounded text-xs font-semibold ${kindBadge(reg().kind)}`}
+                  >
                     {reg().kind ?? 'unknown'}
                   </span>
                   <span class="bg-border-strong/50 text-text-strong px-2 py-0.5 rounded text-xs font-semibold">
@@ -223,7 +220,9 @@ export const DetailModalHost: Component = () => {
 
             {/* PostConstruct */}
             <Section title="PostConstruct">
-              <span class={`px-2 py-0.5 rounded text-xs font-semibold ${postConstructBadge(reg().postConstructStatus)}`}>
+              <span
+                class={`px-2 py-0.5 rounded text-xs font-semibold ${postConstructBadge(reg().postConstructStatus)}`}
+              >
                 {reg().postConstructStatus ?? 'none'}
               </span>
             </Section>

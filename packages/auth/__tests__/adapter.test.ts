@@ -126,7 +126,7 @@ describe('AuthAdapter', () => {
 
   it('supports custom onForbidden handler', async () => {
     const customHandler = vi.fn()
-    const adapter = AuthAdapter({
+    const _adapter = AuthAdapter({
       strategies: [{ name: 'test', validate: async () => ({ roles: [] }) }],
       defaultPolicy: 'protected',
       onForbidden: customHandler,

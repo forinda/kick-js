@@ -248,11 +248,13 @@ export class Logger {
   }
 
   trace(msg: string, ...args: any[]) {
-    this.provider.trace ? this.provider.trace(msg, ...args) : this.provider.debug(msg, ...args)
+    if (this.provider.trace) this.provider.trace(msg, ...args)
+    else this.provider.debug(msg, ...args)
   }
 
   fatal(msg: string, ...args: any[]) {
-    this.provider.fatal ? this.provider.fatal(msg, ...args) : this.provider.error(msg, ...args)
+    if (this.provider.fatal) this.provider.fatal(msg, ...args)
+    else this.provider.error(msg, ...args)
   }
 }
 

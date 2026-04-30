@@ -9,9 +9,7 @@ import { rateLimit } from '@forinda/kickjs'
 
 bootstrap({
   modules,
-  middleware: [
-    rateLimit({ max: 100, windowMs: 60_000 }),
-  ],
+  middleware: [rateLimit({ max: 100, windowMs: 60_000 })],
 })
 ```
 
@@ -19,17 +17,17 @@ This limits each client to **100 requests per minute** based on their IP address
 
 ## Options
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `max` | `number` | `100` | Maximum requests per window |
-| `windowMs` | `number` | `60_000` | Window size in milliseconds |
-| `message` | `string` | `'Too Many Requests'` | Response message on limit exceeded |
-| `statusCode` | `number` | `429` | HTTP status code on limit exceeded |
-| `keyGenerator` | `(req) => string` | `req.ip` | Function to derive the rate limit key |
-| `headers` | `boolean` | `true` | Send `RateLimit-*` response headers |
-| `store` | `RateLimitStore` | In-memory | Custom store for distributed rate limiting |
-| `skip` | `(req) => boolean` | — | Skip rate limiting for certain requests |
-| `skipPaths` | `string[]` | `[]` | Paths to exclude from rate limiting |
+| Option         | Type               | Default               | Description                                |
+| -------------- | ------------------ | --------------------- | ------------------------------------------ |
+| `max`          | `number`           | `100`                 | Maximum requests per window                |
+| `windowMs`     | `number`           | `60_000`              | Window size in milliseconds                |
+| `message`      | `string`           | `'Too Many Requests'` | Response message on limit exceeded         |
+| `statusCode`   | `number`           | `429`                 | HTTP status code on limit exceeded         |
+| `keyGenerator` | `(req) => string`  | `req.ip`              | Function to derive the rate limit key      |
+| `headers`      | `boolean`          | `true`                | Send `RateLimit-*` response headers        |
+| `store`        | `RateLimitStore`   | In-memory             | Custom store for distributed rate limiting |
+| `skip`         | `(req) => boolean` | —                     | Skip rate limiting for certain requests    |
+| `skipPaths`    | `string[]`         | `[]`                  | Paths to exclude from rate limiting        |
 
 ## Response Headers
 
@@ -73,7 +71,7 @@ Rate limit by API key instead of IP:
 
 ```ts
 rateLimit({
-  keyGenerator: (req) => req.headers['x-api-key'] as string ?? req.ip ?? '127.0.0.1',
+  keyGenerator: (req) => (req.headers['x-api-key'] as string) ?? req.ip ?? '127.0.0.1',
 })
 ```
 
@@ -85,7 +83,10 @@ Implement the `RateLimitStore` interface for distributed deployments:
 import type { RateLimitStore } from '@forinda/kickjs'
 
 class RedisStore implements RateLimitStore {
-  constructor(private redis: Redis, private windowMs: number) {}
+  constructor(
+    private redis: Redis,
+    private windowMs: number,
+  ) {}
 
   async increment(key: string) {
     const hits = await this.redis.incr(`rl:${key}`)

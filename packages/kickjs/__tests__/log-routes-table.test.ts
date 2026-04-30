@@ -79,7 +79,9 @@ let logCalls: string[]
 
 function setupLogCapture() {
   logCalls = []
-  const capture = (msg: string) => { logCalls.push(String(msg)) }
+  const capture = (msg: string) => {
+    logCalls.push(String(msg))
+  }
   const noop = () => {}
   Logger.setProvider({
     info: capture,
@@ -91,15 +93,12 @@ function setupLogCapture() {
       warn: noop,
       error: noop,
       debug: capture,
-      child: () => ({} as any),
+      child: () => ({}) as any,
     }),
   })
 }
 
-async function buildApp(options: {
-  logRoutesTable?: boolean
-  nodeEnv?: string
-}) {
+async function buildApp(options: { logRoutesTable?: boolean; nodeEnv?: string }) {
   if (options.nodeEnv !== undefined) {
     process.env.NODE_ENV = options.nodeEnv
   }

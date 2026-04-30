@@ -23,7 +23,10 @@ describe('CircuitBreaker', () => {
   })
 
   it('transitions to OPEN after failure threshold is reached', async () => {
-    const fail = () => breaker.execute(async () => { throw new Error('fail') })
+    const fail = () =>
+      breaker.execute(async () => {
+        throw new Error('fail')
+      })
 
     await expect(fail()).rejects.toThrow('fail')
     await expect(fail()).rejects.toThrow('fail')
@@ -36,7 +39,11 @@ describe('CircuitBreaker', () => {
   it('OPEN state rejects immediately with CircuitOpenError', async () => {
     // Force open
     for (let i = 0; i < 3; i++) {
-      await breaker.execute(async () => { throw new Error('fail') }).catch(() => {})
+      await breaker
+        .execute(async () => {
+          throw new Error('fail')
+        })
+        .catch(() => {})
     }
 
     const spy = vi.fn(async () => 'should not run')
@@ -47,7 +54,11 @@ describe('CircuitBreaker', () => {
 
   it('transitions to HALF_OPEN after resetTimeout elapses', async () => {
     for (let i = 0; i < 3; i++) {
-      await breaker.execute(async () => { throw new Error('fail') }).catch(() => {})
+      await breaker
+        .execute(async () => {
+          throw new Error('fail')
+        })
+        .catch(() => {})
     }
     expect(breaker.getState()).toBe('open')
 
@@ -57,7 +68,11 @@ describe('CircuitBreaker', () => {
 
   it('HALF_OPEN success transitions to CLOSED', async () => {
     for (let i = 0; i < 3; i++) {
-      await breaker.execute(async () => { throw new Error('fail') }).catch(() => {})
+      await breaker
+        .execute(async () => {
+          throw new Error('fail')
+        })
+        .catch(() => {})
     }
 
     vi.advanceTimersByTime(10_000)
@@ -70,14 +85,20 @@ describe('CircuitBreaker', () => {
 
   it('HALF_OPEN failure transitions back to OPEN', async () => {
     for (let i = 0; i < 3; i++) {
-      await breaker.execute(async () => { throw new Error('fail') }).catch(() => {})
+      await breaker
+        .execute(async () => {
+          throw new Error('fail')
+        })
+        .catch(() => {})
     }
 
     vi.advanceTimersByTime(10_000)
     expect(breaker.getState()).toBe('half_open')
 
     await expect(
-      breaker.execute(async () => { throw new Error('still failing') }),
+      breaker.execute(async () => {
+        throw new Error('still failing')
+      }),
     ).rejects.toThrow('still failing')
 
     expect(breaker.getState()).toBe('open')
@@ -92,7 +113,11 @@ describe('CircuitBreaker', () => {
 
     // Trip the breaker
     for (let i = 0; i < 2; i++) {
-      await breaker2.execute(async () => { throw new Error('fail') }).catch(() => {})
+      await breaker2
+        .execute(async () => {
+          throw new Error('fail')
+        })
+        .catch(() => {})
     }
 
     vi.advanceTimersByTime(5_000)
@@ -113,7 +138,11 @@ describe('CircuitBreaker', () => {
 
   it('manual reset() returns to CLOSED state', async () => {
     for (let i = 0; i < 3; i++) {
-      await breaker.execute(async () => { throw new Error('fail') }).catch(() => {})
+      await breaker
+        .execute(async () => {
+          throw new Error('fail')
+        })
+        .catch(() => {})
     }
     expect(breaker.getState()).toBe('open')
 
@@ -135,7 +164,11 @@ describe('CircuitBreaker', () => {
     // After some successes and failures
     await breaker.execute(async () => 'ok')
     await breaker.execute(async () => 'ok')
-    await breaker.execute(async () => { throw new Error('fail') }).catch(() => {})
+    await breaker
+      .execute(async () => {
+        throw new Error('fail')
+      })
+      .catch(() => {})
 
     stats = breaker.getStats()
     expect(stats.successes).toBe(2)
@@ -146,7 +179,11 @@ describe('CircuitBreaker', () => {
 
   it('getStats() reflects state transitions', async () => {
     for (let i = 0; i < 3; i++) {
-      await breaker.execute(async () => { throw new Error('fail') }).catch(() => {})
+      await breaker
+        .execute(async () => {
+          throw new Error('fail')
+        })
+        .catch(() => {})
     }
 
     expect(breaker.getStats().state).toBe('open')
@@ -158,7 +195,11 @@ describe('CircuitBreaker', () => {
 
   it('reset() clears all stats', async () => {
     await breaker.execute(async () => 'ok')
-    await breaker.execute(async () => { throw new Error('fail') }).catch(() => {})
+    await breaker
+      .execute(async () => {
+        throw new Error('fail')
+      })
+      .catch(() => {})
 
     breaker.reset()
     const stats = breaker.getStats()

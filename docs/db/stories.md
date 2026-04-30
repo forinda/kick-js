@@ -48,7 +48,7 @@ Depends on: —
 
 ### M0-S2 — Schema DSL → snapshot extraction (PG, 6 column types)
 
-As a **maintainer**, I want `extractSnapshot(schema)` to walk the exported `table()` declarations and emit a `SchemaSnapshot`, so that the diff engine has the *target* state.
+As a **maintainer**, I want `extractSnapshot(schema)` to walk the exported `table()` declarations and emit a `SchemaSnapshot`, so that the diff engine has the _target_ state.
 
 Acceptance:
 
@@ -912,17 +912,17 @@ Acceptance: `benchmark-results.json` compared against `main` baseline; CI job fa
 
 ## Summary
 
-| Milestone | Stories | Estimated weeks |
-|-----------|---------|-----------------|
-| M0 — Spike | 6 | 2 |
-| M1 — Walking skeleton | 10 | 4 |
-| M2 — Type story + relational | 9 | 3 |
-| M3 — SQLite + multi-dialect | 7 | 3 |
-| M4 — KickJS ecosystem fit | 7 | 3 |
-| M5 — Hardening + v6.0.0 | 6 | 2 |
-| M6 — v6.1 | 6 | 4–6 |
-| M7 — v7.0 | 3 | (months later) |
-| Cross-cutting | 3 | continuous |
+| Milestone                    | Stories | Estimated weeks |
+| ---------------------------- | ------- | --------------- |
+| M0 — Spike                   | 6       | 2               |
+| M1 — Walking skeleton        | 10      | 4               |
+| M2 — Type story + relational | 9       | 3               |
+| M3 — SQLite + multi-dialect  | 7       | 3               |
+| M4 — KickJS ecosystem fit    | 7       | 3               |
+| M5 — Hardening + v6.0.0      | 6       | 2               |
+| M6 — v6.1                    | 6       | 4–6             |
+| M7 — v7.0                    | 3       | (months later)  |
+| Cross-cutting                | 3       | continuous      |
 
 **Total stories: ~57** across the lifecycle.
 

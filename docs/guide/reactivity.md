@@ -97,8 +97,8 @@ watch(
 
 **Options:**
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| Option      | Type      | Default | Description                                 |
+| ----------- | --------- | ------- | ------------------------------------------- |
 | `immediate` | `boolean` | `false` | Run callback immediately with current value |
 
 ### `reactive(object)`
@@ -113,9 +113,7 @@ const metrics = reactive({
   errors: 0,
 })
 
-const errorRate = computed(() =>
-  metrics.requests > 0 ? metrics.errors / metrics.requests : 0,
-)
+const errorRate = computed(() => (metrics.requests > 0 ? metrics.errors / metrics.requests : 0))
 
 watch(errorRate, (rate) => {
   if (rate > 0.5) alertOncall('Service degraded')
@@ -130,8 +128,8 @@ metrics.requests++
 ```ts
 import { isRef, unref, toRefs } from '@forinda/kickjs'
 
-isRef(count)   // true for refs, false for everything else
-unref(count)   // unwraps ref → value, plain values pass through
+isRef(count) // true for refs, false for everything else
+unref(count) // unwraps ref → value, plain values pass through
 toRefs({ a: 1, b: 2 }) // { a: Ref<1>, b: Ref<2> }
 ```
 
@@ -173,10 +171,10 @@ The reactivity module powers the [DevTools adapter](./devtools.md). All reactive
 
 ## Differences from Vue
 
-| Feature | Vue 3 | KickJS |
-|---------|-------|--------|
-| DOM updates | Yes | No (backend) |
-| `watchEffect` | Yes | Not needed — use `watch` with getter |
-| `shallowRef` | Yes | Not needed — use `ref` |
-| Template refs | Yes | N/A |
-| `ref.subscribe()` | No | Yes — direct subscription API |
+| Feature           | Vue 3 | KickJS                               |
+| ----------------- | ----- | ------------------------------------ |
+| DOM updates       | Yes   | No (backend)                         |
+| `watchEffect`     | Yes   | Not needed — use `watch` with getter |
+| `shallowRef`      | Yes   | Not needed — use `ref`               |
+| Template refs     | Yes   | N/A                                  |
+| `ref.subscribe()` | No    | Yes — direct subscription API        |

@@ -12,33 +12,33 @@ pnpm add @forinda/kickjs-ws ws
 
 ### Decorators
 
-| Decorator | Description |
-|-----------|-------------|
+| Decorator                  | Description                                                 |
+| -------------------------- | ----------------------------------------------------------- |
 | `@WsController(namespace)` | Mark a class as a WebSocket controller bound to a namespace |
-| `@OnConnect()` | Handle new socket connections |
-| `@OnDisconnect()` | Handle socket disconnections |
-| `@OnMessage(event)` | Handle a named message event |
-| `@OnError()` | Handle socket errors |
+| `@OnConnect()`             | Handle new socket connections                               |
+| `@OnDisconnect()`          | Handle socket disconnections                                |
+| `@OnMessage(event)`        | Handle a named message event                                |
+| `@OnError()`               | Handle socket errors                                        |
 
 ### Adapter
 
-| Export | Description |
-|--------|-------------|
+| Export      | Description                                         |
+| ----------- | --------------------------------------------------- |
 | `WsAdapter` | AppAdapter that mounts Socket.IO on the HTTP server |
 
 ### Context
 
-| Export | Description |
-|--------|-------------|
+| Export      | Description                                            |
+| ----------- | ------------------------------------------------------ |
 | `WsContext` | Context object passed to all WebSocket handler methods |
 
 ### Types
 
-| Export | Description |
-|--------|-------------|
-| `WsControllerMeta` | Metadata stored by `@WsController` |
-| `WsHandlerMeta` | Metadata stored by `@OnMessage` and other handler decorators |
-| `WsAdapterOptions` | Configuration options for `WsAdapter` |
+| Export             | Description                                                  |
+| ------------------ | ------------------------------------------------------------ |
+| `WsControllerMeta` | Metadata stored by `@WsController`                           |
+| `WsHandlerMeta`    | Metadata stored by `@OnMessage` and other handler decorators |
+| `WsAdapterOptions` | Configuration options for `WsAdapter`                        |
 
 ## WsAdapter Options
 
@@ -57,23 +57,23 @@ interface WsAdapterOptions {
 
 Every handler method receives a `WsContext` with:
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `socket` | `Socket` | The raw Socket.IO socket |
-| `data` | `any` | The message payload |
-| `server` | `Server` | The Socket.IO server instance |
-| `nsp` | `Namespace` | The namespace this socket belongs to |
-| `rooms` | `Set<string>` | Rooms the socket has joined |
+| Property | Type          | Description                          |
+| -------- | ------------- | ------------------------------------ |
+| `socket` | `Socket`      | The raw Socket.IO socket             |
+| `data`   | `any`         | The message payload                  |
+| `server` | `Server`      | The Socket.IO server instance        |
+| `nsp`    | `Namespace`   | The namespace this socket belongs to |
+| `rooms`  | `Set<string>` | Rooms the socket has joined          |
 
 ### Methods
 
-| Method | Description |
-|--------|-------------|
-| `ctx.emit(event, data)` | Emit to the current socket |
-| `ctx.broadcast(event, data)` | Emit to all others in the namespace |
-| `ctx.toRoom(room, event, data)` | Emit to all sockets in a room |
-| `ctx.join(room)` | Join a room |
-| `ctx.leave(room)` | Leave a room |
+| Method                          | Description                         |
+| ------------------------------- | ----------------------------------- |
+| `ctx.emit(event, data)`         | Emit to the current socket          |
+| `ctx.broadcast(event, data)`    | Emit to all others in the namespace |
+| `ctx.toRoom(room, event, data)` | Emit to all sockets in a room       |
+| `ctx.join(room)`                | Join a room                         |
+| `ctx.leave(room)`               | Leave a room                        |
 
 ## Usage
 

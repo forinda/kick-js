@@ -10,11 +10,7 @@ KickJS doesn't ship a first-party multi-tenant package — tenant resolution, sc
 
 ```ts
 // src/contributors/tenant.context.ts
-import {
-  createToken,
-  defineHttpContextDecorator,
-  HttpException,
-} from '@forinda/kickjs'
+import { createToken, defineHttpContextDecorator, HttpException } from '@forinda/kickjs'
 
 export interface Tenant {
   id: string
@@ -40,8 +36,7 @@ export const LoadTenant = defineHttpContextDecorator({
   resolve: async (ctx, { repo }) => {
     // Pick whatever resolution strategy fits — header, subdomain, JWT claim, URL param.
     const slug =
-      (ctx.req.headers['x-tenant'] as string | undefined) ??
-      ctx.req.hostname.split('.')[0]
+      (ctx.req.headers['x-tenant'] as string | undefined) ?? ctx.req.hostname.split('.')[0]
 
     const tenant = await repo.findBySlug(slug)
     if (!tenant) throw new HttpException(404, `Unknown tenant: ${slug}`)
@@ -71,7 +66,7 @@ export const app = await bootstrap({
 class DashboardController {
   @Get('/dashboard')
   show(ctx: RequestContext) {
-    const tenant = ctx.get('tenant')                    // typed
+    const tenant = ctx.get('tenant') // typed
     ctx.json({ tenant })
   }
 }
@@ -80,7 +75,7 @@ class DashboardController {
 @Service()
 class BillingService {
   async chargeForFeature(feature: string) {
-    const tenant = getRequestValue('tenant')            // typed via ContextMeta
+    const tenant = getRequestValue('tenant') // typed via ContextMeta
     if (!tenant) throw new Error('Outside a request frame')
     // ...
   }
@@ -134,11 +129,11 @@ The `Scope.REQUEST` registration ensures the factory runs once per request and t
 
 The previous package surfaced three modes; all three are still natural with the recipe above — just swap the `resolveDbForTenant` body:
 
-| Mode | What `resolveDbForTenant(id)` returns | Trade-offs |
-|---|---|---|
-| **database-per-tenant** | A fresh Drizzle/Prisma client connected to that tenant's database. Cache the client by tenant id at module scope so we don't reconnect per request. | Strongest isolation; most ops overhead (one DB per tenant). |
-| **schema-per-tenant** (Postgres) | The shared client with `schema: 'tenant_<id>'` set. | Strong isolation; one DB cluster. |
-| **discriminator column** | The shared client; every query gets a `WHERE tenant_id = $id` clause via a query builder hook. | Cheapest; relies on app code never forgetting the predicate. |
+| Mode                             | What `resolveDbForTenant(id)` returns                                                                                                               | Trade-offs                                                   |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| **database-per-tenant**          | A fresh Drizzle/Prisma client connected to that tenant's database. Cache the client by tenant id at module scope so we don't reconnect per request. | Strongest isolation; most ops overhead (one DB per tenant).  |
+| **schema-per-tenant** (Postgres) | The shared client with `schema: 'tenant_<id>'` set.                                                                                                 | Strong isolation; one DB cluster.                            |
+| **discriminator column**         | The shared client; every query gets a `WHERE tenant_id = $id` clause via a query builder hook.                                                      | Cheapest; relies on app code never forgetting the predicate. |
 
 Pick at the application boundary; the contributor + plugin recipe stays the same.
 
@@ -165,9 +160,7 @@ export const TenantObservabilityAdapter = defineAdapter({
       },
 
       introspect(): IntrospectionSnapshot {
-        const sortedTop = [...requestsByTenant.entries()]
-          .sort(([, a], [, b]) => b - a)
-          .slice(0, 10)
+        const sortedTop = [...requestsByTenant.entries()].sort(([, a], [, b]) => b - a).slice(0, 10)
         return {
           protocolVersion: 1,
           name: 'TenantObservabilityAdapter',

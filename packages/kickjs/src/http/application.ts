@@ -23,7 +23,7 @@ import { requestId } from './middleware/request-id'
 import { notFoundHandler, errorHandler } from './middleware/error-handler'
 import { requestScopeMiddleware, isRequestScopeMiddleware } from './middleware/request-scope'
 import { _setExternalContributorSources } from './router-builder'
-import { requestStore, getRequestStore } from './request-store'
+import { requestStore } from './request-store'
 
 const log = createLogger('Application')
 
@@ -587,7 +587,7 @@ export class Application {
         totalRoutes += defs.length
 
         const methods = Object.entries(counts)
-          .sort(([a], [b]) => methodRank(a) - methodRank(b))
+          .toSorted(([a], [b]) => methodRank(a) - methodRank(b))
           .map(([m, n]) => `${n} ${m}`)
           .join(', ')
         const name = controller.name || 'Controller'

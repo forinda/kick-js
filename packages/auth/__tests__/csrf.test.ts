@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import 'reflect-metadata'
 import { AuthAdapter, CsrfExempt, Public, type AuthStrategy } from '@forinda/kickjs-auth'
-import { Controller, Get, Post, Delete } from '@forinda/kickjs'
+import { Controller, Post } from '@forinda/kickjs'
 
 // Stub strategy that reads from cookies (triggers CSRF auto-detect)
 const cookieJwtStrategy: AuthStrategy = {

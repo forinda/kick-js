@@ -1,7 +1,7 @@
 ---
 title: "KickJS DI Container Gotchas: When @Service() Doesn't Actually Register Your Class"
-description: "Debugging silent DI failures in a decorator-driven Node.js backend — how @Service() metadata, @Job() processors, and container registration interact in unexpected ways."
-tags: ["kickjs", "nodejs", "typescript", "mongodb", "dependency-injection"]
+description: 'Debugging silent DI failures in a decorator-driven Node.js backend — how @Service() metadata, @Job() processors, and container registration interact in unexpected ways.'
+tags: ['kickjs', 'nodejs', 'typescript', 'mongodb', 'dependency-injection']
 canonical_url: null
 published: false
 ---
@@ -21,26 +21,28 @@ Vibed uses BullMQ for background job processing. Email notifications, activity l
 @Service()
 @Job('email')
 export class EmailProcessor {
-  @Autowired(MAILER) private mailer!: MailerService;
+  @Autowired(MAILER) private mailer!: MailerService
 
   @Process('send-welcome-email')
   async sendWelcome(job: BullMQJob<{ email: string; firstName: string }>) {
-    logger.info(`Sending welcome email to ${job.data.email}`);
+    logger.info(`Sending welcome email to ${job.data.email}`)
     await this.mailer.send({
       to: job.data.email,
       subject: `Welcome to Vibed, ${job.data.firstName}!`,
       html: `<h1>Welcome to Vibed!</h1><p>Hi ${job.data.firstName}, your account is ready.</p>`,
-    });
+    })
   }
 
   @Process('send-task-assigned')
-  async sendTaskAssigned(job: BullMQJob<{ email: string; taskKey: string; taskTitle: string; assignerName: string }>) {
-    logger.info(`Sending task assigned email to ${job.data.email}`);
+  async sendTaskAssigned(
+    job: BullMQJob<{ email: string; taskKey: string; taskTitle: string; assignerName: string }>,
+  ) {
+    logger.info(`Sending task assigned email to ${job.data.email}`)
     await this.mailer.send({
       to: job.data.email,
       subject: `You were assigned to ${job.data.taskKey}: ${job.data.taskTitle}`,
       html: `<p>${job.data.assignerName} assigned you to <strong>${job.data.taskKey}</strong>: ${job.data.taskTitle}</p>`,
-    });
+    })
   }
 
   // ... more processors
@@ -51,10 +53,10 @@ The module file imported these processors as side effects to ensure the decorato
 
 ```typescript
 // src/modules/queue/queue.module.ts
-import type { AppModule, ModuleRoutes, Container } from '@forinda/kickjs';
-import './infrastructure/processors/email.processor';
-import './infrastructure/processors/notification.processor';
-import './infrastructure/processors/activity.processor';
+import type { AppModule, ModuleRoutes, Container } from '@forinda/kickjs'
+import './infrastructure/processors/email.processor'
+import './infrastructure/processors/notification.processor'
+import './infrastructure/processors/activity.processor'
 
 export class QueueModule implements AppModule {
   register(_container: Container): void {
@@ -62,7 +64,7 @@ export class QueueModule implements AppModule {
   }
 
   routes(): ModuleRoutes | null {
-    return null;
+    return null
   }
 }
 ```
@@ -87,9 +89,7 @@ For controllers, `buildRoutes(TasksController)` discovers and registers the clas
 // src/modules/tasks/tasks.module.ts
 export class TasksModule implements AppModule {
   register(container: Container): void {
-    container.registerFactory(TOKENS.TASK_REPOSITORY, () =>
-      container.resolve(MongoTaskRepository),
-    );
+    container.registerFactory(TOKENS.TASK_REPOSITORY, () => container.resolve(MongoTaskRepository))
   }
 }
 ```
@@ -121,13 +121,13 @@ Before KickJS patched this, I had two workarounds.
 export class QueueModule implements AppModule {
   register(container: Container): void {
     // Explicitly register each processor
-    container.register(EmailProcessor);
-    container.register(NotificationProcessor);
-    container.register(ActivityProcessor);
+    container.register(EmailProcessor)
+    container.register(NotificationProcessor)
+    container.register(ActivityProcessor)
   }
 
   routes(): ModuleRoutes | null {
-    return null;
+    return null
   }
 }
 ```
@@ -149,7 +149,7 @@ export class QueueModule implements AppModule {
   }
 
   routes(): ModuleRoutes | null {
-    return null;
+    return null
   }
 }
 ```
@@ -186,9 +186,9 @@ If you are building a DI container, consider supporting string-based fallback ke
 Vibed's queue module relies on side-effect imports:
 
 ```typescript
-import './infrastructure/processors/email.processor';
-import './infrastructure/processors/notification.processor';
-import './infrastructure/processors/activity.processor';
+import './infrastructure/processors/email.processor'
+import './infrastructure/processors/notification.processor'
+import './infrastructure/processors/activity.processor'
 ```
 
 These exist solely to make `@Job()` and `@Service()` decorators execute, populating global registries. This is fragile because:

@@ -50,9 +50,7 @@ export const AuthGate: Component = () => {
         <div class="bg-slate-900 border border-slate-700 rounded-2xl p-8 max-w-md w-full shadow-2xl">
           <div class="text-center mb-6">
             <h2 class="text-xl font-bold text-kick-500 mb-2">⚡ KickJS DevTools</h2>
-            <p class="text-sm text-slate-400">
-              Enter your DevTools token to continue.
-            </p>
+            <p class="text-sm text-slate-400">Enter your DevTools token to continue.</p>
             <p class="text-xs text-slate-600 mt-1">
               The token is printed in the server console on startup, e.g.{' '}
               <code class="font-mono text-slate-500">[token: abc123…]</code>
