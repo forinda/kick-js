@@ -1195,3 +1195,143 @@ it('returns the right greeting given a locale', () => {
 ```
 
 See the [`@forinda/kickjs-testing` API reference](../api/testing.md) for the full helper signatures.
+
+## Parameterised contributors
+
+Decorators ship with one definition; adopters apply them with **per-call params**. The same `defineContextDecorator(...)` value can serve many call sites that differ only in configuration — header name, policy class, audit-log action, rate-limit window, anything.
+
+Pass `paramDefaults` and a third `params` argument on `resolve` / `onError`:
+
+```ts
+import { defineContextDecorator } from '@forinda/kickjs'
+
+type LoadTenantParams = {
+  source: 'header' | 'subdomain' | 'jwt'
+  headerName?: string
+}
+
+export const LoadTenant = defineContextDecorator<'tenant', Record<string, never>, LoadTenantParams>(
+  {
+    key: 'tenant',
+    paramDefaults: { source: 'header', headerName: 'x-tenant-id' },
+    resolve: (ctx, _deps, params) => {
+      if (params.source === 'header') {
+        return ctx.req.headers[params.headerName ?? 'x-tenant-id'] ?? null
+      }
+      if (params.source === 'subdomain') {
+        return ctx.req.hostname.split('.')[0]
+      }
+      // 'jwt' — read from upstream auth contributor.
+      return ctx.req.user?.tenantId ?? null
+    },
+  },
+)
+```
+
+### Three call shapes
+
+```ts
+// 1. Zero-arg — applies paramDefaults.
+@LoadTenant
+@Get('/me')
+me(ctx: RequestContext) {}
+
+// 2. Factory call — merges call-site params over paramDefaults.
+@LoadTenant({ source: 'subdomain' })
+@Get('/orgs/:slug')
+public(ctx: RequestContext) {}
+
+// 3. Distinct params per method on the same controller.
+@Controller('/admin')
+class AdminCtrl {
+  @LoadTenant({ source: 'header', headerName: 'x-org-id' })
+  @Patch('/orgs/:id')
+  update(ctx: RequestContext) {}
+
+  @LoadTenant({ source: 'jwt' })
+  @Get('/me')
+  me(ctx: RequestContext) {}
+}
+```
+
+Each call site produces an independent registration — params are baked into the closure the runner sees. Topo-sort and the contributor pipeline don't change; the runner can't tell parameterised from zero-arg.
+
+### Non-decorator registration sites — `LoadTenant.with(params)`
+
+Module / adapter / plugin / bootstrap hooks already accept `LoadTenant.registration` (no params). When the registration site **does** want to override params, use `.with()`:
+
+```ts
+import { definePlugin } from '@forinda/kickjs'
+import { LoadTenant } from './tenant'
+
+export const TenantPlugin = definePlugin({
+  name: 'tenant',
+  contributors: () => [
+    // Project-wide subdomain rule — every controller gets it unless
+    // a method-level decorator overrides.
+    LoadTenant.with({ source: 'subdomain' }).registration,
+  ],
+})
+```
+
+`LoadTenant.registration` (no `.with()`) keeps working — it equals `.with({}).registration`, which yields the `paramDefaults` registration.
+
+### Function-valued params
+
+Params are **plain values** with no shape constraint — including functions and closures. Useful for "compute this from `ctx`" cases (rate-limit key, cache key, A/B variant assigner):
+
+```ts
+import { defineContextDecorator } from '@forinda/kickjs'
+
+type RateLimitParams = {
+  window: string
+  max: number
+  keyOf: (ctx: RequestContext) => string
+}
+
+export const RateLimited = defineContextDecorator<'rate-limit', RateLimiterDeps, RateLimitParams>({
+  key: 'rate-limit',
+  deps: { limiter: RATE_LIMITER },
+  paramDefaults: {
+    window: '1m',
+    max: 60,
+    keyOf: (ctx) => ctx.req.ip,
+  },
+  resolve: (ctx, { limiter }, params) => limiter.check(params.keyOf(ctx), params),
+})
+
+// Use site — derive the key from a custom field per route.
+@RateLimited({
+  window: '1m',
+  max: 100,
+  keyOf: (ctx) => ctx.user?.id ?? ctx.req.ip,
+})
+@Get('/api/expensive')
+expensive(ctx: RequestContext) {}
+```
+
+Function params are first-class — they capture surrounding scope just like any other closure. Validation is the adopter's choice: framework decorators stay validator-agnostic, so projects can plug Zod / Valibot / hand-rolled checks (or skip validation) on a per-decorator basis.
+
+### Narrowing literal-union params
+
+Param literal unions (`'header' | 'subdomain' | 'jwt'`) are **wide** inside `resolve()` — TypeScript doesn't propagate the call-site literal back into the resolver closure. Branch via `if`:
+
+```ts
+resolve: (ctx, _deps, params) => {
+  if (params.source === 'header') {
+    // params.source narrowed to 'header'
+    return ctx.req.headers[params.headerName ?? 'x-tenant-id']
+  }
+  if (params.source === 'subdomain') {
+    return ctx.req.hostname.split('.')[0]
+  }
+  // 'jwt'
+  return ctx.req.user?.tenantId ?? null
+}
+```
+
+This matches how `switch (request.method)` narrows in any HTTP handler — the convention is `if`, not generic-per-call narrowing.
+
+### Working example
+
+The full end-to-end recipe — definition + four call shapes + assertions through `runContributors` — lives at [`packages/kickjs/__tests__/parameterised-contributors.example.test.ts`](https://github.com/forinda/kick-js/blob/main/packages/kickjs/__tests__/parameterised-contributors.example.test.ts). Copy it into a project as the canonical starting point.
