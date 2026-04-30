@@ -4,13 +4,13 @@ KickJS v2.0 unifies `@forinda/kickjs-core` and `@forinda/kickjs-http` into a sin
 
 ## What Changed
 
-| v1.x | v2.0 |
-|------|------|
-| `@forinda/kickjs-core` + `@forinda/kickjs-http` | `@forinda/kickjs` |
-| `AdapterContext.app: any` | `AdapterContext.app: Express` |
-| `AdapterContext.server: any` | `AdapterContext.server: http.Server` |
-| `MiddlewareHandler<TCtx = any>` | `MiddlewareHandler<TCtx = any>` (pass `RequestContext` for typing) |
-| Two installs | One install |
+| v1.x                                            | v2.0                                                               |
+| ----------------------------------------------- | ------------------------------------------------------------------ |
+| `@forinda/kickjs-core` + `@forinda/kickjs-http` | `@forinda/kickjs`                                                  |
+| `AdapterContext.app: any`                       | `AdapterContext.app: Express`                                      |
+| `AdapterContext.server: any`                    | `AdapterContext.server: http.Server`                               |
+| `MiddlewareHandler<TCtx = any>`                 | `MiddlewareHandler<TCtx = any>` (pass `RequestContext` for typing) |
+| Two installs                                    | One install                                                        |
 
 ## Step 1: Update Dependencies
 
@@ -89,13 +89,13 @@ Adapter hooks now receive `AdapterContext` instead of positional args:
 
 `AdapterContext` provides:
 
-| Field | Type | Available in |
-|-------|------|-------------|
-| `app` | `Express` | all hooks |
-| `container` | `Container` | all hooks |
-| `server` | `http.Server \| undefined` | `afterStart` only |
-| `env` | `string` | all hooks |
-| `isProduction` | `boolean` | all hooks |
+| Field          | Type                       | Available in      |
+| -------------- | -------------------------- | ----------------- |
+| `app`          | `Express`                  | all hooks         |
+| `container`    | `Container`                | all hooks         |
+| `server`       | `http.Server \| undefined` | `afterStart` only |
+| `env`          | `string`                   | all hooks         |
+| `isProduction` | `boolean`                  | all hooks         |
 
 ## Step 4: Sub-path Imports
 

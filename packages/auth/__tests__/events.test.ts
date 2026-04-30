@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import 'reflect-metadata'
-import { AuthAdapter, ApiKeyStrategy, Public, type AuthStrategy } from '@forinda/kickjs-auth'
-import { Controller, Get, Post } from '@forinda/kickjs'
+import { AuthAdapter, Public, type AuthStrategy } from '@forinda/kickjs-auth'
+import { Controller, Get } from '@forinda/kickjs'
 
 describe('Auth Events', () => {
   const validStrategy: AuthStrategy = {
@@ -74,7 +74,7 @@ describe('Auth Events', () => {
     const onForbidden = vi.fn()
 
     @Controller()
-    class AdminCtrl {
+    class _AdminCtrl {
       @Get('/admin')
       admin() {}
     }

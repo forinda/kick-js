@@ -58,7 +58,7 @@ export class EmailProcessor {
     await sendEmail(job.data.to)
   }
 
-  @Process()                  // fallback for unhandled job names
+  @Process() // fallback for unhandled job names
   async catchAll(job: BullMQJob) {
     log.warn(`Unhandled job: ${job.name}`)
   }
@@ -88,9 +88,7 @@ export const app = await bootstrap({
       // Map decorated processor classes to their BullMQ Queue instance.
       // The adapter walks @Process metadata, instantiates each class
       // through DI, and creates a Worker bound to the supplied queue.
-      processors: [
-        { handler: EmailProcessor, queue: emailQueue },
-      ],
+      processors: [{ handler: EmailProcessor, queue: emailQueue }],
 
       // Adopter's choice: same connection for workers, or a separate one.
       // Workers are created by the adapter using BullMQ's Worker constructor.
@@ -109,15 +107,15 @@ export const app = await bootstrap({
 
 **What changed vs v4:**
 
-| Concern | v4 (today) | v5 (slim) |
-|---|---|---|
-| Connection | `redis: { host, port, password }` config | Adopter passes their own `IORedis` instance |
-| Queue instances | Adapter creates them from `queues: ['email', ...]` array | Adopter creates `new Queue('email', ...)` and hands them in |
-| `QueueService` | DI-injectable BullMQ-typed `Queue` map | Removed — adopters inject the BullMQ `Queue` directly |
-| Decorator discovery | `jobRegistry` global Set populated by `@Job` | Unchanged |
-| Worker creation | Internal | Adapter calls `new Worker(queueName, processor, options)` per decorated class |
-| Multi-provider | `QueueProvider` interface + 4 unused classes | Removed; adopters who want RabbitMQ/Kafka write their own `defineAdapter` (sibling BYO recipe in `docs/guide/queue-byo.md`) |
-| Graceful shutdown | `worker.close()` per worker, `queue.close()` per queue | `worker.close()` only — adopter closes their own queues + connection |
+| Concern             | v4 (today)                                               | v5 (slim)                                                                                                                   |
+| ------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Connection          | `redis: { host, port, password }` config                 | Adopter passes their own `IORedis` instance                                                                                 |
+| Queue instances     | Adapter creates them from `queues: ['email', ...]` array | Adopter creates `new Queue('email', ...)` and hands them in                                                                 |
+| `QueueService`      | DI-injectable BullMQ-typed `Queue` map                   | Removed — adopters inject the BullMQ `Queue` directly                                                                       |
+| Decorator discovery | `jobRegistry` global Set populated by `@Job`             | Unchanged                                                                                                                   |
+| Worker creation     | Internal                                                 | Adapter calls `new Worker(queueName, processor, options)` per decorated class                                               |
+| Multi-provider      | `QueueProvider` interface + 4 unused classes             | Removed; adopters who want RabbitMQ/Kafka write their own `defineAdapter` (sibling BYO recipe in `docs/guide/queue-byo.md`) |
+| Graceful shutdown   | `worker.close()` per worker, `queue.close()` per queue   | `worker.close()` only — adopter closes their own queues + connection                                                        |
 
 **Why adopter-owned connections matter:** v4 forced one connection-per-adapter, which conflicts with adopters who want to share connections across BullMQ + cache + rate limiter (the BullMQ docs explicitly recommend connection sharing). v5's "you bring it" model removes the constraint without adding code.
 

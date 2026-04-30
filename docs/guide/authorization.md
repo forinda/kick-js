@@ -31,10 +31,8 @@ When using multi-tenancy, roles can be resolved per-tenant:
 AuthAdapter({
   strategies,
   roleResolver: async (user, tenantId) => {
-    const roles = await db.userRoles
-      .where({ userId: user.id, tenantId })
-      .select('role')
-    return roles.map(r => r.role)
+    const roles = await db.userRoles.where({ userId: user.id, tenantId }).select('role')
+    return roles.map((r) => r.role)
   },
 })
 ```
@@ -157,7 +155,7 @@ declare module '@forinda/kickjs-auth' {
 The same `PolicyRegistry`-based narrowing also applies to `AuthorizationService.can()` and `AuthorizationService.listObjects()`, so the runtime checks stay type-safe too:
 
 ```ts
-const allowed = await authz.can(user, 'delete', 'post')     // ✓
+const allowed = await authz.can(user, 'delete', 'post') // ✓
 const ids = await authz.listObjects(user, 'delete', 'post') // ✓
 ```
 
@@ -177,7 +175,7 @@ class PostService {
   async update(user: AuthUser, postId: string, data: UpdateDto) {
     const post = await this.repo.findById(postId)
 
-    if (!await this.authz.can(user, 'update', 'post', post)) {
+    if (!(await this.authz.can(user, 'update', 'post', post))) {
       throw new HttpException(HttpStatus.FORBIDDEN, 'Cannot update this post')
     }
 
@@ -219,7 +217,7 @@ kick g guard ip-whitelist
 // src/guards/ip-whitelist.guard.ts
 export async function ipWhitelistGuard(ctx: RequestContext, next: () => void) {
   const allowed = ['10.0.0.0/8', '192.168.1.0/24']
-  if (!allowed.some(range => isInSubnet(ctx.req.ip, range))) {
+  if (!allowed.some((range) => isInSubnet(ctx.req.ip, range))) {
     ctx.res.status(403).json({ message: 'IP not allowed' })
     return
   }
@@ -243,14 +241,15 @@ class InternalController {
 
 ### When to Use What
 
-| Mechanism | Use When | Example |
-|-----------|----------|---------|
-| `@Roles('admin')` | Check user has a string role | Admin panel access |
-| `@Can('update', 'post')` | Check user can act on a specific resource | "Can this user edit THIS post?" |
-| `@Middleware(guard)` | Custom logic not tied to roles or resources | IP whitelist, feature flags, API versioning |
-| `@RateLimit()` | Throttle specific endpoints | Login endpoint, search API |
+| Mechanism                | Use When                                    | Example                                     |
+| ------------------------ | ------------------------------------------- | ------------------------------------------- |
+| `@Roles('admin')`        | Check user has a string role                | Admin panel access                          |
+| `@Can('update', 'post')` | Check user can act on a specific resource   | "Can this user edit THIS post?"             |
+| `@Middleware(guard)`     | Custom logic not tied to roles or resources | IP whitelist, feature flags, API versioning |
+| `@RateLimit()`           | Throttle specific endpoints                 | Login endpoint, search API                  |
 
 **Precedence in the auth middleware:**
+
 1. `@Public()` — skips all auth
 2. `@Authenticated()` / `defaultPolicy` — user must be authenticated
 3. `@Roles()` — user must have at least one required role

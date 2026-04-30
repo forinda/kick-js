@@ -14,15 +14,15 @@ bootstrap({
 
 ## Default Headers
 
-| Header | Default Value | Purpose |
-|--------|--------------|---------|
-| `X-Content-Type-Options` | `nosniff` | Prevents MIME type sniffing |
-| `X-Frame-Options` | `DENY` | Prevents clickjacking |
-| `X-XSS-Protection` | `0` | Disables legacy XSS auditor (causes more harm than good) |
-| `Referrer-Policy` | `no-referrer` | Controls referrer information |
-| `X-DNS-Prefetch-Control` | `off` | Disables DNS prefetching |
-| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` | Enforces HTTPS |
-| `X-Powered-By` | *(removed)* | Hides server technology |
+| Header                      | Default Value                         | Purpose                                                  |
+| --------------------------- | ------------------------------------- | -------------------------------------------------------- |
+| `X-Content-Type-Options`    | `nosniff`                             | Prevents MIME type sniffing                              |
+| `X-Frame-Options`           | `DENY`                                | Prevents clickjacking                                    |
+| `X-XSS-Protection`          | `0`                                   | Disables legacy XSS auditor (causes more harm than good) |
+| `Referrer-Policy`           | `no-referrer`                         | Controls referrer information                            |
+| `X-DNS-Prefetch-Control`    | `off`                                 | Disables DNS prefetching                                 |
+| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` | Enforces HTTPS                                           |
+| `X-Powered-By`              | _(removed)_                           | Hides server technology                                  |
 
 ## Options
 
@@ -87,24 +87,24 @@ bootstrap({
 ```ts
 interface CorsOptions {
   origin?: boolean | string | RegExp | (string | RegExp)[]
-  methods?: string[]            // default: GET, HEAD, PUT, PATCH, POST, DELETE
-  allowedHeaders?: string[]     // default: reflects request headers
-  exposedHeaders?: string[]     // default: none
-  credentials?: boolean         // default: false
-  maxAge?: number               // default: 86400 (24h)
-  preflight?: boolean           // default: true
+  methods?: string[] // default: GET, HEAD, PUT, PATCH, POST, DELETE
+  allowedHeaders?: string[] // default: reflects request headers
+  exposedHeaders?: string[] // default: none
+  credentials?: boolean // default: false
+  maxAge?: number // default: 86400 (24h)
+  preflight?: boolean // default: true
 }
 ```
 
 ## Origin Matching
 
-| Value | Behavior |
-|-------|----------|
-| `'*'` | Allow all origins (default) |
-| `true` | Reflect the request's `Origin` header |
-| `'https://app.example.com'` | Exact match |
-| `/\.example\.com$/` | Regex match |
-| `['https://a.com', /\.b\.com$/]` | Array of string/regex |
+| Value                            | Behavior                              |
+| -------------------------------- | ------------------------------------- |
+| `'*'`                            | Allow all origins (default)           |
+| `true`                           | Reflect the request's `Origin` header |
+| `'https://app.example.com'`      | Exact match                           |
+| `/\.example\.com$/`              | Regex match                           |
+| `['https://a.com', /\.b\.com$/]` | Array of string/regex                 |
 
 When reflecting origins (not `'*'`), the middleware sets `Vary: Origin` for correct CDN/proxy caching.
 

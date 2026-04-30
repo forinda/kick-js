@@ -6,18 +6,18 @@ An honest comparison of KickJS against the other Node.js / TypeScript backend fr
 
 ## Versus the field
 
-| Dimension | NestJS | Fastify | Hono | AdonisJS | **KickJS v4** |
-|---|---|---|---|---|---|
-| **Decorators + DI** | Heavy, class-based, opinionated | None natively | None | Heavy, IoC-via-classes | Factory-first (`defineAdapter` / `definePlugin`), decorators only where they earn it |
-| **Type safety end-to-end** | Good for DI tokens, weak for routes/ctx | Schema → types via plugins | TS-native, route inference | Manual via TS contracts | **Strong**: typegen narrows `ctx.params/body/query`, `ContextMeta` keys, `dependsOn`, `deps`, asset paths — all from source scan, no class registry |
-| **Extensibility primitives** | Modules, providers, dynamic modules, custom decorators | `fastify-plugin` encapsulation + hook system | Middleware + helpers | Service providers + IoC bindings | `defineAdapter` / `definePlugin` / `defineContextDecorator` / `defineAugmentation` / `introspect()` / `devtoolsTabs()` — narrow surfaces, all composable |
-| **Per-request typed context** | `@Inject(REQUEST)` (request-scoped DI) | `request.diScope` (via plugins) | `c.var` (untyped without manual decl) | Container `request.ioc` | `ctx.set/get` typed via `ContextMeta` augmentation + ALS-backed Map shared across middleware/contributor/handler instances |
-| **HMR in dev** | None native; nodemon | None native | tsx/Bun watch | None native | **Single-port Vite HMR** via `@forinda/kickjs-vite` — keeps DB connections + typed routes hot |
-| **Plugin-author ergonomics** | Module + Provider + dynamic config — verbose | `fastify-plugin` ergonomic but untyped extensions | Plain middleware | Service providers | `defineAdapter()` factory + `contributors?()` hook + `introspect()` slot — adapter authors ship one factory and adopters get DI + lifecycle + DevTools |
-| **Lock-in** | High (class hierarchies, module decorators, private state) | Low | Low | High | **Low** — we just dropped 5 packages and replaced with 100-LOC BYO recipes that adopters can fork |
-| **Bundle / cold start** | Heavy (~50KB gzipped + reflect-metadata + RxJS pull-in for some packages) | Tiny | Tiny | Heavy | Medium — Express 5 + reflect-metadata + DI; no RxJS, no peer-dep avalanche |
-| **Ecosystem size** | Massive | Big | Growing fast | Solid | **Tiny — by design, getting smaller** (5 wrappers being deprecated; BYO is the explicit answer) |
-| **Community / docs maturity** | Very mature | Mature | Mature | Mature | New — most docs were written this month |
+| Dimension                     | NestJS                                                                    | Fastify                                           | Hono                                  | AdonisJS                         | **KickJS v4**                                                                                                                                            |
+| ----------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------- | ------------------------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Decorators + DI**           | Heavy, class-based, opinionated                                           | None natively                                     | None                                  | Heavy, IoC-via-classes           | Factory-first (`defineAdapter` / `definePlugin`), decorators only where they earn it                                                                     |
+| **Type safety end-to-end**    | Good for DI tokens, weak for routes/ctx                                   | Schema → types via plugins                        | TS-native, route inference            | Manual via TS contracts          | **Strong**: typegen narrows `ctx.params/body/query`, `ContextMeta` keys, `dependsOn`, `deps`, asset paths — all from source scan, no class registry      |
+| **Extensibility primitives**  | Modules, providers, dynamic modules, custom decorators                    | `fastify-plugin` encapsulation + hook system      | Middleware + helpers                  | Service providers + IoC bindings | `defineAdapter` / `definePlugin` / `defineContextDecorator` / `defineAugmentation` / `introspect()` / `devtoolsTabs()` — narrow surfaces, all composable |
+| **Per-request typed context** | `@Inject(REQUEST)` (request-scoped DI)                                    | `request.diScope` (via plugins)                   | `c.var` (untyped without manual decl) | Container `request.ioc`          | `ctx.set/get` typed via `ContextMeta` augmentation + ALS-backed Map shared across middleware/contributor/handler instances                               |
+| **HMR in dev**                | None native; nodemon                                                      | None native                                       | tsx/Bun watch                         | None native                      | **Single-port Vite HMR** via `@forinda/kickjs-vite` — keeps DB connections + typed routes hot                                                            |
+| **Plugin-author ergonomics**  | Module + Provider + dynamic config — verbose                              | `fastify-plugin` ergonomic but untyped extensions | Plain middleware                      | Service providers                | `defineAdapter()` factory + `contributors?()` hook + `introspect()` slot — adapter authors ship one factory and adopters get DI + lifecycle + DevTools   |
+| **Lock-in**                   | High (class hierarchies, module decorators, private state)                | Low                                               | Low                                   | High                             | **Low** — we just dropped 5 packages and replaced with 100-LOC BYO recipes that adopters can fork                                                        |
+| **Bundle / cold start**       | Heavy (~50KB gzipped + reflect-metadata + RxJS pull-in for some packages) | Tiny                                              | Tiny                                  | Heavy                            | Medium — Express 5 + reflect-metadata + DI; no RxJS, no peer-dep avalanche                                                                               |
+| **Ecosystem size**            | Massive                                                                   | Big                                               | Growing fast                          | Solid                            | **Tiny — by design, getting smaller** (5 wrappers being deprecated; BYO is the explicit answer)                                                          |
+| **Community / docs maturity** | Very mature                                                               | Mature                                            | Mature                                | Mature                           | New — most docs were written this month                                                                                                                  |
 
 ## Where KickJS clearly wins
 
@@ -44,7 +44,7 @@ me(ctx: RequestContext) {
 
 ### 2. Generator + typegen feedback loop
 
-Most frameworks rely on hand-typed route registries. KickJS scans source for `@Get`, `createToken`, `defineAdapter`, `defineAugmentation`, asset files, env keys — and emits `KickRoutes`, `KickJsPluginRegistry`, `KickAssets`, `KickEnv` augmentations that narrow IDE completion *as you save*. After v4.1.x typing tightening (`ContextMetaKey` on `dependsOn`, `DepValue` on `deps`), most "did I spell that right" mistakes fail at compile time instead of at boot.
+Most frameworks rely on hand-typed route registries. KickJS scans source for `@Get`, `createToken`, `defineAdapter`, `defineAugmentation`, asset files, env keys — and emits `KickRoutes`, `KickJsPluginRegistry`, `KickAssets`, `KickEnv` augmentations that narrow IDE completion _as you save_. After v4.1.x typing tightening (`ContextMetaKey` on `dependsOn`, `DepValue` on `deps`), most "did I spell that right" mistakes fail at compile time instead of at boot.
 
 ### 3. Subtractive evolution
 
@@ -74,25 +74,25 @@ Ask Claude / GPT-4 "how do I X in NestJS" and get a confident answer drawn from 
 
 ## Adaptability: rated
 
-| Property | Score | Why |
-|---|---|---|
-| **Cleanliness of core surface** | **9 / 10** | Three factories (`defineAdapter`, `definePlugin`, `defineContextDecorator`) cover most extension; everything else is helpers. Few frameworks are this small at the core. |
-| **Extensibility** | **8 / 10** | Adapters / plugins / contributors compose cleanly; DevTools `introspect()` keeps custom adapters discoverable. The BYO pattern is the proof — 100 LOC replaces a shipped wrapper. −1 for the deprecation churn that hasn't fully landed. |
-| **Type safety** | **9 / 10** | Better than every peer except maybe ElysiaJS for route-only typing. Ahead of all of them on `dependsOn` / `deps` / `ContextMeta` / asset key narrowing. |
-| **Adaptability — swap pieces** | **9 / 10** | The BYO migrations land this session are evidence — the framework's own pieces are replaceable by adopter recipes without forking. −1 for the docs-still-converging point. |
-| **Maturity / ecosystem** | **4 / 10** | Honest. Catching up requires either time or a flagship adopter case study. |
-| **Production-readiness** | **7 / 10** | Tests + lint + typegen + HMR + DevTools are all real. The unknowns are soak time at scale. |
-| **Documentation** | **7 / 10** | Substantially better after the BYO + audit work, but still has rough edges; most live docs were rewritten <30 days ago. |
+| Property                        | Score      | Why                                                                                                                                                                                                                                      |
+| ------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Cleanliness of core surface** | **9 / 10** | Three factories (`defineAdapter`, `definePlugin`, `defineContextDecorator`) cover most extension; everything else is helpers. Few frameworks are this small at the core.                                                                 |
+| **Extensibility**               | **8 / 10** | Adapters / plugins / contributors compose cleanly; DevTools `introspect()` keeps custom adapters discoverable. The BYO pattern is the proof — 100 LOC replaces a shipped wrapper. −1 for the deprecation churn that hasn't fully landed. |
+| **Type safety**                 | **9 / 10** | Better than every peer except maybe ElysiaJS for route-only typing. Ahead of all of them on `dependsOn` / `deps` / `ContextMeta` / asset key narrowing.                                                                                  |
+| **Adaptability — swap pieces**  | **9 / 10** | The BYO migrations land this session are evidence — the framework's own pieces are replaceable by adopter recipes without forking. −1 for the docs-still-converging point.                                                               |
+| **Maturity / ecosystem**        | **4 / 10** | Honest. Catching up requires either time or a flagship adopter case study.                                                                                                                                                               |
+| **Production-readiness**        | **7 / 10** | Tests + lint + typegen + HMR + DevTools are all real. The unknowns are soak time at scale.                                                                                                                                               |
+| **Documentation**               | **7 / 10** | Substantially better after the BYO + audit work, but still has rough edges; most live docs were rewritten <30 days ago.                                                                                                                  |
 
 ## Strategic positioning
 
-| If you value… | Pick… |
-|---|---|
-| Architectural cleanliness, type-safety depth, the option to swap any piece without forking | **KickJS v4** — best-in-class, locked in by v4.1.2 |
-| Ecosystem volume, hireability, battle-tested defaults right now | **Nest** — safer bet today; you give up cleanliness for community |
-| Edge / Cloudflare Workers / Bun-first deployment | **Hono** or **Elysia** — they own that frontier |
-| Full-stack opinionated stack (auth, ORM, templating, mailer all integrated) | **AdonisJS** |
-| Bare-metal performance with no opinions | **Fastify** |
+| If you value…                                                                              | Pick…                                                             |
+| ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
+| Architectural cleanliness, type-safety depth, the option to swap any piece without forking | **KickJS v4** — best-in-class, locked in by v4.1.2                |
+| Ecosystem volume, hireability, battle-tested defaults right now                            | **Nest** — safer bet today; you give up cleanliness for community |
+| Edge / Cloudflare Workers / Bun-first deployment                                           | **Hono** or **Elysia** — they own that frontier                   |
+| Full-stack opinionated stack (auth, ORM, templating, mailer all integrated)                | **AdonisJS**                                                      |
+| Bare-metal performance with no opinions                                                    | **Fastify**                                                       |
 
 ## The asymmetric edge
 

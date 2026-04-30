@@ -12,30 +12,30 @@ pnpm add @forinda/kickjs-queue bullmq ioredis
 
 ### Decorators
 
-| Decorator | Description |
-|-----------|-------------|
-| `@Job(queueName)` | Mark a class as a job processor for a named queue |
+| Decorator            | Description                                                          |
+| -------------------- | -------------------------------------------------------------------- |
+| `@Job(queueName)`    | Mark a class as a job processor for a named queue                    |
 | `@Process(jobName?)` | Mark a method as the handler for a specific job (or default handler) |
 
 ### Adapter
 
-| Export | Description |
-|--------|-------------|
+| Export         | Description                                           |
+| -------------- | ----------------------------------------------------- |
 | `QueueAdapter` | AppAdapter that initializes BullMQ workers and queues |
 
 ### Service
 
-| Export | Description |
-|--------|-------------|
+| Export         | Description                                             |
+| -------------- | ------------------------------------------------------- |
 | `QueueService` | Injectable service for adding jobs and accessing queues |
 
 ### Types
 
-| Export | Description |
-|--------|-------------|
+| Export                | Description                              |
+| --------------------- | ---------------------------------------- |
 | `QueueAdapterOptions` | Configuration options for `QueueAdapter` |
-| `JobMeta` | Metadata stored by `@Job` |
-| `ProcessMeta` | Metadata stored by `@Process` |
+| `JobMeta`             | Metadata stored by `@Job`                |
+| `ProcessMeta`         | Metadata stored by `@Process`            |
 
 ## QueueAdapter Options
 
@@ -50,11 +50,11 @@ interface QueueAdapterOptions {
 }
 ```
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `redis` | `{ host, port, password? }` | — | Redis connection configuration |
-| `queues` | `string[]` | `[]` | Queue names to pre-create. Queues referenced by `@Job` are created automatically even if not listed here. |
-| `concurrency` | `number` | `1` | Number of concurrent jobs each worker processes |
+| Option        | Type                        | Default | Description                                                                                               |
+| ------------- | --------------------------- | ------- | --------------------------------------------------------------------------------------------------------- |
+| `redis`       | `{ host, port, password? }` | —       | Redis connection configuration                                                                            |
+| `queues`      | `string[]`                  | `[]`    | Queue names to pre-create. Queues referenced by `@Job` are created automatically even if not listed here. |
+| `concurrency` | `number`                    | `1`     | Number of concurrent jobs each worker processes                                                           |
 
 ::: warning
 Pass queue **name strings** (e.g. `['email', 'notifications']`), not class references. Passing classes causes a runtime error in BullMQ. Processor classes are discovered automatically via the `@Job` decorator — you do not need to list them here.
@@ -89,11 +89,11 @@ The `QueueService` is automatically registered in the DI container when `QueueAd
 
 ### Methods
 
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| `add` | `add(queueName: string, jobName: string, data: any, opts?: JobsOptions): Promise<Job>` | Add a single job to a queue |
-| `addBulk` | `addBulk(queueName: string, jobs: { name: string; data: any; opts?: JobsOptions }[]): Promise<Job[]>` | Add multiple jobs to a queue in one call |
-| `getQueue` | `getQueue(queueName: string): Queue` | Get the raw BullMQ Queue instance for advanced operations |
+| Method     | Signature                                                                                             | Description                                               |
+| ---------- | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `add`      | `add(queueName: string, jobName: string, data: any, opts?: JobsOptions): Promise<Job>`                | Add a single job to a queue                               |
+| `addBulk`  | `addBulk(queueName: string, jobs: { name: string; data: any; opts?: JobsOptions }[]): Promise<Job[]>` | Add multiple jobs to a queue in one call                  |
+| `getQueue` | `getQueue(queueName: string): Queue`                                                                  | Get the raw BullMQ Queue instance for advanced operations |
 
 ### Usage
 

@@ -113,11 +113,11 @@ export class TaskController {
 MCP supports three transports; pick the one that matches your
 deployment:
 
-| Transport | When to use                                                           |
-| --------- | --------------------------------------------------------------------- |
-| `stdio`   | CLI clients (Claude Desktop, Claude Code, Cursor) running locally     |
-| `http`    | Remote clients, web UIs, anything behind a load balancer              |
-| `sse`     | Legacy long-lived SSE connections (still supported by some clients)   |
+| Transport | When to use                                                         |
+| --------- | ------------------------------------------------------------------- |
+| `stdio`   | CLI clients (Claude Desktop, Claude Code, Cursor) running locally   |
+| `http`    | Remote clients, web UIs, anything behind a load balancer            |
+| `sse`     | Legacy long-lived SSE connections (still supported by some clients) |
 
 ### Stdio (local clients)
 
@@ -138,9 +138,9 @@ config:
     "task-api": {
       "command": "kick",
       "args": ["mcp", "start"],
-      "cwd": "/absolute/path/to/your-app"
-    }
-  }
+      "cwd": "/absolute/path/to/your-app",
+    },
+  },
 }
 ```
 

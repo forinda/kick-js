@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { Command } from 'commander'
 import { findBestMatch, type Diagnosis, type ExplainContext } from '../explain/known-issues'

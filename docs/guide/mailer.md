@@ -29,7 +29,10 @@ export interface MailMessage {
 
 @Service()
 export class MailerService {
-  constructor(private readonly transporter: Transporter, private readonly defaultFrom: string) {}
+  constructor(
+    private readonly transporter: Transporter,
+    private readonly defaultFrom: string,
+  ) {}
 
   async send(message: MailMessage): Promise<void> {
     await this.transporter.sendMail({ from: this.defaultFrom, ...message })
@@ -37,8 +40,8 @@ export class MailerService {
 }
 
 export interface MailerConfig {
-  smtpUrl: string         // e.g. 'smtps://user:pass@smtp.example.com:465'
-  defaultFrom: string     // e.g. 'noreply@example.com'
+  smtpUrl: string // e.g. 'smtps://user:pass@smtp.example.com:465'
+  defaultFrom: string // e.g. 'noreply@example.com'
 }
 
 export function buildMailer(config: MailerConfig): MailerService {
@@ -276,8 +279,12 @@ export interface MailProvider {
   send(message: MailMessage): Promise<void>
 }
 
-class NodeMailerProvider implements MailProvider { /* ... */ }
-class ResendProvider implements MailProvider { /* ... */ }
+class NodeMailerProvider implements MailProvider {
+  /* ... */
+}
+class ResendProvider implements MailProvider {
+  /* ... */
+}
 ```
 
 Then `MailerService` constructor accepts a `MailProvider` instead of a raw transporter, and `MailerPlugin` builds the right provider based on a `provider: 'smtp' | 'resend'` config field.

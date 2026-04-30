@@ -16,12 +16,19 @@
 pre-commit:
   parallel: true
   commands:
-    # Prettier on every text file format we own. `{staged_files}` is
-    # lefthook's path list — passing it directly keeps the run
-    # bounded by the diff, not the whole tree.
+    # Format check via oxfmt (Rust, ~30× faster than prettier). The
+    # `glob:` filter scopes the run to staged source + markdown
+    # (VitePress docs, README, articles), mirroring the
+    # `format:check` script.
     format:
-      glob: '*.{ts,tsx,js,mjs,cjs,json,md,yaml,yml}'
-      run: pnpm exec prettier --check {staged_files}
+      glob: '{packages/*/src/**/*.{ts,tsx,js,mjs,cjs},packages/*/__tests__/**/*.{ts,tsx},packages/*/spa/src/**/*.{ts,tsx},docs/**/*.md,docs/.vitepress/**/*.{ts,mts,vue},tutorials/**/*.md,examples/*/README.md,scripts/*.{ts,js,mjs},*.md}'
+      run: pnpm exec oxfmt --check {staged_files}
+    # ESLint-replacement linter via oxlint (Rust, sub-second on full
+    # repo). Runs only when a TS file under packages/ is staged so
+    # markdown-only or example-only commits skip lint.
+    lint:
+      glob: '{packages/*/src/**/*.{ts,tsx},packages/*/__tests__/**/*.{ts,tsx},packages/*/spa/src/**/*.{ts,tsx},scripts/*.ts,docs/.vitepress/**/*.{ts,mts}}'
+      run: pnpm exec oxlint {staged_files}
     # Token-convention lint (kick-lint). Runs only when a TS file
     # under packages/ is staged — adopters editing docs / examples
     # don't pay this cost.

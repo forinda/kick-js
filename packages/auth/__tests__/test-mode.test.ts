@@ -11,7 +11,14 @@ describe('AuthAdapter.testMode()', () => {
     expect(adapter.name).toBe('AuthAdapter')
 
     const handler = adapter.middleware!()[0].handler
-    const req = { method: 'GET', path: '/test', baseUrl: '', headers: {}, ip: '1.1.1.1', url: '/test' }
+    const req = {
+      method: 'GET',
+      path: '/test',
+      baseUrl: '',
+      headers: {},
+      ip: '1.1.1.1',
+      url: '/test',
+    }
     const res = { status: vi.fn().mockReturnThis(), json: vi.fn(), setHeader: vi.fn() }
     const next = vi.fn()
 
@@ -25,7 +32,14 @@ describe('AuthAdapter.testMode()', () => {
     const handler = adapter.middleware!()[0].handler
 
     // Open policy means unmatched routes pass through
-    const req = { method: 'GET', path: '/unknown', baseUrl: '', headers: {}, ip: '1.1.1.1', url: '/unknown' }
+    const req = {
+      method: 'GET',
+      path: '/unknown',
+      baseUrl: '',
+      headers: {},
+      ip: '1.1.1.1',
+      url: '/unknown',
+    }
     const res = { status: vi.fn().mockReturnThis(), json: vi.fn() }
     const next = vi.fn()
 
@@ -41,7 +55,14 @@ describe('AuthAdapter.testMode()', () => {
     })
 
     const handler = adapter.middleware!()[0].handler
-    const req = { method: 'GET', path: '/test', baseUrl: '', headers: {}, ip: '1.1.1.1', url: '/test' }
+    const req = {
+      method: 'GET',
+      path: '/test',
+      baseUrl: '',
+      headers: {},
+      ip: '1.1.1.1',
+      url: '/test',
+    }
     const res = { status: vi.fn().mockReturnThis(), json: vi.fn(), setHeader: vi.fn() }
     const next = vi.fn()
 

@@ -28,17 +28,17 @@ No migrations needed — Mongoose creates collections automatically.
 
 ## Packages Used
 
-| Package | Purpose |
-|---------|---------|
-| `@forinda/kickjs` | Core framework: DI, decorators, Express 5 routing, middleware |
-| `@forinda/kickjs-config` | Zod-based env validation |
-| `@forinda/kickjs-swagger` | OpenAPI docs |
-| `@forinda/kickjs-devtools` | Debug dashboard |
-| `@forinda/kickjs-auth` | JWT auth with `@Public()` decorator |
-| `@forinda/kickjs-queue` | BullMQ job processing |
-| BYO cron via `defineAdapter` + `croner` | Scheduled tasks — see [Cron guide](../guide/cron.md) |
-| BYO mailer via `definePlugin` + nodemailer/Resend | Email transport — see [Mailer guide](../guide/mailer.md) |
-| `@forinda/kickjs-ws` | WebSocket adapter |
+| Package                                           | Purpose                                                       |
+| ------------------------------------------------- | ------------------------------------------------------------- |
+| `@forinda/kickjs`                                 | Core framework: DI, decorators, Express 5 routing, middleware |
+| `@forinda/kickjs-config`                          | Zod-based env validation                                      |
+| `@forinda/kickjs-swagger`                         | OpenAPI docs                                                  |
+| `@forinda/kickjs-devtools`                        | Debug dashboard                                               |
+| `@forinda/kickjs-auth`                            | JWT auth with `@Public()` decorator                           |
+| `@forinda/kickjs-queue`                           | BullMQ job processing                                         |
+| BYO cron via `defineAdapter` + `croner`           | Scheduled tasks — see [Cron guide](../guide/cron.md)          |
+| BYO mailer via `definePlugin` + nodemailer/Resend | Email transport — see [Mailer guide](../guide/mailer.md)      |
+| `@forinda/kickjs-ws`                              | WebSocket adapter                                             |
 
 ## Project Structure
 
@@ -122,11 +122,14 @@ export class AuthController {
 Schemas are defined per-module in `infrastructure/schemas/`:
 
 ```ts
-const userSchema = new Schema({
-  name: { type: String, required: true },
-  email: { type: String, required: true, unique: true },
-  password: { type: String, required: true },
-}, { timestamps: true })
+const userSchema = new Schema(
+  {
+    name: { type: String, required: true },
+    email: { type: String, required: true, unique: true },
+    password: { type: String, required: true },
+  },
+  { timestamps: true },
+)
 
 userSchema.index({ email: 'text', name: 'text' })
 ```
@@ -137,10 +140,7 @@ Shared query helpers build MongoDB filters from parsed query strings:
 
 ```ts
 // shared/infrastructure/database/query-helpers.ts
-const result = await Model.find(filters)
-  .sort(sortObj)
-  .skip(offset)
-  .limit(limit)
+const result = await Model.find(filters).sort(sortObj).skip(offset).limit(limit)
 ```
 
 ### Additional Middleware
@@ -162,14 +162,14 @@ bootstrap({
 
 ## Differences from Drizzle Edition
 
-| Aspect | Mongoose | Drizzle |
-|--------|----------|---------|
-| Database | MongoDB | PostgreSQL |
+| Aspect          | Mongoose                             | Drizzle                      |
+| --------------- | ------------------------------------ | ---------------------------- |
+| Database        | MongoDB                              | PostgreSQL                   |
 | Schema location | Per-module `infrastructure/schemas/` | Centralized `src/db/schema/` |
-| Auth approach | `@forinda/kickjs-auth` + `@Public()` | Custom JWT middleware |
-| Migrations | None (auto-created) | Drizzle Kit migrations |
-| Query style | `Model.find()` with query helpers | Drizzle SQL query builder |
-| Email provider | Resend integration available | Console provider only |
+| Auth approach   | `@forinda/kickjs-auth` + `@Public()` | Custom JWT middleware        |
+| Migrations      | None (auto-created)                  | Drizzle Kit migrations       |
+| Query style     | `Model.find()` with query helpers    | Drizzle SQL query builder    |
+| Email provider  | Resend integration available         | Console provider only        |
 
 ## Source
 

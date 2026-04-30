@@ -25,7 +25,7 @@ import { join } from 'node:path'
 
 const TERMINAL_NAME = 'KickJS'
 
-export function registerKickCommands(context: vscode.ExtensionContext): vscode.Disposable[] {
+export function registerKickCommands(_context: vscode.ExtensionContext): vscode.Disposable[] {
   return [
     vscode.commands.registerCommand('kickjs.dev', () => runKick('dev')),
     vscode.commands.registerCommand('kickjs.build', () => runKick('build')),

@@ -5,6 +5,7 @@
 1. Clean working directory (`git status` shows no changes)
 2. On `main` or `dev` branch
 3. npm token configured:
+
    ```bash
    # Option 1: npm login
    npm login
@@ -12,6 +13,7 @@
    # Option 2: set token directly
    echo "//registry.npmjs.org/:_authToken=YOUR_TOKEN" >> ~/.npmrc
    ```
+
 4. GitHub CLI (`gh`) installed and authenticated (for `--github-release`):
    ```bash
    gh auth login
@@ -28,6 +30,7 @@ node scripts/release.js
 ```
 
 It will prompt you through:
+
 1. **Release type** — patch, minor, major, prerelease, or custom
 2. **Pre-release channel** — alpha, beta, rc (if prerelease)
 3. **Options** — dry run, push, publish, GitHub release
@@ -61,17 +64,19 @@ node scripts/release.js patch --dry-run
 
 ## Branching Model
 
-| Branch | Purpose | npm tag | Release from |
-|--------|---------|---------|--------------|
-| `main` | Stable releases | `latest` | `pnpm release:patch/minor/major` |
-| `dev` | Pre-releases | `alpha`/`beta`/`rc` | `pnpm release:alpha/beta` |
+| Branch | Purpose         | npm tag             | Release from                     |
+| ------ | --------------- | ------------------- | -------------------------------- |
+| `main` | Stable releases | `latest`            | `pnpm release:patch/minor/major` |
+| `dev`  | Pre-releases    | `alpha`/`beta`/`rc` | `pnpm release:alpha/beta`        |
 
 **Flow:**
+
 1. Feature branches → PR → `dev` (experimental) or `main` (stable)
 2. Pre-release from `dev`: `pnpm release:alpha`
 3. When stable: PR `dev` → `main`, then `pnpm release:minor`
 
 Users install:
+
 ```bash
 pnpm add @forinda/kickjs-core                    # latest stable
 pnpm add @forinda/kickjs-core@alpha              # latest alpha
@@ -92,14 +97,14 @@ pnpm add @forinda/kickjs-core@1.5.0-beta.0       # specific pre-release
 
 ## Options
 
-| Flag | Effect |
-|------|--------|
-| `--dry-run` | Preview only, no changes |
-| `--no-push` | Skip `git push` |
-| `--no-publish` | Skip `npm publish` |
+| Flag               | Effect                                                |
+| ------------------ | ----------------------------------------------------- |
+| `--dry-run`        | Preview only, no changes                              |
+| `--no-push`        | Skip `git push`                                       |
+| `--no-publish`     | Skip `npm publish`                                    |
 | `--github-release` | Create GitHub release via `gh` CLI with release notes |
-| `--tag <name>` | Prerelease tag (default: `alpha`) |
-| `--from <ref>` | Generate notes from specific git ref |
+| `--tag <name>`     | Prerelease tag (default: `alpha`)                     |
+| `--from <ref>`     | Generate notes from specific git ref                  |
 
 ## Step-by-Step: First Release
 
@@ -135,6 +140,7 @@ pnpm release:major:gh    # breaking changes + GH release
 ## CI Auto-Publish
 
 The GitHub Actions release workflow auto-publishes when:
+
 - A `v*` tag is pushed (triggered by the release script)
 - A GitHub Release targeting `main` is published manually
 - Manual dispatch with `publish: true`
@@ -142,6 +148,7 @@ The GitHub Actions release workflow auto-publishes when:
 Note: manual GitHub Releases targeting `dev` do not auto-publish — the workflow is gated on `target_commitish == 'main'`. Pre-releases from `dev` should be triggered via tags (`v*-alpha.*`, `v*-beta.*`).
 
 The CI auto-detects the npm dist-tag from the version:
+
 - `1.5.0` → publishes as `latest`
 - `1.5.0-alpha.0` → publishes as `alpha`
 - `1.5.0-beta.0` → publishes as `beta`
@@ -151,26 +158,26 @@ The CI auto-detects the npm dist-tag from the version:
 
 All packages use **lockstep versioning** — every package shares the same version number. A change to any package bumps all of them.
 
-| Version | Meaning |
-|---------|---------|
-| `0.x.y` | Pre-1.0: breaking changes on minor |
-| `1.0.0+` | Semver strictly followed |
-| `x.y.z-alpha.n` | Alpha pre-release |
-| `x.y.z-beta.n` | Beta pre-release |
-| `x.y.z-rc.n` | Release candidate |
+| Version         | Meaning                            |
+| --------------- | ---------------------------------- |
+| `0.x.y`         | Pre-1.0: breaking changes on minor |
+| `1.0.0+`        | Semver strictly followed           |
+| `x.y.z-alpha.n` | Alpha pre-release                  |
+| `x.y.z-beta.n`  | Beta pre-release                   |
+| `x.y.z-rc.n`    | Release candidate                  |
 
 ## Published Packages
 
 All 19 `@forinda/kickjs-*` packages are published with lockstep versioning. Key packages:
 
-| Package | Description |
-|---------|-------------|
-| `@forinda/kickjs-core` | DI container, decorators, module system, logger |
-| `@forinda/kickjs-http` | Express 5 app, middleware (helmet, cors, csrf, upload, rate-limit), query parsing |
-| `@forinda/kickjs-config` | Zod env validation, ConfigService |
-| `@forinda/kickjs-swagger` | OpenAPI spec, Swagger UI, ReDoc |
-| `@forinda/kickjs-cli` | CLI binary, generators, custom commands |
-| `@forinda/kickjs-testing` | Test utilities (createTestApp, createTestModule) |
+| Package                   | Description                                                                       |
+| ------------------------- | --------------------------------------------------------------------------------- |
+| `@forinda/kickjs-core`    | DI container, decorators, module system, logger                                   |
+| `@forinda/kickjs-http`    | Express 5 app, middleware (helmet, cors, csrf, upload, rate-limit), query parsing |
+| `@forinda/kickjs-config`  | Zod env validation, ConfigService                                                 |
+| `@forinda/kickjs-swagger` | OpenAPI spec, Swagger UI, ReDoc                                                   |
+| `@forinda/kickjs-cli`     | CLI binary, generators, custom commands                                           |
+| `@forinda/kickjs-testing` | Test utilities (createTestApp, createTestModule)                                  |
 
 Plus: auth, cron, devtools, drizzle, graphql, mailer, multi-tenant, notifications, otel, prisma, queue, ws, vscode-extension
 

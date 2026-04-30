@@ -79,7 +79,7 @@ describe('resolveTokenScope', () => {
     expect(resolveTokenScope({ tokenScope: 'mycorp' }, dir)).toBe('mycorp')
   })
 
-  it("ignores empty-string tokenScope from config and falls through", () => {
+  it('ignores empty-string tokenScope from config and falls through', () => {
     writeFileSync(
       join(dir, 'package.json'),
       JSON.stringify({ name: '@mycorp/x', version: '0.0.0' }),

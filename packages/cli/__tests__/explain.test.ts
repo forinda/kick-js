@@ -37,10 +37,7 @@ interface RunResult {
  * from arguments / stdin. We also need to feed stdin, which the
  * shared helper doesn't support.
  */
-function runExplain(
-  args: string[],
-  opts: { stdin?: string; unsetEnv?: string[] } = {},
-): RunResult {
+function runExplain(args: string[], opts: { stdin?: string; unsetEnv?: string[] } = {}): RunResult {
   if (!existsSync(CLI_BIN)) {
     throw new Error(`CLI binary not found at ${CLI_BIN}. Run pnpm --filter cli build first.`)
   }
@@ -99,7 +96,7 @@ describe('known-issues registry', () => {
 
   it('matches legacy-kick-routes-bracket-syntax for the old form', () => {
     const m = findBestMatch(
-      "Type 'KickRoutes[\"POST /users\"]' is not assignable to parameter of type Ctx",
+      'Type \'KickRoutes["POST /users"]\' is not assignable to parameter of type Ctx',
     )
     expect(m).not.toBeNull()
     expect(m!.diagnosis.id).toBe('legacy-kick-routes-bracket-syntax')

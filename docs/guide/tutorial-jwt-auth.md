@@ -1,10 +1,10 @@
 ---
-title: "Building JWT Auth with Refresh Token Rotation in KickJS"
+title: 'Building JWT Auth with Refresh Token Rotation in KickJS'
 description: "How I bypassed a framework's built-in auth system and implemented JWT authentication with refresh token rotation from scratch using middleware, guards, and typed helpers."
-tags: ["kickjs", "nodejs", "typescript", "mongodb", "jwt"]
-canonical_url: ""
+tags: ['kickjs', 'nodejs', 'typescript', 'mongodb', 'jwt']
+canonical_url: ''
 published: false
-cover_image: ""
+cover_image: ''
 ---
 
 # Building JWT Auth with Refresh Token Rotation Without a Framework Auth Adapter
@@ -67,7 +67,7 @@ export const adapters = [
     defaultPolicy: 'protected',
   }),
   // ... other adapters
-];
+]
 ```
 
 The `AuthAdapter` with `defaultPolicy: 'protected'` validates JWTs globally and stores the decoded user on `req`. We keep it for the JWT validation part. But for deciding which routes are protected and which are public, we handle that ourselves at the controller level with middleware.
@@ -77,15 +77,15 @@ The `AuthAdapter` with `defaultPolicy: 'protected'` validates JWTs globally and 
 Instead of relying on the adapter's policy system, I built a simple bridge middleware that reads the user the `AuthAdapter` stored on `req` and makes it available through the context API:
 
 ```typescript
-import type { MiddlewareHandler, RequestContext } from '@forinda/kickjs';
+import type { MiddlewareHandler, RequestContext } from '@forinda/kickjs'
 
 export const authBridgeMiddleware: MiddlewareHandler<RequestContext> = (ctx, next) => {
-  const user = (ctx.req as any).user;
+  const user = (ctx.req as any).user
   if (user) {
-    ctx.set('user', user);
+    ctx.set('user', user)
   }
-  next();
-};
+  next()
+}
 ```
 
 Protected controllers apply this middleware at the class level. Public controllers (like auth) do not apply it at all:
@@ -108,21 +108,21 @@ This gives me explicit control. There is no magic. If a controller has `@Middlew
 Reading the user in every handler via `ctx.get('user')` is verbose and returns an optional type. I wrapped it in a helper:
 
 ```typescript
-import type { RequestContext } from '@forinda/kickjs';
-import { HttpException } from '@forinda/kickjs';
+import type { RequestContext } from '@forinda/kickjs'
+import { HttpException } from '@forinda/kickjs'
 
 export interface AuthUser {
-  id: string;
-  email: string;
-  globalRole: string;
+  id: string
+  email: string
+  globalRole: string
 }
 
 export function getUser(ctx: RequestContext): AuthUser {
-  const user = ctx.get<AuthUser>('user');
+  const user = ctx.get<AuthUser>('user')
   if (!user) {
-    throw HttpException.unauthorized('Authentication required');
+    throw HttpException.unauthorized('Authentication required')
   }
-  return user;
+  return user
 }
 ```
 
@@ -137,16 +137,16 @@ Here is the complete flow: register, login, use access token, refresh, logout.
 The registration DTO uses Zod for validation:
 
 ```typescript
-import { z } from 'zod';
+import { z } from 'zod'
 
 export const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8).max(128),
   firstName: z.string().min(1).max(50),
   lastName: z.string().min(1).max(50),
-});
+})
 
-export type RegisterDto = z.infer<typeof registerSchema>;
+export type RegisterDto = z.infer<typeof registerSchema>
 ```
 
 The use case hashes the password, creates the user, generates both tokens, and queues a welcome email:
@@ -161,12 +161,12 @@ export class RegisterUseCase {
   ) {}
 
   async execute(dto: RegisterDto) {
-    const existing = await this.userRepo.findByEmail(dto.email);
+    const existing = await this.userRepo.findByEmail(dto.email)
     if (existing) {
-      throw HttpException.conflict(ErrorCode.EMAIL_ALREADY_EXISTS);
+      throw HttpException.conflict(ErrorCode.EMAIL_ALREADY_EXISTS)
     }
 
-    const passwordHash = await bcrypt.hash(dto.password, 12);
+    const passwordHash = await bcrypt.hash(dto.password, 12)
     const user = await this.userRepo.create({
       email: dto.email,
       passwordHash,
@@ -174,33 +174,44 @@ export class RegisterUseCase {
       lastName: dto.lastName,
       globalRole: 'user',
       isActive: true,
-    });
+    })
 
-    const accessToken = this.generateAccessToken(user);
-    const refreshToken = uuidv4();
-    const refreshExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const accessToken = this.generateAccessToken(user)
+    const refreshToken = uuidv4()
+    const refreshExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
 
     await this.refreshTokenRepo.create({
       userId: user._id.toString(),
       token: refreshToken,
       expiresAt: refreshExpiresAt,
-    });
+    })
 
     // Queue welcome email
     try {
-      await this.queueService.add('email', 'send-welcome-email', {
-        email: user.email,
-        firstName: user.firstName,
-      }, { delay: 5000 });
+      await this.queueService.add(
+        'email',
+        'send-welcome-email',
+        {
+          email: user.email,
+          firstName: user.firstName,
+        },
+        { delay: 5000 },
+      )
     } catch (err) {
-      logger.warn('Failed to queue welcome email — continuing registration');
+      logger.warn('Failed to queue welcome email — continuing registration')
     }
 
     return {
-      user: { id: user._id.toString(), email: user.email, firstName: user.firstName, lastName: user.lastName, globalRole: user.globalRole },
+      user: {
+        id: user._id.toString(),
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        globalRole: user.globalRole,
+      },
       accessToken,
       refreshToken,
-    };
+    }
   }
 
   private generateAccessToken(user: any): string {
@@ -208,7 +219,7 @@ export class RegisterUseCase {
       { sub: user._id.toString(), email: user.email, globalRole: user.globalRole },
       env.JWT_SECRET,
       { expiresIn: env.JWT_ACCESS_EXPIRES_IN as any },
-    );
+    )
   }
 }
 ```
@@ -228,42 +239,48 @@ export class LoginUseCase {
   ) {}
 
   async execute(dto: LoginDto) {
-    const user = await this.userRepo.findByEmail(dto.email);
+    const user = await this.userRepo.findByEmail(dto.email)
     if (!user) {
-      throw HttpException.unauthorized(ErrorCode.INVALID_CREDENTIALS);
+      throw HttpException.unauthorized(ErrorCode.INVALID_CREDENTIALS)
     }
 
     if (!user.isActive) {
-      throw HttpException.forbidden(ErrorCode.USER_INACTIVE);
+      throw HttpException.forbidden(ErrorCode.USER_INACTIVE)
     }
 
-    const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);
+    const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash)
     if (!isPasswordValid) {
-      throw HttpException.unauthorized(ErrorCode.INVALID_CREDENTIALS);
+      throw HttpException.unauthorized(ErrorCode.INVALID_CREDENTIALS)
     }
 
-    await this.userRepo.update(user._id.toString(), { lastLoginAt: new Date() });
+    await this.userRepo.update(user._id.toString(), { lastLoginAt: new Date() })
 
     const accessToken = jwt.sign(
       { sub: user._id.toString(), email: user.email, globalRole: user.globalRole },
       env.JWT_SECRET,
       { expiresIn: env.JWT_ACCESS_EXPIRES_IN as any },
-    );
+    )
 
-    const refreshToken = uuidv4();
-    const refreshExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const refreshToken = uuidv4()
+    const refreshExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
 
     await this.refreshTokenRepo.create({
       userId: user._id.toString(),
       token: refreshToken,
       expiresAt: refreshExpiresAt,
-    });
+    })
 
     return {
-      user: { id: user._id.toString(), email: user.email, firstName: user.firstName, lastName: user.lastName, globalRole: user.globalRole },
+      user: {
+        id: user._id.toString(),
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        globalRole: user.globalRole,
+      },
       accessToken,
       refreshToken,
-    };
+    }
   }
 }
 ```
@@ -279,7 +296,7 @@ const envSchema = defineEnv((base) =>
     JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
     // ...
   }),
-);
+)
 ```
 
 ### Refresh Token Rotation
@@ -295,32 +312,32 @@ export class RefreshTokenUseCase {
   ) {}
 
   async execute(dto: RefreshTokenDto) {
-    const stored = await this.refreshTokenRepo.findByToken(dto.refreshToken);
+    const stored = await this.refreshTokenRepo.findByToken(dto.refreshToken)
     if (!stored || stored.expiresAt < new Date()) {
-      throw HttpException.unauthorized(ErrorCode.TOKEN_EXPIRED);
+      throw HttpException.unauthorized(ErrorCode.TOKEN_EXPIRED)
     }
 
-    const user = await this.userRepo.findById(stored.userId.toString());
+    const user = await this.userRepo.findById(stored.userId.toString())
     if (!user || !user.isActive) {
-      throw HttpException.unauthorized(ErrorCode.USER_NOT_FOUND);
+      throw HttpException.unauthorized(ErrorCode.USER_NOT_FOUND)
     }
 
     // Rotate: delete old, create new
-    await this.refreshTokenRepo.deleteByToken(dto.refreshToken);
-    const newRefreshToken = uuidv4();
+    await this.refreshTokenRepo.deleteByToken(dto.refreshToken)
+    const newRefreshToken = uuidv4()
     await this.refreshTokenRepo.create({
       userId: user._id.toString(),
       token: newRefreshToken,
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-    });
+    })
 
     const accessToken = jwt.sign(
       { sub: user._id.toString(), email: user.email, globalRole: user.globalRole },
       env.JWT_SECRET,
       { expiresIn: env.JWT_ACCESS_EXPIRES_IN as any },
-    );
+    )
 
-    return { accessToken, refreshToken: newRefreshToken };
+    return { accessToken, refreshToken: newRefreshToken }
   }
 }
 ```
@@ -337,11 +354,11 @@ const refreshTokenSchema = new Schema<RefreshTokenDocument>(
     expiresAt: { type: Date, required: true, index: { expires: 0 } },
   },
   { timestamps: true },
-);
+)
 
 export const RefreshTokenModel =
-  (mongoose.models.RefreshToken as mongoose.Model<RefreshTokenDocument>)
-  || mongoose.model<RefreshTokenDocument>('RefreshToken', refreshTokenSchema);
+  (mongoose.models.RefreshToken as mongoose.Model<RefreshTokenDocument>) ||
+  mongoose.model<RefreshTokenDocument>('RefreshToken', refreshTokenSchema)
 ```
 
 The `index: { expires: 0 }` on `expiresAt` is a MongoDB TTL index. Documents are automatically deleted when `expiresAt` passes. We do not need a cron job to clean up expired tokens (though we run one as a safety net).
@@ -358,7 +375,7 @@ export class LogoutUseCase {
   ) {}
 
   async execute(refreshToken: string) {
-    await this.refreshTokenRepo.deleteByToken(refreshToken);
+    await this.refreshTokenRepo.deleteByToken(refreshToken)
   }
 }
 ```
@@ -373,42 +390,42 @@ The controller ties it all together. Notice there is no `@Middleware(authBridgeM
 @ApiTags('Auth')
 @Controller()
 export class AuthController {
-  @Autowired() private registerUseCase!: RegisterUseCase;
-  @Autowired() private loginUseCase!: LoginUseCase;
-  @Autowired() private refreshTokenUseCase!: RefreshTokenUseCase;
-  @Autowired() private logoutUseCase!: LogoutUseCase;
+  @Autowired() private registerUseCase!: RegisterUseCase
+  @Autowired() private loginUseCase!: LoginUseCase
+  @Autowired() private refreshTokenUseCase!: RefreshTokenUseCase
+  @Autowired() private logoutUseCase!: LogoutUseCase
 
   @Post('/register', { body: registerSchema })
   @Public()
   @ApiOperation({ summary: 'Register a new user account' })
   async register(ctx: RequestContext) {
-    const result = await this.registerUseCase.execute(ctx.body);
-    ctx.created(successResponse(result, 'Registration successful'));
+    const result = await this.registerUseCase.execute(ctx.body)
+    ctx.created(successResponse(result, 'Registration successful'))
   }
 
   @Post('/login', { body: loginSchema })
   @Public()
   @ApiOperation({ summary: 'Log in with credentials' })
   async login(ctx: RequestContext) {
-    const result = await this.loginUseCase.execute(ctx.body);
-    ctx.json(successResponse(result, 'Login successful'));
+    const result = await this.loginUseCase.execute(ctx.body)
+    ctx.json(successResponse(result, 'Login successful'))
   }
 
   @Post('/refresh', { body: refreshTokenSchema })
   @Public()
   @ApiOperation({ summary: 'Refresh an access token' })
   async refresh(ctx: RequestContext) {
-    const result = await this.refreshTokenUseCase.execute(ctx.body);
-    ctx.json(successResponse(result));
+    const result = await this.refreshTokenUseCase.execute(ctx.body)
+    ctx.json(successResponse(result))
   }
 
   @Post('/logout')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Log out and invalidate refresh token' })
   async logout(ctx: RequestContext) {
-    const { refreshToken } = ctx.body;
-    await this.logoutUseCase.execute(refreshToken);
-    ctx.json(successResponse(null, 'Logged out successfully'));
+    const { refreshToken } = ctx.body
+    await this.logoutUseCase.execute(refreshToken)
+    ctx.json(successResponse(null, 'Logged out successfully'))
   }
 }
 ```
@@ -423,27 +440,27 @@ The workspace membership guard:
 
 ```typescript
 export const workspaceMembershipGuard: MiddlewareHandler = async (ctx: RequestContext, next) => {
-  const user = ctx.get('user');
+  const user = ctx.get('user')
   if (!user) {
-    throw HttpException.unauthorized('Authentication required');
+    throw HttpException.unauthorized('Authentication required')
   }
 
-  const workspaceId = ctx.params.workspaceId;
-  if (!workspaceId) return next();
+  const workspaceId = ctx.params.workspaceId
+  if (!workspaceId) return next()
 
-  const container = Container.getInstance();
+  const container = Container.getInstance()
   const memberRepo = container.resolve<IWorkspaceMemberRepository>(
     TOKENS.WORKSPACE_MEMBER_REPOSITORY,
-  );
-  const member = await memberRepo.findByUserAndWorkspace(user.id, workspaceId);
+  )
+  const member = await memberRepo.findByUserAndWorkspace(user.id, workspaceId)
 
   if (!member) {
-    throw HttpException.forbidden(ErrorCode.NOT_WORKSPACE_MEMBER);
+    throw HttpException.forbidden(ErrorCode.NOT_WORKSPACE_MEMBER)
   }
 
-  ctx.set('workspaceMember', member);
-  next();
-};
+  ctx.set('workspaceMember', member)
+  next()
+}
 ```
 
 The role-checking factory wraps this further:
@@ -451,17 +468,17 @@ The role-checking factory wraps this further:
 ```typescript
 export function requireWorkspaceRole(...roles: string[]): MiddlewareHandler {
   return async (ctx: RequestContext, next) => {
-    const member = ctx.get('workspaceMember');
+    const member = ctx.get('workspaceMember')
     if (!member) {
-      throw HttpException.forbidden(ErrorCode.NOT_WORKSPACE_MEMBER);
+      throw HttpException.forbidden(ErrorCode.NOT_WORKSPACE_MEMBER)
     }
 
     if (!roles.includes(member.role)) {
-      throw HttpException.forbidden(ErrorCode.FORBIDDEN);
+      throw HttpException.forbidden(ErrorCode.FORBIDDEN)
     }
 
-    next();
-  };
+    next()
+  }
 }
 ```
 
@@ -469,32 +486,32 @@ The channel membership guard handles both public and private channels:
 
 ```typescript
 export const channelMembershipGuard: MiddlewareHandler = async (ctx: RequestContext, next) => {
-  const user = ctx.get('user');
+  const user = ctx.get('user')
   if (!user) {
-    throw HttpException.unauthorized('Authentication required');
+    throw HttpException.unauthorized('Authentication required')
   }
 
-  const channelId = ctx.params.channelId;
-  if (!channelId) return next();
+  const channelId = ctx.params.channelId
+  if (!channelId) return next()
 
-  const container = Container.getInstance();
-  const channelRepo = container.resolve<IChannelRepository>(TOKENS.CHANNEL_REPOSITORY);
-  const channel = await channelRepo.findById(channelId);
+  const container = Container.getInstance()
+  const channelRepo = container.resolve<IChannelRepository>(TOKENS.CHANNEL_REPOSITORY)
+  const channel = await channelRepo.findById(channelId)
 
   if (!channel) {
-    throw HttpException.notFound(ErrorCode.CHANNEL_NOT_FOUND);
+    throw HttpException.notFound(ErrorCode.CHANNEL_NOT_FOUND)
   }
 
   if (channel.type === 'private') {
-    const isMember = channel.memberIds.some((id) => id.toString() === user.id);
+    const isMember = channel.memberIds.some((id) => id.toString() === user.id)
     if (!isMember) {
-      throw HttpException.forbidden(ErrorCode.NOT_CHANNEL_MEMBER);
+      throw HttpException.forbidden(ErrorCode.NOT_CHANNEL_MEMBER)
     }
   }
 
-  ctx.set('channel', channel);
-  next();
-};
+  ctx.set('channel', channel)
+  next()
+}
 ```
 
 Guards stack. A route like `POST /projects/:projectId/tasks` applies the auth bridge first, then the project access guard, which internally checks workspace membership:

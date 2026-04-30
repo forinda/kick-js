@@ -4,15 +4,15 @@ KickJS is a production-grade, decorator-driven Node.js framework built on Expres
 
 ## Why KickJS?
 
-| | KickJS | NestJS | Express |
-|---|--------|--------|---------|
-| DI container | Built-in (lightweight) | Built-in (heavy) | None |
-| TypeScript decorators | Full | Full | None |
-| DDD code generators | First-class | Partial | None |
-| Zod validation | Native | Via pipes | None |
-| OpenAPI from decorators | Automatic | Automatic | None |
-| Vite HMR (backend) | Native | None | None |
-| Bundle size | Minimal | Heavy | Minimal |
+|                         | KickJS                 | NestJS           | Express |
+| ----------------------- | ---------------------- | ---------------- | ------- |
+| DI container            | Built-in (lightweight) | Built-in (heavy) | None    |
+| TypeScript decorators   | Full                   | Full             | None    |
+| DDD code generators     | First-class            | Partial          | None    |
+| Zod validation          | Native                 | Via pipes        | None    |
+| OpenAPI from decorators | Automatic              | Automatic        | None    |
+| Vite HMR (backend)      | Native                 | None             | None    |
+| Bundle size             | Minimal                | Heavy            | Minimal |
 
 ## Design Principles
 
@@ -43,7 +43,7 @@ auth  swagger  ws  devtools  ...
 - **@forinda/kickjs-swagger** — OpenAPI spec generation, Swagger UI, ReDoc
 - **@forinda/kickjs-auth** — JWT, API key, OAuth strategies, JWKS URI support
 - **@forinda/kickjs-ws** — WebSocket with @WsController, rooms, heartbeat
-- **@forinda/kickjs-devtools** — Debug dashboard at /_debug
+- **@forinda/kickjs-devtools** — Debug dashboard at /\_debug
 - **@forinda/kickjs-ai** — AI/LLM integration adapter
 - **@forinda/kickjs-mcp** — Model Context Protocol adapter
 - **@forinda/kickjs-cli** — Project scaffolding, DDD code generators, custom commands

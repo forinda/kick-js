@@ -152,7 +152,7 @@ async function readLatestSnapshotEntry(migrationsDir: string): Promise<LatestEnt
     return { snapshot: empty, id: null }
   }
   const entries = await readdir(migrationsDir)
-  const dirs = entries.filter((e) => /^\d{8}_\d{6}_/.test(e)).sort()
+  const dirs = entries.filter((e) => /^\d{8}_\d{6}_/.test(e)).toSorted()
   if (dirs.length === 0) {
     return { snapshot: empty, id: null }
   }

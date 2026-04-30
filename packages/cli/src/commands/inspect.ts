@@ -1,7 +1,7 @@
 import type { Command } from 'commander'
 import { colors, httpMethodColor } from '../utils/colors'
 
-const { bold, dim, green, red, yellow, cyan, blue } = colors
+const { bold, dim, green, red, yellow, blue } = colors
 
 function formatUptime(seconds: number): string {
   const d = Math.floor(seconds / 86400)

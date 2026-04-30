@@ -66,7 +66,7 @@ describe('introspectPg()', () => {
 
     expect(snap.version).toBe(1)
     expect(snap.dialect).toBe('postgres')
-    expect(Object.keys(snap.tables).sort()).toEqual(['posts', 'users'])
+    expect(Object.keys(snap.tables).toSorted()).toEqual(['posts', 'users'])
 
     expect(snap.tables.users.columns.id).toEqual({
       name: 'id',
@@ -92,7 +92,7 @@ describe('introspectPg()', () => {
     })
 
     // Indexes — the PK-backing index is excluded; user-defined ones are kept.
-    expect(snap.tables.users.indexes.map((i) => i.name).sort()).toEqual([
+    expect(snap.tables.users.indexes.map((i) => i.name).toSorted()).toEqual([
       'users_email_idx',
       'users_email_unique',
     ])

@@ -4,18 +4,18 @@ KickJS is built on Express 5, so your existing Express knowledge applies directl
 
 ## Quick Comparison
 
-| Express | KickJS |
-|---------|--------|
-| `app.get('/users', handler)` | `@Get('/') list(ctx)` on a `@Controller` |
-| `app.use(middleware)` | `bootstrap({ middleware: [...] })` |
-| `req.body` | `ctx.body` |
-| `req.params` | `ctx.params` |
-| `req.query` | `ctx.query` or `ctx.qs()` |
-| `res.json(data)` | `ctx.json(data)` |
-| `res.status(201).json(data)` | `ctx.created(data)` |
-| Manual DI / singletons | `@Service()` + `@Inject()` / `@Autowired()` |
-| `express.Router()` | `@Controller()` + `buildRoutes()` |
-| Swagger via swagger-jsdoc | `@ApiTags()` + `SwaggerAdapter` (automatic) |
+| Express                      | KickJS                                      |
+| ---------------------------- | ------------------------------------------- |
+| `app.get('/users', handler)` | `@Get('/') list(ctx)` on a `@Controller`    |
+| `app.use(middleware)`        | `bootstrap({ middleware: [...] })`          |
+| `req.body`                   | `ctx.body`                                  |
+| `req.params`                 | `ctx.params`                                |
+| `req.query`                  | `ctx.query` or `ctx.qs()`                   |
+| `res.json(data)`             | `ctx.json(data)`                            |
+| `res.status(201).json(data)` | `ctx.created(data)`                         |
+| Manual DI / singletons       | `@Service()` + `@Inject()` / `@Autowired()` |
+| `express.Router()`           | `@Controller()` + `buildRoutes()`           |
+| Swagger via swagger-jsdoc    | `@ApiTags()` + `SwaggerAdapter` (automatic) |
 
 ## Step 1: Install KickJS
 
@@ -66,9 +66,7 @@ import { modules } from './modules'
 export const app = await bootstrap({
   modules,
   middleware: [cors(), helmet(), express.json()],
-  adapters: [
-    SwaggerAdapter({ info: { title: 'My API', version: '1.0.0' } }),
-  ],
+  adapters: [SwaggerAdapter({ info: { title: 'My API', version: '1.0.0' } })],
 })
 ```
 
@@ -143,6 +141,7 @@ export class UserController {
 ```
 
 Key differences:
+
 - No `Router()` — the `@Controller` decorator + route decorators handle it
 - No `new UserService()` — DI injects it via `@Autowired()`
 - `req`/`res` → `ctx` — unified context with helper methods
@@ -160,7 +159,9 @@ export class UserService {
     this.db = new Database() // or import a singleton
   }
 
-  async findAll() { return this.db.query('SELECT * FROM users') }
+  async findAll() {
+    return this.db.query('SELECT * FROM users')
+  }
 }
 ```
 
@@ -175,7 +176,9 @@ import { DRIZZLE_DB } from '@forinda/kickjs-drizzle'
 export class UserService {
   constructor(@Inject(DRIZZLE_DB) private db: AppDatabase) {}
 
-  async findAll() { return this.db.select().from(users).all() }
+  async findAll() {
+    return this.db.select().from(users).all()
+  }
 }
 ```
 

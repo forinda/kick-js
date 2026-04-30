@@ -40,7 +40,7 @@ export const ActivityLogTab: Component = () => {
     const filtered = q ? source.filter((e) => e.type.toLowerCase().includes(q)) : source
     // Newest first reads better than chronological — the user looking
     // at the log is almost always asking "what just happened?"
-    return [...filtered].reverse()
+    return [...filtered].toReversed()
   })
 
   const pager = usePagination<KickDevtoolsEvent>(() => visible())
@@ -91,10 +91,7 @@ export const ActivityLogTab: Component = () => {
         when={pager.page().length > 0}
         fallback={
           <div class="empty">
-            <Show
-              when={events().length === 0}
-              fallback="No events match the current filter"
-            >
+            <Show when={events().length === 0} fallback="No events match the current filter">
               No events yet — emits from kickjs-db, plugins, or the panel itself land here.
             </Show>
           </div>
@@ -116,11 +113,11 @@ export const ActivityLogTab: Component = () => {
                   <tr>
                     <td class="font-mono text-xs text-text-muted">{formatActivityTs(event.ts)}</td>
                     <td class="font-mono text-xs">{event.type}</td>
-                    <td class="font-mono text-xs text-text-secondary">
-                      {event.pluginId ?? '—'}
-                    </td>
+                    <td class="font-mono text-xs text-text-secondary">{event.pluginId ?? '—'}</td>
                     <td class="font-mono text-xs">
-                      <code class="text-text-body break-all">{summarisePayload(event.payload)}</code>
+                      <code class="text-text-body break-all">
+                        {summarisePayload(event.payload)}
+                      </code>
                     </td>
                   </tr>
                 )}
@@ -133,4 +130,3 @@ export const ActivityLogTab: Component = () => {
     </div>
   )
 }
-

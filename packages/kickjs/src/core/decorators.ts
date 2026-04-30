@@ -4,7 +4,6 @@ import { Container, type KickJsRegistry } from './container'
 import {
   setClassMeta,
   setMethodMeta,
-  getClassMeta,
   pushClassMeta,
   pushMethodMeta,
   setInMetaMap,

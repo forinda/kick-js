@@ -157,10 +157,7 @@ export const ContainerTab: Component = () => {
               <For each={pager.page()}>
                 {(r) => (
                   <>
-                    <tr
-                      class="cursor-pointer select-none"
-                      onClick={() => toggleRow(r.token)}
-                    >
+                    <tr class="cursor-pointer select-none" onClick={() => toggleRow(r.token)}>
                       <td>
                         <svg
                           class={`w-3 h-3 text-text-muted transition-transform ${
@@ -181,7 +178,9 @@ export const ContainerTab: Component = () => {
                       </td>
                       <td class="font-mono text-sm">{r.token}</td>
                       <td>
-                        <span class={`px-2 py-0.5 rounded text-xs font-semibold ${kindBadge(r.kind)}`}>
+                        <span
+                          class={`px-2 py-0.5 rounded text-xs font-semibold ${kindBadge(r.kind)}`}
+                        >
                           {r.kind ?? 'unknown'}
                         </span>
                       </td>
@@ -290,9 +289,11 @@ const ExpandedDetail: Component<{ registration: ContainerRegistration }> = (prop
           PostConstruct
           <InfoTip metric="post-construct" />
         </h4>
-        <span class={`px-2 py-0.5 rounded text-xs font-semibold ${postConstructBadge(
-          props.registration.postConstructStatus,
-        )}`}>
+        <span
+          class={`px-2 py-0.5 rounded text-xs font-semibold ${postConstructBadge(
+            props.registration.postConstructStatus,
+          )}`}
+        >
           {props.registration.postConstructStatus ?? 'none'}
         </span>
       </div>

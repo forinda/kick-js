@@ -158,7 +158,7 @@ describe('AiAdapter — tool discovery', () => {
     adapter.beforeStart({ container: new Container() } as never)
 
     const tools = adapter.getTools()
-    const names = tools.map((t) => t.name).sort()
+    const names = tools.map((t) => t.name).toSorted()
     expect(names).toEqual(['TaskController.create', 'TaskController.list'])
   })
 
@@ -213,9 +213,7 @@ describe('AiAdapter.runAgent — unit', () => {
   })
 
   it('returns immediately when the model does not request tools', async () => {
-    const provider = new ScriptedProvider([
-      { content: 'Hello there!', finishReason: 'stop' },
-    ])
+    const provider = new ScriptedProvider([{ content: 'Hello there!', finishReason: 'stop' }])
     const adapter = AiAdapter({ provider })
     adapter.onRouteMount(TaskController, '/api/v1/tasks')
     adapter.beforeStart({ container: new Container() } as never)
@@ -230,9 +228,7 @@ describe('AiAdapter.runAgent — unit', () => {
   })
 
   it('passes discovered tools to the provider when tools is auto', async () => {
-    const provider = new ScriptedProvider([
-      { content: 'nothing to do', finishReason: 'stop' },
-    ])
+    const provider = new ScriptedProvider([{ content: 'nothing to do', finishReason: 'stop' }])
     const adapter = AiAdapter({ provider })
     adapter.onRouteMount(TaskController, '/api/v1/tasks')
     adapter.beforeStart({ container: new Container() } as never)
@@ -244,7 +240,7 @@ describe('AiAdapter.runAgent — unit', () => {
 
     const toolsSent = provider.inputs[0].tools
     expect(Array.isArray(toolsSent)).toBe(true)
-    expect((toolsSent as ReadonlyArray<{ name: string }>).map((t) => t.name).sort()).toEqual([
+    expect((toolsSent as ReadonlyArray<{ name: string }>).map((t) => t.name).toSorted()).toEqual([
       'TaskController.create',
       'TaskController.list',
     ])
@@ -271,9 +267,7 @@ describe('AiAdapter.runAgent — unit', () => {
       toolCalls: [{ id: 'call_1', name: 'TaskController.list', arguments: {} }],
       finishReason: 'tool_calls',
     }
-    const provider = new ScriptedProvider(
-      Array.from({ length: 20 }, () => loopingResponse),
-    )
+    const provider = new ScriptedProvider(Array.from({ length: 20 }, () => loopingResponse))
 
     const rig = await startRig([])
     // Swap the adapter's provider by building a fresh adapter on the
@@ -312,7 +306,7 @@ describe('AiAdapter.runAgent — unit', () => {
       tools: 'auto',
     })
 
-    expect(result.content).toContain("sorry")
+    expect(result.content).toContain('sorry')
     // The second chat call should see the error in the tool message
     const secondInput = provider.inputs[1]
     const toolMessage = secondInput.messages.find((m: ChatMessage) => m.role === 'tool')

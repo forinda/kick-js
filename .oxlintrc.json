@@ -1,0 +1,56 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error",
+    "perf": "warn"
+  },
+  "rules": {
+    "eslint/no-unused-vars": [
+      "error",
+      {
+        "argsIgnorePattern": "^_",
+        "varsIgnorePattern": "^_",
+        "caughtErrorsIgnorePattern": "^_"
+      }
+    ],
+    "eslint/no-underscore-dangle": "off",
+    "eslint/no-await-in-loop": "off",
+    "eslint/no-shadow": "off",
+    "typescript/no-extraneous-class": "off",
+    "oxc/no-async-endpoint-handlers": "off",
+    "unicorn/consistent-function-scoping": "off"
+  },
+  "env": {
+    "builtin": true
+  },
+  "ignorePatterns": [
+    "**/dist/",
+    "**/.kickjs/",
+    "**/.turbo/",
+    "**/.wireit/",
+    "**/coverage/",
+    "**/node_modules/",
+    "packages/devtools/public/",
+    "packages/lint/dist-test/",
+    "**/.vitepress/dist/",
+    "**/.vitepress/cache/",
+    "docs/",
+    "examples/",
+    "tutorials/",
+    "articles/",
+    "scripts/",
+    "*.d.ts"
+  ],
+  "overrides": [
+    {
+      "files": ["**/__tests__/**", "**/*.test.ts", "**/*.spec.ts"],
+      "rules": {
+        "eslint/no-useless-escape": "off",
+        "unicorn/no-new-array": "off",
+        "unicorn/no-useless-spread": "off"
+      }
+    }
+  ]
+}

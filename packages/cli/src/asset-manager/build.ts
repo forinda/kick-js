@@ -177,7 +177,7 @@ async function processEntry(
   // Sort the walk so the manifest is byte-stable across platforms.
   // The `groupAssetKeys` helper preserves input order, so a stable
   // sort here makes the resulting manifest stable too.
-  const sorted = [...matches].sort()
+  const sorted = [...matches].toSorted()
   const { pairs, collisionGroupsResolved } = groupAssetKeys(namespace, sorted, {
     strategy: entry.keys ?? 'auto',
   })
@@ -197,7 +197,7 @@ async function processEntry(
   if (collisionGroupsResolved > 0) {
     console.log(
       `  ℹ assetMap.${namespace}: auto-resolved ${collisionGroupsResolved} basename collision(s) by keeping extensions ` +
-        `(set 'keys: \"strip\"' to opt back into legacy last-write-wins behaviour, or 'keys: \"with-extension\"' to keep all keys verbose).`,
+        `(set 'keys: "strip"' to opt back into legacy last-write-wins behaviour, or 'keys: "with-extension"' to keep all keys verbose).`,
     )
   }
 

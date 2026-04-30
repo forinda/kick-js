@@ -2,7 +2,6 @@ import 'reflect-metadata'
 import { describe, it, expect, beforeEach } from 'vitest'
 import {
   Container,
-  Scope,
   buildPipeline,
   createToken,
   defineContextDecorator,

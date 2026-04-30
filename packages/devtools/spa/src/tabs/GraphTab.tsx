@@ -39,10 +39,7 @@ export const GraphTab: Component = () => {
   })
 
   const grouped = createMemo(() =>
-    KIND_GROUPS.map((g) => ({
-      ...g,
-      nodes: filtered().filter((r) => g.match(r.kind)),
-    })),
+    KIND_GROUPS.map((g) => Object.assign(g, { nodes: filtered().filter((r) => g.match(r.kind)) })),
   )
 
   return (
@@ -142,7 +139,12 @@ const GroupSection: Component<{ label: string; nodes: ContainerRegistration[] }>
           viewBox="0 0 24 24"
           aria-hidden="true"
         >
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2.5"
+            d="M9 5l7 7-7 7"
+          />
         </svg>
         <span>{props.label}</span>
         <span class="ml-2 text-text-muted font-normal normal-case">({source().length})</span>

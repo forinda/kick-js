@@ -74,7 +74,7 @@ declare global {
  * @param ctx - Shared plugin context (entry file, root directory)
  * @returns Vite plugin
  */
-export function kickjsDevServerPlugin(ctx: PluginContext): Plugin {
+export function kickjsDevServerPlugin(_ctx: PluginContext): Plugin {
   return {
     name: 'kickjs:dev-server',
 

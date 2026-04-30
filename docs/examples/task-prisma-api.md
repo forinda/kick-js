@@ -32,29 +32,29 @@ kick dev
 
 ## What's Different from Prisma 5/6
 
-| Aspect | Prisma 5/6 | Prisma 7 (this example) |
-|--------|------------|--------------------------|
-| Generator | `prisma-client-js` | `prisma-client` with `output` |
-| Client import | `from '@prisma/client'` | `from '@/generated/prisma'` |
-| Connection | `new PrismaClient()` | `new PrismaClient({ adapter: new PrismaPg(pool) })` |
-| Logging | `$on('query', ...)` | Auto — adapter uses `$extends` |
-| `@prisma/client` dep | Required | Not needed (client generated locally) |
+| Aspect               | Prisma 5/6              | Prisma 7 (this example)                             |
+| -------------------- | ----------------------- | --------------------------------------------------- |
+| Generator            | `prisma-client-js`      | `prisma-client` with `output`                       |
+| Client import        | `from '@prisma/client'` | `from '@/generated/prisma'`                         |
+| Connection           | `new PrismaClient()`    | `new PrismaClient({ adapter: new PrismaPg(pool) })` |
+| Logging              | `$on('query', ...)`     | Auto — adapter uses `$extends`                      |
+| `@prisma/client` dep | Required                | Not needed (client generated locally)               |
 
 ## Packages Used
 
-| Package | Purpose |
-|---------|---------|
-| `@forinda/kickjs` | Core framework: DI, decorators, Express 5 routing, middleware |
-| `@forinda/kickjs-config` | Zod-based env validation |
-| `@forinda/kickjs-swagger` | OpenAPI docs |
-| `@forinda/kickjs-devtools` | Debug dashboard |
-| `@forinda/kickjs-auth` | JWT auth with `@Public()` decorator |
-| `@forinda/kickjs-prisma` | Prisma adapter — supports v5 / v6 / v7 client shapes |
-| `@forinda/kickjs-queue` | BullMQ job processing |
-| BYO cron via `defineAdapter` + `croner` | Scheduled tasks — see [Cron guide](../guide/cron.md) |
-| BYO mailer via `definePlugin` + nodemailer/Resend | Email transport — see [Mailer guide](../guide/mailer.md) |
-| `@forinda/kickjs-ws` | WebSocket adapter |
-| `@prisma/adapter-pg` + `pg` | Prisma 7 driver adapter for PostgreSQL |
+| Package                                           | Purpose                                                       |
+| ------------------------------------------------- | ------------------------------------------------------------- |
+| `@forinda/kickjs`                                 | Core framework: DI, decorators, Express 5 routing, middleware |
+| `@forinda/kickjs-config`                          | Zod-based env validation                                      |
+| `@forinda/kickjs-swagger`                         | OpenAPI docs                                                  |
+| `@forinda/kickjs-devtools`                        | Debug dashboard                                               |
+| `@forinda/kickjs-auth`                            | JWT auth with `@Public()` decorator                           |
+| `@forinda/kickjs-prisma`                          | Prisma adapter — supports v5 / v6 / v7 client shapes          |
+| `@forinda/kickjs-queue`                           | BullMQ job processing                                         |
+| BYO cron via `defineAdapter` + `croner`           | Scheduled tasks — see [Cron guide](../guide/cron.md)          |
+| BYO mailer via `definePlugin` + nodemailer/Resend | Email transport — see [Mailer guide](../guide/mailer.md)      |
+| `@forinda/kickjs-ws`                              | WebSocket adapter                                             |
+| `@prisma/adapter-pg` + `pg`                       | Prisma 7 driver adapter for PostgreSQL                        |
 
 ## Source
 

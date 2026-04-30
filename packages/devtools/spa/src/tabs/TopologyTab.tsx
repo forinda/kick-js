@@ -142,10 +142,7 @@ const DiTokensTable: Component<{
       <div class="card-header">
         <div class="card-title">DI tokens ({source().length})</div>
       </div>
-      <Show
-        when={source().length > 0}
-        fallback={<div class="empty">No DI tokens registered</div>}
-      >
+      <Show when={source().length > 0} fallback={<div class="empty">No DI tokens registered</div>}>
         <table>
           <thead>
             <tr>

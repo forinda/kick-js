@@ -1,11 +1,6 @@
 import 'reflect-metadata'
 import { describe, it, expect, beforeEach } from 'vitest'
-import {
-  Container,
-  definePlugin,
-  type KickPlugin,
-  type DefinePluginOptions,
-} from '../src/index'
+import { Container, definePlugin, type KickPlugin, type DefinePluginOptions } from '../src/index'
 
 beforeEach(() => {
   Container.reset()

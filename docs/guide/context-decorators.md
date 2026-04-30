@@ -1,6 +1,6 @@
 # Context Decorators
 
-Context decorators are a typed, ordered, declarative way to populate `ctx.set('key', value)` *before* a controller handler runs. They replace hand-written middleware whose only job is "compute X and stash it on the request".
+Context decorators are a typed, ordered, declarative way to populate `ctx.set('key', value)` _before_ a controller handler runs. They replace hand-written middleware whose only job is "compute X and stash it on the request".
 
 Good fits span well beyond multi-tenancy — anything you repeatedly compute from the incoming request is a candidate:
 
@@ -50,43 +50,38 @@ See [Middleware vs context decorators](./middleware.md#middleware-vs-context-dec
 
 Anything you repeatedly compute from the incoming request is a candidate. The pattern is NOT multi-tenancy-specific — here are ten distinct domains where contributors remove a lot of boilerplate, with the rationale for each:
 
-| # | Use case | Typical key + shape | Why it wins over middleware |
-|---|---|---|---|
-| 1 | **Request tracing** — timestamp / trace id / span id for every handler and service on the chain | `requestStartedAt: number`, `traceId: string` | Transport-agnostic (HTTP + WS + queue + cron share the same primitive). Services read via `getRequestValue('traceId')` without a `ctx` reference. |
-| 2 | **Locale / i18n negotiation** — resolve from `Accept-Language`, user prefs, cookie, in that order | `locale: { language: string; region: string \| null }` | Typed once via `ContextMeta`, never re-derived. Replaced per-route (a `/admin` endpoint forces `en`) without forking the middleware stack. |
-| 3 | **Feature flags** — evaluate flags once, cache the result for the request's lifetime | `featureFlags: Record<string, boolean>` | `deps: { flags: FLAG_SERVICE }` pulls the evaluator from DI — no `container.getInstance()` boilerplate. `dependsOn: ['featureFlags']` downstream gives guaranteed-present flags. |
-| 4 | **A/B test bucket assignment** — stable-hash the user into a variant, reusing feature-flag state | `abBucket: 'control' \| 'variantA' \| 'variantB'` | `dependsOn` encodes the "flags must resolve first" relationship once; framework topo-sorts. Middleware order bugs (forgetting to mount B before C) become startup errors, not silent 500s. |
-| 5 | **Rate-limit key derivation** — combine user id + IP + route to produce the limiter key | `rateLimitKey: string` | The contributor returns one string; the downstream rate-limit middleware reads it and does the enforcement. Separation of computation (typed, tested) from enforcement (side-effectful). |
-| 6 | **Idempotency key validation** — pluck `Idempotency-Key` header, reject mutations missing it | `idempotencyKey: string \| null` | `onError` captures the "missing on POST/PUT" case cleanly — return `null` or throw, per your policy. Pipeline enforces the check at boot: forgetting to mount it globally is surfaced by TypeScript if another contributor `dependsOn`s it. |
-| 7 | **Geolocation from CDN headers** — parse Cloudflare / Fastly / Vercel headers once | `geo: { country \| null; city \| null; lat \| null; lng \| null }` | Adapter authors ship `@ResolveGeo` + `GeoAdapter` — adopters pick per-route opt-in OR cross-cutting activation. No "wrap the app in a context provider" boilerplate. |
-| 8 | **Workspace / organisation / project scoping** — resolve the active scope from URL param or header | `workspace: { id; name; members }` (or `org`, `project`, `team`, `room` — whatever your domain calls it) | Not just a tenant loader. Any scoped app (collab tools, chat, kanban, CI) owns its scope name. Multi-level scoping (`workspace` → `project` → `task`) composes via `dependsOn`. |
-| 9 | **Warmed user profile / permission set** — read once from cache, share across handler + services | `user: { id; email; roles }`, `permissions: Set<string>` | Auth middleware sets the user; a contributor warms the profile and cached permission set. Services read via `getRequestValue('user')` without threading the user through every method signature. |
-| 10 | **Correlation ID for distributed tracing / saga state** — propagate an inbound `X-Correlation-ID`, or generate one | `correlationId: string`, `sagaContext: { step: number; …}` | The contributor runs before every route AND every queue job (same registration, different transport). Downstream logs, outbound HTTP clients, and emitted events all pick up the same id. |
+| #   | Use case                                                                                                           | Typical key + shape                                                                                      | Why it wins over middleware                                                                                                                                                                                                                 |
+| --- | ------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **Request tracing** — timestamp / trace id / span id for every handler and service on the chain                    | `requestStartedAt: number`, `traceId: string`                                                            | Transport-agnostic (HTTP + WS + queue + cron share the same primitive). Services read via `getRequestValue('traceId')` without a `ctx` reference.                                                                                           |
+| 2   | **Locale / i18n negotiation** — resolve from `Accept-Language`, user prefs, cookie, in that order                  | `locale: { language: string; region: string \| null }`                                                   | Typed once via `ContextMeta`, never re-derived. Replaced per-route (a `/admin` endpoint forces `en`) without forking the middleware stack.                                                                                                  |
+| 3   | **Feature flags** — evaluate flags once, cache the result for the request's lifetime                               | `featureFlags: Record<string, boolean>`                                                                  | `deps: { flags: FLAG_SERVICE }` pulls the evaluator from DI — no `container.getInstance()` boilerplate. `dependsOn: ['featureFlags']` downstream gives guaranteed-present flags.                                                            |
+| 4   | **A/B test bucket assignment** — stable-hash the user into a variant, reusing feature-flag state                   | `abBucket: 'control' \| 'variantA' \| 'variantB'`                                                        | `dependsOn` encodes the "flags must resolve first" relationship once; framework topo-sorts. Middleware order bugs (forgetting to mount B before C) become startup errors, not silent 500s.                                                  |
+| 5   | **Rate-limit key derivation** — combine user id + IP + route to produce the limiter key                            | `rateLimitKey: string`                                                                                   | The contributor returns one string; the downstream rate-limit middleware reads it and does the enforcement. Separation of computation (typed, tested) from enforcement (side-effectful).                                                    |
+| 6   | **Idempotency key validation** — pluck `Idempotency-Key` header, reject mutations missing it                       | `idempotencyKey: string \| null`                                                                         | `onError` captures the "missing on POST/PUT" case cleanly — return `null` or throw, per your policy. Pipeline enforces the check at boot: forgetting to mount it globally is surfaced by TypeScript if another contributor `dependsOn`s it. |
+| 7   | **Geolocation from CDN headers** — parse Cloudflare / Fastly / Vercel headers once                                 | `geo: { country \| null; city \| null; lat \| null; lng \| null }`                                       | Adapter authors ship `@ResolveGeo` + `GeoAdapter` — adopters pick per-route opt-in OR cross-cutting activation. No "wrap the app in a context provider" boilerplate.                                                                        |
+| 8   | **Workspace / organisation / project scoping** — resolve the active scope from URL param or header                 | `workspace: { id; name; members }` (or `org`, `project`, `team`, `room` — whatever your domain calls it) | Not just a tenant loader. Any scoped app (collab tools, chat, kanban, CI) owns its scope name. Multi-level scoping (`workspace` → `project` → `task`) composes via `dependsOn`.                                                             |
+| 9   | **Warmed user profile / permission set** — read once from cache, share across handler + services                   | `user: { id; email; roles }`, `permissions: Set<string>`                                                 | Auth middleware sets the user; a contributor warms the profile and cached permission set. Services read via `getRequestValue('user')` without threading the user through every method signature.                                            |
+| 10  | **Correlation ID for distributed tracing / saga state** — propagate an inbound `X-Correlation-ID`, or generate one | `correlationId: string`, `sagaContext: { step: number; …}`                                               | The contributor runs before every route AND every queue job (same registration, different transport). Downstream logs, outbound HTTP clients, and emitted events all pick up the same id.                                                   |
 
 ### Why this is more flexible than middleware
 
-| Middleware pattern | Contributor advantage |
-|---|---|
-| Mutates `req.user` / `(req as any).tenant` — all typed `any` | `ctx.get('user')` / `ctx.get('tenant')` typed via `ContextMeta` augmentation |
-| Declared as an array in `bootstrap({ middleware: [...] })` — order is whatever you wrote | `dependsOn: ['x']` — topo-sorted at boot; missing deps + cycles fail startup, not per-request |
-| DI access via `Container.getInstance()` inside the middleware body | `deps: { repo: TOKEN }` typed, resolved once, handed to `resolve(ctx, deps)` |
-| Tested with `supertest` + the whole Express stack | `runContributor` (from `@forinda/kickjs-testing`) tests a single resolver against a stub ctx |
-| Global: every route pays the cost, no opt-out per endpoint | Five precedence levels (method > class > module > adapter > global) — override per-route without forking the stack |
-| HTTP-only — WebSocket / queue / cron use different lifecycles | `defineContextDecorator` (transport-agnostic) registrations reuse across every ctx the pipeline supports |
-| Plugin authors ship `app.use(myMiddleware())` and hope you call it in the right spot | Plugin authors ship `MyAdapter` (which registers via `contributors?()`) AND the raw decorator — adopters pick the ergonomic |
-| Augmentation (`declare global { namespace Express { interface Request { ... } } }`) leaks across every handler in the app | `ContextMeta` augmentation is typed; `defineAugmentation` advertises it in the typegen catalogue for discovery |
-| Error handling: throw → 500 unless you wrote `try/catch` around every middleware | `optional: true` skips silently; `onError` hook returns a fallback value; both typed against `MetaValue<K>` |
-| "Remove the rate-limit middleware on `/health`" = fork the stack or use a path check inside the middleware | Mount `@SkipRateLimit` at method level — higher precedence wins, adapter's registration silently drops for that one route |
+| Middleware pattern                                                                                                        | Contributor advantage                                                                                                       |
+| ------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Mutates `req.user` / `(req as any).tenant` — all typed `any`                                                              | `ctx.get('user')` / `ctx.get('tenant')` typed via `ContextMeta` augmentation                                                |
+| Declared as an array in `bootstrap({ middleware: [...] })` — order is whatever you wrote                                  | `dependsOn: ['x']` — topo-sorted at boot; missing deps + cycles fail startup, not per-request                               |
+| DI access via `Container.getInstance()` inside the middleware body                                                        | `deps: { repo: TOKEN }` typed, resolved once, handed to `resolve(ctx, deps)`                                                |
+| Tested with `supertest` + the whole Express stack                                                                         | `runContributor` (from `@forinda/kickjs-testing`) tests a single resolver against a stub ctx                                |
+| Global: every route pays the cost, no opt-out per endpoint                                                                | Five precedence levels (method > class > module > adapter > global) — override per-route without forking the stack          |
+| HTTP-only — WebSocket / queue / cron use different lifecycles                                                             | `defineContextDecorator` (transport-agnostic) registrations reuse across every ctx the pipeline supports                    |
+| Plugin authors ship `app.use(myMiddleware())` and hope you call it in the right spot                                      | Plugin authors ship `MyAdapter` (which registers via `contributors?()`) AND the raw decorator — adopters pick the ergonomic |
+| Augmentation (`declare global { namespace Express { interface Request { ... } } }`) leaks across every handler in the app | `ContextMeta` augmentation is typed; `defineAugmentation` advertises it in the typegen catalogue for discovery              |
+| Error handling: throw → 500 unless you wrote `try/catch` around every middleware                                          | `optional: true` skips silently; `onError` hook returns a fallback value; both typed against `MetaValue<K>`                 |
+| "Remove the rate-limit middleware on `/health`" = fork the stack or use a path check inside the middleware                | Mount `@SkipRateLimit` at method level — higher precedence wins, adapter's registration silently drops for that one route   |
 
 ## Quickstart
 
 ```ts
-import {
-  defineHttpContextDecorator,
-  Controller,
-  Get,
-  type RequestContext,
-} from '@forinda/kickjs'
+import { defineHttpContextDecorator, Controller, Get, type RequestContext } from '@forinda/kickjs'
 
 // 1. Declare the value's type via ContextMeta augmentation.
 //    This is what TypeScript reads to type `ctx.get('locale')`.
@@ -114,7 +109,7 @@ class HomeController {
   @ResolveLocale
   @Get('/')
   home(ctx: RequestContext) {
-    const locale = ctx.get('locale')   // typed: { language: string; region: string | null }
+    const locale = ctx.get('locale') // typed: { language: string; region: string | null }
     return ctx.json({ greeting: greetingFor(locale) })
   }
 }
@@ -123,6 +118,7 @@ class HomeController {
 That's the whole minimum surface. The rest of this guide covers DI deps, dependency ordering, error handling, the four registration sites beyond `@`-on-method, and how to author reusable decorators inside an adapter or plugin.
 
 ::: tip Two factories, same pipeline
+
 - **`defineHttpContextDecorator`** — recommended for HTTP work. `Ctx` is `RequestContext`, so the resolver can read `ctx.req` / `ctx.headers` / `ctx.params` / `ctx.body` directly.
 - **`defineContextDecorator`** — transport-agnostic. `Ctx` defaults to the smaller `ExecutionContext` surface (`get` / `set` / `requestId`). Use this when authoring a contributor that needs to run across HTTP, WebSocket, queue, and cron transports.
 
@@ -161,7 +157,7 @@ const LoadProject = defineContextDecorator({
   key: 'project',
   dependsOn: ['tenant'],
   resolve: async (ctx) => {
-    const tenant = ctx.get('tenant')!   // guaranteed present — the framework ran LoadTenant first
+    const tenant = ctx.get('tenant')! // guaranteed present — the framework ran LoadTenant first
     return projectsRepo.findFor(tenant.id, ctx.params.id)
   },
 })
@@ -175,6 +171,7 @@ The framework topologically sorts contributors at route mount time. Two failure 
 Both errors are raised once during `app.setup()`, not per request. Bad pipelines fail fast.
 
 ::: tip `dependsOn` and `deps` are statically typed
+
 - `dependsOn` is typed as `(keyof ContextMeta)[]`. Augment `ContextMeta` and the editor surfaces a string-literal autocomplete for every known key. A typo (`dependsOn: ['tenent']`) is a TS error with "Did you mean 'tenant'?" — not a boot-time `MissingContributorError`.
 - `deps` is typed as `Record<string, DepValue>` where `DepValue = InjectionToken<T> | Constructor<T>`. Passing a string literal, an array, or a plain object errors at compile time instead of failing inside `container.resolve` at boot.
 
@@ -185,14 +182,14 @@ Both narrow gracefully — projects without any `ContextMeta` augmentation see `
 
 When a `resolve()` throws, the runner consults two flags before deciding what to do:
 
-| `resolve()` outcome | `optional` | `onError` defined | Behaviour |
-|---|---|---|---|
-| throws | `true` | — | skip the contributor; `ctx.get(key)` returns `undefined` |
-| throws | `false` | yes | call `onError(err, ctx)`; returned value (if any) is stored under `key` |
-| throws | `false` | no | propagate the original error to the Express error handler |
-| `onError` throws | — | — | propagate the *new* error |
-| `onError` returns `undefined` / `void` | — | — | skip; key remains unset |
-| resolves | — | — | `ctx.set(key, value)` |
+| `resolve()` outcome                    | `optional` | `onError` defined | Behaviour                                                               |
+| -------------------------------------- | ---------- | ----------------- | ----------------------------------------------------------------------- |
+| throws                                 | `true`     | —                 | skip the contributor; `ctx.get(key)` returns `undefined`                |
+| throws                                 | `false`    | yes               | call `onError(err, ctx)`; returned value (if any) is stored under `key` |
+| throws                                 | `false`    | no                | propagate the original error to the Express error handler               |
+| `onError` throws                       | —          | —                 | propagate the _new_ error                                               |
+| `onError` returns `undefined` / `void` | —          | —                 | skip; key remains unset                                                 |
+| resolves                               | —          | —                 | `ctx.set(key, value)`                                                   |
 
 Examples:
 
@@ -233,17 +230,25 @@ Same-precedence collisions on the same key throw `DuplicateContributorError` at 
 class C {
   @LoadTenant
   @Get('/me')
-  me(ctx: RequestContext) { /* ... */ }
+  me(ctx: RequestContext) {
+    /* ... */
+  }
 }
 
 // Class-level
 @LoadTenant
-class C { /* every method on C now sees `tenant` */ }
+class C {
+  /* every method on C now sees `tenant` */
+}
 
 // Module-level
 class TenantsModule implements AppModule {
-  contributors() { return [LoadTenant.registration] }
-  routes() { /* ... */ }
+  contributors() {
+    return [LoadTenant.registration]
+  }
+  routes() {
+    /* ... */
+  }
 }
 
 // Adapter-level
@@ -284,7 +289,7 @@ What looks like one continuous `ctx` to your code is three separate JS objects. 
 
 Each Express middleware function receives its own fresh `(req, res, next)` triple — the framework's `@Middleware`, contributor-runner, and main-handler layers are each registered as separate Express middlewares (`router.use(...)` / `router[method](path, ...)`). At the point each one runs there's no shared closure to "reuse" an earlier `RequestContext` from.
 
-A `RequestContext` is also bound to the layer's specific `next` callback — the function you call to advance to the *next* middleware in the chain. The contributor wrapper's `next` runs the main handler; the main handler's `next` runs the error handler. Reusing one ctx across layers would either freeze `next` to the first layer's chain (breaking error propagation) or require mutation per layer (defeating the point).
+A `RequestContext` is also bound to the layer's specific `next` callback — the function you call to advance to the _next_ middleware in the chain. The contributor wrapper's `next` runs the main handler; the main handler's `next` runs the error handler. Reusing one ctx across layers would either freeze `next` to the first layer's chain (breaking error propagation) or require mutation per layer (defeating the point).
 
 The cost is small: a `RequestContext` is one `new` allocation with three field assignments and zero hidden work. Construction is dominated by Express's own per-middleware overhead.
 
@@ -295,14 +300,14 @@ The framework explicitly does NOT cache the ctx on `req` (e.g. `req.kickjsCtx`) 
 
 ### What survives the chain — and what doesn't
 
-| Pattern | Survives across instances? | Why |
-|---|---|---|
-| `ctx.set('tenant', x)` then `ctx.get('tenant')` | ✅ yes | both go through the ALS-backed `Map` |
-| `ctx.req.headers['x-tenant-id']` | ✅ yes | `req` is the underlying Express request, single instance for the whole request lifecycle |
-| `ctx.user`, `ctx.tenantId`, `ctx.roles` (auth getters) | ✅ yes | the getters consult the ALS Map first, fall back to `req.user` |
-| `ctx.tenant = x` (direct property assignment) | ❌ no | sticks to one instance only — the next stage's instance never sees it |
-| `(ctx as any)._foo = x` | ❌ no | same — the assignment is local to one JS object |
-| `req.foo = x` (mutate the underlying Express request) | ✅ yes | `req` is shared; this is the legacy escape hatch and not recommended |
+| Pattern                                                | Survives across instances? | Why                                                                                      |
+| ------------------------------------------------------ | -------------------------- | ---------------------------------------------------------------------------------------- |
+| `ctx.set('tenant', x)` then `ctx.get('tenant')`        | ✅ yes                     | both go through the ALS-backed `Map`                                                     |
+| `ctx.req.headers['x-tenant-id']`                       | ✅ yes                     | `req` is the underlying Express request, single instance for the whole request lifecycle |
+| `ctx.user`, `ctx.tenantId`, `ctx.roles` (auth getters) | ✅ yes                     | the getters consult the ALS Map first, fall back to `req.user`                           |
+| `ctx.tenant = x` (direct property assignment)          | ❌ no                      | sticks to one instance only — the next stage's instance never sees it                    |
+| `(ctx as any)._foo = x`                                | ❌ no                      | same — the assignment is local to one JS object                                          |
+| `req.foo = x` (mutate the underlying Express request)  | ✅ yes                     | `req` is shared; this is the legacy escape hatch and not recommended                     |
 
 ### Why this matters for `onError`
 
@@ -313,9 +318,11 @@ const LoadTenant = defineHttpContextDecorator({
   key: 'tenant',
   onError(err, _ctx) {
     log.error(err, 'tenant load failed')
-    return { id: 'unknown', name: 'Unknown' }   // ← runner does ctx.set('tenant', this)
+    return { id: 'unknown', name: 'Unknown' } // ← runner does ctx.set('tenant', this)
   },
-  resolve: (ctx) => ({ /* … */ }),
+  resolve: (ctx) => ({
+    /* … */
+  }),
 })
 ```
 
@@ -357,17 +364,17 @@ The framework intentionally does NOT export a `setRequestValue` helper. Writes t
 1. A Context Contributor's `resolve()` / `onError()` return value — the runner does `ctx.set(reg.key, value)` for you.
 2. `ctx.set(key, value)` inside a controller, middleware, or contributor that holds a `RequestContext` instance.
 
-Letting arbitrary services reach in and mutate the store from anywhere is "spooky action at a distance" — keys appear without an obvious source and tracing which service polluted what becomes a grep exercise. Services that need to publish per-request state should return the value to their caller and let *that* layer write it via `ctx.set`. If you need a service-level write surface, expose a narrow named function (`recordTrace`, `markStartTime`) on the service that captures the side effect — not a generic write helper.
+Letting arbitrary services reach in and mutate the store from anywhere is "spooky action at a distance" — keys appear without an obvious source and tracing which service polluted what becomes a grep exercise. Services that need to publish per-request state should return the value to their caller and let _that_ layer write it via `ctx.set`. If you need a service-level write surface, expose a narrow named function (`recordTrace`, `markStartTime`) on the service that captures the side effect — not a generic write helper.
 :::
 
 ### Augmenting `ContextMeta`: `declare module` vs `defineAugmentation`
 
 Two calls, two jobs, **both needed if you want both type safety and discoverability**:
 
-| Call | What it does | What it doesn't do |
-|---|---|---|
-| `declare module '@forinda/kickjs' { interface ContextMeta { tenant: ... } }` | Tells **TypeScript** that `ctx.get('tenant')` returns your shape. Resolved at compile time by tsc / your IDE. | Doesn't show up anywhere else in the project. Other devs reading the codebase have to grep for `declare module`. |
-| `defineAugmentation('ContextMeta', { description, example })` | Tells **`kick typegen`** to list the interface in `.kickjs/types/augmentations.d.ts` so every augmentable surface is discoverable from one place. Runtime + type-level no-op. | Doesn't actually augment anything. Skipping the `declare module` block leaves `ctx.get('tenant')` as `unknown`. |
+| Call                                                                         | What it does                                                                                                                                                                  | What it doesn't do                                                                                               |
+| ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `declare module '@forinda/kickjs' { interface ContextMeta { tenant: ... } }` | Tells **TypeScript** that `ctx.get('tenant')` returns your shape. Resolved at compile time by tsc / your IDE.                                                                 | Doesn't show up anywhere else in the project. Other devs reading the codebase have to grep for `declare module`. |
+| `defineAugmentation('ContextMeta', { description, example })`                | Tells **`kick typegen`** to list the interface in `.kickjs/types/augmentations.d.ts` so every augmentable surface is discoverable from one place. Runtime + type-level no-op. | Doesn't actually augment anything. Skipping the `declare module` block leaves `ctx.get('tenant')` as `unknown`.  |
 
 In practice, the file pattern looks like this:
 
@@ -413,7 +420,9 @@ defineAugmentation('ContextMeta', {
 
 const LoadTenant = defineHttpContextDecorator({
   key: 'tenant',
-  resolve: (ctx) => ({ /* fetch and return the tenant */ }),
+  resolve: (ctx) => ({
+    /* fetch and return the tenant */
+  }),
 })
 
 export const TenantAdapter = defineAdapter({
@@ -442,7 +451,7 @@ method > class > module > adapter > global
 
 Lower-precedence duplicates are silently dropped — they don't run, they don't error. That's how method-level overrides work: drop a different `defineHttpContextDecorator({ key: 'tenant', … })` on a single handler and only that one fires for that route. Adapter-level keeps applying everywhere else.
 
-If you need to *prove* which one fired (debugging, smoke tests), have the resolvers produce distinguishable values:
+If you need to _prove_ which one fired (debugging, smoke tests), have the resolvers produce distinguishable values:
 
 ```ts
 // adapter-level
@@ -458,13 +467,13 @@ me(ctx: RequestContext) {
 
 ### Decorator vs `contributors?()`: same runtime, different ergonomics
 
-| Registration site | Best for | Trade-offs |
-|---|---|---|
-| `@LoadX` on a method | One specific route needs an override or extra contributor | Inline, easy to spot when reading the handler |
-| `@LoadX` on a class | Every route in this controller needs the same value | Avoids decorating each method individually |
-| `AppModule.contributors?()` | Every route the module mounts | Keeps the controller files clean; lives next to module wiring |
-| `AppAdapter.contributors?()` / `KickPlugin.contributors?()` | Cross-cutting defaults shipped by a reusable package | Apply everywhere, overridable by anything narrower |
-| `bootstrap({ contributors: [...] })` | App-wide defaults you wrote in the entry file | Lowest precedence — easy to override by accident; prefer adapter-level for shared concerns |
+| Registration site                                           | Best for                                                  | Trade-offs                                                                                 |
+| ----------------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `@LoadX` on a method                                        | One specific route needs an override or extra contributor | Inline, easy to spot when reading the handler                                              |
+| `@LoadX` on a class                                         | Every route in this controller needs the same value       | Avoids decorating each method individually                                                 |
+| `AppModule.contributors?()`                                 | Every route the module mounts                             | Keeps the controller files clean; lives next to module wiring                              |
+| `AppAdapter.contributors?()` / `KickPlugin.contributors?()` | Cross-cutting defaults shipped by a reusable package      | Apply everywhere, overridable by anything narrower                                         |
+| `bootstrap({ contributors: [...] })`                        | App-wide defaults you wrote in the entry file             | Lowest precedence — easy to override by accident; prefer adapter-level for shared concerns |
 
 The runtime path is identical for every site: each registration ends up in the per-route pipeline, runs through `runContributors()`, and writes via `ctx.set`. Only the precedence + scope differ.
 
@@ -526,7 +535,9 @@ The transport-agnostic case. Produces a value every handler (and every service v
 import { defineContextDecorator } from '@forinda/kickjs'
 
 declare module '@forinda/kickjs' {
-  interface ContextMeta { requestStartedAt: number }
+  interface ContextMeta {
+    requestStartedAt: number
+  }
 }
 
 const TraceStart = defineContextDecorator({
@@ -536,7 +547,7 @@ const TraceStart = defineContextDecorator({
 
 bootstrap({
   modules,
-  contributors: [TraceStart.registration],   // global — every route, every transport
+  contributors: [TraceStart.registration], // global — every route, every transport
 })
 ```
 
@@ -574,11 +585,15 @@ The resolver pulls a service out of the container. Downstream contributors can `
 ```ts
 import { createToken, defineHttpContextDecorator } from '@forinda/kickjs'
 
-interface FlagService { evaluate(userId: string | undefined): Promise<Record<string, boolean>> }
+interface FlagService {
+  evaluate(userId: string | undefined): Promise<Record<string, boolean>>
+}
 export const FLAG_SERVICE = createToken<FlagService>('app/flags/service')
 
 declare module '@forinda/kickjs' {
-  interface ContextMeta { featureFlags: Record<string, boolean> }
+  interface ContextMeta {
+    featureFlags: Record<string, boolean>
+  }
 }
 
 const LoadFeatureFlags = defineHttpContextDecorator({
@@ -588,7 +603,7 @@ const LoadFeatureFlags = defineHttpContextDecorator({
     const userId = ctx.req.headers['x-user-id'] as string | undefined
     return flags.evaluate(userId)
   },
-  onError: () => ({}),   // fallback: no flags enabled if the service blows up
+  onError: () => ({}), // fallback: no flags enabled if the service blows up
 })
 ```
 
@@ -638,14 +653,16 @@ class WorkspaceController {
 
 ```ts
 declare module '@forinda/kickjs' {
-  interface ContextMeta { abBucket: 'control' | 'variantA' | 'variantB' }
+  interface ContextMeta {
+    abBucket: 'control' | 'variantA' | 'variantB'
+  }
 }
 
 const AssignAbBucket = defineHttpContextDecorator({
   key: 'abBucket',
-  dependsOn: ['featureFlags'],   // typed against ContextMeta — typos are TS errors
+  dependsOn: ['featureFlags'], // typed against ContextMeta — typos are TS errors
   resolve: (ctx) => {
-    const flags = ctx.get('featureFlags')!   // guaranteed by dependsOn
+    const flags = ctx.get('featureFlags')! // guaranteed by dependsOn
     if (!flags['new-checkout']) return 'control'
     // Stable per-user bucket from a hash of the user id — kept here for brevity
     const userId = ctx.req.headers['x-user-id'] as string | undefined
@@ -695,7 +712,9 @@ export function createIdempotencyLoader(opts: IdempotencyOptions = {}) {
 }
 
 declare module '@forinda/kickjs' {
-  interface ContextMeta { idempotencyKey: string | null }
+  interface ContextMeta {
+    idempotencyKey: string | null
+  }
 }
 
 // Per-route opt-in or pass to an adapter's contributors() hook
@@ -738,24 +757,26 @@ class CheckoutController {
 
 ### 8. Third-party package ships a contributor + a custom decorator wrapping it
 
-The pattern most reusable packages will follow — expose both the registration (for `contributors?()` hooks) *and* a decorator alias (for per-route opt-in). Adopters pick the ergonomic that fits their call site:
+The pattern most reusable packages will follow — expose both the registration (for `contributors?()` hooks) _and_ a decorator alias (for per-route opt-in). Adopters pick the ergonomic that fits their call site:
 
 ```ts
 // packages/geo/src/index.ts
-import {
-  defineAdapter,
-  defineAugmentation,
-  defineHttpContextDecorator,
-} from '@forinda/kickjs'
+import { defineAdapter, defineAugmentation, defineHttpContextDecorator } from '@forinda/kickjs'
 
 declare module '@forinda/kickjs' {
   interface ContextMeta {
-    geo: { country: string | null; city: string | null; latitude: number | null; longitude: number | null }
+    geo: {
+      country: string | null
+      city: string | null
+      latitude: number | null
+      longitude: number | null
+    }
   }
 }
 
 defineAugmentation('ContextMeta', {
-  description: 'Geolocation resolved from CDN headers (Cloudflare / Fastly / Vercel) by GeoAdapter.',
+  description:
+    'Geolocation resolved from CDN headers (Cloudflare / Fastly / Vercel) by GeoAdapter.',
   example: `{ geo: { country: string | null; city: string | null; latitude: number | null; longitude: number | null } }`,
 })
 
@@ -763,8 +784,8 @@ const ResolveGeo = defineHttpContextDecorator({
   key: 'geo',
   resolve: (ctx) => ({
     country: (ctx.req.headers['cf-ipcountry'] as string | undefined) ?? null,
-    city:    (ctx.req.headers['cf-ipcity']    as string | undefined) ?? null,
-    latitude:  parseOrNull(ctx.req.headers['cf-iplatitude']),
+    city: (ctx.req.headers['cf-ipcity'] as string | undefined) ?? null,
+    latitude: parseOrNull(ctx.req.headers['cf-iplatitude']),
     longitude: parseOrNull(ctx.req.headers['cf-iplongitude']),
   }),
 })
@@ -803,16 +824,16 @@ import { Service, getRequestValue, getRequestStore } from '@forinda/kickjs'
 @Service()
 class AuditService {
   log(action: string) {
-    const locale = getRequestValue('locale')         // typed via ContextMeta
-    const geo    = getRequestValue('geo')
+    const locale = getRequestValue('locale') // typed via ContextMeta
+    const geo = getRequestValue('geo')
     const bucket = getRequestValue('abBucket')
 
     db.audit.insert({
       action,
-      locale:     locale?.language,
+      locale: locale?.language,
       geoCountry: geo?.country,
       bucket,
-      requestId:  getRequestStore().requestId,
+      requestId: getRequestStore().requestId,
     })
   }
 }
@@ -847,9 +868,9 @@ health(ctx: RequestContext) {
 
 Two scopes, two test helpers from `@forinda/kickjs-testing`:
 
-| Scope | Helper | Use when |
-|---|---|---|
-| Unit — one contributor in isolation | `runContributor(decorator, opts)` | Asserting the resolver's pure logic (input → output), mocking deps, pre-seeding `dependsOn` keys |
+| Scope                                 | Helper                                     | Use when                                                                                                         |
+| ------------------------------------- | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| Unit — one contributor in isolation   | `runContributor(decorator, opts)`          | Asserting the resolver's pure logic (input → output), mocking deps, pre-seeding `dependsOn` keys                 |
 | Integration — full pipeline + handler | `createTestApp({ modules })` + `supertest` | Asserting the handler actually sees the contributor's value, multi-contributor topo-order, route-level overrides |
 
 ### Unit: a bare contributor
@@ -908,7 +929,9 @@ interface FlagService {
 const FLAG_SERVICE = createToken<FlagService>('app/flags/service')
 
 declare module '@forinda/kickjs' {
-  interface ContextMeta { featureFlags: Record<string, boolean> }
+  interface ContextMeta {
+    featureFlags: Record<string, boolean>
+  }
 }
 
 const LoadFeatureFlags = defineHttpContextDecorator({
@@ -952,7 +975,7 @@ const Greet = defineHttpContextDecorator({
   key: 'greeting',
   dependsOn: ['locale'],
   resolve: (ctx) => {
-    const { language } = ctx.get('locale')!   // guaranteed by dependsOn at runtime
+    const { language } = ctx.get('locale')! // guaranteed by dependsOn at runtime
     return language === 'fr' ? 'Bonjour' : 'Hello'
   },
 })
@@ -976,7 +999,9 @@ import { defineHttpContextDecorator } from '@forinda/kickjs'
 const Tenant = defineHttpContextDecorator({
   key: 'tenant',
   onError: () => ({ id: 'unknown', name: 'Anonymous' }),
-  resolve: () => { throw new Error('lookup failed') },
+  resolve: () => {
+    throw new Error('lookup failed')
+  },
 })
 
 it('falls back to the onError return value when resolve throws', async () => {
@@ -997,12 +1022,18 @@ it('skips an optional contributor that throws', async () => {
   const Flaky = defineHttpContextDecorator({
     key: 'flaky',
     optional: true,
-    resolve: () => { throw new Error('nope') },
+    resolve: () => {
+      throw new Error('nope')
+    },
   })
   const pipeline = buildPipeline([{ source: 'method', registration: Flaky.registration }])
   const container = Container.create()
   const meta = new Map<string, unknown>()
-  const ctx = { requestId: 'r', get: (k: string) => meta.get(k), set: (k: string, v: unknown) => void meta.set(k, v) } as never
+  const ctx = {
+    requestId: 'r',
+    get: (k: string) => meta.get(k),
+    set: (k: string, v: unknown) => void meta.set(k, v),
+  } as never
 
   await runContributors({ pipeline, ctx, container })
   expect(meta.has('flaky')).toBe(false)
@@ -1017,10 +1048,18 @@ Bring the whole stack up with `createTestApp` and verify the value end-to-end th
 import { describe, it, expect } from 'vitest'
 import supertest from 'supertest'
 import { createTestApp } from '@forinda/kickjs-testing'
-import { defineHttpContextDecorator, Controller, Get, type RequestContext, buildRoutes } from '@forinda/kickjs'
+import {
+  defineHttpContextDecorator,
+  Controller,
+  Get,
+  type RequestContext,
+  buildRoutes,
+} from '@forinda/kickjs'
 
 declare module '@forinda/kickjs' {
-  interface ContextMeta { locale: { language: string; region: string | null } }
+  interface ContextMeta {
+    locale: { language: string; region: string | null }
+  }
 }
 
 const ResolveLocale = defineHttpContextDecorator({
@@ -1042,7 +1081,9 @@ class HomeController {
 }
 
 class HomeModule {
-  routes() { return { path: '/', router: buildRoutes(HomeController), controller: HomeController } }
+  routes() {
+    return { path: '/', router: buildRoutes(HomeController), controller: HomeController }
+  }
 }
 
 describe('locale contributor — integration', () => {
@@ -1064,12 +1105,12 @@ Verify the precedence rule fires the way you expect — the override produces a 
 ```ts
 const StubLocale = defineHttpContextDecorator({
   key: 'locale',
-  resolve: () => ({ language: 'en', region: null }),  // forced default
+  resolve: () => ({ language: 'en', region: null }), // forced default
 })
 
 @Controller()
 class StaticController {
-  @StubLocale                           // method wins over the global ResolveLocale
+  @StubLocale // method wins over the global ResolveLocale
   @Get('/static')
   page(ctx: RequestContext) {
     ctx.json({ locale: ctx.get('locale') })
@@ -1079,11 +1120,11 @@ class StaticController {
 it('method-level override beats the global contributor', async () => {
   const { expressApp } = createTestApp({
     modules: [StaticModule],
-    contributors: [ResolveLocale.registration],     // global
+    contributors: [ResolveLocale.registration], // global
   })
   const res = await supertest(expressApp)
     .get('/api/v1/static')
-    .set('Accept-Language', 'fr-CA')                // would be `fr` under the global
+    .set('Accept-Language', 'fr-CA') // would be `fr` under the global
     .expect(200)
   expect(res.body.locale).toEqual({ language: 'en', region: null })
 })
@@ -1103,7 +1144,7 @@ it('boot fails when a dependsOn key is unsatisfied', async () => {
   expect(() =>
     createTestApp({
       modules: [HomeModule],
-      contributors: [NeedsLocale.registration],     // no locale producer anywhere
+      contributors: [NeedsLocale.registration], // no locale producer anywhere
     }),
   ).toThrow(/MissingContributorError/)
 })
@@ -1134,7 +1175,7 @@ it('service reads the locale via getRequestValue during a request', async () => 
 })
 ```
 
-For unit-testing a service that calls `getRequestValue` *without* spinning up an Express stack, wrap the assertion body in `requestStore.run(...)`:
+For unit-testing a service that calls `getRequestValue` _without_ spinning up an Express stack, wrap the assertion body in `requestStore.run(...)`:
 
 ```ts
 import { requestStore } from '@forinda/kickjs'

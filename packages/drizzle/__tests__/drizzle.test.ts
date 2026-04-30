@@ -7,7 +7,6 @@ import {
   DRIZZLE_DB,
   type DrizzleOps,
   type DrizzleColumnQueryConfig,
-  type DrizzleQueryConfig,
 } from '@forinda/kickjs-drizzle'
 import { Container } from '@forinda/kickjs'
 import type { ParsedQuery } from '@forinda/kickjs'

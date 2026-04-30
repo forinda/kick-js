@@ -10,9 +10,7 @@ import { WsAdapter } from '@forinda/kickjs-ws'
 
 bootstrap({
   modules: [ChatModule],
-  adapters: [
-    WsAdapter({ path: '/ws' }),
-  ],
+  adapters: [WsAdapter({ path: '/ws' })],
 })
 ```
 
@@ -98,24 +96,24 @@ Messages must be JSON with an `event` and `data` field:
 
 Every handler receives a `WsContext` with these properties and methods:
 
-| Property/Method | Description |
-|----------------|-------------|
-| `ctx.id` | Unique connection ID |
-| `ctx.data` | Parsed message payload |
-| `ctx.event` | Event name from the message |
-| `ctx.namespace` | Namespace path |
-| `ctx.socket` | Raw WebSocket instance |
-| `ctx.request` | The HTTP upgrade `IncomingMessage` — read cookies, headers, query, client IP |
-| `ctx.cookies` | Parsed cookie map from the upgrade `Cookie` header |
-| `ctx.get(key)` | Get metadata value |
-| `ctx.set(key, value)` | Set metadata (persists for connection lifetime) |
-| `ctx.send(event, data)` | Send to this client |
-| `ctx.broadcast(event, data)` | Send to all clients in namespace except sender |
-| `ctx.broadcastAll(event, data)` | Send to all clients in namespace including sender |
-| `ctx.join(room)` | Join a room |
-| `ctx.leave(room)` | Leave a room |
-| `ctx.rooms()` | Get rooms this client is in |
-| `ctx.to(room).send(event, data)` | Send to all clients in a room |
+| Property/Method                  | Description                                                                  |
+| -------------------------------- | ---------------------------------------------------------------------------- |
+| `ctx.id`                         | Unique connection ID                                                         |
+| `ctx.data`                       | Parsed message payload                                                       |
+| `ctx.event`                      | Event name from the message                                                  |
+| `ctx.namespace`                  | Namespace path                                                               |
+| `ctx.socket`                     | Raw WebSocket instance                                                       |
+| `ctx.request`                    | The HTTP upgrade `IncomingMessage` — read cookies, headers, query, client IP |
+| `ctx.cookies`                    | Parsed cookie map from the upgrade `Cookie` header                           |
+| `ctx.get(key)`                   | Get metadata value                                                           |
+| `ctx.set(key, value)`            | Set metadata (persists for connection lifetime)                              |
+| `ctx.send(event, data)`          | Send to this client                                                          |
+| `ctx.broadcast(event, data)`     | Send to all clients in namespace except sender                               |
+| `ctx.broadcastAll(event, data)`  | Send to all clients in namespace including sender                            |
+| `ctx.join(room)`                 | Join a room                                                                  |
+| `ctx.leave(room)`                | Leave a room                                                                 |
+| `ctx.rooms()`                    | Get rooms this client is in                                                  |
+| `ctx.to(room).send(event, data)` | Send to all clients in a room                                                |
 
 ## Rooms
 
@@ -148,10 +146,14 @@ Each `@WsController` creates a separate namespace:
 
 ```ts
 @WsController('/chat')
-export class ChatController { /* ... */ }
+export class ChatController {
+  /* ... */
+}
 
 @WsController('/notifications')
-export class NotificationController { /* ... */ }
+export class NotificationController {
+  /* ... */
+}
 ```
 
 - `ws://localhost:3000/ws/chat` → ChatController
@@ -161,9 +163,9 @@ export class NotificationController { /* ... */ }
 
 ```ts
 WsAdapter({
-  path: '/ws',              // Base path (default: '/ws')
+  path: '/ws', // Base path (default: '/ws')
   heartbeatInterval: 30000, // Ping interval in ms (default: 30000, 0 to disable)
-  maxPayload: 1048576,      // Max message size in bytes
+  maxPayload: 1048576, // Max message size in bytes
 })
 ```
 
@@ -181,8 +183,8 @@ WsAdapter({
       const token = parseCookie(request.headers.cookie).sid
       return token ? await sessions.verify(token) : null
     },
-    autoJoinUserRoom: true,   // opt sockets into `user:<id>` (default: true)
-    userRoomPrefix: 'user:',  // room prefix (default: 'user:')
+    autoJoinUserRoom: true, // opt sockets into `user:<id>` (default: true)
+    userRoomPrefix: 'user:', // room prefix (default: 'user:')
   },
 })
 ```
@@ -201,11 +203,11 @@ handleConnect(ctx: WsContext) {
 
 The adapter registers three tokens on the DI container during startup so any service can broadcast without holding a `WsContext` reference:
 
-| Token | Type | Purpose |
-|-------|------|---------|
-| `WS_ADAPTER` | `WsAdapter` | The live adapter — call `broadcastToUser(id, event, data)` directly |
-| `WS_ROOM_MANAGER` | `RoomManager` | Low-level room broadcast primitive |
-| `WS_USER_BROADCASTER` | `WsUserBroadcaster` | High-level per-user helper (`toUser(id).send(...)`) |
+| Token                 | Type                | Purpose                                                             |
+| --------------------- | ------------------- | ------------------------------------------------------------------- |
+| `WS_ADAPTER`          | `WsAdapter`         | The live adapter — call `broadcastToUser(id, event, data)` directly |
+| `WS_ROOM_MANAGER`     | `RoomManager`       | Low-level room broadcast primitive                                  |
+| `WS_USER_BROADCASTER` | `WsUserBroadcaster` | High-level per-user helper (`toUser(id).send(...)`)                 |
 
 ```ts
 import { Service, Inject } from '@forinda/kickjs'
@@ -213,9 +215,7 @@ import { WS_USER_BROADCASTER, type WsUserBroadcaster } from '@forinda/kickjs-ws'
 
 @Service()
 export class NotificationService {
-  constructor(
-    @Inject(WS_USER_BROADCASTER) private readonly ws: WsUserBroadcaster,
-  ) {}
+  constructor(@Inject(WS_USER_BROADCASTER) private readonly ws: WsUserBroadcaster) {}
 
   async notify(userId: string, message: string) {
     this.ws.toUser(userId).send('notification', { message })
@@ -252,10 +252,12 @@ The adapter sends periodic pings to detect dead connections. Clients that don't 
 const ws = new WebSocket('ws://localhost:3000/ws/chat')
 
 ws.onopen = () => {
-  ws.send(JSON.stringify({
-    event: 'chat:send',
-    data: { text: 'Hello!' },
-  }))
+  ws.send(
+    JSON.stringify({
+      event: 'chat:send',
+      data: { text: 'Hello!' },
+    }),
+  )
 }
 
 ws.onmessage = (e) => {

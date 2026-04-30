@@ -81,9 +81,7 @@ import { OtelAdapter } from './adapters/otel.adapter'
 
 export const app = await bootstrap({
   modules,
-  adapters: [
-    OtelAdapter({ serviceName: 'my-api', serviceVersion: '1.0.0' }),
-  ],
+  adapters: [OtelAdapter({ serviceName: 'my-api', serviceVersion: '1.0.0' })],
   // Critical: let the OTel SDK own SIGTERM. KickJS keeps the
   // uncaughtException / unhandledRejection loggers but skips
   // signal registration so the SDK's own handler can flush

@@ -92,9 +92,7 @@ describe('AnthropicProvider — construction', () => {
       apiKey: 'sk-ant-test',
       baseURL: 'https://example.com/v1/',
     })
-    fetchSpy.mockResolvedValueOnce(
-      mockJsonResponse({ content: [{ type: 'text', text: 'hi' }] }),
-    )
+    fetchSpy.mockResolvedValueOnce(mockJsonResponse({ content: [{ type: 'text', text: 'hi' }] }))
     await p.chat({ messages: [{ role: 'user', content: 'hello' }] })
     expect(fetchSpy.mock.calls[0]?.[0]).toBe('https://example.com/v1/messages')
   })
@@ -130,9 +128,7 @@ describe('AnthropicProvider.chat()', () => {
     const body = JSON.parse(init.body as string)
     expect(body.model).toBe('claude-opus-4-6')
     expect(body.max_tokens).toBe(4096) // default
-    expect(body.messages).toEqual([
-      { role: 'user', content: [{ type: 'text', text: 'say hi' }] },
-    ])
+    expect(body.messages).toEqual([{ role: 'user', content: [{ type: 'text', text: 'say hi' }] }])
     expect(body.system).toBeUndefined()
     expect(body.stream).toBeUndefined()
 
@@ -148,9 +144,7 @@ describe('AnthropicProvider.chat()', () => {
 
   it('extracts system messages into the top-level system field', async () => {
     const provider = new AnthropicProvider({ apiKey: 'sk-ant-test' })
-    fetchSpy.mockResolvedValueOnce(
-      mockJsonResponse({ content: [{ type: 'text', text: 'ok' }] }),
-    )
+    fetchSpy.mockResolvedValueOnce(mockJsonResponse({ content: [{ type: 'text', text: 'ok' }] }))
 
     await provider.chat({
       messages: [
@@ -161,16 +155,12 @@ describe('AnthropicProvider.chat()', () => {
 
     const body = JSON.parse(fetchSpy.mock.calls[0][1]!.body as string)
     expect(body.system).toBe('You are helpful.')
-    expect(body.messages).toEqual([
-      { role: 'user', content: [{ type: 'text', text: 'hi' }] },
-    ])
+    expect(body.messages).toEqual([{ role: 'user', content: [{ type: 'text', text: 'hi' }] }])
   })
 
   it('drops additional system messages beyond the first', async () => {
     const provider = new AnthropicProvider({ apiKey: 'sk-ant-test' })
-    fetchSpy.mockResolvedValueOnce(
-      mockJsonResponse({ content: [{ type: 'text', text: 'ok' }] }),
-    )
+    fetchSpy.mockResolvedValueOnce(mockJsonResponse({ content: [{ type: 'text', text: 'ok' }] }))
 
     await provider.chat({
       messages: [
@@ -279,9 +269,7 @@ describe('AnthropicProvider.chat()', () => {
 
   it('translates assistant tool calls and tool result messages in requests', async () => {
     const provider = new AnthropicProvider({ apiKey: 'sk-ant-test' })
-    fetchSpy.mockResolvedValueOnce(
-      mockJsonResponse({ content: [{ type: 'text', text: 'done' }] }),
-    )
+    fetchSpy.mockResolvedValueOnce(mockJsonResponse({ content: [{ type: 'text', text: 'done' }] }))
 
     await provider.chat({
       messages: [
@@ -289,9 +277,7 @@ describe('AnthropicProvider.chat()', () => {
         {
           role: 'assistant',
           content: '',
-          toolCalls: [
-            { id: 'tool_1', name: 'create_task', arguments: { title: 'X' } },
-          ],
+          toolCalls: [{ id: 'tool_1', name: 'create_task', arguments: { title: 'X' } }],
         },
         { role: 'tool', content: '{"id":"created"}', toolCallId: 'tool_1' },
       ],
@@ -328,9 +314,9 @@ describe('AnthropicProvider.chat()', () => {
     const provider = new AnthropicProvider({ apiKey: 'bad-key' })
     fetchSpy.mockResolvedValueOnce(mockErrorResponse('{"error":"invalid api key"}', 401))
 
-    await expect(
-      provider.chat({ messages: [{ role: 'user', content: 'hi' }] }),
-    ).rejects.toThrow(ProviderError)
+    await expect(provider.chat({ messages: [{ role: 'user', content: 'hi' }] })).rejects.toThrow(
+      ProviderError,
+    )
 
     // Non-retryable error — check status and body are captured
     fetchSpy.mockResolvedValueOnce(mockErrorResponse('{"error":"rate limit"}', 400))
@@ -498,9 +484,7 @@ describe('AnthropicProvider.stream()', () => {
 describe('AnthropicProvider.embed()', () => {
   it('throws a descriptive error pointing to embedding-capable providers', async () => {
     const provider = new AnthropicProvider({ apiKey: 'sk-ant-test' })
-    await expect(provider.embed('hello')).rejects.toThrow(
-      /does not provide an embeddings API/,
-    )
+    await expect(provider.embed('hello')).rejects.toThrow(/does not provide an embeddings API/)
     expect(fetchSpy).not.toHaveBeenCalled()
   })
 })

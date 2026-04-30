@@ -86,7 +86,9 @@ describe('generate()', () => {
     expect(r.empty).toBe(true)
     expect(r.changeCount).toBe(0)
 
-    const subdirs = (await readdir(cfg.migrationsDir)).filter((e) => e !== '_journal.json').sort()
+    const subdirs = (await readdir(cfg.migrationsDir))
+      .filter((e) => e !== '_journal.json')
+      .toSorted()
     expect(subdirs).toEqual(['20260427_153012_init', '20260427_160000_seed_default_users'])
 
     const seedDir = path.join(cfg.migrationsDir, '20260427_160000_seed_default_users')
@@ -98,9 +100,7 @@ describe('generate()', () => {
     )
 
     const downSql = await readFile(path.join(seedDir, 'down.sql'), 'utf8')
-    expect(downSql).toBe(
-      '-- REVIEWED: false\n' + '-- Empty migration — author the reverse SQL here.\n',
-    )
+    expect(downSql).toBe('-- REVIEWED: false\n-- Empty migration — author the reverse SQL here.\n')
 
     const meta = JSON.parse(await readFile(path.join(seedDir, 'meta.json'), 'utf8'))
     expect(meta).toMatchObject({

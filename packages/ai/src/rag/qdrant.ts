@@ -261,11 +261,17 @@ export class QdrantVectorStore<
     path: string,
     body: unknown,
   ): Promise<T> {
-    const res = await fetch(`${this.url}${path}`, {
+    const init: RequestInit = {
       method,
       headers: this.headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
-    })
+    }
+    // GET requests must not have a body — guard at construction time
+    // so the fetch call doesn't trip the runtime / lint rule when a
+    // caller mistakenly passes a body.
+    if (method !== 'GET' && body !== undefined) {
+      init.body = JSON.stringify(body)
+    }
+    const res = await fetch(`${this.url}${path}`, init)
     if (!res.ok) {
       const text = await res.text().catch(() => '')
       throw new Error(`QdrantVectorStore: ${method} ${path} failed with ${res.status}: ${text}`)

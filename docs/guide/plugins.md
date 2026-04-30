@@ -32,7 +32,11 @@ import { analyticsPlugin } from './plugins/analytics.plugin'
 
 export const app = await bootstrap({
   modules,
-  plugins: [analyticsPlugin({ /* options */ })],
+  plugins: [
+    analyticsPlugin({
+      /* options */
+    }),
+  ],
 })
 ```
 
@@ -90,15 +94,15 @@ interface KickPluginInstance {
 }
 ```
 
-| Method           | When it runs           | Use Case                                          |
-| ---------------- | ---------------------- | ------------------------------------------------- |
-| `register()`     | Before modules load    | Bind services in DI                               |
-| `modules()`      | Before user modules    | Add feature modules                               |
-| `adapters()`     | Before user adapters   | Add lifecycle adapters                            |
-| `middleware()`   | Before user middleware | Add global middleware                             |
+| Method           | When it runs           | Use Case                                                                   |
+| ---------------- | ---------------------- | -------------------------------------------------------------------------- |
+| `register()`     | Before modules load    | Bind services in DI                                                        |
+| `modules()`      | Before user modules    | Add feature modules                                                        |
+| `adapters()`     | Before user adapters   | Add lifecycle adapters                                                     |
+| `middleware()`   | Before user middleware | Add global middleware                                                      |
 | `contributors()` | Per-route, at mount    | Ship typed [Context Contributors](./context-decorators.md) the plugin owns |
-| `onReady()`      | After server starts    | Post-startup tasks                                |
-| `shutdown()`     | On SIGINT/SIGTERM      | Cleanup resources                                 |
+| `onReady()`      | After server starts    | Post-startup tasks                                                         |
+| `shutdown()`     | On SIGINT/SIGTERM      | Cleanup resources                                                          |
 
 ### Plugin Contributors
 

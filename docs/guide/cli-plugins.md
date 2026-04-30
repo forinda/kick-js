@@ -89,7 +89,7 @@ The CLI fails fast at startup on four duplicate signals:
 
 The error message lists both plugin names so the source is obvious.
 Adopter `commands` in `kick.config.ts` overriding a plugin command is
-*not* a conflict — that's the documented override path.
+_not_ a conflict — that's the documented override path.
 
 ## Programmatic command registration
 

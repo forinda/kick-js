@@ -6,10 +6,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import {
-  formatActivityTs,
-  summarisePayload,
-} from '../spa/src/lib/payload-summary'
+import { formatActivityTs, summarisePayload } from '../spa/src/lib/payload-summary'
 
 describe('summarisePayload', () => {
   it('returns String() for primitives', () => {

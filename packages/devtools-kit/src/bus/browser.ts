@@ -115,6 +115,7 @@ export function createBrowserBus(opts: BrowserBusOptions = {}): KickEventBus {
   }
 
   const broadcast = (event: TaggedEnvelope): void => {
+    // oxlint-disable-next-line unicorn/require-post-message-target-origin -- BroadcastChannel.postMessage takes only one argument; targetOrigin is for Window.postMessage
     channel?.postMessage(event)
     if (socket && socket.readyState === WebSocket.OPEN) {
       socket.send(JSON.stringify(event))

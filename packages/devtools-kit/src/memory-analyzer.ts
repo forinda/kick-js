@@ -166,8 +166,8 @@ export class MemoryAnalyzer {
   static heapGrowthBytesPerSec(window: readonly RuntimeSnapshot[]): number {
     if (window.length < 2) return 0
     const t0 = window[0].timestamp
-    const xs: number[] = new Array(window.length)
-    const ys: number[] = new Array(window.length)
+    const xs: number[] = Array.from({ length: window.length })
+    const ys: number[] = Array.from({ length: window.length })
     let sumX = 0
     let sumY = 0
     for (let i = 0; i < window.length; i++) {

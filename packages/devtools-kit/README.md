@@ -76,14 +76,14 @@ For **third-party plugins** the recommended shape is **peer-optional**:
 ```jsonc
 {
   "peerDependencies": {
-    "@forinda/kickjs-devtools-kit": ">=3.2.0"
+    "@forinda/kickjs-devtools-kit": ">=3.2.0",
   },
   "peerDependenciesMeta": {
-    "@forinda/kickjs-devtools-kit": { "optional": true }
+    "@forinda/kickjs-devtools-kit": { "optional": true },
   },
   "devDependencies": {
-    "@forinda/kickjs-devtools-kit": "^3.2.0"
-  }
+    "@forinda/kickjs-devtools-kit": "^3.2.0",
+  },
 }
 ```
 

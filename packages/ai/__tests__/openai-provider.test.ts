@@ -85,15 +85,11 @@ describe('OpenAIProvider — construction', () => {
   it('strips trailing slash from baseURL', () => {
     const p = new OpenAIProvider({ apiKey: 'sk-test', baseURL: 'https://example.com/v1/' })
     // We can verify by triggering a call and reading the URL fetch was given.
-    fetchSpy.mockResolvedValueOnce(
-      mockJsonResponse({ choices: [{ message: { content: 'hi' } }] }),
-    )
-    return p
-      .chat({ messages: [{ role: 'user', content: 'hello' }] })
-      .then(() => {
-        const call = fetchSpy.mock.calls[0]
-        expect(call?.[0]).toBe('https://example.com/v1/chat/completions')
-      })
+    fetchSpy.mockResolvedValueOnce(mockJsonResponse({ choices: [{ message: { content: 'hi' } }] }))
+    return p.chat({ messages: [{ role: 'user', content: 'hello' }] }).then(() => {
+      const call = fetchSpy.mock.calls[0]
+      expect(call?.[0]).toBe('https://example.com/v1/chat/completions')
+    })
   })
 })
 
@@ -203,9 +199,7 @@ describe('OpenAIProvider.chat()', () => {
         {
           role: 'assistant',
           content: '',
-          toolCalls: [
-            { id: 'call_1', name: 'create_task', arguments: { title: 'X' } },
-          ],
+          toolCalls: [{ id: 'call_1', name: 'create_task', arguments: { title: 'X' } }],
         },
         { role: 'tool', content: '{"id":"created"}', toolCallId: 'call_1' },
       ],
@@ -282,9 +276,7 @@ describe('OpenAIProvider.stream()', () => {
 
   it('sets stream: true on the request body', async () => {
     const provider = new OpenAIProvider({ apiKey: 'sk-test' })
-    fetchSpy.mockResolvedValueOnce(
-      mockStreamResponse([{ choices: [{ delta: { content: 'x' } }] }]),
-    )
+    fetchSpy.mockResolvedValueOnce(mockStreamResponse([{ choices: [{ delta: { content: 'x' } }] }]))
 
     const iter = provider.stream({ messages: [{ role: 'user', content: 'q' }] })
     // Consume so the request actually fires

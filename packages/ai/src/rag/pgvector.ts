@@ -429,7 +429,7 @@ export function buildWhereClause(
     return { whereSql: '', whereParams: [] }
   }
 
-  const keyPattern = /^[a-zA-Z0-9_.\-]+$/
+  const keyPattern = /^[a-zA-Z0-9_.-]+$/
   const clauses: string[] = []
   const params: unknown[] = []
   let p = startAt

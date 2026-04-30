@@ -1,13 +1,7 @@
 import { describe, it, expect, expectTypeOf } from 'vitest'
 import type { Generated } from 'kysely'
 
-import {
-  customType,
-  CustomColumnBuilder,
-  table,
-  serial,
-  type SchemaToTypes,
-} from '../../src/index'
+import { customType, CustomColumnBuilder, table, serial, type SchemaToTypes } from '../../src/index'
 
 // Adopter-defined opaque types — the whole point of customType.
 type EncryptedString = string & { readonly __brand: 'EncryptedString' }

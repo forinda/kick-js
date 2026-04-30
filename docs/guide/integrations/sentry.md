@@ -90,13 +90,7 @@ bootstrap({
       info: { title: 'My API', version: '1.0.0' },
     }),
   ],
-  middleware: [
-    helmet(),
-    cors(),
-    requestId(),
-    requestLogger(),
-    express.json(),
-  ],
+  middleware: [helmet(), cors(), requestId(), requestLogger(), express.json()],
 })
 ```
 
@@ -216,7 +210,11 @@ import * as Sentry from '@sentry/node'
 export class UserRepository {
   async findById(id: string) {
     return Sentry.startSpan(
-      { name: 'db.user.findById', op: 'db.query', attributes: { 'db.statement': 'SELECT * FROM users WHERE id = ?' } },
+      {
+        name: 'db.user.findById',
+        op: 'db.query',
+        attributes: { 'db.statement': 'SELECT * FROM users WHERE id = ?' },
+      },
       async () => {
         return this.db.user.findUnique({ where: { id } })
       },
@@ -320,9 +318,9 @@ const { expressApp } = await createTestApp({
 
 ## Configuration Reference
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `dsn` | `string` | *required* | Sentry project DSN |
-| `environment` | `string` | `NODE_ENV` | Environment tag |
-| `tracesSampleRate` | `number` | `1.0` dev / `0.1` prod | Performance sampling rate |
-| `debug` | `boolean` | `false` | Enable Sentry debug logging |
+| Option             | Type      | Default                | Description                 |
+| ------------------ | --------- | ---------------------- | --------------------------- |
+| `dsn`              | `string`  | _required_             | Sentry project DSN          |
+| `environment`      | `string`  | `NODE_ENV`             | Environment tag             |
+| `tracesSampleRate` | `number`  | `1.0` dev / `0.1` prod | Performance sampling rate   |
+| `debug`            | `boolean` | `false`                | Enable Sentry debug logging |

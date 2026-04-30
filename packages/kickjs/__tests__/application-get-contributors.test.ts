@@ -1,12 +1,7 @@
 import 'reflect-metadata'
 import { describe, it, expect } from 'vitest'
 
-import {
-  Application,
-  defineAdapter,
-  definePlugin,
-  defineContextDecorator,
-} from '../src/index'
+import { Application, defineAdapter, definePlugin, defineContextDecorator } from '../src/index'
 
 const tenantContrib = defineContextDecorator({
   key: 'tenant',
@@ -74,7 +69,7 @@ describe('Application.getContributors() — devtools introspection', () => {
       contributors: [analyticsContrib.registration],
     })
     const list = app.getContributors()
-    expect(list.map((c) => c.key).sort()).toEqual(['analytics', 'tenant', 'user'])
+    expect(list.map((c) => c.key).toSorted()).toEqual(['analytics', 'tenant', 'user'])
     expect(list.find((c) => c.key === 'tenant')?.label).toBe('TenantAdapter')
     expect(list.find((c) => c.key === 'user')?.label).toBe('AuthPlugin')
     expect(list.find((c) => c.key === 'analytics')?.label).toBe('bootstrap')

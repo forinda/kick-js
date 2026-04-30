@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { writeFile, mkdir, access, readFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { dirname, extname, join } from 'node:path'
@@ -11,7 +12,7 @@ export function setDryRun(enabled: boolean): void {
 }
 
 /**
- * Toggle prettier post-write formatting. Defaults to enabled — generators
+ * Toggle oxfmt post-write formatting. Defaults to enabled — generators
  * always emit formatted output unless the caller opts out (rare; useful
  * for tests that want byte-stable assertions against raw template strings).
  */
@@ -19,21 +20,20 @@ export function setFormatOnWrite(enabled: boolean): void {
   _format = enabled
 }
 
-/** Extensions prettier can format. Anything else is written verbatim. */
+/** Extensions oxfmt can format. Anything else is written verbatim. */
 const FORMATTABLE = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.json', '.md'])
 
 /**
  * Write a file, creating parent directories if needed.
  *
- * After write, runs prettier against the file when:
+ * After write, runs oxfmt against the file when:
  *   - format-on-write is enabled (default)
  *   - the extension is in {@link FORMATTABLE}
- *   - prettier resolves from the user's project (or our own cwd)
+ *   - oxfmt resolves from the user's project (or our own cwd)
  *
- * Failures (missing prettier, unparseable source, prettier crash) are
+ * Failures (missing oxfmt, unparseable source, formatter crash) are
  * swallowed silently — formatting is a polish step, not a correctness
- * gate. The pre-existing pre-commit hook still catches anything we
- * couldn't format.
+ * gate. The pre-commit hook still catches anything we couldn't format.
  *
  * Skips writing entirely in dry run mode.
  */
@@ -43,57 +43,100 @@ export async function writeFileSafe(filePath: string, content: string): Promise<
   await writeFile(filePath, content, 'utf-8')
   if (_format && FORMATTABLE.has(extname(filePath))) {
     await formatFile(filePath, content).catch(() => {
-      // Prettier missing or unparseable source — leave the unformatted
+      // Formatter missing or unparseable source — leave the unformatted
       // file in place. Pre-commit hook will catch shipping-blocker
       // formatting issues.
     })
   }
 }
 
-let _prettier: PrettierModule | null | undefined = undefined
-
-interface PrettierModule {
-  format(source: string, opts: Record<string, unknown>): Promise<string> | string
-  resolveConfig(file: string): Promise<Record<string, unknown> | null>
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  getFileInfo(
-    file: string,
-    opts?: Record<string, unknown>,
-  ): Promise<{ inferredParser: string | null; ignored?: boolean }> | any
+interface OxfmtFormatResult {
+  code: string
+  errors: unknown[]
 }
 
-/** Resolve prettier from the user's project; cache the result (or null) for the process. */
-function resolvePrettier(cwd: string): PrettierModule | null {
-  if (_prettier !== undefined) return _prettier
+interface OxfmtModule {
+  format(
+    fileName: string,
+    sourceText: string,
+    options?: Record<string, unknown>,
+  ): Promise<OxfmtFormatResult>
+}
+
+let _oxfmt: OxfmtModule | null | undefined = undefined
+
+/** Resolve oxfmt from the user's project; cache the result (or null) for the process. */
+async function resolveOxfmt(cwd: string): Promise<OxfmtModule | null> {
+  if (_oxfmt !== undefined) return _oxfmt
   try {
     const req = createRequire(join(cwd, 'package.json'))
-    _prettier = req('prettier') as PrettierModule
+    const oxfmtPath = req.resolve('oxfmt')
+    _oxfmt = (await import(oxfmtPath)) as OxfmtModule
   } catch {
-    _prettier = null
+    _oxfmt = null
   }
-  return _prettier
+  return _oxfmt
 }
 
 async function formatFile(filePath: string, content: string): Promise<void> {
-  const prettier = resolvePrettier(process.cwd())
-  if (!prettier) return
-  // Honour the project's .prettierrc / .prettierignore. Resolving with
-  // the file path picks the right config block in monorepos with nested
-  // overrides.
-  const info = await prettier.getFileInfo(filePath, { resolveConfig: true })
-  if (info.ignored) return
-  const config = (await prettier.resolveConfig(filePath)) ?? {}
-  const formatted = await prettier.format(content, {
-    ...config,
-    filepath: filePath,
-  })
-  if (formatted === content) return
-  await writeFile(filePath, formatted, 'utf-8')
+  const oxfmt = await resolveOxfmt(process.cwd())
+  if (!oxfmt) return
+  // The CLI binary auto-discovers `.oxfmtrc.json`, but the JS API
+  // does NOT — we walk up from the file being formatted so adopters'
+  // workspace config drives the output. Skip formatting entirely
+  // when no config is found (matches the old prettier failure mode:
+  // raw templates already follow project conventions).
+  const options = await loadOxfmtConfig(filePath)
+  if (options === null) return
+  const result = await oxfmt.format(filePath, content, options)
+  if (result.code === content) return
+  await writeFile(filePath, result.code, 'utf-8')
 }
 
-/** Reset cached prettier resolution. Tests use this; production code shouldn't. */
+const _oxfmtConfigCache = new Map<string, Record<string, unknown> | null>()
+
+/**
+ * Walk up from `filePath`'s directory looking for `.oxfmtrc.json`.
+ * Returns `null` when no config is found anywhere on the path —
+ * generators then leave the raw template alone (which already
+ * follows project conventions). Cached per starting directory so
+ * the walk is one-shot per generator run.
+ */
+async function loadOxfmtConfig(filePath: string): Promise<Record<string, unknown> | null> {
+  let dir = dirname(filePath)
+  const startDir = dir
+  if (_oxfmtConfigCache.has(startDir)) return _oxfmtConfigCache.get(startDir)!
+  while (true) {
+    const configPath = join(dir, '.oxfmtrc.json')
+    if (existsSync(configPath)) {
+      try {
+        const raw = await readFile(configPath, 'utf-8')
+        const parsed = JSON.parse(raw) as Record<string, unknown>
+        // The `$schema` and `ignorePatterns` fields are runner-only —
+        // strip before passing to format() so it doesn't reject them
+        // as unknown options.
+        delete parsed['$schema']
+        delete parsed.ignorePatterns
+        _oxfmtConfigCache.set(startDir, parsed)
+        return parsed
+      } catch {
+        _oxfmtConfigCache.set(startDir, null)
+        return null
+      }
+    }
+    const parent = dirname(dir)
+    if (parent === dir) {
+      _oxfmtConfigCache.set(startDir, null)
+      return null
+    }
+    dir = parent
+  }
+}
+
+/** Reset cached oxfmt resolution. Tests use this; production code shouldn't. */
 export function clearFormatCache(): void {
-  _prettier = undefined
+  _oxfmt = undefined
+  _oxfmtConfigCache.clear()
 }
 
 /** Ensure a directory exists */

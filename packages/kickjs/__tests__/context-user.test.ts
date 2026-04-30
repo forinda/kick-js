@@ -56,9 +56,7 @@ describe('RequestContext.user', () => {
 
   it('falls back to req.user when metadata has no user', () => {
     const reqUser = { id: '1', email: 'fallback@test.com' }
-    withCtx({ user: reqUser, meta: { other: 'data' } }, (ctx) =>
-      expect(ctx.user).toEqual(reqUser),
-    )
+    withCtx({ user: reqUser, meta: { other: 'data' } }, (ctx) => expect(ctx.user).toEqual(reqUser))
   })
 
   it('ctx.get<T>("user") still works for backwards compatibility', () => {
@@ -86,9 +84,7 @@ describe('RequestContext.tenantId / .roles', () => {
   })
 
   it('roles falls back to user.roles when tenantRoles is missing', () => {
-    withCtx({ user: { id: '1', roles: ['admin'] } }, (ctx) =>
-      expect(ctx.roles).toEqual(['admin']),
-    )
+    withCtx({ user: { id: '1', roles: ['admin'] } }, (ctx) => expect(ctx.roles).toEqual(['admin']))
   })
 
   it('roles returns empty array when user has neither field', () => {

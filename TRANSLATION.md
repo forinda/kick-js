@@ -4,16 +4,16 @@ KickJS docs support multiple languages via VitePress i18n and a build-time trans
 
 ## Supported Languages
 
-| Code | Language   | Directory   |
-|------|------------|-------------|
-| en   | English    | `docs/` (root) |
-| fr   | Français   | `docs/fr/`  |
-| es   | Español    | `docs/es/`  |
-| de   | Deutsch    | `docs/de/`  |
-| zh   | 中文        | `docs/zh/`  |
-| ja   | 日本語      | `docs/ja/`  |
-| pt   | Português  | `docs/pt/`  |
-| ar   | العربية     | `docs/ar/`  |
+| Code | Language  | Directory      |
+| ---- | --------- | -------------- |
+| en   | English   | `docs/` (root) |
+| fr   | Français  | `docs/fr/`     |
+| es   | Español   | `docs/es/`     |
+| de   | Deutsch   | `docs/de/`     |
+| zh   | 中文      | `docs/zh/`     |
+| ja   | 日本語    | `docs/ja/`     |
+| pt   | Português | `docs/pt/`     |
+| ar   | العربية   | `docs/ar/`     |
 
 ## How It Works
 

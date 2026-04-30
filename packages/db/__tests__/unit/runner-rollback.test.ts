@@ -33,7 +33,7 @@ describe('migrateRollback', () => {
     expect(r.reversed).toEqual(['20260427_040000_d', '20260427_030000_c'])
 
     const remaining = await adapter.listApplied()
-    expect(remaining.map((row) => row.id).sort()).toEqual([
+    expect(remaining.map((row) => row.id).toSorted()).toEqual([
       '20260427_010000_a',
       '20260427_020000_b',
     ])

@@ -16,11 +16,12 @@ concurrency:
 # the smoke tests (which need built artifacts) wait on `build`.
 #
 # Pre-commit (lefthook.yml) is intentionally a thin wrapper around
-# `prettier --check` + `kick-lint`. CI is the canonical verification.
+# `oxfmt --check` + `oxlint` + `kick-lint`. CI is the canonical
+# verification.
 
 jobs:
   format:
-    name: Format check
+    name: Format check (oxfmt)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -32,8 +33,21 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm format:check
 
+  lint:
+    name: Lint (oxlint)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+
   lint-tokens:
-    name: Token convention lint
+    name: Token convention lint (kick-lint)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6

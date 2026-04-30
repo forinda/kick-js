@@ -78,7 +78,9 @@ async function translateFrontmatter(frontmatter, targetLang) {
     }
 
     // Match key: value pairs (but skip links, themes, layouts, boolean-like values)
-    const kvMatch = line.match(/^(\s*-?\s*)(text|name|tagline|title|details|description|message|copyright):\s*(.+)$/)
+    const kvMatch = line.match(
+      /^(\s*-?\s*)(text|name|tagline|title|details|description|message|copyright):\s*(.+)$/,
+    )
     if (kvMatch) {
       const prefix = kvMatch[1]
       const key = kvMatch[2]
@@ -211,9 +213,7 @@ async function translateMarkdown(content, targetLang) {
 async function main() {
   const targetLocales = process.argv.slice(2)
   const locales =
-    targetLocales.length > 0
-      ? LOCALES.filter((l) => targetLocales.includes(l.code))
-      : LOCALES
+    targetLocales.length > 0 ? LOCALES.filter((l) => targetLocales.includes(l.code)) : LOCALES
 
   if (locales.length === 0) {
     console.error(`Unknown locale(s): ${targetLocales.join(', ')}`)

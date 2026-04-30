@@ -29,8 +29,17 @@ describe('@forinda/kickjs unified exports', () => {
 
   it('exports decorators', async () => {
     const {
-      Service, Controller, Get, Post, Put, Delete, Patch,
-      Autowired, Inject, Value, Middleware,
+      Service,
+      Controller,
+      Get,
+      Post,
+      Put,
+      Delete,
+      Patch,
+      Autowired,
+      Inject,
+      Value,
+      Middleware,
     } = await import('../src/index')
     expect(typeof Service).toBe('function')
     expect(typeof Controller).toBe('function')

@@ -378,15 +378,15 @@ This is why your tsconfig include needs to match both extensions.
 
 ## Plugin & adapter registry
 
-`kick typegen` walks your `src/` for `defineAdapter({ name: '...' })` and `definePlugin({ name: '...' })` calls and writes the discovered names into `.kickjs/types/plugins.d.ts` as a `KickJsPluginRegistry` augmentation. Class-style declarations (`class X implements AppAdapter`) are *not* scanned — those are the v3 pattern and were removed in v4.
+`kick typegen` walks your `src/` for `defineAdapter({ name: '...' })` and `definePlugin({ name: '...' })` calls and writes the discovered names into `.kickjs/types/plugins.d.ts` as a `KickJsPluginRegistry` augmentation. Class-style declarations (`class X implements AppAdapter`) are _not_ scanned — those are the v3 pattern and were removed in v4.
 
 ```ts
 // .kickjs/types/plugins.d.ts (generated)
 declare module '@forinda/kickjs' {
   interface KickJsPluginRegistry {
-    'TenantAdapter': 'adapter'
-    'AuthAdapter': 'adapter'
-    'FlagsPlugin': 'plugin'
+    TenantAdapter: 'adapter'
+    AuthAdapter: 'adapter'
+    FlagsPlugin: 'plugin'
   }
 }
 ```
@@ -396,9 +396,11 @@ Once the registry is populated, the `dependsOn` field on plugins and adapters na
 ```ts
 export const AuthAdapter = defineAdapter({
   name: 'AuthAdapter',
-  dependsOn: ['TenantAdapter'],   // ✓ — autocompletes from the registry
+  dependsOn: ['TenantAdapter'], // ✓ — autocompletes from the registry
   // dependsOn: ['Tennant'],      // ✗ — TS error: not assignable to keyof KickJsPluginRegistry
-  build: (config) => ({ /* ... */ }),
+  build: (config) => ({
+    /* ... */
+  }),
 })
 ```
 

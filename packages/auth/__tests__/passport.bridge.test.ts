@@ -13,7 +13,7 @@ describe('PassportBridge', () => {
 
   it('returns user when passport strategy calls success', async () => {
     const passportStrategy = {
-      authenticate(req: any, options: any) {
+      authenticate(_req: any, _options: any) {
         // Simulate passport calling this.success(user)
         ;(this as any).success({ id: '1', email: 'test@test.com' })
       },
@@ -28,7 +28,7 @@ describe('PassportBridge', () => {
 
   it('returns null when passport strategy calls fail', async () => {
     const passportStrategy = {
-      authenticate(req: any, options: any) {
+      authenticate(_req: any, _options: any) {
         ;(this as any).fail('Invalid credentials')
       },
     }
@@ -40,7 +40,7 @@ describe('PassportBridge', () => {
 
   it('returns null when passport strategy calls error', async () => {
     const passportStrategy = {
-      authenticate(req: any, options: any) {
+      authenticate(_req: any, _options: any) {
         ;(this as any).error(new Error('Something went wrong'))
       },
     }
@@ -64,7 +64,7 @@ describe('PassportBridge', () => {
 
   it('returns null when passport strategy calls pass', async () => {
     const passportStrategy = {
-      authenticate(req: any) {
+      authenticate(_req: any) {
         ;(this as any).pass()
       },
     }

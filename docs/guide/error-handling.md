@@ -16,16 +16,16 @@ throw new HttpException(400, 'Invalid input')
 
 Every common HTTP error has a factory method with a sensible default message:
 
-| Method | Status | Default Message |
-| --- | --- | --- |
-| `HttpException.badRequest()` | 400 | Bad Request |
-| `HttpException.unauthorized()` | 401 | Unauthorized |
-| `HttpException.forbidden()` | 403 | Forbidden |
-| `HttpException.notFound()` | 404 | Not Found |
-| `HttpException.conflict()` | 409 | Conflict |
-| `HttpException.unprocessable()` | 422 | Unprocessable Entity |
-| `HttpException.tooManyRequests()` | 429 | Too Many Requests |
-| `HttpException.internal()` | 500 | Internal Server Error |
+| Method                            | Status | Default Message       |
+| --------------------------------- | ------ | --------------------- |
+| `HttpException.badRequest()`      | 400    | Bad Request           |
+| `HttpException.unauthorized()`    | 401    | Unauthorized          |
+| `HttpException.forbidden()`       | 403    | Forbidden             |
+| `HttpException.notFound()`        | 404    | Not Found             |
+| `HttpException.conflict()`        | 409    | Conflict              |
+| `HttpException.unprocessable()`   | 422    | Unprocessable Entity  |
+| `HttpException.tooManyRequests()` | 429    | Too Many Requests     |
+| `HttpException.internal()`        | 500    | Internal Server Error |
 
 Each accepts an optional custom message. `unprocessable` also accepts a `ValidationError[]` array as a second argument:
 

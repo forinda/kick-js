@@ -15,20 +15,20 @@ pnpm add mysql2          # MySQL
 
 ## Exports
 
-| Export | Description |
-|--------|-------------|
-| `DrizzleAdapter` | AppAdapter that registers the Drizzle db in DI and manages lifecycle |
+| Export                | Description                                                               |
+| --------------------- | ------------------------------------------------------------------------- |
+| `DrizzleAdapter`      | AppAdapter that registers the Drizzle db in DI and manages lifecycle      |
 | `DrizzleQueryAdapter` | Translates ParsedQuery into Drizzle-compatible where/orderBy/limit/offset |
-| `DRIZZLE_DB` | Symbol token for DI injection |
+| `DRIZZLE_DB`          | Symbol token for DI injection                                             |
 
 ## Types
 
-| Type | Description |
-|------|-------------|
-| `DrizzleAdapterOptions` | Constructor options for `DrizzleAdapter` |
-| `DrizzleQueryConfig` | Config for `DrizzleQueryAdapter.build()` (table, searchColumns) |
-| `DrizzleQueryResult` | Output shape with `where`, `orderBy`, `limit`, `offset` |
-| `DrizzleOps` | Interface for drizzle-orm operator functions passed to the query adapter |
+| Type                    | Description                                                              |
+| ----------------------- | ------------------------------------------------------------------------ |
+| `DrizzleAdapterOptions` | Constructor options for `DrizzleAdapter`                                 |
+| `DrizzleQueryConfig`    | Config for `DrizzleQueryAdapter.build()` (table, searchColumns)          |
+| `DrizzleQueryResult`    | Output shape with `where`, `orderBy`, `limit`, `offset`                  |
+| `DrizzleOps`            | Interface for drizzle-orm operator functions passed to the query adapter |
 
 ## DrizzleAdapter
 
@@ -93,7 +93,18 @@ import { eq, ne, gt, gte, lt, lte, ilike, inArray, and, or, asc, desc } from 'dr
 import { DrizzleQueryAdapter } from '@forinda/kickjs-drizzle'
 
 const queryAdapter = new DrizzleQueryAdapter({
-  eq, ne, gt, gte, lt, lte, ilike, inArray, and, or, asc, desc,
+  eq,
+  ne,
+  gt,
+  gte,
+  lt,
+  lte,
+  ilike,
+  inArray,
+  and,
+  or,
+  asc,
+  desc,
 })
 ```
 
@@ -124,19 +135,19 @@ async list(ctx: RequestContext) {
 
 ### Filter operator mapping
 
-| KickJS Operator | Drizzle Function | Example Query |
-|-----------------|-----------------|---------------|
-| `eq` | `eq()` | `?filter=role:eq:admin` |
-| `neq` | `ne()` | `?filter=status:neq:deleted` |
-| `gt` | `gt()` | `?filter=age:gt:18` |
-| `gte` | `gte()` | `?filter=price:gte:100` |
-| `lt` | `lt()` | `?filter=stock:lt:10` |
-| `lte` | `lte()` | `?filter=rating:lte:3` |
-| `contains` | `ilike('%val%')` | `?filter=name:contains:john` |
-| `starts` | `ilike('val%')` | `?filter=email:starts:admin` |
-| `ends` | `ilike('%val')` | `?filter=domain:ends:.com` |
-| `in` | `inArray()` | `?filter=status:in:active,pending` |
-| `between` | `gte() AND lte()` | `?filter=price:between:10,50` |
+| KickJS Operator | Drizzle Function  | Example Query                      |
+| --------------- | ----------------- | ---------------------------------- |
+| `eq`            | `eq()`            | `?filter=role:eq:admin`            |
+| `neq`           | `ne()`            | `?filter=status:neq:deleted`       |
+| `gt`            | `gt()`            | `?filter=age:gt:18`                |
+| `gte`           | `gte()`           | `?filter=price:gte:100`            |
+| `lt`            | `lt()`            | `?filter=stock:lt:10`              |
+| `lte`           | `lte()`           | `?filter=rating:lte:3`             |
+| `contains`      | `ilike('%val%')`  | `?filter=name:contains:john`       |
+| `starts`        | `ilike('val%')`   | `?filter=email:starts:admin`       |
+| `ends`          | `ilike('%val')`   | `?filter=domain:ends:.com`         |
+| `in`            | `inArray()`       | `?filter=status:in:active,pending` |
+| `between`       | `gte() AND lte()` | `?filter=price:between:10,50`      |
 
 ## Related
 

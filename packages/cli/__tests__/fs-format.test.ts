@@ -1,24 +1,27 @@
 /**
  * writeFileSafe format-on-write — verifies generated TS files come out
- * prettier-formatted by default, and that the format step is a polite
- * polish (no failure when prettier is missing or source is unparseable).
+ * oxfmt-formatted by default, and that the format step is a polite
+ * polish (no failure when oxfmt is missing or source is unparseable).
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import {
-  clearFormatCache,
-  setDryRun,
-  setFormatOnWrite,
-  writeFileSafe,
-} from '../src/utils/fs'
+import { clearFormatCache, setDryRun, setFormatOnWrite, writeFileSafe } from '../src/utils/fs'
 
 let cwd: string
 
 beforeEach(() => {
   cwd = mkdtempSync(join(tmpdir(), 'kick-cli-fs-format-'))
+  // Drop a minimal `.oxfmtrc.json` so `loadOxfmtConfig` finds something
+  // when walking up from the test file. Without it the format-on-write
+  // step short-circuits (matching the "no project config → leave raw"
+  // behaviour generators rely on for adopters who don't run oxfmt).
+  writeFileSync(
+    join(cwd, '.oxfmtrc.json'),
+    JSON.stringify({ semi: false, singleQuote: true, printWidth: 100 }),
+  )
   clearFormatCache()
   setFormatOnWrite(true)
   setDryRun(false)
@@ -31,18 +34,18 @@ afterEach(() => {
 describe('writeFileSafe + format-on-write', () => {
   it('writes the file unconditionally', async () => {
     const file = join(cwd, 'sample.ts')
-    await writeFileSafe(file, "export const x=1\n")
+    await writeFileSafe(file, 'export const x=1\n')
     expect(readFileSync(file, 'utf-8')).toContain('export const x')
   })
 
-  it('formats .ts output via prettier (resolved from cwd)', async () => {
+  it('formats .ts output via oxfmt (resolved from cwd)', async () => {
     const file = join(cwd, 'unformatted.ts')
-    // Prettier defaults: no semicolons in this monorepo's .prettierrc; we
-    // assert against a single-quote rewrite (default prettier config gives
-    // double quotes, so we check the structural change instead).
-    await writeFileSafe(file, "export const x   =1\n")
+    // oxfmt is Prettier-compatible and reads the workspace
+    // `.oxfmtrc.json`; we assert the structural change rather than
+    // pinning the exact byte output.
+    await writeFileSafe(file, 'export const x   =1\n')
     const out = readFileSync(file, 'utf-8')
-    // Triple-spaced assignment must collapse — that's prettier's job.
+    // Triple-spaced assignment must collapse — that's the formatter's job.
     expect(out).not.toContain('   =')
   })
 

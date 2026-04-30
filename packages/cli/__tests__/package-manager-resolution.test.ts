@@ -30,10 +30,7 @@ describe('resolvePackageManager', () => {
   })
 
   it('honors packageManager from kick.config.json', async () => {
-    writeFileSync(
-      join(fixture, 'kick.config.json'),
-      JSON.stringify({ packageManager: 'pnpm' }),
-    )
+    writeFileSync(join(fixture, 'kick.config.json'), JSON.stringify({ packageManager: 'pnpm' }))
     writeFileSync(join(fixture, 'yarn.lock'), '')
     expect(await resolvePackageManager(undefined)).toBe('pnpm')
   })
@@ -75,10 +72,7 @@ describe('resolvePackageManager', () => {
   })
 
   it('config beats package.json packageManager', async () => {
-    writeFileSync(
-      join(fixture, 'kick.config.json'),
-      JSON.stringify({ packageManager: 'pnpm' }),
-    )
+    writeFileSync(join(fixture, 'kick.config.json'), JSON.stringify({ packageManager: 'pnpm' }))
     writeFileSync(
       join(fixture, 'package.json'),
       JSON.stringify({ name: 't', packageManager: 'yarn@4.0.0' }),
@@ -87,10 +81,7 @@ describe('resolvePackageManager', () => {
   })
 
   it('--pm flag beats kick.config', async () => {
-    writeFileSync(
-      join(fixture, 'kick.config.json'),
-      JSON.stringify({ packageManager: 'pnpm' }),
-    )
+    writeFileSync(join(fixture, 'kick.config.json'), JSON.stringify({ packageManager: 'pnpm' }))
     expect(await resolvePackageManager('yarn')).toBe('yarn')
   })
 
@@ -116,19 +107,13 @@ describe('resolvePackageManager', () => {
     writeFileSync(join(fixture, 'pnpm-lock.yaml'), '')
     const sub = join(fixture, 'apps', 'sub')
     mkdirSync(sub, { recursive: true })
-    writeFileSync(
-      join(sub, 'package.json'),
-      JSON.stringify({ name: 'sub' }),
-    )
+    writeFileSync(join(sub, 'package.json'), JSON.stringify({ name: 'sub' }))
     process.chdir(sub)
     expect(await resolvePackageManager(undefined)).toBe('pnpm')
   })
 
   it('reports the resolution source via resolvePackageManagerWithSource', async () => {
-    writeFileSync(
-      join(fixture, 'kick.config.json'),
-      JSON.stringify({ packageManager: 'pnpm' }),
-    )
+    writeFileSync(join(fixture, 'kick.config.json'), JSON.stringify({ packageManager: 'pnpm' }))
     expect(await resolvePackageManagerWithSource(undefined)).toEqual({
       pm: 'pnpm',
       source: 'config',

@@ -41,19 +41,19 @@ GET /tasks?filter=status:eq:active&filter=priority:gte:3
 
 Supported operators:
 
-| Operator | Meaning |
-| --- | --- |
-| `eq` | Equal |
-| `neq` | Not equal |
-| `gt` | Greater than |
-| `gte` | Greater than or equal |
-| `lt` | Less than |
-| `lte` | Less than or equal |
-| `between` | Between two values (value format is adapter-specific) |
-| `in` | In a set of values |
-| `contains` | Contains substring |
-| `starts` | Starts with |
-| `ends` | Ends with |
+| Operator   | Meaning                                               |
+| ---------- | ----------------------------------------------------- |
+| `eq`       | Equal                                                 |
+| `neq`      | Not equal                                             |
+| `gt`       | Greater than                                          |
+| `gte`      | Greater than or equal                                 |
+| `lt`       | Less than                                             |
+| `lte`      | Less than or equal                                    |
+| `between`  | Between two values (value format is adapter-specific) |
+| `in`       | In a set of values                                    |
+| `contains` | Contains substring                                    |
+| `starts`   | Starts with                                           |
+| `ends`     | Ends with                                             |
 
 Values may contain colons (useful for timestamps like `2025-01-01T00:00:00`), because only the first two colons are used as delimiters.
 
@@ -68,9 +68,9 @@ GET /tasks?sort=createdAt:desc&sort=title:asc
 ### Pagination
 
 | Parameter | Default | Max |
-| --- | --- | --- |
-| `page` | 1 | -- |
-| `limit` | 20 | 100 |
+| --------- | ------- | --- |
+| `page`    | 1       | --  |
+| `limit`   | 20      | 100 |
 
 The parser computes `offset` automatically: `(page - 1) * limit`.
 
@@ -150,8 +150,8 @@ type QueryFieldConfig = StringQueryFieldConfig | ColumnQueryFieldConfig
 
 ```ts
 interface ParsedQuery {
-  filters: FilterItem[]   // { field, operator, value }
-  sort: SortItem[]        // { field, direction }
+  filters: FilterItem[] // { field, operator, value }
+  sort: SortItem[] // { field, direction }
   pagination: PaginationParams // { page, limit, offset }
   search: string
 }

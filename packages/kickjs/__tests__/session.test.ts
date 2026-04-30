@@ -85,9 +85,7 @@ describe('session() middleware cookie handling', () => {
 
   it('rejects tampered session cookies and falls through to a fresh session', async () => {
     const app = buildApp({ withCookieParser: false })
-    const res = await request(app)
-      .get('/me')
-      .set('Cookie', 'kick.sid=s:bogus.signature')
+    const res = await request(app).get('/me').set('Cookie', 'kick.sid=s:bogus.signature')
     expect(res.status).toBe(401)
   })
 })

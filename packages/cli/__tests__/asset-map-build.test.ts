@@ -101,8 +101,8 @@ describe('buildAssets — happy path', () => {
       },
     }
     const result = await buildAssets(config, { cwd, silent: true })
-    expect(result!.entries.map((e) => e.namespace).sort()).toEqual(['mails', 'reports'])
-    expect(Object.keys(result!.manifest.entries).sort()).toEqual([
+    expect(result!.entries.map((e) => e.namespace).toSorted()).toEqual(['mails', 'reports'])
+    expect(Object.keys(result!.manifest.entries).toSorted()).toEqual([
       'mails/welcome',
       'reports/monthly',
     ])

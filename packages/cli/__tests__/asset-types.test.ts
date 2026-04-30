@@ -46,7 +46,7 @@ describe('discoverAssets', () => {
     }
     const out = discoverAssets(map, cwd)
     expect(out.count).toBe(3)
-    expect(out.entries.map((e) => `${e.namespace}/${e.key}`).sort()).toEqual([
+    expect(out.entries.map((e) => `${e.namespace}/${e.key}`).toSorted()).toEqual([
       'mails/orders/confirmation',
       'mails/password-reset',
       'mails/welcome',
@@ -62,7 +62,7 @@ describe('discoverAssets', () => {
       x: { src: 'src/x', glob: '**/*.{ejs,html}' },
     }
     const out = discoverAssets(map, cwd)
-    expect(out.entries.map((e) => e.key).sort()).toEqual(['another', 'keep'])
+    expect(out.entries.map((e) => e.key).toSorted()).toEqual(['another', 'keep'])
     expect(out.count).toBe(2)
   })
 
@@ -75,7 +75,7 @@ describe('discoverAssets', () => {
     // Auto-mode keeps extensions on collision groups → both files
     // get distinct keys; nothing is dropped.
     expect(out.count).toBe(2)
-    expect(out.entries.map((e) => e.key).sort()).toEqual(['index.html', 'index.js'])
+    expect(out.entries.map((e) => e.key).toSorted()).toEqual(['index.html', 'index.js'])
   })
 
   it("keys: 'strip' opts back into legacy single-entry-on-collision behaviour", () => {
@@ -102,7 +102,7 @@ describe('discoverAssets', () => {
     }
     const out = discoverAssets(map, cwd)
     expect(out.count).toBe(3)
-    expect(out.entries.map((e) => e.key).sort()).toEqual([
+    expect(out.entries.map((e) => e.key).toSorted()).toEqual([
       'about.html',
       'index.html',
       'index.pug',

@@ -5,8 +5,8 @@ KickJS integrates with external services through **adapters** and **middleware**
 ## Monitoring & Error Tracking
 
 - [Sentry](./sentry.md) — Error tracking, performance monitoring, distributed tracing
-- Datadog *(coming soon)*
-- New Relic *(coming soon)*
+- Datadog _(coming soon)_
+- New Relic _(coming soon)_
 
 ## Databases
 
@@ -17,7 +17,7 @@ KickJS integrates with external services through **adapters** and **middleware**
 ## Caching
 
 - Redis — via `ioredis` (see [task-drizzle-api example](https://github.com/forinda/kick-js/tree/main/examples/task-drizzle-api))
-- Upstash *(coming soon)*
+- Upstash _(coming soon)_
 
 ## Email
 
@@ -61,9 +61,7 @@ import { loadEnv } from '@forinda/kickjs-config'
 
 const env = loadEnv(envSchema)
 
-const adapters = [
-  SwaggerAdapter({ info: { title: 'My API', version: '1.0.0' } }),
-]
+const adapters = [SwaggerAdapter({ info: { title: 'My API', version: '1.0.0' } })]
 
 // Conditionally add Sentry when DSN is configured
 if (env.SENTRY_DSN) {

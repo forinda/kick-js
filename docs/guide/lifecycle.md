@@ -101,15 +101,15 @@ beforeStart(ctx)
                              afterStart(ctx)              ← server listening
 ```
 
-| Hook | When | Example use |
-|------|------|-------------|
-| `beforeMount(ctx)` | Before any middleware is registered | Mount routes that bypass the middleware stack (health, docs UI, OAuth callbacks) |
-| `middleware()` | Returns middleware tagged with a phase | Auth checks, header parsing, CSRF, rate-limit enforcement |
-| `contributors()` | Per-route, at mount time | Ship typed [Context Contributors](./context-decorators.md) at the `'adapter'` precedence level |
-| `onRouteMount(ctrl, path)` | After each module's routes are mounted | OpenAPI spec generation, dependency-graph collection, route inventory |
-| `beforeStart(ctx)` | After all routes mounted, before server listens | Log config summary, validate setup, late-stage DI |
-| `afterStart(ctx)` | After the HTTP server is listening | Attach upgrade handlers (Socket.IO, gRPC), warm caches |
-| `shutdown()` | On SIGTERM/SIGINT | Close DB pools, flush logs, disconnect WS — runs concurrently via `Promise.allSettled` |
+| Hook                       | When                                            | Example use                                                                                    |
+| -------------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `beforeMount(ctx)`         | Before any middleware is registered             | Mount routes that bypass the middleware stack (health, docs UI, OAuth callbacks)               |
+| `middleware()`             | Returns middleware tagged with a phase          | Auth checks, header parsing, CSRF, rate-limit enforcement                                      |
+| `contributors()`           | Per-route, at mount time                        | Ship typed [Context Contributors](./context-decorators.md) at the `'adapter'` precedence level |
+| `onRouteMount(ctrl, path)` | After each module's routes are mounted          | OpenAPI spec generation, dependency-graph collection, route inventory                          |
+| `beforeStart(ctx)`         | After all routes mounted, before server listens | Log config summary, validate setup, late-stage DI                                              |
+| `afterStart(ctx)`          | After the HTTP server is listening              | Attach upgrade handlers (Socket.IO, gRPC), warm caches                                         |
+| `shutdown()`               | On SIGTERM/SIGINT                               | Close DB pools, flush logs, disconnect WS — runs concurrently via `Promise.allSettled`         |
 
 See [Adapters](./adapters.md) for the full `defineAdapter()` reference.
 
@@ -117,12 +117,12 @@ See [Adapters](./adapters.md) for the full `defineAdapter()` reference.
 
 Adapter middleware runs at specific phases in the pipeline:
 
-| Phase | Order | Typical adapter |
-|-------|-------|----------------|
+| Phase          | Order                  | Typical adapter                                                  |
+| -------------- | ---------------------- | ---------------------------------------------------------------- |
 | `beforeGlobal` | Before user middleware | Cross-cutting scope adapters (tracing, locale, tenant/workspace) |
-| `afterGlobal` | After user middleware | — |
-| `beforeRoutes` | Before Express router | AuthAdapter, rate limiters, request validators |
-| `afterRoutes` | After Express router | SwaggerAdapter (serve OpenAPI spec), tail-end logging |
+| `afterGlobal`  | After user middleware  | —                                                                |
+| `beforeRoutes` | Before Express router  | AuthAdapter, rate limiters, request validators                   |
+| `afterRoutes`  | After Express router   | SwaggerAdapter (serve OpenAPI spec), tail-end logging            |
 
 Phases execute in order. Within a phase, adapters run in the order they appear in the `adapters` array — order matters when one adapter writes a value the next one reads. For most cases prefer a Context Contributor with `dependsOn` over relying on adapter ordering, since `dependsOn` validates at boot.
 

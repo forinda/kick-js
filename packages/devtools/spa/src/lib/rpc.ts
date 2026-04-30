@@ -234,13 +234,13 @@ export function subscribe<T>(
 ): () => void {
   const url = withToken(`${getBasePath()}${path}`)
   const es = new EventSource(url)
-  es.onmessage = (event) => {
+  es.addEventListener('message', (event) => {
     try {
       onMessage(JSON.parse(event.data) as T)
     } catch (err) {
       console.warn('SSE parse failed', err)
     }
-  }
-  if (onError) es.onerror = onError
+  })
+  if (onError) es.addEventListener('error', onError)
   return () => es.close()
 }

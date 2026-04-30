@@ -14,7 +14,6 @@ import {
   PostgresIntrospector,
   PostgresQueryCompiler,
   ReferenceNode,
-  SelectAllNode,
   SelectionNode,
   TableNode,
   type Dialect,
@@ -78,9 +77,7 @@ describe('ResultExtensionPlugin — transformQuery (needs-injection)', () => {
     const node = {
       kind: 'SelectQueryNode',
       from: { kind: 'FromNode', froms: [TableNode.create('posts')] },
-      selections: [
-        SelectionNode.create(ReferenceNode.create(ColumnNode.create('title'))),
-      ],
+      selections: [SelectionNode.create(ReferenceNode.create(ColumnNode.create('title')))],
     } as never
 
     const out = plugin.transformQuery({ node, queryId: fakeQueryId('q1') })
@@ -131,9 +128,7 @@ describe('ResultExtensionPlugin — transformQuery (needs-injection)', () => {
     const ids = sels.filter((s) => {
       const inner = s.selection
       return (
-        ReferenceNode.is(inner) &&
-        ColumnNode.is(inner.column) &&
-        inner.column.column.name === 'id'
+        ReferenceNode.is(inner) && ColumnNode.is(inner.column) && inner.column.column.name === 'id'
       )
     })
     expect(ids).toHaveLength(1) // one, not two
@@ -173,9 +168,7 @@ describe('ResultExtensionPlugin — transformQuery (needs-injection)', () => {
       posts: { url: { needs: { id: true }, compute: () => '' } },
     })
     const insertNode = { kind: 'InsertQueryNode' } as never
-    expect(plugin.transformQuery({ node: insertNode, queryId: fakeQueryId('q6') })).toBe(
-      insertNode,
-    )
+    expect(plugin.transformQuery({ node: insertNode, queryId: fakeQueryId('q6') })).toBe(insertNode)
   })
 })
 

@@ -85,15 +85,24 @@ function Builder(target: any): void
 ## Types
 
 ```typescript
-enum Scope { SINGLETON = 'singleton', TRANSIENT = 'transient' }
+enum Scope {
+  SINGLETON = 'singleton',
+  TRANSIENT = 'transient',
+}
 
 type Constructor<T = any> = new (...args: any[]) => T
 
-interface ServiceOptions { scope?: Scope }
-interface BeanOptions { scope?: Scope }
+interface ServiceOptions {
+  scope?: Scope
+}
+interface BeanOptions {
+  scope?: Scope
+}
 
 interface RouteDefinition {
-  method: string; path: string; handlerName: string
+  method: string
+  path: string
+  handlerName: string
   validation?: { body?: any; query?: any; params?: any }
 }
 
@@ -101,8 +110,10 @@ type MiddlewareHandler = (ctx: any, next: () => void) => void | Promise<void>
 
 interface FileUploadConfig {
   mode: 'single' | 'array' | 'none'
-  fieldName?: string; maxCount?: number
-  maxSize?: number; allowedMimeTypes?: string[]
+  fieldName?: string
+  maxCount?: number
+  maxSize?: number
+  allowedMimeTypes?: string[]
 }
 
 interface TransactionManager<TTx = unknown> {
@@ -115,7 +126,9 @@ type BuilderOf<T> = {
   [K in keyof T as T[K] extends Function ? never : K]-?: (value: T[K]) => BuilderOf<T>
 } & { build(): T }
 
-interface Buildable<T> { builder(): BuilderOf<T> }
+interface Buildable<T> {
+  builder(): BuilderOf<T>
+}
 ```
 
 ## AppModule
@@ -131,7 +144,10 @@ interface AppModule {
 type AppModuleClass = new () => AppModule
 
 interface ModuleRoutes {
-  path: string; router: any; version?: number; controller?: any
+  path: string
+  router: any
+  version?: number
+  controller?: any
 }
 ```
 
@@ -141,10 +157,10 @@ Lifecycle hooks for plugging in cross-cutting concerns (database, docs, rate lim
 
 ```typescript
 interface AdapterContext {
-  app: any              // Express application
-  container: Container  // DI container
-  server?: any          // http.Server (only available in afterStart)
-  env: string           // NODE_ENV (default: 'development')
+  app: any // Express application
+  container: Container // DI container
+  server?: any // http.Server (only available in afterStart)
+  env: string // NODE_ENV (default: 'development')
   isProduction: boolean // true when NODE_ENV === 'production'
 }
 
@@ -161,7 +177,9 @@ interface AppAdapter {
 type MiddlewarePhase = 'beforeGlobal' | 'afterGlobal' | 'beforeRoutes' | 'afterRoutes'
 
 interface AdapterMiddleware {
-  handler: any; phase?: MiddlewarePhase; path?: string
+  handler: any
+  phase?: MiddlewarePhase
+  path?: string
 }
 ```
 
@@ -180,9 +198,9 @@ function defineContextDecorator<
 
 interface ContextDecoratorSpec<K, D, Ctx> {
   key: K
-  deps?: D                                                // typed DI map
-  dependsOn?: readonly string[]                           // topo-sorted at boot
-  optional?: boolean                                      // skip on resolve throw
+  deps?: D // typed DI map
+  dependsOn?: readonly string[] // topo-sorted at boot
+  optional?: boolean // skip on resolve throw
   onError?: (err, ctx) => MaybePromise<Value | undefined> // async-permitted
   resolve: (ctx, deps) => MaybePromise<Value>
 }
@@ -216,9 +234,19 @@ Precedence (high → low): `method > class > module > adapter > global`. Plugin 
 All three are startup-time errors raised by `buildPipeline()` / route mount — never per request.
 
 ```typescript
-class MissingContributorError extends Error { key; dependent; route? }
-class ContributorCycleError    extends Error { cycle: readonly string[]; route? }
-class DuplicateContributorError extends Error { key; sources: readonly string[] }
+class MissingContributorError extends Error {
+  key
+  dependent
+  route?
+}
+class ContributorCycleError extends Error {
+  cycle: readonly string[]
+  route?
+}
+class DuplicateContributorError extends Error {
+  key
+  sources: readonly string[]
+}
 ```
 
 ### ContextMeta + ExecutionContext
@@ -287,10 +315,10 @@ Logger.resetProvider(): void
 
 **Built-in providers:**
 
-| Provider | Description |
-| --- | --- |
+| Provider                       | Description                                                           |
+| ------------------------------ | --------------------------------------------------------------------- |
 | `PinoLoggerProvider` (default) | Delegates to the root pino instance with `pino-pretty` in development |
-| `ConsoleLoggerProvider` | Uses `console.*` methods. Accepts an optional prefix string |
+| `ConsoleLoggerProvider`        | Uses `console.*` methods. Accepts an optional prefix string           |
 
 ```typescript
 import { Logger, ConsoleLoggerProvider } from '@forinda/kickjs'
@@ -367,9 +395,7 @@ const breaker = new CircuitBreaker('payment-api', {
 })
 
 try {
-  const result = await breaker.execute(() =>
-    fetch('https://payment.example.com/charge'),
-  )
+  const result = await breaker.execute(() => fetch('https://payment.example.com/charge'))
 } catch (err) {
   if (err instanceof CircuitOpenError) {
     // Fail fast — downstream service is unhealthy
@@ -494,5 +520,9 @@ class HttpException extends Error {
   static internal(message?: string): HttpException
 }
 
-interface ValidationError { field: string; message: string; code?: string }
+interface ValidationError {
+  field: string
+  message: string
+  code?: string
+}
 ```

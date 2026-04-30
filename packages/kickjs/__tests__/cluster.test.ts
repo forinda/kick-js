@@ -124,17 +124,21 @@ describe('Cluster module', () => {
     it('SIGTERM on primary calls cluster.disconnect()', async () => {
       vi.spyOn(cluster, 'fork').mockReturnValue({ process: { pid: 1 } } as any)
       vi.spyOn(cluster, 'on').mockImplementation(() => cluster)
-      const disconnectSpy = vi.spyOn(cluster, 'disconnect').mockImplementation((cb?: () => void) => {
-        cb?.()
-      })
+      const disconnectSpy = vi
+        .spyOn(cluster, 'disconnect')
+        .mockImplementation((cb?: () => void) => {
+          cb?.()
+        })
       const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never)
 
       // Capture signal handlers registered by setupClusterPrimary
       const signalHandlers: Record<string | symbol, Function> = {}
-      vi.spyOn(process, 'on').mockImplementation((event: string | symbol, handler: (...args: any[]) => void) => {
-        signalHandlers[event as string] = handler
-        return process
-      })
+      vi.spyOn(process, 'on').mockImplementation(
+        (event: string | symbol, handler: (...args: any[]) => void) => {
+          signalHandlers[event as string] = handler
+          return process
+        },
+      )
 
       const { setupClusterPrimary } = await import('../src/http/cluster')
 

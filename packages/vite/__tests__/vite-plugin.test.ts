@@ -329,7 +329,7 @@ export class UserService {
       const hook = hmrPlugin.handleHotUpdate
       if (typeof hook !== 'function') return undefined
 
-      let sentData: any = null
+      let _sentData: any = null
       const mockServer = {
         moduleGraph: {
           getModuleById: () => null,
@@ -337,7 +337,7 @@ export class UserService {
         },
         hot: {
           send: (data: any) => {
-            sentData = data
+            _sentData = data
           },
         },
       }

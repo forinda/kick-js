@@ -60,10 +60,7 @@ const secrets = table('secrets', {
 ### PostgreSQL enums
 
 ```ts
-export const taskStatus = pgEnum(
-  'task_status',
-  'todo', 'in_progress', 'done',
-)
+export const taskStatus = pgEnum('task_status', 'todo', 'in_progress', 'done')
 
 export const tasks = table('tasks', {
   status: taskStatus().notNull().default('todo'),
@@ -174,23 +171,28 @@ The following land in a follow-up sprint, tracked as roadmap items:
 ### From v5.0 adopter projects using kick-db
 
 - **`Register` was renamed to `KickDbRegister`.** Hand-written augmentations:
+
   ```diff
   - declare module '@forinda/kickjs-db' { interface Register { db: typeof dbClient } }
   + declare module '@forinda/kickjs-db' { interface KickDbRegister { db: typeof dbClient } }
   ```
+
   Most adopters who follow the example app delete this file entirely once `kick typegen` runs (the kick/db plugin emits the equivalent augmentation under `.kickjs/types/`).
 
 - **`createDbClient` infers DB from schema by default.** The previous `createDbClient<TSchema, DB = unknown>` collapsed to `KickDbClient<unknown>` unless adopters passed an explicit generic. Now `DB = SchemaToKysely<TSchema>` — the explicit generic is no longer needed:
+
   ```diff
   - export const dbClient = createDbClient<typeof schema, MyDb>({ schema, dialect })
   + export const dbClient = createDbClient({ schema, dialect })
   ```
 
 - **`kick.config.ts > db.schemaPath`** with a barrel folder needs the explicit `/index.ts` suffix:
+
   ```diff
   -   schemaPath: 'src/db/schema',
   +   schemaPath: 'src/db/schema/index.ts',
   ```
+
   Required because Node's ESM loader doesn't auto-resolve directory imports under `--experimental-strip-types`.
 
 - **`tsconfig.json` for projects using a barrel schema folder** needs `allowImportingTsExtensions: true` and `noEmit: true` so cross-file imports inside the schema folder can use explicit `.ts` extensions (Node's loader requires them).

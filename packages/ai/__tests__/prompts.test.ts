@@ -139,7 +139,7 @@ describe('Prompt missing-variable handling', () => {
 describe('Prompt.getPlaceholders', () => {
   it('returns every placeholder name in declaration order', () => {
     const p = createPrompt<{ first: string; last: string }>('Hi {{first}} {{last}}')
-    expect(p.getPlaceholders().sort()).toEqual(['first', 'last'])
+    expect(p.getPlaceholders().toSorted()).toEqual(['first', 'last'])
   })
 
   it('deduplicates repeated placeholders', () => {

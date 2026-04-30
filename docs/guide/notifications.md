@@ -66,26 +66,23 @@ export const NotificationsPlugin = definePlugin<NotificationsConfig>({
   name: 'NotificationsPlugin',
   build: (config) => ({
     register(container: Container) {
-      container.registerFactory(
-        NOTIFIER,
-        () => {
-          const mailer = container.resolve(MailerService)
-          const notifier: Notifier = {
-            async send(n) {
-              switch (n.channel) {
-                case 'slack':
-                  if (!config.slackWebhook) throw new Error('Slack webhook not configured')
-                  return sendSlack(config.slackWebhook, n)
-                case 'email':
-                  return sendEmail(mailer, n)
-                default:
-                  throw new Error(`Channel not implemented: ${n.channel}`)
-              }
-            },
-          }
-          return notifier
-        },
-      )
+      container.registerFactory(NOTIFIER, () => {
+        const mailer = container.resolve(MailerService)
+        const notifier: Notifier = {
+          async send(n) {
+            switch (n.channel) {
+              case 'slack':
+                if (!config.slackWebhook) throw new Error('Slack webhook not configured')
+                return sendSlack(config.slackWebhook, n)
+              case 'email':
+                return sendEmail(mailer, n)
+              default:
+                throw new Error(`Channel not implemented: ${n.channel}`)
+            }
+          },
+        }
+        return notifier
+      })
     },
   }),
 })

@@ -148,9 +148,9 @@ describe('InMemoryVectorStore — upsert and count', () => {
   })
 
   it('rejects documents without an id', async () => {
-    await expect(
-      store.upsert({ id: '', content: 'x', vector: [1] }),
-    ).rejects.toThrow(/id is required/)
+    await expect(store.upsert({ id: '', content: 'x', vector: [1] })).rejects.toThrow(
+      /id is required/,
+    )
   })
 
   it('rejects documents with a non-array vector', async () => {
@@ -238,7 +238,7 @@ describe('InMemoryVectorStore — metadata filter', () => {
       topK: 10,
       filter: { category: 'fruit' },
     })
-    expect(hits.map((h) => h.id).sort()).toEqual(['a', 'b'])
+    expect(hits.map((h) => h.id).toSorted()).toEqual(['a', 'b'])
   })
 
   it('filters by equality on multiple fields (AND semantics)', async () => {
@@ -356,9 +356,7 @@ describe('RagService.index', () => {
   })
 
   it('preserves metadata through the embedding pipeline', async () => {
-    await rag.index([
-      { id: '1', content: 'hello', metadata: { author: 'alice' } },
-    ])
+    await rag.index([{ id: '1', content: 'hello', metadata: { author: 'alice' } }])
 
     const hits = await store.query({ vector: embedString('hello'), topK: 1 })
     expect(hits[0].metadata).toEqual({ author: 'alice' })

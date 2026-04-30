@@ -19,11 +19,11 @@ export const app = await bootstrap({
 
 ## Settings
 
-| Setting | Default | Description |
-|---|---|---|
-| `kickjs.serverUrl` | `http://localhost:3000` | Where the app is running |
-| `kickjs.debugPath` | `/_debug` | DevTools mount path |
-| `kickjs.autoRefresh` | `true` | Poll every 30s |
+| Setting              | Default                 | Description              |
+| -------------------- | ----------------------- | ------------------------ |
+| `kickjs.serverUrl`   | `http://localhost:3000` | Where the app is running |
+| `kickjs.debugPath`   | `/_debug`               | DevTools mount path      |
+| `kickjs.autoRefresh` | `true`                  | Poll every 30s           |
 
 Commands: `KickJS: Inspect Running App`, `Show Routes`, `Show DI Container`, `Show Metrics`.
 

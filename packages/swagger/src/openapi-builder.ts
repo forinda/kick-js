@@ -290,7 +290,7 @@ function buildOpenAPISpecUncached(options: SwaggerOptions = {}): any {
       if (!s?.url || typeof s.url !== 'string') return false
       if (s.url.startsWith('/')) return true
       try {
-        new URL(s.url)
+        void new URL(s.url)
         return true
       } catch {
         return false

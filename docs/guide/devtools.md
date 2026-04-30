@@ -28,7 +28,9 @@ The runtime `enabled` flag above keeps the DevTools adapter inert in prod, but t
 /// <reference types="@forinda/kickjs-vite/globals" />
 import { bootstrap } from '@forinda/kickjs'
 
-const adapters = [/* prod adapters… */]
+const adapters = [
+  /* prod adapters… */
+]
 
 if (__KICKJS_DEVTOOLS__) {
   const { DevToolsAdapter } = await import('@forinda/kickjs-devtools')
@@ -271,12 +273,12 @@ When you visit `/_debug` in a browser, the DevTools adapter serves a single-page
 
 A pill in the global header shows what the dashboard is doing:
 
-| State | Meaning |
-|---|---|
-| **Live** (green pulse) | Subscribed to `/stream` SSE — metrics + container changes push in real time |
-| **Polling** (amber pulse) | SSE dropped, falling back to a 5-second `/health` + `/metrics` poll |
-| **Connecting…** (grey) | First request hasn't returned yet |
-| **Disconnected** (red) | Teardown — open the dashboard again to reconnect |
+| State                     | Meaning                                                                     |
+| ------------------------- | --------------------------------------------------------------------------- |
+| **Live** (green pulse)    | Subscribed to `/stream` SSE — metrics + container changes push in real time |
+| **Polling** (amber pulse) | SSE dropped, falling back to a 5-second `/health` + `/metrics` poll         |
+| **Connecting…** (grey)    | First request hasn't returned yet                                           |
+| **Disconnected** (red)    | Teardown — open the dashboard again to reconnect                            |
 
 The trailing `Updated HH:MM:SS` timestamp is the last successful refresh, so you can tell at a glance the page isn't frozen.
 
@@ -284,17 +286,17 @@ The trailing `Updated HH:MM:SS` timestamp is the last successful refresh, so you
 
 Each tab subscribes to a slice of the shared store; nothing owns its own polling loop.
 
-| Tab | What it shows |
-|---|---|
-| **Overview** | Three-card landing — Health (status / uptime / error rate / adapters), Metrics (request counts / 5xx / 4xx / started-at), WebSocket (active / total / msgs in+out / namespaces). Default tab on first visit. |
-| **Runtime** | Heap / RSS / event-loop p99 / GC stats with sparklines, streamed via `/runtime/stream`. |
-| **Memory** | Leak-risk panel (heap-growth slope + GC reclaim ratio + heap utilization), heap-snapshot capture button, force-GC button. |
-| **Topology** | Plugin / adapter / contributor / DI-token introspection from `/topology`. |
-| **Routes** | Method / path / controller / handler / middleware registry. Search input + method filter pills (ALL / GET / POST / PUT / DELETE / PATCH) + paginated (20/page). |
-| **Metrics** | Per-route latency table (avg / p50 / p95 / p99 / max). |
+| Tab           | What it shows                                                                                                                                                                                                     |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Overview**  | Three-card landing — Health (status / uptime / error rate / adapters), Metrics (request counts / 5xx / 4xx / started-at), WebSocket (active / total / msgs in+out / namespaces). Default tab on first visit.      |
+| **Runtime**   | Heap / RSS / event-loop p99 / GC stats with sparklines, streamed via `/runtime/stream`.                                                                                                                           |
+| **Memory**    | Leak-risk panel (heap-growth slope + GC reclaim ratio + heap utilization), heap-snapshot capture button, force-GC button.                                                                                         |
+| **Topology**  | Plugin / adapter / contributor / DI-token introspection from `/topology`.                                                                                                                                         |
+| **Routes**    | Method / path / controller / handler / middleware registry. Search input + method filter pills (ALL / GET / POST / PUT / DELETE / PATCH) + paginated (20/page).                                                   |
+| **Metrics**   | Per-route latency table (avg / p50 / p95 / p99 / max).                                                                                                                                                            |
 | **Container** | DI registry — search by token + filter pills (kind: controller / service / repository / other; scope: singleton / transient / request). Expand-row reveals dependency chips, resolve stats, PostConstruct status. |
-| **Queues** | Per-queue cards (waiting / active / completed / failed / delayed / paused) when `@forinda/kickjs-queue` is mounted. |
-| **Graph** | DI dependency graph kind-grouped (controllers / services / repositories / other) with outgoing-edge arrows. Click any node OR edge target → opens detail modal. |
+| **Queues**    | Per-queue cards (waiting / active / completed / failed / delayed / paused) when `@forinda/kickjs-queue` is mounted.                                                                                               |
+| **Graph**     | DI dependency graph kind-grouped (controllers / services / repositories / other) with outgoing-edge arrows. Click any node OR edge target → opens detail modal.                                                   |
 
 The tab nav scrolls horizontally when there are too many tabs to fit; switching to a tab via localStorage restore scrolls it into view automatically.
 

@@ -86,6 +86,7 @@ The diff and emit modules are split by concern, not by change-type. Each test fi
 
 **Story:** Foundation for all of M0.
 **Files:**
+
 - Create: `packages/db/package.json`
 - Create: `packages/db/tsconfig.json`
 - Create: `packages/db/tsconfig.test.json`
@@ -105,8 +106,15 @@ The diff and emit modules are split by concern, not by change-type. Each test fi
   "version": "5.0.2",
   "description": "KickJS-native ORM — code-first schema, reversible migrations, multi-dialect SQL builder",
   "keywords": [
-    "kickjs", "orm", "typescript", "postgres", "sqlite", "mysql",
-    "migrations", "query-builder", "@forinda/kickjs"
+    "kickjs",
+    "orm",
+    "typescript",
+    "postgres",
+    "sqlite",
+    "mysql",
+    "migrations",
+    "query-builder",
+    "@forinda/kickjs"
   ],
   "type": "module",
   "main": "dist/index.mjs",
@@ -208,10 +216,7 @@ export default defineConfig({
   format: ['esm'],
   platform: 'node',
   dts: true,
-  external: [
-    '@forinda/kickjs',
-    /^node:/,
-  ],
+  external: ['@forinda/kickjs', /^node:/],
   banner: { js: createBanner(pkg.name, pkg.version) },
 })
 ```
@@ -293,6 +298,7 @@ touch packages/db/__tests__/unit/.gitkeep packages/db/__tests__/integration/.git
 - [ ] **Step 1.10: Install workspace dependencies**
 
 Run from repo root:
+
 ```bash
 pnpm install
 ```
@@ -308,6 +314,7 @@ pnpm --filter @forinda/kickjs-db typecheck
 ```
 
 Expected:
+
 - `build` succeeds; `dist/index.mjs` and `dist/index.d.mts` exist.
 - `test` exits 0 with "no test files found" (passWithNoTests).
 - `typecheck` exits 0.
@@ -333,6 +340,7 @@ EOF
 
 **Story:** [`M0-S1`](./stories.md) — typed JSON-serializable IR shared by extract, diff, emit.
 **Files:**
+
 - Create: `packages/db/src/snapshot/types.ts`
 - Create: `packages/db/__tests__/unit/snapshot-roundtrip.test.ts`
 - Modify: `packages/db/src/index.ts`
@@ -355,11 +363,15 @@ describe('SchemaSnapshot JSON roundtrip', () => {
           name: 'users',
           columns: {
             id: { name: 'id', type: 'serial', nullable: false, default: null, primaryKey: true },
-            email: { name: 'email', type: 'varchar(255)', nullable: false, default: null, primaryKey: false },
+            email: {
+              name: 'email',
+              type: 'varchar(255)',
+              nullable: false,
+              default: null,
+              primaryKey: false,
+            },
           },
-          indexes: [
-            { name: 'users_email_unique', columns: ['email'], unique: true },
-          ],
+          indexes: [{ name: 'users_email_unique', columns: ['email'], unique: true }],
           foreignKeys: [],
           checks: [],
         },
@@ -367,7 +379,13 @@ describe('SchemaSnapshot JSON roundtrip', () => {
           name: 'posts',
           columns: {
             id: { name: 'id', type: 'serial', nullable: false, default: null, primaryKey: true },
-            authorId: { name: 'author_id', type: 'integer', nullable: false, default: null, primaryKey: false },
+            authorId: {
+              name: 'author_id',
+              type: 'integer',
+              nullable: false,
+              default: null,
+              primaryKey: false,
+            },
           },
           indexes: [],
           foreignKeys: [
@@ -496,6 +514,7 @@ EOF
 
 **Story:** [`M0-S2`](./stories.md) — first two of six column types for the spike.
 **Files:**
+
 - Create: `packages/db/src/dsl/columns/types.ts`
 - Create: `packages/db/src/dsl/columns/builders.ts`
 - Create: `packages/db/src/dsl/columns/index.ts`
@@ -670,6 +689,7 @@ EOF
 
 **Story:** [`M0-S2`](./stories.md) — remaining four spike column types.
 **Files:**
+
 - Modify: `packages/db/src/dsl/columns/builders.ts`
 - Modify: `packages/db/src/dsl/columns/index.ts`
 - Modify: `packages/db/__tests__/unit/columns.test.ts`
@@ -761,15 +781,7 @@ export function timestamp(): TimestampBuilder {
 
 ```ts
 export { ColumnBuilder, type ColumnState } from './types'
-export {
-  serial,
-  integer,
-  varchar,
-  text,
-  boolean,
-  timestamp,
-  TimestampBuilder,
-} from './builders'
+export { serial, integer, varchar, text, boolean, timestamp, TimestampBuilder } from './builders'
 ```
 
 - [ ] **Step 4.5: Run — passes**
@@ -800,6 +812,7 @@ EOF
 
 **Story:** [`M0-S2`](./stories.md) — wire columns into a Table descriptor with constraints and FKs.
 **Files:**
+
 - Create: `packages/db/src/dsl/constraints.ts`
 - Create: `packages/db/src/dsl/table.ts`
 - Modify: `packages/db/src/dsl/columns/types.ts` (add `references()` method)
@@ -815,12 +828,16 @@ import { describe, it, expect } from 'vitest'
 import { table, serial, integer, varchar, index, unique } from '@forinda/kickjs-db'
 
 describe('table() factory', () => {
-  const users = table('users', {
-    id: serial().primaryKey(),
-    email: varchar(255).notNull(),
-  }, (t) => ({
-    emailIdx: index('users_email_idx').on(t.email),
-  }))
+  const users = table(
+    'users',
+    {
+      id: serial().primaryKey(),
+      email: varchar(255).notNull(),
+    },
+    (t) => ({
+      emailIdx: index('users_email_idx').on(t.email),
+    }),
+  )
 
   it('exposes the table name', () => {
     expect(users.__name).toBe('users')
@@ -847,7 +864,9 @@ describe('FK references', () => {
   })
   const posts = table('posts', {
     id: serial().primaryKey(),
-    authorId: integer().notNull().references(() => users.id, { onDelete: 'cascade' }),
+    authorId: integer()
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
   })
 
   it('records FK on the column state', () => {
@@ -861,12 +880,16 @@ describe('FK references', () => {
 })
 
 describe('unique constraint helper', () => {
-  const t = table('posts', {
-    title: varchar(200).notNull(),
-    authorId: integer().notNull(),
-  }, (t) => ({
-    uniqSlug: unique('posts_slug_unique').on(t.title, t.authorId),
-  }))
+  const t = table(
+    'posts',
+    {
+      title: varchar(200).notNull(),
+      authorId: integer().notNull(),
+    },
+    (t) => ({
+      uniqSlug: unique('posts_slug_unique').on(t.title, t.authorId),
+    }),
+  )
 
   it('records multi-column unique', () => {
     expect(t.__indexes).toEqual([
@@ -940,7 +963,9 @@ export interface ColumnRef {
   __state: () => ReturnType<ColumnBuilder['__state']>
 }
 
-export interface TableDecl<C extends Record<string, ColumnBuilder> = Record<string, ColumnBuilder>> {
+export interface TableDecl<
+  C extends Record<string, ColumnBuilder> = Record<string, ColumnBuilder>,
+> {
   __isTable: true
   __name: string
   __columns: C
@@ -951,7 +976,9 @@ type TableRefs<C extends Record<string, ColumnBuilder>> = TableDecl<C> & {
   [K in keyof C]: ColumnRef
 }
 
-type ConstraintBuilder<C extends Record<string, ColumnBuilder>> = (refs: { [K in keyof C]: ColumnRef }) => Record<string, IndexDecl>
+type ConstraintBuilder<C extends Record<string, ColumnBuilder>> = (refs: {
+  [K in keyof C]: ColumnRef
+}) => Record<string, IndexDecl>
 
 export function table<C extends Record<string, ColumnBuilder>>(
   name: string,
@@ -1021,6 +1048,7 @@ EOF
 
 **Story:** [`M0-S2`](./stories.md) — relations declared but excluded from the snapshot per spec §4.
 **Files:**
+
 - Create: `packages/db/src/dsl/relations.ts`
 - Modify: `packages/db/src/index.ts`
 - Create: `packages/db/__tests__/unit/relations.test.ts`
@@ -1092,7 +1120,10 @@ interface RelationsDecl {
 }
 
 interface Helpers {
-  one: (target: TableDecl<Record<string, ColumnBuilder>>, opts: { fields: ColumnRef[]; references: ColumnRef[] }) => RelationOne
+  one: (
+    target: TableDecl<Record<string, ColumnBuilder>>,
+    opts: { fields: ColumnRef[]; references: ColumnRef[] },
+  ) => RelationOne
   many: (target: TableDecl<Record<string, ColumnBuilder>>) => RelationMany
 }
 
@@ -1101,7 +1132,12 @@ export function relations<T extends TableDecl<Record<string, ColumnBuilder>>>(
   builder: (h: Helpers) => Record<string, Relation>,
 ): RelationsDecl {
   const helpers: Helpers = {
-    one: (target, opts) => ({ kind: 'one', target, fields: opts.fields, references: opts.references }),
+    one: (target, opts) => ({
+      kind: 'one',
+      target,
+      fields: opts.fields,
+      references: opts.references,
+    }),
     many: (target) => ({ kind: 'many', target }),
   }
   return {
@@ -1148,6 +1184,7 @@ EOF
 
 **Story:** [`M0-S2`](./stories.md).
 **Files:**
+
 - Create: `packages/db/src/snapshot/extract.ts`
 - Modify: `packages/db/src/index.ts`
 - Create: `packages/db/__tests__/unit/extract.test.ts`
@@ -1159,25 +1196,41 @@ Create `packages/db/__tests__/unit/extract.test.ts`:
 ```ts
 import { describe, it, expect } from 'vitest'
 import {
-  table, relations, serial, integer, varchar, index, unique,
+  table,
+  relations,
+  serial,
+  integer,
+  varchar,
+  index,
+  unique,
   extractSnapshot,
 } from '@forinda/kickjs-db'
 
 describe('extractSnapshot()', () => {
-  const users = table('users', {
-    id: serial().primaryKey(),
-    email: varchar(255).notNull().unique(),
-  }, (t) => ({
-    emailIdx: index('users_email_idx').on(t.email),
-  }))
+  const users = table(
+    'users',
+    {
+      id: serial().primaryKey(),
+      email: varchar(255).notNull().unique(),
+    },
+    (t) => ({
+      emailIdx: index('users_email_idx').on(t.email),
+    }),
+  )
 
-  const posts = table('posts', {
-    id: serial().primaryKey(),
-    authorId: integer().notNull().references(() => users.id, { onDelete: 'cascade' }),
-    title: varchar(200).notNull(),
-  }, (t) => ({
-    uniqTitle: unique('posts_title_author_unique').on(t.title, t.authorId),
-  }))
+  const posts = table(
+    'posts',
+    {
+      id: serial().primaryKey(),
+      authorId: integer()
+        .notNull()
+        .references(() => users.id, { onDelete: 'cascade' }),
+      title: varchar(200).notNull(),
+    },
+    (t) => ({
+      uniqTitle: unique('posts_title_author_unique').on(t.title, t.authorId),
+    }),
+  )
 
   const usersRelations = relations(users, ({ many }) => ({ posts: many(posts) }))
 
@@ -1220,14 +1273,16 @@ describe('extractSnapshot()', () => {
   })
 
   it('captures the FK on posts.authorId', () => {
-    expect(snap.tables.posts.foreignKeys).toEqual([{
-      name: 'posts_authorId_fk',
-      columns: ['authorId'],
-      refTable: 'users',
-      refColumns: ['id'],
-      onDelete: 'cascade',
-      onUpdate: 'no_action',
-    }])
+    expect(snap.tables.posts.foreignKeys).toEqual([
+      {
+        name: 'posts_authorId_fk',
+        columns: ['authorId'],
+        refTable: 'users',
+        refColumns: ['id'],
+        onDelete: 'cascade',
+        onUpdate: 'no_action',
+      },
+    ])
   })
 
   it('captures the multi-column unique', () => {
@@ -1341,6 +1396,7 @@ EOF
 
 **Story:** [`M0-S3`](./stories.md) — typed change set.
 **Files:**
+
 - Create: `packages/db/src/diff/types.ts`
 - Modify: `packages/db/src/index.ts`
 
@@ -1349,7 +1405,12 @@ EOF
 - [ ] **Step 8.1: Create `packages/db/src/diff/types.ts`**
 
 ```ts
-import type { ColumnSnapshot, ForeignKeySnapshot, IndexSnapshot, TableSnapshot } from '../snapshot/types'
+import type {
+  ColumnSnapshot,
+  ForeignKeySnapshot,
+  IndexSnapshot,
+  TableSnapshot,
+} from '../snapshot/types'
 
 export interface CreateTable {
   kind: 'createTable'
@@ -1468,6 +1529,7 @@ EOF
 
 **Story:** [`M0-S3`](./stories.md).
 **Files:**
+
 - Create: `packages/db/src/diff/engine.ts`
 - Modify: `packages/db/src/index.ts`
 - Create: `packages/db/__tests__/unit/diff-create-drop.test.ts`
@@ -1601,6 +1663,7 @@ EOF
 
 **Story:** [`M0-S3`](./stories.md).
 **Files:**
+
 - Modify: `packages/db/src/diff/engine.ts`
 - Create: `packages/db/__tests__/unit/diff-columns.test.ts`
 
@@ -1614,47 +1677,79 @@ import { diff } from '@forinda/kickjs-db'
 import type { SchemaSnapshot, TableSnapshot } from '@forinda/kickjs-db'
 
 const baseTable = (cols: TableSnapshot['columns']): TableSnapshot => ({
-  name: 'users', columns: cols, indexes: [], foreignKeys: [], checks: [],
+  name: 'users',
+  columns: cols,
+  indexes: [],
+  foreignKeys: [],
+  checks: [],
 })
 
 const wrap = (t: TableSnapshot): SchemaSnapshot => ({
-  version: 1, dialect: 'postgres', tables: { users: t },
+  version: 1,
+  dialect: 'postgres',
+  tables: { users: t },
 })
 
 describe('diff() — column add/drop', () => {
   it('adds a new column', () => {
-    const prev = wrap(baseTable({
-      id: { name: 'id', type: 'serial', nullable: false, default: null, primaryKey: true },
-    }))
-    const next = wrap(baseTable({
-      id: { name: 'id', type: 'serial', nullable: false, default: null, primaryKey: true },
-      email: { name: 'email', type: 'varchar(255)', nullable: false, default: null, primaryKey: false },
-    }))
+    const prev = wrap(
+      baseTable({
+        id: { name: 'id', type: 'serial', nullable: false, default: null, primaryKey: true },
+      }),
+    )
+    const next = wrap(
+      baseTable({
+        id: { name: 'id', type: 'serial', nullable: false, default: null, primaryKey: true },
+        email: {
+          name: 'email',
+          type: 'varchar(255)',
+          nullable: false,
+          default: null,
+          primaryKey: false,
+        },
+      }),
+    )
     const changes = diff(prev, next)
     expect(changes).toHaveLength(1)
-    expect(changes[0]).toMatchObject({ kind: 'addColumn', table: 'users', column: { name: 'email' } })
+    expect(changes[0]).toMatchObject({
+      kind: 'addColumn',
+      table: 'users',
+      column: { name: 'email' },
+    })
   })
 
   it('drops a removed column', () => {
-    const prev = wrap(baseTable({
-      id: { name: 'id', type: 'serial', nullable: false, default: null, primaryKey: true },
-      legacy: { name: 'legacy', type: 'text', nullable: true, default: null, primaryKey: false },
-    }))
-    const next = wrap(baseTable({
-      id: { name: 'id', type: 'serial', nullable: false, default: null, primaryKey: true },
-    }))
+    const prev = wrap(
+      baseTable({
+        id: { name: 'id', type: 'serial', nullable: false, default: null, primaryKey: true },
+        legacy: { name: 'legacy', type: 'text', nullable: true, default: null, primaryKey: false },
+      }),
+    )
+    const next = wrap(
+      baseTable({
+        id: { name: 'id', type: 'serial', nullable: false, default: null, primaryKey: true },
+      }),
+    )
     const changes = diff(prev, next)
     expect(changes).toHaveLength(1)
-    expect(changes[0]).toMatchObject({ kind: 'dropColumn', table: 'users', column: { name: 'legacy' } })
+    expect(changes[0]).toMatchObject({
+      kind: 'dropColumn',
+      table: 'users',
+      column: { name: 'legacy' },
+    })
   })
 
   it('add + drop in same diff', () => {
-    const prev = wrap(baseTable({
-      a: { name: 'a', type: 'text', nullable: true, default: null, primaryKey: false },
-    }))
-    const next = wrap(baseTable({
-      b: { name: 'b', type: 'text', nullable: true, default: null, primaryKey: false },
-    }))
+    const prev = wrap(
+      baseTable({
+        a: { name: 'a', type: 'text', nullable: true, default: null, primaryKey: false },
+      }),
+    )
+    const next = wrap(
+      baseTable({
+        b: { name: 'b', type: 'text', nullable: true, default: null, primaryKey: false },
+      }),
+    )
     const changes = diff(prev, next)
     expect(changes).toHaveLength(2)
     expect(changes.find((c) => c.kind === 'dropColumn')?.column.name).toBe('a')
@@ -1713,6 +1808,7 @@ EOF
 
 **Story:** [`M0-S3`](./stories.md).
 **Files:**
+
 - Modify: `packages/db/src/diff/engine.ts`
 - Create: `packages/db/__tests__/unit/diff-alter.test.ts`
 
@@ -1726,12 +1822,17 @@ import { diff } from '@forinda/kickjs-db'
 import type { SchemaSnapshot, ColumnSnapshot } from '@forinda/kickjs-db'
 
 const wrap = (col: ColumnSnapshot): SchemaSnapshot => ({
-  version: 1, dialect: 'postgres',
+  version: 1,
+  dialect: 'postgres',
   tables: { t: { name: 't', columns: { c: col }, indexes: [], foreignKeys: [], checks: [] } },
 })
 
 const base: ColumnSnapshot = {
-  name: 'c', type: 'integer', nullable: true, default: null, primaryKey: false,
+  name: 'c',
+  type: 'integer',
+  nullable: true,
+  default: null,
+  primaryKey: false,
 }
 
 describe('diff() — alter column', () => {
@@ -1791,11 +1892,16 @@ function diffTable(prev: TableSnapshot, next: TableSnapshot, changes: Change[]) 
   }
 }
 
-function columnsEqual(a: import('../snapshot/types').ColumnSnapshot, b: import('../snapshot/types').ColumnSnapshot): boolean {
-  return a.type === b.type
-    && a.nullable === b.nullable
-    && a.default === b.default
-    && a.primaryKey === b.primaryKey
+function columnsEqual(
+  a: import('../snapshot/types').ColumnSnapshot,
+  b: import('../snapshot/types').ColumnSnapshot,
+): boolean {
+  return (
+    a.type === b.type &&
+    a.nullable === b.nullable &&
+    a.default === b.default &&
+    a.primaryKey === b.primaryKey
+  )
 }
 ```
 
@@ -1821,6 +1927,7 @@ EOF
 
 **Story:** [`M0-S3`](./stories.md).
 **Files:**
+
 - Modify: `packages/db/src/diff/engine.ts`
 - Create: `packages/db/__tests__/unit/diff-indexes-fks.test.ts`
 
@@ -1835,12 +1942,17 @@ import type { SchemaSnapshot, IndexSnapshot, ForeignKeySnapshot } from '@forinda
 
 const idx = (name: string): IndexSnapshot => ({ name, columns: ['x'], unique: false })
 const fk = (name: string): ForeignKeySnapshot => ({
-  name, columns: ['x'], refTable: 'other', refColumns: ['id'],
-  onDelete: 'no_action', onUpdate: 'no_action',
+  name,
+  columns: ['x'],
+  refTable: 'other',
+  refColumns: ['id'],
+  onDelete: 'no_action',
+  onUpdate: 'no_action',
 })
 
 const wrap = (indexes: IndexSnapshot[], foreignKeys: ForeignKeySnapshot[]): SchemaSnapshot => ({
-  version: 1, dialect: 'postgres',
+  version: 1,
+  dialect: 'postgres',
   tables: { t: { name: 't', columns: {}, indexes, foreignKeys, checks: [] } },
 })
 
@@ -1872,13 +1984,19 @@ describe('diff() — indexes & FKs', () => {
 - [ ] **Step 12.3: Extend `diffTable`** in `packages/db/src/diff/engine.ts` — append after the column loop:
 
 ```ts
-  diffByName(prev.indexes, next.indexes,
-    (i) => changes.push({ kind: 'dropIndex', table: next.name, index: i }),
-    (i) => changes.push({ kind: 'addIndex',  table: next.name, index: i }))
+diffByName(
+  prev.indexes,
+  next.indexes,
+  (i) => changes.push({ kind: 'dropIndex', table: next.name, index: i }),
+  (i) => changes.push({ kind: 'addIndex', table: next.name, index: i }),
+)
 
-  diffByName(prev.foreignKeys, next.foreignKeys,
-    (f) => changes.push({ kind: 'dropForeignKey', table: next.name, fk: f }),
-    (f) => changes.push({ kind: 'addForeignKey',  table: next.name, fk: f }))
+diffByName(
+  prev.foreignKeys,
+  next.foreignKeys,
+  (f) => changes.push({ kind: 'dropForeignKey', table: next.name, fk: f }),
+  (f) => changes.push({ kind: 'addForeignKey', table: next.name, fk: f }),
+)
 ```
 
 And add at module scope:
@@ -1918,6 +2036,7 @@ EOF
 **Story:** [`M0-S3`](./stories.md). Detects column rename when prev has a dropped column and next has an added column with same type + same constraints. Conservative — falls back to drop+add when ambiguous.
 
 **Files:**
+
 - Modify: `packages/db/src/diff/engine.ts`
 - Create: `packages/db/__tests__/unit/diff-rename.test.ts`
 
@@ -1931,16 +2050,24 @@ import { diff } from '@forinda/kickjs-db'
 import type { SchemaSnapshot, ColumnSnapshot } from '@forinda/kickjs-db'
 
 const col = (name: string, overrides: Partial<ColumnSnapshot> = {}): ColumnSnapshot => ({
-  name, type: 'varchar(255)', nullable: false, default: null, primaryKey: false, ...overrides,
+  name,
+  type: 'varchar(255)',
+  nullable: false,
+  default: null,
+  primaryKey: false,
+  ...overrides,
 })
 
 const wrap = (cols: ColumnSnapshot[]): SchemaSnapshot => ({
-  version: 1, dialect: 'postgres',
+  version: 1,
+  dialect: 'postgres',
   tables: {
     t: {
       name: 't',
       columns: Object.fromEntries(cols.map((c) => [c.name, c])),
-      indexes: [], foreignKeys: [], checks: [],
+      indexes: [],
+      foreignKeys: [],
+      checks: [],
     },
   },
 })
@@ -1949,7 +2076,12 @@ describe('diff() — rename heuristic', () => {
   it('detects rename when one drop + one add with identical attrs', () => {
     const changes = diff(wrap([col('emailAddr')]), wrap([col('email')]))
     expect(changes).toHaveLength(1)
-    expect(changes[0]).toMatchObject({ kind: 'renameColumn', table: 't', from: 'emailAddr', to: 'email' })
+    expect(changes[0]).toMatchObject({
+      kind: 'renameColumn',
+      table: 't',
+      from: 'emailAddr',
+      to: 'email',
+    })
   })
 
   it('falls back to drop+add when types differ', () => {
@@ -1961,10 +2093,7 @@ describe('diff() — rename heuristic', () => {
   })
 
   it('does not rename when ambiguous (multiple matching adds/drops)', () => {
-    const changes = diff(
-      wrap([col('a'), col('b')]),
-      wrap([col('c'), col('d')]),
-    )
+    const changes = diff(wrap([col('a'), col('b')]), wrap([col('c'), col('d')]))
     expect(changes.filter((c) => c.kind === 'renameColumn')).toHaveLength(0)
     expect(changes).toHaveLength(4)
   })
@@ -2015,21 +2144,32 @@ function diffTable(prev: TableSnapshot, next: TableSnapshot, changes: Change[]) 
     }
   }
 
-  diffByName(prev.indexes, next.indexes,
+  diffByName(
+    prev.indexes,
+    next.indexes,
     (i) => changes.push({ kind: 'dropIndex', table: next.name, index: i }),
-    (i) => changes.push({ kind: 'addIndex',  table: next.name, index: i }))
+    (i) => changes.push({ kind: 'addIndex', table: next.name, index: i }),
+  )
 
-  diffByName(prev.foreignKeys, next.foreignKeys,
+  diffByName(
+    prev.foreignKeys,
+    next.foreignKeys,
     (f) => changes.push({ kind: 'dropForeignKey', table: next.name, fk: f }),
-    (f) => changes.push({ kind: 'addForeignKey',  table: next.name, fk: f }))
+    (f) => changes.push({ kind: 'addForeignKey', table: next.name, fk: f }),
+  )
 }
 
-function columnAttrsEqual(a: import('../snapshot/types').ColumnSnapshot, b: import('../snapshot/types').ColumnSnapshot): boolean {
+function columnAttrsEqual(
+  a: import('../snapshot/types').ColumnSnapshot,
+  b: import('../snapshot/types').ColumnSnapshot,
+): boolean {
   // Like columnsEqual but ignores name (since rename is *about* name change).
-  return a.type === b.type
-    && a.nullable === b.nullable
-    && a.default === b.default
-    && a.primaryKey === b.primaryKey
+  return (
+    a.type === b.type &&
+    a.nullable === b.nullable &&
+    a.default === b.default &&
+    a.primaryKey === b.primaryKey
+  )
 }
 ```
 
@@ -2056,6 +2196,7 @@ EOF
 
 **Story:** [`M0-S4`](./stories.md). Foundation for all SQL emission.
 **Files:**
+
 - Create: `packages/db/src/emit/identifiers.ts`
 - Create: `packages/db/__tests__/unit/identifiers.test.ts`
 
@@ -2129,6 +2270,7 @@ EOF
 
 **Story:** [`M0-S4`](./stories.md).
 **Files:**
+
 - Create: `packages/db/src/emit/pg.ts`
 - Modify: `packages/db/src/index.ts`
 - Create: `packages/db/__tests__/unit/emit-pg-create-drop.test.ts`
@@ -2146,7 +2288,13 @@ const usersTable: TableSnapshot = {
   name: 'users',
   columns: {
     id: { name: 'id', type: 'serial', nullable: false, default: null, primaryKey: true },
-    email: { name: 'email', type: 'varchar(255)', nullable: false, default: null, primaryKey: false },
+    email: {
+      name: 'email',
+      type: 'varchar(255)',
+      nullable: false,
+      default: null,
+      primaryKey: false,
+    },
   },
   indexes: [],
   foreignKeys: [],
@@ -2158,10 +2306,10 @@ describe('emitPg() — create/drop/rename table', () => {
     const changes: ChangeSet = [{ kind: 'createTable', table: usersTable }]
     expect(emitPg(changes)).toBe(
       'CREATE TABLE "users" (\n' +
-      '  "id" serial NOT NULL,\n' +
-      '  "email" varchar(255) NOT NULL,\n' +
-      '  PRIMARY KEY ("id")\n' +
-      ');',
+        '  "id" serial NOT NULL,\n' +
+        '  "email" varchar(255) NOT NULL,\n' +
+        '  PRIMARY KEY ("id")\n' +
+        ');',
     )
   })
 
@@ -2182,9 +2330,7 @@ describe('emitPg() — create/drop/rename table', () => {
 - [ ] **Step 15.3: Create `packages/db/src/emit/pg.ts`**
 
 ```ts
-import type {
-  Change, ChangeSet,
-} from '../diff/types'
+import type { Change, ChangeSet } from '../diff/types'
 import type { ColumnSnapshot, TableSnapshot } from '../snapshot/types'
 import { quoteIdent, quoteLiteral } from './identifiers'
 
@@ -2194,16 +2340,22 @@ export function emitPg(changes: ChangeSet): string {
 
 function emitChange(change: Change): string {
   switch (change.kind) {
-    case 'createTable':    return emitCreateTable(change.table)
-    case 'dropTable':      return `DROP TABLE ${quoteIdent(change.table.name)};`
-    case 'renameTable':    return `ALTER TABLE ${quoteIdent(change.from)} RENAME TO ${quoteIdent(change.to)};`
-    default:               return `-- unsupported in M0: ${change.kind}`
+    case 'createTable':
+      return emitCreateTable(change.table)
+    case 'dropTable':
+      return `DROP TABLE ${quoteIdent(change.table.name)};`
+    case 'renameTable':
+      return `ALTER TABLE ${quoteIdent(change.from)} RENAME TO ${quoteIdent(change.to)};`
+    default:
+      return `-- unsupported in M0: ${change.kind}`
   }
 }
 
 function emitCreateTable(t: TableSnapshot): string {
   const cols = Object.values(t.columns).map(emitColumnDecl)
-  const pk = Object.values(t.columns).filter((c) => c.primaryKey).map((c) => quoteIdent(c.name))
+  const pk = Object.values(t.columns)
+    .filter((c) => c.primaryKey)
+    .map((c) => quoteIdent(c.name))
   const lines = [...cols]
   if (pk.length > 0) lines.push(`PRIMARY KEY (${pk.join(', ')})`)
   return `CREATE TABLE ${quoteIdent(t.name)} (\n  ${lines.join(',\n  ')}\n);`
@@ -2220,7 +2372,7 @@ function formatDefault(value: string): string {
   // SQL keywords/functions stay bare; everything else is treated as a literal.
   const upper = value.toUpperCase()
   if (upper === 'CURRENT_TIMESTAMP' || upper === 'NOW()') return value
-  if (/^-?\d+(\.\d+)?$/.test(value)) return value         // numeric
+  if (/^-?\d+(\.\d+)?$/.test(value)) return value // numeric
   if (value === 'true' || value === 'false') return value // boolean literal
   return quoteLiteral(value)
 }
@@ -2252,6 +2404,7 @@ EOF
 
 **Story:** [`M0-S4`](./stories.md).
 **Files:**
+
 - Modify: `packages/db/src/emit/pg.ts`
 - Create: `packages/db/__tests__/unit/emit-pg-columns.test.ts`
 
@@ -2264,17 +2417,35 @@ import { describe, it, expect } from 'vitest'
 import { emitPg } from '@forinda/kickjs-db'
 import type { ChangeSet } from '@forinda/kickjs-db'
 
-const before = { name: 'age', type: 'integer', nullable: true,  default: null, primaryKey: false }
-const after  = { name: 'age', type: 'bigint',  nullable: false, default: '0',  primaryKey: false }
+const before = { name: 'age', type: 'integer', nullable: true, default: null, primaryKey: false }
+const after = { name: 'age', type: 'bigint', nullable: false, default: '0', primaryKey: false }
 
 describe('emitPg() — column changes', () => {
   it('ADD COLUMN', () => {
-    const cs: ChangeSet = [{ kind: 'addColumn', table: 'users', column: { name: 'email', type: 'varchar(255)', nullable: false, default: null, primaryKey: false } }]
+    const cs: ChangeSet = [
+      {
+        kind: 'addColumn',
+        table: 'users',
+        column: {
+          name: 'email',
+          type: 'varchar(255)',
+          nullable: false,
+          default: null,
+          primaryKey: false,
+        },
+      },
+    ]
     expect(emitPg(cs)).toBe('ALTER TABLE "users" ADD COLUMN "email" varchar(255) NOT NULL;')
   })
 
   it('DROP COLUMN', () => {
-    const cs: ChangeSet = [{ kind: 'dropColumn', table: 'users', column: { name: 'legacy', type: 'text', nullable: true, default: null, primaryKey: false } }]
+    const cs: ChangeSet = [
+      {
+        kind: 'dropColumn',
+        table: 'users',
+        column: { name: 'legacy', type: 'text', nullable: true, default: null, primaryKey: false },
+      },
+    ]
     expect(emitPg(cs)).toBe('ALTER TABLE "users" DROP COLUMN "legacy";')
   })
 
@@ -2287,20 +2458,24 @@ describe('emitPg() — column changes', () => {
     const cs: ChangeSet = [{ kind: 'alterColumn', table: 'users', column: 'age', before, after }]
     expect(emitPg(cs)).toBe(
       'ALTER TABLE "users" ALTER COLUMN "age" TYPE bigint USING "age"::bigint;\n' +
-      'ALTER TABLE "users" ALTER COLUMN "age" SET NOT NULL;\n' +
-      'ALTER TABLE "users" ALTER COLUMN "age" SET DEFAULT 0;',
+        'ALTER TABLE "users" ALTER COLUMN "age" SET NOT NULL;\n' +
+        'ALTER TABLE "users" ALTER COLUMN "age" SET DEFAULT 0;',
     )
   })
 
   it('ALTER COLUMN — drop default + drop NOT NULL', () => {
-    const cs: ChangeSet = [{
-      kind: 'alterColumn', table: 'users', column: 'age',
-      before: { name: 'age', type: 'integer', nullable: false, default: '0', primaryKey: false },
-      after:  { name: 'age', type: 'integer', nullable: true,  default: null, primaryKey: false },
-    }]
+    const cs: ChangeSet = [
+      {
+        kind: 'alterColumn',
+        table: 'users',
+        column: 'age',
+        before: { name: 'age', type: 'integer', nullable: false, default: '0', primaryKey: false },
+        after: { name: 'age', type: 'integer', nullable: true, default: null, primaryKey: false },
+      },
+    ]
     expect(emitPg(cs)).toBe(
       'ALTER TABLE "users" ALTER COLUMN "age" DROP DEFAULT;\n' +
-      'ALTER TABLE "users" ALTER COLUMN "age" DROP NOT NULL;',
+        'ALTER TABLE "users" ALTER COLUMN "age" DROP NOT NULL;',
     )
   })
 })
@@ -2315,17 +2490,28 @@ Replace the `default` branch and add new cases. Full updated `emitChange`:
 ```ts
 function emitChange(change: Change): string {
   switch (change.kind) {
-    case 'createTable':       return emitCreateTable(change.table)
-    case 'dropTable':         return `DROP TABLE ${quoteIdent(change.table.name)};`
-    case 'renameTable':       return `ALTER TABLE ${quoteIdent(change.from)} RENAME TO ${quoteIdent(change.to)};`
-    case 'addColumn':         return emitAddColumn(change.table, change.column)
-    case 'dropColumn':        return `ALTER TABLE ${quoteIdent(change.table)} DROP COLUMN ${quoteIdent(change.column.name)};`
-    case 'renameColumn':      return `ALTER TABLE ${quoteIdent(change.table)} RENAME COLUMN ${quoteIdent(change.from)} TO ${quoteIdent(change.to)};`
-    case 'alterColumn':       return emitAlterColumn(change.table, change.before, change.after)
-    case 'addIndex':          return emitAddIndex(change.table, change.index)
-    case 'dropIndex':         return `DROP INDEX ${quoteIdent(change.index.name)};`
-    case 'addForeignKey':     return emitAddFk(change.table, change.fk)
-    case 'dropForeignKey':    return `ALTER TABLE ${quoteIdent(change.table)} DROP CONSTRAINT ${quoteIdent(change.fk.name)};`
+    case 'createTable':
+      return emitCreateTable(change.table)
+    case 'dropTable':
+      return `DROP TABLE ${quoteIdent(change.table.name)};`
+    case 'renameTable':
+      return `ALTER TABLE ${quoteIdent(change.from)} RENAME TO ${quoteIdent(change.to)};`
+    case 'addColumn':
+      return emitAddColumn(change.table, change.column)
+    case 'dropColumn':
+      return `ALTER TABLE ${quoteIdent(change.table)} DROP COLUMN ${quoteIdent(change.column.name)};`
+    case 'renameColumn':
+      return `ALTER TABLE ${quoteIdent(change.table)} RENAME COLUMN ${quoteIdent(change.from)} TO ${quoteIdent(change.to)};`
+    case 'alterColumn':
+      return emitAlterColumn(change.table, change.before, change.after)
+    case 'addIndex':
+      return emitAddIndex(change.table, change.index)
+    case 'dropIndex':
+      return `DROP INDEX ${quoteIdent(change.index.name)};`
+    case 'addForeignKey':
+      return emitAddFk(change.table, change.fk)
+    case 'dropForeignKey':
+      return `ALTER TABLE ${quoteIdent(change.table)} DROP CONSTRAINT ${quoteIdent(change.fk.name)};`
   }
 }
 ```
@@ -2337,11 +2523,7 @@ function emitAddColumn(table: string, c: ColumnSnapshot): string {
   return `ALTER TABLE ${quoteIdent(table)} ADD COLUMN ${emitColumnDecl(c)};`
 }
 
-function emitAlterColumn(
-  table: string,
-  before: ColumnSnapshot,
-  after: ColumnSnapshot,
-): string {
+function emitAlterColumn(table: string, before: ColumnSnapshot, after: ColumnSnapshot): string {
   const stmts: string[] = []
   const t = quoteIdent(table)
   const c = quoteIdent(after.name)
@@ -2350,12 +2532,16 @@ function emitAlterColumn(
     stmts.push(`ALTER TABLE ${t} ALTER COLUMN ${c} TYPE ${after.type} USING ${c}::${after.type};`)
   }
   if (before.nullable !== after.nullable) {
-    stmts.push(`ALTER TABLE ${t} ALTER COLUMN ${c} ${after.nullable ? 'DROP NOT NULL' : 'SET NOT NULL'};`)
+    stmts.push(
+      `ALTER TABLE ${t} ALTER COLUMN ${c} ${after.nullable ? 'DROP NOT NULL' : 'SET NOT NULL'};`,
+    )
   }
   if (before.default !== after.default) {
-    stmts.push(after.default === null
-      ? `ALTER TABLE ${t} ALTER COLUMN ${c} DROP DEFAULT;`
-      : `ALTER TABLE ${t} ALTER COLUMN ${c} SET DEFAULT ${formatDefault(after.default)};`)
+    stmts.push(
+      after.default === null
+        ? `ALTER TABLE ${t} ALTER COLUMN ${c} DROP DEFAULT;`
+        : `ALTER TABLE ${t} ALTER COLUMN ${c} SET DEFAULT ${formatDefault(after.default)};`,
+    )
   }
   return stmts.join('\n')
 }
@@ -2396,6 +2582,7 @@ EOF
 
 **Story:** [`M0-S4`](./stories.md).
 **Files:**
+
 - Modify: `packages/db/src/emit/pg.ts`
 - Create: `packages/db/__tests__/unit/emit-pg-indexes-fks.test.ts`
 
@@ -2410,41 +2597,56 @@ import type { ChangeSet } from '@forinda/kickjs-db'
 
 describe('emitPg() — indexes & FKs', () => {
   it('CREATE INDEX (non-unique)', () => {
-    const cs: ChangeSet = [{
-      kind: 'addIndex', table: 'users',
-      index: { name: 'users_email_idx', columns: ['email'], unique: false },
-    }]
+    const cs: ChangeSet = [
+      {
+        kind: 'addIndex',
+        table: 'users',
+        index: { name: 'users_email_idx', columns: ['email'], unique: false },
+      },
+    ]
     expect(emitPg(cs)).toBe('CREATE INDEX "users_email_idx" ON "users" ("email");')
   })
 
   it('CREATE UNIQUE INDEX', () => {
-    const cs: ChangeSet = [{
-      kind: 'addIndex', table: 'users',
-      index: { name: 'users_email_unique', columns: ['email'], unique: true },
-    }]
+    const cs: ChangeSet = [
+      {
+        kind: 'addIndex',
+        table: 'users',
+        index: { name: 'users_email_unique', columns: ['email'], unique: true },
+      },
+    ]
     expect(emitPg(cs)).toBe('CREATE UNIQUE INDEX "users_email_unique" ON "users" ("email");')
   })
 
   it('multi-column unique', () => {
-    const cs: ChangeSet = [{
-      kind: 'addIndex', table: 'posts',
-      index: { name: 'posts_slug', columns: ['title', 'authorId'], unique: true },
-    }]
+    const cs: ChangeSet = [
+      {
+        kind: 'addIndex',
+        table: 'posts',
+        index: { name: 'posts_slug', columns: ['title', 'authorId'], unique: true },
+      },
+    ]
     expect(emitPg(cs)).toBe('CREATE UNIQUE INDEX "posts_slug" ON "posts" ("title", "authorId");')
   })
 
   it('ADD FOREIGN KEY with cascade', () => {
-    const cs: ChangeSet = [{
-      kind: 'addForeignKey', table: 'posts',
-      fk: {
-        name: 'posts_author_fk', columns: ['authorId'],
-        refTable: 'users', refColumns: ['id'],
-        onDelete: 'cascade', onUpdate: 'no_action',
+    const cs: ChangeSet = [
+      {
+        kind: 'addForeignKey',
+        table: 'posts',
+        fk: {
+          name: 'posts_author_fk',
+          columns: ['authorId'],
+          refTable: 'users',
+          refColumns: ['id'],
+          onDelete: 'cascade',
+          onUpdate: 'no_action',
+        },
       },
-    }]
+    ]
     expect(emitPg(cs)).toBe(
       'ALTER TABLE "posts" ADD CONSTRAINT "posts_author_fk" ' +
-      'FOREIGN KEY ("authorId") REFERENCES "users" ("id") ON DELETE CASCADE ON UPDATE NO ACTION;',
+        'FOREIGN KEY ("authorId") REFERENCES "users" ("id") ON DELETE CASCADE ON UPDATE NO ACTION;',
     )
   })
 })
@@ -2461,19 +2663,21 @@ function emitAddIndex(table: string, i: import('../snapshot/types').IndexSnapsho
 }
 
 const FK_ACTIONS: Record<string, string> = {
-  cascade:    'CASCADE',
-  restrict:   'RESTRICT',
-  set_null:   'SET NULL',
-  set_default:'SET DEFAULT',
-  no_action:  'NO ACTION',
+  cascade: 'CASCADE',
+  restrict: 'RESTRICT',
+  set_null: 'SET NULL',
+  set_default: 'SET DEFAULT',
+  no_action: 'NO ACTION',
 }
 
 function emitAddFk(table: string, fk: import('../snapshot/types').ForeignKeySnapshot): string {
   const cols = fk.columns.map(quoteIdent).join(', ')
   const refCols = fk.refColumns.map(quoteIdent).join(', ')
-  return `ALTER TABLE ${quoteIdent(table)} ADD CONSTRAINT ${quoteIdent(fk.name)} ` +
+  return (
+    `ALTER TABLE ${quoteIdent(table)} ADD CONSTRAINT ${quoteIdent(fk.name)} ` +
     `FOREIGN KEY (${cols}) REFERENCES ${quoteIdent(fk.refTable)} (${refCols}) ` +
     `ON DELETE ${FK_ACTIONS[fk.onDelete]} ON UPDATE ${FK_ACTIONS[fk.onUpdate]};`
+  )
 }
 ```
 
@@ -2500,6 +2704,7 @@ EOF
 
 **Story:** [`M0-S5`](./stories.md). Apply emitted SQL against real Postgres; introspect; assert parity with target snapshot.
 **Files:**
+
 - Create: `packages/db/__tests__/integration/spike.test.ts`
 
 - [ ] **Step 18.1: Write the integration test**
@@ -2510,25 +2715,43 @@ import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers
 import pg from 'pg'
 
 import {
-  table, relations, serial, integer, varchar, index, unique,
-  extractSnapshot, diff, emitPg,
+  table,
+  relations,
+  serial,
+  integer,
+  varchar,
+  index,
+  unique,
+  extractSnapshot,
+  diff,
+  emitPg,
 } from '@forinda/kickjs-db'
 import type { SchemaSnapshot } from '@forinda/kickjs-db'
 
-const users = table('users', {
-  id: serial().primaryKey(),
-  email: varchar(255).notNull().unique(),
-}, (t) => ({
-  emailIdx: index('users_email_idx').on(t.email),
-}))
+const users = table(
+  'users',
+  {
+    id: serial().primaryKey(),
+    email: varchar(255).notNull().unique(),
+  },
+  (t) => ({
+    emailIdx: index('users_email_idx').on(t.email),
+  }),
+)
 
-const posts = table('posts', {
-  id: serial().primaryKey(),
-  authorId: integer().notNull().references(() => users.id, { onDelete: 'cascade' }),
-  title: varchar(200).notNull(),
-}, (t) => ({
-  uniqTitle: unique('posts_title_author_unique').on(t.title, t.authorId),
-}))
+const posts = table(
+  'posts',
+  {
+    id: serial().primaryKey(),
+    authorId: integer()
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    title: varchar(200).notNull(),
+  },
+  (t) => ({
+    uniqTitle: unique('posts_title_author_unique').on(t.title, t.authorId),
+  }),
+)
 
 const usersRelations = relations(users, ({ many }) => ({ posts: many(posts) }))
 
@@ -2568,7 +2791,12 @@ describe('spike — full pipeline (PG)', () => {
     expect(tables.rows.map((r) => r.table_name)).toEqual(['posts', 'users'])
 
     // Verify users.email is varchar(255) NOT NULL
-    const cols = await client.query<{ column_name: string; data_type: string; is_nullable: string; character_maximum_length: number | null }>(`
+    const cols = await client.query<{
+      column_name: string
+      data_type: string
+      is_nullable: string
+      character_maximum_length: number | null
+    }>(`
       SELECT column_name, data_type, is_nullable, character_maximum_length
       FROM information_schema.columns
       WHERE table_schema = 'public' AND table_name = 'users'
@@ -2632,6 +2860,7 @@ EOF
 
 **Story:** [`M0-S6`](./stories.md) — minimal config reader for the CLI.
 **Files:**
+
 - Create: `packages/db/src/cli/config.ts`
 - Modify: `packages/db/src/index.ts`
 - Create: `packages/db/__tests__/unit/cli-config.test.ts`
@@ -2743,6 +2972,7 @@ EOF
 
 **Story:** [`M0-S6`](./stories.md).
 **Files:**
+
 - Create: `packages/db/src/cli/generate.ts`
 - Modify: `packages/db/src/index.ts`
 - Create: `packages/db/__tests__/fixtures/schema.demo.ts`
@@ -2806,10 +3036,21 @@ export async function generate(opts: GenerateOptions): Promise<GenerateResult> {
   const upSql = '-- REVIEWED: false\n' + emitPg(changes) + '\n'
   await writeFile(path.join(dir, 'up.sql'), upSql, 'utf8')
   await writeFile(path.join(dir, 'snapshot.json'), JSON.stringify(target, null, 2) + '\n', 'utf8')
-  await writeFile(path.join(dir, 'meta.json'), JSON.stringify({
-    id, name: opts.name, createdAt: (opts.now?.() ?? new Date()).toISOString(),
-    reviewed: false, dialect: opts.config.dialect,
-  }, null, 2) + '\n', 'utf8')
+  await writeFile(
+    path.join(dir, 'meta.json'),
+    JSON.stringify(
+      {
+        id,
+        name: opts.name,
+        createdAt: (opts.now?.() ?? new Date()).toISOString(),
+        reviewed: false,
+        dialect: opts.config.dialect,
+      },
+      null,
+      2,
+    ) + '\n',
+    'utf8',
+  )
 
   return { status: 'created', migrationDir: dir, changeCount: changes.length }
 }
@@ -2833,7 +3074,8 @@ function formatId(date: Date, name: string): string {
   const ts =
     date.getUTCFullYear().toString() +
     pad(date.getUTCMonth() + 1) +
-    pad(date.getUTCDate()) + '_' +
+    pad(date.getUTCDate()) +
+    '_' +
     pad(date.getUTCHours()) +
     pad(date.getUTCMinutes()) +
     pad(date.getUTCSeconds())
@@ -2879,6 +3121,7 @@ EOF
 
 **Story:** [`M0-S6`](./stories.md). Round-trip: empty migrations dir → run generate → verify files → run again → "no changes".
 **Files:**
+
 - Create: `packages/db/__tests__/unit/cli-generate.test.ts`
 
 - [ ] **Step 21.1: Write the test**
@@ -2924,7 +3167,9 @@ describe('generate()', () => {
     expect(upSql).toContain('CREATE TABLE "users"')
     expect(upSql).toContain('CREATE UNIQUE INDEX "users_email_unique"')
 
-    const meta = JSON.parse(await readFile(path.join(cfg.migrationsDir, subdirs[0], 'meta.json'), 'utf8'))
+    const meta = JSON.parse(
+      await readFile(path.join(cfg.migrationsDir, subdirs[0], 'meta.json'), 'utf8'),
+    )
     expect(meta).toMatchObject({ id: '20260427_153012_init', reviewed: false, dialect: 'postgres' })
   })
 
@@ -2975,6 +3220,7 @@ EOF
 
 **Story:** [`M0-S6`](./stories.md) — surface the command on the existing CLI.
 **Files:**
+
 - Modify: `packages/cli/package.json` (add `@forinda/kickjs-db` workspace dep)
 - Create: `packages/cli/src/commands/db.ts`
 - Modify: `packages/cli/src/cli.ts` (register the command)
@@ -3027,7 +3273,9 @@ export function registerDbCommands(program: Command) {
         console.log('No schema changes detected.')
         return
       }
-      console.log(`Created migration ${result.migrationDir} (${result.changeCount} change${result.changeCount === 1 ? '' : 's'}).`)
+      console.log(
+        `Created migration ${result.migrationDir} (${result.changeCount} change${result.changeCount === 1 ? '' : 's'}).`,
+      )
     })
 }
 ```
@@ -3144,6 +3392,7 @@ Type consistency: `SchemaSnapshot`, `ColumnSnapshot`, `IndexSnapshot`, `ForeignK
 Placeholders: none — every code block is complete.
 
 Out of scope for M0 (deferred to M1):
+
 - Down emission (`-- REVIEWED: false` header on `up.sql` only; `down.sql` lands in M1-S2).
 - Journal (`_journal.json`) — M1-S3.
 - Lock + tracking tables — M1-S4.

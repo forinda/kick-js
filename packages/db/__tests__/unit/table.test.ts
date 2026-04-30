@@ -56,7 +56,7 @@ describe('FK references', () => {
   it('supports self-referencing tables (lazy thunk)', () => {
     const categories = table('categories', {
       id: serial().primaryKey(),
-      parentId: integer().references(():ColumnRef => categories.id, { onDelete: 'set_null' }),
+      parentId: integer().references((): ColumnRef => categories.id, { onDelete: 'set_null' }),
     })
     const fk = categories.parentId.__state().references
     expect(fk).not.toBeNull()

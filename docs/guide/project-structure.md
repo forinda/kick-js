@@ -191,12 +191,12 @@ src/modules/users/
 
 ### Choosing a Pattern
 
-| Pattern | Best for | Complexity |
-|---------|----------|------------|
-| **Minimal** | Scripts, prototyping, learning | Low |
-| **REST** | Standard CRUD APIs, traditional layered apps | Medium |
-| **DDD** | Complex business logic, domain-heavy applications | High |
-| **CQRS** | Event-driven systems, high-throughput writes | High |
+| Pattern     | Best for                                          | Complexity |
+| ----------- | ------------------------------------------------- | ---------- |
+| **Minimal** | Scripts, prototyping, learning                    | Low        |
+| **REST**    | Standard CRUD APIs, traditional layered apps      | Medium     |
+| **DDD**     | Complex business logic, domain-heavy applications | High       |
+| **CQRS**    | Event-driven systems, high-throughput writes      | High       |
 
 ## Generated Module Index
 
@@ -218,9 +218,7 @@ import.meta.glob(
 
 export class UsersModule implements AppModule {
   register(container: Container): void {
-    container.registerFactory(USERS_REPOSITORY, () =>
-      container.resolve(InMemoryUsersRepository),
-    )
+    container.registerFactory(USERS_REPOSITORY, () => container.resolve(InMemoryUsersRepository))
   }
 
   routes(): ModuleRoutes {
@@ -270,8 +268,9 @@ kick g module users --repo drizzle     # Drizzle ORM
 The module's `register()` method binds the interface token to the implementation. Swap implementations by changing the factory target — no other code changes needed:
 
 ```ts
-container.registerFactory(USER_REPOSITORY, () =>
-  container.resolve(InMemoryUserRepository),  // ← change this line
+container.registerFactory(
+  USER_REPOSITORY,
+  () => container.resolve(InMemoryUserRepository), // ← change this line
 )
 ```
 

@@ -109,7 +109,7 @@ async function readColumns(
 
 function isSerialColumn(r: ColumnRow): boolean {
   if (!r.column_default) return false
-  if (!/^nextval\(/.test(r.column_default)) return false
+  if (!r.column_default.startsWith('nextval(')) return false
   return r.udt_name === 'int2' || r.udt_name === 'int4' || r.udt_name === 'int8'
 }
 
@@ -203,7 +203,7 @@ async function readIndexes(
   return [...byIndex.values()]
     .filter((i) => !i._isPrimary)
     .map(({ _isPrimary, ...rest }) => rest)
-    .sort((a, b) => a.name.localeCompare(b.name))
+    .toSorted((a, b) => a.name.localeCompare(b.name))
 }
 
 async function readForeignKeys(
@@ -252,7 +252,7 @@ async function readForeignKeys(
     fk.columns.push(r.column_name)
     fk.refColumns.push(r.ref_column)
   }
-  return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name))
+  return [...byName.values()].toSorted((a, b) => a.name.localeCompare(b.name))
 }
 
 function mapFkAction(raw: string): FkAction {

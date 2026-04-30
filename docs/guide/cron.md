@@ -22,7 +22,7 @@ KickJS exports `setClassMeta` / `pushClassMeta` / `getClassMeta` / `getMethodMet
 // src/decorators/cron.decorator.ts
 import { pushClassMeta, getClassMeta } from '@forinda/kickjs'
 
-const CRON_META = 'app/cron'   // adopter scope — first-party would be 'kick/cron'
+const CRON_META = 'app/cron' // adopter scope — first-party would be 'kick/cron'
 
 export interface CronJobMeta {
   expression: string
@@ -80,17 +80,13 @@ export const CronAdapter = defineAdapter<CronAdapterOptions>({
         for (const ServiceClass of config.services) {
           const instance = container.resolve(ServiceClass)
           for (const meta of getCronJobs(ServiceClass)) {
-            const job = new CronJob(
-              meta.expression,
-              { timezone: meta.timezone },
-              async () => {
-                try {
-                  await instance[meta.handlerName]()
-                } catch (err) {
-                  log.error(err as Error, `Cron job ${ServiceClass.name}.${meta.handlerName} failed`)
-                }
-              },
-            )
+            const job = new CronJob(meta.expression, { timezone: meta.timezone }, async () => {
+              try {
+                await instance[meta.handlerName]()
+              } catch (err) {
+                log.error(err as Error, `Cron job ${ServiceClass.name}.${meta.handlerName} failed`)
+              }
+            })
             jobs.push(job)
             log.info(`Scheduled ${ServiceClass.name}.${meta.handlerName} (${meta.expression})`)
             if (meta.runOnInit) instance[meta.handlerName]().catch(() => {})

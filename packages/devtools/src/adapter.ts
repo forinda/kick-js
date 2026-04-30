@@ -64,7 +64,7 @@ function percentile(sorted: number[], p: number): number {
 
 /** Compute p50, p95, p99 from a RouteStats samples buffer */
 function computePercentiles(stats: RouteStats): { p50: number; p95: number; p99: number } {
-  const sorted = [...stats.samples].sort((a, b) => a - b)
+  const sorted = [...stats.samples].toSorted((a, b) => a - b)
   return {
     p50: percentile(sorted, 0.5),
     p95: percentile(sorted, 0.95),

@@ -151,8 +151,6 @@ describe('createBusCore — dispatch with pre-built envelope', () => {
     core.on('x', handler)
     core.dispatch({ type: 'x', payload: { hi: true }, ts: 1 })
     expect(handler).toHaveBeenCalledWith({ hi: true })
-    expect(handler).not.toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'x' }),
-    )
+    expect(handler).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'x' }))
   })
 })

@@ -137,11 +137,11 @@ KickJS deliberately ships a small, stable core. The "right" extension surface is
 
 Three packages ship with every project — `kick new` always installs them, and `kick add` won't list them as optional. Together they're the framework runtime + the dev/build/scaffold loop:
 
-| Package | Description |
-|---------|-------------|
-| [`@forinda/kickjs`](packages/kickjs/) | Core framework — DI, decorators, Express 5, routing, middleware, contributors, request store, `processHooks` |
-| [`@forinda/kickjs-vite`](packages/vite/) | Vite plugin — single-port HMR, typegen watcher, customizable HMR log |
-| [`@forinda/kickjs-cli`](packages/cli/) | Scaffolding, DDD generators, custom commands, `kick g agents` |
+| Package                                  | Description                                                                                                  |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| [`@forinda/kickjs`](packages/kickjs/)    | Core framework — DI, decorators, Express 5, routing, middleware, contributors, request store, `processHooks` |
+| [`@forinda/kickjs-vite`](packages/vite/) | Vite plugin — single-port HMR, typegen watcher, customizable HMR log                                         |
+| [`@forinda/kickjs-cli`](packages/cli/)   | Scaffolding, DDD generators, custom commands, `kick g agents`                                                |
 
 ### Optional packages
 
@@ -158,29 +158,29 @@ Browse `packages/` in this repo for the full source layout.
 
 These packages are still installable in v4.1.x and emit deprecation notices. The replacement for each is a copy-paste recipe under 100 lines that uses the supported core primitives directly. v5 removes them from the public registry; the in-tree source either disappears or stays as a private internal dep.
 
-| Package | BYO replacement |
-|---------|----------------|
-| [`@forinda/kickjs-graphql`](packages/graphql/) | [guide/graphql](https://forinda.github.io/kick-js/guide/graphql) — wrap `graphql-http` / `graphql-yoga` / Apollo / Pothos via `definePlugin` |
-| [`@forinda/kickjs-otel`](packages/otel/) | [guide/otel](https://forinda.github.io/kick-js/guide/otel) — own the OpenTelemetry NodeSDK lifecycle; pair with `bootstrap({ processHooks: 'errors-only' })` so the SDK's SIGTERM handler doesn't race the framework's |
-| [`@forinda/kickjs-cron`](packages/cron/) | [guide/cron](https://forinda.github.io/kick-js/guide/cron) — wrap `croner` via `defineAdapter` + framework metadata helpers |
-| [`@forinda/kickjs-mailer`](packages/mailer/) | [guide/mailer](https://forinda.github.io/kick-js/guide/mailer) — `nodemailer` / Resend / SES via `definePlugin`, plus a console-mailer asset-manager example |
-| [`@forinda/kickjs-multi-tenant`](packages/multi-tenant/) | [guide/multi-tenancy](https://forinda.github.io/kick-js/guide/multi-tenancy) — `defineHttpContextDecorator` + `Scope.REQUEST` per-tenant DB factory |
-| [`@forinda/kickjs-notifications`](packages/notifications/) | [guide/notifications](https://forinda.github.io/kick-js/guide/notifications) — channel interface + `definePlugin` registration |
+| Package                                                    | BYO replacement                                                                                                                                                                                                        |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`@forinda/kickjs-graphql`](packages/graphql/)             | [guide/graphql](https://forinda.github.io/kick-js/guide/graphql) — wrap `graphql-http` / `graphql-yoga` / Apollo / Pothos via `definePlugin`                                                                           |
+| [`@forinda/kickjs-otel`](packages/otel/)                   | [guide/otel](https://forinda.github.io/kick-js/guide/otel) — own the OpenTelemetry NodeSDK lifecycle; pair with `bootstrap({ processHooks: 'errors-only' })` so the SDK's SIGTERM handler doesn't race the framework's |
+| [`@forinda/kickjs-cron`](packages/cron/)                   | [guide/cron](https://forinda.github.io/kick-js/guide/cron) — wrap `croner` via `defineAdapter` + framework metadata helpers                                                                                            |
+| [`@forinda/kickjs-mailer`](packages/mailer/)               | [guide/mailer](https://forinda.github.io/kick-js/guide/mailer) — `nodemailer` / Resend / SES via `definePlugin`, plus a console-mailer asset-manager example                                                           |
+| [`@forinda/kickjs-multi-tenant`](packages/multi-tenant/)   | [guide/multi-tenancy](https://forinda.github.io/kick-js/guide/multi-tenancy) — `defineHttpContextDecorator` + `Scope.REQUEST` per-tenant DB factory                                                                    |
+| [`@forinda/kickjs-notifications`](packages/notifications/) | [guide/notifications](https://forinda.github.io/kick-js/guide/notifications) — channel interface + `definePlugin` registration                                                                                         |
 
 **Why the cut:** thin wrappers around fast-moving ecosystems were costing more in CI/build time than they were saving adopters. Each shipped wrapper made an opinionated choice (which OTel exporter, which mail provider, which GraphQL runtime) that adopters consistently swapped within weeks. The BYO recipes use the same primitives the framework itself exposes — so adopters keep typed DI, lifecycle hooks, the contributor pipeline, and DevTools `introspect()` — and stop paying for an extra layer they were going to bypass anyway. See [comparison.md](comparison.md) for the strategic positioning.
 
 ## Example Apps
 
-| Example | What it shows |
-|---------|---------------|
-| [minimal-api](examples/minimal-api/) | Simplest possible app — bootstrap + one controller |
-| [task-drizzle-api](examples/task-drizzle-api/) | Full task management app — PostgreSQL + Drizzle, 14 DDD modules |
-| [task-prisma-api](examples/task-prisma-api/) | Full task management app — PostgreSQL + Prisma 7 (driver adapters) |
-| [task-kickdb-api](examples/task-kickdb-api/) | KickJS-native ORM (M1) — PostgreSQL + `@forinda/kickjs-db` |
-| [task-mongoose-api](examples/task-mongoose-api/) | Full task management app — MongoDB + Mongoose |
-| [multi-tenant-drizzle-api](examples/multi-tenant-drizzle-api/) | Multi-tenant pattern — PostgreSQL + Drizzle |
-| [multi-tenant-prisma-api](examples/multi-tenant-prisma-api/) | Multi-tenant pattern — PostgreSQL + Prisma |
-| [multi-tenant-mongoose-api](examples/multi-tenant-mongoose-api/) | Multi-tenant pattern — MongoDB + Mongoose |
+| Example                                                          | What it shows                                                      |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------ |
+| [minimal-api](examples/minimal-api/)                             | Simplest possible app — bootstrap + one controller                 |
+| [task-drizzle-api](examples/task-drizzle-api/)                   | Full task management app — PostgreSQL + Drizzle, 14 DDD modules    |
+| [task-prisma-api](examples/task-prisma-api/)                     | Full task management app — PostgreSQL + Prisma 7 (driver adapters) |
+| [task-kickdb-api](examples/task-kickdb-api/)                     | KickJS-native ORM (M1) — PostgreSQL + `@forinda/kickjs-db`         |
+| [task-mongoose-api](examples/task-mongoose-api/)                 | Full task management app — MongoDB + Mongoose                      |
+| [multi-tenant-drizzle-api](examples/multi-tenant-drizzle-api/)   | Multi-tenant pattern — PostgreSQL + Drizzle                        |
+| [multi-tenant-prisma-api](examples/multi-tenant-prisma-api/)     | Multi-tenant pattern — PostgreSQL + Prisma                         |
+| [multi-tenant-mongoose-api](examples/multi-tenant-mongoose-api/) | Multi-tenant pattern — MongoDB + Mongoose                          |
 
 ## Adding an Example App
 
@@ -258,25 +258,25 @@ kick tinker                          # Interactive REPL with full DI graph
 
 ## Technical Decisions
 
-| Area | Choice | Why |
-|------|--------|-----|
-| Runtime | Node.js 20+ | LTS with native ESM |
-| HTTP | Express 5 | Mature, async middleware, wide ecosystem |
-| Validation | Zod | Runtime + static types, doubles as OpenAPI schema |
-| Build | Vite 8 | Unified toolchain — library builds, HMR, SSR |
-| Test | Vitest 4 | ESM-native, fast, Vite-compatible |
-| Logging | Pino | Fastest Node.js logger, structured JSON |
-| Monorepo | pnpm + Turborepo | Efficient deps, build caching |
+| Area       | Choice           | Why                                               |
+| ---------- | ---------------- | ------------------------------------------------- |
+| Runtime    | Node.js 20+      | LTS with native ESM                               |
+| HTTP       | Express 5        | Mature, async middleware, wide ecosystem          |
+| Validation | Zod              | Runtime + static types, doubles as OpenAPI schema |
+| Build      | Vite 8           | Unified toolchain — library builds, HMR, SSR      |
+| Test       | Vitest 4         | ESM-native, fast, Vite-compatible                 |
+| Logging    | Pino             | Fastest Node.js logger, structured JSON           |
+| Monorepo   | pnpm + Turborepo | Efficient deps, build caching                     |
 
 ## Runtime Compatibility
 
-| Feature | Node 20+ | Node 22+ | Node 24+ | Bun | Deno |
-|---------|----------|----------|----------|-----|------|
-| Production | Yes | Yes | Yes | Experimental | No |
-| Dev Mode (HMR) | Yes | Yes | Yes | No | No |
-| Tests (Vitest) | Yes | Yes | Yes* | Partial | No |
-| CLI (`kick`) | Yes | Yes | Yes | Experimental | No |
-| Pure ESM Import | Yes | Yes | Yes | Yes | Yes |
+| Feature         | Node 20+ | Node 22+ | Node 24+ | Bun          | Deno |
+| --------------- | -------- | -------- | -------- | ------------ | ---- |
+| Production      | Yes      | Yes      | Yes      | Experimental | No   |
+| Dev Mode (HMR)  | Yes      | Yes      | Yes      | No           | No   |
+| Tests (Vitest)  | Yes      | Yes      | Yes\*    | Partial      | No   |
+| CLI (`kick`)    | Yes      | Yes      | Yes      | Experimental | No   |
+| Pure ESM Import | Yes      | Yes      | Yes      | Yes          | Yes  |
 
 > **Node 20** is the minimum supported version (LTS with native ESM).
 >

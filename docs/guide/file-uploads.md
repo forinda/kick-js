@@ -57,13 +57,23 @@ import { RequestContext } from '@forinda/kickjs'
 @Controller()
 class FileController {
   @Post('/upload')
-  @FileUpload({ mode: 'single', fieldName: 'document', maxSize: 10_000_000, allowedTypes: ['pdf', 'docx'] })
+  @FileUpload({
+    mode: 'single',
+    fieldName: 'document',
+    maxSize: 10_000_000,
+    allowedTypes: ['pdf', 'docx'],
+  })
   async handleUpload(ctx: RequestContext) {
     ctx.json({ file: ctx.file.originalname, size: ctx.file.size })
   }
 
   @Post('/photos')
-  @FileUpload({ mode: 'array', fieldName: 'photos', maxCount: 5, allowedTypes: ['jpg', 'png', 'webp'] })
+  @FileUpload({
+    mode: 'array',
+    fieldName: 'photos',
+    maxCount: 5,
+    allowedTypes: ['jpg', 'png', 'webp'],
+  })
   async handlePhotos(ctx: RequestContext) {
     ctx.json({ count: ctx.files?.length })
   }
@@ -85,26 +95,26 @@ class FileController {
 
 The `@FileUpload` decorator and the `upload.*()` middleware share the same base options (`BaseUploadOptions`). The decorator adds `mode`, `fieldName`, and `maxCount`.
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `mode` | `'single' \| 'array' \| 'none'` | **required** | Upload mode |
-| `fieldName` | `string` | `'file'` | Form field name |
-| `maxCount` | `number` | `10` | Max files (array mode only) |
-| `maxSize` | `number` | `5MB` | Max file size in bytes |
-| `allowedTypes` | `string[] \| FileTypeFilter` | all | String array or filter function |
-| `customMimeMap` | `Record<string, string>` | — | Extend the built-in MIME map |
+| Option          | Type                            | Default      | Description                     |
+| --------------- | ------------------------------- | ------------ | ------------------------------- |
+| `mode`          | `'single' \| 'array' \| 'none'` | **required** | Upload mode                     |
+| `fieldName`     | `string`                        | `'file'`     | Form field name                 |
+| `maxCount`      | `number`                        | `10`         | Max files (array mode only)     |
+| `maxSize`       | `number`                        | `5MB`        | Max file size in bytes          |
+| `allowedTypes`  | `string[] \| FileTypeFilter`    | all          | String array or filter function |
+| `customMimeMap` | `Record<string, string>`        | —            | Extend the built-in MIME map    |
 
 ## UploadOptions
 
 All middleware methods accept an `UploadOptions` object:
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `maxSize` | `number` | `5 * 1024 * 1024` (5 MB) | Maximum file size in bytes |
-| `allowedTypes` | `string[] \| FileFilterFn` | all | String array or filter function (see below) |
-| `customMimeMap` | `Record<string, string>` | — | Extend the built-in extension-to-MIME map |
-| `storage` | Multer `StorageEngine` | memory | Custom Multer storage engine |
-| `dest` | `string` | — | Shorthand for disk storage destination directory |
+| Option          | Type                       | Default                  | Description                                      |
+| --------------- | -------------------------- | ------------------------ | ------------------------------------------------ |
+| `maxSize`       | `number`                   | `5 * 1024 * 1024` (5 MB) | Maximum file size in bytes                       |
+| `allowedTypes`  | `string[] \| FileFilterFn` | all                      | String array or filter function (see below)      |
+| `customMimeMap` | `Record<string, string>`   | —                        | Extend the built-in extension-to-MIME map        |
+| `storage`       | Multer `StorageEngine`     | memory                   | Custom Multer storage engine                     |
+| `dest`          | `string`                   | —                        | Shorthand for disk storage destination directory |
 
 ## Allowed Types — Value or Function
 
@@ -133,14 +143,12 @@ For full control, pass a function that receives the MIME type and original filen
 ```ts
 // Accept images and HEIC files by extension
 upload.single('file', {
-  allowedTypes: (mime, filename) =>
-    mime.startsWith('image/') || filename.endsWith('.heic'),
+  allowedTypes: (mime, filename) => mime.startsWith('image/') || filename.endsWith('.heic'),
 })
 
 // Accept anything under 2MB that isn't executable
 upload.single('file', {
-  allowedTypes: (mime) =>
-    !mime.includes('executable') && !mime.includes('x-msdownload'),
+  allowedTypes: (mime) => !mime.includes('executable') && !mime.includes('x-msdownload'),
 })
 ```
 

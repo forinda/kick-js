@@ -1,7 +1,7 @@
 import 'reflect-metadata'
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { DevToolsAdapter, type DevToolsOptions } from '@forinda/kickjs-devtools'
-import { Container, METADATA, Controller, Get, Post, Middleware } from '@forinda/kickjs'
+import { Container, Controller, Get, Post, Middleware } from '@forinda/kickjs'
 import type { Request, Response, NextFunction } from 'express'
 
 // ── Helpers ────────────────────────────────────────────────────────────
@@ -336,7 +336,7 @@ describe('DevToolsAdapter', () => {
       // p99 of 1..100: ceil(0.99 * 100) - 1 = 98 => sorted[98] = 99
       // We can't directly call computePercentiles (it's module-private),
       // but we can verify the samples are there for the metrics endpoint.
-      const sorted = [...stats.samples].sort((a, b) => a - b)
+      const sorted = stats.samples.toSorted((a, b) => a - b)
       expect(sorted[Math.ceil(0.5 * 100) - 1]).toBe(50)
       expect(sorted[Math.ceil(0.95 * 100) - 1]).toBe(95)
       expect(sorted[Math.ceil(0.99 * 100) - 1]).toBe(99)
@@ -493,7 +493,7 @@ describe('DevToolsAdapter', () => {
 
   describe('config sanitization', () => {
     it('should only expose env vars matching configPrefixes', () => {
-      const adapter = createAdapter({
+      const _adapter = createAdapter({
         exposeConfig: true,
         configPrefixes: ['APP_', 'NODE_ENV'],
       })
@@ -523,7 +523,7 @@ describe('DevToolsAdapter', () => {
     })
 
     it('should use default prefixes (APP_, NODE_ENV) when not specified', () => {
-      const adapter = createAdapter({ exposeConfig: true })
+      const _adapter = createAdapter({ exposeConfig: true })
       const defaultPrefixes = ['APP_', 'NODE_ENV']
 
       const env = {

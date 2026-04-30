@@ -17,7 +17,7 @@ import type { MiddlewareHandler } from '@forinda/kickjs'
 import type { RequestContext } from '@forinda/kickjs'
 
 const authMiddleware: MiddlewareHandler<RequestContext> = async (ctx, next) => {
-  const token = ctx.headers['authorization']  // fully typed
+  const token = ctx.headers['authorization'] // fully typed
   if (!token) return ctx.badRequest('Missing authorization header')
 
   ctx.set('user', { id: 'user-123' })
@@ -60,7 +60,7 @@ export class TodoController {
     ctx.created({ id: '1' })
   }
 
-  @Get('/')   // no extra middleware
+  @Get('/') // no extra middleware
   async list(ctx: RequestContext) {
     ctx.json([])
   }
@@ -84,15 +84,15 @@ Steps 1-4 use the `@Middleware()` mechanism described above. Step 5 is the typed
 
 KickJS has two ways to "do something before the handler runs". Picking the right one matters for type safety, ordering, and reusability.
 
-| Concern | `@Middleware()` | `defineContextDecorator()` |
-|---|---|---|
-| Compute a typed value to stash on `ctx` | Possible, untyped | Built for this; types via `ContextMeta` |
-| Short-circuit the response | Yes (`return ctx.notFound()`) | Not the right tool |
-| Mutate the response stream | Yes (compression, etc.) | No |
-| Run before route matching | Yes (global middleware) | No (per-route only) |
-| Declare ordering against another middleware | Manual array position | `dependsOn: ['otherKey']` enforced at startup |
-| Reusable across plugins/adapters | Pass closures around | Built-in `contributors?()` hook |
-| Errors abort boot if misconfigured | No (silent until requests hit) | Yes (cycles/missing deps fail `app.setup()`) |
+| Concern                                     | `@Middleware()`                | `defineContextDecorator()`                    |
+| ------------------------------------------- | ------------------------------ | --------------------------------------------- |
+| Compute a typed value to stash on `ctx`     | Possible, untyped              | Built for this; types via `ContextMeta`       |
+| Short-circuit the response                  | Yes (`return ctx.notFound()`)  | Not the right tool                            |
+| Mutate the response stream                  | Yes (compression, etc.)        | No                                            |
+| Run before route matching                   | Yes (global middleware)        | No (per-route only)                           |
+| Declare ordering against another middleware | Manual array position          | `dependsOn: ['otherKey']` enforced at startup |
+| Reusable across plugins/adapters            | Pass closures around           | Built-in `contributors?()` hook               |
+| Errors abort boot if misconfigured          | No (silent until requests hit) | Yes (cycles/missing deps fail `app.setup()`)  |
 
 Rule of thumb: **if the middleware's only job is to compute a value other code reads off `ctx`, use a context decorator.** For everything else, use `@Middleware()`. See [Context Decorators](./context-decorators.md) for the full guide.
 
@@ -103,11 +103,11 @@ Global middleware is configured in `bootstrap()` via the `middleware` option. Th
 ::: warning Different signature from @Middleware
 Global middleware uses the **raw Express signature** `(req, res, next)`, not the KickJS `MiddlewareHandler` signature `(ctx, next)`. This is because global middleware runs before routes are matched, outside the KickJS `RequestContext` pipeline.
 
-| Location | Signature | Receives |
-|---|---|---|
-| `bootstrap({ middleware })` | `(req, res, next)` | Express `Request`, `Response`, `NextFunction` |
-| `@Middleware()` on class/method | `(ctx, next)` | KickJS `RequestContext`, `next()` |
-| Adapter `middleware()` | `(req, res, next)` | Express `Request`, `Response`, `NextFunction` |
+| Location                        | Signature          | Receives                                      |
+| ------------------------------- | ------------------ | --------------------------------------------- |
+| `bootstrap({ middleware })`     | `(req, res, next)` | Express `Request`, `Response`, `NextFunction` |
+| `@Middleware()` on class/method | `(ctx, next)`      | KickJS `RequestContext`, `next()`             |
+| Adapter `middleware()`          | `(req, res, next)` | Express `Request`, `Response`, `NextFunction` |
 
 Using the wrong signature causes runtime crashes. If you see `Cannot read properties of undefined`, check which signature you're using.
 :::
@@ -119,13 +119,7 @@ import { modules } from './modules'
 
 bootstrap({
   modules,
-  middleware: [
-    requestId(),
-    express.json({ limit: '1mb' }),
-    helmet(),
-    cors(),
-    morgan('dev'),
-  ],
+  middleware: [requestId(), express.json({ limit: '1mb' }), helmet(), cors(), morgan('dev')],
 })
 ```
 
@@ -140,10 +134,7 @@ express.json({ limit: '100kb' })
 Global middleware entries can be path-scoped:
 
 ```ts
-middleware: [
-  express.json(),
-  { path: '/api/v1/webhooks', handler: express.raw({ type: '*/*' }) },
-]
+middleware: [express.json(), { path: '/api/v1/webhooks', handler: express.raw({ type: '*/*' }) }]
 ```
 
 ## Adapter Middleware Phases
@@ -170,25 +161,25 @@ const RateLimitAdapter = defineAdapter({
 
 The full middleware pipeline executes in this order:
 
-| Step | Phase            | Source                |
-| ---- | ---------------- | --------------------- |
-| 1    | `beforeMount`    | Adapter hooks (early routes like health, docs UI) |
-| 2    | `beforeGlobal`   | Adapter middleware    |
-| 3    | global           | User-declared `middleware` array |
-| 4    | `afterGlobal`    | Adapter middleware    |
-| 5    | DI bootstrap     | Module `register()` calls |
-| 6    | `beforeRoutes`   | Adapter middleware    |
-| 7    | routes           | Module route mounting (per-route: validation → upload → `@Middleware()` → [contributor pipeline](./context-decorators.md) → handler) |
-| 8    | `afterRoutes`    | Adapter middleware    |
-| 9    | error handlers   | `onNotFound` + `onError` (or built-in defaults) |
+| Step | Phase          | Source                                                                                                                               |
+| ---- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| 1    | `beforeMount`  | Adapter hooks (early routes like health, docs UI)                                                                                    |
+| 2    | `beforeGlobal` | Adapter middleware                                                                                                                   |
+| 3    | global         | User-declared `middleware` array                                                                                                     |
+| 4    | `afterGlobal`  | Adapter middleware                                                                                                                   |
+| 5    | DI bootstrap   | Module `register()` calls                                                                                                            |
+| 6    | `beforeRoutes` | Adapter middleware                                                                                                                   |
+| 7    | routes         | Module route mounting (per-route: validation → upload → `@Middleware()` → [contributor pipeline](./context-decorators.md) → handler) |
+| 8    | `afterRoutes`  | Adapter middleware                                                                                                                   |
+| 9    | error handlers | `onNotFound` + `onError` (or built-in defaults)                                                                                      |
 
 ### AdapterMiddleware interface
 
 ```ts
 interface AdapterMiddleware {
-  handler: any             // Express-compatible (req, res, next) handler
-  phase?: MiddlewarePhase  // 'beforeGlobal' | 'afterGlobal' | 'beforeRoutes' | 'afterRoutes'
-  path?: string            // Optional path scope
+  handler: any // Express-compatible (req, res, next) handler
+  phase?: MiddlewarePhase // 'beforeGlobal' | 'afterGlobal' | 'beforeRoutes' | 'afterRoutes'
+  path?: string // Optional path scope
 }
 ```
 
@@ -259,19 +250,19 @@ The `CircuitBreaker` class implements the [circuit breaker pattern](https://mart
 
 ### States
 
-| State | Description |
-|---|---|
-| **CLOSED** | Normal operation. Requests pass through. Failures are counted. |
-| **OPEN** | Failures exceeded the threshold. All requests are immediately rejected with `CircuitOpenError`. |
+| State         | Description                                                                                                                                      |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **CLOSED**    | Normal operation. Requests pass through. Failures are counted.                                                                                   |
+| **OPEN**      | Failures exceeded the threshold. All requests are immediately rejected with `CircuitOpenError`.                                                  |
 | **HALF_OPEN** | After `resetTimeout` elapses the circuit allows a limited number of probe requests. If they succeed the circuit closes; if any fail it re-opens. |
 
 ### Configuration options
 
-| Option | Type | Default | Description |
-|---|---|---|---|
-| `failureThreshold` | `number` | *(required)* | Consecutive failures before the circuit opens. |
-| `resetTimeout` | `number` | *(required)* | Milliseconds to wait in OPEN state before transitioning to HALF_OPEN. |
-| `halfOpenMax` | `number` | `1` | Maximum probe requests allowed while HALF_OPEN. |
+| Option             | Type     | Default      | Description                                                           |
+| ------------------ | -------- | ------------ | --------------------------------------------------------------------- |
+| `failureThreshold` | `number` | _(required)_ | Consecutive failures before the circuit opens.                        |
+| `resetTimeout`     | `number` | _(required)_ | Milliseconds to wait in OPEN state before transitioning to HALF_OPEN. |
+| `halfOpenMax`      | `number` | `1`          | Maximum probe requests allowed while HALF_OPEN.                       |
 
 ### Usage
 
@@ -330,8 +321,8 @@ bootstrap({
   modules,
   middleware: [
     requestScopeMiddleware(),
-    traceContext(),        // extracts or generates traceId
-    requestLogger(),       // logger automatically includes traceId
+    traceContext(), // extracts or generates traceId
+    requestLogger(), // logger automatically includes traceId
     express.json(),
   ],
 })
@@ -347,8 +338,8 @@ bootstrap({
 
 ### Options
 
-| Option              | Type      | Default | Description                                                                                                                               |
-| ------------------- | --------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Option              | Type      | Default | Description                                                                                                                             |
+| ------------------- | --------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | `propagateResponse` | `boolean` | `false` | When `true`, sets a `traceresponse` header on the outgoing response containing the trace ID. Useful for debugging client-side requests. |
 
 ```ts

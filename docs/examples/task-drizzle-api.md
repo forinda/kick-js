@@ -29,17 +29,17 @@ kick dev
 
 ## Packages Used
 
-| Package | Purpose |
-|---------|---------|
-| `@forinda/kickjs` | Core framework: DI, decorators, Express 5 routing, middleware |
-| `@forinda/kickjs-config` | Zod-based env validation |
-| `@forinda/kickjs-swagger` | OpenAPI docs |
-| `@forinda/kickjs-devtools` | Debug dashboard |
-| `@forinda/kickjs-drizzle` | Drizzle adapter, DI integration |
-| `@forinda/kickjs-queue` | BullMQ job processing |
-| BYO cron via `defineAdapter` + `croner` | Scheduled tasks — see [Cron guide](../guide/cron.md) |
-| BYO mailer via `definePlugin` + nodemailer/Resend | Email transport — see [Mailer guide](../guide/mailer.md) |
-| `@forinda/kickjs-ws` | WebSocket adapter |
+| Package                                           | Purpose                                                       |
+| ------------------------------------------------- | ------------------------------------------------------------- |
+| `@forinda/kickjs`                                 | Core framework: DI, decorators, Express 5 routing, middleware |
+| `@forinda/kickjs-config`                          | Zod-based env validation                                      |
+| `@forinda/kickjs-swagger`                         | OpenAPI docs                                                  |
+| `@forinda/kickjs-devtools`                        | Debug dashboard                                               |
+| `@forinda/kickjs-drizzle`                         | Drizzle adapter, DI integration                               |
+| `@forinda/kickjs-queue`                           | BullMQ job processing                                         |
+| BYO cron via `defineAdapter` + `croner`           | Scheduled tasks — see [Cron guide](../guide/cron.md)          |
+| BYO mailer via `definePlugin` + nodemailer/Resend | Email transport — see [Mailer guide](../guide/mailer.md)      |
+| `@forinda/kickjs-ws`                              | WebSocket adapter                                             |
 
 ## Project Structure
 
@@ -142,12 +142,12 @@ async list(ctx: RequestContext) {
 
 ## Differences from Mongoose Edition
 
-| Aspect | Drizzle | Mongoose |
-|--------|---------|----------|
-| Database | PostgreSQL | MongoDB |
+| Aspect          | Drizzle                         | Mongoose                                |
+| --------------- | ------------------------------- | --------------------------------------- |
+| Database        | PostgreSQL                      | MongoDB                                 |
 | Schema location | Centralized in `src/db/schema/` | Per-module in `infrastructure/schemas/` |
-| Auth approach | Custom JWT middleware | `@forinda/kickjs-auth` adapter |
-| Query style | SQL with Drizzle query builder | Mongoose `find()` with query helpers |
+| Auth approach   | Custom JWT middleware           | `@forinda/kickjs-auth` adapter          |
+| Query style     | SQL with Drizzle query builder  | Mongoose `find()` with query helpers    |
 
 ## Source
 

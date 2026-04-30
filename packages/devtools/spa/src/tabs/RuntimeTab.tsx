@@ -51,7 +51,11 @@ export const RuntimeTab: Component = () => {
         {(snap) => (
           <>
             <div class="grid">
-              <Card title="Heap used" metric="heap.used" value={formatBytes(snap().memory.heapUsed)}>
+              <Card
+                title="Heap used"
+                metric="heap.used"
+                value={formatBytes(snap().memory.heapUsed)}
+              >
                 <Sparkline values={heap()} />
               </Card>
               <Card title="RSS" metric="rss" value={formatBytes(snap().memory.rss)}>
@@ -82,7 +86,11 @@ export const RuntimeTab: Component = () => {
                 metric="array-buffers"
                 value={formatBytes(snap().memory.arrayBuffers)}
               />
-              <Card title="Heap total" metric="heap.total" value={formatBytes(snap().memory.heapTotal)} />
+              <Card
+                title="Heap total"
+                metric="heap.total"
+                value={formatBytes(snap().memory.heapTotal)}
+              />
               <Card
                 title="CPU (last sample)"
                 value={`${(snap().cpu.userMicros / 1000).toFixed(1)} ms u / ${(snap().cpu.systemMicros / 1000).toFixed(1)} ms s`}
@@ -112,9 +120,7 @@ const Card: Component<{
     <div class="card-header">
       <div class="card-title">
         {props.title}
-        <Show when={props.metric}>
-          {(m) => <InfoTip metric={m()} />}
-        </Show>
+        <Show when={props.metric}>{(m) => <InfoTip metric={m()} />}</Show>
       </div>
       <div class="card-value">{props.value}</div>
     </div>

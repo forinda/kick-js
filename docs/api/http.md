@@ -21,16 +21,14 @@ interface ApplicationOptions {
   modules: AppModuleClass[]
   adapters?: AppAdapter[]
   port?: number
-  apiPrefix?: string            // default: '/api'
-  defaultVersion?: number       // default: 1
+  apiPrefix?: string // default: '/api'
+  defaultVersion?: number // default: 1
   middleware?: MiddlewareEntry[]
   trustProxy?: boolean | number | string | ((ip: string, hopIndex: number) => boolean)
   jsonLimit?: string | number
 }
 
-type MiddlewareEntry =
-  | RequestHandler
-  | { path: string; handler: RequestHandler }
+type MiddlewareEntry = RequestHandler | { path: string; handler: RequestHandler }
 ```
 
 ## bootstrap
@@ -135,12 +133,17 @@ Double-submit cookie CSRF protection.
 function csrf(options?: CsrfOptions): RequestHandler
 
 interface CsrfOptions {
-  cookie?: string           // default: '_csrf'
-  header?: string           // default: 'x-csrf-token'
-  methods?: string[]        // default: ['POST','PUT','PATCH','DELETE']
+  cookie?: string // default: '_csrf'
+  header?: string // default: 'x-csrf-token'
+  methods?: string[] // default: ['POST','PUT','PATCH','DELETE']
   ignorePaths?: string[]
-  tokenLength?: number      // default: 32
-  cookieOptions?: { httpOnly?: boolean; sameSite?: 'strict'|'lax'|'none'; secure?: boolean; path?: string }
+  tokenLength?: number // default: 32
+  cookieOptions?: {
+    httpOnly?: boolean
+    sameSite?: 'strict' | 'lax' | 'none'
+    secure?: boolean
+    path?: string
+  }
 }
 ```
 
@@ -158,7 +161,7 @@ const upload: {
 function cleanupFiles(): RequestHandler
 
 interface UploadOptions {
-  maxSize?: number          // default: 5MB
+  maxSize?: number // default: 5MB
   allowedTypes?: string[]
   storage?: MulterOptions['storage']
   dest?: string
@@ -171,9 +174,15 @@ ORM-agnostic query string parsing for filters, sorting, pagination, and search.
 
 ```typescript
 function parseQuery(query: Record<string, any>, fieldConfig?: QueryFieldConfig): ParsedQuery
-function parseFilters(filterParam: string | string[] | undefined, allowedFields?: string[]): FilterItem[]
+function parseFilters(
+  filterParam: string | string[] | undefined,
+  allowedFields?: string[],
+): FilterItem[]
 function parseSort(sortParam: string | string[] | undefined, allowedFields?: string[]): SortItem[]
-function parsePagination(params: { page?: string | number; limit?: string | number }): PaginationParams
+function parsePagination(params: {
+  page?: string | number
+  limit?: string | number
+}): PaginationParams
 function parseSearchQuery(q: string | undefined): string
 function buildQueryParams(parsed: Partial<ParsedQuery>): Record<string, string | string[] | number>
 ```
@@ -181,13 +190,44 @@ function buildQueryParams(parsed: Partial<ParsedQuery>): Record<string, string |
 ### Query Types
 
 ```typescript
-type FilterOperator = 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'between' | 'in' | 'contains' | 'starts' | 'ends'
+type FilterOperator =
+  | 'eq'
+  | 'neq'
+  | 'gt'
+  | 'gte'
+  | 'lt'
+  | 'lte'
+  | 'between'
+  | 'in'
+  | 'contains'
+  | 'starts'
+  | 'ends'
 
-interface FilterItem { field: string; operator: FilterOperator; value: string }
-interface SortItem { field: string; direction: 'asc' | 'desc' }
-interface PaginationParams { page: number; limit: number; offset: number }
-interface ParsedQuery { filters: FilterItem[]; sort: SortItem[]; pagination: PaginationParams; search: string }
-interface QueryFieldConfig { filterable?: string[]; sortable?: string[]; searchable?: string[] }
+interface FilterItem {
+  field: string
+  operator: FilterOperator
+  value: string
+}
+interface SortItem {
+  field: string
+  direction: 'asc' | 'desc'
+}
+interface PaginationParams {
+  page: number
+  limit: number
+  offset: number
+}
+interface ParsedQuery {
+  filters: FilterItem[]
+  sort: SortItem[]
+  pagination: PaginationParams
+  search: string
+}
+interface QueryFieldConfig {
+  filterable?: string[]
+  sortable?: string[]
+  searchable?: string[]
+}
 
 interface QueryBuilderAdapter<TResult = any, TConfig = any> {
   readonly name: string

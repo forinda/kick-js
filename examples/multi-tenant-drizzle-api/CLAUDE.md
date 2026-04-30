@@ -117,25 +117,25 @@ Every controller method receives a `ctx` (alias `Ctx<TRoute>` or the
 loose `RequestContext`):
 
 ```ts
-ctx.body           // Request body (parsed JSON)
-ctx.params         // Route params
-ctx.query          // Query string
-ctx.headers        // Request headers
-ctx.requestId      // Auto-generated request ID
-ctx.session        // Session data (if session middleware enabled)
-ctx.file           // Uploaded file (single)
-ctx.files          // Uploaded files (multiple)
+ctx.body // Request body (parsed JSON)
+ctx.params // Route params
+ctx.query // Query string
+ctx.headers // Request headers
+ctx.requestId // Auto-generated request ID
+ctx.session // Session data (if session middleware enabled)
+ctx.file // Uploaded file (single)
+ctx.files // Uploaded files (multiple)
 
 // Pagination helpers
-ctx.qs(config)           // Parse query with filters/sort/pagination
-ctx.paginate(handler)     // Auto-paginated response
+ctx.qs(config) // Parse query with filters/sort/pagination
+ctx.paginate(handler) // Auto-paginated response
 
 // Response helpers
-ctx.json(data)            // 200 OK with JSON
-ctx.created(data)         // 201 Created
-ctx.noContent()           // 204 No Content
-ctx.notFound()            // 404 Not Found
-ctx.badRequest(msg)       // 400 Bad Request
+ctx.json(data) // 200 OK with JSON
+ctx.created(data) // 201 Created
+ctx.noContent() // 204 No Content
+ctx.notFound() // 404 Not Found
+ctx.badRequest(msg) // 400 Bad Request
 ```
 
 ## CLI Generators
@@ -193,7 +193,7 @@ export class ApiService {
   @Value('API_KEY')
   private apiKey!: string
 
-  @Value('PORT', 3000)  // With default
+  @Value('PORT', 3000) // With default
   private port!: number
 }
 ```
@@ -224,19 +224,24 @@ reloads, and the next `config.get()` re-parses with the new values.
 These functions work anywhere — scripts, CLI tools, plain files, outside `@Service`/`@Controller`:
 
 ```ts
-import { defineEnv, loadEnv, getEnv, reloadEnv, resetEnvCache, baseEnvSchema } from '@forinda/kickjs/config'
+import {
+  defineEnv,
+  loadEnv,
+  getEnv,
+  reloadEnv,
+  resetEnvCache,
+  baseEnvSchema,
+} from '@forinda/kickjs/config'
 import { z } from 'zod'
 
 // Define and parse schema
-const schema = defineEnv((base) =>
-  base.extend({ DATABASE_URL: z.string().url() })
-)
-const env = loadEnv(schema)      // Parse + validate process.env
-console.log(env.PORT)            // 3000 (coerced to number)
-console.log(env.DATABASE_URL)    // validated URL string
+const schema = defineEnv((base) => base.extend({ DATABASE_URL: z.string().url() }))
+const env = loadEnv(schema) // Parse + validate process.env
+console.log(env.PORT) // 3000 (coerced to number)
+console.log(env.DATABASE_URL) // validated URL string
 
 // Get single value
-const port = getEnv('PORT')      // typed after kick typegen
+const port = getEnv('PORT') // typed after kick typegen
 
 // Reload after .env changes (HMR calls this automatically)
 reloadEnv()
@@ -245,14 +250,14 @@ reloadEnv()
 resetEnvCache()
 ```
 
-| Function | Purpose |
-|----------|---------|
-| `defineEnv(fn)` | Extend base schema with custom Zod keys |
-| `loadEnv(schema?)` | Parse `process.env`, validate, cache, return typed object |
-| `getEnv(key, schema?)` | Get single validated env value |
-| `reloadEnv()` | Re-read `.env` from disk, re-parse with same schema |
-| `resetEnvCache()` | Clear parsed cache AND registered schema (for tests) |
-| `baseEnvSchema` | Base Zod schema: `PORT`, `NODE_ENV`, `LOG_LEVEL` |
+| Function               | Purpose                                                   |
+| ---------------------- | --------------------------------------------------------- |
+| `defineEnv(fn)`        | Extend base schema with custom Zod keys                   |
+| `loadEnv(schema?)`     | Parse `process.env`, validate, cache, return typed object |
+| `getEnv(key, schema?)` | Get single validated env value                            |
+| `reloadEnv()`          | Re-read `.env` from disk, re-parse with same schema       |
+| `resetEnvCache()`      | Clear parsed cache AND registered schema (for tests)      |
+| `baseEnvSchema`        | Base Zod schema: `PORT`, `NODE_ENV`, `LOG_LEVEL`          |
 
 ## Standalone Utilities (No DI Required)
 
@@ -263,11 +268,11 @@ These utilities work outside decorated classes:
 ```ts
 import { Logger, createLogger } from '@forinda/kickjs'
 
-const log = Logger.for('MyScript')    // Static factory
+const log = Logger.for('MyScript') // Static factory
 log.info('Processing started')
 log.error('Something failed')
 
-const log2 = createLogger('Worker')   // Function form
+const log2 = createLogger('Worker') // Function form
 ```
 
 ### Injection Tokens
@@ -287,8 +292,11 @@ import { ref, computed, watch, reactive } from '@forinda/kickjs'
 
 const count = ref(0)
 const doubled = computed(() => count.value * 2)
-const stop = watch(() => count.value, (val) => console.log(val))
-count.value++  // logs 1
+const stop = watch(
+  () => count.value,
+  (val) => console.log(val),
+)
+count.value++ // logs 1
 ```
 
 ### HTTP Errors
@@ -320,12 +328,14 @@ describe('UserController', () => {
 ```
 
 Run tests:
+
 - `pnpm run test` — run all tests
 - `pnpm run test:watch` — watch mode
 
 ## Decorators Reference
 
 ### Route Decorators
+
 - `@Controller('/path')` — define controller prefix
 - `@Get('/'), @Post('/'), @Put('/'), @Delete('/'), @Patch('/')` — HTTP methods
 - `@Middleware(fn)` — attach middleware
@@ -333,6 +343,7 @@ Run tests:
 - `@Roles('admin', 'user')` — role-based access control
 
 ### DI Decorators
+
 - `@Service()` — singleton service (DI-registered)
 - `@Repository()` — repository (semantic alias for @Service)
 - `@Autowired()` — property injection
@@ -346,7 +357,7 @@ Run tests:
 3. **Always use `ctx.body`** — never `req.body` directly
 4. **DI requires `reflect-metadata`** — already imported in `src/index.ts`
 5. **Vite HMR requires proper cleanup** — adapters should implement `shutdown()`
-6. **Never delete `import './config'` from `src/index.ts`** — that side-effect import registers the env schema with kickjs. Without it `ConfigService.get('YOUR_KEY')` returns `undefined` for every user-defined key. `@Value('YOUR_KEY')` *appears* to keep working but only via a raw `process.env` fallback (Zod coercion + schema defaults are silently skipped).
+6. **Never delete `import './config'` from `src/index.ts`** — that side-effect import registers the env schema with kickjs. Without it `ConfigService.get('YOUR_KEY')` returns `undefined` for every user-defined key. `@Value('YOUR_KEY')` _appears_ to keep working but only via a raw `process.env` fallback (Zod coercion + schema defaults are silently skipped).
 
 ## Learn More
 

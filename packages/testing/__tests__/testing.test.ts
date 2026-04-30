@@ -7,7 +7,6 @@ import {
   Service,
   Controller,
   Get,
-  Inject,
   RequestContext,
   buildRoutes,
   defineContextDecorator,

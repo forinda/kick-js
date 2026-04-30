@@ -52,9 +52,7 @@ Implement the repository interface with a plain array:
 import type { IUserRepository, User, NewUser } from '../domain/repositories/user.repository'
 
 class InMemoryUserRepository implements IUserRepository {
-  private users: User[] = [
-    { id: 'u1', email: 'alice@test.com', firstName: 'Alice', /* ... */ },
-  ]
+  private users: User[] = [{ id: 'u1', email: 'alice@test.com', firstName: 'Alice' /* ... */ }]
 
   async findById(id: string) {
     return this.users.find((u) => u.id === id) ?? null

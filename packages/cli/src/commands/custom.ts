@@ -93,7 +93,7 @@ function registerSingleCommand(program: Command, def: KickCommandDefinition): vo
       console.log(`  $ ${finalCmd}`)
       try {
         runShellCommand(finalCmd)
-      } catch (err: any) {
+      } catch {
         console.error(`  Command failed: ${def.name}`)
         process.exitCode = 1
         return

@@ -136,7 +136,7 @@ describe('discoverPluginGenerators', () => {
 
     const result = await discoverPluginGenerators(fixture)
     expect(result.loaded).toEqual(['@my-org/kickjs-cqrs'])
-    expect(result.generators.map((g) => g.spec.name).sort()).toEqual(['command', 'query'])
+    expect(result.generators.map((g) => g.spec.name).toSorted()).toEqual(['command', 'query'])
     for (const g of result.generators) expect(g.source).toBe('@my-org/kickjs-cqrs')
   })
 

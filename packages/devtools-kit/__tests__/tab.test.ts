@@ -1,10 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 
-import {
-  defineDevtoolsRenderTab,
-  type KickEventBus,
-  type TabProps,
-} from '../src'
+import { defineDevtoolsRenderTab, type KickEventBus, type TabProps } from '../src'
 
 // Lightweight fake — the real createInMemoryBus has its own coverage;
 // here we only need a working subscribe/emit pair to assert the tab

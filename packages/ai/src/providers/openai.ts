@@ -199,7 +199,7 @@ export class OpenAIProvider implements AiProvider {
 
     // Sort by index so we always return vectors in the order we sent
     // them, even if the API decides to interleave responses.
-    return [...data.data].sort((a, b) => a.index - b.index).map((d) => d.embedding)
+    return [...data.data].toSorted((a, b) => a.index - b.index).map((d) => d.embedding)
   }
 
   // ── Internal: payload construction ──────────────────────────────────

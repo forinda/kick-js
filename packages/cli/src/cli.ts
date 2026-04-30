@@ -37,7 +37,7 @@ async function main() {
   // declarative commands flow through registerCustomCommands. The
   // merge already filtered adopter overrides, so this list is the
   // resolved view.
-  registerCustomCommands(program, { ...(config ?? {}), commands: merged.commands })
+  registerCustomCommands(program, { ...config, commands: merged.commands })
 
   program.showHelpAfterError()
 

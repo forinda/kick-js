@@ -1,6 +1,6 @@
 # Real-Time Features: SSE Streams and WebSocket Chat
 
-*Part 4 of "Building a Task Management App with KickJS + Drizzle ORM"*
+_Part 4 of "Building a Task Management App with KickJS + Drizzle ORM"_
 
 ---
 
@@ -8,13 +8,13 @@ Vibed has two kinds of real-time features: dashboard stats that update periodica
 
 ## When to Use What
 
-| Feature | Protocol | Why |
-|---------|----------|-----|
-| Dashboard stats | SSE | Server → client only, simple, auto-reconnects |
-| Activity feed | SSE | One-directional stream of events |
-| Chat messages | WebSocket | Bidirectional, need client → server too |
-| Typing indicators | WebSocket | Low-latency bidirectional |
-| Presence (online/offline) | WebSocket | Connection-based lifecycle |
+| Feature                   | Protocol  | Why                                           |
+| ------------------------- | --------- | --------------------------------------------- |
+| Dashboard stats           | SSE       | Server → client only, simple, auto-reconnects |
+| Activity feed             | SSE       | One-directional stream of events              |
+| Chat messages             | WebSocket | Bidirectional, need client → server too       |
+| Typing indicators         | WebSocket | Low-latency bidirectional                     |
+| Presence (online/offline) | WebSocket | Connection-based lifecycle                    |
 
 **Rule of thumb**: If the client only needs to receive data, use SSE. If the client needs to send data too, use WebSocket.
 
@@ -120,7 +120,7 @@ pnpm add @forinda/kickjs-ws
 const wsAdapter = WsAdapter({
   path: '/ws',
   heartbeatInterval: 30000,
-  maxPayload: 1048576,  // 1MB
+  maxPayload: 1048576, // 1MB
 })
 ```
 

@@ -31,10 +31,8 @@ describe('validate() middleware', () => {
   it('forwards schema failures via next(err) so onError sees them', async () => {
     const app = express()
     app.use(express.json())
-    app.post(
-      '/users',
-      validate({ body: schemaThatFails('Name is required') }),
-      (_req, res) => res.json({ ok: true }),
+    app.post('/users', validate({ body: schemaThatFails('Name is required') }), (_req, res) =>
+      res.json({ ok: true }),
     )
 
     const sawError = { called: false, status: 0, message: '', details: undefined as unknown }
@@ -70,10 +68,8 @@ describe('validate() middleware', () => {
   it('passes HttpException through with 422 status', async () => {
     const app = express()
     app.use(express.json())
-    app.post(
-      '/users',
-      validate({ body: schemaThatFails('Name is required') }),
-      (_req, res) => res.json({ ok: true }),
+    app.post('/users', validate({ body: schemaThatFails('Name is required') }), (_req, res) =>
+      res.json({ ok: true }),
     )
 
     let captured: any
@@ -129,14 +125,10 @@ describe('validate() middleware', () => {
     const app = express()
     app.use(express.json())
     let observed: any = null
-    app.post(
-      '/users',
-      validate({ body: schemaThatPasses({ name: 'parsed' }) }),
-      (req, res) => {
-        observed = req.body
-        res.json({ ok: true })
-      },
-    )
+    app.post('/users', validate({ body: schemaThatPasses({ name: 'parsed' }) }), (req, res) => {
+      observed = req.body
+      res.json({ ok: true })
+    })
 
     const res = await request(app).post('/users').send({ name: 'ignored' })
     expect(res.status).toBe(200)
@@ -189,9 +181,7 @@ describe('validate() middleware', () => {
 
     const app = express()
     app.use(express.json())
-    app.post('/users', validate({ body: throwingSchema }), (_req, res) =>
-      res.json({ ok: true }),
-    )
+    app.post('/users', validate({ body: throwingSchema }), (_req, res) => res.json({ ok: true }))
 
     let captured: any
     app.use((err: any, _req: any, res: any, _next: any) => {

@@ -1,6 +1,6 @@
 # Why We Switched from Mongoose to Drizzle ORM
 
-*Part 1 of "Building a Task Management App with KickJS + Drizzle ORM"*
+_Part 1 of "Building a Task Management App with KickJS + Drizzle ORM"_
 
 ---
 
@@ -9,6 +9,7 @@ We built Vibed — a task management backend — twice. The first time with Mong
 ## The Original Stack
 
 The first Vibed was built on:
+
 - **KickJS** — a decorator-driven Node.js framework on Express 5
 - **MongoDB** with Mongoose ODM
 - **Embedded arrays** for many-to-many relationships (assigneeIds, labelIds, memberIds on documents)
@@ -24,12 +25,12 @@ Mongoose schemas and TypeScript interfaces lived in separate worlds. Every entit
 const taskSchema = new Schema({
   title: { type: String, required: true },
   assigneeIds: [{ type: Schema.Types.ObjectId, ref: 'User' }],
-});
+})
 
 // The interface — manually kept in sync
 interface ITask {
-  title: string;
-  assigneeIds: Types.ObjectId[];
+  title: string
+  assigneeIds: Types.ObjectId[]
 }
 ```
 
@@ -39,11 +40,11 @@ With Drizzle, the schema IS the type:
 export const tasks = pgTable('tasks', {
   title: varchar('title', { length: 255 }).notNull(),
   // ...
-});
+})
 
 // Type is derived automatically
-type Task = typeof tasks.$inferSelect;
-type NewTask = typeof tasks.$inferInsert;
+type Task = typeof tasks.$inferSelect
+type NewTask = typeof tasks.$inferInsert
 ```
 
 No drift. No manual interfaces. `$inferSelect` gives you the exact shape of a row, and `$inferInsert` gives you what you need to create one.
@@ -54,11 +55,12 @@ MongoDB's approach of embedding ObjectId arrays inside documents seemed convenie
 
 ```typescript
 // Mongoose: assignees lived on the task document
-task.assigneeIds = [userId1, userId2];
-await task.save();
+task.assigneeIds = [userId1, userId2]
+await task.save()
 ```
 
 But this created problems:
+
 - **No referential integrity** — delete a user, and their stale ObjectId stays in every task's assigneeIds array
 - **Aggregation complexity** — counting tasks per assignee required `$unwind` pipelines
 - **Atomic updates** — adding/removing from arrays needed `$push`/`$pull` with race condition risks
@@ -66,10 +68,18 @@ But this created problems:
 With PostgreSQL + Drizzle, many-to-many uses explicit join tables:
 
 ```typescript
-export const taskAssignees = pgTable('task_assignees', {
-  taskId: uuid('task_id').references(() => tasks.id, { onDelete: 'cascade' }).notNull(),
-  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
-}, (t) => [primaryKey({ columns: [t.taskId, t.userId] })]);
+export const taskAssignees = pgTable(
+  'task_assignees',
+  {
+    taskId: uuid('task_id')
+      .references(() => tasks.id, { onDelete: 'cascade' })
+      .notNull(),
+    userId: uuid('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.taskId, t.userId] })],
+)
 ```
 
 Foreign keys with `onDelete: 'cascade'` handle cleanup automatically. Adding an assignee is a simple insert. Removing is a simple delete. No array manipulation, no race conditions.
@@ -82,12 +92,10 @@ PostgreSQL transactions work everywhere, always:
 
 ```typescript
 await this.db.transaction(async (tx) => {
-  const [task] = await tx.insert(tasks).values(taskData).returning();
-  await tx.insert(taskAssignees).values(
-    assigneeIds.map(userId => ({ taskId: task.id, userId })),
-  );
-  return task;
-});
+  const [task] = await tx.insert(tasks).values(taskData).returning()
+  await tx.insert(taskAssignees).values(assigneeIds.map((userId) => ({ taskId: task.id, userId })))
+  return task
+})
 ```
 
 We use this for task creation (insert task + assignees atomically), workspace creation (insert workspace + add owner as admin), and anywhere we need multi-table consistency.
@@ -97,7 +105,7 @@ We use this for task creation (insert task + assignees atomically), workspace cr
 Vibed tracks `commentCount` and `attachmentCount` on tasks. With Mongoose, incrementing a counter was:
 
 ```typescript
-await TaskModel.updateOne({ _id: taskId }, { $inc: { commentCount: 1 } });
+await TaskModel.updateOne({ _id: taskId }, { $inc: { commentCount: 1 } })
 ```
 
 The Drizzle equivalent uses SQL template literals:
@@ -106,7 +114,7 @@ The Drizzle equivalent uses SQL template literals:
 await this.db
   .update(tasks)
   .set({ commentCount: sql`${tasks.commentCount} + 1` })
-  .where(eq(tasks.id, taskId));
+  .where(eq(tasks.id, taskId))
 ```
 
 Both are atomic. But the Drizzle version composes better — you can wrap it in a transaction with the comment insert, and the `sql` template gives you access to any SQL expression, not just `$inc`.
@@ -120,13 +128,16 @@ One gotcha that cost us time: Drizzle's type inference breaks when you spread a 
 const baseColumns = {
   id: uuid('id').defaultRandom().primaryKey(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
-};
+  updatedAt: timestamp('updated_at')
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
+}
 
 export const users = pgTable('users', {
-  ...baseColumns,  // ← Type inference lost
+  ...baseColumns, // ← Type inference lost
   email: varchar('email', { length: 255 }).notNull(),
-});
+})
 ```
 
 The fix: make `baseColumns` a function that returns fresh column builders each time:
@@ -136,13 +147,16 @@ The fix: make `baseColumns` a function that returns fresh column builders each t
 const baseColumns = () => ({
   id: uuid('id').defaultRandom().primaryKey(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull().$onUpdate(() => new Date()),
-});
+  updatedAt: timestamp('updated_at')
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
+})
 
 export const users = pgTable('users', {
-  ...baseColumns(),  // ← Type inference works
+  ...baseColumns(), // ← Type inference works
   email: varchar('email', { length: 255 }).notNull(),
-});
+})
 ```
 
 This is a Drizzle-specific behavior — TypeScript can infer the return type of a function call but loses track of a plain object's column types after spreading.
@@ -161,14 +175,14 @@ The framework (KickJS) is ORM-agnostic. Swapping Mongoose for Drizzle only chang
 
 ## The Numbers
 
-| Metric | Mongoose Edition | Drizzle Edition |
-|--------|-----------------|-----------------|
-| Schema files | 16 models | 16 tables + 16 relations + 5 enums |
-| Manual type interfaces | 16 | 0 (all inferred) |
-| Migration strategy | Schema-on-write | Explicit (`drizzle-kit push/migrate`) |
-| Many-to-many | Embedded arrays | 3 join tables |
-| Referential integrity | Application-enforced | Database-enforced (FK constraints) |
-| Transactions | Requires replica set | Always available |
+| Metric                 | Mongoose Edition     | Drizzle Edition                       |
+| ---------------------- | -------------------- | ------------------------------------- |
+| Schema files           | 16 models            | 16 tables + 16 relations + 5 enums    |
+| Manual type interfaces | 16                   | 0 (all inferred)                      |
+| Migration strategy     | Schema-on-write      | Explicit (`drizzle-kit push/migrate`) |
+| Many-to-many           | Embedded arrays      | 3 join tables                         |
+| Referential integrity  | Application-enforced | Database-enforced (FK constraints)    |
+| Transactions           | Requires replica set | Always available                      |
 
 ## Next Up
 

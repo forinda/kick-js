@@ -46,6 +46,7 @@ export function createBusCore(): BusCore {
     // doesn't perturb the iteration we're already running.
     const targeted = handlers.get(event.type)
     if (targeted && targeted.size > 0) {
+      // oxlint-disable-next-line unicorn/no-useless-spread -- Set clone is intentional (re-entrant safety, see comment above)
       for (const handler of [...targeted]) {
         try {
           handler(event.payload)
@@ -55,6 +56,7 @@ export function createBusCore(): BusCore {
       }
     }
     if (anyHandlers.size > 0) {
+      // oxlint-disable-next-line unicorn/no-useless-spread -- Set clone is intentional (re-entrant safety, see comment above)
       for (const handler of [...anyHandlers]) {
         try {
           handler(event)

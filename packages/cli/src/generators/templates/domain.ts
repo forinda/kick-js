@@ -103,7 +103,7 @@ export class ${pascal} {
 }
 
 export function generateValueObject(ctx: TemplateContext): string {
-  const { pascal, kebab } = ctx
+  const { pascal } = ctx
   return `/**
  * ${pascal} ID Value Object
  *

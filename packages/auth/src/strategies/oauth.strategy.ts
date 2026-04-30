@@ -212,7 +212,7 @@ export const OAuthStrategy = createAuthStrategy<OAuthStrategyOptions, OAuthStrat
     } else {
       endpoints = {
         ...PROVIDER_ENDPOINTS[options.provider],
-        ...(options.endpoints ?? {}),
+        ...options.endpoints,
       }
     }
 

@@ -32,8 +32,9 @@ export const QueuesTab: Component = () => {
         <div class="card">
           <div class="card-title">Queues</div>
           <p class="text-text-muted text-sm mt-2">
-            QueueAdapter not detected. Install <code class="font-mono text-kick-500">@forinda/kickjs-queue</code>{' '}
-            and register the adapter in your bootstrap to see queue stats here.
+            QueueAdapter not detected. Install{' '}
+            <code class="font-mono text-kick-500">@forinda/kickjs-queue</code> and register the
+            adapter in your bootstrap to see queue stats here.
           </p>
         </div>
       }
@@ -98,11 +99,7 @@ const QueueCard: Component<{ queue: QueueStats }> = (props) => {
         <div class="grid grid-cols-2 gap-2 text-sm">
           <Stat label="Waiting" value={props.queue.waiting ?? 0} colour="text-amber-400" />
           <Stat label="Active" value={props.queue.active ?? 0} colour="text-blue-400" />
-          <Stat
-            label="Completed"
-            value={props.queue.completed ?? 0}
-            colour="text-emerald-400"
-          />
+          <Stat label="Completed" value={props.queue.completed ?? 0} colour="text-emerald-400" />
           <Stat label="Failed" value={props.queue.failed ?? 0} colour="text-red-400" />
           <Stat label="Delayed" value={props.queue.delayed ?? 0} colour="text-violet-400" />
           <Stat label="Paused" value={props.queue.paused ?? 0} colour="text-text-secondary" />

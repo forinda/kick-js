@@ -16,9 +16,7 @@ bootstrap({
         version: '1.0.0',
         description: 'API description',
       },
-      servers: [
-        { url: 'http://localhost:3000', description: 'Local' },
-      ],
+      servers: [{ url: 'http://localhost:3000', description: 'Local' }],
       bearerAuth: true,
     }),
   ],
@@ -26,6 +24,7 @@ bootstrap({
 ```
 
 Visit:
+
 - `http://localhost:3000/docs` — Swagger UI
 - `http://localhost:3000/redoc` — ReDoc
 - `http://localhost:3000/openapi.json` — Raw JSON spec
@@ -41,8 +40,8 @@ Tag controllers or methods for grouping in the docs.
 @ApiTags('Users')
 export class UserController {
   @Get('/')
-  @ApiTags('Admin')  // method-level overrides class-level
-  async listAdmin(ctx: RequestContext) { }
+  @ApiTags('Admin') // method-level overrides class-level
+  async listAdmin(ctx: RequestContext) {}
 }
 ```
 
@@ -89,8 +88,8 @@ Mark endpoints as requiring authentication.
 
 ```typescript
 @Controller()
-@ApiBearerAuth()  // applies to all methods
-export class AdminController { }
+@ApiBearerAuth() // applies to all methods
+export class AdminController {}
 ```
 
 ### @ApiExclude
@@ -121,6 +120,7 @@ const createUserSchema = z.object({
 ```
 
 This generates:
+
 - A request body schema with all field types, constraints, and enums
 - A model named `CreateUserRequest` in the "Schemas" section of Swagger UI
 
@@ -295,12 +295,12 @@ async create(ctx: RequestContext) {
 SwaggerAdapter({
   info: { title, version, description },
   servers: [{ url, description }],
-  bearerAuth: true,           // Add global BearerAuth security scheme
+  bearerAuth: true, // Add global BearerAuth security scheme
   schemaParser: zodSchemaParser, // Default — or pass your custom parser
-  docsPath: '/docs',          // Swagger UI path (default: '/docs')
-  redocPath: '/redoc',        // ReDoc path (default: '/redoc')
-  specPath: '/openapi.json',  // JSON spec path (default: '/openapi.json')
-  disableInProd: true,        // Skip mounting docs/spec/assets when NODE_ENV=production
+  docsPath: '/docs', // Swagger UI path (default: '/docs')
+  redocPath: '/redoc', // ReDoc path (default: '/redoc')
+  specPath: '/openapi.json', // JSON spec path (default: '/openapi.json')
+  disableInProd: true, // Skip mounting docs/spec/assets when NODE_ENV=production
 })
 ```
 
