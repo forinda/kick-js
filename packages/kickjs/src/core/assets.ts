@@ -23,8 +23,9 @@
  */
 
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
-import { extname, isAbsolute, join, resolve, sep } from 'node:path'
+import { isAbsolute, join, resolve, sep } from 'node:path'
 import { createToken, type InjectionToken } from './token'
+import { groupAssetKeys } from './asset-keys'
 
 export const ASSET_MANIFEST_VERSION = 1 as const
 
@@ -151,7 +152,15 @@ function readBuiltManifest(dir: string): ResolvedManifest | null {
 }
 
 interface AssetMapConfigShape {
-  assetMap?: Record<string, { src: string; dest?: string; glob?: string }>
+  assetMap?: Record<
+    string,
+    {
+      src: string
+      dest?: string
+      glob?: string
+      keys?: 'auto' | 'strip' | 'with-extension'
+    }
+  >
   build?: { outDir?: string }
 }
 
@@ -163,29 +172,40 @@ function synthesiseDevManifest(
   if (!config?.assetMap) return null
 
   const entries: Record<string, string> = {}
-  // Per-namespace owner tracker — same collision semantics as the
-  // build pipeline (last-write-wins by walk order, warn on collision).
-  // Walk order is filesystem-dependent in dev so the "winner" isn't
-  // strictly alphabetical, but the warning still surfaces the conflict
-  // so adopters can fix it before shipping.
-  const keyOwners = new Map<string, string>()
+  // Walk order is filesystem-dependent on Linux/macOS, so we collect
+  // every match per-namespace first, then sort + feed `groupAssetKeys`
+  // for stable manifest output. Build pipeline does the same — both
+  // layers agree on the resulting key set.
   for (const [namespace, entry] of Object.entries(config.assetMap)) {
     if (!entry || typeof entry.src !== 'string') continue
     const srcAbs = resolve(cwd, entry.src)
     if (!existsSync(srcAbs)) continue
+
+    const collected: Array<{ rel: string; abs: string }> = []
     walkSync(srcAbs, srcAbs, (relPath, absPath) => {
       if (entry.glob && !matchesGlobLite(relPath, entry.glob, namespace)) return
-      const logicalKey = `${namespace}/${stripExt(relPath)}`
-      const previous = keyOwners.get(logicalKey)
-      if (previous && previous !== relPath) {
-        console.warn(
-          `[kickjs/assets] Dev collision in '${namespace}': '${previous}' and '${relPath}' both flatten to key '${logicalKey}'. ` +
-            `Resolved to '${relPath}'. Rename one of them or filter via assetMap.${namespace}.glob.`,
-        )
-      }
-      keyOwners.set(logicalKey, relPath)
-      entries[logicalKey] = absPath
+      collected.push({ rel: relPath, abs: absPath })
     })
+    collected.sort((a, b) => a.rel.localeCompare(b.rel))
+
+    const { pairs, collisionGroupsResolved } = groupAssetKeys(
+      namespace,
+      collected.map((c) => c.rel),
+      { strategy: entry.keys ?? 'auto' },
+    )
+    const absByRel = new Map(collected.map((c) => [c.rel, c.abs]))
+    for (const { rel, key } of pairs) {
+      const abs = absByRel.get(rel)
+      if (abs) entries[key] = abs
+    }
+    if (collisionGroupsResolved > 0 && process.env.NODE_ENV !== 'production') {
+      // Dev-only nudge — production runs read the build manifest where
+      // the collision was already resolved at build time.
+      console.log(
+        `[kickjs/assets] '${namespace}': ${collisionGroupsResolved} basename collision(s) auto-resolved by keeping extensions ` +
+          `(set assetMap.${namespace}.keys to 'strip' or 'with-extension' to override).`,
+      )
+    }
   }
 
   return { manifest: { version: ASSET_MANIFEST_VERSION, entries }, root: cwd }
@@ -243,11 +263,6 @@ function walkSync(root: string, dir: string, onFile: (rel: string, abs: string) 
       onFile(rel, full)
     }
   }
-}
-
-function stripExt(path: string): string {
-  const ext = extname(path)
-  return ext ? path.slice(0, -ext.length) : path
 }
 
 /**

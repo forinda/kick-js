@@ -206,29 +206,67 @@ describe('buildAssets — manifest format', () => {
 })
 
 describe('buildAssets — collision handling', () => {
-  it('warns when two files in a folder flatten to the same key (index.html + index.js)', async () => {
+  it('auto-keeps extensions when two files in a folder share a basename', async () => {
     writeFile('src/spa/index.html', '<html/>')
     writeFile('src/spa/index.js', 'export {}')
 
     const config: KickConfig = {
       assetMap: { spa: { src: 'src/spa' } },
     }
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     try {
       const result = await buildAssets(config, { cwd, silent: true })
-      // Both files copied verbatim; the manifest holds only one entry
-      // for the colliding logical key (last-alphabetical wins).
+      // Both files copied AND reachable through the manifest under
+      // their full extension keys. The legacy collision warning is
+      // gone because no data is dropped — auto-mode kept both.
       expect(existsSync(join(cwd, 'dist/spa/index.html'))).toBe(true)
       expect(existsSync(join(cwd, 'dist/spa/index.js'))).toBe(true)
-      expect(result!.manifest.entries['spa/index']).toBe('spa/index.js')
-      expect(warnSpy).toHaveBeenCalled()
-      const warning = warnSpy.mock.calls[0][0] as string
-      expect(warning).toContain('collision')
-      expect(warning).toContain('index.html')
-      expect(warning).toContain('index.js')
+      expect(result!.manifest.entries['spa/index.html']).toBe('spa/index.html')
+      expect(result!.manifest.entries['spa/index.js']).toBe('spa/index.js')
+      expect(result!.manifest.entries['spa/index']).toBeUndefined()
+      // Informational log surfaces the auto-resolution so adopters
+      // know whether they're relying on the heuristic.
+      const infoLogs = logSpy.mock.calls.map((c) => c[0] as string).filter(Boolean)
+      expect(infoLogs.some((m) => m.includes('auto-resolved 1'))).toBe(true)
     } finally {
-      warnSpy.mockRestore()
+      logSpy.mockRestore()
     }
+  })
+
+  it('strip mode opts back into legacy last-write-wins semantics', async () => {
+    writeFile('src/spa/index.html', '<html/>')
+    writeFile('src/spa/index.js', 'export {}')
+
+    const config: KickConfig = {
+      // 'strip' tells the build to drop extensions even on collisions.
+      // Last-walk-order (sorted alphabetical → 'index.js') wins.
+      assetMap: { spa: { src: 'src/spa', keys: 'strip' } },
+    }
+    const result = await buildAssets(config, { cwd, silent: true })
+    expect(existsSync(join(cwd, 'dist/spa/index.html'))).toBe(true)
+    expect(existsSync(join(cwd, 'dist/spa/index.js'))).toBe(true)
+    expect(result!.manifest.entries['spa/index']).toBe('spa/index.js')
+    // No 'spa/index.html' / 'spa/index.js' keys — strip mode flattens
+    // both into the same `spa/index` slot.
+    expect(result!.manifest.entries['spa/index.html']).toBeUndefined()
+    expect(result!.manifest.entries['spa/index.js']).toBeUndefined()
+  })
+
+  it('with-extension mode keeps extensions on every key, including non-colliders', async () => {
+    writeFile('src/pages/about.html', '<html/>')
+    writeFile('src/pages/index.pug', 'h1 hi')
+    writeFile('src/pages/index.html', '<html/>')
+
+    const config: KickConfig = {
+      assetMap: { pages: { src: 'src/pages', keys: 'with-extension' } },
+    }
+    const result = await buildAssets(config, { cwd, silent: true })
+    expect(result!.manifest.entries['pages/about.html']).toBe('pages/about.html')
+    expect(result!.manifest.entries['pages/index.pug']).toBe('pages/index.pug')
+    expect(result!.manifest.entries['pages/index.html']).toBe('pages/index.html')
+    // No stripped keys — `keys: 'with-extension'` is uniform.
+    expect(result!.manifest.entries['pages/about']).toBeUndefined()
+    expect(result!.manifest.entries['pages/index']).toBeUndefined()
   })
 
   it('does not warn when same basename lives in different sub-dirs', async () => {

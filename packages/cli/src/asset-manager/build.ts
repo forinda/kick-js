@@ -15,8 +15,9 @@
  */
 
 import { cpSync, existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs'
-import { dirname, extname, isAbsolute, join, relative, resolve } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { glob } from 'glob'
+import { groupAssetKeys } from '@forinda/kickjs'
 import type { AssetMapEntry, KickConfig } from '../config'
 
 /** Wire-format version for `dist/.kickjs-assets.json`. Bump on shape change. */
@@ -173,26 +174,31 @@ async function processEntry(
   mkdirSync(destAbs, { recursive: true })
 
   const manifestSlice: Record<string, string> = {}
-  // Track which source file currently owns each logical key so we can
-  // surface a collision warning when two files in the same dir map to
-  // the same `<basename>` (e.g. `index.html` + `index.js`). Sorted-input
-  // order means last-alphabetical wins — deterministic + documented.
-  const keyOwner = new Map<string, string>()
-  for (const relPath of matches.sort()) {
+  // Sort the walk so the manifest is byte-stable across platforms.
+  // The `groupAssetKeys` helper preserves input order, so a stable
+  // sort here makes the resulting manifest stable too.
+  const sorted = [...matches].sort()
+  const { pairs, collisionGroupsResolved } = groupAssetKeys(namespace, sorted, {
+    strategy: entry.keys ?? 'auto',
+  })
+
+  // Copy the files and write the keyed manifest slice. Both come from
+  // the same `pairs` order so the on-disk layout matches the
+  // manifest's iteration order — easier to grep in cold-start
+  // debugging.
+  for (const { rel: relPath, key } of pairs) {
     const srcFile = join(srcAbs, relPath)
     const destFile = join(destAbs, relPath)
     mkdirSync(dirname(destFile), { recursive: true })
     cpSync(srcFile, destFile)
-    const logicalKey = `${namespace}/${stripExt(relPath)}`
-    const previous = keyOwner.get(logicalKey)
-    if (previous) {
-      console.warn(
-        `  ⚠ assetMap collision in '${namespace}': '${previous}' and '${relPath}' both flatten to key '${logicalKey}'. ` +
-          `Last-alphabetical wins ('${relPath}'). Rename one of them or set assetMap.${namespace}.glob to filter by extension.`,
-      )
-    }
-    keyOwner.set(logicalKey, relPath)
-    manifestSlice[logicalKey] = toManifestRelative(distAbs, destFile)
+    manifestSlice[key] = toManifestRelative(distAbs, destFile)
+  }
+
+  if (collisionGroupsResolved > 0) {
+    console.log(
+      `  ℹ assetMap.${namespace}: auto-resolved ${collisionGroupsResolved} basename collision(s) by keeping extensions ` +
+        `(set 'keys: \"strip\"' to opt back into legacy last-write-wins behaviour, or 'keys: \"with-extension\"' to keep all keys verbose).`,
+    )
   }
 
   return {
@@ -204,12 +210,6 @@ async function processEntry(
     },
     manifestSlice,
   }
-}
-
-/** Strip the final extension from a file path (`mails/welcome.ejs` → `mails/welcome`). */
-function stripExt(path: string): string {
-  const ext = extname(path)
-  return ext ? path.slice(0, -ext.length) : path
 }
 
 /**

@@ -79,6 +79,28 @@ export interface AssetMapEntry {
    * selective by design (unlike `copyDirs` which copies everything).
    */
   glob?: string
+  /**
+   * How file extensions feed into manifest keys. Default `'auto'`.
+   *
+   * - `'strip'` — drop the extension. `pages/index.pug` →
+   *   `'pages/index'`. Two siblings with the same basename collide;
+   *   last-walk-order wins, others are silently dropped. Opt-in
+   *   only — kept for backward compatibility with projects that
+   *   relied on this contract.
+   * - `'with-extension'` — keep every extension on every key. Best
+   *   when the namespace holds extension siblings (`index.pug` +
+   *   `index.html` + `index.css` in `src/pages/`); every file
+   *   reaches the manifest under its full path.
+   * - `'auto'` — strip when basenames are unique, keep extensions
+   *   on collision groups. Singleton files keep their short key;
+   *   `pages/index.{pug,html,css}` becomes
+   *   `pages/index.pug` / `pages/index.html` / `pages/index.css`.
+   *   No data loss; non-colliding namespaces stay on the short
+   *   keys they had before.
+   *
+   * @default 'auto'
+   */
+  keys?: 'auto' | 'strip' | 'with-extension'
 }
 
 /** Typegen settings — controls .kickjs/types/* generation */
