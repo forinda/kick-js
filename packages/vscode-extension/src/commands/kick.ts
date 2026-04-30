@@ -9,10 +9,12 @@
  * with no scroll-back, no colour, and no easy way to Ctrl-C a long-
  * running `dev` server.
  *
- * The package manager is resolved from the workspace's lockfile (pnpm
- * → yarn → bun → npm fallback) so the command line matches how the
- * adopter normally invokes scripts. `npx kick` is the universal escape
- * hatch when no lockfile is present.
+ * The package manager is resolved from the workspace's lockfile so
+ * the command line matches how the adopter normally invokes scripts:
+ * `pnpm-lock.yaml` → `pnpm kick`, `yarn.lock` → `yarn kick`,
+ * `bun.lock(b)` → `bunx kick`. Every other case (npm lockfile, no
+ * lockfile, or no workspace at all) falls through to `npx kick` —
+ * the universal escape hatch.
  *
  * @module @forinda/kickjs-vscode/commands/kick
  */

@@ -119,6 +119,11 @@ export function registerTypegenCommand(program: Command): void {
         // Asset typegen (assets-plan.md PR 4) — drives `KickAssets`
         // augmentation generation. No-op when assetMap is empty.
         assetMap: config?.assetMap,
+        // The CLI command drives the plugin pipeline directly (see
+        // runAllPluginTypegens below) so it can surface --check drift
+        // and per-plugin status. Opting out of `runTypegen`'s built-in
+        // pass prevents a double run on every `kick typegen` invocation.
+        runPlugins: false,
       }
 
       try {

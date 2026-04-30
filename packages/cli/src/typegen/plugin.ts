@@ -29,10 +29,13 @@ export interface TypegenContext {
    * multiple plugins (`kick/routes`, `kick/env`, future adopter plugins)
    * share a single fs walk + AST extraction.
    *
-   * The cache key is a JSON serialization of the resolved options
-   * (`root`, `cwd`, `envFile`, etc.) — different opts get different
-   * results, but identical opts hit the cache. Plugins that don't
-   * need scanner data can ignore this method entirely.
+   * The runner uses an order-independent cache key derived from the
+   * resolved options (`root`, `cwd`, `extensions`, `exclude`, `envFile`)
+   * — semantically equal options hit the cache regardless of how the
+   * caller built the literal. (We deliberately don't `JSON.stringify`
+   * the options for caching since that would be sensitive to property
+   * insertion order.) Plugins that don't need scanner data can ignore
+   * this method entirely.
    *
    * Implementation lives in the runner so test harnesses can inject
    * a stub scanner; plugins only see the function.
