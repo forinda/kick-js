@@ -4,11 +4,15 @@
  * The core factory leaves `Ctx` defaulted to {@link ExecutionContext} so the
  * Context Contributor pipeline stays transport-agnostic — future WebSocket,
  * queue, and cron contexts share the same primitive. The cost is that the
- * vast majority of contributors (which are HTTP) have to spell the third
+ * vast majority of contributors (which are HTTP) have to spell the fourth
  * generic by hand to get `ctx.req` / `ctx.headers` typing:
  *
  * ```ts
- * defineContextDecorator<'tenant', Record<string, never>, RequestContext>({ ... })
+ * // Verbose: spell every generic, including the params shape `P`.
+ * defineContextDecorator<'tenant', Record<string, never>, Record<string, never>, RequestContext>({
+ *   key: 'tenant',
+ *   resolve: (ctx) => ({ id: ctx.req.headers['x-tenant-id'] as string }),
+ * })
  * ```
  *
  * `defineHttpContextDecorator` removes that ceremony — the spec is typed
@@ -21,6 +25,19 @@
  * const LoadTenant = defineHttpContextDecorator({
  *   key: 'tenant',
  *   resolve: (ctx) => ({ id: ctx.req.headers['x-tenant-id'] as string }),
+ * })
+ *
+ * // Parameterised: the third generic carries the per-call params shape.
+ * const LoadTenantParameterised = defineHttpContextDecorator<
+ *   'tenant',
+ *   Record<string, never>,
+ *   { source: 'header' | 'subdomain' }
+ * >({
+ *   key: 'tenant',
+ *   paramDefaults: { source: 'header' },
+ *   resolve: (ctx, _deps, params) => {
+ *     // params.source narrows inside `if` branches.
+ *   },
  * })
  * ```
  *
@@ -41,7 +58,7 @@ import type { RequestContext } from './context'
 export function defineHttpContextDecorator<
   K extends string,
   D extends Record<string, DepValue> = Record<string, never>,
-  P = Record<string, never>,
+  P extends Record<string, unknown> = Record<string, never>,
 >(spec: ContextDecoratorSpec<K, D, P, RequestContext>): ContextDecorator<K, D, P, RequestContext> {
   return defineContextDecorator<K, D, P, RequestContext>(spec)
 }

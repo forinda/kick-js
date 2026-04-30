@@ -84,7 +84,7 @@ class TenantDbPoolService {
   // orders. Real version returns a `KickDbClient` per tenant.
   private readonly clients = new Map<string, TenantDbClient>()
 
-  for(tenant: TenantRecord): TenantDbClient {
+  clientFor(tenant: TenantRecord): TenantDbClient {
     const existing = this.clients.get(tenant.id)
     if (existing) return existing
     const client: TenantDbClient = {
@@ -130,7 +130,7 @@ const LoadTenantDb = defineHttpContextDecorator<
   resolve: (ctx, { dbPool }) => {
     const tenant = ctx.get('tenant')
     if (!tenant) throw new Error('LoadTenantDb: ran before LoadTenant — dependsOn missing?')
-    return dbPool.for(tenant)
+    return dbPool.clientFor(tenant)
   },
 })
 
