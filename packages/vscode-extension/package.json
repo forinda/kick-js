@@ -63,6 +63,51 @@
       {
         "command": "kickjs.clearToken",
         "title": "KickJS: Clear DevTools Token"
+      },
+      {
+        "command": "kickjs.dev",
+        "title": "KickJS: Run Dev Server",
+        "icon": "$(debug-start)"
+      },
+      {
+        "command": "kickjs.build",
+        "title": "KickJS: Build",
+        "icon": "$(package)"
+      },
+      {
+        "command": "kickjs.start",
+        "title": "KickJS: Start (Production)",
+        "icon": "$(rocket)"
+      },
+      {
+        "command": "kickjs.generateModule",
+        "title": "KickJS: Generate Module…",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "kickjs.generateController",
+        "title": "KickJS: Generate Controller…",
+        "icon": "$(new-file)"
+      },
+      {
+        "command": "kickjs.generateService",
+        "title": "KickJS: Generate Service…",
+        "icon": "$(new-file)"
+      },
+      {
+        "command": "kickjs.generateScaffold",
+        "title": "KickJS: Generate Scaffold…",
+        "icon": "$(layers)"
+      },
+      {
+        "command": "kickjs.addPackage",
+        "title": "KickJS: Add Package…",
+        "icon": "$(add)"
+      },
+      {
+        "command": "kickjs.removeModule",
+        "title": "KickJS: Remove Module…",
+        "icon": "$(trash)"
       }
     ],
     "menus": {
@@ -86,7 +131,16 @@
         { "command": "kickjs.showMetrics", "when": "kickjs.isKickProject" },
         { "command": "kickjs.refreshAll", "when": "kickjs.isKickProject" },
         { "command": "kickjs.setToken", "when": "kickjs.isKickProject" },
-        { "command": "kickjs.clearToken", "when": "kickjs.isKickProject" }
+        { "command": "kickjs.clearToken", "when": "kickjs.isKickProject" },
+        { "command": "kickjs.dev", "when": "kickjs.isKickProject" },
+        { "command": "kickjs.build", "when": "kickjs.isKickProject" },
+        { "command": "kickjs.start", "when": "kickjs.isKickProject" },
+        { "command": "kickjs.generateModule", "when": "kickjs.isKickProject" },
+        { "command": "kickjs.generateController", "when": "kickjs.isKickProject" },
+        { "command": "kickjs.generateService", "when": "kickjs.isKickProject" },
+        { "command": "kickjs.generateScaffold", "when": "kickjs.isKickProject" },
+        { "command": "kickjs.addPackage", "when": "kickjs.isKickProject" },
+        { "command": "kickjs.removeModule", "when": "kickjs.isKickProject" }
       ]
     },
     "configuration": {
@@ -110,7 +164,7 @@
         "kickjs.token": {
           "type": "string",
           "default": "",
-          "description": "Optional DevTools auth token. Leave empty when the server runs the DevTools adapter with `requireToken: false` (the default). When the server requires a token (printed as `[token: …]` in the startup console), paste it here OR run `KickJS: Set DevTools Token…` from the palette."
+          "description": "Optional DevTools auth token. Leave empty when the server runs the DevTools adapter with `secret: false` (auth disabled) — the extension probes + the tree views work without a token. When `secret` is auto-generated or explicitly set (printed as `[token: …]` in the startup console), paste it here OR run `KickJS: Set DevTools Token…` from the palette."
         }
       }
     },
