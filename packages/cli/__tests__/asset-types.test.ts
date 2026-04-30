@@ -66,15 +66,47 @@ describe('discoverAssets', () => {
     expect(out.count).toBe(2)
   })
 
-  it('dedupes when two files in same dir flatten to the same key', () => {
+  it('auto-keeps extensions when two files in same dir share a basename', () => {
     writeFile('src/x/index.html')
     writeFile('src/x/index.js')
 
     const map: Record<string, AssetMapEntry> = { x: { src: 'src/x' } }
     const out = discoverAssets(map, cwd)
-    // Both files map to logical key `x/index` — dedupe to one entry.
+    // Auto-mode keeps extensions on collision groups → both files
+    // get distinct keys; nothing is dropped.
+    expect(out.count).toBe(2)
+    expect(out.entries.map((e) => e.key).sort()).toEqual(['index.html', 'index.js'])
+  })
+
+  it("keys: 'strip' opts back into legacy single-entry-on-collision behaviour", () => {
+    writeFile('src/x/index.html')
+    writeFile('src/x/index.js')
+
+    const map: Record<string, AssetMapEntry> = {
+      x: { src: 'src/x', keys: 'strip' },
+    }
+    const out = discoverAssets(map, cwd)
+    // With 'strip' the second file overwrites the first under the
+    // same logical key — last-walk-order wins (sorted alphabetical).
     expect(out.count).toBe(1)
     expect(out.entries[0]).toEqual({ namespace: 'x', key: 'index' })
+  })
+
+  it("keys: 'with-extension' keeps every extension on every key", () => {
+    writeFile('src/x/about.html')
+    writeFile('src/x/index.pug')
+    writeFile('src/x/index.html')
+
+    const map: Record<string, AssetMapEntry> = {
+      x: { src: 'src/x', keys: 'with-extension' },
+    }
+    const out = discoverAssets(map, cwd)
+    expect(out.count).toBe(3)
+    expect(out.entries.map((e) => e.key).sort()).toEqual([
+      'about.html',
+      'index.html',
+      'index.pug',
+    ])
   })
 
   it('returns 0 for entries pointing at missing directories', () => {
