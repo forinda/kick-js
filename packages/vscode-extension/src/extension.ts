@@ -24,35 +24,93 @@ let current: ProviderTrio | null = null
 let providerDisposables: vscode.Disposable[] = []
 
 export async function activate(context: vscode.ExtensionContext) {
-  // Gate every contribution on `kickjs.isKickProject` — the views in
-  // package.json declare `when: kickjs.isKickProject`, so when this
-  // context is false the activity-bar icon disappears entirely. Keeps
-  // the extension out of unrelated workspaces (e.g. someone opens a
-  // Python repo in the same window) without forcing them to disable it.
+  // Gate every contribution on `kickjs.isKickProject` — the views +
+  // command-palette entries in package.json declare
+  // `when: kickjs.isKickProject`, so when this context is false the
+  // activity-bar icon and palette commands disappear from non-kickjs
+  // workspaces. Keeps the extension out of unrelated repos without
+  // forcing the user to disable it.
   await refreshKickProjectContext()
+
+  // Commands + config listener register unconditionally. The palette
+  // hides them via `when` clauses on non-kickjs workspaces, but
+  // keeping them registered means the workspace-folder change handler
+  // below can flip the context key without forcing a window reload.
+  // (Previously the early-return left these unregistered, so users
+  // who opened a kickjs folder mid-session got the icon back but no
+  // working palette commands.)
+  registerCommands(context)
+
+  let autoRefreshInterval: ReturnType<typeof setInterval> | null = null
+  const startInterval = (): void => {
+    if (autoRefreshInterval) clearInterval(autoRefreshInterval)
+    autoRefreshInterval = startAutoRefresh()
+  }
+  const stopInterval = (): void => {
+    stopAutoRefresh(autoRefreshInterval)
+    autoRefreshInterval = null
+  }
+
+  // React to URL / debugPath / autoRefresh changes without a window
+  // reload. Settings.json edits + per-folder overrides + the Connect
+  // command's update() all funnel through here.
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (!e.affectsConfiguration('kickjs')) return
+      if (!isKickProjectCached) return
+      if (
+        e.affectsConfiguration('kickjs.serverUrl') ||
+        e.affectsConfiguration('kickjs.debugPath') ||
+        e.affectsConfiguration('kickjs.token')
+      ) {
+        rebuildProviders(context)
+      }
+      if (e.affectsConfiguration('kickjs.autoRefresh')) {
+        startInterval()
+      }
+    }),
+    { dispose: () => stopInterval() },
+  )
+
   context.subscriptions.push(
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
       void refreshKickProjectContext().then(() => {
-        // Workspace flipped into kickjs territory mid-session — wire up
-        // the providers + auto-detect now so the user doesn't have to
-        // reload the window.
         if (isKickProjectCached && !current) {
           rebuildProviders(context)
+          startInterval()
           void maybeAutoConnect(context)
+        } else if (!isKickProjectCached && current) {
+          // Workspace flipped out of kickjs territory — tear down the
+          // providers + interval so we stop polling localhost.
+          disposeProviders()
+          stopInterval()
         }
       })
     }),
   )
 
-  if (!isKickProjectCached) {
-    // Not a kickjs workspace — register the workspace-folder listener
-    // (above) but skip provider wiring + auto-refresh + auto-connect.
-    // The extension stays dormant until the user opens a kickjs folder.
-    return
+  if (isKickProjectCached) {
+    rebuildProviders(context)
+    startInterval()
+    // First-run auto-detect: if the user hasn't yet picked a URL AND
+    // the workspace looks like a KickJS project, race the standard
+    // candidate list silently. A successful probe writes the URL to
+    // workspace settings + pops a non-blocking 'connected' toast;
+    // failures stay silent so the welcome view remains the primary
+    // affordance.
+    await maybeAutoConnect(context)
   }
+}
 
-  rebuildProviders(context)
-
+/**
+ * Register every palette command exactly once per activation. The
+ * commands themselves are no-ops when no providers are wired (the
+ * tree-view commands short-circuit on `current` being null), so it's
+ * safe to register them on non-kickjs workspaces — they're hidden
+ * from the palette by the `when: kickjs.isKickProject` clauses in
+ * package.json regardless.
+ */
+function registerCommands(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     registerConnectCommand(context, {
       onConnected: () => rebuildProviders(context),
@@ -72,36 +130,6 @@ export async function activate(context: vscode.ExtensionContext) {
     ...registerKickCommands(context),
     { dispose: () => disposeProviders() },
   )
-
-  let interval = startAutoRefresh()
-  context.subscriptions.push({ dispose: () => stopAutoRefresh(interval) })
-
-  // React to URL / debugPath / autoRefresh changes without a window
-  // reload. Settings.json edits + per-folder overrides + the Connect
-  // command's update() all funnel through here.
-  context.subscriptions.push(
-    vscode.workspace.onDidChangeConfiguration((e) => {
-      if (!e.affectsConfiguration('kickjs')) return
-      if (
-        e.affectsConfiguration('kickjs.serverUrl') ||
-        e.affectsConfiguration('kickjs.debugPath') ||
-        e.affectsConfiguration('kickjs.token')
-      ) {
-        rebuildProviders(context)
-      }
-      if (e.affectsConfiguration('kickjs.autoRefresh')) {
-        stopAutoRefresh(interval)
-        interval = startAutoRefresh()
-      }
-    }),
-  )
-
-  // First-run auto-detect: if the user hasn't yet picked a URL AND the
-  // workspace looks like a KickJS project, race the standard candidate
-  // list silently. A successful probe writes the URL to workspace
-  // settings and pops a non-blocking 'connected' notification; failures
-  // stay silent so the welcome view remains the primary affordance.
-  await maybeAutoConnect(context)
 }
 
 let isKickProjectCached = false
