@@ -21,7 +21,8 @@ pnpm format             # Fix formatting
 pnpm format:check       # Check formatting
 pnpm docs:dev           # Dev docs server
 pnpm docs:build         # Build docs
-pnpm release:dry        # Dry run release
+pnpm changeset          # Add a changeset to the current PR
+pnpm changeset:status   # Preview pending bumps
 ```
 
 ## Repository Structure
@@ -86,7 +87,7 @@ docs/                   # VitePress documentation site
 ### Adding a Package
 
 1. Create `packages/<name>/` with `package.json`, `tsconfig.json`, `tsconfig.build.json`, `vite.config.ts`
-2. Name it `@forinda/kickjs-<name>`, use lockstep version
+2. Name it `@forinda/kickjs-<name>`, start at `0.0.0` — changesets will set the first published version on the next release PR
 3. Use `workspace:*` for internal deps
 4. Set `minify: 'esbuild'` in vite.config.ts, add all runtime deps to `rollupOptions.external`
 5. Build script: `"build": "vite build && pnpm build:types"`, `"build:types": "tsc -p tsconfig.build.json"`
@@ -309,16 +310,18 @@ Now `kick` uses your latest local code. After changes, just `pnpm build` — no 
 
 ## Releasing
 
-All packages use **lockstep versioning**. Never bump individually.
+Versions are **per-package independent** via [Changesets](https://github.com/changesets/changesets); publish is automated via [npm trusted publishers](https://docs.npmjs.com/trusted-publishers/) (OIDC, no `NPM_TOKEN`).
 
 ```bash
-pnpm release:patch                  # 1.2.13 → 1.2.14
-pnpm release:minor                  # 1.2.13 → 1.3.0
-pnpm release:patch:gh               # With GitHub release
-pnpm release:dry                    # Preview only
+pnpm changeset                      # add a changeset describing your PR's changes
+pnpm changeset:status               # preview pending bumps
+pnpm release:enter:alpha            # enter pre-release mode (alpha/beta/rc)
+pnpm release:exit:pre               # exit pre-release mode
 ```
 
-The release script bumps all package.json files (packages + examples), generates changelog, snapshots docs, commits, tags, pushes, and publishes.
+`.github/workflows/release.yml` does the rest: it opens a "Version Packages" PR when changesets are pending, then publishes when that PR merges. See `RELEASE.md` for the full flow + npm trusted-publisher one-time setup per package.
+
+**Old `scripts/release.js` (lockstep) is removed** — `@forinda/kickjs@5.3.0` may pair with `@forinda/kickjs-cli@5.2.1`. Each changeset picks its own bump per package.
 
 ## CI/CD
 

@@ -1,0 +1,27 @@
+{
+  "$schema": "https://unpkg.com/@changesets/config@3.1.4/schema.json",
+  "changelog": [
+    "@changesets/changelog-github",
+    {
+      "repo": "forinda/kick-js"
+    }
+  ],
+  "commit": false,
+  "fixed": [],
+  "linked": [],
+  "access": "public",
+  "baseBranch": "main",
+  "updateInternalDependencies": "patch",
+  "ignore": [
+    "@forinda/kickjs-example-db-spike",
+    "@forinda/kickjs-example-minimal-api",
+    "@forinda/kickjs-example-multi-tenant-drizzle",
+    "@forinda/kickjs-example-multi-tenant-mongoose",
+    "@forinda/kickjs-example-multi-tenant-prisma",
+    "@forinda/kickjs-example-task-drizzle-api",
+    "@forinda/kickjs-example-task-kickdb",
+    "@forinda/kickjs-example-task-mongoose-api",
+    "@forinda/kickjs-example-task-prisma-api",
+    "@forinda/kickjs-monorepo"
+  ]
+}
