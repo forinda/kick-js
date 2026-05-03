@@ -186,15 +186,13 @@ We follow a **feature branch workflow**:
 
 ### Release Channels
 
-| Target | Command                                       | npm tag  | Example         |
-| ------ | --------------------------------------------- | -------- | --------------- |
-| `main` | `pnpm release:patch`                          | `latest` | `1.4.1`         |
-| `main` | `pnpm release:minor`                          | `latest` | `1.5.0`         |
-| `dev`  | `pnpm release:alpha`                          | `alpha`  | `1.5.0-alpha.0` |
-| `dev`  | `pnpm release:beta`                           | `beta`   | `1.5.0-beta.0`  |
-| `dev`  | `node scripts/release.js prerelease --tag rc` | `rc`     | `1.5.0-rc.0`    |
+Release is automated via [Changesets](https://github.com/changesets/changesets) + [npm trusted publishers](https://docs.npmjs.com/trusted-publishers/). You add a changeset to your PR; the release workflow does the rest. See [RELEASE.md](./RELEASE.md) for the full flow.
 
-When `dev` is stable, create a PR to `main` and do a full release.
+- **Adding a changeset**: `pnpm changeset` — prompts for affected packages + bump type per package + summary.
+- **Pre-release channels**: `pnpm release:enter:alpha` / `:beta` / `:rc` to enter a pre-release window; `pnpm release:exit:pre` to leave it. Subsequent merges produce versions like `1.5.0-alpha.0`, `1.5.0-alpha.1`, … with the matching npm dist-tag inferred automatically.
+- **Stable**: outside pre-release mode, merging the auto-opened "Version Packages" PR publishes with `latest`.
+
+Versions are **per-package independent** — `@forinda/kickjs@5.3.0` may pair with `@forinda/kickjs-cli@5.2.1`. Each changeset picks its own bump per package.
 
 ### Workflow Steps
 

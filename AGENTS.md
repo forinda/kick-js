@@ -89,22 +89,22 @@ When adding new features, use these as templates:
 ### New Package
 
 - [ ] Create `packages/<name>/` directory
-- [ ] Add `package.json` (name: `@forinda/kickjs-<name>`, version: lockstep)
+- [ ] Add `package.json` (name: `@forinda/kickjs-<name>`, version: `0.0.0` — first changeset sets the published version)
 - [ ] Add `tsconfig.json` (extends `../../tsconfig.base.json`)
 - [ ] Add `vite.config.ts` (ESM lib mode, node20, `minify: 'esbuild'`, externals)
 - [ ] Add `tsconfig.build.json` (extends tsconfig, `emitDeclarationOnly: true`)
 - [ ] Add `src/index.ts` (barrel exports)
 - [ ] Add `README.md` and `LICENSE`
 - [ ] Run `pnpm install` to link workspace
-- [ ] Add to `scripts/release.js` if it should be version-bumped
+- [ ] Register the package as an [npm trusted publisher](https://docs.npmjs.com/trusted-publishers/) (Repository: `forinda/kick-js` · Workflow: `.github/workflows/release.yml`) so the release workflow can publish via OIDC
 - [ ] Add docs page at `docs/api/<name>.md`
 - [ ] Run `pnpm build && pnpm test`
 
 ### New Example App
 
 - [ ] Scaffold with CLI: `cd examples && node ../packages/cli/bin.js new <name> --template ddd --pm pnpm --repo inmemory --no-git --no-install --force`
-- [ ] Add `package.json` (private: true, version: lockstep, `workspace:*` deps)
-- [ ] Add to `scripts/release.js` EXAMPLES array
+- [ ] Add `package.json` (private: true, `workspace:*` deps — examples don't publish; their version is irrelevant)
+- [ ] Add the package name to `.changeset/config.json:ignore` so changesets doesn't try to version it
 - [ ] Add docs page at `docs/examples/<name>.md`
 - [ ] Add to sidebar in `docs/.vitepress/config.mts`
 - [ ] Reference examples: `minimal-api/` (simple), `task-prisma-api/` (full DDD)
@@ -204,7 +204,7 @@ Top-level `modulesDir`, `defaultRepo`, `pluralize`, `schemaDir` are deprecated �
 ## Common Pitfalls
 
 1. **Don't use absolute links in docs** — breaks versioning and i18n
-2. **Don't bump package versions manually** — use `scripts/release.js` (lockstep)
+2. **Don't bump package versions manually** — write a changeset (`pnpm changeset`); the release workflow handles the bump + publish via npm trusted publishers. See `RELEASE.md`.
 3. **Don't forget `pnpm format`** — pre-commit hook will reject unformatted code
 4. **Don't add to `.gitignore` without `**/`prefix** — patterns like`.vitepress/` only match at root
 5. **Don't use `pnpm -r publish`** — use `pnpm --filter='./packages/*' publish` to skip examples
@@ -250,11 +250,11 @@ gh pr create --title "feat: print route table on startup" --body "Closes #31"
 
 ### Commit convention
 
-Follow [Conventional Commits](https://www.conventionalcommits.org/). Commit types categorize changes and guide the explicit version bump when running `node scripts/release.js <patch|minor|major>`:
+Follow [Conventional Commits](https://www.conventionalcommits.org/). Commit types categorize changes; the **changeset** you add in the same PR (`pnpm changeset`) chooses the actual semver bump per affected package:
 
-- `feat:` — generally corresponds to a minor version bump
-- `fix:` — generally corresponds to a patch version bump
-- `docs:`, `chore:`, `test:`, `ci:` — usually no version bump
+- `feat:` — usually a minor bump in the changeset
+- `fix:` — usually a patch bump in the changeset
+- `docs:`, `chore:`, `test:`, `ci:` — usually no changeset (skip the prompt)
 
 Reference issue numbers: `feat: add helmet middleware (#21)`
 

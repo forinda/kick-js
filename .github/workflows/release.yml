@@ -2,89 +2,78 @@ name: Release
 
 on:
   push:
-    tags:
-      - 'v*'
-  release:
-    types: [published]
-  workflow_dispatch:
-    inputs:
-      publish:
-        description: 'Publish all packages to npm'
-        required: false
-        default: 'false'
+    branches:
+      - main
+
+# Concurrency: only one release flow at a time per branch.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  verify:
+  release:
+    name: Version Packages or Publish
     runs-on: ubuntu-latest
+    # The changesets action opens / updates a "Version Packages" PR
+    # whenever pending changesets exist on main, OR publishes when
+    # those version bumps land back on main. Both flows need write
+    # access to the repo. `id-token: write` is required for npm
+    # trusted-publisher OIDC — npm verifies the workflow's identity
+    # against the trusted-publisher rule registered per package, so
+    # no NPM_TOKEN secret is in play.
+    # https://docs.npmjs.com/trusted-publishers/
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          # Full history so the changesets action can compute the
+          # changelog diff against previous tags.
+          fetch-depth: 0
 
       - name: Install pnpm
         uses: pnpm/action-setup@v6
 
-      - name: Setup Node.js 20
+      - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: 20
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build
-        run: pnpm build
-
-      - name: Test
-        run: pnpm test
-
-  publish:
-    needs: verify
-    if: >
-      (github.event_name == 'release' && github.event.release.target_commitish == 'main') ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.publish == 'true' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v6
-
-      - name: Setup Node.js 20
-        uses: actions/setup-node@v6
-        with:
-          node-version: 20
+          # Node 24 ships npm ≥ 11.5.1 which is required for npm
+          # trusted publishers. If we ever need to drop to Node 20
+          # for publish, install npm@latest as a separate step.
+          node-version: 24
           cache: pnpm
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build
+      - name: Build framework packages
         run: pnpm build
 
-      - name: Determine npm dist-tag
-        id: dist-tag
-        run: |
-          VERSION=$(node -p "require('./package.json').version")
-          TAG=""
-          if echo "$VERSION" | grep -q "-"; then
-            PRERELEASE="${VERSION#*-}"
-            PRERELEASE_TAG="${PRERELEASE%%.*}"
-            case "$PRERELEASE_TAG" in
-              alpha|beta|rc|next) TAG="$PRERELEASE_TAG" ;;
-              "") TAG="latest" ;;
-              *) TAG="$PRERELEASE_TAG" ;;
-            esac
-          else
-            TAG="latest"
-          fi
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "Publishing $VERSION with tag: $TAG"
+      - name: Test
+        run: pnpm test
 
-      - name: Publish framework packages
+      - name: Create release PR or publish to npm
+        id: changesets
+        uses: changesets/action@v1
+        with:
+          # When pending changesets exist, this opens / updates a
+          # "Version Packages" PR that bumps the affected packages
+          # + writes per-package CHANGELOG.md entries. Merging that
+          # PR triggers another run of this workflow with no pending
+          # changesets — the action then runs `publish:` instead.
+          version: pnpm changeset:version
+          publish: pnpm changeset:publish
+          title: 'chore: version packages'
+          commit: 'chore: version packages'
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: pnpm --filter='./packages/*' publish --access public --no-git-checks --tag ${{ steps.dist-tag.outputs.tag }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # No NPM_TOKEN: npm trusted-publisher OIDC handles auth.
+          # `NPM_CONFIG_PROVENANCE=true` makes every published tarball
+          # carry a signed provenance statement linking the artefact
+          # to this exact workflow run + commit. Required for the
+          # "Verified" badge on npm.
+          NPM_CONFIG_PROVENANCE: 'true'
