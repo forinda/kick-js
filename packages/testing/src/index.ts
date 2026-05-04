@@ -238,7 +238,7 @@ export async function runContributor<
   K extends string,
   D extends Record<string, any> = Record<string, never>,
 >(
-  decorator: ContextDecorator<K, D, ExecutionContext>,
+  decorator: ContextDecorator<K, D>,
   options: RunContributorOptions = {},
 ): Promise<RunContributorResult<K>> {
   const meta = new Map<string, unknown>(Object.entries(options.initial ?? {}))

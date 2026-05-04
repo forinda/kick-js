@@ -81,18 +81,14 @@ jobs:
       - run: pnpm -r --filter='./packages/*' run typecheck
 
   test:
-    name: Test (Node ${{ matrix.node-version }})
+    name: Test (Node 24)
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        node-version: [20, 22, 24]
     steps:
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v6
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
         env:
@@ -107,25 +103,20 @@ jobs:
       - run: pnpm test
 
   build:
-    name: Build (Node ${{ matrix.node-version }})
+    name: Build (Node 24)
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        node-version: [20, 22, 24]
     steps:
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v6
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       # Cache the built dist/ trees so the smoke-test jobs below can
-      # reuse them without rebuilding from scratch on Node 24.
-      - if: matrix.node-version == 24
-        uses: actions/upload-artifact@v4
+      # reuse them without rebuilding from scratch.
+      - uses: actions/upload-artifact@v4
         with:
           name: built-packages
           path: packages/*/dist
