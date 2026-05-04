@@ -230,7 +230,15 @@ Under the hood this uses Node's `AsyncLocalStorage`, so it works correctly even 
 
 ### Setup
 
-Mount `requestScopeMiddleware()` early in your middleware pipeline (before route handlers):
+Nothing — request-scoped DI works out of the box. `bootstrap()` opens an
+`AsyncLocalStorage` frame around every request automatically, so
+`Scope.REQUEST` services resolve correctly without any manual wiring.
+
+If you need to control _where_ the frame opens (for example, to keep a
+tracing wrapper outside it so spans see the raw request), include
+`requestScopeMiddleware()` in your `middleware` list explicitly. KickJS
+detects an explicit mount and skips the default placement, so you never
+end up with a doubled frame:
 
 ```typescript
 import { bootstrap, requestScopeMiddleware } from '@forinda/kickjs'
@@ -240,7 +248,8 @@ bootstrap({
     /* ... */
   ],
   middleware: [
-    requestScopeMiddleware(), // enables REQUEST-scoped DI
+    tracing(),
+    requestScopeMiddleware(), // mount here instead of the default position
     // ... other middleware
   ],
 })
@@ -249,13 +258,12 @@ bootstrap({
 ### Declaring a Request-Scoped Service
 
 ```typescript
-import { Service, Scope, Autowired } from '@forinda/kickjs'
-import { getRequestStore } from '@forinda/kickjs'
+import { Service, Scope, Autowired, getRequestValue } from '@forinda/kickjs'
 
 @Service({ scope: Scope.REQUEST })
 class TenantContext {
   get tenantId(): string {
-    return getRequestStore().values.get('tenantId')
+    return getRequestValue<string>('tenantId') ?? ''
   }
 }
 
@@ -300,23 +308,62 @@ class OrderController {
 
 ### Pre-Registered Request Values
 
-Middleware can store values in the request store before controllers run. Use `getRequestStore().values.set()` to make data available for injection:
+Need a value computed once per request and visible to every downstream
+handler and request-scoped service? Use a [Context Contributor](context-decorators.md) — a typed,
+ordered, declarative way to populate the request frame before the
+handler runs:
 
 ```typescript
-import { getRequestStore } from '@forinda/kickjs'
+import { defineContextDecorator } from '@forinda/kickjs'
 
-// In auth middleware
-function authMiddleware() {
-  return async (req, res, next) => {
-    const user = await verifyToken(req.headers.authorization)
-    getRequestStore().values.set('currentUser', user)
-    getRequestStore().values.set('tenantId', user.tenantId)
-    next()
+const LoadCurrentUser = defineContextDecorator({
+  key: 'currentUser',
+  resolve: async (ctx) => verifyToken(ctx.req.headers.authorization),
+})
+
+const LoadTenantId = defineContextDecorator({
+  key: 'tenantId',
+  dependsOn: ['currentUser'],
+  resolve: (ctx) => ctx.get('currentUser')!.tenantId,
+})
+
+@Controller()
+class DashboardController {
+  @LoadCurrentUser
+  @LoadTenantId
+  @Get('/me')
+  show(ctx: RequestContext) {
+    return ctx.json({
+      user: ctx.get('currentUser'),
+      tenant: ctx.get('tenantId'),
+    })
   }
 }
 ```
 
-These values can then be read inside any request-scoped service via `getRequestStore().values.get()`.
+Inside any `Scope.REQUEST` service, read the same value with
+`getRequestValue<T>(key)`:
+
+```typescript
+import { Service, Scope, getRequestValue } from '@forinda/kickjs'
+
+@Service({ scope: Scope.REQUEST })
+class CurrentUserService {
+  get tenantId(): string | null {
+    return getRequestValue<string>('tenantId') ?? null
+  }
+}
+```
+
+`getRequestValue()` returns `undefined` outside a request frame
+(background jobs, startup, tests without a request) — null-tolerant by
+design so service code that runs in both request and non-request paths
+doesn't throw.
+
+For ad-hoc writes from inside a handler, use `ctx.set('key', value)`.
+A controller-side write is appropriate when the value depends on
+already-running handler logic; for everything else, prefer a contributor
+so the dependency graph is explicit and order is enforced.
 
 ### Scope Compatibility Rules
 
