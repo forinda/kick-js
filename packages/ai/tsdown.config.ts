@@ -9,6 +9,7 @@ export default defineConfig({
   },
   format: ['esm'],
   platform: 'node',
+  minify: { compress: true, mangle: false },
   dts: true,
   external: ['@forinda/kickjs', 'reflect-metadata', 'zod', /^node:/],
   banner: { js: createBanner(pkg.name, pkg.version) },

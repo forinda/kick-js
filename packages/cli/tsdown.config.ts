@@ -11,6 +11,7 @@ export default defineConfig([
     },
     format: ['esm'],
     platform: 'node',
+    minify: { compress: true, mangle: true },
     dts: true,
     external: [
       '@forinda/kickjs-ai',
@@ -32,6 +33,7 @@ export default defineConfig([
     },
     format: ['esm'],
     platform: 'node',
+    minify: { compress: true, mangle: true },
     dts: false,
     external: [
       '@forinda/kickjs-ai',
