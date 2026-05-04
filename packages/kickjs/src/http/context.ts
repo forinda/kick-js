@@ -1,3 +1,4 @@
+/// <reference types="multer" />
 import type { Request, Response, NextFunction } from 'express'
 import { type ContextMeta, type ExecutionContext, type MetaValue } from '../core/execution-context'
 import { requestStore } from './request-store'
@@ -25,8 +26,7 @@ import {
  * distributes conditional types over `any`), so adopters who haven't
  * typed their `Ctx` get no protection but no breakage either.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type DeepReadonly<T> = T extends (...args: any[]) => any
+export type DeepReadonly<T> = T extends (...args: never[]) => unknown
   ? T
   : T extends Date | RegExp
     ? T
@@ -241,25 +241,30 @@ export class RequestContext<TBody = any, TParams = any, TQuery = any> implements
 
   /**
    * Single uploaded file (requires `@FileUpload({ mode: 'single' })`).
-   * Read-only — file metadata is set by the upload middleware and
-   * shouldn't be mutated downstream.
+   * Returned as `DeepReadonly<Express.Multer.File>` — file metadata is
+   * set by the upload middleware and shouldn't be mutated downstream.
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  get file(): DeepReadonly<any> | undefined {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return (this.req as any).file
+  get file(): DeepReadonly<Express.Multer.File> | undefined {
+    return this.req.file
   }
 
   /**
    * Array of uploaded files (requires `@FileUpload({ mode: 'array' })`).
-   * Returns a `ReadonlyArray` — `push`/`pop`/index assignment all error
-   * at compile time. Use the underlying `ctx.req.files` if you need to
-   * splice the list in place (rare).
+   * Returns a `ReadonlyArray<DeepReadonly<Express.Multer.File>>` — both
+   * the list (`push`/`pop`) and each file's fields (`size`, `originalname`,
+   * etc.) are locked. Use `ctx.req.files` if you genuinely need the
+   * mutable Express handle.
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  get files(): ReadonlyArray<DeepReadonly<any>> | undefined {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return (this.req as any).files
+  get files(): ReadonlyArray<DeepReadonly<Express.Multer.File>> | undefined {
+    // multer's `Request['files']` is a union — array (mode: 'array' /
+    // 'any') or `{ [fieldname]: File[] }` (mode: 'fields'). The
+    // `@FileUpload({ mode: 'array' })` decorator only sets the array
+    // shape, but `Request['files']` is the broad union. Narrow back to
+    // `File[]` here for the common-case getter; adopters using
+    // `mode: 'fields'` can read `ctx.req.files` directly for the
+    // dictionary shape.
+    const f = this.req.files
+    return Array.isArray(f) ? f : undefined
   }
 
   // ── Metadata Store ──────────────────────────────────────────────────

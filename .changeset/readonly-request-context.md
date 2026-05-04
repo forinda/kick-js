@@ -6,7 +6,8 @@
 are now typed `DeepReadonly<T>` (or `Readonly<T>` for headers,
 `ReadonlyArray<...>` for files). This is a **type-only** change — no
 runtime difference, no `Object.freeze`, no perf cost — but adopter code
-that mutates these in place will start failing at compile time:
+that mutates these in place will start failing at compile time, **once
+`ctx` is properly typed**:
 
 ```ts
 // Before — silently accepted, even when bypassing Zod validation
@@ -24,6 +25,17 @@ This matches the framework's existing rule — _writes flow through
 `ctx.set(key, value)` or a Context Contributor's return value, not by
 mutating the request bag in place_ — and now the type system enforces
 it.
+
+::: tip Protection only kicks in for typed contexts
+The default generic for `RequestContext` is `any`, and `DeepReadonly<any>`
+collapses to `any`. Adopters who write `ctx: RequestContext` get no
+protection (and no breakage). Adopters who write
+`ctx: Ctx<KickRoutes.UserController['create']>` (or pass explicit
+generics like `RequestContext<CreateUserBody>`) get the readonly
+locks the changeset describes. The CLI scaffolders (`kick g scaffold`,
+`kick g controller`) already emit `Ctx<KickRoutes…>` by default, so
+freshly generated controllers see the protection automatically.
+:::
 
 ### Migration
 
