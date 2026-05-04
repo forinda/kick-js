@@ -1,6 +1,6 @@
-# @forinda/kickjs-db-pg
+# @forinda/kickjs-swagger
 
-## 5.2.2
+## 5.2.1
 
 ### Patch Changes
 
@@ -9,13 +9,3 @@
   - **CLI** uses `minify: { compress: true, mangle: true }`. The CLI is an operator tool, not a library — full mangle is fine and gives a smaller binary.
 
   Net effect: roughly 30–40% smaller `dist/*.mjs` per package on disk, no public-API or behavior change.
-
-- Updated dependencies [[`a6d0dd6`](https://github.com/forinda/kick-js/commit/a6d0dd6038b215c0ae3cbe1a20e11ba0d8b1c46e)]:
-  - @forinda/kickjs-db@5.2.2
-
-## 5.2.1
-
-### Patch Changes
-
-- Updated dependencies [[`5de61d9`](https://github.com/forinda/kick-js/commit/5de61d9a9cd99bac3e1e271a36b092fa7bf7ad98)]:
-  - @forinda/kickjs-db@5.2.1
