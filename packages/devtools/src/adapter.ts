@@ -27,7 +27,7 @@ import {
   RuntimeSampler,
   type IntrospectionSnapshot,
 } from '@forinda/kickjs-devtools-kit'
-import { DEVTOOLS_BUS } from '@forinda/kickjs-devtools-kit/bus'
+import { DEVTOOLS_BUS } from '@forinda/kickjs-devtools-kit/bus/token'
 import { collectTopologySnapshot, type TopologyApplicationLike } from './topology'
 import { collectDevtoolsTabs } from './devtools-tabs'
 import { createServerBus, type ServerBus } from './bus/server'

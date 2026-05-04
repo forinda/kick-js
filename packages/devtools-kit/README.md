@@ -17,6 +17,20 @@ pnpm add @forinda/kickjs-devtools-kit
 - **`RpcRequest` / `RpcResponse`** — transport-agnostic envelope types used by every DevTools RPC channel.
 - **`PROTOCOL_VERSION`** — wire-format version stamped on every snapshot so future shape changes don't crash old panels.
 
+## Subpath exports
+
+The package is split across focused entry points so browser bundles (and any consumer that doesn't need server-side APIs) only pull what they actually use:
+
+| Subpath                                  | Use it for                                                                      | Pulls in `@forinda/kickjs`? |
+| ---------------------------------------- | ------------------------------------------------------------------------------- | --------------------------- |
+| `@forinda/kickjs-devtools-kit`           | `IntrospectionSnapshot`, `PROTOCOL_VERSION`, `defineDevtoolsTab`, RPC envelopes | no                          |
+| `@forinda/kickjs-devtools-kit/runtime`   | `RuntimeSampler`, `MemoryAnalyzer`                                              | no                          |
+| `@forinda/kickjs-devtools-kit/types`     | shared type-only re-exports                                                     | no                          |
+| `@forinda/kickjs-devtools-kit/bus`       | `KickEventBus` types, `createInMemoryBus`, `createBrowserBus`                   | no                          |
+| `@forinda/kickjs-devtools-kit/bus/token` | `DEVTOOLS_BUS` DI token (server-side only)                                      | yes                         |
+
+The bus DI token lives at its own subpath because `createToken` from `@forinda/kickjs` transitively pulls the framework runtime. Browser SPAs and shared bus consumers import from `/bus`; server-side adapters/plugins that need to register or resolve the bus through DI import the token from `/bus/token`.
+
 ## Quick example — adapter integration
 
 ```ts
@@ -69,20 +83,20 @@ Plugin authors integrating with DevTools should not need to take a dependency on
 
 ## Recommended dependency shape (third-party plugins)
 
-Framework-internal `@forinda/kickjs-*` adapters list this kit as a **regular `dependencies`** entry — lockstep versioning means every release of every package matches, so dedup happens automatically and the ~1KB type install is negligible.
+Framework-internal `@forinda/kickjs-*` adapters list this kit as a **regular `dependencies`** entry — releases are coordinated through Changesets, so the kit and its consumers ship matching versions and pnpm dedupes the ~1 KB type install automatically.
 
 For **third-party plugins** the recommended shape is **peer-optional**:
 
 ```jsonc
 {
   "peerDependencies": {
-    "@forinda/kickjs-devtools-kit": ">=3.2.0",
+    "@forinda/kickjs-devtools-kit": ">=5.0.0",
   },
   "peerDependenciesMeta": {
     "@forinda/kickjs-devtools-kit": { "optional": true },
   },
   "devDependencies": {
-    "@forinda/kickjs-devtools-kit": "^3.2.0",
+    "@forinda/kickjs-devtools-kit": "^5.0.0",
   },
 }
 ```

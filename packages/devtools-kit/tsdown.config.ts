@@ -9,6 +9,7 @@ export default defineConfig({
     runtime: 'src/runtime.ts',
     types: 'src/types.ts',
     bus: 'src/bus.ts',
+    'bus/token': 'src/bus/token.ts',
   },
   format: ['esm'],
   platform: 'node',

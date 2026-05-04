@@ -31,6 +31,10 @@
     "./bus": {
       "import": "./dist/bus.mjs",
       "types": "./dist/bus.d.mts"
+    },
+    "./bus/token": {
+      "import": "./dist/bus/token.mjs",
+      "types": "./dist/bus/token.d.mts"
     }
   },
   "files": [

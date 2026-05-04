@@ -155,7 +155,7 @@ export interface CreateDbClientOptions<TSchema, _DB = unknown> {
    * existing emitter). Wire it from `DEVTOOLS_BUS` if you want the
    * DevTools panel to pick the events up:
    *
-   *   import { DEVTOOLS_BUS } from '@forinda/kickjs-devtools-kit/bus'
+   *   import { DEVTOOLS_BUS } from '@forinda/kickjs-devtools-kit/bus/token'
    *   // Resolve only when devtools is actually wired — adopters who
    *   // skip @forinda/kickjs-devtools never register the token, and
    *   // resolve() throws on missing tokens.

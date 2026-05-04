@@ -4,18 +4,15 @@ KickJS provides 22 decorators across `@forinda/kickjs` and `@forinda/kickjs-swag
 
 ## Class Decorators
 
-### @Controller(path?)
+### @Controller()
 
-Marks a class as an HTTP controller and registers it in the DI container.
+Marks a class as an HTTP controller and registers it in the DI container. Takes no arguments — route prefixes are defined by the module's `routes().path`, the single source of truth for where routes mount. The legacy `@Controller('/path')` form was removed in v4; see [Migration v3 → v4](./migration-v3-to-v4.md) for the rename map.
 
 ```ts
 import { Controller } from '@forinda/kickjs'
 
 @Controller()
 class UserController { ... }
-
-@Controller()  // defaults to '/'
-class RootController { ... }
 ```
 
 ### @Service(options?)
@@ -353,7 +350,7 @@ class TaskController {
 
 | Decorator                    | Target       | Package | Purpose                                             |
 | ---------------------------- | ------------ | ------- | --------------------------------------------------- |
-| `@Controller`                | Class        | core    | HTTP controller with route prefix                   |
+| `@Controller`                | Class        | core    | Mark class as HTTP controller (prefix from module)  |
 | `@Service`                   | Class        | core    | DI-registered service                               |
 | `@Injectable`                | Class        | core    | Generic DI registration                             |
 | `@Component`                 | Class        | core    | Alias for Injectable                                |
