@@ -73,7 +73,7 @@
     "reflect-metadata": "^0.2.2"
   },
   "peerDependencies": {
-    "drizzle-orm": ">=0.30.0",
+    "drizzle-orm": ">=0.45.2",
     "@forinda/kickjs": ">=2.3.0"
   },
   "peerDependenciesMeta": {},
