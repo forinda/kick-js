@@ -136,7 +136,7 @@ jobs:
           cache: pnpm
       - uses: oven-sh/setup-bun@v2
       - run: pnpm install --frozen-lockfile
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: built-packages
           path: packages
@@ -178,7 +178,7 @@ jobs:
         with:
           deno-version: v2.x
       - run: pnpm install --frozen-lockfile
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: built-packages
           path: packages
