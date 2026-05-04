@@ -35,7 +35,7 @@
     "docs:translate:build": "node scripts/translate-docs.js && vitepress build docs",
     "changeset": "changeset",
     "changeset:status": "changeset status",
-    "changeset:version": "changeset version && pnpm install --no-frozen-lockfile && pnpm format",
+    "changeset:version": "changeset version && pnpm install --no-frozen-lockfile && node scripts/snapshot-docs.mjs && pnpm format",
     "changeset:publish": "pnpm build && changeset publish",
     "changeset:tag": "changeset tag",
     "release:enter:alpha": "changeset pre enter alpha",

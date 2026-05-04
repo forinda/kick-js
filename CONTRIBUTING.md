@@ -205,20 +205,26 @@ git checkout -b feat/amazing-feature
 gh pr create --base main
 ```
 
-**Experimental work (target: dev):**
+**Experimental work (pre-release window):**
 
 ```bash
-git checkout dev && git pull origin dev
-git checkout -b feat/experimental-feature
-# ... make changes, commit, push ...
-gh pr create --base dev
+# 1. Enter pre-release mode (alpha, beta, or rc)
+pnpm release:enter:alpha
+git add .changeset/pre.json
+git commit -m "chore: enter alpha pre-release"
+git push
+
+# 2. Land PRs targeting main as usual; their changesets bump to
+#    1.5.0-alpha.0, 1.5.0-alpha.1, … with the alpha npm dist-tag.
+
+# 3. When ready for stable
+pnpm release:exit:pre
+git add .changeset/pre.json
+git commit -m "chore: exit pre-release"
+git push   # next merge bumps to 1.5.0 (latest)
 ```
 
-**Promote dev to main:**
-
-```bash
-gh pr create --base main --head dev --title "Release: merge dev into main"
-```
+There is no separate `dev` branch in this flow. Pre-release windows are explicit (`pnpm release:enter:<tag>`), and `release.yml` runs only on `main`. See [RELEASE.md](./RELEASE.md) for the full pre-release procedure.
 
 2. **Make your changes**:
    - Write code following our standards

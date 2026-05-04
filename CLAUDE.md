@@ -327,7 +327,7 @@ pnpm release:exit:pre               # exit pre-release mode
 
 - **ci.yml** — build, typecheck, test, format on push to main/dev and PRs
 - **deploy-docs.yml** — build and deploy VitePress on push to main
-- **release.yml** — verify and publish on version tags
+- **release.yml** — runs on push to `main` (or `workflow_dispatch`): opens / updates a "Version Packages" PR when changesets are pending, then publishes via npm trusted-publisher OIDC when that PR merges
 
 ## Commit Conventions
 
@@ -344,7 +344,7 @@ test: description      # Test changes
 ## Important Notes
 
 - Decorators fire at class definition time — tests need `Container.reset()` + re-registration
-- `pnpm --filter='./packages/*' publish` — only publishes framework packages, not examples
+- Don't manually publish — the changesets workflow does it via OIDC. Examples are private and skipped automatically (they're in `.changeset/config.json:ignore`).
 - All internal links in docs must be **relative** (for versioning/i18n support)
 - The `kick` CLI binary comes from `packages/cli/src/cli.ts`
 - Vite configs: `minify: 'esbuild'`, all runtime deps in `rollupOptions.external`
