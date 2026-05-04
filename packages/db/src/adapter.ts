@@ -26,7 +26,7 @@ export interface KickDbAdapterConfig {
    * `migrateLatest()` on boot (apply policy only). Pair with
    * `DEVTOOLS_BUS` so the events surface in the DevTools panel:
    *
-   *   import { DEVTOOLS_BUS } from '@forinda/kickjs-devtools-kit/bus'
+   *   import { DEVTOOLS_BUS } from '@forinda/kickjs-devtools-kit/bus/token'
    *   // Resolve only when devtools is actually wired — adopters who
    *   // skip @forinda/kickjs-devtools never register the token, and
    *   // resolve() throws on missing tokens.

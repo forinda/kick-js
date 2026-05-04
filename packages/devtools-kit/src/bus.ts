@@ -1,10 +1,18 @@
 /**
- * Bus sub-entry — pulled in by code that participates in the runtime
- * event-bus pipeline (the server-side bus, plugins publishing typed
- * events, the DI token consumers grab to inject the bus). Lives at a
- * separate sub-path so pure-browser consumers of `./types` and
- * `./runtime` don't pay the `@forinda/kickjs` peer-dep cost via the
- * `createToken` import inside `./bus/token`.
+ * Bus sub-entry — pulled in by browser SPA + server-side bus
+ * publishers alike. Re-exports types + the in-memory / browser bus
+ * implementations.
+ *
+ * The DI token (`DEVTOOLS_BUS`) is intentionally NOT re-exported
+ * here because importing it pulls `createToken` from
+ * `@forinda/kickjs` — and through it the entire framework runtime
+ * (Express + body-parser + …) into any consumer that touches this
+ * sub-path. Browser SPAs that imported from `./bus` were getting
+ * 1MB+ of polyfilled server code in their bundle.
+ *
+ * Server-side consumers grab the token from the dedicated
+ * `@forinda/kickjs-devtools-kit/bus/token` sub-path, which stays
+ * outside the browser SPA's import graph.
  *
  * @module @forinda/kickjs-devtools-kit/bus
  */
@@ -21,4 +29,3 @@ export type {
 
 export { createInMemoryBus, createBusCore, type BusCore } from './bus/in-memory'
 export { createBrowserBus, type BrowserBusOptions } from './bus/browser'
-export { DEVTOOLS_BUS } from './bus/token'

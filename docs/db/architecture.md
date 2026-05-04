@@ -550,7 +550,7 @@ const TenantDb = defineTenantDbContributor({
 bootstrap({ contributors: [TenantDb], ... })
 
 @TenantDb
-@Controller('/projects')
+@Controller()
 class ProjectsController {
   @Get('/:id')
   show(ctx: RequestContext) {

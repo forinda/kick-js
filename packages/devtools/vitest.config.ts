@@ -13,23 +13,27 @@ export default defineConfig({
   ],
   resolve: {
     alias: [
-      // The `/bus` sub-path must match BEFORE the bare-package alias,
-      // otherwise vitest rewrites everything to ../devtools-kit/src/index.ts.
-      // Array form preserves declaration order; object form doesn't.
+      // Anchored regex aliases — string `find` does prefix matching,
+      // which rewrites `/bus/token` into `bus.ts/token` (ENOTDIR).
+      // Order still matters: longest subpath first.
       {
-        find: '@forinda/kickjs-devtools-kit/bus',
+        find: /^@forinda\/kickjs-devtools-kit\/bus\/token$/,
+        replacement: path.resolve(__dirname, '../devtools-kit/src/bus/token.ts'),
+      },
+      {
+        find: /^@forinda\/kickjs-devtools-kit\/bus$/,
         replacement: path.resolve(__dirname, '../devtools-kit/src/bus.ts'),
       },
       {
-        find: '@forinda/kickjs-devtools-kit',
+        find: /^@forinda\/kickjs-devtools-kit$/,
         replacement: path.resolve(__dirname, '../devtools-kit/src/index.ts'),
       },
       {
-        find: '@forinda/kickjs',
+        find: /^@forinda\/kickjs$/,
         replacement: path.resolve(__dirname, '../kickjs/src/index.ts'),
       },
       {
-        find: '@forinda/kickjs-devtools',
+        find: /^@forinda\/kickjs-devtools$/,
         replacement: path.resolve(__dirname, 'src/index.ts'),
       },
     ],
