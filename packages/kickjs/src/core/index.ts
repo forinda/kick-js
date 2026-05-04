@@ -46,6 +46,7 @@ export {
   FileUpload,
   ApiQueryParams,
   Builder,
+  withBuilder,
   type RouteDefinition,
   type MiddlewareHandler,
   type FileUploadConfig,

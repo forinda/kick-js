@@ -1,5 +1,5 @@
 import 'reflect-metadata'
-import { METADATA, Scope, type ServiceOptions } from './interfaces'
+import { METADATA, Scope, type BuilderOf, type ServiceOptions } from './interfaces'
 import { Container, type KickJsRegistry } from './container'
 import {
   setClassMeta,
@@ -507,10 +507,8 @@ export function FileUpload(config: FileUploadConfig): MethodDecorator {
 
 // ── Builder Decorator ───────────────────────────────────────────────────
 
-/** Add a static builder() method for fluent construction */
-export function Builder(target: any): void {
+function attachBuilder(target: any): void {
   setClassMeta(METADATA.BUILDER, true, target)
-
   target.builder = function () {
     const props: Record<string, any> = {}
     const proxy: any = new Proxy(
@@ -529,4 +527,53 @@ export function Builder(target: any): void {
     )
     return proxy
   }
+}
+
+/**
+ * Add a static `builder()` method for fluent construction.
+ *
+ * Legacy decorators cannot widen the class type, so by default the
+ * caller sees the unmodified shape. Opt into typing by adding a single
+ * `declare static` line:
+ *
+ * ```ts
+ * @Builder
+ * class UserDto {
+ *   name!: string
+ *   email!: string
+ *   declare static readonly builder: () => BuilderOf<UserDto>
+ * }
+ * ```
+ *
+ * `readonly` keeps SonarQube's `typescript:S1444` quiet — the runtime
+ * assigns `target.builder` once at decoration time and never again.
+ *
+ * If you'd rather not write the `declare`, use `withBuilder()` instead —
+ * same runtime, types inferred automatically.
+ */
+export function Builder(target: any): void {
+  attachBuilder(target)
+}
+
+/**
+ * Factory variant of `@Builder`. Wraps the class with the same runtime
+ * and returns it intersected with `{ builder(): BuilderOf<T> }` so the
+ * static is fully typed without any `declare` boilerplate.
+ *
+ * ```ts
+ * class UserDtoBase {
+ *   name!: string
+ *   email!: string
+ * }
+ * export const UserDto = withBuilder(UserDtoBase)
+ * export type UserDto = InstanceType<typeof UserDto>
+ *
+ * UserDto.builder().name('Alice').email('a@b.com').build() // fully typed
+ * ```
+ */
+export function withBuilder<C extends new (...args: any[]) => any>(
+  ctor: C,
+): C & { builder(): BuilderOf<InstanceType<C>> } {
+  attachBuilder(ctor)
+  return ctor as C & { builder(): BuilderOf<InstanceType<C>> }
 }
