@@ -553,7 +553,7 @@ export interface I${pascal}Repository {
  * \`kick-lint\`'s \`token-reserved-prefix\` rule never fires —
  * adopters must NOT use the reserved \`'kick/'\` namespace.
  */
-export const ${pascal.toUpperCase()}_REPOSITORY = createToken<I${pascal}Repository>('${tokenScope}/${kebab}/repository')
+export const ${pascal.toUpperCase()}_REPOSITORY = createToken<I${pascal}Repository>('${tokenScope}/${pascal}/repository')
 `
 }
 

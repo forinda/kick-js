@@ -89,9 +89,9 @@ describe('resolveTokenScope', () => {
 })
 
 describe('generateRepositoryInterface — token-scope substitution', () => {
-  it("emits 'app/<kebab>/repository' when tokenScope is omitted", () => {
+  it("emits 'app/<Pascal>/repository' when tokenScope is omitted", () => {
     const out = generateRepositoryInterface({ pascal: 'User', kebab: 'user' })
-    expect(out).toContain(`createToken<IUserRepository>('app/user/repository')`)
+    expect(out).toContain(`createToken<IUserRepository>('app/User/repository')`)
   })
 
   it('emits the resolved scope when tokenScope is set', () => {
@@ -100,20 +100,20 @@ describe('generateRepositoryInterface — token-scope substitution', () => {
       kebab: 'user',
       tokenScope: 'mycorp',
     })
-    expect(out).toContain(`createToken<IUserRepository>('mycorp/user/repository')`)
+    expect(out).toContain(`createToken<IUserRepository>('mycorp/User/repository')`)
     // Documents the 'no kick/' rule inline so adopters reading the
     // file understand why the scope is what it is.
     expect(out).toMatch(/`'mycorp\/'` prefix matches the project scope/)
   })
 
-  it("uses the resolved scope's kebab-case in the token literal", () => {
+  it('uses PascalCase for the key segment in the token literal', () => {
     const out = generateRepositoryInterface({
       pascal: 'TaskAssignee',
       kebab: 'task-assignee',
       tokenScope: 'billing-api',
     })
     expect(out).toContain(
-      `createToken<ITaskAssigneeRepository>('billing-api/task-assignee/repository')`,
+      `createToken<ITaskAssigneeRepository>('billing-api/TaskAssignee/repository')`,
     )
   })
 })

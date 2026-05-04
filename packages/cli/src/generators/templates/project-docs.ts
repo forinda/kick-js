@@ -147,7 +147,7 @@ When generating or modifying code in this project, stay aligned with the v4 conv
 
 - **Adapters**: \`defineAdapter()\` factory — never \`class implements AppAdapter\`.
 - **Plugins**: \`definePlugin()\` factory — never plain function returning \`KickPlugin\`.
-- **DI tokens**: slash-delimited \`<scope>/<area>/<key>\` (e.g. \`'app/users/repository'\`). First-party uses the reserved \`'kick/'\` prefix; this project owns its own scope.
+- **DI tokens**: \`<scope>/<PascalKey>[/<suffix>]\` — scope is lowercase, the key segment is **PascalCase** (e.g. \`'app/Users/repository'\`, \`'mycorp/Cache/redis'\`). First-party uses the reserved \`'kick/'\` prefix; this project owns its own scope.
 - **Decorators**: \`@Controller()\` (no path arg — mount prefix comes from \`routes().path\`).
 - **Module entry file** MUST be named \`<name>.module.ts\` and live under \`src/modules/<name>/\`. The Vite plugin auto-discovers \`*.module.[tj]sx?\` for graceful HMR — a misnamed \`projects.ts\` silently degrades every save into a full restart.
 - **Env**: schema lives in \`src/config/index.ts\`; \`import './config'\` MUST be the first import in \`src/index.ts\` (side-effect registers the schema before any \`@Value\` resolves).
@@ -466,9 +466,9 @@ const log2 = createLogger('Worker')   // Function form
 import { createToken } from '@forinda/kickjs'
 
 // Type-safe DI tokens for factory/interface binding.
-// Convention: '<orgScope>/<area>/<key>' — slash-delimited, lowercase.
-const DB_URL = createToken<string>('app/config/database-url')
-const FEATURE_FLAGS = createToken<FeatureFlags>('app/features')
+// Convention: '<scope>/<PascalKey>[/<suffix>]' — scope lowercase, key PascalCase.
+const DB_URL = createToken<string>('app/Config/database-url')
+const FEATURE_FLAGS = createToken<FeatureFlags>('app/Features')
 \`\`\`
 
 ### Reactivity
@@ -595,11 +595,12 @@ mistakes:
 
 - **Plugins** — \`definePlugin()\` factory. Same shape, never plain function returning \`KickPlugin\`.
 
-- **DI tokens** — slash-delimited \`<scope>/<area>/<key>\`, lower-case, no \`:\` separators:
+- **DI tokens** — \`<scope>/<PascalKey>[/<suffix>]\`. Scope is lowercase,
+  the key segment is **PascalCase** (the regex enforces both):
 
   \`\`\`ts
-  const USERS_REPO = createToken<UsersRepo>('app/users/repository')
-  const DB         = createToken<Database>('app/db/connection')
+  const USERS_REPO = createToken<UsersRepo>('app/Users/repository')
+  const DB         = createToken<Database>('app/Db/connection')
   \`\`\`
 
   The \`kick/\` prefix is reserved for first-party packages; this project
@@ -975,7 +976,7 @@ These work anywhere — scripts, plain files, outside \`@Service\`/\`@Controller
 |---------|--------|---------|
 | \`Logger.for(name)\` | \`@forinda/kickjs\` | \`const log = Logger.for('MyScript')\` |
 | \`createLogger(name)\` | \`@forinda/kickjs\` | \`const log = createLogger('Worker')\` |
-| \`createToken<T>(name)\` | \`@forinda/kickjs\` | \`const TOKEN = createToken<string>('app/db/url')\` |
+| \`createToken<T>(name)\` | \`@forinda/kickjs\` | \`const TOKEN = createToken<string>('app/Db/url')\` |
 | \`ref(value)\` | \`@forinda/kickjs\` | \`const count = ref(0)\` |
 | \`computed(fn)\` | \`@forinda/kickjs\` | \`const doubled = computed(() => count.value * 2)\` |
 | \`watch(source, cb)\` | \`@forinda/kickjs\` | \`watch(() => count.value, (v) => log(v))\` |
