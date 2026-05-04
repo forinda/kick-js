@@ -34,11 +34,11 @@
   "devDependencies": {
     "@forinda/kickjs-cli": "workspace:*",
     "@forinda/kickjs-vite": "workspace:*",
-    "@swc/core": "^1.15.21",
+    "@swc/core": "^1.15.33",
     "@types/express": "^5.0.6",
     "@types/node": "^25.0.0",
     "@types/pg": "^8.11.10",
-    "prettier": "^3.8.1",
+    "prettier": "^3.8.3",
     "typescript": "^6.0.3",
     "unplugin-swc": "^1.5.9",
     "vite": "^8.0.3",
