@@ -257,13 +257,27 @@ bootstrap({
 
 ### Declaring a Request-Scoped Service
 
+`getRequestValue(key)` is keyed off the augmentable `ContextMeta`
+registry — augment it once at module level and every read from that
+key gets the right type without `as` casts:
+
+```typescript
+declare module '@forinda/kickjs' {
+  interface ContextMeta {
+    tenantId: string
+    currentUser: { id: string; email: string; tenantId: string }
+  }
+}
+```
+
 ```typescript
 import { Service, Scope, Autowired, getRequestValue } from '@forinda/kickjs'
 
 @Service({ scope: Scope.REQUEST })
 class TenantContext {
   get tenantId(): string {
-    return getRequestValue<string>('tenantId') ?? ''
+    // typed as `string | undefined` thanks to the ContextMeta augmentation
+    return getRequestValue('tenantId') ?? ''
   }
 }
 
@@ -313,15 +327,21 @@ handler and request-scoped service? Use a [Context Contributor](context-decorato
 ordered, declarative way to populate the request frame before the
 handler runs:
 
-```typescript
-import { defineContextDecorator } from '@forinda/kickjs'
+Because these contributors touch `ctx.req.headers`, use
+`defineHttpContextDecorator` — the HTTP-typed wrapper that binds `ctx`
+to `RequestContext` so `ctx.req` is available and typed. Use plain
+`defineContextDecorator` only for transport-agnostic contributors that
+read `ctx.get(...)` and nothing else:
 
-const LoadCurrentUser = defineContextDecorator({
+```typescript
+import { defineHttpContextDecorator } from '@forinda/kickjs'
+
+const LoadCurrentUser = defineHttpContextDecorator({
   key: 'currentUser',
   resolve: async (ctx) => verifyToken(ctx.req.headers.authorization),
 })
 
-const LoadTenantId = defineContextDecorator({
+const LoadTenantId = defineHttpContextDecorator({
   key: 'tenantId',
   dependsOn: ['currentUser'],
   resolve: (ctx) => ctx.get('currentUser')!.tenantId,
@@ -342,7 +362,9 @@ class DashboardController {
 ```
 
 Inside any `Scope.REQUEST` service, read the same value with
-`getRequestValue<T>(key)`:
+`getRequestValue(key)`. The return type comes from the `ContextMeta`
+augmentation above — there is no value-type generic, so don't write
+`getRequestValue<string>(...)`:
 
 ```typescript
 import { Service, Scope, getRequestValue } from '@forinda/kickjs'
@@ -350,15 +372,18 @@ import { Service, Scope, getRequestValue } from '@forinda/kickjs'
 @Service({ scope: Scope.REQUEST })
 class CurrentUserService {
   get tenantId(): string | null {
-    return getRequestValue<string>('tenantId') ?? null
+    // typed via ContextMeta['tenantId'] — `string | undefined`
+    return getRequestValue('tenantId') ?? null
   }
 }
 ```
 
-`getRequestValue()` returns `undefined` outside a request frame
-(background jobs, startup, tests without a request) — null-tolerant by
-design so service code that runs in both request and non-request paths
-doesn't throw.
+`getRequestValue()` returns `MetaValue<K> | undefined` — typed via
+`ContextMeta[K]` when augmented, falling back to `unknown` when the
+key isn't registered. It also returns `undefined` outside a request
+frame (background jobs, startup, tests without a request), which is
+intentional: service code that runs in both request and non-request
+paths doesn't throw.
 
 For ad-hoc writes from inside a handler, use `ctx.set('key', value)`.
 A controller-side write is appropriate when the value depends on
