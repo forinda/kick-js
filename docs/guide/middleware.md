@@ -312,9 +312,9 @@ The `traceContext()` middleware implements [W3C Trace Context](https://www.w3.or
 ### Setup
 
 `traceContext()` writes into the request's `AsyncLocalStorage` frame, so
-it has to run inside one. KickJS opens that frame automatically before
-any user middleware, so just dropping `traceContext()` into your list
-works:
+it has to run inside one. **By default** (`contextStore: 'auto'`),
+KickJS opens that frame automatically before any user middleware, so
+dropping `traceContext()` into your list just works:
 
 ```ts
 import express from 'express'
@@ -334,6 +334,11 @@ If you need to control the frame's position explicitly — e.g., to keep
 an outer wrapper above it — mount `requestScopeMiddleware()` yourself
 and place `traceContext()` after it. KickJS detects the explicit mount
 and skips its default placement.
+
+If you opted out of auto-mount with `contextStore: 'manual'`,
+`traceContext()` will silently no-op (there's no frame to write
+into) — make sure `requestScopeMiddleware()` (or your own ALS wrapper)
+runs before it.
 
 ### How it works
 
@@ -357,14 +362,34 @@ traceContext({ propagateResponse: true })
 ### Accessing the trace ID in application code
 
 Inside a controller or service, read the trace values via the typed
-helper:
+helper. `getRequestValue` is keyed off the augmentable `ContextMeta`
+registry — augment it once for the trace fields and every read returns
+the right type:
+
+```ts
+declare module '@forinda/kickjs' {
+  interface ContextMeta {
+    traceId: string
+    spanId: string
+    parentSpanId: string
+    traceFlags: number
+    traceVersion: string
+  }
+}
+```
 
 ```ts
 import { getRequestValue } from '@forinda/kickjs'
 
-const traceId = getRequestValue<string>('traceId')
-const spanId = getRequestValue<string>('spanId')
+const traceId = getRequestValue('traceId') // string | undefined
+const spanId = getRequestValue('spanId') // string | undefined
 ```
+
+Without the augmentation, the return type falls back to
+`unknown | undefined`. Don't reach for a value-type generic
+(`getRequestValue<string>('traceId')`) — that generic slot is the
+**key** type, not the value type, and passing `<string>` widens the
+key and hides the typed lookup.
 
 `getRequestValue()` returns `undefined` outside a request frame —
 null-tolerant by design so the same code can run in both request and
