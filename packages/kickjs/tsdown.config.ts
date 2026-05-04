@@ -39,6 +39,7 @@ export default defineConfig({
   },
   format: ['esm'],
   platform: 'node',
+  minify: { compress: true, mangle: false },
   dts: true,
   external: [
     'express',

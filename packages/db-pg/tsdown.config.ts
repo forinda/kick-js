@@ -7,6 +7,7 @@ export default defineConfig({
   entry: { index: 'src/index.ts' },
   format: ['esm'],
   platform: 'node',
+  minify: { compress: true, mangle: false },
   dts: true,
   external: ['@forinda/kickjs', '@forinda/kickjs-db', 'kysely', 'pg', /^node:/],
   banner: { js: createBanner(pkg.name, pkg.version) },
