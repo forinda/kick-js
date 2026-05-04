@@ -75,7 +75,7 @@
   },
   "peerDependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
-    "zod": "^4.3.6",
+    "zod": "^4.4.3",
     "@forinda/kickjs": ">=2.3.0"
   },
   "peerDependenciesMeta": {
@@ -95,7 +95,7 @@
     "typescript": "^6.0.3",
     "unplugin-swc": "^1.5.9",
     "vitest": "^4.1.5",
-    "zod": "^4.3.6"
+    "zod": "^4.4.3"
   },
   "publishConfig": {
     "access": "public"
