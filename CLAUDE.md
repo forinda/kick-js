@@ -224,6 +224,29 @@ git push -u origin feat/my-feature
 gh pr create --base main
 ```
 
+### PR / issue bodies with markdown — always via a temp file
+
+Anything richer than a single-line description (code fences, lists, tables, backticks, `$`, multi-paragraph) goes through a temp file. **Never** inline a multi-line body in `gh pr create --body "$(cat <<'EOF' ... EOF)"` or `gh pr edit --body "..."` — the shell escapes backticks and dollar signs, fenced code blocks lose their language hint, and the body lands on GitHub with literal `\`` everywhere.
+
+```bash
+# Right — write the body to a file, then pass it:
+cat > /tmp/pr-body.md <<'EOF'
+## Why
+…full markdown, no escape gymnastics…
+EOF
+
+gh pr create --base main --title "…" --body-file /tmp/pr-body.md
+
+# For edits to existing PRs, gh pr edit can also take --body-file:
+gh pr edit 123 --body-file /tmp/pr-body.md
+
+# If `gh pr edit` exits non-zero (often: projects-classic deprecation),
+# fall back to the API:
+gh api -X PATCH /repos/<owner>/<repo>/pulls/123 -F body=@/tmp/pr-body.md
+```
+
+Same rule for `gh issue create`, `gh release create`, comment posts (`gh pr comment 123 --body-file …`), and changeset bodies committed to disk.
+
 ## CLI Architecture
 
 The CLI (`packages/cli/`) is structured as:
