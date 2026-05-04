@@ -4,7 +4,7 @@ layout: home
 features:
   - icon: 🔌
     title: Adaptive Architecture
-    details: REST, GraphQL, WebSocket, SSE, or queues — swap adapters without changing your code. One framework, every pattern.
+    details: REST, WebSocket, SSE, or queues — swap adapters without changing your code. One framework, every pattern.
   - icon: 🎯
     title: Decorator-Driven DX
     details: '@Controller, @Service, @Inject, @Cron, @Job — familiar patterns from Spring Boot and NestJS with full TypeScript type safety.'
