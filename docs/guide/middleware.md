@@ -311,22 +311,29 @@ The `traceContext()` middleware implements [W3C Trace Context](https://www.w3.or
 
 ### Setup
 
-`traceContext()` must be mounted **after** `requestScopeMiddleware()` because it stores values in the request's `AsyncLocalStorage` store.
+`traceContext()` writes into the request's `AsyncLocalStorage` frame, so
+it has to run inside one. KickJS opens that frame automatically before
+any user middleware, so just dropping `traceContext()` into your list
+works:
 
 ```ts
 import express from 'express'
-import { bootstrap, requestScopeMiddleware, traceContext, requestLogger } from '@forinda/kickjs'
+import { bootstrap, traceContext, requestLogger } from '@forinda/kickjs'
 
 bootstrap({
   modules,
   middleware: [
-    requestScopeMiddleware(),
     traceContext(), // extracts or generates traceId
     requestLogger(), // logger automatically includes traceId
     express.json(),
   ],
 })
 ```
+
+If you need to control the frame's position explicitly — e.g., to keep
+an outer wrapper above it — mount `requestScopeMiddleware()` yourself
+and place `traceContext()` after it. KickJS detects the explicit mount
+and skips its default placement.
 
 ### How it works
 
