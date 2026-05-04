@@ -2,49 +2,66 @@
 /**
  * Snapshot the live `docs/` tree into `docs/versions/<version>/`.
  *
- * Runs from `pnpm changeset:version` after the changesets bump, so
- * the snapshot directory name reflects the just-released version of
- * `@forinda/kickjs` (the framework core that drives the docs site's
- * version switcher). Per-package versions diverge under changesets;
- * the docs site tracks a single timeline anchored on the core
- * package because that's the version adopters cite.
+ * Run on its own cadence — independent of `changeset version`.
+ * Cut a docs snapshot when prose has materially changed and you
+ * want to pin "the docs as of vX.Y" for the version switcher.
+ * Most patch releases ship zero doc-shape changes and need no snapshot.
  *
- * Idempotent: if the target directory already exists (re-running
- * `changeset version` after a manual fix), the existing snapshot is
- * left in place. Adopters who really need to re-snapshot can `rm -rf`
- * the directory first.
+ * Usage:
+ *   pnpm docs:snapshot                       # use @forinda/kickjs version
+ *   pnpm docs:snapshot -- --version 5.3.0    # explicit version
+ *   pnpm docs:snapshot -- --force            # overwrite existing snapshot
  *
- * Adopted from the previous lockstep `scripts/release.js` flow; the
- * snapshot logic is the only part of that script that survived the
- * changesets migration.
+ * The directory name conventionally tracks the `@forinda/kickjs` core
+ * version because that's the version adopters cite, but `--version`
+ * accepts any string for special cuts (e.g. `5.3.0-rewrite`).
  */
 
-import { existsSync, mkdirSync, readFileSync, statSync, cpSync } from 'node:fs'
-import { join, dirname } from 'node:path'
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, statSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const repoRoot = join(__dirname, '..')
 
-const corePkg = JSON.parse(readFileSync(join(repoRoot, 'packages/kickjs/package.json'), 'utf-8'))
-const version = corePkg.version
+const args = process.argv.slice(2)
+const flag = (name) => {
+  const eq = args.find((a) => a.startsWith(`--${name}=`))
+  if (eq) return eq.slice(`--${name}=`.length)
+  const idx = args.indexOf(`--${name}`)
+  if (idx >= 0 && args[idx + 1] && !args[idx + 1].startsWith('--')) return args[idx + 1]
+  return undefined
+}
+const has = (name) => args.includes(`--${name}`)
+
+const explicit = flag('version')
+const force = has('force')
+
+let version = explicit
+if (!version) {
+  const corePkg = JSON.parse(readFileSync(join(repoRoot, 'packages/kickjs/package.json'), 'utf-8'))
+  version = corePkg.version
+}
 
 if (!version || version === '0.0.0') {
-  console.log(`  snapshot-docs: skipped (core package version is ${version})`)
+  console.log(`  snapshot-docs: skipped (resolved version is ${version})`)
   process.exit(0)
 }
 
 const target = join(repoRoot, 'docs/versions', version)
 if (existsSync(target) && statSync(target).isDirectory()) {
-  console.log(`  snapshot-docs: ${target} exists — skipping (idempotent)`)
-  process.exit(0)
+  if (!force) {
+    console.log(`  snapshot-docs: ${target} exists — skipping (pass --force to overwrite)`)
+    process.exit(0)
+  }
+  rmSync(target, { recursive: true, force: true })
+  console.log(`  snapshot-docs: removed existing ${target} (--force)`)
 }
 
 mkdirSync(target, { recursive: true })
 
 const docsRoot = join(repoRoot, 'docs')
-// Same set the legacy script copied — top-level guide / api / examples
-// directories plus a few standalone files. Anything under
+// Top-level content directories + standalone files. Anything under
 // `docs/.vitepress/`, `docs/versions/`, `docs/public/` stays out;
 // versioned docs only reproduce content pages.
 const dirs = ['guide', 'api', 'examples']
@@ -65,3 +82,4 @@ for (const file of files) {
 }
 
 console.log(`  snapshot-docs: wrote ${target} (kickjs@${version})`)
+console.log(`  next: pnpm format && git add docs/versions/${version} && commit`)

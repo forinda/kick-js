@@ -51,6 +51,27 @@ Once added, npm validates the OIDC token GitHub Actions issues during the workfl
 
 `NPM_CONFIG_PROVENANCE=true` is set in the workflow so every published tarball carries a signed provenance statement linking the artefact to the commit + workflow run that produced it. Adopters see the "Verified" badge on the package page.
 
+## Versioned docs snapshots
+
+The VitePress site shows a version switcher backed by `docs/versions/<version>/`. Snapshots are **decoupled from package releases** — most patches ship zero doc-shape changes, and bundling a full docs copy into every "Version Packages" PR drowns the actual review signal.
+
+Cut a snapshot when prose has materially changed and you want to pin "the docs as of vX.Y":
+
+```bash
+pnpm docs:snapshot                          # use current @forinda/kickjs version
+pnpm docs:snapshot -- --version 5.3.0       # explicit
+pnpm docs:snapshot -- --force               # overwrite an existing snapshot
+pnpm format
+git checkout -b docs/snapshot-vX.Y
+git add docs/versions/<version>
+git commit -m "docs: snapshot vX.Y"
+gh pr create --base main --title "docs: snapshot vX.Y"
+```
+
+The snapshot copies `docs/{guide,api,examples}/` plus `docs/{changelog,roadmap,index}.md` — only content pages, never `.vitepress/`, `versions/`, or `public/`. The directory name is conventionally the `@forinda/kickjs` core version (the version adopters cite), but `--version` accepts any string for special cuts (`5.3.0-rewrite`, etc).
+
+This stays out of `pnpm changeset:version`. Release PRs only touch `package.json`, changelogs, and the lockfile — review takes 30 seconds again.
+
 ## Pre-releases (alpha / beta / rc)
 
 Changesets has a "pre" mode that turns subsequent bumps into pre-release versions until you explicitly exit:
