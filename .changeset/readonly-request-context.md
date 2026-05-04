@@ -12,12 +12,12 @@ that mutates these in place will start failing at compile time:
 // Before — silently accepted, even when bypassing Zod validation
 ctx.body.injectedField = 'computed'
 ctx.headers.authorization = 'fake'
-ctx.files.push(extra)
+ctx.files!.push(extra)
 
 // After — tsc errors
 //   "Cannot assign to 'injectedField' because it is a read-only property."
 //   "Cannot assign to 'authorization' because it is a read-only property."
-//   "Property 'push' does not exist on type 'readonly ..."
+//   "Property 'push' does not exist on type 'readonly any[]'."
 ```
 
 This matches the framework's existing rule — _writes flow through

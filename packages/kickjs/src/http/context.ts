@@ -9,16 +9,21 @@ import {
 } from './query'
 
 /**
- * Recursively marks every property of `T` as `readonly`. Pass-through for
- * `Function`, `Date`, `Map`, `Set`, and `RegExp` since deeply rewriting
- * their internals would break their public API. Used to lock typed
- * request data (`body`, `params`, `query`) so adopters can't mutate
- * Zod-validated payloads in place — the contract is "compute new values,
- * stash via `ctx.set`", not "edit the request bag".
+ * Recursively marks every property of `T` as `readonly`. Preserves
+ * `Function`, `Date`, and `RegExp` unchanged, and converts `Map` / `Set`
+ * to `ReadonlyMap` / `ReadonlySet` so their mutating methods (`set`,
+ * `delete`, `add`, `clear`) are removed from the public surface.
+ * Tuples keep their positional element types — only their per-element
+ * mutability is locked.
  *
- * Type-only. No runtime cost. `DeepReadonly<any>` is `any` (TS distributes
- * conditional types over `any`), so adopters who haven't typed their
- * `Ctx` get no protection but no breakage either.
+ * Used to seal typed request data (`body`, `params`, `query`) so
+ * adopters can't mutate Zod-validated payloads in place — the contract
+ * is "compute new values, stash via `ctx.set`", not "edit the request
+ * bag".
+ *
+ * Type-only. No runtime cost. `DeepReadonly<any>` is `any` (TS
+ * distributes conditional types over `any`), so adopters who haven't
+ * typed their `Ctx` get no protection but no breakage either.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type DeepReadonly<T> = T extends (...args: any[]) => any
@@ -29,8 +34,15 @@ export type DeepReadonly<T> = T extends (...args: any[]) => any
       ? ReadonlyMap<DeepReadonly<K>, DeepReadonly<V>>
       : T extends Set<infer V>
         ? ReadonlySet<DeepReadonly<V>>
-        : T extends ReadonlyArray<infer U>
-          ? ReadonlyArray<DeepReadonly<U>>
+        : T extends readonly (infer U)[]
+          ? // Distinguish a regular array from a tuple. A regular `T[]` widens
+            // its `length` to `number`; a tuple's `length` is a literal
+            // (e.g. `2`). The literal branch maps over `keyof T` so each
+            // positional slot keeps its own type — `DeepReadonly<[1, 2]>` →
+            // `readonly [1, 2]`, not `readonly (1 | 2)[]`.
+            number extends T['length']
+            ? ReadonlyArray<DeepReadonly<U>>
+            : { readonly [K in keyof T]: DeepReadonly<T[K]> }
           : T extends object
             ? { readonly [K in keyof T]: DeepReadonly<T[K]> }
             : T
