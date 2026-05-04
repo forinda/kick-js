@@ -148,7 +148,7 @@
     }
   },
   "devDependencies": {
-    "@swc/core": "^1.15.30",
+    "@swc/core": "^1.15.33",
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.6",
     "@types/multer": "^2.1.0",
