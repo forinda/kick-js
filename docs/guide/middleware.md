@@ -356,22 +356,26 @@ traceContext({ propagateResponse: true })
 
 ### Accessing the trace ID in application code
 
-Inside a controller or service you can read the trace values from the request store:
+Inside a controller or service, read the trace values via the typed
+helper:
 
 ```ts
-import { requestStore } from '@forinda/kickjs'
+import { getRequestValue } from '@forinda/kickjs'
 
-const store = requestStore.getStore()
-const traceId = store?.values.get('traceId')
-const spanId = store?.values.get('spanId')
+const traceId = getRequestValue<string>('traceId')
+const spanId = getRequestValue<string>('spanId')
 ```
 
-Or directly from the request object:
+`getRequestValue()` returns `undefined` outside a request frame —
+null-tolerant by design so the same code can run in both request and
+background paths.
+
+Or directly from the request object inside a handler:
 
 ```ts
 @Get('/health')
 async health(ctx: RequestContext) {
-  const traceId = (ctx.req as any).traceId
+  const traceId = (ctx.req as Request & { traceId?: string }).traceId
   ctx.json({ status: 'ok', traceId })
 }
 ```
