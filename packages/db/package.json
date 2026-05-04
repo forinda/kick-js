@@ -76,7 +76,7 @@
     "@types/pg": "^8.11.10",
     "kysely": "^0.28.16",
     "pg": "^8.13.1",
-    "typescript": "^5.9.2"
+    "typescript": "^6.0.3"
   },
   "publishConfig": {
     "access": "public"
