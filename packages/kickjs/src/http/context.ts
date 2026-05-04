@@ -9,6 +9,33 @@ import {
 } from './query'
 
 /**
+ * Recursively marks every property of `T` as `readonly`. Pass-through for
+ * `Function`, `Date`, `Map`, `Set`, and `RegExp` since deeply rewriting
+ * their internals would break their public API. Used to lock typed
+ * request data (`body`, `params`, `query`) so adopters can't mutate
+ * Zod-validated payloads in place — the contract is "compute new values,
+ * stash via `ctx.set`", not "edit the request bag".
+ *
+ * Type-only. No runtime cost. `DeepReadonly<any>` is `any` (TS distributes
+ * conditional types over `any`), so adopters who haven't typed their
+ * `Ctx` get no protection but no breakage either.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type DeepReadonly<T> = T extends (...args: any[]) => any
+  ? T
+  : T extends Date | RegExp
+    ? T
+    : T extends Map<infer K, infer V>
+      ? ReadonlyMap<DeepReadonly<K>, DeepReadonly<V>>
+      : T extends Set<infer V>
+        ? ReadonlySet<DeepReadonly<V>>
+        : T extends ReadonlyArray<infer U>
+          ? ReadonlyArray<DeepReadonly<U>>
+          : T extends object
+            ? { readonly [K in keyof T]: DeepReadonly<T[K]> }
+            : T
+
+/**
  * Re-export the augmentable {@link ContextMeta} registry from core/.
  * Declared in `core/execution-context.ts` so non-HTTP transports
  * (WS/queue/cron, V2) share one declaration site. Apps still augment
@@ -84,19 +111,29 @@ export class RequestContext<TBody = any, TParams = any, TQuery = any> implements
 
   // ── Request Data ────────────────────────────────────────────────────
 
-  get body(): TBody {
-    return this.req.body as TBody
+  /**
+   * Parsed request body. Returned as `DeepReadonly<TBody>` so adopters
+   * can't mutate Zod-validated payloads in place — compute new values
+   * and stash them via `ctx.set('key', value)` or a Context Contributor
+   * instead. Reach for `ctx.req.body` if you genuinely need the raw,
+   * mutable Express handle (rare).
+   */
+  get body(): DeepReadonly<TBody> {
+    return this.req.body as DeepReadonly<TBody>
   }
 
-  get params(): TParams {
-    return this.req.params as TParams
+  /** Path parameters parsed from the route — read-only, see {@link body}. */
+  get params(): DeepReadonly<TParams> {
+    return this.req.params as DeepReadonly<TParams>
   }
 
-  get query(): TQuery {
-    return this.req.query as TQuery
+  /** Parsed query string — read-only, see {@link body}. */
+  get query(): DeepReadonly<TQuery> {
+    return this.req.query as DeepReadonly<TQuery>
   }
 
-  get headers() {
+  /** Inbound HTTP headers — read-only, see {@link body}. */
+  get headers(): Readonly<Request['headers']> {
     return this.req.headers
   }
 
@@ -190,13 +227,26 @@ export class RequestContext<TBody = any, TParams = any, TQuery = any> implements
 
   // ── File Uploads ────────────────────────────────────────────────────
 
-  /** Single uploaded file (requires @FileUpload({ mode: 'single' })) */
-  get file(): any {
+  /**
+   * Single uploaded file (requires `@FileUpload({ mode: 'single' })`).
+   * Read-only — file metadata is set by the upload middleware and
+   * shouldn't be mutated downstream.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  get file(): DeepReadonly<any> | undefined {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return (this.req as any).file
   }
 
-  /** Array of uploaded files (requires @FileUpload({ mode: 'array' })) */
-  get files(): any[] | undefined {
+  /**
+   * Array of uploaded files (requires `@FileUpload({ mode: 'array' })`).
+   * Returns a `ReadonlyArray` — `push`/`pop`/index assignment all error
+   * at compile time. Use the underlying `ctx.req.files` if you need to
+   * splice the list in place (rare).
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  get files(): ReadonlyArray<DeepReadonly<any>> | undefined {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return (this.req as any).files
   }
 
