@@ -223,19 +223,55 @@ class NotificationService {
 
 ### @Builder
 
-Adds a static `builder()` method for fluent construction.
+Adds a static `builder()` method for fluent construction. KickJS uses TypeScript's legacy decorators (`experimentalDecorators: true`), which cannot widen a class type from a decorator return value, so the runtime side effect and the type opt-in are decoupled. Pick whichever ergonomics you prefer — the runtime is identical.
+
+#### Decorator form (with type opt-in)
 
 ```ts
-import { Builder } from '@forinda/kickjs'
+import { Builder, type BuilderOf } from '@forinda/kickjs'
 
 @Builder
 class UserDto {
   name!: string
   email!: string
   role!: string
+
+  declare static readonly builder: () => BuilderOf<UserDto>
 }
 
 const user = UserDto.builder().name('Alice').email('alice@example.com').role('admin').build()
+//                            ^? (value: string) => BuilderOf<UserDto>
+```
+
+The `declare static readonly` line is the one-time opt-in that exposes the chainable setters and `.build()` to TypeScript. Without it the runtime still works, but you get no autocomplete. `readonly` silences SonarQube's `typescript:S1444` — the runtime assigns `target.builder` once at decoration time and never reassigns it.
+
+#### Factory form (zero boilerplate)
+
+`withBuilder()` runs the same runtime under the hood and returns the class intersected with the typed `builder()` static, so no `declare` line is needed:
+
+```ts
+import { withBuilder } from '@forinda/kickjs'
+
+class UserDtoBase {
+  name!: string
+  email!: string
+  role!: string
+}
+
+export const UserDto = withBuilder(UserDtoBase)
+export type UserDto = InstanceType<typeof UserDto>
+
+const user = UserDto.builder().name('Alice').email('a@b.com').role('admin').build()
+```
+
+Use the decorator form when you want to keep one class declaration; use the factory when you'd rather not maintain the `declare static` line.
+
+#### `BuilderOf<T>` shape
+
+```ts
+type BuilderOf<T> = { [K in keyof T]-?: (value: T[K]) => BuilderOf<T> } & {
+  build(): T
+}
 ```
 
 ## Swagger Decorators
@@ -362,7 +398,8 @@ class TaskController {
 | `@Autowired`                 | Property     | core    | Property injection                                  |
 | `@Value`                     | Property     | core    | Env variable injection                              |
 | `@Inject`                    | Parameter    | core    | Constructor param injection                         |
-| `@Builder`                   | Class        | core    | Fluent builder pattern                              |
+| `@Builder`                   | Class        | core    | Fluent builder via static `builder()` (opt-in type) |
+| `withBuilder()` (factory)    | Class        | core    | Same runtime as `@Builder` with inferred typing     |
 | `@ApiOperation`              | Method       | swagger | OpenAPI operation                                   |
 | `@ApiResponse`               | Method       | swagger | OpenAPI response                                    |
 | `@ApiTags`                   | Class/Method | swagger | OpenAPI tags                                        |
