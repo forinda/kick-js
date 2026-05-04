@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - main
+  # Manual escape hatch — re-run after fixing local npm / tag state
+  # if a publish step failed mid-flight. The changesets action is
+  # idempotent: packages already at the target version skip cleanly.
+  workflow_dispatch:
 
 # Concurrency: only one release flow at a time per branch.
 concurrency:

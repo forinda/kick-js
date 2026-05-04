@@ -1,5 +1,11 @@
 import defineVersionedConfig from 'vitepress-versioning-plugin'
-import pkg from '../../package.json'
+// The docs version timeline tracks the framework core
+// (`@forinda/kickjs`) — adopters cite that version when filing
+// issues, and the changesets snapshot script writes
+// `docs/versions/<corePkg.version>/`. Per-package versions diverge
+// under changesets; the root `package.json` is in `ignore` and
+// stays at 0.0.0.
+import pkg from '../../packages/kickjs/package.json'
 
 const guideSidebar = [
   {
