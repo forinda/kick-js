@@ -2,7 +2,7 @@
 
 > KickJS-native ORM — code-first schema, reversible migrations, multi-dialect SQL.
 
-Phantom-typed column builders, `SchemaToKysely<S>` for end-to-end row inference, `KickDbRegister` module augmentation, runtime lifecycle hooks (`query` / `queryError` / `slowQuery`), `customType` mapper, `pgEnum` with full migration pipeline, and `db.$extends({ model })` per-table methods.
+Phantom-typed column builders, `SchemaToTypes<S>` for end-to-end row inference, `KickDbRegister` module augmentation, runtime lifecycle hooks (`query` / `queryError` / `slowQuery`), `customType` mapper, `pgEnum` with full migration pipeline, and `db.$extends({ model })` per-table methods.
 
 ## Install
 
