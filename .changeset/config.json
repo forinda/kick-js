@@ -21,7 +21,9 @@
     "@forinda/kickjs-example-task-drizzle-api",
     "@forinda/kickjs-example-task-kickdb",
     "@forinda/kickjs-example-task-mongoose-api",
-    "@forinda/kickjs-example-task-prisma-api",
-    "@forinda/kickjs-monorepo"
-  ]
+    "@forinda/kickjs-example-task-prisma-api"
+  ],
+  "___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH": {
+    "onlyUpdatePeerDependentsWhenOutOfRange": true
+  }
 }
