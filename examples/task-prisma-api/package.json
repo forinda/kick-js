@@ -44,7 +44,7 @@
     "@forinda/kickjs-cli": "workspace:*",
     "@forinda/kickjs-vite": "workspace:*",
     "@forinda/kickjs-testing": "workspace:*",
-    "@swc/core": "^1.15.30",
+    "@swc/core": "^1.15.33",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^25.6.0",
