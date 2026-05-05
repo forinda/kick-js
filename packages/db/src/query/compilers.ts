@@ -1,10 +1,12 @@
 /**
  * Dispatch helper that selects the right relational-query compiler
- * for the runtime dialect detected by `createDbClient`.
+ * for the runtime dialect detected by `createDbClient`. After M4.A.3
+ * all three dialects ship real compilers — the throw-stub is
+ * retired.
  *
  *   - PG     → `compilePg`     (kysely/helpers/postgres)
- *   - SQLite → `compileSqlite` (kysely/helpers/sqlite, M4.A.2)
- *   - MySQL  → throw-stub      (compileMysql lands in M4.A.3)
+ *   - SQLite → `compileSqlite` (kysely/helpers/sqlite)
+ *   - MySQL  → `compileMysql`  (kysely/helpers/mysql)
  *
  * Spec: docs/db/spec-relational-query.md §4.3 +
  * docs/db/spec-relational-query-other-dialects.md §4.
@@ -12,19 +14,8 @@
 
 import { compilePg } from './compile-pg'
 import { compileSqlite } from './compile-sqlite'
-import { RelationalQueryNotSupportedError } from './errors'
+import { compileMysql } from './compile-mysql'
 import type { CompileFn } from './builder'
-
-/**
- * Throw-stub still used by the MySQL dialect until M4.A.3 fills it
- * in. Same signature as `compilePg` / `compileSqlite` so the picker
- * is a one-line lookup.
- */
-const compileNotSupported =
-  (dialect: string): CompileFn =>
-  () => {
-    throw new RelationalQueryNotSupportedError(dialect)
-  }
 
 /**
  * Pick a compiler by dialect tag. Used by `createDbClient` after it
@@ -37,6 +28,6 @@ export function pickCompiler(dialect: 'postgres' | 'sqlite' | 'mysql'): CompileF
     case 'sqlite':
       return compileSqlite as CompileFn
     case 'mysql':
-      return compileNotSupported('mysql')
+      return compileMysql as CompileFn
   }
 }

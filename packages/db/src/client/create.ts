@@ -61,18 +61,16 @@ export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
   // compiler (below) and to decide whether the JSON-results plugin
   // ships in the Kysely plugin chain.
   //
-  // SQLite drivers return JSON columns as TEXT, so the
-  // kysely/helpers/sqlite jsonArrayFrom / jsonObjectFrom won't
+  // SQLite + MySQL drivers return JSON columns as TEXT, so the
+  // kysely/helpers/<dialect> jsonArrayFrom / jsonObjectFrom won't
   // round-trip without ParseJSONResultsPlugin. PG decodes JSON
-  // natively. MySQL needs the same plugin in M4.A.3 — gating SQLite-
-  // only here keeps the plugin chain free of unused work for MySQL
-  // adopters until that compiler ships.
+  // natively — skip the plugin there to keep the chain minimal.
   // Spec: docs/db/spec-relational-query-other-dialects.md §5.
   const dialectTag = detectDialect(opts.dialect)
 
   const plugins: KyselyPlugin[] = []
   if (codecPlugin) plugins.push(codecPlugin)
-  if (dialectTag === 'sqlite') {
+  if (dialectTag === 'sqlite' || dialectTag === 'mysql') {
     plugins.push(new ParseJSONResultsPlugin())
   }
 
