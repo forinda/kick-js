@@ -1,5 +1,13 @@
 # M2 — Type story + ecosystem extensibility: Implementation Plan
 
+> **Status (2026-05-05):** ✅ **Shipped** in `@forinda/kickjs-db@5.2.2` + companion packages. All M2 tasks landed except:
+>
+> - **Task 15** — Vite AST strip via Babel (regex-based stripping ships today; full Babel pass deferred).
+> - **Task 18** — `db.query.X.findMany({ with })` relational layer (no `packages/db/src/query` directory yet).
+> - **Removed-enum-value handling** — silent no-op confirmed in `packages/db/src/emit/pg.ts:63`; round-tripping requires operator-orchestrated column drops.
+>
+> The remaining tasks track in [`m3-plan.md`](./m3-plan.md). The "Out of scope" list in [`m2-release.md`](./m2-release.md) is **stale** — KickEventBus, `$extends({result})`, `customType.toDriver` insert path, and the routes/env carve-up have all shipped on disk since the release was cut.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Land the type-tightening + ecosystem-extensibility groundwork that makes
@@ -141,7 +149,7 @@ Memory rules in scope:
 - Modify: `packages/db/src/dsl/columns/types.ts`
 - Modify: `packages/db/src/dsl/columns/builders.ts`
 
-- [ ] **Step 1.1: Update `ColumnBuilder` to carry phantoms**
+- [x] **Step 1.1: Update `ColumnBuilder` to carry phantoms**
 
 ```ts
 // packages/db/src/dsl/columns/types.ts
@@ -215,7 +223,7 @@ export class ColumnBuilder<T = unknown, TNullable extends boolean = true> {
 }
 ```
 
-- [ ] **Step 1.2: Update each constructor to declare its phantom**
+- [x] **Step 1.2: Update each constructor to declare its phantom**
 
 ```ts
 // packages/db/src/dsl/columns/builders.ts (cross-dialect set)
@@ -337,7 +345,7 @@ export function uuid(): UuidBuilder {
 }
 ```
 
-- [ ] **Step 1.3: Update PG-only subpath builders**
+- [x] **Step 1.3: Update PG-only subpath builders**
 
 ```ts
 // packages/db/src/dsl/columns/pg.ts — declare strings for the niche types
@@ -364,7 +372,7 @@ export function xml(): ColumnBuilder<string> {
 }
 ```
 
-- [ ] **Step 1.4: Run existing tests — must stay green**
+- [x] **Step 1.4: Run existing tests — must stay green**
 
 ```bash
 pnpm --filter @forinda/kickjs-db test
@@ -372,7 +380,7 @@ pnpm --filter @forinda/kickjs-db test
 
 Expected: all 152 tests still pass. Phantoms are type-only; runtime is unchanged.
 
-- [ ] **Step 1.5: Commit**
+- [x] **Step 1.5: Commit**
 
 ```bash
 git add packages/db/src/dsl/columns
@@ -392,7 +400,7 @@ git commit -m "feat(db): add phantom <T, TNullable> generics to ColumnBuilder (M
 The marker is a type-level brand that runtime ignores. Uses an unused symbol so it
 can never collide with user data.
 
-- [ ] **Step 2.1: Add the brand and mark serial constructors**
+- [x] **Step 2.1: Add the brand and mark serial constructors**
 
 ```ts
 // packages/db/src/dsl/columns/types.ts (export the brand)
@@ -422,7 +430,7 @@ export function smallSerial(): ColumnBuilder<number, false> & GeneratedBrand {
 }
 ```
 
-- [ ] **Step 2.2: Mark `uuid().defaultRandom()` as generated**
+- [x] **Step 2.2: Mark `uuid().defaultRandom()` as generated**
 
 ```ts
 // packages/db/src/dsl/columns/builders.ts (UuidBuilder)
@@ -441,7 +449,7 @@ export class UuidBuilder<TNullable extends boolean = true> extends ColumnBuilder
 }
 ```
 
-- [ ] **Step 2.3: Mark `timestamp().defaultNow()` / `timestamptz().defaultNow()` as generated**
+- [x] **Step 2.3: Mark `timestamp().defaultNow()` / `timestamptz().defaultNow()` as generated**
 
 ```ts
 // TimestampBuilder
@@ -451,7 +459,7 @@ defaultNow(): this & GeneratedBrand {
 }
 ```
 
-- [ ] **Step 2.4: Mark `.default(...)` as generated when given a runtime default**
+- [x] **Step 2.4: Mark `.default(...)` as generated when given a runtime default**
 
 ```ts
 // ColumnBuilder
@@ -466,7 +474,7 @@ default(value: string): this & GeneratedBrand {
 > the cleanest way to express "this column has a runtime default that the DB will
 > fill in if you skip it."
 
-- [ ] **Step 2.5: Run + commit**
+- [x] **Step 2.5: Run + commit**
 
 ```bash
 pnpm --filter @forinda/kickjs-db test
@@ -482,7 +490,7 @@ git commit -m "feat(db): mark generated columns (serial, default, defaultNow, de
 
 - Modify: `packages/db/src/client/schema-types.ts`
 
-- [ ] **Step 3.1: Rewrite `SchemaToKysely`**
+- [x] **Step 3.1: Rewrite `SchemaToKysely`**
 
 ```ts
 // packages/db/src/client/schema-types.ts
@@ -515,7 +523,7 @@ export type SchemaToKysely<S> = {
 }
 ```
 
-- [ ] **Step 3.2: Verify the existing `examples/task-kickdb-api` schema infers correctly**
+- [x] **Step 3.2: Verify the existing `examples/task-kickdb-api` schema infers correctly**
 
 ```ts
 // scratch test (won't commit) — packages/db/__tests__/unit/schema-infer-scratch.test-d.ts
@@ -532,7 +540,7 @@ expectTypeOf<DB['users']['isActive']>().toEqualTypeOf<Generated<boolean>>() // .
 expectTypeOf<DB['users']['createdAt']>().toEqualTypeOf<Generated<Date>>() // .defaultNow()
 ```
 
-- [ ] **Step 3.3: Run + commit**
+- [x] **Step 3.3: Run + commit**
 
 ```bash
 pnpm --filter @forinda/kickjs-db test  # type-tests run via vitest typecheck mode
@@ -551,7 +559,7 @@ git commit -m "feat(db): tighten SchemaToKysely with phantom inference + Generat
 - Modify: `packages/db/src/client/types.ts`
 - Modify: `packages/db/src/index.ts`
 
-- [ ] **Step 4.1: Create the empty `Register` interface**
+- [x] **Step 4.1: Create the empty `Register` interface**
 
 ```ts
 // packages/db/src/client/register.ts
@@ -573,7 +581,7 @@ export interface Register {}
 export type RegisteredDb = Register extends { db: infer D } ? D : never
 ```
 
-- [ ] **Step 4.2: Wire `KickDbClient` to resolve through `Register`**
+- [x] **Step 4.2: Wire `KickDbClient` to resolve through `Register`**
 
 ```ts
 // packages/db/src/client/types.ts (excerpt — replace existing KickDbClient default)
@@ -594,14 +602,14 @@ export interface KickDbClient<DB = ResolveDb<unknown>> {
 > haven't declared `Register`, `KickDbClient` falls back to the M1-permissive
 > `unknown`. No regression.
 
-- [ ] **Step 4.3: Re-export from barrel**
+- [x] **Step 4.3: Re-export from barrel**
 
 ```ts
 // packages/db/src/index.ts (append)
 export type { Register, RegisteredDb } from './client/register'
 ```
 
-- [ ] **Step 4.4: Run + commit**
+- [x] **Step 4.4: Run + commit**
 
 ```bash
 pnpm --filter @forinda/kickjs-db test
@@ -619,7 +627,7 @@ git commit -m "feat(db): Register interface augmentation for automatic KickDbCli
 - Create: `packages/db/__tests__/unit/schema-types.test-d.ts`
 - Create: `packages/db/__tests__/unit/register.test-d.ts`
 
-- [ ] **Step 5.1: Column phantom inference tests**
+- [x] **Step 5.1: Column phantom inference tests**
 
 ```ts
 // packages/db/__tests__/unit/column-types.test-d.ts
@@ -662,7 +670,7 @@ describe('column phantom T inference', () => {
 })
 ```
 
-- [ ] **Step 5.2: `SchemaToKysely` end-to-end tests**
+- [x] **Step 5.2: `SchemaToKysely` end-to-end tests**
 
 ```ts
 // packages/db/__tests__/unit/schema-types.test-d.ts
@@ -720,7 +728,7 @@ describe('SchemaToKysely', () => {
 })
 ```
 
-- [ ] **Step 5.3: `Register`-driven `KickDbClient` widening test**
+- [x] **Step 5.3: `Register`-driven `KickDbClient` widening test**
 
 ```ts
 // packages/db/__tests__/unit/register.test-d.ts
@@ -750,7 +758,7 @@ describe('Register-driven typing', () => {
 })
 ```
 
-- [ ] **Step 5.4: Wire vitest typecheck mode**
+- [x] **Step 5.4: Wire vitest typecheck mode**
 
 Verify `packages/db/vitest.config.ts` has `test.typecheck.tsconfig` pointing at
 `tsconfig.test.json` (already true from M0). Test files ending in `.test-d.ts`
@@ -762,7 +770,7 @@ pnpm --filter @forinda/kickjs-db test --typecheck
 
 Expected: type tests pass; existing runtime tests unaffected.
 
-- [ ] **Step 5.5: Commit**
+- [x] **Step 5.5: Commit**
 
 ```bash
 git add packages/db/__tests__/unit/{column-types,schema-types,register}.test-d.ts
@@ -780,7 +788,7 @@ git commit -m "test(db): expectTypeOf coverage for phantom inference + SchemaToK
 - Modify: `examples/task-kickdb-api/src/db/client.ts`
 - Modify: `examples/task-kickdb-api/src/modules/{users,workspaces,tasks}/*.repository.ts`
 
-- [ ] **Step 6.1: Drop the manual `interface DB` from client.ts**
+- [x] **Step 6.1: Drop the manual `interface DB` from client.ts**
 
 ```ts
 // examples/task-kickdb-api/src/db/client.ts (M2 — replace whole file)
@@ -807,7 +815,7 @@ export type Db = typeof dbClient
 export { schema }
 ```
 
-- [ ] **Step 6.2: Create the `Register` augmentation file**
+- [x] **Step 6.2: Create the `Register` augmentation file**
 
 ```ts
 // examples/task-kickdb-api/src/db/register.ts
@@ -828,7 +836,7 @@ import (so TS picks up the augmentation):
 import './db/register'
 ```
 
-- [ ] **Step 6.3: Strip `as never` casts from repositories**
+- [x] **Step 6.3: Strip `as never` casts from repositories**
 
 ```ts
 // examples/task-kickdb-api/src/modules/users/users.repository.ts (excerpt)
@@ -867,7 +875,7 @@ export class UsersRepository {
 Same shape for `workspaces.repository.ts` and `tasks.repository.ts`. The
 `as never` cast and the private `typed` getter both go away.
 
-- [ ] **Step 6.4: Verify**
+- [x] **Step 6.4: Verify**
 
 ```bash
 pnpm --filter @forinda/kickjs-example-task-kickdb typecheck
@@ -876,7 +884,7 @@ pnpm --filter @forinda/kickjs-example-task-kickdb build
 
 Expected: clean. Returned row types in IDE narrow correctly to the schema.
 
-- [ ] **Step 6.5: Commit**
+- [x] **Step 6.5: Commit**
 
 ```bash
 git commit -m "example(task-kickdb-api): drop manual interface DB; use Register augmentation (M2.A-T6)"
@@ -895,7 +903,7 @@ git commit -m "example(task-kickdb-api): drop manual interface DB; use Register 
 - Create: `packages/cli/src/typegen/runner.ts`
 - Create: `packages/cli/src/typegen/builtin/index.ts`
 
-- [ ] **Step 7.1: Define the contract**
+- [x] **Step 7.1: Define the contract**
 
 ```ts
 // packages/cli/src/typegen/plugin.ts
@@ -934,7 +942,7 @@ export interface TypegenPluginResult {
 }
 ```
 
-- [ ] **Step 7.2: Runner**
+- [x] **Step 7.2: Runner**
 
 ```ts
 // packages/cli/src/typegen/runner.ts
@@ -1004,7 +1012,7 @@ export async function runTypegen(opts: RunTypegenOptions): Promise<TypegenPlugin
 }
 ```
 
-- [ ] **Step 7.3: Smoke test the runner against a tiny inline plugin**
+- [x] **Step 7.3: Smoke test the runner against a tiny inline plugin**
 
 ```ts
 // packages/cli/__tests__/typegen-runner.test.ts
@@ -1061,7 +1069,7 @@ describe('runTypegen', () => {
 })
 ```
 
-- [ ] **Step 7.4: Commit**
+- [x] **Step 7.4: Commit**
 
 ```bash
 git add packages/cli/src/typegen packages/cli/__tests__/typegen-runner.test.ts
@@ -1080,7 +1088,7 @@ git commit -m "feat(cli): TypegenPlugin contract + runner with --check (M2.B-T7)
   - `builtin/env.ts` — emits `.kickjs/types/kick__env.d.ts`
   - `builtin/assets.ts` — emits `.kickjs/types/kick__assets.d.ts`
 
-- [ ] **Step 8.1: Read existing typegen implementation, extract pure logic**
+- [x] **Step 8.1: Read existing typegen implementation, extract pure logic**
 
 ```bash
 ls packages/cli/src/typegen/
@@ -1094,7 +1102,7 @@ cat packages/cli/src/typegen/index.ts | head -60
 > `.kickjs/types/`; carve that into a `TypegenPlugin` and route through
 > the runner from T7.
 
-- [ ] **Step 8.2: Implement each builtin plugin as a thin wrapper**
+- [x] **Step 8.2: Implement each builtin plugin as a thin wrapper**
 
 ```ts
 // packages/cli/src/typegen/builtin/routes.ts
@@ -1112,7 +1120,7 @@ export const kickRoutesTypegen = (): TypegenPlugin => ({
 
 (Same shape for `env.ts` and `assets.ts` — wrap existing generation logic.)
 
-- [ ] **Step 8.3: Update `kick typegen` CLI command to use the runner**
+- [x] **Step 8.3: Update `kick typegen` CLI command to use the runner**
 
 ```ts
 // packages/cli/src/commands/typegen.ts (sketch)
@@ -1139,7 +1147,7 @@ export function registerTypegenCommand(program: Command) {
 }
 ```
 
-- [ ] **Step 8.4: Smoke-test against an existing example**
+- [x] **Step 8.4: Smoke-test against an existing example**
 
 ```bash
 cd examples/db-spike-api  # has minimal config; routes/env/assets all empty-ish
@@ -1150,7 +1158,7 @@ ls .kickjs/types/
 Expected: `kick__routes.d.ts`, `kick__env.d.ts`, `kick__assets.d.ts` exist with
 the expected augmentations.
 
-- [ ] **Step 8.5: Commit**
+- [x] **Step 8.5: Commit**
 
 ```bash
 git commit -m "refactor(cli): existing typegen becomes builtin TypegenPlugins (M2.B-T8)"
@@ -1166,7 +1174,7 @@ git commit -m "refactor(cli): existing typegen becomes builtin TypegenPlugins (M
 - Create: `packages/cli/src/typegen/builtin/db.ts`
 - Modify: `packages/cli/src/commands/typegen.ts` (register the new builtin)
 
-- [ ] **Step 9.1: Plugin implementation**
+- [x] **Step 9.1: Plugin implementation**
 
 ```ts
 // packages/cli/src/typegen/builtin/db.ts
@@ -1218,7 +1226,7 @@ function posixOf(p: string): string {
 > `tsconfig.json` already includes `.kickjs/types/**/*.d.ts`, so the
 > generated file augments `KickDbClient` automatically.
 
-- [ ] **Step 9.2: Register the builtin**
+- [x] **Step 9.2: Register the builtin**
 
 ```ts
 // packages/cli/src/commands/typegen.ts (add)
@@ -1226,7 +1234,7 @@ import { kickDbTypegen } from '../typegen/builtin/db'
 const builtins = [kickRoutesTypegen(), kickEnvTypegen(), kickAssetsTypegen(), kickDbTypegen()]
 ```
 
-- [ ] **Step 9.3: Smoke-test against `examples/task-kickdb-api`**
+- [x] **Step 9.3: Smoke-test against `examples/task-kickdb-api`**
 
 ```bash
 cd examples/task-kickdb-api
@@ -1238,7 +1246,7 @@ Expected: file exists, references the schema via relative import path,
 contains the `Register` augmentation. After running typegen, the adopter
 can **delete** their hand-written `src/db/register.ts` from M2-T6.
 
-- [ ] **Step 9.4: Commit**
+- [x] **Step 9.4: Commit**
 
 ```bash
 git commit -m "feat(cli): kick/db TypegenPlugin emits Register augmentation from src/db/schema.ts (M2.B-T9)"
@@ -1255,7 +1263,7 @@ git commit -m "feat(cli): kick/db TypegenPlugin emits Register augmentation from
   read the resolved plugin list, watch each plugin's globs, re-run the runner on
   change.
 
-- [ ] **Step 10.1: Read existing watcher**
+- [x] **Step 10.1: Read existing watcher**
 
 ```bash
 grep -n "typegen\|chokidar" packages/vite/src/*.ts | head
@@ -1264,7 +1272,7 @@ grep -n "typegen\|chokidar" packages/vite/src/*.ts | head
 Adapt the integration to fit the existing shape. The runner from T7 is the
 target; the existing watcher just dispatches to it now.
 
-- [ ] **Step 10.2: Implement single watcher → multi-plugin dispatch**
+- [x] **Step 10.2: Implement single watcher → multi-plugin dispatch**
 
 ```ts
 // packages/vite/src/typegen-watcher.ts (new)
@@ -1286,7 +1294,7 @@ export function startTypegenWatcher(opts: {
 }
 ```
 
-- [ ] **Step 10.3: Commit**
+- [x] **Step 10.3: Commit**
 
 ```bash
 git commit -m "feat(vite): typegen watcher dispatches through TypegenPlugin runner (M2.B-T10)"
@@ -1298,7 +1306,7 @@ git commit -m "feat(vite): typegen watcher dispatches through TypegenPlugin runn
 
 **Story:** spec-platform-devtools-typegen §6.7.
 
-- [ ] **Step 11.1: Add `kick typegen --check` to CI workflow**
+- [x] **Step 11.1: Add `kick typegen --check` to CI workflow**
 
 ```yaml
 # .github/workflows/ci.yml — add a step after install
@@ -1306,7 +1314,7 @@ git commit -m "feat(vite): typegen watcher dispatches through TypegenPlugin runn
   run: pnpm exec kick typegen --check
 ```
 
-- [ ] **Step 11.2: Smoke-test locally that drift is detected**
+- [x] **Step 11.2: Smoke-test locally that drift is detected**
 
 ```bash
 # pretend: edit src/db/schema.ts in the example, don't re-run typegen
@@ -1314,7 +1322,7 @@ git commit -m "feat(vite): typegen watcher dispatches through TypegenPlugin runn
 # expected: exits non-zero, references kick/db plugin
 ```
 
-- [ ] **Step 11.3: Commit**
+- [x] **Step 11.3: Commit**
 
 ```bash
 git commit -m "ci: kick typegen --check guards against generator drift (M2.B-T11)"
@@ -1331,14 +1339,14 @@ git commit -m "ci: kick typegen --check guards against generator drift (M2.B-T11
 > **Adapter note**: `@forinda/kickjs-devtools-kit` source is not pre-read here.
 > The first step is to read what's there, then design the migration.
 
-- [ ] **Step 12.1: Read existing surface**
+- [x] **Step 12.1: Read existing surface**
 
 ```bash
 ls packages/devtools-kit/src/
 cat packages/devtools-kit/src/index.ts
 ```
 
-- [ ] **Step 12.2: Add the new `DevtoolsTab` shape alongside existing**
+- [x] **Step 12.2: Add the new `DevtoolsTab` shape alongside existing**
 
 ```ts
 // packages/devtools-kit/src/tab.ts (new file — coexists with old)
@@ -1371,7 +1379,7 @@ export function defineDevtoolsTab<TProps = TabProps>(
 }
 ```
 
-- [ ] **Step 12.3: Migrate first-party tabs**
+- [x] **Step 12.3: Migrate first-party tabs**
 
 For each adapter that ships a tab (`@forinda/kickjs-db`, `swagger`, `queue`, `cron`,
 `devtools-kit` itself), rewrite the tab module to use the new contract. Use safe
@@ -1420,7 +1428,7 @@ export const dbDevtoolsTab = defineDevtoolsTab({
 > The DOM-construction style above is the canonical pattern; document it in
 > the migration guide.
 
-- [ ] **Step 12.4: Mark the old class-based contract deprecated**
+- [x] **Step 12.4: Mark the old class-based contract deprecated**
 
 ```ts
 // packages/devtools-kit/src/legacy.ts (rename old surface)
@@ -1430,7 +1438,7 @@ export interface LegacyDevtoolsTab {
 }
 ```
 
-- [ ] **Step 12.5: Commit**
+- [x] **Step 12.5: Commit**
 
 ```bash
 git commit -m "feat(devtools): defineDevtoolsTab → (el, props) => void contract (M2.C-T12)"
@@ -1444,7 +1452,7 @@ git commit -m "feat(devtools): defineDevtoolsTab → (el, props) => void contrac
 
 **Story:** spec-platform-devtools-typegen §5.
 
-- [ ] **Step 13.1: Types**
+- [x] **Step 13.1: Types**
 
 ```ts
 // packages/devtools-kit/src/bus/types.ts
@@ -1469,7 +1477,7 @@ export type EventTypeKey = keyof KickDevtoolsEventRegistry & string
 export type EventPayload<K extends EventTypeKey> = KickDevtoolsEventRegistry[K]
 ```
 
-- [ ] **Step 13.2: Browser impl**
+- [x] **Step 13.2: Browser impl**
 
 ```ts
 // packages/devtools-kit/src/bus/browser.ts
@@ -1531,7 +1539,7 @@ export function createBrowserBus(
 }
 ```
 
-- [ ] **Step 13.3: Server impl + Express WS route**
+- [x] **Step 13.3: Server impl + Express WS route**
 
 ```ts
 // packages/devtools-kit/src/bus/server.ts
@@ -1585,12 +1593,12 @@ export function createServerBus(opts: { app: Express; path?: string }): KickEven
 }
 ```
 
-- [ ] **Step 13.4: Tests**
+- [x] **Step 13.4: Tests**
 
 Unit-test handler/onAny wiring against a stub channel/socket. Cross-tab is harder
 to test in vitest; integration deferred to M3.
 
-- [ ] **Step 13.5: Commit**
+- [x] **Step 13.5: Commit**
 
 ```bash
 git commit -m "feat(devtools): KickEventBus with BroadcastChannel + WS transports (M2.D-T13)"
@@ -1602,7 +1610,7 @@ git commit -m "feat(devtools): KickEventBus with BroadcastChannel + WS transport
 
 **Story:** spec-platform-devtools-typegen §5.4.
 
-- [ ] **Step 14.1: kickjs-db emits `db:slow-query` + `db:migration-applied`**
+- [x] **Step 14.1: kickjs-db emits `db:slow-query` + `db:migration-applied`**
 
 ```ts
 // packages/db/src/adapter.ts (within beforeStart, when migrationsOnBoot:'apply' fires)
@@ -1619,7 +1627,7 @@ config.bus?.emit({
 })
 ```
 
-- [ ] **Step 14.2: Type-tag the events via `KickDevtoolsEventRegistry`**
+- [x] **Step 14.2: Type-tag the events via `KickDevtoolsEventRegistry`**
 
 ```ts
 // packages/db/src/adapter.ts (top of file)
@@ -1632,7 +1640,7 @@ declare module '@forinda/kickjs-devtools-kit' {
 }
 ```
 
-- [ ] **Step 14.3: Commit**
+- [x] **Step 14.3: Commit**
 
 ```bash
 git commit -m "feat(db): publish db:slow-query / db:migration-applied via KickEventBus (M2.D-T14)"
@@ -1746,7 +1754,7 @@ git commit -m "feat(vite): devtoolsStrip — Babel transform removes devtools im
 
 - Create: `packages/db/src/custom-type.ts`
 
-- [ ] **Step 16.1: Implementation**
+- [x] **Step 16.1: Implementation**
 
 ```ts
 // packages/db/src/custom-type.ts
@@ -1778,7 +1786,7 @@ export function customType<TJs>(opts: CustomTypeOptions<TJs>): () => CustomColum
 > wired via a Kysely plugin that consumes the column metadata. That plugin lands
 > in M2-T19 (lifecycle hooks pipeline).
 
-- [ ] **Step 16.2: Test**
+- [x] **Step 16.2: Test**
 
 ```ts
 // packages/db/__tests__/unit/custom-type.test.ts
@@ -1786,7 +1794,7 @@ export function customType<TJs>(opts: CustomTypeOptions<TJs>): () => CustomColum
 // expectTypeOf: SchemaToKysely propagates EncryptedString to the column type
 ```
 
-- [ ] **Step 16.3: Commit**
+- [x] **Step 16.3: Commit**
 
 ```bash
 git commit -m "feat(db): customType<T>() mapper for typed column transforms (M2.F-T16)"
@@ -1803,7 +1811,7 @@ git commit -m "feat(db): customType<T>() mapper for typed column transforms (M2.
 - Create: `packages/db/src/extend/apply.ts`
 - Modify: `packages/db/src/client/types.ts` (add `$extends` method)
 
-- [ ] **Step 17.1: Types** (sketch — full inference is non-trivial)
+- [x] **Step 17.1: Types** (sketch — full inference is non-trivial)
 
 ```ts
 // packages/db/src/extend/types.ts
@@ -1818,11 +1826,11 @@ export interface ExtensionDefinition<DB> {
 }
 ```
 
-- [ ] **Step 17.2: Runtime apply** — wraps the existing `KickDbClient` so model
+- [x] **Step 17.2: Runtime apply** — wraps the existing `KickDbClient` so model
       methods land on `dbX.<table>.<method>`, result extensions intercept select rows
       and run `compute()` post-fetch.
 
-- [ ] **Step 17.3: Tests + commit**
+- [x] **Step 17.3: Tests + commit**
 
 ```bash
 git commit -m "feat(db): \$extends({ model, result }) extension surface (M2.F-T17)"
@@ -1853,7 +1861,7 @@ git commit -m "feat(db): db.query.X.findMany({ with }) relational layer (M2.F-T1
 - Create: `packages/db/src/hooks/plugin.ts` — Kysely interceptor
 - Create: `packages/db/src/hooks/slow-query.ts`
 
-- [ ] **Step 19.1: Kysely plugin that wires the existing `KickDbEventEmitter`**
+- [x] **Step 19.1: Kysely plugin that wires the existing `KickDbEventEmitter`**
 
 ```ts
 // packages/db/src/hooks/plugin.ts
@@ -1888,12 +1896,12 @@ export class HooksPlugin implements KyselyPlugin {
 }
 ```
 
-- [ ] **Step 19.2: `slowQueryThresholdMs` plumbing**
+- [x] **Step 19.2: `slowQueryThresholdMs` plumbing**
 
 `createDbClient({ slowQueryThresholdMs: 50 })` config flows through to the
 hooks plugin.
 
-- [ ] **Step 19.3: Tests + commit**
+- [x] **Step 19.3: Tests + commit**
 
 ```bash
 git commit -m "feat(db): runtime emit pipeline for query / queryError / slowQuery (M2.F-T19)"
