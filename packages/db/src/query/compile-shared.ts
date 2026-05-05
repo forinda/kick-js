@@ -30,8 +30,6 @@ export interface CompileOptions {
   offset?: number
   maxDepth?: number
   with?: Record<string, true | CompileOptions>
-  /** Skip per-row `customType.fromDriver` walk on JSON-aggregated rows (M3 spec §7 R-1). */
-  raw?: boolean
 }
 
 const DEFAULT_MAX_DEPTH = 5

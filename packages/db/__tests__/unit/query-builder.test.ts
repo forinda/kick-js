@@ -12,8 +12,18 @@
  *      sub-namespaces on first access.
  *   3. `findFirst` / `findUnique` clamp to a single row and `null`
  *      on empty result.
- *   4. SQLite/MySQL clients throw `RelationalQueryNotSupportedError`
- *      on first `findMany` call.
+ *   4. SQLite emits dialect-specific SQL (json_group_array, not
+ *      json_agg) — confirms the dialect picker selected the
+ *      SQLite compiler.
+ *   5. MySQL still throws `RelationalQueryNotSupportedError` on
+ *      first `findMany` call until M4.A.3 ships the compiler.
+ *
+ * Note: by stubbing `executeQuery`, these tests do NOT exercise
+ * the `ParseJSONResultsPlugin` chain that `createDbClient`
+ * auto-attaches for SQLite. End-to-end JSON-string-to-object
+ * round-trip lands in `packages/db-sqlite/__tests__/integration/`
+ * (M4.A.5), where a real `better-sqlite3` driver returns the
+ * actual JSON-encoded TEXT for the plugin to parse.
  */
 
 import { describe, expect, it, vi } from 'vitest'

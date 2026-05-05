@@ -338,6 +338,29 @@ describe('extractRelations — relationName multi-FK disambiguation (M4.B)', () 
     expect(r?.users?.sentMessages?.target).toBe('messages')
   })
 
+  it('preserves empty-string relationName (presence-based, not truthiness-based)', () => {
+    // Edge case: `relationName: ''` is a legal-but-weird tag. The
+    // resolver uses `!== undefined` checks rather than truthy spread
+    // so empty strings round-trip correctly. This locks the
+    // M4.A.2 PR review fix against future regression.
+    const messagesRels = relations(messages, (h) => ({
+      sender: h.one(users, {
+        fields: [messages.senderId],
+        references: [users.id],
+        relationName: '',
+      }),
+    }))
+    const usersRels = relations(users, (h) => ({
+      sentMessages: h.many(messages, { relationName: '' }),
+    }))
+    const tables = extractSnapshot({ users, messages }, 'postgres').tables
+    const r = extractRelations({ users, messages, messagesRels, usersRels }, tables)
+    // Source-side tag preserved on the resolved entry.
+    expect(r?.users?.sentMessages?.relationName).toBe('')
+    // Inverse-side tag preserved on the `one` entry too.
+    expect(r?.messages?.sender?.relationName).toBe('')
+  })
+
   it('reuses the same relationName string across unrelated table pairs (per-pair scope)', () => {
     // R-2 scope clarification: `'audit'` as a tag on (workspaces,
     // audit-logs) and (projects, audit-logs) is fine — duplicates

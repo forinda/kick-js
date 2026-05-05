@@ -144,8 +144,6 @@ export interface FindManyOptions<
   offset?: number
   /** Override the spec's default depth guard (5). Throws `RelationalQueryDepthError` on excess. */
   maxDepth?: number
-  /** Skip per-row `customType.fromDriver` walk on JSON-aggregated rows (spec §7 R-1). */
-  raw?: boolean
   with?: WithClause<DB, TableRelations<Table>>
 }
 
