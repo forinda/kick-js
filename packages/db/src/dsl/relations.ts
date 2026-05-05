@@ -17,6 +17,13 @@ export interface RelationOne<
   target: TTarget
   fields: ColumnRef[]
   references: ColumnRef[]
+  /**
+   * Disambiguates this relation from sibling `one` relations on the
+   * same source table that point at the same target. Pair with the
+   * matching `relationName` on the inverse `many` side. See
+   * docs/db/spec-relation-name.md.
+   */
+  relationName?: string
 }
 
 export interface RelationMany<
@@ -27,6 +34,13 @@ export interface RelationMany<
 > {
   kind: 'many'
   target: TTarget
+  /**
+   * Pairs with the matching `relationName` on the inverse `one`
+   * declaration. Required when the source table has multiple FKs
+   * to the same target; resolver throws
+   * `RelationalQueryMissingInverseError` otherwise.
+   */
+  relationName?: string
 }
 
 export type Relation = RelationOne | RelationMany
@@ -49,9 +63,12 @@ export interface RelationsDecl<
 interface Helpers {
   one: <T extends TableDecl<string, Record<string, ColumnBuilder>>>(
     target: T,
-    opts: { fields: ColumnRef[]; references: ColumnRef[] },
+    opts: { fields: ColumnRef[]; references: ColumnRef[]; relationName?: string },
   ) => RelationOne<T>
-  many: <T extends TableDecl<string, Record<string, ColumnBuilder>>>(target: T) => RelationMany<T>
+  many: <T extends TableDecl<string, Record<string, ColumnBuilder>>>(
+    target: T,
+    opts?: { relationName?: string },
+  ) => RelationMany<T>
 }
 
 /**
@@ -71,8 +88,13 @@ export function relations<
       target,
       fields: opts.fields,
       references: opts.references,
+      ...(opts.relationName ? { relationName: opts.relationName } : {}),
     }),
-    many: (target) => ({ kind: 'many', target }),
+    many: (target, opts) => ({
+      kind: 'many',
+      target,
+      ...(opts?.relationName ? { relationName: opts.relationName } : {}),
+    }),
   }
   return {
     __isRelations: true,
