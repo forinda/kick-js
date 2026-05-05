@@ -117,11 +117,20 @@ export function registerDbCommands(program: Command): void {
     .command('latest')
     .description('Apply all pending migrations in a new batch')
     .option('-c, --config <path>', 'Path to kick.config.ts', 'kick.config.ts')
-    .action(async (opts: BaseOpts) => {
+    .option(
+      '--confirm-enum-drop',
+      'Allow migrations carrying the `-- KICK ENUM REMOVE` header to apply',
+      false,
+    )
+    .action(async (opts: BaseOpts & { confirmEnumDrop?: boolean }) => {
       const config = await loadConfig(opts)
       const { adapter, cleanup } = await resolveAdapter(config)
       try {
-        const r = await migrateLatest({ adapter, migrationsDir: config.migrationsDir })
+        const r = await migrateLatest({
+          adapter,
+          migrationsDir: config.migrationsDir,
+          confirmEnumDrop: opts.confirmEnumDrop,
+        })
         if (r.applied.length === 0) {
           console.log('No pending migrations.')
         } else {
@@ -136,11 +145,20 @@ export function registerDbCommands(program: Command): void {
     .command('up')
     .description('Apply the next single pending migration')
     .option('-c, --config <path>', 'Path to kick.config.ts', 'kick.config.ts')
-    .action(async (opts: BaseOpts) => {
+    .option(
+      '--confirm-enum-drop',
+      'Allow migrations carrying the `-- KICK ENUM REMOVE` header to apply',
+      false,
+    )
+    .action(async (opts: BaseOpts & { confirmEnumDrop?: boolean }) => {
       const config = await loadConfig(opts)
       const { adapter, cleanup } = await resolveAdapter(config)
       try {
-        const r = await migrateUp({ adapter, migrationsDir: config.migrationsDir })
+        const r = await migrateUp({
+          adapter,
+          migrationsDir: config.migrationsDir,
+          confirmEnumDrop: opts.confirmEnumDrop,
+        })
         if (r.applied.length === 0) {
           console.log('No pending migrations.')
         } else {

@@ -41,37 +41,81 @@ function emitChange(change: Change): string {
       return `ALTER TYPE ${quoteIdent(change.enum)} ADD VALUE ${quoteLiteral(change.value)}${before};`
     }
     case 'removeEnumValue':
-      return emitRemoveEnumValueAdvisory(change.enum, change.removed)
+      return emitRemoveEnumValueRecreate(change)
   }
 }
 
 /**
- * PostgreSQL has no `ALTER TYPE … DROP VALUE` — emitting silently
- * here would drop these values from the schema's intent without
- * reflecting in the database. Instead we render a multi-line SQL
- * comment with the manual migration steps the operator must take.
- *
- * The migration file still applies cleanly; the comment block makes
- * the missing operation visible in code review and in the generated
- * SQL output.
+ * Magic header line that the migration runner detects to gate the
+ * apply step behind `confirmEnumDrop`. Kept short + on its own line
+ * so a `String.includes` is enough to find it. Any change to this
+ * literal must also update the runner's check function.
  */
-function emitRemoveEnumValueAdvisory(name: string, removed: readonly string[]): string {
-  const safeName = sanitizeForLineComment(quoteIdent(name))
-  const valuesList = removed.map((v) => sanitizeForLineComment(quoteLiteral(v))).join(', ')
-  return [
-    `-- WARNING: enum ${safeName} dropped value(s): ${valuesList}.`,
-    `-- PostgreSQL has no ALTER TYPE ... DROP VALUE. To round-trip this`,
-    `-- removal you must:`,
-    `--   1. Drop or migrate every column whose type is ${safeName} (or any`,
-    `--      composite that references it).`,
-    `--   2. DROP TYPE ${safeName};`,
-    `--   3. CREATE TYPE ${safeName} AS ENUM (...) with the new value list.`,
-    `--   4. Recreate the columns + restore data, mapping any rows that held`,
-    `--      one of the dropped value(s) to a still-valid replacement first.`,
-    `-- This migration emits no SQL for this change — write the steps above`,
-    `-- by hand if the removal is intentional, or restore the value(s) in`,
-    `-- the schema definition to silence this warning.`,
-  ].join('\n')
+export const ENUM_DROP_HEADER = '-- KICK ENUM REMOVE'
+
+/**
+ * Render the rename-recreate dance for a `pgEnum` value removal.
+ *
+ *   ALTER TYPE foo RENAME TO foo__old
+ *   CREATE TYPE foo AS ENUM (…new value list…)
+ *   for each affected column:
+ *     ALTER TABLE T ALTER COLUMN C TYPE foo USING C::text::foo
+ *   DROP TYPE foo__old
+ *
+ * The block is wrapped in `BEGIN; … COMMIT;` explicitly so the
+ * adapter's tx wrapper doesn't double-wrap it; the migration's
+ * `meta.json` should set `transaction: false`.
+ *
+ * The leading `-- KICK ENUM REMOVE` header is the runner's gate
+ * signal — without `confirmEnumDrop`, the runner refuses to apply
+ * before any DB write happens.
+ *
+ * Spec: docs/db/spec-enum-value-removal.md.
+ */
+function emitRemoveEnumValueRecreate(change: {
+  enum: string
+  removed: readonly string[]
+  values: readonly string[]
+  affectedColumns: readonly { table: string; column: string }[]
+}): string {
+  const safeName = sanitizeForLineComment(quoteIdent(change.enum))
+  const removedList = change.removed.map((v) => sanitizeForLineComment(quoteLiteral(v))).join(', ')
+  const columnsList = change.affectedColumns
+    .map((c) => sanitizeForLineComment(`${c.table}.${c.column}`))
+    .join(', ')
+
+  const oldTypeName = quoteIdent(`${change.enum}__old`)
+  const typeName = quoteIdent(change.enum)
+  const valuesList = change.values.map((v) => quoteLiteral(v)).join(', ')
+
+  const header = [
+    ENUM_DROP_HEADER,
+    `-- enum: ${safeName}`,
+    `-- removed: ${removedList}`,
+    `-- columns: ${columnsList || '(none)'}`,
+    `--`,
+    `-- This migration drops values from a PostgreSQL ENUM type. The`,
+    `-- runner refuses to apply it without the --confirm-enum-drop flag`,
+    `-- (or \`confirmEnumDrop: true\` in RunnerOptions). Inspect the`,
+    `-- column USING clauses below to confirm rows holding a removed`,
+    `-- value will fail loudly rather than silently coerce.`,
+  ]
+
+  const body: string[] = [
+    `BEGIN;`,
+    `  ALTER TYPE ${typeName} RENAME TO ${oldTypeName};`,
+    `  CREATE TYPE ${typeName} AS ENUM (${valuesList});`,
+  ]
+  for (const col of change.affectedColumns) {
+    body.push(
+      `  ALTER TABLE ${quoteIdent(col.table)}`,
+      `    ALTER COLUMN ${quoteIdent(col.column)} TYPE ${typeName}`,
+      `    USING ${quoteIdent(col.column)}::text::${typeName};`,
+    )
+  }
+  body.push(`  DROP TYPE ${oldTypeName};`, `COMMIT;`)
+
+  return [...header, ...body].join('\n')
 }
 
 /**

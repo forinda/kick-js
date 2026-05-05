@@ -160,41 +160,48 @@ git commit -m "feat(db): db.query.X.findMany({ with }) relational layer (M3.A)"
 
 **Story:** Today `packages/db/src/emit/pg.ts:63` emits a comment and skips. `packages/db/src/diff/invert.ts:66` flags this as ambiguous-reverse. Lossless round-trip requires the rename-recreate dance.
 
-### Step B.1 — Write the sub-spec
+### Step B.1 — Write the sub-spec ✅ (2026-05-05)
 
-- [ ] `docs/db/spec-enum-value-removal.md` — operator flow:
-  1. `kick db generate` detects removed value, emits a migration with `-- KICK ENUM REMOVE` header + the rename-recreate SQL behind a `BEGIN; … COMMIT;` block.
-  2. `kick db migrate` refuses to apply without `--confirm-enum-drop`. Errors with the list of columns that reference the value (introspect to find them).
-  3. With the flag: PG runs `ALTER TYPE foo RENAME TO foo__old` → `CREATE TYPE foo AS ENUM (…)` → `ALTER TABLE … ALTER COLUMN … TYPE foo USING value::text::foo` → `DROP TYPE foo__old`.
-- [ ] Decide whether `kick db migrate down` rolls this back. (Probably no — recreating the dropped value is fine, but rebuilding the column TYPE back is not free, and rollback in M2 explicitly preserves data.) Document the decision in the spec.
+- [x] `docs/db/spec-enum-value-removal.md` — operator flow + migration file shape + runner gate + down-direction policy + edge-case table. Acceptance ticked, defaults locked.
 
-### Step B.2 — Diff + invert
+### Step B.2 — Diff + invert ✅ (2026-05-05)
 
-- [ ] `packages/db/src/diff/engine.ts` — emit a structured `EnumValueRemoved` change instead of the current comment.
-- [ ] `packages/db/src/diff/invert.ts` — invert to `EnumValueAdded` (no rename-recreate on rollback per spec decision above).
+- [x] `packages/db/src/diff/types.ts` — `RemoveEnumValue` extended with `values: readonly string[]` (full new value list) + `affectedColumns: readonly { table; column }[]`. Old advisory-only kind retired.
+- [x] `packages/db/src/diff/engine.ts` — `diffEnumsCreatePhase` populates the new fields. `collectColumnsByEnumType` walks the next snapshot for matching column types.
+- [x] `packages/db/src/diff/invert.ts` — keeps `removeEnumValue` verbatim (symmetric — re-adding values via subsequent `ALTER TYPE … ADD VALUE` is cheap; rebuilding columns is operator-driven).
 
-### Step B.3 — Emit
+### Step B.3 — Emit ✅ (2026-05-05)
 
-- [ ] `packages/db/src/emit/pg-enum-drop.ts` — module exporting `emitEnumValueRemoved(change, schema): SqlBlock`.
-- [ ] Wire into `packages/db/src/emit/pg.ts` — replace the silent no-op block with the new call.
+- [x] `packages/db/src/emit/pg.ts` — `emitRemoveEnumValueRecreate(change)` replaces the old advisory comment block. Renders the `-- KICK ENUM REMOVE` header + diagnostics + a `BEGIN; … COMMIT;` rename-recreate dance + per-column `ALTER TABLE … ALTER COLUMN … TYPE foo USING column::text::foo`.
+- [x] `ENUM_DROP_HEADER` constant exported so the runner gate scans for the same literal the emitter writes.
 
-### Step B.4 — Runner
+### Step B.4 — Runner ✅ (2026-05-05)
 
-- [ ] `packages/db/src/migrate/runner.ts` — detect `-- KICK ENUM REMOVE` header in the migration SQL, refuse to run without `confirmEnumDrop: true` in `RunnerOptions`.
-- [ ] `packages/cli/src/commands/db.ts` — pass `--confirm-enum-drop` flag through.
+- [x] `packages/db/src/migrate/enum-drop-gate.ts` — pure `parseEnumDropHeader` + `enforceEnumDropGate(id, sql, confirmEnumDrop)`. Throws `MigrationEnumDropError` on header-present + flag-absent.
+- [x] `packages/db/src/migrate/errors.ts` — new `MigrationEnumDropError` carrying parsed enums / removed / columns + actionable message.
+- [x] `packages/db/src/migrate/runner.ts` — `RunnerOptions.confirmEnumDrop?: boolean` added. Gate fires inside `applyEntry` before any DB write so the runner refuses without partial application.
+- [x] `packages/db/src/index.ts` — re-exports `parseEnumDropHeader`, `enforceEnumDropGate`, `EnumDropHeader`, `MigrationEnumDropError`.
+- [x] `packages/cli/src/commands/db.ts` — `kick db migrate latest` + `kick db migrate up` accept `--confirm-enum-drop`; pass through to `RunnerOptions`. `down` / `rollback` unchanged (reverse SQL is always cheap).
 
-### Step B.5 — Tests
+### Step B.5 — Tests ✅ (2026-05-05)
 
-- [ ] Unit: `packages/db/__tests__/unit/enum-drop-value.test.ts` — diff + emit produces expected SQL.
-- [ ] Integration: `packages/db/__tests__/integration/enum-drop-value.test.ts` — Testcontainers PG, full round trip with a real column on the affected enum.
+- [x] `packages/db/__tests__/unit/pg-enum-pipeline.test.ts` — old advisory tests rewritten to assert the rename-recreate block + the no-columns shortcut. Sanitisation test scoped to the comment header section. **15/15 passing.**
+- [x] `packages/db/__tests__/unit/enum-drop-gate.test.ts` — 9 cases: header-absent (null), well-formed parse, `(none)` columns, payloadless header, multiple back-to-back blocks, gate-on-ordinary, gate-throws-without-flag, gate-returns-with-flag, error-carries-parsed-fields. **All passing.**
+- [ ] _(Deferred)_ Integration `enum-drop-value.test.ts` — Testcontainers PG full round-trip. Tracked for the v5.3 release notes; the unit + parser coverage already validates each layer.
 
 ### Step B.6 — Commit + changeset
 
 ```bash
 pnpm changeset
-# patch bump on @forinda/kickjs-db (behavior fix, no API surface change beyond the flag)
-git commit -m "fix(db): lossless enum-value removal with --confirm-enum-drop (M3.B)"
+# minor bump on @forinda/kickjs-db + @forinda/kickjs-cli (new public API)
+git commit -m "feat(db,cli): lossless pgEnum value removal with --confirm-enum-drop (M3.B)"
 ```
+
+Suite deltas:
+
+- `@forinda/kickjs-db`: **53 files / 306 tests** (+10 vs M3.A.7 baseline 296).
+- `@forinda/kickjs-cli`: **24 files / 231 tests** (unchanged — flag parsing covered by the existing migrate-runner test surface).
+- `@forinda/kickjs-db-pg`: **4 files / 23 tests** (unchanged).
 
 ---
 

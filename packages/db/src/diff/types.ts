@@ -100,16 +100,14 @@ export interface AddEnumValue {
 }
 
 /**
- * Advisory-only change kind raised when an enum keeps the same name
- * but loses one or more values across the diff. PostgreSQL has no
- * `ALTER TYPE … DROP VALUE` — round-tripping requires dropping every
- * column that uses the type, dropping the type, recreating with the
- * new value list, then recreating the columns and restoring data.
+ * Change raised when an enum keeps the same name but loses one or
+ * more values across the diff. PostgreSQL has no `ALTER TYPE … DROP
+ * VALUE`, so the emitter renders a rename-recreate dance behind a
+ * `-- KICK ENUM REMOVE` header. The runner refuses to apply such a
+ * migration without `confirmEnumDrop: true` on `RunnerOptions` (or
+ * `--confirm-enum-drop` from the CLI).
  *
- * The diff engine records the removed values; the emitter renders a
- * multi-line SQL comment with explicit guidance instead of a no-op
- * silently swallowed by the migration runner. Operators choosing to
- * proceed write the multi-step migration by hand.
+ * Spec: docs/db/spec-enum-value-removal.md.
  */
 export interface RemoveEnumValue {
   kind: 'removeEnumValue'
@@ -117,6 +115,18 @@ export interface RemoveEnumValue {
   enum: string
   /** Values present in the previous snapshot but not in the next. */
   removed: readonly string[]
+  /**
+   * Full value list AFTER the removal. Carried on the change so the
+   * emitter can render `CREATE TYPE … AS ENUM (…)` without needing
+   * the next-snapshot reference.
+   */
+  values: readonly string[]
+  /**
+   * Columns in the next snapshot whose declared type is this enum.
+   * Each gets one `ALTER TABLE … ALTER COLUMN … TYPE foo USING
+   * column::text::foo` clause inside the rename-recreate block.
+   */
+  affectedColumns: readonly { table: string; column: string }[]
 }
 
 export type Change =

@@ -23,8 +23,14 @@ export {
   MigrationDriftError,
   MigrationHashError,
   UnreviewedMigrationError,
+  MigrationEnumDropError,
   type SchemaDiffSummary,
 } from './migrate/errors'
+export {
+  parseEnumDropHeader,
+  enforceEnumDropGate,
+  type EnumDropHeader,
+} from './migrate/enum-drop-gate'
 
 export {
   readJournal,

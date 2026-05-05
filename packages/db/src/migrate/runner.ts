@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises'
 import { readJournal, computeMigrationHash } from './journal'
 import { MigrationLockError, MigrationHashError, UnreviewedMigrationError } from './errors'
 import { checkDrift, type DriftBehavior, type DriftLogger } from './drift'
+import { enforceEnumDropGate } from './enum-drop-gate'
 import type { MigrationAdapter } from './adapter'
 import type { SchemaSnapshot } from '../snapshot/types'
 
@@ -18,6 +19,12 @@ export interface RunnerOptions {
   driftCheck?: DriftBehavior
   /** Logger surface for drift warnings. Defaults to console. */
   log?: DriftLogger
+  /**
+   * Allow migrations carrying the `-- KICK ENUM REMOVE` header to
+   * apply. Default `false`. CLI exposes via `--confirm-enum-drop`.
+   * Spec: docs/db/spec-enum-value-removal.md.
+   */
+  confirmEnumDrop?: boolean
 }
 
 export interface AppliedSummary {
@@ -74,6 +81,10 @@ async function applyEntry(entry: PreparedEntry, batch: number, opts: RunnerOptio
   const upSql = await readFile(path.join(dir, 'up.sql'), 'utf8')
   const meta = JSON.parse(await readFile(path.join(dir, 'meta.json'), 'utf8'))
   const useTx = meta.transaction !== false
+
+  // Enum-drop gate runs before any DB write so the runner can refuse
+  // a destructive migration without partial application.
+  enforceEnumDropGate(entry.id, upSql, opts.confirmEnumDrop ?? false)
 
   if (useTx) {
     await opts.adapter.applySqlInTx(upSql)

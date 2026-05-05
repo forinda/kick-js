@@ -100,9 +100,36 @@ function diffEnumsCreatePhase(prev: SchemaSnapshot, next: SchemaSnapshot, change
     // originally wrote.
     const removed = prior.values.filter((v) => !nextValues.has(v))
     if (removed.length > 0) {
-      changes.push({ kind: 'removeEnumValue', enum: name, removed })
+      changes.push({
+        kind: 'removeEnumValue',
+        enum: name,
+        removed,
+        values: nextValueList,
+        affectedColumns: collectColumnsByEnumType(next, name),
+      })
     }
   }
+}
+
+/**
+ * Walk the next snapshot for columns whose declared type matches the
+ * enum being modified. The emitter rewrites each via
+ * `ALTER TABLE … ALTER COLUMN … TYPE foo USING column::text::foo`
+ * inside the rename-recreate block.
+ */
+function collectColumnsByEnumType(
+  snapshot: SchemaSnapshot,
+  enumName: string,
+): { table: string; column: string }[] {
+  const out: { table: string; column: string }[] = []
+  for (const [tableName, table] of Object.entries(snapshot.tables)) {
+    for (const [columnName, column] of Object.entries(table.columns)) {
+      if (column.type === enumName) {
+        out.push({ table: tableName, column: columnName })
+      }
+    }
+  }
+  return out
 }
 
 function diffEnumsDropPhase(prev: SchemaSnapshot, next: SchemaSnapshot, changes: Change[]) {
