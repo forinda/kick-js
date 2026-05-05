@@ -52,6 +52,27 @@ describe('parseMysqlVersion', () => {
     })
   })
 
+  it('strips the `5.5.5-` wire-protocol compat prefix on MariaDB', () => {
+    // MariaDB advertises `5.5.5-<real>-MariaDB...` to keep older
+    // MySQL clients happy. The leading `5.5.5-` is fake — the real
+    // server version sits immediately before `-MariaDB`.
+    expect(parseMysqlVersion('5.5.5-10.6.11-MariaDB-1:10.6.11+maria~ubu2004')).toEqual({
+      flavor: 'mariadb',
+      major: 10,
+      minor: 6,
+    })
+    expect(parseMysqlVersion('5.5.5-10.4.32-MariaDB')).toEqual({
+      flavor: 'mariadb',
+      major: 10,
+      minor: 4,
+    })
+    expect(parseMysqlVersion('5.5.5-11.0.2-MariaDB')).toEqual({
+      flavor: 'mariadb',
+      major: 11,
+      minor: 0,
+    })
+  })
+
   it('returns null on garbage input', () => {
     expect(parseMysqlVersion('')).toBeNull()
     expect(parseMysqlVersion('x.y.z')).toBeNull()
@@ -208,6 +229,45 @@ describe('splitMysqlStatements', () => {
     expect(out).toHaveLength(2)
     expect(out[0]).toContain("it\\'s; fine")
     expect(out[1]).toBe('SELECT 1')
+  })
+
+  it('handles SQL-standard doubled-quote escapes inside single-quoted strings', () => {
+    // `'it''s; fine'` is a single string literal containing `it's; fine`.
+    // The semicolon inside MUST NOT split the statement.
+    const sql = `INSERT INTO t VALUES ('it''s; fine'); SELECT 1;`
+    const out = splitMysqlStatements(sql)
+    expect(out).toEqual([`INSERT INTO t VALUES ('it''s; fine')`, 'SELECT 1'])
+  })
+
+  it('handles SQL-standard doubled-quote escapes inside double-quoted strings', () => {
+    const sql = `INSERT INTO t VALUES ("she said ""hi""; bye"); SELECT 1;`
+    const out = splitMysqlStatements(sql)
+    expect(out).toEqual([`INSERT INTO t VALUES ("she said ""hi""; bye")`, 'SELECT 1'])
+  })
+
+  it('treats consecutive `--` without trailing whitespace as operators, not a comment', () => {
+    // `5--3` is `5 - (-3)` in MySQL — `--` starts a comment only
+    // when followed by whitespace/end-of-input. The splitter must
+    // pass `5--3;` through and then split on the trailing `;`.
+    const sql = `SELECT 5--3; SELECT 1;`
+    const out = splitMysqlStatements(sql)
+    expect(out).toEqual(['SELECT 5--3', 'SELECT 1'])
+  })
+
+  it('still treats `-- ` (with trailing space) as a line comment', () => {
+    const sql = `SELECT 1 -- comment; not a separator\n; SELECT 2;`
+    const out = splitMysqlStatements(sql)
+    expect(out).toHaveLength(2)
+    expect(out[0]).toContain('SELECT 1')
+    expect(out[0]).toContain('-- comment; not a separator')
+    expect(out[1]).toBe('SELECT 2')
+  })
+
+  it('treats `--` at end-of-input as a comment introducer', () => {
+    // `--` followed by nothing is still a comment per MySQL docs.
+    // Empty-comment edge case: no `;` follows so we get one statement.
+    const sql = `SELECT 1 --`
+    expect(splitMysqlStatements(sql)).toEqual(['SELECT 1 --'])
   })
 })
 
