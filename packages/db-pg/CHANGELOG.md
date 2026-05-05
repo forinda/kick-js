@@ -1,5 +1,12 @@
 # @forinda/kickjs-db-pg
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [[`45fd19d`](https://github.com/forinda/kick-js/commit/45fd19da8ad2856d1ac591b25a112098f9f642ca), [`efebe58`](https://github.com/forinda/kick-js/commit/efebe584147c2ed97c2741c49efe29164d2976d6), [`0a63cfc`](https://github.com/forinda/kick-js/commit/0a63cfc90cdc02c94dbdd410ac5f46d1952c3d06), [`b98bcbe`](https://github.com/forinda/kick-js/commit/b98bcbe67ab3fd4bb33039831e3b87702a053919)]:
+  - @forinda/kickjs-db@5.3.0
+
 ## 5.2.2
 
 ### Patch Changes

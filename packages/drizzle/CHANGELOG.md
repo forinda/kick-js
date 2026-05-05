@@ -1,5 +1,19 @@
 # @forinda/kickjs-drizzle
 
+## 5.3.0
+
+### Minor Changes
+
+- [#174](https://github.com/forinda/kick-js/pull/174) [`9b1225c`](https://github.com/forinda/kick-js/commit/9b1225c12ff4d02d758ebe977e5d771ae9a27cbd) Thanks [@forinda](https://github.com/forinda)! - Bump `drizzle-orm` peer-dep floor from `>=0.30.0` to `>=0.45.2` to
+  push adopters off the **HIGH-severity SQL injection** in earlier
+  0.45.x and below ([GHSA advisory][advisory]). Pure peer-range change —
+  no API change in `@forinda/kickjs-drizzle` itself.
+
+  **Adopter action**: bump your `drizzle-orm` to `>=0.45.2`. If you're
+  already on `>=0.45.2`, nothing to do.
+
+  [advisory]: https://github.com/advisories/GHSA-gpj5-g38j-94v9
+
 ## 5.2.1
 
 ### Patch Changes
