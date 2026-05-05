@@ -6,7 +6,9 @@ import './config'
 // KickDbClient widens automatically to the schema-derived shape via
 // `.kickjs/types/kick__db.d.ts` (emitted by the kick/db typegen
 // plugin). `kick dev` regenerates it on schema changes; `kick typegen`
-// produces it once.
+// produces it once. The same file augments KickDbRelationsRegister so
+// `db.query.X.findMany({ with })` keys are checked against the
+// schema's relations() declarations.
 
 import { bootstrap, Container } from '@forinda/kickjs'
 import { kickDbAdapter, DB_PRIMARY } from '@forinda/kickjs-db'

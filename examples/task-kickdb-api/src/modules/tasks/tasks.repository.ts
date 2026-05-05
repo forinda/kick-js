@@ -43,6 +43,25 @@ export class TasksRepository {
     return this.db.selectFrom('tasks').selectAll().where('id', '=', id).executeTakeFirst()
   }
 
+  // Single round-trip fetch of a task plus its comments, assignees,
+  // and labels via the relational query layer. Replaces the
+  // four-query N+1 (task → comments → assignees → labels) the older
+  // `findById` would force on the controller.
+  //
+  // The `with` keys are checked against the `KickDbRelationsRegister`
+  // augmentation in `src/db/relations-register.ts`; mistyping a key
+  // here is a compile error, not a runtime surprise.
+  findFullById(id: string) {
+    return this.db.query.tasks.findUnique({
+      where: (_t, eb) => eb('id', '=', id),
+      with: {
+        comments: true,
+        assignees: true,
+        labels: true,
+      },
+    })
+  }
+
   // status / priority are defaulted in the schema, so the spread
   // is the natural insert shape — Generated columns (id, createdAt,
   // updatedAt) and explicit DB defaults can be omitted; the DB fills

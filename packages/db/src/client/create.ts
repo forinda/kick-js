@@ -5,6 +5,9 @@ import type { SchemaToTypes } from './schema-types'
 import { KickDbEventEmitter } from './events'
 import { CodecPlugin, buildDecoderMap, buildEncoderMap } from './codec-plugin'
 import { wrap, type InternalContext } from './wrap'
+import { extractRelations } from '../query/extract-relations'
+import { pickCompiler } from '../query/compilers'
+import { extractSnapshot } from '../snapshot/extract'
 
 // DB defaults to SchemaToTypes<TSchema> so the returned client is typed
 // directly from the schema parameter — no KickDbRegister lookup at the call
@@ -76,18 +79,42 @@ export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
       : undefined,
   })
 
+  // Detect dialect first — it picks the compiler and feeds the
+  // relations extractor (which needs the dialect tag for snapshot
+  // construction). The detected tag is also stored on the client
+  // for adopters who branch on `db.dialect`.
+  const dialectTag = detectDialect(opts.dialect)
+
+  // Resolve `relations()` declarations into the JSON-serializable
+  // sidecar consumed by the query compiler. Schemas without any
+  // `relations()` get an empty record — the compiler still works
+  // (errors clearly on `with` keys when nothing is declared).
+  const tables = extractSnapshot(opts.schema as Record<string, unknown>, dialectTag).tables
+  const relations = extractRelations(opts.schema as Record<string, unknown>, tables) ?? {}
+
   const ctx: InternalContext = {
     events,
-    dialect: detectDialect(opts.dialect),
+    dialect: dialectTag,
     savepointCounter: { value: 0 },
+    query: {
+      relations,
+      compile: pickCompiler(dialectTag),
+    },
   }
   return wrap<DB>(kysely, ctx)
 }
 
 function detectDialect(dialect: KyselyDialect): KickDbClient['dialect'] {
-  // Kysely's dialects have ctor names like PostgresDialect / SqliteDialect / MysqlDialect.
-  const name = (dialect.constructor as { name?: string })?.name ?? ''
-  if (name.includes('Postgres')) return 'postgres'
-  if (name.includes('Mysql') || name.includes('MySql')) return 'mysql'
+  // Kysely's dialects have ctor names like PostgresDialect /
+  // SqliteDialect / MysqlDialect. Adopters who hand-roll the
+  // KyselyDialect interface (`{ createAdapter, ... }` literals)
+  // bypass that ctor — fall back to inspecting the adapter class
+  // returned by `createAdapter()`, which is the real kysely
+  // PostgresAdapter / SqliteAdapter / MysqlAdapter.
+  const dialectCtor = (dialect.constructor as { name?: string })?.name ?? ''
+  const adapterCtor = (dialect.createAdapter().constructor as { name?: string })?.name ?? ''
+  const tag = `${dialectCtor} ${adapterCtor}`
+  if (/Postgres/i.test(tag)) return 'postgres'
+  if (/Mysql/i.test(tag)) return 'mysql'
   return 'sqlite'
 }

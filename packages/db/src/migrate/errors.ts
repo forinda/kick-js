@@ -47,3 +47,36 @@ export class UnreviewedMigrationError extends MigrationError {
     this.id = id
   }
 }
+
+/**
+ * Thrown by the runner when a migration carries the `-- KICK ENUM
+ * REMOVE` header and the operator hasn't passed `confirmEnumDrop:
+ * true` (CLI: `--confirm-enum-drop`). Spec:
+ * docs/db/spec-enum-value-removal.md §4.
+ */
+export class MigrationEnumDropError extends MigrationError {
+  readonly id: string
+  readonly enums: readonly string[]
+  readonly removed: readonly string[]
+  readonly columns: readonly string[]
+
+  constructor(
+    id: string,
+    enums: readonly string[],
+    removed: readonly string[],
+    columns: readonly string[],
+  ) {
+    const enumList = enums.join(', ')
+    const valueList = removed.join(', ')
+    super(
+      'migration_enum_drop_unconfirmed',
+      `Migration ${id} drops value(s) ${valueList} from PostgreSQL enum(s) ${enumList}. ` +
+        `Re-run with \`--confirm-enum-drop\` (CLI) or \`confirmEnumDrop: true\` ` +
+        `(RunnerOptions) after reviewing the column-USING clauses in up.sql.`,
+    )
+    this.id = id
+    this.enums = enums
+    this.removed = removed
+    this.columns = columns
+  }
+}

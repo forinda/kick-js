@@ -153,20 +153,48 @@ describe('pgEnum snapshot + diff + emit pipeline', () => {
       })
     })
 
-    it('emit/pg renders the advisory comment block (no SQL DDL)', () => {
+    it('emit/pg renders the rename-recreate block with the KICK ENUM REMOVE header', () => {
       const sql = emitPg([
-        { kind: 'removeEnumValue', enum: 'status', removed: ['beta', 'archived'] },
+        {
+          kind: 'removeEnumValue',
+          enum: 'status',
+          removed: ['beta', 'archived'],
+          values: ['alpha', 'released'],
+          affectedColumns: [{ table: 'orders', column: 'status' }],
+        },
       ])
-      expect(sql).toMatch(/-- WARNING: enum "status" dropped value\(s\): 'beta', 'archived'\./)
-      expect(sql).toMatch(/PostgreSQL has no ALTER TYPE \.\.\. DROP VALUE/)
-      expect(sql).toMatch(/DROP TYPE "status"/)
-      expect(sql).toMatch(/CREATE TYPE "status" AS ENUM/)
-      // No actual DDL — every rendered line is a SQL comment.
-      const nonComment = sql
-        .split('\n')
-        .filter((line) => line.trim() !== '')
-        .find((line) => !line.startsWith('--'))
-      expect(nonComment).toBeUndefined()
+      // Header lines that the runner gate scans for.
+      expect(sql).toMatch(/^-- KICK ENUM REMOVE$/m)
+      expect(sql).toMatch(/-- enum: "status"/)
+      expect(sql).toMatch(/-- removed: 'beta', 'archived'/)
+      expect(sql).toMatch(/-- columns: orders\.status/)
+      // Rename-recreate dance — the runner's auto-tx wraps the
+      // whole up.sql; emitting an explicit BEGIN/COMMIT here would
+      // nest and short-circuit the outer transaction.
+      expect(sql).not.toContain('BEGIN;')
+      expect(sql).not.toContain('COMMIT;')
+      expect(sql).toContain('ALTER TYPE "status" RENAME TO "status__old"')
+      expect(sql).toContain(`CREATE TYPE "status" AS ENUM ('alpha', 'released')`)
+      expect(sql).toContain('ALTER TABLE "orders"')
+      expect(sql).toContain('ALTER COLUMN "status" TYPE "status"')
+      expect(sql).toContain('USING "status"::text::"status"')
+      expect(sql).toContain('DROP TYPE "status__old"')
+    })
+
+    it('emit/pg omits the ALTER TABLE step when no columns reference the enum', () => {
+      const sql = emitPg([
+        {
+          kind: 'removeEnumValue',
+          enum: 'orphaned',
+          removed: ['x'],
+          values: ['y'],
+          affectedColumns: [],
+        },
+      ])
+      expect(sql).toMatch(/-- columns: \(none\)/)
+      expect(sql).not.toContain('ALTER TABLE')
+      expect(sql).toContain('ALTER TYPE "orphaned" RENAME TO "orphaned__old"')
+      expect(sql).toContain('DROP TYPE "orphaned__old"')
     })
 
     it('removeEnumValue is flagged as ambiguous-reverse so the down draft warns', () => {
@@ -178,42 +206,56 @@ describe('pgEnum snapshot + diff + emit pipeline', () => {
       expect(hasAmbiguousReverse(forward)).toBe(true)
     })
 
-    it('invertChanges carries the advisory verbatim (symmetric advisory)', () => {
+    it('invertChanges carries removeEnumValue verbatim (symmetric)', () => {
       const change = {
         kind: 'removeEnumValue' as const,
         enum: 'status',
         removed: ['beta'],
+        values: ['alpha'],
+        affectedColumns: [{ table: 'orders', column: 'status' }],
       }
       const reversed = invertChanges([change])
       expect(reversed).toEqual([change])
     })
 
-    it('emit/pg sanitises newlines + control bytes in enum names + values', () => {
+    it('emit/pg sanitises newlines + control bytes in the comment header', () => {
       // Pathological input — an adopter passing pgEnum('foo\nDROP TABLE x;', ...)
-      // shouldn't be able to escape the SQL comment by stuffing newlines
-      // into the comment text.
+      // shouldn't be able to escape the SQL comment header by stuffing
+      // newlines into the comment text. The header lines must remain
+      // line-comment-safe; the DDL portion below the header uses the
+      // regular identifier-quoting helpers, which already double-quote
+      // any embedded characters (PG accepts them as part of a quoted
+      // identifier).
       const sql = emitPg([
         {
           kind: 'removeEnumValue',
           enum: 'foo\nDROP TABLE evil',
           removed: ['bad\nrm -rf', 'safe', '\x07bell'],
+          values: ['safe'],
+          affectedColumns: [],
         },
       ])
-      // No raw newline survives inside the rendered text — every
-      // non-empty rendered line still starts with `--`. Without
-      // sanitisation the newline injection would terminate the
-      // comment early, producing an executable line.
-      const lines = sql.split('\n').filter((l) => l.trim() !== '')
-      for (const line of lines) {
+      const lines = sql.split('\n')
+      // The header section runs from the first line up to the first
+      // statement that doesn't start with `--`. Find that boundary.
+      const firstStatementIdx = lines.findIndex((l) => l.trim() !== '' && !l.startsWith('--'))
+      expect(firstStatementIdx).toBeGreaterThan(0)
+
+      // Every non-empty line in the header must start with `--` so
+      // newline injection inside user-supplied enum/value text can't
+      // pop us out of the comment block early.
+      for (const line of lines.slice(0, firstStatementIdx)) {
+        if (line.trim() === '') continue
         expect(line.startsWith('--')).toBe(true)
       }
-      // Newlines in user-supplied text collapse to a single space.
-      expect(sql).not.toMatch(/foo\nDROP/)
-      expect(sql).not.toMatch(/bad\nrm/)
+
+      // In the COMMENT header, newlines in user-supplied text collapse
+      // to a single space — so `foo\nDROP` never appears in headers.
+      const headerSlice = lines.slice(0, firstStatementIdx).join('\n')
+      expect(headerSlice).not.toMatch(/foo\nDROP/)
+      expect(headerSlice).not.toMatch(/bad\nrm/)
       // C0 control bytes (other than tab / newline) become \x<hh>.
-      // BEL is \x07 — the chosen sanitisation makes the migration
-      // file printable ASCII-clean.
-      expect(sql).toMatch(/\\x07bell/)
+      expect(headerSlice).toMatch(/\\x07bell/)
     })
   })
 })

@@ -49,10 +49,39 @@ export interface EnumSnapshot {
   values: readonly string[]
 }
 
+/**
+ * Resolved relation graph attached as a sidecar on the snapshot.
+ * Lives on `SchemaSnapshot.relations` (optional). Keyed
+ * sourceTable → relationName → resolved entry. Consumed by the
+ * relational-query compiler in `packages/db/src/query/`. The
+ * migration pipeline does not read this field — relations are
+ * query-time sugar, not DDL.
+ *
+ * Shaped this way (rather than re-using the runtime `RelationsDecl`)
+ * so the snapshot stays JSON-serializable: no function thunks, no
+ * back-references to table objects.
+ */
+export interface RelationSnapshot {
+  kind: 'one' | 'many'
+  /** Target table name. */
+  target: string
+  /** Columns on the source table that participate in the join. */
+  sourceColumns: readonly string[]
+  /** Columns on the target table that participate in the join. */
+  targetColumns: readonly string[]
+}
+
 export interface SchemaSnapshot {
   version: 1
   dialect: Dialect
   tables: Record<string, TableSnapshot>
   /** ENUM types declared via `pgEnum()`. PG-only; absent on other dialects. */
   enums?: Record<string, EnumSnapshot>
+  /**
+   * Optional relation sidecar populated when the schema includes
+   * `relations()` declarations. Absent when no relations are
+   * declared so M0/M1 callers see the same snapshot shape they
+   * always did.
+   */
+  relations?: Record<string, Record<string, RelationSnapshot>>
 }

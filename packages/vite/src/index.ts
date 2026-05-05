@@ -75,6 +75,7 @@ import { kickjsDevServerPlugin } from './dev-server'
 import { kickjsModuleDiscoveryPlugin } from './module-discovery'
 import { kickjsHmrPlugin } from './hmr-plugin'
 import { devtoolsFlagPlugin } from './devtools-flag-plugin'
+import { devtoolsStripPlugin } from './devtools-strip-plugin'
 
 /**
  * Create the KickJS Vite plugin array.
@@ -136,6 +137,11 @@ export function kickjsVitePlugin(options: KickJSPluginOptions = {}): Plugin[] {
   // get tree-shaking for free. Pass `devtools: false` to skip.
   if (options.devtools !== false) {
     plugins.push(devtoolsFlagPlugin(options.devtools ?? {}))
+    // Babel-based strip — runs only on `vite build`, removes
+    // devtools-kit imports + their top-level call sites without
+    // requiring adopters to gate them behind the flag. See
+    // `babel-strip-devtools.ts` for the rule set.
+    plugins.push(devtoolsStripPlugin())
   }
   return plugins
 }
@@ -156,3 +162,9 @@ export {
   resolveDevtoolsFlag,
   type DevtoolsFlagOptions,
 } from './devtools-flag-plugin'
+export { devtoolsStripPlugin, type DevtoolsStripOptions } from './devtools-strip-plugin'
+export {
+  stripDevtoolsCode,
+  type StripDevtoolsOptions,
+  type StripResult,
+} from './babel-strip-devtools'

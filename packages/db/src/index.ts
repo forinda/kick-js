@@ -23,8 +23,14 @@ export {
   MigrationDriftError,
   MigrationHashError,
   UnreviewedMigrationError,
+  MigrationEnumDropError,
   type SchemaDiffSummary,
 } from './migrate/errors'
+export {
+  parseEnumDropHeader,
+  enforceEnumDropGate,
+  type EnumDropHeader,
+} from './migrate/enum-drop-gate'
 
 export {
   readJournal,
@@ -95,3 +101,26 @@ export { customType, CustomColumnBuilder, type CustomTypeOptions } from './custo
 
 // Per-table method extensions (M2.F-T17) — `db.$extends({ model })`.
 export type { ExtensionDefinition, ExtendedClient, ModelExtensions } from './extend/types'
+
+// Relational query layer (M3.A) — `db.query.X.findMany({ with })`.
+export type {
+  KickDbRelationsRegister,
+  RegisteredRelations,
+  RelationMapEntry,
+  TableRelations,
+  FindManyOptions,
+  FindManyRow,
+  WithClause,
+  QueryNamespace,
+  TableQueryNamespace,
+} from './query/types'
+export type { ResolvedRelation, ResolvedRelations } from './query/relations'
+export type { RelationSnapshot } from './snapshot/types'
+export type { SchemaToRelationsRegister } from './query/schema-relations-types'
+export {
+  RelationalQueryUnknownRelationError,
+  RelationalQueryDepthError,
+  RelationalQueryAliasCollisionError,
+  RelationalQueryMissingInverseError,
+  RelationalQueryNotSupportedError,
+} from './query/errors'

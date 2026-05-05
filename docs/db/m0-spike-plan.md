@@ -1,5 +1,7 @@
 # M0 — Diff Engine Spike: Implementation Plan
 
+> **Status:** ✅ **Shipped** — see [`m2-release.md`](./m2-release.md). All 22 tasks landed in `@forinda/kickjs-db@5.0.0` (and earlier dev cuts). Checklist marked `[x]` on 2026-05-05 as a janitorial pass; this doc is now historical reference only.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Prove the schema-diff → Postgres-DDL pipeline works end-to-end. From a TypeScript schema file, produce a deterministic SQL migration that creates the target schema in a real Postgres instance.
@@ -98,7 +100,7 @@ The diff and emit modules are split by concern, not by change-type. Each test fi
 - Create: `packages/db/__tests__/unit/.gitkeep`
 - Create: `packages/db/__tests__/integration/.gitkeep`
 
-- [ ] **Step 1.1: Create `packages/db/package.json`**
+- [x] **Step 1.1: Create `packages/db/package.json`**
 
 ```json
 {
@@ -168,7 +170,7 @@ The diff and emit modules are split by concern, not by change-type. Each test fi
 }
 ```
 
-- [ ] **Step 1.2: Create `packages/db/tsconfig.json`**
+- [x] **Step 1.2: Create `packages/db/tsconfig.json`**
 
 ```json
 {
@@ -181,7 +183,7 @@ The diff and emit modules are split by concern, not by change-type. Each test fi
 }
 ```
 
-- [ ] **Step 1.3: Create `packages/db/tsconfig.test.json`**
+- [x] **Step 1.3: Create `packages/db/tsconfig.test.json`**
 
 ```json
 {
@@ -201,7 +203,7 @@ The diff and emit modules are split by concern, not by change-type. Each test fi
 }
 ```
 
-- [ ] **Step 1.4: Create `packages/db/tsdown.config.ts`**
+- [x] **Step 1.4: Create `packages/db/tsdown.config.ts`**
 
 ```ts
 import { defineConfig } from 'tsdown'
@@ -221,7 +223,7 @@ export default defineConfig({
 })
 ```
 
-- [ ] **Step 1.5: Create `packages/db/vitest.config.ts`**
+- [x] **Step 1.5: Create `packages/db/vitest.config.ts`**
 
 ```ts
 import { defineConfig } from 'vitest/config'
@@ -257,7 +259,7 @@ export default defineConfig({
 })
 ```
 
-- [ ] **Step 1.6: Create `packages/db/README.md`**
+- [x] **Step 1.6: Create `packages/db/README.md`**
 
 ```markdown
 # @forinda/kickjs-db
@@ -275,27 +277,27 @@ Not yet published.
 MIT
 ```
 
-- [ ] **Step 1.7: Copy LICENSE from `packages/prisma/LICENSE`**
+- [x] **Step 1.7: Copy LICENSE from `packages/prisma/LICENSE`**
 
 ```bash
 cp packages/prisma/LICENSE packages/db/LICENSE
 ```
 
-- [ ] **Step 1.8: Create empty barrel `packages/db/src/index.ts`**
+- [x] **Step 1.8: Create empty barrel `packages/db/src/index.ts`**
 
 ```ts
 // @forinda/kickjs-db — barrel. Populated as M0 progresses.
 export {}
 ```
 
-- [ ] **Step 1.9: Create test directory placeholders**
+- [x] **Step 1.9: Create test directory placeholders**
 
 ```bash
 mkdir -p packages/db/__tests__/unit packages/db/__tests__/integration
 touch packages/db/__tests__/unit/.gitkeep packages/db/__tests__/integration/.gitkeep
 ```
 
-- [ ] **Step 1.10: Install workspace dependencies**
+- [x] **Step 1.10: Install workspace dependencies**
 
 Run from repo root:
 
@@ -305,7 +307,7 @@ pnpm install
 
 Expected: pnpm links the new workspace package, creates `packages/db/node_modules`, no errors.
 
-- [ ] **Step 1.11: Verify build + test scaffolding**
+- [x] **Step 1.11: Verify build + test scaffolding**
 
 ```bash
 pnpm --filter @forinda/kickjs-db build
@@ -319,7 +321,7 @@ Expected:
 - `test` exits 0 with "no test files found" (passWithNoTests).
 - `typecheck` exits 0.
 
-- [ ] **Step 1.12: Commit**
+- [x] **Step 1.12: Commit**
 
 ```bash
 git add packages/db
@@ -345,7 +347,7 @@ EOF
 - Create: `packages/db/__tests__/unit/snapshot-roundtrip.test.ts`
 - Modify: `packages/db/src/index.ts`
 
-- [ ] **Step 2.1: Write the failing test**
+- [x] **Step 2.1: Write the failing test**
 
 Create `packages/db/__tests__/unit/snapshot-roundtrip.test.ts`:
 
@@ -410,7 +412,7 @@ describe('SchemaSnapshot JSON roundtrip', () => {
 })
 ```
 
-- [ ] **Step 2.2: Run test to verify it fails**
+- [x] **Step 2.2: Run test to verify it fails**
 
 ```bash
 pnpm --filter @forinda/kickjs-db test
@@ -418,7 +420,7 @@ pnpm --filter @forinda/kickjs-db test
 
 Expected: FAIL — `Cannot find module '@forinda/kickjs-db' or its corresponding type declarations` or `SchemaSnapshot is not exported`.
 
-- [ ] **Step 2.3: Write `packages/db/src/snapshot/types.ts`**
+- [x] **Step 2.3: Write `packages/db/src/snapshot/types.ts`**
 
 ```ts
 export type Dialect = 'postgres' | 'sqlite' | 'mysql'
@@ -468,7 +470,7 @@ export interface SchemaSnapshot {
 }
 ```
 
-- [ ] **Step 2.4: Re-export from barrel**
+- [x] **Step 2.4: Re-export from barrel**
 
 Edit `packages/db/src/index.ts`:
 
@@ -485,7 +487,7 @@ export type {
 } from './snapshot/types'
 ```
 
-- [ ] **Step 2.5: Run test to verify it passes**
+- [x] **Step 2.5: Run test to verify it passes**
 
 ```bash
 pnpm --filter @forinda/kickjs-db test
@@ -493,7 +495,7 @@ pnpm --filter @forinda/kickjs-db test
 
 Expected: PASS — 1 test passed.
 
-- [ ] **Step 2.6: Commit**
+- [x] **Step 2.6: Commit**
 
 ```bash
 git add packages/db/src/snapshot/types.ts packages/db/src/index.ts packages/db/__tests__/unit/snapshot-roundtrip.test.ts
@@ -521,7 +523,7 @@ EOF
 - Modify: `packages/db/src/index.ts`
 - Create: `packages/db/__tests__/unit/columns.test.ts`
 
-- [ ] **Step 3.1: Write the failing test**
+- [x] **Step 3.1: Write the failing test**
 
 Create `packages/db/__tests__/unit/columns.test.ts`:
 
@@ -557,7 +559,7 @@ describe('column builders — serial, integer', () => {
 })
 ```
 
-- [ ] **Step 3.2: Run test — fails**
+- [x] **Step 3.2: Run test — fails**
 
 ```bash
 pnpm --filter @forinda/kickjs-db test
@@ -565,7 +567,7 @@ pnpm --filter @forinda/kickjs-db test
 
 Expected: FAIL on missing exports `serial`, `integer`.
 
-- [ ] **Step 3.3: Create `packages/db/src/dsl/columns/types.ts`**
+- [x] **Step 3.3: Create `packages/db/src/dsl/columns/types.ts`**
 
 ```ts
 import type { ColumnSnapshot } from '../../snapshot/types'
@@ -631,7 +633,7 @@ export class ColumnBuilder {
 }
 ```
 
-- [ ] **Step 3.4: Create `packages/db/src/dsl/columns/builders.ts`**
+- [x] **Step 3.4: Create `packages/db/src/dsl/columns/builders.ts`**
 
 ```ts
 import { ColumnBuilder } from './types'
@@ -645,7 +647,7 @@ export function integer(): ColumnBuilder {
 }
 ```
 
-- [ ] **Step 3.5: Create barrel `packages/db/src/dsl/columns/index.ts`**
+- [x] **Step 3.5: Create barrel `packages/db/src/dsl/columns/index.ts`**
 
 ```ts
 export { ColumnBuilder } from './types'
@@ -653,7 +655,7 @@ export type { ColumnState } from './types'
 export { serial, integer } from './builders'
 ```
 
-- [ ] **Step 3.6: Re-export from package barrel**
+- [x] **Step 3.6: Re-export from package barrel**
 
 Append to `packages/db/src/index.ts`:
 
@@ -661,7 +663,7 @@ Append to `packages/db/src/index.ts`:
 export * from './dsl/columns'
 ```
 
-- [ ] **Step 3.7: Run test — passes**
+- [x] **Step 3.7: Run test — passes**
 
 ```bash
 pnpm --filter @forinda/kickjs-db test
@@ -669,7 +671,7 @@ pnpm --filter @forinda/kickjs-db test
 
 Expected: PASS — 5 tests passed (1 from Task 2 + 4 new).
 
-- [ ] **Step 3.8: Commit**
+- [x] **Step 3.8: Commit**
 
 ```bash
 git add packages/db/src/dsl packages/db/src/index.ts packages/db/__tests__/unit/columns.test.ts
@@ -694,7 +696,7 @@ EOF
 - Modify: `packages/db/src/dsl/columns/index.ts`
 - Modify: `packages/db/__tests__/unit/columns.test.ts`
 
-- [ ] **Step 4.1: Extend the failing test**
+- [x] **Step 4.1: Extend the failing test**
 
 Append to `packages/db/__tests__/unit/columns.test.ts`:
 
@@ -726,7 +728,7 @@ describe('column builders — varchar, text, boolean, timestamp', () => {
 })
 ```
 
-- [ ] **Step 4.2: Run — fails**
+- [x] **Step 4.2: Run — fails**
 
 ```bash
 pnpm --filter @forinda/kickjs-db test
@@ -734,7 +736,7 @@ pnpm --filter @forinda/kickjs-db test
 
 Expected: FAIL on missing `varchar`, `text`, `boolean`, `timestamp` and `defaultNow()`.
 
-- [ ] **Step 4.3: Extend `packages/db/src/dsl/columns/builders.ts`**
+- [x] **Step 4.3: Extend `packages/db/src/dsl/columns/builders.ts`**
 
 Replace the file contents with:
 
@@ -777,14 +779,14 @@ export function timestamp(): TimestampBuilder {
 }
 ```
 
-- [ ] **Step 4.4: Update barrel `packages/db/src/dsl/columns/index.ts`**
+- [x] **Step 4.4: Update barrel `packages/db/src/dsl/columns/index.ts`**
 
 ```ts
 export { ColumnBuilder, type ColumnState } from './types'
 export { serial, integer, varchar, text, boolean, timestamp, TimestampBuilder } from './builders'
 ```
 
-- [ ] **Step 4.5: Run — passes**
+- [x] **Step 4.5: Run — passes**
 
 ```bash
 pnpm --filter @forinda/kickjs-db test
@@ -792,7 +794,7 @@ pnpm --filter @forinda/kickjs-db test
 
 Expected: PASS — 10 tests passed total.
 
-- [ ] **Step 4.6: Commit**
+- [x] **Step 4.6: Commit**
 
 ```bash
 git add packages/db/src/dsl/columns packages/db/__tests__/unit/columns.test.ts
@@ -819,7 +821,7 @@ EOF
 - Modify: `packages/db/src/index.ts`
 - Create: `packages/db/__tests__/unit/table.test.ts`
 
-- [ ] **Step 5.1: Write the failing test**
+- [x] **Step 5.1: Write the failing test**
 
 Create `packages/db/__tests__/unit/table.test.ts`:
 
@@ -899,11 +901,11 @@ describe('unique constraint helper', () => {
 })
 ```
 
-- [ ] **Step 5.2: Run — fails**
+- [x] **Step 5.2: Run — fails**
 
 Expected: FAIL on missing `table`, `index`, `unique`, `references`.
 
-- [ ] **Step 5.3: Add `references()` to `ColumnBuilder`**
+- [x] **Step 5.3: Add `references()` to `ColumnBuilder`**
 
 Edit `packages/db/src/dsl/columns/types.ts` — add this method to the class (between `unique()` and `toJSON()`):
 
@@ -920,7 +922,7 @@ Edit `packages/db/src/dsl/columns/types.ts` — add this method to the class (be
   }
 ```
 
-- [ ] **Step 5.4: Create `packages/db/src/dsl/constraints.ts`**
+- [x] **Step 5.4: Create `packages/db/src/dsl/constraints.ts`**
 
 ```ts
 export interface IndexDecl {
@@ -950,7 +952,7 @@ export function unique(name: string) {
 }
 ```
 
-- [ ] **Step 5.5: Create `packages/db/src/dsl/table.ts`**
+- [x] **Step 5.5: Create `packages/db/src/dsl/table.ts`**
 
 ```ts
 import type { ColumnBuilder } from './columns/types'
@@ -1011,14 +1013,14 @@ export function table<C extends Record<string, ColumnBuilder>>(
 }
 ```
 
-- [ ] **Step 5.6: Update barrel `packages/db/src/index.ts`** — append:
+- [x] **Step 5.6: Update barrel `packages/db/src/index.ts`** — append:
 
 ```ts
 export * from './dsl/table'
 export * from './dsl/constraints'
 ```
 
-- [ ] **Step 5.7: Run — passes**
+- [x] **Step 5.7: Run — passes**
 
 ```bash
 pnpm --filter @forinda/kickjs-db test
@@ -1026,7 +1028,7 @@ pnpm --filter @forinda/kickjs-db test
 
 Expected: PASS — table tests + FK tests + unique tests green.
 
-- [ ] **Step 5.8: Commit**
+- [x] **Step 5.8: Commit**
 
 ```bash
 git add packages/db/src/dsl packages/db/src/index.ts packages/db/__tests__/unit/table.test.ts
@@ -1053,7 +1055,7 @@ EOF
 - Modify: `packages/db/src/index.ts`
 - Create: `packages/db/__tests__/unit/relations.test.ts`
 
-- [ ] **Step 6.1: Write the failing test**
+- [x] **Step 6.1: Write the failing test**
 
 Create `packages/db/__tests__/unit/relations.test.ts`:
 
@@ -1089,11 +1091,11 @@ describe('relations()', () => {
 })
 ```
 
-- [ ] **Step 6.2: Run — fails**
+- [x] **Step 6.2: Run — fails**
 
 Expected: FAIL on missing `relations`.
 
-- [ ] **Step 6.3: Create `packages/db/src/dsl/relations.ts`**
+- [x] **Step 6.3: Create `packages/db/src/dsl/relations.ts`**
 
 ```ts
 import type { TableDecl, ColumnRef } from './table'
@@ -1148,13 +1150,13 @@ export function relations<T extends TableDecl<Record<string, ColumnBuilder>>>(
 }
 ```
 
-- [ ] **Step 6.4: Re-export** — append to `packages/db/src/index.ts`:
+- [x] **Step 6.4: Re-export** — append to `packages/db/src/index.ts`:
 
 ```ts
 export * from './dsl/relations'
 ```
 
-- [ ] **Step 6.5: Run — passes**
+- [x] **Step 6.5: Run — passes**
 
 ```bash
 pnpm --filter @forinda/kickjs-db test
@@ -1162,7 +1164,7 @@ pnpm --filter @forinda/kickjs-db test
 
 Expected: PASS.
 
-- [ ] **Step 6.6: Commit**
+- [x] **Step 6.6: Commit**
 
 ```bash
 git add packages/db/src/dsl/relations.ts packages/db/src/index.ts packages/db/__tests__/unit/relations.test.ts
@@ -1189,7 +1191,7 @@ EOF
 - Modify: `packages/db/src/index.ts`
 - Create: `packages/db/__tests__/unit/extract.test.ts`
 
-- [ ] **Step 7.1: Write the failing test**
+- [x] **Step 7.1: Write the failing test**
 
 Create `packages/db/__tests__/unit/extract.test.ts`:
 
@@ -1295,11 +1297,11 @@ describe('extractSnapshot()', () => {
 })
 ```
 
-- [ ] **Step 7.2: Run — fails**
+- [x] **Step 7.2: Run — fails**
 
 Expected: FAIL on `extractSnapshot is not a function`.
 
-- [ ] **Step 7.3: Create `packages/db/src/snapshot/extract.ts`**
+- [x] **Step 7.3: Create `packages/db/src/snapshot/extract.ts`**
 
 ```ts
 import type { ColumnBuilder } from '../dsl/columns/types'
@@ -1361,13 +1363,13 @@ function extractTable(t: TableDecl<Record<string, ColumnBuilder>>): TableSnapsho
 }
 ```
 
-- [ ] **Step 7.4: Re-export** — append to `packages/db/src/index.ts`:
+- [x] **Step 7.4: Re-export** — append to `packages/db/src/index.ts`:
 
 ```ts
 export { extractSnapshot } from './snapshot/extract'
 ```
 
-- [ ] **Step 7.5: Run — passes**
+- [x] **Step 7.5: Run — passes**
 
 ```bash
 pnpm --filter @forinda/kickjs-db test
@@ -1375,7 +1377,7 @@ pnpm --filter @forinda/kickjs-db test
 
 Expected: PASS.
 
-- [ ] **Step 7.6: Commit**
+- [x] **Step 7.6: Commit**
 
 ```bash
 git add packages/db/src/snapshot/extract.ts packages/db/src/index.ts packages/db/__tests__/unit/extract.test.ts
@@ -1402,7 +1404,7 @@ EOF
 
 (No test in this task — pure type declarations. Tested through Task 9 onwards.)
 
-- [ ] **Step 8.1: Create `packages/db/src/diff/types.ts`**
+- [x] **Step 8.1: Create `packages/db/src/diff/types.ts`**
 
 ```ts
 import type {
@@ -1495,13 +1497,13 @@ export type Change =
 export type ChangeSet = Change[]
 ```
 
-- [ ] **Step 8.2: Re-export** — append to `packages/db/src/index.ts`:
+- [x] **Step 8.2: Re-export** — append to `packages/db/src/index.ts`:
 
 ```ts
 export type * from './diff/types'
 ```
 
-- [ ] **Step 8.3: Verify typecheck**
+- [x] **Step 8.3: Verify typecheck**
 
 ```bash
 pnpm --filter @forinda/kickjs-db typecheck
@@ -1509,7 +1511,7 @@ pnpm --filter @forinda/kickjs-db typecheck
 
 Expected: exit 0.
 
-- [ ] **Step 8.4: Commit**
+- [x] **Step 8.4: Commit**
 
 ```bash
 git add packages/db/src/diff/types.ts packages/db/src/index.ts
@@ -1534,7 +1536,7 @@ EOF
 - Modify: `packages/db/src/index.ts`
 - Create: `packages/db/__tests__/unit/diff-create-drop.test.ts`
 
-- [ ] **Step 9.1: Write the failing test**
+- [x] **Step 9.1: Write the failing test**
 
 Create `packages/db/__tests__/unit/diff-create-drop.test.ts`:
 
@@ -1584,11 +1586,11 @@ describe('diff() — create/drop tables', () => {
 })
 ```
 
-- [ ] **Step 9.2: Run — fails**
+- [x] **Step 9.2: Run — fails**
 
 Expected: FAIL on `diff is not a function`.
 
-- [ ] **Step 9.3: Create `packages/db/src/diff/engine.ts`**
+- [x] **Step 9.3: Create `packages/db/src/diff/engine.ts`**
 
 ```ts
 import type { SchemaSnapshot, TableSnapshot } from '../snapshot/types'
@@ -1628,13 +1630,13 @@ function diffTable(_prev: TableSnapshot, _next: TableSnapshot, _changes: Change[
 }
 ```
 
-- [ ] **Step 9.4: Re-export** — append to `packages/db/src/index.ts`:
+- [x] **Step 9.4: Re-export** — append to `packages/db/src/index.ts`:
 
 ```ts
 export { diff } from './diff/engine'
 ```
 
-- [ ] **Step 9.5: Run — passes**
+- [x] **Step 9.5: Run — passes**
 
 ```bash
 pnpm --filter @forinda/kickjs-db test
@@ -1642,7 +1644,7 @@ pnpm --filter @forinda/kickjs-db test
 
 Expected: PASS.
 
-- [ ] **Step 9.6: Commit**
+- [x] **Step 9.6: Commit**
 
 ```bash
 git add packages/db/src/diff/engine.ts packages/db/src/index.ts packages/db/__tests__/unit/diff-create-drop.test.ts
@@ -1667,7 +1669,7 @@ EOF
 - Modify: `packages/db/src/diff/engine.ts`
 - Create: `packages/db/__tests__/unit/diff-columns.test.ts`
 
-- [ ] **Step 10.1: Write the failing test**
+- [x] **Step 10.1: Write the failing test**
 
 Create `packages/db/__tests__/unit/diff-columns.test.ts`:
 
@@ -1758,9 +1760,9 @@ describe('diff() — column add/drop', () => {
 })
 ```
 
-- [ ] **Step 10.2: Run — fails** (column-level tests fail; the diff stub does nothing for common tables).
+- [x] **Step 10.2: Run — fails** (column-level tests fail; the diff stub does nothing for common tables).
 
-- [ ] **Step 10.3: Implement column diff in `packages/db/src/diff/engine.ts`**
+- [x] **Step 10.3: Implement column diff in `packages/db/src/diff/engine.ts`**
 
 Replace the body of `diffTable` with:
 
@@ -1782,7 +1784,7 @@ function diffTable(prev: TableSnapshot, next: TableSnapshot, changes: Change[]) 
 }
 ```
 
-- [ ] **Step 10.4: Run — passes**
+- [x] **Step 10.4: Run — passes**
 
 ```bash
 pnpm --filter @forinda/kickjs-db test
@@ -1790,7 +1792,7 @@ pnpm --filter @forinda/kickjs-db test
 
 Expected: PASS.
 
-- [ ] **Step 10.5: Commit**
+- [x] **Step 10.5: Commit**
 
 ```bash
 git add packages/db/src/diff/engine.ts packages/db/__tests__/unit/diff-columns.test.ts
@@ -1812,7 +1814,7 @@ EOF
 - Modify: `packages/db/src/diff/engine.ts`
 - Create: `packages/db/__tests__/unit/diff-alter.test.ts`
 
-- [ ] **Step 11.1: Write the failing test**
+- [x] **Step 11.1: Write the failing test**
 
 Create `packages/db/__tests__/unit/diff-alter.test.ts`:
 
@@ -1863,9 +1865,9 @@ describe('diff() — alter column', () => {
 })
 ```
 
-- [ ] **Step 11.2: Run — fails**.
+- [x] **Step 11.2: Run — fails**.
 
-- [ ] **Step 11.3: Extend `diffTable`** in `packages/db/src/diff/engine.ts`:
+- [x] **Step 11.3: Extend `diffTable`** in `packages/db/src/diff/engine.ts`:
 
 Replace `diffTable` with:
 
@@ -1905,9 +1907,9 @@ function columnsEqual(
 }
 ```
 
-- [ ] **Step 11.4: Run — passes**.
+- [x] **Step 11.4: Run — passes**.
 
-- [ ] **Step 11.5: Commit**
+- [x] **Step 11.5: Commit**
 
 ```bash
 git add packages/db/src/diff/engine.ts packages/db/__tests__/unit/diff-alter.test.ts
@@ -1931,7 +1933,7 @@ EOF
 - Modify: `packages/db/src/diff/engine.ts`
 - Create: `packages/db/__tests__/unit/diff-indexes-fks.test.ts`
 
-- [ ] **Step 12.1: Write the failing test**
+- [x] **Step 12.1: Write the failing test**
 
 Create `packages/db/__tests__/unit/diff-indexes-fks.test.ts`:
 
@@ -1979,9 +1981,9 @@ describe('diff() — indexes & FKs', () => {
 })
 ```
 
-- [ ] **Step 12.2: Run — fails**.
+- [x] **Step 12.2: Run — fails**.
 
-- [ ] **Step 12.3: Extend `diffTable`** in `packages/db/src/diff/engine.ts` — append after the column loop:
+- [x] **Step 12.3: Extend `diffTable`** in `packages/db/src/diff/engine.ts` — append after the column loop:
 
 ```ts
 diffByName(
@@ -2015,9 +2017,9 @@ function diffByName<T extends { name: string }>(
 }
 ```
 
-- [ ] **Step 12.4: Run — passes**.
+- [x] **Step 12.4: Run — passes**.
 
-- [ ] **Step 12.5: Commit**
+- [x] **Step 12.5: Commit**
 
 ```bash
 git add packages/db/src/diff/engine.ts packages/db/__tests__/unit/diff-indexes-fks.test.ts
@@ -2040,7 +2042,7 @@ EOF
 - Modify: `packages/db/src/diff/engine.ts`
 - Create: `packages/db/__tests__/unit/diff-rename.test.ts`
 
-- [ ] **Step 13.1: Write the failing test**
+- [x] **Step 13.1: Write the failing test**
 
 Create `packages/db/__tests__/unit/diff-rename.test.ts`:
 
@@ -2100,9 +2102,9 @@ describe('diff() — rename heuristic', () => {
 })
 ```
 
-- [ ] **Step 13.2: Run — fails**.
+- [x] **Step 13.2: Run — fails**.
 
-- [ ] **Step 13.3: Implement rename detection in `packages/db/src/diff/engine.ts`**
+- [x] **Step 13.3: Implement rename detection in `packages/db/src/diff/engine.ts`**
 
 Replace `diffTable` entirely:
 
@@ -2173,9 +2175,9 @@ function columnAttrsEqual(
 }
 ```
 
-- [ ] **Step 13.4: Run — passes**.
+- [x] **Step 13.4: Run — passes**.
 
-- [ ] **Step 13.5: Commit**
+- [x] **Step 13.5: Commit**
 
 ```bash
 git add packages/db/src/diff/engine.ts packages/db/__tests__/unit/diff-rename.test.ts
@@ -2200,7 +2202,7 @@ EOF
 - Create: `packages/db/src/emit/identifiers.ts`
 - Create: `packages/db/__tests__/unit/identifiers.test.ts`
 
-- [ ] **Step 14.1: Write the failing test**
+- [x] **Step 14.1: Write the failing test**
 
 Create `packages/db/__tests__/unit/identifiers.test.ts`:
 
@@ -2233,9 +2235,9 @@ describe('quoteLiteral', () => {
 })
 ```
 
-- [ ] **Step 14.2: Run — fails**.
+- [x] **Step 14.2: Run — fails**.
 
-- [ ] **Step 14.3: Create `packages/db/src/emit/identifiers.ts`**
+- [x] **Step 14.3: Create `packages/db/src/emit/identifiers.ts`**
 
 ```ts
 export function quoteIdent(name: string): string {
@@ -2250,9 +2252,9 @@ export function quoteLiteral(value: string): string {
 }
 ```
 
-- [ ] **Step 14.4: Run — passes**.
+- [x] **Step 14.4: Run — passes**.
 
-- [ ] **Step 14.5: Commit**
+- [x] **Step 14.5: Commit**
 
 ```bash
 git add packages/db/src/emit/identifiers.ts packages/db/__tests__/unit/identifiers.test.ts
@@ -2275,7 +2277,7 @@ EOF
 - Modify: `packages/db/src/index.ts`
 - Create: `packages/db/__tests__/unit/emit-pg-create-drop.test.ts`
 
-- [ ] **Step 15.1: Write the failing test**
+- [x] **Step 15.1: Write the failing test**
 
 Create `packages/db/__tests__/unit/emit-pg-create-drop.test.ts`:
 
@@ -2325,9 +2327,9 @@ describe('emitPg() — create/drop/rename table', () => {
 })
 ```
 
-- [ ] **Step 15.2: Run — fails**.
+- [x] **Step 15.2: Run — fails**.
 
-- [ ] **Step 15.3: Create `packages/db/src/emit/pg.ts`**
+- [x] **Step 15.3: Create `packages/db/src/emit/pg.ts`**
 
 ```ts
 import type { Change, ChangeSet } from '../diff/types'
@@ -2378,15 +2380,15 @@ function formatDefault(value: string): string {
 }
 ```
 
-- [ ] **Step 15.4: Re-export** — append to `packages/db/src/index.ts`:
+- [x] **Step 15.4: Re-export** — append to `packages/db/src/index.ts`:
 
 ```ts
 export { emitPg } from './emit/pg'
 ```
 
-- [ ] **Step 15.5: Run — passes**.
+- [x] **Step 15.5: Run — passes**.
 
-- [ ] **Step 15.6: Commit**
+- [x] **Step 15.6: Commit**
 
 ```bash
 git add packages/db/src/emit packages/db/src/index.ts packages/db/__tests__/unit/emit-pg-create-drop.test.ts
@@ -2408,7 +2410,7 @@ EOF
 - Modify: `packages/db/src/emit/pg.ts`
 - Create: `packages/db/__tests__/unit/emit-pg-columns.test.ts`
 
-- [ ] **Step 16.1: Write the failing test**
+- [x] **Step 16.1: Write the failing test**
 
 Create `packages/db/__tests__/unit/emit-pg-columns.test.ts`:
 
@@ -2481,9 +2483,9 @@ describe('emitPg() — column changes', () => {
 })
 ```
 
-- [ ] **Step 16.2: Run — fails** (the M0 stub returns `-- unsupported`).
+- [x] **Step 16.2: Run — fails** (the M0 stub returns `-- unsupported`).
 
-- [ ] **Step 16.3: Extend `emitPg`'s `emitChange` switch**
+- [x] **Step 16.3: Extend `emitPg`'s `emitChange` switch**
 
 Replace the `default` branch and add new cases. Full updated `emitChange`:
 
@@ -2559,9 +2561,9 @@ function emitAddFk(_table: string, _fk: import('../snapshot/types').ForeignKeySn
 }
 ```
 
-- [ ] **Step 16.4: Run — passes** (column tests).
+- [x] **Step 16.4: Run — passes** (column tests).
 
-- [ ] **Step 16.5: Commit**
+- [x] **Step 16.5: Commit**
 
 ```bash
 git add packages/db/src/emit/pg.ts packages/db/__tests__/unit/emit-pg-columns.test.ts
@@ -2586,7 +2588,7 @@ EOF
 - Modify: `packages/db/src/emit/pg.ts`
 - Create: `packages/db/__tests__/unit/emit-pg-indexes-fks.test.ts`
 
-- [ ] **Step 17.1: Write the failing test**
+- [x] **Step 17.1: Write the failing test**
 
 Create `packages/db/__tests__/unit/emit-pg-indexes-fks.test.ts`:
 
@@ -2652,9 +2654,9 @@ describe('emitPg() — indexes & FKs', () => {
 })
 ```
 
-- [ ] **Step 17.2: Run — fails**.
+- [x] **Step 17.2: Run — fails**.
 
-- [ ] **Step 17.3: Replace stubs at the bottom of `packages/db/src/emit/pg.ts`**
+- [x] **Step 17.3: Replace stubs at the bottom of `packages/db/src/emit/pg.ts`**
 
 ```ts
 function emitAddIndex(table: string, i: import('../snapshot/types').IndexSnapshot): string {
@@ -2681,9 +2683,9 @@ function emitAddFk(table: string, fk: import('../snapshot/types').ForeignKeySnap
 }
 ```
 
-- [ ] **Step 17.4: Run — passes**.
+- [x] **Step 17.4: Run — passes**.
 
-- [ ] **Step 17.5: Commit**
+- [x] **Step 17.5: Commit**
 
 ```bash
 git add packages/db/src/emit/pg.ts packages/db/__tests__/unit/emit-pg-indexes-fks.test.ts
@@ -2707,7 +2709,7 @@ EOF
 
 - Create: `packages/db/__tests__/integration/spike.test.ts`
 
-- [ ] **Step 18.1: Write the integration test**
+- [x] **Step 18.1: Write the integration test**
 
 ```ts
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
@@ -2828,7 +2830,7 @@ describe('spike — full pipeline (PG)', () => {
 })
 ```
 
-- [ ] **Step 18.2: Run — should pass**
+- [x] **Step 18.2: Run — should pass**
 
 ```bash
 pnpm --filter @forinda/kickjs-db test
@@ -2838,7 +2840,7 @@ Expected: PASS. Container start ~30s, test runs in <5s.
 
 > **Note:** if Docker isn't running, the test fails at container start. Document in README that integration tests require Docker.
 
-- [ ] **Step 18.3: Commit**
+- [x] **Step 18.3: Commit**
 
 ```bash
 git add packages/db/__tests__/integration/spike.test.ts
@@ -2866,7 +2868,7 @@ EOF
 - Create: `packages/db/__tests__/unit/cli-config.test.ts`
 - Create: `packages/db/__tests__/fixtures/kick.config.demo.ts`
 
-- [ ] **Step 19.1: Create fixture `packages/db/__tests__/fixtures/kick.config.demo.ts`**
+- [x] **Step 19.1: Create fixture `packages/db/__tests__/fixtures/kick.config.demo.ts`**
 
 ```ts
 export default {
@@ -2878,7 +2880,7 @@ export default {
 }
 ```
 
-- [ ] **Step 19.2: Write the failing test**
+- [x] **Step 19.2: Write the failing test**
 
 Create `packages/db/__tests__/unit/cli-config.test.ts`:
 
@@ -2915,9 +2917,9 @@ Also create `packages/db/__tests__/fixtures/kick.config.empty.ts`:
 export default {}
 ```
 
-- [ ] **Step 19.3: Run — fails**.
+- [x] **Step 19.3: Run — fails**.
 
-- [ ] **Step 19.4: Create `packages/db/src/cli/config.ts`**
+- [x] **Step 19.4: Create `packages/db/src/cli/config.ts`**
 
 ```ts
 import path from 'node:path'
@@ -2943,15 +2945,15 @@ export async function resolveDbConfig(opts: { configPath: string }): Promise<DbC
 }
 ```
 
-- [ ] **Step 19.5: Re-export** — append to `packages/db/src/index.ts`:
+- [x] **Step 19.5: Re-export** — append to `packages/db/src/index.ts`:
 
 ```ts
 export { resolveDbConfig, type DbConfig } from './cli/config'
 ```
 
-- [ ] **Step 19.6: Run — passes**.
+- [x] **Step 19.6: Run — passes**.
 
-- [ ] **Step 19.7: Commit**
+- [x] **Step 19.7: Commit**
 
 ```bash
 git add packages/db/src/cli packages/db/src/index.ts packages/db/__tests__/unit/cli-config.test.ts packages/db/__tests__/fixtures
@@ -2977,7 +2979,7 @@ EOF
 - Modify: `packages/db/src/index.ts`
 - Create: `packages/db/__tests__/fixtures/schema.demo.ts`
 
-- [ ] **Step 20.1: Create demo schema `packages/db/__tests__/fixtures/schema.demo.ts`**
+- [x] **Step 20.1: Create demo schema `packages/db/__tests__/fixtures/schema.demo.ts`**
 
 ```ts
 import { table, serial, varchar } from '../../src/index'
@@ -2988,7 +2990,7 @@ export const users = table('users', {
 })
 ```
 
-- [ ] **Step 20.2: Create `packages/db/src/cli/generate.ts`**
+- [x] **Step 20.2: Create `packages/db/src/cli/generate.ts`**
 
 ```ts
 import path from 'node:path'
@@ -3084,14 +3086,14 @@ function formatId(date: Date, name: string): string {
 }
 ```
 
-- [ ] **Step 20.3: Re-export** — append to `packages/db/src/index.ts`:
+- [x] **Step 20.3: Re-export** — append to `packages/db/src/index.ts`:
 
 ```ts
 export { generate } from './cli/generate'
 export type { GenerateOptions, GenerateResult } from './cli/generate'
 ```
 
-- [ ] **Step 20.4: Verify typecheck**
+- [x] **Step 20.4: Verify typecheck**
 
 ```bash
 pnpm --filter @forinda/kickjs-db typecheck
@@ -3099,7 +3101,7 @@ pnpm --filter @forinda/kickjs-db typecheck
 
 Expected: exit 0.
 
-- [ ] **Step 20.5: Commit**
+- [x] **Step 20.5: Commit**
 
 ```bash
 git add packages/db/src/cli/generate.ts packages/db/src/index.ts packages/db/__tests__/fixtures/schema.demo.ts
@@ -3124,7 +3126,7 @@ EOF
 
 - Create: `packages/db/__tests__/unit/cli-generate.test.ts`
 
-- [ ] **Step 21.1: Write the test**
+- [x] **Step 21.1: Write the test**
 
 Create `packages/db/__tests__/unit/cli-generate.test.ts`:
 
@@ -3191,7 +3193,7 @@ describe('generate()', () => {
 })
 ```
 
-- [ ] **Step 21.2: Run — passes**.
+- [x] **Step 21.2: Run — passes**.
 
 ```bash
 pnpm --filter @forinda/kickjs-db test
@@ -3199,7 +3201,7 @@ pnpm --filter @forinda/kickjs-db test
 
 Expected: PASS.
 
-- [ ] **Step 21.3: Commit**
+- [x] **Step 21.3: Commit**
 
 ```bash
 git add packages/db/__tests__/unit/cli-generate.test.ts
@@ -3227,7 +3229,7 @@ EOF
 
 > **Read first:** the existing `packages/cli/src/cli.ts` and one existing command (e.g. `generate.ts`) to confirm the registration pattern (Commander.js subcommand, command builder, etc). The pattern below is plausible but verify against the file before pasting.
 
-- [ ] **Step 22.1: Read the existing CLI registration shape**
+- [x] **Step 22.1: Read the existing CLI registration shape**
 
 ```bash
 sed -n '1,40p' packages/cli/src/cli.ts
@@ -3236,7 +3238,7 @@ ls packages/cli/src/commands/
 
 Note the pattern — file may use `commander`, `cac`, or a custom parser. The snippet below assumes commander; adjust to match.
 
-- [ ] **Step 22.2: Add the workspace dep to `packages/cli/package.json`**
+- [x] **Step 22.2: Add the workspace dep to `packages/cli/package.json`**
 
 In the `dependencies` block, add:
 
@@ -3250,7 +3252,7 @@ Then run:
 pnpm install
 ```
 
-- [ ] **Step 22.3: Create `packages/cli/src/commands/db.ts`**
+- [x] **Step 22.3: Create `packages/cli/src/commands/db.ts`**
 
 ```ts
 import path from 'node:path'
@@ -3280,7 +3282,7 @@ export function registerDbCommands(program: Command) {
 }
 ```
 
-- [ ] **Step 22.4: Wire into `packages/cli/src/cli.ts`**
+- [x] **Step 22.4: Wire into `packages/cli/src/cli.ts`**
 
 Open `packages/cli/src/cli.ts` and add (near other command registrations):
 
@@ -3292,7 +3294,7 @@ registerDbCommands(program)
 
 > If the file uses a different framework, adapt the registration to match. The semantic — register a `db` subcommand with `generate` — is what matters.
 
-- [ ] **Step 22.5: Build the CLI**
+- [x] **Step 22.5: Build the CLI**
 
 ```bash
 pnpm --filter @forinda/kickjs-cli build
@@ -3301,7 +3303,7 @@ pnpm --filter @forinda/kickjs-db build
 
 Expected: exit 0.
 
-- [ ] **Step 22.6: Smoke-test the CLI in a temp dir**
+- [x] **Step 22.6: Smoke-test the CLI in a temp dir**
 
 Create a one-off scratch script (do not commit):
 
@@ -3331,13 +3333,13 @@ cat db/migrations/*/up.sql
 
 Expected: `db/migrations/<timestamp>_init/up.sql` exists, starts with `-- REVIEWED: false`, contains `CREATE TABLE "users"`.
 
-- [ ] **Step 22.7: Clean up the scratch dir**
+- [x] **Step 22.7: Clean up the scratch dir**
 
 ```bash
 rm -rf /tmp/kickdb-spike
 ```
 
-- [ ] **Step 22.8: Commit**
+- [x] **Step 22.8: Commit**
 
 ```bash
 git add packages/cli/package.json packages/cli/src/commands/db.ts packages/cli/src/cli.ts

@@ -154,17 +154,19 @@ Plugins contribute `commands`, `register` (programmatic commander chains), `type
 
 `kick db generate full-port` produces an 86-change migration with `CREATE TYPE` ordered ahead of dependent tables and `DROP TYPE` ordered after dependent table drops on rollback.
 
-## Out of scope (deferred)
+## Out of scope (deferred — superseded 2026-05-05)
 
-The following land in a follow-up sprint, tracked as roadmap items:
-
-- **`$extends({ result })`** — `compute()` over selected rows. Needs a Kysely `OperationNodeTransformer` that walks `SelectQueryNode` and applies the post-fetch transform.
-- **`customType` `toDriver` insert path** — same plugin plumbing as result extensions.
-- **`db.query.X.findMany({ with })`** — relational query compilation to a single SQL with JSON aggregation per dialect. The biggest task in the M2 plan, deferred to its own sprint where the dialect-specific design gets focused attention.
-- **M2.D KickEventBus** — completes the M2.C tab migration story.
-- **M2.E Vite AST strip** — Babel transform plugin to strip devtools tab code from production bundles.
-- **Routes/env legacy generator carve-up** — the M2.B-T8 leftover; the kick/assets typegen carved cleanly, routes/env need their hoisted-import strategy reworked first.
-- **Removed-enum-value handling** — currently a silent no-op; round-tripping requires column drops the operator must orchestrate.
+> **Update:** The audit on 2026-05-05 found this list **stale**. Most items shipped to disk after the release notes were cut, and the rest landed in M3. See [`m3-release.md`](./m3-release.md) for the v5.3 follow-up.
+>
+> | Original deferred item               | Actual status                                                                                                          |
+> | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+> | `$extends({ result })`               | **Shipped before the release notes were filed** — `packages/db/src/extend/result-plugin.ts` carries the Kysely plugin. |
+> | `customType` `toDriver` insert path  | **Shipped** — `packages/db/src/client/codec-plugin.ts:56` `transformQuery` for INSERT/UPDATE.                          |
+> | `db.query.X.findMany({ with })`      | **Shipped in M3.A** — see m3-release.md.                                                                               |
+> | M2.D KickEventBus                    | **Shipped** — `packages/devtools-kit/src/bus/`.                                                                        |
+> | M2.E Vite AST strip                  | **Shipped in M3.C** — `packages/vite/src/babel-strip-devtools.ts`.                                                     |
+> | Routes/env legacy generator carve-up | **Shipped** — `packages/cli/src/typegen/builtin/{routes,env,assets}.ts`.                                               |
+> | Removed-enum-value handling          | **Shipped in M3.B** — `-- KICK ENUM REMOVE` header + `--confirm-enum-drop` runner flag.                                |
 
 ## Migration notes
 

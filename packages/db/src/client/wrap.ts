@@ -19,18 +19,32 @@ import { Kysely, sql } from 'kysely'
 import type { KickDbClient, TransactionEvent } from './types'
 import { applyExtensions } from '../extend/apply'
 import type { KickDbEventEmitter } from './events'
+import type { CompileFn } from '../query/builder'
+import { buildQueryNamespace } from '../query/builder'
+import type { ResolvedRelations } from '../query/relations'
 
 export interface InternalContext {
   events: KickDbEventEmitter | null
   dialect: KickDbClient['dialect']
   /** Increments per savepoint open inside this client; used for SP_<n> names. */
   savepointCounter: { value: number }
+  /**
+   * Resolved relation graph + dialect-specific compiler for the
+   * relational-query namespace. Always present after
+   * `createDbClient` runs — the compiler may be a throw-stub for
+   * unsupported dialects (SQLite / MySQL in v1).
+   */
+  query: {
+    relations: ResolvedRelations
+    compile: CompileFn
+  }
 }
 
 export function wrap<DB>(qb: Kysely<DB>, ctx: InternalContext): KickDbClient<DB> {
   const client: KickDbClient<DB> = {
     qb,
     dialect: ctx.dialect,
+    query: buildQueryNamespace<DB>(qb, ctx.query.relations, ctx.query.compile),
 
     selectFrom: qb.selectFrom.bind(qb),
     insertInto: qb.insertInto.bind(qb),

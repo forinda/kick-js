@@ -24,7 +24,7 @@ describe('kickDbTypegen', () => {
     expect(r[0].status).toBe('skipped')
   })
 
-  it('emits the KickDbRegister augmentation for src/db/schema.ts', async () => {
+  it('emits the KickDbRegister + KickDbRelationsRegister augmentations for src/db/schema.ts', async () => {
     await mkdir(path.join(dir, 'src/db'), { recursive: true })
     await writeFile(path.join(dir, 'src/db/schema.ts'), 'export const users = {}')
 
@@ -42,6 +42,10 @@ describe('kickDbTypegen', () => {
     expect(out).toContain(`declare module '@forinda/kickjs-db'`)
     expect(out).toContain(`interface KickDbRegister`)
     expect(out).toContain(`db: KickDbClient<KickDbSchema>`)
+    // M3.A.7 — relations augmentation derives from the same schema.
+    expect(out).toContain(`SchemaToRelationsRegister`)
+    expect(out).toContain(`interface KickDbRelationsRegister`)
+    expect(out).toContain(`db: SchemaToRelationsRegister<typeof appSchema>`)
   })
 
   it('resolves a barrel folder layout (src/db/schema/index.ts)', async () => {
