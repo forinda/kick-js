@@ -163,4 +163,8 @@ export {
   type DevtoolsFlagOptions,
 } from './devtools-flag-plugin'
 export { devtoolsStripPlugin, type DevtoolsStripOptions } from './devtools-strip-plugin'
-export { stripDevtoolsCode, type StripDevtoolsOptions, type StripResult } from './babel-strip-devtools'
+export {
+  stripDevtoolsCode,
+  type StripDevtoolsOptions,
+  type StripResult,
+} from './babel-strip-devtools'
