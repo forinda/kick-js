@@ -9,15 +9,21 @@
  *     plugin emits the augmentation alongside the column-shape one;
  *     adopters never write it by hand.
  *
- *  2. `FindManyOptions<Table>` — the options bag accepted by
+ *  2. `FindManyOptions<DB, Table>` — the options bag accepted by
  *     `findMany` / `findFirst` / `findUnique`. `with` keys are
  *     constrained to the relations declared for `Table`; nested
  *     `with` recursively constrains in the same way.
  *
- *  3. `FindManyRow<Table, Opts>` — the resolved row shape. Base
+ *  3. `FindManyRow<DB, Table, Opts>` — the resolved row shape. Base
  *     columns of `Table` plus one slot per requested `with` key,
  *     narrowed by relation kind (`one` → `Related | null`, `many` →
  *     `Related[]`).
+ *
+ * `DB` defaults to `RegisteredDB` so call sites that use the bare
+ * `KickDbClient` (i.e. rely on the `KickDbRegister` augmentation) get
+ * the resolved shape without an explicit generic. Call sites with an
+ * explicit `KickDbClient<MySchema>` thread `MySchema` through, and
+ * the global registry only contributes the relation graph.
  *
  * No depth counter on the recursive forms: TypeScript's default
  * recursion limit (~50) covers the spec's runtime guard (5) with
@@ -33,7 +39,7 @@ import type { RegisteredDB } from '../client/register'
  * Adopter-augmented at typegen time, mirroring `KickDbRegister`. The
  * augmentation slots a record keyed by table name; each value is a
  * record of `{ relationName: RelationMapEntry }`. The kick/db typegen
- * plugin (M3.A.4) emits this alongside the column-shape augmentation.
+ * plugin emits this alongside the column-shape augmentation.
  *
  *   declare module '@forinda/kickjs-db' {
  *     interface KickDbRelationsRegister {
@@ -50,11 +56,14 @@ export interface KickDbRelationsRegister {}
 
 /**
  * One relation entry in the registry — kind (`'one'` or `'many'`) +
- * the target table name (a key into `RegisteredDB`).
+ * the target table name. The target is a plain string key so the
+ * registry stays decoupled from any particular `DB` generic; the
+ * compile-time check that `target` lives in the local `DB` happens
+ * inside `WithClause`.
  */
 export interface RelationMapEntry {
   kind: 'one' | 'many'
-  target: keyof RegisteredDB & string
+  target: string
 }
 
 /**
@@ -74,31 +83,27 @@ export type RegisteredRelations = KickDbRelationsRegister extends { db: infer R 
  * which makes `with` resolve to `Record<string, never>` — i.e. typing
  * a `with: { ... }` becomes a compile error per key.
  */
-export type TableRelations<Table extends keyof RegisteredDB & string> =
-  Table extends keyof RegisteredRelations
-    ? RegisteredRelations[Table] extends Record<string, RelationMapEntry>
-      ? RegisteredRelations[Table]
-      : Record<string, never>
+export type TableRelations<Table extends string> = Table extends keyof RegisteredRelations
+  ? RegisteredRelations[Table] extends Record<string, RelationMapEntry>
+    ? RegisteredRelations[Table]
     : Record<string, never>
+  : Record<string, never>
 
 /**
- * Operator helpers exposed inside `where` / `orderBy` callbacks. v1
- * delegates to Kysely's `ExpressionBuilder` directly — `ops.eq`,
+ * Operator helpers exposed inside `where` / `orderBy` callbacks.
+ * Delegates to Kysely's `ExpressionBuilder` directly — `ops.eq`,
  * `ops.and`, `ops.or`, etc. are Kysely's surface verbatim.
  */
-export type QueryOps<Table extends keyof RegisteredDB & string> = ExpressionBuilder<
-  RegisteredDB,
-  Table
->
+export type QueryOps<DB, Table extends keyof DB & string> = ExpressionBuilder<DB, Table>
 
 /**
  * The table-bound shape passed as the first arg to callbacks. The row
- * shape is RegisteredDB[Table] — adopters reach for individual columns
- * via `(u, ops) => ops.eq(u.id, x)` where `u.id` is just the row
- * field's TS type. Operator-bound column references come through
+ * shape is `DB[Table]` — adopters reach for individual columns via
+ * `(u, ops) => ops.eq(u.id, x)` where `u.id` is just the row field's
+ * TS type. Operator-bound column references come through
  * `ops.ref('id')` for adopters who need the Kysely escape.
  */
-export type TableRefs<Table extends keyof RegisteredDB & string> = RegisteredDB[Table]
+export type TableRefs<DB, Table extends keyof DB & string> = DB[Table]
 
 /**
  * Options bag for `findMany` / `findFirst` / `findUnique`.
@@ -110,13 +115,13 @@ export type TableRefs<Table extends keyof RegisteredDB & string> = RegisteredDB[
  * `FindManyOptions` for the related table.
  */
 export interface FindManyOptions<
-  Table extends keyof RegisteredDB & string,
-  Rels extends Record<string, RelationMapEntry> = TableRelations<Table>,
+  DB = RegisteredDB,
+  Table extends keyof DB & string = keyof DB & string,
 > {
-  where?: (table: TableRefs<Table>, ops: QueryOps<Table>) => Expression<unknown>
+  where?: (table: TableRefs<DB, Table>, ops: QueryOps<DB, Table>) => Expression<unknown>
   orderBy?: (
-    table: TableRefs<Table>,
-    ops: QueryOps<Table>,
+    table: TableRefs<DB, Table>,
+    ops: QueryOps<DB, Table>,
   ) => Expression<unknown> | Array<Expression<unknown>>
   limit?: number
   offset?: number
@@ -124,16 +129,18 @@ export interface FindManyOptions<
   maxDepth?: number
   /** Skip per-row `customType.fromDriver` walk on JSON-aggregated rows (spec §7 R-1). */
   raw?: boolean
-  with?: WithClause<Rels>
+  with?: WithClause<DB, TableRelations<Table>>
 }
 
 /**
  * Per-relation shape inside `with`. `true` for boolean shorthand;
- * a nested `FindManyOptions` for filtered eager loads.
+ * a nested `FindManyOptions` for filtered eager loads. Only relations
+ * whose `target` is also a key of the local `DB` are accepted —
+ * cross-DB relations are unrepresentable at the call site.
  */
-export type WithClause<Rels extends Record<string, RelationMapEntry>> = {
-  [K in keyof Rels]?: Rels[K]['target'] extends keyof RegisteredDB & string
-    ? true | FindManyOptions<Rels[K]['target']>
+export type WithClause<DB, Rels extends Record<string, RelationMapEntry>> = {
+  [K in keyof Rels]?: Rels[K]['target'] extends keyof DB & string
+    ? true | FindManyOptions<DB, Rels[K]['target']>
     : never
 }
 
@@ -142,19 +149,21 @@ export type WithClause<Rels extends Record<string, RelationMapEntry>> = {
  * intersected with the per-relation slot map produced by `with`.
  */
 export type FindManyRow<
-  Table extends keyof RegisteredDB & string,
-  Opts extends FindManyOptions<Table>,
-> = RegisteredDB[Table] & WithSlots<Table, Opts['with']>
+  DB,
+  Table extends keyof DB & string,
+  Opts extends FindManyOptions<DB, Table>,
+> = DB[Table] & WithSlots<DB, Table, Opts['with']>
 
 /**
  * Map each present `with` key to its resolved relation slot. Absent
  * keys do not appear in the result shape — adopters who omit `with`
  * get the bare row type back.
  */
-type WithSlots<Table extends keyof RegisteredDB & string, W> =
+type WithSlots<DB, Table extends keyof DB & string, W> =
   W extends Record<string, unknown>
     ? {
         [K in keyof W & keyof TableRelations<Table>]: ResolveRelationSlot<
+          DB,
           TableRelations<Table>[K],
           W[K]
         >
@@ -166,16 +175,15 @@ type WithSlots<Table extends keyof RegisteredDB & string, W> =
  * Resolve one slot. `one` returns `Related | null`; `many` returns
  * `Related[]`. Nested options recurse through `FindManyRow`.
  */
-type ResolveRelationSlot<R extends RelationMapEntry, V> = R['target'] extends keyof RegisteredDB &
-  string
+type ResolveRelationSlot<DB, R extends RelationMapEntry, V> = R['target'] extends keyof DB & string
   ? V extends true
     ? R['kind'] extends 'one'
-      ? RegisteredDB[R['target']] | null
-      : RegisteredDB[R['target']][]
-    : V extends FindManyOptions<R['target']>
+      ? DB[R['target']] | null
+      : DB[R['target']][]
+    : V extends FindManyOptions<DB, R['target']>
       ? R['kind'] extends 'one'
-        ? FindManyRow<R['target'], V> | null
-        : FindManyRow<R['target'], V>[]
+        ? FindManyRow<DB, R['target'], V> | null
+        : FindManyRow<DB, R['target'], V>[]
       : never
   : never
 
@@ -184,15 +192,24 @@ type ResolveRelationSlot<R extends RelationMapEntry, V> = R['target'] extends ke
  * methods only — writes route through layers 1 + 2 (`selectFrom`,
  * `insertInto`, etc.).
  */
-export interface TableQueryNamespace<Table extends keyof RegisteredDB & string> {
-  findMany<O extends FindManyOptions<Table>>(options?: O): Promise<Array<FindManyRow<Table, O>>>
-  findFirst<O extends FindManyOptions<Table>>(options?: O): Promise<FindManyRow<Table, O> | null>
-  findUnique<O extends FindManyOptions<Table>>(options: O): Promise<FindManyRow<Table, O> | null>
+export interface TableQueryNamespace<DB, Table extends keyof DB & string> {
+  findMany<O extends FindManyOptions<DB, Table>>(
+    options?: O,
+  ): Promise<Array<FindManyRow<DB, Table, O>>>
+  findFirst<O extends FindManyOptions<DB, Table>>(
+    options?: O,
+  ): Promise<FindManyRow<DB, Table, O> | null>
+  findUnique<O extends FindManyOptions<DB, Table>>(
+    options: O,
+  ): Promise<FindManyRow<DB, Table, O> | null>
 }
 
 /**
- * Top-level `db.query` namespace. One slot per registered table.
+ * Top-level `db.query` namespace. One slot per table in `DB`. Defaults
+ * to `RegisteredDB` so adopters using the bare `KickDbClient`
+ * (relying on the `KickDbRegister` augmentation) get the right shape
+ * without an explicit generic.
  */
-export type QueryNamespace = {
-  [Table in keyof RegisteredDB & string]: TableQueryNamespace<Table>
+export type QueryNamespace<DB = RegisteredDB> = {
+  [Table in keyof DB & string]: TableQueryNamespace<DB, Table>
 }

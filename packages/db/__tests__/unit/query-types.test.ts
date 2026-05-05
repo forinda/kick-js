@@ -67,10 +67,11 @@ declare module '../../src/query/types' {
 }
 
 // Helper: resolve FindManyRow for a given options literal.
-type Row<
-  T extends 'users' | 'posts' | 'comments' | 'categories',
-  O extends FindManyOptions<T>,
-> = FindManyRow<T, O>
+type Row<T extends keyof FixtureDB & string, O extends FindManyOptions<FixtureDB, T>> = FindManyRow<
+  FixtureDB,
+  T,
+  O
+>
 
 describe('FindManyRow — spec §3.3 expectTypeOf matrix', () => {
   it('T-1-deep-many — users.findMany({ with: { posts: true } })', () => {
@@ -175,23 +176,24 @@ describe('FindManyRow — spec §3.3 expectTypeOf matrix', () => {
 describe('FindManyOptions — compile-time guards', () => {
   it('T-bad-key — unknown `with` key is rejected', () => {
     // @ts-expect-error — `posts` has no relation called `nonsense`.
-    const _bad: FindManyOptions<'posts'> = { with: { nonsense: true } }
+    const _bad: FindManyOptions<FixtureDB, 'posts'> = { with: { nonsense: true } }
     void _bad
   })
 
   it('T-known-key — declared `with` keys compile fine', () => {
-    const _good: FindManyOptions<'posts'> = {
+    const _good: FindManyOptions<FixtureDB, 'posts'> = {
       with: { author: true, comments: { limit: 10 } },
     }
     void _good
   })
 
-  it('T-bad-target — relation pointing at unknown table is structurally ruled out', () => {
-    // Adopters can't construct a relation slot whose `target` is not a
-    // `keyof RegisteredDB`; the registry shape forbids it. This case
-    // doubles as a compile-time canary for the registry constraint.
+  it('T-bad-target — `RelationMapEntry.target` is a plain string key', () => {
+    // The registry stores target as a string so the relation graph
+    // stays decoupled from any particular `DB` generic. The
+    // table-existence check happens inside `WithClause` where we
+    // can see the local `DB`.
     type _CanaryEntry = import('../../src/query/types').RelationMapEntry
     type _TargetField = _CanaryEntry['target']
-    expectTypeOf<_TargetField>().toEqualTypeOf<keyof FixtureDB & string>()
+    expectTypeOf<_TargetField>().toEqualTypeOf<string>()
   })
 })

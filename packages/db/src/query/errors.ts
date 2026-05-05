@@ -82,3 +82,28 @@ export class RelationalQueryNotSupportedError extends KickDbError {
     this.dialect = dialect
   }
 }
+
+/**
+ * Thrown at extract time when a `many` relation has no inverse
+ * `one` declared on the target table. The compiler needs the FK
+ * column pair to build the join predicate; without an inverse we
+ * have no way to discover it. Adopters fix by declaring the inverse
+ * `one` on the target side (drizzle-style symmetric declarations).
+ */
+export class RelationalQueryMissingInverseError extends KickDbError {
+  readonly sourceTable: string
+  readonly relationName: string
+  readonly targetTable: string
+  constructor(sourceTable: string, relationName: string, targetTable: string) {
+    super(
+      'KICK_DB_RELATIONAL_MISSING_INVERSE',
+      `Cannot resolve \`many\` relation \`${sourceTable}.${relationName}\` — ` +
+        `no inverse \`one\` relation declared on \`${targetTable}\` pointing back to \`${sourceTable}\`. ` +
+        `Add e.g. \`relations(${targetTable}, h => ({ ${sourceTable}: h.one(${sourceTable}, { fields: [${targetTable}.${sourceTable}Id], references: [${sourceTable}.id] }) }))\` ` +
+        `so the compiler knows which columns join the two tables.`,
+    )
+    this.sourceTable = sourceTable
+    this.relationName = relationName
+    this.targetTable = targetTable
+  }
+}
