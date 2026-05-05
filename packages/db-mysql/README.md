@@ -1,8 +1,13 @@
 # @forinda/kickjs-db-mysql
 
-> mysql2 adapter for `@forinda/kickjs-db` — `MigrationAdapter` + Kysely `MysqlDialect`. **MySQL 8.0+ required.**
+> MySQL adapter for [`@forinda/kickjs-db`](https://www.npmjs.com/package/@forinda/kickjs-db). **MySQL 8.0+ / MariaDB 10.5+ required.**
 
-Ships the bridge between `@forinda/kickjs-db`'s migration runner / relational query layer and a MySQL 8.0+ database via [`mysql2`](https://github.com/sidorares/node-mysql2) (or any structurally compatible pool).
+Two factories:
+
+- **`mysqlDialect({ pool })`** — query-layer dialect for `createDbClient({ dialect })`.
+- **`mysqlAdapter({ pool })`** — `MigrationAdapter` for `kick db migrate` + `kickDbAdapter` boot-time apply.
+
+Both consume an [`mysql2`](https://github.com/sidorares/node-mysql2) pool (or any structurally compatible runtime).
 
 ## Install
 
@@ -32,7 +37,7 @@ export const db = createDbClient({
 export const migrationAdapter = mysqlAdapter({ pool })
 ```
 
-`createDbClient` auto-attaches Kysely's `ParseJSONResultsPlugin` for the MySQL dialect — `db.query.X.findMany({ with })` round-trips nested rows as parsed JS objects rather than JSON-encoded TEXT.
+`db.query.X.findMany({ with })` round-trips nested rows as parsed JS objects: MySQL's JSON aggregation returns TEXT, but `createDbClient` transparently parses it on the way back so adopters never see the encoded form.
 
 ## MySQL 8.0+ / MariaDB 10.5+ required
 
@@ -47,12 +52,14 @@ The version parser (`parseMysqlVersion`) detects MariaDB via the version string 
 
 mysql2's default `Pool.query()` rejects multi-statement SQL unless the driver is configured with `multipleStatements: true`. The adapter splits SQL blobs at top-level `;` boundaries (respecting string literals and `--` / C-style block comments) so kickjs-generated migrations apply against default mysql2 settings. Adopters with `multipleStatements: true` on their pool pay no extra cost — the splitter is cheap on small DDL blobs.
 
-## What ships
+## Adopter-facing exports
 
-- **`mysqlDialect({ pool })`** — wraps Kysely's `MysqlDialect`.
-- **`mysqlAdapter({ pool })`** — implements `MigrationAdapter` for `@forinda/kickjs-db`'s migration runner (`kick db migrate` + `kickDbAdapter` boot-time apply). Handles `kick_migrations` / `kick_migrations_lock` table creation, lock acquisition, applying SQL in / out of a transaction, plus the version assertion and multi-statement splitting.
-- **`parseMysqlVersion(version)`** + **`parseMysqlMajorVersion(version)`** — exposed for adopters who want to run the same check in their own boot logic. The full parser returns `{ flavor, major, minor }` so adopters can branch on MariaDB vs MySQL; the major-only shim is kept for back-compat.
-- **`splitMysqlStatements(sql)`** — exposed for adopters who want to run the same multi-statement splitter outside the adapter (custom migration tooling, etc.).
+- **`parseMysqlVersion(version)`** — full parse returning `{ flavor, major, minor }` for branching on MariaDB vs MySQL.
+- **`parseMysqlMajorVersion(version)`** — back-compat shim; major-only result.
+- **`splitMysqlStatements(sql)`** — multi-statement splitter for custom migration tooling outside the adapter.
+
+## Notes
+
 - **Drift detection (`introspect()`) is not yet implemented in v1** — it throws `KickDbError` with code `KICK_DB_INTROSPECT_NOT_SUPPORTED`. Set `driftCheck: 'off'` on the migration runner until a follow-up adds the `information_schema` walk.
 
 ## License
