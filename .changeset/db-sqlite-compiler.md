@@ -24,8 +24,8 @@ The compiler emits `coalesce(json_group_array(json_object(...)), '[]')` for `man
 
 **Behavior change in `buildInnerSelect`** — emits explicit `.select([col1, col2, ...])` from the snapshot's column list instead of `.selectAll()`. Required because SQLite's `jsonArrayFrom` / `jsonObjectFrom` helpers can't introspect `selectAll()` to build the JSON object's key list. PG's helpers accept both forms; this change is invisible to adopters but produces slightly more verbose SQL on PG.
 
-**`CompileFn` signature** gained a `tables: Record<string, TableSnapshot>` parameter (now 6 args). Adopters calling `compilePg` / `compileSqlite` directly need to pass the tables map alongside `relations`. `createDbClient`-based call sites are unaffected — `extractSnapshot` already produces the map and threads it through `InternalContext.query.tables`.
+**Internal refactor note:** the shared compiler path now threads a `tables: Record<string, TableSnapshot>` map alongside `relations` when calling `runCompile()`. `createDbClient`-based call sites are unaffected — `extractSnapshot` already produces the map and threads it through `InternalContext.query.tables`. The dialect-specific compilers (`compilePg`, `compileSqlite`) are not exported from the package barrel, so this signature change is internal.
 
-**Adopter migration:** none for `db.query.X.findMany`-based usage. Adopters calling the dialect compilers directly (rare; mostly internal) need to add the `tables` argument.
+**Adopter migration:** none for supported public APIs, including `db.query.X.findMany`-based usage.
 
 Spec: `docs/db/spec-relational-query-other-dialects.md`. Tests: 13 new SQLite snapshot fixtures mirroring the PG suite + 2 new builder integration tests asserting the SQLite path via `kysely/helpers/sqlite`. Suite at 326 tests (was 312; +14).
