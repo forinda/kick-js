@@ -1,5 +1,107 @@
 # @forinda/kickjs-db
 
+## 5.4.0
+
+### Minor Changes
+
+- [#185](https://github.com/forinda/kick-js/pull/185) [`c601090`](https://github.com/forinda/kick-js/commit/c60109029a59694da9478dd714cb9aea684765fe) Thanks [@forinda](https://github.com/forinda)! - `db.query.X.findMany({ with })` now works on MySQL 8.0+. M4.A.3 from `docs/db/m4-plan.md` — closes the "PG only" caveat that started in v5.3 and shrank with M4.A.2 (SQLite). All three dialects now ship real compilers; the `RelationalQueryNotSupportedError` throw-stub is retired.
+
+  ```ts
+  const db = createDbClient({ schema, dialect: mysqlDialect({ pool }) })
+
+  const rows = await db.query.users.findMany({
+    with: { posts: { with: { comments: true } } },
+    where: (_u, eb) => eb('isActive', '=', true),
+    limit: 20,
+  })
+  ```
+
+  The compiler emits `cast(coalesce(json_arrayagg(json_object(...)), '[]') as json)` for `many` (returns `[]` over zero rows, never `null`) and `JSON_OBJECT(...)` with `LIMIT 1` for `one` (returns `null` over zero rows). Same row-shape contract as PG and SQLite.
+
+  **MySQL 8.0+ required.** `JSON_ARRAYAGG` shipped in 8.0; earlier versions don't have it. The version assertion lands at the adapter layer (`mysqlAdapter()` from `@forinda/kickjs-db-mysql` — M4.A.5) on first connection so adopters get a clear error before any query reaches the compiler. v1 spec R-1.
+
+  **`createDbClient` auto-attaches `ParseJSONResultsPlugin` for MySQL** (alongside SQLite). MySQL drivers return JSON columns as TEXT — without the plugin, nested `with` results would land as JSON-encoded strings.
+
+  **`pickCompiler('mysql')`** now returns the real implementation. The throw-stub is gone; all three dialects are first-class.
+
+  **Adopter migration:** none for `db.query.X.findMany`-based usage. Adopters who previously caught `RelationalQueryNotSupportedError` for a MySQL fallback can remove that branch — the compiler now succeeds.
+
+  Spec: `docs/db/spec-relational-query-other-dialects.md` §3.2. Tests: 13 new MySQL snapshot fixtures mirroring the PG + SQLite suites + 2 new builder integration tests asserting the MySQL path via `kysely/helpers/mysql`. Suite at 341 tests (was 327; +14).
+
+- [#183](https://github.com/forinda/kick-js/pull/183) [`6be566a`](https://github.com/forinda/kick-js/commit/6be566a636fe1bbdd3c0b6b56d048f34c2c759e0) Thanks [@forinda](https://github.com/forinda)! - Add `relationName: 'foo'` to `relations()` for multi-FK disambiguation. Resolves the drizzle-parity gap where two tables share more than one FK to the same target — `messages.senderId` + `messages.recipientId` both referencing `users.id`, with `users.sentMessages` + `users.receivedMessages` walking back the other way.
+
+  After this release, adopters tag matching pairs with the same string:
+
+  ```ts
+  relations(messages, ({ one }) => ({
+    sender: one(users, {
+      fields: [messages.senderId],
+      references: [users.id],
+      relationName: 'sentMessages',
+    }),
+    recipient: one(users, {
+      fields: [messages.recipientId],
+      references: [users.id],
+      relationName: 'receivedMessages',
+    }),
+  }))
+
+  relations(users, ({ many }) => ({
+    sentMessages: many(messages, { relationName: 'sentMessages' }),
+    receivedMessages: many(messages, { relationName: 'receivedMessages' }),
+  }))
+  ```
+
+  The resolver pairs by name first; M3's single-inverse + FK-introspection fallbacks remain for schemas that don't need the disambiguation.
+
+  **Resolution precedence** (`extractRelations`):
+  1. Both sides declare matching `relationName` → use the matched `one`'s columns.
+  2. Single untagged inverse `one` (no `relationName` on either side, exactly one `one` on the target points back at the source) → use it.
+  3. FK introspection — exactly one FK back to the source → use those columns.
+  4. Throw `RelationalQueryMissingInverseError` with a hint to add `relationName`.
+
+  **Behavior change vs M3:** Step 2 now requires the inverse to be **unique**. M3's `findInverseOne` returned the first match without a uniqueness check, which silently picked wrong on multi-FK schemas. M4.B makes those schemas surface as `MissingInverseError` instead of silently joining the wrong way. Single-FK schemas (the common case) behave identically.
+
+  **New public surface:**
+  - `Helpers.one`'s opts gain optional `relationName?: string`.
+  - `Helpers.many`'s second arg becomes optional `{ relationName?: string }` (was required-positional `target` only).
+  - `RelationOne<T>` + `RelationMany<T>` interfaces gain optional `relationName?: string`.
+  - `RelationMapEntry` (and the `KickDbRelationsRegister` augmentation it composes) gain optional `relationName?: string`. The kick/db typegen plugin auto-emits the new field through `SchemaToRelationsRegister<S>` — no plugin update needed.
+  - `RelationSnapshot` (`SchemaSnapshot.relations[*][*]`) gains optional `relationName?: string` for adopters reading the snapshot programmatically.
+  - New error class `RelationalQueryAmbiguousRelationNameError` — thrown when two `one` declarations on the same target share a `relationName` AND point back at the same source. Scope: `(sourceTable, targetTable, relationName)` — adopters can reuse the same tag string across unrelated table pairs (e.g. a generic `'audit'` tag on multiple tables).
+
+  **Migration:** none required for existing schemas. The `relationName` field is optional everywhere; M3 schemas keep compiling unmodified.
+
+  Spec: `docs/db/spec-relation-name.md`. Tracks closing M4.B from `docs/db/m4-plan.md`.
+
+- [#184](https://github.com/forinda/kick-js/pull/184) [`64ff558`](https://github.com/forinda/kick-js/commit/64ff558a2f1cee096f040a93b44d8eb68cd73255) Thanks [@forinda](https://github.com/forinda)! - `db.query.X.findMany({ with })` now works on SQLite. M4.A.2 from `docs/db/m4-plan.md` — closes the "PG only" caveat for SQLite adopters; MySQL ships in M4.A.3.
+
+  The `pickCompiler('sqlite')` path now returns a real implementation (`compileSqlite`) backed by `kysely/helpers/sqlite`'s `jsonArrayFrom` / `jsonObjectFrom`. Same call shape as the PG layer; no adopter code changes:
+
+  ```ts
+  const db = createDbClient({ schema, dialect: sqliteDialect({ database }) })
+
+  const rows = await db.query.users.findMany({
+    with: { posts: { with: { comments: true } } },
+    where: (_u, eb) => eb('isActive', '=', true),
+    limit: 20,
+  })
+  ```
+
+  The compiler emits `coalesce(json_group_array(json_object(...)), '[]')` for `many` (returns `[]` over zero rows, never `null`) and `json_object(...)` with `LIMIT 1` for `one` (returns `null` over zero rows). Same row-shape contract as PG.
+
+  **`createDbClient` auto-attaches `ParseJSONResultsPlugin` for SQLite.** SQLite drivers return JSON columns as TEXT; without the plugin, nested `with` results would land as JSON-encoded strings. Adopters who already register the plugin manually pay no penalty — the plugin chain runs each plugin in order, and a second pass over already-parsed values is a no-op. PG clients skip the plugin (the PG driver decodes JSON natively).
+
+  **Refactor — shared traversal.** Internally, `compile-pg.ts` and `compile-sqlite.ts` are now thin wrappers around `compile-shared.ts`'s `runCompile()`. The traversal logic (alias generation, `with`-walking, `where` / `orderBy` / `limit` / `offset` plumbing) lives in one place; per-dialect files supply only the right Kysely helper bag. MySQL drops in the same way once M4.A.3 lands.
+
+  **Behavior change in `buildInnerSelect`** — emits explicit `.select([col1, col2, ...])` from the snapshot's column list instead of `.selectAll()`. Required because SQLite's `jsonArrayFrom` / `jsonObjectFrom` helpers can't introspect `selectAll()` to build the JSON object's key list. PG's helpers accept both forms; this change is invisible to adopters but produces slightly more verbose SQL on PG.
+
+  **Internal refactor note:** the shared compiler path now threads a `tables: Record<string, TableSnapshot>` map alongside `relations` when calling `runCompile()`. `createDbClient`-based call sites are unaffected — `extractSnapshot` already produces the map and threads it through `InternalContext.query.tables`. The dialect-specific compilers (`compilePg`, `compileSqlite`) are not exported from the package barrel, so this signature change is internal.
+
+  **Adopter migration:** none for supported public APIs, including `db.query.X.findMany`-based usage.
+
+  Spec: `docs/db/spec-relational-query-other-dialects.md`. Tests: 13 new SQLite snapshot fixtures mirroring the PG suite + 2 new builder integration tests asserting the SQLite path via `kysely/helpers/sqlite`. Suite at 326 tests (was 312; +14).
+
 ## 5.3.0
 
 ### Minor Changes
