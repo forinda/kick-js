@@ -13,14 +13,21 @@ import {
  * structural surface of `mysql2/promise`'s Pool. The adapter only
  * uses `query(...)` and `getConnection(...)` so any mysql2-compatible
  * driver works.
+ *
+ * Return type is `Promise<[R, unknown]>` (not `[R[], unknown]`) so
+ * mysql2's `Pool.query()` is structurally assignable: SELECT
+ * statements return `RowDataPacket[]` (so callers pass `R =
+ * MyRow[]`), INSERT / UPDATE / DELETE return `ResultSetHeader` (so
+ * callers pass `R = ResultSetHeader`). Each adapter call site picks
+ * the row shape it expects via the type parameter.
  */
 export interface MysqlConnectionLike {
-  query<R = unknown>(sql: string, params?: readonly unknown[]): Promise<[R[], unknown]>
+  query<R = unknown>(sql: string, params?: readonly unknown[]): Promise<[R, unknown]>
   release(): void
 }
 
 export interface MysqlPoolLike {
-  query<R = unknown>(sql: string, params?: readonly unknown[]): Promise<[R[], unknown]>
+  query<R = unknown>(sql: string, params?: readonly unknown[]): Promise<[R, unknown]>
   getConnection(): Promise<MysqlConnectionLike>
 }
 
@@ -34,35 +41,207 @@ export interface MysqlAdapterOptions {
 }
 
 /**
- * Minimum supported MySQL major version. JSON_ARRAYAGG shipped in
- * 8.0; earlier versions can't run kickjs-db's relational query layer.
+ * Minimum supported MySQL major + MariaDB version. `JSON_ARRAYAGG`
+ * shipped in MySQL 8.0 and MariaDB 10.5 — earlier versions can't
+ * run kickjs-db's relational query layer.
+ *
  * Spec: docs/db/spec-relational-query-other-dialects.md §7 R-1.
  */
 const MIN_MYSQL_MAJOR = 8
+const MIN_MARIADB_MAJOR = 10
+const MIN_MARIADB_MINOR = 5
 
 /**
- * Parse a MySQL version string into a major version number. MySQL's
- * `SELECT VERSION()` returns shapes like `8.0.34`, `8.4.0`,
- * `5.7.42-log`, `10.6.11-MariaDB-...`. We only care about the
- * leading integer for the floor check; MariaDB's 10.x is treated
- * as 10 (above the 8 floor).
+ * Parsed shape returned by `parseMysqlVersion`. `flavor` lets
+ * adopters distinguish MySQL from MariaDB without re-grepping the
+ * raw string.
  */
-export function parseMysqlMajorVersion(version: string): number | null {
-  const m = /^(\d+)\./.exec(version.trim())
+export interface ParsedMysqlVersion {
+  flavor: 'mysql' | 'mariadb'
+  major: number
+  minor: number
+}
+
+/**
+ * Parse a MySQL `SELECT VERSION()` string. Handles:
+ *
+ *   - MySQL: `8.0.34`, `8.4.0`, `5.7.42-log`
+ *   - MariaDB: `10.6.11-MariaDB-1:10.6.11+maria~ubu2004`,
+ *              `10.5.21-MariaDB-log`, `10.4.32-MariaDB`
+ *
+ * Returns `null` on unparseable input.
+ */
+export function parseMysqlVersion(version: string): ParsedMysqlVersion | null {
+  const trimmed = version.trim()
+  const m = /^(\d+)\.(\d+)/.exec(trimmed)
   if (!m) return null
   const major = Number(m[1])
-  return Number.isFinite(major) ? major : null
+  const minor = Number(m[2])
+  if (!Number.isFinite(major) || !Number.isFinite(minor)) return null
+  const flavor: ParsedMysqlVersion['flavor'] = /MariaDB/i.test(trimmed) ? 'mariadb' : 'mysql'
+  return { flavor, major, minor }
+}
+
+/**
+ * Back-compat shim — pre-existing API surface that returned the
+ * major version only. Kept exported so adopters depending on it
+ * keep working; new code should use `parseMysqlVersion`.
+ *
+ * @deprecated Use `parseMysqlVersion` for full version + flavor info.
+ */
+export function parseMysqlMajorVersion(version: string): number | null {
+  const parsed = parseMysqlVersion(version)
+  return parsed?.major ?? null
+}
+
+/**
+ * Returns the failure reason if the parsed version doesn't satisfy
+ * kickjs-db's floor, or `null` if it does. Pure — no I/O.
+ */
+function checkVersionSupport(parsed: ParsedMysqlVersion | null, raw: string): string | null {
+  if (parsed == null) {
+    return `unparseable version string: ${raw || '<empty>'}`
+  }
+  if (parsed.flavor === 'mariadb') {
+    if (parsed.major > MIN_MARIADB_MAJOR) return null
+    if (parsed.major < MIN_MARIADB_MAJOR) {
+      return `MariaDB ${MIN_MARIADB_MAJOR}.${MIN_MARIADB_MINOR}+ required (detected: ${raw})`
+    }
+    if (parsed.minor < MIN_MARIADB_MINOR) {
+      return `MariaDB ${MIN_MARIADB_MAJOR}.${MIN_MARIADB_MINOR}+ required (detected: ${raw})`
+    }
+    return null
+  }
+  // MySQL flavor.
+  if (parsed.major < MIN_MYSQL_MAJOR) {
+    return `MySQL ${MIN_MYSQL_MAJOR}.0+ required (detected: ${raw})`
+  }
+  return null
+}
+
+/**
+ * Split a SQL blob into individual statements at the top-level `;`
+ * boundary. Respects single-quote / double-quote / backtick string
+ * literals AND `--` line comments + C-style block comments —
+ * `;` inside any of those does not terminate a statement.
+ *
+ * mysql2's default `Pool.query()` rejects multi-statement SQL unless
+ * the driver was created with `multipleStatements: true`. Splitting
+ * lets the adapter run kickjs-emitted DDL (multi-statement, but
+ * always semicolon-separated at the top level) without that flag.
+ *
+ * Adopter-written migrations with pathological SQL — e.g. `;` in
+ * an unterminated block comment — won't split correctly.
+ * Documented in the README; turn on `multipleStatements: true` on
+ * the pool if you hit it.
+ */
+export function splitMysqlStatements(sql: string): string[] {
+  const out: string[] = []
+  let buf = ''
+  let inSingle = false
+  let inDouble = false
+  let inBacktick = false
+  let inLineComment = false
+  let inBlockComment = false
+
+  for (let i = 0; i < sql.length; i++) {
+    const ch = sql[i]
+    const next = i + 1 < sql.length ? sql[i + 1] : ''
+
+    if (inLineComment) {
+      buf += ch
+      if (ch === '\n') inLineComment = false
+      continue
+    }
+    if (inBlockComment) {
+      buf += ch
+      if (ch === '*' && next === '/') {
+        buf += next
+        i++
+        inBlockComment = false
+      }
+      continue
+    }
+    if (inSingle) {
+      buf += ch
+      if (ch === '\\' && next != null) {
+        buf += next
+        i++
+        continue
+      }
+      if (ch === "'") inSingle = false
+      continue
+    }
+    if (inDouble) {
+      buf += ch
+      if (ch === '\\' && next != null) {
+        buf += next
+        i++
+        continue
+      }
+      if (ch === '"') inDouble = false
+      continue
+    }
+    if (inBacktick) {
+      buf += ch
+      if (ch === '`') inBacktick = false
+      continue
+    }
+
+    if (ch === '-' && next === '-') {
+      buf += ch
+      inLineComment = true
+      continue
+    }
+    if (ch === '/' && next === '*') {
+      buf += ch
+      inBlockComment = true
+      continue
+    }
+    if (ch === "'") {
+      buf += ch
+      inSingle = true
+      continue
+    }
+    if (ch === '"') {
+      buf += ch
+      inDouble = true
+      continue
+    }
+    if (ch === '`') {
+      buf += ch
+      inBacktick = true
+      continue
+    }
+    if (ch === ';') {
+      const trimmed = buf.trim()
+      if (trimmed.length > 0) out.push(trimmed)
+      buf = ''
+      continue
+    }
+    buf += ch
+  }
+
+  const tail = buf.trim()
+  if (tail.length > 0) out.push(tail)
+  return out
 }
 
 /**
  * MigrationAdapter implementation backed by mysql2.
  *
- * Asserts MySQL 8.0+ on first connection (via the first
- * `ensureMigrationTables` call, lazily — no I/O at construction
- * time). Earlier versions throw `KickDbError` with code
- * `KICK_DB_RELATIONAL_NOT_SUPPORTED` carrying the detected version
- * so adopters get a clear error before any query reaches the
- * relational compiler.
+ * Asserts MySQL 8.0+ (or MariaDB 10.5+) on first connection (via
+ * the first `ensureMigrationTables` call, lazily — no I/O at
+ * construction time). Earlier versions throw `KickDbError` with
+ * code `KICK_DB_RELATIONAL_NOT_SUPPORTED` carrying the detected
+ * version so adopters get a clear error before any query reaches
+ * the relational compiler.
+ *
+ * Multi-statement support: every `query()` call splits the SQL
+ * blob at top-level semicolons and runs each statement
+ * sequentially. Works against mysql2's default settings; adopters
+ * who set `multipleStatements: true` on the pool pay no extra
+ * cost (the split is cheap on small DDL blobs).
  *
  * Lock semantics: single-row UPDATE WHERE locked_at IS NULL on
  * `kick_migrations_lock`. Only the row created by
@@ -81,18 +260,40 @@ export function mysqlAdapter(opts: MysqlAdapterOptions): MigrationAdapter {
 
   async function assertVersion() {
     if (versionVerified) return
-    const [rows] = await pool.query<{ version: string }>(`SELECT VERSION() AS \`version\``)
+    const [rows] = await pool.query<{ version: string }[]>(`SELECT VERSION() AS \`version\``)
     const versionString = rows[0]?.version ?? ''
-    const major = parseMysqlMajorVersion(versionString)
-    if (major == null || major < MIN_MYSQL_MAJOR) {
+    const parsed = parseMysqlVersion(versionString)
+    const failure = checkVersionSupport(parsed, versionString)
+    if (failure) {
       throw new KickDbError(
         'KICK_DB_RELATIONAL_NOT_SUPPORTED',
-        `MySQL ${MIN_MYSQL_MAJOR}.0+ required for the relational query layer ` +
-          `(JSON_ARRAYAGG shipped in 8.0); detected version: ${versionString || '<unknown>'}. ` +
-          `Use a layer-1/layer-2 query (selectFrom / selectAll) on older MySQL versions.`,
+        `${failure}. JSON_ARRAYAGG (required by the relational query layer) shipped in ` +
+          `MySQL 8.0 and MariaDB 10.5. Use layer-1/layer-2 queries (selectFrom / selectAll) ` +
+          `on older versions.`,
       )
     }
     versionVerified = true
+  }
+
+  /**
+   * Run a (possibly multi-statement) SQL blob via the pool,
+   * splitting at top-level `;` so default mysql2 settings work.
+   */
+  async function runStatements(sql: string): Promise<void> {
+    for (const stmt of splitMysqlStatements(sql)) {
+      await pool.query(stmt)
+    }
+  }
+
+  /**
+   * Same as `runStatements` but on a held connection (used inside
+   * `applySqlInTx` so all statements share the BEGIN / COMMIT
+   * boundary).
+   */
+  async function runStatementsOnConn(conn: MysqlConnectionLike, sql: string): Promise<void> {
+    for (const stmt of splitMysqlStatements(sql)) {
+      await conn.query(stmt)
+    }
   }
 
   return {
@@ -100,19 +301,21 @@ export function mysqlAdapter(opts: MysqlAdapterOptions): MigrationAdapter {
 
     async ensureMigrationTables() {
       await assertVersion()
-      await pool.query(migrationsTableDdl(dialect))
-      await pool.query(lockTableDdl(dialect))
+      await runStatements(migrationsTableDdl(dialect))
+      await runStatements(lockTableDdl(dialect))
     },
 
     async listApplied(): Promise<MigrationRow[]> {
-      const [rows] = await pool.query<{
-        id: string
-        name: string
-        hash: string
-        batch: number
-        applied_at: string | Date
-        direction: 'up' | 'down'
-      }>(
+      const [rows] = await pool.query<
+        Array<{
+          id: string
+          name: string
+          hash: string
+          batch: number
+          applied_at: string | Date
+          direction: 'up' | 'down'
+        }>
+      >(
         `SELECT id, name, hash, batch, applied_at, direction
          FROM \`kick_migrations\`
          ORDER BY applied_at ASC, id ASC`,
@@ -141,14 +344,12 @@ export function mysqlAdapter(opts: MysqlAdapterOptions): MigrationAdapter {
     },
 
     async acquireLock(owner: string): Promise<boolean> {
-      // mysql2's query() returns [result, fields] for UPDATE where
-      // result has affectedRows. Cast through unknown to the result.
-      const [result] = (await pool.query(
+      const [result] = await pool.query<{ affectedRows: number }>(
         `UPDATE \`kick_migrations_lock\`
          SET locked_at = CURRENT_TIMESTAMP, locked_by = ?
          WHERE id = 1 AND locked_at IS NULL`,
         [owner],
-      )) as unknown as [{ affectedRows: number }, unknown]
+      )
       return result.affectedRows === 1
     },
 
@@ -164,7 +365,7 @@ export function mysqlAdapter(opts: MysqlAdapterOptions): MigrationAdapter {
       const conn = await pool.getConnection()
       try {
         await conn.query('START TRANSACTION')
-        await conn.query(sql)
+        await runStatementsOnConn(conn, sql)
         await conn.query('COMMIT')
       } catch (err) {
         await conn.query('ROLLBACK').catch(() => {
@@ -177,7 +378,7 @@ export function mysqlAdapter(opts: MysqlAdapterOptions): MigrationAdapter {
     },
 
     async applySqlNoTx(sql: string) {
-      await pool.query(sql)
+      await runStatements(sql)
     },
 
     async introspect(): Promise<SchemaSnapshot> {

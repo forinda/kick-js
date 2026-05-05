@@ -28,12 +28,13 @@ const migrationAdapter = sqliteAdapter({ database })
 
 ## `@forinda/kickjs-db-mysql` (initial release: 0.1.0)
 
-mysql2 adapter for `@forinda/kickjs-db`. **MySQL 8.0+ required** (the relational layer compiles to `JSON_ARRAYAGG`, which shipped in 8.0).
+mysql2 adapter for `@forinda/kickjs-db`. **MySQL 8.0+ / MariaDB 10.5+ required** (the relational layer compiles to `JSON_ARRAYAGG`, which shipped in MySQL 8.0 and MariaDB 10.5).
 
 - **`mysqlDialect({ pool })`** — wraps Kysely's `MysqlDialect`.
-- **`mysqlAdapter({ pool })`** — implements `MigrationAdapter`. Asserts the MySQL version on first connection (lazy — no I/O at construction time). Throws `KickDbError(KICK_DB_RELATIONAL_NOT_SUPPORTED)` on MySQL 5.x / unparseable version strings, with the detected version in the error message.
-- **MariaDB 10.x+** is treated as supported (its `JSON_ARRAYAGG` shipped in 10.5).
-- **`parseMysqlMajorVersion(version)`** — exposed for adopters who want to run the same check in their own boot logic.
+- **`mysqlAdapter({ pool })`** — implements `MigrationAdapter`. Asserts the version on first connection (lazy — no I/O at construction time). Throws `KickDbError(KICK_DB_RELATIONAL_NOT_SUPPORTED)` on MySQL 5.x / MariaDB 10.0–10.4 / unparseable version strings, with the detected version in the error message.
+- **Per-flavor version floor** — MySQL needs major `>= 8`; MariaDB needs `>= 10.5`. The adapter detects the flavor from the version string and applies the right floor.
+- **Multi-statement splitter** — mysql2's default `Pool.query()` rejects multi-statement SQL unless `multipleStatements: true` is set. The adapter splits SQL blobs at top-level `;` boundaries (respecting string literals + `--` and C-style block comments) so kickjs-generated migrations apply out of the box.
+- **`parseMysqlVersion(version)`** + **`parseMysqlMajorVersion(version)`** + **`splitMysqlStatements(sql)`** — all exposed for adopters who want the same checks / splitter in their own boot logic.
 - **Drift detection** is a follow-up — same `KICK_DB_INTROSPECT_NOT_SUPPORTED` story as the SQLite adapter; the `information_schema` walk lands later.
 
 ```ts
