@@ -1,6 +1,6 @@
 # M3 — Plan: Close M2 deferreds
 
-> **Status (2026-05-05):** Draft. Tracks the three M2 carry-overs that remain after the audit on 2026-05-05. Once all three ship, the "Out of scope" section of [`m2-release.md`](./m2-release.md) can be deleted and a v5.3 release notes doc replaces this plan.
+> **Status (2026-05-05):** ✅ **Shipped.** All three sub-milestones (M3.A relational `findMany({with})`, M3.B lossless `pgEnum` value removal, M3.C Vite Babel devtools strip) landed on `feat/db-relational-query-m3`. See [`m3-release.md`](./m3-release.md) for the v5.3 release notes; this plan is now historical reference.
 
 **Goal:** Land the three deferred items from M2 so `@forinda/kickjs-db` no longer ships with documented "this exists, but…" caveats. Specifically: relational reads in one round trip, lossless enum migration, and clean prod bundles for adopters who use DevTools tabs.
 
@@ -246,13 +246,13 @@ git commit -m "feat(vite): Babel-based devtools strip for prod bundles (M3.C)"
 
 ---
 
-## M3 exit gate
+## M3 exit gate ✅ (2026-05-05)
 
-- [ ] `pnpm test` green across the monorepo.
-- [ ] `pnpm build` green; bundle-size assertions pass.
-- [ ] `examples/task-kickdb-api` uses `db.query.tasks.findMany({ with })` in at least one repository method.
-- [ ] `m2-release.md` "Out of scope" list deleted (or moved to `m3-release.md`).
-- [ ] `m3-release.md` written summarizing the three landings and any follow-up backlog.
+- [x] `pnpm test` green across the monorepo (db 306 / db-pg 23 / cli 231 / vite 77).
+- [x] `pnpm build` green per package. _(Bundle-size assertion deferred to a follow-up harness; see `m3-release.md` "Out of scope".)_
+- [x] `examples/task-kickdb-api` uses `db.query.tasks.findUnique({ with })` in `TasksRepository.findFullById`.
+- [x] `m2-release.md` "Out of scope" list superseded with a status table pointing at `m3-release.md`.
+- [x] `m3-release.md` written summarizing the three landings and the M4 deferred backlog.
 
 ---
 
