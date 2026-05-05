@@ -1,5 +1,6 @@
 import type { ColumnBuilder } from '../dsl/columns/types'
 import type { TableDecl } from '../dsl/table'
+import { extractRelations } from '../query/extract-relations'
 import type {
   Dialect,
   EnumSnapshot,
@@ -49,12 +50,23 @@ export function extractSnapshot(schema: Record<string, unknown>, dialect: Dialec
     }
   }
 
+  const relations = extractRelations(schema, tables)
+
   // Only carry `enums` on PG snapshots — other dialects don't define
   // them and an empty record would just bloat the diff output.
-  if (dialect === 'postgres' && Object.keys(enums).length > 0) {
-    return { version: 1, dialect, tables, enums }
+  // `relations` is dialect-agnostic (query-time sugar) but we still
+  // omit it when absent to keep snapshots minimal for adopters who
+  // don't use the relational query layer.
+  const enumsField = dialect === 'postgres' && Object.keys(enums).length > 0 ? { enums } : null
+  const relationsField = relations ? { relations } : null
+
+  return {
+    version: 1,
+    dialect,
+    tables,
+    ...enumsField,
+    ...relationsField,
   }
-  return { version: 1, dialect, tables }
 }
 
 function extractTable(t: TableDecl<string, Record<string, ColumnBuilder>>): TableSnapshot {

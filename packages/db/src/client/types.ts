@@ -1,6 +1,7 @@
 import type { Kysely, Dialect as KyselyDialect } from 'kysely'
 
 import type { RegisteredDB } from './register'
+import type { QueryNamespace } from '../query/types'
 
 export interface QueryEvent {
   sql: string
@@ -77,6 +78,20 @@ export interface KickDbClient<DB = RegisteredDB> {
   insertInto: Kysely<DB>['insertInto']
   updateTable: Kysely<DB>['updateTable']
   deleteFrom: Kysely<DB>['deleteFrom']
+
+  /**
+   * Relational query namespace — `db.query.users.findMany({ with: {
+   * posts: true } })`. PG-only in v1; SQLite + MySQL adopters get a
+   * `RelationalQueryNotSupportedError` on first call. The shape is
+   * inferred from the local `DB` generic (which itself defaults to
+   * `RegisteredDB` so adopters using the bare `KickDbClient` still
+   * see the right table set).
+   *
+   * Available `with` keys come from the `KickDbRelationsRegister`
+   * augmentation emitted by the kick/db typegen plugin alongside
+   * the column-shape augmentation.
+   */
+  readonly query: QueryNamespace<DB>
 
   on<E extends keyof KickDbClientEvents>(
     event: E,

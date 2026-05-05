@@ -114,10 +114,20 @@ packages/vite/src/
 - [x] `packages/db/__tests__/unit/query-compile.test.ts` — 16 fixtures: bare findMany, 1-deep many, 1-deep one, 2-deep many→many, 2-deep one→many, self-ref grandchild, per-relation where/limit, outer where/orderBy/limit/offset, `first` + `unique` modes, explicit-limit override, unknown-key throw, depth-1 throw, max-5 accept, depth-6 throw. **All 16 passing.**
 - [x] Full db suite green: **49 files, 275 tests** (was 259 pre-A.3 → +16 from this step). Typecheck clean.
 
-### Step A.4 — Runtime
+### Step A.4 — Runtime ✅ (2026-05-05)
 
-- [ ] `packages/db/src/query/builder.ts` — wires `db.query` onto `KickDbClient` via `$extends`-style augmentation (reuse the existing extension plumbing, do not bolt on a parallel system).
-- [ ] Re-export from `packages/db/src/index.ts`.
+- [x] `packages/db/src/query/extract-relations.ts` — resolves `relations()` declarations into the JSON-serializable sidecar. `one` straight from `fields/references`; `many` via inverse `one` lookup, then FK introspection fallback (preserves M0/M1 schemas that declare `many` only). Throws `RelationalQueryAliasCollisionError` on column-name shadow + `RelationalQueryMissingInverseError` when neither inverse nor FK can resolve.
+- [x] `packages/db/src/snapshot/types.ts` — added optional `relations?: Record<string, Record<string, RelationSnapshot>>` to `SchemaSnapshot`. JSON-serializable; migration pipeline ignores.
+- [x] `packages/db/src/snapshot/extract.ts` — `extractSnapshot` now populates the relations sidecar via `extractRelations`. Absent when no relations are declared (no shape change for callers that skip the query layer).
+- [x] `packages/db/src/query/compilers.ts` — `pickCompiler(dialect)` returns `compilePg` for postgres, throw-stub for sqlite/mysql.
+- [x] `packages/db/src/query/builder.ts` — `buildQueryNamespace(qb, relations, compile)` returns a Proxy-based `QueryNamespace<DB>`. Each method calls the compiler then `qb.executeQuery(compiled)`, returning rows.
+- [x] `packages/db/src/client/types.ts` — `KickDbClient<DB>.query: QueryNamespace<DB>` is now a public field.
+- [x] `packages/db/src/client/wrap.ts` — `InternalContext.query = { relations, compile }` threads through; `wrap()` attaches `query` automatically (works inside transactions + savepoints + `$extends` re-wraps).
+- [x] `packages/db/src/client/create.ts` — calls `extractSnapshot` once at boot to resolve relations, picks the dialect compiler, populates the InternalContext. `detectDialect` now also inspects the adapter class so hand-rolled `KyselyDialect` literals (used by tests) are recognized correctly.
+- [x] `packages/db/src/index.ts` — re-exports public surface: `FindManyOptions`, `FindManyRow`, `WithClause`, `KickDbRelationsRegister`, `RegisteredRelations`, `RelationMapEntry`, `TableRelations`, `QueryNamespace`, `TableQueryNamespace`, `ResolvedRelation`, `ResolvedRelations`, `RelationSnapshot`, plus the four error classes.
+- [x] `packages/db/__tests__/unit/extract-relations.test.ts` — 8 tests: resolve `one`, resolve `many` via inverse, FK fallback, missing-inverse error, alias-collision error, undefined-when-empty, sidecar wired into snapshot, self-reference. **All passing.**
+- [x] `packages/db/__tests__/unit/query-builder.test.ts` — 8 end-to-end tests via `createDbClient` + `DummyDriver`: PG happy paths (findMany / findMany-with-with / findFirst / findFirst-empty / findUnique / Proxy materialization) + SQLite + MySQL throw-paths. **All passing.**
+- [x] Full db suite: **51 files, 292 passing** (+17 vs pre-A.4 baseline). db-pg suite green at 17. Build clean.
 
 ### Step A.5 — Integration
 
