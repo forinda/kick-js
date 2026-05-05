@@ -72,20 +72,40 @@ export function compilePg<DB>(
 ): CompiledQuery {
   const maxDepth = options.maxDepth ?? DEFAULT_MAX_DEPTH
 
-  let query: any = (db.selectFrom(table as any) as any).selectAll()
+  // Every level gets a unique alias derived from the table name +
+  // depth index. Without aliasing, a self-referencing table
+  // (`categories.children → categories`) reuses the same name at the
+  // outer and inner FROM clauses; PG resolves correlated `whereRef`
+  // against the inner-most match, producing the wrong join. Aliasing
+  // every level (even when names don't clash) keeps the rule
+  // uniform and the SQL predictable.
+  const outerAlias = makeAlias(table, 0)
+  let query: any = (db.selectFrom(`${table} as ${outerAlias}` as any) as any).selectAll()
 
   if (options.with) {
-    query = applyWithSelects(query, table, options.with, relations, maxDepth, [table])
+    query = applyWithSelects(query, table, outerAlias, options.with, relations, maxDepth, [
+      outerAlias,
+    ])
   }
 
-  query = applyWhereOrderLimit(query, table, options, mode)
+  query = applyWhereOrderLimit(query, outerAlias, options, mode)
 
   return query.compile() as CompiledQuery
+}
+
+/**
+ * Build a stable alias from a table name + depth index. The depth
+ * suffix disambiguates self-referencing or cyclic relations
+ * without leaking the trace into the SQL identifier.
+ */
+function makeAlias(name: string, depth: number): string {
+  return `${name}_${depth}`
 }
 
 function applyWithSelects(
   query: any,
   source: string,
+  sourceAlias: string,
   withClause: Record<string, true | CompilePgOptions>,
   relations: ResolvedRelations,
   maxDepth: number,
@@ -104,7 +124,17 @@ function applyWithSelects(
       }
 
       const subOptions: CompilePgOptions = value === true ? {} : value
-      const inner = buildInnerSelect(eb, source, rel, subOptions, relations, maxDepth, trace)
+      const innerAlias = makeAlias(rel.target, trace.length)
+      const inner = buildInnerSelect(
+        eb,
+        sourceAlias,
+        rel,
+        innerAlias,
+        subOptions,
+        relations,
+        maxDepth,
+        trace,
+      )
 
       if (rel.kind === 'many') {
         out.push(jsonArrayFrom(inner as Expression<unknown>).as(key))
@@ -118,30 +148,39 @@ function applyWithSelects(
 
 function buildInnerSelect(
   eb: ExpressionBuilder<any, any>,
-  sourceTable: string,
+  sourceAlias: string,
   rel: ResolvedRelation,
+  innerAlias: string,
   subOptions: CompilePgOptions,
   relations: ResolvedRelations,
   maxDepth: number,
   trace: readonly string[],
 ): any {
-  let sub: any = (eb.selectFrom(rel.target as any) as any).selectAll()
+  let sub: any = (eb.selectFrom(`${rel.target} as ${innerAlias}` as any) as any).selectAll()
 
   for (let i = 0; i < rel.sourceColumns.length; i++) {
     sub = sub.whereRef(
-      `${rel.target}.${rel.targetColumns[i]}`,
+      `${innerAlias}.${rel.targetColumns[i]}`,
       '=',
-      `${sourceTable}.${rel.sourceColumns[i]}`,
+      `${sourceAlias}.${rel.sourceColumns[i]}`,
     )
   }
 
-  const nextTrace = [...trace, rel.target]
+  const nextTrace = [...trace, innerAlias]
 
   if (subOptions.with) {
-    sub = applyWithSelects(sub, rel.target, subOptions.with, relations, maxDepth, nextTrace)
+    sub = applyWithSelects(
+      sub,
+      rel.target,
+      innerAlias,
+      subOptions.with,
+      relations,
+      maxDepth,
+      nextTrace,
+    )
   }
 
-  sub = applyWhereOrderLimit(sub, rel.target, subOptions, 'many')
+  sub = applyWhereOrderLimit(sub, innerAlias, subOptions, 'many')
 
   if (rel.kind === 'one') {
     sub = sub.limit(1)

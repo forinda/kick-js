@@ -57,16 +57,14 @@ export function extractSnapshot(schema: Record<string, unknown>, dialect: Dialec
   // `relations` is dialect-agnostic (query-time sugar) but we still
   // omit it when absent to keep snapshots minimal for adopters who
   // don't use the relational query layer.
-  const enumsField = dialect === 'postgres' && Object.keys(enums).length > 0 ? { enums } : null
-  const relationsField = relations ? { relations } : null
-
-  return {
-    version: 1,
-    dialect,
-    tables,
-    ...enumsField,
-    ...relationsField,
+  const snapshot: SchemaSnapshot = { version: 1, dialect, tables }
+  if (dialect === 'postgres' && Object.keys(enums).length > 0) {
+    snapshot.enums = enums
   }
+  if (relations) {
+    snapshot.relations = relations
+  }
+  return snapshot
 }
 
 function extractTable(t: TableDecl<string, Record<string, ColumnBuilder>>): TableSnapshot {

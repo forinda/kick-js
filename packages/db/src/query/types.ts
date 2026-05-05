@@ -90,18 +90,29 @@ export type TableRelations<Table extends string> = Table extends keyof Registere
   : Record<string, never>
 
 /**
- * Operator helpers exposed inside `where` / `orderBy` callbacks.
- * Delegates to Kysely's `ExpressionBuilder` directly — `ops.eq`,
- * `ops.and`, `ops.or`, etc. are Kysely's surface verbatim.
+ * Kysely's `ExpressionBuilder` exposed verbatim as the second arg
+ * to `where` / `orderBy` callbacks. Adopters use the callable form:
+ *
+ *   where:   (_u, eb) => eb('isActive', '=', true)
+ *   orderBy: (_u, eb) => eb.ref('createdAt')
+ *
+ * Helpers like `eb.and(...)`, `eb.or(...)`, `eb.ref('col')`,
+ * `eb.fn.count(...)` are Kysely's standard surface. There is no
+ * `eb.eq` — that's the callable form. There is no `eb.desc` —
+ * order direction lands as a separate Kysely call (e.g. wrap the
+ * ref expression in `sql\`... desc\``) when needed in v1.
  */
 export type QueryOps<DB, Table extends keyof DB & string> = ExpressionBuilder<DB, Table>
 
 /**
- * The table-bound shape passed as the first arg to callbacks. The row
- * shape is `DB[Table]` — adopters reach for individual columns via
- * `(u, ops) => ops.eq(u.id, x)` where `u.id` is just the row field's
- * TS type. Operator-bound column references come through
- * `ops.ref('id')` for adopters who need the Kysely escape.
+ * The table-bound shape passed as the first arg to callbacks. The
+ * declared shape is `DB[Table]`, so `u.id` resolves to the row
+ * field's TS type at compile time — handy for type-narrowing in
+ * adapter-side helpers. At runtime, the same `u` is a Proxy whose
+ * property reads return Kysely column refs (`eb.ref('users.id')`),
+ * so `eb('id', '=', u.id)` Just Works for either layer-1 or
+ * relational-query call sites. Most adopters keep the first arg
+ * underscored and reach for `eb('col', op, value)` directly.
  */
 export type TableRefs<DB, Table extends keyof DB & string> = DB[Table]
 

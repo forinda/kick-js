@@ -14,7 +14,13 @@ import {
 import { users } from './users.ts'
 import { workspaces } from './workspaces.ts'
 
-interface StatusColumn {
+// Exported so TS can name `StatusColumn` from the inferred type of
+// `projects.statusColumns` when other modules read it transitively
+// through `relations()` declarations. M3.A.7 narrowed
+// `relations()`'s return type to preserve the literal source name +
+// builder shape, which surfaces internal column types up through
+// the relations file's exports.
+export interface StatusColumn {
   name: string
   order: number
   color: string

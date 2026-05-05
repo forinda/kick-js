@@ -34,9 +34,9 @@
 
 ```ts
 db.query.users.findMany({
-  where: (u, ops) => ops.eq(u.isActive, true),
+  where: (_u, eb) => eb('isActive', '=', true),
   with: { posts: true, profile: true },
-  orderBy: (u, ops) => ops.desc(u.createdAt),
+  orderBy: (_u, eb) => eb.ref('createdAt'),
   limit: 20,
   offset: 0,
 })
@@ -44,8 +44,10 @@ db.query.users.findMany({
 db.query.users.findFirst({
   /* same options */
 })
-db.query.users.findUnique({ where: (u, ops) => ops.eq(u.id, '...') })
+db.query.users.findUnique({ where: (_u, eb) => eb('id', '=', '...') })
 ```
+
+The second argument is Kysely's `ExpressionBuilder` directly — adopters use the callable form (`eb('col', op, value)`) and `eb.ref('col')` for ordering. The first argument is a typed table-ref proxy: `(u, eb) => eb('id', '=', x)` works fine, but reading `u.id` at runtime returns a Kysely `eb.ref('users.id')` rather than a value, so most adopters keep it underscored.
 
 ### 2.2 `with` clause shapes
 
@@ -57,8 +59,8 @@ db.query.users.findUnique({ where: (u, ops) => ops.eq(u.id, '...') })
 {
   with: {
     posts: {
-      where:   (p, ops) => ops.isNotNull(p.publishedAt),
-      orderBy: (p, ops) => ops.desc(p.publishedAt),
+      where:   (_p, eb) => eb('publishedAt', 'is not', null),
+      orderBy: (_p, eb) => eb.ref('publishedAt'),
       limit:   5,
       with:    { comments: true },
     },

@@ -54,22 +54,19 @@ Step 3 fails loudly if any row holds a removed value — exactly the safety chec
 -- column USING clauses below to confirm rows holding a removed
 -- value will fail loudly rather than silently coerce.
 
-BEGIN;
-  ALTER TYPE "task_priority" RENAME TO "task_priority__old";
-  CREATE TYPE "task_priority" AS ENUM ('critical', 'high', 'medium', 'low', 'none');
-  ALTER TABLE "tasks"
-    ALTER COLUMN "priority" TYPE "task_priority"
-    USING "priority"::text::"task_priority";
-  DROP TYPE "task_priority__old";
-COMMIT;
+ALTER TYPE "task_priority" RENAME TO "task_priority__old";
+CREATE TYPE "task_priority" AS ENUM ('critical', 'high', 'medium', 'low', 'none');
+ALTER TABLE "tasks"
+  ALTER COLUMN "priority" TYPE "task_priority"
+  USING "priority"::text::"task_priority";
+DROP TYPE "task_priority__old";
 ```
 
 Header rules:
 
 - The literal string `-- KICK ENUM REMOVE` on its own line is the runner's recognition signal. Case-sensitive, trimmed.
 - Subsequent `-- key: value` lines (`enum:`, `removed:`, `columns:`) carry the diagnostic payload the runner echoes back when it refuses.
-- The `BEGIN; … COMMIT;` block is **explicit in the SQL**, not delegated to the adapter's `applySqlInTx` wrapper. Reason: the runner refuses before the SQL ever reaches the adapter; the wrapper would never see it.
-- `meta.json` carries `transaction: false` so the adapter doesn't double-wrap the explicit block.
+- **No explicit `BEGIN; … COMMIT;`** — the runner wraps every up.sql in `applySqlInTx` by default, and PG DDL is transactional. The four-statement dance commits or rolls back as one unit. An explicit BEGIN inside the runner's outer transaction would either NOTICE-warn (PG's behavior) and short-circuit on the inner COMMIT, or require synchronizing `meta.json: { transaction: false }` for every emit — both fragile.
 
 ## 4. Runner gate
 
