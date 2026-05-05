@@ -10,14 +10,7 @@ export const globalRole = pgEnum('global_role', 'superadmin', 'user')
 
 export const workspaceRole = pgEnum('workspace_role', 'admin', 'member')
 
-export const taskPriority = pgEnum(
-  'task_priority',
-  'critical',
-  'high',
-  'medium',
-  'low',
-  'none',
-)
+export const taskPriority = pgEnum('task_priority', 'critical', 'high', 'medium', 'low', 'none')
 
 export const channelType = pgEnum('channel_type', 'public', 'private', 'direct')
 

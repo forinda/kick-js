@@ -1,8 +1,8 @@
-// kick/db typegen plugin — M2.B-T9.
+// kick/db typegen plugin — M2.B-T9 + M3.A.7.
 //
 // Reads the adopter's schema (a `src/db/schema.ts` file or `src/db/schema/`
 // folder with a barrel index) and emits `.kickjs/types/kick__db.d.ts`
-// containing two augmentations:
+// containing three augmentations:
 //
 //   1. A global `KickDbSchema` interface set to `SchemaToTypes<typeof
 //      appSchema>` — TS computes the column-level shape at type-check time
@@ -10,9 +10,15 @@
 //   2. A `KickDbRegister` augmentation pointing `db` at
 //      `KickDbClient<KickDbSchema>`, so consumers of bare `KickDbClient`
 //      widen automatically.
+//   3. A `KickDbRelationsRegister` augmentation pointing `db` at
+//      `SchemaToRelationsRegister<typeof appSchema>` — derives the
+//      relation graph from the schema's `relations()` declarations so
+//      `db.query.X.findMany({ with })` call sites get typed `with`
+//      keys without a hand-rolled file.
 //
-// Adopters who used to hand-write `src/db/register.ts` (M2.A-T6) can
-// delete that file once this plugin emits the equivalent augmentation.
+// Adopters who used to hand-write `src/db/register.ts` (M2.A-T6) or
+// `src/db/relations-register.ts` (M3.A.5 stop-gap) can delete both
+// files once this plugin runs.
 
 import path from 'node:path'
 import { existsSync } from 'node:fs'
@@ -41,7 +47,7 @@ export const kickDbTypegen = (): TypegenPlugin => ({
       .replace(/\/index$/, '')
 
     return [
-      `import type { SchemaToTypes, KickDbClient } from '@forinda/kickjs-db'`,
+      `import type { SchemaToTypes, SchemaToRelationsRegister, KickDbClient } from '@forinda/kickjs-db'`,
       `import type * as appSchema from '${rel}'`,
       ``,
       `declare global {`,
@@ -51,6 +57,10 @@ export const kickDbTypegen = (): TypegenPlugin => ({
       `declare module '@forinda/kickjs-db' {`,
       `  interface KickDbRegister {`,
       `    db: KickDbClient<KickDbSchema>`,
+      `  }`,
+      ``,
+      `  interface KickDbRelationsRegister {`,
+      `    db: SchemaToRelationsRegister<typeof appSchema>`,
       `  }`,
       `}`,
     ].join('\n')
