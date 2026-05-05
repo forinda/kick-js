@@ -82,7 +82,7 @@ export function extractRelations(
           target: rel.target.__name,
           sourceColumns: rel.fields.map((f) => f.__name),
           targetColumns: rel.references.map((r) => r.__name),
-          ...(rel.relationName ? { relationName: rel.relationName } : {}),
+          ...(rel.relationName !== undefined ? { relationName: rel.relationName } : {}),
         }
         continue
       }
@@ -96,8 +96,15 @@ export function extractRelations(
       const target = rel.target.__name
       const targetRelations = declsBySource[target] ?? {}
 
+      // Preserve the source-side `relationName` on the resolved
+      // sidecar regardless of which step ends up resolving the join.
+      // The tag is part of the public surface (RelationSnapshot /
+      // RelationMapEntry) and shouldn't drop just because step 1 fell
+      // through to step 2/3.
+      const relNameSpread = rel.relationName !== undefined ? { relationName: rel.relationName } : {}
+
       // Step 1 — paired by relationName.
-      if (rel.relationName) {
+      if (rel.relationName !== undefined) {
         const matchingInverses = findInversesByRelationName(
           targetRelations,
           sourceTable,
@@ -106,6 +113,7 @@ export function extractRelations(
         if (matchingInverses.length > 1) {
           throw new RelationalQueryAmbiguousRelationNameError(
             sourceTable,
+            target,
             rel.relationName,
             matchingInverses.map((m) => m.relationKey),
           )
@@ -117,7 +125,7 @@ export function extractRelations(
             target,
             sourceColumns: inverse.references.map((r) => r.__name),
             targetColumns: inverse.fields.map((f) => f.__name),
-            relationName: rel.relationName,
+            ...relNameSpread,
           }
           continue
         }
@@ -134,6 +142,7 @@ export function extractRelations(
           target,
           sourceColumns: untaggedInverse.references.map((r) => r.__name),
           targetColumns: untaggedInverse.fields.map((f) => f.__name),
+          ...relNameSpread,
         }
         continue
       }
@@ -146,6 +155,7 @@ export function extractRelations(
           target,
           sourceColumns: fkFallback.refColumns,
           targetColumns: fkFallback.columns,
+          ...relNameSpread,
         }
         continue
       }

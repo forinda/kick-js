@@ -84,24 +84,35 @@ export class RelationalQueryNotSupportedError extends KickDbError {
 }
 
 /**
- * Thrown at extract time when more than one `many` declaration on
- * the same source table shares the same `relationName`, or when
- * more than one inverse `one` on the target table shares it. The
- * pairing tag is a unique disambiguator; a duplicate is operator
- * error. Spec: docs/db/spec-relation-name.md §7 R-2.
+ * Thrown at extract time when more than one inverse `one` declared
+ * on the **target** table shares the same `relationName` AND points
+ * back at the same source — the actual ambiguity case for resolver
+ * step 1. Scope is per `(sourceTable, targetTable, relationName)`:
+ * the same tag can be reused across unrelated table pairs. Spec:
+ * docs/db/spec-relation-name.md §7 R-2.
  */
 export class RelationalQueryAmbiguousRelationNameError extends KickDbError {
   readonly sourceTable: string
+  readonly targetTable: string
   readonly relationName: string
+  /** Relation keys on the target table whose inverse `one` shares the tag. */
   readonly conflicting: readonly string[]
-  constructor(sourceTable: string, relationName: string, conflicting: readonly string[]) {
+  constructor(
+    sourceTable: string,
+    targetTable: string,
+    relationName: string,
+    conflicting: readonly string[],
+  ) {
     super(
       'KICK_DB_RELATIONAL_AMBIGUOUS_RELATION_NAME',
-      `Multiple relations on \`${sourceTable}\` share \`relationName: '${relationName}'\` ` +
-        `(${conflicting.map((c) => `\`${c}\``).join(', ')}). The pairing tag must be unique per ` +
-        `(source, name) pair — rename one side or split the schema.`,
+      `Cannot pair \`${sourceTable}\`'s \`many\` with relationName='${relationName}' — ` +
+        `multiple \`one\` relations on \`${targetTable}\` share that tag and point back at ` +
+        `\`${sourceTable}\` (${conflicting.map((c) => `\`${targetTable}.${c}\``).join(', ')}). ` +
+        `The pairing tag must be unique per (source, target, name) triple — rename one of the ` +
+        `\`one\` relations on \`${targetTable}\` or split the schema.`,
     )
     this.sourceTable = sourceTable
+    this.targetTable = targetTable
     this.relationName = relationName
     this.conflicting = conflicting
   }

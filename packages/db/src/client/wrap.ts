@@ -22,6 +22,7 @@ import type { KickDbEventEmitter } from './events'
 import type { CompileFn } from '../query/builder'
 import { buildQueryNamespace } from '../query/builder'
 import type { ResolvedRelations } from '../query/relations'
+import type { TableSnapshot } from '../snapshot/types'
 
 export interface InternalContext {
   events: KickDbEventEmitter | null
@@ -29,13 +30,14 @@ export interface InternalContext {
   /** Increments per savepoint open inside this client; used for SP_<n> names. */
   savepointCounter: { value: number }
   /**
-   * Resolved relation graph + dialect-specific compiler for the
-   * relational-query namespace. Always present after
-   * `createDbClient` runs — the compiler may be a throw-stub for
-   * unsupported dialects (SQLite / MySQL in v1).
+   * Resolved relation graph + per-table column metadata + dialect-
+   * specific compiler for the relational-query namespace. Always
+   * present after `createDbClient` runs — the compiler may be a
+   * throw-stub for unsupported dialects (MySQL until M4.A.3).
    */
   query: {
     relations: ResolvedRelations
+    tables: Record<string, TableSnapshot>
     compile: CompileFn
   }
 }
@@ -44,7 +46,7 @@ export function wrap<DB>(qb: Kysely<DB>, ctx: InternalContext): KickDbClient<DB>
   const client: KickDbClient<DB> = {
     qb,
     dialect: ctx.dialect,
-    query: buildQueryNamespace<DB>(qb, ctx.query.relations, ctx.query.compile),
+    query: buildQueryNamespace<DB>(qb, ctx.query.relations, ctx.query.tables, ctx.query.compile),
 
     selectFrom: qb.selectFrom.bind(qb),
     insertInto: qb.insertInto.bind(qb),

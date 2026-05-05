@@ -88,12 +88,12 @@ export function relations<
       target,
       fields: opts.fields,
       references: opts.references,
-      ...(opts.relationName ? { relationName: opts.relationName } : {}),
+      ...(opts.relationName !== undefined ? { relationName: opts.relationName } : {}),
     }),
     many: (target, opts) => ({
       kind: 'many',
       target,
-      ...(opts?.relationName ? { relationName: opts.relationName } : {}),
+      ...(opts?.relationName !== undefined ? { relationName: opts.relationName } : {}),
     }),
   }
   return {
