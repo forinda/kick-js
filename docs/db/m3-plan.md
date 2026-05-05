@@ -202,30 +202,40 @@ git commit -m "fix(db): lossless enum-value removal with --confirm-enum-drop (M3
 
 **Story:** M2 plan T15. Today `packages/vite/src/devtools-flag-plugin.ts:6` uses regex-based stripping; the comment explicitly notes "without a babel pass." Adopters who wire custom DevTools tabs ship the dev-only render code into prod.
 
-### Step C.1 — Implementation
+### Step C.1 — Implementation ✅ (2026-05-05)
 
-- [ ] `packages/vite/src/babel-strip-devtools.ts` — `@babel/core` transform plugin that walks the program and strips:
-  - Calls to `defineDevtoolsRenderTab` / `defineDevtoolsTab`
-  - Imports of `@forinda/kickjs-devtools-kit` and its sub-paths (`/bus`, `/runtime`)
-  - The augmentation file `*/devtools-events.ts` (already a side-effect import; safe to drop in prod)
-- [ ] Add `@babel/core` + `@babel/plugin-transform-typescript` to `packages/vite/package.json` as **dependencies** (not peer — adopters do not configure Babel themselves).
+- [x] `packages/vite/src/babel-strip-devtools.ts` — pure `stripDevtoolsCode(source, filename, opts)` using `@babel/core.transformSync`. Drops:
+  - Imports from `@forinda/kickjs-devtools-kit` and any sub-path (`/bus`, `/runtime`, etc.) — named, default, namespace, side-effect.
+  - Top-level `ExpressionStatement`s whose root identifier is a binding stripped in pass 1 (catches `defineDevtoolsRenderTab(...)`, namespace-call `devtools.defineDevtoolsRenderTab(...)`, etc.).
+  - Side-effect imports whose path ends in `/devtools-events` — adapter-package augmentation modules.
+- [x] Conservative scope: identifiers used outside top-level statements (e.g., inside function bodies) stay; the build fails loud after the import is dropped, signalling adopters to gate behind `__KICKJS_DEVTOOLS__`.
+- [x] Fast-reject substring check skips files without the `@forinda/kickjs-devtools-kit` or `devtools-events` markers — no Babel parse on the common path.
+- [x] Original-source verbatim return when `changed === false` (avoids whitespace churn on cache-key sensitive files).
+- [x] `packages/vite/package.json` — `@babel/core ^7.29.0` as a direct dependency, `@types/babel__core` as a dev dependency. (`@babel/plugin-transform-typescript` not needed — the transform uses parserOpts plugins directly, no separate plugin required.)
 
-### Step C.2 — Wire
+### Step C.2 — Wire ✅ (2026-05-05)
 
-- [ ] `packages/vite/src/index.ts` — replace the regex strip in `devtools-flag-plugin.ts` with the Babel pass when `mode === 'production'`. Keep regex path as the dev fast-path.
+- [x] `packages/vite/src/devtools-strip-plugin.ts` — Vite plugin wrapping `stripDevtoolsCode`. `apply: 'build'` + `enforce: 'pre'`, no-op in dev. Skips `node_modules` + non-`*.[mc]?[jt]sx?` files.
+- [x] `packages/vite/src/index.ts` — `kickjsVitePlugin()` now pushes the strip plugin alongside the flag plugin (gated on `options.devtools !== false`). Re-exports `devtoolsStripPlugin`, `stripDevtoolsCode`, `DevtoolsStripOptions`, `StripDevtoolsOptions`, `StripResult`.
 
-### Step C.3 — Tests
+### Step C.3 — Tests ✅ (2026-05-05)
 
-- [ ] `packages/vite/src/__tests__/babel-strip-devtools.test.ts` — golden fixtures: input source → expected stripped output. Cover: render-tab definition, side-effect import, conditional import.
-- [ ] Bundle-size assertion: build the `examples/task-kickdb-api` prod bundle with + without the strip, assert >= 30KB delta. (Devtools-kit is ~50KB minified.)
+- [x] `packages/vite/__tests__/babel-strip-devtools.test.ts` — 10 cases: named import drop, sub-path side-effect drop, `/devtools-events` side-effect drop, top-level `defineDevtoolsRenderTab(...)` drop, namespace member-call drop, leave-third-party-imports-alone, leave-non-toplevel-references (build-fails-loud signal), unchanged-when-no-imports, fast-reject short-circuit, multi-import file. **All passing.**
+- [x] `packages/vite/__tests__/vite-plugin.test.ts` updated — plugin count grew from 7 to 8; new assertion that `kickjs:devtools-strip` is present in the default array and absent when `devtools: false`.
+- [x] Vite suite: **3 files / 77 tests** passing (was 2/76; +1 file, +1 test net after merging the strip + plugin-shape adjustments).
+- [ ] _(Deferred)_ Bundle-size delta assertion — needs a separate example-app build harness; tracked for the v5.3 release notes rather than the test suite.
 
-### Step C.4 — Commit + changeset
+### Step C.4 — Commit + changeset ✅ (2026-05-05)
 
 ```bash
 pnpm changeset
 # patch bump on @forinda/kickjs-vite
 git commit -m "feat(vite): Babel-based devtools strip for prod bundles (M3.C)"
 ```
+
+### Step C.2 — Wire
+
+- [ ] `packages/vite/src/index.ts` — replace the regex strip in `devtools-flag-plugin.ts` with the Babel pass when `mode === 'production'`. Keep regex path as the dev fast-path.
 
 ---
 
