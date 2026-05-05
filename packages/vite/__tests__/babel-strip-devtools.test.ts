@@ -119,6 +119,42 @@ describe('stripDevtoolsCode', () => {
     expect(code).toBe(src)
   })
 
+  it('parses TSX files with embedded JSX without crashing', () => {
+    const tsx = `
+      import { defineDevtoolsRenderTab } from '@forinda/kickjs-devtools-kit'
+      defineDevtoolsRenderTab({
+        id: 'demo',
+        render: () => null,
+      })
+      export const Component = () => <div className="x">hi</div>
+    `
+    const { code, changed } = stripDevtoolsCode(tsx, '/project/src/Component.tsx', {
+      fastReject: false,
+    })
+    expect(changed).toBe(true)
+    expect(code).not.toContain('@forinda/kickjs-devtools-kit')
+    expect(code).not.toContain('defineDevtoolsRenderTab(')
+    // JSX in the function body survives — only the imported binding's
+    // top-level call site got stripped.
+    expect(code).toContain('export const Component')
+  })
+
+  it('handles `.ts` files with angle-bracket type assertions', () => {
+    // The jsx plugin is intentionally OFF for plain .ts files —
+    // mixing `jsx` + `typescript` would break `<T>x` cast syntax.
+    const ts = `
+      import { defineDevtoolsRenderTab } from '@forinda/kickjs-devtools-kit'
+      defineDevtoolsRenderTab({ id: 'x' })
+      export const cast = <number>(0 as unknown)
+    `
+    const { code, changed } = stripDevtoolsCode(ts, '/project/src/util.ts', {
+      fastReject: false,
+    })
+    expect(changed).toBe(true)
+    expect(code).not.toContain('@forinda/kickjs-devtools-kit')
+    expect(code).toContain('<number>')
+  })
+
   it('handles multiple devtools-kit imports in one file', () => {
     const src = `
       import { defineDevtoolsRenderTab } from '@forinda/kickjs-devtools-kit'

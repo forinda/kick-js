@@ -62,9 +62,12 @@ export const ENUM_DROP_HEADER = '-- KICK ENUM REMOVE'
  *     ALTER TABLE T ALTER COLUMN C TYPE foo USING C::text::foo
  *   DROP TYPE foo__old
  *
- * The block is wrapped in `BEGIN; … COMMIT;` explicitly so the
- * adapter's tx wrapper doesn't double-wrap it; the migration's
- * `meta.json` should set `transaction: false`.
+ * No explicit `BEGIN; … COMMIT;` — the runner wraps every up.sql
+ * in `applySqlInTx` by default, and PG DDL is transactional, so
+ * the four statements either all commit or all roll back. Wrapping
+ * here would nest a transaction inside the runner's outer one,
+ * which PG accepts (NOTICE-level warning) but commits early on the
+ * inner COMMIT, defeating the runner's atomic-apply guarantee.
  *
  * The leading `-- KICK ENUM REMOVE` header is the runner's gate
  * signal — without `confirmEnumDrop`, the runner refuses to apply
@@ -102,18 +105,17 @@ function emitRemoveEnumValueRecreate(change: {
   ]
 
   const body: string[] = [
-    `BEGIN;`,
-    `  ALTER TYPE ${typeName} RENAME TO ${oldTypeName};`,
-    `  CREATE TYPE ${typeName} AS ENUM (${valuesList});`,
+    `ALTER TYPE ${typeName} RENAME TO ${oldTypeName};`,
+    `CREATE TYPE ${typeName} AS ENUM (${valuesList});`,
   ]
   for (const col of change.affectedColumns) {
     body.push(
-      `  ALTER TABLE ${quoteIdent(col.table)}`,
-      `    ALTER COLUMN ${quoteIdent(col.column)} TYPE ${typeName}`,
-      `    USING ${quoteIdent(col.column)}::text::${typeName};`,
+      `ALTER TABLE ${quoteIdent(col.table)}`,
+      `  ALTER COLUMN ${quoteIdent(col.column)} TYPE ${typeName}`,
+      `  USING ${quoteIdent(col.column)}::text::${typeName};`,
     )
   }
-  body.push(`  DROP TYPE ${oldTypeName};`, `COMMIT;`)
+  body.push(`DROP TYPE ${oldTypeName};`)
 
   return [...header, ...body].join('\n')
 }

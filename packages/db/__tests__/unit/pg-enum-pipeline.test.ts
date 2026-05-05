@@ -168,15 +168,17 @@ describe('pgEnum snapshot + diff + emit pipeline', () => {
       expect(sql).toMatch(/-- enum: "status"/)
       expect(sql).toMatch(/-- removed: 'beta', 'archived'/)
       expect(sql).toMatch(/-- columns: orders\.status/)
-      // Rename-recreate dance.
-      expect(sql).toContain('BEGIN;')
+      // Rename-recreate dance — the runner's auto-tx wraps the
+      // whole up.sql; emitting an explicit BEGIN/COMMIT here would
+      // nest and short-circuit the outer transaction.
+      expect(sql).not.toContain('BEGIN;')
+      expect(sql).not.toContain('COMMIT;')
       expect(sql).toContain('ALTER TYPE "status" RENAME TO "status__old"')
       expect(sql).toContain(`CREATE TYPE "status" AS ENUM ('alpha', 'released')`)
       expect(sql).toContain('ALTER TABLE "orders"')
       expect(sql).toContain('ALTER COLUMN "status" TYPE "status"')
       expect(sql).toContain('USING "status"::text::"status"')
       expect(sql).toContain('DROP TYPE "status__old"')
-      expect(sql).toContain('COMMIT;')
     })
 
     it('emit/pg omits the ALTER TABLE step when no columns reference the enum', () => {
@@ -234,20 +236,22 @@ describe('pgEnum snapshot + diff + emit pipeline', () => {
         },
       ])
       const lines = sql.split('\n')
-      const beginIdx = lines.findIndex((l) => l.trim() === 'BEGIN;')
-      expect(beginIdx).toBeGreaterThan(0)
+      // The header section runs from the first line up to the first
+      // statement that doesn't start with `--`. Find that boundary.
+      const firstStatementIdx = lines.findIndex((l) => l.trim() !== '' && !l.startsWith('--'))
+      expect(firstStatementIdx).toBeGreaterThan(0)
 
-      // Every non-empty line BEFORE the BEGIN; block must start with `--`
-      // so newline injection inside user-supplied enum/value text can't
+      // Every non-empty line in the header must start with `--` so
+      // newline injection inside user-supplied enum/value text can't
       // pop us out of the comment block early.
-      for (const line of lines.slice(0, beginIdx)) {
+      for (const line of lines.slice(0, firstStatementIdx)) {
         if (line.trim() === '') continue
         expect(line.startsWith('--')).toBe(true)
       }
 
       // In the COMMENT header, newlines in user-supplied text collapse
       // to a single space — so `foo\nDROP` never appears in headers.
-      const headerSlice = lines.slice(0, beginIdx).join('\n')
+      const headerSlice = lines.slice(0, firstStatementIdx).join('\n')
       expect(headerSlice).not.toMatch(/foo\nDROP/)
       expect(headerSlice).not.toMatch(/bad\nrm/)
       // C0 control bytes (other than tab / newline) become \x<hh>.

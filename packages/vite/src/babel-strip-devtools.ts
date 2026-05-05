@@ -77,13 +77,22 @@ export function stripDevtoolsCode(
 
   let changed = false
 
+  // Add the `jsx` plugin only for files that may contain JSX —
+  // `.tsx` / `.jsx`. Mixing `jsx` + `typescript` on a `.ts` file
+  // breaks the angle-bracket type-assertion syntax (`<T>x`); kept
+  // off by default. `.tsx` files would otherwise fail to parse on
+  // any embedded JSX.
+  const isJsx = /\.(?:tsx|jsx)$/i.test(filename)
+  const parserPlugins: string[] = ['typescript', 'decorators-legacy', 'classProperties']
+  if (isJsx) parserPlugins.push('jsx')
+
   const result = babel.transformSync(source, {
     filename,
     babelrc: false,
     configFile: false,
     sourceType: 'module',
     parserOpts: {
-      plugins: ['typescript', 'decorators-legacy', 'classProperties'],
+      plugins: parserPlugins as never,
     },
     generatorOpts: {
       retainLines: true,

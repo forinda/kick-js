@@ -88,10 +88,10 @@ const RELATIONS: ResolvedRelations = {
 }
 
 describe('compilePg — happy path', () => {
-  it('bare findMany emits a flat selectAll', () => {
+  it('bare findMany emits a flat selectAll with depth-0 alias', () => {
     const db = makeDb()
     const { sql, parameters } = compilePg(db, 'users', {}, RELATIONS)
-    expect(sql).toBe('select * from "users"')
+    expect(sql).toBe('select * from "users" as "users_0"')
     expect(parameters).toEqual([])
   })
 
@@ -99,8 +99,8 @@ describe('compilePg — happy path', () => {
     const db = makeDb()
     const { sql } = compilePg(db, 'users', { with: { posts: true } }, RELATIONS)
     expect(sql).toContain("select coalesce(json_agg(agg), '[]') from")
-    expect(sql).toContain('from "posts"')
-    expect(sql).toContain('"posts"."authorId" = "users"."id"')
+    expect(sql).toContain('from "posts" as "posts_1"')
+    expect(sql).toContain('"posts_1"."authorId" = "users_0"."id"')
     expect(sql).toContain('as "posts"')
   })
 
@@ -108,8 +108,8 @@ describe('compilePg — happy path', () => {
     const db = makeDb()
     const { sql } = compilePg(db, 'comments', { with: { post: true } }, RELATIONS)
     expect(sql).toContain('select to_json(obj) from')
-    expect(sql).toContain('from "posts"')
-    expect(sql).toContain('"posts"."id" = "comments"."postId"')
+    expect(sql).toContain('from "posts" as "posts_1"')
+    expect(sql).toContain('"posts_1"."id" = "comments_0"."postId"')
     expect(sql).toContain('limit $1')
   })
 
@@ -124,8 +124,8 @@ describe('compilePg — happy path', () => {
     // Outer json_agg over posts; inner json_agg over comments.
     const matches = sql.match(/json_agg/g) ?? []
     expect(matches.length).toBe(2)
-    expect(sql).toContain('"comments"."postId" = "posts"."id"')
-    expect(sql).toContain('"posts"."authorId" = "users"."id"')
+    expect(sql).toContain('"comments_2"."postId" = "posts_1"."id"')
+    expect(sql).toContain('"posts_1"."authorId" = "users_0"."id"')
   })
 
   it('2-deep one → many — comments → post → comments (cycle on post)', () => {
@@ -138,8 +138,10 @@ describe('compilePg — happy path', () => {
     )
     expect(sql).toContain('to_json(obj)')
     expect(sql).toContain('json_agg(agg)')
-    // Two LATERAL aliases on comments — outer source vs nested-on-post.
-    expect(sql.match(/from "comments"/g)?.length).toBe(2)
+    // Outer comments_0, inner comments_2 (on post_1) — distinct
+    // aliases per level keep the cycle's correlation correct.
+    expect(sql).toContain('from "comments" as "comments_0"')
+    expect(sql).toContain('from "comments" as "comments_2"')
   })
 
   it('self-reference — categories { with: { children: { with: { children: true } } } }', () => {
@@ -150,8 +152,13 @@ describe('compilePg — happy path', () => {
       { with: { children: { with: { children: true } } } },
       RELATIONS,
     )
-    // The same table appears three times: outer, child, grandchild.
-    expect(sql.match(/from "categories"/g)?.length).toBe(3)
+    // Three distinct depth-suffixed aliases — outer, child, grandchild.
+    expect(sql).toContain('from "categories" as "categories_0"')
+    expect(sql).toContain('from "categories" as "categories_1"')
+    expect(sql).toContain('from "categories" as "categories_2"')
+    // Correlation walks each level: child → outer, grandchild → child.
+    expect(sql).toContain('"categories_1"."parentId" = "categories_0"."id"')
+    expect(sql).toContain('"categories_2"."parentId" = "categories_1"."id"')
     expect(sql.match(/json_agg/g)?.length).toBe(2)
   })
 
@@ -187,8 +194,8 @@ describe('compilePg — happy path', () => {
       db,
       'users',
       {
-        where: (u, eb) => eb('isActive', '=', true),
-        orderBy: (u, eb) => eb.ref('createdAt'),
+        where: (_u, eb) => eb('isActive', '=', true),
+        orderBy: (_u, eb) => eb.ref('createdAt'),
         limit: 20,
         offset: 5,
       },
@@ -204,14 +211,14 @@ describe('compilePg — happy path', () => {
   it('mode=first adds LIMIT 1 to the outer query', () => {
     const db = makeDb()
     const { sql, parameters } = compilePg(db, 'users', {}, RELATIONS, 'first')
-    expect(sql).toBe('select * from "users" limit $1')
+    expect(sql).toBe('select * from "users" as "users_0" limit $1')
     expect(parameters).toEqual([1])
   })
 
   it('mode=unique adds LIMIT 1 to the outer query', () => {
     const db = makeDb()
     const { sql, parameters } = compilePg(db, 'users', {}, RELATIONS, 'unique')
-    expect(sql).toBe('select * from "users" limit $1')
+    expect(sql).toBe('select * from "users" as "users_0" limit $1')
     expect(parameters).toEqual([1])
   })
 

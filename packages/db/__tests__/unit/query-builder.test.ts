@@ -120,7 +120,8 @@ describe('createDbClient → db.query namespace (PG)', () => {
     const { calls } = patchExecute(db, [{ id: '1', email: 'a@b.com' }])
     const result = await db.query.users.findMany()
     expect(result).toEqual([{ id: '1', email: 'a@b.com' }])
-    expect(calls[0]?.sql).toBe('select * from "users"')
+    // Outer alias `users_0` — see compile-pg makeAlias().
+    expect(calls[0]?.sql).toBe('select * from "users" as "users_0"')
     expect(calls[0]?.parameters).toEqual([])
   })
 
@@ -129,7 +130,7 @@ describe('createDbClient → db.query namespace (PG)', () => {
     const { calls } = patchExecute(db, [])
     await db.query.users.findMany({ with: { posts: true } })
     expect(calls[0]?.sql).toContain('json_agg')
-    expect(calls[0]?.sql).toContain('"posts"."authorId" = "users"."id"')
+    expect(calls[0]?.sql).toContain('"posts_1"."authorId" = "users_0"."id"')
   })
 
   it('findFirst clamps to LIMIT 1 and returns the first row', async () => {
