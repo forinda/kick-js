@@ -1,11 +1,11 @@
 {
-  "name": "@forinda/kickjs-db-pg",
-  "version": "6.0.0",
-  "description": "node-postgres adapter for @forinda/kickjs-db — MigrationAdapter + Kysely PostgresDialect",
+  "name": "@forinda/kickjs-db-mysql",
+  "version": "0.1.0",
+  "description": "mysql2 adapter for @forinda/kickjs-db — MigrationAdapter + Kysely MysqlDialect (MySQL 8.0+)",
   "keywords": [
     "kickjs",
-    "postgres",
-    "pg",
+    "mysql",
+    "mysql2",
     "orm",
     "migrations",
     "query-builder",
@@ -56,16 +56,14 @@
   },
   "peerDependencies": {
     "@forinda/kickjs-db": "workspace:*",
-    "pg": ">=8.11.0"
+    "mysql2": ">=3.0.0"
   },
   "devDependencies": {
     "@forinda/kickjs": "workspace:*",
     "@forinda/kickjs-db": "workspace:*",
-    "@testcontainers/postgresql": "^10.16.0",
     "@types/node": "^25.6.0",
-    "@types/pg": "^8.11.10",
     "kysely": "^0.28.16",
-    "pg": "^8.13.1",
+    "mysql2": "^3.15.3",
     "typescript": "^6.0.3"
   },
   "publishConfig": {
@@ -80,7 +78,7 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/forinda/kick-js.git",
-    "directory": "packages/db-pg"
+    "directory": "packages/db-mysql"
   },
   "bugs": {
     "url": "https://github.com/forinda/kick-js/issues"

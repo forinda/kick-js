@@ -1,11 +1,11 @@
 {
-  "name": "@forinda/kickjs-db-pg",
-  "version": "6.0.0",
-  "description": "node-postgres adapter for @forinda/kickjs-db — MigrationAdapter + Kysely PostgresDialect",
+  "name": "@forinda/kickjs-db-sqlite",
+  "version": "0.1.0",
+  "description": "better-sqlite3 adapter for @forinda/kickjs-db — MigrationAdapter + Kysely SqliteDialect",
   "keywords": [
     "kickjs",
-    "postgres",
-    "pg",
+    "sqlite",
+    "better-sqlite3",
     "orm",
     "migrations",
     "query-builder",
@@ -56,16 +56,15 @@
   },
   "peerDependencies": {
     "@forinda/kickjs-db": "workspace:*",
-    "pg": ">=8.11.0"
+    "better-sqlite3": ">=11.0.0"
   },
   "devDependencies": {
     "@forinda/kickjs": "workspace:*",
     "@forinda/kickjs-db": "workspace:*",
-    "@testcontainers/postgresql": "^10.16.0",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.6.0",
-    "@types/pg": "^8.11.10",
+    "better-sqlite3": "^11.10.0",
     "kysely": "^0.28.16",
-    "pg": "^8.13.1",
     "typescript": "^6.0.3"
   },
   "publishConfig": {
@@ -80,7 +79,7 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/forinda/kick-js.git",
-    "directory": "packages/db-pg"
+    "directory": "packages/db-sqlite"
   },
   "bugs": {
     "url": "https://github.com/forinda/kick-js/issues"
