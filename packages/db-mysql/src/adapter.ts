@@ -66,20 +66,50 @@ export interface ParsedMysqlVersion {
  * Parse a MySQL `SELECT VERSION()` string. Handles:
  *
  *   - MySQL: `8.0.34`, `8.4.0`, `5.7.42-log`
- *   - MariaDB: `10.6.11-MariaDB-1:10.6.11+maria~ubu2004`,
- *              `10.5.21-MariaDB-log`, `10.4.32-MariaDB`
+ *   - MariaDB plain: `10.6.11-MariaDB`, `10.5.21-MariaDB-log`,
+ *                    `10.4.32-MariaDB`
+ *   - MariaDB w/ compat prefix: `5.5.5-10.6.11-MariaDB-1:10.6.11+maria~ubu2004`
+ *     (the leading `5.5.5-` is a wire-protocol thing for older MySQL
+ *     clients; the real server version sits immediately before
+ *     `-MariaDB`)
  *
  * Returns `null` on unparseable input.
  */
 export function parseMysqlVersion(version: string): ParsedMysqlVersion | null {
   const trimmed = version.trim()
+  const isMariaDb = /MariaDB/i.test(trimmed)
+
+  if (isMariaDb) {
+    // Pull the `major.minor` that sits immediately before
+    // `-MariaDB`. This skips the `5.5.5-` compat prefix when
+    // present and grabs the real server version regardless of
+    // whether one's there.
+    const m = /(\d+)\.(\d+)(?:\.\d+)?-MariaDB/i.exec(trimmed)
+    if (m) {
+      const major = Number(m[1])
+      const minor = Number(m[2])
+      if (Number.isFinite(major) && Number.isFinite(minor)) {
+        return { flavor: 'mariadb', major, minor }
+      }
+    }
+    // Fallback for vendor strings we haven't seen — try the
+    // leading x.y. Better to surface the wrong floor than to
+    // refuse an otherwise valid MariaDB outright.
+    const fallback = /^(\d+)\.(\d+)/.exec(trimmed)
+    if (!fallback) return null
+    const major = Number(fallback[1])
+    const minor = Number(fallback[2])
+    if (!Number.isFinite(major) || !Number.isFinite(minor)) return null
+    return { flavor: 'mariadb', major, minor }
+  }
+
+  // MySQL: leading x.y from the start of the string.
   const m = /^(\d+)\.(\d+)/.exec(trimmed)
   if (!m) return null
   const major = Number(m[1])
   const minor = Number(m[2])
   if (!Number.isFinite(major) || !Number.isFinite(minor)) return null
-  const flavor: ParsedMysqlVersion['flavor'] = /MariaDB/i.test(trimmed) ? 'mariadb' : 'mysql'
-  return { flavor, major, minor }
+  return { flavor: 'mysql', major, minor }
 }
 
 /**
@@ -130,6 +160,21 @@ function checkVersionSupport(parsed: ParsedMysqlVersion | null, raw: string): st
  * lets the adapter run kickjs-emitted DDL (multi-statement, but
  * always semicolon-separated at the top level) without that flag.
  *
+ * Two MySQL-specific quirks the splitter handles:
+ *
+ *   - **`--` comments require trailing whitespace/end-of-input.**
+ *     Per MySQL docs, `--` is only a line-comment introducer when
+ *     followed by whitespace (space/tab/newline) or end-of-input —
+ *     otherwise it's two unary-minus operators (`5--3` evaluates
+ *     to `8`). Bare `--xyz` is a parse error in MySQL but kickjs
+ *     should pass it through unchanged so the driver surfaces the
+ *     real error, not silently swallow the rest of the line.
+ *   - **Doubled-quote string escapes.** MySQL accepts both
+ *     backslash-escapes (`'it\'s'`) and SQL-standard doubled-quote
+ *     escapes (`'it''s'`). The state machine peeks for the doubled
+ *     form and stays in-string. Same rule applies to `""` inside
+ *     double-quoted strings.
+ *
  * Adopter-written migrations with pathological SQL — e.g. `;` in
  * an unterminated block comment — won't split correctly.
  * Documented in the README; turn on `multipleStatements: true` on
@@ -144,9 +189,13 @@ export function splitMysqlStatements(sql: string): string[] {
   let inLineComment = false
   let inBlockComment = false
 
+  const isCommentWhitespace = (c: string) =>
+    c === ' ' || c === '\t' || c === '\n' || c === '\r' || c === '\f' || c === '\v'
+
   for (let i = 0; i < sql.length; i++) {
     const ch = sql[i]
     const next = i + 1 < sql.length ? sql[i + 1] : ''
+    const after = i + 2 < sql.length ? sql[i + 2] : ''
 
     if (inLineComment) {
       buf += ch
@@ -163,8 +212,15 @@ export function splitMysqlStatements(sql: string): string[] {
       continue
     }
     if (inSingle) {
+      // Doubled `''` is an SQL-standard escape — stay in-string.
+      if (ch === "'" && next === "'") {
+        buf += ch
+        buf += next
+        i++
+        continue
+      }
       buf += ch
-      if (ch === '\\' && next != null) {
+      if (ch === '\\' && next !== '') {
         buf += next
         i++
         continue
@@ -173,8 +229,15 @@ export function splitMysqlStatements(sql: string): string[] {
       continue
     }
     if (inDouble) {
+      // Doubled `""` is an SQL-standard escape — stay in-string.
+      if (ch === '"' && next === '"') {
+        buf += ch
+        buf += next
+        i++
+        continue
+      }
       buf += ch
-      if (ch === '\\' && next != null) {
+      if (ch === '\\' && next !== '') {
         buf += next
         i++
         continue
@@ -188,7 +251,10 @@ export function splitMysqlStatements(sql: string): string[] {
       continue
     }
 
-    if (ch === '-' && next === '-') {
+    // `--` is a comment introducer only when followed by whitespace
+    // (or end-of-input). Anything else (`5--3`, `--xyz`) is left as
+    // operator-soup and the driver decides what to do with it.
+    if (ch === '-' && next === '-' && (after === '' || isCommentWhitespace(after))) {
       buf += ch
       inLineComment = true
       continue
