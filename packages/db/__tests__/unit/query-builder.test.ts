@@ -12,18 +12,18 @@
  *      sub-namespaces on first access.
  *   3. `findFirst` / `findUnique` clamp to a single row and `null`
  *      on empty result.
- *   4. SQLite emits dialect-specific SQL (json_group_array, not
- *      json_agg) — confirms the dialect picker selected the
- *      SQLite compiler.
- *   5. MySQL still throws `RelationalQueryNotSupportedError` on
- *      first `findMany` call until M4.A.3 ships the compiler.
+ *   4. Each dialect emits its own SQL primitives — PG's
+ *      `json_agg` + `row_to_json`, SQLite's `json_group_array` +
+ *      `json_object`, MySQL's `json_arrayagg` + `json_object`.
+ *      Confirms the picker selected the right compiler per
+ *      dialect tag.
  *
  * Note: by stubbing `executeQuery`, these tests do NOT exercise
  * the `ParseJSONResultsPlugin` chain that `createDbClient`
- * auto-attaches for SQLite. End-to-end JSON-string-to-object
- * round-trip lands in `packages/db-sqlite/__tests__/integration/`
- * (M4.A.5), where a real `better-sqlite3` driver returns the
- * actual JSON-encoded TEXT for the plugin to parse.
+ * auto-attaches for SQLite + MySQL. End-to-end JSON-string-to-
+ * object round-trip lands in the real-driver integration suites
+ * shipping with `@forinda/kickjs-db-sqlite` /
+ * `@forinda/kickjs-db-mysql` (M4.A.5).
  */
 
 import { describe, expect, it, vi } from 'vitest'
@@ -41,15 +41,7 @@ import {
   SqliteQueryCompiler,
   type Dialect as KyselyDialect,
 } from 'kysely'
-import {
-  createDbClient,
-  RelationalQueryNotSupportedError,
-  relations,
-  serial,
-  table,
-  uuid,
-  varchar,
-} from '../../src/index'
+import { createDbClient, relations, serial, table, uuid, varchar } from '../../src/index'
 
 const users = table('users', {
   id: uuid().primaryKey().defaultRandom(),
@@ -202,9 +194,26 @@ describe('createDbClient → db.query namespace (SQLite — M4.A.2)', () => {
   })
 })
 
-describe('createDbClient → db.query namespace (unsupported dialects)', () => {
-  it('MySQL throws RelationalQueryNotSupportedError on findMany', async () => {
+describe('createDbClient → db.query namespace (MySQL — M4.A.3)', () => {
+  it('MySQL findMany compiles via kysely/helpers/mysql', async () => {
     const db = createDbClient({ schema, dialect: makeMysqlDialect() })
-    await expect(db.query.users.findMany()).rejects.toThrow(RelationalQueryNotSupportedError)
+    const { calls } = patchExecute(db, [{ id: '1', email: 'a@b.com' }])
+    const result = await db.query.users.findMany({ with: { posts: true } })
+    expect(result).toEqual([{ id: '1', email: 'a@b.com' }])
+    // MySQL uses json_arrayagg + json_object + cast(... as json) —
+    // different from PG's json_agg + row_to_json AND from SQLite's
+    // json_group_array. Confirms the dialect picker selected the
+    // MySQL compiler.
+    expect(calls[0]?.sql).toContain('json_arrayagg')
+    expect(calls[0]?.sql).toContain('json_object')
+    expect(calls[0]?.sql).not.toContain('json_agg')
+    expect(calls[0]?.sql).not.toContain('json_group_array')
+  })
+
+  it('MySQL findFirst clamps via LIMIT 1', async () => {
+    const db = createDbClient({ schema, dialect: makeMysqlDialect() })
+    const { calls } = patchExecute(db, [])
+    await db.query.users.findFirst()
+    expect(calls[0]?.sql).toContain('limit ?')
   })
 })
