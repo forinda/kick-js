@@ -170,12 +170,29 @@ describe('createDbClient → db.query namespace (PG)', () => {
   })
 })
 
-describe('createDbClient → db.query namespace (unsupported dialects)', () => {
-  it('SQLite throws RelationalQueryNotSupportedError on findMany', async () => {
+describe('createDbClient → db.query namespace (SQLite — M4.A.2)', () => {
+  it('SQLite findMany compiles via kysely/helpers/sqlite', async () => {
     const db = createDbClient({ schema, dialect: makeSqliteDialect() })
-    await expect(db.query.users.findMany()).rejects.toThrow(RelationalQueryNotSupportedError)
+    const { calls } = patchExecute(db, [{ id: '1', email: 'a@b.com' }])
+    const result = await db.query.users.findMany({ with: { posts: true } })
+    expect(result).toEqual([{ id: '1', email: 'a@b.com' }])
+    // SQLite uses json_group_array + json_object — different
+    // primitives than PG's json_agg + row_to_json. Confirms the
+    // dialect picker selected the SQLite compiler.
+    expect(calls[0]?.sql).toContain('json_group_array')
+    expect(calls[0]?.sql).toContain('json_object')
+    expect(calls[0]?.sql).not.toContain('json_agg')
   })
 
+  it('SQLite findFirst clamps via LIMIT 1', async () => {
+    const db = createDbClient({ schema, dialect: makeSqliteDialect() })
+    const { calls } = patchExecute(db, [])
+    await db.query.users.findFirst()
+    expect(calls[0]?.sql).toContain('limit ?')
+  })
+})
+
+describe('createDbClient → db.query namespace (unsupported dialects)', () => {
   it('MySQL throws RelationalQueryNotSupportedError on findMany', async () => {
     const db = createDbClient({ schema, dialect: makeMysqlDialect() })
     await expect(db.query.users.findMany()).rejects.toThrow(RelationalQueryNotSupportedError)

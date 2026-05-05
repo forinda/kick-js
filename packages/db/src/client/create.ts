@@ -1,4 +1,9 @@
-import { Kysely, type Dialect as KyselyDialect } from 'kysely'
+import {
+  Kysely,
+  ParseJSONResultsPlugin,
+  type Dialect as KyselyDialect,
+  type KyselyPlugin,
+} from 'kysely'
 
 import type { CreateDbClientOptions, KickDbClient } from './types'
 import type { SchemaToTypes } from './schema-types'
@@ -52,9 +57,24 @@ export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
   const codecPlugin =
     decoders.size > 0 || encoders.size > 0 ? new CodecPlugin(encoders, decoders) : null
 
+  // Detect dialect early — needed both to pick the relational query
+  // compiler (below) and to decide whether the JSON-results plugin
+  // ships in the Kysely plugin chain. PG decodes JSON columns
+  // natively so no plugin is needed; SQLite + MySQL drivers return
+  // JSON as strings — the kysely/helpers/<dialect>'s jsonArrayFrom /
+  // jsonObjectFrom won't round-trip without ParseJSONResultsPlugin.
+  // Spec: docs/db/spec-relational-query-other-dialects.md §5.
+  const dialectTag = detectDialect(opts.dialect)
+
+  const plugins: KyselyPlugin[] = []
+  if (codecPlugin) plugins.push(codecPlugin)
+  if (dialectTag === 'sqlite' || dialectTag === 'mysql') {
+    plugins.push(new ParseJSONResultsPlugin())
+  }
+
   const kysely = new Kysely<DB>({
     dialect: opts.dialect,
-    plugins: codecPlugin ? [codecPlugin] : undefined,
+    plugins: plugins.length > 0 ? plugins : undefined,
     log: events
       ? (event) => {
           if (event.level === 'query') {
@@ -79,12 +99,6 @@ export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
       : undefined,
   })
 
-  // Detect dialect first — it picks the compiler and feeds the
-  // relations extractor (which needs the dialect tag for snapshot
-  // construction). The detected tag is also stored on the client
-  // for adopters who branch on `db.dialect`.
-  const dialectTag = detectDialect(opts.dialect)
-
   // Resolve `relations()` declarations into the JSON-serializable
   // sidecar consumed by the query compiler. Schemas without any
   // `relations()` get an empty record — the compiler still works
@@ -98,6 +112,7 @@ export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
     savepointCounter: { value: 0 },
     query: {
       relations,
+      tables,
       compile: pickCompiler(dialectTag),
     },
   }

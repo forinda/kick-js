@@ -21,18 +21,25 @@ import type { CompiledQuery, Kysely } from 'kysely'
 import type { ResolvedRelations } from './relations'
 import type { CompileMode, CompilePgOptions } from './compile-pg'
 import type { FindManyOptions, QueryNamespace, TableQueryNamespace } from './types'
+import type { TableSnapshot } from '../snapshot/types'
 
 /**
  * Dialect-specific compile function. PG ships `compilePg`;
- * SQLite/MySQL provide stubs that throw
+ * SQLite ships `compileSqlite`; MySQL provides a stub that throws
  * `RelationalQueryNotSupportedError`. The signature matches
  * `compilePg` so swapping compilers is a one-line change.
+ *
+ * `tables` is the snapshot's table-by-name map; the compiler reads
+ * each target's column list to emit explicit selections inside
+ * `jsonArrayFrom` / `jsonObjectFrom` (SQLite requires it; PG
+ * accepts either form).
  */
 export type CompileFn = (
   qb: Kysely<any>,
   table: string,
   options: CompilePgOptions,
   relations: ResolvedRelations,
+  tables: Record<string, TableSnapshot>,
   mode: CompileMode,
 ) => CompiledQuery
 
@@ -40,23 +47,19 @@ export type CompileFn = (
  * Build the per-table query namespace. The Proxy intercepts every
  * property access — adopters writing `db.query.users` get a fresh
  * namespace bound to that table name. The methods close over the
- * shared compiler + relations + Kysely instance so each call is
- * independent.
+ * shared compiler + relations + tables + Kysely instance so each
+ * call is independent.
  */
 export function buildQueryNamespace<DB>(
   qb: Kysely<DB>,
   relations: ResolvedRelations,
+  tables: Record<string, TableSnapshot>,
   compile: CompileFn,
 ): QueryNamespace<DB> {
   return new Proxy({} as QueryNamespace<DB>, {
     get(_target, prop) {
       if (typeof prop !== 'string') return undefined
-      // `prop` is a runtime string; the Proxy is typed against `DB`'s
-      // table keys but at this dynamic boundary we rely on the
-      // adopter's typed call site (`db.query.users`) to enforce the
-      // keyof-DB constraint. Cast through `as never` so the inner
-      // function signature still binds to the typed `DB`.
-      return makeTableNamespace(qb, prop as never, relations, compile)
+      return makeTableNamespace(qb, prop as never, relations, tables, compile)
     },
   })
 }
@@ -65,6 +68,7 @@ function makeTableNamespace<DB, Table extends keyof DB & string>(
   qb: Kysely<DB>,
   table: Table,
   relations: ResolvedRelations,
+  tables: Record<string, TableSnapshot>,
   compile: CompileFn,
 ): TableQueryNamespace<DB, Table> {
   return {
@@ -74,6 +78,7 @@ function makeTableNamespace<DB, Table extends keyof DB & string>(
         table,
         (options ?? {}) as CompilePgOptions,
         relations,
+        tables,
         'many',
       )
       const rows = await execute(qb, compiled)
@@ -86,6 +91,7 @@ function makeTableNamespace<DB, Table extends keyof DB & string>(
         table,
         (options ?? {}) as CompilePgOptions,
         relations,
+        tables,
         'first',
       )
       const rows = await execute(qb, compiled)
@@ -98,6 +104,7 @@ function makeTableNamespace<DB, Table extends keyof DB & string>(
         table,
         options as CompilePgOptions,
         relations,
+        tables,
         'unique',
       )
       const rows = await execute(qb, compiled)

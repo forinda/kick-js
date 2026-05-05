@@ -1,21 +1,16 @@
 /**
- * Snapshot SQL tests for the PG relational-query compiler.
+ * Snapshot SQL tests for the SQLite relational-query compiler.
  *
- * One fixture per topology in spec-relational-query.md §3.3 + the
- * error-path coverage from §6 / §7. Builds against a Kysely instance
- * with `DummyDriver` so the test never opens a connection — we only
- * assert the compiled `{ sql, parameters }`.
+ * Mirror of `query-compile.test.ts` (PG) but with SQLite-flavored
+ * SQL — `json_group_array` / `json_object` instead of PG's
+ * `json_agg` / `row_to_json`, double-quote identifiers, no LATERAL.
+ *
+ * Spec: docs/db/spec-relational-query-other-dialects.md §3.1.
  */
 
 import { describe, expect, it } from 'vitest'
-import {
-  DummyDriver,
-  Kysely,
-  PostgresAdapter,
-  PostgresIntrospector,
-  PostgresQueryCompiler,
-} from 'kysely'
-import { compilePg } from '../../src/query/compile-pg'
+import { DummyDriver, Kysely, SqliteAdapter, SqliteIntrospector, SqliteQueryCompiler } from 'kysely'
+import { compileSqlite } from '../../src/query/compile-sqlite'
 import {
   RelationalQueryDepthError,
   RelationalQueryUnknownRelationError,
@@ -33,18 +28,14 @@ interface FixtureDB {
 function makeDb(): Kysely<FixtureDB> {
   return new Kysely<FixtureDB>({
     dialect: {
-      createAdapter: () => new PostgresAdapter(),
+      createAdapter: () => new SqliteAdapter(),
       createDriver: () => new DummyDriver(),
-      createIntrospector: (db) => new PostgresIntrospector(db),
-      createQueryCompiler: () => new PostgresQueryCompiler(),
+      createIntrospector: (db) => new SqliteIntrospector(db),
+      createQueryCompiler: () => new SqliteQueryCompiler(),
     },
   })
 }
 
-// Minimal table-snapshot map — the compiler reads each target's
-// columns to emit explicit `.select([col1, col2, ...])` inside
-// jsonArrayFrom / jsonObjectFrom (SQLite requires it; PG accepts
-// either form).
 function col(): TableSnapshot['columns'][string] {
   return { name: '', type: 'text', nullable: true, default: null, primaryKey: false }
 }
@@ -126,120 +117,101 @@ const RELATIONS: ResolvedRelations = {
   },
 }
 
-describe('compilePg — happy path', () => {
+describe('compileSqlite — happy path', () => {
   it('bare findMany emits a flat selectAll with depth-0 alias', () => {
     const db = makeDb()
-    const { sql, parameters } = compilePg(db, 'users', {}, RELATIONS, TABLES)
+    const { sql, parameters } = compileSqlite(db, 'users', {}, RELATIONS, TABLES)
     expect(sql).toBe('select * from "users" as "users_0"')
     expect(parameters).toEqual([])
   })
 
-  it('1-deep many — users { with: { posts: true } }', () => {
+  it('1-deep many uses json_group_array + json_object (no json_agg)', () => {
     const db = makeDb()
-    const { sql } = compilePg(db, 'users', { with: { posts: true } }, RELATIONS, TABLES)
-    expect(sql).toContain("select coalesce(json_agg(agg), '[]') from")
-    expect(sql).toContain('from "posts" as "posts_1"')
+    const { sql } = compileSqlite(db, 'users', { with: { posts: true } }, RELATIONS, TABLES)
+    // SQLite primitives — must NOT contain PG's json_agg.
+    expect(sql).toContain('json_group_array')
+    expect(sql).toContain('json_object')
+    expect(sql).not.toContain('json_agg')
+    // Correlated subquery on aliased tables.
     expect(sql).toContain('"posts_1"."authorId" = "users_0"."id"')
     expect(sql).toContain('as "posts"')
   })
 
-  it('1-deep one — comments { with: { post: true } } uses to_json + LIMIT 1', () => {
+  it('1-deep one — comments { with: { post: true } } uses json_object + LIMIT 1', () => {
     const db = makeDb()
-    const { sql } = compilePg(db, 'comments', { with: { post: true } }, RELATIONS, TABLES)
-    expect(sql).toContain('select to_json(obj) from')
-    expect(sql).toContain('from "posts" as "posts_1"')
+    const { sql } = compileSqlite(db, 'comments', { with: { post: true } }, RELATIONS, TABLES)
+    expect(sql).toContain('json_object')
     expect(sql).toContain('"posts_1"."id" = "comments_0"."postId"')
-    expect(sql).toContain('limit $1')
+    expect(sql).toContain('limit ?')
   })
 
   it('2-deep many → many — users → posts → comments', () => {
     const db = makeDb()
-    const { sql } = compilePg(
+    const { sql } = compileSqlite(
       db,
       'users',
       { with: { posts: { with: { comments: true } } } },
       RELATIONS,
       TABLES,
     )
-    // Outer json_agg over posts; inner json_agg over comments.
-    const matches = sql.match(/json_agg/g) ?? []
+    const matches = sql.match(/json_group_array/g) ?? []
     expect(matches.length).toBe(2)
     expect(sql).toContain('"comments_2"."postId" = "posts_1"."id"')
     expect(sql).toContain('"posts_1"."authorId" = "users_0"."id"')
   })
 
-  it('2-deep one → many — comments → post → comments (cycle on post)', () => {
+  it('self-reference — depth-suffixed aliases per level', () => {
     const db = makeDb()
-    const { sql } = compilePg(
-      db,
-      'comments',
-      { with: { post: { with: { comments: true } } } },
-      RELATIONS,
-      TABLES,
-    )
-    expect(sql).toContain('to_json(obj)')
-    expect(sql).toContain('json_agg(agg)')
-    // Outer comments_0, inner comments_2 (on post_1) — distinct
-    // aliases per level keep the cycle's correlation correct.
-    expect(sql).toContain('from "comments" as "comments_0"')
-    expect(sql).toContain('from "comments" as "comments_2"')
-  })
-
-  it('self-reference — categories { with: { children: { with: { children: true } } } }', () => {
-    const db = makeDb()
-    const { sql } = compilePg(
+    const { sql } = compileSqlite(
       db,
       'categories',
       { with: { children: { with: { children: true } } } },
       RELATIONS,
       TABLES,
     )
-    // Three distinct depth-suffixed aliases — outer, child, grandchild.
     expect(sql).toContain('from "categories" as "categories_0"')
     expect(sql).toContain('from "categories" as "categories_1"')
     expect(sql).toContain('from "categories" as "categories_2"')
-    // Correlation walks each level: child → outer, grandchild → child.
     expect(sql).toContain('"categories_1"."parentId" = "categories_0"."id"')
     expect(sql).toContain('"categories_2"."parentId" = "categories_1"."id"')
-    expect(sql.match(/json_agg/g)?.length).toBe(2)
   })
 
   it('per-relation where parametrizes correctly', () => {
     const db = makeDb()
-    const publishedAt = new Date('2026-01-01T00:00:00.000Z')
-    const { sql, parameters } = compilePg(
+    const since = new Date('2026-01-01T00:00:00.000Z')
+    const { sql, parameters } = compileSqlite(
       db,
       'users',
       {
         with: {
           posts: {
-            where: (p, eb) => eb('publishedAt', '>=', publishedAt),
+            where: (_p, eb) => eb('publishedAt', '>=', since),
           },
         },
       },
       RELATIONS,
       TABLES,
     )
-    expect(sql).toContain('"publishedAt" >= $1')
-    expect(parameters).toEqual([publishedAt])
+    expect(sql).toContain('"publishedAt" >= ?')
+    expect(parameters).toEqual([since])
   })
 
   it('per-relation limit clamps the inner sub-select', () => {
     const db = makeDb()
-    const { sql, parameters } = compilePg(
+    const { sql, parameters } = compileSqlite(
       db,
       'users',
       { with: { posts: { limit: 5 } } },
       RELATIONS,
       TABLES,
     )
-    expect(sql).toContain('limit $1')
+    expect(sql).toContain('limit ?')
     expect(parameters).toEqual([5])
   })
 
   it('outer where + orderBy + limit + offset all flow through', () => {
     const db = makeDb()
-    const { sql, parameters } = compilePg(
+    const { sql, parameters } = compileSqlite(
       db,
       'users',
       {
@@ -251,47 +223,56 @@ describe('compilePg — happy path', () => {
       RELATIONS,
       TABLES,
     )
-    expect(sql).toContain('where "isActive" = $1')
+    expect(sql).toContain('where "isActive" = ?')
     expect(sql).toContain('order by "createdAt"')
-    expect(sql).toContain('limit $2')
-    expect(sql).toContain('offset $3')
+    expect(sql).toContain('limit ?')
+    expect(sql).toContain('offset ?')
+    // SQLite uses positional `?` placeholders — values appear in
+    // the same order they were declared.
     expect(parameters).toEqual([true, 20, 5])
   })
 
   it('mode=first adds LIMIT 1 to the outer query', () => {
     const db = makeDb()
-    const { sql, parameters } = compilePg(db, 'users', {}, RELATIONS, TABLES, 'first')
-    expect(sql).toBe('select * from "users" as "users_0" limit $1')
+    const { sql, parameters } = compileSqlite(db, 'users', {}, RELATIONS, TABLES, 'first')
+    expect(sql).toBe('select * from "users" as "users_0" limit ?')
     expect(parameters).toEqual([1])
   })
 
-  it('mode=unique adds LIMIT 1 to the outer query', () => {
+  it('mode=unique adds LIMIT 1', () => {
     const db = makeDb()
-    const { sql, parameters } = compilePg(db, 'users', {}, RELATIONS, TABLES, 'unique')
-    expect(sql).toBe('select * from "users" as "users_0" limit $1')
+    const { sql, parameters } = compileSqlite(db, 'users', {}, RELATIONS, TABLES, 'unique')
+    expect(sql).toBe('select * from "users" as "users_0" limit ?')
     expect(parameters).toEqual([1])
   })
 
   it('explicit limit overrides the implicit `first` LIMIT 1', () => {
     const db = makeDb()
-    const { sql, parameters } = compilePg(db, 'users', { limit: 10 }, RELATIONS, TABLES, 'first')
-    expect(sql).toContain('limit $1')
+    const { sql, parameters } = compileSqlite(
+      db,
+      'users',
+      { limit: 10 },
+      RELATIONS,
+      TABLES,
+      'first',
+    )
+    expect(sql).toContain('limit ?')
     expect(parameters).toEqual([10])
   })
 })
 
-describe('compilePg — error paths', () => {
+describe('compileSqlite — error paths', () => {
   it('unknown relation throws RelationalQueryUnknownRelationError', () => {
     const db = makeDb()
     expect(() =>
-      compilePg(db, 'users', { with: { nonsense: true } as never }, RELATIONS, TABLES),
+      compileSqlite(db, 'users', { with: { nonsense: true } as never }, RELATIONS, TABLES),
     ).toThrow(RelationalQueryUnknownRelationError)
   })
 
   it('exceeding maxDepth throws RelationalQueryDepthError', () => {
     const db = makeDb()
     expect(() =>
-      compilePg(
+      compileSqlite(
         db,
         'categories',
         {
@@ -302,40 +283,5 @@ describe('compilePg — error paths', () => {
         TABLES,
       ),
     ).toThrow(RelationalQueryDepthError)
-  })
-
-  it('default maxDepth (5) accepts 5 levels of self-reference', () => {
-    const db = makeDb()
-    // 5 levels: categories → children → children → children → children → children (5 nestings)
-    const w = {
-      with: {
-        children: { with: { children: { with: { children: { with: { children: true } } } } } },
-      },
-    } as const
-    expect(() => compilePg(db, 'categories', w, RELATIONS, TABLES)).not.toThrow()
-  })
-
-  it('default maxDepth rejects 6 levels of self-reference', () => {
-    const db = makeDb()
-    const w = {
-      with: {
-        children: {
-          with: {
-            children: {
-              with: {
-                children: {
-                  with: {
-                    children: { with: { children: { with: { children: true } } } },
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-    } as const
-    expect(() => compilePg(db, 'categories', w, RELATIONS, TABLES)).toThrow(
-      RelationalQueryDepthError,
-    )
   })
 })
