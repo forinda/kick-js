@@ -110,6 +110,7 @@ export type {
 } from './query/types'
 export type { ResolvedRelation, ResolvedRelations } from './query/relations'
 export type { RelationSnapshot } from './snapshot/types'
+export type { SchemaToRelationsRegister } from './query/schema-relations-types'
 export {
   RelationalQueryUnknownRelationError,
   RelationalQueryDepthError,

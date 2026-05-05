@@ -132,9 +132,19 @@ packages/vite/src/
 ### Step A.5 — Integration ✅ (2026-05-05)
 
 - [x] `packages/db-pg/__tests__/integration/relational-query.test.ts` — Testcontainers PG, 6 tests: 2-deep nested findMany returns declared shape (with empty-array `[]` not `null`), `findFirst` on empty table returns `null`, `findFirst` clamps via LIMIT 1, `findUnique` returns matched row, per-relation `where` + `limit` filters inner aggregation, row parity with hand-written nested SELECT. Lives in `packages/db-pg/__tests__/integration/` because it needs a real `pg.Pool` + `PostgresDialect` (not just DummyDriver).
-- [x] `examples/task-kickdb-api/src/db/relations-register.ts` — hand-rolled `KickDbRelationsRegister` augmentation for the tasks → {comments, assignees, labels, subtasks, parentTask, reporter} subset. Pulls into `src/index.ts` as a side-effect import. Documents what the kick/db typegen plugin will eventually emit.
 - [x] `examples/task-kickdb-api/src/modules/tasks/tasks.repository.ts` — added `findFullById(id)` using `db.query.tasks.findUnique({ where, with: { comments, assignees, labels } })`. Replaces a four-query N+1 with a single round-trip.
 - [x] db-pg suite: **4 files, 23 tests** (was 17; +6 from this step). example typecheck clean.
+
+### Step A.7 — Typegen extension ✅ (2026-05-05)
+
+- [x] `packages/db/src/dsl/relations.ts` — `relations()` and `Helpers` signatures preserve type info: `relations()` returns `RelationsDecl<TSourceName, TRelationsMap>`, `helpers.one`/`helpers.many` return `RelationOne<TTarget>`/`RelationMany<TTarget>`. Runtime shape unchanged; existing call sites stay assignable.
+- [x] `packages/db/src/query/schema-relations-types.ts` — `SchemaToRelationsRegister<S>` walks the schema barrel for `RelationsDecl` entries and folds them into the registry shape (one entry per source table, each mapping `relationName → { kind, target }` with target as the literal table name).
+- [x] `packages/db/src/index.ts` — re-exports `SchemaToRelationsRegister`.
+- [x] `packages/cli/src/typegen/builtin/db.ts` — emits a third augmentation `KickDbRelationsRegister.db = SchemaToRelationsRegister<typeof appSchema>` alongside the existing `KickDbSchema` + `KickDbRegister`.
+- [x] `packages/cli/__tests__/typegen-db-plugin.test.ts` — assertion updated to require the relations augmentation in the emitted output.
+- [x] `packages/db/__tests__/unit/schema-relations-types.test.ts` — 4 type-level tests: distributive `keyof` over schema, per-table `kind` + literal target, empty-schema fallback, mixed-content schema (tables + relations + non-relation entries).
+- [x] `examples/task-kickdb-api` — deleted the A.5 stop-gap `src/db/relations-register.ts` + its side-effect import in `src/index.ts`. Typegen now emits the equivalent augmentation; example typechecks against it cleanly.
+- [x] Suite deltas — db: **52f/296t** (+4), cli: **24f/231t** (typegen-db-plugin updated), db-pg: **4f/23t** (unchanged), example typecheck clean.
 
 ### Step A.6 — Commit + changeset
 
