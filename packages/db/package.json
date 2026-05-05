@@ -11,7 +11,12 @@
     "mysql",
     "migrations",
     "query-builder",
-    "@forinda/kickjs"
+    "@forinda/kickjs",
+    "@forinda/kickjs-db",
+    "@forinda/kickjs-db-pg",
+    "@forinda/kickjs-db-sqlite",
+    "@forinda/kickjs-db-mysql",
+    "@forinda/kickjs-cli"
   ],
   "type": "module",
   "main": "dist/index.mjs",
