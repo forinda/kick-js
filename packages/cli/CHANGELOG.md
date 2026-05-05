@@ -1,5 +1,12 @@
 # @forinda/kickjs-cli
 
+## 5.3.2
+
+### Patch Changes
+
+- Updated dependencies [[`8f9c153`](https://github.com/forinda/kick-js/commit/8f9c1533aa0d865b472f93fd02c174799d4767d8)]:
+  - @forinda/kickjs-db@5.4.1
+
 ## 5.3.1
 
 ### Patch Changes
