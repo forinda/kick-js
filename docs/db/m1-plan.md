@@ -1,5 +1,7 @@
 # M1 — Walking Skeleton: Implementation Plan
 
+> **Status:** ✅ **Shipped** — runner / introspect / drift / `db-pg` adapter / `examples/task-kickdb-api` all landed before M2 (commit `0b5de4d` cited as M2 prereq). Checklist marked `[x]` on 2026-05-05; doc is historical.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** End-to-end working ORM on Postgres. After M1, an adopter can declare a TS schema, generate + apply reversible migrations against a real database, and execute typed Kysely queries through a KickJS-DI-injected client. The example app `examples/task-kickdb-api` boots and serves real HTTP endpoints backed by the new ORM.
@@ -130,7 +132,7 @@ Memory rules to honor (from MEMORY.md):
 - Modify: `packages/db/src/dsl/columns/index.ts`
 - Create: `packages/db/__tests__/unit/columns-numeric.test.ts`
 
-- [ ] **Step 1.1: Write the failing test**
+- [x] **Step 1.1: Write the failing test**
 
 ```ts
 // packages/db/__tests__/unit/columns-numeric.test.ts
@@ -177,13 +179,13 @@ describe('numeric column builders', () => {
 })
 ```
 
-- [ ] **Step 1.2: Run — fails on missing exports**
+- [x] **Step 1.2: Run — fails on missing exports**
 
 ```bash
 pnpm --filter @forinda/kickjs-db test
 ```
 
-- [ ] **Step 1.3: Add the builders**
+- [x] **Step 1.3: Add the builders**
 
 Append to `packages/db/src/dsl/columns/builders.ts`:
 
@@ -223,7 +225,7 @@ function formatNumeric(base: string, precision?: number, scale?: number): string
 }
 ```
 
-- [ ] **Step 1.4: Re-export from `index.ts`**
+- [x] **Step 1.4: Re-export from `index.ts`**
 
 ```ts
 // packages/db/src/dsl/columns/index.ts — add to the existing list
@@ -245,9 +247,9 @@ export {
 } from './builders'
 ```
 
-- [ ] **Step 1.5: Run — passes**
+- [x] **Step 1.5: Run — passes**
 
-- [ ] **Step 1.6: Commit**
+- [x] **Step 1.6: Commit**
 
 ```bash
 git add packages/db/src/dsl/columns packages/db/__tests__/unit/columns-numeric.test.ts
@@ -261,7 +263,7 @@ git commit -m "feat(db): add bigSerial/bigint/smallint/decimal/numeric/real/doub
 **Story:** M1-S1.
 **Files:** `packages/db/src/dsl/columns/builders.ts`, `index.ts`, `packages/db/__tests__/unit/columns-temporal.test.ts`
 
-- [ ] **Step 2.1: Test**
+- [x] **Step 2.1: Test**
 
 ```ts
 // packages/db/__tests__/unit/columns-temporal.test.ts
@@ -295,7 +297,7 @@ describe('temporal + identity column builders', () => {
 })
 ```
 
-- [ ] **Step 2.2: Implement**
+- [x] **Step 2.2: Implement**
 
 ```ts
 // Append to packages/db/src/dsl/columns/builders.ts
@@ -387,9 +389,9 @@ function formatDefault(value: string): string {
 
 Verify with a unit test: existing `emit-pg-create-drop.test.ts` covers `serial NOT NULL` etc; nothing tests `gen_random_uuid()` yet — add one in `columns-temporal.test.ts` or rely on the integration test in Task 25 to catch.
 
-- [ ] **Step 2.3: Run — passes**
+- [x] **Step 2.3: Run — passes**
 
-- [ ] **Step 2.4: Commit**
+- [x] **Step 2.4: Commit**
 
 ```bash
 git commit -m "feat(db): add char/timestamptz/date/time/interval/uuid column types (M1-S1)"
@@ -402,7 +404,7 @@ git commit -m "feat(db): add char/timestamptz/date/time/interval/uuid column typ
 **Story:** M1-S1.
 **Files:** `packages/db/src/dsl/columns/builders.ts`, `types.ts`, `index.ts`, `packages/db/__tests__/unit/columns-json-array.test.ts`
 
-- [ ] **Step 3.1: Test**
+- [x] **Step 3.1: Test**
 
 ```ts
 import { describe, it, expect } from 'vitest'
@@ -432,7 +434,7 @@ describe('json/jsonb/bytea + array', () => {
 })
 ```
 
-- [ ] **Step 3.2: Implement**
+- [x] **Step 3.2: Implement**
 
 In `builders.ts`:
 
@@ -461,9 +463,9 @@ In `types.ts`, add the `array()` chain method on `ColumnBuilder`:
 
 Re-export `json`, `jsonb`, `bytea` from `index.ts`.
 
-- [ ] **Step 3.3: Run — passes**
+- [x] **Step 3.3: Run — passes**
 
-- [ ] **Step 3.4: Commit**
+- [x] **Step 3.4: Commit**
 
 ```bash
 git commit -m "feat(db): add json/jsonb/bytea + .array() modifier (M1-S1)"
@@ -481,7 +483,7 @@ git commit -m "feat(db): add json/jsonb/bytea + .array() modifier (M1-S1)"
 - Modify: `packages/db/tsdown.config.ts` (add the `pg` entry)
 - Create: `packages/db/__tests__/unit/columns-pg.test.ts`
 
-- [ ] **Step 4.1: Test**
+- [x] **Step 4.1: Test**
 
 ```ts
 // packages/db/__tests__/unit/columns-pg.test.ts
@@ -508,7 +510,7 @@ describe('PG-only column types', () => {
 })
 ```
 
-- [ ] **Step 4.2: Implement**
+- [x] **Step 4.2: Implement**
 
 ```ts
 // packages/db/src/dsl/columns/pg.ts
@@ -537,7 +539,7 @@ export function xml(): ColumnBuilder {
 }
 ```
 
-- [ ] **Step 4.3: Wire subpath**
+- [x] **Step 4.3: Wire subpath**
 
 `packages/db/package.json` — add to `exports`:
 
@@ -573,9 +575,9 @@ entry: {
 '@forinda/kickjs-db/pg': path.resolve(__dirname, 'src/dsl/columns/pg.ts'),
 ```
 
-- [ ] **Step 4.4: Run — build + test pass**
+- [x] **Step 4.4: Run — build + test pass**
 
-- [ ] **Step 4.5: Commit**
+- [x] **Step 4.5: Commit**
 
 ```bash
 git commit -m "feat(db): add @forinda/kickjs-db/pg subpath with vector/citext/money/inet/cidr/xml/tsvector (M1-S1)"
@@ -593,7 +595,7 @@ git commit -m "feat(db): add @forinda/kickjs-db/pg subpath with vector/citext/mo
 - Modify: `packages/db/src/index.ts`
 - Create: `packages/db/__tests__/unit/errors.test.ts`
 
-- [ ] **Step 5.1: Test**
+- [x] **Step 5.1: Test**
 
 ```ts
 import { describe, it, expect } from 'vitest'
@@ -633,7 +635,7 @@ describe('error hierarchy', () => {
 })
 ```
 
-- [ ] **Step 5.2: Implement**
+- [x] **Step 5.2: Implement**
 
 ```ts
 // packages/db/src/errors.ts
@@ -711,7 +713,7 @@ export {
 } from './migrate/errors'
 ```
 
-- [ ] **Step 5.3: Run — passes; commit**
+- [x] **Step 5.3: Run — passes; commit**
 
 ```bash
 git commit -m "feat(db): add KickDbError + Migration* error hierarchy (M1-S3..S6)"
@@ -748,7 +750,7 @@ The journal is the integrity-checked, ordered list of every committed migration.
 
 Hash = `sha256(up.sql + down.sql + snapshot.json)`. Tampering with applied migrations later fails the integrity check at `migrate latest` time.
 
-- [ ] **Step 6.1: Test**
+- [x] **Step 6.1: Test**
 
 ```ts
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
@@ -816,7 +818,7 @@ describe('journal', () => {
 })
 ```
 
-- [ ] **Step 6.2: Implement**
+- [x] **Step 6.2: Implement**
 
 ```ts
 // packages/db/src/migrate/journal.ts
@@ -888,7 +890,7 @@ export async function verifyMigrationHash(
 }
 ```
 
-- [ ] **Step 6.3: Wire into `generate()`**
+- [x] **Step 6.3: Wire into `generate()`**
 
 After writing `up.sql` + `down.sql` + `snapshot.json` + `meta.json`, also append to the journal:
 
@@ -903,7 +905,7 @@ await appendJournalEntry(p.migrationsAbs, p.opts.config.dialect, {
 })
 ```
 
-- [ ] **Step 6.4: Re-export from `index.ts`** + run + commit.
+- [x] **Step 6.4: Re-export from `index.ts`** + run + commit.
 
 ```bash
 git commit -m "feat(db): add _journal.json with deterministic per-migration hashes (M1-S3)"
@@ -923,7 +925,7 @@ git commit -m "feat(db): add _journal.json with deterministic per-migration hash
 
 The runner can't yet talk to a real DB — that comes via `MigrationAdapter` (a slim contract that `db-pg` will satisfy in Task 16). For now, define the interface + the cross-dialect DDL strings.
 
-- [ ] **Step 7.1: Define adapter interface**
+- [x] **Step 7.1: Define adapter interface**
 
 ```ts
 // packages/db/src/migrate/adapter.ts
@@ -963,7 +965,7 @@ export interface MigrationAdapter {
 }
 ```
 
-- [ ] **Step 7.2: Cross-dialect DDL strings**
+- [x] **Step 7.2: Cross-dialect DDL strings**
 
 ```ts
 // packages/db/src/migrate/schema.ts
@@ -1035,7 +1037,7 @@ export function lockTableDdl(dialect: Dialect): string {
 }
 ```
 
-- [ ] **Step 7.3: Test the DDL is dialect-correct**
+- [x] **Step 7.3: Test the DDL is dialect-correct**
 
 ```ts
 // packages/db/__tests__/unit/migrate-tables.test.ts
@@ -1088,7 +1090,7 @@ The lock semantics need testing without spinning a Postgres container per test. 
 - Create: `packages/db/__tests__/unit/lock.test.ts`
 - Modify: `packages/db/src/index.ts`
 
-- [ ] **Step 8.1: Memory adapter**
+- [x] **Step 8.1: Memory adapter**
 
 ```ts
 // packages/db/src/migrate/memory-adapter.ts
@@ -1162,7 +1164,7 @@ export class MemoryMigrationAdapter implements MigrationAdapter {
 }
 ```
 
-- [ ] **Step 8.2: Lock test**
+- [x] **Step 8.2: Lock test**
 
 ```ts
 // packages/db/__tests__/unit/lock.test.ts
@@ -1185,7 +1187,7 @@ describe('MemoryMigrationAdapter lock', () => {
 })
 ```
 
-- [ ] **Step 8.3: Re-export, run, commit**
+- [x] **Step 8.3: Re-export, run, commit**
 
 ```bash
 git commit -m "feat(db): MemoryMigrationAdapter for unit tests (M1-S4)"
@@ -1202,7 +1204,7 @@ git commit -m "feat(db): MemoryMigrationAdapter for unit tests (M1-S4)"
 - Modify: `packages/db/src/index.ts`
 - Create: `packages/db/__tests__/unit/runner-latest.test.ts`
 
-- [ ] **Step 9.1: Runner skeleton**
+- [x] **Step 9.1: Runner skeleton**
 
 ```ts
 // packages/db/src/migrate/runner.ts
@@ -1294,7 +1296,7 @@ export async function migrateLatest(opts: RunnerOptions): Promise<AppliedSummary
 }
 ```
 
-- [ ] **Step 9.2: Test using MemoryMigrationAdapter + a temp migrations dir**
+- [x] **Step 9.2: Test using MemoryMigrationAdapter + a temp migrations dir**
 
 ```ts
 // packages/db/__tests__/unit/runner-latest.test.ts
@@ -1391,7 +1393,7 @@ describe('migrateLatest', () => {
 })
 ```
 
-- [ ] **Step 9.3: Re-export, run, commit**
+- [x] **Step 9.3: Re-export, run, commit**
 
 ```bash
 git commit -m "feat(db): migrateLatest runner — lock + batch + hash verify + reviewed enforcement (M1-S5)"
@@ -1406,7 +1408,7 @@ git commit -m "feat(db): migrateLatest runner — lock + batch + hash verify + r
 
 `migrate up` applies the next single pending migration (vs `migrateLatest` which applies all). Same batch semantics — uses the next batch number even for one migration.
 
-- [ ] **Step 10.1: Implement**
+- [x] **Step 10.1: Implement**
 
 ```ts
 // In runner.ts — add alongside migrateLatest
@@ -1421,7 +1423,7 @@ Refactor: move the body of `migrateLatest` into a private function `runForward(o
 - `migrateLatest` filters all pending and calls `runForward`.
 - `migrateUp` filters pending and slices off the first entry, calling `runForward` with that single-element array.
 
-- [ ] **Step 10.2: Test**
+- [x] **Step 10.2: Test**
 
 ```ts
 // In runner-up-down.test.ts (new file)
@@ -1443,7 +1445,7 @@ describe('migrateUp', () => {
 
 Extract a shared fixture file: `packages/db/__tests__/fixtures/seed-migration.ts` with the `seedMigration` helper. Update Task 9's test to import from there.
 
-- [ ] **Step 10.3: Run + commit**
+- [x] **Step 10.3: Run + commit**
 
 ```bash
 git commit -m "feat(db): migrateUp runner — apply single next pending (M1-S5)"
@@ -1457,7 +1459,7 @@ git commit -m "feat(db): migrateUp runner — apply single next pending (M1-S5)"
 
 `migrate down` reverses the most recent applied entry. Reads `down.sql` from the migration dir, applies it, removes the row from `kick_migrations`.
 
-- [ ] **Step 11.1: Implement**
+- [x] **Step 11.1: Implement**
 
 ```ts
 // In runner.ts
@@ -1491,7 +1493,7 @@ export async function migrateDown(opts: RunnerOptions): Promise<{ reversed: stri
 }
 ```
 
-- [ ] **Step 11.2: Test (extend `runner-up-down.test.ts`)**
+- [x] **Step 11.2: Test (extend `runner-up-down.test.ts`)**
 
 ```ts
 describe('migrateDown', () => {
@@ -1514,7 +1516,7 @@ describe('migrateDown', () => {
 })
 ```
 
-- [ ] **Step 11.3: Commit**
+- [x] **Step 11.3: Commit**
 
 ```bash
 git commit -m "feat(db): migrateDown runner — reverse most recent (M1-S5)"
@@ -1528,7 +1530,7 @@ git commit -m "feat(db): migrateDown runner — reverse most recent (M1-S5)"
 
 Reverses every migration in the most recent batch as a single unit. Same lock + reviewed checks. Order: reverse-applied order (so a batch of [a, b, c] tears down c, b, a).
 
-- [ ] **Step 12.1: Implement**
+- [x] **Step 12.1: Implement**
 
 ```ts
 // In runner.ts
@@ -1563,7 +1565,7 @@ export async function migrateRollback(opts: RunnerOptions): Promise<{ reversed: 
 }
 ```
 
-- [ ] **Step 12.2: Test**
+- [x] **Step 12.2: Test**
 
 ```ts
 // packages/db/__tests__/unit/runner-rollback.test.ts
@@ -1585,7 +1587,7 @@ describe('migrateRollback', () => {
 })
 ```
 
-- [ ] **Step 12.3: Commit**
+- [x] **Step 12.3: Commit**
 
 ```bash
 git commit -m "feat(db): migrateRollback runner — reverse entire last batch (M1-S5)"
@@ -1599,7 +1601,7 @@ git commit -m "feat(db): migrateRollback runner — reverse entire last batch (M
 
 Returns a structured summary of all journal entries — applied vs pending, batch numbers, hashes — for the CLI to render and for tests to assert.
 
-- [ ] **Step 13.1: Implement**
+- [x] **Step 13.1: Implement**
 
 ```ts
 // In runner.ts
@@ -1640,7 +1642,7 @@ export async function migrateStatus(
 }
 ```
 
-- [ ] **Step 13.2: Test + commit**
+- [x] **Step 13.2: Test + commit**
 
 ```ts
 // packages/db/__tests__/unit/runner-status.test.ts
@@ -1681,7 +1683,7 @@ git commit -m "feat(db): migrateStatus runner — applied/pending summary (M1-S5
 
 The introspector reads `information_schema.tables/columns/key_column_usage` + `pg_indexes` + `pg_constraint` and emits the canonical `SchemaSnapshot` IR — same shape that `extractSnapshot()` produces from the DSL. One IR, two producers.
 
-- [ ] **Step 14.1: Define the runner interface (driver-agnostic)**
+- [x] **Step 14.1: Define the runner interface (driver-agnostic)**
 
 Create `packages/db/src/migrate/introspect-types.ts`:
 
@@ -1703,7 +1705,7 @@ export interface IntrospectPgOptions {
 }
 ```
 
-- [ ] **Step 14.2: Write the failing integration test**
+- [x] **Step 14.2: Write the failing integration test**
 
 Create `packages/db/__tests__/integration/introspect-pg.test.ts`:
 
@@ -1829,13 +1831,13 @@ describe('introspectPg()', () => {
 })
 ```
 
-- [ ] **Step 14.3: Run — fails (no `introspectPg` export yet)**
+- [x] **Step 14.3: Run — fails (no `introspectPg` export yet)**
 
 ```bash
 pnpm --filter @forinda/kickjs-db test
 ```
 
-- [ ] **Step 14.4: Implement `introspectPg()` — orchestrator**
+- [x] **Step 14.4: Implement `introspectPg()` — orchestrator**
 
 Create `packages/db/src/migrate/introspect-pg.ts`:
 
@@ -1882,7 +1884,7 @@ export async function introspectPg(
 }
 ```
 
-- [ ] **Step 14.5: Implement `readColumns()` — types + nullability + defaults + primary key flag**
+- [x] **Step 14.5: Implement `readColumns()` — types + nullability + defaults + primary key flag**
 
 Append to the same file:
 
@@ -1995,7 +1997,7 @@ function normalizeDefault(raw: string | null): string | null {
 }
 ```
 
-- [ ] **Step 14.6: Implement `readIndexes()` — exclude PK-backing index**
+- [x] **Step 14.6: Implement `readIndexes()` — exclude PK-backing index**
 
 Still in the same file:
 
@@ -2054,7 +2056,7 @@ async function readIndexes(
 }
 ```
 
-- [ ] **Step 14.7: Implement `readForeignKeys()`**
+- [x] **Step 14.7: Implement `readForeignKeys()`**
 
 Still in the same file:
 
@@ -2136,7 +2138,7 @@ function mapFkAction(raw: string): FkAction {
 }
 ```
 
-- [ ] **Step 14.8: Re-export from package barrel**
+- [x] **Step 14.8: Re-export from package barrel**
 
 Add to `packages/db/src/index.ts`:
 
@@ -2145,7 +2147,7 @@ export { introspectPg } from './migrate/introspect-pg'
 export type { IntrospectPgOptions, PgQueryRunner } from './migrate/introspect-types'
 ```
 
-- [ ] **Step 14.9: Run — passes**
+- [x] **Step 14.9: Run — passes**
 
 ```bash
 pnpm --filter @forinda/kickjs-db test
@@ -2153,7 +2155,7 @@ pnpm --filter @forinda/kickjs-db test
 
 Expected: integration test passes (~30s for container start + ~3s test). All other tests stay green.
 
-- [ ] **Step 14.10: Format + commit**
+- [x] **Step 14.10: Format + commit**
 
 ```bash
 pnpm prettier --write packages/db/src/migrate/introspect-pg.ts packages/db/src/migrate/introspect-types.ts packages/db/__tests__/integration/introspect-pg.test.ts packages/db/src/index.ts
@@ -2302,7 +2304,7 @@ git commit -m "feat(db): drift detection via diff(live, expected) (M1-S6)"
 
 The plugin shape uses `defineAdapter` per memory rule. It takes a `MigrationAdapter` (provided by `db-pg` in Task 19) plus runner config, registers under DI, runs migrationsOnBoot policy, exposes introspect/devtoolsTabs.
 
-- [ ] **Step 16.1: Implement**
+- [x] **Step 16.1: Implement**
 
 ```ts
 // packages/db/src/adapter.ts
@@ -2370,7 +2372,7 @@ export const kickDbAdapter = (opts: KickDbAdapterOptions) =>
   })
 ```
 
-- [ ] **Step 16.2: Test using a stub migrationAdapter + Container.create()**
+- [x] **Step 16.2: Test using a stub migrationAdapter + Container.create()**
 
 ```ts
 // adapter.test.ts
@@ -2398,7 +2400,7 @@ describe('kickDbAdapter', () => {
 })
 ```
 
-- [ ] **Step 16.3: Re-export, run, commit**
+- [x] **Step 16.3: Re-export, run, commit**
 
 ```bash
 git commit -m "feat(db): kickDbAdapter() via defineAdapter — boot policy + lifecycle (M1-S7)"
@@ -2412,7 +2414,7 @@ git commit -m "feat(db): kickDbAdapter() via defineAdapter — boot policy + lif
 
 Integration test extension of Task 16 that exercises each boot policy end-to-end against a real Postgres container. Lands in `packages/db/__tests__/integration/boot-policy.test.ts`.
 
-- [ ] **Step 17.1: Test scaffold**
+- [x] **Step 17.1: Test scaffold**
 
 ```ts
 // boot-policy.test.ts (sketch)
@@ -2433,7 +2435,7 @@ it(
 
 This test is **deferred to land alongside Task 19** since it requires a real `pgAdapter`. Mark this task's tests as `it.skip()` for now and complete in Task 19.
 
-- [ ] **Step 17.2: Stub commit (skip-marker tests)**
+- [x] **Step 17.2: Stub commit (skip-marker tests)**
 
 ```bash
 git commit -m "test(db): boot-policy integration scaffold — completed alongside Task 19 (M1-S7)"
@@ -2462,7 +2464,7 @@ export const DB_CLIENT = DB_PRIMARY
 
 (Forward reference to `KickDbClient` from Task 19 — resolves once Task 19 lands.)
 
-- [ ] **Step 18.1: Test that the tokens exist + are unique**
+- [x] **Step 18.1: Test that the tokens exist + are unique**
 
 ```ts
 import { describe, it, expect } from 'vitest'
@@ -2481,7 +2483,7 @@ describe('DI tokens', () => {
 })
 ```
 
-- [ ] **Step 18.2: Commit**
+- [x] **Step 18.2: Commit**
 
 ```bash
 git commit -m "feat(db): export DB_PRIMARY/DB_REPLICA/DB_CLIENT DI tokens (M1-S9)"
@@ -2512,7 +2514,7 @@ Largest task in M1. Three logical pieces — each their own commit:
 
 ### Task 19a: Bootstrap `packages/db-pg/` and ship `pgAdapter`
 
-- [ ] **Step 19a.1: Create `packages/db-pg/package.json`**
+- [x] **Step 19a.1: Create `packages/db-pg/package.json`**
 
 ```json
 {
@@ -2576,7 +2578,7 @@ Largest task in M1. Three logical pieces — each their own commit:
 }
 ```
 
-- [ ] **Step 19a.2: Create `packages/db-pg/tsconfig.json`**
+- [x] **Step 19a.2: Create `packages/db-pg/tsconfig.json`**
 
 ```json
 {
@@ -2589,7 +2591,7 @@ Largest task in M1. Three logical pieces — each their own commit:
 }
 ```
 
-- [ ] **Step 19a.3: Create `packages/db-pg/tsconfig.test.json`**
+- [x] **Step 19a.3: Create `packages/db-pg/tsconfig.test.json`**
 
 ```json
 {
@@ -2611,7 +2613,7 @@ Largest task in M1. Three logical pieces — each their own commit:
 }
 ```
 
-- [ ] **Step 19a.4: Create `packages/db-pg/tsdown.config.ts`**
+- [x] **Step 19a.4: Create `packages/db-pg/tsdown.config.ts`**
 
 ```ts
 import { defineConfig } from 'tsdown'
@@ -2629,7 +2631,7 @@ export default defineConfig({
 })
 ```
 
-- [ ] **Step 19a.5: Create `packages/db-pg/vitest.config.ts`**
+- [x] **Step 19a.5: Create `packages/db-pg/vitest.config.ts`**
 
 ```ts
 import { defineConfig } from 'vitest/config'
@@ -2664,7 +2666,7 @@ export default defineConfig({
 })
 ```
 
-- [ ] **Step 19a.6: Create README + LICENSE**
+- [x] **Step 19a.6: Create README + LICENSE**
 
 ```bash
 cp packages/db/LICENSE packages/db-pg/LICENSE
@@ -2682,7 +2684,7 @@ migrations and introspect against a real Postgres database, plus Kysely's
 **Status:** Pre-release. Private until M1 ships and the API stabilises.
 ```
 
-- [ ] **Step 19a.7: Empty barrel + initial install**
+- [x] **Step 19a.7: Empty barrel + initial install**
 
 ```ts
 // packages/db-pg/src/index.ts
@@ -2699,14 +2701,14 @@ pnpm --filter @forinda/kickjs-db-pg typecheck
 
 Expected: build succeeds (empty bundle), test exits 0 (`passWithNoTests`), typecheck exits 0.
 
-- [ ] **Step 19a.8: Commit the package shell**
+- [x] **Step 19a.8: Commit the package shell**
 
 ```bash
 git add packages/db-pg pnpm-lock.yaml
 git commit -m "feat(db-pg): bootstrap @forinda/kickjs-db-pg package shell (M1-S8)"
 ```
 
-- [ ] **Step 19a.9: Write the failing integration test for `pgAdapter`**
+- [x] **Step 19a.9: Write the failing integration test for `pgAdapter`**
 
 Create `packages/db-pg/__tests__/integration/adapter.test.ts`:
 
@@ -2830,7 +2832,7 @@ describe('pgAdapter() — MigrationAdapter contract', () => {
 })
 ```
 
-- [ ] **Step 19a.10: Run the failing test**
+- [x] **Step 19a.10: Run the failing test**
 
 ```bash
 pnpm --filter @forinda/kickjs-db-pg test
@@ -2838,7 +2840,7 @@ pnpm --filter @forinda/kickjs-db-pg test
 
 Expected: FAIL — no `pgAdapter` exported yet.
 
-- [ ] **Step 19a.11: Implement `pgAdapter`**
+- [x] **Step 19a.11: Implement `pgAdapter`**
 
 Create `packages/db-pg/src/adapter.ts`:
 
@@ -2966,14 +2968,14 @@ export function pgAdapter(opts: PgAdapterOptions): MigrationAdapter {
 }
 ```
 
-- [ ] **Step 19a.12: Re-export from barrel**
+- [x] **Step 19a.12: Re-export from barrel**
 
 ```ts
 // packages/db-pg/src/index.ts
 export { pgAdapter, type PgAdapterOptions } from './adapter'
 ```
 
-- [ ] **Step 19a.13: Run — passes**
+- [x] **Step 19a.13: Run — passes**
 
 ```bash
 pnpm --filter @forinda/kickjs-db-pg build
@@ -2982,7 +2984,7 @@ pnpm --filter @forinda/kickjs-db-pg test
 
 Expected: integration test green (one container start, ~8 assertions).
 
-- [ ] **Step 19a.14: Format + commit**
+- [x] **Step 19a.14: Format + commit**
 
 ```bash
 pnpm prettier --write packages/db-pg/src/adapter.ts packages/db-pg/src/index.ts packages/db-pg/__tests__/integration/adapter.test.ts
@@ -3005,7 +3007,7 @@ EOF
 
 ### Task 19b: `KickDbClient` over Kysely (events + transaction + savepoint)
 
-- [ ] **Step 19b.1: Define the client surface**
+- [x] **Step 19b.1: Define the client surface**
 
 Create `packages/db/src/client/types.ts`:
 
@@ -3089,7 +3091,7 @@ export interface CreateDbClientOptions<TSchema, DB = unknown> {
 }
 ```
 
-- [ ] **Step 19b.2: Schema → Kysely DB type (M1 permissive version)**
+- [x] **Step 19b.2: Schema → Kysely DB type (M1 permissive version)**
 
 Create `packages/db/src/client/schema-types.ts`:
 
@@ -3110,7 +3112,7 @@ export type SchemaToKysely<S> = {
 }
 ```
 
-- [ ] **Step 19b.3: Lifecycle event plugin (Kysely interceptor)**
+- [x] **Step 19b.3: Lifecycle event plugin (Kysely interceptor)**
 
 Create `packages/db/src/client/events.ts`:
 
@@ -3186,7 +3188,7 @@ export class KickDbEventEmitter {
 }
 ```
 
-- [ ] **Step 19b.4: Implement `createDbClient()`**
+- [x] **Step 19b.4: Implement `createDbClient()`**
 
 Create `packages/db/src/client/create.ts`:
 
@@ -3301,7 +3303,7 @@ function wrap<DB>(kysely: Kysely<DB>, ctx: InternalContext): KickDbClient<DB> {
 
 > **Note on `beforeQuery` mutation:** Kysely's plugin transformQuery happens at AST level, not raw SQL. Rewriting SQL strings is best done by a query interceptor wrapping `kysely.executeQuery`. M1 ships event timing only; SQL-mutation `beforeQuery` lands in M2 alongside `$extends`. The type stays in the surface so adopters relying on it have a stable API; the runtime just doesn't fire it yet.
 
-- [ ] **Step 19b.5: Re-export from package barrel**
+- [x] **Step 19b.5: Re-export from package barrel**
 
 Add to `packages/db/src/index.ts`:
 
@@ -3319,7 +3321,7 @@ export type {
 export type { SchemaToKysely } from './client/schema-types'
 ```
 
-- [ ] **Step 19b.6: Unit test event emitter mechanics**
+- [x] **Step 19b.6: Unit test event emitter mechanics**
 
 Create `packages/db/__tests__/unit/client-events.test.ts`:
 
@@ -3353,7 +3355,7 @@ describe('KickDbEventEmitter', () => {
 })
 ```
 
-- [ ] **Step 19b.7: Integration test — Kysely queries against real PG**
+- [x] **Step 19b.7: Integration test — Kysely queries against real PG**
 
 Create `packages/db-pg/__tests__/integration/client.test.ts`:
 
@@ -3453,7 +3455,7 @@ describe('KickDbClient over Kysely (PG)', () => {
 })
 ```
 
-- [ ] **Step 19b.8: Run + format + commit**
+- [x] **Step 19b.8: Run + format + commit**
 
 ```bash
 pnpm --filter @forinda/kickjs-db build
@@ -3485,7 +3487,7 @@ EOF
 
 ### Task 19c: Wire the deferred boot-policy integration test (Task 17)
 
-- [ ] **Step 19c.1: Now that `pgAdapter` exists, re-enable the boot-policy test**
+- [x] **Step 19c.1: Now that `pgAdapter` exists, re-enable the boot-policy test**
 
 Replace the skipped `it.skip(...)` from Task 17's stub with the real test against a Testcontainers Postgres. Implementation pattern matches `boot-policy.test.ts` sketched in Task 17 — `pgAdapter({ pool })`, seed migrations dir, run `kickDbAdapter().beforeStart({...})` with each policy, assert state.
 
@@ -3517,7 +3519,7 @@ Each test:
 3. Calls `kickDbAdapter({ migrationAdapter, migrationsDir, migrationsOnBoot: <policy> }).beforeStart({...})`.
 4. Asserts the policy's documented behavior.
 
-- [ ] **Step 19c.2: Run + commit**
+- [x] **Step 19c.2: Run + commit**
 
 ```bash
 pnpm --filter @forinda/kickjs-db-pg test
@@ -3583,8 +3585,8 @@ db: {
 
 Add `connectionString` (string) and `adapter` (factory) to `DbConfig`. The CLI prefers `adapter` if both are set.
 
-- [ ] **Step 20.1: Extend `DbConfig`** + the 5 subcommand actions.
-- [ ] **Step 20.2: Smoke test from `examples/db-spike-api`** (after seeding `connectionString` env var).
+- [x] **Step 20.1: Extend `DbConfig`** + the 5 subcommand actions.
+- [x] **Step 20.2: Smoke test from `examples/db-spike-api`** (after seeding `connectionString` env var).
 
 ```bash
 git commit -m "feat(cli): register kick db migrate {latest,up,down,rollback,status} (M1-S5)"
@@ -3626,9 +3628,9 @@ export const users = table('users', {
 
 Lives in `packages/db/src/snapshot/render.ts`.
 
-- [ ] **Step 21.1: Implement renderer**
-- [ ] **Step 21.2: Test — round-trip a known snapshot through render → eval → extract → equal to original**
-- [ ] **Step 21.3: Wire CLI subcommand**
+- [x] **Step 21.1: Implement renderer**
+- [x] **Step 21.2: Test — round-trip a known snapshot through render → eval → extract → equal to original**
+- [x] **Step 21.3: Wire CLI subcommand**
 
 ```bash
 git commit -m "feat(cli): kick db introspect — generate schema.ts from live DB (M1-S10)"
@@ -3642,7 +3644,7 @@ git commit -m "feat(cli): kick db introspect — generate schema.ts from live DB
 
 The exit-gate test for M1: scaffold the example via the CLI, customize to use kickjs-db instead of prisma, all endpoints return parity responses to the prisma example.
 
-- [ ] **Step 22.1: Scaffold**
+- [x] **Step 22.1: Scaffold**
 
 ```bash
 cd examples
@@ -3652,16 +3654,16 @@ node ../packages/cli/bin.js new task-kickdb-api \
 
 Per CLAUDE.md mandatory rule.
 
-- [ ] **Step 22.2: Customize `package.json`**
+- [x] **Step 22.2: Customize `package.json`**
 
 - Set `"private": true`.
 - Rename to `@forinda/kickjs-example-task-kickdb`.
 - Add `@forinda/kickjs-db` + `@forinda/kickjs-db-pg` workspace deps.
 - Add `pg` runtime dep.
 
-- [ ] **Step 22.3: Add `src/db/schema.ts`** mirroring task-prisma-api's `prisma/schema.prisma`. Tables: `users`, `tasks`, `lists`, etc.
+- [x] **Step 22.3: Add `src/db/schema.ts`** mirroring task-prisma-api's `prisma/schema.prisma`. Tables: `users`, `tasks`, `lists`, etc.
 
-- [ ] **Step 22.4: Generate + commit migrations**
+- [x] **Step 22.4: Generate + commit migrations**
 
 ```bash
 cd examples/task-kickdb-api
@@ -3669,7 +3671,7 @@ pnpm db:generate init
 # Hand-edit up.sql/down.sql if needed; flip meta.json `reviewed: true`.
 ```
 
-- [ ] **Step 22.5: Replace prisma client usage with KickDb**
+- [x] **Step 22.5: Replace prisma client usage with KickDb**
 
 For each module (users, tasks, lists), rewrite the repository:
 
@@ -3682,7 +3684,7 @@ async findById(id: string) {
 }
 ```
 
-- [ ] **Step 22.6: Wire `kickDbAdapter()` in `src/index.ts`**
+- [x] **Step 22.6: Wire `kickDbAdapter()` in `src/index.ts`**
 
 ```ts
 import { Pool } from 'pg'
@@ -3706,13 +3708,13 @@ export const app = await bootstrap({
 })
 ```
 
-- [ ] **Step 22.7: Update `scripts/release.js`** EXAMPLES array per CLAUDE.md mandatory rule.
+- [x] **Step 22.7: Update `scripts/release.js`** EXAMPLES array per CLAUDE.md mandatory rule.
 
-- [ ] **Step 22.8: Update root `README.md`** Example Apps table.
+- [x] **Step 22.8: Update root `README.md`** Example Apps table.
 
-- [ ] **Step 22.9: Update `docs/examples/task-kickdb-api.md`** + sidebar.
+- [x] **Step 22.9: Update `docs/examples/task-kickdb-api.md`** + sidebar.
 
-- [ ] **Step 22.10: Run + verify**
+- [x] **Step 22.10: Run + verify**
 
 ```bash
 pnpm install
@@ -3721,7 +3723,7 @@ cd examples/task-kickdb-api && pnpm dev
 # In another terminal: curl every endpoint that task-prisma-api exposes; assert parity.
 ```
 
-- [ ] **Step 22.11: Commit**
+- [x] **Step 22.11: Commit**
 
 ```bash
 git commit -m "example(task-kickdb-api): full DDD port of task-prisma-api on kickjs-db (M1-S10)"
