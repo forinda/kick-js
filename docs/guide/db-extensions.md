@@ -190,7 +190,7 @@ const dbX = db.$extends({
 
 ### Result extensions
 
-Add derived properties to every selected row of a table. Each computed declares which columns it `needs` and a `compute(row)` function that produces the value. The Kysely plugin rewrites the query tree before SQL emit so the listed columns are fetched whenever that table is selected:
+Add derived properties to every selected row of a table. Each computed declares which columns it `needs` and a `compute(row)` function that produces the value. A query-tree transform rewrites the query before SQL emit so the listed columns are fetched whenever that table is selected:
 
 ```ts
 const dbX = db.$extends({
@@ -216,7 +216,7 @@ const rows = await dbX.selectFrom('posts').selectAll().execute()
 - A throwing `compute()` degrades to `undefined` on that row's property; sibling computeds and rows still complete cleanly.
 - Single-table only: joins, sub-selects, multi-table FROM clauses pass through untouched. Cross-table computeds are roadmap.
 
-**How the rebuild works** — `$extends({ result })` calls `qb.withPlugin()` to append a Kysely plugin that owns the transform pair. The new client shares the original's event emitter, savepoint counter, and dialect tag, so `.transaction()` / `.on('slowQuery', …)` / per-call savepoints keep working transparently. `$extends({ model })` alone (no `result`) skips the rebuild — it stays a thin Proxy as before. Composing both in one call is the common path:
+**How the rebuild works** — `$extends({ result })` registers a query-pipeline plugin that owns the transform pair. The new client shares the original's event emitter, savepoint counter, and dialect tag, so `.transaction()` / `.on('slowQuery', …)` / per-call savepoints keep working transparently. `$extends({ model })` alone (no `result`) skips the rebuild — it stays a thin Proxy as before. Composing both in one call is the common path:
 
 ```ts
 const dbX = db.$extends({

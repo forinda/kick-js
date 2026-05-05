@@ -1,8 +1,13 @@
 # @forinda/kickjs-db-sqlite
 
-> better-sqlite3 adapter for `@forinda/kickjs-db` — `MigrationAdapter` + Kysely `SqliteDialect`.
+> SQLite adapter for [`@forinda/kickjs-db`](https://www.npmjs.com/package/@forinda/kickjs-db).
 
-Ships the bridge between `@forinda/kickjs-db`'s migration runner / relational query layer and an in-process SQLite database via [`better-sqlite3`](https://github.com/WiseLibs/better-sqlite3) (or any structurally compatible handle, e.g. `bun:sqlite`).
+Two factories:
+
+- **`sqliteDialect({ database })`** — query-layer dialect for `createDbClient({ dialect })`.
+- **`sqliteAdapter({ database })`** — `MigrationAdapter` for `kick db migrate` + `kickDbAdapter` boot-time apply.
+
+Both consume a [`better-sqlite3`](https://github.com/WiseLibs/better-sqlite3) handle (or any structurally compatible runtime, e.g. `bun:sqlite`).
 
 ## Install
 
@@ -27,12 +32,10 @@ export const db = createDbClient({
 export const migrationAdapter = sqliteAdapter({ database })
 ```
 
-`createDbClient` auto-attaches Kysely's `ParseJSONResultsPlugin` for the SQLite dialect — `db.query.X.findMany({ with })` round-trips nested rows as parsed JS objects rather than JSON-encoded TEXT.
+`db.query.X.findMany({ with })` round-trips nested rows as parsed JS objects: SQLite's JSON aggregation returns TEXT, but `createDbClient` transparently parses it on the way back so adopters never see the encoded form.
 
-## What ships
+## Notes
 
-- **`sqliteDialect({ database })`** — wraps Kysely's `SqliteDialect`.
-- **`sqliteAdapter({ database })`** — implements `MigrationAdapter` for `@forinda/kickjs-db`'s migration runner (`kick db migrate` + `kickDbAdapter` boot-time apply). Handles `kick_migrations` / `kick_migrations_lock` table creation, lock acquisition, applying SQL in / out of a transaction.
 - **Drift detection (`introspect()`) is not yet implemented in v1** — it throws `KickDbError` with code `KICK_DB_INTROSPECT_NOT_SUPPORTED`. Set `driftCheck: 'off'` on the migration runner until a follow-up adds the `sqlite_master` + `pragma` walk.
 
 ## License
