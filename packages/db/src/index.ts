@@ -121,6 +121,7 @@ export {
   RelationalQueryUnknownRelationError,
   RelationalQueryDepthError,
   RelationalQueryAliasCollisionError,
+  RelationalQueryAmbiguousRelationNameError,
   RelationalQueryMissingInverseError,
   RelationalQueryNotSupportedError,
 } from './query/errors'

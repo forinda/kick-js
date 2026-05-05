@@ -18,7 +18,11 @@
 import type { Relation, RelationOne, RelationsDecl } from '../dsl/relations'
 import type { TableSnapshot } from '../snapshot/types'
 import type { ResolvedRelations } from './relations'
-import { RelationalQueryAliasCollisionError, RelationalQueryMissingInverseError } from './errors'
+import {
+  RelationalQueryAliasCollisionError,
+  RelationalQueryAmbiguousRelationNameError,
+  RelationalQueryMissingInverseError,
+} from './errors'
 
 interface MaybeRelations {
   __isRelations?: boolean
@@ -78,27 +82,63 @@ export function extractRelations(
           target: rel.target.__name,
           sourceColumns: rel.fields.map((f) => f.__name),
           targetColumns: rel.references.map((r) => r.__name),
+          ...(rel.relationName ? { relationName: rel.relationName } : {}),
         }
         continue
       }
 
-      // `many` — resolve via the inverse `one` on the target table
-      // when declared. Otherwise fall back to FK introspection: walk
-      // the target table's foreign keys for a single FK back to the
-      // source. This keeps M0/M1 schemas (declared with `many` only,
-      // no inverse) working without a forced rewrite.
+      // `many` resolution precedence (spec-relation-name.md §4):
+      //   1. `relationName` match — both sides declared.
+      //   2. Single untagged inverse `one` — exactly one + neither
+      //      side has a relationName.
+      //   3. FK introspection — exactly one FK back to source.
+      //   4. Throw MissingInverseError with hint.
       const target = rel.target.__name
-      const inverse = findInverseOne(declsBySource[target] ?? {}, sourceTable)
-      if (inverse) {
+      const targetRelations = declsBySource[target] ?? {}
+
+      // Step 1 — paired by relationName.
+      if (rel.relationName) {
+        const matchingInverses = findInversesByRelationName(
+          targetRelations,
+          sourceTable,
+          rel.relationName,
+        )
+        if (matchingInverses.length > 1) {
+          throw new RelationalQueryAmbiguousRelationNameError(
+            sourceTable,
+            rel.relationName,
+            matchingInverses.map((m) => m.relationKey),
+          )
+        }
+        if (matchingInverses.length === 1) {
+          const inverse = matchingInverses[0]!.relation
+          out[sourceTable][relationName] = {
+            kind: 'many',
+            target,
+            sourceColumns: inverse.references.map((r) => r.__name),
+            targetColumns: inverse.fields.map((f) => f.__name),
+            relationName: rel.relationName,
+          }
+          continue
+        }
+        // Tagged on this side but no matching inverse — fall through
+        // to FK fallback so the eventual error message lists what
+        // the resolver looked at.
+      }
+
+      // Step 2 — single untagged inverse `one`.
+      const untaggedInverse = findUniqueUntaggedInverse(targetRelations, sourceTable)
+      if (untaggedInverse) {
         out[sourceTable][relationName] = {
           kind: 'many',
           target,
-          sourceColumns: inverse.references.map((r) => r.__name),
-          targetColumns: inverse.fields.map((f) => f.__name),
+          sourceColumns: untaggedInverse.references.map((r) => r.__name),
+          targetColumns: untaggedInverse.fields.map((f) => f.__name),
         }
         continue
       }
 
+      // Step 3 — FK introspection fallback.
       const fkFallback = resolveByForeignKey(tables[target], sourceTable)
       if (fkFallback) {
         out[sourceTable][relationName] = {
@@ -110,6 +150,7 @@ export function extractRelations(
         continue
       }
 
+      // Step 4 — give up.
       throw new RelationalQueryMissingInverseError(sourceTable, relationName, target)
     }
   }
@@ -117,16 +158,51 @@ export function extractRelations(
   return out
 }
 
-function findInverseOne(
+/**
+ * Step-1 helper — find inverse `one` declarations on the target
+ * table whose `relationName` matches the requested tag AND whose
+ * own target is the source. Returns the relation key alongside the
+ * relation itself so the ambiguous-error message can list the
+ * conflicting names.
+ */
+function findInversesByRelationName(
+  targetRelations: Record<string, Relation>,
+  sourceTable: string,
+  relationName: string,
+): Array<{ relationKey: string; relation: RelationOne }> {
+  const matches: Array<{ relationKey: string; relation: RelationOne }> = []
+  for (const [key, rel] of Object.entries(targetRelations)) {
+    if (
+      rel.kind === 'one' &&
+      rel.target.__name === sourceTable &&
+      rel.relationName === relationName
+    ) {
+      matches.push({ relationKey: key, relation: rel })
+    }
+  }
+  return matches
+}
+
+/**
+ * Step-2 helper — find a single inverse `one` on the target table
+ * pointing at the source AND with **no** `relationName` set. The
+ * uniqueness check is the M4.B tightening of M3's first-match
+ * heuristic; multi-FK schemas now surface as `MissingInverseError`
+ * (which routes adopters at adding `relationName`) instead of
+ * silently picking the first inverse.
+ */
+function findUniqueUntaggedInverse(
   targetRelations: Record<string, Relation>,
   sourceTable: string,
 ): RelationOne | null {
+  let unique: RelationOne | null = null
   for (const rel of Object.values(targetRelations)) {
-    if (rel.kind === 'one' && rel.target.__name === sourceTable) {
-      return rel
+    if (rel.kind === 'one' && rel.target.__name === sourceTable && rel.relationName === undefined) {
+      if (unique) return null // ambiguous — caller falls through
+      unique = rel
     }
   }
-  return null
+  return unique
 }
 
 /**

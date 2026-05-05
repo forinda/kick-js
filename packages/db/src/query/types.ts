@@ -60,10 +60,16 @@ export interface KickDbRelationsRegister {}
  * registry stays decoupled from any particular `DB` generic; the
  * compile-time check that `target` lives in the local `DB` happens
  * inside `WithClause`.
+ *
+ * `relationName` (optional) is the pairing tag from
+ * `relations()`'s helpers. When set, the resolver uses it to pair
+ * `one` + `many` declarations across multi-FK schemas. See
+ * docs/db/spec-relation-name.md (M4.B).
  */
 export interface RelationMapEntry {
   kind: 'one' | 'many'
   target: string
+  relationName?: string
 }
 
 /**

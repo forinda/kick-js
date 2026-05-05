@@ -18,9 +18,10 @@ import { extractSnapshot } from '../../src/snapshot/extract'
 import { extractRelations } from '../../src/query/extract-relations'
 import {
   RelationalQueryAliasCollisionError,
+  RelationalQueryAmbiguousRelationNameError,
   RelationalQueryMissingInverseError,
 } from '../../src/query/errors'
-import { table, serial, varchar, uuid, integer, type ColumnRef } from '../../src/index'
+import { table, serial, varchar, uuid, integer, text, type ColumnRef } from '../../src/index'
 import { relations } from '../../src/dsl/relations'
 
 const users = table('users', {
@@ -198,5 +199,191 @@ describe('extractRelations', () => {
       sourceColumns: ['id'],
       targetColumns: ['parentId'],
     })
+  })
+})
+
+describe('extractRelations — relationName multi-FK disambiguation (M4.B)', () => {
+  // Topology: messages with two FKs to users — sender + recipient.
+  // Without `relationName`, the resolver can't pick the right inverse.
+  const messages = table('messages', {
+    id: uuid().primaryKey().defaultRandom(),
+    senderId: uuid()
+      .notNull()
+      .references(() => users.id),
+    recipientId: uuid()
+      .notNull()
+      .references(() => users.id),
+    body: text().notNull(),
+  })
+
+  it('resolves a paired (one + many) match by relationName', () => {
+    const messagesRels = relations(messages, (h) => ({
+      sender: h.one(users, {
+        fields: [messages.senderId],
+        references: [users.id],
+        relationName: 'sentMessages',
+      }),
+      recipient: h.one(users, {
+        fields: [messages.recipientId],
+        references: [users.id],
+        relationName: 'receivedMessages',
+      }),
+    }))
+    const usersRels = relations(users, (h) => ({
+      sentMessages: h.many(messages, { relationName: 'sentMessages' }),
+      receivedMessages: h.many(messages, { relationName: 'receivedMessages' }),
+    }))
+
+    const tables = extractSnapshot({ users, messages }, 'postgres').tables
+    const r = extractRelations({ users, messages, messagesRels, usersRels }, tables)
+
+    expect(r?.users?.sentMessages).toEqual({
+      kind: 'many',
+      target: 'messages',
+      sourceColumns: ['id'],
+      targetColumns: ['senderId'],
+      relationName: 'sentMessages',
+    })
+    expect(r?.users?.receivedMessages).toEqual({
+      kind: 'many',
+      target: 'messages',
+      sourceColumns: ['id'],
+      targetColumns: ['recipientId'],
+      relationName: 'receivedMessages',
+    })
+  })
+
+  it('preserves relationName on the `one` side as well', () => {
+    const messagesRels = relations(messages, (h) => ({
+      sender: h.one(users, {
+        fields: [messages.senderId],
+        references: [users.id],
+        relationName: 'sentMessages',
+      }),
+    }))
+    const tables = extractSnapshot({ users, messages }, 'postgres').tables
+    const r = extractRelations({ users, messages, messagesRels }, tables)
+    expect(r?.messages?.sender).toEqual({
+      kind: 'one',
+      target: 'users',
+      sourceColumns: ['senderId'],
+      targetColumns: ['id'],
+      relationName: 'sentMessages',
+    })
+  })
+
+  it('throws RelationalQueryAmbiguousRelationNameError when two `one`s share the same tag back to the source', () => {
+    // Two `one`s on `messages` both pointing to `users` with the
+    // same `relationName` is operator error.
+    const messagesRels = relations(messages, (h) => ({
+      sender: h.one(users, {
+        fields: [messages.senderId],
+        references: [users.id],
+        relationName: 'sentMessages',
+      }),
+      // Operator error: same relationName as `sender`.
+      recipient: h.one(users, {
+        fields: [messages.recipientId],
+        references: [users.id],
+        relationName: 'sentMessages',
+      }),
+    }))
+    const usersRels = relations(users, (h) => ({
+      sentMessages: h.many(messages, { relationName: 'sentMessages' }),
+    }))
+    const tables = extractSnapshot({ users, messages }, 'postgres').tables
+    expect(() => extractRelations({ users, messages, messagesRels, usersRels }, tables)).toThrow(
+      RelationalQueryAmbiguousRelationNameError,
+    )
+  })
+
+  it('throws MissingInverseError when multi-FK `many` has no relationName tag', () => {
+    // M4.B tightens the M3 first-match heuristic. Two FKs on
+    // messages → users without relationName is now an error.
+    const messagesRels = relations(messages, (h) => ({
+      sender: h.one(users, {
+        fields: [messages.senderId],
+        references: [users.id],
+      }),
+      recipient: h.one(users, {
+        fields: [messages.recipientId],
+        references: [users.id],
+      }),
+    }))
+    const usersRels = relations(users, (h) => ({
+      anyMessages: h.many(messages),
+    }))
+    const tables = extractSnapshot({ users, messages }, 'postgres').tables
+    expect(() => extractRelations({ users, messages, messagesRels, usersRels }, tables)).toThrow(
+      RelationalQueryMissingInverseError,
+    )
+  })
+
+  it('falls through to step-2 when only the source side declares relationName', () => {
+    // `usersRels.sentMessages` declares the tag; `messagesRels.sender`
+    // doesn't. Step 1 finds zero matches (no inverse with the same
+    // tag), falls through. Step 2 finds one untagged inverse —
+    // pairs them anyway. Slightly forgiving on the typo case.
+    const messagesRels = relations(messages, (h) => ({
+      sender: h.one(users, {
+        fields: [messages.senderId],
+        references: [users.id],
+      }),
+    }))
+    const usersRels = relations(users, (h) => ({
+      sentMessages: h.many(messages, { relationName: 'sentMessages' }),
+    }))
+    const tables = extractSnapshot({ users, messages }, 'postgres').tables
+    const r = extractRelations({ users, messages, messagesRels, usersRels }, tables)
+    expect(r?.users?.sentMessages?.target).toBe('messages')
+  })
+
+  it('reuses the same relationName string across unrelated table pairs (per-pair scope)', () => {
+    // R-2 scope clarification: `'audit'` as a tag on (workspaces,
+    // audit-logs) and (projects, audit-logs) is fine — duplicates
+    // only matter within (sourceTable, targetTable, relationName).
+    const workspaces = table('workspaces', { id: uuid().primaryKey() })
+    const projects = table('projects', { id: uuid().primaryKey() })
+    const auditLogs = table('audit_logs', {
+      id: uuid().primaryKey(),
+      workspaceId: uuid()
+        .notNull()
+        .references(() => workspaces.id),
+      projectId: uuid()
+        .notNull()
+        .references(() => projects.id),
+    })
+
+    const auditRels = relations(auditLogs, (h) => ({
+      workspace: h.one(workspaces, {
+        fields: [auditLogs.workspaceId],
+        references: [workspaces.id],
+        relationName: 'audit',
+      }),
+      project: h.one(projects, {
+        fields: [auditLogs.projectId],
+        references: [projects.id],
+        relationName: 'audit',
+      }),
+    }))
+    const workspaceRels = relations(workspaces, (h) => ({
+      auditLogs: h.many(auditLogs, { relationName: 'audit' }),
+    }))
+    const projectRels = relations(projects, (h) => ({
+      auditLogs: h.many(auditLogs, { relationName: 'audit' }),
+    }))
+
+    const tables = extractSnapshot(
+      { workspaces, projects, audit_logs: auditLogs },
+      'postgres',
+    ).tables
+    const r = extractRelations(
+      { workspaces, projects, audit_logs: auditLogs, auditRels, workspaceRels, projectRels },
+      tables,
+    )
+    // Each side resolves cleanly because the (source, target,
+    // relationName) triple is unique per pair.
+    expect(r?.workspaces?.auditLogs?.targetColumns).toEqual(['workspaceId'])
+    expect(r?.projects?.auditLogs?.targetColumns).toEqual(['projectId'])
   })
 })

@@ -39,13 +39,12 @@ relations(users, ({ many }) => ({
 }))
 ```
 
-`extractRelations` today fails:
+`extractRelations` today fails in two distinct ways depending on whether an inverse `one(...)` is declared. Both surface as wrong behavior on the same multi-FK topology:
 
-- `findInverseOne` walks `messages`'s relations for an entry whose `target` is `users`. Two match (`sender` + `recipient`); the loop returns the first, which is wrong half the time.
-- `resolveByForeignKey` walks `messages.foreignKeys` for entries referencing `users`. Two match; the helper returns `null` because it requires exactly one match.
-- The whole chain throws `RelationalQueryMissingInverseError` with no actionable hint.
+- **Case A — wrong inverse picked.** `users.sentMessages = many(messages)` has no inverse-name hint. `findInverseOne` walks `messages`'s relations for an entry whose `target` is `users`; two match (`sender` + `recipient`); the loop returns the first match. The runtime joins users to messages via the `sender` columns (or `recipient`, depending on declaration order) — wrong half the time.
+- **Case B — no inverse, FK fallback ambiguous.** If neither `sender` nor `recipient` is declared (only `users.sentMessages = many(messages)` on the source side), `findInverseOne` returns `null`. The resolver falls through to `resolveByForeignKey`, which walks `messages.foreignKeys` for entries referencing `users`; two match. The helper returns `null` because it requires exactly one match. The chain throws `RelationalQueryMissingInverseError` with no actionable hint.
 
-Drizzle solves this with `relationName: 'foo'` — a string tag declared on **both** sides of the same logical relation, so the resolver can pair them up. M4.B ports the same pattern.
+Drizzle solves both with `relationName: 'foo'` — a string tag declared on **both** sides of the same logical relation, so the resolver can pair them up. M4.B ports the same pattern.
 
 ---
 
@@ -54,7 +53,7 @@ Drizzle solves this with `relationName: 'foo'` — a string tag declared on **bo
 1. **Multi-FK schemas compile cleanly.** When two relations point at the same target table, adopters disambiguate with `relationName` and the resolver uses the matching pair.
 2. **Strict opt-in.** The current single-FK / single-inverse fast path stays unchanged. Schemas that don't need `relationName` never see it.
 3. **Compile-time error message points at the fix.** When the resolver hits ambiguity AND no `relationName` is declared, the error tells the adopter to add `relationName: 'foo'` to both sides.
-4. **Typegen passes the name through.** `SchemaToRelationsRegister<S>` carries the optional `relationName` so call-site `with` keys still type-check correctly.
+4. **Typegen passes the name through.** `SchemaToRelationsRegister<S>` carries the optional `relationName` for tooling and future type-level pairing. `with` key validation is still driven by relation property names — the keys in the per-table relation map — exactly as in M3; `relationName` does not participate in key checking.
 
 ## Non-goals
 
@@ -142,10 +141,10 @@ The string passed to `relationName` is purely a pairing tag — it can match the
 
 `extractRelations` for a `many` relation walks the candidate inverses in this order:
 
-1. **`relationName` match — both sides declared.** If the source's `many` declares `relationName: 'foo'` AND the target has at least one `one` declaring the same `relationName: 'foo'` AND that `one` points back at the source, use it. Pick exactly one match — if multiple inverse `one`s share the same name (operator error), throw `RelationalQueryAmbiguousRelationNameError` with the conflicting names.
-2. **Single inverse `one` — neither side declares `relationName`.** M3 behavior. If the target has exactly one `one` pointing back at the source and neither side has a name, use it.
-3. **FK introspection fallback — neither side declares `relationName`.** M3 fallback. If the target table has exactly one foreign key referencing the source, use those columns.
-4. **Throw `RelationalQueryMissingInverseError`** — no pair found. Error message includes a hint to add `relationName` to both sides if multiple FKs / inverses are detected.
+1. **`relationName` match — both sides declared.** If the source's `many` declares `relationName: 'foo'` AND the target has at least one `one` declaring the same `relationName: 'foo'` AND that `one` points back at the source, use it. Pick exactly one match — if multiple inverse `one`s share the same `relationName` AND target the same source (the actual ambiguity case), throw `RelationalQueryAmbiguousRelationNameError` with the conflicting names.
+2. **Single untagged inverse `one`** — neither side declares `relationName`. If the target has **exactly one** `one` pointing back at the source AND that `one` has no `relationName` set, use it. **This tightens M3's behavior:** M3's `findInverseOne` returned the first match without enforcing uniqueness, which is the bug §1 Case A describes. M4.B requires uniqueness in this step so multi-FK schemas surface as `MissingInverseError` (with the new `relationName` hint) instead of silently picking wrong.
+3. **FK introspection fallback — neither side declares `relationName`.** M3 behavior unchanged. If the target table has exactly one foreign key referencing the source, use those columns.
+4. **Throw `RelationalQueryMissingInverseError`** — no pair found. Error message lists the candidate inverses + FK matches detected and points adopters at adding `relationName` to both sides.
 
 Same `one` resolver path applies symmetrically: when resolving a `one` relation that needs columns, the same `relationName` rule pairs it with the matching inverse `many` (though for `one` the `fields` / `references` are explicit at the call site, so the resolver only needs `relationName` to disambiguate type-level inverses for `SchemaToRelationsRegister<S>`).
 
@@ -178,7 +177,7 @@ type ResolveRelations<R extends Record<string, Relation>> = {
   [K in keyof R]: {
     kind: R[K]['kind']
     target: R[K]['target'] extends TableDecl<infer N, ...> ? N : string
-    relationName: R[K]['relationName']  // undefined when not declared
+    relationName?: R[K]['relationName'] // optional — propagates only when declared
   }
 }
 ```
@@ -191,22 +190,22 @@ The `kick/db` typegen plugin emits the augmentation unchanged — `SchemaToRelat
 
 ## 6. Edge cases
 
-| Case                                                                                | Behavior                                                                                                                                                                           |
-| ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Both sides declare matching `relationName`                                          | Step 1: pair them, use the `one`'s `fields` / `references` for the join. Happy path.                                                                                               |
-| `relationName` on one side only                                                     | Step 1 fails (no matching pair). Falls through to step 2; if step 2 / step 3 also fail (likely, since multi-FK is what motivates the name), throw `MissingInverseError` with hint. |
-| Two `many` declarations with the same `relationName`                                | `RelationalQueryAmbiguousRelationNameError` at extract time. Operator error.                                                                                                       |
-| `relationName` shadows a column name on the same table                              | No collision: `relationName` is a join-pairing tag, not a relation key. Doesn't reach the alias-collision check.                                                                   |
-| Self-referencing multi-FK (`tasks.parentTaskId` + `tasks.blockedById` both → tasks) | Step 1 pairs by `relationName` per usual. Self-references already alias per level (M3 fix); the alias scheme is orthogonal to `relationName`.                                      |
-| `kick db generate` doesn't read `relationName`                                      | Migrations are unaffected — `relationName` is query-time sugar, not DDL. Same disposition as the existing relations sidecar.                                                       |
-| Adopter adds `relationName` to a single-FK schema                                   | No-op. Step 1 fires (matched pair), produces the same join columns step 2 would have produced. Strictly safe.                                                                      |
+| Case                                                                                | Behavior                                                                                                                                                                                                             |
+| ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Both sides declare matching `relationName`                                          | Step 1: pair them, use the `one`'s `fields` / `references` for the join. Happy path.                                                                                                                                 |
+| `relationName` on one side only                                                     | Step 1 fails (no matching pair). Falls through to step 2; if step 2 / step 3 also fail (likely, since multi-FK is what motivates the name), throw `MissingInverseError` with hint.                                   |
+| Two inverse `one`s on the same target with the same `relationName` AND same source  | `RelationalQueryAmbiguousRelationNameError` at extract time. Scope is per `(sourceTable, targetTable, relationName)` — reusing the same string across unrelated table pairs (e.g., a generic `'audit'` tag) is fine. |
+| `relationName` shadows a column name on the same table                              | No collision: `relationName` is a join-pairing tag, not a relation key. Doesn't reach the alias-collision check.                                                                                                     |
+| Self-referencing multi-FK (`tasks.parentTaskId` + `tasks.blockedById` both → tasks) | Step 1 pairs by `relationName` per usual. Self-references already alias per level (M3 fix); the alias scheme is orthogonal to `relationName`.                                                                        |
+| `kick db generate` doesn't read `relationName`                                      | Migrations are unaffected — `relationName` is query-time sugar, not DDL. Same disposition as the existing relations sidecar.                                                                                         |
+| Adopter adds `relationName` to a single-FK schema                                   | No-op. Step 1 fires (matched pair), produces the same join columns step 2 would have produced. Strictly safe.                                                                                                        |
 
 ---
 
 ## 7. Resolved decisions
 
 - **R-1 — Mismatched `relationName` on the two sides falls through to step 2/3, not throw.** Reason: the typo case (`'sentMessages'` vs `'sentMessage'`) is hard to distinguish from "one side has the name and the other doesn't." Falling through gives the same `MissingInverseError` adopters already see for ambiguous schemas; the error message lists declared names so typos are visible. **Resolved 2026-05-05, default.**
-- **R-2 — Two `many` with the same `relationName` throw a new dedicated error class** (`RelationalQueryAmbiguousRelationNameError`). Catches the duplicate-tag operator error early. Resolved 2026-05-05, default.
+- **R-2 — Two `one`s on the same target sharing the same `relationName` AND pointing back at the same source throw a new dedicated error class** (`RelationalQueryAmbiguousRelationNameError`). Scope: per `(sourceTable, targetTable, relationName)` triple — adopters can reuse the same tag string across unrelated table pairs. Catches the duplicate-tag operator error early without over-restricting tag reuse. Resolved 2026-05-05, default.
 - **R-3 — `relationName` on `Helpers.many` makes the second arg optional with the new field as the only key.** Avoids a breaking signature change. Resolved 2026-05-05, default.
 - **R-4 — Recommended naming is the relation key on the `many` side** (`sentMessages: many(messages, { relationName: 'sentMessages' })`). Documented in the adopter guide. Adopters can pick anything; the recommendation just keeps the schema readable. Resolved 2026-05-05, default.
 - **R-5 — Backwards compat: optional everywhere, no migration required.** Existing M3 schemas keep working unmodified. Resolved 2026-05-05, default.

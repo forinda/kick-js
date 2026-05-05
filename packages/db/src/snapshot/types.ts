@@ -69,6 +69,12 @@ export interface RelationSnapshot {
   sourceColumns: readonly string[]
   /** Columns on the target table that participate in the join. */
   targetColumns: readonly string[]
+  /**
+   * Optional pairing tag from `relationName: 'foo'` on both sides of
+   * the relation. Disambiguates multi-FK schemas. See
+   * docs/db/spec-relation-name.md (M4.B).
+   */
+  relationName?: string
 }
 
 export interface SchemaSnapshot {

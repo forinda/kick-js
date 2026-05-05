@@ -84,6 +84,30 @@ export class RelationalQueryNotSupportedError extends KickDbError {
 }
 
 /**
+ * Thrown at extract time when more than one `many` declaration on
+ * the same source table shares the same `relationName`, or when
+ * more than one inverse `one` on the target table shares it. The
+ * pairing tag is a unique disambiguator; a duplicate is operator
+ * error. Spec: docs/db/spec-relation-name.md §7 R-2.
+ */
+export class RelationalQueryAmbiguousRelationNameError extends KickDbError {
+  readonly sourceTable: string
+  readonly relationName: string
+  readonly conflicting: readonly string[]
+  constructor(sourceTable: string, relationName: string, conflicting: readonly string[]) {
+    super(
+      'KICK_DB_RELATIONAL_AMBIGUOUS_RELATION_NAME',
+      `Multiple relations on \`${sourceTable}\` share \`relationName: '${relationName}'\` ` +
+        `(${conflicting.map((c) => `\`${c}\``).join(', ')}). The pairing tag must be unique per ` +
+        `(source, name) pair — rename one side or split the schema.`,
+    )
+    this.sourceTable = sourceTable
+    this.relationName = relationName
+    this.conflicting = conflicting
+  }
+}
+
+/**
  * Thrown at extract time when a `many` relation has no inverse
  * `one` declared on the target table. The compiler needs the FK
  * column pair to build the join predicate; without an inverse we
@@ -98,8 +122,11 @@ export class RelationalQueryMissingInverseError extends KickDbError {
     super(
       'KICK_DB_RELATIONAL_MISSING_INVERSE',
       `Cannot resolve \`many\` relation \`${sourceTable}.${relationName}\` — ` +
-        `no inverse \`one\` relation declared on \`${targetTable}\` pointing back to \`${sourceTable}\`. ` +
-        `Add e.g. \`relations(${targetTable}, h => ({ ${sourceTable}: h.one(${sourceTable}, { fields: [${targetTable}.${sourceTable}Id], references: [${sourceTable}.id] }) }))\` ` +
+        `no inverse \`one\` relation declared on \`${targetTable}\` pointing back to \`${sourceTable}\`, ` +
+        `and ${targetTable}'s foreign keys to ${sourceTable} are either zero or ambiguous. ` +
+        `If the target has multiple FKs to the source, tag both sides with the same ` +
+        `\`relationName: 'foo'\` to pair them — see docs/db/spec-relation-name.md. ` +
+        `Otherwise add e.g. \`relations(${targetTable}, h => ({ ${sourceTable}: h.one(${sourceTable}, { fields: [${targetTable}.${sourceTable}Id], references: [${sourceTable}.id] }) }))\` ` +
         `so the compiler knows which columns join the two tables.`,
     )
     this.sourceTable = sourceTable
