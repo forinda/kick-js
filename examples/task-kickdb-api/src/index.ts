@@ -3,6 +3,12 @@ import 'reflect-metadata'
 // **before** any controller / service / @Value gets resolved.
 import './config'
 
+// Side-effect import — augments KickDbRelationsRegister so
+// `db.query.X.findMany({ with })` call sites get typed `with` keys.
+// Until the kick/db typegen plugin emits this side too, the file is
+// hand-rolled per the relations() declarations in src/db/schema.
+import './db/relations-register'
+
 // KickDbClient widens automatically to the schema-derived shape via
 // `.kickjs/types/kick__db.d.ts` (emitted by the kick/db typegen
 // plugin). `kick dev` regenerates it on schema changes; `kick typegen`

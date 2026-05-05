@@ -129,10 +129,12 @@ packages/vite/src/
 - [x] `packages/db/__tests__/unit/query-builder.test.ts` — 8 end-to-end tests via `createDbClient` + `DummyDriver`: PG happy paths (findMany / findMany-with-with / findFirst / findFirst-empty / findUnique / Proxy materialization) + SQLite + MySQL throw-paths. **All passing.**
 - [x] Full db suite: **51 files, 292 passing** (+17 vs pre-A.4 baseline). db-pg suite green at 17. Build clean.
 
-### Step A.5 — Integration
+### Step A.5 — Integration ✅ (2026-05-05)
 
-- [ ] `packages/db/__tests__/integration/relational-query.test.ts` — Testcontainers PG, asserts row shape parity with the equivalent hand-written nested SELECT.
-- [ ] Update `examples/task-kickdb-api` to use `db.query.tasks.findMany({ with: { assignees: true, labels: true } })` in at least one repository method. Confirm the shipped API is ergonomic, not just typesafe.
+- [x] `packages/db-pg/__tests__/integration/relational-query.test.ts` — Testcontainers PG, 6 tests: 2-deep nested findMany returns declared shape (with empty-array `[]` not `null`), `findFirst` on empty table returns `null`, `findFirst` clamps via LIMIT 1, `findUnique` returns matched row, per-relation `where` + `limit` filters inner aggregation, row parity with hand-written nested SELECT. Lives in `packages/db-pg/__tests__/integration/` because it needs a real `pg.Pool` + `PostgresDialect` (not just DummyDriver).
+- [x] `examples/task-kickdb-api/src/db/relations-register.ts` — hand-rolled `KickDbRelationsRegister` augmentation for the tasks → {comments, assignees, labels, subtasks, parentTask, reporter} subset. Pulls into `src/index.ts` as a side-effect import. Documents what the kick/db typegen plugin will eventually emit.
+- [x] `examples/task-kickdb-api/src/modules/tasks/tasks.repository.ts` — added `findFullById(id)` using `db.query.tasks.findUnique({ where, with: { comments, assignees, labels } })`. Replaces a four-query N+1 with a single round-trip.
+- [x] db-pg suite: **4 files, 23 tests** (was 17; +6 from this step). example typecheck clean.
 
 ### Step A.6 — Commit + changeset
 
