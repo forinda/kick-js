@@ -71,6 +71,8 @@ export {
 
 export { defineModule, type DefineModuleOptions, type ModuleFactory } from './define-module'
 
+export { defineModules, ModuleList } from './define-modules'
+
 // Adapter System
 export {
   type AppAdapter,
