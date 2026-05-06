@@ -1,6 +1,7 @@
 import 'reflect-metadata'
-import { describe, it, expect } from 'vitest'
+import { beforeEach, describe, it, expect } from 'vitest'
 import {
+  Container,
   defineModule,
   defineModules,
   ModuleList,
@@ -13,6 +14,14 @@ const B = defineModule({ name: 'B', build: () => ({ routes: () => null }) })
 const C = defineModule({ name: 'C', build: () => ({ routes: () => null }) })
 
 describe('defineModules — fluent module list builder', () => {
+  // Defensive isolation — the suite itself doesn't drive the DI
+  // container, but resetting between tests guards against leakage
+  // from any prior test file that may have registered bindings on
+  // the global singleton. Cheap, matches the project convention.
+  beforeEach(() => {
+    Container.reset()
+  })
+
   it('returns an empty ModuleList by default', () => {
     const list = defineModules()
     expect(list).toBeInstanceOf(ModuleList)
