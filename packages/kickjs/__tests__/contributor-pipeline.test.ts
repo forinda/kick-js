@@ -188,6 +188,24 @@ describe('buildPipeline — dependsOn validation', () => {
     expect(err.route).toBe('GET /projects/:id')
   })
 
+  it('error message includes a "declared at" frame pointing at the dependent registration', () => {
+    let captured: unknown
+    try {
+      buildPipeline([sourced('method', reg({ key: 'project', dependsOn: ['tenant'] }))], {
+        route: 'GET /projects/:id',
+      })
+    } catch (err) {
+      captured = err
+    }
+    const err = captured as MissingContributorError
+    // The dependent's stack was captured at decorator-construction time in
+    // `reg(...)`, which calls `defineContextDecorator(...)` from this test
+    // file. The error formatter slices the first non-framework frame.
+    expect(err.dependentDefinedAt).toBeDefined()
+    expect(err.message).toContain('declared at')
+    expect(err.message).toContain('contributor-pipeline.test')
+  })
+
   it('passes when all dependsOn keys are produced by the surviving set', () => {
     const pipeline = buildPipeline([
       sourced('method', reg({ key: 'tenant' })),

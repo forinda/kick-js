@@ -170,6 +170,20 @@ export interface ContributorRegistration<
    * decorator factory, not of the runtime pipeline.
    */
   readonly resolve: (ctx: Ctx, deps: ResolvedDeps<D>) => MaybePromise<MetaValue<K>>
+  /**
+   * Stack snapshot captured the moment the decorator was defined.
+   * Used by the contributor-pipeline builder to point boot-time
+   * errors (`MissingContributorError`, `ContributorCycleError`,
+   * `DuplicateContributorError`) at the adopter file that declared
+   * the broken contributor — instead of forcing them to grep for
+   * the key string.
+   *
+   * Optional because adopters who hand-roll a `ContributorRegistration`
+   * (without `defineContextDecorator`) may not have a useful stack to
+   * attach. Format is the raw `Error.stack` string; consumers slice
+   * the first non-framework frame for display.
+   */
+  readonly definedAt?: string
 }
 
 /**
@@ -314,9 +328,10 @@ export interface ContextDecorator<
  * For non-decorator registration (module/adapter/bootstrap), pass
  * `LoadTenant.registration` into the appropriate contributors list.
  *
- * **No runtime behaviour is wired in Phase 1.** This factory only writes
- * metadata; the topo-sort, runner, and HTTP integration land in later
- * phases. See `architecture.md` §20 for the full pipeline plan.
+ * Boot-time validation: a missing `resolve`, an empty `key`, or a
+ * non-array `dependsOn` throws `TypeError` here at definition time
+ * (typically module-load) rather than waiting for the first request.
+ * See `architecture.md` §20 for the full pipeline plan.
  */
 export function defineContextDecorator<
   K extends string,
@@ -324,6 +339,52 @@ export function defineContextDecorator<
   P extends Record<string, unknown> = Record<string, never>,
   Ctx extends ExecutionContext = ExecutionContext,
 >(spec: ContextDecoratorSpec<K, D, P, Ctx>): ContextDecorator<K, D, P, Ctx> {
+  // ---- Boot-time validation --------------------------------------
+  // Surface mistakes the moment `defineContextDecorator` is called
+  // (typically module-load time) instead of letting them ride to
+  // request time as cryptic ContextMeta misses or container failures.
+  // Cheap, ~15 lines, catches a whole class of definition-time bugs.
+  if (spec === null || typeof spec !== 'object') {
+    throw new TypeError(
+      'defineContextDecorator: spec must be an object literal. ' +
+        'See architecture.md §20.4 for the spec shape.',
+    )
+  }
+  if (typeof spec.key !== 'string' || spec.key.length === 0) {
+    const got = typeof spec.key === 'string' ? '""' : typeof spec.key
+    throw new TypeError(
+      `defineContextDecorator: spec.key must be a non-empty string (got ${got}). ` +
+        'Pick a name that matches a key declared on `ContextMeta` (or one of the framework keys).',
+    )
+  }
+  if (typeof spec.resolve !== 'function') {
+    throw new TypeError(
+      `defineContextDecorator(${spec.key}): spec.resolve is required and must be a function ` +
+        `(got ${typeof spec.resolve}). Each contributor needs a resolver that produces ` +
+        `the value to write into ctx.set(${JSON.stringify(spec.key)}, …).`,
+    )
+  }
+  if (spec.onError !== undefined && typeof spec.onError !== 'function') {
+    throw new TypeError(
+      `defineContextDecorator(${spec.key}): spec.onError must be a function when provided ` +
+        `(got ${typeof spec.onError}).`,
+    )
+  }
+  if (spec.dependsOn !== undefined && !Array.isArray(spec.dependsOn)) {
+    throw new TypeError(
+      `defineContextDecorator(${spec.key}): spec.dependsOn must be an array when provided ` +
+        `(got ${typeof spec.dependsOn}).`,
+    )
+  }
+
+  // Source-location capture. `new Error().stack` here records the
+  // adopter's call site so boot-time errors (cycles, missing deps,
+  // duplicate keys) can point at the file that declared the broken
+  // decorator. Bad boot errors are why frameworks get abandoned —
+  // a single stack frame turns "what's a 'tenent'?" into "edit
+  // src/contributors/tenant.ts line 42".
+  const definedAt = new Error().stack
+
   // Snapshot + freeze paramDefaults so callers can't mutate the spec
   // object post-definition and shift the merged params under our feet.
   // Same immutability boundary applied to `deps` and `dependsOn`.
@@ -337,6 +398,16 @@ export function defineContextDecorator<
   // constructors) are intentionally untouched; freezing them would
   // prevent the container from doing legitimate per-instance
   // bookkeeping.
+  //
+  // The `({} as D)` cast: `spec.deps` is optional (`deps?: D`), so
+  // the fallback to `{}` is required. When `D` defaults to
+  // `Record<string, never>`, the cast is sound (`{}` matches). When
+  // `D` is non-empty AND adopter omitted `deps`, the cast is unsound
+  // — but the runner errors loudly the moment it tries to resolve a
+  // missing dep, so the mistake surfaces at first request rather
+  // than producing wrong-but-silent behaviour. The alternative
+  // (forcing `deps` non-optional in the spec) would break ergonomics
+  // for the common zero-deps case.
   const sharedDeps = Object.freeze({ ...(spec.deps ?? ({} as D)) }) as D
   const sharedDependsOn = Object.freeze([...(spec.dependsOn ?? [])])
   const sharedOptional = spec.optional ?? false
@@ -368,6 +439,7 @@ export function defineContextDecorator<
       optional: sharedOptional,
       onError,
       resolve,
+      definedAt,
     })
   }
 
@@ -471,6 +543,20 @@ export function defineContextDecorator<
     return { ...defaults, ...(override as Partial<P>) } as P
   }
 
+  // Overloaded function signatures so `decoratorOrFactory`'s type
+  // matches `ContextDecorator`'s call shapes directly — no
+  // `as unknown as` double-cast needed. The implementation signature
+  // (`...args: unknown[]`) is hidden from callers; only the four
+  // declared overloads are reachable.
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+  function decoratorOrFactory(target: Function): void
+  function decoratorOrFactory(
+    target: object,
+    propertyKey: string | symbol,
+    descriptor?: PropertyDescriptor,
+  ): void
+  function decoratorOrFactory(): ContextDecoratorTarget
+  function decoratorOrFactory(params: Partial<P>): ContextDecoratorTarget
   function decoratorOrFactory(...args: unknown[]): unknown {
     if (isDecoratorCall(args)) {
       const [target, propertyKey] = args as [
@@ -489,21 +575,29 @@ export function defineContextDecorator<
     }
   }
 
-  Object.defineProperty(decoratorOrFactory, 'registration', {
-    value: defaultRegistration,
+  // Set a meaningful `.name` so `console.log(LoadTenant)` and stack
+  // traces show `[Function: ContextDecorator(tenant)]` instead of
+  // `[Function: decoratorOrFactory]`. Function.name is configurable
+  // by default, so this works on the existing function reference.
+  Object.defineProperty(decoratorOrFactory, 'name', {
+    value: `ContextDecorator(${spec.key})`,
     writable: false,
-    enumerable: true,
-    configurable: false,
+    enumerable: false,
+    configurable: true,
   })
 
-  Object.defineProperty(decoratorOrFactory, 'with', {
-    value: (params: Partial<P>) => ({
+  // `Object.assign` returns the intersection type, so the decorator
+  // gets `.registration` + `.with` properties typed without the
+  // previous `as unknown as ContextDecorator<...>` double cast.
+  // Properties go on via assign (writable + enumerable defaults),
+  // then `Object.freeze` locks the shape so adopters can't mutate
+  // `decorator.registration = …` post-construction.
+  const decorator = Object.assign(decoratorOrFactory, {
+    registration: defaultRegistration,
+    with: (params: Partial<P>) => ({
       registration: buildRegistration(mergeParams(params)),
     }),
-    writable: false,
-    enumerable: true,
-    configurable: false,
   })
 
-  return decoratorOrFactory as unknown as ContextDecorator<K, D, P, Ctx>
+  return Object.freeze(decorator)
 }
