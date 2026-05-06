@@ -137,11 +137,13 @@ export const app = await bootstrap({
 
 /** Generate src/modules/index.ts module registry */
 export function generateModulesIndex(): string {
-  return `import type { AppModuleClass } from '@forinda/kickjs'
+  return `import type { AppModuleEntry } from '@forinda/kickjs'
 import { HelloModule } from './hello/hello.module'
 
 // Remove HelloModule and run: kick g module <name>
-export const modules: AppModuleClass[] = [HelloModule]
+// Modules built with \`defineModule\` are called as factories — the
+// invocation produces the AppModule instance bootstrap registers.
+export const modules: AppModuleEntry[] = [HelloModule()]
 `
 }
 
@@ -248,25 +250,27 @@ export class HelloController {
 
 /** Generate src/modules/hello/hello.module.ts */
 export function generateHelloModule(): string {
-  return `import { type AppModule, type ModuleRoutes, buildRoutes } from '@forinda/kickjs'
+  return `import { defineModule } from '@forinda/kickjs'
 import { HelloController } from './hello.controller'
 
-export class HelloModule implements AppModule {
-  // \`register(container)\` is optional — only implement it when you need
-  // to bind a token to a concrete implementation, e.g.
-  //   register(container) {
-  //     container.registerFactory(USER_REPOSITORY, () => container.resolve(InMemoryUserRepository))
-  //   }
-  // The HelloService uses @Service() so the decorator handles registration.
+export const HelloModule = defineModule({
+  name: 'HelloModule',
+  build: () => ({
+    // \`register(container)\` is optional — only implement it when you need
+    // to bind a token to a concrete implementation, e.g.
+    //   register(container) {
+    //     container.registerFactory(USER_REPOSITORY, () => container.resolve(InMemoryUserRepository))
+    //   }
+    // The HelloService uses @Service() so the decorator handles registration.
 
-  routes(): ModuleRoutes {
-    return {
-      path: '/hello',
-      router: buildRoutes(HelloController),
-      controller: HelloController,
-    }
-  }
-}
+    routes() {
+      return {
+        path: '/hello',
+        controller: HelloController,
+      }
+    },
+  }),
+})
 `
 }
 

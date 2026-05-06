@@ -407,13 +407,13 @@ import.meta.glob(
 When you run `kick g module`, the generator does not just create files in a new directory. It also updates `src/modules/index.ts` automatically. In Vibed, that file looks like this:
 
 ```typescript
-import type { AppModuleClass } from '@forinda/kickjs'
+import type { AppModuleEntry } from '@forinda/kickjs'
 import { AuthModule } from './auth/auth.module'
 import { UsersModule } from './users/users.module'
 import { WorkspacesModule } from './workspaces/workspaces.module'
 // ... other imports
 
-export const modules: AppModuleClass[] = [
+export const modules: AppModuleEntry[] = [
   AuthModule,
   UsersModule,
   WorkspacesModule,

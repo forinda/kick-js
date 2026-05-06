@@ -204,8 +204,7 @@ Each generated module uses `import.meta.glob` to eagerly load decorated classes.
 
 ```ts
 // DDD pattern — src/modules/users/index.ts
-import { Container, type AppModule, type ModuleRoutes } from '@forinda/kickjs'
-import { buildRoutes } from '@forinda/kickjs'
+import { defineModule } from '@forinda/kickjs'
 import { USERS_REPOSITORY } from './domain/repositories/users.repository'
 import { InMemoryUsersRepository } from './infrastructure/repositories/inmemory-users.repository'
 import { UsersController } from './presentation/users.controller'
@@ -216,19 +215,20 @@ import.meta.glob(
   { eager: true },
 )
 
-export class UsersModule implements AppModule {
-  register(container: Container): void {
-    container.registerFactory(USERS_REPOSITORY, () => container.resolve(InMemoryUsersRepository))
-  }
-
-  routes(): ModuleRoutes {
-    return {
-      path: '/users',
-      router: buildRoutes(UsersController),
-      controller: UsersController,
-    }
-  }
-}
+export const UsersModule = defineModule({
+  name: 'UsersModule',
+  build: () => ({
+    register(container) {
+      container.registerFactory(USERS_REPOSITORY, () => container.resolve(InMemoryUsersRepository))
+    },
+    routes() {
+      return {
+        path: '/users',
+        controller: UsersController, // framework derives the router via buildRoutes()
+      }
+    },
+  }),
+})
 ```
 
 The REST pattern uses a broader glob since files are flat:
@@ -246,11 +246,13 @@ Modules are self-contained and composed via the `modules` array:
 
 ```ts
 // src/modules/index.ts
-import type { AppModuleClass } from '@forinda/kickjs'
+import type { AppModuleEntry } from '@forinda/kickjs'
 import { TodoModule } from './todos'
 import { OrderModule } from './orders'
 
-export const modules: AppModuleClass[] = [TodoModule, OrderModule]
+// `defineModule` factories are called at the registration site —
+// the invocation produces the AppModule instance bootstrap registers.
+export const modules: AppModuleEntry[] = [TodoModule(), OrderModule()]
 ```
 
 Routes are mounted at `/{apiPrefix}/v{version}{path}`, so a module with `path: '/todos'` becomes `/api/v1/todos`.

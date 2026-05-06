@@ -29,8 +29,7 @@ export function generateCqrsModuleIndex(ctx: TemplateContext & { repo: string })
  *   events/         — Domain events + handlers (WS broadcast, queue dispatch)
  *   dtos/           — Request/response schemas
  */
-import { Container, type AppModule, type ModuleRoutes } from '@forinda/kickjs'
-import { buildRoutes } from '@forinda/kickjs'
+import { defineModule } from '@forinda/kickjs'
 import { ${pascal.toUpperCase()}_REPOSITORY } from './${kebab}.repository'
 import { ${repoClass} } from './${repoFile}.repository'
 import { ${pascal}Controller } from './${kebab}.controller'
@@ -46,21 +45,37 @@ import.meta.glob(
   { eager: true },
 )
 
-export class ${pascal}Module implements AppModule {
-  register(container: Container): void {
-    container.registerFactory(${pascal.toUpperCase()}_REPOSITORY, () =>
-      container.resolve(${repoClass}),
-    )
-  }
+export const ${pascal}Module = defineModule({
+  name: '${pascal}Module',
+  build: () => ({
+    register(container) {
+      container.registerFactory(${pascal.toUpperCase()}_REPOSITORY, () =>
+        container.resolve(${repoClass}),
+      )
+    },
 
-  routes(): ModuleRoutes {
-    return {
-      path: '/${plural}',
-      router: buildRoutes(${pascal}Controller),
-      controller: ${pascal}Controller,
-    }
-  }
-}
+    /**
+     * Declare HTTP routes. Pass \`controller\` and the framework
+     * derives the Express Router via \`buildRoutes()\` and uses the
+     * same controller for OpenAPI spec generation. Return an array
+     * to mount multiple route sets under the same module (side-by-side
+     * v1 + v2 controllers, admin surfaces). Each entry can override
+     * the API version with a \`version\` field — the mount path becomes
+     * \`/{apiPrefix}/v{version}{path}\`:
+     *
+     *   return [
+     *     { path: '/${plural}', version: 1, controller: ${pascal}V1Controller },
+     *     { path: '/${plural}', version: 2, controller: ${pascal}V2Controller },
+     *   ]
+     */
+    routes() {
+      return {
+        path: '/${plural}',
+        controller: ${pascal}Controller,
+      }
+    },
+  }),
+})
 `
 }
 

@@ -62,7 +62,14 @@ export {
 } from './decorators'
 
 // Module System
-export { type AppModule, type AppModuleClass, type ModuleRoutes } from './app-module'
+export {
+  type AppModule,
+  type AppModuleClass,
+  type AppModuleEntry,
+  type ModuleRoutes,
+} from './app-module'
+
+export { defineModule, type DefineModuleOptions, type ModuleFactory } from './define-module'
 
 // Adapter System
 export {

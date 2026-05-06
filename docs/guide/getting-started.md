@@ -97,27 +97,31 @@ export class UserController {
 ## Your First Module
 
 ```ts
-import { type AppModule, type ModuleRoutes, buildRoutes } from '@forinda/kickjs'
+import { defineModule } from '@forinda/kickjs'
 import { UserController } from './user.controller'
 
-export class UserModule implements AppModule {
-  routes(): ModuleRoutes {
-    return {
-      path: '/users',
-      router: buildRoutes(UserController),
-      controller: UserController,
-    }
-  }
-}
+export const UserModule = defineModule({
+  name: 'UserModule',
+  build: () => ({
+    routes() {
+      return {
+        path: '/users',
+        controller: UserController, // framework derives the router via buildRoutes()
+      }
+    },
+  }),
+})
 ```
 
 Register it in `src/modules/index.ts`:
 
 ```ts
-import type { AppModuleClass } from '@forinda/kickjs'
+import type { AppModuleEntry } from '@forinda/kickjs'
 import { UserModule } from './users/user.module'
 
-export const modules: AppModuleClass[] = [UserModule]
+// `defineModule` factories are called at the registration site —
+// the invocation produces the AppModule instance bootstrap registers.
+export const modules: AppModuleEntry[] = [UserModule()]
 ```
 
 ## Bootstrap

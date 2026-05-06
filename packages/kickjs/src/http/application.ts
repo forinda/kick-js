@@ -9,6 +9,7 @@ import {
   METADATA,
   type AppModule,
   type AppModuleClass,
+  type AppModuleEntry,
   type AppAdapter,
   type AdapterContext,
   type AdapterMiddleware,
@@ -22,7 +23,7 @@ import { getClassMeta } from '../core/metadata'
 import { requestId } from './middleware/request-id'
 import { notFoundHandler, errorHandler } from './middleware/error-handler'
 import { requestScopeMiddleware, isRequestScopeMiddleware } from './middleware/request-scope'
-import { _setExternalContributorSources } from './router-builder'
+import { _setExternalContributorSources, buildRoutes } from './router-builder'
 import { requestStore } from './request-store'
 
 const log = createLogger('Application')
@@ -34,8 +35,14 @@ const log = createLogger('Application')
 export type MiddlewareEntry = RequestHandler | { path: string; handler: RequestHandler }
 
 export interface ApplicationOptions {
-  /** Feature modules to load */
-  modules: AppModuleClass[]
+  /**
+   * Feature modules to load. Accepts both class form
+   * (`SomeModule extends AppModule`, instantiated via `new`) and
+   * instance form (output of {@link defineModule}'s factory call,
+   * e.g. `TasksModule({ scope: 'admin' })`) — the loader discriminates
+   * and either `new`-s the class or uses the instance directly.
+   */
+  modules: AppModuleEntry[]
   /** Adapters that hook into the lifecycle (DB, Redis, Swagger, etc.) */
   adapters?: AppAdapter[]
   /** Server port (falls back to PORT env var, then 3000) */
@@ -461,12 +468,17 @@ export class Application {
 
     // ── 6. Module registration + DI bootstrap ────────────────────────
     // Plugin modules first, then user modules
-    const allModuleClasses = [
+    const allModuleEntries: AppModuleEntry[] = [
       ...this.plugins.flatMap((p) => p.modules?.() ?? []),
       ...this.options.modules,
     ]
-    const modules = allModuleClasses.map((ModuleClass) => {
-      const mod = new ModuleClass()
+    const modules = allModuleEntries.map((entry) => {
+      // Discriminate class vs instance: classes are functions whose
+      // `prototype` carries the AppModule shape; defineModule output is
+      // a plain object with `routes`, `register`, `contributors`. Calling
+      // `new` on a plain object throws, so we branch up-front rather
+      // than try/catch.
+      const mod: AppModule = typeof entry === 'function' ? new (entry as AppModuleClass)() : entry
       // `register()` is optional — modules whose classes are entirely
       // decorator-managed (@Service, @Controller, @Repository) don't need it.
       mod.register?.(this.container)
@@ -542,7 +554,21 @@ export class Application {
       for (const route of routeSets) {
         const version = route.version ?? defaultVersion
         const mountPath = `${apiPrefix}/v${version}${normalizePath(route.path)}`
-        this.app.use(mountPath, route.router)
+        // Derive the router from `controller` when one wasn't passed
+        // explicitly. The common-case shape is `{ path, controller }` —
+        // the framework owns `buildRoutes(controller)` so adopters don't
+        // import + call it themselves. Adopters who hand-build a router
+        // (composing multiple controllers, mounting third-party routers)
+        // pass `router` explicitly and we use it as-is.
+        const router = route.router ?? buildRoutes(route.controller)
+        if (!router) {
+          throw new Error(
+            `Module route at ${mountPath} requires either 'controller' or 'router'. ` +
+              'Pass `controller: SomeController` for the common case (the framework calls ' +
+              'buildRoutes() internally) or `router: yourRouter` to hand-build it.',
+          )
+        }
+        this.app.use(mountPath, router)
 
         // Notify adapters (e.g. SwaggerAdapter for OpenAPI spec generation)
         if (route.controller) {

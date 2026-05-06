@@ -1,6 +1,6 @@
 import type { Container } from './container'
 import type { AppAdapter } from './adapter'
-import type { AppModuleClass } from './app-module'
+import type { AppModuleEntry } from './app-module'
 import type { ContributorRegistrations } from './context-decorator'
 import type { KickJsPluginName } from './augmentation'
 
@@ -87,10 +87,16 @@ export interface KickPlugin {
   register?(container: Container): void
 
   /**
-   * Return module classes to be loaded alongside user modules.
-   * Plugin modules are loaded before user modules.
+   * Return modules to be loaded alongside user modules. Plugin
+   * modules are loaded before user modules.
+   *
+   * Accepts both class form (`SomeModule extends AppModule`) and
+   * instance form (output of {@link defineModule}'s factory call,
+   * e.g. `TasksModule({ scope: 'admin' })`) — the bootstrap loader
+   * discriminates and either `new`-s the class or uses the instance
+   * directly.
    */
-  modules?(): AppModuleClass[]
+  modules?(): AppModuleEntry[]
 
   /**
    * Return adapter instances to be added to the application.

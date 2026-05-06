@@ -28,7 +28,7 @@ export async function generatePlugin(options: GeneratePluginOptions): Promise<st
     `import {
   definePlugin,
   type AppAdapter,
-  type AppModuleClass,
+  type AppModuleEntry,
   type Container,
   type ContributorRegistrations,
 } from '@forinda/kickjs'
@@ -94,13 +94,17 @@ export const ${pascal}Plugin = definePlugin<${pascal}PluginConfig>({
     },
 
     /**
-     * Return module classes this plugin contributes to the app.
-     * These load before user modules, so plugin controllers and
-     * services are available for user code to \`@Autowired\`.
+     * Return modules this plugin contributes to the app. These load
+     * before user modules, so plugin controllers and services are
+     * available for user code to \`@Autowired\`.
+     *
+     * Accepts both \`defineModule\`-style instances (call the factory:
+     * \`ExampleModule()\`) and legacy \`class … implements AppModule\`
+     * constructors.
      */
-    modules(): AppModuleClass[] {
+    modules(): AppModuleEntry[] {
       return [
-        // ExampleModule,
+        // ExampleModule(),
       ]
     },
 
