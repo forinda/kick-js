@@ -47,6 +47,20 @@ Boot-time validation: missing `name`, missing `build`, non-function `build`, non
 
 `bootstrap({ modules })`, `KickPlugin.modules?()`, and `createTestApp({ modules })` now accept `AppModuleEntry = AppModuleClass | AppModule` so `defineModule`-output instances and legacy classes mix freely in the same array. The Application loader discriminates `typeof entry === 'function'` to dispatch — classes get `new`-ed, instances are used directly.
 
+## `defineModules()` — fluent module-list builder
+
+```ts
+import { bootstrap, defineModules } from '@forinda/kickjs'
+
+const modules = defineModules().mount(HelloModule()).mount(TasksModule()).mount(AdminModule())
+
+await bootstrap({ modules })
+```
+
+`defineModules()` returns a `ModuleList` (an `AppModuleEntry[]` subclass with a chainable `.mount()`). Drops into `bootstrap({ modules })` directly — no unwrap step — because `ModuleList extends Array<AppModuleEntry>`. Optional vararg seeds the list inline: `defineModules(HelloModule()).mount(TasksModule())` composes the two forms naturally.
+
+The plain `[X(), Y()]` array form keeps working — `defineModules()` is the fluent alternative for adopters who prefer the call-then-call pattern that mirrors `definePlugin().scoped(...)` / `defineAdapter()` elsewhere in the framework. Both produce the same shape internally.
+
 ## `ModuleRoutes` simplified — `controller` alone is sufficient
 
 ```ts

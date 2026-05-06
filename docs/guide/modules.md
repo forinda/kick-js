@@ -183,10 +183,12 @@ Use `.scoped(scopeName, config?)` when you need two instances of the same module
 
 ## Composing modules
 
-Modules are collected into an array and passed to `bootstrap()`. The default scaffold collects them in `src/modules/index.ts` (matching `modules.dir` from `kick.config.ts`), but the location is just a convention — `bootstrap()` only cares that you hand it an array of module entries.
+Modules are collected into an array and passed to `bootstrap()`. Two equivalent ways to build that array — pick whichever reads better at the call site:
+
+### Plain array
 
 ```ts
-// src/modules/index.ts (default location — configurable)
+// src/modules/index.ts
 import type { AppModuleEntry } from '@forinda/kickjs'
 import { TodoModule } from './todos'
 import { UserModule } from './users'
@@ -195,6 +197,25 @@ import { UserModule } from './users'
 // invocation produces the AppModule instance bootstrap registers.
 export const modules: AppModuleEntry[] = [TodoModule(), UserModule()]
 ```
+
+### Fluent factory — `defineModules()`
+
+```ts
+// src/modules/index.ts
+import { defineModules } from '@forinda/kickjs'
+import { TodoModule } from './todos'
+import { UserModule } from './users'
+
+export const modules = defineModules().mount(TodoModule()).mount(UserModule())
+```
+
+`defineModules()` returns a `ModuleList` (an `AppModuleEntry[]` subclass with a chainable `.mount()`) so the value drops into `bootstrap({ modules })` directly — no extra unwrap step. Optional vararg seeds the list inline:
+
+```ts
+defineModules(TodoModule()).mount(UserModule()) // both forms compose freely
+```
+
+Either form ends up the same shape inside the framework — bootstrap iterates an array of `AppModuleEntry`. Fluent reads more naturally as the list grows; plain-array is fine for small projects.
 
 ```ts
 // src/index.ts
