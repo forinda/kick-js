@@ -15,9 +15,11 @@ import {
   type AdapterMiddleware,
   type ContributorRegistrations,
   type KickPlugin,
+  type ModuleRegistry,
   type RouteDefinition,
   type SourcedRegistration,
   mountSort,
+  MutableModuleRegistry,
 } from '../core'
 import { getClassMeta } from '../core/metadata'
 import { requestId } from './middleware/request-id'
@@ -41,8 +43,30 @@ export interface ApplicationOptions {
    * instance form (output of {@link defineModule}'s factory call,
    * e.g. `TasksModule({ scope: 'admin' })`) — the loader discriminates
    * and either `new`-s the class or uses the instance directly.
+   *
+   * Static path — for conditional / dynamic registration, use the
+   * {@link ApplicationOptions.setup} callback instead.
    */
   modules: AppModuleEntry[]
+
+  /**
+   * Imperative module registration callback. Receives a
+   * {@link ModuleRegistry} you call `.mount(module)` on to register
+   * modules conditionally — based on env flags, runtime config, a
+   * tenant list, etc. Runs after every plugin's `setup()` hook and
+   * after the static `modules: [...]` array is collected.
+   *
+   * @example
+   * ```ts
+   * bootstrap({
+   *   modules: [HelloModule()],
+   *   setup(registry) {
+   *     if (env.ENABLE_ADMIN) registry.mount(AdminModule())
+   *   },
+   * })
+   * ```
+   */
+  setup?(registry: ModuleRegistry): void
   /** Adapters that hook into the lifecycle (DB, Redis, Swagger, etc.) */
   adapters?: AppAdapter[]
   /** Server port (falls back to PORT env var, then 3000) */
@@ -467,11 +491,24 @@ export class Application {
     this.mountMiddlewareList(adapterMw.afterGlobal)
 
     // ── 6. Module registration + DI bootstrap ────────────────────────
-    // Plugin modules first, then user modules
-    const allModuleEntries: AppModuleEntry[] = [
-      ...this.plugins.flatMap((p) => p.modules?.() ?? []),
-      ...this.options.modules,
-    ]
+    // Module collection — the static `modules: [...]` array AND the
+    // imperative `setup(registry)` callback feed into the same
+    // ordered list. Plugins go first so plugin modules / setup
+    // calls run before user code (existing precedence).
+    //
+    // Order within the registry:
+    //   1. plugin static modules (`plugin.modules?()`)
+    //   2. plugin setup() calls (in plugin dependsOn-sorted order)
+    //   3. user static modules (`options.modules`)
+    //   4. user setup() callback
+    const moduleRegistry = new MutableModuleRegistry()
+    for (const plugin of this.plugins) {
+      for (const m of plugin.modules?.() ?? []) moduleRegistry.mount(m)
+      plugin.setup?.(moduleRegistry)
+    }
+    for (const m of this.options.modules) moduleRegistry.mount(m)
+    this.options.setup?.(moduleRegistry)
+    const allModuleEntries: AppModuleEntry[] = moduleRegistry.entries
     const modules = allModuleEntries.map((entry) => {
       // Discriminate class vs instance: classes are functions whose
       // `prototype` carries the AppModule shape; defineModule output is

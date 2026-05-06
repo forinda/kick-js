@@ -58,7 +58,19 @@ export interface AppModule {
   routes(): ModuleRoutes | ModuleRoutes[] | null
 }
 
-/** Constructor type for AppModule classes */
+/**
+ * Constructor type for the legacy `class FooModule implements AppModule`
+ * pattern. The framework still accepts these — bootstrap discriminates
+ * class vs instance at boot — but new code should prefer
+ * {@link defineModule} for parity with {@link defineAdapter} and
+ * {@link definePlugin}, plus typed config + `.scoped()` / `.definition`.
+ *
+ * @deprecated Use `defineModule({ ... })` and `AppModuleEntry` for the
+ *   `bootstrap({ modules })` array. The class form continues to work
+ *   through v5 and is not slated for removal in any specific release —
+ *   this annotation is a soft "prefer the factory form" hint, not an
+ *   imminent deprecation.
+ */
 export type AppModuleClass = new () => AppModule
 
 /**
