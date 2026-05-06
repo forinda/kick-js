@@ -3,6 +3,7 @@ import type { AppAdapter } from './adapter'
 import type { AppModuleEntry } from './app-module'
 import type { ContributorRegistrations } from './context-decorator'
 import type { KickJsPluginName } from './augmentation'
+import type { ModuleRegistry } from './module-registry'
 
 /**
  * Plugin interface for extending KickJS applications.
@@ -95,8 +96,38 @@ export interface KickPlugin {
    * e.g. `TasksModule({ scope: 'admin' })`) — the bootstrap loader
    * discriminates and either `new`-s the class or uses the instance
    * directly.
+   *
+   * Static path — for conditional / dynamic registration, use
+   * {@link KickPlugin.setup} instead.
    */
   modules?(): AppModuleEntry[]
+
+  /**
+   * Imperative module registration hook. Receives a {@link ModuleRegistry}
+   * the plugin can call `.mount(module)` on to register modules
+   * conditionally — e.g. based on injected config, env flags, or a
+   * tenant list resolved at boot.
+   *
+   * Runs after the static {@link KickPlugin.modules} array is collected
+   * but before user modules and the user-level `setup()` callback. The
+   * plugin sees the same dispatch rules as everything else: class
+   * entries get `new`-ed, factory output is used directly.
+   *
+   * @example
+   * ```ts
+   * definePlugin<{ tenants: string[] }>({
+   *   name: 'MultiTenantPlugin',
+   *   build: (config) => ({
+   *     setup(registry) {
+   *       for (const tenant of config.tenants) {
+   *         registry.mount(TenantModule.scoped(tenant, { id: tenant }))
+   *       }
+   *     },
+   *   }),
+   * })
+   * ```
+   */
+  setup?(registry: ModuleRegistry): void
 
   /**
    * Return adapter instances to be added to the application.

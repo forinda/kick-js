@@ -226,3 +226,53 @@ bootstrap({ modules })
 ```
 
 The `bootstrap()` function loads each entry (instantiating classes, using factory output as-is), calls `register()` to set up DI bindings, bootstraps the container, then mounts all routes.
+
+## Conditional registration — `setup(registry)`
+
+The static `modules: [...]` array covers the common case but can't express "register this module **only if** an env flag is set" or "register one module per tenant in this list." For that, `bootstrap` accepts a `setup(registry)` callback that receives a `ModuleRegistry`. Call `.mount(module)` on it for every module you want loaded:
+
+```ts
+import { bootstrap } from '@forinda/kickjs'
+import { HelloModule } from './modules/hello/hello.module'
+import { AdminModule } from './modules/admin/admin.module'
+import { TenantModule } from './modules/tenant/tenant.module'
+
+await bootstrap({
+  modules: [HelloModule()], // static — always mounted
+
+  setup(registry) {
+    if (process.env.ENABLE_ADMIN === 'true') {
+      registry.mount(AdminModule())
+    }
+    for (const tenant of process.env.TENANTS!.split(',')) {
+      registry.mount(TenantModule.scoped(tenant, { id: tenant }))
+    }
+  },
+})
+```
+
+The static array and the `setup` callback both feed into the same registry; bootstrap mounts everything in declared order (static array entries first, then `setup`-mounted entries). Use whichever fits each module's intent — purely-static modules stay in the array; conditional / dynamic ones live in `setup`.
+
+Plugins get the same hook. A multi-tenant plugin that needs to mount one module per tenant in its config can drop the static array entirely:
+
+```ts
+import { definePlugin } from '@forinda/kickjs'
+
+interface MultiTenantConfig {
+  tenants: { id: string; region: string }[]
+}
+
+export const MultiTenantPlugin = definePlugin<MultiTenantConfig>({
+  name: 'MultiTenantPlugin',
+  defaults: { tenants: [] },
+  build: (config) => ({
+    setup(registry) {
+      for (const tenant of config.tenants) {
+        registry.mount(TenantModule.scoped(tenant.id, tenant))
+      }
+    },
+  }),
+})
+```
+
+> **Currently the registry exposes only `.mount(module)`.** A future `.use(module)` is planned for non-HTTP modules (queues, cron, workers, DI-only seeds) — until it lands, non-HTTP modules continue returning `null` from `routes()` and registering via `.mount()` (or staying in the static array).

@@ -86,6 +86,7 @@ interface KickPluginInstance {
   name: string
   register?(container: Container): void
   modules?(): AppModuleEntry[]
+  setup?(registry: ModuleRegistry): void
   adapters?(): AppAdapter[]
   middleware?(): unknown[]
   contributors?(): ContributorRegistrations
@@ -94,15 +95,38 @@ interface KickPluginInstance {
 }
 ```
 
-| Method           | When it runs           | Use Case                                                                   |
-| ---------------- | ---------------------- | -------------------------------------------------------------------------- |
-| `register()`     | Before modules load    | Bind services in DI                                                        |
-| `modules()`      | Before user modules    | Add feature modules                                                        |
-| `adapters()`     | Before user adapters   | Add lifecycle adapters                                                     |
-| `middleware()`   | Before user middleware | Add global middleware                                                      |
-| `contributors()` | Per-route, at mount    | Ship typed [Context Contributors](./context-decorators.md) the plugin owns |
-| `onReady()`      | After server starts    | Post-startup tasks                                                         |
-| `shutdown()`     | On SIGINT/SIGTERM      | Cleanup resources                                                          |
+| Method           | When it runs                   | Use Case                                                                   |
+| ---------------- | ------------------------------ | -------------------------------------------------------------------------- |
+| `register()`     | Before modules load            | Bind services in DI                                                        |
+| `modules()`      | Before user modules (static)   | Add feature modules — array form, statically introspectable                |
+| `setup()`        | After `modules()`, before user | Conditionally `.mount(module)` based on captured config / env / runtime    |
+| `adapters()`     | Before user adapters           | Add lifecycle adapters                                                     |
+| `middleware()`   | Before user middleware         | Add global middleware                                                      |
+| `contributors()` | Per-route, at mount            | Ship typed [Context Contributors](./context-decorators.md) the plugin owns |
+| `onReady()`      | After server starts            | Post-startup tasks                                                         |
+| `shutdown()`     | On SIGINT/SIGTERM              | Cleanup resources                                                          |
+
+### `modules()` vs `setup()`
+
+Both register modules with the application. `modules()` returns an array — static, easy to introspect, suitable for plugins that always contribute the same fixed set. `setup(registry)` receives an imperative registry and lets the plugin decide what to mount based on config:
+
+```ts
+definePlugin<{ tenants: string[] }>({
+  name: 'MultiTenantPlugin',
+  defaults: { tenants: [] },
+  build: (config) => ({
+    setup(registry) {
+      for (const tenant of config.tenants) {
+        registry.mount(TenantModule.scoped(tenant, { id: tenant }))
+      }
+    },
+  }),
+})
+```
+
+Plugins can implement both — `modules()` runs first, then `setup()` adds to the same registry. Order across the framework: plugin `modules()` arrays → plugin `setup()` calls (in plugin dependsOn order) → user `bootstrap({ modules: [...] })` array → user `bootstrap({ setup })` callback.
+
+> The registry currently exposes only `.mount(module)`. A future `.use(module)` for non-HTTP modules (queues, cron, workers) is planned but not yet implemented.
 
 ### Plugin Contributors
 

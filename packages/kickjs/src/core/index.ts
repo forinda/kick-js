@@ -73,6 +73,8 @@ export { defineModule, type DefineModuleOptions, type ModuleFactory } from './de
 
 export { defineModules, ModuleList } from './define-modules'
 
+export { MutableModuleRegistry, type ModuleRegistry } from './module-registry'
+
 // Adapter System
 export {
   type AppAdapter,
