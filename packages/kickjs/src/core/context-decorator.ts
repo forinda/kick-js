@@ -376,6 +376,19 @@ export function defineContextDecorator<
         `(got ${typeof spec.dependsOn}).`,
     )
   }
+  if (
+    Array.isArray(spec.dependsOn) &&
+    spec.dependsOn.some((dep) => typeof dep !== 'string' || dep.length === 0)
+  ) {
+    // TS narrows dependsOn to `readonly ContextMetaKey[]` for typed
+    // adopters, but JS callers (and TS callers who erase via `as any`)
+    // can still slip through with `[42]` or `['']`. Surface it at
+    // definition time as a TypeError instead of riding to first
+    // request as a `MissingContributorError` on a phantom key.
+    throw new TypeError(
+      `defineContextDecorator(${spec.key}): spec.dependsOn entries must be non-empty strings.`,
+    )
+  }
 
   // Source-location capture. `new Error().stack` here records the
   // adopter's call site so boot-time errors (cycles, missing deps,

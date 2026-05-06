@@ -191,6 +191,42 @@ describe('defineContextDecorator — boot-time validation', () => {
     ).toThrow(/spec\.dependsOn must be an array/)
   })
 
+  it('throws TypeError when spec.dependsOn entries are not non-empty strings', () => {
+    // Element-level check — JS callers / TS-via-`as any` callers can
+    // slip past the readonly-string-array type with [42] or [''].
+    // Catching at definition time beats riding to first request as a
+    // MissingContributorError on a phantom key.
+    expect(() =>
+      defineContextDecorator({
+        key: 'tenant',
+        resolve: () => undefined,
+        // @ts-expect-error — testing runtime guard
+        dependsOn: [42],
+      }),
+    ).toThrow(/spec\.dependsOn entries must be non-empty strings/)
+
+    expect(() =>
+      defineContextDecorator({
+        key: 'tenant',
+        resolve: () => undefined,
+        // Empty string passes the string-typed `dependsOn` array but
+        // is meaningless at runtime — the element-level guard catches
+        // it. Cast through `as never[]` since when ContextMeta is
+        // augmented the entry type narrows to a non-empty union.
+        dependsOn: [''] as never[],
+      }),
+    ).toThrow(/spec\.dependsOn entries must be non-empty strings/)
+
+    expect(() =>
+      defineContextDecorator({
+        key: 'tenant',
+        resolve: () => undefined,
+        // @ts-expect-error — undefined entry
+        dependsOn: ['valid', undefined, 'also-valid'],
+      }),
+    ).toThrow(/spec\.dependsOn entries must be non-empty strings/)
+  })
+
   it('error messages name the offending key when one is available', () => {
     expect(() =>
       defineContextDecorator({
