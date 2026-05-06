@@ -414,9 +414,9 @@ import { WorkspacesModule } from './workspaces/workspaces.module'
 // ... other imports
 
 export const modules: AppModuleEntry[] = [
-  AuthModule,
-  UsersModule,
-  WorkspacesModule,
+  AuthModule(),
+  UsersModule(),
+  WorkspacesModule(),
   // ... other modules
 ]
 ```

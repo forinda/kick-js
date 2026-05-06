@@ -235,11 +235,11 @@ Adding a new module to the registry requires a full restart because the old app 
 ```typescript
 // src/modules/index.ts — adding a new entry needs a restart
 export const modules: AppModuleEntry[] = [
-  QueueModule,
-  AuthModule,
-  UsersModule,
-  WorkspacesModule,
-  // Adding ProjectsModule here? Restart.
+  QueueModule(),
+  AuthModule(),
+  UsersModule(),
+  WorkspacesModule(),
+  // Adding ProjectsModule() here? Restart.
 ]
 ```
 
