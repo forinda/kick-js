@@ -258,20 +258,20 @@ export default defineConfig({
 When you generate a module, the generator automatically updates `src/modules/index.ts`. If the file does not exist, it creates one:
 
 ```ts
-import type { AppModuleClass } from '@forinda/kickjs'
+import type { AppModuleEntry } from '@forinda/kickjs'
 import { ProductModule } from './products'
 
-export const modules: AppModuleClass[] = [ProductModule]
+export const modules: AppModuleEntry[] = [ProductModule]
 ```
 
 If `index.ts` already exists, it appends the import and adds the module to the array:
 
 ```ts
-import type { AppModuleClass } from '@forinda/kickjs'
+import type { AppModuleEntry } from '@forinda/kickjs'
 import { UserModule } from './users'
 import { ProductModule } from './products'
 
-export const modules: AppModuleClass[] = [UserModule, ProductModule]
+export const modules: AppModuleEntry[] = [UserModule, ProductModule]
 ```
 
 ### Generated Module Index

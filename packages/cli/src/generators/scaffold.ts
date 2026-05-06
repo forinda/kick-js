@@ -419,7 +419,7 @@ export class ${pascal}Id {
 // These reuse the same patterns as the existing module generator
 
 function genModuleIndex(pascal: string, kebab: string, plural: string): string {
-  return `import { type AppModule, type ModuleRoutes, Container, buildRoutes } from '@forinda/kickjs'
+  return `import { defineModule } from '@forinda/kickjs'
 import { ${pascal}Controller } from './presentation/${kebab}.controller'
 import { ${pascal.toUpperCase()}_REPOSITORY } from './domain/repositories/${kebab}.repository'
 import { InMemory${pascal}Repository } from './infrastructure/repositories/in-memory-${kebab}.repository'
@@ -431,27 +431,41 @@ import.meta.glob(
   { eager: true },
 )
 
-export class ${pascal}Module implements AppModule {
-  /**
-   * Bind the repository token to its concrete implementation.
-   * Decorator-managed classes (@Service, @Controller, @Repository) are
-   * registered automatically — only token-to-impl bindings need to live here.
-   */
-  register(container: Container): void {
-    container.registerFactory(
-      ${pascal.toUpperCase()}_REPOSITORY,
-      () => container.resolve(InMemory${pascal}Repository),
-    )
-  }
+export const ${pascal}Module = defineModule({
+  name: '${pascal}Module',
+  build: () => ({
+    /**
+     * Bind the repository token to its concrete implementation.
+     * Decorator-managed classes (@Service, @Controller, @Repository) are
+     * registered automatically — only token-to-impl bindings need to live here.
+     */
+    register(container) {
+      container.registerFactory(
+        ${pascal.toUpperCase()}_REPOSITORY,
+        () => container.resolve(InMemory${pascal}Repository),
+      )
+    },
 
-  routes(): ModuleRoutes {
-    return {
-      path: '/${plural}',
-      router: buildRoutes(${pascal}Controller),
-      controller: ${pascal}Controller,
-    }
-  }
-}
+    /**
+     * Declare HTTP routes. Pass \`controller\` and the framework
+     * derives the Express Router via \`buildRoutes()\` and uses the
+     * same controller for OpenAPI spec generation. Return an array
+     * to mount multiple route sets under the same module — each entry
+     * can override the API version with a \`version\` field:
+     *
+     *   return [
+     *     { path: '/${plural}', version: 1, controller: ${pascal}V1Controller },
+     *     { path: '/${plural}', version: 2, controller: ${pascal}V2Controller },
+     *   ]
+     */
+    routes() {
+      return {
+        path: '/${plural}',
+        controller: ${pascal}Controller,
+      }
+    },
+  }),
+})
 `
 }
 
@@ -663,7 +677,7 @@ async function autoRegisterModule(
   if (!exists) {
     await writeFileSafe(
       indexPath,
-      `import type { AppModuleClass } from '@forinda/kickjs'\nimport { ${pascal}Module } from '${importPath}'\n\nexport const modules: AppModuleClass[] = [${pascal}Module]\n`,
+      `import type { AppModuleEntry } from '@forinda/kickjs'\nimport { ${pascal}Module } from '${importPath}'\n\nexport const modules: AppModuleEntry[] = [${pascal}Module()]\n`,
     )
     return
   }
@@ -680,11 +694,13 @@ async function autoRegisterModule(
       content = importLine + '\n' + content
     }
 
+    // defineModule emits a factory; call it at the registration site so
+    // bootstrap receives the module instance rather than the factory itself.
     content = content.replace(/(=\s*\[)([\s\S]*?)(])/, (_match, open, existing, close) => {
       const trimmed = existing.trim()
-      if (!trimmed) return `${open}${pascal}Module${close}`
+      if (!trimmed) return `${open}${pascal}Module()${close}`
       const needsComma = trimmed.endsWith(',') ? '' : ','
-      return `${open}${existing.trimEnd()}${needsComma} ${pascal}Module${close}`
+      return `${open}${existing.trimEnd()}${needsComma} ${pascal}Module()${close}`
     })
   }
 

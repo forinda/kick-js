@@ -59,14 +59,20 @@ export async function removeModule(options: RemoveModuleOptions): Promise<void> 
     )
     content = content.replace(importPattern, '')
 
-    // Remove from modules array — handle: ModuleName, or ModuleName (last entry)
-    content = content.replace(new RegExp(`\\s*,?\\s*${pascal}Module\\s*,?`, 'g'), (match) => {
-      // If match starts and ends with comma, keep one comma
-      const startsWithComma = match.trimStart().startsWith(',')
-      const endsWithComma = match.trimEnd().endsWith(',')
-      if (startsWithComma && endsWithComma) return ','
-      return ''
-    })
+    // Remove from modules array — handle: ModuleName, or ModuleName (last entry).
+    // Also strip the optional trailing `()` for defineModule-form factories
+    // (`SomeModule()`) so we don't leave dangling `()` after removing the
+    // identifier.
+    content = content.replace(
+      new RegExp(`\\s*,?\\s*${pascal}Module(?:\\s*\\(\\s*\\))?\\s*,?`, 'g'),
+      (match) => {
+        // If match starts and ends with comma, keep one comma
+        const startsWithComma = match.trimStart().startsWith(',')
+        const endsWithComma = match.trimEnd().endsWith(',')
+        if (startsWithComma && endsWithComma) return ','
+        return ''
+      },
+    )
 
     // Clean up dangling commas before ]
     content = content.replace(/,(\s*])/, '$1')

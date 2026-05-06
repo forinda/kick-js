@@ -29,7 +29,7 @@ const { expressApp, container } = await createTestApp({
 
 ```ts
 interface CreateTestAppOptions {
-  modules: AppModuleClass[]
+  modules: AppModuleEntry[]
   adapters?: AppAdapter[]
   overrides?: Record<symbol | string, any>
   port?: number

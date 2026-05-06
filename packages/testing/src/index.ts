@@ -7,6 +7,7 @@ import {
   type AppAdapter,
   type AppModule,
   type AppModuleClass,
+  type AppModuleEntry,
   type ApplicationOptions,
   type ContextDecorator,
   type ContributorRegistration,
@@ -41,7 +42,13 @@ type BootstrapPassthroughOptions = Pick<
  * Disables helmet, cors, compression, and morgan by default.
  */
 export interface CreateTestAppOptions extends BootstrapPassthroughOptions {
-  modules: AppModuleClass[]
+  /**
+   * Modules registered for the test run. Accepts both legacy class form
+   * (`UserModule extends AppModule`) and `defineModule` factory output
+   * (call the factory: `UserModule()`) — `Application` discriminates
+   * at boot.
+   */
+  modules: AppModuleEntry[]
   /** Adapters to attach (auth, queue, devtools, etc.) */
   adapters?: AppAdapter[]
   /** DI overrides applied after module registration. Supports both string and symbol keys. */
@@ -109,8 +116,11 @@ export async function createTestApp(options: CreateTestAppOptions): Promise<{
   // on the global singleton (Container.getInstance()). Re-register them on
   // the isolated container so that bindings are available there too.
   if (options.isolated) {
-    for (const ModuleClass of options.modules) {
-      const mod = new ModuleClass()
+    for (const entry of options.modules) {
+      // Discriminate class vs instance — `defineModule` factories return
+      // AppModule instances, legacy classes need `new`. Same dispatch
+      // Application.setup() runs at boot.
+      const mod: AppModule = typeof entry === 'function' ? new (entry as AppModuleClass)() : entry
       // register() is optional — see AppModule docs
       mod.register?.(container)
     }
@@ -309,7 +319,7 @@ export interface PluginTestHarness {
    * for that. Useful for assertions like "the plugin exposes the module I
    * expect".
    */
-  modules(): AppModuleClass[]
+  modules(): AppModuleEntry[]
 
   /**
    * Returns adapter instances the plugin ships via `plugin.adapters?()`.

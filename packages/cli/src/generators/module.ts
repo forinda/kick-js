@@ -147,10 +147,10 @@ async function autoRegisterModule(
   if (!exists) {
     await writeFileSafe(
       indexPath,
-      `import type { AppModuleClass } from '@forinda/kickjs'
+      `import type { AppModuleEntry } from '@forinda/kickjs'
 import { ${pascal}Module } from '${importPath}'
 
-export const modules: AppModuleClass[] = [${pascal}Module]
+export const modules: AppModuleEntry[] = [${pascal}Module()]
 `,
     )
     return
@@ -170,17 +170,20 @@ export const modules: AppModuleClass[] = [${pascal}Module]
       content = importLine + '\n' + content
     }
 
-    // Add to modules array — handle both empty and existing entries
-    // Match the array assignment: `= [...]` or `= [\n...\n]`
+    // Add to modules array — handle both empty and existing entries.
+    // defineModule modules are called as factories at the registration
+    // site (`${pascal}Module()`), so emit the call form. Legacy class
+    // modules without `()` continue to work because Application's loader
+    // discriminates class vs instance at boot time.
     content = content.replace(/(=\s*\[)([\s\S]*?)(])/, (_match, open, existing, close) => {
       const trimmed = existing.trim()
       if (!trimmed) {
         // Empty array: `= []`
-        return `${open}${pascal}Module${close}`
+        return `${open}${pascal}Module()${close}`
       }
       // Existing entries: append with comma
       const needsComma = trimmed.endsWith(',') ? '' : ','
-      return `${open}${existing.trimEnd()}${needsComma} ${pascal}Module${close}`
+      return `${open}${existing.trimEnd()}${needsComma} ${pascal}Module()${close}`
     })
   }
 

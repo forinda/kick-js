@@ -525,6 +525,24 @@ export function registerGenerateCommand(program: Command): void {
       const modulesDir = opts.modulesDir ?? mc.dir ?? 'src/modules'
       const fields = parseFields(rawFields)
       const tokenScope = resolveTokenScope(config, process.cwd())
+      // `kick g scaffold` currently emits a DDD-shaped layout
+      // (presentation/, application/, domain/, infrastructure/) — the
+      // field-based generators don't yet have REST / CQRS / minimal
+      // variants. Refuse explicitly when the project's pattern doesn't
+      // match so adopters aren't surprised by mismatched folder shapes.
+      // Use `kick g module <name>` for non-DDD patterns until the
+      // field-aware variants land.
+      const projectPattern = config?.pattern ?? 'ddd'
+      if (projectPattern !== 'ddd') {
+        console.error(
+          `\n  Error: 'kick g scaffold' currently only supports the DDD pattern.\n` +
+            `  Detected project pattern: '${projectPattern}'.\n` +
+            `  Workarounds:\n` +
+            `    - Run 'kick g module ${name}' for the ${projectPattern} layout (no fields), then add fields manually.\n` +
+            `    - Override the pattern for this scaffold by setting kick.config.ts pattern: 'ddd'.\n`,
+        )
+        process.exit(1)
+      }
       const files = await generateScaffold({
         name,
         fields,

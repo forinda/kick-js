@@ -268,33 +268,61 @@ export class UserService {
 
 ### Modules
 
-Modules implement \`AppModule\` and wire controllers via \`buildRoutes()\`.
+Modules are built with \`defineModule()\` and wire controllers via \`buildRoutes()\`. The legacy \`class … implements AppModule\` form keeps working — the loader accepts both — but new generators emit \`defineModule\` for parity with \`defineAdapter\` and \`definePlugin\`.
 
 > **Naming matters.** Module files **must** be named \`<name>.module.ts\` and live under \`src/modules/\`. The Vite plugin auto-discovers files matching \`*.module.[tj]sx?\` for HMR — a misnamed file (e.g., \`projects.ts\`) won't trigger a graceful module rebuild on save and will require a full server restart. The CLI generator (\`kick g module <name>\`) follows this convention automatically.
 
 \`\`\`ts
 // src/modules/users/users.module.ts   (named <feature>.module.ts)
-import { type AppModule, type ModuleRoutes, buildRoutes } from '@forinda/kickjs'
+import { defineModule } from '@forinda/kickjs'
 import { UserController } from './user.controller'
 
-export class UserModule implements AppModule {
-  routes(): ModuleRoutes {
-    return {
-      path: '/users',
-      router: buildRoutes(UserController),
-      controller: UserController,
-    }
-  }
-}
+export const UserModule = defineModule({
+  name: 'UserModule',
+  build: () => ({
+    routes() {
+      // Single route set — framework derives the router via buildRoutes(controller).
+      return {
+        path: '/users',
+        controller: UserController,
+      }
+    },
+  }),
+})
 \`\`\`
 
-Register all modules in \`src/modules/index.ts\`:
+\`routes()\` can also return **an array** to mount multiple route sets under the same module — useful when one feature spans several controllers, or when you want a v1 and v2 surface of the same controller live side-by-side. Each route set carries an optional \`version\` field overriding the app default (\`Application.defaultVersion\`); the mount path becomes \`/{apiPrefix}/v{version}{path}\`:
 
 \`\`\`ts
-import type { AppModuleClass } from '@forinda/kickjs'
+import { defineModule } from '@forinda/kickjs'
+import { UsersV1Controller } from './v1/users.controller'
+import { UsersV2Controller } from './v2/users.controller'
+import { UserAdminController } from './admin/user-admin.controller'
+
+export const UserModule = defineModule({
+  name: 'UserModule',
+  build: () => ({
+    routes() {
+      return [
+        // /api/v1/users — legacy surface kept around for older clients
+        { path: '/users', version: 1, controller: UsersV1Controller },
+        // /api/v2/users — current surface
+        { path: '/users', version: 2, controller: UsersV2Controller },
+        // /api/v1/admin/users — admin surface, same module, different mount
+        { path: '/admin/users', controller: UserAdminController },
+      ]
+    },
+  }),
+})
+\`\`\`
+
+Register all modules in \`src/modules/index.ts\`. \`defineModule\` factories are called at the registration site; the legacy class form is passed by reference:
+
+\`\`\`ts
+import type { AppModuleEntry } from '@forinda/kickjs'
 import { UserModule } from './user/user.module'
 
-export const modules: AppModuleClass[] = [UserModule]
+export const modules: AppModuleEntry[] = [UserModule()]
 \`\`\`
 
 ### RequestContext
@@ -666,7 +694,7 @@ mistakes:
 
   \`\`\`ts
   // src/modules/index.ts
-  export const modules: AppModuleClass[] = [HelloModule, UsersModule, ...]
+  export const modules: AppModuleEntry[] = [HelloModule(), UsersModule(), ...]
 
   // src/middleware/index.ts
   export const middleware = [helmet(), cors(), requestId(), ...]
@@ -732,7 +760,7 @@ ${
 ├── <name>.repository.ts     # Data access (@Repository)
 ├── <name>.dto.ts            # Request/response schemas (Zod)
 ├── <name>.entity.ts         # Domain entity (optional)
-└── <name>.module.ts         # Module definition (implements AppModule)
+└── <name>.module.ts         # Module definition (defineModule factory)
 \`\`\`
 `
     : template === 'cqrs'
@@ -748,7 +776,7 @@ ${
 │   └── <name>-created.event.ts
 ├── <name>.controller.ts     # HTTP routes
 ├── <name>.repository.ts     # Data access
-└── <name>.module.ts         # Module definition (implements AppModule)
+└── <name>.module.ts         # Module definition (defineModule factory)
 \`\`\`
 `
       : template === 'rest'
@@ -757,7 +785,7 @@ ${
 ├── <name>.controller.ts     # HTTP routes (@Controller)
 ├── <name>.service.ts        # Business logic (@Service)
 ├── <name>.dto.ts            # Request/response schemas (Zod)
-└── <name>.module.ts         # Module definition (implements AppModule)
+└── <name>.module.ts         # Module definition (defineModule factory)
 \`\`\`
 `
         : `\`\`\`
@@ -795,8 +823,8 @@ If not using generators:
 - [ ] Create \`src/modules/<name>/<name>.controller.ts\`
 - [ ] Add \`@Controller()\` decorator
 - [ ] Add route handlers with \`@Get()\`, \`@Post()\`, etc.
-- [ ] Create module file implementing \`AppModule\` with \`routes()\` returning \`{ path, router: buildRoutes(Controller), controller }\`
-- [ ] Register module in \`src/modules/index.ts\` (\`AppModuleClass[]\` array)
+- [ ] Create module file with \`defineModule({ name, build: () => ({ routes() { return { path, controller } } }) })\` (the framework derives the Express router from the controller)
+- [ ] Register module in \`src/modules/index.ts\` (\`AppModuleEntry[]\` array — call the factory at the registration site: \`[MyModule()]\`)
 - [ ] Test with \`kick dev\`
 
 ### Manual Service

@@ -326,10 +326,10 @@ const moduleNotRegistered: KnownIssue = {
           'drop the entry.',
         fix: 'Open src/modules/index.ts and verify the module is in the array:',
         codeAfter:
-          "import type { AppModuleClass } from '@forinda/kickjs'\n" +
+          "import type { AppModuleEntry } from '@forinda/kickjs'\n" +
           "import { UserModule } from './users/user.module'\n" +
           "import { TaskModule } from './tasks/task.module'  // ← was this missing?\n\n" +
-          'export const modules: AppModuleClass[] = [UserModule, TaskModule]',
+          'export const modules: AppModuleEntry[] = [UserModule(), TaskModule()]',
         docs: 'https://forinda.github.io/kick-js/guide/project-structure.html',
       },
     }

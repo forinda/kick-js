@@ -85,7 +85,7 @@ export const CorsPlugin = definePlugin<CorsPluginConfig>({
 interface KickPluginInstance {
   name: string
   register?(container: Container): void
-  modules?(): AppModuleClass[]
+  modules?(): AppModuleEntry[]
   adapters?(): AppAdapter[]
   middleware?(): unknown[]
   contributors?(): ContributorRegistrations
@@ -157,7 +157,7 @@ import {
   createToken,
   definePlugin,
   type AppAdapter,
-  type AppModuleClass,
+  type AppModuleEntry,
   type Container,
 } from '@forinda/kickjs'
 import passport from 'passport'
@@ -182,7 +182,7 @@ export const AuthPlugin = definePlugin<AuthPluginConfig>({
       }))
     },
 
-    modules(): AppModuleClass[] {
+    modules(): AppModuleEntry[] {
       return [AuthModule] // provides /auth/login, /auth/register routes
     },
 

@@ -4,15 +4,30 @@ import type { ContributorRegistrations } from './context-decorator'
 /**
  * Route set returned by a module's routes() method.
  * Combined with versioning: /{apiPrefix}/v{version}{path}
+ *
+ * **Either** `controller` or `router` is required. Pass `controller`
+ * for the common case — the framework calls `buildRoutes(controller)`
+ * internally to derive the Express Router. Pass `router` directly
+ * only when you need to compose multiple controllers under one path
+ * or hand-build the router yourself.
  */
 export interface ModuleRoutes {
   /** URL prefix (e.g. '/users') */
   path: string
-  /** Express Router instance (from buildRoutes) */
-  router: any
+  /**
+   * Express Router instance. Optional — when omitted, the framework
+   * builds one from `controller` via `buildRoutes(controller)`. Pass
+   * an explicit router only when you need to compose multiple
+   * controllers or hand-roll the router shape.
+   */
+  router?: any
   /** Optional API version override (defaults to Application.defaultVersion) */
   version?: number
-  /** Controller class for OpenAPI introspection */
+  /**
+   * Controller class. Required unless `router` is provided. Used both
+   * for the auto-derived router (via `buildRoutes(controller)`) and
+   * for OpenAPI spec generation via `SwaggerAdapter`.
+   */
   controller?: any
 }
 
@@ -45,3 +60,19 @@ export interface AppModule {
 
 /** Constructor type for AppModule classes */
 export type AppModuleClass = new () => AppModule
+
+/**
+ * Either form accepted by `bootstrap({ modules })` and
+ * `KickPlugin.modules?()`:
+ *
+ *   - **Class** — the legacy form. Bootstrap calls `new ModuleClass()`.
+ *   - **Instance** — produced by {@link defineModule}'s factory call
+ *     (e.g. `TasksModule({ scope: 'admin' })`). Bootstrap uses it
+ *     directly without `new`.
+ *
+ * Both shapes route through the same lifecycle (`register`,
+ * `contributors`, `routes`) — the only difference is who owns
+ * instantiation. defineModule callers use this union so adopters can
+ * mix-and-match in the same `modules` array.
+ */
+export type AppModuleEntry = AppModuleClass | AppModule
