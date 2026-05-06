@@ -268,7 +268,7 @@ import type { AppModuleEntry } from '@forinda/kickjs'
 import { UserModule } from './users/user.module'
 import { ProductModule } from './products/product.module'
 
-export const modules: AppModuleEntry[] = [UserModule, ProductModule]
+export const modules: AppModuleEntry[] = [UserModule(), ProductModule()]
 
 // src/index.ts — apiPrefix + versioning are automatic
 export const app = await bootstrap({

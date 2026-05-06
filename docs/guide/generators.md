@@ -255,23 +255,23 @@ export default defineConfig({
 
 ### Auto-Registration
 
-When you generate a module, the generator automatically updates `src/modules/index.ts`. If the file does not exist, it creates one:
+When you generate a module, the generator automatically updates `src/modules/index.ts`. `defineModule` factories are called at the registration site — the generator emits `Module()` so bootstrap receives the module instance. If the file does not exist, it creates one:
 
 ```ts
 import type { AppModuleEntry } from '@forinda/kickjs'
 import { ProductModule } from './products'
 
-export const modules: AppModuleEntry[] = [ProductModule]
+export const modules: AppModuleEntry[] = [ProductModule()]
 ```
 
-If `index.ts` already exists, it appends the import and adds the module to the array:
+If `index.ts` already exists, it appends the import and adds the module factory call to the array:
 
 ```ts
 import type { AppModuleEntry } from '@forinda/kickjs'
 import { UserModule } from './users'
 import { ProductModule } from './products'
 
-export const modules: AppModuleEntry[] = [UserModule, ProductModule]
+export const modules: AppModuleEntry[] = [UserModule(), ProductModule()]
 ```
 
 ### Generated Module Index
