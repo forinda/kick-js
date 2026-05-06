@@ -125,7 +125,7 @@ export function buildPipeline(
   for (const reg of survivors) {
     for (const dep of reg.dependsOn) {
       if (!allKeys.has(dep)) {
-        throw new MissingContributorError(dep, reg.key, route)
+        throw new MissingContributorError(dep, reg.key, route, reg.definedAt)
       }
     }
   }

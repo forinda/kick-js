@@ -105,6 +105,102 @@ describe('defineContextDecorator — factory shape', () => {
       decorator.registration = { key: 'hijacked' } as never
     }).toThrow(TypeError)
   })
+
+  it('sets a meaningful .name so console.log / stack traces are readable', () => {
+    const decorator = defineContextDecorator({
+      key: 'tenant',
+      resolve: () => ({ id: 't-1' }),
+    })
+    expect(decorator.name).toBe('ContextDecorator(tenant)')
+  })
+
+  it('captures a stack snapshot on the registration so boot errors point at adopter code', () => {
+    const decorator = defineContextDecorator({
+      key: 'tenant',
+      resolve: () => ({ id: 't-1' }),
+    })
+    expect(typeof decorator.registration.definedAt).toBe('string')
+    // The captured stack should reference this test file's path so a
+    // boot-time error pointing at it would be actionable.
+    expect(decorator.registration.definedAt).toContain('context-decorator.test')
+  })
+})
+
+describe('defineContextDecorator — boot-time validation', () => {
+  it('throws TypeError when spec is null / not an object', () => {
+    expect(() =>
+      // @ts-expect-error — testing runtime guard
+      defineContextDecorator(null),
+    ).toThrow(/spec must be an object literal/)
+    expect(() =>
+      // @ts-expect-error
+      defineContextDecorator(42),
+    ).toThrow(/spec must be an object literal/)
+  })
+
+  it('throws TypeError when spec.key is missing or empty', () => {
+    expect(() =>
+      defineContextDecorator({
+        // @ts-expect-error — testing runtime guard for missing key
+        resolve: () => undefined,
+      }),
+    ).toThrow(/spec\.key must be a non-empty string/)
+    expect(() =>
+      defineContextDecorator({
+        key: '',
+        resolve: () => undefined,
+      }),
+    ).toThrow(/spec\.key must be a non-empty string/)
+  })
+
+  it('throws TypeError when spec.resolve is missing or not a function', () => {
+    expect(() =>
+      defineContextDecorator({
+        // @ts-expect-error — testing runtime guard for missing resolve
+        key: 'tenant',
+      }),
+    ).toThrow(/spec\.resolve is required and must be a function/)
+    expect(() =>
+      defineContextDecorator({
+        key: 'tenant',
+        // @ts-expect-error
+        resolve: 'not-a-function',
+      }),
+    ).toThrow(/spec\.resolve is required and must be a function/)
+  })
+
+  it('throws TypeError when spec.onError is provided but not a function', () => {
+    expect(() =>
+      defineContextDecorator({
+        key: 'tenant',
+        resolve: () => undefined,
+        // @ts-expect-error — testing runtime guard
+        onError: 'oops',
+      }),
+    ).toThrow(/spec\.onError must be a function/)
+  })
+
+  it('throws TypeError when spec.dependsOn is provided but not an array', () => {
+    expect(() =>
+      defineContextDecorator({
+        key: 'tenant',
+        resolve: () => undefined,
+        // @ts-expect-error — testing runtime guard
+        dependsOn: 'tenant',
+      }),
+    ).toThrow(/spec\.dependsOn must be an array/)
+  })
+
+  it('error messages name the offending key when one is available', () => {
+    expect(() =>
+      defineContextDecorator({
+        key: 'tenant',
+        resolve: () => undefined,
+        // @ts-expect-error
+        onError: 42,
+      }),
+    ).toThrow(/defineContextDecorator\(tenant\)/)
+  })
 })
 
 describe('defineContextDecorator — method decorator', () => {

@@ -15,21 +15,46 @@
  * @example
  * ```text
  * MissingContributorError: Missing context contributor 'tenant' required by 'project' on route GET /projects/:id
+ *     declared at src/contributors/load-project.ts:42:18
  * ```
  */
 export class MissingContributorError extends Error {
   readonly key: string
   readonly dependent: string
   readonly route?: string
+  readonly dependentDefinedAt?: string
 
-  constructor(key: string, dependent: string, route?: string) {
+  constructor(key: string, dependent: string, route?: string, dependentDefinedAt?: string) {
     const where = route ? ` on route ${route}` : ''
-    super(`Missing context contributor '${key}' required by '${dependent}'${where}`)
+    const declaredAt = formatDeclaredAt(dependentDefinedAt)
+    super(`Missing context contributor '${key}' required by '${dependent}'${where}${declaredAt}`)
     this.name = 'MissingContributorError'
     this.key = key
     this.dependent = dependent
     this.route = route
+    this.dependentDefinedAt = dependentDefinedAt
   }
+}
+
+/**
+ * Slice the first non-framework frame off a captured `Error.stack`
+ * and format it as `\n    declared at <frame>` for inclusion in
+ * boot-time error messages. Returns `''` when no useful frame is
+ * available (hand-rolled registrations, missing stacks).
+ */
+function formatDeclaredAt(stack: string | undefined): string {
+  if (!stack) return ''
+  const lines = stack.split('\n')
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!trimmed.startsWith('at ')) continue
+    // Skip frames inside this file or the decorator factory — the
+    // adopter's call site is the next frame after those.
+    if (trimmed.includes('context-decorator.')) continue
+    if (trimmed.includes('context-errors.')) continue
+    return `\n    declared at ${trimmed.replace(/^at /, '')}`
+  }
+  return ''
 }
 
 /**
