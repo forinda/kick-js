@@ -1,5 +1,20 @@
 # @forinda/kickjs-db-mysql
 
+## 0.2.1
+
+### Patch Changes
+
+- [#188](https://github.com/forinda/kick-js/pull/188) [`23f3845`](https://github.com/forinda/kick-js/commit/23f3845d6630bf6f843e8cb14fb220a322c0509b) Thanks [@forinda](https://github.com/forinda)! - Drop `Kysely` mentions from the adopter-facing README prose on the two new dialect packages so they match the `@forinda/kickjs-db-pg` template.
+
+  Both packages still use the underlying engine internally — that's the point of the `*Dialect()` factories — but the README now reads like the rest of the family: "SQLite adapter", "MySQL adapter", with the implementation engine treated as an internal detail. Adopters who need to escape into the underlying surface still do so via the framework's `qb` accessor; nothing about the API surface or runtime behavior changes.
+
+  Same sweep applied to `docs/guide/db-extensions.md` (the result-extension internals doc) — "Kysely plugin" reworded to "query-pipeline plugin" / "query-tree transform" so the public guide is engine-agnostic.
+
+  No code changes. No public API changes. Patch bump only because npm picks up the updated README on the next publish.
+
+- Updated dependencies []:
+  - @forinda/kickjs-db@5.4.1
+
 ## 0.2.0
 
 ### Minor Changes
