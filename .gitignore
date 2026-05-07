@@ -8,6 +8,10 @@ yarn-debug.log*
 yarn-error.log*
 .idea/
 .vscode/
+# Claude Code's machine-local override — leaks usernames / absolute
+# paths / per-developer permissions. Each contributor keeps their
+# own copy outside source control.
+.claude/
 .wireit/
 .turbo/
 *.log
