@@ -1,5 +1,5 @@
 import { copyFile, mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises'
-import { dirname, join, relative, resolve as resolvePath, sep } from 'node:path'
+import { dirname, join, resolve as resolvePath, sep } from 'node:path'
 
 /**
  * Direction the migrator rewrites in. Resolved by the caller from
@@ -444,17 +444,21 @@ export async function migrateModulesDir(
 
   const files: MigrateRunResult['files'] = []
 
+  // Absolute paths in `files[].path` and `indexPath` so adopters can
+  // cmd-click straight to the file from terminal output. The `cwd`
+  // option is no longer needed here but stays in the option type for
+  // backwards-compatibility with callers that pass it.
   for (const path of moduleFiles) {
     const content = await readFile(path, 'utf-8')
     const result = migrateModuleFile(content, target)
     if (result.migrated == null) {
-      files.push({ path: relative(cwd, path), status: 'skipped', reason: result.reason })
+      files.push({ path, status: 'skipped', reason: result.reason })
       continue
     }
     if (!dryRun) {
       await writeFile(path, result.migrated, 'utf-8')
     }
-    files.push({ path: relative(cwd, path), status: 'migrated' })
+    files.push({ path, status: 'migrated' })
   }
 
   const indexPath = join(modulesDir, 'index.ts')
@@ -466,7 +470,7 @@ export async function migrateModulesDir(
       target,
       files,
       indexStatus: 'not-found',
-      indexPath: relative(cwd, indexPath),
+      indexPath,
       backupDir,
     }
   }
@@ -477,7 +481,7 @@ export async function migrateModulesDir(
       target,
       files,
       indexStatus: 'skipped',
-      indexPath: relative(cwd, indexPath),
+      indexPath,
       indexReason: indexResult.reason,
       backupDir,
     }
@@ -489,7 +493,7 @@ export async function migrateModulesDir(
     target,
     files,
     indexStatus: 'migrated',
-    indexPath: relative(cwd, indexPath),
+    indexPath,
     backupDir,
   }
 }
