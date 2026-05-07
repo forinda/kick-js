@@ -1,4 +1,4 @@
-import { relative, resolve } from 'node:path'
+import { resolve } from 'node:path'
 import type { Command } from 'commander'
 import { listPluginGenerators, tryDispatchPluginGenerator } from '../generator-extension'
 import { mergeCliPlugins } from '../plugin'
@@ -220,15 +220,16 @@ async function runModuleGeneration(
   if (!dryRun && resolvedStyle === 'define') {
     const drift = await findStyleDriftModules(resolve(modulesDir), 'define')
     if (drift.length > 0) {
-      const cwd = process.cwd()
       console.error(
         `\n  ${colors.red('Error:')} ${drift.length} module file(s) still use the legacy ` +
           `\`class … implements AppModule\` shape.\n` +
           `  ${colors.dim('Project setting:')} modules.style: 'define' (default)\n\n` +
           `  ${colors.bold('Files needing migration:')}`,
       )
+      // Print absolute paths so adopters can cmd-click straight to
+      // the file from their terminal — relative paths break that flow.
       for (const path of drift.slice(0, 5)) {
-        console.error(`    - ${relative(cwd, path)}`)
+        console.error(`    - ${path}`)
       }
       if (drift.length > 5) {
         console.error(`    … and ${drift.length - 5} more`)
