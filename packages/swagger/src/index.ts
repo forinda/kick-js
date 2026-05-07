@@ -7,9 +7,12 @@ export {
   ApiResponse,
   ApiTags,
   ApiBearerAuth,
+  ApiSecurity,
+  ApiPublic,
   ApiExclude,
   type ApiOperationOptions,
   type ApiResponseOptions,
+  type ApiSecurityRequirement,
 } from './decorators'
 
 // Spec Builder
@@ -18,6 +21,8 @@ export {
   registerControllerForDocs,
   clearRegisteredRoutes,
   type OpenAPIInfo,
+  type OpenAPISecurityScheme,
+  type SecurityResolverContext,
   type SwaggerOptions,
 } from './openapi-builder'
 

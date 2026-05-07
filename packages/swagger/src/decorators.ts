@@ -11,10 +11,38 @@ const SWAGGER_KEYS = {
   RESPONSES: 'kick:swagger:responses',
   TAGS: 'kick:swagger:tags',
   BEARER_AUTH: 'kick:swagger:bearer',
+  /**
+   * Generic security requirement(s) attached to a route. Replaces
+   * the implicit `kick:auth:authenticated` cross-package bridge —
+   * adopters now declare auth requirements explicitly via
+   * `@ApiSecurity()` (single or multi-scheme, with optional OAuth
+   * scopes) instead of having Swagger guess from a sibling
+   * package's metadata.
+   */
+  SECURITY: 'kick:swagger:security',
+  /**
+   * Method-level opt-out from class-level security. Mirrors the
+   * intent of `@Public` from auth packages but lives on Swagger's
+   * own metadata namespace, so the spec builder doesn't need to
+   * know about any specific auth library.
+   */
+  PUBLIC: 'kick:swagger:public',
   EXCLUDE: 'kick:swagger:exclude',
 } as const
 
 export { SWAGGER_KEYS }
+
+/**
+ * One entry in a route's OpenAPI security requirement list. Maps to
+ * the `SecurityRequirementObject` in the OpenAPI 3 spec — `name`
+ * references a scheme declared under `components.securitySchemes`,
+ * and `scopes` is the optional OAuth2 / OpenID Connect scope list
+ * (empty array for non-OAuth schemes).
+ */
+export interface ApiSecurityRequirement {
+  name: string
+  scopes?: string[]
+}
 
 export interface ApiOperationOptions {
   summary?: string
@@ -69,6 +97,71 @@ export function ApiBearerAuth(name = 'BearerAuth'): ClassDecorator & MethodDecor
     } else {
       setClassMeta(SWAGGER_KEYS.BEARER_AUTH, name, target)
     }
+  }
+}
+
+/**
+ * Attach one or more OpenAPI security requirements to a class or
+ * method. Generic alternative to {@link ApiBearerAuth} — pick this
+ * when the scheme isn't bearer-shaped (API key, OAuth2 with scopes,
+ * OpenID Connect) or when a route accepts multiple alternative
+ * schemes (`SchemeA` OR `SchemeB`).
+ *
+ * Pass a string for the simple "scheme by name, no scopes" case;
+ * pass an object `{ name, scopes }` to attach OAuth/OIDC scopes;
+ * pass an array to declare multiple alternatives.
+ *
+ * The referenced scheme name **must** be declared under
+ * `SwaggerOptions.securitySchemes` (or via the implicit BearerAuth
+ * scheme generated when `bearerAuth: true` or `@ApiBearerAuth()`
+ * is used) — Swagger doesn't synthesize schemes from `@ApiSecurity`
+ * names alone.
+ *
+ * @example
+ * ```ts
+ * @Controller('/users')
+ * @ApiSecurity('BearerAuth')                   // class-level default
+ * class UsersController {
+ *   @Get('/me')
+ *   @ApiSecurity({ name: 'OAuth2', scopes: ['users:read'] })  // override
+ *   me() { ... }
+ *
+ *   @Get('/health')
+ *   @ApiPublic()                                // opt out
+ *   health() { ... }
+ * }
+ * ```
+ */
+export function ApiSecurity(
+  requirement: string | ApiSecurityRequirement | (string | ApiSecurityRequirement)[],
+): ClassDecorator & MethodDecorator {
+  // Normalise everything to an `ApiSecurityRequirement[]` so the
+  // builder reads a single shape. Strings become `{ name, scopes: [] }`.
+  const requirements: ApiSecurityRequirement[] = (
+    Array.isArray(requirement) ? requirement : [requirement]
+  ).map((r) => (typeof r === 'string' ? { name: r, scopes: [] } : { scopes: [], ...r }))
+
+  return (target: any, propertyKey?: string | symbol) => {
+    if (propertyKey) {
+      setMethodMeta(SWAGGER_KEYS.SECURITY, requirements, target.constructor, propertyKey as string)
+    } else {
+      setClassMeta(SWAGGER_KEYS.SECURITY, requirements, target)
+    }
+  }
+}
+
+/**
+ * Mark a method as publicly accessible — opts out of any
+ * class-level security requirement (set via {@link ApiSecurity}
+ * or {@link ApiBearerAuth}) for this one route.
+ *
+ * Use when the controller is mostly secured but exposes a
+ * health-check / login / public-stats endpoint that shouldn't
+ * carry the inherited security requirement in the OpenAPI spec.
+ */
+export function ApiPublic(): MethodDecorator {
+  return (target, propertyKey) => {
+    setMethodMeta(SWAGGER_KEYS.PUBLIC, true, target.constructor, propertyKey as string)
   }
 }
 

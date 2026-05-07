@@ -5,6 +5,8 @@ import {
   ApiResponse,
   ApiTags,
   ApiBearerAuth,
+  ApiSecurity,
+  ApiPublic,
   ApiExclude,
   buildOpenAPISpec,
   registerControllerForDocs,
@@ -598,53 +600,138 @@ describe('buildOpenAPISpec — caching', () => {
   })
 })
 
-describe('buildOpenAPISpec — auth bridge (cross-package metadata)', () => {
+describe('buildOpenAPISpec — security (Swagger-owned, not coupled to any auth lib)', () => {
   beforeEach(() => {
     Container.reset()
     clearRegisteredRoutes()
   })
 
-  /**
-   * Simulates @forinda/kickjs-auth setting its metadata via the
-   * canonical 'kick:auth:*' string keys (AUTH_META post-migration).
-   * The swagger builder should pick these up without importing the
-   * auth package — string literals are the contract.
-   */
-  it('marks routes secured when kick:auth:authenticated is set on the class', () => {
+  it('@ApiSecurity(string) attaches a single requirement', () => {
     @Controller()
     class SecuredController {
       @Get('/secret')
+      @ApiSecurity('BearerAuth')
       secret() {}
     }
-    Reflect.defineMetadata('kick:auth:authenticated', true, SecuredController)
-
     registerControllerForDocs(SecuredController, '/api')
     const spec = buildOpenAPISpec()
-
-    const op = spec.paths['/api/secret']?.get
-    expect(op.security).toEqual([{ BearerAuth: [] }])
+    expect(spec.paths['/api/secret']?.get?.security).toEqual([{ BearerAuth: [] }])
     expect(spec.components?.securitySchemes?.BearerAuth).toMatchObject({
       type: 'http',
       scheme: 'bearer',
     })
   })
 
-  it('respects method-level kick:auth:public override on a class-secured controller', () => {
+  it('@ApiSecurity({ name, scopes }) carries OAuth2 scopes through to the requirement', () => {
     @Controller()
+    class OauthController {
+      @Get('/profile')
+      @ApiSecurity({ name: 'OAuth2', scopes: ['users:read', 'users:write'] })
+      profile() {}
+    }
+    registerControllerForDocs(OauthController, '/api')
+    const spec = buildOpenAPISpec({
+      securitySchemes: {
+        OAuth2: { type: 'oauth2', flows: {} },
+      },
+    })
+    expect(spec.paths['/api/profile']?.get?.security).toEqual([
+      { OAuth2: ['users:read', 'users:write'] },
+    ])
+    expect(spec.components?.securitySchemes?.OAuth2).toMatchObject({ type: 'oauth2' })
+  })
+
+  it('@ApiSecurity at class level cascades to every method, method-level overrides win', () => {
+    @Controller()
+    @ApiSecurity('BearerAuth')
+    class MixedController {
+      @Get('/inherited')
+      inherited() {}
+      @Get('/overridden')
+      @ApiSecurity('ApiKey')
+      overridden() {}
+    }
+    registerControllerForDocs(MixedController, '/api')
+    const spec = buildOpenAPISpec({
+      securitySchemes: { ApiKey: { type: 'apiKey', in: 'header', name: 'X-API-Key' } },
+    })
+    expect(spec.paths['/api/inherited']?.get?.security).toEqual([{ BearerAuth: [] }])
+    expect(spec.paths['/api/overridden']?.get?.security).toEqual([{ ApiKey: [] }])
+  })
+
+  it('@ApiPublic on a method opts out of class-level security', () => {
+    @Controller()
+    @ApiSecurity('BearerAuth')
     class MixedController {
       @Get('/private')
       priv() {}
-      @Get('/public')
-      pub() {}
+      @Get('/health')
+      @ApiPublic()
+      health() {}
     }
-    Reflect.defineMetadata('kick:auth:authenticated', true, MixedController)
-    Reflect.defineMetadata('kick:auth:public', true, MixedController.prototype, 'pub')
-
     registerControllerForDocs(MixedController, '/api')
     const spec = buildOpenAPISpec()
-
     expect(spec.paths['/api/private']?.get?.security).toEqual([{ BearerAuth: [] }])
-    expect(spec.paths['/api/public']?.get?.security).toBeUndefined()
+    expect(spec.paths['/api/health']?.get?.security).toBeUndefined()
+  })
+
+  it('options.securityResolver bridges adopter-side metadata without coupling', () => {
+    // Adopter sets their own metadata key — Swagger doesn't know
+    // about it, but the resolver hook turns it into a Swagger
+    // requirement. Mirrors the historical kick:auth:* behaviour
+    // without putting that knowledge in the builder.
+    @Controller()
+    class AdopterController {
+      @Get('/secret')
+      secret() {}
+      @Get('/open')
+      open() {}
+    }
+    Reflect.defineMetadata('myapp:secured', true, AdopterController.prototype, 'secret')
+
+    registerControllerForDocs(AdopterController, '/api')
+    const spec = buildOpenAPISpec({
+      securityResolver: ({ controllerClass, handlerName }) => {
+        const secured = Reflect.getMetadata('myapp:secured', controllerClass.prototype, handlerName)
+        return secured ? 'BearerAuth' : undefined
+      },
+    })
+    expect(spec.paths['/api/secret']?.get?.security).toEqual([{ BearerAuth: [] }])
+    expect(spec.paths['/api/open']?.get?.security).toBeUndefined()
+  })
+
+  it('options.securityResolver returning null marks a route as explicitly public', () => {
+    @Controller()
+    @ApiSecurity('BearerAuth')
+    class ResolverPublicController {
+      @Get('/secret')
+      secret() {}
+      @Get('/health')
+      health() {}
+    }
+    registerControllerForDocs(ResolverPublicController, '/api')
+    const spec = buildOpenAPISpec({
+      securityResolver: ({ handlerName }) => (handlerName === 'health' ? null : undefined),
+    })
+    expect(spec.paths['/api/secret']?.get?.security).toEqual([{ BearerAuth: [] }])
+    expect(spec.paths['/api/health']?.get?.security).toBeUndefined()
+  })
+
+  it('refuses to silently synthesise a scheme for non-BearerAuth names — adopter must declare', () => {
+    @Controller()
+    class CustomSchemeController {
+      @Get('/secret')
+      @ApiSecurity('CustomNotDeclared')
+      secret() {}
+    }
+    registerControllerForDocs(CustomSchemeController, '/api')
+    const spec = buildOpenAPISpec()
+    // The requirement IS attached (so the spec validates against the
+    // route), but the scheme block stays absent — Swagger UI surfaces
+    // this as a configuration error the adopter needs to fix by
+    // declaring the scheme under `securitySchemes`.
+    expect(spec.paths['/api/secret']?.get?.security).toEqual([{ CustomNotDeclared: [] }])
+    expect(spec.components?.securitySchemes?.CustomNotDeclared).toBeUndefined()
   })
 })
 

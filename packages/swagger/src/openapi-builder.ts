@@ -9,7 +9,12 @@ import {
   getMethodMetaOrUndefined,
   hasClassMeta,
 } from '@forinda/kickjs'
-import { SWAGGER_KEYS, type ApiOperationOptions, type ApiResponseOptions } from './decorators'
+import {
+  SWAGGER_KEYS,
+  type ApiOperationOptions,
+  type ApiResponseOptions,
+  type ApiSecurityRequirement,
+} from './decorators'
 import { zodSchemaParser, type SchemaParser } from './schema-parser'
 
 const log = Logger.for('SwaggerSpec')
@@ -33,48 +38,107 @@ const warnedBodyOnReadMethod = new Set<string>()
  */
 const EXPRESS_PARAM_RE = /:([A-Za-z_][A-Za-z0-9_]*)/g
 
-// ── Auth metadata bridge ──────────────────────────────────────────────
-// Check @forinda/kickjs-auth decorators without importing the auth
-// package. Auth's metadata keys (AUTH_META.AUTHENTICATED etc.) are
-// string literals under the §22 'kick:auth:*' convention; we read them
-// here via Reflect.getMetadata directly. The previous Symbol-by-
-// description shim broke silently when either side migrated; string
-// literals are byte-stable across packages.
-const AUTH_KEY_AUTHENTICATED = 'kick:auth:authenticated'
-const AUTH_KEY_PUBLIC = 'kick:auth:public'
-
-const R = Reflect as {
-  getMetadata?: (key: string, target: object, propertyKey?: string) => unknown
-}
-
-function getAuthMeta(key: string, target: any, propertyKey?: string): unknown {
-  if (typeof R.getMetadata !== 'function') return undefined
-  const proto = target.prototype ?? target
-  return propertyKey ? R.getMetadata(key, proto, propertyKey) : R.getMetadata(key, target)
-}
-
-function isAuthAuthenticated(controllerClass: any, handlerName?: string): boolean {
-  if (handlerName) {
-    const val = getAuthMeta(AUTH_KEY_AUTHENTICATED, controllerClass, handlerName)
-    if (val !== undefined) return !!val
-  }
-  return !!getAuthMeta(AUTH_KEY_AUTHENTICATED, controllerClass)
-}
-
-function isAuthPublic(controllerClass: any, handlerName: string): boolean {
-  return !!getAuthMeta(AUTH_KEY_PUBLIC, controllerClass, handlerName)
-}
-
 export interface OpenAPIInfo {
   title: string
   version: string
   description?: string
 }
 
+/**
+ * OpenAPI 3 SecuritySchemeObject — the shape adopters declare under
+ * `SwaggerOptions.securitySchemes` and reference by name in
+ * `@ApiSecurity('SchemeName')` / `@ApiBearerAuth('SchemeName')` /
+ * `securityResolver()`. Loose `type: any` here matches the OpenAPI
+ * union (`http` | `apiKey` | `oauth2` | `openIdConnect` | `mutualTLS`)
+ * so adopters can declare any valid scheme without a re-export of
+ * the full OpenAPI types.
+ */
+export type OpenAPISecurityScheme = Record<string, any>
+
+/**
+ * Information passed to {@link SwaggerOptions.securityResolver} for
+ * each route. The hook receives the raw controller class + method
+ * name so adopters bridging another auth library (kickjs-auth,
+ * passport-style decorators, custom annotations) can read whatever
+ * metadata they want via `Reflect.getMetadata`.
+ */
+export interface SecurityResolverContext {
+  controllerClass: any
+  handlerName: string
+}
+
 export interface SwaggerOptions {
   info?: Partial<OpenAPIInfo>
   servers?: { url: string; description?: string }[]
+  /**
+   * Add the `BearerAuth` scheme to `components.securitySchemes` and
+   * apply it as a global security requirement on the spec. Routes
+   * that opt out via {@link ApiPublic} drop the global requirement.
+   */
   bearerAuth?: boolean
+  /**
+   * Custom OpenAPI security schemes. Each entry is a
+   * {@link OpenAPISecurityScheme} keyed by scheme name — the same
+   * name `@ApiSecurity` / `@ApiBearerAuth` / `securityResolver`
+   * reference. Schemes referenced by decorators but not declared
+   * here are still emitted with a default `bearer` shape (back-compat
+   * with the original `@ApiBearerAuth` flow).
+   *
+   * @example
+   * ```ts
+   * SwaggerAdapter({
+   *   securitySchemes: {
+   *     ApiKey: { type: 'apiKey', in: 'header', name: 'X-API-Key' },
+   *     OAuth2: {
+   *       type: 'oauth2',
+   *       flows: {
+   *         authorizationCode: {
+   *           authorizationUrl: 'https://example.com/oauth/authorize',
+   *           tokenUrl: 'https://example.com/oauth/token',
+   *           scopes: { 'users:read': 'Read user profile' },
+   *         },
+   *       },
+   *     },
+   *   },
+   * })
+   * ```
+   */
+  securitySchemes?: Record<string, OpenAPISecurityScheme>
+  /**
+   * Optional bridge for adopters who want their own auth library's
+   * metadata to drive Swagger's security annotations without
+   * reaching for `@ApiSecurity()` on every route.
+   *
+   * Returns one or more {@link ApiSecurityRequirement} entries (or
+   * a bare scheme name string) when the route should be marked
+   * secured; returns `null` to mark the route explicitly public
+   * (overriding class-level security); returns `undefined` to fall
+   * through to the decorator-driven path.
+   *
+   * The hook runs **after** {@link ApiPublic} (which short-circuits
+   * to public) but **before** the decorator-driven `@ApiSecurity` /
+   * `@ApiBearerAuth` lookups, so adopters who set both get the
+   * resolver's verdict; this matches the historical behaviour of
+   * the now-removed implicit `kick:auth:*` bridge.
+   *
+   * @example
+   * ```ts
+   * SwaggerAdapter({
+   *   securityResolver: ({ controllerClass, handlerName }) => {
+   *     // Bridge `@forinda/kickjs-auth`'s metadata without coupling.
+   *     const proto = controllerClass.prototype
+   *     if (Reflect.getMetadata('kick:auth:public', proto, handlerName)) return null
+   *     const secured =
+   *       Reflect.getMetadata('kick:auth:authenticated', controllerClass) ||
+   *       Reflect.getMetadata('kick:auth:authenticated', proto, handlerName)
+   *     return secured ? 'BearerAuth' : undefined
+   *   },
+   * })
+   * ```
+   */
+  securityResolver?: (
+    ctx: SecurityResolverContext,
+  ) => string | ApiSecurityRequirement | (string | ApiSecurityRequirement)[] | null | undefined
   /**
    * Pluggable schema parser for converting validation schemas to JSON Schema.
    * Defaults to `zodSchemaParser` which handles Zod v4+ schemas.
@@ -89,6 +153,19 @@ export interface SwaggerOptions {
    * ```
    */
   schemaParser?: SchemaParser
+}
+
+/**
+ * Normalise any of the shapes accepted by `@ApiSecurity` /
+ * `securityResolver` into a flat `ApiSecurityRequirement[]`.
+ */
+function normaliseSecurity(
+  raw: string | ApiSecurityRequirement | (string | ApiSecurityRequirement)[],
+): ApiSecurityRequirement[] {
+  const arr = Array.isArray(raw) ? raw : [raw]
+  return arr.map((entry) =>
+    typeof entry === 'string' ? { name: entry, scopes: [] } : { scopes: [], ...entry },
+  )
 }
 
 interface RegisteredRoute {
@@ -302,7 +379,13 @@ function buildOpenAPISpecUncached(options: SwaggerOptions = {}): any {
   }
 
   const allTags = new Set<string>()
-  const securitySchemes: Record<string, any> = {}
+  // Pre-seed `securitySchemes` with adopter-declared schemes from
+  // `options.securitySchemes` so `@ApiSecurity('OAuth2')` references
+  // resolve without per-decorator scheme synthesis. The pre-seeded
+  // entries take precedence over the implicit `BearerAuth` fallback
+  // emitted in the route loop, so adopters who redefine `BearerAuth`
+  // (e.g. with custom flows) get their version.
+  const securitySchemes: Record<string, any> = { ...options.securitySchemes }
 
   // Routes scoped to this adapter's config (when adapter passed itself
   // as the scope) plus the legacy default-scope bag (for direct
@@ -326,6 +409,10 @@ function buildOpenAPISpecUncached(options: SwaggerOptions = {}): any {
     const classTags: string[] = getClassMeta<string[]>(SWAGGER_KEYS.TAGS, controllerClass, [])
     const classAuth: string | undefined = getClassMetaOrUndefined<string>(
       SWAGGER_KEYS.BEARER_AUTH,
+      controllerClass,
+    )
+    const classSecurity = getClassMetaOrUndefined<ApiSecurityRequirement[]>(
+      SWAGGER_KEYS.SECURITY,
       controllerClass,
     )
     for (const route of routes) {
@@ -599,22 +686,75 @@ function buildOpenAPISpecUncached(options: SwaggerOptions = {}): any {
         }
       }
 
-      // Security — check Swagger @BearerAuth() first, then fall back to
-      // @forinda/kickjs-auth decorators (@Authenticated, @Public, @Roles)
-      const authName = methodAuth || classAuth
-      const isPublicRoute = isAuthPublic(controllerClass, route.handlerName)
-      const isAuthRequired =
-        authName ||
-        isAuthAuthenticated(controllerClass, route.handlerName) ||
-        isAuthAuthenticated(controllerClass)
+      // Security resolution order (first match wins):
+      //   1. @ApiPublic on the method — opt-out, no security emitted.
+      //   2. options.securityResolver({controllerClass, handlerName})
+      //      — adopter-provided bridge for external auth libraries.
+      //        Returning `null` is "explicitly public" (same as
+      //        @ApiPublic); a value or array drives the requirements.
+      //   3. @ApiSecurity / @ApiBearerAuth on the method.
+      //   4. @ApiSecurity / @ApiBearerAuth on the class.
+      const isPublicMethod = !!getMethodMetaOrUndefined<boolean>(
+        SWAGGER_KEYS.PUBLIC,
+        controllerClass,
+        route.handlerName,
+      )
+      const methodSecurity = getMethodMetaOrUndefined<ApiSecurityRequirement[]>(
+        SWAGGER_KEYS.SECURITY,
+        controllerClass,
+        route.handlerName,
+      )
+      const resolverOutput = !isPublicMethod
+        ? options.securityResolver?.({ controllerClass, handlerName: route.handlerName })
+        : undefined
+      const resolverSecurity =
+        resolverOutput == null || resolverOutput === undefined
+          ? undefined
+          : normaliseSecurity(resolverOutput)
+      const resolverPublic = resolverOutput === null
 
-      if (!isPublicRoute && isAuthRequired) {
-        const schemeName = authName || 'BearerAuth'
-        op.security = [{ [schemeName]: [] }]
-        securitySchemes[schemeName] = securitySchemes[schemeName] || {
-          type: 'http',
-          scheme: 'bearer',
-          bearerFormat: 'JWT',
+      let requirements: ApiSecurityRequirement[] | undefined
+      // Track whether the resolution path came from `@ApiBearerAuth`
+      // (any name) so a bearer-shaped scheme gets auto-synthesised
+      // for the named entry — preserves the original
+      // `@ApiBearerAuth('CustomName')` ergonomics. `@ApiSecurity`
+      // and the resolver hook DON'T auto-synth for arbitrary names
+      // (only the literal `'BearerAuth'`) since their shapes are
+      // generic — adopters must declare custom schemes via
+      // `SwaggerOptions.securitySchemes` when using those paths.
+      let bearerAuthSourced = false
+      if (isPublicMethod || resolverPublic) {
+        requirements = undefined
+      } else if (resolverSecurity && resolverSecurity.length > 0) {
+        requirements = resolverSecurity
+      } else if (methodSecurity && methodSecurity.length > 0) {
+        requirements = methodSecurity
+      } else if (methodAuth) {
+        requirements = [{ name: methodAuth, scopes: [] }]
+        bearerAuthSourced = true
+      } else if (classSecurity && classSecurity.length > 0) {
+        requirements = classSecurity
+      } else if (classAuth) {
+        requirements = [{ name: classAuth, scopes: [] }]
+        bearerAuthSourced = true
+      }
+
+      if (requirements) {
+        op.security = requirements.map((r) => ({ [r.name]: r.scopes ?? [] }))
+        for (const r of requirements) {
+          if (!securitySchemes[r.name]) {
+            // `@ApiBearerAuth('CustomName')` always emits a
+            // bearer-shaped scheme under `CustomName`. The literal
+            // `BearerAuth` name also auto-synths for back-compat
+            // with `@ApiSecurity('BearerAuth')` and resolver hooks.
+            if (bearerAuthSourced || r.name === 'BearerAuth') {
+              securitySchemes[r.name] = {
+                type: 'http',
+                scheme: 'bearer',
+                bearerFormat: 'JWT',
+              }
+            }
+          }
         }
       }
 
