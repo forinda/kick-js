@@ -21,6 +21,7 @@ import { registerRemoveCommand } from '../commands/remove'
 import { registerTypegenCommand } from '../commands/typegen'
 import { registerCheckCommand } from '../commands/check'
 import { registerDbCommands } from '../commands/db'
+import { registerCodemodCommands } from '../commands/codemod'
 import { kickDbTypegen } from '../typegen/builtin/db'
 import { kickAssetsTypegen } from '../typegen/builtin/assets'
 import { kickRoutesTypegen } from '../typegen/builtin/routes'
@@ -43,6 +44,7 @@ export const builtinCliPlugins: readonly KickCliPlugin[] = [
   defineCliPlugin({ name: 'kick/typegen', register: registerTypegenCommand }),
   defineCliPlugin({ name: 'kick/check', register: registerCheckCommand }),
   defineCliPlugin({ name: 'kick/db', register: registerDbCommands, typegens: [kickDbTypegen()] }),
+  defineCliPlugin({ name: 'kick/codemod', register: registerCodemodCommands }),
   // kick/assets, kick/routes are typegen-only — the asset manager
   // itself is wired via @forinda/kickjs runtime, not the CLI; routes
   // emit a `KickRoutes` global namespace augmentation. Both replace
