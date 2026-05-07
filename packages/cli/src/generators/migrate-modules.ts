@@ -1,5 +1,5 @@
 import { copyFile, mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises'
-import { dirname, join, resolve as resolvePath, sep } from 'node:path'
+import { join, resolve as resolvePath } from 'node:path'
 
 /**
  * Direction the migrator rewrites in. Resolved by the caller from
@@ -50,7 +50,7 @@ function reindent(body: string, fromOuterIndent: number, toOuterIndent: number):
 }
 
 function rewriteImportsForDefine(beforeBlock: string): string {
-  return beforeBlock.replace(
+  return beforeBlock.replaceAll(
     /import\s*\{\s*([^}]+)\s*\}\s*from\s*'@forinda\/kickjs'/g,
     (_match, names: string) => {
       const parts = names
@@ -81,7 +81,7 @@ function rewriteImportsForClass(
     contributorRegistrations: boolean
   },
 ): string {
-  return beforeBlock.replace(
+  return beforeBlock.replaceAll(
     /import\s*\{\s*([^}]+)\s*\}\s*from\s*'@forinda\/kickjs'/g,
     (_match, names: string) => {
       const parts = names
@@ -131,14 +131,14 @@ export function migrateClassToDefine(content: string): MigrationResult {
 
   const match = matches[0]
   const moduleName = match[1]
-  const classOpenIdx = match.index! + match[0].length - 1
+  const classOpenIdx = match.index + match[0].length - 1
   const classCloseIdx = findMatchingBrace(content, classOpenIdx)
   if (classCloseIdx === -1) {
     return { migrated: null, reason: 'unbalanced class braces' }
   }
 
   const classBody = content.slice(classOpenIdx + 1, classCloseIdx)
-  const beforeClass = content.slice(0, match.index!)
+  const beforeClass = content.slice(0, match.index)
   const afterClass = content.slice(classCloseIdx + 1)
 
   const registerBody = extractMethodBody(classBody, /register\s*\(([^)]*)\)\s*:\s*void\s*\{/)
@@ -195,7 +195,7 @@ export function migrateDefineToClass(content: string): MigrationResult {
 
   const match = matches[0]
   const moduleName = match[1]
-  const objOpenIdx = match.index! + match[0].length - 1
+  const objOpenIdx = match.index + match[0].length - 1
   const objCloseIdx = findMatchingBrace(content, objOpenIdx)
   if (objCloseIdx === -1) {
     return { migrated: null, reason: 'unbalanced defineModule braces' }
@@ -207,7 +207,7 @@ export function migrateDefineToClass(content: string): MigrationResult {
   }
 
   const objBody = content.slice(objOpenIdx + 1, objCloseIdx)
-  const beforeBlock = content.slice(0, match.index!)
+  const beforeBlock = content.slice(0, match.index)
   let afterIdx = callCloseIdx + 1
   while (afterIdx < content.length && (content[afterIdx] === '\n' || content[afterIdx] === '\r')) {
     afterIdx++
@@ -273,16 +273,19 @@ export function migrateModulesIndex(content: string, target: MigrationTarget): M
 
   if (target === 'define') {
     if (/\bAppModuleClass\b/.test(next)) {
-      next = next.replace(/\bAppModuleClass\b/g, 'AppModuleEntry')
+      next = next.replaceAll(/\bAppModuleClass\b/g, 'AppModuleEntry')
       changed = true
     }
+    // arrayRegex is intentionally single-match (no `/g`) — the
+    // modules array appears once per file, so we replace the first
+    // hit only and leave any non-array `[ … ]` literal alone.
     const arrayRegex = /(=\s*\[)([\s\S]*?)(])/
     const arrayMatch = arrayRegex.exec(next)
     if (arrayMatch) {
       const open = arrayMatch[1]
       const close = arrayMatch[3]
       const body = arrayMatch[2]
-      const rewritten = body.replace(/(\b\w+Module)(?!\(|\.)/g, '$1()')
+      const rewritten = body.replaceAll(/(\b\w+Module)(?![(.])/g, '$1()')
       if (rewritten !== body) {
         next = next.replace(arrayRegex, `${open}${rewritten}${close}`)
         changed = true
@@ -290,7 +293,7 @@ export function migrateModulesIndex(content: string, target: MigrationTarget): M
     }
   } else {
     if (/\bAppModuleEntry\b/.test(next)) {
-      next = next.replace(/\bAppModuleEntry\b/g, 'AppModuleClass')
+      next = next.replaceAll(/\bAppModuleEntry\b/g, 'AppModuleClass')
       changed = true
     }
     const arrayRegex = /(=\s*\[)([\s\S]*?)(])/
@@ -299,7 +302,7 @@ export function migrateModulesIndex(content: string, target: MigrationTarget): M
       const open = arrayMatch[1]
       const close = arrayMatch[3]
       const body = arrayMatch[2]
-      const rewritten = body.replace(/(\b\w+Module)\s*\(\s*\)/g, '$1')
+      const rewritten = body.replaceAll(/(\b\w+Module)\s*\(\s*\)/g, '$1')
       if (rewritten !== body) {
         next = next.replace(arrayRegex, `${open}${rewritten}${close}`)
         changed = true
@@ -431,7 +434,7 @@ async function copyDirectory(srcRoot: string, destRoot: string): Promise<number>
  * (manual; the codemod doesn't provide a revert command yet).
  */
 function makeBackupPath(projectRoot: string): string {
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+  const stamp = new Date().toISOString().replaceAll(/[:.]/g, '-')
   return join(projectRoot, '.kickjs', 'codemod-backups', `${stamp}-modules`)
 }
 
@@ -553,6 +556,6 @@ export async function findStyleDriftModules(
   return drift
 }
 
-// `dirname` and `sep` are exported so tests / future helpers can
+// `dirname` and `sep` re-exported so tests / future helpers can
 // reuse them via the same import surface.
-export { dirname, sep }
+export { dirname, sep } from 'node:path'
