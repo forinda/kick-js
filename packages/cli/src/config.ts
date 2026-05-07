@@ -194,6 +194,26 @@ export interface ModuleConfig {
    * prismaClientPath: './generated/prisma/client'   // relative
    */
   prismaClientPath?: string
+  /**
+   * Module declaration style emitted by `kick g module` and the
+   * project scaffold.
+   *
+   * - `'define'` (default) — `defineModule({ name, build: () => ({...}) })`
+   *   factory form. Mirrors `defineAdapter` / `definePlugin` /
+   *   `defineContextDecorator`.
+   * - `'class'` — legacy `class FooModule implements AppModule { ... }`
+   *   form. Still fully supported by the framework loader; pin to this
+   *   value for projects that prefer the class shape (existing-codebase
+   *   consistency, class-decorator setups, etc).
+   *
+   * The framework runtime accepts both shapes regardless of this
+   * setting — the flag controls codegen output only. `kick g module`
+   * inserts the matching call form into `src/modules/index.ts`
+   * (`Module()` vs `Module`); `kick rm module` matches both.
+   *
+   * @default 'define'
+   */
+  style?: 'define' | 'class'
 }
 
 /** Configuration for the kick.config.ts file */
@@ -408,6 +428,18 @@ export function resolveModuleConfig(config: KickConfig | null): ModuleConfig {
     schemaDir: config.modules?.schemaDir,
     pluralize: config.modules?.pluralize,
     prismaClientPath: config.modules?.prismaClientPath,
+    style: config.modules?.style,
+  }
+  // Validate `style` — silently coerce unknown values to the default.
+  // The CLI surface only documents 'define' and 'class'; anything else
+  // is a typo (e.g. 'defineModule') we'd rather see than silently
+  // emit class form.
+  if (mc.style !== undefined && mc.style !== 'define' && mc.style !== 'class') {
+    console.warn(
+      `  Warning: modules.style '${mc.style as string}' is not a valid value ` +
+        `(expected 'define' or 'class'). Falling back to 'define'.`,
+    )
+    mc.style = 'define'
   }
 
   // Warn if a string repo value isn't a known built-in

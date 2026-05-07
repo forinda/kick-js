@@ -5,6 +5,7 @@ import { colors } from '../utils/colors'
 import { toPascalCase, toKebabCase, pluralize, pluralizePascal } from '../utils/naming'
 import { readFile, writeFile } from 'node:fs/promises'
 import type { ProjectPattern, RepoTypeConfig } from '../config'
+import type { ModuleStyle } from './templates/types'
 import {
   generateMinimalFiles,
   generateRestFiles,
@@ -45,6 +46,12 @@ interface GenerateModuleOptions {
    * without a config in tests/fixtures.
    */
   tokenScope?: string
+  /**
+   * Module declaration style — `'define'` (factory, default) or
+   * `'class'` (legacy). Resolved by the orchestrating command from
+   * `kick.config.ts > modules.style`.
+   */
+  style?: ModuleStyle
 }
 
 /**
@@ -103,6 +110,7 @@ export async function generateModule(options: GenerateModuleOptions): Promise<st
     noTests: noTests ?? false,
     prismaClientPath: options.prismaClientPath ?? '@prisma/client',
     tokenScope: options.tokenScope ?? 'app',
+    style: options.style ?? 'define',
     write,
     files,
   }
@@ -125,7 +133,7 @@ export async function generateModule(options: GenerateModuleOptions): Promise<st
 
   // Auto-register in modules index (all patterns need this)
   if (!dryRun) {
-    await autoRegisterModule(modulesDir, pascal, plural, kebab)
+    await autoRegisterModule(modulesDir, pascal, plural, kebab, ctx.style)
   }
 
   return files
@@ -139,10 +147,17 @@ async function autoRegisterModule(
   pascal: string,
   plural: string,
   kebab: string,
+  style: ModuleStyle = 'define',
 ): Promise<void> {
   const indexPath = join(modulesDir, 'index.ts')
   const exists = await fileExists(indexPath)
   const importPath = `./${plural}/${kebab}.module`
+  // `defineModule` factories are called at the registration site
+  // (`${pascal}Module()`); legacy class modules are passed by reference
+  // (`${pascal}Module`). Application's loader discriminates class vs
+  // instance at boot, so both forms work — `style` only controls what
+  // the orchestrator emits.
+  const entryToken = style === 'class' ? `${pascal}Module` : `${pascal}Module()`
 
   if (!exists) {
     await writeFileSafe(
@@ -150,7 +165,7 @@ async function autoRegisterModule(
       `import type { AppModuleEntry } from '@forinda/kickjs'
 import { ${pascal}Module } from '${importPath}'
 
-export const modules: AppModuleEntry[] = [${pascal}Module()]
+export const modules: AppModuleEntry[] = [${entryToken}]
 `,
     )
     return
@@ -171,19 +186,18 @@ export const modules: AppModuleEntry[] = [${pascal}Module()]
     }
 
     // Add to modules array — handle both empty and existing entries.
-    // defineModule modules are called as factories at the registration
-    // site (`${pascal}Module()`), so emit the call form. Legacy class
-    // modules without `()` continue to work because Application's loader
-    // discriminates class vs instance at boot time.
+    // The entry shape (`Module()` vs `Module`) follows the resolved
+    // `style`. `kick rm module` matches both, so the project can mix
+    // styles freely if a user toggles the flag mid-project.
     content = content.replace(/(=\s*\[)([\s\S]*?)(])/, (_match, open, existing, close) => {
       const trimmed = existing.trim()
       if (!trimmed) {
         // Empty array: `= []`
-        return `${open}${pascal}Module()${close}`
+        return `${open}${entryToken}${close}`
       }
       // Existing entries: append with comma
       const needsComma = trimmed.endsWith(',') ? '' : ','
-      return `${open}${existing.trimEnd()}${needsComma} ${pascal}Module()${close}`
+      return `${open}${existing.trimEnd()}${needsComma} ${entryToken}${close}`
     })
   }
 

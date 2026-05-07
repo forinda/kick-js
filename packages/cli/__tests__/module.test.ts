@@ -6,7 +6,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { assertCliOk, cleanupFixture, createFixtureProject, runCli, runTsc } from './helpers'
 
@@ -88,5 +88,55 @@ describe('kick g module', () => {
     const indexContent = readFileSync(join(fixture, 'src/modules/index.ts'), 'utf-8')
     expect(indexContent).toContain('UserModule')
     expect(indexContent).toContain('PostModule')
+  })
+
+  it('emits the defineModule factory by default', () => {
+    runCli(fixture, ['g', 'module', 'task'])
+    const moduleFile = readFileSync(join(fixture, 'src/modules/tasks/task.module.ts'), 'utf-8')
+    expect(moduleFile).toContain("import { defineModule } from '@forinda/kickjs'")
+    expect(moduleFile).toContain('export const TaskModule = defineModule({')
+    expect(moduleFile).toContain("name: 'TaskModule'")
+    expect(moduleFile).not.toContain('implements AppModule')
+
+    // The orchestrator inserts the factory-call form at the registration site.
+    const indexContent = readFileSync(join(fixture, 'src/modules/index.ts'), 'utf-8')
+    expect(indexContent).toContain('[TaskModule()]')
+  })
+})
+
+describe("kick g module — modules.style: 'class' opt-out", () => {
+  let fixture: string
+
+  beforeEach(() => {
+    fixture = createFixtureProject('module-style-class')
+    // Pin the project to the legacy class form before generating.
+    // JSON config avoids needing `@forinda/kickjs-cli` resolution in
+    // the temp fixture; the loader handles `kick.config.json` the
+    // same as a TS config file.
+    writeFileSync(
+      join(fixture, 'kick.config.json'),
+      JSON.stringify({ pattern: 'ddd', modules: { style: 'class' } }, null, 2),
+    )
+  })
+
+  afterEach(() => {
+    cleanupFixture(fixture)
+  })
+
+  it('emits class FooModule implements AppModule when style is "class"', () => {
+    runCli(fixture, ['g', 'module', 'task'])
+    const moduleFile = readFileSync(join(fixture, 'src/modules/tasks/task.module.ts'), 'utf-8')
+    expect(moduleFile).toContain('export class TaskModule implements AppModule {')
+    expect(moduleFile).toContain('register(container: Container): void {')
+    expect(moduleFile).toContain('routes(): ModuleRoutes {')
+    // Should NOT contain the factory-form noise.
+    expect(moduleFile).not.toContain('defineModule({')
+  })
+
+  it('inserts the bare class reference (no factory call) into src/modules/index.ts', () => {
+    runCli(fixture, ['g', 'module', 'task'])
+    const indexContent = readFileSync(join(fixture, 'src/modules/index.ts'), 'utf-8')
+    expect(indexContent).toContain('[TaskModule]')
+    expect(indexContent).not.toContain('[TaskModule()]')
   })
 })

@@ -114,10 +114,10 @@ describe('kick g scaffold', () => {
     const moduleIndex = readFileSync(join(fixture, 'src/modules/widgets/widget.module.ts'), 'utf-8')
     // Regression: we previously emitted { prefix, controllers } which
     // was the legacy shape and broke the framework. The current shape
-    // must include path/router/controller — verified by the assertions
-    // below AND by the tsc test in the next case.
+    // is `{ path, controller }` — the framework derives the Express
+    // Router from the controller via `buildRoutes()` internally so
+    // the redundant `router:` field is no longer emitted.
     expect(moduleIndex).toContain("path: '/widgets'")
-    expect(moduleIndex).toContain('buildRoutes(WidgetController)')
     expect(moduleIndex).toContain('controller: WidgetController')
     // The legacy shape must NOT appear
     expect(moduleIndex).not.toContain('prefix:')

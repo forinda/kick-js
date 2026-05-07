@@ -131,6 +131,12 @@ interface ScaffoldOptions {
    * callers stay backward-compatible.
    */
   tokenScope?: string
+  /**
+   * Module declaration style — `'define'` (factory) or `'class'`
+   * (legacy). Defaults to `'define'`. Resolved by the caller from
+   * `kick.config.ts > modules.style`.
+   */
+  style?: 'define' | 'class'
 }
 
 export async function generateScaffold(options: ScaffoldOptions): Promise<string[]> {
@@ -142,6 +148,7 @@ export async function generateScaffold(options: ScaffoldOptions): Promise<string
     noTests: _noTests,
     repo = 'inmemory',
     tokenScope = 'app',
+    style = 'define',
   } = options
   const shouldPluralize = options.pluralize !== false
   const kebab = toKebabCase(name)
@@ -160,7 +167,7 @@ export async function generateScaffold(options: ScaffoldOptions): Promise<string
   }
 
   // ── Module file (named `<kebab>.module.ts` so Vite's module-discovery plugin picks it up)
-  await write(`${kebab}.module.ts`, genModuleIndex(pascal, kebab, plural))
+  await write(`${kebab}.module.ts`, genModuleIndex(pascal, kebab, plural, style))
 
   // ── Constants
   await write('constants.ts', genConstants(pascal, fields))
@@ -206,7 +213,7 @@ export async function generateScaffold(options: ScaffoldOptions): Promise<string
   }
 
   // ── Auto-register in modules index
-  await autoRegisterModule(modulesDir, pascal, plural, kebab)
+  await autoRegisterModule(modulesDir, pascal, plural, kebab, style)
 
   return files
 }
@@ -418,9 +425,13 @@ export class ${pascal}Id {
 
 // These reuse the same patterns as the existing module generator
 
-function genModuleIndex(pascal: string, kebab: string, plural: string): string {
-  return `import { defineModule } from '@forinda/kickjs'
-import { ${pascal}Controller } from './presentation/${kebab}.controller'
+function genModuleIndex(
+  pascal: string,
+  kebab: string,
+  plural: string,
+  style: 'define' | 'class' = 'define',
+): string {
+  const repoImports = `import { ${pascal}Controller } from './presentation/${kebab}.controller'
 import { ${pascal.toUpperCase()}_REPOSITORY } from './domain/repositories/${kebab}.repository'
 import { InMemory${pascal}Repository } from './infrastructure/repositories/in-memory-${kebab}.repository'
 
@@ -429,7 +440,50 @@ import { InMemory${pascal}Repository } from './infrastructure/repositories/in-me
 import.meta.glob(
   ['./domain/services/**/*.ts', './application/use-cases/**/*.ts', '!./**/*.test.ts'],
   { eager: true },
-)
+)`
+
+  const routesDoc = `    /**
+     * Declare HTTP routes. Pass \`controller\` and the framework
+     * derives the Express Router via \`buildRoutes()\`. Return an array
+     * to mount multiple route sets — each entry can override the API
+     * version with a \`version\` field:
+     *
+     *   return [
+     *     { path: '/${plural}', version: 1, controller: ${pascal}V1Controller },
+     *     { path: '/${plural}', version: 2, controller: ${pascal}V2Controller },
+     *   ]
+     */`
+
+  if (style === 'class') {
+    return `import { Container, type AppModule, type ModuleRoutes } from '@forinda/kickjs'
+${repoImports}
+
+export class ${pascal}Module implements AppModule {
+  /**
+   * Bind the repository token to its concrete implementation.
+   * Decorator-managed classes (@Service, @Controller, @Repository) are
+   * registered automatically — only token-to-impl bindings need to live here.
+   */
+  register(container: Container): void {
+    container.registerFactory(
+      ${pascal.toUpperCase()}_REPOSITORY,
+      () => container.resolve(InMemory${pascal}Repository),
+    )
+  }
+
+${routesDoc.replace(/^ {4}/gm, '  ').replace(/^ {6}/gm, '    ')}
+  routes(): ModuleRoutes {
+    return {
+      path: '/${plural}',
+      controller: ${pascal}Controller,
+    }
+  }
+}
+`
+  }
+
+  return `import { defineModule } from '@forinda/kickjs'
+${repoImports}
 
 export const ${pascal}Module = defineModule({
   name: '${pascal}Module',
@@ -446,18 +500,7 @@ export const ${pascal}Module = defineModule({
       )
     },
 
-    /**
-     * Declare HTTP routes. Pass \`controller\` and the framework
-     * derives the Express Router via \`buildRoutes()\` and uses the
-     * same controller for OpenAPI spec generation. Return an array
-     * to mount multiple route sets under the same module — each entry
-     * can override the API version with a \`version\` field:
-     *
-     *   return [
-     *     { path: '/${plural}', version: 1, controller: ${pascal}V1Controller },
-     *     { path: '/${plural}', version: 2, controller: ${pascal}V2Controller },
-     *   ]
-     */
+${routesDoc}
     routes() {
       return {
         path: '/${plural}',
@@ -669,15 +712,20 @@ async function autoRegisterModule(
   pascal: string,
   plural: string,
   kebab: string,
+  style: 'define' | 'class' = 'define',
 ): Promise<void> {
   const indexPath = join(modulesDir, 'index.ts')
   const exists = await fileExists(indexPath)
   const importPath = `./${plural}/${kebab}.module`
+  // `defineModule` factories are called at the registration site;
+  // legacy class modules are passed by reference. Application's
+  // loader discriminates at boot, so both shapes work.
+  const entryToken = style === 'class' ? `${pascal}Module` : `${pascal}Module()`
 
   if (!exists) {
     await writeFileSafe(
       indexPath,
-      `import type { AppModuleEntry } from '@forinda/kickjs'\nimport { ${pascal}Module } from '${importPath}'\n\nexport const modules: AppModuleEntry[] = [${pascal}Module()]\n`,
+      `import type { AppModuleEntry } from '@forinda/kickjs'\nimport { ${pascal}Module } from '${importPath}'\n\nexport const modules: AppModuleEntry[] = [${entryToken}]\n`,
     )
     return
   }
@@ -694,13 +742,11 @@ async function autoRegisterModule(
       content = importLine + '\n' + content
     }
 
-    // defineModule emits a factory; call it at the registration site so
-    // bootstrap receives the module instance rather than the factory itself.
     content = content.replace(/(=\s*\[)([\s\S]*?)(])/, (_match, open, existing, close) => {
       const trimmed = existing.trim()
-      if (!trimmed) return `${open}${pascal}Module()${close}`
+      if (!trimmed) return `${open}${entryToken}${close}`
       const needsComma = trimmed.endsWith(',') ? '' : ','
-      return `${open}${existing.trimEnd()}${needsComma} ${pascal}Module()${close}`
+      return `${open}${existing.trimEnd()}${needsComma} ${entryToken}${close}`
     })
   }
 

@@ -187,8 +187,27 @@ export default defineConfig({
     repo: 'drizzle',
     pluralize: true,
     schemaDir: 'src/db/schema',
+    style: 'define', // 'define' (default) or 'class' — see below
   },
 })
+```
+
+### Module declaration style
+
+The `modules.style` field controls what `kick g module` and `kick g scaffold` emit for the module declaration:
+
+- **`'define'`** (default) — `defineModule({ name, build: () => ({...}) })` factory form. Mirrors `defineAdapter` / `definePlugin` / `defineContextDecorator`. The orchestrator inserts the factory-call form (`TaskModule()`) into `src/modules/index.ts`.
+- **`'class'`** — legacy `class FooModule implements AppModule { ... }` form. The orchestrator inserts the bare class reference (`TaskModule`) into the modules array.
+
+The framework runtime accepts both shapes regardless of this setting — the flag controls codegen output only. `kick rm module` matches both forms, so flipping the flag mid-project doesn't break un-registration.
+
+```bash
+# Pin a project to class form (existing-codebase consistency, etc.)
+# kick.config.ts → modules: { style: 'class' }
+kick g module task
+# → src/modules/tasks/task.module.ts emits:
+#     export class TaskModule implements AppModule { register() {...} routes() {...} }
+# → src/modules/index.ts: [TaskModule]
 ```
 
 ```bash
