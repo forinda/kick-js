@@ -5,9 +5,14 @@ import { migrateModulesDir, type MigrationTarget } from '../generators/migrate-m
 import { colors } from '../utils/colors'
 import { setDryRun } from '../utils/fs'
 
-/** Read --dry-run from the parent `codemod` command's options. */
+/**
+ * Read --dry-run from the merged options chain. `optsWithGlobals()`
+ * walks parent commands so a top-level `kick --dry-run codemod
+ * modules --apply` resolves correctly, not just `--dry-run` declared
+ * directly on the subcommand.
+ */
 function isDryRun(cmd: Command): boolean {
-  return (cmd.parent?.opts() as { dryRun?: boolean } | undefined)?.dryRun ?? false
+  return (cmd.optsWithGlobals() as { dryRun?: boolean }).dryRun ?? false
 }
 
 interface CodemodModulesOpts {
