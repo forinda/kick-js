@@ -74,7 +74,12 @@ function rewriteImportsForDefine(beforeBlock: string): string {
 
 function rewriteImportsForClass(
   beforeBlock: string,
-  needs: { container: boolean; appModule: boolean; moduleRoutes: boolean },
+  needs: {
+    container: boolean
+    appModule: boolean
+    moduleRoutes: boolean
+    contributorRegistrations: boolean
+  },
 ): string {
   return beforeBlock.replace(
     /import\s*\{\s*([^}]+)\s*\}\s*from\s*'@forinda\/kickjs'/g,
@@ -92,6 +97,14 @@ function rewriteImportsForClass(
         !parts.some((p) => p === 'ModuleRoutes' || p === 'type ModuleRoutes')
       ) {
         parts.push('type ModuleRoutes')
+      }
+      if (
+        needs.contributorRegistrations &&
+        !parts.some(
+          (p) => p === 'ContributorRegistrations' || p === 'type ContributorRegistrations',
+        )
+      ) {
+        parts.push('type ContributorRegistrations')
       }
       return `import { ${parts.join(', ')} } from '@forinda/kickjs'`
     },
@@ -227,6 +240,9 @@ export function migrateDefineToClass(content: string): MigrationResult {
     container: registerBody !== null,
     appModule: true,
     moduleRoutes: true,
+    // contributors() in class form is typed as `ContributorRegistrations`,
+    // so its import must follow when the source had a contributors block.
+    contributorRegistrations: contributorsBody !== null,
   }
   const newImports = rewriteImportsForClass(beforeBlock, needs)
 
@@ -311,10 +327,10 @@ export function migrateModulesIndex(content: string, target: MigrationTarget): M
 export async function findModuleFiles(modulesDir: string): Promise<string[]> {
   const out: string[] = []
   const rootAbs = resolvePath(modulesDir)
-  await walk(rootAbs, true)
+  await walk(rootAbs, 0)
   return out
 
-  async function walk(dir: string, isRoot: boolean): Promise<void> {
+  async function walk(dir: string, depth: number): Promise<void> {
     let entries: string[]
     try {
       entries = await readdir(dir)
@@ -331,13 +347,19 @@ export async function findModuleFiles(modulesDir: string): Promise<string[]> {
         continue
       }
       if (st.isDirectory()) {
-        await walk(full, false)
+        await walk(full, depth + 1)
       } else if (name.endsWith('.module.ts')) {
         out.push(full)
-      } else if (name === 'index.ts' && !isRoot) {
-        // Older convention: module lives in `<modulesDir>/<sub>/index.ts`.
-        // The registry at `<modulesDir>/index.ts` is excluded because
-        // we only descend into it when `isRoot === false`.
+      } else if (name === 'index.ts' && depth === 1) {
+        // Older convention: module lives at
+        // `<modulesDir>/<sub>/index.ts` (depth=1, the immediate
+        // child directory's index file). Deeper `index.ts` files
+        // (e.g. `<sub>/application/index.ts` or `<sub>/domain/index.ts`)
+        // are barrel files for the DDD layout, NOT module
+        // declarations — sweeping those in would false-positive
+        // the drift gate and let the codemod rewrite unrelated code.
+        // depth=0 is the registry at `<modulesDir>/index.ts`,
+        // intentionally excluded.
         out.push(full)
       }
     }
@@ -433,11 +455,19 @@ export async function migrateModulesDir(
   const { dryRun = false, cwd = process.cwd(), target } = options
   const shouldBackup = options.backup ?? !dryRun
   const moduleFiles = await findModuleFiles(modulesDir)
+  const indexExists = await readFile(join(modulesDir, 'index.ts'), 'utf-8').then(
+    () => true,
+    () => false,
+  )
 
   // Take the backup before any rewrite so a partial-migration
-  // failure still leaves a recoverable snapshot.
+  // failure still leaves a recoverable snapshot. Snapshot when
+  // EITHER module files OR the registry index exists — registry-only
+  // rewrites (e.g. `[Module]` → `[Module()]` after every module file
+  // is already migrated) still touch the project, so they deserve
+  // the same safety net.
   let backupDir: string | null = null
-  if (shouldBackup && moduleFiles.length > 0) {
+  if (shouldBackup && (moduleFiles.length > 0 || indexExists)) {
     backupDir = makeBackupPath(cwd)
     await copyDirectory(modulesDir, backupDir)
   }

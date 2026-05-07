@@ -329,3 +329,102 @@ export const modules: AppModuleClass[] = [TaskModule]
     expect(existsSync(join(dir, '.kickjs', 'codemod-backups'))).toBe(false)
   })
 })
+
+describe('CodeRabbit fixes', () => {
+  describe('migrateDefineToClass — adds ContributorRegistrations import when contributors() present', () => {
+    it('imports ContributorRegistrations alongside the class form', () => {
+      const input = `import { defineModule } from '@forinda/kickjs'
+import { LoadTenant } from './load-tenant'
+
+export const TaskModule = defineModule({
+  name: 'TaskModule',
+  build: () => ({
+    contributors() {
+      return [LoadTenant.registration]
+    },
+    routes() {
+      return { path: '/tasks', controller: TaskController }
+    },
+  }),
+})
+`
+      const result = migrateDefineToClass(input)
+      expect(result.migrated).not.toBeNull()
+      expect(result.migrated).toContain('contributors(): ContributorRegistrations {')
+      expect(result.migrated).toContain('type ContributorRegistrations')
+    })
+  })
+
+  describe('findModuleFiles — depth-aware legacy index.ts discovery', () => {
+    let dir: string
+
+    beforeEach(() => {
+      dir = mkdtempSync(join(tmpdir(), 'kick-depth-'))
+      // Direct child — legacy module convention. Should be picked up.
+      mkdirSync(join(dir, 'modules', 'tasks'), { recursive: true })
+      writeFileSync(
+        join(dir, 'modules', 'tasks', 'index.ts'),
+        'export class TaskModule implements AppModule { routes(): ModuleRoutes { return null as never } }',
+      )
+      // Nested barrel files (DDD layout) — must NOT be picked up.
+      mkdirSync(join(dir, 'modules', 'tasks', 'application'), { recursive: true })
+      writeFileSync(
+        join(dir, 'modules', 'tasks', 'application', 'index.ts'),
+        'export * from "./create-task.use-case"',
+      )
+      mkdirSync(join(dir, 'modules', 'tasks', 'domain'), { recursive: true })
+      writeFileSync(
+        join(dir, 'modules', 'tasks', 'domain', 'index.ts'),
+        'export * from "./task.entity"',
+      )
+      // Registry at modulesDir root — excluded.
+      writeFileSync(join(dir, 'modules', 'index.ts'), 'export const modules = []')
+    })
+
+    afterEach(() => {
+      rmSync(dir, { recursive: true, force: true })
+    })
+
+    it('picks up only the depth-1 legacy index.ts, not nested barrels or the registry', async () => {
+      const files = await findModuleFiles(join(dir, 'modules'))
+      expect(files).toEqual([join(dir, 'modules', 'tasks', 'index.ts')])
+    })
+  })
+
+  describe('migrateModulesDir — backup when registry-only changes', () => {
+    let dir: string
+
+    beforeEach(() => {
+      dir = mkdtempSync(join(tmpdir(), 'kick-registry-backup-'))
+      mkdirSync(join(dir, 'src', 'modules'), { recursive: true })
+      // No module files; only a stale-typed registry that needs the
+      // type rename + factory-call rewrite.
+      writeFileSync(
+        join(dir, 'src', 'modules', 'index.ts'),
+        `import type { AppModuleClass } from '@forinda/kickjs'
+import { TaskModule } from './tasks/task.module'
+
+export const modules: AppModuleClass[] = [TaskModule]
+`,
+      )
+    })
+
+    afterEach(() => {
+      rmSync(dir, { recursive: true, force: true })
+    })
+
+    it('snapshots before rewriting a registry-only project', async () => {
+      const result = await migrateModulesDir(join(dir, 'src', 'modules'), {
+        target: 'define',
+        cwd: dir,
+        dryRun: false,
+      })
+      expect(result.backupDir).not.toBeNull()
+      const backupRegistry = readFileSync(join(result.backupDir!, 'index.ts'), 'utf-8')
+      expect(backupRegistry).toContain('AppModuleClass[]')
+      const liveRegistry = readFileSync(join(dir, 'src', 'modules', 'index.ts'), 'utf-8')
+      expect(liveRegistry).toContain('AppModuleEntry[]')
+      expect(liveRegistry).toContain('[TaskModule()]')
+    })
+  })
+})

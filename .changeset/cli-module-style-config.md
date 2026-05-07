@@ -47,7 +47,7 @@ kick codemod modules --experimental --apply --target class
 
 When `style: 'define'` resolves AND the project still has class-form modules, `kick g module` refuses with an actionable error pointing at `kick codemod modules`:
 
-```
+```text
 Error: 1 module file(s) still use the legacy `class … implements AppModule` shape.
   Project setting: modules.style: 'define' (default)
 
