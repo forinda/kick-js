@@ -1,4 +1,4 @@
-import { resolve } from 'node:path'
+import { relative, resolve } from 'node:path'
 import type { Command } from 'commander'
 import { listPluginGenerators, tryDispatchPluginGenerator } from '../generator-extension'
 import { mergeCliPlugins } from '../plugin'
@@ -13,6 +13,8 @@ import { generateController } from '../generators/controller'
 import { generateDto } from '../generators/dto'
 import { generateConfig } from '../generators/config'
 import { generateAgentDocs } from '../generators/agent-docs'
+import { findStyleDriftModules } from '../generators/migrate-modules'
+import { colors } from '../utils/colors'
 import { generateAuthScaffold } from '../generators/auth-scaffold'
 import { generateJob } from '../generators/job'
 import { generateScaffold, parseFields } from '../generators/scaffold'
@@ -200,6 +202,48 @@ async function runModuleGeneration(
   const pattern = opts.pattern ?? config?.pattern ?? 'ddd'
   const shouldPluralize = opts.pluralize === false ? false : (mc.pluralize ?? true)
   const tokenScope = resolveTokenScope(config, process.cwd())
+  const resolvedStyle = mc.style ?? 'define'
+
+  // Style-drift gate. When the project pins `modules.style: 'define'`
+  // (the default), refuse to add a new module if the existing
+  // codebase still has class-form modules — mixed styles are a
+  // hygiene smell. The fix is one of:
+  //
+  //   1. Run `kick codemod modules --experimental --apply` to migrate
+  //      every existing module to the `defineModule` shape.
+  //   2. Pin `modules.style: 'class'` in kick.config.ts and keep
+  //      the legacy form across the project.
+  //
+  // The gate runs only for `define`; `class` projects accept either
+  // shape since defineModule modules pass through Application's
+  // class-vs-instance discriminator at boot.
+  if (!dryRun && resolvedStyle === 'define') {
+    const drift = await findStyleDriftModules(resolve(modulesDir), 'define')
+    if (drift.length > 0) {
+      const cwd = process.cwd()
+      console.error(
+        `\n  ${colors.red('Error:')} ${drift.length} module file(s) still use the legacy ` +
+          `\`class … implements AppModule\` shape.\n` +
+          `  ${colors.dim('Project setting:')} modules.style: 'define' (default)\n\n` +
+          `  ${colors.bold('Files needing migration:')}`,
+      )
+      for (const path of drift.slice(0, 5)) {
+        console.error(`    - ${relative(cwd, path)}`)
+      }
+      if (drift.length > 5) {
+        console.error(`    … and ${drift.length - 5} more`)
+      }
+      console.error(
+        `\n  ${colors.bold('Pick one:')}\n` +
+          `    1. Migrate everything to defineModule:\n` +
+          `       ${colors.dim('$')} kick codemod modules --experimental --apply\n` +
+          `    2. Keep the class form — pin it in kick.config.ts:\n` +
+          `       ${colors.dim('// kick.config.ts')}\n` +
+          `       ${colors.dim("export default defineConfig({ modules: { style: 'class' } })")}\n`,
+      )
+      process.exit(1)
+    }
+  }
 
   const allFiles: string[] = []
   for (const name of names) {

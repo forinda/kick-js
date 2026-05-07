@@ -104,6 +104,70 @@ describe('kick g module', () => {
   })
 })
 
+describe('kick g module — style-drift gate', () => {
+  let fixture: string
+
+  beforeEach(() => {
+    fixture = createFixtureProject('module-style-gate')
+  })
+
+  afterEach(() => {
+    cleanupFixture(fixture)
+  })
+
+  it('refuses to generate when style="define" but class-form modules exist', () => {
+    // Drop a class-form module into the project, then try to add a
+    // new module while style defaults to 'define'. The gate should
+    // refuse with a pointer to `kick codemod modules`.
+    const legacyDir = join(fixture, 'src/modules/users')
+    require('node:fs').mkdirSync(legacyDir, { recursive: true })
+    writeFileSync(
+      join(legacyDir, 'user.module.ts'),
+      `import { type AppModule, type ModuleRoutes } from '@forinda/kickjs'
+
+export class UserModule implements AppModule {
+  routes(): ModuleRoutes {
+    return null as never
+  }
+}
+`,
+    )
+
+    const result = runCli(fixture, ['g', 'module', 'task'])
+    expect(result.exitCode).not.toBe(0)
+    const combined = `${result.stdout}\n${result.stderr}`
+    expect(combined).toMatch(/legacy.*class.*AppModule.*shape/i)
+    expect(combined).toContain('kick codemod modules')
+    expect(combined).toMatch(/style:\s*'class'/)
+  })
+
+  it('proceeds when style="class" is set, even with class-form modules', () => {
+    // Pin to class form — the gate is skipped.
+    writeFileSync(
+      join(fixture, 'kick.config.json'),
+      JSON.stringify({ pattern: 'ddd', modules: { style: 'class' } }),
+    )
+
+    const legacyDir = join(fixture, 'src/modules/users')
+    require('node:fs').mkdirSync(legacyDir, { recursive: true })
+    writeFileSync(
+      join(legacyDir, 'user.module.ts'),
+      `import { type AppModule, type ModuleRoutes } from '@forinda/kickjs'
+
+export class UserModule implements AppModule {
+  routes(): ModuleRoutes {
+    return null as never
+  }
+}
+`,
+    )
+
+    const result = runCli(fixture, ['g', 'module', 'task'])
+    assertCliOk(result, 'kick g module task (style: class with legacy)')
+    expect(existsSync(join(fixture, 'src/modules/tasks/task.module.ts'))).toBe(true)
+  })
+})
+
 describe("kick g module — modules.style: 'class' opt-out", () => {
   let fixture: string
 
