@@ -202,7 +202,7 @@ export const modules = defineModules().mount(${entryToken})
 
 /**
  * Append `entryToken` (e.g. `LionModule()` or bare `LionModule`) to
- * the project\'s modules registry. Handles two shapes:
+ * the project's modules registry. Handles two shapes:
  *
  *   1. Flat array literal:
  *      `export const modules: AppModuleEntry[] = [HelloModule()]`
@@ -210,10 +210,15 @@ export const modules = defineModules().mount(${entryToken})
  *      `export const modules = defineModules().mount(HelloModule())`
  *
  * If neither shape is detected, content is returned unchanged — the
- * adopter\'s registration site is non-standard and they mount the
+ * adopter's registration site is non-standard and they mount the
  * new module themselves.
+ *
+ * Exported so `scaffold.ts`'s auto-register can reuse the same
+ * balanced-paren scanner — duplicating the regex caused
+ * `mount(UserModule())` to corrupt on the scaffold path before this
+ * was hoisted out.
  */
-function appendModuleEntry(content: string, entryToken: string): string {
+export function appendModuleEntry(content: string, entryToken: string): string {
   // Shape 1 — flat array literal. Existing behaviour.
   const arrayMatch = /(=\s*\[)([\s\S]*?)(])/.exec(content)
   if (arrayMatch) {

@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import { writeFileSafe, fileExists } from '../utils/fs'
 import { toPascalCase, toKebabCase, toCamelCase, pluralize, pluralizePascal } from '../utils/naming'
 import { readFile, writeFile } from 'node:fs/promises'
+import { appendModuleEntry } from './module'
 
 // ── Field Parsing ───────────────────────────────────────────────────────
 
@@ -748,22 +749,12 @@ async function autoRegisterModule(
       content = importLine + '\n' + content
     }
 
-    // Try the flat-array form first; otherwise append to a
-    // `defineModules().mount(...)` fluent chain.
-    const arrayMatch = /(=\s*\[)([\s\S]*?)(])/.exec(content)
-    if (arrayMatch) {
-      content = content.replace(/(=\s*\[)([\s\S]*?)(])/, (_match, open, existing, close) => {
-        const trimmed = existing.trim()
-        if (!trimmed) return `${open}${entryToken}${close}`
-        const needsComma = trimmed.endsWith(',') ? '' : ','
-        return `${open}${existing.trimEnd()}${needsComma} ${entryToken}${close}`
-      })
-    } else {
-      const chainMatch = /defineModules\s*\([^)]*\)((?:\s*\.mount\s*\([^)]*\))*)/.exec(content)
-      if (chainMatch) {
-        content = content.replace(chainMatch[0], `${chainMatch[0]}\n  .mount(${entryToken})`)
-      }
-    }
+    // Reuse the orchestrator's balanced-paren scanner for the chain
+    // form. Duplicating the regex here previously broke on
+    // `defineModules().mount(UserModule())` — the inner `()` of a
+    // factory call was matched as the `.mount(...)` boundary, causing
+    // the next append to nest inside the wrong call.
+    content = appendModuleEntry(content, entryToken)
   }
 
   await writeFile(indexPath, content, 'utf-8')
