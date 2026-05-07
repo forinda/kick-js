@@ -74,17 +74,17 @@ import.meta.glob(
 )`
 
   const routesDoc = `    /**
-     * Declare HTTP routes for this module.
+     * Declare HTTP routes for this module. Return value shape:
      *
-     * The path is prefixed with the global apiPrefix and version
-     * (e.g. /api/v1/${plural}). The framework derives the Express
-     * Router from the controller via \`buildRoutes()\` and uses the
-     * same controller for OpenAPI spec generation via SwaggerAdapter.
+     *   - \`path\`        — URL prefix for this route set, mounted under
+     *                     \`/{apiPrefix}/v{version}{path}\`.
+     *   - \`controller\`  — Controller class. Used both for the route
+     *                     handler bindings and OpenAPI spec generation.
+     *   - \`version\`     — Optional. Overrides the app-wide API version
+     *                     for this route set only.
      *
      * Return an **array** to mount multiple route sets under the
-     * same module (e.g. side-by-side v1 + v2 controllers). Each
-     * entry can override the API version with a \`version\` field —
-     * the mount path becomes \`/{apiPrefix}/v{version}{path}\`:
+     * same module (e.g. side-by-side v1 + v2 controllers):
      *
      *   return [
      *     { path: '/${plural}', version: 1, controller: ${pascal}V1Controller },
@@ -178,15 +178,14 @@ import { ${pascal}Controller } from './${kebab}.controller'
 import.meta.glob(['./**/*.service.ts', './**/*.repository.ts', '!./**/*.test.ts'], { eager: true })`
 
   const routesDoc = `    /**
-     * Declare HTTP routes for this module.
+     * Declare HTTP routes for this module. Return value shape:
      *
-     * Pass \`controller\` and the framework derives the Express
-     * Router via \`buildRoutes()\` and uses the same controller for
-     * OpenAPI spec generation through SwaggerAdapter.
+     *   - \`path\`        — URL prefix for this route set.
+     *   - \`controller\`  — Controller class (also drives OpenAPI).
+     *   - \`version\`     — Optional. Overrides the app-wide API version.
      *
-     * Return an **array** to mount multiple route sets under the
-     * same module (side-by-side v1 + v2 controllers, admin surfaces).
-     * Each entry can override the API version with a \`version\` field:
+     * Return an **array** to mount multiple route sets — admin
+     * surfaces, side-by-side v1 + v2 controllers, etc:
      *
      *   return [
      *     { path: '/${plural}', version: 1, controller: ${pascal}V1Controller },
@@ -248,10 +247,13 @@ export function generateMinimalModuleIndex(ctx: TemplateContext): string {
   const resolvedStyle = resolveStyle(style)
 
   const routesDoc = `    /**
-     * Pass \`controller\` and the framework derives the Express
-     * Router via \`buildRoutes()\`. Return an array to mount multiple
-     * route sets — each entry can override the API version with a
-     * \`version\` field:
+     * Declare HTTP routes. Return value shape:
+     *
+     *   - \`path\`        — URL prefix for this route set.
+     *   - \`controller\`  — Controller class (also drives OpenAPI).
+     *   - \`version\`     — Optional. Overrides the app-wide API version.
+     *
+     * Return an array to mount multiple route sets:
      *
      *   return [
      *     { path: '/${plural}', version: 1, controller: ${pascal}V1Controller },

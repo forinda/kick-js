@@ -316,14 +316,31 @@ export const UserModule = defineModule({
 })
 \`\`\`
 
-Register all modules in \`src/modules/index.ts\`. \`defineModule\` factories are called at the registration site; the legacy class form is passed by reference:
+Register all modules in \`src/modules/index.ts\` via \`defineModules()\` — a chainable list builder that drops directly into \`bootstrap({ modules })\`. \`kick g module <name>\` appends \`.mount(NewModule())\` to the chain on every generation:
 
 \`\`\`ts
-import type { AppModuleEntry } from '@forinda/kickjs'
-import { UserModule } from './user/user.module'
+import { defineModules } from '@forinda/kickjs'
+import { UserModule } from './users/user.module'
+import { TaskModule } from './tasks/task.module'
 
-export const modules: AppModuleEntry[] = [UserModule()]
+export const modules = defineModules().mount(UserModule()).mount(TaskModule())
 \`\`\`
+
+The flat-array form (\`AppModuleEntry[] = [UserModule()]\`) also works and is what \`kick.config.ts > modules.style: 'class'\` emits — both shapes feed the same loader.
+
+\`\`\`ts
+// Setting on \`kick.config.ts\` to opt out of \`defineModule\` codegen.
+export default defineConfig({
+  pattern: 'rest',
+  modules: {
+    style: 'class', // emits \`class FooModule implements AppModule { ... }\`
+                    //   + flat-array registry \`[FooModule]\`
+                    // default is 'define' (defineModule + defineModules chain).
+  },
+})
+\`\`\`
+
+When the project-wide style and existing module files drift (e.g. \`style: 'define'\` on a project that still has class-form modules), \`kick g module\` refuses with a pointer to \`kick codemod modules --experimental --apply\` which rewrites between the two forms in either direction.
 
 ### RequestContext
 
@@ -693,8 +710,10 @@ mistakes:
   inline registration in the entry file:
 
   \`\`\`ts
-  // src/modules/index.ts
-  export const modules: AppModuleEntry[] = [HelloModule(), UsersModule(), ...]
+  // src/modules/index.ts — fluent chain (default for \`modules.style: 'define'\`)
+  export const modules = defineModules().mount(HelloModule()).mount(UsersModule())
+  // OR with \`modules.style: 'class'\`:
+  //   export const modules: AppModuleEntry[] = [HelloModule, UsersModule]
 
   // src/middleware/index.ts
   export const middleware = [helmet(), cors(), requestId(), ...]
@@ -823,8 +842,8 @@ If not using generators:
 - [ ] Create \`src/modules/<name>/<name>.controller.ts\`
 - [ ] Add \`@Controller()\` decorator
 - [ ] Add route handlers with \`@Get()\`, \`@Post()\`, etc.
-- [ ] Create module file with \`defineModule({ name, build: () => ({ routes() { return { path, controller } } }) })\` (the framework derives the Express router from the controller)
-- [ ] Register module in \`src/modules/index.ts\` (\`AppModuleEntry[]\` array — call the factory at the registration site: \`[MyModule()]\`)
+- [ ] Create module file with \`defineModule({ name, build: () => ({ routes() { return { path, controller } } }) })\` — the framework derives the Express router from the controller. Class-form (\`class XModule implements AppModule\`) is the legacy alternative; toggle via \`kick.config.ts > modules.style\`.
+- [ ] Register module in \`src/modules/index.ts\`. Default form is the fluent chain: \`defineModules().mount(MyModule()).mount(...)\`. \`kick g module <name>\` appends \`.mount(NewModule())\` automatically.
 - [ ] Test with \`kick dev\`
 
 ### Manual Service
@@ -1026,7 +1045,9 @@ These work anywhere — scripts, plain files, outside \`@Service\`/\`@Controller
 ### Dependency Injection
 | Decorator | Purpose |
 |-----------|---------|
-| \`AppModule\` interface | Define feature module (implements \`routes()\`) |
+| \`defineModule({...})\` | Define feature module (factory; preferred — paired with \`defineModules()\` registry) |
+| \`defineModules()\` | Build the modules registry as a chainable list (\`.mount(X())\`) |
+| \`AppModule\` interface | Legacy module shape — \`class X implements AppModule\` (toggle via \`modules.style: 'class'\`) |
 | \`@Service()\` | Register singleton service |
 | \`@Repository()\` | Register repository |
 | \`@Autowired()\` | Property injection |
@@ -1043,7 +1064,7 @@ is a value other code reads off \`ctx\`.
 |---------|----------------|
 | \`defineContextDecorator({ key, deps, dependsOn, optional, onError, resolve })\` | \`@forinda/kickjs\` |
 | Method/class decorator | \`@LoadX\` on a controller method/class |
-| Module hook | \`AppModule.contributors?(): ContributorRegistration[]\` |
+| Module hook | \`build: () => ({ contributors() { return [...] } })\` (\`defineModule\`) — or \`AppModule.contributors?()\` for class form |
 | Adapter hook | \`AppAdapter.contributors?(): ContributorRegistration[]\` |
 | Global registration | \`bootstrap({ contributors: [LoadX.registration] })\` |
 | Type augmentation | \`declare module '@forinda/kickjs' { interface ContextMeta { ... } }\` |
@@ -1254,8 +1275,10 @@ description: Use when src/index.ts is accumulating module/middleware/plugin/adap
 **Refactor target**:
 
 \`\`\`ts
-// src/modules/index.ts
-export const modules: AppModuleClass[] = [HelloModule, UsersModule, ...]
+// src/modules/index.ts — fluent chain (default for \`modules.style: 'define'\`)
+export const modules = defineModules().mount(HelloModule()).mount(UsersModule())
+// OR for class-form projects (\`modules.style: 'class'\`):
+//   export const modules: AppModuleEntry[] = [HelloModule, UsersModule]
 
 // src/middleware/index.ts
 export const middleware = [helmet(), cors(), requestId(), ...]

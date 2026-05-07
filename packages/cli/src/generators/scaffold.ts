@@ -443,10 +443,13 @@ import.meta.glob(
 )`
 
   const routesDoc = `    /**
-     * Declare HTTP routes. Pass \`controller\` and the framework
-     * derives the Express Router via \`buildRoutes()\`. Return an array
-     * to mount multiple route sets — each entry can override the API
-     * version with a \`version\` field:
+     * Declare HTTP routes for this module. Return value shape:
+     *
+     *   - \`path\`        — URL prefix for this route set.
+     *   - \`controller\`  — Controller class (also drives OpenAPI).
+     *   - \`version\`     — Optional. Overrides the app-wide API version.
+     *
+     * Return an array to mount multiple route sets:
      *
      *   return [
      *     { path: '/${plural}', version: 1, controller: ${pascal}V1Controller },
@@ -723,10 +726,13 @@ async function autoRegisterModule(
   const entryToken = style === 'class' ? `${pascal}Module` : `${pascal}Module()`
 
   if (!exists) {
-    await writeFileSafe(
-      indexPath,
-      `import type { AppModuleEntry } from '@forinda/kickjs'\nimport { ${pascal}Module } from '${importPath}'\n\nexport const modules: AppModuleEntry[] = [${entryToken}]\n`,
-    )
+    // Default to the fluent `defineModules` chain for new projects;
+    // 'class' style stays on the flat array form for legacy parity.
+    const initialBody =
+      style === 'class'
+        ? `import type { AppModuleEntry } from '@forinda/kickjs'\nimport { ${pascal}Module } from '${importPath}'\n\nexport const modules: AppModuleEntry[] = [${entryToken}]\n`
+        : `import { defineModules } from '@forinda/kickjs'\nimport { ${pascal}Module } from '${importPath}'\n\nexport const modules = defineModules().mount(${entryToken})\n`
+    await writeFileSafe(indexPath, initialBody)
     return
   }
 
@@ -742,12 +748,22 @@ async function autoRegisterModule(
       content = importLine + '\n' + content
     }
 
-    content = content.replace(/(=\s*\[)([\s\S]*?)(])/, (_match, open, existing, close) => {
-      const trimmed = existing.trim()
-      if (!trimmed) return `${open}${entryToken}${close}`
-      const needsComma = trimmed.endsWith(',') ? '' : ','
-      return `${open}${existing.trimEnd()}${needsComma} ${entryToken}${close}`
-    })
+    // Try the flat-array form first; otherwise append to a
+    // `defineModules().mount(...)` fluent chain.
+    const arrayMatch = /(=\s*\[)([\s\S]*?)(])/.exec(content)
+    if (arrayMatch) {
+      content = content.replace(/(=\s*\[)([\s\S]*?)(])/, (_match, open, existing, close) => {
+        const trimmed = existing.trim()
+        if (!trimmed) return `${open}${entryToken}${close}`
+        const needsComma = trimmed.endsWith(',') ? '' : ','
+        return `${open}${existing.trimEnd()}${needsComma} ${entryToken}${close}`
+      })
+    } else {
+      const chainMatch = /defineModules\s*\([^)]*\)((?:\s*\.mount\s*\([^)]*\))*)/.exec(content)
+      if (chainMatch) {
+        content = content.replace(chainMatch[0], `${chainMatch[0]}\n  .mount(${entryToken})`)
+      }
+    }
   }
 
   await writeFile(indexPath, content, 'utf-8')

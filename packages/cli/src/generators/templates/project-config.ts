@@ -9,15 +9,36 @@ const PACKAGE_DEPS: Record<string, string> = {
   devtools: '@forinda/kickjs-devtools',
 }
 
+/**
+ * Map of package name → semver range string (`^x.y.z`). Resolved
+ * from `npm view <name> version` upstream so per-package independent
+ * versioning is honoured at scaffold time. Every sibling
+ * `@forinda/kickjs-*` package we might add to the new project must
+ * appear here; missing keys throw during package.json generation
+ * (loud failure beats silently shipping `^undefined`).
+ */
+export type SiblingVersions = Record<string, string>
+
+function take(versions: SiblingVersions, name: string): string {
+  const v = versions[name]
+  if (!v) {
+    throw new Error(
+      `generatePackageJson: missing resolved version for ${name}. ` +
+        `Add it to SIBLING_PACKAGES in generators/project.ts.`,
+    )
+  }
+  return v
+}
+
 /** Generate package.json with template-aware dependencies */
 export function generatePackageJson(
   name: string,
   template: ProjectTemplate,
-  kickjsVersion: string,
+  versions: SiblingVersions,
   packages: string[] = [],
 ): string {
   const baseDeps: Record<string, string> = {
-    '@forinda/kickjs': kickjsVersion,
+    '@forinda/kickjs': take(versions, '@forinda/kickjs'),
     // `dotenv` is an optional peer of @forinda/kickjs — scaffolded apps
     // get it pre-installed so `.env` files Just Work. Apps that load
     // env from the shell or a secret manager can drop this safely.
@@ -29,18 +50,24 @@ export function generatePackageJson(
     'pino-pretty': '^13.1.3',
   }
 
-  // Add user-selected optional packages
+  // Add user-selected optional packages — each looked up against
+  // the resolved version map so they're independently up-to-date.
   for (const pkg of packages) {
     const dep = PACKAGE_DEPS[pkg]
     if (dep && !baseDeps[dep]) {
-      baseDeps[dep] = kickjsVersion
+      baseDeps[dep] = take(versions, dep)
     }
   }
 
   return JSON.stringify(
     {
       name,
-      version: kickjsVersion.replace('^', ''), // Remove the ^ prefix for project version
+      // Project starts at 0.0.0 — adopters bump as they ship. Tying
+      // the project version to the CLI version (the previous
+      // behaviour) made every scaffolded app `5.4.0` on day one,
+      // which broke npm publishing for adopters trying their first
+      // release.
+      version: '0.0.0',
       type: 'module',
       scripts: {
         dev: 'vite',
@@ -56,8 +83,8 @@ export function generatePackageJson(
       },
       dependencies: baseDeps,
       devDependencies: {
-        '@forinda/kickjs-cli': kickjsVersion,
-        '@forinda/kickjs-vite': kickjsVersion,
+        '@forinda/kickjs-cli': take(versions, '@forinda/kickjs-cli'),
+        '@forinda/kickjs-vite': take(versions, '@forinda/kickjs-vite'),
         '@swc/core': '^1.15.21',
         '@types/express': '^5.0.6',
         '@types/node': '^25.0.0',

@@ -47,11 +47,13 @@ import.meta.glob(
 )`
 
   const routesDoc = `    /**
-     * Declare HTTP routes. Pass \`controller\` and the framework
-     * derives the Express Router via \`buildRoutes()\` and uses the
-     * same controller for OpenAPI spec generation. Return an array
-     * to mount multiple route sets — each entry can override the API
-     * version with a \`version\` field:
+     * Declare HTTP routes for this CQRS module. Return value shape:
+     *
+     *   - \`path\`        — URL prefix for this route set.
+     *   - \`controller\`  — Controller class (also drives OpenAPI).
+     *   - \`version\`     — Optional. Overrides the app-wide API version.
+     *
+     * Return an array to mount multiple route sets:
      *
      *   return [
      *     { path: '/${plural}', version: 1, controller: ${pascal}V1Controller },
