@@ -216,6 +216,7 @@ async function runModuleGeneration(
       pluralize: shouldPluralize,
       prismaClientPath: mc.prismaClientPath,
       tokenScope,
+      style: mc.style,
     })
     allFiles.push(...files)
   }
@@ -551,6 +552,7 @@ export function registerGenerateCommand(program: Command): void {
         noTests: opts.tests === false,
         pluralize: opts.pluralize === false ? false : (mc.pluralize ?? true),
         tokenScope,
+        style: mc.style,
       })
       console.log(`\n  Scaffolded ${name} with ${fields.length} field(s):`)
       for (const f of fields) {

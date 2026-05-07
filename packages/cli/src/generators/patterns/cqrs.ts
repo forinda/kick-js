@@ -29,11 +29,12 @@ export async function generateCqrsFiles(ctx: ModuleContext): Promise<void> {
     noTests,
     prismaClientPath,
     tokenScope,
+    style,
     write,
   } = ctx
 
   // Module file (named `<kebab>.module.ts` so Vite's module-discovery plugin picks it up)
-  await write(`${kebab}.module.ts`, generateCqrsModuleIndex({ pascal, kebab, plural, repo }))
+  await write(`${kebab}.module.ts`, generateCqrsModuleIndex({ pascal, kebab, plural, repo, style }))
 
   // Constants
   await write(`${kebab}.constants.ts`, generateRestConstants({ pascal, kebab }))

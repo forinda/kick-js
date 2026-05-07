@@ -2,7 +2,7 @@ import type { TemplateContext } from './types'
 
 /** CQRS module index — commands, queries, events, WebSocket + queue integration */
 export function generateCqrsModuleIndex(ctx: TemplateContext & { repo: string }): string {
-  const { pascal, kebab, plural = '', repo } = ctx
+  const { pascal, kebab, plural = '', repo, style } = ctx
   const repoClassMap: Record<string, string> = {
     inmemory: `InMemory${pascal}Repository`,
     drizzle: `Drizzle${pascal}Repository`,
@@ -15,8 +15,9 @@ export function generateCqrsModuleIndex(ctx: TemplateContext & { repo: string })
   }
   const repoClass = repoClassMap[repo] ?? repoClassMap.inmemory
   const repoFile = repoFileMap[repo] ?? repoFileMap.inmemory
+  const resolvedStyle = style ?? 'define'
 
-  return `/**
+  const header = `/**
  * ${pascal} Module — CQRS Pattern
  *
  * Separates read (queries) and write (commands) operations.
@@ -28,9 +29,9 @@ export function generateCqrsModuleIndex(ctx: TemplateContext & { repo: string })
  *   queries/        — Read operations (get, list)
  *   events/         — Domain events + handlers (WS broadcast, queue dispatch)
  *   dtos/           — Request/response schemas
- */
-import { defineModule } from '@forinda/kickjs'
-import { ${pascal.toUpperCase()}_REPOSITORY } from './${kebab}.repository'
+ */`
+
+  const repoImports = `import { ${pascal.toUpperCase()}_REPOSITORY } from './${kebab}.repository'
 import { ${repoClass} } from './${repoFile}.repository'
 import { ${pascal}Controller } from './${kebab}.controller'
 
@@ -43,7 +44,47 @@ import.meta.glob(
     '!./**/*.test.ts',
   ],
   { eager: true },
-)
+)`
+
+  const routesDoc = `    /**
+     * Declare HTTP routes. Pass \`controller\` and the framework
+     * derives the Express Router via \`buildRoutes()\` and uses the
+     * same controller for OpenAPI spec generation. Return an array
+     * to mount multiple route sets — each entry can override the API
+     * version with a \`version\` field:
+     *
+     *   return [
+     *     { path: '/${plural}', version: 1, controller: ${pascal}V1Controller },
+     *     { path: '/${plural}', version: 2, controller: ${pascal}V2Controller },
+     *   ]
+     */`
+
+  if (resolvedStyle === 'class') {
+    return `${header}
+import { Container, type AppModule, type ModuleRoutes } from '@forinda/kickjs'
+${repoImports}
+
+export class ${pascal}Module implements AppModule {
+  register(container: Container): void {
+    container.registerFactory(${pascal.toUpperCase()}_REPOSITORY, () =>
+      container.resolve(${repoClass}),
+    )
+  }
+
+${routesDoc.replace(/^ {4}/gm, '  ').replace(/^ {6}/gm, '    ')}
+  routes(): ModuleRoutes {
+    return {
+      path: '/${plural}',
+      controller: ${pascal}Controller,
+    }
+  }
+}
+`
+  }
+
+  return `${header}
+import { defineModule } from '@forinda/kickjs'
+${repoImports}
 
 export const ${pascal}Module = defineModule({
   name: '${pascal}Module',
@@ -54,20 +95,7 @@ export const ${pascal}Module = defineModule({
       )
     },
 
-    /**
-     * Declare HTTP routes. Pass \`controller\` and the framework
-     * derives the Express Router via \`buildRoutes()\` and uses the
-     * same controller for OpenAPI spec generation. Return an array
-     * to mount multiple route sets under the same module (side-by-side
-     * v1 + v2 controllers, admin surfaces). Each entry can override
-     * the API version with a \`version\` field — the mount path becomes
-     * \`/{apiPrefix}/v{version}{path}\`:
-     *
-     *   return [
-     *     { path: '/${plural}', version: 1, controller: ${pascal}V1Controller },
-     *     { path: '/${plural}', version: 2, controller: ${pascal}V2Controller },
-     *   ]
-     */
+${routesDoc}
     routes() {
       return {
         path: '/${plural}',
