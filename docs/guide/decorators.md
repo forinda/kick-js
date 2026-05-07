@@ -315,13 +315,58 @@ class UserController { ... }
 
 ### @ApiBearerAuth(name?)
 
-Mark endpoints as requiring Bearer token authentication.
+Mark endpoints as requiring Bearer token authentication. Convenience over `@ApiSecurity('BearerAuth')` — also auto-synthesizes a bearer-shaped scheme under the given name (defaults to `'BearerAuth'`).
 
 ```ts
 @Controller()
 @ApiBearerAuth()
 class AdminController { ... }
+
+@Controller()
+class CustomAuthController {
+  @Get('/')
+  @ApiBearerAuth('ApiKeyAuth') // custom scheme name; still bearer-shaped
+  list() {}
+}
 ```
+
+### @ApiSecurity(requirement)
+
+Generic security decorator. Pick this when the scheme isn't bearer-shaped (API key, OAuth2 with scopes, OpenID Connect) or when a route accepts multiple alternative schemes. Class-level cascades to every method; method-level overrides win.
+
+```ts
+import { ApiSecurity } from '@forinda/kickjs-swagger'
+
+@Controller('/users')
+@ApiSecurity('BearerAuth') // class-level default
+class UsersController {
+  @Get('/me')
+  @ApiSecurity({ name: 'OAuth2', scopes: ['users:read'] }) // override + scopes
+  me() {}
+
+  @Get('/multi')
+  @ApiSecurity(['BearerAuth', { name: 'ApiKey' }]) // alternatives
+  multi() {}
+}
+```
+
+Three input shapes: a string (single scheme, no scopes), an object (`{ name, scopes? }` for OAuth2 / OIDC scopes), or an array of either (multiple alternative schemes). Custom scheme names other than `'BearerAuth'` must be declared under `SwaggerOptions.securitySchemes` — see the [Swagger guide](./swagger.md#declaring-security-schemes).
+
+### @ApiPublic()
+
+Mark a single method as publicly accessible — opts out of any class-level security requirement (set via `@ApiSecurity` or `@ApiBearerAuth`).
+
+```ts
+@Controller('/internal')
+@ApiSecurity('BearerAuth')
+class InternalController {
+  @Get('/health')
+  @ApiPublic() // overrides class-level BearerAuth
+  health() {}
+}
+```
+
+Use when a mostly-secured controller exposes a health-check / login / public-stats endpoint that shouldn't carry the inherited security requirement.
 
 ### @ApiExclude()
 
@@ -403,7 +448,9 @@ class TaskController {
 | `@ApiOperation`              | Method       | swagger | OpenAPI operation                                   |
 | `@ApiResponse`               | Method       | swagger | OpenAPI response                                    |
 | `@ApiTags`                   | Class/Method | swagger | OpenAPI tags                                        |
-| `@ApiBearerAuth`             | Class/Method | swagger | Bearer auth scheme                                  |
+| `@ApiBearerAuth`             | Class/Method | swagger | Bearer-token scheme (auto-synthesized)              |
+| `@ApiSecurity`               | Class/Method | swagger | Generic security requirement (any scheme + scopes)  |
+| `@ApiPublic`                 | Method       | swagger | Opt-out from class-level security                   |
 | `@ApiQueryParams`            | Method       | core    | Declare filterable/sortable/searchable query fields |
 | `@ApiExclude`                | Class/Method | swagger | Hide from spec                                      |
 

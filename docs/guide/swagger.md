@@ -84,13 +84,68 @@ When you pass a Zod (or Joi) schema, it's converted to JSON Schema and registere
 
 ### @ApiBearerAuth
 
-Mark endpoints as requiring authentication.
+Mark endpoints as requiring Bearer-token authentication. Convenience over `@ApiSecurity('BearerAuth')` — also auto-synthesizes a bearer-shaped scheme under the given name (defaults to `'BearerAuth'`).
 
 ```typescript
 @Controller()
 @ApiBearerAuth() // applies to all methods
 export class AdminController {}
+
+@Controller()
+class CustomAuthController {
+  @Get('/')
+  @ApiBearerAuth('ApiKeyAuth') // custom scheme name; still bearer-shaped
+  list() {}
+}
 ```
+
+### @ApiSecurity
+
+Generic security decorator. Pick this when the scheme isn't bearer-shaped (API key, OAuth2 with scopes, OpenID Connect) or when a route accepts multiple alternative schemes.
+
+```typescript
+import { ApiSecurity } from '@forinda/kickjs-swagger'
+
+@Controller('/users')
+@ApiSecurity('BearerAuth') // class-level default
+class UsersController {
+  @Get('/me')
+  @ApiSecurity({ name: 'OAuth2', scopes: ['users:read'] }) // method override + scopes
+  me() {}
+
+  @Get('/multi')
+  @ApiSecurity(['BearerAuth', { name: 'ApiKey' }]) // multiple alternatives
+  multi() {}
+}
+```
+
+Three input shapes:
+
+- **String** — `@ApiSecurity('BearerAuth')`. Single scheme, no scopes.
+- **Object** — `@ApiSecurity({ name: 'OAuth2', scopes: ['users:read'] })`. Single scheme with OAuth2 / OpenID Connect scopes.
+- **Array** — `@ApiSecurity(['BearerAuth', { name: 'ApiKey' }])`. Multiple alternative schemes; clients satisfy any one.
+
+Class-level requirements cascade to every method; method-level requirements override the class default.
+
+::: warning Custom scheme names must be declared
+`@ApiSecurity('MyCustomScheme')` references a scheme by name. Unless the name is `'BearerAuth'` (which auto-synthesizes a `bearer` HTTP scheme for back-compat with `@ApiBearerAuth`), the scheme MUST be declared under `SwaggerOptions.securitySchemes` — otherwise the spec emits the requirement but Swagger UI surfaces a "missing scheme" warning.
+:::
+
+### @ApiPublic
+
+Mark a single method as publicly accessible — opts out of any class-level security requirement (set via `@ApiSecurity` or `@ApiBearerAuth`).
+
+```typescript
+@Controller('/internal')
+@ApiSecurity('BearerAuth')
+class InternalController {
+  @Get('/health')
+  @ApiPublic() // overrides class-level BearerAuth — no security on /health
+  health() {}
+}
+```
+
+Use when the controller is mostly secured but exposes a health-check / login / public-stats endpoint that shouldn't carry the inherited security requirement in the OpenAPI spec.
 
 ### @ApiExclude
 
@@ -101,6 +156,64 @@ Hide a controller or method from the spec.
 @ApiExclude()
 async internal(ctx: RequestContext) { }
 ```
+
+## Declaring Security Schemes
+
+Custom OpenAPI security schemes (anything beyond the auto-synthesized `BearerAuth`) live under `SwaggerOptions.securitySchemes`:
+
+```typescript
+SwaggerAdapter({
+  securitySchemes: {
+    OAuth2: {
+      type: 'oauth2',
+      flows: {
+        authorizationCode: {
+          authorizationUrl: 'https://example.com/oauth/authorize',
+          tokenUrl: 'https://example.com/oauth/token',
+          scopes: {
+            'users:read': 'Read user profile',
+            'users:write': 'Modify user profile',
+          },
+        },
+      },
+    },
+    ApiKey: { type: 'apiKey', in: 'header', name: 'X-API-Key' },
+  },
+})
+```
+
+Schemes declared here resolve when referenced by name from `@ApiSecurity('OAuth2')` / `@ApiBearerAuth('ApiKey')` / the `securityResolver` hook below.
+
+## Bridging Other Auth Libraries — `securityResolver`
+
+If your project uses a different auth library and wants its decorators to drive Swagger's security annotations without putting `@ApiSecurity` on every controller, supply a `securityResolver` hook. The hook receives the controller class + method name; return a scheme reference (or `null` to mark the route explicitly public, or `undefined` to fall through to decorator-driven resolution).
+
+```typescript
+SwaggerAdapter({
+  securityResolver: ({ controllerClass, handlerName }) => {
+    // Bridge `@forinda/kickjs-auth`'s metadata without coupling.
+    const proto = controllerClass.prototype
+    if (Reflect.getMetadata('kick:auth:public', proto, handlerName)) return null
+    const secured =
+      Reflect.getMetadata('kick:auth:authenticated', controllerClass) ||
+      Reflect.getMetadata('kick:auth:authenticated', proto, handlerName)
+    return secured ? 'BearerAuth' : undefined
+  },
+})
+```
+
+The resolver runs **after** `@ApiPublic()` (which short-circuits to public) but **before** the decorator-driven `@ApiSecurity` / `@ApiBearerAuth` lookups. Returning a value drives the requirement; returning `null` is "explicitly public" (overrides class-level security); returning `undefined` falls through.
+
+## Resolution order
+
+When the spec builder picks security for a route, the first match wins:
+
+1. `@ApiPublic()` on the method → no security emitted.
+2. `securityResolver({ controllerClass, handlerName })` returns a value (or `null` for public).
+3. `@ApiSecurity` on the method.
+4. `@ApiBearerAuth` on the method.
+5. `@ApiSecurity` on the class.
+6. `@ApiBearerAuth` on the class.
 
 ## Schema-Driven Documentation
 
