@@ -141,8 +141,20 @@ export async function generateModule(options: GenerateModuleOptions): Promise<st
 
 // ── Auto-register in modules index ──────────────────────────────────────
 
-/** Add the new module to src/modules/index.ts */
-async function autoRegisterModule(
+/**
+ * Add a new module to `src/modules/index.ts`. Handles both the
+ * fresh-project initial-write path (creates the file with the right
+ * shape for the resolved style) and the established-project append
+ * path (inserts the import + extends the flat array OR fluent chain
+ * via {@link appendModuleEntry}).
+ *
+ * Exported so `scaffold.ts` can reuse it — both call sites had
+ * line-for-line identical bodies before consolidation, including
+ * the inline-regex chain-append bug CodeRabbit caught on PR #196.
+ * Single source of truth here keeps the orchestrator and scaffold
+ * paths from drifting again.
+ */
+export async function autoRegisterModule(
   modulesDir: string,
   pascal: string,
   plural: string,

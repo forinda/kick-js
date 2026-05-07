@@ -1,8 +1,7 @@
 import { join } from 'node:path'
-import { writeFileSafe, fileExists } from '../utils/fs'
+import { writeFileSafe } from '../utils/fs'
 import { toPascalCase, toKebabCase, toCamelCase, pluralize, pluralizePascal } from '../utils/naming'
-import { readFile, writeFile } from 'node:fs/promises'
-import { appendModuleEntry } from './module'
+import { autoRegisterModule } from './module'
 
 // ── Field Parsing ───────────────────────────────────────────────────────
 
@@ -709,53 +708,8 @@ export class Delete${pascal}UseCase {
   ]
 }
 
-// ── Auto-register ───────────────────────────────────────────────────────
-
-async function autoRegisterModule(
-  modulesDir: string,
-  pascal: string,
-  plural: string,
-  kebab: string,
-  style: 'define' | 'class' = 'define',
-): Promise<void> {
-  const indexPath = join(modulesDir, 'index.ts')
-  const exists = await fileExists(indexPath)
-  const importPath = `./${plural}/${kebab}.module`
-  // `defineModule` factories are called at the registration site;
-  // legacy class modules are passed by reference. Application's
-  // loader discriminates at boot, so both shapes work.
-  const entryToken = style === 'class' ? `${pascal}Module` : `${pascal}Module()`
-
-  if (!exists) {
-    // Default to the fluent `defineModules` chain for new projects;
-    // 'class' style stays on the flat array form for legacy parity.
-    const initialBody =
-      style === 'class'
-        ? `import type { AppModuleEntry } from '@forinda/kickjs'\nimport { ${pascal}Module } from '${importPath}'\n\nexport const modules: AppModuleEntry[] = [${entryToken}]\n`
-        : `import { defineModules } from '@forinda/kickjs'\nimport { ${pascal}Module } from '${importPath}'\n\nexport const modules = defineModules().mount(${entryToken})\n`
-    await writeFileSafe(indexPath, initialBody)
-    return
-  }
-
-  let content = await readFile(indexPath, 'utf-8')
-  const importLine = `import { ${pascal}Module } from '${importPath}'`
-
-  if (!content.includes(`${pascal}Module`)) {
-    const lastImportIdx = content.lastIndexOf('import ')
-    if (lastImportIdx !== -1) {
-      const lineEnd = content.indexOf('\n', lastImportIdx)
-      content = content.slice(0, lineEnd + 1) + importLine + '\n' + content.slice(lineEnd + 1)
-    } else {
-      content = importLine + '\n' + content
-    }
-
-    // Reuse the orchestrator's balanced-paren scanner for the chain
-    // form. Duplicating the regex here previously broke on
-    // `defineModules().mount(UserModule())` — the inner `()` of a
-    // factory call was matched as the `.mount(...)` boundary, causing
-    // the next append to nest inside the wrong call.
-    content = appendModuleEntry(content, entryToken)
-  }
-
-  await writeFile(indexPath, content, 'utf-8')
-}
+// `autoRegisterModule` is imported from `./module` — single source
+// of truth for registry mutation. Pre-consolidation, scaffold and
+// the orchestrator each had a copy that drifted (the regex bug
+// CodeRabbit caught on PR #196 only existed on the scaffold side
+// because the two had stopped tracking each other).
