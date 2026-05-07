@@ -98,9 +98,24 @@ describe('kick g module', () => {
     expect(moduleFile).toContain("name: 'TaskModule'")
     expect(moduleFile).not.toContain('implements AppModule')
 
-    // The orchestrator inserts the factory-call form at the registration site.
+    // The orchestrator emits the fluent `defineModules()` chain by
+    // default. New projects start with `defineModules().mount(X())`
+    // so subsequent `kick g module` invocations append cleanly.
     const indexContent = readFileSync(join(fixture, 'src/modules/index.ts'), 'utf-8')
-    expect(indexContent).toContain('[TaskModule()]')
+    expect(indexContent).toContain("import { defineModules } from '@forinda/kickjs'")
+    expect(indexContent).toContain('defineModules().mount(TaskModule())')
+  })
+
+  it('appends to an existing defineModules() chain on subsequent generations', () => {
+    runCli(fixture, ['g', 'module', 'user'])
+    runCli(fixture, ['g', 'module', 'task'])
+    const indexContent = readFileSync(join(fixture, 'src/modules/index.ts'), 'utf-8')
+    // First module establishes the chain; second one is appended via
+    // `.mount(TaskModule())` on a new line. This is the regression
+    // guard for the fluent-chain orchestrator path — flat-array
+    // detection was the legacy behaviour.
+    expect(indexContent).toContain('.mount(UserModule())')
+    expect(indexContent).toContain('.mount(TaskModule())')
   })
 })
 

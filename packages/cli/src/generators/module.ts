@@ -160,14 +160,23 @@ async function autoRegisterModule(
   const entryToken = style === 'class' ? `${pascal}Module` : `${pascal}Module()`
 
   if (!exists) {
-    await writeFileSafe(
-      indexPath,
-      `import type { AppModuleEntry } from '@forinda/kickjs'
+    // For 'class' style we emit the legacy flat-array form because
+    // `defineModules` is the factory-form companion. For 'define' (default)
+    // we emit the fluent `defineModules().mount(...)` chain so subsequent
+    // `kick g module` invocations append cleanly.
+    const initialBody =
+      style === 'class'
+        ? `import type { AppModuleEntry } from '@forinda/kickjs'
 import { ${pascal}Module } from '${importPath}'
 
 export const modules: AppModuleEntry[] = [${entryToken}]
-`,
-    )
+`
+        : `import { defineModules } from '@forinda/kickjs'
+import { ${pascal}Module } from '${importPath}'
+
+export const modules = defineModules().mount(${entryToken})
+`
+    await writeFileSafe(indexPath, initialBody)
     return
   }
 
@@ -185,21 +194,123 @@ export const modules: AppModuleEntry[] = [${entryToken}]
       content = importLine + '\n' + content
     }
 
-    // Add to modules array — handle both empty and existing entries.
-    // The entry shape (`Module()` vs `Module`) follows the resolved
-    // `style`. `kick rm module` matches both, so the project can mix
-    // styles freely if a user toggles the flag mid-project.
-    content = content.replace(/(=\s*\[)([\s\S]*?)(])/, (_match, open, existing, close) => {
+    content = appendModuleEntry(content, entryToken)
+  }
+
+  await writeFile(indexPath, content, 'utf-8')
+}
+
+/**
+ * Append `entryToken` (e.g. `LionModule()` or bare `LionModule`) to
+ * the project\'s modules registry. Handles two shapes:
+ *
+ *   1. Flat array literal:
+ *      `export const modules: AppModuleEntry[] = [HelloModule()]`
+ *   2. Fluent factory chain:
+ *      `export const modules = defineModules().mount(HelloModule())`
+ *
+ * If neither shape is detected, content is returned unchanged — the
+ * adopter\'s registration site is non-standard and they mount the
+ * new module themselves.
+ */
+function appendModuleEntry(content: string, entryToken: string): string {
+  // Shape 1 — flat array literal. Existing behaviour.
+  const arrayMatch = /(=\s*\[)([\s\S]*?)(])/.exec(content)
+  if (arrayMatch) {
+    return content.replace(/(=\s*\[)([\s\S]*?)(])/, (_match, open, existing, close) => {
       const trimmed = existing.trim()
-      if (!trimmed) {
-        // Empty array: `= []`
-        return `${open}${entryToken}${close}`
-      }
-      // Existing entries: append with comma
+      if (!trimmed) return `${open}${entryToken}${close}`
       const needsComma = trimmed.endsWith(',') ? '' : ','
       return `${open}${existing.trimEnd()}${needsComma} ${entryToken}${close}`
     })
   }
 
-  await writeFile(indexPath, content, 'utf-8')
+  // Shape 2 — `defineModules()` fluent chain. Walk forward from
+  // `defineModules(...)` consuming `.mount(...)` calls with a
+  // balanced-paren scanner so nested parens (`mount(UserModule())`)
+  // don't confuse the boundary. We need a real scanner here — a
+  // naive `\.mount\([^)]*\)` regex matches `mount(UserModule()`
+  // and breaks subsequent appends.
+  const chainEnd = findChainEnd(content)
+  if (chainEnd !== -1) {
+    return `${content.slice(0, chainEnd)}\n  .mount(${entryToken})${content.slice(chainEnd)}`
+  }
+
+  // Unknown shape — leave untouched. The import was added; adopter
+  // mounts manually.
+  return content
+}
+
+/**
+ * Locate the insertion point after the last `.mount(...)` call in a
+ * `defineModules()...` chain, or after `defineModules()` itself when
+ * the chain is empty. Returns the source-string offset to insert at,
+ * or -1 when the chain isn't found.
+ *
+ * The scanner walks balanced parens so nested factory calls inside
+ * `.mount(X())` don't break boundary detection.
+ */
+function findChainEnd(src: string): number {
+  // Match the CALL site, not the import statement. We require an
+  // immediately-following `(` (allowing whitespace) to anchor on
+  // `defineModules(...)` and skip past `import { defineModules }`.
+  const callRegex = /defineModules\s*\(/g
+  const match = callRegex.exec(src)
+  if (!match) return -1
+  // `match.index` points at `d`; `(` is at `match.index + match[0].length - 1`.
+  let i = match.index + match[0].length - 1
+  if (src[i] !== '(') return -1
+  // Balance the args of `defineModules(...)`.
+  i = balancedClose(src, i)
+  if (i === -1) return -1
+  i++
+  // Now consume zero or more `.mount(...)` calls. After each, `i`
+  // points just past its closing `)` so the next iteration sees a
+  // potential `.mount(...)` ahead.
+  for (;;) {
+    let j = i
+    while (j < src.length && /\s/.test(src[j] ?? '')) j++
+    if (src[j] !== '.') break
+    if (src.slice(j, j + 6) !== '.mount') break
+    j += 6
+    while (j < src.length && /\s/.test(src[j] ?? '')) j++
+    if (src[j] !== '(') break
+    const close = balancedClose(src, j)
+    if (close === -1) break
+    i = close + 1
+  }
+  return i
+}
+
+/**
+ * Given an offset pointing at `(`, return the offset of its matching
+ * `)`, or -1 on imbalance. Skips parens inside string literals
+ * (single, double, backtick) — the `mount()` args may include
+ * scoped-name strings.
+ */
+function balancedClose(src: string, openIdx: number): number {
+  if (src[openIdx] !== '(') return -1
+  let depth = 1
+  let i = openIdx + 1
+  while (i < src.length) {
+    const ch = src[i] ?? ''
+    if (ch === "'" || ch === '"' || ch === '`') {
+      // Skip string literal — find matching unescaped quote.
+      const quote = ch
+      i++
+      while (i < src.length && src[i] !== quote) {
+        if (src[i] === '\\') i++
+        i++
+      }
+      if (i < src.length) i++
+      continue
+    }
+    if (ch === '(') depth++
+    else if (ch === ')') {
+      depth--
+      if (depth === 0) return i
+    }
+    i++
+  }
+  return -1
 }

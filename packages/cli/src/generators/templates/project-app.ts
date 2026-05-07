@@ -137,13 +137,13 @@ export const app = await bootstrap({
 
 /** Generate src/modules/index.ts module registry */
 export function generateModulesIndex(): string {
-  return `import type { AppModuleEntry } from '@forinda/kickjs'
+  return `import { defineModules } from '@forinda/kickjs'
 import { HelloModule } from './hello/hello.module'
 
 // Remove HelloModule and run: kick g module <name>
-// Modules built with \`defineModule\` are called as factories — the
-// invocation produces the AppModule instance bootstrap registers.
-export const modules: AppModuleEntry[] = [HelloModule()]
+// \`defineModules()\` returns a chainable list — \`kick g module\` appends
+// \`.mount(NewModule())\` to the chain on every generation.
+export const modules = defineModules().mount(HelloModule())
 `
 }
 

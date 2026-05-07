@@ -1,5 +1,5 @@
 import { join, dirname } from 'node:path'
-import { execSync } from 'node:child_process'
+import { execFileSync, execSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { writeFileSafe } from '../utils/fs'
@@ -33,7 +33,62 @@ import {
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const cliPkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'))
-const KICKJS_VERSION = `^${cliPkg.version}`
+const CLI_VERSION_FALLBACK = `^${cliPkg.version}`
+
+/**
+ * Sibling `@forinda/kickjs-*` packages whose versions are resolved
+ * independently when scaffolding a new project. Each entry is queried
+ * via `npm view <name> version`; failure falls back to the CLI's own
+ * version (`CLI_VERSION_FALLBACK`).
+ *
+ * Per-package independent versioning landed with changesets — before
+ * that, every sibling shipped in lockstep with the CLI so a single
+ * pin was correct. Now `@forinda/kickjs@5.5.0` may pair with
+ * `@forinda/kickjs-cli@5.4.2` and `@forinda/kickjs-swagger@5.3.1`;
+ * pinning them all to the CLI's version under-installs adopters.
+ */
+const SIBLING_PACKAGES = [
+  '@forinda/kickjs',
+  '@forinda/kickjs-cli',
+  '@forinda/kickjs-vite',
+  '@forinda/kickjs-auth',
+  '@forinda/kickjs-swagger',
+  '@forinda/kickjs-ws',
+  '@forinda/kickjs-queue',
+  '@forinda/kickjs-devtools',
+  '@forinda/kickjs-testing',
+] as const
+
+/**
+ * Resolve the latest published version of every sibling package via
+ * `npm view <name> version` (via execFileSync — no shell, no
+ * injection vector). Each query has a short timeout; failures fall
+ * back to the CLI's own version with a `^` prefix so the scaffold
+ * stays usable offline.
+ */
+async function resolveSiblingVersions(): Promise<Record<string, string>> {
+  const results = await Promise.all(
+    SIBLING_PACKAGES.map(async (name) => {
+      try {
+        const out = execFileSync('npm', ['view', name, 'version'], {
+          encoding: 'utf-8',
+          timeout: 5000,
+          stdio: ['ignore', 'pipe', 'ignore'],
+        })
+          .toString()
+          .trim()
+        if (out && /^\d+\.\d+\.\d+/.test(out)) {
+          return [name, `^${out}`] as const
+        }
+      } catch {
+        // Network failure / package not yet published / npm
+        // unavailable. Fall back to CLI version below.
+      }
+      return [name, CLI_VERSION_FALLBACK] as const
+    }),
+  )
+  return Object.fromEntries(results)
+}
 
 type ProjectTemplate = 'rest' | 'ddd' | 'cqrs' | 'minimal'
 
@@ -64,10 +119,20 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
 
   console.log(`\n  Creating KickJS project: ${name}\n`)
 
+  // Resolve published version of every sibling kickjs package in
+  // parallel. Per-package independent versioning means
+  // `@forinda/kickjs@5.5.0` may pair with `@forinda/kickjs-cli@5.4.2`
+  // and `@forinda/kickjs-swagger@5.3.1`; pinning every dep to the
+  // CLI's own version under-installs adopters whenever a sibling
+  // bumps independently. `npm view` fallback keeps the scaffold
+  // working offline.
+  log('Resolving package versions...')
+  const versions = await resolveSiblingVersions()
+
   // ── package.json — template-aware deps ────────────────────────────
   await writeFileSafe(
     join(dir, 'package.json'),
-    generatePackageJson(name, template, KICKJS_VERSION, packages),
+    generatePackageJson(name, template, versions, packages),
   )
 
   // ── vite.config.ts — enables HMR + SWC for decorators ──────────────
