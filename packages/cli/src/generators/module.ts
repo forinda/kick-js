@@ -194,9 +194,13 @@ export const modules = defineModules().mount(${entryToken})
 
   let content = await readFile(indexPath, 'utf-8')
 
-  // Add import if not present
+  // Add import if not present. Word-boundary check so `ItemModule`
+  // doesn't see itself as already-imported when `OrderItemModule`
+  // exists in the file (substring `Item` is contained but the names
+  // are distinct).
   const importLine = `import { ${pascal}Module } from '${importPath}'`
-  if (!content.includes(`${pascal}Module`)) {
+  const moduleNameRe = new RegExp(`\\b${pascal}Module\\b`)
+  if (!moduleNameRe.test(content)) {
     // Insert import after last existing import
     const lastImportIdx = content.lastIndexOf('import ')
     if (lastImportIdx !== -1) {
@@ -231,26 +235,42 @@ export const modules = defineModules().mount(${entryToken})
  * was hoisted out.
  */
 export function appendModuleEntry(content: string, entryToken: string): string {
-  // Shape 1 — flat array literal. Existing behaviour.
-  const arrayMatch = /(=\s*\[)([\s\S]*?)(])/.exec(content)
-  if (arrayMatch) {
-    return content.replace(/(=\s*\[)([\s\S]*?)(])/, (_match, open, existing, close) => {
-      const trimmed = existing.trim()
-      if (!trimmed) return `${open}${entryToken}${close}`
+  // Anchor on the actual `export const modules` declaration so we
+  // don't accidentally rewrite a helper array or unrelated builder
+  // declared earlier in the file. The previous match-anywhere
+  // behaviour mutated whichever `[...]` or `defineModules(...)`
+  // appeared first, even if it was a sibling helper.
+  const declMatch = /export\s+const\s+modules\b[^=]*=/.exec(content)
+  if (!declMatch) return content
+  const eqEnd = declMatch.index + declMatch[0].length
+  // Skip whitespace after `=` to find the start of the rhs.
+  let rhsStart = eqEnd
+  while (rhsStart < content.length && /\s/.test(content[rhsStart] ?? '')) rhsStart++
+
+  // Shape 1 — flat array literal at the rhs.
+  if (content[rhsStart] === '[') {
+    const close = balancedBracketClose(content, rhsStart)
+    if (close === -1) return content
+    const inside = content.slice(rhsStart + 1, close)
+    const trimmed = inside.trim()
+    let rewritten: string
+    if (!trimmed) {
+      rewritten = `[${entryToken}]`
+    } else {
       const needsComma = trimmed.endsWith(',') ? '' : ','
-      return `${open}${existing.trimEnd()}${needsComma} ${entryToken}${close}`
-    })
+      rewritten = `[${inside.trimEnd()}${needsComma} ${entryToken}]`
+    }
+    return content.slice(0, rhsStart) + rewritten + content.slice(close + 1)
   }
 
-  // Shape 2 — `defineModules()` fluent chain. Walk forward from
-  // `defineModules(...)` consuming `.mount(...)` calls with a
-  // balanced-paren scanner so nested parens (`mount(UserModule())`)
-  // don't confuse the boundary. We need a real scanner here — a
-  // naive `\.mount\([^)]*\)` regex matches `mount(UserModule()`
-  // and breaks subsequent appends.
-  const chainEnd = findChainEnd(content)
-  if (chainEnd !== -1) {
-    return `${content.slice(0, chainEnd)}\n  .mount(${entryToken})${content.slice(chainEnd)}`
+  // Shape 2 — `defineModules()` fluent chain at the rhs. Walk forward
+  // through `.mount(...)` calls with a balanced-paren scanner so
+  // nested parens (`mount(UserModule())`) don't confuse the boundary.
+  if (content.slice(rhsStart, rhsStart + 'defineModules'.length) === 'defineModules') {
+    const chainEnd = findChainEnd(content, rhsStart)
+    if (chainEnd !== -1) {
+      return `${content.slice(0, chainEnd)}\n  .mount(${entryToken})${content.slice(chainEnd)}`
+    }
   }
 
   // Unknown shape — leave untouched. The import was added; adopter
@@ -267,11 +287,15 @@ export function appendModuleEntry(content: string, entryToken: string): string {
  * The scanner walks balanced parens so nested factory calls inside
  * `.mount(X())` don't break boundary detection.
  */
-function findChainEnd(src: string): number {
+function findChainEnd(src: string, fromIdx = 0): number {
   // Match the CALL site, not the import statement. We require an
   // immediately-following `(` (allowing whitespace) to anchor on
   // `defineModules(...)` and skip past `import { defineModules }`.
+  // `fromIdx` lets the caller scope the search to the rhs of an
+  // `export const modules =` declaration so unrelated calls
+  // elsewhere in the file aren't matched.
   const callRegex = /defineModules\s*\(/g
+  callRegex.lastIndex = fromIdx
   const match = callRegex.exec(src)
   if (!match) return -1
   // `match.index` points at `d`; `(` is at `match.index + match[0].length - 1`.
@@ -297,6 +321,37 @@ function findChainEnd(src: string): number {
     i = close + 1
   }
   return i
+}
+
+/**
+ * Given an offset pointing at `[`, return the offset of its matching
+ * `]`. Skips brackets inside string literals so `['weird]name']`
+ * doesn't break. Returns -1 on imbalance.
+ */
+function balancedBracketClose(src: string, openIdx: number): number {
+  if (src[openIdx] !== '[') return -1
+  let depth = 1
+  let i = openIdx + 1
+  while (i < src.length) {
+    const ch = src[i] ?? ''
+    if (ch === "'" || ch === '"' || ch === '`') {
+      const quote = ch
+      i++
+      while (i < src.length && src[i] !== quote) {
+        if (src[i] === '\\') i++
+        i++
+      }
+      if (i < src.length) i++
+      continue
+    }
+    if (ch === '[') depth++
+    else if (ch === ']') {
+      depth--
+      if (depth === 0) return i
+    }
+    i++
+  }
+  return -1
 }
 
 /**

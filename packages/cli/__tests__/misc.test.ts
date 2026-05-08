@@ -40,6 +40,29 @@ describe('misc commands', () => {
         expect(content).not.toContain('TaskModule')
       }
     })
+
+    it('strips the .mount() entry from the defineModules() chain (not just the import)', () => {
+      // Generate three modules to build a non-trivial chain. Removing
+      // the middle one must drop both its import line AND the
+      // `.mount(LionModule())` call — leaving a valid chain with the
+      // surviving entries. The legacy regex left an orphan
+      // `.mount()` because it only stripped the identifier.
+      runCli(fixture, ['g', 'module', 'hello'])
+      runCli(fixture, ['g', 'module', 'lion'])
+      runCli(fixture, ['g', 'module', 'tiger'])
+      const indexPath = join(fixture, 'src/modules/index.ts')
+      expect(readFileSync(indexPath, 'utf-8')).toContain('.mount(LionModule())')
+
+      runCli(fixture, ['rm', 'module', 'lion', '--force'])
+
+      const updated = readFileSync(indexPath, 'utf-8')
+      expect(updated).not.toContain('LionModule')
+      // No empty `.mount()` orphan left behind.
+      expect(updated).not.toMatch(/\.mount\(\s*\)/)
+      // Surviving entries still in the chain.
+      expect(updated).toContain('.mount(HelloModule())')
+      expect(updated).toContain('.mount(TigerModule())')
+    })
   })
 
   describe('kick g config', () => {
