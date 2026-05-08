@@ -8,7 +8,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { assertCliOk, cleanupFixture, createFixtureProject, runCli } from './helpers'
 
@@ -62,6 +62,29 @@ describe('misc commands', () => {
       // Surviving entries still in the chain.
       expect(updated).toContain('.mount(HelloModule())')
       expect(updated).toContain('.mount(TigerModule())')
+    })
+
+    it('does not strip a longer identifier when the target is a prefix', () => {
+      // Regression: `kick rm module user` must not match
+      // `UserModuleFactory` inside the registry. Previously the
+      // array-entry regex lacked a `\b` after `Module`, so the
+      // optional `()` group + trailing comma matched zero chars
+      // and the prefix got stripped from longer names.
+      runCli(fixture, ['g', 'module', 'user'])
+      const indexPath = join(fixture, 'src/modules/index.ts')
+      const original = readFileSync(indexPath, 'utf-8')
+      // Inject a sibling identifier whose name has UserModule as a
+      // prefix; it lives outside the registry but in the same file.
+      writeFileSync(
+        indexPath,
+        original + `\nexport const UserModuleFactory = { build: () => null }\n`,
+      )
+
+      runCli(fixture, ['rm', 'module', 'user', '--force'])
+
+      const updated = readFileSync(indexPath, 'utf-8')
+      expect(updated).toContain('UserModuleFactory')
+      expect(updated).not.toMatch(/\bUserModule\b/) // the original was removed
     })
   })
 

@@ -133,6 +133,33 @@ describe('kick g module', () => {
     expect(indexContent).toContain('.mount(ItemModule())')
   })
 
+  it('the balanced-paren scanner skips comments — `)` inside `//` or `/* */` does not break the chain walk', () => {
+    // Regression: previously balancedClose() didn't skip comments,
+    // so a stray `)` inside a comment terminated the scan early
+    // and the next append landed in the wrong place. Hand-craft a
+    // registry with a comment containing parens, then run
+    // `kick g module` and confirm the new module lands at the
+    // right spot.
+    runCli(fixture, ['g', 'module', 'hello'])
+    const indexPath = join(fixture, 'src/modules/index.ts')
+    const original = readFileSync(indexPath, 'utf-8')
+    writeFileSync(
+      indexPath,
+      original.replace(
+        '.mount(HelloModule())',
+        '.mount(/* a (comment with parens) and ) inside */ HelloModule())',
+      ),
+    )
+
+    runCli(fixture, ['g', 'module', 'task'])
+    const updated = readFileSync(indexPath, 'utf-8')
+    // Comment preserved; new module appended after the existing chain.
+    expect(updated).toContain('comment with parens')
+    expect(updated).toContain('.mount(TaskModule())')
+    // The order is hello → task; new entry doesn't land mid-comment.
+    expect(updated.indexOf('HelloModule')).toBeLessThan(updated.indexOf('TaskModule'))
+  })
+
   it('mutates the export const modules declaration, not unrelated builders earlier in the file', () => {
     // Regression: `appendModuleEntry` previously matched the first
     // `[...]` or `defineModules(...)` anywhere in the file. Helper
