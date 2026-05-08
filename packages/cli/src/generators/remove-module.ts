@@ -4,6 +4,7 @@ import { toPascalCase, toKebabCase, pluralize } from '../utils/naming'
 import { confirm } from '../utils/prompts'
 import { colors } from '../utils/colors'
 import { fileExists } from '../utils/fs'
+import { escapeRegex } from '../utils/regex'
 
 /**
  * Strip every `.mount(<X>Module(...))` call from a `defineModules()`
@@ -17,7 +18,7 @@ import { fileExists } from '../utils/fs'
  * the chain actually changed).
  */
 function stripChainMount(content: string, pascal: string): { content: string; changed: boolean } {
-  const moduleNameRe = new RegExp(`^\\s*${pascal}Module\\b`)
+  const moduleNameRe = new RegExp(`^\\s*${escapeRegex(pascal)}Module\\b`)
   let changed = false
   let cursor = 0
   let out = content
@@ -126,7 +127,7 @@ export async function removeModule(options: RemoveModuleOptions): Promise<void> 
 
     // Remove import line — matches both legacy `'./<plural>'` and current `'./<plural>/<kebab>.module'`
     const importPattern = new RegExp(
-      `^import\\s*\\{\\s*${pascal}Module\\s*\\}\\s*from\\s*['"][^'"]*${plural}(?:/[^'"]*)?['"].*\\n?`,
+      `^import\\s*\\{\\s*${escapeRegex(pascal)}Module\\s*\\}\\s*from\\s*['"][^'"]*${escapeRegex(plural)}(?:/[^'"]*)?['"].*\\n?`,
       'gm',
     )
     content = content.replace(importPattern, '')
@@ -144,7 +145,7 @@ export async function removeModule(options: RemoveModuleOptions): Promise<void> 
     // (`SomeModule()`) so we don't leave dangling `()` after removing the
     // identifier.
     content = content.replace(
-      new RegExp(`\\s*,?\\s*${pascal}Module(?:\\s*\\(\\s*\\))?\\s*,?`, 'g'),
+      new RegExp(`\\s*,?\\s*${escapeRegex(pascal)}Module(?:\\s*\\(\\s*\\))?\\s*,?`, 'g'),
       (match) => {
         // If match starts and ends with comma, keep one comma
         const startsWithComma = match.trimStart().startsWith(',')

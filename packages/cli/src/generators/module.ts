@@ -3,6 +3,7 @@ import { writeFileSafe, fileExists } from '../utils/fs'
 import { confirm, log } from '../utils/prompts'
 import { colors } from '../utils/colors'
 import { toPascalCase, toKebabCase, pluralize, pluralizePascal } from '../utils/naming'
+import { escapeRegex } from '../utils/regex'
 import { readFile, writeFile } from 'node:fs/promises'
 import type { ProjectPattern, RepoTypeConfig } from '../config'
 import type { ModuleStyle } from './templates/types'
@@ -199,7 +200,7 @@ export const modules = defineModules().mount(${entryToken})
   // exists in the file (substring `Item` is contained but the names
   // are distinct).
   const importLine = `import { ${pascal}Module } from '${importPath}'`
-  const moduleNameRe = new RegExp(`\\b${pascal}Module\\b`)
+  const moduleNameRe = new RegExp(`\\b${escapeRegex(pascal)}Module\\b`)
   if (!moduleNameRe.test(content)) {
     // Insert import after last existing import
     const lastImportIdx = content.lastIndexOf('import ')
