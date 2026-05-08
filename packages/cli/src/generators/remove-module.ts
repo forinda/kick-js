@@ -30,9 +30,23 @@ function stripChainMount(content: string, pascal: string): { content: string; ch
     const argStart = mountIdx + '.mount('.length
 
     // Walk balanced parens to find the closing `)` of this call.
+    // Skip string literals + `//` / `/* *\/` comments so a `)` in
+    // either doesn't terminate the scan early.
     let depth = 1
     let i = argStart
     while (i < out.length && depth > 0) {
+      const next = out.slice(i, i + 2)
+      if (next === '//' || next === '/*') {
+        if (next === '//') {
+          i += 2
+          while (i < out.length && out[i] !== '\n') i++
+        } else {
+          i += 2
+          while (i + 1 < out.length && !(out[i] === '*' && out[i + 1] === '/')) i++
+          i += 2
+        }
+        continue
+      }
       const ch = out[i] ?? ''
       if (ch === "'" || ch === '"' || ch === '`') {
         // Skip string literal — find matching unescaped quote.
@@ -145,7 +159,12 @@ export async function removeModule(options: RemoveModuleOptions): Promise<void> 
     // (`SomeModule()`) so we don't leave dangling `()` after removing the
     // identifier.
     content = content.replace(
-      new RegExp(`\\s*,?\\s*${escapeRegex(pascal)}Module(?:\\s*\\(\\s*\\))?\\s*,?`, 'g'),
+      // `\b` after `Module` so `UserModule` isn't matched inside
+      // `UserModuleFactory`. The optional `(?:\s*\(\s*\))?` lookahead
+      // and trailing `\s*,?` can both match zero characters, so
+      // without an explicit word boundary the regex happily strips
+      // the prefix off a longer identifier.
+      new RegExp(`\\s*,?\\s*${escapeRegex(pascal)}Module\\b(?:\\s*\\(\\s*\\))?\\s*,?`, 'g'),
       (match) => {
         // If match starts and ends with comma, keep one comma
         const startsWithComma = match.trimStart().startsWith(',')

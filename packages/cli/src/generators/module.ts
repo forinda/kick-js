@@ -325,15 +325,43 @@ function findChainEnd(src: string, fromIdx = 0): number {
 }
 
 /**
+ * Skip past a `//` line comment or `/* … *\/` block comment that
+ * starts at offset `i`. Returns the offset of the first character
+ * after the comment, or `i` unchanged when there's no comment at
+ * that position. Used by the balanced-paren / bracket scanners so
+ * a `]` or `)` inside a comment doesn't terminate the scan early.
+ */
+function skipComment(src: string, i: number): number {
+  const two = src.slice(i, i + 2)
+  if (two === '//') {
+    i += 2
+    while (i < src.length && src[i] !== '\n') i++
+    return i
+  }
+  if (two === '/*') {
+    i += 2
+    while (i + 1 < src.length && !(src[i] === '*' && src[i + 1] === '/')) i++
+    return i + 2
+  }
+  return i
+}
+
+/**
  * Given an offset pointing at `[`, return the offset of its matching
  * `]`. Skips brackets inside string literals so `['weird]name']`
- * doesn't break. Returns -1 on imbalance.
+ * doesn't break, and inside `//` / `/* *\/` comments. Returns -1 on
+ * imbalance.
  */
 function balancedBracketClose(src: string, openIdx: number): number {
   if (src[openIdx] !== '[') return -1
   let depth = 1
   let i = openIdx + 1
   while (i < src.length) {
+    const next = src.slice(i, i + 2)
+    if (next === '//' || next === '/*') {
+      i = skipComment(src, i)
+      continue
+    }
     const ch = src[i] ?? ''
     if (ch === "'" || ch === '"' || ch === '`') {
       const quote = ch
@@ -358,14 +386,20 @@ function balancedBracketClose(src: string, openIdx: number): number {
 /**
  * Given an offset pointing at `(`, return the offset of its matching
  * `)`, or -1 on imbalance. Skips parens inside string literals
- * (single, double, backtick) — the `mount()` args may include
- * scoped-name strings.
+ * (single, double, backtick) and inside `//` / `/* *\/` comments —
+ * a `)` in either would terminate the scan early and corrupt the
+ * insertion offset.
  */
 function balancedClose(src: string, openIdx: number): number {
   if (src[openIdx] !== '(') return -1
   let depth = 1
   let i = openIdx + 1
   while (i < src.length) {
+    const next = src.slice(i, i + 2)
+    if (next === '//' || next === '/*') {
+      i = skipComment(src, i)
+      continue
+    }
     const ch = src[i] ?? ''
     if (ch === "'" || ch === '"' || ch === '`') {
       // Skip string literal — find matching unescaped quote.
