@@ -160,6 +160,50 @@ describe('kick g module', () => {
     expect(updated.indexOf('HelloModule')).toBeLessThan(updated.indexOf('TaskModule'))
   })
 
+  it('recovers a half-edited registry — import present, registry entry missing', () => {
+    // Regression: previously the auto-register gate skipped both
+    // halves when ANY mention of `XModule` appeared anywhere in the
+    // file. After splitting, the import-line check and the
+    // registry-entry check are independent, so a stale import with
+    // a deleted .mount entry gets recovered on the next
+    // `kick g module`.
+    runCli(fixture, ['g', 'module', 'task'])
+    const indexPath = join(fixture, 'src/modules/index.ts')
+    const original = readFileSync(indexPath, 'utf-8')
+    // Manually delete the .mount(TaskModule()) entry but leave the
+    // import — simulates an adopter editing the registry by hand.
+    const halfEdited = original.replace(/\n?\s*\.mount\(TaskModule\(\)\)/, '')
+    expect(halfEdited).toContain('TaskModule') // import survives
+    expect(halfEdited).not.toContain('.mount(TaskModule())')
+    writeFileSync(indexPath, halfEdited)
+
+    runCli(fixture, ['g', 'module', 'task', '--force'])
+    const updated = readFileSync(indexPath, 'utf-8')
+    expect(updated).toContain('.mount(TaskModule())')
+    // Import wasn't duplicated — already-present import line is detected.
+    const importLines = updated
+      .split('\n')
+      .filter((line) => /^import\s*\{\s*TaskModule\s*\}/.test(line))
+    expect(importLines).toHaveLength(1)
+  })
+
+  it('a comment naming a module does not suppress its registration', () => {
+    // Regression: `XModule` mentioned in a comment ANYWHERE in the
+    // file used to make the gate think it was already registered.
+    // The split now only looks at exact import statements + the
+    // registry rhs slice, so comments are safe.
+    runCli(fixture, ['g', 'module', 'hello'])
+    const indexPath = join(fixture, 'src/modules/index.ts')
+    const original = readFileSync(indexPath, 'utf-8')
+    // Inject a comment that names a not-yet-generated module.
+    writeFileSync(indexPath, `// TODO: also register TaskModule someday\n${original}`)
+
+    runCli(fixture, ['g', 'module', 'task'])
+    const updated = readFileSync(indexPath, 'utf-8')
+    expect(updated).toContain("import { TaskModule } from './tasks/task.module'")
+    expect(updated).toContain('.mount(TaskModule())')
+  })
+
   it('mutates the export const modules declaration, not unrelated builders earlier in the file', () => {
     // Regression: `appendModuleEntry` previously matched the first
     // `[...]` or `defineModules(...)` anywhere in the file. Helper

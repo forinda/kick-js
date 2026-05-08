@@ -64,6 +64,38 @@ describe('misc commands', () => {
       expect(updated).toContain('.mount(TigerModule())')
     })
 
+    it('rm scopes its strippers to the export const modules slice — sibling builders untouched', () => {
+      // Regression: `stripChainMount` and the array-entry regex
+      // used to operate on the whole file. A helper builder
+      // declared above the registry could lose its `.mount(...)`
+      // call on `kick rm module`, even though it wasn't part of
+      // the registry. Now both strippers run on the rhs slice
+      // only.
+      runCli(fixture, ['g', 'module', 'task'])
+      const indexPath = join(fixture, 'src/modules/index.ts')
+      const original = readFileSync(indexPath, 'utf-8')
+      // Helper builder above the registry that happens to mount
+      // a module of the same name. Removing `task` must not
+      // touch this.
+      writeFileSync(
+        indexPath,
+        `// Helper builder — adopter-defined; kick rm should ignore it.\n` +
+          `const helperModules = anotherBuilder().mount(TaskModule())\n` +
+          `\n` +
+          original,
+      )
+
+      runCli(fixture, ['rm', 'module', 'task', '--force'])
+
+      const updated = readFileSync(indexPath, 'utf-8')
+      // Helper builder's .mount(TaskModule()) survives — it's not
+      // part of `export const modules`.
+      expect(updated).toContain('helperModules = anotherBuilder().mount(TaskModule())')
+      // The actual registry no longer references TaskModule.
+      const span = updated.match(/export\s+const\s+modules\s*=[\s\S]+/)?.[0] ?? ''
+      expect(span).not.toContain('TaskModule')
+    })
+
     it('does not strip a longer identifier when the target is a prefix', () => {
       // Regression: `kick rm module user` must not match
       // `UserModuleFactory` inside the registry. Previously the
