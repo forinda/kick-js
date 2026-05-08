@@ -41,7 +41,7 @@ import type {
   DiscoveredRoute,
   DiscoveredToken,
 } from './scanner'
-import { renderAssetTypes, type DiscoveredAssets } from './asset-types'
+import type { DiscoveredAssets } from './asset-types'
 
 /** Header written to every generated file */
 const HEADER = `/* eslint-disable */
@@ -168,13 +168,17 @@ ${sorted.map((n) => `  | '${n}'`).join('\n')}
 }
 
 /** Render the barrel index that re-exports the union types */
-function renderIndex(includeEnv: boolean): string {
-  // The kick/routes + kick/env TypegenPlugins write their output to
-  // `kick__routes.ts` / `kick__env.ts` (see typegen runner + builtin
-  // plugins). The index re-exports them via side-effect imports so
-  // `tsconfig include` of `.kickjs/types/` is enough to wire up the
-  // augmentations — same surface adopters had before the carve.
+function renderIndex(includeEnv: boolean, includeAssets: boolean): string {
+  // The kick/routes + kick/env + kick/assets TypegenPlugins write their
+  // output to `kick__routes.ts` / `kick__env.ts` / `kick__assets.d.ts`
+  // (see typegen runner + builtin plugins). The index re-exports them
+  // via side-effect imports so `tsconfig include` of `.kickjs/types/`
+  // is enough to wire up the augmentations — same surface adopters had
+  // before the carve. Assets/env are conditional: the plugins skip
+  // emission when there's nothing to declare, so the import would
+  // dangle.
   const envImport = includeEnv ? "import './kick__env'\n" : ''
+  const assetsImport = includeAssets ? "import './kick__assets'\n" : ''
   return `${HEADER}
 export type { ServiceToken } from './services'
 export type { ModuleToken } from './modules'
@@ -189,8 +193,7 @@ import './registry'
 import './kick__routes'
 import './plugins'
 import './augmentations'
-import './assets'
-${envImport}`
+${assetsImport}${envImport}`
 }
 
 /**
@@ -394,13 +397,14 @@ export async function generateTypes(opts: GenerateOptions): Promise<GenerateResu
   const registryFile = join(outDir, 'registry.d.ts')
   const servicesFile = join(outDir, 'services.d.ts')
   const modulesFile = join(outDir, 'modules.d.ts')
-  // routes.ts + env.ts are now owned by the `kick/routes` and
-  // `kick/env` typegen plugins (M2.B-T8 carve). They write
-  // `kick__routes.ts` / `kick__env.ts` via the plugin runner. Legacy
-  // emissions of those files are gone.
+  // routes.ts + env.ts + assets.d.ts are owned by the `kick/routes`,
+  // `kick/env`, and `kick/assets` typegen plugins (M2.B-T8 carve).
+  // They write `kick__routes.ts` / `kick__env.ts` / `kick__assets.d.ts`
+  // via the plugin runner. Legacy emissions of all three files are
+  // gone — `assets.d.ts` was the last holdover (#TBD) and stopped
+  // emitting once the plugin pipeline proved stable.
   const pluginsFile = join(outDir, 'plugins.d.ts')
   const augmentationsFile = join(outDir, 'augmentations.d.ts')
-  const assetsFile = join(outDir, 'assets.d.ts')
   const indexFile = join(outDir, 'index.d.ts')
 
   const collidingNames = new Set(collisions.map((c) => c.className))
@@ -429,15 +433,13 @@ export async function generateTypes(opts: GenerateOptions): Promise<GenerateResu
   )
   const pluginsContent = renderPlugins(pluginsAndAdapters)
   const augmentationsContent = renderAugmentations(augmentations)
-  const assetsContent = renderAssetTypes(assets)
-  const indexContent = renderIndex(env !== null)
+  const indexContent = renderIndex(env !== null, assets.count > 0)
 
   await writeFile(registryFile, registryContent, 'utf-8')
   await writeFile(servicesFile, servicesContent, 'utf-8')
   await writeFile(modulesFile, modulesContent, 'utf-8')
   await writeFile(pluginsFile, pluginsContent, 'utf-8')
   await writeFile(augmentationsFile, augmentationsContent, 'utf-8')
-  await writeFile(assetsFile, assetsContent, 'utf-8')
   await writeFile(indexFile, indexContent, 'utf-8')
 
   const written = [
@@ -446,7 +448,6 @@ export async function generateTypes(opts: GenerateOptions): Promise<GenerateResu
     modulesFile,
     pluginsFile,
     augmentationsFile,
-    assetsFile,
     indexFile,
   ]
 

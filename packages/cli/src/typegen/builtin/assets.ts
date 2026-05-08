@@ -1,11 +1,10 @@
 // kick/assets typegen plugin — M2.B-T8.
 //
-// Walks the project's `assetMap` and emits the same KickAssets
-// augmentation the legacy generator produces, but routed through the
-// TypegenPlugin contract. During the transition both this plugin and
-// the legacy generator's `assets.d.ts` emission run; TS merges the
-// two interface declarations safely (identical content). The legacy
-// emission removes once routes/env land as plugins too.
+// Walks the project's `assetMap` and emits the KickAssets augmentation
+// to `.kickjs/types/kick__assets.d.ts` via the TypegenPlugin contract.
+// Sole owner of asset typegen — the legacy generator's `assets.d.ts`
+// emission was retired once routes/env carved out, so adopters no
+// longer get duplicate `interface KickAssets` declarations.
 //
 // Resolution: returns null when there's no assetMap or it's empty.
 

@@ -8,12 +8,14 @@
  * @module @forinda/kickjs-cli/typegen
  */
 
-import { resolve } from 'node:path'
+import { resolve, basename } from 'node:path'
+import { readdir, stat, unlink } from 'node:fs/promises'
 import { scanProject, type ScanResult } from './scanner'
 import { generateTypes, type GenerateResult, TokenCollisionError } from './generator'
 import { validateTokenConventions, type TokenConventionWarning } from './token-conventions'
 import { discoverAssets } from './asset-types'
 import type { AssetMapEntry } from '../config'
+import type { TypegenPluginResult } from './plugin'
 
 export type {
   DiscoveredClass,
@@ -148,12 +150,13 @@ export async function runTypegen(opts: RunTypegenOptions = {}): Promise<{
   // and the `kick typegen` / `kick dev` / `kick build` CLI paths
   // opt out (`runPlugins: false`) because they drive the plugin
   // pass externally and would otherwise double-run it.
+  let pluginResults: TypegenPluginResult[] = []
   if (opts.runPlugins !== false) {
     try {
       const { runAllPluginTypegens } = await import('./run-plugins')
       const { loadKickConfig } = await import('../config')
       const pluginConfig = await loadKickConfig(cwd)
-      await runAllPluginTypegens({ cwd, config: pluginConfig, silent: true })
+      pluginResults = await runAllPluginTypegens({ cwd, config: pluginConfig, silent: true })
     } catch (err) {
       // Broken plugins shouldn't block dev tooling — generators have
       // already written the rest of `.kickjs/types/`, and surfacing
@@ -165,6 +168,20 @@ export async function runTypegen(opts: RunTypegenOptions = {}): Promise<{
         console.warn(`  kick typegen: plugin pipeline failed (${msg}) — continuing`)
       }
     }
+  }
+
+  // Sweep stale `.kickjs/types/*` files. Older CLI versions emitted
+  // `env.ts`, `routes.ts`, and (until this fix) `assets.d.ts` directly
+  // from the legacy generator. Once those carved out into `kick/env`,
+  // `kick/routes`, and `kick/assets` typegen plugins, the legacy
+  // file names became orphans — but were never deleted on subsequent
+  // runs, so adopters who upgraded saw `KickAssets`/`KickEnv`/
+  // `KickRoutes` declared twice (once legacy, once `kick__*`). Sweep
+  // walks the output dir at the end of every pass and unlinks any
+  // top-level file not in the expected set, so a single `kick typegen`
+  // run after upgrade self-heals.
+  if (opts.runPlugins !== false) {
+    await sweepStaleTypegen(outDir, result.written, pluginResults, silent)
   }
 
   const tokenWarnings = validateTokenConventions(scan.tokens)
@@ -222,8 +239,8 @@ export async function watchTypegen(opts: RunTypegenOptions = {}): Promise<() => 
   // Watch mode always tolerates collisions — otherwise an in-progress
   // rename would crash the dev loop. The error is still printed.
   // `runPlugins: false` keeps `runTypegen` from double-running the
-  // plugin pipeline; the watcher already calls `runPlugins()`
-  // explicitly after each `safeRun`.
+  // plugin pipeline; the watcher invokes `runPlugins()` explicitly
+  // after each `runLegacy()` so both phases land before the sweep.
   const runOpts: RunTypegenOptions = { ...resolved, allowDuplicates: true, runPlugins: false }
 
   // Polling is the right strategy for Docker bind mounts, WSL crosses,
@@ -241,11 +258,40 @@ export async function watchTypegen(opts: RunTypegenOptions = {}): Promise<() => 
     import('../config'),
   ])
   const pluginConfig = await loadKickConfig(cwd)
-  const runPlugins = () =>
-    runAllPluginTypegens({ cwd, config: pluginConfig, silent: true }).catch(() => {})
+  // Track the most recent generator + plugin outputs so the post-run
+  // sweep knows the full expected set. The legacy generator returns
+  // its written list on each call (captured below via a closure), and
+  // the plugin pipeline returns one per plugin.
+  let lastGeneratorWritten: readonly string[] = []
+  const runLegacy = async () => {
+    try {
+      const out = await runTypegen({ ...runOpts })
+      lastGeneratorWritten = out.result.written
+    } catch (err) {
+      if (silent) return
+      if (err instanceof TokenCollisionError) {
+        console.error('\n' + err.message + '\n')
+      } else {
+        const msg = err instanceof Error ? err.message : String(err)
+        console.error(`  kick typegen failed: ${msg}`)
+      }
+    }
+  }
+  const runPlugins = async () => {
+    try {
+      const pluginResults = await runAllPluginTypegens({
+        cwd,
+        config: pluginConfig,
+        silent: true,
+      })
+      await sweepStaleTypegen(resolved.outDir, lastGeneratorWritten, pluginResults, true)
+    } catch {
+      /* swallow — watcher must never die */
+    }
+  }
 
   // Initial run — legacy pass first, then plugin typegens.
-  await safeRun(runOpts, silent)
+  await runLegacy()
   await runPlugins()
 
   const { watch } = await import('node:fs')
@@ -260,8 +306,7 @@ export async function watchTypegen(opts: RunTypegenOptions = {}): Promise<() => 
 
     if (timer) clearTimeout(timer)
     timer = setTimeout(() => {
-      safeRun(runOpts, silent)
-      void runPlugins()
+      void runLegacy().then(runPlugins)
     }, 100)
   }
 
@@ -315,4 +360,57 @@ async function safeRun(opts: RunTypegenOptions, silent: boolean): Promise<void> 
       console.error(`  kick typegen failed: ${msg}`)
     }
   }
+}
+
+/**
+ * Remove orphaned typegen output. The legacy generator emitted
+ * `assets.d.ts`, `env.ts`, and `routes.ts` directly; once those carved
+ * into the `kick/assets`, `kick/env`, and `kick/routes` plugins, the
+ * legacy file names became stale on disk for any project that had run
+ * an older CLI. Without a sweep, both copies coexist and adopters get
+ * duplicated `KickAssets` / `KickEnv` / `KickRoutes` augmentations.
+ *
+ * Strategy: enumerate the top level of `outDir`, keep the union of
+ * generator-written files + plugin-written files, unlink anything
+ * else. Subdirectories are left alone — typegen never creates them.
+ * Errors are swallowed (silent → no log) so a transient ENOENT or
+ * permission glitch never aborts the wider command.
+ */
+export async function sweepStaleTypegen(
+  outDir: string,
+  generatorWritten: readonly string[],
+  pluginResults: readonly TypegenPluginResult[],
+  silent: boolean,
+): Promise<string[]> {
+  const expected = new Set<string>()
+  for (const file of generatorWritten) expected.add(basename(file))
+  for (const r of pluginResults) {
+    if (r.outFile) expected.add(basename(r.outFile))
+  }
+  // Hidden files we own at the types/ level — none today, but the
+  // gitignore at .kickjs/.gitignore lives one level up so it's not
+  // a candidate here.
+  let entries: string[]
+  try {
+    entries = await readdir(outDir)
+  } catch {
+    return []
+  }
+  const removed: string[] = []
+  for (const name of entries) {
+    if (expected.has(name)) continue
+    const abs = resolve(outDir, name)
+    try {
+      const s = await stat(abs)
+      if (!s.isFile()) continue
+      await unlink(abs)
+      removed.push(name)
+    } catch {
+      // Best-effort; don't crash the typegen pass on a stat/unlink miss.
+    }
+  }
+  if (removed.length > 0 && !silent) {
+    console.log(`  kick typegen: swept ${removed.length} stale file(s): ${removed.join(', ')}`)
+  }
+  return removed
 }
