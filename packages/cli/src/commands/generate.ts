@@ -342,7 +342,12 @@ export function registerGenerateCommand(program: Command): void {
     .action(async (names: string[], opts: ModuleGenOpts, cmd: Command) => {
       const dryRun = isDryRun(cmd)
       setDryRun(dryRun)
-      await runModuleGeneration(names, opts, dryRun)
+      // The parent `gen` command also defines `-f, --force`; commander
+      // binds the option to the parent's opts in that case, not the
+      // subcommand's. Read both via `optsWithGlobals()` so `--force`
+      // works regardless of which subcommand the adopter scoped it to.
+      const merged = cmd.optsWithGlobals() as ModuleGenOpts
+      await runModuleGeneration(names, { ...merged, ...opts }, dryRun)
     })
 
   // ── kick g adapter <name> ──────────────────────────────────────────

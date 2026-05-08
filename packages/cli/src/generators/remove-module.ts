@@ -5,6 +5,7 @@ import { confirm } from '../utils/prompts'
 import { colors } from '../utils/colors'
 import { fileExists } from '../utils/fs'
 import { escapeRegex } from '../utils/regex'
+import { findModulesRhsSpan } from './module'
 
 /**
  * Strip every `.mount(<X>Module(...))` call from a `defineModules()`
@@ -92,6 +93,53 @@ function stripChainMount(content: string, pascal: string): { content: string; ch
   return { content: out, changed }
 }
 
+/**
+ * Apply both unregistration strategies (chain `.mount(...)` strip +
+ * flat-array entry strip) to the actual `export const modules`
+ * initializer slice only. Anything outside that slice — helper
+ * arrays, comments, sibling builders, even a doc string with an
+ * embedded `.mount(UserModule())` example — is left untouched.
+ *
+ * Returns the rewritten file content. When no `export const
+ * modules` declaration is found, returns the original unchanged
+ * (the caller has already removed the import line).
+ */
+function stripFromModulesRhs(content: string, pascal: string): string {
+  const span = findModulesRhsSpan(content)
+  if (!span) return content
+
+  // Slice covers `[...]` for arrays or `defineModules()...` for chains.
+  // For chains, `chainEnd` points just past the last `.mount(...)`'s
+  // closing `)`; we want to mutate up to but not including that
+  // boundary. `rhsEnd + 1` aligns with both shapes.
+  const sliceStart = span.rhsStart
+  const sliceEnd = span.rhsEnd + 1
+  let slice = content.slice(sliceStart, sliceEnd)
+
+  // 1. Strip `.mount(<X>Module(...))` calls from the chain. Operates
+  //    only on the slice so `.mount(...)` references elsewhere in
+  //    the file aren't candidates.
+  slice = stripChainMount(slice, pascal).content
+
+  // 2. Strip the flat-array entry — `\b` after `Module` so
+  //    `UserModule` doesn't match inside `UserModuleFactory`.
+  slice = slice.replace(
+    new RegExp(`\\s*,?\\s*${escapeRegex(pascal)}Module\\b(?:\\s*\\(\\s*\\))?\\s*,?`, 'g'),
+    (match) => {
+      const startsWithComma = match.trimStart().startsWith(',')
+      const endsWithComma = match.trimEnd().endsWith(',')
+      if (startsWithComma && endsWithComma) return ','
+      return ''
+    },
+  )
+
+  // 3. Clean up a dangling comma before `]` (only relevant when the
+  //    slice is an array literal).
+  slice = slice.replace(/,(\s*])/, '$1')
+
+  return content.slice(0, sliceStart) + slice + content.slice(sliceEnd)
+}
+
 interface RemoveModuleOptions {
   name: string
   modulesDir: string
@@ -146,38 +194,14 @@ export async function removeModule(options: RemoveModuleOptions): Promise<void> 
     )
     content = content.replace(importPattern, '')
 
-    // Remove from a `defineModules().mount(...)` chain first — the
-    // chain form needs balanced-paren walking so `.mount(X.scoped('foo'))`
-    // and `.mount(X({ option: true }))` don't trip the regex. The
-    // flat-array regex below catches the legacy `[X, Y]` form (and
-    // also the `[X(), Y()]` factory-call variant).
-    const chainResult = stripChainMount(content, pascal)
-    content = chainResult.content
+    // Anchor both removals on the actual `export const modules`
+    // initializer slice — running them on the whole file would let a
+    // helper array, comment, or stray `.mount(...)` reference
+    // elsewhere take the hit instead of the real registry.
+    content = stripFromModulesRhs(content, pascal)
 
-    // Remove from modules array — handle: ModuleName, or ModuleName (last entry).
-    // Also strip the optional trailing `()` for defineModule-form factories
-    // (`SomeModule()`) so we don't leave dangling `()` after removing the
-    // identifier.
-    content = content.replace(
-      // `\b` after `Module` so `UserModule` isn't matched inside
-      // `UserModuleFactory`. The optional `(?:\s*\(\s*\))?` lookahead
-      // and trailing `\s*,?` can both match zero characters, so
-      // without an explicit word boundary the regex happily strips
-      // the prefix off a longer identifier.
-      new RegExp(`\\s*,?\\s*${escapeRegex(pascal)}Module\\b(?:\\s*\\(\\s*\\))?\\s*,?`, 'g'),
-      (match) => {
-        // If match starts and ends with comma, keep one comma
-        const startsWithComma = match.trimStart().startsWith(',')
-        const endsWithComma = match.trimEnd().endsWith(',')
-        if (startsWithComma && endsWithComma) return ','
-        return ''
-      },
-    )
-
-    // Clean up dangling commas before ]
-    content = content.replace(/,(\s*])/, '$1')
-
-    // Clean up double blank lines
+    // Clean up double blank lines (the import-line removal can leave
+    // these behind regardless of which rhs shape was edited).
     content = content.replace(/\n{3,}/g, '\n\n')
 
     if (content !== originalContent) {

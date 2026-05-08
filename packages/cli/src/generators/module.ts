@@ -195,13 +195,23 @@ export const modules = defineModules().mount(${entryToken})
 
   let content = await readFile(indexPath, 'utf-8')
 
-  // Add import if not present. Word-boundary check so `ItemModule`
-  // doesn't see itself as already-imported when `OrderItemModule`
-  // exists in the file (substring `Item` is contained but the names
-  // are distinct).
+  // Two independent checks — a stale comment, a doc snippet, or a
+  // partially-edited file shouldn't make the gate skip both halves.
+  //
+  //   1. Import-line check: look for an exact `import { XModule }
+  //      from '<importPath>'` statement, not just any `XModule`
+  //      mention. A comment that names XModule doesn't satisfy this.
+  //   2. Registry-entry check: look for `XModule` (word-bounded)
+  //      inside the actual `export const modules` initializer rhs,
+  //      not anywhere in the file. Recovers a half-edited registry
+  //      where the import survived but the .mount entry was deleted.
   const importLine = `import { ${pascal}Module } from '${importPath}'`
-  const moduleNameRe = new RegExp(`\\b${escapeRegex(pascal)}Module\\b`)
-  if (!moduleNameRe.test(content)) {
+  const escapedImportPath = escapeRegex(importPath)
+  const importPresentRe = new RegExp(
+    `^import\\s*\\{[^}]*\\b${escapeRegex(pascal)}Module\\b[^}]*\\}\\s*from\\s*['"]${escapedImportPath}['"]`,
+    'm',
+  )
+  if (!importPresentRe.test(content)) {
     // Insert import after last existing import
     const lastImportIdx = content.lastIndexOf('import ')
     if (lastImportIdx !== -1) {
@@ -210,7 +220,24 @@ export const modules = defineModules().mount(${entryToken})
     } else {
       content = importLine + '\n' + content
     }
+  }
 
+  // Independently confirm the registry rhs already names this entry
+  // before skipping the append. Scoped to the `export const modules`
+  // slice via `findModulesRhsSpan` so an `XModule` mention in an
+  // unrelated builder above the registry doesn't mask a missing
+  // `.mount(XModule())` further down.
+  const span = findModulesRhsSpan(content)
+  if (span) {
+    const rhsSlice = content.slice(span.rhsStart, span.rhsEnd + 1)
+    const entryPresentRe = new RegExp(`\\b${escapeRegex(pascal)}Module\\b`)
+    if (!entryPresentRe.test(rhsSlice)) {
+      content = appendModuleEntry(content, entryToken)
+    }
+  } else {
+    // No recognizable registry shape — fall back to the previous
+    // best-effort behaviour: try appending; appendModuleEntry returns
+    // content unchanged when it can't find a target.
     content = appendModuleEntry(content, entryToken)
   }
 
@@ -236,23 +263,12 @@ export const modules = defineModules().mount(${entryToken})
  * was hoisted out.
  */
 export function appendModuleEntry(content: string, entryToken: string): string {
-  // Anchor on the actual `export const modules` declaration so we
-  // don't accidentally rewrite a helper array or unrelated builder
-  // declared earlier in the file. The previous match-anywhere
-  // behaviour mutated whichever `[...]` or `defineModules(...)`
-  // appeared first, even if it was a sibling helper.
-  const declMatch = /export\s+const\s+modules\b[^=]*=/.exec(content)
-  if (!declMatch) return content
-  const eqEnd = declMatch.index + declMatch[0].length
-  // Skip whitespace after `=` to find the start of the rhs.
-  let rhsStart = eqEnd
-  while (rhsStart < content.length && /\s/.test(content[rhsStart] ?? '')) rhsStart++
+  const span = findModulesRhsSpan(content)
+  if (!span) return content
 
   // Shape 1 — flat array literal at the rhs.
-  if (content[rhsStart] === '[') {
-    const close = balancedBracketClose(content, rhsStart)
-    if (close === -1) return content
-    const inside = content.slice(rhsStart + 1, close)
+  if (span.shape === 'array') {
+    const inside = content.slice(span.rhsStart + 1, span.rhsEnd)
     const trimmed = inside.trim()
     let rewritten: string
     if (!trimmed) {
@@ -261,22 +277,63 @@ export function appendModuleEntry(content: string, entryToken: string): string {
       const needsComma = trimmed.endsWith(',') ? '' : ','
       rewritten = `[${inside.trimEnd()}${needsComma} ${entryToken}]`
     }
-    return content.slice(0, rhsStart) + rewritten + content.slice(close + 1)
+    return content.slice(0, span.rhsStart) + rewritten + content.slice(span.rhsEnd + 1)
   }
 
-  // Shape 2 — `defineModules()` fluent chain at the rhs. Walk forward
-  // through `.mount(...)` calls with a balanced-paren scanner so
-  // nested parens (`mount(UserModule())`) don't confuse the boundary.
+  // Shape 2 — `defineModules()` fluent chain at the rhs. Insert
+  // `.mount(...)` right at `chainEnd` (the offset just past the
+  // last `.mount(...)`'s closing `)` or just past `defineModules()`'s
+  // closing `)` when the chain is empty).
+  return `${content.slice(0, span.chainEnd)}\n  .mount(${entryToken})${content.slice(span.chainEnd)}`
+}
+
+/**
+ * Span returned by {@link findModulesRhsSpan}. Both shapes carry the
+ * `rhsStart` (the offset of `[` for arrays or `d` for the chain) and
+ * an `end` offset describing where the rhs concludes:
+ *
+ *   - `array`: `rhsEnd` points at the matching `]` (inclusive).
+ *   - `chain`: `chainEnd` points just past the last `.mount(...)`
+ *      call (or just past `defineModules()`'s closing `)` when the
+ *      chain is empty). For consistency with arrays, `rhsEnd =
+ *      chainEnd - 1` so a `[rhsStart, rhsEnd + 1)` slice covers the
+ *      whole initializer.
+ */
+type ModulesRhsSpan =
+  | { shape: 'array'; rhsStart: number; rhsEnd: number }
+  | { shape: 'chain'; rhsStart: number; rhsEnd: number; chainEnd: number }
+
+/**
+ * Locate the `export const modules = <rhs>` initializer in `content`
+ * and return the rhs's start/end offsets along with which shape it
+ * is (flat array vs `defineModules()` chain). Used by both the
+ * append path (`appendModuleEntry`) AND the remove path
+ * (`stripChainMount` / array-entry rm regex) so neither mutates
+ * unrelated text elsewhere in the file.
+ *
+ * Returns `null` when no `export const modules` declaration is
+ * found, or when its rhs doesn't match either supported shape.
+ */
+export function findModulesRhsSpan(content: string): ModulesRhsSpan | null {
+  const declMatch = /export\s+const\s+modules\b[^=]*=/.exec(content)
+  if (!declMatch) return null
+  const eqEnd = declMatch.index + declMatch[0].length
+  let rhsStart = eqEnd
+  while (rhsStart < content.length && /\s/.test(content[rhsStart] ?? '')) rhsStart++
+
+  if (content[rhsStart] === '[') {
+    const close = balancedBracketClose(content, rhsStart)
+    if (close === -1) return null
+    return { shape: 'array', rhsStart, rhsEnd: close }
+  }
+
   if (content.slice(rhsStart, rhsStart + 'defineModules'.length) === 'defineModules') {
     const chainEnd = findChainEnd(content, rhsStart)
-    if (chainEnd !== -1) {
-      return `${content.slice(0, chainEnd)}\n  .mount(${entryToken})${content.slice(chainEnd)}`
-    }
+    if (chainEnd === -1) return null
+    return { shape: 'chain', rhsStart, rhsEnd: chainEnd - 1, chainEnd }
   }
 
-  // Unknown shape — leave untouched. The import was added; adopter
-  // mounts manually.
-  return content
+  return null
 }
 
 /**
