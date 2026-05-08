@@ -5,6 +5,78 @@ import { confirm } from '../utils/prompts'
 import { colors } from '../utils/colors'
 import { fileExists } from '../utils/fs'
 
+/**
+ * Strip every `.mount(<X>Module(...))` call from a `defineModules()`
+ * chain whose first arg names `<pascal>Module`. Walks balanced parens
+ * so adopter-customised arg shapes (`.mount(X.scoped('foo'))`,
+ * `.mount(X({ ... }))`) don't break removal — the `.mount(` boundary
+ * is matched on the outer paren only.
+ *
+ * Returns the rewritten content + a flag indicating whether anything
+ * was stripped (caller surfaces an "unregistered" message only when
+ * the chain actually changed).
+ */
+function stripChainMount(content: string, pascal: string): { content: string; changed: boolean } {
+  const moduleNameRe = new RegExp(`^\\s*${pascal}Module\\b`)
+  let changed = false
+  let cursor = 0
+  let out = content
+
+  while (true) {
+    // Find the next `.mount(` boundary.
+    const mountIdx = out.indexOf('.mount(', cursor)
+    if (mountIdx === -1) break
+    const argStart = mountIdx + '.mount('.length
+
+    // Walk balanced parens to find the closing `)` of this call.
+    let depth = 1
+    let i = argStart
+    while (i < out.length && depth > 0) {
+      const ch = out[i] ?? ''
+      if (ch === "'" || ch === '"' || ch === '`') {
+        // Skip string literal — find matching unescaped quote.
+        const quote = ch
+        i++
+        while (i < out.length && out[i] !== quote) {
+          if (out[i] === '\\') i++
+          i++
+        }
+      } else if (ch === '(') {
+        depth++
+      } else if (ch === ')') {
+        depth--
+        if (depth === 0) break
+      }
+      i++
+    }
+    if (depth !== 0) break // unbalanced — bail
+
+    const argText = out.slice(argStart, i)
+    if (moduleNameRe.test(argText)) {
+      // Strip the entire `.mount(...)` call. Also peel back any
+      // leading whitespace + newline so the chain stays clean
+      // (otherwise we'd leave a blank `\n  ` behind from the
+      // generated multi-line `.mount(...)` form).
+      let strippedStart = mountIdx
+      while (
+        strippedStart > 0 &&
+        (out[strippedStart - 1] === ' ' ||
+          out[strippedStart - 1] === '\t' ||
+          out[strippedStart - 1] === '\n')
+      ) {
+        strippedStart--
+      }
+      out = out.slice(0, strippedStart) + out.slice(i + 1)
+      changed = true
+      cursor = strippedStart
+      continue
+    }
+    cursor = i + 1
+  }
+
+  return { content: out, changed }
+}
+
 interface RemoveModuleOptions {
   name: string
   modulesDir: string
@@ -58,6 +130,14 @@ export async function removeModule(options: RemoveModuleOptions): Promise<void> 
       'gm',
     )
     content = content.replace(importPattern, '')
+
+    // Remove from a `defineModules().mount(...)` chain first — the
+    // chain form needs balanced-paren walking so `.mount(X.scoped('foo'))`
+    // and `.mount(X({ option: true }))` don't trip the regex. The
+    // flat-array regex below catches the legacy `[X, Y]` form (and
+    // also the `[X(), Y()]` factory-call variant).
+    const chainResult = stripChainMount(content, pascal)
+    content = chainResult.content
 
     // Remove from modules array — handle: ModuleName, or ModuleName (last entry).
     // Also strip the optional trailing `()` for defineModule-form factories

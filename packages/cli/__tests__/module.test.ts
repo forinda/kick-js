@@ -117,6 +117,46 @@ describe('kick g module', () => {
     expect(indexContent).toContain('.mount(UserModule())')
     expect(indexContent).toContain('.mount(TaskModule())')
   })
+
+  it('does not skip generation when a longer module name already contains the new name as a substring', () => {
+    // Regression: previously `content.includes(\`${pascal}Module\`)` was
+    // a bare substring check, so generating `Item` would think
+    // `OrderItemModule` already implied an import. With a word-boundary
+    // check, generating `Item` alongside `OrderItem` produces both
+    // imports + both `.mount(...)` entries.
+    runCli(fixture, ['g', 'module', 'order-item'])
+    runCli(fixture, ['g', 'module', 'item'])
+    const indexContent = readFileSync(join(fixture, 'src/modules/index.ts'), 'utf-8')
+    expect(indexContent).toMatch(/import \{ OrderItemModule \}/)
+    expect(indexContent).toMatch(/import \{ ItemModule \}/)
+    expect(indexContent).toContain('.mount(OrderItemModule())')
+    expect(indexContent).toContain('.mount(ItemModule())')
+  })
+
+  it('mutates the export const modules declaration, not unrelated builders earlier in the file', () => {
+    // Regression: `appendModuleEntry` previously matched the first
+    // `[...]` or `defineModules(...)` anywhere in the file. Helper
+    // arrays declared above the registry got mutated instead of the
+    // `export const modules`. Now anchored on the declaration.
+    runCli(fixture, ['g', 'module', 'user'])
+    const indexPath = join(fixture, 'src/modules/index.ts')
+    const original = readFileSync(indexPath, 'utf-8')
+    // Inject a sibling array that the old anchor-anywhere logic would
+    // have rewritten.
+    writeFileSync(
+      indexPath,
+      `import type { Helper } from 'somewhere'\n` +
+        `const helpers: Helper[] = ['unrelated']\n` +
+        original,
+    )
+
+    runCli(fixture, ['g', 'module', 'task'])
+    const updated = readFileSync(indexPath, 'utf-8')
+    // Helper array stays untouched.
+    expect(updated).toContain(`const helpers: Helper[] = ['unrelated']`)
+    // TaskModule lands on the actual modules registry.
+    expect(updated).toContain('.mount(TaskModule())')
+  })
 })
 
 describe('kick g module — style-drift gate', () => {
