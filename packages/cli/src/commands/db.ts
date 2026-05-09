@@ -13,6 +13,7 @@ import {
   migrateRollback,
   migrateStatus,
   renderSchemaSource,
+  type CompositeQueryRunner,
   type DbConfig,
   type MigrationAdapter,
 } from '@forinda/kickjs-db'
@@ -67,9 +68,7 @@ async function resolveAdapter(config: DbConfig): Promise<{
 }
 
 interface PgQueryRunnerProbe {
-  runner: {
-    query: (sql: string, params?: readonly unknown[]) => Promise<{ rows: unknown[] }>
-  }
+  runner: CompositeQueryRunner
   cleanup: () => Promise<void>
 }
 

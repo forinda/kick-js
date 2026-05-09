@@ -164,7 +164,9 @@ function normaliseSecurity(
 ): ApiSecurityRequirement[] {
   const arr = Array.isArray(raw) ? raw : [raw]
   return arr.map((entry) =>
-    typeof entry === 'string' ? { name: entry, scopes: [] } : { scopes: [], ...entry },
+    typeof entry === 'string'
+      ? { name: entry, scopes: [] }
+      : { name: entry.name, scopes: entry.scopes ?? [] },
   )
 }
 
