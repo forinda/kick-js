@@ -193,3 +193,23 @@ jobs:
           EOF
           deno run --allow-read=. --allow-env --allow-sys deno-smoke.mjs
           rm deno-smoke.mjs
+
+  bundle-size:
+    name: Bundle size assertion (devtools strip)
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: oven-sh/setup-bun@v2
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@v8
+        with:
+          name: built-packages
+          path: packages
+      - name: Run bundle-size assertion
+        run: pnpm test:bundle-size

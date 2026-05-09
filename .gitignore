@@ -24,3 +24,5 @@ benchmarks/results.json
 .ignored
 superpowers/
 *.vsix
+# Bundle-size harness scratch dir — written by scripts/bundle-size-check.ts.
+.kickjs/

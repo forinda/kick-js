@@ -40,7 +40,6 @@
     "examples/",
     "tutorials/",
     "articles/",
-    "scripts/",
     "*.d.ts"
   ],
   "overrides": [
