@@ -8,7 +8,9 @@
 
 **Tech stack:** Same as M4 — TypeScript, Vitest + SWC, tsdown, wireit, Kysely 0.29, Testcontainers PG. M5.B adds no runtime deps. M5.C reuses `@forinda/kickjs-devtools-kit`'s `defineDevtoolsRenderTab` + `KickEventBus`.
 
-**Release discipline (carry-over from PR #207):** every sub-milestone ships as **patch or minor** on each affected package. The `workspace:^` peer ranges and `onlyUpdatePeerDependentsWhenOutOfRange: true` config flag mean a minor on `@forinda/kickjs-db` no longer cascades to majors on `db-pg` / `db-mysql` / `db-sqlite`. Adapters bump only when their own source changes.
+**Release discipline — patch + minor only, no majors in M5:** every sub-milestone ships as **patch or minor** on each affected package. **Any change that feels like it might warrant a major (new error class, removed field, changed default) gets demoted to minor for this cycle** — adopters absorbed too many majors during the M4 + Kysely-0.29 cycle and we owe them a stretch of additive-only releases. If a planned change can't fit inside minor semantics, it gets reshaped or moved to M6.
+
+The `workspace:^` peer ranges (PR #207) plus `onlyUpdatePeerDependentsWhenOutOfRange: true` already prevent peer adapters from cascading to majors on a core minor bump. This rule extends the same discipline to the core package itself.
 
 **Specs to write before code:**
 
@@ -89,7 +91,7 @@ packages/devtools/spa/src/tabs/
 
 ## Conventions
 
-- **Semver discipline:** every sub-milestone ships as patch or minor on each affected package. M5.A.1 is `patch` on `@forinda/kickjs-db` (correctness fix). M5.A.2 + M5.A.3 are each `minor` (additive). M5.B is `minor` (new opt-in plugin) + internal patch on the emit refactor. M5.C is `minor` on `@forinda/kickjs-db` (new event payloads, if any) + `minor` on `@forinda/kickjs-devtools` (new tab).
+- **Semver discipline (loud rule):** every sub-milestone ships as patch or minor — no majors in M5, full stop. If reviewing a changeset feels like "this should be major," reshape the change to fit minor semantics (additive surface, opt-in default, deprecation path instead of removal) or push it to M6. M5.A.1 is `patch` on `@forinda/kickjs-db` (correctness fix). M5.A.2 + M5.A.3 are each `minor` (additive). M5.B is `minor` (new opt-in plugin) + internal patch on the emit refactor. M5.C is `minor` on `@forinda/kickjs-db` (new event payloads, if any) + `minor` on `@forinda/kickjs-devtools` (new tab).
 - **Spec-first:** M5.A.1 + M5.A.2 each get a sub-spec under `docs/db/` before code. Internal-only items (M5.A.3, M5.B refactor) skip the spec — the implementation is the spec.
 - **Test-first for adopter-visible changes:** M5.A.2's integration tests live in the dialect-specific peer packages (matches the M4.A pattern). The unit-level signal threading test lives in `packages/db/`.
 - **No new public surface beyond the listed APIs:** any incidental Kysely 0.29 wins (e.g. `eb.case().thenRef`) ride along through the existing client without new wrappers — adopters reach for them via the standard `qb` accessor.
@@ -271,6 +273,24 @@ git commit -m "feat(devtools): connection-pool live query log + pool stats tab (
 ```
 
 No changeset on `@forinda/kickjs-db` — it ships no new events for this; it's a UI consumer only.
+
+---
+
+## Major-shaped changes (audit)
+
+Each item below was screened against the no-major rule. None require a major in their current shape.
+
+| Change                                                | Major-shaped?                                                                              | Adopted shape  |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------ | -------------- |
+| New `RelationalQueryCancelledError` (M5.A.2)          | No — additive error class                                                                  | minor          |
+| `signal?: AbortSignal` on `FindManyOptions` (M5.A.2)  | No — optional field                                                                        | minor          |
+| `safeNullComparison()` plugin (M5.B)                  | No — opt-in via `KickDbClientOptions.plugins`                                              | minor          |
+| ALTER TYPE node refactor (M5.B)                       | No — output SQL byte-identical, locked by snapshot tests                                   | internal patch |
+| DROP/SET DEFAULT brackets in rename-recreate (M5.A.1) | No — emitted only when snapshot records a default; existing migrations stay byte-identical | patch          |
+| `ReadonlyKysely` re-export (M5.A.3)                   | No — type alias                                                                            | minor          |
+| Devtools DB tab (M5.C)                                | No — new tab, no removal                                                                   | minor          |
+
+If a future M5 deliverable surfaces with major-shaped semantics (e.g. removing an export, changing a default), the surfacer reshapes or defers it — they don't request a major in the changeset.
 
 ---
 
