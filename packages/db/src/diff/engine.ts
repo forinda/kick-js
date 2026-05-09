@@ -1,3 +1,4 @@
+import { RemovedValueAsDefaultError } from '../errors'
 import type { SchemaSnapshot, TableSnapshot } from '../snapshot/types'
 import type { Change, ChangeSet } from './types'
 
@@ -100,12 +101,32 @@ function diffEnumsCreatePhase(prev: SchemaSnapshot, next: SchemaSnapshot, change
     // originally wrote.
     const removed = prior.values.filter((v) => !nextValues.has(v))
     if (removed.length > 0) {
+      const affectedColumns = collectColumnsByEnumType(next, name)
+      // M5.A.1 — pull each affected column's default off the PRIOR
+      // snapshot. The default is what the column had before the
+      // migration; we restore it (cast through the new type) after
+      // the type swap. Reading from `prev` keeps the dance idempotent
+      // with respect to schema-author intent.
+      const affectedColumnsWithDefaults = affectedColumns.map((c) => ({
+        ...c,
+        default: readPriorDefault(prev, c.table, c.column),
+      }))
+      // Refuse at diff time when the column's default is being dropped
+      // from the enum. The operator must update the column default
+      // in the schema first.
+      for (const c of affectedColumnsWithDefaults) {
+        if (c.default == null) continue
+        const literal = stripDefaultCast(c.default)
+        if (literal != null && removed.includes(literal)) {
+          throw new RemovedValueAsDefaultError(name, c.table, c.column, literal)
+        }
+      }
       changes.push({
         kind: 'removeEnumValue',
         enum: name,
         removed,
         values: nextValueList,
-        affectedColumns: collectColumnsByEnumType(next, name),
+        affectedColumns: affectedColumnsWithDefaults,
       })
     }
   }
@@ -130,6 +151,39 @@ function collectColumnsByEnumType(
     }
   }
   return out
+}
+
+/**
+ * Pull the literal default expression off the prior-snapshot column.
+ * Returns `null` when the table/column doesn't exist in `prev` (i.e.
+ * a column added in the same diff that introduces the enum change).
+ */
+function readPriorDefault(
+  prev: SchemaSnapshot,
+  tableName: string,
+  columnName: string,
+): string | null {
+  const table = prev.tables[tableName]
+  if (!table) return null
+  const column = table.columns[columnName]
+  if (!column) return null
+  return column.default
+}
+
+/**
+ * Strip the optional PG `::"enum"` cast from a default expression to
+ * recover the bare literal. Returns the literal sans outer single
+ * quotes when it's a simple text default, or `null` for function
+ * calls, complex expressions, or anything else that wouldn't be a
+ * value in the enum.
+ *
+ * Used only for the M5.A.1 "default points at a removed value" check.
+ */
+function stripDefaultCast(expr: string): string | null {
+  const noCast = expr.replace(/::\s*"?[a-zA-Z_][a-zA-Z0-9_]*"?\s*$/, '').trim()
+  const match = /^'((?:[^']|'')*)'$/.exec(noCast)
+  if (!match) return null
+  return match[1]!.replace(/''/g, "'")
 }
 
 function diffEnumsDropPhase(prev: SchemaSnapshot, next: SchemaSnapshot, changes: Change[]) {

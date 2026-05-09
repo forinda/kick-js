@@ -145,7 +145,7 @@ describe('M4.E.2 — emitPg removeEnumValue does not nest BEGIN/COMMIT', () => {
         enum: 'status',
         removed: ['legacy'],
         values: ['active', 'banned'],
-        affectedColumns: [{ table: 'users', column: 'status' }],
+        affectedColumns: [{ table: 'users', column: 'status', default: null }],
       },
     ])
 
@@ -171,14 +171,14 @@ describe('M4.E.2 — emitPg removeEnumValue does not nest BEGIN/COMMIT', () => {
         enum: 'status',
         removed: ['legacy'],
         values: ['active', 'banned'],
-        affectedColumns: [{ table: 'users', column: 'status' }],
+        affectedColumns: [{ table: 'users', column: 'status', default: null }],
       },
       {
         kind: 'removeEnumValue',
         enum: 'role',
         removed: ['root'],
         values: ['admin', 'member'],
-        affectedColumns: [{ table: 'users', column: 'role' }],
+        affectedColumns: [{ table: 'users', column: 'role', default: null }],
       },
     ])
 

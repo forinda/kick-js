@@ -160,7 +160,7 @@ describe('pgEnum snapshot + diff + emit pipeline', () => {
           enum: 'status',
           removed: ['beta', 'archived'],
           values: ['alpha', 'released'],
-          affectedColumns: [{ table: 'orders', column: 'status' }],
+          affectedColumns: [{ table: 'orders', column: 'status', default: null }],
         },
       ])
       // Header lines that the runner gate scans for.
@@ -212,7 +212,7 @@ describe('pgEnum snapshot + diff + emit pipeline', () => {
         enum: 'status',
         removed: ['beta'],
         values: ['alpha'],
-        affectedColumns: [{ table: 'orders', column: 'status' }],
+        affectedColumns: [{ table: 'orders', column: 'status', default: null }],
       }
       const reversed = invertChanges([change])
       expect(reversed).toEqual([change])

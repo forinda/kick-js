@@ -125,8 +125,14 @@ export interface RemoveEnumValue {
    * Columns in the next snapshot whose declared type is this enum.
    * Each gets one `ALTER TABLE … ALTER COLUMN … TYPE foo USING
    * column::text::foo` clause inside the rename-recreate block.
+   *
+   * `default` carries the column's literal SQL default expression as
+   * declared on the prior snapshot, or `null` when the column has no
+   * default. The emitter wraps the type swap in
+   * `DROP DEFAULT` / `SET DEFAULT … ::"<enum>"` brackets only when
+   * this is non-null. Spec: docs/db/spec-default-preservation.md.
    */
-  affectedColumns: readonly { table: string; column: string }[]
+  affectedColumns: readonly { table: string; column: string; default: string | null }[]
 }
 
 export type Change =

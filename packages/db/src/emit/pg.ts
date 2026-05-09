@@ -79,7 +79,7 @@ function emitRemoveEnumValueRecreate(change: {
   enum: string
   removed: readonly string[]
   values: readonly string[]
-  affectedColumns: readonly { table: string; column: string }[]
+  affectedColumns: readonly { table: string; column: string; default: string | null }[]
 }): string {
   const safeName = sanitizeForLineComment(quoteIdent(change.enum))
   const removedList = change.removed.map((v) => sanitizeForLineComment(quoteLiteral(v))).join(', ')
@@ -109,11 +109,29 @@ function emitRemoveEnumValueRecreate(change: {
     `CREATE TYPE ${typeName} AS ENUM (${valuesList});`,
   ]
   for (const col of change.affectedColumns) {
+    // M5.A.1 — when the column carries a default, drop it before the
+    // type swap and restore it cast through the new type after.
+    // Columns without a default emit the bare swap (byte-identical
+    // to pre-M5.A.1 output, so existing migration hashes stay valid).
+    const tableIdent = quoteIdent(col.table)
+    const columnIdent = quoteIdent(col.column)
+    if (col.default != null) {
+      body.push(`ALTER TABLE ${tableIdent} ALTER COLUMN ${columnIdent} DROP DEFAULT;`)
+    }
     body.push(
-      `ALTER TABLE ${quoteIdent(col.table)}`,
-      `  ALTER COLUMN ${quoteIdent(col.column)} TYPE ${typeName}`,
-      `  USING ${quoteIdent(col.column)}::text::${typeName};`,
+      `ALTER TABLE ${tableIdent}`,
+      `  ALTER COLUMN ${columnIdent} TYPE ${typeName}`,
+      `  USING ${columnIdent}::text::${typeName};`,
     )
+    if (col.default != null) {
+      // Strip any existing `::"<old-enum>"` cast so we don't double-
+      // cast through the renamed shadow type. Re-attach the cast
+      // through the freshly-created type name.
+      const literal = stripDefaultTypeCast(col.default)
+      body.push(
+        `ALTER TABLE ${tableIdent} ALTER COLUMN ${columnIdent} SET DEFAULT ${literal}::${typeName};`,
+      )
+    }
   }
   body.push(`DROP TYPE ${oldTypeName};`)
 
@@ -142,6 +160,20 @@ function emitRemoveEnumValueRecreate(change: {
  * adding security — only line terminators can break out of a `--`
  * comment, and those are handled above.
  */
+/**
+ * Strip a trailing `::"<typename>"` (or `::<typename>`) cast off a
+ * default expression. The rename-recreate dance recreates the enum
+ * type, so any existing cast in the snapshot defaults points at the
+ * about-to-be-renamed shadow type. Re-attach the cast through the
+ * freshly-created type at the SET DEFAULT call site.
+ *
+ * Returns the bare expression (literal, function call, etc.) when no
+ * cast was present.
+ */
+function stripDefaultTypeCast(expr: string): string {
+  return expr.replace(/::\s*"?[a-zA-Z_][a-zA-Z0-9_]*"?\s*$/, '').trim()
+}
+
 function sanitizeForLineComment(value: string): string {
   // Walk code units rather than regex character classes \u2014 control-char
   // regex literals trip `no-control-regex` lints and confuse some
