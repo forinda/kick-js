@@ -86,6 +86,7 @@ const guideSidebar = [
     text: 'Database (kickjs-db)',
     items: [
       { text: 'Schema Types', link: '/guide/db-schema-types' },
+      { text: 'Relational Queries', link: '/guide/db-relational-query' },
       { text: 'Extensions', link: '/guide/db-extensions' },
     ],
   },

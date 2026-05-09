@@ -20,6 +20,39 @@ export class WorkspacesRepository {
     return this.db.selectFrom('workspaces').selectAll().where('id', '=', id).executeTakeFirst()
   }
 
+  // Single round-trip fetch of a workspace plus its members + projects
+  // via the relational query layer. Replaces the three-query N+1
+  // (workspace → workspaceMembers → projects) the controller used to
+  // assemble for the "workspace overview" view.
+  //
+  // The `with` keys are checked against the `KickDbRelationsRegister`
+  // augmentation emitted by `kick typegen` — mistyping a key here is
+  // a compile error, not a runtime surprise.
+  findFullById(id: string) {
+    return this.db.query.workspaces.findUnique({
+      where: (_w, eb) => eb('id', '=', id),
+      with: {
+        owner: true,
+        members: { with: { user: true } },
+        projects: true,
+      },
+    })
+  }
+
+  // Workspaces a user owns. Same nesting as `findFullById` so the
+  // caller can render the same "workspace card" component without
+  // round-tripping per row.
+  listOwnedByUser(userId: string) {
+    return this.db.query.workspaces.findMany({
+      where: (_w, eb) => eb('ownerId', '=', userId),
+      orderBy: (_w, eb) => eb.ref('createdAt'),
+      with: {
+        members: { with: { user: true } },
+        projects: true,
+      },
+    })
+  }
+
   create(input: NewWorkspace) {
     return this.db
       .insertInto('workspaces')
