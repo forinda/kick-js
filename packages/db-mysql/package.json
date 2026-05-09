@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-db-mysql",
-  "version": "0.2.1",
+  "version": "1.0.0",
   "description": "mysql2 adapter for @forinda/kickjs-db — MigrationAdapter + Kysely MysqlDialect (MySQL 8.0+)",
   "keywords": [
     "kickjs",
