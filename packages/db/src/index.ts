@@ -22,7 +22,7 @@ export {
   type CompositeQueryRunner,
 } from './diff/composite-detect'
 
-export { KickDbError } from './errors'
+export { KickDbError, RemovedValueAsDefaultError } from './errors'
 export {
   MigrationError,
   MigrationLockError,
