@@ -15,6 +15,12 @@ export { renderSchemaSource } from './snapshot/render'
 export type * from './diff/types'
 export { diff } from './diff/engine'
 export { invertChanges, hasAmbiguousReverse } from './diff/invert'
+export {
+  detectCompositeReferences,
+  CompositeEnumReferenceError,
+  type CompositeRef,
+  type CompositeQueryRunner,
+} from './diff/composite-detect'
 
 export { KickDbError } from './errors'
 export {

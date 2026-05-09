@@ -4,6 +4,7 @@ import type { Command } from 'commander'
 import { writeFile } from 'node:fs/promises'
 
 import {
+  detectCompositeReferences,
   generate,
   resolveDbConfig,
   migrateLatest,
@@ -65,6 +66,36 @@ async function resolveAdapter(config: DbConfig): Promise<{
   }
 }
 
+/**
+ * Resolve a pg-protocol-compatible query runner for the M4.C
+ * composite-type check at `kick db generate` time. Only fires for the
+ * built-in pgAdapter path (dialect=postgres + connection string set):
+ * the `db.adapter` factory escape hatch returns an opaque
+ * MigrationAdapter, so we skip the check there.
+ *
+ * Returns null when detection is not wired (non-postgres dialect, no
+ * connection string, or the adopter is using a custom adapter
+ * factory). Adopters who need detection on a custom factory can call
+ * `detectCompositeReferences` directly against their own pool.
+ */
+async function tryResolvePgQueryRunner(config: DbConfig): Promise<{
+  runner: { query: (sql: string, params?: readonly unknown[]) => Promise<{ rows: unknown[] }> }
+  cleanup: () => Promise<void>
+} | null> {
+  if (config.adapter) return null
+  if ((config.dialect ?? 'postgres') !== 'postgres') return null
+  if (!config.connectionString) return null
+
+  const pg = await import('pg')
+  const pool = new pg.default.Pool({ connectionString: config.connectionString })
+  return {
+    runner: pool,
+    cleanup: async () => {
+      await pool.end()
+    },
+  }
+}
+
 function printStatusTable(status: Awaited<ReturnType<typeof migrateStatus>>): void {
   if (status.length === 0) {
     console.log('No migrations.')
@@ -94,20 +125,41 @@ export function registerDbCommands(program: Command): void {
     .action(async (name: string, opts: BaseOpts & { empty?: boolean }) => {
       const cwd = process.cwd()
       const config = await loadConfig(opts)
-      const result = await generate({ name, config, cwd, empty: opts.empty })
 
-      if (result.status === 'no-changes') {
-        console.log('No schema changes detected.')
-        return
+      // M4.C — wire composite-type detection when we can resolve a PG pool
+      // ourselves (built-in pgAdapter path, dialect=postgres, connection
+      // string available). When the operator uses the `adapter` factory
+      // escape hatch we skip the check — they can run
+      // `detectCompositeReferences` manually if needed.
+      const probe = await tryResolvePgQueryRunner(config)
+      const detectCompositeRefs = probe
+        ? (enumName: string) => detectCompositeReferences(probe.runner, enumName)
+        : undefined
+
+      try {
+        const result = await generate({
+          name,
+          config,
+          cwd,
+          empty: opts.empty,
+          detectCompositeRefs,
+        })
+
+        if (result.status === 'no-changes') {
+          console.log('No schema changes detected.')
+          return
+        }
+        if (result.empty) {
+          console.log(`Created empty migration ${result.migrationDir} (author up.sql + down.sql).`)
+          return
+        }
+        const plural = result.changeCount === 1 ? '' : 's'
+        console.log(
+          `Created migration ${result.migrationDir} (${result.changeCount} change${plural}).`,
+        )
+      } finally {
+        await probe?.cleanup()
       }
-      if (result.empty) {
-        console.log(`Created empty migration ${result.migrationDir} (author up.sql + down.sql).`)
-        return
-      }
-      const plural = result.changeCount === 1 ? '' : 's'
-      console.log(
-        `Created migration ${result.migrationDir} (${result.changeCount} change${plural}).`,
-      )
     })
 
   // ── migrate runner subcommands ─────────────────────────────────────────

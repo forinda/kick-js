@@ -6,10 +6,12 @@ import { existsSync } from 'node:fs'
 import { extractSnapshot } from '../snapshot/extract'
 import { diff } from '../diff/engine'
 import { invertChanges, hasAmbiguousReverse } from '../diff/invert'
+import { CompositeEnumReferenceError, type CompositeRef } from '../diff/composite-detect'
 import { emitPg } from '../emit/pg'
 import { appendJournalEntry, computeMigrationHash } from '../migrate/journal'
 import type { DbConfig } from './config'
 import type { SchemaSnapshot } from '../snapshot/types'
+import type { Change, RemoveEnumValue } from '../diff/types'
 
 export interface GenerateOptions {
   name: string
@@ -23,6 +25,17 @@ export interface GenerateOptions {
    * change the diff engine can't author. Matches knex's `migrate:make`.
    */
   empty?: boolean
+  /**
+   * M4.C — generate-time gate for `removeEnumValue` changes. When the
+   * diff produces one or more, this callback is invoked once per
+   * affected enum to surface PG composite-type references. A non-empty
+   * result aborts generate with `CompositeEnumReferenceError` (the
+   * rename-recreate USING-cast can't reach into composite fields).
+   *
+   * Optional: when omitted, generate skips the check (no DB connection
+   * required). The CLI wires this for `dialect=postgres` workflows.
+   */
+  detectCompositeRefs?: (enumName: string) => Promise<readonly CompositeRef[]>
 }
 
 export interface GenerateResult {
@@ -60,6 +73,8 @@ export async function generate(opts: GenerateOptions): Promise<GenerateResult> {
   if (changes.length === 0) {
     return { status: 'no-changes', changeCount: 0 }
   }
+
+  await assertNoCompositeReferences(changes, opts.detectCompositeRefs)
 
   return await writeMigration({
     opts,
@@ -160,6 +175,37 @@ async function readLatestSnapshotEntry(migrationsDir: string): Promise<LatestEnt
   const file = path.join(migrationsDir, latest, 'snapshot.json')
   const snapshot = JSON.parse(await readFile(file, 'utf8')) as SchemaSnapshot
   return { snapshot, id: latest }
+}
+
+/**
+ * M4.C gate. Walk the diff for `removeEnumValue` changes; if any are
+ * present and the caller supplied a composite-detector, run it once
+ * per enum and aggregate the references. Throws
+ * `CompositeEnumReferenceError` when any references are found so the
+ * operator restructures the composite before the migration is
+ * committed to disk.
+ */
+async function assertNoCompositeReferences(
+  changes: readonly Change[],
+  detect: ((enumName: string) => Promise<readonly CompositeRef[]>) | undefined,
+): Promise<void> {
+  if (!detect) return
+  const removals = changes.filter((c): c is RemoveEnumValue => c.kind === 'removeEnumValue')
+  if (removals.length === 0) return
+
+  const allRefs: CompositeRef[] = []
+  // Detect once per distinct enum — multiple removals on the same enum
+  // collapse into a single check; the caller probably batched them.
+  const seen = new Set<string>()
+  for (const r of removals) {
+    if (seen.has(r.enum)) continue
+    seen.add(r.enum)
+    const refs = await detect(r.enum)
+    allRefs.push(...refs)
+  }
+  if (allRefs.length > 0) {
+    throw new CompositeEnumReferenceError(allRefs)
+  }
 }
 
 function formatId(date: Date, name: string): string {
