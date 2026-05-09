@@ -130,4 +130,5 @@ export {
   RelationalQueryAmbiguousRelationNameError,
   RelationalQueryMissingInverseError,
   RelationalQueryNotSupportedError,
+  RelationalQueryCancelledError,
 } from './query/errors'
