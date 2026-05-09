@@ -103,6 +103,57 @@ export interface AssetMapEntry {
   keys?: 'auto' | 'strip' | 'with-extension'
 }
 
+/**
+ * Database settings consumed by `kick db generate`, `kick db migrate`,
+ * and the M4.C composite-type detection gate. Mirrors the runtime
+ * `DbConfig` shape from `@forinda/kickjs-db` — duplicated here so
+ * adopters who only install `@forinda/kickjs-cli` can set the block
+ * without pulling `@forinda/kickjs-db` types into their kick.config.ts
+ * resolution. The CLI loads kick.config.ts through `loadKickConfig`,
+ * then `resolveDbConfig` re-reads this block from the same module and
+ * normalises defaults (`schemaPath` / `migrationsDir` / `dialect`).
+ *
+ * @example
+ * ```ts
+ * defineConfig({
+ *   db: {
+ *     schemaPath: 'src/db/schema.ts',
+ *     migrationsDir: 'db/migrations',
+ *     dialect: 'postgres',
+ *     connectionString: process.env.DATABASE_URL,
+ *   },
+ * })
+ * ```
+ */
+export interface KickDbConfigBlock {
+  /**
+   * Path to the schema module (`pgEnum` / `table` declarations).
+   * Defaults to `'src/db/schema.ts'`.
+   */
+  schemaPath?: string
+  /**
+   * Where `kick db generate` writes migration directories. Defaults
+   * to `'db/migrations'`.
+   */
+  migrationsDir?: string
+  /** SQL dialect. Defaults to `'postgres'`. */
+  dialect?: 'postgres' | 'sqlite' | 'mysql'
+  /**
+   * Postgres connection string for the built-in pgAdapter path. Read
+   * from the `DATABASE_URL` env var when omitted. Used by
+   * `kick db migrate*` and the M4.C composite-type gate at
+   * `kick db generate`.
+   */
+  connectionString?: string
+  /**
+   * Escape hatch: a factory returning a fully-constructed
+   * MigrationAdapter (typed loosely here so the CLI types don't pull
+   * `@forinda/kickjs-db` into adopter projects that don't import it).
+   * Takes precedence over `connectionString` when both are set.
+   */
+  adapter?: () => unknown | Promise<unknown>
+}
+
 /** Typegen settings — controls .kickjs/types/* generation */
 export interface TypegenConfig {
   /**
@@ -343,6 +394,12 @@ export interface KickConfig {
    * ```
    */
   typegen?: TypegenConfig
+  /**
+   * Database settings — schema path, migrations dir, dialect,
+   * connection string, optional adapter factory. Consumed by
+   * `kick db generate` / `kick db migrate*`. See {@link KickDbConfigBlock}.
+   */
+  db?: KickDbConfigBlock
   /** Custom commands that extend the CLI */
   commands?: KickCommandDefinition[]
   /**

@@ -10,7 +10,7 @@ export { initProject } from './generators/project'
 
 // Config
 export { defineConfig, loadKickConfig } from './config'
-export type { KickConfig, KickCommandDefinition } from './config'
+export type { KickConfig, KickCommandDefinition, KickDbConfigBlock } from './config'
 
 // CLI Plugin contract — adopters write `defineCliPlugin({...})` and add
 // it to `kick.config.ts > plugins[]`. Built-in commands use the same
