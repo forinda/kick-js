@@ -67,6 +67,41 @@ export class RelationalQueryAliasCollisionError extends KickDbError {
 }
 
 /**
+ * Thrown by `db.query.X.find{Many,First,Unique}` when an
+ * `AbortSignal` passed via options fires (or is already aborted at
+ * call time). Wraps the underlying cause — typically a DOMException
+ * with `name === 'AbortError'`, or whatever the caller passed to
+ * `AbortController.abort(reason)` — on the `cause` field for adopter
+ * inspection (e.g. distinguishing HTTP timeout from explicit
+ * cancellation from user-disconnect).
+ *
+ * Spec: docs/db/spec-abortsignal-threading.md.
+ */
+export class RelationalQueryCancelledError extends KickDbError {
+  readonly cause?: unknown
+
+  constructor(cause?: unknown) {
+    const reasonText = formatCancelCause(cause)
+    super(
+      'relational_query_cancelled',
+      `Relational query cancelled by AbortSignal${reasonText ? ` — ${reasonText}` : '.'}`,
+    )
+    this.cause = cause
+  }
+}
+
+function formatCancelCause(cause: unknown): string {
+  if (cause == null) return ''
+  if (cause instanceof Error) return cause.message
+  if (typeof cause === 'string') return cause
+  try {
+    return JSON.stringify(cause)
+  } catch {
+    return String(cause)
+  }
+}
+
+/**
  * Thrown by SQLite + MySQL compiler stubs in v1. The interface ships
  * with PG only; the other dialects fill in during M4 without an API
  * change at the call site.

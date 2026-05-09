@@ -145,6 +145,20 @@ export interface FindManyOptions<
   /** Override the spec's default depth guard (5). Throws `RelationalQueryDepthError` on excess. */
   maxDepth?: number
   with?: WithClause<DB, TableRelations<Table>>
+  /**
+   * Cancellation handle. When the signal aborts, the in-flight
+   * query is cancelled at the dialect level (PG `pg_cancel_backend`,
+   * SQLite synchronous abort, MySQL `KILL QUERY`) and the promise
+   * rejects with `RelationalQueryCancelledError`.
+   *
+   * Bind to `RequestContext.signal` from kickjs-http to short-circuit
+   * the query when the client disconnects or the request times out.
+   *
+   * Spec: docs/db/spec-abortsignal-threading.md. Per-relation
+   * `signal` on a `with` value is intentionally not supported;
+   * nested LATERAL/correlated subqueries inherit the parent signal.
+   */
+  signal?: AbortSignal
 }
 
 /**
