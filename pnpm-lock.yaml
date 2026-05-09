@@ -373,7 +373,7 @@ importers:
         version: 10.0.1
       drizzle-orm:
         specifier: ^0.45.2
-        version: 0.45.2(@electric-sql/pglite@0.4.1)(@opentelemetry/api@1.9.1)(@prisma/client@7.8.0(prisma@7.8.0(@types/react@19.2.14)(better-sqlite3@12.9.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3))(typescript@6.0.3))(@types/better-sqlite3@7.6.13)(@types/pg@8.20.0)(better-sqlite3@12.9.0)(kysely@0.28.16)(mysql2@3.15.3)(pg@8.20.0)(postgres@3.4.8)(prisma@7.8.0(@types/react@19.2.14)(better-sqlite3@12.9.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3))
+        version: 0.45.2(@electric-sql/pglite@0.4.1)(@opentelemetry/api@1.9.1)(@prisma/client@7.8.0(prisma@7.8.0(@types/react@19.2.14)(better-sqlite3@12.9.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3))(typescript@6.0.3))(@types/better-sqlite3@7.6.13)(@types/pg@8.20.0)(better-sqlite3@12.9.0)(kysely@0.29.0)(mysql2@3.15.3)(pg@8.20.0)(postgres@3.4.8)(prisma@7.8.0(@types/react@19.2.14)(better-sqlite3@12.9.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3))
       express:
         specifier: ^5.1.0
         version: 5.2.1
@@ -892,8 +892,8 @@ importers:
   packages/db:
     dependencies:
       kysely:
-        specifier: 0.28.16
-        version: 0.28.16
+        specifier: 0.29.0
+        version: 0.29.0
     devDependencies:
       '@forinda/kickjs':
         specifier: workspace:*
@@ -920,8 +920,8 @@ importers:
   packages/db-mysql:
     dependencies:
       kysely:
-        specifier: 0.28.16
-        version: 0.28.16
+        specifier: 0.29.0
+        version: 0.29.0
     devDependencies:
       '@forinda/kickjs':
         specifier: workspace:*
@@ -942,8 +942,8 @@ importers:
   packages/db-pg:
     dependencies:
       kysely:
-        specifier: 0.28.16
-        version: 0.28.16
+        specifier: 0.29.0
+        version: 0.29.0
     devDependencies:
       '@forinda/kickjs':
         specifier: workspace:*
@@ -970,8 +970,8 @@ importers:
   packages/db-sqlite:
     dependencies:
       kysely:
-        specifier: 0.28.16
-        version: 0.28.16
+        specifier: 0.29.0
+        version: 0.29.0
     devDependencies:
       '@forinda/kickjs':
         specifier: workspace:*
@@ -1075,7 +1075,7 @@ importers:
     dependencies:
       drizzle-orm:
         specifier: '>=0.45.2'
-        version: 0.45.2(@electric-sql/pglite@0.4.1)(@opentelemetry/api@1.9.1)(@prisma/client@7.8.0(prisma@7.8.0(@types/react@19.2.14)(better-sqlite3@12.9.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3))(typescript@6.0.3))(@types/better-sqlite3@7.6.13)(@types/pg@8.20.0)(better-sqlite3@12.9.0)(kysely@0.28.16)(mysql2@3.15.3)(pg@8.20.0)(postgres@3.4.8)(prisma@7.8.0(@types/react@19.2.14)(better-sqlite3@12.9.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3))
+        version: 0.45.2(@electric-sql/pglite@0.4.1)(@opentelemetry/api@1.9.1)(@prisma/client@7.8.0(prisma@7.8.0(@types/react@19.2.14)(better-sqlite3@12.9.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3))(typescript@6.0.3))(@types/better-sqlite3@7.6.13)(@types/pg@8.20.0)(better-sqlite3@12.9.0)(kysely@0.29.0)(mysql2@3.15.3)(pg@8.20.0)(postgres@3.4.8)(prisma@7.8.0(@types/react@19.2.14)(better-sqlite3@12.9.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3))
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
@@ -4847,6 +4847,10 @@ packages:
   kysely@0.28.16:
     resolution: {integrity: sha512-3i5pmOiZvMDj00qhrIVbH0AnioVTx22DMP7Vn5At4yJO46iy+FM8Y/g61ltenLVSo3fiO8h8Q3QOFgf/gQ72ww==}
     engines: {node: '>=20.0.0'}
+
+  kysely@0.29.0:
+    resolution: {integrity: sha512-LrQfPUeTW7MXbMvT62moEMnpMTuj9TO3lqjCeLKjM975PJ4Alrl/43f2tlDX7xOsNptKgH4LSNGwIbXwEkLg4g==}
+    engines: {node: '>=22.0.0'}
 
   lazystream@1.0.1:
     resolution: {integrity: sha512-b94GiNHQNy6JNTrt5w6zNyffMrNkXZb3KTkCZJb2V1xaEGCk093vkZ2jk3tpaeP33/OiXC+WvK9AxUebnf5nbw==}
@@ -9225,7 +9229,7 @@ snapshots:
       esbuild: 0.25.12
       tsx: 4.21.0
 
-  drizzle-orm@0.45.2(@electric-sql/pglite@0.4.1)(@opentelemetry/api@1.9.1)(@prisma/client@7.8.0(prisma@7.8.0(@types/react@19.2.14)(better-sqlite3@12.9.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3))(typescript@6.0.3))(@types/better-sqlite3@7.6.13)(@types/pg@8.20.0)(better-sqlite3@12.9.0)(kysely@0.28.16)(mysql2@3.15.3)(pg@8.20.0)(postgres@3.4.8)(prisma@7.8.0(@types/react@19.2.14)(better-sqlite3@12.9.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3)):
+  drizzle-orm@0.45.2(@electric-sql/pglite@0.4.1)(@opentelemetry/api@1.9.1)(@prisma/client@7.8.0(prisma@7.8.0(@types/react@19.2.14)(better-sqlite3@12.9.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3))(typescript@6.0.3))(@types/better-sqlite3@7.6.13)(@types/pg@8.20.0)(better-sqlite3@12.9.0)(kysely@0.29.0)(mysql2@3.15.3)(pg@8.20.0)(postgres@3.4.8)(prisma@7.8.0(@types/react@19.2.14)(better-sqlite3@12.9.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3)):
     optionalDependencies:
       '@electric-sql/pglite': 0.4.1
       '@opentelemetry/api': 1.9.1
@@ -9233,7 +9237,7 @@ snapshots:
       '@types/better-sqlite3': 7.6.13
       '@types/pg': 8.20.0
       better-sqlite3: 12.9.0
-      kysely: 0.28.16
+      kysely: 0.29.0
       mysql2: 3.15.3
       pg: 8.20.0
       postgres: 3.4.8
@@ -9911,6 +9915,8 @@ snapshots:
   kareem@3.2.0: {}
 
   kysely@0.28.16: {}
+
+  kysely@0.29.0: {}
 
   lazystream@1.0.1:
     dependencies:
