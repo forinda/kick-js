@@ -201,7 +201,7 @@ async function execute<DB>(
  *
  * - DOM standard / Kysely:   err.name === 'AbortError'
  * - node-postgres:           err.code === '57014' (query_canceled SQLSTATE)
- * - mysql2:                  err.code === 'EAGAIN_QUERY_INTERRUPTED' or 'PROTOCOL_CONNECTION_LOST'
+ * - mysql2:                  err.code === 'EAGAIN_QUERY_INTERRUPTED'
  * - better-sqlite3:          err.code === 'SQLITE_INTERRUPT'
  */
 function isAbortError(err: unknown): boolean {
