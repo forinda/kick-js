@@ -52,7 +52,26 @@ const cacheRoot = resolve(repoRoot, '.kickjs/bundle-size')
 // imports are unused; the strip's value is removing the imports
 // before the bundler runs and refusing to drop the top-level
 // expression because of the side-effect rule).
-const MIN_DELTA_BYTES = Number(process.env.KICKJS_BUNDLE_DELTA_FLOOR ?? '1024')
+const MIN_DELTA_BYTES = parseDeltaFloor(process.env.KICKJS_BUNDLE_DELTA_FLOOR)
+
+/**
+ * Parse the `KICKJS_BUNDLE_DELTA_FLOOR` env var. Refuses anything that
+ * isn't a non-negative finite integer — silent NaN coercion (the
+ * default `Number(...)` shape) would make the threshold check pass
+ * unconditionally and silently bypass the regression gate.
+ */
+function parseDeltaFloor(raw: string | undefined): number {
+  if (raw == null || raw === '') return 1024
+  const n = Number.parseInt(raw, 10)
+  if (!Number.isFinite(n) || n < 0 || String(n) !== raw.trim()) {
+    console.error(
+      `[bundle-size] invalid KICKJS_BUNDLE_DELTA_FLOOR='${raw}'. ` +
+        `Expected a non-negative integer (bytes).`,
+    )
+    process.exit(1)
+  }
+  return n
+}
 
 const FIXTURE_SOURCE = `// Bundle-size fixture for M4.D — exercises the devtools-strip rules
 // exactly as the babel-strip-devtools header documents them.
