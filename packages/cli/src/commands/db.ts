@@ -66,6 +66,13 @@ async function resolveAdapter(config: DbConfig): Promise<{
   }
 }
 
+interface PgQueryRunnerProbe {
+  runner: {
+    query: (sql: string, params?: readonly unknown[]) => Promise<{ rows: unknown[] }>
+  }
+  cleanup: () => Promise<void>
+}
+
 /**
  * Resolve a pg-protocol-compatible query runner for the M4.C
  * composite-type check at `kick db generate` time. Only fires for the
@@ -78,10 +85,7 @@ async function resolveAdapter(config: DbConfig): Promise<{
  * factory). Adopters who need detection on a custom factory can call
  * `detectCompositeReferences` directly against their own pool.
  */
-async function tryResolvePgQueryRunner(config: DbConfig): Promise<{
-  runner: { query: (sql: string, params?: readonly unknown[]) => Promise<{ rows: unknown[] }> }
-  cleanup: () => Promise<void>
-} | null> {
+async function tryResolvePgQueryRunner(config: DbConfig): Promise<PgQueryRunnerProbe | null> {
   if (config.adapter) return null
   if ((config.dialect ?? 'postgres') !== 'postgres') return null
   if (!config.connectionString) return null
