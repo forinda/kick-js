@@ -57,7 +57,7 @@
     "kysely": "0.29.0"
   },
   "peerDependencies": {
-    "@forinda/kickjs-db": "workspace:*",
+    "@forinda/kickjs-db": "workspace:^",
     "mysql2": ">=3.0.0"
   },
   "devDependencies": {
