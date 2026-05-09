@@ -50,7 +50,7 @@ The `workspace:^` peer ranges (PR #207) plus `onlyUpdatePeerDependentsWhenOutOfR
 
 New files this plan adds:
 
-```
+```text
 docs/db/
   spec-default-preservation.md          M5.A.1 — DROP/SET DEFAULT bracket placement
   spec-abortsignal-threading.md         M5.A.2 — signal precedence + dialect cancellation
