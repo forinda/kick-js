@@ -75,6 +75,14 @@ export type {
   CreateDbClientOptions,
 } from './client/types'
 export type { SchemaToTypes } from './client/schema-types'
+
+// Re-export Kysely 0.29's read-only client narrowing helper. Adopters
+// inject `ReadonlyKysely<KickDb>` into query-side repositories to make
+// `insertInto` / `updateTable` / `deleteFrom` / `mergeInto` compile
+// errors. `$pickTables` / `$omitTables` ship as methods on the client
+// itself (M5.A.3 doesn't add them — Kysely defines them on Kysely<DB>
+// which `KickDbClient<DB>` already extends).
+export type { ReadonlyKysely } from 'kysely/readonly'
 export type { KickDbRegister, RegisteredDB } from './client/register'
 
 export {

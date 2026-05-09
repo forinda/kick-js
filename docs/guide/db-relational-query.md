@@ -130,6 +130,95 @@ MySQL 8+ uses `JSON_ARRAYAGG(JSON_OBJECT(...))` for `many`. MySQL's `JSON_ARRAYA
 - **`RelationalQueryAmbiguousRelationNameError`** — two relations share the same name in the registry. Disambiguate via `relationName: 'foo'` on both sides.
 - **`RelationalQueryMissingInverseError`** — a `many` relation can't find its inverse `one`. Either add the inverse in the relations file or tag both sides with `relationName: 'foo'`.
 
+## Cancelling in-flight queries
+
+`db.query.findMany` / `findFirst` / `findUnique` accept an optional `signal: AbortSignal`. Bind to `RequestContext.signal` from kickjs-http to short-circuit relational queries when the client disconnects or the request times out — no manual `Promise.race`.
+
+```ts
+@Service()
+export class TasksRepository {
+  constructor(@Inject(DB_PRIMARY) private readonly db: KickDbClient) {}
+
+  findFullById(id: string, signal: AbortSignal) {
+    return this.db.query.tasks.findUnique({
+      where: (_t, eb) => eb('id', '=', id),
+      with: { comments: true, assignees: true, labels: true },
+      signal,
+    })
+  }
+}
+
+@Controller()
+export class TasksController {
+  constructor(private readonly tasks: TasksRepository) {}
+  @Get('/tasks/:id')
+  async show(ctx: RequestContext) {
+    return ctx.json(await this.tasks.findFullById(ctx.params.id, ctx.signal))
+  }
+}
+```
+
+When the signal fires the promise rejects with `RelationalQueryCancelledError` (extends `KickDbError`, code `relational_query_cancelled`). The signal's `reason` flows onto the error's `cause` field — adopters can distinguish HTTP timeout vs explicit cancel by inspecting it.
+
+Already-aborted signals short-circuit before any compile or DB round trip. The default cancellation strategy is Kysely's `'ignore query'` — JS-side promise rejects immediately, DB-side query keeps running until completion. Adopters who need true `pg_cancel_backend` / `KILL QUERY` semantics drive Kysely directly via `db.qb.executeQuery(...)` until a future release exposes a per-call override.
+
+## Narrowing the client
+
+Kysely 0.29 adds three compile-time narrowing helpers. They live on `KickDbClient<DB>` (which extends `Kysely<DB>`) so adopters get them for free:
+
+### `ReadonlyKysely<DB>` — read-only repos
+
+```ts
+import { Inject, Service } from '@forinda/kickjs'
+import { DB_PRIMARY, type ReadonlyKysely } from '@forinda/kickjs-db'
+
+@Service()
+export class WorkspacesQueryRepository {
+  constructor(@Inject(DB_PRIMARY) private readonly db: ReadonlyKysely<KickDb>) {}
+
+  list() {
+    return this.db.selectFrom('workspaces').selectAll().execute()
+  }
+  // this.db.insertInto('workspaces')
+  //   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Property does not exist on ReadonlyKysely
+}
+```
+
+`selectFrom` / `with` / `case` / `fn` / `dynamic` / `introspection` / `isTransaction` / `destroy` are kept; `insertInto` / `updateTable` / `deleteFrom` / `mergeInto` are removed at the type level. The runtime is the same `KickDbClient` instance — TS is the gate.
+
+### `$pickTables<...>()` — module-scoped views
+
+```ts
+@Service()
+export class WorkspacesAdminQueryRepository {
+  // Inject the full client; narrow at call time so this repo can ONLY
+  // touch `workspaces` + `workspaceMembers`. Trying to selectFrom
+  // `tasks` is a compile error.
+  constructor(@Inject(DB_PRIMARY) private readonly db: KickDbClient<KickDb>) {}
+
+  listMembers(workspaceId: string) {
+    return this.db
+      .$pickTables<'workspaces' | 'workspaceMembers'>()
+      .selectFrom('workspaceMembers')
+      .where('workspaceId', '=', workspaceId)
+      .selectAll()
+      .execute()
+  }
+}
+```
+
+### `$omitTables<...>()` — soft-delete-style guards
+
+```ts
+// Layer-1 repo never touches the audit_log table — narrow it out at
+// the boundary so accidental writes are compile errors.
+db.$omitTables<'audit_log'>().updateTable('users').set({ ... }).execute()
+// db.$omitTables<'audit_log'>().updateTable('audit_log')
+//                                            ^^^^^^^^^ Argument not assignable
+```
+
+All three return Kysely instances backed by the same connection pool — narrowing is purely structural; no runtime cost.
+
 ## Reference: `task-kickdb-api`
 
 The example app uses the relational layer in three places:
