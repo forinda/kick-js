@@ -25,4 +25,5 @@ benchmarks/results.json
 superpowers/
 *.vsix
 # Bundle-size harness scratch dir — written by scripts/bundle-size-check.ts.
-.kickjs/
+# `**/` so the rule fires inside any nested project, not just root.
+**/.kickjs/
