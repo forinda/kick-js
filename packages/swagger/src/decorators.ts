@@ -139,7 +139,9 @@ export function ApiSecurity(
   // builder reads a single shape. Strings become `{ name, scopes: [] }`.
   const requirements: ApiSecurityRequirement[] = (
     Array.isArray(requirement) ? requirement : [requirement]
-  ).map((r) => (typeof r === 'string' ? { name: r, scopes: [] } : { scopes: [], ...r }))
+  ).map((r) =>
+    typeof r === 'string' ? { name: r, scopes: [] } : { name: r.name, scopes: r.scopes ?? [] },
+  )
 
   return (target: any, propertyKey?: string | symbol) => {
     if (propertyKey) {

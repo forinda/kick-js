@@ -11,7 +11,7 @@
  * Run via `pnpm build:icons` (wireit step). Idempotent — safe to re-run.
  */
 
-import { readFileSync, mkdirSync, writeFileSync } from 'node:fs'
+import { readFileSync, mkdirSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import sharp from 'sharp'
