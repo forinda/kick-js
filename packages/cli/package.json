@@ -85,12 +85,12 @@
     "@forinda/kickjs-ai": "workspace:*",
     "@forinda/kickjs-db-pg": "workspace:*",
     "@swc/core": "^1.15.33",
-    "@types/node": "^25.6.0",
+    "@types/node": "^25.6.2",
     "@types/pg": "^8.11.10",
     "@types/pluralize": "^0.0.33",
     "pg": "^8.13.1",
     "typescript": "^6.0.3",
-    "vite": "^8.0.9",
+    "vite": "^8.0.12",
     "vitest": "^4.1.5"
   },
   "publishConfig": {

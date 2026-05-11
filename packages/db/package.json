@@ -77,7 +77,7 @@
     "@forinda/kickjs": "workspace:*",
     "@forinda/kickjs-devtools-kit": "workspace:*",
     "@testcontainers/postgresql": "^10.16.0",
-    "@types/node": "^25.6.0",
+    "@types/node": "^25.6.2",
     "@types/pg": "^8.11.10",
     "kysely": "^0.29.0",
     "pg": "^8.13.1",

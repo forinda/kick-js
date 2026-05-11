@@ -36,12 +36,12 @@
     "@forinda/kickjs-vite": "workspace:*",
     "@swc/core": "^1.15.33",
     "@types/express": "^5.0.6",
-    "@types/node": "^25.0.0",
+    "@types/node": "^25.6.2",
     "@types/pg": "^8.11.10",
     "prettier": "^3.8.3",
     "typescript": "^6.0.3",
     "unplugin-swc": "^1.5.9",
-    "vite": "^8.0.3",
+    "vite": "^8.0.12",
     "vitest": "^4.1.2"
   }
 }
