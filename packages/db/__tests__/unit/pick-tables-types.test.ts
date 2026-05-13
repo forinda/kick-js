@@ -1,5 +1,5 @@
 import { describe, expectTypeOf, it } from 'vitest'
-import type { Kysely } from 'kysely'
+import type { Kysely, KyselyTypeError } from 'kysely'
 import {
   table,
   serial,
@@ -15,7 +15,7 @@ import {
 // `@forinda/kickjs-db` import path and that `$pickTables` / `$omitTables`
 // narrow the table set as expected.
 //
-// `_narrowed*` functions are declared but never invoked — we only
+// `_narrowed*` helpers are declared but never invoked — we only
 // reach for their `ReturnType` at compile time. This avoids the
 // runtime-null trap (where `kdb.$pickTables()` would throw) and the
 // oxc parser limitation on `Kysely<DB>['$pickTables']<'users'>`
@@ -38,7 +38,8 @@ type DB = SchemaToTypes<{ users: typeof users; posts: typeof posts }>
 declare const kdb: Kysely<DB>
 declare const ro: ReadonlyKysely<DB>
 
-// Never invoked — used only via ReturnType<typeof ...>.
+// Never invoked — `ReturnType<typeof ...>` reads through to the
+// narrowed shape without executing the calls.
 function _narrowedPick() {
   return kdb.$pickTables<'users'>()
 }
@@ -57,13 +58,24 @@ type OmittedFull = ReturnType<typeof _narrowedOmit>
 type PickedRo = ReturnType<typeof _narrowedPickRo>
 type OmittedRo = ReturnType<typeof _narrowedOmitRo>
 
+// `ReadonlyKysely` keeps `insertInto` / `updateTable` / `deleteFrom` /
+// `mergeInto` as poisoned methods — they're typed to return a
+// `KyselyTypeError<'not allowed with a read-only Kysely instance.'>`
+// sentinel, so any call site fails to typecheck even though the
+// property name remains visible in IDE autocomplete. Asserting on
+// the return type (rather than the property's presence) reflects
+// the real enforcement.
+type WriteMethodReturn<M extends 'insertInto' | 'updateTable' | 'deleteFrom' | 'mergeInto'> =
+  ReturnType<ReadonlyKysely<DB>[M]>
+type PoisonedWriteSentinel = KyselyTypeError<'not allowed with a read-only Kysely instance.'>
+
 describe('Kysely $pickTables / $omitTables', () => {
   it('$pickTables narrows the table set to the picked keys', () => {
-    expectTypeOf<PickedFull>().toMatchTypeOf<Kysely<Pick<DB, 'users'>>>()
+    expectTypeOf<PickedFull>().toExtend<Kysely<Pick<DB, 'users'>>>()
   })
 
   it('$omitTables removes the named tables from the table set', () => {
-    expectTypeOf<OmittedFull>().toMatchTypeOf<Kysely<Omit<DB, 'posts'>>>()
+    expectTypeOf<OmittedFull>().toExtend<Kysely<Omit<DB, 'posts'>>>()
   })
 })
 
@@ -72,21 +84,21 @@ describe('ReadonlyKysely', () => {
     expectTypeOf<ReadonlyKysely<DB>>().toHaveProperty('selectFrom')
   })
 
-  it('does not expose write entrypoints', () => {
-    // `ReadonlyKysely` keeps only `case`, `destroy`, `dynamic`, `fn`,
-    // `introspection`, `isTransaction` from the full `Kysely` shape —
-    // `insertInto` / `updateTable` / `deleteFrom` / `mergeInto` are gone.
-    expectTypeOf<ReadonlyKysely<DB>>().not.toHaveProperty('insertInto')
-    expectTypeOf<ReadonlyKysely<DB>>().not.toHaveProperty('updateTable')
-    expectTypeOf<ReadonlyKysely<DB>>().not.toHaveProperty('deleteFrom')
-    expectTypeOf<ReadonlyKysely<DB>>().not.toHaveProperty('mergeInto')
+  it('poisons write entrypoints (insertInto / updateTable / deleteFrom / mergeInto)', () => {
+    // Each write method is typed to return a `KyselyTypeError` sentinel,
+    // so call sites like `ro.insertInto('users')` are compile-time
+    // rejected even though the property name remains visible.
+    expectTypeOf<WriteMethodReturn<'insertInto'>>().toEqualTypeOf<PoisonedWriteSentinel>()
+    expectTypeOf<WriteMethodReturn<'updateTable'>>().toEqualTypeOf<PoisonedWriteSentinel>()
+    expectTypeOf<WriteMethodReturn<'deleteFrom'>>().toEqualTypeOf<PoisonedWriteSentinel>()
+    expectTypeOf<WriteMethodReturn<'mergeInto'>>().toEqualTypeOf<PoisonedWriteSentinel>()
   })
 
   it('$pickTables narrows to ReadonlyKysely (not a full Kysely)', () => {
-    expectTypeOf<PickedRo>().toMatchTypeOf<ReadonlyKysely<Pick<DB, 'users'>>>()
+    expectTypeOf<PickedRo>().toExtend<ReadonlyKysely<Pick<DB, 'users'>>>()
   })
 
   it('$omitTables narrows to ReadonlyKysely (not a full Kysely)', () => {
-    expectTypeOf<OmittedRo>().toMatchTypeOf<ReadonlyKysely<Omit<DB, 'posts'>>>()
+    expectTypeOf<OmittedRo>().toExtend<ReadonlyKysely<Omit<DB, 'posts'>>>()
   })
 })

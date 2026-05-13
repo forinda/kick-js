@@ -36,7 +36,7 @@ private get reader() {
 // reader.selectFrom('projects') → compile error, table picked out
 ```
 
-`ReadonlyKysely` strips `insertInto` / `updateTable` / `deleteFrom` / `mergeInto` from the type surface — the runtime is the same Kysely instance, only the type changes. Pairs cleanly with the `DB_PRIMARY` / `DB_REPLICA` split for read-replica routing.
+`ReadonlyKysely` keeps `insertInto` / `updateTable` / `deleteFrom` / `mergeInto` visible in autocomplete, but every call site is typed to return a poisoned `KyselyTypeError<'not allowed with a read-only Kysely instance.'>` sentinel — so the IDE still surfaces the method names while any actual write fails to compile. Pairs cleanly with the `DB_PRIMARY` / `DB_REPLICA` split for read-replica routing.
 
 Adopter doc: [`docs/guide/db-relational-query.md#narrowing-the-client`](https://github.com/forinda/kick-js/blob/main/docs/guide/db-relational-query.md#narrowing-the-client). Tests: 7 type-only `expectTypeOf` cases in `packages/db/__tests__/unit/pick-tables-types.test.ts`.
 
