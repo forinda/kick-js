@@ -1,5 +1,7 @@
 # Getting Started
 
+> 📖 **Reading this on GitHub?** The latest rendered version lives at <https://forinda.github.io/kick-js/guide/getting-started.html> — every `./*.md` link in this page resolves there too.
+
 ## Prerequisites
 
 - Node.js 20+
@@ -196,7 +198,8 @@ pnpm kick start
 
 ## Next Steps
 
-- [Dependency Injection](./dependency-injection) — learn about the DI container
-- [Controllers & Routes](./controllers) — route decorators and validation
-- [Middleware](./middleware) — class and method middleware
-- [Examples](../examples/) — see complete example applications
+- [Dependency Injection](./dependency-injection.md) — learn about the DI container
+- [Controllers & Routes](./controllers.md) — route decorators and validation
+- [Middleware](./middleware.md) — class and method middleware
+- [Plugins](./plugins.md) — bundle modules, adapters, middleware, and DI bindings into one reusable unit with `definePlugin()` and mount them via `bootstrap({ plugins: [...] })`
+- [Examples](../examples/index.md) — see complete example applications
