@@ -16,6 +16,22 @@ export class TasksController {
     ctx.json({ tasks: rows })
   }
 
+  // Single-trip relational fetch that threads `ctx.signal` through
+  // to the DB layer. If the HTTP client disconnects mid-flight (a
+  // closed tab, a 30s timeout, a cancelled fetch from the browser),
+  // `kickjs-db`'s M5.A.2 plumbing maps the abort to
+  // `RelationalQueryCancelledError` and the in-flight query short-
+  // circuits instead of churning a connection until completion.
+  @Get('/:id/full')
+  async showFull(ctx: RequestContext) {
+    const row = await this.tasks.findFullById(ctx.params.id as string, ctx.signal)
+    if (!row) {
+      ctx.notFound()
+      return
+    }
+    ctx.json(row)
+  }
+
   @Post('/')
   async create(ctx: RequestContext) {
     const body = ctx.body as {

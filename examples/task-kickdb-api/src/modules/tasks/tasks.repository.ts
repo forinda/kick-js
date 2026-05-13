@@ -51,7 +51,12 @@ export class TasksRepository {
   // The `with` keys are checked against the `KickDbRelationsRegister`
   // augmentation in `src/db/relations-register.ts`; mistyping a key
   // here is a compile error, not a runtime surprise.
-  findFullById(id: string) {
+  //
+  // Pass `ctx.signal` from the controller to cancel the in-flight
+  // query when the HTTP client disconnects mid-request — kickjs-db
+  // M5.A.2 maps the abort to `RelationalQueryCancelledError` and
+  // the underlying Kysely driver short-circuits the pending query.
+  findFullById(id: string, signal?: AbortSignal) {
     return this.db.query.tasks.findUnique({
       where: (_t, eb) => eb('id', '=', id),
       with: {
@@ -59,6 +64,7 @@ export class TasksRepository {
         assignees: true,
         labels: true,
       },
+      signal,
     })
   }
 
