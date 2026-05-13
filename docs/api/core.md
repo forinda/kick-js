@@ -153,7 +153,7 @@ interface ModuleRoutes {
 
 ## AppAdapter
 
-Lifecycle hooks for plugging in cross-cutting concerns (database, docs, rate limiting).
+Lifecycle hooks for plugging in cross-cutting concerns (database, docs, rate limiting). Build adapters with [`defineAdapter()`](#defineadapter); the call site mounts the result via `bootstrap({ adapters: [...] })`. Full narrative at [Adapters](../guide/adapters.md).
 
 ```typescript
 interface AdapterContext {
@@ -166,12 +166,16 @@ interface AdapterContext {
 
 interface AppAdapter {
   name?: string
+  /** Other plugin/adapter names that must mount before this one. Topo-sorted at boot. */
+  dependsOn?: readonly KickJsPluginName[]
   middleware?(): AdapterMiddleware[]
   beforeMount?(ctx: AdapterContext): void
   onRouteMount?(controllerClass: any, mountPath: string): void
   beforeStart?(ctx: AdapterContext): void
   afterStart?(ctx: AdapterContext): void
   shutdown?(): void | Promise<void>
+  contributors?(): ContributorRegistrations
+  onHealthCheck?(): Promise<{ name: string; status: 'up' | 'down'; message?: string }>
 }
 
 type MiddlewarePhase = 'beforeGlobal' | 'afterGlobal' | 'beforeRoutes' | 'afterRoutes'
@@ -182,6 +186,162 @@ interface AdapterMiddleware {
   path?: string
 }
 ```
+
+### defineAdapter
+
+```typescript
+function defineAdapter<TConfig = Record<string, unknown>, TExtra = unknown>(
+  options: DefineAdapterOptions<TConfig, TExtra>,
+): AdapterFactory<TConfig, TExtra>
+
+interface DefineAdapterOptions<TConfig, TExtra = unknown> {
+  name: string
+  version?: string
+  requires?: { kickjs?: string }
+  defaults?: Partial<TConfig>
+  /** Returns the AppAdapter lifecycle object plus any extra public methods (TExtra). */
+  build(config: TConfig, ctx: BuildContext): Omit<AppAdapter, 'name'> & TExtra
+}
+```
+
+`BuildContext` is the same `{ name, scoped }` shape used by `definePlugin` — see the [Plugins reference](#plugins).
+
+::: warning `defineAdapter()` returns a factory, not an adapter
+The function returns an `AdapterFactory`, not an `AppAdapter`. `bootstrap({ adapters: [...] })` expects the **result of calling** the factory (`MyAdapter()`, `MyAdapter.scoped('x')`, or `MyAdapter.async(...)`). Passing the factory itself is a type error.
+:::
+
+### AdapterFactory
+
+The callable returned by `defineAdapter()`. Same surface as [`PluginFactory`](#pluginfactory) so the mental model is shared.
+
+```typescript
+interface AdapterFactory<TConfig, TExtra = unknown> {
+  /** Singleton form — name matches the definition. */
+  (config?: Partial<TConfig>): AppAdapter & TExtra
+  /** Multi-instance form — name becomes `${defName}:${scopeName}`. */
+  scoped(scopeName: string, config?: Partial<TConfig>): AppAdapter & TExtra
+  /** Deferred-config form — inner adapter built inside `beforeStart`. */
+  async(opts: AdapterAsyncOptions<TConfig>): AppAdapter
+  /** Read-only access to the original definition. */
+  readonly definition: Readonly<DefineAdapterOptions<TConfig, TExtra>>
+}
+
+interface AdapterAsyncOptions<TConfig> {
+  inject?: readonly unknown[]
+  useFactory(...deps: any[]): TConfig | Promise<TConfig>
+}
+```
+
+::: warning `.async()` skips early adapter hooks
+The async form resolves the config inside `beforeStart`, so the inner adapter's `middleware()`, `contributors()`, `beforeMount()`, and `onRouteMount()` are **not picked up** — those phases have already run. Only `beforeStart`, `afterStart`, `shutdown`, and `onHealthCheck` fire on the lazily-built inner adapter.
+:::
+
+The `TExtra` generic preserves any public methods `build()` exposes beyond the `AppAdapter` contract — useful for adapters that ship helpers external callers need to invoke directly (e.g. `OtelAdapter.applyRedaction`).
+
+## Plugins
+
+The highest-level extension primitive — a plugin bundles modules, adapters, middleware, DI bindings, and context contributors into one reusable unit. Build them with `definePlugin()`; mount them via the `plugins?: KickPlugin[]` field on `bootstrap()`. The full narrative lives at [Plugins](../guide/plugins.md); this section is the type reference.
+
+### definePlugin
+
+```typescript
+function definePlugin<TConfig = Record<string, unknown>>(
+  options: DefinePluginOptions<TConfig>,
+): PluginFactory<TConfig>
+
+interface DefinePluginOptions<TConfig> {
+  name: string
+  version?: string
+  requires?: { kickjs?: string }
+  defaults?: Partial<TConfig>
+  build(config: TConfig, ctx: BuildContext): Omit<KickPlugin, 'name'>
+}
+
+interface BuildContext {
+  /** Resolved instance name — definition name for the bare call, `${name}:${scope}` for `.scoped()`. */
+  name: string
+  /** True when produced by `.scoped()`. */
+  scoped: boolean
+}
+```
+
+### PluginFactory
+
+The callable returned by `definePlugin()`. Bare call produces a singleton; `.scoped()` and `.async()` cover the multi-instance and deferred-config cases.
+
+```typescript
+interface PluginFactory<TConfig> {
+  /** Singleton form — `AuthPlugin(config)`. */
+  (config?: Partial<TConfig>): KickPlugin
+  /** Multi-instance form — namespaces the resolved name to `${defName}:${scopeName}`. */
+  scoped(scopeName: string, config?: Partial<TConfig>): KickPlugin
+  /** Deferred-config form — resolves DI tokens then calls `useFactory` inside `onReady`. */
+  async(opts: PluginAsyncOptions<TConfig>): KickPlugin
+  /** Read-only access to the original definition. */
+  readonly definition: Readonly<DefinePluginOptions<TConfig>>
+}
+
+interface PluginAsyncOptions<TConfig> {
+  inject?: readonly unknown[]
+  useFactory(...deps: any[]): TConfig | Promise<TConfig>
+}
+```
+
+::: warning `.async()` skips early hooks
+The async form resolves the inner plugin lazily inside `onReady`, so any `modules()` / `setup()` / `adapters()` / `middleware()` / `contributors()` the plugin returns is **not registered** — those hooks have already run. Use the bare call or `.scoped()` when the plugin needs to contribute anything other than DI bindings or post-start work.
+:::
+
+### KickPlugin
+
+The lifecycle object returned by `build()`. Every hook is optional — emit only what the plugin needs.
+
+```typescript
+interface KickPlugin {
+  name: string
+  /** Other plugin names that must mount before this one. Topo-sorted at boot. */
+  dependsOn?: readonly KickJsPluginName[]
+
+  register?(container: Container): void
+  modules?(): AppModuleEntry[]
+  setup?(registry: ModuleRegistry): void
+  adapters?(): AppAdapter[]
+  middleware?(): any[]
+  contributors?(): ContributorRegistrations
+  onReady?(container: Container): void | Promise<void>
+  shutdown?(): void | Promise<void>
+
+  /** DevTools introspection snapshot — runs on poll, keep cheap. */
+  introspect?(): unknown | Promise<unknown>
+  /** Plugin-owned tabs rendered inside the DevTools UI. */
+  devtoolsTabs?(): readonly unknown[]
+}
+```
+
+`KickJsPluginName` resolves to `string` until `kick typegen` populates `KickJsPluginRegistry`, at which point it narrows to a string-literal union of every plugin/adapter name in the project — making `dependsOn` autocomplete-safe.
+
+### Mounting plugins
+
+Plugins flow in through `bootstrap()`:
+
+```typescript
+interface ApplicationOptions {
+  // ... other fields
+  plugins?: KickPlugin[]
+}
+```
+
+Plugin hooks fire in this order, before user-supplied modules/adapters/middleware:
+
+1. `register()` — DI bindings
+2. `middleware()` — global middleware
+3. `modules()` + user modules — route registration
+4. `setup(registry)` — imperative module mounts
+5. `adapters()` + user adapters — lifecycle hooks
+6. Server starts
+7. `onReady()` — post-startup
+8. `shutdown()` — on SIGINT/SIGTERM
+
+Cross-plugin ordering respects `dependsOn`; cycles throw `MountCycleError` and unknown names throw `MissingMountDepError`, both at boot.
 
 ## Context Contributors (#107)
 

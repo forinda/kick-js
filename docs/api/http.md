@@ -20,6 +20,7 @@ class Application {
 interface ApplicationOptions {
   modules: AppModuleClass[]
   adapters?: AppAdapter[]
+  plugins?: KickPlugin[] // see ../api/core.md#plugins
   port?: number
   apiPrefix?: string // default: '/api'
   defaultVersion?: number // default: 1
@@ -30,6 +31,8 @@ interface ApplicationOptions {
 
 type MiddlewareEntry = RequestHandler | { path: string; handler: RequestHandler }
 ```
+
+Plugins (`KickPlugin[]`) are the highest-level extension primitive — they can bundle modules, adapters, middleware, DI bindings, and context contributors into one reusable unit. Build them with `definePlugin()` and pass the factory output here. See the [Plugins guide](../guide/plugins.md) and the [`definePlugin` API reference](./core.md#plugins).
 
 ## bootstrap
 

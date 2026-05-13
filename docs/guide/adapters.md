@@ -4,13 +4,26 @@ Adapters plug into the KickJS application lifecycle. Use them to add health chec
 
 ## The `defineAdapter()` factory
 
-v4 declares adapters with `defineAdapter({ name, defaults?, build })` — never `class Foo implements AppAdapter`. The factory captures three things:
+v4 declares adapters with `defineAdapter({ name, defaults?, build })` — never `class Foo implements AppAdapter`.
+
+::: tip `defineAdapter()` returns a factory, not an adapter
+The value you `export` from `defineAdapter()` is an **`AdapterFactory<TConfig>`**, not an `AppAdapter`. Call the factory (`MyAdapter(config)`) to produce the mountable `AppAdapter` instance. `bootstrap({ adapters: [...] })` accepts the result of the call, never the factory itself.
+
+```ts
+export const MyAdapter = defineAdapter({ ... })   // AdapterFactory<TConfig>
+bootstrap({ adapters: [MyAdapter()] })             // AppAdapter — invoked at the call site
+bootstrap({ adapters: [MyAdapter] })               // ✗ type error — passed the factory
+```
+
+:::
+
+The factory captures three things:
 
 - `name` — string, used for diagnostics and the `KickJsPluginRegistry` typegen output. Required.
 - `defaults?` — partial config the factory pre-applies before merging the caller's options. Optional.
-- `build(config, meta)` — runs once per adapter instance and returns the lifecycle object. Closures inside `build` are how each adapter instance owns its own state (Redis client, database pool, internal Map, etc.).
+- `build(config, ctx)` — runs once per adapter instance and returns the lifecycle object. Closures inside `build` are how each adapter instance owns its own state (Redis client, database pool, internal Map, etc.). The second arg is the `BuildContext` — `{ name, scoped }`, identical to `definePlugin`'s — useful for namespacing DI tokens in [`.scoped()`](#multi-instance-adapters-scoped) adapters.
 
-The returned object implements any subset of the lifecycle hooks below. Every hook is optional — emit only what your adapter actually needs.
+`build()` returns the actual `AppAdapter` lifecycle object — any subset of the hooks below, every hook optional, plus optional extra methods (see [Extension methods (`TExtra`)](#extension-methods-textra)).
 
 ```ts
 import { defineAdapter, type AdapterContext, type AdapterMiddleware } from '@forinda/kickjs'
@@ -197,19 +210,189 @@ export const RedisAdapter = defineAdapter({
 })
 ```
 
-## Registering Adapters
+## The AdapterFactory Surface
 
-Pass adapter instances to `bootstrap()` or `Application`:
+The value returned by `defineAdapter()` is an `AdapterFactory<TConfig, TExtra>`. The bare call produces a singleton; two helpers cover the multi-instance and async-config cases — identical shape to [`PluginFactory`](./plugins.md#the-pluginfactory-surface) so the mental model is shared.
+
+```ts
+interface AdapterFactory<TConfig, TExtra = unknown> {
+  /** Singleton form — `RedisAdapter({ url })`. */
+  (config?: Partial<TConfig>): AppAdapter & TExtra
+  /** Multi-instance form — namespaces the resolved name to `${defName}:${scopeName}`. */
+  scoped(scopeName: string, config?: Partial<TConfig>): AppAdapter & TExtra
+  /** Deferred-config form — resolves DI tokens then calls `useFactory` inside `beforeStart`. */
+  async(opts: AdapterAsyncOptions<TConfig>): AppAdapter
+  /** Read-only access to the original definition. */
+  readonly definition: Readonly<DefineAdapterOptions<TConfig, TExtra>>
+}
+```
+
+### Default Mount: Just Call the Factory
+
+**This is what 90% of apps need.** No `.scoped()`, no `.async()` — just invoke the factory once and put the result in `bootstrap({ adapters: [...] })`:
 
 ```ts
 import { bootstrap } from '@forinda/kickjs'
 import { modules } from './modules'
 import { HealthAdapter } from './adapters/health.adapter'
 import { CorsAdapter } from './adapters/cors.adapter'
+import { RedisAdapter } from './adapters/redis.adapter'
 
 bootstrap({
   modules,
-  adapters: [HealthAdapter(), CorsAdapter({ origin: '*' })],
+  adapters: [
+    HealthAdapter(), // no config needed
+    CorsAdapter({ origin: '*' }), // pass config as the only argument
+    RedisAdapter({ url: process.env.REDIS_URL! }),
+  ],
+})
+```
+
+Each bare call produces one singleton `AppAdapter` whose runtime `name` matches the definition (`'HealthAdapter'`, `'CorsAdapter'`, `'RedisAdapter'`). The adapter's `defaults` are merged under the config you pass — omit the argument entirely if all defaults are fine (`HealthAdapter()` above).
+
+Mounting order in the array is mounting order at boot, unless an adapter declares [`dependsOn`](#ordering-with-dependson). Reach for `.scoped()` only when you need more than one instance of the same adapter; reach for `.async()` only when the config has to come from the DI container itself.
+
+### Multi-Instance Adapters: `.scoped()`
+
+The bare call produces a singleton whose runtime `name` matches the definition. `.scoped(scopeName, config)` produces a separate instance whose `name` becomes `${definitionName}:${scopeName}` — useful when one adapter type legitimately needs to mount more than once (sharded caches, per-region API clients):
+
+```ts
+const RedisAdapter = defineAdapter<{ url: string }>({
+  name: 'RedisAdapter',
+  build: (config, { name }) => {
+    const client = createClient({ url: config.url })
+    const token = createToken<RedisClientType>(`redis/${name}`)
+    return {
+      async beforeStart({ container }) {
+        await client.connect()
+        container.registerInstance(token, client)
+      },
+      async shutdown() {
+        await client.quit()
+      },
+    }
+  },
+})
+
+bootstrap({
+  modules,
+  adapters: [
+    RedisAdapter.scoped('cache', { url: process.env.REDIS_CACHE_URL! }), // name = 'RedisAdapter:cache'
+    RedisAdapter.scoped('sessions', { url: process.env.REDIS_SESSIONS_URL! }), // name = 'RedisAdapter:sessions'
+  ],
+})
+```
+
+### Deferred Config: `.async()`
+
+When the config an adapter needs must be resolved from the DI container itself (e.g. it depends on `ConfigService` or another adapter's registration), use `.async()`. The inner adapter is built lazily inside `beforeStart`:
+
+```ts
+bootstrap({
+  modules,
+  adapters: [
+    RedisAdapter.async({
+      inject: [CONFIG_SERVICE],
+      useFactory: (config: ConfigService) => ({ url: config.get('REDIS_URL') }),
+    }),
+  ],
+})
+```
+
+::: warning `.async()` skips early adapter hooks
+The async form resolves the config inside `beforeStart`, so anything the inner adapter would contribute via `middleware()`, `contributors()`, `beforeMount()`, or `onRouteMount()` is **not picked up** — those phases have already run. Only `beforeStart`, `afterStart`, `shutdown`, and `onHealthCheck` fire on the lazily-built inner adapter. Use the bare call or `.scoped()` when the adapter needs to contribute middleware or contributors.
+:::
+
+### Extension methods (`TExtra`)
+
+If `build()` returns methods beyond the standard `AppAdapter` contract, the factory preserves them on the returned instance — so external callers (tests, peer adapters) can invoke them directly. The factory's `TExtra` generic is inferred from the build return type:
+
+```ts
+const OtelAdapter = defineAdapter({
+  name: 'OtelAdapter',
+  build: () => ({
+    beforeStart({ container }) {
+      /* ... */
+    },
+    // Extra method, not part of AppAdapter:
+    applyRedaction(span: Span) {
+      /* ... */
+    },
+  }),
+})
+
+const instance = OtelAdapter()
+instance.applyRedaction(span) // typed and callable
+```
+
+### Introspecting a Factory: `.definition`
+
+Every `AdapterFactory` carries a read-only, frozen copy of the options you passed to `defineAdapter()`. Its type is `Readonly<DefineAdapterOptions<TConfig, TExtra>>` — same five fields you originally supplied:
+
+```ts
+factory.definition = {
+  readonly name: string
+  readonly version?: string
+  readonly requires?: { kickjs?: string }
+  readonly defaults?: Partial<TConfig>
+  readonly build: (config, ctx) => Omit<AppAdapter, 'name'> & TExtra
+}
+```
+
+For example, given:
+
+```ts
+export const RedisAdapter = defineAdapter<{ url: string; ttl?: number }>({
+  name: 'RedisAdapter',
+  version: '1.2.0',
+  defaults: { ttl: 60_000 },
+  build: (config) => ({
+    /* ... */
+  }),
+})
+
+console.log(RedisAdapter.definition.name) // 'RedisAdapter'
+console.log(RedisAdapter.definition.version) // '1.2.0'
+console.log(RedisAdapter.definition.defaults) // { ttl: 60000 }
+```
+
+The snapshot is `Object.freeze`'d — assigning to any field throws in strict mode. Use it for:
+
+**1. DevTools introspection.** The DevTools dashboard reads `definition.name` and `definition.version` to label adapters and check for available upgrades — no extra wiring needed.
+
+**2. Compatibility checks at boot.** Verify that a third-party adapter you depend on advertises a minimum version before mounting it:
+
+```ts
+if (compare(RedisAdapter.definition.version ?? '0.0.0', '1.2.0') < 0) {
+  throw new Error('RedisAdapter >= 1.2.0 required for TTL support')
+}
+```
+
+**3. Deriving a sibling factory.** Build a preconfigured variant of an existing adapter without re-defining its `build`:
+
+```ts
+export const RedisCacheAdapter = defineAdapter({
+  ...RedisAdapter.definition,
+  name: 'RedisCacheAdapter',
+  defaults: { ...RedisAdapter.definition.defaults, ttl: 5_000 },
+})
+```
+
+`.definition` is **metadata only** — it does not produce a mountable adapter. To mount, call the factory: `RedisAdapter()`, `RedisAdapter.scoped(...)`, or `RedisAdapter.async(...)`.
+
+## Ordering with `dependsOn`
+
+Adapters mount in declaration order by default — whatever order they appear in the `adapters` array. When ordering matters across adapters (e.g. `OtelAdapter` must initialize tracing before `RequestLoggerAdapter` reads the trace ID), declare `dependsOn` on the `AppAdapter` returned from `build()` — same field, same topo-sort rules as plugins:
+
+```ts
+const RequestLogger = defineAdapter({
+  name: 'RequestLoggerAdapter',
+  build: () => ({
+    dependsOn: ['OtelAdapter'],
+    middleware() {
+      /* reads otel trace id */ return []
+    },
+  }),
 })
 ```
 
@@ -222,3 +405,7 @@ onRouteMount(controllerClass: any, mountPath: string): void {
   console.log(`Mounted ${controllerClass.name} at ${mountPath}`)
 }
 ```
+
+## When to Reach for a Plugin Instead
+
+An adapter is the right tool when the extension lives entirely in the request lifecycle — middleware, route metadata, health checks, before/after hooks. If you find yourself also bundling **modules**, **DI bindings**, or **context contributors** alongside an adapter, promote the whole thing to a [Plugin](./plugins.md). A plugin can ship adapters via its `adapters()` hook and still own the DI/module surface in one place; mount it via `bootstrap({ plugins: [...] })`.
