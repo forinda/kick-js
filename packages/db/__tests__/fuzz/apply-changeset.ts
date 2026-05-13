@@ -134,6 +134,14 @@ function applyOne(snapshot: SchemaSnapshot, change: ChangeSet[number]): void {
       }
       return
     }
+    default: {
+      // Exhaustiveness guard: a new Change variant added without
+      // an applier case here would silently no-op and make the
+      // fuzz round-trip assertions misleading. Asserting `change`
+      // is `never` turns it into a TS compile error instead.
+      const _exhaustive: never = change
+      return _exhaustive
+    }
   }
 }
 
