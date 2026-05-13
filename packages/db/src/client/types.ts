@@ -196,21 +196,27 @@ export interface CreateDbClientOptions<TSchema, _DB = unknown> {
    * byte-identical chain to pre-M5.B clients (only the built-in
    * plugins run).
    *
-   * **Heads-up — Kysely 0.29's `SafeNullComparisonPlugin` ships
-   * broken on PG.** The plugin rewrites `=` / `!=` against literal
-   * `null` to `IS` / `IS NOT` but keeps the null as a parameterised
-   * `ValueNode`, producing `WHERE "col" IS $1` with `$1=null` —
-   * which PG rejects with `syntax error at or near "$1"`. The
-   * `kickjs-db-pg` test suite locks this in
-   * `kysely-safe-null-broken-pg.test.ts` so an upstream fix
-   * surfaces immediately; until then, don't pass it through
-   * `plugins`. Spell null comparisons with the explicit operators
-   * (`is`, `is not`) via the Kysely expression builder instead:
+   * Reach for `safeNullComparison()` here when you want
+   * `eb('col', '=', null)` to compile to `IS NULL` instead of the
+   * silently-false `= NULL`:
    *
    * ```ts
-   * .where('deletedAt', 'is', null)        // OK — emits IS NULL
-   * .where('deletedAt', 'is not', null)    // OK — emits IS NOT NULL
+   * import { createDbClient, safeNullComparison } from '@forinda/kickjs-db'
+   *
+   * const db = createDbClient({
+   *   schema,
+   *   dialect: pgDialect({ pool }),
+   *   plugins: [safeNullComparison()],
+   * })
    * ```
+   *
+   * **Heads-up — pass `safeNullComparison()` from
+   * `@forinda/kickjs-db`, NOT Kysely's `SafeNullComparisonPlugin`.**
+   * Kysely 0.29's upstream version is broken on PG (rewrites the
+   * operator but keeps the null operand parameterised, producing
+   * `WHERE "col" IS $1` which PG rejects with `syntax error at or
+   * near "$1"`). The kickjs version emits the literal `null` keyword
+   * inline. Tracked upstream at <https://github.com/forinda/kick-js/issues/220>.
    */
   plugins?: KyselyPlugin[]
 }

@@ -40,7 +40,14 @@ import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testconta
 import pg from 'pg'
 import { SafeNullComparisonPlugin } from 'kysely'
 
-import { createDbClient, serial, table, timestamp, varchar } from '@forinda/kickjs-db'
+import {
+  createDbClient,
+  safeNullComparison,
+  serial,
+  table,
+  timestamp,
+  varchar,
+} from '@forinda/kickjs-db'
 import { pgDialect } from '@forinda/kickjs-db-pg'
 
 let container: StartedPostgreSqlContainer
@@ -149,5 +156,57 @@ describe('Kysely 0.29 SafeNullComparisonPlugin — broken upstream on PG', () =>
       .where('deletedAt', '=', null)
       .execute()
     expect(rows).toEqual([])
+  })
+})
+
+describe('@forinda/kickjs-db safeNullComparison() — working PG behaviour', () => {
+  it("eb('col', '=', null) returns rows where deletedAt IS NULL", async () => {
+    const db = createDbClient({
+      schema,
+      dialect: pgDialect({ pool }),
+      plugins: [safeNullComparison()],
+    })
+
+    const rows = await db
+      .selectFrom('users')
+      .select(['email'])
+      .where('deletedAt', '=', null)
+      .orderBy('email')
+      .execute()
+
+    expect(rows).toEqual([{ email: 'live@example.com' }])
+  })
+
+  it("eb('col', '!=', null) returns rows where deletedAt IS NOT NULL", async () => {
+    const db = createDbClient({
+      schema,
+      dialect: pgDialect({ pool }),
+      plugins: [safeNullComparison()],
+    })
+
+    const rows = await db
+      .selectFrom('users')
+      .select(['email'])
+      .where('deletedAt', '!=', null)
+      .orderBy('email')
+      .execute()
+
+    expect(rows).toEqual([{ email: 'deleted@example.com' }])
+  })
+
+  it('non-null comparisons stay parameterised (plugin only rewrites the literal-null case)', async () => {
+    const db = createDbClient({
+      schema,
+      dialect: pgDialect({ pool }),
+      plugins: [safeNullComparison()],
+    })
+
+    const rows = await db
+      .selectFrom('users')
+      .select(['email'])
+      .where('email', '=', 'live@example.com')
+      .execute()
+
+    expect(rows).toEqual([{ email: 'live@example.com' }])
   })
 })
