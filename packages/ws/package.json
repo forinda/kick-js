@@ -69,7 +69,7 @@
   },
   "dependencies": {
     "reflect-metadata": "^0.2.2",
-    "ws": "^8.20.0"
+    "ws": "^8.20.1"
   },
   "devDependencies": {
     "@forinda/kickjs": "workspace:*",
