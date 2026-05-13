@@ -6,6 +6,7 @@ export type {
   ForeignKeySnapshot,
   CheckSnapshot,
   TableSnapshot,
+  EnumSnapshot,
   SchemaSnapshot,
 } from './snapshot/types'
 
