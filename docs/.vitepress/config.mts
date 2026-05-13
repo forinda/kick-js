@@ -101,7 +101,6 @@ const guideSidebar = [
     text: 'Tutorials: Building a Jira Clone',
     collapsed: false,
     items: [
-      { text: 'Mongoose to Drizzle', link: '/guide/tutorial-mongoose-to-drizzle' },
       { text: 'DDD Module Architecture', link: '/guide/tutorial-ddd-architecture' },
       { text: 'Query Parsing & Pagination', link: '/guide/tutorial-query-pagination' },
       { text: 'Real-Time (SSE & WebSocket)', link: '/guide/tutorial-realtime' },
@@ -136,8 +135,6 @@ const apiSidebar = [
       { text: '@forinda/kickjs-db-pg', link: '/api/db-pg' },
       { text: '@forinda/kickjs-db-sqlite', link: '/api/db-sqlite' },
       { text: '@forinda/kickjs-db-mysql', link: '/api/db-mysql' },
-      { text: '@forinda/kickjs-prisma', link: '/api/prisma' },
-      { text: '@forinda/kickjs-drizzle', link: '/api/drizzle' },
       { text: '@forinda/kickjs-ws', link: '/api/ws' },
       { text: '@forinda/kickjs-queue', link: '/api/queue' },
       { text: '@forinda/kickjs-devtools', link: '/api/devtools' },
