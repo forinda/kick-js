@@ -28,7 +28,10 @@ export class WorkspacesRepository {
   // The `with` keys are checked against the `KickDbRelationsRegister`
   // augmentation emitted by `kick typegen` — mistyping a key here is
   // a compile error, not a runtime surprise.
-  findFullById(id: string) {
+  //
+  // Pass `ctx.signal` from the controller to cancel the in-flight
+  // query when the HTTP client disconnects mid-request.
+  findFullById(id: string, signal?: AbortSignal) {
     return this.db.query.workspaces.findUnique({
       where: (_w, eb) => eb('id', '=', id),
       with: {
@@ -36,13 +39,15 @@ export class WorkspacesRepository {
         members: { with: { user: true } },
         projects: true,
       },
+      signal,
     })
   }
 
   // Workspaces a user owns. Same nesting as `findFullById` so the
   // caller can render the same "workspace card" component without
-  // round-tripping per row.
-  listOwnedByUser(userId: string) {
+  // round-tripping per row. Accepts `ctx.signal` to cancel the
+  // potentially-expensive nested aggregation on client disconnect.
+  listOwnedByUser(userId: string, signal?: AbortSignal) {
     return this.db.query.workspaces.findMany({
       where: (_w, eb) => eb('ownerId', '=', userId),
       orderBy: (_w, eb) => eb.ref('createdAt'),
@@ -50,6 +55,7 @@ export class WorkspacesRepository {
         members: { with: { user: true } },
         projects: true,
       },
+      signal,
     })
   }
 
