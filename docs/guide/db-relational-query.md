@@ -213,9 +213,12 @@ export class WorkspacesQueryRepository {
     return this.reader.selectFrom('workspaces').selectAll().execute()
   }
 
-  // this.reader.insertInto(...) → compile error:
-  //   Property 'insertInto' does not exist on type 'ReadonlyKysely<KickDb>'
+  // this.reader.insertInto('workspaces') → compile error:
+  //   Argument of type ... is not assignable to parameter of type
+  //   'KyselyTypeError<"not allowed with a read-only Kysely instance.">'
 }
 ```
+
+The four write entrypoints (`insertInto` / `updateTable` / `deleteFrom` / `mergeInto`) stay visible in autocomplete on `ReadonlyKysely<DB>`, but every call site is typed to return a poisoned `KyselyTypeError` sentinel — so any actual write attempt fails to compile. The IDE shows the method names; the call fails the build.
 
 See [Schema Types](./db-schema-types.md) for how `KickDb` is derived from your schema via `SchemaToTypes`.
