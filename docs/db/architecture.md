@@ -793,76 +793,114 @@ D1 has notable wrinkles — no real transactions, batched-statements only — ha
 
 ## 13. Roadmap
 
-### M0 — Spike (2 weeks)
+The original roadmap (M0–M7) was time-ordered around a v6.0.0 GA cut. M0–M5 all shipped on the 5.x line; the v6 framing is dropped — kickjs-db continues releasing patches + minors on 5.x indefinitely to keep adopters out of major-bump churn. The remaining items below are **ordered by adoption-blocker impact** rather than calendar.
 
-Prove the diff engine works.
+### Shipped (M0–M5, all on 5.x)
 
-- 6 column types (serial, integer, varchar, text, boolean, timestamp), one table, one FK.
-- Diff: snapshot-vs-snapshot → change set → PG SQL.
-- Hand-author one migration manually, apply, verify.
-- No client, no Kysely yet.
-- _Exit:_ `kick db generate` produces correct PG up.sql for a known delta.
+| Milestone                          | Scope                                                                                                                                                                                                                                                                                                              | Released                                                                                                |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| M0 — Spike                         | diff-engine prototype, hand-authored PG migration                                                                                                                                                                                                                                                                  | `@forinda/kickjs-db@0.1.0`                                                                              |
+| M1 — Walking skeleton              | full PG types + migration runner + `kick db generate`/`introspect`; `task-kickdb-api` example                                                                                                                                                                                                                      | `@forinda/kickjs-db@1.0.0`                                                                              |
+| M2 — Type story + relational query | `db.query.X.findMany({ with })` + `customType<T>()` + `$extends({ model })` + lifecycle hooks + DevTools tab                                                                                                                                                                                                       | M2 release notes ([`m2-release.md`](./m2-release.md))                                                   |
+| M3 — Multi-dialect                 | SQLite adapter; per-dialect SQL emitter; capability flags; `pgEnum` rename-recreate                                                                                                                                                                                                                                | M3 release notes ([`m3-release.md`](./m3-release.md))                                                   |
+| M4 — Ecosystem fit                 | MySQL adapter (early); `defineTenantDbContributor`; `relationName` for multi-FK; composite-enum gate; Testcontainers enum-drop coverage                                                                                                                                                                            | M4 release notes ([`m4-release.md`](./m4-release.md))                                                   |
+| M5 — Hardening                     | DEFAULT preservation through pgEnum rename-recreate; `AbortSignal` end-to-end + `RequestContext.signal`; `ReadonlyKysely` re-export; ALTER TYPE typed-IR; `safeNullComparison()` workaround for the broken Kysely upstream; **diff-engine fuzz (1000 seeds)**; **migration replay**; **SQL emission threat model** | M5 release notes ([`m5-release.md`](./m5-release.md)) + post-M5 hardening on `@forinda/kickjs-db@5.8.0` |
 
-### M1 — Walking skeleton (4 weeks)
+API reference docs for the whole db family (db + db-pg + db-sqlite + db-mysql) shipped at the same time as the M5 line. Three guide pages live in `docs/guide/` (schema types, relational queries, extensions).
 
-End-to-end happy path on PG.
+### Remaining work, in priority order
 
-- Full PG column type set.
-- Kysely integration; `selectFrom`, `insert`, `update`, `delete`.
-- `kickDbAdapter()` in DI; one example app boots.
-- Migration runner: `latest`, `up`, `down`, `rollback`, `status`. Lock. Batches. Reviewed enforcement.
-- `kick db generate` + `kick db introspect`.
-- _Exit:_ port `examples/task-prisma-api` to `task-kickdb-api`; all endpoints green.
+The order is the **adoption-blocker ranking** from the post-M5 gap audit. Each item is sized + sequenced so it can ship as a standalone minor on 5.x.
 
-### M2 — Type story + relational query (3 weeks)
+#### P1 — Edge runtime adapters
 
-- `db.query.users.findMany({ with: { posts: true } })` → single SQL with `json_agg`.
-- `expectTypeOf` test suite.
-- `customType<T>()`.
-- `$extends({ model, result })`.
-- Lifecycle hooks (`on('query'|'queryError'|...)`).
-- Slow query threshold + DevTools tab.
-- _Exit:_ drizzle's headline DX surface matched.
+Adopters deploying to Vercel / Cloudflare / Deno Deploy can't use the bundled adapters today (the migration runner imports `node:fs`). Originally slotted for v6.2.
 
-### M3 — SQLite + multi-dialect (3 weeks)
+**Scope:**
 
-- `db-sqlite` adapter; full test parity.
-- SQLite quirks: no real ALTER TYPE, foreign_keys=ON pragma, in-memory mode.
-- Per-dialect SQL emitter for change set IR.
-- Capability flags wired and asserted.
-- _Exit:_ full integration suite green on both PG and SQLite.
+- `@forinda/kickjs-db/edge` — edge-safe entry. Omits the migration runner + introspection + any `node:fs` / `node:path` import.
+- `@forinda/kickjs-db-neon-http` — driver on `@neondatabase/serverless`.
+- `@forinda/kickjs-db-d1` — Cloudflare D1 adapter (`transactions: false` capability flag; throws `TransactionsNotSupportedError` on `db.transaction()`).
+- `@forinda/kickjs-db-planetscale` — PlanetScale serverless driver (optional follow-up).
 
-### M4 — KickJS ecosystem fit (3 weeks)
+**Exit:** boot `task-kickdb-api` against Neon HTTP from a Cloudflare Worker.
 
-- `kick g module --repo kickdb` template.
-- `defineTenantDbContributor`.
-- DevTools tab complete.
-- `createTestDb()`.
-- Documentation pass: this file + guide pages (getting-started, schema, migrations, queries, transactions, multi-tenant, testing, extensions, introspection, errors, observability).
-- _Exit:_ zero-friction `kick new --repo kickdb`.
+#### P2 — Schema GUI (DevTools tab expansion)
 
-### M5 — Hardening + v6.0.0 (2 weeks)
+Adopters evaluating new ORMs reach for Studio / equivalent for the "look around the DB" moment. A first-party GUI in DevTools is the lowest-friction answer (no separate process to install).
 
-- Bench against drizzle, prisma, raw `pg` on read/write/transaction microbenchmarks. Goal: within 10% of `pg`-direct on simple selects, within 25% on `with`-joins.
-- Fuzz the diff engine: 1000 random schema-pair fixtures → emit + apply + reverse → assert no drift.
-- Migration replay test: every committed migration in test fixtures → apply → reverse → re-apply → schema identical.
-- Threat-model SQL emission (binding-only, no string interpolation in hot paths).
-- Release v6.0.0; `kickjs-prisma` and `kickjs-drizzle` get deprecation notices.
+**Scope:**
 
-### M6 — v6.1 (~4-6 weeks after v6.0)
+- `/db` tab in DevTools surfaces:
+  - Schema browser (tables → columns + indexes + FKs).
+  - Recent queries (already partially live via the lifecycle bus from M2.D).
+  - **NEW:** row-level table browser with pagination (read-only by default; "edit" mode behind `NODE_ENV !== 'production'` + opt-in flag).
+  - **NEW:** `EXPLAIN` / `EXECUTE` text-area for ad-hoc SQL (dev only).
+  - **NEW:** pool stats (active/idle/waiting, max).
 
-- `db-mysql` adapter.
-- Edge entry (`@forinda/kickjs-db/edge`).
-- `db-neon-http`, `db-d1`.
-- `kickjs-prisma` + `kickjs-drizzle` go private.
+**Exit:** an adopter switching from Prisma can navigate the schema + browse rows without leaving DevTools.
 
-### M7 — v7.0 (~6 months after v6.0)
+#### P3 — Seed framework
 
-- Removal of `kickjs-prisma` + `kickjs-drizzle`.
-- Studio / schema visualizer.
-- View / materialized view / enum introspection.
+Every production app needs seeds. Today adopters write ad-hoc scripts.
 
-**Total to v6.0: ~17 weeks** (~4 months) full-time. With kickjs maintenance load: 5-6 months.
+**Scope:**
+
+- `kick db seed make <name>` scaffolds `db/seeds/<name>.ts`.
+- `kick db seed run [<name>]` executes one or all. Idempotency is the seed author's responsibility (use `onConflict.doNothing()`).
+- `Seeder` interface: `export default async function seed(db: KickDbClient) { ... }`.
+- No tracking table — re-running is safe by convention; the spec was deliberate in `architecture.md` §5.
+
+**Exit:** `task-kickdb-api` ships a working `seeds/users.ts` + `seeds/projects.ts` referenced in the README quick-start.
+
+#### P4 — `$extends({ result })` for computed columns
+
+The `model` half shipped in M2; the `result` half (computed / virtual fields with `{ needs, compute }`) is still TODO. Closes a real Prisma-parity gap that adopters notice immediately.
+
+**Scope:**
+
+- `$extends({ result: { users: { fullName: { needs: { firstName: true, lastName: true }, compute: (u) => `${u.firstName} ${u.lastName}` } } } })`.
+- `needs` declares required columns — they're auto-included in `select` lists so the computed field never returns `undefined`.
+- Extended client's select-type widens to include the computed key.
+- Type-test suite locks the widening shape.
+
+**Exit:** an adopter migrating from Prisma can recreate their virtual fields without per-call wrapping.
+
+#### P5 — Read-replica routing helper
+
+Documented as a manual pattern today (register two adapters under `DB_PRIMARY` / `DB_REPLICA`). A first-party `routedDb({ reads, writes, stickyOnWrite })` helper would close the gap on the common pattern.
+
+**Scope:**
+
+- `routedDb({ writes: primary, reads: replica })` returns a `KickDbClient` that routes `selectFrom` to `reads` and everything else to `writes`.
+- `stickyOnWrite: true` (default) — after the first write in a request, subsequent reads in the same request route to `writes` to avoid replication-lag staleness.
+- Per-call override: `db.usingReplica('replica-2').selectFrom(...)`.
+
+**Exit:** documented pattern in `docs/guide/db-multi-tenant.md`; example fixture in `task-kickdb-api`.
+
+### Lower-priority follow-ups (P6+)
+
+Order is rougher; pick by adopter signal.
+
+- **Migration drift auto-repair.** Prisma can auto-emit a corrective migration from a drift diff. We surface `MigrationDriftError` but require operator intervention. Generating a `corrective_<timestamp>.sql` would close the loop.
+- **Views + materialized views + stored procs in introspection.** Today `introspectPg` covers tables / columns / indexes / FKs only. Adding views requires DSL changes (a `view()` constructor) and is a non-trivial scope.
+- **PG full-text search DSL.** `tsvector` column type exists; no query-side helpers for `to_tsquery`, `@@`, `ts_rank`. Adopters can drop to `sql\`...\``.
+- **Vector-embedding query operators.** `vector(N)` column type exists in `@forinda/kickjs-db/pg`; `<->` (L2 distance), `<#>` (negative inner product), `<=>` (cosine distance) operators have no first-party DSL. Adopters use `sql\`...\`` for now.
+- **`groupBy` aggregation sugar.** Prisma's `_sum` / `_avg` / `_count` style. Inherits Kysely's surface today.
+- **Soft-delete plugin.** Achievable via `beforeQuery` + `$extends`; a first-party helper would beat boilerplate.
+- **Migration squashing / consolidation.** No first-party path today; existing migrations stay forever.
+- **Cache layer.** No first-party answer; adopters wire Redis or similar.
+- **Real-time / live queries via PG logical replication.** Pulse-style. Substantial scope; probably belongs in a separate package (`@forinda/kickjs-db-live`).
+- **`kickjs-prisma` + `kickjs-drizzle` end-of-life.** Architecture spec had these going private at v6.1 and removed at v7.0. With the stay-on-5.x preference, they remain published but receive no active development; documentation has already been removed (PR #233).
+
+### Risks called out elsewhere
+
+The original §14 risk list still applies — type-inference complexity, diff-engine ambiguity at scale, drift-detection false positives, Kysely peer-dep churn, performance regressions in `with`-joins, adopter migration friction, CI runtime. The empirical mitigations shipped in M5 (fuzz, replay, threat model) cover three of those; the rest are ongoing.
+
+### What's NOT happening (kept for clarity)
+
+- **No v6.0.0 / v7.0 major cut.** Saved adopter preference — every roadmap item ships as patch or minor on 5.x. Items that would naturally warrant a major (removed export, changed default) get reshaped to fit minor semantics or deferred until a single coherent major is unavoidable.
+- **Benchmarks vs drizzle / prisma / raw `pg`.** Originally an M5 hardening item; deliberately deprioritised. Performance characterization for marketing rather than correctness; the SQL-builder layer (Kysely-shaped) has well-documented characteristics already, and the diff-engine fuzz proves correctness without bench numbers. May land as a P6 if an adopter raises a performance concern with a concrete repro.
 
 ## 14. Risks
 
