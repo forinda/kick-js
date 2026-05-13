@@ -73,6 +73,13 @@ export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
   if (dialectTag === 'sqlite' || dialectTag === 'mysql') {
     plugins.push(new ParseJSONResultsPlugin())
   }
+  // M5.B.2 — adopter-supplied plugins (e.g. `safeNullComparison()`)
+  // append after the built-ins so the AST transforms run on a tree
+  // that already has the kickjs-internal codec / JSON rewriting in
+  // place. Order matches Kysely's documented "plugins run top-down".
+  if (opts.plugins && opts.plugins.length > 0) {
+    plugins.push(...opts.plugins)
+  }
 
   const kysely = new Kysely<DB>({
     dialect: opts.dialect,
