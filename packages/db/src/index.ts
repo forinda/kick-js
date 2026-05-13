@@ -77,6 +77,12 @@ export type {
 export type { SchemaToTypes } from './client/schema-types'
 export type { KickDbRegister, RegisteredDB } from './client/register'
 
+// Kysely 0.29 narrowing helpers (M5.A.3). `$pickTables` / `$omitTables`
+// are methods already reachable on KickDbClient via Kysely; re-exporting
+// the type surfaces them on the bare `@forinda/kickjs-db` import path so
+// adopters can declare read-only repos without dipping into `kysely/readonly`.
+export type { ReadonlyKysely } from 'kysely/readonly'
+
 export {
   migrateLatest,
   migrateUp,

@@ -167,3 +167,55 @@ async function workspaceOverview(id: string) {
 ```
 
 The `with` shape is enforced by the typegen registry — the registry stays in sync with the schema as long as `kick typegen` runs (it's wired into `kick dev` and `pretypecheck`).
+
+## Narrowing the client
+
+Kysely 0.29 ships three compile-time narrowing helpers — `$pickTables<...>()`, `$omitTables<...>()`, and the `ReadonlyKysely<DB>` type — and `@forinda/kickjs-db` surfaces all three on the bare-import path.
+
+Reach the table-set narrowers through the underlying Kysely escape hatch (`db.qb`):
+
+```ts
+import { Service, Inject } from '@forinda/kickjs'
+import { DB_PRIMARY, type KickDbClient } from '@forinda/kickjs-db'
+
+@Service()
+export class WorkspacesAuditRepository {
+  constructor(@Inject(DB_PRIMARY) private readonly db: KickDbClient) {}
+
+  // Limit this repo to two tables at compile time. `selectFrom('users')` is a
+  // type error here, even though the runtime client can reach every table.
+  private get reader() {
+    return this.db.qb.$pickTables<'workspaces' | 'workspace_members'>()
+  }
+
+  list() {
+    return this.reader.selectFrom('workspaces').selectAll().execute()
+  }
+}
+```
+
+For a fully read-only handle, annotate `db.qb` as `ReadonlyKysely<KickDb>`. The runtime is the same Kysely instance — the type just strips `insertInto` / `updateTable` / `deleteFrom` / `mergeInto`:
+
+```ts
+import { Service, Inject } from '@forinda/kickjs'
+import { DB_PRIMARY, type KickDbClient, type ReadonlyKysely } from '@forinda/kickjs-db'
+import type { KickDb } from '../db/schema' // your SchemaToTypes alias
+
+@Service()
+export class WorkspacesQueryRepository {
+  private readonly reader: ReadonlyKysely<KickDb>
+
+  constructor(@Inject(DB_PRIMARY) db: KickDbClient<KickDb>) {
+    this.reader = db.qb as unknown as ReadonlyKysely<KickDb>
+  }
+
+  list() {
+    return this.reader.selectFrom('workspaces').selectAll().execute()
+  }
+
+  // this.reader.insertInto(...) → compile error:
+  //   Property 'insertInto' does not exist on type 'ReadonlyKysely<KickDb>'
+}
+```
+
+See [Schema Types](./db-schema-types.md) for how `KickDb` is derived from your schema via `SchemaToTypes`.
