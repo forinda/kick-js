@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-db",
-  "version": "5.6.0",
+  "version": "5.7.0",
   "description": "KickJS-native ORM — code-first schema, reversible migrations, multi-dialect SQL builder",
   "keywords": [
     "kickjs",
