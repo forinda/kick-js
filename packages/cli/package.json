@@ -72,12 +72,12 @@
     }
   },
   "dependencies": {
-    "@clack/prompts": "^1.2.0",
+    "@clack/prompts": "^1.4.0",
     "@forinda/kickjs": "workspace:*",
     "@forinda/kickjs-db": "workspace:*",
     "commander": "^14.0.3",
     "glob": "^13.0.6",
-    "oxfmt": "^0.47.0",
+    "oxfmt": "^0.49.0",
     "picocolors": "^1.1.1",
     "pluralize": "^8.0.0"
   },
