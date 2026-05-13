@@ -1,8 +1,9 @@
 ---
 '@forinda/kickjs-db': minor
+'@forinda/kickjs-db-pg': patch
 ---
 
-feat(db): ALTER TYPE typed-IR helpers + `safeNullComparison()` plugin opt-in (M5.B)
+feat(db): ALTER TYPE typed-IR helpers + `plugins?` opt-in (M5.B)
 
 Two pieces of internal / Kysely-0.29-surface work bundled into one minor.
 
@@ -14,29 +15,29 @@ Future enum-related work (value-rename, schema-move) now has one source of truth
 
 Internal helpers — not surfaced on the public `package.json` exports map. Tests reach them through the `@forinda/kickjs-db/emit/alter-type` vitest alias.
 
-### M5.B.2 — `safeNullComparison()` plugin opt-in
+### M5.B.2 — `plugins?: KyselyPlugin[]` option
+
+`CreateDbClientOptions` gains an additive `plugins?: KyselyPlugin[]` field — adopter plugins append after the built-in chain (`CodecPlugin` for `customType` mappers, `ParseJSONResultsPlugin` for SQLite + MySQL JSON decoding). Unset = byte-identical chain to pre-M5.B clients.
 
 ```ts
-import { createDbClient, safeNullComparison } from '@forinda/kickjs-db'
+import { createDbClient } from '@forinda/kickjs-db'
+import { CamelCasePlugin } from 'kysely'
 
 const db = createDbClient({
   schema,
   dialect: pgDialect({ pool }),
-  plugins: [safeNullComparison()],
+  plugins: [new CamelCasePlugin()],
 })
-
-await db.selectFrom('users').where('deletedAt', '=', null).selectAll().execute()
-// → SQL: select * from "users" where "deletedAt" is $1   (param: null)
 ```
 
-Without the plugin, Kysely passes `null` through as a bound parameter — `"col" = $1` evaluates to UNKNOWN under three-valued logic, filtering every row including the ones you meant to match. The plugin rewrites the operator to `IS` / `IS NOT` at AST level so the binding behaves as `IS NULL` / `IS NOT NULL`.
+**Heads-up — Kysely 0.29's `SafeNullComparisonPlugin` ships broken on PG.** Verified empirically against `postgres:16-alpine` on this PR. The plugin rewrites `=` / `!=` against literal `null` to `IS` / `IS NOT` but keeps the null as a parameterised `ValueNode`, producing `WHERE "col" IS $1` with `$1=null` — which PG rejects with `syntax error at or near "$1"`. The original `safeNullComparison()` wrapper we'd planned to ship in this minor was pulled for that reason (would surface a runtime error instead of the silently-false comparison — arguably worse than the broken default). The `CreateDbClientOptions.plugins` docstring carries the warning + the recommended workaround (use the explicit `'is'` / `'is not'` operators directly via the Kysely expression builder).
 
-`CreateDbClientOptions` gains an additive `plugins?: KyselyPlugin[]` field — adopter plugins append after the built-in chain (`CodecPlugin` for `customType` mappers, `ParseJSONResultsPlugin` for SQLite + MySQL JSON decoding). Unset = byte-identical chain to pre-M5.B clients.
+`packages/db-pg/__tests__/integration/kysely-safe-null-broken-pg.test.ts` locks the upstream-broken behaviour so an upstream Kysely fix (or our re-introduction of a fixed kickjs-side wrapper) surfaces here.
 
 ### Tests
 
 - 6 new unit cases in `packages/db/__tests__/unit/alter-type-helpers.test.ts` — covers the three IR builders + the `before` / `after` mutual-exclusion guard + identifier quoting.
-- 5 new unit cases in `packages/db/__tests__/unit/safe-null-comparison.test.ts` — locks the broken-default shape (`= $1` / `!= $1`) and the corrected-plugin shape (`IS $1` / `IS NOT $1`); confirms non-null comparisons aren't touched.
+- 4 new integration cases in `packages/db-pg/__tests__/integration/kysely-safe-null-broken-pg.test.ts` — Testcontainers PG 16, raw protocol + end-to-end via `createDbClient({ plugins })`, plus the recommended `'is'` / `'is not'` workaround verification.
 - The existing pg-enum-pipeline + default-preservation snapshot tests continue to gate byte-identity of the ALTER TYPE refactor.
 
-`@forinda/kickjs-db`: **397 tests** (was 386 at M5.A.3 cut). Additive — no breaking change. M5 "no major bumps" rule respected.
+`@forinda/kickjs-db`: **392 tests** (was 386 at M5.A.3 cut). `@forinda/kickjs-db-pg`: **32 tests** (was 28). Additive — no breaking change. M5 "no major bumps" rule respected.
