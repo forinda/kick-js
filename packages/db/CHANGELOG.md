@@ -1,5 +1,138 @@
 # @forinda/kickjs-db
 
+## 5.7.0
+
+### Minor Changes
+
+- [#212](https://github.com/forinda/kick-js/pull/212) [`eb06da2`](https://github.com/forinda/kick-js/commit/eb06da2eb397a68fd577dd0deb312187dcca49db) Thanks [@forinda](https://github.com/forinda)! - feat(db): `AbortSignal` threading on `db.query.*` + `RelationalQueryCancelledError` (M5.A.2)
+
+  `FindManyOptions` / `FindFirstOptions` / `FindUniqueOptions` accept a new optional `signal: AbortSignal`. Bind to `RequestContext.signal` from kickjs-http to short-circuit relational queries when the client disconnects or the request times out — no more wrapping every call site in a manual `Promise.race`.
+
+  ```ts
+  @Service()
+  export class TasksRepository {
+    constructor(@Inject(DB_PRIMARY) private readonly db: KickDbClient) {}
+
+    findFullById(id: string, signal: AbortSignal) {
+      return this.db.query.tasks.findUnique({
+        where: (_t, eb) => eb('id', '=', id),
+        with: { comments: true, assignees: true, labels: true },
+        signal,
+      })
+    }
+  }
+
+  @Controller()
+  export class TasksController {
+    constructor(private readonly tasks: TasksRepository) {}
+    @Get('/tasks/:id')
+    async show(ctx: RequestContext) {
+      return ctx.json(await this.tasks.findFullById(ctx.params.id, ctx.signal))
+    }
+  }
+  ```
+
+  When the signal fires, the promise rejects with the new `RelationalQueryCancelledError` (extends `KickDbError`, code `relational_query_cancelled`). The signal's `reason` flows onto the error's `cause` field so adopters can inspect upstream causes (HTTP timeout vs explicit cancel vs user disconnect).
+
+  Already-aborted signals short-circuit before any compile or DB round trip. Driver-level AbortError shapes (DOM `AbortError`, PG SQLSTATE `57014`, mysql2 `EAGAIN_QUERY_INTERRUPTED`, better-sqlite3 `SQLITE_INTERRUPT`) are normalised to `RelationalQueryCancelledError`. Unrelated rejections pass through verbatim.
+
+  Default cancellation strategy is Kysely 0.29's `'ignore query'` — JS-side promise rejects, DB-side query keeps running until completion. The stricter `'cancel query'` (`pg_cancel_backend` / `KILL QUERY`) requires per-dialect support and isn't safe to default across all peer adapters yet; adopters who need it drive Kysely directly via `db.qb`. A future minor may surface a per-call override.
+
+  Spec: [`docs/db/spec-abortsignal-threading.md`](https://github.com/forinda/kick-js/blob/main/docs/db/spec-abortsignal-threading.md). Tests: 11 new unit cases in `packages/db/__tests__/unit/abort-signal-unit.test.ts` + 3 PG integration cases (`packages/db-pg/__tests__/integration/abort-signal-pg.test.ts`) + 3 SQLite cases (`packages/db-sqlite/__tests__/integration/abort-signal-sqlite.test.ts`).
+
+  Additive — no breaking change. M5 "no major bumps" rule respected.
+
+- [#218](https://github.com/forinda/kick-js/pull/218) [`c695340`](https://github.com/forinda/kick-js/commit/c6953404b14ea9b0fc9f5ff0951849418c32d482) Thanks [@forinda](https://github.com/forinda)! - feat(db): re-export `ReadonlyKysely` + document `$pickTables` / `$omitTables` narrowing (M5.A.3)
+
+  Kysely 0.29 ships three compile-time narrowing helpers — `$pickTables<...>()`, `$omitTables<...>()`, and the `ReadonlyKysely<DB>` type. They're reachable today through `KickDbClient`'s `db.qb` escape hatch, but adopters who hit them through the bare `@forinda/kickjs-db` import path got no autocomplete and no obvious entry point. M5.A.3 surfaces the type:
+
+  ```ts
+  import type { KickDbClient, ReadonlyKysely } from '@forinda/kickjs-db'
+  import type { KickDb } from '../db/schema' // your SchemaToTypes alias
+
+  @Service()
+  export class WorkspacesQueryRepository {
+    private readonly reader: ReadonlyKysely<KickDb>
+
+    constructor(@Inject(DB_PRIMARY) db: KickDbClient<KickDb>) {
+      this.reader = db.qb as unknown as ReadonlyKysely<KickDb>
+    }
+
+    list() {
+      return this.reader.selectFrom('workspaces').selectAll().execute()
+    }
+
+    // this.reader.insertInto('workspaces') → compile error:
+    //   Argument of type ... is not assignable to parameter of type
+    //   'KyselyTypeError<"not allowed with a read-only Kysely instance.">'
+  }
+  ```
+
+  Same pattern for table-set narrowing inside a repo:
+
+  ```ts
+  private get reader() {
+    return this.db.qb.$pickTables<'workspaces' | 'workspace_members'>()
+  }
+  // reader.selectFrom('projects') → compile error, table picked out
+  ```
+
+  `ReadonlyKysely` keeps `insertInto` / `updateTable` / `deleteFrom` / `mergeInto` visible in autocomplete, but every call site is typed to return a poisoned `KyselyTypeError<'not allowed with a read-only Kysely instance.'>` sentinel — so the IDE still surfaces the method names while any actual write fails to compile. Pairs cleanly with the `DB_PRIMARY` / `DB_REPLICA` split for read-replica routing.
+
+  Adopter doc: [`docs/guide/db-relational-query.md#narrowing-the-client`](https://github.com/forinda/kick-js/blob/main/docs/guide/db-relational-query.md#narrowing-the-client). Tests: 7 type-only `expectTypeOf` cases in `packages/db/__tests__/unit/pick-tables-types.test.ts`.
+
+  Additive — no breaking change. M5 "no major bumps" rule respected.
+
+- [#219](https://github.com/forinda/kick-js/pull/219) [`69a7126`](https://github.com/forinda/kick-js/commit/69a71269f60c1fb1b07bc687ed916da51ab086fa) Thanks [@forinda](https://github.com/forinda)! - feat(db): ALTER TYPE typed-IR helpers + `plugins?` opt-in (M5.B)
+
+  Two pieces of internal / Kysely-0.29-surface work bundled into one minor.
+
+  ### M5.B.1 — typed-IR helpers for `ALTER TYPE`
+
+  The four PG `ALTER TYPE` shapes the migration emitter produces (`RENAME TO`, `ADD VALUE`, `ADD VALUE BEFORE/AFTER`, `RENAME VALUE`) now flow through a typed IR (`AlterTypeIr`) in `packages/db/src/emit/alter-type.ts` plus one renderer. Emitted SQL is byte-identical to pre-refactor output — existing snapshot tests + every adopter's `_journal.json` migration hash continue to lock the uppercase form. Kysely 0.29's `db.schema.alterType(...).compile().sql` emits lowercase keywords (`alter type "foo" rename to ...`), so the helpers model Kysely's `AlterTypeNode` shape but render via the local emitter rather than Kysely's `PostgresQueryCompiler`.
+
+  Future enum-related work (value-rename, schema-move) now has one source of truth instead of scattered string-builds across `emit/pg.ts`.
+
+  Internal helpers — not surfaced on the public `package.json` exports map. Tests reach them through the `@forinda/kickjs-db/emit/alter-type` vitest alias.
+
+  ### M5.B.2 — `plugins?: KyselyPlugin[]` option
+
+  `CreateDbClientOptions` gains an additive `plugins?: KyselyPlugin[]` field — adopter plugins append after the built-in chain (`CodecPlugin` for `customType` mappers, `ParseJSONResultsPlugin` for SQLite + MySQL JSON decoding). Unset = byte-identical chain to pre-M5.B clients.
+
+  ```ts
+  import { createDbClient } from '@forinda/kickjs-db'
+  import { CamelCasePlugin } from 'kysely'
+
+  const db = createDbClient({
+    schema,
+    dialect: pgDialect({ pool }),
+    plugins: [new CamelCasePlugin()],
+  })
+  ```
+
+  **Heads-up — Kysely 0.29's `SafeNullComparisonPlugin` ships broken on PG.** Verified empirically against `postgres:16-alpine` on this PR. The plugin rewrites `=` / `!=` against literal `null` to `IS` / `IS NOT` but keeps the null as a parameterised `ValueNode`, producing `WHERE "col" IS $1` with `$1=null` — which PG rejects with `syntax error at or near "$1"`. The original `safeNullComparison()` wrapper we'd planned to ship in this minor was pulled for that reason (would surface a runtime error instead of the silently-false comparison — arguably worse than the broken default). The `CreateDbClientOptions.plugins` docstring carries the warning + the recommended workaround (use the explicit `'is'` / `'is not'` operators directly via the Kysely expression builder).
+
+  `packages/db-pg/__tests__/integration/kysely-safe-null-broken-pg.test.ts` locks the upstream-broken behaviour so an upstream Kysely fix (or our re-introduction of a fixed kickjs-side wrapper) surfaces here.
+
+  ### Tests
+  - 6 new unit cases in `packages/db/__tests__/unit/alter-type-helpers.test.ts` — covers the three IR builders + the `before` / `after` mutual-exclusion guard + identifier quoting.
+  - 4 new integration cases in `packages/db-pg/__tests__/integration/kysely-safe-null-broken-pg.test.ts` — Testcontainers PG 16, raw protocol + end-to-end via `createDbClient({ plugins })`, plus the recommended `'is'` / `'is not'` workaround verification.
+  - The existing pg-enum-pipeline + default-preservation snapshot tests continue to gate byte-identity of the ALTER TYPE refactor.
+
+  `@forinda/kickjs-db`: **392 tests** (was 386 at M5.A.3 cut). `@forinda/kickjs-db-pg`: **32 tests** (was 28). Additive — no breaking change. M5 "no major bumps" rule respected.
+
+### Patch Changes
+
+- [#210](https://github.com/forinda/kick-js/pull/210) [`ac74a73`](https://github.com/forinda/kick-js/commit/ac74a73e8c8c2e92565cf3f2b535045a23cce30d) Thanks [@forinda](https://github.com/forinda)! - fix(db): preserve column DEFAULT through `pgEnum` rename-recreate (M5.A.1)
+
+  Adopters whose schemas declared `column.notNull().default('active')` on an enum-typed column couldn't run the M3.B value-removal flow — PG refused the `ALTER COLUMN TYPE … USING …` cast with `default for column X cannot be cast automatically`. Fix: `emitRemoveEnumValueRecreate` now wraps the type swap in `DROP DEFAULT` / `SET DEFAULT 'value'::"<enum>"` brackets when the affected column carries a default.
+
+  Columns without a default emit the bare swap — output is byte-identical to pre-M5.A.1, so existing applied migrations keep their journal hashes.
+
+  New `RemovedValueAsDefaultError` is raised at `kick db generate` time when the column's default is itself one of the values being removed (the SET DEFAULT step would fail anyway). The operator must update the column default in the schema before re-running generate.
+
+  Spec: [`docs/db/spec-default-preservation.md`](https://github.com/forinda/kick-js/blob/main/docs/db/spec-default-preservation.md). Integration test: `packages/db-pg/__tests__/integration/enum-drop-with-default.test.ts`.
+
 ## 5.6.0
 
 ### Minor Changes
