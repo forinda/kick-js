@@ -1,6 +1,7 @@
 import type { Change, ChangeSet } from '../diff/types'
 import type { ColumnSnapshot, TableSnapshot } from '../snapshot/types'
 import { quoteIdent, quoteLiteral } from './identifiers'
+import { alterTypeAddValue, alterTypeRenameTo, renderAlterType } from './alter-type'
 
 export function emitPg(changes: ChangeSet): string {
   return changes.map(emitChange).join('\n')
@@ -36,10 +37,10 @@ function emitChange(change: Change): string {
     }
     case 'dropEnum':
       return `DROP TYPE ${quoteIdent(change.enum.name)};`
-    case 'addEnumValue': {
-      const before = change.before ? ` BEFORE ${quoteLiteral(change.before)}` : ''
-      return `ALTER TYPE ${quoteIdent(change.enum)} ADD VALUE ${quoteLiteral(change.value)}${before};`
-    }
+    case 'addEnumValue':
+      return renderAlterType(
+        alterTypeAddValue(change.enum, change.value, { before: change.before }),
+      )
     case 'removeEnumValue':
       return emitRemoveEnumValueRecreate(change)
   }
@@ -89,6 +90,7 @@ function emitRemoveEnumValueRecreate(change: {
 
   const oldTypeName = quoteIdent(`${change.enum}__old`)
   const typeName = quoteIdent(change.enum)
+  const oldTypeRawName = `${change.enum}__old`
   const valuesList = change.values.map((v) => quoteLiteral(v)).join(', ')
 
   const header = [
@@ -105,7 +107,7 @@ function emitRemoveEnumValueRecreate(change: {
   ]
 
   const body: string[] = [
-    `ALTER TYPE ${typeName} RENAME TO ${oldTypeName};`,
+    renderAlterType(alterTypeRenameTo(change.enum, oldTypeRawName)),
     `CREATE TYPE ${typeName} AS ENUM (${valuesList});`,
   ]
   for (const col of change.affectedColumns) {

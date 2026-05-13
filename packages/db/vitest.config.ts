@@ -31,6 +31,16 @@ export default defineConfig({
         find: '@forinda/kickjs-db/pg',
         replacement: path.resolve(__dirname, 'src/dsl/columns/pg.ts'),
       },
+      // M5.B — internal-only aliases so tests can reach helpers that
+      // aren't part of the public `package.json` exports.
+      {
+        find: '@forinda/kickjs-db/emit/alter-type',
+        replacement: path.resolve(__dirname, 'src/emit/alter-type.ts'),
+      },
+      {
+        find: '@forinda/kickjs-db/client/plugins',
+        replacement: path.resolve(__dirname, 'src/client/plugins.ts'),
+      },
       {
         find: '@forinda/kickjs-db',
         replacement: path.resolve(__dirname, 'src/index.ts'),

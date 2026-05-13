@@ -1,4 +1,4 @@
-import type { Kysely, Dialect as KyselyDialect } from 'kysely'
+import type { Kysely, Dialect as KyselyDialect, KyselyPlugin } from 'kysely'
 
 import type { RegisteredDB } from './register'
 import type { QueryNamespace } from '../query/types'
@@ -185,4 +185,29 @@ export interface CreateDbClientOptions<TSchema, _DB = unknown> {
    * bus module.
    */
   bus?: import('@forinda/kickjs-devtools-kit/bus').KickEventBus
+  /**
+   * Extra Kysely plugins appended to the internal chain. Kickjs-db
+   * still installs its own plugins (`CodecPlugin` for `customType`
+   * mappers, `ParseJSONResultsPlugin` for SQLite + MySQL JSON
+   * decoding); adopter plugins run after them in the order supplied.
+   *
+   * Reach for `safeNullComparison()` here when you want
+   * `eb('col', '=', null)` to compile to `IS NULL` instead of the
+   * silently-false `= NULL`:
+   *
+   * ```ts
+   * import { createDbClient, safeNullComparison } from '@forinda/kickjs-db'
+   *
+   * const db = createDbClient({
+   *   schema,
+   *   dialect: pgDialect({ pool }),
+   *   plugins: [safeNullComparison()],
+   * })
+   * ```
+   *
+   * Any `KyselyPlugin` works — JSON column rewriters, soft-delete
+   * filters, instrumentation. Empty / unset = byte-identical chain
+   * to pre-M5.B clients (only the built-in plugins run).
+   */
+  plugins?: KyselyPlugin[]
 }
