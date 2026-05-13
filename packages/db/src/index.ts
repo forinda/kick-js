@@ -64,7 +64,6 @@ export { kickDbAdapter, type KickDbAdapterConfig, type MigrationsOnBoot } from '
 export { DB_PRIMARY, DB_REPLICA, DB_CLIENT } from './tokens'
 
 export { createDbClient } from './client/create'
-export { safeNullComparison } from './client/plugins'
 export type {
   KickDbClient,
   KickDbClientEvents,
