@@ -36,7 +36,7 @@ Files: `pg.ts`, `alter-type.ts`.
 Files: `compile-shared.ts`, `compile-pg.ts`, `compile-mysql.ts`, `compile-sqlite.ts`.
 
 - The relational query layer is a thin wrapper over Kysely's `selectFrom` / `where` / `orderBy` / `limit` / `with` plus per-dialect JSON-aggregation helpers (`jsonArrayFrom`, `jsonObjectFrom`).
-- **`db.selectFrom(\`${table} as ${alias}\`)`** in `compile-shared.ts:98`: `table` is the table name from the schema (code-time). `alias` is `${table}_${depth}` derived from the same. Kysely's selectFrom parses the `<id> as <alias>` shorthand and quotes both sides.
+- **`db.selectFrom(\`${table} as ${alias}\`)`** in `compile-shared.ts:98`: `table` is the table name from the schema (code-time). `alias` is `${table}_${depth}` derived from the same. Kysely's selectFrom parses the `name as alias` shorthand and quotes both sides.
 - **`where: (proxy, eb) => ...`** delegates to Kysely's `ExpressionBuilder`. Any value the adopter passes (`eb('col', '=', value)`, `eb('col', 'in', userArray)`, etc.) compiles to a parameterised `ValueNode` → `$N` / `?` / `@N` placeholder + bound parameter at execution. No string interpolation of values.
 - **Operator strings** in `eb` (`'='`, `'<'`, `'is null'`, etc.) come from a typed union; Kysely rejects unrecognised operators at compile time.
 
@@ -67,7 +67,7 @@ When this spec changes (new emit path, new query helper), the corresponding test
 
 ## 4. Out-of-scope (documented for clarity)
 
-- **Adopter-defined `customType({ dataType: () => '<sql>' })`**: the `dataType` callback returns a string that's interpolated raw into DDL. If an adopter writes `customType({ dataType: () => 'text); DROP TABLE x; --' })`, the injected SQL fires on migration generation. This is equivalent to the adopter writing the same SQL by hand — they have full code execution, so the trust boundary is irrelevant. Not in scope.
+- **Adopter-defined `customType({ dataType: () => 'some-sql' })`**: the `dataType` callback returns a string that's interpolated raw into DDL. If an adopter writes `customType({ dataType: () => 'text); DROP TABLE x; --' })`, the injected SQL fires on migration generation. This is equivalent to the adopter writing the same SQL by hand — they have full code execution, so the trust boundary is irrelevant. Not in scope.
 - **DSL constructor strings** (`varchar(N)`, `decimal(p, s)`): same as above. These are code-time, adopter-controlled.
 - **`sql` template tag** (Kysely's `sql\`...\``): adopters using this opt out of parameterisation explicitly. Kysely's docs cover the responsibility shift.
 - **Raw migration SQL** (`up.ts` / `down.ts` escape hatch): adopters writing raw SQL in TS migration files are responsible for their own escaping. Not in scope.
