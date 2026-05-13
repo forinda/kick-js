@@ -20,7 +20,11 @@ await db.selectFrom('users').where('deletedAt', '=', null).selectAll().execute()
 // → SQL: select * from "users" where "deletedAt" is null   (no parameter)
 ```
 
-The kickjs version emits the literal `null` keyword inline using `ValueNode.createImmediate(null)`, producing valid PostgreSQL. Pass this — NOT Kysely's `SafeNullComparisonPlugin` — through `plugins`. The Kysely upstream version is broken on PG (rewrites the operator but keeps the null operand parameterised, producing `WHERE "col" IS $1` which PG rejects with `syntax error at or near "$1"`); tracked upstream at <https://github.com/forinda/kick-js/issues/220>.
+The kickjs version emits the literal `null` keyword inline using `ValueNode.createImmediate(null)`, producing standard SQL. Pass this — NOT Kysely's `SafeNullComparisonPlugin` — through `plugins`.
+
+The Kysely upstream version is broken on **strict-ANSI parsers** (PostgreSQL **and Microsoft SQL Server**): it rewrites the operator but keeps the null operand parameterised, producing `WHERE "col" IS $1` (PG) / `WHERE [col] IS @p1` (MSSQL) — both rejected as syntax errors at parse time. Permissive parsers (SQLite, MySQL) accept the non-standard `IS <placeholder>` shape and behave as the user intended, so adopters on those dialects are silently fine — but they're also silently emitting non-standard SQL.
+
+Empirical dialect matrix verified against `postgres:16-alpine`, `mcr.microsoft.com/mssql/server:2022-latest`, `mysql:8`, and `better-sqlite3` in-memory. Tracked upstream at <https://github.com/forinda/kick-js/issues/220> (includes the matrix + proposed one-line upstream fix).
 
 When upstream Kysely fixes their transformer, this kickjs wrapper can collapse to a one-line re-export of Kysely's plugin.
 

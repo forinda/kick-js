@@ -212,11 +212,16 @@ export interface CreateDbClientOptions<TSchema, _DB = unknown> {
    *
    * **Heads-up — pass `safeNullComparison()` from
    * `@forinda/kickjs-db`, NOT Kysely's `SafeNullComparisonPlugin`.**
-   * Kysely 0.29's upstream version is broken on PG (rewrites the
-   * operator but keeps the null operand parameterised, producing
-   * `WHERE "col" IS $1` which PG rejects with `syntax error at or
-   * near "$1"`). The kickjs version emits the literal `null` keyword
-   * inline. Tracked upstream at <https://github.com/forinda/kick-js/issues/220>.
+   * Kysely 0.29's upstream version is broken on strict-ANSI parsers
+   * (PostgreSQL and Microsoft SQL Server) — it rewrites the operator
+   * but keeps the null operand parameterised, producing
+   * `WHERE "col" IS $1` (PG) / `WHERE [col] IS @p1` (MSSQL), both
+   * rejected as syntax errors at parse time. SQLite + MySQL accept
+   * the non-standard shape and run correctly, but adopters on those
+   * dialects are silently emitting non-standard SQL. The kickjs
+   * version emits the literal `null` keyword inline so the SQL is
+   * standard everywhere. Tracked upstream at
+   * <https://github.com/forinda/kick-js/issues/220>.
    */
   plugins?: KyselyPlugin[]
 }

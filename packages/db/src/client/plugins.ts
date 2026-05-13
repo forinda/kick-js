@@ -17,15 +17,23 @@ import {
 //
 // The upstream transformer rewrites `=` / `!=` / `<>` against
 // literal `null` to `IS` / `IS NOT` at AST level but keeps the null
-// operand as a `ValueNode(null)`, which the PG compiler then
-// parameterises. Result: `WHERE "col" IS $1` with `$1=null` —
-// invalid PostgreSQL syntax. PG's `IS` predicate grammar requires
-// specific predicates (`NULL`, `TRUE`, `FALSE`, `UNKNOWN`,
-// `DISTINCT FROM ...`), not an arbitrary parameter placeholder.
+// operand as a `ValueNode(null)`, which dialect compilers then
+// parameterise. Result: `WHERE "col" IS $1` (PG) / `WHERE [col] IS
+// @p1` (MSSQL) — non-standard SQL that strict-ANSI parsers reject
+// at parse time. The SQL standard's `IS` predicate requires specific
+// predicates (`NULL`, `TRUE`, `FALSE`, `UNKNOWN`, `DISTINCT FROM ...`),
+// not an arbitrary parameter placeholder.
 //
-// Verified empirically against postgres:16-alpine in
-// `packages/db-pg/__tests__/integration/kysely-safe-null-broken-pg.test.ts`.
-// Tracked for upstream follow-up at #220.
+// Empirical dialect matrix:
+//   - PostgreSQL (pg)       — REJECTED: `syntax error at or near "$1"`
+//   - MSSQL (tedious)       — REJECTED: `Incorrect syntax near '@p1'`
+//   - MySQL (mysql2)        — ACCEPTED (permissive parser; non-standard but functional)
+//   - SQLite (better-sqlite3) — ACCEPTED (permissive parser; non-standard but functional)
+//
+// Verified against postgres:16-alpine + mcr.microsoft.com/mssql/server:2022-latest
+// in `packages/db-pg/__tests__/integration/kysely-safe-null-broken-pg.test.ts`
+// (PG branch — MSSQL not in our peer-adapter matrix but the diagnosis is
+// in the issue). Tracked for upstream follow-up at #220.
 //
 // Fix: identical AST rewrite, but replace the null `ValueNode` with
 // `ValueNode.createImmediate(null)` so the PG compiler emits the
@@ -104,12 +112,16 @@ class SafeNullComparisonPlugin implements KyselyPlugin {
  * behaviour change.
  *
  * **Why a kickjs-side helper rather than re-exporting Kysely's?**
- * Kysely 0.29's own `SafeNullComparisonPlugin` ships broken on PG —
+ * Kysely 0.29's own `SafeNullComparisonPlugin` ships broken on
+ * strict-ANSI parsers (PostgreSQL **and** Microsoft SQL Server) —
  * it rewrites the operator but keeps the null operand parameterised,
- * producing `WHERE "col" IS $1` with `$1=null`, which PG rejects
- * with `syntax error at or near "$1"`. The kickjs version emits the
- * literal `null` keyword inline so PG accepts it. Tracked upstream
- * at <https://github.com/forinda/kick-js/issues/220>.
+ * producing `WHERE "col" IS $1` (PG) / `WHERE [col] IS @p1` (MSSQL),
+ * both rejected at parse time. SQLite and MySQL accept the
+ * non-standard shape (their parsers treat `IS` as a more general
+ * binary comparator) but adopters on those dialects are still
+ * emitting non-standard SQL. The kickjs version emits the literal
+ * `null` keyword inline so the SQL is spec-compliant everywhere.
+ * Tracked upstream at <https://github.com/forinda/kick-js/issues/220>.
  */
 export function safeNullComparison(): KyselyPlugin {
   return new SafeNullComparisonPlugin()
