@@ -1,5 +1,78 @@
 # @forinda/kickjs-db-pg
 
+## 9.0.4
+
+### Patch Changes
+
+- [#229](https://github.com/forinda/kick-js/pull/229) [`60a156e`](https://github.com/forinda/kick-js/commit/60a156eef9192ecd2e10bd14ca91ff0f5bea2c15) Thanks [@forinda](https://github.com/forinda)! - test(db-pg): migration replay against real PG — apply / reverse / re-apply cycle
+
+  Adds the migration-replay item from [architecture spec §13](https://github.com/forinda/kick-js/blob/main/docs/db/architecture.md) hardening list (deferred when M5 prioritised the AbortSignal / DEFAULT / ReadonlyKysely / ALTER TYPE work; companion to the in-memory diff-engine fuzz that shipped in `@forinda/kickjs-db@5.8.0`).
+
+  For every fixture `(from, to)` snapshot pair, runs the full pipeline three times against a real `postgres:16-alpine` Testcontainer:
+  1. **Forward:** apply `diff(from, to)` → introspect → assert ≡ `to`. Catches missing changes, bad SQL emit, introspection round-trip drift.
+  2. **Reverse:** apply `invertChanges(diff(from, to))` → introspect → assert ≡ `from`. Catches inverter omitting a change or producing un-applyable SQL.
+  3. **Replay:** re-apply the original forward → introspect → assert ≡ `to`. Catches non-idempotent reverse — i.e., a reverse that leaves residue causing the second apply to land in a different shape.
+
+  5 fixtures × 3 phases = **15 new integration cases**, covering the patterns that account for the bulk of real migration work:
+  - empty → 1 table with PK + non-null column.
+  - Add nullable column.
+  - Add 2nd table with FK pointing at the first.
+  - Add unique index.
+  - Alter column nullability + default (the trickiest path — exercises the type-changed / nullable-changed / default-changed branch combo).
+
+  ### Finding from the first run (worth documenting)
+
+  The replay surfaced a real **contract clarification** in how `default` values flow through the snapshot:
+  - Snapshot `default` field stores the **string value**, NOT the SQL representation. `emit/pg.ts:formatDefault` wraps it (`'foo'`); `introspect-pg.ts:normalizeDefault` strips it. A fixture storing `"'foo'"` (with literal quotes inside the value) would cycle into `''foo''` on re-apply — quotes doubled by `quoteLiteral` then unstripped by `normalizeDefault`.
+
+  The fixture comment in `migration-replay-fixtures.ts` documents this so future readers don't trip on it. Not changing the contract — `'value'` (unquoted) is the natural shape per the existing `introspect-pg.test.ts` assertions, just wasn't surfaced anywhere obvious.
+
+  ### Numbers
+
+  `@forinda/kickjs-db-pg`: **50 tests** (was 35 at the safe-null-comparison-workaround cut). Patch — test-only, no src change in the peer adapter. Stays on 5.x. PG cycle cost: ~80s for the full file (one container boot + 15 forward/reverse/replay cycles).
+
+  ### Architecture-spec §13 hardening remaining after this
+  - **Benchmarks** vs drizzle / prisma / raw `pg` — perf-bound for adopters with hot paths.
+  - **SQL emission threat model** — confirm binding-only hot paths, no string interpolation that could become injection.
+
+  The diff-engine fuzz + this replay test cover the two highest-confidence-buy items. The bench + threat model are smaller-scope follow-ups.
+
+- [#231](https://github.com/forinda/kick-js/pull/231) [`9fee7bf`](https://github.com/forinda/kick-js/commit/9fee7bfdc5dfacbb54078baaaf55a44b6afdc9ab) Thanks [@forinda](https://github.com/forinda)! - test(db-pg): SQL emission threat model — adversarial-input audit against real PG
+
+  Final hardening item from [architecture spec §13](https://github.com/forinda/kick-js/blob/main/docs/db/architecture.md): "Threat-model SQL emission (binding-only, no string interpolation in hot paths)." Pairs with the new spec at [`docs/db/spec-sql-emission-threat-model.md`](https://github.com/forinda/kick-js/blob/main/docs/db/spec-sql-emission-threat-model.md) which documents the trust boundary.
+
+  ### Audit summary
+  - **Runtime values** flow through Kysely's `ExpressionBuilder` → parameter binding (`$N`/`?`/`@N`). Safe.
+  - **DDL identifiers** flow through `quoteIdent` (double-quoted, internal `"` doubled per SQL standard). Safe.
+  - **DDL literals** flow through `quoteLiteral` (single-quoted, internal `'` doubled). Safe.
+  - **Type strings + adopter `customType({ dataType })`** are interpolated raw — code-time-controlled (adopters writing their own SQL injection there are injecting into their own code; not in scope).
+
+  ### Adversarial coverage
+
+  `packages/db-pg/__tests__/integration/sql-injection-pg.test.ts` runs 24 new cases against a real `postgres:16-alpine` Testcontainer:
+  - **19 value-binding tests**: insert + select round-trip with every common injection class — single-quote escape, double-quote, dollar-quoting, statement terminator + DROP, `pg_sleep` timing attack, C-style comments (including nested), E-string escapes, EXECUTE/FORMAT combos, stacked statements, boolean-blind algebra, subquery injection, UNION injection, WAITFOR DELAY (cross-dialect), pg_catalog snooping, URL-encoded payloads. Each test seeds a canary row and asserts (a) the adversarial value round-trips byte-identical, (b) the table still has exactly 2 rows (canary + the value), proving no out-of-band SQL ran.
+  - **2 operator coverage tests**: `in (...)` array binding + `like` pattern matching, both with adversarial payloads.
+  - **3 identifier-escape tests**: tables and columns whose names contain `"`, `;`, embedded `DROP TABLE` statements. `quoteIdent` produces SQL PG accepts as a single (weird-but-valid) identifier; introspection round-trips the literal name.
+
+  ### Finding from the first run
+
+  The deliberately-bad-identifier test surfaced a **legitimate test-harness limitation**, not a `@forinda/kickjs-db` bug: splitting emitted SQL on `;` client-side breaks when an identifier contains a literal `;`. PG's simple-query protocol respects quoted-identifier boundaries; passing `emitPg` output as one multi-statement query works correctly. Updated the test to use that path. The `migration-replay-pg.test.ts` `applyChanges` helper has the same client-side `;`-split — it's safe in that context because the fixtures don't have weird identifiers, but worth flagging if future replay fixtures get nastier.
+
+  ### Numbers
+
+  `@forinda/kickjs-db-pg`: **74 tests** (was 50 at the migration-replay cut). Patch — test-only + new spec doc, no src change. Stays on 5.x.
+
+  ### Architecture-spec §13 hardening status
+
+  | Item                                                       | Status                           |
+  | ---------------------------------------------------------- | -------------------------------- |
+  | Diff-engine fuzz (1000 random pairs, in-memory round-trip) | ✅ `@forinda/kickjs-db@5.8.0`    |
+  | Migration replay (real PG, 5 fixtures × 3 phases)          | ✅ `@forinda/kickjs-db-pg@9.0.4` |
+  | SQL emission threat model                                  | ✅ this PR                       |
+  | Benchmarks vs drizzle / prisma / raw `pg`                  | ⏳ remaining                     |
+
+  Only benchmarks remain. The correctness + security bars from the architecture spec are now met.
+
 ## 9.0.3
 
 ### Patch Changes
