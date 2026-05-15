@@ -97,6 +97,30 @@ function writeSseEvent(res: Response, payload: unknown): void {
 }
 
 /**
+ * Race a promise against a timeout. Clears the timer when the inner
+ * promise wins so we don't leak handles every time a peer responds
+ * quickly. Used to bound peer `onHealthCheck()` calls inside the
+ * `/_debug/health` handler — one slow peer must not be able to stall
+ * the dashboard request.
+ */
+function raceWithTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+  })
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timer) clearTimeout(timer)
+  })
+}
+
+/**
+ * Per-peer budget for `onHealthCheck()` inside `/_debug/health`.
+ * Long enough for a typical DB ping or remote check, short enough that
+ * one misbehaving adapter can't stall the dashboard endpoint.
+ */
+const PEER_HEALTHCHECK_TIMEOUT_MS = 1500
+
+/**
  * Module-scoped guard for `POST /_debug/memory/snapshot`. `writeHeapSnapshot()`
  * blocks the event loop for the duration of the capture (multi-second
  * for large heaps); two concurrent captures would compound the pause.
@@ -486,6 +510,12 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
           // upgrades that to a live `up`/`down`/`degraded` reading so
           // the Overview > Health card reflects actual adapter state,
           // not just "registered at boot".
+          //
+          // Each peer call is bounded by `PEER_HEALTHCHECK_TIMEOUT_MS` —
+          // an adapter whose check hangs (network DB ping, remote
+          // service, etc.) must not be able to stall the entire
+          // dashboard request. Timed-out peers fall through to the
+          // catch arm and are reported as `down`.
           const live: Record<string, string> = { ...adapterStatuses }
           await Promise.all(
             getPeerAdapters().map(async (peer) => {
@@ -493,7 +523,11 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
               const name: unknown = peer?.name
               if (typeof name !== 'string' || name === 'DevToolsAdapter') return
               try {
-                const result = await peer.onHealthCheck()
+                const result = await raceWithTimeout(
+                  Promise.resolve(peer.onHealthCheck()),
+                  PEER_HEALTHCHECK_TIMEOUT_MS,
+                  `onHealthCheck(${name})`,
+                )
                 if (result && typeof result.status === 'string') {
                   live[name] = result.status
                 }
