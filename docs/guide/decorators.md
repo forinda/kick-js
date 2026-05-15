@@ -180,42 +180,38 @@ class FileController {
 | `allowedTypes`  | `string[] \| function`          | all          | Accepts extensions, MIME types, wildcards, or filter function |
 | `customMimeMap` | `Record<string, string>`        | —            | Extend built-in MIME map                                      |
 
-## Property Decorators
+## Injection Decorators
 
-### @Autowired(token?)
+### @Autowired(token?) and @Inject(token?)
 
-Inject a dependency by type or token. Resolved lazily from the DI container.
+Inject a dependency by inferred type or explicit token. The two names are interchangeable — same runtime, same types. Pick whichever reads better at the call site. Each works in two positions:
 
 ```ts
 @Controller()
 class UserController {
-  @Autowired() private userService!: UserService // By type
-  @Autowired(CACHE_TOKEN) private cache!: CacheService // By token
+  // Property position — both names work.
+  @Autowired() private userService!: UserService // resolved by type
+  @Inject(CACHE_TOKEN) private cache!: CacheService // resolved by token
+
+  // Constructor-parameter position — both names work.
+  constructor(
+    @Inject(MAILER_TOKEN) private mailer: Mailer,
+    @Autowired() private logger: Logger,
+  ) {}
 }
 ```
 
+Property-position injections resolve lazily on first access. Constructor-position injections resolve at instantiation. The no-token form (`@Autowired()` / `@Inject()`) relies on TypeScript's `emitDecoratorMetadata` to resolve by the property's declared type or the constructor parameter's type.
+
 ### @Value(envKey, defaultValue?)
 
-Inject an environment variable value. Evaluated lazily at access time.
+Inject an environment variable value. Property-position only. Evaluated lazily at access time.
 
 ```ts
 @Service()
 class EmailService {
   @Value('SMTP_HOST') private host!: string
   @Value('SMTP_PORT', 587) private port!: number
-}
-```
-
-## Parameter Decorators
-
-### @Inject(token)
-
-Inject a dependency by token in constructor parameters.
-
-```ts
-@Service()
-class NotificationService {
-  constructor(@Inject(MAILER_TOKEN) private mailer: Mailer) {}
 }
 ```
 
