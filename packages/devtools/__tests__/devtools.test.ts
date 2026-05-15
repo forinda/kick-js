@@ -301,16 +301,56 @@ describe('DevToolsAdapter', () => {
       expect(stats.totalMs).toBeGreaterThanOrEqual(0)
     })
 
-    it('should fall back to req.path when req.route is undefined', () => {
+    it('buckets requests with no matching route under a single <unmatched> key', () => {
+      // Regression: the previous fallback used `req.path` (the raw URL)
+      // as the latency key, so each probed 404 created a new entry —
+      // unbounded growth in the reactive map. The fix collapses every
+      // unmatched request for a given method into one bucket.
       const adapter = createAdapter()
       const mw = adapter.middleware()[0].handler
 
-      const req = mockReq({ method: 'GET', path: '/fallback', route: undefined } as any)
-      const res = mockRes(200)
-      mw(req, res, mockNext())
-      res._finishCb()
+      const probedPaths = ['/wp-admin', '/.env', '/api/v2/users/123', '/random-junk']
+      for (const path of probedPaths) {
+        const req = mockReq({ method: 'GET', path, route: undefined } as any)
+        const res = mockRes(404)
+        mw(req, res, mockNext())
+        res._finishCb()
+      }
 
-      expect(adapter.routeLatency['GET /fallback']).toBeDefined()
+      // All four distinct 404 paths land in the same bucket — none of
+      // the raw URLs become keys.
+      expect(adapter.routeLatency['GET <unmatched>']).toBeDefined()
+      expect(adapter.routeLatency['GET <unmatched>'].count).toBe(4)
+      for (const path of probedPaths) {
+        expect(adapter.routeLatency[`GET ${path}`]).toBeUndefined()
+      }
+    })
+
+    it('keeps matched and unmatched buckets separate per method', () => {
+      const adapter = createAdapter()
+      const mw = adapter.middleware()[0].handler
+
+      // Matched GET — uses the route pattern.
+      const matched = mockReq({ method: 'GET', route: { path: '/api/users' } } as any)
+      const resMatched = mockRes(200)
+      mw(matched, resMatched, mockNext())
+      resMatched._finishCb()
+
+      // Unmatched GET — different raw paths, same bucket.
+      const unmatchedGet = mockReq({ method: 'GET', path: '/junk-1', route: undefined } as any)
+      const resGet = mockRes(404)
+      mw(unmatchedGet, resGet, mockNext())
+      resGet._finishCb()
+
+      // Unmatched POST — separate bucket because the method differs.
+      const unmatchedPost = mockReq({ method: 'POST', path: '/junk-2', route: undefined } as any)
+      const resPost = mockRes(404)
+      mw(unmatchedPost, resPost, mockNext())
+      resPost._finishCb()
+
+      expect(adapter.routeLatency['GET /api/users']).toBeDefined()
+      expect(adapter.routeLatency['GET <unmatched>']).toBeDefined()
+      expect(adapter.routeLatency['POST <unmatched>']).toBeDefined()
     })
   })
 

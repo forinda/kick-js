@@ -8,7 +8,7 @@
 // owns the WebSocket transport + ws server lifecycle).
 //
 // `@forinda/kickjs-devtools` registers an instance under this token in
-// its adapter's `beforeStart` so anything resolved during plugin boot
+// its adapter's `beforeMount` so anything resolved during plugin boot
 // can grab it. Plugins that resolve before devtools boots get
 // `undefined`; making the dep optional via `@Optional()` is the
 // idiomatic guard.

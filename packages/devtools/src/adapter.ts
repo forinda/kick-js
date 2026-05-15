@@ -939,7 +939,14 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
                 if (res.statusCode >= 500) errorCount.value++
                 else if (res.statusCode >= 400) clientErrorCount.value++
 
-                const routeKey = `${req.method} ${req.route?.path ?? req.path}`
+                // Bucket unmatched paths (404s) under a single key. The
+                // previous `?? req.path` fallback used the raw URL, which
+                // grows the reactive map unboundedly under 404 probing —
+                // each random path became its own entry, bloating
+                // `/_debug/metrics` and leaking memory.
+                const routeKey = req.route?.path
+                  ? `${req.method} ${req.route.path}`
+                  : `${req.method} <unmatched>`
                 const elapsed = Date.now() - start
 
                 if (!routeLatency[routeKey]) {
