@@ -135,14 +135,16 @@ export function PostConstruct(): MethodDecorator {
 
 /**
  * A decorator that's valid as either a property decorator OR a
- * constructor-parameter decorator. forinda/kick-js#235 §2 — `@Autowired` and
- * `@Inject` previously diverged at the type level (property-only vs
- * parameter-only) and adopters who picked the wrong name for the
+ * constructor-parameter decorator. forinda/kick-js#235 §2 — `@Autowired`
+ * and `@Inject` previously diverged at the type level (property-only
+ * vs parameter-only) and adopters who picked the wrong name for the
  * position got a cryptic TS1240 error. Both names now accept either
  * position and route to the correct metadata bucket at runtime.
  */
 export interface PropertyOrParameterDecorator {
+  /** Property decorator form — `@Autowired(TOKEN) private foo!: Foo`. */
   (target: object, propertyKey: string | symbol): void
+  /** Constructor-parameter form — `constructor(@Inject(TOKEN) foo: Foo) {}`. */
   (target: object, propertyKey: string | symbol | undefined, parameterIndex: number): void
 }
 
@@ -194,9 +196,9 @@ export function Autowired(token?: unknown): PropertyOrParameterDecorator {
 /**
  * Inject a dependency by token. Same shape as {@link Autowired} —
  * works as either a property decorator or a constructor-parameter
- * decorator. See `@Autowired` for the long-form docstring.
+ * decorator. Pick whichever name reads better at the call site.
  *
- * ## Typed string-literal overload (architecture.md §22.4 #3)
+ * ## Typed string-literal overload
  *
  * When called with a string literal that matches a key of the
  * augmented `KickJsRegistry`, TypeScript narrows the parameter type
@@ -217,9 +219,9 @@ export function Autowired(token?: unknown): PropertyOrParameterDecorator {
  * }
  * ```
  *
- * After `kick typegen` populates `.kickjs/types/registry.d.ts` the
- * literal autocompletes from the registry, and a typo
- * (`@Inject('kick/prisma/Cleint')`) becomes a TS2345 error.
+ * After `kick typegen` runs, the literal autocompletes from the
+ * registry and a typo (`@Inject('kick/prisma/Cleint')`) becomes a
+ * TS2345 error.
  */
 export function Inject<K extends keyof KickJsRegistry & string>(
   token: K,

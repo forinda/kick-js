@@ -444,20 +444,6 @@ const PATH_FIELD_REGEX = /\bpath\s*:\s*['"`]([^'"`]*)['"`]/g
 const CONTROLLER_FIELD_REGEX = /\bcontroller\s*:\s*([A-Z]\w*)\b/g
 
 /**
- * Scan a module file's `routes()` body for `{ path, controller }` pairs.
- * A single return value or an array of return values both work — we
- * regex out every `path: '...'` and every `controller: Ident` and
- * zip them in order. Adopter writing wildly creative bodies won't be
- * matched; that's fine — the scanner falls back to no-mount behaviour
- * (per-route path only) which is the pre-fix behaviour.
- *
- * Returns a list of `{ controller, mountPath }` entries. A controller
- * that appears multiple times in `routes()` (rare; multi-mount
- * version-bundled controllers) gets multiple entries; the route
- * scanner uses the first one for path-param extraction since the
- * pattern usually shares the prefix.
- */
-/**
  * Match the start of an `import.meta.glob(...)` call. The first arg
  * (string or string array) gets parsed forward via balanced-paren
  * walking to handle whitespace + line breaks inside the array.
@@ -550,6 +536,20 @@ export interface ModuleMount {
   mountPath: string
 }
 
+/**
+ * Scan a module file's `routes()` body for `{ path, controller }` pairs.
+ * A single return value or an array of return values both work — we
+ * regex out every `path: '...'` and every `controller: Ident` and
+ * zip them in order. Adopter writing wildly creative bodies won't be
+ * matched; that's fine — the scanner falls back to no-mount behaviour
+ * (per-route path only) which is the pre-fix behaviour.
+ *
+ * Returns a list of `{ controller, mountPath }` entries. A controller
+ * that appears multiple times in `routes()` (rare; multi-mount
+ * version-bundled controllers) gets multiple entries; the route
+ * scanner uses the first one for path-param extraction since the
+ * pattern usually shares the prefix.
+ */
 export function extractModuleMounts(source: string): ModuleMount[] {
   const out: ModuleMount[] = []
   ROUTES_METHOD_START.lastIndex = 0
