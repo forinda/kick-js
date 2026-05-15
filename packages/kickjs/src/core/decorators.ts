@@ -182,7 +182,16 @@ function applyInjection(
  * `@Inject` is the same function under another name — they share
  * runtime + types so the two names are interchangeable. Pick whichever
  * reads better at the call site.
+ *
+ * Like `@Inject`, the typed string-literal overload narrows the token
+ * to a key of the augmented `KickJsRegistry`. After `kick typegen`
+ * populates the registry, `@Autowired('kick/prisma/Client')` auto-
+ * completes the key and typo'd literals become TS2345 errors.
  */
+export function Autowired<K extends keyof KickJsRegistry & string>(
+  token: K,
+): PropertyOrParameterDecorator
+export function Autowired(token?: unknown): PropertyOrParameterDecorator
 export function Autowired(token?: unknown): PropertyOrParameterDecorator {
   return ((
     target: object,
