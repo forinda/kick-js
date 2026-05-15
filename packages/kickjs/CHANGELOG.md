@@ -1,5 +1,22 @@
 # @forinda/kickjs
 
+## 5.7.1
+
+### Patch Changes
+
+- [#238](https://github.com/forinda/kick-js/pull/238) [`4286e9f`](https://github.com/forinda/kick-js/commit/4286e9f37d5645837fb4a5753ff2e2bb6f198298) Thanks [@forinda](https://github.com/forinda)! - fix(core): restore typed `KickJsRegistry` overload on `@Autowired`
+
+  The first overload — `<K extends keyof KickJsRegistry & string>(token: K)` —
+  already exists on `@Inject` but was lost on `@Autowired` during the
+  dual-position unification in forinda/kick-js#236. Without it, adopters lose
+  string-literal narrowing + typo detection when reaching for `@Autowired`
+  instead of `@Inject`, even though the two are interchangeable everywhere
+  else.
+
+  After `kick typegen` populates the registry, `@Autowired('kick/prisma/Client')`
+  now autocompletes the key and typo'd literals become TS2345 errors, matching
+  `@Inject` exactly. No runtime behaviour change.
+
 ## 5.7.0
 
 ### Minor Changes
