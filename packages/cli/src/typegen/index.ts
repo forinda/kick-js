@@ -213,6 +213,19 @@ export async function runTypegen(opts: RunTypegenOptions = {}): Promise<{
         }
       }
     }
+    if (scan.orphanedClasses.length > 0) {
+      // forinda/kick-js#235 §4 — decorated classes sitting inside a
+      // module directory whose globs don't pick them up. At runtime
+      // the decorator never fires; downstream code paths get
+      // confusing `MissingContributorError` or silent misroutes.
+      console.warn(
+        `  kick typegen: ${scan.orphanedClasses.length} decorated class(es) not matched by any module's import.meta.glob():`,
+      )
+      for (const orphan of scan.orphanedClasses) {
+        console.warn(`    @${orphan.decorator} ${orphan.className} (${orphan.relativePath})`)
+        console.warn(`      → not picked up by any glob in ${orphan.moduleFilePath}`)
+      }
+    }
   }
 
   return { scan, result, tokenWarnings }

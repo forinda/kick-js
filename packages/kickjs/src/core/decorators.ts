@@ -131,20 +131,70 @@ export function PostConstruct(): MethodDecorator {
   }
 }
 
-// ── Property Decorators ─────────────────────────────────────────────────
+// ── Injection Decorators (property + constructor parameter) ─────────────
 
-/** Property injection — resolved lazily from the container */
-export function Autowired(token?: any): PropertyDecorator {
-  return (target, propertyKey) => {
+/**
+ * A decorator that's valid as either a property decorator OR a
+ * constructor-parameter decorator. forinda/kick-js#235 §2 — `@Autowired` and
+ * `@Inject` previously diverged at the type level (property-only vs
+ * parameter-only) and adopters who picked the wrong name for the
+ * position got a cryptic TS1240 error. Both names now accept either
+ * position and route to the correct metadata bucket at runtime.
+ */
+export interface PropertyOrParameterDecorator {
+  (target: object, propertyKey: string | symbol): void
+  (target: object, propertyKey: string | symbol | undefined, parameterIndex: number): void
+}
+
+function applyInjection(
+  token: unknown,
+  target: object,
+  propertyKey: string | symbol | undefined,
+  parameterIndex: number | undefined,
+): void {
+  // Legacy parameter decorators receive 3 args (target, propertyKey,
+  // parameterIndex); property decorators receive 2 (target, propertyKey).
+  // The 3rd-arg-number-vs-undefined check is the canonical position
+  // detection in TypeScript's legacy decorator runtime.
+  if (typeof parameterIndex === 'number') {
+    setInMetaRecord(METADATA.INJECT, target, parameterIndex, token)
+    return
+  }
+  if (propertyKey != null) {
+    // `target` for a property decorator on a non-static field is the
+    // class prototype; the AUTOWIRED bucket is keyed off the prototype
+    // identity at resolution time, so pass it through unchanged.
     setInMetaMap(METADATA.AUTOWIRED, target, propertyKey as string, token)
   }
 }
 
 /**
- * Constructor parameter injection with an explicit token.
+ * Inject a dependency. Works in two positions:
  *
- * **Constructor parameters only** — does not work as a property decorator.
- * For property injection with a token, use `@Autowired(token)` instead.
+ * - **Property decorator** — `@Autowired(TOKEN) private repo!: UserRepo`.
+ *   Resolved lazily from the container the first time the property is
+ *   read.
+ * - **Constructor parameter decorator** — `constructor(@Autowired(TOKEN) repo: UserRepo) {}`.
+ *   Resolved at instantiation; injected into the ctor call.
+ *
+ * `@Inject` is the same function under another name — they share
+ * runtime + types so the two names are interchangeable. Pick whichever
+ * reads better at the call site.
+ */
+export function Autowired(token?: unknown): PropertyOrParameterDecorator {
+  return ((
+    target: object,
+    propertyKey: string | symbol | undefined,
+    parameterIndex?: number,
+  ): void => {
+    applyInjection(token, target, propertyKey, parameterIndex)
+  }) as PropertyOrParameterDecorator
+}
+
+/**
+ * Inject a dependency by token. Same shape as {@link Autowired} —
+ * works as either a property decorator or a constructor-parameter
+ * decorator. See `@Autowired` for the long-form docstring.
  *
  * ## Typed string-literal overload (architecture.md §22.4 #3)
  *
@@ -162,6 +212,8 @@ export function Autowired(token?: any): PropertyDecorator {
  * `@Service()`
  * class UserRepo {
  *   constructor(@Inject('kick/prisma/Client') private db: PrismaClient) {}
+ *   // OR property form, same decorator:
+ *   @Inject('kick/prisma/Client') private db2!: PrismaClient
  * }
  * ```
  *
@@ -169,12 +221,18 @@ export function Autowired(token?: any): PropertyDecorator {
  * literal autocompletes from the registry, and a typo
  * (`@Inject('kick/prisma/Cleint')`) becomes a TS2345 error.
  */
-export function Inject<K extends keyof KickJsRegistry & string>(token: K): ParameterDecorator
-export function Inject(token: unknown): ParameterDecorator
-export function Inject(token: unknown): ParameterDecorator {
-  return (target, _propertyKey, parameterIndex) => {
-    setInMetaRecord(METADATA.INJECT, target as object, parameterIndex, token)
-  }
+export function Inject<K extends keyof KickJsRegistry & string>(
+  token: K,
+): PropertyOrParameterDecorator
+export function Inject(token: unknown): PropertyOrParameterDecorator
+export function Inject(token: unknown): PropertyOrParameterDecorator {
+  return ((
+    target: object,
+    propertyKey: string | symbol | undefined,
+    parameterIndex?: number,
+  ): void => {
+    applyInjection(token, target, propertyKey, parameterIndex)
+  }) as PropertyOrParameterDecorator
 }
 
 /**

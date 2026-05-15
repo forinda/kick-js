@@ -169,6 +169,7 @@ export {
   type AnyContributorRegistration,
   type ContributorRegistrations,
   type ContextDecorator,
+  type ContextDecoratorTarget,
   type DepValue,
   type ResolvedDeps,
 } from './context-decorator'
