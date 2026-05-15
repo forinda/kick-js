@@ -114,7 +114,10 @@ describe('forinda/kick-js#235 §2 — Autowired + Inject both work in property a
 
     @Service()
     class UsesNoTokenCtor {
-      constructor(@Inject(AnotherGreeterImpl) private readonly g: AnotherGreeterImpl) {}
+      // True no-token form — relies on TypeScript's emitted
+      // `design:paramtypes` reflection to find `AnotherGreeterImpl`.
+      // Symmetric with `@Autowired()` on a typed property.
+      constructor(@Inject() private readonly g: AnotherGreeterImpl) {}
       sayHi() {
         return this.g.hello()
       }

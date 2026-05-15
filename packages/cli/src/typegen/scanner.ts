@@ -540,10 +540,18 @@ export function fileMatchesAnyGlob(
   return matched
 }
 
-export function extractModuleMounts(
-  source: string,
-): Array<{ controller: string; mountPath: string }> {
-  const out: Array<{ controller: string; mountPath: string }> = []
+/**
+ * A `{ controller, mountPath }` pair extracted from a module's
+ * `routes()` body. Multiple entries appear when a module returns an
+ * array (multi-mount). forinda/kick-js#235 §3.
+ */
+export interface ModuleMount {
+  controller: string
+  mountPath: string
+}
+
+export function extractModuleMounts(source: string): ModuleMount[] {
+  const out: ModuleMount[] = []
   ROUTES_METHOD_START.lastIndex = 0
   let m: RegExpExecArray | null
   while ((m = ROUTES_METHOD_START.exec(source)) !== null) {
@@ -1257,16 +1265,25 @@ export async function scanProject(opts: ScanOptions): Promise<ScanResult> {
   // whose file sits inside the module directory but isn't matched by
   // a positive pattern. Catches the "added a new file type, forgot to
   // extend the glob" silent-degradation case.
+  // Normalize Windows backslashes to forward slashes before any
+  // slicing / startsWith / glob-matching — the rest of the scanner
+  // already speaks forward-slash relative paths, but absolute
+  // `filePath` values may carry the platform separator on Windows.
   const orphanedClasses: OrphanedClass[] = []
   for (const [moduleFile, source] of sources) {
     if (!/\.module\.[mc]?[tj]sx?$/.test(moduleFile)) continue
     const patterns = extractGlobPatterns(source)
     if (patterns.length === 0) continue
-    const moduleDir = moduleFile.slice(0, moduleFile.lastIndexOf('/'))
+    const moduleFilePosix = moduleFile.replaceAll(sep, '/')
+    const moduleDir = moduleFilePosix.slice(0, moduleFilePosix.lastIndexOf('/'))
     for (const cls of classes) {
-      if (!cls.filePath.startsWith(moduleDir + '/')) continue
-      if (cls.filePath === moduleFile) continue // skip the module file itself
-      const moduleRelative = cls.filePath.slice(moduleDir.length + 1)
+      // Skip module files themselves — they're scanner-synthesized
+      // `decorator: 'Module'` entries that aren't glob contributors.
+      if (cls.decorator === 'Module') continue
+      const classFilePosix = cls.filePath.replaceAll(sep, '/')
+      if (!classFilePosix.startsWith(moduleDir + '/')) continue
+      if (classFilePosix === moduleFilePosix) continue
+      const moduleRelative = classFilePosix.slice(moduleDir.length + 1)
       if (!fileMatchesAnyGlob(moduleRelative, patterns)) {
         orphanedClasses.push({
           className: cls.className,

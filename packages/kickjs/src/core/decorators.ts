@@ -224,8 +224,8 @@ export function Autowired(token?: unknown): PropertyOrParameterDecorator {
 export function Inject<K extends keyof KickJsRegistry & string>(
   token: K,
 ): PropertyOrParameterDecorator
-export function Inject(token: unknown): PropertyOrParameterDecorator
-export function Inject(token: unknown): PropertyOrParameterDecorator {
+export function Inject(token?: unknown): PropertyOrParameterDecorator
+export function Inject(token?: unknown): PropertyOrParameterDecorator {
   return ((
     target: object,
     propertyKey: string | symbol | undefined,
