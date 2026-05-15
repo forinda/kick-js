@@ -23,7 +23,11 @@ export const OverviewTab: Component = () => {
 }
 
 const HealthCard: Component = () => {
-  const [adaptersOpen, setAdaptersOpen] = createSignal(false)
+  // Default-open so the registered adapter list is visible on first
+  // load — the previous collapsed default made adapters easy to miss
+  // entirely (especially when only `DevToolsAdapter` ever populated the
+  // dict; see adapter.ts `afterStart` peer-seeding).
+  const [adaptersOpen, setAdaptersOpen] = createSignal(true)
   return (
     <div class="bg-surface-1 rounded-xl border border-border p-5">
       <h2 class="text-xs font-semibold uppercase tracking-wider text-text-muted mb-3">Health</h2>

@@ -476,15 +476,38 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
           })
         })
 
-        router.get('/health', (_req: Request, res: Response) => {
+        router.get('/health', async (_req: Request, res: Response) => {
           const healthy = errorRate.value < errorRateThreshold
           const status = healthy ? 'healthy' : 'degraded'
+
+          // Refresh peer statuses from `onHealthCheck()` when present.
+          // The static `adapterStatuses` dict (seeded in `afterStart`)
+          // proves a peer was mounted; calling `onHealthCheck()` here
+          // upgrades that to a live `up`/`down`/`degraded` reading so
+          // the Overview > Health card reflects actual adapter state,
+          // not just "registered at boot".
+          const live: Record<string, string> = { ...adapterStatuses }
+          await Promise.all(
+            getPeerAdapters().map(async (peer) => {
+              if (typeof peer?.onHealthCheck !== 'function') return
+              const name: unknown = peer?.name
+              if (typeof name !== 'string' || name === 'DevToolsAdapter') return
+              try {
+                const result = await peer.onHealthCheck()
+                if (result && typeof result.status === 'string') {
+                  live[name] = result.status
+                }
+              } catch {
+                live[name] = 'down'
+              }
+            }),
+          )
 
           res.status(healthy ? 200 : 503).json({
             status,
             errorRate: errorRate.value,
             uptime: uptimeSeconds.value,
-            adapters: adapterStatuses,
+            adapters: live,
           })
         })
 
@@ -947,6 +970,20 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
         // any other adapter sharing the same listener stays
         // unaffected — only `${basePath}/_bus` is claimed.
         if (server) bus?.attachUpgrade(server)
+
+        // Seed `/_debug/health.adapters` with every peer the framework
+        // mounted alongside us. Before this, only `DevToolsAdapter`
+        // appeared in the Overview > Health card because the dict was
+        // only ever written in `beforeMount` (self) and `shutdown`
+        // (self). Peers with `onHealthCheck` get their live status;
+        // anything else is reported as `running` since reaching
+        // `afterStart` means the framework already mounted them.
+        for (const peer of getPeerAdapters()) {
+          const name = peer?.name
+          if (typeof name !== 'string' || name === 'DevToolsAdapter') continue
+          adapterStatuses[name] = 'running'
+        }
+
         log.info(
           `DevTools ready — ${routes.length} routes tracked, ` +
             `${container?.getRegistrations().length ?? 0} DI bindings, ` +
