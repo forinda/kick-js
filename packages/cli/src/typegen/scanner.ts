@@ -186,6 +186,26 @@ export interface DiscoveredAugmentation {
   relativePath: string
 }
 
+/**
+ * A decorated class whose file sits inside a module directory but
+ * isn't picked up by any of the module's `import.meta.glob(...)`
+ * patterns. Surfaced as a typegen warning per forinda/kick-js#235 §4
+ * so adopters notice silent registration drift before it bites them
+ * at runtime with a `MissingContributorError` or wrong code path.
+ */
+export interface OrphanedClass {
+  /** The decorated class name */
+  className: string
+  /** Absolute path of the class file */
+  filePath: string
+  /** Path relative to scan root, with forward slashes */
+  relativePath: string
+  /** Absolute path of the module file whose globs didn't match */
+  moduleFilePath: string
+  /** The decorator name (`Service`, `Controller`, `Repository`, …) */
+  decorator: DecoratorName
+}
+
 /** Aggregated scanner output */
 export interface ScanResult {
   classes: DiscoveredClass[]
@@ -199,6 +219,12 @@ export interface ScanResult {
   pluginsAndAdapters: DiscoveredPluginOrAdapter[]
   /** Augmentation interfaces declared via `defineAugmentation('Name', meta)` */
   augmentations: DiscoveredAugmentation[]
+  /**
+   * Decorated classes that sit inside a module directory but aren't
+   * picked up by any of the module's `import.meta.glob(...)` patterns.
+   * Empty when every decorator file is matched. forinda/kick-js#235 §4.
+   */
+  orphanedClasses: OrphanedClass[]
 }
 
 /** Options for the scanner */
@@ -385,6 +411,170 @@ function readMethodAfterDecorators(
 function extractPathParams(path: string): string[] {
   const matches = path.match(/:([a-zA-Z_]\w*)/g) ?? []
   return matches.map((m) => m.slice(1))
+}
+
+/**
+ * Join a controller's mount-prefix path with a per-route path.
+ * Handles the slash edge cases so `'/orgs/:id'` + `'/'` becomes
+ * `'/orgs/:id'` (no trailing slash) and `'/orgs/:id'` + `'/:code'`
+ * becomes `'/orgs/:id/:code'`. forinda/kick-js#235 §3.
+ */
+function joinMountPath(mountPath: string, routePath: string): string {
+  const prefix = mountPath.endsWith('/') ? mountPath.slice(0, -1) : mountPath
+  if (!routePath || routePath === '/') return prefix || '/'
+  const suffix = routePath.startsWith('/') ? routePath : '/' + routePath
+  return prefix + suffix || '/'
+}
+
+/**
+ * Match the `routes()` method body on a class implementing `AppModule`.
+ * Captures the body region so we can scan it for `path:` + `controller:`
+ * pairs. Tolerates `routes(): ModuleRoutes` and stripped return type.
+ */
+const ROUTES_METHOD_START =
+  /\b(?:public\s+|private\s+|protected\s+)?routes\s*\([^)]*\)\s*(?::\s*[A-Za-z_][\w<>[\]\s,|]*\s*)?\{/g
+
+/**
+ * Match `path: '/...'` inside a routes-method body. Picks up both
+ * single-quoted and double-quoted / template literal forms.
+ */
+const PATH_FIELD_REGEX = /\bpath\s*:\s*['"`]([^'"`]*)['"`]/g
+
+/** Match `controller: SomeController` (bare identifier only). */
+const CONTROLLER_FIELD_REGEX = /\bcontroller\s*:\s*([A-Z]\w*)\b/g
+
+/**
+ * Scan a module file's `routes()` body for `{ path, controller }` pairs.
+ * A single return value or an array of return values both work — we
+ * regex out every `path: '...'` and every `controller: Ident` and
+ * zip them in order. Adopter writing wildly creative bodies won't be
+ * matched; that's fine — the scanner falls back to no-mount behaviour
+ * (per-route path only) which is the pre-fix behaviour.
+ *
+ * Returns a list of `{ controller, mountPath }` entries. A controller
+ * that appears multiple times in `routes()` (rare; multi-mount
+ * version-bundled controllers) gets multiple entries; the route
+ * scanner uses the first one for path-param extraction since the
+ * pattern usually shares the prefix.
+ */
+/**
+ * Match the start of an `import.meta.glob(...)` call. The first arg
+ * (string or string array) gets parsed forward via balanced-paren
+ * walking to handle whitespace + line breaks inside the array.
+ * forinda/kick-js#235 §4.
+ */
+const IMPORT_META_GLOB_START = /\bimport\.meta\.glob\s*\(/g
+
+/**
+ * Extract every glob pattern from `import.meta.glob([...patterns], ...)` calls
+ * in a module file. Single-string form (`import.meta.glob('./**\\/*.ts')`) and
+ * array form both supported. Negation patterns (`!./**\\/*.test.ts`)
+ * are returned with the leading `!` preserved so the caller can apply
+ * exclusion logic.
+ */
+export function extractGlobPatterns(source: string): string[] {
+  const patterns: string[] = []
+  IMPORT_META_GLOB_START.lastIndex = 0
+  while (IMPORT_META_GLOB_START.exec(source) !== null) {
+    const openParen = IMPORT_META_GLOB_START.lastIndex - 1
+    const closeParen = findBalancedClose(source, openParen)
+    if (closeParen < 0) continue
+    const args = source.slice(openParen + 1, closeParen)
+    // Pull out every string literal inside the first-arg region —
+    // we don't bother distinguishing the array form from the bare
+    // string; both end up as flat patterns.
+    const literalRe = /['"`]([^'"`]+)['"`]/g
+    let lit: RegExpExecArray | null
+    while ((lit = literalRe.exec(args)) !== null) {
+      patterns.push(lit[1] as string)
+    }
+  }
+  return patterns
+}
+
+/**
+ * Convert a Vite-style glob (e.g. `./**\\/*.controller.ts`) to a
+ * RegExp. Supports `**` (any path segments including `/`), `*` (any
+ * chars within one segment), `?` (single char). Brace alternation is
+ * intentionally not handled — none of the templated globs use it,
+ * and a false-negative on an unusual pattern is safer than a false-
+ * positive (better to skip the warning than to wrongly silence one).
+ */
+function globToRegex(pattern: string): RegExp {
+  // Process `?` before any of the substitutions that insert `?` into
+  // the output (e.g. the `(?:.+/)?` non-capture group for `**/`).
+  // If we left it for last, the `?` → `.` pass would mangle those
+  // groups into `(.:.+\/).` — broken regex.
+  const escaped = pattern
+    .replace(/[.+^$()|[\]\\]/g, '\\$&')
+    .replace(/\?/g, '.')
+    .replace(/\*\*\//g, '___DOUBLESTAR_SLASH___')
+    .replace(/\*\*/g, '___DOUBLESTAR___')
+    .replace(/\*/g, '[^/]*')
+    .replace(/___DOUBLESTAR_SLASH___/g, '(?:.+/)?')
+    .replace(/___DOUBLESTAR___/g, '.*')
+  return new RegExp('^' + escaped + '$')
+}
+
+/**
+ * Decide whether a file (relative to the module file's directory)
+ * matches any of the module's positive glob patterns. Negation
+ * patterns (`!./**\\/*.test.ts`) subtract; a file matched by both a
+ * positive and a negation is excluded.
+ */
+export function fileMatchesAnyGlob(
+  moduleRelativePath: string,
+  patterns: readonly string[],
+): boolean {
+  const normalised = moduleRelativePath.startsWith('./')
+    ? moduleRelativePath
+    : './' + moduleRelativePath
+  let matched = false
+  for (const pattern of patterns) {
+    const isNegation = pattern.startsWith('!')
+    const body = isNegation ? pattern.slice(1) : pattern
+    if (globToRegex(body).test(normalised)) {
+      matched = !isNegation
+    }
+  }
+  return matched
+}
+
+export function extractModuleMounts(
+  source: string,
+): Array<{ controller: string; mountPath: string }> {
+  const out: Array<{ controller: string; mountPath: string }> = []
+  ROUTES_METHOD_START.lastIndex = 0
+  let m: RegExpExecArray | null
+  while ((m = ROUTES_METHOD_START.exec(source)) !== null) {
+    const openBrace = source.indexOf('{', m.index + m[0].length - 1)
+    if (openBrace < 0) continue
+    const closeBrace = findBalancedBrace(source, openBrace)
+    if (closeBrace < 0) continue
+    const body = source.slice(openBrace + 1, closeBrace)
+
+    const paths: string[] = []
+    PATH_FIELD_REGEX.lastIndex = 0
+    let p: RegExpExecArray | null
+    while ((p = PATH_FIELD_REGEX.exec(body)) !== null) {
+      paths.push(p[1] ?? '')
+    }
+
+    const controllers: string[] = []
+    CONTROLLER_FIELD_REGEX.lastIndex = 0
+    let c: RegExpExecArray | null
+    while ((c = CONTROLLER_FIELD_REGEX.exec(body)) !== null) {
+      controllers.push(c[1] as string)
+    }
+
+    // Zip — if counts mismatch, take the shorter of the two so we
+    // never assign a wrong controller to a path.
+    const n = Math.min(paths.length, controllers.length)
+    for (let i = 0; i < n; i++) {
+      out.push({ controller: controllers[i] as string, mountPath: paths[i] as string })
+    }
+  }
+  return out
 }
 
 /**
@@ -646,6 +836,7 @@ export function extractRoutesFromSource(
   filePath: string,
   cwd: string,
   classesInFile: DiscoveredClass[],
+  mountPathByController: ReadonlyMap<string, string> = new Map(),
 ): DiscoveredRoute[] {
   const out: DiscoveredRoute[] = []
   if (classesInFile.length === 0) return out
@@ -700,12 +891,19 @@ export function extractRoutesFromSource(
       const queryId = extractObjectFieldIdentifier(routeArgs, 'query')
       const paramsId = extractObjectFieldIdentifier(routeArgs, 'params')
 
+      // forinda/kick-js#235 §3 — when the controller is mounted under a path
+      // with `:params` (e.g. `/orgs/:id/extensions`), surface those
+      // params in `pathParams` so the typegen widens `ctx.params`
+      // without adopters repeating `params: schema` on every route.
+      const mountPath = mountPathByController.get(cls.className) ?? ''
+      const fullPath = mountPath ? joinMountPath(mountPath, path) : path
+
       out.push({
         controller: cls.className,
         method: methodName,
         httpMethod: verb.toUpperCase() as DiscoveredRoute['httpMethod'],
         path,
-        pathParams: extractPathParams(path),
+        pathParams: extractPathParams(fullPath),
         queryFilterable: apiQp?.filterable ?? null,
         querySortable: apiQp?.sortable ?? null,
         querySearchable: apiQp?.searchable ?? null,
@@ -1033,9 +1231,52 @@ export async function scanProject(opts: ScanOptions): Promise<ScanResult> {
     augmentations.push(...extractAugmentationsFromSource(source, file, opts.cwd))
   }
 
+  // forinda/kick-js#235 §3 — build a `Controller → mountPath` map from every
+  // module file's `routes()` body so per-route `pathParams` can include
+  // the prefix params (e.g. `/orgs/:id`) without adopters re-declaring
+  // `params:` on every method. First mount wins on duplicates (rare
+  // multi-mount controllers — typically share the prefix shape).
+  const mountPathByController = new Map<string, string>()
+  for (const [, source] of sources) {
+    for (const { controller, mountPath } of extractModuleMounts(source)) {
+      if (!mountPathByController.has(controller)) {
+        mountPathByController.set(controller, mountPath)
+      }
+    }
+  }
+
   for (const [file, source] of sources) {
     const classesInFile = classes.filter((c) => c.filePath === file)
-    routes.push(...extractRoutesFromSource(source, file, opts.cwd, classesInFile))
+    routes.push(
+      ...extractRoutesFromSource(source, file, opts.cwd, classesInFile, mountPathByController),
+    )
+  }
+
+  // forinda/kick-js#235 §4 — for every module file, extract its
+  // `import.meta.glob([...])` patterns and flag any decorated class
+  // whose file sits inside the module directory but isn't matched by
+  // a positive pattern. Catches the "added a new file type, forgot to
+  // extend the glob" silent-degradation case.
+  const orphanedClasses: OrphanedClass[] = []
+  for (const [moduleFile, source] of sources) {
+    if (!/\.module\.[mc]?[tj]sx?$/.test(moduleFile)) continue
+    const patterns = extractGlobPatterns(source)
+    if (patterns.length === 0) continue
+    const moduleDir = moduleFile.slice(0, moduleFile.lastIndexOf('/'))
+    for (const cls of classes) {
+      if (!cls.filePath.startsWith(moduleDir + '/')) continue
+      if (cls.filePath === moduleFile) continue // skip the module file itself
+      const moduleRelative = cls.filePath.slice(moduleDir.length + 1)
+      if (!fileMatchesAnyGlob(moduleRelative, patterns)) {
+        orphanedClasses.push({
+          className: cls.className,
+          filePath: cls.filePath,
+          relativePath: cls.relativePath,
+          moduleFilePath: moduleFile,
+          decorator: cls.decorator,
+        })
+      }
+    }
   }
 
   // Deterministic ordering for stable .d.ts output
@@ -1062,6 +1303,11 @@ export async function scanProject(opts: ScanOptions): Promise<ScanResult> {
   const collisions = findCollisions(classes)
   const env = await detectEnvFile(opts.cwd, opts.envFile ?? 'src/env.ts')
 
+  orphanedClasses.sort(
+    (a, b) =>
+      a.relativePath.localeCompare(b.relativePath) || a.className.localeCompare(b.className),
+  )
+
   return {
     classes,
     routes,
@@ -1071,5 +1317,6 @@ export async function scanProject(opts: ScanOptions): Promise<ScanResult> {
     env,
     pluginsAndAdapters,
     augmentations,
+    orphanedClasses,
   }
 }
