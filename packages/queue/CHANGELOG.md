@@ -1,5 +1,12 @@
 # @forinda/kickjs-queue
 
+## 5.2.3
+
+### Patch Changes
+
+- Updated dependencies [[`4eebd43`](https://github.com/forinda/kick-js/commit/4eebd43f259c1d5b7214acd46efc6c6d277ee82f)]:
+  - @forinda/kickjs-devtools-kit@5.3.2
+
 ## 5.2.2
 
 ### Patch Changes

@@ -1,5 +1,50 @@
 # @forinda/kickjs-devtools
 
+## 5.2.3
+
+### Patch Changes
+
+- [#238](https://github.com/forinda/kick-js/pull/238) [`98f9ef0`](https://github.com/forinda/kick-js/commit/98f9ef08c787799a051fd62c1db5ab03d844a5b3) Thanks [@forinda](https://github.com/forinda)! - fix(devtools): surface every peer adapter on `/_debug/health` + Overview
+
+  Two related bugs caused the DevTools Overview > Health card to list
+  **only** `DevToolsAdapter` even when the app booted with several
+  adapters:
+  - `adapterStatuses` was only ever written in `beforeMount`/`shutdown`
+    for the DevTools adapter itself — peers were never added, so the
+    `/_debug/health` JSON returned `adapters: { DevToolsAdapter: 'running' }`
+    regardless of how many other adapters were registered.
+  - The Overview > Health card's Adapters accordion defaulted to
+    collapsed, hiding the list further.
+
+  The fix seeds `adapterStatuses` from `getPeerAdapters()` in `afterStart`
+  (every mounted peer appears as `running`), refreshes each entry from
+  `peer.onHealthCheck()` when present at request time so the status is
+  live rather than a frozen boot snapshot, and defaults the Overview
+  accordion to open. No public-API change.
+
+- [#240](https://github.com/forinda/kick-js/pull/240) [`4eebd43`](https://github.com/forinda/kick-js/commit/4eebd43f259c1d5b7214acd46efc6c6d277ee82f) Thanks [@forinda](https://github.com/forinda)! - fix(devtools): two audit-found correctness wins
+
+  **`routeLatency` map no longer grows unboundedly under 404 probing**
+  (`@forinda/kickjs-devtools`).
+
+  The request-tracking middleware keyed `routeLatency` by
+  `${req.method} ${req.route?.path ?? req.path}` — when no route matched,
+  the fallback used the raw URL, so every probed 404 path became its own
+  entry. The samples ring buffer was capped at 1000, but the map itself
+  had no cap; an attacker hammering random paths could inflate
+  `/_debug/metrics` payloads and leak memory indefinitely. Unmatched
+  requests now collapse into a single `<unmatched>` bucket per HTTP
+  method.
+
+  **`DEVTOOLS_BUS` token doc drift** (`@forinda/kickjs-devtools-kit`).
+
+  The JSDoc claimed the adapter registered the bus in `beforeStart`, but
+  it actually registers in `beforeMount`. Doc-only fix — no runtime
+  change.
+
+- Updated dependencies [[`4eebd43`](https://github.com/forinda/kick-js/commit/4eebd43f259c1d5b7214acd46efc6c6d277ee82f)]:
+  - @forinda/kickjs-devtools-kit@5.3.2
+
 ## 5.2.2
 
 ### Patch Changes
