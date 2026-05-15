@@ -40,7 +40,7 @@ TypeScript's `emitDecoratorMetadata` resolves constructor parameter types automa
 
 ### Explicit Token Override
 
-Use `@Inject` when the type doesn't match the token — typically for **interface bindings**. **`@Inject` is for constructor parameters only** — it does not work as a property decorator.
+Use `@Inject` when the type doesn't match the token — typically for **interface bindings**. `@Inject` and `@Autowired` are interchangeable in both constructor-parameter and property positions; pick whichever name reads better at the call site.
 
 The recommended way to declare a non-class token is `createToken<T>(name)`. The returned token is a frozen object identified by reference, so collisions are impossible by construction, and the phantom type parameter `T` flows through `container.resolve()` and `@Inject()` automatically:
 
@@ -81,13 +81,14 @@ class OrderController {
 Properties are resolved lazily on first access, not at construction time.
 
 ::: tip @Inject vs @Autowired
-| Decorator | Where | Resolves by |
-|---|---|---|
-| `@Inject(token)` | Constructor parameters only | Explicit token (`createToken<T>`, class, or string) |
-| `@Autowired()` | Class properties only | Class type (from TypeScript metadata) |
-| `@Autowired(token)` | Class properties only | Explicit token |
+The two names are interchangeable — same runtime, same types. Both work in either position:
 
-Using `@Inject` on a property causes a TypeScript compile error (`TS1240`). Use `@Autowired(token)` instead.
+| Form                                   | Where                             | Resolves by                                         |
+| -------------------------------------- | --------------------------------- | --------------------------------------------------- |
+| `@Autowired(token)` / `@Inject(token)` | Property or constructor parameter | Explicit token (`createToken<T>`, class, or string) |
+| `@Autowired()` / `@Inject()`           | Property or constructor parameter | Inferred type (from TypeScript metadata)            |
+
+Pick the name that reads better at the call site; the framework treats them identically.
 :::
 
 ## DI Token Hardening

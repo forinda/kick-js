@@ -48,16 +48,36 @@ function Transactional(): MethodDecorator
 - **PostConstruct** -- Called once after the instance is fully constructed and injected.
 - **Transactional** -- Wraps the method in a begin/commit/rollback transaction cycle.
 
-### Property and Parameter Decorators
+### Injection Decorators
 
 ```typescript
-function Autowired(token?: any): PropertyDecorator
-function Inject(token: any): ParameterDecorator
+function Autowired(token?: any): PropertyOrParameterDecorator
+function Inject(token?: any): PropertyOrParameterDecorator
 function Value(envKey: string, defaultValue?: any): PropertyDecorator
 ```
 
-- **Autowired** -- Lazy property injection resolved from the container.
-- **Inject** -- Explicit token override for constructor parameter injection.
+`@Autowired` and `@Inject` are interchangeable — same runtime, same types, two names. Each works in two positions:
+
+```typescript
+@Service()
+class UserRepo {
+  // Property position.
+  @Autowired(DB) private db!: KickDbClient
+
+  // Or constructor-parameter position — same decorator works here too.
+  constructor(@Inject(LOGGER) private logger: Logger) {}
+}
+```
+
+Calling without an explicit token resolves via the property type / constructor parameter type emitted by `emitDecoratorMetadata`:
+
+```typescript
+class UserRepo {
+  @Autowired() private db!: KickDbClient // resolved by type
+}
+```
+
+- **Autowired / Inject** -- Property or constructor-parameter dependency injection. Pick the name that reads better; the framework treats them identically.
 - **Value** -- Injects an environment variable, evaluated lazily at access time.
 
 ### HTTP Route Decorators

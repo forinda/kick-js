@@ -429,30 +429,30 @@ class TaskController {
 
 ## Summary Table
 
-| Decorator                    | Target       | Package | Purpose                                             |
-| ---------------------------- | ------------ | ------- | --------------------------------------------------- |
-| `@Controller`                | Class        | core    | Mark class as HTTP controller (prefix from module)  |
-| `@Service`                   | Class        | core    | DI-registered service                               |
-| `@Injectable`                | Class        | core    | Generic DI registration                             |
-| `@Component`                 | Class        | core    | Alias for Injectable                                |
-| `@Repository`                | Class        | core    | Data access class                                   |
-| `@Get/Post/Put/Delete/Patch` | Method       | core    | HTTP route handler                                  |
-| `@PostConstruct`             | Method       | core    | Post-instantiation hook                             |
-| `@Middleware`                | Class/Method | core    | Attach middleware                                   |
-| `@FileUpload`                | Method       | core    | Configure file upload                               |
-| `@Autowired`                 | Property     | core    | Property injection                                  |
-| `@Value`                     | Property     | core    | Env variable injection                              |
-| `@Inject`                    | Parameter    | core    | Constructor param injection                         |
-| `@Builder`                   | Class        | core    | Fluent builder via static `builder()` (opt-in type) |
-| `withBuilder()` (factory)    | Class        | core    | Same runtime as `@Builder` with inferred typing     |
-| `@ApiOperation`              | Method       | swagger | OpenAPI operation                                   |
-| `@ApiResponse`               | Method       | swagger | OpenAPI response                                    |
-| `@ApiTags`                   | Class/Method | swagger | OpenAPI tags                                        |
-| `@ApiBearerAuth`             | Class/Method | swagger | Bearer-token scheme (auto-synthesized)              |
-| `@ApiSecurity`               | Class/Method | swagger | Generic security requirement (any scheme + scopes)  |
-| `@ApiPublic`                 | Method       | swagger | Opt-out from class-level security                   |
-| `@ApiQueryParams`            | Method       | core    | Declare filterable/sortable/searchable query fields |
-| `@ApiExclude`                | Class/Method | swagger | Hide from spec                                      |
+| Decorator                    | Target               | Package | Purpose                                             |
+| ---------------------------- | -------------------- | ------- | --------------------------------------------------- |
+| `@Controller`                | Class                | core    | Mark class as HTTP controller (prefix from module)  |
+| `@Service`                   | Class                | core    | DI-registered service                               |
+| `@Injectable`                | Class                | core    | Generic DI registration                             |
+| `@Component`                 | Class                | core    | Alias for Injectable                                |
+| `@Repository`                | Class                | core    | Data access class                                   |
+| `@Get/Post/Put/Delete/Patch` | Method               | core    | HTTP route handler                                  |
+| `@PostConstruct`             | Method               | core    | Post-instantiation hook                             |
+| `@Middleware`                | Class/Method         | core    | Attach middleware                                   |
+| `@FileUpload`                | Method               | core    | Configure file upload                               |
+| `@Autowired`                 | Property / Parameter | core    | Dependency injection — either position works        |
+| `@Value`                     | Property             | core    | Env variable injection                              |
+| `@Inject`                    | Property / Parameter | core    | Dependency injection — alias for `@Autowired`       |
+| `@Builder`                   | Class                | core    | Fluent builder via static `builder()` (opt-in type) |
+| `withBuilder()` (factory)    | Class                | core    | Same runtime as `@Builder` with inferred typing     |
+| `@ApiOperation`              | Method               | swagger | OpenAPI operation                                   |
+| `@ApiResponse`               | Method               | swagger | OpenAPI response                                    |
+| `@ApiTags`                   | Class/Method         | swagger | OpenAPI tags                                        |
+| `@ApiBearerAuth`             | Class/Method         | swagger | Bearer-token scheme (auto-synthesized)              |
+| `@ApiSecurity`               | Class/Method         | swagger | Generic security requirement (any scheme + scopes)  |
+| `@ApiPublic`                 | Method               | swagger | Opt-out from class-level security                   |
+| `@ApiQueryParams`            | Method               | core    | Declare filterable/sortable/searchable query fields |
+| `@ApiExclude`                | Class/Method         | swagger | Hide from spec                                      |
 
 ## See also
 
