@@ -512,10 +512,29 @@ export function resolveModuleConfig(config: KickConfig | null): ModuleConfig {
 
 const CONFIG_FILES = ['kick.config.ts', 'kick.config.js', 'kick.config.mjs', 'kick.config.json']
 
-/** Load kick.config.* from the project root */
-export async function loadKickConfig(cwd: string): Promise<KickConfig | null> {
+/**
+ * Load `kick.config.*` starting from `startDir` and walking up toward
+ * the filesystem root until a config file is found. Returns `null`
+ * when no config exists anywhere on the way up.
+ *
+ * Walking up means adopters can run `kick <cmd>` from any subdirectory
+ * (e.g. `src/modules/users/`) and still pick up the project's config —
+ * before this change a nested-cwd invocation silently saw `null` and
+ * fell back to framework defaults.
+ *
+ * TypeScript configs (`.ts`) are loaded via `jiti` when available;
+ * `.js` / `.mjs` use native `import()`; `.json` uses `JSON.parse`. The
+ * jiti import is dynamic + best-effort: if the dep is missing we
+ * surface a warning telling the adopter how to install it, instead of
+ * silently dropping the config (which is what the previous bare-catch
+ * did).
+ */
+export async function loadKickConfig(startDir: string): Promise<KickConfig | null> {
+  const { findProjectRoot } = await import('./utils/project-root')
+  const root = findProjectRoot(startDir)
+
   for (const filename of CONFIG_FILES) {
-    const filepath = join(cwd, filename)
+    const filepath = join(root, filename)
     try {
       await access(filepath)
     } catch {
@@ -527,24 +546,41 @@ export async function loadKickConfig(cwd: string): Promise<KickConfig | null> {
       return JSON.parse(content)
     }
 
-    // For .ts/.js/.mjs — dynamic import (use file URL for cross-platform compat)
+    const isTs = filename.endsWith('.ts')
+
+    if (isTs) {
+      try {
+        const { createJiti } = await import('jiti')
+        const jiti = createJiti(root, { interopDefault: true, fsCache: false })
+        const config = (await jiti.import(filepath, { default: true })) as KickConfig
+        const warnings = validateAssetMap(config, root)
+        for (const warning of warnings) console.warn(`  Warning: ${warning}`)
+        return config
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        if (msg.includes("Cannot find package 'jiti'") || msg.includes('ERR_MODULE_NOT_FOUND')) {
+          console.warn(
+            `Warning: Failed to load ${filename} — 'jiti' is required for TypeScript configs. ` +
+              "Run `pnpm add -D jiti` (or your package manager's equivalent), or rename the file " +
+              'to kick.config.js / kick.config.mjs / kick.config.json.',
+          )
+        } else {
+          console.warn(`Warning: Failed to load ${filename}: ${msg}`)
+        }
+        continue
+      }
+    }
+
     try {
       const { pathToFileURL } = await import('node:url')
       const mod = await import(pathToFileURL(filepath).href)
       const config = (mod.default ?? mod) as KickConfig
-      // Surface assetMap mistakes at config-load time so they aren't
-      // hidden inside the build pipeline. Warnings only — a typo
-      // shouldn't block `kick g`, `kick typegen`, etc.
-      const warnings = validateAssetMap(config, cwd)
+      const warnings = validateAssetMap(config, root)
       for (const warning of warnings) console.warn(`  Warning: ${warning}`)
       return config
-    } catch {
-      if (filename.endsWith('.ts')) {
-        console.warn(
-          `Warning: Failed to load ${filename}. TypeScript config files require ` +
-            'a runtime loader (e.g. tsx, ts-node) or use kick.config.js/.mjs instead.',
-        )
-      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.warn(`Warning: Failed to load ${filename}: ${msg}`)
       continue
     }
   }

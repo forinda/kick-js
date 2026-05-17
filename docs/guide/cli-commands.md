@@ -302,7 +302,6 @@ Generate code scaffolds. See the [Generators](./generators.md) page for full det
 kick g --list            # List all available generators
 kick g module user       # Structure depends on pattern in kick.config.ts
 kick g module user --pattern rest  # Force flat REST structure
-kick g resolver product  # GraphQL resolver with @Query/@Mutation/@Arg
 kick g job email         # Queue job processor with @Job/@Process
 kick g scaffold Post title:string body:text:optional  # CRUD from fields
 kick g controller auth
@@ -443,12 +442,9 @@ Example output:
     PUT     /api/users/:id
     DELETE  /api/users/:id
     GET     /api/posts
-    POST    /api/posts
-    GET     /graphql          [GraphQLAdapter]
     WS      /chat             [WsAdapter]
 
-  Adapters (3):
-    GraphQLAdapter     /graphql
+  Adapters (2):
     WsAdapter          /chat
     DevToolsAdapter    /_debug
 
@@ -458,7 +454,6 @@ Example output:
   DI Container:
     Services:    8
     Controllers: 4
-    Resolvers:   2
 ```
 
 ## Port Configuration

@@ -43,7 +43,7 @@
  * generators without rewriting their templates.
  */
 export interface GeneratorContext {
-  /** Raw name passed on the command line (`kick g resolver UserPost` → `'UserPost'`). */
+  /** Raw name passed on the command line (`kick g drizzle-typegen UserPost` → `'UserPost'`). */
   name: string
   /** PascalCase form (`UserPost`). */
   pascal: string
