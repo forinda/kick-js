@@ -14,7 +14,7 @@ const DDD_FOLDER_MAP: Record<string, string> = {
 }
 
 /**
- * Flat folder mapping — REST/GraphQL/minimal patterns.
+ * Flat folder mapping — REST and minimal patterns.
  * Files live at the module root or in minimal subdirectories.
  */
 const FLAT_FOLDER_MAP: Record<string, string> = {

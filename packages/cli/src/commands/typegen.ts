@@ -13,6 +13,7 @@ import { resolve } from 'node:path'
 import { runTypegen, sweepStaleTypegen, TokenCollisionError, watchTypegen } from '../typegen'
 import { runAllPluginTypegens } from '../typegen/run-plugins'
 import { loadKickConfig } from '../config'
+import { findProjectRoot } from '../utils/project-root'
 
 interface TypegenCliOptions {
   watch?: boolean
@@ -76,7 +77,11 @@ export function registerTypegenCommand(program: Command): void {
     .option('--check', 'CI gate: fail on plugin-typegen drift instead of writing')
     .option('--list', 'List every registered typegen plugin id (use to populate `typegen.disable`)')
     .action(async (opts: TypegenCliOptions) => {
-      const cwd = process.cwd()
+      // Walk up from process.cwd() to the directory that owns kick.config.*
+      // (or package.json). Without this, running `kick typegen` from inside
+      // `src/` would resolve srcDir/outDir relative to `src/`, writing
+      // `.kickjs/types/` to `src/.kickjs/types/` instead of the project root.
+      const cwd = findProjectRoot(process.cwd())
 
       // CLI flag wins over kick.config.ts; the config sets the project default.
       const config = await loadKickConfig(cwd)
