@@ -576,50 +576,55 @@ export class Application {
 
       // Thread per-module + adapter + global sources to buildRoutes via the
       // module-scoped slot. Module setup is sequential, so the slot is
-      // race-free; the finally block clears it even if mod.routes() throws.
+      // race-free. The slot MUST stay populated across both `mod.routes()`
+      // AND any framework-driven `buildRoutes(controller)` calls below —
+      // when a module returns `{ path, controller }` (auto-derive shape),
+      // buildRoutes runs here, not inside routes(). Clearing the slot in
+      // the routes()-finally would drop module/adapter/global contributors
+      // on the floor and surface as `MissingContributorError` for any
+      // class/method-level dependsOn referencing a module-level key.
       _setExternalContributorSources([...moduleSources, ...adapterSources, ...globalSources])
-      let result: ReturnType<AppModule['routes']>
       try {
-        result = mod.routes()
-      } finally {
-        _setExternalContributorSources([])
-      }
-      if (!result) continue // Non-HTTP modules (queues, cron) may return null
+        const result = mod.routes()
+        if (!result) continue // Non-HTTP modules (queues, cron) may return null
 
-      const routeSets = Array.isArray(result) ? result : [result]
+        const routeSets = Array.isArray(result) ? result : [result]
 
-      for (const route of routeSets) {
-        const version = route.version ?? defaultVersion
-        const mountPath = `${apiPrefix}/v${version}${normalizePath(route.path)}`
-        // Derive the router from `controller` when one wasn't passed
-        // explicitly. The common-case shape is `{ path, controller }` —
-        // the framework owns `buildRoutes(controller)` so adopters don't
-        // import + call it themselves. Adopters who hand-build a router
-        // (composing multiple controllers, mounting third-party routers)
-        // pass `router` explicitly and we use it as-is.
-        const router = route.router ?? buildRoutes(route.controller)
-        if (!router) {
-          throw new Error(
-            `Module route at ${mountPath} requires either 'controller' or 'router'. ` +
-              'Pass `controller: SomeController` for the common case (the framework calls ' +
-              'buildRoutes() internally) or `router: yourRouter` to hand-build it.',
-          )
-        }
-        this.app.use(mountPath, router)
+        for (const route of routeSets) {
+          const version = route.version ?? defaultVersion
+          const mountPath = `${apiPrefix}/v${version}${normalizePath(route.path)}`
+          // Derive the router from `controller` when one wasn't passed
+          // explicitly. The common-case shape is `{ path, controller }` —
+          // the framework owns `buildRoutes(controller)` so adopters don't
+          // import + call it themselves. Adopters who hand-build a router
+          // (composing multiple controllers, mounting third-party routers)
+          // pass `router` explicitly and we use it as-is.
+          const router = route.router ?? buildRoutes(route.controller)
+          if (!router) {
+            throw new Error(
+              `Module route at ${mountPath} requires either 'controller' or 'router'. ` +
+                'Pass `controller: SomeController` for the common case (the framework calls ' +
+                'buildRoutes() internally) or `router: yourRouter` to hand-build it.',
+            )
+          }
+          this.app.use(mountPath, router)
 
-        // Notify adapters (e.g. SwaggerAdapter for OpenAPI spec generation)
-        if (route.controller) {
-          for (const adapter of this.adapters) {
-            try {
-              adapter.onRouteMount?.(route.controller, mountPath)
-            } catch (err) {
-              log.error(err, `adapter.onRouteMount() failed for ${mountPath}`)
+          // Notify adapters (e.g. SwaggerAdapter for OpenAPI spec generation)
+          if (route.controller) {
+            for (const adapter of this.adapters) {
+              try {
+                adapter.onRouteMount?.(route.controller, mountPath)
+              } catch (err) {
+                log.error(err, `adapter.onRouteMount() failed for ${mountPath}`)
+              }
+            }
+            if (shouldLogRoutes) {
+              mountedRoutes.push({ controller: route.controller, mountPath })
             }
           }
-          if (shouldLogRoutes) {
-            mountedRoutes.push({ controller: route.controller, mountPath })
-          }
         }
+      } finally {
+        _setExternalContributorSources([])
       }
     }
 
