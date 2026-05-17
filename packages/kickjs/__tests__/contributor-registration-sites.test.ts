@@ -327,6 +327,66 @@ describe('contributor sources — Application threading + per-module isolation',
       b: 'B-value',
     })
   })
+
+  // Regression: when a module returns `{ path, controller }` (auto-derive shape)
+  // instead of `{ path, router: buildRoutes(...) }`, the framework calls
+  // buildRoutes() AFTER mod.routes() returns. The external-contributor slot must
+  // stay populated across that auto-derive call or the module-level registrations
+  // (and any class-level dependsOn against them) are silently dropped.
+  it('threads module/adapter/global contributors through the auto-derived router (controller-only shape)', async () => {
+    const LoadLocale: ContributorRegistration = defineContextDecorator({
+      key: 'locale',
+      resolve: () => ({ language: 'en', region: 'US' }),
+    }).registration
+
+    const CheckLocale: ContributorRegistration = defineContextDecorator({
+      key: 'check-locale',
+      dependsOn: ['locale'],
+      resolve: () => 'ok',
+    }).registration
+
+    @Controller()
+    class HelloController {
+      @Get('/')
+      probe(ctx: RequestContext) {
+        return ctx.json({
+          locale: ctx.get('locale'),
+          check: ctx.get('check-locale'),
+        })
+      }
+    }
+
+    // Apply class-level contributor by writing to the metadata directly so the
+    // test doesn't depend on the decorator factory's TS overloads.
+    const { METADATA } = await import('../src/index')
+    const { pushClassMeta } = await import('../src/core/metadata')
+    pushClassMeta(METADATA.CLASS_CONTRIBUTORS, HelloController, CheckLocale)
+
+    class HelloModule implements AppModule {
+      contributors() {
+        return [LoadLocale]
+      }
+      routes(): ModuleRoutes {
+        // Auto-derive shape: framework calls buildRoutes(HelloController) later.
+        return { path: '/hello', controller: HelloController }
+      }
+    }
+
+    const { Application } = await import('../src/index')
+    const app = new Application({
+      modules: [HelloModule],
+      apiPrefix: '/api',
+      defaultVersion: 1,
+    })
+    await app.setup()
+
+    const res = await request(app.getExpressApp()).get('/api/v1/hello/')
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({
+      locale: { language: 'en', region: 'US' },
+      check: 'ok',
+    })
+  })
 })
 
 // ── Plugin-level contributors (#107) ────────────────────────────────────
