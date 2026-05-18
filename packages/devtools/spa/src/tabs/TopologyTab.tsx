@@ -188,14 +188,45 @@ const Section: Component<{
   </div>
 )
 
+/** Human-friendly byte formatter — bytes / KB / MB / GB with one decimal. */
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
+}
+
 const PrimitiveRow: Component<{ item: IntrospectionSnapshot }> = (props) => (
   <div class="tree-node">
     <span class="tree-key">{props.item.name}</span>
+    <Show when={props.item.kind}>
+      <span class="tree-meta">[{props.item.kind}]</span>
+    </Show>
     <Show when={props.item.version}>
       <span class="tree-meta">v{props.item.version}</span>
     </Show>
+    <Show when={typeof props.item.memoryBytes === 'number'}>
+      <span class="tree-meta">{formatBytes(props.item.memoryBytes as number)}</span>
+    </Show>
     <Show when={props.item.tokens?.provides.length}>
       <div class="tree-meta">provides: {props.item.tokens?.provides.join(', ')}</div>
+    </Show>
+    <Show when={props.item.tokens?.requires.length}>
+      <div class="tree-meta">requires: {props.item.tokens?.requires.join(', ')}</div>
+    </Show>
+    <Show when={props.item.state && Object.keys(props.item.state).length > 0}>
+      <div class="tree-meta">
+        <For each={Object.entries(props.item.state ?? {})}>
+          {([key, value]) => (
+            <span style="margin-right:12px">
+              {key}:{' '}
+              <strong style="color:var(--text)">
+                {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+              </strong>
+            </span>
+          )}
+        </For>
+      </div>
     </Show>
     <Show when={props.item.metrics}>
       {(m) => (

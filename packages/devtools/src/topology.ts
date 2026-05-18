@@ -175,15 +175,14 @@ function collectContributors(app: TopologyApplicationLike): TopologyContributorE
   if (typeof app.getContributors === 'function') {
     for (const c of app.getContributors()) {
       if (seen.has(c.key)) continue
-      // The kit's source enum currently only allows 'adapter' | 'module';
-      // 'plugin' + 'global' both map to 'adapter' provenance for now —
-      // the Topology UI labels them by `label` so the source field is
-      // mainly a coarse category. Future kit version can widen.
-      const mapped: TopologyContributorEntry['source'] =
-        c.source === 'module' ? 'module' : 'adapter'
+      // Pass `source` through unchanged — the kit's
+      // `TopologyContributorSource` union accepts every value the
+      // framework's `getContributors()` returns. Earlier versions
+      // collapsed `'plugin' | 'global'` → `'adapter'` because the kit
+      // type was narrower; that's no longer needed.
       seen.set(c.key, {
         key: c.key,
-        source: mapped,
+        source: c.source as TopologyContributorEntry['source'],
         dependsOn: c.dependsOn as string[],
       })
     }

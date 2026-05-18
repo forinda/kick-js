@@ -153,11 +153,31 @@ export interface TopologyTokenEntry {
  * `architecture.md` §20; this surface is just enough for the panel to
  * draw the Module → Contributor edge.
  */
+/**
+ * Origin of a contributor registration. Mirrors the precedence union
+ * from the framework's `ContributorSource` (method > class > module >
+ * adapter > global) plus `'plugin'` which the topology aggregator
+ * surfaces as a distinct label even though plugins land at adapter
+ * precedence on the per-route pipeline.
+ *
+ * Typed as a union so dashboards can render distinct badges / filters
+ * per source. Adding a new value here is a backward-compatible wire
+ * change (existing consumers happily ignore unknown values); removing
+ * one is breaking.
+ */
+export type TopologyContributorSource =
+  | 'method'
+  | 'class'
+  | 'module'
+  | 'adapter'
+  | 'plugin'
+  | 'global'
+
 export interface TopologyContributorEntry {
   /** Contributor key — what it sets on `ctx.set(...)`. */
   key: string
-  /** Source layer — `'method' | 'class' | 'module' | 'adapter' | 'global'`. */
-  source: string
+  /** Source layer — see {@link TopologyContributorSource}. */
+  source: TopologyContributorSource
   /** Other contributor keys this one depends on. */
   dependsOn: readonly string[]
 }

@@ -2,6 +2,7 @@ import type http from 'node:http'
 import type { Express, RequestHandler, ErrorRequestHandler } from 'express'
 import type { Container } from './container'
 import type { ContributorRegistrations } from './context-decorator'
+import type { IntrospectionSnapshot } from './introspect'
 import type { MaybePromise, Constructor } from './interfaces'
 import type { KickJsPluginName } from './augmentation'
 
@@ -219,12 +220,12 @@ export interface AppAdapter {
    * the implementation cheap (counters + flags, no DB round trips) since
    * the topology endpoint polls on a short interval.
    *
-   * The return type is intentionally untyped at this layer to avoid
-   * `@forinda/kickjs` taking on a runtime dep on `@forinda/kickjs-devtools-kit`.
-   * Adapter authors should import and return `IntrospectionSnapshot`
-   * from `@forinda/kickjs-devtools-kit` directly.
+   * The return type lives in `@forinda/kickjs` itself ({@link IntrospectionSnapshot})
+   * so adopters can author `introspect()` without importing the kit just
+   * to satisfy the contract. The kit's own `IntrospectionSnapshot` type
+   * stays structurally identical; either import works.
    */
-  introspect?(): unknown | Promise<unknown>
+  introspect?(): IntrospectionSnapshot | Promise<IntrospectionSnapshot>
 
   /**
    * Optional DevTools tabs this adapter contributes (architecture.md §23).
