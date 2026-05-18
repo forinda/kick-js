@@ -21,7 +21,7 @@
     "@forinda/kickjs-swagger": "workspace:*",
     "@forinda/kickjs-ws": "workspace:*",
     "bcryptjs": "^3.0.3",
-    "bullmq": "^5.76.8",
+    "bullmq": "^5.76.10",
     "cors": "^2.8.6",
     "croner": "^10.0.1",
     "express": "^5.1.0",

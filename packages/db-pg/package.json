@@ -52,7 +52,7 @@
     }
   },
   "dependencies": {
-    "kysely": "0.29.0"
+    "kysely": "0.29.2"
   },
   "peerDependencies": {
     "@forinda/kickjs-db": "workspace:^",
@@ -64,8 +64,8 @@
     "@testcontainers/postgresql": "^11.14.0",
     "@types/node": "^25.8.0",
     "@types/pg": "^8.11.10",
-    "kysely": "^0.29.0",
-    "pg": "^8.13.1",
+    "kysely": "^0.29.2",
+    "pg": "^8.21.0",
     "typescript": "^6.0.3"
   },
   "publishConfig": {
