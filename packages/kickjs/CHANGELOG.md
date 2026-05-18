@@ -1,5 +1,53 @@
 # @forinda/kickjs
 
+## 5.8.0
+
+### Minor Changes
+
+- [#246](https://github.com/forinda/kick-js/pull/246) [`a94780c`](https://github.com/forinda/kick-js/commit/a94780c26ceee6355c4680a5aeed36d83664a021) Thanks [@forinda](https://github.com/forinda)! - feat(http): widen AdapterMiddleware.path + tighten handler typing + clarify lifecycle docs
+
+  Three improvements to the adapter middleware contract, surfacing from a real-world bug-report investigation that found no bug — just sharp edges:
+
+  **1. Widened path scope.** `AdapterMiddleware.path` now accepts `string | RegExp | (string | RegExp)[]` (new `MiddlewarePath` type, exported from `@forinda/kickjs`) instead of a bare `string`. Mirrors Express's native `app.use(path, …)` shape so adopters get the full range without learning a new mini-language:
+
+  ```ts
+  middleware() {
+    return [
+      { handler: rateLimit(), phase: 'beforeRoutes', path: ['/api', '/admin'] },
+      { handler: csrf(), phase: 'afterGlobal', path: /^\/api\/v\d+\//, },
+      { handler: bodyLog({ region: 'eu' }), phase: 'afterGlobal', path: ['/api', /^\/internal\//] },
+    ]
+  }
+  ```
+
+  The framework copies readonly arrays before passing to Express (`PathParams` requires a mutable array), so adopters can declare paths with `as const` without any runtime workaround.
+
+  **2. Tighter `handler` typing.** `AdapterMiddleware.handler` is now `RequestHandler | ErrorRequestHandler` instead of `any`. Adapters that ship error-handling middleware get type checking; the union resolves via Express's arity-based dispatch.
+
+  **3. Lifecycle JSDoc clarified.** The `MiddlewarePhase` JSDoc spells out the `afterRoutes` semantics — fires **only on fall-through** (no route matched, or a handler called `next()` without ending the response). Controllers that respond with `ctx.json(…)` end the chain and skip this phase. For per-response work (logging, metrics) the doc points adopters at `res.on('finish', …)` from an earlier phase instead. The `kick g middleware` generator template now embeds the same guidance so freshly scaffolded middleware files explain phase trade-offs at the point of use.
+
+  New tests in `__tests__/adapter-middleware-path-patterns.test.ts` exercise every path shape (string prefix, array of strings, single RegExp, mixed array, `as const` readonly array, omitted). The existing `lifecycle-mount-order.test.ts` continues to lock in the order semantics.
+
+### Patch Changes
+
+- [#241](https://github.com/forinda/kick-js/pull/241) [`e0bf64b`](https://github.com/forinda/kick-js/commit/e0bf64b28e032bd2fee88ed397740430c7d74ae8) Thanks [@forinda](https://github.com/forinda)! - fix(http): preserve module/adapter/global context contributors across auto-derived router builds
+
+  When a module returns `{ path, controller }` (auto-derive shape) instead of `{ path, router: buildRoutes(...) }`, the framework calls `buildRoutes(controller)` after `mod.routes()` returns. The internal `_externalContributorSources` slot was being cleared in a `finally` immediately after `mod.routes()` — so by the time `buildRoutes` ran, module-level, adapter-level, and global contributors were dropped from the pipeline. Any class/method-level `dependsOn` against a module-level key surfaced at boot as `MissingContributorError: Missing context contributor '<key>' required by '<dependent>' on route ...`.
+
+  The slot lifetime now spans both `mod.routes()` and the subsequent per-route `buildRoutes(controller)` calls, then clears in a single `finally`. Existing modules that pre-built routers inside `routes()` were unaffected (they ran while the slot was still set) — this fix closes the gap for the documented `{ path, controller }` shape and `defineModule({ build: () => ({ contributors, routes }) })` pattern.
+
+- [#245](https://github.com/forinda/kick-js/pull/245) [`a583829`](https://github.com/forinda/kick-js/commit/a5838298632e419389e3464779b9cb2f049d4392) Thanks [@forinda](https://github.com/forinda)! - test(http): lock in Application middleware lifecycle mount order
+
+  Adds a dedicated test file (`__tests__/lifecycle-mount-order.test.ts`) that exercises every documented step of `Application.setup()` and asserts the runtime mount order through the real Express stack. Six cases:
+  - `beforeMount` → `register()` → `beforeStart` hooks fire during `setup()` in adapter / plugin declaration order
+  - `afterStart` only fires under `start()`, never `setup()` (the documented contract for `createTestApp` compatibility)
+  - Per-request middleware fires in phase order: `beforeGlobal` (adapter) → plugin → user-declared global → `afterGlobal` (adapter) → `beforeRoutes` (adapter) → route handler
+  - `afterRoutes` middleware does fire when a request falls through to the 404 handler — guards against accidentally short-circuiting the chain
+  - Multiple adapters within the same phase fire in `dependsOn`-topological order at runtime (cascading from the existing construction-time sort to per-phase execution)
+  - Plugin middleware fires before user-declared global middleware (§3c precedes §4)
+
+  No production behaviour change — pure regression coverage for previously untested lifecycle contracts.
+
 ## 5.7.1
 
 ### Patch Changes
