@@ -105,6 +105,11 @@ const PACKAGE_REGISTRY: Record<string, PackageEntry> = {
     peers: ['kafkajs'],
     description: 'Queue with Kafka',
   },
+  'queue:redis-pubsub': {
+    pkg: '@forinda/kickjs-queue',
+    peers: ['ioredis'],
+    description: 'Lightweight pub/sub via Redis (no persistence)',
+  },
 
   // MCP — Model Context Protocol server
   mcp: {
