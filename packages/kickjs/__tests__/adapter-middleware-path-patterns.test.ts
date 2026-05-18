@@ -189,9 +189,7 @@ describe('AdapterMiddleware.path — widened pattern shapes', () => {
     const trace: string[] = []
     const adapter: AppAdapter = {
       name: 'A',
-      middleware: () => [
-        { handler: tap(trace, 'fired'), phase: 'beforeRoutes', path: PATHS },
-      ],
+      middleware: () => [{ handler: tap(trace, 'fired'), phase: 'beforeRoutes', path: PATHS }],
     }
     const app = new Application({
       modules: [new HelloModule(), new AdminModule()],
