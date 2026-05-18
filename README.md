@@ -16,7 +16,7 @@
 
 NestJS ergonomics without the complexity — decorators, DI, module system, code generators, and end-to-end type safety, powered by Zod and Vite.
 
-> **Heads-up — v4.2.0 just shipped.** Six wrappers (`graphql`, `otel`, `cron`, `mailer`, `multi-tenant`, `notifications`) are now flagged for removal in **v5.0.0**. Each is replaced by a 100-LOC BYO recipe that uses the framework's own primitives. See [Migration v4 → v5 guide](https://forinda.github.io/kick-js/guide/migration-v3-to-v4#dropped-packages-bring-your-own-via-defineadapter-defineplugin) for the cutover; [comparison.md](comparison.md) for why this is the strategic shape.
+> **Bring-Your-Own ecosystem.** Six historical wrappers (`graphql`, `otel`, `cron`, `mailer`, `multi-tenant`, `notifications`) have been replaced by ~100-LOC BYO recipes built on `defineAdapter()` / `definePlugin()` / `defineHttpContextDecorator()`. See the [BYO Recipes](https://forinda.github.io/kick-js/guide/byo-recipes.html) guide for each replacement.
 
 ## Install
 
@@ -34,8 +34,7 @@ cd my-api && pnpm dev
 
 ## Hello World
 
-A fresh `kick new my-api` scaffolds a complete project. Here are the files
-that matter, exactly as the CLI generates them:
+A fresh `kick new my-api` scaffolds a complete project. Here are the files that matter, exactly as the CLI generates them:
 
 ```ts
 // src/modules/hello/hello.service.ts
@@ -76,26 +75,25 @@ export class HelloController {
 
 ```ts
 // src/modules/hello/hello.module.ts
-import { type AppModule, type ModuleRoutes, buildRoutes } from '@forinda/kickjs'
+import { defineModule } from '@forinda/kickjs'
 import { HelloController } from './hello.controller'
 
-export class HelloModule implements AppModule {
-  routes(): ModuleRoutes {
-    return {
-      path: '/hello',
-      router: buildRoutes(HelloController),
-      controller: HelloController,
-    }
-  }
-}
+export const HelloModule = defineModule({
+  name: 'HelloModule',
+  build: () => ({
+    routes() {
+      return { path: '/hello', controller: HelloController }
+    },
+  }),
+})
 ```
 
 ```ts
 // src/modules/index.ts
-import type { AppModuleClass } from '@forinda/kickjs'
+import { defineModules } from '@forinda/kickjs'
 import { HelloModule } from './hello/hello.module'
 
-export const modules: AppModuleClass[] = [HelloModule]
+export const modules = defineModules().mount(HelloModule())
 ```
 
 ```ts
@@ -114,75 +112,72 @@ export const app = await bootstrap({ modules })
 
 ## Highlights
 
-- **Factory-first extensibility** — `defineAdapter()` / `definePlugin()` / `defineHttpContextDecorator()` are the entire extension surface; no class hierarchies to inherit from
-- **Custom DI container** — constructor and property injection, slash-delimited tokens (`createToken<T>('app/users/repository')`), three scopes (singleton / transient / request), no external dependency
-- **Typed Context Contributors** — `defineHttpContextDecorator()` populates `ctx.set('key', value)` once per request; `dependsOn` is typed against `keyof ContextMeta` (typos are TS errors, not boot-time `MissingContributorError`); same registration runs across HTTP / WS / queue / cron
-- **End-to-end type safety via typegen** — `kick typegen` (auto on `kick dev`) emits `KickRoutes`, `KickJsPluginRegistry`, `KickAssets`, `KickEnv` augmentations from source scan; `ctx.params/body/query`, `@Inject` literals, and asset paths all narrow as you save
-- **Decorator-driven** — `@Controller`, `@Get`/`@Post`/`@Put`/`@Delete`/`@Patch`, `@Service`, `@Autowired`, `@Middleware`, `@Roles`, `@Public`, `@Cacheable`
-- **Zod-native validation** — schemas double as OpenAPI documentation
-- **Vite HMR** — single-port dev server, zero-downtime hot reload, preserves DB/Redis/Socket connections, customizable HMR log
-- **DDD generators** — `kick g module users` scaffolds 18 files in 2 seconds; `kick g adapter` / `kick g plugin` emit the full hook surface so you delete what you don't need
-- **`kick g agents`** — regenerates `AGENTS.md` / `CLAUDE.md` / `kickjs-skills.md` in every project; one CLI command keeps every AI coding agent in sync with the latest framework conventions
-- **Auto OpenAPI** — Swagger UI and ReDoc from decorators + Zod schemas; pluggable schema parser + UI renderer for adopters who want corporate branding
-- **Built-in middleware** — helmet, CORS, CSRF, rate limiting, file uploads, request logging, request scope (AsyncLocalStorage)
-- **Cooperative shutdown** — `bootstrap({ processHooks: 'errors-only' })` lets observability SDKs (OpenTelemetry, Sentry) own SIGTERM without racing the framework; `Promise.allSettled` for adapter shutdown so one slow flush can't block siblings
-- **DevTools dashboard** — `/_debug` browser panel with topology, container, routes, metrics; adapter authors expose state via `introspect()` + `devtoolsTabs()` from `@forinda/kickjs-devtools-kit`
-- **Extensible CLI** — custom commands in `kick.config.ts`, plugin generators discovered from `node_modules`
+- **Factory-first extensibility** — `defineAdapter()` / `definePlugin()` / `defineModule()` / `defineHttpContextDecorator()` are the entire extension surface; no class hierarchies to inherit from.
+- **Custom DI container** — constructor and property injection, slash-delimited tokens (`createToken<T>('app/users/repository')`), three scopes (singleton / transient / request), no external dependency.
+- **Typed Context Contributors** — `defineHttpContextDecorator()` populates `ctx.set('key', value)` once per request; `dependsOn` is typed against `keyof ContextMeta` (typos are TS errors, not boot-time `MissingContributorError`); same registration runs across HTTP / WS / queue / cron.
+- **End-to-end type safety via typegen** — `kick typegen` (auto on `kick dev`) emits `KickRoutes`, `KickJsPluginRegistry`, `KickAssets`, `KickEnv` augmentations from source scan; `ctx.params/body/query`, `@Inject` literals, and asset paths all narrow as you save.
+- **Decorator-driven** — `@Controller`, `@Get`/`@Post`/`@Put`/`@Delete`/`@Patch`, `@Service`, `@Autowired`, `@Middleware`, `@Cacheable`, `@Cron`, `@Asset`.
+- **Zod-native validation** — schemas double as OpenAPI documentation.
+- **Vite HMR** — single-port dev server, zero-downtime hot reload, preserves DB/Redis/Socket connections, customizable HMR log.
+- **DDD generators** — `kick g module users` scaffolds a complete module in seconds; `kick g adapter` / `kick g plugin` emit the full hook surface so you delete what you don't need.
+- **`kick g agents`** — regenerates `CLAUDE.md` at the project root and `.agents/AGENTS.md` / `.agents/GEMINI.md` / `.agents/COPILOT.md` + per-skill `.agents/skills/<slug>/SKILL.md` files. One CLI command keeps every AI coding agent in sync with the latest framework conventions.
+- **Auto OpenAPI** — Swagger UI and ReDoc from decorators + Zod schemas; pluggable schema parser + UI renderer for adopters who want corporate branding.
+- **Built-in middleware** — helmet, CORS, CSRF, rate limiting, file uploads, request logging, request scope (AsyncLocalStorage).
+- **Cooperative shutdown** — `bootstrap({ processHooks: 'errors-only' })` lets observability SDKs (OpenTelemetry, Sentry) own SIGTERM without racing the framework; `Promise.allSettled` for adapter shutdown so one slow flush can't block siblings.
+- **DevTools dashboard** — `/_debug` browser panel with topology, container, routes, metrics; adapter authors expose state via `introspect()` ([type lives in `@forinda/kickjs` directly](https://forinda.github.io/kick-js/guide/devtools.html) — no extra import needed) + `devtoolsTabs()` from `@forinda/kickjs-devtools-kit`.
+- **Extensible CLI** — custom commands in `kick.config.ts`, plugin generators registered as real Commander subcommands so they appear in `kick g --help`, jiti-powered TS config loading, walk-up project-root resolution.
 
 ## Ecosystem
 
-KickJS deliberately ships a small, stable core. The "right" extension surface is `defineAdapter()` / `definePlugin()` / `defineHttpContextDecorator()` plus `getRequestValue` / `processHooks` from `@forinda/kickjs` — adopters compose ecosystem-specific glue (GraphQL runtimes, OTel SDKs, mail providers, auth flows) on top of those primitives via short copy-paste recipes. Several wrappers are deprecated for v5 because the BYO recipe is shorter and ages better than a thin first-party wrapper around a fast-moving upstream.
-
-> **`@forinda/kickjs-auth` joins the BYO list as of this release.** The new parameterised context contributors (`@LoadX({...})` + `.with()`) cover every shape the package wrapped — JWT / API-key / OAuth / Session / Passport bridge — without coupling your auth surface to the framework's release cadence. See the [BYO Auth recipe](https://forinda.github.io/kick-js/guide/byo-recipes.html#auth) for the full migration guide and the [Context Decorators guide](https://forinda.github.io/kick-js/guide/context-decorators.html) for the underlying primitive.
+KickJS deliberately ships a small, stable core. The "right" extension surface is `defineAdapter()` / `definePlugin()` / `defineHttpContextDecorator()` plus `getRequestValue` / `processHooks` from `@forinda/kickjs` — adopters compose ecosystem-specific glue (GraphQL runtimes, OTel SDKs, mail providers, auth flows) on top of those primitives via short copy-paste recipes. The wrappers dropped between v4 and v5 (`graphql`, `otel`, `cron`, `mailer`, `multi-tenant`, `notifications`) had each chosen an opinionated default that adopters consistently swapped within weeks; the BYO recipes use the same primitives the framework itself exposes — so adopters keep typed DI, lifecycle hooks, the contributor pipeline, and DevTools `introspect()` — without paying for a layer they were going to bypass anyway.
 
 ### Core packages
 
 Three packages ship with every project — `kick new` always installs them, and `kick add` won't list them as optional. Together they're the framework runtime + the dev/build/scaffold loop:
 
-| Package                                  | Description                                                                                                  |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| [`@forinda/kickjs`](packages/kickjs/)    | Core framework — DI, decorators, Express 5, routing, middleware, contributors, request store, `processHooks` |
-| [`@forinda/kickjs-vite`](packages/vite/) | Vite plugin — single-port HMR, typegen watcher, customizable HMR log                                         |
-| [`@forinda/kickjs-cli`](packages/cli/)   | Scaffolding, DDD generators, custom commands, `kick g agents`                                                |
+| Package                                  | Description                                                                                                         |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| [`@forinda/kickjs`](packages/kickjs/)    | Core framework — DI, decorators, Express 5, routing, middleware, contributors, request store, `processHooks`        |
+| [`@forinda/kickjs-vite`](packages/vite/) | Vite plugin — single-port HMR, typegen watcher, customizable HMR log                                                |
+| [`@forinda/kickjs-cli`](packages/cli/)   | Scaffolding, DDD generators, custom commands, `kick g agents`, jiti-powered TS config loading, walk-up project root |
 
 ### Optional packages
 
-Everything else — auth, swagger, db, queue, ws, devtools, etc. — installs on demand. The catalog moves over time (new packages land, deprecated ones move out), so the live list lives next to the CLI rather than this README:
+Everything else — swagger, the db family, queue, ws, devtools, drizzle, prisma — installs on demand. The catalog moves over time, so the live list lives next to the CLI rather than this README:
 
 ```bash
-kick add --list   # current optional catalog
-kick add auth swagger drizzle   # install several at once
+kick add --list           # current optional catalog
+kick add swagger drizzle  # install several at once
 ```
 
 Browse `packages/` in this repo for the full source layout.
 
-### Deprecated — going private in v5
+### Replaced by BYO recipes (no first-party wrapper)
 
-These packages are still installable in v4.1.x and emit deprecation notices. The replacement for each is a copy-paste recipe under 100 lines that uses the supported core primitives directly. v5 removes them from the public registry; the in-tree source either disappears or stays as a private internal dep.
+Each of the v5 cuts has a focused copy-paste recipe under the supported core primitives. Recipes age better than wrapper packages because the upstream SDK shape is your contract, not ours:
 
-| Package                                                    | BYO replacement                                                                                                                                                                                                        |
-| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`@forinda/kickjs-graphql`](packages/graphql/)             | [guide/graphql](https://forinda.github.io/kick-js/guide/graphql) — wrap `graphql-http` / `graphql-yoga` / Apollo / Pothos via `definePlugin`                                                                           |
-| [`@forinda/kickjs-otel`](packages/otel/)                   | [guide/otel](https://forinda.github.io/kick-js/guide/otel) — own the OpenTelemetry NodeSDK lifecycle; pair with `bootstrap({ processHooks: 'errors-only' })` so the SDK's SIGTERM handler doesn't race the framework's |
-| [`@forinda/kickjs-cron`](packages/cron/)                   | [guide/cron](https://forinda.github.io/kick-js/guide/cron) — wrap `croner` via `defineAdapter` + framework metadata helpers                                                                                            |
-| [`@forinda/kickjs-mailer`](packages/mailer/)               | [guide/mailer](https://forinda.github.io/kick-js/guide/mailer) — `nodemailer` / Resend / SES via `definePlugin`, plus a console-mailer asset-manager example                                                           |
-| [`@forinda/kickjs-multi-tenant`](packages/multi-tenant/)   | [guide/multi-tenancy](https://forinda.github.io/kick-js/guide/multi-tenancy) — `defineHttpContextDecorator` + `Scope.REQUEST` per-tenant DB factory                                                                    |
-| [`@forinda/kickjs-notifications`](packages/notifications/) | [guide/notifications](https://forinda.github.io/kick-js/guide/notifications) — channel interface + `definePlugin` registration                                                                                         |
-
-**Why the cut:** thin wrappers around fast-moving ecosystems were costing more in CI/build time than they were saving adopters. Each shipped wrapper made an opinionated choice (which OTel exporter, which mail provider, which GraphQL runtime) that adopters consistently swapped within weeks. The BYO recipes use the same primitives the framework itself exposes — so adopters keep typed DI, lifecycle hooks, the contributor pipeline, and DevTools `introspect()` — and stop paying for an extra layer they were going to bypass anyway. See [comparison.md](comparison.md) for the strategic positioning.
+| Capability                   | Recipe                                                                                                                                                                                                                     |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GraphQL                      | [guide/byo-recipes#graphql](https://forinda.github.io/kick-js/guide/byo-recipes.html#graphql) — `graphql-http` / `graphql-yoga` / Apollo / Pothos via `definePlugin`                                                       |
+| OpenTelemetry                | [guide/byo-recipes#otel](https://forinda.github.io/kick-js/guide/byo-recipes.html#opentelemetry) — own the NodeSDK lifecycle; pair with `bootstrap({ processHooks: 'errors-only' })`                                       |
+| Cron / scheduling            | [guide/byo-recipes#cron](https://forinda.github.io/kick-js/guide/byo-recipes.html#cron) — `croner` via `defineAdapter` + framework metadata helpers                                                                        |
+| Mailer                       | [guide/byo-recipes#mailer](https://forinda.github.io/kick-js/guide/byo-recipes.html#mailer) — `nodemailer` / Resend / SES via `definePlugin`                                                                               |
+| Multi-tenancy                | [guide/byo-recipes#multi-tenancy](https://forinda.github.io/kick-js/guide/byo-recipes.html#multi-tenancy) — `defineHttpContextDecorator` + `Scope.REQUEST` per-tenant DB factory                                           |
+| Notifications                | [guide/byo-recipes#notifications](https://forinda.github.io/kick-js/guide/byo-recipes.html#notifications) — channel interface + `definePlugin` registration                                                                |
+| Auth (JWT / OAuth / API key) | [guide/byo-recipes#auth](https://forinda.github.io/kick-js/guide/byo-recipes.html#auth) — parameterised context contributors (`@LoadUser({ source })` + `.with()`) cover every shape the old `kickjs-auth` package wrapped |
 
 ## Example Apps
 
-| Example                                                          | What it shows                                                      |
-| ---------------------------------------------------------------- | ------------------------------------------------------------------ |
-| [minimal-api](examples/minimal-api/)                             | Simplest possible app — bootstrap + one controller                 |
-| [task-drizzle-api](examples/task-drizzle-api/)                   | Full task management app — PostgreSQL + Drizzle, 14 DDD modules    |
-| [task-prisma-api](examples/task-prisma-api/)                     | Full task management app — PostgreSQL + Prisma 7 (driver adapters) |
-| [task-kickdb-api](examples/task-kickdb-api/)                     | KickJS-native ORM (M1) — PostgreSQL + `@forinda/kickjs-db`         |
-| [task-mongoose-api](examples/task-mongoose-api/)                 | Full task management app — MongoDB + Mongoose                      |
-| [multi-tenant-drizzle-api](examples/multi-tenant-drizzle-api/)   | Multi-tenant pattern — PostgreSQL + Drizzle                        |
-| [multi-tenant-prisma-api](examples/multi-tenant-prisma-api/)     | Multi-tenant pattern — PostgreSQL + Prisma                         |
-| [multi-tenant-mongoose-api](examples/multi-tenant-mongoose-api/) | Multi-tenant pattern — MongoDB + Mongoose                          |
+| Example                                                          | What it shows                                         |
+| ---------------------------------------------------------------- | ----------------------------------------------------- |
+| [minimal-api](examples/minimal-api/)                             | Simplest possible app — bootstrap + one controller    |
+| [task-drizzle-api](examples/task-drizzle-api/)                   | Full task management app — PostgreSQL + Drizzle       |
+| [task-prisma-api](examples/task-prisma-api/)                     | Full task management app — PostgreSQL + Prisma 7      |
+| [task-kickdb-api](examples/task-kickdb-api/)                     | KickJS-native ORM — PostgreSQL + `@forinda/kickjs-db` |
+| [task-mongoose-api](examples/task-mongoose-api/)                 | Full task management app — MongoDB + Mongoose         |
+| [multi-tenant-drizzle-api](examples/multi-tenant-drizzle-api/)   | Multi-tenant pattern — PostgreSQL + Drizzle           |
+| [multi-tenant-prisma-api](examples/multi-tenant-prisma-api/)     | Multi-tenant pattern — PostgreSQL + Prisma            |
+| [multi-tenant-mongoose-api](examples/multi-tenant-mongoose-api/) | Multi-tenant pattern — MongoDB + Mongoose             |
 
 ## Adding an Example App
 
@@ -234,23 +229,24 @@ kick dev                             # Vite HMR dev server (~200ms reload)
 kick build && kick start             # Production build + run
 
 # Code generation
-kick g module users                  # Full DDD module (18 files)
+kick g module users                  # Full DDD module
 kick g module users --repo prisma    # …with a Prisma repository
 kick g module users --repo drizzle   # …with a Drizzle repository
 kick g scaffold post title:string body:text:optional  # CRUD from field defs
-kick g controller auth               # Single @Controller class
+kick g controller users              # Single @Controller class
 kick g service payment               # Single @Service class
 kick g adapter websocket             # AppAdapter — every hook stubbed + JSDoc
 kick g plugin analytics              # KickPlugin — every hook stubbed + JSDoc
-kick g resolver / job / dto / guard / middleware / test  # one-file scaffolds
+kick g job / dto / guard / middleware / test  # one-file scaffolds
 
 # AI agent docs (regenerate from upstream templates after framework upgrades)
-kick g agents                        # Refresh AGENTS.md / CLAUDE.md / kickjs-skills.md
-kick g agents --only skills -f       # Just the skills file
+kick g agents                        # CLAUDE.md (root) + .agents/{AGENTS,GEMINI,COPILOT}.md + .agents/skills/*/SKILL.md
+kick g agents --only skills -f       # Just the per-skill SKILL.md files
+kick g agents --only gemini -f       # Just .agents/GEMINI.md
 
 # Package management
-kick add auth swagger drizzle        # Install KickJS packages with peer deps
-kick add --list                      # Show all available packages (deprecated ones are flagged)
+kick add swagger drizzle             # Install KickJS packages with peer deps
+kick add --list                      # Show all available packages
 
 # Introspection
 kick info                            # System + framework version
@@ -276,13 +272,11 @@ kick tinker                          # Interactive REPL with full DI graph
 | --------------- | -------- | -------- | -------- | ------------ | ---- |
 | Production      | Yes      | Yes      | Yes      | Experimental | No   |
 | Dev Mode (HMR)  | Yes      | Yes      | Yes      | No           | No   |
-| Tests (Vitest)  | Yes      | Yes      | Yes\*    | Partial      | No   |
+| Tests (Vitest)  | Yes      | Yes      | Yes      | Partial      | No   |
 | CLI (`kick`)    | Yes      | Yes      | Yes      | Experimental | No   |
 | Pure ESM Import | Yes      | Yes      | Yes      | Yes          | Yes  |
 
 > **Node 20** is the minimum supported version (LTS with native ESM).
->
-> **Node 24**: mailer tests need `server.deps.external` for nodemailer CJS.
 >
 > **Bun**: core DI and decorators work; full HTTP pipeline is experimental.
 >

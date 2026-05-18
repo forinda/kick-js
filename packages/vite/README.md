@@ -37,7 +37,7 @@ The plugin reads the exported `app` from the entry file, mounts Express on Vite'
 
 ## Documentation
 
-[forinda.github.io/kick-js/guide/vite-plugin](https://forinda.github.io/kick-js/guide/vite-plugin)
+[forinda.github.io/kick-js/guide/hmr](https://forinda.github.io/kick-js/guide/hmr)
 
 ## License
 

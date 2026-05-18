@@ -30,8 +30,14 @@ Pluggable authentication for KickJS — JWT, API key, OAuth, Session, Passport b
 ## Install
 
 ```bash
-kick add auth
+pnpm add @forinda/kickjs-auth
 ```
+
+> Not available via `kick add` — `@forinda/kickjs-auth` has been removed
+> from the CLI's optional-package catalog in favour of the [BYO Auth
+> recipe](https://forinda.github.io/kick-js/guide/byo-recipes.html#auth)
+> (parameterised context contributors). Existing adopters who still
+> depend on this package install it manually with the command above.
 
 ## Quick Example
 
