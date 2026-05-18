@@ -99,15 +99,18 @@ export function mergeCliPlugins(
     }
   }
 
+  /**
+   * Apply every plugin's `register()` callback in input order against the
+   * given Commander program. Each callback receives a {@link KickCliPluginContext}:
+   * caller-supplied ctx wins (test fixtures can inject a different
+   * workspace boundary); otherwise a default ctx is built with
+   * `findProjectRoot(process.cwd())` as the project root, `cwd` matching
+   * `process.cwd()`, null config, no-op log, and the merged generator set
+   * threaded through so the `kick/generate` built-in can surface each as
+   * a Commander subcommand. The dynamic import of `findProjectRoot` keeps
+   * the caller-supplied fast path zero-cost.
+   */
   const register = async (program: Command, ctx?: KickCliPluginContext): Promise<void> => {
-    // Default ctx if caller didn't provide one (tests, scripts). Thread
-    // `generators` through so the `kick/generate` built-in can register
-    // each plugin generator as a real Commander subcommand. Caller-
-    // supplied ctx wins for every field — including `generators` and
-    // `projectRoot`, in case a test fixture wants to inject a different
-    // workspace boundary. Lazy-resolve `findProjectRoot` only when no
-    // caller-provided ctx supplies a projectRoot — keeps the no-op
-    // fast path zero-cost.
     let resolved: KickCliPluginContext
     if (ctx) {
       resolved = { generators, ...ctx }
