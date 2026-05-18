@@ -321,6 +321,7 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
             args: rest,
             flags: opts as unknown as Record<string, string | boolean>,
             cwd: process.cwd(),
+            projectRoot: ctx?.projectRoot,
           },
           merged.generators,
         )
@@ -695,7 +696,7 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
   // the first positional as `itemName` for dispatch — the spec entry
   // is purely a documentation hint to Commander.
   for (const entry of ctx?.generators ?? []) {
-    registerPluginGeneratorSubcommand(gen, entry)
+    registerPluginGeneratorSubcommand(gen, entry, ctx?.projectRoot)
   }
 }
 
@@ -723,7 +724,11 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
  * The source plugin name is appended to the description in `[brackets]`
  * so adopters can see at a glance which plugin shipped each generator.
  */
-function registerPluginGeneratorSubcommand(gen: Command, entry: DiscoveredGenerator): void {
+function registerPluginGeneratorSubcommand(
+  gen: Command,
+  entry: DiscoveredGenerator,
+  projectRoot?: string,
+): void {
   const { source, spec } = entry
   const firstArg = spec.args?.[0]
   const firstArgName = firstArg?.name ?? 'itemName'
@@ -758,6 +763,7 @@ function registerPluginGeneratorSubcommand(gen: Command, entry: DiscoveredGenera
           args: extraArgs ?? [],
           flags: opts as Record<string, string | boolean>,
           cwd: process.cwd(),
+          projectRoot,
         },
         [entry],
       )
