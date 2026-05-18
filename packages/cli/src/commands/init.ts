@@ -8,7 +8,6 @@ import { resolvePackageManager } from './add'
 
 /** All optional packages available for selection */
 const OPTIONAL_PACKAGES = [
-  { value: 'auth', label: 'Auth', hint: 'JWT, OAuth, API keys' },
   { value: 'swagger', label: 'Swagger', hint: 'OpenAPI docs' },
   { value: 'ws', label: 'WebSocket', hint: 'rooms, heartbeat' },
   { value: 'queue', label: 'Queue', hint: 'BullMQ/RabbitMQ/Kafka' },

@@ -20,7 +20,6 @@ import { generateConfig } from '../generators/config'
 import { generateAgentDocs } from '../generators/agent-docs'
 import { findStyleDriftModules } from '../generators/migrate-modules'
 import { colors } from '../utils/colors'
-import { generateAuthScaffold } from '../generators/auth-scaffold'
 import { generateJob } from '../generators/job'
 import { generateScaffold, parseFields } from '../generators/scaffold'
 import { generateTest } from '../generators/test'
@@ -32,7 +31,6 @@ import {
 } from '../config'
 import { setDryRun } from '../utils/fs'
 import { runTypegen } from '../typegen'
-import { select, confirm as promptConfirm } from '../utils/prompts'
 
 /** Options accepted by `kick g module` and the bare `kick g <name>` shortcut. */
 interface ModuleGenOpts {
@@ -72,12 +70,6 @@ interface ScaffoldOpts {
   tests?: boolean
   pluralize?: boolean
   modulesDir?: string
-}
-
-interface AuthScaffoldOpts {
-  strategy?: 'jwt' | 'session'
-  roleGuards?: boolean
-  out: string
 }
 
 interface ConfigOpts {
@@ -616,49 +608,6 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
       }
       printGenerated(files, dryRun)
       await runPostTypegen(dryRun)
-    })
-
-  // ── kick g auth-scaffold ─────────────────────────────────────────────
-  gen
-    .command('auth-scaffold')
-    .description(
-      'Generate a complete auth module (register, login, logout, password hashing)\n' +
-        '  Includes controller, service, DTOs, and test stubs.',
-    )
-    .option('-s, --strategy <type>', 'Auth strategy: jwt | session')
-    .option('--role-guards', 'Generate role-based guards (default: true)')
-    .option('--no-role-guards', 'Skip role-based guard generation')
-    .option('-o, --out <dir>', 'Output directory', 'src/modules/auth')
-    .action(async (opts: AuthScaffoldOpts, cmd: Command) => {
-      const dryRun = isDryRun(cmd)
-      setDryRun(dryRun)
-
-      // Interactive prompts when flags not provided
-      let strategy = opts.strategy
-      if (!strategy) {
-        strategy = await select({
-          message: 'Auth strategy',
-          options: [
-            { value: 'jwt', label: 'JWT', hint: 'stateless token-based auth' },
-            { value: 'session', label: 'Session', hint: 'server-side session with cookies' },
-          ],
-        })
-      }
-
-      let roleGuards = opts.roleGuards
-      if (roleGuards === undefined) {
-        roleGuards = await promptConfirm({
-          message: 'Generate role-based guards?',
-          initialValue: true,
-        })
-      }
-
-      const files = await generateAuthScaffold({
-        strategy,
-        outDir: opts.out,
-        roleGuards,
-      })
-      printGenerated(files, dryRun)
     })
 
   // ── kick g config ────────────────────────────────────────────────────
