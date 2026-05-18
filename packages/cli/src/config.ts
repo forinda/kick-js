@@ -549,13 +549,18 @@ export async function loadKickConfig(startDir: string): Promise<KickConfig | nul
     const isTs = filename.endsWith('.ts')
 
     if (isTs) {
+      // Split the import-jiti step from the load-user-config step so the
+      // diagnostic blames the right thing. Both surface as Node module-
+      // resolution errors with similar shapes (`Cannot find package …`,
+      // `ERR_MODULE_NOT_FOUND`), but the remedies differ:
+      //
+      // - Missing jiti  → adopter needs to install jiti.
+      // - Missing dep referenced from kick.config.ts → adopter needs to
+      //   install THAT package; telling them to install jiti would send
+      //   them to the wrong fix and bury the real missing module.
+      let jitiModule: typeof import('jiti')
       try {
-        const { createJiti } = await import('jiti')
-        const jiti = createJiti(root, { interopDefault: true, fsCache: false })
-        const config = (await jiti.import(filepath, { default: true })) as KickConfig
-        const warnings = validateAssetMap(config, root)
-        for (const warning of warnings) console.warn(`  Warning: ${warning}`)
-        return config
+        jitiModule = await import('jiti')
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         if (msg.includes("Cannot find package 'jiti'") || msg.includes('ERR_MODULE_NOT_FOUND')) {
@@ -565,8 +570,20 @@ export async function loadKickConfig(startDir: string): Promise<KickConfig | nul
               'to kick.config.js / kick.config.mjs / kick.config.json.',
           )
         } else {
-          console.warn(`Warning: Failed to load ${filename}: ${msg}`)
+          console.warn(`Warning: Failed to initialize jiti for ${filename}: ${msg}`)
         }
+        continue
+      }
+
+      try {
+        const jiti = jitiModule.createJiti(root, { interopDefault: true, fsCache: false })
+        const config = (await jiti.import(filepath, { default: true })) as KickConfig
+        const warnings = validateAssetMap(config, root)
+        for (const warning of warnings) console.warn(`  Warning: ${warning}`)
+        return config
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        console.warn(`Warning: Failed to load ${filename}: ${msg}`)
         continue
       }
     }
