@@ -28,6 +28,7 @@ import type { Command } from 'commander'
 import type { TypegenPlugin } from '../typegen/plugin'
 import type { KickCommandDefinition, KickConfig } from '../config'
 import type { GeneratorSpec } from '../generator-extension/define'
+import type { DiscoveredGenerator } from '../generator-extension/discover'
 
 /**
  * Runtime context handed to `register()` — saves callbacks from
@@ -39,6 +40,18 @@ export interface KickCliPluginContext {
   /** Resolved kick.config.ts (null if the project has none). */
   config: KickConfig | null
   log: (msg: string) => void
+  /**
+   * Plugin-shipped generators merged from built-ins + adopter
+   * `kick.config.ts > plugins[]`. Populated by `mergeCliPlugins` and
+   * threaded through so `register()` callbacks (notably
+   * `kick/generate`) can register each plugin generator as a real
+   * Commander subcommand — without that, plugin generators only fire
+   * via the bare-action dispatch and are invisible to `kick g --help`.
+   *
+   * Optional so light test harnesses that call `plugin.register(program)`
+   * directly (no merge step) stay unaffected.
+   */
+  generators?: DiscoveredGenerator[]
 }
 
 export interface KickCliPlugin {

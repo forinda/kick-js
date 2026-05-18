@@ -76,3 +76,30 @@ export interface TypegenPluginResult {
   status: 'written' | 'unchanged' | 'skipped'
   outFile?: string
 }
+
+/**
+ * Identity factory for {@link TypegenPlugin}. Returns the spec verbatim.
+ * Exists for type inference and forward-compatibility — future
+ * fields can be added with defaults without breaking adopters.
+ *
+ * Mirrors {@link defineGenerator} ergonomics. Use at the call site so
+ * the plugin's `generate(ctx)` body gets a fully-typed `ctx` without
+ * an explicit annotation:
+ *
+ * @example
+ * ```ts
+ * import { defineTypegen } from '@forinda/kickjs-cli'
+ *
+ * export const drizzleTypegen = defineTypegen({
+ *   id: 'drizzle',
+ *   inputs: ['src/db/schema.ts'],
+ *   async generate(ctx) {
+ *     const schema = await ctx.importTs(`${ctx.cwd}/src/db/schema.ts`)
+ *     return `// declare module …`
+ *   },
+ * })
+ * ```
+ */
+export function defineTypegen(spec: TypegenPlugin): TypegenPlugin {
+  return spec
+}

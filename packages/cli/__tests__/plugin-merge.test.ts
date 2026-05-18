@@ -112,4 +112,70 @@ describe('mergeCliPlugins', () => {
     expect(r.generators[0].source).toBe('cqrs-plugin')
     expect(r.generators[0].spec).toBe(spec)
   })
+
+  it('threads merged generators into the register ctx', async () => {
+    const spec = {
+      name: 'drizzle-typegen',
+      description: 'Generate Drizzle types',
+      args: [{ name: 'schema', required: true }],
+      files: () => [],
+    }
+    const plugin = defineCliPlugin({ name: 'drizzle', generators: [spec] })
+    let seen: unknown
+    const consumer = defineCliPlugin({
+      name: 'consumer',
+      register: (_program, ctx) => {
+        seen = ctx?.generators
+      },
+    })
+    const r = mergeCliPlugins([plugin, consumer])
+    await r.register(new Command())
+    expect(Array.isArray(seen)).toBe(true)
+    expect((seen as { spec: { name: string } }[]).map((g) => g.spec.name)).toEqual([
+      'drizzle-typegen',
+    ])
+  })
+})
+
+describe('plugin generators registered as Commander subcommands', () => {
+  it('each plugin generator becomes a kick g <name> subcommand', async () => {
+    const { registerGenerateCommand } = await import('../src/commands/generate')
+    const spec = {
+      name: 'drizzle-typegen',
+      description: 'Generate Drizzle types',
+      args: [{ name: 'schema', required: true }],
+      flags: [{ name: 'output', description: 'Output path' }],
+      files: () => [],
+    }
+    const program = new Command()
+    registerGenerateCommand(program, {
+      cwd: process.cwd(),
+      config: null,
+      log: () => {},
+      generators: [{ source: 'test-plugin', spec }],
+    })
+    const gen = program.commands.find((c) => c.name() === 'generate')!
+    const sub = gen.commands.find((c) => c.name() === 'drizzle-typegen')
+    expect(sub).toBeDefined()
+    // Description includes the source plugin in brackets so adopters
+    // can tell at a glance which plugin shipped the generator.
+    expect(sub!.description()).toContain('Generate Drizzle types')
+    expect(sub!.description()).toContain('[test-plugin]')
+    // First positional honors required-ness from spec.args[0].
+    expect(sub!.usage()).toMatch(/<schema>/)
+    // Flags declared on the spec show up as --flags.
+    const outputFlag = sub!.options.find((o) => o.long === '--output')
+    expect(outputFlag).toBeDefined()
+  })
+
+  it('does not register plugin subcommands when ctx.generators is omitted', async () => {
+    const { registerGenerateCommand } = await import('../src/commands/generate')
+    const program = new Command()
+    registerGenerateCommand(program)
+    const gen = program.commands.find((c) => c.name() === 'generate')!
+    // Built-in subcommands still register (module, controller, etc.).
+    expect(gen.commands.length).toBeGreaterThan(0)
+    // But no plugin-shipped generator slipped in.
+    expect(gen.commands.find((c) => c.name() === 'drizzle-typegen')).toBeUndefined()
+  })
 })

@@ -100,11 +100,14 @@ export function mergeCliPlugins(
   }
 
   const register = async (program: Command, ctx?: KickCliPluginContext): Promise<void> => {
-    const resolved: KickCliPluginContext = ctx ?? {
-      cwd: process.cwd(),
-      config: null,
-      log: () => {},
-    }
+    // Default ctx if caller didn't provide one (tests, scripts). Thread
+    // `generators` through so the `kick/generate` built-in can register
+    // each plugin generator as a real Commander subcommand. Caller-
+    // supplied ctx wins for every field — including `generators`, in
+    // case a test fixture wants to inject a different set.
+    const resolved: KickCliPluginContext = ctx
+      ? { generators, ...ctx }
+      : { cwd: process.cwd(), config: null, log: () => {}, generators }
     for (const p of plugins) {
       if (p.register) await p.register(program, resolved)
     }
