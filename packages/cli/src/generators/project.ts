@@ -24,12 +24,7 @@ import {
   generateHelloController,
   generateHelloModule,
 } from './templates/project-app'
-import {
-  generateReadme,
-  generateClaude,
-  generateAgents,
-  generateKickJsSkills,
-} from './templates/project-docs'
+import { generateReadme } from './templates/project-docs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const cliPkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'))
@@ -189,20 +184,23 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
   // ── README.md ────────────────────────────────────────────────────────
   await writeFileSafe(join(dir, 'README.md'), generateReadme(name, template, packageManager))
 
-  // ── CLAUDE.md ────────────────────────────────────────────────────────
-  await writeFileSafe(join(dir, 'CLAUDE.md'), generateClaude(name, template, packageManager))
-
-  // ── AGENTS.md ────────────────────────────────────────────────────────
-  await writeFileSafe(join(dir, 'AGENTS.md'), generateAgents(name, template, packageManager))
-
-  // ── kickjs-skills.md ────────────────────────────────────────────────
-  // Task-oriented "skill" recipes for AI agents — short rigid workflows
-  // keyed to triggers (add-module, write-test, env-wiring-check, …).
-  // Regenerate later with `kick g agents -f --only skills`.
-  await writeFileSafe(
-    join(dir, 'kickjs-skills.md'),
-    generateKickJsSkills(name, template, packageManager),
-  )
+  // ── Agent docs ──────────────────────────────────────────────────────
+  // Delegate to `generateAgentDocs()` so `kick new` emits the same
+  // `.agents/` subfolder layout as `kick g agents -f`. Otherwise the
+  // two paths drifted: kick new was writing the legacy flat layout
+  // (root-level AGENTS.md + kickjs-skills.md) while kick g agents
+  // emits the per-skill SKILL.md format under .agents/. `force: true`
+  // because the project directory is fresh — no overwrite prompts
+  // make sense during init.
+  const { generateAgentDocs } = await import('./agent-docs')
+  await generateAgentDocs({
+    outDir: dir,
+    name,
+    pm: packageManager,
+    template,
+    only: 'all',
+    force: true,
+  })
 
   // ── Install Dependencies ────────────────────────────────────────────
   // Install BEFORE git init so the lockfile is included in the first commit.

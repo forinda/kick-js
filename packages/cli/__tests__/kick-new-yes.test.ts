@@ -125,4 +125,31 @@ describe('kick new --yes (non-interactive)', () => {
     expect(existsSync(join(target, 'existing.txt'))).toBe(false)
     expect(existsSync(join(target, 'kick.config.ts'))).toBe(true)
   })
+
+  // Regression: kick new used to emit the legacy flat agent layout
+  // (AGENTS.md + kickjs-skills.md at the project root) even after
+  // `kick g agents` migrated to the `.agents/` subfolder format.
+  // The two paths drifted because kick new had its own emission
+  // logic; it now delegates to `generateAgentDocs()` so the layout
+  // stays in lockstep.
+  it('emits the .agents/ subfolder layout (no flat AGENTS.md / kickjs-skills.md at root)', () => {
+    const result = runNew(cwd, ['my-api', '--yes', '--no-install', '--no-git'])
+    expect(result.exitCode).toBe(0)
+    const project = join(cwd, 'my-api')
+
+    // CLAUDE.md stays at the project root (Claude Code auto-loads from
+    // there); everything else lives under `.agents/`.
+    expect(existsSync(join(project, 'CLAUDE.md'))).toBe(true)
+    expect(existsSync(join(project, 'AGENTS.md'))).toBe(false)
+    expect(existsSync(join(project, 'kickjs-skills.md'))).toBe(false)
+
+    expect(existsSync(join(project, '.agents', 'AGENTS.md'))).toBe(true)
+    expect(existsSync(join(project, '.agents', 'GEMINI.md'))).toBe(true)
+    expect(existsSync(join(project, '.agents', 'COPILOT.md'))).toBe(true)
+
+    // Per-skill SKILL.md format — at least one slug confirms the
+    // structure; a missing add-module slug would mean the
+    // generateKickJsSkillFiles helper is no longer wired up.
+    expect(existsSync(join(project, '.agents', 'skills', 'add-module', 'SKILL.md'))).toBe(true)
+  })
 })

@@ -1,10 +1,10 @@
 # CLAUDE.md — KickJS Development Guide
 
-> **Read [`AGENTS.md`](./AGENTS.md) first.** It is the canonical, multi-agent
-> reference for this monorepo (Claude, Copilot, Codex, Gemini, etc.). This
-> file mirrors the same project context distilled for Claude, plus
+> **Read [`.agents/AGENTS.md`](./.agents/AGENTS.md) first.** It is the canonical,
+> multi-agent reference for this monorepo (Claude, Copilot, Codex, Gemini, etc.).
+> This file mirrors the same project context distilled for Claude, plus
 > Claude-specific notes. When the two disagree on anything substantive, treat
-> `AGENTS.md` as authoritative and flag the discrepancy.
+> `.agents/AGENTS.md` as authoritative and flag the discrepancy.
 
 ## Project Overview
 
