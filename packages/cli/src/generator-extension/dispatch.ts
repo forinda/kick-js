@@ -95,6 +95,17 @@ function findGenerator(discovery: DiscoveryResult, name: string): DiscoveredGene
   return discovery.generators.find((g) => g.spec.name === name)
 }
 
+/**
+ * Invoke a {@link GeneratorSpec.files} factory with a fully-populated
+ * {@link GeneratorContext}, write every returned file under the context's
+ * cwd, and return the absolute paths along with the source plugin name.
+ *
+ * Threads `input.projectRoot` through to `buildGeneratorContext` so
+ * callers that already resolved the project root (the CLI entry does
+ * this once at startup) avoid a redundant filesystem walk. When omitted,
+ * `buildGeneratorContext` derives `projectRoot` from `cwd` via
+ * `findProjectRoot()` — keeping ad-hoc callers zero-config.
+ */
 async function runGenerator(
   spec: GeneratorSpec,
   source: string,

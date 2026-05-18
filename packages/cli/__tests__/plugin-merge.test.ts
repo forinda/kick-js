@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { Command } from 'commander'
+import { isAbsolute } from 'node:path'
 
 import { defineCliPlugin, mergeCliPlugins, KickPluginConflictError } from '../src/plugin'
 
@@ -166,9 +167,11 @@ describe('mergeCliPlugins', () => {
     await r.register(new Command())
     // findProjectRoot(process.cwd()) returns an absolute path. We can't
     // assert the exact value (it depends on where the test runs from),
-    // but it must be a non-empty absolute path.
+    // but it must be a non-empty absolute path — assert both since the
+    // contract on KickCliPluginContext.projectRoot says "usable absolute".
     expect(typeof seen).toBe('string')
     expect((seen ?? '').length).toBeGreaterThan(0)
+    expect(isAbsolute(seen ?? '')).toBe(true)
   })
 })
 
