@@ -133,6 +133,23 @@ function userMiddleware(trace: Trace, label: string): MiddlewareEntry {
   }
 }
 
+/**
+ * Assert `earlier` precedes `later` in trace AND both are present.
+ * Plain `indexOf(...) < indexOf(...)` passes vacuously when either
+ * entry is missing (`-1 < anyPositive`), so a regression that drops
+ * a hook entirely would slip through. Use this helper for ordering
+ * assertions whenever a full-array `toEqual` would be too rigid.
+ */
+function expectOrder(trace: readonly string[], earlier: string, later: string): void {
+  const earlierIdx = trace.indexOf(earlier)
+  const laterIdx = trace.indexOf(later)
+  expect(earlierIdx, `expected '${earlier}' in trace [${trace.join(', ')}]`).toBeGreaterThanOrEqual(
+    0,
+  )
+  expect(laterIdx, `expected '${later}' in trace [${trace.join(', ')}]`).toBeGreaterThanOrEqual(0)
+  expect(earlierIdx, `'${earlier}' should precede '${later}'`).toBeLessThan(laterIdx)
+}
+
 describe('Application lifecycle mount order', () => {
   it('adapter.beforeMount + plugin.register fire during setup() in declared order', async () => {
     const trace: Trace = []
@@ -143,15 +160,22 @@ describe('Application lifecycle mount order', () => {
       // No user middleware → uses framework defaults; doesn't affect lifecycle-hook ordering
     })
     await app.setup()
-    // beforeMount for every adapter fires before any plugin.register()
-    // (plugin.register() runs in §3b, beforeMount in §1). beforeStart
-    // for every adapter fires at the very end.
-    const idx = (label: string) => trace.indexOf(label)
-    expect(idx('A1:beforeMount')).toBeLessThan(idx('A2:beforeMount'))
-    expect(idx('A2:beforeMount')).toBeLessThan(idx('P1:register'))
-    expect(idx('P1:register')).toBeLessThan(idx('P2:register'))
-    expect(idx('P2:register')).toBeLessThan(idx('A1:beforeStart'))
-    expect(idx('A1:beforeStart')).toBeLessThan(idx('A2:beforeStart'))
+    // Strict full-trace equality so a missing hook fails the test —
+    // indexOf-only ordering passes vacuously when an entry is missing
+    // (-1 < anything). The expected sequence is:
+    //   §1  every adapter.beforeMount fires in declaration order
+    //   §3b every plugin.register fires (DI bindings only — no middleware
+    //       handler runs because no request has been sent)
+    //   §11 every adapter.beforeStart fires
+    // No `afterStart` here — covered by the next test.
+    expect(trace).toEqual([
+      'A1:beforeMount',
+      'A2:beforeMount',
+      'P1:register',
+      'P2:register',
+      'A1:beforeStart',
+      'A2:beforeStart',
+    ])
   })
 
   it('afterStart does NOT fire under setup() — only start()', async () => {
@@ -248,13 +272,11 @@ describe('Application lifecycle mount order', () => {
     expect(tenantIdx).toBeGreaterThanOrEqual(0)
     expect(authIdx).toBeGreaterThanOrEqual(0)
     expect(tenantIdx).toBeLessThan(authIdx)
-    // Spot-check every phase: Tenant's variant must precede Auth's variant.
-    for (const phase of [
-      'beforeGlobal-mw',
-      'afterGlobal-mw',
-      'beforeRoutes-mw',
-    ] as const) {
-      expect(trace.indexOf(`Tenant:${phase}`)).toBeLessThan(trace.indexOf(`Auth:${phase}`))
+    // Spot-check every phase: Tenant's variant must precede Auth's
+    // variant AND both must be present (a missing entry would let
+    // bare `indexOf < indexOf` pass vacuously).
+    for (const phase of ['beforeGlobal-mw', 'afterGlobal-mw', 'beforeRoutes-mw'] as const) {
+      expectOrder(trace, `Tenant:${phase}`, `Auth:${phase}`)
     }
   })
 
@@ -273,6 +295,6 @@ describe('Application lifecycle mount order', () => {
     await app.setup()
     trace.length = 0
     await request(app.getExpressApp()).get('/api/v1/trace/ping').expect(200)
-    expect(trace.indexOf('P:middleware')).toBeLessThan(trace.indexOf('user-mw'))
+    expectOrder(trace, 'P:middleware', 'user-mw')
   })
 })
