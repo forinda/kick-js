@@ -21,6 +21,7 @@ export { defineCliPlugin, KickPluginConflictError } from './plugin/types'
 
 // Typegen plugin contract — passed via `KickCliPlugin.typegens`.
 export type { TypegenPlugin, TypegenContext, TypegenPluginResult } from './typegen/plugin'
+export { defineTypegen } from './typegen/plugin'
 
 // Plugin Generator Extension API (architecture.md §21.2.3)
 // Plugins ship `kick g <name>` generators via `kickjs.generators` in

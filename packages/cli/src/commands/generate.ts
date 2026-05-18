@@ -1,7 +1,12 @@
 import { resolve } from 'node:path'
 import type { Command } from 'commander'
-import { listPluginGenerators, tryDispatchPluginGenerator } from '../generator-extension'
+import {
+  listPluginGenerators,
+  tryDispatchPluginGenerator,
+  type DiscoveredGenerator,
+} from '../generator-extension'
 import { mergeCliPlugins } from '../plugin'
+import type { KickCliPluginContext } from '../plugin/types'
 import { generateModule } from '../generators/module'
 import { resolveRepoType, type RepoType } from '../generators/module'
 import { generateAdapter } from '../generators/adapter'
@@ -269,7 +274,7 @@ async function runModuleGeneration(
   await runPostTypegen(dryRun)
 }
 
-export function registerGenerateCommand(program: Command): void {
+export function registerGenerateCommand(program: Command, ctx?: KickCliPluginContext): void {
   const gen = program
     .command('generate [names...]')
     .alias('g')
@@ -298,20 +303,21 @@ export function registerGenerateCommand(program: Command): void {
       const dryRun = isDryRun(cmd)
       setDryRun(dryRun)
 
-      // Try plugin generators first — `kick g <name> <itemName>` where
-      // `<name>` matches a discovered plugin generator wins over the
-      // bare-module shortcut. This lets `kick g command Order` route
-      // to a CQRS plugin without colliding with `kick g <module-name>`.
-      // Config-supplied generators (kick.config.ts > plugins[]) take
-      // priority over the legacy package.json discovery path.
-      if (names.length >= 2) {
-        const [generatorName, itemName, ...rest] = names
+      // Bare-form safety net — plugin generators are registered as real
+      // Commander subcommands further down, so Commander routes
+      // `kick g <plugin-gen> [item]` to its dedicated action before
+      // this bare action ever fires. This block only matters for the
+      // rare case where a plugin generator is discovered late (e.g.
+      // package.json-discovered, not config-supplied) and so didn't
+      // get a Commander subcommand at register time.
+      const [generatorName, itemName, ...rest] = names
+      if (generatorName) {
         const cfg = await loadKickConfig(process.cwd())
         const merged = mergeCliPlugins(cfg?.plugins ?? [], cfg?.commands ?? [])
         const result = await tryDispatchPluginGenerator(
           {
             generatorName,
-            itemName,
+            itemName: itemName ?? '',
             args: rest,
             flags: opts as unknown as Record<string, string | boolean>,
             cwd: process.cwd(),
@@ -717,4 +723,64 @@ export function registerGenerateCommand(program: Command): void {
       })
       printGenerated(files, dryRun)
     })
+
+  // ── Plugin-shipped generators ───────────────────────────────────────
+  // Surface each plugin's generators as real Commander subcommands so
+  // they appear in `kick g --help` and `kick g <name>` (bare form,
+  // no item arg) dispatches without falling through to the module
+  // generator. Without this loop a single-name invocation like
+  // `kick g drizzle-typegen` would silently scaffold a module called
+  // "drizzle-typegen".
+  //
+  // Positional syntax mirrors the spec's first `args[]` entry so the
+  // auto-generated help reads naturally (`drizzle-typegen <schema>`
+  // instead of `drizzle-typegen [itemName]`). The runtime still treats
+  // the first positional as `itemName` for dispatch — the spec entry
+  // is purely a documentation hint to Commander.
+  for (const entry of ctx?.generators ?? []) {
+    registerPluginGeneratorSubcommand(gen, entry)
+  }
+}
+
+function registerPluginGeneratorSubcommand(gen: Command, entry: DiscoveredGenerator): void {
+  const { source, spec } = entry
+  const firstArg = spec.args?.[0]
+  const firstArgName = firstArg?.name ?? 'itemName'
+  const firstArgSyntax = firstArg?.required ? `<${firstArgName}>` : `[${firstArgName}]`
+  // Variadic catch-all for any additional positionals; runtime forwards
+  // them to the generator as `ctx.args` for the generator's own parsing.
+  const cmdSyntax = `${spec.name} ${firstArgSyntax} [extraArgs...]`
+
+  const subCmd = gen.command(cmdSyntax).description(`${spec.description}  [${source}]`)
+  for (const flag of spec.flags ?? []) {
+    const flagBody = flag.takesValue ? `--${flag.name} <value>` : `--${flag.name}`
+    const flagWithAlias = flag.alias ? `-${flag.alias}, ${flagBody}` : flagBody
+    subCmd.option(flagWithAlias, flag.description ?? '')
+  }
+
+  // Commander invokes `.action` with one parameter per positional in
+  // declaration order, then opts, then the Command instance. Two
+  // positionals here (firstArg + variadic extraArgs) → 4-arg signature.
+  subCmd.action(
+    async (
+      firstValue: string | undefined,
+      extraArgs: string[],
+      opts: Record<string, unknown>,
+      command: Command,
+    ) => {
+      const dryRun = isDryRun(command)
+      setDryRun(dryRun)
+      const result = await tryDispatchPluginGenerator(
+        {
+          generatorName: spec.name,
+          itemName: firstValue ?? '',
+          args: extraArgs ?? [],
+          flags: opts as Record<string, string | boolean>,
+          cwd: process.cwd(),
+        },
+        [entry],
+      )
+      if (result) printGenerated(result.files, dryRun)
+    },
+  )
 }
