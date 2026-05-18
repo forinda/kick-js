@@ -1,6 +1,6 @@
 /// <reference types="multer" />
 import type { Request, Response, NextFunction } from 'express'
-import { type ContextMeta, type ExecutionContext, type MetaValue } from '../core/execution-context'
+import { type ExecutionContext, type MetaValue } from '../core/execution-context'
 import { requestStore } from './request-store'
 import {
   parseQuery,
