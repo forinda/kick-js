@@ -981,11 +981,17 @@ export class Application {
 
   private mountMiddlewareList(entries: AdapterMiddleware[]): void {
     for (const entry of entries) {
-      if (entry.path) {
-        this.app.use(entry.path, entry.handler)
-      } else {
+      if (entry.path === undefined) {
         this.app.use(entry.handler)
+        continue
       }
+      // Copy ReadonlyArray paths to a mutable array — Express's
+      // `PathParams` doesn't accept readonly arrays, even though the
+      // function never mutates them. Pass-through for non-array shapes.
+      const path: string | RegExp | (string | RegExp)[] = Array.isArray(entry.path)
+        ? [...entry.path]
+        : (entry.path as string | RegExp)
+      this.app.use(path, entry.handler)
     }
   }
 

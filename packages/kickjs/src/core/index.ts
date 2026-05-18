@@ -82,6 +82,7 @@ export {
   type AdapterContext,
   type AdapterMiddleware,
   type MiddlewarePhase,
+  type MiddlewarePath,
 } from './adapter'
 
 // Plugin System
