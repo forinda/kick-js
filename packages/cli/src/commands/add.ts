@@ -84,13 +84,6 @@ const PACKAGE_REGISTRY: Record<string, PackageEntry> = {
     dev: true,
   },
 
-  // Auth
-  auth: {
-    pkg: '@forinda/kickjs-auth',
-    peers: ['jsonwebtoken'],
-    description: 'Authentication — JWT, API key, and custom strategies',
-  },
-
   // Queue
   queue: {
     pkg: '@forinda/kickjs-queue',

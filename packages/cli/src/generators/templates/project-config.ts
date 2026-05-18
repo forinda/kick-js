@@ -2,7 +2,6 @@ type ProjectTemplate = 'rest' | 'ddd' | 'cqrs' | 'minimal'
 
 /** Map of optional package names to their npm package identifiers */
 const PACKAGE_DEPS: Record<string, string> = {
-  auth: '@forinda/kickjs-auth',
   swagger: '@forinda/kickjs-swagger',
   ws: '@forinda/kickjs-ws',
   queue: '@forinda/kickjs-queue',

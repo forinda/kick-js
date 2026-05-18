@@ -51,7 +51,6 @@ const SIBLING_PACKAGES = [
   '@forinda/kickjs',
   '@forinda/kickjs-cli',
   '@forinda/kickjs-vite',
-  '@forinda/kickjs-auth',
   '@forinda/kickjs-swagger',
   '@forinda/kickjs-ws',
   '@forinda/kickjs-queue',
