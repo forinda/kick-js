@@ -41,6 +41,13 @@ export interface Ref<T = any> {
   value: T
   /** Subscribe to changes. Returns unsubscribe function. */
   subscribe(fn: (newValue: T, oldValue: T) => void): () => void
+  /**
+   * Auto-unwrap on `JSON.stringify` — returns the underlying value
+   * so refs serialise transparently inside larger payloads (introspect
+   * snapshots, devtools state, request responses). Equivalent to
+   * `unref(ref)` but invoked implicitly by the JSON pipeline.
+   */
+  toJSON(): T
 }
 
 /**
@@ -75,6 +82,18 @@ export function ref<T>(initialValue: T): Ref<T> {
       subscribers.add(fn)
       return () => subscribers.delete(fn)
     },
+    /**
+     * Auto-unwrap on `JSON.stringify`. Without this, serialising a ref
+     * leaks the wrapper shape (`{"value": …, "subscribe": …}`) instead
+     * of the underlying value — particularly painful for adopters who
+     * keep adapter / plugin state in refs and surface it through
+     * `introspect()`. Returning `value` here means
+     * `JSON.stringify({ count: ref(0) })` produces `{"count":0}` as
+     * expected, without callers having to `.value`-unwrap by hand.
+     */
+    toJSON(): T {
+      return wrapper._value
+    },
   }
 }
 
@@ -82,6 +101,12 @@ export function ref<T>(initialValue: T): Ref<T> {
 
 export interface ComputedRef<T = any> {
   readonly value: T
+  /**
+   * Auto-unwrap on `JSON.stringify` — see {@link Ref.toJSON} for the
+   * motivation. Triggers a recompute when the cached value is stale,
+   * same as reading `.value`.
+   */
+  toJSON(): T
 }
 
 /**
@@ -106,21 +131,38 @@ export function computed<T>(getter: () => T): ComputedRef<T> {
     trigger(wrapper, '_value')
   }
 
+  const recompute = (): T => {
+    if (dirty) {
+      const prev = activeEffect
+      activeEffect = effect
+      try {
+        cached = getter()
+      } finally {
+        activeEffect = prev
+      }
+      wrapper._value = cached
+      dirty = false
+    }
+    return cached
+  }
+
   return {
     get value(): T {
       track(wrapper, '_value')
-      if (dirty) {
-        const prev = activeEffect
-        activeEffect = effect
-        try {
-          cached = getter()
-        } finally {
-          activeEffect = prev
-        }
-        wrapper._value = cached
-        dirty = false
-      }
-      return cached
+      return recompute()
+    },
+    /**
+     * Auto-unwrap on `JSON.stringify`, matching {@link ref}'s behaviour
+     * so adopters can drop a computed straight into a JSON-bound
+     * payload (introspect snapshot, devtools state) and get the value
+     * rather than the wrapper shape.
+     *
+     * Computed values cache through the same dirty-flag the getter
+     * uses, so calling `toJSON` is at worst one recompute when stale —
+     * identical cost to reading `.value`.
+     */
+    toJSON(): T {
+      return recompute()
     },
   }
 }
