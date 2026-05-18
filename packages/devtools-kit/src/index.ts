@@ -22,6 +22,7 @@ export {
   type RpcSuccess,
   type RuntimeSnapshot,
   type TopologyContributorEntry,
+  type TopologyContributorSource,
   type TopologyError,
   type TopologySnapshot,
   type TopologyTokenEntry,

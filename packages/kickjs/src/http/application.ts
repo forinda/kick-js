@@ -277,6 +277,23 @@ export class Application {
 
   private readonly plugins: KickPlugin[]
 
+  /**
+   * Snapshot of every module-level Context Contributor registration
+   * captured during `setup()`. The registrations themselves are
+   * frozen by `defineContextDecorator`, so storing references is
+   * safe — they outlive the module instances they came from.
+   *
+   * Used by {@link getContributors} so DevTools and adopter tooling
+   * can render the module-level contributors alongside the adapter /
+   * plugin / global ones. Populated once per `setup()` call; cleared
+   * at the start of each invocation so a re-setup (test harnesses,
+   * dev-server restarts) doesn't accumulate stale entries.
+   */
+  private _moduleContributors: Array<{
+    registration: { key: string; dependsOn: readonly string[] }
+    label: string
+  }> = []
+
   /** Number of HTTP requests currently being processed */
   private _inFlightRequests = 0
   /** Whether the application is draining (shutting down gracefully) */
@@ -565,14 +582,29 @@ export class Application {
       }),
     )
 
+    // Reset module-contributor snapshot at the start of each setup
+    // pass so re-running `setup()` (test harnesses, dev-server
+    // restarts) doesn't accumulate stale entries.
+    this._moduleContributors = []
+
     for (const mod of modules) {
+      const moduleLabel = mod.constructor?.name ?? 'module'
       const moduleSources: SourcedRegistration[] = (mod.contributors?.() ?? []).map(
         (registration): SourcedRegistration => ({
           source: 'module',
           registration,
-          label: mod.constructor?.name ?? 'module',
+          label: moduleLabel,
         }),
       )
+      // Retain registrations for `getContributors()` — these would
+      // otherwise be unreachable post-bootstrap (module instances
+      // are not kept on the Application).
+      for (const src of moduleSources) {
+        this._moduleContributors.push({
+          registration: src.registration as { key: string; dependsOn: readonly string[] },
+          label: moduleLabel,
+        })
+      }
 
       // Thread per-module + adapter + global sources to buildRoutes via the
       // module-scoped slot. Module setup is sequential, so the slot is
@@ -878,30 +910,37 @@ export class Application {
 
   /**
    * Snapshot of every Context Contributor reachable from this app —
-   * walks the four registration sites (adapters, plugins, global, and
-   * the bootstrap `contributors` option). Module-level contributors
-   * are NOT included; module instances aren't retained post-bootstrap.
-   * The devtools Topology tab consumes this for the Contributors
-   * panel; tests + adopters can call it for diagnostics.
+   * walks **four** registration sites: adapters, plugins, modules,
+   * and the bootstrap `contributors` option. The devtools Topology
+   * tab consumes this for the Contributors panel; tests + adopters
+   * can call it for diagnostics.
+   *
+   * Per-route (method/class-decorator) registrations are NOT included
+   * here — they live on the route registry rather than on any of
+   * the four collection sites this method walks. A future RPC will
+   * surface them separately.
    *
    * Result shape stays minimal — `{ key, source, label, dependsOn }`
    * — so we don't leak `resolve` closures or other internal fields.
+   * `source` matches the five-level precedence union from
+   * `ContributorSource` (minus `'method'` / `'class'` which require
+   * the per-route walk noted above).
    */
   getContributors(): ReadonlyArray<{
     key: string
-    source: 'adapter' | 'plugin' | 'global'
+    source: 'module' | 'adapter' | 'plugin' | 'global'
     label: string
     dependsOn: readonly string[]
   }> {
     const out: Array<{
       key: string
-      source: 'adapter' | 'plugin' | 'global'
+      source: 'module' | 'adapter' | 'plugin' | 'global'
       label: string
       dependsOn: readonly string[]
     }> = []
     const ingest = (
       list: ReadonlyArray<unknown> | null | undefined,
-      source: 'adapter' | 'plugin' | 'global',
+      source: 'module' | 'adapter' | 'plugin' | 'global',
       label: string,
     ): void => {
       if (!list) return
@@ -925,6 +964,12 @@ export class Application {
     }
     for (const plugin of this.plugins) {
       ingest(plugin.contributors?.(), 'plugin', plugin.name ?? 'plugin')
+    }
+    // Module-level registrations — captured during `setup()` because
+    // module instances are not retained on the Application. Walk the
+    // snapshot rather than calling `mod.contributors()` here.
+    for (const { registration, label } of this._moduleContributors) {
+      ingest([registration], 'module', label)
     }
     ingest(this.options.contributors, 'global', 'bootstrap')
     return out

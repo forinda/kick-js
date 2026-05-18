@@ -88,6 +88,11 @@ export {
 // Plugin System
 export { type KickPlugin } from './plugin'
 
+// Introspection (DevTools hook contract — type-only; the kit re-exports
+// for back-compat but adopters can import from `@forinda/kickjs` directly
+// and skip the kit dep when they only need to type `introspect()`).
+export { type IntrospectionSnapshot, type IntrospectionKind, type IntrospectFn } from './introspect'
+
 // Cron
 export { Cron, getCronJobs, type CronJobMeta, CRON_META } from './cron'
 
