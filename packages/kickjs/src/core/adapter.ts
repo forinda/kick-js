@@ -1,5 +1,5 @@
 import type http from 'node:http'
-import type { Express } from 'express'
+import type { Express, RequestHandler, ErrorRequestHandler } from 'express'
 import type { Container } from './container'
 import type { ContributorRegistrations } from './context-decorator'
 import type { MaybePromise, Constructor } from './interfaces'
@@ -8,21 +8,57 @@ import type { KickJsPluginName } from './augmentation'
 /**
  * Where in the middleware pipeline an adapter's middleware should be inserted.
  *
- *   beforeGlobal  → runs before any user-defined global middleware
- *   afterGlobal   → runs after global middleware, before module routes
- *   beforeRoutes  → just before module routes are mounted
- *   afterRoutes   → after module routes but before error handlers
+ * - `beforeGlobal` — runs **before** any user-defined global middleware.
+ *   Suitable for transport-level concerns (request tagging, low-level
+ *   request rewriting). Fires on every request.
+ * - `afterGlobal` — runs **after** global middleware, **before** module
+ *   routes are matched. Default for most adapter middleware (auth pre-checks,
+ *   tenant resolution, body shaping). Fires on every request.
+ * - `beforeRoutes` — runs just before module routes are mounted. Functionally
+ *   equivalent to `afterGlobal` for most cases; the explicit phase exists so
+ *   adapters that *must* sit at the very end of the pre-route stack can
+ *   declare intent. Fires on every request.
+ * - `afterRoutes` — sits **after** module routes but **before** error
+ *   handlers. **Fires only on fall-through** — when no route matched (404
+ *   path) or a route handler called `next()` without ending the response.
+ *   Controllers that respond with `ctx.json(...)` end the chain and skip
+ *   this phase, so it is *not* a "post-response" hook. For per-response
+ *   work (logging, metrics) use `res.on('finish', ...)` from inside an
+ *   earlier-phase middleware instead.
  */
 export type MiddlewarePhase = 'beforeGlobal' | 'afterGlobal' | 'beforeRoutes' | 'afterRoutes'
 
+/**
+ * Path scope for an {@link AdapterMiddleware} entry. Mirrors what
+ * Express's `app.use(path, handler)` accepts so adapters get the full
+ * range without learning a new mini-language:
+ *
+ * - A `string` prefix — `'/api'` matches `/api`, `/api/v1`, `/api/v1/x`.
+ * - A `RegExp` — `/^\/api\/v\d+/` matches `/api/v1`, `/api/v42`.
+ * - An array of either — `['/api', '/admin']` matches either prefix;
+ *   `['/api', /^\/internal\//]` mixes shapes.
+ *
+ * Omit to apply the middleware unconditionally (Express `app.use(handler)`).
+ */
+export type MiddlewarePath = string | RegExp | ReadonlyArray<string | RegExp>
+
 /** A middleware entry contributed by an adapter */
 export interface AdapterMiddleware {
-  /** Express-compatible handler: (req, res, next) => void */
-  handler: any
+  /**
+   * Express handler: either a `RequestHandler` (`(req, res, next) => …`)
+   * or an `ErrorRequestHandler` (`(err, req, res, next) => …`).
+   * Express dispatches based on arity, so the same field accepts both
+   * without a discriminant.
+   */
+  handler: RequestHandler | ErrorRequestHandler
   /** Which phase to insert into (default: 'afterGlobal') */
   phase?: MiddlewarePhase
-  /** Optional path to scope the middleware to (e.g. '/api/v1/auth') */
-  path?: string
+  /**
+   * Optional path scope. See {@link MiddlewarePath} for the accepted
+   * shapes (string prefix, RegExp, or an array mixing both). Omit to
+   * apply the middleware to every request that reaches this phase.
+   */
+  path?: MiddlewarePath
 }
 
 /**
