@@ -11,12 +11,12 @@ import { ref, computed, reactive } from '../src/core/reactivity'
  * value), and adopters had to `.value`-unwrap by hand on every site.
  */
 describe('ref().toJSON — auto-unwrap on JSON.stringify', () => {
-  it('serialises a primitive ref as its value, not the wrapper', () => {
+  it('serializes a primitive ref as its value, not the wrapper', () => {
     const count = ref(42)
     expect(JSON.stringify(count)).toBe('42')
   })
 
-  it('serialises an object ref as its value', () => {
+  it('serializes an object ref as its value', () => {
     const user = ref({ id: 1, name: 'alice' })
     expect(JSON.parse(JSON.stringify(user))).toEqual({ id: 1, name: 'alice' })
   })
@@ -42,15 +42,15 @@ describe('ref().toJSON — auto-unwrap on JSON.stringify', () => {
     expect(json.metrics.cacheHits).toBe(120)
   })
 
-  it('reflects the current value when serialised after a write', () => {
+  it('reflects the current value when serialized after a write', () => {
     const flag = ref(false)
     flag.value = true
     expect(JSON.stringify(flag)).toBe('true')
   })
 
   it('one-shot unwrap — JSON.stringify calls toJSON exactly once per chain (nested refs preserved as wrapper)', () => {
-    // Document the one-shot behaviour: `JSON.stringify`'s toJSON
-    // substitution fires once per value, so `ref(ref(x))` serialises
+    // Document the one-shot behavior: `JSON.stringify`'s toJSON
+    // substitution fires once per value, so `ref(ref(x))` serializes
     // to the inner ref's enumerable shape (`{"value":x}`), NOT to `x`.
     // Adopters shouldn't wrap a ref in another ref deliberately;
     // assert here so a future "recursive unwrap" refactor doesn't
@@ -62,7 +62,7 @@ describe('ref().toJSON — auto-unwrap on JSON.stringify', () => {
 })
 
 describe('computed().toJSON — auto-unwrap with stale-cache recompute', () => {
-  it('serialises a computed value as its current cached result', () => {
+  it('serializes a computed value as its current cached result', () => {
     const base = ref(10)
     const doubled = computed(() => base.value * 2)
     expect(JSON.stringify(doubled)).toBe('20')
@@ -79,11 +79,11 @@ describe('computed().toJSON — auto-unwrap with stale-cache recompute', () => {
   })
 })
 
-describe('reactive().toJSON — plain serialisation through the Proxy', () => {
-  it('serialises a reactive object by walking its enumerable keys', () => {
+describe('reactive().toJSON — plain serialization through the Proxy', () => {
+  it('serializes a reactive object by walking its enumerable keys', () => {
     // No explicit toJSON on the Proxy — JSON.stringify enumerates
     // the underlying target's keys via the get trap, which returns
-    // the raw value for primitives. This test pins existing behaviour
+    // the raw value for primitives. This test pins existing behavior
     // so a future Proxy refactor doesn't accidentally break it.
     const state = reactive({ users: 10, errors: 0 })
     expect(JSON.parse(JSON.stringify(state))).toEqual({ users: 10, errors: 0 })

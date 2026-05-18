@@ -43,7 +43,7 @@ export interface Ref<T = any> {
   subscribe(fn: (newValue: T, oldValue: T) => void): () => void
   /**
    * Auto-unwrap on `JSON.stringify` — returns the underlying value
-   * so refs serialise transparently inside larger payloads (introspect
+   * so refs serialize transparently inside larger payloads (introspect
    * snapshots, devtools state, request responses). Equivalent to
    * `unref(ref)` but invoked implicitly by the JSON pipeline.
    */
@@ -83,7 +83,7 @@ export function ref<T>(initialValue: T): Ref<T> {
       return () => subscribers.delete(fn)
     },
     /**
-     * Auto-unwrap on `JSON.stringify`. Without this, serialising a ref
+     * Auto-unwrap on `JSON.stringify`. Without this, serializing a ref
      * leaks the wrapper shape (`{"value": …, "subscribe": …}`) instead
      * of the underlying value — particularly painful for adopters who
      * keep adapter / plugin state in refs and surface it through
@@ -152,7 +152,7 @@ export function computed<T>(getter: () => T): ComputedRef<T> {
       return recompute()
     },
     /**
-     * Auto-unwrap on `JSON.stringify`, matching {@link ref}'s behaviour
+     * Auto-unwrap on `JSON.stringify`, matching {@link ref}'s behavior
      * so adopters can drop a computed straight into a JSON-bound
      * payload (introspect snapshot, devtools state) and get the value
      * rather than the wrapper shape.
