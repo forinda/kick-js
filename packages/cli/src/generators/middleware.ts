@@ -66,7 +66,7 @@ export interface ${toPascalCase(name)}Options {
  *     return [{
  *       handler: ${camel}({ region: 'eu' }),
  *       phase: 'afterGlobal',
- *       path: ['/api', /^\\\\/admin/],
+ *       path: ['/api', /^\\/admin/],
  *     }]
  *   }
  *

@@ -197,9 +197,12 @@ describe('AdapterMiddleware.path — widened pattern shapes', () => {
       apiPrefix: '/api',
       defaultVersion: 1,
     })
-    // Setup must NOT throw — internal copy handles the readonly → mutable
-    // boundary that Express's PathParams type requires.
-    await expect(app.setup()).resolves.not.toThrow()
+    // Setup must resolve normally (not reject) — the internal copy
+    // handles the readonly → mutable boundary that Express's
+    // PathParams type requires. `.resolves.toBeUndefined()` checks the
+    // resolved-value side; if the promise rejected instead, vitest
+    // would surface the rejection as the test failure.
+    await expect(app.setup()).resolves.toBeUndefined()
     await request(app.getExpressApp()).get('/api/v1/hello/ping').expect(200)
     expect(trace).toEqual(['fired'])
   })
