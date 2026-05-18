@@ -119,7 +119,7 @@ That's it — `http://localhost:3000/api/v1/users` returns Alice; `POST /api/v1/
 
 `kick new` produces this convention; everything except the bootstrap entry is configurable via `kick.config.ts`:
 
-```
+```text
 src/
   index.ts                  # bootstrap entry — exports `app`
   config/index.ts           # env schema via defineEnv() + loadEnv()
