@@ -79,14 +79,22 @@ interface ConfigOpts {
 }
 
 interface AgentDocsOpts {
-  only?: 'agents' | 'claude' | 'skills' | 'both' | 'all'
+  only?: 'agents' | 'claude' | 'skills' | 'gemini' | 'copilot' | 'both' | 'all'
   name?: string
   pm?: string
   template?: 'rest' | 'ddd' | 'cqrs' | 'minimal'
   force?: boolean
 }
 
-const AGENT_DOCS_ONLY_VALUES = ['agents', 'claude', 'skills', 'both', 'all'] as const
+const AGENT_DOCS_ONLY_VALUES = [
+  'agents',
+  'claude',
+  'skills',
+  'gemini',
+  'copilot',
+  'both',
+  'all',
+] as const
 
 /** Check if --dry-run was passed on the parent generate command */
 function isDryRun(cmd: Command): boolean {
