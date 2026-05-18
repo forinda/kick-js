@@ -1,6 +1,6 @@
-# @forinda/kickjs-queue
+# kickjs-devtools
 
-## 5.2.5
+## 5.2.1
 
 ### Patch Changes
 
@@ -23,40 +23,3 @@
   **`kickjs-devtools` (VS Code extension)** — disambiguate the naming collision with `@forinda/kickjs-devtools` (the runtime adapter that serves `/_debug/*`). Adds an explicit "VS Code editor extension, not the runtime adapter" callout, and recommends setting `secret: env.DEVTOOLS_SECRET` on the adapter for production gating.
 
   Root repo `README.md` is also rewritten (drop v4.2 banner, remove "Deprecated — going private in v5" table for packages already gone, switch Hello World to factory patterns, drop `kick g resolver` and `kick add auth` references, update `kick g agents` description to `.agents/` subfolder layout) — but that file isn't published, so it's a free-rider on this changeset.
-
-- Updated dependencies []:
-  - @forinda/kickjs-devtools-kit@5.4.0
-
-## 5.2.4
-
-### Patch Changes
-
-- Updated dependencies [[`9f1e90e`](https://github.com/forinda/kick-js/commit/9f1e90e00160dfb3801e8bac451ace0aa7b3f37f)]:
-  - @forinda/kickjs-devtools-kit@5.4.0
-
-## 5.2.3
-
-### Patch Changes
-
-- Updated dependencies [[`4eebd43`](https://github.com/forinda/kick-js/commit/4eebd43f259c1d5b7214acd46efc6c6d277ee82f)]:
-  - @forinda/kickjs-devtools-kit@5.3.2
-
-## 5.2.2
-
-### Patch Changes
-
-- [#166](https://github.com/forinda/kick-js/pull/166) [`a6d0dd6`](https://github.com/forinda/kick-js/commit/a6d0dd6038b215c0ae3cbe1a20e11ba0d8b1c46e) Thanks [@forinda](https://github.com/forinda)! - Minify published build output via the tsdown / oxc minifier.
-  - **Library packages** use `minify: { compress: true, mangle: false }`. Whitespace and comments are stripped and constants folded, but identifiers stay intact so adopter stack traces remain readable.
-  - **CLI** uses `minify: { compress: true, mangle: true }`. The CLI is an operator tool, not a library — full mangle is fine and gives a smaller binary.
-
-  Net effect: roughly 30–40% smaller `dist/*.mjs` per package on disk, no public-API or behavior change.
-
-- Updated dependencies [[`a6d0dd6`](https://github.com/forinda/kick-js/commit/a6d0dd6038b215c0ae3cbe1a20e11ba0d8b1c46e)]:
-  - @forinda/kickjs-devtools-kit@5.3.1
-
-## 5.2.1
-
-### Patch Changes
-
-- Updated dependencies [[`5de61d9`](https://github.com/forinda/kick-js/commit/5de61d9a9cd99bac3e1e271a36b092fa7bf7ad98)]:
-  - @forinda/kickjs-devtools-kit@5.3.0
