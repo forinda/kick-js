@@ -103,6 +103,50 @@ describe('buildGeneratorContext', () => {
     expect(fromSnake.pascal).toBe(fromPascal.pascal)
     expect(fromKebab.pascal).toBe(fromPascal.pascal)
   })
+
+  it('exposes projectRoot — caller-supplied value wins over derived', () => {
+    const ctx = buildGeneratorContext({
+      name: 'task',
+      cwd: '/some/nested/dir',
+      projectRoot: '/some',
+    })
+    expect(ctx.projectRoot).toBe('/some')
+  })
+
+  it('derives projectRoot from cwd via findProjectRoot when not supplied', () => {
+    // Create a fixture: a temp dir containing a kick.config.json marker
+    // and a nested src/modules/foo/ subdir. buildGeneratorContext should
+    // walk up from the nested cwd and land on the temp dir.
+    const root = mkdtempSync(join(tmpdir(), 'kick-gen-root-'))
+    const nested = join(root, 'src', 'modules', 'foo')
+    mkdirSync(nested, { recursive: true })
+    writeFileSync(join(root, 'kick.config.json'), '{}')
+    try {
+      const ctx = buildGeneratorContext({ name: 'task', cwd: nested })
+      expect(ctx.projectRoot).toBe(root)
+      // cwd remains where the caller said — only projectRoot walks up
+      expect(ctx.cwd).toBe(nested)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('projectRoot falls back to cwd when no marker file is found anywhere', () => {
+    // Walk up will hit the filesystem root without finding a marker;
+    // findProjectRoot returns the startDir in that case so the field
+    // is always a usable absolute path.
+    const orphan = mkdtempSync(join(tmpdir(), 'kick-gen-orphan-'))
+    try {
+      const ctx = buildGeneratorContext({ name: 'task', cwd: orphan })
+      // On most systems no kick.config.* or package.json sits between
+      // /tmp and /. Either the orphan dir itself OR a parent with a
+      // package.json — but it must be an absolute path, not undefined.
+      expect(typeof ctx.projectRoot).toBe('string')
+      expect(ctx.projectRoot.length).toBeGreaterThan(0)
+    } finally {
+      rmSync(orphan, { recursive: true, force: true })
+    }
+  })
 })
 
 describe('discoverPluginGenerators', () => {

@@ -1,6 +1,7 @@
 import { pathToFileURL } from 'node:url'
 import { resolve } from 'node:path'
 import { toPascalCase, toCamelCase, toKebabCase, pluralize } from '../utils/naming'
+import { findProjectRoot } from '../utils/project-root'
 import type { GeneratorContext } from './define'
 
 /** Convert any string to snake_case (`UserPost` / `user-post` → `user_post`). */
@@ -20,9 +21,17 @@ export function buildGeneratorContext(input: {
   flags?: Record<string, string | boolean>
   modulesDir?: string
   cwd?: string
+  /**
+   * Resolved project root. When omitted, derived from {@link cwd} via
+   * `findProjectRoot()` so adopter-facing call sites stay zero-config.
+   * Callers that already know the root (e.g. `cli.ts` after one upfront
+   * resolution) should pass it through to avoid redundant fs walks.
+   */
+  projectRoot?: string
   pluralize?: boolean
 }): GeneratorContext {
   const cwd = input.cwd ?? process.cwd()
+  const projectRoot = input.projectRoot ?? findProjectRoot(cwd)
   const usePlural = input.pluralize ?? true
 
   const pascal = toPascalCase(input.name)
@@ -38,6 +47,7 @@ export function buildGeneratorContext(input: {
     snake,
     modulesDir: input.modulesDir ?? 'src/modules',
     cwd,
+    projectRoot,
     args: input.args ?? [],
     flags: input.flags ?? {},
   }

@@ -61,8 +61,23 @@ export interface GeneratorContext {
   pluralCamel?: string
   /** Modules directory from `kick.config.ts` (default `'src/modules'`). */
   modulesDir: string
-  /** Working directory for the generator — usually `process.cwd()`. */
+  /**
+   * Working directory the CLI was invoked from. May be a nested subdirectory
+   * if the adopter ran `kick g ...` from `src/modules/foo/` — for "write
+   * files relative to the project" use {@link projectRoot} instead.
+   */
   cwd: string
+  /**
+   * Resolved project root — the nearest ancestor directory of {@link cwd}
+   * containing `kick.config.{ts,js,mjs,json}` (or `package.json` as a
+   * fallback). Always set; falls back to `cwd` when no marker is found.
+   *
+   * Use this when writing files that must land at a known location
+   * regardless of where the adopter typed the command. `kick g ...` from
+   * inside `src/modules/foo/` will still see `projectRoot` pointing at
+   * the directory that owns `kick.config.ts`.
+   */
+  projectRoot: string
   /** Positional arguments passed AFTER the name (e.g. `kick g command Order extra1 extra2` → `['extra1', 'extra2']`). */
   args: string[]
   /** Flag values from the command line — booleans for switches, strings for `--key value`. */

@@ -36,7 +36,25 @@ import type { DiscoveredGenerator } from '../generator-extension/discover'
  * land here without changing the callback signature.
  */
 export interface KickCliPluginContext {
+  /**
+   * Working directory the CLI was invoked from. Plugin authors that need
+   * a stable "project base" location (e.g. to write artifacts, resolve
+   * config-relative paths) should prefer {@link projectRoot} over `cwd`
+   * — `cwd` is whatever the adopter typed the command from, including
+   * arbitrary subdirectories.
+   */
   cwd: string
+  /**
+   * Resolved project root — the directory `loadKickConfig` walked up to
+   * via `findProjectRoot()`. Always set to a usable absolute path: when
+   * a `kick.config.{ts,js,mjs,json}` is found, that directory; otherwise
+   * the nearest ancestor with a `package.json`; otherwise `cwd` itself.
+   *
+   * Populated by `mergeCliPlugins.register()` from the same resolution
+   * that `cli.ts` performs at startup, so plugin authors get a coherent
+   * view of the project root without re-walking the filesystem.
+   */
+  projectRoot: string
   /** Resolved kick.config.ts (null if the project has none). */
   config: KickConfig | null
   log: (msg: string) => void

@@ -23,8 +23,12 @@ async function main() {
   // Walk up to find the project root — `kick` invoked from any
   // subdirectory (e.g. `src/modules/users/`) still resolves the
   // adopter's kick.config.* + plugins instead of silently falling
-  // back to defaults.
-  const cwd = findProjectRoot(process.cwd())
+  // back to defaults. `cwd` shadows the resolved root for back-compat
+  // with existing command code that reads `ctx.cwd` as the project
+  // base; `projectRoot` is the same value exposed under a name that
+  // matches what the field actually carries.
+  const projectRoot = findProjectRoot(process.cwd())
+  const cwd = projectRoot
 
   // Default to {} so spreads + the `commands`/`plugins` reads stay
   // safe when the adopter has no kick.config.ts. The cast keeps the
@@ -41,6 +45,7 @@ async function main() {
 
   await merged.register(program, {
     cwd,
+    projectRoot,
     config,
     log: (msg) => console.log(msg),
   })

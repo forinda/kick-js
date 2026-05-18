@@ -135,6 +135,41 @@ describe('mergeCliPlugins', () => {
       'drizzle-typegen',
     ])
   })
+
+  it('threads caller-supplied projectRoot into the register ctx', async () => {
+    let seen: string | undefined
+    const consumer = defineCliPlugin({
+      name: 'consumer',
+      register: (_program, ctx) => {
+        seen = ctx?.projectRoot
+      },
+    })
+    const r = mergeCliPlugins([consumer])
+    await r.register(new Command(), {
+      cwd: '/foo/bar',
+      projectRoot: '/foo',
+      config: null,
+      log: () => {},
+    })
+    expect(seen).toBe('/foo')
+  })
+
+  it('defaults projectRoot from process.cwd() when no ctx is supplied', async () => {
+    let seen: string | undefined
+    const consumer = defineCliPlugin({
+      name: 'consumer',
+      register: (_program, ctx) => {
+        seen = ctx?.projectRoot
+      },
+    })
+    const r = mergeCliPlugins([consumer])
+    await r.register(new Command())
+    // findProjectRoot(process.cwd()) returns an absolute path. We can't
+    // assert the exact value (it depends on where the test runs from),
+    // but it must be a non-empty absolute path.
+    expect(typeof seen).toBe('string')
+    expect((seen ?? '').length).toBeGreaterThan(0)
+  })
 })
 
 describe('plugin generators registered as Commander subcommands', () => {

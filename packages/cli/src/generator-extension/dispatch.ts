@@ -18,6 +18,13 @@ export interface DispatchInput {
   flags?: Record<string, string | boolean>
   /** Project context — usually `process.cwd()`. */
   cwd?: string
+  /**
+   * Resolved project root. When omitted, `buildGeneratorContext` derives
+   * it from `cwd` via `findProjectRoot()`. Pass through when the caller
+   * has already resolved it (the CLI entry point does this once at
+   * startup) to avoid re-walking the filesystem on every generator call.
+   */
+  projectRoot?: string
   /** Modules dir from `kick.config.ts`. */
   modulesDir?: string
   /** Whether the project enables auto-pluralization. */
@@ -101,6 +108,7 @@ async function runGenerator(
     modulesDir: input.modulesDir,
     pluralize: input.pluralize,
     cwd,
+    projectRoot: input.projectRoot,
   })
 
   const files = await spec.files(ctx)
