@@ -1,11 +1,18 @@
 # @forinda/kickjs-queue
 
-BullMQ adapter with decorator-driven job processing for KickJS — `@Job` to declare a queue class, `@Process` to bind handlers, `QueueService` for dispatch.
+Decorator-driven job processing for KickJS — `@Job` to declare a queue class, `@Process` to bind handlers, `QueueService` for dispatch. Pluggable providers: BullMQ (default), RabbitMQ, Kafka, and Redis pub/sub.
 
 ## Install
 
 ```bash
+# Default — BullMQ (Redis-backed jobs)
 kick add queue
+
+# Pick a specific provider — pulls in the right peer deps
+kick add queue:bullmq         # Redis-backed durable jobs (default)
+kick add queue:rabbitmq       # RabbitMQ via amqplib
+kick add queue:kafka          # KafkaJS-backed event streaming
+kick add queue:redis-pubsub   # lightweight pub/sub without persistence
 ```
 
 ## Quick Example

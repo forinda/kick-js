@@ -31,7 +31,7 @@ kick mcp start            # Run app as an MCP stdio server
 kick typegen              # Refresh KickRoutes / KickEnv type maps
 ```
 
-`kick new` is interactive (template, package manager, ORM, package multi-select, git init, install) — every prompt has a flag for CI: `--template rest|ddd|cqrs|minimal`, `--pm pnpm|npm|yarn`, `--repo prisma|drizzle|inmemory|custom`, `--no-git`, `--no-install`, `--force`.
+`kick new` is interactive (template, package manager, ORM, package multi-select, git init, install) — every prompt has a flag for CI: `--template rest|ddd|cqrs|minimal`, `--pm pnpm|npm|yarn|bun`, `--repo prisma|drizzle|inmemory|custom`, `--no-git`, `--no-install`, `--force`.
 
 ## Documentation
 
