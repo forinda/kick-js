@@ -431,6 +431,13 @@ export class Application {
   async setup(): Promise<void> {
     log.debug('Bootstrapping application...')
 
+    // Reset module-contributor snapshot at the very top of each
+    // setup pass — before anything that could throw — so a partial
+    // failure doesn't leave stale entries that getContributors()
+    // would surface on the next call. See _moduleContributors field
+    // declaration for the use case.
+    this._moduleContributors = []
+
     // Collect adapter middleware by phase
     const adapterMw = this.collectAdapterMiddleware()
 
@@ -588,7 +595,18 @@ export class Application {
     this._moduleContributors = []
 
     for (const mod of modules) {
-      const moduleLabel = mod.constructor?.name ?? 'module'
+      // Prefer the declared `name` field (set by `defineModule({ name: 'X', ... })`)
+      // over `constructor.name`. Factory-built modules are plain objects whose
+      // constructor is `Object` — falling straight to `constructor.name` would
+      // degrade every label in the DevTools Contributors table to "Object".
+      const declaredName = (mod as { name?: unknown }).name
+      const ctorName = mod.constructor?.name
+      const moduleLabel =
+        typeof declaredName === 'string' && declaredName.length > 0
+          ? declaredName
+          : ctorName && ctorName !== 'Object'
+            ? ctorName
+            : 'module'
       const moduleSources: SourcedRegistration[] = (mod.contributors?.() ?? []).map(
         (registration): SourcedRegistration => ({
           source: 'module',

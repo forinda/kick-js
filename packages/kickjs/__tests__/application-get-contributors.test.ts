@@ -1,13 +1,21 @@
 import 'reflect-metadata'
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 
 import {
   Application,
+  Container,
   defineAdapter,
   defineModule,
   definePlugin,
   defineContextDecorator,
 } from '../src/index'
+
+beforeEach(() => {
+  // Reset the singleton container between tests so adapter / plugin
+  // factory registrations from one case don't bleed into the next —
+  // standard pattern in this codebase per CLAUDE.md.
+  Container.reset()
+})
 
 const tenantContrib = defineContextDecorator({
   key: 'tenant',
