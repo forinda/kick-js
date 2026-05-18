@@ -742,6 +742,30 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
   }
 }
 
+/**
+ * Wire a single {@link DiscoveredGenerator} entry into the `kick g`
+ * Commander tree as a dedicated subcommand. Called once per merged
+ * plugin generator at CLI bootstrap so the entry shows up in
+ * `kick g --help` and routes through Commander instead of falling
+ * through the bare-action dispatch.
+ *
+ * Behaviour:
+ *
+ * - Positional syntax mirrors `spec.args[0]` so the help reads
+ *   naturally (`drizzle-typegen <schema>` vs `drizzle-typegen
+ *   [itemName]`). Required-ness comes from `spec.args[0].required`;
+ *   additional positionals are bundled into a variadic catch-all and
+ *   forwarded to the generator as `ctx.args` for its own parsing.
+ * - Each `spec.flags[]` entry becomes a Commander `.option(...)`
+ *   with optional alias + value-taking shape preserved.
+ * - The action handler dispatches via {@link tryDispatchPluginGenerator}
+ *   restricted to the single matching entry — keeping the runtime path
+ *   identical to the bare-action fallback so behaviour stays consistent
+ *   whether Commander routes the call or the safety-net catches it.
+ *
+ * The source plugin name is appended to the description in `[brackets]`
+ * so adopters can see at a glance which plugin shipped each generator.
+ */
 function registerPluginGeneratorSubcommand(gen: Command, entry: DiscoveredGenerator): void {
   const { source, spec } = entry
   const firstArg = spec.args?.[0]
