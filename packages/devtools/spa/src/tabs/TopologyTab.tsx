@@ -196,6 +196,23 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
 }
 
+/**
+ * Render a single `state` value as a string for the topology row.
+ * `JSON.stringify` throws on circular structures and on objects with
+ * unserializable members (functions, bigints in older runtimes); falling
+ * back to `'[unserializable]'` keeps the dashboard from blanking out
+ * on a single malformed introspect snapshot. Same defensive pattern
+ * used by `summarisePayload()` elsewhere in the SPA.
+ */
+function formatStateValue(value: unknown): string {
+  if (typeof value !== 'object' || value === null) return String(value)
+  try {
+    return JSON.stringify(value)
+  } catch {
+    return '[unserializable]'
+  }
+}
+
 const PrimitiveRow: Component<{ item: IntrospectionSnapshot }> = (props) => (
   <div class="tree-node">
     <span class="tree-key">{props.item.name}</span>
@@ -219,10 +236,7 @@ const PrimitiveRow: Component<{ item: IntrospectionSnapshot }> = (props) => (
         <For each={Object.entries(props.item.state ?? {})}>
           {([key, value]) => (
             <span style="margin-right:12px">
-              {key}:{' '}
-              <strong style="color:var(--text)">
-                {typeof value === 'object' ? JSON.stringify(value) : String(value)}
-              </strong>
+              {key}: <strong style="color:var(--text)">{formatStateValue(value)}</strong>
             </span>
           )}
         </For>

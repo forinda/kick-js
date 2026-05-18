@@ -19,11 +19,14 @@
 export interface IntrospectionSnapshot {
   /**
    * Wire-protocol version this snapshot conforms to. The kit ships a
-   * `PROTOCOL_VERSION` constant — adopters can set this field to
-   * `1` directly without importing the constant; bumping it is a
-   * coordinated kit + framework release.
+   * `PROTOCOL_VERSION` constant typed as the literal `1`; we mirror
+   * that literal here so structural parity is enforced both ways —
+   * an adopter who writes `protocolVersion: 1` satisfies both this
+   * type and the kit's `IntrospectionSnapshot`. Bumping is a
+   * coordinated kit + framework release; widen this literal in
+   * lockstep.
    */
-  protocolVersion: number
+  protocolVersion: 1
   /** Stable identity matching the `name` from `definePlugin` / `defineAdapter`. */
   name: string
   /** Discriminator for what kind of primitive this is. */
