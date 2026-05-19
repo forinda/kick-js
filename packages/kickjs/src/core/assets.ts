@@ -72,6 +72,28 @@ export class UnknownAssetError extends Error {
 
 let manifestCache: ResolvedManifest | null | undefined = undefined
 
+/**
+ * Convert a filesystem path to its posix (forward-slash) form. The
+ * asset manifest and the public `resolveAsset` / `assets.x.y()` /
+ * `useAssets()` contract returns posix paths on every platform so
+ * adopters can:
+ *
+ * - pass the result to `express.static` / `res.sendFile` / `ejs.renderFile`
+ *   without worrying about Windows vs. posix separators
+ * - splice the path into URLs (`href`, `src`, CDN keys) without
+ *   replacing `\` with `/` by hand
+ * - compare two paths from `resolveAsset` for equality on any host
+ *
+ * Node's `fs.*` and Express's path-handling APIs accept either
+ * separator on Windows, so this normalisation is safe — the only
+ * adopter code it could break is something explicitly parsing
+ * Windows backslashes back out of the result, which would already be
+ * brittle.
+ */
+function toPosixPath(p: string): string {
+  return p.replaceAll('\\', '/')
+}
+
 export function resolveAsset(namespace: string, key: string): string {
   const resolved = loadManifest()
   if (!resolved) {
@@ -81,7 +103,8 @@ export function resolveAsset(namespace: string, key: string): string {
   if (!entry) {
     throw new UnknownAssetError(namespace, key)
   }
-  return isAbsolute(entry) ? entry : resolve(resolved.root, entry)
+  const abs = isAbsolute(entry) ? entry : resolve(resolved.root, entry)
+  return toPosixPath(abs)
 }
 
 /** Reset the manifest cache. Tests use this; production code shouldn't need it. */

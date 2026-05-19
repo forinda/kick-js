@@ -10,6 +10,15 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+
+/**
+ * `resolveAsset` normalises returned paths to posix (forward slashes)
+ * on every platform so adopters can splice them into URLs and compare
+ * them across hosts. Tests construct expected paths via `join(cwd,
+ * 'rel/path')` which yields backslashes on Windows — wrap with
+ * `toPosix()` so assertions hold on both Windows and posix CI.
+ */
+const toPosix = (p: string): string => p.replaceAll('\\', '/')
 import {
   ASSET_MANIFEST_VERSION,
   ASSETS,
@@ -78,20 +87,20 @@ describe('resolveAsset — built manifest path (prod)', () => {
     writeManifest('dist', { 'mails/welcome': 'mails/welcome.ejs' })
     writeFile('dist/mails/welcome.ejs', 'hi')
     const path = resolveAsset('mails', 'welcome')
-    expect(path).toBe(join(cwd, 'dist/mails/welcome.ejs'))
+    expect(path).toBe(toPosix(join(cwd, 'dist/mails/welcome.ejs')))
   })
 
   it('honours absolute manifest entries verbatim', () => {
     const abs = join(cwd, 'somewhere/else/file.txt')
     writeFile('somewhere/else/file.txt')
     writeManifest('dist', { 'x/y': abs })
-    expect(resolveAsset('x', 'y')).toBe(abs)
+    expect(resolveAsset('x', 'y')).toBe(toPosix(abs))
   })
 
   it('also probes build/ + out/ for the manifest', () => {
     writeManifest('out', { 'reports/monthly': 'reports/monthly.ejs' })
     writeFile('out/reports/monthly.ejs')
-    expect(resolveAsset('reports', 'monthly')).toBe(join(cwd, 'out/reports/monthly.ejs'))
+    expect(resolveAsset('reports', 'monthly')).toBe(toPosix(join(cwd, 'out/reports/monthly.ejs')))
   })
 
   it('skips a future-version manifest + falls through', () => {
@@ -110,7 +119,7 @@ describe('resolveAsset — KICK_ASSETS_ROOT env override', () => {
     writeFile('custom/mails/welcome.ejs')
     process.env.KICK_ASSETS_ROOT = join(cwd, 'custom')
     clearAssetCache()
-    expect(resolveAsset('mails', 'welcome')).toBe(join(cwd, 'custom/mails/welcome.ejs'))
+    expect(resolveAsset('mails', 'welcome')).toBe(toPosix(join(cwd, 'custom/mails/welcome.ejs')))
   })
 
   it('falls back to dist when the env path has no manifest', () => {
@@ -118,7 +127,7 @@ describe('resolveAsset — KICK_ASSETS_ROOT env override', () => {
     writeFile('dist/mails/welcome.ejs')
     process.env.KICK_ASSETS_ROOT = join(cwd, 'nonexistent')
     clearAssetCache()
-    expect(resolveAsset('mails', 'welcome')).toBe(join(cwd, 'dist/mails/welcome.ejs'))
+    expect(resolveAsset('mails', 'welcome')).toBe(toPosix(join(cwd, 'dist/mails/welcome.ejs')))
   })
 })
 
@@ -131,9 +140,11 @@ describe('resolveAsset — dev fallback (no manifest)', () => {
     writeFile('src/templates/mails/welcome.ejs', 'hi')
     writeFile('src/templates/mails/orders/confirmation.ejs', 'order')
 
-    expect(resolveAsset('mails', 'welcome')).toBe(join(cwd, 'src/templates/mails/welcome.ejs'))
+    expect(resolveAsset('mails', 'welcome')).toBe(
+      toPosix(join(cwd, 'src/templates/mails/welcome.ejs')),
+    )
     expect(resolveAsset('mails', 'orders/confirmation')).toBe(
-      join(cwd, 'src/templates/mails/orders/confirmation.ejs'),
+      toPosix(join(cwd, 'src/templates/mails/orders/confirmation.ejs')),
     )
   })
 
@@ -147,7 +158,7 @@ describe('resolveAsset — dev fallback (no manifest)', () => {
     writeFile('src/x/keep.ejs', 'keep')
     writeFile('src/x/skip.txt', 'skip')
 
-    expect(resolveAsset('x', 'keep')).toBe(join(cwd, 'src/x/keep.ejs'))
+    expect(resolveAsset('x', 'keep')).toBe(toPosix(join(cwd, 'src/x/keep.ejs')))
     expect(() => resolveAsset('x', 'skip')).toThrow(UnknownAssetError)
   })
 
@@ -196,14 +207,14 @@ describe('Variant A — assets Proxy ambient', () => {
     // would narrow this in real adopter code, but at runtime the
     // shape works without it.
     const path = (assets as any).mails.welcome()
-    expect(path).toBe(join(cwd, 'dist/mails/welcome.ejs'))
+    expect(path).toBe(toPosix(join(cwd, 'dist/mails/welcome.ejs')))
   })
 
   it('resolves nested access (assets.mails.orders.confirmation())', () => {
     writeManifest('dist', { 'mails/orders/confirmation': 'mails/orders/confirmation.ejs' })
     writeFile('dist/mails/orders/confirmation.ejs')
     const path = (assets as any).mails.orders.confirmation()
-    expect(path).toBe(join(cwd, 'dist/mails/orders/confirmation.ejs'))
+    expect(path).toBe(toPosix(join(cwd, 'dist/mails/orders/confirmation.ejs')))
   })
 
   it('returns undefined for thenable detection (Promise.resolve unwrap)', () => {
@@ -229,7 +240,7 @@ describe('Variant A — assets Proxy ambient', () => {
     const ns = 'reports'
     const key = 'monthly'
     const path = (assets as any)[ns][key]()
-    expect(path).toBe(join(cwd, 'dist/reports/monthly.ejs'))
+    expect(path).toBe(toPosix(join(cwd, 'dist/reports/monthly.ejs')))
   })
 })
 
@@ -247,7 +258,7 @@ describe('Variant B — useAssets hook', () => {
         return (this.assetsRef as any).mails.welcome()
       }
     }
-    expect(new MailService().welcome()).toBe(join(cwd, 'dist/mails/welcome.ejs'))
+    expect(new MailService().welcome()).toBe(toPosix(join(cwd, 'dist/mails/welcome.ejs')))
   })
 })
 
@@ -272,7 +283,7 @@ describe('@Asset decorator', () => {
 
     Container.getInstance().register(MailService, MailService)
     const svc = Container.getInstance().resolve(MailService)
-    expect(svc.welcomeTemplate).toBe(join(cwd, 'dist/mails/welcome.ejs'))
+    expect(svc.welcomeTemplate).toBe(toPosix(join(cwd, 'dist/mails/welcome.ejs')))
   })
 
   it('resolves nested-path assets (mails/orders/confirmation)', async () => {
@@ -289,7 +300,7 @@ describe('@Asset decorator', () => {
 
     Container.getInstance().register(MailService, MailService)
     const svc = Container.getInstance().resolve(MailService)
-    expect(svc.orderConfirmation).toBe(join(cwd, 'dist/mails/orders/confirmation.ejs'))
+    expect(svc.orderConfirmation).toBe(toPosix(join(cwd, 'dist/mails/orders/confirmation.ejs')))
   })
 
   it('is lazy — resolves on access, not at instantiation', async () => {
@@ -311,7 +322,7 @@ describe('@Asset decorator', () => {
     writeFile('dist/mails/welcome.ejs')
     clearAssetCache()
 
-    expect(inst.template).toBe(join(cwd, 'dist/mails/welcome.ejs'))
+    expect(inst.template).toBe(toPosix(join(cwd, 'dist/mails/welcome.ejs')))
   })
 
   it('throws UnknownAssetError on access for missing assets', async () => {
