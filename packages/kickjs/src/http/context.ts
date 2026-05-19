@@ -77,10 +77,31 @@ const signalControllerKey = Symbol.for('kickjs.requestContext.signalController')
 const readOnlyProxyCacheKey = Symbol.for('kickjs.requestContext.readOnlyProxyCache')
 
 /**
- * In dev, wrap `target` in a `Proxy` whose `set` / `deleteProperty`
- * traps log a warning and otherwise leave the underlying object
- * untouched. In production (`process.env.NODE_ENV === 'production'`)
- * returns `target` as-is so the hot path stays zero-cost.
+ * `true` iff `v` is a plain object (`{}` / `Object.create(null)`) or an
+ * array — the two shapes JSON.parse / Express body-parser produce and
+ * the only ones the read-only Proxy recurses into. Class instances,
+ * `Date`, `RegExp`, `Map`, `Set`, `Buffer`, streams, and functions
+ * pass through unwrapped so their method dispatch and `instanceof`
+ * checks keep working.
+ */
+function isPlainObjectOrArray(v: unknown): v is object {
+  if (v === null || typeof v !== 'object') return false
+  if (Array.isArray(v)) return true
+  const proto = Object.getPrototypeOf(v)
+  return proto === Object.prototype || proto === null
+}
+
+/**
+ * In dev, wrap `target` in a `Proxy` whose `set` / `deleteProperty` /
+ * `defineProperty` traps log a warning and otherwise leave the
+ * underlying object untouched. A `get` trap recursively wraps nested
+ * plain objects and arrays on access, so deep mutations
+ * (`ctx.body.user.name = 'x'`, `ctx.files[0].fieldname = 'y'`,
+ * `ctx.body.tags.push(...)`) all surface a warning — matching the
+ * prior `DeepReadonly<T>` contract at runtime instead of at the type
+ * level. In production (`process.env.NODE_ENV === 'production'`) the
+ * proxy is bypassed entirely and `target` is returned as-is so the
+ * hot path stays zero-cost.
  *
  * Why a Proxy instead of `DeepReadonly<T>` at the type level: the
  * recursive conditional type interfered with TS narrowing (notably
@@ -89,18 +110,20 @@ const readOnlyProxyCacheKey = Symbol.for('kickjs.requestContext.readOnlyProxyCac
  * runtime warning catches the same class of bug during dev and tests.
  *
  * Trap returns `true` so strict-mode call sites (which is all of them
- * — ES modules are strict) don't *throw* on assignment — they just get
- * a warning + the underlying value stays untouched. Adopters discover
- * the violation when the subsequent read returns the original value,
- * not the one they "set".
+ * — ES modules are strict) don't *throw* on assignment — they just
+ * get a warning + the underlying value stays untouched. Adopters
+ * discover the violation when the subsequent read returns the
+ * original value, not the one they "set".
  *
  * Targets are cached per-`req` under {@link readOnlyProxyCacheKey} so
- * repeat getter access returns the same proxy. Primitives, `null`,
- * and non-object values pass through unchanged.
+ * (1) repeat getter access returns the same proxy (`ctx.body ===
+ * ctx.body`, `ctx.body.user === ctx.body.user`); and (2) cyclic refs
+ * (`body.self = body`) terminate via the cache hit on the second
+ * visit. Primitives, `null`, and non-plain values pass through.
  */
 function makeReadOnlyProxy<T>(target: T, req: object, label: string): T {
   if (process.env.NODE_ENV === 'production') return target
-  if (target === null || typeof target !== 'object') return target
+  if (!isPlainObjectOrArray(target)) return target
 
   type Cache = WeakMap<object, unknown>
   const reqObj = req as Record<symbol, Cache | undefined>
@@ -113,21 +136,37 @@ function makeReadOnlyProxy<T>(target: T, req: object, label: string): T {
   const cached = cache.get(targetObj)
   if (cached) return cached as T
 
+  const warnWrite = (verb: string, prop: PropertyKey) => {
+    console.warn(
+      `[kickjs] Attempted to ${verb} \`ctx.${label}.${String(prop)}\` — ` +
+        `request data is read-only. ` +
+        `Stash computed values via \`ctx.set('key', value)\` or a Context Contributor, ` +
+        `or reach \`ctx.req.${label}\` if you genuinely need the raw mutable handle.`,
+    )
+  }
+
   const proxy = new Proxy(targetObj, {
-    set(_t, prop, _value) {
-      console.warn(
-        `[kickjs] Attempted to assign \`ctx.${label}.${String(prop)}\` — ` +
-          `request data is read-only. ` +
-          `Stash computed values via \`ctx.set('key', value)\` or a Context Contributor, ` +
-          `or reach \`ctx.req.${label}\` if you genuinely need the raw mutable handle.`,
-      )
+    get(t, prop, receiver) {
+      const value = Reflect.get(t, prop, receiver)
+      // Recurse only into plain objects / arrays. Functions (incl.
+      // array methods like `.push`) pass through with `receiver` as
+      // their `this`, so internal `this[i] = x` writes still hit the
+      // `set` trap and warn.
+      if (isPlainObjectOrArray(value)) {
+        return makeReadOnlyProxy(value, req, `${label}.${String(prop)}`)
+      }
+      return value
+    },
+    set(_t, prop) {
+      warnWrite('assign', prop)
       return true
     },
     deleteProperty(_t, prop) {
-      console.warn(
-        `[kickjs] Attempted to \`delete ctx.${label}.${String(prop)}\` — ` +
-          `request data is read-only. See above for guidance.`,
-      )
+      warnWrite('delete', prop)
+      return true
+    },
+    defineProperty(_t, prop) {
+      warnWrite('Object.defineProperty on', prop)
       return true
     },
   })
