@@ -73,7 +73,7 @@
   },
   "peerDependencies": {
     "express": "^5.1.0",
-    "zod": ">=4.0.0",
+    "zod": "^4.0.0",
     "@forinda/kickjs": ">=2.3.0"
   },
   "peerDependenciesMeta": {
