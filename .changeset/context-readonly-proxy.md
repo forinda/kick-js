@@ -14,4 +14,4 @@ The compile-time wrapper is gone. Runtime read-only enforcement now lives in a p
 
 The `DeepReadonly<T>` utility type stays exported (still useful for adopters who want to seal their own shapes). It just isn't applied to the framework's request getters anymore.
 
-No API surface change for callers — `ctx.body.email` still reads the email; assignment to it now warns at dev time instead of being a TS error. Adopters who relied on the compile-time block should keep doing what they were doing (the contract is documented in JSDoc + warned at runtime).
+Runtime read behavior is unchanged for callers — `ctx.body.email` still reads the email — but the TypeScript contract changed: assignment is no longer a compile-time error and now warns at dev time at runtime. Adopters who relied on the compile-time block should keep doing what they were doing (the contract is documented in JSDoc + warned at runtime). The Proxy is deep: nested mutations like `ctx.body.user.name = 'x'`, `ctx.files[0].fieldname = 'y'`, and `ctx.body.tags.push(...)` all surface the same warning, matching the prior `DeepReadonly<T>` depth at runtime instead of at the type level.

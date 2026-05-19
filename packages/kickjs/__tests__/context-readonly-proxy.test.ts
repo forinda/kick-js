@@ -80,7 +80,7 @@ describe('RequestContext read-only Proxy (dev)', () => {
       delete (params as Partial<typeof params>).id
       expect(rawParams.id).toBe('42')
       expect(warnSpy).toHaveBeenCalledTimes(1)
-      expect(warnSpy.mock.calls[0][0]).toMatch(/delete ctx\.params\.id/)
+      expect(warnSpy.mock.calls[0][0]).toMatch(/delete.*ctx\.params\.id/)
     })
   })
 
@@ -133,6 +133,89 @@ describe('RequestContext read-only Proxy (dev)', () => {
     const rawBody = { greeting: 'hello' }
     withCtx({ body: rawBody }, (ctx) => {
       expect((ctx.body as { greeting: string }).greeting).toBe('hello')
+    })
+  })
+
+  // ── Deep wrapping ──────────────────────────────────────────────────
+  // Shallow-only would let `ctx.body.user.name = 'evil'`,
+  // `ctx.files[0].fieldname = 'evil'`, and `ctx.body.tags.push(...)`
+  // through unwarned — the most common shape of mutation on a typical
+  // Zod-validated body. The `get` trap recursively wraps nested plain
+  // objects and arrays on access so these surface a warning too.
+
+  it('catches nested object mutations (ctx.body.user.name = ...)', () => {
+    const rawBody = { user: { name: 'alice', email: 'a@b.com' } }
+    withCtx({ body: rawBody }, (ctx) => {
+      const body = ctx.body as { user: { name: string; email: string } }
+      body.user.name = 'evil'
+      expect(rawBody.user.name).toBe('alice')
+      expect(warnSpy).toHaveBeenCalledTimes(1)
+      expect(warnSpy.mock.calls[0][0]).toMatch(/ctx\.body\.user\.name/)
+    })
+  })
+
+  it('catches mutations on an array element field (ctx.files[0].fieldname = ...)', () => {
+    const rawFile = {
+      originalname: 'x.png',
+      size: 100,
+    } as unknown as Express.Multer.File & { fieldname?: string }
+    const rawFiles = [rawFile] as Express.Multer.File[]
+    withCtx({ files: rawFiles }, (ctx) => {
+      const files = ctx.files as (Express.Multer.File & { fieldname?: string })[]
+      files[0].fieldname = 'evil'
+      expect(rawFile.fieldname).toBeUndefined()
+      expect(warnSpy).toHaveBeenCalledTimes(1)
+      expect(warnSpy.mock.calls[0][0]).toMatch(/ctx\.files\.0\.fieldname/)
+    })
+  })
+
+  it('catches array mutation methods (ctx.body.tags.push)', () => {
+    // `Array.prototype.push` internally does `this[this.length] = x`
+    // then bumps `length`. With the array wrapped, both writes hit
+    // the `set` trap and warn — the original array is untouched.
+    const rawBody = { tags: ['a', 'b'] as string[] }
+    withCtx({ body: rawBody }, (ctx) => {
+      const body = ctx.body as { tags: string[] }
+      body.tags.push('evil')
+      expect(rawBody.tags).toEqual(['a', 'b'])
+      expect(warnSpy.mock.calls.length).toBeGreaterThan(0)
+    })
+  })
+
+  it('keeps nested identity stable (ctx.body.user === ctx.body.user)', () => {
+    withCtx({ body: { user: { name: 'a' } } }, (ctx) => {
+      const a = (ctx.body as { user: object }).user
+      const b = (ctx.body as { user: object }).user
+      expect(a).toBe(b)
+    })
+  })
+
+  it('terminates on cyclic refs (body.self = body)', () => {
+    const rawBody: Record<string, unknown> = { name: 'alice' }
+    rawBody.self = rawBody
+    withCtx({ body: rawBody }, (ctx) => {
+      // Drilling into a cycle must return the same proxy as the top
+      // — the cache catches the second visit. Without this, the get
+      // trap would StackOverflow on a recursive structure.
+      const body = ctx.body as Record<string, unknown>
+      expect(body.self).toBe(body)
+    })
+  })
+
+  it('does not wrap non-plain objects (Date, Buffer pass through)', () => {
+    // Express body-parser produces plain objects, but if an adopter's
+    // middleware stashes a Date / Buffer on `req.body`, we leave it
+    // alone — method dispatch and `instanceof` checks would break if
+    // we wrapped them.
+    const rawDate = new Date('2026-01-01')
+    const rawBuf = Buffer.from('hello')
+    const rawBody = { d: rawDate, b: rawBuf, n: 'alice' }
+    withCtx({ body: rawBody }, (ctx) => {
+      const body = ctx.body as { d: Date; b: Buffer; n: string }
+      expect(body.d).toBe(rawDate)
+      expect(body.b).toBe(rawBuf)
+      expect(body.d instanceof Date).toBe(true)
+      expect(Buffer.isBuffer(body.b)).toBe(true)
     })
   })
 })
