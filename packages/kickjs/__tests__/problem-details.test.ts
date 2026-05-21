@@ -5,6 +5,7 @@ import request from 'supertest'
 import {
   HttpException,
   ProblemException,
+  Problems,
   defaultProblemTitle,
   normalizeProblem,
   type ProblemDetails,
@@ -46,103 +47,103 @@ describe('ProblemException', () => {
   })
 
   it('extends HttpException so plain HttpException catches still see it', () => {
-    const ex = ProblemException.notFound()
+    const ex = Problems.notFound()
     expect(ex).toBeInstanceOf(HttpException)
     expect(ex).toBeInstanceOf(ProblemException)
   })
 
   it('exposes `status` directly for parity with HttpException', () => {
-    const ex = ProblemException.conflict()
+    const ex = Problems.conflict()
     expect(ex.status).toBe(409)
   })
+})
 
-  describe('static factories', () => {
-    it('badRequest', () => {
-      const ex = ProblemException.badRequest({ detail: 'invalid' })
-      expect(ex.problem.status).toBe(400)
-      expect(ex.problem.title).toBe('Bad Request')
-      expect(ex.problem.detail).toBe('invalid')
-    })
-
-    it('unauthorized — sets WWW-Authenticate when challenge passed', () => {
-      const ex = ProblemException.unauthorized({}, 'Bearer realm="api"')
-      expect(ex.problem.status).toBe(401)
-      expect(ex.headers).toEqual({ 'WWW-Authenticate': 'Bearer realm="api"' })
-    })
-
-    it('forbidden', () => {
-      const ex = ProblemException.forbidden({ detail: 'no access' })
-      expect(ex.problem.status).toBe(403)
-      expect(ex.problem.detail).toBe('no access')
-    })
-
-    it('notFound', () => {
-      const ex = ProblemException.notFound({ detail: 'user 123 not found' })
-      expect(ex.problem.status).toBe(404)
-      expect(ex.problem.detail).toBe('user 123 not found')
-    })
-
-    it('methodNotAllowed — sets Allow header from allowedMethods', () => {
-      const ex = ProblemException.methodNotAllowed(['GET', 'POST'])
-      expect(ex.problem.status).toBe(405)
-      expect(ex.headers).toEqual({ Allow: 'GET, POST' })
-    })
-
-    it('conflict', () => {
-      const ex = ProblemException.conflict({ detail: 'email taken' })
-      expect(ex.problem.status).toBe(409)
-      expect(ex.problem.detail).toBe('email taken')
-    })
-
-    it('unprocessable', () => {
-      const ex = ProblemException.unprocessable({ errors: [{ field: 'email' }] })
-      expect(ex.problem.status).toBe(422)
-      expect(ex.problem.errors).toEqual([{ field: 'email' }])
-    })
-
-    it('tooManyRequests — sets Retry-After when seconds passed', () => {
-      const ex = ProblemException.tooManyRequests({}, 60)
-      expect(ex.problem.status).toBe(429)
-      expect(ex.headers).toEqual({ 'Retry-After': '60' })
-    })
-
-    it('serviceUnavailable — sets Retry-After when seconds passed', () => {
-      const ex = ProblemException.serviceUnavailable({}, 30)
-      expect(ex.problem.status).toBe(503)
-      expect(ex.headers).toEqual({ 'Retry-After': '30' })
-    })
-
-    it('internal', () => {
-      const ex = ProblemException.internal()
-      expect(ex.problem.status).toBe(500)
-      expect(ex.problem.title).toBe('Internal Server Error')
-    })
-
-    it('fromZodError — wraps Zod issues into the §3.2 errors extension', () => {
-      const zodError = {
-        issues: [
-          { path: ['email'], message: 'Invalid email', code: 'invalid_string' },
-          { path: ['name'], message: 'Required', code: 'invalid_type' },
-        ],
-      }
-      const ex = ProblemException.fromZodError(zodError as any)
-      expect(ex.problem.status).toBe(422)
-      expect(ex.problem.detail).toBe('Invalid email')
-      expect(ex.problem.errors).toEqual([
-        { field: 'email', message: 'Invalid email', code: 'invalid_string' },
-        { field: 'name', message: 'Required', code: 'invalid_type' },
-      ])
-    })
+describe('Problems convenience factories', () => {
+  it('badRequest', () => {
+    const ex = Problems.badRequest({ detail: 'invalid' })
+    expect(ex.problem.status).toBe(400)
+    expect(ex.problem.title).toBe('Bad Request')
+    expect(ex.problem.detail).toBe('invalid')
   })
 
-  describe('withHeaders', () => {
-    it('returns a fresh exception with merged headers', () => {
-      const a = ProblemException.tooManyRequests({}, 60)
-      const b = a.withHeaders({ 'X-Custom': 'yes' })
-      expect(b).not.toBe(a)
-      expect(b.headers).toEqual({ 'Retry-After': '60', 'X-Custom': 'yes' })
-      expect(b.problem.status).toBe(429)
-    })
+  it('unauthorized — sets WWW-Authenticate when challenge passed', () => {
+    const ex = Problems.unauthorized({}, 'Bearer realm="api"')
+    expect(ex.problem.status).toBe(401)
+    expect(ex.headers).toEqual({ 'WWW-Authenticate': 'Bearer realm="api"' })
+  })
+
+  it('forbidden', () => {
+    const ex = Problems.forbidden({ detail: 'no access' })
+    expect(ex.problem.status).toBe(403)
+    expect(ex.problem.detail).toBe('no access')
+  })
+
+  it('notFound', () => {
+    const ex = Problems.notFound({ detail: 'user 123 not found' })
+    expect(ex.problem.status).toBe(404)
+    expect(ex.problem.detail).toBe('user 123 not found')
+  })
+
+  it('methodNotAllowed — sets Allow header from allowedMethods', () => {
+    const ex = Problems.methodNotAllowed(['GET', 'POST'])
+    expect(ex.problem.status).toBe(405)
+    expect(ex.headers).toEqual({ Allow: 'GET, POST' })
+  })
+
+  it('conflict', () => {
+    const ex = Problems.conflict({ detail: 'email taken' })
+    expect(ex.problem.status).toBe(409)
+    expect(ex.problem.detail).toBe('email taken')
+  })
+
+  it('unprocessable', () => {
+    const ex = Problems.unprocessable({ errors: [{ field: 'email' }] })
+    expect(ex.problem.status).toBe(422)
+    expect(ex.problem.errors).toEqual([{ field: 'email' }])
+  })
+
+  it('tooManyRequests — sets Retry-After when seconds passed', () => {
+    const ex = Problems.tooManyRequests({}, 60)
+    expect(ex.problem.status).toBe(429)
+    expect(ex.headers).toEqual({ 'Retry-After': '60' })
+  })
+
+  it('serviceUnavailable — sets Retry-After when seconds passed', () => {
+    const ex = Problems.serviceUnavailable({}, 30)
+    expect(ex.problem.status).toBe(503)
+    expect(ex.headers).toEqual({ 'Retry-After': '30' })
+  })
+
+  it('internal', () => {
+    const ex = Problems.internal()
+    expect(ex.problem.status).toBe(500)
+    expect(ex.problem.title).toBe('Internal Server Error')
+  })
+
+  it('fromZodError — wraps Zod issues into the §3.2 errors extension', () => {
+    const zodError = {
+      issues: [
+        { path: ['email'], message: 'Invalid email', code: 'invalid_string' },
+        { path: ['name'], message: 'Required', code: 'invalid_type' },
+      ],
+    }
+    const ex = Problems.fromZodError(zodError as any)
+    expect(ex.problem.status).toBe(422)
+    expect(ex.problem.detail).toBe('Invalid email')
+    expect(ex.problem.errors).toEqual([
+      { field: 'email', message: 'Invalid email', code: 'invalid_string' },
+      { field: 'name', message: 'Required', code: 'invalid_type' },
+    ])
+  })
+})
+
+describe('ProblemException.withHeaders', () => {
+  it('returns a fresh exception with merged headers', () => {
+    const a = Problems.tooManyRequests({}, 60)
+    const b = a.withHeaders({ 'X-Custom': 'yes' })
+    expect(b).not.toBe(a)
+    expect(b.headers).toEqual({ 'Retry-After': '60', 'X-Custom': 'yes' })
+    expect(b.problem.status).toBe(429)
   })
 })
 
@@ -174,6 +175,16 @@ describe('normalizeProblem', () => {
     expect(out.foo).toBe('bar')
     expect(out.count).toBe(7)
   })
+
+  it("falls back to defaults when caller passes explicit `undefined` (CodeRabbit regression)", () => {
+    // A partial built from optional fields can land here with type/title
+    // explicitly undefined. Spreading after the defaults would re-override
+    // them; spreading first preserves the fallback.
+    const maybeUrl: string | undefined = undefined
+    const out = normalizeProblem({ status: 404, type: maybeUrl, title: undefined })
+    expect(out.type).toBe('about:blank')
+    expect(out.title).toBe('Not Found')
+  })
 })
 
 describe('defaultProblemTitle', () => {
@@ -201,13 +212,13 @@ function appThrowing(err: Error) {
 
 describe('errorHandler — ProblemException', () => {
   it('emits Content-Type application/problem+json', async () => {
-    const res = await request(appThrowing(ProblemException.notFound())).get('/boom')
+    const res = await request(appThrowing(Problems.notFound())).get('/boom')
     expect(res.status).toBe(404)
     expect(res.headers['content-type']).toMatch(/^application\/problem\+json/)
   })
 
   it('serializes the canonical RFC 9457 shape with type defaulted to about:blank', async () => {
-    const res = await request(appThrowing(ProblemException.notFound())).get('/boom')
+    const res = await request(appThrowing(Problems.notFound())).get('/boom')
     expect(res.body).toEqual({ type: 'about:blank', title: 'Not Found', status: 404 })
   })
 
@@ -233,7 +244,7 @@ describe('errorHandler — ProblemException', () => {
   })
 
   it('forwards exception headers (Retry-After, WWW-Authenticate, Allow)', async () => {
-    const ex = ProblemException.tooManyRequests({}, 60)
+    const ex = Problems.tooManyRequests({}, 60)
     const res = await request(appThrowing(ex)).get('/boom')
     expect(res.status).toBe(429)
     expect(res.headers['retry-after']).toBe('60')

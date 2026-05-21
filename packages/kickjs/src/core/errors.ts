@@ -248,10 +248,15 @@ export function defaultProblemTitle(status: number): string {
  * with the canonical shape; `type` defaults to `about:blank`, `title`
  * to the IANA reason phrase for `status`.
  *
- * For adopters who want the problem fields required at construction
- * (vs. {@link HttpException}'s optional shape), this is the typed
- * entry point. The static factories pre-fill `status` and `title` for
- * the common codes.
+ * Extends {@link HttpException} so existing `instanceof HttpException`
+ * catches still see it. Use `new ProblemException(...)` directly for
+ * full control, or {@link Problems} for the pre-filled-status
+ * convenience factories.
+ *
+ * Static factories deliberately live on {@link Problems} rather than
+ * this class — putting them here would shadow `HttpException`'s
+ * same-named statics with incompatible (object vs string) signatures,
+ * which TypeScript correctly rejects.
  *
  * @example
  * ```ts
@@ -264,8 +269,8 @@ export function defaultProblemTitle(status: number): string {
  *   balance: 30,  // extension
  * })
  *
- * // Or via the static factory:
- * throw ProblemException.forbidden({
+ * // Or via the Problems convenience factory:
+ * throw Problems.forbidden({
  *   type: 'https://api.example.com/problems/out-of-credit',
  *   detail: 'Your balance is 30, but that costs 50.',
  *   balance: 30,
@@ -287,13 +292,33 @@ export class ProblemException extends HttpException {
   withHeaders(headers: Record<string, string>): ProblemException {
     return new ProblemException(this.problem, { ...this.headers, ...headers })
   }
+}
 
+/**
+ * Convenience factories for {@link ProblemException}. Pre-fill `status`
+ * (and `title` via {@link defaultProblemTitle}) for the common HTTP
+ * codes — same shortcut set the `ctx.problem.*` response helpers cover.
+ *
+ * Lives in a separate namespace rather than as statics on
+ * {@link ProblemException} to avoid shadowing {@link HttpException}'s
+ * same-named statics, which would create a TypeScript variance
+ * conflict (parent's `notFound(message?: string)` vs the child's
+ * desired `notFound(input?: ProblemInput)`).
+ *
+ * @example
+ * ```ts
+ * throw Problems.notFound({ detail: 'User abc not found' })
+ * throw Problems.tooManyRequests({}, 60)  // sets Retry-After: 60
+ * throw Problems.fromZodError(zodResult.error)
+ * ```
+ */
+export const Problems = {
   /** 400 Bad Request with optional detail / instance / extensions. */
-  static badRequest(input: Omit<ProblemDetails, 'status'> = {}): ProblemException {
+  badRequest(input: Omit<ProblemDetails, 'status'> = {}): ProblemException {
     return new ProblemException({ status: 400, ...input })
-  }
+  },
   /** 401 Unauthorized. Pass a `WWW-Authenticate` challenge via the headers arg. */
-  static unauthorized(
+  unauthorized(
     input: Omit<ProblemDetails, 'status'> = {},
     wwwAuthenticate?: string,
   ): ProblemException {
@@ -301,36 +326,36 @@ export class ProblemException extends HttpException {
       { status: 401, ...input },
       wwwAuthenticate ? { 'WWW-Authenticate': wwwAuthenticate } : undefined,
     )
-  }
+  },
   /** 403 Forbidden. */
-  static forbidden(input: Omit<ProblemDetails, 'status'> = {}): ProblemException {
+  forbidden(input: Omit<ProblemDetails, 'status'> = {}): ProblemException {
     return new ProblemException({ status: 403, ...input })
-  }
+  },
   /** 404 Not Found. */
-  static notFound(input: Omit<ProblemDetails, 'status'> = {}): ProblemException {
+  notFound(input: Omit<ProblemDetails, 'status'> = {}): ProblemException {
     return new ProblemException({ status: 404, ...input })
-  }
+  },
   /** 405 Method Not Allowed. Pass the allowed methods so the Allow header is set. */
-  static methodNotAllowed(
+  methodNotAllowed(
     allowedMethods: string[],
     input: Omit<ProblemDetails, 'status'> = {},
   ): ProblemException {
     return new ProblemException({ status: 405, ...input }, { Allow: allowedMethods.join(', ') })
-  }
+  },
   /** 409 Conflict. */
-  static conflict(input: Omit<ProblemDetails, 'status'> = {}): ProblemException {
+  conflict(input: Omit<ProblemDetails, 'status'> = {}): ProblemException {
     return new ProblemException({ status: 409, ...input })
-  }
+  },
   /**
    * 422 Unprocessable Entity. Pass per-field issues via the `errors`
    * extension — keep the array shape per the RFC's recommended convention
    * (`{ field, message, code }`).
    */
-  static unprocessable(input: Omit<ProblemDetails, 'status'> = {}): ProblemException {
+  unprocessable(input: Omit<ProblemDetails, 'status'> = {}): ProblemException {
     return new ProblemException({ status: 422, ...input })
-  }
+  },
   /** 429 Too Many Requests. Pass `retryAfterSeconds` to set the Retry-After header. */
-  static tooManyRequests(
+  tooManyRequests(
     input: Omit<ProblemDetails, 'status'> = {},
     retryAfterSeconds?: number,
   ): ProblemException {
@@ -338,9 +363,9 @@ export class ProblemException extends HttpException {
       { status: 429, ...input },
       retryAfterSeconds !== undefined ? { 'Retry-After': String(retryAfterSeconds) } : undefined,
     )
-  }
+  },
   /** 503 Service Unavailable. */
-  static serviceUnavailable(
+  serviceUnavailable(
     input: Omit<ProblemDetails, 'status'> = {},
     retryAfterSeconds?: number,
   ): ProblemException {
@@ -348,17 +373,17 @@ export class ProblemException extends HttpException {
       { status: 503, ...input },
       retryAfterSeconds !== undefined ? { 'Retry-After': String(retryAfterSeconds) } : undefined,
     )
-  }
+  },
   /** 500 Internal Server Error. */
-  static internal(input: Omit<ProblemDetails, 'status'> = {}): ProblemException {
+  internal(input: Omit<ProblemDetails, 'status'> = {}): ProblemException {
     return new ProblemException({ status: 500, ...input })
-  }
+  },
 
   /**
    * Build from a Zod error — 422 with the issues serialized into the
    * `errors` extension per RFC 9457 §3.2's array convention.
    */
-  static fromZodError(error: any, input: Omit<ProblemDetails, 'status'> = {}): ProblemException {
+  fromZodError(error: any, input: Omit<ProblemDetails, 'status'> = {}): ProblemException {
     const issues: ValidationError[] = (error.issues || []).map((issue: any) => ({
       field: issue.path?.join('.') || '',
       message: issue.message,
@@ -370,19 +395,24 @@ export class ProblemException extends HttpException {
       ...input,
       errors: issues,
     })
-  }
-}
+  },
+} as const
 
 /**
  * Normalize an RFC 9457 problem into the wire shape — fill in `type` →
  * `'about:blank'` and `title` → IANA reason phrase. The same function is
  * used by {@link RequestContext}'s `problem` helpers and the global
  * error handler so the response is identical regardless of entry point.
+ *
+ * Defaults are applied **after** the spread, so a caller passing
+ * `{ type: undefined }` (e.g. a partial built up from optional fields)
+ * still gets `'about:blank'` on the wire — `...input` would otherwise
+ * re-overwrite the fallback with the explicit `undefined`.
  */
 export function normalizeProblem(input: ProblemDetails): ProblemDetails {
   return {
+    ...input,
     type: input.type ?? 'about:blank',
     title: input.title ?? defaultProblemTitle(input.status),
-    ...input,
   }
 }
