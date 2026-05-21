@@ -7,10 +7,10 @@ describe('Logger.setProvider() — pluggable logger backend', () => {
     Logger.resetProvider()
   })
 
-  it('default provider is pino-based (not ConsoleLoggerProvider)', () => {
+  it('default provider is ConsoleLoggerProvider', () => {
     const provider = Logger.getProvider()
     expect(provider).toBeDefined()
-    expect(provider).not.toBeInstanceOf(ConsoleLoggerProvider)
+    expect(provider).toBeInstanceOf(ConsoleLoggerProvider)
   })
 
   it('custom provider receives log calls', () => {
@@ -160,7 +160,7 @@ describe('Logger.setProvider() — pluggable logger backend', () => {
     ])
   })
 
-  it('resetProvider() restores the default pino provider', () => {
+  it('resetProvider() restores the default ConsoleLoggerProvider', () => {
     const custom: LoggerProvider = {
       info: () => {},
       warn: () => {},
@@ -173,6 +173,6 @@ describe('Logger.setProvider() — pluggable logger backend', () => {
 
     Logger.resetProvider()
     expect(Logger.getProvider()).not.toBe(custom)
-    expect(Logger.getProvider()).not.toBeInstanceOf(ConsoleLoggerProvider)
+    expect(Logger.getProvider()).toBeInstanceOf(ConsoleLoggerProvider)
   })
 })

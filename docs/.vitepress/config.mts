@@ -61,6 +61,7 @@ const guideSidebar = [
       { text: 'AI', link: '/guide/ai' },
       { text: 'MCP (Model Context Protocol)', link: '/guide/mcp' },
       { text: 'Caching', link: '/guide/caching' },
+      { text: 'Logging', link: '/guide/logging' },
       { text: 'View Engines', link: '/guide/view-engines' },
       { text: 'Asset Manager', link: '/guide/asset-manager' },
       { text: 'MongoDB', link: '/guide/mongodb' },

@@ -108,13 +108,7 @@ export {
 } from './cache'
 
 // Logger
-export {
-  Logger,
-  createLogger,
-  rootLogger,
-  ConsoleLoggerProvider,
-  type LoggerProvider,
-} from './logger'
+export { Logger, createLogger, ConsoleLoggerProvider, type LoggerProvider } from './logger'
 
 // Errors
 export { HttpException, HttpStatus, type HttpStatusCode, type ValidationError } from './errors'
