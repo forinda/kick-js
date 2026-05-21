@@ -168,49 +168,28 @@ Each of the v5 cuts has a focused copy-paste recipe under the supported core pri
 
 ## Example Apps
 
-| Example                                                          | What it shows                                         |
-| ---------------------------------------------------------------- | ----------------------------------------------------- |
-| [minimal-api](examples/minimal-api/)                             | Simplest possible app — bootstrap + one controller    |
-| [task-drizzle-api](examples/task-drizzle-api/)                   | Full task management app — PostgreSQL + Drizzle       |
-| [task-prisma-api](examples/task-prisma-api/)                     | Full task management app — PostgreSQL + Prisma 7      |
-| [task-kickdb-api](examples/task-kickdb-api/)                     | KickJS-native ORM — PostgreSQL + `@forinda/kickjs-db` |
-| [task-mongoose-api](examples/task-mongoose-api/)                 | Full task management app — MongoDB + Mongoose         |
-| [multi-tenant-drizzle-api](examples/multi-tenant-drizzle-api/)   | Multi-tenant pattern — PostgreSQL + Drizzle           |
-| [multi-tenant-prisma-api](examples/multi-tenant-prisma-api/)     | Multi-tenant pattern — PostgreSQL + Prisma            |
-| [multi-tenant-mongoose-api](examples/multi-tenant-mongoose-api/) | Multi-tenant pattern — MongoDB + Mongoose             |
+Examples live in their own repo so they can release on their own cadence and don't drag on this repo's CI install time: **[forinda/kickjs-examples-archive](https://github.com/forinda/kickjs-examples-archive)**
 
-## Adding an Example App
+| Example                     | What it shows                                         |
+| --------------------------- | ----------------------------------------------------- |
+| `minimal-api`               | Simplest possible app — bootstrap + one controller    |
+| `task-drizzle-api`          | Full task management app — PostgreSQL + Drizzle       |
+| `task-prisma-api`           | Full task management app — PostgreSQL + Prisma 7      |
+| `task-kickdb-api`           | KickJS-native ORM — PostgreSQL + `@forinda/kickjs-db` |
+| `task-mongoose-api`         | Full task management app — MongoDB + Mongoose         |
+| `multi-tenant-drizzle-api`  | Multi-tenant pattern — PostgreSQL + Drizzle           |
+| `multi-tenant-prisma-api`   | Multi-tenant pattern — PostgreSQL + Prisma            |
+| `multi-tenant-mongoose-api` | Multi-tenant pattern — MongoDB + Mongoose             |
 
-1. Build the CLI first (if not already built):
+Clone the archive locally:
 
-   ```bash
-   pnpm build
-   ```
+```bash
+git clone https://github.com/forinda/kickjs-examples-archive
+cd kickjs-examples-archive/minimal-api
+pnpm install && pnpm dev
+```
 
-2. Scaffold the example using the local CLI from the `examples/` directory (pass all flags to avoid interactive prompts):
-
-   ```bash
-   cd examples
-   node ../packages/cli/bin.js new my-example-api \
-     --template minimal --pm pnpm --repo inmemory --no-git --no-install --force
-   ```
-
-   Available flags:
-   - `--template <type>` — `rest | ddd | cqrs | minimal`
-   - `--pm <manager>` — `pnpm | npm | yarn | bun`
-   - `--repo <type>` — `prisma | drizzle | inmemory | custom`
-   - `--no-git` — skip git init (use repo root's git)
-   - `--no-install` — skip install (run `pnpm install` from root instead)
-   - `--force` — overwrite existing directory without prompting
-
-   This generates `package.json`, `tsconfig.json`, `vite.config.ts`, `kick.config.ts`, `src/index.ts`, and all boilerplate.
-
-3. The workspace already includes `examples/*` in `pnpm-workspace.yaml` — no changes needed there.
-
-4. Update the generated `package.json`:
-   - Rename to `@forinda/kickjs-example-<name>`
-   - Set `"private": true`
-   - Replace published `@forinda/kickjs*` deps with `workspace:*` references
+The fastest way to start a new project is still `kick new <name>` — `kick.config.ts`, `tsconfig`, `vite.config`, modules, env wiring scaffolded for you. The archive is for reading reference patterns; the CLI is for starting your own.
 
 5. Add a row to the **Example Apps** table in this README.
 
