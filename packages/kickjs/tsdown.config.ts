@@ -44,8 +44,6 @@ export default defineConfig({
   external: [
     'express',
     'reflect-metadata',
-    'pino',
-    'pino-pretty',
     'multer',
     'cookie-parser',
     'dotenv',

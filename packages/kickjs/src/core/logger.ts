@@ -1,33 +1,33 @@
-import pino from 'pino'
-
-const isDev = process.env.NODE_ENV !== 'production'
-
-/** Root pino logger instance */
-export const rootLogger = pino({
-  level: process.env.LOG_LEVEL || 'info',
-  ...(isDev
-    ? {
-        transport: {
-          target: 'pino-pretty',
-          options: {
-            colorize: true,
-            translateTime: 'SYS:HH:MM:ss.l',
-            singleLine: true,
-            ignore: 'pid,hostname,component',
-            messageFormat: '{if component}[{component}] {end}{msg}',
-          },
-        },
-      }
-    : {}),
-})
-
 // ── LoggerProvider interface ───────────────────────────────────────────
 
 /**
  * Pluggable logger backend.
  *
- * Implement this interface to replace the default pino-based logging
- * with any logging library (winston, bunyan, console, etc.).
+ * Implement this interface to plug in any logging library (pino,
+ * winston, bunyan, console, etc.). The framework only ever calls the
+ * methods declared here — it doesn't know or care which logger is
+ * underneath.
+ *
+ * Default: `ConsoleLoggerProvider` (zero runtime deps).
+ *
+ * @example
+ * ```ts
+ * import pino from 'pino'
+ * import { Logger, type LoggerProvider } from '@forinda/kickjs'
+ *
+ * class PinoProvider implements LoggerProvider {
+ *   constructor(private p = pino()) {}
+ *   info(msg, ...args)  { this.p.info(msg, ...args) }
+ *   warn(msg, ...args)  { this.p.warn(msg, ...args) }
+ *   error(msg, ...args) { this.p.error(msg, ...args) }
+ *   debug(msg, ...args) { this.p.debug(msg, ...args) }
+ *   child({ component }) { return new PinoProvider(this.p.child({ component })) }
+ * }
+ *
+ * Logger.setProvider(new PinoProvider())
+ * ```
+ *
+ * See `docs/guide/logging.md` for Pino, Winston, and silent-logger recipes.
  */
 export interface LoggerProvider {
   info(msg: string, ...args: any[]): void
@@ -40,44 +40,14 @@ export interface LoggerProvider {
   child(bindings: { component: string }): LoggerProvider
 }
 
-// ── PinoLoggerProvider (default) ───────────────────────────────────────
-
-/** Default provider that delegates to the root pino instance */
-class PinoLoggerProvider implements LoggerProvider {
-  private log: pino.Logger
-
-  constructor(pinoInstance?: pino.Logger) {
-    this.log = pinoInstance ?? rootLogger
-  }
-
-  info(msg: string, ...args: any[]) {
-    this.log.info(msg, ...args)
-  }
-  warn(msg: string, ...args: any[]) {
-    this.log.warn(msg, ...args)
-  }
-  error(msg: string, ...args: any[]) {
-    this.log.error(msg, ...args)
-  }
-  debug(msg: string, ...args: any[]) {
-    this.log.debug(msg, ...args)
-  }
-  trace(msg: string, ...args: any[]) {
-    this.log.trace(msg, ...args)
-  }
-  fatal(msg: string, ...args: any[]) {
-    this.log.fatal(msg, ...args)
-  }
-  child(bindings: { component: string }): LoggerProvider {
-    return new PinoLoggerProvider(this.log.child(bindings))
-  }
-}
-
-// ── ConsoleLoggerProvider ──────────────────────────────────────────────
+// ── ConsoleLoggerProvider (default) ────────────────────────────────────
 
 /**
- * Built-in fallback provider that uses `console.*` methods.
- * Useful for environments where pino is unavailable or undesired.
+ * Default provider — emits through `console.*` methods. Zero deps.
+ *
+ * Swap it for pino, winston, bunyan, or anything else by implementing
+ * the `LoggerProvider` interface and calling `Logger.setProvider()`
+ * before `bootstrap()`.
  */
 export class ConsoleLoggerProvider implements LoggerProvider {
   private prefix: string
@@ -115,7 +85,7 @@ export class ConsoleLoggerProvider implements LoggerProvider {
 
 // ── Active provider ────────────────────────────────────────────────────
 
-let activeProvider: LoggerProvider = new PinoLoggerProvider()
+let activeProvider: LoggerProvider = new ConsoleLoggerProvider()
 
 /** Cache of named loggers to avoid creating duplicates */
 const loggerCache = new Map<string, Logger>()
@@ -133,8 +103,8 @@ const loggerCache = new Map<string, Logger>()
  * // Shorthand function
  * const log = createLogger('OrderService')
  *
- * // Pluggable backend
- * Logger.setProvider(new ConsoleLoggerProvider())
+ * // Pluggable backend — see docs/guide/logging.md
+ * Logger.setProvider(new MyCustomProvider())
  *
  * // Injectable — auto-named from class
  * class MyService {
@@ -181,7 +151,7 @@ export class Logger {
    *
    * @example
    * ```ts
-   * Logger.setProvider(new ConsoleLoggerProvider())
+   * Logger.setProvider(new MyWinstonProvider())
    * ```
    */
   static setProvider(provider: LoggerProvider): void {
@@ -196,11 +166,11 @@ export class Logger {
   }
 
   /**
-   * Reset the provider back to the default pino-based implementation.
+   * Reset the provider back to the default `ConsoleLoggerProvider`.
    * Primarily intended for test teardown.
    */
   static resetProvider(): void {
-    activeProvider = new PinoLoggerProvider()
+    activeProvider = new ConsoleLoggerProvider()
     Logger._providerVersion++
     loggerCache.clear()
   }

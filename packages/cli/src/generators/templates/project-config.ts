@@ -45,8 +45,6 @@ export function generatePackageJson(
     express: '^5.1.0',
     'reflect-metadata': '^0.2.2',
     zod: '^4.3.6',
-    pino: '^10.3.1',
-    'pino-pretty': '^13.1.3',
   }
 
   // Add user-selected optional packages — each looked up against
@@ -129,11 +127,6 @@ export default defineConfig({
     alias: {
       '@': resolve(__dirname, 'src'),
     },
-  },
-  ssr: {
-    // Don't bundle pino — its worker-thread transport needs Node.js resolution
-    // to find pino-pretty at runtime for colored log output
-    external: ['pino', 'pino-pretty'],
   },
   build: {
     target: 'node20',
