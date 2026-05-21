@@ -4,13 +4,14 @@
   "description": "Lint rules for KickJS — DI token convention, plugin/adapter naming, and other framework conventions",
   "keywords": [
     "kickjs",
+    "nodejs",
+    "typescript",
     "lint",
-    "convention",
-    "di",
-    "token",
+    "kickjs-lint",
+    "di-token-convention",
     "static-analysis",
-    "@forinda/kickjs",
-    "@forinda/kickjs-cli"
+    "naming-convention",
+    "framework-lint"
   ],
   "type": "module",
   "main": "dist/index.mjs",

@@ -4,13 +4,15 @@
   "description": "Types, RPC envelopes, runtime sampler, and memory analyzer used by KickJS DevTools and any plugin that integrates with it",
   "keywords": [
     "kickjs",
-    "devtools",
-    "introspection",
-    "memory",
+    "nodejs",
+    "typescript",
+    "devtools-types",
+    "rpc-envelopes",
+    "runtime-sampler",
+    "memory-analyzer",
     "leak-detection",
-    "monitoring",
-    "@forinda/kickjs",
-    "@forinda/kickjs-devtools"
+    "introspection",
+    "monitoring"
   ],
   "type": "module",
   "main": "dist/index.mjs",
