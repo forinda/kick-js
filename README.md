@@ -16,8 +16,6 @@
 
 NestJS ergonomics without the complexity — decorators, DI, module system, code generators, and end-to-end type safety, powered by Zod and Vite.
 
-> **Bring-Your-Own ecosystem.** Six historical wrappers (`graphql`, `otel`, `cron`, `mailer`, `multi-tenant`, `notifications`) have been replaced by ~100-LOC BYO recipes built on `defineAdapter()` / `definePlugin()` / `defineHttpContextDecorator()`. See the [BYO Recipes](https://forinda.github.io/kick-js/guide/byo-recipes.html) guide for each replacement.
-
 ## Install
 
 ```bash
@@ -112,24 +110,70 @@ export const app = await bootstrap({ modules })
 
 ## Highlights
 
-- **Factory-first extensibility** — `defineAdapter()` / `definePlugin()` / `defineModule()` / `defineHttpContextDecorator()` are the entire extension surface; no class hierarchies to inherit from.
-- **Custom DI container** — constructor and property injection, slash-delimited tokens (`createToken<T>('app/users/repository')`), three scopes (singleton / transient / request), no external dependency.
-- **Typed Context Contributors** — `defineHttpContextDecorator()` populates `ctx.set('key', value)` once per request; `dependsOn` is typed against `keyof ContextMeta` (typos are TS errors, not boot-time `MissingContributorError`); same registration runs across HTTP / WS / queue / cron.
-- **End-to-end type safety via typegen** — `kick typegen` (auto on `kick dev`) emits `KickRoutes`, `KickJsPluginRegistry`, `KickAssets`, `KickEnv` augmentations from source scan; `ctx.params/body/query`, `@Inject` literals, and asset paths all narrow as you save.
-- **Decorator-driven** — `@Controller`, `@Get`/`@Post`/`@Put`/`@Delete`/`@Patch`, `@Service`, `@Autowired`, `@Middleware`, `@Cacheable`, `@Cron`, `@Asset`.
-- **Zod-native validation** — schemas double as OpenAPI documentation.
-- **Vite HMR** — single-port dev server, zero-downtime hot reload, preserves DB/Redis/Socket connections, customizable HMR log.
-- **DDD generators** — `kick g module users` scaffolds a complete module in seconds; `kick g adapter` / `kick g plugin` emit the full hook surface so you delete what you don't need.
-- **`kick g agents`** — regenerates `CLAUDE.md` at the project root and `.agents/AGENTS.md` / `.agents/GEMINI.md` / `.agents/COPILOT.md` + per-skill `.agents/skills/<slug>/SKILL.md` files. One CLI command keeps every AI coding agent in sync with the latest framework conventions.
-- **Auto OpenAPI** — Swagger UI and ReDoc from decorators + Zod schemas; pluggable schema parser + UI renderer for adopters who want corporate branding.
-- **Built-in middleware** — helmet, CORS, CSRF, rate limiting, file uploads, request logging, request scope (AsyncLocalStorage).
-- **Cooperative shutdown** — `bootstrap({ processHooks: 'errors-only' })` lets observability SDKs (OpenTelemetry, Sentry) own SIGTERM without racing the framework; `Promise.allSettled` for adapter shutdown so one slow flush can't block siblings.
-- **DevTools dashboard** — `/_debug` browser panel with topology, container, routes, metrics; adapter authors expose state via `introspect()` ([type lives in `@forinda/kickjs` directly](https://forinda.github.io/kick-js/guide/devtools.html) — no extra import needed) + `devtoolsTabs()` from `@forinda/kickjs-devtools-kit`.
-- **Extensible CLI** — custom commands in `kick.config.ts`, plugin generators registered as real Commander subcommands so they appear in `kick g --help`, jiti-powered TS config loading, walk-up project-root resolution.
+**Factory-first extensibility** — the full extension surface. No class hierarchies to inherit from.
+
+```ts
+defineAdapter() defineModule()
+definePlugin() defineHttpContextDecorator()
+```
+
+**Custom DI container** — constructor and property injection, three scopes (singleton / transient / request), zero external dependency. Slash-delimited tokens carry intent and scope from the type definition straight through to error messages.
+
+```ts
+const REPO = createToken<UserRepo>('app/users/repository')
+container.register(REPO, PrismaUserRepo)
+```
+
+**Typed Context Contributors** — `defineHttpContextDecorator()` populates `ctx.set('key', value)` once per request. `dependsOn` is typed against `keyof ContextMeta` so typos are TS errors, not boot-time `MissingContributorError`. Same registration runs across HTTP / WS / queue / cron.
+
+**End-to-end type safety via typegen** — `kick typegen` (auto on `kick dev`) emits augmentations from source scan. `ctx.params/body/query`, `@Inject` literals, and asset paths all narrow as you save.
+
+```ts
+KickRoutes // ctx.params / body / query per route
+KickJsPluginRegistry // @Inject literals
+KickAssets // typed asset paths
+KickEnv // ConfigService.get keys
+```
+
+**Decorator-driven**:
+
+```ts
+@Controller @Get @Post @Put @Delete @Patch
+@Service @Autowired @Middleware
+@Cacheable @Cron @Asset
+```
+
+**DDD generators** — full hook surface emitted so you delete what you don't need.
+
+```bash
+kick g module users  # complete module scaffold
+kick g adapter       # full hook surface
+kick g plugin        # full plugin shape
+```
+
+**`kick g agents`** — regenerates `CLAUDE.md` at the project root and `.agents/AGENTS.md` / `.agents/GEMINI.md` / `.agents/COPILOT.md` + per-skill `.agents/skills/<slug>/SKILL.md`. One CLI command keeps every AI coding agent in sync with the latest framework conventions.
+
+**Cooperative shutdown** — observability SDKs (OpenTelemetry, Sentry) own SIGTERM without racing the framework. `Promise.allSettled` for adapter shutdown so one slow flush can't block siblings.
+
+```ts
+bootstrap({ processHooks: 'errors-only' })
+```
+
+**Zod-native validation** — schemas double as OpenAPI documentation.
+
+**Vite HMR** — single-port dev server, zero-downtime hot reload, preserves DB/Redis/Socket connections, customizable HMR log.
+
+**Auto OpenAPI** — Swagger UI and ReDoc from decorators + Zod schemas; pluggable schema parser + UI renderer for adopters who want corporate branding.
+
+**Built-in middleware** — helmet, CORS, CSRF, rate limiting, file uploads, request logging, request scope (AsyncLocalStorage).
+
+**DevTools dashboard** — `/_debug` browser panel with topology, container, routes, metrics; adapter authors expose state via `introspect()` ([type lives in `@forinda/kickjs` directly](https://forinda.github.io/kick-js/guide/devtools.html) — no extra import needed) + `devtoolsTabs()` from `@forinda/kickjs-devtools-kit`.
+
+**Extensible CLI** — custom commands in `kick.config.ts`, plugin generators registered as real Commander subcommands so they appear in `kick g --help`, jiti-powered TS config loading, walk-up project-root resolution.
 
 ## Ecosystem
 
-KickJS deliberately ships a small, stable core. The "right" extension surface is `defineAdapter()` / `definePlugin()` / `defineHttpContextDecorator()` plus `getRequestValue` / `processHooks` from `@forinda/kickjs` — adopters compose ecosystem-specific glue (GraphQL runtimes, OTel SDKs, mail providers, auth flows) on top of those primitives via short copy-paste recipes. The wrappers dropped between v4 and v5 (`graphql`, `otel`, `cron`, `mailer`, `multi-tenant`, `notifications`) had each chosen an opinionated default that adopters consistently swapped within weeks; the BYO recipes use the same primitives the framework itself exposes — so adopters keep typed DI, lifecycle hooks, the contributor pipeline, and DevTools `introspect()` — without paying for a layer they were going to bypass anyway.
+KickJS deliberately ships a small, stable core. The extension surface — `defineAdapter()`, `definePlugin()`, `defineHttpContextDecorator()`, plus `getRequestValue` and `processHooks` from `@forinda/kickjs` — is the same one the framework itself uses, so adopter-built integrations stay first-class: typed DI, lifecycle hooks, the contributor pipeline, and DevTools `introspect()` all work without any framework changes.
 
 ### Core packages
 
@@ -151,20 +195,6 @@ kick add swagger drizzle  # install several at once
 ```
 
 Browse `packages/` in this repo for the full source layout.
-
-### Replaced by BYO recipes (no first-party wrapper)
-
-Each of the v5 cuts has a focused copy-paste recipe under the supported core primitives. Recipes age better than wrapper packages because the upstream SDK shape is your contract, not ours:
-
-| Capability                   | Recipe                                                                                                                                                                                                                     |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| GraphQL                      | [guide/byo-recipes#graphql](https://forinda.github.io/kick-js/guide/byo-recipes.html#graphql) — `graphql-http` / `graphql-yoga` / Apollo / Pothos via `definePlugin`                                                       |
-| OpenTelemetry                | [guide/byo-recipes#otel](https://forinda.github.io/kick-js/guide/byo-recipes.html#opentelemetry) — own the NodeSDK lifecycle; pair with `bootstrap({ processHooks: 'errors-only' })`                                       |
-| Cron / scheduling            | [guide/byo-recipes#cron](https://forinda.github.io/kick-js/guide/byo-recipes.html#cron) — `croner` via `defineAdapter` + framework metadata helpers                                                                        |
-| Mailer                       | [guide/byo-recipes#mailer](https://forinda.github.io/kick-js/guide/byo-recipes.html#mailer) — `nodemailer` / Resend / SES via `definePlugin`                                                                               |
-| Multi-tenancy                | [guide/byo-recipes#multi-tenancy](https://forinda.github.io/kick-js/guide/byo-recipes.html#multi-tenancy) — `defineHttpContextDecorator` + `Scope.REQUEST` per-tenant DB factory                                           |
-| Notifications                | [guide/byo-recipes#notifications](https://forinda.github.io/kick-js/guide/byo-recipes.html#notifications) — channel interface + `definePlugin` registration                                                                |
-| Auth (JWT / OAuth / API key) | [guide/byo-recipes#auth](https://forinda.github.io/kick-js/guide/byo-recipes.html#auth) — parameterised context contributors (`@LoadUser({ source })` + `.with()`) cover every shape the old `kickjs-auth` package wrapped |
 
 ## Example Apps
 
