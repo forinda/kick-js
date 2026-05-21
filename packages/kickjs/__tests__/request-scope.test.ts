@@ -96,7 +96,7 @@ describe('REQUEST scope — Container unit tests', () => {
     const container = Container.getInstance()
     container.register(OutsideReqService, OutsideReqService, Scope.REQUEST)
 
-    expect(() => container.resolve(OutsideReqService)).toThrow(/outside.*request context/i)
+    expect(() => container.resolve(OutsideReqService)).toThrow(/KICK003|outside an HTTP request/)
   })
 
   it('throws when no request store provider is configured', () => {
@@ -110,7 +110,7 @@ describe('REQUEST scope — Container unit tests', () => {
     Container._requestStoreProvider = null
 
     expect(() => container.resolve(NoProviderService)).toThrow(
-      /no request store provider configured/i,
+      /KICK002|request scope middleware not mounted/,
     )
   })
 

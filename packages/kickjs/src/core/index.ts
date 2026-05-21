@@ -123,6 +123,14 @@ export {
   type ValidationError,
 } from './errors'
 
+// KickError — structured framework errors with code, cause, and fix hint
+export {
+  KickError,
+  formatKickError,
+  type FormatKickErrorOptions,
+  type KickErrorInit,
+} from './kick-error'
+
 // Path utilities
 export { normalizePath, joinPaths } from './path'
 
