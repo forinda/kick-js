@@ -191,14 +191,6 @@ pnpm install && pnpm dev
 
 The fastest way to start a new project is still `kick new <name>` — `kick.config.ts`, `tsconfig`, `vite.config`, modules, env wiring scaffolded for you. The archive is for reading reference patterns; the CLI is for starting your own.
 
-5. Add a row to the **Example Apps** table in this README.
-
-6. Run from the repo root to link workspace deps and verify:
-
-   ```bash
-   pnpm install && pnpm build
-   ```
-
 ## CLI
 
 ```bash
