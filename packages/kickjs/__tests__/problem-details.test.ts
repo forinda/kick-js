@@ -176,7 +176,7 @@ describe('normalizeProblem', () => {
     expect(out.count).toBe(7)
   })
 
-  it("falls back to defaults when caller passes explicit `undefined` (CodeRabbit regression)", () => {
+  it('falls back to defaults when caller passes explicit `undefined` (CodeRabbit regression)', () => {
     // A partial built from optional fields can land here with type/title
     // explicitly undefined. Spreading after the defaults would re-override
     // them; spreading first preserves the fallback.
