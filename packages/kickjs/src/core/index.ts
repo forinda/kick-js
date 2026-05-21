@@ -111,7 +111,16 @@ export {
 export { Logger, createLogger, ConsoleLoggerProvider, type LoggerProvider } from './logger'
 
 // Errors
-export { HttpException, HttpStatus, type HttpStatusCode, type ValidationError } from './errors'
+export {
+  HttpException,
+  HttpStatus,
+  ProblemException,
+  defaultProblemTitle,
+  normalizeProblem,
+  type HttpStatusCode,
+  type ProblemDetails,
+  type ValidationError,
+} from './errors'
 
 // Path utilities
 export { normalizePath, joinPaths } from './path'

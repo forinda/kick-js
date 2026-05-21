@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from 'express'
-import { HttpException, createLogger } from '../../core'
+import { HttpException, ProblemException, normalizeProblem, createLogger } from '../../core'
 
 const log = createLogger('ErrorHandler')
 
@@ -19,6 +19,11 @@ export function notFoundHandler() {
  * expose details in production — for client-facing field-level validation,
  * for example — should pass their own `onError` to `bootstrap()` and decide
  * the policy explicitly.
+ *
+ * {@link ProblemException} is dispatched first and emits an
+ * `application/problem+json` response per RFC 9457. Plain
+ * {@link HttpException} keeps the existing `{ message, errors? }` shape
+ * for backward compatibility.
  */
 export function errorHandler() {
   const isProduction = process.env.NODE_ENV === 'production'
@@ -27,6 +32,23 @@ export function errorHandler() {
     if (res.headersSent) {
       log.warn(`Error after headers sent: ${err?.message || 'Unknown'}`)
       return
+    }
+
+    // RFC 9457 Problem Details — checked before HttpException because
+    // ProblemException extends HttpException; instanceof on the base
+    // would otherwise swallow it.
+    if (err instanceof ProblemException) {
+      if (err.problem.status >= 500) {
+        log.error(err, err.message)
+      }
+      if (err.headers) {
+        for (const [k, v] of Object.entries(err.headers)) {
+          res.setHeader(k, v)
+        }
+      }
+      const body = normalizeProblem(err.problem)
+      res.setHeader('Content-Type', 'application/problem+json')
+      return res.status(body.status).json(body)
     }
 
     // Zod validation errors

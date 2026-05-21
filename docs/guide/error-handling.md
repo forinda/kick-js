@@ -92,3 +92,124 @@ The `notFoundHandler()` middleware is placed before the error handler to catch u
 ```json
 { "message": "Not Found" }
 ```
+
+## RFC 9457 — Problem Details
+
+KickJS ships first-class support for [RFC 9457 — Problem Details for HTTP APIs](https://datatracker.ietf.org/doc/html/rfc9457) (the successor to RFC 7807). It's the canonical answer to "what shape should our error JSON have?" — five standard fields, a known content type (`application/problem+json`), and arbitrary extensions per §3.2.
+
+Two entry points: `ctx.problem.*` for the response-side flow, and `ProblemException` for throwing from services where `ctx` isn't in scope.
+
+### `ctx.problem` — response helpers
+
+```ts
+@Get('/projects/:id')
+async getProject(ctx: RequestContext) {
+  const project = await this.repo.find(ctx.params.id)
+  if (!project) {
+    return ctx.problem.notFound({
+      detail: `Project ${ctx.params.id} does not exist`,
+      instance: ctx.req.url,
+    })
+  }
+  if (project.tenantId !== ctx.tenantId) {
+    return ctx.problem.forbidden({
+      type: 'https://api.example.com/problems/tenant-mismatch',
+      detail: 'This project belongs to a different tenant.',
+    })
+  }
+  ctx.json(project)
+}
+```
+
+Each `ctx.problem.*` call sets `Content-Type: application/problem+json` and fills in defaults:
+
+- `type` → `'about:blank'` (RFC 9457 §3.1.1)
+- `title` → IANA reason phrase for `status` (§3.1.4)
+- Extension members per §3.2 pass through unchanged
+
+Available shortcuts: `badRequest`, `unauthorized`, `forbidden`, `notFound`, `conflict`, `unprocessable`, `tooManyRequests`, `internal`, plus the generic `ctx.problem({ status, ... })` for any status code.
+
+For Zod validation errors, `ctx.problem.validation(issues)` serializes them into the RFC 9457 §3.2 `errors` array:
+
+```ts
+const parsed = userSchema.safeParse(ctx.body)
+if (!parsed.success) {
+  return ctx.problem.validation(parsed.error.issues)
+}
+```
+
+Emits:
+
+```json
+{
+  "type": "about:blank",
+  "title": "Unprocessable Entity",
+  "status": 422,
+  "detail": "Invalid email",
+  "errors": [
+    { "field": "email", "message": "Invalid email", "code": "invalid_string" },
+    { "field": "name", "message": "Required", "code": "invalid_type" }
+  ]
+}
+```
+
+### `ProblemException` — throw-from-anywhere
+
+When you're inside a service and don't have `ctx`, throw `ProblemException`. The global error handler catches it and emits the same `application/problem+json` response:
+
+```ts
+import { ProblemException } from '@forinda/kickjs'
+
+@Service()
+class AccountService {
+  charge(account: Account, amount: number) {
+    if (account.balance < amount) {
+      throw new ProblemException({
+        type: 'https://api.example.com/problems/out-of-credit',
+        status: 403,
+        title: 'You do not have enough credit',
+        detail: `Your balance is ${account.balance}, but that costs ${amount}.`,
+        instance: `/account/${account.id}`,
+        balance: account.balance,
+      })
+    }
+    // ...
+  }
+}
+```
+
+Static factories pre-fill `status` + `title` for the common codes — same set as the `ctx.problem.*` shortcuts:
+
+```ts
+throw ProblemException.notFound({ detail: 'User abc not found' })
+throw ProblemException.conflict({ detail: 'Email already in use' })
+throw ProblemException.tooManyRequests({}, 60) // sets Retry-After: 60
+throw ProblemException.fromZodError(zodResult.error)
+```
+
+`ProblemException` extends `HttpException`, so existing `instanceof HttpException` catches keep working. Spec-mandated headers (`Retry-After`, `WWW-Authenticate`, `Allow`) are forwarded from the exception to the response.
+
+### Why both APIs
+
+`ctx.problem.*` is the right choice when you're in a controller and want to short-circuit the response inline. `ProblemException` is the right choice when you're deeper in the call stack — services, repositories, helpers — and don't have a `RequestContext` to write to. Both emit the same wire format, so an adopter calling either way produces identical RFC-compliant responses.
+
+### Coexistence with the old helpers
+
+The pre-existing `ctx.notFound()` and `ctx.badRequest()` helpers still work; they're marked `@deprecated` in JSDoc with a pointer at the `ctx.problem.*` equivalent. IDEs surface a strikethrough — nothing breaks at runtime, no behavior change for existing endpoints, no migration deadline. Adopters move per call site when they next touch the file.
+
+Plain `HttpException` (thrown without the problem fields) keeps its existing `{ message }` JSON shape. Only `ProblemException` triggers `application/problem+json`. The framework infers behavior from the exception type, not from a config flag — backward compatible by detection, not by configuration.
+
+### Defaults explained
+
+| Field      | Default when omitted                                                        |
+| ---------- | --------------------------------------------------------------------------- |
+| `type`     | `'about:blank'` per RFC 9457 §3.1.1                                         |
+| `title`    | IANA reason phrase for `status` (e.g., `'Not Found'` for 404) per §3.1.4    |
+| `detail`   | Falls back to `title` if neither is provided                                |
+| `instance` | Not auto-populated; set explicitly per occurrence (typically `ctx.req.url`) |
+
+The framework does not auto-populate `instance` from the request URL — the RFC leaves this an application decision and over-eager auto-population can leak unexpected URL structure. Set it explicitly when you want it.
+
+### Open: validate() middleware integration
+
+The `validate()` Zod middleware currently emits a 422 with the existing `{ message, errors }` shape, not problem+json. Switching it to problem+json is a follow-up; for now, call `ctx.problem.validation(parsed.error.issues)` explicitly when you want the RFC 9457 shape, or throw `ProblemException.fromZodError(...)` from a controller.
