@@ -921,10 +921,6 @@ importers:
         version: 6.0.3
 
   packages/db-mysql:
-    dependencies:
-      kysely:
-        specifier: 0.29.2
-        version: 0.29.2
     devDependencies:
       '@forinda/kickjs':
         specifier: workspace:*
@@ -935,6 +931,9 @@ importers:
       '@types/node':
         specifier: ^25.8.0
         version: 25.8.0
+      kysely:
+        specifier: ^0.29.2
+        version: 0.29.2
       mysql2:
         specifier: ^3.22.3
         version: 3.22.3(@types/node@25.8.0)
@@ -943,10 +942,6 @@ importers:
         version: 6.0.3
 
   packages/db-pg:
-    dependencies:
-      kysely:
-        specifier: 0.29.2
-        version: 0.29.2
     devDependencies:
       '@forinda/kickjs':
         specifier: workspace:*
@@ -963,6 +958,9 @@ importers:
       '@types/pg':
         specifier: ^8.11.10
         version: 8.20.0
+      kysely:
+        specifier: ^0.29.2
+        version: 0.29.2
       pg:
         specifier: ^8.21.0
         version: 8.21.0
@@ -971,10 +969,6 @@ importers:
         version: 6.0.3
 
   packages/db-sqlite:
-    dependencies:
-      kysely:
-        specifier: 0.29.2
-        version: 0.29.2
     devDependencies:
       '@forinda/kickjs':
         specifier: workspace:*
@@ -991,6 +985,9 @@ importers:
       better-sqlite3:
         specifier: ^12.10.0
         version: 12.10.0
+      kysely:
+        specifier: ^0.29.2
+        version: 0.29.2
       typescript:
         specifier: ^6.0.3
         version: 6.0.3

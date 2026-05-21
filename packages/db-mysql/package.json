@@ -53,11 +53,10 @@
       "dependencies": []
     }
   },
-  "dependencies": {
-    "kysely": "0.29.2"
-  },
+  "dependencies": {},
   "peerDependencies": {
     "@forinda/kickjs-db": "workspace:^",
+    "kysely": "0.29.2",
     "mysql2": ">=3.0.0"
   },
   "devDependencies": {
