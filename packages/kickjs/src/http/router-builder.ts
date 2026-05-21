@@ -25,9 +25,8 @@ import { buildUploadMiddleware } from './middleware/upload'
  * empty — direct buildRoutes() callers (mostly tests) see only class + method
  * contributors unless they pass `externalSources` explicitly.
  *
- * Same idiom as `Container._requestStoreProvider` and `Logger._contextProvider`:
- * an internal escape hatch for cross-module wiring without inversion-of-control
- * gymnastics.
+ * Same idiom as `Container._requestStoreProvider`: an internal escape hatch for
+ * cross-module wiring without inversion-of-control gymnastics.
  *
  * @internal
  */
