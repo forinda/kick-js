@@ -229,7 +229,7 @@ A centralized error catalog (`packages/kickjs/src/core/error-catalog.ts`) keyed 
 
 - WebContainers only run Node (no native modules). Excludes better-sqlite3 examples. Acceptable trade-off if we have a SQLite-via-WASM fallback?
 - Hosting cost — StackBlitz is free for embeds; CodeSandbox CDE has limits.
-- Authoring overhead — each interactive example needs a working project. Auto-generate from `examples/`?
+- Authoring overhead — each interactive example needs a working project. Auto-generate from [the examples archive](https://github.com/forinda/kickjs-examples-archive)?
 
 ---
 
@@ -445,7 +445,7 @@ class UserService {
 **Status:** `proposed`
 **Effort:** 2–3 months
 
-**Why it matters.** The multi-tenant examples exist (`examples/multi-tenant-*`) but they're separate templates with significant boilerplate. SaaS teams pick frameworks partly on how easy multi-tenancy is. Making it `bootstrap({ multiTenant: ... })` instead of a project rewrite is a real differentiator.
+**Why it matters.** The [multi-tenant examples in the archive](https://github.com/forinda/kickjs-examples-archive) exist (`multi-tenant-drizzle-api`, `multi-tenant-prisma-api`, `multi-tenant-mongoose-api`) but they're separate templates with significant boilerplate. SaaS teams pick frameworks partly on how easy multi-tenancy is. Making it `bootstrap({ multiTenant: ... })` instead of a project rewrite is a real differentiator.
 
 **What it looks like.**
 
