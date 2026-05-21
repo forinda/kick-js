@@ -34,7 +34,7 @@
     "dev": "tsdown --watch",
     "dev:spa": "vite spa",
     "test": "vitest run --passWithNoTests",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsgo --noEmit",
     "clean": "rm -rf dist .wireit"
   },
   "wireit": {

@@ -32,7 +32,7 @@
     "build": "wireit",
     "dev": "tsdown --watch",
     "test": "vitest run --passWithNoTests",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsgo --noEmit",
     "clean": "rm -rf dist .wireit",
     "lint": "tsc --noEmit"
   },

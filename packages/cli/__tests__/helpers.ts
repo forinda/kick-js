@@ -188,18 +188,22 @@ export function runCli(cwd: string, args: string[]): CliResult {
 }
 
 /**
- * Run `tsc --noEmit` against a fixture project. Resolves the
- * workspace `tsc` so we don't need it installed in every fixture.
+ * Run `tsgo --noEmit` against a fixture project. Resolves the
+ * workspace `tsgo` (@typescript/native-preview) so we don't need it
+ * installed in every fixture.
+ *
+ * Was `tsc` — swapped to tsgo because per-fixture `tsc --noEmit`
+ * shell-outs dominated CLI test wall time. tsgo is ~3× faster on the
+ * same fixtures and produces identical diagnostics for the configs we
+ * generate.
  */
 export function runTsc(cwd: string): CliResult {
-  // Find the typescript binary from the workspace root's node_modules
-  const tscBin = resolve(WORKSPACE_ROOT, 'node_modules', '.pnpm', 'node_modules', '.bin', 'tsc')
-  // Fallback to a direct path if the .pnpm shortcut doesn't exist
-  const candidates = [tscBin, resolve(WORKSPACE_ROOT, 'node_modules', '.bin', 'tsc')]
+  const tsgoBin = resolve(WORKSPACE_ROOT, 'node_modules', '.pnpm', 'node_modules', '.bin', 'tsgo')
+  const candidates = [tsgoBin, resolve(WORKSPACE_ROOT, 'node_modules', '.bin', 'tsgo')]
   const tsc = candidates.find((p) => existsSync(p))
   if (!tsc) {
     throw new Error(
-      `tsc binary not found in workspace node_modules (tried: ${candidates.join(', ')})`,
+      `tsgo binary not found in workspace node_modules (tried: ${candidates.join(', ')})`,
     )
   }
   const result: SpawnSyncReturns<string> = spawnSync(tsc, ['--noEmit', '-p', cwd], {
