@@ -8,7 +8,7 @@ export default defineConfig({
   format: ['esm'],
   platform: 'node',
   minify: { compress: true, mangle: false },
-  dts: true,
+  dts: { tsgo: true },
   external: ['@forinda/kickjs', '@forinda/kickjs-db', 'kysely', 'mysql2', /^node:/],
   banner: { js: createBanner(pkg.name, pkg.version) },
 })

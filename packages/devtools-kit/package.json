@@ -46,7 +46,7 @@
     "build": "wireit",
     "dev": "tsdown --watch",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsgo --noEmit",
     "clean": "rm -rf dist .wireit"
   },
   "wireit": {

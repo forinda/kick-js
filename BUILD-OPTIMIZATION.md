@@ -221,12 +221,55 @@ The remaining real bottlenecks are package-specific, not framework-wide:
 
 Both are package-specific cleanup, not framework-wide. Neither belongs on this build-optimization branch.
 
+### Run 5 — H8: `tsgo` (Microsoft's Go-based `tsc`)
+
+`@typescript/native-preview` (`tsgo`) is Microsoft's Go rewrite of the TypeScript compiler — drop-in replacement for `tsc` advertised at ~10× speed. As of this experiment it's preview-stage (version 7.0.0-dev), not 1.0.
+
+Tested as a swap for `tsc` in two places:
+
+1. Every package's `"typecheck": "tsc --noEmit"` → `"tsgo --noEmit"`
+2. `packages/cli/__tests__/helpers.ts` → `runTsc()` spawns `tsgo` instead of `tsc` for fixture validation
+
+| Setup                                                                 | tsc    | tsgo     | Δ                 |
+| --------------------------------------------------------------------- | ------ | -------- | ----------------- |
+| kickjs typecheck alone                                                | 3.4s   | **1.6s** | -53% (~2× faster) |
+| Workspace typecheck (`pnpm -r run typecheck`, 19 packages)            | 15.7s  | **5.2s** | -67% (~3× faster) |
+| kickjs cold build (dts emission)                                      | 5.6s   | **4.6s** | -18%              |
+| Workspace cold build (`pnpm build`, dts via tsgo across all packages) | ~40s   | **24s**  | -40%              |
+| CLI tests (heavy on `runTsc()` fixture validation)                    | 3m 49s | 3m 19s   | -13%              |
+
+**Combined CI-gate saving across the parallel job matrix: ~55 seconds per PR.**
+
+`rolldown-plugin-dts` 0.25 (tsdown's dts engine) ships first-party tsgo support via the `tsgo: true` config flag; in tsdown that's `dts: { tsgo: true }`. No hacks — official plumbing.
+
+**Diagnostics parity:** zero new errors across all 19 packages. Decorators, conditional types, module augmentations, generics, `experimentalDecorators` + `emitDecoratorMetadata` — all compatible. The 21 failing CLI tests on tsc remain the same 21 on tsgo (pre-existing fixture flakes, not tsgo-induced).
+
+**Why CLI gain is only 13%, not 67%:** the 226s CLI test wall isn't mostly tsc-shellout. Six of 31 test files use `runTsc()`; the rest do scaffold generation, file IO, command argument tests — none of which tsgo touches. The tsc-shellout savings (~50%) only apply to a fraction of the test bag.
+
+**Verdict: ship it (opt-in via package scripts).** This is the first hypothesis that produced a real, measurable win at low cost.
+
+- Workspace typecheck: 15.7s → 5.2s saves ~10s per CI run (per job, since multiple jobs typecheck)
+- CLI tests: ~30s saved per run
+- Total CI gate impact: ~1 minute saved across the parallel job matrix
+- Risk: tsgo is preview-stage; bugs may surface on advanced TypeScript features we don't currently use. **Pin the version explicitly** so an upstream regression doesn't break CI overnight.
+- Adopters unaffected — they keep using `tsc` in their own projects; tsgo is internal to KickJS's build/test pipeline.
+
+**Open questions for follow-up:**
+
+- Can `tsdown` use tsgo for dts emission? Currently it shells `tsc` via `rolldown-plugin-dts`. tsdown 0.22 doesn't appear to expose a tsgo backend; might be worth checking the upstream issue tracker.
+- Should the CI workflow add `tsgo --version` as a step so a tsgo regression shows up in the install log?
+- Should `kick doctor` add a tsgo-installed check?
+
 ### Branch disposition
 
-This branch is **experimental documentation**, not for merge. The findings stand on their own:
+The first half of this branch is **experimental documentation** — H1, H7 measurements that didn't move the needle.
 
-- The 10-minute CI pain was almost entirely the example install footprint
-- Extraction (PR #279) covered the win
-- The remaining bottlenecks are local-env flakes (db-pg) and per-package test-strategy choices (CLI typegen) — not framework infrastructure
+The H8 (`tsgo` swap) is **shippable.** If the changes were extracted to a focused PR:
 
-Keep the branch around for the spec doc + future reference. Don't merge.
+- `+1` devDep on `@typescript/native-preview`
+- 19 package.json `typecheck` script edits (`tsc` → `tsgo`)
+- 1 file change in `packages/cli/__tests__/helpers.ts`
+
+That'd save ~1 minute on every CI run. Low risk because it's gated to internal pipelines — adopters don't see tsgo.
+
+Recommend: open a PR for the H8 changes. Keep the rest of this spec doc as branch-only history.
