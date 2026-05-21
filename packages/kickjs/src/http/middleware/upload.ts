@@ -1,7 +1,31 @@
 import { unlink } from 'node:fs/promises'
+import { createRequire } from 'node:module'
 import type { Request, Response, NextFunction, RequestHandler } from 'express'
-import multer, { type Options as MulterOptions } from 'multer'
+import type { Options as MulterOptions } from 'multer'
 import type { BaseUploadOptions, FileUploadConfig } from '../../core'
+
+// `multer` is an optional peer dependency. We load it lazily via
+// `createRequire` so importing this module never touches `multer` —
+// only constructing an upload middleware does. Adopters who never
+// call `upload.single/array/none()` or use `@FileUpload` don't need
+// `multer` installed at all.
+const requireFromHere = createRequire(import.meta.url)
+type MulterFactory = typeof import('multer').default
+let _multer: MulterFactory | undefined
+
+function loadMulter(): MulterFactory {
+  if (_multer) return _multer
+  try {
+    const mod = requireFromHere('multer')
+    _multer = (mod.default ?? mod) as MulterFactory
+    return _multer
+  } catch {
+    throw new Error(
+      "@forinda/kickjs: file uploads require the 'multer' package, which is not installed.\n" +
+        'Install it as a peer dependency: pnpm add multer (or npm i multer / yarn add multer).',
+    )
+  }
+}
 
 /**
  * Maps short file extensions to their MIME types.
@@ -134,7 +158,7 @@ function createMulter(options: UploadOptions) {
     ...(options.dest ? { dest: options.dest } : {}),
   }
 
-  return multer(multerOptions)
+  return loadMulter()(multerOptions)
 }
 
 /**
