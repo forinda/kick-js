@@ -178,16 +178,20 @@ class AccountService {
 }
 ```
 
-Static factories pre-fill `status` + `title` for the common codes — same set as the `ctx.problem.*` shortcuts:
+The `Problems` namespace object exports convenience factories that pre-fill `status` + `title` for the common codes — same shortcut set as `ctx.problem.*`:
 
 ```ts
-throw ProblemException.notFound({ detail: 'User abc not found' })
-throw ProblemException.conflict({ detail: 'Email already in use' })
-throw ProblemException.tooManyRequests({}, 60) // sets Retry-After: 60
-throw ProblemException.fromZodError(zodResult.error)
+import { Problems } from '@forinda/kickjs'
+
+throw Problems.notFound({ detail: 'User abc not found' })
+throw Problems.conflict({ detail: 'Email already in use' })
+throw Problems.tooManyRequests({}, 60) // sets Retry-After: 60
+throw Problems.fromZodError(zodResult.error)
 ```
 
 `ProblemException` extends `HttpException`, so existing `instanceof HttpException` catches keep working. Spec-mandated headers (`Retry-After`, `WWW-Authenticate`, `Allow`) are forwarded from the exception to the response.
+
+The factories live on `Problems` rather than as `ProblemException.notFound()` statics because shadowing `HttpException`'s same-named statics with incompatible signatures (object vs string) would be a TypeScript variance conflict. Naming them `Problems.notFound(...)` reads well, autocompletes cleanly, and sidesteps the inheritance issue.
 
 ### Why both APIs
 

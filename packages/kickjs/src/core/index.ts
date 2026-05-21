@@ -114,6 +114,7 @@ export { Logger, createLogger, ConsoleLoggerProvider, type LoggerProvider } from
 export {
   HttpException,
   HttpStatus,
+  Problems,
   ProblemException,
   defaultProblemTitle,
   normalizeProblem,
