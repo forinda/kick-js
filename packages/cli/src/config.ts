@@ -423,6 +423,44 @@ export interface KickConfig {
     trailingComma?: 'all' | 'es5' | 'none'
     indent?: number
   }
+
+  /**
+   * Extensibility hook for `kick doctor`. Adopters add their own
+   * environment / project-shape checks here; each function receives
+   * the same context the built-in checks see and returns a result (or
+   * `null` to skip).
+   *
+   * The framework stays ORM- and stack-agnostic — Prisma-specific,
+   * Drizzle-specific, deploy-target-specific checks belong in adopter
+   * config (or in adapter packages that ship doctor extensions),
+   * never in core.
+   *
+   * @example
+   * ```ts
+   * import { existsSync } from 'node:fs'
+   * import { join } from 'node:path'
+   * import { defineConfig } from '@forinda/kickjs-cli'
+   *
+   * export default defineConfig({
+   *   doctor: {
+   *     checks: [
+   *       (ctx) => {
+   *         if (!existsSync(join(ctx.cwd, 'prisma/schema.prisma'))) return null
+   *         const generated = join(ctx.cwd, 'node_modules/@prisma/client/default.js')
+   *         return existsSync(generated)
+   *           ? { name: 'Prisma client generated', status: 'pass' }
+   *           : {
+   *               name: 'Prisma client generated',
+   *               status: 'fail',
+   *               fix: 'Run: pnpm exec prisma generate',
+   *             }
+   *       },
+   *     ],
+   *   },
+   * })
+   * ```
+   */
+  doctor?: import('./commands/doctor').DoctorExtension
 }
 
 /** Helper to define a type-safe kick.config.ts */

@@ -192,6 +192,143 @@ kick start -p 8080
 
 Sets `NODE_ENV=production` automatically.
 
+## kick doctor
+
+Pre-flight checks for your KickJS project's dev environment. Catches the common "doesn't work on my machine" misconfigs before they bite — missing decorator flags, env-wiring footguns, stale typegen, wrong Node version.
+
+```bash
+kick doctor
+```
+
+Sibling to `kick check --deploy` (which scans for production-readiness — JWT secrets, CORS, rate limits, etc.). Doctor is the dev-setup counterpart.
+
+Sample output:
+
+```text
+KickJS Doctor
+
+✔  Node version  (v22.7.0)
+✔  @forinda/kickjs installed  (^5.12.0)
+✔  express installed  (^5.1.0)
+✔  reflect-metadata installed  (^0.2.2)
+✔  tsconfig: experimentalDecorators
+✔  tsconfig: emitDecoratorMetadata
+⚠  env wiring  (env-init imported AFTER bootstrap() — should be before)
+   → Move the env import above the bootstrap() call so the schema
+   → runs before any service reads from ConfigService.
+✔  typegen freshness  (2m ago)
+
+8 passed, 1 warning, 0 errors — review the warnings
+```
+
+Exit code is `0` on pass-or-warn, `1` on any error.
+
+### What it checks
+
+| Check                              | Severity if failing | Detects                                                                                                    |
+| ---------------------------------- | ------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Node version                       | error               | Node version below the framework's minimum (20+)                                                           |
+| `@forinda/kickjs` installed        | error               | Wrong directory, or fresh repo without `kick new`                                                          |
+| `express` installed                | error               | Required peer dep missing (`@forinda/kickjs`'s peer)                                                       |
+| `reflect-metadata` installed       | error               | Decorator runtime polyfill missing                                                                         |
+| tsconfig: `experimentalDecorators` | error               | Decorators won't compile                                                                                   |
+| tsconfig: `emitDecoratorMetadata`  | error               | DI container can't read constructor types                                                                  |
+| env wiring                         | error / warn        | env-init file calls `loadEnv(...)` but the app entry doesn't import it (or imports it AFTER `bootstrap()`) |
+| typegen freshness                  | warn                | `.kickjs/types/` last touched > 60 minutes ago                                                             |
+
+The env-wiring check looks at multiple common locations — `src/env.ts`, `src/env/index.ts`, `src/config/env.ts`, `src/config/index.ts` — and accepts both relative and `@/` aliased imports.
+
+### Extending with custom checks
+
+Add your own checks via `kick.config.ts`. Adopter-supplied checks run after the built-ins and use the same `DoctorContext` / `DoctorResult` shape. The CLI exports `defineDoctorExtension` and `defineDoctorCheck` as identity helpers — they give you type inference and autocomplete without an explicit type annotation, mirroring the `defineConfig` pattern.
+
+#### Inline — quickest path
+
+```ts
+// kick.config.ts
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
+import { defineConfig, defineDoctorExtension } from '@forinda/kickjs-cli'
+
+export default defineConfig({
+  doctor: defineDoctorExtension({
+    checks: [
+      // ORM-specific: only emits a result when this project actually uses Prisma
+      (ctx) => {
+        if (!existsSync(join(ctx.cwd, 'prisma/schema.prisma'))) return null
+        const generated = join(ctx.cwd, 'node_modules/@prisma/client/default.js')
+        return existsSync(generated)
+          ? { name: 'Prisma client generated', status: 'pass' }
+          : {
+              name: 'Prisma client generated',
+              status: 'fail',
+              fix: 'Run: pnpm exec prisma generate',
+            }
+      },
+    ],
+  }),
+})
+```
+
+#### Shared extension — published or workspace-shared
+
+When you want the same extension across multiple projects in a monorepo (or want to publish it as a package), put the extension in its own module:
+
+```ts
+// doctor-checks/prisma.ts
+import { defineDoctorExtension } from '@forinda/kickjs-cli'
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
+
+export const prismaDoctor = defineDoctorExtension({
+  checks: [
+    (ctx) => {
+      if (!existsSync(join(ctx.cwd, 'prisma/schema.prisma'))) return null
+      const generated = join(ctx.cwd, 'node_modules/@prisma/client/default.js')
+      return existsSync(generated)
+        ? { name: 'Prisma client generated', status: 'pass' }
+        : {
+            name: 'Prisma client generated',
+            status: 'fail',
+            fix: 'Run: pnpm exec prisma generate',
+          }
+    },
+  ],
+})
+```
+
+```ts
+// kick.config.ts
+import { defineConfig } from '@forinda/kickjs-cli'
+import { prismaDoctor } from './doctor-checks/prisma'
+
+export default defineConfig({
+  doctor: prismaDoctor,
+})
+```
+
+#### Single-check helper
+
+For one-off checks scattered across modules, `defineDoctorCheck` provides the same type-inference convenience:
+
+```ts
+import { defineDoctorCheck } from '@forinda/kickjs-cli'
+
+export const checkJwtSecretLength = defineDoctorCheck((ctx) => {
+  const v = process.env.JWT_SECRET
+  if (!v || v.length < 32) {
+    return {
+      name: 'JWT_SECRET ≥ 32 chars',
+      status: 'warn',
+      fix: 'Generate a strong secret: openssl rand -hex 32',
+    }
+  }
+  return { name: 'JWT_SECRET ≥ 32 chars', status: 'pass' }
+})
+```
+
+The framework stays ORM-agnostic on purpose — Prisma / Drizzle / Mongoose-specific checks belong in adopter config (or in adapter packages that ship doctor extensions), never in core.
+
 ## kick info
 
 Print system and framework information:

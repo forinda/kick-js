@@ -38,5 +38,17 @@ export {
   type DiscoveryResult,
 } from './generator-extension'
 
+// Doctor extension API — adopters and plugins ship custom dev-environment
+// checks via `defineDoctorExtension({...})` and plug them through the
+// `doctor.checks` block of kick.config.ts.
+export {
+  defineDoctorCheck,
+  defineDoctorExtension,
+  type DoctorCheck,
+  type DoctorContext,
+  type DoctorExtension,
+  type DoctorResult,
+} from './commands/doctor'
+
 // Utilities
 export { toPascalCase, toCamelCase, toKebabCase, pluralize } from './utils/naming'
