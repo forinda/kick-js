@@ -1,6 +1,7 @@
 /// <reference types="multer" />
 import type { Request, Response, NextFunction } from 'express'
 import { type ExecutionContext, type MetaValue } from '../core/execution-context'
+import { normalizeProblem, type ProblemDetails, type ValidationError } from '../core/errors'
 import { requestStore } from './request-store'
 import {
   parseQuery,
@@ -8,6 +9,62 @@ import {
   type PaginatedResponse,
   type TypedParsedQuery,
 } from './query'
+
+/**
+ * Input shape for the typed problem-detail convenience methods on
+ * {@link ProblemSender} (`ctx.problem.notFound`, `.badRequest`, etc.) —
+ * RFC 9457 details minus the `status`, which each method pre-fills.
+ */
+type ProblemInput = Omit<ProblemDetails, 'status'>
+
+/**
+ * Callable response helper for RFC 9457 — Problem Details responses.
+ * Returned by `ctx.problem`. Invoke directly for a fully-specified
+ * payload, or use the named convenience methods to pre-fill `status` +
+ * `title` for the common codes.
+ *
+ * Each call sets `Content-Type: application/problem+json` and serializes
+ * the canonical shape (defaulting `type` to `about:blank` and `title` to
+ * the IANA reason phrase per RFC 9457 §3.1.1 / §3.1.4).
+ *
+ * @example
+ * ```ts
+ * ctx.problem({
+ *   type: 'https://api.example.com/problems/out-of-credit',
+ *   status: 403,
+ *   detail: 'Your balance is 30, but that costs 50.',
+ *   balance: 30,                // extension per §3.2
+ * })
+ *
+ * ctx.problem.notFound({ detail: 'User abc not found' })
+ * ctx.problem.validation(zodResult.error.issues)
+ * ```
+ */
+interface ProblemSender {
+  (input: ProblemDetails): Response
+  /** 400 Bad Request — RFC 9457. */
+  badRequest(input?: ProblemInput): Response
+  /** 401 Unauthorized — RFC 9457. */
+  unauthorized(input?: ProblemInput): Response
+  /** 403 Forbidden — RFC 9457. */
+  forbidden(input?: ProblemInput): Response
+  /** 404 Not Found — RFC 9457. */
+  notFound(input?: ProblemInput): Response
+  /** 409 Conflict — RFC 9457. */
+  conflict(input?: ProblemInput): Response
+  /** 422 Unprocessable Entity — RFC 9457. */
+  unprocessable(input?: ProblemInput): Response
+  /** 429 Too Many Requests — RFC 9457. */
+  tooManyRequests(input?: ProblemInput): Response
+  /** 500 Internal Server Error — RFC 9457. */
+  internal(input?: ProblemInput): Response
+  /**
+   * 422 with Zod issues serialized into the `errors` extension per
+   * RFC 9457 §3.2's array convention. Pass `error.issues` from a Zod
+   * `safeParse` failure or `error.issues` from a thrown ZodError.
+   */
+  validation(issues: any[], input?: ProblemInput): Response
+}
 
 /**
  * Recursively marks every property of `T` as `readonly`. Preserves
@@ -474,12 +531,94 @@ export class RequestContext<TBody = any, TParams = any, TQuery = any> implements
     return this.res.status(204).end()
   }
 
+  /**
+   * @deprecated Prefer {@link ProblemSender.notFound | ctx.problem.notFound()},
+   * which emits an RFC 9457 — Problem Details response. This helper stays
+   * for backward compatibility and will not be removed.
+   */
   notFound(message = 'Not Found') {
     return this.res.status(404).json({ message })
   }
 
+  /**
+   * @deprecated Prefer {@link ProblemSender.badRequest | ctx.problem.badRequest()},
+   * which emits an RFC 9457 — Problem Details response. This helper stays
+   * for backward compatibility and will not be removed.
+   */
   badRequest(message: string) {
     return this.res.status(400).json({ message })
+  }
+
+  // ── RFC 9457 Problem Details ───────────────────────────────────────
+
+  /**
+   * RFC 9457 — Problem Details for HTTP APIs response helper.
+   * https://datatracker.ietf.org/doc/html/rfc9457
+   *
+   * `ctx.problem(...)` sends a canonical problem-detail response with
+   * `Content-Type: application/problem+json`. The convenience methods
+   * (`ctx.problem.notFound`, `.badRequest`, etc.) pre-fill `status` +
+   * `title` for the common codes.
+   *
+   * `type` defaults to `about:blank` (§3.1.1); `title` defaults to the
+   * IANA reason phrase for `status` (§3.1.4). Extension members per §3.2
+   * pass through unchanged.
+   *
+   * @example
+   * ```ts
+   * ctx.problem({
+   *   type: 'https://api.example.com/problems/out-of-credit',
+   *   status: 403,
+   *   detail: 'Your balance is 30, but that costs 50.',
+   *   instance: `/account/${ctx.user.id}/messages/${ctx.params.id}`,
+   *   balance: 30,
+   * })
+   *
+   * ctx.problem.notFound({ detail: 'User abc not found' })
+   * ctx.problem.validation(zodResult.error.issues)
+   * ```
+   *
+   * @see {@link ProblemException} for the exception-throwing equivalent
+   * (use it from services where `ctx` isn't in scope).
+   */
+  get problem(): ProblemSender {
+    const send = (input: ProblemDetails): Response => this.sendProblem(input)
+    send.badRequest = (input: ProblemInput = {}): Response =>
+      this.sendProblem({ status: 400, ...input })
+    send.unauthorized = (input: ProblemInput = {}): Response =>
+      this.sendProblem({ status: 401, ...input })
+    send.forbidden = (input: ProblemInput = {}): Response =>
+      this.sendProblem({ status: 403, ...input })
+    send.notFound = (input: ProblemInput = {}): Response =>
+      this.sendProblem({ status: 404, ...input })
+    send.conflict = (input: ProblemInput = {}): Response =>
+      this.sendProblem({ status: 409, ...input })
+    send.unprocessable = (input: ProblemInput = {}): Response =>
+      this.sendProblem({ status: 422, ...input })
+    send.tooManyRequests = (input: ProblemInput = {}): Response =>
+      this.sendProblem({ status: 429, ...input })
+    send.internal = (input: ProblemInput = {}): Response =>
+      this.sendProblem({ status: 500, ...input })
+    send.validation = (issues: any[], input: ProblemInput = {}): Response => {
+      const errors: ValidationError[] = (issues || []).map((issue: any) => ({
+        field: issue.path?.join?.('.') ?? '',
+        message: issue.message ?? '',
+        code: issue.code,
+      }))
+      return this.sendProblem({
+        status: 422,
+        detail: issues?.[0]?.message,
+        ...input,
+        errors,
+      })
+    }
+    return send as ProblemSender
+  }
+
+  private sendProblem(input: ProblemDetails): Response {
+    const body = normalizeProblem(input)
+    this.res.setHeader('Content-Type', 'application/problem+json')
+    return this.res.status(body.status).json(body)
   }
 
   html(content: string, status = 200) {
