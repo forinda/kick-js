@@ -270,6 +270,84 @@ $ kick doctor
 
 ---
 
+### B.5 RFC 9457 Problem Details on `ctx`
+
+**Status:** `proposed`
+**Effort:** 1–2 weeks
+
+**Why it matters.** Every API has the same error-shape bikeshedding conversation: should the JSON be `{ error: ... }` or `{ message: ... }` or `{ status, message }` or some custom envelope? [RFC 9457 — Problem Details for HTTP APIs](https://datatracker.ietf.org/doc/html/rfc9457) (July 2024, supersedes RFC 7807) is the standard answer: a single canonical shape with five fields and a known content type. Adopting it gives kickjs a "standards-compliant by default" line without forcing anything — most Node frameworks make adopters reach for a library.
+
+**What it looks like.**
+
+New helper on `RequestContext`:
+
+```ts
+// Canonical RFC 9457 shape — type, status, title, detail, instance, plus
+// arbitrary extensions
+ctx.problem({
+  type: 'https://api.example.com/problems/out-of-credit',
+  status: 403,
+  title: 'You do not have enough credit',
+  detail: 'Your current balance is 30, but that costs 50.',
+  instance: `/account/${ctx.user.id}/messages/${ctx.params.id}`,
+  // extensions per §3.2
+  balance: 30,
+})
+```
+
+Plus typed convenience methods on the same namespace:
+
+```ts
+ctx.problem.notFound({ detail: 'User abc not found' })
+ctx.problem.badRequest({ detail: '...', errors: [...] })
+ctx.problem.unauthorized()
+ctx.problem.forbidden()
+ctx.problem.conflict({ detail: 'Email already in use' })
+ctx.problem.validation(zodIssues) // serializes Zod errors into the §3.2 "errors" extension
+```
+
+Each method:
+
+- Sets `Content-Type: application/problem+json`
+- Pre-fills `status` and `title` per RFC 9457's recommendations
+- Lets the caller override or extend any field
+
+`HttpException` gets optional `type` / `instance` / `extensions` fields. The framework error handler emits `application/problem+json` automatically when those fields are present:
+
+```ts
+throw new HttpException('Out of credit', HttpStatus.FORBIDDEN, {
+  type: 'https://api.example.com/problems/out-of-credit',
+  detail: 'Your balance is 30, but that costs 50.',
+  extensions: { balance: 30 },
+})
+```
+
+Optional sibling class `ProblemException` for adopters who want the problem fields to be required at the type level — type-safety for the new way without forcing it on existing code.
+
+**The design decision: coexistence + passive deprecation.**
+
+Only the **error-shape helpers** (`ctx.notFound()`, `ctx.badRequest()`) get a `@deprecated` JSDoc tag pointing at the `ctx.problem.*` equivalent — IDEs surface the strikethrough, nothing breaks at runtime, no behavior change for any existing endpoint. Adopters migrate per call site when they next touch the file.
+
+`ctx.json(data, status?)` is **not deprecated** — it's the generic response helper for success and any non-standard shape, and stays the canonical way to send arbitrary JSON. Same for `ctx.created()`, `ctx.noContent()`, `ctx.html()`, `ctx.download()`, `ctx.render()`. The deprecation is scoped narrowly to the two helpers whose entire purpose is "emit an error in our custom shape" — those are the ones RFC 9457 directly replaces.
+
+**Explicitly NOT in scope:**
+
+- **No `bootstrap()` config knob.** Every new opt-in feature adding a `bootstrap({ ... })` config bloats the surface area for what's ultimately a metadata-format change. Adopters opt in per call site by reaching for the new helpers.
+- **No `kick.config.ts` config knob** either. Same reasoning.
+- **No forced migration.** The framework error handler infers behavior from the data (problem fields present → problem+json; absent → existing JSON shape). Backward compatible by detection, not by config.
+- **`ctx.json` is not touched.** It's the generic JSON response helper for success and arbitrary shapes — orthogonal to the error-format question RFC 9457 answers.
+
+**Why this is DX.** Standards alignment costs adopters nothing (the old way keeps working) and gives them a real "we follow RFC 9457" line for their API docs. The framework gets uniform error shapes across the ecosystem; the typed-client work in A.1 gets a standard error type to generate against.
+
+**Open questions.**
+
+- Default `type` value when none is provided — `about:blank` per RFC 9457 §4.2.1, or a kickjs-specific URI scheme like `https://forinda.github.io/kick-js/problems/{status}`?
+- How does this interact with the `validate()` middleware? It currently throws a 400 with a custom shape — auto-upgrade to problem+json with the `errors[]` extension, or keep current shape and add an opt-in flag?
+- `instance` is per-occurrence URI — should the framework auto-populate it with `req.url`, or always require the caller to set it explicitly?
+- Localization of `title` / `detail` — out of scope for v1 (RFC 9457 §6 acknowledges i18n is the application's responsibility), but worth deciding now.
+
+---
+
 ## Track C — Bold Bets
 
 High-risk, high-reward. Each of these could be the thing KickJS is famous for, if it works.
@@ -453,14 +531,15 @@ These will get their own track once we have a clearer picture from the non-DB wo
 
 Rough order if we were optimizing for **impact-per-effort**:
 
-1. **B.2 — Error messages with fix hints** (2–3 weeks, changes how the framework feels forever)
-2. **B.4 — `kick doctor` command** (1 week, kills a huge category of support questions)
-3. **A.1 — Typed client** (2–3 months, but it's the moat)
-4. **B.1 — Scaffolder feature-overlay** (3–6 weeks, contributor-friendly)
-5. **A.2 — Observability** (1–2 months, production-readiness story)
-6. **B.3 — Interactive docs** (2–4 weeks, depends on hosting cost analysis)
-7. **A.3 — Runtime-portable core** (long arc — gradual, every peer-dep cleanup advances it)
-8. **C.1, C.2, C.3** — bold bets, sequence after the moat is in place
+1. **B.5 — RFC 9457 Problem Details on `ctx`** (1–2 weeks, clear spec, no breaking change, "standards-compliant" pitch)
+2. **B.2 — Error messages with fix hints** (2–3 weeks, changes how the framework feels forever)
+3. **B.4 — `kick doctor` command** (1 week, kills a huge category of support questions)
+4. **A.1 — Typed client** (2–3 months, but it's the moat)
+5. **B.1 — Scaffolder feature-overlay** (3–6 weeks, contributor-friendly)
+6. **A.2 — Observability** (1–2 months, production-readiness story)
+7. **B.3 — Interactive docs** (2–4 weeks, depends on hosting cost analysis)
+8. **A.3 — Runtime-portable core** (long arc — gradual, every peer-dep cleanup advances it)
+9. **C.1, C.2, C.3** — bold bets, sequence after the moat is in place
 
 Open for redirection — these are starting points, not commitments.
 
