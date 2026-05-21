@@ -256,9 +256,10 @@ Tested as a swap for `tsc` in two places:
 
 **Open questions for follow-up:**
 
-- Can `tsdown` use tsgo for dts emission? Currently it shells `tsc` via `rolldown-plugin-dts`. tsdown 0.22 doesn't appear to expose a tsgo backend; might be worth checking the upstream issue tracker.
 - Should the CI workflow add `tsgo --version` as a step so a tsgo regression shows up in the install log?
 - Should `kick doctor` add a tsgo-installed check?
+- Any edge cases with `dts: { tsgo: true }` on future package additions (decorators-heavy fixtures, complex generics)?
+- Upgrade cadence — track `@typescript/native-preview` releases and bump deliberately; right now it's a `dev` channel and minor regressions are possible. Pin policy and a `kick doctor` notice if a major version diverges.
 
 ### Branch disposition
 
