@@ -97,7 +97,7 @@ The `notFoundHandler()` middleware is placed before the error handler to catch u
 
 Framework-thrown errors (DI resolution failures, missing env vars, malformed module setup, etc.) use the `KickError` class — a structured error type with a stable `code`, a one-line `summary`, a `cause` explanation, an actionable `fix` block, and a `docsUrl`. The result is multi-line, scannable, and points at the exact change to apply:
 
-```
+```text
 KICK001: No provider for UserService
 
   Cause:
