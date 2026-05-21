@@ -9,15 +9,18 @@ import type { BaseUploadOptions, FileUploadConfig } from '../../core'
 // only constructing an upload middleware does. Adopters who never
 // call `upload.single/array/none()` or use `@FileUpload` don't need
 // `multer` installed at all.
+//
+// multer uses CJS `export = multer`, so the module is itself the
+// callable factory — no `.default` indirection on either the type
+// or the runtime side.
 const requireFromHere = createRequire(import.meta.url)
-type MulterFactory = typeof import('multer').default
+type MulterFactory = typeof import('multer')
 let _multer: MulterFactory | undefined
 
 function loadMulter(): MulterFactory {
   if (_multer) return _multer
   try {
-    const mod = requireFromHere('multer')
-    _multer = (mod.default ?? mod) as MulterFactory
+    _multer = requireFromHere('multer') as MulterFactory
     return _multer
   } catch {
     throw new Error(
