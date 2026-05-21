@@ -20,6 +20,7 @@ import { registerTinkerCommand } from '../commands/tinker'
 import { registerRemoveCommand } from '../commands/remove'
 import { registerTypegenCommand } from '../commands/typegen'
 import { registerCheckCommand } from '../commands/check'
+import { registerDoctorCommand } from '../commands/doctor'
 import { registerDbCommands } from '../commands/db'
 import { registerCodemodCommands } from '../commands/codemod'
 import { kickDbTypegen } from '../typegen/builtin/db'
@@ -43,6 +44,7 @@ export const builtinCliPlugins: readonly KickCliPlugin[] = [
   defineCliPlugin({ name: 'kick/remove', register: registerRemoveCommand }),
   defineCliPlugin({ name: 'kick/typegen', register: registerTypegenCommand }),
   defineCliPlugin({ name: 'kick/check', register: registerCheckCommand }),
+  defineCliPlugin({ name: 'kick/doctor', register: registerDoctorCommand }),
   defineCliPlugin({ name: 'kick/db', register: registerDbCommands, typegens: [kickDbTypegen()] }),
   defineCliPlugin({ name: 'kick/codemod', register: registerCodemodCommands }),
   // kick/assets, kick/routes are typegen-only — the asset manager
