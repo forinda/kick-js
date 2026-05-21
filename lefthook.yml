@@ -21,7 +21,7 @@ pre-commit:
     # (VitePress docs, README, articles), mirroring the
     # `format:check` script.
     format:
-      glob: '{packages/*/src/**/*.{ts,tsx,js,mjs,cjs},packages/*/__tests__/**/*.{ts,tsx},packages/*/spa/src/**/*.{ts,tsx},docs/**/*.md,docs/.vitepress/**/*.{ts,mts,vue},tutorials/**/*.md,examples/*/README.md,scripts/*.{ts,js,mjs},*.md}'
+      glob: '{packages/*/src/**/*.{ts,tsx,js,mjs,cjs},packages/*/__tests__/**/*.{ts,tsx},packages/*/spa/src/**/*.{ts,tsx},docs/**/*.md,docs/.vitepress/**/*.{ts,mts,vue},tutorials/**/*.md,scripts/*.{ts,js,mjs},*.md}'
       run: pnpm exec oxfmt --check {staged_files}
     # ESLint-replacement linter via oxlint (Rust, sub-second on full
     # repo). Runs only when a TS file under packages/ is staged so

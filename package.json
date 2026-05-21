@@ -11,7 +11,6 @@
   "packageManager": "pnpm@10.12.1",
   "scripts": {
     "build": "pnpm run --filter=\"./packages/**\" build",
-    "build:examples": "pnpm run --filter=\"./examples/**\" build",
     "build:all": "pnpm -r run build",
     "dev": "pnpm run --filter=\"./packages/**\" --parallel build --watch",
     "test": "pnpm run --filter=\"./packages/**\" test",
@@ -25,8 +24,8 @@
     "lint:fix": "oxlint packages/ --fix",
     "lint:tokens": "node packages/lint/bin.mjs --first-party --scope packages --cwd .",
     "clean": "pnpm -r run clean",
-    "format": "oxfmt --write 'packages/*/src/**/*.{ts,tsx}' 'packages/*/__tests__/**/*.{ts,tsx}' 'packages/*/spa/src/**/*.{ts,tsx}' 'docs/**/*.md' 'docs/.vitepress/**/*.{ts,mts,vue}' 'tutorials/**/*.md' 'examples/*/README.md' 'scripts/*.{ts,js,mjs}' '*.md'",
-    "format:check": "oxfmt --check 'packages/*/src/**/*.{ts,tsx}' 'packages/*/__tests__/**/*.{ts,tsx}' 'packages/*/spa/src/**/*.{ts,tsx}' 'docs/**/*.md' 'docs/.vitepress/**/*.{ts,mts,vue}' 'tutorials/**/*.md' 'examples/*/README.md' 'scripts/*.{ts,js,mjs}' '*.md'",
+    "format": "oxfmt --write 'packages/*/src/**/*.{ts,tsx}' 'packages/*/__tests__/**/*.{ts,tsx}' 'packages/*/spa/src/**/*.{ts,tsx}' 'docs/**/*.md' 'docs/.vitepress/**/*.{ts,mts,vue}' 'tutorials/**/*.md' 'scripts/*.{ts,js,mjs}' '*.md'",
+    "format:check": "oxfmt --check 'packages/*/src/**/*.{ts,tsx}' 'packages/*/__tests__/**/*.{ts,tsx}' 'packages/*/spa/src/**/*.{ts,tsx}' 'docs/**/*.md' 'docs/.vitepress/**/*.{ts,mts,vue}' 'tutorials/**/*.md' 'scripts/*.{ts,js,mjs}' '*.md'",
     "bench": "node scripts/benchmark.js",
     "bench:quick": "node scripts/benchmark.js --duration 10 --connections 50",
     "docs:dev": "vitepress dev docs",
