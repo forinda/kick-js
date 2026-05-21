@@ -71,11 +71,11 @@
   },
   "dependencies": {
     "@forinda/kickjs-devtools-kit": "workspace:*",
-    "reflect-metadata": "^0.2.2",
-    "ws": "^8.20.1"
+    "reflect-metadata": "^0.2.2"
   },
   "peerDependencies": {
     "express": "^5.1.0",
+    "ws": "^8.0.0",
     "@forinda/kickjs": ">=2.3.0"
   },
   "devDependencies": {
@@ -88,7 +88,8 @@
     "typescript": "^6.0.3",
     "vite": "^8.0.13",
     "vite-plugin-solid": "^2.11.12",
-    "vitest": "^4.1.6"
+    "vitest": "^4.1.6",
+    "ws": "^8.20.1"
   },
   "publishConfig": {
     "access": "public"
