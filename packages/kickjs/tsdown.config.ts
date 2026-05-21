@@ -45,7 +45,6 @@ export default defineConfig({
     'express',
     'reflect-metadata',
     'multer',
-    'cookie-parser',
     'dotenv',
     'dotenv/config',
     'zod',
