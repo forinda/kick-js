@@ -1,5 +1,5 @@
 import 'reflect-metadata'
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, afterEach } from 'vitest'
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -17,8 +17,18 @@ import {
 
 // ── helpers ───────────────────────────────────────────────────────────
 
+/**
+ * Temp-dir tracking with afterEach cleanup. Earlier revisions called
+ * `cleanup(dir)` at the tail of each `it` block, but any failing
+ * assertion short-circuits and leaks the directory in the OS temp
+ * folder. Tracking + global afterEach guarantees cleanup regardless
+ * of test outcome.
+ */
+const trackedDirs: string[] = []
+
 function tempProject(files: Record<string, string>): string {
   const dir = mkdtempSync(join(tmpdir(), 'kick-doctor-'))
+  trackedDirs.push(dir)
   for (const [path, contents] of Object.entries(files)) {
     const full = join(dir, path)
     mkdirSync(dirname(full), { recursive: true })
@@ -27,13 +37,16 @@ function tempProject(files: Record<string, string>): string {
   return dir
 }
 
-function cleanup(dir: string): void {
-  try {
-    rmSync(dir, { recursive: true, force: true })
-  } catch {
-    // Windows sometimes holds the lock briefly; tolerate.
+afterEach(() => {
+  while (trackedDirs.length > 0) {
+    const dir = trackedDirs.pop()!
+    try {
+      rmSync(dir, { recursive: true, force: true })
+    } catch {
+      // Windows sometimes holds the lock briefly; tolerate.
+    }
   }
-}
+})
 
 function ctx(cwd: string, overrides: Partial<DoctorContext> = {}): DoctorContext {
   const pkgPath = join(cwd, 'package.json')
@@ -54,7 +67,6 @@ describe('checkKickJsInstalled', () => {
     const r = checkKickJsInstalled(ctx(dir))
     expect(r.status).toBe('pass')
     expect(r.message).toBe('^5.0.0')
-    cleanup(dir)
   })
 
   it('fails when @forinda/kickjs is missing', () => {
@@ -62,14 +74,12 @@ describe('checkKickJsInstalled', () => {
     const r = checkKickJsInstalled(ctx(dir))
     expect(r.status).toBe('fail')
     expect(r.fix).toContain('kick new')
-    cleanup(dir)
   })
 
   it('warns when package.json is missing', () => {
     const dir = tempProject({})
     const r = checkKickJsInstalled(ctx(dir))
     expect(r.status).toBe('warn')
-    cleanup(dir)
   })
 })
 
@@ -83,7 +93,6 @@ describe('checkReflectMetadata', () => {
       }),
     })
     expect(checkReflectMetadata(ctx(dir)).status).toBe('pass')
-    cleanup(dir)
   })
 
   it('fails when reflect-metadata is missing', () => {
@@ -93,7 +102,6 @@ describe('checkReflectMetadata', () => {
     const r = checkReflectMetadata(ctx(dir))
     expect(r.status).toBe('fail')
     expect(r.fix).toContain('reflect-metadata')
-    cleanup(dir)
   })
 })
 
@@ -109,7 +117,6 @@ describe('checkExpressInstalled', () => {
     const r = checkExpressInstalled(ctx(dir))
     expect(r?.status).toBe('fail')
     expect(r?.fix).toContain('express')
-    cleanup(dir)
   })
 
   it('passes when both kickjs and express are installed', () => {
@@ -119,13 +126,11 @@ describe('checkExpressInstalled', () => {
       }),
     })
     expect(checkExpressInstalled(ctx(dir))?.status).toBe('pass')
-    cleanup(dir)
   })
 
   it('skips (returns null) when there is no kickjs and no express', () => {
     const dir = tempProject({ 'package.json': JSON.stringify({ dependencies: {} }) })
     expect(checkExpressInstalled(ctx(dir))).toBeNull()
-    cleanup(dir)
   })
 })
 
@@ -164,7 +169,6 @@ describe('checkEnvWiring', () => {
   it('skips when no env-init file exists', () => {
     const dir = tempProject({ 'src/index.ts': 'export {}\n' })
     expect(checkEnvWiring(ctx(dir))).toBeNull()
-    cleanup(dir)
   })
 
   it("skips when an env file exists but doesn't call loadEnv()", () => {
@@ -175,7 +179,6 @@ describe('checkEnvWiring', () => {
       'src/index.ts': 'export {}',
     })
     expect(checkEnvWiring(ctx(dir))).toBeNull()
-    cleanup(dir)
   })
 
   it("fails when src/env.ts has loadEnv but src/index.ts doesn't import it", () => {
@@ -186,7 +189,6 @@ describe('checkEnvWiring', () => {
     const r = checkEnvWiring(ctx(dir))
     expect(r?.status).toBe('fail')
     expect(r?.fix).toContain("import './env'")
-    cleanup(dir)
   })
 
   it('passes when src/env.ts is imported before bootstrap()', () => {
@@ -199,7 +201,6 @@ bootstrap({})
 `,
     })
     expect(checkEnvWiring(ctx(dir))?.status).toBe('pass')
-    cleanup(dir)
   })
 
   it('warns when env import lands AFTER bootstrap()', () => {
@@ -214,7 +215,6 @@ import './env'
     const r = checkEnvWiring(ctx(dir))
     expect(r?.status).toBe('warn')
     expect(r?.message).toContain('AFTER bootstrap')
-    cleanup(dir)
   })
 
   it('handles src/config/env.ts variation', () => {
@@ -227,7 +227,6 @@ bootstrap({})
 `,
     })
     expect(checkEnvWiring(ctx(dir))?.status).toBe('pass')
-    cleanup(dir)
   })
 
   it('handles src/config/index.ts variation', () => {
@@ -240,7 +239,6 @@ bootstrap({})
 `,
     })
     expect(checkEnvWiring(ctx(dir))?.status).toBe('pass')
-    cleanup(dir)
   })
 
   it('handles the @/ alias import form', () => {
@@ -253,7 +251,6 @@ bootstrap({})
 `,
     })
     expect(checkEnvWiring(ctx(dir))?.status).toBe('pass')
-    cleanup(dir)
   })
 
   it("fails when src/config/env.ts has loadEnv but src/index.ts doesn't import it", () => {
@@ -264,7 +261,6 @@ bootstrap({})
     const r = checkEnvWiring(ctx(dir))
     expect(r?.status).toBe('fail')
     expect(r?.message).toContain('config/env.ts')
-    cleanup(dir)
   })
 
   it('falls back to src/main.ts when src/index.ts is absent', () => {
@@ -273,7 +269,6 @@ bootstrap({})
       'src/main.ts': `import './env'\nimport { bootstrap } from '@forinda/kickjs'\nbootstrap({})\n`,
     })
     expect(checkEnvWiring(ctx(dir))?.status).toBe('pass')
-    cleanup(dir)
   })
 })
 
@@ -297,7 +292,6 @@ describe('runChecks', () => {
     const kickjsCheck = results.find((r) => r.name === '@forinda/kickjs installed')
     expect(kickjsCheck?.status).toBe('pass')
     expect(results.find((r) => r.name === 'tsconfig.json present')?.status).toBe('fail')
-    cleanup(dir)
   })
 
   it('runs caller-supplied extra checks after the built-ins', async () => {
@@ -310,18 +304,45 @@ describe('runChecks', () => {
       extraChecks: [() => ({ name: 'My custom check', status: 'pass' })],
     })
     expect(results.find((r) => r.name === 'My custom check')?.status).toBe('pass')
-    cleanup(dir)
   })
 
-  it('skips extra checks that return null', async () => {
+  it('skips extra checks that return null — no null entries pollute the result array', async () => {
+    const dir = tempProject({
+      'package.json': JSON.stringify({ dependencies: {} }),
+    })
+    // Bracket the built-in checks with two null-returning extras AND a
+    // real one. The real one MUST appear; the nulls MUST be skipped (no
+    // null/undefined entries, no extra slots in the array).
+    const results = await runChecks(dir, {
+      extraChecks: [() => null, () => ({ name: 'Real check', status: 'pass' }), () => null],
+    })
+    expect(results.every((r) => r != null)).toBe(true)
+    expect(results.some((r) => r.name === 'Real check')).toBe(true)
+    // Exactly one entry per non-null check — the two nulls add nothing.
+    const realIdx = results.findIndex((r) => r.name === 'Real check')
+    expect(realIdx).toBeGreaterThanOrEqual(0)
+    expect(results.filter((r) => r.name === 'Real check').length).toBe(1)
+  })
+
+  it('isolates failing checks so one extension cannot abort the whole report', async () => {
     const dir = tempProject({
       'package.json': JSON.stringify({ dependencies: {} }),
     })
     const results = await runChecks(dir, {
-      extraChecks: [() => null],
+      extraChecks: [
+        () => {
+          throw new Error('Boom from a buggy extension')
+        },
+        () => ({ name: 'After the boom', status: 'pass' }),
+      ],
     })
-    expect(results.find((r) => r.name === 'My custom check')).toBeUndefined()
-    cleanup(dir)
+    // Built-ins still ran
+    expect(results.find((r) => r.name === 'Node version')).toBeDefined()
+    // The throwing check produced a synthetic fail with the error message
+    const synthetic = results.find((r) => r.status === 'fail' && r.message?.includes('Boom'))
+    expect(synthetic).toBeDefined()
+    // The check AFTER the thrower still ran — the loop didn't abort
+    expect(results.find((r) => r.name === 'After the boom')?.status).toBe('pass')
   })
 
   it('awaits async extra checks', async () => {
@@ -337,7 +358,6 @@ describe('runChecks', () => {
       ],
     })
     expect(results.find((r) => r.name === 'Async check')?.status).toBe('pass')
-    cleanup(dir)
   })
 })
 
@@ -358,7 +378,6 @@ describe('defineDoctorExtension', () => {
     })
     const results = await runChecks(dir, { extraChecks: ext.checks })
     expect(results.find((r) => r.name === 'Custom from extension')?.status).toBe('pass')
-    cleanup(dir)
   })
 })
 
@@ -376,6 +395,5 @@ describe('defineDoctorCheck', () => {
     }))
     const results = await runChecks(dir, { extraChecks: [myCheck] })
     expect(results.find((r) => r.name === 'Bound check')?.status).toBe('pass')
-    cleanup(dir)
   })
 })

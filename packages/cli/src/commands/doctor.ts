@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import type { Command } from 'commander'
 import { loadKickConfig, type KickConfig } from '../config'
@@ -380,28 +380,69 @@ export function checkEnvWiring(ctx: DoctorContext): DoctorResult | null {
   return { name: 'env wiring', status: 'pass' }
 }
 
+/**
+ * Find the newest file mtime under a directory tree, recursively.
+ * Returns `0` when the tree is empty or unreadable. Walks at most
+ * {@link MAX_TYPEGEN_FILES} entries to bound the cost on large
+ * generated trees.
+ *
+ * Necessary because the directory's own `mtimeMs` does not update
+ * when existing files inside are rewritten — `kick typegen` can run
+ * successfully and the directory stat still looks stale. The newest
+ * file mtime is the honest measure.
+ */
+function newestFileMtime(dir: string, budget = MAX_TYPEGEN_FILES): number {
+  let newest = 0
+  let visited = 0
+  const stack = [dir]
+  while (stack.length > 0 && visited < budget) {
+    const current = stack.pop()!
+    let entries
+    try {
+      entries = readdirSync(current, { withFileTypes: true })
+    } catch {
+      continue
+    }
+    for (const entry of entries) {
+      if (visited >= budget) break
+      visited++
+      const full = join(current, entry.name)
+      if (entry.isDirectory()) {
+        stack.push(full)
+        continue
+      }
+      try {
+        const m = statSync(full).mtimeMs
+        if (m > newest) newest = m
+      } catch {
+        // skip unreadable files
+      }
+    }
+  }
+  return newest
+}
+
+const MAX_TYPEGEN_FILES = 2000
+
 export function checkTypegenFreshness(ctx: DoctorContext): DoctorResult | null {
   const typegenDir = join(ctx.cwd, '.kickjs', 'types')
   if (!existsSync(typegenDir)) return null
-  try {
-    const stat = statSync(typegenDir)
-    const ageMs = Date.now() - stat.mtimeMs
-    const ageMin = Math.floor(ageMs / 60_000)
-    if (ageMin > 60) {
-      return {
-        name: 'typegen freshness',
-        status: 'warn',
-        message: `last updated ${ageMin} minutes ago`,
-        fix: 'Re-run `kick typegen` (or `kick dev`, which runs it on every reload) so generated types match the current code.',
-      }
-    }
+  const newest = newestFileMtime(typegenDir)
+  if (newest === 0) return null
+  const ageMs = Date.now() - newest
+  const ageMin = Math.floor(ageMs / 60_000)
+  if (ageMin > 60) {
     return {
       name: 'typegen freshness',
-      status: 'pass',
-      message: ageMin === 0 ? 'just now' : `${ageMin}m ago`,
+      status: 'warn',
+      message: `last updated ${ageMin} minutes ago`,
+      fix: 'Re-run `kick typegen` (or `kick dev`, which runs it on every reload) so generated types match the current code.',
     }
-  } catch {
-    return null
+  }
+  return {
+    name: 'typegen freshness',
+    status: 'pass',
+    message: ageMin === 0 ? 'just now' : `${ageMin}m ago`,
   }
 }
 
@@ -429,7 +470,20 @@ export async function runChecks(
   const checks = [...BUILT_IN_CHECKS, ...(options.extraChecks ?? [])]
   const out: DoctorResult[] = []
   for (const check of checks) {
-    const r = await check(ctx)
+    // Per-check try/catch so one buggy extension can't abort the whole
+    // report. A throwing check produces a synthetic `fail` result with
+    // the error message; the loop continues to the next check.
+    let r: DoctorResult | DoctorResult[] | null
+    try {
+      r = await check(ctx)
+    } catch (err) {
+      out.push({
+        name: check.name || 'doctor check',
+        status: 'fail',
+        message: err instanceof Error ? err.message : String(err),
+      })
+      continue
+    }
     if (r == null) continue
     if (Array.isArray(r)) out.push(...r)
     else out.push(r)
