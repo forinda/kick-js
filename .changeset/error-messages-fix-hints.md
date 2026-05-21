@@ -6,7 +6,7 @@ feat(errors): structured KickError with code, cause, and fix hint
 
 Framework-thrown errors are now `KickError` instances — a multi-line, scannable shape with a stable code, a cause explanation, an actionable fix, and a docs URL.
 
-```
+```text
 KICK001: No provider for UserService
 
   Cause:

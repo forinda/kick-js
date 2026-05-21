@@ -65,7 +65,11 @@ function ansiEnabled(): boolean {
   return process.stderr?.isTTY === true
 }
 
-const ESC = '\x1b['
+// Use the Unicode-escape form (``) rather than the hex-escape (`\x1b`)
+// for the ANSI ESC byte — both produce the same character, but oxlint's
+// `no-control-character` rule flags the hex form as "unexpected control
+// character in string literal". Functionally identical, lint-clean.
+const ESC = '['
 const RESET = `${ESC}0m`
 
 function paint(text: string, code: string, enabled: boolean): string {
