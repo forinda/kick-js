@@ -12,17 +12,7 @@
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": [
-    "@forinda/kickjs-example-db-spike",
-    "@forinda/kickjs-example-minimal-api",
-    "@forinda/kickjs-example-multi-tenant-drizzle",
-    "@forinda/kickjs-example-multi-tenant-mongoose",
-    "@forinda/kickjs-example-multi-tenant-prisma",
-    "@forinda/kickjs-example-task-drizzle-api",
-    "@forinda/kickjs-example-task-kickdb",
-    "@forinda/kickjs-example-task-mongoose-api",
-    "@forinda/kickjs-example-task-prisma-api"
-  ],
+  "ignore": [],
   "___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH": {
     "onlyUpdatePeerDependentsWhenOutOfRange": true
   }
