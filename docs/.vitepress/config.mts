@@ -153,27 +153,13 @@ const apiSidebar = [
   },
 ]
 
+// Examples live in their own repo (forinda/kickjs-examples-archive)
+// since the workspace extraction. The single index page tells readers
+// where to find the apps and how to run them.
 const examplesSidebar = [
   {
-    text: 'Full Applications',
-    items: [
-      { text: 'Overview', link: '/examples/' },
-      { text: 'Task Management (Drizzle)', link: '/examples/task-drizzle-api' },
-      { text: 'Task Management (Prisma)', link: '/examples/task-prisma-api' },
-      { text: 'Task Management (Mongoose)', link: '/examples/task-mongoose-api' },
-    ],
-  },
-  {
-    text: 'Multi-Tenant',
-    items: [
-      { text: 'Multi-Tenant (Drizzle)', link: '/examples/multi-tenant-drizzle-api' },
-      { text: 'Multi-Tenant (Prisma)', link: '/examples/multi-tenant-prisma-api' },
-      { text: 'Multi-Tenant (Mongoose)', link: '/examples/multi-tenant-mongoose-api' },
-    ],
-  },
-  {
-    text: 'Starter',
-    items: [{ text: 'Minimal', link: '/examples/minimal-api' }],
+    text: 'Examples',
+    items: [{ text: 'Overview & archive', link: '/examples/' }],
   },
 ]
 
