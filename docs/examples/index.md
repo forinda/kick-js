@@ -1,33 +1,15 @@
 # Examples
 
-Realistic, runnable applications that exercise full KickJS patterns end-to-end live in a separate repository — **[forinda/kickjs-examples-archive](https://github.com/forinda/kickjs-examples-archive)**.
-
-They were extracted from this monorepo so they can release on their own cadence and stop weighing on the framework's CI install time. The patterns and code are the same; only the location changed.
-
-## What's in the archive
-
-| App                                                                                                                   | What it shows                                          |
-| --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| [`minimal-api`](https://github.com/forinda/kickjs-examples-archive/tree/main/minimal-api)                             | Simplest possible app — `bootstrap()` + one controller |
-| [`task-drizzle-api`](https://github.com/forinda/kickjs-examples-archive/tree/main/task-drizzle-api)                   | Full task management — PostgreSQL + Drizzle            |
-| [`task-prisma-api`](https://github.com/forinda/kickjs-examples-archive/tree/main/task-prisma-api)                     | Full task management — PostgreSQL + Prisma 7           |
-| [`task-kickdb-api`](https://github.com/forinda/kickjs-examples-archive/tree/main/task-kickdb-api)                     | KickJS-native ORM — PostgreSQL + `@forinda/kickjs-db`  |
-| [`task-mongoose-api`](https://github.com/forinda/kickjs-examples-archive/tree/main/task-mongoose-api)                 | Full task management — MongoDB + Mongoose              |
-| [`multi-tenant-drizzle-api`](https://github.com/forinda/kickjs-examples-archive/tree/main/multi-tenant-drizzle-api)   | Multi-tenant pattern — PostgreSQL + Drizzle            |
-| [`multi-tenant-prisma-api`](https://github.com/forinda/kickjs-examples-archive/tree/main/multi-tenant-prisma-api)     | Multi-tenant pattern — PostgreSQL + Prisma             |
-| [`multi-tenant-mongoose-api`](https://github.com/forinda/kickjs-examples-archive/tree/main/multi-tenant-mongoose-api) | Multi-tenant pattern — MongoDB + Mongoose              |
-| [`db-spike-api`](https://github.com/forinda/kickjs-examples-archive/tree/main/db-spike-api)                           | `@forinda/kickjs-db` exploration / spike               |
-
-## Running an example
+Runnable reference apps live in their own repository — **[forinda/kickjs-examples-archive](https://github.com/forinda/kickjs-examples-archive)** — covering Drizzle, Prisma, Mongoose, `@forinda/kickjs-db`, multi-tenant patterns, and a minimal starter. Open the archive's README for the current catalog so it stays one source of truth.
 
 ```bash
 git clone https://github.com/forinda/kickjs-examples-archive
-cd kickjs-examples-archive/minimal-api
+cd kickjs-examples-archive/<app>
 pnpm install
 pnpm dev
 ```
 
-The `task-*` and `multi-tenant-*` apps need a database — each has its own `.env.example` and migration recipe in the app's README.
+The `task-*` and `multi-tenant-*` apps need a database — each app's README in the archive carries the `.env.example` and migration recipe.
 
 ## Starting your own project
 

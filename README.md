@@ -168,28 +168,13 @@ Each of the v5 cuts has a focused copy-paste recipe under the supported core pri
 
 ## Example Apps
 
-Examples live in their own repo so they can release on their own cadence and don't drag on this repo's CI install time: **[forinda/kickjs-examples-archive](https://github.com/forinda/kickjs-examples-archive)**
-
-| Example                     | What it shows                                         |
-| --------------------------- | ----------------------------------------------------- |
-| `minimal-api`               | Simplest possible app — bootstrap + one controller    |
-| `task-drizzle-api`          | Full task management app — PostgreSQL + Drizzle       |
-| `task-prisma-api`           | Full task management app — PostgreSQL + Prisma 7      |
-| `task-kickdb-api`           | KickJS-native ORM — PostgreSQL + `@forinda/kickjs-db` |
-| `task-mongoose-api`         | Full task management app — MongoDB + Mongoose         |
-| `multi-tenant-drizzle-api`  | Multi-tenant pattern — PostgreSQL + Drizzle           |
-| `multi-tenant-prisma-api`   | Multi-tenant pattern — PostgreSQL + Prisma            |
-| `multi-tenant-mongoose-api` | Multi-tenant pattern — MongoDB + Mongoose             |
-
-Clone the archive locally:
+Runnable reference apps live in **[forinda/kickjs-examples-archive](https://github.com/forinda/kickjs-examples-archive)** — Drizzle / Prisma / Mongoose / `@forinda/kickjs-db` task apps, multi-tenant patterns, and a minimal starter. Open the archive's README for the current catalog.
 
 ```bash
 git clone https://github.com/forinda/kickjs-examples-archive
-cd kickjs-examples-archive/minimal-api
-pnpm install && pnpm dev
 ```
 
-The fastest way to start a new project is still `kick new <name>` — `kick.config.ts`, `tsconfig`, `vite.config`, modules, env wiring scaffolded for you. The archive is for reading reference patterns; the CLI is for starting your own.
+The fastest way to start a real project is still `kick new <name>` — `kick.config.ts`, `tsconfig`, `vite.config`, modules, and env wiring scaffolded for you. The archive is for reading reference patterns; the CLI is for starting your own.
 
 ## CLI
 
