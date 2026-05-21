@@ -3,7 +3,6 @@ import express, { type Express, type RequestHandler } from 'express'
 import {
   Container,
   createLogger,
-  Logger,
   normalizePath,
   tokenName,
   METADATA,
@@ -137,8 +136,7 @@ export interface ApplicationOptions {
    *   inserted by `router-builder` regardless of ALS state. What
    *   degrades without an ALS frame is the *backing store*:
    *   REQUEST-scoped DI throws (no `requestStore.getStore()` to read
-   *   from), `Logger` loses its requestId context, and
-   *   `RequestContext.set/get` throws. Use `'manual'` only when you
+   *   from) and `RequestContext.set/get` throws. Use `'manual'` only when you
    *   genuinely intend to wrap requests in your own ALS frame (rare —
    *   multi-tenant adapters used to do this; post-Phase 3 they share
    *   the framework's frame instead).
@@ -337,17 +335,6 @@ export class Application {
     this.adapters = mountSort(namedAdapters, 'adapter')
     // Wire the request store provider so Container can resolve REQUEST-scoped deps
     Container._requestStoreProvider = () => requestStore.getStore() ?? null
-    // Wire logger context provider so logs auto-include requestId
-    Logger._contextProvider = () => {
-      const store = requestStore.getStore()
-      if (!store) return null
-      const ctx: Record<string, any> = { requestId: store.requestId }
-      const traceId = store.values.get('traceId')
-      if (traceId) ctx.traceId = traceId
-      const spanId = store.values.get('spanId')
-      if (spanId) ctx.spanId = spanId
-      return ctx
-    }
   }
 
   /** Whether the application is currently draining in-flight requests */

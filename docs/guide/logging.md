@@ -193,10 +193,6 @@ child.info('charged')
 // Pino → { component: 'PaymentService', msg: 'charged', ... }
 ```
 
-## Request context
-
-When the HTTP layer is active, it wires `Logger._contextProvider` to surface the current `requestId` (and any other request-scoped fields) on every log call. You don't have to do anything — it Just Works once `bootstrap()` runs. If you write a custom provider, the framework's runtime hook is read by `Logger`, not by your provider, so there's nothing to integrate on your side.
-
 ## Why no first-party adapter packages?
 
 We intentionally don't ship `@forinda/kickjs-logger-pino` or similar. Logger ecosystems move at their own pace, each has its own config surface, and the adapter glue is ~15 lines you can read at a glance. Owning the adapter in your own app means you control its version, its transports, its formatting — without waiting for a kickjs release when your logger of choice cuts a major.

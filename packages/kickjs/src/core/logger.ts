@@ -119,13 +119,6 @@ export class Logger {
   private _providerVersion: number
   private _name?: string
 
-  /**
-   * Optional context provider for request-scoped log enrichment.
-   * Set by the HTTP package to inject requestId from AsyncLocalStorage.
-   * Returns extra fields to merge into every log call, or null if outside a request.
-   */
-  static _contextProvider: (() => Record<string, any> | null) | null = null
-
   /** Incremented on every setProvider/resetProvider so instances know to refresh */
   private static _providerVersion = 0
 
@@ -188,11 +181,6 @@ export class Logger {
   /** Create a child logger with a sub-component name */
   child(name: string): Logger {
     return new Logger(name)
-  }
-
-  /** Get request context (requestId, etc.) if inside a request */
-  private ctx(): Record<string, any> | undefined {
-    return Logger._contextProvider?.() ?? undefined
   }
 
   info(msg: string, ...args: any[]) {
