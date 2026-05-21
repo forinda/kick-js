@@ -20,6 +20,7 @@ import {
   mountSort,
   MutableModuleRegistry,
 } from '../core'
+import { moduleRouteMissingControllerError } from '../core/kick-errors'
 import { getClassMeta } from '../core/metadata'
 import { requestId } from './middleware/request-id'
 import { notFoundHandler, errorHandler } from './middleware/error-handler'
@@ -638,11 +639,7 @@ export class Application {
           // pass `router` explicitly and we use it as-is.
           const router = route.router ?? buildRoutes(route.controller)
           if (!router) {
-            throw new Error(
-              `Module route at ${mountPath} requires either 'controller' or 'router'. ` +
-                'Pass `controller: SomeController` for the common case (the framework calls ' +
-                'buildRoutes() internally) or `router: yourRouter` to hand-build it.',
-            )
+            throw moduleRouteMissingControllerError(mountPath)
           }
           this.app.use(mountPath, router)
 

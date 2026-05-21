@@ -7,6 +7,12 @@ import {
   type PostConstructStatus,
 } from './interfaces'
 import { resolveAsset } from './assets'
+import {
+  envValueMissingError,
+  noProviderError,
+  requestScopeMiddlewareMissingError,
+  requestScopeOutsideRequestError,
+} from './kick-errors'
 import { createLogger } from './logger'
 import {
   getClassMeta,
@@ -378,7 +384,7 @@ export class Container {
       reg = this.registrations.get(`__hmr__${token.name}`)
     }
     if (!reg) {
-      throw new Error(`No binding found for: ${tokenName(token)}`)
+      throw noProviderError(tokenName(token))
     }
 
     if (reg.scope === Scope.SINGLETON && reg.instance !== undefined) {
@@ -391,16 +397,11 @@ export class Container {
     // REQUEST scope: one instance per HTTP request, cached in AsyncLocalStorage
     if (reg.scope === Scope.REQUEST) {
       if (!Container._requestStoreProvider) {
-        throw new Error(
-          `Cannot resolve REQUEST-scoped "${tokenName(token)}": no request store provider configured. ` +
-            `Ensure requestScopeMiddleware() is in your middleware pipeline.`,
-        )
+        throw requestScopeMiddlewareMissingError(tokenName(token))
       }
       const store = Container._requestStoreProvider()
       if (!store) {
-        throw new Error(
-          `Cannot resolve REQUEST-scoped "${tokenName(token)}" outside an HTTP request context.`,
-        )
+        throw requestScopeOutsideRequestError(tokenName(token))
       }
       // Check for pre-registered request values (user, tenant, etc.)
       if (store.values.has(token)) {
@@ -732,9 +733,7 @@ export class Container {
           const val = process.env[config.envKey]
           if (val !== undefined) return val
           if (config.defaultValue !== undefined) return config.defaultValue
-          throw new Error(
-            `@Value('${config.envKey}'): Environment variable "${config.envKey}" is not set and no default was provided.`,
-          )
+          throw envValueMissingError(config.envKey)
         },
         enumerable: true,
         configurable: true,

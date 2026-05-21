@@ -93,6 +93,112 @@ The `notFoundHandler()` middleware is placed before the error handler to catch u
 { "message": "Not Found" }
 ```
 
+## Framework errors with fix hints
+
+Framework-thrown errors (DI resolution failures, missing env vars, malformed module setup, etc.) use the `KickError` class — a structured error type with a stable `code`, a one-line `summary`, a `cause` explanation, an actionable `fix` block, and a `docsUrl`. The result is multi-line, scannable, and points at the exact change to apply:
+
+```
+KICK001: No provider for UserService
+
+  Cause:
+    `UserService` was requested from the DI container but no binding
+    is registered.
+    This usually means one of:
+      • The class is decorated with @Service() / @Repository() / @Controller(),
+        but its enclosing module isn't passed to bootstrap({ modules: [...] }).
+      • The class isn't decorated at all (decorators register the binding).
+      • You're injecting a token (created with createToken()) that nothing
+        provides — add a Container.register(TOKEN, ...) call or a module that
+        binds it.
+
+  Fix:
+    If `UserService` lives in a module, add the module to bootstrap:
+
+      bootstrap({
+        modules: [
+          UsersModule,        // add this
+          OtherModule,
+        ],
+      })
+
+    If it's a custom token, register it explicitly:
+
+      const TENANT_REPO = createToken<TenantRepo>('TENANT_REPO')
+      Container.getInstance().register(TENANT_REPO, { useClass: PrismaTenantRepo })
+
+  Docs:
+    https://forinda.github.io/kick-js/guide/dependency-injection#registering-services
+```
+
+### Catalog (current set)
+
+| Code      | When it fires                                                                |
+| --------- | ---------------------------------------------------------------------------- |
+| `KICK001` | DI: no provider registered for the requested token                           |
+| `KICK002` | DI: REQUEST-scoped binding resolved without request-scope middleware mounted |
+| `KICK003` | DI: REQUEST-scoped binding resolved outside an HTTP request                  |
+| `KICK004` | Config: `@Value('X')` resolved but env var not set and no default given      |
+| `KICK005` | Module: `routes()` declared a path without `controller` or `router`          |
+
+More framework errors will migrate to `KickError` over time. Each new entry gets the next free code; codes are stable and never reused.
+
+### Anatomy
+
+```ts
+import { KickError } from '@forinda/kickjs'
+
+throw new KickError({
+  code: 'APP001',
+  summary: 'My one-line headline',
+  cause: 'Multi-line\nexplanation of why this happened.',
+  fix: 'Actionable multi-line steps, with example code.',
+  docsUrl: 'https://example.com/docs/my-error',
+  context: { foo: 'bar' }, // structured fields for log consumers
+})
+```
+
+`KickError` extends `Error`, so `instanceof Error` catches still see it. The `.message` field carries the full multi-line plain-text body — Node's default `Error.toString()` and unhandled-exception printing surface the helpful version automatically. No setup required.
+
+### Colorized output
+
+Call `formatKickError(err, { color: true })` to get the ANSI-colored version for terminal logging:
+
+```ts
+import { formatKickError, KickError } from '@forinda/kickjs'
+
+try {
+  // ...
+} catch (err) {
+  if (err instanceof KickError) {
+    console.error(formatKickError(err, { color: process.stderr.isTTY }))
+    process.exit(1)
+  }
+  throw err
+}
+```
+
+Color detection honors [`NO_COLOR`](https://no-color.org) and `FORCE_COLOR` automatically when the `color` option is omitted.
+
+### Catching by code
+
+The stable `code` field is the right way to handle framework errors programmatically — never match on `.message` substrings (those evolve with rewording):
+
+```ts
+import { KickError } from '@forinda/kickjs'
+
+try {
+  container.resolve(SomeService)
+} catch (err) {
+  if (err instanceof KickError && err.code === 'KICK001') {
+    // No provider — handle the bootstrap-error path
+  } else {
+    throw err
+  }
+}
+```
+
+The `context` field carries structured data (the token name, the env key, the mount path, etc.) so log aggregators can filter or alert without parsing prose.
+
 ## RFC 9457 — Problem Details
 
 KickJS ships first-class support for [RFC 9457 — Problem Details for HTTP APIs](https://datatracker.ietf.org/doc/html/rfc9457) (the successor to RFC 7807). It's the canonical answer to "what shape should our error JSON have?" — five standard fields, a known content type (`application/problem+json`), and arbitrary extensions per §3.2.
