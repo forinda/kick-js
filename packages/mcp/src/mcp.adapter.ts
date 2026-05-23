@@ -335,7 +335,7 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
       const registerTool = server.registerTool.bind(server) as (
         name: string,
         config: { description: string; inputSchema?: unknown },
-        cb: (args: unknown) => any,
+        cb: (args: unknown, extra: unknown) => any,
       ) => unknown
       /* eslint-enable @typescript-eslint/no-explicit-any */
 
@@ -345,8 +345,14 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
         }
         if (tool.zodInputSchema) {
           config.inputSchema = tool.zodInputSchema
+          registerTool(tool.name, config, async (args: unknown, extra: unknown) =>
+            dispatchTool(tool, args, extra),
+          )
+        } else {
+          registerTool(tool.name, config, async (extra: unknown) =>
+            dispatchTool(tool, {}, extra),
+          )
         }
-        registerTool(tool.name, config, async (args: unknown) => dispatchTool(tool, args))
       }
 
       return server
@@ -406,11 +412,21 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
       },
 
       /**
-       * Walk collected controllers, read route metadata, and materialize
-       * `McpToolDefinition[]`. Runs after every module has mounted but
-       * before the HTTP server starts listening.
+       * Walk collected controllers, materialize tool defs, and (for
+       * HTTP transports) mount the `/_mcp/messages` Express routes.
+       *
+       * Mounting happens here — not in `afterStart` — because by the
+       * time `afterStart` fires, the Application has already attached
+       * its `notFoundHandler` to the express stack. notFoundHandler is
+       * a catch-all that never calls `next()`, so any route registered
+       * after it gets pre-empted with a 404. `beforeStart` runs before
+       * the framework adds the error handlers (kickjs ≥5.12.2), which
+       * is the only window where mount order is correct.
+       *
+       * The stdio path stays in `afterStart` because it doesn't touch
+       * the Express stack at all.
        */
-      beforeStart() {
+      async beforeStart(ctx) {
         for (const { controller, mountPath } of mountedControllers) {
           const routes = getClassMeta<RouteDefinition[]>(METADATA.ROUTES, controller, [])
           for (const route of routes) {
@@ -423,27 +439,9 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
           `MCP adapter discovered ${tools.length} tool(s) ` +
             `(mode=${options.mode}, transport=${options.transport})`,
         )
-      },
-
-      /**
-       * Start the MCP server on the configured transport.
-       *
-       * - `http` (recommended): mounts a `StreamableHTTPServerTransport` on
-       *   the existing Express app at `${basePath}/messages`.
-       * - `sse` (deprecated): currently aliases to `http` and emits a warning.
-       * - `stdio`: skipped here. The standalone `kick mcp` CLI command
-       *   instantiates the adapter directly and connects it to a stdio
-       *   transport so dev logs don't interfere.
-       */
-      async afterStart(ctx) {
-        serverBaseUrl = resolveServerBaseUrl(ctx.server)
 
         const effectiveTransport = resolveTransportMode()
-
-        if (effectiveTransport === 'stdio') {
-          await startStdioTransport()
-          return
-        }
+        if (effectiveTransport === 'stdio') return
 
         if (effectiveTransport === 'sse') {
           log.warn(
@@ -465,6 +463,23 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
 
         await mcpServer.connect(httpTransport)
         mountHttpRoutes(expressApp, httpTransport)
+      },
+
+      /**
+       * Capture the running server's base URL (only available after
+       * the HTTP server is listening), and for stdio transports build
+       * and connect the MCP server. HTTP routes were already mounted
+       * in `beforeStart` so they land ahead of the catch-all 404.
+       */
+      async afterStart(ctx) {
+        serverBaseUrl = resolveServerBaseUrl(ctx.server)
+
+        const effectiveTransport = resolveTransportMode()
+
+        if (effectiveTransport === 'stdio') {
+          await startStdioTransport()
+          return
+        }
 
         log.info(
           `McpAdapter ready — ${tools.length} tool(s) registered, listening at ${options.basePath}/messages`,
