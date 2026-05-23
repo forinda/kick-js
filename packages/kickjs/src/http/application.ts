@@ -702,14 +702,21 @@ export class Application {
     // ── 9. Adapter middleware: afterRoutes ────────────────────────────
     this.mountMiddlewareList(adapterMw.afterRoutes)
 
-    // ── 10. Error handlers ───────────────────────────────────────────
-    this.app.use(this.options.onNotFound ?? notFoundHandler())
-    this.app.use(this.options.onError ?? errorHandler())
-
-    // ── 11. Adapter beforeStart hooks ────────────────────────────────
+    // ── 10. Adapter beforeStart hooks ────────────────────────────────
+    // Runs BEFORE error handlers so adapters can still mount Express
+    // routes (e.g. `McpAdapter` registers `/_mcp/messages` here). If
+    // error handlers were registered first, the notFoundHandler — a
+    // catch-all that never calls next() — would pre-empt anything an
+    // adapter adds afterwards and adapter-mounted endpoints would 404.
     for (const adapter of this.adapters) {
       await this.callHook(adapter.beforeStart?.bind(adapter), ctx)
     }
+
+    // ── 11. Error handlers ───────────────────────────────────────────
+    // Last in the chain so any adapter-mounted route (step 10) gets
+    // a chance to match before the catch-all 404 fires.
+    this.app.use(this.options.onNotFound ?? notFoundHandler())
+    this.app.use(this.options.onError ?? errorHandler())
   }
 
   /** Register modules and DI without starting the HTTP server (used by kick tinker) */
