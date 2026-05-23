@@ -501,15 +501,55 @@ The mental model: treat MCP exposure exactly like exposing the same route to a p
 
 ## Troubleshooting
 
-| Symptom                                                | Cause                                                  | Fix                                                                                                             |
-| ------------------------------------------------------ | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
-| 404 on `/_mcp/messages`                                | Wrong URL or kickjs version before the mount-order fix | Use the full path `/_mcp/messages`; update `@forinda/kickjs` to latest patch                                    |
-| "Server already initialized"                           | Stale MCP session from a previous connection           | Restart your KickJS server                                                                                      |
-| "Not Acceptable: Client must accept text/event-stream" | Opened `/_mcp/messages` in a browser tab               | Use the Inspector UI or a proper MCP client — the endpoint expects JSON-RPC POST requests                       |
-| CORS errors                                            | Browser client on a different origin                   | Add `cors({ origin: '*', exposedHeaders: ['mcp-session-id'] })` to middleware                                   |
-| Tool calls return "Not authenticated"                  | Auth header not configured or not forwarded            | Configure `Authorization` in your MCP client; verify `@LoadUser` reads `ctx.req.headers.authorization`          |
-| Tools not showing up                                   | Methods not decorated with `@McpTool` in explicit mode | Add `@McpTool({ description: '...' })` to each method you want to expose                                        |
-| Inspector shows "proxy session token" error            | Inspector started with auth enabled                    | Restart with `DANGEROUSLY_OMIT_AUTH=true npx @modelcontextprotocol/inspector` or set the token in Configuration |
+| Symptom                                                | Cause                                                  | Fix                                                                                                                         |
+| ------------------------------------------------------ | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| 404 on `/_mcp/messages`                                | Wrong URL or kickjs version before the mount-order fix | Use the full path `/_mcp/messages`; update `@forinda/kickjs` to latest patch                                                |
+| "Server already initialized"                           | Stale MCP session from a previous connection           | Restart your KickJS server                                                                                                  |
+| "Not Acceptable: Client must accept text/event-stream" | Opened `/_mcp/messages` in a browser tab               | Use the Inspector UI or a proper MCP client — the endpoint expects JSON-RPC POST requests                                   |
+| CORS errors                                            | Browser client on a different origin                   | Add `cors({ origin: '*', exposedHeaders: ['mcp-session-id'] })` to middleware                                               |
+| Tool calls return "Not authenticated"                  | Auth header not configured or not forwarded            | Configure `Authorization` in your MCP client; verify `@LoadUser` reads `ctx.req.headers.authorization`                      |
+| Tools not showing up                                   | Methods not decorated with `@McpTool` in explicit mode | Add `@McpTool({ description: '...' })` to each method you want to expose                                                    |
+| Inspector shows "proxy session token" error            | Inspector started with auth enabled                    | Open the full URL from Inspector output (includes `?MCP_PROXY_AUTH_TOKEN=...`) or restart with `DANGEROUSLY_OMIT_AUTH=true` |
+| `@Autowired()` service is undefined (500 error)        | Running with `tsx`/`ts-node` — no decorator metadata   | Use `@Autowired(MyService)` with explicit token instead of bare `@Autowired()`                                              |
+| "Mcp-Session-Id header is required"                    | CORS not exposing the session header                   | Add `exposedHeaders: ['mcp-session-id']` to your `cors()` config                                                            |
+
+## Important Caveats
+
+### One MCP session at a time
+
+The MCP SDK's `StreamableHTTPServerTransport` allows **one active session per server**. The first client to `initialize` locks the session — any second client is rejected. This only affects `/_mcp/messages`; your regular API routes work normally with unlimited clients.
+
+**Reset the session by:**
+
+- **`kick dev`** — save any file to trigger HMR (resets the session)
+- **Production** — restart the server
+- **Inspector** — click Disconnect before closing the tab
+
+**Rule of thumb:** don't `curl /_mcp/messages` before connecting the Inspector. Use one MCP client at a time.
+
+### CORS for HTTP transport
+
+Browser-based MCP clients (Inspector, web UIs) require CORS with the session header exposed:
+
+```ts
+middleware: [cors({ origin: '*', exposedHeaders: ['mcp-session-id'] }), express.json()]
+```
+
+Without `exposedHeaders`, the Inspector can't read the session ID and every request after `initialize` fails. Stdio transport doesn't need CORS.
+
+### @Autowired needs explicit tokens with tsx
+
+When running with `tsx`, `ts-node`, or any transpiler that strips decorator metadata:
+
+```ts
+// Fails with tsx — service is undefined at runtime:
+@Autowired() private readonly svc!: MyService
+
+// Works everywhere — always pass the token explicitly:
+@Autowired(MyService) private readonly svc!: MyService
+```
+
+`kick dev` (Vite + SWC) emits metadata so bare `@Autowired()` works there, but the explicit form is safer as a default habit. This is especially visible with MCP — an uninjected service returns a generic 500 with no obvious cause.
 
 ## Documentation
 

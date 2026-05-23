@@ -661,13 +661,163 @@ dispatch and resolves the user as normal.
 
 ### Common issues
 
-| Symptom                                                | Cause                                                      | Fix                                                                                                                                  |
-| ------------------------------------------------------ | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| 404 on connect                                         | Wrong URL — missing `/_mcp/messages`                       | Use the full path: `http://localhost:<port>/_mcp/messages`                                                                           |
-| "Server already initialized"                           | Stale session from a previous connection                   | Restart your KickJS server to reset the MCP session                                                                                  |
-| "Not Acceptable: Client must accept text/event-stream" | Opened `/_mcp/messages` directly in a browser tab          | Use the Inspector UI, not a direct browser navigation — the endpoint expects JSON-RPC POST requests                                  |
-| CORS errors in browser console                         | Connecting from a different origin without CORS configured | Add `cors()` middleware in your bootstrap: `middleware: [cors({ origin: '*', exposedHeaders: ['mcp-session-id'] }), express.json()]` |
-| Tool calls return "Not authenticated"                  | Auth header not configured in the Inspector                | Expand Authentication, enable the Authorization header, set the value                                                                |
+| Symptom                                                | Cause                                                            | Fix                                                                                                                                  |
+| ------------------------------------------------------ | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| 404 on connect                                         | Wrong URL — missing `/_mcp/messages`                             | Use the full path: `http://localhost:<port>/_mcp/messages`                                                                           |
+| "Server already initialized"                           | Stale session from a previous connection                         | Restart your KickJS server to reset the MCP session                                                                                  |
+| "Not Acceptable: Client must accept text/event-stream" | Opened `/_mcp/messages` directly in a browser tab                | Use the Inspector UI, not a direct browser navigation — the endpoint expects JSON-RPC POST requests                                  |
+| CORS errors in browser console                         | Connecting from a different origin without CORS configured       | Add `cors()` middleware in your bootstrap: `middleware: [cors({ origin: '*', exposedHeaders: ['mcp-session-id'] }), express.json()]` |
+| Tool calls return "Not authenticated"                  | Auth header not configured in the Inspector                      | Expand Authentication, enable the Authorization header, set the value                                                                |
+| Tools not showing up                                   | Methods not decorated with `@McpTool` in explicit mode           | Add `@McpTool({ description: '...' })` to each method you want to expose                                                             |
+| `@Autowired()` service is undefined (500 on tool call) | Running with `tsx`/`ts-node` which don't emit decorator metadata | Use explicit token: `@Autowired(MyService)` instead of bare `@Autowired()` — see [DI caveats](#di-caveats-autowired-with-tsx) below  |
+
+### Important caveats
+
+#### One MCP session at a time
+
+The MCP SDK's `StreamableHTTPServerTransport` allows **one active
+session per server instance**. The first client to send `initialize`
+locks the session. Any second client gets rejected.
+
+```text
+Client A: POST /_mcp/messages { "initialize" }  →  OK (session created)
+Client B: POST /_mcp/messages { "initialize" }  →  "Server already initialized"
+```
+
+This affects **only the MCP endpoint** (`/_mcp/messages`). Your
+regular API routes work normally regardless:
+
+```text
+/_mcp/messages    ← locked to one MCP session at a time
+/api/v1/hello     ← always works, unlimited clients
+/api/v1/tasks     ← always works, unlimited clients
+```
+
+**What triggers a stale session:**
+
+- Running `curl` against `/_mcp/messages` before opening the Inspector
+- A previous Inspector connection that wasn't disconnected cleanly
+- Any MCP client that initialized but didn't disconnect
+
+**How to reset:**
+
+- **`kick dev`** — save any source file to trigger HMR, which resets
+  the MCP session automatically
+- **Production** — restart the server process
+- **Inspector** — click **Disconnect** before closing the tab, so the
+  next connection can initialize cleanly
+
+**Rule of thumb:** use one MCP client at a time. If switching from
+curl to the Inspector (or vice versa), restart the server first.
+
+#### Inspector quick-start checklist
+
+Follow this exact sequence to avoid the common pitfalls:
+
+1. **Start your server** (fresh — no prior MCP connections):
+
+   ```bash
+   kick dev
+   ```
+
+2. **Start the Inspector** in a separate terminal:
+
+   ```bash
+   npx @modelcontextprotocol/inspector
+   ```
+
+3. **Copy the full URL** from the Inspector output — it includes the
+   proxy auth token:
+
+   ```text
+   http://localhost:6274/?MCP_PROXY_AUTH_TOKEN=<token>
+   ```
+
+   Open that URL in your browser. Without the token, the Inspector
+   proxy rejects connections with "Did you add the proxy session
+   token in Configuration?"
+
+4. **Set the URL** to your server's MCP endpoint:
+
+   ```text
+   http://localhost:<your-port>/_mcp/messages
+   ```
+
+   The `/_mcp/messages` suffix is required. Without it, the
+   Inspector connects to your server root and gets a 404.
+
+5. **Do NOT `curl` the MCP endpoint** between starting the server
+   and clicking Connect. Any `initialize` call consumes the session.
+
+6. **Click Connect** — green dot + server name should appear.
+
+7. **Click List Tools** — your `@McpTool`-decorated methods appear.
+
+8. **If something goes wrong** — restart the server (`kick dev` will
+   HMR on file save), then click **Connect** again in the Inspector.
+
+#### CORS for HTTP transport
+
+If the Inspector (or any browser-based MCP client) connects to your
+server, you need CORS middleware with the `mcp-session-id` header
+exposed:
+
+```ts
+import { bootstrap, cors } from '@forinda/kickjs'
+
+export const app = await bootstrap({
+  modules,
+  middleware: [
+    cors({
+      origin: '*',
+      exposedHeaders: ['mcp-session-id'],
+    }),
+    express.json(),
+  ],
+  adapters: [McpAdapter({ name: 'my-api' })],
+})
+```
+
+Without `exposedHeaders: ['mcp-session-id']`, the Inspector proxy
+can't read the session ID from the `initialize` response, and every
+subsequent request fails with "Mcp-Session-Id header is required".
+
+This is only needed for HTTP transport. Stdio transport (used by
+Claude Code, Cursor, Zed) doesn't go through a browser and doesn't
+need CORS.
+
+#### DI caveats: @Autowired with tsx
+
+When running your app with `tsx`, `ts-node`, or any runner that
+doesn't emit TypeScript decorator metadata, bare `@Autowired()`
+can't resolve the type and the injected property stays `undefined`.
+
+```ts
+// This works with `kick dev` (Vite + SWC emit metadata)
+// but FAILS with `tsx src/index.ts`:
+@Autowired() private readonly taskService!: TaskService  // undefined!
+
+// This works everywhere — always use the explicit token:
+@Autowired(TaskService) private readonly taskService!: TaskService  // works
+```
+
+**Why:** `@Autowired()` with no argument relies on
+`emitDecoratorMetadata` (the `Reflect.getMetadata('design:type', ...)`
+reflection API) to discover the type at runtime. `tsx` and `ts-node`
+strip type information during transpilation and don't emit the
+metadata, so the DI container sees `undefined` as the token.
+
+**The fix is always the same:** pass the class (or injection token)
+explicitly: `@Autowired(TaskService)`, `@Autowired(MY_TOKEN)`.
+
+`kick dev` uses Vite + SWC which does emit decorator metadata, so
+bare `@Autowired()` works there. But since developers often use `tsx`
+for scripts, tests, or quick runs, the explicit form is safer as a
+default habit.
+
+This applies to all DI injection, not just MCP — but it's especially
+visible with MCP because tool calls that hit an uninjected service
+return a generic 500 "Internal Server Error" with no obvious cause.
 
 ### Programmatic inspection
 
