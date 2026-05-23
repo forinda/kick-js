@@ -43,9 +43,10 @@ async function buildAdapterOnApp(): Promise<{ adapter: McpAdapter; app: Express 
   })
 
   adapter.onRouteMount(TaskController, '/api/v1/tasks')
-  adapter.beforeStart({} as never)
+  await adapter.beforeStart({ app, container: {} as never } as never)
 
-  // Provide a minimal AdapterContext stub — only `app` is read by afterStart.
+  // afterStart captures the server base URL for dispatch — `app` was
+  // already consumed in beforeStart where the HTTP routes are mounted.
   await adapter.afterStart({ app, container: {} as never, server: undefined } as never)
 
   return { adapter, app }
@@ -128,7 +129,7 @@ describe('McpAdapter — StreamableHTTP transport', () => {
     })
 
     adapter.onRouteMount(TaskController, '/api/v1/tasks')
-    adapter.beforeStart({} as never)
+    await adapter.beforeStart({ app, container: {} as never } as never)
     await adapter.afterStart({ app, container: {} as never, server: undefined } as never)
     active = adapter
 

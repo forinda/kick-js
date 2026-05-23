@@ -349,9 +349,7 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
             dispatchTool(tool, args, extra),
           )
         } else {
-          registerTool(tool.name, config, async (extra: unknown) =>
-            dispatchTool(tool, {}, extra),
-          )
+          registerTool(tool.name, config, async (extra: unknown) => dispatchTool(tool, {}, extra))
         }
       }
 
