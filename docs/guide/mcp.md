@@ -51,7 +51,7 @@ an MCP server to your Express pipeline at `/_mcp` (configurable via
 
 The MCP adapter hooks into the standard KickJS adapter lifecycle:
 
-```
+```text
 bootstrap({ modules, adapters: [McpAdapter(...)] })
   |
   +-- 1. Register DI bindings
@@ -92,7 +92,7 @@ middleware, context decorators, auth guards, Zod validation, and
 request logging all apply. Tool calls are indistinguishable from
 direct HTTP calls as far as your handler code is concerned.
 
-```
+```text
 MCP Client                    McpAdapter                   Express Pipeline
     |                              |                              |
     |  POST /_mcp/messages         |                              |
@@ -115,7 +115,7 @@ MCP Client                    McpAdapter                   Express Pipeline
     |                              |  Build internal request:     |
     |                              |  POST /api/v1/tasks          |
     |                              |  Authorization: Bearer ...   |
-    |                              |  Content-Type: app/json      |
+    |                              |  Content-Type: application/json      |
     |                              |  Body: {"title":"Ship it"}   |
     |                              | ----------------------------> |
     |                              |                              |
@@ -176,7 +176,7 @@ McpAdapter({
 
 ### What @McpTool controls
 
-```
+```text
 @McpTool({ description: '...' })     ->  EXPOSED as tool
 @McpTool({ hidden: true })           ->  NOT exposed (excluded even in auto mode)
 No @McpTool decorator                ->  NOT exposed (in explicit mode)
@@ -278,7 +278,7 @@ class TaskController {
 
 ### How auth flows through MCP
 
-```
+```text
 MCP Client                          Internal Dispatch              @LoadUser
     |                                       |                          |
     |  Authorization: Bearer <jwt>          |                          |
@@ -478,7 +478,7 @@ const LoadUser = defineHttpContextDecorator({
 
 The agent flow becomes:
 
-```
+```text
 Agent: "Call login with { email, password }"
 Server: stores user in MCP session -> "Logged in as alice"
 
@@ -514,7 +514,7 @@ deployment:
 Both transports dispatch through the same Express pipeline — same
 middleware, same context decorators, same auth flow.
 
-```
+```text
                  +--------------------+
                  |   McpAdapter       |
                  |   transport config |
@@ -622,7 +622,7 @@ In the Inspector UI:
 
 1. Set **Transport Type** to `Streamable HTTP`
 2. Set **URL** to your server's MCP endpoint:
-   ```
+   ```text
    http://localhost:<your-port>/_mcp/messages
    ```
    The `/_mcp/messages` path is where `McpAdapter` mounts the

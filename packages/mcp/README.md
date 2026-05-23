@@ -128,7 +128,7 @@ For Claude Desktop, copy the entry to `~/.config/claude-desktop/claude_desktop_c
 
 Your server is already running somewhere (localhost during dev, cloud URL in production). The MCP endpoint is at `/_mcp/messages` on whatever port your app uses:
 
-```
+```text
 http://localhost:3000/_mcp/messages     # local dev
 https://api.myapp.com/_mcp/messages     # production
 ```
@@ -173,7 +173,7 @@ See [the full guide](https://forinda.github.io/kick-js/guide/mcp#testing-with-mc
 
 ### Boot Sequence
 
-```
+```text
 bootstrap({ modules, adapters: [McpAdapter(...)] })
   |
   +-- 1. Register DI bindings (@Service, @Controller -> Container)
@@ -190,7 +190,7 @@ bootstrap({ modules, adapters: [McpAdapter(...)] })
 
 When an MCP client calls a tool, the adapter dispatches it through the full Express pipeline via an internal HTTP request. Your existing middleware, context decorators, auth guards, validation, and logging all apply — identically to a direct HTTP call.
 
-```
+```text
 MCP Client                    McpAdapter                   Express Pipeline
     |                              |                              |
     |  POST /_mcp/messages         |                              |
@@ -228,7 +228,7 @@ MCP Client                    McpAdapter                   Express Pipeline
 
 ### What @McpTool Controls
 
-```
+```text
 @McpTool({ description: '...' })     ->  EXPOSED as tool
 @McpTool({ hidden: true })           ->  NOT exposed (excluded even in auto mode)
 No @McpTool decorator                ->  NOT exposed (in explicit mode, the default)
@@ -341,7 +341,7 @@ const LoadUser = defineHttpContextDecorator({
 
 The agent flow becomes:
 
-```
+```text
 Agent: "Call login with { email, password }"
 Server: stores user in MCP session -> "Logged in as alice"
 
@@ -358,7 +358,7 @@ Best for: agents that self-authenticate without pre-configured tokens.
 
 Regardless of which pattern you use, the flow is the same:
 
-```
+```text
 MCP Client                          McpAdapter                    Express
     |                                    |                            |
     |  Authorization: Bearer <token>     |                            |
@@ -411,7 +411,7 @@ McpAdapter({
 
 ## Transport Modes
 
-```
+```text
                  +-----------------------+
                  |      McpAdapter       |
                  |   transport: config   |
@@ -482,7 +482,7 @@ McpAdapter({
 
 ## Security
 
-```
+```text
 IN PLACE:
   [x] Explicit mode — only @McpTool-decorated routes exposed
   [x] Full Express pipeline — middleware, auth, RBAC, rate limits apply
