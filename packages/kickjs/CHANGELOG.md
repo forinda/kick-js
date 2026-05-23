@@ -1,5 +1,120 @@
 # @forinda/kickjs
 
+## 5.13.0
+
+### Minor Changes
+
+- [#277](https://github.com/forinda/kick-js/pull/277) [`ace5e84`](https://github.com/forinda/kick-js/commit/ace5e8499b74a7b333fa6c6024f53ab5f5fd6ea8) Thanks [@forinda](https://github.com/forinda)! - feat(errors): structured KickError with code, cause, and fix hint
+
+  Framework-thrown errors are now `KickError` instances — a multi-line, scannable shape with a stable code, a cause explanation, an actionable fix, and a docs URL.
+
+  ```text
+  KICK001: No provider for UserService
+
+    Cause:
+      UserService was requested from the DI container but no binding
+      is registered. This usually means one of:
+        • The class is decorated with @Service() / @Repository() / @Controller(),
+          but its enclosing module isn't passed to bootstrap({ modules: [...] }).
+        • The class isn't decorated at all (decorators register the binding).
+        • You're injecting a token (created with createToken()) that nothing
+          provides — add a Container.register(TOKEN, ...) call or a module that
+          binds it.
+
+    Fix:
+      If UserService lives in a module, add the module to bootstrap:
+
+        bootstrap({
+          modules: [
+            UsersModule,        // add this
+            OtherModule,
+          ],
+        })
+
+    Docs:
+      https://forinda.github.io/kick-js/guide/dependency-injection#registering-services
+  ```
+
+  **First catalog pass — 5 errors upgraded:**
+
+  | Code      | When it fires                                                                |
+  | --------- | ---------------------------------------------------------------------------- |
+  | `KICK001` | DI: no provider registered for the requested token                           |
+  | `KICK002` | DI: REQUEST-scoped binding resolved without request-scope middleware mounted |
+  | `KICK003` | DI: REQUEST-scoped binding resolved outside an HTTP request                  |
+  | `KICK004` | Config: `@Value('X')` resolved but env var not set and no default given      |
+  | `KICK005` | Module: `routes()` declared a path without `controller` or `router`          |
+
+  More framework errors will migrate to `KickError` over time. Codes are stable and never reused.
+
+  **API:**
+  - `KickError` class — extends `Error`. Holds `code`, `summary`, `cause`, `fix`, `docsUrl`, `context`. `.message` carries the full multi-line plain-text body so Node's default `Error.toString()` surfaces the helpful version automatically.
+  - `formatKickError(err, { color })` — ANSI-colored renderer for terminal output. Honors `NO_COLOR` / `FORCE_COLOR` env vars when the `color` option is omitted.
+  - All five catalog entries exposed via factory functions (`noProviderError`, `envValueMissingError`, etc.) for use by adopters' own integrations.
+
+  **Backward compat:** errors still `instanceof Error`. Adopter code that catches generic `Error` keeps working. The previous error `message` substrings are replaced — adopters matching on those (e.g. `err.message.includes('No binding found')`) need to update to match the new wording, OR — better — switch to matching on `err.code` which is stable.
+
+  **Tests:** 17 new in `kick-error.test.ts` (class, formatter, ANSI gating, every catalog entry, code uniqueness). Full kickjs suite **509/509 pass**.
+
+  Closes B.2 (first pass) from the roadmap.
+
+- [#275](https://github.com/forinda/kick-js/pull/275) [`7101444`](https://github.com/forinda/kick-js/commit/7101444c77d2eb3352f45db437401ff0ded0e1a6) Thanks [@forinda](https://github.com/forinda)! - feat(http): RFC 9457 — Problem Details for HTTP APIs
+
+  KickJS now ships first-class support for [RFC 9457](https://datatracker.ietf.org/doc/html/rfc9457) — the canonical shape for HTTP API error responses. Two entry points:
+
+  **`ctx.problem.*`** — response helpers on `RequestContext`:
+
+  ```ts
+  ctx.problem({
+    type: 'https://api.example.com/problems/out-of-credit',
+    status: 403,
+    detail: 'Your balance is 30, but that costs 50.',
+    balance: 30, // extension per §3.2
+  })
+
+  ctx.problem.notFound({ detail: 'User abc not found' })
+  ctx.problem.validation(zodResult.error.issues)
+  ```
+
+  Each call sets `Content-Type: application/problem+json` and fills in defaults (`type` → `about:blank` per §3.1.1, `title` → IANA reason phrase per §3.1.4). Shortcuts: `badRequest`, `unauthorized`, `forbidden`, `notFound`, `conflict`, `unprocessable`, `tooManyRequests`, `internal`, plus the generic `ctx.problem({ status, ... })`.
+
+  **`ProblemException`** — throw-from-anywhere class:
+
+  ```ts
+  throw ProblemException.forbidden({
+    type: 'https://api.example.com/problems/out-of-credit',
+    detail: 'Your balance is 30, but that costs 50.',
+    balance: 30,
+  })
+  ```
+
+  Extends `HttpException` so existing catches keep working. The framework error handler dispatches `ProblemException` first and emits `application/problem+json`. Plain `HttpException` keeps its existing `{ message }` JSON shape — backward compatible by detection (data-driven), not by config.
+
+  **Deprecated** (`@deprecated` JSDoc, no runtime change):
+  - `ctx.notFound()` → use `ctx.problem.notFound()`
+  - `ctx.badRequest()` → use `ctx.problem.badRequest()`
+
+  `ctx.json`, `ctx.created`, `ctx.noContent`, `ctx.html`, `ctx.download`, `ctx.render` are **not** deprecated — they're generic response helpers, orthogonal to the error-format question RFC 9457 answers.
+
+  **New exports** from `@forinda/kickjs`:
+  - `ProblemException` class
+  - `ProblemDetails` type
+  - `normalizeProblem(input)` helper (fills defaults — used internally, exposed for adopters writing their own response paths)
+  - `defaultProblemTitle(status)` helper (IANA reason phrase lookup)
+
+  **No bootstrap or kick.config.ts knob.** Adopters opt in per call site by reaching for the new helpers — no global flag, no migration deadline.
+
+  Docs: `docs/guide/error-handling.md` covers the new section with Zod-integration recipes and a comparison of the two entry points.
+
+### Patch Changes
+
+- [#283](https://github.com/forinda/kick-js/pull/283) [`a46927e`](https://github.com/forinda/kick-js/commit/a46927e9102ea67d25df633df2a55d782ab23a3c) Thanks [@forinda](https://github.com/forinda)! - Fix 3 bugs blocking MCP HTTP transport and auth forwarding:
+  1. **Route mount order** — `notFoundHandler` was registered before adapter `beforeStart` hooks, causing `/_mcp/messages` to 404. Swapped ordering so adapters mount routes before the catch-all.
+  2. **Auth header dropped** — `buildMcpServer` didn't forward the SDK's `extra` parameter (carrying `requestInfo.headers`) to `dispatchTool`, so `Authorization` headers never reached the internal Express dispatch.
+  3. **SDK callback signature mismatch** — `@modelcontextprotocol/sdk` uses `(args, extra)` when `inputSchema` is present but `(extra)` when absent. Tools backed by GET/DELETE routes silently lost auth headers.
+
+  Context decorators (`@LoadUser`, `@LoadTenant`, etc.) now flow auth through MCP-dispatched calls identically to direct HTTP.
+
 ## 5.12.1
 
 ### Patch Changes
