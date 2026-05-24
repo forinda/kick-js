@@ -51,32 +51,39 @@ export interface LoggerProvider {
  */
 export class ConsoleLoggerProvider implements LoggerProvider {
   private prefix: string
+  private useColor: boolean
 
   constructor(prefix?: string) {
     this.prefix = prefix ?? ''
+    this.useColor =
+      typeof process !== 'undefined' && process.stdout?.isTTY === true && !process.env.NO_COLOR
   }
 
-  private fmt(msg: string): string {
-    return this.prefix ? `[${this.prefix}] ${msg}` : msg
+  private fmt(level: string, color: string, msg: string): string {
+    const tag = this.prefix ? `[${this.prefix}]` : ''
+    if (this.useColor) {
+      return `${color}${level}\x1b[0m ${tag ? `\x1b[36m${tag}\x1b[0m ` : ''}${msg}`
+    }
+    return `${level} ${tag ? `${tag} ` : ''}${msg}`
   }
 
   info(msg: string, ...args: any[]) {
-    console.log(this.fmt(msg), ...args)
+    console.log(this.fmt('INFO', '\x1b[32m', msg), ...args)
   }
   warn(msg: string, ...args: any[]) {
-    console.warn(this.fmt(msg), ...args)
+    console.warn(this.fmt('WARN', '\x1b[33m', msg), ...args)
   }
   error(msg: string, ...args: any[]) {
-    console.error(this.fmt(msg), ...args)
+    console.error(this.fmt('ERROR', '\x1b[31m', msg), ...args)
   }
   debug(msg: string, ...args: any[]) {
-    console.debug(this.fmt(msg), ...args)
+    console.debug(this.fmt('DEBUG', '\x1b[90m', msg), ...args)
   }
   trace(msg: string, ...args: any[]) {
-    console.trace(this.fmt(msg), ...args)
+    console.trace(this.fmt('TRACE', '\x1b[90m', msg), ...args)
   }
   fatal(msg: string, ...args: any[]) {
-    console.error(this.fmt(msg), ...args)
+    console.error(this.fmt('FATAL', '\x1b[1m\x1b[31m', msg), ...args)
   }
   child(bindings: { component: string }): LoggerProvider {
     return new ConsoleLoggerProvider(bindings.component)

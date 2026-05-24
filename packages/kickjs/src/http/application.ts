@@ -3,6 +3,7 @@ import express, { type Express, type RequestHandler } from 'express'
 import {
   Container,
   createLogger,
+  Logger,
   normalizePath,
   tokenName,
   METADATA,
@@ -534,6 +535,13 @@ export class Application {
       return mod
     })
     this.container.bootstrap()
+
+    // Register Logger as an injectable singleton so @Inject(Logger)
+    // works in constructors. Without this, Logger is just a plain
+    // class with static methods and no DI binding.
+    if (!this.container.has(Logger)) {
+      this.container.registerInstance(Logger, new Logger())
+    }
 
     // ── 7. Adapter middleware: beforeRoutes ───────────────────────────
     this.mountMiddlewareList(adapterMw.beforeRoutes)

@@ -604,11 +604,28 @@ export class Container {
 
   private createInstance(reg: Registration): any {
     const paramTypes = getClassMeta<Constructor[]>(METADATA.PARAM_TYPES, reg.target, [])
+    const injectTokens = getMetaRecord<any>(METADATA.INJECT, reg.target)
 
-    const args = paramTypes.map((paramType, index) => {
-      // Check for @Inject token override on constructor parameter
-      const injectTokens = getMetaRecord<any>(METADATA.INJECT, reg.target)
-      const token = injectTokens[index] || paramType
+    // When emitDecoratorMetadata is unavailable (tsx, ts-node without
+    // SWC), paramTypes is empty even though @Inject set tokens on
+    // specific constructor indices. Derive the constructor arity from
+    // the @Inject metadata so constructor injection still works.
+    const maxInjectIndex =
+      Object.keys(injectTokens).length > 0
+        ? Math.max(...Object.keys(injectTokens).map(Number)) + 1
+        : 0
+    const paramCount = Math.max(paramTypes.length, maxInjectIndex)
+
+    const args: any[] = []
+    for (let index = 0; index < paramCount; index++) {
+      const token = injectTokens[index] || paramTypes[index]
+      if (!token) {
+        throw new Error(
+          `Cannot resolve constructor parameter at index ${index} of ${tokenName(reg.target)}. ` +
+            `No @Inject token and no design:paramtypes metadata (tsx/ts-node don't emit it). ` +
+            `Add @Inject(Token) to every constructor parameter.`,
+        )
+      }
       // Scope validation: SINGLETON cannot inject REQUEST-scoped dependencies
       if (reg.scope === Scope.SINGLETON) {
         const depReg = this.registrations.get(token)
@@ -619,8 +636,8 @@ export class Container {
           )
         }
       }
-      return this.resolve(token)
-    })
+      args.push(this.resolve(token))
+    }
 
     const instance = new reg.target(...args)
 
