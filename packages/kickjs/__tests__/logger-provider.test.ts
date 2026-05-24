@@ -80,10 +80,10 @@ describe('Logger.setProvider() — pluggable logger backend', () => {
     log.error('error message')
     log.debug('debug message')
 
-    expect(logSpy).toHaveBeenCalledWith('[ConsoleTest] info message')
-    expect(warnSpy).toHaveBeenCalledWith('[ConsoleTest] warn message')
-    expect(errorSpy).toHaveBeenCalledWith('[ConsoleTest] error message')
-    expect(debugSpy).toHaveBeenCalledWith('[ConsoleTest] debug message')
+    expect(logSpy).toHaveBeenCalledWith('INFO [ConsoleTest] info message')
+    expect(warnSpy).toHaveBeenCalledWith('WARN [ConsoleTest] warn message')
+    expect(errorSpy).toHaveBeenCalledWith('ERROR [ConsoleTest] error message')
+    expect(debugSpy).toHaveBeenCalledWith('DEBUG [ConsoleTest] debug message')
 
     logSpy.mockRestore()
     warnSpy.mockRestore()
