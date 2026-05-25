@@ -69,14 +69,14 @@
   "devDependencies": {
     "@forinda/kickjs-ai": "workspace:*",
     "@forinda/kickjs-db-pg": "workspace:*",
-    "@swc/core": "^1.15.33",
-    "@types/node": "^25.8.0",
+    "@swc/core": "^1.15.40",
+    "@types/node": "^25.9.1",
     "@types/pg": "^8.11.10",
     "@types/pluralize": "^0.0.33",
     "pg": "^8.21.0",
     "typescript": "^6.0.3",
-    "vite": "^8.0.13",
-    "vitest": "^4.1.6"
+    "vite": "^8.0.14",
+    "vitest": "^4.1.7"
   },
   "publishConfig": {
     "access": "public"
