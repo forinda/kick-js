@@ -1,0 +1,90 @@
+{
+  "name": "@forinda/kickjs-schema",
+  "version": "0.0.0",
+  "description": "Schema-agnostic validation abstraction for KickJS — use Zod, Valibot, Yup, Joi, or any Standard Schema library",
+  "keywords": [
+    "kickjs",
+    "schema",
+    "validation",
+    "zod",
+    "valibot",
+    "yup",
+    "joi",
+    "standard-schema",
+    "json-schema",
+    "typescript"
+  ],
+  "type": "module",
+  "main": "dist/index.mjs",
+  "types": "dist/index.d.mts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "types": "./dist/index.d.mts"
+    },
+    "./zod": {
+      "import": "./dist/zod.mjs",
+      "types": "./dist/zod.d.mts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "wireit",
+    "dev": "tsdown --watch",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest",
+    "typecheck": "tsgo --noEmit",
+    "clean": "rm -rf dist .wireit",
+    "lint": "tsc --noEmit"
+  },
+  "wireit": {
+    "build": {
+      "command": "tsdown",
+      "files": [
+        "src/**/*.ts",
+        "tsdown.config.ts",
+        "tsconfig.json",
+        "package.json"
+      ],
+      "output": [
+        "dist/**"
+      ],
+      "dependencies": []
+    }
+  },
+  "dependencies": {},
+  "peerDependencies": {
+    "zod": ">=3.23.0"
+  },
+  "peerDependenciesMeta": {
+    "zod": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@swc/core": "^1.15.33",
+    "@types/node": "^25.8.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.6",
+    "zod": "^4.4.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT",
+  "author": "Felix Orinda",
+  "engines": {
+    "node": ">=20.0"
+  },
+  "homepage": "https://forinda.github.io/kick-js/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/forinda/kick-js.git",
+    "directory": "packages/schema"
+  },
+  "bugs": {
+    "url": "https://github.com/forinda/kick-js/issues"
+  }
+}
