@@ -135,14 +135,14 @@
     }
   },
   "devDependencies": {
-    "@swc/core": "^1.15.33",
+    "@swc/core": "^1.15.40",
     "@types/express": "^5.0.6",
     "@types/multer": "^2.1.0",
-    "@types/node": "^25.8.0",
+    "@types/node": "^25.9.1",
     "multer": "^2.1.1",
     "typescript": "^6.0.3",
-    "vite": "^8.0.13",
-    "vitest": "^4.1.6",
+    "vite": "^8.0.14",
+    "vitest": "^4.1.7",
     "zod": "^4.4.3"
   },
   "publishConfig": {

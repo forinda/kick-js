@@ -64,15 +64,15 @@
   "devDependencies": {
     "@forinda/kickjs": "workspace:*",
     "@types/express": "^5.0.6",
-    "@types/node": "^25.8.0",
+    "@types/node": "^25.9.1",
     "@types/ws": "^8.18.0",
     "express": "^5.1.0",
     "solid-js": "^1.9.13",
     "typescript": "^6.0.3",
-    "vite": "^8.0.13",
+    "vite": "^8.0.14",
     "vite-plugin-solid": "^2.11.12",
-    "vitest": "^4.1.6",
-    "ws": "^8.20.1"
+    "vitest": "^4.1.7",
+    "ws": "^8.21.0"
   },
   "publishConfig": {
     "access": "public"

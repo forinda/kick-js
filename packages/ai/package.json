@@ -70,11 +70,11 @@
   },
   "devDependencies": {
     "@forinda/kickjs": "workspace:*",
-    "@swc/core": "^1.15.33",
-    "@types/node": "^25.8.0",
+    "@swc/core": "^1.15.40",
+    "@types/node": "^25.9.1",
     "typescript": "^6.0.3",
     "unplugin-swc": "^1.5.9",
-    "vitest": "^4.1.6",
+    "vitest": "^4.1.7",
     "zod": "^4.4.3"
   },
   "publishConfig": {
