@@ -17,7 +17,7 @@ export default defineConfig({
     },
   },
   ssr: {
-    noExternal: ['valibot', '@valibot/to-json-schema'],
+    noExternal: ['valibot', '@valibot/to-json-schema', 'yup'],
   },
   test: {
     typecheck: {
@@ -30,7 +30,7 @@ export default defineConfig({
     maxConcurrency: 1,
     server: {
       deps: {
-        inline: ['valibot', '@valibot/to-json-schema'],
+        inline: ['valibot', '@valibot/to-json-schema', 'yup'],
       },
     },
   },
