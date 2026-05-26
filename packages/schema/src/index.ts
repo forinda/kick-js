@@ -6,4 +6,6 @@ export type {
   SchemaAdapter,
 } from './types.js'
 
+export type { InferSchemaOutput } from './infer.js'
+
 export { detectSchema, isKickSchema, registerAdapter } from './detect.js'

@@ -32,13 +32,16 @@ interface TypegenCliOptions {
  * flag was not passed (so the config default applies), `'zod'` if a
  * supported value was passed, or `false` if explicitly disabled.
  */
-function parseSchemaValidatorFlag(value: string | undefined): 'zod' | false | undefined {
+function parseSchemaValidatorFlag(
+  value: string | undefined,
+): 'zod' | 'kickjs-schema' | false | undefined {
   if (value === undefined) return undefined
   if (value === 'false' || value === 'off' || value === 'none') return false
   if (value === 'zod') return 'zod'
+  if (value === 'kickjs-schema' || value === 'schema') return 'kickjs-schema'
   console.warn(
-    `  kick typegen: unknown --schema-validator '${value}' (only 'zod' and 'false' are supported). ` +
-      `Falling back to project config.`,
+    `  kick typegen: unknown --schema-validator '${value}' ` +
+      `(supported: 'zod', 'kickjs-schema', 'false'). Falling back to project config.`,
   )
   return undefined
 }

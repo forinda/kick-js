@@ -366,9 +366,10 @@ export interface GenerateOptions {
    * are ignored and `body`/`query`/`params` keep their `unknown`
    * placeholders.
    *
-   * Future: `'joi'`, `'yup'`, `'json-schema'`, custom adapters.
+   * `'kickjs-schema'` uses `InferSchemaOutput<>` from `@forinda/kickjs-schema`
+   * which infers from Zod, Valibot, ArkType, or any KickSchema adapter.
    */
-  schemaValidator?: 'zod' | false
+  schemaValidator?: 'zod' | 'kickjs-schema' | false
 }
 
 /** Write all generated `.d.ts` files to `outDir` */
