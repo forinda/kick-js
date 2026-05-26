@@ -402,17 +402,16 @@ describe('registerControllerForDocs / clearRegisteredRoutes', () => {
 // ── Schema Parser Tests ───────────────────────────────────────────────
 
 describe('zodSchemaParser', () => {
-  it('should have name "zod"', () => {
-    expect(zodSchemaParser.name).toBe('zod')
+  it('should have name "kickjs-schema"', () => {
+    expect(zodSchemaParser.name).toBe('kickjs-schema')
   })
 
-  it('should not support non-Zod values', () => {
+  it('should not support non-schema values', () => {
     expect(zodSchemaParser.supports(null)).toBe(false)
     expect(zodSchemaParser.supports(undefined)).toBe(false)
     expect(zodSchemaParser.supports('string')).toBe(false)
     expect(zodSchemaParser.supports(123)).toBe(false)
     expect(zodSchemaParser.supports({})).toBe(false)
-    expect(zodSchemaParser.supports({ safeParse: () => {} })).toBe(false)
   })
 
   it('should support objects with safeParse and toJSONSchema', () => {

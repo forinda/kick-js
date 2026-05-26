@@ -13,8 +13,8 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
+import { detectSchema } from '@forinda/kickjs-schema'
 import { getMcpToolMeta } from './decorators'
-import { zodToJsonSchema } from './zod-to-json-schema'
 import type { McpAdapterOptions, McpToolDefinition, McpTransport } from './types'
 
 const log = Logger.for('McpAdapter')
@@ -175,13 +175,26 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
       // fall back to whatever schema the route decorator declared.
       const candidateSchema = meta?.inputSchema ?? route.validation?.body ?? route.validation?.query
 
-      const inputSchema = zodToJsonSchema(candidateSchema) ?? {
-        type: 'object',
-        properties: {},
-        additionalProperties: false,
+      let inputSchema: Record<string, unknown>
+      try {
+        const wrapped = candidateSchema ? detectSchema(candidateSchema) : undefined
+        inputSchema = wrapped?.toJsonSchema() ?? {
+          type: 'object',
+          properties: {},
+          additionalProperties: false,
+        }
+      } catch {
+        inputSchema = { type: 'object', properties: {}, additionalProperties: false }
       }
 
-      const outputSchema = meta?.outputSchema ? zodToJsonSchema(meta.outputSchema) : undefined
+      let outputSchema: Record<string, unknown> | undefined
+      if (meta?.outputSchema) {
+        try {
+          outputSchema = detectSchema(meta.outputSchema).toJsonSchema()
+        } catch {
+          outputSchema = undefined
+        }
+      }
 
       return {
         name,

@@ -57,6 +57,32 @@ function fromStandardSchema(schema: any): KickSchema {
   }
 }
 
+function fromSafeParseDuckType(schema: any): KickSchema {
+  return {
+    safeParse(data: unknown) {
+      const result = schema.safeParse(data)
+      if (result.success) {
+        return { success: true, data: result.data }
+      }
+      const rawIssues = result.error?.issues ?? result.issues ?? []
+      const issues = rawIssues.map((i: any) => ({
+        path: (i.path ?? []).map(String),
+        message: i.message ?? 'Validation failed',
+        code: i.code ?? 'unknown',
+      }))
+      return { success: false, issues }
+    },
+    toJsonSchema() {
+      if (typeof schema.toJSONSchema === 'function') {
+        const { $schema: _, ...rest } = schema.toJSONSchema()
+        return rest
+      }
+      return { type: 'object' }
+    },
+    _raw: schema,
+  }
+}
+
 export function detectSchema(schema: unknown): KickSchema {
   if (isKickSchema(schema)) return schema
 
@@ -85,6 +111,14 @@ export function detectSchema(schema: unknown): KickSchema {
         return { type: 'object' }
       },
     }
+  }
+
+  if (
+    typeof schema === 'object' &&
+    schema != null &&
+    typeof (schema as any).safeParse === 'function'
+  ) {
+    return fromSafeParseDuckType(schema)
   }
 
   throw new Error(

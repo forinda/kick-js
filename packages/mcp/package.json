@@ -51,11 +51,13 @@
         "dist/**"
       ],
       "dependencies": [
-        "../kickjs:build"
+        "../kickjs:build",
+        "../schema:build"
       ]
     }
   },
   "dependencies": {
+    "@forinda/kickjs-schema": "workspace:*",
     "reflect-metadata": "^0.2.2"
   },
   "peerDependencies": {

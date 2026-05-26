@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from 'express'
 import { HttpException, HttpStatus } from '../../core'
+import { detectSchema, type SchemaIssue } from '@forinda/kickjs-schema'
 
 export interface ValidationSchema {
   body?: any
@@ -8,13 +9,12 @@ export interface ValidationSchema {
 }
 
 function toValidationException(
-  error: any,
+  issues: SchemaIssue[],
   message: string,
   useFirstIssueMessage: boolean,
 ): HttpException {
-  const issues = error.issues || []
-  const details = issues.map((i: any) => ({
-    field: i.path?.join('.') ?? '',
+  const details = issues.map((i) => ({
+    field: i.path.join('.') || '',
     message: i.message,
   }))
   const finalMessage = useFirstIssueMessage ? (issues[0]?.message ?? message) : message
@@ -42,37 +42,43 @@ function assignReqProperty(req: Request, key: 'query' | 'params', value: unknown
 
 /**
  * Express middleware that validates request body/query/params against schemas.
- * Works with any validation library that exposes `.safeParse(data)` returning
- * `{ success: true, data }` or `{ success: false, error: { issues } }`.
+ *
+ * Accepts any schema supported by `@forinda/kickjs-schema`:
+ * - Zod schemas (auto-detected)
+ * - Standard Schema v1 objects
+ * - KickSchema instances (from adapters like fromZod, fromValibot, etc.)
+ * - Plain validator functions
  *
  * Validation failures are forwarded via `next(err)` as an `HttpException`, so
  * they flow through the application's global error handler (`onError`) and
- * produce a uniform response envelope. Apps that keep the built-in handler
- * continue to see the same `{ message, errors: [{ field, message }] }` body.
+ * produce a uniform response envelope.
  */
 export function validate(schema: ValidationSchema) {
   return (req: Request, _res: Response, next: NextFunction) => {
     try {
       if (schema.body) {
-        const result = schema.body.safeParse(req.body)
+        const wrapped = detectSchema(schema.body)
+        const result = wrapped.safeParse(req.body)
         if (!result.success) {
-          return next(toValidationException(result.error, 'Validation failed', true))
+          return next(toValidationException(result.issues, 'Validation failed', true))
         }
         req.body = result.data
       }
 
       if (schema.query) {
-        const result = schema.query.safeParse(req.query)
+        const wrapped = detectSchema(schema.query)
+        const result = wrapped.safeParse(req.query)
         if (!result.success) {
-          return next(toValidationException(result.error, 'Invalid query parameters', false))
+          return next(toValidationException(result.issues, 'Invalid query parameters', false))
         }
         assignReqProperty(req, 'query', result.data)
       }
 
       if (schema.params) {
-        const result = schema.params.safeParse(req.params)
+        const wrapped = detectSchema(schema.params)
+        const result = wrapped.safeParse(req.params)
         if (!result.success) {
-          return next(toValidationException(result.error, 'Invalid path parameters', false))
+          return next(toValidationException(result.issues, 'Invalid path parameters', false))
         }
         assignReqProperty(req, 'params', result.data)
       }
