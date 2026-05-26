@@ -176,6 +176,7 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
       const candidateSchema = meta?.inputSchema ?? route.validation?.body ?? route.validation?.query
 
       let inputSchema: Record<string, unknown>
+      let resolvedZodInput: unknown = candidateSchema
       try {
         const wrapped = candidateSchema ? detectSchema(candidateSchema) : undefined
         inputSchema = wrapped?.toJsonSchema() ?? {
@@ -185,6 +186,7 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
         }
       } catch {
         inputSchema = { type: 'object', properties: {}, additionalProperties: false }
+        resolvedZodInput = undefined
       }
 
       let outputSchema: Record<string, unknown> | undefined
@@ -200,10 +202,7 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
         name,
         description,
         inputSchema,
-        // Keep the original Zod schema alongside the JSON Schema. The MCP
-        // SDK accepts Zod directly via `registerTool`, while `inputSchema`
-        // (above) is what `getTools()` and inspection surfaces consume.
-        zodInputSchema: candidateSchema,
+        zodInputSchema: resolvedZodInput,
         outputSchema: outputSchema ?? undefined,
         httpMethod: route.method.toUpperCase(),
         mountPath: joinMountPath(mountPath, route.path),

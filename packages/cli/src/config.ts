@@ -46,10 +46,13 @@ export type RepoTypeConfig = BuiltinRepoType | CustomRepoType
 
 /**
  * Supported schema validators for `kick typegen` body/query/params
- * type extraction. Only `'zod'` ships built-in for now; other libraries
- * (Joi, Yup, JSON Schema) will be added later as the adapter system
- * grows. Set to `false` (or omit) to disable schema-driven body typing
- * entirely (the route entries will keep `body: unknown`).
+ * type extraction.
+ *
+ * - `'zod'` — emits `import('zod').infer<typeof schema>` (default)
+ * - `'kickjs-schema'` — emits `InferSchemaOutput<typeof schema>` from
+ *   `@forinda/kickjs-schema`, works with Zod, Valibot, Yup, and any
+ *   Standard Schema v1 or KickSchema adapter
+ * - `false` — disables schema-driven body typing (fields stay `unknown`)
  */
 export type SchemaValidator = 'zod' | 'kickjs-schema' | false
 

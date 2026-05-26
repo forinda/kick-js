@@ -6,13 +6,13 @@ How the schema abstraction connects to KickJS's existing systems: HTTP validatio
 
 ### Current Flow (Zod-Coupled)
 
-```
+```text
 Route Decorator → validate() middleware → .safeParse() → 422 or next()
 ```
 
 ### Target Flow (Schema-Agnostic)
 
-```
+```text
 Route Decorator → validate() middleware → detectSchema() → .safeParse() → normalize issues → 422 or next()
 ```
 
