@@ -1,5 +1,6 @@
 import type { KickSchema, SchemaAdapter } from './types.js'
 import { isZodSchema, fromZod } from './adapters/zod.js'
+import { isValibotSchema, fromValibot } from './adapters/valibot.js'
 
 const customAdapters: SchemaAdapter[] = []
 
@@ -90,9 +91,11 @@ export function detectSchema(schema: unknown): KickSchema {
     if (adapter.detect(schema)) return adapter.wrap(schema)
   }
 
-  if (hasStandardSchema(schema)) return fromStandardSchema(schema)
-
   if (isZodSchema(schema)) return fromZod(schema)
+
+  if (isValibotSchema(schema)) return fromValibot(schema)
+
+  if (hasStandardSchema(schema)) return fromStandardSchema(schema)
 
   if (typeof schema === 'function') {
     return {

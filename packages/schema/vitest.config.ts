@@ -16,6 +16,9 @@ export default defineConfig({
       '@forinda/kickjs-schema': path.resolve(__dirname, 'src/index.ts'),
     },
   },
+  ssr: {
+    noExternal: ['valibot', '@valibot/to-json-schema'],
+  },
   test: {
     typecheck: {
       tsconfig: './tsconfig.test.json',
@@ -25,5 +28,10 @@ export default defineConfig({
     globals: false,
     pool: 'threads',
     maxConcurrency: 1,
+    server: {
+      deps: {
+        inline: ['valibot', '@valibot/to-json-schema'],
+      },
+    },
   },
 })
