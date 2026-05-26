@@ -1,9 +1,12 @@
+import { detectSchema, isKickSchema } from '@forinda/kickjs-schema'
+
 /**
  * Interface for converting validation library schemas to JSON Schema.
  *
- * KickJS ships with a Zod parser by default. To use a different validation
- * library (Yup, Joi, Valibot, ArkType, etc.), implement this interface and
- * pass it to the SwaggerAdapter.
+ * @deprecated Use `@forinda/kickjs-schema` adapters instead. Schemas that
+ * implement KickSchema or StandardSchemaV1 are auto-detected and converted
+ * via `detectSchema().toJsonSchema()`. This interface is preserved for
+ * backwards compatibility with custom parsers passed to SwaggerAdapter.
  *
  * @example
  * ```ts
@@ -38,23 +41,28 @@ export interface SchemaParser {
 }
 
 /**
- * Default schema parser for Zod v4+.
- * Uses Zod's built-in `.toJSONSchema()` instance method.
+ * Default schema parser using @forinda/kickjs-schema auto-detection.
+ * Supports Zod, Standard Schema v1, and any KickSchema adapter.
  */
 export const zodSchemaParser: SchemaParser = {
-  name: 'zod',
+  name: 'kickjs-schema',
 
   supports(schema: unknown): boolean {
-    return (
-      schema != null &&
+    if (schema == null) return false
+    if (isKickSchema(schema)) return true
+    if (typeof schema === 'object' && '~standard' in (schema as object)) return true
+    if (
       typeof schema === 'object' &&
       typeof (schema as any).safeParse === 'function' &&
       typeof (schema as any).toJSONSchema === 'function'
     )
+      return true
+    if (typeof schema === 'object' && typeof (schema as any).safeParse === 'function') return true
+    return false
   },
 
   toJsonSchema(schema: unknown): Record<string, unknown> {
-    const { $schema: _, ...rest } = (schema as any).toJSONSchema() as Record<string, unknown>
-    return rest
+    const wrapped = detectSchema(schema)
+    return wrapped.toJsonSchema({ target: 'openapi-3.0' })
   },
 }

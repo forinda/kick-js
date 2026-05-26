@@ -13,6 +13,7 @@ export default defineConfig({
   dts: { tsgo: true },
   external: [
     '@forinda/kickjs',
+    '@forinda/kickjs-schema',
     /^@modelcontextprotocol\/sdk/,
     'express',
     'reflect-metadata',

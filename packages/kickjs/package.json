@@ -114,10 +114,14 @@
       ],
       "output": [
         "dist/**"
+      ],
+      "dependencies": [
+        "../schema:build"
       ]
     }
   },
   "dependencies": {
+    "@forinda/kickjs-schema": "workspace:*",
     "reflect-metadata": "^0.2.2"
   },
   "peerDependencies": {

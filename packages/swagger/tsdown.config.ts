@@ -13,6 +13,7 @@ export default defineConfig({
   dts: { tsgo: true },
   external: [
     '@forinda/kickjs',
+    '@forinda/kickjs-schema',
     'reflect-metadata',
     'swagger-ui-dist',
     'zod',

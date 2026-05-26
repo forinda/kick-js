@@ -49,10 +49,13 @@
       "output": [
         "dist/**"
       ],
-      "dependencies": []
+      "dependencies": [
+        "../schema:build"
+      ]
     }
   },
   "dependencies": {
+    "@forinda/kickjs-schema": "workspace:*",
     "reflect-metadata": "^0.2.2",
     "swagger-ui-dist": "^5.32.6"
   },
