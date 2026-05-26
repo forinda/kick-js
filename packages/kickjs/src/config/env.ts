@@ -191,7 +191,11 @@ export function reloadEnv(): void {
   // re-trigger any cache-population step.
   cachedEnv = null
   if (cachedSchema) {
-    loadEnv(cachedSchema)
+    if (typeof cachedSchema.parse === 'function') {
+      loadEnv(cachedSchema)
+    } else {
+      loadEnvFromSchema(cachedSchema)
+    }
   }
 }
 

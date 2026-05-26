@@ -1,4 +1,4 @@
-import { detectSchema, isKickSchema } from '@forinda/kickjs-schema'
+import { detectSchema } from '@forinda/kickjs-schema'
 
 /**
  * Interface for converting validation library schemas to JSON Schema.
@@ -49,16 +49,12 @@ export const zodSchemaParser: SchemaParser = {
 
   supports(schema: unknown): boolean {
     if (schema == null) return false
-    if (isKickSchema(schema)) return true
-    if (typeof schema === 'object' && '~standard' in (schema as object)) return true
-    if (
-      typeof schema === 'object' &&
-      typeof (schema as any).safeParse === 'function' &&
-      typeof (schema as any).toJSONSchema === 'function'
-    )
+    try {
+      detectSchema(schema)
       return true
-    if (typeof schema === 'object' && typeof (schema as any).safeParse === 'function') return true
-    return false
+    } catch {
+      return false
+    }
   },
 
   toJsonSchema(schema: unknown): Record<string, unknown> {

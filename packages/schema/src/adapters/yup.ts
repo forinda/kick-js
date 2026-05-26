@@ -70,12 +70,16 @@ function descToJsonSchema(desc: any): Record<string, unknown> {
   const schema: Record<string, unknown> = { type: typeMap[desc.type] ?? desc.type }
 
   for (const test of desc.tests ?? []) {
-    if (test.name === 'min' && test.params?.min !== undefined) schema.minLength = test.params.min
-    if (test.name === 'max' && test.params?.max !== undefined) schema.maxLength = test.params.max
     if (test.name === 'email') schema.format = 'email'
     if (test.name === 'url') schema.format = 'uri'
-    if (test.name === 'min' && desc.type === 'number') schema.minimum = test.params?.min
-    if (test.name === 'max' && desc.type === 'number') schema.maximum = test.params?.max
+    if (test.name === 'min' && test.params?.min !== undefined) {
+      if (desc.type === 'number') schema.minimum = test.params.min
+      else schema.minLength = test.params.min
+    }
+    if (test.name === 'max' && test.params?.max !== undefined) {
+      if (desc.type === 'number') schema.maximum = test.params.max
+      else schema.maxLength = test.params.max
+    }
   }
 
   if (desc.oneOf && desc.oneOf.length > 0) schema.enum = desc.oneOf

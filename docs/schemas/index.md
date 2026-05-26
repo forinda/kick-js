@@ -278,19 +278,16 @@ bootstrap({
 
 ## Package Structure
 
-```
+```text
 packages/schema/
   src/
     types.ts              # KickSchema, SchemaResult, SchemaIssue
-    standard.ts           # fromStandard() — wraps StandardSchemaV1
-    auto-detect.ts        # Given unknown schema, detect + wrap
+    infer.ts              # InferSchemaOutput<T> utility type
+    detect.ts             # detectSchema() auto-detection + registerAdapter()
     adapters/
       zod.ts             # fromZod()
-      yup.ts             # fromYup()
       valibot.ts         # fromValibot()
-      joi.ts             # fromJoi()
-    json-schema.ts        # JsonSchema type definition
-    error-formatter.ts    # Default + pluggable formatting
+      yup.ts             # fromYup()
 ```
 
 Separate export paths for tree-shaking:
@@ -298,12 +295,10 @@ Separate export paths for tree-shaking:
 ```json
 {
   "exports": {
-    ".": "./src/types.ts",
-    "./zod": "./src/adapters/zod.ts",
-    "./yup": "./src/adapters/yup.ts",
-    "./valibot": "./src/adapters/valibot.ts",
-    "./joi": "./src/adapters/joi.ts",
-    "./standard": "./src/standard.ts"
+    ".": "./dist/index.mjs",
+    "./zod": "./dist/zod.mjs",
+    "./valibot": "./dist/valibot.mjs",
+    "./yup": "./dist/yup.mjs"
   }
 }
 ```

@@ -27,7 +27,7 @@ type CreateUserInput = typeof CreateUser extends KickSchema<infer T> ? T : never
 
 **Error mapping**:
 
-```
+```text
 ZodIssue.path       → SchemaIssue.path (string[])
 ZodIssue.message    → SchemaIssue.message
 ZodIssue.code       → SchemaIssue.code ("invalid_type", "too_small", etc.)
@@ -54,7 +54,7 @@ const CreateUser = fromValibot(
 
 **Error mapping**:
 
-```
+```text
 issue.path[].key    → SchemaIssue.path (string[])
 issue.message       → SchemaIssue.message
 issue.type          → SchemaIssue.code ("string", "min_length", etc.)
@@ -83,7 +83,7 @@ const CreateUser = fromYup(
 
 **Error mapping**:
 
-```
+```text
 inner[].path        → SchemaIssue.path (split on '.')
 inner[].message     → SchemaIssue.message
 inner[].type        → SchemaIssue.code ("required", "min", "email", etc.)
@@ -91,30 +91,7 @@ inner[].type        → SchemaIssue.code ("required", "min", "email", etc.)
 
 ## Joi Adapter
 
-```ts
-import { fromJoi } from '@forinda/kickjs-schema/joi'
-import Joi from 'joi'
-
-const CreateUser = fromJoi(
-  Joi.object({
-    name: Joi.string().required().min(1),
-    email: Joi.string().required().email(),
-    age: Joi.number().required().integer().min(18),
-  }),
-)
-```
-
-**Validation protocol**: Calls `schema.validate(data, { abortEarly: false })`. Maps `error.details` to `SchemaIssue[]`.
-
-**JSON Schema**: Uses `joi-to-json` for conversion.
-
-**Error mapping**:
-
-```
-details[].path      → SchemaIssue.path (already string[])
-details[].message   → SchemaIssue.message
-details[].type      → SchemaIssue.code ("string.min", "any.required", etc.)
-```
+> **Not implemented.** Joi lacks TypeScript type inference (`Joi.infer<>` does not exist), so `InferSchemaOutput<typeof joiSchema>` always resolves to `unknown`. Since the core goal of the schema abstraction is type-safe validation, Joi is not planned. Use Zod, Valibot, or Yup instead.
 
 ## Standard Schema Adapter (Universal)
 
@@ -131,7 +108,7 @@ const CreateUser = fromStandard(anyStandardSchemaV1Object)
 
 **Error mapping**:
 
-```
+```text
 issue.path          → SchemaIssue.path (mapped from PropertyKey | PathSegment)
 issue.message       → SchemaIssue.message
 (no code in spec)   → SchemaIssue.code = "validation"
