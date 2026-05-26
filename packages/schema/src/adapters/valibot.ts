@@ -29,11 +29,11 @@ let _toJsonSchema: ((schema: any) => Record<string, unknown>) | null | undefined
 function getToJsonSchema(): ((schema: any) => Record<string, unknown>) | null {
   if (_toJsonSchema !== undefined) return _toJsonSchema
   try {
-    _toJsonSchema = require('@valibot/to-json-schema').toJsonSchema
+    _toJsonSchema = require('@valibot/to-json-schema').toJsonSchema ?? null
   } catch {
     _toJsonSchema = null
   }
-  return _toJsonSchema
+  return _toJsonSchema!
 }
 
 function valibotToJsonSchema(schema: any, _options?: JsonSchemaOptions): Record<string, unknown> {
