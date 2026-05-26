@@ -8,6 +8,7 @@ export {
   baseEnvSchema,
   defineEnv,
   loadEnv,
+  loadEnvFromSchema,
   getEnv,
   reloadEnv,
   resetEnvCache,

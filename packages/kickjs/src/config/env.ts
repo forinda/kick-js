@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { detectSchema, type KickSchema } from '@forinda/kickjs-schema'
 import { Container } from '../core/container'
 import type { EnvKey } from '../core/decorators'
 
@@ -203,6 +204,43 @@ export function reloadEnv(): void {
 export function resetEnvCache(): void {
   cachedEnv = null
   cachedSchema = null
+}
+
+/**
+ * Schema-agnostic env loader. Accepts any schema supported by
+ * `@forinda/kickjs-schema` (Zod, Valibot, Yup, Joi, Standard Schema,
+ * KickSchema adapters, or plain validator functions).
+ *
+ * Unlike `loadEnv()` which uses Zod's `.parse()` and throws a
+ * `ZodError`, this function uses `detectSchema().safeParse()` and
+ * throws a plain `Error` with structured issue messages on failure.
+ *
+ * @example
+ * ```ts
+ * import * as v from 'valibot'
+ * import { fromValibot } from '@forinda/kickjs-schema/valibot'
+ *
+ * const envSchema = fromValibot(v.object({
+ *   PORT: v.pipe(v.string(), v.transform(Number)),
+ *   NODE_ENV: v.picklist(['development', 'production', 'test']),
+ * }))
+ *
+ * export const env = loadEnvFromSchema(envSchema)
+ * ```
+ */
+export function loadEnvFromSchema<T = Record<string, unknown>>(schema: KickSchema<T> | unknown): T {
+  const wrapped = detectSchema(schema)
+  const result = wrapped.safeParse(process.env)
+  if (!result.success) {
+    const details = result.issues
+      .map((i) => `  ${i.path.join('.') || '(root)'}: ${i.message}`)
+      .join('\n')
+    throw new Error(`Environment validation failed:\n${details}`)
+  }
+  cachedEnv = result.data
+  cachedSchema = schema
+  Container._envResolver = (key: string) => cachedEnv?.[key]
+  return result.data as T
 }
 
 export type Env = z.infer<typeof baseEnvSchema>
