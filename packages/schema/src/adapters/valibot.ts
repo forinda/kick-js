@@ -24,27 +24,19 @@ function mapValibotIssues(issues: v.BaseIssue<unknown>[]): SchemaIssue[] {
   })
 }
 
-let _toJsonSchemaPromise: Promise<((schema: any) => Record<string, unknown>) | null> | undefined
-let _toJsonSchemaResolved: ((schema: any) => Record<string, unknown>) | null | undefined
+let _toJsonSchemaFn: ((schema: any) => Record<string, unknown>) | null | undefined
 
-function initToJsonSchema(): void {
-  if (_toJsonSchemaPromise) return
-  _toJsonSchemaPromise = import('@valibot/to-json-schema')
-    .then((mod) => {
-      _toJsonSchemaResolved = mod.toJsonSchema ?? null
-      return _toJsonSchemaResolved
-    })
-    .catch(() => {
-      _toJsonSchemaResolved = null
-      return null
-    })
-}
-
-initToJsonSchema()
+import('@valibot/to-json-schema')
+  .then((mod) => {
+    _toJsonSchemaFn = mod.toJsonSchema as (schema: any) => Record<string, unknown>
+  })
+  .catch(() => {
+    _toJsonSchemaFn = null
+  })
 
 function valibotToJsonSchema(schema: any, _options?: JsonSchemaOptions): Record<string, unknown> {
-  if (_toJsonSchemaResolved) {
-    const { $schema: _, ...rest } = _toJsonSchemaResolved(schema) as Record<string, unknown>
+  if (_toJsonSchemaFn) {
+    const { $schema: _, ...rest } = _toJsonSchemaFn(schema)
     return rest
   }
   return { type: 'object' }
