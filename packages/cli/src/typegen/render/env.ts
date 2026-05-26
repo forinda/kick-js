@@ -23,7 +23,11 @@ const ENV_HEADER = `/* eslint-disable */
  * so the caller can skip emission entirely (rather than emitting an
  * empty augmentation that would shadow `KickEnv` to a useless `{}`).
  */
-export function renderEnv(env: DiscoveredEnv | null, envOutFile: string): string | null {
+export function renderEnv(
+  env: DiscoveredEnv | null,
+  envOutFile: string,
+  schemaValidator: 'zod' | 'kickjs-schema' | false = 'zod',
+): string | null {
   if (!env) return null
   // Compute the relative import path from the output file back to the
   // user's env schema source, stripping the extension so TS resolves it.
@@ -41,7 +45,7 @@ import type _envSchema from '${rel}'
 // Local type alias — interfaces can only \`extend\` an identifier,
 // not an inline import expression, so we resolve the schema's
 // inferred shape into a named type first.
-type _KickEnvShape = import('zod').infer<typeof _envSchema>
+type _KickEnvShape = ${schemaValidator === 'kickjs-schema' ? "import('@forinda/kickjs-schema').InferSchemaOutput<typeof _envSchema>" : "import('zod').infer<typeof _envSchema>"}
 
 declare global {
   /**
