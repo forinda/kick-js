@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { z } from 'zod'
 import { fromZod, zodAdapter } from '../src/adapters/zod'
 import { detectSchema, isKickSchema, registerAdapter } from '../src/detect'
-import type { KickSchema, SchemaIssue } from '../src/types'
+import type { KickSchema } from '../src/types'
 
 describe('fromZod() — Zod adapter', () => {
   const UserSchema = z.object({
