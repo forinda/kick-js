@@ -7,11 +7,12 @@ export default defineConfig({
   entry: {
     index: 'src/index.ts',
     zod: 'src/adapters/zod.ts',
+    valibot: 'src/adapters/valibot.ts',
   },
   format: ['esm'],
   platform: 'node',
   minify: { compress: true, mangle: false },
   dts: { tsgo: true },
-  external: ['zod', /^node:/],
+  external: ['valibot', '@valibot/to-json-schema', 'zod', /^node:/],
   banner: { js: createBanner(pkg.name, pkg.version) },
 })
