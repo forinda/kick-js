@@ -32,7 +32,7 @@ const ROUTES_HEADER = `/* eslint-disable */
 export function renderRoutes(
   routes: DiscoveredRoute[],
   routesOutFile: string,
-  schemaValidator: 'zod' | false,
+  schemaValidator: 'zod' | 'kickjs-schema' | false,
 ): string {
   if (routes.length === 0) {
     return `${ROUTES_HEADER}
@@ -72,7 +72,11 @@ export {}
       schemaValidator,
       schemaImports,
     )
-    return alias ? `import('zod').infer<typeof ${alias}>` : null
+    if (!alias) return null
+    if (schemaValidator === 'kickjs-schema') {
+      return `import('@forinda/kickjs-schema').InferSchemaOutput<typeof ${alias}>`
+    }
+    return `import('zod').infer<typeof ${alias}>`
   }
 
   const interfaces: string[] = []
@@ -161,10 +165,10 @@ function planSchemaImport(
   schema: { identifier: string; source: string | null } | null,
   routeFilePath: string,
   routesOutFile: string,
-  schemaValidator: 'zod' | false,
+  schemaValidator: 'zod' | 'kickjs-schema' | false,
   imports: Map<string, { identifier: string; specifier: string }>,
 ): string | null {
-  if (!schema || schemaValidator !== 'zod') return null
+  if (!schema || schemaValidator === false) return null
   if (schema.source === null) return null
   const specifier = resolveSchemaImportSpecifier(schema.source, routeFilePath, routesOutFile)
   if (specifier === 'unknown') return null

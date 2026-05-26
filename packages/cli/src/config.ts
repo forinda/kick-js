@@ -51,7 +51,7 @@ export type RepoTypeConfig = BuiltinRepoType | CustomRepoType
  * grows. Set to `false` (or omit) to disable schema-driven body typing
  * entirely (the route entries will keep `body: unknown`).
  */
-export type SchemaValidator = 'zod' | false
+export type SchemaValidator = 'zod' | 'kickjs-schema' | false
 
 /**
  * One entry in the typed `assetMap` config record (`assets-plan.md`).

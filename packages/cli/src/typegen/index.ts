@@ -53,7 +53,7 @@ export interface RunTypegenOptions {
    * default) leaves these fields as `unknown`. Loaded from
    * `kick.config.ts` `typegen.schemaValidator` when invoked via the CLI.
    */
-  schemaValidator?: 'zod' | false
+  schemaValidator?: 'zod' | 'kickjs-schema' | false
   /**
    * Path to the env schema file (relative to `cwd`). The file must
    * default-export a `defineEnv(...)` schema for the typed `KickEnv`
@@ -87,7 +87,7 @@ function resolveOptions(opts: RunTypegenOptions): {
   outDir: string
   silent: boolean
   allowDuplicates: boolean
-  schemaValidator: 'zod' | false
+  schemaValidator: 'zod' | 'kickjs-schema' | false
   envFile: string | false
 } {
   const cwd = opts.cwd ?? process.cwd()
