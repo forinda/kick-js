@@ -34,8 +34,9 @@ export const kickEnvTypegen = (): TypegenPlugin => ({
     })
     if (!scan.env) return null
 
+    const schemaValidator = ctx.config?.typegen?.schemaValidator ?? 'zod'
     const outFile = path.resolve(ctx.cwd, '.kickjs/types/kick__env.ts')
-    return renderEnv(scan.env, outFile)
+    return renderEnv(scan.env, outFile, schemaValidator)
   },
 })
 
