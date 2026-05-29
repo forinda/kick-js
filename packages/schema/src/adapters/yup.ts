@@ -1,4 +1,5 @@
 import type { KickSchema, SchemaResult, SchemaIssue, JsonSchemaOptions } from '../types.js'
+import type { InferSchemaOutput } from '../infer.js'
 
 export function isYupSchema(schema: unknown): boolean {
   return (
@@ -87,12 +88,17 @@ function descToJsonSchema(desc: any): Record<string, unknown> {
   return schema
 }
 
-export function fromYup<TOutput = unknown>(schema: any): KickSchema<TOutput> {
+/** Wrap a Yup schema as a {@link KickSchema}. `InferSchemaOutput` reads
+ * the schema's output brand — Yup exposes it as `__outputType`. When the
+ * brand isn't statically discoverable, the result lands at `unknown` and
+ * adopters cast (`fromYup(schema) as KickSchema<MyShape>`). */
+export function fromYup<TSchema>(schema: TSchema): KickSchema<InferSchemaOutput<TSchema>>
+export function fromYup(schema: any): KickSchema<any> {
   return {
-    safeParse(data: unknown): SchemaResult<TOutput> {
+    safeParse(data: unknown): SchemaResult<any> {
       try {
         const result = schema.validateSync(data, { abortEarly: false, stripUnknown: false })
-        return { success: true, data: result as TOutput }
+        return { success: true, data: result }
       } catch (err: any) {
         if (err.name === 'ValidationError') {
           return { success: false, issues: mapYupErrors(err) }

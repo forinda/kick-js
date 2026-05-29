@@ -36,16 +36,33 @@ export function renderEnv(
   rel = rel.replace(/\.(ts|tsx|mts|cts)$/i, '')
   if (!rel.startsWith('.')) rel = './' + rel
 
+  // The `kickjs-schema` path needs an extra mapped-type pass —
+  // `InferSchemaOutput<T>` is a conditional type, so an interface that
+  // `extends` it directly hits TS2312 ("interface can only extend an
+  // object type with statically known members") even when the
+  // conditional resolves to a plain object literal. Wrapping the result
+  // in `{ [K in keyof X]: X[K] }` forces eager evaluation and lands the
+  // interface at an object type TS will accept.
+  const shapeExpr =
+    schemaValidator === 'kickjs-schema' ? `_Resolved` : `import('zod').infer<typeof _envSchema>`
+
+  const shapeAlias =
+    schemaValidator === 'kickjs-schema'
+      ? `type _Raw = import('@forinda/kickjs-schema').InferSchemaOutput<typeof _envSchema>
+type _Resolved = { [K in keyof _Raw]: _Raw[K] }
+`
+      : ''
+
   return `${ENV_HEADER}
 // Importing the schema as a type lets us infer its shape without
 // pulling in any runtime code. \`Awaited<>\` strips an accidental
 // Promise wrap on dynamic-imported defaults.
 import type _envSchema from '${rel}'
 
-// Local type alias — interfaces can only \`extend\` an identifier,
+${shapeAlias}// Local type alias — interfaces can only \`extend\` an identifier,
 // not an inline import expression, so we resolve the schema's
 // inferred shape into a named type first.
-type _KickEnvShape = ${schemaValidator === 'kickjs-schema' ? "import('@forinda/kickjs-schema').InferSchemaOutput<typeof _envSchema>" : "import('zod').infer<typeof _envSchema>"}
+type _KickEnvShape = ${shapeExpr}
 
 declare global {
   /**

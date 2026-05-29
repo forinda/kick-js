@@ -1,5 +1,6 @@
 import * as v from 'valibot'
 import type { KickSchema, SchemaResult, SchemaIssue, JsonSchemaOptions } from '../types.js'
+import type { InferSchemaOutput } from '../infer.js'
 
 export function isValibotSchema(schema: unknown): boolean {
   return (
@@ -42,12 +43,16 @@ function valibotToJsonSchema(schema: any, _options?: JsonSchemaOptions): Record<
   return { type: 'object' }
 }
 
-export function fromValibot<TOutput = unknown>(schema: any): KickSchema<TOutput> {
+/** Wrap a Valibot schema as a {@link KickSchema}. See `fromZod` for the
+ * inference rationale — `TOutput` flows from the schema's Standard
+ * Schema phantom so `kick typegen` can extend `KickEnv` from it. */
+export function fromValibot<TSchema>(schema: TSchema): KickSchema<InferSchemaOutput<TSchema>>
+export function fromValibot(schema: any): KickSchema<any> {
   return {
-    safeParse(data: unknown): SchemaResult<TOutput> {
+    safeParse(data: unknown): SchemaResult<any> {
       const result = v.safeParse(schema, data)
       if (result.success) {
-        return { success: true, data: result.output as TOutput }
+        return { success: true, data: result.output }
       }
       return { success: false, issues: mapValibotIssues(result.issues) }
     },

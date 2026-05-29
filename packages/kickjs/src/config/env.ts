@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { detectSchema, type KickSchema } from '@forinda/kickjs-schema'
+import { detectSchema, type InferSchemaOutput } from '@forinda/kickjs-schema'
 import { Container } from '../core/container'
 import type { EnvKey } from '../core/decorators'
 
@@ -232,7 +232,19 @@ export function resetEnvCache(): void {
  * export const env = loadEnvFromSchema(envSchema)
  * ```
  */
-export function loadEnvFromSchema<T = Record<string, unknown>>(schema: KickSchema<T> | unknown): T {
+/**
+ * Overload + impl. The generic overload infers the parsed env shape
+ * from the schema (a `KickSchema<T>` resolves to `T`; a raw
+ * Zod/Valibot/Yup schema resolves through `InferSchemaOutput<T>`), so
+ * the call site lands at the real typed shape instead of
+ * `Record<string, unknown>`. The fallback overload accepts arbitrary
+ * `unknown` for adopters who pass a runtime-only validator the typed
+ * path can't see — they still get a typed `Record<string, unknown>`
+ * back.
+ */
+export function loadEnvFromSchema<TSchema>(schema: TSchema): InferSchemaOutput<TSchema>
+export function loadEnvFromSchema(schema: unknown): Record<string, unknown>
+export function loadEnvFromSchema(schema: unknown): unknown {
   const wrapped = detectSchema(schema)
   const result = wrapped.safeParse(process.env)
   if (!result.success) {
@@ -244,7 +256,7 @@ export function loadEnvFromSchema<T = Record<string, unknown>>(schema: KickSchem
   cachedEnv = result.data
   cachedSchema = schema
   Container._envResolver = (key: string) => cachedEnv?.[key]
-  return result.data as T
+  return result.data
 }
 
 export type Env = z.infer<typeof baseEnvSchema>
