@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-devtools-kit",
-  "version": "5.4.1",
+  "version": "6.0.0-alpha.0",
   "description": "Types, RPC envelopes, runtime sampler, and memory analyzer used by KickJS DevTools and any plugin that integrates with it",
   "keywords": [
     "kickjs",
@@ -65,7 +65,7 @@
   },
   "dependencies": {},
   "peerDependencies": {
-    "@forinda/kickjs": ">=2.3.0"
+    "@forinda/kickjs": ">=5.14.0-alpha.0"
   },
   "peerDependenciesMeta": {
     "@forinda/kickjs": {

@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-db",
-  "version": "5.9.1",
+  "version": "6.0.0-alpha.0",
   "description": "KickJS-native ORM — code-first schema, reversible migrations, multi-dialect SQL builder",
   "keywords": [
     "kickjs",
@@ -64,8 +64,8 @@
     "kysely": "0.29.2"
   },
   "peerDependencies": {
-    "@forinda/kickjs": ">=5.0.0",
-    "@forinda/kickjs-devtools-kit": ">=5.1.0"
+    "@forinda/kickjs": ">=5.14.0-alpha.0",
+    "@forinda/kickjs-devtools-kit": ">=6.0.0-alpha.0"
   },
   "peerDependenciesMeta": {
     "@forinda/kickjs-devtools-kit": {

@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-swagger",
-  "version": "5.3.2",
+  "version": "6.0.0-alpha.0",
   "description": "OpenAPI spec generation from decorators, Swagger UI and ReDoc serving for KickJS",
   "keywords": [
     "kickjs",
@@ -62,7 +62,7 @@
   "peerDependencies": {
     "express": "^5.1.0",
     "zod": "^4.0.0",
-    "@forinda/kickjs": ">=2.3.0"
+    "@forinda/kickjs": ">=5.14.0-alpha.0"
   },
   "peerDependenciesMeta": {
     "zod": {

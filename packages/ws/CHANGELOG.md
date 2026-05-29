@@ -1,5 +1,12 @@
 # @forinda/kickjs-ws
 
+## 6.0.0-alpha.0
+
+### Patch Changes
+
+- Updated dependencies [[`f04da5b`](https://github.com/forinda/kick-js/commit/f04da5b9ac7d496a57d357f2b8d4d2a2c9507e62), [`0d9a895`](https://github.com/forinda/kick-js/commit/0d9a8955f358f8ca8be8aca169dfa38285c48f50), [`a4fc68c`](https://github.com/forinda/kick-js/commit/a4fc68c991b996cae08800e7e9c1f0e8f39eaaeb)]:
+  - @forinda/kickjs@5.14.0-alpha.0
+
 ## 5.2.3
 
 ### Patch Changes

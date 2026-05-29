@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-ws",
-  "version": "5.2.3",
+  "version": "6.0.0-alpha.0",
   "description": "WebSocket support with decorators, namespaces, rooms, and DI integration for KickJS",
   "keywords": [
     "kickjs",
@@ -81,7 +81,7 @@
     "url": "https://github.com/forinda/kick-js/issues"
   },
   "peerDependencies": {
-    "@forinda/kickjs": ">=2.3.0",
+    "@forinda/kickjs": ">=5.14.0-alpha.0",
     "ws": "^8.0.0"
   },
   "peerDependenciesMeta": {}

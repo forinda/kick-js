@@ -1,5 +1,12 @@
 # @forinda/kickjs-db-sqlite
 
+## 3.0.0-alpha.0
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @forinda/kickjs-db@6.0.0-alpha.0
+
 ## 2.0.3
 
 ### Patch Changes
