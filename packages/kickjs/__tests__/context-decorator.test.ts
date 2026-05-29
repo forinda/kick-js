@@ -618,3 +618,65 @@ describe('parameterised contributors — factory call form', () => {
     expect(errors[0].params).toEqual({ tag: 'specific' })
   })
 })
+
+describe('defineContextDecorator.withParams — curried partial inference', () => {
+  // The positional generics force adopters to spell `K` and `D` the
+  // moment they want to specify `P`. These cases lock in the
+  // `.withParams<P>()` shape: `P` is spelled, `K` and `D` (and `Ctx`
+  // for the HTTP wrapper) infer from the spec, and the resolver's
+  // `deps`/`params` arguments end up typed without any casts.
+
+  type LoadProjectParams = {
+    source: 'route' | 'query'
+    fallback?: string
+  }
+
+  it('infers K and D from the spec while P is fixed by the curried call', () => {
+    const REPO = { findById: (id: string) => ({ id, name: `proj-${id}` }) }
+
+    const LoadProject = defineContextDecorator.withParams<LoadProjectParams>()({
+      key: 'project',
+      deps: { repo: REPO as { findById: (id: string) => { id: string; name: string } } },
+      paramDefaults: { source: 'route' },
+      resolve: (_ctx, deps, params) => {
+        // `deps.repo` is fully typed via D inference; calling a method
+        // that doesn't exist would fail to compile.
+        const id = params.source === 'route' ? '42' : (params.fallback ?? '0')
+        return deps.repo.findById(id)
+      },
+    })
+
+    expect(LoadProject.registration.key).toBe('project')
+    expect(LoadProject.registration.deps).toHaveProperty('repo')
+  })
+
+  it('default params from the curried form propagate to the resolver', async () => {
+    type Params = { greeting: string }
+    const Greet = defineContextDecorator.withParams<Params>()({
+      key: 'greeting',
+      paramDefaults: { greeting: 'hello' },
+      resolve: (_ctx, _deps, params) => params.greeting,
+    })
+
+    const value = await Greet.registration.resolve({} as never, {} as never)
+    expect(value).toBe('hello')
+  })
+
+  it('call-site params via .with() override curried-form defaults', async () => {
+    type Params = { source: 'a' | 'b' }
+    const Pick = defineContextDecorator.withParams<Params>()({
+      key: 'pick',
+      paramDefaults: { source: 'a' },
+      resolve: (_ctx, _deps, params) => params.source,
+    })
+
+    const overridden = Pick.with({ source: 'b' }).registration
+    const value = await overridden.resolve({} as never, {} as never)
+    expect(value).toBe('b')
+  })
+
+  it('the .withParams helper is itself frozen on the factory', () => {
+    expect(typeof defineContextDecorator.withParams).toBe('function')
+    expect(Object.isFrozen(defineContextDecorator)).toBe(true)
+  })
+})

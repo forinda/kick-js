@@ -307,6 +307,70 @@ export interface ContextDecorator<
 }
 
 /**
+ * Curried params-first helper for {@link defineContextDecorator}.
+ *
+ * Solves the partial-inference problem: TS generics are positional, so
+ * the moment an adopter wants to specify the per-call params shape
+ * `P`, they're forced to spell `K` and `D` by hand — losing the
+ * automatic `deps` inference that drives the `(ctx, deps, params) =>`
+ * resolver signature:
+ *
+ * ```ts
+ * // ❌ Positional generics — must repeat the deps type, and `D` no
+ * // longer flows from `spec.deps` into `resolve(ctx, deps, ...)`.
+ * defineContextDecorator<'tenant', { repo: typeof TENANT_REPO }, MyParams>({
+ *   key: 'tenant',
+ *   deps: { repo: TENANT_REPO },
+ *   resolve: (ctx, { repo }, params) => ...,
+ * })
+ *
+ * // ✅ Curried form — only `P` is spelled; `K`, `D`, `Ctx` infer.
+ * defineContextDecorator.withParams<MyParams>()({
+ *   key: 'tenant',
+ *   deps: { repo: TENANT_REPO },     // D inferred
+ *   resolve: (ctx, { repo }, params) => ..., // deps + params both typed
+ * })
+ * ```
+ *
+ * Use this whenever the contributor takes call-site params; use the
+ * positional form when there are no params (the common case).
+ */
+export interface DefineContextDecoratorWithParams<P extends Record<string, unknown>> {
+  <
+    K extends string,
+    D extends Record<string, DepValue> = Record<string, never>,
+    Ctx extends ExecutionContext = ExecutionContext,
+  >(
+    spec: ContextDecoratorSpec<K, D, P, Ctx>,
+  ): ContextDecorator<K, D, P, Ctx>
+}
+
+/**
+ * The public shape of {@link defineContextDecorator}. Combines the
+ * original positional-generic call signature with the curried
+ * `.withParams<P>()` helper that fixes partial-inference for the
+ * parameterised case.
+ */
+export interface DefineContextDecoratorFn {
+  <
+    K extends string,
+    D extends Record<string, DepValue> = Record<string, never>,
+    P extends Record<string, unknown> = Record<string, never>,
+    Ctx extends ExecutionContext = ExecutionContext,
+  >(
+    spec: ContextDecoratorSpec<K, D, P, Ctx>,
+  ): ContextDecorator<K, D, P, Ctx>
+
+  /**
+   * Curried entry point. Spell only the per-call params shape `P`;
+   * `K`, `D`, and `Ctx` are inferred from the spec passed to the
+   * returned function. See {@link DefineContextDecoratorWithParams}
+   * for the rationale.
+   */
+  withParams<P extends Record<string, unknown>>(): DefineContextDecoratorWithParams<P>
+}
+
+/**
  * Define a typed context contributor.
  *
  * The returned function works as a method or class decorator:
@@ -332,8 +396,14 @@ export interface ContextDecorator<
  * non-array `dependsOn` throws `TypeError` here at definition time
  * (typically module-load) rather than waiting for the first request.
  * See `architecture.md` §20 for the full pipeline plan.
+ *
+ * **Parameterised contributors:** TS generics are positional, so to
+ * specify `P` (the per-call params shape) with this signature you
+ * also have to spell `K` and `D` — which loses automatic `deps`
+ * inference. Use {@link DefineContextDecoratorFn.withParams} instead:
+ * `defineContextDecorator.withParams<MyParams>()(spec)`.
  */
-export function defineContextDecorator<
+function defineContextDecoratorImpl<
   K extends string,
   D extends Record<string, DepValue> = Record<string, never>,
   P extends Record<string, unknown> = Record<string, never>,
@@ -614,3 +684,30 @@ export function defineContextDecorator<
 
   return Object.freeze(decorator)
 }
+
+/**
+ * Public export — the positional-generic implementation plus the
+ * curried `.withParams<P>()` helper attached as a method. Adopters
+ * pick whichever form fits the call site:
+ *
+ * - **Positional** — `defineContextDecorator(spec)` when there are
+ *   no per-call params (the common case). `K`, `D`, `Ctx` infer.
+ * - **Curried** — `defineContextDecorator.withParams<P>()(spec)`
+ *   when the contributor takes params; spell only `P`, the rest
+ *   still infer.
+ *
+ * Frozen so adopters can't reassign `.withParams` at runtime.
+ */
+export const defineContextDecorator: DefineContextDecoratorFn = Object.freeze(
+  Object.assign(defineContextDecoratorImpl, {
+    withParams: <P extends Record<string, unknown>>(): DefineContextDecoratorWithParams<P> => {
+      return <
+        K extends string,
+        D extends Record<string, DepValue> = Record<string, never>,
+        Ctx extends ExecutionContext = ExecutionContext,
+      >(
+        spec: ContextDecoratorSpec<K, D, P, Ctx>,
+      ): ContextDecorator<K, D, P, Ctx> => defineContextDecoratorImpl<K, D, P, Ctx>(spec)
+    },
+  }),
+) as DefineContextDecoratorFn
