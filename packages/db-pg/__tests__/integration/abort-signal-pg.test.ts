@@ -60,11 +60,24 @@ afterAll(async () => {
 })
 
 beforeEach(async () => {
+  // The mid-flight cancel test leaves `pg_sleep(10)` running
+  // server-side because Kysely 0.29's default abort strategy is
+  // `'ignore query'` — JS rejects fast but the Postgres backend
+  // keeps holding an access-share lock on `sleeper`. Cancel any
+  // other in-progress backends before dropping the table so we
+  // don't wait out the lock here.
+  await pool.query(`
+    SELECT pg_cancel_backend(pid)
+    FROM pg_stat_activity
+    WHERE datname = current_database()
+      AND pid <> pg_backend_pid()
+      AND state = 'active'
+  `)
   await pool.query(`
     DROP TABLE IF EXISTS "sleeper" CASCADE;
     CREATE TABLE "sleeper" (id serial PRIMARY KEY, label varchar(64));
   `)
-})
+}, 30_000)
 
 describe('M5.A.2 — AbortSignal cancels in-flight PG queries', () => {
   it('rejects with RelationalQueryCancelledError when the signal fires mid-flight', async () => {
