@@ -6,6 +6,7 @@ import {
   type ContributorRegistration,
   type ExecutionContext,
 } from '../src/core'
+import { defineHttpContextDecorator } from '../src/http/define-http-context-decorator'
 
 /**
  * Method-level contributor metadata is stored on the constructor (matches the
@@ -678,5 +679,51 @@ describe('defineContextDecorator.withParams — curried partial inference', () =
   it('the .withParams helper is itself frozen on the factory', () => {
     expect(typeof defineContextDecorator.withParams).toBe('function')
     expect(Object.isFrozen(defineContextDecorator)).toBe(true)
+  })
+})
+
+describe('defineHttpContextDecorator.withParams — HTTP parity', () => {
+  // Mirrors the curried surface but locks `Ctx` to `RequestContext`. The
+  // core test suite covers K/D inference and frozen factory shape; this
+  // suite just verifies the HTTP wrapper exposes the same behaviour and
+  // that the runner-facing registration matches.
+
+  it('exposes a frozen .withParams helper on the HTTP factory', () => {
+    expect(typeof defineHttpContextDecorator.withParams).toBe('function')
+    expect(Object.isFrozen(defineHttpContextDecorator)).toBe(true)
+  })
+
+  it('locks ctx to RequestContext and resolves with the merged params', async () => {
+    const LoadTenant = defineHttpContextDecorator.withParams<{
+      source: 'header' | 'subdomain'
+    }>()({
+      key: 'tenant',
+      paramDefaults: { source: 'header' },
+      resolve: (ctx, _deps, params) =>
+        params.source === 'header'
+          ? ((ctx.req.headers['x-tenant-id'] as string | undefined) ?? 'missing')
+          : ctx.req.hostname,
+    })
+
+    const value = await LoadTenant.with({ source: 'header' }).registration.resolve(
+      {
+        req: { headers: { 'x-tenant-id': 't-1' }, hostname: 'acme.example' },
+      } as never,
+      {} as never,
+    )
+
+    expect(value).toBe('t-1')
+  })
+
+  it('forwards .with() overrides through the HTTP factory', async () => {
+    const Pick = defineHttpContextDecorator.withParams<{ source: 'a' | 'b' }>()({
+      key: 'pick',
+      paramDefaults: { source: 'a' },
+      resolve: (_ctx, _deps, params) => params.source,
+    })
+
+    const overridden = Pick.with({ source: 'b' }).registration
+    const value = await overridden.resolve({} as never, {} as never)
+    expect(value).toBe('b')
   })
 })
