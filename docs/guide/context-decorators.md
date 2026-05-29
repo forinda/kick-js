@@ -975,7 +975,7 @@ export class TenantDbPoolService {
 
 ```ts
 // src/tenant/contributors.ts
-import { defineContextDecorator, type RequestContext } from '@forinda/kickjs'
+import { defineHttpContextDecorator, type RequestContext } from '@forinda/kickjs'
 import { TENANT_REGISTRY } from './tenant-registry.service'
 import { TENANT_DB_POOL } from './tenant-db-pool.service'
 
@@ -983,7 +983,7 @@ import { TENANT_DB_POOL } from './tenant-db-pool.service'
 // different header than the public-facing routes.
 type LoadTenantParams = { source: 'header' | 'subdomain'; headerName?: string }
 
-export const LoadTenant = defineContextDecorator.withParams<LoadTenantParams>()({
+export const LoadTenant = defineHttpContextDecorator.withParams<LoadTenantParams>()({
   key: 'tenant',
   deps: { registry: TENANT_REGISTRY },
   paramDefaults: { source: 'header', headerName: 'x-tenant-id' },
@@ -1002,7 +1002,7 @@ export const LoadTenant = defineContextDecorator.withParams<LoadTenantParams>()(
 // identity contributor has already resolved when this one runs.
 type LoadTenantDbParams = { pool: 'primary' | 'replica' }
 
-export const LoadTenantDb = defineContextDecorator.withParams<LoadTenantDbParams>()({
+export const LoadTenantDb = defineHttpContextDecorator.withParams<LoadTenantDbParams>()({
   key: 'tenantDb',
   deps: { dbPool: TENANT_DB_POOL },
   dependsOn: ['tenant'],
@@ -1476,10 +1476,12 @@ Pass `paramDefaults` and a third `params` argument on `resolve` / `onError`.
 
 TypeScript generics are positional, so once you want to specify the per-call params shape `P` on `defineContextDecorator<K, D, P, Ctx>(spec)`, you also have to spell `K` and `D` — which **loses the automatic `deps` inference** that drives the `(ctx, deps, params) => …` resolver signature.
 
-`defineContextDecorator.withParams<P>()(spec)` is the curried entry point that fixes this. You spell only `P`; `K`, `D`, and `Ctx` infer from the spec value, so `deps.<name>` ends up fully typed in the resolver without any annotation:
+`defineContextDecorator.withParams<P>()(spec)` is the curried entry point that fixes this. You spell only `P`; `K`, `D`, and `Ctx` infer from the spec value, so `deps.<name>` ends up fully typed in the resolver without any annotation.
+
+For HTTP-flavoured contributors (the common case), reach for `defineHttpContextDecorator.withParams<P>()(spec)` — `Ctx` is locked to `RequestContext`, so `ctx.req`, `ctx.req.headers`, `ctx.req.hostname`, etc. are typed without a cast:
 
 ```ts
-import { defineContextDecorator } from '@forinda/kickjs'
+import { defineHttpContextDecorator } from '@forinda/kickjs'
 import { TENANT_REGISTRY } from './tenant-registry.service'
 
 type LoadTenantParams = {
@@ -1487,7 +1489,7 @@ type LoadTenantParams = {
   headerName?: string
 }
 
-export const LoadTenant = defineContextDecorator.withParams<LoadTenantParams>()({
+export const LoadTenant = defineHttpContextDecorator.withParams<LoadTenantParams>()({
   key: 'tenant', // K inferred as 'tenant' literal
   deps: { registry: TENANT_REGISTRY }, // D inferred → deps.registry typed
   paramDefaults: { source: 'header', headerName: 'x-tenant-id' },
@@ -1503,7 +1505,7 @@ export const LoadTenant = defineContextDecorator.withParams<LoadTenantParams>()(
 })
 ```
 
-The `defineHttpContextDecorator.withParams<P>()(spec)` mirror does the same for HTTP-flavoured contributors (`Ctx` is locked to `RequestContext`).
+Use the core `defineContextDecorator.withParams<P>()(spec)` form when authoring contributors for non-HTTP transports (WebSocket, queue, cron) or when sharing one definition across transports — the resolver then sticks to the `ExecutionContext` surface (`ctx.get`, `ctx.set`, `ctx.requestId`).
 
 ### Positional form (no params)
 
@@ -1590,7 +1592,7 @@ export const TenantPlugin = definePlugin({
 Params are **plain values** with no shape constraint — including functions and closures. Useful for "compute this from `ctx`" cases (rate-limit key, cache key, A/B variant assigner):
 
 ```ts
-import { defineContextDecorator } from '@forinda/kickjs'
+import { defineHttpContextDecorator } from '@forinda/kickjs'
 
 type RateLimitParams = {
   window: string
@@ -1598,7 +1600,7 @@ type RateLimitParams = {
   keyOf: (ctx: RequestContext) => string
 }
 
-export const RateLimited = defineContextDecorator.withParams<RateLimitParams>()({
+export const RateLimited = defineHttpContextDecorator.withParams<RateLimitParams>()({
   key: 'rate-limit',
   deps: { limiter: RATE_LIMITER },
   paramDefaults: {
@@ -1723,7 +1725,7 @@ const LoadTenantFromSubdomain = defineContextDecorator({
 ```ts
 type LoadTenantParams = { source: 'header' | 'subdomain' | 'jwt'; headerName?: string }
 
-const LoadTenant = defineContextDecorator.withParams<LoadTenantParams>()({
+const LoadTenant = defineHttpContextDecorator.withParams<LoadTenantParams>()({
   key: 'tenant',
   deps: { repo: TENANT_REPO },
   paramDefaults: { source: 'header', headerName: 'x-tenant-id' },
@@ -1764,7 +1766,7 @@ interface Policy {
   check(user: User, req: Request): MaybePromise<boolean>
 }
 
-const RequirePolicy = defineContextDecorator.withParams<{ policy: new () => Policy }>()({
+const RequirePolicy = defineHttpContextDecorator.withParams<{ policy: new () => Policy }>()({
   key: 'authzCheck',
   paramDefaults: { policy: AlwaysAllowPolicy },
   resolve: async (ctx, _deps, params) => {
@@ -1805,7 +1807,7 @@ type RateLimitParams = {
   keyOf: (ctx: RequestContext) => string
 }
 
-const RateLimited = defineContextDecorator.withParams<RateLimitParams>()({
+const RateLimited = defineHttpContextDecorator.withParams<RateLimitParams>()({
   key: 'rate-limit',
   deps: { limiter: RATE_LIMITER },
   paramDefaults: { window: '1m', max: 60, keyOf: (ctx) => ctx.req.ip },
@@ -1842,7 +1844,7 @@ The closure-returning-decorator pattern works but means every call site builds i
 type Validator<T> = { parse(value: unknown): T }
 type ValidateBodyParams = { schema: Validator<unknown>; on?: 'throw' | 'attach-issues' }
 
-const ValidateBody = defineContextDecorator.withParams<ValidateBodyParams>()({
+const ValidateBody = defineHttpContextDecorator.withParams<ValidateBodyParams>()({
   key: 'validatedBody',
   paramDefaults: { schema: { parse: (v) => v }, on: 'throw' },
   resolve: (ctx, _deps, params) => {
@@ -1893,7 +1895,7 @@ type VerifyParams = {
   algorithm: 'sha256' | 'sha1'
 }
 
-const VerifySignature = defineContextDecorator.withParams<VerifyParams>()({
+const VerifySignature = defineHttpContextDecorator.withParams<VerifyParams>()({
   key: 'verifiedWebhook',
   paramDefaults: { secret: '', header: 'x-signature', algorithm: 'sha256' },
   resolve: (ctx, _deps, params) => {
