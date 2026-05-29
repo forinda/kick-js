@@ -179,30 +179,38 @@ Without `as const`, the field unions widen to `string` — that's the documented
 
 ## How env vars are typed
 
-KickJS scans `src/env.ts` for a default-exported `defineEnv(...)` schema. When found, the generator emits `.kickjs/types/env.ts` augmenting two globals:
+KickJS scans `src/config/index.ts` (or `src/env.ts`, `src/config/env.ts`, `src/config.ts`) for a default-exported schema. When found, the generator emits `.kickjs/types/kick__env.ts` augmenting two globals:
 
 - **`KickEnv`** — an interface holding the inferred shape of your env schema. This drives `@Value` and the `Env<K>` type helper.
 - **`NodeJS.ProcessEnv`** — narrowed so known keys exist as `string` (the raw pre-coercion form).
 
-### Authoring `src/env.ts`
+The accepted schema-construction calls are `defineEnv(...)` (legacy Zod scaffold) and `fromZod(...)` / `fromValibot(...)` / `fromYup(...)` (the [`@forinda/kickjs-schema`](schema.md) adapters). A file that constructs one of those AND default-exports the schema is detected; a file that default-exports the _parsed_ env (e.g. `export default loadEnvFromSchema(schema)`) is explicitly rejected so the generator doesn't run the env value type through `InferSchemaOutput`.
 
-`kick init` scaffolds this file for you. To add a key, extend the base schema:
+### Authoring `src/config/index.ts`
+
+`kick new --schema {zod,valibot,yup}` scaffolds this file for you with the right wrap. To add a key, extend the schema:
 
 ```ts
-// src/env.ts
-import { defineEnv } from '@forinda/kickjs-config'
+// src/config/index.ts — Zod (recommended default)
+import { loadEnvFromSchema } from '@forinda/kickjs/config'
+import { fromZod } from '@forinda/kickjs-schema/zod'
 import { z } from 'zod'
 
-export default defineEnv((base) =>
-  base.extend({
+const envSchema = fromZod(
+  z.object({
+    PORT: z.coerce.number().default(3000),
+    NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+    LOG_LEVEL: z.string().default('info'),
     DATABASE_URL: z.string().url(),
     JWT_SECRET: z.string().min(32),
-    REDIS_URL: z.string().url().optional(),
   }),
 )
+
+export const env = loadEnvFromSchema(envSchema)
+export default envSchema
 ```
 
-The base schema (`baseEnvSchema`) already includes `PORT`, `NODE_ENV`, and `LOG_LEVEL` with sensible defaults, so you only declare the application-specific variables on top.
+The legacy `defineEnv((base) => base.extend({…}))` form is still detected — pre-`@forinda/kickjs-schema` projects keep working without migration. See [Configuration](configuration.md#defining-an-environment-schema) for the full set of Zod / Valibot / Yup templates.
 
 ### Using typed env in services
 
@@ -256,8 +264,8 @@ import { defineConfig } from '@forinda/kickjs-cli'
 
 export default defineConfig({
   typegen: {
-    schemaValidator: 'zod', // 'zod' | false (default: 'zod')
-    envFile: 'src/env.ts', // string | false (default: 'src/env.ts')
+    schemaValidator: 'kickjs-schema', // 'zod' | 'kickjs-schema' | false (default: 'zod')
+    envFile: 'src/config/index.ts', // string | false (default: candidate search)
     srcDir: 'src', // optional override
     outDir: '.kickjs/types', // optional override
     disable: ['kick/db'], // skip specific plugin typegens (see below)
@@ -265,13 +273,21 @@ export default defineConfig({
 })
 ```
 
-| Field             | Default           | What it does                                                                                                                                                 |
-| ----------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `schemaValidator` | `'zod'`           | Drives `body`/`query`/`params` type inference. Set to `false` to skip schema-driven typing entirely (params still come from URL patterns).                   |
-| `envFile`         | `'src/env.ts'`    | Path to the project's env schema file. Must default-export a `defineEnv(...)` schema for typed `KickEnv` augmentation. Set to `false` to disable env typing. |
-| `srcDir`          | `'src'`           | Directory to scan for controllers and decorators.                                                                                                            |
-| `outDir`          | `'.kickjs/types'` | Where to write generated files.                                                                                                                              |
-| `disable`         | `[]`              | Plugin typegen ids to skip. The plugin still loads — only its `generate()` is bypassed. Discover ids with `kick typegen --list`.                             |
+| Field             | Default            | What it does                                                                                                                                                                                                                   |
+| ----------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `schemaValidator` | `'zod'`            | Drives `body`/`query`/`params` type inference and the `KickEnv` codegen. See the table below for what each value emits. Set to `false` to skip schema-driven typing entirely (params still come from URL patterns).            |
+| `envFile`         | _(candidate list)_ | Path to the project's env schema file. The default sentinel searches `src/config/index.ts`, `src/config/env.ts`, `src/config.ts`, `src/env.ts` in order. Pass an explicit path to pin one; pass `false` to disable env typing. |
+| `srcDir`          | `'src'`            | Directory to scan for controllers and decorators.                                                                                                                                                                              |
+| `outDir`          | `'.kickjs/types'`  | Where to write generated files.                                                                                                                                                                                                |
+| `disable`         | `[]`               | Plugin typegen ids to skip. The plugin still loads — only its `generate()` is bypassed. Discover ids with `kick typegen --list`.                                                                                               |
+
+#### `schemaValidator` values
+
+| Value             | Env codegen                                                            | Body/query/params codegen                              | Use when                                                                                                                            |
+| ----------------- | ---------------------------------------------------------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `'zod'`           | `import('zod').infer<typeof _envSchema>`                               | `import('zod').infer<typeof Schema>`                   | Legacy / Zod-only projects (default for back-compat).                                                                               |
+| `'kickjs-schema'` | `InferSchemaOutput<typeof _envSchema>` flattened through a mapped type | `InferSchemaOutput<typeof Schema>`                     | Projects using `fromZod` / `fromValibot` / `fromYup` schemas. **Recommended for new projects.** `kick new` sets this automatically. |
+| `false`           | (skipped — no `KickEnv` augmentation)                                  | `unknown` for body/query/params (URL params unchanged) | Adopters who want hand-rolled typing or are validator-agnostic.                                                                     |
 
 CLI flags override the config for a single run: `--schema-validator <name>`, `--env-file <path>` (`--env-file false` disables it).
 
@@ -433,7 +449,7 @@ Each call surfaces in `.kickjs/types/augmentations.d.ts` as a documentation-only
 These are known and deliberate for the current release; some will be lifted in follow-up work:
 
 - **Response types are not generated.** Handler return types are not statically inferable without a heavyweight TypeScript compiler-API integration. There's no `response` typing today.
-- **Joi, Yup, and JSON Schema are not yet supported.** The `typegen.schemaValidator` config slot is designed to accept other validators in the future, but only Zod ships built-in for now.
+- **Joi and JSON Schema are not yet supported.** `typegen.schemaValidator: 'kickjs-schema'` already covers Zod, Valibot, Yup, and Standard Schema v1 — Joi and JSON Schema need a `@forinda/kickjs-schema` adapter first (PRs welcome).
 - **Schema references must be bare top-level identifiers.** Member access, function calls, and inline compositions silently fall back to `body: unknown` (see [What the scanner cannot resolve](#what-the-scanner-cannot-resolve-falls-back-to-unknown)).
 - **Column-object `@ApiQueryParams` configs (Drizzle-style) are recognised but not narrowed.** Use the string-array form (or `ctx.qs(config as const)`) for typed query field names.
 - **Errors in generated `routes.ts` point at the generated file**, not your controller. The line numbers and identifiers are accurate, but the file path is `.kickjs/types/routes.ts` rather than your source. If you see a tsc error there, look at the schema that the failing route's decorator references.
