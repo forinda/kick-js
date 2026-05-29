@@ -29,6 +29,10 @@ export function registerInitCommand(program: Command): void {
     .option('-t, --template <type>', 'Project template: rest | ddd | cqrs | minimal')
     .option('-r, --repo <type>', 'Default repository: prisma | drizzle | inmemory | custom')
     .option(
+      '-s, --schema <lib>',
+      'Schema library for env / DTOs: zod | valibot | yup (default: zod)',
+    )
+    .option(
       '--packages <packages>',
       'Comma-separated packages to include (e.g. auth,swagger,ws,queue)',
     )
@@ -168,6 +172,33 @@ export function registerInitCommand(program: Command): void {
         }
       }
 
+      // ── Schema library ────────────────────────────────────────────
+      // Flows into the env scaffold (`fromZod` / `fromValibot` /
+      // `fromYup`), the body-validation pipeline, and the swagger spec
+      // generator. All three go through `@forinda/kickjs-schema`'s
+      // `detectSchema()` at runtime, so the choice is purely about
+      // author ergonomics — `zod` is the default for the widest
+      // ecosystem reach.
+      let schemaLib: 'zod' | 'valibot' | 'yup' = opts.schema
+      if (!schemaLib) {
+        if (yes) {
+          schemaLib = 'zod'
+        } else {
+          schemaLib = (await select({
+            message: 'Schema library (env + DTO validation)',
+            options: [
+              { value: 'zod', label: 'Zod', hint: 'default — broad ecosystem' },
+              { value: 'valibot', label: 'Valibot', hint: 'smaller bundle' },
+              { value: 'yup', label: 'Yup', hint: 'classic API' },
+            ],
+          })) as 'zod' | 'valibot' | 'yup'
+        }
+      }
+      if (!['zod', 'valibot', 'yup'].includes(schemaLib)) {
+        log.warn(`Unknown --schema "${schemaLib}", falling back to zod.`)
+        schemaLib = 'zod'
+      }
+
       // ── Optional packages ─────────────────────────────────────────
       let selectedPackages: string[]
       if (opts.packages !== undefined) {
@@ -227,6 +258,7 @@ export function registerInitCommand(program: Command): void {
         template,
         defaultRepo,
         packages: selectedPackages,
+        schemaLib,
       })
 
       outro(`Done! Next steps: ${colors.cyan(`cd ${name} && ${packageManager} dev`)}`)

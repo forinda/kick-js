@@ -1,11 +1,27 @@
 type ProjectTemplate = 'rest' | 'ddd' | 'cqrs' | 'minimal'
 
+/**
+ * Supported schema libraries — passed through to `fromZod` /
+ * `fromValibot` / `fromYup` in the generated env file. `zod` is the
+ * default for `--yes` because it has the deepest ecosystem
+ * compatibility (OpenAPI generation, Standard Schema brand for
+ * `kick typegen`).
+ */
+export type SchemaLib = 'zod' | 'valibot' | 'yup'
+
 /** Map of optional package names to their npm package identifiers */
 const PACKAGE_DEPS: Record<string, string> = {
   swagger: '@forinda/kickjs-swagger',
   ws: '@forinda/kickjs-ws',
   queue: '@forinda/kickjs-queue',
   devtools: '@forinda/kickjs-devtools',
+}
+
+/** Schema-lib runtime dependency ranges. Pinned to a recent release. */
+const SCHEMA_LIB_DEPS: Record<SchemaLib, { name: string; range: string }> = {
+  zod: { name: 'zod', range: '^4.3.6' },
+  valibot: { name: 'valibot', range: '^1.4.1' },
+  yup: { name: 'yup', range: '^1.7.1' },
 }
 
 /**
@@ -35,16 +51,24 @@ export function generatePackageJson(
   template: ProjectTemplate,
   versions: SiblingVersions,
   packages: string[] = [],
+  schemaLib: SchemaLib = 'zod',
 ): string {
+  const schemaDep = SCHEMA_LIB_DEPS[schemaLib]
   const baseDeps: Record<string, string> = {
     '@forinda/kickjs': take(versions, '@forinda/kickjs'),
+    // The schema-agnostic abstraction kickjs-schema wraps zod / valibot
+    // / yup behind a single `KickSchema` interface — env validation,
+    // body validation, and swagger spec generation all flow through
+    // `detectSchema()`. Shipping it as a direct dep (rather than a peer)
+    // keeps the new-project install one-step.
+    '@forinda/kickjs-schema': take(versions, '@forinda/kickjs-schema'),
     // `dotenv` is an optional peer of @forinda/kickjs — scaffolded apps
     // get it pre-installed so `.env` files Just Work. Apps that load
     // env from the shell or a secret manager can drop this safely.
     dotenv: '^17.3.1',
     express: '^5.1.0',
     'reflect-metadata': '^0.2.2',
-    zod: '^4.3.6',
+    [schemaDep.name]: schemaDep.range,
   }
 
   // Add user-selected optional packages — each looked up against
