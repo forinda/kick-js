@@ -165,25 +165,127 @@ export const modules = defineModules().mount(HelloModule())
  *
  * Both autocomplete and type-check at compile time.
  */
-export function generateEnvFile(): string {
-  return `import { defineEnv, loadEnv } from '@forinda/kickjs/config'
+export function generateEnvFile(schemaLib: 'zod' | 'valibot' | 'yup' = 'zod'): string {
+  if (schemaLib === 'valibot') {
+    return `import { loadEnvFromSchema } from '@forinda/kickjs/config'
+import { fromValibot } from '@forinda/kickjs-schema/valibot'
+import * as v from 'valibot'
+
+/**
+ * Project environment schema (Valibot).
+ *
+ * \`fromValibot\` wraps the Valibot schema as a \`KickSchema\` so the
+ * env loader, validate middleware, and swagger spec generator all see
+ * the same shape. The default export is the contract \`kick typegen\`
+ * reads to populate \`KickEnv\` via \`InferSchemaOutput<typeof _envSchema>\`
+ * — that's what makes \`@Value('FOO')\` autocomplete and
+ * \`process.env.FOO\` typed.
+ *
+ * @example
+ *   DATABASE_URL: v.pipe(v.string(), v.url()),
+ *   JWT_SECRET:   v.pipe(v.string(), v.minLength(32)),
+ *   REDIS_URL:    v.optional(v.pipe(v.string(), v.url())),
+ */
+const envSchema = fromValibot(
+  v.object({
+    PORT: v.optional(v.pipe(v.string(), v.transform(Number)), '3000'),
+    NODE_ENV: v.optional(v.picklist(['development', 'production', 'test']), 'development'),
+    LOG_LEVEL: v.optional(v.string(), 'info'),
+    // DATABASE_URL: v.pipe(v.string(), v.url()),
+  }),
+)
+
+/**
+ * IMPORTANT — side effect: register the schema with kickjs's env cache
+ * **at module-load time**. \`ConfigService\` and \`@Value()\` both consume
+ * this cache, and they will fall back to the base schema (or undefined)
+ * if no extended schema has been registered before they're resolved.
+ *
+ * As long as \`src/index.ts\` imports this file (\`import './config'\`) at
+ * the top — before \`bootstrap()\` runs — every controller and service
+ * in the app sees the typed extended values.
+ */
+export const env = loadEnvFromSchema(envSchema)
+
+export default envSchema
+`
+  }
+
+  if (schemaLib === 'yup') {
+    return `import { loadEnvFromSchema } from '@forinda/kickjs/config'
+import { fromYup } from '@forinda/kickjs-schema/yup'
+import * as yup from 'yup'
+
+/**
+ * Project environment schema (Yup).
+ *
+ * \`fromYup\` wraps the Yup schema as a \`KickSchema\` so the env loader,
+ * validate middleware, and swagger spec generator all see the same
+ * shape. The default export is the contract \`kick typegen\` reads to
+ * populate \`KickEnv\` via \`InferSchemaOutput<typeof _envSchema>\`.
+ *
+ * Note: Yup's \`.url()\` defaults to http/https; database connection
+ * strings like \`postgres://\` use \`.matches(/^[a-z]+:\\/\\/.+/i)\` or
+ * a plain \`.string().required()\`.
+ *
+ * @example
+ *   DATABASE_URL: yup.string().required(),
+ *   JWT_SECRET:   yup.string().min(32).required(),
+ *   REDIS_URL:    yup.string().url().optional(),
+ */
+const envSchema = fromYup(
+  yup.object({
+    PORT: yup.number().default(3000),
+    NODE_ENV: yup
+      .string()
+      .oneOf(['development', 'production', 'test'])
+      .default('development'),
+    LOG_LEVEL: yup.string().default('info'),
+    // DATABASE_URL: yup.string().required(),
+  }),
+)
+
+/**
+ * IMPORTANT — side effect: register the schema with kickjs's env cache
+ * **at module-load time**. \`ConfigService\` and \`@Value()\` both consume
+ * this cache, and they will fall back to the base schema (or undefined)
+ * if no extended schema has been registered before they're resolved.
+ *
+ * As long as \`src/index.ts\` imports this file (\`import './config'\`) at
+ * the top — before \`bootstrap()\` runs — every controller and service
+ * in the app sees the typed extended values.
+ */
+export const env = loadEnvFromSchema(envSchema)
+
+export default envSchema
+`
+  }
+
+  // zod (default)
+  return `import { loadEnvFromSchema } from '@forinda/kickjs/config'
+import { fromZod } from '@forinda/kickjs-schema/zod'
 import { z } from 'zod'
 
 /**
- * Project environment schema.
+ * Project environment schema (Zod).
  *
- * Extend the base schema with your application's variables. The
- * default export is the contract \`kick typegen\` reads to populate
- * the global \`KickEnv\` registry — that's what makes \`@Value('FOO')\`
- * autocomplete and \`process.env.FOO\` typed.
+ * \`fromZod\` wraps the Zod schema as a \`KickSchema\` so the env loader,
+ * validate middleware, and swagger spec generator all see the same
+ * shape. The default export is the contract \`kick typegen\` reads to
+ * populate \`KickEnv\` via \`InferSchemaOutput<typeof _envSchema>\` —
+ * that's what makes \`@Value('FOO')\` autocomplete and
+ * \`process.env.FOO\` typed.
  *
  * @example
  *   DATABASE_URL: z.string().url(),
  *   JWT_SECRET: z.string().min(32),
  *   REDIS_URL: z.string().url().optional(),
  */
-const envSchema = defineEnv((base) =>
-  base.extend({
+const envSchema = fromZod(
+  z.object({
+    PORT: z.coerce.number().default(3000),
+    NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+    LOG_LEVEL: z.string().default('info'),
     // DATABASE_URL: z.string().url(),
   }),
 )
@@ -194,11 +296,11 @@ const envSchema = defineEnv((base) =>
  * this cache, and they will fall back to the base schema (or undefined)
  * if no extended schema has been registered before they're resolved.
  *
- * As long as \`src/index.ts\` imports this file (\`import './env'\`) at the
- * top — before \`bootstrap()\` runs — every controller and service in the
- * app sees the typed extended values.
+ * As long as \`src/index.ts\` imports this file (\`import './config'\`) at
+ * the top — before \`bootstrap()\` runs — every controller and service
+ * in the app sees the typed extended values.
  */
-export const env = loadEnv(envSchema)
+export const env = loadEnvFromSchema(envSchema)
 
 export default envSchema
 `
@@ -300,9 +402,12 @@ export default defineConfig({
 
   // \`kick typegen\` populates \`.kickjs/types/\` so \`Ctx<KickRoutes.X['method']>\`
   // resolves to fully-typed params/body/query. Auto-runs on \`kick dev\`.
-  // Set \`schemaValidator: false\` to skip schema-driven body typing entirely.
+  // \`'kickjs-schema'\` routes inference through \`InferSchemaOutput\` so the
+  // typegen works for any wrapped schema (Zod / Valibot / Yup). Switch
+  // to \`'zod'\` if you ship Zod schemas without \`fromZod()\` wrapping, or
+  // set \`schemaValidator: false\` to skip schema-driven body typing.
   typegen: {
-    schemaValidator: 'zod',
+    schemaValidator: 'kickjs-schema',
   },
 
   commands: [

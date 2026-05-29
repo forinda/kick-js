@@ -76,7 +76,9 @@
     "@types/node": "^25.9.1",
     "express": "^5.1.0",
     "typescript": "^6.0.3",
+    "valibot": "^1.4.1",
     "vitest": "^4.1.7",
+    "yup": "^1.7.1",
     "zod": "^4.4.3"
   },
   "publishConfig": {

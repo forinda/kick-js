@@ -45,6 +45,7 @@ const CLI_VERSION_FALLBACK = `^${cliPkg.version}`
 const SIBLING_PACKAGES = [
   '@forinda/kickjs',
   '@forinda/kickjs-cli',
+  '@forinda/kickjs-schema',
   '@forinda/kickjs-vite',
   '@forinda/kickjs-swagger',
   '@forinda/kickjs-ws',
@@ -85,6 +86,7 @@ async function resolveSiblingVersions(): Promise<Record<string, string>> {
 }
 
 type ProjectTemplate = 'rest' | 'ddd' | 'cqrs' | 'minimal'
+type SchemaLib = 'zod' | 'valibot' | 'yup'
 
 interface InitProjectOptions {
   name: string
@@ -95,6 +97,8 @@ interface InitProjectOptions {
   template?: ProjectTemplate
   defaultRepo?: string
   packages?: string[]
+  /** Schema library to scaffold env / DTOs with. Defaults to `zod`. */
+  schemaLib?: SchemaLib
 }
 
 /** Scaffold a new KickJS project */
@@ -106,6 +110,7 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
     template = 'rest',
     defaultRepo = 'inmemory',
     packages = [],
+    schemaLib = 'zod',
   } = options
   const dir = directory
 
@@ -126,7 +131,7 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
   // ── package.json — template-aware deps ────────────────────────────
   await writeFileSafe(
     join(dir, 'package.json'),
-    generatePackageJson(name, template, versions, packages),
+    generatePackageJson(name, template, versions, packages, schemaLib),
   )
 
   // ── vite.config.ts — enables HMR + SWC for decorators ──────────────
@@ -156,7 +161,7 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
   // Lives under `src/config/` so the framework's "config" concept has a
   // single, conventional home. Old projects with `src/env.ts` still
   // work — `detectEnvFile()` searches both locations.
-  await writeFileSafe(join(dir, 'src/config/index.ts'), generateEnvFile())
+  await writeFileSafe(join(dir, 'src/config/index.ts'), generateEnvFile(schemaLib))
 
   // ── src/index.ts — template-aware entry point ─────────────────────
   await writeFileSafe(
