@@ -1166,22 +1166,34 @@ export async function detectEnvFile(cwd: string, envFile: string): Promise<Disco
     } catch {
       continue
     }
-    // Cheap heuristic: any of the schema-building helpers AND a
-    // default export. We don't try to evaluate the file — the
-    // generator emits an `import type schema from '...'` and lets
-    // the user's tsc do the actual schema-to-type inference.
+    // Cheap heuristic: a schema-construction call AND a default
+    // export. The default export must be the SCHEMA itself — the
+    // generator emits `import type schema from '...'` and runs it
+    // through schema-to-type inference. `loadEnvFromSchema(...)` is
+    // deliberately NOT in the accept list because its return value is
+    // the parsed env object, not the schema. Adopters routinely write
+    //   export default envSchema
+    //   export const env = loadEnvFromSchema(envSchema)
+    // where only `envSchema` is the schema; detecting on
+    // `loadEnvFromSchema` would also accept the anti-pattern
+    //   export default loadEnvFromSchema(schema)
+    // which would push the parsed *env value* into `InferSchemaOutput`
+    // and emit a broken `KickEnv`.
     //
-    //   - `defineEnv(...)`            — legacy Zod scaffold
+    // Accept lists:
+    //   - `defineEnv(...)`                       — legacy Zod scaffold
     //   - `fromZod / fromValibot / fromYup(...)` — kickjs-schema adapters
-    //   - `loadEnvFromSchema(...)`    — schema-agnostic loader
-    if (
-      !/\bdefineEnv\s*\(/.test(source) &&
-      !/\bfrom(Zod|Valibot|Yup)\s*\(/.test(source) &&
-      !/\bloadEnvFromSchema\s*\(/.test(source)
-    ) {
+    if (!/\bdefineEnv\s*\(/.test(source) && !/\bfrom(Zod|Valibot|Yup)\s*\(/.test(source)) {
       continue
     }
     if (!/export\s+default\b/.test(source)) continue
+    // Reject the "default-export is the parsed env" pattern
+    // explicitly. Without this guard, a file that constructs the
+    // schema with `fromZod(...)` and then does
+    // `export default loadEnvFromSchema(envSchema)` would slip past
+    // the schema-construction check above and feed the parsed env's
+    // value type into `InferSchemaOutput`.
+    if (/export\s+default\s+loadEnvFromSchema\s*\(/.test(source)) continue
     return {
       filePath: abs,
       relativePath: toRelative(abs, cwd),

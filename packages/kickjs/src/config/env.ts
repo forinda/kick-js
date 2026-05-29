@@ -233,17 +233,19 @@ export function resetEnvCache(): void {
  * ```
  */
 /**
- * Overload + impl. The generic overload infers the parsed env shape
- * from the schema (a `KickSchema<T>` resolves to `T`; a raw
- * Zod/Valibot/Yup schema resolves through `InferSchemaOutput<T>`), so
- * the call site lands at the real typed shape instead of
- * `Record<string, unknown>`. The fallback overload accepts arbitrary
- * `unknown` for adopters who pass a runtime-only validator the typed
- * path can't see — they still get a typed `Record<string, unknown>`
- * back.
+ * Single inferring signature. `TSchema` is inferred from the call site;
+ * the conditional return type maps the unknown-input case (TSchema
+ * resolves to `unknown` only when the argument is `unknown`-typed
+ * because nothing on the value side carried a richer brand) to
+ * `Record<string, unknown>` rather than letting `InferSchemaOutput`
+ * fall through to `unknown`. The previous two-overload form had the
+ * generic overload win for `unknown`-typed inputs (`unknown` is
+ * assignable to any `TSchema`), so the documented "Record" fallback
+ * never actually applied.
  */
-export function loadEnvFromSchema<TSchema>(schema: TSchema): InferSchemaOutput<TSchema>
-export function loadEnvFromSchema(schema: unknown): Record<string, unknown>
+export function loadEnvFromSchema<TSchema>(
+  schema: TSchema,
+): unknown extends TSchema ? Record<string, unknown> : InferSchemaOutput<TSchema>
 export function loadEnvFromSchema(schema: unknown): unknown {
   const wrapped = detectSchema(schema)
   const result = wrapped.safeParse(process.env)
