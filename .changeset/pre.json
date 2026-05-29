@@ -25,5 +25,10 @@
     "kickjs-devtools": "5.2.1",
     "@forinda/kickjs-ws": "5.2.3"
   },
-  "changesets": []
+  "changesets": [
+    "cli-schema-scaffold",
+    "context-decorator-with-params",
+    "schema-abstraction",
+    "schema-inference-fixes"
+  ]
 }

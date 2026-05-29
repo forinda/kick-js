@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-vite",
-  "version": "5.3.2",
+  "version": "6.0.0-alpha.0",
   "description": "Vite plugin for KickJS — dev server integration, HMR, virtual modules, httpServer piping",
   "keywords": [
     "kickjs",
@@ -61,7 +61,7 @@
   "peerDependencies": {
     "vite": ">=6.0.0",
     "express": "^5.1.0",
-    "@forinda/kickjs": ">=2.3.0"
+    "@forinda/kickjs": ">=5.14.0-alpha.0"
   },
   "devDependencies": {
     "@forinda/kickjs": "workspace:*",
