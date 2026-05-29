@@ -1166,11 +1166,21 @@ export async function detectEnvFile(cwd: string, envFile: string): Promise<Disco
     } catch {
       continue
     }
-    // Cheap heuristic: defineEnv(...) call AND a default export.
-    // We don't try to evaluate the file — the generator emits an
-    // `import type schema from '...'` and lets the user's tsc do the
-    // actual schema-to-type inference.
-    if (!/\bdefineEnv\s*\(/.test(source)) continue
+    // Cheap heuristic: any of the schema-building helpers AND a
+    // default export. We don't try to evaluate the file — the
+    // generator emits an `import type schema from '...'` and lets
+    // the user's tsc do the actual schema-to-type inference.
+    //
+    //   - `defineEnv(...)`            — legacy Zod scaffold
+    //   - `fromZod / fromValibot / fromYup(...)` — kickjs-schema adapters
+    //   - `loadEnvFromSchema(...)`    — schema-agnostic loader
+    if (
+      !/\bdefineEnv\s*\(/.test(source) &&
+      !/\bfrom(Zod|Valibot|Yup)\s*\(/.test(source) &&
+      !/\bloadEnvFromSchema\s*\(/.test(source)
+    ) {
+      continue
+    }
     if (!/export\s+default\b/.test(source)) continue
     return {
       filePath: abs,
