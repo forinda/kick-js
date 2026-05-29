@@ -107,15 +107,28 @@ describe('InferSchemaOutput — Yup', () => {
     JWT_SECRET: yup.string().min(32).required(),
   })
 
-  it('fromYup returns a KickSchema; output type lands at unknown when Yup omits the brand', () => {
-    // Yup exposes `__outputType` on some schema kinds but not all.
-    // The inference path tries it; when missing, adopters cast — and
-    // either way the runtime safeParse still produces typed data
-    // through the explicit annotation.
-    const wrapped = fromYup(Schema) as KickSchema<{
-      DATABASE_URL: string
-      JWT_SECRET: string
-    }>
+  it('fromYup infers the Yup output type via __outputType — no cast required', () => {
+    // Yup exposes `__outputType` on every schema (yup 1.x typings,
+    // `index.d.ts` line ~199), so the `InferSchemaOutput` Yup branch
+    // resolves it. The compile-time assertion below trips `tsc` if
+    // `fromYup` regresses to `KickSchema<unknown>` or the Yup branch
+    // is dropped — adopters would otherwise see `result.data` typed
+    // as `unknown` and silently lose `KickEnv` autocomplete.
+    const wrapped = fromYup(Schema)
+
+    type Out = InferSchemaOutput<typeof wrapped>
+    type Resolved = { [K in keyof Out]: Out[K] }
+
+    // The required-string fields land at `string | undefined` in Yup's
+    // `__outputType` because `.required()` is a runtime check, not a
+    // type-level guard. Drive the assertion through the unioned form
+    // to lock the brand path without painting a false expectation of
+    // strict-string output.
+    const _expected: Resolved = {
+      DATABASE_URL: 'https://example.com' as string | undefined,
+      JWT_SECRET: 'a-very-long-secret-of-at-least-32' as string | undefined,
+    }
+    void _expected
 
     const result = wrapped.safeParse({
       DATABASE_URL: 'https://example.com',
@@ -123,7 +136,22 @@ describe('InferSchemaOutput — Yup', () => {
     })
     expect(result.success).toBe(true)
     if (result.success) {
-      expect(result.data.DATABASE_URL).toBe('https://example.com')
+      // Runtime data exists because Yup's `.required()` enforced it.
+      const data = result.data as Out
+      expect(data.DATABASE_URL).toBe('https://example.com')
     }
+  })
+
+  it('rejects KickSchema<unknown> at compile time when the brand resolves correctly', () => {
+    // Pure type-level guard. If `fromYup` regresses to returning
+    // `KickSchema<unknown>`, the variable would assign to either
+    // branch and the test loses its compile-time meaning. The
+    // assertion shape forces a real object inference.
+    const wrapped = fromYup(Schema)
+    type Out = InferSchemaOutput<typeof wrapped>
+    type HasShape = keyof Out extends 'DATABASE_URL' | 'JWT_SECRET' ? true : false
+    const _proof: HasShape = true
+    void _proof
+    expect(wrapped._raw).toBe(Schema)
   })
 })
