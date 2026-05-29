@@ -30,6 +30,7 @@ const guideSidebar = [
       { text: 'Middleware', link: '/guide/middleware' },
       { text: 'Context Decorators', link: '/guide/context-decorators' },
       { text: 'Validation', link: '/guide/validation' },
+      { text: 'Schema (Zod / Valibot / Yup)', link: '/guide/schema' },
       { text: 'Error Handling', link: '/guide/error-handling' },
       { text: 'Request Lifecycle', link: '/guide/lifecycle' },
     ],

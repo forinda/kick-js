@@ -1,6 +1,6 @@
 # Configuration
 
-`@forinda/kickjs` ships Zod-validated environment configuration with caching, an injectable typed service, and tight integration with `kick typegen` — every API in this guide is type-safe with no manual schema passing. No extra package install is required.
+`@forinda/kickjs` ships schema-validated environment configuration with caching, an injectable typed service, and tight integration with `kick typegen` — every API in this guide is type-safe with no manual schema passing. No extra package install is required.
 
 ::: tip Moved from `@forinda/kickjs-config`
 Earlier releases shipped these APIs in a separate `@forinda/kickjs-config` package. They now live inside `@forinda/kickjs` itself. The standalone package still exists as a thin re-export shim for one release and will be removed in v3 — migrate your imports to `@forinda/kickjs`.
@@ -12,10 +12,85 @@ Earlier releases shipped these APIs in a separate `@forinda/kickjs-config` packa
 
 The recommended pattern: put your schema in **`src/config/index.ts`** as a default export (older scaffolds put it at `src/env.ts` — both still work; the typegen scanner searches both). `kick new` creates this file for you, and `kick typegen` (auto-run on `kick dev`) reads it once and populates the global `KickEnv` interface — that's what makes `ConfigService.get`, `loadEnv`, `getEnv`, `process.env`, and `@Value` all type-safe across the project.
 
-Use `defineEnv()` to extend the base schema with your application-specific variables. The base schema includes `PORT`, `NODE_ENV`, and `LOG_LEVEL`:
+Wrap your schema with `fromZod` / `fromValibot` / `fromYup` from [`@forinda/kickjs-schema`](schema.md) and load it with `loadEnvFromSchema(envSchema)`. The wrapped schema is what `kick typegen` reads to populate `KickEnv`, and the same wrapped schema flows through the validate middleware and the swagger spec generator — all three pipelines share one definition. Pick whichever library you prefer:
 
 ```ts
-// src/config/index.ts
+// src/config/index.ts — Zod (recommended default)
+import { loadEnvFromSchema } from '@forinda/kickjs/config'
+import { fromZod } from '@forinda/kickjs-schema/zod'
+import { z } from 'zod'
+
+const envSchema = fromZod(
+  z.object({
+    PORT: z.coerce.number().default(3000),
+    NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+    LOG_LEVEL: z.string().default('info'),
+    DATABASE_URL: z.string().url(),
+    JWT_SECRET: z.string().min(32),
+    REDIS_URL: z.string().url().optional(),
+  }),
+)
+
+export const env = loadEnvFromSchema(envSchema)
+export default envSchema
+```
+
+```ts
+// src/config/index.ts — Valibot
+import { loadEnvFromSchema } from '@forinda/kickjs/config'
+import { fromValibot } from '@forinda/kickjs-schema/valibot'
+import * as v from 'valibot'
+
+const envSchema = fromValibot(
+  v.object({
+    PORT: v.optional(v.pipe(v.string(), v.transform(Number)), '3000'),
+    NODE_ENV: v.optional(v.picklist(['development', 'production', 'test']), 'development'),
+    LOG_LEVEL: v.optional(v.string(), 'info'),
+    DATABASE_URL: v.pipe(v.string(), v.url()),
+    JWT_SECRET: v.pipe(v.string(), v.minLength(32)),
+  }),
+)
+
+export const env = loadEnvFromSchema(envSchema)
+export default envSchema
+```
+
+```ts
+// src/config/index.ts — Yup
+import { loadEnvFromSchema } from '@forinda/kickjs/config'
+import { fromYup } from '@forinda/kickjs-schema/yup'
+import * as yup from 'yup'
+
+const envSchema = fromYup(
+  yup.object({
+    PORT: yup.number().default(3000),
+    NODE_ENV: yup.string().oneOf(['development', 'production', 'test']).default('development'),
+    LOG_LEVEL: yup.string().default('info'),
+    // Yup's `.url()` only matches http/https — use `.string().required()` for
+    // database URLs like `postgres://…` or write a custom `.matches(/^…/)`.
+    DATABASE_URL: yup.string().required(),
+    JWT_SECRET: yup.string().min(32).required(),
+  }),
+)
+
+export const env = loadEnvFromSchema(envSchema)
+export default envSchema
+```
+
+::: tip Scaffold straight from the CLI
+`kick new --schema zod` (default), `--schema valibot`, or `--schema yup` writes the right `src/config/index.ts` for you and sets `typegen.schemaValidator: 'kickjs-schema'` in `kick.config.ts` so type generation flows through `InferSchemaOutput`. See [CLI commands](cli-commands.md#kick-new) for the full flag list.
+:::
+
+For the `KickSchema` interface, adapter behaviour, and a deeper look at `InferSchemaOutput`, jump to the [schema-agnostic validation guide](schema.md). Once `src/config/index.ts` exists, run `kick typegen` once (or just start `kick dev`) and the schema flows through to every consumer automatically — see [Type Generation](typegen.md#how-env-vars-are-typed) for the full pipeline.
+
+### Legacy: `defineEnv` + `loadEnv` (Zod-only)
+
+::: warning Older pattern — still supported, not removed
+Projects scaffolded before the `@forinda/kickjs-schema` integration use `defineEnv()` + `loadEnv()` directly against Zod. Both APIs still ship and `kick typegen` still detects the schema (set `typegen.schemaValidator: 'zod'` to keep the legacy `z.infer<typeof envSchema>` codegen). New projects should prefer the schema-agnostic pattern above; existing projects can migrate at their own pace.
+:::
+
+```ts
+// Legacy — Zod-only, still works
 import { defineEnv } from '@forinda/kickjs'
 import { z } from 'zod'
 
@@ -28,24 +103,22 @@ export default defineEnv((base) =>
 )
 ```
 
-Once this file exists, run `kick typegen` once (or just start `kick dev`) and the schema flows through to every consumer automatically. See [Type Generation](typegen.md#how-env-vars-are-typed) for the full pipeline.
-
 ## Wiring the schema at startup
 
 ::: danger Required: side-effect import
-The schema in `src/env.ts` is a **declaration only**. You must also call `loadEnv(envSchema)` (the canonical pattern below does this for you) **and** make sure that file is imported as a side effect from `src/index.ts` _before_ `bootstrap()` runs. If you skip this:
+The schema is a **declaration only**. You must also call `loadEnvFromSchema(envSchema)` (the canonical pattern above does this for you) **and** make sure that file is imported as a side effect from `src/index.ts` _before_ `bootstrap()` runs. If you skip this:
 
 - `ConfigService.get('YOUR_KEY')` returns `undefined` for every user-defined key.
 - `loadEnv()` (no-arg) falls back to `baseEnvSchema` and only knows `PORT`, `NODE_ENV`, `LOG_LEVEL`.
-- `@Value('YOUR_KEY')` _appears_ to keep working — but only because it has a raw `process.env` fallback baked in. The Zod-validated typed value is not available, the schema's defaults never apply, and `z.coerce.number()` etc. silently drop their type coercion. This is the divergence that causes "ConfigService doesn't see my env" bug reports.
+- `@Value('YOUR_KEY')` _appears_ to keep working — but only because it has a raw `process.env` fallback baked in. The validated typed value is not available, the schema's defaults never apply, and Zod coercions / Valibot transforms silently drop. This is the divergence that causes "ConfigService doesn't see my env" bug reports.
 
-`kick new` scaffolds both halves of the wiring for you. If you're upgrading an older project by hand, follow the canonical pattern below.
+`kick new` scaffolds both halves of the wiring for you. If you're upgrading an older project by hand, follow the canonical patterns above.
 :::
 
-The canonical `src/config/index.ts` calls `loadEnv(envSchema)` itself so the file does double duty as both a schema declaration _and_ a runtime registration:
+The canonical `src/config/index.ts` calls `loadEnvFromSchema(envSchema)` itself so the file does double duty as both a schema declaration _and_ a runtime registration. Legacy projects can keep using `loadEnv(envSchema)` against a `defineEnv` schema — the wiring requirement is identical:
 
 ```ts
-// src/config/index.ts
+// Legacy — still supported. New projects: use loadEnvFromSchema + fromZod (see above).
 import { defineEnv, loadEnv } from '@forinda/kickjs/config'
 import { z } from 'zod'
 
@@ -109,9 +182,34 @@ The base schema provides these defaults:
 
 ## Loading and Accessing Environment Variables
 
-### loadEnv
+### loadEnvFromSchema
 
-Parse and validate `process.env` against your schema. The result is cached — subsequent calls return the same object without re-parsing:
+Parse and validate `process.env` against any wrapped `KickSchema` — Zod, Valibot, Yup, or any future adapter. Returns the typed env data; caches the result so subsequent reads through `loadEnv()` / `ConfigService` reuse the same parsed object.
+
+```ts
+import { loadEnvFromSchema } from '@forinda/kickjs/config'
+import { fromZod } from '@forinda/kickjs-schema/zod'
+import { z } from 'zod'
+
+const envSchema = fromZod(
+  z.object({
+    DATABASE_URL: z.string().url(),
+    PORT: z.coerce.number().default(3000),
+  }),
+)
+
+export const env = loadEnvFromSchema(envSchema)
+env.DATABASE_URL // string (inferred from the wrapped schema)
+env.PORT // number
+```
+
+The return type is `InferSchemaOutput<TSchema>` — Zod's `_output` (via the Standard Schema brand on v4), Valibot's `~standard.types.output`, or Yup's `__outputType`. Pass a runtime-only validator (a plain function) and the return type degrades to `Record<string, unknown>` automatically. Validation failure throws a single `Error` whose message lists every field that failed; the `safeParse` shape underneath is the same one swagger and the validate middleware use.
+
+### loadEnv (legacy — Zod only)
+
+::: warning Older API — still supported, not removed
+`loadEnv()` accepts only Zod schemas and predates `loadEnvFromSchema`. New projects should prefer `loadEnvFromSchema` so the env shares the same `KickSchema` abstraction as body validation and swagger.
+:::
 
 ```ts
 import { loadEnv } from '@forinda/kickjs'
@@ -127,7 +225,7 @@ env.PORT // number
 const testEnv = loadEnv(testSchema)
 ```
 
-The cache is **sticky**: once you've called `loadEnv(extendedSchema)` once, subsequent `loadEnv()` calls reuse the extended schema instead of falling back to the base. This matters because `ConfigService` (and the bare `@Value` resolver) call `loadEnv()` no-arg internally — without stickiness, instantiating them after a custom schema load would silently downgrade the env.
+The cache is **sticky** across both APIs: once you've called `loadEnvFromSchema(extendedSchema)` or `loadEnv(extendedSchema)` once, subsequent `loadEnv()` calls reuse the extended schema instead of falling back to the base. This matters because `ConfigService` (and the bare `@Value` resolver) call `loadEnv()` no-arg internally — without stickiness, instantiating them after a custom schema load would silently downgrade the env.
 
 ### getEnv
 

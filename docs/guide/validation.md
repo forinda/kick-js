@@ -1,10 +1,14 @@
 # Validation
 
-KickJS validates request data using Zod schemas. Validation can be declared inline on route decorators or applied manually with the `validate()` middleware. Failed validation returns a `422` response with structured error details.
+KickJS validates request data through the [`@forinda/kickjs-schema`](schema.md) abstraction, so any wrapped schema — Zod, Valibot, Yup, or anything implementing Standard Schema v1 — works without changing the route decorator. Validation can be declared inline on route decorators or applied manually with the `validate()` middleware. Failed validation returns a `422` response with structured error details.
+
+::: tip One pipeline, three libraries
+Under the hood the validate middleware calls `detectSchema(schema).safeParse(payload)`. The same `KickSchema` flows into the swagger spec generator and `loadEnvFromSchema()` — so picking Valibot for one DTO and Yup for another in the same project Just Works, no extra config. See the [schema-agnostic validation guide](schema.md) for the adapter surface.
+:::
 
 ## Inline Validation on Route Decorators
 
-The route decorators (`@Get`, `@Post`, `@Put`, `@Delete`, `@Patch`) accept a second argument with Zod schemas for `body`, `query`, and `params`:
+The route decorators (`@Get`, `@Post`, `@Put`, `@Delete`, `@Patch`) accept a second argument with `body`, `query`, and `params` schemas. Pass a Zod, Valibot, or Yup schema directly — `detectSchema()` routes each one to the right adapter:
 
 ```ts
 import { Controller, Post, Put, Get, type Ctx } from '@forinda/kickjs'
@@ -140,10 +144,10 @@ For query parameter errors, the message reads `"Invalid query parameters"`. For 
 
 ## Defining Reusable DTOs
 
-Define schemas in dedicated DTO files and use `z.infer` to extract the TypeScript type:
+Define schemas in dedicated DTO files and extract the TypeScript type with the library's native infer helper. The three adapters round-trip identically through the validate middleware — pick whichever you prefer:
 
 ```ts
-// application/dtos/create-todo.dto.ts
+// application/dtos/create-todo.dto.ts — Zod (recommended default)
 import { z } from 'zod'
 
 export const createTodoSchema = z.object({
@@ -154,7 +158,33 @@ export const createTodoSchema = z.object({
 export type CreateTodoDTO = z.infer<typeof createTodoSchema>
 ```
 
-Pass the schema to the route decorator and use the type in your use case:
+```ts
+// application/dtos/create-todo-valibot.dto.ts — Valibot
+import * as v from 'valibot'
+
+export const createTodoSchema = v.object({
+  title: v.pipe(v.string(), v.minLength(1, 'Title is required'), v.maxLength(200)),
+  priority: v.optional(v.picklist(['low', 'medium', 'high']), 'medium'),
+})
+
+export type CreateTodoDTO = v.InferOutput<typeof createTodoSchema>
+```
+
+```ts
+// application/dtos/create-todo-yup.dto.ts — Yup
+import * as yup from 'yup'
+
+export const createTodoSchema = yup
+  .object({
+    title: yup.string().required('Title is required').max(200),
+    priority: yup.string().oneOf(['low', 'medium', 'high']).default('medium'),
+  })
+  .required()
+
+export type CreateTodoDTO = yup.InferType<typeof createTodoSchema>
+```
+
+Pass any of those schemas to the route decorator and use the matching type in your use case — `detectSchema()` figures out the right adapter at startup, no `fromZod` / `fromValibot` / `fromYup` wrap is required on the route side:
 
 ```ts
 @Post('/', { body: createTodoSchema })
@@ -164,6 +194,15 @@ async create(ctx: RequestContext) {
 }
 ```
 
+::: tip Adapter caveats
+
+- **Zod** — broadest ecosystem, default for `kick new`.
+- **Valibot** — smaller bundle; transforms validate the default _through_ the pipe, so `v.optional(v.pipe(v.string(), v.transform(Number)), '3000')` lands at `3000: number` (not the raw `'3000'` string).
+- **Yup** — classic API; `.url()` only matches http/https (use `.string().required()` for `postgres://`-style connection strings), and `__outputType` types required strings as `string | undefined` because `.required()` is enforced at runtime, not in the type. The validate middleware still rejects undefined at runtime.
+
+See [Schema-agnostic validation](schema.md) for the adapter detection order and how to register a custom one.
+:::
+
 ## OpenAPI Integration
 
-When the `@forinda/kickjs-swagger` adapter is active, Zod schemas passed to route decorators are used to generate OpenAPI request body and parameter documentation automatically. No additional annotations are needed for basic schema documentation -- the Zod structure is introspected at startup.
+When the `@forinda/kickjs-swagger` adapter is active, schemas passed to route decorators are used to generate OpenAPI request body and parameter documentation automatically — Zod, Valibot, and Yup all flow through the same `detectSchema().toJsonSchema()` pipeline, so no additional annotations are needed. Each adapter implements `toJsonSchema()`; Zod uses the built-in `toJSONSchema()`, Valibot delegates to `@valibot/to-json-schema`, and Yup walks `describe()` output. See [`@forinda/kickjs-swagger`](../api/swagger.md) for the spec-generation surface.
