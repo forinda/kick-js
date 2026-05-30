@@ -1,5 +1,12 @@
 # @forinda/kickjs-swagger
 
+## 6.0.1
+
+### Patch Changes
+
+- Updated dependencies [[`edcdb33`](https://github.com/forinda/kick-js/commit/edcdb33bdcba2057dfa325fd8ca0474d73cdb50b)]:
+  - @forinda/kickjs-schema@0.1.1
+
 ## 6.0.0
 
 ### Patch Changes
