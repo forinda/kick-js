@@ -25,15 +25,21 @@ function mapValibotIssues(issues: v.BaseIssue<unknown>[]): SchemaIssue[] {
   })
 }
 
-let _toJsonSchemaFn: ((schema: any) => Record<string, unknown>) | null | undefined
-
-import('@valibot/to-json-schema')
-  .then((mod) => {
-    _toJsonSchemaFn = mod.toJsonSchema as (schema: any) => Record<string, unknown>
-  })
-  .catch(() => {
-    _toJsonSchemaFn = null
-  })
+// Resolve `@valibot/to-json-schema` synchronously at module-load via
+// top-level await. The previous dangling-promise pattern raced with
+// the first `toJsonSchema()` call on fast CI runners — tests that
+// asserted on `properties` saw the `{ type: 'object' }` fallback
+// because the dynamic import hadn't resolved yet. Top-level await
+// blocks the importer until the optional peer either loads or
+// confirms it's missing; adopters without the peer installed still
+// land at the same `_toJsonSchemaFn = null` fallback (the catch).
+let _toJsonSchemaFn: ((schema: any) => Record<string, unknown>) | null
+try {
+  const mod = await import('@valibot/to-json-schema')
+  _toJsonSchemaFn = mod.toJsonSchema as (schema: any) => Record<string, unknown>
+} catch {
+  _toJsonSchemaFn = null
+}
 
 function valibotToJsonSchema(schema: any, _options?: JsonSchemaOptions): Record<string, unknown> {
   if (_toJsonSchemaFn) {
