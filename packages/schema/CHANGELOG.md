@@ -1,5 +1,17 @@
 # @forinda/kickjs-schema
 
+## 0.1.2
+
+### Patch Changes
+
+- [#304](https://github.com/forinda/kick-js/pull/304) [`020c4d0`](https://github.com/forinda/kick-js/commit/020c4d05bc948907207b5e70d9ee9c2341bbb9c4) Thanks [@forinda](https://github.com/forinda)! - Fix module-load crash when the `valibot` peer is not installed. `packages/schema/src/adapters/valibot.ts` static-imported `valibot` at the top of the file, so any consumer of `@forinda/kickjs-schema` (including the CLI, which loads `detect.ts` which static-imports every adapter) crashed with `ERR_MODULE_NOT_FOUND` when the peer was absent — even adopters who only used Zod paid the cost.
+
+  Switched to top-level `await import('valibot')` inside try/catch (same pattern as the `@valibot/to-json-schema` fix in 0.1.1). When the peer is absent `v` lands at `null` and `fromValibot()` throws a clear error message at call time. When present, behaviour is identical to before.
+
+  `isValibotSchema()` works without the peer (pure duck-type), so `detectSchema()` can still skip past a non-Valibot input on a Zod-only project.
+
+- [#302](https://github.com/forinda/kick-js/pull/302) [`fd786f8`](https://github.com/forinda/kick-js/commit/fd786f8ef2bca43658b4263109d9f5f6977101a5) Thanks [@forinda](https://github.com/forinda)! - Fix race condition where `fromValibot(...).toJsonSchema()` returned the `{ type: 'object' }` fallback on fast runners (CI). The previous dangling `import('@valibot/to-json-schema').then(...)` resolved asynchronously, so the first `toJsonSchema()` call frequently fired before `_toJsonSchemaFn` got assigned. Replaced with top-level `await import(...)` inside a try/catch — adopters without the peer still land at the same `_toJsonSchemaFn = null` fallback, but adopters who have it installed get the real conversion every time.
+
 ## 0.1.1
 
 ### Patch Changes

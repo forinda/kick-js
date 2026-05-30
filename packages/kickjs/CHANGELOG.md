@@ -1,5 +1,12 @@
 # @forinda/kickjs
 
+## 5.14.2
+
+### Patch Changes
+
+- Updated dependencies [[`020c4d0`](https://github.com/forinda/kick-js/commit/020c4d05bc948907207b5e70d9ee9c2341bbb9c4), [`fd786f8`](https://github.com/forinda/kick-js/commit/fd786f8ef2bca43658b4263109d9f5f6977101a5)]:
+  - @forinda/kickjs-schema@0.1.2
+
 ## 5.14.1
 
 ### Patch Changes
