@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-drizzle",
-  "version": "6.0.0-alpha.0",
+  "version": "6.0.0",
   "description": "Drizzle ORM adapter with DI integration, transaction support, and query building for KickJS",
   "keywords": [
     "kickjs",

@@ -1,5 +1,7 @@
 # @forinda/kickjs-db-sqlite
 
+## 3.0.0
+
 ## 3.0.0-alpha.0
 
 ### Patch Changes

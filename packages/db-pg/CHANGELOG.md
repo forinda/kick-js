@@ -1,5 +1,7 @@
 # @forinda/kickjs-db-pg
 
+## 10.0.0
+
 ## 10.0.0-alpha.0
 
 ### Patch Changes
