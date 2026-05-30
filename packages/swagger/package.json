@@ -29,30 +29,13 @@
     "dist"
   ],
   "scripts": {
-    "build": "wireit",
+    "build": "tsdown",
     "dev": "tsdown --watch",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "typecheck": "tsgo --noEmit",
     "clean": "rm -rf dist .wireit",
     "lint": "tsc --noEmit"
-  },
-  "wireit": {
-    "build": {
-      "command": "tsdown",
-      "files": [
-        "src/**/*.ts",
-        "tsdown.config.ts",
-        "tsconfig.json",
-        "package.json"
-      ],
-      "output": [
-        "dist/**"
-      ],
-      "dependencies": [
-        "../schema:build"
-      ]
-    }
   },
   "dependencies": {
     "@forinda/kickjs-schema": "workspace:*",
