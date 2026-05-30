@@ -1,5 +1,11 @@
 # @forinda/kickjs-schema
 
+## 0.1.1
+
+### Patch Changes
+
+- [#302](https://github.com/forinda/kick-js/pull/302) [`edcdb33`](https://github.com/forinda/kick-js/commit/edcdb33bdcba2057dfa325fd8ca0474d73cdb50b) Thanks [@forinda](https://github.com/forinda)! - Fix race condition where `fromValibot(...).toJsonSchema()` returned the `{ type: 'object' }` fallback on fast runners (CI). The previous dangling `import('@valibot/to-json-schema').then(...)` resolved asynchronously, so the first `toJsonSchema()` call frequently fired before `_toJsonSchemaFn` got assigned. Replaced with top-level `await import(...)` inside a try/catch — adopters without the peer still land at the same `_toJsonSchemaFn = null` fallback, but adopters who have it installed get the real conversion every time.
+
 ## 0.1.0
 
 ### Minor Changes
