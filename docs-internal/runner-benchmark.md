@@ -27,17 +27,18 @@ over the current **pnpm `--filter` + wireit** setup.
 
 ## Environment
 
-|                |                                      |
-| -------------- | ------------------------------------ |
-| CPU            | AMD Ryzen 5 5600G (12 logical cores) |
-| RAM            | 42.2 GB                              |
-| OS             | win32 10.0.26200 (Windows 11)        |
-| Node           | v24.16.0                             |
-| pnpm           | 10.12.1                              |
-| turbo          | 2.9.16                               |
-| wireit         | 0.14.12                              |
-| packages built | 20                                   |
-| date           | 2026-05-30                           |
+|                         |                                                          |
+| ----------------------- | -------------------------------------------------------- |
+| CPU                     | AMD Ryzen 5 5600G (12 logical cores)                     |
+| RAM                     | 42.2 GB                                                  |
+| OS                      | win32 10.0.26200 (Windows 11)                            |
+| Node                    | v24.16.0                                                 |
+| pnpm                    | 10.12.1                                                  |
+| turbo                   | 2.9.16                                                   |
+| wireit                  | 0.14.12                                                  |
+| tsdown packages         | 20 (use the `tsdown` build)                              |
+| total turbo build tasks | 22 (the 20 + vite-based `devtools` + the `devtools` SPA) |
+| date                    | 2026-05-30                                               |
 
 ## Results
 
@@ -157,8 +158,11 @@ do turbo's graph scheduling + full cache restore show their true full-repo numbe
 
 ## FINAL: fair benchmark — all packages on direct `tsdown` (5 runs each)
 
-All 19 wireit packages rewired (`build: wireit` → `build: tsdown`, wireit blocks
-removed; `wireit` devDep dropped from root). `turbo` pinned as a local devDep
+All wireit packages rewired (`build: wireit` → `build: tsdown`, wireit blocks
+removed; `wireit` devDep dropped from root) — 19 here in the pilot's wake (schema
+was already converted above), 20 in total. Two further packages have non-tsdown
+builds (the vite-based `devtools` and its SPA), so turbo schedules **22 build
+tasks** in all. `turbo` pinned as a local devDep
 (`turbo@2.9.16`) and invoked via `pnpm exec turbo` — **no `npx` refetch, no wireit
 wrapper**. Both legs now run the _identical_ `tsdown` compile; the only variable is
 the runner + its cache.

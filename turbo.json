@@ -4,8 +4,9 @@
     "build": {
       "dependsOn": ["^build"],
       "inputs": [
-        "src/**/*.ts",
-        "tsdown.config.ts",
+        "src/**/*.{ts,tsx,mts,cts}",
+        "tsdown.config.*",
+        "vite.config.*",
         "tsconfig.json",
         "package.json"
       ],
