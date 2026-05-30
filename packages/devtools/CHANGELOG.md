@@ -1,5 +1,12 @@
 # @forinda/kickjs-devtools
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @forinda/kickjs-devtools-kit@6.0.0
+
 ## 6.0.0-alpha.0
 
 ### Patch Changes
