@@ -1,0 +1,21 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        "src/**/*.{ts,tsx,mts,cts}",
+        "tsdown.config.*",
+        "vite.config.*",
+        "tsconfig.json",
+        "package.json"
+      ],
+      "outputs": ["dist/**"]
+    },
+    "test": {
+      "dependsOn": ["build"],
+      "inputs": ["src/**", "__tests__/**", "vitest.config.*", "package.json"],
+      "outputs": []
+    }
+  }
+}
