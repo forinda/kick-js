@@ -2,17 +2,40 @@ import type * as VType from 'valibot'
 import type { KickSchema, SchemaResult, SchemaIssue, JsonSchemaOptions } from '../types.js'
 import type { InferSchemaOutput } from '../infer.js'
 
+/**
+ * Recognise the specific "optional peer not installed" rejection from
+ * `await import(...)`. Bare `catch {}` would also swallow real
+ * import-time / evaluation errors (the peer is installed but threw
+ * while initialising, or its version is incompatible) — those should
+ * surface as the actual crash, not silently degrade to the `null`
+ * fallback.
+ *
+ * Node throws `ERR_MODULE_NOT_FOUND` for ESM dynamic imports and
+ * `MODULE_NOT_FOUND` for CJS; the message embeds the missing
+ * specifier so a transitive peer crash inside the optional package
+ * doesn't match this filter.
+ */
+function isMissingOptionalPeer(error: unknown, specifier: string): boolean {
+  if (!(error instanceof Error)) return false
+  const code = (error as { code?: unknown }).code
+  if (code !== 'ERR_MODULE_NOT_FOUND' && code !== 'MODULE_NOT_FOUND') return false
+  return error.message.includes(specifier)
+}
+
 // Resolve the `valibot` peer synchronously at module load. The previous
 // static `import * as v from 'valibot'` crashed the entire schema
 // package whenever the optional peer wasn't installed — even adopters
 // who only used Zod paid the cost because `detect.ts` static-imports
 // every adapter for runtime routing. Top-level `await import(...)`
-// inside try/catch keeps the package loadable when the peer is absent;
-// `fromValibot()` then throws the contextual error below on first call.
+// inside a narrowed try/catch keeps the package loadable when the peer
+// is absent; `fromValibot()` then throws the contextual error below on
+// first call. Anything *other* than a missing-peer error re-throws so
+// init failures surface instead of degrading silently.
 let v: typeof VType | null
 try {
   v = await import('valibot')
-} catch {
+} catch (err) {
+  if (!isMissingOptionalPeer(err, 'valibot')) throw err
   v = null
 }
 
@@ -58,7 +81,8 @@ let _toJsonSchemaFn: ((schema: any) => Record<string, unknown>) | null
 try {
   const mod = await import('@valibot/to-json-schema')
   _toJsonSchemaFn = mod.toJsonSchema as (schema: any) => Record<string, unknown>
-} catch {
+} catch (err) {
+  if (!isMissingOptionalPeer(err, '@valibot/to-json-schema')) throw err
   _toJsonSchemaFn = null
 }
 
