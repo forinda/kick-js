@@ -26,14 +26,57 @@
  */
 
 /**
- * Augmentable per-request metadata registry.
+ * Augmentable per-request **value-type** registry.
  *
  * Extend via module augmentation to give `ctx.get()` / `ctx.set()` static
  * type information for a given key. Unknown keys still resolve via an
  * explicit generic: `ctx.get<MyType>('custom')`.
+ *
+ * ```ts
+ * declare module '@forinda/kickjs' {
+ *   interface ContextMeta {
+ *     tenant: { id: string; name: string }
+ *   }
+ * }
+ * ```
+ *
+ * Every key declared here is automatically a valid `dependsOn` key — see
+ * {@link ContextKeys} for the relationship.
  */
 // eslint-disable-next-line @typescript-eslint/no-empty-interface
 export interface ContextMeta {}
+
+/**
+ * Augmentable per-request **key** registry — the set of context keys a
+ * project's contributors populate, independent of whether each key has a
+ * declared value type in {@link ContextMeta}.
+ *
+ * This exists so `dependsOn` (and any other key-level typing) can be
+ * narrowed to real keys WITHOUT forcing every key to carry a value type.
+ * Before it, `dependsOn` was typed against `keyof ContextMeta` alone, so
+ * the moment a project augmented `ContextMeta` for *some* keys, any
+ * contributor that depended on a key you hadn't added to `ContextMeta`
+ * stopped compiling — even though that key was a perfectly valid
+ * contributor. Splitting the two registries removes that coupling:
+ *
+ * - Put a key in `ContextMeta` when you want `ctx.get(key)` typed.
+ * - Put a key in `ContextKeys` when it's a real contributor key but you
+ *   don't need a value type for it (e.g. a marker, or a value you only
+ *   ever read with an explicit generic).
+ *
+ * Keys from BOTH registries are accepted by `dependsOn`, so adding a
+ * value type via `ContextMeta` never breaks a `dependsOn` elsewhere.
+ *
+ * ```ts
+ * declare module '@forinda/kickjs' {
+ *   interface ContextKeys {
+ *     session: true       // value type irrelevant; the key just exists
+ *   }
+ * }
+ * ```
+ */
+// eslint-disable-next-line @typescript-eslint/no-empty-interface
+export interface ContextKeys {}
 
 /** Resolve a {@link ContextMeta} value type, falling back to `Fallback` for unknown keys. */
 export type MetaValue<K extends string, Fallback = unknown> = K extends keyof ContextMeta

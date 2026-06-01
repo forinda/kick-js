@@ -209,10 +209,32 @@ Both errors are raised once during `app.setup()`, not per request. Bad pipelines
 
 ::: tip `dependsOn` and `deps` are statically typed
 
-- `dependsOn` is typed as `(keyof ContextMeta)[]`. Augment `ContextMeta` and the editor surfaces a string-literal autocomplete for every known key. A typo (`dependsOn: ['tenent']`) is a TS error with "Did you mean 'tenant'?" — not a boot-time `MissingContributorError`.
+- `dependsOn` is typed against the **union of two registries**: `keyof ContextMeta` (keys that have a value type) **and** `keyof ContextKeys` (key-only registry). Augment either and the editor surfaces a string-literal autocomplete for every known key. A typo (`dependsOn: ['tenent']`) is a TS error with "Did you mean 'tenant'?" — not a boot-time `MissingContributorError`.
 - `deps` is typed as `Record<string, DepValue>` where `DepValue = InjectionToken<T> | Constructor<T>`. Passing a string literal, an array, or a plain object errors at compile time instead of failing inside `container.resolve` at boot.
 
-Both narrow gracefully — projects without any `ContextMeta` augmentation see `dependsOn` accept plain `string[]` so first-day code keeps compiling; the narrowing kicks in as soon as the first `declare module` block lands.
+Both narrow gracefully — projects without any augmentation see `dependsOn` accept plain `string[]` so first-day code keeps compiling; the narrowing kicks in as soon as the first `declare module` block lands.
+:::
+
+::: tip `ContextMeta` vs `ContextKeys`
+
+Two augmentable registries, deliberately separate:
+
+- **`ContextMeta`** — maps a key to its **value type**, so `ctx.get('tenant')` is typed. Augment this when downstream code reads the value.
+- **`ContextKeys`** — a **key-only** registry for context keys that don't need a value type (markers, or values you only ever read with an explicit generic). The value you assign is irrelevant — `true` is conventional.
+
+`dependsOn` accepts keys from **both**. This matters: before they were split, `dependsOn` was keyed off `ContextMeta` alone, so the moment you augmented `ContextMeta` for _some_ keys, any contributor that depended on a key you hadn't added there stopped compiling. Now adding a value type via `ContextMeta` never breaks an unrelated `dependsOn` — and you can register a dependsOn-able key without inventing a value type for it:
+
+```ts
+declare module '@forinda/kickjs' {
+  interface ContextMeta {
+    tenant: { id: string; name: string } // ctx.get('tenant') is typed
+  }
+  interface ContextKeys {
+    session: true // valid in dependsOn; ctx.get('session') stays `unknown`
+  }
+}
+```
+
 :::
 
 ## Error handling

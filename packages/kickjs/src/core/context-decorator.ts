@@ -2,21 +2,31 @@ import 'reflect-metadata'
 import { METADATA, type Constructor, type MaybePromise } from './interfaces'
 import { pushClassMeta, pushMethodMeta } from './metadata'
 import type { InjectionToken } from './token'
-import type { ContextMeta, ExecutionContext, MetaValue } from './execution-context'
+import type { ContextKeys, ContextMeta, ExecutionContext, MetaValue } from './execution-context'
 
 /**
- * String-literal union of every key declared on the augmentable
- * {@link ContextMeta} interface. Resolves to `string` when the
- * project hasn't augmented `ContextMeta` yet (so a first-day project
- * keeps compiling), and narrows to the concrete keys once the
- * `declare module '@forinda/kickjs' { interface ContextMeta { ... } }`
+ * String-literal union of every known context key — the union of the
+ * keys declared on {@link ContextKeys} (key-only registry) and
+ * {@link ContextMeta} (value-type registry). Resolves to `string` when
+ * the project hasn't augmented either yet (so a first-day project keeps
+ * compiling), and narrows to the concrete keys once the
+ * `declare module '@forinda/kickjs' { interface ContextKeys/ContextMeta { ... } }`
  * blocks land.
  *
  * Used as the element type of `dependsOn`, so a typo like
  * `dependsOn: ['tenent']` becomes a TS error instead of a boot-time
  * `MissingContributorError`.
+ *
+ * Unioning BOTH registries is deliberate: it means adding a value type
+ * via `ContextMeta` automatically makes that key a valid `dependsOn`
+ * target, and you can register a dependsOn-able key in `ContextKeys`
+ * without being forced to give it a value type. (Before the split,
+ * `dependsOn` was keyed off `ContextMeta` alone, so augmenting
+ * `ContextMeta` for some keys broke `dependsOn` for every key you
+ * hadn't added there.)
  */
-export type ContextMetaKey = keyof ContextMeta extends never ? string : keyof ContextMeta & string
+type KnownContextKey = keyof ContextMeta | keyof ContextKeys
+export type ContextMetaKey = [KnownContextKey] extends [never] ? string : KnownContextKey & string
 
 /**
  * What a single `deps` entry is allowed to be — the runtime calls
@@ -71,12 +81,12 @@ export interface ContextDecoratorSpec<
    * Other contributor keys that must populate before this one runs.
    * Enforced via topo-sort at startup; missing deps and cycles fail boot.
    *
-   * Typed against `keyof ContextMeta` once the project augments it — so
+   * Typed against {@link ContextMetaKey} — the union of `keyof ContextMeta`
+   * and `keyof ContextKeys` — once the project augments either, so
    * `dependsOn: ['tenent']` (typo) is a TS error, not a boot-time
-   * `MissingContributorError`. Falls back to plain `string[]` when the
-   * registry is empty (no augmentation yet) so first-day projects keep
-   * compiling. Cast-as-any escape hatch:
-   * `dependsOn: ['custom-key' as keyof ContextMeta]`.
+   * `MissingContributorError`. Falls back to plain `string[]` when both
+   * registries are empty (no augmentation yet) so first-day projects keep
+   * compiling. Cast escape hatch: `dependsOn: ['custom-key' as ContextMetaKey]`.
    */
   dependsOn?: readonly ContextMetaKey[]
   /**
