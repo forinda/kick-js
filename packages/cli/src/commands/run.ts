@@ -69,12 +69,17 @@ async function startDevServer(
   }
 
   // Plugin typegens — the sole emitter of `.kickjs/types/*`. Same
-  // swallow-on-error semantics: a broken plugin shouldn't block the dev
-  // server from coming up. `writeTypegenArtifacts` then writes the
-  // `.kickjs/.gitignore` guard + sweeps legacy orphans.
+  // swallow-on-error semantics as the scan/gate pass above: a broken
+  // plugin (or a scanner/fs error, or a writeTypegenArtifacts hiccup)
+  // shouldn't block the dev server from coming up. `writeTypegenArtifacts`
+  // then writes the `.kickjs/.gitignore` guard + sweeps legacy orphans.
   const typesOutDir = resolve(cwd, devConfig?.typegen?.outDir ?? '.kickjs/types')
-  const startupPluginResults = await runAllPluginTypegens({ cwd, config: devConfig })
-  await writeTypegenArtifacts(typesOutDir, startupPluginResults, false)
+  try {
+    const startupPluginResults = await runAllPluginTypegens({ cwd, config: devConfig })
+    await writeTypegenArtifacts(typesOutDir, startupPluginResults, false)
+  } catch (err: any) {
+    console.warn(`  kick typegen: plugin pass skipped (${err?.message ?? err})`)
+  }
 
   // Resolve vite from the user's project, not the CLI package.
   // On Windows, require.resolve returns an absolute path like

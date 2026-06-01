@@ -401,8 +401,12 @@ export async function watchTypegen(opts: RunTypegenOptions = {}): Promise<() => 
     if (!silent) {
       console.log('  kick typegen: polling mode (KICKJS_WATCH_POLLING)')
     }
+    // Must drive BOTH phases — the plugin pass owns every
+    // `.kickjs/types/kick__*` file now, so scan/gate alone (runLegacy)
+    // would never refresh types on the polling path. Both closures
+    // swallow their own errors, so the interval loop never dies.
     const interval = setInterval(() => {
-      safeRun({ ...runOpts, silent: true }, true)
+      void runLegacy().then(runPlugins)
     }, 2000)
     return () => clearInterval(interval)
   }
@@ -418,9 +422,11 @@ export async function watchTypegen(opts: RunTypegenOptions = {}): Promise<() => 
         `  kick typegen: watch mode unavailable (${err?.message ?? err}). Falling back to polling.`,
       )
     }
-    // Polling fallback — re-scan every 2s
+    // Polling fallback — re-run both phases every 2s (see forcePolling
+    // note above: the plugin pass is the sole emitter, so scan/gate
+    // alone would never refresh types).
     const interval = setInterval(() => {
-      safeRun({ ...runOpts, silent: true }, true)
+      void runLegacy().then(runPlugins)
     }, 2000)
     return () => clearInterval(interval)
   }
@@ -428,21 +434,6 @@ export async function watchTypegen(opts: RunTypegenOptions = {}): Promise<() => 
   return () => {
     if (timer) clearTimeout(timer)
     watcher.close()
-  }
-}
-
-/** Run typegen swallowing errors so the watcher loop never dies */
-async function safeRun(opts: RunTypegenOptions, silent: boolean): Promise<void> {
-  try {
-    await runTypegen(opts)
-  } catch (err) {
-    if (silent) return
-    if (err instanceof TokenCollisionError) {
-      console.error('\n' + err.message + '\n')
-    } else {
-      const msg = err instanceof Error ? err.message : String(err)
-      console.error(`  kick typegen failed: ${msg}`)
-    }
   }
 }
 
