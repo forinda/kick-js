@@ -21,6 +21,7 @@ After running `kick typegen` (or starting `kick dev`), you'll have:
     kick__env.ts                # KickEnv + NodeJS.ProcessEnv augmentation (when src/env.ts exists)
     kick__assets.d.ts           # KickAssets augmentation (when assetMap is set)
     kick__db.d.ts               # DB model types (when a DB adapter is configured)
+    kick__context.d.ts          # ContextKeys augmentation (when context decorators exist)
 ```
 
 Each file is emitted by its own typegen plugin. There is no barrel
@@ -438,6 +439,33 @@ Two payoffs:
 - **Discoverability.** IDE autocomplete inside `dependsOn: [...]` lists every plugin/adapter name in scope.
 
 When the registry is empty (fresh project, never ran `kick typegen`), `keyof KickJsPluginRegistry` resolves to `never` and the runtime falls back to `string` so existing code keeps compiling. Run `kick typegen` once and the narrowing kicks in.
+
+## Context keys (`dependsOn` on contributors)
+
+`kick typegen` also walks your `src/` for `defineContextDecorator({ key: '...' })` and `defineHttpContextDecorator({ key: '...' })` calls (including the curried `.withParams<T>()({ key: '...' })` form) and writes every discovered key into `.kickjs/types/kick__context.d.ts` as a `ContextKeys` augmentation:
+
+```ts
+// .kickjs/types/kick__context.d.ts (generated)
+declare module '@forinda/kickjs' {
+  interface ContextKeys {
+    tenant: true
+    session: true
+  }
+}
+```
+
+This is what makes a Context Contributor's `dependsOn` typo-checked **without you hand-maintaining a registry** — and without forcing a value type into `ContextMeta`. `dependsOn` narrows to the union of `keyof ContextMeta` (keys with a value type) and `keyof ContextKeys` (every contributor key), so:
+
+```ts
+defineHttpContextDecorator({
+  key: 'project',
+  dependsOn: ['tenant'], // ✓ — autocompletes from discovered keys
+  // dependsOn: ['tenent'], // ✗ — TS error: "Did you mean 'tenant'?"
+  resolve: (ctx) => loadProject(ctx),
+})
+```
+
+`ContextMeta` still drives the value type of `ctx.get('tenant')`; `ContextKeys` only records that the key exists. Scaffold a contributor (and its `ContextMeta` stub) with [`kick g contributor`](./context-decorators.md). Empty project → no `kick__context.d.ts` emitted and `dependsOn` falls back to `string[]`.
 
 ## Augmentation catalogue
 

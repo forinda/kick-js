@@ -169,6 +169,22 @@ export interface DiscoveredPluginOrAdapter {
 }
 
 /**
+ * A context key discovered from a `defineContextDecorator({ key })` or
+ * `defineHttpContextDecorator({ key })` call (including the curried
+ * `.withParams<P>()({ key })` form). Feeds the `kick/context` typegen
+ * plugin, which emits the `ContextKeys` augmentation so `dependsOn`
+ * typo-checking is automatic and complete.
+ */
+export interface DiscoveredContextKey {
+  /** The literal `key:` value the contributor writes. */
+  key: string
+  /** Absolute file path. */
+  filePath: string
+  /** Path relative to scan root, with forward slashes. */
+  relativePath: string
+}
+
+/**
  * A `defineAugmentation('Name', meta)` call discovered in source. Plugins
  * call this to advertise an augmentable interface so the typegen can list
  * every augmentation surface in one generated file.
@@ -219,6 +235,8 @@ export interface ScanResult {
   pluginsAndAdapters: DiscoveredPluginOrAdapter[]
   /** Augmentation interfaces declared via `defineAugmentation('Name', meta)` */
   augmentations: DiscoveredAugmentation[]
+  /** Context keys from `define(Http)ContextDecorator({ key })` calls */
+  contextKeys: DiscoveredContextKey[]
   /**
    * Decorated classes that sit inside a module directory but aren't
    * picked up by any of the module's `import.meta.glob(...)` patterns.
@@ -301,6 +319,20 @@ const INJECT_LITERAL_REGEX = /@Inject\s*\(\s*['"`]([^'"`]+)['"`]\s*\)/g
  * `findBalancedClose` so nested objects/parens don't confuse us.
  */
 const DEFINE_HELPER_START = /\b(defineAdapter|definePlugin)\s*(?:<[^>]*>)?\s*\(/g
+
+/**
+ * Match the start of a `defineContextDecorator(...)` /
+ * `defineHttpContextDecorator(...)` call up to the `(` that opens the
+ * spec object — tolerating optional `<...>` generics AND the curried
+ * `.withParams<P>()(...)` form (the empty `()` is consumed so the next
+ * `(` is the spec). The spec's `key:` literal is then read forward via
+ * `findBalancedClose`, mirroring `DEFINE_HELPER_START`.
+ */
+// `(?:<(?:[^<>]|<[^<>]*>)*>)?` tolerates one level of nested generics
+// (e.g. `defineHttpContextDecorator<'tenant', Record<string, never>>`),
+// which a flat `<[^>]*>` would truncate at the inner `>`.
+const CONTEXT_DECORATOR_START =
+  /\b(?:defineContextDecorator|defineHttpContextDecorator)\s*(?:\.withParams\s*<(?:[^<>]|<[^<>]*>)*>\s*\(\s*\))?\s*(?:<(?:[^<>]|<[^<>]*>)*>)?\s*\(/g
 
 /**
  * Match a class declaration whose `implements` clause includes `AppAdapter`.
@@ -1037,6 +1069,45 @@ export function extractPluginsAndAdaptersFromSource(
 }
 
 /**
+ * Extract context keys from `defineContextDecorator({ key: '...' })` and
+ * `defineHttpContextDecorator({ key: '...' })` calls (including the
+ * curried `.withParams<P>()({ key: '...' })` form). Only the literal
+ * `key:` field feeds the result — the symbol on the LHS is irrelevant
+ * since `dependsOn` references the runtime key string.
+ *
+ * Mirrors {@link extractPluginsAndAdaptersFromSource}: regex to the spec
+ * object's opening paren, `findBalancedClose` to its end, then the first
+ * `key: 'literal'` inside.
+ */
+export function extractContextKeysFromSource(
+  source: string,
+  filePath: string,
+  cwd: string,
+): DiscoveredContextKey[] {
+  const out: DiscoveredContextKey[] = []
+  const relPath = toRelative(filePath, cwd)
+  const seen = new Set<string>()
+
+  CONTEXT_DECORATOR_START.lastIndex = 0
+  // The match value itself is unused — we only need the loop to advance
+  // and `lastIndex` to point just past the spec's opening paren.
+  while (CONTEXT_DECORATOR_START.exec(source) !== null) {
+    const openParen = CONTEXT_DECORATOR_START.lastIndex - 1
+    const closeParen = findBalancedClose(source, openParen)
+    if (closeParen < 0) continue
+    const callArgs = source.slice(openParen + 1, closeParen)
+    const keyMatch = /\bkey\s*:\s*['"`]([^'"`]+)['"`]/.exec(callArgs)
+    if (!keyMatch) continue
+    const key = keyMatch[1]
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push({ key, filePath, relativePath: relPath })
+  }
+
+  return out
+}
+
+/**
  * Extract `defineAugmentation('Name', { description, example })` calls
  * from a source file. The metadata object is optional — when absent both
  * `description` and `example` resolve to `null`.
@@ -1241,6 +1312,7 @@ export async function scanProject(opts: ScanOptions): Promise<ScanResult> {
   const injects: DiscoveredInject[] = []
   const pluginsAndAdapters: DiscoveredPluginOrAdapter[] = []
   const augmentations: DiscoveredAugmentation[] = []
+  const contextKeys: DiscoveredContextKey[] = []
 
   // Two passes: first collect all classes, then a second pass extracts
   // routes per file using the per-file class list as scoping context.
@@ -1259,6 +1331,7 @@ export async function scanProject(opts: ScanOptions): Promise<ScanResult> {
     injects.push(...extractInjectsFromSource(source, file, opts.cwd))
     pluginsAndAdapters.push(...extractPluginsAndAdaptersFromSource(source, file, opts.cwd))
     augmentations.push(...extractAugmentationsFromSource(source, file, opts.cwd))
+    contextKeys.push(...extractContextKeysFromSource(source, file, opts.cwd))
   }
 
   // forinda/kick-js#235 §3 — build a `Controller → mountPath` map from every
@@ -1338,6 +1411,9 @@ export async function scanProject(opts: ScanOptions): Promise<ScanResult> {
   augmentations.sort(
     (a, b) => a.name.localeCompare(b.name) || a.relativePath.localeCompare(b.relativePath),
   )
+  contextKeys.sort(
+    (a, b) => a.key.localeCompare(b.key) || a.relativePath.localeCompare(b.relativePath),
+  )
 
   const collisions = findCollisions(classes)
   const env = await detectEnvFile(opts.cwd, opts.envFile ?? 'src/env.ts')
@@ -1356,6 +1432,7 @@ export async function scanProject(opts: ScanOptions): Promise<ScanResult> {
     env,
     pluginsAndAdapters,
     augmentations,
+    contextKeys,
     orphanedClasses,
   }
 }
