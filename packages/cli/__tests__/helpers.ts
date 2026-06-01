@@ -198,8 +198,18 @@ export function runCli(cwd: string, args: string[]): CliResult {
  * generate.
  */
 export function runTsc(cwd: string): CliResult {
-  const tsgoBin = resolve(WORKSPACE_ROOT, 'node_modules', '.pnpm', 'node_modules', '.bin', 'tsgo')
-  const candidates = [tsgoBin, resolve(WORKSPACE_ROOT, 'node_modules', '.bin', 'tsgo')]
+  // On Windows the runnable shim is `tsgo.CMD` / `tsgo.cmd`, not the
+  // extensionless `tsgo` (a POSIX shell script). spawnSync can't launch
+  // the latter on win32 — it returns status -1 with empty output, which
+  // surfaces as a bogus "tsc failed" carrying no diagnostics. Probe the
+  // platform-correct names so the helper works on every host.
+  const dirs = [
+    resolve(WORKSPACE_ROOT, 'node_modules', '.pnpm', 'node_modules', '.bin'),
+    resolve(WORKSPACE_ROOT, 'node_modules', '.bin'),
+  ]
+  const names =
+    process.platform === 'win32' ? ['tsgo.CMD', 'tsgo.cmd', 'tsgo.exe', 'tsgo'] : ['tsgo']
+  const candidates = dirs.flatMap((d) => names.map((n) => resolve(d, n)))
   const tsc = candidates.find((p) => existsSync(p))
   if (!tsc) {
     throw new Error(
@@ -210,6 +220,8 @@ export function runTsc(cwd: string): CliResult {
     cwd,
     encoding: 'utf-8',
     stdio: ['ignore', 'pipe', 'pipe'],
+    // `.CMD` shims require a shell on Windows.
+    shell: process.platform === 'win32',
   })
   return {
     exitCode: result.status ?? -1,

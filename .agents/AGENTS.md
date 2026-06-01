@@ -231,12 +231,35 @@ git checkout -b feat/route-table-on-startup
 git add packages/http/
 git commit -m "feat: print route table on application startup (#31)"
 
-# 3. Push and create PR
+# 3. Push and create PR (rich bodies go through a temp file — see below)
 git push -u origin feat/route-table-on-startup
-gh pr create --title "feat: print route table on startup" --body "Closes #31"
+gh pr create --title "feat: print route table on startup" --body-file /tmp/pr-body.md
 
 # 4. After review, merge via GitHub (squash or merge commit)
 ```
+
+### PR / issue bodies with markdown — always via a temp file
+
+Anything richer than a single-line description (code fences, lists, tables, backticks, `$`, multi-paragraph) goes through a temp file. **Never** inline a multi-line body in `gh pr create --body "$(cat <<'EOF' ... EOF)"` or `gh pr edit --body "..."` — the shell escapes backticks and dollar signs, fenced code blocks lose their language hint, and the body lands on GitHub with literal `\`` everywhere.
+
+```bash
+# Right — write the body to a file, then pass it:
+cat > /tmp/pr-body.md <<'EOF'
+## Why
+…full markdown, no escape gymnastics…
+EOF
+
+gh pr create --base main --title "…" --body-file /tmp/pr-body.md
+
+# Edits to existing PRs take --body-file too:
+gh pr edit 123 --body-file /tmp/pr-body.md
+
+# If `gh pr edit` exits non-zero (often: projects-classic deprecation),
+# fall back to the API:
+gh api -X PATCH /repos/<owner>/<repo>/pulls/123 -F body=@/tmp/pr-body.md
+```
+
+Same rule for `gh issue create`, `gh release create`, comment posts (`gh pr comment 123 --body-file …`), and changeset bodies committed to disk.
 
 ### Branch naming
 

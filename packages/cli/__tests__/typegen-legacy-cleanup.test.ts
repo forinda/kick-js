@@ -10,8 +10,10 @@
  *     plugin actually emits it (i.e. assetMap is non-empty). With no
  *     assets, the import would dangle.
  *  3. `sweepStaleTypegen` removes orphaned files left by older CLI
- *     versions (`assets.d.ts`, `env.ts`, `routes.ts`, plus any other
- *     top-level file not in the current expected set).
+ *     versions (`assets.d.ts`, `env.ts`, `routes.ts`) — and ONLY those
+ *     known legacy names. It is an allowlist, not a denylist: unknown /
+ *     custom files are always preserved so an aborted plugin pass can
+ *     never wipe live output (e.g. `kick__routes.ts`).
  *
  * @module @forinda/kickjs-cli/__tests__/typegen-legacy-cleanup.test
  */
@@ -164,27 +166,38 @@ describe('sweepStaleTypegen', () => {
     expect(removed).toEqual([])
   })
 
-  it('skips orphan removal for plugin outputs that the runner reported', async () => {
-    // Reproduces the upgrade case: the plugin runner names its output
-    // `kick__assets.d.ts` based on the plugin id; sweep must keep
-    // that file even though no generator wrote it.
+  it('preserves unknown/custom files — only known legacy orphans are candidates', async () => {
+    // Safety regression: the sweep used to be a denylist ("delete
+    // anything not in the expected set"). That meant an aborted plugin
+    // pass (empty pluginResults) could delete live files like
+    // `kick__routes.ts` — wiping controller route types project-wide.
+    // It's now an allowlist of pre-carve legacy filenames, so unknown
+    // files are always left alone regardless of the expected set.
     await mkdir(outDir, { recursive: true })
     writeFileSync(join(outDir, 'kick__assets.d.ts'), '/* plugin */')
-    writeFileSync(join(outDir, 'leftover.d.ts'), '/* orphan */')
+    writeFileSync(join(outDir, 'kick__routes.ts'), '/* plugin */')
+    writeFileSync(join(outDir, 'leftover.d.ts'), '/* custom — must survive */')
 
+    // Empty generator + plugin results simulate the aborted-pass case.
+    const removed = await sweepStaleTypegen(outDir, [], [], true)
+    expect(removed).toEqual([])
+    expect(existsSync(join(outDir, 'kick__assets.d.ts'))).toBe(true)
+    expect(existsSync(join(outDir, 'kick__routes.ts'))).toBe(true)
+    expect(existsSync(join(outDir, 'leftover.d.ts'))).toBe(true)
+  })
+
+  it('keeps a legacy-named file when the runner reported it as a plugin output', async () => {
+    // Contrived collision: a plugin output whose filename matches a
+    // legacy orphan name. The reported `outFile` wins — never swept.
+    await mkdir(outDir, { recursive: true })
+    writeFileSync(join(outDir, 'assets.d.ts'), '/* still owned */')
     const removed = await sweepStaleTypegen(
       outDir,
       [],
-      [
-        {
-          id: 'kick/assets',
-          status: 'written',
-          outFile: join(outDir, 'kick__assets.d.ts'),
-        },
-      ],
+      [{ id: 'legacy/assets', status: 'written', outFile: join(outDir, 'assets.d.ts') }],
       true,
     )
-    expect(removed).toEqual(['leftover.d.ts'])
-    expect(existsSync(join(outDir, 'kick__assets.d.ts'))).toBe(true)
+    expect(removed).toEqual([])
+    expect(existsSync(join(outDir, 'assets.d.ts'))).toBe(true)
   })
 })

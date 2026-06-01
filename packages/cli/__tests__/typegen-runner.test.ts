@@ -76,6 +76,38 @@ describe('runTypegen', () => {
     expect(r[0].outFile).toMatch(/kick__db\.d\.ts$/)
   })
 
+  it('isolates a throwing plugin so later plugins still run', async () => {
+    // Regression: a throw in one plugin used to abort the whole loop,
+    // so a downstream plugin (e.g. kick/routes after kick/assets) never
+    // ran. Order here mirrors that: the thrower precedes the survivor.
+    const thrower: TypegenPlugin = {
+      id: 'kick/assets',
+      inputs: [],
+      async generate() {
+        throw new Error('boom')
+      },
+    }
+    const survivor: TypegenPlugin = {
+      id: 'kick/routes',
+      inputs: [],
+      async generate() {
+        return 'export type R = 1'
+      },
+    }
+    const r = await runTypegen({
+      cwd: dir,
+      config: {} as never,
+      plugins: [thrower, survivor],
+    })
+    expect(r[0]).toMatchObject({ id: 'kick/assets', status: 'error' })
+    // The errored plugin still reports its outFile so a downstream sweep
+    // keeps any previously-good output instead of deleting it.
+    expect(r[0].outFile).toMatch(/kick__assets\.d\.ts$/)
+    expect(r[1]).toMatchObject({ id: 'kick/routes', status: 'written' })
+    const out = await readFile(r[1].outFile!, 'utf8')
+    expect(out).toContain('R = 1')
+  })
+
   it('getScanResult memoizes across plugins within the same pass', async () => {
     let scanCalls = 0
     const stubScan = async () => {

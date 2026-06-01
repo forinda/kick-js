@@ -76,18 +76,35 @@ export async function runTypegen(opts: RunTypegenOptions): Promise<TypegenPlugin
 
   const results: TypegenPluginResult[] = []
   for (const plugin of opts.plugins) {
-    const out = await plugin.generate(ctx)
+    // Slashes in ids (kick/db) → __ on disk so they're valid filenames.
+    // Default extension is .d.ts (declaration only); plugins emitting
+    // hoisted top-level imports (kick/routes) override to .ts so the
+    // bundler resolver sees them as proper modules.
+    // Computed BEFORE generate() so a failing plugin can still report
+    // its `outFile` — the downstream sweep keeps any file in the
+    // result set, so a transient generate() throw never deletes this
+    // plugin's previously-good output.
+    const ext = plugin.outExtension ?? '.d.ts'
+    const file = path.join(typesDirAbs, `${plugin.id.replace(/\//g, '__')}${ext}`)
+
+    let out: string | null
+    try {
+      out = await plugin.generate(ctx)
+    } catch (err) {
+      // Isolate the failure: one plugin throwing must not abort the
+      // rest of the pass (before this guard, a throw in e.g. kick/assets
+      // aborted the whole loop, so kick/routes never ran and the sweep
+      // then deleted the stale-looking controller route types).
+      const msg = err instanceof Error ? err.message : String(err)
+      ctx.log.error(`  ${plugin.id}: typegen failed (${msg}) — keeping previous output`)
+      results.push({ id: plugin.id, status: 'error', outFile: file })
+      continue
+    }
     if (out === null) {
       results.push({ id: plugin.id, status: 'skipped' })
       continue
     }
 
-    // Slashes in ids (kick/db) → __ on disk so they're valid filenames.
-    // Default extension is .d.ts (declaration only); plugins emitting
-    // hoisted top-level imports (kick/routes) override to .ts so the
-    // bundler resolver sees them as proper modules.
-    const ext = plugin.outExtension ?? '.d.ts'
-    const file = path.join(typesDirAbs, `${plugin.id.replace(/\//g, '__')}${ext}`)
     const banner = `${BANNER_PREFIX}${plugin.id} */\n\n`
     const next = banner + out + '\n'
 

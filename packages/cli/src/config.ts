@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { readFile, access } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 
@@ -621,6 +621,7 @@ export async function loadKickConfig(startDir: string): Promise<KickConfig | nul
         const config = (await jiti.import(filepath, { default: true })) as KickConfig
         const warnings = validateAssetMap(config, root)
         for (const warning of warnings) console.warn(`  Warning: ${warning}`)
+        writeAssetConfigSnapshot(root, config)
         return config
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
@@ -635,6 +636,7 @@ export async function loadKickConfig(startDir: string): Promise<KickConfig | nul
       const config = (mod.default ?? mod) as KickConfig
       const warnings = validateAssetMap(config, root)
       for (const warning of warnings) console.warn(`  Warning: ${warning}`)
+      writeAssetConfigSnapshot(root, config)
       return config
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -643,6 +645,44 @@ export async function loadKickConfig(startDir: string): Promise<KickConfig | nul
     }
   }
   return null
+}
+
+/**
+ * Mirror the JSON-serialisable slice of a TS/JS `kick.config` that the
+ * runtime asset resolver needs (`assetMap` + `build.outDir`) into
+ * `.kickjs/kick.config.json`.
+ *
+ * Why: the runtime resolver in `@forinda/kickjs` reads its config
+ * *synchronously* (it sits on the hot path of `assets.x.y()` /
+ * `resolveAsset()`), so it can only parse `kick.config.{json,js,cjs}` —
+ * it deliberately can't transpile `kick.config.ts`. For a `.ts`-config
+ * project in dev (no built `dist/.kickjs-assets.json` yet), that left
+ * the resolver with no config to synthesise a manifest from, so
+ * `assets.x.y()` threw `UnknownAssetError` until the first build.
+ *
+ * The CLI already transpiles the `.ts` config here, so it drops this
+ * tiny snapshot the runtime can read with a plain `JSON.parse`. Best
+ * effort: any failure (read-only fs, etc.) is swallowed — a missing
+ * snapshot just falls back to the previous behaviour.
+ */
+export function writeAssetConfigSnapshot(root: string, config: KickConfig | null): void {
+  // Only meaningful for asset-manager users — don't litter `.kickjs/`
+  // for projects that never declare an assetMap.
+  if (!config?.assetMap || Object.keys(config.assetMap).length === 0) return
+  try {
+    const dir = join(root, '.kickjs')
+    mkdirSync(dir, { recursive: true })
+    const snapshot = {
+      // Marker so a future shape change can be detected/migrated.
+      version: 1 as const,
+      assetMap: config.assetMap,
+      ...(config.build?.outDir ? { build: { outDir: config.build.outDir } } : {}),
+    }
+    writeFileSync(join(dir, 'kick.config.json'), JSON.stringify(snapshot, null, 2) + '\n', 'utf-8')
+  } catch {
+    // Best effort — snapshot is an optimisation, not a correctness
+    // requirement. Production reads the real dist manifest.
+  }
 }
 
 /**

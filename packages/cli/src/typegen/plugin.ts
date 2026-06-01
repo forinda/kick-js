@@ -73,7 +73,7 @@ export interface TypegenPlugin {
 
 export interface TypegenPluginResult {
   id: string
-  status: 'written' | 'unchanged' | 'skipped'
+  status: 'written' | 'unchanged' | 'skipped' | 'error'
   outFile?: string
 }
 
