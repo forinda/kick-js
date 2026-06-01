@@ -11,6 +11,7 @@ const DDD_FOLDER_MAP: Record<string, string> = {
   dto: 'application/dtos',
   guard: 'presentation/guards',
   middleware: 'middleware',
+  contributor: 'presentation/contributors',
 }
 
 /**
@@ -23,6 +24,7 @@ const FLAT_FOLDER_MAP: Record<string, string> = {
   dto: 'dtos',
   guard: 'guards',
   middleware: 'middleware',
+  contributor: 'contributors',
 }
 
 /**
@@ -34,6 +36,7 @@ const CQRS_FOLDER_MAP: Record<string, string> = {
   dto: 'dtos',
   guard: 'guards',
   middleware: 'middleware',
+  contributor: 'contributors',
   command: 'commands',
   query: 'queries',
   event: 'events',

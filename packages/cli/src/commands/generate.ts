@@ -13,6 +13,7 @@ import { generateAdapter } from '../generators/adapter'
 import { generatePlugin } from '../generators/plugin'
 import { generateMiddleware } from '../generators/middleware'
 import { generateGuard } from '../generators/guard'
+import { generateContributor, type ContributorType } from '../generators/contributor'
 import { generateService } from '../generators/service'
 import { generateController } from '../generators/controller'
 import { generateDto } from '../generators/dto'
@@ -146,6 +147,10 @@ const GENERATORS = [
   { name: 'service <name>', description: '@Service() singleton             [-m module]' },
   { name: 'middleware <name>', description: 'Express middleware function     [-m module]' },
   { name: 'guard <name>', description: 'Route guard (auth, roles, etc.)  [-m module]' },
+  {
+    name: 'contributor <name>',
+    description: 'Context contributor       [--type http|bare] [--params a:string] [-m]',
+  },
   { name: 'dto <name>', description: 'Zod DTO schema                  [-m module]' },
   { name: 'adapter <name>', description: 'AppAdapter with lifecycle hooks (app-level only)' },
   { name: 'test <name>', description: 'Vitest test scaffold            [-m module]' },
@@ -434,6 +439,51 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
       })
       printGenerated(files, dryRun)
     })
+
+  // ── kick g contributor <name> ──────────────────────────────────────
+  gen
+    .command('contributor <name>')
+    .description(
+      'Generate a Context Contributor (typed alternative to @Middleware for ctx.set)\n' +
+        '  --type http (default, RequestContext) | bare (ExecutionContext)\n' +
+        '  --params "source:string,region:number" → emits the withParams<T>() form\n' +
+        '  Use -m to scope it to a module: kick g contributor tenant -m users',
+    )
+    .option('-o, --out <dir>', 'Output directory (overrides --module)')
+    .option('-m, --module <module>', 'Place inside a module folder')
+    .option('-t, --type <type>', 'Contributor flavour: http | bare', 'http')
+    .option('-k, --key <key>', 'Context key it writes (defaults to camelCase of name)')
+    .option('--params <fields>', 'Per-call params, e.g. "source:string,region:number"')
+    .action(
+      async (
+        name: string,
+        opts: ModuleScopedOpts & { type?: string; key?: string; params?: string },
+        cmd: Command,
+      ) => {
+        const dryRun = isDryRun(cmd)
+        setDryRun(dryRun)
+        let type = (opts.type ?? 'http').toLowerCase()
+        if (type !== 'http' && type !== 'bare') {
+          console.warn(`  kick g contributor: unknown --type '${opts.type}', using 'http'.`)
+          type = 'http'
+        }
+        const config = await loadKickConfig(process.cwd())
+        const mc = resolveModuleConfig(config)
+        const modulesDir = mc.dir ?? 'src/modules'
+        const files = await generateContributor({
+          name,
+          type: type as ContributorType,
+          key: opts.key,
+          params: opts.params,
+          outDir: opts.out,
+          moduleName: opts.module,
+          modulesDir,
+          pattern: config?.pattern,
+          pluralize: mc.pluralize ?? true,
+        })
+        printGenerated(files, dryRun)
+      },
+    )
 
   // ── kick g service <name> ──────────────────────────────────────────
   gen
