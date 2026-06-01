@@ -27,6 +27,11 @@ import { kickDbTypegen } from '../typegen/builtin/db'
 import { kickAssetsTypegen } from '../typegen/builtin/assets'
 import { kickRoutesTypegen } from '../typegen/builtin/routes'
 import { kickEnvTypegen } from '../typegen/builtin/env'
+import { kickRegistryTypegen } from '../typegen/builtin/registry'
+import { kickServiceTokensTypegen } from '../typegen/builtin/service-tokens'
+import { kickModuleTokensTypegen } from '../typegen/builtin/module-tokens'
+import { kickPluginsRegistryTypegen } from '../typegen/builtin/plugins-registry'
+import { kickAugmentationsTypegen } from '../typegen/builtin/augmentations'
 
 import { defineCliPlugin, type KickCliPlugin } from './types'
 
@@ -47,11 +52,20 @@ export const builtinCliPlugins: readonly KickCliPlugin[] = [
   defineCliPlugin({ name: 'kick/doctor', register: registerDoctorCommand }),
   defineCliPlugin({ name: 'kick/db', register: registerDbCommands, typegens: [kickDbTypegen()] }),
   defineCliPlugin({ name: 'kick/codemod', register: registerCodemodCommands }),
-  // kick/assets, kick/routes are typegen-only — the asset manager
-  // itself is wired via @forinda/kickjs runtime, not the CLI; routes
-  // emit a `KickRoutes` global namespace augmentation. Both replace
-  // sections of the legacy generator that used to live in
-  // `typegen/generator.ts` before the M2.B-T8 carve.
+  // Typegen-only built-ins. Each owns one `.kickjs/types/kick__*` file
+  // via the TypegenPlugin contract; together they replace the entire
+  // legacy `typegen/generator.ts` monolith (now removed). The asset
+  // manager runtime itself is wired via @forinda/kickjs, not the CLI.
+  //
+  // Registration order is the emission order. registry/services/modules
+  // run first (they were the generator's core output), then the carved
+  // plugins. Order is not load-bearing for correctness — the runner
+  // isolates each plugin — but keeps log output stable.
+  defineCliPlugin({ name: 'kick/registry', typegens: [kickRegistryTypegen()] }),
+  defineCliPlugin({ name: 'kick/services', typegens: [kickServiceTokensTypegen()] }),
+  defineCliPlugin({ name: 'kick/modules', typegens: [kickModuleTokensTypegen()] }),
+  defineCliPlugin({ name: 'kick/plugins', typegens: [kickPluginsRegistryTypegen()] }),
+  defineCliPlugin({ name: 'kick/augmentations', typegens: [kickAugmentationsTypegen()] }),
   defineCliPlugin({ name: 'kick/assets', typegens: [kickAssetsTypegen()] }),
   defineCliPlugin({ name: 'kick/routes', typegens: [kickRoutesTypegen()] }),
   defineCliPlugin({ name: 'kick/env', typegens: [kickEnvTypegen()] }),
