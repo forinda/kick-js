@@ -1,5 +1,49 @@
 # @forinda/kickjs-cli
 
+## 5.11.0
+
+### Minor Changes
+
+- [#315](https://github.com/forinda/kick-js/pull/315) [`55b7c96`](https://github.com/forinda/kick-js/commit/55b7c9688fcdaa490beca9da41b18dd9e03c70db) Thanks [@forinda](https://github.com/forinda)! - Add the `kick/context` typegen plugin — auto-populate `ContextKeys` from context-decorator key literals.
+
+  `kick typegen` now scans every `defineContextDecorator({ key })` / `defineHttpContextDecorator({ key })` call (including the curried `.withParams<T>()({ key })` form) and emits `.kickjs/types/kick__context.d.ts` augmenting the `ContextKeys` registry. This makes a Context Contributor's `dependsOn` typo-checked automatically — no hand-maintained registry, and no need to give a key a value type in `ContextMeta` just to depend on it.
+
+  Pairs with the `ContextKeys` registry: `dependsOn` narrows to `keyof ContextMeta | keyof ContextKeys`, so the generated augmentation feeds typo-checking while `ContextMeta` keeps driving `ctx.get(key)` value types. The plugin skips emission when no context decorators are found. Scanner gains `extractContextKeysFromSource` + `ScanResult.contextKeys`.
+
+- [#313](https://github.com/forinda/kick-js/pull/313) [`1190b56`](https://github.com/forinda/kick-js/commit/1190b565c8769402c01ae77df6c81dc328aaf79b) Thanks [@forinda](https://github.com/forinda)! - Add `kick g contributor <name>` to scaffold a Context Contributor.
+  - `--type http` (default) → `defineHttpContextDecorator`, resolver typed against `RequestContext`.
+  - `--type bare` → `defineContextDecorator`, resolver typed against the transport-agnostic `ExecutionContext`.
+  - `--params "source:string,region:number"` → emits the curried `.withParams<T>()` form with a generated params `type` alias and `paramDefaults` stub (mirrors how `kick g scaffold` takes field definitions).
+  - `--key <key>` overrides the context key (defaults to camelCase of the name); `-m <module>` scopes the file into a module folder.
+
+  The scaffold also drops a `ContextMeta` augmentation stub so `ctx.get('<key>')` is typed and `dependsOn: ['<key>']` is checked.
+
+### Patch Changes
+
+- [#314](https://github.com/forinda/kick-js/pull/314) [`07995b9`](https://github.com/forinda/kick-js/commit/07995b9576e04298d52e0a45b9906360a4da55ac) Thanks [@forinda](https://github.com/forinda)! - Fix two issues in the plugin-only typegen pipeline (follow-up to the generator.ts retirement):
+  - **Polling watch never regenerated types.** `kick typegen --watch` / `kick dev` on the polling paths (forced via `KICKJS_WATCH_POLLING`, or the `fs.watch` fallback used on Docker bind mounts / WSL / NFS) ran only the scan + collision gate, not the plugin pass — so no `.kickjs/types/kick__*` file refreshed on change. Both polling paths now drive the full `runLegacy().then(runPlugins)` chain, matching the event-based watcher.
+  - **`kick dev` startup could abort on a typegen error.** The startup plugin pass + artifact write were unguarded, so a scanner/fs error would exit the dev server with code 1. Now wrapped in try/catch + warn, consistent with the scan/gate pass and the debounced refresh.
+
+- [#310](https://github.com/forinda/kick-js/pull/310) [`285262f`](https://github.com/forinda/kick-js/commit/285262f1243d6a6623b6c54669ec04fe409ab7d5) Thanks [@forinda](https://github.com/forinda)! - Make `kick typegen` fully plugin-based and retire the legacy monolithic generator.
+
+  The `KickJsRegistry`, `ServiceToken`/`ModuleToken` unions, `KickJsPluginRegistry`, and the `defineAugmentation` catalogue are now each emitted by their own typegen plugin (`kick/registry`, `kick/services`, `kick/modules`, `kick/plugins`, `kick/augmentations`) — joining the already-carved `kick/routes`, `kick/env`, `kick/assets`, `kick/db`. `typegen/generator.ts` is removed; `runTypegen` now just scans, gates collisions, runs the plugin pipeline, and finalises.
+
+  Effects:
+  - Output files are renamed to the uniform `kick__*` scheme (`kick__registry.d.ts`, `kick__services.d.ts`, …). The barrel `index.d.ts` is dropped — the scaffolded tsconfig pulls `.kickjs/types/**` in via `include`, so augmentations apply by inclusion and the barrel's re-exports were redundant.
+  - The whole pipeline is now uniformly per-plugin-isolated (a throw in one plugin can't block the others).
+  - Upgrading is automatic: the first run sweeps the old `index.d.ts` / `registry.d.ts` / `services.d.ts` / `modules.d.ts` / `plugins.d.ts` / `augmentations.d.ts` files.
+
+  Tracking issue [#309](https://github.com/forinda/kick-js/issues/309).
+
+- [#307](https://github.com/forinda/kick-js/pull/307) [`541ae2b`](https://github.com/forinda/kick-js/commit/541ae2bb2ce7325229d17d47c95432a97268c504) Thanks [@forinda](https://github.com/forinda)! - Fix asset manager interfering with controller typegen, and make `assets.x.y()` resolve in dev for `kick.config.ts` projects.
+  - **Typegen runner is now per-plugin isolated.** A throw in one typegen plugin (e.g. `kick/assets`) no longer aborts the whole pass — it's reported as an `error` and the remaining plugins (e.g. `kick/routes`) still run. Previously one failing plugin left the controller route types ungenerated.
+  - **The stale-file sweep is now an allowlist, not a denylist.** It only removes the known pre-carve legacy filenames (`assets.d.ts`, `env.ts`, `routes.ts`) and never touches unknown/custom files. Previously, when the plugin pass returned nothing (e.g. it aborted), the sweep deleted live `kick__routes.ts` / `kick__assets.d.ts` — wiping controller types project-wide.
+  - **Dev-mode asset resolution now works with `kick.config.ts`.** The runtime resolver reads config synchronously and can't transpile TS, so a `.ts`-config project had no manifest to resolve from until the first production build (`assets.x.y()` threw `UnknownAssetError`). The CLI now mirrors the JSON-serialisable `assetMap` + `build.outDir` into `.kickjs/kick.config.json` whenever it loads the config, and the runtime resolver reads that snapshot as a fallback.
+
+- Updated dependencies [[`90299cf`](https://github.com/forinda/kick-js/commit/90299cf76e6aa81776ed109db93ec5dcefea68c7), [`80e0fdf`](https://github.com/forinda/kick-js/commit/80e0fdf30d3d1b7e5d749cb015f77891847eefa6), [`541ae2b`](https://github.com/forinda/kick-js/commit/541ae2bb2ce7325229d17d47c95432a97268c504), [`541ae2b`](https://github.com/forinda/kick-js/commit/541ae2bb2ce7325229d17d47c95432a97268c504)]:
+  - @forinda/kickjs@5.15.0
+  - @forinda/kickjs-db@6.0.0
+
 ## 5.10.2
 
 ### Patch Changes
