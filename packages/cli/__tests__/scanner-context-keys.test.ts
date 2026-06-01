@@ -8,8 +8,16 @@
  * `defineHttpContextDecorator`.
  */
 
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { Container } from '@forinda/kickjs'
 import { extractContextKeysFromSource } from '../src/typegen/scanner'
+
+// Project rule: every .test.ts isolates DI state. This is a pure-function
+// suite (no container use); a fresh isolated container per test keeps it
+// consistent without mutating the global singleton.
+beforeEach(() => {
+  Container.create()
+})
 
 const FILE = '/proj/src/contributors/x.contributor.ts'
 const keys = (source: string): string[] =>
