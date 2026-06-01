@@ -95,7 +95,7 @@ export function getBaseEnvSchema(): z.ZodObject<any> {
  */
 export const baseEnvSchema: z.ZodObject<any> = new Proxy({} as z.ZodObject<any>, {
   get(_t, prop) {
-    const real = getBaseEnvSchema() as Record<string | symbol, unknown>
+    const real = getBaseEnvSchema() as unknown as Record<string | symbol, unknown>
     const value = real[prop]
     // Bind methods to the real schema so zod's internal `this` works.
     return typeof value === 'function' ? (value as (...a: unknown[]) => unknown).bind(real) : value
