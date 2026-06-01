@@ -70,16 +70,34 @@ tryLoadDotenv()
  * schema instance (matters for the `cachedSchema === s` identity check
  * in {@link loadEnv}). Loads zod lazily via {@link getZod}.
  */
-let _baseEnvSchema: z.ZodObject<any> | undefined
-export function getBaseEnvSchema(): z.ZodObject<any> {
-  if (_baseEnvSchema) return _baseEnvSchema
+// Build the concrete base schema. This function is the single source of
+// the *type* of `baseEnvSchema` (via `ReturnType<typeof buildBaseEnvSchema>`)
+// AND its runtime value (via `getBaseEnvSchema`). It is NEVER called at
+// module load — only lazily through `getBaseEnvSchema()` — so referencing
+// its return type stays compile-time-only and pulls no eager zod import.
+// Spelling the type this way (rather than `z.ZodObject<any>`) preserves the
+// precise PORT/NODE_ENV/LOG_LEVEL shape, which `defineEnv` composition and
+// the `kick typegen` `KickEnv` inference depend on.
+function buildBaseEnvSchema() {
   const z = getZod()
-  _baseEnvSchema = z.object({
+  return z.object({
     // Server
     PORT: z.coerce.number().default(3000),
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
     LOG_LEVEL: z.string().default('info'),
   })
+}
+
+/** Precise type of the base env schema — no runtime value, no eager zod. */
+export type BaseEnvSchema = ReturnType<typeof buildBaseEnvSchema>
+
+/**
+ * Memoized base schema. Reuses one instance so the `cachedSchema === s`
+ * identity check in {@link loadEnv} holds. Loads zod lazily.
+ */
+let _baseEnvSchema: BaseEnvSchema | undefined
+export function getBaseEnvSchema(): BaseEnvSchema {
+  if (!_baseEnvSchema) _baseEnvSchema = buildBaseEnvSchema()
   return _baseEnvSchema
 }
 
@@ -91,9 +109,9 @@ export function getBaseEnvSchema(): z.ZodObject<any> {
  * Proxy does NOT load zod — zod is only required the moment a property
  * (`.extend`, `.parse`, `.shape`, …) is actually accessed. This keeps
  * `import { baseEnvSchema } from '@forinda/kickjs'` zero-cost for apps
- * that don't use the Zod env path.
+ * that don't use the Zod env path, while keeping the precise schema type.
  */
-export const baseEnvSchema: z.ZodObject<any> = new Proxy({} as z.ZodObject<any>, {
+export const baseEnvSchema: BaseEnvSchema = new Proxy({} as BaseEnvSchema, {
   get(_t, prop) {
     const real = getBaseEnvSchema() as unknown as Record<string | symbol, unknown>
     const value = real[prop]
@@ -103,7 +121,7 @@ export const baseEnvSchema: z.ZodObject<any> = new Proxy({} as z.ZodObject<any>,
   has(_t, prop) {
     return prop in (getBaseEnvSchema() as object)
   },
-}) as z.ZodObject<any>
+}) as BaseEnvSchema
 
 /** Cached env config to avoid re-parsing — keyed by schema reference */
 let cachedEnv: any = null
