@@ -19,12 +19,11 @@ import {
 } from '../src/typegen/scanner'
 import { assertCliOk, cleanupFixture, createFixtureProject, runCli } from './helpers'
 
-// Project rule: isolate DI state before every test. A fresh isolated
-// container avoids mutating the global singleton across parallel tests.
-// Applies across all describes (runs before any describe-local
-// beforeEach, e.g. the E2E fixture setup).
+// Project rule: reset DI state before every test for isolation. Applies
+// across all describes (runs before any describe-local beforeEach, e.g.
+// the E2E fixture setup).
 beforeEach(() => {
-  Container.create()
+  Container.reset()
 })
 
 describe('scanner — extractPluginsAndAdaptersFromSource', () => {

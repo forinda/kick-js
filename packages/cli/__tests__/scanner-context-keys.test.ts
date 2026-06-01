@@ -12,11 +12,11 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { Container } from '@forinda/kickjs'
 import { extractContextKeysFromSource } from '../src/typegen/scanner'
 
-// Project rule: every .test.ts isolates DI state. This is a pure-function
-// suite (no container use); a fresh isolated container per test keeps it
-// consistent without mutating the global singleton.
+// Project rule: every .test.ts resets DI state in beforeEach. This is a
+// pure-function suite (no container use), but the reset keeps it
+// consistent with the repo-wide isolation convention.
 beforeEach(() => {
-  Container.create()
+  Container.reset()
 })
 
 const FILE = '/proj/src/contributors/x.contributor.ts'
