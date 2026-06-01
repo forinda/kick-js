@@ -130,6 +130,40 @@ export {}
 `
 }
 
+/** True when `str` is a bare JS identifier (usable as an unquoted key). */
+function isIdentifierKey(str: string): boolean {
+  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(str)
+}
+
+/**
+ * Render the `ContextKeys` augmentation from discovered context-decorator
+ * keys. Each `key:` literal becomes a `'<key>': true` entry — a key-only
+ * registry (the value type is irrelevant; `true` is conventional) so
+ * `dependsOn: ['<key>']` is autocompleted + typo-checked without forcing
+ * a value type into `ContextMeta`. Non-identifier keys are quoted.
+ */
+export function renderContextKeys(keys: readonly { key: string }[]): string {
+  const unique = [...new Set(keys.map((k) => k.key))].toSorted()
+  const body = unique
+    .map((k) => `    ${isIdentifierKey(k) ? k : JSON.stringify(k)}: true`)
+    .join('\n')
+  return `${HEADER}
+declare module '@forinda/kickjs' {
+  /**
+   * Key-only registry of every context key produced by a
+   * \`defineContextDecorator\` / \`defineHttpContextDecorator\` in the
+   * project. Feeds \`dependsOn\` typo-checking. Value types live in
+   * \`ContextMeta\`; this only records that the key exists.
+   */
+  interface ContextKeys {
+${body}
+  }
+}
+
+export {}
+`
+}
+
 /** Render a string-literal union type containing the given names */
 export function renderUnion(typeName: string, names: string[], emptyComment: string): string {
   if (names.length === 0) {

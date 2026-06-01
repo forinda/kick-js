@@ -261,6 +261,41 @@ describe('kick typegen — plugins.d.ts + augmentations.d.ts E2E', () => {
     expect(existsSync(join(fixture, '.kickjs/types/kick__augmentations.d.ts'))).toBe(true)
   })
 
+  it('auto-populates ContextKeys from context-decorator key literals', () => {
+    writeFile(
+      'src/contributors/tenant.contributor.ts',
+      `import { defineHttpContextDecorator } from '@forinda/kickjs'
+export const Tenant = defineHttpContextDecorator({
+  key: 'tenant',
+  resolve: (ctx) => ({ id: ctx.req.headers['x-tenant-id'] }),
+})
+`,
+    )
+    writeFile(
+      'src/contributors/session.contributor.ts',
+      `import { defineContextDecorator } from '@forinda/kickjs'
+export const Session = defineContextDecorator.withParams<{ source: string }>()({
+  key: 'session',
+  paramDefaults: { source: '' },
+  resolve: (_ctx, _deps, params) => ({ source: params.source }),
+})
+`,
+    )
+
+    runCli(fixture, ['typegen'])
+
+    const ctx = readFileSync(join(fixture, '.kickjs/types/kick__context.d.ts'), 'utf-8')
+    expect(ctx).toContain("declare module '@forinda/kickjs'")
+    expect(ctx).toContain('interface ContextKeys')
+    expect(ctx).toContain('tenant: true')
+    expect(ctx).toContain('session: true')
+  })
+
+  it('skips kick__context.d.ts when no context decorators exist', () => {
+    runCli(fixture, ['typegen'])
+    expect(existsSync(join(fixture, '.kickjs/types/kick__context.d.ts'))).toBe(false)
+  })
+
   it('augments KickJsPluginRegistry with discovered names', () => {
     writeFile(
       'src/adapters/tenant.adapter.ts',
