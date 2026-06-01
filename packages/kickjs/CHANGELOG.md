@@ -1,5 +1,41 @@
 # @forinda/kickjs
 
+## 5.15.0
+
+### Minor Changes
+
+- [#311](https://github.com/forinda/kick-js/pull/311) [`90299cf`](https://github.com/forinda/kick-js/commit/90299cf76e6aa81776ed109db93ec5dcefea68c7) Thanks [@forinda](https://github.com/forinda)! - Add a `ContextKeys` registry so augmenting `ContextMeta` no longer breaks `dependsOn` on unrelated context decorators.
+
+  `ContextMeta` was doing double duty: the value-type registry for `ctx.get`/`set` AND (via `keyof ContextMeta`) the valid-key registry for `dependsOn`. So the moment a project augmented `ContextMeta` for some keys, any contributor that `dependsOn`-ed a key you hadn't added to `ContextMeta` stopped compiling (`Type '"session"' is not assignable to type '"tenant" | "user"'`) — even though it was a perfectly valid contributor key.
+
+  `dependsOn` is now typed against the **union** of `keyof ContextMeta` and the new key-only `ContextKeys` registry:
+
+  ```ts
+  declare module '@forinda/kickjs' {
+    interface ContextMeta {
+      tenant: { id: string; name: string }
+    } // typed ctx.get
+    interface ContextKeys {
+      session: true
+    } // dependsOn-able, value stays unknown
+  }
+  ```
+
+  Adding a value type via `ContextMeta` now always makes that key a valid `dependsOn` target, and you can register a dependsOn-able key without inventing a value type for it. Typo-protection and the empty-registry `string` fallback are preserved. Non-breaking: existing `ContextMeta`-only projects keep working unchanged.
+
+### Patch Changes
+
+- [#310](https://github.com/forinda/kick-js/pull/310) [`80e0fdf`](https://github.com/forinda/kick-js/commit/80e0fdf30d3d1b7e5d749cb015f77891847eefa6) Thanks [@forinda](https://github.com/forinda)! - Deprecate `defineAugmentation`. It's a no-op at both runtime and the type level — the `declare module '@forinda/kickjs' { … }` block alone provides the augmentation, and the `.kickjs/types/kick__augmentations.d.ts` catalogue it feeds is documentation-only. Prefer a plain `declare module` block with a JSDoc comment on your own interface. `defineAugmentation` and the `kick/augmentations` typegen plugin will be removed in a future major; no behaviour change for now.
+
+- [#307](https://github.com/forinda/kick-js/pull/307) [`541ae2b`](https://github.com/forinda/kick-js/commit/541ae2bb2ce7325229d17d47c95432a97268c504) Thanks [@forinda](https://github.com/forinda)! - Make `zod` a truly optional peer dependency. `src/config/env.ts` previously did a top-level `import { z } from 'zod'` and built `baseEnvSchema` eagerly; since the env module is re-exported from the main entry, `import { anything } from '@forinda/kickjs'` pulled zod into the eager graph and crashed at build/load time for apps that validate env with Valibot/Yup/Standard Schema and never installed zod.
+
+  zod is now lazy-loaded only when the Zod env helpers (`baseEnvSchema`, `defineEnv`, `loadEnv`) are actually used, with a clear error if it's missing. `baseEnvSchema` is now a lazy view that doesn't construct (or load zod) until accessed. The non-zod path (`loadEnvFromSchema`) needs no zod at all. `zod` is also marked `optional` in `peerDependenciesMeta`.
+
+- [#307](https://github.com/forinda/kick-js/pull/307) [`541ae2b`](https://github.com/forinda/kick-js/commit/541ae2bb2ce7325229d17d47c95432a97268c504) Thanks [@forinda](https://github.com/forinda)! - Fix asset manager interfering with controller typegen, and make `assets.x.y()` resolve in dev for `kick.config.ts` projects.
+  - **Typegen runner is now per-plugin isolated.** A throw in one typegen plugin (e.g. `kick/assets`) no longer aborts the whole pass — it's reported as an `error` and the remaining plugins (e.g. `kick/routes`) still run. Previously one failing plugin left the controller route types ungenerated.
+  - **The stale-file sweep is now an allowlist, not a denylist.** It only removes the known pre-carve legacy filenames (`assets.d.ts`, `env.ts`, `routes.ts`) and never touches unknown/custom files. Previously, when the plugin pass returned nothing (e.g. it aborted), the sweep deleted live `kick__routes.ts` / `kick__assets.d.ts` — wiping controller types project-wide.
+  - **Dev-mode asset resolution now works with `kick.config.ts`.** The runtime resolver reads config synchronously and can't transpile TS, so a `.ts`-config project had no manifest to resolve from until the first production build (`assets.x.y()` threw `UnknownAssetError`). The CLI now mirrors the JSON-serialisable `assetMap` + `build.outDir` into `.kickjs/kick.config.json` whenever it loads the config, and the runtime resolver reads that snapshot as a fallback.
+
 ## 5.14.2
 
 ### Patch Changes
