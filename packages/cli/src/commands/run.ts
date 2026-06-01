@@ -4,7 +4,7 @@ import { pathToFileURL } from 'node:url'
 import type { Command } from 'commander'
 import { runNodeWithEnv } from '../utils/shell'
 import { loadKickConfig } from '../config'
-import { runTypegen } from '../typegen'
+import { runTypegen, writeTypegenArtifacts } from '../typegen'
 import { runAllPluginTypegens } from '../typegen/run-plugins'
 import { buildAssets } from '../asset-manager/build'
 
@@ -68,10 +68,13 @@ async function startDevServer(
     console.warn(`  kick typegen: skipped (${err?.message ?? err})`)
   }
 
-  // Plugin typegens (kick/db + adopter plugins from kick.config.ts).
-  // Same swallow-on-error semantics as the legacy pass — a broken
-  // plugin shouldn't block the dev server from coming up.
-  await runAllPluginTypegens({ cwd, config: devConfig })
+  // Plugin typegens — the sole emitter of `.kickjs/types/*`. Same
+  // swallow-on-error semantics: a broken plugin shouldn't block the dev
+  // server from coming up. `writeTypegenArtifacts` then writes the
+  // `.kickjs/.gitignore` guard + sweeps legacy orphans.
+  const typesOutDir = resolve(cwd, devConfig?.typegen?.outDir ?? '.kickjs/types')
+  const startupPluginResults = await runAllPluginTypegens({ cwd, config: devConfig })
+  await writeTypegenArtifacts(typesOutDir, startupPluginResults, false)
 
   // Resolve vite from the user's project, not the CLI package.
   // On Windows, require.resolve returns an absolute path like
@@ -145,10 +148,13 @@ async function startDevServer(
         // avoids double-running it on every debounced trigger.
         runPlugins: false,
       }).catch(() => {})
-      // Plugin typegens piggy-back on the same debounce — kick/db
-      // re-emits kick__db.d.ts when the schema (or anything else
-      // touched) changes. silent so the dev console stays quiet.
-      runAllPluginTypegens({ cwd, config: devConfig, silent: true }).catch(() => {})
+      // Plugin typegens piggy-back on the same debounce — they re-emit
+      // their `kick__*` files when sources (or templates) change. silent
+      // so the dev console stays quiet; artifacts (.gitignore + sweep)
+      // run after the pass.
+      runAllPluginTypegens({ cwd, config: devConfig, silent: true })
+        .then((r) => writeTypegenArtifacts(typesOutDir, r, true))
+        .catch(() => {})
     }, 100)
   }
   server.watcher.on('add', scheduleTypegen)

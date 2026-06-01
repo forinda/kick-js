@@ -8,10 +8,15 @@
  * @module @forinda/kickjs-cli/typegen
  */
 
-import { resolve, basename } from 'node:path'
-import { readdir, stat, unlink } from 'node:fs/promises'
+import { resolve, basename, dirname, join } from 'node:path'
+import { mkdir, readdir, stat, unlink, writeFile } from 'node:fs/promises'
 import { scanProject, type ScanResult } from './scanner'
-import { generateTypes, type GenerateResult, TokenCollisionError } from './generator'
+import {
+  buildModuleTokens,
+  buildServiceTokens,
+  REGISTRY_DECORATORS,
+  TokenCollisionError,
+} from './render/manifest'
 import { validateTokenConventions, type TokenConventionWarning } from './token-conventions'
 import { discoverAssets } from './asset-types'
 import type { AssetMapEntry } from '../config'
@@ -27,9 +32,36 @@ export type {
   ClassCollision,
   ScanResult,
 } from './scanner'
-export type { GenerateResult } from './generator'
-export { TokenCollisionError } from './generator'
+export { TokenCollisionError } from './render/manifest'
 export { validateTokenConventions, type TokenConventionWarning } from './token-conventions'
+
+/**
+ * Result of a typegen run — useful for logging and tests. Computed from
+ * the scan result + asset discovery; the per-file emission itself is now
+ * owned entirely by the typegen plugins (see `builtin/`).
+ */
+export interface GenerateResult {
+  /** Number of registry-decorated classes (KickJsRegistry entries) */
+  registryEntries: number
+  /** Number of unique service tokens (classes + createToken + @Inject literals) */
+  serviceTokens: number
+  /** Number of module tokens */
+  moduleTokens: number
+  /** Number of route entries */
+  routeEntries: number
+  /** Number of unique plugin/adapter names */
+  pluginEntries: number
+  /** Number of unique `defineAugmentation` calls */
+  augmentationEntries: number
+  /** Number of typed asset entries */
+  assetEntries: number
+  /** Whether a typed env augmentation will be emitted */
+  envWritten: boolean
+  /** Files written this pass (barrel + plugin outputs), for the sweep */
+  written: string[]
+  /** Number of collisions (only > 0 with allowDuplicates) */
+  resolvedCollisions: number
+}
 
 /** Options for `runTypegen` */
 export interface RunTypegenOptions {
@@ -117,8 +149,7 @@ export async function runTypegen(opts: RunTypegenOptions = {}): Promise<{
   /** Token convention warnings — empty when every literal matches §22.2. */
   tokenWarnings: TokenConventionWarning[]
 }> {
-  const { cwd, srcDir, outDir, silent, allowDuplicates, schemaValidator, envFile } =
-    resolveOptions(opts)
+  const { cwd, srcDir, outDir, silent, allowDuplicates, envFile } = resolveOptions(opts)
 
   const start = Date.now()
   const scan = await scanProject({
@@ -127,30 +158,30 @@ export async function runTypegen(opts: RunTypegenOptions = {}): Promise<{
     // Pass through unless explicitly disabled
     envFile: envFile === false ? undefined : envFile,
   })
+
+  // Collision gate. This used to live inside the legacy generator
+  // (`generateTypes` threw before writing). Now that every file is
+  // emitted by an isolated plugin, the gate must run here — at the
+  // orchestration level, before any plugin executes — so a duplicate
+  // class name fails the whole command loudly instead of being silently
+  // namespaced by the registry plugin.
+  if (scan.collisions.length > 0 && !allowDuplicates) {
+    throw new TokenCollisionError(scan.collisions)
+  }
+
   const assets = discoverAssets(opts.assetMap, cwd)
-  const result = await generateTypes({
-    classes: scan.classes,
-    routes: scan.routes,
-    tokens: scan.tokens,
-    injects: scan.injects,
-    collisions: scan.collisions,
-    env: envFile === false ? null : scan.env,
-    pluginsAndAdapters: scan.pluginsAndAdapters,
-    augmentations: scan.augmentations,
-    assets,
-    outDir,
-    allowDuplicates,
-    schemaValidator,
-  })
-  // M2.B-T8 carve: routes + env live in plugin typegens, not the
-  // legacy generator above. Run the plugin pipeline as part of
-  // `runTypegen` by default so single-shot callers (kick g <leaf> /
-  // kick new / tests) stay on one entry point and see a fully-
-  // refreshed `.kickjs/types/` after the call returns. Watch mode
-  // and the `kick typegen` / `kick dev` / `kick build` CLI paths
-  // opt out (`runPlugins: false`) because they drive the plugin
-  // pass externally and would otherwise double-run it.
+
+  // Every `.kickjs/types/*` file is now owned by a typegen plugin
+  // (builtin/ + adopter plugins). Run the pipeline by default so
+  // single-shot callers (kick g <leaf> / kick new / tests) stay on one
+  // entry point and see a fully-refreshed `.kickjs/types/` after the
+  // call returns. The `kick typegen` / `kick dev` / `kick build` /
+  // watch paths opt out (`runPlugins: false`) because they drive the
+  // plugin pass externally (for --check + per-plugin status) and would
+  // otherwise double-run it — they call `writeTypegenArtifacts`
+  // themselves after their own plugin pass.
   let pluginResults: TypegenPluginResult[] = []
+  const written: string[] = []
   if (opts.runPlugins !== false) {
     try {
       const { runAllPluginTypegens } = await import('./run-plugins')
@@ -158,33 +189,20 @@ export async function runTypegen(opts: RunTypegenOptions = {}): Promise<{
       const pluginConfig = await loadKickConfig(cwd)
       pluginResults = await runAllPluginTypegens({ cwd, config: pluginConfig, silent: true })
     } catch (err) {
-      // Broken plugins shouldn't block dev tooling — generators have
-      // already written the rest of `.kickjs/types/`, and surfacing
-      // here as a throw would abort the wider command (kick g, kick
-      // new). When `silent` is false, log the message so the failure
-      // is at least visible; otherwise swallow.
+      // Broken plugins shouldn't block dev tooling. The runner already
+      // isolates each plugin (per-plugin try/catch), so reaching here
+      // means a non-plugin failure (scanner, fs). Surfacing as a throw
+      // would abort the wider command (kick g, kick new); log + continue.
       if (!silent) {
         const msg = err instanceof Error ? err.message : String(err)
         console.warn(`  kick typegen: plugin pipeline failed (${msg}) — continuing`)
       }
     }
-  }
-
-  // Sweep stale `.kickjs/types/*` files. Older CLI versions emitted
-  // `env.ts`, `routes.ts`, and (until this fix) `assets.d.ts` directly
-  // from the legacy generator. Once those carved out into `kick/env`,
-  // `kick/routes`, and `kick/assets` typegen plugins, the legacy
-  // file names became orphans — but were never deleted on subsequent
-  // runs, so adopters who upgraded saw `KickAssets`/`KickEnv`/
-  // `KickRoutes` declared twice (once legacy, once `kick__*`). Sweep
-  // walks the output dir at the end of every pass and unlinks any
-  // top-level file not in the expected set, so a single `kick typegen`
-  // run after upgrade self-heals.
-  if (opts.runPlugins !== false) {
-    await sweepStaleTypegen(outDir, result.written, pluginResults, silent)
+    written.push(...(await writeTypegenArtifacts(outDir, pluginResults, silent)))
   }
 
   const tokenWarnings = validateTokenConventions(scan.tokens)
+  const result = buildGenerateResult(scan, assets.count, written)
   const elapsed = Date.now() - start
 
   if (!silent) {
@@ -231,6 +249,62 @@ export async function runTypegen(opts: RunTypegenOptions = {}): Promise<{
   return { scan, result, tokenWarnings }
 }
 
+/** Derive the logging/test `GenerateResult` from a scan — no files written here. */
+function buildGenerateResult(
+  scan: ScanResult,
+  assetCount: number,
+  written: string[],
+): GenerateResult {
+  const colliding = new Set(scan.collisions.map((c) => c.className))
+  const registryClasses = scan.classes.filter((c) => REGISTRY_DECORATORS.has(c.decorator))
+  const serviceNames = buildServiceTokens(scan.classes, scan.tokens, scan.injects, colliding)
+  return {
+    registryEntries: registryClasses.length,
+    serviceTokens: new Set(serviceNames).size,
+    moduleTokens: buildModuleTokens(scan.classes).length,
+    routeEntries: scan.routes.length,
+    pluginEntries: new Set(scan.pluginsAndAdapters.map((p) => p.name)).size,
+    augmentationEntries: new Set(scan.augmentations.map((a) => a.name)).size,
+    assetEntries: assetCount,
+    envWritten: scan.env !== null,
+    written,
+    resolvedCollisions: scan.collisions.length,
+  }
+}
+
+/**
+ * Post-plugin-pass finalisation: write the `.kickjs/.gitignore` guard
+ * and sweep stale legacy files. Shared by `runTypegen` (single-shot
+ * mode) and the split-mode callers (`kick typegen` / `kick dev` /
+ * watch) so the artifact-writing + sweep stay identical across both.
+ *
+ * No barrel `index.d.ts` is emitted: the scaffolded tsconfig pulls
+ * `.kickjs/types/**` in via `include` globs, so every `declare module`
+ * / `declare global` augmentation in the per-plugin files applies by
+ * inclusion. The old barrel + its `ServiceToken`/`ModuleToken`
+ * re-exports were redundant; they're swept as legacy orphans.
+ *
+ * Returns the list of files considered "written" this pass (the plugin
+ * outputs) for the caller's bookkeeping.
+ */
+export async function writeTypegenArtifacts(
+  outDir: string,
+  pluginResults: readonly TypegenPluginResult[],
+  silent: boolean,
+): Promise<string[]> {
+  await mkdir(outDir, { recursive: true })
+  // `.kickjs/.gitignore` keeps the generated tree out of git even if the
+  // project's root .gitignore predates the `.kickjs/` convention.
+  await writeFile(
+    join(dirname(outDir), '.gitignore'),
+    '# Auto-generated by kick typegen\n*\n',
+    'utf-8',
+  )
+  const written = pluginResults.filter((r) => r.outFile).map((r) => r.outFile as string)
+  await sweepStaleTypegen(outDir, written, pluginResults, silent)
+  return written
+}
+
 /**
  * Watch mode for `kick typegen --watch`.
  *
@@ -271,15 +345,12 @@ export async function watchTypegen(opts: RunTypegenOptions = {}): Promise<() => 
     import('../config'),
   ])
   const pluginConfig = await loadKickConfig(cwd)
-  // Track the most recent generator + plugin outputs so the post-run
-  // sweep knows the full expected set. The legacy generator returns
-  // its written list on each call (captured below via a closure), and
-  // the plugin pipeline returns one per plugin.
-  let lastGeneratorWritten: readonly string[] = []
+  // `runLegacy` now just runs the scan + collision gate (collisions are
+  // tolerated in watch mode via allowDuplicates) and refreshes the
+  // logging counts; all file emission happens in `runPlugins`.
   const runLegacy = async () => {
     try {
-      const out = await runTypegen({ ...runOpts })
-      lastGeneratorWritten = out.result.written
+      await runTypegen({ ...runOpts })
     } catch (err) {
       if (silent) return
       if (err instanceof TokenCollisionError) {
@@ -297,13 +368,13 @@ export async function watchTypegen(opts: RunTypegenOptions = {}): Promise<() => 
         config: pluginConfig,
         silent: true,
       })
-      await sweepStaleTypegen(resolved.outDir, lastGeneratorWritten, pluginResults, true)
+      await writeTypegenArtifacts(resolved.outDir, pluginResults, true)
     } catch {
       /* swallow — watcher must never die */
     }
   }
 
-  // Initial run — legacy pass first, then plugin typegens.
+  // Initial run — scan/gate pass first, then plugin typegens + artifacts.
   await runLegacy()
   await runPlugins()
 
@@ -436,13 +507,28 @@ export async function sweepStaleTypegen(
 }
 
 /**
- * Pre-carve filenames the legacy generator emitted directly before
- * `kick/routes`, `kick/env`, and `kick/assets` became typegen plugins
- * (which now write `kick__routes.ts` / `kick__env.ts` /
- * `kick__assets.d.ts`). A project that upgraded across the M2.B-T8
- * carve has these as orphans on disk; the sweep removes them so the
- * augmentations aren't declared twice. None of these names collide with
- * any file the current generator or plugins emit, so the sweep can
- * never touch live output.
+ * Filenames the legacy monolithic generator (`generator.ts`, now
+ * removed) emitted directly, before every augmentation became its own
+ * typegen plugin. A project that upgrades across this change has these
+ * as orphans on disk; the sweep removes them so the augmentations aren't
+ * declared twice and the dropped `index.d.ts` barrel doesn't linger.
+ *
+ * Split into two waves only for documentation:
+ * - `assets.d.ts` / `env.ts` / `routes.ts` — the M2.B-T8 carve.
+ * - `registry.d.ts` / `services.d.ts` / `modules.d.ts` / `plugins.d.ts`
+ *   / `augmentations.d.ts` / `index.d.ts` — this plugin-only refactor.
+ *
+ * None collide with any current plugin output (all `kick__*`), so the
+ * sweep can never touch live output.
  */
-const LEGACY_ORPHAN_FILES: ReadonlySet<string> = new Set(['assets.d.ts', 'env.ts', 'routes.ts'])
+const LEGACY_ORPHAN_FILES: ReadonlySet<string> = new Set([
+  'assets.d.ts',
+  'env.ts',
+  'routes.ts',
+  'registry.d.ts',
+  'services.d.ts',
+  'modules.d.ts',
+  'plugins.d.ts',
+  'augmentations.d.ts',
+  'index.d.ts',
+])

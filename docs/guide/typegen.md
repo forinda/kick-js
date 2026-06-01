@@ -12,13 +12,25 @@ After running `kick typegen` (or starting `kick dev`), you'll have:
 .kickjs/
   .gitignore                    # ignores everything inside
   types/
-    index.d.ts                  # barrel re-exporting the unions below
-    registry.d.ts               # KickJsRegistry augmentation for container.resolve()
-    services.d.ts               # ServiceToken string-literal union
-    modules.d.ts                # ModuleToken string-literal union
-    routes.ts                   # KickRoutes namespace augmentation (typed Ctx<>)
-    env.ts                      # KickEnv + NodeJS.ProcessEnv augmentation (when src/env.ts exists)
+    kick__registry.d.ts         # KickJsRegistry augmentation for container.resolve()
+    kick__services.d.ts         # ServiceToken string-literal union
+    kick__modules.d.ts          # ModuleToken string-literal union
+    kick__plugins.d.ts          # KickJsPluginRegistry augmentation (narrows dependsOn)
+    kick__augmentations.d.ts    # defineAugmentation catalogue (docs-only)
+    kick__routes.ts             # KickRoutes namespace augmentation (typed Ctx<>)
+    kick__env.ts                # KickEnv + NodeJS.ProcessEnv augmentation (when src/env.ts exists)
+    kick__assets.d.ts           # KickAssets augmentation (when assetMap is set)
+    kick__db.d.ts               # DB model types (when a DB adapter is configured)
 ```
+
+Each file is emitted by its own typegen plugin. There is no barrel
+`index.d.ts` — the scaffolded tsconfig pulls the whole directory in via
+`include: ['.kickjs/types/**/*.d.ts', '.kickjs/types/**/*.ts']`, so every
+`declare module` / `declare global` augmentation applies just by being
+present. (Upgrading from an older CLI? The first `kick typegen` run
+sweeps the old `index.d.ts` / `registry.d.ts` / `services.d.ts` /
+`modules.d.ts` / `plugins.d.ts` / `augmentations.d.ts` files
+automatically.)
 
 Four things become type-safe as a result:
 

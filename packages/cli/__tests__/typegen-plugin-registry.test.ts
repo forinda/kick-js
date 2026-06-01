@@ -257,8 +257,8 @@ describe('kick typegen — plugins.d.ts + augmentations.d.ts E2E', () => {
   it('produces plugins.d.ts and augmentations.d.ts on every run', () => {
     const result = runCli(fixture, ['typegen'])
     assertCliOk(result, 'kick typegen')
-    expect(existsSync(join(fixture, '.kickjs/types/plugins.d.ts'))).toBe(true)
-    expect(existsSync(join(fixture, '.kickjs/types/augmentations.d.ts'))).toBe(true)
+    expect(existsSync(join(fixture, '.kickjs/types/kick__plugins.d.ts'))).toBe(true)
+    expect(existsSync(join(fixture, '.kickjs/types/kick__augmentations.d.ts'))).toBe(true)
   })
 
   it('augments KickJsPluginRegistry with discovered names', () => {
@@ -292,7 +292,7 @@ export const FlagsPlugin = definePlugin({
 
     runCli(fixture, ['typegen'])
 
-    const plugins = readFileSync(join(fixture, '.kickjs/types/plugins.d.ts'), 'utf-8')
+    const plugins = readFileSync(join(fixture, '.kickjs/types/kick__plugins.d.ts'), 'utf-8')
     expect(plugins).toContain("declare module '@forinda/kickjs'")
     expect(plugins).toContain('interface KickJsPluginRegistry')
     expect(plugins).toContain("'TenantAdapter': 'adapter'")
@@ -321,7 +321,7 @@ export const FlagsPlugin = definePlugin({
 
     runCli(fixture, ['typegen'])
 
-    const aug = readFileSync(join(fixture, '.kickjs/types/augmentations.d.ts'), 'utf-8')
+    const aug = readFileSync(join(fixture, '.kickjs/types/kick__augmentations.d.ts'), 'utf-8')
     expect(aug).toContain('FeatureFlagsAugmentation')
     expect(aug).toContain('Flags consumed by FlagsPlugin')
     expect(aug).toContain('{ beta: boolean; rolloutPercentage: number }')
@@ -330,7 +330,7 @@ export const FlagsPlugin = definePlugin({
 
   it('emits an empty registry when no plugins/adapters exist', () => {
     runCli(fixture, ['typegen'])
-    const plugins = readFileSync(join(fixture, '.kickjs/types/plugins.d.ts'), 'utf-8')
+    const plugins = readFileSync(join(fixture, '.kickjs/types/kick__plugins.d.ts'), 'utf-8')
     expect(plugins).toContain('interface KickJsPluginRegistry')
     expect(plugins).toContain('no plugins/adapters discovered yet')
   })

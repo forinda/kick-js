@@ -10,7 +10,7 @@
 
 import type { Command } from 'commander'
 import { resolve } from 'node:path'
-import { runTypegen, sweepStaleTypegen, TokenCollisionError, watchTypegen } from '../typegen'
+import { runTypegen, writeTypegenArtifacts, TokenCollisionError, watchTypegen } from '../typegen'
 import { runAllPluginTypegens } from '../typegen/run-plugins'
 import { loadKickConfig } from '../config'
 import { findProjectRoot } from '../utils/project-root'
@@ -150,11 +150,14 @@ export function registerTypegenCommand(program: Command): void {
           // Keep the event loop alive until shutdown
           await new Promise<void>(() => {})
         } else {
-          const { result } = await runTypegen(baseOpts)
+          // runTypegen here only runs the scan + collision gate (it's
+          // invoked with runPlugins:false below); all file emission is
+          // the plugin pipeline that follows.
+          await runTypegen(baseOpts)
 
-          // Plugin-typegen pipeline runs after the legacy pass. The
-          // helper handles merging builtins with user plugins, applies
-          // the `typegen.disable` filter, logs per-plugin status, and
+          // Plugin-typegen pipeline — the sole emitter now. The helper
+          // merges builtins with user plugins, applies the
+          // `typegen.disable` filter, logs per-plugin status, and
           // surfaces drift for the --check exit code.
           const results = await runAllPluginTypegens({
             cwd,
@@ -166,13 +169,12 @@ export function registerTypegenCommand(program: Command): void {
             process.exit(1)
           }
 
-          // Sweep orphans from older CLI versions (e.g. legacy
-          // `assets.d.ts`/`env.ts`/`routes.ts` left behind after the
-          // M2.B-T8 carve). Skipped under --check so the gate stays
-          // strictly diagnostic.
+          // Finalise: write the `.kickjs/.gitignore` guard and sweep
+          // legacy orphan files. Skipped under --check so the gate stays
+          // strictly diagnostic (no writes).
           if (!opts.check) {
             const outDir = resolve(cwd, opts.out ?? config?.typegen?.outDir ?? '.kickjs/types')
-            await sweepStaleTypegen(outDir, result.written, results, opts.silent ?? false)
+            await writeTypegenArtifacts(outDir, results, opts.silent ?? false)
           }
         }
       } catch (err: unknown) {

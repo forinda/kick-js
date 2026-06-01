@@ -27,18 +27,28 @@ describe('kick typegen', () => {
     writeFileSync(full, content)
   }
 
-  it('produces all five generated files for a project with no controllers', () => {
+  it('produces the per-plugin generated files for a project with no controllers', () => {
     const result = runCli(fixture, ['typegen'])
     assertCliOk(result, 'kick typegen')
+    for (const f of [
+      '.kickjs/types/kick__registry.d.ts',
+      '.kickjs/types/kick__services.d.ts',
+      '.kickjs/types/kick__modules.d.ts',
+      '.kickjs/types/kick__plugins.d.ts',
+      '.kickjs/types/kick__augmentations.d.ts',
+      '.kickjs/types/kick__routes.ts',
+      '.kickjs/.gitignore',
+    ]) {
+      expect(existsSync(join(fixture, f)), `${f}`).toBe(true)
+    }
+    // The legacy monolithic generator's files (and its barrel) are gone.
     for (const f of [
       '.kickjs/types/registry.d.ts',
       '.kickjs/types/services.d.ts',
       '.kickjs/types/modules.d.ts',
-      '.kickjs/types/kick__routes.ts',
       '.kickjs/types/index.d.ts',
-      '.kickjs/.gitignore',
     ]) {
-      expect(existsSync(join(fixture, f)), `${f}`).toBe(true)
+      expect(existsSync(join(fixture, f)), `${f} should not exist`).toBe(false)
     }
   })
 
@@ -114,7 +124,7 @@ export class UserService {}
     const result = runCli(fixture, ['typegen', '--allow-duplicates'])
     assertCliOk(result, 'kick typegen --allow-duplicates')
 
-    const registry = readFileSync(join(fixture, '.kickjs/types/registry.d.ts'), 'utf-8')
+    const registry = readFileSync(join(fixture, '.kickjs/types/kick__registry.d.ts'), 'utf-8')
     // Both colliding entries should be namespaced
     expect(registry).toContain("'a/UserService'")
     expect(registry).toContain("'b/UserService'")
@@ -177,7 +187,7 @@ export class AuthModule implements AppModule {
 
     runCli(fixture, ['typegen'])
 
-    const modules = readFileSync(join(fixture, '.kickjs/types/modules.d.ts'), 'utf-8')
+    const modules = readFileSync(join(fixture, '.kickjs/types/kick__modules.d.ts'), 'utf-8')
     expect(modules).toContain('ModuleToken')
     expect(modules).toContain("'UsersModule'")
     expect(modules).toContain("'AuthModule'")
