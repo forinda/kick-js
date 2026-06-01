@@ -117,6 +117,17 @@ Same job, different ergonomics. Each line below maps a middleware pain point to 
 
 ## Quickstart
 
+Scaffold one with the CLI:
+
+```bash
+kick g contributor tenant                          # HTTP (RequestContext), key 'tenant'
+kick g contributor session --type bare             # ExecutionContext (transport-agnostic)
+kick g contributor tenant --params "source:string" # emits the withParams<T>() form
+kick g contributor admin -m users                  # scoped inside the users module
+```
+
+`--type http` (default) types the resolver against `RequestContext`; `--type bare` against `ExecutionContext`. `--params` switches to the curried `.withParams<T>()` form with a generated params type. The scaffold also drops a `ContextMeta` augmentation stub for the key. Or write one by hand:
+
 ```ts
 import { defineHttpContextDecorator, Controller, Get, type RequestContext } from '@forinda/kickjs'
 

@@ -101,6 +101,66 @@ describe('kick g <leaf>', () => {
     })
   })
 
+  describe('contributor', () => {
+    it('generates an HTTP context contributor (defaults: --type http)', () => {
+      const result = runCli(fixture, ['g', 'contributor', 'tenant'])
+      assertCliOk(result, 'kick g contributor tenant')
+      const file = join(fixture, 'src/contributors/tenant.contributor.ts')
+      expect(existsSync(file)).toBe(true)
+      const content = readFileSync(file, 'utf-8')
+      expect(content).toContain('defineHttpContextDecorator')
+      expect(content).toContain('RequestContext')
+      expect(content).toContain("key: 'tenant'") // key defaults to camelCase(name)
+      expect(content).toContain('export const Tenant')
+      // Registers the key for typed ctx.get + dependsOn checking.
+      expect(content).toContain('interface ContextMeta')
+    })
+
+    it('generates a bare contributor with --type bare', () => {
+      runCli(fixture, ['g', 'contributor', 'session', '--type', 'bare'])
+      const content = readFileSync(
+        join(fixture, 'src/contributors/session.contributor.ts'),
+        'utf-8',
+      )
+      expect(content).toContain('defineContextDecorator')
+      expect(content).not.toContain('defineHttpContextDecorator')
+      expect(content).toContain('ExecutionContext')
+    })
+
+    it('emits the withParams<T>() form when --params is supplied', () => {
+      runCli(fixture, ['g', 'contributor', 'tenant', '--params', 'source:string,region:number'])
+      const content = readFileSync(join(fixture, 'src/contributors/tenant.contributor.ts'), 'utf-8')
+      // type alias (not interface) so it satisfies P extends Record<string, unknown>
+      expect(content).toContain('export type TenantParams = {')
+      expect(content).toContain('source: string')
+      expect(content).toContain('region: number')
+      expect(content).toContain('.withParams<TenantParams>()')
+      expect(content).toContain('paramDefaults')
+      expect(content).toContain('(ctx, _deps, params)')
+    })
+
+    it('honours an explicit --key', () => {
+      runCli(fixture, ['g', 'contributor', 'load-tenant', '--key', 'tenant'])
+      const content = readFileSync(
+        join(fixture, 'src/contributors/load-tenant.contributor.ts'),
+        'utf-8',
+      )
+      expect(content).toContain("key: 'tenant'")
+      expect(content).toContain('export const LoadTenant')
+    })
+
+    it('passes tsc --noEmit (http, bare, and withParams forms)', () => {
+      runCli(fixture, ['g', 'contributor', 'tenant'])
+      runCli(fixture, ['g', 'contributor', 'session', '--type', 'bare'])
+      runCli(fixture, ['g', 'contributor', 'project', '--params', 'depth:number'])
+      const tsc = runTsc(fixture)
+      if (tsc.exitCode !== 0) {
+        throw new Error(`tsc failed:\n${tsc.stdout}\n${tsc.stderr}`)
+      }
+      expect(tsc.exitCode).toBe(0)
+    })
+  })
+
   describe('dto', () => {
     it('generates a Zod DTO schema', () => {
       const result = runCli(fixture, ['g', 'dto', 'create-user'])
