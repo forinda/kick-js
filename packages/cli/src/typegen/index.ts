@@ -400,9 +400,6 @@ export async function sweepStaleTypegen(
   for (const r of pluginResults) {
     if (r.outFile) expected.add(basename(r.outFile))
   }
-  // Hidden files we own at the types/ level — none today, but the
-  // gitignore at .kickjs/.gitignore lives one level up so it's not
-  // a candidate here.
   let entries: string[]
   try {
     entries = await readdir(outDir)
@@ -411,6 +408,16 @@ export async function sweepStaleTypegen(
   }
   const removed: string[] = []
   for (const name of entries) {
+    // Allowlist, NOT denylist. The earlier "delete anything not in the
+    // expected set" form was a footgun: if the plugin pass aborted
+    // (e.g. one plugin threw and the runner bubbled it up, so
+    // `pluginResults` came back empty), the expected set lost
+    // `kick__routes.ts` / `kick__assets.d.ts` / `kick__env.ts` and the
+    // sweep deleted those good files — wiping controller route types
+    // project-wide. We now only remove the specific pre-carve filenames
+    // the legacy generator used to emit, and only when the current pass
+    // didn't (re)write them. Anything else is left untouched.
+    if (!LEGACY_ORPHAN_FILES.has(name)) continue
     if (expected.has(name)) continue
     const abs = resolve(outDir, name)
     try {
@@ -427,3 +434,15 @@ export async function sweepStaleTypegen(
   }
   return removed
 }
+
+/**
+ * Pre-carve filenames the legacy generator emitted directly before
+ * `kick/routes`, `kick/env`, and `kick/assets` became typegen plugins
+ * (which now write `kick__routes.ts` / `kick__env.ts` /
+ * `kick__assets.d.ts`). A project that upgraded across the M2.B-T8
+ * carve has these as orphans on disk; the sweep removes them so the
+ * augmentations aren't declared twice. None of these names collide with
+ * any file the current generator or plugins emit, so the sweep can
+ * never touch live output.
+ */
+const LEGACY_ORPHAN_FILES: ReadonlySet<string> = new Set(['assets.d.ts', 'env.ts', 'routes.ts'])

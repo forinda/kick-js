@@ -119,6 +119,9 @@
     },
     "multer": {
       "optional": true
+    },
+    "zod": {
+      "optional": true
     }
   },
   "devDependencies": {

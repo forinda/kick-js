@@ -317,6 +317,21 @@ function loadConfigSync(cwd: string): AssetMapConfigShape | null {
       continue
     }
   }
+
+  // Fallback: the CLI snapshot of a transpiled `kick.config.ts`. We
+  // can't transpile TS synchronously on the asset hot path, so the CLI
+  // (`loadKickConfig`) mirrors the JSON-serialisable `assetMap` +
+  // `build.outDir` into `.kickjs/kick.config.json` whenever it loads a
+  // `.ts`/`.js` config. This is what makes `assets.x.y()` resolve in
+  // dev for `.ts`-config projects before the first production build.
+  const snapshotPath = join(cwd, '.kickjs', 'kick.config.json')
+  if (existsSync(snapshotPath)) {
+    try {
+      return JSON.parse(readFileSync(snapshotPath, 'utf-8')) as AssetMapConfigShape
+    } catch {
+      return null
+    }
+  }
   return null
 }
 
