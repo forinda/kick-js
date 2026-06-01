@@ -441,6 +441,8 @@ When the registry is empty (fresh project, never ran `kick typegen`), `keyof Kic
 
 ## Augmentation catalogue
 
+> **Deprecated.** `defineAugmentation` does nothing at runtime or at the type level — the `declare module '@forinda/kickjs' { … }` block alone gives you the augmentation, and the catalogue it feeds is documentation-only. Prefer a plain `declare module` block with a JSDoc comment on your own interface. `defineAugmentation` and the `kick/augmentations` typegen plugin will be removed in a future major.
+
 Plugins advertise augmentable interfaces by calling `defineAugmentation('Name', meta)` — a runtime no-op that exists purely for `kick typegen` to discover:
 
 ```ts

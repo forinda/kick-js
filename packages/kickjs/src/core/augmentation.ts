@@ -97,6 +97,14 @@ export interface AugmentationMeta {
  *
  * Skip `defineAugmentation` if you don't care about the catalogue — the
  * `declare module` block alone is enough for runtime + type behaviour.
+ *
+ * @deprecated Low value in practice: it does nothing at runtime or at
+ * the type level — the `declare module` block alone gives you the
+ * augmentation, and the generated `.kickjs/types/kick__augmentations.d.ts`
+ * catalogue it feeds is documentation-only. Prefer a plain
+ * `declare module '@forinda/kickjs' { ... }` block and (optionally) a
+ * JSDoc comment on your own interface. `defineAugmentation` and the
+ * `kick/augmentations` typegen plugin will be removed in a future major.
  */
 export function defineAugmentation(name: string, meta?: AugmentationMeta): void {
   // No-op at runtime — `kick typegen` discovers the call statically and
