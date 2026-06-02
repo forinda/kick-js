@@ -162,6 +162,16 @@ const GENERATORS = [
   },
 ]
 
+/**
+ * First token of every built-in generator (`'module <name>'` → `'module'`).
+ * Used by the bare `kick g <names...>` action to refuse silently
+ * scaffolding modules when the first arg is actually a generator name
+ * that failed to route (older CLI, typo'd flag).
+ */
+const RESERVED_GENERATOR_NAMES: ReadonlySet<string> = new Set(
+  GENERATORS.map((g) => g.name.split(' ')[0]),
+)
+
 async function printGeneratorList(): Promise<void> {
   console.log('\n  Built-in generators:\n')
   const maxName = Math.max(...GENERATORS.map((g) => g.name.length))
@@ -332,6 +342,25 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
         )
         if (result) {
           printGenerated(result.files, dryRun)
+          return
+        }
+
+        // Guard the module fallback against a reserved generator name.
+        // Commander routes `kick g <gen> <name>` to its dedicated
+        // subcommand — so reaching here with a known generator name as
+        // the first token means it DIDN'T route: typically the installed
+        // CLI predates that generator (e.g. `contributor`), or a typo in
+        // a flag broke parsing. Without this guard the names fall through
+        // to `runModuleGeneration` and silently scaffold MODULES named
+        // after the generator + its argument (`kick g contributor tenant`
+        // → modules `contributor` and `tenant`). Fail loud instead.
+        if (generatorName !== 'module' && RESERVED_GENERATOR_NAMES.has(generatorName)) {
+          console.error(`\n  '${generatorName}' is a generator, not a module name.`)
+          console.error(`  Did you mean:  kick g ${generatorName} ${itemName ?? '<name>'}`)
+          console.error(
+            `  If that errors, your @forinda/kickjs-cli is older than the '${generatorName}' generator — upgrade it.\n`,
+          )
+          process.exitCode = 1
           return
         }
       }
