@@ -753,6 +753,14 @@ export class Application {
       this.httpServer = g.__kickjs_httpServer
       log.debug('Attached to Vite dev server')
 
+      // Dev mode suppresses our own SIGINT/SIGTERM handlers (Vite owns
+      // the process lifecycle), so a Ctrl+C would otherwise skip graceful
+      // shutdown entirely — `adapter.shutdown()`, request draining, and
+      // any shutdown logs never run. Expose `shutdown()` on globalThis so
+      // the CLI dev server (`kick dev`) can drive it before tearing down
+      // Vite. Same process, so the CLI's signal handler can reach this.
+      g.__kickjs_app_shutdown = () => this.shutdown()
+
       for (const adapter of this.adapters) {
         const ctx = this.adapterCtx(this.httpServer!)
         await this.callHook(adapter.afterStart?.bind(adapter), ctx)
