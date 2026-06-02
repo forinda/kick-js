@@ -131,8 +131,8 @@
     "@types/node": "^25.9.1",
     "multer": "^2.1.1",
     "typescript": "^6.0.3",
-    "vite": "^8.0.14",
-    "vitest": "^4.1.7",
+    "vite": "^8.0.16",
+    "vitest": "^4.1.8",
     "zod": "^4.4.3"
   },
   "publishConfig": {

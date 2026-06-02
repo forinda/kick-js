@@ -45,7 +45,7 @@
     "@types/node": "^25.9.1",
     "@types/ws": "^8.18.0",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.7",
+    "vitest": "^4.1.8",
     "ws": "^8.21.0"
   },
   "publishConfig": {

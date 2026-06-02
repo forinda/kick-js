@@ -54,9 +54,9 @@
     "express": "^5.1.0",
     "solid-js": "^1.9.13",
     "typescript": "^6.0.3",
-    "vite": "^8.0.14",
+    "vite": "^8.0.16",
     "vite-plugin-solid": "^2.11.12",
-    "vitest": "^4.1.7",
+    "vitest": "^4.1.8",
     "ws": "^8.21.0"
   },
   "publishConfig": {
