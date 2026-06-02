@@ -41,6 +41,29 @@ const PACKAGE_REGISTRY: Record<string, PackageEntry> = {
     core: true,
   },
 
+  // Schema validation — the validator backing env + DTO + OpenAPI
+  // schemas. `@forinda/kickjs-schema` (a core dep) wraps whichever one
+  // you pick behind `KickSchema`, but the validator itself is an
+  // optional peer of `@forinda/kickjs`, so it must be installed
+  // explicitly or the app errors at startup ("Cannot find module
+  // 'zod'"). `kick new` installs the chosen one; `kick add` lets an
+  // existing project add/switch.
+  zod: {
+    pkg: 'zod',
+    peers: [],
+    description: 'Zod schema validation (env, DTOs, OpenAPI) — wrap with fromZod()',
+  },
+  valibot: {
+    pkg: 'valibot',
+    peers: [],
+    description: 'Valibot schema validation — wrap with fromValibot()',
+  },
+  yup: {
+    pkg: 'yup',
+    peers: [],
+    description: 'Yup schema validation — wrap with fromYup()',
+  },
+
   // API
   swagger: {
     pkg: '@forinda/kickjs-swagger',
