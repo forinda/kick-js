@@ -256,65 +256,131 @@ export const RequestLogger = defineAdapter({
 
 ---
 
-## 8. Extending the CLI
+## 8. Extending the CLI — the full `defineCliPlugin` surface
 
-KickJS's CLI is itself plugin-based — adopters extend it from `kick.config.ts`.
-
-**Custom commands** — wrap shell steps under `kick run`:
+The `kick` CLI is itself a composition of plugins — every built-in command ships internally as a `KickCliPlugin`, and adopters extend the **same** surface from `kick.config.ts > plugins[]`. A plugin is an object (or a factory returning one); `defineCliPlugin` is the identity helper for inference.
 
 ```ts
-import { defineConfig } from '@forinda/kickjs-cli'
+import { defineCliPlugin } from '@forinda/kickjs-cli'
 
-export default defineConfig({
+export const myPlugin = defineCliPlugin({
+  name: 'my-org-cli', // required — stable id, used for de-dup + conflict errors
   commands: [
-    { name: 'db:migrate', description: 'Run migrations', steps: 'npx drizzle-kit migrate' },
+    /* declarative shell commands */
+  ],
+  register(program, ctx) {
+    /* programmatic Commander commands */
+  },
+  generators: [
+    /* `kick g <name>` scaffolders */
+  ],
+  // typegens: [ … ]  // ← `kick typegen` plugins — see Type Generation
+})
+
+// kick.config.ts
+// export default defineConfig({ plugins: [myPlugin] })
+```
+
+Everything you can put on a plugin, field by field (typegens aside — those live in [Type Generation](./typegen.md)):
+
+### `name` (required)
+
+A stable identifier. Used to de-dup plugins and to name the offender in conflict errors (two plugins shipping the same command / generator name throw `KickPluginConflictError`). Convention: the package name (`'kickjs-cli-drizzle'`).
+
+### `commands[]` — declarative shell commands
+
+The lowest-ceremony extension: a name, a description, and shell `steps`. Each becomes a `kick <name>` command.
+
+```ts
+defineCliPlugin({
+  name: 'db-tools',
+  commands: [
+    {
+      name: 'db:migrate', // → `kick db:migrate`
+      description: 'Apply pending migrations', // shown in --help
+      steps: 'npx drizzle-kit migrate', // string … or string[] for sequential steps
+      aliases: ['migrate'], // optional — `kick migrate` also works
+    },
     {
       name: 'proto:gen',
       description: 'Codegen protobufs',
-      steps: ['npx buf generate', 'echo done'],
+      steps: ['npx buf generate', 'echo done'], // runs in order; stops on first failure
     },
   ],
 })
 ```
 
-**CLI plugins** — ship reusable commands + typegens as a package:
+`steps` may use `{args}` as a placeholder for trailing CLI arguments. Same shape as the top-level `kick.config.ts > commands[]` — a plugin just bundles them for reuse.
+
+### `register(program, ctx)` — programmatic Commander
+
+When declarative `commands` aren't enough (subcommands, options/flags, async actions), get the raw [Commander](https://github.com/tj/commander.js) `program`. Called once at CLI startup.
 
 ```ts
-import { defineCliPlugin } from '@forinda/kickjs-cli'
-
-export const drizzlePlugin = (opts: { schemaPath?: string } = {}) =>
-  defineCliPlugin({
-    name: 'kickjs-cli-drizzle',
-    commands: [
-      { name: 'db:migrate', description: 'Apply migrations', steps: 'npx drizzle-kit migrate' },
-    ],
-    typegens: [drizzleTypegen(opts)],
-  })
-
-// kick.config.ts → defineConfig({ plugins: [drizzlePlugin({ schemaPath: 'src/db/schema' })] })
+defineCliPlugin({
+  name: 'reporter',
+  register(program, ctx) {
+    program
+      .command('report <kind>')
+      .description('Emit a project report')
+      .option('--json', 'machine-readable output')
+      .action(async (kind: string, opts: { json?: boolean }) => {
+        ctx.log(`project root: ${ctx.projectRoot}`)
+        const pattern = ctx.config?.pattern ?? 'rest'
+        // … build the report; write to ctx.projectRoot
+      })
+  },
+})
 ```
 
-**Custom generators** — teach `kick g` your own scaffolds:
+The second arg is the **plugin context** (`KickCliPluginContext`) — so the callback never re-loads config or guesses paths:
+
+| Field         | What it is                                                                                                                      |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `cwd`         | Directory the command was invoked from (may be a nested subdir).                                                                |
+| `projectRoot` | Resolved project root (dir owning `kick.config.*`, else nearest `package.json`, else `cwd`). **Prefer this for writing files.** |
+| `config`      | The loaded `kick.config.ts` (`KickConfig \| null`).                                                                             |
+| `log(msg)`    | Plugin-friendly logger.                                                                                                         |
+| `generators?` | Merged plugin generators (built-ins + adopter) — lets a `register()` surface them as real subcommands.                          |
+
+### `generators[]` — custom `kick g <name>` scaffolders
+
+Teach `kick g` your own scaffolds with `defineGenerator`. `kick g <name>` matches `name` (after built-ins), runs `files(ctx)`, and writes each returned `{ path, content }`.
 
 ```ts
 import { defineCliPlugin, defineGenerator } from '@forinda/kickjs-cli'
 
-const cqrsCommandGen = defineGenerator({
-  name: 'command',
-  description: 'Generate a CQRS command + handler',
-  args: [{ name: 'name', required: true }],
+const cqrsCommand = defineGenerator({
+  name: 'command', // → `kick g command Order`
+  description: 'Generate a CQRS command + handler', // shown in `kick g --list`
+  args: [{ name: 'name', required: true, description: 'Command name' }], // informational (help)
+  flags: [{ name: 'sync', description: 'Synchronous handler', takesValue: false }], // informational
   files: (ctx) => [
     {
+      // relative paths resolve against ctx.cwd; parent dirs auto-created
       path: `${ctx.modulesDir}/${ctx.kebab}/commands/create-${ctx.kebab}.command.ts`,
       content: `export class Create${ctx.pascal}Command {}\n`,
     },
   ],
 })
 
-export const cqrsPlugin = defineCliPlugin({ name: 'kickjs-cli-cqrs', generators: [cqrsCommandGen] })
+export const cqrsPlugin = defineCliPlugin({ name: 'kickjs-cli-cqrs', generators: [cqrsCommand] })
 ```
 
-**Best pattern:** start with `commands[]` for one-off shell steps; promote to a `defineCliPlugin` (with `generators` / `typegens`) when you want to share it across projects. → [Custom Commands](./custom-commands.md), [CLI Plugins](./cli-plugins.md), [Plugin Generators](./plugin-generators.md)
+The `files(ctx)` factory receives a `GeneratorContext` with the name pre-cased + project paths + raw input:
+
+| Field                                             | Example for `kick g command UserPost extra --sync`                              |
+| ------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `name` / `pascal` / `kebab` / `camel` / `snake`   | `UserPost` / `UserPost` / `user-post` / `userPost` / `user_post`                |
+| `pluralPascal?` / `pluralKebab?` / `pluralCamel?` | `UserPosts` / `user-posts` / `userPosts` (when `pluralize` is on)               |
+| `modulesDir`                                      | `'src/modules'` (from `kick.config.ts`)                                         |
+| `cwd` / `projectRoot`                             | invocation dir / resolved project root (prefer `projectRoot` for stable writes) |
+| `args`                                            | `['extra']` (positional args after the name)                                    |
+| `flags`                                           | `{ sync: true }` (booleans for switches, strings for `--key value`)             |
+
+`files()` may be async and return a `Promise<GeneratorFile[]>`.
+
+**Best pattern:** start with `commands[]` for one-off shell steps; reach for `register()` only when you need options/subcommands/async; ship `generators[]` to standardise scaffolds across a team. Promote a one-project `kick.config.ts > commands[]` to a published `defineCliPlugin` when you want to reuse it. → [CLI Plugins](./cli-plugins.md), [Custom Commands](./custom-commands.md), [Plugin Generators](./plugin-generators.md)
 
 ---
 
