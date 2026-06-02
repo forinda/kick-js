@@ -177,14 +177,32 @@ async function startDevServer(
 
   console.log(`\n  KickJS dev server running (Vite + @forinda/kickjs-vite)\n`)
 
-  // Graceful shutdown — Vite closes the server + all HMR connections
+  // Graceful shutdown — Vite closes the server + all HMR connections.
+  // The app suppresses its own signal handlers in dev (Vite owns the
+  // lifecycle), so drive its graceful shutdown here: drain in-flight
+  // requests + run adapter.shutdown() + emit shutdown logs BEFORE Vite
+  // tears the server down. The hook is set on globalThis by
+  // Application.start() once the app has bootstrapped (same process).
+  let shuttingDown = false
   const shutdown = async () => {
+    if (shuttingDown) return
+    shuttingDown = true
     if (typegenTimer) clearTimeout(typegenTimer)
+    try {
+      await (
+        globalThis as { __kickjs_app_shutdown?: () => Promise<void> }
+      ).__kickjs_app_shutdown?.()
+    } catch (err: any) {
+      console.error(`  app shutdown hook failed: ${err?.message ?? err}`)
+    }
     await server.close()
     process.exit(0)
   }
   process.on('SIGINT', shutdown)
   process.on('SIGTERM', shutdown)
+  // Windows delivers Ctrl+Break as SIGBREAK (and SIGTERM is never raised);
+  // wire it so graceful shutdown works there too.
+  process.on('SIGBREAK', shutdown)
 }
 
 export function registerRunCommands(program: Command): void {

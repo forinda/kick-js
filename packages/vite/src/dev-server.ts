@@ -105,6 +105,30 @@ export function kickjsDevServerPlugin(_ctx: PluginContext): Plugin {
       globalThis.__kickjs_httpServer = viteServer.httpServer ?? null
       globalThis.__kickjs_viteServer = viteServer
 
+      // ━━━ Eagerly bootstrap the app once the server is listening ━━━
+      // The post-middleware below only evaluates the entry on the FIRST
+      // request (lazy SSR). That means `bootstrap()`, adapter
+      // `afterStart`, and the app's startup logs don't run until someone
+      // hits the URL — the app looks "not started" until then. Warm the
+      // module once the HTTP server is listening so startup behaves like
+      // `node`/`tsx` (logs + adapters + the in-dev shutdown hook ready
+      // immediately). Errors surface with a fixed stacktrace.
+      const warm = () => {
+        viteServer.ssrLoadModule(VIRTUAL_APP).catch((err: unknown) => {
+          if (err instanceof Error) viteServer.ssrFixStacktrace(err)
+          viteServer.config.logger.error(
+            `[kickjs] failed to bootstrap app on startup: ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          )
+        })
+      }
+      const httpServer = viteServer.httpServer
+      if (httpServer) {
+        if (httpServer.listening) warm()
+        else httpServer.once('listening', warm)
+      }
+
       // Return post-middleware — runs after Vite's static/HMR middleware
       return () => {
         viteServer.middlewares.use(async (req, res, next) => {
