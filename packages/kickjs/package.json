@@ -128,11 +128,11 @@
     "@swc/core": "^1.15.40",
     "@types/express": "^5.0.6",
     "@types/multer": "^2.1.0",
-    "@types/node": "^25.9.1",
+    "@types/node": "^25.9.2",
     "multer": "^2.1.1",
     "typescript": "^6.0.3",
-    "vite": "^8.0.14",
-    "vitest": "^4.1.7",
+    "vite": "^8.0.16",
+    "vitest": "^4.1.8",
     "zod": "^4.4.3"
   },
   "publishConfig": {
