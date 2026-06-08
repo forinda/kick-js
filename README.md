@@ -272,6 +272,8 @@ kick tinker                          # Interactive REPL with full DI graph
 
 **[forinda.github.io/kick-js](https://forinda.github.io/kick-js/)**
 
+New here? The **[Samples guide](https://forinda.github.io/kick-js/guide/samples)** is a one-page, copy-pasteable tour of the recommended patterns — controllers, DI, modules, config, context decorators, error handling, adapters, and extending the CLI — each linking into the full guide. It doubles as the mental model.
+
 ## Contributing
 
 ```bash
