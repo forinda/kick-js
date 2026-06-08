@@ -41,13 +41,13 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@clack/prompts": "^1.4.0",
+    "@clack/prompts": "^1.5.1",
     "@forinda/kickjs": "workspace:*",
     "@forinda/kickjs-db": "workspace:*",
     "commander": "^15.0.0",
     "glob": "^13.0.6",
     "jiti": "^2.7.0",
-    "oxfmt": "^0.52.0",
+    "oxfmt": "^0.54.0",
     "picocolors": "^1.1.1",
     "pluralize": "^8.0.0"
   },
