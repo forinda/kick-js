@@ -45,7 +45,7 @@
     "@forinda/kickjs": "workspace:*",
     "@forinda/kickjs-db": "workspace:*",
     "@types/better-sqlite3": "^7.6.13",
-    "@types/node": "^25.9.1",
+    "@types/node": "^25.9.2",
     "better-sqlite3": "^12.10.0",
     "kysely": "^0.29.2",
     "typescript": "^6.0.3"
