@@ -28,6 +28,7 @@
 import type { Dirent } from 'node:fs'
 import { readdir, readFile } from 'node:fs/promises'
 import { join, relative, resolve, sep } from 'node:path'
+import { ScanCache } from './scanner-cache'
 
 /** Decorators that mark a class as DI-managed */
 export const DECORATOR_NAMES = [
@@ -263,6 +264,14 @@ export interface ScanOptions {
    * expected shape, env typing is skipped silently.
    */
   envFile?: string
+  /**
+   * Directory for the persistent per-file extraction cache. When set,
+   * unchanged files (matched by `mtimeMs:size` signature) are served
+   * from `<cacheDir>/scan.json` instead of being re-read and re-scanned.
+   * Omit to disable caching (every scan is a cold read — the original
+   * behaviour). Typically `<cwd>/.kickjs/cache`.
+   */
+  cacheDir?: string
 }
 
 const DEFAULT_EXTENSIONS = ['.ts', '.tsx', '.mts', '.cts']
@@ -1299,13 +1308,228 @@ export function findCollisions(classes: DiscoveredClass[]): ClassCollision[] {
 }
 
 /**
+ * The complete per-file extraction result. Every field here is a pure
+ * function of a single file's source text — no cross-file context — so
+ * the whole object is cacheable keyed by the file's signature.
+ *
+ * The one subtlety is `routes`: their `pathParams` are computed with an
+ * EMPTY mount map (own-path params only). The cross-file mount prefix
+ * is re-applied during the join phase of `scanProject`, which is a
+ * cheap pure-JS recompute (no regex, no I/O). This keeps routes fully
+ * cacheable even though their final `pathParams` depend on a sibling
+ * module file's `routes()` mount path.
+ */
+export interface FileExtract {
+  classes: DiscoveredClass[]
+  tokens: DiscoveredToken[]
+  injects: DiscoveredInject[]
+  pluginsAndAdapters: DiscoveredPluginOrAdapter[]
+  augmentations: DiscoveredAugmentation[]
+  contextKeys: DiscoveredContextKey[]
+  /** Routes with own-path `pathParams` only — mount prefix applied at join. */
+  routes: DiscoveredRoute[]
+  /** `{ controller, mountPath }` pairs from this file's `routes()` body. */
+  moduleMounts: ModuleMount[]
+  /** `import.meta.glob([...])` patterns (only non-empty for `*.module.ts`). */
+  globPatterns: string[]
+}
+
+/**
+ * Run every per-file extractor over one source string. Pure: depends
+ * only on the file's own text, so the result is safe to cache by
+ * filesystem signature (see `scanner-cache.ts`).
+ */
+export function extractFile(source: string, filePath: string, cwd: string): FileExtract {
+  const classes = extractClassesFromSource(source, filePath, cwd)
+  return {
+    classes,
+    tokens: extractTokensFromSource(source, filePath, cwd),
+    injects: extractInjectsFromSource(source, filePath, cwd),
+    pluginsAndAdapters: extractPluginsAndAdaptersFromSource(source, filePath, cwd),
+    augmentations: extractAugmentationsFromSource(source, filePath, cwd),
+    contextKeys: extractContextKeysFromSource(source, filePath, cwd),
+    // Empty mount map → own-path params only; prefix re-applied at join.
+    routes: extractRoutesFromSource(source, filePath, cwd, classes, new Map()),
+    moduleMounts: extractModuleMounts(source),
+    globPatterns: /\.module\.[mc]?[tj]sx?$/.test(filePath) ? extractGlobPatterns(source) : [],
+  }
+}
+
+/**
+ * Read + extract a single file, consulting the optional persistent
+ * cache first. On a signature hit the file is not read at all — the
+ * cached extract is returned directly. Returns null when the file
+ * cannot be read (deleted mid-scan / permission error).
+ */
+async function loadFileExtract(
+  file: string,
+  cwd: string,
+  cache: ScanCache | null,
+): Promise<FileExtract | null> {
+  const sig = cache ? await ScanCache.signature(file) : null
+  if (cache && sig) {
+    const hit = cache.get(file, sig)
+    if (hit) {
+      cache.set(file, sig, hit)
+      return hit
+    }
+  }
+  let source: string
+  try {
+    source = await readFile(file, 'utf-8')
+  } catch {
+    return null
+  }
+  const extract = extractFile(source, file, cwd)
+  if (cache && sig) cache.set(file, sig, extract)
+  return extract
+}
+
+/** Map a concurrency-bounded async fn over items, preserving order. */
+async function mapConcurrent<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const out: R[] = []
+  let next = 0
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    for (;;) {
+      const i = next++
+      if (i >= items.length) return
+      out[i] = await fn(items[i], i)
+    }
+  })
+  await Promise.all(workers)
+  return out
+}
+
+/**
  * Scan a project for decorated classes, createToken definitions, and
  * `@Inject` literal usages.
+ *
+ * Per-file extraction is read + parsed concurrently and, when
+ * `opts.cacheDir` is set, served from a persistent signature cache so
+ * unchanged files are never re-read on a watch/rebuild. The cross-file
+ * join phase (mount-prefix resolution, orphan detection) always runs
+ * over the full extract set, so cached entries can never desync output.
  */
 export async function scanProject(opts: ScanOptions): Promise<ScanResult> {
   const root = resolve(opts.root)
   const files = await walk(root, opts)
 
+  const cache = opts.cacheDir ? await ScanCache.load(opts.cacheDir) : null
+
+  // Concurrent read + per-file extraction (cache-aware). I/O-bound, so
+  // a modest fan-out hides per-file latency without thrashing the FD
+  // table. Order is preserved for deterministic downstream iteration.
+  const extracts = await mapConcurrent(files, 16, (file) => loadFileExtract(file, opts.cwd, cache))
+
+  const joined = joinExtracts(files, extracts)
+  const env = await detectEnvFile(opts.cwd, opts.envFile ?? 'src/env.ts')
+
+  // Persist the refreshed cache (prunes entries for deleted files).
+  if (cache) await cache.save()
+
+  return { ...joined, env }
+}
+
+/** A precise set of filesystem changes, as reported by a watcher. */
+export interface ScanDelta {
+  /** Files added or modified since the last scan (absolute or cwd-relative). */
+  changed: string[]
+  /** Files deleted since the last scan. */
+  removed: string[]
+}
+
+/**
+ * Does `file` belong in the scan? Mirrors `walk()`'s ext + exclude
+ * filtering so a watcher event for a `.d.ts`, a test, or a node_modules
+ * file is ignored just as the full walk would ignore it.
+ */
+function isScannableFile(file: string, root: string, opts: ScanOptions): boolean {
+  const exts = opts.extensions ?? DEFAULT_EXTENSIONS
+  const excludes = opts.exclude ?? DEFAULT_EXCLUDES
+  if (!file.startsWith(root + sep) && file !== root) return false
+  if (!exts.some((ext) => file.endsWith(ext))) return false
+  const rel = relative(opts.cwd, file)
+  if (excludes.some((ex) => rel.includes(ex))) return false
+  return true
+}
+
+/**
+ * Incremental scan driven by an exact watcher delta (e.g. Vite's
+ * chokidar events). Unlike `scanProject` this performs NO directory
+ * walk and NO `stat()` of unchanged files: it loads the persistent
+ * cache, re-extracts only the `changed` files, drops `removed` ones,
+ * and re-runs the cheap cross-file join over the resulting set.
+ *
+ * Requires a warm cache. With no `cacheDir`, an empty cache (cold
+ * start), it transparently falls back to a full `scanProject` so the
+ * caller never has to special-case the first run.
+ */
+export async function scanProjectIncremental(
+  opts: ScanOptions,
+  delta: ScanDelta,
+): Promise<ScanResult> {
+  if (!opts.cacheDir) return scanProject(opts)
+  const root = resolve(opts.root)
+  const cache = await ScanCache.load(opts.cacheDir)
+  const cachedFiles = cache.cachedFiles()
+  if (cachedFiles.length === 0) return scanProject(opts)
+
+  const removed = new Set(delta.removed.map((f) => resolve(opts.cwd, f)))
+  const changed = delta.changed
+    .map((f) => resolve(opts.cwd, f))
+    .filter((f) => !removed.has(f) && isScannableFile(f, root, opts))
+  const changedSet = new Set(changed)
+
+  // Working set = (previously cached ∪ newly added) − removed.
+  const working = new Set(cachedFiles)
+  for (const f of changedSet) working.add(f)
+  for (const f of removed) working.delete(f)
+
+  // Re-extract only the changed files (concurrent). Everything else is
+  // served from the cache without a read or a stat.
+  const fresh = new Map<string, FileExtract>()
+  await mapConcurrent(changed, 16, async (file) => {
+    if (!working.has(file)) return
+    const sig = await ScanCache.signature(file)
+    let source: string
+    try {
+      source = await readFile(file, 'utf-8')
+    } catch {
+      working.delete(file)
+      return
+    }
+    const extract = extractFile(source, file, opts.cwd)
+    fresh.set(file, extract)
+    if (sig) cache.set(file, sig, extract)
+  })
+
+  const orderedFiles = [...working].toSorted()
+  const extracts = orderedFiles.map((file) => {
+    const f = fresh.get(file)
+    if (f) return f
+    cache.carry(file) // keep the unchanged entry in the next saved cache
+    return cache.peek(file)
+  })
+
+  const joined = joinExtracts(orderedFiles, extracts)
+  const env = await detectEnvFile(opts.cwd, opts.envFile ?? 'src/env.ts')
+  await cache.save()
+
+  return { ...joined, env }
+}
+
+/**
+ * Cross-file join over a set of per-file extracts: resolves mount-prefix
+ * route params, detects glob-orphaned classes, concatenates and sorts
+ * every discovered entity into a deterministic `ScanResult` (minus the
+ * async `env` field, which the caller attaches). Pure and synchronous —
+ * shared by both `scanProject` and `scanProjectIncremental`.
+ */
+function joinExtracts(files: string[], extracts: (FileExtract | null)[]): Omit<ScanResult, 'env'> {
   const classes: DiscoveredClass[] = []
   const routes: DiscoveredRoute[] = []
   const tokens: DiscoveredToken[] = []
@@ -1314,45 +1538,47 @@ export async function scanProject(opts: ScanOptions): Promise<ScanResult> {
   const augmentations: DiscoveredAugmentation[] = []
   const contextKeys: DiscoveredContextKey[] = []
 
-  // Two passes: first collect all classes, then a second pass extracts
-  // routes per file using the per-file class list as scoping context.
-  // This keeps class discovery and route discovery independent.
-  const sources = new Map<string, string>()
-  for (const file of files) {
-    let source: string
-    try {
-      source = await readFile(file, 'utf-8')
-    } catch {
-      continue
-    }
-    sources.set(file, source)
-    classes.push(...extractClassesFromSource(source, file, opts.cwd))
-    tokens.push(...extractTokensFromSource(source, file, opts.cwd))
-    injects.push(...extractInjectsFromSource(source, file, opts.cwd))
-    pluginsAndAdapters.push(...extractPluginsAndAdaptersFromSource(source, file, opts.cwd))
-    augmentations.push(...extractAugmentationsFromSource(source, file, opts.cwd))
-    contextKeys.push(...extractContextKeysFromSource(source, file, opts.cwd))
-  }
-
   // forinda/kick-js#235 §3 — build a `Controller → mountPath` map from every
   // module file's `routes()` body so per-route `pathParams` can include
   // the prefix params (e.g. `/orgs/:id`) without adopters re-declaring
   // `params:` on every method. First mount wins on duplicates (rare
   // multi-mount controllers — typically share the prefix shape).
   const mountPathByController = new Map<string, string>()
-  for (const [, source] of sources) {
-    for (const { controller, mountPath } of extractModuleMounts(source)) {
+  for (const extract of extracts) {
+    if (!extract) continue
+    for (const { controller, mountPath } of extract.moduleMounts) {
       if (!mountPathByController.has(controller)) {
         mountPathByController.set(controller, mountPath)
       }
     }
   }
 
-  for (const [file, source] of sources) {
-    const classesInFile = classes.filter((c) => c.filePath === file)
-    routes.push(
-      ...extractRoutesFromSource(source, file, opts.cwd, classesInFile, mountPathByController),
-    )
+  // A per-file glob-pattern map drives the §4 orphan pass below without
+  // re-reading module sources.
+  const globPatternsByFile = new Map<string, string[]>()
+  for (let i = 0; i < files.length; i++) {
+    const extract = extracts[i]
+    if (!extract) continue
+    classes.push(...extract.classes)
+    tokens.push(...extract.tokens)
+    injects.push(...extract.injects)
+    pluginsAndAdapters.push(...extract.pluginsAndAdapters)
+    augmentations.push(...extract.augmentations)
+    contextKeys.push(...extract.contextKeys)
+    if (extract.globPatterns.length > 0) globPatternsByFile.set(files[i], extract.globPatterns)
+
+    // Re-apply the cross-file mount prefix to each cached route's
+    // pathParams. Routes were extracted with an empty mount map, so
+    // their pathParams currently carry own-path params only.
+    for (const route of extract.routes) {
+      const mountPath = mountPathByController.get(route.controller)
+      if (mountPath) {
+        const fullPath = joinMountPath(mountPath, route.path)
+        routes.push({ ...route, pathParams: extractPathParams(fullPath) })
+      } else {
+        routes.push(route)
+      }
+    }
   }
 
   // forinda/kick-js#235 §4 — for every module file, extract its
@@ -1365,9 +1591,8 @@ export async function scanProject(opts: ScanOptions): Promise<ScanResult> {
   // already speaks forward-slash relative paths, but absolute
   // `filePath` values may carry the platform separator on Windows.
   const orphanedClasses: OrphanedClass[] = []
-  for (const [moduleFile, source] of sources) {
+  for (const [moduleFile, patterns] of globPatternsByFile) {
     if (!/\.module\.[mc]?[tj]sx?$/.test(moduleFile)) continue
-    const patterns = extractGlobPatterns(source)
     if (patterns.length === 0) continue
     const moduleFilePosix = moduleFile.replaceAll(sep, '/')
     const moduleDir = moduleFilePosix.slice(0, moduleFilePosix.lastIndexOf('/'))
@@ -1416,7 +1641,6 @@ export async function scanProject(opts: ScanOptions): Promise<ScanResult> {
   )
 
   const collisions = findCollisions(classes)
-  const env = await detectEnvFile(opts.cwd, opts.envFile ?? 'src/env.ts')
 
   orphanedClasses.sort(
     (a, b) =>
@@ -1429,7 +1653,6 @@ export async function scanProject(opts: ScanOptions): Promise<ScanResult> {
     tokens,
     injects,
     collisions,
-    env,
     pluginsAndAdapters,
     augmentations,
     contextKeys,

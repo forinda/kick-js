@@ -10,7 +10,7 @@
 
 import { resolve, basename, dirname, join } from 'node:path'
 import { mkdir, readdir, stat, unlink, writeFile } from 'node:fs/promises'
-import { scanProject, type ScanResult } from './scanner'
+import { scanProject, scanProjectIncremental, type ScanDelta, type ScanResult } from './scanner'
 import {
   buildModuleTokens,
   buildServiceTokens,
@@ -110,6 +110,13 @@ export interface RunTypegenOptions {
    * filesystem trigger.
    */
   runPlugins?: boolean
+  /**
+   * Exact watcher delta (Vite chokidar events). When present, the scan
+   * runs incrementally — re-extracting only the changed files and
+   * skipping the directory walk — and the same delta is forwarded to
+   * the plugin pass. `kick dev` supplies this on every file change.
+   */
+  changedFiles?: ScanDelta
 }
 
 /** Resolve options to absolute paths */
@@ -152,12 +159,16 @@ export async function runTypegen(opts: RunTypegenOptions = {}): Promise<{
   const { cwd, srcDir, outDir, silent, allowDuplicates, envFile } = resolveOptions(opts)
 
   const start = Date.now()
-  const scan = await scanProject({
+  const scanOpts = {
     root: srcDir,
     cwd,
+    cacheDir: resolve(cwd, '.kickjs', 'cache'),
     // Pass through unless explicitly disabled
     envFile: envFile === false ? undefined : envFile,
-  })
+  }
+  const scan = opts.changedFiles
+    ? await scanProjectIncremental(scanOpts, opts.changedFiles)
+    : await scanProject(scanOpts)
 
   // Collision gate. This used to live inside the legacy generator
   // (`generateTypes` threw before writing). Now that every file is
@@ -187,7 +198,12 @@ export async function runTypegen(opts: RunTypegenOptions = {}): Promise<{
       const { runAllPluginTypegens } = await import('./run-plugins')
       const { loadKickConfig } = await import('../config')
       const pluginConfig = await loadKickConfig(cwd)
-      pluginResults = await runAllPluginTypegens({ cwd, config: pluginConfig, silent: true })
+      pluginResults = await runAllPluginTypegens({
+        cwd,
+        config: pluginConfig,
+        silent: true,
+        changedFiles: opts.changedFiles,
+      })
     } catch (err) {
       // Broken plugins shouldn't block dev tooling. The runner already
       // isolates each plugin (per-plugin try/catch), so reaching here

@@ -15,7 +15,13 @@ import { existsSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 
 import type { KickConfig } from '../config'
-import { scanProject, type ScanOptions, type ScanResult } from './scanner'
+import {
+  scanProject,
+  scanProjectIncremental,
+  type ScanDelta,
+  type ScanOptions,
+  type ScanResult,
+} from './scanner'
 import type { TypegenContext, TypegenPlugin, TypegenPluginResult } from './plugin'
 
 const TYPES_DIR = '.kickjs/types'
@@ -33,6 +39,13 @@ export interface RunTypegenOptions {
    * callers leave this undefined.
    */
   scan?: (opts: ScanOptions) => Promise<ScanResult>
+  /**
+   * Exact watcher delta (e.g. from Vite's chokidar). When present, the
+   * scan runs incrementally — re-extracting only changed files and
+   * skipping the directory walk entirely — instead of a full re-scan.
+   * Ignored when a `scan` stub is supplied (tests).
+   */
+  changedFiles?: ScanDelta
 }
 
 export async function runTypegen(opts: RunTypegenOptions): Promise<TypegenPluginResult[]> {
@@ -49,11 +62,21 @@ export async function runTypegen(opts: RunTypegenOptions): Promise<TypegenPlugin
   // the cache and trigger duplicate scans.
   const scanCache = new Map<string, Promise<ScanResult>>()
   const scanFn = opts.scan ?? scanProject
+  // Persistent per-file extraction cache lives under `.kickjs/cache`.
+  // Injected centrally here so every builtin/plugin scan benefits
+  // regardless of how it assembled its ScanOptions. `stableScanKey`
+  // ignores `cacheDir`, so the in-pass memo still collapses duplicate
+  // scans to a single walk.
+  const defaultCacheDir = path.resolve(opts.cwd, '.kickjs', 'cache')
+  // Use the incremental scanner only for the real scanner (not a test
+  // stub) and only when the caller handed us a precise watcher delta.
+  const delta = opts.scan ? undefined : opts.changedFiles
   const getScanResult = (scanOpts: ScanOptions): Promise<ScanResult> => {
     const key = stableScanKey(scanOpts)
     let pending = scanCache.get(key)
     if (!pending) {
-      pending = scanFn(scanOpts)
+      const resolved = { cacheDir: defaultCacheDir, ...scanOpts }
+      pending = delta ? scanProjectIncremental(resolved, delta) : scanFn(resolved)
       scanCache.set(key, pending)
     }
     return pending

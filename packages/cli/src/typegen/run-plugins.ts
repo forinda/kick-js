@@ -12,6 +12,7 @@ import type { KickConfig } from '../config'
 import { mergeCliPlugins } from '../plugin'
 import { builtinCliPlugins } from '../plugin/builtins'
 import { runTypegen as runPluginTypegens } from './runner'
+import type { ScanDelta } from './scanner'
 import type { TypegenPluginResult } from './plugin'
 import { applyDisableFilter } from './disable-filter'
 
@@ -26,6 +27,12 @@ export interface RunAllPluginTypegensOptions {
   silent?: boolean
   /** CI gate — fail (do not write) on the first plugin whose output drifted. */
   check?: boolean
+  /**
+   * Exact watcher delta. Forwarded to the scanner so the plugin pass
+   * scans incrementally (changed files only) instead of re-walking the
+   * whole tree. Used by `kick dev`'s file-change handler.
+   */
+  changedFiles?: ScanDelta
 }
 
 export async function runAllPluginTypegens(
@@ -64,6 +71,7 @@ export async function runAllPluginTypegens(
       config: opts.config ?? ({} as never),
       plugins: enabled,
       check: opts.check,
+      changedFiles: opts.changedFiles,
     })
     if (!opts.silent) {
       for (const r of results) console.log(`  ${r.id}: ${r.status}`)
