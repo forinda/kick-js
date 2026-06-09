@@ -7,7 +7,15 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs'
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+  existsSync,
+  utimesSync,
+} from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { buildAssets, readAssetManifest, ASSET_MANIFEST_VERSION } from '../src/asset-manager/build'
@@ -57,6 +65,39 @@ describe('buildAssets — happy path', () => {
     expect(manifest.entries['mails/welcome']).toBe('mails/welcome.ejs')
     expect(manifest.entries['mails/password-reset']).toBe('mails/password-reset.ejs')
     expect(manifest.entries['mails/orders/confirmation']).toBe('mails/orders/confirmation.ejs')
+  })
+
+  it('incremental rebuild: copies nothing when no source changed', async () => {
+    writeFile('src/templates/mails/welcome.ejs', '<h1>hi</h1>')
+    writeFile('src/templates/mails/password-reset.ejs', '<p>reset</p>')
+    const config: KickConfig = { assetMap: { mails: { src: 'src/templates/mails' } } }
+
+    const first = await buildAssets(config, { cwd, silent: true })
+    expect(first!.entries[0].filesCopied).toBe(2) // cold: all copied
+
+    const second = await buildAssets(config, { cwd, silent: true })
+    expect(second!.entries[0].filesCopied).toBe(0) // warm: nothing re-copied
+    // Manifest is still complete despite copying nothing.
+    expect(second!.manifest.entries['mails/welcome']).toBe('mails/welcome.ejs')
+    expect(second!.manifest.entries['mails/password-reset']).toBe('mails/password-reset.ejs')
+  })
+
+  it('incremental rebuild: re-copies only the edited file', async () => {
+    writeFile('src/templates/mails/welcome.ejs', '<h1>hi</h1>')
+    writeFile('src/templates/mails/password-reset.ejs', '<p>reset</p>')
+    const config: KickConfig = { assetMap: { mails: { src: 'src/templates/mails' } } }
+    await buildAssets(config, { cwd, silent: true })
+
+    // Edit one file with a different byte length + bump its mtime so the
+    // size/mtime guard detects the change deterministically.
+    const edited = join(cwd, 'src/templates/mails/welcome.ejs')
+    writeFileSync(edited, '<h1>hello world changed</h1>')
+    const future = new Date(Date.now() + 5000)
+    utimesSync(edited, future, future)
+
+    const result = await buildAssets(config, { cwd, silent: true })
+    expect(result!.entries[0].filesCopied).toBe(1)
+    expect(readFileSync(join(cwd, 'dist/mails/welcome.ejs'), 'utf-8')).toContain('changed')
   })
 
   it('respects the glob filter', async () => {

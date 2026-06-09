@@ -146,17 +146,25 @@ async function startDevServer(
   // happens we fall back to a full walk-based re-scan for this window,
   // which is always correct (it simply won't find the deleted files).
   let forceFullScan = false
+  // Set when a file under an `assetMap.<ns>.src` dir changes — drives an
+  // incremental `buildAssets` so the dist copies + manifest stay fresh
+  // without re-copying every asset on every save (buildAssets skips
+  // up-to-date files). Only meaningful when an assetMap is configured.
+  let assetDirty = false
+  const hasAssetMap = !!devConfig?.assetMap && Object.keys(devConfig.assetMap).length > 0
   const scheduleTypegen = (event: 'add' | 'change' | 'unlink' | 'unlinkDir', file: string) => {
     if (file.includes('.kickjs')) return
     if (event === 'unlinkDir') {
       // Only meaningful if the removed dir could have held scanned
       // sources or watched assets; cheap to just force a full scan.
       forceFullScan = true
+      if (hasAssetMap) assetDirty = true
     } else {
       if (file.endsWith('.d.ts')) return
       const isTs = /\.(ts|tsx|mts|cts)$/.test(file)
       const isAsset = isAssetFile(file)
       if (!isTs && !isAsset) return
+      if (isAsset && hasAssetMap) assetDirty = true
       // Only `.ts` files participate in the source scan delta. Asset-only
       // changes still trigger the pass (so the asset plugin re-emits) but
       // contribute nothing to the scan — an empty `.ts` delta makes the
@@ -177,9 +185,11 @@ async function startDevServer(
       const delta = forceFullScan
         ? undefined
         : { changed: [...pendingChanged], removed: [...pendingRemoved] }
+      const rebuildAssets = assetDirty
       pendingChanged.clear()
       pendingRemoved.clear()
       forceFullScan = false
+      assetDirty = false
       runTypegen({
         cwd,
         silent: true,
@@ -201,6 +211,13 @@ async function startDevServer(
       runAllPluginTypegens({ cwd, config: devConfig, silent: true, changedFiles: delta })
         .then((r) => writeTypegenArtifacts(typesOutDir, r, true))
         .catch(() => {})
+      // Incrementally refresh the dist asset copies + manifest, but only
+      // when an asset file actually changed this window. buildAssets
+      // skips up-to-date files, so this is a cheap stat sweep + the
+      // occasional changed-file copy — not a full re-copy every save.
+      if (rebuildAssets) {
+        buildAssets(devConfig, { cwd, silent: true }).catch(() => {})
+      }
     }, 100)
   }
   server.watcher.on('add', (f: string) => scheduleTypegen('add', f))

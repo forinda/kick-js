@@ -57,7 +57,11 @@ export interface BuildAssetsEntryResult {
   namespace: string
   src: string
   dest: string
-  /** Number of files matched + copied. */
+  /**
+   * Number of files actually written this run. On an incremental
+   * rebuild where nothing changed this is 0 even though the manifest
+   * still lists every matched file.
+   */
   filesCopied: number
 }
 
@@ -186,12 +190,22 @@ async function processEntry(
   // the same `pairs` order so the on-disk layout matches the
   // manifest's iteration order — easier to grep in cold-start
   // debugging.
+  //
+  // Incremental: skip the copy when the destination is already
+  // up-to-date (exists, same size, mtime ≥ source). `cpSync` stamps the
+  // copy with the current time, so an unchanged source always satisfies
+  // `dest.mtime ≥ src.mtime` on the next run — turning a re-build into a
+  // pure stat sweep instead of re-copying every asset. The manifest
+  // slice is written unconditionally so the manifest stays complete.
+  let filesCopied = 0
   for (const { rel: relPath, key } of pairs) {
     const srcFile = join(srcAbs, relPath)
     const destFile = join(destAbs, relPath)
+    manifestSlice[key] = toManifestRelative(distAbs, destFile)
+    if (isUpToDate(srcFile, destFile)) continue
     mkdirSync(dirname(destFile), { recursive: true })
     cpSync(srcFile, destFile)
-    manifestSlice[key] = toManifestRelative(distAbs, destFile)
+    filesCopied++
   }
 
   if (collisionGroupsResolved > 0) {
@@ -206,9 +220,25 @@ async function processEntry(
       namespace,
       src: entry.src,
       dest: relative(cwd, destAbs),
-      filesCopied: matches.length,
+      filesCopied,
     },
     manifestSlice,
+  }
+}
+
+/**
+ * Is `destFile` already a current copy of `srcFile`? True when the
+ * destination exists with the same byte size and an mtime no older than
+ * the source. Used to skip redundant copies on an incremental rebuild.
+ */
+function isUpToDate(srcFile: string, destFile: string): boolean {
+  if (!existsSync(destFile)) return false
+  try {
+    const s = statSync(srcFile)
+    const d = statSync(destFile)
+    return d.size === s.size && d.mtimeMs >= s.mtimeMs
+  } catch {
+    return false
   }
 }
 
