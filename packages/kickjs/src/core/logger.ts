@@ -40,10 +40,39 @@ export interface LoggerProvider {
   child(bindings: { component: string }): LoggerProvider
 }
 
+// ── Log levels ─────────────────────────────────────────────────────────
+
+/** Severity ordering — a message prints only when its rank ≥ the threshold. */
+const LEVEL_RANK: Record<string, number> = {
+  trace: 10,
+  debug: 20,
+  info: 30,
+  warn: 40,
+  error: 50,
+  fatal: 60,
+  silent: 100,
+}
+
+/**
+ * Resolve the active threshold rank from `LOG_LEVEL` (default `info`).
+ * Read per-call so a late `process.env.LOG_LEVEL` assignment still
+ * takes effect. An unrecognised value falls back to `info`.
+ */
+function thresholdRank(): number {
+  const level = (process.env.LOG_LEVEL ?? 'info').toLowerCase()
+  return LEVEL_RANK[level] ?? LEVEL_RANK.info
+}
+
 // ── ConsoleLoggerProvider (default) ────────────────────────────────────
 
 /**
  * Default provider — emits through `console.*` methods. Zero deps.
+ *
+ * Respects the `LOG_LEVEL` env var (default `info`): messages below the
+ * threshold are dropped, so the verbose startup detail (the route table,
+ * DI wiring, HMR ticks — all `debug`) stays quiet by default and only
+ * appears with `LOG_LEVEL=debug`. `error`/`fatal` always print unless
+ * `LOG_LEVEL=silent`.
  *
  * Swap it for pino, winston, bunyan, or anything else by implementing
  * the `LoggerProvider` interface and calling `Logger.setProvider()`
@@ -67,23 +96,29 @@ export class ConsoleLoggerProvider implements LoggerProvider {
     return `${level} ${tag ? `${tag} ` : ''}${msg}`
   }
 
+  /** Should a message at `rank` print under the current `LOG_LEVEL`? */
+  private enabled(rank: number): boolean {
+    return rank >= thresholdRank()
+  }
+
   info(msg: string, ...args: any[]) {
-    console.log(this.fmt('INFO', '\x1b[32m', msg), ...args)
+    if (this.enabled(LEVEL_RANK.info)) console.log(this.fmt('INFO', '\x1b[32m', msg), ...args)
   }
   warn(msg: string, ...args: any[]) {
-    console.warn(this.fmt('WARN', '\x1b[33m', msg), ...args)
+    if (this.enabled(LEVEL_RANK.warn)) console.warn(this.fmt('WARN', '\x1b[33m', msg), ...args)
   }
   error(msg: string, ...args: any[]) {
-    console.error(this.fmt('ERROR', '\x1b[31m', msg), ...args)
+    if (this.enabled(LEVEL_RANK.error)) console.error(this.fmt('ERROR', '\x1b[31m', msg), ...args)
   }
   debug(msg: string, ...args: any[]) {
-    console.debug(this.fmt('DEBUG', '\x1b[90m', msg), ...args)
+    if (this.enabled(LEVEL_RANK.debug)) console.debug(this.fmt('DEBUG', '\x1b[90m', msg), ...args)
   }
   trace(msg: string, ...args: any[]) {
-    console.trace(this.fmt('TRACE', '\x1b[90m', msg), ...args)
+    if (this.enabled(LEVEL_RANK.trace)) console.trace(this.fmt('TRACE', '\x1b[90m', msg), ...args)
   }
   fatal(msg: string, ...args: any[]) {
-    console.error(this.fmt('FATAL', '\x1b[1m\x1b[31m', msg), ...args)
+    if (this.enabled(LEVEL_RANK.fatal))
+      console.error(this.fmt('FATAL', '\x1b[1m\x1b[31m', msg), ...args)
   }
   child(bindings: { component: string }): LoggerProvider {
     return new ConsoleLoggerProvider(bindings.component)

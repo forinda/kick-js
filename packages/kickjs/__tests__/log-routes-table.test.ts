@@ -98,7 +98,11 @@ function setupLogCapture() {
   })
 }
 
-async function buildApp(options: { logRoutesTable?: boolean; nodeEnv?: string }) {
+async function buildApp(options: {
+  logRouteTable?: boolean
+  logRoutesTable?: boolean
+  nodeEnv?: string
+}) {
   if (options.nodeEnv !== undefined) {
     process.env.NODE_ENV = options.nodeEnv
   }
@@ -113,6 +117,7 @@ async function buildApp(options: { logRoutesTable?: boolean; nodeEnv?: string })
   const app = new Application({
     modules: [TestModule],
     middleware: [express.json()],
+    logRouteTable: options.logRouteTable,
     logRoutesTable: options.logRoutesTable,
   })
 
@@ -122,7 +127,7 @@ async function buildApp(options: { logRoutesTable?: boolean; nodeEnv?: string })
 
 // ── Tests ─────────────────────────────────────────────────────────────────
 
-describe('logRoutesTable option', () => {
+describe('logRouteTable option', () => {
   beforeEach(() => {
     originalNodeEnv = process.env.NODE_ENV
     setupLogCapture()
@@ -138,22 +143,20 @@ describe('logRoutesTable option', () => {
     Container.reset()
   })
 
-  // ── 1. Default: routes logged in non-production ──────────────────────
+  // ── 1. Default: routes NOT logged (opt-in) ───────────────────────────
 
-  it('logs routes by default when NODE_ENV is not production', async () => {
+  it('does not log routes by default (development)', async () => {
     await buildApp({ nodeEnv: 'development' })
 
     const messages = logCalls
     const hasRoutesHeader = messages.some((m: string) => m.includes('Routes:'))
-    const hasTotalLine = messages.some((m: string) => m.includes('Total:'))
 
-    expect(hasRoutesHeader).toBe(true)
-    expect(hasTotalLine).toBe(true)
+    expect(hasRoutesHeader).toBe(false)
   })
 
-  // ── 2. Default: routes NOT logged in production ──────────────────────
+  // ── 2. Default: routes NOT logged in production either ────────────────
 
-  it('does not log routes by default when NODE_ENV is production', async () => {
+  it('does not log routes by default (production)', async () => {
     await buildApp({ nodeEnv: 'production' })
 
     const messages = logCalls
@@ -162,10 +165,10 @@ describe('logRoutesTable option', () => {
     expect(hasRoutesHeader).toBe(false)
   })
 
-  // ── 3. logRoutesTable: true forces logging in production ─────────────
+  // ── 3. logRouteTable: true opts in (even in production) ───────────────
 
-  it('logs routes when logRoutesTable is true even in production', async () => {
-    await buildApp({ nodeEnv: 'production', logRoutesTable: true })
+  it('logs routes when logRouteTable is true', async () => {
+    await buildApp({ nodeEnv: 'production', logRouteTable: true })
 
     const messages = logCalls
     const hasRoutesHeader = messages.some((m: string) => m.includes('Routes:'))
@@ -175,21 +178,28 @@ describe('logRoutesTable option', () => {
     expect(hasTotalLine).toBe(true)
   })
 
-  // ── 4. logRoutesTable: false suppresses logging in development ───────
+  // ── 4. Deprecated alias logRoutesTable still works ───────────────────
 
-  it('does not log routes when logRoutesTable is false even in development', async () => {
-    await buildApp({ nodeEnv: 'development', logRoutesTable: false })
+  it('logs routes via the deprecated logRoutesTable alias', async () => {
+    await buildApp({ nodeEnv: 'production', logRoutesTable: true })
 
     const messages = logCalls
-    const hasRoutesHeader = messages.some((m: string) => m.includes('Routes:'))
+    expect(messages.some((m: string) => m.includes('Routes:'))).toBe(true)
+  })
 
-    expect(hasRoutesHeader).toBe(false)
+  // ── 4b. logRouteTable wins over the alias when both are set ───────────
+
+  it('logRouteTable: false overrides logRoutesTable: true', async () => {
+    await buildApp({ logRouteTable: false, logRoutesTable: true })
+
+    const messages = logCalls
+    expect(messages.some((m: string) => m.includes('Routes:'))).toBe(false)
   })
 
   // ── 5. Route log output includes correct HTTP methods and mount paths ─
 
   it('logs correct HTTP methods and mount paths for each controller', async () => {
-    await buildApp({ nodeEnv: 'development' })
+    await buildApp({ nodeEnv: 'development', logRouteTable: true })
 
     const messages = logCalls
 
@@ -219,7 +229,7 @@ describe('logRoutesTable option', () => {
   // ── 6. Routes are sorted by method order ─────────────────────────────
 
   it('sorts methods in deterministic order: GET, POST, PUT, PATCH, DELETE', async () => {
-    await buildApp({ nodeEnv: 'development' })
+    await buildApp({ nodeEnv: 'development', logRouteTable: true })
 
     const messages = logCalls
 
@@ -242,15 +252,15 @@ describe('logRoutesTable option', () => {
     expect(userPutIdx).toBeLessThan(userPatchIdx)
   })
 
-  // ── Edge: undefined NODE_ENV defaults to non-production ──────────────
+  // ── Edge: default is off regardless of NODE_ENV ──────────────────────
 
-  it('logs routes when NODE_ENV is undefined (treated as non-production)', async () => {
+  it('does not log routes when NODE_ENV is undefined and no option is set', async () => {
     delete process.env.NODE_ENV
     await buildApp({})
 
     const messages = logCalls
     const hasRoutesHeader = messages.some((m: string) => m.includes('Routes:'))
 
-    expect(hasRoutesHeader).toBe(true)
+    expect(hasRoutesHeader).toBe(false)
   })
 })
