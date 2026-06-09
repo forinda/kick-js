@@ -248,7 +248,7 @@ bootstrap({
   modules: [
     /* ... */
   ],
-  middleware: [
+  middlewares: [
     tracing(),
     requestScopeMiddleware(), // mount here instead of the default position
     // ... other middleware

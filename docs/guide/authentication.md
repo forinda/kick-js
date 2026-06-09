@@ -427,7 +427,7 @@ import { session } from '@forinda/kickjs'
 // Bootstrap with session middleware + strategy
 bootstrap({
   modules,
-  middleware: [session({ secret: process.env.SESSION_SECRET! }), express.json()],
+  middlewares: [session({ secret: process.env.SESSION_SECRET! }), express.json()],
   adapters: [
     AuthAdapter({
       strategies: [SessionStrategy()],

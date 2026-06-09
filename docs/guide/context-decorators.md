@@ -105,7 +105,7 @@ Anything you repeatedly compute from the incoming request is a candidate. The pa
 Same job, different ergonomics. Each line below maps a middleware pain point to the contributor primitive that solves it.
 
 - **Type safety** — middleware mutates `req.user` / `(req as any).tenant`, all typed `any`. Contributors expose `ctx.get('user')` / `ctx.get('tenant')` typed via `ContextMeta` augmentation.
-- **Ordering** — middleware is an array in `bootstrap({ middleware: [...] })`; order is whatever you wrote. Contributors use `dependsOn: ['x']` — topo-sorted at boot, missing deps + cycles fail startup, not per-request.
+- **Ordering** — middleware is an array in `bootstrap({ middlewares: [...] })`; order is whatever you wrote. Contributors use `dependsOn: ['x']` — topo-sorted at boot, missing deps + cycles fail startup, not per-request.
 - **DI access** — middleware reaches for `Container.getInstance()` inside the body. Contributors declare `deps: { repo: TOKEN }` typed, resolved once, handed to `resolve(ctx, deps)`.
 - **Testing** — middleware needs `supertest` + the whole Express stack. Contributors test via `runContributor` (from `@forinda/kickjs-testing`) — single resolver against a stub ctx.
 - **Per-route override** — middleware is global: every route pays the cost, no opt-out per endpoint. Contributors have five precedence levels (method > class > module > adapter > global) — override per-route without forking the stack.

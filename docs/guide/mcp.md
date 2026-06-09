@@ -661,15 +661,15 @@ dispatch and resolves the user as normal.
 
 ### Common issues
 
-| Symptom                                                | Cause                                                            | Fix                                                                                                                                  |
-| ------------------------------------------------------ | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| 404 on connect                                         | Wrong URL — missing `/_mcp/messages`                             | Use the full path: `http://localhost:<port>/_mcp/messages`                                                                           |
-| "Server already initialized"                           | Stale session from a previous connection                         | Restart your KickJS server to reset the MCP session                                                                                  |
-| "Not Acceptable: Client must accept text/event-stream" | Opened `/_mcp/messages` directly in a browser tab                | Use the Inspector UI, not a direct browser navigation — the endpoint expects JSON-RPC POST requests                                  |
-| CORS errors in browser console                         | Connecting from a different origin without CORS configured       | Add `cors()` middleware in your bootstrap: `middleware: [cors({ origin: '*', exposedHeaders: ['mcp-session-id'] }), express.json()]` |
-| Tool calls return "Not authenticated"                  | Auth header not configured in the Inspector                      | Expand Authentication, enable the Authorization header, set the value                                                                |
-| Tools not showing up                                   | Methods not decorated with `@McpTool` in explicit mode           | Add `@McpTool({ description: '...' })` to each method you want to expose                                                             |
-| `@Autowired()` service is undefined (500 on tool call) | Running with `tsx`/`ts-node` which don't emit decorator metadata | Use explicit token: `@Autowired(MyService)` instead of bare `@Autowired()` — see [DI caveats](#di-caveats-autowired-with-tsx) below  |
+| Symptom                                                | Cause                                                            | Fix                                                                                                                                   |
+| ------------------------------------------------------ | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| 404 on connect                                         | Wrong URL — missing `/_mcp/messages`                             | Use the full path: `http://localhost:<port>/_mcp/messages`                                                                            |
+| "Server already initialized"                           | Stale session from a previous connection                         | Restart your KickJS server to reset the MCP session                                                                                   |
+| "Not Acceptable: Client must accept text/event-stream" | Opened `/_mcp/messages` directly in a browser tab                | Use the Inspector UI, not a direct browser navigation — the endpoint expects JSON-RPC POST requests                                   |
+| CORS errors in browser console                         | Connecting from a different origin without CORS configured       | Add `cors()` middleware in your bootstrap: `middlewares: [cors({ origin: '*', exposedHeaders: ['mcp-session-id'] }), express.json()]` |
+| Tool calls return "Not authenticated"                  | Auth header not configured in the Inspector                      | Expand Authentication, enable the Authorization header, set the value                                                                 |
+| Tools not showing up                                   | Methods not decorated with `@McpTool` in explicit mode           | Add `@McpTool({ description: '...' })` to each method you want to expose                                                              |
+| `@Autowired()` service is undefined (500 on tool call) | Running with `tsx`/`ts-node` which don't emit decorator metadata | Use explicit token: `@Autowired(MyService)` instead of bare `@Autowired()` — see [DI caveats](#di-caveats-autowired-with-tsx) below   |
 
 ### Important caveats
 
@@ -767,7 +767,7 @@ import { bootstrap, cors } from '@forinda/kickjs'
 
 export const app = await bootstrap({
   modules,
-  middleware: [
+  middlewares: [
     cors({
       origin: '*',
       exposedHeaders: ['mcp-session-id'],

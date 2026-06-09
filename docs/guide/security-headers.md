@@ -8,7 +8,7 @@ The `helmet()` middleware sets security-related HTTP headers with sensible defau
 import { helmet } from '@forinda/kickjs'
 
 bootstrap({
-  middleware: [helmet(), requestId(), express.json()],
+  middlewares: [helmet(), requestId(), express.json()],
 })
 ```
 
@@ -66,12 +66,12 @@ import { cors } from '@forinda/kickjs'
 
 // Allow all origins (default)
 bootstrap({
-  middleware: [cors(), helmet(), express.json()],
+  middlewares: [cors(), helmet(), express.json()],
 })
 
 // Allowlist specific origins
 bootstrap({
-  middleware: [
+  middlewares: [
     cors({
       origin: ['https://app.example.com', /\.example\.com$/],
       credentials: true,
