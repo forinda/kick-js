@@ -305,6 +305,16 @@ const APP_MODULE_CLASS_REGEX = new RegExp(
 )
 
 /**
+ * Match the v4 module factory form
+ * `export const XModule = defineModule({ ... })` (the `class implements
+ * AppModule` form above is the deprecated v3 style). The const name is
+ * the module's identity and becomes its `ModuleToken` entry. An
+ * optional generic / type annotation on the const is tolerated.
+ */
+const DEFINE_MODULE_REGEX =
+  /export\s+const\s+(\w+)\s*(?::\s*[^=]+)?=\s*defineModule\s*(?:<[^>]*>)?\s*\(/g
+
+/**
  * Match a `createToken<T>('name')` call with optional `export const X =`
  * or `const X =` prefix. Tolerates whitespace and the type parameter
  * being absent (`createToken('name')`).
@@ -829,6 +839,24 @@ export function extractClassesFromSource(
       filePath,
       relativePath: relPath,
       isDefault: Boolean(defaultMarker),
+    })
+  }
+
+  // v4 factory modules: `export const XModule = defineModule({ ... })`.
+  // Tag with the synthetic `Module` decorator (same as the v3 class form)
+  // so `buildModuleTokens` populates `ModuleToken` — without this, a
+  // project that uses only `defineModule()` emits `ModuleToken = never`.
+  DEFINE_MODULE_REGEX.lastIndex = 0
+  let defMatch: RegExpExecArray | null
+  while ((defMatch = DEFINE_MODULE_REGEX.exec(source)) !== null) {
+    const [, className] = defMatch
+    if (out.some((c) => c.className === className && c.filePath === filePath)) continue
+    out.push({
+      className,
+      decorator: 'Module',
+      filePath,
+      relativePath: relPath,
+      isDefault: false,
     })
   }
 

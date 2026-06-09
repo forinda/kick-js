@@ -194,6 +194,27 @@ export class AuthModule implements AppModule {
     expect(modules).not.toMatch(/=\s*never/)
   })
 
+  it('emits ModuleToken union from v4 defineModule() factory modules', () => {
+    writeController(
+      'src/modules/hello/hello.module.ts',
+      `import { defineModule } from '@forinda/kickjs'
+import { HelloController } from './hello.controller'
+
+export const HelloModule = defineModule({
+  name: 'HelloModule',
+  build: () => ({ routes() { return { path: '/hello', controller: HelloController } } }),
+})
+`,
+    )
+
+    runCli(fixture, ['typegen'])
+
+    const modules = readFileSync(join(fixture, '.kickjs/types/kick__modules.d.ts'), 'utf-8')
+    expect(modules).toContain('ModuleToken')
+    expect(modules).toContain("'HelloModule'")
+    expect(modules).not.toMatch(/=\s*never/)
+  })
+
   // Regression for forinda/kick-js#108
   it('preserves method name when swagger decorators stack above the route', () => {
     writeController(

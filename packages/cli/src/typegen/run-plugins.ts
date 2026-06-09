@@ -19,6 +19,16 @@ import { applyDisableFilter } from './disable-filter'
 // Re-export so the existing public surface (cli/index.ts) still resolves.
 export { applyDisableFilter } from './disable-filter'
 
+/**
+ * True when verbose typegen output is requested via `LOG_LEVEL=debug`
+ * (the kickjs log-level convention). Gates the per-plugin status list so
+ * a normal `kick typegen` run only prints its one-line summary.
+ */
+function isDebugLog(): boolean {
+  const level = (process.env.LOG_LEVEL ?? process.env.KICKJS_LOG_LEVEL ?? '').toLowerCase()
+  return level === 'debug' || level === 'trace'
+}
+
 export interface RunAllPluginTypegensOptions {
   cwd: string
   /** Pre-loaded kick.config.ts (saves a re-read). */
@@ -73,7 +83,10 @@ export async function runAllPluginTypegens(
       check: opts.check,
       changedFiles: opts.changedFiles,
     })
-    if (!opts.silent) {
+    // Per-plugin status lines are debug-level detail — the command
+    // already prints a one-line summary (`kick typegen → …`). Only emit
+    // the full list when LOG_LEVEL=debug so the default run stays quiet.
+    if (!opts.silent && isDebugLog()) {
       for (const r of results) console.log(`  ${r.id}: ${r.status}`)
     }
     return results
