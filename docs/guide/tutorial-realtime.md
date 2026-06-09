@@ -1,6 +1,6 @@
 # Real-Time Features: SSE Streams and WebSocket Chat
 
-_Part 4 of "Building a Task Management App with KickJS + Drizzle ORM"_
+_Part 4 of "Building a Task Management App with KickJS"_
 
 ---
 
@@ -65,24 +65,22 @@ The stats aren't stored — they're computed on the fly from aggregate queries:
 
 ```typescript
 async getWorkspaceStats(workspaceId: string) {
-  const [memberResult, projectResult, taskResult, openResult, completedResult, channelResult] =
+  const [memberCount, projectCount, taskCount, openCount, completedCount, channelCount] =
     await Promise.all([
-      this.db.select({ count: sql<number>`count(*)` }).from(workspaceMembers)
-        .where(eq(workspaceMembers.workspaceId, workspaceId)),
-      this.db.select({ count: sql<number>`count(*)` }).from(projects)
-        .where(eq(projects.workspaceId, workspaceId)),
-      // ... more count queries
+      this.memberRepo.countByWorkspace(workspaceId),
+      this.projectRepo.countByWorkspace(workspaceId),
+      // ... more count queries, each behind a repository method
     ])
 
   return {
-    memberCount: memberResult[0]?.count ?? 0,
-    projectCount: projectResult[0]?.count ?? 0,
+    memberCount,
+    projectCount,
     // ...
   }
 }
 ```
 
-Six queries run in parallel via `Promise.all`. Each is a simple `COUNT(*)` with a WHERE clause — fast even on large datasets with proper indexes.
+Six counts run in parallel via `Promise.all`. Each is a simple count behind a repository method — fast even on large datasets with proper indexes.
 
 ### JSON + SSE: Same Use Case, Two Endpoints
 
@@ -127,7 +125,7 @@ const wsAdapter = WsAdapter({
 The WebSocket controller is loaded via a side-effect import in `adapters.ts`:
 
 ```typescript
-import '@/modules/messages/presentation/chat.ws-controller'
+import '@/modules/messages/chat.ws-controller'
 ```
 
 This is necessary because `@WsController` decorators need to register before the adapter starts.
@@ -288,19 +286,13 @@ async listByChannel(ctx: RequestContext) {
 }
 ```
 
-This uses cursor-based pagination (not offset-based) because chat messages are append-only and users scroll backwards through history. The cursor is a `createdAt` timestamp — the repository fetches messages older than the cursor:
+This uses cursor-based pagination (not offset-based) because chat messages are append-only and users scroll backwards through history. The cursor is a `createdAt` timestamp — the repository fetches messages older than the cursor, newest first:
 
 ```typescript
 async findByChannel(channelId: string, cursor?: string, limit = 50) {
-  const conditions = [eq(messages.channelId, channelId)]
-  if (cursor) {
-    conditions.push(lt(messages.createdAt, new Date(cursor)))
-  }
-
-  return this.db.select().from(messages)
-    .where(and(...conditions))
-    .orderBy(desc(messages.createdAt))
-    .limit(limit)
+  // The repository owns the "messages in this channel older than `cursor`,
+  // newest first" query — the controller stays storage-agnostic.
+  return this.messageRepo.findByChannelBefore(channelId, cursor, limit)
 }
 ```
 

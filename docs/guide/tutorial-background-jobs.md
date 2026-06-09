@@ -1,6 +1,6 @@
 # Background Jobs and Scheduled Tasks in Node.js
 
-_Part 5 of "Building a Task Management App with KickJS + Drizzle ORM"_
+_Part 5 of "Building a Task Management App with KickJS"_
 
 ---
 
@@ -134,41 +134,30 @@ CronAdapter({
 
 ### Overdue Task Reminders (Daily at 9am)
 
-The most complex cron job queries for overdue tasks, looks up assignees via the join table, and dispatches email jobs:
+The most complex cron job queries for overdue tasks, looks up each task's assignees, and dispatches email jobs. The data access lives behind the task repository — the cron job just calls repository methods:
 
 ```typescript
 @Service()
 export class TaskCronJobs {
   constructor(
-    @Inject(DRIZZLE_DB) private db: PostgresJsDatabase,
+    @Inject(TASK_REPOSITORY) private taskRepo: TaskRepository,
     @Inject(QUEUE_MANAGER) private queueService: QueueService,
   ) {}
 
   @Cron('0 9 * * *', { description: 'Send overdue task reminders', timezone: 'UTC' })
   async overdueReminders() {
-    const overdueTasks = await this.db
-      .select({
-        taskId: tasks.id,
-        taskKey: tasks.key,
-        taskTitle: tasks.title,
-        dueDate: tasks.dueDate,
-      })
-      .from(tasks)
-      .where(and(lt(tasks.dueDate, new Date()), ne(tasks.status, 'done')))
+    const overdueTasks = await this.taskRepo.findOverdue()
 
     for (const task of overdueTasks) {
-      // Join table lookup — can't use task.assigneeIds like Mongoose
-      const assignees = await this.db
-        .select({ email: users.email })
-        .from(taskAssignees)
-        .innerJoin(users, eq(users.id, taskAssignees.userId))
-        .where(eq(taskAssignees.taskId, task.taskId))
+      // Repository owns the assignee lookup — the cron job doesn't care
+      // whether assignees are an embedded array or a separate table.
+      const assignees = await this.taskRepo.findAssignees(task.id)
 
       for (const assignee of assignees) {
         await this.queueService.add('email', 'send-overdue-reminder', {
           email: assignee.email,
-          taskKey: task.taskKey,
-          taskTitle: task.taskTitle,
+          taskKey: task.key,
+          taskTitle: task.title,
           dueDate: task.dueDate?.toISOString(),
         })
       }
@@ -177,7 +166,7 @@ export class TaskCronJobs {
 }
 ```
 
-Note the Drizzle-specific difference from Mongoose: we can't do `task.assigneeIds.forEach(...)` because assignees live in a separate join table. We need an explicit `innerJoin` query.
+Keeping the query behind a repository method (`findOverdue()`, `findAssignees()`) keeps the cron job database-agnostic — the storage shape (embedded array vs. join table) is the repository's concern, not the scheduler's.
 
 ### Token Cleanup (Daily at 3am)
 
@@ -186,22 +175,22 @@ Simple bulk delete of expired refresh tokens:
 ```typescript
 @Cron('0 3 * * *', { description: 'Clean up expired refresh tokens', timezone: 'UTC' })
 async cleanupTokens() {
-  await this.db.delete(refreshTokens).where(lt(refreshTokens.expiresAt, new Date()))
+  await this.tokenRepo.deleteExpired(new Date())
 }
 ```
 
 ### Health Check (Every minute)
 
-Monitors PostgreSQL and queue connectivity:
+Monitors database and queue connectivity:
 
 ```typescript
 @Cron('* * * * *', { description: 'Run system health check every minute' })
 async healthCheck() {
-  const results = { postgres: false, queues: false }
+  const results = { database: false, queues: false }
 
   try {
-    await this.db.execute(sql`SELECT 1`)
-    results.postgres = true
+    await this.healthRepo.ping()
+    results.database = true
   } catch { /* ignore */ }
 
   try {
@@ -209,15 +198,15 @@ async healthCheck() {
     results.queues = queueNames.length > 0
   } catch { /* ignore */ }
 
-  if (results.postgres && results.queues) {
-    logger.info('Health OK — postgres: ✓, queues: ✓')
+  if (results.database && results.queues) {
+    logger.info('Health OK — database: ✓, queues: ✓')
   } else {
-    logger.warn(`Health DEGRADED — postgres: ${results.postgres ? '✓' : '✗'}, queues: ${results.queues ? '✓' : '✗'}`)
+    logger.warn(`Health DEGRADED — database: ${results.database ? '✓' : '✗'}, queues: ${results.queues ? '✓' : '✗'}`)
   }
 }
 ```
 
-The Mongoose edition checked `mongoose.connection.readyState === 1`. The Drizzle edition uses `SELECT 1` — a universal PostgreSQL health check.
+The health check delegates the connectivity probe to a repository `ping()` — a lightweight round-trip (e.g. `SELECT 1` on SQL, a `ping` command on the driver) that confirms the database is reachable.
 
 ## Adapter Ordering Matters
 
@@ -225,7 +214,7 @@ The adapter array in `config/adapters.ts` runs `beforeStart()` in order. Depende
 
 ```typescript
 export const adapters = [
-  drizzleAdapter,           // 1. Database — everything depends on this
+  dbAdapter,                // 1. Database — everything depends on this
   wsAdapter,                // 2. WebSocket — before DevTools
   MailerAdapter({...}), // 3. Email — before queue (processors need MAILER)
   queueAdapter,             // 4. Queues — after Redis, Mailer
@@ -237,7 +226,7 @@ export const adapters = [
 ]
 ```
 
-If you put `CronAdapter` before `QueueAdapter`, the overdue reminders cron will fail because `QUEUE_MANAGER` isn't registered yet.
+If you put `CronAdapter` before `QueueAdapter`, the overdue reminders cron will fail because `QUEUE_MANAGER` isn't registered yet. The database adapter comes first because the cron jobs' repositories depend on it.
 
 ## Email Provider Strategy
 
@@ -278,8 +267,8 @@ The email processor code doesn't change — it calls `this.mailer.send()` regard
 
 Over five articles, we've covered:
 
-1. **Why Drizzle over Mongoose** — type safety, join tables, transactions
-2. **DDD module architecture** — generator scaffolding, shared patterns, DI tokens
+1. **Repository-backed data access** — type-safe repositories, DI tokens, swapping the storage layer without touching callers
+2. **Module architecture** — generator scaffolding, shared patterns, DI tokens
 3. **Query parsing & pagination** — Column-based configs, baseCondition, the evolution across framework versions
 4. **Real-time features** — SSE for dashboards, WebSocket for chat
 5. **Background jobs** — queue processors, cron jobs, adapter ordering

@@ -32,7 +32,7 @@ This is the fundamental issue that causes most HMR pain in decorator-based backe
 When Vite re-evaluates a module, JavaScript creates **new class objects**. Consider this controller:
 
 ```typescript
-// src/modules/tasks/presentation/tasks.controller.ts
+// src/modules/tasks/tasks.controller.ts
 @ApiTags('Tasks')
 @ApiBearerAuth()
 @Middleware(authBridgeMiddleware)
@@ -82,7 +82,7 @@ Your dev server crashes. Every. Single. Save.
 The fix is a guard pattern that checks if the model already exists:
 
 ```typescript
-// src/modules/tasks/infrastructure/schemas/task.schema.ts
+// src/modules/tasks/task.schema.ts
 const taskSchema = new Schema<TaskDocument>(
   {
     projectId: { type: Schema.Types.ObjectId, ref: 'Project', required: true, index: true },
@@ -297,7 +297,7 @@ Modern KickJS uses `createToken<T>(name)` for DI tokens, not raw `Symbol()`. Two
 2. **Same-file ownership.** The token lives next to the interface it represents, and is re-imported by everything that needs it. There's no separate `TOKENS` object to keep in sync.
 
 ```typescript
-// src/modules/users/domain/repositories/user.repository.ts
+// src/modules/users/user.repository.ts
 import { createToken } from '@forinda/kickjs'
 
 export interface IUserRepository {
@@ -310,7 +310,7 @@ export const USER_REPOSITORY = createToken<IUserRepository>('User/Repository')
 
 ```typescript
 // Anywhere it's needed
-import { USER_REPOSITORY, type IUserRepository } from '../domain/repositories/user.repository'
+import { USER_REPOSITORY, type IUserRepository } from './user.repository'
 
 @Service()
 class GetUserUseCase {

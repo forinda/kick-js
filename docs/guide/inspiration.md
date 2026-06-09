@@ -18,7 +18,7 @@ I tried framework after framework. Express was fast but gave you nothing — eve
 
 I started experimenting. Not building a framework yet — just collecting patterns. I studied **Django** and its batteries-included philosophy: admin generators, opinionated project structure, ORM integration that actually works out of the box. I studied **Spring Boot** and its adaptable model: annotations for everything, elegant inversion of control, convention over configuration. I studied **NestJS** to understand what it got right (module system, TypeScript-first, controller/service pattern) and what felt too heavy.
 
-Through 2023 and into 2024, I prototyped the pieces: a custom DI container with zero external dependencies, Express 5 integration, Vite-powered hot reload that preserves database connections across code changes, and a CLI that could scaffold an entire DDD module in under two seconds. Each piece was tested against real projects — not toy demos.
+Through 2023 and into 2024, I prototyped the pieces: a custom DI container with zero external dependencies, Express 5 integration, Vite-powered hot reload that preserves database connections across code changes, and a CLI that could scaffold an entire module in under two seconds. Each piece was tested against real projects — not toy demos.
 
 ### The Name
 
@@ -77,7 +77,7 @@ The core idea behind KickJS is **adaptability**. Every major subsystem — auth,
 - Use JWT or API keys or OAuth or Passport.js or your own auth
 - Use Redis cache or in-memory or build your own
 - Use BullMQ or RabbitMQ or Kafka or Redis Pub/Sub for queues
-- Use Drizzle or Prisma or Mongoose or raw SQL
+- Use any database — Postgres, SQLite, MongoDB, or raw SQL
 - Use croner or node-cron or your own scheduler
 
 The framework provides the patterns. You provide the choices.

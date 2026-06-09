@@ -4,7 +4,7 @@ KickJS generators produce a **repository interface** plus a DI token for every m
 
 ## What the generator produces
 
-`kick g module users` (DDD pattern) emits a contract like this:
+`kick g module users` emits a repository contract like this:
 
 ```ts
 // src/modules/users/domain/repositories/user.repository.ts

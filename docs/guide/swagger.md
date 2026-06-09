@@ -448,4 +448,4 @@ be allowed automatically.
 
 ## Examples
 
-For a full app exercising Swagger end-to-end with rich Zod schemas, see the [task-drizzle-api](../examples/task-drizzle-api) and [task-prisma-api](../examples/task-prisma-api) examples — they wire Swagger over the standard 14-module DDD layout.
+For a full app exercising Swagger end-to-end with rich Zod schemas, see the example apps in the [examples archive](https://github.com/forinda/kickjs-examples-archive) — they wire Swagger over a multi-module REST layout.

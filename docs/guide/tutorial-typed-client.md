@@ -317,11 +317,8 @@ vibed/
 ├── src/                       # KickJS backend
 │   └── modules/
 │       ├── tasks/
-│       │   ├── application/
-│       │   │   └── dtos/
-│       │   │       └── create-task.dto.ts    # Zod schema (source of truth)
-│       │   └── presentation/
-│       │       └── tasks.controller.ts       # Route decorators
+│       │   ├── create-task.dto.ts            # Zod schema (source of truth)
+│       │   └── tasks.controller.ts           # Route decorators
 │       └── ...
 ├── client/                    # Generated typed API client
 │   └── index.ts               # kick generate:client output
@@ -393,16 +390,10 @@ Create a shared types package that exports your Zod schemas:
 
 ```typescript
 // shared/api-types.ts
-export {
-  createTaskSchema,
-  type CreateTaskDto,
-} from '../modules/tasks/application/dtos/create-task.dto'
-export {
-  updateTaskSchema,
-  type UpdateTaskDto,
-} from '../modules/tasks/application/dtos/update-task.dto'
-export { registerSchema, type RegisterDto } from '../modules/auth/application/dtos/register.dto'
-export { loginSchema, type LoginDto } from '../modules/auth/application/dtos/login.dto'
+export { createTaskSchema, type CreateTaskDto } from '../modules/tasks/create-task.dto'
+export { updateTaskSchema, type UpdateTaskDto } from '../modules/tasks/update-task.dto'
+export { registerSchema, type RegisterDto } from '../modules/auth/register.dto'
+export { loginSchema, type LoginDto } from '../modules/auth/login.dto'
 // ... export all DTOs
 ```
 

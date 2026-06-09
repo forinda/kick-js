@@ -40,7 +40,7 @@ interface CreateTestAppOptions {
 }
 ```
 
-## Testing a DDD Module
+## Testing a Module
 
 The recommended pattern: create an in-memory repository, wire a test controller without auth, and test via supertest.
 
@@ -325,11 +325,11 @@ kick g module user
 #   __tests__/user.repository.test.ts  — InMemoryRepository unit tests
 ```
 
-When using `repo: 'drizzle'` or `repo: 'prisma'`, the generator creates **both** the ORM repository and an in-memory repository for testing. The in-memory repo implements the same interface, so tests run without a database.
+When you generate a module with a custom repo name (e.g. `--repo postgres`), the generator creates **both** the custom repository stub and an in-memory repository for testing. The in-memory repo implements the same interface, so tests run without a database.
 
 ```
 src/modules/users/
-  drizzle-user.repository.ts      # Production — talks to PostgreSQL
+  postgres-user.repository.ts     # Production — wire to your DB client
   in-memory-user.repository.ts    # Testing — in-memory stub
   __tests__/
     user.repository.test.ts       # Imports InMemoryUserRepository
