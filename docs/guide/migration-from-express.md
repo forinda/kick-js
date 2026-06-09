@@ -170,14 +170,14 @@ export class UserService {
 ```ts
 // modules/users/user.service.ts
 import { Service, Inject } from '@forinda/kickjs'
-import { DRIZZLE_DB } from '@forinda/kickjs-drizzle'
+import { DB_CLIENT } from '@forinda/kickjs-db'
 
 @Service()
 export class UserService {
-  constructor(@Inject(DRIZZLE_DB) private db: AppDatabase) {}
+  constructor(@Inject(DB_CLIENT) private db: AppDatabase) {}
 
   async findAll() {
-    return this.db.select().from(users).all()
+    return this.db.query('SELECT * FROM users')
   }
 }
 ```

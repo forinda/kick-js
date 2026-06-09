@@ -48,7 +48,7 @@ export const MongooseAdapter = defineAdapter<MongooseAdapterOptions>({
 ### Define Models
 
 ```ts
-// src/modules/users/domain/user.model.ts
+// src/modules/users/user.model.ts
 import mongoose, { Schema, type Model } from 'mongoose'
 
 export interface IUser {
@@ -77,10 +77,10 @@ export const User: Model<IUser> =
 ### Repository Using Mongoose
 
 ```ts
-// src/modules/users/infrastructure/mongoose-user.repository.ts
+// src/modules/users/mongoose-user.repository.ts
 import { Repository, HttpException } from '@forinda/kickjs'
 import type { ParsedQuery } from '@forinda/kickjs'
-import { User, type IUser } from '../domain/user.model'
+import { User, type IUser } from './user.model'
 
 @Repository()
 export class MongooseUserRepository {
@@ -136,20 +136,22 @@ bootstrap({
 
 ```ts
 // src/modules/users/index.ts
-import type { AppModule } from '@forinda/kickjs'
-import { UserController } from './presentation/user.controller'
-import { USER_REPOSITORY } from './domain/repositories/user.repository'
-import { MongooseUserRepository } from './infrastructure/mongoose-user.repository'
+import { defineModule } from '@forinda/kickjs'
+import { UserController } from './user.controller'
+import { USER_REPOSITORY } from './user.repository'
+import { MongooseUserRepository } from './mongoose-user.repository'
 
-export class UserModule implements AppModule {
-  register(container: any) {
-    container.registerFactory(USER_REPOSITORY, () => container.resolve(MongooseUserRepository))
-  }
-
-  routes() {
-    return { prefix: '/users', controllers: [UserController] }
-  }
-}
+export const UserModule = defineModule({
+  name: 'UserModule',
+  build: () => ({
+    register(container) {
+      container.registerFactory(USER_REPOSITORY, () => container.resolve(MongooseUserRepository))
+    },
+    routes() {
+      return { path: '/users', controller: UserController }
+    },
+  }),
+})
 ```
 
 ---
@@ -210,11 +212,11 @@ export const MongoDBAdapter = defineAdapter<MongoDBAdapterOptions>({
 ### Repository Using Native Driver
 
 ```ts
-// src/modules/products/infrastructure/mongo-product.repository.ts
+// src/modules/products/mongo-product.repository.ts
 import { Repository, Inject, HttpException } from '@forinda/kickjs'
 import type { Db, ObjectId } from 'mongodb'
 import type { ParsedQuery } from '@forinda/kickjs'
-import { MONGO_DB } from '../../../adapters/mongodb.adapter'
+import { MONGO_DB } from '../../adapters/mongodb.adapter'
 
 interface ProductDoc {
   _id?: ObjectId

@@ -29,7 +29,7 @@ Things deliberately not copied:
 4. Reversible migrations with auto-emitted but explicitly-reviewed `down.sql` drafts.
 5. Drift detection between live DB and last applied snapshot.
 6. First-class KickJS integration: DI tokens, lifecycle adapter, Context Contributors for multi-tenant, DevTools tab, generators.
-7. Replaces `@forinda/kickjs-prisma` and `@forinda/kickjs-drizzle` long-term (deprecate v6.1, remove v7.0).
+7. The first-party database layer for KickJS.
 
 ### Non-goals
 
@@ -597,7 +597,7 @@ Generates the standard DDD layout:
 
 The schema file is also re-exported into `src/db/schema.ts` aggregate. Module removal (`kick rm module users`) drops both.
 
-In v6.0, `kick new --repo kickdb` becomes the default. `--repo prisma|drizzle` work in v6.0 with a deprecation warning; removed in v7.
+`kick new --repo kickdb` is the default.
 
 ### Testing helpers
 
@@ -838,7 +838,7 @@ Adopters evaluating new ORMs reach for Studio / equivalent for the "look around 
   - **NEW:** `EXPLAIN` / `EXECUTE` text-area for ad-hoc SQL (dev only).
   - **NEW:** pool stats (active/idle/waiting, max).
 
-**Exit:** an adopter switching from Prisma can navigate the schema + browse rows without leaving DevTools.
+**Exit:** an adopter can navigate the schema + browse rows without leaving DevTools.
 
 #### P3 — Seed framework
 
@@ -855,7 +855,7 @@ Every production app needs seeds. Today adopters write ad-hoc scripts.
 
 #### P4 — `$extends({ result })` for computed columns
 
-The `model` half shipped in M2; the `result` half (computed / virtual fields with `{ needs, compute }`) is still TODO. Closes a real Prisma-parity gap that adopters notice immediately.
+The `model` half shipped in M2; the `result` half (computed / virtual fields with `{ needs, compute }`) is still TODO. Closes a real gap that adopters notice immediately.
 
 **Scope:**
 
@@ -864,7 +864,7 @@ The `model` half shipped in M2; the `result` half (computed / virtual fields wit
 - Extended client's select-type widens to include the computed key.
 - Type-test suite locks the widening shape.
 
-**Exit:** an adopter migrating from Prisma can recreate their virtual fields without per-call wrapping.
+**Exit:** an adopter can recreate virtual fields without per-call wrapping.
 
 #### P5 — Read-replica routing helper
 
@@ -891,7 +891,6 @@ Order is rougher; pick by adopter signal.
 - **Migration squashing / consolidation.** No first-party path today; existing migrations stay forever.
 - **Cache layer.** No first-party answer; adopters wire Redis or similar.
 - **Real-time / live queries via PG logical replication.** Pulse-style. Substantial scope; probably belongs in a separate package (`@forinda/kickjs-db-live`).
-- **`kickjs-prisma` + `kickjs-drizzle` end-of-life.** Architecture spec had these going private at v6.1 and removed at v7.0. With the stay-on-5.x preference, they remain published but receive no active development; documentation has already been removed (PR #233).
 
 ### Risks called out elsewhere
 
@@ -900,7 +899,7 @@ The original §14 risk list still applies — type-inference complexity, diff-en
 ### What's NOT happening (kept for clarity)
 
 - **No v6.0.0 / v7.0 major cut.** Saved adopter preference — every roadmap item ships as patch or minor on 5.x. Items that would naturally warrant a major (removed export, changed default) get reshaped to fit minor semantics or deferred until a single coherent major is unavoidable.
-- **Benchmarks vs drizzle / prisma / raw `pg`.** Originally an M5 hardening item; deliberately deprioritised. Performance characterization for marketing rather than correctness; the SQL-builder layer (Kysely-shaped) has well-documented characteristics already, and the diff-engine fuzz proves correctness without bench numbers. May land as a P6 if an adopter raises a performance concern with a concrete repro.
+- **Benchmarks vs raw `pg`.** Originally an M5 hardening item; deliberately deprioritised. Performance characterization for marketing rather than correctness; the SQL-builder layer (Kysely-shaped) has well-documented characteristics already, and the diff-engine fuzz proves correctness without bench numbers. May land as a P6 if an adopter raises a performance concern with a concrete repro.
 
 ## 14. Risks
 
@@ -911,7 +910,7 @@ Ordered by likelihood × impact.
 3. **Migration drift detection false positives.** PG introspection sees auto-generated index names, sequence ownership chains the snapshot doesn't capture verbatim. Mitigation: snapshot stores _normalized_ schema; drift compares normalized form.
 4. **Kysely breaking changes during M0–M5.** Mitigation: pin to a minor at start, peer-dep range from M5, contribute upstream when our needs converge.
 5. **Performance regressions in `db.query` joins.** JSON aggregation cost varies per dialect. Mitigation: M5 benchmarks; documented per-dialect notes; escape hatch to layers 1/2 always available.
-6. **Adopter migration from prisma/drizzle to kickdb harder than predicted.** Mitigation: codemod tools in M6; introspection lets adopters bootstrap a kickdb schema from existing DB and incrementally swap repos.
+6. **Adopter migration to kickdb harder than predicted.** Mitigation: introspection lets adopters bootstrap a kickdb schema from an existing DB and incrementally swap repos.
 7. **CI runtime balloons.** Three dialects × full integration = potentially 20+ minutes. Mitigation: dialect tests parallelized across jobs; PRs only run PG + SQLite; full matrix on `main` and tags.
 
 ## 15. Open questions

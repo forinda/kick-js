@@ -18,7 +18,7 @@ export default defineConfig({
     {
       name: 'db:migrate',
       description: 'Run database migrations',
-      steps: 'npx drizzle-kit migrate',
+      steps: 'kick db migrate',
     },
     {
       name: 'db:seed',
@@ -44,7 +44,7 @@ import { defineConfig } from '@forinda/kickjs-cli'
 export default defineConfig({
   modules: {
     dir: 'src/modules',
-    repo: 'drizzle',
+    repo: { name: 'postgres' },
     schemaDir: 'src/db/schema',
   },
   style: {
@@ -78,7 +78,7 @@ interface KickCommandDefinition {
 {
   name: 'db:push',
   description: 'Push schema directly (dev only)',
-  steps: 'npx drizzle-kit push',
+  steps: 'kick db push',
 }
 ```
 
@@ -91,8 +91,8 @@ When `steps` is an array, commands run sequentially. If any step fails, executio
   name: 'db:reset',
   description: 'Drop and recreate the database',
   steps: [
-    'npx drizzle-kit drop',
-    'npx drizzle-kit migrate',
+    'kick db drop',
+    'kick db migrate',
     'npx tsx src/db/seed.ts',
   ],
 }
@@ -104,7 +104,7 @@ When `steps` is an array, commands run sequentially. If any step fails, executio
 {
   name: 'db:migrate',
   description: 'Run database migrations',
-  steps: 'npx drizzle-kit migrate',
+  steps: 'kick db migrate',
   aliases: ['migrate'],
 }
 ```
@@ -117,7 +117,7 @@ Custom commands accept trailing arguments. Any extra arguments are appended to t
 
 ```bash
 kick db:migrate --verbose
-# Runs: npx drizzle-kit migrate --verbose
+# Runs: kick db migrate --verbose
 ```
 
 ## Full Example
@@ -130,28 +130,28 @@ import { defineConfig } from '@forinda/kickjs-cli'
 export default defineConfig({
   modules: {
     dir: 'src/modules',
-    repo: 'drizzle',
+    repo: { name: 'postgres' },
   },
   commands: [
     {
       name: 'db:generate',
       description: 'Generate Drizzle migrations from schema',
-      steps: 'npx drizzle-kit generate',
+      steps: 'kick db generate',
     },
     {
       name: 'db:migrate',
       description: 'Run database migrations',
-      steps: 'npx drizzle-kit migrate',
+      steps: 'kick db migrate',
     },
     {
       name: 'db:push',
       description: 'Push schema directly (dev only)',
-      steps: 'npx drizzle-kit push',
+      steps: 'kick db push',
     },
     {
       name: 'db:studio',
       description: 'Open Drizzle Studio GUI',
-      steps: 'npx drizzle-kit studio',
+      steps: 'kick db studio',
     },
     {
       name: 'db:seed',

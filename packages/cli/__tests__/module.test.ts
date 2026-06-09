@@ -21,27 +21,20 @@ describe('kick g module', () => {
     cleanupFixture(fixture)
   })
 
-  it('generates a DDD module skeleton', () => {
+  it('generates a flat REST module skeleton', () => {
     const result = runCli(fixture, ['g', 'module', 'task'])
     assertCliOk(result, 'kick g module task')
 
     const expectedFiles = [
       'src/modules/tasks/task.module.ts',
-      'src/modules/tasks/constants.ts',
-      'src/modules/tasks/presentation/task.controller.ts',
-      'src/modules/tasks/application/dtos/create-task.dto.ts',
-      'src/modules/tasks/application/dtos/update-task.dto.ts',
-      'src/modules/tasks/application/dtos/task-response.dto.ts',
-      'src/modules/tasks/application/use-cases/create-task.use-case.ts',
-      'src/modules/tasks/application/use-cases/get-task.use-case.ts',
-      'src/modules/tasks/application/use-cases/list-tasks.use-case.ts',
-      'src/modules/tasks/application/use-cases/update-task.use-case.ts',
-      'src/modules/tasks/application/use-cases/delete-task.use-case.ts',
-      'src/modules/tasks/domain/repositories/task.repository.ts',
-      'src/modules/tasks/domain/services/task-domain.service.ts',
-      'src/modules/tasks/domain/entities/task.entity.ts',
-      'src/modules/tasks/domain/value-objects/task-id.vo.ts',
-      'src/modules/tasks/infrastructure/repositories/in-memory-task.repository.ts',
+      'src/modules/tasks/task.constants.ts',
+      'src/modules/tasks/task.controller.ts',
+      'src/modules/tasks/task.service.ts',
+      'src/modules/tasks/dtos/create-task.dto.ts',
+      'src/modules/tasks/dtos/update-task.dto.ts',
+      'src/modules/tasks/dtos/task-response.dto.ts',
+      'src/modules/tasks/task.repository.ts',
+      'src/modules/tasks/in-memory-task.repository.ts',
     ]
     for (const f of expectedFiles) {
       expect(existsSync(join(fixture, f)), `expected ${f} to exist`).toBe(true)
@@ -61,7 +54,7 @@ describe('kick g module', () => {
     runCli(fixture, ['g', 'module', 'task'])
 
     const repoInterface = readFileSync(
-      join(fixture, 'src/modules/tasks/domain/repositories/task.repository.ts'),
+      join(fixture, 'src/modules/tasks/task.repository.ts'),
       'utf-8',
     )
     expect(repoInterface).toContain("import { createToken } from '@forinda/kickjs'")
@@ -271,7 +264,7 @@ export class UserModule implements AppModule {
     // Pin to class form — the gate is skipped.
     writeFileSync(
       join(fixture, 'kick.config.json'),
-      JSON.stringify({ pattern: 'ddd', modules: { style: 'class' } }),
+      JSON.stringify({ pattern: 'rest', modules: { style: 'class' } }),
     )
 
     const legacyDir = join(fixture, 'src/modules/users')
@@ -305,7 +298,7 @@ describe("kick g module — modules.style: 'class' opt-out", () => {
     // same as a TS config file.
     writeFileSync(
       join(fixture, 'kick.config.json'),
-      JSON.stringify({ pattern: 'ddd', modules: { style: 'class' } }, null, 2),
+      JSON.stringify({ pattern: 'rest', modules: { style: 'class' } }, null, 2),
     )
   })
 

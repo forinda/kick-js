@@ -75,10 +75,11 @@ Create a new KickJS project:
 
 ```bash
 kick new my-app                          # Interactive prompts for everything
-kick new my-app --yes                    # Pick all defaults (minimal + inmemory)
+kick new my-app --yes                    # Pick all defaults (rest + inmemory)
+kick new my-app --yes --template minimal # Minimal template, no prompts
 kick new .                               # Scaffold in current directory
 kick new my-app --pm pnpm                # Skip PM prompt only
-kick new my-app -t ddd --pm pnpm --no-git --install  # Fully scriptable
+kick new my-app -t rest --pm pnpm --no-git --install  # Fully scriptable
 ```
 
 `-y, --yes` (alias `--non-interactive`) bypasses every prompt and picks safe defaults — usable in CI pipelines and one-liner shell scripts:
@@ -92,44 +93,42 @@ kick new my-api --yes
 
 | Setting           | Default value                                                                         |
 | ----------------- | ------------------------------------------------------------------------------------- |
-| Template          | `minimal`                                                                             |
+| Template          | `rest`                                                                                |
 | Repository        | `inmemory`                                                                            |
 | Optional packages | none                                                                                  |
 | Git init          | enabled                                                                               |
 | Install deps      | enabled                                                                               |
 | Package manager   | resolved via `kick add`'s chain (config → corepack `packageManager` → lockfile → npm) |
 
-Any explicit flag overrides the matching default — `--yes --template rest --repo drizzle` scaffolds a REST + Drizzle project without prompts.
+Any explicit flag overrides the matching default — `--yes --template minimal --repo postgres` scaffolds a minimal project with a `postgres` custom-repository stub without prompts.
 
 When run without `--yes` (and without specific flags), the CLI prompts for:
 
-1. **Project template** — REST, DDD, CQRS, or Minimal
+1. **Project template** — REST or Minimal
 2. **Package manager** — pnpm, npm, yarn, or bun
-3. **Default repository** — Prisma, Drizzle, In-Memory, or Custom ORM
+3. **Default repository** — In-Memory or a custom DB name (e.g. `postgres`, `mongo`)
 4. **Optional packages** — auth, swagger, ws, queue, devtools
 5. **Git init** — initialize a git repository with an initial commit
 6. **Install deps** — run the selected package manager's install command
 
-| Flag                             | Description                                                   | Default                                  |
-| -------------------------------- | ------------------------------------------------------------- | ---------------------------------------- |
-| `-t, --template <type>`          | Project template: `rest`, `ddd`, `cqrs`, `minimal`            | Prompted (or `minimal` with `--yes`)     |
-| `-r, --repo <type>`              | Default repository: `prisma`, `drizzle`, `inmemory`, `custom` | Prompted (or `inmemory` with `--yes`)    |
-| `-d, --directory <dir>`          | Target directory                                              | Project name                             |
-| `--pm <manager>`                 | Package manager: `pnpm`, `npm`, `yarn`, or `bun`              | Prompted (or auto-detected with `--yes`) |
-| `--packages <list>`              | Comma-separated optional packages                             | Prompted (or none with `--yes`)          |
-| `--git / --no-git`               | Initialize git repository                                     | Prompted (or `true` with `--yes`)        |
-| `--install / --no-install`       | Install dependencies                                          | Prompted (or `true` with `--yes`)        |
-| `-f, --force`                    | Clear non-empty directory without prompting                   | `false`                                  |
-| `-y, --yes`, `--non-interactive` | Bypass every prompt with safe defaults                        | `false`                                  |
+| Flag                             | Description                                                            | Default                                  |
+| -------------------------------- | ---------------------------------------------------------------------- | ---------------------------------------- |
+| `-t, --template <type>`          | Project template: `rest`, `minimal`                                    | Prompted (or `rest` with `--yes`)        |
+| `-r, --repo <name>`              | Repository name: `inmemory` (default) or any DB name (e.g. `postgres`) | Prompted (or `inmemory` with `--yes`)    |
+| `-d, --directory <dir>`          | Target directory                                                       | Project name                             |
+| `--pm <manager>`                 | Package manager: `pnpm`, `npm`, `yarn`, or `bun`                       | Prompted (or auto-detected with `--yes`) |
+| `--packages <list>`              | Comma-separated optional packages                                      | Prompted (or none with `--yes`)          |
+| `--git / --no-git`               | Initialize git repository                                              | Prompted (or `true` with `--yes`)        |
+| `--install / --no-install`       | Install dependencies                                                   | Prompted (or `true` with `--yes`)        |
+| `-f, --force`                    | Clear non-empty directory without prompting                            | `false`                                  |
+| `-y, --yes`, `--non-interactive` | Bypass every prompt with safe defaults                                 | `false`                                  |
 
 ### Templates
 
-| Template         | Adapters                        | Packages installed                                           |
-| ---------------- | ------------------------------- | ------------------------------------------------------------ |
-| `rest` (default) | Swagger + DevTools              | kickjs, kickjs-vite, kickjs-swagger                          |
-| `ddd`            | Swagger + DevTools              | kickjs, kickjs-vite, kickjs-swagger                          |
-| `cqrs`           | Swagger + WS + Queue + DevTools | kickjs, kickjs-vite, kickjs-swagger, kickjs-ws, kickjs-queue |
-| `minimal`        | None                            | kickjs, kickjs-vite                                          |
+| Template         | Adapters           | Packages installed                  |
+| ---------------- | ------------------ | ----------------------------------- |
+| `rest` (default) | Swagger + DevTools | kickjs, kickjs-vite, kickjs-swagger |
+| `minimal`        | None               | kickjs, kickjs-vite                 |
 
 Use `.` as the project name to scaffold in the current directory (the folder name becomes the project name).
 
@@ -253,16 +252,16 @@ import { defineConfig, defineDoctorExtension } from '@forinda/kickjs-cli'
 export default defineConfig({
   doctor: defineDoctorExtension({
     checks: [
-      // ORM-specific: only emits a result when this project actually uses Prisma
+      // Project-specific: only emits a result when this project has migrations
       (ctx) => {
-        if (!existsSync(join(ctx.cwd, 'prisma/schema.prisma'))) return null
-        const generated = join(ctx.cwd, 'node_modules/@prisma/client/default.js')
-        return existsSync(generated)
-          ? { name: 'Prisma client generated', status: 'pass' }
+        if (!existsSync(join(ctx.cwd, 'migrations'))) return null
+        const applied = join(ctx.cwd, '.migrations-applied')
+        return existsSync(applied)
+          ? { name: 'Migrations applied', status: 'pass' }
           : {
-              name: 'Prisma client generated',
+              name: 'Migrations applied',
               status: 'fail',
-              fix: 'Run: pnpm exec prisma generate',
+              fix: 'Run: kick db migrate',
             }
       },
     ],
@@ -275,22 +274,22 @@ export default defineConfig({
 When you want the same extension across multiple projects in a monorepo (or want to publish it as a package), put the extension in its own module:
 
 ```ts
-// doctor-checks/prisma.ts
+// doctor-checks/migrations.ts
 import { defineDoctorExtension } from '@forinda/kickjs-cli'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 
-export const prismaDoctor = defineDoctorExtension({
+export const migrationsDoctor = defineDoctorExtension({
   checks: [
     (ctx) => {
-      if (!existsSync(join(ctx.cwd, 'prisma/schema.prisma'))) return null
-      const generated = join(ctx.cwd, 'node_modules/@prisma/client/default.js')
-      return existsSync(generated)
-        ? { name: 'Prisma client generated', status: 'pass' }
+      if (!existsSync(join(ctx.cwd, 'migrations'))) return null
+      const applied = join(ctx.cwd, '.migrations-applied')
+      return existsSync(applied)
+        ? { name: 'Migrations applied', status: 'pass' }
         : {
-            name: 'Prisma client generated',
+            name: 'Migrations applied',
             status: 'fail',
-            fix: 'Run: pnpm exec prisma generate',
+            fix: 'Run: kick db migrate',
           }
     },
   ],
@@ -300,10 +299,10 @@ export const prismaDoctor = defineDoctorExtension({
 ```ts
 // kick.config.ts
 import { defineConfig } from '@forinda/kickjs-cli'
-import { prismaDoctor } from './doctor-checks/prisma'
+import { migrationsDoctor } from './doctor-checks/migrations'
 
 export default defineConfig({
-  doctor: prismaDoctor,
+  doctor: migrationsDoctor,
 })
 ```
 
@@ -327,7 +326,7 @@ export const checkJwtSecretLength = defineDoctorCheck((ctx) => {
 })
 ```
 
-The framework stays ORM-agnostic on purpose — Prisma / Drizzle / Mongoose-specific checks belong in adopter config (or in adapter packages that ship doctor extensions), never in core.
+The framework stays ORM-agnostic on purpose — database- or ORM-specific checks belong in adopter config (or in adapter packages that ship doctor extensions), never in core.
 
 ## kick info
 
@@ -383,7 +382,7 @@ Add KickJS packages with their required peer dependencies automatically resolved
 
 ```bash
 kick add swagger          # installs @forinda/kickjs-swagger
-kick add drizzle auth     # installs multiple packages at once
+kick add db auth          # installs multiple packages at once
 kick add queue:bullmq     # installs queue package + bullmq + ioredis
 kick add --list           # show core packages (alias: kick list)
 kick add --list --all     # full optional catalog
@@ -404,7 +403,7 @@ kick add --list --all     # full optional catalog
   Run `kick add --list --all` for the full catalog.
 ```
 
-The framework runtime (`@forinda/kickjs`), the dev/build/HMR layer (`@forinda/kickjs-vite`), and the CLI (`@forinda/kickjs-cli`) are the only members of the core set. Everything else — auth, swagger, db, drizzle, prisma, ws, queue, devtools, mcp, testing — is opt-in via `kick add`.
+The framework runtime (`@forinda/kickjs`), the dev/build/HMR layer (`@forinda/kickjs-vite`), and the CLI (`@forinda/kickjs-cli`) are the only members of the core set. Everything else — auth, swagger, db, ws, queue, devtools, mcp, testing — is opt-in via `kick add`.
 
 ### Package manager resolution
 
@@ -481,12 +480,12 @@ kick g scaffold User name:string email:email:optional role:enum:admin,user,guest
 
 #### Scaffold Flags
 
-| Flag                  | Description                             | Default       |
-| --------------------- | --------------------------------------- | ------------- |
-| `--no-entity`         | Skip entity and value object generation | `false`       |
-| `--no-tests`          | Skip test file generation               | `false`       |
-| `--no-pluralize`      | Use singular names                      | from config   |
-| `--modules-dir <dir>` | Modules directory                       | `src/modules` |
+| Flag                  | Description               | Default       |
+| --------------------- | ------------------------- | ------------- |
+| `--no-tests`          | Skip test file generation | `false`       |
+| `--no-pluralize`      | Use singular names        | from config   |
+| `--repo <name>`       | Repository name           | from config   |
+| `--modules-dir <dir>` | Modules directory         | `src/modules` |
 
 ::: tip Shell-safe optional syntax
 Use `name:type:optional` instead of `"name:type?"` — the `?` character is a shell glob in bash/zsh and needs quoting.
@@ -502,14 +501,14 @@ Generate a `kick.config.ts` at the project root. Useful for existing projects cr
 kick g config                        # Interactive — prompts if file exists
 kick g config --force                # Overwrite without prompting
 kick g config --modules-dir src/mods # Custom modules directory
-kick g config --repo drizzle         # Default repo type
+kick g config --repo postgres        # Default repo name
 ```
 
-| Flag                  | Description                                                 | Default       |
-| --------------------- | ----------------------------------------------------------- | ------------- |
-| `-f, --force`         | Overwrite existing config without prompting                 | `false`       |
-| `--modules-dir <dir>` | Modules directory path                                      | `src/modules` |
-| `--repo <type>`       | Default repository type: `inmemory`, `drizzle`, or `prisma` | `inmemory`    |
+| Flag                  | Description                                                            | Default       |
+| --------------------- | ---------------------------------------------------------------------- | ------------- |
+| `-f, --force`         | Overwrite existing config without prompting                            | `false`       |
+| `--modules-dir <dir>` | Modules directory path                                                 | `src/modules` |
+| `--repo <name>`       | Repository name: `inmemory` (default) or any DB name (e.g. `postgres`) | `inmemory`    |
 
 If `kick.config.ts` already exists, the CLI prompts for confirmation before overwriting.
 
@@ -533,7 +532,7 @@ Aliases: `kick g agent-docs`, `kick g ai-docs`. Auto-detects project name (from 
 | `--only <which>`        | `agents` \| `claude` \| `skills` \| `both` \| `all` | `all`                 |
 | `--name <name>`         | Project name override                               | from `package.json`   |
 | `--pm <pm>`             | Package manager override                            | from `package.json`   |
-| `--template <template>` | `rest` \| `ddd` \| `cqrs` \| `minimal`              | from `kick.config.ts` |
+| `--template <template>` | `rest` \| `minimal`                                 | from `kick.config.ts` |
 | `-f, --force`           | Overwrite without prompting                         | `false`               |
 
 See [Generators — kick g agents](./generators.md#kick-g-agents) for what each file contains and how to keep local customisations from being overwritten.
@@ -616,7 +615,7 @@ export default defineConfig({
   pattern: 'rest',
   modules: {
     dir: 'src/modules',
-    repo: 'drizzle',
+    repo: { name: 'postgres' },
     pluralize: true,
     schemaDir: 'src/db/schema',
   },
@@ -625,7 +624,7 @@ export default defineConfig({
     {
       name: 'db:migrate',
       description: 'Run database migrations',
-      steps: 'npx drizzle-kit migrate',
+      steps: 'kick db migrate',
     },
   ],
 })
@@ -635,12 +634,10 @@ export default defineConfig({
 
 Controls the default generator behavior and project template style.
 
-| Value       | Description                                              |
-| ----------- | -------------------------------------------------------- |
-| `'rest'`    | Express + Swagger (default)                              |
-| `'ddd'`     | Full DDD modules with use cases, entities, value objects |
-| `'cqrs'`    | CQRS with commands, queries, events + WS/queue           |
-| `'minimal'` | Bare Express with no scaffolding                         |
+| Value       | Description                                                 |
+| ----------- | ----------------------------------------------------------- |
+| `'rest'`    | Express + Swagger, flat module layout (default)             |
+| `'minimal'` | Bare Express with no scaffolding (module + controller only) |
 
 ### `copyDirs`
 
@@ -663,12 +660,12 @@ If a source directory does not exist, the CLI logs a warning and skips it.
 
 Module generation settings — controls how `kick g module` produces code.
 
-| Option              | Type                         | Default         | Description                                                                                             |
-| ------------------- | ---------------------------- | --------------- | ------------------------------------------------------------------------------------------------------- |
-| `modules.dir`       | `string`                     | `'src/modules'` | Where generators place module files                                                                     |
-| `modules.repo`      | `string \| { name: string }` | `'inmemory'`    | Default repository type. Built-in: `'drizzle'`, `'inmemory'`, `'prisma'`. Custom: `{ name: 'typeorm' }` |
-| `modules.pluralize` | `boolean`                    | `true`          | Whether to pluralize module folder and route names                                                      |
-| `modules.schemaDir` | `string`                     | `undefined`     | Schema output directory (e.g. `'src/db/schema'` or `'prisma/'`)                                         |
+| Option              | Type                         | Default         | Description                                                                                                                                               |
+| ------------------- | ---------------------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `modules.dir`       | `string`                     | `'src/modules'` | Where generators place module files                                                                                                                       |
+| `modules.repo`      | `string \| { name: string }` | `'inmemory'`    | Repository name. Built-in: `'inmemory'` (working in-memory impl). Any other name (e.g. `{ name: 'postgres' }`) scaffolds a generic custom-repository stub |
+| `modules.pluralize` | `boolean`                    | `true`          | Whether to pluralize module folder and route names                                                                                                        |
+| `modules.schemaDir` | `string`                     | `undefined`     | Schema output directory (e.g. `'src/db/schema'`)                                                                                                          |
 
 ### Other Options
 

@@ -28,6 +28,7 @@ import {
   loadKickConfig,
   resolveModuleConfig,
   resolveTokenScope,
+  warnIfDeprecatedRepo,
   type ProjectPattern,
 } from '../config'
 import { setDryRun } from '../utils/fs'
@@ -83,7 +84,7 @@ interface AgentDocsOpts {
   only?: 'agents' | 'claude' | 'skills' | 'gemini' | 'copilot' | 'both' | 'all'
   name?: string
   pm?: string
-  template?: 'rest' | 'ddd' | 'cqrs' | 'minimal'
+  template?: 'rest' | 'minimal'
   force?: boolean
 }
 
@@ -141,7 +142,7 @@ async function runPostTypegen(dryRun: boolean): Promise<void> {
 }
 
 const GENERATORS = [
-  { name: 'module <name>', description: 'Full DDD module (controller, DTOs, use-cases, repo)' },
+  { name: 'module <name>', description: 'REST module (controller, service, DTOs, repo)' },
   { name: 'scaffold <name> <fields...>', description: 'CRUD module from field definitions' },
   { name: 'controller <name>', description: '@Controller() class            [-m module]' },
   { name: 'service <name>', description: '@Service() singleton             [-m module]' },
@@ -219,7 +220,9 @@ async function runModuleGeneration(
   const mc = resolveModuleConfig(config)
   const modulesDir = opts.modulesDir ?? mc.dir ?? 'src/modules'
   const repo: RepoType = opts.repo ?? resolveRepoType(mc.repo)
-  const pattern = opts.pattern ?? config?.pattern ?? 'ddd'
+  // `--repo prisma|drizzle` still scaffolds, but as a generic custom stub.
+  if (opts.repo) warnIfDeprecatedRepo(opts.repo)
+  const pattern = opts.pattern ?? config?.pattern ?? 'rest'
   const shouldPluralize = opts.pluralize === false ? false : (mc.pluralize ?? true)
   const tokenScope = resolveTokenScope(config, process.cwd())
   const resolvedStyle = mc.style ?? 'define'
@@ -300,8 +303,8 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
     .option('--dry-run', 'Preview files that would be generated without writing them')
     .option('--no-entity', 'Skip entity and value object generation (module shortcut)')
     .option('--no-tests', 'Skip test file generation (module shortcut)')
-    .option('--repo <type>', 'Repository implementation: inmemory | drizzle | prisma')
-    .option('--pattern <pattern>', 'Override project pattern: rest | ddd | cqrs | minimal')
+    .option('--repo <type>', 'Repository name: inmemory (default) or any DB name (e.g. postgres)')
+    .option('--pattern <pattern>', 'Override project pattern: rest | minimal')
     .option('--minimal', 'Shorthand for --pattern minimal')
     .option('--modules-dir <dir>', 'Modules directory')
     .option('--no-pluralize', 'Use singular names (skip auto-pluralization)')
@@ -374,8 +377,8 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
     .description('Generate one or more modules (e.g. kick g module user task project)')
     .option('--no-entity', 'Skip entity and value object generation')
     .option('--no-tests', 'Skip test file generation')
-    .option('--repo <type>', 'Repository implementation: inmemory | drizzle | prisma')
-    .option('--pattern <pattern>', 'Override project pattern: rest | ddd | cqrs | minimal')
+    .option('--repo <type>', 'Repository name: inmemory (default) or any DB name (e.g. postgres)')
+    .option('--pattern <pattern>', 'Override project pattern: rest | minimal')
     .option('--minimal', 'Shorthand for --pattern minimal')
     .option('--modules-dir <dir>', 'Modules directory')
     .option('--no-pluralize', 'Use singular names (skip auto-pluralization)')
@@ -662,24 +665,9 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
       const modulesDir = opts.modulesDir ?? mc.dir ?? 'src/modules'
       const fields = parseFields(rawFields)
       const tokenScope = resolveTokenScope(config, process.cwd())
-      // `kick g scaffold` currently emits a DDD-shaped layout
-      // (presentation/, application/, domain/, infrastructure/) — the
-      // field-based generators don't yet have REST / CQRS / minimal
-      // variants. Refuse explicitly when the project's pattern doesn't
-      // match so adopters aren't surprised by mismatched folder shapes.
-      // Use `kick g module <name>` for non-DDD patterns until the
-      // field-aware variants land.
-      const projectPattern = config?.pattern ?? 'ddd'
-      if (projectPattern !== 'ddd') {
-        console.error(
-          `\n  Error: 'kick g scaffold' currently only supports the DDD pattern.\n` +
-            `  Detected project pattern: '${projectPattern}'.\n` +
-            `  Workarounds:\n` +
-            `    - Run 'kick g module ${name}' for the ${projectPattern} layout (no fields), then add fields manually.\n` +
-            `    - Override the pattern for this scaffold by setting kick.config.ts pattern: 'ddd'.\n`,
-        )
-        process.exit(1)
-      }
+      // `kick g scaffold` emits the flat REST layout with field-aware
+      // DTOs / repository. (The DDD layout it used to produce was removed
+      // alongside the ddd/cqrs patterns.)
       const files = await generateScaffold({
         name,
         fields,
@@ -703,7 +691,7 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
     .command('config')
     .description('Generate a kick.config.ts at the project root')
     .option('--modules-dir <dir>', 'Modules directory path', 'src/modules')
-    .option('--repo <type>', 'Default repository type: inmemory | drizzle | prisma', 'inmemory')
+    .option('--repo <type>', 'Repository name: inmemory (default) or any DB name', 'inmemory')
     .option('-f, --force', 'Overwrite existing kick.config.ts without prompting')
     .action(async (opts: ConfigOpts, cmd: Command) => {
       const dryRun = isDryRun(cmd)
@@ -737,7 +725,7 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
     )
     .option('--name <name>', 'Project name (defaults to package.json name)')
     .option('--pm <pm>', 'Package manager (defaults to package.json packageManager)')
-    .option('--template <template>', 'Template: rest | ddd | cqrs | minimal')
+    .option('--template <template>', 'Template: rest | minimal')
     .option('-f, --force', 'Overwrite existing files without prompting')
     .action(async (opts: AgentDocsOpts, cmd: Command) => {
       const dryRun = isDryRun(cmd)

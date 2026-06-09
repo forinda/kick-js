@@ -31,7 +31,7 @@ pnpm add -D tsx
 Import your classes and resolve them from the container:
 
 ```
-kick> const { UserService } = await import('./src/modules/users/domain/services/user-domain.service.ts')
+kick> const { UserService } = await import('./src/modules/users/user.service.ts')
 kick> const userService = resolve(UserService)
 kick> await userService.ensureExists('some-id')
 ```
@@ -39,7 +39,7 @@ kick> await userService.ensureExists('some-id')
 Or use DI tokens directly:
 
 ```
-kick> const { USER_REPOSITORY } = await import('./src/modules/users/domain/repositories/user.repository.ts')
+kick> const { USER_REPOSITORY } = await import('./src/modules/users/user.repository.ts')
 kick> const repo = container.resolve(USER_REPOSITORY)
 kick> await repo.findAll()
 ```
@@ -54,9 +54,9 @@ kick> container.has(UserService)      // Check if a class is registered
 ## Running Business Logic
 
 ```
-kick> const { CreateUserUseCase } = await import('./src/modules/users/application/use-cases/create-user.use-case.ts')
-kick> const useCase = resolve(CreateUserUseCase)
-kick> await useCase.execute({ name: 'Alice', email: 'alice@test.com' })
+kick> const { CreateUserService } = await import('./src/modules/users/create-user.service.ts')
+kick> const service = resolve(CreateUserService)
+kick> await service.execute({ name: 'Alice', email: 'alice@test.com' })
 ```
 
 ## Using Logger

@@ -154,8 +154,8 @@ because it never imports React/Vue — it just hands an element to the plugin.
 
 **What to do:** Refactor `defineDevtoolsTab` to this contract before v6.0. Existing tabs
 (`devtools-kit` consumers) get a thin migration layer. New plugin authors learn one
-API. Means our DevTools dashboard at `/_debug` can host third-party plugins (e.g.,
-`@forinda/kickjs-prisma`-shipped tab) without us needing to know their UI framework.
+API. Means our DevTools dashboard at `/_debug` can host third-party plugins (e.g., an
+adapter-package-shipped tab) without us needing to know their UI framework.
 
 **Effort:** ~1 week. **Reach:** every adapter package author + adopters who want to ship
 their own custom tabs.
@@ -300,7 +300,7 @@ function matchQuery({ queryKey: filter, exact }, query) {
 
 **Apply to kickjs-db:** Useful when we add a query result cache (post-M2). E.g.,
 `db.invalidate(['users'])` invalidates every cached query whose key starts with
-`['users', ...]`. Mirrors how prisma's `select` cache works.
+`['users', ...]`.
 
 **Apply to KickJS framework:** Slash-delimited DI tokens (`'kick/db/primary'`,
 `'app/users/repository'`) are already structural-prefix friendly. Could expose:

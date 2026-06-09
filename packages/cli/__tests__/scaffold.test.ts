@@ -37,66 +37,56 @@ describe('kick g scaffold', () => {
     ])
     assertCliOk(result, 'kick g scaffold widget')
 
-    // Spot-check the file tree — every layer of the DDD pattern.
+    // Spot-check the file tree — flat REST layout.
     const expectedFiles = [
       'src/modules/widgets/widget.module.ts',
-      'src/modules/widgets/constants.ts',
-      'src/modules/widgets/presentation/widget.controller.ts',
-      'src/modules/widgets/application/dtos/create-widget.dto.ts',
-      'src/modules/widgets/application/dtos/update-widget.dto.ts',
-      'src/modules/widgets/application/dtos/widget-response.dto.ts',
-      'src/modules/widgets/application/use-cases/create-widget.use-case.ts',
-      'src/modules/widgets/application/use-cases/get-widget.use-case.ts',
-      'src/modules/widgets/application/use-cases/list-widgets.use-case.ts',
-      'src/modules/widgets/application/use-cases/update-widget.use-case.ts',
-      'src/modules/widgets/application/use-cases/delete-widget.use-case.ts',
-      'src/modules/widgets/domain/repositories/widget.repository.ts',
-      'src/modules/widgets/domain/services/widget-domain.service.ts',
-      'src/modules/widgets/infrastructure/repositories/in-memory-widget.repository.ts',
-      'src/modules/widgets/domain/entities/widget.entity.ts',
-      'src/modules/widgets/domain/value-objects/widget-id.vo.ts',
+      'src/modules/widgets/widget.constants.ts',
+      'src/modules/widgets/widget.controller.ts',
+      'src/modules/widgets/widget.service.ts',
+      'src/modules/widgets/dtos/create-widget.dto.ts',
+      'src/modules/widgets/dtos/update-widget.dto.ts',
+      'src/modules/widgets/dtos/widget-response.dto.ts',
+      'src/modules/widgets/widget.repository.ts',
+      'src/modules/widgets/in-memory-widget.repository.ts',
     ]
     for (const f of expectedFiles) {
       expect(existsSync(join(fixture, f)), `expected ${f} to exist`).toBe(true)
     }
   })
 
-  it('propagates all field definitions through the entity, DTO, and repository', () => {
+  it('propagates all field definitions through the create + response DTOs', () => {
     runCli(fixture, ['g', 'scaffold', 'widget', 'title:string', 'count:int', 'tags:json'])
 
-    const entity = readFileSync(
-      join(fixture, 'src/modules/widgets/domain/entities/widget.entity.ts'),
-      'utf-8',
-    )
-    expect(entity).toContain('title: string')
-    expect(entity).toContain('count: number')
-    expect(entity).toContain('tags: any')
-
     const createDto = readFileSync(
-      join(fixture, 'src/modules/widgets/application/dtos/create-widget.dto.ts'),
+      join(fixture, 'src/modules/widgets/dtos/create-widget.dto.ts'),
       'utf-8',
     )
     expect(createDto).toContain('title: z.string()')
     expect(createDto).toContain('count: z.number().int()')
     expect(createDto).toContain('tags: z.any()')
 
-    const inMemoryRepo = readFileSync(
-      join(
-        fixture,
-        'src/modules/widgets/infrastructure/repositories/in-memory-widget.repository.ts',
-      ),
+    const responseDto = readFileSync(
+      join(fixture, 'src/modules/widgets/dtos/widget-response.dto.ts'),
       'utf-8',
     )
-    expect(inMemoryRepo).toContain('title: dto.title')
-    expect(inMemoryRepo).toContain('count: dto.count')
-    expect(inMemoryRepo).toContain('tags: dto.tags')
+    expect(responseDto).toContain('title: string')
+    expect(responseDto).toContain('count: number')
+    expect(responseDto).toContain('tags: any')
+
+    // The repo builds the entity by spreading the create DTO, so it works
+    // for any field set without hard-coding field names.
+    const inMemoryRepo = readFileSync(
+      join(fixture, 'src/modules/widgets/in-memory-widget.repository.ts'),
+      'utf-8',
+    )
+    expect(inMemoryRepo).toContain('...dto')
   })
 
   it('emits a collision-safe createToken for the repository token', () => {
     runCli(fixture, ['g', 'scaffold', 'widget', 'title:string'])
 
     const repoInterface = readFileSync(
-      join(fixture, 'src/modules/widgets/domain/repositories/widget.repository.ts'),
+      join(fixture, 'src/modules/widgets/widget.repository.ts'),
       'utf-8',
     )
     // Repository token should use createToken<IWidgetRepository>(...) so

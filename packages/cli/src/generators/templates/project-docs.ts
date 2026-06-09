@@ -1,4 +1,4 @@
-type ProjectTemplate = 'rest' | 'ddd' | 'cqrs' | 'minimal'
+type ProjectTemplate = 'rest' | 'minimal'
 
 /** Generate README.md with project documentation */
 export function generateReadme(name: string, template: ProjectTemplate, pm: string): string {
@@ -12,9 +12,6 @@ export function generateReadme(name: string, template: ProjectTemplate, pm: stri
   const packages = ['@forinda/kickjs', '@forinda/kickjs-vite']
   if (template !== 'minimal') {
     packages.push('@forinda/kickjs-swagger', '@forinda/kickjs-devtools')
-  }
-  if (template === 'cqrs') {
-    packages.push('@forinda/kickjs-queue', '@forinda/kickjs-ws')
   }
 
   return `# ${name}
@@ -392,7 +389,7 @@ kick g middleware <name>          # Express middleware
 kick g guard <name>               # Route guard (auth, roles)
 kick g adapter <name>             # AppAdapter with lifecycle hooks
 kick g dto <name>                 # Zod DTO schema
-${template === 'cqrs' ? 'kick g job <name>                # Queue job processor\n' : ''}\`\`\`
+\`\`\`
 
 ## Adding Packages
 
@@ -583,18 +580,7 @@ Run tests:
 - \`@Inject('token')\` — token-based injection
 - \`@Value('ENV_VAR')\` — inject config value
 
-${
-  template === 'cqrs'
-    ? `### CQRS/Event Decorators
-- \`@Job('job-name')\` — queue job handler
-- \`@Process('queue-name')\` — queue processor
-- \`@Cron('0 * * * *')\` — cron schedule
-- \`@WsController('/path')\` — WebSocket controller
-- \`@Subscribe('event')\` — WebSocket event handler
-
-`
-    : ''
-}## Common Pitfalls
+## Common Pitfalls
 
 1. **Decorators fire at import time** — make sure to import module classes in \`src/modules/index.ts\`
 2. **Tests need \`Container.reset()\`** — call in \`beforeEach\` to isolate DI state
@@ -779,43 +765,17 @@ package additions, env access patterns, troubleshooting) is detailed below.
 Each module in \`src/modules/<name>/\` typically contains:
 
 ${
-  template === 'ddd'
+  template === 'rest'
     ? `\`\`\`
 <name>/
 ├── <name>.controller.ts     # HTTP routes (@Controller)
 ├── <name>.service.ts        # Business logic (@Service)
 ├── <name>.repository.ts     # Data access (@Repository)
-├── <name>.dto.ts            # Request/response schemas (Zod)
-├── <name>.entity.ts         # Domain entity (optional)
+├── dtos/                    # Request/response schemas (Zod)
 └── <name>.module.ts         # Module definition (defineModule factory)
 \`\`\`
 `
-    : template === 'cqrs'
-      ? `\`\`\`
-<name>/
-├── commands/                # Write operations
-│   ├── create-<name>.command.ts
-│   └── create-<name>.handler.ts
-├── queries/                 # Read operations
-│   ├── get-<name>.query.ts
-│   └── get-<name>.handler.ts
-├── events/                  # Domain events
-│   └── <name>-created.event.ts
-├── <name>.controller.ts     # HTTP routes
-├── <name>.repository.ts     # Data access
-└── <name>.module.ts         # Module definition (defineModule factory)
-\`\`\`
-`
-      : template === 'rest'
-        ? `\`\`\`
-<name>/
-├── <name>.controller.ts     # HTTP routes (@Controller)
-├── <name>.service.ts        # Business logic (@Service)
-├── <name>.dto.ts            # Request/response schemas (Zod)
-└── <name>.module.ts         # Module definition (defineModule factory)
-\`\`\`
-`
-        : `\`\`\`
+    : `\`\`\`
 src/
 ├── index.ts                 # Add routes here
 └── ...                      # Custom structure
@@ -1083,19 +1043,7 @@ fast). The \`onError\` hook is async-permitted.
 
 Full guide: <https://forinda.github.io/kick-js/guide/context-decorators>.
 
-${
-  template === 'cqrs'
-    ? `### Background Jobs
-| Decorator | Purpose |
-|-----------|---------|
-| \`@Job('name')\` | Queue job handler |
-| \`@Process('queue')\` | Queue processor |
-| \`@Cron('0 * * * *')\` | Cron schedule |
-| \`@WsController()\` | WebSocket controller |
-
-`
-    : ''
-}## Common Pitfalls
+## Common Pitfalls
 
 1. **Forgot to register module** — Add to \`src/modules/index.ts\` exports array
 2. **DI not working** — Ensure \`reflect-metadata\` is imported in \`src/index.ts\`

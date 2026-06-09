@@ -24,17 +24,47 @@ export interface KickCommandDefinition {
 }
 
 /** Project pattern — controls what generators produce and which deps are installed */
-export type ProjectPattern = 'rest' | 'ddd' | 'cqrs' | 'minimal'
+export type ProjectPattern = 'rest' | 'minimal'
 
 /** Package manager used for `kick add` and other dep-installing commands */
 export type PackageManager = 'pnpm' | 'npm' | 'yarn' | 'bun'
 
 export const PACKAGE_MANAGERS: readonly PackageManager[] = ['pnpm', 'npm', 'yarn', 'bun']
 
-/** Built-in repository types with first-class code generation support */
-export type BuiltinRepoType = 'drizzle' | 'inmemory' | 'prisma'
+/**
+ * Built-in repository type with first-class code generation support.
+ *
+ * Only `inmemory` remains built-in (zero-dep, framework-owned). The
+ * `prisma` and `drizzle` ORM presets are **deprecated** — they now
+ * scaffold a generic custom-repository stub like any other name (see
+ * {@link DEPRECATED_REPO_TYPES}). Bring your own DB by passing a name:
+ * `repo: { name: 'postgres' }`.
+ */
+export type BuiltinRepoType = 'inmemory'
 
-export const BUILTIN_REPO_TYPES: readonly string[] = ['drizzle', 'inmemory', 'prisma']
+export const BUILTIN_REPO_TYPES: readonly string[] = ['inmemory']
+
+/**
+ * Repo names that used to have dedicated ORM generators. They still
+ * work — they just produce the same generic stub every other custom
+ * name does — but the CLI prints a one-line deprecation note.
+ */
+export const DEPRECATED_REPO_TYPES: readonly string[] = ['prisma', 'drizzle']
+
+/**
+ * Print a deprecation note when a generator is asked for a
+ * `prisma`/`drizzle` repo. No-op for every other name. Returns whether
+ * a note was printed (handy for tests).
+ */
+export function warnIfDeprecatedRepo(repo: string): boolean {
+  if (!DEPRECATED_REPO_TYPES.includes(repo)) return false
+  console.warn(
+    `  Note: the '${repo}' repository preset is deprecated. Generating a generic ` +
+      `custom repository named '${repo}' instead — wire it to your DB by hand. ` +
+      `Pass any name via \`--repo <name>\` or \`modules.repo: { name: '<name>' }\`.`,
+  )
+  return true
+}
 
 /** Custom repository type — generates a stub with TODO markers */
 export interface CustomRepoType {
@@ -540,12 +570,16 @@ export function resolveModuleConfig(config: KickConfig | null): ModuleConfig {
     mc.style = 'define'
   }
 
-  // Warn if a string repo value isn't a known built-in
+  // Warn if a string repo value isn't a known built-in. Deprecated ORM
+  // presets get their own note; any other bare string suggests the
+  // `{ name }` form to silence the stub-repo warning.
   if (mc.repo && typeof mc.repo === 'string' && !BUILTIN_REPO_TYPES.includes(mc.repo)) {
-    console.warn(
-      `  Warning: modules.repo '${mc.repo}' is not a built-in type (${BUILTIN_REPO_TYPES.join(', ')}).` +
-        ` It will generate a stub repository. Use { name: '${mc.repo}' } to silence this warning.`,
-    )
+    if (!warnIfDeprecatedRepo(mc.repo)) {
+      console.warn(
+        `  Warning: modules.repo '${mc.repo}' is not a built-in type (${BUILTIN_REPO_TYPES.join(', ')}).` +
+          ` It will generate a stub repository. Use { name: '${mc.repo}' } to silence this warning.`,
+      )
+    }
   }
 
   return mc

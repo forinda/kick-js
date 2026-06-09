@@ -3,20 +3,8 @@ import { pluralize, toKebabCase } from './naming'
 import type { ProjectPattern } from '../config'
 
 /**
- * DDD folder mapping — nested layered architecture.
- */
-const DDD_FOLDER_MAP: Record<string, string> = {
-  controller: 'presentation',
-  service: 'domain/services',
-  dto: 'application/dtos',
-  guard: 'presentation/guards',
-  middleware: 'middleware',
-  contributor: 'presentation/contributors',
-}
-
-/**
- * Flat folder mapping — REST and minimal patterns.
- * Files live at the module root or in minimal subdirectories.
+ * Flat folder mapping — the layout for both `rest` and `minimal`.
+ * Files live at the module root or in shallow subdirectories.
  */
 const FLAT_FOLDER_MAP: Record<string, string> = {
   controller: '',
@@ -25,21 +13,6 @@ const FLAT_FOLDER_MAP: Record<string, string> = {
   guard: 'guards',
   middleware: 'middleware',
   contributor: 'contributors',
-}
-
-/**
- * CQRS folder mapping — commands, queries, events.
- */
-const CQRS_FOLDER_MAP: Record<string, string> = {
-  controller: '',
-  service: '',
-  dto: 'dtos',
-  guard: 'guards',
-  middleware: 'middleware',
-  contributor: 'contributors',
-  command: 'commands',
-  query: 'queries',
-  event: 'events',
 }
 
 export interface ResolveOutDirOptions {
@@ -74,17 +47,16 @@ export function resolveOutDir(options: ResolveOutDirOptions): string {
     moduleName,
     modulesDir = 'src/modules',
     defaultDir,
-    pattern = 'ddd',
     shouldPluralize = true,
   } = options
 
   // Explicit --out always wins
   if (outDir) return resolve(outDir)
 
-  // Module-scoped: place inside the module's folder
+  // Module-scoped: place inside the module's folder. All patterns
+  // (rest/minimal) share the flat folder layout.
   if (moduleName) {
-    const folderMap =
-      pattern === 'ddd' ? DDD_FOLDER_MAP : pattern === 'cqrs' ? CQRS_FOLDER_MAP : FLAT_FOLDER_MAP
+    const folderMap = FLAT_FOLDER_MAP
     const kebab = toKebabCase(moduleName)
     const folder = shouldPluralize ? pluralize(kebab) : kebab
     const subfolder = folderMap[type] ?? ''

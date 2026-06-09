@@ -8,7 +8,7 @@ all ship as plugins internally.
 ## When to write one
 
 - You publish a package that wants to add a `kick <name>` subcommand
-  (e.g. `@forinda/kickjs-cli-drizzle` adding `kick db:migrate`).
+  (e.g. a migrations plugin adding `kick db:migrate`).
 - You need to emit a `.d.ts` file under `.kickjs/types/` from project
   sources (typegen plugin) — Vite, schema, route map, anything.
 - You want to bundle commands + typegens in one install for adopters.
@@ -49,17 +49,17 @@ All four contribution kinds are optional; pick whichever fit. Use
 ```ts
 import { defineCliPlugin } from '@forinda/kickjs-cli'
 
-export const drizzlePlugin = (opts: { schemaPath?: string } = {}) =>
+export const migrationsPlugin = (opts: { schemaPath?: string } = {}) =>
   defineCliPlugin({
-    name: 'kickjs-cli-drizzle',
+    name: 'my-migrations-plugin',
     commands: [
       {
         name: 'db:migrate',
-        description: 'Apply pending Drizzle migrations',
-        steps: 'npx drizzle-kit migrate',
+        description: 'Apply pending migrations',
+        steps: 'node ./scripts/migrate.js',
       },
     ],
-    typegens: [drizzleTypegen(opts)],
+    typegens: [schemaTypegen(opts)],
   })
 ```
 
@@ -67,10 +67,10 @@ export const drizzlePlugin = (opts: { schemaPath?: string } = {}) =>
 
 ```ts
 import { defineConfig } from '@forinda/kickjs-cli'
-import { drizzlePlugin } from '@forinda/kickjs-cli-drizzle'
+import { migrationsPlugin } from '@my-org/kickjs-cli-migrations'
 
 export default defineConfig({
-  plugins: [drizzlePlugin({ schemaPath: 'src/db/schema' })],
+  plugins: [migrationsPlugin({ schemaPath: 'src/db/schema' })],
 })
 ```
 
@@ -128,25 +128,25 @@ the spec, then expose it via the plugin:
 ```ts
 import { defineCliPlugin, defineGenerator } from '@forinda/kickjs-cli'
 
-const cqrsCommandGen = defineGenerator({
-  name: 'command',
-  description: 'Generate a CQRS command + handler',
+const endpointGen = defineGenerator({
+  name: 'endpoint',
+  description: 'Generate a controller endpoint stub',
   args: [{ name: 'name', required: true }],
   files: (ctx) => [
     {
-      path: `src/modules/${ctx.kebab}/commands/create-${ctx.kebab}.command.ts`,
+      path: `src/modules/${ctx.kebab}/${ctx.kebab}.controller.ts`,
       content: `// generated for ${ctx.pascal}\n`,
     },
   ],
 })
 
-export const cqrsPlugin = defineCliPlugin({
-  name: 'kickjs-cli-cqrs',
-  generators: [cqrsCommandGen],
+export const endpointPlugin = defineCliPlugin({
+  name: 'my-endpoint-plugin',
+  generators: [endpointGen],
 })
 ```
 
-`kick g command Order` then dispatches against the registered spec —
+`kick g endpoint Order` then dispatches against the registered spec —
 config-supplied generators take priority over the legacy
 `package.json > kickjs.generators` discovery path, which stays around
 as a deprecated fallback for one minor version.
@@ -160,13 +160,13 @@ Each `TypegenPlugin` owns one file under `.kickjs/types/<id>.d.ts`
 ```ts
 import type { TypegenPlugin } from '@forinda/kickjs-cli'
 
-const drizzleTypegen = (): TypegenPlugin => ({
-  id: 'drizzle/db',
+const schemaTypegen = (): TypegenPlugin => ({
+  id: 'schema/db',
   inputs: ['src/db/schema.ts', 'src/db/schema/**/*.ts'],
   async generate(ctx) {
     // Read project sources via ctx.cwd, compute the augmentation,
     // return a TS source string (no banner — the runner prepends one).
-    return `export type DrizzleDb = ${'/* ... */'}`
+    return `export type SchemaDb = ${'/* ... */'}`
   },
 })
 ```

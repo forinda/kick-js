@@ -85,7 +85,7 @@ async function resolveSiblingVersions(): Promise<Record<string, string>> {
   return Object.fromEntries(results)
 }
 
-type ProjectTemplate = 'rest' | 'ddd' | 'cqrs' | 'minimal'
+type ProjectTemplate = 'rest' | 'minimal'
 type SchemaLib = 'zod' | 'valibot' | 'yup'
 
 interface InitProjectOptions {
@@ -279,7 +279,6 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
   log('  kick g guard <name>       Route guard (auth, roles, etc.)')
   log('  kick g adapter <name>     AppAdapter with lifecycle hooks')
   log('  kick g dto <name>         Zod DTO schema')
-  if (template === 'cqrs') log('  kick g job <name>         Queue job processor')
   log('  kick g config             Generate kick.config.ts')
   log('')
   log('Add packages:')

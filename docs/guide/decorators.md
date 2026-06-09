@@ -378,7 +378,7 @@ async internalEndpoint(ctx: RequestContext) { ... }
 
 Declares the filterable, sortable, and searchable query parameters for an endpoint. This decorator lives in `@forinda/kickjs` and works with both the query parser and the Swagger spec generator. When `@forinda/kickjs-swagger` is installed, the declared fields are automatically added as OpenAPI query parameters.
 
-Accepts **both** string-based configs and column-object configs (e.g., `DrizzleQueryParamsConfig`):
+Accepts **both** string-based configs and column-object configs (e.g., `ColumnQueryFieldConfig`):
 
 ```ts
 import { Controller, Get, ApiQueryParams } from '@forinda/kickjs'
@@ -402,7 +402,7 @@ class TaskController {
 }
 ```
 
-**With Drizzle Column objects** — pass your `DrizzleQueryParamsConfig` directly:
+**With column-object config** — pass a `ColumnQueryFieldConfig` directly:
 
 ```ts
 import { TASK_QUERY_CONFIG } from '../constants'

@@ -18,9 +18,9 @@ KickJS is a production-grade, decorator-driven Node.js framework built on Expres
 
 **Lightweight** — No RxJS, no class-transformer, no class-validator. Just TypeScript, Zod, and decorators.
 
-**Pluggable** — Everything is an adapter or interface. Swap Zod for Yup, Drizzle for Prisma, Redis for in-memory. No vendor lock-in.
+**Pluggable** — Everything is an adapter or interface. Swap Zod for Yup, Postgres for SQLite, Redis for in-memory. No vendor lock-in.
 
-**DDD-first** — Code generators produce proper domain-driven structure, not flat CRUD files.
+**Generator-driven** — Code generators scaffold a clean REST module (controller, service, DTOs, repository interface) so you start from a working, layered structure.
 
 **Vite-native** — The only backend framework with built-in Vite hot reload that preserves connections.
 

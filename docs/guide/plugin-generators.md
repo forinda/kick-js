@@ -14,25 +14,25 @@ Build the generator with `defineGenerator`, then expose it via the `generators` 
 // src/index.ts (your plugin entry)
 import { defineCliPlugin, defineGenerator } from '@forinda/kickjs-cli'
 
-const cqrsCommandGen = defineGenerator({
-  name: 'command',
-  description: 'Generate a CQRS command + handler',
+const actionGen = defineGenerator({
+  name: 'action',
+  description: 'Generate a service action + handler',
   args: [{ name: 'name', required: true }],
   files: (ctx) => [
     {
-      path: `${ctx.modulesDir}/${ctx.kebab}/commands/create-${ctx.kebab}.command.ts`,
-      content: `// Command for ${ctx.pascal}\nexport class Create${ctx.pascal}Command {}\n`,
+      path: `${ctx.modulesDir}/${ctx.kebab}/create-${ctx.kebab}.action.ts`,
+      content: `// Action for ${ctx.pascal}\nexport class Create${ctx.pascal}Action {}\n`,
     },
     {
-      path: `${ctx.modulesDir}/${ctx.kebab}/commands/create-${ctx.kebab}.handler.ts`,
+      path: `${ctx.modulesDir}/${ctx.kebab}/create-${ctx.kebab}.handler.ts`,
       content: `// Handler for ${ctx.pascal}\nexport class Create${ctx.pascal}Handler {}\n`,
     },
   ],
 })
 
-export const cqrsPlugin = defineCliPlugin({
-  name: 'kickjs-cli-cqrs',
-  generators: [cqrsCommandGen],
+export const actionPlugin = defineCliPlugin({
+  name: 'my-action-plugin',
+  generators: [actionGen],
 })
 ```
 
@@ -40,14 +40,14 @@ Adopters wire the plugin in `kick.config.ts`:
 
 ```ts
 import { defineConfig } from '@forinda/kickjs-cli'
-import { cqrsPlugin } from '@my-org/kickjs-cli-cqrs'
+import { actionPlugin } from '@my-org/kickjs-cli-actions'
 
 export default defineConfig({
-  plugins: [cqrsPlugin],
+  plugins: [actionPlugin],
 })
 ```
 
-That's it — `kick g command Order` dispatches against the registered spec.
+That's it — `kick g action Order` dispatches against the registered spec.
 
 ::: warning Legacy `package.json > kickjs.generators` discovery
 The previous shape pointed `package.json` at a compiled manifest:

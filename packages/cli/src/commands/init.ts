@@ -4,6 +4,7 @@ import type { Command } from 'commander'
 import { initProject } from '../generators/project'
 import { intro, outro, text, select, multiSelect, confirm, log } from '../utils/prompts'
 import { colors } from '../utils/colors'
+import { warnIfDeprecatedRepo } from '../config'
 import { resolvePackageManager } from './add'
 
 /** All optional packages available for selection */
@@ -26,8 +27,8 @@ export function registerInitCommand(program: Command): void {
     .option('--install', 'Install dependencies after scaffolding')
     .option('--no-install', 'Skip dependency installation')
     .option('-f, --force', 'Remove existing files without prompting')
-    .option('-t, --template <type>', 'Project template: rest | ddd | cqrs | minimal')
-    .option('-r, --repo <type>', 'Default repository: prisma | drizzle | inmemory | custom')
+    .option('-t, --template <type>', 'Project template: rest | minimal')
+    .option('-r, --repo <type>', 'Repository name (inmemory, or any DB name e.g. postgres)')
     .option(
       '-s, --schema <lib>',
       'Schema library for env / DTOs: zod | valibot | yup (default: zod)',
@@ -118,8 +119,6 @@ export function registerInitCommand(program: Command): void {
             message: 'Project template',
             options: [
               { value: 'rest', label: 'REST API', hint: 'Express + Swagger' },
-              { value: 'ddd', label: 'DDD', hint: 'Domain-Driven Design modules' },
-              { value: 'cqrs', label: 'CQRS', hint: 'Commands, Queries, Events + WS/Queue' },
               { value: 'minimal', label: 'Minimal', hint: 'bare Express' },
             ],
           })
@@ -147,30 +146,22 @@ export function registerInitCommand(program: Command): void {
         }
       }
 
-      // ── Repository type ───────────────────────────────────────────
+      // ── Repository name ───────────────────────────────────────────
+      // Free-form: `inmemory` (zero-dep working impl, the default) or any
+      // DB/ORM name (e.g. `postgres`, `mongo`) which scaffolds a generic
+      // custom repository stub you wire to your own client. The dedicated
+      // prisma/drizzle presets were removed — pass their name to get a stub.
       let defaultRepo = opts.repo
       if (!defaultRepo) {
-        if (yes) {
-          defaultRepo = 'inmemory'
-        } else {
-          defaultRepo = await select({
-            message: 'Default repository/ORM',
-            options: [
-              { value: 'prisma', label: 'Prisma' },
-              { value: 'drizzle', label: 'Drizzle' },
-              { value: 'inmemory', label: 'In-Memory' },
-              { value: 'custom', label: 'Custom', hint: 'specify later' },
-            ],
-          })
-
-          if (defaultRepo === 'custom') {
-            defaultRepo = await text({
-              message: 'Custom repository name',
-              defaultValue: 'custom',
+        defaultRepo = yes
+          ? 'inmemory'
+          : await text({
+              message: 'Repository name',
+              placeholder: 'inmemory (or a DB name, e.g. postgres)',
+              defaultValue: 'inmemory',
             })
-          }
-        }
       }
+      warnIfDeprecatedRepo(defaultRepo)
 
       // ── Schema library ────────────────────────────────────────────
       // Flows into the env scaffold (`fromZod` / `fromValibot` /

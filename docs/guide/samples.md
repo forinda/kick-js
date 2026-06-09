@@ -285,7 +285,7 @@ Everything you can put on a plugin, field by field (typegens aside — those liv
 
 ### `name` (required)
 
-A stable identifier. Used to de-dup plugins and to name the offender in conflict errors (two plugins shipping the same command / generator name throw `KickPluginConflictError`). Convention: the package name (`'kickjs-cli-drizzle'`).
+A stable identifier. Used to de-dup plugins and to name the offender in conflict errors (two plugins shipping the same command / generator name throw `KickPluginConflictError`). Convention: the package name (`'kickjs-cli-db'`).
 
 ### `commands[]` — declarative shell commands
 
@@ -298,7 +298,7 @@ defineCliPlugin({
     {
       name: 'db:migrate', // → `kick db:migrate`
       description: 'Apply pending migrations', // shown in --help
-      steps: 'npx drizzle-kit migrate', // string … or string[] for sequential steps
+      steps: 'kick db migrate', // string … or string[] for sequential steps
       aliases: ['migrate'], // optional — `kick migrate` also works
     },
     {
@@ -350,21 +350,21 @@ Teach `kick g` your own scaffolds with `defineGenerator`. `kick g <name>` matche
 ```ts
 import { defineCliPlugin, defineGenerator } from '@forinda/kickjs-cli'
 
-const cqrsCommand = defineGenerator({
-  name: 'command', // → `kick g command Order`
-  description: 'Generate a CQRS command + handler', // shown in `kick g --list`
-  args: [{ name: 'name', required: true, description: 'Command name' }], // informational (help)
+const actionGen = defineGenerator({
+  name: 'action', // → `kick g action Order`
+  description: 'Generate a service action + handler', // shown in `kick g --list`
+  args: [{ name: 'name', required: true, description: 'Action name' }], // informational (help)
   flags: [{ name: 'sync', description: 'Synchronous handler', takesValue: false }], // informational
   files: (ctx) => [
     {
       // relative paths resolve against ctx.cwd; parent dirs auto-created
-      path: `${ctx.modulesDir}/${ctx.kebab}/commands/create-${ctx.kebab}.command.ts`,
-      content: `export class Create${ctx.pascal}Command {}\n`,
+      path: `${ctx.modulesDir}/${ctx.kebab}/create-${ctx.kebab}.action.ts`,
+      content: `export class Create${ctx.pascal}Action {}\n`,
     },
   ],
 })
 
-export const cqrsPlugin = defineCliPlugin({ name: 'kickjs-cli-cqrs', generators: [cqrsCommand] })
+export const actionPlugin = defineCliPlugin({ name: 'my-action-plugin', generators: [actionGen] })
 ```
 
 The `files(ctx)` factory receives a `GeneratorContext` with the name pre-cased + project paths + raw input:
@@ -386,10 +386,10 @@ The `files(ctx)` factory receives a `GeneratorContext` with the name pre-cased +
 
 ## 9. Scaffolding with `kick g`
 
-Let the CLI write the boilerplate to the right place, in your project's pattern (REST / DDD / CQRS).
+Let the CLI write the boilerplate to the right place, in your project's pattern (REST / minimal).
 
 ```bash
-kick g module user                              # full module (controller, DTOs, use-cases, repo)
+kick g module user                              # full module (controller, DTOs, service, repo)
 kick g scaffold Post title:string published:boolean:optional  # CRUD module from fields
 kick g controller auth                          # standalone controller
 kick g service payment                          # @Service singleton
@@ -408,6 +408,6 @@ KickJS ships **primitives** (`defineContextDecorator`, `defineAdapter`, `defineP
 
 ## Where to go next
 
-- **Step-by-step tutorials:** [DDD architecture](./tutorial-ddd-architecture.md), [JWT auth](./tutorial-jwt-auth.md), [query + pagination](./tutorial-query-pagination.md), [realtime](./tutorial-realtime.md), [typed client](./tutorial-typed-client.md), [custom CLI](./tutorial-custom-cli.md).
+- **Step-by-step tutorials:** [REST module architecture](./tutorial-ddd-architecture.md), [JWT auth](./tutorial-jwt-auth.md), [query + pagination](./tutorial-query-pagination.md), [realtime](./tutorial-realtime.md), [typed client](./tutorial-typed-client.md), [custom CLI](./tutorial-custom-cli.md).
 - **Reference:** [Decorators](./decorators.md), [Type Generation](./typegen.md), [Project Structure](./project-structure.md).
 - **Gotchas worth reading early:** [DI gotchas](./tutorial-di-gotchas.md), [HMR + decorators](./tutorial-hmr-decorators.md).

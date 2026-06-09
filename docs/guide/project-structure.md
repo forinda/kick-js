@@ -80,10 +80,10 @@ pnpm kick start   # Production server (Vite not used at runtime)
 
 ## Module Patterns
 
-KickJS supports four module patterns. Set the pattern in `kick.config.ts` or use the `--pattern` flag:
+KickJS supports two module patterns. Set the pattern in `kick.config.ts` or use the `--pattern` flag:
 
 ```bash
-kick g module users                    # Uses kick.config.ts pattern (default: ddd)
+kick g module users                    # Uses kick.config.ts pattern (default: rest)
 kick g module users --pattern minimal  # Override pattern
 ```
 
@@ -95,22 +95,22 @@ Bare-bones controller. Perfect for prototyping.
 
 ```text
 src/modules/users/
-  index.ts
+  users.module.ts
   users.controller.ts
 ```
 
-### REST
+### REST (default)
 
 Flat structure with service and repository separation.
 
 ```text
 src/modules/users/
-  index.ts
+  users.module.ts
   users.constants.ts
   users.controller.ts
   users.service.ts
   users.repository.ts                # Interface + DI token
-  inmemory-users.repository.ts       # Default implementation
+  in-memory-users.repository.ts      # Default implementation (in-memory)
   dtos/
     create-users.dto.ts
     update-users.dto.ts
@@ -120,100 +120,28 @@ src/modules/users/
     users.repository.test.ts
 ```
 
-### DDD (Domain-Driven Design)
-
-Full vertical layering with domain, application, infrastructure, and presentation layers.
-
-```text
-src/modules/users/
-  index.ts
-  constants.ts
-  presentation/
-    users.controller.ts
-  application/
-    dtos/
-      create-users.dto.ts
-      update-users.dto.ts
-      users-response.dto.ts
-    use-cases/
-      create-users.use-case.ts
-      update-users.use-case.ts
-      get-users.use-case.ts
-      list-users.use-case.ts
-      delete-users.use-case.ts
-  domain/
-    entities/
-      users.entity.ts
-    value-objects/
-      users-id.vo.ts
-    repositories/
-      users.repository.ts            # Interface only
-    services/
-      users-domain.service.ts
-  infrastructure/
-    repositories/
-      inmemory-users.repository.ts    # Concrete implementation
-  __tests__/
-    users.controller.test.ts
-    users.repository.test.ts
-```
-
-### CQRS (Command Query Responsibility Segregation)
-
-Event-driven pattern with explicit commands, queries, and domain events.
-
-```text
-src/modules/users/
-  index.ts
-  users.constants.ts
-  users.controller.ts                 # Dispatches commands/queries
-  users.repository.ts                 # Interface
-  inmemory-users.repository.ts        # Implementation
-  dtos/
-    create-users.dto.ts
-    update-users.dto.ts
-    users-response.dto.ts
-  commands/
-    create-users.command.ts
-    update-users.command.ts
-    delete-users.command.ts
-  queries/
-    get-users.query.ts
-    list-users.query.ts
-  events/
-    users-created.event.ts
-    users-updated.event.ts
-    users-deleted.event.ts
-  __tests__/
-    users.controller.test.ts
-    users.repository.test.ts
-```
+With a custom repo name (e.g. `--repo postgres`) the implementation file becomes `users-postgres.repository.ts`, a generic stub with TODO markers you wire to your own client.
 
 ### Choosing a Pattern
 
-| Pattern     | Best for                                          | Complexity |
-| ----------- | ------------------------------------------------- | ---------- |
-| **Minimal** | Scripts, prototyping, learning                    | Low        |
-| **REST**    | Standard CRUD APIs, traditional layered apps      | Medium     |
-| **DDD**     | Complex business logic, domain-heavy applications | High       |
-| **CQRS**    | Event-driven systems, high-throughput writes      | High       |
+| Pattern     | Best for                                      | Complexity |
+| ----------- | --------------------------------------------- | ---------- |
+| **Minimal** | Scripts, prototyping, learning                | Low        |
+| **REST**    | Standard CRUD APIs, layered service/repo apps | Medium     |
 
-## Generated Module Index
+## Generated Module Declaration
 
 Each generated module uses `import.meta.glob` to eagerly load decorated classes. This ensures `@Service()` and `@Repository()` decorators fire and register in the DI container without manual imports:
 
 ```ts
-// DDD pattern — src/modules/users/index.ts
+// REST pattern — src/modules/users/users.module.ts
 import { defineModule } from '@forinda/kickjs'
-import { USERS_REPOSITORY } from './domain/repositories/users.repository'
-import { InMemoryUsersRepository } from './infrastructure/repositories/inmemory-users.repository'
-import { UsersController } from './presentation/users.controller'
+import { USERS_REPOSITORY } from './users.constants'
+import { InMemoryUsersRepository } from './in-memory-users.repository'
+import { UsersController } from './users.controller'
 
 // Eagerly load decorated classes so @Service()/@Repository() decorators register in the DI container
-import.meta.glob(
-  ['./domain/services/**/*.ts', './application/use-cases/**/*.ts', '!./**/*.test.ts'],
-  { eager: true },
-)
+import.meta.glob(['./**/*.service.ts', './**/*.repository.ts', '!./**/*.test.ts'], { eager: true })
 
 export const UsersModule = defineModule({
   name: 'UsersModule',
@@ -229,13 +157,6 @@ export const UsersModule = defineModule({
     },
   }),
 })
-```
-
-The REST pattern uses a broader glob since files are flat:
-
-```ts
-// REST pattern — eagerly loads services and repositories
-import.meta.glob(['./**/*.service.ts', './**/*.repository.ts', '!./**/*.test.ts'], { eager: true })
 ```
 
 You can also use plain side-effect imports instead of `import.meta.glob` if you prefer explicit imports.
@@ -259,12 +180,12 @@ Routes are mounted at `/{apiPrefix}/v{version}{path}`, so a module with `path: '
 
 ## Repository Options
 
-All patterns (except minimal) support swapping the repository implementation:
+The REST pattern supports swapping the repository implementation by name. `inmemory` is the only built-in (a working in-memory store); any other name scaffolds a generic custom-repository stub with TODO markers:
 
 ```bash
-kick g module users --repo inmemory    # Default — in-memory store
-kick g module users --repo prisma      # Prisma ORM
-kick g module users --repo drizzle     # Drizzle ORM
+kick g module users --repo inmemory    # Default — working in-memory store
+kick g module users --repo postgres    # Generic custom-repository stub
+kick g module users --repo mongo       # Generic custom-repository stub
 ```
 
 The module's `register()` method binds the interface token to the implementation. Swap implementations by changing the factory target — no other code changes needed:

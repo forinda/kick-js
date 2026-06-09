@@ -102,7 +102,7 @@ describe('kick g agents → .agents/ subfolder layout', () => {
 
 describe('generateKickJsSkillFiles — direct contract', () => {
   it('returns at least 9 skills, each with valid frontmatter', () => {
-    const skills = generateKickJsSkillFiles('demo', 'ddd', 'pnpm')
+    const skills = generateKickJsSkillFiles('demo', 'rest', 'pnpm')
     expect(skills.length).toBeGreaterThanOrEqual(9)
 
     for (const { slug, content } of skills) {
@@ -116,8 +116,8 @@ describe('generateKickJsSkillFiles — direct contract', () => {
   })
 
   it('interpolates the package manager into skill bodies that reference it', () => {
-    const pnpmSkills = generateKickJsSkillFiles('demo', 'ddd', 'pnpm')
-    const yarnSkills = generateKickJsSkillFiles('demo', 'ddd', 'yarn')
+    const pnpmSkills = generateKickJsSkillFiles('demo', 'rest', 'pnpm')
+    const yarnSkills = generateKickJsSkillFiles('demo', 'rest', 'yarn')
 
     const addModulePnpm = pnpmSkills.find((s) => s.slug === 'add-module')!
     const addModuleYarn = yarnSkills.find((s) => s.slug === 'add-module')!

@@ -86,7 +86,7 @@ export class InMemory${pascal}Repository implements I${pascal}Repository {
     const now = new Date().toISOString()
     const entity: ${pascal}ResponseDTO = {
       id: randomUUID(),
-      name: dto.name,
+      ...dto,
       createdAt: now,
       updatedAt: now,
     }
@@ -167,7 +167,7 @@ export class ${repoTypePascal}${pascal}Repository implements I${pascal}Repositor
     const now = new Date().toISOString()
     const entity: ${pascal}ResponseDTO = {
       id: randomUUID(),
-      name: dto.name,
+      ...dto,
       createdAt: now,
       updatedAt: now,
     }

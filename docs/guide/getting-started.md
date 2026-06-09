@@ -43,32 +43,26 @@ The dev server starts with Vite HMR — edit any file and the server rebuilds in
 pnpm kick g module users
 ```
 
-This generates a full DDD module under the configured `modules.dir` (default `src/modules`, override via `kick.config.ts`):
+This generates a flat REST module under the configured `modules.dir` (default `src/modules`, override via `kick.config.ts`):
 
 ```
 src/modules/users/
-  presentation/
-    users.controller.ts
-  domain/
-    entities/users.entity.ts
-    value-objects/users-id.vo.ts
-    repositories/users.repository.ts
-    services/users-domain.service.ts
-  application/
-    use-cases/
-      create-users.use-case.ts
-      list-users.use-case.ts
-      get-users.use-case.ts
-      update-users.use-case.ts
-      delete-users.use-case.ts
-    dtos/
-      create-users.dto.ts
-      update-users.dto.ts
-  infrastructure/
-    repositories/
-      in-memory-users.repository.ts
-  index.ts
+  users.module.ts          # defineModule() factory
+  users.controller.ts      # @Controller() — HTTP routes
+  users.service.ts         # @Service() — business logic
+  users.constants.ts       # query config
+  users.repository.ts      # repository interface + DI token
+  in-memory-users.repository.ts   # zero-dep impl (the `inmemory` default)
+  dtos/
+    create-users.dto.ts
+    update-users.dto.ts
+    users-response.dto.ts
+  __tests__/
+    users.controller.test.ts
+    users.repository.test.ts
 ```
+
+`rest` is the default pattern; pass `--template minimal` for just a controller + module. Need a real database? Pick a repo by name (`--repo postgres`) for a stub you wire yourself, or reach for the first-party [`@forinda/kickjs-db`](./database/) layer.
 
 ## Your First Controller
 

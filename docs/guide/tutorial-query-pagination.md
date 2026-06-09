@@ -1,10 +1,10 @@
-# Type-Safe Filtering, Sorting & Pagination with DrizzleQueryParamsConfig
+# Type-Safe Filtering, Sorting & Pagination
 
-_Part 3 of "Building a Task Management App with KickJS + Drizzle ORM"_
+_Part 3 of "Building a Task Management App with KickJS"_
 
 ---
 
-Every list endpoint in Vibed supports filtering, sorting, search, and pagination. This article covers how we built that with Drizzle ORM's Column objects, and how the approach evolved across three framework releases.
+Every list endpoint in Vibed supports filtering, sorting, search, and pagination. This article covers how we built that with the framework's ORM-agnostic query parser, and how the approach evolved across releases.
 
 ## The Problem
 
@@ -18,37 +18,28 @@ That's filtering by status AND priority, sorting by creation date, searching by 
 
 ## The Config Object
 
-Each module defines a `DrizzleQueryParamsConfig` that declares which columns can be filtered, sorted, and searched:
+Each module defines a query config that declares which fields can be filtered, sorted, and searched:
 
 ```typescript
 // src/modules/tasks/constants.ts
-import type { DrizzleQueryParamsConfig } from '@forinda/kickjs-drizzle'
-import { tasks } from '@/db/schema'
+import type { QueryFieldConfig } from '@forinda/kickjs'
 
-export const TASK_QUERY_CONFIG: DrizzleQueryParamsConfig = {
-  columns: {
-    projectId: tasks.projectId,
-    workspaceId: tasks.workspaceId,
-    status: tasks.status,
-    priority: tasks.priority,
-    reporterId: tasks.reporterId,
-  },
-  sortable: {
-    title: tasks.title,
-    status: tasks.status,
-    priority: tasks.priority,
-    dueDate: tasks.dueDate,
-    createdAt: tasks.createdAt,
-  },
-  searchColumns: [tasks.title, tasks.key],
+export const TASK_QUERY_CONFIG: QueryFieldConfig = {
+  filterable: ['projectId', 'workspaceId', 'status', 'priority', 'reporterId'],
+  sortable: ['title', 'status', 'priority', 'dueDate', 'createdAt'],
+  searchable: ['title', 'key'],
 }
 ```
 
-The keys in `columns` and `sortable` are the query parameter names. The values are actual Drizzle Column objects — not strings. This gives you:
+The entries in `filterable` and `sortable` are the query parameter names clients are allowed to use. Keeping them in one exported constant gives you:
 
-1. **Compile-time validation** — rename a column and TypeScript catches it
-2. **Automatic type coercion** — the adapter reads the column's `dataType` to coerce "true" → boolean, "42" → number
-3. **Single source of truth** — the same config drives Swagger docs, query parsing, and SQL generation
+1. **A single allow-list** — fields not declared here are silently dropped, so clients can't filter or sort on arbitrary columns
+2. **Single source of truth** — the same config drives Swagger docs, query parsing, and your query builder
+3. **Easy refactors** — change the allowed fields in one place
+
+::: tip Column-object configs
+If your data layer exposes column metadata (for example a SQL query builder), you can pass an object-based `ColumnQueryFieldConfig` instead — `ctx.qs()` and `ctx.paginate()` read the allowed field names from `Object.keys()`. See [Query Parsing](/guide/query-parsing#object-based-column-metadata).
+:::
 
 ## Using the Config
 
@@ -79,58 +70,58 @@ async execute(parsed: ParsedQuery, projectId?: string) {
 
 Use cases don't know about query parsing — they just forward the `ParsedQuery`.
 
-### Repository — SQL generation
+### Repository — turning the parsed query into results
 
 ```typescript
 async findPaginated(parsed: ParsedQuery, projectId?: string) {
-  const query = queryAdapter.buildFromColumns(parsed, {
+  const query = queryAdapter.build(parsed, {
     ...TASK_QUERY_CONFIG,
-    ...(projectId ? { baseCondition: eq(tasks.projectId, projectId) } : {}),
+    ...(projectId ? { baseCondition: { field: 'projectId', value: projectId } } : {}),
   })
 
-  const [data, countResult] = await Promise.all([
-    this.db.select().from(tasks)
-      .where(query.where)
-      .orderBy(...query.orderBy)
-      .limit(query.limit)
-      .offset(query.offset),
-    this.db.select({ count: sql<number>`count(*)` }).from(tasks)
-      .where(query.where),
+  const [data, total] = await Promise.all([
+    this.store.find({
+      where: query.where,
+      orderBy: query.orderBy,
+      limit: query.limit,
+      offset: query.offset,
+    }),
+    this.store.count({ where: query.where }),
   ])
 
-  return { data, total: countResult[0]?.count ?? 0 }
+  return { data, total }
 }
 ```
 
-`buildFromColumns()` converts the parsed query into Drizzle-compatible SQL fragments:
+`queryAdapter.build()` converts the parsed query into whatever shape your store understands:
 
-- `query.where` — a combined SQL condition (filters + search + baseCondition)
-- `query.orderBy` — an array of `asc()`/`desc()` calls
+- `query.where` — a combined condition (filters + search + baseCondition)
+- `query.orderBy` — the resolved sort directives
 - `query.limit` / `query.offset` — pagination values
 
 ## The baseCondition Pattern
 
-Many endpoints need scoping — tasks belong to a project, notifications belong to a user, activities belong to a workspace. The `baseCondition` parameter prepends an additional WHERE clause:
+Many endpoints need scoping — tasks belong to a project, notifications belong to a user, activities belong to a workspace. The `baseCondition` parameter prepends an additional constraint that the client can't override:
 
 ```typescript
 // Notifications — always scoped to the authenticated user
-const query = queryAdapter.buildFromColumns(parsed, {
+const query = queryAdapter.build(parsed, {
   ...NOTIFICATION_QUERY_CONFIG,
-  baseCondition: eq(notifications.recipientId, userId),
+  baseCondition: { field: 'recipientId', value: userId },
 })
 
 // Activities — scoped by workspace, optionally by project and task
-const conditions = [eq(activities.workspaceId, scope.workspaceId)]
-if (scope.projectId) conditions.push(eq(activities.projectId, scope.projectId))
-if (scope.taskId) conditions.push(eq(activities.taskId, scope.taskId))
+const conditions = [{ field: 'workspaceId', value: scope.workspaceId }]
+if (scope.projectId) conditions.push({ field: 'projectId', value: scope.projectId })
+if (scope.taskId) conditions.push({ field: 'taskId', value: scope.taskId })
 
-const query = queryAdapter.buildFromColumns(parsed, {
+const query = queryAdapter.build(parsed, {
   ...ACTIVITY_QUERY_CONFIG,
-  baseCondition: and(...conditions),
+  baseCondition: { and: conditions },
 })
 ```
 
-This composability is why Column objects matter — `baseCondition` takes a Drizzle SQL expression, not a string. It integrates naturally with `eq()`, `and()`, and any other Drizzle operator.
+This composability is why keeping the adapter at the repository layer matters — `baseCondition` is expressed in your store's own terms, so it integrates naturally with whatever query builder or in-memory filter you use.
 
 ## The Pagination Response
 
@@ -159,57 +150,39 @@ We started on KickJS v1.2.8 and hit several issues that were resolved across rel
 ### v1.2.8 — String-based configs only
 
 ```typescript
-// Old: strings, no type safety
-const queryAdapter = new DrizzleQueryAdapter({ eq, ne, ... })
+// Old: handed strings to the adapter, no shared config
 const query = queryAdapter.build(parsed, {
-  table: tasks,
-  searchColumns: ['title', 'key'],  // strings — no compile-time validation
+  searchColumns: ['title', 'key'],
 })
 ```
 
-### v1.2.9 — Column-based configs introduced
+### v1.2.9 — Shared config objects introduced
 
 ```typescript
-// New: Column objects with buildFromColumns()
-const query = queryAdapter.buildFromColumns(parsed, TASK_QUERY_CONFIG)
+// New: one exported config drives parsing and query building
+const query = queryAdapter.build(parsed, TASK_QUERY_CONFIG)
 ```
 
-But `@ApiQueryParams` and `ctx.paginate` still only accepted string-based configs. We had to write a bridge helper.
+But `@ApiQueryParams` and `ctx.paginate` still only accepted ad-hoc configs. We had to write a bridge helper.
 
-### v1.2.10 — Full Column support everywhere
+### v1.2.10 — Full config support everywhere
 
-`@ApiQueryParams` and `ctx.paginate` now accept `DrizzleQueryParamsConfig` directly. The bridge helper was deleted. One config object flows through all three layers without conversion.
+`@ApiQueryParams` and `ctx.paginate` now accept the same `QueryFieldConfig` directly. The bridge helper was deleted. One config object flows through all three layers without conversion.
 
 ## The Shared QueryAdapter
 
-Every repository needs the same `DrizzleQueryAdapter` instance. We extracted it to avoid 15-line import duplication:
+Every repository uses the same query adapter instance. We extracted it to avoid duplication across modules:
 
 ```typescript
 // src/shared/infrastructure/query-adapter.ts
-import { eq, ne, gt, gte, lt, lte, ilike, inArray, between, and, or, asc, desc } from 'drizzle-orm'
-import { DrizzleQueryAdapter } from '@forinda/kickjs-drizzle'
+import { createQueryAdapter } from '@forinda/kickjs'
 
-export const queryAdapter = new DrizzleQueryAdapter({
-  eq,
-  ne,
-  gt,
-  gte,
-  lt,
-  lte,
-  ilike,
-  inArray,
-  between,
-  and,
-  or,
-  asc,
-  desc,
-})
+export const queryAdapter = createQueryAdapter()
 ```
 
-Repositories import it and only add the operators they use directly in their methods:
+Repositories import the shared adapter and only add the store-specific helpers they use directly in their methods:
 
 ```typescript
-import { eq, sql } from 'drizzle-orm'
 import { queryAdapter } from '@/shared/infrastructure/query-adapter'
 ```
 
