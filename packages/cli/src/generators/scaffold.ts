@@ -1,7 +1,16 @@
 import { join } from 'node:path'
 import { writeFileSafe } from '../utils/fs'
-import { toPascalCase, toKebabCase, toCamelCase, pluralize, pluralizePascal } from '../utils/naming'
+import { toPascalCase, toKebabCase, pluralize, pluralizePascal } from '../utils/naming'
 import { autoRegisterModule } from './module'
+import {
+  generateRestModuleIndex,
+  generateRestController,
+  generateRestConstants,
+  generateRestService,
+  generateRepositoryInterface,
+  generateInMemoryRepository,
+  generateCustomRepository,
+} from './templates'
 
 // ── Field Parsing ───────────────────────────────────────────────────────
 
@@ -144,8 +153,6 @@ export async function generateScaffold(options: ScaffoldOptions): Promise<string
     name,
     fields,
     modulesDir,
-    noEntity,
-    noTests: _noTests,
     repo = 'inmemory',
     tokenScope = 'app',
     style = 'define',
@@ -153,7 +160,6 @@ export async function generateScaffold(options: ScaffoldOptions): Promise<string
   const shouldPluralize = options.pluralize !== false
   const kebab = toKebabCase(name)
   const pascal = toPascalCase(name)
-  const _camel = toCamelCase(name)
   const plural = shouldPluralize ? pluralize(kebab) : kebab
   const pluralPascal = shouldPluralize ? pluralizePascal(pascal) : pascal
   const moduleDir = join(modulesDir, plural)
@@ -166,53 +172,49 @@ export async function generateScaffold(options: ScaffoldOptions): Promise<string
     files.push(fullPath)
   }
 
-  // ── Module file (named `<kebab>.module.ts` so Vite's module-discovery plugin picks it up)
-  await write(`${kebab}.module.ts`, genModuleIndex(pascal, kebab, plural, style))
+  // Flat REST layout — identical structure to `kick g module` (the ddd/cqrs
+  // layouts were removed), but the DTOs are generated from the supplied
+  // `<field>:<type>` definitions instead of empty stubs. The boilerplate
+  // (module/controller/service/repository) is shared with the REST pattern
+  // so the field-aware DTOs slot in by their conventional export names.
 
-  // ── Constants
-  await write('constants.ts', genConstants(pascal, fields))
+  // Module file (named `<kebab>.module.ts` so Vite's discovery picks it up)
+  await write(`${kebab}.module.ts`, generateRestModuleIndex({ pascal, kebab, plural, repo, style }))
 
-  // ── Controller
+  // Constants (query config)
+  await write(`${kebab}.constants.ts`, generateRestConstants({ pascal, kebab }))
+
+  // Controller + service (generic CRUD boilerplate)
   await write(
-    `presentation/${kebab}.controller.ts`,
-    genController(pascal, kebab, plural, pluralPascal),
+    `${kebab}.controller.ts`,
+    generateRestController({ pascal, kebab, plural, pluralPascal }),
   )
+  await write(`${kebab}.service.ts`, generateRestService({ pascal, kebab }))
 
-  // ── DTOs
-  await write(`application/dtos/create-${kebab}.dto.ts`, genCreateDTO(pascal, fields))
-  await write(`application/dtos/update-${kebab}.dto.ts`, genUpdateDTO(pascal, fields))
-  await write(`application/dtos/${kebab}-response.dto.ts`, genResponseDTO(pascal, fields))
+  // Field-aware DTOs — the scaffold value-add
+  await write(`dtos/create-${kebab}.dto.ts`, genCreateDTO(pascal, fields))
+  await write(`dtos/update-${kebab}.dto.ts`, genUpdateDTO(pascal, fields))
+  await write(`dtos/${kebab}-response.dto.ts`, genResponseDTO(pascal, fields))
 
-  // ── Use Cases
-  const useCases = genUseCases(pascal, kebab, plural, pluralPascal)
-  for (const uc of useCases) {
-    await write(`application/use-cases/${uc.file}`, uc.content)
-  }
-
-  // ── Domain: Repository Interface
+  // Repository interface + implementation
   await write(
-    `domain/repositories/${kebab}.repository.ts`,
-    genRepositoryInterface(pascal, kebab, tokenScope),
+    `${kebab}.repository.ts`,
+    generateRepositoryInterface({ pascal, kebab, dtoPrefix: './dtos', tokenScope }),
   )
+  const isInMemory = repo === 'inmemory'
+  const repoFile = isInMemory ? `in-memory-${kebab}` : `${toKebabCase(repo)}-${kebab}`
+  const repoImpl = isInMemory
+    ? generateInMemoryRepository({ pascal, kebab, repoPrefix: '.', dtoPrefix: './dtos' })
+    : generateCustomRepository({
+        pascal,
+        kebab,
+        repoType: repo,
+        repoPrefix: '.',
+        dtoPrefix: './dtos',
+      })
+  await write(`${repoFile}.repository.ts`, repoImpl)
 
-  // ── Domain: Service
-  await write(`domain/services/${kebab}-domain.service.ts`, genDomainService(pascal, kebab))
-
-  // ── Infrastructure: Repository
-  if (repo === 'inmemory') {
-    await write(
-      `infrastructure/repositories/in-memory-${kebab}.repository.ts`,
-      genInMemoryRepository(pascal, kebab, fields),
-    )
-  }
-
-  // ── Entity & Value Objects
-  if (!noEntity) {
-    await write(`domain/entities/${kebab}.entity.ts`, genEntity(pascal, kebab, fields))
-    await write(`domain/value-objects/${kebab}-id.vo.ts`, genValueObject(pascal))
-  }
-
-  // ── Auto-register in modules index
+  // Auto-register in modules index
   await autoRegisterModule(modulesDir, pascal, plural, kebab, style)
 
   return files
@@ -262,454 +264,3 @@ ${tsFields}
 }
 `
 }
-
-function genConstants(pascal: string, fields: FieldDef[]): string {
-  const stringFields = fields.filter((f) => f.tsType === 'string').map((f) => `'${f.name}'`)
-  const _numberFields = fields.filter((f) => f.tsType === 'number').map((f) => `'${f.name}'`)
-  const allFieldNames = fields.map((f) => `'${f.name}'`)
-
-  const filterable = [...allFieldNames].join(', ')
-  const sortable = [...allFieldNames, "'createdAt'", "'updatedAt'"].join(', ')
-  const searchable = stringFields.length > 0 ? stringFields.join(', ') : "'name'"
-
-  return `import type { ApiQueryParamsConfig } from '@forinda/kickjs'
-
-export const ${pascal.toUpperCase()}_QUERY_CONFIG: ApiQueryParamsConfig = {
-  filterable: [${filterable}],
-  sortable: [${sortable}],
-  searchable: [${searchable}],
-}
-`
-}
-
-function genInMemoryRepository(pascal: string, kebab: string, fields: FieldDef[]): string {
-  const fieldAssignments = fields.map((f) => `      ${f.name}: dto.${f.name},`).join('\n')
-  const fieldSpread = '...dto'
-
-  return `import { randomUUID } from 'node:crypto'
-import { Repository, HttpException } from '@forinda/kickjs'
-import type { ParsedQuery } from '@forinda/kickjs'
-import type { I${pascal}Repository } from '../../domain/repositories/${kebab}.repository'
-import type { ${pascal}ResponseDTO } from '../../application/dtos/${kebab}-response.dto'
-import type { Create${pascal}DTO } from '../../application/dtos/create-${kebab}.dto'
-import type { Update${pascal}DTO } from '../../application/dtos/update-${kebab}.dto'
-
-@Repository()
-export class InMemory${pascal}Repository implements I${pascal}Repository {
-  private store = new Map<string, ${pascal}ResponseDTO>()
-
-  async findById(id: string): Promise<${pascal}ResponseDTO | null> {
-    return this.store.get(id) ?? null
-  }
-
-  async findAll(): Promise<${pascal}ResponseDTO[]> {
-    return Array.from(this.store.values())
-  }
-
-  async findPaginated(parsed: ParsedQuery): Promise<{ data: ${pascal}ResponseDTO[]; total: number }> {
-    const all = Array.from(this.store.values())
-    const data = all.slice(parsed.pagination.offset, parsed.pagination.offset + parsed.pagination.limit)
-    return { data, total: all.length }
-  }
-
-  async create(dto: Create${pascal}DTO): Promise<${pascal}ResponseDTO> {
-    const now = new Date().toISOString()
-    const entity: ${pascal}ResponseDTO = {
-      id: randomUUID(),
-${fieldAssignments}
-      createdAt: now,
-      updatedAt: now,
-    }
-    this.store.set(entity.id, entity)
-    return entity
-  }
-
-  async update(id: string, dto: Update${pascal}DTO): Promise<${pascal}ResponseDTO> {
-    const existing = this.store.get(id)
-    if (!existing) throw HttpException.notFound('${pascal} not found')
-    const updated = { ...existing, ${fieldSpread}, updatedAt: new Date().toISOString() }
-    this.store.set(id, updated)
-    return updated
-  }
-
-  async delete(id: string): Promise<void> {
-    if (!this.store.has(id)) throw HttpException.notFound('${pascal} not found')
-    this.store.delete(id)
-  }
-}
-`
-}
-
-function genEntity(pascal: string, kebab: string, fields: FieldDef[]): string {
-  const propsInterface = fields
-    .map((f) => `  ${f.name}${f.optional ? '?' : ''}: ${f.tsType}`)
-    .join('\n')
-  const createParams = fields
-    .filter((f) => !f.optional)
-    .map((f) => `${f.name}: ${f.tsType}`)
-    .join('; ')
-  const createAssignments = fields
-    .filter((f) => !f.optional)
-    .map((f) => `      ${f.name}: params.${f.name},`)
-    .join('\n')
-  const getters = fields
-    .map(
-      (f) => `  get ${f.name}(): ${f.tsType}${f.optional ? ' | undefined' : ''} {
-    return this.props.${f.name}
-  }`,
-    )
-    .join('\n')
-  const toJsonFields = fields.map((f) => `      ${f.name}: this.props.${f.name},`).join('\n')
-
-  return `import { ${pascal}Id } from '../value-objects/${kebab}-id.vo'
-
-interface ${pascal}Props {
-  id: ${pascal}Id
-${propsInterface}
-  createdAt: Date
-  updatedAt: Date
-}
-
-export class ${pascal} {
-  private constructor(private props: ${pascal}Props) {}
-
-  static create(params: { ${createParams} }): ${pascal} {
-    const now = new Date()
-    return new ${pascal}({
-      id: ${pascal}Id.create(),
-${createAssignments}
-      createdAt: now,
-      updatedAt: now,
-    })
-  }
-
-  static reconstitute(props: ${pascal}Props): ${pascal} {
-    return new ${pascal}(props)
-  }
-
-  get id(): ${pascal}Id { return this.props.id }
-${getters}
-  get createdAt(): Date { return this.props.createdAt }
-  get updatedAt(): Date { return this.props.updatedAt }
-
-  toJSON() {
-    return {
-      id: this.props.id.toString(),
-${toJsonFields}
-      createdAt: this.props.createdAt.toISOString(),
-      updatedAt: this.props.updatedAt.toISOString(),
-    }
-  }
-}
-`
-}
-
-function genValueObject(pascal: string): string {
-  return `import { randomUUID } from 'node:crypto'
-
-export class ${pascal}Id {
-  private constructor(private readonly value: string) {}
-
-  static create(): ${pascal}Id { return new ${pascal}Id(randomUUID()) }
-
-  static from(id: string): ${pascal}Id {
-    if (!id || id.trim().length === 0) throw new Error('${pascal}Id cannot be empty')
-    return new ${pascal}Id(id)
-  }
-
-  toString(): string { return this.value }
-  equals(other: ${pascal}Id): boolean { return this.value === other.value }
-}
-`
-}
-
-// These reuse the same patterns as the existing module generator
-
-function genModuleIndex(
-  pascal: string,
-  kebab: string,
-  plural: string,
-  style: 'define' | 'class' = 'define',
-): string {
-  const repoImports = `import { ${pascal}Controller } from './presentation/${kebab}.controller'
-import { ${pascal.toUpperCase()}_REPOSITORY } from './domain/repositories/${kebab}.repository'
-import { InMemory${pascal}Repository } from './infrastructure/repositories/in-memory-${kebab}.repository'
-
-// Eagerly load decorated classes so @Service()/@Repository() decorators
-// register in the DI container before the application bootstraps.
-import.meta.glob(
-  ['./domain/services/**/*.ts', './application/use-cases/**/*.ts', '!./**/*.test.ts'],
-  { eager: true },
-)`
-
-  const routesDoc = `    /**
-     * Declare HTTP routes for this module. Return value shape:
-     *
-     *   - \`path\`        — URL prefix for this route set.
-     *   - \`controller\`  — Controller class (also drives OpenAPI).
-     *   - \`version\`     — Optional. Overrides the app-wide API version.
-     *
-     * Return an array to mount multiple route sets:
-     *
-     *   return [
-     *     { path: '/${plural}', version: 1, controller: ${pascal}V1Controller },
-     *     { path: '/${plural}', version: 2, controller: ${pascal}V2Controller },
-     *   ]
-     */`
-
-  if (style === 'class') {
-    return `import { Container, type AppModule, type ModuleRoutes } from '@forinda/kickjs'
-${repoImports}
-
-export class ${pascal}Module implements AppModule {
-  /**
-   * Bind the repository token to its concrete implementation.
-   * Decorator-managed classes (@Service, @Controller, @Repository) are
-   * registered automatically — only token-to-impl bindings need to live here.
-   */
-  register(container: Container): void {
-    container.registerFactory(
-      ${pascal.toUpperCase()}_REPOSITORY,
-      () => container.resolve(InMemory${pascal}Repository),
-    )
-  }
-
-${routesDoc.replace(/^ {4}/gm, '  ').replace(/^ {6}/gm, '    ')}
-  routes(): ModuleRoutes {
-    return {
-      path: '/${plural}',
-      controller: ${pascal}Controller,
-    }
-  }
-}
-`
-  }
-
-  return `import { defineModule } from '@forinda/kickjs'
-${repoImports}
-
-export const ${pascal}Module = defineModule({
-  name: '${pascal}Module',
-  build: () => ({
-    /**
-     * Bind the repository token to its concrete implementation.
-     * Decorator-managed classes (@Service, @Controller, @Repository) are
-     * registered automatically — only token-to-impl bindings need to live here.
-     */
-    register(container) {
-      container.registerFactory(
-        ${pascal.toUpperCase()}_REPOSITORY,
-        () => container.resolve(InMemory${pascal}Repository),
-      )
-    },
-
-${routesDoc}
-    routes() {
-      return {
-        path: '/${plural}',
-        controller: ${pascal}Controller,
-      }
-    },
-  }),
-})
-`
-}
-
-function genController(
-  pascal: string,
-  kebab: string,
-  plural: string,
-  pluralPascal: string,
-): string {
-  return `import { Controller, Get, Post, Put, Delete, Autowired, ApiQueryParams, type Ctx } from '@forinda/kickjs'
-import { ApiTags } from '@forinda/kickjs-swagger'
-import { Create${pascal}UseCase } from '../application/use-cases/create-${kebab}.use-case'
-import { Get${pascal}UseCase } from '../application/use-cases/get-${kebab}.use-case'
-import { List${pluralPascal}UseCase } from '../application/use-cases/list-${plural}.use-case'
-import { Update${pascal}UseCase } from '../application/use-cases/update-${kebab}.use-case'
-import { Delete${pascal}UseCase } from '../application/use-cases/delete-${kebab}.use-case'
-import { create${pascal}Schema } from '../application/dtos/create-${kebab}.dto'
-import { update${pascal}Schema } from '../application/dtos/update-${kebab}.dto'
-import { ${pascal.toUpperCase()}_QUERY_CONFIG } from '../constants'
-
-// Each handler annotates its \`ctx\` with \`Ctx<KickRoutes.${pascal}Controller['<method>']>\`
-// so \`ctx.params\`, \`ctx.body\`, and \`ctx.query\` are typed end-to-end.
-// The \`KickRoutes\` namespace is generated by \`kick typegen\` (auto-run on
-// \`kick dev\`) — see https://forinda.github.io/kick-js/guide/typegen.
-
-@Controller()
-export class ${pascal}Controller {
-  @Autowired() private readonly create${pascal}UseCase!: Create${pascal}UseCase
-  @Autowired() private readonly get${pascal}UseCase!: Get${pascal}UseCase
-  @Autowired() private readonly list${pluralPascal}UseCase!: List${pluralPascal}UseCase
-  @Autowired() private readonly update${pascal}UseCase!: Update${pascal}UseCase
-  @Autowired() private readonly delete${pascal}UseCase!: Delete${pascal}UseCase
-
-  @Get('/')
-  @ApiTags('${pascal}')
-  @ApiQueryParams(${pascal.toUpperCase()}_QUERY_CONFIG)
-  async list(ctx: Ctx<KickRoutes.${pascal}Controller['list']>) {
-    return ctx.paginate(
-      (parsed) => this.list${pluralPascal}UseCase.execute(parsed),
-      ${pascal.toUpperCase()}_QUERY_CONFIG,
-    )
-  }
-
-  @Get('/:id')
-  @ApiTags('${pascal}')
-  async getById(ctx: Ctx<KickRoutes.${pascal}Controller['getById']>) {
-    const result = await this.get${pascal}UseCase.execute(ctx.params.id)
-    if (!result) return ctx.notFound('${pascal} not found')
-    ctx.json(result)
-  }
-
-  @Post('/', { body: create${pascal}Schema, name: 'Create${pascal}' })
-  @ApiTags('${pascal}')
-  async create(ctx: Ctx<KickRoutes.${pascal}Controller['create']>) {
-    const result = await this.create${pascal}UseCase.execute(ctx.body)
-    ctx.created(result)
-  }
-
-  @Put('/:id', { body: update${pascal}Schema, name: 'Update${pascal}' })
-  @ApiTags('${pascal}')
-  async update(ctx: Ctx<KickRoutes.${pascal}Controller['update']>) {
-    const result = await this.update${pascal}UseCase.execute(ctx.params.id, ctx.body)
-    ctx.json(result)
-  }
-
-  @Delete('/:id')
-  @ApiTags('${pascal}')
-  async remove(ctx: Ctx<KickRoutes.${pascal}Controller['remove']>) {
-    await this.delete${pascal}UseCase.execute(ctx.params.id)
-    ctx.noContent()
-  }
-}
-`
-}
-
-function genRepositoryInterface(pascal: string, kebab: string, tokenScope: string): string {
-  return `import { createToken } from '@forinda/kickjs'
-import type { ${pascal}ResponseDTO } from '../../application/dtos/${kebab}-response.dto'
-import type { Create${pascal}DTO } from '../../application/dtos/create-${kebab}.dto'
-import type { Update${pascal}DTO } from '../../application/dtos/update-${kebab}.dto'
-import type { ParsedQuery } from '@forinda/kickjs'
-
-export interface I${pascal}Repository {
-  findById(id: string): Promise<${pascal}ResponseDTO | null>
-  findAll(): Promise<${pascal}ResponseDTO[]>
-  findPaginated(parsed: ParsedQuery): Promise<{ data: ${pascal}ResponseDTO[]; total: number }>
-  create(dto: Create${pascal}DTO): Promise<${pascal}ResponseDTO>
-  update(id: string, dto: Update${pascal}DTO): Promise<${pascal}ResponseDTO>
-  delete(id: string): Promise<void>
-}
-
-/**
- * Collision-safe DI token bound to \`I${pascal}Repository\`.
- * \`container.resolve(${pascal.toUpperCase()}_REPOSITORY)\` and
- * \`@Inject(${pascal.toUpperCase()}_REPOSITORY)\` both return the typed
- * interface — no manual generic, no \`any\` cast.
- *
- * The \`'${tokenScope}/'\` prefix matches the project scope so
- * \`kick-lint\`'s \`token-reserved-prefix\` rule never fires —
- * adopters must NOT use the reserved \`'kick/'\` namespace.
- */
-export const ${pascal.toUpperCase()}_REPOSITORY = createToken<I${pascal}Repository>('${tokenScope}/${pascal}/repository')
-`
-}
-
-function genDomainService(pascal: string, kebab: string): string {
-  return `import { Service, Inject, HttpException } from '@forinda/kickjs'
-import { ${pascal.toUpperCase()}_REPOSITORY, type I${pascal}Repository } from '../repositories/${kebab}.repository'
-
-@Service()
-export class ${pascal}DomainService {
-  constructor(
-    @Inject(${pascal.toUpperCase()}_REPOSITORY) private readonly repo: I${pascal}Repository,
-  ) {}
-
-  async ensureExists(id: string): Promise<void> {
-    const entity = await this.repo.findById(id)
-    if (!entity) throw HttpException.notFound('${pascal} not found')
-  }
-}
-`
-}
-
-function genUseCases(
-  pascal: string,
-  kebab: string,
-  plural: string,
-  pluralPascal: string,
-): Array<{ file: string; content: string }> {
-  return [
-    {
-      file: `create-${kebab}.use-case.ts`,
-      content: `import { Service, Inject } from '@forinda/kickjs'
-import { ${pascal.toUpperCase()}_REPOSITORY, type I${pascal}Repository } from '../../domain/repositories/${kebab}.repository'
-import type { Create${pascal}DTO } from '../dtos/create-${kebab}.dto'
-
-@Service()
-export class Create${pascal}UseCase {
-  constructor(@Inject(${pascal.toUpperCase()}_REPOSITORY) private repo: I${pascal}Repository) {}
-  async execute(dto: Create${pascal}DTO) { return this.repo.create(dto) }
-}
-`,
-    },
-    {
-      file: `get-${kebab}.use-case.ts`,
-      content: `import { Service, Inject } from '@forinda/kickjs'
-import { ${pascal.toUpperCase()}_REPOSITORY, type I${pascal}Repository } from '../../domain/repositories/${kebab}.repository'
-
-@Service()
-export class Get${pascal}UseCase {
-  constructor(@Inject(${pascal.toUpperCase()}_REPOSITORY) private repo: I${pascal}Repository) {}
-  async execute(id: string) { return this.repo.findById(id) }
-}
-`,
-    },
-    {
-      file: `list-${plural}.use-case.ts`,
-      content: `import { Service, Inject } from '@forinda/kickjs'
-import type { ParsedQuery } from '@forinda/kickjs'
-import { ${pascal.toUpperCase()}_REPOSITORY, type I${pascal}Repository } from '../../domain/repositories/${kebab}.repository'
-
-@Service()
-export class List${pluralPascal}UseCase {
-  constructor(@Inject(${pascal.toUpperCase()}_REPOSITORY) private repo: I${pascal}Repository) {}
-  async execute(parsed: ParsedQuery) { return this.repo.findPaginated(parsed) }
-}
-`,
-    },
-    {
-      file: `update-${kebab}.use-case.ts`,
-      content: `import { Service, Inject } from '@forinda/kickjs'
-import { ${pascal.toUpperCase()}_REPOSITORY, type I${pascal}Repository } from '../../domain/repositories/${kebab}.repository'
-import type { Update${pascal}DTO } from '../dtos/update-${kebab}.dto'
-
-@Service()
-export class Update${pascal}UseCase {
-  constructor(@Inject(${pascal.toUpperCase()}_REPOSITORY) private repo: I${pascal}Repository) {}
-  async execute(id: string, dto: Update${pascal}DTO) { return this.repo.update(id, dto) }
-}
-`,
-    },
-    {
-      file: `delete-${kebab}.use-case.ts`,
-      content: `import { Service, Inject } from '@forinda/kickjs'
-import { ${pascal.toUpperCase()}_REPOSITORY, type I${pascal}Repository } from '../../domain/repositories/${kebab}.repository'
-
-@Service()
-export class Delete${pascal}UseCase {
-  constructor(@Inject(${pascal.toUpperCase()}_REPOSITORY) private repo: I${pascal}Repository) {}
-  async execute(id: string) { return this.repo.delete(id) }
-}
-`,
-    },
-  ]
-}
-
-// `autoRegisterModule` is imported from `./module` — single source
-// of truth for registry mutation. Pre-consolidation, scaffold and
-// the orchestrator each had a copy that drifted (the regex bug
-// CodeRabbit caught on PR #196 only existed on the scaffold side
-// because the two had stopped tracking each other).

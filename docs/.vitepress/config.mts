@@ -86,6 +86,17 @@ const guideSidebar = [
     ],
   },
   {
+    text: 'Database',
+    items: [
+      { text: 'Overview & Getting Started', link: '/guide/database/' },
+      { text: 'Schema', link: '/guide/database/schema' },
+      { text: 'Queries', link: '/guide/database/queries' },
+      { text: 'Migrations', link: '/guide/database/migrations' },
+      { text: 'Drivers', link: '/guide/database/drivers' },
+      { text: 'Repositories', link: '/guide/database/repositories' },
+    ],
+  },
+  {
     text: 'Database (kickjs-db)',
     items: [
       { text: 'Schema Types', link: '/guide/db-schema-types' },
@@ -104,7 +115,7 @@ const guideSidebar = [
     text: 'Tutorials: Building a Jira Clone',
     collapsed: false,
     items: [
-      { text: 'DDD Module Architecture', link: '/guide/tutorial-ddd-architecture' },
+      { text: 'REST Module Architecture', link: '/guide/tutorial-ddd-architecture' },
       { text: 'Query Parsing & Pagination', link: '/guide/tutorial-query-pagination' },
       { text: 'Real-Time (SSE & WebSocket)', link: '/guide/tutorial-realtime' },
       { text: 'Background Jobs & Cron', link: '/guide/tutorial-background-jobs' },
@@ -216,9 +227,9 @@ export default defineVersionedConfig(
       versionSwitcher: false,
       nav: [
         { text: 'Guide', link: '/guide/getting-started' },
+        { text: 'Database', link: '/guide/database/' },
         { text: 'API', link: '/api/core' },
         { text: 'Schemas', link: '/schemas/' },
-        { text: 'Examples', link: '/examples/' },
         { component: 'VersionSwitcher' },
       ],
 

@@ -11,7 +11,7 @@ import {
 } from './templates/project-docs'
 import { loadKickConfig } from '../config'
 
-type ProjectTemplate = 'rest' | 'ddd' | 'cqrs' | 'minimal'
+type ProjectTemplate = 'rest' | 'minimal'
 
 /**
  * Subdirectory (relative to the project root) where every shared
@@ -53,7 +53,7 @@ export interface GenerateAgentDocsOptions {
   force?: boolean
 }
 
-const VALID_TEMPLATES = new Set<ProjectTemplate>(['rest', 'ddd', 'cqrs', 'minimal'])
+const VALID_TEMPLATES = new Set<ProjectTemplate>(['rest', 'minimal'])
 
 function detectName(outDir: string, override?: string): string {
   if (override) return override
@@ -91,7 +91,7 @@ async function detectTemplate(
   } catch {
     // ignore
   }
-  return 'ddd'
+  return 'rest'
 }
 
 export async function generateAgentDocs(options: GenerateAgentDocsOptions): Promise<string[]> {

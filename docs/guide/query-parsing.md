@@ -100,15 +100,15 @@ const config = {
 }
 ```
 
-### Column-object-based (Drizzle)
+### Object-based (column metadata)
 
-If you use `@forinda/kickjs-drizzle`, you can pass a `DrizzleQueryParamsConfig` directly — `ctx.qs()` and `ctx.paginate()` will extract field names from `Object.keys()` automatically:
+Adapters can also accept a richer config whose `columns`/`sortable` keys map to backend-specific column metadata instead of plain strings. `ctx.qs()` and `ctx.paginate()` extract the allowed field names from `Object.keys()` automatically, so the same object drives both the parser and your query builder:
 
 ```ts
-import type { DrizzleQueryParamsConfig } from '@forinda/kickjs-drizzle'
+import type { ColumnQueryFieldConfig } from '@forinda/kickjs'
 import { tasks } from '@/db/schema'
 
-export const TASK_QUERY_CONFIG: DrizzleQueryParamsConfig = {
+export const TASK_QUERY_CONFIG: ColumnQueryFieldConfig = {
   columns: {
     status: tasks.status,
     priority: tasks.priority,
@@ -175,18 +175,18 @@ To connect parsed queries to your ORM, implement the `QueryBuilderAdapter` inter
 ```ts
 import { QueryBuilderAdapter, ParsedQuery } from '@forinda/kickjs'
 
-class DrizzleQueryAdapter implements QueryBuilderAdapter<DrizzleResult, DrizzleConfig> {
-  readonly name = 'drizzle'
+class SqlQueryAdapter implements QueryBuilderAdapter<SqlResult, SqlConfig> {
+  readonly name = 'sql'
 
-  build(parsed: ParsedQuery, config: DrizzleConfig): DrizzleResult {
-    // Convert filters to Drizzle SQL conditions
-    // Convert sort to Drizzle orderBy clauses
+  build(parsed: ParsedQuery, config: SqlConfig): SqlResult {
+    // Convert filters to WHERE conditions
+    // Convert sort to ORDER BY clauses
     return { where, orderBy, limit: parsed.pagination.limit, offset: parsed.pagination.offset }
   }
 }
 ```
 
-The adapter pattern keeps the query parser ORM-agnostic. You can write adapters for Drizzle, Prisma, Sequelize, or any other query builder.
+The adapter pattern keeps the query parser ORM-agnostic. You can write adapters for `@forinda/kickjs-db`, raw SQL, an in-memory store, or any other query builder.
 
 ## Paginated Responses with ctx.paginate()
 

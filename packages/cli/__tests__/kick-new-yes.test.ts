@@ -90,14 +90,15 @@ describe('kick new --yes (non-interactive)', () => {
       '--template',
       'rest',
       '--repo',
-      'drizzle',
+      'postgres',
       '--no-install',
       '--no-git',
     ])
     expect(result.exitCode).toBe(0)
     const config = readFileSync(join(cwd, 'my-api', 'kick.config.ts'), 'utf-8')
     expect(config).toContain(`pattern: 'rest'`)
-    expect(config).toContain(`repo: 'drizzle'`)
+    // Any non-inmemory repo name is emitted as a custom `{ name }` repo.
+    expect(config).toContain(`repo: { name: 'postgres' }`)
   })
 
   it('aborts cleanly when target dir is non-empty and --force is missing', () => {

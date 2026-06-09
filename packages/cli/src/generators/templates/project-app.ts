@@ -1,4 +1,4 @@
-type ProjectTemplate = 'rest' | 'ddd' | 'cqrs' | 'minimal'
+type ProjectTemplate = 'rest' | 'minimal'
 
 /**
  * Generate src/index.ts entry file with template-specific bootstrap.
@@ -14,44 +14,6 @@ export function generateEntryFile(
   packages: string[] = [],
 ): string {
   switch (template) {
-    case 'cqrs': {
-      // Build adapters based on user-selected packages
-      const cqrsImports: string[] = []
-      const cqrsAdapters: string[] = []
-
-      if (packages.includes('devtools')) {
-        cqrsImports.push(`import { DevToolsAdapter } from '@forinda/kickjs-devtools'`)
-        cqrsAdapters.push(`    DevToolsAdapter(),`)
-      }
-      if (packages.includes('swagger')) {
-        cqrsImports.push(`import { SwaggerAdapter } from '@forinda/kickjs-swagger'`)
-        cqrsAdapters.push(
-          `    SwaggerAdapter({\n      info: { title: '${name}', version: '${version}' },\n    }),`,
-        )
-      }
-      const cqrsImportsBlock = cqrsImports.length ? cqrsImports.join('\n') + '\n' : ''
-      const cqrsAdaptersBlock = cqrsImports.length
-        ? `\n  adapters: [\n${cqrsAdapters.join('\n')}\n    // Uncomment for WebSocket support:\n    // WsAdapter(),\n    // Uncomment when Redis is available:\n    // QueueAdapter({\n    //   provider: new BullMQProvider({ host: 'localhost', port: 6379 }),\n    // }),\n  ],`
-        : `\n  adapters: [\n    // Uncomment for WebSocket support:\n    // WsAdapter(),\n    // Uncomment when Redis is available:\n    // QueueAdapter({\n    //   provider: new BullMQProvider({ host: 'localhost', port: 6379 }),\n    // }),\n  ],`
-
-      return `import 'reflect-metadata'
-// Side-effect import — registers the extended env schema with kickjs
-// **before** any controller / service / @Value gets resolved. Without
-// this line ConfigService.get('YOUR_KEY') returns undefined because the
-// cached schema would still be the base shape. See guide/configuration.
-import './config'
-import { bootstrap } from '@forinda/kickjs'
-// import { WsAdapter } from '@forinda/kickjs-ws'
-// import { QueueAdapter, BullMQProvider } from '@forinda/kickjs-queue'
-${cqrsImportsBlock}import { modules } from './modules'
-
-// Export the app for the Vite plugin (dev mode)
-export const app = await bootstrap({
-  modules,${cqrsAdaptersBlock}
-})
-`
-    }
-
     case 'minimal': {
       const imports: string[] = []
       const adapters: string[] = []
@@ -81,7 +43,6 @@ export const app = await bootstrap({ modules${adaptersBlock} })
 `
     }
 
-    case 'ddd':
     case 'rest':
     default: {
       // Build adapters based on user-selected packages
@@ -382,10 +343,9 @@ export function generateKickConfig(
   defaultRepo: string = 'inmemory',
   packageManager: 'pnpm' | 'npm' | 'yarn' | 'bun' = 'pnpm',
 ): string {
-  const builtinRepos = ['drizzle', 'inmemory', 'prisma']
-  const repoValue = builtinRepos.includes(defaultRepo)
-    ? `'${defaultRepo}'`
-    : `{ name: '${defaultRepo}' }`
+  // `inmemory` is the only built-in; every other name (incl. the
+  // deprecated prisma/drizzle) is emitted as a `{ name }` custom repo.
+  const repoValue = defaultRepo === 'inmemory' ? `'inmemory'` : `{ name: '${defaultRepo}' }`
 
   return `import { defineConfig } from '@forinda/kickjs-cli'
 

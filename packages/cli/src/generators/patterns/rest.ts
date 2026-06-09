@@ -11,25 +11,12 @@ import {
   generateRepositoryInterface,
   generateInMemoryRepository,
   generateCustomRepository,
-  generateDrizzleRepository,
-  generatePrismaRepository,
   generateControllerTest,
   generateRepositoryTest,
 } from '../templates'
 
 export async function generateRestFiles(ctx: ModuleContext): Promise<void> {
-  const {
-    pascal,
-    kebab,
-    plural,
-    pluralPascal,
-    repo,
-    noTests,
-    prismaClientPath,
-    tokenScope,
-    style,
-    write,
-  } = ctx
+  const { pascal, kebab, plural, pluralPascal, repo, noTests, tokenScope, style, write } = ctx
 
   // Module file (named `<kebab>.module.ts` so Vite's module-discovery plugin picks it up)
   await write(`${kebab}.module.ts`, generateRestModuleIndex({ pascal, kebab, plural, repo, style }))
@@ -57,38 +44,22 @@ export async function generateRestFiles(ctx: ModuleContext): Promise<void> {
     generateRepositoryInterface({ pascal, kebab, dtoPrefix: './dtos', tokenScope }),
   )
 
-  // Repository implementation (flat imports)
-  const builtinRepoFileMap: Record<string, string> = {
-    inmemory: `in-memory-${kebab}`,
-    drizzle: `drizzle-${kebab}`,
-    prisma: `prisma-${kebab}`,
-  }
-  const builtinRepoGeneratorMap: Record<string, () => string> = {
-    inmemory: () =>
-      generateInMemoryRepository({ pascal, kebab, repoPrefix: '.', dtoPrefix: './dtos' }),
-    drizzle: () =>
-      generateDrizzleRepository({ pascal, kebab, repoPrefix: '.', dtoPrefix: './dtos' }),
-    prisma: () =>
-      generatePrismaRepository({
-        pascal,
-        kebab,
-        repoPrefix: '.',
-        dtoPrefix: './dtos',
-        prismaClientPath,
-      }),
-  }
-  const repoFile = builtinRepoFileMap[repo] ?? `${toKebabCase(repo)}-${kebab}`
-  const repoGenerator =
-    builtinRepoGeneratorMap[repo] ??
-    (() =>
-      generateCustomRepository({
+  // Repository implementation (flat imports). `inmemory` is the only
+  // built-in (zero-dep working impl); every other name scaffolds a
+  // generic custom stub — prisma/drizzle no longer have dedicated
+  // generators (see `warnIfDeprecatedRepo`).
+  const isInMemory = repo === 'inmemory'
+  const repoFile = isInMemory ? `in-memory-${kebab}` : `${toKebabCase(repo)}-${kebab}`
+  const repoContent = isInMemory
+    ? generateInMemoryRepository({ pascal, kebab, repoPrefix: '.', dtoPrefix: './dtos' })
+    : generateCustomRepository({
         pascal,
         kebab,
         repoType: repo,
         repoPrefix: '.',
         dtoPrefix: './dtos',
-      }))
-  await write(`${repoFile}.repository.ts`, repoGenerator())
+      })
+  await write(`${repoFile}.repository.ts`, repoContent)
 
   // Tests
   if (!noTests) {
@@ -109,7 +80,7 @@ export async function generateRestFiles(ctx: ModuleContext): Promise<void> {
         pascal,
         kebab,
         plural,
-        repoPrefix: `../${builtinRepoFileMap.inmemory ?? `in-memory-${kebab}`}.repository`,
+        repoPrefix: `../in-memory-${kebab}.repository`,
       }),
     )
   }

@@ -27,7 +27,7 @@ packages/db/
   tsdown.config.ts                                   NEW
   vitest.config.ts                                   NEW
   README.md                                          NEW
-  LICENSE                                            NEW (MIT, copy from packages/prisma)
+  LICENSE                                            NEW (MIT, copy from another package)
   src/
     index.ts                                         NEW (barrel)
     snapshot/
@@ -277,10 +277,10 @@ Not yet published.
 MIT
 ```
 
-- [x] **Step 1.7: Copy LICENSE from `packages/prisma/LICENSE`**
+- [x] **Step 1.7: Copy LICENSE from an existing package's `LICENSE`**
 
 ```bash
-cp packages/prisma/LICENSE packages/db/LICENSE
+cp packages/core/LICENSE packages/db/LICENSE
 ```
 
 - [x] **Step 1.8: Create empty barrel `packages/db/src/index.ts`**
@@ -328,8 +328,8 @@ git add packages/db
 git commit -m "$(cat <<'EOF'
 feat(db): bootstrap @forinda/kickjs-db package skeleton (M0-S1)
 
-Package shell with tsdown + wireit + vitest+swc, matching kickjs-prisma
-shape. Empty barrel ready for the diff-engine spike.
+Package shell with tsdown + wireit + vitest+swc, matching the standard
+package shape. Empty barrel ready for the diff-engine spike.
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF

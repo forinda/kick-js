@@ -25,7 +25,7 @@ kick g module user task project    # generate multiple at once
 The `pattern` field in `kick.config.ts` controls what files are generated. You can also override per-invocation with `--pattern`.
 :::
 
-### Pattern: `rest` (recommended for most apps)
+### Pattern: `rest` (default — recommended for most apps)
 
 Generates a flat, simple module with a controller that delegates to a service. Every endpoint works out of the box with the in-memory repository.
 
@@ -35,12 +35,12 @@ kick g module product --pattern rest
 
 ```
 products/
-  index.ts                          # Module class (register + routes)
-  product.constants.ts              # Query config (filterable, sortable, searchable)
+  product.module.ts                 # Module declaration (register + routes)
+  product.constants.ts              # Query config (filterable, sortable, searchable) + repo token
   product.controller.ts             # @Controller with full CRUD
   product.service.ts                # @Service wrapping the repository
   product.repository.ts             # Interface + Symbol token
-  in-memory-product.repository.ts   # @Repository implementation
+  in-memory-product.repository.ts   # @Repository implementation (in-memory default)
   dtos/
     create-product.dto.ts           # Zod schema for POST
     update-product.dto.ts           # Zod schema for PUT
@@ -50,48 +50,11 @@ products/
     product.repository.test.ts
 ```
 
-The controller injects `ProductService`, which handles all CRUD. No use-cases, no domain layer — just clean REST.
-
-### Pattern: `ddd` (full Domain-Driven Design)
-
-Generates a layered DDD module with presentation, application, domain, and infrastructure layers. Use this for complex domains where you need entities, value objects, and use-case orchestration.
-
-```bash
-kick g module product --pattern ddd
-```
-
-```
-products/
-  index.ts                                          # Module class
-  constants.ts                                      # DI tokens and query config
-  presentation/
-    product.controller.ts                           # @Controller injecting use-cases
-  application/
-    dtos/
-      create-product.dto.ts                         # Zod schemas
-      update-product.dto.ts
-      product-response.dto.ts
-    use-cases/
-      create-product.use-case.ts                    # @Service use-case classes
-      get-product.use-case.ts
-      list-products.use-case.ts
-      update-product.use-case.ts
-      delete-product.use-case.ts
-  domain/
-    entities/product.entity.ts                      # Entity with factory methods
-    value-objects/product-id.vo.ts                   # Typed ID value object
-    repositories/product.repository.ts              # Interface + Symbol token
-    services/product-domain.service.ts              # Domain logic
-  infrastructure/
-    repositories/in-memory-product.repository.ts    # @Repository implementation
-  __tests__/
-    product.controller.test.ts
-    product.repository.test.ts
-```
+The controller injects `ProductService`, which handles all CRUD. No use-cases, no domain layer — just clean REST. With a custom repo name (e.g. `--repo postgres`) the implementation file becomes `product-postgres.repository.ts`, a generic stub with TODO markers you wire to your own client.
 
 ### Pattern: `minimal`
 
-Generates only a module index and a bare controller. Use this as a starting point when you want full control.
+Generates only a module declaration and a bare controller. Use this as a starting point when you want full control.
 
 ```bash
 kick g module product --pattern minimal
@@ -99,62 +62,21 @@ kick g module product --pattern minimal
 
 ```
 products/
-  index.ts                # Module class
-  product.controller.ts   # Bare @Controller with a single GET endpoint
+  product.module.ts      # Module declaration
+  product.controller.ts  # Bare @Controller with a single GET endpoint
 ```
-
-### Pattern: `cqrs`
-
-Generates a CQRS module that separates read (queries) and write (commands) operations. Events are emitted after state changes and can be handled via WebSocket broadcasts, queue jobs, or ETL pipelines.
-
-```bash
-kick g module product --pattern cqrs
-```
-
-```
-products/
-  index.ts                              # Module class
-  product.controller.ts                 # REST controller dispatching commands/queries
-  product.constants.ts                  # Query config
-  commands/
-    create-product.command.ts           # Command + handler (emits events)
-    update-product.command.ts
-    delete-product.command.ts
-  queries/
-    get-product.query.ts                # Query handler
-    list-products.query.ts
-  events/
-    product.events.ts                   # Typed event emitter (created/updated/deleted)
-    on-product-change.handler.ts        # Event handler (WS broadcast, queue dispatch, ETL)
-  dtos/
-    create-product.dto.ts
-    update-product.dto.ts
-    product-response.dto.ts
-  product.repository.ts                 # Interface + Symbol token
-  in-memory-product.repository.ts       # @Repository implementation
-  __tests__/
-    product.controller.test.ts
-    product.repository.test.ts
-```
-
-The event handler includes commented-out integration points for:
-
-- **WebSocket** — broadcast changes to connected clients in real-time via `@forinda/kickjs-ws`
-- **Queue** — dispatch async jobs for background processing via `@forinda/kickjs-queue`
-- **ETL** — transform and load data to external systems
 
 ### Module Flags
 
-| Flag                  | Description                                                                 | Default                      |
-| --------------------- | --------------------------------------------------------------------------- | ---------------------------- |
-| `--pattern <type>`    | Override project pattern: `rest`, `ddd`, `cqrs`, `minimal`                  | from config or `ddd`         |
-| `--no-entity`         | Skip entity and value object generation (DDD only)                          | false                        |
-| `--no-tests`          | Skip test file generation                                                   | false                        |
-| `--repo <type>`       | Repository implementation (see [Repository Variants](#repository-variants)) | from config or `inmemory`    |
-| `--no-pluralize`      | Use singular names for folders and routes                                   | from config or `false`       |
-| `--minimal`           | Shorthand for `--pattern minimal`                                           | false                        |
-| `--modules-dir <dir>` | Modules directory                                                           | from config or `src/modules` |
-| `-f, --force`         | Overwrite existing files without prompting                                  | false                        |
+| Flag                  | Description                                                       | Default                      |
+| --------------------- | ----------------------------------------------------------------- | ---------------------------- |
+| `--pattern <type>`    | Override project pattern: `rest`, `minimal`                       | from config or `rest`        |
+| `--no-tests`          | Skip test file generation                                         | false                        |
+| `--repo <name>`       | Repository name (see [Repository Variants](#repository-variants)) | from config or `inmemory`    |
+| `--no-pluralize`      | Use singular names for folders and routes                         | from config or `false`       |
+| `--minimal`           | Shorthand for `--pattern minimal`                                 | false                        |
+| `--modules-dir <dir>` | Modules directory                                                 | from config or `src/modules` |
+| `-f, --force`         | Overwrite existing files without prompting                        | false                        |
 
 ### Pluralization
 
@@ -184,7 +106,7 @@ export default defineConfig({
   pattern: 'rest',
   modules: {
     dir: 'src/modules',
-    repo: 'drizzle',
+    repo: { name: 'postgres' },
     pluralize: true,
     schemaDir: 'src/db/schema',
     style: 'define', // 'define' (default) or 'class' — see below
@@ -211,9 +133,9 @@ kick g module task
 ```
 
 ```bash
-kick g module user                   # uses rest pattern + drizzle (from config)
-kick g module user --pattern ddd     # overrides to DDD structure
-kick g module user --repo prisma     # overrides repo, keeps rest pattern
+kick g module user                   # uses rest pattern + postgres repo (from config)
+kick g module user --pattern minimal # overrides to minimal structure
+kick g module user --repo mongo      # overrides repo, keeps rest pattern
 kick g module user --no-pluralize    # overrides pluralization
 ```
 
@@ -238,39 +160,40 @@ Use `--force` to skip all prompts and overwrite everything.
 
 ### Repository Variants
 
-The `--repo` flag generates a different infrastructure implementation:
+The `--repo` flag is name-based. There is exactly one built-in repository — `inmemory` — and any other name scaffolds a generic custom-repository stub.
 
-**Built-in types** generate fully working repository code:
+| Value      | Generated file                   | Description                                                              |
+| ---------- | -------------------------------- | ------------------------------------------------------------------------ |
+| `inmemory` | `in-memory-{name}.repository.ts` | Working, zero-dependency Map-based store. The default.                   |
+| any name   | `{name}-{repo}.repository.ts`    | Generic custom-repository stub with TODO markers — wire your own client. |
 
-| Value      | Generated file                   | Description                                                  |
-| ---------- | -------------------------------- | ------------------------------------------------------------ |
-| `inmemory` | `in-memory-{name}.repository.ts` | Working Map-based store for prototyping                      |
-| `drizzle`  | `drizzle-{name}.repository.ts`   | Working Drizzle ORM queries with `DRIZZLE_DB` injection      |
-| `prisma`   | `prisma-{name}.repository.ts`    | Working Prisma Client queries with `PRISMA_CLIENT` injection |
-
-**Custom types** accept any ORM name and generate a stub with TODO markers:
+**Custom repos** accept any database or ORM name and generate a stub you complete yourself:
 
 ```bash
+kick g module user --repo postgres    # → postgres-user.repository.ts
+kick g module user --repo mongo       # → mongo-user.repository.ts
 kick g module user --repo typeorm     # → typeorm-user.repository.ts
-kick g module user --repo mongoose    # → mongoose-user.repository.ts
-kick g module user --repo mikro-orm   # → mikro-orm-user.repository.ts
 ```
 
-Custom repositories use a working in-memory implementation as a placeholder with `// TODO: Implement with {orm}` markers, so the generated module compiles and runs immediately.
+Custom repositories use a working in-memory implementation as a placeholder with `// TODO: Implement with {repo}` markers, so the generated module compiles and runs immediately — swap the body for your real client when ready.
 
-You can set the default via `kick.config.ts`:
+You can set the default via `kick.config.ts`. The CLI suggests the `{ name }` object form for any non-inmemory repo:
 
 ```ts
 export default defineConfig({
   modules: {
-    // Built-in (string) — generates working code
-    repo: 'prisma',
+    // Built-in — working in-memory code
+    repo: 'inmemory',
 
-    // Custom (object) — generates stub with TODO markers
-    repo: { name: 'typeorm' },
+    // Custom — generates stub with TODO markers (preferred object form)
+    repo: { name: 'postgres' },
   },
 })
 ```
+
+::: tip Wiring a real database
+The only built-in repository is `inmemory`. For persistence, scaffold a generic custom repository (any name, e.g. `postgres`) and wire it to your own client, or install the first-party DB layer with `kick add db` (`@forinda/kickjs-db`, plus `db-pg` / `db-sqlite` / `db-mysql` drivers) and implement the generated stub against it.
+:::
 
 ### Auto-Registration
 
@@ -293,37 +216,37 @@ import { ProductModule } from './products'
 export const modules: AppModuleEntry[] = [UserModule(), ProductModule()]
 ```
 
-### Generated Module Index
+### Generated Module Declaration
 
-The module `index.ts` registers the repository binding in the DI container and declares routes:
+The module file (`product.module.ts`) registers the repository binding in the DI container and declares routes. With the default `'define'` style:
 
 ```ts
-import { Container, type AppModule, type ModuleRoutes } from '@forinda/kickjs'
-import { buildRoutes } from '@forinda/kickjs'
-import { PRODUCT_REPOSITORY } from './domain/repositories/product.repository'
-import { InMemoryProductRepository } from './infrastructure/repositories/in-memory-product.repository'
-import { ProductController } from './presentation/product.controller'
+import { defineModule } from '@forinda/kickjs'
+import { PRODUCT_REPOSITORY } from './product.constants'
+import { InMemoryProductRepository } from './in-memory-product.repository'
+import { ProductController } from './product.controller'
 
-export class ProductModule implements AppModule {
-  register(container: Container): void {
-    container.registerFactory(PRODUCT_REPOSITORY, () =>
-      container.resolve(InMemoryProductRepository),
-    )
-  }
-
-  routes(): ModuleRoutes {
-    return {
-      path: '/products',
-      router: buildRoutes(ProductController),
-      controller: ProductController,
-    }
-  }
-}
+export const ProductModule = defineModule({
+  name: 'ProductModule',
+  build: () => ({
+    register(container) {
+      container.registerFactory(PRODUCT_REPOSITORY, () =>
+        container.resolve(InMemoryProductRepository),
+      )
+    },
+    routes() {
+      return {
+        path: '/products',
+        controller: ProductController, // framework derives the router via buildRoutes()
+      }
+    },
+  }),
+})
 ```
 
 ## kick g scaffold
 
-Generate a full CRUD module from field definitions. Unlike `kick g module`, which creates empty DTOs, scaffold generates Zod schemas with concrete fields, typed entities, and a working repository — ready to use immediately.
+Generate a full CRUD module from field definitions. Unlike `kick g module`, which creates empty DTOs, scaffold generates Zod schemas with concrete fields and a working repository — ready to use immediately. It produces the same flat REST layout as `kick g module` (controller + service + field-aware DTOs + repository), not a layered DDD structure.
 
 ```bash
 kick g scaffold Post title:string body:text:optional published:boolean:optional
@@ -370,35 +293,31 @@ kick g scaffold Post title:string "body?:text" "published?:boolean"
 
 ### Generated Structure
 
-Scaffold generates a DDD module structure inside `posts/`:
+Scaffold emits the same flat REST module layout as `kick g module`, but with field-aware DTOs and a working repository instead of empty stubs. Inside `posts/`:
 
-| File                                                       | Layer          | Description                                     |
-| ---------------------------------------------------------- | -------------- | ----------------------------------------------- |
-| `index.ts`                                                 | Module         | Module class (register + routes)                |
-| `constants.ts`                                             | Module         | Query config (filterable, sortable, searchable) |
-| `presentation/post.controller.ts`                          | Presentation   | Full CRUD with typed `Ctx`                      |
-| `application/dtos/create-post.dto.ts`                      | Application    | Zod schema from fields                          |
-| `application/dtos/update-post.dto.ts`                      | Application    | All fields optional                             |
-| `application/dtos/post-response.dto.ts`                    | Application    | Response interface                              |
-| `application/use-cases/create-post.use-case.ts`            | Application    | Create use case                                 |
-| `application/use-cases/get-post.use-case.ts`               | Application    | Get by ID use case                              |
-| `application/use-cases/list-posts.use-case.ts`             | Application    | Paginated list use case                         |
-| `application/use-cases/update-post.use-case.ts`            | Application    | Update use case                                 |
-| `application/use-cases/delete-post.use-case.ts`            | Application    | Delete use case                                 |
-| `domain/entities/post.entity.ts`                           | Domain         | Entity with factory methods                     |
-| `domain/value-objects/post-id.vo.ts`                       | Domain         | Typed ID value object                           |
-| `domain/repositories/post.repository.ts`                   | Domain         | Interface + `createToken`                       |
-| `domain/services/post-domain.service.ts`                   | Domain         | Domain logic                                    |
-| `infrastructure/repositories/in-memory-post.repository.ts` | Infrastructure | Working Map-based store                         |
+| File                           | Description                                             |
+| ------------------------------ | ------------------------------------------------------- |
+| `post.module.ts`               | Module declaration (register + routes)                  |
+| `post.constants.ts`            | Query config (filterable, sortable, searchable) + token |
+| `post.controller.ts`           | Full CRUD with typed `Ctx`                              |
+| `post.service.ts`              | `@Service` wrapping the repository                      |
+| `post.repository.ts`           | Interface + Symbol token                                |
+| `in-memory-post.repository.ts` | Working Map-based store (default repo)                  |
+| `dtos/create-post.dto.ts`      | Zod schema built from the fields                        |
+| `dtos/update-post.dto.ts`      | All fields optional                                     |
+| `dtos/post-response.dto.ts`    | Response interface                                      |
+| `__tests__/`                   | Controller + repository tests                           |
+
+With a custom repo name (e.g. `--repo postgres`), the implementation file is `post-postgres.repository.ts` — a generic stub with TODO markers.
 
 ### Scaffold Flags
 
-| Flag                  | Description                             | Default                      |
-| --------------------- | --------------------------------------- | ---------------------------- |
-| `--no-entity`         | Skip entity and value object generation | `false`                      |
-| `--no-tests`          | Skip test file generation               | `false`                      |
-| `--no-pluralize`      | Use singular names                      | from config or `false`       |
-| `--modules-dir <dir>` | Modules directory                       | from config or `src/modules` |
+| Flag                  | Description               | Default                      |
+| --------------------- | ------------------------- | ---------------------------- |
+| `--no-tests`          | Skip test file generation | `false`                      |
+| `--no-pluralize`      | Use singular names        | from config or `false`       |
+| `--repo <name>`       | Repository name           | from config or `inmemory`    |
+| `--modules-dir <dir>` | Modules directory         | from config or `src/modules` |
 
 ### Example
 
@@ -453,7 +372,7 @@ The generator auto-detects:
 
 - **Project name** from `package.json` `name` (strips `@scope/` prefix).
 - **Package manager** from `package.json` `packageManager` (corepack convention).
-- **Template** from `kick.config.ts` `pattern` field (defaults to `ddd`).
+- **Template** from `kick.config.ts` `pattern` field (defaults to `rest`).
 
 Override any of those with `--name`, `--pm`, `--template`.
 
@@ -462,7 +381,7 @@ Override any of those with `--name`, `--pm`, `--template`.
 | `--only <which>`        | `agents` \| `claude` \| `skills` \| `both` \| `all` | `all`                 |
 | `--name <name>`         | Project name (overrides `package.json`)             | auto                  |
 | `--pm <pm>`             | Package manager (overrides `package.json`)          | auto                  |
-| `--template <template>` | `rest` \| `graphql` \| `ddd` \| `cqrs` \| `minimal` | from `kick.config.ts` |
+| `--template <template>` | `rest` \| `minimal`                                 | from `kick.config.ts` |
 | `-f, --force`           | Overwrite without prompting                         | `false`               |
 
 ::: tip Local customisations
@@ -478,21 +397,21 @@ The three files are overwritten on regeneration. Keep project-specific notes in 
 ## Module-Scoped vs Global Generation
 
 ::: tip When to use `kick g module` vs standalone generators
-**`kick g module <name>`** creates a full DDD module with all layers in one shot — controller, DTOs, use-cases, repository interface, implementation, domain service, entity, value objects, and tests. Use this when starting a new feature.
+**`kick g module <name>`** creates a full flat REST module in one shot — controller, service, DTOs, repository interface + token, repository implementation, and tests. Use this when starting a new feature.
 
 **Standalone generators** (`kick g controller`, `kick g service`, `kick g dto`, `kick g guard`, `kick g middleware`) create a single file. Use these to **add files to an existing module** or to create **app-level** artifacts that don't belong to any module.
 :::
 
 ### The `--module` flag
 
-Standalone generators support `-m, --module <name>` to place the file inside an existing module's DDD folder structure:
+Standalone generators support `-m, --module <name>` to place the file inside an existing module's folder structure:
 
 ```bash
-# Module-scoped — file goes into the module's DDD structure
-kick g controller auth -m users     # → src/modules/users/presentation/auth.controller.ts
-kick g service payment -m orders    # → src/modules/orders/domain/services/payment.service.ts
-kick g dto create-user -m users     # → src/modules/users/application/dtos/create-user.dto.ts
-kick g guard admin -m users         # → src/modules/users/presentation/guards/admin.guard.ts
+# Module-scoped — file goes into the module's flat structure
+kick g controller auth -m users     # → src/modules/users/auth.controller.ts
+kick g service payment -m orders    # → src/modules/orders/payment.service.ts
+kick g dto create-user -m users     # → src/modules/users/dtos/create-user.dto.ts
+kick g guard admin -m users         # → src/modules/users/guards/admin.guard.ts
 kick g middleware cache -m products # → src/modules/products/middleware/cache.middleware.ts
 
 # Global / app-level — file goes to the standalone default directory
@@ -507,21 +426,9 @@ The `--module` flag respects `modules.dir` from `kick.config.ts`. If you also pa
 Adapters (`kick g adapter`) do not support `--module` because they configure app-wide lifecycle hooks and are not scoped to a single module.
 :::
 
-### Folder mapping by pattern
+### Folder mapping
 
-When `--module` is used, each artifact type maps to a folder based on the project pattern:
-
-**DDD pattern:**
-
-| Generator  | Module folder          |
-| ---------- | ---------------------- |
-| controller | `presentation/`        |
-| service    | `domain/services/`     |
-| dto        | `application/dtos/`    |
-| guard      | `presentation/guards/` |
-| middleware | `middleware/`          |
-
-**REST / GraphQL / Minimal patterns (flat):**
+When `--module` is used, each artifact type maps to a folder inside the module's flat layout:
 
 | Generator  | Module folder |
 | ---------- | ------------- |
@@ -539,7 +446,7 @@ Each generator creates a single file. Use `-m <module>` to scope it to a module,
 
 ```bash
 kick g controller auth
-kick g controller auth -o src/modules/auth/presentation
+kick g controller auth -o src/modules/auth
 ```
 
 Generates a `@Controller()` class with basic `@Get('/')` route. Default output: `src/controllers/`.

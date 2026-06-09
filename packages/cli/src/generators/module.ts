@@ -7,15 +7,10 @@ import { escapeRegex } from '../utils/regex'
 import { readFile, writeFile } from 'node:fs/promises'
 import type { ProjectPattern, RepoTypeConfig } from '../config'
 import type { ModuleStyle } from './templates/types'
-import {
-  generateMinimalFiles,
-  generateRestFiles,
-  generateCqrsFiles,
-  generateDddFiles,
-} from './patterns'
+import { generateMinimalFiles, generateRestFiles } from './patterns'
 import type { ModuleContext } from './patterns'
 
-export type BuiltinRepoType = 'drizzle' | 'inmemory' | 'prisma'
+export type BuiltinRepoType = 'inmemory'
 export type RepoType = BuiltinRepoType | (string & {})
 
 /** Resolve a RepoTypeConfig (from kick.config.ts) into a flat repo type string */
@@ -59,16 +54,14 @@ interface GenerateModuleOptions {
  * Generate a module — structure depends on the project pattern.
  *
  * Patterns:
- *   rest         — flat folder: controller + service + DTOs + repo
- *   ddd          — nested DDD: presentation/ application/ domain/ infrastructure/
- *   cqrs         — commands, queries, events with WS/queue integration
+ *   rest         — flat folder: controller + service + DTOs + repo (default)
  *   minimal      — just controller + module index
  */
 export async function generateModule(options: GenerateModuleOptions): Promise<string[]> {
   const { name, modulesDir, noEntity, noTests, repo = 'inmemory', force, dryRun } = options
   const shouldPluralize = options.pluralize !== false
 
-  let pattern = options.pattern ?? 'ddd'
+  let pattern = options.pattern ?? 'rest'
   if (options.minimal) pattern = 'minimal'
 
   const kebab = toKebabCase(name)
@@ -121,14 +114,8 @@ export async function generateModule(options: GenerateModuleOptions): Promise<st
       await generateMinimalFiles(ctx)
       break
     case 'rest':
-      await generateRestFiles(ctx)
-      break
-    case 'cqrs':
-      await generateCqrsFiles(ctx)
-      break
-    case 'ddd':
     default:
-      await generateDddFiles(ctx)
+      await generateRestFiles(ctx)
       break
   }
 

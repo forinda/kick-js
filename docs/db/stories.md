@@ -263,28 +263,28 @@ Acceptance:
 Touches: `packages/db/src/tokens.ts`, `packages/db/src/adapter.ts`
 Depends on: M1-S7
 
-### M1-S10 — Port `examples/task-prisma-api` to `task-kickdb-api`
+### M1-S10 — `task-kickdb-api` example app
 
-As a **maintainer**, I want a 1:1 port of an existing example to prove M1 works in a real KickJS app, so that the milestone exit gate is meaningful.
+As a **maintainer**, I want a full task-management example to prove M1 works in a real KickJS app, so that the milestone exit gate is meaningful.
 
 Acceptance:
 
 - `examples/task-kickdb-api/` exists, scaffolded via the CLI (per CLAUDE.md mandatory rule).
-- Same routes and DTOs as `examples/task-prisma-api/`.
+- Standard task-management routes and DTOs.
 - Schema in `src/db/schema.ts`. Migrations committed under `db/migrations/`.
-- `pnpm dev` boots; all REST endpoints return parity responses to the prisma example.
+- `pnpm dev` boots; all REST endpoints return correct responses.
 - README links to the architecture spec.
 
 Touches: `examples/task-kickdb-api/`, `scripts/release.js` (EXAMPLES array), `docs/.vitepress/config.mts` (sidebar)
 Depends on: M1-S8, M1-S9
 
-**M1 exit gate:** the kickdb example runs the same task-management feature set as the prisma example, with reversible migrations and drift detection.
+**M1 exit gate:** the kickdb example runs a full task-management feature set, with reversible migrations and drift detection.
 
 ---
 
 ## M2 — Type story + relational query (3 weeks)
 
-Goal: drizzle's headline DX matched. Inference at every API surface; `db.query` joins; custom types; `$extends`; hooks.
+Goal: best-in-class type DX. Inference at every API surface; `db.query` joins; custom types; `$extends`; hooks.
 
 ### M2-S1 — `$inferSelect` / `$inferInsert` / `$inferUpdate`
 
@@ -417,7 +417,7 @@ Acceptance:
 Touches: `packages/db/src/devtools/`
 Depends on: M2-S7, M1-S5
 
-**M2 exit gate:** drizzle's headline DX surface matched — typed schema, typed queries (3 layers), relations, custom types, extensions, hooks, slow query alerting.
+**M2 exit gate:** full type DX surface — typed schema, typed queries (3 layers), relations, custom types, extensions, hooks, slow query alerting.
 
 ---
 
@@ -534,7 +534,7 @@ Goal: zero-friction `kick new --repo kickdb`. Multi-tenant solved. DevTools poli
 
 ### M4-S1 — `kick g module --repo kickdb` template
 
-As an **adopter**, I want `kick g module users --repo kickdb` to scaffold the standard DDD module shape with a kickdb repository, so that I get the same one-command experience prisma/drizzle generators give me.
+As an **adopter**, I want `kick g module users --repo kickdb` to scaffold the standard DDD module shape with a kickdb repository, so that I get a one-command module scaffolding experience.
 
 Acceptance:
 
@@ -556,7 +556,7 @@ Acceptance:
 - `defineTenantDbContributor({ key, base, resolveTenant, buildClient })` exported from core.
 - Returns a `ContextContributor` keyed on `'db'` (or `opts.key`) — typed against `keyof ContextMeta`.
 - `buildClient` is called once per tenant per request; supports `withSchema(...)` for PG search_path.
-- Adopter app demo in `examples/multi-tenant-kickdb-api/` (CLI-scaffolded; matches existing multi-tenant-prisma-api).
+- Adopter app demo in `examples/multi-tenant-kickdb-api/` (CLI-scaffolded).
 - Memory rules honored: writes flow via `ctx.set` or contributor return; never `setRequestValue`. User code reads via `ctx.get(...)` or `getRequestValue(...)`; no raw `requestStore.getStore().values`.
 
 Touches: `packages/db/src/contributors/tenant.ts`, `examples/multi-tenant-kickdb-api/`
@@ -656,7 +656,7 @@ Goal: ship. Production-ready as the new default.
 
 ### M5-S1 — Microbenchmarks
 
-As a **maintainer**, I want benchmarks for read/write/transaction/`with`-join scenarios against drizzle, prisma, and raw `pg`, so that we can claim performance bounds publicly.
+As a **maintainer**, I want benchmarks for read/write/transaction/`with`-join scenarios against raw `pg`, so that we can claim performance bounds publicly.
 
 Acceptance:
 
@@ -665,7 +665,7 @@ Acceptance:
   - simple `SELECT *` — within 10% of raw `pg`.
   - simple `INSERT` returning — within 10%.
   - 100-row transaction — within 15%.
-  - `findMany({ with })` 1-to-many — within 25% of raw `pg` doing two queries; better than prisma.
+  - `findMany({ with })` 1-to-many — within 25% of raw `pg` doing two queries.
 - Results checked into `benchmark-results.json` and rendered in `docs/guide/db-benchmarks.md`.
 
 Touches: `benchmarks/db/`, `docs/guide/db-benchmarks.md`, `benchmark-results.json`
@@ -709,19 +709,6 @@ Acceptance:
 Touches: `docs/db/security.md`
 Depends on: M5-S3
 
-### M5-S5 — Deprecation notices in `kickjs-prisma` + `kickjs-drizzle`
-
-As a **maintainer**, I want both adapter package READMEs to point users at `kickjs-db` and link the migration guide, so that adopters know the path forward.
-
-Acceptance:
-
-- README banner in both packages: "Deprecated. Will be removed in v7.0. See [migration guide](../db/) and [`@forinda/kickjs-db`](../db/)."
-- `package.json` deprecation field set (npm publishes warn on install).
-- Migration guide written: `docs/guide/migration-prisma-to-kickdb.md` and `docs/guide/migration-drizzle-to-kickdb.md`.
-
-Touches: `packages/prisma/README.md`, `packages/drizzle/README.md`, `docs/guide/migration-*.md`
-Depends on: M5-S4
-
 ### M5-S6 — v6.0.0 release
 
 As a **maintainer**, I want a clean v6.0.0 tag with all packages bumped lockstep, so that the public release lands.
@@ -729,20 +716,20 @@ As a **maintainer**, I want a clean v6.0.0 tag with all packages bumped lockstep
 Acceptance:
 
 - `pnpm release:major` runs cleanly. All `db*` packages at 6.0.0.
-- `RELEASE_NOTES_v6.0.0.md` written. Highlights: kickdb ships, prisma/drizzle adapters deprecated, BYO recipes carry forward.
+- `RELEASE_NOTES_v6.0.0.md` written. Highlights: kickdb ships, BYO recipes carry forward.
 - npm publish via CI (release.yml).
 - GitHub release attached.
 
 Touches: `RELEASE_NOTES_v6.0.0.md`, `scripts/release.js`, `packages/*/package.json`
-Depends on: M5-S5
+Depends on: M5-S4
 
-**M5 exit gate:** v6.0.0 published, deprecation in motion.
+**M5 exit gate:** v6.0.0 published.
 
 ---
 
 ## M6 — v6.1 (~4–6 weeks after v6.0)
 
-Goal: MySQL + edge runtimes. Old adapters go private.
+Goal: MySQL + edge runtimes.
 
 ### M6-S1 — `db-mysql` adapter
 
@@ -802,56 +789,13 @@ Acceptance:
 Touches: `packages/db-d1/`
 Depends on: M6-S3
 
-### M6-S5 — `kickjs-prisma` + `kickjs-drizzle` go private
-
-As a **maintainer**, I want both old adapter packages set `"private": true` and removed from `pnpm --filter='./packages/*' publish`, so that they stop publishing to npm but the source remains for in-tree use until v7.
-
-Acceptance:
-
-- Both packages: `"private": true` in package.json.
-- README banner updated: "No longer published to npm. Will be removed in v7.0."
-- Release script skips them.
-- v6.1.0 release notes call out the privacy change.
-
-Touches: `packages/prisma/package.json`, `packages/drizzle/package.json`, `scripts/release.js`
-Depends on: M6-S4
-
-### M6-S6 — Codemods (kickjs-prisma → kickjs-db, kickjs-drizzle → kickjs-db)
-
-As an **adopter**, I want a one-shot codemod that rewrites my prisma/drizzle adopter code to kickdb, so that migration is a 30-minute task instead of a 30-day project.
-
-Acceptance:
-
-- `kick db codemod from-prisma` rewrites: imports, `prisma.user.findMany` → `db.query.users.findMany`, `prisma.user.create({ data })` → `db.insert(users).values(data).returningAll().executeTakeFirstOrThrow()`, etc.
-- `kick db codemod from-drizzle` similar.
-- Codemod runs jscodeshift (or ts-morph) and prints a report of un-rewritten cases.
-- Test: each example app's drizzle/prisma version codemodded → typechecks.
-
-Touches: `packages/cli/src/codemods/`
-Depends on: M6-S5
-
-**M6 exit gate:** MySQL + edge support shipped; old adapters privatized; codemods available.
+**M6 exit gate:** MySQL + edge support shipped.
 
 ---
 
 ## M7 — v7.0 (~6 months after v6.0)
 
-Goal: clean break. Removal of deprecated packages. Studio.
-
-### M7-S1 — Remove `@forinda/kickjs-prisma` + `@forinda/kickjs-drizzle`
-
-As a **maintainer**, I want both packages and their generator templates gone in v7, so that the maintenance surface shrinks.
-
-Acceptance:
-
-- `packages/prisma/` and `packages/drizzle/` deleted.
-- CLI generator templates `prisma/` and `drizzle/` deleted.
-- `kick g module --repo` only accepts `kickdb | inmemory | custom`.
-- All examples that used prisma/drizzle either removed or codemodded to kickdb.
-- v7.0 release notes call out the breaking change with migration links.
-
-Touches: `packages/prisma/`, `packages/drizzle/`, `packages/cli/src/generators/templates/{prisma,drizzle}/`, `examples/`
-Depends on: M6-S6
+Goal: Studio.
 
 ### M7-S2 — `kick db studio`
 
@@ -866,7 +810,7 @@ Acceptance:
 - Disabled in production (404).
 
 Touches: `packages/db/src/studio/`
-Depends on: M7-S1
+Depends on: M6-S4
 
 ### M7-S3 — View / materialized view / enum / trigger introspection
 
@@ -882,7 +826,7 @@ Acceptance:
 Touches: `packages/db/src/dsl/`, `packages/db/src/snapshot/`, `packages/db/src/diff/`, `packages/db-pg/src/introspect.ts`
 Depends on: M7-S2
 
-**M7 exit gate:** v7.0 ships. The deprecation cycle is complete.
+**M7 exit gate:** v7.0 ships.
 
 ---
 
@@ -919,11 +863,11 @@ Acceptance: `benchmark-results.json` compared against `main` baseline; CI job fa
 | M2 — Type story + relational | 9       | 3               |
 | M3 — SQLite + multi-dialect  | 7       | 3               |
 | M4 — KickJS ecosystem fit    | 7       | 3               |
-| M5 — Hardening + v6.0.0      | 6       | 2               |
-| M6 — v6.1                    | 6       | 4–6             |
-| M7 — v7.0                    | 3       | (months later)  |
+| M5 — Hardening + v6.0.0      | 5       | 2               |
+| M6 — v6.1                    | 4       | 4–6             |
+| M7 — v7.0                    | 2       | (months later)  |
 | Cross-cutting                | 3       | continuous      |
 
-**Total stories: ~57** across the lifecycle.
+**Total stories: ~52** across the lifecycle.
 
 Stories carry dependency edges and acceptance criteria so any can be picked up independently when its blockers are clear. Add new stories at the end of their milestone section. Never re-number existing IDs.

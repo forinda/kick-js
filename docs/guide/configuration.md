@@ -377,13 +377,12 @@ The `kick.config.ts` file configures the CLI's code generators, project-local co
 import { defineConfig } from '@forinda/kickjs-cli'
 
 export default defineConfig({
-  pattern: 'ddd', // 'rest' | 'graphql' | 'ddd' | 'cqrs' | 'minimal'
+  pattern: 'rest', // 'rest' (default) | 'minimal'
   modules: {
     dir: 'src/modules', // default location (convention) — override freely
-    repo: 'prisma', // 'drizzle' | 'inmemory' | 'prisma' | { name: 'custom' }
+    repo: { name: 'postgres' }, // 'inmemory' (built-in) or { name: '<db>' } for a custom stub
     pluralize: true, // pluralize module names
-    schemaDir: 'prisma/', // schema directory for ORM (configurable)
-    prismaClientPath: '@/generated/prisma/client', // Prisma 7+ client path
+    schemaDir: 'src/db/schema', // schema directory (configurable)
   },
   plugins: [], // KickCliPlugin[] — see ./cli-plugins.md
   commands: [], // project-local custom CLI commands
@@ -402,7 +401,7 @@ of letting the `kick/db` plugin generate it. See
 :::
 
 ::: tip Folder paths are conventions
-`src/modules/`, `prisma/`, `src/db/schema`, and the rest of the defaults reflect what `kick new` scaffolds. Generators read `kick.config.ts` for the live values, so renaming or relocating directories is a one-line config change — not a fork.
+`src/modules/`, `src/db/schema`, and the rest of the defaults reflect what `kick new` scaffolds. Generators read `kick.config.ts` for the live values, so renaming or relocating directories is a one-line config change — not a fork.
 :::
 
 The `plugins` field expects an array of `KickCliPlugin` instances (typically built with `defineCliPlugin()`). Each plugin can contribute `commands`, `register`, `typegens`, and `generators` — see [CLI Plugins](./cli-plugins.md) for the full shape and conflict semantics.

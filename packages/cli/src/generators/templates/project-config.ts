@@ -1,4 +1,4 @@
-type ProjectTemplate = 'rest' | 'ddd' | 'cqrs' | 'minimal'
+type ProjectTemplate = 'rest' | 'minimal'
 
 /**
  * Supported schema libraries — passed through to `fromZod` /
