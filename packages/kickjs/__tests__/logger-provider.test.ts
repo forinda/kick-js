@@ -66,7 +66,9 @@ describe('Logger.setProvider() — pluggable logger backend', () => {
     expect(childCalls).toContain('from child')
   })
 
-  it('ConsoleLoggerProvider works as fallback', () => {
+  it('ConsoleLoggerProvider works as fallback (default LOG_LEVEL=info suppresses debug)', () => {
+    const prevLevel = process.env.LOG_LEVEL
+    delete process.env.LOG_LEVEL // default → info
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -83,12 +85,30 @@ describe('Logger.setProvider() — pluggable logger backend', () => {
     expect(logSpy).toHaveBeenCalledWith('INFO [ConsoleTest] info message')
     expect(warnSpy).toHaveBeenCalledWith('WARN [ConsoleTest] warn message')
     expect(errorSpy).toHaveBeenCalledWith('ERROR [ConsoleTest] error message')
-    expect(debugSpy).toHaveBeenCalledWith('DEBUG [ConsoleTest] debug message')
+    // debug is below the default `info` threshold → suppressed.
+    expect(debugSpy).not.toHaveBeenCalled()
 
     logSpy.mockRestore()
     warnSpy.mockRestore()
     errorSpy.mockRestore()
     debugSpy.mockRestore()
+    if (prevLevel === undefined) delete process.env.LOG_LEVEL
+    else process.env.LOG_LEVEL = prevLevel
+  })
+
+  it('ConsoleLoggerProvider emits debug when LOG_LEVEL=debug', () => {
+    const prevLevel = process.env.LOG_LEVEL
+    process.env.LOG_LEVEL = 'debug'
+    const debugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {})
+
+    Logger.setProvider(new ConsoleLoggerProvider())
+    Logger.for('ConsoleTest').debug('debug message')
+
+    expect(debugSpy).toHaveBeenCalledWith('DEBUG [ConsoleTest] debug message')
+
+    debugSpy.mockRestore()
+    if (prevLevel === undefined) delete process.env.LOG_LEVEL
+    else process.env.LOG_LEVEL = prevLevel
   })
 
   it('setProvider() can be called multiple times (last wins)', () => {

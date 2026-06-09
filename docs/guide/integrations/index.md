@@ -71,7 +71,7 @@ if (env.SENTRY_DSN) {
 bootstrap({
   modules: [UserModule, ProductModule],
   adapters,
-  middleware: [helmet(), cors(), requestId(), express.json()],
+  middlewares: [helmet(), cors(), requestId(), express.json()],
 })
 ```
 

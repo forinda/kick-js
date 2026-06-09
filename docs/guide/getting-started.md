@@ -1,6 +1,6 @@
 # Getting Started
 
-> 📖 **Reading this on GitHub?** The latest rendered version lives at <https://forinda.github.io/kick-js/guide/getting-started.html> — every `./*.md` link in this page resolves there too.
+> 📖 **Reading this on GitHub?** The full rendered docs live at <https://forinda.github.io/kick-js/> — every `./*.md` link in this page resolves there too.
 
 ## Prerequisites
 
@@ -150,7 +150,14 @@ That's it. Your API is running at `http://localhost:3000/api/v1/users`.
 
 ### Route Summary
 
-In dev mode, a compact route summary is logged at startup:
+Opt in to a compact route table at startup with `logRouteTable: true`:
+
+```ts
+export const app = await bootstrap({
+  modules,
+  logRouteTable: true,
+})
+```
 
 ```
 [Application] Routes:
@@ -158,15 +165,7 @@ In dev mode, a compact route summary is logged at startup:
   Total: 5 routes
 ```
 
-This is enabled by default when `NODE_ENV !== 'production'`. Override with `logRoutesTable`:
-
-```ts
-export const app = await bootstrap({
-  modules,
-  logRoutesTable: true, // always log (even in production)
-  // logRoutesTable: false, // never log
-})
-```
+It is **off by default** (it used to print automatically in dev). When enabled it logs at `info` level, so it appears at the default `LOG_LEVEL` but is hidden if you raise the threshold to `warn`/`error`/`silent`. The old `logRoutesTable` option still works as a deprecated alias.
 
 ## Add Swagger Docs
 

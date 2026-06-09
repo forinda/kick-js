@@ -9,7 +9,7 @@ import { session } from '@forinda/kickjs'
 
 bootstrap({
   modules,
-  middleware: [session({ secret: process.env.SESSION_SECRET! })],
+  middlewares: [session({ secret: process.env.SESSION_SECRET! })],
 })
 ```
 

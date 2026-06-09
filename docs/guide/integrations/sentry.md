@@ -90,7 +90,7 @@ bootstrap({
       info: { title: 'My API', version: '1.0.0' },
     }),
   ],
-  middleware: [helmet(), cors(), requestId(), requestLogger(), express.json()],
+  middlewares: [helmet(), cors(), requestId(), requestLogger(), express.json()],
 })
 ```
 
@@ -160,7 +160,7 @@ Add it before the default error handler:
 bootstrap({
   modules,
   adapters: [SentryAdapter({ dsn: env.SENTRY_DSN })],
-  middleware: [
+  middlewares: [
     helmet(),
     cors(),
     requestId(),
@@ -248,7 +248,7 @@ export function sentryContext() {
 Add after `requestId()` in the middleware pipeline:
 
 ```ts
-middleware: [
+middlewares: [
   requestId(),
   sentryContext(),  // Links request ID to Sentry traces
   requestLogger(),
@@ -276,7 +276,7 @@ if (env.SENTRY_DSN) {
   )
 }
 
-bootstrap({ modules, adapters, middleware: [...] })
+bootstrap({ modules, adapters, middlewares: [...] })
 ```
 
 ## Source Maps

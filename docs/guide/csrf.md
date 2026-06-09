@@ -20,7 +20,7 @@ import { csrf } from '@forinda/kickjs'
 
 bootstrap({
   modules,
-  middleware: [cookieParser(), csrf()],
+  middlewares: [cookieParser(), csrf()],
 })
 ```
 

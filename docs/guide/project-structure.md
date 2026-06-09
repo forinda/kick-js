@@ -41,7 +41,7 @@ export const app = bootstrap({
   modules,
   apiPrefix: '/api',
   defaultVersion: 1,
-  middleware: [
+  middlewares: [
     helmet(),
     cors({ origin: ['https://app.example.com'] }),
     requestId(),

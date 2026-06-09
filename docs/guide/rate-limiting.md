@@ -9,7 +9,7 @@ import { rateLimit } from '@forinda/kickjs'
 
 bootstrap({
   modules,
-  middleware: [rateLimit({ max: 100, windowMs: 60_000 })],
+  middlewares: [rateLimit({ max: 100, windowMs: 60_000 })],
 })
 ```
 

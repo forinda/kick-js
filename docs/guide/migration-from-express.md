@@ -7,7 +7,7 @@ KickJS is built on Express 5, so your existing Express knowledge applies directl
 | Express                      | KickJS                                      |
 | ---------------------------- | ------------------------------------------- |
 | `app.get('/users', handler)` | `@Get('/') list(ctx)` on a `@Controller`    |
-| `app.use(middleware)`        | `bootstrap({ middleware: [...] })`          |
+| `app.use(middleware)`        | `bootstrap({ middlewares: [...] })`         |
 | `req.body`                   | `ctx.body`                                  |
 | `req.params`                 | `ctx.params`                                |
 | `req.query`                  | `ctx.query` or `ctx.qs()`                   |
@@ -65,7 +65,7 @@ import { modules } from './modules'
 // In production, bootstrap() auto-starts the HTTP server.
 export const app = await bootstrap({
   modules,
-  middleware: [cors(), helmet(), express.json()],
+  middlewares: [cors(), helmet(), express.json()],
   adapters: [SwaggerAdapter({ info: { title: 'My API', version: '1.0.0' } })],
 })
 ```
@@ -230,7 +230,7 @@ Or keep your Express middleware as-is and apply it globally:
 ```ts
 export const app = await bootstrap({
   modules,
-  middleware: [authMiddleware, express.json()],
+  middlewares: [authMiddleware, express.json()],
 })
 ```
 
@@ -304,7 +304,7 @@ You don't have to convert everything at once. KickJS runs on Express 5, so you c
 ```ts
 export const app = await bootstrap({
   modules, // converted modules from src/modules/index.ts
-  middleware: [
+  middlewares: [
     cors(),
     express.json(),
     // Mount legacy Express router directly:

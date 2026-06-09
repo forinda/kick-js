@@ -85,7 +85,7 @@ export interface ApplicationOptions {
    * ```ts
    * bootstrap({
    *   modules,
-   *   middleware: [
+   *   middlewares: [
    *     helmet(),
    *     cors(),
    *     compression(),
@@ -97,6 +97,12 @@ export interface ApplicationOptions {
    *
    * If omitted, a sensible default is applied:
    *   requestId(), express.json({ limit: '100kb' })
+   */
+  middlewares?: MiddlewareEntry[]
+  /**
+   * @deprecated Use {@link ApplicationOptions.middlewares} (plural).
+   * Kept as an alias for back-compat; `middlewares` wins when both are
+   * set.
    */
   middleware?: MiddlewareEntry[]
 
@@ -177,8 +183,16 @@ export interface ApplicationOptions {
   /** Maximum JSON body size (only used when middleware is not provided) */
   jsonLimit?: string | number
   /**
-   * Log route summary on startup. Default: true in dev, false in production.
-   * Set to `true` to always log, `false` to always suppress.
+   * Print the route table on startup. Default: `false`. Set to `true`
+   * to log a per-controller summary (method counts + mount paths) once
+   * the app has mounted. Emitted at `info` level, so it is still subject
+   * to `LOG_LEVEL` filtering (visible at the default `info`; hidden at
+   * `warn`/`error`/`silent`).
+   */
+  logRouteTable?: boolean
+  /**
+   * @deprecated Use {@link ApplicationOptions.logRouteTable}. Kept as an
+   * alias for back-compat; `logRouteTable` wins when both are set.
    */
   logRoutesTable?: boolean
   /**
@@ -489,9 +503,10 @@ export class Application {
       }
     }
 
-    if (this.options.middleware) {
+    const userMiddlewares = this.options.middlewares ?? this.options.middleware
+    if (userMiddlewares) {
       // User-declared pipeline — full control
-      for (const entry of this.options.middleware) {
+      for (const entry of userMiddlewares) {
         this.mountMiddlewareEntry(entry)
       }
     } else {
@@ -549,7 +564,9 @@ export class Application {
     // ── 8. Mount module routes with versioning ───────────────────────
     const apiPrefix = this.options.apiPrefix ?? '/api'
     const defaultVersion = this.options.defaultVersion ?? 1
-    const shouldLogRoutes = this.options.logRoutesTable ?? process.env.NODE_ENV !== 'production'
+    // Opt-in, default off. `logRouteTable` is the current name;
+    // `logRoutesTable` is the deprecated alias.
+    const shouldLogRoutes = this.options.logRouteTable ?? this.options.logRoutesTable ?? false
 
     // Collect route metadata during mounting (avoids calling mod.routes() twice)
     const mountedRoutes: Array<{ controller: any; mountPath: string }> = []
@@ -679,7 +696,7 @@ export class Application {
       }
 
       let totalRoutes = 0
-      log.debug('Routes:')
+      log.info('Routes:')
 
       for (const { controller, mountPath } of mountedRoutes) {
         const defs: RouteDefinition[] = getClassMeta<RouteDefinition[]>(
@@ -701,10 +718,10 @@ export class Application {
           .map(([m, n]) => `${n} ${m}`)
           .join(', ')
         const name = controller.name || 'Controller'
-        log.debug(`  ${name.padEnd(30)} ${mountPath.padEnd(25)} ${defs.length} routes (${methods})`)
+        log.info(`  ${name.padEnd(30)} ${mountPath.padEnd(25)} ${defs.length} routes (${methods})`)
       }
 
-      log.debug(`  Total: ${totalRoutes} routes`)
+      log.info(`  Total: ${totalRoutes} routes`)
     }
 
     // ── 9. Adapter middleware: afterRoutes ────────────────────────────
@@ -1022,7 +1039,7 @@ export class Application {
   private shouldAutoMountRequestScope(): boolean {
     if (this.options.contextStore === 'manual') return false
 
-    const userEntries = this.options.middleware ?? []
+    const userEntries = this.options.middlewares ?? this.options.middleware ?? []
     for (const entry of userEntries) {
       const handler = typeof entry === 'function' ? entry : entry.handler
       if (isRequestScopeMiddleware(handler)) return false

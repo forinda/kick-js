@@ -98,14 +98,18 @@ Rule of thumb: **if the middleware's only job is to compute a value other code r
 
 ## Global Middleware
 
-Global middleware is configured in `bootstrap()` via the `middleware` option. These run on every request before any route is matched.
+Global middleware is configured in `bootstrap()` via the `middlewares` option. These run on every request before any route is matched.
+
+::: tip Renamed from `middleware`
+The option is `middlewares` (plural). The singular `middleware` still works as a **deprecated alias** — existing apps keep running — but new code should use `middlewares`. If you set both, `middlewares` wins.
+:::
 
 ::: warning Different signature from @Middleware
 Global middleware uses the **raw Express signature** `(req, res, next)`, not the KickJS `MiddlewareHandler` signature `(ctx, next)`. This is because global middleware runs before routes are matched, outside the KickJS `RequestContext` pipeline.
 
 | Location                        | Signature          | Receives                                      |
 | ------------------------------- | ------------------ | --------------------------------------------- |
-| `bootstrap({ middleware })`     | `(req, res, next)` | Express `Request`, `Response`, `NextFunction` |
+| `bootstrap({ middlewares })`    | `(req, res, next)` | Express `Request`, `Response`, `NextFunction` |
 | `@Middleware()` on class/method | `(ctx, next)`      | KickJS `RequestContext`, `next()`             |
 | Adapter `middleware()`          | `(req, res, next)` | Express `Request`, `Response`, `NextFunction` |
 
@@ -119,14 +123,14 @@ import { modules } from './modules'
 
 bootstrap({
   modules,
-  middleware: [requestId(), express.json({ limit: '1mb' }), helmet(), cors(), morgan('dev')],
+  middlewares: [requestId(), express.json({ limit: '1mb' }), helmet(), cors(), morgan('dev')],
 })
 ```
 
-If you omit the `middleware` option, sensible defaults are applied:
+If you omit the `middlewares` option, sensible defaults are applied:
 
 ```ts
-// Default pipeline when middleware is not specified:
+// Default pipeline when middlewares is not specified:
 requestId()
 express.json({ limit: '100kb' })
 ```
@@ -134,7 +138,7 @@ express.json({ limit: '100kb' })
 Global middleware entries can be path-scoped:
 
 ```ts
-middleware: [express.json(), { path: '/api/v1/webhooks', handler: express.raw({ type: '*/*' }) }]
+middlewares: [express.json(), { path: '/api/v1/webhooks', handler: express.raw({ type: '*/*' }) }]
 ```
 
 ## Adapter Middleware Phases
@@ -322,7 +326,7 @@ import { bootstrap, traceContext, requestLogger } from '@forinda/kickjs'
 
 bootstrap({
   modules,
-  middleware: [
+  middlewares: [
     traceContext(), // extracts or generates traceId
     requestLogger(), // logger automatically includes traceId
     express.json(),

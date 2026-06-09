@@ -17,6 +17,8 @@ log.error('DB unreachable', err)
 log.debug('Cache miss for key=%s', key)
 ```
 
+The default provider respects the `LOG_LEVEL` env var (default `info`): messages below the threshold are dropped, ordered `trace < debug < info < warn < error < fatal` (plus `silent`). So `debug`/`trace` calls — including the framework's verbose startup detail like the route table and DI wiring — stay quiet unless you run with `LOG_LEVEL=debug`. Custom providers (Pino, Winston, …) manage their own levels.
+
 For most apps that's enough. When it isn't, plug in a real logger.
 
 ## The contract
