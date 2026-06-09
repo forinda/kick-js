@@ -165,7 +165,7 @@ export const app = await bootstrap({
   Total: 5 routes
 ```
 
-It is **off by default** (it used to print automatically in dev). When enabled it logs at `info` level, so it shows regardless of `LOG_LEVEL`. The old `logRoutesTable` option still works as a deprecated alias.
+It is **off by default** (it used to print automatically in dev). When enabled it logs at `info` level, so it appears at the default `LOG_LEVEL` but is hidden if you raise the threshold to `warn`/`error`/`silent`. The old `logRoutesTable` option still works as a deprecated alias.
 
 ## Add Swagger Docs
 

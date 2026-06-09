@@ -185,8 +185,9 @@ export interface ApplicationOptions {
   /**
    * Print the route table on startup. Default: `false`. Set to `true`
    * to log a per-controller summary (method counts + mount paths) once
-   * the app has mounted. Printed at `info` level, so it shows regardless
-   * of `LOG_LEVEL` when enabled.
+   * the app has mounted. Emitted at `info` level, so it is still subject
+   * to `LOG_LEVEL` filtering (visible at the default `info`; hidden at
+   * `warn`/`error`/`silent`).
    */
   logRouteTable?: boolean
   /**
