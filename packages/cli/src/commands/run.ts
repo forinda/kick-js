@@ -131,15 +131,65 @@ async function startDevServer(
   // Runtime resolution of new templates is handled in @forinda/kickjs
   // itself — the dev-mode resolver skips its module-level cache so each
   // `assets.x.y()` call re-walks. No Vite full-reload needed.
+  // Batch every watcher event in the debounce window into one precise
+  // delta. Vite tells us EXACTLY which files changed, so we feed that to
+  // the incremental scanner — it re-extracts only those files and skips
+  // the directory walk entirely (see `scanProjectIncremental`). The
+  // previous code passed only the last file to a full re-scan; batching
+  // a `changed`/`removed` set both fixes that and unlocks the fast path.
   let typegenTimer: ReturnType<typeof setTimeout> | null = null
-  const scheduleTypegen = (file: string) => {
+  const pendingChanged = new Set<string>()
+  const pendingRemoved = new Set<string>()
+  // A directory removal can't be expressed as a precise file delta —
+  // chokidar may emit a single `unlinkDir` instead of per-file `unlink`
+  // events, so we can't know which cached files vanished. When that
+  // happens we fall back to a full walk-based re-scan for this window,
+  // which is always correct (it simply won't find the deleted files).
+  let forceFullScan = false
+  // Set when a file under an `assetMap.<ns>.src` dir changes — drives an
+  // incremental `buildAssets` so the dist copies + manifest stay fresh
+  // without re-copying every asset on every save (buildAssets skips
+  // up-to-date files). Only meaningful when an assetMap is configured.
+  let assetDirty = false
+  const hasAssetMap = !!devConfig?.assetMap && Object.keys(devConfig.assetMap).length > 0
+  const scheduleTypegen = (event: 'add' | 'change' | 'unlink' | 'unlinkDir', file: string) => {
     if (file.includes('.kickjs')) return
-    if (file.endsWith('.d.ts')) return
-    const isTs = /\.(ts|tsx|mts|cts)$/.test(file)
-    const isAsset = isAssetFile(file)
-    if (!isTs && !isAsset) return
+    if (event === 'unlinkDir') {
+      // Only meaningful if the removed dir could have held scanned
+      // sources or watched assets; cheap to just force a full scan.
+      forceFullScan = true
+      if (hasAssetMap) assetDirty = true
+    } else {
+      if (file.endsWith('.d.ts')) return
+      const isTs = /\.(ts|tsx|mts|cts)$/.test(file)
+      const isAsset = isAssetFile(file)
+      if (!isTs && !isAsset) return
+      if (isAsset && hasAssetMap) assetDirty = true
+      // Only `.ts` files participate in the source scan delta. Asset-only
+      // changes still trigger the pass (so the asset plugin re-emits) but
+      // contribute nothing to the scan — an empty `.ts` delta makes the
+      // incremental scan a near-instant cache replay.
+      if (isTs) {
+        if (event === 'unlink') {
+          pendingRemoved.add(file)
+          pendingChanged.delete(file)
+        } else {
+          pendingChanged.add(file)
+          pendingRemoved.delete(file)
+        }
+      }
+    }
     if (typegenTimer) clearTimeout(typegenTimer)
     typegenTimer = setTimeout(() => {
+      // `undefined` delta → full scan (the `unlinkDir` correctness path).
+      const delta = forceFullScan
+        ? undefined
+        : { changed: [...pendingChanged], removed: [...pendingRemoved] }
+      const rebuildAssets = assetDirty
+      pendingChanged.clear()
+      pendingRemoved.clear()
+      forceFullScan = false
+      assetDirty = false
       runTypegen({
         cwd,
         silent: true,
@@ -149,6 +199,7 @@ async function startDevServer(
         srcDir: devConfig?.typegen?.srcDir,
         outDir: devConfig?.typegen?.outDir,
         assetMap: devConfig?.assetMap,
+        changedFiles: delta,
         // Plugin pipeline runs separately just below; opting out here
         // avoids double-running it on every debounced trigger.
         runPlugins: false,
@@ -157,14 +208,22 @@ async function startDevServer(
       // their `kick__*` files when sources (or templates) change. silent
       // so the dev console stays quiet; artifacts (.gitignore + sweep)
       // run after the pass.
-      runAllPluginTypegens({ cwd, config: devConfig, silent: true })
+      runAllPluginTypegens({ cwd, config: devConfig, silent: true, changedFiles: delta })
         .then((r) => writeTypegenArtifacts(typesOutDir, r, true))
         .catch(() => {})
+      // Incrementally refresh the dist asset copies + manifest, but only
+      // when an asset file actually changed this window. buildAssets
+      // skips up-to-date files, so this is a cheap stat sweep + the
+      // occasional changed-file copy — not a full re-copy every save.
+      if (rebuildAssets) {
+        buildAssets(devConfig, { cwd, silent: true }).catch(() => {})
+      }
     }, 100)
   }
-  server.watcher.on('add', scheduleTypegen)
-  server.watcher.on('unlink', scheduleTypegen)
-  server.watcher.on('change', scheduleTypegen)
+  server.watcher.on('add', (f: string) => scheduleTypegen('add', f))
+  server.watcher.on('unlink', (f: string) => scheduleTypegen('unlink', f))
+  server.watcher.on('change', (f: string) => scheduleTypegen('change', f))
+  server.watcher.on('unlinkDir', (d: string) => scheduleTypegen('unlinkDir', d))
   // Vite's default watcher ignores extensions it doesn't compile;
   // explicitly subscribe asset src dirs so .ejs / .html changes land
   // in the typegen pipeline.

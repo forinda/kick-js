@@ -12,11 +12,22 @@ import type { KickConfig } from '../config'
 import { mergeCliPlugins } from '../plugin'
 import { builtinCliPlugins } from '../plugin/builtins'
 import { runTypegen as runPluginTypegens } from './runner'
+import type { ScanDelta } from './scanner'
 import type { TypegenPluginResult } from './plugin'
 import { applyDisableFilter } from './disable-filter'
 
 // Re-export so the existing public surface (cli/index.ts) still resolves.
 export { applyDisableFilter } from './disable-filter'
+
+/**
+ * True when verbose typegen output is requested via `LOG_LEVEL=debug`
+ * (the kickjs log-level convention). Gates the per-plugin status list so
+ * a normal `kick typegen` run only prints its one-line summary.
+ */
+function isDebugLog(): boolean {
+  const level = (process.env.LOG_LEVEL ?? process.env.KICKJS_LOG_LEVEL ?? '').toLowerCase()
+  return level === 'debug' || level === 'trace'
+}
 
 export interface RunAllPluginTypegensOptions {
   cwd: string
@@ -26,6 +37,12 @@ export interface RunAllPluginTypegensOptions {
   silent?: boolean
   /** CI gate — fail (do not write) on the first plugin whose output drifted. */
   check?: boolean
+  /**
+   * Exact watcher delta. Forwarded to the scanner so the plugin pass
+   * scans incrementally (changed files only) instead of re-walking the
+   * whole tree. Used by `kick dev`'s file-change handler.
+   */
+  changedFiles?: ScanDelta
 }
 
 export async function runAllPluginTypegens(
@@ -64,8 +81,12 @@ export async function runAllPluginTypegens(
       config: opts.config ?? ({} as never),
       plugins: enabled,
       check: opts.check,
+      changedFiles: opts.changedFiles,
     })
-    if (!opts.silent) {
+    // Per-plugin status lines are debug-level detail — the command
+    // already prints a one-line summary (`kick typegen → …`). Only emit
+    // the full list when LOG_LEVEL=debug so the default run stays quiet.
+    if (!opts.silent && isDebugLog()) {
       for (const r of results) console.log(`  ${r.id}: ${r.status}`)
     }
     return results
