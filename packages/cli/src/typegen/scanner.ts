@@ -1416,7 +1416,12 @@ async function mapConcurrent<T, R>(
  */
 export async function scanProject(opts: ScanOptions): Promise<ScanResult> {
   const root = resolve(opts.root)
-  const files = await walk(root, opts)
+  // Sort the walk output so the cross-file join sees files in the same
+  // order the incremental path does (which sorts its working set). The
+  // §3 mount-map is first-wins, so a stable order keeps a multi-mount
+  // controller's pathParams identical across cold and incremental runs
+  // (and across filesystems with different readdir ordering).
+  const files = (await walk(root, opts)).toSorted()
 
   const cache = opts.cacheDir ? await ScanCache.load(opts.cacheDir) : null
 

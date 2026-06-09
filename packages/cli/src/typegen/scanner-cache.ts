@@ -30,6 +30,32 @@ import type { FileExtract } from './scanner'
 /** Bump when the shape of `FileExtract` (or any extractor) changes. */
 const CACHE_VERSION = 1
 
+/** The array-valued keys every `FileExtract` must carry. */
+const EXTRACT_ARRAY_KEYS = [
+  'classes',
+  'tokens',
+  'injects',
+  'pluginsAndAdapters',
+  'augmentations',
+  'contextKeys',
+  'routes',
+  'moduleMounts',
+  'globPatterns',
+] as const
+
+/**
+ * Structurally validate a cached extract before trusting it. The join
+ * phase spreads these arrays (`...extract.classes`), so a truncated or
+ * hand-edited `scan.json` whose entry is missing a field would crash
+ * the scanner. Rejecting the entry here lets the cache self-heal — the
+ * file is treated as uncached and re-scanned.
+ */
+function isFileExtract(value: unknown): value is FileExtract {
+  if (!value || typeof value !== 'object') return false
+  const extract = value as Record<string, unknown>
+  return EXTRACT_ARRAY_KEYS.every((key) => Array.isArray(extract[key]))
+}
+
 /** One cached file: its signature plus the extraction it produced. */
 interface CacheEntry {
   /** `${mtimeMs}:${size}` — cheap change signature, no content read. */
@@ -74,7 +100,7 @@ export class ScanCache {
       const doc = JSON.parse(raw) as CacheDoc
       if (doc.version === CACHE_VERSION && doc.files) {
         for (const [path, entry] of Object.entries(doc.files)) {
-          if (entry && typeof entry.sig === 'string' && entry.extract) {
+          if (entry && typeof entry.sig === 'string' && isFileExtract(entry.extract)) {
             prev.set(path, entry)
           }
         }

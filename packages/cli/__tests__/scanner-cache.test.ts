@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, writeFile, rm, utimes } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, readFile, rm, utimes } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -93,6 +93,22 @@ export class UsersService {}
     const names = warm.classes.map((c) => c.className)
     expect(names).toContain('UsersService') // stale → proves no re-read
     expect(names).not.toContain('UsersServiZZ')
+  })
+
+  it('self-heals from a corrupt cache file (missing extract fields)', async () => {
+    const truth = await scanProject({ root: src, cwd: root })
+    await scanProject(opts()) // write a valid cache
+
+    // Corrupt one entry: keep a valid sig but a structurally-broken
+    // extract (no array fields). load() must reject it → cold re-scan.
+    const cacheFile = join(cacheDir, 'scan.json')
+    const doc = JSON.parse(await readFile(cacheFile, 'utf-8'))
+    const firstKey = Object.keys(doc.files)[0]
+    doc.files[firstKey].extract = { classes: 'not-an-array' }
+    await writeFile(cacheFile, JSON.stringify(doc))
+
+    const healed = await scanProject(opts())
+    expect(healed).toEqual(truth)
   })
 
   it('re-extracts a file whose signature changed', async () => {
