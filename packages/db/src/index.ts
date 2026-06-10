@@ -101,6 +101,7 @@ export { reviewMigration, type ReviewResult } from './migrate/review'
 
 export { emitPg } from './emit/pg'
 export { emitSqlite, SqliteRebuildRequiredError } from './emit/sqlite'
+export { emitMysql } from './emit/mysql'
 
 export { resolveDbConfig, type DbConfig } from './cli/config'
 export { generate } from './cli/generate'

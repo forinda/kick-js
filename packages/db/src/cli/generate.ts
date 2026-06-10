@@ -9,6 +9,7 @@ import { invertChanges, hasAmbiguousReverse } from '../diff/invert'
 import { CompositeEnumReferenceError, type CompositeRef } from '../diff/composite-detect'
 import { emitPg } from '../emit/pg'
 import { emitSqlite } from '../emit/sqlite'
+import { emitMysql } from '../emit/mysql'
 import { appendJournalEntry, computeMigrationHash } from '../migrate/journal'
 import type { DbConfig } from './config'
 import type { ChangeSet } from '../diff/types'
@@ -17,10 +18,14 @@ import type { Change, RemoveEnumValue } from '../diff/types'
 
 /** Pick the migration SQL emitter for the configured dialect. */
 function emitterFor(dialect: Dialect): (changes: ChangeSet) => string {
-  if (dialect === 'sqlite') return emitSqlite
-  // MySQL has no dedicated emitter yet — it falls back to the Postgres
-  // DDL, which is close but not guaranteed to run. Tracked separately.
-  return emitPg
+  switch (dialect) {
+    case 'sqlite':
+      return emitSqlite
+    case 'mysql':
+      return emitMysql
+    case 'postgres':
+      return emitPg
+  }
 }
 
 export interface GenerateOptions {
