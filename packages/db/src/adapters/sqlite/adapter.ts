@@ -1,5 +1,4 @@
 import {
-  KickDbError,
   lockTableDdl,
   migrationsTableDdl,
   type Dialect,
@@ -48,9 +47,10 @@ export interface SqliteAdapterOptions {
  * exists, so the UPDATE either flips `locked_at` and returns
  * `changes=1` (we won) or matches zero rows (someone else holds it).
  *
- * Introspection: not implemented in v1 — throws `KickDbError` with
- * code `KICK_DB_INTROSPECT_NOT_SUPPORTED`. Drift detection lands in a
- * follow-up that walks `sqlite_master` + `pragma` queries.
+ * Introspection: `introspect()` walks `sqlite_master` + `PRAGMA` via
+ * {@link introspectSqlite}. Types come back as SQLite affinities (lossy
+ * vs the code-first DSL), so it powers `kick db introspect` rather than
+ * byte-exact drift detection.
  */
 export function sqliteAdapter(opts: SqliteAdapterOptions): MigrationAdapter {
   const dialect: Dialect = 'sqlite'
