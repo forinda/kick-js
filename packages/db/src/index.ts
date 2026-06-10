@@ -97,8 +97,10 @@ export {
   type RollbackSummary,
   type StatusEntry,
 } from './migrate/runner'
+export { reviewMigration, type ReviewResult } from './migrate/review'
 
 export { emitPg } from './emit/pg'
+export { emitSqlite, SqliteRebuildRequiredError } from './emit/sqlite'
 
 export { resolveDbConfig, type DbConfig } from './cli/config'
 export { generate } from './cli/generate'
