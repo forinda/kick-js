@@ -1,98 +1,37 @@
-// CLI Plugin shape.
+// CLI plugin contract — re-exported from `@forinda/kickjs-cli-kit`.
 //
-// The kick CLI is itself a composition of plugins — every built-in
-// command (init, generate, run, typegen, db, …) ships as a KickCliPlugin
-// internally. Adopters extend the same surface from kick.config.ts to
-// add commands, generators, and typegens; the merging + conflict
-// detection runs the same way for built-ins and user plugins.
-//
-// Four contribution kinds:
-//
-//   • commands[]   — declarative shell-handler commands (same shape as
-//                    the existing kick.config.ts `commands` field).
-//   • register()   — programmatic commander registration. Called with
-//                    `(program, ctx)` so the callback has cwd + config
-//                    without re-loading.
-//   • typegens[]   — TypegenPlugin instances that `kick typegen` runs
-//                    after the legacy pass.
-//   • generators[] — `kick g <name>` scaffolders (defineGenerator).
-//                    Replaces the `package.json > kickjs.generators`
-//                    discovery; that path stays as a deprecated
-//                    fallback for one minor version.
-//
-// Mirrors `definePlugin` / `defineAdapter` factory parity so adopters
-// don't have to learn a new helper-naming convention.
+// The contract itself (defineCliPlugin, KickCliPlugin, the context, the
+// generator + command types) lives in the dependency-free
+// `@forinda/kickjs-cli-kit` so packages can ship CLI commands without
+// depending on `@forinda/kickjs-cli` (which would cycle — the CLI depends
+// on those packages). This module re-exports it for back-compat (adopters
+// import `defineCliPlugin` from `@forinda/kickjs-cli`) and narrows the
+// host-config generic to the CLI's `KickConfig`.
 
-import type { Command } from 'commander'
+import type { KickConfig } from '../config'
+import {
+  type KickCliPlugin as KitCliPlugin,
+  type KickCliPluginContext as KitCliPluginContext,
+} from '@forinda/kickjs-cli-kit'
 
-import type { TypegenPlugin } from '../typegen/plugin'
-import type { KickCommandDefinition, KickConfig } from '../config'
-import type { GeneratorSpec } from '../generator-extension/define'
-import type { DiscoveredGenerator } from '../generator-extension/discover'
+// Re-export the contract verbatim so `import { defineCliPlugin } from
+// '@forinda/kickjs-cli'` keeps working.
+export {
+  defineCliPlugin,
+  KickPluginConflictError,
+  type KickCommandDefinition,
+  type CliTypegen,
+  type DiscoveredGenerator,
+  type GeneratorSpec,
+  type GeneratorContext,
+  type GeneratorFile,
+  type GeneratorArg,
+  type GeneratorFlag,
+  defineGenerator,
+} from '@forinda/kickjs-cli-kit'
 
-/**
- * Runtime context handed to `register()` — saves callbacks from
- * re-loading config or guessing cwd. Forward-compatible: future fields
- * land here without changing the callback signature.
- */
-export interface KickCliPluginContext {
-  /**
-   * Working directory the CLI was invoked from. Plugin authors that need
-   * a stable "project base" location (e.g. to write artifacts, resolve
-   * config-relative paths) should prefer {@link projectRoot} over `cwd`
-   * — `cwd` is whatever the adopter typed the command from, including
-   * arbitrary subdirectories.
-   */
-  cwd: string
-  /**
-   * Resolved project root — the directory `loadKickConfig` walked up to
-   * via `findProjectRoot()`. Always set to a usable absolute path: when
-   * a `kick.config.{ts,js,mjs,json}` is found, that directory; otherwise
-   * the nearest ancestor with a `package.json`; otherwise `cwd` itself.
-   *
-   * Populated by `mergeCliPlugins.register()` from the same resolution
-   * that `cli.ts` performs at startup, so plugin authors get a coherent
-   * view of the project root without re-walking the filesystem.
-   */
-  projectRoot: string
-  /** Resolved kick.config.ts (null if the project has none). */
-  config: KickConfig | null
-  log: (msg: string) => void
-  /**
-   * Plugin-shipped generators merged from built-ins + adopter
-   * `kick.config.ts > plugins[]`. Populated by `mergeCliPlugins` and
-   * threaded through so `register()` callbacks (notably
-   * `kick/generate`) can register each plugin generator as a real
-   * Commander subcommand — without that, plugin generators only fire
-   * via the bare-action dispatch and are invisible to `kick g --help`.
-   *
-   * Optional so light test harnesses that call `plugin.register(program)`
-   * directly (no merge step) stay unaffected.
-   */
-  generators?: DiscoveredGenerator[]
-}
+/** CLI plugin context with the host config narrowed to `KickConfig`. */
+export type KickCliPluginContext = KitCliPluginContext<KickConfig>
 
-export interface KickCliPlugin {
-  /** Stable identifier — used in error messages on conflict + de-dup. */
-  name: string
-  commands?: KickCommandDefinition[]
-  /** Programmatic command registration. Called once at CLI startup. */
-  register?: (program: Command, ctx: KickCliPluginContext) => void | Promise<void>
-  typegens?: TypegenPlugin[]
-  generators?: GeneratorSpec[]
-}
-
-/** Identity helper — exists for type inference + parity with definePlugin. */
-export function defineCliPlugin(p: KickCliPlugin): KickCliPlugin {
-  return p
-}
-
-export class KickPluginConflictError extends Error {
-  constructor(kind: 'plugin' | 'command' | 'typegen' | 'generator', id: string, owners: string[]) {
-    super(
-      `Two plugins registered the same ${kind} '${id}': ${owners.join(', ')}. ` +
-        `Plugins must use unique ${kind} names.`,
-    )
-    this.name = 'KickPluginConflictError'
-  }
-}
+/** A CLI plugin with the host config narrowed to `KickConfig`. */
+export type KickCliPlugin = KitCliPlugin<KickConfig>
