@@ -2,6 +2,7 @@ import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { Dialect } from '../snapshot/types'
 import type { MigrationAdapter } from '../migrate/adapter'
+import type { DriftBehavior } from '../migrate/drift'
 
 export type MigrationAdapterFactory = () => MigrationAdapter | Promise<MigrationAdapter>
 
@@ -9,6 +10,14 @@ export interface DbConfig {
   schemaPath: string
   migrationsDir: string
   dialect: Dialect
+  /**
+   * How `kick db migrate` reacts when the live DB has schema not recorded
+   * in the migrations (someone ran DDL out of band): `'error'` (default —
+   * refuse), `'warn'` (log + continue), `'ignore'` (skip the check). The
+   * check is dialect-normalised, so SQLite/MySQL's lossy introspection
+   * doesn't false-positive.
+   */
+  driftCheck?: DriftBehavior
   /**
    * Postgres connection string for the built-in pgAdapter path. Read from
    * `db.connectionString` in kick.config.ts, or falls back to the
@@ -35,5 +44,6 @@ export async function resolveDbConfig(opts: { configPath: string }): Promise<DbC
     dialect: db.dialect ?? 'postgres',
     connectionString: db.connectionString ?? process.env.DATABASE_URL,
     adapter: db.adapter,
+    driftCheck: db.driftCheck,
   }
 }

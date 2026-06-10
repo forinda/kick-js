@@ -223,7 +223,7 @@ function emitInlineFk(fk: ForeignKeySnapshot): string {
 }
 
 /** Map a Postgres column type string to a SQLite affinity type. */
-function sqliteType(pgType: string): string {
+export function sqliteType(pgType: string): string {
   const base = pgType
     .toLowerCase()
     .replace(/\(.*\)/, '')

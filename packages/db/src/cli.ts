@@ -38,6 +38,7 @@ import {
 } from './index'
 import type { Dialect } from './snapshot/types'
 import type { MigrationAdapterFactory } from './cli/config'
+import type { DriftBehavior } from './migrate/drift'
 
 /**
  * Authoring shape for the db config — every field optional, defaults
@@ -51,6 +52,12 @@ export interface KickDbConfigInput {
   dialect?: Dialect
   connectionString?: string
   adapter?: MigrationAdapterFactory
+  /**
+   * How `migrate` reacts to out-of-band schema (drift): `'error'`
+   * (default), `'warn'`, or `'ignore'`. The check is dialect-normalised,
+   * so SQLite/MySQL's lossy introspection doesn't false-positive.
+   */
+  driftCheck?: DriftBehavior
 }
 
 /**
@@ -83,6 +90,7 @@ export function resolveKickDbConfig(block: KickDbConfigInput | undefined): DbCon
     dialect: db.dialect ?? 'postgres',
     connectionString: db.connectionString ?? process.env.DATABASE_URL,
     adapter: db.adapter,
+    driftCheck: db.driftCheck,
   }
 }
 
@@ -122,19 +130,6 @@ async function resolveAdapter(config: DbConfig): Promise<{
       await pool.end()
     },
   }
-}
-
-/**
- * Drift detection introspects the live DB and compares it to the last
- * applied snapshot. All three adapters now implement `introspect()`, but
- * SQLite / MySQL introspection is lossy against a code-first snapshot (a
- * `uuid()` column reads back as `text` / `char(36)`), so comparing raw
- * would false-positive. Until a dialect-normalised compare lands, drift
- * stays off for those dialects; PostgreSQL (faithful round-trip) keeps
- * the default `'error'`.
- */
-function driftCheckFor(config: DbConfig): 'ignore' | undefined {
-  return (config.dialect ?? 'postgres') === 'postgres' ? undefined : 'ignore'
 }
 
 interface PgQueryRunnerProbe {
@@ -238,8 +233,8 @@ export function registerDbCommands(parent: Command, getConfig: DbConfigResolver)
         const r = await migrateLatest({
           adapter,
           migrationsDir: config.migrationsDir,
+          driftCheck: config.driftCheck,
           confirmEnumDrop: opts.confirmEnumDrop,
-          driftCheck: driftCheckFor(config),
         })
         console.log(
           r.applied.length === 0
@@ -266,8 +261,8 @@ export function registerDbCommands(parent: Command, getConfig: DbConfigResolver)
         const r = await migrateUp({
           adapter,
           migrationsDir: config.migrationsDir,
+          driftCheck: config.driftCheck,
           confirmEnumDrop: opts.confirmEnumDrop,
-          driftCheck: driftCheckFor(config),
         })
         console.log(
           r.applied.length === 0
@@ -289,7 +284,7 @@ export function registerDbCommands(parent: Command, getConfig: DbConfigResolver)
         const r = await migrateDown({
           adapter,
           migrationsDir: config.migrationsDir,
-          driftCheck: driftCheckFor(config),
+          driftCheck: config.driftCheck,
         })
         console.log(r.reversed ? `Reversed ${r.reversed}.` : 'Nothing to reverse.')
       } finally {
@@ -307,7 +302,7 @@ export function registerDbCommands(parent: Command, getConfig: DbConfigResolver)
         const r = await migrateRollback({
           adapter,
           migrationsDir: config.migrationsDir,
-          driftCheck: driftCheckFor(config),
+          driftCheck: config.driftCheck,
         })
         console.log(
           r.reversed.length === 0
