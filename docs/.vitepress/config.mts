@@ -1,11 +1,5 @@
-import defineVersionedConfig from 'vitepress-versioning-plugin'
-// The docs version timeline tracks the framework core
-// (`@forinda/kickjs`) — adopters cite that version when filing
-// issues, and the changesets snapshot script writes
-// `docs/versions/<corePkg.version>/`. Per-package versions diverge
-// under changesets; the root `package.json` is in `ignore` and
-// stays at 0.0.0.
-import pkg from '../../packages/kickjs/package.json'
+import { defineConfig } from 'vitepress'
+// Docs track the latest release only — older versions are not snapshotted.
 
 const guideSidebar = [
   {
@@ -197,11 +191,8 @@ const sharedSidebar = {
   '/schemas/': schemasSidebar,
 }
 
-export default defineVersionedConfig(
+export default defineConfig(
   {
-    versioning: {
-      latestVersion: pkg.version,
-    },
     title: 'KickJS',
     description:
       'A production-grade, decorator-driven Node.js framework built on Express 5 and TypeScript',
@@ -225,13 +216,11 @@ export default defineVersionedConfig(
     ],
 
     themeConfig: {
-      versionSwitcher: false,
       nav: [
         { text: 'Guide', link: '/guide/getting-started' },
         { text: 'Database', link: '/guide/database/' },
         { text: 'API', link: '/api/core' },
         { text: 'Schemas', link: '/schemas/' },
-        { component: 'VersionSwitcher' },
       ],
 
       logo: '/logo.svg',
@@ -266,5 +255,4 @@ export default defineVersionedConfig(
       },
     },
   },
-  __dirname,
 )
