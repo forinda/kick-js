@@ -3,7 +3,7 @@
 `@forinda/kickjs-db` is the first-party database layer for KickJS — a code-first ORM built on top of [Kysely](https://kysely.dev). You declare your schema as TypeScript, get fully typed queries with zero codegen, and ship reversible migrations through the `kick db` CLI.
 
 ::: tip This is the database story for KickJS
-`@forinda/kickjs-db` and its driver packages (`@forinda/kickjs-db-pg`, `@forinda/kickjs-db-sqlite`, `@forinda/kickjs-db-mysql`) are the supported, first-party way to talk to a SQL database from a KickJS app.
+`@forinda/kickjs-db` and its driver packages (`@forinda/kickjs-db/pg`, `@forinda/kickjs-db/sqlite`, `@forinda/kickjs-db/mysql`) are the supported, first-party way to talk to a SQL database from a KickJS app.
 :::
 
 ## What you get
@@ -21,21 +21,21 @@ Install the core package plus the driver for your database. Use `kick add`:
 
 ```bash
 # PostgreSQL
-kick add db db-pg
+kick add pg
 
 # SQLite
-kick add db db-sqlite
+kick add sqlite
 
 # MySQL / MariaDB
-kick add db db-mysql
+kick add mysql
 ```
 
 Each driver package needs the underlying database client too:
 
 ```bash
-pnpm add @forinda/kickjs-db @forinda/kickjs-db-pg pg          # PostgreSQL
-pnpm add @forinda/kickjs-db @forinda/kickjs-db-sqlite better-sqlite3   # SQLite
-pnpm add @forinda/kickjs-db @forinda/kickjs-db-mysql mysql2   # MySQL
+pnpm add @forinda/kickjs-db pg          # PostgreSQL
+pnpm add @forinda/kickjs-db better-sqlite3   # SQLite
+pnpm add @forinda/kickjs-db mysql2   # MySQL
 ```
 
 See [Drivers](./drivers) for the differences between dialects.
@@ -94,7 +94,7 @@ See [Migrations](./migrations) for the full workflow.
 // src/db/client.ts
 import { Pool } from 'pg'
 import { createDbClient } from '@forinda/kickjs-db'
-import { pgAdapter, pgDialect } from '@forinda/kickjs-db-pg'
+import { pgAdapter, pgDialect } from '@forinda/kickjs-db/pg'
 import * as schema from './schema'
 
 export const pool = new Pool({ connectionString: process.env.DATABASE_URL })

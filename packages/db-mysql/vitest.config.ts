@@ -14,7 +14,9 @@ export default defineConfig({
   resolve: {
     alias: {
       '@forinda/kickjs': path.resolve(__dirname, '../kickjs/src/index.ts'),
-      '@forinda/kickjs-db/pg': path.resolve(__dirname, '../db/src/dsl/columns/pg.ts'),
+      '@forinda/kickjs-db/pg': path.resolve(__dirname, '../db/src/pg.ts'),
+      '@forinda/kickjs-db/sqlite': path.resolve(__dirname, '../db/src/sqlite.ts'),
+      '@forinda/kickjs-db/mysql': path.resolve(__dirname, '../db/src/mysql.ts'),
       '@forinda/kickjs-db': path.resolve(__dirname, '../db/src/index.ts'),
       '@forinda/kickjs-db-mysql': path.resolve(__dirname, 'src/index.ts'),
     },

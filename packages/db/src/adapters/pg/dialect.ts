@@ -23,7 +23,7 @@ export interface PgDialectOptions {
  * @example
  * ```ts
  * import { createDbClient } from '@forinda/kickjs-db'
- * import { pgDialect, pgAdapter } from '@forinda/kickjs-db-pg'
+ * import { pgDialect, pgAdapter } from '@forinda/kickjs-db/pg'
  * import { Pool } from 'pg'
  *
  * const pool = new Pool({ connectionString: process.env.DATABASE_URL })

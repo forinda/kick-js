@@ -50,7 +50,7 @@ async function loadConfig(opts: BaseOpts): Promise<DbConfig> {
  * Resolve a MigrationAdapter from config:
  *  1. config.adapter() — explicit factory wins.
  *  2. config.connectionString — built-in pgAdapter path; we dynamically
- *     import @forinda/kickjs-db-pg + pg so the CLI doesn't pull pg into
+ *     import @forinda/kickjs-db/pg + pg so the CLI doesn't pull pg into
  *     non-PG workflows.
  */
 async function resolveAdapter(config: DbConfig): Promise<{
@@ -73,9 +73,9 @@ async function resolveAdapter(config: DbConfig): Promise<{
     )
   }
   // Dynamic import so the CLI doesn't hard-require pg unless this path runs.
-  // Both packages are devDependencies of @forinda/kickjs-cli so types resolve;
-  // adopters who use this path must also install them in their own app.
-  const [{ pgAdapter }, pg] = await Promise.all([import('@forinda/kickjs-db-pg'), import('pg')])
+  // The pg adapter ships from the `@forinda/kickjs-db/pg` subpath; adopters
+  // who use this path install `@forinda/kickjs-db` + `pg` in their own app.
+  const [{ pgAdapter }, pg] = await Promise.all([import('@forinda/kickjs-db/pg'), import('pg')])
   const pool = new pg.default.Pool({ connectionString: config.connectionString })
   const adapter = pgAdapter({ pool })
   return {

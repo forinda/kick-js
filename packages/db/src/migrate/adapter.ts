@@ -13,7 +13,7 @@ export interface MigrationRow {
  * Slim contract that connects the runner to a concrete database driver.
  *
  * Concrete impls: MemoryMigrationAdapter (this package, test-only) and
- * pgAdapter from @forinda/kickjs-db-pg. Future db-sqlite / db-mysql adapter
+ * pgAdapter from @forinda/kickjs-db/pg. Future db-sqlite / db-mysql adapter
  * packages will satisfy this same shape so the runner stays driver-agnostic.
  */
 export interface MigrationAdapter {

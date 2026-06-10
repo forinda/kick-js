@@ -1,6 +1,6 @@
 // mysqlDialect — thin factory over Kysely's MysqlDialect so adopters
 // never have to reach for `import { MysqlDialect } from 'kysely'`.
-// Mirrors the `@forinda/kickjs-db-pg` template; the kysely subpackage
+// Mirrors the `@forinda/kickjs-db/pg` template; the kysely subpackage
 // is a pinned internal dep of the framework.
 
 import { MysqlDialect, type Dialect as KyselyDialect } from 'kysely'
@@ -27,7 +27,7 @@ export interface MysqlDialectOptions {
  * @example
  * ```ts
  * import { createDbClient } from '@forinda/kickjs-db'
- * import { mysqlAdapter, mysqlDialect } from '@forinda/kickjs-db-mysql'
+ * import { mysqlAdapter, mysqlDialect } from '@forinda/kickjs-db/mysql'
  * import { createPool } from 'mysql2/promise'
  *
  * const pool = createPool({

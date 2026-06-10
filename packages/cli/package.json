@@ -53,7 +53,8 @@
   },
   "devDependencies": {
     "@forinda/kickjs-ai": "workspace:*",
-    "@forinda/kickjs-db-pg": "workspace:*",
+    "pg": "^8.21.0",
+    "@types/pg": "^8.11.10",
     "@swc/core": "^1.15.40",
     "@types/node": "^25.9.2",
     "@types/pg": "^8.11.10",

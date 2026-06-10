@@ -174,7 +174,7 @@ export default defineConfig({
     dialect: 'sqlite',
     adapter: async () => {
       const Database = (await import('better-sqlite3')).default
-      const { sqliteAdapter } = await import('@forinda/kickjs-db-sqlite')
+      const { sqliteAdapter } = await import('@forinda/kickjs-db/sqlite')
       return sqliteAdapter({ database: new Database('app.db') })
     },
   },
