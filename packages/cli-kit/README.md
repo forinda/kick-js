@@ -79,16 +79,16 @@ export default [
 
 ## Contract surface
 
-| Export                   | Purpose                                                                   |
-| ------------------------ | ------------------------------------------------------------------------- |
-| `defineCliPlugin(p)`     | Declare a CLI plugin: `name` + `register()` / `commands` / `typegens` / `generators`. |
-| `defineGenerator(spec)`  | Declare a `kick g <name>` scaffolder (returns the spec, typed).            |
-| `KickCliPlugin<TConfig>` | The plugin shape. `TConfig` is the host config type (`ctx.config`).       |
-| `KickCliPluginContext`   | What `register()` receives: `cwd`, `projectRoot`, `config`, `log`.        |
-| `GeneratorSpec` + co.    | `GeneratorContext` / `GeneratorFile` / `GeneratorArg` / `GeneratorFlag`.  |
-| `KickCommandDefinition`  | A declarative shell-handler command (the `commands` field shape).         |
-| `CliTypegen`             | Structural typegen shape (the CLI's `TypegenPlugin` satisfies it).        |
-| `KickPluginConflictError`| Thrown on duplicate plugin / command / typegen / generator ids.           |
+| Export                    | Purpose                                                                               |
+| ------------------------- | ------------------------------------------------------------------------------------- |
+| `defineCliPlugin(p)`      | Declare a CLI plugin: `name` + `register()` / `commands` / `typegens` / `generators`. |
+| `defineGenerator(spec)`   | Declare a `kick g <name>` scaffolder (returns the spec, typed).                       |
+| `KickCliPlugin<TConfig>`  | The plugin shape. `TConfig` is the host config type (`ctx.config`).                   |
+| `KickCliPluginContext`    | What `register()` receives: `cwd`, `projectRoot`, `config`, `log`.                    |
+| `GeneratorSpec` + co.     | `GeneratorContext` / `GeneratorFile` / `GeneratorArg` / `GeneratorFlag`.              |
+| `KickCommandDefinition`   | A declarative shell-handler command (the `commands` field shape).                     |
+| `CliTypegen`              | Structural typegen shape (the CLI's `TypegenPlugin` satisfies it).                    |
+| `KickPluginConflictError` | Thrown on duplicate plugin / command / typegen / generator ids.                       |
 
 ## License
 
