@@ -8,7 +8,7 @@ import type { DriftBehavior } from './migrate/drift'
 export type MigrationsOnBoot = 'fail-if-pending' | 'apply' | 'ignore'
 
 export interface KickDbAdapterConfig {
-  /** The driver-bound MigrationAdapter — pgAdapter() in @forinda/kickjs-db-pg, etc. */
+  /** The driver-bound MigrationAdapter — pgAdapter() in @forinda/kickjs-db/pg, etc. */
   migrationAdapter: MigrationAdapter
   /** Directory containing the generated migrations + _journal.json. */
   migrationsDir: string

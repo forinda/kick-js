@@ -59,7 +59,7 @@ Why not fork drizzle: license-clean greenfield is preferred; idiom-borrowing (br
 
 The node SQL dialects (PostgreSQL / SQLite / MySQL) ship as **subpaths of the core package** — one install plus the one driver you use. The pattern mirrors `@forinda/kickjs-schema` (`./zod` / `./valibot` / `./yup` + optional peer deps).
 
-```
+```text
 packages/
   db/                        @forinda/kickjs-db                 (core + /pg /sqlite /mysql adapters)
   db-pg/                     @forinda/kickjs-db-pg              (deprecated shim → @forinda/kickjs-db/pg)
@@ -74,12 +74,12 @@ packages/
 - `db` core — `kysely` + `@forinda/kickjs` (peer). Drivers (`pg`, `better-sqlite3`, `mysql2`) are **optional peer deps** — the relevant subpath imports its driver lazily, so installing `@forinda/kickjs-db` never pulls all three.
 - Edge adapters — driver-specific separate packages (`@neondatabase/serverless`, etc), v6.2.
 
-**Subpath exports** (core package) — each dialect subpath bundles its column quirks **plus** the migration adapter + Kysely dialect:
+**Subpath exports** (core package) — each dialect subpath ships the migration adapter + Kysely dialect, and (for PG today) the dialect-specific column types. Cross-dialect column constructors (`uuid`, `varchar`, `timestamp`, …) live on the **root** entry, not the subpaths.
 
-- `@forinda/kickjs-db` — root: cross-dialect DSL, client, hooks, `$extends`, `defineTenantDbContributor`.
-- `@forinda/kickjs-db/pg` — PG column types (`tsvector`, `vector`, `citext`, `money`, `inet`, `cidr`, `xml`) + `pgAdapter` + `pgDialect`. Needs `pg`.
-- `@forinda/kickjs-db/sqlite` — `sqliteAdapter` + `sqliteDialect` (+ SQLite quirks). Needs `better-sqlite3`.
-- `@forinda/kickjs-db/mysql` — `mysqlAdapter` + `mysqlDialect` (+ MySQL types). Needs `mysql2`.
+- `@forinda/kickjs-db` — root: cross-dialect DSL + column constructors, client, hooks, `$extends`, `defineTenantDbContributor`.
+- `@forinda/kickjs-db/pg` — `pgAdapter` + `pgDialect` **+ PG-only column types** (`tsvector`, `vector`, `citext`, `money`, `inet`, `cidr`, `xml`). Needs `pg`.
+- `@forinda/kickjs-db/sqlite` — `sqliteAdapter` + `sqliteDialect`. No SQLite-specific column types today (reserved for future quirks). Needs `better-sqlite3`.
+- `@forinda/kickjs-db/mysql` — `mysqlAdapter` + `mysqlDialect`. No MySQL-specific column types today (reserved for future types). Needs `mysql2`.
 - `@forinda/kickjs-db/edge` — edge-safe entry; omits the migration runner, introspection, and any `node:fs`/`node:path` import path. v6.2.
 
 **Versioning** — lockstep across all `db*` packages, matching KickJS convention. Bumped via `scripts/release.js`.

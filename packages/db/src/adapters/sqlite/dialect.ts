@@ -1,6 +1,6 @@
 // sqliteDialect — thin factory over Kysely's SqliteDialect so adopters
 // never have to reach for `import { SqliteDialect } from 'kysely'`.
-// Mirrors the `@forinda/kickjs-db-pg` template; the kysely subpackage
+// Mirrors the `@forinda/kickjs-db/pg` template; the kysely subpackage
 // is a pinned internal dep of the framework.
 
 import { SqliteDialect, type Dialect as KyselyDialect } from 'kysely'
