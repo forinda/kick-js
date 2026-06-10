@@ -1,5 +1,99 @@
 # @forinda/kickjs-db
 
+## 6.1.0
+
+### Minor Changes
+
+- [#334](https://github.com/forinda/kick-js/pull/334) [`f050f6b`](https://github.com/forinda/kick-js/commit/f050f6b235d1fc54f7adc790cd2b5c999411c5c6) Thanks [@forinda](https://github.com/forinda)! - Ship the database CLI from `@forinda/kickjs-db/cli` — a mountable plugin **and** a standalone `kickjs-db` bin — so you can use the db tooling without (or alongside) `@forinda/kickjs-cli`.
+
+  **New: `@forinda/kickjs-db/cli`**
+  - `dbCliPlugin` — a CLI plugin (`@forinda/kickjs-cli-kit` contract). Mount it in `kick.config.ts` to get `kick db generate | migrate latest|up|down|rollback|status|review | introspect`. It reads config from the same `kick.config.ts` `db` block (via `ctx.config`, no re-parse).
+  - `defineKickDbConfig` / `mergeKickDbConfig` / `resolveKickDbConfig` — vite-style config helpers. Author a standalone `kickjs-db.config.ts` (`export default defineKickDbConfig({ ... })`) or reuse the `kick.config.ts` `db` block; the two merge (later wins).
+  - Standalone **`kickjs-db` bin** — `npx kickjs-db migrate latest` runs the whole command tree without kickjs-cli, loading `kickjs-db.config.ts` (or a `kick.config.ts` `db` block) through jiti.
+
+  **Breaking (`@forinda/kickjs-cli`): `kick db` is now opt-in.**
+  The `kick db` commands are no longer built into kickjs-cli. Add the plugin to your config:
+
+  ```ts
+  import { defineConfig } from '@forinda/kickjs-cli'
+  import { dbCliPlugin } from '@forinda/kickjs-db/cli'
+
+  export default defineConfig({ plugins: [dbCliPlugin] })
+  ```
+
+  Zero-config **db type generation is unchanged** — it stays a built-in typegen (`kick typegen` still emits `.kickjs/types` for your schema). Only the `kick db` _commands_ moved.
+
+- [#331](https://github.com/forinda/kick-js/pull/331) [`4ba020e`](https://github.com/forinda/kick-js/commit/4ba020ed043dc0ee8f696661035891824a3e83f8) Thanks [@forinda](https://github.com/forinda)! - Consolidate the SQL dialect adapters into `@forinda/kickjs-db` subpaths.
+
+  The PostgreSQL / SQLite / MySQL adapters + dialects now ship from **subpaths of `@forinda/kickjs-db`** instead of separate packages — mirroring how `@forinda/kickjs-schema` exposes `./zod` / `./valibot` / `./yup`. Install one package plus the single driver you use:
+
+  ```bash
+  # before
+  pnpm add @forinda/kickjs-db @forinda/kickjs-db-pg pg
+  # after
+  pnpm add @forinda/kickjs-db pg
+  ```
+
+  ```ts
+  // before
+  import { pgAdapter, pgDialect } from '@forinda/kickjs-db-pg'
+  // after
+  import { pgAdapter, pgDialect } from '@forinda/kickjs-db/pg'
+  ```
+
+  - New subpaths: `@forinda/kickjs-db/pg` (now also carries `pgAdapter` + `pgDialect` alongside the PG column types), `@forinda/kickjs-db/sqlite`, `@forinda/kickjs-db/mysql`.
+  - `pg`, `better-sqlite3`, `mysql2` are **optional peer deps** of `@forinda/kickjs-db` — the relevant subpath imports its driver lazily, so the core install never pulls all three.
+  - `@forinda/kickjs-db-pg` / `-sqlite` / `-mysql` remain as **deprecated re-export shims** (`export * from '@forinda/kickjs-db/<dialect>'`) so existing installs keep working; they'll be removed in a future major.
+  - CLI: `kick db` resolves the pg adapter from `@forinda/kickjs-db/pg`; `kick add pg|sqlite|mysql` installs `@forinda/kickjs-db` plus the matching driver.
+
+- [#337](https://github.com/forinda/kick-js/pull/337) [`cf3ba8c`](https://github.com/forinda/kick-js/commit/cf3ba8cb56e70385cc6906371d2f8cb3846a2093) Thanks [@forinda](https://github.com/forinda)! - `introspect()` now works for SQLite and MySQL, so `kick db introspect` can reverse-engineer a live SQLite / MySQL database into a `schema.ts` (previously Postgres-only — the SQLite/MySQL adapters threw `KICK_DB_INTROSPECT_NOT_SUPPORTED`).
+  - `introspectSqlite` walks `sqlite_master` + `PRAGMA table_info|index_list|index_info|foreign_key_list` (skips constraint auto-indexes, groups multi-column FKs).
+  - `introspectMysql` walks `information_schema.{TABLES,COLUMNS,STATISTICS,KEY_COLUMN_USAGE,REFERENTIAL_CONSTRAINTS}`.
+  - Both are exported (`introspectSqlite` / `introspectMysql`) and wired into their adapters' `introspect()`.
+
+  Note: SQLite/MySQL introspection is **lossy** against a code-first snapshot — a `uuid()` column reads back as `text` / `char(36)` — so it powers schema reverse-engineering, not byte-exact drift detection. Drift stays off for those dialects pending a dialect-normalised compare; PostgreSQL drift is unaffected.
+
+- [#336](https://github.com/forinda/kick-js/pull/336) [`3b00de4`](https://github.com/forinda/kick-js/commit/3b00de462ebe6f1772cfe0e44c1c04d3a45a4ddf) Thanks [@forinda](https://github.com/forinda)! - `kick db generate` now emits MySQL DDL when `db.dialect: 'mysql'`. Previously MySQL fell back to the Postgres emitter, which produced double-quoted identifiers and Postgres-only types that MySQL rejects.
+
+  `emitMysql` mirrors the Postgres emitter's structure (MySQL has full `ALTER TABLE` support, unlike SQLite) with MySQL-specific output: backtick identifiers, PG→MySQL type mapping (`uuid`→`CHAR(36)`, `boolean`→`TINYINT(1)`, `serial`→`INT ... AUTO_INCREMENT`, `jsonb`→`JSON`, `text`→`TEXT`, length-preserving `varchar(n)`→`VARCHAR(n)`), normalised defaults (`gen_random_uuid()`→`(UUID())`, `now()`→`CURRENT_TIMESTAMP`, `false`→`0`), `alterColumn` via `MODIFY COLUMN`, and `dropForeignKey` via `DROP FOREIGN KEY`. The emitter is dispatched by dialect in `generate()`.
+
+- [#339](https://github.com/forinda/kick-js/pull/339) [`66aae3c`](https://github.com/forinda/kick-js/commit/66aae3cf8c3bd87d14eaa0085d9ca15181fa97fe) Thanks [@forinda](https://github.com/forinda)! - Drift detection now works for SQLite and MySQL — `kick db migrate` catches out-of-band schema changes on all three dialects.
+
+  SQLite/MySQL introspection is lossy against a code-first snapshot (a `uuid()` column reads back as `text` / `char(36)`, defaults normalise, SQLite drops FK names), so a raw comparison flagged drift on every migration. `checkDrift` now **canonicalises both sides** before diffing: column types run through the emit type-mapper (so `uuid` ≡ `text`), defaults are dropped, and FK names become a structural key. This catches the drift that matters — tables/columns added or removed, type/nullability/PK changes, indexes — without false positives. PostgreSQL still compares raw (faithful round-trip) and keeps default-level drift detection.
+
+  **Behaviour change**: SQLite/MySQL `migrate` previously skipped drift entirely (it had no `introspect()`); it now defaults to `'error'` like Postgres. Tune it with the new `db.driftCheck` option (`'error'` | `'warn'` | `'ignore'`) in `kick.config.ts` / `kickjs-db.config.ts`.
+
+  Verified end-to-end: a clean SQLite migrate passes the drift check (no false positive on lossy types), while an out-of-band `ALTER TABLE ... ADD COLUMN` is caught ("Schema drift detected: 1 added").
+
+- [#332](https://github.com/forinda/kick-js/pull/332) [`456e280`](https://github.com/forinda/kick-js/commit/456e280eaef89b0d0c357a06edbde6f8e7c2c789) Thanks [@forinda](https://github.com/forinda)! - SQLite migration generation, a `migrate review` command, and drift handling for non-Postgres dialects.
+  - **`kick db generate` now emits SQLite DDL** when `db.dialect: 'sqlite'`. Previously the migration emitter was Postgres-only, so SQLite projects couldn't generate migrations from their schema (only the runner worked). The new `emitSqlite` maps PG types to SQLite affinities, normalises defaults (`gen_random_uuid()` → `(lower(hex(randomblob(16))))`, `false` → `0`, `now()` → `CURRENT_TIMESTAMP`), inlines a single integer PK as `INTEGER PRIMARY KEY` (rowid), and folds foreign keys into `CREATE TABLE` (SQLite has no `ALTER ... ADD CONSTRAINT`). Operations SQLite can't express via `ALTER TABLE` (column type/null/default changes, FK changes on an existing table) throw a clear `SqliteRebuildRequiredError` pointing at `kick db generate --empty` instead of emitting wrong SQL. `generate` now dispatches the emitter by dialect.
+
+  - **`kick db migrate review <id>`** marks a migration reviewed: it flips `meta.json.reviewed`, swaps the `-- REVIEWED: false` markers in `up.sql`/`down.sql`, and recomputes the journal hash so all three stay in sync. Previously the only way to review was hand-editing `meta.json`, which left the SQL markers and the hash out of sync (the runner gates on `meta.json.reviewed`, not the comment).
+
+  - **Drift detection is skipped for SQLite/MySQL** — only the Postgres adapter implements `introspect()`, so `kick db migrate` no longer fails with "introspection not supported" on those dialects (PostgreSQL keeps the default `error` behaviour).
+
+- [#338](https://github.com/forinda/kick-js/pull/338) [`e0e7c34`](https://github.com/forinda/kick-js/commit/e0e7c34ed46b70e1dcfecdf178a7d6f7e774beb9) Thanks [@forinda](https://github.com/forinda)! - `kick db generate` now emits a SQLite **table rebuild** for changes SQLite's `ALTER TABLE` can't express — column type/null/default alters and foreign-key add/drop on an existing table. Previously these threw `SqliteRebuildRequiredError` and had to be hand-authored.
+
+  The emitter follows SQLite's recommended safe procedure: `CREATE TABLE _kick_new_<t>` with the desired shape → `INSERT ... SELECT` the surviving columns (the old/new column intersection, so data is preserved) → `DROP TABLE` → `RENAME` → recreate indexes. Verified end-to-end: a seeded row survives both `migrate up` and `migrate down` of a column-type change, with indexes intact.
+
+  To build the new table the emitter needs the resolved before/after schema, so `generate()` now threads both snapshots into the SQLite emitter (`emitSqlite(changes, { from, to })`). Calling `emitSqlite(changes)` bare with a rebuild-requiring change still throws `SqliteRebuildRequiredError`.
+
+  Limitation: the rebuild works for tables without **inbound** foreign-key references (the common case). A table that other tables' FKs point at would need `PRAGMA foreign_keys=OFF` outside the migration transaction — still out of scope.
+
+- [#335](https://github.com/forinda/kick-js/pull/335) [`cda92e7`](https://github.com/forinda/kick-js/commit/cda92e79e0bdc7a6a46c4f428dc10da4ad115a8f) Thanks [@forinda](https://github.com/forinda)! - The `kick/db` type generation now ships on `dbCliPlugin` (exported as `kickDbTypegen` from `@forinda/kickjs-db/cli`), so mounting the plugin brings **both** the `kick db` commands and `.kickjs/types/kick__db.d.ts` generation from one opt-in.
+
+  Previously the db typegen was a kickjs-cli built-in while the commands lived in the plugin — split across two packages. Now `@forinda/kickjs-db/cli` owns the full db CLI surface. kickjs-cli's `kickDbTypegen` export stays as a re-export shim for back-compat, but it is no longer auto-registered — add `dbCliPlugin` to `kick.config.ts` `plugins: []` to get db types (the same mount that enables the commands).
+
+### Patch Changes
+
+- [#330](https://github.com/forinda/kick-js/pull/330) [`91cf40f`](https://github.com/forinda/kick-js/commit/91cf40f2925b733dd39d46f3faf8ce29120c84f1) Thanks [@forinda](https://github.com/forinda)! - Fix `kick db` with plugin-importing configs, and non-string column defaults.
+  - **`kick db` commands now load `kick.config.ts` through the CLI's jiti loader** (`loadKickConfig`) instead of `@forinda/kickjs-db`'s native `import()`. Native ESM can't resolve the extensionless, relative TypeScript imports a config commonly uses — e.g. `import { toolsPlugin } from './tools/cli-plugin'` to mount a CLI plugin — so every `kick db ...` command failed with `Cannot find module` whenever the config imported local TS. It now resolves exactly like the rest of the CLI.
+
+  - **Column `.default()` accepts `string | number | boolean`** and normalises non-strings to their SQL-literal text. `boolean().default(false)` / `integer().default(0)` previously stored a raw boolean/number in the snapshot, which crashed migration emit with `value.replace is not a function`. The Postgres emitter (`formatDefault`) is also hardened to coerce booleans/numbers defensively, so a pre-existing snapshot with a non-string default emits a bare SQL literal (`false`, `0`) instead of throwing.
+
+- Updated dependencies [[`b6b6832`](https://github.com/forinda/kick-js/commit/b6b683292596bec023104a7fc2b3d8e5a958f36a)]:
+  - @forinda/kickjs-cli-kit@0.1.0
+
 ## 6.0.0
 
 ## 6.0.0-alpha.0

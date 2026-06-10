@@ -1,8 +1,15 @@
 {
   "name": "@forinda/kickjs-cli-kit",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Shared CLI-plugin contract for KickJS — defineCliPlugin, defineGenerator, and the types CLI plugins implement",
-  "keywords": ["kickjs", "cli", "plugin", "generator", "commander", "typescript"],
+  "keywords": [
+    "kickjs",
+    "cli",
+    "plugin",
+    "generator",
+    "commander",
+    "typescript"
+  ],
   "type": "module",
   "main": "dist/index.mjs",
   "types": "dist/index.d.mts",
@@ -12,7 +19,9 @@
       "types": "./dist/index.d.mts"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch",
