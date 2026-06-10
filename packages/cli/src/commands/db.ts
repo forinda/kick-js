@@ -6,7 +6,6 @@ import { writeFile } from 'node:fs/promises'
 import {
   detectCompositeReferences,
   generate,
-  resolveDbConfig,
   migrateLatest,
   migrateUp,
   migrateDown,
@@ -17,13 +16,34 @@ import {
   type DbConfig,
   type MigrationAdapter,
 } from '@forinda/kickjs-db'
+import { loadKickConfig } from '../config'
 
 interface BaseOpts {
   config: string
 }
 
+/**
+ * Resolve the `db` block from `kick.config.ts` using the CLI's own jiti
+ * loader (`loadKickConfig`) rather than `@forinda/kickjs-db`'s
+ * `resolveDbConfig`, which does a native `import()` of the config file.
+ *
+ * Native ESM can't resolve the extensionless, relative TypeScript
+ * imports a `kick.config.ts` commonly uses (e.g. `import { toolsPlugin }
+ * from './tools/cli-plugin'` to mount a CLI plugin) — so any config that
+ * imports local TS broke every `kick db` command with "Cannot find
+ * module". jiti handles those exactly like the rest of the CLI does.
+ */
 async function loadConfig(opts: BaseOpts): Promise<DbConfig> {
-  return resolveDbConfig({ configPath: path.resolve(process.cwd(), opts.config) })
+  const startDir = path.dirname(path.resolve(process.cwd(), opts.config))
+  const cfg = await loadKickConfig(startDir)
+  const db = cfg?.db ?? {}
+  return {
+    schemaPath: db.schemaPath ?? 'src/db/schema.ts',
+    migrationsDir: db.migrationsDir ?? 'db/migrations',
+    dialect: db.dialect ?? 'postgres',
+    connectionString: db.connectionString ?? process.env.DATABASE_URL,
+    adapter: db.adapter as DbConfig['adapter'],
+  }
 }
 
 /**
