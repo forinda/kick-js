@@ -3,61 +3,106 @@ import type {
   ColumnSnapshot,
   ForeignKeySnapshot,
   IndexSnapshot,
+  SchemaSnapshot,
   TableSnapshot,
 } from '../snapshot/types'
 import { quoteIdent, quoteLiteral } from './identifiers'
 
 /**
- * Raised when a change set contains a SQLite operation that SQLite's
- * limited `ALTER TABLE` can't express directly (altering a column's
- * type/null/default, or adding/dropping a foreign key on an existing
- * table). Those need the 12-step table-rebuild dance, not yet emitted —
- * author the migration by hand with `kick db generate --empty` for now.
+ * Raised when a change set needs a SQLite table rebuild but the emitter
+ * wasn't given the resolved snapshots to build it from (it only has the
+ * per-change diff). `generate()` always passes the snapshots, so this only
+ * surfaces if `emitSqlite` is called bare with a rebuild-requiring change.
  */
 export class SqliteRebuildRequiredError extends Error {
   constructor(detail: string) {
     super(
-      `kickjs-db: this change needs a SQLite table rebuild, which the emitter ` +
-        `doesn't generate yet — ${detail}. Author it manually with ` +
-        `\`kick db generate --empty <name>\` (CREATE new table → copy rows → ` +
-        `DROP old → RENAME), or target PostgreSQL for automatic ALTERs.`,
+      `kickjs-db: this SQLite change needs a table rebuild and no resolved ` +
+        `schema snapshot was supplied to build it — ${detail}. This is an ` +
+        `internal error; report it (generate() passes the snapshots).`,
     )
     this.name = 'SqliteRebuildRequiredError'
   }
 }
 
 /**
+ * Resolved before/after schema snapshots, threaded in by `generate()` so
+ * the emitter can build the 12-step table-rebuild for changes SQLite's
+ * `ALTER TABLE` can't express (column type/null/default changes, FK
+ * add/drop on an existing table). `to` is the schema *after* the changes
+ * apply; `from` is before — their column intersection drives the
+ * `INSERT ... SELECT` data copy.
+ */
+export interface SqliteEmitContext {
+  from?: SchemaSnapshot
+  to?: SchemaSnapshot
+}
+
+/**
  * Emit SQLite DDL for a change set.
  *
- * SQLite-specific handling vs the Postgres emitter:
- * - PG column types are mapped to SQLite type affinities.
- * - A single integer primary key is emitted **inline** (`INTEGER
- *   PRIMARY KEY`) so it aliases the rowid (auto-increment); composite
- *   or non-integer PKs use a table-level `PRIMARY KEY (...)` clause.
- * - Foreign keys are **inlined into `CREATE TABLE`** — SQLite has no
- *   `ALTER TABLE ... ADD CONSTRAINT`. The diff emits a new table's FKs
- *   as separate `addForeignKey` changes; we fold those into the create
- *   and skip them here.
- * - `alterColumn`, FK changes on an existing table, and enum changes
- *   throw {@link SqliteRebuildRequiredError} (or an enum error) rather
- *   than emit wrong SQL.
+ * Most operations map to a direct statement (CREATE/DROP/RENAME TABLE,
+ * ADD/DROP/RENAME COLUMN, CREATE/DROP INDEX). The ones SQLite can't `ALTER`
+ * directly — `alterColumn`, and foreign-key add/drop on an existing table —
+ * are handled by a **table rebuild**: create a new table with the desired
+ * shape, copy rows, drop the old, rename, recreate indexes. Foreign keys
+ * are folded into `CREATE TABLE` (SQLite has no `ADD CONSTRAINT`).
  */
-export function emitSqlite(changes: ChangeSet): string {
-  // Tables created in this change set — their FKs are inlined into the
-  // CREATE TABLE, so the separate `addForeignKey` changes are no-ops.
+export function emitSqlite(changes: ChangeSet, ctx: SqliteEmitContext = {}): string {
   const createdTables = new Set<string>()
   for (const c of changes) if (c.kind === 'createTable') createdTables.add(c.table.name)
 
-  return changes
-    .map((c) => emitChange(c, createdTables))
-    .filter((s) => s.length > 0)
-    .join('\n')
+  // Tables that need a rebuild (an ALTER SQLite can't express). A table
+  // created in this same change set is never rebuilt — its FKs inline into
+  // CREATE TABLE directly.
+  const rebuildTables = new Set<string>()
+  for (const c of changes) {
+    const t = perTableName(c)
+    if (!t || createdTables.has(t)) continue
+    if (c.kind === 'alterColumn' || c.kind === 'dropForeignKey' || c.kind === 'addForeignKey') {
+      rebuildTables.add(t)
+    }
+  }
+
+  const out: string[] = []
+
+  // 1. Emit every change that isn't subsumed by a rebuild.
+  for (const c of changes) {
+    const t = perTableName(c)
+    if (t && rebuildTables.has(t)) continue // folded into the rebuild below
+    const sql = emitChange(c)
+    if (sql) out.push(sql)
+  }
+
+  // 2. Emit one rebuild per affected table, from the resolved `to` snapshot.
+  for (const table of rebuildTables) {
+    out.push(emitRebuild(table, ctx))
+  }
+
+  return out.join('\n')
 }
 
-function emitChange(change: Change, createdTables: Set<string>): string {
+/** The table a per-table change targets, or null for table-level changes. */
+function perTableName(change: Change): string | null {
+  switch (change.kind) {
+    case 'addColumn':
+    case 'dropColumn':
+    case 'renameColumn':
+    case 'alterColumn':
+    case 'addIndex':
+    case 'dropIndex':
+    case 'addForeignKey':
+    case 'dropForeignKey':
+      return change.table
+    default:
+      return null
+  }
+}
+
+function emitChange(change: Change): string {
   switch (change.kind) {
     case 'createTable':
-      return emitCreateTable(change.table)
+      return emitCreateTable(change.table.name, change.table)
     case 'dropTable':
       return `DROP TABLE ${quoteIdent(change.table.name)};`
     case 'renameTable':
@@ -65,30 +110,20 @@ function emitChange(change: Change, createdTables: Set<string>): string {
     case 'addColumn':
       return `ALTER TABLE ${quoteIdent(change.table)} ADD COLUMN ${emitColumnDecl(change.column)};`
     case 'dropColumn':
-      // SQLite 3.35+ supports DROP COLUMN.
       return `ALTER TABLE ${quoteIdent(change.table)} DROP COLUMN ${quoteIdent(change.column.name)};`
     case 'renameColumn':
-      // SQLite 3.25+ supports RENAME COLUMN.
       return `ALTER TABLE ${quoteIdent(change.table)} RENAME COLUMN ${quoteIdent(change.from)} TO ${quoteIdent(change.to)};`
     case 'addIndex':
       return emitAddIndex(change.table, change.index)
     case 'dropIndex':
       return `DROP INDEX ${quoteIdent(change.index.name)};`
     case 'addForeignKey':
-      // Inlined into CREATE TABLE for new tables; otherwise impossible
-      // without a rebuild.
-      if (createdTables.has(change.table)) return ''
-      throw new SqliteRebuildRequiredError(
-        `adding foreign key '${change.fk.name}' to existing table '${change.table}'`,
-      )
     case 'dropForeignKey':
-      throw new SqliteRebuildRequiredError(
-        `dropping foreign key '${change.fk.name}' from table '${change.table}'`,
-      )
     case 'alterColumn':
-      throw new SqliteRebuildRequiredError(
-        `altering column '${change.column}' on table '${change.table}'`,
-      )
+      // FK add/drop + column alters never emit a standalone statement:
+      // new-table FKs inline into CREATE TABLE, existing-table FK + column
+      // changes are subsumed by the table rebuild.
+      return ''
     case 'createEnum':
     case 'dropEnum':
     case 'addEnumValue':
@@ -100,32 +135,64 @@ function emitChange(change: Change, createdTables: Set<string>): string {
   }
 }
 
-function emitCreateTable(t: TableSnapshot): string {
+/**
+ * The SQLite-recommended safe table mutation: create the new table, copy
+ * the rows that survive (column intersection of old + new), drop the old,
+ * rename, and recreate indexes.
+ *
+ * Works for tables without inbound foreign-key references (the common
+ * case for a column type/default change). Tables referenced by other
+ * tables' FKs would need `PRAGMA foreign_keys=OFF` outside the migration
+ * transaction — out of scope here.
+ */
+function emitRebuild(table: string, ctx: SqliteEmitContext): string {
+  const next = ctx.to?.tables[table]
+  if (!next) {
+    throw new SqliteRebuildRequiredError(`no resolved snapshot for table '${table}'`)
+  }
+  const prev = ctx.from?.tables[table]
+
+  // Copy columns present in BOTH old and new (added columns get their
+  // default; dropped columns are simply not selected).
+  const newCols = Object.keys(next.columns)
+  const common = prev ? newCols.filter((c) => c in prev.columns) : newCols
+  const colList = common.map(quoteIdent).join(', ')
+
+  const tmp = `_kick_new_${table}`
+  const lines: string[] = [
+    emitCreateTable(tmp, next),
+    common.length > 0
+      ? `INSERT INTO ${quoteIdent(tmp)} (${colList})\n  SELECT ${colList} FROM ${quoteIdent(table)};`
+      : `-- (no columns survive the rebuild; nothing to copy)`,
+    `DROP TABLE ${quoteIdent(table)};`,
+    `ALTER TABLE ${quoteIdent(tmp)} RENAME TO ${quoteIdent(table)};`,
+  ]
+  for (const idx of next.indexes) lines.push(emitAddIndex(table, idx))
+  return lines.join('\n')
+}
+
+function emitCreateTable(name: string, t: TableSnapshot): string {
   const columns = Object.values(t.columns)
   const pkCols = columns.filter((c) => c.primaryKey)
 
-  // A single integer PK becomes the rowid alias only when declared
-  // inline as `INTEGER PRIMARY KEY` — a table-level PRIMARY KEY clause
-  // would not auto-increment. Composite or non-integer PKs use the
-  // table-level clause.
+  // A single integer PK becomes the rowid alias only when declared inline
+  // as `INTEGER PRIMARY KEY`; composite/non-integer PKs use a table clause.
   const inlinePk =
     pkCols.length === 1 && sqliteType(pkCols[0].type) === 'INTEGER' ? pkCols[0] : null
 
   const lines = columns.map((c) => emitColumnDecl(c, c === inlinePk))
-
   if (!inlinePk && pkCols.length > 0) {
     lines.push(`PRIMARY KEY (${pkCols.map((c) => quoteIdent(c.name)).join(', ')})`)
   }
   for (const fk of t.foreignKeys) lines.push(emitInlineFk(fk))
 
-  return `CREATE TABLE ${quoteIdent(t.name)} (\n  ${lines.join(',\n  ')}\n);`
+  return `CREATE TABLE ${quoteIdent(name)} (\n  ${lines.join(',\n  ')}\n);`
 }
 
 function emitColumnDecl(c: ColumnSnapshot, inlinePk = false): string {
   let s = `${quoteIdent(c.name)} ${sqliteType(c.type)}`
   if (inlinePk) {
     s += ' PRIMARY KEY'
-    // `serial`/`bigserial` imply an auto-incrementing PK.
     if (/serial/i.test(c.type)) s += ' AUTOINCREMENT'
   }
   if (!c.nullable && !inlinePk) s += ' NOT NULL'
@@ -155,17 +222,12 @@ function emitInlineFk(fk: ForeignKeySnapshot): string {
   )
 }
 
-/**
- * Map a Postgres column type string to a SQLite type. SQLite uses
- * type affinity (only the substring matters), but we emit canonical
- * names — `INTEGER` / `REAL` / `NUMERIC` / `TEXT` / `BLOB` — so the
- * generated DDL reads clearly and the right affinity is selected.
- */
+/** Map a Postgres column type string to a SQLite affinity type. */
 function sqliteType(pgType: string): string {
   const base = pgType
     .toLowerCase()
-    .replace(/\(.*\)/, '') // drop length/precision, e.g. varchar(200)
-    .replace(/\[\]$/, '') // drop array marker (stored as TEXT/JSON)
+    .replace(/\(.*\)/, '')
+    .replace(/\[\]$/, '')
     .trim()
 
   if (/^(serial|bigserial|smallserial|big|small)?int(eger|2|4|8)?$/.test(base)) return 'INTEGER'
@@ -174,37 +236,21 @@ function sqliteType(pgType: string): string {
   if (/^(real|float4|float8|double precision|float)$/.test(base)) return 'REAL'
   if (/^(numeric|decimal|money)$/.test(base)) return 'NUMERIC'
   if (base === 'bytea' || base === 'blob') return 'BLOB'
-  // varchar/char/text/uuid/json/jsonb/citext/xml/inet/cidr/timestamp/date/
-  // time/interval and anything else → TEXT (SQLite stores dates as TEXT).
   return 'TEXT'
 }
 
-/**
- * Map a Postgres default expression to its SQLite equivalent.
- */
+/** Map a Postgres default expression to its SQLite equivalent. */
 function sqliteDefault(value: unknown): string {
   if (typeof value === 'boolean') return value ? '1' : '0'
   if (typeof value === 'number' || typeof value === 'bigint') return String(value)
   const str = String(value).trim()
 
-  // Booleans → SQLite integer literals.
   if (/^true$/i.test(str)) return '1'
   if (/^false$/i.test(str)) return '0'
-
-  // Postgres UUID/`now()` generators → SQLite equivalents.
-  if (/^(gen_random_uuid|uuid_generate_v4)\(\)$/i.test(str)) {
-    // 16 random bytes → 32 hex chars. Not dash-formatted, but unique +
-    // collision-safe; wrap in parens so SQLite treats it as an expression.
-    return '(lower(hex(randomblob(16))))'
-  }
+  if (/^(gen_random_uuid|uuid_generate_v4)\(\)$/i.test(str)) return '(lower(hex(randomblob(16))))'
   if (/^now\(\)$/i.test(str)) return 'CURRENT_TIMESTAMP'
-
-  // SQLite-supported time keywords + plain numerics pass through bare.
   if (/^(CURRENT_TIMESTAMP|CURRENT_DATE|CURRENT_TIME|NULL)$/i.test(str)) return str.toUpperCase()
   if (/^-?\d+(\.\d+)?$/.test(str)) return str
-
-  // Any other bare function call (best effort) passes through; everything
-  // else is a string literal.
   if (/^[a-z_][a-z0-9_]*\s*\([^)]*\)$/i.test(str)) return str
   return quoteLiteral(str)
 }

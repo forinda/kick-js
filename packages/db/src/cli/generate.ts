@@ -16,15 +16,25 @@ import type { ChangeSet } from '../diff/types'
 import type { Dialect, SchemaSnapshot } from '../snapshot/types'
 import type { Change, RemoveEnumValue } from '../diff/types'
 
-/** Pick the migration SQL emitter for the configured dialect. */
-function emitterFor(dialect: Dialect): (changes: ChangeSet) => string {
+/**
+ * Emit migration DDL for the dialect. `from`/`to` are the schema snapshots
+ * before/after the changes apply — the SQLite emitter uses them to build
+ * table rebuilds (column alters, FK add/drop) it can't express via
+ * `ALTER TABLE`. Postgres/MySQL ignore them.
+ */
+function emitDdl(
+  dialect: Dialect,
+  changes: ChangeSet,
+  from: SchemaSnapshot,
+  to: SchemaSnapshot,
+): string {
   switch (dialect) {
     case 'sqlite':
-      return emitSqlite
+      return emitSqlite(changes, { from, to })
     case 'mysql':
-      return emitMysql
+      return emitMysql(changes)
     case 'postgres':
-      return emitPg
+      return emitPg(changes)
   }
 }
 
@@ -94,14 +104,15 @@ export async function generate(opts: GenerateOptions): Promise<GenerateResult> {
 
   await assertNoCompositeReferences(changes, opts.detectCompositeRefs)
 
-  const emit = emitterFor(opts.config.dialect)
+  const dialect = opts.config.dialect
   return await writeMigration({
     opts,
     migrationsAbs,
     previousId,
     target,
-    upBody: emit(changes),
-    downBody: emit(invertChanges(changes)),
+    // up: prev -> target. down: invert applied to target -> prev.
+    upBody: emitDdl(dialect, changes, prev, target),
+    downBody: emitDdl(dialect, invertChanges(changes), target, prev),
     changeCount: changes.length,
     draft: hasAmbiguousReverse(changes),
     empty: false,

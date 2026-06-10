@@ -193,3 +193,127 @@ describe('emitSqlite — ALTER', () => {
     ).toThrow(SqliteRebuildRequiredError)
   })
 })
+
+import type { SchemaSnapshot } from '@forinda/kickjs-db'
+
+const tbl = (
+  name: string,
+  cols: Record<string, Partial<import('@forinda/kickjs-db').ColumnSnapshot>>,
+  indexes: import('@forinda/kickjs-db').IndexSnapshot[] = [],
+) => ({
+  name,
+  columns: Object.fromEntries(Object.entries(cols).map(([n, o]) => [n, col({ name: n, ...o })])),
+  indexes,
+  foreignKeys: [],
+  checks: [],
+})
+
+describe('emitSqlite — table rebuild (alterColumn with snapshots)', () => {
+  it('rebuilds the table: create _kick_new / copy common cols / drop / rename / reindex', () => {
+    const from: SchemaSnapshot = {
+      version: 1,
+      dialect: 'sqlite',
+      tables: {
+        tasks: tbl(
+          'tasks',
+          {
+            id: { type: 'integer', nullable: false, primaryKey: true },
+            title: { type: 'varchar(50)', nullable: true },
+          },
+          [{ name: 'tasks_title_idx', columns: ['title'], unique: false }],
+        ),
+      },
+    }
+    const to: SchemaSnapshot = {
+      version: 1,
+      dialect: 'sqlite',
+      tables: {
+        tasks: tbl(
+          'tasks',
+          {
+            id: { type: 'integer', nullable: false, primaryKey: true },
+            title: { type: 'text', nullable: false }, // type + nullability changed
+          },
+          [{ name: 'tasks_title_idx', columns: ['title'], unique: false }],
+        ),
+      },
+    }
+    const sql = emitSqlite(
+      [
+        {
+          kind: 'alterColumn',
+          table: 'tasks',
+          column: 'title',
+          before: from.tables.tasks.columns.title,
+          after: to.tables.tasks.columns.title,
+        },
+      ],
+      { from, to },
+    )
+    expect(sql).toBe(
+      'CREATE TABLE "_kick_new_tasks" (\n' +
+        '  "id" INTEGER PRIMARY KEY,\n' +
+        '  "title" TEXT NOT NULL\n' +
+        ');\n' +
+        'INSERT INTO "_kick_new_tasks" ("id", "title")\n' +
+        '  SELECT "id", "title" FROM "tasks";\n' +
+        'DROP TABLE "tasks";\n' +
+        'ALTER TABLE "_kick_new_tasks" RENAME TO "tasks";\n' +
+        'CREATE INDEX "tasks_title_idx" ON "tasks" ("title");',
+    )
+  })
+
+  it('copies only the column intersection (a dropped column is not selected)', () => {
+    const from: SchemaSnapshot = {
+      version: 1,
+      dialect: 'sqlite',
+      tables: {
+        t: tbl('t', {
+          id: { type: 'integer', primaryKey: true, nullable: false },
+          gone: { type: 'text' },
+          keep: { type: 'text' },
+        }),
+      },
+    }
+    const to: SchemaSnapshot = {
+      version: 1,
+      dialect: 'sqlite',
+      tables: {
+        t: tbl('t', {
+          id: { type: 'integer', primaryKey: true, nullable: false },
+          keep: { type: 'integer' },
+        }),
+      },
+    }
+    const sql = emitSqlite(
+      [
+        {
+          kind: 'alterColumn',
+          table: 't',
+          column: 'keep',
+          before: from.tables.t.columns.keep,
+          after: to.tables.t.columns.keep,
+        },
+      ],
+      { from, to },
+    )
+    expect(sql).toContain(
+      'INSERT INTO "_kick_new_t" ("id", "keep")\n  SELECT "id", "keep" FROM "t";',
+    )
+    expect(sql).not.toContain('gone')
+  })
+
+  it('still throws when no snapshot is supplied (bare call)', () => {
+    expect(() =>
+      emitSqlite([
+        {
+          kind: 'alterColumn',
+          table: 'tasks',
+          column: 'title',
+          before: col({ name: 'title', type: 'varchar(50)' }),
+          after: col({ name: 'title', type: 'text' }),
+        },
+      ]),
+    ).toThrow(SqliteRebuildRequiredError)
+  })
+})
