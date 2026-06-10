@@ -126,7 +126,7 @@ function emitAddFk(table: string, fk: ForeignKeySnapshot): string {
 /**
  * Map a Postgres column type string to a MySQL type.
  */
-function mysqlType(pgType: string): string {
+export function mysqlType(pgType: string): string {
   const lower = pgType.toLowerCase().trim()
   const base = lower
     .replace(/\(.*\)/, '')
