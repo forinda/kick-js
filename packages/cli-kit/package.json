@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-cli-kit",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Shared CLI-plugin contract for KickJS — defineCliPlugin, defineGenerator, and the types CLI plugins implement",
   "keywords": [
     "kickjs",
