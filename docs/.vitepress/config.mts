@@ -92,6 +92,7 @@ const guideSidebar = [
       { text: 'Schema', link: '/guide/database/schema' },
       { text: 'Queries', link: '/guide/database/queries' },
       { text: 'Migrations', link: '/guide/database/migrations' },
+      { text: 'CLI', link: '/guide/database/cli' },
       { text: 'Drivers', link: '/guide/database/drivers' },
       { text: 'Repositories', link: '/guide/database/repositories' },
     ],
