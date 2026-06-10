@@ -57,6 +57,16 @@ export {
 } from './migrate/schema'
 export { MemoryMigrationAdapter } from './migrate/memory-adapter'
 export { introspectPg } from './migrate/introspect-pg'
+export {
+  introspectSqlite,
+  type SqliteIntrospectDb,
+  type IntrospectSqliteOptions,
+} from './migrate/introspect-sqlite'
+export {
+  introspectMysql,
+  type MysqlIntrospectDb,
+  type IntrospectMysqlOptions,
+} from './migrate/introspect-mysql'
 export type { IntrospectPgOptions, PgQueryRunner } from './migrate/introspect-types'
 export { checkDrift, type DriftBehavior, type DriftLogger } from './migrate/drift'
 

@@ -126,9 +126,12 @@ async function resolveAdapter(config: DbConfig): Promise<{
 
 /**
  * Drift detection introspects the live DB and compares it to the last
- * applied snapshot. Only the Postgres adapter implements `introspect()`,
- * so for SQLite / MySQL we turn drift off (the runner would otherwise
- * throw "introspection not supported"). PostgreSQL keeps `'error'`.
+ * applied snapshot. All three adapters now implement `introspect()`, but
+ * SQLite / MySQL introspection is lossy against a code-first snapshot (a
+ * `uuid()` column reads back as `text` / `char(36)`), so comparing raw
+ * would false-positive. Until a dialect-normalised compare lands, drift
+ * stays off for those dialects; PostgreSQL (faithful round-trip) keeps
+ * the default `'error'`.
  */
 function driftCheckFor(config: DbConfig): 'ignore' | undefined {
   return (config.dialect ?? 'postgres') === 'postgres' ? undefined : 'ignore'
