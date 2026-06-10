@@ -11,6 +11,7 @@ import {
   migrateDown,
   migrateRollback,
   migrateStatus,
+  reviewMigration,
   renderSchemaSource,
   type CompositeQueryRunner,
   type DbConfig,
@@ -85,6 +86,17 @@ async function resolveAdapter(config: DbConfig): Promise<{
       await pool.end()
     },
   }
+}
+
+/**
+ * Drift detection introspects the live DB and compares it to the last
+ * applied snapshot. Only the Postgres adapter implements `introspect()`
+ * today, so for SQLite / MySQL we turn drift off (the runner would
+ * otherwise throw "introspection not supported"). PostgreSQL keeps the
+ * default `'error'` behaviour.
+ */
+function driftCheckFor(config: DbConfig): 'ignore' | undefined {
+  return (config.dialect ?? 'postgres') === 'postgres' ? undefined : 'ignore'
 }
 
 interface PgQueryRunnerProbe {
@@ -205,6 +217,7 @@ export function registerDbCommands(program: Command): void {
           adapter,
           migrationsDir: config.migrationsDir,
           confirmEnumDrop: opts.confirmEnumDrop,
+          driftCheck: driftCheckFor(config),
         })
         if (r.applied.length === 0) {
           console.log('No pending migrations.')
@@ -233,6 +246,7 @@ export function registerDbCommands(program: Command): void {
           adapter,
           migrationsDir: config.migrationsDir,
           confirmEnumDrop: opts.confirmEnumDrop,
+          driftCheck: driftCheckFor(config),
         })
         if (r.applied.length === 0) {
           console.log('No pending migrations.')
@@ -252,7 +266,11 @@ export function registerDbCommands(program: Command): void {
       const config = await loadConfig(opts)
       const { adapter, cleanup } = await resolveAdapter(config)
       try {
-        const r = await migrateDown({ adapter, migrationsDir: config.migrationsDir })
+        const r = await migrateDown({
+          adapter,
+          migrationsDir: config.migrationsDir,
+          driftCheck: driftCheckFor(config),
+        })
         if (!r.reversed) {
           console.log('Nothing to reverse.')
         } else {
@@ -271,7 +289,11 @@ export function registerDbCommands(program: Command): void {
       const config = await loadConfig(opts)
       const { adapter, cleanup } = await resolveAdapter(config)
       try {
-        const r = await migrateRollback({ adapter, migrationsDir: config.migrationsDir })
+        const r = await migrateRollback({
+          adapter,
+          migrationsDir: config.migrationsDir,
+          driftCheck: driftCheckFor(config),
+        })
         if (r.reversed.length === 0) {
           console.log('Nothing to roll back.')
         } else {
@@ -295,6 +317,21 @@ export function registerDbCommands(program: Command): void {
       } finally {
         await cleanup()
       }
+    })
+
+  migrate
+    .command('review <id>')
+    .description('Mark a migration reviewed (flips meta.json + the -- REVIEWED markers)')
+    .option('-c, --config <path>', 'Path to kick.config.ts', 'kick.config.ts')
+    .action(async (id: string, opts: BaseOpts) => {
+      // No adapter/DB needed — review only touches the migration files.
+      const config = await loadConfig(opts)
+      const r = await reviewMigration(config.migrationsDir, id)
+      console.log(
+        r.alreadyReviewed
+          ? `${r.id} was already reviewed.`
+          : `Reviewed ${r.id} — it can now be applied.`,
+      )
     })
 
   // ── kick db introspect ─────────────────────────────────────────────────

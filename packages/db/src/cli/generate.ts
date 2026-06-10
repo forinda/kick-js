@@ -8,10 +8,20 @@ import { diff } from '../diff/engine'
 import { invertChanges, hasAmbiguousReverse } from '../diff/invert'
 import { CompositeEnumReferenceError, type CompositeRef } from '../diff/composite-detect'
 import { emitPg } from '../emit/pg'
+import { emitSqlite } from '../emit/sqlite'
 import { appendJournalEntry, computeMigrationHash } from '../migrate/journal'
 import type { DbConfig } from './config'
-import type { SchemaSnapshot } from '../snapshot/types'
+import type { ChangeSet } from '../diff/types'
+import type { Dialect, SchemaSnapshot } from '../snapshot/types'
 import type { Change, RemoveEnumValue } from '../diff/types'
+
+/** Pick the migration SQL emitter for the configured dialect. */
+function emitterFor(dialect: Dialect): (changes: ChangeSet) => string {
+  if (dialect === 'sqlite') return emitSqlite
+  // MySQL has no dedicated emitter yet — it falls back to the Postgres
+  // DDL, which is close but not guaranteed to run. Tracked separately.
+  return emitPg
+}
 
 export interface GenerateOptions {
   name: string
@@ -47,7 +57,10 @@ export interface GenerateResult {
 
 export async function generate(opts: GenerateOptions): Promise<GenerateResult> {
   const migrationsAbs = path.resolve(opts.cwd, opts.config.migrationsDir)
-  const { snapshot: prev, id: previousId } = await readLatestSnapshotEntry(migrationsAbs)
+  const { snapshot: prev, id: previousId } = await readLatestSnapshotEntry(
+    migrationsAbs,
+    opts.config.dialect,
+  )
 
   if (opts.empty) {
     return await writeMigration({
@@ -76,13 +89,14 @@ export async function generate(opts: GenerateOptions): Promise<GenerateResult> {
 
   await assertNoCompositeReferences(changes, opts.detectCompositeRefs)
 
+  const emit = emitterFor(opts.config.dialect)
   return await writeMigration({
     opts,
     migrationsAbs,
     previousId,
     target,
-    upBody: emitPg(changes),
-    downBody: emitPg(invertChanges(changes)),
+    upBody: emit(changes),
+    downBody: emit(invertChanges(changes)),
     changeCount: changes.length,
     draft: hasAmbiguousReverse(changes),
     empty: false,
@@ -161,8 +175,11 @@ interface LatestEntry {
   id: string | null
 }
 
-async function readLatestSnapshotEntry(migrationsDir: string): Promise<LatestEntry> {
-  const empty: SchemaSnapshot = { version: 1, dialect: 'postgres', tables: {} }
+async function readLatestSnapshotEntry(
+  migrationsDir: string,
+  dialect: Dialect,
+): Promise<LatestEntry> {
+  const empty: SchemaSnapshot = { version: 1, dialect, tables: {} }
   if (!existsSync(migrationsDir)) {
     return { snapshot: empty, id: null }
   }
