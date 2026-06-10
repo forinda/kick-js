@@ -52,6 +52,16 @@ beforeAll(async () => {
     database: container.getDatabase(),
     max: 4, // big enough for the parallel "is the backend gone" check
   })
+  // The mid-flight cancel test deliberately abandons a `pg_sleep(10)`
+  // backend (Kysely's `'ignore query'` strategy). When `container.stop()`
+  // tears the server down in afterAll, that backend's pooled connection is
+  // terminated server-side (`57P01`), which a `pg.Pool` surfaces as an
+  // async `'error'` on the idle client. Without a listener that becomes an
+  // unhandled error and fails the run even though every test passed — a
+  // pool error handler is mandatory for exactly this teardown race.
+  pool.on('error', () => {
+    // expected idle-client termination during teardown — swallow.
+  })
 }, 90_000)
 
 afterAll(async () => {
