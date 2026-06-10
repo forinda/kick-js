@@ -191,68 +191,66 @@ const sharedSidebar = {
   '/schemas/': schemasSidebar,
 }
 
-export default defineConfig(
-  {
-    title: 'KickJS',
-    description:
-      'A production-grade, decorator-driven Node.js framework built on Express 5 and TypeScript',
-    base: '/kick-js/',
-    ignoreDeadLinks: true,
-    head: [
-      ['link', { rel: 'icon', type: 'image/svg+xml', href: '/kick-js/logo.svg' }],
-      ['meta', { name: 'theme-color', content: '#3b82f6' }],
-      ['meta', { property: 'og:type', content: 'website' }],
-      ['meta', { property: 'og:title', content: 'KickJS — The Adaptive Node.js Framework' }],
-      [
-        'meta',
-        {
-          property: 'og:description',
-          content:
-            'Decorator-driven APIs on Express 5. REST, WebSocket, queues, scheduled jobs — pick what you need.',
-        },
-      ],
-      ['meta', { property: 'og:url', content: 'https://forinda.github.io/kick-js/' }],
-      ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
+export default defineConfig({
+  title: 'KickJS',
+  description:
+    'A production-grade, decorator-driven Node.js framework built on Express 5 and TypeScript',
+  base: '/kick-js/',
+  ignoreDeadLinks: true,
+  head: [
+    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/kick-js/logo.svg' }],
+    ['meta', { name: 'theme-color', content: '#3b82f6' }],
+    ['meta', { property: 'og:type', content: 'website' }],
+    ['meta', { property: 'og:title', content: 'KickJS — The Adaptive Node.js Framework' }],
+    [
+      'meta',
+      {
+        property: 'og:description',
+        content:
+          'Decorator-driven APIs on Express 5. REST, WebSocket, queues, scheduled jobs — pick what you need.',
+      },
+    ],
+    ['meta', { property: 'og:url', content: 'https://forinda.github.io/kick-js/' }],
+    ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
+  ],
+
+  themeConfig: {
+    nav: [
+      { text: 'Guide', link: '/guide/getting-started' },
+      { text: 'Database', link: '/guide/database/' },
+      { text: 'API', link: '/api/core' },
+      { text: 'Schemas', link: '/schemas/' },
     ],
 
-    themeConfig: {
-      nav: [
-        { text: 'Guide', link: '/guide/getting-started' },
-        { text: 'Database', link: '/guide/database/' },
-        { text: 'API', link: '/api/core' },
-        { text: 'Schemas', link: '/schemas/' },
-      ],
+    logo: '/logo.svg',
+    siteTitle: 'KickJS',
 
-      logo: '/logo.svg',
-      siteTitle: 'KickJS',
+    sidebar: sharedSidebar,
 
-      sidebar: sharedSidebar,
+    socialLinks: [
+      { icon: 'github', link: 'https://github.com/forinda/kick-js' },
+      { icon: 'npm', link: 'https://www.npmjs.com/package/@forinda/kickjs' },
+    ],
 
-      socialLinks: [
-        { icon: 'github', link: 'https://github.com/forinda/kick-js' },
-        { icon: 'npm', link: 'https://www.npmjs.com/package/@forinda/kickjs' },
-      ],
+    editLink: {
+      pattern: 'https://github.com/forinda/kick-js/edit/main/docs/:path',
+      text: 'Suggest changes to this page',
+    },
 
-      editLink: {
-        pattern: 'https://github.com/forinda/kick-js/edit/main/docs/:path',
-        text: 'Suggest changes to this page',
-      },
+    footer: {
+      message:
+        'Released under the <a href="https://github.com/forinda/kick-js/blob/main/LICENSE">MIT License</a>. Built with TypeScript + Express 5.',
+      copyright: `Copyright &copy; ${new Date().getFullYear()} <a href="https://github.com/forinda">Felix Orinda</a>`,
+    },
 
-      footer: {
-        message:
-          'Released under the <a href="https://github.com/forinda/kick-js/blob/main/LICENSE">MIT License</a>. Built with TypeScript + Express 5.',
-        copyright: `Copyright &copy; ${new Date().getFullYear()} <a href="https://github.com/forinda">Felix Orinda</a>`,
-      },
-
-      search: {
-        provider: 'local',
-        options: {
-          detailedView: true,
-          miniSearch: {
-            searchOptions: {},
-          },
+    search: {
+      provider: 'local',
+      options: {
+        detailedView: true,
+        miniSearch: {
+          searchOptions: {},
         },
       },
     },
   },
-)
+})
