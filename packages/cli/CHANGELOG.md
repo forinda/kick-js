@@ -1,5 +1,123 @@
 # @forinda/kickjs-cli
 
+## 6.0.0
+
+### Major Changes
+
+- [#329](https://github.com/forinda/kick-js/pull/329) [`e63875d`](https://github.com/forinda/kick-js/commit/e63875ddd772c0981eca086cf9669380d231bd6c) Thanks [@forinda](https://github.com/forinda)! - Lean generators: REST + minimal only, name-based repositories, flat scaffold.
+
+  **Breaking — project templates.** The `ddd` and `cqrs` generator patterns are removed. `kick new` / `kick g module` now offer only `rest` (the new default) and `minimal`. Projects that passed `--template ddd|cqrs` (or set `pattern: 'ddd'|'cqrs'` in `kick.config.ts`) now generate the flat REST layout. Existing hand-written DDD/CQRS code is untouched — only the generators changed.
+
+  **Deprecated — ORM repository presets.** The dedicated `prisma` and `drizzle` repository generators are gone. The repo prompt is now a free-text name: `inmemory` (the zero-dep default, unchanged) or any DB name (e.g. `postgres`, `mongo`) which scaffolds a generic custom-repository stub you wire to your own client. Passing `--repo prisma|drizzle` still works — it just emits the generic stub and prints a deprecation note. Pass a name via `--repo <name>` or `modules.repo: { name: '<name>' }`.
+
+  **`kick g scaffold` now emits the flat REST layout** (controller + service + field-aware DTOs + repository) instead of the removed DDD layout. The `--fields name:type` feature is unchanged; the generated in-memory/custom repository now builds entities by spreading the create DTO, so it works for any field set.
+
+  To keep DDD/CQRS scaffolding, pin to the previous CLI major.
+
+### Minor Changes
+
+- [#334](https://github.com/forinda/kick-js/pull/334) [`f050f6b`](https://github.com/forinda/kick-js/commit/f050f6b235d1fc54f7adc790cd2b5c999411c5c6) Thanks [@forinda](https://github.com/forinda)! - Ship the database CLI from `@forinda/kickjs-db/cli` — a mountable plugin **and** a standalone `kickjs-db` bin — so you can use the db tooling without (or alongside) `@forinda/kickjs-cli`.
+
+  **New: `@forinda/kickjs-db/cli`**
+  - `dbCliPlugin` — a CLI plugin (`@forinda/kickjs-cli-kit` contract). Mount it in `kick.config.ts` to get `kick db generate | migrate latest|up|down|rollback|status|review | introspect`. It reads config from the same `kick.config.ts` `db` block (via `ctx.config`, no re-parse).
+  - `defineKickDbConfig` / `mergeKickDbConfig` / `resolveKickDbConfig` — vite-style config helpers. Author a standalone `kickjs-db.config.ts` (`export default defineKickDbConfig({ ... })`) or reuse the `kick.config.ts` `db` block; the two merge (later wins).
+  - Standalone **`kickjs-db` bin** — `npx kickjs-db migrate latest` runs the whole command tree without kickjs-cli, loading `kickjs-db.config.ts` (or a `kick.config.ts` `db` block) through jiti.
+
+  **Breaking (`@forinda/kickjs-cli`): `kick db` is now opt-in.**
+  The `kick db` commands are no longer built into kickjs-cli. Add the plugin to your config:
+
+  ```ts
+  import { defineConfig } from '@forinda/kickjs-cli'
+  import { dbCliPlugin } from '@forinda/kickjs-db/cli'
+
+  export default defineConfig({ plugins: [dbCliPlugin] })
+  ```
+
+  Zero-config **db type generation is unchanged** — it stays a built-in typegen (`kick typegen` still emits `.kickjs/types` for your schema). Only the `kick db` _commands_ moved.
+
+- [#332](https://github.com/forinda/kick-js/pull/332) [`456e280`](https://github.com/forinda/kick-js/commit/456e280eaef89b0d0c357a06edbde6f8e7c2c789) Thanks [@forinda](https://github.com/forinda)! - SQLite migration generation, a `migrate review` command, and drift handling for non-Postgres dialects.
+  - **`kick db generate` now emits SQLite DDL** when `db.dialect: 'sqlite'`. Previously the migration emitter was Postgres-only, so SQLite projects couldn't generate migrations from their schema (only the runner worked). The new `emitSqlite` maps PG types to SQLite affinities, normalises defaults (`gen_random_uuid()` → `(lower(hex(randomblob(16))))`, `false` → `0`, `now()` → `CURRENT_TIMESTAMP`), inlines a single integer PK as `INTEGER PRIMARY KEY` (rowid), and folds foreign keys into `CREATE TABLE` (SQLite has no `ALTER ... ADD CONSTRAINT`). Operations SQLite can't express via `ALTER TABLE` (column type/null/default changes, FK changes on an existing table) throw a clear `SqliteRebuildRequiredError` pointing at `kick db generate --empty` instead of emitting wrong SQL. `generate` now dispatches the emitter by dialect.
+
+  - **`kick db migrate review <id>`** marks a migration reviewed: it flips `meta.json.reviewed`, swaps the `-- REVIEWED: false` markers in `up.sql`/`down.sql`, and recomputes the journal hash so all three stay in sync. Previously the only way to review was hand-editing `meta.json`, which left the SQL markers and the hash out of sync (the runner gates on `meta.json.reviewed`, not the comment).
+
+  - **Drift detection is skipped for SQLite/MySQL** — only the Postgres adapter implements `introspect()`, so `kick db migrate` no longer fails with "introspection not supported" on those dialects (PostgreSQL keeps the default `error` behaviour).
+
+- [#327](https://github.com/forinda/kick-js/pull/327) [`bebd92d`](https://github.com/forinda/kick-js/commit/bebd92df749ef4d9de283df066e8074594e338c9) Thanks [@forinda](https://github.com/forinda)! - Incremental asset builds — `buildAssets` no longer re-copies every file on each run.
+
+  `kick build` / `kick build:assets` now skip copying any asset whose destination is already up to date (exists, same byte size, mtime ≥ source), turning a no-change rebuild into a cheap stat sweep instead of a full re-copy. The `.kickjs-assets.json` manifest is still written with every matched file, so output is identical — only redundant copies are elided. `BuildAssetsEntryResult.filesCopied` now reports the number of files actually written (0 when nothing changed).
+
+  `kick dev` wires this into the watcher: when an `assetMap.<ns>.src` directory changes, it runs the incremental asset build (debounced, alongside typegen) so the dist copies + manifest stay fresh without rebuilding everything on every save.
+
+- [#327](https://github.com/forinda/kick-js/pull/327) [`3162704`](https://github.com/forinda/kick-js/commit/316270487b6e3ae4bb1ebc48b59646bd8b29c8e8) Thanks [@forinda](https://github.com/forinda)! - Detect `defineModule()` factory modules in typegen, and quiet per-plugin logs by default.
+  - **`ModuleToken` now includes v4 `defineModule()` modules.** The scanner previously only recognised the deprecated `class X implements AppModule` form, so a project using the v4 `export const XModule = defineModule({ ... })` idiom emitted `export type ModuleToken = never`. The scanner now also picks up `defineModule()` consts (per-file, so it's cache/incremental-safe), populating `ModuleToken` with each module name.
+  - **Per-plugin typegen status lines are now debug-only.** `kick typegen` printed a `kick/<id>: <status>` line for every plugin on each run. That list is now gated behind `LOG_LEVEL=debug` (or `trace`); a normal run prints just the one-line `kick typegen → …` summary. Set `LOG_LEVEL=debug` to see the full per-plugin breakdown.
+
+- [#327](https://github.com/forinda/kick-js/pull/327) [`db526e9`](https://github.com/forinda/kick-js/commit/db526e958b4237cba62fcaf1f23b22a223a1db0c) Thanks [@forinda](https://github.com/forinda)! - Speed up `kick typegen` / `kick dev` / `kick build` on large projects with a persistent, incremental scanner.
+
+  The typegen scanner used to re-read and re-regex every `src/**/*.ts` file on every run, serially. Two changes cut that cost:
+  - **Persistent per-file cache** (`.kickjs/cache/scan.json`, already gitignored): each file's extraction is cached keyed by a cheap `mtimeMs:size` signature, so a watch/rebuild only re-reads genuinely-changed files. Reads + extraction now also run concurrently. Warm scans are ~3× faster than a cold scan.
+  - **Walk-free incremental scan in `kick dev`**: the dev server feeds Vite's exact chokidar delta to the scanner, which re-extracts only the changed files and skips the directory walk entirely — ~2.8× faster again than a warm full scan (≈8.5× over the original cold scan on a 1,500-module project).
+
+  Correctness is preserved: the cross-file join (mount-prefix route params, glob-orphan detection) always re-runs over the full cached + fresh extract set, so cached entries can never desync output. File deletions are handled — single-file `unlink` events drop the file from the scan and prune the cache; a directory `unlinkDir` (which carries no precise per-file delta) falls back to a full re-scan. No public API or config changes; the cache is transparent and self-healing (a missing or version-mismatched cache simply behaves like a cold first run).
+
+### Patch Changes
+
+- [#333](https://github.com/forinda/kick-js/pull/333) [`b6b6832`](https://github.com/forinda/kick-js/commit/b6b683292596bec023104a7fc2b3d8e5a958f36a) Thanks [@forinda](https://github.com/forinda)! - Extract the CLI-plugin contract into a new dependency-free package, `@forinda/kickjs-cli-kit`.
+
+  `defineCliPlugin`, `defineGenerator`, `KickCliPlugin`, `KickCliPluginContext`, `GeneratorSpec` (+ friends), `KickCommandDefinition`, and `KickPluginConflictError` now live in `@forinda/kickjs-cli-kit`. This lets packages ship `kick`-compatible commands and generators **without** depending on `@forinda/kickjs-cli` — which previously caused a dependency cycle for first-party packages the CLI itself mounts (e.g. the database tooling).
+
+  `@forinda/kickjs-cli` re-exports the whole contract, so existing imports (`import { defineCliPlugin } from '@forinda/kickjs-cli'`) keep working unchanged. The plugin context's config is generic (`KickCliPluginContext<TConfig>`); the CLI narrows it to its `KickConfig`.
+
+  No behaviour change — pure contract extraction.
+
+- [#330](https://github.com/forinda/kick-js/pull/330) [`91cf40f`](https://github.com/forinda/kick-js/commit/91cf40f2925b733dd39d46f3faf8ce29120c84f1) Thanks [@forinda](https://github.com/forinda)! - Fix `kick db` with plugin-importing configs, and non-string column defaults.
+  - **`kick db` commands now load `kick.config.ts` through the CLI's jiti loader** (`loadKickConfig`) instead of `@forinda/kickjs-db`'s native `import()`. Native ESM can't resolve the extensionless, relative TypeScript imports a config commonly uses — e.g. `import { toolsPlugin } from './tools/cli-plugin'` to mount a CLI plugin — so every `kick db ...` command failed with `Cannot find module` whenever the config imported local TS. It now resolves exactly like the rest of the CLI.
+
+  - **Column `.default()` accepts `string | number | boolean`** and normalises non-strings to their SQL-literal text. `boolean().default(false)` / `integer().default(0)` previously stored a raw boolean/number in the snapshot, which crashed migration emit with `value.replace is not a function`. The Postgres emitter (`formatDefault`) is also hardened to coerce booleans/numbers defensively, so a pre-existing snapshot with a non-string default emits a bare SQL literal (`false`, `0`) instead of throwing.
+
+- [#331](https://github.com/forinda/kick-js/pull/331) [`4ba020e`](https://github.com/forinda/kick-js/commit/4ba020ed043dc0ee8f696661035891824a3e83f8) Thanks [@forinda](https://github.com/forinda)! - Consolidate the SQL dialect adapters into `@forinda/kickjs-db` subpaths.
+
+  The PostgreSQL / SQLite / MySQL adapters + dialects now ship from **subpaths of `@forinda/kickjs-db`** instead of separate packages — mirroring how `@forinda/kickjs-schema` exposes `./zod` / `./valibot` / `./yup`. Install one package plus the single driver you use:
+
+  ```bash
+  # before
+  pnpm add @forinda/kickjs-db @forinda/kickjs-db-pg pg
+  # after
+  pnpm add @forinda/kickjs-db pg
+  ```
+
+  ```ts
+  // before
+  import { pgAdapter, pgDialect } from '@forinda/kickjs-db-pg'
+  // after
+  import { pgAdapter, pgDialect } from '@forinda/kickjs-db/pg'
+  ```
+
+  - New subpaths: `@forinda/kickjs-db/pg` (now also carries `pgAdapter` + `pgDialect` alongside the PG column types), `@forinda/kickjs-db/sqlite`, `@forinda/kickjs-db/mysql`.
+  - `pg`, `better-sqlite3`, `mysql2` are **optional peer deps** of `@forinda/kickjs-db` — the relevant subpath imports its driver lazily, so the core install never pulls all three.
+  - `@forinda/kickjs-db-pg` / `-sqlite` / `-mysql` remain as **deprecated re-export shims** (`export * from '@forinda/kickjs-db/<dialect>'`) so existing installs keep working; they'll be removed in a future major.
+  - CLI: `kick db` resolves the pg adapter from `@forinda/kickjs-db/pg`; `kick add pg|sqlite|mysql` installs `@forinda/kickjs-db` plus the matching driver.
+
+- [#335](https://github.com/forinda/kick-js/pull/335) [`cda92e7`](https://github.com/forinda/kick-js/commit/cda92e79e0bdc7a6a46c4f428dc10da4ad115a8f) Thanks [@forinda](https://github.com/forinda)! - The `kick/db` type generation now ships on `dbCliPlugin` (exported as `kickDbTypegen` from `@forinda/kickjs-db/cli`), so mounting the plugin brings **both** the `kick db` commands and `.kickjs/types/kick__db.d.ts` generation from one opt-in.
+
+  Previously the db typegen was a kickjs-cli built-in while the commands lived in the plugin — split across two packages. Now `@forinda/kickjs-db/cli` owns the full db CLI surface. kickjs-cli's `kickDbTypegen` export stays as a re-export shim for back-compat, but it is no longer auto-registered — add `dbCliPlugin` to `kick.config.ts` `plugins: []` to get db types (the same mount that enables the commands).
+
+- [#324](https://github.com/forinda/kick-js/pull/324) [`ee9bcff`](https://github.com/forinda/kick-js/commit/ee9bcffe7c9a28617dfd62b1516defd51fc9ea70) Thanks [@forinda](https://github.com/forinda)! - `kick g <generator> <name>` no longer silently scaffolds modules when the generator name fails to route. The bare `kick g <names...>` form is module shorthand and previously sent ANY unmatched first token straight to module generation — so on a CLI older than a given generator (e.g. `contributor`), `kick g contributor tenant` quietly created modules named `contributor` and `tenant` instead of erroring. The fallback now refuses a reserved generator name with a clear message (and an "upgrade your CLI" hint) instead of scaffolding modules. Plain module shorthand (`kick g user task`) is unaffected.
+
+- [#323](https://github.com/forinda/kick-js/pull/323) [`6396452`](https://github.com/forinda/kick-js/commit/639645286383510d662e90008d0dd51b9d8d1875) Thanks [@forinda](https://github.com/forinda)! - `kick add zod | valibot | yup` now installs the schema validator.
+
+  The validator is an optional peer of `@forinda/kickjs` (the framework
+  lazy-loads it), so a project that installs one in any other way hits
+  `Cannot find module 'zod'` at startup. They weren't in the `kick add`
+  registry before (`kick add zod` → "Unknown packages: zod"); now they're
+  first-class entries, so existing projects can add or switch schema libs
+  in one step. `kick new` already installs the chosen one.
+
+- Updated dependencies [[`b6b6832`](https://github.com/forinda/kick-js/commit/b6b683292596bec023104a7fc2b3d8e5a958f36a), [`f050f6b`](https://github.com/forinda/kick-js/commit/f050f6b235d1fc54f7adc790cd2b5c999411c5c6), [`91cf40f`](https://github.com/forinda/kick-js/commit/91cf40f2925b733dd39d46f3faf8ce29120c84f1), [`4ba020e`](https://github.com/forinda/kick-js/commit/4ba020ed043dc0ee8f696661035891824a3e83f8), [`cf3ba8c`](https://github.com/forinda/kick-js/commit/cf3ba8cb56e70385cc6906371d2f8cb3846a2093), [`3b00de4`](https://github.com/forinda/kick-js/commit/3b00de462ebe6f1772cfe0e44c1c04d3a45a4ddf), [`66aae3c`](https://github.com/forinda/kick-js/commit/66aae3cf8c3bd87d14eaa0085d9ca15181fa97fe), [`456e280`](https://github.com/forinda/kick-js/commit/456e280eaef89b0d0c357a06edbde6f8e7c2c789), [`e0e7c34`](https://github.com/forinda/kick-js/commit/e0e7c34ed46b70e1dcfecdf178a7d6f7e774beb9), [`cda92e7`](https://github.com/forinda/kick-js/commit/cda92e79e0bdc7a6a46c4f428dc10da4ad115a8f), [`bcada77`](https://github.com/forinda/kick-js/commit/bcada7784a2e866a512c25856ff1c94ca44ed92b)]:
+  - @forinda/kickjs-cli-kit@0.1.0
+  - @forinda/kickjs-db@6.1.0
+  - @forinda/kickjs@5.16.0
+
 ## 5.11.1
 
 ### Patch Changes
