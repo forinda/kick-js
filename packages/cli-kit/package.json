@@ -43,6 +43,15 @@
   "publishConfig": {
     "access": "public"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/forinda/kick-js.git",
+    "directory": "packages/cli-kit"
+  },
+  "homepage": "https://forinda.github.io/kick-js/",
+  "bugs": {
+    "url": "https://github.com/forinda/kick-js/issues"
+  },
   "license": "MIT",
   "author": "Felix Orinda",
   "engines": {
