@@ -271,8 +271,11 @@ describe('sqliteAdapter — migration table contract', () => {
     await adapter.releaseLock()
   })
 
-  it('introspect throws — drift detection lands in a follow-up', async () => {
+  it('introspect reads the live schema via sqlite_master + PRAGMA', async () => {
     const adapter = sqliteAdapter({ database })
-    await expect(adapter.introspect()).rejects.toThrow(/not supported in v1/)
+    const snap = await adapter.introspect()
+    expect(snap.dialect).toBe('sqlite')
+    // The suite created tables on this handle — introspect sees them.
+    expect(Object.keys(snap.tables).length).toBeGreaterThan(0)
   })
 })

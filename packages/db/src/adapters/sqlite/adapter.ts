@@ -1,5 +1,4 @@
 import {
-  KickDbError,
   lockTableDdl,
   migrationsTableDdl,
   type Dialect,
@@ -7,6 +6,7 @@ import {
   type MigrationRow,
   type SchemaSnapshot,
 } from '../../index'
+import { introspectSqlite } from '../../migrate/introspect-sqlite'
 
 /**
  * better-sqlite3-shaped database handle that `sqliteAdapter` consumes.
@@ -47,9 +47,10 @@ export interface SqliteAdapterOptions {
  * exists, so the UPDATE either flips `locked_at` and returns
  * `changes=1` (we won) or matches zero rows (someone else holds it).
  *
- * Introspection: not implemented in v1 — throws `KickDbError` with
- * code `KICK_DB_INTROSPECT_NOT_SUPPORTED`. Drift detection lands in a
- * follow-up that walks `sqlite_master` + `pragma` queries.
+ * Introspection: `introspect()` walks `sqlite_master` + `PRAGMA` via
+ * {@link introspectSqlite}. Types come back as SQLite affinities (lossy
+ * vs the code-first DSL), so it powers `kick db introspect` rather than
+ * byte-exact drift detection.
  */
 export function sqliteAdapter(opts: SqliteAdapterOptions): MigrationAdapter {
   const dialect: Dialect = 'sqlite'
@@ -149,12 +150,11 @@ export function sqliteAdapter(opts: SqliteAdapterOptions): MigrationAdapter {
     },
 
     async introspect(): Promise<SchemaSnapshot> {
-      throw new KickDbError(
-        'KICK_DB_INTROSPECT_NOT_SUPPORTED',
-        'SQLite introspection is not supported in v1. ' +
-          'Drift detection requires a sqlite_master + pragma walk that lands in a follow-up. ' +
-          'Set `driftCheck: "off"` on the migration runner until then.',
-      )
+      // Reverse-engineer the live schema via sqlite_master + PRAGMA walks.
+      // Types come back as SQLite affinities (a code-first `uuid()` reads as
+      // `text`), so this powers `kick db introspect`; byte-exact drift
+      // against a code-first snapshot needs a dialect-normalised compare.
+      return introspectSqlite(database)
     },
 
     async close() {

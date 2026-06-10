@@ -7,6 +7,7 @@ import {
   type MigrationRow,
   type SchemaSnapshot,
 } from '../../index'
+import { introspectMysql } from '../../migrate/introspect-mysql'
 
 /**
  * mysql2-shaped pool that `mysqlAdapter` consumes. Mirrors the
@@ -448,12 +449,11 @@ export function mysqlAdapter(opts: MysqlAdapterOptions): MigrationAdapter {
     },
 
     async introspect(): Promise<SchemaSnapshot> {
-      throw new KickDbError(
-        'KICK_DB_INTROSPECT_NOT_SUPPORTED',
-        'MySQL introspection is not supported in v1. ' +
-          'Drift detection requires an information_schema walk that lands in a follow-up. ' +
-          'Set `driftCheck: "off"` on the migration runner until then.',
-      )
+      // Reverse-engineer the live schema via information_schema. Types come
+      // back as the declared COLUMN_TYPE (a code-first `uuid()` reads as
+      // `char(36)`), so this powers `kick db introspect`; byte-exact drift
+      // against a code-first snapshot needs a dialect-normalised compare.
+      return introspectMysql(pool)
     },
 
     async close() {

@@ -300,9 +300,22 @@ describe('mysqlAdapter — multi-statement DDL via splitter', () => {
     expect(queries).toEqual(['CREATE TABLE x (id int)', 'INSERT INTO x VALUES (1)'])
   })
 
-  it('introspect throws — drift detection lands in a follow-up', async () => {
-    const { pool } = makeMockPool('8.0.34')
+  it('introspect walks information_schema (empty snapshot when no tables)', async () => {
+    // mysqlAdapter now implements introspect() via information_schema; every
+    // SELECT returns an empty row set, so the snapshot has no tables.
+    const pool: MysqlPoolLike = {
+      async query() {
+        return [[] as never, []]
+      },
+      async getConnection(): Promise<MysqlConnectionLike> {
+        throw new Error('not used in this test')
+      },
+    }
     const adapter = mysqlAdapter({ pool })
-    await expect(adapter.introspect()).rejects.toThrow(/not supported in v1/)
+    await expect(adapter.introspect()).resolves.toEqual({
+      version: 1,
+      dialect: 'mysql',
+      tables: {},
+    })
   })
 })
