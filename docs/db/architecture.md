@@ -57,29 +57,29 @@ Why not fork drizzle: license-clean greenfield is preferred; idiom-borrowing (br
 
 ## 3. Package topology
 
+The node SQL dialects (PostgreSQL / SQLite / MySQL) ship as **subpaths of the core package** — one install plus the one driver you use. The pattern mirrors `@forinda/kickjs-schema` (`./zod` / `./valibot` / `./yup` + optional peer deps).
+
 ```
 packages/
-  db/                        @forinda/kickjs-db                 (core)
-  db-pg/                     @forinda/kickjs-db-pg              (node-postgres)
-  db-sqlite/                 @forinda/kickjs-db-sqlite          (better-sqlite3)
-  db-mysql/                  @forinda/kickjs-db-mysql           (mysql2, v6.1)
+  db/                        @forinda/kickjs-db                 (core + /pg /sqlite /mysql adapters)
+  db-pg/                     @forinda/kickjs-db-pg              (deprecated shim → @forinda/kickjs-db/pg)
+  db-sqlite/                 @forinda/kickjs-db-sqlite          (deprecated shim → @forinda/kickjs-db/sqlite)
+  db-mysql/                  @forinda/kickjs-db-mysql           (deprecated shim → @forinda/kickjs-db/mysql)
   db-neon-http/              @forinda/kickjs-db-neon-http       (edge, v6.2)
   db-d1/                     @forinda/kickjs-db-d1              (Cloudflare D1, v6.2)
 ```
 
-**Dependencies** (all peer):
+**Dependencies:**
 
-- `db` core — `kysely`, `@forinda/kickjs`.
-- `db-pg` — `pg` (peer), `kickjs-db` (peer). ~50 LOC factory wrapping Kysely's `PostgresDialect` and exposing the `KickDbAdapter` interface.
-- `db-sqlite` — `better-sqlite3` (peer), `kickjs-db` (peer).
-- Edge adapters — driver-specific (`@neondatabase/serverless`, etc).
+- `db` core — `kysely` + `@forinda/kickjs` (peer). Drivers (`pg`, `better-sqlite3`, `mysql2`) are **optional peer deps** — the relevant subpath imports its driver lazily, so installing `@forinda/kickjs-db` never pulls all three.
+- Edge adapters — driver-specific separate packages (`@neondatabase/serverless`, etc), v6.2.
 
-**Subpath exports** (core package):
+**Subpath exports** (core package) — each dialect subpath bundles its column quirks **plus** the migration adapter + Kysely dialect:
 
 - `@forinda/kickjs-db` — root: cross-dialect DSL, client, hooks, `$extends`, `defineTenantDbContributor`.
-- `@forinda/kickjs-db/pg` — PG-only column types (`tsvector`, `vector`, `citext`, `money`, `inet`, `cidr`, `xml`).
-- `@forinda/kickjs-db/sqlite` — SQLite-only quirks.
-- `@forinda/kickjs-db/mysql` — MySQL-only types.
+- `@forinda/kickjs-db/pg` — PG column types (`tsvector`, `vector`, `citext`, `money`, `inet`, `cidr`, `xml`) + `pgAdapter` + `pgDialect`. Needs `pg`.
+- `@forinda/kickjs-db/sqlite` — `sqliteAdapter` + `sqliteDialect` (+ SQLite quirks). Needs `better-sqlite3`.
+- `@forinda/kickjs-db/mysql` — `mysqlAdapter` + `mysqlDialect` (+ MySQL types). Needs `mysql2`.
 - `@forinda/kickjs-db/edge` — edge-safe entry; omits the migration runner, introspection, and any `node:fs`/`node:path` import path. v6.2.
 
 **Versioning** — lockstep across all `db*` packages, matching KickJS convention. Bumped via `scripts/release.js`.

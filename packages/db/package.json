@@ -29,6 +29,14 @@
       "import": "./dist/pg.mjs",
       "types": "./dist/pg.d.mts"
     },
+    "./sqlite": {
+      "import": "./dist/sqlite.mjs",
+      "types": "./dist/sqlite.d.mts"
+    },
+    "./mysql": {
+      "import": "./dist/mysql.mjs",
+      "types": "./dist/mysql.d.mts"
+    },
     "./devtools-events": {
       "import": "./dist/devtools-events.mjs",
       "types": "./dist/devtools-events.d.mts"
@@ -50,10 +58,22 @@
   },
   "peerDependencies": {
     "@forinda/kickjs": ">=5.14.0-alpha.0",
-    "@forinda/kickjs-devtools-kit": ">=6.0.0-alpha.0"
+    "@forinda/kickjs-devtools-kit": ">=6.0.0-alpha.0",
+    "better-sqlite3": ">=12.0.0",
+    "mysql2": ">=3.0.0",
+    "pg": ">=8.11.0"
   },
   "peerDependenciesMeta": {
     "@forinda/kickjs-devtools-kit": {
+      "optional": true
+    },
+    "better-sqlite3": {
+      "optional": true
+    },
+    "mysql2": {
+      "optional": true
+    },
+    "pg": {
       "optional": true
     }
   },
@@ -61,9 +81,12 @@
     "@forinda/kickjs": "workspace:*",
     "@forinda/kickjs-devtools-kit": "workspace:*",
     "@testcontainers/postgresql": "^12.0.1",
+    "@types/better-sqlite3": "^7.6.11",
     "@types/node": "^25.9.2",
     "@types/pg": "^8.11.10",
+    "better-sqlite3": "^12.0.0",
     "kysely": "^0.29.2",
+    "mysql2": "^3.11.0",
     "pg": "^8.21.0",
     "typescript": "^6.0.3"
   },

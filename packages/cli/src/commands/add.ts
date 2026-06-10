@@ -70,16 +70,28 @@ const PACKAGE_REGISTRY: Record<string, PackageEntry> = {
     peers: [],
     description: 'OpenAPI spec + Swagger UI + ReDoc',
   },
-  // Database
+  // Database — the dialect adapters now ship as subpaths of
+  // `@forinda/kickjs-db` (`/pg`, `/sqlite`, `/mysql`), so each `kick add`
+  // pulls the core package plus the one driver you need.
   db: {
     pkg: '@forinda/kickjs-db',
     peers: [],
     description: 'kick/db core — schema DSL, migrations, KickDbClient, customType',
   },
-  'db-pg': {
-    pkg: '@forinda/kickjs-db-pg',
+  pg: {
+    pkg: '@forinda/kickjs-db',
     peers: ['pg'],
-    description: 'kick/db PostgreSQL dialect + adapter (pgDialect, pgAdapter)',
+    description: 'kick/db + PostgreSQL driver (use @forinda/kickjs-db/pg)',
+  },
+  sqlite: {
+    pkg: '@forinda/kickjs-db',
+    peers: ['better-sqlite3'],
+    description: 'kick/db + SQLite driver (use @forinda/kickjs-db/sqlite)',
+  },
+  mysql: {
+    pkg: '@forinda/kickjs-db',
+    peers: ['mysql2'],
+    description: 'kick/db + MySQL driver (use @forinda/kickjs-db/mysql)',
   },
   drizzle: {
     pkg: '@forinda/kickjs-drizzle',

@@ -6,7 +6,7 @@ import {
   type MigrationAdapter,
   type MigrationRow,
   type SchemaSnapshot,
-} from '@forinda/kickjs-db'
+} from '../../index'
 
 /**
  * better-sqlite3-shaped database handle that `sqliteAdapter` consumes.

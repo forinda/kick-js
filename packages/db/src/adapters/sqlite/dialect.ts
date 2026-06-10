@@ -23,7 +23,7 @@ export interface SqliteDialectOptions {
  * @example
  * ```ts
  * import { createDbClient } from '@forinda/kickjs-db'
- * import { sqliteDialect, sqliteAdapter } from '@forinda/kickjs-db-sqlite'
+ * import { sqliteDialect, sqliteAdapter } from '@forinda/kickjs-db/sqlite'
  * import Database from 'better-sqlite3'
  *
  * const database = new Database(':memory:')

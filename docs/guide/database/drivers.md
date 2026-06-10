@@ -9,22 +9,22 @@ Both factories share the same underlying connection (one pool / handle, no dupli
 
 | Package                     | Dialect factory | Adapter factory | Driver dependency | Database                   |
 | --------------------------- | --------------- | --------------- | ----------------- | -------------------------- |
-| `@forinda/kickjs-db-pg`     | `pgDialect`     | `pgAdapter`     | `pg`              | PostgreSQL                 |
-| `@forinda/kickjs-db-sqlite` | `sqliteDialect` | `sqliteAdapter` | `better-sqlite3`  | SQLite                     |
-| `@forinda/kickjs-db-mysql`  | `mysqlDialect`  | `mysqlAdapter`  | `mysql2`          | MySQL 8.0+ / MariaDB 10.5+ |
+| `@forinda/kickjs-db/pg`     | `pgDialect`     | `pgAdapter`     | `pg`              | PostgreSQL                 |
+| `@forinda/kickjs-db/sqlite` | `sqliteDialect` | `sqliteAdapter` | `better-sqlite3`  | SQLite                     |
+| `@forinda/kickjs-db/mysql`  | `mysqlDialect`  | `mysqlAdapter`  | `mysql2`          | MySQL 8.0+ / MariaDB 10.5+ |
 
 Set the matching `dialect` in your `kick.config.ts` `db:` block (`'postgres'`, `'sqlite'`, or `'mysql'`).
 
-## PostgreSQL — `@forinda/kickjs-db-pg`
+## PostgreSQL — `@forinda/kickjs-db/pg`
 
 ```bash
-pnpm add @forinda/kickjs-db @forinda/kickjs-db-pg pg
+pnpm add @forinda/kickjs-db pg
 ```
 
 ```ts
 import { Pool } from 'pg'
 import { createDbClient } from '@forinda/kickjs-db'
-import { pgAdapter, pgDialect } from '@forinda/kickjs-db-pg'
+import { pgAdapter, pgDialect } from '@forinda/kickjs-db/pg'
 import * as schema from './schema'
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL })
@@ -47,16 +47,16 @@ Postgres is the most complete dialect:
 - The `@forinda/kickjs-db/pg` subpath types are available: `pgEnum`, `tsvector`, `vector(n)`, `citext`, `money`, `inet`, `cidr`, `xml`.
 - The built-in CLI migration path uses `pgAdapter` automatically when you set `connectionString` (or `DATABASE_URL`) — no `adapter` factory needed.
 
-## SQLite — `@forinda/kickjs-db-sqlite`
+## SQLite — `@forinda/kickjs-db/sqlite`
 
 ```bash
-pnpm add @forinda/kickjs-db @forinda/kickjs-db-sqlite better-sqlite3
+pnpm add @forinda/kickjs-db better-sqlite3
 ```
 
 ```ts
 import Database from 'better-sqlite3'
 import { createDbClient } from '@forinda/kickjs-db'
-import { sqliteAdapter, sqliteDialect } from '@forinda/kickjs-db-sqlite'
+import { sqliteAdapter, sqliteDialect } from '@forinda/kickjs-db/sqlite'
 import * as schema from './schema'
 
 const database = new Database('app.db') // or ':memory:'
@@ -77,16 +77,16 @@ Notes:
 - **`introspect()` is not implemented in v1** — it throws `KickDbError` with code `KICK_DB_INTROSPECT_NOT_SUPPORTED`. Set `driftCheck: 'off'` (or `'ignore'`) on the runner until a follow-up lands.
 - The built-in CLI adapter only resolves Postgres from `connectionString`. For SQLite migrations, supply an `adapter` factory in the `db:` block (see [Migrations → Non-Postgres dialects](./migrations#non-postgres-dialects)).
 
-## MySQL / MariaDB — `@forinda/kickjs-db-mysql`
+## MySQL / MariaDB — `@forinda/kickjs-db/mysql`
 
 ```bash
-pnpm add @forinda/kickjs-db @forinda/kickjs-db-mysql mysql2
+pnpm add @forinda/kickjs-db mysql2
 ```
 
 ```ts
 import { createPool } from 'mysql2/promise'
 import { createDbClient } from '@forinda/kickjs-db'
-import { mysqlAdapter, mysqlDialect } from '@forinda/kickjs-db-mysql'
+import { mysqlAdapter, mysqlDialect } from '@forinda/kickjs-db/mysql'
 import * as schema from './schema'
 
 const pool = createPool({

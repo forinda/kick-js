@@ -6,7 +6,7 @@ import {
   type MigrationAdapter,
   type MigrationRow,
   type SchemaSnapshot,
-} from '@forinda/kickjs-db'
+} from '../../index'
 
 /**
  * mysql2-shaped pool that `mysqlAdapter` consumes. Mirrors the

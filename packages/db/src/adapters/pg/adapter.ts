@@ -6,7 +6,7 @@ import {
   type MigrationAdapter,
   type MigrationRow,
   type SchemaSnapshot,
-} from '@forinda/kickjs-db'
+} from '../../index'
 
 /**
  * Minimal client returned by PgPoolLike.connect(). Matches the shape of

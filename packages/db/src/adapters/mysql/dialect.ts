@@ -27,7 +27,7 @@ export interface MysqlDialectOptions {
  * @example
  * ```ts
  * import { createDbClient } from '@forinda/kickjs-db'
- * import { mysqlAdapter, mysqlDialect } from '@forinda/kickjs-db-mysql'
+ * import { mysqlAdapter, mysqlDialect } from '@forinda/kickjs-db/mysql'
  * import { createPool } from 'mysql2/promise'
  *
  * const pool = createPool({
