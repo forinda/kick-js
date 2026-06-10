@@ -70,12 +70,25 @@ export default defineKickDbConfig({
   schemaPath: 'src/db/schema.ts',
   migrationsDir: 'db/migrations',
   adapter: () => sqliteAdapter({ database: new Database('dev.db') }),
+  // How `migrate` reacts to out-of-band schema changes (drift):
+  // 'error' (default) | 'warn' | 'ignore'.
+  driftCheck: 'error',
 })
 ```
 
 `defineKickDbConfig` is the same shape as the `kick.config.ts` `db` block,
 so a config authored once drops into either place. `.ts` configs load via
 jiti; `.js` / `.mjs` / `.json` work without it.
+
+### Drift detection
+
+`kick db migrate` introspects the live database and compares it to the
+last applied snapshot — if someone ran DDL out of band, it stops (`'error'`)
+or logs (`'warn'`). It works on all three dialects; SQLite/MySQL
+introspection is lossy against a code-first schema (`uuid()` reads back as
+`text` / `char(36)`), so the comparison normalises both sides and never
+false-positives on the type difference. Set `driftCheck: 'ignore'` to skip
+it entirely.
 
 ## Config helpers
 

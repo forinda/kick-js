@@ -808,6 +808,15 @@ The original roadmap (M0–M7) was time-ordered around a v6.0.0 GA cut. M0–M5 
 
 API reference docs for the whole db family (db + db-pg + db-sqlite + db-mysql) shipped at the same time as the M5 line. Three guide pages live in `docs/guide/` (schema types, relational queries, extensions).
 
+#### Post-M5 — multi-dialect migration completion (5.x minors)
+
+The migration engine is now symmetric across all three node dialects:
+
+- **SQL emit** — `kick db generate` emits dialect-correct DDL for PostgreSQL, SQLite (incl. the safe **table rebuild** for column alters / FK changes SQLite's `ALTER TABLE` can't express), and MySQL (`MODIFY COLUMN`, `DROP FOREIGN KEY`, backtick idents). Dispatched by dialect in `generate()`.
+- **Introspection** — `introspect()` implemented for all three (`information_schema` for PG/MySQL, `sqlite_master` + `PRAGMA` for SQLite), powering `kick db introspect`.
+- **Drift detection** — works on all three. SQLite/MySQL introspection is lossy vs a code-first schema, so `checkDrift` canonicalises both sides (types through the emit mapper, defaults dropped, FK names structural) before diffing — meaningful drift, no false positives. Tunable via `db.driftCheck`.
+- **CLI surface** — the `kick db` commands + db typegen ship from `@forinda/kickjs-db/cli` (`dbCliPlugin`) on the `@forinda/kickjs-cli-kit` contract, plus a standalone `kickjs-db` bin and `defineKickDbConfig` (mergeable config). `kick db migrate review <id>` keeps the REVIEWED markers + journal hash in sync.
+
 ### Remaining work, in priority order
 
 The order is the **adoption-blocker ranking** from the post-M5 gap audit. Each item is sized + sequenced so it can ship as a standalone minor on 5.x.
