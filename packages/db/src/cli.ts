@@ -18,6 +18,9 @@ import { writeFile } from 'node:fs/promises'
 import type { Command } from 'commander'
 
 import { defineCliPlugin, type KickCliPlugin } from '@forinda/kickjs-cli-kit'
+import { kickDbTypegen } from './cli-typegen'
+
+export { kickDbTypegen } from './cli-typegen'
 
 import {
   detectCompositeReferences,
@@ -393,4 +396,7 @@ export const dbCliPlugin: KickCliPlugin = defineCliPlugin({
     const db = program.command('db').description('Database commands (kickjs-db)')
     registerDbCommands(db, () => resolveKickDbConfig(dbBlockOf(ctx.config)))
   },
+  // Mounting the plugin also wires `.kickjs/types/kick__db.d.ts` generation
+  // into `kick typegen` — db commands + db types from one opt-in plugin.
+  typegens: [kickDbTypegen()],
 })
