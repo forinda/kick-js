@@ -15,7 +15,7 @@
  * The discovery file exports a typed manifest:
  *
  * ```ts
- * import { defineGenerator } from '@forinda/kickjs-cli'
+ * import { defineGenerator } from '@forinda/kickjs-cli-kit'
  *
  * export default [
  *   defineGenerator({
@@ -137,7 +137,7 @@ export interface GeneratorSpec {
  *
  * @example
  * ```ts
- * import { defineGenerator } from '@forinda/kickjs-cli'
+ * import { defineGenerator } from '@forinda/kickjs-cli-kit'
  *
  * export default [
  *   defineGenerator({
