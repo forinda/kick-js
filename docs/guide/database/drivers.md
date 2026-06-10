@@ -74,7 +74,8 @@ Both factories take a `better-sqlite3` handle (or any structurally compatible ru
 Notes:
 
 - `db.query.X.findMany({ with })` works. SQLite returns JSON aggregation as TEXT; `createDbClient` transparently parses it back into JS objects, so you never see the encoded form.
-- **`introspect()` is not implemented in v1** — it throws `KickDbError` with code `KICK_DB_INTROSPECT_NOT_SUPPORTED`. Set `driftCheck: 'off'` (or `'ignore'`) on the runner until a follow-up lands.
+- **`introspect()` works** — `kick db introspect` reverse-engineers the live database into a schema file, and `kick db migrate` runs dialect-normalised drift detection. Introspected types reflect SQLite affinities (a `uuid()` column reads back as `text`), so introspection is best for reverse-engineering; drift comparison normalises both sides to avoid false positives.
+- **`kick db generate` emits SQLite DDL** — including the safe table-rebuild for column alters / FK changes SQLite's `ALTER TABLE` can't express.
 - The built-in CLI adapter only resolves Postgres from `connectionString`. For SQLite migrations, supply an `adapter` factory in the `db:` block (see [Migrations → Non-Postgres dialects](./migrations#non-postgres-dialects)).
 
 ## MySQL / MariaDB — `@forinda/kickjs-db/mysql`
@@ -111,13 +112,14 @@ Notes:
 - **MySQL 8.0+ / MariaDB 10.5+ required.** The relational query layer compiles to `JSON_ARRAYAGG`, which shipped in those versions. `mysqlAdapter()` checks the version lazily on first connection and throws `KickDbError` (`KICK_DB_RELATIONAL_NOT_SUPPORTED`) on older servers. The version parser detects MariaDB vs MySQL and applies the correct floor.
 - Like SQLite, JSON aggregation returns TEXT and is parsed back transparently.
 - **Multi-statement migrations** — mysql2's default `query()` rejects multi-statement SQL. The adapter splits generated migration blobs at top-level `;` boundaries (respecting string literals and comments) so they apply against default mysql2 settings.
-- **`introspect()` is not implemented in v1** — throws `KICK_DB_INTROSPECT_NOT_SUPPORTED`. Set `driftCheck: 'off'`.
+- **`introspect()` works** — `kick db introspect` reverse-engineers the live database (via `information_schema`) and `kick db migrate` runs dialect-normalised drift detection. Introspected types reflect the declared MySQL types (`uuid()` reads back as `char(36)`).
+- **`kick db generate` emits MySQL DDL** — backtick identifiers, `MODIFY COLUMN` alters, `DROP FOREIGN KEY`, MySQL type mapping.
 - The package exports helpers for custom tooling: `parseMysqlVersion(version)`, `parseMysqlMajorVersion(version)`, and `splitMysqlStatements(sql)`.
 
 ## Choosing a dialect
 
 - **PostgreSQL** — the default and most complete. Choose it unless you have a specific reason not to: full introspection / drift detection, the richest column-type set (enums, vectors, full-text), and the built-in CLI path.
-- **SQLite** — zero-dependency local / embedded use, fast tests (`:memory:`). Relational queries work; introspection / drift detection don't yet.
+- **SQLite** — zero-dependency local / embedded use, fast tests (`:memory:`). Full migration support including `generate` (with table rebuilds), `introspect`, and drift detection.
 - **MySQL / MariaDB** — when your infrastructure is already MySQL. Mind the 8.0 / 10.5 floor for relational queries.
 
 ## Capability summary
@@ -127,6 +129,9 @@ Notes:
 | Query builder (`selectFrom`, …) |    ✅    |   ✅    |       ✅        |
 | Transactions + savepoints       |    ✅    |   ✅    |       ✅        |
 | Relational `db.query`           |    ✅    |   ✅    | ✅ (8.0+/10.5+) |
+| `kick db generate` (SQL emit)   |    ✅    |   ✅    |       ✅        |
 | Built-in CLI migrate adapter    |    ✅    | factory |     factory     |
-| `introspect()` / drift          |    ✅    |   ❌    |       ❌        |
+| `introspect()` + drift          |    ✅    |   ✅¹   |       ✅¹       |
 | `@forinda/kickjs-db/pg` types   |    ✅    |    —    |        —        |
+
+¹ SQLite/MySQL introspection is lossy against a code-first schema (`uuid()` → `text` / `char(36)`); drift comparison normalises both sides so it doesn't false-positive.

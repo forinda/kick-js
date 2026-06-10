@@ -155,8 +155,10 @@ kick db introspect --out src/db/schema.ts
 kick db introspect --json
 ```
 
-::: warning Postgres-only introspection in v1
-`introspect()` is implemented for Postgres. SQLite and MySQL throw `KickDbError` with code `KICK_DB_INTROSPECT_NOT_SUPPORTED` — set `driftCheck: 'off'` (or `'ignore'`) on those dialects until a follow-up lands the introspection walk.
+`introspect()` is implemented for all three dialects (Postgres via `information_schema`, SQLite via `sqlite_master` + `PRAGMA`, MySQL via `information_schema`).
+
+::: tip Lossy types on SQLite / MySQL
+SQLite and MySQL don't preserve the code-first type (a `uuid()` column reads back as `text` / `char(36)`), so introspection is best for **reverse-engineering** an existing database. Drift detection accounts for this — it normalises both sides before comparing, so it never false-positives on the type difference. Tune it per-project with `db.driftCheck` (`'error'` default, `'warn'`, or `'ignore'`).
 :::
 
 ## Non-Postgres dialects
