@@ -303,12 +303,18 @@ function emitColumnDecl(c: ColumnSnapshot): string {
   return s
 }
 
-function formatDefault(value: string): string {
+function formatDefault(value: unknown): string {
+  // Defensive: a snapshot authored before defaults were normalised to
+  // strings (or hand-edited) may carry a raw boolean/number. Coerce so
+  // `quoteLiteral` (String.prototype.replace) never sees a non-string.
+  if (typeof value === 'boolean') return value ? 'true' : 'false'
+  if (typeof value === 'number' || typeof value === 'bigint') return String(value)
+  const str = String(value)
   // SQL keywords pass through bare.
-  if (/^[A-Z_]+$/.test(value)) return value // CURRENT_TIMESTAMP, CURRENT_DATE, NULL, etc.
+  if (/^[A-Z_]+$/.test(str)) return str // CURRENT_TIMESTAMP, CURRENT_DATE, NULL, etc.
   // SQL function calls pass through bare: NOW(), gen_random_uuid(), etc.
-  if (/^[a-z_][a-z0-9_]*\s*\([^)]*\)$/i.test(value)) return value
-  if (/^-?\d+(\.\d+)?$/.test(value)) return value // numeric
-  if (value === 'true' || value === 'false') return value // boolean literal
-  return quoteLiteral(value)
+  if (/^[a-z_][a-z0-9_]*\s*\([^)]*\)$/i.test(str)) return str
+  if (/^-?\d+(\.\d+)?$/.test(str)) return str // numeric
+  if (str === 'true' || str === 'false') return str // boolean literal
+  return quoteLiteral(str)
 }

@@ -93,4 +93,39 @@ describe('emitPg() — column changes', () => {
         'ALTER TABLE "users" ALTER COLUMN "age" DROP NOT NULL;',
     )
   })
+
+  // Regression: a non-string default (e.g. from `boolean().default(false)`)
+  // must not crash the emitter (`value.replace is not a function`).
+  it('emits non-string defaults (boolean / number) as bare SQL literals', () => {
+    const cs: ChangeSet = [
+      {
+        kind: 'addColumn',
+        table: 'tasks',
+        // `default` is typed string, but harden against a raw boolean/number
+        // slipping through (snapshot drift / pre-normalisation defaults).
+        column: {
+          name: 'done',
+          type: 'boolean',
+          nullable: false,
+          default: false as unknown as string,
+          primaryKey: false,
+        },
+      },
+      {
+        kind: 'addColumn',
+        table: 'tasks',
+        column: {
+          name: 'qty',
+          type: 'integer',
+          nullable: false,
+          default: 0 as unknown as string,
+          primaryKey: false,
+        },
+      },
+    ]
+    expect(emitPg(cs)).toBe(
+      'ALTER TABLE "tasks" ADD COLUMN "done" boolean NOT NULL DEFAULT false;\n' +
+        'ALTER TABLE "tasks" ADD COLUMN "qty" integer NOT NULL DEFAULT 0;',
+    )
+  })
 })

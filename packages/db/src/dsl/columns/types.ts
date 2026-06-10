@@ -142,9 +142,16 @@ export class ColumnBuilder<T = unknown> {
    * Mark the column as having a runtime / DB-assigned default. The
    * `GeneratedBrand` flows into `SchemaToTypes<S>` so the column wraps
    * in `Generated<T>` — adopters can `INSERT` without specifying it.
+   *
+   * Accepts the natural literal for the column type — `boolean().default(false)`,
+   * `integer().default(0)`, `varchar().default('active')`. Non-string
+   * literals are normalised to their SQL-literal text so the snapshot
+   * (`ColumnSnapshot.default: string | null`) and migration emitter stay
+   * string-only. For a quoted string default the text is the value
+   * itself (`'active'`); booleans/numbers emit bare (`false`, `0`).
    */
-  default(value: string): this & GeneratedBrand {
-    this.state.default = value
+  default(value: string | number | boolean): this & GeneratedBrand {
+    this.state.default = typeof value === 'string' ? value : String(value)
     return this as this & GeneratedBrand
   }
 
