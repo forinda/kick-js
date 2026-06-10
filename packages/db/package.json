@@ -37,13 +37,21 @@
       "import": "./dist/mysql.mjs",
       "types": "./dist/mysql.d.mts"
     },
+    "./cli": {
+      "import": "./dist/cli.mjs",
+      "types": "./dist/cli.d.mts"
+    },
     "./devtools-events": {
       "import": "./dist/devtools-events.mjs",
       "types": "./dist/devtools-events.d.mts"
     }
   },
+  "bin": {
+    "kickjs-db": "./bin/kickjs-db.mjs"
+  },
   "files": [
-    "dist"
+    "dist",
+    "bin"
   ],
   "scripts": {
     "build": "tsdown",
@@ -54,6 +62,9 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@forinda/kickjs-cli-kit": "workspace:*",
+    "commander": "^14.0.2",
+    "jiti": "^2.4.2",
     "kysely": "0.29.2"
   },
   "peerDependencies": {

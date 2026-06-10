@@ -9,6 +9,7 @@ export default defineConfig({
     pg: 'src/pg.ts',
     sqlite: 'src/sqlite.ts',
     mysql: 'src/mysql.ts',
+    cli: 'src/cli.ts',
     'devtools-events': 'src/devtools-events.ts',
   },
   format: ['esm'],
@@ -26,6 +27,11 @@ export default defineConfig({
     'better-sqlite3',
     'mysql2',
     'mysql2/promise',
+    // CLI subpath deps — kept external so the `./cli` entry + bin resolve
+    // them from the install, never bundled into the ORM entries.
+    '@forinda/kickjs-cli-kit',
+    'commander',
+    'jiti',
     /^node:/,
   ],
   banner: { js: createBanner(pkg.name, pkg.version) },
