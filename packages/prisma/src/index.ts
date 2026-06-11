@@ -1,8 +1,9 @@
 /**
- * @deprecated `@forinda/kickjs-prisma` is deprecated — the DB layer is
- * consolidated into `@forinda/kickjs-db`. Migrate to the unified schema
- * DSL + client (`@forinda/kickjs-db`, dialect subpaths `/pg`, `/mysql`,
- * `/sqlite`). This package will be removed in a future major.
+ * @deprecated `@forinda/kickjs-prisma` is deprecated. It was an
+ * early-adoption adapter and is no longer maintained —
+ * `@forinda/kickjs-db` (schema DSL + client, dialect subpaths `/pg`,
+ * `/mysql`, `/sqlite`) is the supported DB layer going forward. This
+ * package will be removed in a future major.
  *
  * @module @forinda/kickjs-prisma
  */
