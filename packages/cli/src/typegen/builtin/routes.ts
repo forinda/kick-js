@@ -40,7 +40,9 @@ export const kickRoutesTypegen = (): TypegenPlugin => ({
     // hoisted-import path computation inside renderRoutes needs the
     // absolute target so it can re-relativise schema imports.
     const outFile = path.resolve(ctx.cwd, '.kickjs/types/kick__routes.ts')
-    return renderRoutes(scan.routes, outFile, schemaValidator)
+    return renderRoutes(scan.routes, outFile, schemaValidator, {
+      onWarn: (msg) => ctx.log.warn(msg),
+    })
   },
 })
 

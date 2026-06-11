@@ -33,6 +33,7 @@ export function renderRoutes(
   routes: DiscoveredRoute[],
   routesOutFile: string,
   schemaValidator: 'zod' | 'kickjs-schema' | false,
+  opts: { onWarn?: (msg: string) => void } = {},
 ): string {
   if (routes.length === 0) {
     return `${ROUTES_HEADER}
@@ -63,16 +64,30 @@ export {}
 
   const renderField = (
     schema: { identifier: string; source: string | null } | null,
-    routeFilePath: string,
+    m: DiscoveredRoute,
+    field: 'body' | 'query' | 'params',
   ): string | null => {
     const alias = planSchemaImport(
       schema,
-      routeFilePath,
+      m.filePath,
       routesOutFile,
       schemaValidator,
       schemaImports,
     )
-    if (!alias) return null
+    if (!alias) {
+      // The adopter wired a schema but we couldn't link it — the emitted
+      // type silently degrades, so say so. A disabled validator is an
+      // intentional opt-out and stays quiet.
+      if (schema && schemaValidator !== false) {
+        opts.onWarn?.(
+          `route ${m.controller}.${m.method} (${m.httpMethod} ${m.path}): ` +
+            `${field} schema '${schema.identifier}' could not be statically resolved — ` +
+            `falling back to ${field === 'params' ? 'URL-pattern params' : `'unknown'`}. ` +
+            `Export the schema from the controller file or import it with a static specifier.`,
+        )
+      }
+      return null
+    }
     if (schemaValidator === 'kickjs-schema') {
       return `import('@forinda/kickjs-schema').InferSchemaOutput<typeof ${alias}>`
     }
@@ -92,9 +107,9 @@ export {}
 
       // Schema-driven types win over the URL-pattern / `unknown` defaults
       // when the user has wired a schema in the route decorator.
-      const bodySchemaType = renderField(m.bodySchema, m.filePath)
-      const querySchemaType = renderField(m.querySchema, m.filePath)
-      const paramsSchemaType = renderField(m.paramsSchema, m.filePath)
+      const bodySchemaType = renderField(m.bodySchema, m, 'body')
+      const querySchemaType = renderField(m.querySchema, m, 'query')
+      const paramsSchemaType = renderField(m.paramsSchema, m, 'params')
 
       const paramsType = paramsSchemaType ?? urlParamsType
       const bodyType = bodySchemaType ?? 'unknown'
