@@ -45,7 +45,7 @@
     "vite": ">=6.0.0",
     "express": "^5.1.0",
     "@forinda/kickjs": ">=5.14.0-alpha.0",
-    "@forinda/kickjs-cli": ">=6.1.0"
+    "@forinda/kickjs-cli": ">=6.0.0"
   },
   "devDependencies": {
     "@forinda/kickjs": "workspace:*",
