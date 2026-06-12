@@ -7,7 +7,7 @@ import { loadKickConfig } from '../config'
 import { runTypegen, writeTypegenArtifacts } from '../typegen'
 import { runAllPluginTypegens } from '../typegen/run-plugins'
 import { buildAssets } from '../asset-manager/build'
-import { createTypegenErrorReporter } from './typegen-error-reporter'
+import { createTypegenDevWatcher, TYPEGEN_OWNER_KEY } from '../typegen/dev-watcher'
 import {
   createDevTypechecker,
   formatTypecheckOutput,
@@ -98,6 +98,11 @@ async function startDevServer(
   const vitePath = require.resolve('vite')
   const { createServer } = await import(pathToFileURL(vitePath).href)
 
+  // Claim typegen ownership BEFORE booting Vite — the kickjs:typegen
+  // vite plugin checks this marker (same process) and stands down, so
+  // the pipeline never double-runs under `kick dev`.
+  ;(globalThis as Record<string, unknown>)[TYPEGEN_OWNER_KEY] = 'kick-dev'
+
   const server = await createServer({
     configFile: resolve('vite.config.ts'),
     server: {
@@ -113,49 +118,6 @@ async function startDevServer(
     },
   })
 
-  // Resolve the absolute paths of every assetMap.<ns>.src directory so
-  // the watcher can treat any file change beneath them as an asset
-  // change — regardless of extension, since adopters drop .ejs / .html
-  // / .json / .md / .pug / etc. into a templates folder.
-  const assetSrcRoots: readonly string[] = devConfig?.assetMap
-    ? Object.values(devConfig.assetMap)
-        .map((entry) => entry?.src)
-        .filter((src): src is string => typeof src === 'string' && src.length > 0)
-        .map((src) => resolve(cwd, src))
-    : []
-  const isAssetFile = (file: string): boolean =>
-    assetSrcRoots.some((root) => file === root || file.startsWith(`${root}/`))
-
-  // Re-run typegen whenever a source file changes. Vite already
-  // owns a chokidar watcher, so we piggy-back on it instead of
-  // adding our own — same files, no extra fd cost.
-  //
-  // Two trigger paths share one debounced run:
-  //   1. .ts/.tsx/.mts/.cts changes → controllers / services / @Asset
-  //      keys re-discovered, registry + augmentation files refresh.
-  //   2. anything inside an `assetMap.<ns>.src` dir → KickAssets
-  //      augmentation refreshes so TypeScript sees newly added templates.
-  // Runtime resolution of new templates is handled in @forinda/kickjs
-  // itself — the dev-mode resolver skips its module-level cache so each
-  // `assets.x.y()` call re-walks. No Vite full-reload needed.
-  // Batch every watcher event in the debounce window into one precise
-  // delta. Vite tells us EXACTLY which files changed, so we feed that to
-  // the incremental scanner — it re-extracts only those files and skips
-  // the directory walk entirely (see `scanProjectIncremental`). The
-  // previous code passed only the last file to a full re-scan; batching
-  // a `changed`/`removed` set both fixes that and unlocks the fast path.
-  // Surface watch-mode typegen failures. Deduped so a broken schema
-  // doesn't spam a warning on every save; broadcast as a custom HMR
-  // event so DevTools / overlays can subscribe (same pattern as the
-  // `kickjs:hmr` event in @forinda/kickjs-vite).
-  const typegenErrors = createTypegenErrorReporter((message) => {
-    console.warn(message)
-    server.hot.send({
-      type: 'custom',
-      event: 'kickjs:typegen-error',
-      data: { message, timestamp: Date.now() },
-    })
-  })
   // Optional dev-time typecheck worker (--typecheck / dev.typecheck in
   // kick.config). Runs the PROJECT's own checker after each debounced
   // typegen pass so diagnostics are computed against fresh .kickjs/types.
@@ -197,104 +159,33 @@ async function startDevServer(
       })
     }
   }
-  let typegenTimer: ReturnType<typeof setTimeout> | null = null
-  const pendingChanged = new Set<string>()
-  const pendingRemoved = new Set<string>()
-  // A directory removal can't be expressed as a precise file delta —
-  // chokidar may emit a single `unlinkDir` instead of per-file `unlink`
-  // events, so we can't know which cached files vanished. When that
-  // happens we fall back to a full walk-based re-scan for this window,
-  // which is always correct (it simply won't find the deleted files).
-  let forceFullScan = false
-  // Set when a file under an `assetMap.<ns>.src` dir changes — drives an
-  // incremental `buildAssets` so the dist copies + manifest stay fresh
-  // without re-copying every asset on every save (buildAssets skips
-  // up-to-date files). Only meaningful when an assetMap is configured.
-  let assetDirty = false
-  const hasAssetMap = !!devConfig?.assetMap && Object.keys(devConfig.assetMap).length > 0
-  const scheduleTypegen = (event: 'add' | 'change' | 'unlink' | 'unlinkDir', file: string) => {
-    if (file.includes('.kickjs')) return
-    if (event === 'unlinkDir') {
-      // Only meaningful if the removed dir could have held scanned
-      // sources or watched assets; cheap to just force a full scan.
-      forceFullScan = true
-      if (hasAssetMap) assetDirty = true
-    } else {
-      if (file.endsWith('.d.ts')) return
-      const isTs = /\.(ts|tsx|mts|cts)$/.test(file)
-      const isAsset = isAssetFile(file)
-      if (!isTs && !isAsset) return
-      if (isAsset && hasAssetMap) assetDirty = true
-      // Only `.ts` files participate in the source scan delta. Asset-only
-      // changes still trigger the pass (so the asset plugin re-emits) but
-      // contribute nothing to the scan — an empty `.ts` delta makes the
-      // incremental scan a near-instant cache replay.
-      if (isTs) {
-        if (event === 'unlink') {
-          pendingRemoved.add(file)
-          pendingChanged.delete(file)
-        } else {
-          pendingChanged.add(file)
-          pendingRemoved.delete(file)
-        }
-      }
-    }
-    if (typegenTimer) clearTimeout(typegenTimer)
-    typegenTimer = setTimeout(() => {
-      // `undefined` delta → full scan (the `unlinkDir` correctness path).
-      const delta = forceFullScan
-        ? undefined
-        : { changed: [...pendingChanged], removed: [...pendingRemoved] }
-      const rebuildAssets = assetDirty
-      pendingChanged.clear()
-      pendingRemoved.clear()
-      forceFullScan = false
-      assetDirty = false
-      runTypegen({
-        cwd,
-        silent: true,
-        allowDuplicates: true,
-        schemaValidator,
-        envFile,
-        srcDir: devConfig?.typegen?.srcDir,
-        outDir: devConfig?.typegen?.outDir,
-        assetMap: devConfig?.assetMap,
-        changedFiles: delta,
-        // Plugin pipeline runs separately just below; opting out here
-        // avoids double-running it on every debounced trigger.
-        runPlugins: false,
+  // Typegen-on-save — shared engine (typegen/dev-watcher.ts) piggy-
+  // backing on Vite's chokidar. Failures surface as deduplicated
+  // warnings + the `kickjs:typegen-error` custom HMR event.
+  const typegenWatcher = createTypegenDevWatcher({
+    cwd,
+    config: devConfig,
+    emitWarning: (message) => {
+      console.warn(message)
+      server.hot.send({
+        type: 'custom',
+        event: 'kickjs:typegen-error',
+        data: { message, timestamp: Date.now() },
       })
-        .then(() => typegenErrors.clear('scan'))
-        .catch((err) => typegenErrors.report('scan', err))
-      // Plugin typegens piggy-back on the same debounce — they re-emit
-      // their `kick__*` files when sources (or templates) change. silent
-      // so the dev console stays quiet; artifacts (.gitignore + sweep)
-      // run after the pass.
-      runAllPluginTypegens({ cwd, config: devConfig, silent: true, changedFiles: delta })
-        .then((r) => writeTypegenArtifacts(typesOutDir, r, true))
-        .then(() => typegenErrors.clear('plugins'))
-        .catch((err) => typegenErrors.report('plugins', err))
-        // Typecheck AFTER the plugin pass settles (success or failure) so
-        // the checker sees the freshest .kickjs/types this window produced.
-        .finally(() => typechecker?.schedule())
-      // Incrementally refresh the dist asset copies + manifest, but only
-      // when an asset file actually changed this window. buildAssets
-      // skips up-to-date files, so this is a cheap stat sweep + the
-      // occasional changed-file copy — not a full re-copy every save.
-      if (rebuildAssets) {
-        buildAssets(devConfig, { cwd, silent: true }).catch(() => {})
-      }
-    }, 100)
-  }
-  server.watcher.on('add', (f: string) => scheduleTypegen('add', f))
-  server.watcher.on('unlink', (f: string) => scheduleTypegen('unlink', f))
-  server.watcher.on('change', (f: string) => scheduleTypegen('change', f))
-  server.watcher.on('unlinkDir', (d: string) => scheduleTypegen('unlinkDir', d))
+    },
+    // Typecheck AFTER each pass settles so the checker sees the
+    // freshest .kickjs/types the window produced.
+    onPassComplete: () => typechecker?.schedule(),
+  })
+  server.watcher.on('add', (f: string) => typegenWatcher.handleWatchEvent('add', f))
+  server.watcher.on('unlink', (f: string) => typegenWatcher.handleWatchEvent('unlink', f))
+  server.watcher.on('change', (f: string) => typegenWatcher.handleWatchEvent('change', f))
+  server.watcher.on('unlinkDir', (d: string) => typegenWatcher.handleWatchEvent('unlinkDir', d))
   // Vite's default watcher ignores extensions it doesn't compile;
   // explicitly subscribe asset src dirs so .ejs / .html changes land
   // in the typegen pipeline.
-  if (assetSrcRoots.length > 0) {
-    server.watcher.add(assetSrcRoots)
+  if (typegenWatcher.assetSrcRoots.length > 0) {
+    server.watcher.add([...typegenWatcher.assetSrcRoots])
   }
 
   await server.listen()
@@ -316,7 +207,7 @@ async function startDevServer(
   const shutdown = async () => {
     if (shuttingDown) return
     shuttingDown = true
-    if (typegenTimer) clearTimeout(typegenTimer)
+    typegenWatcher.dispose()
     typechecker?.dispose()
     try {
       await (

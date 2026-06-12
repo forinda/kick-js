@@ -44,7 +44,8 @@
   "peerDependencies": {
     "vite": ">=6.0.0",
     "express": "^5.1.0",
-    "@forinda/kickjs": ">=5.14.0-alpha.0"
+    "@forinda/kickjs": ">=5.14.0-alpha.0",
+    "@forinda/kickjs-cli": ">=6.1.0"
   },
   "devDependencies": {
     "@forinda/kickjs": "workspace:*",
@@ -73,5 +74,9 @@
   "bugs": {
     "url": "https://github.com/forinda/kick-js/issues"
   },
-  "peerDependenciesMeta": {}
+  "peerDependenciesMeta": {
+    "@forinda/kickjs-cli": {
+      "optional": true
+    }
+  }
 }

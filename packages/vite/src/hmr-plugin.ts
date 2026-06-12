@@ -40,6 +40,7 @@
 import type { Plugin, ViteDevServer } from 'vite'
 import type { HmrOptions, PluginContext } from './types'
 import { RESOLVED_APP } from './virtual-modules'
+import { rewarmApp } from './warm'
 
 /**
  * Test whether a watcher event refers to a file we should react to.
@@ -294,6 +295,11 @@ function flushInvalidation(
   if (vmod) {
     server.moduleGraph.invalidateModule(vmod)
   }
+  // 2b. Re-warm immediately — without this, re-evaluation waits for the
+  //     next HTTP request, so a broken save (syntax error, boot throw)
+  //     stays SILENT until something hits the server. Mirrors the eager
+  //     startup warm in dev-server.ts.
+  rewarmApp(server, `HMR invalidation (${batch.length} token${batch.length === 1 ? '' : 's'})`)
 
   // 3. Send ONE custom HMR event with the full batch
   //    DevTools dashboard, Swagger UI, and other dev tools can listen:

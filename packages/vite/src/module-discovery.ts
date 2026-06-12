@@ -32,6 +32,7 @@
 import type { Plugin, ViteDevServer } from 'vite'
 import type { PluginContext } from './types'
 import { RESOLVED_APP } from './virtual-modules'
+import { rewarmApp } from './warm'
 
 /** Regex to detect exported module classes in source files */
 const MODULE_CLASS_REGEX =
@@ -165,6 +166,9 @@ function invalidateVirtualApp(server: ViteDevServer): void {
   if (mod) {
     server.moduleGraph.invalidateModule(mod)
   }
+  // Re-warm immediately so a broken module file surfaces its error on
+  // save instead of on the next HTTP request (see warm.ts).
+  rewarmApp(server, 'module discovery change')
 }
 
 /**
