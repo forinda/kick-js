@@ -14,7 +14,7 @@ no `@forinda/kickjs-cli` required.
 | `migrate up` / `down` | Apply / reverse a single migration.                                                                            |
 | `migrate rollback`    | Reverse the entire last batch.                                                                                 |
 | `migrate status`      | Print applied + pending migrations.                                                                            |
-| `migrate review <id>` | Mark a migration reviewed (flips `meta.json` + the `-- REVIEWED` markers + the journal hash).                  |
+| `migrate review <id>` | Mark a migration reviewed (flips `meta.json` only — the SQL banner is immutable, so the hash stays valid).     |
 | `introspect`          | Generate a TypeScript schema file from a live database.                                                        |
 
 ## Option A — as a `kick` CLI plugin
