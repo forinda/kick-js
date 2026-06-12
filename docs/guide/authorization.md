@@ -1,7 +1,7 @@
 # Authorization
 
-::: warning `@forinda/kickjs-auth` is deprecated
-Authorization, like authentication, is now **BYO** — composed from [context decorators](context-decorators.md) you own. The patterns below show the BYO shapes first; the [legacy package reference](#legacy-role-based-access-control-deprecated) follows for existing projects.
+::: warning `@forinda/kickjs-auth` is deprecated — and there is no built-in authorization layer anymore
+The framework ships **no roles system and no policy engine**. `@Roles`, `@Policy`, `@Can`, `AuthorizationService`, and the policy registry were features of the deprecated package and have no first-party replacement. Authorization is **your code**: the sections below show the recommended shapes to compose from [context decorators](context-decorators.md). The [legacy package reference](#legacy-role-based-access-control-deprecated) follows for existing projects.
 :::
 
 ## BYO role checks — `@RequireRole`
@@ -37,28 +37,47 @@ dashboard(ctx: RequestContext) { /* ctx.get('user') is non-null here */ }
 
 Because `roles` is your own `AuthUser` type, literal-union role names give you compile-time typo checking with zero augmentation machinery — you declared the type yourself in Step 1.
 
-## BYO policies — resource-level checks
+## Policies — bring your own engine via DI
 
-A policy is the same pattern one level deeper: a contributor (or a plain service the contributor calls) that loads the resource and compares it against the user. Sketch:
+There is no first-party `@Policy` / `@Can` to migrate to — but nothing about a policy engine needs framework support. Context decorators have everything required to compose one: **`deps` injects any DI token** (your engine service), **`dependsOn` orders it after `user`**, and **parameterised decorators carry the action**. The engine is just a service you register:
 
 ```ts
-export const CanEditPost = defineHttpContextDecorator({
-  key: 'post', // doubles as the loaded resource for the handler
-  dependsOn: ['user'],
-  deps: { posts: POSTS_REPO },
-  resolve: async (ctx, { posts }) => {
-    const post = await posts.findById(ctx.params.id)
-    if (!post) throw withStatus(new Error('Not Found'), 404)
-    const user = ctx.get('user')!
-    if (post.authorId !== user.id && !user.roles.includes('admin')) {
+// 1. Your engine — any shape you want. Registered in DI like any service.
+export interface PolicyEngine {
+  can(user: AuthUser, action: string, resource: unknown): boolean | Promise<boolean>
+}
+export const POLICY_ENGINE = createToken<PolicyEngine>('app/auth/policyEngine')
+
+// 2. `@Can` is a parameterised contributor: engine via deps (DI), user
+//    via dependsOn ordering, action via params.
+export const Can = defineHttpContextDecorator<
+  'authorized',
+  { engine: typeof POLICY_ENGINE; posts: typeof POSTS_REPO },
+  { action: string }
+>({
+  key: 'authorized',
+  dependsOn: ['user'], // topologically ordered — user resolves first
+  deps: { engine: POLICY_ENGINE, posts: POSTS_REPO },
+  paramDefaults: { action: 'read' },
+  resolve: async (ctx, { engine, posts }, params) => {
+    const user = ctx.get('user')
+    if (!user) throw withStatus(new Error('Unauthorized'), 401)
+    const resource = await posts.findById(ctx.params.id)
+    if (!resource) throw withStatus(new Error('Not Found'), 404)
+    if (!(await engine.can(user, params.action, resource))) {
       throw withStatus(new Error('Forbidden'), 403)
     }
-    return post // handler reads ctx.get('post') — already authorized
+    return true
   },
 })
+
+// Usage — same ergonomics the old @Can had, but the engine is yours:
+@Can({ action: 'post.delete' })
+@Delete('/:id')
+remove(ctx: RequestContext) { /* … */ }
 ```
 
-The load-and-authorize-in-one-contributor shape replaces `@Policy`/`@Can`: the handler never sees an unauthorized resource, and the policy logic lives in one named, testable unit.
+Swap the engine implementation (CASL, a rules table, hardcoded checks) by re-binding `POLICY_ENGINE` — controllers never change. For simpler cases, fold the load-and-authorize into one contributor that returns the resource itself (`key: 'post'`), so the handler reads `ctx.get('post')` already authorized.
 
 ---
 
