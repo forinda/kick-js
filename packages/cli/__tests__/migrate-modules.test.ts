@@ -231,7 +231,9 @@ export const modules: AppModuleClass[] = []`,
   })
 
   it('finds all three module-declaration files (current + legacy index)', async () => {
-    const files = await findModuleFiles(join(dir, 'modules'))
+    // findModuleFiles returns OS-native absolute paths — normalize so
+    // the suffix assertions hold on Windows too.
+    const files = (await findModuleFiles(join(dir, 'modules'))).map((f) => f.replaceAll('\\', '/'))
     expect(files.length).toBe(4)
     expect(files.some((f) => f.endsWith('users/user.module.ts'))).toBe(true)
     expect(files.some((f) => f.endsWith('tasks/index.ts'))).toBe(true)
@@ -246,7 +248,9 @@ export const modules: AppModuleClass[] = []`,
   })
 
   it('findStyleDriftModules picks up class form in legacy index.ts files', async () => {
-    const drift = await findStyleDriftModules(join(dir, 'modules'), 'define')
+    const drift = (await findStyleDriftModules(join(dir, 'modules'), 'define')).map((p) =>
+      p.replaceAll('\\', '/'),
+    )
     // Three of the four files actually have a `class … implements AppModule`
     // declaration; the orders/index.ts only re-exports.
     expect(drift.length).toBeGreaterThanOrEqual(2)
