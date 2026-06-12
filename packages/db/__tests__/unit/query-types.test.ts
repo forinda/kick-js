@@ -2,11 +2,11 @@
  * Type-level coverage for `db.query.X.findMany({ with })` —
  * spec-relational-query.md §3.3 expectTypeOf matrix.
  *
- * The test file owns the global `KickDbRegister` +
- * `KickDbRelationsRegister` augmentations for this run: a 4-table
- * fixture (users / posts / comments / categories) declared inline
- * here and augmented onto both registries. Runtime asserts only —
- * no DB connection, no schema instance.
+ * The test file owns the global `KickDbRelationsRegister` augmentation
+ * for this run: a 4-table fixture (users / posts / comments /
+ * categories) declared inline here. (`KickDbRegister` is owned by
+ * register.test.ts — see the note above the augmentation below.)
+ * Runtime asserts only — no DB connection, no schema instance.
  */
 
 import { describe, expectTypeOf, it } from 'vitest'
@@ -38,13 +38,13 @@ interface FixtureDB {
   }
 }
 
-// ── Augment both registries ─────────────────────────────────────────────
-declare module '../../src/client/register' {
-  interface KickDbRegister {
-    db: { qb: import('kysely').Kysely<FixtureDB> }
-  }
-}
-
+// ── Augment the relations registry ──────────────────────────────────────
+// NOTE: deliberately NOT augmenting `KickDbRegister` here — register.test.ts
+// owns that global augmentation (`db: KickDbClient<AppDB>`), and a second
+// conflicting `db` declaration breaks the whole-program typecheck
+// ("Subsequent property declarations must have the same type"). Every
+// assertion below passes `FixtureDB` explicitly, so the column-shape
+// registry is not needed.
 declare module '../../src/query/types' {
   interface KickDbRelationsRegister {
     db: {
