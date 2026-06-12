@@ -28,7 +28,10 @@ import { dirname, join } from 'node:path'
 import type { FileExtract } from './scanner'
 
 /** Bump when the shape of `FileExtract` (or any extractor) changes. */
-const CACHE_VERSION = 1
+// v2: per-file extraction switched to AST-first (extract-ast.ts) — v1
+// entries hold regex-era results that can differ (template-literal
+// paths, aliased schema-ref resolution), so they must not be served.
+const CACHE_VERSION = 2
 
 /** The array-valued keys every `FileExtract` must carry. */
 const EXTRACT_ARRAY_KEYS = [
