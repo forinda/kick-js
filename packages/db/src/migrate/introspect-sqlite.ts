@@ -9,9 +9,17 @@ import type {
 
 const DEFAULT_EXCLUDED = ['kick_migrations', 'kick_migrations_lock']
 
-/** Minimal better-sqlite3 surface introspection needs (sync `.all()`). */
+/**
+ * Minimal better-sqlite3 surface introspection needs (sync `.all()`).
+ *
+ * `all` is deliberately NOT method-generic: better-sqlite3 v12's own
+ * `Statement.all(...params): Result[]` is non-generic, so a generic
+ * method here would make a real `Database` instance structurally
+ * incompatible (callers had to cast). Row typing happens inside this
+ * module via per-call assertions instead.
+ */
 export interface SqliteIntrospectDb {
-  prepare(sql: string): { all<R = unknown>(...params: unknown[]): R[] }
+  prepare(sql: string): { all(...params: unknown[]): unknown[] }
 }
 
 export interface IntrospectSqliteOptions {
@@ -72,7 +80,7 @@ export function introspectSqlite(
        WHERE type = 'table' AND name NOT LIKE 'sqlite_%'
        ORDER BY name`,
     )
-    .all<{ name: string }>()
+    .all() as { name: string }[]
 
   const tables: Record<string, TableSnapshot> = {}
   for (const { name } of tableRows) {
@@ -89,7 +97,7 @@ export function introspectSqlite(
 }
 
 function readColumns(db: SqliteIntrospectDb, table: string): Record<string, ColumnSnapshot> {
-  const rows = db.prepare(`PRAGMA table_info(${quote(table)})`).all<TableInfoRow>()
+  const rows = db.prepare(`PRAGMA table_info(${quote(table)})`).all() as TableInfoRow[]
   const out: Record<string, ColumnSnapshot> = {}
   for (const r of rows) {
     out[r.name] = {
@@ -104,15 +112,13 @@ function readColumns(db: SqliteIntrospectDb, table: string): Record<string, Colu
 }
 
 function readIndexes(db: SqliteIntrospectDb, table: string): IndexSnapshot[] {
-  const list = db.prepare(`PRAGMA index_list(${quote(table)})`).all<IndexListRow>()
+  const list = db.prepare(`PRAGMA index_list(${quote(table)})`).all() as IndexListRow[]
   const out: IndexSnapshot[] = []
   for (const idx of list) {
     // Skip auto-indexes SQLite creates for UNIQUE / PK constraints — those
     // belong to the column/constraint definitions, not standalone indexes.
     if (idx.origin !== 'c') continue
-    const cols = db
-      .prepare(`PRAGMA index_info(${quote(idx.name)})`)
-      .all<IndexInfoRow>()
+    const cols = (db.prepare(`PRAGMA index_info(${quote(idx.name)})`).all() as IndexInfoRow[])
       .filter((c) => c.name !== null)
       .map((c) => c.name as string)
     out.push({ name: idx.name, columns: cols, unique: idx.unique === 1 })
@@ -121,7 +127,7 @@ function readIndexes(db: SqliteIntrospectDb, table: string): IndexSnapshot[] {
 }
 
 function readForeignKeys(db: SqliteIntrospectDb, table: string): ForeignKeySnapshot[] {
-  const rows = db.prepare(`PRAGMA foreign_key_list(${quote(table)})`).all<FkListRow>()
+  const rows = db.prepare(`PRAGMA foreign_key_list(${quote(table)})`).all() as FkListRow[]
   // Group multi-column FKs by their `id`.
   const byId = new Map<number, FkListRow[]>()
   for (const r of rows) {

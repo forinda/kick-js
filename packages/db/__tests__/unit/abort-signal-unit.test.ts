@@ -62,7 +62,7 @@ interface ExecuteCall {
   signal: AbortSignal | undefined
 }
 
-function patchExecuteToObserve(client: { qb: Kysely<unknown> }) {
+function patchExecuteToObserve(client: { qb: Kysely<any> }) {
   const calls: ExecuteCall[] = []
   const original = (client.qb as any).executeQuery
   ;(client.qb as any).executeQuery = vi.fn(async (compiled: any, opts?: any) => {
@@ -77,7 +77,7 @@ function patchExecuteToObserve(client: { qb: Kysely<unknown> }) {
   }
 }
 
-function patchExecuteToReject(client: { qb: Kysely<unknown> }, err: unknown) {
+function patchExecuteToReject(client: { qb: Kysely<any> }, err: unknown) {
   const original = (client.qb as any).executeQuery
   ;(client.qb as any).executeQuery = vi.fn(async () => {
     throw err

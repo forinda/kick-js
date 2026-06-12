@@ -184,12 +184,12 @@ describe('M5.A.1 — diff guard against removed-value-as-default', () => {
     })
 
     const changes = diff(prev, next)
-    const removeChange = changes.find((c) => c.kind === 'removeEnumValue')
+    const removeChange = changes.find(
+      (c): c is Extract<(typeof changes)[number], { kind: 'removeEnumValue' }> =>
+        c.kind === 'removeEnumValue',
+    )
     expect(removeChange).toBeDefined()
-    expect(
-      (removeChange as { affectedColumns: { default: string | null }[] }).affectedColumns[0]
-        ?.default,
-    ).toBe(`'active'::"status"`)
+    expect(removeChange?.affectedColumns[0]?.default).toBe(`'active'::"status"`)
   })
 
   it('does NOT throw when the column has no default', () => {

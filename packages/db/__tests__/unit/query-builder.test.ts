@@ -94,7 +94,7 @@ function makeMysqlDialect(): KyselyDialect {
  * Patch `executeQuery` on the underlying Kysely so we can capture
  * the SQL the namespace emits and feed back canned rows.
  */
-function patchExecute(client: { qb: Kysely<unknown> }, rows: unknown[]) {
+function patchExecute(client: { qb: Kysely<any> }, rows: unknown[]) {
   const calls: { sql: string; parameters: readonly unknown[] }[] = []
   const original = (client.qb as unknown as { executeQuery: unknown }).executeQuery
   ;(
