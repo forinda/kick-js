@@ -9,11 +9,10 @@ The framework ships **no roles system and no policy engine**. `@Roles`, `@Policy
 A role check is a contributor that depends on the auth user and throws 401/403. The full implementation is Step 4 of the [BYO Auth recipe](byo-recipes.md#auth):
 
 ```ts
-export const RequireRole = defineHttpContextDecorator<
-  'roleCheck',
-  Record<string, never>,
-  { roles: readonly string[]; mode?: 'all' | 'any' }
->({
+export const RequireRole = defineHttpContextDecorator.withParams<{
+  roles: readonly string[]
+  mode?: 'all' | 'any'
+}>()({
   key: 'roleCheck',
   dependsOn: ['user'], // strict ordering — @LoadAuthUser resolves first
   paramDefaults: { roles: [], mode: 'any' },
@@ -49,12 +48,9 @@ export interface PolicyEngine {
 export const POLICY_ENGINE = createToken<PolicyEngine>('app/auth/policyEngine')
 
 // 2. `@Can` is a parameterised contributor: engine via deps (DI), user
-//    via dependsOn ordering, action via params.
-export const Can = defineHttpContextDecorator<
-  'authorized',
-  { engine: typeof POLICY_ENGINE; posts: typeof POSTS_REPO },
-  { action: string }
->({
+//    via dependsOn ordering, action via params. Only the params shape
+//    is spelled — `key` and the deps types are inferred from the spec.
+export const Can = defineHttpContextDecorator.withParams<{ action: string }>()({
   key: 'authorized',
   dependsOn: ['user'], // topologically ordered — user resolves first
   deps: { engine: POLICY_ENGINE, posts: POSTS_REPO },

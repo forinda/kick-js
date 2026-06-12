@@ -26,16 +26,17 @@ export function jwtStrategy(opts: { secret: string }): AuthStrategy {
 
 // 3. `@LoadAuthUser` is a parameterised contributor — resolves the user
 //    before the handler runs, throws 401 unless `on401: 'allow'`.
-export const LoadAuthUser = defineHttpContextDecorator<'user', Deps, { on401: 'allow' | 'reject' }>(
-  {
-    key: 'user',
-    deps: { strategies: AUTH_STRATEGIES },
-    paramDefaults: { on401: 'reject' },
-    resolve: async (ctx, { strategies }, params) => {
-      /* try strategies in order */
-    },
+//    Only the params shape is spelled; key + deps types are inferred.
+export const LoadAuthUser = defineHttpContextDecorator.withParams<{
+  on401: 'allow' | 'reject'
+}>()({
+  key: 'user',
+  deps: { strategies: AUTH_STRATEGIES },
+  paramDefaults: { on401: 'reject' },
+  resolve: async (ctx, { strategies }, params) => {
+    /* try strategies in order */
   },
-)
+})
 
 // 4. `@Public` is sugar: LoadAuthUser({ on401: 'allow' }).
 export const Public = LoadAuthUser({ on401: 'allow' })

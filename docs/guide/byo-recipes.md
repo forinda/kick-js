@@ -139,11 +139,7 @@ type LoadAuthUserParams = {
   on401: 'allow' | 'reject'
 }
 
-export const LoadAuthUser = defineHttpContextDecorator<
-  'user',
-  { strategies: typeof AUTH_STRATEGIES },
-  LoadAuthUserParams
->({
+export const LoadAuthUser = defineHttpContextDecorator.withParams<LoadAuthUserParams>()({
   key: 'user',
   deps: { strategies: AUTH_STRATEGIES },
   paramDefaults: { on401: 'reject' },
@@ -168,11 +164,7 @@ import { defineHttpContextDecorator } from '@forinda/kickjs'
 
 type RequireRoleParams = { roles: readonly string[]; mode?: 'all' | 'any' }
 
-export const RequireRole = defineHttpContextDecorator<
-  'roleCheck',
-  Record<string, never>,
-  RequireRoleParams
->({
+export const RequireRole = defineHttpContextDecorator.withParams<RequireRoleParams>()({
   key: 'roleCheck',
   // Strict precedence — auth user must resolve before we check roles.
   dependsOn: ['user'],
