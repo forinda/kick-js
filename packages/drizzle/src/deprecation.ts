@@ -11,8 +11,8 @@ export function warnDeprecated(env: NodeJS.ProcessEnv = process.env): boolean {
   if (flag === '1' || flag === 'true') return false
   console.warn(
     '[kickjs] @forinda/kickjs-drizzle is deprecated. It was an early-adoption adapter and ' +
-      'is no longer maintained — @forinda/kickjs-db (schema DSL + client, dialect subpaths ' +
-      '/pg /mysql /sqlite) is the supported DB layer going forward. ' +
+      'is no longer maintained — wire Drizzle directly in your app (BYO), or use ' +
+      '@forinda/kickjs-db, the built-in Kick ORM, if you prefer to skip external ORMs. ' +
       'This package will be removed in a future major. ' +
       'Set KICKJS_SUPPRESS_DEPRECATION=1 to silence this warning.',
   )

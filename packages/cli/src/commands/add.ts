@@ -122,14 +122,14 @@ export const PACKAGE_REGISTRY: Record<string, PackageEntry> = {
     peers: ['drizzle-orm'],
     description: 'Drizzle ORM adapter + query builder',
     deprecated:
-      'early-adoption adapter, no longer maintained — @forinda/kickjs-db is the supported DB layer (`kick add db` / pg / sqlite / mysql)',
+      'early-adoption adapter, no longer maintained — wire Drizzle directly (BYO), or use @forinda/kickjs-db, the built-in Kick ORM (`kick add db` / pg / sqlite / mysql)',
   },
   prisma: {
     pkg: '@forinda/kickjs-prisma',
     peers: ['@prisma/client'],
     description: 'Prisma adapter + query builder',
     deprecated:
-      'early-adoption adapter, no longer maintained — @forinda/kickjs-db is the supported DB layer (`kick add db` / pg / sqlite / mysql)',
+      'early-adoption adapter, no longer maintained — wire Prisma directly (BYO), or use @forinda/kickjs-db, the built-in Kick ORM (`kick add db` / pg / sqlite / mysql)',
   },
 
   // Real-time
