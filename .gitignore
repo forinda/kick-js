@@ -28,3 +28,5 @@ superpowers/
 # `**/` so the rule fires inside any nested project, not just root.
 **/.kickjs/
 examples/
+# Tutorials + generated thumbnails — authored locally, not tracked
+tutorials/
