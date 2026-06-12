@@ -1,8 +1,79 @@
 # Authentication
 
-KickJS provides pluggable authentication through `@forinda/kickjs-auth`. Use decorators to protect routes, and swap strategies (JWT, API key, custom) without changing your controllers.
+::: warning `@forinda/kickjs-auth` is deprecated
+Auth has moved to **BYO (bring-your-own)**: you compose `@LoadAuthUser` / `@RequireRole` / `@Public` from the framework's own primitives — `defineContextDecorator` and `defineAdapter` — in ~200 lines of code you own end-to-end. No framework upgrade can silently change your auth surface again.
 
-## Installation
+The package still installs (`kick add auth` prints a deprecation warning) and the [legacy reference below](#legacy-forindakickjs-auth-deprecated) stays until removal in a future major. New projects should start from the recipe.
+:::
+
+## The BYO approach
+
+Authentication is just **typed, ordered context population** — exactly what [context decorators](context-decorators.md) do. The full walkthrough lives in the [BYO Auth recipe](byo-recipes.md#auth); the shape:
+
+```ts
+// 1. Declare what `ctx.get('user')` returns — once, globally.
+declare module '@forinda/kickjs' {
+  interface ContextMeta {
+    user: AuthUser | null
+  }
+}
+
+// 2. A strategy is a function: ctx in, user-or-null out. You own the
+//    credential handling (JWT verify, API-key lookup, session read).
+export function jwtStrategy(opts: { secret: string }): AuthStrategy {
+  /* … */
+}
+
+// 3. `@LoadAuthUser` is a parameterised contributor — resolves the user
+//    before the handler runs, throws 401 unless `on401: 'allow'`.
+export const LoadAuthUser = defineHttpContextDecorator<'user', Deps, { on401: 'allow' | 'reject' }>(
+  {
+    key: 'user',
+    deps: { strategies: AUTH_STRATEGIES },
+    paramDefaults: { on401: 'reject' },
+    resolve: async (ctx, { strategies }, params) => {
+      /* try strategies in order */
+    },
+  },
+)
+
+// 4. `@Public` is sugar: LoadAuthUser({ on401: 'allow' }).
+export const Public = LoadAuthUser({ on401: 'allow' })
+
+// 5. AuthAdapter (defineAdapter) registers the strategy list in DI and
+//    ships LoadAuthUser as a GLOBAL contributor when defaultPolicy is
+//    'protected' — every route requires a user unless marked @Public.
+```
+
+Usage reads the same as the old package:
+
+```ts
+@Controller()
+export class UsersController {
+  @Public
+  @Get('/health')
+  health(ctx: RequestContext) {
+    ctx.json({ ok: true })
+  }
+
+  @RequireRole({ roles: ['admin'] })
+  @Delete('/:id')
+  remove(ctx: RequestContext) {
+    const actor = ctx.get('user') // typed AuthUser — never null here
+    // …
+  }
+}
+```
+
+Follow the [recipe](byo-recipes.md#auth) for the complete, copy-paste-ready eight steps (strategies, role checks, adapter, bootstrap, migration checklist). Authorization patterns (roles, policies) live in [Authorization](authorization.md).
+
+---
+
+## Legacy: `@forinda/kickjs-auth` (deprecated)
+
+Everything below documents the deprecated package for existing projects. It keeps working until removal in a future major; imports print a one-time warning (suppress with `KICKJS_SUPPRESS_DEPRECATION=1`).
+
+### Installation
 
 ```bash
 pnpm add @forinda/kickjs-auth
@@ -11,7 +82,7 @@ pnpm add @forinda/kickjs-auth
 pnpm add jsonwebtoken @types/jsonwebtoken
 ```
 
-Or via CLI:
+Or via CLI (prints the deprecation warning):
 
 ```bash
 kick add auth

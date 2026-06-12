@@ -146,12 +146,32 @@ kick dev -e src/main.ts
 kick dev -p 4000
 ```
 
-| Flag                 | Description | Default                |
-| -------------------- | ----------- | ---------------------- |
-| `-e, --entry <file>` | Entry file  | `src/index.ts`         |
-| `-p, --port <port>`  | Port number | `3000` (or `PORT` env) |
+| Flag                 | Description                                                                         | Default                |
+| -------------------- | ----------------------------------------------------------------------------------- | ---------------------- |
+| `-e, --entry <file>` | Entry file                                                                          | `src/index.ts`         |
+| `-p, --port <port>`  | Port number                                                                         | `3000` (or `PORT` env) |
+| `--polling`          | Force chokidar polling (Docker bind mounts / WSL / NFS where fs events get dropped) | off                    |
+| `--typecheck`        | Run the project's TypeScript checker after each change (see below)                  | off                    |
 
 Changes to your source files are picked up instantly — database connections, WebSocket state, and port bindings survive reloads.
+
+### Errors surface on save
+
+`kick dev` reports problems the moment a save lands, without waiting for a request:
+
+- **Runtime/transform errors** — a broken file (syntax error, failed import, bootstrap throw) prints `[kickjs] app failed to reload after HMR invalidation: …` with a fixed stacktrace.
+- **Typegen failures** — a scan or plugin pass that fails prints a deduplicated `kick typegen: … — types in .kickjs/types may be stale` warning (quiet on repeats of the same error; re-arms after a successful pass) and broadcasts a `kickjs:typegen-error` custom HMR event for DevTools/overlays.
+
+### `--typecheck` — dev-time type checking
+
+Opt in via the flag or `dev: { typecheck: true }` in `kick.config.ts`. After each debounced change (and once at startup), `kick dev` runs the **project's own** checker — `tsgo` (`@typescript/native-preview`) preferred, `tsc` fallback — with `--noEmit`, timed after the typegen pass so diagnostics always see fresh `.kickjs/types`:
+
+```
+  kick typecheck (tsgo, 412ms):
+    src/modules/users/users.controller.ts(14,9): error TS2322: …
+```
+
+A healthy project stays quiet; the first clean run after an error prints `kick typecheck: clean again`. In-flight checks are killed when a new save lands, and the full output rides the `kickjs:typecheck` HMR event.
 
 ## kick dev:debug
 
@@ -336,20 +356,23 @@ Print system and framework information:
 kick info
 ```
 
-Output:
+Output — the CLI's own version, plus every `@forinda/kickjs*` dependency the nearest project declares with the version actually installed in `node_modules` (declared range shown when not installed). Packages the `kick add` catalog marks as deprecated are flagged:
 
 ```
-  KickJS CLI
+  KickJS CLI v6.1.0
 
   System:
     OS:       linux 6.x.x (x64)
-    Node:     v20.x.x
+    Node:     v22.x.x
 
   Packages:
-    @forinda/kickjs           workspace
-    @forinda/kickjs-vite      workspace
-    @forinda/kickjs-cli       workspace
+    @forinda/kickjs          5.16.0
+    @forinda/kickjs-cli      6.1.0
+    @forinda/kickjs-prisma   6.0.1  [DEPRECATED — see `kick add --list --all`]
+    @forinda/kickjs-vite     6.1.0
 ```
+
+`kick --version` / `-V` / `-v` print just the CLI version.
 
 ## kick list
 
@@ -382,11 +405,13 @@ Add KickJS packages with their required peer dependencies automatically resolved
 
 ```bash
 kick add swagger          # installs @forinda/kickjs-swagger
-kick add db auth          # installs multiple packages at once
+kick add db ai            # installs multiple packages at once
 kick add queue:bullmq     # installs queue package + bullmq + ioredis
 kick add --list           # show core packages (alias: kick list)
 kick add --list --all     # full optional catalog
 ```
+
+Deprecated catalog entries (`auth`, `drizzle`, `prisma`) still install but print a migration warning first, and `--list --all` flags them with `[DEPRECATED — …]` plus the recommended replacement (BYO auth via context decorators; `@forinda/kickjs-db` for the early-adoption ORM adapters).
 
 ### Core packages
 

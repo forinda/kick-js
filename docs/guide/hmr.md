@@ -52,6 +52,32 @@ export default defineConfig({
 
 The `kick dev` command uses Vite's Environment Runner which reads this config automatically. No additional HMR configuration is needed.
 
+## Errors Surface on Save
+
+After an invalidation (a token change or a module-file add/remove), the dev server eagerly re-evaluates `virtual:kickjs/app` instead of waiting for the next HTTP request. A broken save — syntax error, failed import, bootstrap throw — prints immediately:
+
+```
+[vite] [kickjs] app failed to reload after HMR invalidation (1 token): x Expected ',', got ':'
+```
+
+The next successful save heals it; the dev loop never dies mid-edit.
+
+## Custom HMR Events
+
+Dev tools (the DevTools dashboard, Swagger UI, custom overlays) can subscribe to the channel KickJS broadcasts on:
+
+| Event                  | Payload                      | Fired when                                                      |
+| ---------------------- | ---------------------------- | --------------------------------------------------------------- |
+| `kickjs:hmr`           | `{ tokens, timestamp }`      | A batch of DI tokens was invalidated                            |
+| `kickjs:typegen-error` | `{ message, timestamp }`     | A watch-mode typegen pass failed (types may be stale)           |
+| `kickjs:typecheck`     | `{ ok, output, durationMs }` | A `kick dev --typecheck` run finished (full diagnostics inside) |
+
+```ts
+import.meta.hot?.on('kickjs:typecheck', (data) => {
+  if (!data.ok) overlay.show(data.output)
+})
+```
+
 ## Graceful Shutdown
 
 When the process receives `SIGINT` or `SIGTERM`, `bootstrap()` calls `app.shutdown()` which:

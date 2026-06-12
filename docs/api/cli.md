@@ -60,6 +60,8 @@ cd packages/cli && pnpm link --global
 
 - `-e, --entry <file>` -- Entry file (default: `src/index.ts`)
 - `-p, --port <port>` -- Port number
+- `--polling` -- Force chokidar polling (Docker bind mounts / WSL / NFS)
+- `--typecheck` -- Run the project's checker (`tsgo`/`tsc --noEmit`) after each change; also via `dev.typecheck` in kick.config
 
 **kick g module**
 

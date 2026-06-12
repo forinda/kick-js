@@ -1,13 +1,70 @@
 # Authorization
 
-KickJS provides two levels of authorization:
+::: warning `@forinda/kickjs-auth` is deprecated
+Authorization, like authentication, is now **BYO** — composed from [context decorators](context-decorators.md) you own. The patterns below show the BYO shapes first; the [legacy package reference](#legacy-role-based-access-control-deprecated) follows for existing projects.
+:::
 
-- **Role-based** — `@Roles('admin')` checks string roles on the user
-- **Policy-based** — `@Policy` + `@Can` checks resource-level permissions
+## BYO role checks — `@RequireRole`
 
-Both work through `@forinda/kickjs-auth` and are enforced by `AuthAdapter` middleware.
+A role check is a contributor that depends on the auth user and throws 401/403. The full implementation is Step 4 of the [BYO Auth recipe](byo-recipes.md#auth):
 
-## Role-Based Access Control
+```ts
+export const RequireRole = defineHttpContextDecorator<
+  'roleCheck',
+  Record<string, never>,
+  { roles: readonly string[]; mode?: 'all' | 'any' }
+>({
+  key: 'roleCheck',
+  dependsOn: ['user'], // strict ordering — @LoadAuthUser resolves first
+  paramDefaults: { roles: [], mode: 'any' },
+  resolve: (ctx, _deps, params) => {
+    const user = ctx.get('user')
+    if (!user) throw withStatus(new Error('Unauthorized'), 401)
+    const owned = new Set(user.roles)
+    const hits = params.roles.filter((r) => owned.has(r))
+    const ok = params.mode === 'all' ? hits.length === params.roles.length : hits.length > 0
+    if (!ok) throw withStatus(new Error('Forbidden'), 403)
+    return true
+  },
+})
+
+// Usage — params are typed, ordering is topological, typos in
+// `dependsOn` keys are caught by `kick typegen`'s ContextKeys registry.
+@RequireRole({ roles: ['admin', 'manager'] })
+@Get('/dashboard')
+dashboard(ctx: RequestContext) { /* ctx.get('user') is non-null here */ }
+```
+
+Because `roles` is your own `AuthUser` type, literal-union role names give you compile-time typo checking with zero augmentation machinery — you declared the type yourself in Step 1.
+
+## BYO policies — resource-level checks
+
+A policy is the same pattern one level deeper: a contributor (or a plain service the contributor calls) that loads the resource and compares it against the user. Sketch:
+
+```ts
+export const CanEditPost = defineHttpContextDecorator({
+  key: 'post', // doubles as the loaded resource for the handler
+  dependsOn: ['user'],
+  deps: { posts: POSTS_REPO },
+  resolve: async (ctx, { posts }) => {
+    const post = await posts.findById(ctx.params.id)
+    if (!post) throw withStatus(new Error('Not Found'), 404)
+    const user = ctx.get('user')!
+    if (post.authorId !== user.id && !user.roles.includes('admin')) {
+      throw withStatus(new Error('Forbidden'), 403)
+    }
+    return post // handler reads ctx.get('post') — already authorized
+  },
+})
+```
+
+The load-and-authorize-in-one-contributor shape replaces `@Policy`/`@Can`: the handler never sees an unauthorized resource, and the policy logic lives in one named, testable unit.
+
+---
+
+## Legacy: Role-Based Access Control (deprecated)
+
+Everything below documents the deprecated `@forinda/kickjs-auth` package for existing projects.
 
 `@Roles()` checks that the authenticated user has at least one of the required roles:
 
