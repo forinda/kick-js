@@ -29,6 +29,7 @@ import type { Dirent } from 'node:fs'
 import { readdir, readFile } from 'node:fs/promises'
 import { join, relative, resolve, sep } from 'node:path'
 import { ScanCache } from './scanner-cache'
+import { extractFileAst } from './extract-ast'
 
 /** Decorators that mark a class as DI-managed */
 export const DECORATOR_NAMES = [
@@ -1363,11 +1364,27 @@ export interface FileExtract {
 }
 
 /**
- * Run every per-file extractor over one source string. Pure: depends
- * only on the file's own text, so the result is safe to cache by
- * filesystem signature (see `scanner-cache.ts`).
+ * Run per-file extraction over one source string. Pure: depends only
+ * on the file's own text, so the result is safe to cache by filesystem
+ * signature (see `scanner-cache.ts`).
+ *
+ * AST-first (oxc-parser — exact decorator/argument parsing, template-
+ * literal route paths, no balanced-delimiter heuristics), falling back
+ * to the regex extractors when the file doesn't parse — mid-edit
+ * syntax errors in watch mode still yield partial results that keep
+ * the dev loop alive.
  */
 export function extractFile(source: string, filePath: string, cwd: string): FileExtract {
+  const ast = extractFileAst(source, filePath, cwd)
+  if (ast) return ast
+  return extractFileRegex(source, filePath, cwd)
+}
+
+/**
+ * The original regex extraction pipeline — fallback for unparseable
+ * sources and the parity baseline for the AST extractor's tests.
+ */
+export function extractFileRegex(source: string, filePath: string, cwd: string): FileExtract {
   const classes = extractClassesFromSource(source, filePath, cwd)
   return {
     classes,
