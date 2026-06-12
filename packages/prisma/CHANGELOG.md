@@ -1,5 +1,11 @@
 # @forinda/kickjs-prisma
 
+## 6.0.1
+
+### Patch Changes
+
+- [#348](https://github.com/forinda/kick-js/pull/348) [`37459a7`](https://github.com/forinda/kick-js/commit/37459a722c2121cc55480f16900a0268b91ef11b) Thanks [@forinda](https://github.com/forinda)! - Mark both packages as deprecated. They were early-adoption adapters and are no longer maintained — wire the ORM directly in your app (BYO), or use `@forinda/kickjs-db`, the built-in Kick ORM, if you prefer to skip external ORMs. Importing either now prints a one-time console warning (suppress with `KICKJS_SUPPRESS_DEPRECATION=1`) and the entry modules carry `@deprecated` JSDoc so editors flag usages. Both packages will be removed in a future major.
+
 ## 6.0.0
 
 ## 6.0.0-alpha.0

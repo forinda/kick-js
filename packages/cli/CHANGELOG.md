@@ -1,5 +1,34 @@
 # @forinda/kickjs-cli
 
+## 6.1.0
+
+### Minor Changes
+
+- [#348](https://github.com/forinda/kick-js/pull/348) [`134482b`](https://github.com/forinda/kick-js/commit/134482b9ae737d628344f7af9d5b7155e99fadc7) Thanks [@forinda](https://github.com/forinda)! - Refresh the `kick add` catalog. `ai` (`@forinda/kickjs-ai` + zod) and `auth` (`@forinda/kickjs-auth` + jsonwebtoken) are now resolvable — `kick add auth` previously reported "Unknown packages" despite the help text suggesting it. Deprecated entries (`auth` → BYO auth via context contributors, `drizzle`/`prisma` → `@forinda/kickjs-db`) still install but print a migration warning and are flagged in `kick add --list --all`. Catalog resolution is exposed as a pure `planAddPackages()` helper with a drift-guard test that fails if an entry stops matching a published workspace package.
+
+- [#353](https://github.com/forinda/kick-js/pull/353) [`d14d671`](https://github.com/forinda/kick-js/commit/d14d671781e61fab02cc5b05cfff2d2b7044f417) Thanks [@forinda](https://github.com/forinda)! - `kick typegen` per-file extraction is now AST-based (oxc-parser) with the regex extractors kept as a fallback for unparseable mid-edit sources. Accuracy fixes over the regex path: template-literal route paths extract correctly, `@ApiQueryParams` stacked above the HTTP decorator is no longer silently dropped, string literals containing parens/braces can't skew extraction, aliased named imports resolve as schema sources, and const-bound `createToken` declarations are no longer double-emitted. The scan cache version is bumped so stale regex-era entries refresh on first run.
+
+- [#352](https://github.com/forinda/kick-js/pull/352) [`afda925`](https://github.com/forinda/kick-js/commit/afda9253c5e5eb1e8c0dfa668e57d1272c8cc22c) Thanks [@forinda](https://github.com/forinda)! - `kick dev --typecheck` (or `dev.typecheck: true` in kick.config) runs the project's own TypeScript checker after each debounced change and surfaces diagnostics without leaving the dev console. Resolves `tsgo` (`@typescript/native-preview`) from the project's `node_modules/.bin`, falling back to `tsc`; runs `--noEmit` after the typegen pass settles so checks always see fresh `.kickjs/types`. In-flight runs are killed when a new save lands. Failures print a capped diagnostic summary and broadcast a `kickjs:typecheck` HMR event with the full output; a healthy project stays quiet, and the first clean run after an error prints a "clean again" line. Off by default.
+
+- [#348](https://github.com/forinda/kick-js/pull/348) [`630c07d`](https://github.com/forinda/kick-js/commit/630c07d6da38bcbe4b2aae5c3ad55a71e5ca2788) Thanks [@forinda](https://github.com/forinda)! - `kick typegen` now warns when a route decorator's wired `body`/`query`/`params` schema cannot be statically resolved and the generated `KickRoutes` type silently falls back to `unknown` (or URL-pattern params). The warning names the controller, method, route, and schema identifier, and suggests exporting the schema with a static import specifier. No warning is emitted when no schema is wired or when `typegen.schemaValidator` is `false`.
+
+- [#358](https://github.com/forinda/kick-js/pull/358) [`00d6859`](https://github.com/forinda/kick-js/commit/00d6859279877b5f5cfe8445f64f3d91ceb5e7cc) Thanks [@forinda](https://github.com/forinda)! - Two dev-loop fixes:
+
+  **Typegen-on-save for bare `vite` boots.** The vite plugin array now includes `kickjs:typegen`, which wires the same debounced typegen watcher `kick dev` uses — so projects (or tools) that boot Vite directly no longer run with silently frozen `.kickjs/types`. The engine is the CLI's new exported `createTypegenDevWatcher()`; the plugin resolves `@forinda/kickjs-cli` from the project root at runtime (optional peer — manifest-walk resolution, since the ESM-only exports map defeats `require.resolve`) and quietly stands down when the CLI is absent or when `kick dev` has claimed ownership via `TYPEGEN_OWNER_KEY` (no double-running). A startup catch-up pass covers edits made while no dev server was running.
+
+  **Errors now surface on save, not on the next request.** The app module was re-evaluated lazily after HMR/module-discovery invalidation, so a broken save (syntax error, failed import, bootstrap throw) stayed silent until an HTTP request arrived. Both invalidation paths now eagerly re-warm `virtual:kickjs/app` and log the failure (with fixed stacktraces) the moment the save lands — matching the eager startup behavior.
+
+### Patch Changes
+
+- [#348](https://github.com/forinda/kick-js/pull/348) [`6597fcb`](https://github.com/forinda/kick-js/commit/6597fcb9cfc5336303944213d49e9e1b71d24252) Thanks [@forinda](https://github.com/forinda)! - `kick dev` no longer silently swallows typegen failures in watch mode. A failed scan or plugin pass now prints a deduplicated console warning ("types in .kickjs/types may be stale") and broadcasts a `kickjs:typegen-error` custom HMR event for DevTools/overlays. Repeated identical failures stay quiet until the error changes or a pass succeeds again.
+
+- [#348](https://github.com/forinda/kick-js/pull/348) [`78fc8b3`](https://github.com/forinda/kick-js/commit/78fc8b357e838c84630ed27a56fe82674389567e) Thanks [@forinda](https://github.com/forinda)! - `kick info` now reports real data instead of a hardcoded three-package "workspace" list: the CLI's own version, plus every `@forinda/kickjs*` dependency the project declares with the version actually installed in `node_modules` (falling back to the declared range when not installed) and a `[DEPRECATED]` flag for packages the `kick add` catalog marks as deprecated. `kick -v` now works as an alias for `-V` / `--version`.
+
+- [#357](https://github.com/forinda/kick-js/pull/357) [`781db49`](https://github.com/forinda/kick-js/commit/781db49cf1c3e2baced838aa7c07deeb359efa81) Thanks [@forinda](https://github.com/forinda)! - Scaffolded projects now get `"dev": "kick dev"` instead of bare `"dev": "vite"`. The typegen-on-save watcher (and the opt-in `--typecheck` worker) live only in `kick dev` — the bare `vite` script gave working HMR with silently frozen `.kickjs/types`, so adding a route or controller required a manual `kick typegen` to refresh its typing. Existing projects: change the `dev` script in package.json to `kick dev`.
+
+- Updated dependencies [[`bdd9757`](https://github.com/forinda/kick-js/commit/bdd975792ace8fb4e53f542802db7f7610119fcc), [`889fce7`](https://github.com/forinda/kick-js/commit/889fce7f2f02229d8af6bca062fb5642172add8d), [`92c8ce5`](https://github.com/forinda/kick-js/commit/92c8ce5c28384c5e12cad34f1f4c41307b47b966), [`57001c3`](https://github.com/forinda/kick-js/commit/57001c376090cf838db4c9b2dac672a317c21e33), [`e8133d2`](https://github.com/forinda/kick-js/commit/e8133d2c0df13dd59db98637f4ec1a13181ff884)]:
+  - @forinda/kickjs-db@6.2.0
+
 ## 6.0.1
 
 ### Patch Changes
