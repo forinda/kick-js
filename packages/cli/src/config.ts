@@ -428,6 +428,20 @@ export interface KickConfig {
    */
   typegen?: TypegenConfig
   /**
+   * Dev-server (`kick dev`) settings.
+   */
+  dev?: {
+    /**
+     * Run the project's TypeScript checker (`tsgo --noEmit`, falling
+     * back to `tsc --noEmit`) after each debounced change and surface
+     * diagnostics in the dev console + a `kickjs:typecheck` HMR event.
+     * Equivalent to the `kick dev --typecheck` flag.
+     *
+     * @default false
+     */
+    typecheck?: boolean
+  }
+  /**
    * Database settings — schema path, migrations dir, dialect,
    * connection string, optional adapter factory. Consumed by
    * `kick db generate` / `kick db migrate*`. See {@link KickDbConfigBlock}.

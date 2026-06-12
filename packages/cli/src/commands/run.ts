@@ -8,6 +8,12 @@ import { runTypegen, writeTypegenArtifacts } from '../typegen'
 import { runAllPluginTypegens } from '../typegen/run-plugins'
 import { buildAssets } from '../asset-manager/build'
 import { createTypegenErrorReporter } from './typegen-error-reporter'
+import {
+  createDevTypechecker,
+  formatTypecheckOutput,
+  resolveTypecheckBin,
+  type DevTypechecker,
+} from './dev-typecheck'
 
 /**
  * Start the Vite dev server with @forinda/kickjs-vite plugin.
@@ -38,7 +44,7 @@ function resolvePolling(flag: boolean | undefined): boolean {
 async function startDevServer(
   _entry: string,
   port?: string,
-  opts: { polling?: boolean } = {},
+  opts: { polling?: boolean; typecheck?: boolean } = {},
 ): Promise<void> {
   if (port) process.env.PORT = port
   const polling = resolvePolling(opts.polling)
@@ -150,6 +156,47 @@ async function startDevServer(
       data: { message, timestamp: Date.now() },
     })
   })
+  // Optional dev-time typecheck worker (--typecheck / dev.typecheck in
+  // kick.config). Runs the PROJECT's own checker after each debounced
+  // typegen pass so diagnostics are computed against fresh .kickjs/types.
+  // tsgo checks a typical project in well under a second; in-flight runs
+  // are killed when a new save lands, so rapid edits never queue up.
+  const typecheckEnabled = opts.typecheck ?? devConfig?.dev?.typecheck ?? false
+  let typechecker: DevTypechecker | null = null
+  let lastTypecheckOk = true
+  if (typecheckEnabled) {
+    const bin = resolveTypecheckBin(cwd)
+    if (!bin) {
+      console.warn(
+        '  kick dev: --typecheck requested but neither tsgo (@typescript/native-preview) ' +
+          'nor typescript is installed in this project — skipping type checks.',
+      )
+    } else {
+      typechecker = createDevTypechecker({
+        cwd,
+        bin,
+        onResult: (result) => {
+          // Full output always rides the HMR event (DevTools / overlays);
+          // the console gets a capped, indented summary — and only on
+          // failure or on the error→clean transition, so a healthy
+          // project stays quiet.
+          server.hot.send({
+            type: 'custom',
+            event: 'kickjs:typecheck',
+            data: { ok: result.ok, output: result.output, durationMs: result.durationMs },
+          })
+          if (!result.ok) {
+            lastTypecheckOk = false
+            console.warn(`\n  kick typecheck (${result.kind}, ${result.durationMs}ms):`)
+            console.warn(formatTypecheckOutput(result.output).replace(/^/gm, '    '))
+          } else if (!lastTypecheckOk) {
+            lastTypecheckOk = true
+            console.log(`  kick typecheck: clean again (${result.kind}, ${result.durationMs}ms)`)
+          }
+        },
+      })
+    }
+  }
   let typegenTimer: ReturnType<typeof setTimeout> | null = null
   const pendingChanged = new Set<string>()
   const pendingRemoved = new Set<string>()
@@ -227,6 +274,9 @@ async function startDevServer(
         .then((r) => writeTypegenArtifacts(typesOutDir, r, true))
         .then(() => typegenErrors.clear('plugins'))
         .catch((err) => typegenErrors.report('plugins', err))
+        // Typecheck AFTER the plugin pass settles (success or failure) so
+        // the checker sees the freshest .kickjs/types this window produced.
+        .finally(() => typechecker?.schedule())
       // Incrementally refresh the dist asset copies + manifest, but only
       // when an asset file actually changed this window. buildAssets
       // skips up-to-date files, so this is a cheap stat sweep + the
@@ -252,6 +302,10 @@ async function startDevServer(
 
   console.log(`\n  KickJS dev server running (Vite + @forinda/kickjs-vite)\n`)
 
+  // Baseline check on startup — surfaces pre-existing type errors
+  // immediately instead of waiting for the first save.
+  typechecker?.schedule()
+
   // Graceful shutdown — Vite closes the server + all HMR connections.
   // The app suppresses its own signal handlers in dev (Vite owns the
   // lifecycle), so drive its graceful shutdown here: drain in-flight
@@ -263,6 +317,7 @@ async function startDevServer(
     if (shuttingDown) return
     shuttingDown = true
     if (typegenTimer) clearTimeout(typegenTimer)
+    typechecker?.dispose()
     try {
       await (
         globalThis as { __kickjs_app_shutdown?: () => Promise<void> }
@@ -290,9 +345,16 @@ export function registerRunCommands(program: Command): void {
       '--polling',
       'Force chokidar to poll for file changes (Docker / WSL / NFS / older kernels)',
     )
+    .option(
+      '--typecheck',
+      'Run the project TypeScript checker (tsgo/tsc --noEmit) after each change and report diagnostics',
+    )
     .action(async (opts: any) => {
       try {
-        await startDevServer(opts.entry, opts.port, { polling: opts.polling })
+        await startDevServer(opts.entry, opts.port, {
+          polling: opts.polling,
+          typecheck: opts.typecheck,
+        })
       } catch (err: any) {
         if (err.code === 'ERR_MODULE_NOT_FOUND' && err.message?.includes('vite')) {
           console.error('\n  Error: vite is not installed.\n  Run: pnpm add -D vite unplugin-swc\n')
