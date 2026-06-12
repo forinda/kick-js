@@ -287,7 +287,8 @@ describe('tryDispatchPluginGenerator', () => {
     expect(result).not.toBeNull()
     expect(result!.source).toBe('@my-org/kickjs-cqrs')
     expect(result!.files).toHaveLength(1)
-    expect(result!.files[0]).toMatch(/generated\/create-order\.command\.ts$/)
+    // Normalize — the dispatcher returns OS-native paths (backslashes on Windows).
+    expect(result!.files[0].replaceAll('\\', '/')).toMatch(/generated\/create-order\.command\.ts$/)
   })
 
   it('first-match-wins when two plugins declare the same generator name', async () => {

@@ -14,8 +14,8 @@
  * @module @forinda/kickjs-cli/__tests__/helpers
  */
 
-import { execSync, spawnSync, type SpawnSyncReturns } from 'node:child_process'
-import { mkdtempSync, mkdirSync, writeFileSync, existsSync, rmSync } from 'node:fs'
+import { spawnSync, type SpawnSyncReturns } from 'node:child_process'
+import { mkdtempSync, mkdirSync, writeFileSync, existsSync, rmSync, symlinkSync } from 'node:fs'
 import { join, resolve, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
@@ -94,10 +94,10 @@ export function createFixtureProject(name = 'kick-cli-test'): string {
   // directly (not the dist) to avoid needing a build step in tests.
   mkdirSync(join(dir, 'node_modules', '@forinda'), { recursive: true })
   const kickjsSrc = join(WORKSPACE_ROOT, 'packages', 'kickjs')
-  execSync(`ln -sf "${kickjsSrc}" "${join(dir, 'node_modules', '@forinda', 'kickjs')}"`)
+  linkDir(kickjsSrc, join(dir, 'node_modules', '@forinda', 'kickjs'))
   // Some scaffolds also import from @forinda/kickjs-swagger
   const swaggerSrc = join(WORKSPACE_ROOT, 'packages', 'swagger')
-  execSync(`ln -sf "${swaggerSrc}" "${join(dir, 'node_modules', '@forinda', 'kickjs-swagger')}"`)
+  linkDir(swaggerSrc, join(dir, 'node_modules', '@forinda', 'kickjs-swagger'))
 
   // Symlink @types/node and zod from the workspace so tsc can resolve
   // both the `types: ['node']` reference and any `import { z } from 'zod'`
@@ -137,13 +137,26 @@ function linkWorkspaceDep(fixtureDir: string, pkgName: string): void {
           })()
         : join(fixtureDir, 'node_modules', pkgName)
       try {
-        execSync(`ln -sf "${candidate}" "${target}"`)
+        linkDir(candidate, target)
       } catch {
         // ignore
       }
       return
     }
   }
+}
+
+/**
+ * Cross-platform replacement for `ln -sf <target> <link>` on directories.
+ * `ln` doesn't exist on a stock Windows host, so the previous execSync
+ * shell-out failed every fixture-based test there. `symlinkSync` with
+ * type 'junction' works without admin rights on Windows (junctions are
+ * directory-only, which is all we link); the type argument is ignored
+ * on POSIX. `-f` semantics via the rmSync prelude.
+ */
+function linkDir(target: string, linkPath: string): void {
+  rmSync(linkPath, { recursive: true, force: true })
+  symlinkSync(target, linkPath, 'junction')
 }
 
 /** Recursively delete a fixture directory (best-effort, never throws) */
