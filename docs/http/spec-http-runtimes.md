@@ -262,6 +262,62 @@ interface RuntimeResponse {
   without `capabilities.render`.
 - `ctx.sse()` already writes via `writeHead/write/end` — maps directly.
 
+### 4.3b Runtime-typed context — the escape hatches follow the chosen runtime
+
+`raw: unknown` would force casts at every engine-native touchpoint.
+Instead the raw types come from an **augmentable runtime registry** —
+the exact `KickDbRegister` / `KickEnv` mechanism the framework already
+uses, so the type story is uniform with `kick/db` and env typing:
+
+```ts
+// core — empty, augmentable; ExpressRuntimeTypes is the un-augmented fallback
+export interface KickRuntimeRegister {}
+
+export interface RuntimeTypeMap {
+  request: unknown // engine-native request  (express.Request / FastifyRequest / H3Event)
+  response: unknown // engine-native response (express.Response / FastifyReply / H3Event)
+  app: unknown // engine-native app      (Express / FastifyInstance / H3 App)
+}
+
+type ActiveRuntime = KickRuntimeRegister extends { runtime: infer R extends RuntimeTypeMap }
+  ? R
+  : ExpressRuntimeTypes // default mirrors the runtime default
+
+// flows into the surfaces:
+//   ctx.req.raw        : ActiveRuntime['request']
+//   ctx.res.raw        : ActiveRuntime['response']
+//   AdapterContext.app : ActiveRuntime['app']
+//   getRuntimeApp()    : ActiveRuntime['app']
+```
+
+The augmentation is **emitted by typegen** (a `kick/runtime` plugin
+reading the configured runtime from `kick.config.ts`), mirroring how
+`kick/db` emits `KickDbRegister`:
+
+```ts
+// .kickjs/types/kick__runtime.d.ts — generated
+declare module '@forinda/kickjs' {
+  interface KickRuntimeRegister {
+    runtime: import('@forinda/kickjs/fastify').FastifyRuntimeTypes
+  }
+}
+```
+
+Consequences:
+
+- Under Fastify, `ctx.req.raw` IS `FastifyRequest` — autocomplete,
+  no casts. Same controller code, runtime-correct types.
+- Single-runtime-per-app is enforced by the type system for free: two
+  conflicting augmentations are a compile error ("Subsequent property
+  declarations must have the same type").
+- Typegen-emitted rather than import-side-effect, so merely importing a
+  runtime subpath in a script never flips the app's global types; the
+  config is the single source of truth. Hand-written augmentation stays
+  documented for no-typegen projects.
+- Under the default (no config, no typegen) everything types as Express —
+  existing code compiles unchanged, which is what makes the §6 “structural
+  no-op under express” guarantee hold at the type level too.
+
 ### 4.4 Adapter contract — the mount facade
 
 `AdapterContext` changes from `app: Express` to:
@@ -269,7 +325,7 @@ interface RuntimeResponse {
 ```ts
 export interface AdapterContext {
   http: AdapterHttp // NEW — the supported surface
-  app: unknown // engine-native escape hatch (was: Express)
+  app: ActiveRuntime['app'] // engine-native escape hatch, typed by the runtime registry (§4.3b)
   container: Container
   server?: http.Server
   // …
@@ -405,13 +461,13 @@ primitive until then.
 
 ## 9. Milestones
 
-| Milestone                                  | Scope                                                                                                                                                                                                  | Risk                        |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------- |
-| **M1 — seam extraction**                   | `HttpRuntime` + `RouteTable` + runtime drivers in core; `expressRuntime()` implements them; zero behavior change (golden tests: full kickjs suite must pass untouched)                                 | Medium (core refactor)      |
-| **M2 — adapter facade**                    | `AdapterContext.http`; migrate swagger/queue/mcp; devtools last                                                                                                                                        | Low (mechanical)            |
-| **M3 — `@forinda/kickjs/fastify` subpath** | Runtime adapter + middie bridge + uploads + conformance suite (shared fixture app run under both runtimes via supertest: routes, contributors, errors, SSE, uploads, shutdown draining, Vite dev boot) | Medium                      |
-| **M4 — `@forinda/kickjs/h3` subpath**      | Runtime adapter on v2 beta (or v1 fallback), same conformance suite                                                                                                                                    | Medium-high (upstream beta) |
-| **M5 — docs + scaffold**                   | `kick new --runtime fastify\|h3\|express`, runtime guide, capability matrix in docs                                                                                                                    | Low                         |
+| Milestone                                  | Scope                                                                                                                                                                                                                                                                  | Risk                        |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| **M1 — seam extraction**                   | `HttpRuntime` + `RouteTable` + runtime drivers in core; `expressRuntime()` implements them; zero behavior change (golden tests: full kickjs suite must pass untouched)                                                                                                 | Medium (core refactor)      |
+| **M2 — adapter facade**                    | `AdapterContext.http`; migrate swagger/queue/mcp; devtools last                                                                                                                                                                                                        | Low (mechanical)            |
+| **M3 — `@forinda/kickjs/fastify` subpath** | Runtime adapter + middie bridge + uploads + `kick/runtime` typegen plugin (runtime-typed registry, §4.3b) + conformance suite (shared fixture app run under both runtimes via supertest: routes, contributors, errors, SSE, uploads, shutdown draining, Vite dev boot) | Medium                      |
+| **M4 — `@forinda/kickjs/h3` subpath**      | Runtime adapter on v2 beta (or v1 fallback), same conformance suite                                                                                                                                                                                                    | Medium-high (upstream beta) |
+| **M5 — docs + scaffold**                   | `kick new --runtime fastify\|h3\|express`, runtime guide, capability matrix in docs                                                                                                                                                                                    | Low                         |
 
 The **conformance suite** (M3) is the centerpiece: one fixture app, one
 spec file, parameterized over every registered runtime — the same trick
