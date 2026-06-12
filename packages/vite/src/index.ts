@@ -76,6 +76,7 @@ import { kickjsModuleDiscoveryPlugin } from './module-discovery'
 import { kickjsHmrPlugin } from './hmr-plugin'
 import { devtoolsFlagPlugin } from './devtools-flag-plugin'
 import { devtoolsStripPlugin } from './devtools-strip-plugin'
+import { kickjsTypegenPlugin } from './typegen-plugin'
 
 /**
  * Create the KickJS Vite plugin array.
@@ -131,6 +132,9 @@ export function kickjsVitePlugin(options: KickJSPluginOptions = {}): Plugin[] {
     kickjsHmrPlugin(ctx, options.hmr),
     kickjsVirtualModulesPlugin(ctx),
     kickjsDevServerPlugin(ctx),
+    // Typegen-on-save for bare `vite` boots — no-op under `kick dev`
+    // (which claims ownership) or when @forinda/kickjs-cli is absent.
+    kickjsTypegenPlugin(),
   ]
   // Register the devtools flag plugin by default. Adopters who don't
   // gate their devtools imports get a harmless no-op; adopters who do
@@ -157,6 +161,11 @@ export type {
 
 // Standalone plugins users can compose alongside `kickjsVitePlugin()`
 export { envWatchPlugin } from './env-watch-plugin'
+export {
+  kickjsTypegenPlugin,
+  type TypegenPluginOptions,
+  type TypegenCliModule,
+} from './typegen-plugin'
 export {
   devtoolsFlagPlugin,
   resolveDevtoolsFlag,

@@ -23,6 +23,17 @@ export { defineCliPlugin, KickPluginConflictError } from './plugin/types'
 export type { TypegenPlugin, TypegenContext, TypegenPluginResult } from './typegen/plugin'
 export { defineTypegen } from './typegen/plugin'
 
+// Typegen-on-save engine — consumed by @forinda/kickjs-vite so plain
+// `vite` boots get the same watcher `kick dev` wires (the CLI claims
+// ownership via TYPEGEN_OWNER_KEY when it boots Vite itself).
+export {
+  createTypegenDevWatcher,
+  TYPEGEN_OWNER_KEY,
+  type TypegenDevWatcher,
+  type TypegenDevWatcherOptions,
+  type TypegenWatchEvent,
+} from './typegen/dev-watcher'
+
 // Plugin Generator Extension API (architecture.md §21.2.3)
 // Plugins ship `kick g <name>` generators via `kickjs.generators` in
 // their package.json — see `defineGenerator` for the manifest shape.

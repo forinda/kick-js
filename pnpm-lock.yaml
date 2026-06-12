@@ -701,6 +701,9 @@ importers:
       '@babel/core':
         specifier: ^7.29.7
         version: 7.29.7
+      '@forinda/kickjs-cli':
+        specifier: '>=6.0.0'
+        version: 6.0.1(@forinda/kickjs-devtools-kit@6.0.0(@forinda/kickjs@packages+kickjs))(better-sqlite3@12.10.0)(dotenv@17.4.2)(express@5.2.1)(multer@2.1.1)(mysql2@3.22.5(@types/node@25.9.2))(pg@8.21.0)(valibot@1.4.1(typescript@6.0.3))(yup@1.7.1)(zod@4.4.3)
     devDependencies:
       '@forinda/kickjs':
         specifier: workspace:*
@@ -1324,6 +1327,77 @@ packages:
     engines: {node: '>=18'}
     cpu: [x64]
     os: [win32]
+
+  '@forinda/kickjs-cli-kit@0.1.1':
+    resolution: {integrity: sha512-4bO7HOKa6kQVJmPMJDOhzZEwslMWt9qPcN6HDDPDsLnfRIRVYUJG3TumpPogylJxPU11x6cz4vfWbNyj61Xy3w==}
+    engines: {node: '>=20.0'}
+    peerDependencies:
+      commander: '>=12.0.0'
+
+  '@forinda/kickjs-cli@6.0.1':
+    resolution: {integrity: sha512-Px7Zy2DlKCgjZGvq+hGg/qxXho5sjPaCTAXhUECjRuynj+tC6kGiJ7aECFAT1DNYrlsgwlZqfix/8/aSHLrzrg==}
+    engines: {node: '>=20.0'}
+    hasBin: true
+
+  '@forinda/kickjs-db@6.1.1':
+    resolution: {integrity: sha512-FHMJfXrKRRQaL0tfv0k9l09SEvAnBUV+D52Y1mMLRYgunbcCc/2wOnhZ69yPQEh6BYrbb8rzAuCVzKyJYiulgw==}
+    engines: {node: '>=20.0'}
+    hasBin: true
+    peerDependencies:
+      '@forinda/kickjs': '>=5.14.0-alpha.0'
+      '@forinda/kickjs-devtools-kit': '>=6.0.0-alpha.0'
+      better-sqlite3: '>=12.0.0'
+      mysql2: '>=3.0.0'
+      pg: '>=8.11.0'
+    peerDependenciesMeta:
+      '@forinda/kickjs-devtools-kit':
+        optional: true
+      better-sqlite3:
+        optional: true
+      mysql2:
+        optional: true
+      pg:
+        optional: true
+
+  '@forinda/kickjs-devtools-kit@6.0.0':
+    resolution: {integrity: sha512-7ovfcS4f7Ajx9uORixwHgENhqYniy0JoEKU1Ea7WtM3BA9+VrTkAqCJ93sNWdkIwYubrdATxqSRoORSbCdw5Og==}
+    engines: {node: '>=20.0'}
+    peerDependencies:
+      '@forinda/kickjs': '>=5.14.0-alpha.0'
+    peerDependenciesMeta:
+      '@forinda/kickjs':
+        optional: true
+
+  '@forinda/kickjs-schema@0.1.2':
+    resolution: {integrity: sha512-FjhHtGjjYfbS2Ny8BhjaTIfj+ZXjMZTggu86GvmFgPhvWwqvk8wUqMUDxHmYwQ0wD6YazNoAZ/oWBkrYOf/RYQ==}
+    engines: {node: '>=20.0'}
+    peerDependencies:
+      valibot: '>=1.0.0'
+      yup: '>=1.0.0'
+      zod: '>=3.23.0'
+    peerDependenciesMeta:
+      valibot:
+        optional: true
+      yup:
+        optional: true
+      zod:
+        optional: true
+
+  '@forinda/kickjs@5.16.0':
+    resolution: {integrity: sha512-/Y9rWX3YwRtUsEBG2G3C4na6KsE2sH/nryW2/dliKWfwR7jVQT+5IiCf76sBdagwLc7oodpP5g4rSnDVXiSwuw==}
+    engines: {node: '>=20.0'}
+    peerDependencies:
+      dotenv: ^17.0.0
+      express: ^5.1.0
+      multer: ^2.0.0
+      zod: ^4.0.0
+    peerDependenciesMeta:
+      dotenv:
+        optional: true
+      multer:
+        optional: true
+      zod:
+        optional: true
 
   '@grpc/grpc-js@1.14.4':
     resolution: {integrity: sha512-k9Dj3DV/itK9D06Y8f190Qgop7/Ui+D0njFV3LHMPwPT75DpXLQohE9Wmz0QElrJnzsjB7KPWiKJbOl7IPDArQ==}
@@ -6624,6 +6698,77 @@ snapshots:
 
   '@esbuild/win32-x64@0.27.4':
     optional: true
+
+  '@forinda/kickjs-cli-kit@0.1.1(commander@14.0.3)':
+    dependencies:
+      commander: 14.0.3
+
+  '@forinda/kickjs-cli-kit@0.1.1(commander@15.0.0)':
+    dependencies:
+      commander: 15.0.0
+
+  '@forinda/kickjs-cli@6.0.1(@forinda/kickjs-devtools-kit@6.0.0(@forinda/kickjs@packages+kickjs))(better-sqlite3@12.10.0)(dotenv@17.4.2)(express@5.2.1)(multer@2.1.1)(mysql2@3.22.5(@types/node@25.9.2))(pg@8.21.0)(valibot@1.4.1(typescript@6.0.3))(yup@1.7.1)(zod@4.4.3)':
+    dependencies:
+      '@clack/prompts': 1.5.1
+      '@forinda/kickjs': 5.16.0(dotenv@17.4.2)(express@5.2.1)(multer@2.1.1)(valibot@1.4.1(typescript@6.0.3))(yup@1.7.1)(zod@4.4.3)
+      '@forinda/kickjs-cli-kit': 0.1.1(commander@15.0.0)
+      '@forinda/kickjs-db': 6.1.1(@forinda/kickjs-devtools-kit@6.0.0(@forinda/kickjs@packages+kickjs))(@forinda/kickjs@5.16.0(dotenv@17.4.2)(express@5.2.1)(multer@2.1.1)(valibot@1.4.1(typescript@6.0.3))(yup@1.7.1)(zod@4.4.3))(better-sqlite3@12.10.0)(mysql2@3.22.5(@types/node@25.9.2))(pg@8.21.0)
+      commander: 15.0.0
+      glob: 13.0.6
+      jiti: 2.7.0
+      oxfmt: 0.54.0
+      picocolors: 1.1.1
+      pluralize: 8.0.0
+    transitivePeerDependencies:
+      - '@forinda/kickjs-devtools-kit'
+      - better-sqlite3
+      - dotenv
+      - express
+      - multer
+      - mysql2
+      - pg
+      - svelte
+      - valibot
+      - vite-plus
+      - yup
+      - zod
+
+  '@forinda/kickjs-db@6.1.1(@forinda/kickjs-devtools-kit@6.0.0(@forinda/kickjs@packages+kickjs))(@forinda/kickjs@5.16.0(dotenv@17.4.2)(express@5.2.1)(multer@2.1.1)(valibot@1.4.1(typescript@6.0.3))(yup@1.7.1)(zod@4.4.3))(better-sqlite3@12.10.0)(mysql2@3.22.5(@types/node@25.9.2))(pg@8.21.0)':
+    dependencies:
+      '@forinda/kickjs': 5.16.0(dotenv@17.4.2)(express@5.2.1)(multer@2.1.1)(valibot@1.4.1(typescript@6.0.3))(yup@1.7.1)(zod@4.4.3)
+      '@forinda/kickjs-cli-kit': 0.1.1(commander@14.0.3)
+      commander: 14.0.3
+      jiti: 2.7.0
+      kysely: 0.29.2
+    optionalDependencies:
+      '@forinda/kickjs-devtools-kit': 6.0.0(@forinda/kickjs@packages+kickjs)
+      better-sqlite3: 12.10.0
+      mysql2: 3.22.5(@types/node@25.9.2)
+      pg: 8.21.0
+
+  '@forinda/kickjs-devtools-kit@6.0.0(@forinda/kickjs@packages+kickjs)':
+    optionalDependencies:
+      '@forinda/kickjs': link:packages/kickjs
+    optional: true
+
+  '@forinda/kickjs-schema@0.1.2(valibot@1.4.1(typescript@6.0.3))(yup@1.7.1)(zod@4.4.3)':
+    optionalDependencies:
+      valibot: 1.4.1(typescript@6.0.3)
+      yup: 1.7.1
+      zod: 4.4.3
+
+  '@forinda/kickjs@5.16.0(dotenv@17.4.2)(express@5.2.1)(multer@2.1.1)(valibot@1.4.1(typescript@6.0.3))(yup@1.7.1)(zod@4.4.3)':
+    dependencies:
+      '@forinda/kickjs-schema': 0.1.2(valibot@1.4.1(typescript@6.0.3))(yup@1.7.1)(zod@4.4.3)
+      express: 5.2.1
+      reflect-metadata: 0.2.2
+    optionalDependencies:
+      dotenv: 17.4.2
+      multer: 2.1.1
+      zod: 4.4.3
+    transitivePeerDependencies:
+      - valibot
+      - yup
 
   '@grpc/grpc-js@1.14.4':
     dependencies:
