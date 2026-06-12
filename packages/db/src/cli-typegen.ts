@@ -29,8 +29,13 @@ const DEFAULT_SCHEMA_PATHS = [
 export const kickDbTypegen = (): CliTypegen => ({
   id: 'kick/db',
   inputs: ['src/db/schema.ts', 'src/db/schema/**/*.ts'],
-  async generate(ctx: { cwd: string }) {
-    const schemaAbs = resolveSchema(ctx.cwd)
+  async generate(ctx: { cwd: string; config?: { db?: { schemaPath?: string } } }) {
+    // Parity with `kick db generate` (cli/config.ts resolveDbConfig):
+    // an adopter-configured `db.schemaPath` must drive BOTH the
+    // migration engine and this augmentation — previously only the
+    // default candidates were probed, so a custom path produced
+    // working migrations but a silently untyped client.
+    const schemaAbs = resolveSchema(ctx.cwd, ctx.config?.db?.schemaPath)
     if (!schemaAbs) return null
 
     // Strip the `.ts` extension and any trailing `/index` so the import
@@ -61,7 +66,16 @@ export const kickDbTypegen = (): CliTypegen => ({
   },
 })
 
-function resolveSchema(cwd: string): string | null {
+function resolveSchema(cwd: string, configuredPath?: string): string | null {
+  // kick.config `db.schemaPath` wins when the file exists; a configured-
+  // but-missing path falls through to the candidates rather than
+  // emitting an augmentation with a broken import specifier.
+  if (configuredPath) {
+    const abs = path.resolve(cwd, configuredPath)
+    if (existsSync(abs)) return abs
+    const idx = path.join(abs, 'index.ts')
+    if (existsSync(idx)) return idx
+  }
   for (const candidate of DEFAULT_SCHEMA_PATHS) {
     const abs = path.resolve(cwd, candidate)
     if (candidate.endsWith('.ts')) {
