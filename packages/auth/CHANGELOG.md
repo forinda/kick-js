@@ -1,5 +1,11 @@
 # @forinda/kickjs-auth
 
+## 6.0.1
+
+### Patch Changes
+
+- [#348](https://github.com/forinda/kick-js/pull/348) [`b83837d`](https://github.com/forinda/kick-js/commit/b83837dee4bdc511e5d646bfb570f94172c20641) Thanks [@forinda](https://github.com/forinda)! - Mark the package as deprecated — auth is moving to BYO (bring-your-own): compose `@LoadAuthUser` / `@RequireRole` / `@Public` from `defineContextDecorator` and `defineAdapter` (see the BYO Auth recipe in the docs). Importing the package now prints a one-time console warning (suppress with `KICKJS_SUPPRESS_DEPRECATION=1`) and the entry module carries `@deprecated` JSDoc. The package will be removed in a future major.
+
 ## 6.0.0
 
 ## 6.0.0-alpha.0
