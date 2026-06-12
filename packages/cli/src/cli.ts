@@ -58,7 +58,10 @@ async function main() {
 
   program.showHelpAfterError()
 
-  await program.parseAsync(process.argv)
+  // Commander registers a single short flag for version (`-V`); accept
+  // the lowercase `-v` people type by reflex as an alias.
+  const argv = process.argv.map((arg) => (arg === '-v' ? '--version' : arg))
+  await program.parseAsync(argv)
 }
 
 main().catch((err) => {

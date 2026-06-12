@@ -15,10 +15,16 @@ interface PackageEntry {
    * future package-removal flows refuse to drop them.
    */
   core?: boolean
+  /**
+   * Set when the package still installs but should no longer be the
+   * default choice. The string is the migration hint shown both in
+   * `kick add --list --all` and as a warning when the package is added.
+   */
+  deprecated?: string
 }
 
 /** Registry of KickJS packages and their required peer dependencies */
-const PACKAGE_REGISTRY: Record<string, PackageEntry> = {
+export const PACKAGE_REGISTRY: Record<string, PackageEntry> = {
   // Core (always installed by kick new — required for the framework to run)
   kickjs: {
     pkg: '@forinda/kickjs',
@@ -64,6 +70,24 @@ const PACKAGE_REGISTRY: Record<string, PackageEntry> = {
     description: 'Yup schema validation — wrap with fromYup()',
   },
 
+  // Auth — deprecated in favour of BYO (bring-your-own) auth composed
+  // from context contributors. Still installable for existing projects;
+  // JWT is the common path, so it co-installs jsonwebtoken.
+  auth: {
+    pkg: '@forinda/kickjs-auth',
+    peers: ['jsonwebtoken'],
+    description: 'JWT, API key, OAuth strategies, @Public, @Roles (+ optional argon2/bcryptjs)',
+    deprecated:
+      'auth is moving to BYO — compose @LoadAuthUser/@RequireRole/@Public from defineContextDecorator (see the BYO Auth recipe in the docs)',
+  },
+
+  // AI — requires zod (^4) for tool/schema definitions.
+  ai: {
+    pkg: '@forinda/kickjs-ai',
+    peers: ['zod'],
+    description: 'AI toolkit — LLM providers, tool definitions from controllers',
+  },
+
   // API
   swagger: {
     pkg: '@forinda/kickjs-swagger',
@@ -97,11 +121,15 @@ const PACKAGE_REGISTRY: Record<string, PackageEntry> = {
     pkg: '@forinda/kickjs-drizzle',
     peers: ['drizzle-orm'],
     description: 'Drizzle ORM adapter + query builder',
+    deprecated:
+      'early-adoption adapter, no longer maintained — wire Drizzle directly (BYO), or use @forinda/kickjs-db, the built-in Kick ORM (`kick add db` / pg / sqlite / mysql)',
   },
   prisma: {
     pkg: '@forinda/kickjs-prisma',
     peers: ['@prisma/client'],
     description: 'Prisma adapter + query builder',
+    deprecated:
+      'early-adoption adapter, no longer maintained — wire Prisma directly (BYO), or use @forinda/kickjs-db, the built-in Kick ORM (`kick add db` / pg / sqlite / mysql)',
   },
 
   // Real-time
@@ -271,7 +299,8 @@ export function printPackageList(all = false): void {
   const formatRow = ([name, info]: [string, PackageEntry]): string => {
     const padded = name.padEnd(maxName + 2)
     const peers = info.peers.length ? ` (+ ${info.peers.join(', ')})` : ''
-    return `    ${padded} ${info.description}${peers}`
+    const deprecated = info.deprecated ? ` [DEPRECATED — ${info.deprecated}]` : ''
+    return `    ${padded} ${info.description}${peers}${deprecated}`
   }
 
   console.log('\n  Core packages (always installed by `kick new`):\n')
@@ -285,9 +314,48 @@ export function printPackageList(all = false): void {
     console.log('  Run `kick add --list --all` for the full catalog.')
   }
 
-  console.log('\n  Usage: kick add auth drizzle swagger')
+  console.log('\n  Usage: kick add ai db swagger')
   console.log('         kick add queue:bullmq')
   console.log()
+}
+
+export interface AddPlan {
+  prodDeps: string[]
+  devDeps: string[]
+  unknown: string[]
+  /** Deprecation notices for requested entries — print, then install anyway. */
+  warnings: string[]
+}
+
+/**
+ * Pure resolution step for `kick add` — maps requested catalog names to
+ * the npm packages (plus peers) to install, split prod/dev. Kept free
+ * of I/O so the catalog rules (dev defaults, deprecations, unknown
+ * handling) are unit-testable without spawning a package manager.
+ */
+export function planAddPackages(packages: string[], forceDev: boolean): AddPlan {
+  const prodDeps = new Set<string>()
+  const devDeps = new Set<string>()
+  const unknown: string[] = []
+  const warnings: string[] = []
+
+  for (const name of packages) {
+    const entry = PACKAGE_REGISTRY[name]
+    if (!entry) {
+      unknown.push(name)
+      continue
+    }
+    if (entry.deprecated) {
+      warnings.push(`'${name}' (${entry.pkg}) is deprecated — ${entry.deprecated}`)
+    }
+    const target = forceDev || entry.dev ? devDeps : prodDeps
+    target.add(entry.pkg)
+    for (const peer of entry.peers) {
+      target.add(peer)
+    }
+  }
+
+  return { prodDeps: [...prodDeps], devDeps: [...devDeps], unknown, warnings }
 }
 
 export function registerListCommand(program: Command): void {
@@ -318,33 +386,21 @@ export function registerAddCommand(program: Command): void {
 
       const { pm, source } = await resolvePackageManagerWithSource(opts.pm)
       console.log(`\n  Using ${pm} (resolved from ${source})`)
-      const forceDevFlag = opts.dev
-      const prodDeps = new Set<string>()
-      const devDeps = new Set<string>()
-      const unknown: string[] = []
+      const { prodDeps, devDeps, unknown, warnings } = planAddPackages(packages, Boolean(opts.dev))
 
-      for (const name of packages) {
-        const entry = PACKAGE_REGISTRY[name]
-        if (!entry) {
-          unknown.push(name)
-          continue
-        }
-        const target = forceDevFlag || entry.dev ? devDeps : prodDeps
-        target.add(entry.pkg)
-        for (const peer of entry.peers) {
-          target.add(peer)
-        }
+      for (const warning of warnings) {
+        console.warn(`\n  WARNING: ${warning}`)
       }
 
       if (unknown.length > 0) {
         console.log(`\n  Unknown packages: ${unknown.join(', ')}`)
         console.log('  Run "kick add --list" to see available packages.\n')
-        if (prodDeps.size === 0 && devDeps.size === 0) return
+        if (prodDeps.length === 0 && devDeps.length === 0) return
       }
 
       // Install production dependencies
-      if (prodDeps.size > 0) {
-        const deps = Array.from(prodDeps)
+      if (prodDeps.length > 0) {
+        const deps = prodDeps
         const cmd = `${pm} add ${deps.join(' ')}`
         console.log(`\n  Installing ${deps.length} dependency(ies):`)
         for (const dep of deps) console.log(`    + ${dep}`)
@@ -357,8 +413,8 @@ export function registerAddCommand(program: Command): void {
       }
 
       // Install dev dependencies
-      if (devDeps.size > 0) {
-        const deps = Array.from(devDeps)
+      if (devDeps.length > 0) {
+        const deps = devDeps
         const cmd = `${pm} add -D ${deps.join(' ')}`
         console.log(`\n  Installing ${deps.length} dev dependency(ies):`)
         for (const dep of deps) console.log(`    + ${dep} (dev)`)

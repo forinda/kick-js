@@ -7,6 +7,7 @@ import { loadKickConfig } from '../config'
 import { runTypegen, writeTypegenArtifacts } from '../typegen'
 import { runAllPluginTypegens } from '../typegen/run-plugins'
 import { buildAssets } from '../asset-manager/build'
+import { createTypegenErrorReporter } from './typegen-error-reporter'
 
 /**
  * Start the Vite dev server with @forinda/kickjs-vite plugin.
@@ -137,6 +138,18 @@ async function startDevServer(
   // the directory walk entirely (see `scanProjectIncremental`). The
   // previous code passed only the last file to a full re-scan; batching
   // a `changed`/`removed` set both fixes that and unlocks the fast path.
+  // Surface watch-mode typegen failures. Deduped so a broken schema
+  // doesn't spam a warning on every save; broadcast as a custom HMR
+  // event so DevTools / overlays can subscribe (same pattern as the
+  // `kickjs:hmr` event in @forinda/kickjs-vite).
+  const typegenErrors = createTypegenErrorReporter((message) => {
+    console.warn(message)
+    server.hot.send({
+      type: 'custom',
+      event: 'kickjs:typegen-error',
+      data: { message, timestamp: Date.now() },
+    })
+  })
   let typegenTimer: ReturnType<typeof setTimeout> | null = null
   const pendingChanged = new Set<string>()
   const pendingRemoved = new Set<string>()
@@ -203,14 +216,17 @@ async function startDevServer(
         // Plugin pipeline runs separately just below; opting out here
         // avoids double-running it on every debounced trigger.
         runPlugins: false,
-      }).catch(() => {})
+      })
+        .then(() => typegenErrors.clear('scan'))
+        .catch((err) => typegenErrors.report('scan', err))
       // Plugin typegens piggy-back on the same debounce — they re-emit
       // their `kick__*` files when sources (or templates) change. silent
       // so the dev console stays quiet; artifacts (.gitignore + sweep)
       // run after the pass.
       runAllPluginTypegens({ cwd, config: devConfig, silent: true, changedFiles: delta })
         .then((r) => writeTypegenArtifacts(typesOutDir, r, true))
-        .catch(() => {})
+        .then(() => typegenErrors.clear('plugins'))
+        .catch((err) => typegenErrors.report('plugins', err))
       // Incrementally refresh the dist asset copies + manifest, but only
       // when an asset file actually changed this window. buildAssets
       // skips up-to-date files, so this is a cheap stat sweep + the

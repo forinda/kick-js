@@ -249,6 +249,18 @@ export function kickjsHmrPlugin(ctx: PluginContext, hmrOptions: HmrOptions = {})
 }
 
 /**
+ * Shape of the reactive-container handle the KickJS runtime publishes on
+ * `globalThis` for dev-mode HMR. Optional all the way down — the container
+ * only exists after the app has bootstrapped at least once, and older
+ * runtime versions may not expose `invalidate`.
+ */
+interface KickHmrGlobal {
+  __kickjs_container?: {
+    invalidate?: (token: string) => void
+  }
+}
+
+/**
  * Flush accumulated token invalidations.
  *
  * Called after the debounce window closes. Performs:
@@ -270,7 +282,7 @@ function flushInvalidation(
 
   // 1. Invalidate tokens in the reactive container (if available)
   //    container.invalidate() walks the dependency graph and notifies subscribers
-  const container = (globalThis as any).__kickjs_container
+  const container = (globalThis as typeof globalThis & KickHmrGlobal).__kickjs_container
   if (container && typeof container.invalidate === 'function') {
     for (const token of batch) {
       container.invalidate(token)

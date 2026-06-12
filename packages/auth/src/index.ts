@@ -1,4 +1,17 @@
+/**
+ * @deprecated `@forinda/kickjs-auth` is deprecated — auth is moving to
+ * BYO (bring-your-own). Compose `@LoadAuthUser` / `@RequireRole` /
+ * `@Public` from `defineContextDecorator` and `defineAdapter` (see the
+ * BYO Auth recipe in the KickJS docs). This package will be removed in
+ * a future major.
+ *
+ * @module @forinda/kickjs-auth
+ */
 import 'reflect-metadata'
+
+import { warnDeprecated } from './deprecation'
+
+warnDeprecated()
 
 // Types & interfaces
 export {
