@@ -91,7 +91,11 @@ export function generatePackageJson(
       version: '0.0.0',
       type: 'module',
       scripts: {
-        dev: 'vite',
+        // `kick dev` (not bare `vite`): it boots Vite itself AND owns the
+        // typegen-on-save watcher. Plain `vite` gives working HMR but
+        // frozen `.kickjs/types` — new routes silently lose their typing
+        // until a manual `kick typegen`.
+        dev: 'kick dev',
         'dev:debug': 'kick dev:debug',
         build: 'kick build',
         start: 'kick start',
