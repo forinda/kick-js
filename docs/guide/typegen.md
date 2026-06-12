@@ -75,17 +75,22 @@ export class UserController {
 
 ## Running typegen
 
-| Command                 | When it runs                                                     |
-| ----------------------- | ---------------------------------------------------------------- |
-| `kick typegen`          | One-shot — runs the scan and writes the types                    |
-| `kick typegen --watch`  | Re-runs on every source file change (Ctrl-C to exit)             |
-| `kick dev`              | Runs once at startup, then re-runs whenever Vite's watcher fires |
-| `kick g module ...`     | Runs after the new files are written                             |
-| `kick g controller ...` | Runs after the new file is written                               |
-| `kick g scaffold ...`   | Runs after the new files are written                             |
-| `kick init`             | Runs once after the project is scaffolded                        |
+| Command                 | When it runs                                                                 |
+| ----------------------- | ---------------------------------------------------------------------------- |
+| `kick typegen`          | One-shot — runs the scan and writes the types                                |
+| `kick typegen --watch`  | Re-runs on every source file change (Ctrl-C to exit)                         |
+| `kick dev`              | Runs once at startup, then re-runs whenever Vite's watcher fires             |
+| bare `vite`             | The `kickjs:typegen` vite plugin wires the same watcher + a startup catch-up |
+| `kick g module ...`     | Runs after the new files are written                                         |
+| `kick g controller ...` | Runs after the new file is written                                           |
+| `kick g scaffold ...`   | Runs after the new files are written                                         |
+| `kick init`             | Runs once after the project is scaffolded                                    |
 
-You almost never need to run it manually — `kick dev` keeps `.kickjs/types/` up to date for you.
+You almost never need to run it manually — the dev loop keeps `.kickjs/types/` up to date for you. (`kick dev` is the recommended entry; if something boots Vite directly, the `@forinda/kickjs-vite` plugin runs the identical watcher, resolving `@forinda/kickjs-cli` from your project — exactly one of the two ever owns the pipeline per process.)
+
+### Watch-mode failure surfacing
+
+A failing scan or plugin pass in watch mode prints a deduplicated warning (`kick typegen: <source> pass failed (<error>) — types in .kickjs/types may be stale`) and broadcasts a `kickjs:typegen-error` custom HMR event. Repeated identical failures stay quiet until the message changes or a pass succeeds. Separately, a route whose wired `body`/`query`/`params` schema can't be statically resolved warns with the controller, method, and schema identifier instead of silently emitting `unknown`.
 
 ## How `params` is typed
 

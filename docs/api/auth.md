@@ -1,5 +1,9 @@
 # @forinda/kickjs-auth
 
+::: warning Deprecated
+Auth has moved to BYO (bring-your-own) — compose `@LoadAuthUser` / `@RequireRole` / `@Public` from `defineContextDecorator` and `defineAdapter`. See the [BYO Auth recipe](../guide/byo-recipes.md#auth) and the [Authentication guide](../guide/authentication.md). This package still installs (with a one-time runtime warning) and will be removed in a future major.
+:::
+
 Pluggable authentication — JWT, API key, OAuth, and Passport.js bridge.
 
 ## AuthStrategy

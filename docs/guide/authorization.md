@@ -1,13 +1,85 @@
 # Authorization
 
-KickJS provides two levels of authorization:
+::: warning `@forinda/kickjs-auth` is deprecated — and there is no built-in authorization layer anymore
+The framework ships **no roles system and no policy engine**. `@Roles`, `@Policy`, `@Can`, `AuthorizationService`, and the policy registry were features of the deprecated package and have no first-party replacement. Authorization is **your code**: the sections below show the recommended shapes to compose from [context decorators](context-decorators.md). The [legacy package reference](#legacy-role-based-access-control-deprecated) follows for existing projects.
+:::
 
-- **Role-based** — `@Roles('admin')` checks string roles on the user
-- **Policy-based** — `@Policy` + `@Can` checks resource-level permissions
+## BYO role checks — `@RequireRole`
 
-Both work through `@forinda/kickjs-auth` and are enforced by `AuthAdapter` middleware.
+A role check is a contributor that depends on the auth user and throws 401/403. The full implementation is Step 4 of the [BYO Auth recipe](byo-recipes.md#auth):
 
-## Role-Based Access Control
+```ts
+export const RequireRole = defineHttpContextDecorator.withParams<{
+  roles: readonly string[]
+  mode?: 'all' | 'any'
+}>()({
+  key: 'roleCheck',
+  dependsOn: ['user'], // strict ordering — @LoadAuthUser resolves first
+  paramDefaults: { roles: [], mode: 'any' },
+  resolve: (ctx, _deps, params) => {
+    const user = ctx.get('user')
+    if (!user) throw withStatus(new Error('Unauthorized'), 401)
+    const owned = new Set(user.roles)
+    const hits = params.roles.filter((r) => owned.has(r))
+    const ok = params.mode === 'all' ? hits.length === params.roles.length : hits.length > 0
+    if (!ok) throw withStatus(new Error('Forbidden'), 403)
+    return true
+  },
+})
+
+// Usage — params are typed, ordering is topological, typos in
+// `dependsOn` keys are caught by `kick typegen`'s ContextKeys registry.
+@RequireRole({ roles: ['admin', 'manager'] })
+@Get('/dashboard')
+dashboard(ctx: RequestContext) { /* ctx.get('user') is non-null here */ }
+```
+
+Because `roles` is your own `AuthUser` type, literal-union role names give you compile-time typo checking with zero augmentation machinery — you declared the type yourself in Step 1.
+
+## Policies — bring your own engine via DI
+
+There is no first-party `@Policy` / `@Can` to migrate to — but nothing about a policy engine needs framework support. Context decorators have everything required to compose one: **`deps` injects any DI token** (your engine service), **`dependsOn` orders it after `user`**, and **parameterised decorators carry the action**. The engine is just a service you register:
+
+```ts
+// 1. Your engine — any shape you want. Registered in DI like any service.
+export interface PolicyEngine {
+  can(user: AuthUser, action: string, resource: unknown): boolean | Promise<boolean>
+}
+export const POLICY_ENGINE = createToken<PolicyEngine>('app/auth/policyEngine')
+
+// 2. `@Can` is a parameterised contributor: engine via deps (DI), user
+//    via dependsOn ordering, action via params. Only the params shape
+//    is spelled — `key` and the deps types are inferred from the spec.
+export const Can = defineHttpContextDecorator.withParams<{ action: string }>()({
+  key: 'authorized',
+  dependsOn: ['user'], // topologically ordered — user resolves first
+  deps: { engine: POLICY_ENGINE, posts: POSTS_REPO },
+  paramDefaults: { action: 'read' },
+  resolve: async (ctx, { engine, posts }, params) => {
+    const user = ctx.get('user')
+    if (!user) throw withStatus(new Error('Unauthorized'), 401)
+    const resource = await posts.findById(ctx.params.id)
+    if (!resource) throw withStatus(new Error('Not Found'), 404)
+    if (!(await engine.can(user, params.action, resource))) {
+      throw withStatus(new Error('Forbidden'), 403)
+    }
+    return true
+  },
+})
+
+// Usage — same ergonomics the old @Can had, but the engine is yours:
+@Can({ action: 'post.delete' })
+@Delete('/:id')
+remove(ctx: RequestContext) { /* … */ }
+```
+
+Swap the engine implementation (CASL, a rules table, hardcoded checks) by re-binding `POLICY_ENGINE` — controllers never change. For simpler cases, fold the load-and-authorize into one contributor that returns the resource itself (`key: 'post'`), so the handler reads `ctx.get('post')` already authorized.
+
+---
+
+## Legacy: Role-Based Access Control (deprecated)
+
+Everything below documents the deprecated `@forinda/kickjs-auth` package for existing projects.
 
 `@Roles()` checks that the authenticated user has at least one of the required roles:
 
@@ -58,7 +130,7 @@ declare module '@forinda/kickjs-auth' {
 
 Apps that don't augment `AuthUser['roles']` get the loose `string[]` fallback — full backwards compatibility.
 
-## Policy-Based Authorization
+## Legacy: Policy-Based Authorization (deprecated)
 
 For resource-level permissions ("can this user edit THIS post?"), use policies.
 
@@ -194,7 +266,7 @@ class PostService {
 
 Missing policy or missing action both result in denial (deny by default).
 
-## Combining Roles and Policies
+## Legacy: Combining Roles and Policies (deprecated)
 
 You can use `@Roles()` and `@Can()` together. Roles are checked first:
 
@@ -207,7 +279,7 @@ remove(ctx) { ... }
 
 ## Guards (Custom Middleware)
 
-`kick g guard <name>` generates a middleware function for custom authorization logic that doesn't fit `@Roles()` or `@Can()`. Guards are raw Express middleware applied via `@Middleware()`.
+`kick g guard <name>` generates a middleware function for authorization logic that needs to short-circuit the response or run before route matching — the cases [context decorators deliberately don't cover](context-decorators.md). For value-producing checks, prefer a contributor; reach for a guard when you need raw Express middleware semantics.
 
 ```bash
 kick g guard ip-whitelist
