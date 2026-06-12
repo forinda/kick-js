@@ -13,11 +13,13 @@
 // Express stays the zero-config default — nothing changes for existing apps.
 export const app = await bootstrap({ modules })
 
-// Opt in to Fastify or h3:
-import { fastifyRuntime } from '@forinda/kickjs-fastify'
+// Opt in to Fastify or h3 — runtimes ship as SUBPATHS of the core
+// package (the @forinda/kickjs-db dialect model: one package, engine
+// drivers as optional peers, install only the one you use):
+import { fastifyRuntime } from '@forinda/kickjs/fastify'
 export const app = await bootstrap({ modules, runtime: fastifyRuntime() })
 
-import { h3Runtime } from '@forinda/kickjs-h3'
+import { h3Runtime } from '@forinda/kickjs/h3'
 export const app = await bootstrap({ modules, runtime: h3Runtime() })
 ```
 
@@ -313,15 +315,28 @@ kept as a deprecated alias.
   returns the engine app under any runtime (testing keeps working —
   supertest accepts any node handler: `request(app.nodeHandler())`).
 
-### 4.6 New packages
+### 4.6 Packaging — subpaths, not new packages
 
-| Package                   | Contents                                            | Deps                                                             |
-| ------------------------- | --------------------------------------------------- | ---------------------------------------------------------------- |
-| (core) `@forinda/kickjs`  | `HttpRuntime` contract + `expressRuntime()` default | `express` peer (unchanged)                                       |
-| `@forinda/kickjs-fastify` | `fastifyRuntime(opts?: FastifyServerOptions)`       | `fastify` peer, `@fastify/middie`, `@fastify/multipart` optional |
-| `@forinda/kickjs-h3`      | `h3Runtime()`                                       | `h3` peer (pin v2 once stable; v1 fallback path documented)      |
+Runtimes follow the **`@forinda/kickjs-db` dialect model**: one package,
+engine adapters as export subpaths, engines as optional peers. No new
+npm packages — the package count stays flat and `kick add` stays a
+one-liner per runtime.
 
-Naming follows the existing `@forinda/kickjs-<thing>` convention.
+| Entry                     | Contents                                                                          | Peer (optional)                                        |
+| ------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `@forinda/kickjs` (root)  | `HttpRuntime` contract, `RouteTable`, runtime drivers, `expressRuntime()` default | `express` (unchanged)                                  |
+| `@forinda/kickjs/fastify` | `fastifyRuntime(opts?: FastifyServerOptions)`                                     | `fastify` (+ `@fastify/middie`, `@fastify/multipart`)  |
+| `@forinda/kickjs/h3`      | `h3Runtime()`                                                                     | `h3` (pin v2 once stable; v1 fallback path documented) |
+
+Bundling notes (mirrors how `kickjs-db/pg|mysql|sqlite` already works):
+
+- Each subpath is its own tsdown entry; engine imports are dynamic /
+  type-only so importing the root never loads (or requires) fastify/h3.
+- `package.json` `exports` gains `./fastify` and `./h3`; peers declared
+  optional via `peerDependenciesMeta`.
+- `kick add` catalog grows `fastify` / `h3` entries that install the
+  engine peer alongside core — exactly like the `pg` / `sqlite` /
+  `mysql` catalog entries do for kickjs-db today.
 
 ## 5. Per-engine notes
 
@@ -390,13 +405,13 @@ primitive until then.
 
 ## 9. Milestones
 
-| Milestone                          | Scope                                                                                                                                                                                                  | Risk                        |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------- |
-| **M1 — seam extraction**           | `HttpRuntime` + `RouteTable` + runtime drivers in core; `expressRuntime()` implements them; zero behavior change (golden tests: full kickjs suite must pass untouched)                                 | Medium (core refactor)      |
-| **M2 — adapter facade**            | `AdapterContext.http`; migrate swagger/queue/mcp; devtools last                                                                                                                                        | Low (mechanical)            |
-| **M3 — `@forinda/kickjs-fastify`** | Runtime adapter + middie bridge + uploads + conformance suite (shared fixture app run under both runtimes via supertest: routes, contributors, errors, SSE, uploads, shutdown draining, Vite dev boot) | Medium                      |
-| **M4 — `@forinda/kickjs-h3`**      | Runtime adapter on v2 beta (or v1 fallback), same conformance suite                                                                                                                                    | Medium-high (upstream beta) |
-| **M5 — docs + scaffold**           | `kick new --runtime fastify\|h3\|express`, runtime guide, capability matrix in docs                                                                                                                    | Low                         |
+| Milestone                                  | Scope                                                                                                                                                                                                  | Risk                        |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------- |
+| **M1 — seam extraction**                   | `HttpRuntime` + `RouteTable` + runtime drivers in core; `expressRuntime()` implements them; zero behavior change (golden tests: full kickjs suite must pass untouched)                                 | Medium (core refactor)      |
+| **M2 — adapter facade**                    | `AdapterContext.http`; migrate swagger/queue/mcp; devtools last                                                                                                                                        | Low (mechanical)            |
+| **M3 — `@forinda/kickjs/fastify` subpath** | Runtime adapter + middie bridge + uploads + conformance suite (shared fixture app run under both runtimes via supertest: routes, contributors, errors, SSE, uploads, shutdown draining, Vite dev boot) | Medium                      |
+| **M4 — `@forinda/kickjs/h3` subpath**      | Runtime adapter on v2 beta (or v1 fallback), same conformance suite                                                                                                                                    | Medium-high (upstream beta) |
+| **M5 — docs + scaffold**                   | `kick new --runtime fastify\|h3\|express`, runtime guide, capability matrix in docs                                                                                                                    | Low                         |
 
 The **conformance suite** (M3) is the centerpiece: one fixture app, one
 spec file, parameterized over every registered runtime — the same trick
