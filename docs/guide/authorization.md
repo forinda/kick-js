@@ -130,7 +130,7 @@ declare module '@forinda/kickjs-auth' {
 
 Apps that don't augment `AuthUser['roles']` get the loose `string[]` fallback — full backwards compatibility.
 
-## Policy-Based Authorization
+## Legacy: Policy-Based Authorization (deprecated)
 
 For resource-level permissions ("can this user edit THIS post?"), use policies.
 
@@ -266,7 +266,7 @@ class PostService {
 
 Missing policy or missing action both result in denial (deny by default).
 
-## Combining Roles and Policies
+## Legacy: Combining Roles and Policies (deprecated)
 
 You can use `@Roles()` and `@Can()` together. Roles are checked first:
 
@@ -279,7 +279,7 @@ remove(ctx) { ... }
 
 ## Guards (Custom Middleware)
 
-`kick g guard <name>` generates a middleware function for custom authorization logic that doesn't fit `@Roles()` or `@Can()`. Guards are raw Express middleware applied via `@Middleware()`.
+`kick g guard <name>` generates a middleware function for authorization logic that needs to short-circuit the response or run before route matching — the cases [context decorators deliberately don't cover](context-decorators.md). For value-producing checks, prefer a contributor; reach for a guard when you need raw Express middleware semantics.
 
 ```bash
 kick g guard ip-whitelist

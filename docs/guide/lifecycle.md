@@ -49,13 +49,12 @@ Request In
   ├─ ▸ beforeRoutes adapters
   │   └─ Example: AuthAdapter
   │       ├─ Resolve controller + method from URL
-  │       ├─ @Public() → skip auth, next()
-  │       ├─ Try strategies (JWT → API Key → Session)
-  │       │   ├─ No user → onAuthFailed event, 401
-  │       │   └─ User found → ctx.set('user', user), onAuthenticated event
-  │       ├─ @Roles() check          → 403 on missing role
-  │       ├─ @Can(action, resource)  → 403 on policy deny
-  │       ├─ @RateLimit() check      → 429 + RateLimit-* headers
+  │       ├─ @Public → LoadAuthUser({ on401: 'allow' }), user may be null
+  │       ├─ @LoadAuthUser → try strategies in order (BYO)
+  │       │   ├─ No user → throw, 401
+  │       │   └─ User found → ctx.set('user', user)
+  │       ├─ @RequireRole check (BYO) → 403 on missing role
+  │       ├─ @Can / policy engine via DI (BYO) → 403 on deny
   │       └─ CSRF check (cookie auth + mutating method)
   │
   ├─ Express Router matches route
@@ -166,7 +165,7 @@ Services that don't hold a `ctx` reference read the same bag via `getRequestValu
 - [Adapters](./adapters.md) — writing custom adapters with `defineAdapter()`
 - [Plugins](./plugins.md) — bundling modules + adapters + middleware via `definePlugin()`
 - [Context Decorators](./context-decorators.md) — typed per-request values + contributor pipeline
-- [Authentication](./authentication.md) — AuthAdapter strategies and decorators
-- [Authorization](./authorization.md) — @Policy, @Can, @Roles
+- [Authentication](./authentication.md) — BYO auth via context decorators
+- [Authorization](./authorization.md) — BYO role checks + policy engine via DI
 - [Multi-Tenancy](./multi-tenancy.md) — TenantAdapter and database switching
 - [Middleware](./middleware.md) — custom middleware
