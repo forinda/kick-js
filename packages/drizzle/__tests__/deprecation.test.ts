@@ -13,9 +13,16 @@ describe('deprecation warning', () => {
     expect(spy.mock.calls[0][0]).toContain('deprecated')
   })
 
-  it('is suppressed via KICKJS_SUPPRESS_DEPRECATION', () => {
+  it('is suppressed via KICKJS_SUPPRESS_DEPRECATION=1 or =true', () => {
     const spy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     expect(warnDeprecated({ KICKJS_SUPPRESS_DEPRECATION: '1' })).toBe(false)
+    expect(warnDeprecated({ KICKJS_SUPPRESS_DEPRECATION: 'true' })).toBe(false)
     expect(spy).not.toHaveBeenCalled()
+  })
+
+  it('still warns when KICKJS_SUPPRESS_DEPRECATION=0', () => {
+    const spy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    expect(warnDeprecated({ KICKJS_SUPPRESS_DEPRECATION: '0' })).toBe(true)
+    expect(spy).toHaveBeenCalledTimes(1)
   })
 })

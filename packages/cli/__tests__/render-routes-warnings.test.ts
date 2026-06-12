@@ -39,6 +39,24 @@ describe('renderRoutes fallback warnings', () => {
     expect(onWarn.mock.calls[0][0]).toContain('createTaskSchema')
   })
 
+  it('query fallback warning names the @ApiQueryParams-derived shape when one exists', () => {
+    const onWarn = vi.fn()
+    renderRoutes(
+      [
+        route({
+          querySchema: { identifier: 'listTasksQuery', source: null },
+          queryFilterable: ['status'],
+        }),
+      ],
+      OUT,
+      'zod',
+      { onWarn },
+    )
+    expect(onWarn).toHaveBeenCalledTimes(1)
+    expect(onWarn.mock.calls[0][0]).toContain('@ApiQueryParams')
+    expect(onWarn.mock.calls[0][0]).not.toContain("'unknown'")
+  })
+
   it('does not warn when no schema is wired', () => {
     const onWarn = vi.fn()
     renderRoutes([route({})], OUT, 'zod', { onWarn })

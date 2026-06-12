@@ -4,7 +4,11 @@
  * adapters, which pull the optional `drizzle-orm` peer.
  */
 export function warnDeprecated(env: NodeJS.ProcessEnv = process.env): boolean {
-  if (env.KICKJS_SUPPRESS_DEPRECATION) return false
+  // Match the documented contract (`=1`) plus the repo-wide env-flag
+  // convention (run.ts resolvePolling) — a bare truthy check would make
+  // `KICKJS_SUPPRESS_DEPRECATION=0` suppress too.
+  const flag = env.KICKJS_SUPPRESS_DEPRECATION
+  if (flag === '1' || flag === 'true') return false
   console.warn(
     '[kickjs] @forinda/kickjs-drizzle is deprecated. It was an early-adoption adapter and ' +
       'is no longer maintained — @forinda/kickjs-db (schema DSL + client, dialect subpaths ' +

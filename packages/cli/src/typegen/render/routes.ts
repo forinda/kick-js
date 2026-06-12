@@ -79,10 +79,19 @@ export {}
       // type silently degrades, so say so. A disabled validator is an
       // intentional opt-out and stays quiet.
       if (schema && schemaValidator !== false) {
+        // Name the ACTUAL fallback per field: params → URL-pattern params,
+        // query → the @ApiQueryParams-derived shape when one exists
+        // (renderQueryShape), otherwise 'unknown'.
+        const fallback =
+          field === 'params'
+            ? 'URL-pattern params'
+            : field === 'query' && m.queryFilterable !== null
+              ? 'the @ApiQueryParams-derived query shape'
+              : `'unknown'`
         opts.onWarn?.(
           `route ${m.controller}.${m.method} (${m.httpMethod} ${m.path}): ` +
             `${field} schema '${schema.identifier}' could not be statically resolved — ` +
-            `falling back to ${field === 'params' ? 'URL-pattern params' : `'unknown'`}. ` +
+            `falling back to ${fallback}. ` +
             `Export the schema from the controller file or import it with a static specifier.`,
         )
       }
