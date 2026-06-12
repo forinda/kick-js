@@ -166,7 +166,7 @@ Changes to your source files are picked up instantly — database connections, W
 
 Opt in via the flag or `dev: { typecheck: true }` in `kick.config.ts`. After each debounced change (and once at startup), `kick dev` runs the **project's own** checker — `tsgo` (`@typescript/native-preview`) preferred, `tsc` fallback — with `--noEmit`, timed after the typegen pass so diagnostics always see fresh `.kickjs/types`:
 
-```
+```text
   kick typecheck (tsgo, 412ms):
     src/modules/users/users.controller.ts(14,9): error TS2322: …
 ```
@@ -358,7 +358,7 @@ kick info
 
 Output — the CLI's own version, plus every `@forinda/kickjs*` dependency the nearest project declares with the version actually installed in `node_modules` (declared range shown when not installed). Packages the `kick add` catalog marks as deprecated are flagged:
 
-```
+```text
   KickJS CLI v6.1.0
 
   System:

@@ -56,7 +56,7 @@ The `kick dev` command uses Vite's Environment Runner which reads this config au
 
 After an invalidation (a token change or a module-file add/remove), the dev server eagerly re-evaluates `virtual:kickjs/app` instead of waiting for the next HTTP request. A broken save — syntax error, failed import, bootstrap throw — prints immediately:
 
-```
+```text
 [vite] [kickjs] app failed to reload after HMR invalidation (1 token): x Expected ',', got ':'
 ```
 
