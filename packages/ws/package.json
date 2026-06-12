@@ -33,8 +33,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsgo --noEmit",
-    "clean": "rm -rf dist .wireit",
-    "lint": "tsc --noEmit"
+    "clean": "rm -rf dist .wireit"
   },
   "dependencies": {
     "reflect-metadata": "^0.2.2"

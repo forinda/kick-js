@@ -18,6 +18,10 @@ beforeAll(async () => {
     password: container.getPassword(),
     database: container.getDatabase(),
   })
+  // Idle pg clients receive FATAL 57P01 when the container stops mid-teardown;
+  // an unlistened 'error' event becomes a process-level uncaught exception that
+  // fails the run AFTER every test passed. Expected teardown noise — swallow.
+  pool.on('error', () => {})
   adapter = pgAdapter({ pool })
 }, 90_000)
 

@@ -33,8 +33,7 @@
     "dev": "tsdown --watch",
     "test": "vitest run --passWithNoTests",
     "typecheck": "tsgo --noEmit",
-    "clean": "rm -rf dist .wireit",
-    "lint": "tsc --noEmit"
+    "clean": "rm -rf dist .wireit"
   },
   "dependencies": {
     "@forinda/kickjs-devtools-kit": "workspace:*",

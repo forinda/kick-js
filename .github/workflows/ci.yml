@@ -78,7 +78,7 @@ jobs:
       # `package.json:exports → dist/index.d.mts`. Build the workspace
       # first so those declaration files exist on disk.
       - run: pnpm build
-      - run: pnpm -r --filter='./packages/*' run typecheck
+      - run: pnpm typecheck
 
   test:
     name: Test (Node 24)

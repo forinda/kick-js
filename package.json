@@ -1,102 +1,102 @@
 {
-  "name": "@forinda/kickjs-monorepo",
-  "version": "5.2.0",
-  "private": true,
-  "description": "A production-grade, decorator-driven Node.js framework built on Express 5 and TypeScript",
-  "author": "Felix Orinda",
-  "license": "MIT",
-  "engines": {
-    "node": ">=20.0"
-  },
-  "packageManager": "pnpm@10.12.1",
-  "scripts": {
-    "build": "turbo run build",
-    "build:nocache": "pnpm run --filter=\"./packages/**\" build",
-    "build:all": "pnpm -r run build",
-    "dev": "pnpm run --filter=\"./packages/**\" --parallel build --watch",
-    "test": "pnpm run --filter=\"./packages/**\" test",
-    "test:integration": "vitest run __tests__/",
-    "test:all": "pnpm run --filter=\"./packages/**\" test && vitest run __tests__/",
-    "test:bun": "bun test scripts/bun-smoke.ts",
-    "test:bundle-size": "bun scripts/bundle-size-check.ts",
-    "test:watch": "pnpm -r --parallel run test:watch",
-    "typecheck": "pnpm -r run typecheck",
-    "lint": "oxlint packages/",
-    "lint:fix": "oxlint packages/ --fix",
-    "lint:tokens": "node packages/lint/bin.mjs --first-party --scope packages --cwd .",
-    "clean": "pnpm -r run clean",
-    "format": "oxfmt --write \"packages/*/src/**/*.{ts,tsx}\" \"packages/*/__tests__/**/*.{ts,tsx}\" \"packages/*/spa/src/**/*.{ts,tsx}\" \"docs/**/*.md\" \"docs/.vitepress/**/*.{ts,mts,vue}\" \"tutorials/**/*.md\" \"scripts/*.{ts,js,mjs}\" \"*.md\"",
-    "format:check": "oxfmt --check \"packages/*/src/**/*.{ts,tsx}\" \"packages/*/__tests__/**/*.{ts,tsx}\" \"packages/*/spa/src/**/*.{ts,tsx}\" \"docs/**/*.md\" \"docs/.vitepress/**/*.{ts,mts,vue}\" \"tutorials/**/*.md\" \"scripts/*.{ts,js,mjs}\" \"*.md\"",
-    "bench": "node scripts/benchmark.js",
-    "bench:quick": "node scripts/benchmark.js --duration 10 --connections 50",
-    "docs:dev": "vitepress dev docs",
-    "docs:build": "vitepress build docs",
-    "docs:preview": "vitepress preview docs",
-    "docs:translate": "node scripts/translate-docs.js",
-    "docs:translate:build": "node scripts/translate-docs.js && vitepress build docs",
-    "docs:snapshot": "node scripts/snapshot-docs.mjs",
-    "changeset": "changeset",
-    "changeset:status": "changeset status",
-    "changeset:version": "changeset version && pnpm install --no-frozen-lockfile && pnpm format",
-    "changeset:publish": "pnpm build && changeset publish",
-    "changeset:tag": "changeset tag",
-    "release:enter:alpha": "changeset pre enter alpha",
-    "release:enter:beta": "changeset pre enter beta",
-    "release:enter:rc": "changeset pre enter rc",
-    "release:exit:pre": "changeset pre exit",
-    "prepare": "lefthook install"
-  },
-  "devDependencies": {
-    "@changesets/changelog-github": "^0.7.0",
-    "@changesets/cli": "^2.31.0",
-    "@swc/core": "^1.15.40",
-    "@types/express": "^5.0.6",
-    "@types/supertest": "^7.2.0",
-    "@types/ws": "^8.18.1",
-    "@typescript/native-preview": "7.0.0-dev.20260608.1",
-    "@vitalets/google-translate-api": "^9.2.1",
-    "autocannon": "^8.0.0",
-    "express": "^5.2.1",
-    "lefthook": "^2.1.9",
-    "oxfmt": "^0.54.0",
-    "oxlint": "^1.68.0",
-    "reflect-metadata": "^0.2.2",
-    "supertest": "^7.2.2",
-    "tsdown": "^0.22.2",
-    "turbo": "2.9.16",
-    "typescript": "^6.0.3",
-    "unplugin-swc": "^1.5.9",
-    "vite": "^8.0.16",
-    "vitepress": "^1.6.4",
-    "vitest": "^4.1.8",
-    "ws": "^8.21.0",
-    "zod": "^4.4.3"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/forinda/kick-js.git"
-  },
-  "bugs": {
-    "url": "https://github.com/forinda/kick-js/issues"
-  },
-  "homepage": "https://forinda.github.io/kick-js/",
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "@swc/core",
-      "better-sqlite3",
-      "esbuild"
-    ],
-    "ignoredBuiltDependencies": [
-      "lefthook"
-    ],
-    "overrides": {
-      "esbuild@<0.25.0": ">=0.25.0",
-      "uuid@<14.0.0": ">=14.0.0",
-      "@hono/node-server@<1.19.13": ">=1.19.13",
-      "undici@<6.24.0": "^6.24.0"
-    }
-  },
-  "dependencies": {
-    "picocolors": "^1.1.1"
+ "name": "@forinda/kickjs-monorepo",
+ "version": "5.2.0",
+ "private": true,
+ "description": "A production-grade, decorator-driven Node.js framework built on Express 5 and TypeScript",
+ "author": "Felix Orinda",
+ "license": "MIT",
+ "engines": {
+  "node": ">=20.0"
+ },
+ "packageManager": "pnpm@10.12.1",
+ "scripts": {
+  "build": "turbo run build",
+  "build:nocache": "pnpm run --filter=\"./packages/**\" build",
+  "build:all": "pnpm -r run build",
+  "dev": "pnpm run --filter=\"./packages/**\" --parallel build --watch",
+  "test": "turbo run test",
+  "test:integration": "vitest run __tests__/",
+  "test:all": "pnpm run --filter=\"./packages/**\" test && vitest run __tests__/",
+  "test:bun": "bun test scripts/bun-smoke.ts",
+  "test:bundle-size": "bun scripts/bundle-size-check.ts",
+  "test:watch": "pnpm -r --parallel run test:watch",
+  "typecheck": "turbo run typecheck",
+  "lint": "oxlint packages/",
+  "lint:fix": "oxlint packages/ --fix",
+  "lint:tokens": "node packages/lint/bin.mjs --first-party --scope packages --cwd .",
+  "clean": "pnpm -r run clean",
+  "format": "oxfmt --write \"packages/*/src/**/*.{ts,tsx}\" \"packages/*/__tests__/**/*.{ts,tsx}\" \"packages/*/spa/src/**/*.{ts,tsx}\" \"docs/**/*.md\" \"docs/.vitepress/**/*.{ts,mts,vue}\" \"tutorials/**/*.md\" \"scripts/*.{ts,js,mjs}\" \"*.md\"",
+  "format:check": "oxfmt --check \"packages/*/src/**/*.{ts,tsx}\" \"packages/*/__tests__/**/*.{ts,tsx}\" \"packages/*/spa/src/**/*.{ts,tsx}\" \"docs/**/*.md\" \"docs/.vitepress/**/*.{ts,mts,vue}\" \"tutorials/**/*.md\" \"scripts/*.{ts,js,mjs}\" \"*.md\"",
+  "bench": "node scripts/benchmark.js",
+  "bench:quick": "node scripts/benchmark.js --duration 10 --connections 50",
+  "docs:dev": "vitepress dev docs",
+  "docs:build": "vitepress build docs",
+  "docs:preview": "vitepress preview docs",
+  "docs:translate": "node scripts/translate-docs.js",
+  "docs:translate:build": "node scripts/translate-docs.js && vitepress build docs",
+  "docs:snapshot": "node scripts/snapshot-docs.mjs",
+  "changeset": "changeset",
+  "changeset:status": "changeset status",
+  "changeset:version": "changeset version && pnpm install --no-frozen-lockfile && pnpm format",
+  "changeset:publish": "pnpm build && changeset publish",
+  "changeset:tag": "changeset tag",
+  "release:enter:alpha": "changeset pre enter alpha",
+  "release:enter:beta": "changeset pre enter beta",
+  "release:enter:rc": "changeset pre enter rc",
+  "release:exit:pre": "changeset pre exit",
+  "prepare": "lefthook install"
+ },
+ "devDependencies": {
+  "@changesets/changelog-github": "^0.7.0",
+  "@changesets/cli": "^2.31.0",
+  "@swc/core": "^1.15.40",
+  "@types/express": "^5.0.6",
+  "@types/supertest": "^7.2.0",
+  "@types/ws": "^8.18.1",
+  "@typescript/native-preview": "7.0.0-dev.20260608.1",
+  "@vitalets/google-translate-api": "^9.2.1",
+  "autocannon": "^8.0.0",
+  "express": "^5.2.1",
+  "lefthook": "^2.1.9",
+  "oxfmt": "^0.54.0",
+  "oxlint": "^1.68.0",
+  "reflect-metadata": "^0.2.2",
+  "supertest": "^7.2.2",
+  "tsdown": "^0.22.2",
+  "turbo": "2.9.16",
+  "typescript": "^6.0.3",
+  "unplugin-swc": "^1.5.9",
+  "vite": "^8.0.16",
+  "vitepress": "^1.6.4",
+  "vitest": "^4.1.8",
+  "ws": "^8.21.0",
+  "zod": "^4.4.3"
+ },
+ "repository": {
+  "type": "git",
+  "url": "git+https://github.com/forinda/kick-js.git"
+ },
+ "bugs": {
+  "url": "https://github.com/forinda/kick-js/issues"
+ },
+ "homepage": "https://forinda.github.io/kick-js/",
+ "pnpm": {
+  "onlyBuiltDependencies": [
+   "@swc/core",
+   "better-sqlite3",
+   "esbuild"
+  ],
+  "ignoredBuiltDependencies": [
+   "lefthook"
+  ],
+  "overrides": {
+   "esbuild@<0.25.0": ">=0.25.0",
+   "uuid@<14.0.0": ">=14.0.0",
+   "@hono/node-server@<1.19.13": ">=1.19.13",
+   "undici@<6.24.0": "^6.24.0"
   }
+ },
+ "dependencies": {
+  "picocolors": "^1.1.1"
+ }
 }

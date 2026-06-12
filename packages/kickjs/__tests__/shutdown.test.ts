@@ -77,8 +77,15 @@ describe('Graceful shutdown with request draining', () => {
     // Start a slow request (200ms)
     const reqPromise = fetch(`http://localhost:${addr.port}/api/v1/slow/`).then((r) => r.json())
 
-    // Give the request a moment to be received by the server
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    // Wait until the server has actually RECEIVED the request — a fixed
+    // sleep raced under CI contention (the fetch hadn't connected within
+    // the grace window, so the counter still read 0 while every test
+    // passed locally). Polling can't miss the rise: the slow handler
+    // holds the request for 200ms, far longer than the poll interval.
+    const deadline = Date.now() + 5_000
+    while (app.inFlightRequests < 1 && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 5))
+    }
 
     // Verify in-flight tracking
     expect(app.inFlightRequests).toBeGreaterThanOrEqual(1)
