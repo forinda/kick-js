@@ -20,7 +20,24 @@ export function invertChanges(forward: ChangeSet): ChangeSet {
   for (const change of forward) {
     reversed.push(invert(change))
   }
-  return reversed.toReversed()
+  const ordered = reversed.toReversed()
+
+  // Prune redundant teardown: when the inverted set drops a table
+  // outright, its dropForeignKey / dropIndex entries are no-ops — the
+  // DROP TABLE removes both. On SQLite they're actively fatal: FK/index
+  // drops compile to a table rebuild against the post-state snapshot,
+  // which no longer contains the table when the inversion of a
+  // createTable is in the same set (every first migration of an
+  // FK-bearing schema hit `SqliteRebuildRequiredError`).
+  const droppedTables = new Set(
+    ordered.filter((c) => c.kind === 'dropTable').map((c) => c.table.name),
+  )
+  return ordered.filter((c) => {
+    if (c.kind === 'dropForeignKey' || c.kind === 'dropIndex') {
+      return !droppedTables.has(c.table)
+    }
+    return true
+  })
 }
 
 function invert(change: Change): Change {

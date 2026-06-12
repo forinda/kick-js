@@ -45,9 +45,9 @@ describe('generate()', () => {
     // Forward only adds — per spec §5, the reverse is clean (no DRAFT marker).
     expect(downSql).not.toContain('-- DRAFT')
     expect(downSql).toContain('DROP TABLE "users"')
-    expect(downSql).toContain('DROP INDEX "users_email_unique"')
-    // Order: drop index before drop table.
-    expect(downSql.indexOf('DROP INDEX')).toBeLessThan(downSql.indexOf('DROP TABLE'))
+    // The index lives on a table the down drops outright — its DROP INDEX
+    // is pruned as redundant (see invert-redundant-drops.test.ts).
+    expect(downSql).not.toContain('DROP INDEX "users_email_unique"')
 
     const meta = JSON.parse(
       await readFile(path.join(cfg.migrationsDir, subdirs[0], 'meta.json'), 'utf8'),
