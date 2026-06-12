@@ -17,10 +17,17 @@ import { introspectSqlite } from '../../migrate/introspect-sqlite'
  * to match the `MigrationAdapter` contract. No I/O actually awaits;
  * the wrapping is for shape compatibility.
  */
+/**
+ * `all` / `get` are deliberately NOT method-generic: better-sqlite3
+ * v12's own `Statement` methods are non-generic, so generic signatures
+ * here would make a real `Database` instance structurally incompatible
+ * (callers had to cast — same fix as `SqliteIntrospectDb`). Row typing
+ * happens at the call sites via assertions instead.
+ */
 export interface SqliteStatement {
   run(...params: readonly unknown[]): { changes: number; lastInsertRowid: number | bigint }
-  all<R = unknown>(...params: readonly unknown[]): R[]
-  get<R = unknown>(...params: readonly unknown[]): R | undefined
+  all(...params: readonly unknown[]): unknown[]
+  get(...params: readonly unknown[]): unknown
 }
 
 export interface SqliteDatabaseLike {
@@ -75,14 +82,14 @@ export function sqliteAdapter(opts: SqliteAdapterOptions): MigrationAdapter {
            FROM kick_migrations
            ORDER BY applied_at ASC, id ASC`,
         )
-        .all<{
-          id: string
-          name: string
-          hash: string
-          batch: number
-          applied_at: string
-          direction: 'up' | 'down'
-        }>()
+        .all() as {
+        id: string
+        name: string
+        hash: string
+        batch: number
+        applied_at: string
+        direction: 'up' | 'down'
+      }[]
       return rows.map((row) => ({
         id: row.id,
         name: row.name,

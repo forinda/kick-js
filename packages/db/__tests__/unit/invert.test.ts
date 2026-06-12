@@ -53,16 +53,20 @@ describe('invertChanges()', () => {
   })
 
   it('reverses the order so teardown matches dependencies', () => {
+    // Index/FK live on a table that SURVIVES the inversion ('other'),
+    // so their drops are kept and ordered before the dropTable. When
+    // they belong to a table the inverted set drops, they're pruned
+    // outright — see invert-redundant-drops.test.ts.
     const fwd: ChangeSet = [
       { kind: 'createTable', table: usersTable },
-      { kind: 'addIndex', table: 'users', index: { name: 'i', columns: ['id'], unique: false } },
+      { kind: 'addIndex', table: 'other', index: { name: 'i', columns: ['id'], unique: false } },
       {
         kind: 'addForeignKey',
-        table: 'users',
+        table: 'other',
         fk: {
           name: 'fk',
           columns: ['id'],
-          refTable: 'other',
+          refTable: 'users',
           refColumns: ['id'],
           onDelete: 'cascade',
           onUpdate: 'no_action',
