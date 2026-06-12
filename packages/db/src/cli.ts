@@ -329,7 +329,7 @@ export function registerDbCommands(parent: Command, getConfig: DbConfigResolver)
 
   migrate
     .command('review <id>')
-    .description('Mark a migration reviewed (flips meta.json + the -- REVIEWED markers)')
+    .description('Mark a migration reviewed (flips meta.json; migrates legacy -- REVIEWED markers)')
     .action(async (id: string) => {
       // No adapter/DB needed — review only touches the migration files.
       const config = await getConfig()

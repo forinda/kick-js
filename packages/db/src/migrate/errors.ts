@@ -42,7 +42,7 @@ export class UnreviewedMigrationError extends MigrationError {
   constructor(id: string) {
     super(
       'migration_unreviewed',
-      `Migration ${id} has -- REVIEWED: false; flip the marker before applying outside dev`,
+      `Migration ${id} is unreviewed (meta.json reviewed: false) — run \`kick db migrate review ${id}\` before applying outside dev`,
     )
     this.id = id
   }
