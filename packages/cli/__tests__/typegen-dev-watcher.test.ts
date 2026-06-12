@@ -47,7 +47,10 @@ describe('createTypegenDevWatcher', () => {
 
     expect(pipeline.runTypegen).toHaveBeenCalledTimes(1)
     const delta = pipeline.runTypegen.mock.calls[0][0].changedFiles
-    expect(delta.changed.sort()).toEqual(['/proj/src/a.controller.ts', '/proj/src/b.service.ts'])
+    expect(delta.changed.toSorted()).toEqual([
+      '/proj/src/a.controller.ts',
+      '/proj/src/b.service.ts',
+    ])
     expect(delta.removed).toEqual(['/proj/src/gone.ts'])
     expect(pipeline.runAllPluginTypegens).toHaveBeenCalledTimes(1)
   })
@@ -90,6 +93,23 @@ describe('createTypegenDevWatcher', () => {
       changed: [],
       removed: [],
     })
+  })
+
+  it('asset detection survives mixed path separators (Windows chokidar)', async () => {
+    const config = { assetMap: { mails: { src: 'src/templates/mails' } } } as unknown as KickConfig
+    const { watcher, pipeline } = makeWatcher(config)
+    // Simulate a native-separator chokidar event against the resolved root.
+    const winStyle = `${watcher.assetSrcRoots[0].replaceAll('/', '\\')}\\welcome.ejs`
+    watcher.handleWatchEvent('change', winStyle)
+    await vi.advanceTimersByTimeAsync(150)
+    expect(pipeline.buildAssets).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not filter files merely named like .kickjs', async () => {
+    const { watcher, pipeline } = makeWatcher()
+    watcher.handleWatchEvent('change', '/proj/src/my.kickjs.backup.ts')
+    await vi.advanceTimersByTimeAsync(150)
+    expect(pipeline.runTypegen).toHaveBeenCalledTimes(1)
   })
 
   it('reports failures once and re-arms after success', async () => {

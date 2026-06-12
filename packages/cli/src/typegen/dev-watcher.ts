@@ -110,8 +110,15 @@ export function createTypegenDevWatcher(opts: TypegenDevWatcherOptions): Typegen
         .map((src) => path.resolve(cwd, src))
     : []
   const hasAssetMap = !!config?.assetMap && Object.keys(config.assetMap).length > 0
-  const isAssetFile = (file: string): boolean =>
-    assetSrcRoots.some((root) => file === root || file.startsWith(`${root}/`))
+  // Normalize BOTH sides to forward slashes before comparing — chokidar
+  // emits native separators on Windows while `path.resolve` produces
+  // backslash roots, so a raw startsWith would miss either direction.
+  const toPosix = (p: string): string => p.replaceAll('\\', '/')
+  const assetRootsPosix = assetSrcRoots.map(toPosix)
+  const isAssetFile = (file: string): boolean => {
+    const posix = toPosix(file)
+    return assetRootsPosix.some((root) => posix === root || posix.startsWith(`${root}/`))
+  }
 
   const reporter = createTypegenErrorReporter(opts.emitWarning)
 
@@ -172,7 +179,9 @@ export function createTypegenDevWatcher(opts: TypegenDevWatcherOptions): Typegen
 
     handleWatchEvent(event, file) {
       if (disposed) return
-      if (file.includes('.kickjs')) return
+      // Typegen's own output directory — separator-aware so a file
+      // merely NAMED like `my.kickjs.backup.ts` isn't filtered.
+      if (toPosix(file).includes('/.kickjs/')) return
       if (event === 'unlinkDir') {
         // Only meaningful if the removed dir could have held scanned
         // sources or watched assets; cheap to just force a full scan.

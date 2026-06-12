@@ -153,7 +153,13 @@ export function kickjsTypegenPlugin(opts: TypegenPluginOptions = {}): Plugin {
       if (watcher.assetSrcRoots.length > 0) {
         server.watcher.add([...watcher.assetSrcRoots])
       }
-      server.httpServer?.once('close', () => watcher.dispose())
+      if (server.httpServer) {
+        server.httpServer.once('close', () => watcher.dispose())
+      } else {
+        // Middleware mode — no httpServer; tie disposal to the chokidar
+        // watcher's own close so the debounce timer can't leak.
+        server.watcher.once('close', () => watcher.dispose())
+      }
     },
   }
 }

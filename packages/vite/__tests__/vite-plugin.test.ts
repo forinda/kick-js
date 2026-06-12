@@ -1,4 +1,4 @@
-﻿import 'reflect-metadata'
+import 'reflect-metadata'
 import { describe, it, expect, beforeEach } from 'vitest'
 import { kickjsVitePlugin } from '@forinda/kickjs-vite'
 import type { Plugin } from 'vite'
@@ -109,7 +109,7 @@ describe('kickjsVitePlugin()', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Tests: kickjs:core plugin â€” config hook
+// Tests: kickjs:core plugin — config hook
 // ---------------------------------------------------------------------------
 
 describe('kickjs:core plugin', () => {
@@ -215,7 +215,7 @@ describe('kickjs:core plugin', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Tests: kickjs:virtual-modules plugin â€” resolveId + load
+// Tests: kickjs:virtual-modules plugin — resolveId + load
 // ---------------------------------------------------------------------------
 
 describe('kickjs:virtual-modules plugin', () => {
@@ -279,7 +279,7 @@ describe('kickjs:virtual-modules plugin', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Tests: kickjs:hmr plugin â€” decorator detection & transform
+// Tests: kickjs:hmr plugin — decorator detection & transform
 // ---------------------------------------------------------------------------
 
 describe('kickjs:hmr plugin', () => {
@@ -290,7 +290,7 @@ describe('kickjs:hmr plugin', () => {
     expect(hmrPlugin).toBeDefined()
   })
 
-  describe('transform() â€” decorator detection', () => {
+  describe('transform() — decorator detection', () => {
     it('returns null (does not transform code)', () => {
       const code = `
 @Service()
@@ -425,7 +425,7 @@ export class RepoB {}
 
     it('still handles project source files without kickjs patterns', () => {
       // Plain helper / utility / side-effect modules don't carry decorators
-      // or v4 factories, but they're imported by the running app â€” a change
+      // or v4 factories, but they're imported by the running app — a change
       // to one MUST invalidate the virtual app or HMR silently misses it.
       // Returning [] tells Vite "we handled it" and our debounced flush
       // will invalidate the virtual:kickjs/app module.
@@ -468,7 +468,7 @@ const Load = defineContextDecorator({ key: 'x', resolve: () => 1 })
 
     it('handles decorator with arguments on same line as class', () => {
       const code = `@Controller() export class UserController {}`
-      // The regex expects newline/whitespace between decorator and class â€” this
+      // The regex expects newline/whitespace between decorator and class — this
       // may or may not match depending on exact formatting. We verify it does
       // not crash either way.
       const result = simulateTransformAndHmr(code, '/src/inline.controller.ts')
@@ -479,7 +479,7 @@ const Load = defineContextDecorator({ key: 'x', resolve: () => 1 })
 })
 
 // ---------------------------------------------------------------------------
-// Tests: kickjs:module-discovery plugin â€” transform
+// Tests: kickjs:module-discovery plugin — transform
 // ---------------------------------------------------------------------------
 
 describe('kickjs:module-discovery plugin', () => {
@@ -512,7 +512,7 @@ describe('kickjs:module-discovery plugin', () => {
     it('processes .module.ts files', () => {
       const code = `export class UserModule {}`
       const result = callTransform(discoveryPlugin, code, '/src/user.module.ts')
-      expect(result).toBeNull() // still null â€” discovery only observes
+      expect(result).toBeNull() // still null — discovery only observes
     })
 
     it('processes .module.js files', () => {
@@ -524,7 +524,7 @@ describe('kickjs:module-discovery plugin', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Tests: kickjs:dev-server plugin â€” structure
+// Tests: kickjs:dev-server plugin — structure
 // ---------------------------------------------------------------------------
 
 describe('kickjs:dev-server plugin', () => {
