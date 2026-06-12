@@ -16,6 +16,11 @@
       "dependsOn": ["build"],
       "inputs": ["src/**", "__tests__/**", "vitest.config.*", "package.json"],
       "outputs": []
+    },
+    "typecheck": {
+      "dependsOn": ["^build"],
+      "inputs": ["src/**", "tsconfig.json", "package.json"],
+      "outputs": []
     }
   }
 }

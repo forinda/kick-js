@@ -107,10 +107,11 @@ function diffEnumsCreatePhase(prev: SchemaSnapshot, next: SchemaSnapshot, change
       // migration; we restore it (cast through the new type) after
       // the type swap. Reading from `prev` keeps the dance idempotent
       // with respect to schema-author intent.
-      const affectedColumnsWithDefaults = affectedColumns.map((c) => ({
-        ...c,
-        default: readPriorDefault(prev, c.table, c.column),
-      }))
+      // In-place assign — collectColumnsByEnumType builds fresh objects,
+      // so mutating them here is safe and skips a per-entry spread copy.
+      const affectedColumnsWithDefaults = affectedColumns.map((c) =>
+        Object.assign(c, { default: readPriorDefault(prev, c.table, c.column) }),
+      )
       // Refuse at diff time when the column's default is being dropped
       // from the enum. The operator must update the column default
       // in the schema first.

@@ -1,4 +1,4 @@
-name: CI
+﻿name: CI
 
 on:
   push:
@@ -59,7 +59,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       # `kick-lint` is published from packages/lint and its bin shim
       # imports `dist/index.mjs`. Build the lint package itself before
-      # invoking — full `pnpm build` would be wasteful here.
+      # invoking â€” full `pnpm build` would be wasteful here.
       - run: pnpm --filter @forinda/kickjs-lint build
       - run: pnpm lint:tokens
 
@@ -75,10 +75,10 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       # Per-package `tsc --noEmit` resolves cross-package types via
-      # `package.json:exports → dist/index.d.mts`. Build the workspace
+      # `package.json:exports â†’ dist/index.d.mts`. Build the workspace
       # first so those declaration files exist on disk.
       - run: pnpm build
-      - run: pnpm -r --filter='./packages/*' run typecheck
+      - run: pnpm typecheck
 
   test:
     name: Test (Node 24)
@@ -97,7 +97,7 @@ jobs:
       # points at `dist/`. Build before running so cross-package
       # imports (e.g. @forinda/kickjs-devtools-kit referenced by
       # @forinda/kickjs-queue) resolve to real artefacts. The dedicated
-      # `build` job above still runs in parallel — wall time is
+      # `build` job above still runs in parallel â€” wall time is
       # max(build, test) which is what the parallelisation buys us.
       - run: pnpm build
       - run: pnpm test
@@ -140,7 +140,7 @@ jobs:
         with:
           name: built-packages
           path: packages
-      - name: Smoke test — imports resolve under Bun
+      - name: Smoke test â€” imports resolve under Bun
         run: |
           bun -e "
             import { Container, Service, Controller } from './packages/kickjs/dist/index.mjs'
@@ -149,7 +149,7 @@ jobs:
             console.log('Application:', typeof Application)
             console.log('Bun smoke test passed')
           "
-      - name: Smoke test — bun test on core exports
+      - name: Smoke test â€” bun test on core exports
         run: |
           bun -e "
             import { Container, Scope, Service, Controller, Get, Inject } from './packages/kickjs/dist/index.mjs'
@@ -182,7 +182,7 @@ jobs:
         with:
           name: built-packages
           path: packages
-      - name: Smoke test — pure ESM imports resolve under Deno
+      - name: Smoke test â€” pure ESM imports resolve under Deno
         run: |
           cat > deno-smoke.mjs << 'EOF'
           import { Scope, Container, parseQuery } from "./packages/kickjs/dist/index.mjs"

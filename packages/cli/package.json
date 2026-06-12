@@ -37,8 +37,7 @@
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "typecheck": "tsgo --noEmit",
-    "clean": "rm -rf dist .wireit",
-    "lint": "tsc --noEmit"
+    "clean": "rm -rf dist .wireit"
   },
   "dependencies": {
     "@clack/prompts": "^1.5.1",
