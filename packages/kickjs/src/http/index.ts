@@ -27,6 +27,10 @@ export type {
   RuntimeAppOptions,
   RuntimeCapabilities,
   UseConnectOptions,
+  RuntimeTypeMap,
+  ExpressRuntimeTypes,
+  KickRuntimeRegister,
+  ActiveRuntime,
 } from './runtime'
 
 // Middleware

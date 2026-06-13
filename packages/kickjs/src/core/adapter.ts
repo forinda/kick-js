@@ -1,12 +1,12 @@
 import type http from 'node:http'
-import type { Express, RequestHandler, ErrorRequestHandler } from 'express'
+import type { RequestHandler, ErrorRequestHandler } from 'express'
 import type { Container } from './container'
 import type { ContributorRegistrations } from './context-decorator'
 import type { IntrospectionSnapshot } from './introspect'
 import type { MaybePromise, Constructor } from './interfaces'
 import type { KickJsPluginName } from './augmentation'
 // Type-only import — erased at emit, so no runtime core→http cycle.
-import type { AdapterHttp } from '../http/runtime'
+import type { AdapterHttp, ActiveRuntime } from '../http/runtime'
 
 /**
  * Where in the middleware pipeline an adapter's middleware should be inserted.
@@ -85,11 +85,12 @@ export interface AdapterContext {
    */
   http: AdapterHttp
   /**
-   * Engine-native application instance — Express under the default runtime.
+   * Engine-native application instance — Express under the default runtime,
+   * typed from the active runtime via {@link ActiveRuntime} (spec §4.3b).
    * Escape hatch for genuinely engine-specific needs; for everything else use
-   * {@link http}. (A later milestone types this from the active runtime.)
+   * {@link http}.
    */
-  app: Express
+  app: ActiveRuntime['app']
   /** DI container */
   container: Container
   /** Node.js http.Server — only available in afterStart */

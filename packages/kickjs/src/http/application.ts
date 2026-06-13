@@ -28,7 +28,7 @@ import { notFoundHandler, errorHandler } from './middleware/error-handler'
 import { requestScopeMiddleware, isRequestScopeMiddleware } from './middleware/request-scope'
 import { _setExternalContributorSources } from './router-builder'
 import { buildRoutes, expressRuntime } from './runtimes/express'
-import type { AdapterHttp, HttpRuntime, RouteEntry } from './runtime'
+import type { ActiveRuntime, AdapterHttp, HttpRuntime, RouteEntry } from './runtime'
 import { requestStore } from './request-store'
 
 const log = createLogger('Application')
@@ -982,6 +982,17 @@ export class Application {
     }
   }
 
+  /**
+   * The engine-native app instance, typed from the active runtime
+   * ({@link ActiveRuntime} — Express by default). Prefer this over
+   * {@link getExpressApp}; under a non-Express runtime the type follows the
+   * augmented registry.
+   */
+  getRuntimeApp(): ActiveRuntime['app'] {
+    return this.app
+  }
+
+  /** @deprecated Use {@link getRuntimeApp}. Returns the engine-native app. */
   getExpressApp(): Express {
     return this.app
   }
