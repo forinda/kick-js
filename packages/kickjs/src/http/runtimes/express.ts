@@ -112,6 +112,8 @@ export function expressRuntime(): HttpRuntime<Express> {
 
     createApp(options: RuntimeAppOptions = {}): Express {
       const app = express()
+      // Engine hardening + config the Application used to apply directly.
+      app.disable('x-powered-by')
       app.set('trust proxy', options.trustProxy ?? false)
       return app
     },

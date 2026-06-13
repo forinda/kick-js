@@ -184,11 +184,13 @@ export interface ApplicationOptions {
    * The HTTP engine driver. Defaults to {@link expressRuntime} — Express stays
    * the zero-config default, so existing apps are unaffected.
    *
-   * Typed `HttpRuntime<Express>` for now: `Application` still calls a few
-   * Express-only APIs directly (`disable('x-powered-by')`, `set('trust proxy')`,
-   * the `/health/*` routes). Those move onto the runtime in M2, at which point
-   * this widens to a generic `HttpRuntime` so the Fastify / h3 subpaths can be
-   * passed here. Until then, only an Express-typed runtime is sound.
+   * Typed `HttpRuntime<Express>` for now: all routing, middleware, and the
+   * hardened defaults (`x-powered-by` / `trust proxy`) and `/health/*` routes
+   * now go through the runtime, but the engine-native escape hatches
+   * (`getRuntimeApp()` / `getExpressApp()`, `AdapterContext.app`) are still
+   * typed `Express`. This widens to a generic `HttpRuntime` once `app` becomes
+   * runtime-typed (registry augmentation, spec §4.3b) — which lands with the
+   * Fastify / h3 subpaths. Until then, only an Express-typed runtime is sound.
    */
   runtime?: HttpRuntime<Express>
 
@@ -335,7 +337,7 @@ export class Application {
 
   constructor(private readonly options: ApplicationOptions) {
     this.runtime = options.runtime ?? expressRuntime()
-    this.app = this.runtime.createApp()
+    this.app = this.runtime.createApp({ trustProxy: options.trustProxy })
     this.container = Container.getInstance()
 
     // Sort plugins by `dependsOn` declarations BEFORE reading their adapters/etc.
@@ -504,8 +506,7 @@ export class Application {
     }
 
     // ── 2. Hardened defaults ──────────────────────────────────────────
-    this.app.disable('x-powered-by')
-    this.app.set('trust proxy', this.options.trustProxy ?? false)
+    // x-powered-by disable + trust proxy now live in `runtime.createApp()`.
 
     // ── 2a. In-flight request tracking ──────────────────────────────
     this.runtime.useConnect(this.app, this.requestTrackingMiddleware())
@@ -890,7 +891,7 @@ export class Application {
     try {
       Container.reset()
       this.container = Container.getInstance()
-      this.app = this.runtime.createApp()
+      this.app = this.runtime.createApp({ trustProxy: this.options.trustProxy })
       await this.setup()
     } catch (err) {
       log.error(err, 'HMR rebuild failed, keeping previous app')
@@ -1157,17 +1158,19 @@ export class Application {
 
   /** Mount /health/live and /health/ready endpoints at the root (no API prefix) */
   private mountHealthEndpoints(): void {
-    this.app.get('/health/live', (_req, res) => {
+    const http = this.adapterHttp()
+
+    http.route('GET', '/health/live', (ctx) => {
       if (this._draining) {
-        res.status(503).json({ status: 'draining', uptime: process.uptime() })
+        ctx.res.status(503).json({ status: 'draining', uptime: process.uptime() })
       } else {
-        res.json({ status: 'ok', uptime: process.uptime() })
+        ctx.json({ status: 'ok', uptime: process.uptime() })
       }
     })
 
-    this.app.get('/health/ready', async (_req, res) => {
+    http.route('GET', '/health/ready', async (ctx) => {
       if (this._draining) {
-        res.status(503).json({ status: 'draining', checks: [] })
+        ctx.res.status(503).json({ status: 'draining', checks: [] })
         return
       }
       const adaptersWithHealth = this.adapters.filter((a) => a.onHealthCheck)
@@ -1177,7 +1180,7 @@ export class Application {
         return { name: adaptersWithHealth[i].name ?? 'unknown', status: 'down' as const }
       })
       const healthy = results.every((r) => r.status === 'up')
-      res.status(healthy ? 200 : 503).json({
+      ctx.res.status(healthy ? 200 : 503).json({
         status: healthy ? 'ready' : 'degraded',
         checks: results,
       })
