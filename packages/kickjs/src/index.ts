@@ -71,6 +71,8 @@ export {
   parsePagination,
   parseSearchQuery,
   buildQueryParams,
+  setQueryParsingDefaults,
+  getQueryParsingDefaults,
   FILTER_OPERATORS,
   type FilterOperator,
   type FilterItem,
@@ -82,6 +84,9 @@ export {
   type QueryFieldConfig,
   type QueryBuilderAdapter,
   type PaginatedResponse,
+  type ParseQueryOptions,
+  type QueryRejection,
+  type QueryRejectReason,
 } from './http/query'
 
 // View & SPA Adapters

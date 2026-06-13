@@ -5,6 +5,7 @@ import { normalizeProblem, type ProblemDetails, type ValidationError } from '../
 import { requestStore } from './request-store'
 import {
   parseQuery,
+  type ParseQueryOptions,
   type QueryFieldConfig,
   type PaginatedResponse,
   type TypedParsedQuery,
@@ -261,6 +262,14 @@ export class RequestContext<TBody = any, TParams = any, TQuery = any> implements
   ) {}
 
   /**
+   * Memo of the most recent {@link qs} call this request. The query
+   * object is immutable for a request's lifetime, so a repeat call with
+   * the same `(fieldConfig, options)` references returns the cached
+   * parse instead of re-walking the filter/sort strings.
+   */
+  private _qsMemo?: { config: unknown; options: unknown; result: unknown }
+
+  /**
    * Read-side accessor for the per-request metadata map.
    *
    * Returns the AsyncLocalStorage map (`requestStore.getStore().values`)
@@ -443,6 +452,10 @@ export class RequestContext<TBody = any, TParams = any, TQuery = any> implements
    * config and you get the loose `string` fallback.
    *
    * @param fieldConfig - Optional whitelist for filterable, sortable, and searchable fields
+   * @param options - Limits (`maxLimit`, `defaultLimit`, `maxSearchLength`) and an
+   *   `onReject` hook. By default a rejected/over-broad field is logged via
+   *   `console.warn` with the request id; pass an explicit `onReject` to override
+   *   (e.g. throw to return a 400), or `onReject: () => {}` to silence.
    *
    * @example
    * ```ts
@@ -459,8 +472,33 @@ export class RequestContext<TBody = any, TParams = any, TQuery = any> implements
    */
   qs<TConfig extends QueryFieldConfig | undefined = undefined>(
     fieldConfig?: TConfig,
+    options?: ParseQueryOptions,
   ): TypedParsedQuery<TConfig> {
-    return parseQuery<TConfig>(this.req.query as Record<string, any>, fieldConfig)
+    // Cheap per-request memo — repeat calls with the same args (the
+    // common controller pattern) skip re-parsing. `req.query` is fixed
+    // for the request's lifetime, so caching is always sound.
+    const memo = this._qsMemo
+    if (memo && memo.config === fieldConfig && memo.options === options) {
+      return memo.result as TypedParsedQuery<TConfig>
+    }
+    const effective: ParseQueryOptions = {
+      ...options,
+      onReject:
+        options?.onReject ??
+        ((rejection) => {
+          const id = this.requestId ? `[${this.requestId}] ` : ''
+          console.warn(
+            `${id}query ${rejection.kind} '${rejection.field}' rejected (${rejection.reason})`,
+          )
+        }),
+    }
+    const result = parseQuery<TConfig>(
+      this.req.query as Record<string, any>,
+      fieldConfig,
+      effective,
+    )
+    this._qsMemo = { config: fieldConfig, options, result }
+    return result
   }
 
   // ── File Uploads ────────────────────────────────────────────────────
