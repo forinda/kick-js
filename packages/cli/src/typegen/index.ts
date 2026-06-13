@@ -354,7 +354,15 @@ export async function watchTypegen(opts: RunTypegenOptions = {}): Promise<() => 
   // `runPlugins: false` keeps `runTypegen` from double-running the
   // plugin pipeline; the watcher invokes `runPlugins()` explicitly
   // after each `runLegacy()` so both phases land before the sweep.
-  const runOpts: RunTypegenOptions = { ...resolved, allowDuplicates: true, runPlugins: false }
+  // `resolved` comes from resolveOptions, which doesn't carry noCache —
+  // thread it through explicitly so `kick typegen --watch --no-cache`
+  // disables the scan cache on every rebuild too.
+  const runOpts: RunTypegenOptions = {
+    ...resolved,
+    allowDuplicates: true,
+    runPlugins: false,
+    noCache: opts.noCache,
+  }
 
   // Polling is the right strategy for Docker bind mounts, WSL crosses,
   // NFS, and some kernel/filesystem combos where `fs.watch` returns
