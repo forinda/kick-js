@@ -74,10 +74,14 @@ export interface RouteEntry {
 
 /** Per-route metadata: introspection refs plus runtime-materialized concerns. */
 export interface RouteMeta {
-  /** Owning controller class — for DI resolution and adapter introspection. */
-  controller: Constructor
-  /** Handler method name on the controller. */
-  handlerName: string
+  /**
+   * Owning controller class — for DI resolution and adapter introspection.
+   * Absent for ad-hoc routes registered through {@link AdapterHttp.route},
+   * which have no controller class behind them.
+   */
+  controller?: Constructor
+  /** Handler method name on the controller, when there is one. */
+  handlerName?: string
   /** Zod/JSON-schema validation config from the route decorator, if any. */
   validation?: RouteDefinition['validation']
   /** `@FileUpload` config, if present — the runtime supplies the backend. */
@@ -151,4 +155,23 @@ export interface HttpRuntime<TApp = unknown> {
   setErrorHandler(app: TApp, mw: ConnectMiddleware): void
 
   readonly capabilities: RuntimeCapabilities
+}
+
+/**
+ * The supported surface adapters use to add HTTP routes, mounts, static dirs,
+ * and middleware — engine-agnostic, in place of reaching for the raw Express
+ * `app` (spec §4.4). Exposed as {@link AdapterContext.http}. Built by the
+ * Application over the active {@link HttpRuntime}, so an adapter written against
+ * this works under any runtime; the raw `app` escape hatch stays available for
+ * the rare engine-specific need.
+ */
+export interface AdapterHttp {
+  /** Register a single context-handler route (e.g. a docs or transport endpoint). */
+  route(method: RouteMethod, path: string, handler: CtxHandler): void
+  /** Mount a pre-built route table under a path prefix. */
+  mount(prefix: string, routes: RouteEntry[]): void
+  /** Serve a static directory under a path prefix. */
+  serveStatic(prefix: string, dir: string): void
+  /** Register a connect-style middleware (optionally path-scoped). */
+  use(mw: ConnectMiddleware, opts?: UseConnectOptions): void
 }

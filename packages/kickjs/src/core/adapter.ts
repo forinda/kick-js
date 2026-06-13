@@ -5,6 +5,8 @@ import type { ContributorRegistrations } from './context-decorator'
 import type { IntrospectionSnapshot } from './introspect'
 import type { MaybePromise, Constructor } from './interfaces'
 import type { KickJsPluginName } from './augmentation'
+// Type-only import — erased at emit, so no runtime core→http cycle.
+import type { AdapterHttp } from '../http/runtime'
 
 /**
  * Where in the middleware pipeline an adapter's middleware should be inserted.
@@ -76,7 +78,17 @@ export interface AdapterMiddleware {
  * ```
  */
 export interface AdapterContext {
-  /** Express application instance — fully typed */
+  /**
+   * Engine-agnostic HTTP surface — the supported way to add routes, mounts,
+   * static dirs, and middleware (spec §4.4). Prefer this over {@link app}:
+   * an adapter written against `http` works under any runtime.
+   */
+  http: AdapterHttp
+  /**
+   * Engine-native application instance — Express under the default runtime.
+   * Escape hatch for genuinely engine-specific needs; for everything else use
+   * {@link http}. (A later milestone types this from the active runtime.)
+   */
   app: Express
   /** DI container */
   container: Container

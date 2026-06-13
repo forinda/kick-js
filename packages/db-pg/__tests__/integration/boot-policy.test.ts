@@ -55,6 +55,7 @@ afterAll(async () => {
 
 const fakeCtx = (container: Container) => ({
   app: {} as never,
+  http: {} as never,
   container,
   env: 'test',
   isProduction: false,
