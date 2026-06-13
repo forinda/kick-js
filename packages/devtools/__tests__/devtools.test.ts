@@ -666,10 +666,11 @@ describe('DevToolsAdapter', () => {
 
     it('starts the sampler in beforeMount', async () => {
       const adapter = createAdapter()
-      // Stub the express app + container so beforeMount can run
+      // Stub the express app, http facade, and container so beforeMount can run
       const fakeApp = { use: vi.fn() } as any
+      const fakeHttp = { route: vi.fn(), mount: vi.fn(), serveStatic: vi.fn(), use: vi.fn() } as any
       const container = new Container()
-      await adapter.beforeMount?.({ app: fakeApp, container } as any)
+      await adapter.beforeMount?.({ app: fakeApp, http: fakeHttp, container } as any)
       expect(adapter.runtimeSampler?.isRunning()).toBe(true)
       // Initial sample should already be in the buffer
       expect(adapter.runtimeSampler?.latest()).not.toBeNull()
@@ -679,8 +680,9 @@ describe('DevToolsAdapter', () => {
     it('stops the sampler in shutdown', async () => {
       const adapter = createAdapter()
       const fakeApp = { use: vi.fn() } as any
+      const fakeHttp = { route: vi.fn(), mount: vi.fn(), serveStatic: vi.fn(), use: vi.fn() } as any
       const container = new Container()
-      await adapter.beforeMount?.({ app: fakeApp, container } as any)
+      await adapter.beforeMount?.({ app: fakeApp, http: fakeHttp, container } as any)
       expect(adapter.runtimeSampler?.isRunning()).toBe(true)
       adapter.shutdown()
       expect(adapter.runtimeSampler?.isRunning()).toBe(false)

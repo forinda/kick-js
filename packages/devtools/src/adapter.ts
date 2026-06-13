@@ -1,5 +1,5 @@
-import type { Request, Response, NextFunction } from 'express'
-import { Router, static as serveStatic } from 'express'
+import type { Request, Response, NextFunction, RequestHandler } from 'express'
+import { static as serveStatic } from 'express'
 import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
@@ -433,7 +433,7 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
 
       // ── Lifecycle ─────────────────────────────────────────────────
 
-      beforeMount({ app, container: containerArg }) {
+      beforeMount({ app, http, container: containerArg }) {
         if (!enabled) return
 
         appRef = app
@@ -453,7 +453,24 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
         runtimeSampler?.start()
         memoryAnalyzer?.start()
 
-        const router = Router()
+        // Register dashboard routes through the engine-agnostic HTTP facade
+        // (`ctx.http`) instead of an Express Router, so devtools no longer
+        // depends on the raw Express app for mounting. The `router` shim keeps
+        // every existing `(req, res)` handler verbatim — `req` / `res` are the
+        // engine-native request/response under the default runtime.
+        //
+        // `use()` scopes the middleware to `basePath` (Express strips the
+        // prefix, so the guard still sees router-relative `req.path`). `get` /
+        // `post` register the prefixed path; the dashboard root (`'/'`) maps to
+        // `basePath` itself, matching the old `router.get('/')` at the mount.
+        const joinBase = (p: string): string => (p === '/' ? basePath : `${basePath}${p}`)
+        const router = {
+          use: (mw: RequestHandler): void => http.use(mw, { path: basePath }),
+          get: (path: string, handler: (req: Request, res: Response) => unknown): void =>
+            http.route('GET', joinBase(path), (ctx) => handler(ctx.req, ctx.res)),
+          post: (path: string, handler: (req: Request, res: Response) => unknown): void =>
+            http.route('POST', joinBase(path), (ctx) => handler(ctx.req, ctx.res)),
+        }
 
         // ── Access guard — require secret token ──────────────────
         if (secret !== false) {
@@ -916,7 +933,8 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
           })
         }
 
-        app.use(basePath, router)
+        // Routes self-register through the facade as they're declared above —
+        // no Router to mount here.
 
         if (secret) {
           log.info(`DevTools mounted at ${basePath} [token: ${secret}]`)
