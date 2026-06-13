@@ -20,6 +20,13 @@ describe('escapeLike', () => {
   it('honours a custom escape char', () => {
     expect(escapeLike('a%b', '!')).toBe('a!%b')
   })
+
+  it('rejects an invalid escape char (empty, multi-char, or a wildcard)', () => {
+    expect(() => escapeLike('x', '')).toThrow(/single character/)
+    expect(() => escapeLike('x', '!!')).toThrow(/single character/)
+    expect(() => escapeLike('x', '%')).toThrow(/'%' or '_'/)
+    expect(() => escapeLike('x', '_')).toThrow(/'%' or '_'/)
+  })
 })
 
 describe('likePattern', () => {

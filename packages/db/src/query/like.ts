@@ -27,6 +27,13 @@ export type LikeMatchMode = 'contains' | 'startsWith' | 'endsWith' | 'exact'
  * ```
  */
 export function escapeLike(input: string, escapeChar = '\\'): string {
+  // The escape char must be exactly one character and not a wildcard
+  // itself — `''` would be a no-op, `'%'`/`'_'` would over-escape and
+  // corrupt the literal match. This is a safety primitive, so reject
+  // bad config loudly rather than emit a silently-wrong pattern.
+  if (escapeChar.length !== 1 || escapeChar === '%' || escapeChar === '_') {
+    throw new Error("escapeLike: escapeChar must be a single character other than '%' or '_'")
+  }
   // Escape the escape char first so we don't double-escape the
   // backslashes we add for % and _.
   const e = escapeChar

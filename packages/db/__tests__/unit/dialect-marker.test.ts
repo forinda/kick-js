@@ -12,7 +12,13 @@ describe('dialect marker', () => {
     const d = markDialect({ createAdapter: () => ({}) }, 'sqlite')
     expect(Object.keys(d)).toEqual(['createAdapter'])
     expect(JSON.stringify(d)).toBe('{}')
-    // …but still readable via the symbol.
+    // Object spread copies ENUMERABLE symbol keys — assert the mark is
+    // not carried (Object.keys/JSON.stringify ignore symbols regardless,
+    // so they alone don't prove non-enumerability).
+    const spread = { ...d }
+    expect((spread as Record<symbol, unknown>)[KICK_DIALECT]).toBeUndefined()
+    expect(Object.getOwnPropertyDescriptor(d, KICK_DIALECT)?.enumerable).toBe(false)
+    // …but still readable via the symbol on the original.
     expect((d as Record<symbol, unknown>)[KICK_DIALECT]).toBe('sqlite')
   })
 
@@ -20,7 +26,7 @@ describe('dialect marker', () => {
     expect(readDialectMark({})).toBeUndefined()
   })
 
-  it('the factory-stamped tag survives — createDbClient detects it exactly', async () => {
+  it('the factory-stamped tag survives on dialect instances', async () => {
     const { sqliteDialect } = await import('../../src/adapters/sqlite/dialect')
     // A fake better-sqlite3-shaped handle is enough; we only read the mark.
     const dialect = sqliteDialect({ database: {} as never })
