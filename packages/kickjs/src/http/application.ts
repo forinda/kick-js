@@ -27,7 +27,8 @@ import { requestId } from './middleware/request-id'
 import { notFoundHandler, errorHandler } from './middleware/error-handler'
 import { requestScopeMiddleware, isRequestScopeMiddleware } from './middleware/request-scope'
 import { _setExternalContributorSources } from './router-builder'
-import { buildRoutes } from './runtimes/express'
+import { buildRoutes, expressRuntime } from './runtimes/express'
+import type { HttpRuntime } from './runtime'
 import { requestStore } from './request-store'
 
 const log = createLogger('Application')
@@ -179,6 +180,18 @@ export interface ApplicationOptions {
    */
   processHooks?: 'auto' | 'errors-only' | 'manual'
 
+  /**
+   * The HTTP engine driver. Defaults to {@link expressRuntime} — Express stays
+   * the zero-config default, so existing apps are unaffected.
+   *
+   * Typed `HttpRuntime<Express>` for now: `Application` still calls a few
+   * Express-only APIs directly (`disable('x-powered-by')`, `set('trust proxy')`,
+   * the `/health/*` routes). Those move onto the runtime in M2, at which point
+   * this widens to a generic `HttpRuntime` so the Fastify / h3 subpaths can be
+   * passed here. Until then, only an Express-typed runtime is sound.
+   */
+  runtime?: HttpRuntime<Express>
+
   /** Express `trust proxy` setting */
   trustProxy?: boolean | number | string | ((ip: string, hopIndex: number) => boolean)
   /** Maximum JSON body size (only used when middleware is not provided) */
@@ -286,6 +299,8 @@ export interface ApplicationOptions {
  */
 export class Application {
   private app: Express
+  /** The HTTP engine driver. Defaults to {@link expressRuntime}. */
+  private readonly runtime: HttpRuntime<Express>
   private container: Container
   private httpServer: http.Server | null = null
   private readonly adapters: AppAdapter[]
@@ -319,7 +334,8 @@ export class Application {
   private _drainResolvers: Array<() => void> = []
 
   constructor(private readonly options: ApplicationOptions) {
-    this.app = express()
+    this.runtime = options.runtime ?? expressRuntime()
+    this.app = this.runtime.createApp()
     this.container = Container.getInstance()
 
     // Sort plugins by `dependsOn` declarations BEFORE reading their adapters/etc.
@@ -384,10 +400,11 @@ export class Application {
    * ```
    */
   handle(req: http.IncomingMessage, res: http.ServerResponse, next?: (err?: any) => void): void {
+    const handler = this.runtime.nodeHandler(this.app)
     if (next) {
-      this.app(req as any, res as any, next)
+      handler(req, res, next)
     } else {
-      this.app(req as any, res as any)
+      handler(req, res)
     }
   }
 
@@ -460,7 +477,7 @@ export class Application {
     this.app.set('trust proxy', this.options.trustProxy ?? false)
 
     // ── 2a. In-flight request tracking ──────────────────────────────
-    this.app.use(this.requestTrackingMiddleware())
+    this.runtime.useConnect(this.app, this.requestTrackingMiddleware())
 
     // ── 2b. Health check endpoints (before middleware, at root) ──────
     this.mountHealthEndpoints()
@@ -469,7 +486,7 @@ export class Application {
     // Auto-mounted unless the user opted out (`contextStore: 'manual'`)
     // or already included one in their middleware list.
     if (this.shouldAutoMountRequestScope()) {
-      this.app.use(requestScopeMiddleware())
+      this.runtime.useConnect(this.app, requestScopeMiddleware())
     }
 
     // ── 3. Adapter middleware: beforeGlobal ───────────────────────────
@@ -485,7 +502,7 @@ export class Application {
       try {
         const mw = plugin.middleware?.() ?? []
         for (const handler of mw) {
-          this.app.use(handler)
+          this.runtime.useConnect(this.app, handler)
         }
       } catch (err) {
         log.error(err, `Plugin middleware failed: ${(plugin as any).name ?? 'unknown'}`)
@@ -498,7 +515,7 @@ export class Application {
     if (autoHelmet) {
       try {
         const { helmet: helmetFn } = await import('./middleware/helmet')
-        this.app.use(helmetFn())
+        this.runtime.useConnect(this.app, helmetFn())
       } catch {
         // helmet middleware not available — skip silently
       }
@@ -512,8 +529,8 @@ export class Application {
       }
     } else {
       // Sensible defaults when no middleware declared
-      this.app.use(requestId())
-      this.app.use(express.json({ limit: this.options.jsonLimit ?? '1mb' }))
+      this.runtime.useConnect(this.app, requestId())
+      this.runtime.useConnect(this.app, express.json({ limit: this.options.jsonLimit ?? '1mb' }))
     }
 
     // ── 5. Adapter middleware: afterGlobal ────────────────────────────
@@ -667,7 +684,7 @@ export class Application {
           if (!router) {
             throw moduleRouteMissingControllerError(mountPath)
           }
-          this.app.use(mountPath, router)
+          this.runtime.useConnect(this.app, router, { path: mountPath })
 
           // Notify adapters (e.g. SwaggerAdapter for OpenAPI spec generation)
           if (route.controller) {
@@ -741,8 +758,8 @@ export class Application {
     // ── 11. Error handlers ───────────────────────────────────────────
     // Last in the chain so any adapter-mounted route (step 10) gets
     // a chance to match before the catch-all 404 fires.
-    this.app.use(this.options.onNotFound ?? notFoundHandler())
-    this.app.use(this.options.onError ?? errorHandler())
+    this.runtime.setNotFound(this.app, this.options.onNotFound ?? notFoundHandler())
+    this.runtime.setErrorHandler(this.app, this.options.onError ?? errorHandler())
   }
 
   /** Register modules and DI without starting the HTTP server (used by kick tinker) */
@@ -793,7 +810,7 @@ export class Application {
 
     // ── PRODUCTION: Create and own the http.Server ─────────────────
     const port = this.options.port ?? parseInt(process.env.PORT || '3000', 10)
-    this.httpServer = http.createServer(this.app)
+    this.httpServer = http.createServer(this.runtime.nodeHandler(this.app))
 
     this.httpServer.on('error', (err: NodeJS.ErrnoException) => {
       if (err.code === 'EADDRINUSE') {
@@ -842,7 +859,7 @@ export class Application {
     try {
       Container.reset()
       this.container = Container.getInstance()
-      this.app = express()
+      this.app = this.runtime.createApp()
       await this.setup()
     } catch (err) {
       log.error(err, 'HMR rebuild failed, keeping previous app')
@@ -854,8 +871,8 @@ export class Application {
 
     if (this.httpServer) {
       this.httpServer.removeAllListeners('request')
-      this.httpServer.on('request', this.app)
-      log.debug('HMR: Express app rebuilt and swapped')
+      this.httpServer.on('request', this.runtime.nodeHandler(this.app))
+      log.debug('HMR: app rebuilt and swapped')
     }
   }
 
@@ -1070,24 +1087,18 @@ export class Application {
   private mountMiddlewareList(entries: AdapterMiddleware[]): void {
     for (const entry of entries) {
       if (entry.path === undefined) {
-        this.app.use(entry.handler)
+        this.runtime.useConnect(this.app, entry.handler)
         continue
       }
-      // Copy ReadonlyArray paths to a mutable array — Express's
-      // `PathParams` doesn't accept readonly arrays, even though the
-      // function never mutates them. Pass-through for non-array shapes.
-      const path: string | RegExp | (string | RegExp)[] = Array.isArray(entry.path)
-        ? [...entry.path]
-        : (entry.path as string | RegExp)
-      this.app.use(path, entry.handler)
+      this.runtime.useConnect(this.app, entry.handler, { path: entry.path })
     }
   }
 
   private mountMiddlewareEntry(entry: MiddlewareEntry): void {
     if (typeof entry === 'function') {
-      this.app.use(entry)
+      this.runtime.useConnect(this.app, entry)
     } else {
-      this.app.use(entry.path, entry.handler)
+      this.runtime.useConnect(this.app, entry.handler, { path: entry.path })
     }
   }
 
