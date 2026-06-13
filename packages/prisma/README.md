@@ -1,5 +1,12 @@
 # @forinda/kickjs-prisma
 
+> ⚠️ **Deprecated — no longer maintained.**
+> This was an early-adoption adapter. Wire Prisma directly in your app (BYO),
+> or use [`@forinda/kickjs-db`](https://www.npmjs.com/package/@forinda/kickjs-db)
+> — the built-in Kick ORM — if you prefer to skip external ORMs. Importing this
+> package logs a one-time runtime warning (silence with
+> `KICKJS_SUPPRESS_DEPRECATION=1`). It will be removed in a future major.
+
 Prisma adapter for KickJS. Registers `PrismaClient` in the DI container, manages lifecycle (connect/disconnect), and ships a typed `PrismaModelDelegate` for cast-free repositories. Supports Prisma 5, 6, and 7+ (auto-detects logging method).
 
 ## Install

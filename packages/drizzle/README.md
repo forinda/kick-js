@@ -1,5 +1,12 @@
 # @forinda/kickjs-drizzle
 
+> ⚠️ **Deprecated — no longer maintained.**
+> This was an early-adoption adapter. Wire Drizzle directly in your app (BYO),
+> or use [`@forinda/kickjs-db`](https://www.npmjs.com/package/@forinda/kickjs-db)
+> — the built-in Kick ORM — if you prefer to skip external ORMs. Importing this
+> package logs a one-time runtime warning (silence with
+> `KICKJS_SUPPRESS_DEPRECATION=1`). It will be removed in a future major.
+
 Drizzle ORM adapter for KickJS — DI integration, lifecycle management, and a `DrizzleQueryAdapter` that translates `ParsedQuery` into Drizzle `where` / `orderBy` / `limit` / `offset`.
 
 ## Install
