@@ -126,16 +126,15 @@ export const QueueAdapter = defineAdapter<QueueAdapterOptions, QueueAdapterExten
         ]
       },
 
-      // Mount the iframe panel route. Done in beforeMount (not
-      // beforeStart) because we need the Express app, not the DI
-      // container. Standalone HTML page — no framework, no build
-      // step; bundled inline so adopters don't have to ship our
-      // panel as a separate static asset.
-      beforeMount({ app }) {
-        app.get('/_kick/queue/panel', (_req, res) => {
-          res.type('html').send(QUEUE_PANEL_HTML)
+      // Mount the iframe panel route via the engine-agnostic HTTP facade.
+      // Done in beforeMount so the panel is registered before module routes.
+      // Standalone HTML page — no framework, no build step; bundled inline so
+      // adopters don't have to ship our panel as a separate static asset.
+      beforeMount({ http }) {
+        http.route('GET', '/_kick/queue/panel', (ctx) => {
+          ctx.html(QUEUE_PANEL_HTML)
         })
-        app.get('/_kick/queue/data', async (_req, res) => {
+        http.route('GET', '/_kick/queue/data', async (ctx) => {
           const queues: Array<{
             name: string
             counts: Record<string, number> | { error: string }
@@ -150,7 +149,7 @@ export const QueueAdapter = defineAdapter<QueueAdapterOptions, QueueAdapterExten
               })
             }
           }
-          res.json({ queues })
+          ctx.json({ queues })
         })
       },
 

@@ -17,6 +17,7 @@ export { buildRoutes, materializeRouter, expressRuntime } from './runtimes/expre
 // HTTP runtime seam (spec: docs/http/spec-http-runtimes.md)
 export type {
   HttpRuntime,
+  AdapterHttp,
   RouteEntry,
   RouteMeta,
   RouteTable,

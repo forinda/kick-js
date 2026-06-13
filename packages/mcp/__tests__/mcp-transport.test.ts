@@ -3,8 +3,29 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import express, { type Express } from 'express'
 import request from 'supertest'
 import { z } from 'zod'
-import { Container, Controller, Get, Post } from '@forinda/kickjs'
+import { Container, Controller, Get, Post, expressRuntime, type AdapterHttp } from '@forinda/kickjs'
 import { McpAdapter, McpTool } from '@forinda/kickjs-mcp'
+
+/**
+ * Build the engine-agnostic `ctx.http` facade over a bare Express app — the
+ * same wiring Application does internally. Lets these unit tests exercise the
+ * adapter's facade-based mounting without standing up a full Application.
+ */
+function adapterHttpFor(app: Express): AdapterHttp {
+  const rt = expressRuntime()
+  return {
+    route: (method, path, handler) =>
+      rt.mountRoutes(app, [
+        {
+          mountPath: '/',
+          routes: [{ method, path, middlewares: [], contributorRunner: null, handler, meta: {} }],
+        },
+      ]),
+    mount: (prefix, routes) => rt.mountRoutes(app, [{ mountPath: prefix, routes }]),
+    serveStatic: (prefix, dir) => rt.serveStatic(app, prefix, dir),
+    use: (mw, opts) => rt.useConnect(app, mw, opts),
+  }
+}
 
 // ── Fixtures ──────────────────────────────────────────────────────────────
 
@@ -43,11 +64,12 @@ async function buildAdapterOnApp(): Promise<{ adapter: McpAdapter; app: Express 
   })
 
   adapter.onRouteMount(TaskController, '/api/v1/tasks')
-  await adapter.beforeStart({ app, container: {} as never } as never)
+  const http = adapterHttpFor(app)
+  await adapter.beforeStart({ app, http, container: {} as never } as never)
 
   // afterStart captures the server base URL for dispatch — `app` was
   // already consumed in beforeStart where the HTTP routes are mounted.
-  await adapter.afterStart({ app, container: {} as never, server: undefined } as never)
+  await adapter.afterStart({ app, http, container: {} as never, server: undefined } as never)
 
   return { adapter, app }
 }
