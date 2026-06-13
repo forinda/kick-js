@@ -47,12 +47,14 @@ interface QueryParsingDefaults {
   defaultPage: number
 }
 
-const defaults: QueryParsingDefaults = {
+const BUILTIN_DEFAULTS: QueryParsingDefaults = {
   maxLimit: 100,
   defaultLimit: 20,
   maxSearchLength: 200,
   defaultPage: 1,
 }
+
+const defaults: QueryParsingDefaults = { ...BUILTIN_DEFAULTS }
 
 /**
  * Globally override the query-parsing limits — call once at bootstrap.
@@ -69,6 +71,16 @@ export function setQueryParsingDefaults(
 /** Read the current global query-parsing defaults (a copy). */
 export function getQueryParsingDefaults(): Readonly<QueryParsingDefaults> {
   return { ...defaults }
+}
+
+/**
+ * Restore the built-in query-parsing defaults (maxLimit 100, defaultLimit
+ * 20, maxSearchLength 200). Useful in test teardown after a
+ * {@link setQueryParsingDefaults} override so global state can't leak
+ * between tests.
+ */
+export function resetQueryParsingDefaults(): void {
+  Object.assign(defaults, BUILTIN_DEFAULTS)
 }
 
 // ── Individual parsers ──────────────────────────────────────────────────

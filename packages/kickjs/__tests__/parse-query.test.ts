@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 
 import {
   parseQuery,
@@ -8,7 +8,12 @@ import {
   parseSearchQuery,
   setQueryParsingDefaults,
   getQueryParsingDefaults,
+  resetQueryParsingDefaults,
 } from '../src/http/query/parse-query'
+
+// Any test that mutates the module-level defaults restores them here so
+// global state never leaks between tests, even on assertion failure.
+afterEach(() => resetQueryParsingDefaults())
 
 describe('parseFilters — onReject', () => {
   it('reports a filter dropped for an unknown field', () => {
@@ -115,11 +120,23 @@ describe('parseQuery — options threading', () => {
 })
 
 describe('setQueryParsingDefaults', () => {
-  it('overrides the global maxLimit + restores', () => {
+  it('overrides the global maxLimit (afterEach resets)', () => {
     const prev = getQueryParsingDefaults()
     setQueryParsingDefaults({ maxLimit: 5 })
     expect(parsePagination({ page: '1', limit: '999' }).limit).toBe(5)
-    setQueryParsingDefaults({ maxLimit: prev.maxLimit })
-    expect(parsePagination({ page: '1', limit: '999' }).limit).toBe(100)
+    // No manual restore — the afterEach reset guarantees cleanup even if
+    // this assertion throws. Verify the helper round-trips the original.
+    resetQueryParsingDefaults()
+    expect(parsePagination({ page: '1', limit: '999' }).limit).toBe(prev.maxLimit)
+  })
+
+  it('resetQueryParsingDefaults restores every field', () => {
+    setQueryParsingDefaults({ maxLimit: 1, defaultLimit: 1, maxSearchLength: 1 })
+    resetQueryParsingDefaults()
+    expect(getQueryParsingDefaults()).toMatchObject({
+      maxLimit: 100,
+      defaultLimit: 20,
+      maxSearchLength: 200,
+    })
   })
 })
