@@ -1,5 +1,12 @@
 # @forinda/kickjs-db-pg
 
+> ⚠️ **Deprecated — merged into [`@forinda/kickjs-db`](https://www.npmjs.com/package/@forinda/kickjs-db).**
+> This package is now a thin re-export shim kept for one release. Install only
+> `@forinda/kickjs-db` (plus the `pg` driver) and import from the `/pg` subpath:
+> `import { pgAdapter, pgDialect } from '@forinda/kickjs-db/pg'`. Importing from
+> this package logs a runtime deprecation warning. It will stop being published
+> in a future release.
+
 > PostgreSQL adapter for [`@forinda/kickjs-db`](https://www.npmjs.com/package/@forinda/kickjs-db).
 
 Two factories:

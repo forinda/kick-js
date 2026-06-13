@@ -7,15 +7,14 @@ Phantom-typed column builders, `SchemaToTypes<S>` for end-to-end row inference, 
 ## Install
 
 ```bash
-pnpm add @forinda/kickjs-db
-pnpm add @forinda/kickjs-db-pg pg          # PostgreSQL adapter
+pnpm add @forinda/kickjs-db pg          # PostgreSQL — dialect ships as the /pg subpath
 ```
 
 ## Quick start
 
 ```ts
 import { table, uuid, varchar, timestamp, createDbClient } from '@forinda/kickjs-db'
-import { pgAdapter, pgDialect } from '@forinda/kickjs-db-pg'
+import { pgAdapter, pgDialect } from '@forinda/kickjs-db/pg'
 import { Pool } from 'pg'
 
 // 1. Schema — phantom T flows through every column automatically.
@@ -55,9 +54,18 @@ const row = await db
 - [DB Extensions](https://forinda.github.io/kick-js/guide/db-extensions) — `customType<T>()`, `$extends({ model })`
 - [Type Generation](https://forinda.github.io/kick-js/guide/typegen) — `kick typegen` plugin contract + `kick/db` auto-emit
 
+## Dialect subpaths
+
+Each dialect ships inside this package — no extra install beyond the driver:
+
+- `@forinda/kickjs-db/pg` — PostgreSQL (`pgDialect`, `pgAdapter`); peer driver `pg`
+- `@forinda/kickjs-db/mysql` — MySQL (`mysqlDialect`, `mysqlAdapter`); peer driver `mysql2`
+- `@forinda/kickjs-db/sqlite` — SQLite (`sqliteDialect`, `sqliteAdapter`); peer driver `better-sqlite3`
+
+> The standalone `@forinda/kickjs-db-pg` / `-db-mysql` / `-db-sqlite` packages are deprecated re-export shims kept for one release; import from the subpaths above instead.
+
 ## Companion packages
 
-- [`@forinda/kickjs-db-pg`](https://www.npmjs.com/package/@forinda/kickjs-db-pg) — node-postgres adapter
 - [`@forinda/kickjs`](https://www.npmjs.com/package/@forinda/kickjs) — framework runtime + DI container
 - [`@forinda/kickjs-cli`](https://www.npmjs.com/package/@forinda/kickjs-cli) — `kick db generate`, `kick db migrate`, `kick typegen`
 

@@ -1,5 +1,12 @@
 # @forinda/kickjs-db-mysql
 
+> ⚠️ **Deprecated — merged into [`@forinda/kickjs-db`](https://www.npmjs.com/package/@forinda/kickjs-db).**
+> This package is now a thin re-export shim kept for one release. Install only
+> `@forinda/kickjs-db` (plus the `mysql2` driver) and import from the `/mysql`
+> subpath: `import { mysqlAdapter, mysqlDialect } from '@forinda/kickjs-db/mysql'`.
+> Importing from this package logs a runtime deprecation warning. It will stop
+> being published in a future release.
+
 > MySQL adapter for [`@forinda/kickjs-db`](https://www.npmjs.com/package/@forinda/kickjs-db). **MySQL 8.0+ / MariaDB 10.5+ required.**
 
 Two factories:

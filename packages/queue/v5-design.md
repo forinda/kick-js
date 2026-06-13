@@ -1,5 +1,11 @@
 # `@forinda/kickjs-queue` v5 — slim shape
 
+> 📐 **Archived design proposal — not shipped.** This documents a proposed
+> "slim" rework that was never adopted. The published package still ships the
+> multi-provider shape described under _Current shape_ below (`QueueService`,
+> `QUEUE_MANAGER`, and the BullMQ / RabbitMQ / Kafka providers). Kept for design
+> history; do not read it as the package's current API.
+
 ## Why slim instead of drop
 
 Queue earns its keep where the other 6 deprecated wrappers didn't:
