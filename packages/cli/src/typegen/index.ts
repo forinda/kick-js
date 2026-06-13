@@ -80,6 +80,14 @@ export interface RunTypegenOptions {
    * `kick typegen` (and CI) catches collisions early. */
   allowDuplicates?: boolean
   /**
+   * Disable the persistent per-file scan cache (`.kickjs/cache/scan.json`).
+   * Every file is re-read + re-extracted from cold. Escape hatch for the
+   * rare `mtimeMs:size` signature collision (a file edited so fast its
+   * mtime + size are unchanged) where the cache would serve a stale
+   * extract. Wired to `kick typegen --no-cache` / `kick dev --no-typegen-cache`.
+   */
+  noCache?: boolean
+  /**
    * Schema validator used to derive `body`/`query`/`params` types from
    * route metadata. Currently only `'zod'` is supported; `false` (the
    * default) leaves these fields as `unknown`. Loaded from
@@ -162,7 +170,9 @@ export async function runTypegen(opts: RunTypegenOptions = {}): Promise<{
   const scanOpts = {
     root: srcDir,
     cwd,
-    cacheDir: resolve(cwd, '.kickjs', 'cache'),
+    // Omitting cacheDir disables the persistent scan cache entirely —
+    // every file is re-read cold (the --no-cache escape hatch).
+    cacheDir: opts.noCache ? undefined : resolve(cwd, '.kickjs', 'cache'),
     // Pass through unless explicitly disabled
     envFile: envFile === false ? undefined : envFile,
   }
