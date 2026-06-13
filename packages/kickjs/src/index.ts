@@ -19,7 +19,21 @@ export { isClusterPrimary, type ClusterOptions } from './http/cluster'
 export { RequestContext, type Ctx, type RouteShape, type DeepReadonly } from './http/context'
 export { defineHttpContextDecorator } from './http/define-http-context-decorator'
 
-export { buildRoutes } from './http/router-builder'
+export { buildRouteTable } from './http/router-builder'
+export type { BuildRoutesOptions } from './http/router-builder'
+export { buildRoutes, materializeRouter, expressRuntime } from './http/runtimes/express'
+export type {
+  HttpRuntime,
+  RouteEntry,
+  RouteMeta,
+  RouteTable,
+  RouteMethod,
+  CtxHandler,
+  ConnectMiddleware,
+  RuntimeAppOptions,
+  RuntimeCapabilities,
+  UseConnectOptions,
+} from './http/runtime'
 
 // Request-Scoped DI
 export {
