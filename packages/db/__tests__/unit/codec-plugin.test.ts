@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import {
   ColumnNode,
   ColumnUpdateNode,
@@ -295,6 +295,47 @@ describe('buildDecoderMap()', () => {
     expect(buildDecoderMap(null).size).toBe(0)
     expect(buildDecoderMap('schema').size).toBe(0)
   })
+})
+
+describe('codec column-name collision detection', () => {
+  it('warns and keeps the first when two tables map the same column to different codecs', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const codecA = customType<string>({
+      dataType: () => 'text',
+      fromDriver: (r) => `a:${String(r)}`,
+    })
+    const codecB = customType<string>({
+      dataType: () => 'text',
+      fromDriver: (r) => `b:${String(r)}`,
+    })
+    const users = table('users', { id: serial().primaryKey(), token: codecA().notNull() })
+    const orders = table('orders', { id: serial().primaryKey(), token: codecB().notNull() })
+
+    const map = buildDecoderMap({ users, orders })
+
+    expect(map.size).toBe(1)
+    // First table wins — deterministic regardless of how the row arrives.
+    expect(map.get('token')!('x')).toBe('a:x')
+    expect(warn).toHaveBeenCalledTimes(1)
+    const msg = warn.mock.calls[0][0] as string
+    expect(msg).toContain("column 'token'")
+    expect(msg).toContain('users')
+    expect(msg).toContain('orders')
+  })
+
+  it('does NOT warn when the SAME customType is shared across tables', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const shared = customType<string>({ dataType: () => 'text', fromDriver: (r) => String(r) })
+    const a = table('a', { id: serial().primaryKey(), meta: shared().notNull() })
+    const b = table('b', { id: serial().primaryKey(), meta: shared().notNull() })
+
+    const map = buildDecoderMap({ a, b })
+
+    expect(map.size).toBe(1) // one codec, shared — fine
+    expect(warn).not.toHaveBeenCalled()
+  })
+
+  afterEach(() => vi.restoreAllMocks())
 })
 
 describe('buildEncoderMap()', () => {
