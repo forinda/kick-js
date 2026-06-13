@@ -130,4 +130,17 @@ export class UsersRepo {}
     // Fresh class only visible if the file was re-read → proves re-extract.
     expect(result.classes.map((c) => c.className)).toContain('UsersRepo')
   })
+
+  it('writes no cache file when cacheDir is omitted (the --no-cache path)', async () => {
+    // Mirrors runTypegen({ noCache: true }) → scanProject without cacheDir.
+    const result = await scanProject({ root: src, cwd: root })
+    expect(result.classes.length).toBeGreaterThan(0) // still scans correctly
+    let exists = true
+    try {
+      await readFile(join(cacheDir, 'scan.json'), 'utf-8')
+    } catch {
+      exists = false
+    }
+    expect(exists).toBe(false) // nothing persisted
+  })
 })

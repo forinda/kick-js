@@ -25,6 +25,7 @@ interface TypegenCliOptions {
   envFile?: string
   check?: boolean
   list?: boolean
+  cache?: boolean
 }
 
 /**
@@ -79,6 +80,10 @@ export function registerTypegenCommand(program: Command): void {
     )
     .option('--check', 'CI gate: fail on plugin-typegen drift instead of writing')
     .option('--list', 'List every registered typegen plugin id (use to populate `typegen.disable`)')
+    .option(
+      '--no-cache',
+      'Disable the persistent scan cache; re-read + re-extract every file from cold',
+    )
     .action(async (opts: TypegenCliOptions) => {
       // Walk up from process.cwd() to the directory that owns kick.config.*
       // (or package.json). Without this, running `kick typegen` from inside
@@ -123,6 +128,8 @@ export function registerTypegenCommand(program: Command): void {
         outDir: opts.out ?? config?.typegen?.outDir,
         silent: opts.silent,
         allowDuplicates: opts.allowDuplicates,
+        // commander sets `cache: false` for `--no-cache`; default undefined → cache on
+        noCache: opts.cache === false,
         schemaValidator,
         envFile,
         // Asset typegen (assets-plan.md PR 4) — drives `KickAssets`
