@@ -212,12 +212,36 @@ function collectCodecs(schema: unknown, key: 'toDriver' | 'fromDriver'): CodecMa
   const out: CodecMap = new Map()
   if (!schema || typeof schema !== 'object') return out
 
+  // Track which table first claimed each column name so a collision can
+  // name both sides. Codecs are keyed by column name (see the file
+  // header for why a table-aware scheme can't work on the decode path);
+  // a same-named column with a DIFFERENT codec in another table would
+  // otherwise silently corrupt one of them. First-write-wins +
+  // a loud warning makes the clash debuggable instead of invisible.
+  const owner = new Map<string, string>()
+
   for (const value of Object.values(schema as Record<string, unknown>)) {
     if (!isTableDecl(value)) continue
+    const tableName = value.__name
     for (const [colName, col] of Object.entries(value.__columns)) {
-      if (col instanceof CustomColumnBuilder) {
-        const fn = col[key]
-        if (fn) out.set(colName, fn as (v: unknown) => unknown)
+      if (!(col instanceof CustomColumnBuilder)) continue
+      const fn = col[key] as ((v: unknown) => unknown) | undefined
+      if (!fn) continue
+
+      const existing = out.get(colName)
+      if (existing === undefined) {
+        out.set(colName, fn)
+        owner.set(colName, tableName)
+      } else if (existing !== fn) {
+        // Same codec instance shared across tables (existing === fn) is
+        // the common, safe case and stays quiet. Only a genuinely
+        // different codec function triggers the warning.
+        console.warn(
+          `[kickjs-db] customType codec conflict: column '${colName}' maps to different ` +
+            `${key} codecs in tables '${owner.get(colName)}' and '${tableName}'. Codecs are ` +
+            `keyed by column name, so the first ('${owner.get(colName)}') wins and the other ` +
+            `is ignored — rename the column or share a single customType instance.`,
+        )
       }
     }
   }
