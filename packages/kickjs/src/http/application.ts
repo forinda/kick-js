@@ -26,7 +26,8 @@ import { getClassMeta } from '../core/metadata'
 import { requestId } from './middleware/request-id'
 import { notFoundHandler, errorHandler } from './middleware/error-handler'
 import { requestScopeMiddleware, isRequestScopeMiddleware } from './middleware/request-scope'
-import { _setExternalContributorSources, buildRoutes } from './router-builder'
+import { _setExternalContributorSources } from './router-builder'
+import { buildRoutes } from './runtimes/express'
 import { requestStore } from './request-store'
 
 const log = createLogger('Application')

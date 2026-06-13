@@ -9,8 +9,24 @@ export { RequestContext, type ContextMeta, type Ctx, type RouteShape } from './c
 export { defineHttpContextDecorator } from './define-http-context-decorator'
 export type { TypedParsedQuery, FieldsOf } from './query'
 
-// Router Builder
-export { buildRoutes } from './router-builder'
+// Router Builder — engine-neutral route table + the default Express materializer
+export { buildRouteTable } from './router-builder'
+export type { BuildRoutesOptions } from './router-builder'
+export { buildRoutes, materializeRouter, expressRuntime } from './runtimes/express'
+
+// HTTP runtime seam (spec: docs/http/spec-http-runtimes.md)
+export type {
+  HttpRuntime,
+  RouteEntry,
+  RouteMeta,
+  RouteTable,
+  RouteMethod,
+  CtxHandler,
+  ConnectMiddleware,
+  RuntimeAppOptions,
+  RuntimeCapabilities,
+  UseConnectOptions,
+} from './runtime'
 
 // Middleware
 export { requestId, REQUEST_ID_HEADER } from './middleware/request-id'

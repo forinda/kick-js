@@ -1,4 +1,3 @@
-import { Router, type Request, type Response, type NextFunction } from 'express'
 import {
   buildPipeline,
   Container,
@@ -11,19 +10,17 @@ import {
   type SourcedRegistration,
 } from '../core'
 import { getClassMeta, getMethodMeta, getMethodMetaOrUndefined } from '../core/metadata'
-import { RequestContext } from './context'
-import { validate } from './middleware/validate'
-import { buildUploadMiddleware } from './middleware/upload'
+import type { CtxHandler, RouteEntry, RouteMethod } from './runtime'
 
 /**
  * Per-module SourcedRegistration[] threaded through the route-mount loop by
  * Application.setup(). Carries module + adapter + global contributors so
- * buildRoutes() can merge them with class + method ones into a single pipeline.
+ * buildRouteTable() can merge them with class + method ones into a single pipeline.
  *
  * Module setup is sequential, so this slot is race-free. Cleared in a finally
  * block after each module mounts. Outside of Application setup the slot is
- * empty — direct buildRoutes() callers (mostly tests) see only class + method
- * contributors unless they pass `externalSources` explicitly.
+ * empty — direct buildRouteTable()/buildRoutes() callers (mostly tests) see only
+ * class + method contributors unless they pass `externalSources` explicitly.
  *
  * Same idiom as `Container._requestStoreProvider`: an internal escape hatch for
  * cross-module wiring without inversion-of-control gymnastics.
@@ -40,26 +37,37 @@ export function _setExternalContributorSources(sources: readonly SourcedRegistra
 export interface BuildRoutesOptions {
   /**
    * Extra contributors to merge into the per-route pipeline at their declared
-   * precedence levels. Pass explicitly when calling buildRoutes outside the
-   * Application route-mount loop (typically in tests). When omitted, falls
-   * back to the slot set by Application.setup().
+   * precedence levels. Pass explicitly when calling buildRouteTable/buildRoutes
+   * outside the Application route-mount loop (typically in tests). When omitted,
+   * falls back to the slot set by Application.setup().
    */
   externalSources?: readonly SourcedRegistration[]
 }
 
 /**
- * Build an Express Router from a controller class decorated with @Get, @Post, etc.
- * Resolves the controller from the DI container, wraps handlers in RequestContext,
- * and applies class-level and method-level middleware.
+ * Turn a controller class decorated with @Get, @Post, etc. into a plain-data
+ * {@link RouteEntry}[] — the engine-neutral route table an {@link HttpRuntime}
+ * materializes (see `docs/http/spec-http-runtimes.md`, Avenue B).
  *
- * Routes are registered using only the method-level decorator paths (e.g. @Get('/me') → '/me').
- * The @Controller path is NOT baked into the router — it serves as metadata only
- * (used by Swagger and other adapters for introspection).
+ * What used to be per-handler Express `(req, res, next)` closures is now
+ * captured as data: `middlewares` keep their `(ctx, next)` shape, the contributor
+ * pipeline is pre-built into a `contributorRunner` closure, validation / upload
+ * stay as metadata, and the terminal `handler` resolves the controller per-request
+ * (to respect DI scoping) and invokes it. The runtime owns how these get wrapped
+ * onto its engine.
+ *
+ * Routes use only the method-level decorator paths (e.g. @Get('/me') → '/me').
+ * The @Controller path is NOT baked in — it is metadata for Swagger/introspection.
  * The module's routes().path is the single source of truth for the mount prefix,
- * which avoids path doubling when both the module and controller specify the same path.
+ * which avoids path doubling when both the module and controller specify the path.
+ *
+ * The contributor pipeline is built here, so a cycle or missing `dependsOn`
+ * throws at table-build time (boot) rather than on first request.
  */
-export function buildRoutes(controllerClass: any, options: BuildRoutesOptions = {}): Router {
-  const router = Router()
+export function buildRouteTable(
+  controllerClass: any,
+  options: BuildRoutesOptions = {},
+): RouteEntry[] {
   const container = Container.getInstance()
   const externalSources = options.externalSources ?? _externalContributorSources
   const routes: RouteDefinition[] = getClassMeta<RouteDefinition[]>(
@@ -83,8 +91,10 @@ export function buildRoutes(controllerClass: any, options: BuildRoutesOptions = 
     [],
   )
 
+  const entries: RouteEntry[] = []
+
   for (const route of routes) {
-    const method = route.method.toLowerCase() as 'get' | 'post' | 'put' | 'delete' | 'patch'
+    const method = route.method.toUpperCase() as RouteMethod
     const fullPath = route.path || '/'
 
     // Method-level middleware
@@ -95,31 +105,12 @@ export function buildRoutes(controllerClass: any, options: BuildRoutesOptions = 
       [],
     )
 
-    // Build handler chain
-    const handlers: any[] = []
-
-    // Validation middleware (shared with standalone validate() export)
-    if (route.validation) {
-      handlers.push(validate(route.validation))
-    }
-
-    // @FileUpload decorator — auto-attach upload middleware from metadata
+    // @FileUpload decorator — runtime supplies the upload backend.
     const fileUploadConfig = getMethodMetaOrUndefined<FileUploadConfig>(
       METADATA.FILE_UPLOAD,
       controllerClass,
       route.handlerName,
     )
-    if (fileUploadConfig) {
-      handlers.push(buildUploadMiddleware(fileUploadConfig))
-    }
-
-    // Class + method middleware (wrapped as Express middleware with error catching)
-    for (const mw of [...classMiddlewares, ...methodMiddlewares]) {
-      handlers.push((req: Request, res: Response, next: NextFunction) => {
-        const ctx = new RequestContext(req, res, next)
-        Promise.resolve(mw(ctx, next)).catch(next)
-      })
-    }
 
     // Context Contributor pipeline (#107) — class + method contributors,
     // built once at mount time so cycle/missing-dep failures abort boot.
@@ -130,6 +121,7 @@ export function buildRoutes(controllerClass: any, options: BuildRoutesOptions = 
       [],
     )
 
+    let contributorRunner: CtxHandler | null = null
     if (
       classContributors.length > 0 ||
       methodContributors.length > 0 ||
@@ -157,32 +149,28 @@ export function buildRoutes(controllerClass: any, options: BuildRoutesOptions = 
         ...externalSources,
       ]
       const pipeline = buildPipeline(sources, {
-        route: `${route.method.toUpperCase()} ${fullPath}`,
+        route: `${method} ${fullPath}`,
       })
-
-      handlers.push(async (req: Request, res: Response, next: NextFunction) => {
-        const ctx = new RequestContext(req, res, next)
-        try {
-          await runContributors({ pipeline, ctx, container })
-          next()
-        } catch (err) {
-          next(err)
-        }
-      })
+      contributorRunner = (ctx) => runContributors({ pipeline, ctx, container })
     }
 
-    // Main handler — resolve controller per-request to respect DI scoping
-    handlers.push(async (req: Request, res: Response, next: NextFunction) => {
-      const ctx = new RequestContext(req, res, next)
-      try {
-        const controller = container.resolve(controllerClass)
-        await controller[route.handlerName](ctx)
-      } catch (err: any) {
-        next(err)
-      }
+    // Terminal handler — resolve controller per-request to respect DI scoping.
+    const handler: CtxHandler = (ctx) => container.resolve(controllerClass)[route.handlerName](ctx)
+
+    entries.push({
+      method,
+      path: fullPath,
+      middlewares: [...classMiddlewares, ...methodMiddlewares],
+      contributorRunner,
+      handler,
+      meta: {
+        controller: controllerClass,
+        handlerName: route.handlerName,
+        validation: route.validation,
+        upload: fileUploadConfig,
+      },
     })
-    ;(router as any)[method](fullPath, ...handlers)
   }
 
-  return router
+  return entries
 }
