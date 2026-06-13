@@ -1,0 +1,30 @@
+{
+  "mode": "pre",
+  "tag": "alpha",
+  "initialVersions": {
+    "@forinda/kickjs-ai": "6.0.0",
+    "@forinda/kickjs-auth": "6.0.1",
+    "@forinda/kickjs-cli": "6.1.0",
+    "@forinda/kickjs-cli-kit": "0.1.1",
+    "@forinda/kickjs-db": "6.2.0",
+    "@forinda/kickjs-db-mysql": "3.1.0",
+    "@forinda/kickjs-db-pg": "10.1.0",
+    "@forinda/kickjs-db-sqlite": "3.1.0",
+    "@forinda/kickjs-devtools": "6.0.0",
+    "@forinda/kickjs-devtools-kit": "6.0.0",
+    "@forinda/kickjs-devtools-spa": "3.2.0",
+    "@forinda/kickjs-drizzle": "6.0.1",
+    "@forinda/kickjs": "5.16.0",
+    "@forinda/kickjs-lint": "5.2.3",
+    "@forinda/kickjs-mcp": "6.0.2",
+    "@forinda/kickjs-prisma": "6.0.1",
+    "@forinda/kickjs-queue": "6.0.0",
+    "@forinda/kickjs-schema": "0.1.2",
+    "@forinda/kickjs-swagger": "6.0.2",
+    "@forinda/kickjs-testing": "6.0.0",
+    "@forinda/kickjs-vite": "6.1.0",
+    "kickjs-devtools": "5.2.1",
+    "@forinda/kickjs-ws": "6.0.0"
+  },
+  "changesets": []
+}
