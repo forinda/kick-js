@@ -135,7 +135,7 @@ export const PACKAGE_REGISTRY: Record<string, PackageEntry> = {
   // Real-time
   ws: {
     pkg: '@forinda/kickjs-ws',
-    peers: ['socket.io'],
+    peers: ['ws'],
     description: 'WebSocket with @WsController decorators',
   },
 
