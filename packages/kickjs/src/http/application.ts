@@ -182,11 +182,15 @@ export interface ApplicationOptions {
 
   /**
    * The HTTP engine driver. Defaults to {@link expressRuntime} — Express stays
-   * the zero-config default, so existing apps are unaffected. Pass a different
-   * runtime (e.g. the Fastify / h3 subpaths, in a later milestone) to swap the
-   * engine without touching controllers, modules, or context decorators.
+   * the zero-config default, so existing apps are unaffected.
+   *
+   * Typed `HttpRuntime<Express>` for now: `Application` still calls a few
+   * Express-only APIs directly (`disable('x-powered-by')`, `set('trust proxy')`,
+   * the `/health/*` routes). Those move onto the runtime in M2, at which point
+   * this widens to a generic `HttpRuntime` so the Fastify / h3 subpaths can be
+   * passed here. Until then, only an Express-typed runtime is sound.
    */
-  runtime?: HttpRuntime
+  runtime?: HttpRuntime<Express>
 
   /** Express `trust proxy` setting */
   trustProxy?: boolean | number | string | ((ip: string, hopIndex: number) => boolean)
@@ -330,7 +334,7 @@ export class Application {
   private _drainResolvers: Array<() => void> = []
 
   constructor(private readonly options: ApplicationOptions) {
-    this.runtime = (options.runtime as HttpRuntime<Express> | undefined) ?? expressRuntime()
+    this.runtime = options.runtime ?? expressRuntime()
     this.app = this.runtime.createApp()
     this.container = Container.getInstance()
 
