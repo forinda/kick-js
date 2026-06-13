@@ -1,5 +1,17 @@
 # @forinda/kickjs-db
 
+## 6.3.0
+
+### Minor Changes
+
+- [#365](https://github.com/forinda/kick-js/pull/365) [`7e3cbf2`](https://github.com/forinda/kick-js/commit/7e3cbf2d3e1f23b0648f3cb912ccf79cd2b59cec) Thanks [@forinda](https://github.com/forinda)! - Two query-layer safety additions:
+  - **`escapeLike(input)` / `likePattern(input, mode)`** — escape LIKE/ILIKE metacharacters (`%`, `_`, and the escape char) so user search text matches literally. Without this, a user searching for `100%` produces a match-all pattern (or, with a leading wildcard, a full scan). `likePattern` builds the wrapped pattern for `'contains'` / `'startsWith'` / `'endsWith'` / `'exact'`.
+  - **Explicit dialect tagging** — `pgDialect` / `mysqlDialect` / `sqliteDialect` now stamp a non-enumerable `KICK_DIALECT` marker, and `createDbClient`'s dialect detection reads it first. Previously detection relied solely on Kysely ctor-name regex (`/Postgres/i`) with a **silent fallback to SQLite** — a hand-rolled or future Kysely dialect whose ctor name didn't match was misclassified, emitting the wrong JSON-aggregation SQL. The ctor-name heuristic remains as the fallback for raw Kysely dialects. `markDialect` / `readDialectMark` are exported for adopters wrapping a raw dialect.
+
+### Patch Changes
+
+- [#367](https://github.com/forinda/kick-js/pull/367) [`191935b`](https://github.com/forinda/kick-js/commit/191935bdfe0f8f41ba829ce335ff43536d5cd3a6) Thanks [@forinda](https://github.com/forinda)! - `customType` codecs are keyed by column name, so two tables declaring a same-named column with _different_ codecs previously had one silently overwrite the other — corrupting encode/decode for one table with no signal. `createDbClient` now warns at startup when a column name maps to two different codec functions, names both tables, and keeps the first deterministically (first-write-wins instead of the old last-write-wins). Sharing one `customType` instance across tables is the common, safe case and stays silent.
+
 ## 6.2.0
 
 ### Minor Changes
