@@ -5,10 +5,13 @@ import {
   defineAdapter,
   getClassMeta,
   type AdapterContext,
+  type AdapterHttp,
   type Constructor,
+  type RequestContext,
   type RouteDefinition,
+  type RouteEntry,
+  type RouteMethod,
 } from '@forinda/kickjs'
-import type { Express } from 'express'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
@@ -368,12 +371,19 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
       return server
     }
 
-    /** Mount StreamableHTTP transport endpoints on the existing Express app. */
-    const mountHttpRoutes = (app: Express, httpTransport: StreamableHTTPServerTransport): void => {
+    /** Mount StreamableHTTP transport endpoints via the HTTP facade. */
+    const mountHttpRoutes = (
+      http: AdapterHttp,
+      httpTransport: StreamableHTTPServerTransport,
+    ): void => {
       const path = `${options.basePath!}/messages`
 
+      // The MCP transport reads/writes the raw node request/response directly,
+      // so reach through to `ctx.req` / `ctx.res` (engine-native under Express).
       /* eslint-disable @typescript-eslint/no-explicit-any */
-      const handleRequest = async (req: any, res: any): Promise<void> => {
+      const handleRequest = async (ctx: RequestContext): Promise<void> => {
+        const req = ctx.req as any
+        const res = ctx.res as any
         try {
           await httpTransport.handleRequest(req, res, req.body)
         } catch (err) {
@@ -385,9 +395,19 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
       }
       /* eslint-enable @typescript-eslint/no-explicit-any */
 
-      app.post(path, handleRequest)
-      app.get(path, handleRequest)
-      app.delete(path, handleRequest)
+      // Mount all three verbs in a single table so they share one router —
+      // this is what lets the engine auto-answer the OPTIONS preflight with the
+      // correct Allow header (separate `route()` calls would each get their own
+      // router and the preflight wouldn't aggregate).
+      const makeEntry = (method: RouteMethod): RouteEntry => ({
+        method,
+        path,
+        middlewares: [],
+        contributorRunner: null,
+        handler: handleRequest,
+        meta: {},
+      })
+      http.mount('/', [makeEntry('POST'), makeEntry('GET'), makeEntry('DELETE')])
     }
 
     /**
@@ -459,9 +479,8 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
           )
         }
 
-        const expressApp = ctx.app as Express | undefined
-        if (!expressApp) {
-          log.warn('McpAdapter: AdapterContext.app is unavailable, cannot mount HTTP transport')
+        if (!ctx.http) {
+          log.warn('McpAdapter: AdapterContext.http is unavailable, cannot mount HTTP transport')
           return
         }
 
@@ -472,7 +491,7 @@ export const McpAdapter = defineAdapter<McpAdapterOptions, McpAdapterExtensions>
         transport = httpTransport
 
         await mcpServer.connect(httpTransport)
-        mountHttpRoutes(expressApp, httpTransport)
+        mountHttpRoutes(ctx.http, httpTransport)
       },
 
       /**
