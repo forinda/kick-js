@@ -68,7 +68,10 @@ describe('planAddPackages', () => {
   it('resolves a known package with its peers', () => {
     const plan = planAddPackages(['ws'], false)
     expect(plan.prodDeps).toContain('@forinda/kickjs-ws')
-    expect(plan.prodDeps).toContain('socket.io')
+    // @forinda/kickjs-ws is built on the `ws` package (WebSocketServer),
+    // not socket.io — the catalog peer must match the actual dependency.
+    expect(plan.prodDeps).toContain('ws')
+    expect(plan.prodDeps).not.toContain('socket.io')
     expect(plan.unknown).toEqual([])
     expect(plan.warnings).toEqual([])
   })

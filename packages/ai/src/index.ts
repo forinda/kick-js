@@ -1,6 +1,6 @@
 export { AiAdapter } from './ai.adapter'
 export { AiTool, getAiToolMeta, isAiTool } from './decorators'
-export { AI_PROVIDER, AI_TOOL_METADATA, VECTOR_STORE } from './constants'
+export { AI_ADAPTER, AI_PROVIDER, AI_TOOL_METADATA, VECTOR_STORE } from './constants'
 export { OpenAIProvider, type OpenAIProviderOptions } from './providers/openai'
 export { AnthropicProvider, type AnthropicProviderOptions } from './providers/anthropic'
 export { ProviderError } from './providers/base'
@@ -39,6 +39,7 @@ export type {
 } from './rag'
 export type {
   AiProvider,
+  AiAdapterInstance,
   AiAdapterOptions,
   AiToolOptions,
   AiToolDefinition,
