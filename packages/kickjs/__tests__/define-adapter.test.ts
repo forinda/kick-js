@@ -35,6 +35,7 @@ const fakeAdapterCtx = (): AdapterContext =>
   ({
     container: Container.create(),
     app: {} as never,
+    http: {} as never,
     env: 'test',
     isProduction: false,
   }) as AdapterContext

@@ -20,6 +20,7 @@ afterEach(async () => {
 
 const fakeCtx = (container: Container) => ({
   app: {} as any,
+  http: {} as any,
   container,
   env: 'test',
   isProduction: false,

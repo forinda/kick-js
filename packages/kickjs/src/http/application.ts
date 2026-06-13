@@ -28,7 +28,7 @@ import { notFoundHandler, errorHandler } from './middleware/error-handler'
 import { requestScopeMiddleware, isRequestScopeMiddleware } from './middleware/request-scope'
 import { _setExternalContributorSources } from './router-builder'
 import { buildRoutes, expressRuntime } from './runtimes/express'
-import type { HttpRuntime } from './runtime'
+import type { AdapterHttp, HttpRuntime, RouteEntry } from './runtime'
 import { requestStore } from './request-store'
 
 const log = createLogger('Application')
@@ -425,11 +425,42 @@ export class Application {
   private adapterCtx(server?: any): AdapterContext {
     const env = process.env.NODE_ENV ?? 'development'
     return {
+      http: this.adapterHttp(),
       app: this.app,
       container: this.container,
       server,
       env,
       isProduction: env === 'production',
+    }
+  }
+
+  /**
+   * The engine-agnostic HTTP surface handed to adapters as `ctx.http`. Each
+   * call routes through the active runtime over the current `this.app`, so an
+   * adapter written against this works under any runtime.
+   */
+  private adapterHttp(): AdapterHttp {
+    return {
+      route: (method, path, handler) => {
+        const entry: RouteEntry = {
+          method,
+          path,
+          middlewares: [],
+          contributorRunner: null,
+          handler,
+          meta: {},
+        }
+        this.runtime.mountRoutes(this.app, [{ mountPath: '/', routes: [entry] }])
+      },
+      mount: (prefix, routes) => {
+        this.runtime.mountRoutes(this.app, [{ mountPath: prefix, routes }])
+      },
+      serveStatic: (prefix, dir) => {
+        this.runtime.serveStatic(this.app, prefix, dir)
+      },
+      use: (mw, opts) => {
+        this.runtime.useConnect(this.app, mw, opts)
+      },
     }
   }
 
