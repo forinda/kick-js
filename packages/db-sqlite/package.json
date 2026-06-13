@@ -1,6 +1,7 @@
 {
   "name": "@forinda/kickjs-db-sqlite",
   "version": "3.1.0",
+  "private": true,
   "description": "better-sqlite3 adapter for @forinda/kickjs-db — MigrationAdapter + Kysely SqliteDialect",
   "keywords": [
     "kickjs",
