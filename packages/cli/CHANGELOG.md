@@ -1,5 +1,17 @@
 # @forinda/kickjs-cli
 
+## 6.1.1
+
+### Patch Changes
+
+- [#364](https://github.com/forinda/kick-js/pull/364) [`db882ca`](https://github.com/forinda/kick-js/commit/db882cab2fe971813db11145780584346a0cbc67) Thanks [@forinda](https://github.com/forinda)! - `kick typegen --no-cache` disables the persistent per-file scan cache, re-reading and re-extracting every source file from cold. Escape hatch for the rare `mtimeMs:size` signature collision (a file edited fast enough that its mtime + size are unchanged) where the cache would otherwise serve a stale extract — previously the only recovery was manually deleting `.kickjs/cache`. `runTypegen({ noCache: true })` exposes the same on the programmatic API.
+
+- [#368](https://github.com/forinda/kick-js/pull/368) [`eb4297f`](https://github.com/forinda/kick-js/commit/eb4297fdbc326415ae27b07d8564fb64dbe41753) Thanks [@forinda](https://github.com/forinda)! - `kick add ws` now installs the correct peer dependency. The catalog listed `socket.io`, but `@forinda/kickjs-ws` is built on the `ws` package (`WebSocketServer`) — adopters running `kick add ws` got the wrong library. Fixed the registry entry to `ws`.
+
+- Updated dependencies [[`191935b`](https://github.com/forinda/kick-js/commit/191935bdfe0f8f41ba829ce335ff43536d5cd3a6), [`7e3cbf2`](https://github.com/forinda/kick-js/commit/7e3cbf2d3e1f23b0648f3cb912ccf79cd2b59cec), [`b11a837`](https://github.com/forinda/kick-js/commit/b11a83773e84299e52fbb1b74533b3986972a3bc)]:
+  - @forinda/kickjs-db@6.3.0
+  - @forinda/kickjs@5.17.0
+
 ## 6.1.0
 
 ### Minor Changes

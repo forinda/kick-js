@@ -1,5 +1,11 @@
 # @forinda/kickjs-ai
 
+## 6.0.1
+
+### Patch Changes
+
+- [#368](https://github.com/forinda/kick-js/pull/368) [`eb4297f`](https://github.com/forinda/kick-js/commit/eb4297fdbc326415ae27b07d8564fb64dbe41753) Thanks [@forinda](https://github.com/forinda)! - Export `AI_ADAPTER` and the `AiAdapterInstance` type from the package root. Both are documented in the README and the adapter's own JSDoc as the way to inject the adapter (`@Inject(AI_ADAPTER) private ai: AiAdapterInstance`), but were missing from `src/index.ts` so the documented import didn't resolve.
+
 ## 6.0.0
 
 ## 6.0.0-alpha.0
