@@ -49,6 +49,7 @@
   },
   "devDependencies": {
     "@forinda/kickjs": "workspace:*",
+    "@forinda/kickjs-cli": "workspace:*",
     "@types/babel__core": "^7.20.5",
     "@types/express": "^5.0.6",
     "@types/node": "^25.9.2",
