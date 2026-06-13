@@ -5,7 +5,12 @@ export {
   parsePagination,
   parseSearchQuery,
   buildQueryParams,
+  setQueryParsingDefaults,
+  getQueryParsingDefaults,
+  resetQueryParsingDefaults,
 } from './parse-query'
+
+export type { ParseQueryOptions, QueryRejection, QueryRejectReason } from './parse-query'
 
 export type {
   FilterOperator,
