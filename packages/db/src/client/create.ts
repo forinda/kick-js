@@ -11,6 +11,7 @@ import { KickDbEventEmitter } from './events'
 import { CodecPlugin, buildDecoderMap, buildEncoderMap } from './codec-plugin'
 import { wrap, type InternalContext } from './wrap'
 import { extractRelations } from '../query/extract-relations'
+import { readDialectMark } from '../dialect-marker'
 import { pickCompiler } from '../query/compilers'
 import { extractSnapshot } from '../snapshot/extract'
 
@@ -129,6 +130,13 @@ export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
 }
 
 function detectDialect(dialect: KyselyDialect): KickDbClient['dialect'] {
+  // Fast path: KickJS's own dialect factories (`pgDialect` /
+  // `mysqlDialect` / `sqliteDialect`) stamp an explicit marker, so
+  // detection is exact and never silently mis-classifies.
+  const marked = readDialectMark(dialect)
+  if (marked) return marked
+
+  // Fallback for raw Kysely dialects an adopter constructs directly.
   // Kysely's dialects have ctor names like PostgresDialect /
   // SqliteDialect / MysqlDialect. Adopters who hand-roll the
   // KyselyDialect interface (`{ createAdapter, ... }` literals)

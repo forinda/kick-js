@@ -5,6 +5,7 @@
 // even when we change query backends (or fork Kysely's internals).
 
 import { PostgresDialect, type Dialect as KyselyDialect } from 'kysely'
+import { markDialect } from '../../dialect-marker'
 
 import type { PgPoolLike } from './adapter'
 
@@ -41,5 +42,5 @@ export function pgDialect(opts: PgDialectOptions): KyselyDialect {
   // Kysely versions; casting through `unknown` keeps adopters using
   // alternate clients (neon, pg-cloudflare) compatible without
   // pulling node-postgres' typings into our public surface.
-  return new PostgresDialect({ pool: opts.pool as unknown as never })
+  return markDialect(new PostgresDialect({ pool: opts.pool as unknown as never }), 'postgres')
 }

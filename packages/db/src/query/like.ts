@@ -1,0 +1,66 @@
+/**
+ * LIKE / ILIKE pattern safety helpers.
+ *
+ * User-supplied search text dropped straight into a `LIKE` pattern lets
+ * the user inject wildcards: searching for `100%` matches everything,
+ * `a_b` matches `axb`. Worse, a literal `%` from the user combined with a
+ * leading wildcard (`%${input}%`) can blow up to a full scan. These
+ * helpers escape the LIKE metacharacters so the input is matched
+ * literally.
+ *
+ * Escapes `%`, `_`, and the escape character itself. The default escape
+ * char is backslash, which Postgres and SQLite honour by default; MySQL
+ * also defaults to backslash. When you build the query, pair the pattern
+ * with the matching `ESCAPE '\'` clause if your dialect/collation needs
+ * it explicit.
+ */
+
+export type LikeMatchMode = 'contains' | 'startsWith' | 'endsWith' | 'exact'
+
+/**
+ * Escape LIKE/ILIKE metacharacters in `input` so it matches literally.
+ *
+ * @example
+ * ```ts
+ * escapeLike('100%')        // '100\\%'
+ * escapeLike('a_b\\c')      // 'a\\_b\\\\c'
+ * ```
+ */
+export function escapeLike(input: string, escapeChar = '\\'): string {
+  // Escape the escape char first so we don't double-escape the
+  // backslashes we add for % and _.
+  const e = escapeChar
+  return input
+    .replaceAll(e, e + e)
+    .replaceAll('%', e + '%')
+    .replaceAll('_', e + '_')
+}
+
+/**
+ * Build a literal-safe LIKE pattern from user input.
+ *
+ * @example
+ * ```ts
+ * likePattern('john%', 'contains')    // '%john\\%%'
+ * likePattern('admin', 'startsWith')  // 'admin%'
+ * db.selectFrom('users')
+ *   .where('email', 'like', likePattern(ctx.qs().search, 'contains'))
+ * ```
+ */
+export function likePattern(
+  input: string,
+  mode: LikeMatchMode = 'contains',
+  escapeChar = '\\',
+): string {
+  const safe = escapeLike(input, escapeChar)
+  switch (mode) {
+    case 'contains':
+      return `%${safe}%`
+    case 'startsWith':
+      return `${safe}%`
+    case 'endsWith':
+      return `%${safe}`
+    case 'exact':
+      return safe
+  }
+}
