@@ -36,7 +36,7 @@ describe('PACKAGE_REGISTRY catalog health', () => {
     expect(PACKAGE_REGISTRY.auth?.deprecated).toContain('BYO')
   })
 
-  it('every first-party entry points at an existing, non-private workspace package', () => {
+  it('every first-party entry points at an existing workspace package; non-deprecated ones are public', () => {
     for (const [name, entry] of Object.entries(PACKAGE_REGISTRY)) {
       if (!entry.pkg.startsWith('@forinda/')) continue
       const manifest = manifests.get(entry.pkg)
@@ -44,6 +44,11 @@ describe('PACKAGE_REGISTRY catalog health', () => {
         manifest,
         `registry entry '${name}' → ${entry.pkg} not found in workspace`,
       ).toBeDefined()
+      // Deprecated entries (auth/prisma/drizzle) are frozen `private: true`:
+      // they no longer cut new versions but remain installable from their last
+      // npm release, so `kick add <name>` still works (with a deprecation
+      // warning). Only non-deprecated entries must be published (non-private).
+      if (entry.deprecated) continue
       expect(manifest?.private ?? false, `registry entry '${name}' → ${entry.pkg} is private`).toBe(
         false,
       )

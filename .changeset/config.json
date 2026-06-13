@@ -12,7 +12,14 @@
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": [],
+  "ignore": [
+    "@forinda/kickjs-auth",
+    "@forinda/kickjs-prisma",
+    "@forinda/kickjs-drizzle",
+    "@forinda/kickjs-db-pg",
+    "@forinda/kickjs-db-mysql",
+    "@forinda/kickjs-db-sqlite"
+  ],
   "___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH": {
     "onlyUpdatePeerDependentsWhenOutOfRange": true
   }
