@@ -5,6 +5,7 @@
 
 import { SqliteDialect, type Dialect as KyselyDialect } from 'kysely'
 
+import { markDialect } from '../../dialect-marker'
 import type { SqliteDatabaseLike } from './adapter'
 
 export interface SqliteDialectOptions {
@@ -37,5 +38,5 @@ export interface SqliteDialectOptions {
  * ```
  */
 export function sqliteDialect(opts: SqliteDialectOptions): KyselyDialect {
-  return new SqliteDialect({ database: opts.database as never })
+  return markDialect(new SqliteDialect({ database: opts.database as never }), 'sqlite')
 }

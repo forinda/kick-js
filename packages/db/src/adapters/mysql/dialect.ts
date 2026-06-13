@@ -4,6 +4,7 @@
 // is a pinned internal dep of the framework.
 
 import { MysqlDialect, type Dialect as KyselyDialect } from 'kysely'
+import { markDialect } from '../../dialect-marker'
 
 import type { MysqlPoolLike } from './adapter'
 
@@ -47,5 +48,5 @@ export function mysqlDialect(opts: MysqlDialectOptions): KyselyDialect {
   // newer Kysely versions; casting through `unknown` keeps adopters
   // using compatible drivers (e.g. mysql-mariadb forks) working
   // without pulling mysql2's typings into our public surface.
-  return new MysqlDialect({ pool: opts.pool as unknown as never })
+  return markDialect(new MysqlDialect({ pool: opts.pool as unknown as never }), 'mysql')
 }
