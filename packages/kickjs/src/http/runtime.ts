@@ -93,8 +93,12 @@ export type RouteTable = { mountPath: string; routes: RouteEntry[] }[]
 
 /** Options passed to {@link HttpRuntime.createApp}. */
 export interface RuntimeAppOptions {
-  /** Express `trust proxy` setting (and the equivalent on other engines). */
-  trustProxy?: boolean | string | number | string[]
+  /**
+   * Express `trust proxy` setting (and the equivalent on other engines). The
+   * function form is Express-specific; other runtimes interpret the simpler
+   * shapes (or normalize X-Forwarded-For themselves — see spec §10 Q1).
+   */
+  trustProxy?: boolean | string | number | string[] | ((ip: string, hopIndex: number) => boolean)
 }
 
 /** Where a connect middleware sits and what it scopes to. */
