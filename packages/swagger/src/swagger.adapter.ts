@@ -1,6 +1,6 @@
 import { dirname } from 'node:path'
 import { createRequire } from 'node:module'
-import express, { Router } from 'express'
+import type { Request, Response, NextFunction } from 'express'
 import { Logger, defineAdapter } from '@forinda/kickjs'
 import {
   buildOpenAPISpec,
@@ -157,7 +157,7 @@ export const SwaggerAdapter = defineAdapter<SwaggerAdapterOptions>({
         config.servers = [...userSuppliedServers, ...autoDetected]
       },
 
-      beforeMount({ app }) {
+      beforeMount({ http }) {
         if (isDisabled()) {
           log.info('Swagger disabled in production (disableInProd=true)')
           return
@@ -170,15 +170,13 @@ export const SwaggerAdapter = defineAdapter<SwaggerAdapterOptions>({
         const specPath = config.specPath!
         let uiDistAvailable = false
 
-        const docsRouter = Router()
-
         // ── Serve swagger-ui-dist static assets locally ──────────────────
         // This makes Swagger UI work offline — no CDN needed.
         // Assets served at /_swagger-assets/ (CSS, JS, fonts, etc.)
         const swaggerAssetsPath = '/_swagger-assets'
         try {
           const swaggerDistDir = getSwaggerUiDistPath()
-          docsRouter.use(swaggerAssetsPath, express.static(swaggerDistDir))
+          http.serveStatic(swaggerAssetsPath, swaggerDistDir)
           uiDistAvailable = true
         } catch {
           log.warn('swagger-ui-dist not found — Swagger UI will load from CDN (requires internet).')
@@ -204,7 +202,7 @@ export const SwaggerAdapter = defineAdapter<SwaggerAdapterOptions>({
             : ['https://unpkg.com', 'https://fonts.googleapis.com']
         const imgOrigins = uiDistAvailable || customSwaggerRenderer ? [] : ['https://unpkg.com']
 
-        docsRouter.use((_req, res, next) => {
+        http.use((_req: Request, res: Response, next: NextFunction) => {
           // Build connect-src dynamically so "Try it out" can call any configured server URL.
           // Includes dev-friendly localhost/127.0.0.1 origins so docs served from one host
           // can call an API spec'd at the other (a common cross-origin gotcha).
@@ -246,9 +244,8 @@ export const SwaggerAdapter = defineAdapter<SwaggerAdapterOptions>({
         })
 
         // Spec endpoint (JSON)
-        docsRouter.get(specPath, (_req, res) => {
-          const spec = buildOpenAPISpec(config)
-          res.json(spec)
+        http.route('GET', specPath, (ctx) => {
+          ctx.json(buildOpenAPISpec(config))
         })
 
         // Swagger UI — uses local assets if available, CDN fallback.
@@ -256,26 +253,22 @@ export const SwaggerAdapter = defineAdapter<SwaggerAdapterOptions>({
         // (Stoplight Elements, RapiDoc, Scalar) or apply branding.
         const renderSwagger = config.renderSwaggerUI ?? swaggerUIHtml
         const renderReDoc = config.renderReDoc ?? redocHtml
-        docsRouter.get(docsPath, (_req, res) => {
-          res
-            .type('html')
-            .send(
-              renderSwagger(
-                specPath,
-                config.info?.title,
-                uiDistAvailable ? swaggerAssetsPath : undefined,
-              ),
-            )
+        http.route('GET', docsPath, (ctx) => {
+          ctx.html(
+            renderSwagger(
+              specPath,
+              config.info?.title,
+              uiDistAvailable ? swaggerAssetsPath : undefined,
+            ),
+          )
         })
 
         // ReDoc — still CDN-based for the default renderer (no npm
         // package for the standalone bundle). Custom renderers can
         // self-host whatever they like.
-        docsRouter.get(redocPath, (_req, res) => {
-          res.type('html').send(renderReDoc(specPath, config.info?.title))
+        http.route('GET', redocPath, (ctx) => {
+          ctx.html(renderReDoc(specPath, config.info?.title))
         })
-
-        app.use(docsRouter)
 
         log.info(`Swagger UI:  ${docsPath}`)
         log.info(`ReDoc:       ${redocPath}`)
