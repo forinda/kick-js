@@ -69,5 +69,12 @@ export function likePattern(
       return `%${safe}`
     case 'exact':
       return safe
+    default: {
+      // Compile-time exhaustiveness + a runtime guard for JS callers /
+      // `as any` that pass an unsupported mode (would otherwise return
+      // undefined despite the `: string` signature).
+      const _exhaustive: never = mode
+      throw new Error(`likePattern: unsupported match mode ${String(_exhaustive)}`)
+    }
   }
 }

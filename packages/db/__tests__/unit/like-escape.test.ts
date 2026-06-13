@@ -45,4 +45,8 @@ describe('likePattern', () => {
   it('defaults to contains', () => {
     expect(likePattern('x')).toBe('%x%')
   })
+
+  it('throws on an unsupported mode (JS caller / as-any)', () => {
+    expect(() => likePattern('x', 'bogus' as never)).toThrow(/unsupported match mode/)
+  })
 })

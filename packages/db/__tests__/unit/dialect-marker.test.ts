@@ -26,6 +26,13 @@ describe('dialect marker', () => {
     expect(readDialectMark({})).toBeUndefined()
   })
 
+  it('rejects a garbage marker value (rogue Symbol.for stamp) → undefined', () => {
+    const d = {}
+    Object.defineProperty(d, KICK_DIALECT, { value: 'oracle', enumerable: false })
+    // Not a supported tag → falls the caller back to ctor-name detection.
+    expect(readDialectMark(d)).toBeUndefined()
+  })
+
   it('the factory-stamped tag survives on dialect instances', async () => {
     const { sqliteDialect } = await import('../../src/adapters/sqlite/dialect')
     // A fake better-sqlite3-shaped handle is enough; we only read the mark.
