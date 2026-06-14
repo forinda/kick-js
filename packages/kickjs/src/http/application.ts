@@ -564,7 +564,11 @@ export class Application {
     } else {
       // Sensible defaults when no middleware declared
       this.runtime.useConnect(this.app, requestId())
-      this.runtime.useConnect(this.app, express.json({ limit: this.options.jsonLimit ?? '1mb' }))
+      // Skip express.json on engines that parse bodies natively (Fastify, h3) —
+      // otherwise the body stream is read twice and the engine's parser hangs.
+      if (!this.runtime.capabilities.nativeBodyParsing) {
+        this.runtime.useConnect(this.app, express.json({ limit: this.options.jsonLimit ?? '1mb' }))
+      }
     }
 
     // ── 5. Adapter middleware: afterGlobal ────────────────────────────

@@ -20,6 +20,7 @@ import { createRequire } from 'node:module'
 import { RequestContext } from '../context'
 import { requestStore } from '../request-store'
 import { createRequestStore } from '../middleware/request-scope'
+import { validate } from '../middleware/validate'
 import type {
   ConnectMiddleware,
   HttpRuntime,
@@ -162,6 +163,17 @@ function routeHandler(entry: RouteEntry): FastifyHandler {
     await requestStore.run(store, async () => {
       const ctx = new RequestContext(raw as never, reply as never, NOOP_NEXT, replyDriver(reply))
 
+      // Validation (from @Get(path, schema) / route.validation). `validate` is a
+      // connect-style middleware that mutates req.body/query/params to the parsed
+      // value and calls next(err) on failure — it never touches `res`, so it runs
+      // cleanly here. A rejection propagates to the error handler (422).
+      if (entry.meta.validation) {
+        const v = validate(entry.meta.validation)
+        await new Promise<void>((resolve, reject) => {
+          v(raw as never, undefined as never, (err?: unknown) => (err ? reject(err) : resolve()))
+        })
+      }
+
       // Class + method middleware — `(ctx, next)`; await each, stop if it ended
       // the response or called next(err).
       for (const mw of entry.middlewares) {
@@ -296,6 +308,7 @@ export function fastifyRuntime(): HttpRuntime<FastifyAppLike> {
       render: false,
       uploads: false,
       connectMiddleware: true,
+      nativeBodyParsing: true,
     },
   }
 }
@@ -303,7 +316,10 @@ export function fastifyRuntime(): HttpRuntime<FastifyAppLike> {
 /** Join a mount prefix and a route path into one URL, collapsing slashes. */
 function joinPath(mountPath: string, path: string): string {
   const a = mountPath.endsWith('/') ? mountPath.slice(0, -1) : mountPath
+  // A root route path ('/' or '') maps to the mount prefix itself — otherwise a
+  // controller `@Post('/')` would register at `${prefix}/`, and a request to
+  // `${prefix}` (no trailing slash) wouldn't match under Fastify's strict router.
+  if (path === '/' || path === '') return a === '' ? '/' : a
   const b = path.startsWith('/') ? path : `/${path}`
-  const joined = `${a}${b}`
-  return joined === '' ? '/' : joined
+  return `${a}${b}`
 }
