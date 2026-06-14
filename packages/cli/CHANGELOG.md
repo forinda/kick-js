@@ -1,5 +1,15 @@
 # @forinda/kickjs-cli
 
+## 6.2.1
+
+### Patch Changes
+
+- [#402](https://github.com/forinda/kick-js/pull/402) [`f45f83c`](https://github.com/forinda/kick-js/commit/f45f83c362de15cd7f396814b0eb191a96c6c750) Thanks [@forinda](https://github.com/forinda)! - The post-scaffold "Available:" hint no longer advertises deprecated packages. It was a hardcoded list that included `auth`, `drizzle`, and `prisma` (all deprecated); it's now derived from `PACKAGE_REGISTRY`, filtering out deprecated, core, `:` sub-variants, and db-dialect/schema-lib duplicates — so it can't drift. A test locks it (no deprecated/core names in the list).
+
+- Updated dependencies [[`506f083`](https://github.com/forinda/kick-js/commit/506f083df779256a4f366a936e918da7e43a592b), [`f45f83c`](https://github.com/forinda/kick-js/commit/f45f83c362de15cd7f396814b0eb191a96c6c750)]:
+  - @forinda/kickjs@6.0.0
+  - @forinda/kickjs-db@7.0.0
+
 ## 6.2.0
 
 ### Minor Changes
