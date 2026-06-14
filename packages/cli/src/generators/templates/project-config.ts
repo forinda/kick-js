@@ -67,19 +67,22 @@ export function generatePackageJson(
     // get it pre-installed so `.env` files Just Work. Apps that load
     // env from the shell or a secret manager can drop this safely.
     dotenv: '^17.3.1',
-    // `express` stays installed for every runtime: it's the default engine,
-    // and the Fastify / h3 runtimes use `express.static` for `serveStatic`.
-    express: '^5.1.0',
     'reflect-metadata': '^0.2.2',
     [schemaDep.name]: schemaDep.range,
   }
 
   // Engine peers for the chosen runtime (optional peers of @forinda/kickjs).
-  if (runtime === 'fastify') {
+  if (runtime === 'express') {
+    // Express is the engine itself.
+    baseDeps.express = '^5.1.0'
+  } else if (runtime === 'fastify') {
     baseDeps.fastify = '^5.0.0'
     baseDeps['@fastify/middie'] = '^9.0.0'
+    // Static serving uses `serve-static` (no express dependency).
+    baseDeps['serve-static'] = '^2.2.0'
   } else if (runtime === 'h3') {
     baseDeps.h3 = '^1.0.0'
+    baseDeps['serve-static'] = '^2.2.0'
   }
 
   // Add user-selected optional packages — each looked up against
@@ -122,7 +125,9 @@ export function generatePackageJson(
         '@forinda/kickjs-cli': take(versions, '@forinda/kickjs-cli'),
         '@forinda/kickjs-vite': take(versions, '@forinda/kickjs-vite'),
         '@swc/core': '^1.15.21',
-        '@types/express': '^5.0.6',
+        // Express types only when Express is the engine (it's the only runtime
+        // that imports `express` in src/index.ts).
+        ...(runtime === 'express' ? { '@types/express': '^5.0.6' } : {}),
         '@types/node': '^25.0.0',
         'unplugin-swc': '^1.5.9',
         vite: '^8.0.3',

@@ -245,8 +245,11 @@ export function h3Runtime(): HttpRuntime<H3AppLike> {
     },
 
     serveStatic(app, prefix, dir) {
-      const expressStatic = peerRequire('express').static
-      this.useConnect(app, expressStatic(dir) as ConnectMiddleware, { path: prefix })
+      // `serve-static` (the standalone connect middleware behind express.static)
+      // so the h3 runtime carries no `express` dependency — bridged via
+      // fromNodeMiddleware like any other connect middleware.
+      const serveStatic = peerRequire('serve-static')
+      this.useConnect(app, serveStatic(dir) as ConnectMiddleware, { path: prefix })
     },
 
     setNotFound(app, mw: ConnectMiddleware) {

@@ -32,8 +32,8 @@ import type {
   UseConnectOptions,
 } from '../runtime'
 
-// ESM-safe require for the optional peers (fastify / @fastify/middie / express),
-// resolved from wherever this module is installed.
+// ESM-safe require for the optional peers (fastify / @fastify/middie /
+// serve-static), resolved from wherever this module is installed.
 const peerRequire = createRequire(import.meta.url)
 const loadPeer = (name: string): any => {
   const mod = peerRequire(name)
@@ -328,9 +328,11 @@ export function fastifyRuntime(): HttpRuntime<FastifyAppLike> {
     },
 
     serveStatic(app, prefix, dir) {
-      // Serve via express.static as a connect middleware, queued like any other.
-      const expressStatic = loadPeer('express').static
-      this.useConnect(app, expressStatic(dir) as ConnectMiddleware, { path: prefix })
+      // Serve via `serve-static` (the standalone connect middleware behind
+      // express.static) so the Fastify runtime carries no `express` dependency —
+      // queued like any other connect middleware, bridged through middie.
+      const serveStatic = loadPeer('serve-static')
+      this.useConnect(app, serveStatic(dir) as ConnectMiddleware, { path: prefix })
     },
 
     setNotFound(app, mw: ConnectMiddleware) {
