@@ -14,6 +14,7 @@ import {
   type HttpRuntime,
 } from '../src/index'
 import { fastifyRuntime } from '../src/http/runtimes/fastify'
+import { h3Runtime } from '../src/http/runtimes/h3'
 
 // One fixture app, run under both runtimes — the conformance harness. Proves the
 // HttpRuntime contract holds for Fastify: native routing, the RuntimeResponse
@@ -21,6 +22,7 @@ import { fastifyRuntime } from '../src/http/runtimes/fastify'
 const RUNTIMES: Array<{ name: string; make: () => HttpRuntime }> = [
   { name: 'express', make: () => expressRuntime() },
   { name: 'fastify', make: () => fastifyRuntime() },
+  { name: 'h3', make: () => h3Runtime() },
 ]
 
 beforeEach(() => {
