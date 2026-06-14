@@ -158,6 +158,7 @@ export function expressRuntime(): HttpRuntime<Express> {
       render: true,
       uploads: true,
       connectMiddleware: true,
+      nativeBodyParsing: false,
     },
   }
 }

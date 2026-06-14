@@ -83,7 +83,12 @@ describe('expressRuntime', () => {
   it('reports Express capabilities', () => {
     const rt = expressRuntime()
     expect(rt.name).toBe('express')
-    expect(rt.capabilities).toEqual({ render: true, uploads: true, connectMiddleware: true })
+    expect(rt.capabilities).toEqual({
+      render: true,
+      uploads: true,
+      connectMiddleware: true,
+      nativeBodyParsing: false,
+    })
   })
 
   it('mountRoutes serves a RouteTable end-to-end', async () => {

@@ -194,6 +194,13 @@ export interface RuntimeCapabilities {
   uploads: boolean
   /** Connect-style middleware. Express/Fastify(middie): true; h3: best-effort. */
   connectMiddleware: boolean
+  /**
+   * The engine parses request bodies itself (Fastify, h3). When true, the
+   * Application skips its default `express.json()` so the body stream isn't
+   * consumed twice (which would deadlock the engine's own parser). Express:
+   * false — it relies on the `express.json()` connect middleware.
+   */
+  nativeBodyParsing: boolean
 }
 
 /**

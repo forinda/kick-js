@@ -1,11 +1,13 @@
 import 'reflect-metadata'
 import { describe, it, expect, beforeEach } from 'vitest'
 import request from 'supertest'
+import { z } from 'zod'
 import {
   Application,
   Container,
   Controller,
   Get,
+  Post,
   RequestContext,
   defineContextDecorator,
   expressRuntime,
@@ -171,6 +173,32 @@ for (const rt of RUNTIMES) {
       expect(res.headers['content-type']).toMatch(/text\/event-stream/)
       expect(res.text).toContain('event: tick')
       expect(res.text).toContain('"tick":1')
+    })
+
+    it('validates the request body and rejects invalid input', async () => {
+      const schema = z.object({ title: z.string().min(1) })
+
+      @Controller()
+      class C {
+        @Post('/', { body: schema })
+        create(ctx: RequestContext) {
+          ctx.created({ title: (ctx.body as { title: string }).title })
+        }
+      }
+      const app = new Application({
+        runtime: rt.make(),
+        modules: [{ routes: () => ({ path: '/v', controller: C }) } as never],
+      })
+      await app.setup()
+      const handler = app.handle.bind(app)
+
+      // Valid body → 201 with parsed data.
+      const ok = await request(handler).post('/api/v1/v').send({ title: 'hi' }).expect(201)
+      expect(ok.body).toEqual({ title: 'hi' })
+
+      // Invalid body → rejected by validation (not 2xx).
+      const bad = await request(handler).post('/api/v1/v').send({ title: '' })
+      expect(bad.status).toBeGreaterThanOrEqual(400)
     })
   })
 }
