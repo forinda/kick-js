@@ -1,8 +1,13 @@
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
 /**
  * KickJS Custom VitePress Theme
  *
  * Brand colors, typography, and component overrides for a modern,
  * professional documentation site.
+ *
+ * Type system: Bricolage Grotesque (display / headings — characterful,
+ * optical-sizing), Geist (body — clean, dev-native), JetBrains Mono (code).
  */
 
 /* ── Brand Colors ────────────────────────────────────────────── */
@@ -73,11 +78,23 @@
 /* ── Typography ──────────────────────────────────────────────── */
 
 :root {
-  --vp-font-family-base: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI',
-    Roboto, Oxygen, Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans',
-    'Helvetica Neue', sans-serif;
+  --vp-font-family-base: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
   --vp-font-family-mono: 'JetBrains Mono', 'Fira Code', Menlo, Monaco, Consolas,
     'Courier New', monospace;
+  /* Display face for the wordmark + headings. */
+  --kick-font-display: 'Bricolage Grotesque', 'Geist', sans-serif;
+}
+
+/* Headings + hero wear the display face. */
+.vp-doc h1,
+.vp-doc h2,
+.vp-doc h3,
+.VPHero .name,
+.VPHero .text,
+.VPFeature .title {
+  font-family: var(--kick-font-display);
+  letter-spacing: -0.02em;
 }
 
 /* ── Hero Section ────────────────────────────────────────────── */
@@ -105,10 +122,13 @@
 
 /* ── Feature Grid — edge-to-edge lines ───────────────────────── */
 
-/* The features container becomes a line-separated grid */
+/* The features container becomes a line-separated grid, capped to the same
+ * width as the hero (1280px) and centered — so the new feature cards line up
+ * with the hero instead of bleeding edge-to-edge across wide viewports. */
 .VPFeatures .container {
-  max-width: 100% !important;
-  padding: 0 !important;
+  max-width: 1280px !important;
+  margin: 0 auto !important;
+  padding: 0 24px !important;
 }
 
 .VPFeatures .items {
@@ -155,12 +175,60 @@
   border-bottom: none;
 }
 
-/* Hover — subtle highlight */
+/* Feature card — relative so the accent bar + hover lift have a frame. */
+.VPFeatures .VPFeature {
+  position: relative;
+}
+
+/* Top accent bar — grows in on hover, tinted per column. */
+.VPFeatures .VPFeature::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--kick-accent, var(--vp-c-brand-1));
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.25s ease;
+}
+
+/* Hover — subtle highlight + reveal accent bar + nudge the icon. */
 .VPFeatures .VPFeature:hover {
   background: var(--vp-c-bg-soft);
 }
 
-/* Feature icon size */
+.VPFeatures .VPFeature:hover::before {
+  transform: scaleX(1);
+}
+
+.VPFeatures .VPFeature .icon {
+  transition:
+    transform 0.25s ease,
+    filter 0.25s ease;
+}
+
+.VPFeatures .VPFeature:hover .icon {
+  transform: translateY(-2px) scale(1.08);
+  filter: drop-shadow(0 4px 10px var(--kick-accent-soft, rgba(59, 130, 246, 0.35)));
+}
+
+/* Per-column accent — three brand-adjacent hues cycling across the grid. */
+.VPFeatures .item:nth-child(3n + 1) {
+  --kick-accent: #3b82f6;
+  --kick-accent-soft: rgba(59, 130, 246, 0.35);
+}
+.VPFeatures .item:nth-child(3n + 2) {
+  --kick-accent: #8b5cf6;
+  --kick-accent-soft: rgba(139, 92, 246, 0.35);
+}
+.VPFeatures .item:nth-child(3n + 3) {
+  --kick-accent: #10b981;
+  --kick-accent-soft: rgba(16, 185, 129, 0.35);
+}
+
+/* Feature title + details */
 .VPFeatures .VPFeature .title {
   font-size: 1rem;
   font-weight: 600;
@@ -170,6 +238,46 @@
   font-size: 0.875rem;
   line-height: 1.6;
   color: var(--vp-c-text-2);
+}
+
+/* Staggered fade-up reveal on first paint. */
+@media (prefers-reduced-motion: no-preference) {
+  .VPFeatures .item {
+    opacity: 0;
+    animation: kick-fade-up 0.5s ease forwards;
+  }
+  .VPFeatures .item:nth-child(1) {
+    animation-delay: 0.04s;
+  }
+  .VPFeatures .item:nth-child(2) {
+    animation-delay: 0.08s;
+  }
+  .VPFeatures .item:nth-child(3) {
+    animation-delay: 0.12s;
+  }
+  .VPFeatures .item:nth-child(4) {
+    animation-delay: 0.16s;
+  }
+  .VPFeatures .item:nth-child(5) {
+    animation-delay: 0.2s;
+  }
+  .VPFeatures .item:nth-child(6) {
+    animation-delay: 0.24s;
+  }
+  .VPFeatures .item:nth-child(n + 7) {
+    animation-delay: 0.28s;
+  }
+}
+
+@keyframes kick-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* ── Code Blocks ─────────────────────────────────────────────── */
