@@ -1,0 +1,36 @@
+# KickJS
+
+> A production-grade, decorator-driven Node.js framework for TypeScript. The HTTP engine is pluggable — the same controllers, modules, and context decorators run on Express (default), Fastify, or h3; swap the engine in one line at bootstrap. Includes a DI container, 20+ decorators, a module system, typed env config, type generation, and a CLI that scaffolds projects and feature modules.
+
+## Core guides
+
+- [What is KickJS?](https://forinda.github.io/kick-js/guide/what-is-kickjs.html): Overview, philosophy, and where it fits.
+- [Getting Started](https://forinda.github.io/kick-js/guide/getting-started.html): Install, scaffold a project (`kick new`), run the dev server.
+- [Controllers & Routes](https://forinda.github.io/kick-js/guide/controllers.html): `@Controller`, `@Get`/`@Post`/…, the `RequestContext`.
+- [Dependency Injection](https://forinda.github.io/kick-js/guide/dependency-injection.html): The container, `@Service`, `@Inject`, scopes.
+- [Modules](https://forinda.github.io/kick-js/guide/modules.html): `defineModule`, route mounting, registration.
+- [HTTP Runtimes (Express / Fastify / h3)](https://forinda.github.io/kick-js/guide/http-runtimes.html): Pick the engine at bootstrap; capability matrix; writing a custom runtime.
+- [Context Decorators](https://forinda.github.io/kick-js/guide/context-decorators.html): Typed, ordered `ctx` population via `defineContextDecorator`.
+- [Middleware](https://forinda.github.io/kick-js/guide/middleware.html): Built-ins (helmet, cors, requestId, rate-limit, …) and custom.
+- [Validation](https://forinda.github.io/kick-js/guide/validation.html): Zod / Valibot / Yup body, query, and param validation.
+- [Configuration](https://forinda.github.io/kick-js/guide/configuration.html): Typed env via `defineEnv`, `ConfigService`, `@Value`.
+- [Type Generation](https://forinda.github.io/kick-js/guide/typegen.html): `kick typegen` for fully-typed route params/body/query and env.
+- [Error Handling](https://forinda.github.io/kick-js/guide/error-handling.html): `HttpException`, RFC 9457 problem details, global error handler.
+
+## Features
+
+- [File Uploads](https://forinda.github.io/kick-js/guide/file-uploads.html)
+- [Swagger / OpenAPI](https://forinda.github.io/kick-js/guide/swagger.html)
+- [WebSockets](https://forinda.github.io/kick-js/guide/websockets.html)
+- [Server-Sent Events](https://forinda.github.io/kick-js/guide/sse.html)
+- [Authentication (BYO)](https://forinda.github.io/kick-js/guide/authentication.html)
+- [Database (kickjs-db / Prisma / Drizzle)](https://forinda.github.io/kick-js/guide/database/)
+- [DevTools](https://forinda.github.io/kick-js/guide/devtools.html)
+- [Adapters](https://forinda.github.io/kick-js/guide/adapters.html)
+
+## Reference
+
+- [CLI Commands](https://forinda.github.io/kick-js/guide/cli-commands.html)
+- [API: core](https://forinda.github.io/kick-js/api/core.html)
+- [GitHub](https://github.com/forinda/kick-js)
+- [npm: @forinda/kickjs](https://www.npmjs.com/package/@forinda/kickjs)
