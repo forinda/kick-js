@@ -184,15 +184,14 @@ export interface ApplicationOptions {
    * The HTTP engine driver. Defaults to {@link expressRuntime} — Express stays
    * the zero-config default, so existing apps are unaffected.
    *
-   * Typed `HttpRuntime<Express>` for now: all routing, middleware, and the
-   * hardened defaults (`x-powered-by` / `trust proxy`) and `/health/*` routes
-   * now go through the runtime, but the engine-native escape hatches
-   * (`getRuntimeApp()` / `getExpressApp()`, `AdapterContext.app`) are still
-   * typed `Express`. This widens to a generic `HttpRuntime` once `app` becomes
-   * runtime-typed (registry augmentation, spec §4.3b) — which lands with the
-   * Fastify / h3 subpaths. Until then, only an Express-typed runtime is sound.
+   * Any `HttpRuntime` is accepted — pass `fastifyRuntime()` (from
+   * `@forinda/kickjs/fastify`) or a custom engine driver. Defaults to
+   * {@link expressRuntime}. The engine-native escape hatches
+   * (`getRuntimeApp()`, `AdapterContext.app`) follow the active runtime via the
+   * registry (`ActiveRuntime`, spec §4.3b) — Express by default, or the augmented
+   * engine once the `kick/runtime` typegen output is present.
    */
-  runtime?: HttpRuntime<Express>
+  runtime?: HttpRuntime
 
   /** Express `trust proxy` setting */
   trustProxy?: boolean | number | string | ((ip: string, hopIndex: number) => boolean)
@@ -302,7 +301,7 @@ export interface ApplicationOptions {
 export class Application {
   private app: Express
   /** The HTTP engine driver. Defaults to {@link expressRuntime}. */
-  private readonly runtime: HttpRuntime<Express>
+  private readonly runtime: HttpRuntime
   private container: Container
   private httpServer: http.Server | null = null
   private readonly adapters: AppAdapter[]
@@ -337,7 +336,10 @@ export class Application {
 
   constructor(private readonly options: ApplicationOptions) {
     this.runtime = options.runtime ?? expressRuntime()
-    this.app = this.runtime.createApp({ trustProxy: options.trustProxy })
+    // `this.app` is the engine-native app; typed Express here (the default) for
+    // the legacy escape hatches. Under another runtime it holds that engine's
+    // app — `getRuntimeApp()` / `AdapterContext.app` expose it via ActiveRuntime.
+    this.app = this.runtime.createApp({ trustProxy: options.trustProxy }) as Express
     this.container = Container.getInstance()
 
     // Sort plugins by `dependsOn` declarations BEFORE reading their adapters/etc.
@@ -894,7 +896,7 @@ export class Application {
     try {
       Container.reset()
       this.container = Container.getInstance()
-      this.app = this.runtime.createApp({ trustProxy: this.options.trustProxy })
+      this.app = this.runtime.createApp({ trustProxy: this.options.trustProxy }) as Express
       await this.setup()
     } catch (err) {
       log.error(err, 'HMR rebuild failed, keeping previous app')
