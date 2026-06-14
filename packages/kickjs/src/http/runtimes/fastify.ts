@@ -131,10 +131,17 @@ function routeHandler(entry: RouteEntry): FastifyHandler {
     // Fastify runs the route handler OUTSIDE the connect-middleware chain, so
     // (unlike Express) the requestScopeMiddleware ALS frame isn't active here.
     // Establish it around the pipeline so REQUEST-scoped DI, contributors, and
-    // ctx.set/get work. Reuse the inbound x-request-id when present.
-    const headerId = request.raw.headers['x-request-id']
-    const requestId = Array.isArray(headerId) ? headerId[0] : headerId
+    // ctx.set/get work. Reuse the inbound x-request-id, or the id a connect
+    // middleware (requestId / requestScope, run earlier via middie) already
+    // stamped on the raw request, before generating a fresh one.
+    const raw = request.raw as IncomingMessage & { requestId?: string }
+    const headerId = raw.headers['x-request-id']
+    const requestId = (Array.isArray(headerId) ? headerId[0] : headerId) || raw.requestId
     const store = createRequestStore(requestId)
+    // Propagate the resolved id back onto the raw request so anything reading
+    // `req.requestId` inside the frame (e.g. request-logger) matches the store
+    // and the X-Request-Id response header — parity with Express.
+    raw.requestId = store.requestId
 
     await requestStore.run(store, async () => {
       const ctx = new RequestContext(
