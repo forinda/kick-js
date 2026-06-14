@@ -63,20 +63,44 @@ propagation, error / 404 handling, and Server-Sent Events (`ctx.sse`).
 Fastify's built-in pino logger is disabled (`logger: false`) so the kickjs
 `requestLogger` stays the single log format across engines.
 
+## h3
+
+[h3](https://h3.dev) is the HTTP layer behind Nitro / Nuxt. It ships as a
+subpath too:
+
+```bash
+pnpm add h3
+```
+
+```ts
+import { h3Runtime } from '@forinda/kickjs/h3'
+
+export const app = await bootstrap({ modules, runtime: h3Runtime() })
+```
+
+The binding targets **h3 v1** (the stable, node-based surface). h3 v2's
+web-standard `Request` / `Response` core is the eventual target via a future
+web-standard driver — see the [design spec](../http/spec-http-runtimes.md) §8.
+
+Same surface as Fastify: routing, JSON / HTML, connect middleware (via h3's
+`fromNodeMiddleware`), context decorators, errors / 404, SSE, body validation,
+and native body parsing.
+
 ## Capability matrix
 
 Some `ctx` features depend on the engine. Calling an unsupported one raises a
 clear error rather than failing silently.
 
-| Capability                | Express | Fastify             |
-| ------------------------- | ------- | ------------------- |
-| Routing + `ctx.json`      | ✅      | ✅                  |
-| Connect middleware        | ✅      | ✅ (via middie)     |
-| Context decorators        | ✅      | ✅                  |
-| Errors / 404              | ✅      | ✅                  |
-| Server-Sent Events        | ✅      | ✅                  |
-| `ctx.render` (views)      | ✅      | ❌ (no view engine) |
-| File uploads (`ctx.file`) | ✅      | ⏳ (planned)        |
+| Capability                | Express | Fastify             | h3 (v1)                 |
+| ------------------------- | ------- | ------------------- | ----------------------- |
+| Routing + `ctx.json`      | ✅      | ✅                  | ✅                      |
+| Connect middleware        | ✅      | ✅ (via middie)     | ✅ (fromNodeMiddleware) |
+| Context decorators        | ✅      | ✅                  | ✅                      |
+| Errors / 404              | ✅      | ✅                  | ✅                      |
+| Server-Sent Events        | ✅      | ✅                  | ✅                      |
+| Validation                | ✅      | ✅                  | ✅                      |
+| `ctx.render` (views)      | ✅      | ❌ (no view engine) | ❌ (no view engine)     |
+| File uploads (`ctx.file`) | ✅      | ⏳ (planned)        | ⏳ (planned)            |
 
 ## The engine-native escape hatch
 
