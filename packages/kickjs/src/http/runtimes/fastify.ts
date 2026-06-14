@@ -51,6 +51,9 @@ interface FastifyReplyLike {
 }
 interface FastifyRequestLike {
   raw: IncomingMessage
+  body?: unknown
+  params?: unknown
+  query?: unknown
 }
 type FastifyHandler = (request: FastifyRequestLike, reply: FastifyReplyLike) => void | Promise<void>
 interface FastifyAppLike {
@@ -134,7 +137,20 @@ function routeHandler(entry: RouteEntry): FastifyHandler {
     // ctx.set/get work. Reuse the inbound x-request-id, or the id a connect
     // middleware (requestId / requestScope, run earlier via middie) already
     // stamped on the raw request, before generating a fresh one.
-    const raw = request.raw as IncomingMessage & { requestId?: string }
+    // Use the raw node request as `ctx.req`: it natively provides the stream
+    // events (`on('close')` / `once`) that SSE and `ctx.signal` need — Fastify's
+    // request object doesn't. Copy Fastify's parsed body/params/query onto it so
+    // `ctx.body` / `ctx.params` / `ctx.query` keep working.
+    const raw = request.raw as IncomingMessage & {
+      requestId?: string
+      body?: unknown
+      params?: unknown
+      query?: unknown
+    }
+    raw.body = request.body
+    raw.params = request.params
+    raw.query = request.query
+
     const headerId = raw.headers['x-request-id']
     const requestId = (Array.isArray(headerId) ? headerId[0] : headerId) || raw.requestId
     const store = createRequestStore(requestId)
@@ -144,12 +160,7 @@ function routeHandler(entry: RouteEntry): FastifyHandler {
     raw.requestId = store.requestId
 
     await requestStore.run(store, async () => {
-      const ctx = new RequestContext(
-        request as never,
-        reply as never,
-        NOOP_NEXT,
-        replyDriver(reply),
-      )
+      const ctx = new RequestContext(raw as never, reply as never, NOOP_NEXT, replyDriver(reply))
 
       // Class + method middleware — `(ctx, next)`; await each, stop if it ended
       // the response or called next(err).
@@ -258,9 +269,11 @@ export function fastifyRuntime(): HttpRuntime<FastifyAppLike> {
           next()
           return
         }
+        // Pass the reply DRIVER (not raw res) so the connect-style
+        // notFoundHandler's `res.status().json()` lands on the Fastify reply.
         ;(mw as (req: unknown, res: unknown, next: () => void) => void)(
           request.raw,
-          reply.raw,
+          replyDriver(reply),
           NOOP_NEXT,
         )
       })
@@ -268,10 +281,12 @@ export function fastifyRuntime(): HttpRuntime<FastifyAppLike> {
 
     setErrorHandler(app, mw: ConnectMiddleware) {
       app.setErrorHandler((err, request, reply) => {
+        // Reply driver (not raw res) so the connect-style errorHandler's
+        // `res.status().json()` / `setHeader` land on the Fastify reply.
         ;(mw as (e: unknown, req: unknown, res: unknown, next: () => void) => void)(
           err,
           request.raw,
-          reply.raw,
+          replyDriver(reply),
           NOOP_NEXT,
         )
       })
