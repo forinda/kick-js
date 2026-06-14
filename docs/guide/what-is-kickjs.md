@@ -1,6 +1,6 @@
 # What is KickJS?
 
-KickJS is a production-grade, decorator-driven Node.js framework built on Express 5 and TypeScript. It provides the developer experience of NestJS without the heavy dependencies.
+KickJS is a production-grade, decorator-driven Node.js framework for TypeScript. It provides the developer experience of NestJS without the heavy dependencies — and the HTTP engine is **pluggable**: the same controllers, modules, and context decorators run on **Express** (the zero-config default), **Fastify**, or **h3**. Swap the engine in one line at bootstrap; see [HTTP Runtimes](./http-runtimes.md).
 
 ## Why KickJS?
 
