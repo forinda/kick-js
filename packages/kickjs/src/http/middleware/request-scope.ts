@@ -17,6 +17,20 @@ import { requestStore, type RequestStore } from '../request-store'
 const REQUEST_SCOPE_MIDDLEWARE_MARKER = Symbol.for('@kickjs/requestScopeMiddleware')
 
 /**
+ * Build a fresh per-request store. Shared by {@link requestScopeMiddleware}
+ * (Express) and by runtimes whose handler runs outside the connect-middleware
+ * chain (e.g. Fastify), so both establish an identical ALS frame.
+ */
+export function createRequestStore(requestId?: string): RequestStore {
+  return {
+    requestId: requestId || crypto.randomUUID(),
+    instances: new Map(),
+    // Explicit generic locks the "string keys only" decision.
+    values: new Map<string, unknown>(),
+  }
+}
+
+/**
  * Wraps each request in an AsyncLocalStorage context.
  * Enables REQUEST-scoped DI and automatic requestId propagation to logs.
  *
@@ -29,14 +43,7 @@ export function requestScopeMiddleware() {
     const requestIdHeader = req.headers['x-request-id']
     const requestId =
       (Array.isArray(requestIdHeader) ? requestIdHeader[0] : requestIdHeader) || crypto.randomUUID()
-    const store: RequestStore = {
-      requestId,
-      instances: new Map(),
-      // Explicit generic locks the "string keys only" decision
-      // (architecture.md §20.12 #4) at construction time, so accidental
-      // non-string keys can't slip in via the inferred Map<any, any>.
-      values: new Map<string, unknown>(),
-    }
+    const store = createRequestStore(requestId)
     // Surface the requestId on req so the standalone requestId() middleware
     // (when also mounted) reuses this value instead of generating a divergent
     // second one. Without this, log lines that read from the ALS store would

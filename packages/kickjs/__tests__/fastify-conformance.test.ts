@@ -7,6 +7,7 @@ import {
   Controller,
   Get,
   RequestContext,
+  defineContextDecorator,
   expressRuntime,
   type HttpRuntime,
 } from '../src/index'
@@ -90,6 +91,29 @@ for (const rt of RUNTIMES) {
 
       const res = await request(app.handle.bind(app)).get('/api/v1/mw/m').expect(200)
       expect(res.headers['x-conformance']).toBe(rt.name)
+    })
+
+    it('runs a context contributor and exposes it via ctx.get (ALS frame)', async () => {
+      const LoadWho = defineContextDecorator({ key: 'who', resolve: () => 'ada' })
+
+      @Controller()
+      class C {
+        @LoadWho
+        @Get('/who')
+        who(ctx: RequestContext) {
+          ctx.json({ who: ctx.get('who') })
+        }
+      }
+      const app = new Application({
+        runtime: rt.make() as never,
+        apiPrefix: '/api',
+        defaultVersion: 1,
+        modules: [{ routes: () => ({ path: '/c', controller: C }) } as never],
+      })
+      await app.setup()
+
+      const res = await request(app.handle.bind(app)).get('/api/v1/c/who').expect(200)
+      expect(res.body).toEqual({ who: 'ada' })
     })
   })
 }
