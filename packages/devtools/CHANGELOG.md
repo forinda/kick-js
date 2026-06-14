@@ -1,5 +1,15 @@
 # @forinda/kickjs-devtools
 
+## 7.0.0-alpha.0
+
+### Patch Changes
+
+- [#379](https://github.com/forinda/kick-js/pull/379) [`7528356`](https://github.com/forinda/kick-js/commit/75283569d8f142af7c9931a90958c611b478c906) Thanks [@forinda](https://github.com/forinda)! - Migrate the devtools adapter off the raw Express `app` / `Router` onto the engine-agnostic `ctx.http` facade (final M2 adapter). A thin local `router` shim forwards `.get` / `.post` / `.use` to `ctx.http.route` / `ctx.http.use`, so every dashboard handler — the ~20 JSON routes, the SSE streams, the heap-snapshot download, the static dashboard, and the token guard — is kept verbatim. Registration order is preserved and the guard still sees router-relative `req.path` (the facade scopes it to `basePath`, and Express strips the prefix), so behavior is unchanged under the default Express runtime. `ctx.app` is still used only as the documented escape hatch for `__kickApp` (topology needs the live Application instance).
+
+- Updated dependencies [[`d6622d5`](https://github.com/forinda/kick-js/commit/d6622d5d1d9c10cd2c446203fbaa2d143d13f2ea), [`fe1b578`](https://github.com/forinda/kick-js/commit/fe1b578344f5af05077c92023e5f549ddcb4edf4), [`79f2989`](https://github.com/forinda/kick-js/commit/79f298985606e6a1bf2bd2ae558910ad615226d1), [`3e5d03e`](https://github.com/forinda/kick-js/commit/3e5d03e7144a19ff26d44b7f882b86f564c6de17), [`d049c48`](https://github.com/forinda/kick-js/commit/d049c48015e1331eeae3f75ea4e536871cb03fd5), [`335c247`](https://github.com/forinda/kick-js/commit/335c24724293ff7c900f50ec20350b47d968f6e7), [`c6e4d73`](https://github.com/forinda/kick-js/commit/c6e4d73c2ad8be3725c91673451ab994a648a7f8), [`8fc8c1a`](https://github.com/forinda/kick-js/commit/8fc8c1a23d0e717edc1ccc54089141036a0ae975), [`0e18440`](https://github.com/forinda/kick-js/commit/0e1844075a074e11413c6811b0eb3137ee0c4b7c), [`d0bc46d`](https://github.com/forinda/kick-js/commit/d0bc46d7336fb9395c7b4f71fe74e94f1a2301e5), [`07a3a15`](https://github.com/forinda/kick-js/commit/07a3a15d51aaa55372e58ee2eafa11f6841245dd), [`d66dc5b`](https://github.com/forinda/kick-js/commit/d66dc5b337c8f961e4b9329607901bad850e0f91), [`841637e`](https://github.com/forinda/kick-js/commit/841637ec9d19f7df727db7342603e7e48bb07e25), [`6c59776`](https://github.com/forinda/kick-js/commit/6c5977641707cb533a86fcf701d249ef3bff3215), [`d500c8a`](https://github.com/forinda/kick-js/commit/d500c8a9d3b11277392e88e0369cb2fd2b39cf78)]:
+  - @forinda/kickjs@5.18.0-alpha.0
+  - @forinda/kickjs-devtools-kit@7.0.0-alpha.0
+
 ## 6.0.0
 
 ### Patch Changes

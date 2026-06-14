@@ -43,7 +43,7 @@
   },
   "peerDependencies": {
     "drizzle-orm": ">=0.45.2",
-    "@forinda/kickjs": ">=5.14.0-alpha.0"
+    "@forinda/kickjs": ">=5.18.0-alpha.0"
   },
   "peerDependenciesMeta": {},
   "devDependencies": {

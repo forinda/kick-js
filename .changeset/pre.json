@@ -26,5 +26,24 @@
     "kickjs-devtools": "5.2.1",
     "@forinda/kickjs-ws": "6.0.0"
   },
-  "changesets": []
+  "changesets": [
+    "cli-runtime-flag",
+    "fastify-h3-uploads",
+    "http-adapter-facade-m2a",
+    "http-adapter-migrate-devtools",
+    "http-adapter-migrate-m2b",
+    "http-adapter-migrate-swagger",
+    "http-fastify-als-m3c3",
+    "http-fastify-errors-sse-m3c4",
+    "http-fastify-validation-m3c6",
+    "http-runtime-application-seam",
+    "http-runtime-ctx-registry",
+    "http-runtime-fastify-m3c2",
+    "http-runtime-finish-m2e",
+    "http-runtime-h3-m4",
+    "http-runtime-registry-m3a",
+    "http-runtime-response-driver-m3b",
+    "http-runtime-seam-m1",
+    "http-runtime-widen-option"
+  ]
 }
