@@ -89,6 +89,10 @@
     "./config": {
       "import": "./dist/config/index.mjs",
       "types": "./dist/config/index.d.mts"
+    },
+    "./fastify": {
+      "import": "./dist/http/runtimes/fastify.mjs",
+      "types": "./dist/http/runtimes/fastify.d.mts"
     }
   },
   "files": [
@@ -108,13 +112,21 @@
     "reflect-metadata": "^0.2.2"
   },
   "peerDependencies": {
+    "@fastify/middie": "^9.0.0",
     "dotenv": "^17.0.0",
     "express": "^5.1.0",
+    "fastify": "^5.0.0",
     "multer": "^2.0.0",
     "zod": "^4.0.0"
   },
   "peerDependenciesMeta": {
+    "@fastify/middie": {
+      "optional": true
+    },
     "dotenv": {
+      "optional": true
+    },
+    "fastify": {
       "optional": true
     },
     "multer": {
@@ -125,10 +137,12 @@
     }
   },
   "devDependencies": {
+    "@fastify/middie": "^9.3.2",
     "@swc/core": "^1.15.40",
     "@types/express": "^5.0.6",
     "@types/multer": "^2.1.0",
     "@types/node": "^25.9.2",
+    "fastify": "^5.8.5",
     "multer": "^2.1.1",
     "typescript": "^6.0.3",
     "vite": "^8.0.16",
