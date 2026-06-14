@@ -26,7 +26,7 @@ export const kickRuntimeTypegen = (): TypegenPlugin => ({
   id: 'kick/runtime',
   outExtension: '.ts',
   // Re-run when kick.config changes (the `runtime` field is the only input).
-  inputs: ['kick.config.ts', 'kick.config.js', 'kick.config.mjs'],
+  inputs: ['kick.config.ts', 'kick.config.js', 'kick.config.mjs', 'kick.config.json'],
   async generate(ctx) {
     const runtime = (ctx.config as { runtime?: string } | undefined)?.runtime
     // Express (or unset) needs no augmentation — ActiveRuntime defaults to it.

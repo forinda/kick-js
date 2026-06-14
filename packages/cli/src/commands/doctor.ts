@@ -265,7 +265,7 @@ export function checkRuntimeEngine(ctx: DoctorContext): DoctorResult | null {
     return {
       name,
       status: 'fail',
-      fix: `Your kick.config runtime is '${ctx.runtime}', but its engine peer(s) are missing: ${missing.join(', ')}.\nInstall: pnpm add ${missing.join(' ')}`,
+      fix: `Resolved runtime '${ctx.runtime}' is missing engine peer(s): ${missing.join(', ')}.\nInstall: pnpm add ${missing.join(' ')}`,
     }
   }
   return { name, status: 'pass' }

@@ -62,6 +62,8 @@ const STATUS_REASONS: Record<number, string> = {
   406: 'Not Acceptable',
   409: 'Conflict',
   410: 'Gone',
+  413: 'Payload Too Large',
+  415: 'Unsupported Media Type',
   422: 'Unprocessable Entity',
   429: 'Too Many Requests',
   500: 'Internal Server Error',

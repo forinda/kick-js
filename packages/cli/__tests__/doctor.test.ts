@@ -1,5 +1,6 @@
 import 'reflect-metadata'
-import { describe, it, expect, afterEach } from 'vitest'
+import { describe, it, expect, afterEach, beforeEach } from 'vitest'
+import { Container } from '@forinda/kickjs'
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -38,6 +39,10 @@ function tempProject(files: Record<string, string>): string {
   }
   return dir
 }
+
+beforeEach(() => {
+  Container.reset()
+})
 
 afterEach(() => {
   while (trackedDirs.length > 0) {
