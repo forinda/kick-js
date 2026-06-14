@@ -29,12 +29,12 @@ function Service(options?: ServiceOptions): ClassDecorator
 function Component(options?: ServiceOptions): ClassDecorator
 function Repository(options?: ServiceOptions): ClassDecorator
 function Configuration(): ClassDecorator
-function Controller(path?: string): ClassDecorator
+function Controller(): ClassDecorator
 ```
 
 - **Injectable / Service / Component / Repository** -- Register a class in the container. Semantic aliases with identical behavior.
 - **Configuration** -- Marks a class whose `@Bean` methods produce factory-registered dependencies.
-- **Controller** -- Registers a class and attaches an HTTP route prefix.
+- **Controller** -- Registers a class as an HTTP controller. The route prefix comes from the module's `routes().path`, not the decorator.
 
 ### Method Decorators
 
@@ -133,7 +133,9 @@ interface FileUploadConfig {
   fieldName?: string
   maxCount?: number
   maxSize?: number
-  allowedMimeTypes?: string[]
+  /** Short extensions ('jpg'), MIME types ('image/jpeg'), wildcards ('image/*'), or a `(mimetype, filename) => boolean` predicate. */
+  allowedTypes?: string[] | ((mimetype: string, filename: string) => boolean)
+  customMimeMap?: Record<string, string>
 }
 
 interface TransactionManager<TTx = unknown> {
@@ -177,11 +179,19 @@ Lifecycle hooks for plugging in cross-cutting concerns (database, docs, rate lim
 
 ```typescript
 interface AdapterContext {
-  app: any // Express application
+  http: AdapterHttp // engine-agnostic route/mount/static/middleware surface (preferred)
+  app: any // engine-native app — Express by default; escape hatch
   container: Container // DI container
   server?: any // http.Server (only available in afterStart)
   env: string // NODE_ENV (default: 'development')
   isProduction: boolean // true when NODE_ENV === 'production'
+}
+
+interface AdapterHttp {
+  route(method: string, path: string, handler: (ctx: any) => unknown): void
+  mount(prefix: string, routes: unknown[]): void
+  serveStatic(prefix: string, dir: string): void
+  use(mw: unknown, opts?: { path?: string | RegExp | (string | RegExp)[] }): void
 }
 
 interface AppAdapter {
