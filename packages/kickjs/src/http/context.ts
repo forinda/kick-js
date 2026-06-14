@@ -1,6 +1,6 @@
 /// <reference types="multer" />
-import type { Request, Response, NextFunction } from 'express'
-import type { RuntimeResponse } from './runtime'
+import type { Request, NextFunction } from 'express'
+import type { ActiveRuntime, RuntimeResponse } from './runtime'
 import { type ExecutionContext, type MetaValue } from '../core/execution-context'
 import { normalizeProblem, type ProblemDetails, type ValidationError } from '../core/errors'
 import { requestStore } from './request-store'
@@ -265,12 +265,14 @@ export class RequestContext<TBody = any, TParams = any, TQuery = any> implements
   private readonly _response: RuntimeResponse
 
   constructor(
-    public readonly req: Request,
-    public readonly res: Response,
+    public readonly req: ActiveRuntime['request'],
+    public readonly res: ActiveRuntime['response'],
     public readonly next: NextFunction,
     responseDriver?: RuntimeResponse,
   ) {
-    this._response = responseDriver ?? res
+    // Under the Express runtime `res` IS a RuntimeResponse (structural); other
+    // runtimes pass an explicit driver wrapping their native reply.
+    this._response = responseDriver ?? (res as RuntimeResponse)
   }
 
   /**
