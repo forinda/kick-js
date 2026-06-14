@@ -1,5 +1,7 @@
 # @forinda/kickjs-devtools-kit
 
+## 7.0.0
+
 ## 7.0.0-alpha.0
 
 ### Patch Changes

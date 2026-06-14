@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-devtools",
-  "version": "7.0.0-alpha.0",
+  "version": "7.0.0",
   "description": "Development introspection dashboard for KickJS — routes, DI container, metrics, health",
   "keywords": [
     "kickjs",
@@ -44,7 +44,7 @@
   "peerDependencies": {
     "express": "^5.1.0",
     "ws": "^8.0.0",
-    "@forinda/kickjs": ">=5.18.0-alpha.0"
+    "@forinda/kickjs": ">=5.18.0"
   },
   "devDependencies": {
     "@forinda/kickjs": "workspace:*",
