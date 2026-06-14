@@ -1,5 +1,26 @@
 # @forinda/kickjs
 
+## 6.0.0
+
+### Major Changes
+
+- [#402](https://github.com/forinda/kick-js/pull/402) [`f45f83c`](https://github.com/forinda/kick-js/commit/f45f83c362de15cd7f396814b0eb191a96c6c750) Thanks [@forinda](https://github.com/forinda)! - **Major release — the pluggable HTTP runtimes line.** `@forinda/kickjs` now runs on Express (default), Fastify, or h3 behind one `HttpRuntime` seam, selected with `bootstrap({ runtime })`. Express apps need no code changes (see the migration guide), but this is a major because the runtime/adapter refactor changed a few surfaces that adapter and tooling authors depend on:
+  - `RequestContext` response helpers (`json`/`html`/`sse`/`download`/`render`/`problem`) now return `RuntimeResponse` instead of the Express `Response` — they write through an engine-neutral response driver.
+  - `AdapterContext` gained a required `http` facade (`route`/`mount`/`serveStatic`/`use`) and `AdapterContext.app` / `getRuntimeApp()` are typed to the active runtime via the `KickRuntimeRegister` registry (Express by default).
+  - `getExpressApp()` is deprecated in favour of `getRuntimeApp()`.
+  - The default logger is `ConsoleLoggerProvider` (pino dropped — zero default deps).
+  - The Fastify and h3 runtimes carry no `express` dependency (static serving uses `serve-static`).
+
+  New: `@FileUpload` works on all three engines, `bootstrap({ runtime })`, the `@forinda/kickjs/fastify` and `@forinda/kickjs/h3` subpaths, cross-engine uploads, and the `KickRuntimeRegister` type registry.
+
+### Patch Changes
+
+- [#404](https://github.com/forinda/kick-js/pull/404) [`506f083`](https://github.com/forinda/kick-js/commit/506f083df779256a4f366a936e918da7e43a592b) Thanks [@forinda](https://github.com/forinda)! - Two HTTP-runtime route-reachability fixes surfaced by linked-build testing:
+  - **h3:** routes from any source past the first 404'd (`/health`, devtools `/_debug/*`, ad-hoc adapter routes) with `Cannot find any path matching …`. h3's `createRouter` is terminal — on no match it throws rather than falling through like an Express Router — so mounting each source as its own router let the first shadow the rest. The runtime now uses one shared router per app (registered after the connect middleware), and dispatches the router's no-match 404 through `onError` to the framework's notFound handler (or the Vite dev fall-through) instead of surfacing it as a logged error.
+  - **fastify:** a controller's root `@Get('/')` (mounted at the prefix) 404'd a trailing-slash request (`/api/v1/hello/`) because Fastify's router is strict by default, while Express and h3 are lenient. The runtime now sets `routerOptions.ignoreTrailingSlash`, so `${prefix}` and `${prefix}/` both resolve.
+
+  Conformance gains multi-mount-source and root-trailing-slash cases across express + fastify + h3.
+
 ## 5.18.0
 
 ### Minor Changes
