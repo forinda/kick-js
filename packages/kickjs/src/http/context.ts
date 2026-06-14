@@ -1,5 +1,6 @@
 /// <reference types="multer" />
 import type { Request, Response, NextFunction } from 'express'
+import type { RuntimeResponse } from './runtime'
 import { type ExecutionContext, type MetaValue } from '../core/execution-context'
 import { normalizeProblem, type ProblemDetails, type ValidationError } from '../core/errors'
 import { requestStore } from './request-store'
@@ -42,29 +43,29 @@ type ProblemInput = Omit<ProblemDetails, 'status'>
  * ```
  */
 interface ProblemSender {
-  (input: ProblemDetails): Response
+  (input: ProblemDetails): RuntimeResponse
   /** 400 Bad Request — RFC 9457. */
-  badRequest(input?: ProblemInput): Response
+  badRequest(input?: ProblemInput): RuntimeResponse
   /** 401 Unauthorized — RFC 9457. */
-  unauthorized(input?: ProblemInput): Response
+  unauthorized(input?: ProblemInput): RuntimeResponse
   /** 403 Forbidden — RFC 9457. */
-  forbidden(input?: ProblemInput): Response
+  forbidden(input?: ProblemInput): RuntimeResponse
   /** 404 Not Found — RFC 9457. */
-  notFound(input?: ProblemInput): Response
+  notFound(input?: ProblemInput): RuntimeResponse
   /** 409 Conflict — RFC 9457. */
-  conflict(input?: ProblemInput): Response
+  conflict(input?: ProblemInput): RuntimeResponse
   /** 422 Unprocessable Entity — RFC 9457. */
-  unprocessable(input?: ProblemInput): Response
+  unprocessable(input?: ProblemInput): RuntimeResponse
   /** 429 Too Many Requests — RFC 9457. */
-  tooManyRequests(input?: ProblemInput): Response
+  tooManyRequests(input?: ProblemInput): RuntimeResponse
   /** 500 Internal Server Error — RFC 9457. */
-  internal(input?: ProblemInput): Response
+  internal(input?: ProblemInput): RuntimeResponse
   /**
    * 422 with Zod issues serialized into the `errors` extension per
    * RFC 9457 §3.2's array convention. Pass `error.issues` from a Zod
    * `safeParse` failure or `error.issues` from a thrown ZodError.
    */
-  validation(issues: any[], input?: ProblemInput): Response
+  validation(issues: any[], input?: ProblemInput): RuntimeResponse
 }
 
 /**
@@ -255,11 +256,22 @@ export interface RouteShape {
  * the same way it will run against future WS / queue / cron contexts.
  */
 export class RequestContext<TBody = any, TParams = any, TQuery = any> implements ExecutionContext {
+  /**
+   * Engine-agnostic response driver the response helpers write through. Under
+   * the Express runtime it IS `res` (Express's Response satisfies
+   * {@link RuntimeResponse} structurally); other runtimes pass a thin wrapper
+   * over their native reply as the optional fourth argument.
+   */
+  private readonly _response: RuntimeResponse
+
   constructor(
     public readonly req: Request,
     public readonly res: Response,
     public readonly next: NextFunction,
-  ) {}
+    responseDriver?: RuntimeResponse,
+  ) {
+    this._response = responseDriver ?? res
+  }
 
   /**
    * Memo of the most recent {@link qs} call this request. The query
@@ -384,7 +396,7 @@ export class RequestContext<TBody = any, TParams = any, TQuery = any> implements
     req[signalControllerKey] = ctrl
     const abort = () => ctrl.abort('request closed')
     this.req.once('close', abort)
-    this.res.once('close', abort)
+    this._response.once('close', abort)
     return ctrl.signal
   }
 
@@ -558,15 +570,15 @@ export class RequestContext<TBody = any, TParams = any, TQuery = any> implements
   // ── Response Helpers ────────────────────────────────────────────────
 
   json(data: any, status = 200) {
-    return this.res.status(status).json(data)
+    return this._response.status(status).json(data)
   }
 
   created(data: any) {
-    return this.res.status(201).json(data)
+    return this._response.status(201).json(data)
   }
 
   noContent() {
-    return this.res.status(204).end()
+    return this._response.status(204).end()
   }
 
   /**
@@ -575,7 +587,7 @@ export class RequestContext<TBody = any, TParams = any, TQuery = any> implements
    * for backward compatibility and will not be removed.
    */
   notFound(message = 'Not Found') {
-    return this.res.status(404).json({ message })
+    return this._response.status(404).json({ message })
   }
 
   /**
@@ -584,7 +596,7 @@ export class RequestContext<TBody = any, TParams = any, TQuery = any> implements
    * for backward compatibility and will not be removed.
    */
   badRequest(message: string) {
-    return this.res.status(400).json({ message })
+    return this._response.status(400).json({ message })
   }
 
   // ── RFC 9457 Problem Details ───────────────────────────────────────
@@ -620,24 +632,24 @@ export class RequestContext<TBody = any, TParams = any, TQuery = any> implements
    * (use it from services where `ctx` isn't in scope).
    */
   get problem(): ProblemSender {
-    const send = (input: ProblemDetails): Response => this.sendProblem(input)
-    send.badRequest = (input: ProblemInput = {}): Response =>
+    const send = (input: ProblemDetails): RuntimeResponse => this.sendProblem(input)
+    send.badRequest = (input: ProblemInput = {}): RuntimeResponse =>
       this.sendProblem({ status: 400, ...input })
-    send.unauthorized = (input: ProblemInput = {}): Response =>
+    send.unauthorized = (input: ProblemInput = {}): RuntimeResponse =>
       this.sendProblem({ status: 401, ...input })
-    send.forbidden = (input: ProblemInput = {}): Response =>
+    send.forbidden = (input: ProblemInput = {}): RuntimeResponse =>
       this.sendProblem({ status: 403, ...input })
-    send.notFound = (input: ProblemInput = {}): Response =>
+    send.notFound = (input: ProblemInput = {}): RuntimeResponse =>
       this.sendProblem({ status: 404, ...input })
-    send.conflict = (input: ProblemInput = {}): Response =>
+    send.conflict = (input: ProblemInput = {}): RuntimeResponse =>
       this.sendProblem({ status: 409, ...input })
-    send.unprocessable = (input: ProblemInput = {}): Response =>
+    send.unprocessable = (input: ProblemInput = {}): RuntimeResponse =>
       this.sendProblem({ status: 422, ...input })
-    send.tooManyRequests = (input: ProblemInput = {}): Response =>
+    send.tooManyRequests = (input: ProblemInput = {}): RuntimeResponse =>
       this.sendProblem({ status: 429, ...input })
-    send.internal = (input: ProblemInput = {}): Response =>
+    send.internal = (input: ProblemInput = {}): RuntimeResponse =>
       this.sendProblem({ status: 500, ...input })
-    send.validation = (issues: any[], input: ProblemInput = {}): Response => {
+    send.validation = (issues: any[], input: ProblemInput = {}): RuntimeResponse => {
       const errors: ValidationError[] = (issues || []).map((issue: any) => ({
         field: issue.path?.join?.('.') ?? '',
         message: issue.message ?? '',
@@ -653,20 +665,20 @@ export class RequestContext<TBody = any, TParams = any, TQuery = any> implements
     return send as ProblemSender
   }
 
-  private sendProblem(input: ProblemDetails): Response {
+  private sendProblem(input: ProblemDetails): RuntimeResponse {
     const body = normalizeProblem(input)
-    this.res.setHeader('Content-Type', 'application/problem+json')
-    return this.res.status(body.status).json(body)
+    this._response.setHeader('Content-Type', 'application/problem+json')
+    return this._response.status(body.status).json(body)
   }
 
   html(content: string, status = 200) {
-    return this.res.status(status).type('html').send(content)
+    return this._response.status(status).type('html').send(content)
   }
 
   download(buffer: Buffer, filename: string, contentType = 'application/octet-stream') {
-    this.res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
-    this.res.setHeader('Content-Type', contentType)
-    return this.res.send(buffer)
+    this._response.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+    this._response.setHeader('Content-Type', contentType)
+    return this._response.send(buffer)
   }
 
   /**
@@ -683,7 +695,7 @@ export class RequestContext<TBody = any, TParams = any, TQuery = any> implements
    * ```
    */
   render(template: string, data: Record<string, any> = {}) {
-    return this.res.render(template, data)
+    return this._response.render(template, data)
   }
 
   /**
@@ -755,13 +767,13 @@ export class RequestContext<TBody = any, TParams = any, TQuery = any> implements
    * ```
    */
   sse() {
-    this.res.writeHead(200, {
+    this._response.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
       Connection: 'keep-alive',
       'X-Accel-Buffering': 'no',
     })
-    this.res.flushHeaders()
+    this._response.flushHeaders()
 
     const closeCallbacks: Array<() => void> = []
 
@@ -772,13 +784,13 @@ export class RequestContext<TBody = any, TParams = any, TQuery = any> implements
     return {
       /** Send an SSE event with optional event name and id */
       send: (data: any, event?: string, id?: string) => {
-        if (id) this.res.write(`id: ${id}\n`)
-        if (event) this.res.write(`event: ${event}\n`)
-        this.res.write(`data: ${JSON.stringify(data)}\n\n`)
+        if (id) this._response.write(`id: ${id}\n`)
+        if (event) this._response.write(`event: ${event}\n`)
+        this._response.write(`data: ${JSON.stringify(data)}\n\n`)
       },
       /** Send a comment (keeps connection alive) */
       comment: (text: string) => {
-        this.res.write(`: ${text}\n\n`)
+        this._response.write(`: ${text}\n\n`)
       },
       /** Register a callback when the client disconnects */
       onClose: (fn: () => void) => {
@@ -786,7 +798,7 @@ export class RequestContext<TBody = any, TParams = any, TQuery = any> implements
       },
       /** End the SSE stream */
       close: () => {
-        this.res.end()
+        this._response.end()
       },
     }
   }
