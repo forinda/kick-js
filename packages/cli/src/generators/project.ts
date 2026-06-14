@@ -85,6 +85,32 @@ async function resolveSiblingVersions(): Promise<Record<string, string>> {
   return Object.fromEntries(results)
 }
 
+/**
+ * Resolve the exact published version of a package at a given dist-tag
+ * (`npm view <name>@<tag> version`). Returns `null` on any failure. Used
+ * to pin `@forinda/kickjs` to the `alpha` channel when scaffolding a
+ * Fastify / h3 app — the engine subpaths (`@forinda/kickjs/fastify`,
+ * `/h3`) ship only on the alpha until the runtimes land in a stable
+ * release, so the default `latest` resolution would install a kickjs
+ * that doesn't export them (→ Vite "./h3 is not exported" at boot).
+ * Prerelease versions are pinned exactly (no `^`) — a caret range over a
+ * prerelease has surprising semver semantics.
+ */
+function resolveExactVersionAtTag(name: string, tag: string): string | null {
+  try {
+    const out = execFileSync('npm', ['view', `${name}@${tag}`, 'version'], {
+      encoding: 'utf-8',
+      timeout: 5000,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+      .toString()
+      .trim()
+    return out && /^\d+\.\d+\.\d+/.test(out) ? out : null
+  } catch {
+    return null
+  }
+}
+
 type ProjectTemplate = 'rest' | 'minimal'
 type SchemaLib = 'zod' | 'valibot' | 'yup'
 
@@ -130,6 +156,25 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
   // working offline.
   log('Resolving package versions...')
   const versions = await resolveSiblingVersions()
+
+  // The Fastify / h3 runtime subpaths (`@forinda/kickjs/fastify`, `/h3`) ship
+  // only on the `alpha` channel until the pluggable-runtimes work lands in a
+  // stable release. `latest` resolution would install a kickjs without those
+  // exports, so a scaffolded Fastify/h3 app fails to boot ("./h3 is not
+  // exported"). Pin `@forinda/kickjs` to the alpha when a non-Express runtime
+  // is chosen. Express stays on the stable channel.
+  if (runtime !== 'express') {
+    const alpha = resolveExactVersionAtTag('@forinda/kickjs', 'alpha')
+    if (alpha) {
+      versions['@forinda/kickjs'] = alpha
+      log(`Using @forinda/kickjs@${alpha} (alpha channel — ${runtime} runtime)`)
+    } else {
+      log(
+        `WARNING: could not resolve @forinda/kickjs@alpha — the ${runtime} runtime subpath ` +
+          `may be missing. After install, run: ${packageManager} add @forinda/kickjs@alpha`,
+      )
+    }
+  }
 
   // ── package.json — template-aware deps ────────────────────────────
   await writeFileSafe(

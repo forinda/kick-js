@@ -8,7 +8,9 @@
 
 ## Project Overview
 
-KickJS is a decorator-driven Node.js framework built on Express 5 and TypeScript. Monorepo managed with pnpm workspaces and Turbo.
+KickJS is a decorator-driven Node.js framework for TypeScript. The HTTP engine is pluggable — it runs on **Express (default), Fastify, or h3**, selected via `bootstrap({ runtime })`; controllers/modules/DI/context decorators are engine-neutral. Monorepo managed with pnpm workspaces and Turbo.
+
+> The real framework package is `packages/kickjs` (`@forinda/kickjs`) — it holds the DI core, HTTP layer, RequestContext, and the runtime seam (`src/http/runtimes/{express,fastify,h3}.ts`). The `packages/core` + `packages/http` split described in older parts of this doc is **stale**; treat `packages/kickjs/src/{core,http}` as the source of truth. Fastify/h3 runtimes + cross-engine uploads currently ship on the `alpha` channel.
 
 **18 published packages** under `@forinda/kickjs-*`, **10 example apps**, CLI with generators, Prisma/Drizzle/custom ORM support.
 
