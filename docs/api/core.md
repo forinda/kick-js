@@ -2,6 +2,50 @@
 
 Inversion-of-Control container, decorators, logger, and error types shared by all KickJS packages.
 
+## bootstrap() options
+
+`bootstrap(options)` (from `@forinda/kickjs`) is the application entry point. It takes an `ApplicationOptions` object — every field below. `modules` is the only required one; everything else has a safe default.
+
+| Option            | Type                                  | Default                         | Description                                                                                                              |
+| ----------------- | ------------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `modules`         | `AppModuleEntry[]`                    | **required**                    | Feature modules to load (class or `defineModule()` instance form).                                                       |
+| `setup`           | `(registry) => void`                  | —                               | Imperative/conditional module registration; runs after plugins and the static `modules` array.                           |
+| `adapters`        | `AppAdapter[]`                        | `[]`                            | Lifecycle hooks (DB, Redis, Swagger, OTel…). Build with `defineAdapter()`.                                               |
+| `plugins`         | `KickPlugin[]`                        | `[]`                            | Bundles of modules + adapters + middleware + DI bindings. Build with `definePlugin()`.                                   |
+| `contributors`    | `ContributorRegistrations`            | —                               | Global [context contributors](../guide/context-decorators.md) at `'global'` precedence.                                  |
+| `runtime`         | `HttpRuntime`                         | `expressRuntime()`              | HTTP engine driver — `fastifyRuntime()` / `h3Runtime()` swap the engine. See [HTTP Runtimes](../guide/http-runtimes.md). |
+| `middlewares`     | `MiddlewareEntry[]`                   | `requestId()`, `express.json()` | Global middleware pipeline, in order. Replaces the default stack entirely when set.                                      |
+| `port`            | `number`                              | `PORT` env, else `3000`         | Listen port.                                                                                                             |
+| `apiPrefix`       | `string`                              | `'/api'`                        | Global route prefix.                                                                                                     |
+| `defaultVersion`  | `number`                              | `1`                             | Routes mount at `/{prefix}/v{version}/{path}`.                                                                           |
+| `trustProxy`      | `boolean \| number \| string \| fn`   | `false`                         | Express `trust proxy` setting.                                                                                           |
+| `jsonLimit`       | `string \| number`                    | `'1mb'`                         | Max JSON body size — only applied when `middlewares` is omitted.                                                         |
+| `security`        | `{ helmet?: boolean }`                | `{ helmet: true }`              | Auto-inject helmet headers unless opted out.                                                                             |
+| `contextStore`    | `'auto' \| 'manual'`                  | `'auto'`                        | ALS frame for `RequestContext.set/get` + REQUEST-scoped DI. `'manual'` only if you own the frame.                        |
+| `processHooks`    | `'auto' \| 'errors-only' \| 'manual'` | `'auto'`                        | Process-level error loggers + SIGINT/SIGTERM → shutdown. Use `'errors-only'` when an SDK owns shutdown.                  |
+| `cluster`         | `boolean \| { workers?: number }`     | `false`                         | Fork workers across CPU cores (shared port).                                                                             |
+| `shutdownTimeout` | `number`                              | `30000`                         | Max ms to wait for graceful shutdown (0 disables forced exit).                                                           |
+| `logRouteTable`   | `boolean`                             | `false`                         | Log a per-controller route summary on startup (`info` level).                                                            |
+| `onNotFound`      | `(req, res, next) => void`            | built-in 404                    | Custom unmatched-route handler.                                                                                          |
+| `onError`         | `(err, req, res, next) => void`       | built-in                        | Custom global error handler (built-in formats ZodError / HttpException).                                                 |
+
+Deprecated aliases (kept for back-compat; the new name wins when both are set): `middleware` → `middlewares`, `logRoutesTable` → `logRouteTable`.
+
+```ts
+import { bootstrap, helmet, cors, requestId } from '@forinda/kickjs'
+import { fastifyRuntime } from '@forinda/kickjs/fastify'
+
+await bootstrap({
+  modules: [HelloModule()],
+  runtime: fastifyRuntime(),
+  apiPrefix: '/api',
+  defaultVersion: 1,
+  middlewares: [requestId(), helmet(), cors()],
+})
+```
+
+> Configuration that lives in `kick.config.ts` (CLI/codegen — pattern, runtime, typegen, db) is separate. See [KickConfig](../api/cli.md#kickconfig).
+
 ## Container
 
 Singleton IoC container managing dependency registration, resolution, and lifecycle.

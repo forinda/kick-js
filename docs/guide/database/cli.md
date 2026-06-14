@@ -90,6 +90,21 @@ introspection is lossy against a code-first schema (`uuid()` reads back as
 false-positives on the type difference. Set `driftCheck: 'ignore'` to skip
 it entirely.
 
+## Config fields
+
+The same shape backs both the `kick.config.ts` `db` block (Option A) and a standalone `kickjs-db.config.ts` (Option B):
+
+| Field              | Type                                  | Default              | Description                                                                                   |
+| ------------------ | ------------------------------------- | -------------------- | --------------------------------------------------------------------------------------------- |
+| `schemaPath`       | `string`                              | `'src/db/schema.ts'` | Schema module (`table` / `pgEnum` declarations).                                              |
+| `migrationsDir`    | `string`                              | `'db/migrations'`    | Where `kick db generate` writes migration directories.                                        |
+| `dialect`          | `'postgres' \| 'sqlite' \| 'mysql'`   | `'postgres'`         | SQL dialect.                                                                                  |
+| `connectionString` | `string`                              | `DATABASE_URL` env   | Connection string for the built-in adapter path (`migrate*`, generate gate).                  |
+| `adapter`          | `() => MigrationAdapter \| Promise<>` | —                    | Escape hatch — a factory returning a constructed adapter. Wins over `connectionString`.       |
+| `driftCheck`       | `'error' \| 'warn' \| 'ignore'`       | `'error'`            | How `migrate` reacts to out-of-band schema changes (see [Drift detection](#drift-detection)). |
+
+> Related config lives elsewhere: app runtime options are in [`bootstrap()`](../../api/core.md#bootstrap-options); the wider `kick.config.ts` surface (pattern, runtime, typegen) is in [KickConfig](../../api/cli.md#kickconfig).
+
 ## Config helpers
 
 | Helper                                  | Purpose                                                                       |

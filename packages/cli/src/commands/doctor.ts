@@ -2,6 +2,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import type { Command } from 'commander'
 import { loadKickConfig, type KickConfig } from '../config'
+import { resolveAppRuntime, UPLOAD_DRIVERS, type AppRuntime } from './add'
 import { colors } from '../utils/colors'
 import { intro, outro, log } from '../utils/prompts'
 
@@ -28,6 +29,12 @@ export interface DoctorContext {
   cwd: string
   pkg: any | null
   tsconfig: any | null
+  /**
+   * The project's HTTP runtime — from kick.config `runtime`, else sniffed from
+   * deps, else `express`. Lets engine-aware checks (engine peers, the upload
+   * multipart driver) validate against the right backend.
+   */
+  runtime: AppRuntime
 }
 
 export interface DoctorResult {
@@ -231,6 +238,97 @@ export function checkExpressInstalled(ctx: DoctorContext): DoctorResult | null {
     }
   }
   return deps.express ? { name: 'express installed', status: 'pass', message: deps.express } : null
+}
+
+/** Engine peers required by the configured non-Express runtime. */
+const RUNTIME_PEERS: Record<AppRuntime, string[]> = {
+  express: [], // covered by checkExpressInstalled
+  fastify: ['fastify', '@fastify/middie'],
+  h3: ['h3'],
+}
+
+/**
+ * The configured runtime's engine peers are installed. Express is checked by
+ * {@link checkExpressInstalled}; this covers the Fastify / h3 runtimes, whose
+ * peers are optional on `@forinda/kickjs` and so only required when chosen.
+ */
+export function checkRuntimeEngine(ctx: DoctorContext): DoctorResult | null {
+  if (!ctx.pkg || ctx.runtime === 'express') return null
+  const deps = {
+    ...ctx.pkg.dependencies,
+    ...ctx.pkg.peerDependencies,
+    ...ctx.pkg.devDependencies,
+  }
+  const missing = RUNTIME_PEERS[ctx.runtime].filter((p) => !deps[p])
+  const name = `runtime engine (${ctx.runtime})`
+  if (missing.length > 0) {
+    return {
+      name,
+      status: 'fail',
+      fix: `Your kick.config runtime is '${ctx.runtime}', but its engine peer(s) are missing: ${missing.join(', ')}.\nInstall: pnpm add ${missing.join(' ')}`,
+    }
+  }
+  return { name, status: 'pass' }
+}
+
+/**
+ * When the project actually uses file uploads (`@FileUpload` / the `upload`
+ * middleware), the multipart driver for its runtime must be installed —
+ * express → multer, fastify → @fastify/multipart, h3 → built-in (nothing).
+ * Skips silently when no upload usage is detected, so non-upload apps aren't
+ * nagged about a driver they don't need.
+ */
+export function checkUploadDriver(ctx: DoctorContext): DoctorResult | null {
+  if (!ctx.pkg || !srcUsesUpload(ctx.cwd)) return null
+  const driver = UPLOAD_DRIVERS[ctx.runtime]
+  const name = `upload driver (${ctx.runtime})`
+  // h3 parses multipart natively — there is no driver to require.
+  if (!driver.prod) return { name, status: 'pass', message: 'native multipart' }
+  const deps = {
+    ...ctx.pkg.dependencies,
+    ...ctx.pkg.peerDependencies,
+    ...ctx.pkg.devDependencies,
+  }
+  if (!deps[driver.prod]) {
+    return {
+      name,
+      status: 'fail',
+      fix: `This project uses file uploads on the '${ctx.runtime}' runtime, which needs '${driver.prod}'.\nInstall it: kick add upload (or pnpm add ${driver.prod})`,
+    }
+  }
+  return { name, status: 'pass', message: driver.prod }
+}
+
+const MAX_UPLOAD_SCAN_FILES = 2000
+
+/** Bounded walk of src/ looking for @FileUpload / upload.single|array|none usage. */
+function srcUsesUpload(cwd: string): boolean {
+  const srcDir = join(cwd, 'src')
+  if (!existsSync(srcDir)) return false
+  const pattern = /@FileUpload\b|\bupload\.(single|array|none)\s*\(/
+  const stack = [srcDir]
+  let visited = 0
+  while (stack.length > 0 && visited < MAX_UPLOAD_SCAN_FILES) {
+    const current = stack.pop()!
+    let entries
+    try {
+      entries = readdirSync(current, { withFileTypes: true })
+    } catch {
+      continue
+    }
+    for (const entry of entries) {
+      if (visited >= MAX_UPLOAD_SCAN_FILES) break
+      const full = join(current, entry.name)
+      if (entry.isDirectory()) {
+        if (entry.name !== 'node_modules') stack.push(full)
+        continue
+      }
+      if (!/\.(ts|tsx|mts|cts)$/.test(entry.name)) continue
+      visited++
+      if (pattern.test(safeRead(full) ?? '')) return true
+    }
+  }
+  return false
 }
 
 export function checkReflectMetadata(ctx: DoctorContext): DoctorResult {
@@ -452,6 +550,8 @@ const BUILT_IN_CHECKS: DoctorCheck[] = [
   () => checkNodeVersion(),
   checkKickJsInstalled,
   checkExpressInstalled,
+  checkRuntimeEngine,
+  checkUploadDriver,
   checkReflectMetadata,
   checkDecoratorTsConfig,
   checkEnvWiring,
@@ -460,12 +560,13 @@ const BUILT_IN_CHECKS: DoctorCheck[] = [
 
 export async function runChecks(
   cwd: string,
-  options: { extraChecks?: DoctorCheck[] } = {},
+  options: { extraChecks?: DoctorCheck[]; runtime?: AppRuntime } = {},
 ): Promise<DoctorResult[]> {
   const ctx: DoctorContext = {
     cwd,
     pkg: safeReadJson(join(cwd, 'package.json')),
     tsconfig: loadTsConfig(cwd),
+    runtime: options.runtime ?? 'express',
   }
   const checks = [...BUILT_IN_CHECKS, ...(options.extraChecks ?? [])]
   const out: DoctorResult[] = []
@@ -531,10 +632,11 @@ export function registerDoctorCommand(program: Command): void {
       const cwd = process.cwd()
       const config = await loadKickConfig(cwd)
       const extraChecks = extractDoctorChecks(config)
+      const runtime = await resolveAppRuntime(cwd)
 
       intro('KickJS Doctor')
 
-      const results = await runChecks(cwd, { extraChecks })
+      const results = await runChecks(cwd, { extraChecks, runtime })
 
       for (const r of results) {
         log.message(formatResult(r))

@@ -1,6 +1,18 @@
 # File Uploads
 
-KickJS wraps Multer to provide file upload handling via both **middleware** and a **decorator**.
+KickJS provides file upload handling via both **middleware** and a **decorator**, exposing every uploaded file on `ctx.file` / `ctx.files` in the standard Multer shape regardless of the HTTP runtime.
+
+::: tip Runtime support
+The `@FileUpload` decorator works on all three runtimes; each uses its engine's multipart backend, which you install with `kick add upload`:
+
+| Runtime           | Multipart driver                   | Notes                                                   |
+| ----------------- | ---------------------------------- | ------------------------------------------------------- |
+| Express (default) | `multer`                           | Used by the `upload.single/array/none()` middleware too |
+| Fastify           | `@fastify/multipart`               | Parts are buffered into the same Multer file shape      |
+| h3                | built-in (`readMultipartFormData`) | No driver to install                                    |
+
+The `upload` middleware factory and `cleanupFiles()` (disk storage, custom `StorageEngine`) are Multer-specific and therefore Express-only. On Fastify / h3, use the `@FileUpload` decorator. `kick doctor` flags a missing driver when it detects upload usage.
+:::
 
 ## Middleware Approach
 
@@ -104,17 +116,42 @@ The `@FileUpload` decorator and the `upload.*()` middleware share the same base 
 | `allowedTypes`  | `string[] \| FileTypeFilter`    | all          | String array or filter function |
 | `customMimeMap` | `Record<string, string>`        | —            | Extend the built-in MIME map    |
 
+::: warning Decorator is memory-only — for disk/custom storage use the middleware
+`@FileUpload` has **no `storage` / `dest`** option on purpose: it buffers to memory so the same decorator works identically on Express, Fastify, and h3 (`ctx.file.buffer`). Multer's `StorageEngine` is Express-specific and can't cross engines.
+
+To vary the storage engine per route — memory on one, disk on another, S3 on a third — use the `upload.single/array()` **middleware** (Express only), which exposes `storage` + `dest`:
+
+```ts
+import multer from 'multer'
+import { upload } from '@forinda/kickjs'
+
+// memory → ctx.file.buffer
+@Post('/avatar') @Middleware(upload.single('avatar'))
+avatar(ctx: RequestContext) {}
+
+// disk → ctx.file.path
+@Post('/import') @Middleware(upload.single('csv', { dest: '/tmp/uploads' }))
+importCsv(ctx: RequestContext) {}
+
+// any multer StorageEngine (multer-s3, gridfs, …)
+@Post('/doc') @Middleware(upload.single('doc', { storage: multer.diskStorage({ destination: '/var/data' }) }))
+doc(ctx: RequestContext) {}
+```
+
+Rule of thumb: **portable + memory → `@FileUpload`; Express-specific storage engine → `upload.*()` middleware.**
+:::
+
 ## UploadOptions
 
 All middleware methods accept an `UploadOptions` object:
 
-| Option          | Type                       | Default                  | Description                                      |
-| --------------- | -------------------------- | ------------------------ | ------------------------------------------------ |
-| `maxSize`       | `number`                   | `5 * 1024 * 1024` (5 MB) | Maximum file size in bytes                       |
-| `allowedTypes`  | `string[] \| FileFilterFn` | all                      | String array or filter function (see below)      |
-| `customMimeMap` | `Record<string, string>`   | —                        | Extend the built-in extension-to-MIME map        |
-| `storage`       | Multer `StorageEngine`     | memory                   | Custom Multer storage engine                     |
-| `dest`          | `string`                   | —                        | Shorthand for disk storage destination directory |
+| Option          | Type                       | Default                  | Description                                 |
+| --------------- | -------------------------- | ------------------------ | ------------------------------------------- |
+| `maxSize`       | `number`                   | `5 * 1024 * 1024` (5 MB) | Maximum file size in bytes                  |
+| `allowedTypes`  | `string[] \| FileFilterFn` | all                      | String array or filter function (see below) |
+| `customMimeMap` | `Record<string, string>`   | —                        | Extend the built-in extension-to-MIME map   |
+| `storage`       | Multer `StorageEngine`     | memory                   | Custom Multer storage engine (Express only) |
+| `dest`          | `string`                   | —                        | Disk storage destination dir, Express only  |
 
 ## Allowed Types — Value or Function
 

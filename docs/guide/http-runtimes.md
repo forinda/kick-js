@@ -58,7 +58,8 @@ What works on Fastify today: routing, JSON / HTML / `ctx.problem` responses,
 connect-style middleware (the built-ins — `helmet`, `cors`, `requestId`,
 `requestLogger`, … — plus your own, bridged via `@fastify/middie`),
 request-scoped DI and context decorators (`ctx.set` / `ctx.get`), `X-Request-Id`
-propagation, error / 404 handling, and Server-Sent Events (`ctx.sse`).
+propagation, error / 404 handling, Server-Sent Events (`ctx.sse`), and file
+uploads (`@FileUpload` → `ctx.file` / `ctx.files`, via `@fastify/multipart`).
 
 Fastify's built-in pino logger is disabled (`logger: false`) so the kickjs
 `requestLogger` stays the single log format across engines.
@@ -84,23 +85,24 @@ web-standard driver — see the [design spec](../http/spec-http-runtimes.md) §8
 
 Same surface as Fastify: routing, JSON / HTML, connect middleware (via h3's
 `fromNodeMiddleware`), context decorators, errors / 404, SSE, body validation,
-and native body parsing.
+native body parsing, and file uploads (`@FileUpload` → `ctx.file` / `ctx.files`,
+via h3's built-in `readMultipartFormData` — no driver to install).
 
 ## Capability matrix
 
 Some `ctx` features depend on the engine. Calling an unsupported one raises a
 clear error rather than failing silently.
 
-| Capability                | Express | Fastify             | h3 (v1)                 |
-| ------------------------- | ------- | ------------------- | ----------------------- |
-| Routing + `ctx.json`      | ✅      | ✅                  | ✅                      |
-| Connect middleware        | ✅      | ✅ (via middie)     | ✅ (fromNodeMiddleware) |
-| Context decorators        | ✅      | ✅                  | ✅                      |
-| Errors / 404              | ✅      | ✅                  | ✅                      |
-| Server-Sent Events        | ✅      | ✅                  | ✅                      |
-| Validation                | ✅      | ✅                  | ✅                      |
-| `ctx.render` (views)      | ✅      | ❌ (no view engine) | ❌ (no view engine)     |
-| File uploads (`ctx.file`) | ✅      | ⏳ (planned)        | ⏳ (planned)            |
+| Capability                | Express     | Fastify                 | h3 (v1)                 |
+| ------------------------- | ----------- | ----------------------- | ----------------------- |
+| Routing + `ctx.json`      | ✅          | ✅                      | ✅                      |
+| Connect middleware        | ✅          | ✅ (via middie)         | ✅ (fromNodeMiddleware) |
+| Context decorators        | ✅          | ✅                      | ✅                      |
+| Errors / 404              | ✅          | ✅                      | ✅                      |
+| Server-Sent Events        | ✅          | ✅                      | ✅                      |
+| Validation                | ✅          | ✅                      | ✅                      |
+| `ctx.render` (views)      | ✅          | ❌ (no view engine)     | ❌ (no view engine)     |
+| File uploads (`ctx.file`) | ✅ (multer) | ✅ (@fastify/multipart) | ✅ (native multipart)   |
 
 ## The engine-native escape hatch
 
@@ -112,8 +114,10 @@ reachable:
 
 Under the default Express runtime these are typed as Express's `Application`,
 `Request`, and `Response`. The types follow the active runtime via the
-`ActiveRuntime` registry, so a future `kick/runtime` typegen step can retype them
-to Fastify's `FastifyInstance` / `FastifyRequest` / `FastifyReply`.
+`ActiveRuntime` registry: set `runtime: 'fastify'` (or `'h3'`) in `kick.config.ts`
+and the `kick/runtime` typegen emits a `KickRuntimeRegister` augmentation that
+retypes them to that engine — Fastify's `FastifyInstance` / `FastifyRequest` /
+`FastifyReply`, or h3's `App` / `H3Event`.
 
 ## Writing a custom runtime
 

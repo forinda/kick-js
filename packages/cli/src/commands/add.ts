@@ -191,6 +191,66 @@ export const PACKAGE_REGISTRY: Record<string, PackageEntry> = {
 }
 
 /**
+ * The `upload` catalog name is special — file uploads ship inside
+ * `@forinda/kickjs` itself, so there's no package to install. What an app
+ * needs is the multipart DRIVER for its HTTP runtime, and that differs per
+ * engine. `planAddPackages` resolves `upload` against the configured runtime
+ * (see {@link KickConfig.runtime}); `kick doctor` validates the same mapping.
+ */
+export const UPLOAD_DRIVERS: Record<
+  'express' | 'fastify' | 'h3',
+  { prod?: string; dev?: string; note: string }
+> = {
+  express: {
+    prod: 'multer',
+    dev: '@types/multer',
+    note: 'Express uploads use multer (memory/disk storage, ctx.file / ctx.files).',
+  },
+  fastify: {
+    prod: '@fastify/multipart',
+    note: 'Fastify uploads use @fastify/multipart (buffered into ctx.file / ctx.files).',
+  },
+  h3: {
+    note: 'h3 parses multipart natively (readMultipartFormData) — no driver to install.',
+  },
+}
+
+export type AppRuntime = 'express' | 'fastify' | 'h3'
+
+/**
+ * Resolve the project's HTTP runtime: the `runtime` field in kick.config
+ * (authoritative — `kick new` writes it), falling back to sniffing installed
+ * deps in the nearest package.json (`fastify` → fastify, `h3` → h3), else
+ * `express` (the default engine). Lets `kick add upload` / `kick doctor` pick
+ * the engine-correct multipart driver even in projects scaffolded before the
+ * `runtime` field existed.
+ */
+export async function resolveAppRuntime(cwd = process.cwd()): Promise<AppRuntime> {
+  const config = await loadKickConfig(cwd)
+  const fromConfig = (config as { runtime?: AppRuntime } | null)?.runtime
+  if (fromConfig === 'express' || fromConfig === 'fastify' || fromConfig === 'h3') {
+    return fromConfig
+  }
+  return detectRuntimeFromDeps(cwd)
+}
+
+/** Sniff the runtime from installed deps when kick.config has no `runtime`. */
+export function detectRuntimeFromDeps(cwd = process.cwd()): AppRuntime {
+  const dir = findUp('package.json', cwd)
+  if (dir) {
+    try {
+      const pkg = JSON.parse(readFileSync(resolve(dir, 'package.json'), 'utf-8'))
+      const deps = { ...pkg.dependencies, ...pkg.devDependencies } as Record<string, unknown>
+      if ('fastify' in deps) return 'fastify'
+      if ('h3' in deps) return 'h3'
+    } catch {
+      // ignore — fall through to the default engine
+    }
+  }
+  return 'express'
+}
+
+/**
  * Walk up from `fromDir` to filesystem root, returning the first
  * directory that contains `name`. Lets monorepo sub-packages pick up
  * lockfiles and `packageManager` fields living at the workspace root.
@@ -316,6 +376,7 @@ export function printPackageList(all = false): void {
 
   console.log('\n  Usage: kick add ai db swagger')
   console.log('         kick add queue:bullmq')
+  console.log('         kick add upload   # installs the multipart driver for your runtime')
   console.log()
 }
 
@@ -325,6 +386,8 @@ export interface AddPlan {
   unknown: string[]
   /** Deprecation notices for requested entries — print, then install anyway. */
   warnings: string[]
+  /** Informational notes (e.g. the upload driver chosen for the runtime). */
+  notices: string[]
 }
 
 /**
@@ -333,13 +396,28 @@ export interface AddPlan {
  * of I/O so the catalog rules (dev defaults, deprecations, unknown
  * handling) are unit-testable without spawning a package manager.
  */
-export function planAddPackages(packages: string[], forceDev: boolean): AddPlan {
+export function planAddPackages(
+  packages: string[],
+  forceDev: boolean,
+  runtime: AppRuntime = 'express',
+): AddPlan {
   const prodDeps = new Set<string>()
   const devDeps = new Set<string>()
   const unknown: string[] = []
   const warnings: string[] = []
+  const notices: string[] = []
 
   for (const name of packages) {
+    // `upload` isn't a package — it's the runtime's multipart driver. File
+    // uploads ship in @forinda/kickjs; only the engine backend needs adding.
+    if (name === 'upload') {
+      const driver = UPLOAD_DRIVERS[runtime]
+      notices.push(`upload (${runtime}): ${driver.note}`)
+      if (driver.prod) (forceDev ? devDeps : prodDeps).add(driver.prod)
+      if (driver.dev) devDeps.add(driver.dev)
+      continue
+    }
+
     const entry = PACKAGE_REGISTRY[name]
     if (!entry) {
       unknown.push(name)
@@ -355,7 +433,7 @@ export function planAddPackages(packages: string[], forceDev: boolean): AddPlan 
     }
   }
 
-  return { prodDeps: [...prodDeps], devDeps: [...devDeps], unknown, warnings }
+  return { prodDeps: [...prodDeps], devDeps: [...devDeps], unknown, warnings, notices }
 }
 
 export function registerListCommand(program: Command): void {
@@ -386,10 +464,21 @@ export function registerAddCommand(program: Command): void {
 
       const { pm, source } = await resolvePackageManagerWithSource(opts.pm)
       console.log(`\n  Using ${pm} (resolved from ${source})`)
-      const { prodDeps, devDeps, unknown, warnings } = planAddPackages(packages, Boolean(opts.dev))
+      // Resolve the runtime so `kick add upload` installs the right multipart
+      // driver (express → multer, fastify → @fastify/multipart, h3 → none).
+      const runtime = await resolveAppRuntime(process.cwd())
+      const { prodDeps, devDeps, unknown, warnings, notices } = planAddPackages(
+        packages,
+        Boolean(opts.dev),
+        runtime,
+      )
 
       for (const warning of warnings) {
         console.warn(`\n  WARNING: ${warning}`)
+      }
+
+      for (const notice of notices) {
+        console.log(`\n  ${notice}`)
       }
 
       if (unknown.length > 0) {
