@@ -39,7 +39,7 @@ for (const rt of RUNTIMES) {
       const app = new Application({
         // runtime option is HttpRuntime<Express> until it widens with the driver
         // layer; the fastify runtime is sound here (cast at the call site).
-        runtime: rt.make() as never,
+        runtime: rt.make(),
         apiPrefix: '/api',
         defaultVersion: 1,
         modules: [{ routes: () => ({ path: '/p', controller: PingController }) } as never],
@@ -59,7 +59,7 @@ for (const rt of RUNTIMES) {
         }
       }
       const app = new Application({
-        runtime: rt.make() as never,
+        runtime: rt.make(),
         modules: [{ routes: () => ({ path: '/h', controller: HtmlController }) } as never],
       })
       await app.setup()
@@ -78,7 +78,7 @@ for (const rt of RUNTIMES) {
         }
       }
       const app = new Application({
-        runtime: rt.make() as never,
+        runtime: rt.make(),
         middlewares: [
           (_req: never, res: { setHeader: (n: string, v: string) => void }, next: () => void) => {
             res.setHeader('x-conformance', rt.name)
@@ -105,7 +105,7 @@ for (const rt of RUNTIMES) {
         }
       }
       const app = new Application({
-        runtime: rt.make() as never,
+        runtime: rt.make(),
         apiPrefix: '/api',
         defaultVersion: 1,
         modules: [{ routes: () => ({ path: '/c', controller: C }) } as never],
@@ -125,7 +125,7 @@ for (const rt of RUNTIMES) {
         }
       }
       const app = new Application({
-        runtime: rt.make() as never,
+        runtime: rt.make(),
         modules: [{ routes: () => ({ path: '/e', controller: C }) } as never],
       })
       await app.setup()
@@ -143,7 +143,7 @@ for (const rt of RUNTIMES) {
         }
       }
       const app = new Application({
-        runtime: rt.make() as never,
+        runtime: rt.make(),
         modules: [{ routes: () => ({ path: '/nf', controller: C }) } as never],
       })
       await app.setup()
@@ -162,7 +162,7 @@ for (const rt of RUNTIMES) {
         }
       }
       const app = new Application({
-        runtime: rt.make() as never,
+        runtime: rt.make(),
         modules: [{ routes: () => ({ path: '/s', controller: C }) } as never],
       })
       await app.setup()
