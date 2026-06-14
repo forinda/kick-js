@@ -115,5 +115,62 @@ for (const rt of RUNTIMES) {
       const res = await request(app.handle.bind(app)).get('/api/v1/c/who').expect(200)
       expect(res.body).toEqual({ who: 'ada' })
     })
+
+    it('maps a thrown error to a 500 through the error handler', async () => {
+      @Controller()
+      class C {
+        @Get('/boom')
+        boom() {
+          throw new Error('kaboom')
+        }
+      }
+      const app = new Application({
+        runtime: rt.make() as never,
+        modules: [{ routes: () => ({ path: '/e', controller: C }) } as never],
+      })
+      await app.setup()
+
+      const res = await request(app.handle.bind(app)).get('/api/v1/e/boom').expect(500)
+      expect(res.body).toEqual({ message: 'Internal Server Error' })
+    })
+
+    it('returns 404 for an unmatched route', async () => {
+      @Controller()
+      class C {
+        @Get('/here')
+        here(ctx: RequestContext) {
+          ctx.json({ ok: true })
+        }
+      }
+      const app = new Application({
+        runtime: rt.make() as never,
+        modules: [{ routes: () => ({ path: '/nf', controller: C }) } as never],
+      })
+      await app.setup()
+
+      await request(app.handle.bind(app)).get('/api/v1/nf/nope').expect(404)
+    })
+
+    it('streams Server-Sent Events through the response driver', async () => {
+      @Controller()
+      class C {
+        @Get('/events')
+        events(ctx: RequestContext) {
+          const sse = ctx.sse()
+          sse.send({ tick: 1 }, 'tick')
+          sse.close()
+        }
+      }
+      const app = new Application({
+        runtime: rt.make() as never,
+        modules: [{ routes: () => ({ path: '/s', controller: C }) } as never],
+      })
+      await app.setup()
+
+      const res = await request(app.handle.bind(app)).get('/api/v1/s/events').expect(200)
+      expect(res.headers['content-type']).toMatch(/text\/event-stream/)
+      expect(res.text).toContain('event: tick')
+      expect(res.text).toContain('"tick":1')
+    })
   })
 }
