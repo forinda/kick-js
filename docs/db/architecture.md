@@ -576,7 +576,7 @@ Internally reads via `getRequestValue('db')`. Never exposes raw store APIs to us
 
 ### Logger integration
 
-`KickDbClient` accepts `log: Logger | { level, logger }`. When omitted, pulls the framework Logger from DI. All query/error events route through the same Pino instance, module name `kickjs-db`.
+`KickDbClient` accepts `log: Logger | { level, logger }`. When omitted, pulls the framework Logger from DI. All query/error events route through the same framework `Logger`, module name `kickjs-db`.
 
 ### CLI generator
 
@@ -639,7 +639,7 @@ Constraint errors expose structured detail (`constraint`, `table`, `columns`, `d
 
 ### Logging
 
-Three topics through Pino, module `kickjs-db`:
+Three topics through the framework `Logger`, module `kickjs-db`:
 
 - `query` — `{ sql, parameters, ms, rowCount }`, `debug`, off in prod by default.
 - `migration` — `{ id, direction, ms }`, `info`.

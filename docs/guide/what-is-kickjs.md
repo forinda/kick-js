@@ -1,6 +1,6 @@
 # What is KickJS?
 
-KickJS is a production-grade, decorator-driven Node.js framework built on Express 5 and TypeScript. It provides the developer experience of NestJS without the heavy dependencies.
+KickJS is a production-grade, decorator-driven Node.js framework for TypeScript. It provides the developer experience of NestJS without the heavy dependencies — and the HTTP engine is **pluggable**: the same controllers, modules, and context decorators run on **Express** (the zero-config default), **Fastify**, or **h3**. Swap the engine in one line at bootstrap; see [HTTP Runtimes](./http-runtimes.md).
 
 ## Why KickJS?
 
@@ -32,16 +32,16 @@ KickJS is a production-grade, decorator-driven Node.js framework built on Expres
 @forinda/kickjs (unified: core + http + config)
        ↓ (peer dependency)
 ┌──────┼──────────┬───────────┬──────────┐
-auth  swagger  ws  devtools  ...
+db  swagger  ws  devtools  ...
                                     (adapter packages)
 
 @forinda/kickjs-cli (standalone)
 @forinda/kickjs-vite (dev tooling)
 ```
 
-- **@forinda/kickjs** — Unified framework: DI container, 20+ decorators, Express 5, middleware, routing, logger, Zod env config
+- **@forinda/kickjs** — Unified framework: DI container, 20+ decorators, pluggable HTTP runtimes (Express / Fastify / h3), middleware, routing, logger, Zod env config
 - **@forinda/kickjs-swagger** — OpenAPI spec generation, Swagger UI, ReDoc
-- **@forinda/kickjs-auth** — JWT, API key, OAuth strategies, JWKS URI support
+- **@forinda/kickjs-db** — Code-first ORM (Kysely-based): schema, reversible migrations, typed queries — Postgres / MySQL / SQLite
 - **@forinda/kickjs-ws** — WebSocket with @WsController, rooms, heartbeat
 - **@forinda/kickjs-devtools** — Debug dashboard at /\_debug
 - **@forinda/kickjs-ai** — AI/LLM integration adapter

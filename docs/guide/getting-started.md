@@ -7,6 +7,23 @@
 - Node.js 20+
 - pnpm (recommended) or npm
 
+## Release channels
+
+KickJS publishes to two npm dist-tags:
+
+- **`@latest`** — the stable channel. This is the default; `npm install @forinda/kickjs` and `npx @forinda/kickjs-cli new` install from here. Use it for production.
+- **`@alpha`** — the preview channel for upcoming features and experiments (new HTTP runtimes, in-progress subsystems). Opt in to try things before they stabilize:
+
+  ```bash
+  # scaffold with the preview CLI
+  npx @forinda/kickjs-cli@alpha new my-api
+
+  # or pin a package to the alpha channel in an existing project
+  pnpm add @forinda/kickjs@alpha
+  ```
+
+  Alpha builds can change without notice — pin an exact version if you depend on one.
+
 ## Create a New Project
 
 ```bash
