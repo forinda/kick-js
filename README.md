@@ -10,8 +10,12 @@
 
 <p align="center">
   <a href="https://www.npmjs.com/package/@forinda/kickjs"><img src="https://img.shields.io/npm/v/@forinda/kickjs?color=FACC15&label=npm" alt="npm version" /></a>
+  <a href="https://www.npmjs.com/package/@forinda/kickjs"><img src="https://img.shields.io/npm/dw/@forinda/kickjs?color=3B82F6&label=downloads" alt="npm weekly downloads" /></a>
+  <a href="https://github.com/forinda/kick-js/actions/workflows/ci.yml"><img src="https://github.com/forinda/kick-js/actions/workflows/ci.yml/badge.svg" alt="CI status" /></a>
+  <a href="https://www.npmjs.com/package/@forinda/kickjs"><img src="https://img.shields.io/npm/types/@forinda/kickjs?color=3178C6" alt="TypeScript types" /></a>
   <a href="https://github.com/forinda/kick-js/blob/main/LICENSE"><img src="https://img.shields.io/github/license/forinda/kick-js?color=312E81" alt="license" /></a>
   <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen" alt="node version" /></a>
+  <a href="https://github.com/forinda/kick-js"><img src="https://img.shields.io/github/stars/forinda/kick-js?style=flat&color=FACC15" alt="GitHub stars" /></a>
 </p>
 
 NestJS ergonomics without the complexity — decorators, DI, module system, code generators, and end-to-end type safety, powered by Zod and Vite.
