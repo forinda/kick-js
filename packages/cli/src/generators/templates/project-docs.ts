@@ -16,7 +16,7 @@ export function generateReadme(name: string, template: ProjectTemplate, pm: stri
 
   return `# ${name}
 
-A **${templateLabels[template] ?? 'REST API'}** built with [KickJS](https://forinda.github.io/kick-js/) — a decorator-driven Node.js framework on Express 5 and TypeScript.
+A **${templateLabels[template] ?? 'REST API'}** built with [KickJS](https://forinda.github.io/kick-js/) — a decorator-driven Node.js framework for TypeScript that runs on Express, Fastify, or h3 (swap the engine in one line).
 
 ## Getting Started
 
@@ -154,6 +154,7 @@ When generating or modifying code in this project, stay aligned with the v4 conv
 - **Plugins**: \`definePlugin()\` factory — never plain function returning \`KickPlugin\`.
 - **DI tokens**: \`<scope>/<PascalKey>[/<suffix>]\` — scope is lowercase, the key segment is **PascalCase** (e.g. \`'app/Users/repository'\`, \`'mycorp/Cache/redis'\`). First-party uses the reserved \`'kick/'\` prefix; this project owns its own scope.
 - **Decorators**: \`@Controller()\` (no path arg — mount prefix comes from \`routes().path\`).
+- **HTTP runtime**: this app may run on Express, Fastify, or h3 — check \`kick.config.ts\` \`runtime\` (or \`bootstrap({ runtime })\`) before writing engine-specific code. Prefer engine-neutral \`ctx\` APIs (\`ctx.json\`/\`ctx.body\`/\`ctx.params\`/\`ctx.sse\`); don't assume \`ctx.req\` is an Express request. Uploads (\`@FileUpload\` → \`ctx.file\`/\`ctx.files\`) work on all three (\`kick add upload\` installs the driver). Full rules in \`.agents/AGENTS.md\` → "HTTP runtime".
 - **Module entry file** MUST be named \`<name>.module.ts\` and live under \`src/modules/<name>/\`. The Vite plugin auto-discovers \`*.module.[tj]sx?\` for graceful HMR — a misnamed \`projects.ts\` silently degrades every save into a full restart.
 - **Env**: schema lives in \`src/config/index.ts\`; \`import './config'\` MUST be the first import in \`src/index.ts\` (side-effect registers the schema before any \`@Value\` resolves).
 - **Assets**: drop new template files into \`src/templates/<namespace>/\`; the dev watcher auto-rebuilds the \`KickAssets\` augmentation + \`assets.x.y()\` re-walks on next call. No restart, no manual build.
@@ -613,6 +614,42 @@ add tool-specific affordances on top.
 2. Run \`kick dev\` to verify the app starts
 3. Read the [KickJS documentation](https://forinda.github.io/kick-js/) for framework details
 
+## HTTP runtime — DON'T assume Express-only
+
+KickJS is **engine-pluggable**. It runs on **Express (default), Fastify, or h3** —
+chosen with one line: \`bootstrap({ runtime: fastifyRuntime() })\`. Before writing
+any engine-specific code, **check which engine this project uses**:
+
+- \`kick.config.ts\` → the \`runtime\` field (\`'express'\` | \`'fastify'\` | \`'h3'\`), and/or
+- \`src/index.ts\` → the \`runtime:\` passed to \`bootstrap()\`, and/or
+- \`package.json\` → \`fastify\` / \`h3\` in deps.
+
+Rules that keep generated code correct on **every** engine:
+
+- **Write to \`ctx\`, not the raw request/response.** \`ctx.json()\`, \`ctx.body\`,
+  \`ctx.params\`, \`ctx.query\`, \`ctx.set/get\`, \`ctx.sse()\` are engine-neutral and
+  work identically everywhere. \`ctx.req\` / \`ctx.res\` are the engine-native
+  objects — their **type follows the active runtime** (Express by default; the
+  \`kick/runtime\` typegen retypes them to Fastify / h3 when \`runtime\` is set).
+  Don't assume \`ctx.req\` is an \`express.Request\` in portable code.
+- **Global middleware** in \`bootstrap({ middleware })\` is connect-style
+  \`(req, res, next)\` — it runs on all engines (Fastify via \`@fastify/middie\`,
+  h3 via \`fromNodeMiddleware\`). But on Fastify / h3 the engine parses the body
+  natively, so the default \`express.json()\` is **auto-skipped** (\`nativeBodyParsing\`).
+  Don't add \`express.json()\` manually on those engines.
+- **File uploads** work on all three: \`@FileUpload({ mode, fieldName, ... })\` →
+  \`ctx.file\` / \`ctx.files\` (same Multer-shaped object everywhere). Backends:
+  Express \`multer\`, Fastify \`@fastify/multipart\`, h3 native. Run
+  \`kick add upload\` to install the runtime-correct driver. The \`@FileUpload\`
+  decorator is **memory-only** (portable); disk / custom-storage (\`storage\` /
+  \`dest\`) is Express-only via the \`upload.single/array()\` middleware.
+- **Engine subpaths**: \`import { fastifyRuntime } from '@forinda/kickjs/fastify'\`
+  or \`h3Runtime\` from \`'@forinda/kickjs/h3'\`. Express is the zero-config default
+  (no import, nothing to install).
+- **Not supported on Fastify / h3**: \`ctx.render()\` (no view engine). Calling it
+  throws a clear error rather than failing silently.
+- Run \`kick doctor\` to verify the runtime's engine peers + upload driver are installed.
+
 ## v4 Conventions (don't skip)
 
 KickJS v4 made a handful of structural changes from v3. Internalise these
@@ -1071,12 +1108,14 @@ Full guide: <https://forinda.github.io/kick-js/guide/context-decorators>.
 | \`kick g service <name>\` | Generate service |
 | \`kick g middleware <name>\` | Generate middleware |
 | \`kick add <package>\` | Add KickJS package |
+| \`kick add upload\` | Install the multipart upload driver for this project's runtime |
 | \`kick add --list\` | List available packages |
+| \`kick doctor\` | Pre-flight checks — runtime engine peers, upload driver, env wiring |
 | \`kick rm module <names...>\` | Remove one or more modules |
 
-> **Note:** When using \`kick new\` in scripts or CI, pass \`-t\` (or \`--template\`) and \`-r\` (or \`--repo\`) flags to bypass interactive prompts:
+> **Note:** When using \`kick new\` in scripts or CI, pass \`-t\` (or \`--template\`), \`-r\` (or \`--repo\`), and \`--runtime express|fastify|h3\` to bypass interactive prompts:
 > \`\`\`bash
-> kick new my-api -t ddd -r prisma --pm ${pm} --no-git --no-install -f
+> kick new my-api -t ddd -r prisma --runtime fastify --pm ${pm} --no-git --no-install -f
 > \`\`\`
 
 ## Learn More

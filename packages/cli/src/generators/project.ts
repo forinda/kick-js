@@ -85,6 +85,82 @@ async function resolveSiblingVersions(): Promise<Record<string, string>> {
   return Object.fromEntries(results)
 }
 
+/**
+ * Resolve the exact published version of a package at a given dist-tag
+ * (`npm view <name>@<tag> version`). Returns `null` on any failure. Used
+ * to pin `@forinda/kickjs` to the `alpha` channel when scaffolding a
+ * Fastify / h3 app — the engine subpaths (`@forinda/kickjs/fastify`,
+ * `/h3`) ship only on the alpha until the runtimes land in a stable
+ * release, so the default `latest` resolution would install a kickjs
+ * that doesn't export them (→ Vite "./h3 is not exported" at boot).
+ * Prerelease versions are pinned exactly (no `^`) — a caret range over a
+ * prerelease has surprising semver semantics.
+ */
+function resolveExactVersionAtTag(name: string, tag: string): string | null {
+  try {
+    const out = execFileSync('npm', ['view', `${name}@${tag}`, 'version'], {
+      encoding: 'utf-8',
+      timeout: 5000,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+      .toString()
+      .trim()
+    return out && /^\d+\.\d+\.\d+/.test(out) ? out : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Whether the package at a given dist-tag exports a subpath (e.g. `./h3`).
+ * Reads the `exports` map via `npm view <name>@<tag> exports --json`. Used to
+ * gate the alpha-pin: if `latest` already ships the engine subpath, the runtime
+ * has graduated to stable and we should NOT downgrade to an older alpha.
+ * Returns `false` on any failure (missing field / network / unparseable) so the
+ * caller treats "unknown" as "not present" and falls through to the alpha path.
+ */
+/** Strip a leading range operator (`^1.2.3` / `~1.2.3` → `1.2.3`). */
+function stripRange(range: string | undefined): string {
+  return (range ?? '').replace(/^[\^~>=<\s]+/, '')
+}
+
+/**
+ * Compare the release cores (major.minor.patch, ignoring any `-prerelease`
+ * suffix) of two versions: is `a` >= `b`? Used to guard the alpha-pin so a
+ * package is never downgraded onto a stale prerelease whose stable line has
+ * already moved past it. A coarse compare is enough here — we only need
+ * "is this alpha at least as new as the stable we'd otherwise install".
+ */
+function baseVersionGte(a: string, b: string): boolean {
+  const core = (v: string): number[] =>
+    stripRange(v)
+      .split('-')[0]!
+      .split('.')
+      .map((n) => Number.parseInt(n, 10) || 0)
+  const [a0 = 0, a1 = 0, a2 = 0] = core(a)
+  const [b0 = 0, b1 = 0, b2 = 0] = core(b)
+  if (a0 !== b0) return a0 > b0
+  if (a1 !== b1) return a1 > b1
+  return a2 >= b2
+}
+
+function tagExportsSubpath(name: string, tag: string, subpath: string): boolean {
+  try {
+    const out = execFileSync('npm', ['view', `${name}@${tag}`, 'exports', '--json'], {
+      encoding: 'utf-8',
+      timeout: 5000,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+      .toString()
+      .trim()
+    if (!out) return false
+    const exportsMap = JSON.parse(out) as Record<string, unknown>
+    return Object.prototype.hasOwnProperty.call(exportsMap, subpath)
+  } catch {
+    return false
+  }
+}
+
 type ProjectTemplate = 'rest' | 'minimal'
 type SchemaLib = 'zod' | 'valibot' | 'yup'
 
@@ -130,6 +206,51 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
   // working offline.
   log('Resolving package versions...')
   const versions = await resolveSiblingVersions()
+
+  // The pluggable-runtimes work (Fastify / h3 engine subpaths, the
+  // `kick/runtime` typegen, `kick add upload`, `kick doctor` runtime checks)
+  // ships only on the `alpha` channel until it lands in a stable release. So a
+  // non-Express scaffold needs the alpha of every package that carries runtime
+  // behavior, not just `@forinda/kickjs`:
+  //   - `@forinda/kickjs`       — the `./fastify` / `./h3` export subpaths the
+  //                               app imports (stable lacks them → Vite boot
+  //                               error `"./h3" is not exported`).
+  //   - `@forinda/kickjs-cli`   — `--runtime`, `kick add upload`, `kick doctor`,
+  //                               the `kick/runtime` typegen plugin.
+  //   - `@forinda/kickjs-vite`  — the dev loop co-versioned with the above.
+  // Gated on whether `@forinda/kickjs@latest` already exports the chosen engine
+  // subpath: once that's true the runtimes are stable and we keep `latest` for
+  // everything (self-retiring — no code change needed at graduation). Each pin
+  // is guarded so it never DOWNGRADES (an alpha can be older than latest — e.g.
+  // a package whose stable moved on past an old prerelease). Express is exempt.
+  if (runtime !== 'express') {
+    const subpath = `./${runtime}` // './fastify' | './h3'
+    if (tagExportsSubpath('@forinda/kickjs', 'latest', subpath)) {
+      log(`Using @forinda/kickjs@latest (stable ships the ${runtime} runtime)`)
+    } else {
+      const RUNTIME_PKGS = ['@forinda/kickjs', '@forinda/kickjs-cli', '@forinda/kickjs-vite']
+      const pinned: string[] = []
+      let kickjsPinned = false
+      for (const pkg of RUNTIME_PKGS) {
+        const alpha = resolveExactVersionAtTag(pkg, 'alpha')
+        // Only pin when the alpha is newer-or-equal to the stable we'd otherwise
+        // install — never downgrade a package onto a stale prerelease.
+        if (alpha && baseVersionGte(alpha, stripRange(versions[pkg]))) {
+          versions[pkg] = alpha
+          pinned.push(`${pkg}@${alpha}`)
+          if (pkg === '@forinda/kickjs') kickjsPinned = true
+        }
+      }
+      if (kickjsPinned) {
+        log(`Using the alpha channel for the ${runtime} runtime: ${pinned.join(', ')}`)
+      } else {
+        log(
+          `WARNING: could not resolve @forinda/kickjs@alpha — the ${runtime} runtime subpath ` +
+            `may be missing. After install, run: ${packageManager} add @forinda/kickjs@alpha`,
+        )
+      }
+    }
+  }
 
   // ── package.json — template-aware deps ────────────────────────────
   await writeFileSafe(
