@@ -1,22 +1,43 @@
 type ProjectTemplate = 'rest' | 'minimal'
+export type ProjectRuntime = 'express' | 'fastify' | 'h3'
+
+/** Per-runtime import source + factory name for the scaffolded `runtime:` option. */
+const RUNTIME_FACTORY: Record<ProjectRuntime, { from: string; name: string }> = {
+  express: { from: '@forinda/kickjs', name: 'expressRuntime' },
+  fastify: { from: '@forinda/kickjs/fastify', name: 'fastifyRuntime' },
+  h3: { from: '@forinda/kickjs/h3', name: 'h3Runtime' },
+}
 
 /**
  * Generate src/index.ts entry file with template-specific bootstrap.
  *
+ * The runtime is always emitted explicitly (`runtime: expressRuntime()` etc.)
+ * so the entry file is self-documenting and switching engines is a one-line
+ * edit. Fastify / h3 parse bodies natively, so the REST template skips the
+ * `express.json()` middleware (and the `express` import) under those engines.
+ *
  * All templates export the app for the Vite plugin (dev mode).
- * In production, bootstrap() auto-starts the HTTP server when
- * `globalThis.__kickjs_httpServer` is not set.
  */
 export function generateEntryFile(
   name: string,
   template: ProjectTemplate,
   version: string,
   packages: string[] = [],
+  runtime: ProjectRuntime = 'express',
 ): string {
+  const factory = RUNTIME_FACTORY[runtime]
+  const isExpress = runtime === 'express'
+
   switch (template) {
     case 'minimal': {
       const imports: string[] = []
       const adapters: string[] = []
+
+      // The runtime factory comes from the core package for Express, or a
+      // subpath for Fastify / h3.
+      const kickImport = isExpress
+        ? `import { bootstrap, ${factory.name} } from '@forinda/kickjs'`
+        : `import { bootstrap } from '@forinda/kickjs'\nimport { ${factory.name} } from '${factory.from}'`
 
       if (packages.includes('swagger')) {
         imports.push(`import { SwaggerAdapter } from '@forinda/kickjs-swagger'`)
@@ -35,11 +56,11 @@ export function generateEntryFile(
 // this line ConfigService.get('YOUR_KEY') returns undefined because the
 // cached schema would still be the base shape. See guide/configuration.
 import './config'
-import { bootstrap } from '@forinda/kickjs'
+${kickImport}
 ${importsBlock}import { modules } from './modules'
 
 // Export the app for the Vite plugin (dev mode)
-export const app = await bootstrap({ modules${adaptersBlock} })
+export const app = await bootstrap({ modules, runtime: ${factory.name}()${adaptersBlock} })
 `
     }
 
@@ -64,31 +85,33 @@ export const app = await bootstrap({ modules${adaptersBlock} })
         ? `\n  adapters: [\n${restAdapters.join('\n')}\n  ],`
         : ''
 
+      // Express needs `express.json()` for body parsing; Fastify / h3 parse
+      // bodies natively, so adding it would consume the body stream twice.
+      const kickNamed = ['bootstrap', 'requestId', 'requestLogger', 'helmet', 'cors']
+      if (isExpress) kickNamed.push(factory.name)
+      const kickImport = isExpress
+        ? `import express from 'express'\nimport {\n  ${kickNamed.join(',\n  ')},\n} from '@forinda/kickjs'`
+        : `import {\n  ${kickNamed.join(',\n  ')},\n} from '@forinda/kickjs'\nimport { ${factory.name} } from '${factory.from}'`
+      const bodyParserLine = isExpress ? `\n    express.json(),` : ''
+
       return `import 'reflect-metadata'
 // Side-effect import — registers the extended env schema with kickjs
 // **before** any controller / service / @Value gets resolved. Without
 // this line ConfigService.get('YOUR_KEY') returns undefined because the
 // cached schema would still be the base shape. See guide/configuration.
 import './config'
-import express from 'express'
-import {
-  bootstrap,
-  requestId,
-  requestLogger,
-  helmet,
-  cors,
-} from '@forinda/kickjs'
+${kickImport}
 ${restImportsBlock}import { modules } from './modules'
 
 // Export the app for the Vite plugin (dev mode)
 export const app = await bootstrap({
-  modules,${restAdaptersBlock}
+  modules,
+  runtime: ${factory.name}(),${restAdaptersBlock}
   middleware: [
     helmet(),
     cors({ origin: '*' }),
     requestId(),
-    requestLogger(),
-    express.json(),
+    requestLogger(),${bodyParserLine}
   ],
 })
 `
