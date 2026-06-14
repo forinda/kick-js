@@ -1,6 +1,11 @@
 # Spec: Pluggable HTTP Runtimes (Express / Fastify / h3)
 
-> Status: **DRAFT — design spec, no implementation yet.**
+> Status: **IMPLEMENTED (M1–M3).** The `HttpRuntime` seam, the engine-neutral
+> `RouteTable` + `RequestContext` response driver, the runtime-typed registry,
+> and the `@forinda/kickjs/fastify` runtime have shipped. Adopter usage lives in
+> the [HTTP Runtimes guide](../guide/http-runtimes.md); this file is kept as the
+> design record. Remaining niceties: `@fastify/multipart` uploads, the
+> `kick/runtime` typegen plugin, and the h3 runtime (M4).
 > Mirrors the `docs/db/` spec convention. Companion inventory: the
 > coupling audit summarized in §2 (31 core coupling points + per-package
 > downstream matrix, file:line refs in §2.3/§2.4).

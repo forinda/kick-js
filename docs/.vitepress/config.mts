@@ -23,6 +23,7 @@ const guideSidebar = [
       { text: 'Controllers & Routes', link: '/guide/controllers' },
       { text: 'Type Generation', link: '/guide/typegen' },
       { text: 'Middleware', link: '/guide/middleware' },
+      { text: 'HTTP Runtimes (Express / Fastify)', link: '/guide/http-runtimes' },
       { text: 'Context Decorators', link: '/guide/context-decorators' },
       { text: 'Validation', link: '/guide/validation' },
       { text: 'Schema (Zod / Valibot / Yup)', link: '/guide/schema' },
