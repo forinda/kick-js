@@ -242,15 +242,15 @@ kick tinker                          # Interactive REPL with full DI graph
 
 ## Technical Decisions
 
-| Area       | Choice                 | Why                                               |
-| ---------- | ---------------------- | ------------------------------------------------- |
-| Runtime    | Node.js 20+            | LTS with native ESM                               |
-| HTTP       | Express / Fastify / h3 | Pluggable runtime — pick the engine at bootstrap  |
-| Validation | Zod                    | Runtime + static types, doubles as OpenAPI schema |
-| Build      | Vite 8                 | Unified toolchain — library builds, HMR, SSR      |
-| Test       | Vitest 4               | ESM-native, fast, Vite-compatible                 |
-| Logging    | Pino                   | Fastest Node.js logger, structured JSON           |
-| Monorepo   | pnpm + Turborepo       | Efficient deps, build caching                     |
+| Area       | Choice                 | Why                                                                  |
+| ---------- | ---------------------- | -------------------------------------------------------------------- |
+| Runtime    | Node.js 20+            | LTS with native ESM                                                  |
+| HTTP       | Express / Fastify / h3 | Pluggable runtime — pick the engine at bootstrap                     |
+| Validation | Zod                    | Runtime + static types, doubles as OpenAPI schema                    |
+| Build      | Vite 8                 | Unified toolchain — library builds, HMR, SSR                         |
+| Test       | Vitest 4               | ESM-native, fast, Vite-compatible                                    |
+| Logging    | console (pluggable)    | Zero-dep default; swap for Pino / Winston via `Logger.setProvider()` |
+| Monorepo   | pnpm + Turborepo       | Efficient deps, build caching                                        |
 
 ## Runtime Compatibility
 
@@ -266,7 +266,7 @@ kick tinker                          # Interactive REPL with full DI graph
 >
 > **Bun**: core DI and decorators work; full HTTP pipeline is experimental.
 >
-> **Deno**: blocked by `reflect-metadata` and `pino` dependencies. Use `Logger.setProvider()` for core-only usage.
+> **Deno**: blocked by `reflect-metadata`. The default logger is `console`-based (zero deps), so logging is not a blocker.
 
 ## Documentation
 

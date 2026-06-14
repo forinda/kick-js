@@ -1,6 +1,6 @@
 # Error Handling
 
-KickJS provides a structured error-handling pipeline built on the `HttpException` class and a global error handler middleware. Errors are logged through Pino and serialized into consistent JSON responses.
+KickJS provides a structured error-handling pipeline built on the `HttpException` class and a global error handler middleware. Errors are logged through the framework `Logger` and serialized into consistent JSON responses.
 
 ## HttpException
 
@@ -67,7 +67,7 @@ Any error with `name === 'ZodError'` is caught and returned as a **422** respons
 
 ### 2. HttpException Instances
 
-The handler reads `err.status` and returns the appropriate status code. If validation `details` are present, they are included as `errors`. Server errors (status >= 500) are logged at the `error` level via Pino.
+The handler reads `err.status` and returns the appropriate status code. If validation `details` are present, they are included as `errors`. Server errors (status >= 500) are logged at the `error` level via the framework `Logger`.
 
 ### 3. Unexpected Errors
 
@@ -79,7 +79,7 @@ If Express has already started streaming the response (`res.headersSent === true
 
 ## Logging
 
-Errors are logged using the `@forinda/kickjs` Pino logger tagged with `ErrorHandler`:
+Errors are logged using the `@forinda/kickjs` `Logger` tagged with `ErrorHandler`:
 
 - **500+ HttpException** and **unexpected errors** are logged at `error` level with full stack traces.
 - **Headers-already-sent** conditions are logged at `warn` level.

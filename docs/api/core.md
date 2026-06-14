@@ -450,7 +450,7 @@ type MetaValue<K extends string, Fallback = unknown> = K extends keyof ContextMe
 
 ## Logger
 
-Named logger built on pino with component context.
+Named logger with component context. Console-based by default (zero deps) and pluggable via `Logger.setProvider()`.
 
 ```typescript
 class Logger {
@@ -491,14 +491,15 @@ Logger.resetProvider(): void
 
 - **setProvider** -- Replaces the active logging backend for all loggers. Clears the internal logger cache so subsequent `Logger.for()` calls use the new provider.
 - **getProvider** -- Returns the currently active provider (useful for testing).
-- **resetProvider** -- Reverts to the default pino-based provider. Intended for test teardown.
+- **resetProvider** -- Reverts to the default console-based provider. Intended for test teardown.
 
-**Built-in providers:**
+**Built-in provider:**
 
-| Provider                       | Description                                                           |
-| ------------------------------ | --------------------------------------------------------------------- |
-| `PinoLoggerProvider` (default) | Delegates to the root pino instance with `pino-pretty` in development |
-| `ConsoleLoggerProvider`        | Uses `console.*` methods. Accepts an optional prefix string           |
+| Provider                          | Description                                                            |
+| --------------------------------- | ---------------------------------------------------------------------- |
+| `ConsoleLoggerProvider` (default) | Uses `console.*` methods. Zero deps; accepts an optional prefix string |
+
+Bring your own backend (Pino, Winston, …) by implementing `LoggerProvider` and passing it to `Logger.setProvider()` — see the [Logging guide](../guide/logging.md).
 
 ```typescript
 import { Logger, ConsoleLoggerProvider } from '@forinda/kickjs'
@@ -509,7 +510,7 @@ Logger.setProvider(new ConsoleLoggerProvider())
 const log = Logger.for('MyService')
 log.info('Hello') // Output: [MyService] Hello
 
-// Restore default pino backend (e.g. in afterEach)
+// Restore default console backend (e.g. in afterEach)
 Logger.resetProvider()
 ```
 

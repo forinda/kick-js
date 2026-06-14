@@ -90,9 +90,13 @@ Adapter shutdown failures are logged but do not prevent other adapters from clea
 
 ## Troubleshooting
 
-### Raw JSON logs instead of colored output
+### Raw JSON logs instead of colored output (Pino provider)
 
-Pino uses a worker thread to load `pino-pretty`. Vite's SSR bundler can't resolve it from the bundled output. Fix: add `pino` and `pino-pretty` to `ssr.external` in your `vite.config.ts`:
+The default logger is `console`-based and needs no setup. This only applies if
+you've opted into the **Pino** logger via `Logger.setProvider()`: Pino loads
+`pino-pretty` in a worker thread, which Vite's SSR bundler can't resolve from the
+bundled output. Fix: add `pino` and `pino-pretty` to `ssr.external` in your
+`vite.config.ts`:
 
 ```ts
 export default defineConfig({
