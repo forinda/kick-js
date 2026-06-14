@@ -25,6 +25,7 @@ export { buildRoutes, materializeRouter, expressRuntime } from './http/runtimes/
 export type {
   HttpRuntime,
   AdapterHttp,
+  RuntimeResponse,
   RouteEntry,
   RouteMeta,
   RouteTable,

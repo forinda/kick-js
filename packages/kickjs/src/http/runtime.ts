@@ -97,6 +97,32 @@ export interface RouteMeta {
 /** A controller's routes grouped under the module mount prefix. */
 export type RouteTable = { mountPath: string; routes: RouteEntry[] }[]
 
+/**
+ * The response surface {@link RequestContext}'s helpers (`json` / `html` /
+ * `sse` / `download` / `render` / `problem`) drive, instead of calling Express
+ * `res` methods directly (spec §4.3). Sized so `express.Response` satisfies it
+ * structurally — under the Express runtime the driver IS the Express response,
+ * so there is no wrapping and no behavior change. Other runtimes (Fastify / h3)
+ * provide a thin object implementing this over their native reply.
+ *
+ * The terminal methods return `RuntimeResponse` for fluent chaining (Express's
+ * `Response` is assignable, since it is a superset).
+ */
+export interface RuntimeResponse {
+  status(code: number): RuntimeResponse
+  json(data: unknown): RuntimeResponse
+  send(data: unknown): RuntimeResponse
+  type(contentType: string): RuntimeResponse
+  setHeader(name: string, value: string | number | readonly string[]): unknown
+  render(view: string, data?: Record<string, unknown>): unknown
+  writeHead(statusCode: number, headers?: Record<string, string>): unknown
+  flushHeaders(): unknown
+  write(chunk: string | Buffer): boolean
+  end(data?: unknown): unknown
+  once(event: 'close', listener: () => void): unknown
+  readonly headersSent: boolean
+}
+
 // ── Runtime-typed escape hatches (spec §4.3b) ─────────────────────────────
 
 /**
