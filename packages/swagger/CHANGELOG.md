@@ -1,5 +1,13 @@
 # @forinda/kickjs-swagger
 
+## 7.0.0
+
+### Patch Changes
+
+- [#378](https://github.com/forinda/kick-js/pull/378) [`3622ca7`](https://github.com/forinda/kick-js/commit/3622ca7825c2d8d837ae094830145185d1b7ea07) Thanks [@forinda](https://github.com/forinda)! - Migrate the swagger adapter onto the engine-agnostic `ctx.http` facade (M2c). The docs UI, ReDoc, and OpenAPI spec endpoints now register via `ctx.http.route(...)`, the swagger-ui-dist assets via `ctx.http.serveStatic(...)`, and the CSP middleware via `ctx.http.use(...)` — instead of building an Express `Router` and reaching for the raw `app`. Behavior is unchanged under the default Express runtime (the CSP header still applies app-wide, exactly as the previous root-mounted docs router did).
+
+  The devtools adapter (26 routes + SSE + static SPA) migrates separately as the final M2 step.
+
 ## 7.0.0-alpha.0
 
 ### Patch Changes

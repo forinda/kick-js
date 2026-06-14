@@ -1,5 +1,44 @@
 # @forinda/kickjs-cli
 
+## 6.2.0
+
+### Minor Changes
+
+- [#391](https://github.com/forinda/kick-js/pull/391) [`3a3080c`](https://github.com/forinda/kick-js/commit/3a3080c26fca405ad3f3bd34d79a30f1a1b712dd) Thanks [@forinda](https://github.com/forinda)! - `kick new` now scaffolds the HTTP runtime explicitly. A new `--runtime express|fastify|h3` flag (and interactive prompt, default `express`) controls:
+  - the generated `src/index.ts` — `bootstrap({ runtime: expressRuntime() })` / `fastifyRuntime()` / `h3Runtime()`, imported from the core package (Express) or the `@forinda/kickjs/fastify` / `@forinda/kickjs/h3` subpath;
+  - the installed engine peers — Fastify adds `fastify` + `@fastify/middie`, h3 adds `h3` (Express needs nothing extra);
+  - the REST template's middleware — `express.json()` is only emitted for Express, since Fastify and h3 parse bodies natively (adding it would consume the body stream twice).
+
+  Making the runtime explicit means switching engines later is a one-line edit, and the scaffold installs exactly the deps the chosen engine needs.
+
+- [#395](https://github.com/forinda/kick-js/pull/395) [`d6622d5`](https://github.com/forinda/kick-js/commit/d6622d5d1d9c10cd2c446203fbaa2d143d13f2ea) Thanks [@forinda](https://github.com/forinda)! - File uploads (`@FileUpload` → `ctx.file` / `ctx.files`) now work on all three runtimes, and the CLI grew runtime-aware tooling around them.
+
+  **`@forinda/kickjs`**
+  - Fastify and h3 runtimes implement file uploads (previously gated `capabilities.uploads: false`). Fastify buffers multipart parts via `@fastify/multipart` (new optional peer); h3 uses its built-in `readMultipartFormData`. Both produce the same Multer-shaped file objects as Express, so `@FileUpload` and `ctx.file` / `ctx.files` behave identically across engines. Conformance-tested under all three.
+  - New shared helpers in `middleware/upload.ts`: `buildFileTypeFilter`, `applyUploadConfig` (enforces field name, type filter, per-file `maxSize`, array `maxCount`).
+  - Added `HttpStatus.PAYLOAD_TOO_LARGE` (413) and `HttpStatus.UNSUPPORTED_MEDIA_TYPE` (415).
+  - The runtime subpaths export their engine-native type maps: `FastifyRuntimeTypes` (`@forinda/kickjs/fastify`) and `H3RuntimeTypes` (`@forinda/kickjs/h3`), for the `KickRuntimeRegister` escape-hatch augmentation.
+
+  **`@forinda/kickjs-cli`**
+  - `KickConfig.runtime?: 'express' | 'fastify' | 'h3'` — written by `kick new --runtime`, read by dep-aware commands.
+  - `kick add upload` installs the multipart driver for the project's runtime: Express → `multer` (+ `@types/multer`), Fastify → `@fastify/multipart`, h3 → none (native).
+  - New `kick/runtime` typegen plugin emits the `KickRuntimeRegister` augmentation from `config.runtime`, retyping `ctx.req` / `ctx.res` / `AdapterContext.app` / `getRuntimeApp()` to the active engine (Express stays the default, no augmentation emitted).
+  - `kick doctor` gains two checks: the configured runtime's engine peers are installed, and — when upload usage is detected in `src/` — the matching multipart driver is present.
+
+### Patch Changes
+
+- [#399](https://github.com/forinda/kick-js/pull/399) [`2481bfd`](https://github.com/forinda/kick-js/commit/2481bfd0c9bf6418dcd04a5efedfc96974beb19f) Thanks [@forinda](https://github.com/forinda)! - The Fastify and h3 runtimes no longer depend on `express`. Their `serveStatic` used `express.static`, which forced `express` to be installed even on a pure Fastify/h3 app — defeating the point of swapping the engine. They now use `serve-static` (the standalone connect middleware that `express.static` wraps), bridged through middie / `fromNodeMiddleware` exactly as before. `serve-static` is a new optional peer of `@forinda/kickjs`.
+
+  CLI scaffolding follows suit: `kick new --runtime fastify|h3` now installs `serve-static` instead of `express` (and drops the `@types/express` devDependency) — an Express scaffold still gets `express`. The alpha-channel pins for the runtime toolchain (`@forinda/kickjs`, `-cli`, `-vite`) are now `^`-ranges rather than exact versions, so a generated project floats to newer alphas and auto-graduates to the stable release once it ships.
+
+- [#397](https://github.com/forinda/kick-js/pull/397) [`0606f9b`](https://github.com/forinda/kick-js/commit/0606f9bbf83d449eaf81b53f7f27782b6f33f531) Thanks [@forinda](https://github.com/forinda)! - Fix `kick new --runtime fastify|h3` installing a `@forinda/kickjs` that lacks the engine subpath. The Fastify / h3 runtimes ship on the `alpha` channel for now, but the scaffolder resolved `@forinda/kickjs` from the `latest` dist-tag — so a generated Fastify/h3 app pinned a stable kickjs without the `./fastify` / `./h3` exports and failed to boot under Vite (`"./h3" is not exported …`). The scaffolder now pins `@forinda/kickjs` to the `alpha` channel (exact prerelease version) when a non-Express runtime is chosen, and warns with a manual `add @forinda/kickjs@alpha` hint if the alpha can't be resolved. Express scaffolds stay on the stable channel.
+
+  Also refreshed the generated agent docs (`AGENTS.md` / `CLAUDE.md` / README templates) to describe KickJS as engine-pluggable (Express / Fastify / h3) instead of Express-only, with an explicit "don't assume Express" section, the `runtime` config field, cross-engine uploads, and `kick add upload` / `kick doctor` — so coding agents don't hallucinate an Express-only framework.
+
+- Updated dependencies [[`d6622d5`](https://github.com/forinda/kick-js/commit/d6622d5d1d9c10cd2c446203fbaa2d143d13f2ea), [`fe1b578`](https://github.com/forinda/kick-js/commit/fe1b578344f5af05077c92023e5f549ddcb4edf4), [`79f2989`](https://github.com/forinda/kick-js/commit/79f298985606e6a1bf2bd2ae558910ad615226d1), [`3e5d03e`](https://github.com/forinda/kick-js/commit/3e5d03e7144a19ff26d44b7f882b86f564c6de17), [`d049c48`](https://github.com/forinda/kick-js/commit/d049c48015e1331eeae3f75ea4e536871cb03fd5), [`335c247`](https://github.com/forinda/kick-js/commit/335c24724293ff7c900f50ec20350b47d968f6e7), [`c6e4d73`](https://github.com/forinda/kick-js/commit/c6e4d73c2ad8be3725c91673451ab994a648a7f8), [`8fc8c1a`](https://github.com/forinda/kick-js/commit/8fc8c1a23d0e717edc1ccc54089141036a0ae975), [`0e18440`](https://github.com/forinda/kick-js/commit/0e1844075a074e11413c6811b0eb3137ee0c4b7c), [`d0bc46d`](https://github.com/forinda/kick-js/commit/d0bc46d7336fb9395c7b4f71fe74e94f1a2301e5), [`07a3a15`](https://github.com/forinda/kick-js/commit/07a3a15d51aaa55372e58ee2eafa11f6841245dd), [`d66dc5b`](https://github.com/forinda/kick-js/commit/d66dc5b337c8f961e4b9329607901bad850e0f91), [`841637e`](https://github.com/forinda/kick-js/commit/841637ec9d19f7df727db7342603e7e48bb07e25), [`6c59776`](https://github.com/forinda/kick-js/commit/6c5977641707cb533a86fcf701d249ef3bff3215), [`d500c8a`](https://github.com/forinda/kick-js/commit/d500c8a9d3b11277392e88e0369cb2fd2b39cf78), [`2481bfd`](https://github.com/forinda/kick-js/commit/2481bfd0c9bf6418dcd04a5efedfc96974beb19f)]:
+  - @forinda/kickjs@5.18.0
+  - @forinda/kickjs-db@7.0.0
+
 ## 6.2.0-alpha.2
 
 ### Patch Changes

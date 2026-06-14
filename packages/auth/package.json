@@ -42,7 +42,7 @@
     "reflect-metadata": "^0.2.2"
   },
   "peerDependencies": {
-    "@forinda/kickjs": ">=5.18.0-alpha.0",
+    "@forinda/kickjs": ">=5.18.0",
     "jsonwebtoken": "^9.0.0",
     "argon2": ">=0.31.0",
     "bcryptjs": ">=2.4.0",

@@ -1,5 +1,7 @@
 # @forinda/kickjs-ws
 
+## 7.0.0
+
 ## 7.0.0-alpha.0
 
 ### Patch Changes

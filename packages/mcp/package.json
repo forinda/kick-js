@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-mcp",
-  "version": "7.0.0-alpha.0",
+  "version": "7.0.0",
   "description": "Model Context Protocol server adapter for KickJS — expose @Controller endpoints as MCP tools",
   "keywords": [
     "kickjs",
@@ -45,7 +45,7 @@
   "peerDependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
     "zod": "^4.4.3",
-    "@forinda/kickjs": ">=5.18.0-alpha.0"
+    "@forinda/kickjs": ">=5.18.0"
   },
   "peerDependenciesMeta": {
     "@modelcontextprotocol/sdk": {
