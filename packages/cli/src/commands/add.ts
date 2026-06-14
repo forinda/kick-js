@@ -191,6 +191,25 @@ export const PACKAGE_REGISTRY: Record<string, PackageEntry> = {
 }
 
 /**
+ * Headline `kick add` packages shown after scaffolding — derived from
+ * {@link PACKAGE_REGISTRY} so it can never advertise a deprecated package (the
+ * old hardcoded list included auth / drizzle / prisma). Excludes core packages
+ * (already installed), deprecated ones, `:` sub-variants (e.g. `queue:bullmq`),
+ * and the db-dialect / schema-lib duplicates that clutter a one-line summary.
+ * `kick add --list` shows the full catalog.
+ */
+export const AVAILABLE_ADD_PACKAGES = Object.entries(PACKAGE_REGISTRY)
+  .filter(
+    ([name, entry]) =>
+      !entry.core &&
+      !entry.deprecated &&
+      !name.includes(':') &&
+      !['pg', 'sqlite', 'mysql', 'zod', 'valibot', 'yup'].includes(name),
+  )
+  .map(([name]) => name)
+  .join(', ')
+
+/**
  * The `upload` catalog name is special — file uploads ship inside
  * `@forinda/kickjs` itself, so there's no package to install. What an app
  * needs is the multipart DRIVER for its HTTP runtime, and that differs per

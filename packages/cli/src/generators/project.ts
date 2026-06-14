@@ -25,6 +25,7 @@ import {
   generateHelloModule,
 } from './templates/project-app'
 import { generateReadme } from './templates/project-docs'
+import { AVAILABLE_ADD_PACKAGES } from '../commands/add'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const cliPkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'))
@@ -413,6 +414,6 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
   log('  kick add <pkg>            Install a KickJS package + peers')
   log('  kick add --list           Show all available packages')
   log('')
-  log('Available: auth, swagger, drizzle, prisma, ws, queue, devtools, mcp, testing')
+  log(`Available: ${AVAILABLE_ADD_PACKAGES}`)
   log('')
 }
