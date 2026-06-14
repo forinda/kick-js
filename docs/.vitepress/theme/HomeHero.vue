@@ -13,8 +13,9 @@ import { VPButton } from 'vitepress/theme'
       <h1 class="hero-name">Kick<span class="hero-accent">JS</span></h1>
       <p class="hero-text">The Adaptive Node.js Framework</p>
       <p class="hero-tagline">
-        Decorator-driven APIs on Express 5. REST, GraphQL, WebSocket, queues &mdash; pick what you
-        need. TypeScript-first, pluggable, production-ready.
+        Decorator-driven APIs that run on Express, Fastify, or h3 &mdash; swap the engine in one
+        line. REST, WebSocket, queues, scheduled jobs. TypeScript-first, pluggable,
+        production-ready.
       </p>
       <div class="hero-actions">
         <VPButton
