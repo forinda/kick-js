@@ -1,5 +1,117 @@
 # @forinda/kickjs
 
+## 5.18.0-alpha.0
+
+### Minor Changes
+
+- [#395](https://github.com/forinda/kick-js/pull/395) [`d6622d5`](https://github.com/forinda/kick-js/commit/d6622d5d1d9c10cd2c446203fbaa2d143d13f2ea) Thanks [@forinda](https://github.com/forinda)! - File uploads (`@FileUpload` → `ctx.file` / `ctx.files`) now work on all three runtimes, and the CLI grew runtime-aware tooling around them.
+
+  **`@forinda/kickjs`**
+  - Fastify and h3 runtimes implement file uploads (previously gated `capabilities.uploads: false`). Fastify buffers multipart parts via `@fastify/multipart` (new optional peer); h3 uses its built-in `readMultipartFormData`. Both produce the same Multer-shaped file objects as Express, so `@FileUpload` and `ctx.file` / `ctx.files` behave identically across engines. Conformance-tested under all three.
+  - New shared helpers in `middleware/upload.ts`: `buildFileTypeFilter`, `applyUploadConfig` (enforces field name, type filter, per-file `maxSize`, array `maxCount`).
+  - Added `HttpStatus.PAYLOAD_TOO_LARGE` (413) and `HttpStatus.UNSUPPORTED_MEDIA_TYPE` (415).
+  - The runtime subpaths export their engine-native type maps: `FastifyRuntimeTypes` (`@forinda/kickjs/fastify`) and `H3RuntimeTypes` (`@forinda/kickjs/h3`), for the `KickRuntimeRegister` escape-hatch augmentation.
+
+  **`@forinda/kickjs-cli`**
+  - `KickConfig.runtime?: 'express' | 'fastify' | 'h3'` — written by `kick new --runtime`, read by dep-aware commands.
+  - `kick add upload` installs the multipart driver for the project's runtime: Express → `multer` (+ `@types/multer`), Fastify → `@fastify/multipart`, h3 → none (native).
+  - New `kick/runtime` typegen plugin emits the `KickRuntimeRegister` augmentation from `config.runtime`, retyping `ctx.req` / `ctx.res` / `AdapterContext.app` / `getRuntimeApp()` to the active engine (Express stays the default, no augmentation emitted).
+  - `kick doctor` gains two checks: the configured runtime's engine peers are installed, and — when upload usage is detected in `src/` — the matching multipart driver is present.
+
+- [#375](https://github.com/forinda/kick-js/pull/375) [`fe1b578`](https://github.com/forinda/kick-js/commit/fe1b578344f5af05077c92023e5f549ddcb4edf4) Thanks [@forinda](https://github.com/forinda)! - Add the engine-agnostic adapter HTTP facade (M2a). `AdapterContext` now carries `http: AdapterHttp` — `route()` / `mount()` / `serveStatic()` / `use()` — the supported way for adapters to register routes, mounts, static dirs, and middleware without reaching for the raw Express `app`. Each call routes through the active `HttpRuntime`, so an adapter written against `ctx.http` works under any runtime.
+
+  `ctx.app` stays as the engine-native escape hatch (Express under the default runtime). Existing adapters that use `ctx.app` are unchanged. Migrating the first-party adapters (swagger / queue / mcp / devtools) onto `ctx.http` follows in M2b/M2c.
+
+  Note: `http` is a required field on `AdapterContext` (like `app`), so code that hand-builds a mock `AdapterContext` (e.g. in tests) must now include an `http` entry.
+
+  `RouteMeta.controller` / `handlerName` are now optional (ad-hoc routes registered via `ctx.http.route` have no controller behind them).
+
+- [#377](https://github.com/forinda/kick-js/pull/377) [`79f2989`](https://github.com/forinda/kick-js/commit/79f298985606e6a1bf2bd2ae558910ad615226d1) Thanks [@forinda](https://github.com/forinda)! - Migrate the queue and mcp adapters onto the engine-agnostic `ctx.http` facade (M2b), and export the `AdapterHttp` type from `@forinda/kickjs` so adapter authors can type against it.
+  - `@forinda/kickjs-queue`: the `/_kick/queue/{panel,data}` routes now register via `ctx.http.route(...)` and respond through `ctx.html` / `ctx.json` instead of reaching for the raw Express `app` / `res`.
+  - `@forinda/kickjs-mcp`: the StreamableHTTP transport endpoints (`<basePath>/messages`) now mount via `ctx.http.mount(...)` — all three verbs in one route table so the engine still auto-answers the OPTIONS preflight. The transport handler reaches `ctx.req` / `ctx.res` for the raw node request/response it needs.
+
+  Behavior is unchanged under the default Express runtime. Swagger and devtools migrate in M2c.
+
+- [#372](https://github.com/forinda/kick-js/pull/372) [`c6e4d73`](https://github.com/forinda/kick-js/commit/c6e4d73c2ad8be3725c91673451ab994a648a7f8) Thanks [@forinda](https://github.com/forinda)! - Route the bootstrap path through the HTTP-runtime seam (M1b). `Application` now holds an `HttpRuntime` (default `expressRuntime()`) and drives it for app creation, every middleware registration, route mounting, the terminal not-found / error handlers, the production server, and HMR rebuilds — instead of calling Express directly. The new `ApplicationOptions.runtime` lets you supply a different engine driver.
+
+  No behavior change: Express stays the zero-config default, so existing apps are byte-for-byte unaffected (full suite passes untouched). Engine-native escape hatches (`getExpressApp()`, `AdapterContext.app`, the health-check routes) still resolve to the Express app under the default runtime; moving those onto the runtime's adapter facade is the next milestone (M2).
+
+  This makes the runtime load-bearing — the foundation the Fastify / h3 subpaths plug into later.
+
+- [#384](https://github.com/forinda/kick-js/pull/384) [`0e18440`](https://github.com/forinda/kick-js/commit/0e1844075a074e11413c6811b0eb3137ee0c4b7c) Thanks [@forinda](https://github.com/forinda)! - Add the **Fastify runtime** — `@forinda/kickjs/fastify` (M3c). Pick the engine at bootstrap with no controller, module, or context-decorator changes:
+
+  ```ts
+  import { fastifyRuntime } from '@forinda/kickjs/fastify'
+  export const app = await bootstrap({ modules, runtime: fastifyRuntime() })
+  ```
+
+  - `fastifyRuntime()` implements the full `HttpRuntime` contract over Fastify 5: routes materialize as **native Fastify routes**, `reply` is wrapped in a `RuntimeResponse` so `ctx.json` / `ctx.html` / `ctx.download` / `ctx.problem` work unchanged, and connect middleware (the built-ins + adopter middleware) runs via `@fastify/middie`. Per spec §10, Fastify's built-in pino logger is disabled (`logger: false`) so the kickjs `requestLogger` stays the single log format.
+  - `fastify` and `@fastify/middie` are **optional peers** (install only when you opt in); the root package never imports them unless this subpath is used.
+  - `Application` now mounts controller routes through the runtime's engine-neutral `mountRoutes(RouteTable)` instead of always building an Express `Router` — behavior is byte-identical under the default Express runtime (verified by the full suite). Hand-built `route.router` values stay Express-specific and mount as connect middleware.
+
+  A conformance suite runs one fixture app under **both** Express and Fastify (routing, the response driver, connect middleware). Express behavior is unchanged.
+
+  Known follow-ups (next M3 steps): request-scoped contributors under Fastify (ALS frame across its hook model), `@fastify/multipart` uploads, SSE conformance, the `kick/runtime` typegen plugin, and widening `ApplicationOptions.runtime` from `HttpRuntime<Express>` to generic.
+
+- [#390](https://github.com/forinda/kick-js/pull/390) [`07a3a15`](https://github.com/forinda/kick-js/commit/07a3a15d51aaa55372e58ee2eafa11f6841245dd) Thanks [@forinda](https://github.com/forinda)! - Add the **h3 runtime** — `@forinda/kickjs/h3` (M4). h3 is the HTTP layer behind Nitro / Nuxt; KickJS now runs on it with no controller or module changes:
+
+  ```ts
+  import { h3Runtime } from '@forinda/kickjs/h3'
+  export const app = await bootstrap({ modules, runtime: h3Runtime() })
+  ```
+
+  `h3Runtime()` implements the full `HttpRuntime` contract over **h3 v1** (the stable, node-based surface — `createApp` / `createRouter` / `toNodeListener`, with `event.node.req` / `event.node.res`). Routes become native h3 router routes; the node response is wrapped in a `RuntimeResponse` so `ctx.json` / `ctx.html` / `ctx.sse` work unchanged; connect middleware runs via h3's `fromNodeMiddleware`; bodies parse natively (`readBody`).
+
+  `h3` is an **optional peer** (`^1`); the root package never loads it unless this subpath is used. The conformance suite now runs the same fixture app under **Express, Fastify, and h3** (24 cases) — routing, the response driver, connect middleware, context decorators, errors / 404, SSE, and validation all pass on all three.
+
+  h3 v2's web-standard `Request` / `Response` core is the eventual target via a future web-standard driver (spec §8); until then this binding uses the node-compatible v1 surface. File uploads remain gated (`capability: false`) on Fastify and h3.
+
+- [#381](https://github.com/forinda/kick-js/pull/381) [`d66dc5b`](https://github.com/forinda/kick-js/commit/d66dc5b337c8f961e4b9329607901bad850e0f91) Thanks [@forinda](https://github.com/forinda)! - Add the runtime-typed escape-hatch registry (M3a, spec §4.3b) — the type foundation the Fastify / h3 runtimes plug into.
+  - New augmentable `KickRuntimeRegister` interface plus `RuntimeTypeMap`, `ExpressRuntimeTypes`, and the `ActiveRuntime` resolver. With no augmentation, `ActiveRuntime` defaults to the Express type map.
+  - `AdapterContext.app` and the new `getRuntimeApp()` accessor are now typed `ActiveRuntime['app']` (Express by default), so a `kick/runtime` typegen augmentation can flip the engine-native escape-hatch types to Fastify / h3 without touching adapter code. `getExpressApp()` stays as a deprecated alias.
+
+  Mirrors the `KickDbRegister` / `KickEnv` augmentation mechanism. Zero behavior change and — under the default Express runtime — zero type change (`ActiveRuntime['app']` is `Express`). The request/response driver layer (`ctx.req.raw` / `ctx.res.raw`) and the Fastify runtime itself follow in later M3 steps.
+
+- [#382](https://github.com/forinda/kick-js/pull/382) [`841637e`](https://github.com/forinda/kick-js/commit/841637ec9d19f7df727db7342603e7e48bb07e25) Thanks [@forinda](https://github.com/forinda)! - Route `RequestContext`'s response helpers through an engine-agnostic `RuntimeResponse` driver (M3b) instead of calling Express `res` methods directly — the first half of the request/response driver layer that lets `ctx` run on non-Express engines.
+  - New `RuntimeResponse` interface (exported), sized so `express.Response` satisfies it structurally. Under the Express runtime the driver IS the response object, so there is no wrapping and no behavior change.
+  - `RequestContext` gains an optional fourth constructor argument (`responseDriver`); when omitted it defaults to `res`, so every existing `new RequestContext(req, res, next)` call is unchanged. Fastify / h3 runtimes will pass a thin wrapper over their native reply.
+  - `ctx.json` / `ctx.html` / `ctx.download` / `ctx.render` / `ctx.problem.*` and `ctx.sse()` now write through the driver; their return type is `RuntimeResponse` (Express's `Response` is a superset, so chained `.status().json()` usage keeps working).
+
+  Behavior is unchanged under the default Express runtime (full kickjs suite + testing/swagger/mcp/devtools pass). `ctx.req` / `ctx.res` stay as the raw engine objects; retyping them via the runtime registry and the Fastify runtime itself follow in M3c.
+
+- [#370](https://github.com/forinda/kick-js/pull/370) [`6c59776`](https://github.com/forinda/kick-js/commit/6c5977641707cb533a86fcf701d249ef3bff3215) Thanks [@forinda](https://github.com/forinda)! - Introduce the pluggable HTTP-runtime seam (M1 — seam extraction). Decorators no longer emit an `express.Router` directly: `buildRouteTable()` turns controller metadata into a plain-data `RouteEntry[]`, and an `HttpRuntime` materializes that table onto its engine. `expressRuntime()` is the default and the reference implementation — its materializer rebuilds the exact handler chain the old router builder produced, so behavior is unchanged (the full existing suite passes untouched).
+
+  New exports from `@forinda/kickjs`: `expressRuntime`, `buildRouteTable`, `materializeRouter`, and the `HttpRuntime` / `RouteTable` / `RouteEntry` / `RouteMeta` / `CtxHandler` / `ConnectMiddleware` / `RuntimeAppOptions` / `RuntimeCapabilities` types. The public `buildRoutes(controller)` API is unchanged — it now delegates through the Express runtime.
+
+  No behavior change and no migration required. This is the foundation for the Fastify / h3 runtimes in later milestones (see `docs/http/spec-http-runtimes.md`).
+
+### Patch Changes
+
+- [#385](https://github.com/forinda/kick-js/pull/385) [`3e5d03e`](https://github.com/forinda/kick-js/commit/3e5d03e7144a19ff26d44b7f882b86f564c6de17) Thanks [@forinda](https://github.com/forinda)! - Make request-scoped contributors and `ctx.set` / `ctx.get` work under the Fastify runtime. Fastify runs the route handler outside the connect-middleware chain, so the `requestScopeMiddleware` AsyncLocalStorage frame (which Express relies on) wasn't active inside the handler. The Fastify route handler now establishes the ALS frame itself around the pipeline (reusing the inbound `x-request-id` when present), so REQUEST-scoped DI, context decorators (`defineContextDecorator`), and `ctx.set` / `ctx.get` behave the same on Fastify as on Express. Adds a shared `createRequestStore` helper (used by both the Express middleware and the Fastify runtime) and a conformance test covering contributors under both engines.
+
+- [#386](https://github.com/forinda/kick-js/pull/386) [`d049c48`](https://github.com/forinda/kick-js/commit/d049c48015e1331eeae3f75ea4e536871cb03fd5) Thanks [@forinda](https://github.com/forinda)! - Error handling, 404s, and Server-Sent Events now work under the Fastify runtime.
+  - **Errors / 404**: the Fastify runtime passed the raw node response to the connect-style `errorHandler` / `notFoundHandler`, whose `res.status().json()` calls failed on it. They now receive the `RuntimeResponse` reply driver, so thrown errors map to the proper 500 / problem response and unmatched routes return the standard 404 — same shape as Express.
+  - **SSE / `ctx.signal`**: `ctx.sse()` and `ctx.signal` register `req.on('close')` / `req.once('close')`, which Fastify's request object doesn't expose. The runtime now hands `ctx` the raw node request (which has the stream events) with Fastify's parsed `body` / `params` / `query` copied onto it, so streaming and request accessors both work.
+
+  The conformance suite now runs error, 404, and SSE cases under **both** Express and Fastify (14 cases total).
+
+- [#389](https://github.com/forinda/kick-js/pull/389) [`335c247`](https://github.com/forinda/kick-js/commit/335c24724293ff7c900f50ec20350b47d968f6e7) Thanks [@forinda](https://github.com/forinda)! - Validation and request-body parsing now work under the Fastify runtime.
+  - **Validation**: the Fastify route handler now runs the route's `@Get(path, schema)` / `route.validation` schema (it previously skipped it, so validated routes weren't actually validated on Fastify). `validate` is a connect-style middleware that parses `req.body` / `query` / `params` and rejects via `next(err)` → a 422 through the error handler — same as Express.
+  - **Body parsing**: a new `nativeBodyParsing` runtime capability. Fastify parses bodies itself, so the Application now skips its default `express.json()` on Fastify — previously both ran, the body stream was read twice, and the request hung. Express keeps `express.json()` (capability is `false`).
+  - **Root paths**: a controller `@Post('/')` now mounts at the module prefix itself on Fastify (not `${prefix}/`), so requests without a trailing slash match.
+
+  Conformance suite now covers body validation (valid → parsed, invalid → rejected) under both Express and Fastify. kickjs 572 green.
+
+- [#383](https://github.com/forinda/kick-js/pull/383) [`8fc8c1a`](https://github.com/forinda/kick-js/commit/8fc8c1a23d0e717edc1ccc54089141036a0ae975) Thanks [@forinda](https://github.com/forinda)! - Type `ctx.req` / `ctx.res` from the runtime registry (`ActiveRuntime['request']` / `ActiveRuntime['response']`) instead of hard-coding Express's `Request` / `Response`. Under the default (unaugmented) Express runtime these resolve to `express.Request` / `express.Response`, so there is no change for existing apps — but a `kick/runtime` typegen augmentation now flips `ctx.req` / `ctx.res` to the active engine's native request/response, completing the §4.3b runtime-typed-context story for the request context. Behavior is unchanged; this is the last type-prep before the Fastify runtime subpath.
+
+- [#380](https://github.com/forinda/kick-js/pull/380) [`d0bc46d`](https://github.com/forinda/kick-js/commit/d0bc46d7336fb9395c7b4f71fe74e94f1a2301e5) Thanks [@forinda](https://github.com/forinda)! - Move the Application's last Express-specific calls onto the HTTP runtime, so `application.ts` no longer reaches for engine-specific APIs in its setup path:
+  - `disable('x-powered-by')` + `set('trust proxy')` now live in `expressRuntime.createApp(opts)`; `Application` passes `trustProxy` through at both the constructor and HMR-rebuild create sites. `RuntimeAppOptions.trustProxy` widened to include Express's function form.
+  - The `/health/live` and `/health/ready` endpoints now register through the `ctx.http` facade instead of `this.app.get(...)`.
+
+  Behavior is unchanged under the default Express runtime. The engine-native escape hatches (`getExpressApp()` / `getRuntimeApp()`, `AdapterContext.app`) stay typed `Express` — `ApplicationOptions.runtime` widens from `HttpRuntime<Express>` to generic once `app` becomes runtime-typed (with the Fastify / h3 work).
+
+- [#387](https://github.com/forinda/kick-js/pull/387) [`d500c8a`](https://github.com/forinda/kick-js/commit/d500c8a9d3b11277392e88e0369cb2fd2b39cf78) Thanks [@forinda](https://github.com/forinda)! - `ApplicationOptions.runtime` now accepts any `HttpRuntime`, so `bootstrap({ runtime: fastifyRuntime() })` typechecks without a cast. It was previously typed `HttpRuntime<Express>`, which forced a `as never` / `as any` when passing a non-Express runtime. The engine-native escape hatches (`getRuntimeApp()`, `AdapterContext.app`) continue to follow the active runtime via the `ActiveRuntime` registry (Express by default). Behavior is unchanged.
+
 ## 5.17.0
 
 ### Minor Changes
