@@ -196,7 +196,7 @@ const sharedSidebar = {
 export default defineConfig({
   title: 'KickJS',
   description:
-    'A production-grade, decorator-driven Node.js framework built on Express 5 and TypeScript',
+    'A production-grade, decorator-driven Node.js framework for TypeScript — runs on Express, Fastify, or h3, swap the engine in one line.',
   base: '/kick-js/',
   ignoreDeadLinks: true,
   head: [
@@ -209,7 +209,7 @@ export default defineConfig({
       {
         property: 'og:description',
         content:
-          'Decorator-driven APIs on Express 5. REST, WebSocket, queues, scheduled jobs — pick what you need.',
+          'Decorator-driven APIs that run on Express, Fastify, or h3. REST, WebSocket, queues, scheduled jobs — pick what you need.',
       },
     ],
     ['meta', { property: 'og:url', content: 'https://forinda.github.io/kick-js/' }],
@@ -241,7 +241,7 @@ export default defineConfig({
 
     footer: {
       message:
-        'Released under the <a href="https://github.com/forinda/kick-js/blob/main/LICENSE">MIT License</a>. Built with TypeScript + Express 5.',
+        'Released under the <a href="https://github.com/forinda/kick-js/blob/main/LICENSE">MIT License</a>. Built with TypeScript — runs on Express, Fastify, or h3.',
       copyright: `Copyright &copy; ${new Date().getFullYear()} <a href="https://github.com/forinda">Felix Orinda</a>`,
     },
 

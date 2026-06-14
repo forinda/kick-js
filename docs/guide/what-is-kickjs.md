@@ -39,7 +39,7 @@ auth  swagger  ws  devtools  ...
 @forinda/kickjs-vite (dev tooling)
 ```
 
-- **@forinda/kickjs** — Unified framework: DI container, 20+ decorators, Express 5, middleware, routing, logger, Zod env config
+- **@forinda/kickjs** — Unified framework: DI container, 20+ decorators, pluggable HTTP runtimes (Express / Fastify / h3), middleware, routing, logger, Zod env config
 - **@forinda/kickjs-swagger** — OpenAPI spec generation, Swagger UI, ReDoc
 - **@forinda/kickjs-auth** — JWT, API key, OAuth strategies, JWKS URI support
 - **@forinda/kickjs-ws** — WebSocket with @WsController, rooms, heartbeat
