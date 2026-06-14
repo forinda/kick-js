@@ -18,6 +18,8 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createRequire } from 'node:module'
 
 import { RequestContext } from '../context'
+import { requestStore } from '../request-store'
+import { createRequestStore } from '../middleware/request-scope'
 import type {
   ConnectMiddleware,
   HttpRuntime,
@@ -126,26 +128,48 @@ function replyDriver(reply: FastifyReplyLike): RuntimeResponse {
 /** Build the Fastify per-route handler that runs the kickjs pipeline. */
 function routeHandler(entry: RouteEntry): FastifyHandler {
   return async (request, reply) => {
-    const ctx = new RequestContext(request as never, reply as never, NOOP_NEXT, replyDriver(reply))
+    // Fastify runs the route handler OUTSIDE the connect-middleware chain, so
+    // (unlike Express) the requestScopeMiddleware ALS frame isn't active here.
+    // Establish it around the pipeline so REQUEST-scoped DI, contributors, and
+    // ctx.set/get work. Reuse the inbound x-request-id, or the id a connect
+    // middleware (requestId / requestScope, run earlier via middie) already
+    // stamped on the raw request, before generating a fresh one.
+    const raw = request.raw as IncomingMessage & { requestId?: string }
+    const headerId = raw.headers['x-request-id']
+    const requestId = (Array.isArray(headerId) ? headerId[0] : headerId) || raw.requestId
+    const store = createRequestStore(requestId)
+    // Propagate the resolved id back onto the raw request so anything reading
+    // `req.requestId` inside the frame (e.g. request-logger) matches the store
+    // and the X-Request-Id response header — parity with Express.
+    raw.requestId = store.requestId
 
-    // Class + method middleware — `(ctx, next)`; await each, stop if it ended
-    // the response or called next(err).
-    for (const mw of entry.middlewares) {
-      let advanced = false
-      await new Promise<void>((resolve, reject) => {
-        const next = (err?: unknown): void => {
-          advanced = true
-          if (err) reject(err)
-          else resolve()
-        }
-        Promise.resolve(mw(ctx, next)).catch(reject)
-      })
-      if (!advanced || reply.sent) return
-    }
+    await requestStore.run(store, async () => {
+      const ctx = new RequestContext(
+        request as never,
+        reply as never,
+        NOOP_NEXT,
+        replyDriver(reply),
+      )
 
-    if (entry.contributorRunner) await entry.contributorRunner(ctx)
-    if (reply.sent) return
-    await entry.handler(ctx)
+      // Class + method middleware — `(ctx, next)`; await each, stop if it ended
+      // the response or called next(err).
+      for (const mw of entry.middlewares) {
+        let advanced = false
+        await new Promise<void>((resolve, reject) => {
+          const next = (err?: unknown): void => {
+            advanced = true
+            if (err) reject(err)
+            else resolve()
+          }
+          Promise.resolve(mw(ctx, next)).catch(reject)
+        })
+        if (!advanced || reply.sent) return
+      }
+
+      if (entry.contributorRunner) await entry.contributorRunner(ctx)
+      if (reply.sent) return
+      await entry.handler(ctx)
+    })
   }
 }
 
