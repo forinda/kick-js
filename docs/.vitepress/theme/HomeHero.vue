@@ -54,12 +54,13 @@ import { VPButton } from 'vitepress/theme'
         </div>
         <pre
           class="code-body"
-        ><span class="hl-keyword">import</span> { bootstrap, helmet, cors } <span class="hl-keyword">from</span> <span class="hl-string">'@forinda/kickjs'</span>
+        ><span class="hl-keyword">import</span> { bootstrap } <span class="hl-keyword">from</span> <span class="hl-string">'@forinda/kickjs'</span>
+<span class="hl-keyword">import</span> { fastifyRuntime } <span class="hl-keyword">from</span> <span class="hl-string">'@forinda/kickjs/fastify'</span>
 <span class="hl-keyword">import</span> { modules } <span class="hl-keyword">from</span> <span class="hl-string">'./modules'</span>
 
-export const app = bootstrap({
+<span class="hl-keyword">export const</span> app = <span class="hl-keyword">await</span> bootstrap({
   modules,
-  middleware: [helmet(), cors(), express.json()],
+  runtime: <span class="hl-fn">fastifyRuntime</span>(), <span class="hl-comment">// or h3Runtime(), or Express</span>
 })</pre>
       </div>
     </div>
@@ -80,20 +81,34 @@ export const app = bootstrap({
   overflow: hidden;
 }
 
+/* Atmosphere: a twin-glow gradient mesh (brand blue + violet) layered over a
+ * faint dotted grid, so the hero has depth instead of a flat backdrop. */
 .hero-bg {
   position: absolute;
-  top: -200px;
-  right: -200px;
-  width: 600px;
-  height: 600px;
-  background: radial-gradient(circle, rgba(59, 130, 246, 0.12) 0%, transparent 70%);
-  border-radius: 50%;
+  inset: 0;
   pointer-events: none;
   z-index: 0;
+  background:
+    radial-gradient(540px circle at 88% 8%, rgba(59, 130, 246, 0.16), transparent 60%),
+    radial-gradient(480px circle at 12% 92%, rgba(139, 92, 246, 0.13), transparent 60%),
+    radial-gradient(circle at 1px 1px, var(--vp-c-divider) 1px, transparent 0);
+  background-size:
+    100% 100%,
+    100% 100%,
+    22px 22px;
+  -webkit-mask-image: radial-gradient(ellipse 100% 80% at 50% 30%, #000 55%, transparent 100%);
+  mask-image: radial-gradient(ellipse 100% 80% at 50% 30%, #000 55%, transparent 100%);
 }
 
 .dark .hero-bg {
-  background: radial-gradient(circle, rgba(59, 130, 246, 0.08) 0%, transparent 70%);
+  background:
+    radial-gradient(540px circle at 88% 8%, rgba(59, 130, 246, 0.2), transparent 60%),
+    radial-gradient(480px circle at 12% 92%, rgba(139, 92, 246, 0.16), transparent 60%),
+    radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.04) 1px, transparent 0);
+  background-size:
+    100% 100%,
+    100% 100%,
+    22px 22px;
 }
 
 .hero-content {
@@ -124,11 +139,13 @@ export const app = bootstrap({
 }
 
 .hero-name {
-  font-size: 4rem;
+  font-family: var(--kick-font-display);
+  font-size: 4.4rem;
   font-weight: 800;
   line-height: 1;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
   margin: 0 0 16px;
+  font-optical-sizing: auto;
 }
 
 .hero-accent {
@@ -245,12 +262,72 @@ export const app = bootstrap({
   color: #10b981;
 }
 
+.hl-fn {
+  color: #3b82f6;
+}
+
+.hl-comment {
+  color: var(--vp-c-text-3);
+  font-style: italic;
+}
+
 .dark .hl-keyword {
   color: #a78bfa;
 }
 
 .dark .hl-string {
   color: #34d399;
+}
+
+.dark .hl-fn {
+  color: #60a5fa;
+}
+
+/* ── Entrance — staggered reveal on first paint ─── */
+
+@media (prefers-reduced-motion: no-preference) {
+  .hero-badge,
+  .hero-name,
+  .hero-text,
+  .hero-tagline,
+  .hero-actions,
+  .hero-install,
+  .hero-visual {
+    opacity: 0;
+    animation: hero-rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+  .hero-badge {
+    animation-delay: 0.05s;
+  }
+  .hero-name {
+    animation-delay: 0.12s;
+  }
+  .hero-text {
+    animation-delay: 0.19s;
+  }
+  .hero-tagline {
+    animation-delay: 0.26s;
+  }
+  .hero-actions {
+    animation-delay: 0.33s;
+  }
+  .hero-install {
+    animation-delay: 0.4s;
+  }
+  .hero-visual {
+    animation: hero-rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.3s forwards;
+  }
+}
+
+@keyframes hero-rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* ── Responsive ─── */
