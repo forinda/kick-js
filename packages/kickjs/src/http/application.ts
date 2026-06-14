@@ -26,8 +26,8 @@ import { getClassMeta } from '../core/metadata'
 import { requestId } from './middleware/request-id'
 import { notFoundHandler, errorHandler } from './middleware/error-handler'
 import { requestScopeMiddleware, isRequestScopeMiddleware } from './middleware/request-scope'
-import { _setExternalContributorSources } from './router-builder'
-import { buildRoutes, expressRuntime } from './runtimes/express'
+import { _setExternalContributorSources, buildRouteTable } from './router-builder'
+import { expressRuntime } from './runtimes/express'
 import type { ActiveRuntime, AdapterHttp, HttpRuntime, RouteEntry } from './runtime'
 import { requestStore } from './request-store'
 
@@ -706,17 +706,20 @@ export class Application {
         for (const route of routeSets) {
           const version = route.version ?? defaultVersion
           const mountPath = `${apiPrefix}/v${version}${normalizePath(route.path)}`
-          // Derive the router from `controller` when one wasn't passed
-          // explicitly. The common-case shape is `{ path, controller }` —
-          // the framework owns `buildRoutes(controller)` so adopters don't
-          // import + call it themselves. Adopters who hand-build a router
-          // (composing multiple controllers, mounting third-party routers)
-          // pass `router` explicitly and we use it as-is.
-          const router = route.router ?? buildRoutes(route.controller)
-          if (!router) {
+          // Common-case `{ path, controller }`: build the engine-neutral route
+          // table and let the runtime materialize it natively (Express Router /
+          // Fastify routes / …). Adopters who hand-build a `router` (composing
+          // multiple controllers, third-party routers) pass it explicitly — that
+          // is an Express-specific connect handler, mounted via `useConnect`.
+          if (route.router) {
+            this.runtime.useConnect(this.app, route.router, { path: mountPath })
+          } else if (route.controller) {
+            this.runtime.mountRoutes(this.app, [
+              { mountPath, routes: buildRouteTable(route.controller) },
+            ])
+          } else {
             throw moduleRouteMissingControllerError(mountPath)
           }
-          this.runtime.useConnect(this.app, router, { path: mountPath })
 
           // Notify adapters (e.g. SwaggerAdapter for OpenAPI spec generation)
           if (route.controller) {
