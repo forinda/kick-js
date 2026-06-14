@@ -52,6 +52,7 @@ export function generatePackageJson(
   versions: SiblingVersions,
   packages: string[] = [],
   schemaLib: SchemaLib = 'zod',
+  runtime: 'express' | 'fastify' | 'h3' = 'express',
 ): string {
   const schemaDep = SCHEMA_LIB_DEPS[schemaLib]
   const baseDeps: Record<string, string> = {
@@ -66,9 +67,19 @@ export function generatePackageJson(
     // get it pre-installed so `.env` files Just Work. Apps that load
     // env from the shell or a secret manager can drop this safely.
     dotenv: '^17.3.1',
+    // `express` stays installed for every runtime: it's the default engine,
+    // and the Fastify / h3 runtimes use `express.static` for `serveStatic`.
     express: '^5.1.0',
     'reflect-metadata': '^0.2.2',
     [schemaDep.name]: schemaDep.range,
+  }
+
+  // Engine peers for the chosen runtime (optional peers of @forinda/kickjs).
+  if (runtime === 'fastify') {
+    baseDeps.fastify = '^5.0.0'
+    baseDeps['@fastify/middie'] = '^9.0.0'
+  } else if (runtime === 'h3') {
+    baseDeps.h3 = '^1.0.0'
   }
 
   // Add user-selected optional packages — each looked up against

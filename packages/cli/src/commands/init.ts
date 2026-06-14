@@ -28,6 +28,7 @@ export function registerInitCommand(program: Command): void {
     .option('--no-install', 'Skip dependency installation')
     .option('-f, --force', 'Remove existing files without prompting')
     .option('-t, --template <type>', 'Project template: rest | minimal')
+    .option('--runtime <engine>', 'HTTP runtime: express | fastify | h3')
     .option('-r, --repo <type>', 'Repository name (inmemory, or any DB name e.g. postgres)')
     .option(
       '-s, --schema <lib>',
@@ -120,6 +121,23 @@ export function registerInitCommand(program: Command): void {
             options: [
               { value: 'rest', label: 'REST API', hint: 'Express + Swagger' },
               { value: 'minimal', label: 'Minimal', hint: 'bare Express' },
+            ],
+          })
+        }
+      }
+
+      // ── HTTP runtime ──────────────────────────────────────────────
+      let runtime = opts.runtime
+      if (!runtime) {
+        if (yes) {
+          runtime = 'express'
+        } else {
+          runtime = await select({
+            message: 'HTTP runtime',
+            options: [
+              { value: 'express', label: 'Express', hint: 'default, zero-config' },
+              { value: 'fastify', label: 'Fastify', hint: 'fastify + @fastify/middie' },
+              { value: 'h3', label: 'h3', hint: 'Nitro / Nuxt engine' },
             ],
           })
         }
@@ -250,6 +268,7 @@ export function registerInitCommand(program: Command): void {
         defaultRepo,
         packages: selectedPackages,
         schemaLib,
+        runtime,
       })
 
       outro(`Done! Next steps: ${colors.cyan(`cd ${name} && ${packageManager} dev`)}`)

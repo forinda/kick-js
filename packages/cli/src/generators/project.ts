@@ -99,6 +99,8 @@ interface InitProjectOptions {
   packages?: string[]
   /** Schema library to scaffold env / DTOs with. Defaults to `zod`. */
   schemaLib?: SchemaLib
+  /** HTTP engine to scaffold. Defaults to `express`. */
+  runtime?: 'express' | 'fastify' | 'h3'
 }
 
 /** Scaffold a new KickJS project */
@@ -111,6 +113,7 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
     defaultRepo = 'inmemory',
     packages = [],
     schemaLib = 'zod',
+    runtime = 'express',
   } = options
   const dir = directory
 
@@ -131,7 +134,7 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
   // ── package.json — template-aware deps ────────────────────────────
   await writeFileSafe(
     join(dir, 'package.json'),
-    generatePackageJson(name, template, versions, packages, schemaLib),
+    generatePackageJson(name, template, versions, packages, schemaLib, runtime),
   )
 
   // ── vite.config.ts — enables HMR + SWC for decorators ──────────────
@@ -166,7 +169,7 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
   // ── src/index.ts — template-aware entry point ─────────────────────
   await writeFileSafe(
     join(dir, 'src/index.ts'),
-    generateEntryFile(name, template, cliPkg.version, packages),
+    generateEntryFile(name, template, cliPkg.version, packages, runtime),
   )
 
   // ── src/modules/index.ts ────────────────────────────────────────────
