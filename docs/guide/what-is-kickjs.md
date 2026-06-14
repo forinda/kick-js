@@ -32,7 +32,7 @@ KickJS is a production-grade, decorator-driven Node.js framework for TypeScript.
 @forinda/kickjs (unified: core + http + config)
        ↓ (peer dependency)
 ┌──────┼──────────┬───────────┬──────────┐
-auth  swagger  ws  devtools  ...
+db  swagger  ws  devtools  ...
                                     (adapter packages)
 
 @forinda/kickjs-cli (standalone)
@@ -41,7 +41,7 @@ auth  swagger  ws  devtools  ...
 
 - **@forinda/kickjs** — Unified framework: DI container, 20+ decorators, pluggable HTTP runtimes (Express / Fastify / h3), middleware, routing, logger, Zod env config
 - **@forinda/kickjs-swagger** — OpenAPI spec generation, Swagger UI, ReDoc
-- **@forinda/kickjs-auth** — JWT, API key, OAuth strategies, JWKS URI support
+- **@forinda/kickjs-db** — Code-first ORM (Kysely-based): schema, reversible migrations, typed queries — Postgres / MySQL / SQLite
 - **@forinda/kickjs-ws** — WebSocket with @WsController, rooms, heartbeat
 - **@forinda/kickjs-devtools** — Debug dashboard at /\_debug
 - **@forinda/kickjs-ai** — AI/LLM integration adapter

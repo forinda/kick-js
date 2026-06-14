@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  A production-grade, decorator-driven Node.js framework built on Express 5 and TypeScript.
+  A production-grade, decorator-driven Node.js framework for TypeScript — runs on Express, Fastify, or h3, swap the engine in one line.
 </p>
 
 <p align="center">
@@ -179,11 +179,11 @@ KickJS deliberately ships a small, stable core. The extension surface — `defin
 
 Three packages ship with every project — `kick new` always installs them, and `kick add` won't list them as optional. Together they're the framework runtime + the dev/build/scaffold loop:
 
-| Package                                  | Description                                                                                                         |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| [`@forinda/kickjs`](packages/kickjs/)    | Core framework — DI, decorators, Express 5, routing, middleware, contributors, request store, `processHooks`        |
-| [`@forinda/kickjs-vite`](packages/vite/) | Vite plugin — single-port HMR, typegen watcher, customizable HMR log                                                |
-| [`@forinda/kickjs-cli`](packages/cli/)   | Scaffolding, DDD generators, custom commands, `kick g agents`, jiti-powered TS config loading, walk-up project root |
+| Package                                  | Description                                                                                                                                         |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`@forinda/kickjs`](packages/kickjs/)    | Core framework — DI, decorators, pluggable HTTP runtimes (Express / Fastify / h3), routing, middleware, contributors, request store, `processHooks` |
+| [`@forinda/kickjs-vite`](packages/vite/) | Vite plugin — single-port HMR, typegen watcher, customizable HMR log                                                                                |
+| [`@forinda/kickjs-cli`](packages/cli/)   | Scaffolding, DDD generators, custom commands, `kick g agents`, jiti-powered TS config loading, walk-up project root                                 |
 
 ### Optional packages
 
@@ -242,15 +242,15 @@ kick tinker                          # Interactive REPL with full DI graph
 
 ## Technical Decisions
 
-| Area       | Choice           | Why                                               |
-| ---------- | ---------------- | ------------------------------------------------- |
-| Runtime    | Node.js 20+      | LTS with native ESM                               |
-| HTTP       | Express 5        | Mature, async middleware, wide ecosystem          |
-| Validation | Zod              | Runtime + static types, doubles as OpenAPI schema |
-| Build      | Vite 8           | Unified toolchain — library builds, HMR, SSR      |
-| Test       | Vitest 4         | ESM-native, fast, Vite-compatible                 |
-| Logging    | Pino             | Fastest Node.js logger, structured JSON           |
-| Monorepo   | pnpm + Turborepo | Efficient deps, build caching                     |
+| Area       | Choice                 | Why                                               |
+| ---------- | ---------------------- | ------------------------------------------------- |
+| Runtime    | Node.js 20+            | LTS with native ESM                               |
+| HTTP       | Express / Fastify / h3 | Pluggable runtime — pick the engine at bootstrap  |
+| Validation | Zod                    | Runtime + static types, doubles as OpenAPI schema |
+| Build      | Vite 8                 | Unified toolchain — library builds, HMR, SSR      |
+| Test       | Vitest 4               | ESM-native, fast, Vite-compatible                 |
+| Logging    | Pino                   | Fastest Node.js logger, structured JSON           |
+| Monorepo   | pnpm + Turborepo       | Efficient deps, build caching                     |
 
 ## Runtime Compatibility
 
