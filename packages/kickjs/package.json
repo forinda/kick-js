@@ -117,6 +117,7 @@
   },
   "peerDependencies": {
     "@fastify/middie": "^9.0.0",
+    "@fastify/multipart": "^9.0.0",
     "dotenv": "^17.0.0",
     "express": "^5.1.0",
     "fastify": "^5.0.0",
@@ -126,6 +127,9 @@
   },
   "peerDependenciesMeta": {
     "@fastify/middie": {
+      "optional": true
+    },
+    "@fastify/multipart": {
       "optional": true
     },
     "dotenv": {
@@ -146,6 +150,7 @@
   },
   "devDependencies": {
     "@fastify/middie": "^9.3.2",
+    "@fastify/multipart": "^9.0.0",
     "@swc/core": "^1.15.40",
     "@types/express": "^5.0.6",
     "@types/multer": "^2.1.0",

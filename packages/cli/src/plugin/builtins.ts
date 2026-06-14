@@ -31,6 +31,7 @@ import { kickModuleTokensTypegen } from '../typegen/builtin/module-tokens'
 import { kickPluginsRegistryTypegen } from '../typegen/builtin/plugins-registry'
 import { kickAugmentationsTypegen } from '../typegen/builtin/augmentations'
 import { kickContextTypegen } from '../typegen/builtin/context'
+import { kickRuntimeTypegen } from '../typegen/builtin/runtime'
 
 import { defineCliPlugin, type KickCliPlugin } from './types'
 
@@ -71,4 +72,5 @@ export const builtinCliPlugins: readonly KickCliPlugin[] = [
   defineCliPlugin({ name: 'kick/assets', typegens: [kickAssetsTypegen()] }),
   defineCliPlugin({ name: 'kick/routes', typegens: [kickRoutesTypegen()] }),
   defineCliPlugin({ name: 'kick/env', typegens: [kickEnvTypegen()] }),
+  defineCliPlugin({ name: 'kick/runtime', typegens: [kickRuntimeTypegen()] }),
 ]

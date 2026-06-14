@@ -1,5 +1,6 @@
 import 'reflect-metadata'
-import { describe, it, expect, afterEach } from 'vitest'
+import { describe, it, expect, afterEach, beforeEach } from 'vitest'
+import { Container } from '@forinda/kickjs'
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -9,6 +10,8 @@ import {
   checkExpressInstalled,
   checkKickJsInstalled,
   checkReflectMetadata,
+  checkRuntimeEngine,
+  checkUploadDriver,
   defineDoctorCheck,
   defineDoctorExtension,
   runChecks,
@@ -37,6 +40,10 @@ function tempProject(files: Record<string, string>): string {
   return dir
 }
 
+beforeEach(() => {
+  Container.reset()
+})
+
 afterEach(() => {
   while (trackedDirs.length > 0) {
     const dir = trackedDirs.pop()!
@@ -51,7 +58,7 @@ afterEach(() => {
 function ctx(cwd: string, overrides: Partial<DoctorContext> = {}): DoctorContext {
   const pkgPath = join(cwd, 'package.json')
   const pkg = existsSync(pkgPath) ? JSON.parse(readFileSync(pkgPath, 'utf-8')) : null
-  return { cwd, pkg, tsconfig: null, ...overrides }
+  return { cwd, pkg, tsconfig: null, runtime: 'express', ...overrides }
 }
 
 // ── checkKickJsInstalled ──────────────────────────────────────────────
@@ -131,6 +138,88 @@ describe('checkExpressInstalled', () => {
   it('skips (returns null) when there is no kickjs and no express', () => {
     const dir = tempProject({ 'package.json': JSON.stringify({ dependencies: {} }) })
     expect(checkExpressInstalled(ctx(dir))).toBeNull()
+  })
+})
+
+// ── checkRuntimeEngine ────────────────────────────────────────────────
+
+describe('checkRuntimeEngine', () => {
+  it('skips for the express runtime (covered by checkExpressInstalled)', () => {
+    const dir = tempProject({ 'package.json': JSON.stringify({ dependencies: {} }) })
+    expect(checkRuntimeEngine(ctx(dir, { runtime: 'express' }))).toBeNull()
+  })
+
+  it('fails when the fastify runtime peers are missing', () => {
+    const dir = tempProject({
+      'package.json': JSON.stringify({ dependencies: { '@forinda/kickjs': '^5.0.0' } }),
+    })
+    const r = checkRuntimeEngine(ctx(dir, { runtime: 'fastify' }))
+    expect(r?.status).toBe('fail')
+    expect(r?.fix).toContain('@fastify/middie')
+  })
+
+  it('passes when fastify + @fastify/middie are present', () => {
+    const dir = tempProject({
+      'package.json': JSON.stringify({
+        dependencies: { fastify: '^5.0.0', '@fastify/middie': '^9.0.0' },
+      }),
+    })
+    expect(checkRuntimeEngine(ctx(dir, { runtime: 'fastify' }))?.status).toBe('pass')
+  })
+
+  it('passes when h3 is present for the h3 runtime', () => {
+    const dir = tempProject({
+      'package.json': JSON.stringify({ dependencies: { h3: '^1.0.0' } }),
+    })
+    expect(checkRuntimeEngine(ctx(dir, { runtime: 'h3' }))?.status).toBe('pass')
+  })
+})
+
+// ── checkUploadDriver ─────────────────────────────────────────────────
+
+describe('checkUploadDriver', () => {
+  it('skips when the project does not use uploads', () => {
+    const dir = tempProject({
+      'package.json': JSON.stringify({ dependencies: {} }),
+      'src/hello.controller.ts': '@Get("/") hi() {}',
+    })
+    expect(checkUploadDriver(ctx(dir))).toBeNull()
+  })
+
+  it('fails when uploads are used on express but multer is missing', () => {
+    const dir = tempProject({
+      'package.json': JSON.stringify({ dependencies: { '@forinda/kickjs': '^5.0.0' } }),
+      'src/files.controller.ts': '@FileUpload({ mode: "single" })\nupload() {}',
+    })
+    const r = checkUploadDriver(ctx(dir, { runtime: 'express' }))
+    expect(r?.status).toBe('fail')
+    expect(r?.fix).toContain('multer')
+  })
+
+  it('passes for fastify uploads when @fastify/multipart is installed', () => {
+    const dir = tempProject({
+      'package.json': JSON.stringify({ dependencies: { '@fastify/multipart': '^9.0.0' } }),
+      'src/files.controller.ts': '@FileUpload({ mode: "array" })\nupload() {}',
+    })
+    expect(checkUploadDriver(ctx(dir, { runtime: 'fastify' }))?.status).toBe('pass')
+  })
+
+  it('passes for h3 uploads with no driver (native multipart)', () => {
+    const dir = tempProject({
+      'package.json': JSON.stringify({ dependencies: {} }),
+      'src/files.controller.ts': '@FileUpload({ mode: "single" })\nupload() {}',
+    })
+    const r = checkUploadDriver(ctx(dir, { runtime: 'h3' }))
+    expect(r?.status).toBe('pass')
+    expect(r?.message).toContain('native')
+  })
+
+  it('detects the upload.single() middleware form too', () => {
+    const dir = tempProject({
+      'package.json': JSON.stringify({ dependencies: { '@forinda/kickjs': '^5.0.0' } }),
+      'src/files.controller.ts': 'upload.single("avatar")',
+    })
+    expect(checkUploadDriver(ctx(dir, { runtime: 'express' }))?.status).toBe('fail')
   })
 })
 

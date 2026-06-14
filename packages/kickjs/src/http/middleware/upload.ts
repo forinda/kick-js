@@ -2,7 +2,12 @@ import { unlink } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import type { Request, Response, NextFunction, RequestHandler } from 'express'
 import type { Options as MulterOptions } from 'multer'
-import type { BaseUploadOptions, FileUploadConfig } from '../../core'
+import {
+  HttpException,
+  HttpStatus,
+  type BaseUploadOptions,
+  type FileUploadConfig,
+} from '../../core'
 
 // `multer` is an optional peer dependency. We load it lazily via
 // `createRequire` so importing this module never touches `multer` —
@@ -103,6 +108,93 @@ export function resolveMimeTypes(types: string[]): string[] {
 }
 
 /**
+ * Build a runtime-agnostic `(mimetype, filename) => boolean` file-type filter
+ * from `allowedTypes` (a predicate, or a list of extensions / MIME types /
+ * wildcards). Returned by both the multer middleware (Express) and the
+ * Fastify / h3 multipart paths so the accept/reject rule stays identical
+ * across engines. No `allowedTypes` → accept everything.
+ */
+export function buildFileTypeFilter(
+  allowedTypes: BaseUploadOptions['allowedTypes'],
+  customMimeMap?: Record<string, string>,
+): (mimetype: string, filename: string) => boolean {
+  if (!allowedTypes) return () => true
+  if (typeof allowedTypes === 'function') return allowedTypes
+  const mimeMap = customMimeMap ? { ...MIME_MAP, ...customMimeMap } : MIME_MAP
+  const resolved = allowedTypes.map((t) => mimeMap[t.toLowerCase().replace(/^\./, '')] ?? t)
+  return (mimetype: string) =>
+    resolved.some((type) =>
+      type.endsWith('/*') ? mimetype.startsWith(type.replace('/*', '/')) : mimetype === type,
+    )
+}
+
+/** A multer-shaped uploaded file — what `ctx.file` / `ctx.files` expose. */
+export interface UploadedFileLike {
+  fieldname: string
+  originalname: string
+  encoding: string
+  mimetype: string
+  size: number
+  buffer: Buffer
+}
+
+/** A buffered multipart file part, as the runtime hands it to {@link applyUploadConfig}. */
+export interface RawUploadPart {
+  fieldname: string
+  filename: string
+  mimetype: string
+  buffer: Buffer
+}
+
+const DEFAULT_MAX_SIZE = 5 * 1024 * 1024
+
+/**
+ * Apply a `@FileUpload` config to already-buffered multipart parts and return
+ * the multer-shaped `file` / `files` for `ctx`. Enforces the field name, type
+ * filter, per-file size limit, and (array mode) max count — throwing
+ * `HttpException` on a violation, mirroring the Express/multer error path.
+ * Used by the Fastify and h3 runtimes; Express keeps using multer directly.
+ */
+export function applyUploadConfig(
+  parts: RawUploadPart[],
+  config: FileUploadConfig,
+): { file?: UploadedFileLike; files?: UploadedFileLike[] } {
+  if (config.mode === 'none') return {}
+
+  const field = config.fieldName ?? 'file'
+  const maxSize = config.maxSize ?? DEFAULT_MAX_SIZE
+  const typeAllowed = buildFileTypeFilter(config.allowedTypes, config.customMimeMap)
+
+  const matched = parts.filter((p) => p.fieldname === field)
+  const files: UploadedFileLike[] = matched.map((p) => {
+    if (!typeAllowed(p.mimetype, p.filename)) {
+      throw new HttpException(
+        HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+        `File type ${p.mimetype} is not allowed`,
+      )
+    }
+    if (p.buffer.length > maxSize) {
+      throw new HttpException(
+        HttpStatus.PAYLOAD_TOO_LARGE,
+        `File ${p.filename} exceeds the ${maxSize}-byte limit`,
+      )
+    }
+    return {
+      fieldname: p.fieldname,
+      originalname: p.filename,
+      encoding: '7bit',
+      mimetype: p.mimetype,
+      size: p.buffer.length,
+      buffer: p.buffer,
+    }
+  })
+
+  if (config.mode === 'single') return { file: files[0] }
+  const maxCount = config.maxCount ?? 10
+  return { files: files.slice(0, maxCount) }
+}
+
+/**
  * Upload options for the middleware.
  * Extends BaseUploadOptions from core (shared with @FileUpload decorator)
  * and adds Multer-specific storage options.
@@ -115,38 +207,15 @@ export interface UploadOptions extends BaseUploadOptions {
 }
 
 function createMulter(options: UploadOptions) {
-  const mimeMap = options.customMimeMap ? { ...MIME_MAP, ...options.customMimeMap } : MIME_MAP
-
   const limits: MulterOptions['limits'] = {
     fileSize: options.maxSize ?? 5 * 1024 * 1024,
   }
 
   let fileFilter: MulterOptions['fileFilter'] | undefined
-
-  if (typeof options.allowedTypes === 'function') {
-    // Custom filter function
-    const filterFn = options.allowedTypes
+  if (options.allowedTypes) {
+    const typeAllowed = buildFileTypeFilter(options.allowedTypes, options.customMimeMap)
     fileFilter = (_req, file, cb) => {
-      if (filterFn(file.mimetype, file.originalname)) {
-        cb(null, true)
-      } else {
-        cb(new Error(`File type ${file.mimetype} is not allowed`))
-      }
-    }
-  } else if (Array.isArray(options.allowedTypes)) {
-    // String array — resolve short extensions using the (possibly extended) MIME map
-    const resolvedTypes = options.allowedTypes.map((t) => {
-      const lower = t.toLowerCase().replace(/^\./, '')
-      return mimeMap[lower] ?? t
-    })
-    fileFilter = (_req, file, cb) => {
-      const allowed = resolvedTypes.some((type) => {
-        if (type.endsWith('/*')) {
-          return file.mimetype.startsWith(type.replace('/*', '/'))
-        }
-        return file.mimetype === type
-      })
-      if (allowed) {
+      if (typeAllowed(file.mimetype, file.originalname)) {
         cb(null, true)
       } else {
         cb(new Error(`File type ${file.mimetype} is not allowed`))

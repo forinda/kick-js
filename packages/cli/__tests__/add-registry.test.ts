@@ -3,7 +3,7 @@ import { join, resolve } from 'node:path'
 
 import { describe, it, expect } from 'vitest'
 
-import { PACKAGE_REGISTRY, planAddPackages } from '../src/commands/add'
+import { PACKAGE_REGISTRY, planAddPackages, UPLOAD_DRIVERS } from '../src/commands/add'
 
 const WORKSPACE_PACKAGES_DIR = resolve(__dirname, '../..')
 
@@ -109,5 +109,39 @@ describe('planAddPackages', () => {
 
     const devByDefault = planAddPackages(['testing'], false)
     expect(devByDefault.devDeps).toContain('@forinda/kickjs-testing')
+  })
+
+  describe('upload — runtime-aware multipart driver', () => {
+    it('installs multer (+ @types/multer dev) for the express runtime', () => {
+      const plan = planAddPackages(['upload'], false, 'express')
+      expect(plan.prodDeps).toContain('multer')
+      expect(plan.devDeps).toContain('@types/multer')
+      expect(plan.unknown).toEqual([])
+      expect(plan.notices.some((n) => n.includes('multer'))).toBe(true)
+    })
+
+    it('installs @fastify/multipart for the fastify runtime', () => {
+      const plan = planAddPackages(['upload'], false, 'fastify')
+      expect(plan.prodDeps).toContain('@fastify/multipart')
+      expect(plan.prodDeps).not.toContain('multer')
+    })
+
+    it('installs no driver for h3 (built-in multipart) but still notes it', () => {
+      const plan = planAddPackages(['upload'], false, 'h3')
+      expect(plan.prodDeps).toEqual([])
+      expect(plan.devDeps).toEqual([])
+      expect(plan.notices.some((n) => n.includes('h3'))).toBe(true)
+    })
+
+    it('defaults to the express driver when no runtime is passed', () => {
+      const plan = planAddPackages(['upload'], false)
+      expect(plan.prodDeps).toContain('multer')
+    })
+
+    it('never treats upload as an unknown package', () => {
+      for (const rt of Object.keys(UPLOAD_DRIVERS) as Array<keyof typeof UPLOAD_DRIVERS>) {
+        expect(planAddPackages(['upload'], false, rt).unknown).toEqual([])
+      }
+    })
   })
 })

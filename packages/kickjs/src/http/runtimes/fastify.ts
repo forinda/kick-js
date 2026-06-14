@@ -21,6 +21,7 @@ import { RequestContext } from '../context'
 import { requestStore } from '../request-store'
 import { createRequestStore } from '../middleware/request-scope'
 import { validate } from '../middleware/validate'
+import { applyUploadConfig, type RawUploadPart } from '../middleware/upload'
 import type {
   ConnectMiddleware,
   HttpRuntime,
@@ -55,10 +56,13 @@ interface FastifyRequestLike {
   body?: unknown
   params?: unknown
   query?: unknown
+  /** Present once @fastify/multipart is registered — async iterator of parts. */
+  parts?: () => AsyncIterableIterator<MultipartPart>
+  isMultipart?: () => boolean
 }
 type FastifyHandler = (request: FastifyRequestLike, reply: FastifyReplyLike) => void | Promise<void>
 interface FastifyAppLike {
-  register(plugin: unknown): Promise<void> | FastifyAppLike
+  register(plugin: unknown, opts?: unknown): Promise<void> | FastifyAppLike
   use(path: unknown, mw?: unknown): unknown
   route(opts: { method: string; url: string; handler: FastifyHandler }): unknown
   setNotFoundHandler(handler: FastifyHandler): unknown
@@ -72,7 +76,20 @@ interface FastifyAppLike {
 const QUEUE = Symbol('kickjs.fastify.connectQueue')
 const READY = Symbol('kickjs.fastify.ready')
 const NEXT = Symbol('kickjs.fastify.next')
+// Set during mountRoutes when any route carries @FileUpload metadata, so
+// nodeHandler knows to register @fastify/multipart before ready().
+const NEEDS_MULTIPART = Symbol('kickjs.fastify.needsMultipart')
 const NOOP_NEXT = (): void => {}
+
+// A @fastify/multipart part as we consume it from `request.parts()`.
+interface MultipartPart {
+  type: 'file' | 'field'
+  fieldname: string
+  filename?: string
+  mimetype?: string
+  value?: unknown
+  toBuffer?: () => Promise<Buffer>
+}
 
 /** Wrap a Fastify reply so the RequestContext response helpers drive it. */
 function replyDriver(reply: FastifyReplyLike): RuntimeResponse {
@@ -147,10 +164,44 @@ function routeHandler(entry: RouteEntry): FastifyHandler {
       body?: unknown
       params?: unknown
       query?: unknown
+      file?: unknown
+      files?: unknown
     }
     raw.body = request.body
     raw.params = request.params
     raw.query = request.query
+
+    // @FileUpload: buffer multipart parts into the multer-shaped file(s) that
+    // `ctx.file` / `ctx.files` expose. Fastify doesn't parse multipart natively
+    // — @fastify/multipart (registered in nodeHandler when any route needs it)
+    // provides `request.parts()`. Non-file fields are merged onto `raw.body` so
+    // validation / `ctx.body` see them, matching multer's req.body behavior.
+    if (entry.meta.upload && entry.meta.upload.mode !== 'none') {
+      if (typeof request.parts !== 'function') {
+        throw new Error(
+          "@forinda/kickjs: @FileUpload on the Fastify runtime requires '@fastify/multipart'.\n" +
+            'Install it as a peer dependency: pnpm add @fastify/multipart.',
+        )
+      }
+      const rawParts: RawUploadPart[] = []
+      const fields: Record<string, unknown> = {}
+      for await (const part of request.parts()) {
+        if (part.type === 'file' && part.toBuffer) {
+          rawParts.push({
+            fieldname: part.fieldname,
+            filename: part.filename ?? '',
+            mimetype: part.mimetype ?? 'application/octet-stream',
+            buffer: await part.toBuffer(),
+          })
+        } else {
+          fields[part.fieldname] = part.value
+        }
+      }
+      const { file, files } = applyUploadConfig(rawParts, entry.meta.upload)
+      raw.file = file
+      raw.files = files
+      raw.body = { ...(raw.body as Record<string, unknown> | undefined), ...fields }
+    }
 
     const headerId = raw.headers['x-request-id']
     const requestId = (Array.isArray(headerId) ? headerId[0] : headerId) || raw.requestId
@@ -225,9 +276,18 @@ export function fastifyRuntime(): HttpRuntime<FastifyAppLike> {
       const state = app as {
         [QUEUE]?: Array<{ mw: ConnectMiddleware; opts?: UseConnectOptions }>
         [READY]?: Promise<void>
+        [NEEDS_MULTIPART]?: boolean
       }
       if (!state[READY]) {
         state[READY] = (async () => {
+          // Register @fastify/multipart first when any route uses @FileUpload so
+          // `request.parts()` is available. Our applyUploadConfig enforces the
+          // real per-file maxSize, so give the plugin a generous fileSize ceiling
+          // (its 1MB default would silently truncate larger uploads first).
+          if (state[NEEDS_MULTIPART]) {
+            const multipart = loadPeer('@fastify/multipart')
+            await app.register(multipart, { limits: { fileSize: Number.MAX_SAFE_INTEGER } })
+          }
           const middie = loadPeer('@fastify/middie')
           await app.register(middie)
           for (const { mw, opts } of state[QUEUE] ?? []) {
@@ -253,6 +313,7 @@ export function fastifyRuntime(): HttpRuntime<FastifyAppLike> {
     mountRoutes(app, table: RouteTable) {
       for (const { mountPath, routes } of table) {
         for (const entry of routes) {
+          if (entry.meta.upload) (app as { [NEEDS_MULTIPART]?: boolean })[NEEDS_MULTIPART] = true
           const url = joinPath(mountPath, entry.path)
           app.route({ method: entry.method, url, handler: routeHandler(entry) })
         }
@@ -306,11 +367,24 @@ export function fastifyRuntime(): HttpRuntime<FastifyAppLike> {
 
     capabilities: {
       render: false,
-      uploads: false,
+      uploads: true,
       connectMiddleware: true,
       nativeBodyParsing: true,
     },
   }
+}
+
+/**
+ * The Fastify runtime's engine-native types — what the runtime-typed escape
+ * hatches resolve to once the `kick/runtime` typegen emits a `KickRuntimeRegister`
+ * augmentation pointing here (spec §4.3b). `AdapterContext.app` / `getRuntimeApp()`
+ * become `FastifyInstance`; `ctx.req` / `ctx.res` the Fastify request / reply.
+ * Mirrors {@link import('../runtime').ExpressRuntimeTypes} for the default engine.
+ */
+export interface FastifyRuntimeTypes {
+  request: import('fastify').FastifyRequest
+  response: import('fastify').FastifyReply
+  app: import('fastify').FastifyInstance
 }
 
 /** Join a mount prefix and a route path into one URL, collapsing slashes. */

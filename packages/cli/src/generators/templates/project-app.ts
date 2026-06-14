@@ -365,6 +365,7 @@ export function generateKickConfig(
   template: ProjectTemplate,
   defaultRepo: string = 'inmemory',
   packageManager: 'pnpm' | 'npm' | 'yarn' | 'bun' = 'pnpm',
+  runtime: 'express' | 'fastify' | 'h3' = 'express',
 ): string {
   // `inmemory` is the only built-in; every other name (incl. the
   // deprecated prisma/drizzle) is emitted as a `{ name }` custom repo.
@@ -374,6 +375,11 @@ export function generateKickConfig(
 
 export default defineConfig({
   pattern: '${template}',
+  // The HTTP engine this app boots on (matches \`bootstrap({ runtime })\` in
+  // src/index.ts). Dep-aware commands read it: \`kick add upload\` installs the
+  // engine's multipart driver, \`kick doctor\` checks the engine peers, and
+  // \`kick typegen\` flips the runtime escape-hatch types to this engine.
+  runtime: '${runtime}',
   // Pinned so \`kick add\` and other dep-installing commands always use the
   // project's intended package manager, regardless of which lockfile exists.
   packageManager: '${packageManager}',

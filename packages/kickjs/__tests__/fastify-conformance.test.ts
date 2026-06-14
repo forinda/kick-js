@@ -6,6 +6,7 @@ import {
   Application,
   Container,
   Controller,
+  FileUpload,
   Get,
   Post,
   RequestContext,
@@ -84,10 +85,14 @@ for (const rt of RUNTIMES) {
       const app = new Application({
         runtime: rt.make(),
         middlewares: [
-          (_req: never, res: { setHeader: (n: string, v: string) => void }, next: () => void) => {
+          ((
+            _req: unknown,
+            res: { setHeader: (n: string, v: string) => void },
+            next: () => void,
+          ) => {
             res.setHeader('x-conformance', rt.name)
             next()
-          },
+          }) as never,
         ],
         modules: [{ routes: () => ({ path: '/mw', controller: C }) } as never],
       })
@@ -201,6 +206,90 @@ for (const rt of RUNTIMES) {
       // Invalid body → rejected by validation (not 2xx).
       const bad = await request(handler).post('/api/v1/v').send({ title: '' })
       expect(bad.status).toBeGreaterThanOrEqual(400)
+    })
+
+    it('accepts a single file upload and exposes it on ctx.file', async () => {
+      @Controller()
+      class C {
+        @Post('/avatar')
+        @FileUpload({ mode: 'single', fieldName: 'avatar' })
+        upload(ctx: RequestContext) {
+          const f = ctx.file
+          ctx.created({
+            name: f?.originalname,
+            mimetype: f?.mimetype,
+            size: f?.size,
+            content: f?.buffer.toString('utf-8'),
+            // a non-file field rides along on ctx.body
+            note: (ctx.body as { note?: string }).note,
+          })
+        }
+      }
+      const app = new Application({
+        runtime: rt.make(),
+        modules: [{ routes: () => ({ path: '/u', controller: C }) } as never],
+      })
+      await app.setup()
+
+      const res = await request(app.handle.bind(app))
+        .post('/api/v1/u/avatar')
+        .field('note', 'hello')
+        .attach('avatar', Buffer.from('PNGDATA'), {
+          filename: 'pic.png',
+          contentType: 'image/png',
+        })
+        .expect(201)
+      expect(res.body).toEqual({
+        name: 'pic.png',
+        mimetype: 'image/png',
+        size: 7,
+        content: 'PNGDATA',
+        note: 'hello',
+      })
+    })
+
+    it('accepts an array upload and exposes ctx.files', async () => {
+      @Controller()
+      class C {
+        @Post('/docs')
+        @FileUpload({ mode: 'array', fieldName: 'docs', maxCount: 3 })
+        upload(ctx: RequestContext) {
+          ctx.created({ names: (ctx.files ?? []).map((f) => f.originalname) })
+        }
+      }
+      const app = new Application({
+        runtime: rt.make(),
+        modules: [{ routes: () => ({ path: '/u', controller: C }) } as never],
+      })
+      await app.setup()
+
+      const res = await request(app.handle.bind(app))
+        .post('/api/v1/u/docs')
+        .attach('docs', Buffer.from('a'), { filename: 'a.txt', contentType: 'text/plain' })
+        .attach('docs', Buffer.from('b'), { filename: 'b.txt', contentType: 'text/plain' })
+        .expect(201)
+      expect(res.body).toEqual({ names: ['a.txt', 'b.txt'] })
+    })
+
+    it('rejects a file whose type is not allowed', async () => {
+      @Controller()
+      class C {
+        @Post('/img')
+        @FileUpload({ mode: 'single', fieldName: 'img', allowedTypes: ['png'] })
+        upload(ctx: RequestContext) {
+          ctx.created({ name: ctx.file?.originalname })
+        }
+      }
+      const app = new Application({
+        runtime: rt.make(),
+        modules: [{ routes: () => ({ path: '/u', controller: C }) } as never],
+      })
+      await app.setup()
+
+      const res = await request(app.handle.bind(app))
+        .post('/api/v1/u/img')
+        .attach('img', Buffer.from('%PDF'), { filename: 'doc.pdf', contentType: 'application/pdf' })
+      expect(res.status).toBeGreaterThanOrEqual(400)
     })
   })
 }

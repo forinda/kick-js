@@ -340,6 +340,24 @@ export interface KickConfig {
   packageManager?: PackageManager
 
   /**
+   * The HTTP runtime the app boots on — the engine passed to
+   * `bootstrap({ runtime })`. Written by `kick new --runtime`, and read by
+   * dep-aware commands so they install / validate the engine-correct peers:
+   * - `kick add upload` picks the multipart driver (express → `multer`,
+   *   fastify → `@fastify/multipart`, h3 → built-in, no driver)
+   * - `kick doctor` checks the engine peers + upload driver are present
+   * - the `kick/runtime` typegen emits the `KickRuntimeRegister` augmentation
+   *   that flips the runtime-typed escape hatches (`AdapterContext.app`,
+   *   `getRuntimeApp()`) to the engine's native types
+   *
+   * Defaults to `'express'` when unset (the default engine).
+   *
+   * @example
+   * runtime: 'fastify'
+   */
+  runtime?: 'express' | 'fastify' | 'h3'
+
+  /**
    * DI token scope prefix used by code generators. Every scaffolded
    * `createToken<T>('<scope>/<area>/<key>')` substitutes this string
    * for `<scope>`. Generators emit org-scoped tokens out of the box

@@ -100,30 +100,61 @@ function defineConfig(config: KickConfig): KickConfig
 
 ## KickConfig
 
+The `kick.config.ts` shape — configures the CLI, code generators, typegen, and `kick db`. It is **separate** from [`bootstrap()` options](./core.md#bootstrap-options), which configure the running app. Wrap it in [`defineConfig`](#defineconfig) for type-checking.
+
 ```typescript
 interface KickConfig {
-  pattern?: 'rest' | 'ddd' | 'cqrs' | 'minimal'
+  pattern?: 'rest' | 'ddd' | 'cqrs' | 'minimal' // generator scaffolding style
+  runtime?: 'express' | 'fastify' | 'h3' // HTTP engine — drives `kick add upload`, `kick doctor`, runtime typegen
+  packageManager?: 'pnpm' | 'npm' | 'yarn' | 'bun' // overrides lockfile auto-detection for `kick add`
+  tokenScope?: string // DI token prefix for generated `createToken('<scope>/...')`
+
   modules?: {
     dir?: string // default: 'src/modules'
-    repo?: 'drizzle' | 'inmemory' | 'prisma' | { name: string }
+    repo?: 'inmemory' | 'prisma' | 'drizzle' | { name: string } // default: 'inmemory'
     pluralize?: boolean // default: true
-    schemaDir?: string // For Drizzle/Prisma schema files
+    schemaDir?: string // Drizzle/Prisma schema files
     prismaClientPath?: string // Prisma 7: '@/generated/prisma/client'
   }
-  commands?: KickCommandDefinition[]
-  style?: {
-    semicolons?: boolean
-    quotes?: 'single' | 'double'
-    trailingComma?: 'all' | 'es5' | 'none'
-    indent?: number
+
+  typegen?: {
+    srcDir?: string // default: 'src'
+    outDir?: string // default: '.kickjs/types'
+    schemaValidator?: 'kickjs-schema' | 'zod' | false // body-typing source
+    envFile?: string | false // false disables env typing
+    disable?: string[] // plugin ids to skip, e.g. ['kick/runtime']
   }
-  // Deprecated (use modules.* instead)
-  modulesDir?: string // @deprecated - use modules.dir
-  defaultRepo?: 'drizzle' | 'inmemory' | 'prisma' // @deprecated - use modules.repo
-  pluralize?: boolean // @deprecated - use modules.pluralize
-  schemaDir?: string // @deprecated - use modules.schemaDir
+
+  db?: {
+    schemaPath?: string // default: 'src/db/schema.ts'
+    migrationsDir?: string // default: 'db/migrations'
+    dialect?: 'postgres' | 'sqlite' | 'mysql' // default: 'postgres'
+    connectionString?: string // else read from DATABASE_URL
+    adapter?: () => unknown | Promise<unknown> // escape hatch (takes precedence)
+  }
+
+  copyDirs?: Array<string | { src: string; dest?: string }> // dirs copied to dist/ on build
+  commands?: KickCommandDefinition[] // custom `kick <name>` commands
+  plugins?: KickCliPlugin[] // CLI plugins (e.g. dbCliPlugin from '@forinda/kickjs-db/cli')
+  doctor?: { checks?: DoctorCheck[] } // extra `kick doctor` checks
+  style?: 'define' | 'class' // module generation style
 }
 ```
+
+Key fields at a glance:
+
+| Field                  | Default                                    | Used by                                                           |
+| ---------------------- | ------------------------------------------ | ----------------------------------------------------------------- |
+| `pattern`              | `'rest'`                                   | `kick new`, `kick g`                                              |
+| `runtime`              | `'express'`                                | `kick add upload` (driver), `kick doctor`, `kick/runtime` typegen |
+| `packageManager`       | lockfile-detected                          | `kick add` and any dep-installing command                         |
+| `modules`              | see above                                  | module generators                                                 |
+| `typegen`              | `srcDir: 'src'`, `outDir: '.kickjs/types'` | `kick typegen`, `kick dev`                                        |
+| `db`                   | `dialect: 'postgres'`                      | `kick db *` (when `dbCliPlugin` is in `plugins`)                  |
+| `commands` / `plugins` | `[]`                                       | custom CLI surface                                                |
+| `doctor`               | —                                          | `kick doctor`                                                     |
+
+> The deprecated top-level `modulesDir` / `defaultRepo` / `pluralize` / `schemaDir` fields still parse but are superseded by the `modules` block — migrate to `modules.*`.
 
 ## KickCommandDefinition
 

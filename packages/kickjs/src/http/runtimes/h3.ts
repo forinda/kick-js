@@ -23,6 +23,7 @@ import { RequestContext } from '../context'
 import { requestStore } from '../request-store'
 import { createRequestStore } from '../middleware/request-scope'
 import { validate } from '../middleware/validate'
+import { applyUploadConfig, type RawUploadPart } from '../middleware/upload'
 import type {
   ConnectMiddleware,
   HttpRuntime,
@@ -105,20 +106,48 @@ function resDriver(res: ServerResponse): RuntimeResponse {
 
 /** Build the h3 event handler that runs the kickjs pipeline for one route. */
 function makeEventHandler(entry: RouteEntry): (event: H3EventLike) => Promise<void> {
-  const { getRouterParams, getQuery, readBody } = h3()
+  const { getRouterParams, getQuery, readBody, readMultipartFormData } = h3()
+  const upload = entry.meta.upload
   return async (event: H3EventLike) => {
     const req = event.node.req as IncomingMessage & {
       requestId?: string
       body?: unknown
       params?: unknown
       query?: unknown
+      file?: unknown
+      files?: unknown
     }
     const res = event.node.res
 
     // Populate the express-shaped request fields h3 keeps elsewhere.
     req.params = getRouterParams(event) ?? {}
     req.query = getQuery(event) ?? {}
-    if (BODY_METHODS.has(req.method ?? 'GET')) {
+    if (upload && upload.mode !== 'none') {
+      // @FileUpload: read the multipart body once (readBody would consume the
+      // same stream, so the two are mutually exclusive). File parts → the
+      // multer-shaped ctx.file/ctx.files; non-file fields → req.body.
+      const form = (await readMultipartFormData(event).catch(() => undefined)) as
+        | Array<{ name?: string; filename?: string; type?: string; data: Buffer }>
+        | undefined
+      const rawParts: RawUploadPart[] = []
+      const fields: Record<string, unknown> = {}
+      for (const part of form ?? []) {
+        if (part.filename) {
+          rawParts.push({
+            fieldname: part.name ?? '',
+            filename: part.filename,
+            mimetype: part.type ?? 'application/octet-stream',
+            buffer: part.data,
+          })
+        } else if (part.name) {
+          fields[part.name] = part.data.toString('utf-8')
+        }
+      }
+      const { file, files } = applyUploadConfig(rawParts, upload)
+      req.file = file
+      req.files = files
+      req.body = fields
+    } else if (BODY_METHODS.has(req.method ?? 'GET')) {
       req.body = await readBody(event).catch(() => undefined)
     }
 
@@ -245,11 +274,24 @@ export function h3Runtime(): HttpRuntime<H3AppLike> {
 
     capabilities: {
       render: false,
-      uploads: false,
+      uploads: true,
       connectMiddleware: true,
       nativeBodyParsing: true,
     },
   }
+}
+
+/**
+ * The h3 runtime's engine-native types — what the runtime-typed escape hatches
+ * resolve to once the `kick/runtime` typegen emits a `KickRuntimeRegister`
+ * augmentation pointing here (spec §4.3b). `AdapterContext.app` / `getRuntimeApp()`
+ * become the h3 `App`; `ctx.req` / `ctx.res` the per-request `H3Event` (h3 v1
+ * routes everything through the event). Mirrors `ExpressRuntimeTypes`.
+ */
+export interface H3RuntimeTypes {
+  request: import('h3').H3Event
+  response: import('h3').H3Event
+  app: import('h3').App
 }
 
 /** Join a mount prefix and a route path; a root path maps to the prefix itself. */

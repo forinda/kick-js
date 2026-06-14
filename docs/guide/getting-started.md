@@ -157,6 +157,8 @@ The Vite dev plugin reads the `app` export to wire HMR. Skipping the
 update on file changes.
 :::
 
+`bootstrap()` takes many more options (runtime, middlewares, port, cluster, security…) — the full table is the [bootstrap() options reference](../api/core.md#bootstrap-options). The separate `kick.config.ts` file (CLI/codegen) is documented at [KickConfig](../api/cli.md#kickconfig).
+
 That's it. Your API is running at `http://localhost:3000/api/v1/users`.
 
 ### Route Summary
