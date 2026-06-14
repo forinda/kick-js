@@ -45,6 +45,7 @@
     "http-runtime-response-driver-m3b",
     "http-runtime-seam-m1",
     "http-runtime-widen-option",
+    "runtime-drop-express-static",
     "scaffold-alpha-runtime"
   ]
 }
