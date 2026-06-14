@@ -86,17 +86,19 @@ async function resolveSiblingVersions(): Promise<Record<string, string>> {
 }
 
 /**
- * Resolve the exact published version of a package at a given dist-tag
+ * Resolve the published version of a package at a given dist-tag
  * (`npm view <name>@<tag> version`). Returns `null` on any failure. Used
  * to pin `@forinda/kickjs` to the `alpha` channel when scaffolding a
  * Fastify / h3 app — the engine subpaths (`@forinda/kickjs/fastify`,
  * `/h3`) ship only on the alpha until the runtimes land in a stable
  * release, so the default `latest` resolution would install a kickjs
  * that doesn't export them (→ Vite "./h3 is not exported" at boot).
- * Prerelease versions are pinned exactly (no `^`) — a caret range over a
- * prerelease has surprising semver semantics.
+ * Returns the bare version; the caller applies a `^` range so the project
+ * floats to newer alphas and auto-graduates to stable (a caret over a
+ * prerelease matches same-tuple prereleases ≥ it, plus later stables `< next
+ * major`).
  */
-function resolveExactVersionAtTag(name: string, tag: string): string | null {
+function resolveVersionAtTag(name: string, tag: string): string | null {
   try {
     const out = execFileSync('npm', ['view', `${name}@${tag}`, 'version'], {
       encoding: 'utf-8',
@@ -232,12 +234,14 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
       const pinned: string[] = []
       let kickjsPinned = false
       for (const pkg of RUNTIME_PKGS) {
-        const alpha = resolveExactVersionAtTag(pkg, 'alpha')
-        // Only pin when the alpha is newer-or-equal to the stable we'd otherwise
-        // install — never downgrade a package onto a stale prerelease.
+        const alpha = resolveVersionAtTag(pkg, 'alpha')
+        // Only switch when the alpha is newer-or-equal to the stable we'd
+        // otherwise install — never downgrade onto a stale prerelease. Use a
+        // `^` range (not an exact pin) so the project picks up newer alphas and
+        // auto-graduates to the stable release once it ships.
         if (alpha && baseVersionGte(alpha, stripRange(versions[pkg]))) {
-          versions[pkg] = alpha
-          pinned.push(`${pkg}@${alpha}`)
+          versions[pkg] = `^${alpha}`
+          pinned.push(`${pkg}@^${alpha}`)
           if (pkg === '@forinda/kickjs') kickjsPinned = true
         }
       }

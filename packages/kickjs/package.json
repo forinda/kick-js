@@ -123,6 +123,7 @@
     "fastify": "^5.0.0",
     "h3": "^1.0.0",
     "multer": "^2.0.0",
+    "serve-static": "^1.15.0 || ^2.0.0",
     "zod": "^4.0.0"
   },
   "peerDependenciesMeta": {
@@ -144,6 +145,9 @@
     "multer": {
       "optional": true
     },
+    "serve-static": {
+      "optional": true
+    },
     "zod": {
       "optional": true
     }
@@ -155,9 +159,11 @@
     "@types/express": "^5.0.6",
     "@types/multer": "^2.1.0",
     "@types/node": "^25.9.2",
+    "@types/serve-static": "^1.15.7",
     "fastify": "^5.8.5",
     "h3": "1.15.11",
     "multer": "^2.1.1",
+    "serve-static": "^2.2.0",
     "typescript": "^6.0.3",
     "vite": "^8.0.16",
     "vitest": "^4.1.8",
