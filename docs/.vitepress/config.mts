@@ -195,9 +195,15 @@ const sharedSidebar = {
 export default defineConfig({
   title: 'KickJS',
   description:
-    'A production-grade, decorator-driven Node.js framework built on Express 5 and TypeScript',
+    'A production-grade, decorator-driven Node.js framework for TypeScript — runs on Express, Fastify, or h3, swap the engine in one line.',
   base: '/kick-js/',
   ignoreDeadLinks: true,
+  lastUpdated: true,
+  // Emit sitemap.xml so search engines can crawl every page (GitHub Pages
+  // project site is served under /kick-js/).
+  sitemap: {
+    hostname: 'https://forinda.github.io/kick-js/',
+  },
   head: [
     ['link', { rel: 'icon', type: 'image/svg+xml', href: '/kick-js/logo.svg' }],
     ['meta', { name: 'theme-color', content: '#3b82f6' }],
@@ -208,7 +214,7 @@ export default defineConfig({
       {
         property: 'og:description',
         content:
-          'Decorator-driven APIs on Express 5. REST, WebSocket, queues, scheduled jobs — pick what you need.',
+          'Decorator-driven APIs that run on Express, Fastify, or h3. REST, WebSocket, queues, scheduled jobs — pick what you need.',
       },
     ],
     ['meta', { property: 'og:url', content: 'https://forinda.github.io/kick-js/' }],
