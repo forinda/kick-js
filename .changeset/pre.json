@@ -44,6 +44,7 @@
     "http-runtime-registry-m3a",
     "http-runtime-response-driver-m3b",
     "http-runtime-seam-m1",
-    "http-runtime-widen-option"
+    "http-runtime-widen-option",
+    "scaffold-alpha-runtime"
   ]
 }

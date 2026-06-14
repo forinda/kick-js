@@ -1,5 +1,13 @@
 # @forinda/kickjs-cli
 
+## 6.2.0-alpha.1
+
+### Patch Changes
+
+- [#397](https://github.com/forinda/kick-js/pull/397) [`0606f9b`](https://github.com/forinda/kick-js/commit/0606f9bbf83d449eaf81b53f7f27782b6f33f531) Thanks [@forinda](https://github.com/forinda)! - Fix `kick new --runtime fastify|h3` installing a `@forinda/kickjs` that lacks the engine subpath. The Fastify / h3 runtimes ship on the `alpha` channel for now, but the scaffolder resolved `@forinda/kickjs` from the `latest` dist-tag — so a generated Fastify/h3 app pinned a stable kickjs without the `./fastify` / `./h3` exports and failed to boot under Vite (`"./h3" is not exported …`). The scaffolder now pins `@forinda/kickjs` to the `alpha` channel (exact prerelease version) when a non-Express runtime is chosen, and warns with a manual `add @forinda/kickjs@alpha` hint if the alpha can't be resolved. Express scaffolds stay on the stable channel.
+
+  Also refreshed the generated agent docs (`AGENTS.md` / `CLAUDE.md` / README templates) to describe KickJS as engine-pluggable (Express / Fastify / h3) instead of Express-only, with an explicit "don't assume Express" section, the `runtime` config field, cross-engine uploads, and `kick add upload` / `kick doctor` — so coding agents don't hallucinate an Express-only framework.
+
 ## 6.2.0-alpha.0
 
 ### Minor Changes
