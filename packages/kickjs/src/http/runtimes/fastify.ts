@@ -260,6 +260,13 @@ export function fastifyRuntime(): HttpRuntime<FastifyAppLike> {
       const Fastify = loadPeer('fastify')
       const app = Fastify({
         logger: false,
+        // Match Express / h3 routing leniency: `/api/v1/hello` and
+        // `/api/v1/hello/` resolve to the same route. Without this, Fastify's
+        // strict router 404s a trailing-slash request — e.g. a controller's
+        // root `@Get('/')` (mounted at the prefix) misses `${prefix}/`. Set under
+        // `routerOptions` (Fastify 5+; top-level `ignoreTrailingSlash` is
+        // deprecated, removed in Fastify 6).
+        routerOptions: { ignoreTrailingSlash: true },
         // trustProxy passed through for now; core X-Forwarded-For
         // normalization (spec §10 Q1) is a follow-up.
         trustProxy: typeof options.trustProxy === 'function' ? false : options.trustProxy,
