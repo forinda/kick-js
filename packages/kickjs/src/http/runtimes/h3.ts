@@ -48,6 +48,13 @@ interface H3AppLike {
 
 const NEXT = Symbol('kickjs.h3.next')
 const ERROR_MW = Symbol('kickjs.h3.errorMw')
+// h3's `createRouter` is terminal — on no match it THROWS a 404, it does not
+// fall through to the next `app.use` layer like an Express Router. So every
+// route source (controllers, /health, devtools /_debug, ad-hoc adapter routes)
+// must live on ONE shared router, registered AFTER all connect middleware.
+const ROUTER = Symbol('kickjs.h3.router')
+const NOTFOUND_MW = Symbol('kickjs.h3.notFoundMw')
+const ASSEMBLED = Symbol('kickjs.h3.assembled')
 const NOOP_NEXT = (): void => {}
 const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 
@@ -199,12 +206,40 @@ export function h3Runtime(): HttpRuntime<H3AppLike> {
       const { createApp } = h3()
       const app = createApp({
         onError: (error: unknown, event: H3EventLike) => {
-          const mw = (app as { [ERROR_MW]?: ConnectMiddleware })[ERROR_MW]
-          if (mw && !event.node.res.writableEnded) {
+          const res = event.node.res
+          if (res.writableEnded) return
+          const state = app as {
+            [ERROR_MW]?: ConnectMiddleware
+            [NOTFOUND_MW]?: ConnectMiddleware
+          }
+          // The shared router throws a 404 on no match (it's terminal). Treat
+          // that as "not found", not a server error: hand back to the outer
+          // chain (Vite dev fall-through) when present, else run the framework's
+          // notFound handler so it returns a proper 404 — only genuine handler
+          // errors reach the error middleware (and the ErrorHandler log).
+          const status = (error as { statusCode?: number } | undefined)?.statusCode
+          if (status === 404) {
+            const next = (event.node.req as IncomingMessage & { [NEXT]?: () => void })[NEXT]
+            if (next) {
+              next()
+              return
+            }
+            const nf = state[NOTFOUND_MW]
+            if (nf) {
+              ;(nf as (req: unknown, res: unknown, next: () => void) => void)(
+                event.node.req,
+                resDriver(res),
+                NOOP_NEXT,
+              )
+              return
+            }
+          }
+          const mw = state[ERROR_MW]
+          if (mw) {
             ;(mw as (e: unknown, req: unknown, res: unknown, next: () => void) => void)(
               error,
               event.node.req,
-              resDriver(event.node.res),
+              resDriver(res),
               NOOP_NEXT,
             )
           }
@@ -215,6 +250,15 @@ export function h3Runtime(): HttpRuntime<H3AppLike> {
 
     nodeHandler(app) {
       const { toNodeListener } = h3()
+      // Register the shared router exactly once, AFTER all connect middleware
+      // (serveStatic / useConnect) the setup phase added via `app.use` — the
+      // router is terminal, so anything that must run for non-route paths has to
+      // sit before it in the stack.
+      const state = app as { [ROUTER]?: unknown; [ASSEMBLED]?: boolean }
+      if (!state[ASSEMBLED]) {
+        state[ASSEMBLED] = true
+        if (state[ROUTER]) app.use(state[ROUTER])
+      }
       const listener = toNodeListener(app)
       return (req: IncomingMessage, res: ServerResponse, next?: (err?: unknown) => void) => {
         if (next) (req as IncomingMessage & { [NEXT]?: (err?: unknown) => void })[NEXT] = next
@@ -226,7 +270,12 @@ export function h3Runtime(): HttpRuntime<H3AppLike> {
 
     mountRoutes(app, table: RouteTable) {
       const { createRouter, eventHandler } = h3()
-      const router = createRouter()
+      // One shared router per app — every mountRoutes call (controllers, health,
+      // devtools, ad-hoc adapter routes) adds to it. `app.use(router)` is
+      // deferred to nodeHandler so the router lands after connect middleware.
+      const state = app as { [ROUTER]?: ReturnType<typeof createRouter> }
+      if (!state[ROUTER]) state[ROUTER] = createRouter()
+      const router = state[ROUTER]
       for (const { mountPath, routes } of table) {
         for (const entry of routes) {
           const url = joinPath(mountPath, entry.path)
@@ -234,7 +283,6 @@ export function h3Runtime(): HttpRuntime<H3AppLike> {
           router[method](url, eventHandler(makeEventHandler(entry)))
         }
       }
-      app.use(router)
     },
 
     useConnect(app, mw: ConnectMiddleware, opts?: UseConnectOptions) {
@@ -253,22 +301,11 @@ export function h3Runtime(): HttpRuntime<H3AppLike> {
     },
 
     setNotFound(app, mw: ConnectMiddleware) {
-      const { eventHandler } = h3()
-      // Registered after the router, so it only runs when nothing matched.
-      app.use(
-        eventHandler((event: H3EventLike) => {
-          const next = (event.node.req as IncomingMessage & { [NEXT]?: () => void })[NEXT]
-          if (next) {
-            next()
-            return
-          }
-          ;(mw as (req: unknown, res: unknown, next: () => void) => void)(
-            event.node.req,
-            resDriver(event.node.res),
-            NOOP_NEXT,
-          )
-        }),
-      )
+      // Stash it — the shared router throws a 404 on no match, which `onError`
+      // (createApp) dispatches to this handler (or to the Vite fall-through when
+      // a `next` is present). A post-router `app.use` could never run, since the
+      // terminal router throws before the stack advances.
+      ;(app as { [NOTFOUND_MW]?: ConnectMiddleware })[NOTFOUND_MW] = mw
     },
 
     setErrorHandler(app, mw: ConnectMiddleware) {

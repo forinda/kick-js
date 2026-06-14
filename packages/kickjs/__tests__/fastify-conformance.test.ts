@@ -271,6 +271,66 @@ for (const rt of RUNTIMES) {
       expect(res.body).toEqual({ names: ['a.txt', 'b.txt'] })
     })
 
+    it('serves a controller root route with and without a trailing slash', async () => {
+      // Regression: a controller `@Get('/')` mounts at the prefix itself. Fastify's
+      // strict router 404s `${prefix}/` (trailing slash) unless ignoreTrailingSlash
+      // is on — Express and h3 are lenient. Both forms must resolve.
+      @Controller()
+      class Root {
+        @Get('/')
+        root(ctx: RequestContext) {
+          ctx.json({ ok: true })
+        }
+      }
+      const app = new Application({
+        runtime: rt.make(),
+        modules: [{ routes: () => ({ path: '/root', controller: Root }) } as never],
+      })
+      await app.setup()
+      const handler = app.handle.bind(app)
+
+      const noSlash = await request(handler).get('/api/v1/root').expect(200)
+      expect(noSlash.body).toEqual({ ok: true })
+      const withSlash = await request(handler).get('/api/v1/root/').expect(200)
+      expect(withSlash.body).toEqual({ ok: true })
+    })
+
+    it('reaches routes from multiple mount sources, and still 404s the rest', async () => {
+      // Regression: h3's router is terminal (throws on no match), so two route
+      // sources mounted as separate routers would let the first shadow the
+      // second. Both controllers must be reachable; an unmatched path is a clean
+      // 404, not a surfaced error.
+      @Controller()
+      class A {
+        @Get('/a')
+        a(ctx: RequestContext) {
+          ctx.json({ from: 'a' })
+        }
+      }
+      @Controller()
+      class B {
+        @Get('/b')
+        b(ctx: RequestContext) {
+          ctx.json({ from: 'b' })
+        }
+      }
+      const app = new Application({
+        runtime: rt.make(),
+        modules: [
+          { routes: () => ({ path: '/one', controller: A }) } as never,
+          { routes: () => ({ path: '/two', controller: B }) } as never,
+        ],
+      })
+      await app.setup()
+      const handler = app.handle.bind(app)
+
+      const ra = await request(handler).get('/api/v1/one/a').expect(200)
+      expect(ra.body).toEqual({ from: 'a' })
+      const rb = await request(handler).get('/api/v1/two/b').expect(200)
+      expect(rb.body).toEqual({ from: 'b' })
+      await request(handler).get('/api/v1/one/nope').expect(404)
+    })
+
     it('rejects a file whose type is not allowed', async () => {
       @Controller()
       class C {
