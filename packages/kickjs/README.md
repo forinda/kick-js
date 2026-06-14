@@ -1,6 +1,6 @@
 # @forinda/kickjs
 
-Decorator-driven Node.js framework on Express 5 + TypeScript. Custom DI container, factory-first module system, code generators, Zod-native validation, end-to-end type safety via typegen, and Vite HMR for sub-200ms dev reloads.
+Decorator-driven Node.js framework for TypeScript — runs on **Express, Fastify, or h3** (swap the engine in one line). Custom DI container, factory-first module system, code generators, Zod-native validation, end-to-end type safety via typegen, and Vite HMR for sub-200ms dev reloads.
 
 ## Install
 

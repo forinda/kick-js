@@ -3,7 +3,12 @@ import { join, resolve } from 'node:path'
 
 import { describe, it, expect } from 'vitest'
 
-import { PACKAGE_REGISTRY, planAddPackages, UPLOAD_DRIVERS } from '../src/commands/add'
+import {
+  PACKAGE_REGISTRY,
+  planAddPackages,
+  UPLOAD_DRIVERS,
+  AVAILABLE_ADD_PACKAGES,
+} from '../src/commands/add'
 
 const WORKSPACE_PACKAGES_DIR = resolve(__dirname, '../..')
 
@@ -53,6 +58,20 @@ describe('PACKAGE_REGISTRY catalog health', () => {
         false,
       )
     }
+  })
+
+  it('the post-scaffold "Available:" list excludes deprecated and core packages', () => {
+    const names = AVAILABLE_ADD_PACKAGES.split(',').map((s) => s.trim())
+    expect(names.length).toBeGreaterThan(0)
+    for (const name of names) {
+      const entry = PACKAGE_REGISTRY[name]
+      expect(entry, `'${name}' is not a known registry package`).toBeDefined()
+      expect(entry?.deprecated, `'${name}' is deprecated — must not be advertised`).toBeUndefined()
+      expect(entry?.core, `'${name}' is core — already installed, don't advertise`).toBeFalsy()
+    }
+    expect(names).not.toContain('auth')
+    expect(names).not.toContain('drizzle')
+    expect(names).not.toContain('prisma')
   })
 
   it('never offers the merged db-* dialect shims or internal support packages', () => {
