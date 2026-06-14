@@ -144,13 +144,8 @@ const apiSidebar = [
       { text: '@forinda/kickjs', link: '/api/kickjs' },
       { text: '@forinda/kickjs-core', link: '/api/core' },
       { text: '@forinda/kickjs-http', link: '/api/http' },
-      { text: '@forinda/kickjs-auth', link: '/api/auth' },
       { text: '@forinda/kickjs-swagger', link: '/api/swagger' },
-      { text: '@forinda/kickjs-inertia', link: '/api/inertia' },
       { text: '@forinda/kickjs-db', link: '/api/db' },
-      { text: '@forinda/kickjs-db-pg', link: '/api/db-pg' },
-      { text: '@forinda/kickjs-db-sqlite', link: '/api/db-sqlite' },
-      { text: '@forinda/kickjs-db-mysql', link: '/api/db-mysql' },
       { text: '@forinda/kickjs-ws', link: '/api/ws' },
       { text: '@forinda/kickjs-queue', link: '/api/queue' },
       { text: '@forinda/kickjs-devtools', link: '/api/devtools' },
@@ -207,6 +202,11 @@ export default defineConfig({
   },
   head: [
     ['link', { rel: 'icon', type: 'image/svg+xml', href: '/kick-js/logo.svg' }],
+    // Google Search Console site verification.
+    [
+      'meta',
+      { name: 'google-site-verification', content: '7K2ToZEha4-8GYymarMDrEi5pbiAa8Bl8vsAWp4sr2M' },
+    ],
     ['meta', { name: 'theme-color', content: '#3b82f6' }],
     ['meta', { property: 'og:type', content: 'website' }],
     ['meta', { property: 'og:title', content: 'KickJS — The Adaptive Node.js Framework' }],
