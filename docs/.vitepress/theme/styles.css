@@ -105,10 +105,13 @@
 
 /* ── Feature Grid — edge-to-edge lines ───────────────────────── */
 
-/* The features container becomes a line-separated grid */
+/* The features container becomes a line-separated grid, capped to the same
+ * width as the hero (1280px) and centered — so the new feature cards line up
+ * with the hero instead of bleeding edge-to-edge across wide viewports. */
 .VPFeatures .container {
-  max-width: 100% !important;
-  padding: 0 !important;
+  max-width: 1280px !important;
+  margin: 0 auto !important;
+  padding: 0 24px !important;
 }
 
 .VPFeatures .items {
