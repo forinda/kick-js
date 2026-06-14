@@ -111,6 +111,31 @@ function resolveExactVersionAtTag(name: string, tag: string): string | null {
   }
 }
 
+/**
+ * Whether the package at a given dist-tag exports a subpath (e.g. `./h3`).
+ * Reads the `exports` map via `npm view <name>@<tag> exports --json`. Used to
+ * gate the alpha-pin: if `latest` already ships the engine subpath, the runtime
+ * has graduated to stable and we should NOT downgrade to an older alpha.
+ * Returns `false` on any failure (missing field / network / unparseable) so the
+ * caller treats "unknown" as "not present" and falls through to the alpha path.
+ */
+function tagExportsSubpath(name: string, tag: string, subpath: string): boolean {
+  try {
+    const out = execFileSync('npm', ['view', `${name}@${tag}`, 'exports', '--json'], {
+      encoding: 'utf-8',
+      timeout: 5000,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+      .toString()
+      .trim()
+    if (!out) return false
+    const exportsMap = JSON.parse(out) as Record<string, unknown>
+    return Object.prototype.hasOwnProperty.call(exportsMap, subpath)
+  } catch {
+    return false
+  }
+}
+
 type ProjectTemplate = 'rest' | 'minimal'
 type SchemaLib = 'zod' | 'valibot' | 'yup'
 
@@ -159,20 +184,28 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
 
   // The Fastify / h3 runtime subpaths (`@forinda/kickjs/fastify`, `/h3`) ship
   // only on the `alpha` channel until the pluggable-runtimes work lands in a
-  // stable release. `latest` resolution would install a kickjs without those
-  // exports, so a scaffolded Fastify/h3 app fails to boot ("./h3 is not
-  // exported"). Pin `@forinda/kickjs` to the alpha when a non-Express runtime
-  // is chosen. Express stays on the stable channel.
+  // stable release. If `latest` already exports the chosen engine's subpath,
+  // the runtime has graduated — use the stable version `resolveSiblingVersions`
+  // already picked. Otherwise pin `@forinda/kickjs` to the alpha, so the
+  // scaffolded app actually has the subpath it imports (a stable kickjs without
+  // it fails to boot under Vite: `"./h3" is not exported`). This gate is
+  // self-retiring: once runtimes are stable, `latest` exports the subpath and
+  // the alpha branch is never taken. Express needs no subpath, so it's exempt.
   if (runtime !== 'express') {
-    const alpha = resolveExactVersionAtTag('@forinda/kickjs', 'alpha')
-    if (alpha) {
-      versions['@forinda/kickjs'] = alpha
-      log(`Using @forinda/kickjs@${alpha} (alpha channel — ${runtime} runtime)`)
+    const subpath = `./${runtime}` // './fastify' | './h3'
+    if (tagExportsSubpath('@forinda/kickjs', 'latest', subpath)) {
+      log(`Using @forinda/kickjs@latest (stable ships the ${runtime} runtime)`)
     } else {
-      log(
-        `WARNING: could not resolve @forinda/kickjs@alpha — the ${runtime} runtime subpath ` +
-          `may be missing. After install, run: ${packageManager} add @forinda/kickjs@alpha`,
-      )
+      const alpha = resolveExactVersionAtTag('@forinda/kickjs', 'alpha')
+      if (alpha) {
+        versions['@forinda/kickjs'] = alpha
+        log(`Using @forinda/kickjs@${alpha} (alpha channel — ${runtime} runtime not yet in stable)`)
+      } else {
+        log(
+          `WARNING: could not resolve @forinda/kickjs@alpha — the ${runtime} runtime subpath ` +
+            `may be missing. After install, run: ${packageManager} add @forinda/kickjs@alpha`,
+        )
+      }
     }
   }
 
