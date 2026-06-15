@@ -482,3 +482,211 @@
   color: #10b981;
   border-color: #10b981;
 }
+
+/* ── Density (sm/md/lg) — root font-size drives rem-based spacing+type ── */
+html[data-density='sm'] {
+  font-size: 13px;
+}
+html[data-density='md'] {
+  font-size: 15px;
+}
+html[data-density='lg'] {
+  font-size: 16.5px;
+}
+
+/* ── Settings (gear) menu ────────────────────────────────────── */
+.dt-settings {
+  position: relative;
+  display: inline-flex;
+}
+.dt-settings-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(var(--spacing) * 7);
+  height: calc(var(--spacing) * 7);
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--color-text-secondary);
+  transition: all 0.15s ease;
+}
+.dt-settings-btn svg {
+  width: 16px;
+  height: 16px;
+}
+.dt-settings-btn:hover,
+.dt-settings-btn.open {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-hover);
+  color: var(--color-text-strong);
+}
+.dt-settings-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 50;
+  min-width: 220px;
+  padding: calc(var(--spacing) * 3);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface-1);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.25);
+}
+.dt-settings-section + .dt-settings-section {
+  margin-top: calc(var(--spacing) * 3);
+}
+.dt-settings-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin-bottom: calc(var(--spacing) * 1.5);
+}
+.dt-seg {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+}
+.dt-seg-item {
+  flex: 1;
+  padding: calc(var(--spacing) * 1) 0;
+  cursor: pointer;
+  border: none;
+  border-radius: calc(var(--radius-md) - 2px);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+.dt-seg-item:hover {
+  color: var(--color-text-strong);
+}
+.dt-seg-item.active {
+  background: var(--color-kick-500);
+  color: #fff;
+}
+.dt-settings-hint {
+  margin-top: calc(var(--spacing) * 1.5);
+  font-size: 0.68rem;
+  line-height: 1.4;
+  color: var(--color-text-muted);
+}
+
+/* ── Sidebar shell ───────────────────────────────────────────── */
+.dt-shell {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.dt-sidebar {
+  flex-shrink: 0;
+  overflow-y: auto;
+  padding: calc(var(--spacing) * 2) calc(var(--spacing) * 2);
+  border-right: 1px solid var(--color-border);
+  background: var(--color-surface-2);
+  scrollbar-width: thin;
+}
+.dt-main {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: calc(var(--spacing) * 5);
+}
+.dt-resizer {
+  width: 5px;
+  flex-shrink: 0;
+  cursor: col-resize;
+  background: transparent;
+  transition: background 0.15s ease;
+}
+.dt-resizer:hover {
+  background: var(--color-accent);
+}
+
+/* Nav groups + items */
+.dt-nav-group {
+  margin-bottom: calc(var(--spacing) * 1);
+}
+.dt-nav-group-header {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--spacing) * 1.5);
+  width: 100%;
+  padding: calc(var(--spacing) * 1.5) calc(var(--spacing) * 2);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.dt-nav-group-header:hover {
+  color: var(--color-text-secondary);
+}
+.dt-nav-caret {
+  display: inline-block;
+  transition: transform 0.15s ease;
+  font-size: 0.7rem;
+}
+.dt-nav-caret.closed {
+  transform: rotate(-90deg);
+}
+.dt-nav-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(var(--spacing) * 2);
+  width: 100%;
+  padding: calc(var(--spacing) * 1.5) calc(var(--spacing) * 2.5);
+  margin-bottom: 1px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  text-align: left;
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+  font-weight: 500;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+}
+.dt-nav-item.nested {
+  padding-left: calc(var(--spacing) * 5);
+}
+.dt-nav-item:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text-strong);
+}
+.dt-nav-item.active {
+  background: var(--color-surface-1);
+  color: var(--color-accent);
+  box-shadow: inset 2px 0 0 0 var(--color-accent);
+}
+.dt-nav-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dt-nav-sep {
+  height: 1px;
+  margin: calc(var(--spacing) * 2) calc(var(--spacing) * 2);
+  background: var(--color-border);
+}
+
+/* App fills the viewport so the sidebar + main scroll independently
+ * (overrides the .app min-height from the component layer). */
+.app {
+  height: 100vh;
+  overflow: hidden;
+}
