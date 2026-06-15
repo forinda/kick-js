@@ -40,11 +40,11 @@
   },
   "devDependencies": {
     "@forinda/kickjs": "workspace:*",
-    "@swc/core": "^1.15.40",
-    "@types/node": "^25.9.2",
+    "@swc/core": "^1.15.41",
+    "@types/node": "^25.9.3",
     "@types/ws": "^8.18.0",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.8",
+    "vitest": "^4.1.9",
     "ws": "^8.21.0"
   },
   "publishConfig": {
