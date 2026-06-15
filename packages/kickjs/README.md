@@ -8,9 +8,13 @@ Decorator-driven Node.js framework for TypeScript — runs on **Express, Fastify
 # Scaffold a new project (recommended) — gets you a complete layout in seconds
 npx @forinda/kickjs-cli new my-api && cd my-api && pnpm dev
 
-# Or add to an existing project
+# Or add to an existing project (Express is the zero-config default engine)
 pnpm add @forinda/kickjs express reflect-metadata zod
 pnpm add -D @forinda/kickjs-cli @forinda/kickjs-vite
+
+# Prefer another engine? Install its peer and swap one line (see HTTP Runtimes):
+#   pnpm add fastify @fastify/middie   →  runtime: fastifyRuntime()
+#   pnpm add h3                        →  runtime: h3Runtime()
 ```
 
 ## Getting Started
@@ -84,7 +88,7 @@ export const UserModule = defineModule({
 })
 ```
 
-The framework derives the router from `controller` — never import `buildRoutes` directly. `path` is the **single source of truth** for the mount prefix; `@Controller()` takes no path argument in v5.
+The framework derives the router from `controller` — never import `buildRoutes` directly. `path` is the **single source of truth** for the mount prefix; `@Controller()` takes no path argument.
 
 ### 4. Module registry (`defineModules()` fluent chain)
 
@@ -115,6 +119,19 @@ export const app = await bootstrap({ modules })
 
 That's it — `http://localhost:3000/api/v1/users` returns Alice; `POST /api/v1/users` with `{ name, email }` validates against the Zod schema.
 
+## HTTP Runtimes — Express, Fastify, or h3
+
+The HTTP engine is pluggable. Controllers, DI, decorators, and `ctx` are engine-neutral; pick the engine in `bootstrap()` (Express is the default — no import needed):
+
+```ts
+import { bootstrap } from '@forinda/kickjs'
+import { fastifyRuntime } from '@forinda/kickjs/fastify' // or @forinda/kickjs/h3 → h3Runtime
+
+export const app = await bootstrap({ modules, runtime: fastifyRuntime() })
+```
+
+`kick new --runtime express|fastify|h3` scaffolds the right peers. File uploads (`@FileUpload` → `ctx.file` / `ctx.files`) and the rest of the surface work the same on all three. See [HTTP Runtimes](https://forinda.github.io/kick-js/guide/http-runtimes.html).
+
 ## Project Layout
 
 `kick new` produces this convention; everything except the bootstrap entry is configurable via `kick.config.ts`:
@@ -139,6 +156,8 @@ vite.config.ts              # Vite + KickJS HMR
 
 ## Core Concepts
 
+- **Pluggable HTTP runtimes** — one `HttpRuntime` seam over Express (default), Fastify, or h3. Swap the engine in one line; everything above stays the same. See [HTTP Runtimes](https://forinda.github.io/kick-js/guide/http-runtimes.html).
+- **First-class database** — `kick/db`: code-first schema, fully typed queries, and migrations for PostgreSQL / SQLite / MySQL. `kick add db` (or `pg` / `sqlite` / `mysql`). See [Database](https://forinda.github.io/kick-js/guide/database/).
 - **Custom DI container** — three scopes (singleton / transient / request), slash-delimited tokens (`createToken<T>('app/users/repository')`), constructor + property injection. No external DI dep. See [Dependency Injection](https://forinda.github.io/kick-js/guide/dependency-injection.html).
 - **Factory-first** — `defineAdapter()`, `definePlugin()`, `defineModule()`, `defineHttpContextDecorator()`. No class hierarchies to inherit from. See [Adapters](https://forinda.github.io/kick-js/guide/adapters.html), [Plugins](https://forinda.github.io/kick-js/guide/plugins.html).
 - **Context Contributors** — replace single-purpose middleware that only sets `ctx` values. Typed `dependsOn` (typos are TS errors, not boot-time crashes), topo-sorted at startup, runs across HTTP / WS / queue / cron. See [Context Decorators](https://forinda.github.io/kick-js/guide/context-decorators.html).
@@ -150,14 +169,16 @@ vite.config.ts              # Vite + KickJS HMR
 ## Common Add-Ons
 
 ```bash
+kick add db           # kick/db — typed, code-first DB (+ pg / sqlite / mysql)
+kick add upload       # file-upload driver for your runtime (multer / @fastify/multipart / native)
 kick add swagger      # OpenAPI docs from decorators + Zod schemas
-kick add drizzle      # Drizzle ORM adapter
-kick add prisma       # Prisma adapter (v5 / v6 / v7)
 kick add devtools     # /_debug dashboard
 kick add ws           # WebSocket with @WsController, rooms, heartbeat
 kick add queue        # BullMQ / RabbitMQ / Kafka jobs
 kick add testing      # createTestApp + createTestModule helpers
 kick add --list       # full live catalog
+
+kick doctor           # pre-flight checks: engine peers, upload driver, env wiring
 ```
 
 ## Documentation

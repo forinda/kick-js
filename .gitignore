@@ -30,3 +30,4 @@ superpowers/
 examples/
 # Tutorials + generated thumbnails — authored locally, not tracked
 tutorials/
+.tmp-posters/
