@@ -557,6 +557,17 @@ export class Container {
 
   /** Batch-emit a change event (debounced, flushed after 50ms of quiet) */
   private emit(token: string, event: ContainerChangeEvent['event'], kind?: ClassKind): void {
+    // Zero-listener fast path. Nobody subscribes to container changes unless
+    // DevTools (or a test) calls `onChange` — the production default. Without
+    // this guard, every `resolve()` (including the hot cached-singleton path)
+    // would scan `pendingChanges`, push an entry, and reschedule a `setTimeout`
+    // only for the eventual flush to iterate an empty listener set and discard
+    // the batch. Short-circuiting here keeps `resolve()` allocation- and
+    // timer-free when no one is watching. When a listener attaches later,
+    // subsequent emits work exactly as before — past resolves had no observer
+    // to notify anyway.
+    if (this.changeListeners.size === 0) return
+
     // Dedupe within the pending batch: a high-throughput TRANSIENT
     // token that resolves 1000× per request would otherwise queue
     // 1000 identical 'resolved' events. The downstream listener only
