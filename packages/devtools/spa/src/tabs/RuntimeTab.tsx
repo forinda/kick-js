@@ -1,7 +1,7 @@
 import { createSignal, onCleanup, onMount, Show, type Component } from 'solid-js'
 import type { RuntimeSnapshot } from '@forinda/kickjs-devtools-kit'
 import { Sparkline } from '../lib/sparkline'
-import { rpc, subscribe } from '../lib/rpc'
+import { rpc, subscribe, type ProcessInfo } from '../lib/rpc'
 import { formatBytes, formatMs, formatUptime } from '../lib/format'
 import { InfoTip, METRIC_DEFS } from '../lib/info'
 
@@ -11,6 +11,7 @@ const HISTORY_CAP = 60
 
 export const RuntimeTab: Component = () => {
   const [latest, setLatest] = createSignal<RuntimeSnapshot | null>(null)
+  const [proc, setProc] = createSignal<ProcessInfo | null>(null)
   const [heap, setHeap] = createSignal<number[]>([])
   const [rss, setRss] = createSignal<number[]>([])
   const [eventLoopP99, setEventLoopP99] = createSignal<number[]>([])
@@ -29,6 +30,7 @@ export const RuntimeTab: Component = () => {
     rpc
       .runtime()
       .then((data) => {
+        if (data.process) setProc(data.process)
         for (const snap of data.history) ingest(snap)
         setConnected(true)
       })
@@ -47,6 +49,26 @@ export const RuntimeTab: Component = () => {
 
   return (
     <>
+      <Show when={proc()}>
+        {(p) => (
+          <div class="proc-strip">
+            <span class="proc-label">
+              These stats are for <strong>this Node process</strong> — the one running your KickJS
+              app.
+            </span>
+            <span class="proc-meta">
+              <Show when={p().runtime}>
+                {(rt) => <span class={`proc-pill rt-${rt().name}`}>engine: {rt().name}</span>}
+              </Show>
+              <span class="proc-pill">Node {p().nodeVersion}</span>
+              <span class="proc-pill">
+                {p().platform}/{p().arch}
+              </span>
+              <span class="proc-pill">pid {p().pid}</span>
+            </span>
+          </div>
+        )}
+      </Show>
       <Show when={latest()} fallback={<div class="empty">Loading runtime metrics…</div>}>
         {(snap) => (
           <>

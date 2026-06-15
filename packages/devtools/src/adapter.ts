@@ -329,6 +329,8 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
     const requestCount = ref(0)
     const errorCount = ref(0)
     const clientErrorCount = ref(0)
+    // App mount timestamp — kept for reference, but uptime is derived from the
+    // node process (see below) so it survives HMR rebuilds.
     const startedAt = ref(Date.now())
     const routeLatency = reactive<Record<string, RouteStats>>({})
 
@@ -336,7 +338,16 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
       requestCount.value > 0 ? errorCount.value / requestCount.value : 0,
     )
 
-    const uptimeSeconds = computed(() => Math.floor((Date.now() - startedAt.value) / 1000))
+    // Uptime is the NODE PROCESS uptime, not "time since beforeMount". In dev,
+    // `beforeMount` re-runs on every HMR rebuild / SSR re-bootstrap, which used
+    // to reset `startedAt` and pin uptime near 0s. `process.uptime()` is
+    // monotonic from process start, so it reports the real server uptime across
+    // reloads. `tick` makes the computed re-evaluate when the reactive graph
+    // refreshes; the value itself comes from the live process clock.
+    const uptimeSeconds = computed(() => {
+      void startedAt.value // keep the dependency so DevTools polls re-read it
+      return Math.floor(process.uptime())
+    })
 
     // ── Internal mutable state ─────────────────────────────────────
     let routes: RouteInfo[] = []
@@ -392,6 +403,27 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
         return kickApp.getAdapters()
       }
       return peerAdapters
+    }
+
+    /**
+     * Active HTTP runtime identity + capabilities (`express` | `fastify` | `h3`),
+     * read from the Application via `getActiveRuntime()`. Returns `null` when the
+     * framework is older than the getter (graceful for mixed versions). Lets the
+     * dashboard show which engine the app is running on.
+     */
+    const readActiveRuntime = (): {
+      name: string
+      capabilities: Record<string, boolean>
+    } | null => {
+      const kickApp = appRef?.__kickApp
+      if (kickApp && typeof kickApp.getActiveRuntime === 'function') {
+        try {
+          return kickApp.getActiveRuntime()
+        } catch {
+          return null
+        }
+      }
+      return null
     }
 
     return {
@@ -558,6 +590,7 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
             status,
             errorRate: errorRate.value,
             uptime: uptimeSeconds.value,
+            runtime: readActiveRuntime(),
             adapters: live,
           })
         })
@@ -597,6 +630,17 @@ export const DevToolsAdapter = defineAdapter<DevToolsOptions, DevToolsAdapterExt
           const health = memoryAnalyzer.health(history)
           res.json({
             protocolVersion: PROTOCOL_VERSION,
+            // Identity of the process these stats describe — every memory / CPU /
+            // event-loop number below is for THIS Node process (the one running
+            // your KickJS app), not the OS or any child. Lets the panel label it
+            // unambiguously ("Node v22 · pid 12345 · linux/x64 · engine: fastify").
+            process: {
+              nodeVersion: process.version,
+              pid: process.pid,
+              platform: process.platform,
+              arch: process.arch,
+              runtime: readActiveRuntime(),
+            },
             latest,
             history,
             health,
