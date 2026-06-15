@@ -183,6 +183,58 @@ describe('resolveAsset — dev fallback (no manifest)', () => {
   })
 })
 
+describe('resolveAsset — dev mode prefers the live source tree', () => {
+  // The shared beforeEach pins NODE_ENV=production; these cases need the
+  // dev codepath, so each flips it back to a non-prod value.
+  beforeEach(() => {
+    process.env.NODE_ENV = 'development'
+    clearAssetCache()
+  })
+
+  it('walks src/ instead of a stale dist/.kickjs-assets.json', () => {
+    // An earlier `kick build` left a built manifest on disk pointing at a
+    // file that no longer reflects the source tree. Dev must NOT read it.
+    writeManifest('dist', { 'mails/welcome': 'mails/stale.ejs' })
+    writeFile('dist/mails/stale.ejs', 'stale')
+    writeFile(
+      'kick.config.json',
+      JSON.stringify({ assetMap: { mails: { src: 'src/templates/mails' } } }),
+    )
+    writeFile('src/templates/mails/welcome.ejs', 'fresh')
+
+    expect(resolveAsset('mails', 'welcome')).toBe(
+      toPosix(join(cwd, 'src/templates/mails/welcome.ejs')),
+    )
+  })
+
+  it('picks up a newly-added file without a cache clear or restart', () => {
+    writeFile(
+      'kick.config.json',
+      JSON.stringify({ assetMap: { mails: { src: 'src/templates/mails' } } }),
+    )
+    writeFile('src/templates/mails/welcome.ejs', 'hi')
+    // Prime the resolver once.
+    expect(resolveAsset('mails', 'welcome')).toBe(
+      toPosix(join(cwd, 'src/templates/mails/welcome.ejs')),
+    )
+
+    // Drop a new template in — no clearAssetCache(), no restart.
+    writeFile('src/templates/mails/reminder.ejs', 'remember')
+    expect(resolveAsset('mails', 'reminder')).toBe(
+      toPosix(join(cwd, 'src/templates/mails/reminder.ejs')),
+    )
+  })
+
+  it('still falls back to a built manifest when no assetMap config exists', () => {
+    // No kick.config / assetMap to walk — the dev src-walk returns null,
+    // so a dev running purely off a dist build must still resolve.
+    writeManifest('dist', { 'mails/welcome': 'mails/welcome.ejs' })
+    writeFile('dist/mails/welcome.ejs', 'built')
+
+    expect(resolveAsset('mails', 'welcome')).toBe(toPosix(join(cwd, 'dist/mails/welcome.ejs')))
+  })
+})
+
 describe('resolveAsset — error surface', () => {
   it('throws UnknownAssetError carrying namespace + key fields', () => {
     writeManifest('dist', { 'x/y': 'x/y.txt' })

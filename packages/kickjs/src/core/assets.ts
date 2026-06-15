@@ -129,6 +129,8 @@ function loadManifest(): ResolvedManifest | null {
 }
 
 function discoverManifest(): ResolvedManifest | null {
+  // `KICK_ASSETS_ROOT` is an explicit, deliberate override — it wins in
+  // both dev and prod.
   const envRoot = process.env.KICK_ASSETS_ROOT
   if (envRoot) {
     const fromEnv = readBuiltManifest(envRoot)
@@ -136,6 +138,20 @@ function discoverManifest(): ResolvedManifest | null {
   }
 
   const cwd = process.cwd()
+  const config = loadConfigSync(cwd)
+
+  // In dev, prefer a live walk of the source tree over any built
+  // manifest left on disk by an earlier `kick build`. Otherwise a stale
+  // `dist/.kickjs-assets.json` shadows the live `src/` tree: a freshly
+  // added template file would resolve to the old map (or throw
+  // UnknownAssetError) until the next rebuild — exactly the surprise the
+  // cache-skip in `loadManifest` exists to avoid. `synthesiseDevManifest`
+  // returns null only when there's no `assetMap` config at all, in which
+  // case we fall through to the built-manifest probes below.
+  if (process.env.NODE_ENV !== 'production') {
+    const fresh = synthesiseDevManifest(cwd, config)
+    if (fresh) return fresh
+  }
 
   // Honour `kick.config.build.outDir` BEFORE the standard probe list
   // so adopters with non-default Vite outputs (e.g. `output/`,
@@ -143,7 +159,6 @@ function discoverManifest(): ResolvedManifest | null {
   // every time. Cached config load — same loader the dev fallback
   // uses. Skip when outDir matches one of the standard candidates;
   // it'd be probed redundantly otherwise.
-  const config = loadConfigSync(cwd)
   const configOutDir = config?.build?.outDir
   if (configOutDir && !(STANDARD_OUT_DIRS as readonly string[]).includes(configOutDir)) {
     const found = readBuiltManifest(resolve(cwd, configOutDir))
