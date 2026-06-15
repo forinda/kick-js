@@ -445,16 +445,16 @@
   gap: 10px;
   padding: 10px 14px;
   margin-bottom: 14px;
-  border: 1px solid var(--border, var(--color-border));
+  border: 1px solid var(--color-border);
   border-radius: 10px;
-  background: var(--bg-soft, var(--color-surface));
+  background: var(--color-surface-1);
   font-size: 0.85rem;
 }
 .proc-label {
-  color: var(--text-dim, var(--color-text-muted));
+  color: var(--color-text-secondary);
 }
 .proc-label strong {
-  color: var(--text, var(--color-text));
+  color: var(--color-text-strong);
 }
 .proc-meta {
   display: flex;
@@ -464,11 +464,11 @@
 .proc-pill {
   padding: 2px 10px;
   border-radius: 999px;
-  border: 1px solid var(--border, var(--color-border));
-  background: var(--bg, var(--color-app-bg));
-  font-family: var(--font-mono, ui-monospace, monospace);
+  border: 1px solid var(--color-border);
+  background: var(--color-app-bg);
+  font-family: var(--font-mono);
   font-size: 0.78rem;
-  color: var(--text-dim, var(--color-text-muted));
+  color: var(--color-text-secondary);
 }
 .proc-pill.rt-express {
   color: #3b82f6;
