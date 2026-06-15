@@ -1,5 +1,11 @@
 # @forinda/kickjs
 
+## 6.0.1
+
+### Patch Changes
+
+- [#413](https://github.com/forinda/kick-js/pull/413) [`732d0f6`](https://github.com/forinda/kick-js/commit/732d0f64d8e5082b6fe8564a73ed1e8daf2c346b) Thanks [@forinda](https://github.com/forinda)! - Refresh the package README: add an HTTP Runtimes section (Express / Fastify / h3 swap), surface `kick/db` and file uploads, and fix the Common Add-Ons list — drop the deprecated `drizzle` / `prisma` entries in favour of `kick add db` / `kick add upload`, and add `kick doctor`. Also drops a stale "v5" reference.
+
 ## 6.0.0
 
 ### Major Changes
