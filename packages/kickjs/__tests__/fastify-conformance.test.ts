@@ -1,5 +1,16 @@
 import 'reflect-metadata'
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
+
+// This is a heavy integration suite: 13 cases run against three real HTTP
+// engines (express + fastify + h3) over supertest. Fastify in particular pays a
+// one-time cold cost on the first case — `require('fastify')` + `@fastify/middie`
+// + avvio's async `ready()` plugin-graph boot — which, when the full package
+// suite (50+ files) imports in parallel and saturates the CPU, can blow past
+// vitest's default 5s budget and flake the first test. The work is the same in
+// production (boots once at startup); only the test-time contention makes it
+// slow. Give the whole file generous head-room so cold-start jitter never trips
+// a timeout. File-scoped — other suites keep the 5s default.
+vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 })
 import request from 'supertest'
 import { z } from 'zod'
 import {
