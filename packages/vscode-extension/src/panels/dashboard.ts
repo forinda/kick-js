@@ -8,14 +8,18 @@ export class DashboardPanel {
   private constructor(
     panel: vscode.WebviewPanel,
     private baseUrl: string,
+    private token: string | undefined,
   ) {
     this.panel = panel
     this.panel.onDidDispose(() => this.dispose(), null, this.disposables)
     this.panel.webview.html = this.getHtml()
   }
 
-  public static createOrShow(extensionUri: vscode.Uri, baseUrl: string) {
+  public static createOrShow(extensionUri: vscode.Uri, baseUrl: string, token?: string) {
     if (DashboardPanel.currentPanel) {
+      // Refresh the base URL + token on the live panel so a token set/clear
+      // (or a reconnect to a different app) takes effect without closing it.
+      DashboardPanel.currentPanel.update(baseUrl, token)
       DashboardPanel.currentPanel.panel.reveal()
       return
     }
@@ -27,7 +31,15 @@ export class DashboardPanel {
       { enableScripts: true },
     )
 
-    DashboardPanel.currentPanel = new DashboardPanel(panel, baseUrl)
+    DashboardPanel.currentPanel = new DashboardPanel(panel, baseUrl, token)
+  }
+
+  /** Re-point the open panel at a new base URL / token and re-render. */
+  private update(baseUrl: string, token: string | undefined): void {
+    if (this.baseUrl === baseUrl && this.token === token) return
+    this.baseUrl = baseUrl
+    this.token = token
+    this.panel.webview.html = this.getHtml()
   }
 
   private dispose() {
@@ -83,7 +95,16 @@ export class DashboardPanel {
   <div id="content"></div>
   <script>
     const BASE = '${this.baseUrl}';
+    const TOKEN = ${JSON.stringify(this.token ?? '')};
     let allRoutes = [];
+
+    // Authenticated GET — sends the devtools token as a header (not a
+    // query string), matching the tree providers. Without this the
+    // dashboard 401s against any server with a configured secret.
+    function getJson(path) {
+      const headers = TOKEN ? { 'x-devtools-token': TOKEN } : undefined;
+      return fetch(BASE + path, { headers }).then(r => r.ok ? r.json() : null).catch(() => null);
+    }
 
     // Escape HTML entities in dynamic string values
     function esc(str) {
@@ -153,10 +174,10 @@ export class DashboardPanel {
       const content = document.getElementById('content');
       try {
         const [health, metrics, routes, container] = await Promise.all([
-          fetch(BASE+'/health').then(r=>r.json()).catch(()=>null),
-          fetch(BASE+'/metrics').then(r=>r.json()).catch(()=>null),
-          fetch(BASE+'/routes').then(r=>r.json()).catch(()=>null),
-          fetch(BASE+'/container').then(r=>r.json()).catch(()=>null),
+          getJson('/health'),
+          getJson('/metrics'),
+          getJson('/routes'),
+          getJson('/container'),
         ]);
 
         allRoutes = routes?.routes ?? [];
@@ -182,6 +203,9 @@ export class DashboardPanel {
           statusRow.appendChild(buildBadge(health.status, health.status === 'healthy'));
           healthCard.appendChild(statusRow);
           healthCard.appendChild(buildStatRow('Uptime', health.uptime + 's'));
+          if (health.runtime && health.runtime.name) {
+            healthCard.appendChild(buildStatRow('Runtime', health.runtime.name));
+          }
         } else {
           const p = document.createElement('p');
           p.className = 'dimmed';

@@ -96,6 +96,29 @@ export function registerKickCommands(_context: vscode.ExtensionContext): vscode.
     ),
     vscode.commands.registerCommand('kickjs.mcpStart', () => runKick('mcp start')),
     vscode.commands.registerCommand('kickjs.mcpInit', () => runKick('mcp init')),
+
+    // ── Diagnostics ─────────────────────────────────────────────────
+    // `kick doctor` runs the v6 runtime-aware pre-flight checks (engine
+    // peers, upload driver, env wiring) in the shared terminal.
+    vscode.commands.registerCommand('kickjs.doctor', () => runKick('doctor')),
+
+    // ── kick/db utilities ───────────────────────────────────────────
+    // The first-party database (`kick/db`) ships a `kick db` command tree
+    // when `dbCliPlugin` is registered. These wrap the common migration
+    // flows so adopters can drive them from the palette.
+    vscode.commands.registerCommand('kickjs.dbMigrate', () => runKick('db migrate latest')),
+    vscode.commands.registerCommand('kickjs.dbStatus', () => runKick('db migrate status')),
+    vscode.commands.registerCommand('kickjs.dbGenerate', async () => {
+      const name = await vscode.window.showInputBox({
+        title: 'KickJS: generate migration',
+        prompt: 'Migration name (diffs the schema against the last snapshot)',
+        placeHolder: 'add_users',
+        validateInput: validateMigrationName,
+      })
+      if (!name) return
+      runKick(`db generate ${name}`)
+    }),
+    vscode.commands.registerCommand('kickjs.dbRollback', () => runKick('db migrate rollback')),
   ]
 }
 
@@ -143,19 +166,23 @@ async function promptAndRunGenerator(
  */
 function addPackageOptions(): vscode.QuickPickItem[] {
   return [
-    { label: 'auth', description: 'JWT, API key, custom strategies' },
+    { label: 'db', description: 'kick/db core — schema DSL, typed queries, migrations' },
+    { label: 'pg', description: 'kick/db + PostgreSQL driver' },
+    { label: 'sqlite', description: 'kick/db + SQLite driver' },
+    { label: 'mysql', description: 'kick/db + MySQL driver' },
+    {
+      label: 'upload',
+      description: 'File-upload driver for your runtime (multer / @fastify/multipart)',
+    },
     { label: 'swagger', description: 'OpenAPI spec + Swagger UI + ReDoc' },
-    { label: 'ws', description: '@WsController decorators (socket.io)' },
+    { label: 'ws', description: 'WebSocket with @WsController, rooms, heartbeat' },
     { label: 'queue', description: 'Queue adapter (BullMQ / RabbitMQ / Kafka)' },
     { label: 'queue:bullmq', description: 'Queue + BullMQ + Redis peers' },
     { label: 'queue:rabbitmq', description: 'Queue + RabbitMQ peer (amqplib)' },
     { label: 'queue:kafka', description: 'Queue + Kafka peer (kafkajs)' },
     { label: 'devtools', description: 'Debug dashboard at /_debug' },
     { label: 'mcp', description: 'Model Context Protocol server' },
-    { label: 'db', description: 'kick/db core — schema DSL, migrations' },
-    { label: 'db-pg', description: 'kick/db PostgreSQL dialect + adapter' },
-    { label: 'drizzle', description: 'Drizzle ORM adapter + query builder' },
-    { label: 'prisma', description: 'Prisma adapter + query builder' },
+    { label: 'ai', description: 'AI toolkit — LLM providers, tools from controllers' },
     { label: 'testing', description: 'TestModule builder + helpers' },
   ]
 }
@@ -173,6 +200,20 @@ function validateName(input: string): string | null {
   if (!trimmed) return 'Name is required'
   if (!/^[a-z][a-z0-9-]*$/.test(trimmed)) {
     return 'Use kebab-case: lowercase letters, digits, hyphens (must start with a letter)'
+  }
+  return null
+}
+
+/**
+ * Migration names follow `kick db generate`'s snake_case convention
+ * (e.g. `add_users`), so underscores are allowed here — unlike the
+ * kebab-case module/component names {@link validateName} enforces.
+ */
+function validateMigrationName(input: string): string | null {
+  const trimmed = input.trim()
+  if (!trimmed) return 'Name is required'
+  if (!/^[a-z][a-z0-9_-]*$/.test(trimmed)) {
+    return 'Use lowercase letters, digits, underscores or hyphens (must start with a letter)'
   }
   return null
 }

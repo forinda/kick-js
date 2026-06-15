@@ -23,6 +23,35 @@ interface ProviderTrio {
 let current: ProviderTrio | null = null
 let providerDisposables: vscode.Disposable[] = []
 
+/** SecretStorage key for the devtools auth token. */
+const TOKEN_KEY = 'kickjs.token'
+
+/**
+ * Resolve the devtools auth token from VS Code SecretStorage. One-time
+ * migration: if a legacy plaintext `kickjs.token` setting exists (older
+ * versions wrote it to settings.json, where it could be committed), move
+ * it into SecretStorage and clear the setting. Returns `undefined` when
+ * no token is configured (the devtools adapter defaults to no auth).
+ */
+async function getToken(context: vscode.ExtensionContext): Promise<string | undefined> {
+  const secret = await context.secrets.get(TOKEN_KEY)
+  if (secret) return secret
+  const config = vscode.workspace.getConfiguration('kickjs')
+  const legacy = config.get<string>('token')?.trim()
+  if (legacy) {
+    await context.secrets.store(TOKEN_KEY, legacy)
+    // Scrub the plaintext copy from settings.json (both targets).
+    await config
+      .update('token', undefined, vscode.ConfigurationTarget.Workspace)
+      .then(undefined, () => undefined)
+    await config
+      .update('token', undefined, vscode.ConfigurationTarget.Global)
+      .then(undefined, () => undefined)
+    return legacy
+  }
+  return undefined
+}
+
 export async function activate(context: vscode.ExtensionContext) {
   // Gate every contribution on `kickjs.isKickProject` — the views +
   // command-palette entries in package.json declare
@@ -60,14 +89,18 @@ export async function activate(context: vscode.ExtensionContext) {
       if (!isKickProjectCached) return
       if (
         e.affectsConfiguration('kickjs.serverUrl') ||
-        e.affectsConfiguration('kickjs.debugPath') ||
-        e.affectsConfiguration('kickjs.token')
+        e.affectsConfiguration('kickjs.debugPath')
       ) {
-        rebuildProviders(context)
+        void rebuildProviders(context)
       }
       if (e.affectsConfiguration('kickjs.autoRefresh')) {
         startInterval()
       }
+    }),
+    // Token lives in SecretStorage now — rebuild when it changes so the
+    // providers pick up the new (or cleared) token.
+    context.secrets.onDidChange((e) => {
+      if (e.key === TOKEN_KEY && isKickProjectCached) void rebuildProviders(context)
     }),
     { dispose: () => stopInterval() },
   )
@@ -76,7 +109,7 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
       void refreshKickProjectContext().then(() => {
         if (isKickProjectCached && !current) {
-          rebuildProviders(context)
+          void rebuildProviders(context)
           startInterval()
           void maybeAutoConnect(context)
         } else if (!isKickProjectCached && current) {
@@ -90,7 +123,7 @@ export async function activate(context: vscode.ExtensionContext) {
   )
 
   if (isKickProjectCached) {
-    rebuildProviders(context)
+    void rebuildProviders(context)
     startInterval()
     // First-run auto-detect: if the user hasn't yet picked a URL AND
     // the workspace looks like a KickJS project, race the standard
@@ -113,20 +146,21 @@ export async function activate(context: vscode.ExtensionContext) {
 function registerCommands(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     registerConnectCommand(context, {
-      onConnected: () => rebuildProviders(context),
+      onConnected: () => void rebuildProviders(context),
+      getToken: () => getToken(context),
     }),
-    vscode.commands.registerCommand('kickjs.inspect', () => {
+    vscode.commands.registerCommand('kickjs.inspect', async () => {
       if (!current) {
         return vscode.commands.executeCommand('kickjs.connect')
       }
-      DashboardPanel.createOrShow(context.extensionUri, current.baseUrl)
+      DashboardPanel.createOrShow(context.extensionUri, current.baseUrl, await getToken(context))
     }),
     vscode.commands.registerCommand('kickjs.showRoutes', () => current?.routes.refresh()),
     vscode.commands.registerCommand('kickjs.showContainer', () => current?.container.refresh()),
     vscode.commands.registerCommand('kickjs.showMetrics', () => current?.health.refresh()),
     vscode.commands.registerCommand('kickjs.refreshAll', () => refreshAll()),
     vscode.commands.registerCommand('kickjs.setToken', () => promptForToken(context)),
-    vscode.commands.registerCommand('kickjs.clearToken', () => clearToken()),
+    vscode.commands.registerCommand('kickjs.clearToken', () => clearToken(context)),
     ...registerKickCommands(context),
     { dispose: () => disposeProviders() },
   )
@@ -158,7 +192,7 @@ async function maybeAutoConnect(context: vscode.ExtensionContext): Promise<void>
     const result = await probeConnection(
       config.get<string>('serverUrl', 'http://localhost:3000'),
       config.get<string>('debugPath', DEFAULT_DEBUG_PATH),
-      { token: config.get<string>('token') || undefined },
+      { token: await getToken(context) },
     )
     setConnected(result.ok)
     if (!result.ok && result.error.kind === 'unauthorized') {
@@ -184,16 +218,16 @@ async function maybeAutoConnect(context: vscode.ExtensionContext): Promise<void>
   const debugPath = config.get<string>('debugPath', DEFAULT_DEBUG_PATH)
   const serverUrl = result.baseUrl.replace(new RegExp(escapeRegex(debugPath) + '$'), '')
   await config.update('serverUrl', serverUrl, vscode.ConfigurationTarget.Workspace)
-  rebuildProviders(context)
+  void rebuildProviders(context)
   vscode.window.showInformationMessage(`KickJS: auto-detected app at ${result.baseUrl}`)
 }
 
-function rebuildProviders(context: vscode.ExtensionContext): void {
+async function rebuildProviders(context: vscode.ExtensionContext): Promise<void> {
   disposeProviders()
   const config = vscode.workspace.getConfiguration('kickjs')
   const serverUrl = config.get<string>('serverUrl', 'http://localhost:3000')
   const debugPath = config.get<string>('debugPath', DEFAULT_DEBUG_PATH)
-  const token = config.get<string>('token') || undefined
+  const token = await getToken(context)
   const baseUrl = `${trimRightSlash(serverUrl)}${debugPath}`
 
   const health = new HealthTreeProvider(baseUrl, token)
@@ -258,42 +292,34 @@ function escapeRegex(s: string): string {
  * workspace `kickjs.token`. Triggered explicitly by the palette
  * command + automatically when a 401/403 surfaces in autoConnect.
  */
-async function promptForToken(_context: vscode.ExtensionContext): Promise<void> {
-  const config = vscode.workspace.getConfiguration('kickjs')
-  const current = config.get<string>('token', '')
+async function promptForToken(context: vscode.ExtensionContext): Promise<void> {
+  const existing = (await context.secrets.get(TOKEN_KEY)) ?? ''
   const input = await vscode.window.showInputBox({
     title: 'KickJS: DevTools auth token',
     prompt:
       'Paste the token printed in your server console on startup ' +
-      '(e.g. "[token: abc123…]"). Leave blank to clear.',
-    value: current,
+      '(e.g. "[token: abc123…]"). Stored securely in VS Code SecretStorage, ' +
+      'not in settings.json. Leave blank to clear.',
+    value: existing,
     password: true,
     placeHolder: 'abc123…',
   })
   if (input === undefined) return
   const trimmed = input.trim()
-  const target =
-    (vscode.workspace.workspaceFolders?.length ?? 0) > 0
-      ? vscode.ConfigurationTarget.Workspace
-      : vscode.ConfigurationTarget.Global
-  await config.update('token', trimmed || undefined, target)
   if (trimmed) {
-    vscode.window.showInformationMessage('KickJS: token saved. Reconnecting…')
+    await context.secrets.store(TOKEN_KEY, trimmed)
+    vscode.window.showInformationMessage('KickJS: token saved securely. Reconnecting…')
   } else {
+    await context.secrets.delete(TOKEN_KEY)
     vscode.window.showInformationMessage('KickJS: token cleared.')
   }
-  // Config-change listener triggers rebuildProviders → next refresh
-  // uses the new token.
+  // The secrets.onDidChange listener triggers rebuildProviders → next
+  // refresh uses the new token.
 }
 
-/** Wipe the workspace `kickjs.token` setting. */
-async function clearToken(): Promise<void> {
-  const config = vscode.workspace.getConfiguration('kickjs')
-  const target =
-    (vscode.workspace.workspaceFolders?.length ?? 0) > 0
-      ? vscode.ConfigurationTarget.Workspace
-      : vscode.ConfigurationTarget.Global
-  await config.update('token', undefined, target)
+/** Wipe the devtools token from SecretStorage. */
+async function clearToken(context: vscode.ExtensionContext): Promise<void> {
+  await context.secrets.delete(TOKEN_KEY)
   vscode.window.showInformationMessage('KickJS: token cleared.')
 }
 
@@ -304,15 +330,11 @@ async function clearToken(): Promise<void> {
  * via the {@link probeConnection} error message.
  */
 async function offerSetToken(message: string): Promise<void> {
-  const action = await vscode.window.showWarningMessage(
-    `KickJS: ${message}`,
-    'Set token…',
-    'Open settings',
-  )
+  // The token lives in SecretStorage now, so "Set token…" (the secure prompt)
+  // is the only useful action — no settings.json link to a deprecated field.
+  const action = await vscode.window.showWarningMessage(`KickJS: ${message}`, 'Set token…')
   if (action === 'Set token…') {
     await vscode.commands.executeCommand('kickjs.setToken')
-  } else if (action === 'Open settings') {
-    await vscode.commands.executeCommand('workbench.action.openSettings', 'kickjs.token')
   }
 }
 
