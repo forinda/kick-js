@@ -163,6 +163,12 @@ export const App: Component = () => {
     })
   }
 
+  // Teardown for an in-flight resize drag — set while dragging, cleared on
+  // release. A single component-level onCleanup (below) calls it so the
+  // window listeners + cursor don't leak if we unmount mid-drag.
+  let endResize: (() => void) | null = null
+  onCleanup(() => endResize?.())
+
   // Drag the divider to resize the sidebar; persist on release.
   const startResize = (e: MouseEvent): void => {
     e.preventDefault()
@@ -173,16 +179,21 @@ export const App: Component = () => {
       const w = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, startW + (ev.clientX - startX)))
       setSidebarWidth(w)
     }
-    const onUp = (): void => {
+    const teardown = (): void => {
       document.removeEventListener('mousemove', onMove)
       document.removeEventListener('mouseup', onUp)
       document.body.style.cursor = ''
+      endResize = null
+    }
+    const onUp = (): void => {
+      teardown()
       try {
         localStorage.setItem(SIDEBAR_WIDTH_KEY, String(sidebarWidth()))
       } catch {
         // ignore
       }
     }
+    endResize = teardown
     document.addEventListener('mousemove', onMove)
     document.addEventListener('mouseup', onUp)
   }

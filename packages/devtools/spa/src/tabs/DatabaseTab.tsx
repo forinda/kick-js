@@ -19,9 +19,8 @@ import { Pagination, usePagination } from '../lib/pagination'
 /** Payload of a `db:query` bus event (mirrors what kick/db emits). */
 interface DbQuery {
   sql: string
-  params?: unknown[]
+  parameters?: readonly unknown[]
   durationMs: number
-  rowCount?: number
   error?: string
   dialect?: string
   ts: number
@@ -48,7 +47,7 @@ export const DatabaseTab: Component = () => {
     const error = p.error
     return {
       sql: p.sql,
-      params: p.parameters,
+      parameters: p.parameters,
       durationMs: 0,
       dialect: p.dialect,
       error: error instanceof Error ? error.message : String(error ?? 'query error'),
@@ -134,7 +133,6 @@ export const DatabaseTab: Component = () => {
               <th>Time</th>
               <th>Dialect</th>
               <th class="text-right">Duration</th>
-              <th class="text-right">Rows</th>
               <th>SQL</th>
             </tr>
           </thead>
@@ -152,7 +150,6 @@ export const DatabaseTab: Component = () => {
                   >
                     {formatMs(q.durationMs)}
                   </td>
-                  <td class="text-right">{q.rowCount ?? '—'}</td>
                   <td>
                     <Show
                       when={!q.error}
