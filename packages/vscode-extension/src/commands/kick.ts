@@ -113,7 +113,7 @@ export function registerKickCommands(_context: vscode.ExtensionContext): vscode.
         title: 'KickJS: generate migration',
         prompt: 'Migration name (diffs the schema against the last snapshot)',
         placeHolder: 'add_users',
-        validateInput: validateName,
+        validateInput: validateMigrationName,
       })
       if (!name) return
       runKick(`db generate ${name}`)
@@ -200,6 +200,20 @@ function validateName(input: string): string | null {
   if (!trimmed) return 'Name is required'
   if (!/^[a-z][a-z0-9-]*$/.test(trimmed)) {
     return 'Use kebab-case: lowercase letters, digits, hyphens (must start with a letter)'
+  }
+  return null
+}
+
+/**
+ * Migration names follow `kick db generate`'s snake_case convention
+ * (e.g. `add_users`), so underscores are allowed here — unlike the
+ * kebab-case module/component names {@link validateName} enforces.
+ */
+function validateMigrationName(input: string): string | null {
+  const trimmed = input.trim()
+  if (!trimmed) return 'Name is required'
+  if (!/^[a-z][a-z0-9_-]*$/.test(trimmed)) {
+    return 'Use lowercase letters, digits, underscores or hyphens (must start with a letter)'
   }
   return null
 }

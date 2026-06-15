@@ -330,15 +330,11 @@ async function clearToken(context: vscode.ExtensionContext): Promise<void> {
  * via the {@link probeConnection} error message.
  */
 async function offerSetToken(message: string): Promise<void> {
-  const action = await vscode.window.showWarningMessage(
-    `KickJS: ${message}`,
-    'Set token…',
-    'Open settings',
-  )
+  // The token lives in SecretStorage now, so "Set token…" (the secure prompt)
+  // is the only useful action — no settings.json link to a deprecated field.
+  const action = await vscode.window.showWarningMessage(`KickJS: ${message}`, 'Set token…')
   if (action === 'Set token…') {
     await vscode.commands.executeCommand('kickjs.setToken')
-  } else if (action === 'Open settings') {
-    await vscode.commands.executeCommand('workbench.action.openSettings', 'kickjs.token')
   }
 }
 

@@ -17,6 +17,9 @@ export class DashboardPanel {
 
   public static createOrShow(extensionUri: vscode.Uri, baseUrl: string, token?: string) {
     if (DashboardPanel.currentPanel) {
+      // Refresh the base URL + token on the live panel so a token set/clear
+      // (or a reconnect to a different app) takes effect without closing it.
+      DashboardPanel.currentPanel.update(baseUrl, token)
       DashboardPanel.currentPanel.panel.reveal()
       return
     }
@@ -29,6 +32,14 @@ export class DashboardPanel {
     )
 
     DashboardPanel.currentPanel = new DashboardPanel(panel, baseUrl, token)
+  }
+
+  /** Re-point the open panel at a new base URL / token and re-render. */
+  private update(baseUrl: string, token: string | undefined): void {
+    if (this.baseUrl === baseUrl && this.token === token) return
+    this.baseUrl = baseUrl
+    this.token = token
+    this.panel.webview.html = this.getHtml()
   }
 
   private dispose() {
