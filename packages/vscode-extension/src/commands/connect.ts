@@ -30,6 +30,8 @@ import {
 export interface ConnectCommandDeps {
   /** Called after a successful probe so the activate-time refresh runs. */
   onConnected: (serverUrl: string, debugPath: string) => void
+  /** Resolve the devtools auth token (from SecretStorage). */
+  getToken: () => Promise<string | undefined>
 }
 
 export function registerConnectCommand(
@@ -80,7 +82,7 @@ async function runAutoDetect(deps: ConnectCommandDeps): Promise<void> {
   const debugPath = readDebugPath()
   const roots = workspaceRoots()
   const candidates = buildCandidates(roots, debugPath)
-  const token = readToken()
+  const token = await deps.getToken()
 
   const result = await vscode.window.withProgress(
     {
@@ -104,13 +106,13 @@ async function runAutoDetect(deps: ConnectCommandDeps): Promise<void> {
     return
   }
 
-  await acceptResult(result, debugPath, deps)
+  await acceptResult(result, debugPath, deps, token)
 }
 
 async function runManualConnect(deps: ConnectCommandDeps): Promise<void> {
   const debugPath = readDebugPath()
   const currentUrl = readServerUrl()
-  const token = readToken()
+  const token = await deps.getToken()
 
   const url = await vscode.window.showInputBox({
     title: 'KickJS: server URL',
@@ -135,13 +137,14 @@ async function runManualConnect(deps: ConnectCommandDeps): Promise<void> {
     return
   }
 
-  await acceptResult(result, debugPath, deps)
+  await acceptResult(result, debugPath, deps, token)
 }
 
 async function acceptResult(
   result: ProbeResult & { ok: true },
   debugPath: string,
   deps: ConnectCommandDeps,
+  token: string | undefined,
 ): Promise<void> {
   const serverUrl = result.baseUrl.replace(new RegExp(escapeRegex(debugPath) + '$'), '')
   const target =
@@ -159,8 +162,7 @@ async function acceptResult(
   //   - no token configured + 200 → server runs with `secret: false`
   //     (auth disabled) since a 401 would have routed to reportFailure
   //     instead of acceptResult.
-  const usingToken = !!config.get<string>('token')
-  const authNote = usingToken ? 'auth: token' : 'auth: disabled'
+  const authNote = token ? 'auth: token' : 'auth: disabled'
   vscode.window.showInformationMessage(
     `KickJS: connected to ${result.baseUrl} (${authNote}, uptime ${result.info.uptime}s, status ${result.info.status})`,
   )
@@ -216,10 +218,6 @@ function readServerUrl(): string {
 
 function readDebugPath(): string {
   return vscode.workspace.getConfiguration('kickjs').get<string>('debugPath', DEFAULT_DEBUG_PATH)
-}
-
-function readToken(): string | undefined {
-  return vscode.workspace.getConfiguration('kickjs').get<string>('token') || undefined
 }
 
 function validateUrl(input: string): string | null {

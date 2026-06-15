@@ -36,6 +36,8 @@ export interface ConnectionInfo {
   status: string
   /** Adapter-state map from `/health` (key -> 'running' | 'stopped'). */
   adapters?: Record<string, string>
+  /** Active HTTP runtime engine + capabilities (KickJS v6+), from `/health`. */
+  runtime?: { name: string; capabilities?: Record<string, boolean> }
 }
 
 export type ProbeResult =

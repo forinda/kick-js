@@ -74,6 +74,12 @@ export class HealthTreeProvider implements vscode.TreeDataProvider<vscode.TreeIt
     )
     status.iconPath = new vscode.ThemeIcon(this.data.status === 'healthy' ? 'pass' : 'error')
     items.push(status)
+    if (this.data.runtime?.name) {
+      const rt = new vscode.TreeItem(`Runtime: ${this.data.runtime.name}`)
+      rt.iconPath = new vscode.ThemeIcon('server-process')
+      rt.tooltip = 'Active HTTP runtime engine (express / fastify / h3)'
+      items.push(rt)
+    }
     items.push(new vscode.TreeItem(`Uptime: ${this.data.uptime}s`))
     items.push(new vscode.TreeItem(`Error Rate: ${((this.data.errorRate ?? 0) * 100).toFixed(2)}%`))
 

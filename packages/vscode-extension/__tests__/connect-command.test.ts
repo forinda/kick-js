@@ -47,6 +47,7 @@ describe('registerConnectCommand', () => {
     )
     registerConnectCommand(fakeContext, {
       onConnected: onConnected as unknown as (s: string, d: string) => void,
+      getToken: async () => undefined,
     })
   })
 

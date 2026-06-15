@@ -2,7 +2,7 @@
   "name": "kickjs-devtools",
   "displayName": "KickJS DevTools",
   "description": "VS Code extension for inspecting KickJS applications — routes, DI container, metrics, and health",
-  "version": "5.2.1",
+  "version": "5.3.0",
   "publisher": "forinda",
   "engines": {
     "vscode": "^1.85.0"
@@ -10,13 +10,16 @@
   "icon": "resources/icon.png",
   "categories": [
     "Other",
-    "Debuggers"
+    "Visualization"
   ],
   "keywords": [
     "kickjs",
     "devtools",
     "nodejs",
     "express",
+    "fastify",
+    "h3",
+    "database",
     "typescript",
     "decorator"
   ],
@@ -123,6 +126,31 @@
         "command": "kickjs.mcpInit",
         "title": "KickJS: Initialise MCP Config (.claude/)",
         "icon": "$(file-add)"
+      },
+      {
+        "command": "kickjs.doctor",
+        "title": "KickJS: Doctor (pre-flight checks)",
+        "icon": "$(pulse)"
+      },
+      {
+        "command": "kickjs.dbMigrate",
+        "title": "KickJS: DB Migrate (latest)",
+        "icon": "$(database)"
+      },
+      {
+        "command": "kickjs.dbStatus",
+        "title": "KickJS: DB Migration Status",
+        "icon": "$(database)"
+      },
+      {
+        "command": "kickjs.dbGenerate",
+        "title": "KickJS: DB Generate Migration…",
+        "icon": "$(database)"
+      },
+      {
+        "command": "kickjs.dbRollback",
+        "title": "KickJS: DB Rollback (last batch)",
+        "icon": "$(database)"
       }
     ],
     "menus": {
@@ -218,6 +246,26 @@
         {
           "command": "kickjs.mcpInit",
           "when": "kickjs.isKickProject"
+        },
+        {
+          "command": "kickjs.doctor",
+          "when": "kickjs.isKickProject"
+        },
+        {
+          "command": "kickjs.dbMigrate",
+          "when": "kickjs.isKickProject"
+        },
+        {
+          "command": "kickjs.dbStatus",
+          "when": "kickjs.isKickProject"
+        },
+        {
+          "command": "kickjs.dbGenerate",
+          "when": "kickjs.isKickProject"
+        },
+        {
+          "command": "kickjs.dbRollback",
+          "when": "kickjs.isKickProject"
         }
       ]
     },
@@ -242,7 +290,8 @@
         "kickjs.token": {
           "type": "string",
           "default": "",
-          "description": "Optional DevTools auth token. Leave empty when the server runs the DevTools adapter with `secret: false` (auth disabled) — the extension probes + the tree views work without a token. When `secret` is auto-generated or explicitly set (printed as `[token: …]` in the startup console), paste it here OR run `KickJS: Set DevTools Token…` from the palette."
+          "markdownDeprecationMessage": "The token is now stored securely in VS Code SecretStorage. Run **KickJS: Set DevTools Token…** from the palette instead. Any value here is migrated to SecretStorage and cleared automatically.",
+          "description": "Deprecated — use `KickJS: Set DevTools Token…`. The token now lives in SecretStorage, not settings.json. A value left here is migrated once, then removed."
         }
       }
     },
@@ -297,6 +346,10 @@
     "url": "https://github.com/forinda/kick-js.git",
     "directory": "packages/vscode-extension"
   },
+  "bugs": {
+    "url": "https://github.com/forinda/kick-js/issues"
+  },
+  "homepage": "https://forinda.github.io/kick-js/guide/devtools",
   "license": "MIT",
   "scripts": {
     "build": "pnpm build:icons && vite build",

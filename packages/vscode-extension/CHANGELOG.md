@@ -1,5 +1,17 @@
 # kickjs-devtools
 
+## 5.3.0
+
+### Minor Changes
+
+- Security + v6 feature update for the VS Code extension:
+  - **Token moved to SecretStorage.** The devtools auth token is no longer stored in the plaintext `kickjs.token` setting (which could be committed to `.vscode/settings.json`). It now lives in VS Code SecretStorage; an existing setting value is migrated once and the plaintext copy cleared. `KickJS: Set/Clear DevTools Token…` write to SecretStorage.
+  - **Dashboard webview now sends the token.** The webview's `fetch`es include the `x-devtools-token` header, so the dashboard works against token-protected servers (previously it showed "Unavailable").
+  - **Active runtime engine** (`express` / `fastify` / `h3`) is surfaced in the Health tree and the dashboard health card (KickJS v6 `/health.runtime`).
+  - **New commands:** `KickJS: Doctor` (`kick doctor`), and `KickJS: DB Migrate / Status / Generate / Rollback` (`kick db …`).
+  - **`Add Package…`** now offers `db`, `pg`, `sqlite`, `mysql`, `upload`, and `ai`; the deprecated `auth` / `drizzle` / `prisma` entries were removed.
+  - Marketplace: `fastify` / `h3` / `database` keywords, `Visualization` category (was the misleading `Debuggers`), `bugs` / `homepage` fields.
+
 ## 5.2.1
 
 ### Patch Changes
