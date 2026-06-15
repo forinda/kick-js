@@ -481,7 +481,7 @@ const SettingsMenu: Component = () => {
   })
 
   return (
-    <div class="dt-settings" ref={root}>
+    <div class="dt-settings" ref={(el) => (root = el)}>
       <button
         type="button"
         class={`dt-settings-btn ${open() ? 'open' : ''}`}
