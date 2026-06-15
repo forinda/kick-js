@@ -17,10 +17,16 @@
 // once (typically from `src/index.ts` of their app) to register the
 // types globally.
 
-import type { SlowQueryEvent, QueryErrorEvent } from './client/types'
+import type { QueryEvent, SlowQueryEvent, QueryErrorEvent } from './client/types'
 
 declare module '@forinda/kickjs-devtools-kit/bus' {
   interface KickDevtoolsEventRegistry {
+    /**
+     * Fired for every successful query — the per-statement stream the
+     * DevTools "Database" tab renders (sql, parameters, durationMs) tagged
+     * with the active `dialect`. Failures flow on `db:query-error`.
+     */
+    'db:query': QueryEvent & { dialect: string }
     /** Fired when a query duration exceeds `slowQueryThresholdMs`. */
     'db:slow-query': SlowQueryEvent
     /** Fired when a query throws — mirrors the local `queryError` event. */

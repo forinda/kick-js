@@ -69,6 +69,17 @@ export function createDbClient<TSchema, DB = SchemaToTypes<TSchema>>(
   // Spec: docs/db/spec-relational-query-other-dialects.md §5.
   const dialectTag = detectDialect(opts.dialect)
 
+  // Unified per-query stream for the DevTools "Database" tab — every
+  // successful query republished as `db:query` with the dialect tag so
+  // the tab can render duration / SQL / dialect. Failures keep flowing on
+  // `db:query-error` (wired above); the tab subscribes to both. Tagging
+  // here (rather than the block above) keeps `dialectTag` in scope.
+  if (events && bus) {
+    events.on('query', (payload) => {
+      bus.emit('db:query', { ...payload, dialect: dialectTag })
+    })
+  }
+
   const plugins: KyselyPlugin[] = []
   if (codecPlugin) plugins.push(codecPlugin)
   if (dialectTag === 'sqlite' || dialectTag === 'mysql') {

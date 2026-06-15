@@ -9,6 +9,7 @@ import { RoutesTab } from './tabs/RoutesTab'
 import { MetricsTab } from './tabs/MetricsTab'
 import { ContainerTab } from './tabs/ContainerTab'
 import { QueuesTab } from './tabs/QueuesTab'
+import { DatabaseTab } from './tabs/DatabaseTab'
 import { GraphTab } from './tabs/GraphTab'
 import { ActivityLogTab } from './tabs/ActivityLogTab'
 import { CustomTab } from './tabs/CustomTab'
@@ -28,6 +29,7 @@ type BuiltInTabId =
   | 'metrics'
   | 'container'
   | 'queues'
+  | 'database'
   | 'graph'
   | 'activity'
 
@@ -60,6 +62,13 @@ function builtInTabs(): readonly BuiltInTabSpec[] {
       id: 'queues',
       label: 'Queues',
       count: () => store.queues().queues.length || undefined,
+    },
+    {
+      id: 'database',
+      label: 'Database',
+      count: () =>
+        recentBusEvents()().filter((e) => e.type === 'db:query' || e.type === 'db:query-error')
+          .length || undefined,
     },
     {
       id: 'graph',
@@ -220,6 +229,9 @@ export const App: Component = () => {
         </Show>
         <Show when={active() === 'queues'}>
           <QueuesTab />
+        </Show>
+        <Show when={active() === 'database'}>
+          <DatabaseTab />
         </Show>
         <Show when={active() === 'graph'}>
           <GraphTab />

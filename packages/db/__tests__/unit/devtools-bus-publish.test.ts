@@ -58,6 +58,22 @@ describe('createDbClient — bus republishing', () => {
     expect(typeof payload.durationMs).toBe('number')
   })
 
+  it('forwards every query → db:query tagged with the dialect', async () => {
+    const bus = createInMemoryBus()
+    const seen: Array<Record<string, unknown>> = []
+    bus.on('db:query', (p) => seen.push(p as unknown as Record<string, unknown>))
+
+    const db = createDbClient({ schema: { users }, dialect: dummy, bus })
+    await db.selectFrom('users').selectAll().execute()
+    await db.destroy()
+
+    expect(seen).toHaveLength(1)
+    expect(seen[0].sql).toMatch(/select/i)
+    expect(typeof seen[0].durationMs).toBe('number')
+    expect(seen[0].dialect).toBe('postgres')
+    expect(Array.isArray(seen[0].parameters)).toBe(true)
+  })
+
   it('does not republish when no bus is wired (zero overhead path)', async () => {
     // Just exercise the slow-query path without a bus and confirm the
     // client still works end-to-end. The absence of an emit is the
