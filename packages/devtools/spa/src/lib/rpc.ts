@@ -106,9 +106,23 @@ function tokenHeaders(): Record<string, string> {
   return t ? { 'x-devtools-token': t } : {}
 }
 
+/** Identity of the Node process the runtime stats describe. */
+export interface ProcessInfo {
+  nodeVersion: string
+  pid: number
+  platform: string
+  arch: string
+  runtime: { name: string; capabilities: Record<string, boolean> } | null
+}
+
 export const rpc = {
   runtime: () =>
-    get<{ latest: RuntimeSnapshot; history: RuntimeSnapshot[]; health: MemoryHealth }>('/runtime'),
+    get<{
+      latest: RuntimeSnapshot
+      history: RuntimeSnapshot[]
+      health: MemoryHealth
+      process?: ProcessInfo
+    }>('/runtime'),
   topology: () => get<TopologySnapshot>('/topology'),
   /** Per-route latency table — separate concept from the route registry below. */
   metrics: () =>

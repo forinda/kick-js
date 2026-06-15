@@ -28,7 +28,13 @@ import { notFoundHandler, errorHandler } from './middleware/error-handler'
 import { requestScopeMiddleware, isRequestScopeMiddleware } from './middleware/request-scope'
 import { _setExternalContributorSources, buildRouteTable } from './router-builder'
 import { expressRuntime } from './runtimes/express'
-import type { ActiveRuntime, AdapterHttp, HttpRuntime, RouteEntry } from './runtime'
+import type {
+  ActiveRuntime,
+  AdapterHttp,
+  HttpRuntime,
+  RouteEntry,
+  RuntimeCapabilities,
+} from './runtime'
 import { requestStore } from './request-store'
 
 const log = createLogger('Application')
@@ -999,6 +1005,17 @@ export class Application {
    */
   getRuntimeApp(): ActiveRuntime['app'] {
     return this.app
+  }
+
+  /**
+   * The active HTTP runtime's identity + capabilities — `name` is `'express'`
+   * (default), `'fastify'`, or `'h3'`; `capabilities` reports what the engine
+   * supports (render / uploads / connectMiddleware / nativeBodyParsing).
+   * Surfaced by DevTools and the VS Code extension so tooling can show which
+   * engine the app is running on. Cheap, side-effect free.
+   */
+  getActiveRuntime(): { name: string; capabilities: RuntimeCapabilities } {
+    return { name: this.runtime.name, capabilities: this.runtime.capabilities }
   }
 
   /** @deprecated Use {@link getRuntimeApp}. Returns the engine-native app. */

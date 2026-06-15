@@ -110,13 +110,16 @@ describe('DevToolsAdapter', () => {
       expect(adapter.errorRate.value).toBeCloseTo(0.3)
     })
 
-    it('should compute uptimeSeconds relative to startedAt', () => {
+    it('reports uptime from the node process, not a mount timestamp', () => {
       const adapter = createAdapter()
-      // Set startedAt to 5 seconds ago
+      // Uptime now derives from process.uptime() (monotonic from process start)
+      // so it survives HMR rebuilds — moving `startedAt` must NOT change it.
+      const before = adapter.uptimeSeconds.value
+      expect(before).toBe(Math.floor(process.uptime()))
       adapter.startedAt.value = Date.now() - 5000
-      // Should be approximately 5 (allow some tolerance)
-      expect(adapter.uptimeSeconds.value).toBeGreaterThanOrEqual(4)
-      expect(adapter.uptimeSeconds.value).toBeLessThanOrEqual(6)
+      expect(adapter.uptimeSeconds.value).toBe(Math.floor(process.uptime()))
+      // ...and it tracks the real process clock, unaffected by the reset above.
+      expect(adapter.uptimeSeconds.value).toBeGreaterThanOrEqual(before)
     })
 
     it('should invoke onErrorRateExceeded callback when threshold is crossed', () => {
