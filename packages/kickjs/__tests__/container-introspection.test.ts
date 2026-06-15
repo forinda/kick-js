@@ -92,3 +92,59 @@ describe('Container introspection — dependency capture', () => {
     expect(reg!.dependencies).toEqual([])
   })
 })
+
+describe('Container change emit — zero-listener fast path', () => {
+  let c: Container
+
+  beforeEach(() => {
+    // Decorators (@Service) register on the global container at definition
+    // time; reset it per test so DI/decorator state can't leak between cases.
+    Container.reset()
+    c = Container.create()
+  })
+
+  it('buffers nothing while no listener is attached (no timer churn per resolve)', () => {
+    @Service()
+    class Hot {}
+    c.register(Hot, Hot)
+
+    // Resolve repeatedly with NO subscriber. The emit fast-path should
+    // short-circuit, so nothing accumulates in the pending batch.
+    for (let i = 0; i < 50; i++) c.resolve(Hot)
+
+    // Attach AFTER the resolves and flush: a listener that subscribes late
+    // must not receive a backlog of events it never asked for.
+    const seen: string[] = []
+    c.onChange((batch) => {
+      for (const e of batch) seen.push(e.token)
+    })
+    c.flushChanges()
+    expect(seen).toHaveLength(0)
+  })
+
+  it('still tracks resolveCount with no listener (registration state unaffected)', () => {
+    @Service()
+    class Counted {}
+    c.register(Counted, Counted)
+
+    for (let i = 0; i < 5; i++) c.resolve(Counted)
+
+    const reg = c.getRegistrations().find((r) => r.token === 'Counted')
+    expect(reg!.resolveCount).toBe(5)
+  })
+
+  it('emits normally once a listener is attached', () => {
+    const seen: string[] = []
+    @Service()
+    class Live {}
+    c.register(Live, Live)
+
+    c.onChange((batch) => {
+      for (const e of batch) seen.push(e.token)
+    })
+    c.resolve(Live)
+    c.flushChanges()
+
+    expect(seen).toContain('Live')
+  })
+})
