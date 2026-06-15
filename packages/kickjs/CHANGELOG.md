@@ -1,5 +1,40 @@
 # @forinda/kickjs
 
+## 6.1.0
+
+### Minor Changes
+
+- [#415](https://github.com/forinda/kick-js/pull/415) [`7864609`](https://github.com/forinda/kick-js/commit/786460934ac035a3d591d7b80d49cdfba6a64a1d) Thanks [@forinda](https://github.com/forinda)! - DevTools now surfaces the active HTTP runtime and reports uptime correctly.
+  - **`Application.getActiveRuntime()`** (new) — returns `{ name, capabilities }` for the active engine (`express` / `fastify` / `h3`), so tooling can show which runtime an app runs on.
+  - **DevTools `/health`** includes `runtime`; **`/runtime`** includes a `process` block (`nodeVersion`, `pid`, `platform`, `arch`, `runtime`) — the Runtime tab now shows a strip making explicit that the memory / CPU / event-loop stats are for **this Node process** (the one running your app), with the engine, Node version, platform, and pid.
+  - **Uptime fix** — uptime was derived from a timestamp reset in `beforeMount`, which re-runs on every HMR rebuild / dev re-bootstrap and pinned it near `0s`. It now reads `process.uptime()`, which is monotonic from process start and survives reloads.
+
+### Patch Changes
+
+- [#421](https://github.com/forinda/kick-js/pull/421) [`3d877a9`](https://github.com/forinda/kick-js/commit/3d877a9cfb2ff7bea4d1fc965bd62c184ba3a957) Thanks [@forinda](https://github.com/forinda)! - assets: in dev, resolve from the live `src/` tree instead of a stale built manifest
+
+  `assets.x.y()` / `resolveAsset()` could return stale paths (or throw
+  `UnknownAssetError` for a freshly-added file) in development when an earlier
+  `kick build` had left a `dist/.kickjs-assets.json` on disk. The dev resolver
+  skips its in-memory cache so file additions show up live, but `discoverManifest`
+  still probed on-disk built manifests (`dist`/`build`/`out`) _before_ walking the
+  source tree — so the stale manifest shadowed `src/`.
+
+  Dev now prefers a fresh source walk and only falls back to a built manifest when
+  there's no `assetMap` config to walk. `KICK_ASSETS_ROOT` still wins as an
+  explicit override; production behaviour is unchanged.
+
+- [#423](https://github.com/forinda/kick-js/pull/423) [`2c705d7`](https://github.com/forinda/kick-js/commit/2c705d72a8741f46034ff178cec7625969811271) Thanks [@forinda](https://github.com/forinda)! - perf(container): skip change-event bookkeeping when no listener is attached
+
+  `Container.resolve()` emitted a debounced change event on every call — including
+  the hot cached-singleton path. With no `onChange` subscriber (the production
+  default; only DevTools or tests subscribe), each resolve still scanned the
+  pending batch, pushed an entry, and rescheduled a `setTimeout`, only for the
+  flush to iterate an empty listener set and discard the work. `emit()` now
+  short-circuits when there are zero listeners, keeping `resolve()` allocation- and
+  timer-free on the common path. Behaviour is unchanged when a listener is present;
+  registration counters (`resolveCount`, `lastResolvedAt`) are updated regardless.
+
 ## 6.0.1
 
 ### Patch Changes

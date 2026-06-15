@@ -1,5 +1,13 @@
 # @forinda/kickjs-db
 
+## 7.1.0
+
+### Minor Changes
+
+- [#419](https://github.com/forinda/kick-js/pull/419) [`8bbf484`](https://github.com/forinda/kick-js/commit/8bbf484d0cbd1fb0abf5a55d21873bef41231e95) Thanks [@forinda](https://github.com/forinda)! - Live `kick/db` query telemetry in DevTools.
+  - **`@forinda/kickjs-db`** now republishes every successful query to the DevTools event bus as **`db:query`** (`{ sql, parameters, durationMs, dialect }`), alongside the existing `db:slow-query` / `db:query-error`. Zero-overhead when no bus is wired (unchanged). The `db:query` event is added to the `KickDevtoolsEventRegistry` augmentation (`@forinda/kickjs-db/devtools-events`).
+  - **`@forinda/kickjs-devtools`** gains a **Database** tab: a live recent-query table (time, dialect, duration with slow-query highlight, rows, SQL/error) with SQL filter and headline counters (queries / errors / slow / avg duration). It subscribes to `db:query` (successes) and `db:query-error` (failures) on the shared bus.
+
 ## 7.0.0
 
 ## 7.0.0-alpha.0
