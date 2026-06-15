@@ -97,6 +97,9 @@ describe('Container change emit — zero-listener fast path', () => {
   let c: Container
 
   beforeEach(() => {
+    // Decorators (@Service) register on the global container at definition
+    // time; reset it per test so DI/decorator state can't leak between cases.
+    Container.reset()
     c = Container.create()
   })
 
