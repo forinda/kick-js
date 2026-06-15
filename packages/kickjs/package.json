@@ -161,7 +161,7 @@
     "@types/express": "^5.0.6",
     "@types/multer": "^2.1.0",
     "@types/node": "^25.9.2",
-    "@types/serve-static": "^1.15.7",
+    "@types/serve-static": "^2.2.0",
     "fastify": "^5.8.5",
     "h3": "1.15.11",
     "multer": "^2.1.1",
