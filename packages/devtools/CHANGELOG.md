@@ -1,5 +1,36 @@
 # @forinda/kickjs-devtools
 
+## 7.1.0
+
+### Minor Changes
+
+- [#419](https://github.com/forinda/kick-js/pull/419) [`8bbf484`](https://github.com/forinda/kick-js/commit/8bbf484d0cbd1fb0abf5a55d21873bef41231e95) Thanks [@forinda](https://github.com/forinda)! - Live `kick/db` query telemetry in DevTools.
+  - **`@forinda/kickjs-db`** now republishes every successful query to the DevTools event bus as **`db:query`** (`{ sql, parameters, durationMs, dialect }`), alongside the existing `db:slow-query` / `db:query-error`. Zero-overhead when no bus is wired (unchanged). The `db:query` event is added to the `KickDevtoolsEventRegistry` augmentation (`@forinda/kickjs-db/devtools-events`).
+  - **`@forinda/kickjs-devtools`** gains a **Database** tab: a live recent-query table (time, dialect, duration with slow-query highlight, rows, SQL/error) with SQL filter and headline counters (queries / errors / slow / avg duration). It subscribes to `db:query` (successes) and `db:query-error` (failures) on the shared bus.
+
+- [#420](https://github.com/forinda/kick-js/pull/420) [`02fc80e`](https://github.com/forinda/kick-js/commit/02fc80e54a00b522800b2ae385b1588505815b14) Thanks [@forinda](https://github.com/forinda)! - DevTools dashboard: lean, space-efficient redesign
+  - **Grouped resizable sidebar** replaces the horizontal tab strip. Tabs are
+    organised into collapsible sections (Overview · Runtime · Architecture ·
+    Data & Jobs · Activity). Drag the divider to resize; width and collapsed
+    groups persist across reloads.
+  - **Density control** (Small / Medium / Large) scales the whole dashboard's
+    spacing and font size from one lever. Defaults to **Small** to maximise data
+    on screen.
+  - **Settings gear menu** in the header — a discoverable home for the density
+    control (and future preferences), with an outside-click / Esc dismiss.
+
+- [#415](https://github.com/forinda/kick-js/pull/415) [`7864609`](https://github.com/forinda/kick-js/commit/786460934ac035a3d591d7b80d49cdfba6a64a1d) Thanks [@forinda](https://github.com/forinda)! - DevTools now surfaces the active HTTP runtime and reports uptime correctly.
+  - **`Application.getActiveRuntime()`** (new) — returns `{ name, capabilities }` for the active engine (`express` / `fastify` / `h3`), so tooling can show which runtime an app runs on.
+  - **DevTools `/health`** includes `runtime`; **`/runtime`** includes a `process` block (`nodeVersion`, `pid`, `platform`, `arch`, `runtime`) — the Runtime tab now shows a strip making explicit that the memory / CPU / event-loop stats are for **this Node process** (the one running your app), with the engine, Node version, platform, and pid.
+  - **Uptime fix** — uptime was derived from a timestamp reset in `beforeMount`, which re-runs on every HMR rebuild / dev re-bootstrap and pinned it near `0s`. It now reads `process.uptime()`, which is monotonic from process start and survives reloads.
+
+### Patch Changes
+
+- [#415](https://github.com/forinda/kick-js/pull/415) [`5ba703f`](https://github.com/forinda/kick-js/commit/5ba703f3aca4b6c203d7f976cb738fe28df6e0a2) Thanks [@forinda](https://github.com/forinda)! - Upgrade the DevTools dashboard SPA to Tailwind CSS 4.3.1 and rebuild the shipped `public/spa` assets so consumers get the current build.
+
+- Updated dependencies []:
+  - @forinda/kickjs-devtools-kit@7.0.0
+
 ## 7.0.0
 
 ### Patch Changes
