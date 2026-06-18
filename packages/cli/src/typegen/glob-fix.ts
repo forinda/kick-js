@@ -102,6 +102,62 @@ function matchingParen(source: string, openIdx: number): number {
   return -1
 }
 
+/**
+ * First index of `char` within `[from, to)` that sits OUTSIDE a string literal.
+ * Used to find the array's opening `[` without being fooled by a `[` inside a
+ * glob pattern (`'./[A-Z]*.ts'`). `-1` if none.
+ */
+function indexOfUnquoted(source: string, char: string, from: number, to: number): number {
+  let quote: string | null = null
+  for (let i = from; i < to; i++) {
+    const ch = source[i]
+    if (quote) {
+      if (ch === '\\') {
+        i++
+        continue
+      }
+      if (ch === quote) quote = null
+      continue
+    }
+    if (ch === "'" || ch === '"' || ch === '`') {
+      quote = ch
+    } else if (ch === char) {
+      return i
+    }
+  }
+  return -1
+}
+
+/**
+ * Index of the `]` that closes the `[` at `openIdx`, balanced and quote-aware
+ * (brackets inside string literals — e.g. the char class in `'./[A-Z]*.ts'` —
+ * don't count). `-1` if unbalanced.
+ */
+function matchingBracket(source: string, openIdx: number): number {
+  let depth = 0
+  let quote: string | null = null
+  for (let i = openIdx; i < source.length; i++) {
+    const ch = source[i]
+    if (quote) {
+      if (ch === '\\') {
+        i++
+        continue
+      }
+      if (ch === quote) quote = null
+      continue
+    }
+    if (ch === "'" || ch === '"' || ch === '`') {
+      quote = ch
+    } else if (ch === '[') {
+      depth++
+    } else if (ch === ']') {
+      depth--
+      if (depth === 0) return i
+    }
+  }
+  return -1
+}
+
 /** Locate every `import.meta.glob(...)` call with its balanced boundaries. */
 function findGlobCalls(source: string): GlobCall[] {
   const re = /\bimport\.meta\.glob\s*\(/g
@@ -153,9 +209,12 @@ export function patchModuleGlobSource(
   const insertion = fresh.map((p) => `'${p}'`).join(', ')
 
   // Array form: insert before the closing `]` of this call's array literal.
-  const bracket = source.indexOf('[', target.open)
-  if (bracket >= 0 && bracket < target.close) {
-    const closeBracket = source.indexOf(']', bracket)
+  // Both the opening `[` lookup and its matching `]` are quote-aware so a
+  // char-class inside a pattern (`'./[A-Z]*.ts'`) can't be mistaken for the
+  // array delimiters.
+  const bracket = indexOfUnquoted(source, '[', target.open, target.close)
+  if (bracket >= 0) {
+    const closeBracket = matchingBracket(source, bracket)
     if (closeBracket < 0 || closeBracket > target.close) return null
     // Respect a trailing comma / whitespace already before `]`.
     const before = source.slice(0, closeBracket)

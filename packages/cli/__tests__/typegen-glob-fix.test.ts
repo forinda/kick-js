@@ -116,6 +116,19 @@ describe('patchModuleGlobSource — splice patterns into the call', () => {
     expect(extractGlobPatterns(out!)).toContain('./**/*.controller.ts')
   })
 
+  it("isn't fooled by a ] inside a char-class pattern (array form)", () => {
+    const source = `import.meta.glob(['./[A-Z]*.ts'], { eager: true })`
+    const out = patchModuleGlobSource(source, ['./**/*.controller.ts'])
+    expect(out).toBe(`import.meta.glob(['./[A-Z]*.ts', './**/*.controller.ts'], { eager: true })`)
+    expect(extractGlobPatterns(out!)).toEqual(['./[A-Z]*.ts', './**/*.controller.ts'])
+  })
+
+  it('treats a bare string containing [ as bare-string, not array', () => {
+    const source = `import.meta.glob('./[A-Z]*.ts', { eager: true })`
+    const out = patchModuleGlobSource(source, ['./**/*.controller.ts'])
+    expect(out).toBe(`import.meta.glob(['./[A-Z]*.ts', './**/*.controller.ts'], { eager: true })`)
+  })
+
   it('handles a multi-line array with a trailing comma', () => {
     const source = [
       'import.meta.glob(',
