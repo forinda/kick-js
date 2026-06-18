@@ -24,6 +24,7 @@ interface TypegenCliOptions {
   schemaValidator?: string
   envFile?: string
   check?: boolean
+  fix?: boolean
   list?: boolean
   cache?: boolean
 }
@@ -79,6 +80,10 @@ export function registerTypegenCommand(program: Command): void {
       "Path to env schema file for KickEnv typing (default 'src/env.ts'; pass 'false' to disable)",
     )
     .option('--check', 'CI gate: fail on plugin-typegen drift instead of writing')
+    .option(
+      '--fix',
+      "Patch module import.meta.glob() calls to cover decorated classes that aren't loaded by any glob (orphans)",
+    )
     .option('--list', 'List every registered typegen plugin id (use to populate `typegen.disable`)')
     .option(
       '--no-cache',
@@ -127,6 +132,7 @@ export function registerTypegenCommand(program: Command): void {
         srcDir: opts.src ?? config?.typegen?.srcDir,
         outDir: opts.out ?? config?.typegen?.outDir,
         silent: opts.silent,
+        fix: opts.fix,
         allowDuplicates: opts.allowDuplicates,
         // commander sets `cache: false` for `--no-cache`; default undefined → cache on
         noCache: opts.cache === false,

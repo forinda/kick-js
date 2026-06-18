@@ -67,9 +67,17 @@ export function generateModuleIndex(ctx: TemplateContext & { repo: RepoType }): 
 import { ${repoClass} } from './infrastructure/repositories/${repoFile}.repository'
 import { ${pascal}Controller } from './presentation/${kebab}.controller'
 
-// Eagerly load decorated classes so @Service()/@Repository() decorators register in the DI container
+// Eagerly load decorated classes so @Controller()/@Service()/@Repository() decorators
+// register in the DI container. Recursive globs (./**/) so the module keeps working
+// however you nest files (e.g. moving controllers into a controllers/ sub-folder).
 import.meta.glob(
-  ['./domain/services/**/*.ts', './application/use-cases/**/*.ts', '!./**/*.test.ts'],
+  [
+    './**/*.controller.ts',
+    './**/*.service.ts',
+    './**/*.repository.ts',
+    './application/use-cases/**/*.ts',
+    '!./**/*.test.ts',
+  ],
   { eager: true },
 )`
 
@@ -174,8 +182,13 @@ export function generateRestModuleIndex(ctx: TemplateContext & { repo: RepoType 
 import { ${repoClass} } from './${repoFile}.repository'
 import { ${pascal}Controller } from './${kebab}.controller'
 
-// Eagerly load decorated classes so @Service()/@Repository() decorators register in the DI container
-import.meta.glob(['./**/*.service.ts', './**/*.repository.ts', '!./**/*.test.ts'], { eager: true })`
+// Eagerly load decorated classes so @Controller()/@Service()/@Repository() decorators
+// register in the DI container. Recursive globs (./**/) so the module keeps working
+// however you nest files (e.g. moving controllers into a controllers/ sub-folder).
+import.meta.glob(
+  ['./**/*.controller.ts', './**/*.service.ts', './**/*.repository.ts', '!./**/*.test.ts'],
+  { eager: true },
+)`
 
   const routesDoc = `    /**
      * Declare HTTP routes for this module. Return value shape:
