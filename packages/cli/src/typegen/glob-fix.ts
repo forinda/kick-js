@@ -65,42 +65,98 @@ export function suggestGlobsForOrphans(orphans: readonly OrphanLike[]): string[]
   return [...set].toSorted()
 }
 
+/** A single `import.meta.glob(...)` call: byte offsets of its name start, `(`, and matching `)`. */
+interface GlobCall {
+  start: number
+  open: number
+  close: number
+}
+
 /**
- * Splice `addPatterns` into the FIRST `import.meta.glob(...)` call in `source`,
- * preserving the existing patterns. Handles both the array form
- * (`import.meta.glob(['./a'], …)`) and the bare-string form
- * (`import.meta.glob('./a', …)`, which is upgraded to an array).
+ * Index of the `)` that closes the `(` at `openIdx`, balanced and
+ * quote-aware (parens inside string literals don't count). `-1` if
+ * unbalanced.
+ */
+function matchingParen(source: string, openIdx: number): number {
+  let depth = 0
+  let quote: string | null = null
+  for (let i = openIdx; i < source.length; i++) {
+    const ch = source[i]
+    if (quote) {
+      if (ch === '\\') {
+        i++
+        continue
+      }
+      if (ch === quote) quote = null
+      continue
+    }
+    if (ch === "'" || ch === '"' || ch === '`') {
+      quote = ch
+    } else if (ch === '(') {
+      depth++
+    } else if (ch === ')') {
+      depth--
+      if (depth === 0) return i
+    }
+  }
+  return -1
+}
+
+/** Locate every `import.meta.glob(...)` call with its balanced boundaries. */
+function findGlobCalls(source: string): GlobCall[] {
+  const re = /\bimport\.meta\.glob\s*\(/g
+  const calls: GlobCall[] = []
+  let m: RegExpExecArray | null
+  while ((m = re.exec(source)) !== null) {
+    const open = source.indexOf('(', m.index)
+    if (open < 0) continue
+    const close = matchingParen(source, open)
+    if (close < 0) continue
+    calls.push({ start: m.index, open, close })
+  }
+  return calls
+}
+
+/**
+ * Splice `addPatterns` into the module's EAGER `import.meta.glob(...)` call,
+ * preserving its existing patterns. The eager call (`{ eager: true }`) is the
+ * one that actually fires decorators — a module may also hold lazy globs (e.g.
+ * route-component loaders) that must NOT be touched, so we target the eager
+ * call specifically and fall back to the first call only when none is marked
+ * eager. Handles both the array form (`import.meta.glob(['./a'], …)`) and the
+ * bare-string form (`import.meta.glob('./a', …)`, upgraded to an array).
  *
- * Patterns already present (positive or negated) are skipped, so it's
- * idempotent. Returns the patched source, or `null` when there's no glob call
- * to patch or nothing new to add.
+ * Patterns already present in the TARGET call (positive or negated) are
+ * skipped, so it's idempotent. Returns the patched source, or `null` when
+ * there's no glob call to patch or nothing new to add.
  */
 export function patchModuleGlobSource(
   source: string,
   addPatterns: readonly string[],
 ): string | null {
-  const callIdx = source.search(/\bimport\.meta\.glob\s*\(/)
-  if (callIdx < 0) return null
+  const calls = findGlobCalls(source)
+  if (calls.length === 0) return null
 
-  const open = source.indexOf('(', callIdx)
-  if (open < 0) return null
+  // Prefer the eager call (the decorator-firing loader); fall back to the first.
+  const target =
+    calls.find((c) => /\beager\s*:\s*true\b/.test(source.slice(c.open, c.close + 1))) ?? calls[0]
 
-  // Skip patterns the call already declares (compare on the bare body so a
-  // negation like `!./**/*.test.ts` doesn't re-add `./**/*.test.ts`).
+  // Idempotency scoped to the TARGET call only — a pattern present in some
+  // other (lazy) call shouldn't suppress adding it to the eager loader.
+  const callSource = source.slice(target.start, target.close + 1)
   const existing = new Set(
-    extractGlobPatterns(source).map((p) => (p.startsWith('!') ? p.slice(1) : p)),
+    extractGlobPatterns(callSource).map((p) => (p.startsWith('!') ? p.slice(1) : p)),
   )
   const fresh = addPatterns.filter((p) => !existing.has(p))
   if (fresh.length === 0) return null
 
   const insertion = fresh.map((p) => `'${p}'`).join(', ')
 
-  // Array form: insert before the closing `]` of the first array literal.
-  const bracket = source.indexOf('[', open)
-  const closeParen = source.indexOf(')', open)
-  if (bracket >= 0 && (closeParen < 0 || bracket < closeParen)) {
+  // Array form: insert before the closing `]` of this call's array literal.
+  const bracket = source.indexOf('[', target.open)
+  if (bracket >= 0 && bracket < target.close) {
     const closeBracket = source.indexOf(']', bracket)
-    if (closeBracket < 0) return null
+    if (closeBracket < 0 || closeBracket > target.close) return null
     // Respect a trailing comma / whitespace already before `]`.
     const before = source.slice(0, closeBracket)
     const needsComma = !/[[,]\s*$/.test(before)
@@ -108,12 +164,12 @@ export function patchModuleGlobSource(
     return before + sep + insertion + source.slice(closeBracket)
   }
 
-  // Bare-string form: wrap the first string literal into an array.
+  // Bare-string form: wrap this call's first string literal into an array.
   const strRe = /(['"`])((?:\\.|(?!\1).)*)\1/
-  const tail = source.slice(open + 1)
+  const tail = source.slice(target.open + 1, target.close)
   const m = strRe.exec(tail)
   if (!m) return null
-  const absStart = open + 1 + m.index
+  const absStart = target.open + 1 + m.index
   const absEnd = absStart + m[0].length
   return source.slice(0, absStart) + `[${m[0]}, ${insertion}]` + source.slice(absEnd)
 }

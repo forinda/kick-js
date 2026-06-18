@@ -92,6 +92,30 @@ describe('patchModuleGlobSource — splice patterns into the call', () => {
     expect(patchModuleGlobSource(`export const x = 1`, ['./**/*.controller.ts'])).toBeNull()
   })
 
+  it('patches the EAGER call, not an earlier lazy one', () => {
+    // A lazy glob (no eager) appears first; the eager decorator-loader is
+    // second. The fix must land in the eager one.
+    const source = [
+      "const lazyPages = import.meta.glob(['./pages/*.ts'])",
+      "import.meta.glob(['./**/*.service.ts', '!./**/*.test.ts'], { eager: true })",
+    ].join('\n')
+    const out = patchModuleGlobSource(source, ['./**/*.controller.ts'])
+    expect(out).not.toBeNull()
+    // The lazy call is untouched.
+    expect(out!).toContain("import.meta.glob(['./pages/*.ts'])")
+    // The controller pattern landed inside the eager array.
+    expect(out!).toMatch(
+      /'!\.\/\*\*\/\*\.test\.ts', '\.\/\*\*\/\*\.controller\.ts'\], \{ eager: true \}/,
+    )
+  })
+
+  it('falls back to the first call when none is eager', () => {
+    const source = `import.meta.glob(['./**/*.service.ts'])`
+    const out = patchModuleGlobSource(source, ['./**/*.controller.ts'])
+    expect(out).not.toBeNull()
+    expect(extractGlobPatterns(out!)).toContain('./**/*.controller.ts')
+  })
+
   it('handles a multi-line array with a trailing comma', () => {
     const source = [
       'import.meta.glob(',
