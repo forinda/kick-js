@@ -9,7 +9,8 @@
  */
 
 import { resolve, basename, dirname, join } from 'node:path'
-import { mkdir, readdir, stat, unlink, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, stat, unlink, writeFile } from 'node:fs/promises'
+import { patchModuleGlobSource, suggestGlobsForOrphans } from './glob-fix'
 import { scanProject, scanProjectIncremental, type ScanDelta, type ScanResult } from './scanner'
 import {
   buildModuleTokens,
@@ -73,6 +74,13 @@ export interface RunTypegenOptions {
   outDir?: string
   /** Suppress console output */
   silent?: boolean
+  /**
+   * Patch module `import.meta.glob(...)` calls in place to cover decorated
+   * classes the scanner flags as orphaned (their file isn't imported by any
+   * module glob, so the decorator never fires at runtime). Wired to
+   * `kick typegen --fix`. Off by default — diagnostics only.
+   */
+  fix?: boolean
   /**
    * When `true`, duplicate class names are auto-namespaced by file path
    * instead of throwing. `kick dev` enables this so the dev server is
@@ -257,22 +265,96 @@ export async function runTypegen(opts: RunTypegenOptions = {}): Promise<{
         }
       }
     }
-    if (scan.orphanedClasses.length > 0) {
-      // forinda/kick-js#235 §4 — decorated classes sitting inside a
-      // module directory whose globs don't pick them up. At runtime
-      // the decorator never fires; downstream code paths get
-      // confusing `MissingContributorError` or silent misroutes.
-      console.warn(
-        `  kick typegen: ${scan.orphanedClasses.length} decorated class(es) not matched by any module's import.meta.glob():`,
-      )
-      for (const orphan of scan.orphanedClasses) {
-        console.warn(`    @${orphan.decorator} ${orphan.className} (${orphan.relativePath})`)
-        console.warn(`      → not picked up by any glob in ${orphan.moduleFilePath}`)
-      }
-    }
+  }
+
+  // forinda/kick-js#235 §4 — decorated classes sitting inside a module
+  // directory whose globs don't pick them up. At runtime the decorator never
+  // fires; downstream code paths get confusing `MissingContributorError` or
+  // silent misroutes. `--fix` patches the module globs; otherwise we print the
+  // exact recursive patterns to add. Runs outside the `!silent` guard so
+  // `--fix` still applies under `--silent`.
+  if (scan.orphanedClasses.length > 0) {
+    await handleOrphanedClasses(scan.orphanedClasses, { fix: opts.fix ?? false, silent })
   }
 
   return { scan, result, tokenWarnings }
+}
+
+/**
+ * Report (and optionally fix) decorated classes whose files aren't imported by
+ * any module's `import.meta.glob(...)`. Groups orphans by their owning module
+ * file, derives the minimal recursive globs that would cover them, and either
+ * patches the module source in place (`fix`) or prints a copy-pasteable
+ * suggestion + the `--fix` hint.
+ */
+async function handleOrphanedClasses(
+  orphans: ScanResult['orphanedClasses'],
+  { fix, silent }: { fix: boolean; silent: boolean },
+): Promise<void> {
+  // Group by the module file whose globs missed them.
+  const byModule = new Map<string, typeof orphans>()
+  for (const o of orphans) {
+    const list = byModule.get(o.moduleFilePath) ?? []
+    list.push(o)
+    byModule.set(o.moduleFilePath, list)
+  }
+
+  if (fix) {
+    let patched = 0
+    const skipped: string[] = []
+    for (const [moduleFile, group] of byModule) {
+      const patterns = suggestGlobsForOrphans(group)
+      try {
+        const source = await readFile(moduleFile, 'utf-8')
+        const next = patchModuleGlobSource(source, patterns)
+        if (next && next !== source) {
+          await writeFile(moduleFile, next)
+          patched++
+          if (!silent) {
+            console.log(
+              `  kick typegen --fix: patched ${moduleFile}\n      + ${patterns.join(', ')}`,
+            )
+          }
+        } else {
+          skipped.push(moduleFile)
+        }
+      } catch {
+        skipped.push(moduleFile)
+      }
+    }
+    if (!silent) {
+      if (patched > 0) {
+        console.log(
+          `  kick typegen --fix: updated ${patched} module glob(s) — re-run typegen to pick up the now-loaded classes.`,
+        )
+      }
+      if (skipped.length > 0) {
+        console.warn(
+          `  kick typegen --fix: could not auto-patch ${skipped.length} module(s) (no import.meta.glob() call found) — add the patterns by hand:`,
+        )
+        for (const m of skipped) {
+          const group = byModule.get(m) ?? []
+          console.warn(`    ${m}: ${suggestGlobsForOrphans(group).join(', ')}`)
+        }
+      }
+    }
+    return
+  }
+
+  if (silent) return
+
+  console.warn(
+    `  kick typegen: ${orphans.length} decorated class(es) not matched by any module's import.meta.glob():`,
+  )
+  for (const [moduleFile, group] of byModule) {
+    for (const orphan of group) {
+      console.warn(`    @${orphan.decorator} ${orphan.className} (${orphan.relativePath})`)
+    }
+    const patterns = suggestGlobsForOrphans(group)
+    console.warn(`      → add to import.meta.glob([...]) in ${moduleFile}:`)
+    console.warn(`          ${patterns.map((p) => `'${p}'`).join(', ')}`)
+  }
+  console.warn(`      → or run \`kick typegen --fix\` to apply these automatically.`)
 }
 
 /** Derive the logging/test `GenerateResult` from a scan — no files written here. */

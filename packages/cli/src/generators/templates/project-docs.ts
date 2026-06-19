@@ -1206,7 +1206,7 @@ export const TodosModule = defineModule({
 })
 \`\`\`
 
-The module file MUST include \`import.meta.glob([...], { eager: true })\` for every \`@Service\` / \`@Repository\` / \`@Component\` class — without it, decorators never fire and DI silently resolves to \`undefined\`.
+The module file MUST include \`import.meta.glob([...], { eager: true })\` for every \`@Controller\` / \`@Service\` / \`@Repository\` / \`@Component\` class — without it, decorators never fire and DI silently resolves to \`undefined\` (or routes vanish). Use **recursive** patterns (\`./**/*.controller.ts\`) so the glob keeps working when you nest files into sub-folders (\`controllers/\`, \`presentation/\`, …). If you reorganise and a class stops loading, \`kick typegen\` flags it as orphaned and \`kick typegen --fix\` patches the glob for you.
 
 **Multiple route sets / versioning** — \`routes()\` may return an array with per-entry \`version\` override:
 
