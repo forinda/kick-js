@@ -1,5 +1,25 @@
 # @forinda/kickjs-cli
 
+## 6.3.0
+
+### Minor Changes
+
+- [#425](https://github.com/forinda/kick-js/pull/425) [`d248935`](https://github.com/forinda/kick-js/commit/d248935243ec882085b533d05d1969d85920903e) Thanks [@forinda](https://github.com/forinda)! - typegen: resolve decorated classes at any module depth + `kick typegen --fix`
+
+  Decorated classes (`@Controller`, `@Service`, …) only register at runtime if a
+  module's `import.meta.glob([...], { eager: true })` imports their file. When you
+  reorganise a module into sub-folders (e.g. moving controllers into
+  `controllers/`), a shallow glob stops reaching them — routes silently vanish and
+  DI tokens resolve `undefined`. Typegen already detected this; now it helps fix it:
+  - **Actionable warning** — orphaned classes are grouped by their owning module
+    file, with the exact recursive glob to add (`./**/*.controller.ts`) and a
+    `kick typegen --fix` hint.
+  - **`kick typegen --fix`** — patches each module's `import.meta.glob(...)` call in
+    place (array or bare-string form), adding the missing recursive patterns.
+    Idempotent; skips patterns already present.
+  - **Scaffold templates** now emit recursive globs that include controllers, so
+    newly-generated modules don't orphan when reorganised.
+
 ## 6.2.3
 
 ### Patch Changes
