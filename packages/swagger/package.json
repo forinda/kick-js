@@ -39,7 +39,7 @@
   "dependencies": {
     "@forinda/kickjs-schema": "workspace:*",
     "reflect-metadata": "^0.2.2",
-    "swagger-ui-dist": "^5.32.6"
+    "swagger-ui-dist": "^5.32.8"
   },
   "peerDependencies": {
     "express": "^5.1.0",
