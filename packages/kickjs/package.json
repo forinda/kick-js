@@ -157,18 +157,18 @@
   "devDependencies": {
     "@fastify/middie": "^9.3.2",
     "@fastify/multipart": "^9.0.0",
-    "@swc/core": "^1.15.40",
+    "@swc/core": "^1.15.43",
     "@types/express": "^5.0.6",
     "@types/multer": "^2.1.0",
     "@types/node": "^25.9.2",
     "@types/serve-static": "^1.15.7",
-    "fastify": "^5.8.5",
+    "fastify": "^5.9.0",
     "h3": "1.15.11",
-    "multer": "^2.1.1",
+    "multer": "^2.2.0",
     "serve-static": "^2.2.0",
     "typescript": "^6.0.3",
-    "vite": "^8.0.16",
-    "vitest": "^4.1.8",
+    "vite": "^8.1.0",
+    "vitest": "^4.1.9",
     "zod": "^4.4.3"
   },
   "publishConfig": {
