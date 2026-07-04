@@ -9,3 +9,6 @@
 
 [build.environment]
   NODE_VERSION = "20"
+  # Canonical URL for sitemap + og:url. Replace with this deploy's domain —
+  # the build fails if left unset while DOCS_BASE is overridden.
+  DOCS_HOSTNAME = "https://kickjs.example/"
