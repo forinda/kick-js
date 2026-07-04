@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "DOCS_BASE=/ DOCS_HOSTNAME=\"${DOCS_HOSTNAME:-https://kickjs.example/}\" vitepress build",
+  "buildCommand": "DOCS_BASE=/ DOCS_HOSTNAME=\"${DOCS_HOSTNAME:-https://kickjs.example/}\" pnpm build",
   "outputDirectory": ".vitepress/dist",
   "framework": null
 }

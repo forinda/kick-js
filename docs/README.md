@@ -27,7 +27,11 @@ The site's base path and canonical hostname are env-driven so one config serves 
 
 ### Vercel / Netlify
 
-Set the project's **root/base directory to `docs`**. Committed configs (`vercel.json`, `netlify.toml`) supply the build command (`DOCS_BASE=/ vitepress build`) and output dir (`.vitepress/dist`) — no dashboard build settings needed beyond the root directory.
+**Netlify** — the repo-root `netlify.toml` is authoritative (`base = "docs"`, `command = "DOCS_BASE=/ pnpm build"`, `publish = ".vitepress/dist"`). Leave **Base directory**, **Build command** and **Publish directory** blank in the Netlify UI so they don't override the file.
+
+**Vercel** — set the project's **root directory to `docs`**; `docs/vercel.json` supplies the build command and output dir.
+
+Both run the build through `pnpm` so the workspace-local `vitepress` bin resolves (a bare `vitepress` isn't on `PATH`).
 
 **Required:** set `DOCS_HOSTNAME=https://your-domain/` for the sitemap/OG tags. The build **fails** if `DOCS_BASE` is overridden while `DOCS_HOSTNAME` is left at the GitHub Pages default — otherwise those tags would silently point at the wrong site. The committed configs carry a `https://kickjs.example/` placeholder; replace it with the real domain.
 
