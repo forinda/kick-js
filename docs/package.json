@@ -1,0 +1,19 @@
+{
+  "name": "@forinda/kickjs-docs",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "KickJS documentation site (VitePress). Deployable standalone to Vercel/Netlify or GitHub Pages.",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vitepress dev",
+    "build": "vitepress build",
+    "preview": "vitepress preview"
+  },
+  "devDependencies": {
+    "vitepress": "^1.6.4"
+  },
+  "engines": {
+    "node": ">=20.0"
+  }
+}

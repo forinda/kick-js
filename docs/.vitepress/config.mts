@@ -188,20 +188,37 @@ const sharedSidebar = {
   '/schemas/': schemasSidebar,
 }
 
+// Deploy target is configurable so the same config serves GitHub Pages
+// (project site under /kick-js/) and root-domain hosts (Vercel/Netlify).
+// Override on those platforms: DOCS_BASE=/ and DOCS_HOSTNAME=https://your-domain/
+const DEFAULT_BASE = '/kick-js/'
+const DEFAULT_HOSTNAME = 'https://forinda.github.io/kick-js/'
+const base = process.env.DOCS_BASE ?? DEFAULT_BASE
+const hostname = process.env.DOCS_HOSTNAME ?? DEFAULT_HOSTNAME
+
+// Serving from a non-Pages root (DOCS_BASE=/) while DOCS_HOSTNAME still
+// defaults to the Pages URL would emit a wrong sitemap/og:url. Fail loud.
+if (base !== DEFAULT_BASE && hostname === DEFAULT_HOSTNAME) {
+  throw new Error(
+    `DOCS_BASE is overridden (${base}) but DOCS_HOSTNAME is unset — ` +
+      `sitemap and og:url would point at ${DEFAULT_HOSTNAME}. ` +
+      `Set DOCS_HOSTNAME to this deploy's canonical URL.`,
+  )
+}
+
 export default defineConfig({
   title: 'KickJS',
   description:
     'A production-grade, decorator-driven Node.js framework for TypeScript — runs on Express, Fastify, or h3, swap the engine in one line.',
-  base: '/kick-js/',
+  base,
   ignoreDeadLinks: true,
   lastUpdated: true,
-  // Emit sitemap.xml so search engines can crawl every page (GitHub Pages
-  // project site is served under /kick-js/).
+  // Emit sitemap.xml so search engines can crawl every page.
   sitemap: {
-    hostname: 'https://forinda.github.io/kick-js/',
+    hostname,
   },
   head: [
-    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/kick-js/logo.svg' }],
+    ['link', { rel: 'icon', type: 'image/svg+xml', href: `${base}logo.svg` }],
     // Google Search Console site verification.
     [
       'meta',
@@ -218,7 +235,7 @@ export default defineConfig({
           'Decorator-driven APIs that run on Express, Fastify, or h3. REST, WebSocket, queues, scheduled jobs — pick what you need.',
       },
     ],
-    ['meta', { property: 'og:url', content: 'https://forinda.github.io/kick-js/' }],
+    ['meta', { property: 'og:url', content: hostname }],
     ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
   ],
 
