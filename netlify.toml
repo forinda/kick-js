@@ -1,0 +1,16 @@
+# Netlify config for the docs site (repo-root file so it's read regardless of
+# UI settings). `base = "docs"` builds the docs workspace package; the command
+# runs through pnpm so the workspace-local `vitepress` bin resolves.
+#
+# In the Netlify UI, leave "Base directory", "Build command" and "Publish
+# directory" blank so this file is authoritative.
+[build]
+  base = "docs"
+  command = "DOCS_BASE=/ pnpm build"
+  publish = ".vitepress/dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+  # Canonical URL for sitemap + og:url. Replace with this deploy's domain —
+  # the build fails if left at the GitHub Pages default while DOCS_BASE=/.
+  DOCS_HOSTNAME = "https://kickjs.example/"
