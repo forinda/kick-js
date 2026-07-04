@@ -188,20 +188,25 @@ const sharedSidebar = {
   '/schemas/': schemasSidebar,
 }
 
+// Deploy target is configurable so the same config serves GitHub Pages
+// (project site under /kick-js/) and root-domain hosts (Vercel/Netlify).
+// Override on those platforms: DOCS_BASE=/ and DOCS_HOSTNAME=https://your-domain/
+const base = process.env.DOCS_BASE ?? '/kick-js/'
+const hostname = process.env.DOCS_HOSTNAME ?? 'https://forinda.github.io/kick-js/'
+
 export default defineConfig({
   title: 'KickJS',
   description:
     'A production-grade, decorator-driven Node.js framework for TypeScript — runs on Express, Fastify, or h3, swap the engine in one line.',
-  base: '/kick-js/',
+  base,
   ignoreDeadLinks: true,
   lastUpdated: true,
-  // Emit sitemap.xml so search engines can crawl every page (GitHub Pages
-  // project site is served under /kick-js/).
+  // Emit sitemap.xml so search engines can crawl every page.
   sitemap: {
-    hostname: 'https://forinda.github.io/kick-js/',
+    hostname,
   },
   head: [
-    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/kick-js/logo.svg' }],
+    ['link', { rel: 'icon', type: 'image/svg+xml', href: `${base}logo.svg` }],
     // Google Search Console site verification.
     [
       'meta',
@@ -218,7 +223,7 @@ export default defineConfig({
           'Decorator-driven APIs that run on Express, Fastify, or h3. REST, WebSocket, queues, scheduled jobs — pick what you need.',
       },
     ],
-    ['meta', { property: 'og:url', content: 'https://forinda.github.io/kick-js/' }],
+    ['meta', { property: 'og:url', content: hostname }],
     ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
   ],
 

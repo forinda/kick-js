@@ -1,0 +1,6 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "DOCS_BASE=/ vitepress build",
+  "outputDirectory": ".vitepress/dist",
+  "framework": null
+}
