@@ -1,6 +1,8 @@
 # Web Standards & Edge Runtime Design — KickJS on h3 v2
 
-> Status: **DRAFT — spec only, no implementation yet** (2026-07-05)
+> Status: **SHIPPED** — P0 (#440), P1 `h3WebRuntime` (#441), P2 `@forinda/kickjs/web` (#442),
+> P3 docs (`docs/guide/edge-deployment.md`). Remaining follow-ups live in §6 open questions
+> (KV stores, adapters-on-edge, `ctx.waitUntil`).
 > Decision owner: @forinda
 > Engine decision: **h3 v2 as the web-standard engine** (chosen over a zero-dep hand-rolled runtime)
 > Channel: TBD after spec review (precedent: fastify/h3 runtimes shipped via `alpha`)
