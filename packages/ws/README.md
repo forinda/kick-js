@@ -44,7 +44,7 @@ Clients connect to `ws://localhost:3000/ws/chat`.
 
 ## Documentation
 
-[forinda.github.io/kick-js/guide/websockets](https://forinda.github.io/kick-js/guide/websockets)
+[kickjs.app/guide/websockets](https://kickjs.app/guide/websockets)
 
 ## License
 

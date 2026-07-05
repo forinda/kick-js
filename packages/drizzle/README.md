@@ -52,7 +52,7 @@ For the multi-tenant `DrizzleTenantAdapter` see the [examples/multi-tenant-drizz
 
 ## Documentation
 
-[forinda.github.io/kick-js/api/drizzle](https://forinda.github.io/kick-js/api/drizzle)
+[kickjs.app/api/drizzle](https://kickjs.app/api/drizzle)
 
 ## License
 

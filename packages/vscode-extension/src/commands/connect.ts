@@ -178,9 +178,7 @@ async function reportFailure(result: ProbeResult & { ok: false }): Promise<void>
         'Try another URL',
       )
       if (action === 'Open Devtools docs') {
-        vscode.env.openExternal(
-          vscode.Uri.parse('https://forinda.github.io/kick-js/guide/devtools'),
-        )
+        vscode.env.openExternal(vscode.Uri.parse('https://kickjs.app/guide/devtools'))
       } else if (action === 'Try another URL') {
         await vscode.commands.executeCommand('kickjs.connect')
       }

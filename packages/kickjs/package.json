@@ -179,7 +179,7 @@
   "engines": {
     "node": ">=20.0"
   },
-  "homepage": "https://forinda.github.io/kick-js/",
+  "homepage": "https://kickjs.app/",
   "repository": {
     "type": "git",
     "url": "https://github.com/forinda/kick-js.git",

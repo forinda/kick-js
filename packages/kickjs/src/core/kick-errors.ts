@@ -15,7 +15,7 @@
  */
 import { KickError } from './kick-error'
 
-const DOCS_BASE = 'https://forinda.github.io/kick-js'
+const DOCS_BASE = 'https://kickjs.app'
 
 // ── DI container ──────────────────────────────────────────────────────
 

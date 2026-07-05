@@ -16,25 +16,23 @@ pnpm docs:build
 pnpm docs:preview
 ```
 
-## Deploy
-
-The site's base path and canonical hostname are env-driven so one config serves every target:
-
-| Var             | Default                              | Set for root-domain hosts |
-| --------------- | ------------------------------------ | ------------------------- |
-| `DOCS_BASE`     | `/kick-js/`                          | `/`                       |
-| `DOCS_HOSTNAME` | `https://forinda.github.io/kick-js/` | your domain               |
+The canonical site is **[kickjs.app](https://kickjs.app/)**, served from the domain root.
 
 ### Vercel / Netlify
 
-**Netlify** — the repo-root `netlify.toml` is authoritative (`base = "docs"`, `command = "DOCS_BASE=/ pnpm build"`, `publish = ".vitepress/dist"`). Leave **Base directory**, **Build command** and **Publish directory** blank in the Netlify UI so they don't override the file.
+**Netlify** — the repo-root `netlify.toml` is authoritative (`base = "docs"`, `command = "pnpm build"`, `publish = ".vitepress/dist"`). Leave **Base directory**, **Build command** and **Publish directory** blank in the Netlify UI so they don't override the file.
 
 **Vercel** — set the project's **root directory to `docs`**; `docs/vercel.json` supplies the build command and output dir.
 
-Both run the build through `pnpm` so the workspace-local `vitepress` bin resolves (a bare `vitepress` isn't on `PATH`).
+Both run through `pnpm` so the workspace-local `vitepress` bin resolves (a bare `vitepress` isn't on `PATH`). The config defaults (`base "/"`, hostname `https://kickjs.app/`) already match this deploy — **no env vars required**.
 
-**Required:** set `DOCS_HOSTNAME=https://your-domain/` for the sitemap/OG tags. The build **fails** if `DOCS_BASE` is overridden while `DOCS_HOSTNAME` is left at the GitHub Pages default — otherwise those tags would silently point at the wrong site. The committed configs carry a `https://kickjs.example/` placeholder; replace it with the real domain.
+### Deploying under a subpath
 
-### GitHub Pages
+For a host that serves under a path prefix (e.g. GitHub Pages at `/kick-js/`), override **both**:
 
-Handled by `.github/workflows/deploy-docs.yml` on push to `main`. Uses the defaults (`/kick-js/` project-site paths) — no env overrides.
+| Var             | Value for the subpath host           |
+| --------------- | ------------------------------------ |
+| `DOCS_BASE`     | `/kick-js/`                          |
+| `DOCS_HOSTNAME` | `https://forinda.github.io/kick-js/` |
+
+The build **fails** if `DOCS_BASE` is overridden while `DOCS_HOSTNAME` is left at the `kickjs.app` default — otherwise the sitemap/OG tags would silently point at the wrong site.

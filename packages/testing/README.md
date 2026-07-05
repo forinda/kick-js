@@ -32,7 +32,7 @@ describe('UserController', () => {
 
 ## Documentation
 
-[forinda.github.io/kick-js/guide/testing](https://forinda.github.io/kick-js/guide/testing)
+[kickjs.app/guide/testing](https://kickjs.app/guide/testing)
 
 ## License
 

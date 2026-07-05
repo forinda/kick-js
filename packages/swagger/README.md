@@ -31,7 +31,7 @@ Decorators (`@ApiTags`, `@ApiOperation`, `@ApiResponse`, `@ApiBearerAuth`, `@Api
 
 ## Documentation
 
-[forinda.github.io/kick-js/guide/swagger](https://forinda.github.io/kick-js/guide/swagger)
+[kickjs.app/guide/swagger](https://kickjs.app/guide/swagger)
 
 ## License
 

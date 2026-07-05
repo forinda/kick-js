@@ -26,7 +26,7 @@ body:
     attributes:
       label: Page URL or Path
       description: Which page is affected?
-      placeholder: "https://forinda.github.io/kick-js/guide/getting-started or docs/guide/getting-started.md"
+      placeholder: "https://kickjs.app/guide/getting-started or docs/guide/getting-started.md"
     validations:
       required: false
 

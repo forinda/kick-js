@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://forinda.github.io/kick-js/">
+  <a href="https://kickjs.app/">
     <img src="docs/public/banner.svg" alt="KickJS" width="600" />
   </a>
 </p>
@@ -171,7 +171,7 @@ bootstrap({ processHooks: 'errors-only' })
 
 **Built-in middleware** — helmet, CORS, CSRF, rate limiting, file uploads, request logging, request scope (AsyncLocalStorage).
 
-**DevTools dashboard** — `/_debug` browser panel with topology, container, routes, metrics; adapter authors expose state via `introspect()` ([type lives in `@forinda/kickjs` directly](https://forinda.github.io/kick-js/guide/devtools.html) — no extra import needed) + `devtoolsTabs()` from `@forinda/kickjs-devtools-kit`.
+**DevTools dashboard** — `/_debug` browser panel with topology, container, routes, metrics; adapter authors expose state via `introspect()` ([type lives in `@forinda/kickjs` directly](https://kickjs.app/guide/devtools.html) — no extra import needed) + `devtoolsTabs()` from `@forinda/kickjs-devtools-kit`.
 
 **Extensible CLI** — custom commands in `kick.config.ts`, plugin generators registered as real Commander subcommands so they appear in `kick g --help`, jiti-powered TS config loading, walk-up project-root resolution.
 
@@ -274,9 +274,9 @@ kick tinker                          # Interactive REPL with full DI graph
 
 ## Documentation
 
-**[forinda.github.io/kick-js](https://forinda.github.io/kick-js/)**
+**[kickjs.app](https://kickjs.app/)**
 
-New here? The **[Samples guide](https://forinda.github.io/kick-js/guide/samples)** is a one-page, copy-pasteable tour of the recommended patterns — controllers, DI, modules, config, context decorators, error handling, adapters, and extending the CLI — each linking into the full guide. It doubles as the mental model.
+New here? The **[Samples guide](https://kickjs.app/guide/samples)** is a one-page, copy-pasteable tour of the recommended patterns — controllers, DI, modules, config, context decorators, error handling, adapters, and extending the CLI — each linking into the full guide. It doubles as the mental model.
 
 ## Contributing
 

@@ -78,7 +78,7 @@
  "bugs": {
   "url": "https://github.com/forinda/kick-js/issues"
  },
- "homepage": "https://forinda.github.io/kick-js/",
+ "homepage": "https://kickjs.app/",
  "pnpm": {
   "onlyBuiltDependencies": [
    "@swc/core",

@@ -50,9 +50,9 @@ const row = await db
 
 ## Docs
 
-- [Schema Types](https://forinda.github.io/kick-js/guide/db-schema-types) — phantom inference, `KickDbRegister`, self-references, `pgEnum`
-- [DB Extensions](https://forinda.github.io/kick-js/guide/db-extensions) — `customType<T>()`, `$extends({ model })`
-- [Type Generation](https://forinda.github.io/kick-js/guide/typegen) — `kick typegen` plugin contract + `kick/db` auto-emit
+- [Schema Types](https://kickjs.app/guide/db-schema-types) — phantom inference, `KickDbRegister`, self-references, `pgEnum`
+- [DB Extensions](https://kickjs.app/guide/db-extensions) — `customType<T>()`, `$extends({ model })`
+- [Type Generation](https://kickjs.app/guide/typegen) — `kick typegen` plugin contract + `kick/db` auto-emit
 
 ## Dialect subpaths
 

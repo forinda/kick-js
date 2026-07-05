@@ -167,7 +167,7 @@ Then open `http://localhost:6274` in your browser:
 
 To test with auth, expand **Authentication** in the sidebar, enable the `Authorization` header, and set its value (e.g. `Bearer <your-jwt>`).
 
-See [the full guide](https://forinda.github.io/kick-js/guide/mcp#testing-with-mcp-inspector) for troubleshooting common issues (404, CORS, stale sessions).
+See [the full guide](https://kickjs.app/guide/mcp#testing-with-mcp-inspector) for troubleshooting common issues (404, CORS, stale sessions).
 
 ## How It Works
 
@@ -553,7 +553,7 @@ When running with `tsx`, `ts-node`, or any transpiler that strips decorator meta
 
 ## Documentation
 
-[forinda.github.io/kick-js/guide/mcp](https://forinda.github.io/kick-js/guide/mcp) — full guide with transports, auto mode, dispatch internals, context decorator auth, Inspector setup, and security notes.
+[kickjs.app/guide/mcp](https://kickjs.app/guide/mcp) — full guide with transports, auto mode, dispatch internals, context decorator auth, Inspector setup, and security notes.
 
 ## License
 

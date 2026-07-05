@@ -48,7 +48,7 @@ kick typegen                        # emits KickRuntimeRegister so ctx.app / get
 
 ## Documentation
 
-[forinda.github.io/kick-js/guide/cli-commands](https://forinda.github.io/kick-js/guide/cli-commands) — every command + flag, custom commands via `kick.config.ts`, generator architecture.
+[kickjs.app/guide/cli-commands](https://kickjs.app/guide/cli-commands) — every command + flag, custom commands via `kick.config.ts`, generator architecture.
 
 ## License
 
