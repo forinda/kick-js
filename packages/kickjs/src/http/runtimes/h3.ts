@@ -342,10 +342,18 @@ export function h3Runtime(): HttpRuntime<H3AppLike> {
  * become the h3 `App`; `ctx.req` / `ctx.res` the per-request `H3Event` (h3 v1
  * routes everything through the event). Mirrors `ExpressRuntimeTypes`.
  */
+// Resolved conditionally so this file typechecks against EITHER installed h3
+// major: v1 exports `App`; v2 (used by the sibling h3-web runtime) does not.
+// Runtime behavior is untouched — this block is type-only.
+type H3AppType = typeof import('h3') extends { App: infer A } ? A : unknown
+type H3EventType = typeof import('h3') extends { H3Event: new (...args: never[]) => infer E }
+  ? E
+  : unknown
+
 export interface H3RuntimeTypes {
-  request: import('h3').H3Event
-  response: import('h3').H3Event
-  app: import('h3').App
+  request: H3EventType
+  response: H3EventType
+  app: H3AppType
 }
 
 /** Join a mount prefix and a route path; a root path maps to the prefix itself. */

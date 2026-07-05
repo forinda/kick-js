@@ -99,6 +99,10 @@
     "./h3": {
       "import": "./dist/http/runtimes/h3.mjs",
       "types": "./dist/http/runtimes/h3.d.mts"
+    },
+    "./h3-web": {
+      "import": "./dist/http/runtimes/h3-web.mjs",
+      "types": "./dist/http/runtimes/h3-web.d.mts"
     }
   },
   "files": [
@@ -123,7 +127,7 @@
     "dotenv": "^17.0.0",
     "express": "^5.1.0",
     "fastify": "^5.0.0",
-    "h3": "^1.0.0",
+    "h3": "^1.0.0 || ^2.0.0-rc || ^2.0.0",
     "multer": "^2.0.0",
     "serve-static": "^1.15.0 || ^2.0.0",
     "zod": "^4.0.0"
@@ -164,6 +168,7 @@
     "@types/serve-static": "^1.15.7",
     "fastify": "^5.9.0",
     "h3": "1.15.11",
+    "h3-v2": "npm:h3@2.0.1-rc.22",
     "multer": "^2.2.0",
     "serve-static": "^2.2.0",
     "typescript": "^6.0.3",

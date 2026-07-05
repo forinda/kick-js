@@ -24,6 +24,7 @@ export default defineConfig({
     'http/router-builder': 'src/http/router-builder.ts',
     'http/runtimes/fastify': 'src/http/runtimes/fastify.ts',
     'http/runtimes/h3': 'src/http/runtimes/h3.ts',
+    'http/runtimes/h3-web': 'src/http/runtimes/h3-web.ts',
     'http/middleware/helmet': 'src/http/middleware/helmet.ts',
     'http/middleware/cors': 'src/http/middleware/cors.ts',
     'http/middleware/csrf': 'src/http/middleware/csrf.ts',
