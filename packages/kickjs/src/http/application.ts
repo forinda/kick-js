@@ -22,6 +22,12 @@ import {
   MutableModuleRegistry,
 } from '../core'
 import { moduleRouteMissingControllerError } from '../core/kick-errors'
+import {
+  disposeAll,
+  drainDisposables,
+  registerDisposable,
+  runDisposables,
+} from '../core/disposables'
 import { getClassMeta } from '../core/metadata'
 import { requestId } from './middleware/request-id'
 import { notFoundHandler, errorHandler } from './middleware/error-handler'
@@ -902,6 +908,12 @@ export class Application {
     // the old app keeps running so the server stays responsive.
     const prevApp = this.app
     const prevContainer = this.container
+    // Snapshot the outgoing app's disposables (session/rate-limit store
+    // intervals) BEFORE setup() registers the incoming app's. On success the
+    // stale set is disposed — without this, every HMR swap leaked one live
+    // interval + Map per store. On failure it's restored, and whatever the
+    // failed setup() half-registered is disposed instead.
+    const staleDisposables = drainDisposables()
 
     try {
       Container.reset()
@@ -911,10 +923,14 @@ export class Application {
     } catch (err) {
       log.error(err, 'HMR rebuild failed, keeping previous app')
       // Restore previous state so the server stays responsive
+      await runDisposables(drainDisposables())
+      for (const d of staleDisposables) registerDisposable(d)
       this.app = prevApp
       this.container = prevContainer
       return
     }
+
+    await runDisposables(staleDisposables)
 
     if (this.httpServer) {
       this.httpServer.removeAllListeners('request')
@@ -992,6 +1008,13 @@ export class Application {
           log.error({ err: result.reason }, 'Adapter shutdown failed')
         }
       }
+
+      // Step 4: Release framework-owned resources started outside the
+      // adapter lifecycle — in-memory session/rate-limit store intervals —
+      // and flush any pending container change batch so its debounce timer
+      // doesn't outlive the app.
+      await disposeAll()
+      this.container.flushChanges()
     } finally {
       if (timer) clearTimeout(timer)
     }

@@ -283,6 +283,9 @@ export class RequestContext<TBody = any, TParams = any, TQuery = any> implements
    */
   private _qsMemo?: { config: unknown; options: unknown; result: unknown }
 
+  /** Memoized {@link problem} sender — built lazily on first access. */
+  private _problem?: ProblemSender
+
   /**
    * Read-side accessor for the per-request metadata map.
    *
@@ -634,6 +637,9 @@ export class RequestContext<TBody = any, TParams = any, TQuery = any> implements
    * (use it from services where `ctx` isn't in scope).
    */
   get problem(): ProblemSender {
+    // Memoized — building the sender allocates ~10 closures, so pay that only
+    // on the first access per context instead of per `ctx.problem.*` call.
+    if (this._problem) return this._problem
     const send = (input: ProblemDetails): RuntimeResponse => this.sendProblem(input)
     send.badRequest = (input: ProblemInput = {}): RuntimeResponse =>
       this.sendProblem({ status: 400, ...input })
@@ -664,7 +670,8 @@ export class RequestContext<TBody = any, TParams = any, TQuery = any> implements
         errors,
       })
     }
-    return send as ProblemSender
+    this._problem = send as ProblemSender
+    return this._problem
   }
 
   private sendProblem(input: ProblemDetails): RuntimeResponse {

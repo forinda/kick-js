@@ -21,7 +21,7 @@ import { createRequire } from 'node:module'
 
 import { RequestContext } from '../context'
 import { requestStore } from '../request-store'
-import { createRequestStore } from '../middleware/request-scope'
+import { createRequestStore, disposeRequestStore } from '../middleware/request-scope'
 import { validate } from '../middleware/validate'
 import { applyUploadConfig, type RawUploadPart } from '../middleware/upload'
 import type {
@@ -58,63 +58,72 @@ const ASSEMBLED = Symbol('kickjs.h3.assembled')
 const NOOP_NEXT = (): void => {}
 const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 
-/** Wrap a node ServerResponse (from `event.node.res`) as a RuntimeResponse. */
-function resDriver(res: ServerResponse): RuntimeResponse {
-  const driver: RuntimeResponse = {
-    status(code) {
-      res.statusCode = code
-      return driver
-    },
-    json(data) {
-      if (!res.headersSent) res.setHeader('content-type', 'application/json; charset=utf-8')
-      res.end(JSON.stringify(data))
-      return driver
-    },
-    send(data) {
-      res.end(data as never)
-      return driver
-    },
-    type(contentType) {
-      res.setHeader('content-type', contentType)
-      return driver
-    },
-    setHeader(name, value) {
-      res.setHeader(name, value as never)
-      return driver
-    },
-    render() {
-      throw new Error('ctx.render() is not supported on the h3 runtime (no view engine).')
-    },
-    writeHead(statusCode, headers) {
-      res.writeHead(statusCode, headers)
-      return driver
-    },
-    flushHeaders() {
-      res.flushHeaders()
-      return driver
-    },
-    write(chunk) {
-      return res.write(chunk)
-    },
-    end(data) {
-      res.end(data as never)
-      return driver
-    },
-    once(event, listener) {
-      res.once(event, listener)
-      return driver
-    },
-    get headersSent() {
-      return res.headersSent
-    },
+/**
+ * Wrap a node ServerResponse (from `event.node.res`) as a RuntimeResponse.
+ * A class so the ~12 driver methods live on a shared prototype — the previous
+ * object-literal version re-allocated every method closure on each request.
+ */
+class NodeResDriver implements RuntimeResponse {
+  constructor(private readonly res: ServerResponse) {}
+  status(code: number): this {
+    this.res.statusCode = code
+    return this
   }
-  return driver
+  json(data: unknown): this {
+    if (!this.res.headersSent) this.res.setHeader('content-type', 'application/json; charset=utf-8')
+    this.res.end(JSON.stringify(data))
+    return this
+  }
+  send(data: unknown): this {
+    this.res.end(data as never)
+    return this
+  }
+  type(contentType: string): this {
+    this.res.setHeader('content-type', contentType)
+    return this
+  }
+  setHeader(name: string, value: unknown): this {
+    this.res.setHeader(name, value as never)
+    return this
+  }
+  render(): never {
+    throw new Error('ctx.render() is not supported on the h3 runtime (no view engine).')
+  }
+  writeHead(statusCode: number, headers?: Record<string, string | number | string[]>): this {
+    this.res.writeHead(statusCode, headers)
+    return this
+  }
+  flushHeaders(): this {
+    this.res.flushHeaders()
+    return this
+  }
+  write(chunk: unknown): boolean {
+    return this.res.write(chunk as never)
+  }
+  end(data?: unknown): this {
+    this.res.end(data as never)
+    return this
+  }
+  once(event: string, listener: (...args: unknown[]) => void): this {
+    this.res.once(event, listener)
+    return this
+  }
+  get headersSent(): boolean {
+    return this.res.headersSent
+  }
+}
+
+function resDriver(res: ServerResponse): RuntimeResponse {
+  return new NodeResDriver(res) as unknown as RuntimeResponse
 }
 
 /** Build the h3 event handler that runs the kickjs pipeline for one route. */
 function makeEventHandler(entry: RouteEntry): (event: H3EventLike) => Promise<void> {
   const { getRouterParams, getQuery, readBody, readMultipartFormData } = h3()
   const upload = entry.meta.upload
+  // Validation middleware built ONCE per route (parity with Express) — calling
+  // validate() per request re-allocated the closure every time.
+  const validator = entry.meta.validation ? validate(entry.meta.validation) : undefined
   return async (event: H3EventLike) => {
     const req = event.node.req as IncomingMessage & {
       requestId?: string
@@ -163,13 +172,18 @@ function makeEventHandler(entry: RouteEntry): (event: H3EventLike) => Promise<vo
     const store = createRequestStore(requestId)
     req.requestId = store.requestId
 
+    // @PreDestroy teardown for REQUEST-scoped instances once the response
+    // closes (finished or aborted) — parity with requestScopeMiddleware.
+    res.once('close', () => disposeRequestStore(store))
+
     await requestStore.run(store, async () => {
       const ctx = new RequestContext(req as never, res as never, NOOP_NEXT, resDriver(res))
 
-      if (entry.meta.validation) {
-        const v = validate(entry.meta.validation)
+      if (validator) {
         await new Promise<void>((resolve, reject) => {
-          v(req as never, undefined as never, (err?: unknown) => (err ? reject(err) : resolve()))
+          validator(req as never, undefined as never, (err?: unknown) =>
+            err ? reject(err) : resolve(),
+          )
         })
       }
 

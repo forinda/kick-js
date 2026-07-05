@@ -33,6 +33,7 @@ export {
   Repository,
   Controller,
   PostConstruct,
+  PreDestroy,
   Autowired,
   Inject,
   Value,
@@ -109,6 +110,9 @@ export {
 
 // Logger
 export { Logger, createLogger, ConsoleLoggerProvider, type LoggerProvider } from './logger'
+
+// Disposables — framework-owned resource teardown drained by Application.shutdown()
+export { registerDisposable, disposeAll, type Disposable } from './disposables'
 
 // Errors
 export {

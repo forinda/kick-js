@@ -19,7 +19,7 @@ import { createRequire } from 'node:module'
 
 import { RequestContext } from '../context'
 import { requestStore } from '../request-store'
-import { createRequestStore } from '../middleware/request-scope'
+import { createRequestStore, disposeRequestStore } from '../middleware/request-scope'
 import { validate } from '../middleware/validate'
 import { applyUploadConfig, type RawUploadPart } from '../middleware/upload'
 import type {
@@ -91,63 +91,73 @@ interface MultipartPart {
   toBuffer?: () => Promise<Buffer>
 }
 
-/** Wrap a Fastify reply so the RequestContext response helpers drive it. */
-function replyDriver(reply: FastifyReplyLike): RuntimeResponse {
-  const driver: RuntimeResponse = {
-    status(code) {
-      reply.code(code)
-      return driver
-    },
-    json(data) {
-      reply.send(data)
-      return driver
-    },
-    send(data) {
-      reply.send(data)
-      return driver
-    },
-    type(contentType) {
-      reply.type(contentType)
-      return driver
-    },
-    setHeader(name, value) {
-      reply.header(name, value)
-      return driver
-    },
-    render() {
-      throw new Error('ctx.render() is not supported on the Fastify runtime (no view engine).')
-    },
-    writeHead(statusCode, headers) {
-      // Streaming / SSE: take over the raw socket so Fastify doesn't try to
-      // serialize a reply we're writing by hand.
-      reply.hijack()
-      reply.raw.writeHead(statusCode, headers)
-      return driver
-    },
-    flushHeaders() {
-      ;(reply.raw as ServerResponse & { flushHeaders?: () => void }).flushHeaders?.()
-      return driver
-    },
-    write(chunk) {
-      return reply.raw.write(chunk)
-    },
-    end(data) {
-      reply.raw.end(data)
-      return driver
-    },
-    once(event, listener) {
-      reply.raw.once(event, listener)
-      return driver
-    },
-    get headersSent() {
-      return reply.sent || reply.raw.headersSent
-    },
+/**
+ * Wrap a Fastify reply so the RequestContext response helpers drive it.
+ * A class so the ~12 driver methods live on a shared prototype — the previous
+ * object-literal version re-allocated every method closure on each request.
+ */
+class FastifyReplyDriver implements RuntimeResponse {
+  constructor(private readonly reply: FastifyReplyLike) {}
+  status(code: number): this {
+    this.reply.code(code)
+    return this
   }
-  return driver
+  json(data: unknown): this {
+    this.reply.send(data)
+    return this
+  }
+  send(data: unknown): this {
+    this.reply.send(data)
+    return this
+  }
+  type(contentType: string): this {
+    this.reply.type(contentType)
+    return this
+  }
+  setHeader(name: string, value: unknown): this {
+    this.reply.header(name, value)
+    return this
+  }
+  render(): never {
+    throw new Error('ctx.render() is not supported on the Fastify runtime (no view engine).')
+  }
+  writeHead(statusCode: number, headers?: Record<string, string | number | string[]>): this {
+    // Streaming / SSE: take over the raw socket so Fastify doesn't try to
+    // serialize a reply we're writing by hand.
+    this.reply.hijack()
+    this.reply.raw.writeHead(statusCode, headers)
+    return this
+  }
+  flushHeaders(): this {
+    ;(this.reply.raw as ServerResponse & { flushHeaders?: () => void }).flushHeaders?.()
+    return this
+  }
+  write(chunk: unknown): boolean {
+    return this.reply.raw.write(chunk as never)
+  }
+  end(data?: unknown): this {
+    this.reply.raw.end(data as never)
+    return this
+  }
+  once(event: string, listener: (...args: unknown[]) => void): this {
+    this.reply.raw.once(event, listener)
+    return this
+  }
+  get headersSent(): boolean {
+    return this.reply.sent || this.reply.raw.headersSent
+  }
+}
+
+function replyDriver(reply: FastifyReplyLike): RuntimeResponse {
+  return new FastifyReplyDriver(reply) as unknown as RuntimeResponse
 }
 
 /** Build the Fastify per-route handler that runs the kickjs pipeline. */
 function routeHandler(entry: RouteEntry): FastifyHandler {
+  // Validation middleware is built ONCE per route (parity with the Express
+  // materializer) — `validate()` constructs a fresh closure, so calling it
+  // per request was pure allocation waste.
+  const validator = entry.meta.validation ? validate(entry.meta.validation) : undefined
   return async (request, reply) => {
     // Fastify runs the route handler OUTSIDE the connect-middleware chain, so
     // (unlike Express) the requestScopeMiddleware ALS frame isn't active here.
@@ -211,17 +221,23 @@ function routeHandler(entry: RouteEntry): FastifyHandler {
     // and the X-Request-Id response header — parity with Express.
     raw.requestId = store.requestId
 
+    // @PreDestroy teardown for REQUEST-scoped instances once the response
+    // closes (finished or aborted) — parity with requestScopeMiddleware.
+    reply.raw.once('close', () => disposeRequestStore(store))
+
     await requestStore.run(store, async () => {
       const ctx = new RequestContext(raw as never, reply as never, NOOP_NEXT, replyDriver(reply))
 
-      // Validation (from @Get(path, schema) / route.validation). `validate` is a
-      // connect-style middleware that mutates req.body/query/params to the parsed
-      // value and calls next(err) on failure — it never touches `res`, so it runs
-      // cleanly here. A rejection propagates to the error handler (422).
-      if (entry.meta.validation) {
-        const v = validate(entry.meta.validation)
+      // Validation (from @Get(path, schema) / route.validation). `validator` is a
+      // connect-style middleware built once at route registration; it mutates
+      // req.body/query/params to the parsed value and calls next(err) on failure
+      // — it never touches `res`, so it runs cleanly here. A rejection
+      // propagates to the error handler (422).
+      if (validator) {
         await new Promise<void>((resolve, reject) => {
-          v(raw as never, undefined as never, (err?: unknown) => (err ? reject(err) : resolve()))
+          validator(raw as never, undefined as never, (err?: unknown) =>
+            err ? reject(err) : resolve(),
+          )
         })
       }
 

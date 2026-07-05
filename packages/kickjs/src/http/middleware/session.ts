@@ -1,6 +1,8 @@
 import { randomUUID, createHmac, timingSafeEqual } from 'node:crypto'
 import type { Request, Response, NextFunction } from 'express'
 
+import { registerDisposable } from '../../core/disposables'
+
 export interface SessionData {
   [key: string]: unknown
 }
@@ -53,6 +55,16 @@ class MemoryStore implements SessionStore {
     // Purge expired sessions every 60 seconds
     this.cleanupInterval = setInterval(() => this.purge(), 60_000)
     this.cleanupInterval.unref()
+    // Symmetric teardown: Application.shutdown() drains the disposables
+    // registry — without this, every in-process app re-create (tests, HMR)
+    // leaked one live interval + its session Map.
+    registerDisposable(() => this.dispose())
+  }
+
+  /** Clear the cleanup interval and drop all sessions. */
+  dispose(): void {
+    clearInterval(this.cleanupInterval)
+    this.sessions.clear()
   }
 
   async get(sid: string): Promise<SessionData | null> {
