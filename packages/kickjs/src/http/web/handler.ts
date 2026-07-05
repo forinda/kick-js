@@ -7,7 +7,7 @@ import { RequestContext } from '../context'
 import { requestStore } from '../request-store'
 import { createRequestStore, disposeRequestStore } from '../middleware/request-scope'
 import { validate } from '../middleware/validate'
-import { applyUploadConfig, type RawUploadPart } from '../middleware/upload'
+import { applyUploadConfig, type RawUploadPart } from '../middleware/upload-config'
 import type { RouteEntry, RuntimeResponse } from '../runtime'
 import { WebRequestShim, WebResponseDriver } from './driver'
 

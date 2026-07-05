@@ -103,6 +103,10 @@
     "./h3-web": {
       "import": "./dist/http/runtimes/h3-web.mjs",
       "types": "./dist/http/runtimes/h3-web.d.mts"
+    },
+    "./web": {
+      "import": "./dist/web.mjs",
+      "types": "./dist/web.d.mts"
     }
   },
   "files": [
