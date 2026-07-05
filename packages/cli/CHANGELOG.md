@@ -1,5 +1,20 @@
 # @forinda/kickjs-cli
 
+## 6.3.1
+
+### Patch Changes
+
+- [#436](https://github.com/forinda/kick-js/pull/436) [`5ebb82e`](https://github.com/forinda/kick-js/commit/5ebb82e5266790a12e8b3ad6e6e776c469008783) Thanks [@forinda](https://github.com/forinda)! - docs: point package metadata and doc links at the canonical docs host (https://kickjs.app)
+
+  The `homepage` field, README documentation links, CLI generator templates,
+  and error-message doc URLs now reference https://kickjs.app instead of the
+  retired GitHub Pages URL. No API or runtime behavior changes.
+
+- Updated dependencies [[`5ebb82e`](https://github.com/forinda/kick-js/commit/5ebb82e5266790a12e8b3ad6e6e776c469008783)]:
+  - @forinda/kickjs@6.1.1
+  - @forinda/kickjs-cli-kit@0.1.2
+  - @forinda/kickjs-db@7.1.1
+
 ## 6.3.0
 
 ### Minor Changes
