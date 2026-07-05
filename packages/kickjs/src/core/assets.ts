@@ -446,3 +446,10 @@ export const assets: KickAssets = createAssetProxy()
 export function useAssets(): KickAssets {
   return assets
 }
+
+// Install this module's resolver into the container's asset slot — the
+// container deliberately avoids importing this file (edge purity; see
+// asset-resolver-slot.ts). Runs at module scope so any node app that loads
+// the asset manager gets full @Asset injection.
+import { _setAssetResolver } from './asset-resolver-slot'
+_setAssetResolver(resolveAsset)

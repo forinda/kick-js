@@ -1,14 +1,12 @@
-import {
-  buildPipeline,
-  Container,
-  METADATA,
-  runContributors,
-  type ContributorRegistration,
-  type FileUploadConfig,
-  type MiddlewareHandler,
-  type RouteDefinition,
-  type SourcedRegistration,
-} from '../core'
+// Concrete-module imports (NOT the `../core` barrel): the barrel re-exports
+// the asset manager, whose eager `node:fs` import would poison the edge-safe
+// `@forinda/kickjs/web` entry graph that flows through this file.
+import { buildPipeline, type SourcedRegistration } from '../core/contributor-pipeline'
+import { runContributors } from '../core/contributor-runner'
+import { Container } from '../core/container'
+import { METADATA } from '../core/interfaces'
+import type { ContributorRegistration } from '../core/context-decorator'
+import type { FileUploadConfig, MiddlewareHandler, RouteDefinition } from '../core/decorators'
 import { getClassMeta, getMethodMeta, getMethodMetaOrUndefined } from '../core/metadata'
 import type { CtxHandler, RouteEntry, RouteMethod } from './runtime'
 

@@ -6,7 +6,9 @@ import {
   type ClassKind,
   type PostConstructStatus,
 } from './interfaces'
-import { resolveAsset } from './assets'
+// Slot indirection, NOT `./assets` — that module's eager node:fs import
+// would poison the edge-safe web entry graph (see asset-resolver-slot.ts).
+import { resolveAssetViaSlot as resolveAsset } from './asset-resolver-slot'
 import {
   envValueMissingError,
   noProviderError,

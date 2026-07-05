@@ -6,6 +6,7 @@ const pkg = readPkg(import.meta.dirname)
 export default defineConfig({
   entry: {
     index: 'src/index.ts',
+    web: 'src/web.ts',
     'core/adapter': 'src/core/adapter.ts',
     'core/container': 'src/core/container.ts',
     'core/decorators': 'src/core/decorators.ts',

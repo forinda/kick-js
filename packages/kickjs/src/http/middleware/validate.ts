@@ -1,5 +1,7 @@
 import type { Request, Response, NextFunction } from 'express'
-import { HttpException, HttpStatus } from '../../core'
+// core/errors directly (not the barrel) — keeps the edge-safe web entry
+// graph free of the barrel's eager node:fs asset-manager import.
+import { HttpException, HttpStatus } from '../../core/errors'
 import { detectSchema, type SchemaIssue } from '@forinda/kickjs-schema'
 
 export interface ValidationSchema {
