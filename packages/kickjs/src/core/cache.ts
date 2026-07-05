@@ -46,12 +46,19 @@ export interface CacheProvider {
 // ── Built-in Memory Provider ────────────────────────────────────────────
 
 /**
- * Default in-memory cache provider using a Map.
+ * Default in-memory cache provider using a Map with LRU eviction.
  * Suitable for development and single-instance deployments.
  * For multi-instance or production, use a Redis-backed provider.
+ *
+ * Bounded: at most `maxEntries` (default 10 000) live entries. Expiry is
+ * lazy (checked on read); the size cap is what bounds memory — without it,
+ * a `@Cacheable` method over high-cardinality args grew the Map without
+ * limit, since write-once-never-read keys were never revisited.
  */
 export class MemoryCacheProvider implements CacheProvider {
   private store = new Map<string, { data: any; expiresAt: number }>()
+
+  constructor(private readonly maxEntries = 10_000) {}
 
   async get(key: string): Promise<any | null> {
     const entry = this.store.get(key)
@@ -60,10 +67,20 @@ export class MemoryCacheProvider implements CacheProvider {
       this.store.delete(key)
       return null
     }
+    // LRU touch: re-insert so Map iteration order tracks recency and
+    // eviction removes the least-recently-used key, not the oldest write.
+    this.store.delete(key)
+    this.store.set(key, entry)
     return entry.data
   }
 
   async set(key: string, value: any, ttlMs: number): Promise<void> {
+    if (!this.store.has(key) && this.store.size >= this.maxEntries) {
+      // Evict the least-recently-used entry (first in iteration order).
+      const oldest = this.store.keys().next().value
+      if (oldest !== undefined) this.store.delete(oldest)
+    }
+    this.store.delete(key)
     this.store.set(key, { data: value, expiresAt: Date.now() + ttlMs })
   }
 
@@ -129,6 +146,13 @@ export interface CacheOptions {
  * @param ttl - Time-to-live in seconds (default: 60)
  * @param options.key - Custom cache key prefix
  */
+// Sentinel stored in place of a legitimate `null` result. Providers signal
+// "miss" with null, so caching null directly was indistinguishable from a
+// miss — the method re-executed on every call (cache stampede on the exact
+// path caching should protect). A string survives any JSON round-trip
+// (Redis, etc.) without needing changes to the CacheProvider contract.
+const CACHED_NULL = '__kickjs_cached_null__'
+
 export function Cacheable(ttl?: number, options?: { key?: string }): MethodDecorator {
   return (_target, propertyKey, descriptor: PropertyDescriptor) => {
     const original = descriptor.value
@@ -141,11 +165,14 @@ export function Cacheable(ttl?: number, options?: { key?: string }): MethodDecor
 
       const cached = await provider.get(cacheKey)
       if (cached !== null) {
-        return cached
+        return cached === CACHED_NULL ? null : cached
       }
 
       const result = await original.apply(this, args)
-      await provider.set(cacheKey, result, cacheTtl)
+      // Cache legit-null results via the sentinel; `undefined` stays
+      // uncached (callers returning undefined get pre-existing behavior).
+      if (result === null) await provider.set(cacheKey, CACHED_NULL, cacheTtl)
+      else if (result !== undefined) await provider.set(cacheKey, result, cacheTtl)
       return result
     }
 

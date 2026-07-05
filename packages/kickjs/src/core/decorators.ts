@@ -131,6 +131,20 @@ export function PostConstruct(): MethodDecorator {
   }
 }
 
+/**
+ * Mark a method as a teardown hook — the counterpart to {@link PostConstruct}.
+ *
+ * For REQUEST-scoped services it runs when the request's scope closes
+ * (response finished or aborted): release per-request resources there
+ * (transactions, handles, subscriptions). May be async; errors are logged
+ * and swallowed so one failing hook can't break request completion.
+ */
+export function PreDestroy(): MethodDecorator {
+  return (target, propertyKey) => {
+    setClassMeta(METADATA.PRE_DESTROY, propertyKey, target)
+  }
+}
+
 // ── Injection Decorators (property + constructor parameter) ─────────────
 
 /**

@@ -5,10 +5,48 @@
  */
 
 // ── Dependency Tracking ─────────────────────────────────────────────────
+//
+// Effects carry back-references to every dep Set they were added to, so
+// stopping a watcher / disposing a computed — or simply re-running an
+// effect whose getter reads different keys this time — removes it from the
+// old Sets instead of leaving dead subscriptions to accumulate (and be
+// invoked!) forever. Same cleanup discipline as Vue 3's ReactiveEffect.
 
-type Effect = () => void
+interface Effect {
+  (): void
+  /** Dep Sets this effect is currently registered in (for cleanup). */
+  deps: Set<Set<Effect>>
+}
+
 let activeEffect: Effect | null = null
 const targetMap = new WeakMap<object, Map<string | symbol, Set<Effect>>>()
+
+function createEffect(fn: () => void): Effect {
+  const effect = fn as Effect
+  effect.deps = new Set()
+  return effect
+}
+
+/** Remove the effect from every dep Set it was tracked into. */
+function cleanupEffect(effect: Effect): void {
+  for (const depSet of effect.deps) depSet.delete(effect)
+  effect.deps.clear()
+}
+
+/**
+ * Run `fn` with `effect` as the active tracking target, first clearing the
+ * effect's previous subscriptions so conditional reads don't leave stale deps.
+ */
+function runTracked<T>(effect: Effect, fn: () => T): T {
+  cleanupEffect(effect)
+  const prev = activeEffect
+  activeEffect = effect
+  try {
+    return fn()
+  } finally {
+    activeEffect = prev
+  }
+}
 
 function track(target: object, key: string | symbol): void {
   if (!activeEffect) return
@@ -23,14 +61,19 @@ function track(target: object, key: string | symbol): void {
     depsMap.set(key, deps)
   }
   deps.add(activeEffect)
+  activeEffect.deps.add(deps)
 }
 
 function trigger(target: object, key: string | symbol): void {
   const depsMap = targetMap.get(target)
   if (!depsMap) return
   const deps = depsMap.get(key)
-  if (!deps) return
-  for (const effect of deps) {
+  if (!deps || deps.size === 0) return
+  // Iterate a snapshot — a triggered effect re-tracks (mutating `deps`)
+  // during its run, which would otherwise corrupt this iteration. The
+  // array copy is deliberate, not a useless spread.
+  // eslint-disable-next-line unicorn/no-useless-spread
+  for (const effect of [...deps]) {
     effect()
   }
 }
@@ -107,6 +150,15 @@ export interface ComputedRef<T = any> {
    * same as reading `.value`.
    */
   toJSON(): T
+  /**
+   * Unsubscribe this computed from its reactive sources. Call when the
+   * computed's lifetime is shorter than its sources' (e.g. created
+   * per-request/per-tenant against app-lifetime refs) — without it the
+   * internal effect stays pinned in the sources' dep Sets forever.
+   * After disposal, reading `.value` still works but recomputes on every
+   * access and no longer tracks.
+   */
+  dispose(): void
 }
 
 /**
@@ -124,22 +176,20 @@ export interface ComputedRef<T = any> {
 export function computed<T>(getter: () => T): ComputedRef<T> {
   let cached: T
   let dirty = true
+  let disposed = false
   const wrapper = { _value: undefined as T }
 
-  const effect: Effect = () => {
+  const effect = createEffect(() => {
     dirty = true
     trigger(wrapper, '_value')
-  }
+  })
 
   const recompute = (): T => {
+    // Disposed: plain evaluation, no tracking — the computed must not
+    // re-subscribe itself to sources it was explicitly detached from.
+    if (disposed) return getter()
     if (dirty) {
-      const prev = activeEffect
-      activeEffect = effect
-      try {
-        cached = getter()
-      } finally {
-        activeEffect = prev
-      }
+      cached = runTracked(effect, getter)
       wrapper._value = cached
       dirty = false
     }
@@ -150,6 +200,10 @@ export function computed<T>(getter: () => T): ComputedRef<T> {
     get value(): T {
       track(wrapper, '_value')
       return recompute()
+    },
+    dispose(): void {
+      disposed = true
+      cleanupEffect(effect)
     },
     /**
      * Auto-unwrap on `JSON.stringify`, matching {@link ref}'s behavior
@@ -200,30 +254,30 @@ export function watch<T>(
 
   const getter = typeof source === 'function' ? source : () => source.value
 
-  const job: Effect = () => {
+  const job = createEffect(() => {
     if (stopped) return
-    const newValue = getter()
+    // Re-run the getter UNDER tracking so deps are refreshed each run —
+    // a conditional getter (`cond ? a.value : b.value`) drops the branch
+    // it no longer reads instead of staying subscribed to it forever.
+    const newValue = runTracked(job, getter)
     if (!Object.is(newValue, oldValue)) {
       callback(newValue, oldValue)
       oldValue = newValue
     }
-  }
+  })
 
   // Initial run to establish tracking
-  const prev = activeEffect
-  activeEffect = job
-  try {
-    oldValue = getter()
-  } finally {
-    activeEffect = prev
-  }
+  oldValue = runTracked(job, getter)
 
   if (options?.immediate) {
     callback(oldValue, undefined as T)
   }
 
   return () => {
+    // Detach from every dep Set — a flag alone would leave the dead effect
+    // referenced (and invoked) by its sources for their entire lifetime.
     stopped = true
+    cleanupEffect(job)
   }
 }
 
@@ -244,8 +298,15 @@ export function watch<T>(
  * console.log(errorRate.value) // 0.05
  * ```
  */
+// Memoize proxies per target: repeated reads of the same nested object must
+// return the SAME proxy — otherwise every access allocates a fresh Proxy and
+// referential identity breaks (`state.nested !== state.nested`).
+const proxyCache = new WeakMap<object, any>()
+
 export function reactive<T extends Record<string, any>>(target: T): T {
-  return new Proxy(target, {
+  const existing = proxyCache.get(target)
+  if (existing) return existing as T
+  const proxy = new Proxy(target, {
     get(obj, key, receiver) {
       const value = Reflect.get(obj, key, receiver)
       if (typeof key === 'symbol') return value
@@ -265,6 +326,8 @@ export function reactive<T extends Record<string, any>>(target: T): T {
       return result
     },
   })
+  proxyCache.set(target, proxy)
+  return proxy
 }
 
 // ── Utility ──────────────────────────────────────────────────────────────

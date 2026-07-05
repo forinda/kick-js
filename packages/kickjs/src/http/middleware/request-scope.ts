@@ -1,6 +1,60 @@
 import crypto from 'node:crypto'
 import type { Request, Response, NextFunction } from 'express'
 import { requestStore, type RequestStore } from '../request-store'
+import { METADATA } from '../../core/interfaces'
+import { getClassMetaOrUndefined } from '../../core/metadata'
+import { createLogger } from '../../core/logger'
+
+const log = createLogger('RequestScope')
+
+// Per-class @PreDestroy method-name cache: the metadata is immutable after
+// class definition, so pay the Reflect read once per class, not once per
+// instance per request. `null` = "checked, none declared".
+const preDestroyCache = new Map<Function, string | symbol | null>()
+
+function preDestroyMethod(ctor: Function): string | symbol | null {
+  let method = preDestroyCache.get(ctor)
+  if (method === undefined) {
+    method =
+      getClassMetaOrUndefined<string | symbol>(METADATA.PRE_DESTROY, (ctor as any).prototype) ??
+      null
+    preDestroyCache.set(ctor, method)
+  }
+  return method
+}
+
+/**
+ * Run `@PreDestroy` hooks on every REQUEST-scoped instance the request
+ * created, then drop them. Called when the response closes (finished or
+ * aborted) — the counterpart to `@PostConstruct`, closing the lifecycle gap
+ * where per-request services holding transactions/handles/subscriptions were
+ * silently dropped with no cleanup callback.
+ *
+ * Idempotent (guarded by `store.disposed`); hook errors are logged and
+ * swallowed so one failing teardown can't break request completion. Async
+ * hooks are fired without being awaited — the response is already gone.
+ */
+export function disposeRequestStore(store: RequestStore): void {
+  if (store.disposed) return
+  store.disposed = true
+  if (store.instances.size === 0) return
+  for (const instance of store.instances.values()) {
+    if (instance === null || typeof instance !== 'object') continue
+    const method = preDestroyMethod(instance.constructor)
+    if (!method || typeof instance[method] !== 'function') continue
+    try {
+      const result = instance[method]()
+      if (result && typeof result.then === 'function') {
+        ;(result as Promise<void>).catch((err) =>
+          log.error(err, `@PreDestroy on ${instance.constructor.name} rejected`),
+        )
+      }
+    } catch (err) {
+      log.error(err, `@PreDestroy on ${instance.constructor.name} threw`)
+    }
+  }
+  store.instances.clear()
+}
 
 /**
  * Marker symbol stamped on the function returned by {@link requestScopeMiddleware}.
@@ -39,7 +93,7 @@ export function createRequestStore(requestId?: string): RequestStore {
  * or the user already includes one in their middleware list.
  */
 export function requestScopeMiddleware() {
-  const mw = (req: Request, _res: Response, next: NextFunction) => {
+  const mw = (req: Request, res: Response, next: NextFunction) => {
     const requestIdHeader = req.headers['x-request-id']
     const requestId =
       (Array.isArray(requestIdHeader) ? requestIdHeader[0] : requestIdHeader) || crypto.randomUUID()
@@ -50,7 +104,12 @@ export function requestScopeMiddleware() {
     // disagree with the X-Request-Id response header for any request that
     // didn't carry an inbound x-request-id header.
     ;(req as Request & { requestId?: string }).requestId = requestId
-    requestStore.run(store, () => next())
+    // 'close' fires once the response finished OR the client aborted — run
+    // @PreDestroy teardown for the request's scoped instances either way.
+    res.once('close', () => disposeRequestStore(store))
+    // Pass `next` directly — `run` invokes it with no args, so the arrow
+    // wrapper previously allocated per request added nothing.
+    requestStore.run(store, next)
   }
   ;(mw as unknown as Record<symbol, unknown>)[REQUEST_SCOPE_MIDDLEWARE_MARKER] = true
   return mw

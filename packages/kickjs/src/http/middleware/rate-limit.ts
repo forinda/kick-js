@@ -1,5 +1,7 @@
 import type { Request, Response, NextFunction } from 'express'
 
+import { registerDisposable } from '../../core/disposables'
+
 export interface RateLimitStore {
   increment(key: string): Promise<{ totalHits: number; resetTime: Date }>
   decrement(key: string): Promise<void>
@@ -42,6 +44,16 @@ class MemoryStore implements RateLimitStore {
     if (this.cleanupTimer.unref) {
       this.cleanupTimer.unref()
     }
+    // Symmetric teardown: Application.shutdown() drains the disposables
+    // registry — without this, every in-process app re-create (tests, HMR)
+    // leaked one live interval + its hits Map.
+    registerDisposable(() => this.dispose())
+  }
+
+  /** Clear the cleanup interval and drop all hit counters. */
+  dispose(): void {
+    clearInterval(this.cleanupTimer)
+    this.hits.clear()
   }
 
   async increment(key: string): Promise<{ totalHits: number; resetTime: Date }> {

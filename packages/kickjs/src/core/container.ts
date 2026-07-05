@@ -39,6 +39,27 @@ interface Registration {
   resolveDurationMs?: number
   postConstructStatus: PostConstructStatus
   dependencies: string[]
+  /** Lazily built instantiation plan — see {@link Container.buildPlan}. */
+  plan?: InstantiationPlan
+}
+
+/**
+ * Precomputed instantiation recipe for a class. Class metadata is immutable
+ * after definition, so the Reflect reads (5 per create) and the derived
+ * structures only need computing ONCE — previously they re-ran on every
+ * REQUEST-scoped resolve (i.e. every request) and every TRANSIENT resolve.
+ */
+interface InstantiationPlan {
+  /** Ordered, validated constructor parameter tokens. */
+  ctorTokens: any[]
+  /** `@Autowired` properties: [property, resolved token]. */
+  autowired: Array<[string, any]>
+  /** `@Value` properties: [property, env config]. */
+  values: Array<[string, { envKey: string; defaultValue?: any }]>
+  /** `@Asset` properties: [property, pre-split namespace/key]. */
+  assets: Array<[string, { namespace: string; key: string }]>
+  /** `@PostConstruct` method name, if any. */
+  postConstruct?: string | symbol
 }
 
 /** Create a Registration with observability defaults */
@@ -250,7 +271,7 @@ export class Container {
     if (typeof token === 'function' && token.name) {
       this.registrations.set(`__hmr__${token.name}`, reg)
     }
-    this.emit(tokenName(token), 'registered', kind)
+    this.emit(token, 'registered', kind)
   }
 
   /** Register a factory function under the given token */
@@ -390,7 +411,7 @@ export class Container {
     if (reg.scope === Scope.SINGLETON && reg.instance !== undefined) {
       reg.resolveCount++
       reg.lastResolvedAt = Date.now()
-      this.emit(tokenName(token), 'resolved', reg.kind)
+      this.emit(token, 'resolved', reg.kind)
       return reg.instance
     }
 
@@ -407,14 +428,14 @@ export class Container {
       if (store.values.has(token)) {
         reg.resolveCount++
         reg.lastResolvedAt = Date.now()
-        this.emit(tokenName(token), 'resolved', reg.kind)
+        this.emit(token, 'resolved', reg.kind)
         return store.values.get(token) as T
       }
       // Check per-request instance cache
       if (store.instances.has(token)) {
         reg.resolveCount++
         reg.lastResolvedAt = Date.now()
-        this.emit(tokenName(token), 'resolved', reg.kind)
+        this.emit(token, 'resolved', reg.kind)
         return store.instances.get(token) as T
       }
       // Factory-registered binding: invoke the factory once per request
@@ -431,7 +452,7 @@ export class Container {
         reg.lastResolvedAt = Date.now()
         if (!reg.firstResolvedAt) reg.firstResolvedAt = Date.now()
         store.instances.set(token, instance)
-        this.emit(tokenName(token), 'resolved', reg.kind)
+        this.emit(token, 'resolved', reg.kind)
         return instance as T
       }
       // Create instance and cache for this request only
@@ -442,7 +463,7 @@ export class Container {
       reg.lastResolvedAt = Date.now()
       if (!reg.firstResolvedAt) reg.firstResolvedAt = Date.now()
       store.instances.set(token, instance)
-      this.emit(tokenName(token), 'resolved', reg.kind)
+      this.emit(token, 'resolved', reg.kind)
       return instance as T
     }
 
@@ -458,7 +479,7 @@ export class Container {
         // Persist resolved factory instances so they survive module re-evaluation
         getPersistentStore().resolvedInstances.set(tokenName(token), instance)
       }
-      this.emit(tokenName(token), 'resolved', reg.kind)
+      this.emit(token, 'resolved', reg.kind)
       return instance
     }
 
@@ -479,7 +500,7 @@ export class Container {
       if (reg.scope === Scope.SINGLETON) {
         reg.instance = instance
       }
-      this.emit(tokenName(token), 'resolved', reg.kind)
+      this.emit(token, 'resolved', reg.kind)
       return instance
     } finally {
       this.resolving.delete(token)
@@ -555,8 +576,13 @@ export class Container {
     }
   }
 
-  /** Batch-emit a change event (debounced, flushed after 50ms of quiet) */
-  private emit(token: string, event: ContainerChangeEvent['event'], kind?: ClassKind): void {
+  /**
+   * Batch-emit a change event (debounced, flushed after 50ms of quiet).
+   * Takes the RAW token — `tokenName()` is only computed after the
+   * zero-listener guard, so the hot cached-singleton resolve path never pays
+   * the name derivation when nobody is watching (the production default).
+   */
+  private emit(rawToken: any, event: ContainerChangeEvent['event'], kind?: ClassKind): void {
     // Zero-listener fast path. Nobody subscribes to container changes unless
     // DevTools (or a test) calls `onChange` — the production default. Without
     // this guard, every `resolve()` (including the hot cached-singleton path)
@@ -567,6 +593,7 @@ export class Container {
     // subsequent emits work exactly as before — past resolves had no observer
     // to notify anyway.
     if (this.changeListeners.size === 0) return
+    const token = tokenName(rawToken)
 
     // Dedupe within the pending batch: a high-throughput TRANSIENT
     // token that resolves 1000× per request would otherwise queue
@@ -594,6 +621,9 @@ export class Container {
         }
       }
     }, Container.DEBOUNCE_MS)
+    // Don't let a pending debounce window hold the event loop open — flush is
+    // best-effort telemetry, not critical work.
+    this.notifyTimer.unref?.()
   }
 
   /** Flush pending change events immediately (useful in tests) */
@@ -613,7 +643,17 @@ export class Container {
     }
   }
 
-  private createInstance(reg: Registration): any {
+  /**
+   * Build the one-time instantiation plan for a registration. Runs on the
+   * FIRST createInstance for the class — the metadata it reads is immutable
+   * after class definition, so every later create (REQUEST scope: every
+   * request) skips all Reflect reads and re-derivation.
+   *
+   * Scope validation (SINGLETON must not ctor-inject REQUEST) lives here
+   * too: it's a static property of the (parent, dep) registration pair, so
+   * checking it once at plan build is equivalent to the old per-create loop.
+   */
+  private buildPlan(reg: Registration): InstantiationPlan {
     const paramTypes = getClassMeta<Constructor[]>(METADATA.PARAM_TYPES, reg.target, [])
     const injectTokens = getMetaRecord<any>(METADATA.INJECT, reg.target)
 
@@ -627,7 +667,7 @@ export class Container {
         : 0
     const paramCount = Math.max(paramTypes.length, maxInjectIndex)
 
-    const args: any[] = []
+    const ctorTokens: any[] = []
     for (let index = 0; index < paramCount; index++) {
       const token = injectTokens[index] || paramTypes[index]
       if (!token) {
@@ -647,19 +687,67 @@ export class Container {
           )
         }
       }
+      ctorTokens.push(token)
+    }
+
+    // @Autowired properties — resolve each property's token once.
+    const autowiredProps = getMetaMap<string, any>(METADATA.AUTOWIRED, reg.target.prototype)
+    const autowired: InstantiationPlan['autowired'] = []
+    for (const [prop, token] of autowiredProps) {
+      const resolvedToken =
+        token || getMethodMetaOrUndefined(METADATA.PROPERTY_TYPE, reg.target.prototype, prop)
+      if (resolvedToken) autowired.push([prop, resolvedToken])
+    }
+
+    // @Value properties.
+    const valueProps = getMetaMap<string, { envKey: string; defaultValue?: any }>(
+      METADATA.VALUE,
+      reg.target.prototype,
+    )
+    const values: InstantiationPlan['values'] = [...valueProps.entries()]
+
+    // @Asset properties — pre-split namespace/key (and fail fast on bad keys).
+    const assetProps = getMetaMap<string, { assetKey: string }>(
+      METADATA.ASSET,
+      reg.target.prototype,
+    )
+    const assets: InstantiationPlan['assets'] = []
+    for (const [prop, config] of assetProps) {
+      const slashIdx = config.assetKey.indexOf('/')
+      if (slashIdx === -1) {
+        throw new Error(
+          `@Asset('${config.assetKey}'): asset key must include a '/' separator (e.g. 'mails/welcome').`,
+        )
+      }
+      assets.push([
+        prop,
+        { namespace: config.assetKey.slice(0, slashIdx), key: config.assetKey.slice(slashIdx + 1) },
+      ])
+    }
+
+    const postConstruct = getClassMetaOrUndefined<string | symbol>(
+      METADATA.POST_CONSTRUCT,
+      reg.target.prototype,
+    )
+
+    return { ctorTokens, autowired, values, assets, postConstruct }
+  }
+
+  private createInstance(reg: Registration): any {
+    const plan = (reg.plan ??= this.buildPlan(reg))
+
+    const args: any[] = []
+    for (const token of plan.ctorTokens) {
       args.push(this.resolve(token))
     }
 
     const instance = new reg.target(...args)
 
-    // Property injection via @Autowired
-    this.injectProperties(instance, reg.target)
+    // Property injection via @Autowired / @Value / @Asset
+    this.injectProperties(instance, plan)
 
     // @PostConstruct lifecycle hook
-    const postConstruct = getClassMetaOrUndefined<string | symbol>(
-      METADATA.POST_CONSTRUCT,
-      reg.target.prototype,
-    )
+    const postConstruct = plan.postConstruct
     if (postConstruct && typeof instance[postConstruct] === 'function') {
       try {
         const result = instance[postConstruct]()
@@ -724,29 +812,36 @@ export class Container {
     return [...new Set([...ctorDeps, ...propDeps])]
   }
 
-  private injectProperties(instance: any, target: Constructor): void {
-    // @Autowired — lazy DI property injection
-    const autowiredProps = getMetaMap<string, any>(METADATA.AUTOWIRED, target.prototype)
-
-    for (const [prop, token] of autowiredProps) {
-      const resolvedToken =
-        token || getMethodMetaOrUndefined(METADATA.PROPERTY_TYPE, target.prototype, prop)
-      if (resolvedToken) {
-        Object.defineProperty(instance, prop, {
-          get: () => this.resolve(resolvedToken),
-          enumerable: true,
-          configurable: true,
-        })
-      }
+  private injectProperties(instance: any, plan: InstantiationPlan): void {
+    // @Autowired — lazy DI property injection. The getter re-resolves per
+    // access by design (a SINGLETON may lazily read a REQUEST-scoped dep at
+    // call time). For SINGLETON deps that laziness buys nothing after the
+    // first read — the container returns the same cached instance forever —
+    // so the getter memoizes itself into a plain data property then. REQUEST
+    // and TRANSIENT deps keep the live getter (memoizing would pin the first
+    // request's instance across requests).
+    for (const [prop, resolvedToken] of plan.autowired) {
+      Object.defineProperty(instance, prop, {
+        get: () => {
+          const value = this.resolve(resolvedToken)
+          const depReg = this.registrations.get(resolvedToken)
+          if (depReg?.scope === Scope.SINGLETON) {
+            Object.defineProperty(instance, prop, {
+              value,
+              enumerable: true,
+              configurable: true,
+              writable: false,
+            })
+          }
+          return value
+        },
+        enumerable: true,
+        configurable: true,
+      })
     }
 
     // @Value — lazy environment variable injection
-    const valueProps = getMetaMap<string, { envKey: string; defaultValue?: any }>(
-      METADATA.VALUE,
-      target.prototype,
-    )
-
-    for (const [prop, config] of valueProps) {
+    for (const [prop, config] of plan.values) {
       Object.defineProperty(instance, prop, {
         get() {
           // Use the registered env resolver if available (wired by the
@@ -771,28 +866,15 @@ export class Container {
     // @Asset — lazy asset path injection (assets-plan.md). Same lazy-
     // getter pattern as @Value: resolve on every property access via
     // the asset manager's cached resolver, not at class instantiation.
-    // Splits the key on the FIRST '/' so `mails/orders/confirmation`
-    // becomes namespace=`mails` + key=`orders/confirmation`.
-    const assetProps = getMetaMap<string, { assetKey: string }>(METADATA.ASSET, target.prototype)
-
-    if (assetProps.size > 0) {
-      for (const [prop, config] of assetProps) {
-        const slashIdx = config.assetKey.indexOf('/')
-        if (slashIdx === -1) {
-          throw new Error(
-            `@Asset('${config.assetKey}'): asset key must include a '/' separator (e.g. 'mails/welcome').`,
-          )
-        }
-        const namespace = config.assetKey.slice(0, slashIdx)
-        const key = config.assetKey.slice(slashIdx + 1)
-        Object.defineProperty(instance, prop, {
-          get() {
-            return resolveAsset(namespace, key)
-          },
-          enumerable: true,
-          configurable: true,
-        })
-      }
+    // namespace/key were pre-split at plan build.
+    for (const [prop, { namespace, key }] of plan.assets) {
+      Object.defineProperty(instance, prop, {
+        get() {
+          return resolveAsset(namespace, key)
+        },
+        enumerable: true,
+        configurable: true,
+      })
     }
   }
 }

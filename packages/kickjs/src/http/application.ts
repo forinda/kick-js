@@ -22,6 +22,7 @@ import {
   MutableModuleRegistry,
 } from '../core'
 import { moduleRouteMissingControllerError } from '../core/kick-errors'
+import { disposeAll } from '../core/disposables'
 import { getClassMeta } from '../core/metadata'
 import { requestId } from './middleware/request-id'
 import { notFoundHandler, errorHandler } from './middleware/error-handler'
@@ -992,6 +993,13 @@ export class Application {
           log.error({ err: result.reason }, 'Adapter shutdown failed')
         }
       }
+
+      // Step 4: Release framework-owned resources started outside the
+      // adapter lifecycle — in-memory session/rate-limit store intervals —
+      // and flush any pending container change batch so its debounce timer
+      // doesn't outlive the app.
+      await disposeAll()
+      this.container.flushChanges()
     } finally {
       if (timer) clearTimeout(timer)
     }

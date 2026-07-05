@@ -32,6 +32,8 @@ export interface RequestStore {
    * write helper.
    */
   values: Map<string, unknown>
+  /** Set once {@link disposeRequestStore} has run — guards double-dispose. */
+  disposed?: boolean
 }
 
 /** AsyncLocalStorage instance shared across the framework */

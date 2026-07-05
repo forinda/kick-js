@@ -68,6 +68,7 @@ export const METADATA = {
   AUTOWIRED: 'kick:autowired',
   INJECT: 'kick:inject',
   POST_CONSTRUCT: 'kick:post_construct',
+  PRE_DESTROY: 'kick:pre_destroy',
   BUILDER: 'kick:builder',
   QUERY_PARAMS: 'kick:query:params',
   ROUTES: 'kick:routes',
