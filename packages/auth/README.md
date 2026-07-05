@@ -8,13 +8,13 @@
 > compose their own auth flow without the ergonomic loss the package
 > previously offered.
 >
-> **What to do:** follow the [BYO Auth recipe](https://forinda.github.io/kick-js/guide/byo-recipes.html#auth)
+> **What to do:** follow the [BYO Auth recipe](https://kickjs.app/guide/byo-recipes.html#auth)
 > — it composes `@LoadAuthUser` / `@RequireRole` / `@Public` from
 > `defineContextDecorator` and `defineAdapter` (the same primitives
 > this package wraps). ~200 lines of adopter code you own end-to-end,
 > no framework upgrades silently changing your auth surface.
 >
-> Background: see the [Context Decorators guide](https://forinda.github.io/kick-js/guide/context-decorators.html)
+> Background: see the [Context Decorators guide](https://kickjs.app/guide/context-decorators.html)
 > for the full primitive reference.
 >
 > **Why?** `@forinda/kickjs-auth` couples the framework's release cadence
@@ -35,7 +35,7 @@ pnpm add @forinda/kickjs-auth
 
 > Not available via `kick add` — `@forinda/kickjs-auth` has been removed
 > from the CLI's optional-package catalog in favour of the [BYO Auth
-> recipe](https://forinda.github.io/kick-js/guide/byo-recipes.html#auth)
+> recipe](https://kickjs.app/guide/byo-recipes.html#auth)
 > (parameterised context contributors). Existing adopters who still
 > depend on this package install it manually with the command above.
 
@@ -91,7 +91,7 @@ Custom strategies use `createAuthStrategy()` — same call/`.scoped()` ergonomic
 
 ## Documentation
 
-[forinda.github.io/kick-js/guide/authentication](https://forinda.github.io/kick-js/guide/authentication) — every strategy, OAuth + PKCE, CSRF, RBAC, policies, test mode.
+[kickjs.app/guide/authentication](https://kickjs.app/guide/authentication) — every strategy, OAuth + PKCE, CSRF, RBAC, policies, test mode.
 
 ## License
 

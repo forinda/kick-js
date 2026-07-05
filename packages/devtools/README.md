@@ -31,7 +31,7 @@ Endpoints (token-gated unless `secret: false`): `/_debug/{routes,container,metri
 
 ## Documentation
 
-[forinda.github.io/kick-js/guide/devtools](https://forinda.github.io/kick-js/guide/devtools)
+[kickjs.app/guide/devtools](https://kickjs.app/guide/devtools)
 
 ## License
 

@@ -326,7 +326,7 @@
     "viewsWelcome": [
       {
         "view": "kickjs.health",
-        "contents": "No KickJS app connected.\n\n[$(plug) Connect to App](command:kickjs.connect)\n\nThis probes common dev ports + your workspace `.env` for a running app.\n\n[Open settings](command:workbench.action.openSettings?%22kickjs.serverUrl%22)\n\nLearn more in the [DevTools docs](https://forinda.github.io/kick-js/guide/devtools).",
+        "contents": "No KickJS app connected.\n\n[$(plug) Connect to App](command:kickjs.connect)\n\nThis probes common dev ports + your workspace `.env` for a running app.\n\n[Open settings](command:workbench.action.openSettings?%22kickjs.serverUrl%22)\n\nLearn more in the [DevTools docs](https://kickjs.app/guide/devtools).",
         "when": "!kickjs.connected"
       },
       {
@@ -349,7 +349,7 @@
   "bugs": {
     "url": "https://github.com/forinda/kick-js/issues"
   },
-  "homepage": "https://forinda.github.io/kick-js/guide/devtools",
+  "homepage": "https://kickjs.app/guide/devtools",
   "license": "MIT",
   "scripts": {
     "build": "pnpm build:icons && vite build",

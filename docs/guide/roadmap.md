@@ -199,7 +199,7 @@ Proposed:
    Or, if UserService should be in a different module, decorate
    the right module class with @Module({ providers: [UserService] }).
 
-   Docs: https://forinda.github.io/kick-js/guide/dependency-injection#registering-services
+   Docs: https://kickjs.app/guide/dependency-injection#registering-services
 ```
 
 A centralized error catalog (`packages/kickjs/src/core/error-catalog.ts`) keyed by error code, with structured fields: `code`, `summary`, `cause`, `fix`, `docsUrl`. Each `throw new HttpException(...)` / framework-internal error uses the catalog.
@@ -341,7 +341,7 @@ Only the **error-shape helpers** (`ctx.notFound()`, `ctx.badRequest()`) get a `@
 
 **Open questions.**
 
-- Default `type` value when none is provided — `about:blank` per RFC 9457 §4.2.1, or a kickjs-specific URI scheme like `https://forinda.github.io/kick-js/problems/{status}`?
+- Default `type` value when none is provided — `about:blank` per RFC 9457 §4.2.1, or a kickjs-specific URI scheme like `https://kickjs.app/problems/{status}`?
 - How does this interact with the `validate()` middleware? It currently throws a 400 with a custom shape — auto-upgrade to problem+json with the `errors[]` extension, or keep current shape and add an opt-in flag?
 - `instance` is per-occurrence URI — should the framework auto-populate it with `req.url`, or always require the caller to set it explicitly?
 - Localization of `title` / `detail` — out of scope for v1 (RFC 9457 §6 acknowledges i18n is the application's responsibility), but worth deciding now.

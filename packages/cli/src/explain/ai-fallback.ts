@@ -171,7 +171,7 @@ function buildSystemPrompt(cwd?: string): string {
     '  "docs": "<optional: KickJS doc URL that discusses this topic>"',
     '}',
     '',
-    'The KickJS docs live at https://forinda.github.io/kick-js/ — prefer',
+    'The KickJS docs live at https://kickjs.app/ — prefer',
     'that domain for any doc links you suggest.',
     cwd ? `The project is located at ${cwd}.` : '',
   ]

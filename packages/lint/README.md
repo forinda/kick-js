@@ -46,4 +46,4 @@ export const FOO = Symbol('Legacy') // kick-lint-disable di-token-symbol
 
 ## Why
 
-See [architecture.md §22](https://github.com/forinda/kick-js/blob/main/architecture.md#22-di-token-convention--symbol-to-string-migration) for the convention rationale. The convention landed in the v3 → v4 migration and has been stable since; refer to the [DI Tokens guide](https://forinda.github.io/kick-js/guide/dependency-injection.html#tokens) for the current shape.
+See [architecture.md §22](https://github.com/forinda/kick-js/blob/main/architecture.md#22-di-token-convention--symbol-to-string-migration) for the convention rationale. The convention landed in the v3 → v4 migration and has been stable since; refer to the [DI Tokens guide](https://kickjs.app/guide/dependency-injection.html#tokens) for the current shape.

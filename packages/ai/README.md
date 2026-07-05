@@ -50,7 +50,7 @@ class AgentService {
 
 ## Documentation
 
-[forinda.github.io/kick-js/guide/ai](https://forinda.github.io/kick-js/guide/ai) — providers, `@AiTool`, agent loops, memory, RAG.
+[kickjs.app/guide/ai](https://kickjs.app/guide/ai) — providers, `@AiTool`, agent loops, memory, RAG.
 
 ## License
 

@@ -165,7 +165,7 @@ describe('askAi — success', () => {
     const systemMessage = input.messages.find((m: { role: string }) => m.role === 'system')
     expect(systemMessage.content).toContain('KickJS')
     expect(systemMessage.content).toContain('AppModule')
-    expect(systemMessage.content).toContain('forinda.github.io/kick-js')
+    expect(systemMessage.content).toContain('kickjs.app')
   })
 })
 

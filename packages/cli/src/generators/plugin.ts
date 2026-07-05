@@ -133,7 +133,7 @@ export const ${pascal}Plugin = definePlugin<${pascal}PluginConfig>({
      * Return Context Contributors to merge into every route's pipeline.
      * Plugins contribute at the same \`'adapter'\` precedence level as
      * adapters — overrideable per-route at the method / class / module
-     * level. See https://forinda.github.io/kick-js/guide/context-decorators
+     * level. See https://kickjs.app/guide/context-decorators
      *
      * Delete this hook if your plugin doesn't ship typed per-request values.
      */

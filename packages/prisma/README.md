@@ -50,7 +50,7 @@ For Prisma 7 driver-adapter setup (e.g. `PrismaPg`) and the multi-tenant `Prisma
 
 ## Documentation
 
-[forinda.github.io/kick-js/api/prisma](https://forinda.github.io/kick-js/api/prisma)
+[kickjs.app/api/prisma](https://kickjs.app/api/prisma)
 
 ## License
 

@@ -107,7 +107,7 @@ const envSchemaNotRegistered: KnownIssue = {
           "import './config'  // ← add this — registers env schema\n" +
           "import { bootstrap } from '@forinda/kickjs'\n" +
           "import { modules } from './modules'\n",
-        docs: 'https://forinda.github.io/kick-js/guide/configuration.html#wiring-the-schema-at-startup',
+        docs: 'https://kickjs.app/guide/configuration.html#wiring-the-schema-at-startup',
       },
     }
   },
@@ -144,7 +144,7 @@ const containerNotReset: KnownIssue = {
           '  beforeEach(() => Container.reset())\n\n' +
           "  it('does the thing', async () => { /* ... */ })\n" +
           '})',
-        docs: 'https://forinda.github.io/kick-js/guide/testing.html',
+        docs: 'https://kickjs.app/guide/testing.html',
       },
     }
   },
@@ -191,7 +191,7 @@ const moduleDecoratorNotFound: KnownIssue = {
           '    }\n' +
           '  }\n' +
           '}',
-        docs: 'https://forinda.github.io/kick-js/guide/project-structure.html',
+        docs: 'https://kickjs.app/guide/project-structure.html',
       },
     }
   },
@@ -224,7 +224,7 @@ const legacyRoutesSyntax: KnownIssue = {
         codeAfter:
           "@Post('/', { body: createUserSchema, name: 'CreateUser' })\n" +
           "create(ctx: Ctx<KickRoutes.UserController['create']>) { /* ... */ }",
-        docs: 'https://forinda.github.io/kick-js/guide/typegen.html',
+        docs: 'https://kickjs.app/guide/typegen.html',
       },
     }
   },
@@ -263,7 +263,7 @@ const clusterInDevMode: KnownIssue = {
           '  modules,\n' +
           "  cluster: process.env.NODE_ENV === 'production' ? { workers: 4 } : false,\n" +
           '})',
-        docs: 'https://forinda.github.io/kick-js/guide/cluster.html',
+        docs: 'https://kickjs.app/guide/cluster.html',
       },
     }
   },
@@ -300,7 +300,7 @@ const reflectMetadataMissing: KnownIssue = {
           "import { bootstrap } from '@forinda/kickjs'\n" +
           "import { modules } from './modules'\n\n" +
           'export const app = await bootstrap({ modules })',
-        docs: 'https://forinda.github.io/kick-js/guide/dependency-injection.html',
+        docs: 'https://kickjs.app/guide/dependency-injection.html',
       },
     }
   },
@@ -330,7 +330,7 @@ const moduleNotRegistered: KnownIssue = {
           "import { UserModule } from './users/user.module'\n" +
           "import { TaskModule } from './tasks/task.module'  // ← was this missing?\n\n" +
           'export const modules: AppModuleEntry[] = [UserModule(), TaskModule()]',
-        docs: 'https://forinda.github.io/kick-js/guide/project-structure.html',
+        docs: 'https://kickjs.app/guide/project-structure.html',
       },
     }
   },

@@ -549,7 +549,7 @@
         })
 
     Docs:
-      https://forinda.github.io/kick-js/guide/dependency-injection#registering-services
+      https://kickjs.app/guide/dependency-injection#registering-services
   ```
 
   **First catalog pass — 5 errors upgraded:**

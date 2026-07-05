@@ -57,8 +57,8 @@ The `pool` is shared between the migration adapter (used by the CLI for `kick db
 
 ## Docs
 
-- [Schema Types](https://forinda.github.io/kick-js/guide/db-schema-types)
-- [DB Extensions](https://forinda.github.io/kick-js/guide/db-extensions)
+- [Schema Types](https://kickjs.app/guide/db-schema-types)
+- [DB Extensions](https://kickjs.app/guide/db-extensions)
 
 ## License
 

@@ -16,7 +16,7 @@ export function generateReadme(name: string, template: ProjectTemplate, pm: stri
 
   return `# ${name}
 
-A **${templateLabels[template] ?? 'REST API'}** built with [KickJS](https://forinda.github.io/kick-js/) — a decorator-driven Node.js framework for TypeScript that runs on Express, Fastify, or h3 (swap the engine in one line).
+A **${templateLabels[template] ?? 'REST API'}** built with [KickJS](https://kickjs.app/) — a decorator-driven Node.js framework for TypeScript that runs on Express, Fastify, or h3 (swap the engine in one line).
 
 ## Getting Started
 
@@ -61,7 +61,7 @@ kick add queue         # Background job processing
 kick add --list        # Show all available packages
 \`\`\`
 
-For email, scheduled tasks, multi-tenancy, OpenTelemetry, GraphQL, and notifications use the BYO recipes in the [KickJS guides](https://forinda.github.io/kick-js/guide/) — they wire the upstream library through \`defineAdapter()\` / \`definePlugin()\` directly, so you keep control of the integration.
+For email, scheduled tasks, multi-tenancy, OpenTelemetry, GraphQL, and notifications use the BYO recipes in the [KickJS guides](https://kickjs.app/guide/) — they wire the upstream library through \`defineAdapter()\` / \`definePlugin()\` directly, so you keep control of the integration.
 
 ## Environment Variables
 
@@ -74,8 +74,8 @@ Copy \`.env.example\` to \`.env\` and configure:
 
 ## Learn More
 
-- [KickJS Documentation](https://forinda.github.io/kick-js/)
-- [CLI Reference](https://forinda.github.io/kick-js/api/cli.html)
+- [KickJS Documentation](https://kickjs.app/)
+- [CLI Reference](https://kickjs.app/api/cli.html)
 `
 }
 
@@ -191,7 +191,7 @@ function _LEGACY_FULL_CLAUDE_TEMPLATE_UNUSED(
 
 ## Project Overview
 
-This is a **${templateLabels[template] ?? 'REST API'}** application built with [KickJS](https://forinda.github.io/kick-js/) — a decorator-driven Node.js framework on Express 5 and TypeScript.
+This is a **${templateLabels[template] ?? 'REST API'}** application built with [KickJS](https://kickjs.app/) — a decorator-driven Node.js framework on Express 5 and TypeScript.
 
 ## Quick Commands
 
@@ -375,7 +375,7 @@ ctx.notFound()            // 404 Not Found
 ctx.badRequest(msg)       // 400 Bad Request
 \`\`\`
 
-> **Context decorators** — when a middleware's only job is to populate \`ctx.set/get\` for the handler to read, prefer \`defineContextDecorator()\` over \`@Middleware()\`. Typed via \`ContextMeta\`, supports \`dependsOn\` ordering, validates the pipeline at boot. Full pattern reference in \`AGENTS.md\` and at <https://forinda.github.io/kick-js/guide/context-decorators>.
+> **Context decorators** — when a middleware's only job is to populate \`ctx.set/get\` for the handler to read, prefer \`defineContextDecorator()\` over \`@Middleware()\`. Typed via \`ContextMeta\`, supports \`dependsOn\` ordering, validates the pipeline at boot. Full pattern reference in \`AGENTS.md\` and at <https://kickjs.app/guide/context-decorators>.
 
 ## CLI Generators
 
@@ -405,7 +405,7 @@ kick add devtools      # Browser debug dashboard
 kick add --list        # Show all available packages
 
 # For email, scheduled tasks, multi-tenancy, OpenTelemetry, GraphQL, and
-# notifications use the BYO recipes in https://forinda.github.io/kick-js/guide/
+# notifications use the BYO recipes in https://kickjs.app/guide/
 # — they wire the upstream library through defineAdapter()/definePlugin() directly.
 \`\`\`
 
@@ -592,10 +592,10 @@ Run tests:
 
 ## Learn More
 
-- [KickJS Documentation](https://forinda.github.io/kick-js/)
-- [API Reference](https://forinda.github.io/kick-js/api/)
-- [CLI Commands](https://forinda.github.io/kick-js/guide/cli-commands.html)
-- [Decorators Guide](https://forinda.github.io/kick-js/guide/decorators.html)
+- [KickJS Documentation](https://kickjs.app/)
+- [API Reference](https://kickjs.app/api/)
+- [CLI Commands](https://kickjs.app/guide/cli-commands.html)
+- [Decorators Guide](https://kickjs.app/guide/decorators.html)
 `
 }
 
@@ -612,7 +612,7 @@ add tool-specific affordances on top.
 
 1. Run \`${pm} install\` to install dependencies
 2. Run \`kick dev\` to verify the app starts
-3. Read the [KickJS documentation](https://forinda.github.io/kick-js/) for framework details
+3. Read the [KickJS documentation](https://kickjs.app/) for framework details
 
 ## HTTP runtime — DON'T assume Express-only
 
@@ -1078,7 +1078,7 @@ Precedence high → low: **method > class > module > adapter > global**.
 Cycles and missing \`dependsOn\` keys throw at \`app.setup()\` (boot fails
 fast). The \`onError\` hook is async-permitted.
 
-Full guide: <https://forinda.github.io/kick-js/guide/context-decorators>.
+Full guide: <https://kickjs.app/guide/context-decorators>.
 
 ## Common Pitfalls
 
@@ -1120,11 +1120,11 @@ Full guide: <https://forinda.github.io/kick-js/guide/context-decorators>.
 
 ## Learn More
 
-- [KickJS Docs](https://forinda.github.io/kick-js/)
-- [CLI Reference](https://forinda.github.io/kick-js/api/cli.html)
-- [Decorators Guide](https://forinda.github.io/kick-js/guide/decorators.html)
-- [DI System](https://forinda.github.io/kick-js/guide/dependency-injection.html)
-- [Testing](https://forinda.github.io/kick-js/api/testing.html)
+- [KickJS Docs](https://kickjs.app/)
+- [CLI Reference](https://kickjs.app/api/cli.html)
+- [Decorators Guide](https://kickjs.app/guide/decorators.html)
+- [DI System](https://kickjs.app/guide/dependency-injection.html)
+- [Testing](https://kickjs.app/api/testing.html)
 `
 }
 
@@ -2077,10 +2077,10 @@ description: Patterns to refuse outright when the user asks for them — they br
 
 ## Learn More
 
-- [KickJS Docs](https://forinda.github.io/kick-js/)
-- [Decorators](https://forinda.github.io/kick-js/guide/decorators.html)
-- [Context Decorators](https://forinda.github.io/kick-js/guide/context-decorators.html)
-- [Testing](https://forinda.github.io/kick-js/api/testing.html)
+- [KickJS Docs](https://kickjs.app/)
+- [Decorators](https://kickjs.app/guide/decorators.html)
+- [Context Decorators](https://kickjs.app/guide/context-decorators.html)
+- [Testing](https://kickjs.app/api/testing.html)
 `
 }
 

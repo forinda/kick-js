@@ -217,7 +217,7 @@ function printNoMatch(input: string, aiRequested?: boolean): void {
       '  No known-issue matched. Things you can try:\n' +
         '\n' +
         '    1. Check the framework docs for the error keywords:\n' +
-        '       https://forinda.github.io/kick-js/\n' +
+        '       https://kickjs.app/\n' +
         '\n' +
         '    2. Re-run with --ai to fall back to an LLM (requires\n' +
         '       @forinda/kickjs-ai with a configured provider):\n' +

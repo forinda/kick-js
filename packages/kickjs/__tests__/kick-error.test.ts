@@ -72,7 +72,7 @@ describe('formatKickError', () => {
         summary: 'thing failed',
         cause: 'because reasons',
         fix: 'fix it like this',
-        docsUrl: 'https://forinda.github.io/kick-js/guide/x',
+        docsUrl: 'https://kickjs.app/guide/x',
       },
       { color: false },
     )

@@ -137,7 +137,7 @@ export const PrismaTenantAdapter = defineAdapter<
         // Reads the per-request tenant from the framework's request bag
         // (populated by an upstream contributor that augments
         // `ContextMeta` with `tenant: { id: string; … }`). See
-        // https://forinda.github.io/kick-js/guide/multi-tenancy for the
+        // https://kickjs.app/guide/multi-tenancy for the
         // full pattern. Outside an active request — singleton boot,
         // background jobs, tests without `requestScopeMiddleware()` —
         // `getRequestValue` returns `undefined` and the factory falls

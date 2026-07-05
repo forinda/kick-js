@@ -1,6 +1,6 @@
 # Getting Started
 
-> 📖 **Reading this on GitHub?** The full rendered docs live at <https://forinda.github.io/kick-js/> — every `./*.md` link in this page resolves there too.
+> 📖 **Reading this on GitHub?** The full rendered docs live at <https://kickjs.app/> — every `./*.md` link in this page resolves there too.
 
 ## Prerequisites
 

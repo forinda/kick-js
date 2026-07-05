@@ -273,10 +273,10 @@ All three library peers are declared `optional` in `peerDependenciesMeta`, so in
 
 ## See also
 
-- [Schema-agnostic validation guide](https://forinda.github.io/kick-js/guide/schema.html) — full prose docs
-- [Configuration](https://forinda.github.io/kick-js/guide/configuration.html) — env loading with `loadEnvFromSchema`
-- [Validation](https://forinda.github.io/kick-js/guide/validation.html) — `@Post body` / `@Get query` / params validation
-- [Type Generation](https://forinda.github.io/kick-js/guide/typegen.html) — `schemaValidator: 'kickjs-schema'` codegen
+- [Schema-agnostic validation guide](https://kickjs.app/guide/schema.html) — full prose docs
+- [Configuration](https://kickjs.app/guide/configuration.html) — env loading with `loadEnvFromSchema`
+- [Validation](https://kickjs.app/guide/validation.html) — `@Post body` / `@Get query` / params validation
+- [Type Generation](https://kickjs.app/guide/typegen.html) — `schemaValidator: 'kickjs-schema'` codegen
 
 ## License
 

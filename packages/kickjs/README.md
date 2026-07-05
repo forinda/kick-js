@@ -130,7 +130,7 @@ import { fastifyRuntime } from '@forinda/kickjs/fastify' // or @forinda/kickjs/h
 export const app = await bootstrap({ modules, runtime: fastifyRuntime() })
 ```
 
-`kick new --runtime express|fastify|h3` scaffolds the right peers. File uploads (`@FileUpload` → `ctx.file` / `ctx.files`) and the rest of the surface work the same on all three. See [HTTP Runtimes](https://forinda.github.io/kick-js/guide/http-runtimes.html).
+`kick new --runtime express|fastify|h3` scaffolds the right peers. File uploads (`@FileUpload` → `ctx.file` / `ctx.files`) and the rest of the surface work the same on all three. See [HTTP Runtimes](https://kickjs.app/guide/http-runtimes.html).
 
 ## Project Layout
 
@@ -156,15 +156,15 @@ vite.config.ts              # Vite + KickJS HMR
 
 ## Core Concepts
 
-- **Pluggable HTTP runtimes** — one `HttpRuntime` seam over Express (default), Fastify, or h3. Swap the engine in one line; everything above stays the same. See [HTTP Runtimes](https://forinda.github.io/kick-js/guide/http-runtimes.html).
-- **First-class database** — `kick/db`: code-first schema, fully typed queries, and migrations for PostgreSQL / SQLite / MySQL. `kick add db` (or `pg` / `sqlite` / `mysql`). See [Database](https://forinda.github.io/kick-js/guide/database/).
-- **Custom DI container** — three scopes (singleton / transient / request), slash-delimited tokens (`createToken<T>('app/users/repository')`), constructor + property injection. No external DI dep. See [Dependency Injection](https://forinda.github.io/kick-js/guide/dependency-injection.html).
-- **Factory-first** — `defineAdapter()`, `definePlugin()`, `defineModule()`, `defineHttpContextDecorator()`. No class hierarchies to inherit from. See [Adapters](https://forinda.github.io/kick-js/guide/adapters.html), [Plugins](https://forinda.github.io/kick-js/guide/plugins.html).
-- **Context Contributors** — replace single-purpose middleware that only sets `ctx` values. Typed `dependsOn` (typos are TS errors, not boot-time crashes), topo-sorted at startup, runs across HTTP / WS / queue / cron. See [Context Decorators](https://forinda.github.io/kick-js/guide/context-decorators.html).
-- **Env wiring** — `defineEnv()` + `loadEnv()` in `src/config/index.ts`. The `import './config'` side-effect import at the top of `src/index.ts` MUST happen before any `@Value()` injection resolves. See [Configuration](https://forinda.github.io/kick-js/guide/configuration.html).
-- **Asset Manager** — typed `assets.<ns>.<key>()` accessor, configured via `assetMap` in `kick.config.ts`. Drops the `__dirname` arithmetic that production builds get wrong. See [Asset Manager](https://forinda.github.io/kick-js/guide/asset-manager.html).
+- **Pluggable HTTP runtimes** — one `HttpRuntime` seam over Express (default), Fastify, or h3. Swap the engine in one line; everything above stays the same. See [HTTP Runtimes](https://kickjs.app/guide/http-runtimes.html).
+- **First-class database** — `kick/db`: code-first schema, fully typed queries, and migrations for PostgreSQL / SQLite / MySQL. `kick add db` (or `pg` / `sqlite` / `mysql`). See [Database](https://kickjs.app/guide/database/).
+- **Custom DI container** — three scopes (singleton / transient / request), slash-delimited tokens (`createToken<T>('app/users/repository')`), constructor + property injection. No external DI dep. See [Dependency Injection](https://kickjs.app/guide/dependency-injection.html).
+- **Factory-first** — `defineAdapter()`, `definePlugin()`, `defineModule()`, `defineHttpContextDecorator()`. No class hierarchies to inherit from. See [Adapters](https://kickjs.app/guide/adapters.html), [Plugins](https://kickjs.app/guide/plugins.html).
+- **Context Contributors** — replace single-purpose middleware that only sets `ctx` values. Typed `dependsOn` (typos are TS errors, not boot-time crashes), topo-sorted at startup, runs across HTTP / WS / queue / cron. See [Context Decorators](https://kickjs.app/guide/context-decorators.html).
+- **Env wiring** — `defineEnv()` + `loadEnv()` in `src/config/index.ts`. The `import './config'` side-effect import at the top of `src/index.ts` MUST happen before any `@Value()` injection resolves. See [Configuration](https://kickjs.app/guide/configuration.html).
+- **Asset Manager** — typed `assets.<ns>.<key>()` accessor, configured via `assetMap` in `kick.config.ts`. Drops the `__dirname` arithmetic that production builds get wrong. See [Asset Manager](https://kickjs.app/guide/asset-manager.html).
 - **Reactive primitives** — `ref()` / `computed()` / `reactive()` / `watch()` Vue-style; `ref` and `computed` auto-unwrap on `JSON.stringify` so they drop straight into `introspect()` snapshots.
-- **DevTools** — `/_debug` browser panel with topology, container, contributors, metrics. Adapters expose state via `introspect(): IntrospectionSnapshot` (type lives in `@forinda/kickjs` — no extra import needed). See [DevTools](https://forinda.github.io/kick-js/guide/devtools.html).
+- **DevTools** — `/_debug` browser panel with topology, container, contributors, metrics. Adapters expose state via `introspect(): IntrospectionSnapshot` (type lives in `@forinda/kickjs` — no extra import needed). See [DevTools](https://kickjs.app/guide/devtools.html).
 
 ## Common Add-Ons
 
@@ -183,14 +183,14 @@ kick doctor           # pre-flight checks: engine peers, upload driver, env wiri
 
 ## Documentation
 
-**[forinda.github.io/kick-js](https://forinda.github.io/kick-js/)** — full guide, API reference, BYO recipes (auth, GraphQL, OTel, cron, mailer, multi-tenancy, notifications), example apps.
+**[kickjs.app](https://kickjs.app/)** — full guide, API reference, BYO recipes (auth, GraphQL, OTel, cron, mailer, multi-tenancy, notifications), example apps.
 
 Start here:
 
-- [Getting Started](https://forinda.github.io/kick-js/guide/getting-started.html)
-- [Modules](https://forinda.github.io/kick-js/guide/modules.html) · [Controllers](https://forinda.github.io/kick-js/guide/controllers.html) · [Middleware](https://forinda.github.io/kick-js/guide/middleware.html)
-- [Context Decorators](https://forinda.github.io/kick-js/guide/context-decorators.html) · [Adapters](https://forinda.github.io/kick-js/guide/adapters.html) · [Plugins](https://forinda.github.io/kick-js/guide/plugins.html)
-- [BYO Recipes](https://forinda.github.io/kick-js/guide/byo-recipes.html) — auth, GraphQL, OpenTelemetry, cron, mailer, multi-tenancy, notifications
+- [Getting Started](https://kickjs.app/guide/getting-started.html)
+- [Modules](https://kickjs.app/guide/modules.html) · [Controllers](https://kickjs.app/guide/controllers.html) · [Middleware](https://kickjs.app/guide/middleware.html)
+- [Context Decorators](https://kickjs.app/guide/context-decorators.html) · [Adapters](https://kickjs.app/guide/adapters.html) · [Plugins](https://kickjs.app/guide/plugins.html)
+- [BYO Recipes](https://kickjs.app/guide/byo-recipes.html) — auth, GraphQL, OpenTelemetry, cron, mailer, multi-tenancy, notifications
 
 ## License
 

@@ -127,7 +127,7 @@ KICK001: No provider for UserService
       Container.getInstance().register(TENANT_REPO, { useClass: PrismaTenantRepo })
 
   Docs:
-    https://forinda.github.io/kick-js/guide/dependency-injection#registering-services
+    https://kickjs.app/guide/dependency-injection#registering-services
 ```
 
 ### Catalog (current set)

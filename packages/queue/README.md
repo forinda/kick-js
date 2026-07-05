@@ -63,7 +63,7 @@ class UserService {
 
 ## Documentation
 
-[forinda.github.io/kick-js/api/queue](https://forinda.github.io/kick-js/api/queue)
+[kickjs.app/api/queue](https://kickjs.app/api/queue)
 
 ## License
 

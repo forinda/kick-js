@@ -188,16 +188,17 @@ const sharedSidebar = {
   '/schemas/': schemasSidebar,
 }
 
-// Deploy target is configurable so the same config serves GitHub Pages
-// (project site under /kick-js/) and root-domain hosts (Vercel/Netlify).
-// Override on those platforms: DOCS_BASE=/ and DOCS_HOSTNAME=https://your-domain/
-const DEFAULT_BASE = '/kick-js/'
-const DEFAULT_HOSTNAME = 'https://forinda.github.io/kick-js/'
+// Canonical deploy is kickjs.app, served from the domain root — the defaults
+// below are correct for it, so no env is needed in CI/Netlify/Vercel.
+// A subpath host (e.g. GitHub Pages under /kick-js/) can still override both:
+// DOCS_BASE=/kick-js/ and DOCS_HOSTNAME=https://forinda.github.io/kick-js/
+const DEFAULT_BASE = '/'
+const DEFAULT_HOSTNAME = 'https://kickjs.app/'
 const base = process.env.DOCS_BASE ?? DEFAULT_BASE
 const hostname = process.env.DOCS_HOSTNAME ?? DEFAULT_HOSTNAME
 
-// Serving from a non-Pages root (DOCS_BASE=/) while DOCS_HOSTNAME still
-// defaults to the Pages URL would emit a wrong sitemap/og:url. Fail loud.
+// A subpath base without a matching hostname would emit a wrong sitemap/og:url
+// (pointing at kickjs.app). Fail loud so the deploy is fixed, not shipped.
 if (base !== DEFAULT_BASE && hostname === DEFAULT_HOSTNAME) {
   throw new Error(
     `DOCS_BASE is overridden (${base}) but DOCS_HOSTNAME is unset — ` +
