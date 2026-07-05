@@ -21,9 +21,30 @@ export function registerDisposable(fn: Disposable): () => void {
   return () => disposables.delete(fn)
 }
 
-/** Run and clear all registered disposables. Errors are swallowed per-entry. */
-export async function disposeAll(): Promise<void> {
+/**
+ * Remove and return all currently registered disposables WITHOUT running
+ * them. Used by HMR rebuild to snapshot the outgoing app's resources before
+ * `setup()` registers the incoming app's — so the stale set can be disposed
+ * on success, or restored on failure, without touching the new one.
+ */
+export function drainDisposables(): Disposable[] {
   const pending = [...disposables]
   disposables.clear()
-  await Promise.allSettled(pending.map((fn) => Promise.resolve(fn())))
+  return pending
+}
+
+/**
+ * Run a list of disposables. Errors — including SYNCHRONOUS throws — are
+ * swallowed per-entry: the `async` callback converts a sync throw into a
+ * rejection that `allSettled` absorbs, so one bad disposable can't abort
+ * the rest (a bare `Promise.resolve(fn())` would let the throw escape the
+ * `.map()` before `allSettled` ever ran).
+ */
+export async function runDisposables(list: Disposable[]): Promise<void> {
+  await Promise.allSettled(list.map(async (fn) => fn()))
+}
+
+/** Run and clear all registered disposables. Errors are swallowed per-entry. */
+export async function disposeAll(): Promise<void> {
+  await runDisposables(drainDisposables())
 }

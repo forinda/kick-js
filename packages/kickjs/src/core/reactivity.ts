@@ -70,10 +70,8 @@ function trigger(target: object, key: string | symbol): void {
   const deps = depsMap.get(key)
   if (!deps || deps.size === 0) return
   // Iterate a snapshot — a triggered effect re-tracks (mutating `deps`)
-  // during its run, which would otherwise corrupt this iteration. The
-  // array copy is deliberate, not a useless spread.
-  // eslint-disable-next-line unicorn/no-useless-spread
-  for (const effect of [...deps]) {
+  // during its run, which would otherwise corrupt this iteration.
+  for (const effect of Array.from(deps)) {
     effect()
   }
 }
@@ -185,9 +183,19 @@ export function computed<T>(getter: () => T): ComputedRef<T> {
   })
 
   const recompute = (): T => {
-    // Disposed: plain evaluation, no tracking — the computed must not
-    // re-subscribe itself to sources it was explicitly detached from.
-    if (disposed) return getter()
+    // Disposed: plain evaluation with tracking SUSPENDED — neither this
+    // computed's effect nor any OUTER active effect (a watcher reading
+    // `.value`) may attach to the sources through a disposed computed;
+    // otherwise disposal wouldn't actually sever the subscription chain.
+    if (disposed) {
+      const prev = activeEffect
+      activeEffect = null
+      try {
+        return getter()
+      } finally {
+        activeEffect = prev
+      }
+    }
     if (dirty) {
       cached = runTracked(effect, getter)
       wrapper._value = cached

@@ -8,6 +8,7 @@ import { Service, PreDestroy, Autowired } from '../src/core/decorators'
 import { Scope } from '../src/core/interfaces'
 import { requestStore, type RequestStore } from '../src/http/request-store'
 import { createRequestStore, disposeRequestStore } from '../src/http/middleware/request-scope'
+import { registerDisposable, disposeAll } from '../src/core/disposables'
 
 /**
  * Locks in the object-lifecycle fixes from the framework audit:
@@ -53,6 +54,22 @@ describe('reactivity — effect cleanup', () => {
     expect(doubled.value).toBe(10) // recomputes on demand, untracked
   })
 
+  it('reading a disposed computed inside a watcher does not attach the watcher to its sources', () => {
+    const count = ref(1)
+    const other = ref(0)
+    const doubled = computed(() => count.value * 2)
+    doubled.dispose()
+    let calls = 0
+    watch(
+      () => other.value + doubled.value, // reads disposed computed under an active effect
+      () => calls++,
+    )
+    count.value = 10 // must NOT fire — tracking is suspended through disposal
+    expect(calls).toBe(0)
+    other.value = 1 // direct dep — must fire
+    expect(calls).toBe(1)
+  })
+
   it('reactive() returns a stable proxy for nested objects', () => {
     const state = reactive({ nested: { x: 1 } })
     expect(state.nested).toBe(state.nested)
@@ -85,6 +102,20 @@ describe('MemoryCacheProvider — bounds and null caching', () => {
     expect(await repo.find('x')).toBeNull()
     expect(await repo.find('x')).toBeNull()
     expect(executions).toBe(1)
+  })
+})
+
+describe('disposables — sync-throw isolation', () => {
+  it('a synchronously throwing disposable does not prevent the others from running', async () => {
+    let ran = 0
+    registerDisposable(() => {
+      throw new Error('bad disposable')
+    })
+    registerDisposable(() => {
+      ran++
+    })
+    await expect(disposeAll()).resolves.toBeUndefined()
+    expect(ran).toBe(1)
   })
 })
 

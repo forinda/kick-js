@@ -149,9 +149,22 @@ export interface CacheOptions {
 // Sentinel stored in place of a legitimate `null` result. Providers signal
 // "miss" with null, so caching null directly was indistinguishable from a
 // miss — the method re-executed on every call (cache stampede on the exact
-// path caching should protect). A string survives any JSON round-trip
-// (Redis, etc.) without needing changes to the CacheProvider contract.
-const CACHED_NULL = '__kickjs_cached_null__'
+// path caching should protect). An object envelope (structurally checked,
+// so it survives any JSON round-trip through Redis etc.) rather than a bare
+// string: a method legitimately RETURNING that string (echoing user input,
+// etc.) must not be replayed as null. A user value could still forge this
+// exact single-key shape, but that requires deliberately constructing it —
+// not a value class that occurs by accident.
+const CACHED_NULL = { __kickjs_cached_null__: true }
+
+function isCachedNull(value: unknown): boolean {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    (value as Record<string, unknown>).__kickjs_cached_null__ === true &&
+    Object.keys(value).length === 1
+  )
+}
 
 export function Cacheable(ttl?: number, options?: { key?: string }): MethodDecorator {
   return (_target, propertyKey, descriptor: PropertyDescriptor) => {
@@ -165,7 +178,7 @@ export function Cacheable(ttl?: number, options?: { key?: string }): MethodDecor
 
       const cached = await provider.get(cacheKey)
       if (cached !== null) {
-        return cached === CACHED_NULL ? null : cached
+        return isCachedNull(cached) ? null : cached
       }
 
       const result = await original.apply(this, args)
