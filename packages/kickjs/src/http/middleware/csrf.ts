@@ -1,11 +1,6 @@
 import type { Request, Response, NextFunction } from 'express'
 
-// Web Crypto random hex — portable (node/bun/deno/workers) replacement for
-// node:crypto `randomBytes(n).toString('hex')`.
-function randomHex(bytes: number): string {
-  const buf = crypto.getRandomValues(new Uint8Array(bytes))
-  return Array.from(buf, (b) => b.toString(16).padStart(2, '0')).join('')
-}
+import { randomHex } from '../../core/web-crypto'
 
 export interface CsrfOptions {
   /** Cookie name for the CSRF token (default: '_csrf') */
