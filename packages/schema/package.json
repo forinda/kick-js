@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-schema",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Schema-agnostic validation abstraction for KickJS — use Zod, Valibot, Yup, Joi, or any Standard Schema library",
   "keywords": [
     "kickjs",
