@@ -1,6 +1,7 @@
-import crypto from 'node:crypto'
 import type { Request, Response, NextFunction } from 'express'
 import { requestStore } from '../request-store'
+
+import { randomHex } from '../../core/web-crypto'
 
 /**
  * W3C Trace Context header name.
@@ -37,14 +38,14 @@ export interface TraceContext {
  * Generate a random 32-hex-character trace ID.
  */
 function generateTraceId(): string {
-  return crypto.randomBytes(16).toString('hex')
+  return randomHex(16)
 }
 
 /**
  * Generate a random 16-hex-character span ID.
  */
 function generateSpanId(): string {
-  return crypto.randomBytes(8).toString('hex')
+  return randomHex(8)
 }
 
 /**

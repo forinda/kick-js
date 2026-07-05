@@ -1,5 +1,6 @@
-import { randomBytes } from 'node:crypto'
 import type { Request, Response, NextFunction } from 'express'
+
+import { randomHex } from '../../core/web-crypto'
 
 export interface CsrfOptions {
   /** Cookie name for the CSRF token (default: '_csrf') */
@@ -68,7 +69,7 @@ export function csrf(options: CsrfOptions = {}) {
     let token = cookies[cookieName]
 
     if (!token) {
-      token = randomBytes(tokenLength).toString('hex')
+      token = randomHex(tokenLength)
       res.cookie(cookieName, token, cookieOpts)
     }
 

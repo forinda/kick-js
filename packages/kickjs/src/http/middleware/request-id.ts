@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import type { Request, Response, NextFunction } from 'express'
 
 export const REQUEST_ID_HEADER = 'x-request-id'
@@ -16,7 +15,9 @@ export const REQUEST_ID_HEADER = 'x-request-id'
 export function requestId() {
   return (req: Request, res: Response, next: NextFunction) => {
     const existing = (req as Request & { requestId?: string }).requestId
-    const id = existing || (req.headers[REQUEST_ID_HEADER] as string) || randomUUID()
+    // globalThis.crypto (Web Crypto) — portable across node/bun/deno/workers,
+    // unlike node:crypto. Node ≥ 19 exposes it globally; engines pin ≥ 20.
+    const id = existing || (req.headers[REQUEST_ID_HEADER] as string) || crypto.randomUUID()
     ;(req as any).requestId = id
     res.setHeader(REQUEST_ID_HEADER, id)
     next()
