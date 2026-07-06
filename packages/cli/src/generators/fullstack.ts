@@ -80,6 +80,18 @@ export async function initFullstackProject(options: InitFullstackOptions): Promi
   await writeFileSafe(join(dir, '.gitignore'), rootGitignore())
   await writeFileSafe(join(dir, 'README.md'), rootReadme(name, packageManager))
 
+  // Workspace-root agent docs (CLAUDE.md + .agents/) flavored for the
+  // fullstack layout — the server/ subdir keeps its own generated set.
+  const { generateAgentDocs } = await import('./agent-docs')
+  await generateAgentDocs({
+    outDir: dir,
+    name,
+    pm: packageManager,
+    template: 'fullstack',
+    only: 'all',
+    force: true,
+  })
+
   // ── install (root — covers both workspace packages) ────────────────
   if (options.installDeps) {
     console.log(`\n  Installing workspace dependencies with ${packageManager}...\n`)

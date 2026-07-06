@@ -557,7 +557,7 @@ Aliases: `kick g agent-docs`, `kick g ai-docs`. Auto-detects project name (from 
 | `--only <which>`        | `agents` \| `claude` \| `skills` \| `both` \| `all` | `all`                 |
 | `--name <name>`         | Project name override                               | from `package.json`   |
 | `--pm <pm>`             | Package manager override                            | from `package.json`   |
-| `--template <template>` | `rest` \| `minimal`                                 | from `kick.config.ts` |
+| `--template <template>` | `rest` \| `minimal` \| `fullstack`                  | from `kick.config.ts` |
 | `-f, --force`           | Overwrite without prompting                         | `false`               |
 
 See [Generators — kick g agents](./generators.md#kick-g-agents) for what each file contains and how to keep local customisations from being overwritten.
