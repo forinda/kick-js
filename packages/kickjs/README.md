@@ -132,6 +132,18 @@ export const app = await bootstrap({ modules, runtime: fastifyRuntime() })
 
 `kick new --runtime express|fastify|h3` scaffolds the right peers. File uploads (`@FileUpload` → `ctx.file` / `ctx.files`) and the rest of the surface work the same on all three. See [HTTP Runtimes](https://kickjs.app/guide/http-runtimes.html).
 
+Two web-standard entries sit alongside them (h3 v2 engine — additive, the v1 runtime is untouched):
+
+```ts
+import { h3WebRuntime } from '@forinda/kickjs/h3-web' // bootstrap() on node, WHATWG pipeline
+import { createWebApp } from '@forinda/kickjs/web' // fetch(Request) → Response — Workers / Bun / Deno
+
+const app = createWebApp({ h3, modules })
+export default { fetch: (req: Request) => app.fetch(req) }
+```
+
+See [Edge Deployment](https://kickjs.app/guide/edge-deployment.html).
+
 ## Project Layout
 
 `kick new` produces this convention; everything except the bootstrap entry is configurable via `kick.config.ts`:
@@ -157,6 +169,7 @@ vite.config.ts              # Vite + KickJS HMR
 ## Core Concepts
 
 - **Pluggable HTTP runtimes** — one `HttpRuntime` seam over Express (default), Fastify, or h3. Swap the engine in one line; everything above stays the same. See [HTTP Runtimes](https://kickjs.app/guide/http-runtimes.html).
+- **Return-value handlers + typed client** — `return` the payload (`reply(201, body)` for other statuses) and the response type flows through `kick typegen` into `KickRoutes.Api`, consumed by [`@forinda/kickjs-client`](https://kickjs.app/guide/typed-client.html) on the frontend. Declare `{ response: schema }` on a route and the same contract feeds the OpenAPI success response. See [Controllers](https://kickjs.app/guide/controllers.html#return-value-handlers), [Typed Client](https://kickjs.app/guide/typed-client.html).
 - **First-class database** — `kick/db`: code-first schema, fully typed queries, and migrations for PostgreSQL / SQLite / MySQL. `kick add db` (or `pg` / `sqlite` / `mysql`). See [Database](https://kickjs.app/guide/database/).
 - **Custom DI container** — three scopes (singleton / transient / request), slash-delimited tokens (`createToken<T>('app/users/repository')`), constructor + property injection. No external DI dep. See [Dependency Injection](https://kickjs.app/guide/dependency-injection.html).
 - **Factory-first** — `defineAdapter()`, `definePlugin()`, `defineModule()`, `defineHttpContextDecorator()`. No class hierarchies to inherit from. See [Adapters](https://kickjs.app/guide/adapters.html), [Plugins](https://kickjs.app/guide/plugins.html).
