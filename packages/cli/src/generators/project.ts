@@ -53,6 +53,7 @@ const SIBLING_PACKAGES = [
   '@forinda/kickjs-queue',
   '@forinda/kickjs-devtools',
   '@forinda/kickjs-testing',
+  '@forinda/kickjs-client',
 ] as const
 
 /**
@@ -62,7 +63,7 @@ const SIBLING_PACKAGES = [
  * back to the CLI's own version with a `^` prefix so the scaffold
  * stays usable offline.
  */
-async function resolveSiblingVersions(): Promise<Record<string, string>> {
+export async function resolveSiblingVersions(): Promise<Record<string, string>> {
   const results = await Promise.all(
     SIBLING_PACKAGES.map(async (name) => {
       try {

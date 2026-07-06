@@ -27,7 +27,7 @@ export function registerInitCommand(program: Command): void {
     .option('--install', 'Install dependencies after scaffolding')
     .option('--no-install', 'Skip dependency installation')
     .option('-f, --force', 'Remove existing files without prompting')
-    .option('-t, --template <type>', 'Project template: rest | minimal')
+    .option('-t, --template <type>', 'Project template: rest | minimal | fullstack')
     .option('--runtime <engine>', 'HTTP runtime: express | fastify | h3')
     .option('-r, --repo <type>', 'Repository name (inmemory, or any DB name e.g. postgres)')
     .option(
@@ -121,6 +121,11 @@ export function registerInitCommand(program: Command): void {
             options: [
               { value: 'rest', label: 'REST API', hint: 'Express + Swagger' },
               { value: 'minimal', label: 'Minimal', hint: 'bare Express' },
+              {
+                value: 'fullstack',
+                label: 'Fullstack',
+                hint: 'server + Vite React web, typed client',
+              },
             ],
           })
         }
@@ -258,6 +263,22 @@ export function registerInitCommand(program: Command): void {
       }
 
       // ── Scaffold ──────────────────────────────────────────────────
+      if (template === 'fullstack') {
+        const { initFullstackProject } = await import('../generators/fullstack')
+        await initFullstackProject({
+          name,
+          directory,
+          packageManager,
+          initGit,
+          installDeps,
+          schemaLib,
+          runtime,
+        })
+        outro(
+          `Done! Next steps: ${colors.cyan(`cd ${name} && ${packageManager}${packageManager === 'pnpm' ? ' dev' : ' run dev:server'}`)}`,
+        )
+        return
+      }
       await initProject({
         name,
         directory,

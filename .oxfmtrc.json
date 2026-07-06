@@ -21,6 +21,7 @@
     "packages/vscode-extension/resources/icon.png",
     "**/node_modules/",
     "pnpm-lock.yaml",
-    "docs/versions/"
+    "docs/versions/",
+    "**/CHANGELOG.md"
   ]
 }

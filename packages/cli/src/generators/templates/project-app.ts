@@ -321,14 +321,18 @@ import { HelloService } from './hello.service'
 export class HelloController {
   @Autowired() private readonly helloService!: HelloService
 
+  // Return-value handlers: the runtime sends the returned payload as
+  // 200 json, and \`kick typegen\` infers the response type into
+  // \`KickRoutes.Api\` — which is what makes the typed client
+  // (@forinda/kickjs-client) end-to-end type-safe.
   @Get('/')
-  index(ctx: Ctx<KickRoutes.HelloController['index']>) {
-    ctx.json(this.helloService.greet('World'))
+  index(_ctx: Ctx<KickRoutes.HelloController['index']>) {
+    return this.helloService.greet('World')
   }
 
   @Get('/health')
-  health(ctx: Ctx<KickRoutes.HelloController['health']>) {
-    ctx.json(this.helloService.healthCheck())
+  health(_ctx: Ctx<KickRoutes.HelloController['health']>) {
+    return this.helloService.healthCheck()
   }
 }
 `

@@ -345,6 +345,13 @@ export class UserService {
             _sentData = data
           },
         },
+        // The debounced flushInvalidation → rewarmApp path fires ~150ms
+        // AFTER the test returns and touches these three members; without
+        // them the timer throws an unhandled TypeError once the worker
+        // lives long enough (CI), failing the run from outside any test.
+        ssrLoadModule: async () => ({}),
+        ssrFixStacktrace: () => {},
+        config: { logger: { error: () => {} } },
       }
 
       const result = (hook as any).call({}, { file: filePath, server: mockServer })
