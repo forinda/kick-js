@@ -162,6 +162,30 @@ export {}
     interfaces.push(lines.join('\n'))
   }
 
+  // Flat verb+path map for the typed client (`@forinda/kickjs-client`):
+  // `KickRoutes.Api['GET /users/:id']` → the same shape as the controller
+  // interface entry (referenced, not duplicated). Paths are module-mount
+  // relative — the client's `baseUrl` carries the bootstrap-level
+  // `/api/v{n}` prefix, which is not statically scannable.
+  const apiEntries: string[] = []
+  const seenApiKeys = new Set<string>()
+  for (const [controller, methods] of byController) {
+    for (const m of methods) {
+      const key = `${m.httpMethod} ${m.path}`
+      if (seenApiKeys.has(key)) {
+        opts.onWarn?.(
+          `duplicate route '${key}' (${controller}.${m.method}) — ` +
+            `KickRoutes.Api keeps the first registration; later ones are skipped.`,
+        )
+        continue
+      }
+      seenApiKeys.add(key)
+      apiEntries.push(`      '${key}': ${controller}['${m.method}']`)
+    }
+  }
+  const apiInterface = [`    interface Api {`, ...apiEntries, `    }`].join('\n')
+  interfaces.push(apiInterface)
+
   // Controller type imports — same hoisting rationale as schema imports.
   // `source: ''` semantics of resolveSchemaImportSpecifier point the
   // specifier at the controller file itself.

@@ -1,0 +1,191 @@
+import 'reflect-metadata'
+import { describe, it, expect, expectTypeOf, beforeEach } from 'vitest'
+import * as h3v2 from 'h3-v2'
+
+import { createWebApp } from '@forinda/kickjs/web'
+import { Container } from '@forinda/kickjs/container'
+import { Controller, Get, Post, Delete } from '@forinda/kickjs/decorators'
+import { reply, type RequestContext, type InferHandlerResponse } from '@forinda/kickjs'
+
+import { createClient, KickClientError, type RouteShapeLike } from '../src/index'
+
+/**
+ * End-to-end: real decorated controllers served through `createWebApp`,
+ * consumed through the typed client with `fetch` injected — the full R1→R3
+ * loop, network-free. The hand-written Api map below mirrors what
+ * `kick typegen` emits into `KickRoutes.Api`.
+ */
+
+interface Task {
+  id: string
+  title: string
+}
+
+// What kick typegen would emit (KickRoutes.Api) for the fixture controller.
+interface Api {
+  'GET /tasks/:id': {
+    params: { id: string }
+    body: unknown
+    query: unknown
+    response: Task
+  }
+  'POST /tasks': {
+    params: Record<string, never>
+    body: { title: string }
+    query: unknown
+    response: Task
+  }
+  'DELETE /tasks/:id': {
+    params: { id: string }
+    body: unknown
+    query: unknown
+    response: unknown
+  }
+  'GET /tasks': {
+    params: Record<string, never>
+    body: unknown
+    query: unknown
+    response: Task[]
+  }
+}
+// Api entries must conform to the client's shape contract.
+type _check = Api[keyof Api] extends RouteShapeLike ? true : never
+
+function makeApp() {
+  @Controller()
+  class TasksController {
+    @Get('/:id')
+    async get(ctx: RequestContext): Promise<Task> {
+      return { id: ctx.params.id, title: `task ${ctx.params.id}` }
+    }
+
+    @Get('/')
+    async list(_ctx: RequestContext): Promise<Task[]> {
+      return [{ id: '1', title: 'one' }]
+    }
+
+    @Post('/')
+    async create(ctx: RequestContext) {
+      return reply(201, { id: 'new', title: (ctx.body as { title: string }).title })
+    }
+
+    @Delete('/:id')
+    async remove(ctx: RequestContext) {
+      if (ctx.params.id === 'missing') return ctx.notFound('no such task')
+      return reply.noContent()
+    }
+  }
+
+  return createWebApp({
+    h3: h3v2,
+    modules: [{ routes: () => ({ path: '/tasks', controller: TasksController }) } as never],
+  })
+}
+
+beforeEach(() => {
+  Container.reset()
+})
+
+describe('createClient — runtime against a real web app', () => {
+  function makeClient() {
+    const app = makeApp()
+    return createClient<Api>({
+      baseUrl: 'http://api.test/api/v1',
+      fetch: (req) => app.fetch(req),
+    })
+  }
+
+  it('GET with params — response typed and correct', async () => {
+    const api = makeClient()
+    const task = await api.get('/tasks/:id', { params: { id: '42' } })
+    expect(task).toEqual({ id: '42', title: 'task 42' })
+    expectTypeOf(task).toEqualTypeOf<Task>()
+  })
+
+  it('POST with body — 201 payload comes back typed', async () => {
+    const api = makeClient()
+    const created = await api.post('/tasks', { body: { title: 'ship it' } })
+    expect(created).toEqual({ id: 'new', title: 'ship it' })
+    expectTypeOf(created).toEqualTypeOf<Task>()
+  })
+
+  it('DELETE 204 resolves to undefined', async () => {
+    const api = makeClient()
+    await expect(api.delete('/tasks/:id', { params: { id: '9' } })).resolves.toBeUndefined()
+  })
+
+  it('non-2xx throws KickClientError carrying the body', async () => {
+    const api = makeClient()
+    const err = await api
+      .delete('/tasks/:id', { params: { id: 'missing' } })
+      .then(() => null)
+      .catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(KickClientError)
+    expect((err as KickClientError).status).toBe(404)
+  })
+
+  it('missing path params throw a clear client-side error', async () => {
+    const api = makeClient()
+    await expect(api.get('/tasks/:id', {} as never)).rejects.toThrow(/missing path param ':id'/)
+  })
+
+  it('query values serialize onto the URL', async () => {
+    let seenUrl = ''
+    const api = createClient<Api>({
+      baseUrl: 'http://api.test/api/v1',
+      fetch: (req) => {
+        seenUrl = req.url
+        return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }))
+      },
+    })
+    await api.get('/tasks', { query: { sort: '-createdAt', tag: ['a', 'b'] } })
+    expect(seenUrl).toBe('http://api.test/api/v1/tasks?sort=-createdAt&tag=a&tag=b')
+  })
+
+  it('header factory runs per request', async () => {
+    let token = 't1'
+    let seen: string | null = null
+    const api = createClient<Api>({
+      baseUrl: 'http://x/api/v1',
+      headers: () => ({ authorization: `Bearer ${token}` }),
+      fetch: (req) => {
+        seen = req.headers.get('authorization')
+        return Promise.resolve(
+          new Response('[]', { headers: { 'content-type': 'application/json' } }),
+        )
+      },
+    })
+    await api.get('/tasks')
+    expect(seen).toBe('Bearer t1')
+    token = 't2'
+    await api.get('/tasks')
+    expect(seen).toBe('Bearer t2')
+  })
+})
+
+describe('createClient — type-level contract', () => {
+  // NEVER INVOKED — these closures exist purely for the type checker.
+  // Calling the client here would fire real fetches (unhandled rejections).
+  const api = createClient<Api>({ baseUrl: 'http://x' })
+
+  const _typeOnly = () => {
+    // @ts-expect-error — '/nope' is not a registered GET path
+    void api.get('/nope')
+    // @ts-expect-error — '/tasks/:id' is not registered under POST
+    void api.post('/tasks/:id')
+    // @ts-expect-error — params.id is required for '/tasks/:id'
+    void api.get('/tasks/:id')
+    // @ts-expect-error — body.title is required for POST /tasks
+    void api.post('/tasks', {})
+
+    expectTypeOf(api.get).parameter(0).toEqualTypeOf<'/tasks/:id' | '/tasks'>()
+    expectTypeOf(api.get('/tasks/:id', { params: { id: 'x' } })).resolves.toEqualTypeOf<Task>()
+    expectTypeOf(api.get('/tasks')).resolves.toEqualTypeOf<Task[]>()
+    expectTypeOf(api.post('/tasks', { body: { title: 't' } })).resolves.toEqualTypeOf<Task>()
+  }
+
+  it('type contract compiles (assertions live in the unexecuted closure)', () => {
+    expect(typeof _typeOnly).toBe('function')
+    expectTypeOf<InferHandlerResponse<(ctx: never) => Promise<Task>>>().toEqualTypeOf<Task>()
+  })
+})

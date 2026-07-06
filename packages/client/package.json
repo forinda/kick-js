@@ -1,0 +1,57 @@
+{
+  "name": "@forinda/kickjs-client",
+  "version": "0.0.0",
+  "description": "Typed fetch client for KickJS APIs — end-to-end response types from the kick typegen KickRoutes augmentation",
+  "keywords": [
+    "kickjs",
+    "typed-client",
+    "fetch",
+    "typescript",
+    "rpc",
+    "api-client"
+  ],
+  "type": "module",
+  "main": "dist/index.mjs",
+  "types": "dist/index.d.mts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "types": "./dist/index.d.mts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsgo --noEmit",
+    "clean": "rm -rf dist .wireit"
+  },
+  "devDependencies": {
+    "@forinda/kickjs": "workspace:*",
+    "h3-v2": "npm:h3@2.0.1-rc.22",
+    "reflect-metadata": "^0.2.2",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT",
+  "author": "Felix Orinda",
+  "engines": {
+    "node": ">=20.0"
+  },
+  "homepage": "https://kickjs.app/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/forinda/kick-js.git",
+    "directory": "packages/client"
+  },
+  "bugs": {
+    "url": "https://github.com/forinda/kick-js/issues"
+  }
+}

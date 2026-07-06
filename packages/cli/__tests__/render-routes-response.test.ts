@@ -76,3 +76,36 @@ describe('renderRoutes — response inference emission', () => {
     expect(src).toContain("InferHandlerResponse<_C1['create']>")
   })
 })
+
+describe('renderRoutes — KickRoutes.Api flat map', () => {
+  it('emits verb+path keys referencing the controller interfaces', () => {
+    const src = renderRoutes(
+      [route({}), route({ method: 'create', httpMethod: 'POST', path: '/', pathParams: [] })],
+      OUT,
+      'zod',
+    )
+    expect(src).toContain("'GET /:id': UsersController['get']")
+    expect(src).toContain("'POST /': UsersController['create']")
+    expect(src).toContain('interface Api {')
+  })
+
+  it('warns and keeps first on duplicate verb+path', () => {
+    const warnings: string[] = []
+    const src = renderRoutes(
+      [
+        route({}),
+        route({
+          controller: 'OtherController',
+          method: 'also',
+          filePath: '/app/src/other.controller.ts',
+        }),
+      ],
+      OUT,
+      'zod',
+      { onWarn: (w) => warnings.push(w) },
+    )
+    expect(src).toContain("'GET /:id': UsersController['get']")
+    expect(src).not.toContain("OtherController['also']")
+    expect(warnings.some((w) => w.includes('duplicate route'))).toBe(true)
+  })
+})
