@@ -10,6 +10,7 @@
   Request/Response, `app.fetch`). The existing h3 v1 runtime
   (`@forinda/kickjs/h3`) is untouched — adopters keep the old way; v2 is pure
   opt-in via `bootstrap({ runtime: h3WebRuntime() })`.
+
   - Shared web driver pair (`WebRequestShim`, `WebResponseDriver`): buffered
     responses build a web `Response`; SSE streams over a `TransformStream`
   - Uploads via web `FormData` (no multer)
@@ -24,6 +25,7 @@
 - [#438](https://github.com/forinda/kick-js/pull/438) [`ff3e492`](https://github.com/forinda/kick-js/commit/ff3e492bb3261102be774d44730d878399417a46) Thanks [@forinda](https://github.com/forinda)! - perf + lifecycle: object-lifecycle audit fixes across the framework layer
 
   **Hot-path allocations removed**
+
   - Fastify/h3 runtimes: validation middleware is now built once per route
     (previously re-constructed on every request) and the response driver is a
     shared-prototype class (previously ~12 method closures allocated per request)
@@ -37,6 +39,7 @@
     read; REQUEST/TRANSIENT deps keep the live getter
 
   **Leaks fixed**
+
   - Reactivity: `watch().stop()` now detaches the effect from all dependency
     Sets (previously dead watchers accumulated and kept firing); effects re-track
     per run so conditional getters drop stale branches; `computed()` gains
@@ -93,6 +96,7 @@
   watch-fast. Return-value handlers yield their exact payload
   (`Reply<201, Task>` unwraps to `Task`); imperative `ctx.json` handlers
   degrade to `unknown` exactly as before.
+
   - `@forinda/kickjs`: new `InferHandlerResponse<H>` type (exported from the
     root, `/web`, and the http barrel)
   - `@forinda/kickjs-cli`: hoisted controller `import type` per (file, class),
@@ -133,6 +137,7 @@
   scan paths (AST + regex, parity preserved).
 
   Also from the same review pass:
+
   - fresh projects with zero routes now still emit an empty `KickRoutes.Api`, so
     `createClient<KickRoutes.Api>` compiles before the first controller exists
   - a controller class named `Api` now triggers a typegen warning (it would
@@ -210,6 +215,7 @@
 ### Major Changes
 
 - [#402](https://github.com/forinda/kick-js/pull/402) [`f45f83c`](https://github.com/forinda/kick-js/commit/f45f83c362de15cd7f396814b0eb191a96c6c750) Thanks [@forinda](https://github.com/forinda)! - **Major release — the pluggable HTTP runtimes line.** `@forinda/kickjs` now runs on Express (default), Fastify, or h3 behind one `HttpRuntime` seam, selected with `bootstrap({ runtime })`. Express apps need no code changes (see the migration guide), but this is a major because the runtime/adapter refactor changed a few surfaces that adapter and tooling authors depend on:
+
   - `RequestContext` response helpers (`json`/`html`/`sse`/`download`/`render`/`problem`) now return `RuntimeResponse` instead of the Express `Response` — they write through an engine-neutral response driver.
   - `AdapterContext` gained a required `http` facade (`route`/`mount`/`serveStatic`/`use`) and `AdapterContext.app` / `getRuntimeApp()` are typed to the active runtime via the `KickRuntimeRegister` registry (Express by default).
   - `getExpressApp()` is deprecated in favour of `getRuntimeApp()`.
@@ -221,6 +227,7 @@
 ### Patch Changes
 
 - [#404](https://github.com/forinda/kick-js/pull/404) [`506f083`](https://github.com/forinda/kick-js/commit/506f083df779256a4f366a936e918da7e43a592b) Thanks [@forinda](https://github.com/forinda)! - Two HTTP-runtime route-reachability fixes surfaced by linked-build testing:
+
   - **h3:** routes from any source past the first 404'd (`/health`, devtools `/_debug/*`, ad-hoc adapter routes) with `Cannot find any path matching …`. h3's `createRouter` is terminal — on no match it throws rather than falling through like an Express Router — so mounting each source as its own router let the first shadow the rest. The runtime now uses one shared router per app (registered after the connect middleware), and dispatches the router's no-match 404 through `onError` to the framework's notFound handler (or the Vite dev fall-through) instead of surfacing it as a logged error.
   - **fastify:** a controller's root `@Get('/')` (mounted at the prefix) 404'd a trailing-slash request (`/api/v1/hello/`) because Fastify's router is strict by default, while Express and h3 are lenient. The runtime now sets `routerOptions.ignoreTrailingSlash`, so `${prefix}` and `${prefix}/` both resolve.
 
@@ -233,12 +240,14 @@
 - [#395](https://github.com/forinda/kick-js/pull/395) [`d6622d5`](https://github.com/forinda/kick-js/commit/d6622d5d1d9c10cd2c446203fbaa2d143d13f2ea) Thanks [@forinda](https://github.com/forinda)! - File uploads (`@FileUpload` → `ctx.file` / `ctx.files`) now work on all three runtimes, and the CLI grew runtime-aware tooling around them.
 
   **`@forinda/kickjs`**
+
   - Fastify and h3 runtimes implement file uploads (previously gated `capabilities.uploads: false`). Fastify buffers multipart parts via `@fastify/multipart` (new optional peer); h3 uses its built-in `readMultipartFormData`. Both produce the same Multer-shaped file objects as Express, so `@FileUpload` and `ctx.file` / `ctx.files` behave identically across engines. Conformance-tested under all three.
   - New shared helpers in `middleware/upload.ts`: `buildFileTypeFilter`, `applyUploadConfig` (enforces field name, type filter, per-file `maxSize`, array `maxCount`).
   - Added `HttpStatus.PAYLOAD_TOO_LARGE` (413) and `HttpStatus.UNSUPPORTED_MEDIA_TYPE` (415).
   - The runtime subpaths export their engine-native type maps: `FastifyRuntimeTypes` (`@forinda/kickjs/fastify`) and `H3RuntimeTypes` (`@forinda/kickjs/h3`), for the `KickRuntimeRegister` escape-hatch augmentation.
 
   **`@forinda/kickjs-cli`**
+
   - `KickConfig.runtime?: 'express' | 'fastify' | 'h3'` — written by `kick new --runtime`, read by dep-aware commands.
   - `kick add upload` installs the multipart driver for the project's runtime: Express → `multer` (+ `@types/multer`), Fastify → `@fastify/multipart`, h3 → none (native).
   - New `kick/runtime` typegen plugin emits the `KickRuntimeRegister` augmentation from `config.runtime`, retyping `ctx.req` / `ctx.res` / `AdapterContext.app` / `getRuntimeApp()` to the active engine (Express stays the default, no augmentation emitted).
@@ -253,6 +262,7 @@
   `RouteMeta.controller` / `handlerName` are now optional (ad-hoc routes registered via `ctx.http.route` have no controller behind them).
 
 - [#377](https://github.com/forinda/kick-js/pull/377) [`79f2989`](https://github.com/forinda/kick-js/commit/79f298985606e6a1bf2bd2ae558910ad615226d1) Thanks [@forinda](https://github.com/forinda)! - Migrate the queue and mcp adapters onto the engine-agnostic `ctx.http` facade (M2b), and export the `AdapterHttp` type from `@forinda/kickjs` so adapter authors can type against it.
+
   - `@forinda/kickjs-queue`: the `/_kick/queue/{panel,data}` routes now register via `ctx.http.route(...)` and respond through `ctx.html` / `ctx.json` instead of reaching for the raw Express `app` / `res`.
   - `@forinda/kickjs-mcp`: the StreamableHTTP transport endpoints (`<basePath>/messages`) now mount via `ctx.http.mount(...)` — all three verbs in one route table so the engine still auto-answers the OPTIONS preflight. The transport handler reaches `ctx.req` / `ctx.res` for the raw node request/response it needs.
 
@@ -293,12 +303,14 @@
   h3 v2's web-standard `Request` / `Response` core is the eventual target via a future web-standard driver (spec §8); until then this binding uses the node-compatible v1 surface. File uploads remain gated (`capability: false`) on Fastify and h3.
 
 - [#381](https://github.com/forinda/kick-js/pull/381) [`d66dc5b`](https://github.com/forinda/kick-js/commit/d66dc5b337c8f961e4b9329607901bad850e0f91) Thanks [@forinda](https://github.com/forinda)! - Add the runtime-typed escape-hatch registry (M3a, spec §4.3b) — the type foundation the Fastify / h3 runtimes plug into.
+
   - New augmentable `KickRuntimeRegister` interface plus `RuntimeTypeMap`, `ExpressRuntimeTypes`, and the `ActiveRuntime` resolver. With no augmentation, `ActiveRuntime` defaults to the Express type map.
   - `AdapterContext.app` and the new `getRuntimeApp()` accessor are now typed `ActiveRuntime['app']` (Express by default), so a `kick/runtime` typegen augmentation can flip the engine-native escape-hatch types to Fastify / h3 without touching adapter code. `getExpressApp()` stays as a deprecated alias.
 
   Mirrors the `KickDbRegister` / `KickEnv` augmentation mechanism. Zero behavior change and — under the default Express runtime — zero type change (`ActiveRuntime['app']` is `Express`). The request/response driver layer (`ctx.req.raw` / `ctx.res.raw`) and the Fastify runtime itself follow in later M3 steps.
 
 - [#382](https://github.com/forinda/kick-js/pull/382) [`841637e`](https://github.com/forinda/kick-js/commit/841637ec9d19f7df727db7342603e7e48bb07e25) Thanks [@forinda](https://github.com/forinda)! - Route `RequestContext`'s response helpers through an engine-agnostic `RuntimeResponse` driver (M3b) instead of calling Express `res` methods directly — the first half of the request/response driver layer that lets `ctx` run on non-Express engines.
+
   - New `RuntimeResponse` interface (exported), sized so `express.Response` satisfies it structurally. Under the Express runtime the driver IS the response object, so there is no wrapping and no behavior change.
   - `RequestContext` gains an optional fourth constructor argument (`responseDriver`); when omitted it defaults to `res`, so every existing `new RequestContext(req, res, next)` call is unchanged. Fastify / h3 runtimes will pass a thin wrapper over their native reply.
   - `ctx.json` / `ctx.html` / `ctx.download` / `ctx.render` / `ctx.problem.*` and `ctx.sse()` now write through the driver; their return type is `RuntimeResponse` (Express's `Response` is a superset, so chained `.status().json()` usage keeps working).
@@ -320,12 +332,14 @@
 - [#385](https://github.com/forinda/kick-js/pull/385) [`3e5d03e`](https://github.com/forinda/kick-js/commit/3e5d03e7144a19ff26d44b7f882b86f564c6de17) Thanks [@forinda](https://github.com/forinda)! - Make request-scoped contributors and `ctx.set` / `ctx.get` work under the Fastify runtime. Fastify runs the route handler outside the connect-middleware chain, so the `requestScopeMiddleware` AsyncLocalStorage frame (which Express relies on) wasn't active inside the handler. The Fastify route handler now establishes the ALS frame itself around the pipeline (reusing the inbound `x-request-id` when present), so REQUEST-scoped DI, context decorators (`defineContextDecorator`), and `ctx.set` / `ctx.get` behave the same on Fastify as on Express. Adds a shared `createRequestStore` helper (used by both the Express middleware and the Fastify runtime) and a conformance test covering contributors under both engines.
 
 - [#386](https://github.com/forinda/kick-js/pull/386) [`d049c48`](https://github.com/forinda/kick-js/commit/d049c48015e1331eeae3f75ea4e536871cb03fd5) Thanks [@forinda](https://github.com/forinda)! - Error handling, 404s, and Server-Sent Events now work under the Fastify runtime.
+
   - **Errors / 404**: the Fastify runtime passed the raw node response to the connect-style `errorHandler` / `notFoundHandler`, whose `res.status().json()` calls failed on it. They now receive the `RuntimeResponse` reply driver, so thrown errors map to the proper 500 / problem response and unmatched routes return the standard 404 — same shape as Express.
   - **SSE / `ctx.signal`**: `ctx.sse()` and `ctx.signal` register `req.on('close')` / `req.once('close')`, which Fastify's request object doesn't expose. The runtime now hands `ctx` the raw node request (which has the stream events) with Fastify's parsed `body` / `params` / `query` copied onto it, so streaming and request accessors both work.
 
   The conformance suite now runs error, 404, and SSE cases under **both** Express and Fastify (14 cases total).
 
 - [#389](https://github.com/forinda/kick-js/pull/389) [`335c247`](https://github.com/forinda/kick-js/commit/335c24724293ff7c900f50ec20350b47d968f6e7) Thanks [@forinda](https://github.com/forinda)! - Validation and request-body parsing now work under the Fastify runtime.
+
   - **Validation**: the Fastify route handler now runs the route's `@Get(path, schema)` / `route.validation` schema (it previously skipped it, so validated routes weren't actually validated on Fastify). `validate` is a connect-style middleware that parses `req.body` / `query` / `params` and rejects via `next(err)` → a 422 through the error handler — same as Express.
   - **Body parsing**: a new `nativeBodyParsing` runtime capability. Fastify parses bodies itself, so the Application now skips its default `express.json()` on Fastify — previously both ran, the body stream was read twice, and the request hung. Express keeps `express.json()` (capability is `false`).
   - **Root paths**: a controller `@Post('/')` now mounts at the module prefix itself on Fastify (not `${prefix}/`), so requests without a trailing slash match.
@@ -335,6 +349,7 @@
 - [#383](https://github.com/forinda/kick-js/pull/383) [`8fc8c1a`](https://github.com/forinda/kick-js/commit/8fc8c1a23d0e717edc1ccc54089141036a0ae975) Thanks [@forinda](https://github.com/forinda)! - Type `ctx.req` / `ctx.res` from the runtime registry (`ActiveRuntime['request']` / `ActiveRuntime['response']`) instead of hard-coding Express's `Request` / `Response`. Under the default (unaugmented) Express runtime these resolve to `express.Request` / `express.Response`, so there is no change for existing apps — but a `kick/runtime` typegen augmentation now flips `ctx.req` / `ctx.res` to the active engine's native request/response, completing the §4.3b runtime-typed-context story for the request context. Behavior is unchanged; this is the last type-prep before the Fastify runtime subpath.
 
 - [#380](https://github.com/forinda/kick-js/pull/380) [`d0bc46d`](https://github.com/forinda/kick-js/commit/d0bc46d7336fb9395c7b4f71fe74e94f1a2301e5) Thanks [@forinda](https://github.com/forinda)! - Move the Application's last Express-specific calls onto the HTTP runtime, so `application.ts` no longer reaches for engine-specific APIs in its setup path:
+
   - `disable('x-powered-by')` + `set('trust proxy')` now live in `expressRuntime.createApp(opts)`; `Application` passes `trustProxy` through at both the constructor and HMR-rebuild create sites. `RuntimeAppOptions.trustProxy` widened to include Express's function form.
   - The `/health/live` and `/health/ready` endpoints now register through the `ctx.http` facade instead of `this.app.get(...)`.
 
@@ -357,12 +372,14 @@
 - [#395](https://github.com/forinda/kick-js/pull/395) [`d6622d5`](https://github.com/forinda/kick-js/commit/d6622d5d1d9c10cd2c446203fbaa2d143d13f2ea) Thanks [@forinda](https://github.com/forinda)! - File uploads (`@FileUpload` → `ctx.file` / `ctx.files`) now work on all three runtimes, and the CLI grew runtime-aware tooling around them.
 
   **`@forinda/kickjs`**
+
   - Fastify and h3 runtimes implement file uploads (previously gated `capabilities.uploads: false`). Fastify buffers multipart parts via `@fastify/multipart` (new optional peer); h3 uses its built-in `readMultipartFormData`. Both produce the same Multer-shaped file objects as Express, so `@FileUpload` and `ctx.file` / `ctx.files` behave identically across engines. Conformance-tested under all three.
   - New shared helpers in `middleware/upload.ts`: `buildFileTypeFilter`, `applyUploadConfig` (enforces field name, type filter, per-file `maxSize`, array `maxCount`).
   - Added `HttpStatus.PAYLOAD_TOO_LARGE` (413) and `HttpStatus.UNSUPPORTED_MEDIA_TYPE` (415).
   - The runtime subpaths export their engine-native type maps: `FastifyRuntimeTypes` (`@forinda/kickjs/fastify`) and `H3RuntimeTypes` (`@forinda/kickjs/h3`), for the `KickRuntimeRegister` escape-hatch augmentation.
 
   **`@forinda/kickjs-cli`**
+
   - `KickConfig.runtime?: 'express' | 'fastify' | 'h3'` — written by `kick new --runtime`, read by dep-aware commands.
   - `kick add upload` installs the multipart driver for the project's runtime: Express → `multer` (+ `@types/multer`), Fastify → `@fastify/multipart`, h3 → none (native).
   - New `kick/runtime` typegen plugin emits the `KickRuntimeRegister` augmentation from `config.runtime`, retyping `ctx.req` / `ctx.res` / `AdapterContext.app` / `getRuntimeApp()` to the active engine (Express stays the default, no augmentation emitted).
@@ -377,6 +394,7 @@
   `RouteMeta.controller` / `handlerName` are now optional (ad-hoc routes registered via `ctx.http.route` have no controller behind them).
 
 - [#377](https://github.com/forinda/kick-js/pull/377) [`79f2989`](https://github.com/forinda/kick-js/commit/79f298985606e6a1bf2bd2ae558910ad615226d1) Thanks [@forinda](https://github.com/forinda)! - Migrate the queue and mcp adapters onto the engine-agnostic `ctx.http` facade (M2b), and export the `AdapterHttp` type from `@forinda/kickjs` so adapter authors can type against it.
+
   - `@forinda/kickjs-queue`: the `/_kick/queue/{panel,data}` routes now register via `ctx.http.route(...)` and respond through `ctx.html` / `ctx.json` instead of reaching for the raw Express `app` / `res`.
   - `@forinda/kickjs-mcp`: the StreamableHTTP transport endpoints (`<basePath>/messages`) now mount via `ctx.http.mount(...)` — all three verbs in one route table so the engine still auto-answers the OPTIONS preflight. The transport handler reaches `ctx.req` / `ctx.res` for the raw node request/response it needs.
 
@@ -417,12 +435,14 @@
   h3 v2's web-standard `Request` / `Response` core is the eventual target via a future web-standard driver (spec §8); until then this binding uses the node-compatible v1 surface. File uploads remain gated (`capability: false`) on Fastify and h3.
 
 - [#381](https://github.com/forinda/kick-js/pull/381) [`d66dc5b`](https://github.com/forinda/kick-js/commit/d66dc5b337c8f961e4b9329607901bad850e0f91) Thanks [@forinda](https://github.com/forinda)! - Add the runtime-typed escape-hatch registry (M3a, spec §4.3b) — the type foundation the Fastify / h3 runtimes plug into.
+
   - New augmentable `KickRuntimeRegister` interface plus `RuntimeTypeMap`, `ExpressRuntimeTypes`, and the `ActiveRuntime` resolver. With no augmentation, `ActiveRuntime` defaults to the Express type map.
   - `AdapterContext.app` and the new `getRuntimeApp()` accessor are now typed `ActiveRuntime['app']` (Express by default), so a `kick/runtime` typegen augmentation can flip the engine-native escape-hatch types to Fastify / h3 without touching adapter code. `getExpressApp()` stays as a deprecated alias.
 
   Mirrors the `KickDbRegister` / `KickEnv` augmentation mechanism. Zero behavior change and — under the default Express runtime — zero type change (`ActiveRuntime['app']` is `Express`). The request/response driver layer (`ctx.req.raw` / `ctx.res.raw`) and the Fastify runtime itself follow in later M3 steps.
 
 - [#382](https://github.com/forinda/kick-js/pull/382) [`841637e`](https://github.com/forinda/kick-js/commit/841637ec9d19f7df727db7342603e7e48bb07e25) Thanks [@forinda](https://github.com/forinda)! - Route `RequestContext`'s response helpers through an engine-agnostic `RuntimeResponse` driver (M3b) instead of calling Express `res` methods directly — the first half of the request/response driver layer that lets `ctx` run on non-Express engines.
+
   - New `RuntimeResponse` interface (exported), sized so `express.Response` satisfies it structurally. Under the Express runtime the driver IS the response object, so there is no wrapping and no behavior change.
   - `RequestContext` gains an optional fourth constructor argument (`responseDriver`); when omitted it defaults to `res`, so every existing `new RequestContext(req, res, next)` call is unchanged. Fastify / h3 runtimes will pass a thin wrapper over their native reply.
   - `ctx.json` / `ctx.html` / `ctx.download` / `ctx.render` / `ctx.problem.*` and `ctx.sse()` now write through the driver; their return type is `RuntimeResponse` (Express's `Response` is a superset, so chained `.status().json()` usage keeps working).
@@ -440,12 +460,14 @@
 - [#385](https://github.com/forinda/kick-js/pull/385) [`3e5d03e`](https://github.com/forinda/kick-js/commit/3e5d03e7144a19ff26d44b7f882b86f564c6de17) Thanks [@forinda](https://github.com/forinda)! - Make request-scoped contributors and `ctx.set` / `ctx.get` work under the Fastify runtime. Fastify runs the route handler outside the connect-middleware chain, so the `requestScopeMiddleware` AsyncLocalStorage frame (which Express relies on) wasn't active inside the handler. The Fastify route handler now establishes the ALS frame itself around the pipeline (reusing the inbound `x-request-id` when present), so REQUEST-scoped DI, context decorators (`defineContextDecorator`), and `ctx.set` / `ctx.get` behave the same on Fastify as on Express. Adds a shared `createRequestStore` helper (used by both the Express middleware and the Fastify runtime) and a conformance test covering contributors under both engines.
 
 - [#386](https://github.com/forinda/kick-js/pull/386) [`d049c48`](https://github.com/forinda/kick-js/commit/d049c48015e1331eeae3f75ea4e536871cb03fd5) Thanks [@forinda](https://github.com/forinda)! - Error handling, 404s, and Server-Sent Events now work under the Fastify runtime.
+
   - **Errors / 404**: the Fastify runtime passed the raw node response to the connect-style `errorHandler` / `notFoundHandler`, whose `res.status().json()` calls failed on it. They now receive the `RuntimeResponse` reply driver, so thrown errors map to the proper 500 / problem response and unmatched routes return the standard 404 — same shape as Express.
   - **SSE / `ctx.signal`**: `ctx.sse()` and `ctx.signal` register `req.on('close')` / `req.once('close')`, which Fastify's request object doesn't expose. The runtime now hands `ctx` the raw node request (which has the stream events) with Fastify's parsed `body` / `params` / `query` copied onto it, so streaming and request accessors both work.
 
   The conformance suite now runs error, 404, and SSE cases under **both** Express and Fastify (14 cases total).
 
 - [#389](https://github.com/forinda/kick-js/pull/389) [`335c247`](https://github.com/forinda/kick-js/commit/335c24724293ff7c900f50ec20350b47d968f6e7) Thanks [@forinda](https://github.com/forinda)! - Validation and request-body parsing now work under the Fastify runtime.
+
   - **Validation**: the Fastify route handler now runs the route's `@Get(path, schema)` / `route.validation` schema (it previously skipped it, so validated routes weren't actually validated on Fastify). `validate` is a connect-style middleware that parses `req.body` / `query` / `params` and rejects via `next(err)` → a 422 through the error handler — same as Express.
   - **Body parsing**: a new `nativeBodyParsing` runtime capability. Fastify parses bodies itself, so the Application now skips its default `express.json()` on Fastify — previously both ran, the body stream was read twice, and the request hung. Express keeps `express.json()` (capability is `false`).
   - **Root paths**: a controller `@Post('/')` now mounts at the module prefix itself on Fastify (not `${prefix}/`), so requests without a trailing slash match.
@@ -455,6 +477,7 @@
 - [#383](https://github.com/forinda/kick-js/pull/383) [`8fc8c1a`](https://github.com/forinda/kick-js/commit/8fc8c1a23d0e717edc1ccc54089141036a0ae975) Thanks [@forinda](https://github.com/forinda)! - Type `ctx.req` / `ctx.res` from the runtime registry (`ActiveRuntime['request']` / `ActiveRuntime['response']`) instead of hard-coding Express's `Request` / `Response`. Under the default (unaugmented) Express runtime these resolve to `express.Request` / `express.Response`, so there is no change for existing apps — but a `kick/runtime` typegen augmentation now flips `ctx.req` / `ctx.res` to the active engine's native request/response, completing the §4.3b runtime-typed-context story for the request context. Behavior is unchanged; this is the last type-prep before the Fastify runtime subpath.
 
 - [#380](https://github.com/forinda/kick-js/pull/380) [`d0bc46d`](https://github.com/forinda/kick-js/commit/d0bc46d7336fb9395c7b4f71fe74e94f1a2301e5) Thanks [@forinda](https://github.com/forinda)! - Move the Application's last Express-specific calls onto the HTTP runtime, so `application.ts` no longer reaches for engine-specific APIs in its setup path:
+
   - `disable('x-powered-by')` + `set('trust proxy')` now live in `expressRuntime.createApp(opts)`; `Application` passes `trustProxy` through at both the constructor and HMR-rebuild create sites. `RuntimeAppOptions.trustProxy` widened to include Express's function form.
   - The `/health/live` and `/health/ready` endpoints now register through the `ctx.http` facade instead of `this.app.get(...)`.
 
@@ -476,6 +499,7 @@
 ### Minor Changes
 
 - [#328](https://github.com/forinda/kick-js/pull/328) [`bcada77`](https://github.com/forinda/kick-js/commit/bcada7784a2e866a512c25856ff1c94ca44ed92b) Thanks [@forinda](https://github.com/forinda)! - Quieter startup by default, plus clearer bootstrap option names.
+
   - **`ConsoleLoggerProvider` now respects `LOG_LEVEL`** (default `info`). Previously every `logger.debug()` printed unconditionally, dumping DI wiring and HMR ticks on each start. Messages below the threshold (`trace < debug < info < warn < error < fatal`, plus `silent`) are now dropped; run with `LOG_LEVEL=debug` to see them. Custom `LoggerProvider` implementations (pino, winston, …) are unaffected — they manage their own levels.
 
   - **The startup route table is now opt-in via `bootstrap({ logRouteTable: true })`** and defaults to **off**. It previously printed automatically in non-production. When enabled it logs at `info` level (so it appears whenever `LOG_LEVEL` permits `info`, i.e. the default). The old `logRoutesTable` option keeps working as a deprecated alias (`logRouteTable` wins when both are set).
@@ -566,6 +590,7 @@
 - [#291](https://github.com/forinda/kick-js/pull/291) [`0d9a895`](https://github.com/forinda/kick-js/commit/0d9a8955f358f8ca8be8aca169dfa38285c48f50) Thanks [@forinda](https://github.com/forinda)! - Schema-agnostic validation abstraction
 
   **New package: `@forinda/kickjs-schema`**
+
   - `KickSchema` interface — unified `safeParse()`, `toJsonSchema()`, `_raw`
   - `SchemaIssue` — normalized error format (path, message, code, expected, received)
   - `detectSchema()` — auto-detects KickSchema, Zod, Valibot, Yup, Standard Schema v1, functions, and duck-typed schemas
@@ -573,17 +598,20 @@
   - `InferSchemaOutput<T>` — type-level inference for Zod, Valibot, Standard Schema, and KickSchema
 
   **Adapters (tree-shakable sub-exports):**
+
   - `@forinda/kickjs-schema/zod` — `fromZod()` with full issue normalization and JSON Schema via `.toJSONSchema()`
   - `@forinda/kickjs-schema/valibot` — `fromValibot()` with issue mapping and JSON Schema via `@valibot/to-json-schema`
   - `@forinda/kickjs-schema/yup` — `fromYup()` with `validateSync` error mapping and JSON Schema from `describe()` metadata
 
   **Framework integration:**
+
   - `validate()` middleware uses `detectSchema()` — accepts any supported schema library
   - Swagger `SchemaParser` uses `detectSchema().toJsonSchema()` instead of Zod-specific conversion
   - MCP adapter uses `detectSchema()` for tool input/output schema conversion
   - `loadEnvFromSchema()` — schema-agnostic env loader alongside existing Zod-only `loadEnv()`
 
   **Typegen:**
+
   - New `schemaValidator: 'kickjs-schema'` option emits `InferSchemaOutput<>` for route body/query/params and env types
   - Default `'zod'` unchanged — fully backward compatible
   - CLI: `kick typegen --schema-validator kickjs-schema`
@@ -591,13 +619,16 @@
 - [#297](https://github.com/forinda/kick-js/pull/297) [`a4fc68c`](https://github.com/forinda/kick-js/commit/a4fc68c991b996cae08800e7e9c1f0e8f39eaaeb) Thanks [@forinda](https://github.com/forinda)! - Fix schema-driven env typing end-to-end across `@forinda/kickjs-schema`, `loadEnvFromSchema`, and `kick typegen`.
 
   **`@forinda/kickjs-schema`**
+
   - `fromZod` / `fromValibot` / `fromYup` now infer their output type from the wrapped schema via `InferSchemaOutput<TSchema>`. Previously the `<TOutput = unknown>` generic defaulted to `unknown` whenever the caller didn't spell the output type explicitly — every wrapped schema landed at `KickSchema<unknown>` and propagated `unknown` into `KickEnv`. The explicit `<TOutput>` overload was dropped because TypeScript overload resolution always picked it with `TOutput = unknown` before reaching the inferring overload; adopters who want to spell the output type explicitly can cast (`fromZod(s) as KickSchema<MyShape>`) instead.
   - `InferSchemaOutput<T>` now resolves the Standard Schema brand (`~standard.types.output`) before Zod's `_output` (Zod v4 sometimes types `_output` as `never` on object schemas, which would mask the real shape), and adds a final branch for Yup's `__outputType`.
 
   **`@forinda/kickjs`**
+
   - `loadEnvFromSchema` now takes `<TSchema>(schema: TSchema): InferSchemaOutput<TSchema>` so the call site lands at the real env shape instead of `Record<string, unknown>`. A second overload preserves the `Record<string, unknown>` fallback for adopters who pass a runtime-only validator with no static brand.
 
   **`@forinda/kickjs-cli`**
+
   - `kick typegen` env-file detection regex broadened to match `fromZod(...)` / `fromValibot(...)` / `fromYup(...)` / `loadEnvFromSchema(...)` in addition to the legacy `defineEnv(...)`. Projects migrating off `defineEnv` to the schema-agnostic loader no longer get a silent `kick/env: skipped`.
   - Env renderer flattens the kickjs-schema inference via a mapped-type identity (`type _Resolved = { [K in keyof _Raw]: _Raw[K] }`) so `interface KickEnv extends _Resolved {}` lands at an object type TS accepts. Without it, `InferSchemaOutput<typeof envSchema>` stays as a conditional type and the interface extension errors with TS2312 ("interface can only extend an object type with statically known members") even when the conditional resolves to a plain object.
 
@@ -632,6 +663,7 @@
 - [#291](https://github.com/forinda/kick-js/pull/291) [`0d9a895`](https://github.com/forinda/kick-js/commit/0d9a8955f358f8ca8be8aca169dfa38285c48f50) Thanks [@forinda](https://github.com/forinda)! - Schema-agnostic validation abstraction
 
   **New package: `@forinda/kickjs-schema`**
+
   - `KickSchema` interface — unified `safeParse()`, `toJsonSchema()`, `_raw`
   - `SchemaIssue` — normalized error format (path, message, code, expected, received)
   - `detectSchema()` — auto-detects KickSchema, Zod, Valibot, Yup, Standard Schema v1, functions, and duck-typed schemas
@@ -639,17 +671,20 @@
   - `InferSchemaOutput<T>` — type-level inference for Zod, Valibot, Standard Schema, and KickSchema
 
   **Adapters (tree-shakable sub-exports):**
+
   - `@forinda/kickjs-schema/zod` — `fromZod()` with full issue normalization and JSON Schema via `.toJSONSchema()`
   - `@forinda/kickjs-schema/valibot` — `fromValibot()` with issue mapping and JSON Schema via `@valibot/to-json-schema`
   - `@forinda/kickjs-schema/yup` — `fromYup()` with `validateSync` error mapping and JSON Schema from `describe()` metadata
 
   **Framework integration:**
+
   - `validate()` middleware uses `detectSchema()` — accepts any supported schema library
   - Swagger `SchemaParser` uses `detectSchema().toJsonSchema()` instead of Zod-specific conversion
   - MCP adapter uses `detectSchema()` for tool input/output schema conversion
   - `loadEnvFromSchema()` — schema-agnostic env loader alongside existing Zod-only `loadEnv()`
 
   **Typegen:**
+
   - New `schemaValidator: 'kickjs-schema'` option emits `InferSchemaOutput<>` for route body/query/params and env types
   - Default `'zod'` unchanged — fully backward compatible
   - CLI: `kick typegen --schema-validator kickjs-schema`
@@ -657,13 +692,16 @@
 - [#297](https://github.com/forinda/kick-js/pull/297) [`a4fc68c`](https://github.com/forinda/kick-js/commit/a4fc68c991b996cae08800e7e9c1f0e8f39eaaeb) Thanks [@forinda](https://github.com/forinda)! - Fix schema-driven env typing end-to-end across `@forinda/kickjs-schema`, `loadEnvFromSchema`, and `kick typegen`.
 
   **`@forinda/kickjs-schema`**
+
   - `fromZod` / `fromValibot` / `fromYup` now infer their output type from the wrapped schema via `InferSchemaOutput<TSchema>`. Previously the `<TOutput = unknown>` generic defaulted to `unknown` whenever the caller didn't spell the output type explicitly — every wrapped schema landed at `KickSchema<unknown>` and propagated `unknown` into `KickEnv`. The explicit `<TOutput>` overload was dropped because TypeScript overload resolution always picked it with `TOutput = unknown` before reaching the inferring overload; adopters who want to spell the output type explicitly can cast (`fromZod(s) as KickSchema<MyShape>`) instead.
   - `InferSchemaOutput<T>` now resolves the Standard Schema brand (`~standard.types.output`) before Zod's `_output` (Zod v4 sometimes types `_output` as `never` on object schemas, which would mask the real shape), and adds a final branch for Yup's `__outputType`.
 
   **`@forinda/kickjs`**
+
   - `loadEnvFromSchema` now takes `<TSchema>(schema: TSchema): InferSchemaOutput<TSchema>` so the call site lands at the real env shape instead of `Record<string, unknown>`. A second overload preserves the `Record<string, unknown>` fallback for adopters who pass a runtime-only validator with no static brand.
 
   **`@forinda/kickjs-cli`**
+
   - `kick typegen` env-file detection regex broadened to match `fromZod(...)` / `fromValibot(...)` / `fromYup(...)` / `loadEnvFromSchema(...)` in addition to the legacy `defineEnv(...)`. Projects migrating off `defineEnv` to the schema-agnostic loader no longer get a silent `kick/env: skipped`.
   - Env renderer flattens the kickjs-schema inference via a mapped-type identity (`type _Resolved = { [K in keyof _Raw]: _Raw[K] }`) so `interface KickEnv extends _Resolved {}` lands at an object type TS accepts. Without it, `InferSchemaOutput<typeof envSchema>` stays as a conditional type and the interface extension errors with TS2312 ("interface can only extend an object type with statically known members") even when the conditional resolves to a plain object.
 
@@ -729,6 +767,7 @@
   More framework errors will migrate to `KickError` over time. Codes are stable and never reused.
 
   **API:**
+
   - `KickError` class — extends `Error`. Holds `code`, `summary`, `cause`, `fix`, `docsUrl`, `context`. `.message` carries the full multi-line plain-text body so Node's default `Error.toString()` surfaces the helpful version automatically.
   - `formatKickError(err, { color })` — ANSI-colored renderer for terminal output. Honors `NO_COLOR` / `FORCE_COLOR` env vars when the `color` option is omitted.
   - All five catalog entries exposed via factory functions (`noProviderError`, `envValueMissingError`, etc.) for use by adopters' own integrations.
@@ -772,12 +811,14 @@
   Extends `HttpException` so existing catches keep working. The framework error handler dispatches `ProblemException` first and emits `application/problem+json`. Plain `HttpException` keeps its existing `{ message }` JSON shape — backward compatible by detection (data-driven), not by config.
 
   **Deprecated** (`@deprecated` JSDoc, no runtime change):
+
   - `ctx.notFound()` → use `ctx.problem.notFound()`
   - `ctx.badRequest()` → use `ctx.problem.badRequest()`
 
   `ctx.json`, `ctx.created`, `ctx.noContent`, `ctx.html`, `ctx.download`, `ctx.render` are **not** deprecated — they're generic response helpers, orthogonal to the error-format question RFC 9457 answers.
 
   **New exports** from `@forinda/kickjs`:
+
   - `ProblemException` class
   - `ProblemDetails` type
   - `normalizeProblem(input)` helper (fills defaults — used internally, exposed for adopters writing their own response paths)
@@ -790,6 +831,7 @@
 ### Patch Changes
 
 - [#283](https://github.com/forinda/kick-js/pull/283) [`a46927e`](https://github.com/forinda/kick-js/commit/a46927e9102ea67d25df633df2a55d782ab23a3c) Thanks [@forinda](https://github.com/forinda)! - Fix 3 bugs blocking MCP HTTP transport and auth forwarding:
+
   1. **Route mount order** — `notFoundHandler` was registered before adapter `beforeStart` hooks, causing `/_mcp/messages` to 404. Swapped ordering so adapters mount routes before the catch-all.
   2. **Auth header dropped** — `buildMcpServer` didn't forward the SDK's `extra` parameter (carrying `requestInfo.headers`) to `dispatchTool`, so `Authorization` headers never reached the internal Express dispatch.
   3. **SDK callback signature mismatch** — `@modelcontextprotocol/sdk` uses `(args, extra)` when `inputSchema` is present but `(extra)` when absent. Tools backed by GET/DELETE routes silently lost auth headers.
@@ -849,6 +891,7 @@
   **`@forinda/kickjs-swagger`** — peer range tightened from `>=4.0.0` to `^4.0.0` for consistency with kickjs. Stays optional: `schema-parser.ts` duck-types Zod schemas (no `import 'zod'` in `src/`) so adopters using non-Zod parsers (Joi, Valibot, Yup, ArkType) don't need zod at all.
 
   **Upgrade impact:**
+
   - Projects scaffolded with `kick new` already pin `zod: ^4.4.3` — no action required.
   - Projects on `npm install`, `yarn` (non-strict), or `pnpm install` without `--strict-peer-dependencies` will see a "missing peer dependency" warning if they don't have zod. Fix: `pnpm add zod` (or your package manager's equivalent).
   - Projects using pnpm with `strict-peer-dependencies=true` or npm 7+ with `--legacy-peer-deps=false` will hard-fail until they add zod themselves.
@@ -860,6 +903,7 @@
 - [#263](https://github.com/forinda/kick-js/pull/263) [`e53f833`](https://github.com/forinda/kick-js/commit/e53f83358304fddfd10840a9f5a1ab603f184a2f) Thanks [@forinda](https://github.com/forinda)! - fix(assets): always return posix paths from `resolveAsset` / `assets.x.y()` / `useAssets()`
 
   `resolveAsset` now normalises returned paths to forward slashes on every platform. On Windows, it previously emitted native paths (`C:\Users\foo\dist\mails\welcome.ejs`), which broke:
+
   - splicing the result into URLs (`href` / `src` / CDN keys) — backslashes are invalid in URLs and silently corrupt the link
   - cross-host equality comparisons (a path produced on Windows vs. one on Linux)
   - substring assertions in adopters' tests
@@ -877,6 +921,7 @@
   `RequestContext.{body,params,query,headers,file,files}` used to return `DeepReadonly<T>` (and `Readonly<>` for `headers`). The recursive conditional type interfered with TS narrowing — discriminated unions on `ctx.body`, drilldown into nested Zod-inferred shapes, and IDE jump-to-type all degraded — and slowed type-checking on deeply-nested payloads.
 
   The compile-time wrapper is gone. Runtime read-only enforcement now lives in a private `makeReadOnlyProxy()` helper:
+
   - **Dev (`NODE_ENV !== 'production'`)** — `ctx.body` returns a `Proxy` over `req.body` whose `set` / `deleteProperty` traps `console.warn` and leave the underlying object untouched. Strict-mode-safe (traps return `true`), so `ctx.body.foo = 'x'` doesn't throw mid-handler — it just warns + ignores the write.
   - **Production** — the Proxy is bypassed entirely; getters return `req.body` / `req.params` / etc. as-is. Zero overhead on the hot path.
   - Wrappers are cached per-target on `req` via a Symbol, so repeat access of `ctx.body` returns the same Proxy instance (stable under `===` across middleware / contributor / handler boundaries — relied on by router-builder's multi-RequestContext-per-request layout).
@@ -1039,6 +1084,7 @@
 - [#245](https://github.com/forinda/kick-js/pull/245) [`a583829`](https://github.com/forinda/kick-js/commit/a5838298632e419389e3464779b9cb2f049d4392) Thanks [@forinda](https://github.com/forinda)! - test(http): lock in Application middleware lifecycle mount order
 
   Adds a dedicated test file (`__tests__/lifecycle-mount-order.test.ts`) that exercises every documented step of `Application.setup()` and asserts the runtime mount order through the real Express stack. Six cases:
+
   - `beforeMount` → `register()` → `beforeStart` hooks fire during `setup()` in adapter / plugin declaration order
   - `afterStart` only fires under `start()`, never `setup()` (the documented contract for `createTestApp` compatibility)
   - Per-request middleware fires in phase order: `beforeGlobal` (adapter) → plugin → user-declared global → `afterGlobal` (adapter) → `beforeRoutes` (adapter) → route handler
@@ -1332,6 +1378,7 @@
   - New `KickPlugin.setup?(registry: ModuleRegistry)` lifecycle hook on plugins. Runs after `plugin.modules?()` so plugins can mix static + dynamic registration in the same plugin.
 
   Order across the whole pipeline (preserved across bootstrap):
+
   1. plugin static modules (`plugin.modules?()`)
   2. plugin `setup()` calls (in plugin dependsOn-sorted order)
   3. user static modules (`options.modules`)
@@ -1360,6 +1407,7 @@
 ### Patch Changes
 
 - [#190](https://github.com/forinda/kick-js/pull/190) [`a812ad5`](https://github.com/forinda/kick-js/commit/a812ad5daa9c3acbe9583eec632a766dadafaea8) Thanks [@forinda](https://github.com/forinda)! - Harden `defineContextDecorator` based on review feedback. Six tightening passes, all backwards-compatible:
+
   1. **Boot-time spec validation.** `defineContextDecorator` now throws `TypeError` immediately if `spec` is missing/non-object, `spec.key` is empty, `spec.resolve` isn't a function, `spec.onError` is provided but not a function, or `spec.dependsOn` is provided but not an array. Adopters get definition-time errors (typically module load) instead of cryptic ContextMeta misses at first request.
   2. **Source-location capture.** Every registration now carries `definedAt: string` — a snapshot of `new Error().stack` taken at decorator-construction time. The contributor pipeline threads it into `MissingContributorError`'s message so boot-time errors print `declared at src/contributors/load-project.ts:42:18` instead of forcing adopters to grep for the key string.
   3. **Cleaner type story.** Replaced the trailing `as unknown as ContextDecorator<...>` double-cast with overloaded function signatures + `Object.assign` + `Object.freeze`. `decoratorOrFactory` now matches `ContextDecorator`'s call shapes structurally and properties are typed via the assign intersection — no more `as unknown` escape hatch in the factory's return path.
@@ -1414,6 +1462,7 @@
 
   Most usages already comply. If you mutate one of these surfaces
   intentionally, two escape hatches:
+
   1. **Compute and stash** (preferred):
      ```ts
      const enriched = { ...ctx.body, computed: f(ctx.body) }
@@ -1442,6 +1491,7 @@
 ### Patch Changes
 
 - [#166](https://github.com/forinda/kick-js/pull/166) [`a6d0dd6`](https://github.com/forinda/kick-js/commit/a6d0dd6038b215c0ae3cbe1a20e11ba0d8b1c46e) Thanks [@forinda](https://github.com/forinda)! - Minify published build output via the tsdown / oxc minifier.
+
   - **Library packages** use `minify: { compress: true, mangle: false }`. Whitespace and comments are stripped and constants folded, but identifiers stay intact so adopter stack traces remain readable.
   - **CLI** uses `minify: { compress: true, mangle: true }`. The CLI is an operator tool, not a library — full mangle is fine and gives a smaller binary.
 
