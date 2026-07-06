@@ -124,40 +124,32 @@ pnpm test:coverage      # Run tests with coverage report
 pnpm test:e2e           # Run end-to-end tests
 
 # Code Quality
-pnpm lint               # Run ESLint
-pnpm lint:fix           # Fix ESLint issues
-pnpm type-check         # Run TypeScript type checking
-pnpm format             # Format code with Prettier
-
-# Examples
-pnpm example:basic-todo     # Run basic todo example
-pnpm example:medium-kanban  # Run kanban example
-pnpm example:complex-analytics # Run analytics example
+pnpm lint               # oxlint over packages/
+pnpm lint:fix           # oxlint --fix
+pnpm typecheck          # tsgo/tsc across packages (turbo)
+pnpm format             # oxfmt --write (repo standard; no ESLint/Prettier)
 ```
+
+Runnable example apps live in
+[forinda/kickjs-examples-archive](https://github.com/forinda/kickjs-examples-archive) —
+clone that repo to run them; `examples/` here holds test fixtures only.
 
 ## 📁 Project Structure
 
 Understanding the project structure will help you navigate and contribute effectively:
 
 ```
-kickjs/
-├── src/                          # Source code
-│   ├── core/                     # Core framework code
-│   │   ├── app/                  # Application management
-│   │   ├── decorators/           # Framework decorators
-│   │   ├── types/                # TypeScript type definitions
-│   │   ├── utils/                # Utility functions
-│   │   └── constants/            # Constants and keys
-│   ├── cli/                      # CLI tooling
-│   └── index.ts                  # Main export file
-├── examples/                     # Example applications
-│   ├── basic-todo/               # Simple CRUD example
-│   ├── medium-kanban/            # Kanban board example
-│   └── complex-analytics/        # Analytics dashboard example
-├── tests/                        # Test files
-├── docs/                         # Documentation
-├── dist/                         # Built files (generated)
-└── README.md                     # Main documentation
+kick-js/                          # pnpm + Turbo monorepo
+├── packages/
+│   ├── kickjs/                   # THE framework (DI core, http, runtimes, /web entry)
+│   ├── cli/                      # kick new / generators / typegen
+│   ├── client/                   # typed fetch client (frontend)
+│   ├── vite/ schema/ swagger/ testing/ …   # the rest of the @forinda/kickjs* family
+│   └── <pkg>/__tests__/          # per-package tests (vitest)
+├── __tests__/                    # root integration tests
+├── examples/                     # test fixtures only (apps → kickjs-examples-archive)
+├── docs/                         # VitePress site (kickjs.app)
+└── CLAUDE.md / .agents/          # AI agent context
 ```
 
 ### Key Directories
@@ -241,7 +233,7 @@ There is no separate `dev` branch in this flow. Pre-release windows are explicit
    ```
 
    ::: warning
-   If you change any framework package (`packages/*`), always run `pnpm build:examples` before submitting your PR. Example apps depend on the framework packages — a breaking change in `@forinda/kickjs-core` or `@forinda/kickjs-http` can silently break examples that CI may not catch in every job.
+   If you change any framework package (`packages/*`), always run `pnpm build:examples` before submitting your PR. Example apps depend on the framework packages — a breaking change in `@forinda/kickjs` can silently break examples that CI may not catch in every job.
    :::
 
 4. **Commit your changes**:
@@ -499,12 +491,6 @@ tests/
    pnpm lint
    pnpm type-check
    pnpm build
-   ```
-
-3. **Test examples**:
-   ```bash
-   pnpm example:basic-todo
-   pnpm example:medium-kanban
    ```
 
 ### PR Template

@@ -10,9 +10,9 @@
 
 KickJS is a decorator-driven Node.js framework for TypeScript. The HTTP engine is pluggable — it runs on **Express (default), Fastify, or h3**, selected via `bootstrap({ runtime })`; controllers/modules/DI/context decorators are engine-neutral. Monorepo managed with pnpm workspaces and Turbo.
 
-> The real framework package is `packages/kickjs` (`@forinda/kickjs`) — it holds the DI core, HTTP layer, RequestContext, and the runtime seam (`src/http/runtimes/{express,fastify,h3}.ts`). The `packages/core` + `packages/http` split described in older parts of this doc is **stale**; treat `packages/kickjs/src/{core,http}` as the source of truth. Fastify/h3 runtimes + cross-engine uploads currently ship on the `alpha` channel.
+> The real framework package is `packages/kickjs` (`@forinda/kickjs`) — it holds the DI core, HTTP layer, RequestContext, and the runtime seam (`src/http/runtimes/{express,fastify,h3}.ts`). The `packages/core` + `packages/http` split described in older parts of this doc is **stale**; treat `packages/kickjs/src/{core,http}` as the source of truth. Fastify/h3 runtimes, the h3 v2 web-standard entries (`./h3-web`, `./web` — edge/Bun/Deno), and cross-engine uploads all ship in the **stable** release.
 
-**18 published packages** under `@forinda/kickjs-*`, **10 example apps**, CLI with generators, Prisma/Drizzle/custom ORM support.
+**30+ workspace packages** (published under `@forinda/kickjs*` unless private), CLI with generators + a fullstack template, typed client, Prisma/Drizzle/kick-db support. Runnable example apps live in [forinda/kickjs-examples-archive](https://github.com/forinda/kickjs-examples-archive); `examples/` in-repo holds only test fixtures.
 
 ## Quick Commands
 
@@ -30,33 +30,25 @@ pnpm changeset:status   # Preview pending bumps
 ## Repository Structure
 
 ```
-packages/               # Published @forinda/kickjs-* packages
-  core/                 # DI container, 20+ decorators, module system, logger, reactivity
-  http/                 # Express 5, routing, middleware, RequestContext, query parsing
-  config/               # Zod-based env validation, ConfigService, @Value decorator
-  cli/                  # Project scaffolding, DDD generators, kick add, kick remove
-  swagger/              # OpenAPI spec generation from decorators
-  testing/              # createTestApp, createTestModule helpers
-  prisma/               # Prisma adapter (v5/6/7), PrismaModelDelegate, query building
-  drizzle/              # Drizzle adapter, DrizzleQueryAdapter
-  auth/                 # JWT, API key, OAuth strategies, @Public, @Roles
-  ws/                   # WebSocket with @WsController, rooms, heartbeat
-  queue/                # BullMQ/RabbitMQ/Kafka with @Job, @Process
-  cron/                 # Cron scheduling with @Cron decorator
-  mailer/               # SMTP, Resend, SES, ConsoleProvider
-  graphql/              # @Resolver, @Query, @Mutation, GraphiQL
-  otel/                 # OpenTelemetry tracing and metrics
-  devtools/             # Debug dashboard at /_debug
-  notifications/        # Multi-channel: email, Slack, Discord, webhook
-  multi-tenant/         # Tenant resolution middleware
-examples/                       # Non-published example apps (private, not on npm)
-  minimal-api/                  # Simplest possible app (~10 lines)
-  task-drizzle-api/             # Full task management app — PostgreSQL + Drizzle
-  task-mongoose-api/            # Full task management app — MongoDB + Mongoose
-  task-prisma-api/              # Full task management app — PostgreSQL + Prisma 7
-  multi-tenant-drizzle-api/     # Multi-tenant pattern — PostgreSQL + Drizzle
-  multi-tenant-mongoose-api/    # Multi-tenant pattern — MongoDB + Mongoose
-  multi-tenant-prisma-api/      # Multi-tenant pattern — PostgreSQL + Prisma
+packages/               # Workspace packages (@forinda/kickjs* on npm unless private)
+  kickjs/               # THE framework — DI core, decorators, http layer,
+                        #   RequestContext, runtimes (express/fastify/h3/h3-web),
+                        #   web fetch entry (src/web.ts → @forinda/kickjs/web)
+  cli/                  # kick new (rest|minimal|fullstack), generators, typegen,
+                        #   kick add / doctor / agents
+  client/               # @forinda/kickjs-client — typed fetch client (frontend)
+  vite/                 # Vite HMR plugin + typegen watcher
+  schema/               # Schema-agnostic validation (Zod/Valibot/Yup/StdSchema)
+  swagger/              # OpenAPI from decorators + declared response schemas
+  db/ db-pg/ db-mysql/ db-sqlite/  # kick/db code-first database family
+  testing/              # createTestApp, createTestModule, plugin harness
+  devtools/ devtools-kit/          # /_debug dashboard + adapter tab kit
+  ai/ mcp/ graphql/ ws/ queue/ cron/ mailer/ otel/
+  notifications/ multi-tenant/ auth/ prisma/ drizzle/
+  cli-kit/ lint/ vscode-extension/
+  core/ http/ config/   # LEGACY split — superseded by packages/kickjs; do not edit
+examples/               # Test fixtures only (typegen-test). Runnable apps live in
+                        #   github.com/forinda/kickjs-examples-archive
 articles/               # Blog articles (dev.to)
 scripts/                # release.js (versioning)
 docs/                   # VitePress documentation site
@@ -79,20 +71,20 @@ docs/                   # VitePress documentation site
 
 ## Key Patterns
 
-### Adding Middleware (to `packages/http`)
+### Adding Middleware (to `packages/kickjs`)
 
-1. Create `packages/http/src/middleware/<name>.ts`
-2. Add entry to `packages/http/vite.config.ts` `build.lib.entry` object
-3. Add export map entry to `packages/http/package.json`
-4. Add re-export to `packages/http/src/index.ts`
+1. Create `packages/kickjs/src/http/middleware/<name>.ts`
+2. Add entry to `packages/kickjs/tsdown.config.ts` `entry` object
+3. Add export map entry to `packages/kickjs/package.json`
+4. Add re-export to `packages/kickjs/src/http/index.ts` (and `src/index.ts` if it's public API — the root index is selective, not `export *`)
 
 ### Adding a Package
 
-1. Create `packages/<name>/` with `package.json`, `tsconfig.json`, `tsconfig.build.json`, `vite.config.ts`
+1. Create `packages/<name>/` with `package.json`, `tsconfig.json`, `tsdown.config.ts`, `vitest.config.ts` (copy `packages/schema/` as the template — tsdown is the repo standard; the old vite-library recipe is retired)
 2. Name it `@forinda/kickjs-<name>`, start at `0.0.0` — changesets will set the first published version on the next release PR
 3. Use `workspace:*` for internal deps
-4. Set `minify: 'esbuild'` in vite.config.ts, add all runtime deps to `rollupOptions.external`
-5. Build script: `"build": "vite build && pnpm build:types"`, `"build:types": "tsc -p tsconfig.build.json"`
+4. tsdown config: `format: ['esm']`, `dts: { tsgo: true }`, all runtime deps in `external`
+5. Scripts: `"build": "tsdown"`, `"typecheck": "tsgo --noEmit"` — and CHECK the exports map matches what tsdown emits (`dist/index.js` + `dist/index.d.ts`; a mismatch shipped an unresolvable package once)
 
 ### Adding an Adapter
 
@@ -119,12 +111,12 @@ node ../packages/cli/bin.js new my-example-api --yes --no-install --force
 
 # Or specify each flag explicitly when you want a non-default template/repo
 node ../packages/cli/bin.js new my-example-api \
-  --template ddd --pm pnpm --repo prisma --no-git --no-install --force
+  --template rest --pm pnpm --repo prisma --no-git --no-install --force
 ```
 
 `--yes` (alias `--non-interactive`) bypasses every prompt with safe defaults; explicit flags override individual answers. Without `--yes`, every unset flag prompts interactively.
 
-Available flags: `--template rest|ddd|cqrs|minimal`, `--pm pnpm|npm|yarn|bun`, `--repo prisma|drizzle|inmemory|custom`, `--packages auth,swagger,...`, `--no-git`, `--no-install`, `--force`, `-y / --yes / --non-interactive`.
+Available flags: `--template rest|minimal|fullstack`, `--pm pnpm|npm|yarn|bun`, `--repo prisma|drizzle|inmemory|custom`, `--packages auth,swagger,...`, `--no-git`, `--no-install`, `--force`, `-y / --yes / --non-interactive`.
 
 3. Update generated `package.json`:
    - Rename to `@forinda/kickjs-example-<name>`
@@ -267,7 +259,7 @@ src/
     module.ts                     # generateModule orchestrator
     remove-module.ts              # removeModule + index.ts cleanup
     patterns/                     # Pattern-specific generators
-      rest.ts, ddd.ts, cqrs.ts, minimal.ts
+      rest.ts, minimal.ts
       types.ts                    # ModuleContext interface
     templates/                    # Code template functions
       types.ts                    # TemplateContext interface
@@ -281,7 +273,7 @@ src/
 
 ```ts
 export default defineConfig({
-  pattern: 'ddd',
+  pattern: 'rest',
   modules: {
     dir: 'src/modules',
     repo: 'prisma',                     // 'drizzle' | 'inmemory' | 'prisma' | { name: 'custom' }
