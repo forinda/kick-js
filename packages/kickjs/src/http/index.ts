@@ -6,6 +6,9 @@ export { bootstrap } from './bootstrap'
 
 // Request Context
 export { RequestContext, type ContextMeta, type Ctx, type RouteShape } from './context'
+
+// Return-value handlers — `return reply(201, body)` / plain returns auto-send
+export { reply, isReply, applyHandlerResult, type Reply } from './reply'
 export { defineHttpContextDecorator } from './define-http-context-decorator'
 export type { TypedParsedQuery, FieldsOf } from './query'
 
