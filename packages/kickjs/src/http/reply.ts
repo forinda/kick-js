@@ -47,6 +47,28 @@ reply.accepted = <T>(body: T): Reply<202, T> => reply(202, body)
 /** Empty 204 — maps to `ctx.noContent()`. */
 reply.noContent = (): Reply<204, undefined> => reply(204, undefined)
 
+/**
+ * The statically-inferred response type of a controller handler — what
+ * `kick typegen` emits into `KickRoutes[...].response`:
+ *
+ * - `Awaited<ReturnType>` of the method
+ * - `Reply<S, T>` unwraps to `T`
+ * - `void`/`undefined` members are dropped (imperative `ctx.json` branches);
+ *   a handler that never returns a value stays `unknown`, matching the
+ *   pre-inference emission
+ *
+ * ```ts
+ * type R = InferHandlerResponse<UsersController['get']> // → User
+ * ```
+ */
+export type InferHandlerResponse<H> = H extends (...args: never[]) => infer R
+  ? [Exclude<Awaited<R>, void | undefined>] extends [never]
+    ? unknown
+    : UnwrapReply<Exclude<Awaited<R>, void | undefined>>
+  : unknown
+
+type UnwrapReply<A> = A extends Reply<number, infer B> ? B : A
+
 export function isReply(value: unknown): value is Reply {
   return (
     typeof value === 'object' &&

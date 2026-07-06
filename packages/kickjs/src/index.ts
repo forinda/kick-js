@@ -19,6 +19,15 @@ export { isClusterPrimary, type ClusterOptions } from './http/cluster'
 export { RequestContext, type Ctx, type RouteShape, type DeepReadonly } from './http/context'
 export { defineHttpContextDecorator } from './http/define-http-context-decorator'
 
+// Return-value handlers + response inference (response-inference-design.md)
+export {
+  reply,
+  isReply,
+  applyHandlerResult,
+  type Reply,
+  type InferHandlerResponse,
+} from './http/reply'
+
 export { buildRouteTable } from './http/router-builder'
 export type { BuildRoutesOptions } from './http/router-builder'
 export { buildRoutes, materializeRouter, expressRuntime } from './http/runtimes/express'

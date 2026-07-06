@@ -33,7 +33,7 @@ import { normalizePath } from './core/path'
 export { WebRequestShim, WebResponseDriver } from './http/web/driver'
 export { compileWebRoute } from './http/web/handler'
 // Return-value handler helpers — edge consumers can't import the main barrel.
-export { reply, isReply, type Reply } from './http/reply'
+export { reply, isReply, type Reply, type InferHandlerResponse } from './http/reply'
 
 // Minimal structural surface of h3 v2 used here (kept local so this entry
 // never imports the node-coupled h3-web runtime module).
