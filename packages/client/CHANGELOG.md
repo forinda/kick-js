@@ -5,6 +5,7 @@
 ### Minor Changes
 
 - [#447](https://github.com/forinda/kick-js/pull/447) [`7085e3d`](https://github.com/forinda/kick-js/commit/7085e3d2909dd299c16d6cc0994b60a001d2e9e8) Thanks [@forinda](https://github.com/forinda)! - feat: typed query strings + `createTestClient`
+
   - Routes with a statically-known query shape (Zod `query` schema or
     `@ApiQueryParams`) now constrain `query` at the call site — sort fields
     autocomplete (`'-createdAt' | 'createdAt' | …`), typos are compile errors.
@@ -44,6 +45,7 @@
   scan paths (AST + regex, parity preserved).
 
   Also from the same review pass:
+
   - fresh projects with zero routes now still emit an empty `KickRoutes.Api`, so
     `createClient<KickRoutes.Api>` compiles before the first controller exists
   - a controller class named `Api` now triggers a typegen warning (it would
