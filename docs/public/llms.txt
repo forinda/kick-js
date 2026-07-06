@@ -15,7 +15,7 @@
 - [Middleware](https://kickjs.app/guide/middleware.html): Built-ins (helmet, cors, requestId, rate-limit, …) and custom.
 - [Validation](https://kickjs.app/guide/validation.html): Zod / Valibot / Yup body, query, and param validation.
 - [Configuration](https://kickjs.app/guide/configuration.html): Typed env via `defineEnv`, `ConfigService`, `@Value`.
-- [Type Generation](https://kickjs.app/guide/typegen.html): `kick typegen` for fully-typed route params/body/query and env.
+- [Type Generation](https://kickjs.app/guide/typegen.html): `kick typegen` for fully-typed route params/body/query/response (incl. the KickRoutes.Api map for the typed client) and env.
 - [Typed Client](https://kickjs.app/guide/typed-client.html): `@forinda/kickjs-client` — end-to-end response types from your handlers.
 - [Typed Client Recipes](https://kickjs.app/guide/typed-client-recipes.html): TanStack Query + SWR patterns over the typed client.
 - [Error Handling](https://kickjs.app/guide/error-handling.html): `HttpException`, RFC 9457 problem details, global error handler.

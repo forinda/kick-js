@@ -1,6 +1,6 @@
 # What is KickJS?
 
-KickJS is a production-grade, decorator-driven Node.js framework for TypeScript. It provides the developer experience of NestJS without the heavy dependencies — and the HTTP engine is **pluggable**: the same controllers, modules, and context decorators run on **Express** (the zero-config default), **Fastify**, or **h3**. Swap the engine in one line at bootstrap; see [HTTP Runtimes](./http-runtimes.md).
+KickJS is a production-grade, decorator-driven Node.js framework for TypeScript. It provides the developer experience of NestJS without the heavy dependencies — and the HTTP engine is **pluggable**: the same controllers, modules, and context decorators run on **Express** (the zero-config default), **Fastify**, or **h3** — and as a web-standard `fetch` handler on **Cloudflare Workers, Bun, and Deno**. Swap the engine in one line at bootstrap; see [HTTP Runtimes](./http-runtimes.md) and [Edge Deployment](./edge-deployment.md).
 
 ## Why KickJS?
 
@@ -49,3 +49,4 @@ db  swagger  ws  devtools  ...
 - **@forinda/kickjs-cli** — Project scaffolding, DDD code generators, custom commands
 - **@forinda/kickjs-vite** — Vite HMR plugin, envWatchPlugin, dev tooling
 - **@forinda/kickjs-testing** — Test utilities for integration testing
+- **@forinda/kickjs-client** — Typed fetch client for the frontend: response types inferred from your handlers, end to end ([guide](./typed-client.md))

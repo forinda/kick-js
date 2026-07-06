@@ -17,7 +17,9 @@ After running `kick typegen` (or starting `kick dev`), you'll have:
     kick__modules.d.ts          # ModuleToken string-literal union
     kick__plugins.d.ts          # KickJsPluginRegistry augmentation (narrows dependsOn)
     kick__augmentations.d.ts    # defineAugmentation catalogue (docs-only)
-    kick__routes.ts             # KickRoutes namespace augmentation (typed Ctx<>)
+    kick__routes.ts             # KickRoutes augmentation — typed Ctx<>, per-route
+                                #   response types, and the flat KickRoutes.Api map
+                                #   ('METHOD /mounted/path' keys) for the typed client
     kick__env.ts                # KickEnv + NodeJS.ProcessEnv augmentation (when src/env.ts exists)
     kick__assets.d.ts           # KickAssets augmentation (when assetMap is set)
     kick__db.d.ts               # DB model types (when a DB adapter is configured)
@@ -33,12 +35,13 @@ sweeps the old `index.d.ts` / `registry.d.ts` / `services.d.ts` /
 `modules.d.ts` / `plugins.d.ts` / `augmentations.d.ts` files
 automatically.)
 
-Four things become type-safe as a result:
+Five things become type-safe as a result:
 
 1. **`container.resolve('UserService')`** returns `UserService` instead of `any`.
 2. **`ctx.params`, `ctx.body`, `ctx.query`** are typed per route — including the inferred shape of any Zod schema you wired into the route decorator.
-3. **`ctx.qs(config as const)`** narrows `parsed.filters[].field` and `parsed.sort[].field` to the literal whitelist you passed.
-4. **`@Value('DATABASE_URL')` and `process.env.DATABASE_URL`** are typed from your project's `src/env.ts` schema — autocomplete on keys, tsc errors on typos, and `Env<'PORT'>` looks up the inferred type.
+3. **Response types** — inferred from each handler's return type ([return-value handlers](./controllers.md#return-value-handlers); `Reply<S, T>` unwraps; a declared `{ response: schema }` on the route wins). Emitted both per controller and as the flat `KickRoutes.Api` map that powers the [typed client](./typed-client.md).
+4. **`ctx.qs(config as const)`** narrows `parsed.filters[].field` and `parsed.sort[].field` to the literal whitelist you passed.
+5. **`@Value('DATABASE_URL')` and `process.env.DATABASE_URL`** are typed from your project's `src/env.ts` schema — autocomplete on keys, tsc errors on typos, and `Env<'PORT'>` looks up the inferred type.
 
 ## Quick start
 
@@ -495,7 +498,7 @@ Each call surfaces in `.kickjs/types/augmentations.d.ts` as a documentation-only
 
 These are known and deliberate for the current release; some will be lifted in follow-up work:
 
-- **Response types are not generated.** Handler return types are not statically inferable without a heavyweight TypeScript compiler-API integration. There's no `response` typing today.
+- **Imperative `ctx.json(...)` handlers infer `response: unknown`.** Response types come from handler RETURN types (emitted as `InferHandlerResponse<Controller['method']>` references your own tsc computes — no compiler-API integration in the scanner). Use [return-value handlers](./controllers.md#return-value-handlers) or declare `{ response: schema }` on the route for exact types.
 - **Joi and JSON Schema are not yet supported.** `typegen.schemaValidator: 'kickjs-schema'` already covers Zod, Valibot, Yup, and Standard Schema v1 — Joi and JSON Schema need a `@forinda/kickjs-schema` adapter first (PRs welcome).
 - **Schema references must be bare top-level identifiers.** Member access, function calls, and inline compositions silently fall back to `body: unknown` (see [What the scanner cannot resolve](#what-the-scanner-cannot-resolve-falls-back-to-unknown)).
 - **Column-object `@ApiQueryParams` configs (Drizzle-style) are recognised but not narrowed.** Use the string-array form (or `ctx.qs(config as const)`) for typed query field names.

@@ -104,7 +104,7 @@ Any explicit flag overrides the matching default — `--yes --template minimal -
 
 When run without `--yes` (and without specific flags), the CLI prompts for:
 
-1. **Project template** — REST or Minimal
+1. **Project template** — REST, Minimal, or Fullstack (server + typed web app)
 2. **Package manager** — pnpm, npm, yarn, or bun
 3. **Default repository** — In-Memory or a custom DB name (e.g. `postgres`, `mongo`)
 4. **Optional packages** — auth, swagger, ws, queue, devtools
@@ -113,7 +113,7 @@ When run without `--yes` (and without specific flags), the CLI prompts for:
 
 | Flag                             | Description                                                            | Default                                  |
 | -------------------------------- | ---------------------------------------------------------------------- | ---------------------------------------- |
-| `-t, --template <type>`          | Project template: `rest`, `minimal`                                    | Prompted (or `rest` with `--yes`)        |
+| `-t, --template <type>`          | Project template: `rest`, `minimal`, `fullstack`                       | Prompted (or `rest` with `--yes`)        |
 | `-r, --repo <name>`              | Repository name: `inmemory` (default) or any DB name (e.g. `postgres`) | Prompted (or `inmemory` with `--yes`)    |
 | `-d, --directory <dir>`          | Target directory                                                       | Project name                             |
 | `--pm <manager>`                 | Package manager: `pnpm`, `npm`, `yarn`, or `bun`                       | Prompted (or auto-detected with `--yes`) |
@@ -125,10 +125,15 @@ When run without `--yes` (and without specific flags), the CLI prompts for:
 
 ### Templates
 
-| Template         | Adapters           | Packages installed                  |
-| ---------------- | ------------------ | ----------------------------------- |
-| `rest` (default) | Swagger + DevTools | kickjs, kickjs-vite, kickjs-swagger |
-| `minimal`        | None               | kickjs, kickjs-vite                 |
+| Template         | Adapters           | Packages installed                                             |
+| ---------------- | ------------------ | -------------------------------------------------------------- |
+| `rest` (default) | Swagger + DevTools | kickjs, kickjs-vite, kickjs-swagger                            |
+| `minimal`        | None               | kickjs, kickjs-vite                                            |
+| `fullstack`      | None (minimal API) | server: kickjs, kickjs-vite · web: kickjs-client, React + Vite |
+
+`fullstack` scaffolds a pnpm workspace — `server/` (KickJS API) + `web/`
+(Vite + React typed against the API via the
+[typed client](./typed-client.md)); `pnpm dev` runs both.
 
 Use `.` as the project name to scaffold in the current directory (the folder name becomes the project name).
 
@@ -663,6 +668,10 @@ Controls the default generator behavior and project template style.
 | ----------- | ----------------------------------------------------------- |
 | `'rest'`    | Express + Swagger, flat module layout (default)             |
 | `'minimal'` | Bare Express with no scaffolding (module + controller only) |
+
+(`kick new` additionally offers the `fullstack` workspace template — it scaffolds
+a `rest`/`minimal`-style server plus a typed web app; the `pattern` config above
+applies to the server side.)
 
 ### `copyDirs`
 
