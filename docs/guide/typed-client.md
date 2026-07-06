@@ -66,19 +66,35 @@ try {
 }
 ```
 
-## Network-free testing
+## Typed query strings
 
-The client accepts a custom `fetch` — pass a
-[`createWebApp`](./edge-deployment.md) handler and integration-test the full
-stack in-process:
+Routes with a statically-known query shape — a Zod `query` schema or an
+`@ApiQueryParams` config — constrain `query` at the call site:
 
 ```ts
-const app = createWebApp({ h3, modules })
-const api = createClient<KickRoutes.Api>({
-  baseUrl: 'http://test/api/v1',
-  fetch: (req) => app.fetch(req),
-})
+await api.get('/tasks', { query: { sort: '-createdAt' } }) // sort autocompletes
+await api.get('/tasks', { query: { sort: 'created' } }) // ✗ compile error
 ```
+
+Routes without one accept a loose `Record<string, string | number | boolean | array>`.
+
+## Network-free testing
+
+`createTestClient` wraps any web-standard app (a
+[`createWebApp`](./edge-deployment.md) result) for in-process, fully-typed
+integration tests — no server, no ports:
+
+```ts
+import { createTestClient } from '@forinda/kickjs-client'
+
+const app = createWebApp({ h3, modules })
+const api = createTestClient<KickRoutes.Api>(app)
+
+expect(await api.get('/tasks/:id', { params: { id: '1' } })).toEqual(task)
+```
+
+`baseUrl` defaults to `http://test/api/v1`; pass
+`{ baseUrl: 'http://test/custom/v2' }` for non-default prefixes.
 
 ## Notes
 

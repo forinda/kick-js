@@ -2,6 +2,22 @@
 
 The `@forinda/kickjs-testing` package provides utilities for integration testing KickJS applications. Works with Vitest and supertest.
 
+## Typed API tests with the client
+
+For request-level integration tests, [`@forinda/kickjs-client`](./typed-client.md)'s
+`createTestClient` drives a [`createWebApp`](./edge-deployment.md) app in-process —
+typed end to end, no ports, no supertest:
+
+```ts
+import { createTestClient } from '@forinda/kickjs-client'
+import { createWebApp } from '@forinda/kickjs/web'
+
+const app = createWebApp({ h3, modules })
+const api = createTestClient<KickRoutes.Api>(app)
+
+const created = await api.post('/tasks', { body: { title: 'x' } }) // created: Task
+```
+
 ## Setup
 
 ```bash

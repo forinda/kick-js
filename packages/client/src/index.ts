@@ -50,15 +50,22 @@ type ParamsField<T> = unknown extends T
 
 type BodyField<T> = unknown extends T ? { body?: unknown } : { body: T }
 
+/** Loose fallback for routes without a statically-known query shape. */
+type LooseQuery = Record<string, string | number | boolean | Array<string | number>>
+
+// Routes with a typegen-known query shape (Zod schema or the
+// @ApiQueryParams-derived filter/sort/q/page/limit object) constrain
+// `query` — sort fields autocomplete as '-createdAt' | 'createdAt' | …
+type QueryField<T> = unknown extends T ? { query?: LooseQuery } : { query?: T }
+
 export type RequestOptions<S extends RouteShapeLike> = {
   /** Extra headers merged over the client-level ones. */
   headers?: Record<string, string>
   /** AbortSignal for cancellation. */
   signal?: AbortSignal
-  /** Query string values — serialized with URLSearchParams. */
-  query?: Record<string, string | number | boolean | Array<string | number>>
 } & ParamsField<S['params']> &
-  BodyField<S['body']>
+  BodyField<S['body']> &
+  QueryField<S['query']>
 
 export interface ClientOptions {
   /**
@@ -122,7 +129,7 @@ export interface KickClient<Api extends ApiMap> {
 interface AnyRequestOptions {
   headers?: Record<string, string>
   signal?: AbortSignal
-  query?: Record<string, string | number | boolean | Array<string | number>>
+  query?: Record<string, unknown>
   params?: Record<string, string | number>
   body?: unknown
 }
@@ -139,12 +146,11 @@ function fillPath(path: string, params?: Record<string, string | number>): strin
   return filled
 }
 
-function buildQuery(
-  query?: Record<string, string | number | boolean | Array<string | number>>,
-): string {
+function buildQuery(query?: Record<string, unknown>): string {
   if (!query) return ''
   const qs = new URLSearchParams()
   for (const [key, value] of Object.entries(query)) {
+    if (value === undefined || value === null) continue
     if (Array.isArray(value)) for (const v of value) qs.append(key, String(v))
     else qs.append(key, String(value))
   }
@@ -197,4 +203,34 @@ export function createClient<Api extends ApiMap>(options: ClientOptions): KickCl
     delete: (path, opts) => run('DELETE', path, opts as AnyRequestOptions),
     patch: (path, opts) => run('PATCH', path, opts as AnyRequestOptions),
   } as KickClient<Api>
+}
+
+/** Anything with a web-standard fetch — a `createWebApp()` result, a Worker, a mock. */
+export interface FetchLike {
+  fetch(request: Request): Promise<Response>
+}
+
+/**
+ * Typed client over an in-process app — network-free full-stack tests:
+ *
+ * ```ts
+ * const app = createWebApp({ h3, modules })
+ * const api = createTestClient<KickRoutes.Api>(app)
+ * expect(await api.get('/tasks/:id', { params: { id: '1' } })).toEqual(...)
+ * ```
+ *
+ * `baseUrl` defaults to `http://test/api/v1` (the bootstrap default prefix);
+ * override it when the server uses a custom `apiPrefix`/version.
+ */
+export function createTestClient<Api extends ApiMap>(
+  app: FetchLike,
+  options: Omit<ClientOptions, 'fetch' | 'baseUrl'> & { baseUrl?: string } = {},
+): KickClient<Api> {
+  return createClient<Api>({
+    ...options,
+    // AFTER the spread — an explicit `baseUrl: undefined` key in options
+    // must not clobber the default (spread copies undefined-valued keys).
+    baseUrl: options.baseUrl ?? 'http://test/api/v1',
+    fetch: (request) => app.fetch(request),
+  })
 }

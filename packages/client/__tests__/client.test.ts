@@ -7,7 +7,7 @@ import { Container } from '@forinda/kickjs/container'
 import { Controller, Get, Post, Delete } from '@forinda/kickjs/decorators'
 import { reply, type RequestContext, type InferHandlerResponse } from '@forinda/kickjs'
 
-import { createClient, KickClientError, type RouteShapeLike } from '../src/index'
+import { createClient, createTestClient, KickClientError, type RouteShapeLike } from '../src/index'
 
 /**
  * End-to-end: real decorated controllers served through `createWebApp`,
@@ -44,7 +44,7 @@ interface Api {
   'GET /tasks': {
     params: Record<string, never>
     body: unknown
-    query: unknown
+    query: { filter?: string | string[]; sort?: 'createdAt' | '-createdAt'; q?: string }
     response: Task[]
   }
 }
@@ -138,8 +138,8 @@ describe('createClient — runtime against a real web app', () => {
         return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }))
       },
     })
-    await api.get('/tasks', { query: { sort: '-createdAt', tag: ['a', 'b'] } })
-    expect(seenUrl).toBe('http://api.test/api/v1/tasks?sort=-createdAt&tag=a&tag=b')
+    await api.get('/tasks', { query: { sort: '-createdAt', filter: ['a', 'b'] } })
+    expect(seenUrl).toBe('http://api.test/api/v1/tasks?sort=-createdAt&filter=a&filter=b')
   })
 
   it('header factory runs per request', async () => {
@@ -178,6 +178,9 @@ describe('createClient — type-level contract', () => {
     // @ts-expect-error — body.title is required for POST /tasks
     void api.post('/tasks', {})
 
+    // @ts-expect-error — 'created' is not a sortable field on GET /tasks
+    void api.get('/tasks', { query: { sort: 'created' } })
+
     expectTypeOf(api.get).parameter(0).toEqualTypeOf<'/tasks/:id' | '/tasks'>()
     expectTypeOf(api.get('/tasks/:id', { params: { id: 'x' } })).resolves.toEqualTypeOf<Task>()
     expectTypeOf(api.get('/tasks')).resolves.toEqualTypeOf<Task[]>()
@@ -187,5 +190,32 @@ describe('createClient — type-level contract', () => {
   it('type contract compiles (assertions live in the unexecuted closure)', () => {
     expect(typeof _typeOnly).toBe('function')
     expectTypeOf<InferHandlerResponse<(ctx: never) => Promise<Task>>>().toEqualTypeOf<Task>()
+  })
+})
+
+describe('createTestClient — network-free harness', () => {
+  it('wraps a web app with the default test baseUrl', async () => {
+    const api = createTestClient<Api>(makeApp())
+    const task = await api.get('/tasks/:id', { params: { id: '7' } })
+    expect(task).toEqual({ id: '7', title: 'task 7' })
+    expectTypeOf(task).toEqualTypeOf<Task>()
+  })
+
+  it('an explicit undefined baseUrl keeps the default (spread-order regression)', async () => {
+    const app = makeApp()
+    const api = createTestClient<Api>(app, { baseUrl: undefined })
+    const task = await api.get('/tasks/:id', { params: { id: '3' } })
+    expect(task).toEqual({ id: '3', title: 'task 3' })
+  })
+
+  it('honors a custom baseUrl for non-default prefixes', async () => {
+    const app = makeApp()
+    let seenUrl = ''
+    const api = createTestClient<Api>(
+      { fetch: (r) => ((seenUrl = r.url), app.fetch(r)) },
+      { baseUrl: 'http://edge/api/v1' },
+    )
+    await api.get('/tasks')
+    expect(seenUrl).toBe('http://edge/api/v1/tasks')
   })
 })
