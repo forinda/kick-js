@@ -32,13 +32,19 @@ export async function initFullstackProject(options: InitFullstackOptions): Promi
   // `--pm` arrives as a free CLI string — allowlist before it reaches a
   // process invocation (execFileSync takes an argv array, no shell, but a
   // bogus binary name is still a confusing failure).
-  const packageManager = (['pnpm', 'npm', 'yarn', 'bun'] as const).includes(
+  const pmValid = (['pnpm', 'npm', 'yarn', 'bun'] as const).includes(
     options.packageManager as never,
   )
+  const packageManager = pmValid
     ? (options.packageManager as 'pnpm' | 'npm' | 'yarn' | 'bun')
     : 'pnpm'
   const dir = directory
   const log = (msg: string) => console.log(`  ${msg}`)
+  if (options.packageManager !== undefined && !pmValid) {
+    log(
+      `Warning: unknown package manager '${String(options.packageManager)}' — falling back to pnpm.`,
+    )
+  }
 
   console.log(`\n  Creating fullstack KickJS workspace: ${name}\n`)
 
@@ -309,9 +315,15 @@ function rootPackageJson(name: string, pm: string): string {
           typecheck: 'pnpm -r run typecheck',
         }
       : {
-          'dev:server': `${pm} run dev --workspace server`,
-          'dev:web': `${pm} run dev --workspace web`,
-          build: `${pm} run build --workspaces`,
+          // cd-based scripts — the one form npm, yarn (classic AND berry),
+          // and bun all run identically; workspace-filter flags differ per
+          // manager (--workspace vs `yarn workspace <name>` vs --filter).
+          'dev:server': `cd server && ${pm} run dev`,
+          'dev:web': `cd web && ${pm} run dev`,
+          build: `${pm} run build:server && ${pm} run build:web`,
+          'build:server': `cd server && ${pm} run build`,
+          'build:web': `cd web && ${pm} run build`,
+          typecheck: `cd web && ${pm} run typecheck`,
         }
   return `${JSON.stringify(
     {
