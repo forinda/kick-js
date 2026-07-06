@@ -45,8 +45,8 @@
   "devDependencies": {
     "@forinda/kickjs": "workspace:*",
     "@forinda/kickjs-db": "workspace:*",
-    "@types/node": "^25.9.2",
-    "kysely": "^0.29.2",
+    "@types/node": "^26.1.0",
+    "kysely": "^0.29.3",
     "mysql2": "^3.22.5",
     "typescript": "^6.0.3"
   },
