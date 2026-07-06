@@ -69,7 +69,10 @@ export function isReply(value: unknown): value is Reply {
 export function applyHandlerResult(ctx: RequestContext, result: unknown): boolean {
   if (result === undefined) return false
   if (isReply(result)) {
-    if (result.status === 204 || result.body === undefined) {
+    // Only 204 maps to noContent — an undefined body must NOT coerce the
+    // declared status (reply(304, undefined) keeps its 304; the json body
+    // is simply empty).
+    if (result.status === 204) {
       ctx.noContent()
       return true
     }

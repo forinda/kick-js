@@ -44,6 +44,12 @@ function makeControllers() {
       return reply.noContent()
     }
 
+    @Get('/accepted-empty')
+    // Undefined body must NOT coerce the declared status to 204.
+    acceptedEmpty(_ctx: RequestContext) {
+      return reply(202, undefined)
+    }
+
     @Get('/ctx-wins')
     ctxWins(ctx: RequestContext) {
       ctx.json({ via: 'ctx' })
@@ -102,6 +108,11 @@ for (const rt of RUNTIMES) {
     it('reply.noContent() sends an empty 204', async () => {
       const app = await makeApp()
       await request(app.handle.bind(app)).get('/api/v1/r/gone').expect(204)
+    })
+
+    it('an undefined body does not coerce the status to 204', async () => {
+      const app = await makeApp()
+      await request(app.handle.bind(app)).get('/api/v1/r/accepted-empty').expect(202)
     })
 
     it('ctx.json wins over a return value', async () => {
