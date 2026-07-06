@@ -1,5 +1,33 @@
 # @forinda/kickjs-cli
 
+## 6.5.0
+
+### Minor Changes
+
+- [#452](https://github.com/forinda/kick-js/pull/452) [`50e40e9`](https://github.com/forinda/kick-js/commit/50e40e9f491084b39e47b778aa5fec221c0e083e) Thanks [@forinda](https://github.com/forinda)! - feat: `kick new --template fullstack` — typed end-to-end workspace
+
+  Scaffolds a pnpm workspace with `server/` (KickJS API) and `web/` (Vite +
+  React) where the frontend is typed against the backend via
+  `@forinda/kickjs-client` and the server's generated `KickRoutes.Api`:
+
+  ```bash
+  kick new my-app --template fullstack
+  cd my-app && pnpm dev   # server (kick dev) + web (vite), proxied
+  ```
+
+  Rename a field in a server handler → the web app stops compiling.
+
+  Also, found by proving the template end-to-end:
+
+  - `@forinda/kickjs-client`: package exports pointed at `dist/index.mjs` /
+    `.d.mts` but the build emits `index.js` / `.d.ts` — the published entry was
+    unresolvable; fixed
+  - `@forinda/kickjs-client`: the generated `KickRoutes.Api` is an interface
+    (no index signature) and failed the client's `Record` constraint — the
+    generic now accepts it
+  - the scaffolded hello controller uses return-value handlers, so its response
+    types flow into the typed client out of the box
+
 ## 6.4.0
 
 ### Minor Changes
@@ -10,7 +38,7 @@
   controller handler itself:
 
   ```ts
-  response: import('@forinda/kickjs').InferHandlerResponse<_C0['get']>
+  response: import("@forinda/kickjs").InferHandlerResponse<_C0["get"]>;
   ```
 
   Your tsc computes the actual type — the scanner stays checker-free and
@@ -31,10 +59,10 @@
   consumes it:
 
   ```ts
-  import { createClient } from '@forinda/kickjs-client'
+  import { createClient } from "@forinda/kickjs-client";
 
-  const api = createClient<KickRoutes.Api>({ baseUrl: 'https://x/api/v1' })
-  const task = await api.get('/tasks/:id', { params: { id: '42' } })
+  const api = createClient<KickRoutes.Api>({ baseUrl: "https://x/api/v1" });
+  const task = await api.get("/tasks/:id", { params: { id: "42" } });
   //    ^ your handler's actual return type
   ```
 
@@ -306,10 +334,10 @@
   The `kick db` commands are no longer built into kickjs-cli. Add the plugin to your config:
 
   ```ts
-  import { defineConfig } from '@forinda/kickjs-cli'
-  import { dbCliPlugin } from '@forinda/kickjs-db/cli'
+  import { defineConfig } from "@forinda/kickjs-cli";
+  import { dbCliPlugin } from "@forinda/kickjs-db/cli";
 
-  export default defineConfig({ plugins: [dbCliPlugin] })
+  export default defineConfig({ plugins: [dbCliPlugin] });
   ```
 
   Zero-config **db type generation is unchanged** — it stays a built-in typegen (`kick typegen` still emits `.kickjs/types` for your schema). Only the `kick db` _commands_ moved.
@@ -371,9 +399,9 @@
 
   ```ts
   // before
-  import { pgAdapter, pgDialect } from '@forinda/kickjs-db-pg'
+  import { pgAdapter, pgDialect } from "@forinda/kickjs-db-pg";
   // after
-  import { pgAdapter, pgDialect } from '@forinda/kickjs-db/pg'
+  import { pgAdapter, pgDialect } from "@forinda/kickjs-db/pg";
   ```
 
   - New subpaths: `@forinda/kickjs-db/pg` (now also carries `pgAdapter` + `pgDialect` alongside the PG column types), `@forinda/kickjs-db/sqlite`, `@forinda/kickjs-db/mysql`.
@@ -688,7 +716,7 @@
 
   ```ts
   // doctor-checks/prisma.ts (publishable as a package, or workspace-shared)
-  import { defineDoctorExtension } from '@forinda/kickjs-cli'
+  import { defineDoctorExtension } from "@forinda/kickjs-cli";
 
   export const prismaDoctor = defineDoctorExtension({
     checks: [
@@ -697,13 +725,13 @@
         // as the built-ins. Return null to skip.
       },
     ],
-  })
+  });
 
   // kick.config.ts
-  import { defineConfig } from '@forinda/kickjs-cli'
-  import { prismaDoctor } from './doctor-checks/prisma'
+  import { defineConfig } from "@forinda/kickjs-cli";
+  import { prismaDoctor } from "./doctor-checks/prisma";
 
-  export default defineConfig({ doctor: prismaDoctor })
+  export default defineConfig({ doctor: prismaDoctor });
   ```
 
   Extra checks run after the built-ins, support async, and merge into the same summary output.
@@ -837,8 +865,8 @@
   ```ts
   export interface GeneratorContext {
     // ...existing fields
-    cwd: string // where the CLI was invoked
-    projectRoot: string // resolved root via findProjectRoot()
+    cwd: string; // where the CLI was invoked
+    projectRoot: string; // resolved root via findProjectRoot()
   }
   ```
 
@@ -848,11 +876,11 @@
 
   ```ts
   export interface KickCliPluginContext {
-    cwd: string // invocation directory
-    projectRoot: string // resolved root
-    config: KickConfig | null
-    log: (msg: string) => void
-    generators?: DiscoveredGenerator[]
+    cwd: string; // invocation directory
+    projectRoot: string; // resolved root
+    config: KickConfig | null;
+    log: (msg: string) => void;
+    generators?: DiscoveredGenerator[];
   }
   ```
 
@@ -1060,13 +1088,13 @@
   @Service()
   class UserRepo {
     // Property position — both names work.
-    @Autowired(DB) private db1!: KickDbClient
-    @Inject(DB) private db2!: KickDbClient
+    @Autowired(DB) private db1!: KickDbClient;
+    @Inject(DB) private db2!: KickDbClient;
 
     // Constructor parameter position — both names work.
     constructor(
       @Autowired(LOGGER) private logger: Logger,
-      @Inject(CACHE) private cache: Cache,
+      @Inject(CACHE) private cache: Cache
     ) {}
   }
   ```
@@ -1201,10 +1229,10 @@
   `kick new` and `kick g module` (on a fresh project) now emit:
 
   ```ts
-  import { defineModules } from '@forinda/kickjs'
-  import { HelloModule } from './hello/hello.module'
+  import { defineModules } from "@forinda/kickjs";
+  import { HelloModule } from "./hello/hello.module";
 
-  export const modules = defineModules().mount(HelloModule())
+  export const modules = defineModules().mount(HelloModule());
   ```
 
   instead of the flat `[HelloModule()]` array. Subsequent `kick g module <name>` invocations append `.mount(<Name>Module())` to the chain. Pinning `modules.style: 'class'` in `kick.config.ts` keeps the legacy flat-array form for adopters who prefer it.
@@ -1242,9 +1270,9 @@
   ```ts
   export default defineConfig({
     modules: {
-      style: 'class', // pin to legacy class form; default is 'define'
+      style: "class", // pin to legacy class form; default is 'define'
     },
-  })
+  });
   ```
 
   The framework runtime accepts both shapes regardless of this setting — `Application` discriminates `typeof entry === 'function'` at boot. The flag controls codegen output only:
@@ -1296,6 +1324,7 @@
   The gate runs only for `'define'`; `'class'` projects accept either shape since defineModule modules pass through Application's class-vs-instance discriminator at boot.
 
   ## What changed
+
   - New `packages/cli/src/generators/migrate-modules.ts` — bidirectional class ↔ defineModule rewriter, registry rewriter (`AppModuleClass[]` ↔ `AppModuleEntry[]` + factory-call vs bare-reference), file walker that handles both `*.module.ts` and legacy `<sub>/index.ts` patterns, backup helper.
   - New `packages/cli/src/commands/codemod.ts` — `kick codemod` namespace (distinct from `kick db migrate`).
   - `kick g module` orchestrator gates on style drift before generating.
@@ -1303,6 +1332,7 @@
   - `kick rm module` + `kick g scaffold` register-loader emit the matching shape.
 
   ## Tests
+
   - 11 new unit tests for the migrator: class→define, define→class, idempotency, register-less modules, multi-class refusal, registry rewrites both directions, `index.ts` detection, backup behavior (creates timestamped dir, dry-run skips, --no-backup skips).
   - 3 new integration tests on the gate: default style refuses on legacy modules; style='class' proceeds without checks; style='class' emits class form.
 
@@ -1320,27 +1350,27 @@
 
   ```ts
   const TasksModule = defineModule({
-    name: 'TasksModule',
-    defaults: { scope: 'public' },
+    name: "TasksModule",
+    defaults: { scope: "public" },
     build: (config, { name }) => ({
       register(container) {
-        container.registerInstance(`tasks:scope:${name}`, config.scope)
+        container.registerInstance(`tasks:scope:${name}`, config.scope);
       },
       routes() {
-        return { path: `/${config.scope}/tasks`, controller: TasksController }
+        return { path: `/${config.scope}/tasks`, controller: TasksController };
       },
       contributors() {
-        return [LoadTenant.registration]
+        return [LoadTenant.registration];
       },
     }),
-  })
+  });
 
   bootstrap({
     modules: [
       TasksModule(), // public scope (defaults)
-      TasksModule.scoped('admin', { scope: 'admin' }), // namespaced clone
+      TasksModule.scoped("admin", { scope: "admin" }), // namespaced clone
     ],
-  })
+  });
   ```
 
   - `(config?)` call form returns the module instance.
@@ -1358,11 +1388,14 @@
   ## `defineModules()` — fluent module-list builder
 
   ```ts
-  import { bootstrap, defineModules } from '@forinda/kickjs'
+  import { bootstrap, defineModules } from "@forinda/kickjs";
 
-  const modules = defineModules().mount(HelloModule()).mount(TasksModule()).mount(AdminModule())
+  const modules = defineModules()
+    .mount(HelloModule())
+    .mount(TasksModule())
+    .mount(AdminModule());
 
-  await bootstrap({ modules })
+  await bootstrap({ modules });
   ```
 
   `defineModules()` returns a `ModuleList` (an `AppModuleEntry[]` subclass with a chainable `.mount()`). Drops into `bootstrap({ modules })` directly — no unwrap step — because `ModuleList extends Array<AppModuleEntry>`. Optional vararg seeds the list inline: `defineModules(HelloModule()).mount(TasksModule())` composes the two forms naturally.
@@ -1428,6 +1461,7 @@
   Active adopter-facing guides updated: `docs/guide/modules.md` (full rewrite leading with `defineModule`), `getting-started.md`, `project-structure.md` (canonical examples). `plugins.md`, `migration-from-express.md`, `testing.md`, `generators.md`, `tutorial-hmr-decorators.md`, `tutorial-generator-patterns.md` get the type-annotation rename so the `AppModuleEntry[]` story is consistent across the docs site. Versioned snapshots under `docs/versions/` left untouched (they're locked to their respective releases).
 
   ## What's deferred
+
   - `kick g scaffold` for REST / CQRS / minimal patterns — currently only emits DDD-shaped layouts. The command refuses on non-DDD projects with a clear error pointing at `kick g module` as the workaround.
   - Module-registry pattern for plugins (`.mount(module)` / `.use(module)` factory) — separate design conversation; the flat-array `modules?(): AppModuleEntry[]` is the stable shape for now.
 
@@ -1503,13 +1537,13 @@
   After upgrading + running `kick typegen` (or `kick dev`), `.kickjs/types/kick__db.d.ts` carries:
 
   ```ts
-  declare module '@forinda/kickjs-db' {
+  declare module "@forinda/kickjs-db" {
     interface KickDbRegister {
-      db: KickDbClient<KickDbSchema>
+      db: KickDbClient<KickDbSchema>;
     }
 
     interface KickDbRelationsRegister {
-      db: SchemaToRelationsRegister<typeof appSchema>
+      db: SchemaToRelationsRegister<typeof appSchema>;
     }
   }
   ```
@@ -1555,13 +1589,17 @@
   Before:
 
   ```ts
-  export const USER_REPOSITORY = createToken<IUserRepository>('app/user/repository')
+  export const USER_REPOSITORY = createToken<IUserRepository>(
+    "app/user/repository"
+  );
   ```
 
   After:
 
   ```ts
-  export const USER_REPOSITORY = createToken<IUserRepository>('app/User/repository')
+  export const USER_REPOSITORY = createToken<IUserRepository>(
+    "app/User/repository"
+  );
   ```
 
   Existing scaffolded code keeps working — token literals are arbitrary
