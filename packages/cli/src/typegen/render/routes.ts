@@ -41,7 +41,11 @@ export function renderRoutes(
 //  @Get/@Post/@Put/@Delete/@Patch and re-run \`kick typegen\`)
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
-  namespace KickRoutes {}
+  namespace KickRoutes {
+    // Always present so \`createClient<KickRoutes.Api>\` compiles before the
+    // first route exists (fresh project / pre-controller typegen runs).
+    interface Api {}
+  }
 }
 
 export {}
@@ -169,13 +173,24 @@ export {}
   // `/api/v{n}` prefix, which is not statically scannable.
   const apiEntries: string[] = []
   const seenApiKeys = new Set<string>()
+  // 'Api' is reserved for the flat map below — a user controller class named
+  // Api would declaration-merge its methods into the client map silently.
+  if (byController.has('Api')) {
+    opts.onWarn?.(
+      `controller class 'Api' collides with the reserved KickRoutes.Api client map — ` +
+        `its interface declaration-merges into the flat route map. Rename the controller.`,
+    )
+  }
   for (const [controller, methods] of byController) {
     for (const m of methods) {
-      const key = `${m.httpMethod} ${m.path}`
+      // Mount-joined path — the bare decorator path would collide across
+      // controllers ('GET /:id' everywhere) and 404 against real URLs.
+      const key = `${m.httpMethod} ${m.mountedPath ?? m.path}`
       if (seenApiKeys.has(key)) {
         opts.onWarn?.(
-          `duplicate route '${key}' (${controller}.${m.method}) — ` +
-            `KickRoutes.Api keeps the first registration; later ones are skipped.`,
+          `duplicate route '${key}' (${controller}.${m.method}) — two handlers claim the same ` +
+            `verb+path at runtime. KickRoutes.Api keeps the first (scan order, which may not match ` +
+            `runtime dispatch); resolve the conflict in the modules.`,
         )
         continue
       }

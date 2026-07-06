@@ -108,6 +108,20 @@ describe('forinda/kick-js#235 §3 — extractRoutesFromSource combines mount pat
     expect(byMethod.get('disable')).toEqual(['code', 'id'])
   })
 
+  it('mountedPath carries the mount-joined path for KickRoutes.Api keys', () => {
+    const mounts = new Map([['ExtensionsController', '/control/orgs/:id/extensions']])
+    const routes = extractRoutesFromSource(controllerSource, cls.filePath, FAKE_CWD, [cls], mounts)
+    const byMethod = new Map(routes.map((r) => [r.method, r.mountedPath]))
+    // @Delete('/:code') under the mount → full joined path, not the bare '/:code'.
+    expect(byMethod.get('disable')).toBe('/control/orgs/:id/extensions/:code')
+  })
+
+  it('mountedPath falls back to the own path with no mount map', () => {
+    const routes = extractRoutesFromSource(controllerSource, cls.filePath, FAKE_CWD, [cls])
+    const disable = routes.find((r) => r.method === 'disable')
+    expect(disable?.mountedPath).toBe('/:code')
+  })
+
   it('mount path without params is a no-op — base case stays unaffected', () => {
     const mounts = new Map([['ExtensionsController', '/static-prefix']])
     const routes = extractRoutesFromSource(controllerSource, cls.filePath, FAKE_CWD, [cls], mounts)

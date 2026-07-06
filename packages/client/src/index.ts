@@ -15,7 +15,12 @@
 // Runtime-neutral: fetch/URL/Headers only — browsers, node ≥ 20, Bun, Deno,
 // and edge workers (pairs with `@forinda/kickjs/web` on the server side).
 
-/** The per-route shape `kick typegen` emits into `KickRoutes.Api`. */
+/**
+ * The per-route shape `kick typegen` emits into `KickRoutes.Api`.
+ * Deliberately re-declares (NOT imports) @forinda/kickjs's `RouteShape`:
+ * frontends installing this client must never need the server package.
+ * Keep the field list in sync with `RouteShape` in kickjs http/context.ts.
+ */
 export interface RouteShapeLike {
   params: unknown
   body: unknown
@@ -33,11 +38,14 @@ type PathsFor<Api extends ApiMap, M extends ClientMethod> = {
   [K in keyof Api]: K extends `${M} ${infer P}` ? P : never
 }[keyof Api]
 
+// Fallback is `never` ON PURPOSE: P is already constrained to PathsFor, so a
+// failed key lookup means the map and the client's key math drifted — that
+// must fail loudly at the call site, not silently degrade to unknown.
 type ShapeOf<
   Api extends ApiMap,
   M extends ClientMethod,
   P extends string,
-> = `${M} ${P}` extends keyof Api ? Api[`${M} ${P}`] : RouteShapeLike
+> = `${M} ${P}` extends keyof Api ? Api[`${M} ${P}`] : never
 
 // Paramless routes emit `params: {}` and unschema'd bodies emit
 // `body: unknown` — both become OPTIONAL fields; a concrete shape is
