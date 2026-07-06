@@ -20,6 +20,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createRequire } from 'node:module'
 
 import { RequestContext } from '../context'
+import { applyHandlerResult } from '../reply'
 import { requestStore } from '../request-store'
 import { createRequestStore, disposeRequestStore } from '../middleware/request-scope'
 import { validate } from '../middleware/validate'
@@ -202,7 +203,9 @@ function makeEventHandler(entry: RouteEntry): (event: H3EventLike) => Promise<vo
 
       if (entry.contributorRunner) await entry.contributorRunner(ctx)
       if (res.writableEnded) return
-      await entry.handler(ctx)
+      const result = await entry.handler(ctx)
+      // Return-value handlers (reply.ts): auto-send when nothing was written.
+      if (!res.writableEnded && !res.headersSent) applyHandlerResult(ctx, result)
     })
   }
 }

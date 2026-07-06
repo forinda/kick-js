@@ -17,6 +17,7 @@ import express, {
 
 import { buildRouteTable, type BuildRoutesOptions } from '../router-builder'
 import { RequestContext } from '../context'
+import { applyHandlerResult } from '../reply'
 import { validate } from '../middleware/validate'
 import { buildUploadMiddleware } from '../middleware/upload'
 import type {
@@ -79,7 +80,10 @@ export function materializeRouter(entries: RouteEntry[]): Router {
     handlers.push(async (req: Request, res: Response, next: NextFunction) => {
       const ctx = new RequestContext(req, res, next)
       try {
-        await entry.handler(ctx)
+        const result = await entry.handler(ctx)
+        // Return-value handlers (reply.ts): auto-send the returned payload
+        // when the handler wrote nothing. `undefined` keeps prior behavior.
+        if (!res.headersSent) applyHandlerResult(ctx, result)
       } catch (err) {
         next(err)
       }

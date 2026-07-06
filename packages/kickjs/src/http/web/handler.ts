@@ -4,6 +4,7 @@
 // Edge-safe: no node imports beyond the sanctioned ALS request store.
 
 import { RequestContext } from '../context'
+import { applyHandlerResult } from '../reply'
 import { requestStore } from '../request-store'
 import { createRequestStore, disposeRequestStore } from '../middleware/request-scope'
 import { validate } from '../middleware/validate'
@@ -134,7 +135,10 @@ export function compileWebRoute(
 
       if (entry.contributorRunner) await entry.contributorRunner(ctx)
       if (driver.settled) return
-      await entry.handler(ctx)
+      const result = await entry.handler(ctx)
+      // Return-value handlers (reply.ts): auto-send when nothing was written.
+      // `undefined` falls through to the canonical 404 below.
+      if (!driver.settled) applyHandlerResult(ctx, result)
     })
 
     try {

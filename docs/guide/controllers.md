@@ -219,6 +219,47 @@ SSE helpers:
 | `sse.onClose(fn)`             | Register disconnect callback |
 | `sse.close()`                 | End the stream               |
 
+## Return-Value Handlers
+
+Handlers may **return** the response payload instead of calling `ctx.json` —
+the runtime auto-sends it as `200 application/json` when the handler wrote
+nothing. Works on every runtime (Express, Fastify, h3, h3-web, and the
+[edge fetch entry](./edge-deployment.md)):
+
+```ts
+@Get('/:id')
+async get(ctx: RequestContext) {
+  return this.users.find(ctx.params.id) // → 200 json
+}
+```
+
+For a non-200 status, wrap with `reply()` — the wrapper carries the status in
+its type, so response inference stays exact:
+
+```ts
+import { reply } from '@forinda/kickjs'
+
+@Post('/')
+async create(ctx: RequestContext) {
+  return reply(201, await this.users.create(ctx.body)) // → 201 json
+}
+
+@Delete('/:id')
+async remove(ctx: RequestContext) {
+  await this.users.remove(ctx.params.id)
+  return reply.noContent() // → empty 204
+}
+```
+
+Rules of precedence:
+
+- A `ctx.*` response (e.g. `ctx.json`) always wins — a return value after it is ignored.
+- Returning `undefined`/`void` changes nothing — pure imperative handlers behave exactly as before.
+- Sugars: `reply.created(body)` (201), `reply.accepted(body)` (202), `reply.noContent()` (204).
+
+Returning values is what makes the handler's **response type statically
+inferable** — the foundation for typed-client generation.
+
 ## Middleware on Controllers
 
 Use `@Middleware()` at the class or method level. See [Middleware](./middleware.md) for the full guide.
