@@ -17,7 +17,6 @@
   watch-fast. Return-value handlers yield their exact payload
   (`Reply<201, Task>` unwraps to `Task`); imperative `ctx.json` handlers
   degrade to `unknown` exactly as before.
-
   - `@forinda/kickjs`: new `InferHandlerResponse<H>` type (exported from the
     root, `/web`, and the http barrel)
   - `@forinda/kickjs-cli`: hoisted controller `import type` per (file, class),
@@ -55,7 +54,6 @@
   scan paths (AST + regex, parity preserved).
 
   Also from the same review pass:
-
   - fresh projects with zero routes now still emit an empty `KickRoutes.Api`, so
     `createClient<KickRoutes.Api>` compiles before the first controller exists
   - a controller class named `Api` now triggers a typegen warning (it would
@@ -97,7 +95,6 @@
   reorganise a module into sub-folders (e.g. moving controllers into
   `controllers/`), a shallow glob stops reaching them — routes silently vanish and
   DI tokens resolve `undefined`. Typegen already detected this; now it helps fix it:
-
   - **Actionable warning** — orphaned classes are grouped by their owning module
     file, with the exact recursive glob to add (`./**/*.controller.ts`) and a
     `kick typegen --fix` hint.
@@ -138,7 +135,6 @@
 ### Minor Changes
 
 - [#391](https://github.com/forinda/kick-js/pull/391) [`3a3080c`](https://github.com/forinda/kick-js/commit/3a3080c26fca405ad3f3bd34d79a30f1a1b712dd) Thanks [@forinda](https://github.com/forinda)! - `kick new` now scaffolds the HTTP runtime explicitly. A new `--runtime express|fastify|h3` flag (and interactive prompt, default `express`) controls:
-
   - the generated `src/index.ts` — `bootstrap({ runtime: expressRuntime() })` / `fastifyRuntime()` / `h3Runtime()`, imported from the core package (Express) or the `@forinda/kickjs/fastify` / `@forinda/kickjs/h3` subpath;
   - the installed engine peers — Fastify adds `fastify` + `@fastify/middie`, h3 adds `h3` (Express needs nothing extra);
   - the REST template's middleware — `express.json()` is only emitted for Express, since Fastify and h3 parse bodies natively (adding it would consume the body stream twice).
@@ -148,14 +144,12 @@
 - [#395](https://github.com/forinda/kick-js/pull/395) [`d6622d5`](https://github.com/forinda/kick-js/commit/d6622d5d1d9c10cd2c446203fbaa2d143d13f2ea) Thanks [@forinda](https://github.com/forinda)! - File uploads (`@FileUpload` → `ctx.file` / `ctx.files`) now work on all three runtimes, and the CLI grew runtime-aware tooling around them.
 
   **`@forinda/kickjs`**
-
   - Fastify and h3 runtimes implement file uploads (previously gated `capabilities.uploads: false`). Fastify buffers multipart parts via `@fastify/multipart` (new optional peer); h3 uses its built-in `readMultipartFormData`. Both produce the same Multer-shaped file objects as Express, so `@FileUpload` and `ctx.file` / `ctx.files` behave identically across engines. Conformance-tested under all three.
   - New shared helpers in `middleware/upload.ts`: `buildFileTypeFilter`, `applyUploadConfig` (enforces field name, type filter, per-file `maxSize`, array `maxCount`).
   - Added `HttpStatus.PAYLOAD_TOO_LARGE` (413) and `HttpStatus.UNSUPPORTED_MEDIA_TYPE` (415).
   - The runtime subpaths export their engine-native type maps: `FastifyRuntimeTypes` (`@forinda/kickjs/fastify`) and `H3RuntimeTypes` (`@forinda/kickjs/h3`), for the `KickRuntimeRegister` escape-hatch augmentation.
 
   **`@forinda/kickjs-cli`**
-
   - `KickConfig.runtime?: 'express' | 'fastify' | 'h3'` — written by `kick new --runtime`, read by dep-aware commands.
   - `kick add upload` installs the multipart driver for the project's runtime: Express → `multer` (+ `@types/multer`), Fastify → `@fastify/multipart`, h3 → none (native).
   - New `kick/runtime` typegen plugin emits the `KickRuntimeRegister` augmentation from `config.runtime`, retyping `ctx.req` / `ctx.res` / `AdapterContext.app` / `getRuntimeApp()` to the active engine (Express stays the default, no augmentation emitted).
@@ -200,7 +194,6 @@
 ### Minor Changes
 
 - [#391](https://github.com/forinda/kick-js/pull/391) [`3a3080c`](https://github.com/forinda/kick-js/commit/3a3080c26fca405ad3f3bd34d79a30f1a1b712dd) Thanks [@forinda](https://github.com/forinda)! - `kick new` now scaffolds the HTTP runtime explicitly. A new `--runtime express|fastify|h3` flag (and interactive prompt, default `express`) controls:
-
   - the generated `src/index.ts` — `bootstrap({ runtime: expressRuntime() })` / `fastifyRuntime()` / `h3Runtime()`, imported from the core package (Express) or the `@forinda/kickjs/fastify` / `@forinda/kickjs/h3` subpath;
   - the installed engine peers — Fastify adds `fastify` + `@fastify/middie`, h3 adds `h3` (Express needs nothing extra);
   - the REST template's middleware — `express.json()` is only emitted for Express, since Fastify and h3 parse bodies natively (adding it would consume the body stream twice).
@@ -210,14 +203,12 @@
 - [#395](https://github.com/forinda/kick-js/pull/395) [`d6622d5`](https://github.com/forinda/kick-js/commit/d6622d5d1d9c10cd2c446203fbaa2d143d13f2ea) Thanks [@forinda](https://github.com/forinda)! - File uploads (`@FileUpload` → `ctx.file` / `ctx.files`) now work on all three runtimes, and the CLI grew runtime-aware tooling around them.
 
   **`@forinda/kickjs`**
-
   - Fastify and h3 runtimes implement file uploads (previously gated `capabilities.uploads: false`). Fastify buffers multipart parts via `@fastify/multipart` (new optional peer); h3 uses its built-in `readMultipartFormData`. Both produce the same Multer-shaped file objects as Express, so `@FileUpload` and `ctx.file` / `ctx.files` behave identically across engines. Conformance-tested under all three.
   - New shared helpers in `middleware/upload.ts`: `buildFileTypeFilter`, `applyUploadConfig` (enforces field name, type filter, per-file `maxSize`, array `maxCount`).
   - Added `HttpStatus.PAYLOAD_TOO_LARGE` (413) and `HttpStatus.UNSUPPORTED_MEDIA_TYPE` (415).
   - The runtime subpaths export their engine-native type maps: `FastifyRuntimeTypes` (`@forinda/kickjs/fastify`) and `H3RuntimeTypes` (`@forinda/kickjs/h3`), for the `KickRuntimeRegister` escape-hatch augmentation.
 
   **`@forinda/kickjs-cli`**
-
   - `KickConfig.runtime?: 'express' | 'fastify' | 'h3'` — written by `kick new --runtime`, read by dep-aware commands.
   - `kick add upload` installs the multipart driver for the project's runtime: Express → `multer` (+ `@types/multer`), Fastify → `@fastify/multipart`, h3 → none (native).
   - New `kick/runtime` typegen plugin emits the `KickRuntimeRegister` augmentation from `config.runtime`, retyping `ctx.req` / `ctx.res` / `AdapterContext.app` / `getRuntimeApp()` to the active engine (Express stays the default, no augmentation emitted).
@@ -297,7 +288,6 @@
 - [#334](https://github.com/forinda/kick-js/pull/334) [`f050f6b`](https://github.com/forinda/kick-js/commit/f050f6b235d1fc54f7adc790cd2b5c999411c5c6) Thanks [@forinda](https://github.com/forinda)! - Ship the database CLI from `@forinda/kickjs-db/cli` — a mountable plugin **and** a standalone `kickjs-db` bin — so you can use the db tooling without (or alongside) `@forinda/kickjs-cli`.
 
   **New: `@forinda/kickjs-db/cli`**
-
   - `dbCliPlugin` — a CLI plugin (`@forinda/kickjs-cli-kit` contract). Mount it in `kick.config.ts` to get `kick db generate | migrate latest|up|down|rollback|status|review | introspect`. It reads config from the same `kick.config.ts` `db` block (via `ctx.config`, no re-parse).
   - `defineKickDbConfig` / `mergeKickDbConfig` / `resolveKickDbConfig` — vite-style config helpers. Author a standalone `kickjs-db.config.ts` (`export default defineKickDbConfig({ ... })`) or reuse the `kick.config.ts` `db` block; the two merge (later wins).
   - Standalone **`kickjs-db` bin** — `npx kickjs-db migrate latest` runs the whole command tree without kickjs-cli, loading `kickjs-db.config.ts` (or a `kick.config.ts` `db` block) through jiti.
@@ -315,7 +305,6 @@
   Zero-config **db type generation is unchanged** — it stays a built-in typegen (`kick typegen` still emits `.kickjs/types` for your schema). Only the `kick db` _commands_ moved.
 
 - [#332](https://github.com/forinda/kick-js/pull/332) [`456e280`](https://github.com/forinda/kick-js/commit/456e280eaef89b0d0c357a06edbde6f8e7c2c789) Thanks [@forinda](https://github.com/forinda)! - SQLite migration generation, a `migrate review` command, and drift handling for non-Postgres dialects.
-
   - **`kick db generate` now emits SQLite DDL** when `db.dialect: 'sqlite'`. Previously the migration emitter was Postgres-only, so SQLite projects couldn't generate migrations from their schema (only the runner worked). The new `emitSqlite` maps PG types to SQLite affinities, normalises defaults (`gen_random_uuid()` → `(lower(hex(randomblob(16))))`, `false` → `0`, `now()` → `CURRENT_TIMESTAMP`), inlines a single integer PK as `INTEGER PRIMARY KEY` (rowid), and folds foreign keys into `CREATE TABLE` (SQLite has no `ALTER ... ADD CONSTRAINT`). Operations SQLite can't express via `ALTER TABLE` (column type/null/default changes, FK changes on an existing table) throw a clear `SqliteRebuildRequiredError` pointing at `kick db generate --empty` instead of emitting wrong SQL. `generate` now dispatches the emitter by dialect.
 
   - **`kick db migrate review <id>`** marks a migration reviewed: it flips `meta.json.reviewed`, swaps the `-- REVIEWED: false` markers in `up.sql`/`down.sql`, and recomputes the journal hash so all three stay in sync. Previously the only way to review was hand-editing `meta.json`, which left the SQL markers and the hash out of sync (the runner gates on `meta.json.reviewed`, not the comment).
@@ -329,14 +318,12 @@
   `kick dev` wires this into the watcher: when an `assetMap.<ns>.src` directory changes, it runs the incremental asset build (debounced, alongside typegen) so the dist copies + manifest stay fresh without rebuilding everything on every save.
 
 - [#327](https://github.com/forinda/kick-js/pull/327) [`3162704`](https://github.com/forinda/kick-js/commit/316270487b6e3ae4bb1ebc48b59646bd8b29c8e8) Thanks [@forinda](https://github.com/forinda)! - Detect `defineModule()` factory modules in typegen, and quiet per-plugin logs by default.
-
   - **`ModuleToken` now includes v4 `defineModule()` modules.** The scanner previously only recognised the deprecated `class X implements AppModule` form, so a project using the v4 `export const XModule = defineModule({ ... })` idiom emitted `export type ModuleToken = never`. The scanner now also picks up `defineModule()` consts (per-file, so it's cache/incremental-safe), populating `ModuleToken` with each module name.
   - **Per-plugin typegen status lines are now debug-only.** `kick typegen` printed a `kick/<id>: <status>` line for every plugin on each run. That list is now gated behind `LOG_LEVEL=debug` (or `trace`); a normal run prints just the one-line `kick typegen → …` summary. Set `LOG_LEVEL=debug` to see the full per-plugin breakdown.
 
 - [#327](https://github.com/forinda/kick-js/pull/327) [`db526e9`](https://github.com/forinda/kick-js/commit/db526e958b4237cba62fcaf1f23b22a223a1db0c) Thanks [@forinda](https://github.com/forinda)! - Speed up `kick typegen` / `kick dev` / `kick build` on large projects with a persistent, incremental scanner.
 
   The typegen scanner used to re-read and re-regex every `src/**/*.ts` file on every run, serially. Two changes cut that cost:
-
   - **Persistent per-file cache** (`.kickjs/cache/scan.json`, already gitignored): each file's extraction is cached keyed by a cheap `mtimeMs:size` signature, so a watch/rebuild only re-reads genuinely-changed files. Reads + extraction now also run concurrently. Warm scans are ~3× faster than a cold scan.
   - **Walk-free incremental scan in `kick dev`**: the dev server feeds Vite's exact chokidar delta to the scanner, which re-extracts only the changed files and skips the directory walk entirely — ~2.8× faster again than a warm full scan (≈8.5× over the original cold scan on a 1,500-module project).
 
@@ -353,7 +340,6 @@
   No behaviour change — pure contract extraction.
 
 - [#330](https://github.com/forinda/kick-js/pull/330) [`91cf40f`](https://github.com/forinda/kick-js/commit/91cf40f2925b733dd39d46f3faf8ce29120c84f1) Thanks [@forinda](https://github.com/forinda)! - Fix `kick db` with plugin-importing configs, and non-string column defaults.
-
   - **`kick db` commands now load `kick.config.ts` through the CLI's jiti loader** (`loadKickConfig`) instead of `@forinda/kickjs-db`'s native `import()`. Native ESM can't resolve the extensionless, relative TypeScript imports a config commonly uses — e.g. `import { toolsPlugin } from './tools/cli-plugin'` to mount a CLI plugin — so every `kick db ...` command failed with `Cannot find module` whenever the config imported local TS. It now resolves exactly like the rest of the CLI.
 
   - **Column `.default()` accepts `string | number | boolean`** and normalises non-strings to their SQL-literal text. `boolean().default(false)` / `integer().default(0)` previously stored a raw boolean/number in the snapshot, which crashed migration emit with `value.replace is not a function`. The Postgres emitter (`formatDefault`) is also hardened to coerce booleans/numbers defensively, so a pre-existing snapshot with a non-string default emits a bare SQL literal (`false`, `0`) instead of throwing.
@@ -406,7 +392,6 @@
 ### Patch Changes
 
 - [#321](https://github.com/forinda/kick-js/pull/321) [`5dc5a99`](https://github.com/forinda/kick-js/commit/5dc5a991df7c92dd7c369f6f87a3b005ba3dea13) Thanks [@forinda](https://github.com/forinda)! - Fix two `kick dev` (Vite) lifecycle gaps — neither was Windows-specific, though Windows made the shutdown one worse.
-
   - **App now bootstraps at startup, not on first request.** The dev-server plugin evaluated the app lazily via `ssrLoadModule` inside the request middleware, so `bootstrap()`, adapter `afterStart`, and your startup logs didn't run until the first HTTP request hit. The plugin now warms the module once the HTTP server is listening, so `kick dev` behaves like `node`/`tsx` — logs + adapters + the server come up immediately.
   - **Graceful shutdown now runs on Ctrl+C in dev.** The app deliberately suppresses its own SIGINT/SIGTERM handlers in dev (Vite owns the lifecycle), and the CLI dev server only closed Vite — so `adapter.shutdown()`, request draining, and shutdown logs never ran. `Application.start()` now exposes its `shutdown()` on `globalThis` in dev, and `kick dev` awaits it before tearing down Vite. Also wires `SIGBREAK` (Windows Ctrl+Break) since Windows never raises `SIGTERM`.
 
@@ -425,7 +410,6 @@
   Pairs with the `ContextKeys` registry: `dependsOn` narrows to `keyof ContextMeta | keyof ContextKeys`, so the generated augmentation feeds typo-checking while `ContextMeta` keeps driving `ctx.get(key)` value types. The plugin skips emission when no context decorators are found. Scanner gains `extractContextKeysFromSource` + `ScanResult.contextKeys`.
 
 - [#313](https://github.com/forinda/kick-js/pull/313) [`1190b56`](https://github.com/forinda/kick-js/commit/1190b565c8769402c01ae77df6c81dc328aaf79b) Thanks [@forinda](https://github.com/forinda)! - Add `kick g contributor <name>` to scaffold a Context Contributor.
-
   - `--type http` (default) → `defineHttpContextDecorator`, resolver typed against `RequestContext`.
   - `--type bare` → `defineContextDecorator`, resolver typed against the transport-agnostic `ExecutionContext`.
   - `--params "source:string,region:number"` → emits the curried `.withParams<T>()` form with a generated params `type` alias and `paramDefaults` stub (mirrors how `kick g scaffold` takes field definitions).
@@ -436,7 +420,6 @@
 ### Patch Changes
 
 - [#314](https://github.com/forinda/kick-js/pull/314) [`07995b9`](https://github.com/forinda/kick-js/commit/07995b9576e04298d52e0a45b9906360a4da55ac) Thanks [@forinda](https://github.com/forinda)! - Fix two issues in the plugin-only typegen pipeline (follow-up to the generator.ts retirement):
-
   - **Polling watch never regenerated types.** `kick typegen --watch` / `kick dev` on the polling paths (forced via `KICKJS_WATCH_POLLING`, or the `fs.watch` fallback used on Docker bind mounts / WSL / NFS) ran only the scan + collision gate, not the plugin pass — so no `.kickjs/types/kick__*` file refreshed on change. Both polling paths now drive the full `runLegacy().then(runPlugins)` chain, matching the event-based watcher.
   - **`kick dev` startup could abort on a typegen error.** The startup plugin pass + artifact write were unguarded, so a scanner/fs error would exit the dev server with code 1. Now wrapped in try/catch + warn, consistent with the scan/gate pass and the debounced refresh.
 
@@ -445,7 +428,6 @@
   The `KickJsRegistry`, `ServiceToken`/`ModuleToken` unions, `KickJsPluginRegistry`, and the `defineAugmentation` catalogue are now each emitted by their own typegen plugin (`kick/registry`, `kick/services`, `kick/modules`, `kick/plugins`, `kick/augmentations`) — joining the already-carved `kick/routes`, `kick/env`, `kick/assets`, `kick/db`. `typegen/generator.ts` is removed; `runTypegen` now just scans, gates collisions, runs the plugin pipeline, and finalises.
 
   Effects:
-
   - Output files are renamed to the uniform `kick__*` scheme (`kick__registry.d.ts`, `kick__services.d.ts`, …). The barrel `index.d.ts` is dropped — the scaffolded tsconfig pulls `.kickjs/types/**` in via `include`, so augmentations apply by inclusion and the barrel's re-exports were redundant.
   - The whole pipeline is now uniformly per-plugin-isolated (a throw in one plugin can't block the others).
   - Upgrading is automatic: the first run sweeps the old `index.d.ts` / `registry.d.ts` / `services.d.ts` / `modules.d.ts` / `plugins.d.ts` / `augmentations.d.ts` files.
@@ -453,7 +435,6 @@
   Tracking issue [#309](https://github.com/forinda/kick-js/issues/309).
 
 - [#307](https://github.com/forinda/kick-js/pull/307) [`541ae2b`](https://github.com/forinda/kick-js/commit/541ae2bb2ce7325229d17d47c95432a97268c504) Thanks [@forinda](https://github.com/forinda)! - Fix asset manager interfering with controller typegen, and make `assets.x.y()` resolve in dev for `kick.config.ts` projects.
-
   - **Typegen runner is now per-plugin isolated.** A throw in one typegen plugin (e.g. `kick/assets`) no longer aborts the whole pass — it's reported as an `error` and the remaining plugins (e.g. `kick/routes`) still run. Previously one failing plugin left the controller route types ungenerated.
   - **The stale-file sweep is now an allowlist, not a denylist.** It only removes the known pre-carve legacy filenames (`assets.d.ts`, `env.ts`, `routes.ts`) and never touches unknown/custom files. Previously, when the plugin pass returned nothing (e.g. it aborted), the sweep deleted live `kick__routes.ts` / `kick__assets.d.ts` — wiping controller types project-wide.
   - **Dev-mode asset resolution now works with `kick.config.ts`.** The runtime resolver reads config synchronously and can't transpile TS, so a `.ts`-config project had no manifest to resolve from until the first production build (`assets.x.y()` threw `UnknownAssetError`). The CLI now mirrors the JSON-serialisable `assetMap` + `build.outDir` into `.kickjs/kick.config.json` whenever it loads the config, and the runtime resolver reads that snapshot as a fallback.
@@ -505,7 +486,6 @@
 - [#291](https://github.com/forinda/kick-js/pull/291) [`0d9a895`](https://github.com/forinda/kick-js/commit/0d9a8955f358f8ca8be8aca169dfa38285c48f50) Thanks [@forinda](https://github.com/forinda)! - Schema-agnostic validation abstraction
 
   **New package: `@forinda/kickjs-schema`**
-
   - `KickSchema` interface — unified `safeParse()`, `toJsonSchema()`, `_raw`
   - `SchemaIssue` — normalized error format (path, message, code, expected, received)
   - `detectSchema()` — auto-detects KickSchema, Zod, Valibot, Yup, Standard Schema v1, functions, and duck-typed schemas
@@ -513,20 +493,17 @@
   - `InferSchemaOutput<T>` — type-level inference for Zod, Valibot, Standard Schema, and KickSchema
 
   **Adapters (tree-shakable sub-exports):**
-
   - `@forinda/kickjs-schema/zod` — `fromZod()` with full issue normalization and JSON Schema via `.toJSONSchema()`
   - `@forinda/kickjs-schema/valibot` — `fromValibot()` with issue mapping and JSON Schema via `@valibot/to-json-schema`
   - `@forinda/kickjs-schema/yup` — `fromYup()` with `validateSync` error mapping and JSON Schema from `describe()` metadata
 
   **Framework integration:**
-
   - `validate()` middleware uses `detectSchema()` — accepts any supported schema library
   - Swagger `SchemaParser` uses `detectSchema().toJsonSchema()` instead of Zod-specific conversion
   - MCP adapter uses `detectSchema()` for tool input/output schema conversion
   - `loadEnvFromSchema()` — schema-agnostic env loader alongside existing Zod-only `loadEnv()`
 
   **Typegen:**
-
   - New `schemaValidator: 'kickjs-schema'` option emits `InferSchemaOutput<>` for route body/query/params and env types
   - Default `'zod'` unchanged — fully backward compatible
   - CLI: `kick typegen --schema-validator kickjs-schema`
@@ -534,16 +511,13 @@
 - [#297](https://github.com/forinda/kick-js/pull/297) [`a4fc68c`](https://github.com/forinda/kick-js/commit/a4fc68c991b996cae08800e7e9c1f0e8f39eaaeb) Thanks [@forinda](https://github.com/forinda)! - Fix schema-driven env typing end-to-end across `@forinda/kickjs-schema`, `loadEnvFromSchema`, and `kick typegen`.
 
   **`@forinda/kickjs-schema`**
-
   - `fromZod` / `fromValibot` / `fromYup` now infer their output type from the wrapped schema via `InferSchemaOutput<TSchema>`. Previously the `<TOutput = unknown>` generic defaulted to `unknown` whenever the caller didn't spell the output type explicitly — every wrapped schema landed at `KickSchema<unknown>` and propagated `unknown` into `KickEnv`. The explicit `<TOutput>` overload was dropped because TypeScript overload resolution always picked it with `TOutput = unknown` before reaching the inferring overload; adopters who want to spell the output type explicitly can cast (`fromZod(s) as KickSchema<MyShape>`) instead.
   - `InferSchemaOutput<T>` now resolves the Standard Schema brand (`~standard.types.output`) before Zod's `_output` (Zod v4 sometimes types `_output` as `never` on object schemas, which would mask the real shape), and adds a final branch for Yup's `__outputType`.
 
   **`@forinda/kickjs`**
-
   - `loadEnvFromSchema` now takes `<TSchema>(schema: TSchema): InferSchemaOutput<TSchema>` so the call site lands at the real env shape instead of `Record<string, unknown>`. A second overload preserves the `Record<string, unknown>` fallback for adopters who pass a runtime-only validator with no static brand.
 
   **`@forinda/kickjs-cli`**
-
   - `kick typegen` env-file detection regex broadened to match `fromZod(...)` / `fromValibot(...)` / `fromYup(...)` / `loadEnvFromSchema(...)` in addition to the legacy `defineEnv(...)`. Projects migrating off `defineEnv` to the schema-agnostic loader no longer get a silent `kick/env: skipped`.
   - Env renderer flattens the kickjs-schema inference via a mapped-type identity (`type _Resolved = { [K in keyof _Raw]: _Raw[K] }`) so `interface KickEnv extends _Resolved {}` lands at an object type TS accepts. Without it, `InferSchemaOutput<typeof envSchema>` stays as a conditional type and the interface extension errors with TS2312 ("interface can only extend an object type with statically known members") even when the conditional resolves to a plain object.
 
@@ -580,7 +554,6 @@
 - [#291](https://github.com/forinda/kick-js/pull/291) [`0d9a895`](https://github.com/forinda/kick-js/commit/0d9a8955f358f8ca8be8aca169dfa38285c48f50) Thanks [@forinda](https://github.com/forinda)! - Schema-agnostic validation abstraction
 
   **New package: `@forinda/kickjs-schema`**
-
   - `KickSchema` interface — unified `safeParse()`, `toJsonSchema()`, `_raw`
   - `SchemaIssue` — normalized error format (path, message, code, expected, received)
   - `detectSchema()` — auto-detects KickSchema, Zod, Valibot, Yup, Standard Schema v1, functions, and duck-typed schemas
@@ -588,20 +561,17 @@
   - `InferSchemaOutput<T>` — type-level inference for Zod, Valibot, Standard Schema, and KickSchema
 
   **Adapters (tree-shakable sub-exports):**
-
   - `@forinda/kickjs-schema/zod` — `fromZod()` with full issue normalization and JSON Schema via `.toJSONSchema()`
   - `@forinda/kickjs-schema/valibot` — `fromValibot()` with issue mapping and JSON Schema via `@valibot/to-json-schema`
   - `@forinda/kickjs-schema/yup` — `fromYup()` with `validateSync` error mapping and JSON Schema from `describe()` metadata
 
   **Framework integration:**
-
   - `validate()` middleware uses `detectSchema()` — accepts any supported schema library
   - Swagger `SchemaParser` uses `detectSchema().toJsonSchema()` instead of Zod-specific conversion
   - MCP adapter uses `detectSchema()` for tool input/output schema conversion
   - `loadEnvFromSchema()` — schema-agnostic env loader alongside existing Zod-only `loadEnv()`
 
   **Typegen:**
-
   - New `schemaValidator: 'kickjs-schema'` option emits `InferSchemaOutput<>` for route body/query/params and env types
   - Default `'zod'` unchanged — fully backward compatible
   - CLI: `kick typegen --schema-validator kickjs-schema`
@@ -609,16 +579,13 @@
 - [#297](https://github.com/forinda/kick-js/pull/297) [`a4fc68c`](https://github.com/forinda/kick-js/commit/a4fc68c991b996cae08800e7e9c1f0e8f39eaaeb) Thanks [@forinda](https://github.com/forinda)! - Fix schema-driven env typing end-to-end across `@forinda/kickjs-schema`, `loadEnvFromSchema`, and `kick typegen`.
 
   **`@forinda/kickjs-schema`**
-
   - `fromZod` / `fromValibot` / `fromYup` now infer their output type from the wrapped schema via `InferSchemaOutput<TSchema>`. Previously the `<TOutput = unknown>` generic defaulted to `unknown` whenever the caller didn't spell the output type explicitly — every wrapped schema landed at `KickSchema<unknown>` and propagated `unknown` into `KickEnv`. The explicit `<TOutput>` overload was dropped because TypeScript overload resolution always picked it with `TOutput = unknown` before reaching the inferring overload; adopters who want to spell the output type explicitly can cast (`fromZod(s) as KickSchema<MyShape>`) instead.
   - `InferSchemaOutput<T>` now resolves the Standard Schema brand (`~standard.types.output`) before Zod's `_output` (Zod v4 sometimes types `_output` as `never` on object schemas, which would mask the real shape), and adds a final branch for Yup's `__outputType`.
 
   **`@forinda/kickjs`**
-
   - `loadEnvFromSchema` now takes `<TSchema>(schema: TSchema): InferSchemaOutput<TSchema>` so the call site lands at the real env shape instead of `Record<string, unknown>`. A second overload preserves the `Record<string, unknown>` fallback for adopters who pass a runtime-only validator with no static brand.
 
   **`@forinda/kickjs-cli`**
-
   - `kick typegen` env-file detection regex broadened to match `fromZod(...)` / `fromValibot(...)` / `fromYup(...)` / `loadEnvFromSchema(...)` in addition to the legacy `defineEnv(...)`. Projects migrating off `defineEnv` to the schema-agnostic loader no longer get a silent `kick/env: skipped`.
   - Env renderer flattens the kickjs-schema inference via a mapped-type identity (`type _Resolved = { [K in keyof _Raw]: _Raw[K] }`) so `interface KickEnv extends _Resolved {}` lands at an object type TS accepts. Without it, `InferSchemaOutput<typeof envSchema>` stays as a conditional type and the interface extension errors with TS2312 ("interface can only extend an object type with statically known members") even when the conditional resolves to a plain object.
 
@@ -709,7 +676,6 @@
   Extra checks run after the built-ins, support async, and merge into the same summary output.
 
   **New exports from `@forinda/kickjs-cli`:**
-
   - `defineDoctorExtension(ext)` — identity helper for an extension bundle (mirrors `defineConfig`)
   - `defineDoctorCheck(check)` — identity helper for a single check
   - `DoctorExtension`, `DoctorCheck`, `DoctorContext`, `DoctorResult` — type contracts
@@ -857,7 +823,6 @@
   ```
 
   `mergeCliPlugins.register()` now populates `projectRoot` automatically:
-
   - When the caller supplies a ctx, that field wins (test harnesses can inject a different workspace boundary).
   - When no ctx is supplied (lightweight test path), the default is `findProjectRoot(process.cwd())`.
 
@@ -868,14 +833,12 @@
   **Why both contexts?**
 
   `cwd` and `projectRoot` are semantically distinct:
-
   - `cwd` = where the adopter typed the command (could be any subdirectory)
   - `projectRoot` = the resolved base that owns `kick.config.*` (or `package.json` as fallback)
 
   Generators that emit "files relative to the project" should now use `ctx.projectRoot` instead of `ctx.cwd`. Existing code that treats `ctx.cwd` as the project root keeps working — the CLI entry point sets `cwd` to the resolved root for back-compat, so the two fields hold the same value at the top of the chain.
 
   **Tests**
-
   - `buildGeneratorContext`: caller-supplied `projectRoot` wins; derived from `cwd` via `findProjectRoot()` when omitted; falls back to `cwd` when no marker file exists anywhere.
   - `mergeCliPlugins`: caller `projectRoot` flows through to `ctx`; default ctx populates it from `process.cwd()`.
 
@@ -920,7 +883,6 @@
   Each `SKILL.md` opens with YAML frontmatter (`name: kickjs-<slug>`, `description: <when to use>`) so agents that auto-discover skills (Claude Code, Copilot CLI plugins, Gemini's `activate_skill`) pick each up without an external index file.
 
   **New API surface**
-
   - `defineGemini` / `defineCopilot` template helpers exported from `@forinda/kickjs-cli` (alongside the existing `generateAgents` / `generateClaude`).
   - `generateKickJsSkillFiles(name, template, pm): KickJsSkillFile[]` replaces the legacy single-file `generateKickJsSkills` (kept as `@deprecated` for one minor for back-compat).
   - New `--only gemini` and `--only copilot` flags on `kick g agents` for targeted refreshes.
@@ -933,7 +895,6 @@
   **Enriched skill content**
 
   Each of the 13 skill bodies has been rewritten to faithfully reflect the official docs:
-
   - **`add-module`** — `defineModule` factory, `import.meta.glob` requirement, versioned route arrays, conditional `setup(registry)` mounting, factory-invocation footgun.
   - **`add-adapter`** — `defineAdapter` factory, lifecycle hook decision tree (`beforeMount` / `beforeStart` / `afterStart` / `shutdown`), middleware phases, `.scoped` / `.async` patterns, `dependsOn` topo-sort, when to promote to a plugin.
   - **`add-plugin`** _(NEW)_ — `definePlugin` factory, inline-literal pattern for one-off DI bindings, execution order, multi-instance, when plugin > adapter.
@@ -961,7 +922,6 @@
   **`defineTypegen` identity factory.** Mirrors the existing `defineGenerator` ergonomics — adopters can now write `defineTypegen({ id, inputs, generate })` and get full type inference on the `generate(ctx)` body without manually annotating `TypegenPlugin`. Exported alongside `defineGenerator` from `@forinda/kickjs-cli`.
 
   **Plugin generators surface in `kick g --help` and dispatch via Commander.** Previously, `KickCliPlugin.generators[]` entries were only discoverable through `kick g --list`, and a bare invocation like `kick g drizzle-typegen` (no item arg) silently fell through to the module generator — scaffolding a module called "drizzle-typegen" instead of running the plugin. Two changes fix this:
-
   1. `KickCliPluginContext` now carries the merged `generators[]` (threaded through by `mergeCliPlugins.register()`), so `register()` callbacks have access to plugin generators at command-registration time.
   2. The built-in `kick/generate` plugin now iterates over `ctx.generators` and registers each as a real Commander subcommand. The subcommand syntax honors the spec's first `args[]` entry (`<schema>` when required, `[schema]` when optional), and declared `flags[]` show up as `--flag` options. The bare-action dispatch is preserved as a safety net for late-discovered generators (e.g. package.json-resolved entries that didn't reach `mergeCliPlugins`).
 
@@ -970,7 +930,6 @@
 - [#247](https://github.com/forinda/kick-js/pull/247) [`89f5737`](https://github.com/forinda/kick-js/commit/89f5737c1287233902dd666b3a3df70a64cc1bfc) Thanks [@forinda](https://github.com/forinda)! - chore(cli): drop @forinda/kickjs-auth from every user-facing CLI surface
 
   `@forinda/kickjs-auth` is no longer offered through the CLI. Adopters who already depend on it keep working — the package itself stays on disk and is unaffected. Only the prompts / scaffolds / registries that proactively suggested it have been pruned. Five surfaces touched:
-
   1. **`kick new` multi-select** — `Auth` removed from the optional-packages prompt (`init.ts`). New projects no longer see it offered.
   2. **`kick g auth-scaffold`** subcommand removed (`generate.ts`). The `kick g` Commander tree no longer registers the `auth-scaffold` subcommand. Underlying generator file (`generators/auth-scaffold.ts`) kept on disk for now — orphaned code, can be deleted in a follow-up.
   3. **`kick add auth`** registry entry removed (`commands/add.ts`). `kick add --list` no longer surfaces it.
@@ -1486,7 +1445,6 @@
   The `USING column::text::foo` clause does the safety check: if any row holds a removed value, the cast fails and the whole transaction rolls back. Operators who need to map removed values to a replacement first must hand-roll a pre-migration that does the data update before generating the structural removal.
 
   **New public API on `@forinda/kickjs-db`:**
-
   - `RunnerOptions.confirmEnumDrop?: boolean` — opt-in flag for the runner.
   - `MigrationEnumDropError` — thrown by the gate; carries `id`, `enums`, `removed`, `columns`.
   - `parseEnumDropHeader(sql)` / `enforceEnumDropGate(id, sql, confirmEnumDrop)` / `EnumDropHeader` — exposed for adopters who run migrations through their own tooling and want the same gate semantics.
@@ -1521,7 +1479,6 @@
   `relations(source, builder)` and the `Helpers.one` / `Helpers.many` factories now preserve the source name and target literal at the type level. The runtime shape is unchanged and all existing call sites remain assignable to the prior less-specific signature; this is strictly a narrowing improvement that makes `SchemaToRelationsRegister<S>` derivable.
 
   Specifically:
-
   - `relations()` returns `RelationsDecl<TSourceName, TRelationsMap>` (was `RelationsDecl`).
   - `Helpers.one` returns `RelationOne<TTarget>` (was `RelationOne`).
   - `Helpers.many` returns `RelationMany<TTarget>` (was `RelationMany`).
@@ -1570,7 +1527,6 @@
   PascalCase key convention.
 
 - [#166](https://github.com/forinda/kick-js/pull/166) [`a6d0dd6`](https://github.com/forinda/kick-js/commit/a6d0dd6038b215c0ae3cbe1a20e11ba0d8b1c46e) Thanks [@forinda](https://github.com/forinda)! - Minify published build output via the tsdown / oxc minifier.
-
   - **Library packages** use `minify: { compress: true, mangle: false }`. Whitespace and comments are stripped and constants folded, but identifiers stay intact so adopter stack traces remain readable.
   - **CLI** uses `minify: { compress: true, mangle: true }`. The CLI is an operator tool, not a library — full mangle is fine and gives a smaller binary.
 
