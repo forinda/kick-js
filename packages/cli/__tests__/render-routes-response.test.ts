@@ -23,6 +23,7 @@ function route(partial: Partial<DiscoveredRoute>): DiscoveredRoute {
     paramsSchema: null,
     filePath: '/app/src/modules/users/users.controller.ts',
     relativePath: 'modules/users/users.controller.ts',
+    mountedPath: '/users/:id',
     ...partial,
   }
 }
@@ -78,18 +79,69 @@ describe('renderRoutes — response inference emission', () => {
 })
 
 describe('renderRoutes — KickRoutes.Api flat map', () => {
-  it('emits verb+path keys referencing the controller interfaces', () => {
+  it('emits MOUNTED verb+path keys referencing the controller interfaces', () => {
     const src = renderRoutes(
-      [route({}), route({ method: 'create', httpMethod: 'POST', path: '/', pathParams: [] })],
+      [
+        route({}),
+        route({
+          method: 'create',
+          httpMethod: 'POST',
+          path: '/',
+          pathParams: [],
+          mountedPath: '/users',
+        }),
+      ],
       OUT,
       'zod',
     )
-    expect(src).toContain("'GET /:id': UsersController['get']")
-    expect(src).toContain("'POST /': UsersController['create']")
+    expect(src).toContain("'GET /users/:id': UsersController['get']")
+    expect(src).toContain("'POST /users': UsersController['create']")
     expect(src).toContain('interface Api {')
   })
 
-  it('warns and keeps first on duplicate verb+path', () => {
+  it('falls back to the bare path when mountedPath is absent (old fixtures)', () => {
+    const src = renderRoutes([route({ mountedPath: undefined })], OUT, 'zod')
+    expect(src).toContain("'GET /:id': UsersController['get']")
+  })
+
+  it('same decorator path under different mounts does NOT collide', () => {
+    const warnings: string[] = []
+    const src = renderRoutes(
+      [
+        route({}),
+        route({
+          controller: 'TasksController',
+          method: 'get',
+          filePath: '/app/src/modules/tasks/tasks.controller.ts',
+          mountedPath: '/tasks/:id',
+        }),
+      ],
+      OUT,
+      'zod',
+      { onWarn: (w) => warnings.push(w) },
+    )
+    expect(src).toContain("'GET /users/:id': UsersController['get']")
+    expect(src).toContain("'GET /tasks/:id': TasksController['get']")
+    expect(warnings).toEqual([])
+  })
+
+  it('empty routes still emit an (empty) KickRoutes.Api', () => {
+    const src = renderRoutes([], OUT, 'zod')
+    expect(src).toContain('interface Api {}')
+  })
+
+  it("warns when a controller is named 'Api' (reserved for the flat map)", () => {
+    const warnings: string[] = []
+    renderRoutes(
+      [route({ controller: 'Api', filePath: '/app/src/api.controller.ts' })],
+      OUT,
+      'zod',
+      { onWarn: (w) => warnings.push(w) },
+    )
+    expect(warnings.some((w) => w.includes('reserved KickRoutes.Api'))).toBe(true)
+  })
+
+  it('warns and keeps first on a REAL duplicate (same mounted verb+path)', () => {
     const warnings: string[] = []
     const src = renderRoutes(
       [
@@ -98,13 +150,14 @@ describe('renderRoutes — KickRoutes.Api flat map', () => {
           controller: 'OtherController',
           method: 'also',
           filePath: '/app/src/other.controller.ts',
+          mountedPath: '/users/:id',
         }),
       ],
       OUT,
       'zod',
       { onWarn: (w) => warnings.push(w) },
     )
-    expect(src).toContain("'GET /:id': UsersController['get']")
+    expect(src).toContain("'GET /users/:id': UsersController['get']")
     expect(src).not.toContain("OtherController['also']")
     expect(warnings.some((w) => w.includes('duplicate route'))).toBe(true)
   })

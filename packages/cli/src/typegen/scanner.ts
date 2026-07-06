@@ -98,6 +98,14 @@ export interface DiscoveredRoute {
    * import. Optional so regex-path extraction and old fixtures stay valid.
    */
   controllerIsDefaultExport?: boolean
+  /**
+   * Module-mount-joined path (`/tasks/:id` for a controller mounted at
+   * `/tasks` with `@Get('/:id')`). Excludes the bootstrap `/api/v{n}`
+   * prefix (not statically scannable). The KickRoutes.Api flat map keys
+   * on this — the bare `path` would collide across controllers and 404
+   * against real URLs. Optional for old fixtures; falls back to `path`.
+   */
+  mountedPath?: string
 }
 
 /** A statically-resolved schema identifier reference */
@@ -1003,6 +1011,7 @@ export function extractRoutesFromSource(
         filePath,
         relativePath: relPath,
         controllerIsDefaultExport: cls.isDefault,
+        mountedPath: fullPath,
       })
     }
   }
@@ -1631,9 +1640,9 @@ function joinExtracts(files: string[], extracts: (FileExtract | null)[]): Omit<S
       const mountPath = mountPathByController.get(route.controller)
       if (mountPath) {
         const fullPath = joinMountPath(mountPath, route.path)
-        routes.push({ ...route, pathParams: extractPathParams(fullPath) })
+        routes.push({ ...route, pathParams: extractPathParams(fullPath), mountedPath: fullPath })
       } else {
-        routes.push(route)
+        routes.push({ ...route, mountedPath: route.mountedPath ?? route.path })
       }
     }
   }

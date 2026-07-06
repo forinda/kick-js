@@ -593,6 +593,10 @@ export function extractFileAst(source: string, filePath: string, cwd: string): F
           filePath,
           relativePath: relPath,
           controllerIsDefaultExport: discovered.isDefault,
+          // Per-file contract: own path only (parity with the regex
+          // extractor's empty-mount default); joinExtracts overwrites with
+          // the cross-file mount-joined path.
+          mountedPath: path,
         })
       }
     }

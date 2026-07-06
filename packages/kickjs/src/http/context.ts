@@ -841,11 +841,13 @@ export type Ctx<TRoute extends RouteShape = RouteShape> = RequestContext<
 /**
  * Global ambient registry of typed routes, populated by `kick typegen`.
  *
- * Each interface inside `KickRoutes` corresponds to a controller class;
- * each property is one route method on that controller. The values
- * conform to `RouteShape`.
+ * Interfaces inside `KickRoutes` correspond to controller classes (each
+ * property one route method, conforming to `RouteShape`) — plus the
+ * reserved `KickRoutes.Api`: a flat `'METHOD /mounted/path'` map over the
+ * same shapes, consumed by `@forinda/kickjs-client`. Don't name a
+ * controller class `Api` — it would declaration-merge into that map.
  *
- * Empty by default — declarations come from `.kickjs/types/routes.d.ts`
+ * Empty by default — declarations come from `.kickjs/types/kick__routes.ts`
  * generated alongside the rest of the typegen output.
  */
 declare global {
