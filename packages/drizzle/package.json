@@ -48,7 +48,7 @@
   "peerDependenciesMeta": {},
   "devDependencies": {
     "@forinda/kickjs": "workspace:*",
-    "@types/node": "^25.9.2",
+    "@types/node": "^26.1.0",
     "typescript": "^6.0.3"
   },
   "publishConfig": {
