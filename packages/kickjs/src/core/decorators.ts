@@ -419,6 +419,13 @@ export interface RouteDefinition {
     query?: any
     /** JSON Schema object for validating URL params */
     params?: any
+    /**
+     * DECLARED response schema — never validated at runtime. Feeds two
+     * consumers from one source of truth: the Swagger adapter's success
+     * response schema, and `kick typegen`'s `KickRoutes[...].response`
+     * (winning over return-type inference when present).
+     */
+    response?: any
     /** Schema name in OpenAPI components/schemas for the request body. Auto-generated from handler name if omitted. */
     name?: string
   }

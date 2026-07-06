@@ -590,6 +590,7 @@ export function extractFileAst(source: string, filePath: string, cwd: string): F
           bodySchema: schemaFieldRef(options, 'body', ctx),
           querySchema: schemaFieldRef(options, 'query', ctx),
           paramsSchema: schemaFieldRef(options, 'params', ctx),
+          responseSchema: schemaFieldRef(options, 'response', ctx),
           filePath,
           relativePath: relPath,
           controllerIsDefaultExport: discovered.isDefault,

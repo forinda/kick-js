@@ -162,3 +162,27 @@ describe('renderRoutes — KickRoutes.Api flat map', () => {
     expect(warnings.some((w) => w.includes('duplicate route'))).toBe(true)
   })
 })
+
+describe('renderRoutes — declared response schema override', () => {
+  it('a validation.response schema wins over return-type inference', () => {
+    const src = renderRoutes(
+      [
+        route({
+          responseSchema: { identifier: 'taskSchema', source: '' },
+        }),
+      ],
+      OUT,
+      'zod',
+    )
+    expect(src).toContain("response: import('zod').infer<typeof _S0>")
+    expect(src).toContain(
+      "import type { taskSchema as _S0 } from '../../src/modules/users/users.controller'",
+    )
+    expect(src).not.toContain("InferHandlerResponse<_C0['get']>")
+  })
+
+  it('routes without a declared schema keep InferHandlerResponse', () => {
+    const src = renderRoutes([route({})], OUT, 'zod')
+    expect(src).toContain("InferHandlerResponse<_C0['get']>")
+  })
+})

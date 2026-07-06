@@ -681,7 +681,20 @@ function buildOpenAPISpecUncached(options: SwaggerOptions = {}): any {
       } else {
         // Auto-generate default responses
         const defaultStatus = method === 'post' ? '201' : method === 'delete' ? '204' : '200'
-        op.responses[defaultStatus] = { description: 'Successful operation' }
+        const success: Record<string, unknown> = { description: 'Successful operation' }
+        // Declared response contract (`@Get('/', { response: schema })`) —
+        // the same declaration `kick typegen` consumes, so docs and types
+        // can't drift. Explicit @ApiResponse entries above still win.
+        if (route.validation?.response && defaultStatus !== '204') {
+          const converted = toJsonSchema(route.validation.response)
+          if (converted) {
+            const schemaName = `${route.validation.name || route.handlerName}Response`
+            success.content = {
+              'application/json': { schema: registerSchema(converted, schemaName) },
+            }
+          }
+        }
+        op.responses[defaultStatus] = success
 
         if (route.validation?.body) {
           op.responses['422'] = { description: 'Validation error' }
