@@ -92,6 +92,12 @@ export interface DiscoveredRoute {
   filePath: string
   /** Path relative to scan root, with forward slashes */
   relativePath: string
+  /**
+   * True when the controller class is `export default` — the response
+   * typegen hoists `import type { default as _Cn }` instead of a named
+   * import. Optional so regex-path extraction and old fixtures stay valid.
+   */
+  controllerIsDefaultExport?: boolean
 }
 
 /** A statically-resolved schema identifier reference */
@@ -996,6 +1002,7 @@ export function extractRoutesFromSource(
           : null,
         filePath,
         relativePath: relPath,
+        controllerIsDefaultExport: cls.isDefault,
       })
     }
   }

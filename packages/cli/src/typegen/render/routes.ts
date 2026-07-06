@@ -62,6 +62,21 @@ export {}
   // silently degrades to `unknown` with `moduleResolution: 'bundler'`.)
   const schemaImports = new Map<string, { identifier: string; specifier: string }>()
 
+  // Hoisted controller type imports for response inference — one alias per
+  // (file, class). The consumer's tsc computes the response from the
+  // handler's return type via InferHandlerResponse; the scanner never runs
+  // a type checker (response-inference-design.md R2).
+  const controllerImports = new Map<string, string>()
+  const planControllerImport = (m: DiscoveredRoute): string => {
+    const key = `${m.filePath}::${m.controller}`
+    let alias = controllerImports.get(key)
+    if (!alias) {
+      alias = `_C${controllerImports.size}`
+      controllerImports.set(key, alias)
+    }
+    return alias
+  }
+
   const renderField = (
     schema: { identifier: string; source: string | null } | null,
     m: DiscoveredRoute,
@@ -123,6 +138,12 @@ export {}
       const paramsType = paramsSchemaType ?? urlParamsType
       const bodyType = bodySchemaType ?? 'unknown'
       const queryType = querySchemaType ?? renderQueryShape(m)
+      // Response inference: reference the handler's own type and let the
+      // consumer's tsc compute it — return-value handlers yield their exact
+      // payload (Reply<S, T> unwraps to T); imperative ctx.json handlers
+      // degrade to `unknown` inside InferHandlerResponse, same as before.
+      const controllerAlias = planControllerImport(m)
+      const responseType = `import('@forinda/kickjs').InferHandlerResponse<${controllerAlias}['${m.method}']>`
       const docLines = renderQueryDocLines(m)
       lines.push(
         `      /**`,
@@ -133,7 +154,7 @@ export {}
         `        params: ${paramsType}`,
         `        body: ${bodyType}`,
         `        query: ${queryType}`,
-        `        response: unknown`,
+        `        response: ${responseType}`,
         `      }`,
       )
     }
@@ -141,7 +162,24 @@ export {}
     interfaces.push(lines.join('\n'))
   }
 
-  const importBlock = renderSchemaImports(schemaImports)
+  // Controller type imports — same hoisting rationale as schema imports.
+  // `source: ''` semantics of resolveSchemaImportSpecifier point the
+  // specifier at the controller file itself.
+  const controllerImportLines: string[] = []
+  const routeByKey = new Map<string, DiscoveredRoute>()
+  for (const r of routes) routeByKey.set(`${r.filePath}::${r.controller}`, r)
+  for (const [key, alias] of controllerImports) {
+    const route = routeByKey.get(key)!
+    const specifier = resolveSchemaImportSpecifier('', route.filePath, routesOutFile)
+    const binding = route.controllerIsDefaultExport
+      ? `default as ${alias}`
+      : `${route.controller} as ${alias}`
+    controllerImportLines.push(`import type { ${binding} } from '${specifier}'`)
+  }
+  const controllerImportBlock =
+    controllerImportLines.length > 0 ? controllerImportLines.join('\n') + '\n' : ''
+
+  const importBlock = renderSchemaImports(schemaImports) + controllerImportBlock
   const interfaceBlock = interfaces.join('\n')
 
   return `${ROUTES_HEADER}${importBlock}

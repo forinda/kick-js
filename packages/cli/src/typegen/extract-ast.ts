@@ -592,6 +592,7 @@ export function extractFileAst(source: string, filePath: string, cwd: string): F
           paramsSchema: schemaFieldRef(options, 'params', ctx),
           filePath,
           relativePath: relPath,
+          controllerIsDefaultExport: discovered.isDefault,
         })
       }
     }
