@@ -22,6 +22,11 @@ pre-commit:
     # `format:check` script.
     format:
       glob: '{packages/*/src/**/*.{ts,tsx,js,mjs,cjs},packages/*/__tests__/**/*.{ts,tsx},packages/*/spa/src/**/*.{ts,tsx},docs/**/*.md,docs/.vitepress/**/*.{ts,mts,vue},tutorials/**/*.md,scripts/*.{ts,js,mjs},*.md}'
+      # CHANGELOGs are changesets-generated and oxfmt-ignored (.oxfmtrc).
+      # Without this exclude, the release bot's version commit stages ONLY
+      # changelogs, oxfmt sees zero unignored targets, exits 2, and the
+      # pre-commit hook kills the changesets action's commit.
+      exclude: '**/CHANGELOG.md'
       run: pnpm exec oxfmt --check {staged_files}
     # ESLint-replacement linter via oxlint (Rust, sub-second on full
     # repo). Runs only when a TS file under packages/ is staged so
