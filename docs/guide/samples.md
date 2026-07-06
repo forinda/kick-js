@@ -4,7 +4,7 @@ A copy-pasteable tour of the patterns KickJS leans on. Each sample is the **reco
 
 If you're new, read [What is KickJS](./what-is-kickjs.md) and [Getting Started](./getting-started.md) first, then skim this page top-to-bottom — it doubles as the mental model.
 
-> **The mental model in one breath:** decorate classes (`@Controller`, `@Service`), let the DI container wire them, group them into modules, and `bootstrap()`. `kick typegen` scans your source and feeds the editor types (routes, env, DI tokens, context keys) so the framework stays "just TypeScript" with no codegen you hand-maintain.
+> **The mental model in one breath:** decorate classes (`@Controller`, `@Service`), let the DI container wire them, group them into modules, and `bootstrap()`. `kick typegen` scans your source and feeds the editor types (routes (params/body/query/response), env, DI tokens, context keys) so the framework stays "just TypeScript" with no codegen you hand-maintain.
 
 ---
 

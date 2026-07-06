@@ -79,12 +79,12 @@ src/modules/users/
     users.repository.test.ts
 ```
 
-`rest` is the default pattern; pass `--template minimal` for just a controller + module. Need a real database? Pick a repo by name (`--repo postgres`) for a stub you wire yourself, or reach for the first-party [`@forinda/kickjs-db`](./database/) layer.
+`rest` is the default pattern; pass `--template minimal` for just a controller + module, or `--template fullstack` for a server + typed-web-app workspace (see the [typed client](./typed-client.md)). Need a real database? Pick a repo by name (`--repo postgres`) for a stub you wire yourself, or reach for the first-party [`@forinda/kickjs-db`](./database/) layer.
 
 ## Your First Controller
 
 ```ts
-import { Controller, Get, Post, type Ctx } from '@forinda/kickjs'
+import { Controller, Get, Post, reply, type Ctx } from '@forinda/kickjs'
 import { z } from 'zod'
 
 const createUserSchema = z.object({
@@ -95,17 +95,23 @@ const createUserSchema = z.object({
 @Controller()
 export class UserController {
   @Get('/')
-  async list(ctx: Ctx<KickRoutes.UserController['list']>) {
-    ctx.json([{ id: '1', name: 'Alice' }])
+  async list(_ctx: Ctx<KickRoutes.UserController['list']>) {
+    // Return-value handlers: the runtime sends this as 200 json, and
+    // `kick typegen` infers the response type for the typed client.
+    return [{ id: '1', name: 'Alice' }]
   }
 
   @Post('/', { body: createUserSchema, name: 'CreateUser' })
   async create(ctx: Ctx<KickRoutes.UserController['create']>) {
     // ctx.body is validated and typed from the Zod schema
-    ctx.created({ id: '2', ...ctx.body })
+    return reply(201, { id: '2', ...ctx.body })
   }
 }
 ```
+
+(`ctx.json(...)` / `ctx.created(...)` remain fully supported — returning the
+payload is what makes the response type statically inferable. See
+[Return-Value Handlers](./controllers.md#return-value-handlers).)
 
 ## Your First Module
 
@@ -214,4 +220,5 @@ pnpm kick start
 - [Controllers & Routes](./controllers.md) — route decorators and validation
 - [Middleware](./middleware.md) — class and method middleware
 - [Plugins](./plugins.md) — bundle modules, adapters, middleware, and DI bindings into one reusable unit with `definePlugin()` and mount them via `bootstrap({ plugins: [...] })`
+- [Typed Client](./typed-client.md) — call the API from your frontend with response types inferred from these handlers
 - [Examples](../examples/index.md) — see complete example applications

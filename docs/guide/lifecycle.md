@@ -110,6 +110,11 @@ beforeStart(ctx)
 | `afterStart(ctx)`          | After the HTTP server is listening              | Attach upgrade handlers (Socket.IO, gRPC), warm caches                                         |
 | `shutdown()`               | On SIGTERM/SIGINT                               | Close DB pools, flush logs, disconnect WS — runs concurrently via `Promise.allSettled`         |
 
+Per-request teardown is separate from process shutdown: a REQUEST-scoped
+service method decorated with `@PreDestroy()` runs when its request's scope
+closes (response finished or aborted) — the counterpart to `@PostConstruct`.
+See [Dependency Injection → Lifecycle Hooks](./dependency-injection.md#predestroy).
+
 See [Adapters](./adapters.md) for the full `defineAdapter()` reference.
 
 ## Middleware Phases

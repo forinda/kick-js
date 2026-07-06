@@ -198,6 +198,30 @@ class CacheService {
 }
 ```
 
+### @PreDestroy
+
+The teardown counterpart. For REQUEST-scoped services it runs when the
+request's scope closes (response finished or aborted) — release per-request
+resources there:
+
+```ts
+@Service({ scope: Scope.REQUEST })
+class TxService {
+  @PostConstruct()
+  begin() {
+    this.tx = db.beginTransaction()
+  }
+
+  @PreDestroy()
+  async close() {
+    await this.tx.rollbackIfOpen()
+  }
+}
+```
+
+Hooks may be async; errors are logged and swallowed so one failing teardown
+can't break request completion.
+
 ## Environment Injection
 
 Use `@Value` to inject environment variables. When `kick typegen` has populated the project's `KickEnv` global from `src/env.ts`, the key autocompletes and the `Env<K>` type alias resolves to the schema-inferred type — see [Configuration](configuration.md) and [Type Generation](typegen.md#how-env-vars-are-typed) for the full pipeline.

@@ -115,6 +115,23 @@ class CacheService {
 }
 ```
 
+### @PreDestroy()
+
+The teardown counterpart. For REQUEST-scoped services it runs when the
+request's scope closes (response finished or aborted) — release transactions,
+handles, and subscriptions there. Async hooks are fired without blocking the
+response; errors are logged and swallowed.
+
+```ts
+@Service({ scope: Scope.REQUEST })
+class TxService {
+  @PreDestroy()
+  async close() {
+    await this.tx.rollbackIfOpen()
+  }
+}
+```
+
 ## Method & Class Decorators
 
 ### @Middleware(...handlers)
@@ -434,6 +451,7 @@ class TaskController {
 | `@Repository`                | Class                | core    | Data access class                                   |
 | `@Get/Post/Put/Delete/Patch` | Method               | core    | HTTP route handler                                  |
 | `@PostConstruct`             | Method               | core    | Post-instantiation hook                             |
+| `@PreDestroy`                | Method               | core    | Teardown hook (request-scope close)                 |
 | `@Middleware`                | Class/Method         | core    | Attach middleware                                   |
 | `@FileUpload`                | Method               | core    | Configure file upload                               |
 | `@Autowired`                 | Property / Parameter | core    | Dependency injection — either position works        |
