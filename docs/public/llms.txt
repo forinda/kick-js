@@ -10,6 +10,7 @@
 - [Dependency Injection](https://kickjs.app/guide/dependency-injection.html): The container, `@Service`, `@Inject`, scopes.
 - [Modules](https://kickjs.app/guide/modules.html): `defineModule`, route mounting, registration.
 - [HTTP Runtimes (Express / Fastify / h3)](https://kickjs.app/guide/http-runtimes.html): Pick the engine at bootstrap; capability matrix; writing a custom runtime.
+- [Edge Deployment (Workers / Bun / Deno)](https://kickjs.app/guide/edge-deployment.html): `createWebApp` fetch entry, wrangler `nodejs_compat`, Bun/Deno serve, edge caveats.
 - [Context Decorators](https://kickjs.app/guide/context-decorators.html): Typed, ordered `ctx` population via `defineContextDecorator`.
 - [Middleware](https://kickjs.app/guide/middleware.html): Built-ins (helmet, cors, requestId, rate-limit, …) and custom.
 - [Validation](https://kickjs.app/guide/validation.html): Zod / Valibot / Yup body, query, and param validation.
