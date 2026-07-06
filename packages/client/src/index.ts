@@ -227,8 +227,10 @@ export function createTestClient<Api extends ApiMap>(
   options: Omit<ClientOptions, 'fetch' | 'baseUrl'> & { baseUrl?: string } = {},
 ): KickClient<Api> {
   return createClient<Api>({
-    baseUrl: options.baseUrl ?? 'http://test/api/v1',
     ...options,
+    // AFTER the spread — an explicit `baseUrl: undefined` key in options
+    // must not clobber the default (spread copies undefined-valued keys).
+    baseUrl: options.baseUrl ?? 'http://test/api/v1',
     fetch: (request) => app.fetch(request),
   })
 }

@@ -201,6 +201,13 @@ describe('createTestClient — network-free harness', () => {
     expectTypeOf(task).toEqualTypeOf<Task>()
   })
 
+  it('an explicit undefined baseUrl keeps the default (spread-order regression)', async () => {
+    const app = makeApp()
+    const api = createTestClient<Api>(app, { baseUrl: undefined })
+    const task = await api.get('/tasks/:id', { params: { id: '3' } })
+    expect(task).toEqual({ id: '3', title: 'task 3' })
+  })
+
   it('honors a custom baseUrl for non-default prefixes', async () => {
     const app = makeApp()
     let seenUrl = ''
