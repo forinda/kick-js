@@ -34,6 +34,13 @@ npx @forinda/kickjs-cli new my-api
 cd my-api && pnpm dev
 ```
 
+Or a fullstack workspace — KickJS API + Vite/React frontend, typed end to end:
+
+```bash
+npx @forinda/kickjs-cli new my-app --template fullstack
+cd my-app && pnpm dev   # server + web in parallel; rename a server field and the frontend stops compiling
+```
+
 ## Hello World
 
 A fresh `kick new my-api` scaffolds a complete project. Here are the files that matter, exactly as the CLI generates them:
@@ -133,7 +140,8 @@ container.register(REPO, PrismaUserRepo)
 **End-to-end type safety via typegen** — `kick typegen` (auto on `kick dev`) emits augmentations from source scan. `ctx.params/body/query`, `@Inject` literals, and asset paths all narrow as you save.
 
 ```ts
-KickRoutes // ctx.params / body / query per route
+KickRoutes // ctx.params / body / query / response per route
+KickRoutes.Api // flat 'METHOD /path' map — powers the typed client
 KickJsPluginRegistry // @Inject literals
 KickAssets // typed asset paths
 KickEnv // ConfigService.get keys
@@ -146,6 +154,17 @@ KickEnv // ConfigService.get keys
 @Service @Autowired @Middleware
 @Cacheable @Cron @Asset
 ```
+
+**Return-value handlers + typed client** — `return` the payload and the response type flows from the handler through `kick typegen` into [`@forinda/kickjs-client`](packages/client/): the frontend calls `api.get('/tasks/:id', …)` with the server's actual types. Declare `{ response: schema }` on a route and the same contract feeds the OpenAPI success response — docs and types can't drift.
+
+```ts
+@Get('/:id')
+async get(ctx: RequestContext) {
+  return this.tasks.find(ctx.params.id) // → 200 json; response type inferred end to end
+}
+```
+
+**Edge-ready web standards** — the same app runs as a `fetch(Request) → Response` handler on Cloudflare Workers, Bun, and Deno via [`@forinda/kickjs/web`](https://kickjs.app/guide/edge-deployment.html) (h3 v2 engine); a bundle-purity test keeps the entry free of node-only imports.
 
 **DDD generators** — full hook surface emitted so you delete what you don't need.
 
@@ -197,6 +216,8 @@ Everything else — swagger, the db family, queue, ws, devtools, drizzle, prisma
 kick add --list           # current optional catalog
 kick add swagger drizzle  # install several at once
 ```
+
+One optional package lives on the frontend side instead: [`@forinda/kickjs-client`](packages/client/) — the zero-dependency typed fetch client (`pnpm add @forinda/kickjs-client` in your web app; see the [typed client guide](https://kickjs.app/guide/typed-client.html)).
 
 Browse `packages/` in this repo for the full source layout.
 
@@ -258,19 +279,19 @@ kick tinker                          # Interactive REPL with full DI graph
 
 ## Runtime Compatibility
 
-| Feature         | Node 20+ | Node 22+ | Node 24+ | Bun          | Deno |
-| --------------- | -------- | -------- | -------- | ------------ | ---- |
-| Production      | Yes      | Yes      | Yes      | Experimental | No   |
-| Dev Mode (HMR)  | Yes      | Yes      | Yes      | No           | No   |
-| Tests (Vitest)  | Yes      | Yes      | Yes      | Partial      | No   |
-| CLI (`kick`)    | Yes      | Yes      | Yes      | Experimental | No   |
-| Pure ESM Import | Yes      | Yes      | Yes      | Yes          | Yes  |
+| Feature                      | Node 20+ | Bun          | Deno | Cloudflare Workers |
+| ---------------------------- | -------- | ------------ | ---- | ------------------ |
+| Production (node runtimes)   | Yes      | Yes          | —    | —                  |
+| Production (web fetch entry) | Yes      | Yes          | Yes  | Yes¹               |
+| Dev Mode (Vite HMR)          | Yes      | No           | No   | —                  |
+| Tests (Vitest)               | Yes      | Partial      | No   | —                  |
+| CLI (`kick`)                 | Yes      | Experimental | No   | —                  |
 
 > **Node 20** is the minimum supported version (LTS with native ESM).
 >
-> **Bun**: core DI and decorators work; full HTTP pipeline is experimental.
->
-> **Deno**: blocked by `reflect-metadata`. The default logger is `console`-based (zero deps), so logging is not a blocker.
+> ¹ Workers need `compatibility_flags = ["nodejs_compat"]` (AsyncLocalStorage). The
+> web fetch entry is [`@forinda/kickjs/web`](https://kickjs.app/guide/edge-deployment.html)
+> — `createWebApp({ h3, modules })` on the h3 v2 engine; Bun/Deno smoke tests run in CI.
 
 ## Documentation
 
