@@ -65,7 +65,7 @@
   "devDependencies": {
     "@forinda/kickjs": "workspace:*",
     "@types/jsonwebtoken": "^9.0.9",
-    "@types/node": "^25.9.2",
+    "@types/node": "^26.1.0",
     "jsonwebtoken": "^9.0.2",
     "typescript": "^6.0.3",
     "vitest": "^4.1.9"
