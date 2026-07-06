@@ -28,7 +28,11 @@ export interface RouteShapeLike {
   response: unknown
 }
 
-type ApiMap = Record<string, RouteShapeLike>
+// `object`, not `Record<string, RouteShapeLike>`: the generated
+// `KickRoutes.Api` is an INTERFACE, which has no string index signature and
+// would fail a Record constraint. Key/value conformance is guaranteed by the
+// generator; PathsFor/ShapeOf only rely on `keyof Api`.
+type ApiMap = object
 
 /** HTTP verbs the route decorators produce. */
 export type ClientMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
@@ -45,7 +49,11 @@ type ShapeOf<
   Api extends ApiMap,
   M extends ClientMethod,
   P extends string,
-> = `${M} ${P}` extends keyof Api ? Api[`${M} ${P}`] : never
+> = `${M} ${P}` extends keyof Api
+  ? Api[`${M} ${P}`] extends RouteShapeLike
+    ? Api[`${M} ${P}`]
+    : never
+  : never
 
 // Paramless routes emit `params: {}` and unschema'd bodies emit
 // `body: unknown` — both become OPTIONAL fields; a concrete shape is

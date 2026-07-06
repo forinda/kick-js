@@ -1,7 +1,7 @@
 {
   "name": "@forinda/kickjs-client",
   "version": "0.0.0",
-  "description": "Typed fetch client for KickJS APIs — end-to-end response types from the kick typegen KickRoutes augmentation",
+  "description": "Typed fetch client for KickJS APIs \u2014 end-to-end response types from the kick typegen KickRoutes augmentation",
   "keywords": [
     "kickjs",
     "typed-client",
@@ -11,12 +11,12 @@
     "api-client"
   ],
   "type": "module",
-  "main": "dist/index.mjs",
-  "types": "dist/index.d.mts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.mjs",
-      "types": "./dist/index.d.mts"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     }
   },
   "files": [
