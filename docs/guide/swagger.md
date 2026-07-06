@@ -29,6 +29,28 @@ Visit:
 - `http://localhost:3000/redoc` — ReDoc
 - `http://localhost:3000/openapi.json` — Raw JSON spec
 
+## Declared response schemas
+
+Give the route a `response` schema and the success response documents itself —
+the SAME declaration `kick typegen` uses for `KickRoutes[...].response`, so
+docs, server types, and the [typed client](./typed-client.md) can't drift:
+
+```ts
+const taskSchema = z.object({ id: z.string(), title: z.string() })
+
+@Get('/', { response: taskSchema })
+list() {
+  return this.tasks.all()
+}
+```
+
+- The schema lands on the auto-generated success response (`200`/`201`) as
+  `application/json` content, registered under `components/schemas`.
+- It is **never validated at runtime** — it's a documented contract.
+- Explicit `@ApiResponse(...)` entries on the method still win wholesale.
+- In `kick typegen`, a declared `response` schema overrides return-type
+  inference for that route.
+
 ## Decorators
 
 ### @ApiTags

@@ -84,7 +84,7 @@ export {}
   const renderField = (
     schema: { identifier: string; source: string | null } | null,
     m: DiscoveredRoute,
-    field: 'body' | 'query' | 'params',
+    field: 'body' | 'query' | 'params' | 'response',
   ): string | null => {
     const alias = planSchemaImport(
       schema,
@@ -142,12 +142,16 @@ export {}
       const paramsType = paramsSchemaType ?? urlParamsType
       const bodyType = bodySchemaType ?? 'unknown'
       const queryType = querySchemaType ?? renderQueryShape(m)
-      // Response inference: reference the handler's own type and let the
-      // consumer's tsc compute it — return-value handlers yield their exact
-      // payload (Reply<S, T> unwraps to T); imperative ctx.json handlers
-      // degrade to `unknown` inside InferHandlerResponse, same as before.
+      // Response type, priority order:
+      //   1. Declared contract (`@Get('/', { response: schema })`) — the
+      //      schema's inferred type; same declaration feeds Swagger.
+      //   2. Return-type inference via InferHandlerResponse (return-value
+      //      handlers exact; imperative ctx.json degrades to unknown).
+      const responseSchemaType = renderField(m.responseSchema ?? null, m, 'response')
       const controllerAlias = planControllerImport(m)
-      const responseType = `import('@forinda/kickjs').InferHandlerResponse<${controllerAlias}['${m.method}']>`
+      const responseType =
+        responseSchemaType ??
+        `import('@forinda/kickjs').InferHandlerResponse<${controllerAlias}['${m.method}']>`
       const docLines = renderQueryDocLines(m)
       lines.push(
         `      /**`,

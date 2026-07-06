@@ -101,7 +101,9 @@ expect(await api.get('/tasks/:id', { params: { id: '1' } })).toEqual(task)
 - Query values pass through `URLSearchParams` (arrays append repeated keys).
 - `204` responses resolve to `undefined`.
 - Imperative `ctx.json` handlers infer `response: unknown` — switch them to
-  return-value style (or a `Reply`) for exact types.
+  return-value style (or a `Reply`) for exact types, or declare the contract
+  with `@Get('/', { response: schema })` (which also feeds
+  [Swagger](./swagger.md#declared-response-schemas)).
 
 Using TanStack Query or SWR? See the
 [recipes](./typed-client-recipes.md) — the client's inference flows straight

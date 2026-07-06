@@ -88,6 +88,13 @@ export interface DiscoveredRoute {
   bodySchema: SchemaRef | null
   querySchema: SchemaRef | null
   paramsSchema: SchemaRef | null
+  /**
+   * Declared response contract from the route decorator
+   * (`@Get('/', { response: schema })`). When present it WINS over
+   * return-type inference in the emitted `response` field — and the same
+   * declaration drives the Swagger success-response schema.
+   */
+  responseSchema?: SchemaRef | null
   /** Absolute file path of the controller */
   filePath: string
   /** Path relative to scan root, with forward slashes */
@@ -982,6 +989,7 @@ export function extractRoutesFromSource(
       const bodyId = extractObjectFieldIdentifier(routeArgs, 'body')
       const queryId = extractObjectFieldIdentifier(routeArgs, 'query')
       const paramsId = extractObjectFieldIdentifier(routeArgs, 'params')
+      const responseId = extractObjectFieldIdentifier(routeArgs, 'response')
 
       // forinda/kick-js#235 §3 — when the controller is mounted under a path
       // with `:params` (e.g. `/orgs/:id/extensions`), surface those
@@ -1007,6 +1015,9 @@ export function extractRoutesFromSource(
           : null,
         paramsSchema: paramsId
           ? { identifier: paramsId, source: resolveImportSource(source, paramsId) }
+          : null,
+        responseSchema: responseId
+          ? { identifier: responseId, source: resolveImportSource(source, responseId) }
           : null,
         filePath,
         relativePath: relPath,

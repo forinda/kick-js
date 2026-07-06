@@ -1,5 +1,6 @@
 import 'reflect-metadata'
 import { describe, it, expect, beforeEach } from 'vitest'
+import { z } from 'zod'
 import {
   ApiOperation,
   ApiResponse,
@@ -911,5 +912,68 @@ describe('registerControllerForDocs — per-scope isolation', () => {
 
     expect(buildOpenAPISpec(keepOpts).paths['/api/keep']).toBeDefined()
     expect(buildOpenAPISpec(dropOpts).paths['/api/drop']).toBeUndefined()
+  })
+})
+
+describe('declared response schema (validation.response)', () => {
+  beforeEach(() => {
+    Container.reset()
+    clearRegisteredRoutes()
+  })
+
+  it('feeds the default success response content schema', () => {
+    const taskSchema = z.object({ id: z.string(), title: z.string() })
+
+    @Controller()
+    class TasksController {
+      @Get('/', { response: taskSchema })
+      list() {}
+    }
+
+    registerControllerForDocs(TasksController, '/tasks')
+    const spec = buildOpenAPISpec()
+
+    const op = spec.paths['/tasks']?.get
+    expect(op).toBeDefined()
+    const success = op.responses['200']
+    expect(success.description).toBe('Successful operation')
+    const ref = success.content['application/json'].schema.$ref as string
+    expect(ref).toContain('listResponse')
+    const registered = spec.components.schemas['listResponse']
+    expect(registered.properties.id.type).toBe('string')
+    expect(registered.properties.title.type).toBe('string')
+  })
+
+  it('explicit @ApiResponse still wins over validation.response', () => {
+    const taskSchema = z.object({ id: z.string() })
+
+    @Controller()
+    class OverrideController {
+      @ApiResponse({ status: 200, description: 'manual wins' })
+      @Get('/', { response: taskSchema })
+      list() {}
+    }
+
+    registerControllerForDocs(OverrideController, '/ovr')
+    const spec = buildOpenAPISpec()
+    const success = spec.paths['/ovr']?.get.responses['200']
+    expect(success.description).toBe('manual wins')
+    expect(success.content).toBeUndefined()
+  })
+
+  it('204 default (DELETE) never gets a response body schema', () => {
+    const gone = z.object({ ok: z.boolean() })
+
+    @Controller()
+    class GoneController {
+      @Delete('/:id', { response: gone })
+      remove() {}
+    }
+
+    registerControllerForDocs(GoneController, '/gone')
+    const spec = buildOpenAPISpec()
+    const success = spec.paths['/gone/{id}']?.delete.responses['204']
+    expect(success.description).toBe('Successful operation')
+    expect(success.content).toBeUndefined()
   })
 })
