@@ -102,3 +102,7 @@ expect(await api.get('/tasks/:id', { params: { id: '1' } })).toEqual(task)
 - `204` responses resolve to `undefined`.
 - Imperative `ctx.json` handlers infer `response: unknown` — switch them to
   return-value style (or a `Reply`) for exact types.
+
+Using TanStack Query or SWR? See the
+[recipes](./typed-client-recipes.md) — the client's inference flows straight
+through `queryFn`/fetchers, no wrapper needed.

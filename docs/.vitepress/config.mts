@@ -24,6 +24,7 @@ const guideSidebar = [
       { text: 'Controllers & Routes', link: '/guide/controllers' },
       { text: 'Type Generation', link: '/guide/typegen' },
       { text: 'Typed Client', link: '/guide/typed-client' },
+      { text: 'Typed Client Recipes (Query/SWR)', link: '/guide/typed-client-recipes' },
       { text: 'Middleware', link: '/guide/middleware' },
       { text: 'HTTP Runtimes (Express / Fastify / h3)', link: '/guide/http-runtimes' },
       { text: 'Edge Deployment (Workers / Bun / Deno)', link: '/guide/edge-deployment' },
