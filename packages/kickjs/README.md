@@ -137,6 +137,8 @@ Two web-standard entries sit alongside them (h3 v2 engine — additive, the v1 r
 ```ts
 import { h3WebRuntime } from '@forinda/kickjs/h3-web' // bootstrap() on node, WHATWG pipeline
 import { createWebApp } from '@forinda/kickjs/web' // fetch(Request) → Response — Workers / Bun / Deno
+import * as h3 from 'h3' // v2 — passed in: edge bundlers have no createRequire
+import { modules } from './modules'
 
 const app = createWebApp({ h3, modules })
 export default { fetch: (req: Request) => app.fetch(req) }
