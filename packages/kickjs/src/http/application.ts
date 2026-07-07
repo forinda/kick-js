@@ -5,6 +5,7 @@ import {
   createLogger,
   Logger,
   normalizePath,
+  joinPaths,
   tokenName,
   METADATA,
   type AppModule,
@@ -32,7 +33,11 @@ import { getClassMeta } from '../core/metadata'
 import { requestId } from './middleware/request-id'
 import { notFoundHandler, errorHandler } from './middleware/error-handler'
 import { requestScopeMiddleware, isRequestScopeMiddleware } from './middleware/request-scope'
-import { _setExternalContributorSources, buildRouteTable } from './router-builder'
+import {
+  _setExternalContributorSources,
+  assertRouteUnique,
+  buildRouteTable,
+} from './router-builder'
 import { expressRuntime } from './runtimes/express'
 import type {
   ActiveRuntime,
@@ -675,6 +680,11 @@ export class Application {
     // restarts) doesn't accumulate stale entries.
     this._moduleContributors = []
 
+    // Duplicate-route guard (KICK006): one registry across every module in
+    // this setup pass, so cross-module collisions fail at boot instead of
+    // silently losing the dispatch race.
+    const seenRoutes = new Map<string, string>()
+
     for (const mod of modules) {
       // Prefer the declared `name` field (set by `defineModule({ name: 'X', ... })`)
       // over `constructor.name`. Factory-built modules are plain objects whose
@@ -732,9 +742,12 @@ export class Application {
           if (route.router) {
             this.runtime.useConnect(this.app, route.router, { path: mountPath })
           } else if (route.controller) {
-            this.runtime.mountRoutes(this.app, [
-              { mountPath, routes: buildRouteTable(route.controller) },
-            ])
+            const routeTable = buildRouteTable(route.controller)
+            const owner = route.controller.name ?? 'controller'
+            for (const entry of routeTable) {
+              assertRouteUnique(seenRoutes, entry.method, joinPaths(mountPath, entry.path), owner)
+            }
+            this.runtime.mountRoutes(this.app, [{ mountPath, routes: routeTable }])
           } else {
             throw moduleRouteMissingControllerError(mountPath)
           }

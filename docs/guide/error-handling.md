@@ -132,13 +132,14 @@ KICK001: No provider for UserService
 
 ### Catalog (current set)
 
-| Code      | When it fires                                                                |
-| --------- | ---------------------------------------------------------------------------- |
-| `KICK001` | DI: no provider registered for the requested token                           |
-| `KICK002` | DI: REQUEST-scoped binding resolved without request-scope middleware mounted |
-| `KICK003` | DI: REQUEST-scoped binding resolved outside an HTTP request                  |
-| `KICK004` | Config: `@Value('X')` resolved but env var not set and no default given      |
-| `KICK005` | Module: `routes()` declared a path without `controller` or `router`          |
+| Code      | When it fires                                                                                                                                               |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `KICK001` | DI: no provider registered for the requested token                                                                                                          |
+| `KICK002` | DI: REQUEST-scoped binding resolved without request-scope middleware mounted                                                                                |
+| `KICK003` | DI: REQUEST-scoped binding resolved outside an HTTP request                                                                                                 |
+| `KICK004` | Config: `@Value('X')` resolved but env var not set and no default given                                                                                     |
+| `KICK005` | Module: `routes()` declared a path without `controller` or `router`                                                                                         |
+| `KICK006` | Routing: two handlers claim the same verb + mounted path (param names ignored — `/:id` and `/:taskId` collide); thrown at boot on both node and web entries |
 
 More framework errors will migrate to `KickError` over time. Each new entry gets the next free code; codes are stable and never reused.
 
