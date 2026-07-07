@@ -68,6 +68,12 @@ class LazyMemoryStore implements RateLimitStore {
 }
 
 function defaultKey(ctx: RequestContext): string {
+  // Prefer the runtime-computed client IP (Express derives req.ip from the
+  // app's `trust proxy` setting) — raw forwarded headers are client-spoofable
+  // on node deployments that don't normalize them. Header fallbacks cover
+  // runtimes without an `ip` field (the web/edge entry).
+  const reqIp = (ctx.req as { ip?: unknown }).ip
+  if (typeof reqIp === 'string' && reqIp.length > 0) return reqIp
   const h = ctx.headers
   const first = (v: unknown): string | undefined =>
     typeof v === 'string' && v.length > 0 ? v.split(',')[0].trim() : undefined

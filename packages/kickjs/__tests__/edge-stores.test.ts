@@ -156,4 +156,21 @@ describe('rateLimitGuard on the web entry', () => {
       expect((await app.fetch(req())).status).toBe(200)
     }
   })
+
+  it('default key prefers runtime-computed req.ip over spoofable headers', async () => {
+    const seen: string[] = []
+    const guard = rateLimitGuard({
+      max: 1000,
+      store: {
+        increment: async (key) => (seen.push(key), { totalHits: 1, resetTime: new Date() }),
+        decrement: async () => {},
+        reset: async () => {},
+      },
+    })
+    const fakeCtx = (ip: string | undefined, headers: Record<string, string>) =>
+      ({ req: { ip }, headers, setHeader: () => {}, json: () => {} }) as never
+    await guard(fakeCtx('10.0.0.1', { 'x-forwarded-for': 'spoofed' }), () => {})
+    await guard(fakeCtx(undefined, { 'x-forwarded-for': 'fallback, hop2' }), () => {})
+    expect(seen).toEqual(['10.0.0.1', 'fallback'])
+  })
 })

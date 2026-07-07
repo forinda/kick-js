@@ -111,6 +111,10 @@ export interface KvSessionStoreOptions {
  * `session()` middleware today (e.g. backed by Upstash/Cloudflare KV via
  * REST) so sessions survive restarts and horizontal scaling; TTL expiry is
  * delegated to the KV layer via `expirationTtl`.
+ *
+ * Cost note: `touch()` is a get + put round-trip (KvLike has no TTL-only
+ * refresh), so `session({ rolling: true })` doubles KV operations per
+ * request — per-operation-billed platforms may prefer `rolling: false`.
  */
 export class KvSessionStore implements SessionStore {
   private readonly prefix: string

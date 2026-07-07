@@ -579,7 +579,7 @@ export class RequestContext<TBody = any, TParams = any, TQuery = any> implements
    * the web/edge entry. No-op guards are the runtime's job (headers set
    * after the response settles are ignored or throw per engine).
    */
-  setHeader(name: string, value: string): this {
+  setHeader(name: string, value: string | number | readonly string[]): this {
     this._response.setHeader(name, value)
     return this
   }
