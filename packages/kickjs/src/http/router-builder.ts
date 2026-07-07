@@ -8,6 +8,7 @@ import { METADATA } from '../core/interfaces'
 import type { ContributorRegistration } from '../core/context-decorator'
 import type { FileUploadConfig, MiddlewareHandler, RouteDefinition } from '../core/decorators'
 import { getClassMeta, getMethodMeta, getMethodMetaOrUndefined } from '../core/metadata'
+import { duplicateRouteError } from '../core/kick-errors'
 import type { CtxHandler, RouteEntry, RouteMethod } from './runtime'
 
 /**
@@ -30,6 +31,30 @@ let _externalContributorSources: readonly SourcedRegistration[] = []
 /** @internal — set by Application.setup() before each `mod.routes()` call. */
 export function _setExternalContributorSources(sources: readonly SourcedRegistration[]): void {
   _externalContributorSources = sources
+}
+
+/**
+ * Boot-time duplicate-route guard shared by the node and web mount loops.
+ *
+ * Registers `METHOD /mounted/path` into `registry` and throws
+ * {@link duplicateRouteError} (KICK006) if another handler already claimed
+ * it. Param *names* are ignored — `/tasks/:id` and `/tasks/:taskId` are the
+ * same route at dispatch time, so they collide here too.
+ *
+ * @internal
+ */
+export function assertRouteUnique(
+  registry: Map<string, string>,
+  method: string,
+  fullPath: string,
+  owner: string,
+): void {
+  const key = `${method.toUpperCase()} ${fullPath.replace(/:[^/]+/g, ':*')}`
+  const prior = registry.get(key)
+  if (prior !== undefined) {
+    throw duplicateRouteError(method.toUpperCase(), fullPath, owner, prior)
+  }
+  registry.set(key, owner)
 }
 
 export interface BuildRoutesOptions {

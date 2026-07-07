@@ -197,3 +197,34 @@ Or pass \`router:\` for full control:
     context: { mountPath },
   })
 }
+
+/**
+ * KICK006 — Two handlers claim the same HTTP verb + mounted path. The
+ * engine would silently dispatch one of them (Express/h3: first wins,
+ * Fastify: its own throw), while typegen and the typed client may
+ * describe the other — so this fails at boot instead.
+ */
+export function duplicateRouteError(
+  method: string,
+  path: string,
+  owner: string,
+  prior: string,
+): KickError {
+  return new KickError({
+    code: 'KICK006',
+    summary: `Duplicate route: ${method} ${path} is registered twice`,
+    cause: `\`${owner}\` registers \`${method} ${path}\`, but that verb + path is
+already claimed by \`${prior}\`. Only one handler can win at dispatch
+time, and which one depends on the engine — while \`kick typegen\` and
+the typed client may describe the other. Param names are ignored when
+comparing (\`/:id\` and \`/:taskId\` are the same route).`,
+    fix: `Change one of the two paths, remove the duplicate handler, or mount
+the second controller under a different module path / version:
+
+      routes() {
+        return { path: '/tasks', controller: TasksController, version: 2 }
+      }`,
+    docsUrl: `${DOCS_BASE}/guide/modules`,
+    context: { method, path, owner, prior },
+  })
+}

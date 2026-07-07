@@ -25,7 +25,11 @@ import { MutableModuleRegistry } from './core/module-registry'
 import type { AppModule, AppModuleClass, AppModuleEntry } from './core/app-module'
 import type { ContributorRegistrations } from './core/context-decorator'
 import type { SourcedRegistration } from './core/contributor-pipeline'
-import { _setExternalContributorSources, buildRouteTable } from './http/router-builder'
+import {
+  _setExternalContributorSources,
+  assertRouteUnique,
+  buildRouteTable,
+} from './http/router-builder'
 import { requestStore } from './http/request-store'
 import { compileWebRoute } from './http/web/handler'
 import { normalizePath } from './core/path'
@@ -130,6 +134,9 @@ export function createWebApp(options: CreateWebAppOptions): WebApp {
     }),
   )
 
+  // Duplicate-route guard (KICK006) — same boot-time check as the node path.
+  const seenRoutes = new Map<string, string>()
+
   for (const mod of modules) {
     const declaredName = (mod as { name?: unknown }).name
     const moduleLabel =
@@ -160,6 +167,9 @@ export function createWebApp(options: CreateWebAppOptions): WebApp {
         const mountPath = `${apiPrefix}/v${version}${normalizePath(route.path)}`
         for (const entry of buildRouteTable(route.controller)) {
           const url = joinPath(mountPath, entry.path)
+          // Per-handler owner so intra-controller duplicates name both methods.
+          const owner = `${route.controller.name ?? 'controller'}.${String(entry.meta.handlerName ?? '?')}`
+          assertRouteUnique(seenRoutes, entry.method, url, owner)
           const run = compileWebRoute(entry)
           app.on(entry.method, url, (event: H3EventLike) =>
             run({
