@@ -1,7 +1,7 @@
 {
   "name": "@forinda/kickjs",
   "version": "6.3.0",
-  "description": "A production-grade, decorator-driven Node.js framework for TypeScript — runs on Express, Fastify, or h3 (swap the engine in one line).",
+  "description": "A production-grade, decorator-driven Node.js framework for TypeScript \u2014 runs on Express, Fastify, or h3 (swap the engine in one line).",
   "keywords": [
     "kickjs",
     "nodejs",
@@ -131,7 +131,6 @@
     "dotenv": "^17.0.0",
     "express": "^5.1.0",
     "fastify": "^5.0.0",
-    "h3": "^1.0.0 || ^2.0.0-rc || ^2.0.0",
     "multer": "^2.0.0",
     "serve-static": "^1.15.0 || ^2.0.0",
     "zod": "^4.0.0"
@@ -144,9 +143,6 @@
       "optional": true
     },
     "dotenv": {
-      "optional": true
-    },
-    "h3": {
       "optional": true
     },
     "fastify": {
