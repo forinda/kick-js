@@ -4,7 +4,7 @@ This guide helps AI agents (Claude, Copilot, etc.) work effectively on the KickJ
 
 ## Engine & package layout (read first — avoids the two most common mistakes)
 
-- **KickJS is engine-pluggable, not Express-only.** It runs on **Express (default), Fastify, or h3** behind one `HttpRuntime` seam (`bootstrap({ runtime })`). Controllers, modules, DI, and context decorators are engine-neutral — write to `ctx` (`ctx.json`/`ctx.body`/`ctx.params`/`ctx.sse`), not raw Express APIs. The runtimes + cross-engine file uploads currently ship on the **`alpha`** channel.
+- **KickJS is engine-pluggable, not Express-only.** It runs on **Express (default), Fastify, or h3** behind one `HttpRuntime` seam (`bootstrap({ runtime })`). Controllers, modules, DI, and context decorators are engine-neutral — write to `ctx` (`ctx.json`/`ctx.body`/`ctx.params`/`ctx.sse`), not raw Express APIs. The runtimes (incl. the h3 v2 web-standard entries `./h3-web` and `./web` for edge/Bun/Deno) + cross-engine file uploads ship in the **stable** release.
 - **The framework lives in `packages/kickjs`** (`@forinda/kickjs`) — DI core under `src/core/`, HTTP layer under `src/http/`, runtimes under `src/http/runtimes/{express,fastify,h3}.ts`. The old `packages/core` + `packages/http` split (referenced in some tables below) **no longer exists**; map any such path to `packages/kickjs/src/{core,http}`.
 
 ## Before You Start
@@ -37,7 +37,7 @@ This guide helps AI agents (Claude, Copilot, etc.) work effectively on the KickJ
 | Config/env           | `packages/config/src/`                                                     |
 | CLI commands         | `packages/cli/src/commands/`                                               |
 | Code generators      | `packages/cli/src/generators/`                                             |
-| Generator patterns   | `packages/cli/src/generators/patterns/{rest,ddd,cqrs,minimal}.ts`          |
+| Generator patterns   | `packages/cli/src/generators/patterns/{rest,minimal}.ts`                   |
 | Template functions   | `packages/cli/src/generators/templates/`                                   |
 | Drizzle templates    | `packages/cli/src/generators/templates/drizzle/`                           |
 | Prisma templates     | `packages/cli/src/generators/templates/prisma/`                            |
@@ -71,25 +71,25 @@ This guide helps AI agents (Claude, Copilot, etc.) work effectively on the KickJ
 
 When adding new features, use these as templates:
 
-| Task              | Reference File                                                         |
-| ----------------- | ---------------------------------------------------------------------- |
-| New middleware    | `packages/http/src/middleware/csrf.ts`                                 |
-| New adapter       | `packages/swagger/src/swagger.adapter.ts`                              |
-| New package       | `packages/prisma/` (full package structure)                            |
-| New example app   | `examples/minimal-api/` (simple) or `examples/task-prisma-api/` (full) |
-| New test file     | `tests/container.test.ts`                                              |
-| Package exports   | `packages/http/package.json` (exports map)                             |
-| Vite build config | `packages/http/vite.config.ts` (multi-entry)                           |
+| Task            | Reference File                                                                |
+| --------------- | ----------------------------------------------------------------------------- |
+| New middleware  | `packages/kickjs/src/http/middleware/csrf.ts`                                 |
+| New adapter     | `packages/swagger/src/swagger.adapter.ts`                                     |
+| New package     | `packages/schema/` (tsdown-based structure — the repo standard)               |
+| New example app | [kickjs-examples-archive](https://github.com/forinda/kickjs-examples-archive) |
+| New test file   | `packages/kickjs/__tests__/` (per-package) or root `__tests__/` (integration) |
+| Package exports | `packages/kickjs/package.json` (exports map — verify against tsdown output)   |
+| Build config    | `packages/kickjs/tsdown.config.ts` (multi-entry)                              |
 
 ## Checklist: Adding a Feature
 
 ### New Middleware
 
-- [ ] Create `packages/http/src/middleware/<name>.ts`
+- [ ] Create `packages/kickjs/src/http/middleware/<name>.ts`
 - [ ] Export factory function: `export function name(options = {}) { return (req, res, next) => ... }`
-- [ ] Add to `packages/http/vite.config.ts` `build.lib.entry` object
-- [ ] Add to `packages/http/package.json` exports map
-- [ ] Add re-export to `packages/http/src/index.ts`
+- [ ] Add to `packages/kickjs/tsdown.config.ts` `entry` object
+- [ ] Add to `packages/kickjs/package.json` exports map
+- [ ] Add re-export to `packages/kickjs/src/http/index.ts` (+ `src/index.ts` if public — the root index is selective)
 - [ ] Add docs page at `docs/guide/<name>.md`
 - [ ] Add to sidebar in `docs/.vitepress/config.mts`
 - [ ] Run `pnpm build && pnpm test`
@@ -110,7 +110,7 @@ When adding new features, use these as templates:
 
 ### New Example App
 
-- [ ] Scaffold with CLI: `cd examples && node ../packages/cli/bin.js new <name> --template ddd --pm pnpm --repo inmemory --no-git --no-install --force`
+- [ ] Scaffold with CLI: `cd examples && node ../packages/cli/bin.js new <name> --template rest --pm pnpm --repo inmemory --no-git --no-install --force`
 - [ ] Add `package.json` (private: true, `workspace:*` deps — examples don't publish; their version is irrelevant)
 - [ ] Add the package name to `.changeset/config.json:ignore` so changesets doesn't try to version it
 - [ ] Add docs page at `docs/examples/<name>.md`
@@ -154,7 +154,7 @@ node ../packages/cli/bin.js new upload-api --yes --no-install --force
 
 # Or specify each flag for a non-default scaffold
 node ../packages/cli/bin.js new upload-api \
-  --template ddd --pm pnpm --repo prisma --no-git --no-install --force
+  --template rest --pm pnpm --repo prisma --no-git --no-install --force
 
 # Generate modules inside the example
 cd upload-api
@@ -163,7 +163,7 @@ node ../../packages/cli/bin.js g module upload
 
 `--yes` (alias `--non-interactive`, short `-y`) bypasses every prompt. Without it, missing flags trigger interactive selection.
 
-Available flags for `new`: `--template rest|ddd|cqrs|minimal`, `--pm pnpm|npm|yarn|bun`, `--repo prisma|drizzle|inmemory|custom`, `--packages auth,swagger,...`, `--no-git`, `--no-install`, `--force`, `-y / --yes / --non-interactive`.
+Available flags for `new`: `--template rest|minimal|fullstack`, `--pm pnpm|npm|yarn|bun`, `--repo prisma|drizzle|inmemory|custom`, `--packages auth,swagger,...`, `--no-git`, `--no-install`, `--force`, `-y / --yes / --non-interactive`.
 
 After scaffolding, customize the generated code for the example's purpose.
 
@@ -191,13 +191,13 @@ ORM-specific templates live in subfolders:
 
 Pattern generators are in `generators/patterns/`:
 
-- `rest.ts`, `ddd.ts`, `cqrs.ts`, `minimal.ts` — each exports a `generate*Files(ctx: ModuleContext)` function
+- `rest.ts`, `minimal.ts` — each exports a `generate*Files(ctx: ModuleContext)` function
 
 ### Key Config: kick.config.ts
 
 ```ts
 export default defineConfig({
-  pattern: 'ddd',
+  pattern: 'rest',
   modules: {
     dir: 'src/modules',
     repo: 'prisma', // 'drizzle' | 'inmemory' | 'prisma' | { name: 'custom' }
@@ -236,7 +236,7 @@ Use feature branches and PRs — never commit directly to `main`:
 git checkout -b feat/route-table-on-startup
 
 # 2. Make changes, commit with conventional commits
-git add packages/http/
+git add packages/kickjs/
 git commit -m "feat: print route table on application startup (#31)"
 
 # 3. Push and create PR (rich bodies go through a temp file — see below)
