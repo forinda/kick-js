@@ -1,12 +1,11 @@
-type ProjectTemplate = 'rest' | 'minimal'
+type ProjectTemplate = 'rest' | 'minimal' | 'fullstack'
 
 /** Generate README.md with project documentation */
 export function generateReadme(name: string, template: ProjectTemplate, pm: string): string {
   const templateLabels: Record<string, string> = {
     rest: 'REST API',
-    ddd: 'Domain-Driven Design',
-    cqrs: 'CQRS + Event-Driven',
     minimal: 'Minimal',
+    fullstack: 'Fullstack (KickJS API + typed web app)',
   }
 
   const packages = ['@forinda/kickjs', '@forinda/kickjs-vite']
@@ -168,437 +167,6 @@ For everything else (controllers, services, modules, RequestContext API, generat
 `
 }
 
-// Legacy reference left as a comment for the v4 doc — the original
-// generator embedded ~400 lines of patterns here that duplicated
-// AGENTS.md. The chunk below is the unused remnant of that template
-// kept under a `false &&` guard so the diff stays reviewable; it can
-// be deleted in the next minor.
-function _LEGACY_FULL_CLAUDE_TEMPLATE_UNUSED(
-  name: string,
-  template: ProjectTemplate,
-  pm: string,
-): string {
-  const templateLabels: Record<string, string> = {
-    rest: 'REST API',
-    ddd: 'Domain-Driven Design',
-    cqrs: 'CQRS + Event-Driven',
-    minimal: 'Minimal Express',
-  }
-
-  return `# CLAUDE.md — ${name} Development Guide
-
-> **Read \`AGENTS.md\` first.** It is the canonical, multi-agent reference for this project (Claude, Copilot, Codex, Gemini, etc.). This file contains the same project context distilled for Claude, plus Claude-specific notes. When the two disagree on anything substantive, treat \`AGENTS.md\` as authoritative and flag the discrepancy.
-
-## Project Overview
-
-This is a **${templateLabels[template] ?? 'REST API'}** application built with [KickJS](https://kickjs.app/) — a decorator-driven Node.js framework on Express 5 and TypeScript.
-
-## Quick Commands
-
-\`\`\`bash
-${pm} install           # Install dependencies
-kick dev                # Start dev server with HMR
-kick build              # Production build via Vite
-kick start              # Run production build
-${pm} run test          # Run tests with Vitest
-${pm} run typecheck     # TypeScript type checking
-${pm} run format        # Format code with Prettier
-\`\`\`
-
-## Project Structure
-
-\`\`\`
-src/
-├── index.ts           # Application bootstrap
-├── modules/           # Feature modules (DDD/CQRS pattern)
-│   └── index.ts       # Module registry
-└── ...
-\`\`\`
-
-## Package Manager
-
-- Always use **${pm}** for this project
-- Run \`${pm} install\` to sync dependencies
-- Never mix package managers (npm/yarn/pnpm)
-
-## Code Style
-
-- **Prettier** — no semicolons, single quotes, trailing commas, 100 char width
-- **TypeScript strict mode** — all types required
-- Format before committing: \`${pm} run format\`
-- Type check with: \`${pm} run typecheck\`
-
-## Key Patterns
-
-### Controllers
-
-Use decorators to define routes. Annotate \`ctx\` with \`Ctx<KickRoutes.X['method']>\`
-to get fully-typed \`ctx.params\`, \`ctx.body\`, and \`ctx.query\` from the
-generated \`KickRoutes\` namespace (refreshed on \`kick dev\` and \`kick typegen\`).
-
-\`\`\`ts
-import { Controller, Get, Post, type Ctx } from '@forinda/kickjs'
-
-@Controller()
-export class UserController {
-  @Get('/')
-  async findAll(ctx: Ctx<KickRoutes.UserController['findAll']>) {
-    return ctx.json({ users: [] })
-  }
-
-  @Post('/')
-  async create(ctx: Ctx<KickRoutes.UserController['create']>) {
-    const data = ctx.body
-    return ctx.created({ user: data })
-  }
-}
-\`\`\`
-
-### Services
-
-Inject dependencies with \`@Service()\` and \`@Autowired()\`:
-
-\`\`\`ts
-import { Service, Autowired } from '@forinda/kickjs'
-
-@Service()
-export class UserService {
-  @Autowired()
-  private userRepository!: UserRepository
-
-  async findAll() {
-    return this.userRepository.findAll()
-  }
-}
-\`\`\`
-
-### Modules
-
-Modules are built with \`defineModule()\` and wire controllers via \`buildRoutes()\`. The legacy \`class … implements AppModule\` form keeps working — the loader accepts both — but new generators emit \`defineModule\` for parity with \`defineAdapter\` and \`definePlugin\`.
-
-> **Naming matters.** Module files **must** be named \`<name>.module.ts\` and live under \`src/modules/\`. The Vite plugin auto-discovers files matching \`*.module.[tj]sx?\` for HMR — a misnamed file (e.g., \`projects.ts\`) won't trigger a graceful module rebuild on save and will require a full server restart. The CLI generator (\`kick g module <name>\`) follows this convention automatically.
-
-\`\`\`ts
-// src/modules/users/users.module.ts   (named <feature>.module.ts)
-import { defineModule } from '@forinda/kickjs'
-import { UserController } from './user.controller'
-
-export const UserModule = defineModule({
-  name: 'UserModule',
-  build: () => ({
-    routes() {
-      // Single route set — framework derives the router via buildRoutes(controller).
-      return {
-        path: '/users',
-        controller: UserController,
-      }
-    },
-  }),
-})
-\`\`\`
-
-\`routes()\` can also return **an array** to mount multiple route sets under the same module — useful when one feature spans several controllers, or when you want a v1 and v2 surface of the same controller live side-by-side. Each route set carries an optional \`version\` field overriding the app default (\`Application.defaultVersion\`); the mount path becomes \`/{apiPrefix}/v{version}{path}\`:
-
-\`\`\`ts
-import { defineModule } from '@forinda/kickjs'
-import { UsersV1Controller } from './v1/users.controller'
-import { UsersV2Controller } from './v2/users.controller'
-import { UserAdminController } from './admin/user-admin.controller'
-
-export const UserModule = defineModule({
-  name: 'UserModule',
-  build: () => ({
-    routes() {
-      return [
-        // /api/v1/users — legacy surface kept around for older clients
-        { path: '/users', version: 1, controller: UsersV1Controller },
-        // /api/v2/users — current surface
-        { path: '/users', version: 2, controller: UsersV2Controller },
-        // /api/v1/admin/users — admin surface, same module, different mount
-        { path: '/admin/users', controller: UserAdminController },
-      ]
-    },
-  }),
-})
-\`\`\`
-
-Register all modules in \`src/modules/index.ts\` via \`defineModules()\` — a chainable list builder that drops directly into \`bootstrap({ modules })\`. \`kick g module <name>\` appends \`.mount(NewModule())\` to the chain on every generation:
-
-\`\`\`ts
-import { defineModules } from '@forinda/kickjs'
-import { UserModule } from './users/user.module'
-import { TaskModule } from './tasks/task.module'
-
-export const modules = defineModules().mount(UserModule()).mount(TaskModule())
-\`\`\`
-
-The flat-array form (\`AppModuleEntry[] = [UserModule()]\`) also works and is what \`kick.config.ts > modules.style: 'class'\` emits — both shapes feed the same loader.
-
-\`\`\`ts
-// Setting on \`kick.config.ts\` to opt out of \`defineModule\` codegen.
-export default defineConfig({
-  pattern: 'rest',
-  modules: {
-    style: 'class', // emits \`class FooModule implements AppModule { ... }\`
-                    //   + flat-array registry \`[FooModule]\`
-                    // default is 'define' (defineModule + defineModules chain).
-  },
-})
-\`\`\`
-
-When the project-wide style and existing module files drift (e.g. \`style: 'define'\` on a project that still has class-form modules), \`kick g module\` refuses with a pointer to \`kick codemod modules --experimental --apply\` which rewrites between the two forms in either direction.
-
-### RequestContext
-
-Every controller method receives a \`ctx\` (alias \`Ctx<TRoute>\` or the
-loose \`RequestContext\`):
-
-\`\`\`ts
-ctx.body           // Request body (parsed JSON)
-ctx.params         // Route params
-ctx.query          // Query string
-ctx.headers        // Request headers
-ctx.requestId      // Auto-generated request ID
-ctx.session        // Session data (if session middleware enabled)
-ctx.file           // Uploaded file (single)
-ctx.files          // Uploaded files (multiple)
-
-// Pagination helpers
-ctx.qs(config)           // Parse query with filters/sort/pagination
-ctx.paginate(handler)     // Auto-paginated response
-
-// Response helpers
-ctx.json(data)            // 200 OK with JSON
-ctx.created(data)         // 201 Created
-ctx.noContent()           // 204 No Content
-ctx.notFound()            // 404 Not Found
-ctx.badRequest(msg)       // 400 Bad Request
-\`\`\`
-
-> **Context decorators** — when a middleware's only job is to populate \`ctx.set/get\` for the handler to read, prefer \`defineContextDecorator()\` over \`@Middleware()\`. Typed via \`ContextMeta\`, supports \`dependsOn\` ordering, validates the pipeline at boot. Full pattern reference in \`AGENTS.md\` and at <https://kickjs.app/guide/context-decorators>.
-
-## CLI Generators
-
-Generate code with the \`kick\` CLI:
-
-\`\`\`bash
-kick g module <name>              # Full module (controller, service, DTOs, repo)
-kick g scaffold <name> <fields>   # CRUD module from field definitions
-kick g controller <name>          # Standalone controller
-kick g service <name>             # Service class
-kick g middleware <name>          # Express middleware
-kick g guard <name>               # Route guard (auth, roles)
-kick g adapter <name>             # AppAdapter with lifecycle hooks
-kick g dto <name>                 # Zod DTO schema
-\`\`\`
-
-## Adding Packages
-
-\`\`\`bash
-kick add auth          # JWT, API key, OAuth strategies
-kick add swagger       # OpenAPI docs from decorators
-kick add ws            # WebSocket support
-kick add queue         # Background jobs (BullMQ/RabbitMQ/Kafka)
-kick add prisma        # Prisma ORM adapter
-kick add drizzle       # Drizzle ORM adapter
-kick add devtools      # Browser debug dashboard
-kick add --list        # Show all available packages
-
-# For email, scheduled tasks, multi-tenancy, OpenTelemetry, GraphQL, and
-# notifications use the BYO recipes in https://kickjs.app/guide/
-# — they wire the upstream library through defineAdapter()/definePlugin() directly.
-\`\`\`
-
-## Environment Configuration
-
-The project's typed env schema lives in **\`src/config/index.ts\`** —
-extend the base schema there with your application-specific keys, and
-the schema is auto-registered with kickjs at module load. The companion
-\`src/index.ts\` imports it as a side effect (\`import './config'\`) **before**
-\`bootstrap()\` runs, so every \`@Service\`, \`@Controller\`, \`@Value\`, and
-\`ConfigService\` resolution sees the validated extended values.
-
-> **Do not delete \`import './config'\` from \`src/index.ts\`.** It is the
-> registration step that wires \`ConfigService\` to your env schema.
-> Without it, \`config.get('YOUR_KEY')\` returns \`undefined\` for every
-> user-defined key and \`@Value('YOUR_KEY')\` only works because of a
-> raw \`process.env\` fallback (Zod coercion + defaults are skipped).
-
-Edit \`.env\` for variable values. Access them with \`@Value()\`:
-
-\`\`\`ts
-import { Value } from '@forinda/kickjs'
-
-@Service()
-export class ApiService {
-  @Value('API_KEY')
-  private apiKey!: string
-
-  @Value('PORT', 3000)  // With default
-  private port!: number
-}
-\`\`\`
-
-Or use \`ConfigService\`:
-
-\`\`\`ts
-import { Service, Autowired, ConfigService } from '@forinda/kickjs'
-
-@Service()
-export class AppService {
-  @Autowired()
-  private config!: ConfigService
-
-  getPort() {
-    // typed: number, Zod-coerced from baseEnvSchema
-    return this.config.get('PORT')
-  }
-}
-\`\`\`
-
-Hot-reload of \`.env\` changes during dev is wired up automatically via
-\`envWatchPlugin()\` in \`vite.config.ts\` — edit \`.env\`, the dev server
-reloads, and the next \`config.get()\` re-parses with the new values.
-
-### Standalone Env Utilities (No DI Required)
-
-These functions work anywhere — scripts, CLI tools, plain files, outside \`@Service\`/\`@Controller\`:
-
-\`\`\`ts
-import { defineEnv, loadEnv, getEnv, reloadEnv, resetEnvCache, baseEnvSchema } from '@forinda/kickjs/config'
-import { z } from 'zod'
-
-// Define and parse schema
-const schema = defineEnv((base) =>
-  base.extend({ DATABASE_URL: z.string().url() })
-)
-const env = loadEnv(schema)      // Parse + validate process.env
-console.log(env.PORT)            // 3000 (coerced to number)
-console.log(env.DATABASE_URL)    // validated URL string
-
-// Get single value
-const port = getEnv('PORT')      // typed after kick typegen
-
-// Reload after .env changes (HMR calls this automatically)
-reloadEnv()
-
-// Reset cache in tests that swap schemas
-resetEnvCache()
-\`\`\`
-
-| Function | Purpose |
-|----------|---------|
-| \`defineEnv(fn)\` | Extend base schema with custom Zod keys |
-| \`loadEnv(schema?)\` | Parse \`process.env\`, validate, cache, return typed object |
-| \`getEnv(key, schema?)\` | Get single validated env value |
-| \`reloadEnv()\` | Re-read \`.env\` from disk, re-parse with same schema |
-| \`resetEnvCache()\` | Clear parsed cache AND registered schema (for tests) |
-| \`baseEnvSchema\` | Base Zod schema: \`PORT\`, \`NODE_ENV\`, \`LOG_LEVEL\` |
-
-## Standalone Utilities (No DI Required)
-
-These utilities work outside decorated classes:
-
-### Logger
-
-\`\`\`ts
-import { Logger, createLogger } from '@forinda/kickjs'
-
-const log = Logger.for('MyScript')    // Static factory
-log.info('Processing started')
-log.error('Something failed')
-
-const log2 = createLogger('Worker')   // Function form
-\`\`\`
-
-### Injection Tokens
-
-\`\`\`ts
-import { createToken } from '@forinda/kickjs'
-
-// Type-safe DI tokens for factory/interface binding.
-// Convention: '<scope>/<PascalKey>[/<suffix>]' — scope lowercase, key PascalCase.
-const DB_URL = createToken<string>('app/Config/database-url')
-const FEATURE_FLAGS = createToken<FeatureFlags>('app/Features')
-\`\`\`
-
-### Reactivity
-
-\`\`\`ts
-import { ref, computed, watch, reactive } from '@forinda/kickjs'
-
-const count = ref(0)
-const doubled = computed(() => count.value * 2)
-const stop = watch(() => count.value, (val) => console.log(val))
-count.value++  // logs 1
-\`\`\`
-
-### HTTP Errors
-
-\`\`\`ts
-import { HttpException, HttpStatus } from '@forinda/kickjs'
-
-throw new HttpException(HttpStatus.NOT_FOUND, 'User not found')
-\`\`\`
-
-## Testing
-
-Tests live in \`src/**/*.test.ts\`:
-
-\`\`\`ts
-import { describe, it, expect, beforeEach } from 'vitest'
-import { Container } from '@forinda/kickjs'
-import { createTestApp } from '@forinda/kickjs-testing'
-
-describe('UserController', () => {
-  beforeEach(() => Container.reset())
-
-  it('should return users', async () => {
-    const app = await createTestApp([UserModule])
-    const res = await app.get('/users')
-    expect(res.status).toBe(200)
-  })
-})
-\`\`\`
-
-Run tests:
-- \`${pm} run test\` — run all tests
-- \`${pm} run test:watch\` — watch mode
-
-## Decorators Reference
-
-### Route Decorators
-- \`@Controller()\` — mark a class as an HTTP controller (path comes from \`routes().path\`)
-- \`@Get('/'), @Post('/'), @Put('/'), @Delete('/'), @Patch('/')\` — HTTP methods
-- \`@Middleware(fn)\` — attach middleware
-- \`@Public()\` — skip authentication (requires @forinda/kickjs-auth)
-- \`@Roles('admin', 'user')\` — role-based access control
-
-### DI Decorators
-- \`@Service()\` — singleton service (DI-registered)
-- \`@Repository()\` — repository (semantic alias for @Service)
-- \`@Autowired()\` — property injection
-- \`@Inject('token')\` — token-based injection
-- \`@Value('ENV_VAR')\` — inject config value
-
-## Common Pitfalls
-
-1. **Decorators fire at import time** — make sure to import module classes in \`src/modules/index.ts\`
-2. **Tests need \`Container.reset()\`** — call in \`beforeEach\` to isolate DI state
-3. **Always use \`ctx.body\`** — never \`req.body\` directly
-4. **DI requires \`reflect-metadata\`** — already imported in \`src/index.ts\`
-5. **Vite HMR requires proper cleanup** — adapters should implement \`shutdown()\`
-6. **Never delete \`import './config'\` from \`src/index.ts\`** — that side-effect import registers the env schema with kickjs. Without it \`ConfigService.get('YOUR_KEY')\` returns \`undefined\` for every user-defined key. \`@Value('YOUR_KEY')\` *appears* to keep working but only via a raw \`process.env\` fallback (Zod coercion + schema defaults are silently skipped).
-
-## Learn More
-
-- [KickJS Documentation](https://kickjs.app/)
-- [API Reference](https://kickjs.app/api/)
-- [CLI Commands](https://kickjs.app/guide/cli-commands.html)
-- [Decorators Guide](https://kickjs.app/guide/decorators.html)
-`
-}
-
 /** Generate AGENTS.md with AI agent guide */
 export function generateAgents(name: string, template: ProjectTemplate, pm: string): string {
   return `# AGENTS.md — AI Agent Guide for ${name}
@@ -611,7 +179,28 @@ add tool-specific affordances on top.
 ## Before You Start
 
 1. Run \`${pm} install\` to install dependencies
-2. Run \`kick dev\` to verify the app starts
+2. Run \`kick dev\` to verify the app starts${
+    template === 'fullstack'
+      ? `
+
+## Fullstack workspace layout
+
+This is a WORKSPACE root — the KickJS API lives in \`server/\`, the typed web
+app in \`web/\`. Run both with \`${pm === 'pnpm' ? 'pnpm dev' : `${pm} run dev:server + ${pm} run dev:web`}\`.
+
+The type loop (do not break it):
+1. \`server/\` handlers RETURN their payloads → \`kick typegen\` (auto under
+   \`kick dev\`) emits \`server/.kickjs/types/kick__routes.ts\` incl. the flat
+   \`KickRoutes.Api\` map with inferred response types.
+2. \`web/src/types/kick-routes.d.ts\` imports that file TYPE-ONLY.
+3. \`web/src/api.ts\` = \`createClient<KickRoutes.Api>({ baseUrl: '/api/v1' })\`
+   — every call site is typed from the server's handlers.
+
+Rules: kick commands (\`kick g\`, \`kick typegen\`, \`kick dev\`) run in
+\`server/\`; never import server runtime code into \`web/\` (the d.ts bridge is
+type-only); prefer return-value handlers so responses stay inferable.`
+      : ''
+  }
 3. Read the [KickJS documentation](https://kickjs.app/) for framework details
 
 ## HTTP runtime — DON'T assume Express-only
@@ -626,6 +215,15 @@ any engine-specific code, **check which engine this project uses**:
 
 Rules that keep generated code correct on **every** engine:
 
+- **Prefer return-value handlers.** \`return payload\` sends 200 json on every
+  engine and lets \`kick typegen\` infer the response type into
+  \`KickRoutes.Api\` (consumed by the \`@forinda/kickjs-client\` typed client);
+  \`reply(status, body)\` for non-200, \`reply.noContent()\` for 204. A declared
+  \`{ response: schema }\` on the route feeds BOTH the OpenAPI success response
+  and the typegen response type. \`ctx.json(...)\` stays fully supported but
+  infers \`unknown\`.
+- **Lifecycle hooks:** \`@PostConstruct()\` after instantiation; \`@PreDestroy()\`
+  when a REQUEST-scoped service's request closes (release transactions/handles).
 - **Write to \`ctx\`, not the raw request/response.** \`ctx.json()\`, \`ctx.body\`,
   \`ctx.params\`, \`ctx.query\`, \`ctx.set/get\`, \`ctx.sse()\` are engine-neutral and
   work identically everywhere. \`ctx.req\` / \`ctx.res\` are the engine-native
@@ -1385,9 +983,10 @@ describe('UserController', () => {
 
 \`\`\`ts
 @Post('/', { body: createTodoSchema })
-create(ctx: Ctx<KickRoutes.TodoController['create']>) {
-  // ctx.body is typed from createTodoSchema; ctx.params from the route
-  ctx.created(await this.service.create(ctx.body))
+async create(ctx: Ctx<KickRoutes.TodoController['create']>) {
+  // ctx.body is typed from createTodoSchema; ctx.params from the route.
+  // Returning (vs ctx.created) lets typegen infer the response type.
+  return reply(201, await this.service.create(ctx.body))
 }
 \`\`\`
 
