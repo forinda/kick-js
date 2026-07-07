@@ -55,6 +55,28 @@ Wrong path, missing `params.id`, wrong body shape — all **compile errors**.
 `KickRoutes.Api` keys are **module-mount relative** (`'GET /tasks/:id'`); the
 bootstrap-level prefix and version (default `/api/v1`) go in `baseUrl`.
 
+## RPC-style calls
+
+Prefer `rpc.tasks.get(...)` over path strings? `kick typegen` also emits a
+runtime manifest (`kickRpc`) — `createRpc` builds a typed namespace over the
+same client:
+
+```ts
+import { createRpc } from '@forinda/kickjs-client'
+import { kickRpc } from './server-types' // re-export of .kickjs/types/kick__routes
+
+const rpc = createRpc(api, kickRpc)
+
+const task = await rpc.tasks.get({ params: { id: '42' } }) // task: Task
+const made = await rpc.tasks.create({ body: { title: 'Ship' } })
+```
+
+Same types, same runtime behavior (headers, errors, query serialization) —
+every call delegates to the path-keyed client. Namespaces come from
+controller names (`TasksController` → `tasks`), methods from handler names.
+SSE routes are typed `never` on the RPC surface — open those with
+`api.stream(path)`.
+
 ## Typed SSE streams
 
 Handlers that `return ctx.sse<T>()` mark the route as a typed event stream —
