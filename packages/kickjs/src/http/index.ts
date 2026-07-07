@@ -52,6 +52,14 @@ export { requestLogger, type RequestLoggerOptions } from './middleware/request-l
 export { helmet, type HelmetOptions } from './middleware/helmet'
 export { cors, type CorsOptions } from './middleware/cors'
 export { rateLimit, type RateLimitOptions, type RateLimitStore } from './middleware/rate-limit'
+export { rateLimitGuard, type RateLimitGuardOptions } from './middleware/rate-limit-guard'
+export {
+  KvRateLimitStore,
+  KvSessionStore,
+  type KvLike,
+  type KvRateLimitStoreOptions,
+  type KvSessionStoreOptions,
+} from './middleware/kv-stores'
 export {
   session,
   type SessionOptions,

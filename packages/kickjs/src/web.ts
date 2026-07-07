@@ -24,6 +24,7 @@ import { Container } from './core/container'
 import { MutableModuleRegistry } from './core/module-registry'
 import type { AppModule, AppModuleClass, AppModuleEntry } from './core/app-module'
 import type { ContributorRegistrations } from './core/context-decorator'
+import type { MiddlewareHandler } from './core/decorators'
 import type { SourcedRegistration } from './core/contributor-pipeline'
 import {
   _setExternalContributorSources,
@@ -39,6 +40,15 @@ export { compileWebRoute } from './http/web/handler'
 // Return-value handler helpers — edge consumers can't import the main barrel.
 export { reply, isReply, type Reply, type InferHandlerResponse } from './http/reply'
 export type { SseHandler } from './http/context'
+// Edge-safe stores + ctx-style rate limiter (zero runtime imports).
+export {
+  KvRateLimitStore,
+  KvSessionStore,
+  type KvLike,
+  type KvRateLimitStoreOptions,
+  type KvSessionStoreOptions,
+} from './http/middleware/kv-stores'
+export { rateLimitGuard, type RateLimitGuardOptions } from './http/middleware/rate-limit-guard'
 
 // Minimal structural surface of h3 v2 used here (kept local so this entry
 // never imports the node-coupled h3-web runtime module).
@@ -75,6 +85,12 @@ export interface CreateWebAppOptions {
    * Bun/Deno, ambient `process.env` already works and this can be omitted.
    */
   env?: Record<string, string | undefined>
+  /**
+   * Global `(ctx, next)` middlewares, run before route middlewares on every
+   * route — the web-entry counterpart of `bootstrap({ middleware })`. Only
+   * ctx-style handlers are accepted (no connect/express middleware here).
+   */
+  middleware?: MiddlewareHandler[]
 }
 
 export interface WebApp {
@@ -125,6 +141,7 @@ export function createWebApp(options: CreateWebAppOptions): WebApp {
   const app = new h3mod.H3()
   const apiPrefix = options.apiPrefix ?? '/api'
   const defaultVersion = options.defaultVersion ?? 1
+  const globalMiddleware = options.middleware ?? []
 
   const globalSources: SourcedRegistration[] = (options.contributors ?? []).map(
     (registration): SourcedRegistration => ({
@@ -170,6 +187,9 @@ export function createWebApp(options: CreateWebAppOptions): WebApp {
           // Per-handler owner so intra-controller duplicates name both methods.
           const owner = `${route.controller.name ?? 'controller'}.${String(entry.meta.handlerName ?? '?')}`
           assertRouteUnique(seenRoutes, entry.method, url, owner)
+          if (globalMiddleware.length > 0) {
+            entry.middlewares = [...globalMiddleware, ...entry.middlewares]
+          }
           const run = compileWebRoute(entry)
           app.on(entry.method, url, (event: H3EventLike) =>
             run({
