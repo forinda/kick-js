@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-client",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Typed fetch client for KickJS APIs — end-to-end response types from the kick typegen KickRoutes augmentation",
   "keywords": [
     "kickjs",

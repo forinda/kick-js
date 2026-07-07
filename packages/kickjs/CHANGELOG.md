@@ -1,5 +1,22 @@
 # @forinda/kickjs
 
+## 6.4.0
+
+### Minor Changes
+
+- [#471](https://github.com/forinda/kick-js/pull/471) [`dc60f42`](https://github.com/forinda/kick-js/commit/dc60f420299c961a83d9b7df6ea32b12de80afc8) Thanks [@forinda](https://github.com/forinda)! - Boot-time duplicate-route guard (KICK006). Two handlers claiming the same HTTP verb + mounted path now fail `Application.setup()` / `createWebApp()` with a structured `KickError` instead of silently losing the dispatch race — previously the engine served one handler while `kick typegen` and the typed client could describe the other. Param names are ignored when comparing (`GET /tasks/:id` and `GET /tasks/:taskId` collide). Same path under a different verb or module `version` is unaffected.
+
+  Heads-up: an app that today registers the same route twice (a latent bug — only one handler ever ran) will now fail at boot with a KICK006 pointing at both registrations.
+
+- [#472](https://github.com/forinda/kick-js/pull/472) [`7f3e2aa`](https://github.com/forinda/kick-js/commit/7f3e2aa8579813bc5e427a1bd18c27e8075c4030) Thanks [@forinda](https://github.com/forinda)! - Edge-ready rate limiting and sessions:
+
+  - `rateLimitGuard()` — ctx-style rate limiter that runs on every runtime AND the `@forinda/kickjs/web` fetch entry (the connect-style `rateLimit()` stays node-only). Sends `X-RateLimit-*` / `Retry-After` headers, pluggable key generator (`cf-connecting-ip` → `x-forwarded-for` → `x-real-ip` by default).
+  - `KvRateLimitStore` / `KvSessionStore` over a minimal `KvLike` interface — structurally a Cloudflare Workers `KVNamespace` binding, so `new KvRateLimitStore(env.MY_KV, { windowMs })` just works. `KvSessionStore` plugs into the existing node `session()` middleware.
+  - `createWebApp({ middleware })` — global `(ctx, next)` middlewares on the web entry, the counterpart of `bootstrap({ middleware })`.
+  - `ctx.setHeader(name, value)` — runtime-neutral response header setter on `RequestContext`.
+
+  All new modules are zero-runtime-import and part of the edge purity graph.
+
 ## 6.3.1
 
 ### Patch Changes

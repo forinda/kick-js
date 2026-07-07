@@ -1,5 +1,32 @@
 # @forinda/kickjs-cli
 
+## 6.7.0
+
+### Minor Changes
+
+- [#469](https://github.com/forinda/kick-js/pull/469) [`f721f83`](https://github.com/forinda/kick-js/commit/f721f83a457044ce3800e24d9a598e3b5dfe8676) Thanks [@forinda](https://github.com/forinda)! - feat: tRPC-style RPC sugar — `createRpc(api, kickRpc)`
+
+  ```ts
+  import { kickRpc } from "./.kickjs/types/kick__routes";
+
+  const rpc = createRpc(api, kickRpc);
+  const task = await rpc.tasks.get({ params: { id: "42" } }); // typed end to end
+  ```
+
+  - `kick typegen` now also emits a runtime `kickRpc` manifest in
+    `kick__routes.ts` (`controller.method → 'VERB /mounted/path'`, friendly
+    namespaces: `TasksController` → `tasks`; stays in lockstep with the
+    `KickRoutes.Api` map incl. duplicate handling)
+  - `createRpc` builds a plain typed namespace over the existing client — no
+    Proxy, no new inference; required params/body enforced, SSE routes typed
+    `never` (use `api.stream`)
+
+### Patch Changes
+
+- Updated dependencies [[`dc60f42`](https://github.com/forinda/kick-js/commit/dc60f420299c961a83d9b7df6ea32b12de80afc8), [`7f3e2aa`](https://github.com/forinda/kick-js/commit/7f3e2aa8579813bc5e427a1bd18c27e8075c4030)]:
+  - @forinda/kickjs@6.4.0
+  - @forinda/kickjs-db@7.1.1
+
 ## 6.6.1
 
 ### Patch Changes

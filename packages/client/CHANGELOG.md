@@ -1,5 +1,26 @@
 # @forinda/kickjs-client
 
+## 0.3.0
+
+### Minor Changes
+
+- [#469](https://github.com/forinda/kick-js/pull/469) [`f721f83`](https://github.com/forinda/kick-js/commit/f721f83a457044ce3800e24d9a598e3b5dfe8676) Thanks [@forinda](https://github.com/forinda)! - feat: tRPC-style RPC sugar — `createRpc(api, kickRpc)`
+
+  ```ts
+  import { kickRpc } from "./.kickjs/types/kick__routes";
+
+  const rpc = createRpc(api, kickRpc);
+  const task = await rpc.tasks.get({ params: { id: "42" } }); // typed end to end
+  ```
+
+  - `kick typegen` now also emits a runtime `kickRpc` manifest in
+    `kick__routes.ts` (`controller.method → 'VERB /mounted/path'`, friendly
+    namespaces: `TasksController` → `tasks`; stays in lockstep with the
+    `KickRoutes.Api` map incl. duplicate handling)
+  - `createRpc` builds a plain typed namespace over the existing client — no
+    Proxy, no new inference; required params/body enforced, SSE routes typed
+    `never` (use `api.stream`)
+
 ## 0.2.0
 
 ### Minor Changes
