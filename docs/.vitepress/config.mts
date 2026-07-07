@@ -3,6 +3,10 @@ import { defineConfig } from 'vitepress'
 
 const guideSidebar = [
   {
+    text: 'Support',
+    items: [{ text: '☕ Support KickJS', link: '/guide/support' }],
+  },
+  {
     text: 'Introduction',
     items: [
       { text: 'What is KickJS?', link: '/guide/what-is-kickjs' },
