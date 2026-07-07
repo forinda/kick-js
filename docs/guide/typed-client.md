@@ -8,6 +8,9 @@ generated from the backend's own handlers — no duplicated interfaces, no drift
 pnpm add @forinda/kickjs-client
 ```
 
+`kick typegen` emits a global `KickApi` alias for `KickRoutes.Api` — use
+whichever reads better; they're identical.
+
 ## The loop
 
 **1. Backend** — write [return-value handlers](./controllers.md#return-value-handlers):
@@ -36,7 +39,7 @@ Zod schemas and `response` inferred from each handler's return type.
 ```ts
 import { createClient } from '@forinda/kickjs-client'
 
-const api = createClient<KickRoutes.Api>({
+const api = createClient<KickApi>({
   baseUrl: 'https://api.example.com/api/v1',
   headers: () => ({ Authorization: `Bearer ${getToken()}` }),
 })
@@ -51,6 +54,32 @@ Wrong path, missing `params.id`, wrong body shape — all **compile errors**.
 
 `KickRoutes.Api` keys are **module-mount relative** (`'GET /tasks/:id'`); the
 bootstrap-level prefix and version (default `/api/v1`) go in `baseUrl`.
+
+## Typed SSE streams
+
+Handlers that `return ctx.sse<T>()` mark the route as a typed event stream —
+`api.stream()` consumes it as an async iterable:
+
+```ts
+// server
+@Get('/events')
+async events(ctx: RequestContext) {
+  const sse = ctx.sse<{ n: number }>()
+  const timer = setInterval(() => sse.send({ n: Date.now() }), 1000)
+  sse.onClose(() => clearInterval(timer))
+  return sse // ← carries the event type into KickApi
+}
+
+// client
+const stream = await api.stream('/events') // only SSE routes accepted here
+for await (const ev of stream) {
+  ev.data // { n: number } — typed
+}
+stream.close()
+```
+
+Events arrive as `SseEvent<T>` (`data` JSON-parsed, plus optional `event` /
+`id`). Non-SSE paths are rejected at compile time.
 
 ## Errors
 

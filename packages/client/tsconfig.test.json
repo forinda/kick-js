@@ -2,12 +2,8 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "noEmit": true,
-    "baseUrl": ".",
     "types": [],
-    "paths": {
-      "@forinda/kickjs-schema": ["src/index.ts"],
-      "@forinda/kickjs-schema/*": ["src/*"]
-    }
+    "lib": ["ES2022", "DOM", "DOM.Iterable"]
   },
   "include": ["src", "__tests__"]
 }

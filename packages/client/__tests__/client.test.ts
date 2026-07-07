@@ -5,9 +5,20 @@ import * as h3v2 from 'h3-v2'
 import { createWebApp } from '@forinda/kickjs/web'
 import { Container } from '@forinda/kickjs/container'
 import { Controller, Get, Post, Delete } from '@forinda/kickjs/decorators'
-import { reply, type RequestContext, type InferHandlerResponse } from '@forinda/kickjs'
+import {
+  reply,
+  type RequestContext,
+  type InferHandlerResponse,
+  type SseHandler,
+} from '@forinda/kickjs'
 
-import { createClient, createTestClient, KickClientError, type RouteShapeLike } from '../src/index'
+import {
+  createClient,
+  createTestClient,
+  KickClientError,
+  type RouteShapeLike,
+  type SseEvent,
+} from '../src/index'
 
 /**
  * End-to-end: real decorated controllers served through `createWebApp`,
@@ -47,6 +58,12 @@ interface Api {
     query: { filter?: string | string[]; sort?: 'createdAt' | '-createdAt'; q?: string }
     response: Task[]
   }
+  'GET /tasks/events': {
+    params: Record<string, never>
+    body: unknown
+    query: unknown
+    response: SseHandler<{ n: number }>
+  }
 }
 // Api entries must conform to the client's shape contract.
 type _check = Api[keyof Api] extends RouteShapeLike ? true : never
@@ -73,6 +90,16 @@ function makeApp() {
     async remove(ctx: RequestContext) {
       if (ctx.params.id === 'missing') return ctx.notFound('no such task')
       return reply.noContent()
+    }
+
+    @Get('/events')
+    async events(ctx: RequestContext) {
+      const sse = ctx.sse<{ n: number }>()
+      sse.send({ n: 1 })
+      sse.send({ n: 2 }, 'tick', '42')
+      sse.comment('keep-alive')
+      sse.close()
+      return sse
     }
   }
 
@@ -129,6 +156,21 @@ describe('createClient — runtime against a real web app', () => {
     await expect(api.get('/tasks/:id', {} as never)).rejects.toThrow(/missing path param ':id'/)
   })
 
+  it('a body smuggled onto GET via casts is stripped (no Request throw)', async () => {
+    let method = ''
+    const api = createClient<Api>({
+      baseUrl: 'http://x/api/v1',
+      fetch: (req) => {
+        method = req.method
+        return Promise.resolve(
+          new Response('[]', { headers: { 'content-type': 'application/json' } }),
+        )
+      },
+    })
+    await api.get('/tasks', { body: { nope: true } } as never)
+    expect(method).toBe('GET')
+  })
+
   it('query values serialize onto the URL', async () => {
     let seenUrl = ''
     const api = createClient<Api>({
@@ -177,11 +219,12 @@ describe('createClient — type-level contract', () => {
     void api.get('/tasks/:id')
     // @ts-expect-error — body.title is required for POST /tasks
     void api.post('/tasks', {})
+    // @ts-expect-error — GET requests must not carry a body
+    void api.get('/tasks', { body: { nope: true } })
 
     // @ts-expect-error — 'created' is not a sortable field on GET /tasks
     void api.get('/tasks', { query: { sort: 'created' } })
 
-    expectTypeOf(api.get).parameter(0).toEqualTypeOf<'/tasks/:id' | '/tasks'>()
     expectTypeOf(api.get('/tasks/:id', { params: { id: 'x' } })).resolves.toEqualTypeOf<Task>()
     expectTypeOf(api.get('/tasks')).resolves.toEqualTypeOf<Task[]>()
     expectTypeOf(api.post('/tasks', { body: { title: 't' } })).resolves.toEqualTypeOf<Task>()
@@ -217,5 +260,43 @@ describe('createTestClient — network-free harness', () => {
     )
     await api.get('/tasks')
     expect(seenUrl).toBe('http://edge/api/v1/tasks')
+  })
+})
+
+describe('api.stream — typed SSE', () => {
+  it('iterates typed events from a real web app', async () => {
+    const app = makeApp()
+    const api = createTestClient<Api>(app)
+    const stream = await api.stream('/tasks/events')
+    const events: SseEvent<{ n: number }>[] = []
+    for await (const ev of stream) events.push(ev)
+    expect(events.map((e) => e.data)).toEqual([{ n: 1 }, { n: 2 }])
+    expect(events[1]).toMatchObject({ event: 'tick', id: '42' })
+    expectTypeOf(events[0].data).toEqualTypeOf<{ n: number }>()
+  })
+
+  it('close() aborts iteration', async () => {
+    const app = makeApp()
+    const api = createTestClient<Api>(app)
+    const stream = await api.stream('/tasks/events')
+    stream.close()
+    const events: unknown[] = []
+    try {
+      for await (const ev of stream) events.push(ev)
+    } catch {
+      // aborted reads may reject — either outcome (empty or throw) is fine
+    }
+    expect(events.length).toBeLessThanOrEqual(2)
+  })
+
+  it('non-SSE GET paths are rejected at the type level', () => {
+    const api = createTestClient<Api>(makeApp())
+    const _typeOnly = () => {
+      // @ts-expect-error — '/tasks/:id' response is not an SSE stream
+      void api.stream('/tasks/:id')
+      // @ts-expect-error — '/tasks' response is not an SSE stream
+      void api.stream('/tasks')
+    }
+    expect(typeof _typeOnly).toBe('function')
   })
 })

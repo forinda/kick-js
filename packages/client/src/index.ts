@@ -55,6 +55,53 @@ type ShapeOf<
     : never
   : never
 
+// ── SSE typing ────────────────────────────────────────────────────────
+// Server handlers that `return ctx.sse<T>()` put an `SseHandler<T>` into the
+// map's response slot; its phantom `__sse` property carries T structurally,
+// so the client detects SSE routes without importing server types. The
+// optional-property check must be non-vacuous — `'__sse' extends keyof S`,
+// NOT `S extends { __sse?: … }` (every object vacuously extends the latter).
+type SsePayloadOf<S> = S extends object
+  ? '__sse' extends keyof S
+    ? NonNullable<S['__sse']>
+    : never
+  : never
+
+/** GET paths whose response is an SSE stream (`return ctx.sse<T>()`). */
+type StreamPathsFor<Api extends ApiMap> = {
+  [K in keyof Api]: K extends `GET ${infer P}`
+    ? Api[K] extends RouteShapeLike
+      ? [SsePayloadOf<Api[K]['response']>] extends [never]
+        ? never
+        : P
+      : never
+    : never
+}[keyof Api]
+
+// Options argument is OPTIONAL only when the shape requires nothing
+// (no concrete params, no required body) — otherwise omitting it must be
+// a compile error, not a runtime missing-param throw.
+type ArgsFor<S extends RouteShapeLike, M extends ClientMethod> =
+  Record<string, never> extends RequestOptions<S, M>
+    ? [options?: RequestOptions<S, M>]
+    : [options: RequestOptions<S, M>]
+
+/** One parsed server-sent event. */
+export interface SseEvent<T = unknown> {
+  /** JSON-parsed `data:` payload (raw string when not valid JSON). */
+  data: T
+  /** The `event:` name, when the server sent one. */
+  event?: string
+  /** The `id:` field, when the server sent one. */
+  id?: string
+}
+
+/** Typed async-iterable SSE connection — `for await`, then `close()`. */
+export interface SseStream<T = unknown> extends AsyncIterable<SseEvent<T>> {
+  /** Abort the underlying request and end iteration. */
+  close(): void
+}
+
 // Paramless routes emit `params: {}` and unschema'd bodies emit
 // `body: unknown` — both become OPTIONAL fields; a concrete shape is
 // required so forgetting `params` on `/users/:id` is a type error.
@@ -64,7 +111,13 @@ type ParamsField<T> = unknown extends T
     ? { params?: T }
     : { params: T }
 
-type BodyField<T> = unknown extends T ? { body?: unknown } : { body: T }
+// GET requests must not carry a body — `new Request(url, { method: 'GET',
+// body })` throws at runtime, so the type forbids it up front.
+type BodyField<T, M extends ClientMethod> = M extends 'GET'
+  ? { body?: never }
+  : unknown extends T
+    ? { body?: unknown }
+    : { body: T }
 
 /** Loose fallback for routes without a statically-known query shape. */
 type LooseQuery = Record<string, string | number | boolean | Array<string | number>>
@@ -74,13 +127,13 @@ type LooseQuery = Record<string, string | number | boolean | Array<string | numb
 // `query` — sort fields autocomplete as '-createdAt' | 'createdAt' | …
 type QueryField<T> = unknown extends T ? { query?: LooseQuery } : { query?: T }
 
-export type RequestOptions<S extends RouteShapeLike> = {
+export type RequestOptions<S extends RouteShapeLike, M extends ClientMethod = ClientMethod> = {
   /** Extra headers merged over the client-level ones. */
   headers?: Record<string, string>
   /** AbortSignal for cancellation. */
   signal?: AbortSignal
 } & ParamsField<S['params']> &
-  BodyField<S['body']> &
+  BodyField<S['body'], M> &
   QueryField<S['query']>
 
 export interface ClientOptions {
@@ -122,23 +175,36 @@ export class KickClientError extends Error {
 export interface KickClient<Api extends ApiMap> {
   get<P extends PathsFor<Api, 'GET'> & string>(
     path: P,
-    options?: RequestOptions<ShapeOf<Api, 'GET', P>>,
+    ...args: ArgsFor<ShapeOf<Api, 'GET', P>, 'GET'>
   ): Promise<ShapeOf<Api, 'GET', P>['response']>
+  /**
+   * Open a typed SSE connection to a route whose handler
+   * `return ctx.sse<T>()` — events arrive as `SseEvent<T>`:
+   *
+   * ```ts
+   * const stream = await api.stream('/events')
+   * for await (const ev of stream) console.log(ev.data) // ev.data: T
+   * ```
+   */
+  stream<P extends StreamPathsFor<Api> & string>(
+    path: P,
+    ...args: ArgsFor<ShapeOf<Api, 'GET', P>, 'GET'>
+  ): Promise<SseStream<SsePayloadOf<ShapeOf<Api, 'GET', P>['response']>>>
   post<P extends PathsFor<Api, 'POST'> & string>(
     path: P,
-    options?: RequestOptions<ShapeOf<Api, 'POST', P>>,
+    ...args: ArgsFor<ShapeOf<Api, 'POST', P>, 'POST'>
   ): Promise<ShapeOf<Api, 'POST', P>['response']>
   put<P extends PathsFor<Api, 'PUT'> & string>(
     path: P,
-    options?: RequestOptions<ShapeOf<Api, 'PUT', P>>,
+    ...args: ArgsFor<ShapeOf<Api, 'PUT', P>, 'PUT'>
   ): Promise<ShapeOf<Api, 'PUT', P>['response']>
   delete<P extends PathsFor<Api, 'DELETE'> & string>(
     path: P,
-    options?: RequestOptions<ShapeOf<Api, 'DELETE', P>>,
+    ...args: ArgsFor<ShapeOf<Api, 'DELETE', P>, 'DELETE'>
   ): Promise<ShapeOf<Api, 'DELETE', P>['response']>
   patch<P extends PathsFor<Api, 'PATCH'> & string>(
     path: P,
-    options?: RequestOptions<ShapeOf<Api, 'PATCH', P>>,
+    ...args: ArgsFor<ShapeOf<Api, 'PATCH', P>, 'PATCH'>
   ): Promise<ShapeOf<Api, 'PATCH', P>['response']>
 }
 
@@ -162,6 +228,28 @@ function fillPath(path: string, params?: Record<string, string | number>): strin
   return filled
 }
 
+/** Parse one SSE block (lines until a blank line) into an event. */
+function parseSseBlock(block: string): SseEvent | null {
+  let event: string | undefined
+  let id: string | undefined
+  const dataLines: string[] = []
+  for (const line of block.split('\n')) {
+    if (line.startsWith(':')) continue // comment / keep-alive
+    if (line.startsWith('data:')) dataLines.push(line.slice(5).trimStart())
+    else if (line.startsWith('event:')) event = line.slice(6).trim()
+    else if (line.startsWith('id:')) id = line.slice(3).trim()
+  }
+  if (dataLines.length === 0) return null
+  const raw = dataLines.join('\n')
+  let data: unknown = raw
+  try {
+    data = JSON.parse(raw)
+  } catch {
+    // Non-JSON payloads pass through as the raw string.
+  }
+  return { data, ...(event ? { event } : {}), ...(id ? { id } : {}) }
+}
+
 function buildQuery(query?: Record<string, unknown>): string {
   if (!query) return ''
   const qs = new URLSearchParams()
@@ -182,22 +270,32 @@ export function createClient<Api extends ApiMap>(options: ClientOptions): KickCl
   const baseUrl = options.baseUrl.replace(/\/$/, '')
   const doFetch = options.fetch ?? ((req: Request) => fetch(req))
 
-  async function run(method: ClientMethod, path: string, opts: AnyRequestOptions = {}) {
+  async function buildRequest(
+    method: ClientMethod,
+    path: string,
+    opts: AnyRequestOptions,
+  ): Promise<Request> {
     const clientHeaders =
       typeof options.headers === 'function' ? await options.headers() : (options.headers ?? {})
     const headers = new Headers({ ...clientHeaders, ...opts.headers })
-    const hasBody = opts.body !== undefined
+    // Defensive: fetch's Request constructor throws on GET-with-body; the
+    // types already forbid it, but casts can smuggle one through.
+    const hasBody = method !== 'GET' && opts.body !== undefined
     if (hasBody && !headers.has('content-type')) {
       headers.set('content-type', 'application/json')
     }
 
     const url = `${baseUrl}${fillPath(path, opts.params)}${buildQuery(opts.query)}`
-    const request = new Request(url, {
+    return new Request(url, {
       method,
       headers,
       body: hasBody ? JSON.stringify(opts.body) : undefined,
       signal: opts.signal,
     })
+  }
+
+  async function run(method: ClientMethod, path: string, opts: AnyRequestOptions = {}) {
+    const request = await buildRequest(method, path, opts)
 
     const response = await doFetch(request)
     const contentType = response.headers.get('content-type') ?? ''
@@ -212,13 +310,65 @@ export function createClient<Api extends ApiMap>(options: ClientOptions): KickCl
     return body
   }
 
+  async function openStream(path: string, opts: AnyRequestOptions = {}): Promise<SseStream> {
+    // Own controller so close() works even without a caller-provided signal;
+    // chain the caller's signal into it when present.
+    const controller = new AbortController()
+    opts.signal?.addEventListener('abort', () => controller.abort(), { once: true })
+    const request = await buildRequest('GET', path, {
+      ...opts,
+      signal: controller.signal,
+      headers: { accept: 'text/event-stream', ...opts.headers },
+    })
+
+    const response = await doFetch(request)
+    if (!response.ok || !response.body) {
+      const contentType = response.headers.get('content-type') ?? ''
+      const body = contentType.includes('json')
+        ? await response.json().catch(() => undefined)
+        : await response.text().catch(() => undefined)
+      throw new KickClientError(response.status, body, response)
+    }
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+
+    async function* events(): AsyncGenerator<SseEvent> {
+      let buffer = ''
+      try {
+        for (;;) {
+          const { done, value } = await reader.read()
+          if (done) break
+          buffer += decoder.decode(value, { stream: true })
+          // Events are separated by a blank line; keep the trailing partial.
+          const blocks = buffer.split(/\n\n/)
+          buffer = blocks.pop() ?? ''
+          for (const block of blocks) {
+            const ev = parseSseBlock(block)
+            if (ev) yield ev
+          }
+        }
+      } finally {
+        controller.abort()
+        reader.releaseLock()
+      }
+    }
+
+    return {
+      [Symbol.asyncIterator]: events,
+      close: () => controller.abort(),
+    }
+  }
+
   return {
-    get: (path, opts) => run('GET', path, opts as AnyRequestOptions),
-    post: (path, opts) => run('POST', path, opts as AnyRequestOptions),
-    put: (path, opts) => run('PUT', path, opts as AnyRequestOptions),
-    delete: (path, opts) => run('DELETE', path, opts as AnyRequestOptions),
-    patch: (path, opts) => run('PATCH', path, opts as AnyRequestOptions),
-  } as KickClient<Api>
+    get: (path: string, opts?: unknown) => run('GET', path, opts as AnyRequestOptions),
+    stream: (path: string, opts?: unknown) =>
+      openStream(path, (opts ?? {}) as AnyRequestOptions) as never,
+    post: (path: string, opts?: unknown) => run('POST', path, opts as AnyRequestOptions),
+    put: (path: string, opts?: unknown) => run('PUT', path, opts as AnyRequestOptions),
+    delete: (path: string, opts?: unknown) => run('DELETE', path, opts as AnyRequestOptions),
+    patch: (path: string, opts?: unknown) => run('PATCH', path, opts as AnyRequestOptions),
+  } as unknown as KickClient<Api>
 }
 
 /** Anything with a web-standard fetch — a `createWebApp()` result, a Worker, a mock. */

@@ -11,7 +11,12 @@ export default defineConfig({
     }),
   ],
   test: {
-    typecheck: { tsconfig: './tsconfig.test.json' },
+    // Default typecheck.include only matches *.test-d.ts — which silently
+    // skipped every expectTypeOf/@ts-expect-error in the real suites.
+    typecheck: {
+      tsconfig: './tsconfig.test.json',
+      include: ['__tests__/**/*.test.ts'],
+    },
     environment: 'node',
     include: ['__tests__/**/*.test.ts'],
     globals: false,

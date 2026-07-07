@@ -193,7 +193,7 @@ The type loop (do not break it):
    \`kick dev\`) emits \`server/.kickjs/types/kick__routes.ts\` incl. the flat
    \`KickRoutes.Api\` map with inferred response types.
 2. \`web/src/types/kick-routes.d.ts\` imports that file TYPE-ONLY.
-3. \`web/src/api.ts\` = \`createClient<KickRoutes.Api>({ baseUrl: '/api/v1' })\`
+3. \`web/src/api.ts\` = \`createClient<KickApi>({ baseUrl: '/api/v1' })\`
    — every call site is typed from the server's handlers.
 
 Rules: kick commands (\`kick g\`, \`kick typegen\`, \`kick dev\`) run in

@@ -186,3 +186,15 @@ describe('renderRoutes — declared response schema override', () => {
     expect(src).toContain("InferHandlerResponse<_C0['get']>")
   })
 })
+
+describe('renderRoutes — KickApi alias', () => {
+  it('emits the global KickApi alias alongside the namespace', () => {
+    const src = renderRoutes([route({})], OUT, 'zod')
+    expect(src).toContain('type KickApi = KickRoutes.Api')
+  })
+
+  it('empty-routes emission also declares the alias', () => {
+    const src = renderRoutes([], OUT, 'zod')
+    expect(src).toContain('type KickApi = KickRoutes.Api')
+  })
+})

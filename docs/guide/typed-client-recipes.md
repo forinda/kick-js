@@ -10,7 +10,7 @@ Everything below assumes the fullstack setup:
 // src/api.ts
 import { createClient } from '@forinda/kickjs-client'
 
-export const api = createClient<KickRoutes.Api>({ baseUrl: '/api/v1' })
+export const api = createClient<KickApi>({ baseUrl: '/api/v1' })
 ```
 
 ## TanStack Query (React Query v5)

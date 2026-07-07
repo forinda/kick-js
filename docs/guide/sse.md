@@ -139,3 +139,10 @@ Use SSE for notifications, live feeds, progress updates. Use WebSocket for chat,
 - [WebSockets](./websockets.md) — bidirectional real-time communication
 - [Reactivity](./reactivity.md) — reactive state that pairs well with SSE
 - [DevTools](./devtools.md) — reactive metrics and health endpoints
+
+## Typed SSE
+
+`ctx.sse<T>()` types every `send()`; `return sse` from the handler carries the
+event type into `KickApi`, and the [typed client](./typed-client.md#typed-sse-streams)
+consumes it with `api.stream()` — `for await (const ev of stream)` gives
+`ev.data: T`.

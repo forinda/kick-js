@@ -10,7 +10,7 @@ pnpm add @forinda/kickjs-client
 ```ts
 import { createClient } from '@forinda/kickjs-client'
 
-const api = createClient<KickRoutes.Api>({ baseUrl: 'https://api.example.com/api/v1' })
+const api = createClient<KickApi>({ baseUrl: 'https://api.example.com/api/v1' })
 
 const task = await api.get('/tasks/:id', { params: { id: '42' } })
 //    ^ the handler's actual response type — inferred, not declared

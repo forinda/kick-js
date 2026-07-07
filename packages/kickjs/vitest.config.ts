@@ -20,6 +20,9 @@ export default defineConfig({
   test: {
     typecheck: {
       tsconfig: './tsconfig.test.json',
+      // Default include only matches *.test-d.ts — without this the
+      // expectTypeOf suite below was never actually type-checked.
+      include: ['**/infer-handler-response.test.ts'],
     },
     environment: 'node',
     include: ['__tests__/**/*.test.ts', '**/__tests__/**/*.test.ts','**/*.test.ts'],

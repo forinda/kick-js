@@ -761,21 +761,30 @@ export class RequestContext<TBody = any, TParams = any, TQuery = any> implements
    * Start an SSE (Server-Sent Events) stream.
    * Sets the correct headers and returns helpers to send events.
    *
+   * Pass a payload type to get typed sends — and `return sse` from the
+   * handler so `kick typegen` carries the event type into
+   * `KickRoutes.Api`, where `@forinda/kickjs-client`'s `api.stream()`
+   * picks it up (the returned handler is ignored at runtime — the
+   * response is already streaming).
+   *
    * @example
    * ```ts
+   * interface Tick { time: string }
+   *
    * @Get('/events')
    * async stream(ctx: RequestContext) {
-   *   const sse = ctx.sse()
+   *   const sse = ctx.sse<Tick>()
    *
    *   const interval = setInterval(() => {
    *     sse.send({ time: new Date().toISOString() }, 'tick')
    *   }, 1000)
    *
    *   sse.onClose(() => clearInterval(interval))
+   *   return sse // typed as SseHandler<Tick> → response inference
    * }
    * ```
    */
-  sse() {
+  sse<T = unknown>(): SseHandler<T> {
     this._response.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
@@ -792,7 +801,7 @@ export class RequestContext<TBody = any, TParams = any, TQuery = any> implements
 
     return {
       /** Send an SSE event with optional event name and id */
-      send: (data: any, event?: string, id?: string) => {
+      send: (data: T, event?: string, id?: string) => {
         if (id) this._response.write(`id: ${id}\n`)
         if (event) this._response.write(`event: ${event}\n`)
         this._response.write(`data: ${JSON.stringify(data)}\n\n`)
@@ -811,6 +820,26 @@ export class RequestContext<TBody = any, TParams = any, TQuery = any> implements
       },
     }
   }
+}
+
+/**
+ * The handle {@link RequestContext.sse} returns. The optional phantom
+ * `__sse` property carries the event payload type STRUCTURALLY — never set
+ * at runtime — so `kick typegen`'s response inference (handler `return sse`)
+ * flows it into `KickRoutes.Api`, and `@forinda/kickjs-client` detects SSE
+ * routes without importing any server types.
+ */
+export interface SseHandler<T = unknown> {
+  /** Phantom event-payload type marker — never assigned at runtime. */
+  readonly __sse?: T
+  /** Send an SSE event with optional event name and id. */
+  send(data: T, event?: string, id?: string): void
+  /** Send a comment line (keeps the connection alive through proxies). */
+  comment(text: string): void
+  /** Register a callback for client disconnect. */
+  onClose(fn: () => void): void
+  /** End the SSE stream. */
+  close(): void
 }
 
 /**

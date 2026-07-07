@@ -298,11 +298,11 @@ export function App() {
 function webApi(): string {
   return `import { createClient } from '@forinda/kickjs-client'
 
-// KickRoutes.Api is ambient — populated by server/.kickjs/types (see
+// KickApi (alias of KickRoutes.Api) is ambient — populated by server/.kickjs/types (see
 // src/types/kick-routes.d.ts). Keys are module-mount-relative paths;
 // the bootstrap-level '/api/v1' prefix lives here in baseUrl, and the
 // Vite dev proxy forwards it to the KickJS server.
-export const api = createClient<KickRoutes.Api>({ baseUrl: '/api/v1' })
+export const api = createClient<KickApi>({ baseUrl: '/api/v1' })
 `
 }
 
