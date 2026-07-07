@@ -167,7 +167,9 @@ export function createWebApp(options: CreateWebAppOptions): WebApp {
         const mountPath = `${apiPrefix}/v${version}${normalizePath(route.path)}`
         for (const entry of buildRouteTable(route.controller)) {
           const url = joinPath(mountPath, entry.path)
-          assertRouteUnique(seenRoutes, entry.method, url, route.controller.name ?? 'controller')
+          // Per-handler owner so intra-controller duplicates name both methods.
+          const owner = `${route.controller.name ?? 'controller'}.${String(entry.meta.handlerName ?? '?')}`
+          assertRouteUnique(seenRoutes, entry.method, url, owner)
           const run = compileWebRoute(entry)
           app.on(entry.method, url, (event: H3EventLike) =>
             run({

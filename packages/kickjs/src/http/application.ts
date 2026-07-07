@@ -743,8 +743,10 @@ export class Application {
             this.runtime.useConnect(this.app, route.router, { path: mountPath })
           } else if (route.controller) {
             const routeTable = buildRouteTable(route.controller)
-            const owner = route.controller.name ?? 'controller'
+            const ctrl = route.controller.name ?? 'controller'
             for (const entry of routeTable) {
+              // Per-handler owner so intra-controller duplicates name both methods.
+              const owner = `${ctrl}.${String(entry.meta.handlerName ?? '?')}`
               assertRouteUnique(seenRoutes, entry.method, joinPaths(mountPath, entry.path), owner)
             }
             this.runtime.mountRoutes(this.app, [{ mountPath, routes: routeTable }])

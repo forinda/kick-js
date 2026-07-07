@@ -58,7 +58,15 @@ describe('duplicate routes — Application (node)', () => {
       build: () => ({ routes: () => ({ path: '/dup', controller: DupController }) }),
     })()
     const app = new Application({ modules: [mod] })
-    await expectKick006(() => app.setup())
+    const err = await app.setup().then(
+      () => null,
+      (e: unknown) => e,
+    )
+    expect(err).toBeInstanceOf(KickError)
+    expect((err as KickError & { code: string }).code).toBe('KICK006')
+    // Owner granularity: both conflicting handlers are named, not just the class.
+    expect((err as Error).message).toContain('DupController.a')
+    expect((err as Error).message).toContain('DupController.b')
   })
 
   it('throws KICK006 across modules mounted on the same path', async () => {
@@ -113,9 +121,13 @@ describe('duplicate routes — Application (node)', () => {
 
 describe('duplicate routes — createWebApp (web)', () => {
   it('throws KICK006 at build time for cross-module duplicates', () => {
-    expect(() => createWebApp({ h3: h3v2, modules: [taskModule(), taskModule()] })).toThrowError(
-      /KICK006|registered twice/,
-    )
+    try {
+      createWebApp({ h3: h3v2, modules: [taskModule(), taskModule()] })
+      expect.unreachable('expected createWebApp to throw')
+    } catch (e) {
+      expect(e).toBeInstanceOf(KickError)
+      expect((e as KickError & { code: string }).code).toBe('KICK006')
+    }
   })
 
   it('boots and serves when routes are unique', async () => {
