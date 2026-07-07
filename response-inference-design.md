@@ -1,6 +1,9 @@
 # Typed Response Inference — Return-Value Handlers, KickRoutes.response, Typed Client
 
-> Status: **DRAFT — spec only, no implementation yet** (2026-07-06)
+> Status: **SHIPPED + CLOSED** — R1 #444, R2 #445, R3 #446; follow-ups: mounted-path
+> fix #448, typed query + createTestClient #447, fullstack template #452,
+> Query/SWR recipes #456, declared response schemas (§6 Q6) #457. No open questions remain
+> except deferred non-goals (§7) and the imperative ctx.json AST fallback (optional).
 > Decision owner: @forinda
 > Prior art in-repo: `docs/guide/tutorial-typed-client.md` (the vision), `kick typegen`'s
 > `kick/routes` plugin (the vehicle), the edge/web-standards rollout (the process template).
