@@ -5,7 +5,13 @@ export { Application, type ApplicationOptions, type MiddlewareEntry } from './ap
 export { bootstrap } from './bootstrap'
 
 // Request Context
-export { RequestContext, type ContextMeta, type Ctx, type RouteShape } from './context'
+export {
+  RequestContext,
+  type ContextMeta,
+  type Ctx,
+  type RouteShape,
+  type SseHandler,
+} from './context'
 
 // Return-value handlers — `return reply(201, body)` / plain returns auto-send
 export { reply, isReply, applyHandlerResult, type Reply, type InferHandlerResponse } from './reply'

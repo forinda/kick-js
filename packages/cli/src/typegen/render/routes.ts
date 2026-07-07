@@ -46,6 +46,9 @@ declare global {
     // first route exists (fresh project / pre-controller typegen runs).
     interface Api {}
   }
+
+  /** Short alias for \`KickRoutes.Api\` — \`createClient<KickApi>(...)\`. */
+  type KickApi = KickRoutes.Api
 }
 
 export {}
@@ -231,6 +234,9 @@ declare global {
   namespace KickRoutes {
 ${interfaceBlock}
   }
+
+  /** Short alias for \`KickRoutes.Api\` — \`createClient<KickApi>(...)\`. */
+  type KickApi = KickRoutes.Api
 }
 
 export {}

@@ -16,7 +16,13 @@ export { bootstrap } from './http/bootstrap'
 // Cluster
 export { isClusterPrimary, type ClusterOptions } from './http/cluster'
 
-export { RequestContext, type Ctx, type RouteShape, type DeepReadonly } from './http/context'
+export {
+  RequestContext,
+  type Ctx,
+  type RouteShape,
+  type DeepReadonly,
+  type SseHandler,
+} from './http/context'
 export { defineHttpContextDecorator } from './http/define-http-context-decorator'
 
 // Return-value handlers + response inference (response-inference-design.md)
