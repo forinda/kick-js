@@ -93,17 +93,62 @@ it.
 
 ## What's different on the edge
 
-| Concern                                            | Status                                                                          |
-| -------------------------------------------------- | ------------------------------------------------------------------------------- |
-| Routing, DI, decorators, validation, `ctx.problem` | ✅ identical                                                                    |
-| Context decorators / request-scoped DI             | ✅ (needs `nodejs_compat` on Workers)                                           |
-| SSE (`ctx.sse`)                                    | ✅ — streams over a web `Response`                                              |
-| File uploads (`@FileUpload`)                       | ✅ — web `FormData`, buffered in memory                                         |
-| `@PreDestroy` request teardown                     | ✅ — runs when the response closes                                              |
-| `ctx.render()` / view engines / SPA / static files | ❌ throws — serve assets from the platform CDN                                  |
-| In-memory `session()` / `rateLimit()` stores       | ❌ — no persistent process between requests; use a KV/Redis-backed custom store |
-| `@Asset` injection                                 | ❌ — reads the filesystem; clear error on access                                |
-| Adapters / plugins                                 | Not wired on the web entry at launch — use `bootstrap()` on node for those      |
+| Concern                                            | Status                                                                                                                           |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Routing, DI, decorators, validation, `ctx.problem` | ✅ identical                                                                                                                     |
+| Context decorators / request-scoped DI             | ✅ (needs `nodejs_compat` on Workers)                                                                                            |
+| SSE (`ctx.sse`)                                    | ✅ — streams over a web `Response`                                                                                               |
+| File uploads (`@FileUpload`)                       | ✅ — web `FormData`, buffered in memory                                                                                          |
+| `@PreDestroy` request teardown                     | ✅ — runs when the response closes                                                                                               |
+| `ctx.render()` / view engines / SPA / static files | ❌ throws — serve assets from the platform CDN                                                                                   |
+| Rate limiting                                      | ✅ — `rateLimitGuard()` + `KvRateLimitStore` over a Workers KV binding (below)                                                   |
+| Sessions                                           | ⚠️ — `KvSessionStore` plugs into the node `session()` middleware; the cookie middleware itself is not wired on the web entry yet |
+| `@Asset` injection                                 | ❌ — reads the filesystem; clear error on access                                                                                 |
+| Adapters / plugins                                 | Not wired on the web entry at launch — use `bootstrap()` on node for those                                                       |
+
+## Rate limiting on the edge
+
+In-memory counters die with the isolate, so the edge story is a `(ctx, next)`
+guard plus a KV-backed store. `KvLike` is structurally a Cloudflare
+`KVNamespace` — pass the binding straight in:
+
+```ts
+import { createWebApp, rateLimitGuard, KvRateLimitStore } from '@forinda/kickjs/web'
+
+export default {
+  fetch(req: Request, env: Env) {
+    const app = createWebApp({
+      h3,
+      modules,
+      env,
+      middleware: [
+        rateLimitGuard({
+          max: 60,
+          windowMs: 60_000,
+          store: new KvRateLimitStore(env.RATE_KV, { windowMs: 60_000 }),
+        }),
+      ],
+    })
+    return app.fetch(req)
+  },
+}
+```
+
+`createWebApp({ middleware })` runs ctx-style middlewares on every route —
+the web-entry counterpart of `bootstrap({ middleware })`. `rateLimitGuard`
+also works per-route on any runtime via `@Middleware(rateLimitGuard({ max: 10 }))`,
+and without a `store` it falls back to a per-process in-memory counter
+(fine on node, pointless on edge).
+
+Two caveats: KV is eventually consistent, so limiting is **approximate**
+under concurrent bursts (use a Durable Object or Redis store for exact
+quotas), and Cloudflare KV enforces a minimum 60-second TTL (shorter
+windows still limit correctly; the KV entry just lives a bit longer).
+
+Sessions: `KvSessionStore` implements the `SessionStore` contract for the
+node `session()` middleware — `new KvSessionStore(kv)` makes sessions
+survive restarts and horizontal scaling today. The cookie-handling
+middleware itself is not wired on the web entry yet.
 
 ### Runtime support (AsyncLocalStorage)
 

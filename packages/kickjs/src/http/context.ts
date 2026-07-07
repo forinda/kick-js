@@ -574,6 +574,16 @@ export class RequestContext<TBody = any, TParams = any, TQuery = any> implements
 
   // ── Response Helpers ────────────────────────────────────────────────
 
+  /**
+   * Set a response header. Runtime-neutral — works on every engine and on
+   * the web/edge entry. No-op guards are the runtime's job (headers set
+   * after the response settles are ignored or throw per engine).
+   */
+  setHeader(name: string, value: string): this {
+    this._response.setHeader(name, value)
+    return this
+  }
+
   json(data: any, status = 200) {
     return this._response.status(status).json(data)
   }
