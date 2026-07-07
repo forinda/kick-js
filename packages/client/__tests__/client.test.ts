@@ -14,6 +14,7 @@ import {
 
 import {
   createClient,
+  createRpc,
   createTestClient,
   KickClientError,
   type RouteShapeLike,
@@ -298,5 +299,50 @@ describe('api.stream — typed SSE', () => {
       void api.stream('/tasks')
     }
     expect(typeof _typeOnly).toBe('function')
+  })
+})
+
+describe('createRpc — tRPC-style sugar', () => {
+  // Mirrors what kick typegen emits as `kickRpc` for the fixture controller.
+  const manifest = {
+    tasks: {
+      get: 'GET /tasks/:id',
+      list: 'GET /tasks',
+      create: 'POST /tasks',
+      remove: 'DELETE /tasks/:id',
+      events: 'GET /tasks/events',
+    },
+  } as const
+
+  it('round-trips through a real web app with full typing', async () => {
+    const api = createTestClient<Api>(makeApp())
+    const rpc = createRpc(api, manifest)
+
+    const task = await rpc.tasks.get({ params: { id: '9' } })
+    expect(task).toEqual({ id: '9', title: 'task 9' })
+    expectTypeOf(task).toEqualTypeOf<Task>()
+
+    const made = await rpc.tasks.create({ body: { title: 'via rpc' } })
+    expect(made).toEqual({ id: 'new', title: 'via rpc' })
+    expectTypeOf(made).toEqualTypeOf<Task>()
+
+    await expect(rpc.tasks.remove({ params: { id: '1' } })).resolves.toBeUndefined()
+    const all = await rpc.tasks.list()
+    expectTypeOf(all).toEqualTypeOf<Task[]>()
+  })
+
+  it('type contract: required options enforced; SSE routes are never', () => {
+    const api = createTestClient<Api>(makeApp())
+    const rpc = createRpc(api, manifest)
+    const _typeOnly = () => {
+      // @ts-expect-error — params.id required
+      void rpc.tasks.get()
+      // @ts-expect-error — body.title required
+      void rpc.tasks.create({})
+      // @ts-expect-error — SSE routes are not callable via rpc (use api.stream)
+      void rpc.tasks.events()
+    }
+    expect(typeof _typeOnly).toBe('function')
+    expectTypeOf(rpc.tasks.events).toEqualTypeOf<never>()
   })
 })

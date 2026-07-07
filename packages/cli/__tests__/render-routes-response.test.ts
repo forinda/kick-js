@@ -198,3 +198,48 @@ describe('renderRoutes — KickApi alias', () => {
     expect(src).toContain('type KickApi = KickRoutes.Api')
   })
 })
+
+describe('renderRoutes — kickRpc runtime manifest', () => {
+  it('emits controller.method → verb+path entries with friendly keys', () => {
+    const src = renderRoutes(
+      [
+        route({}),
+        route({ method: 'create', httpMethod: 'POST', path: '/', mountedPath: '/users' }),
+      ],
+      OUT,
+      'zod',
+    )
+    expect(src).toContain('export const kickRpc = {')
+    expect(src).toContain('users: {')
+    expect(src).toContain("get: 'GET /users/:id',")
+    expect(src).toContain("create: 'POST /users',")
+  })
+
+  it('skips duplicate-dropped routes and warns on controller-key collisions', () => {
+    const warnings: string[] = []
+    const src = renderRoutes(
+      [
+        route({}),
+        route({
+          controller: 'Users',
+          method: 'also',
+          filePath: '/app/src/other.controller.ts',
+          mountedPath: '/users/:id',
+        }),
+      ],
+      OUT,
+      'zod',
+      { onWarn: (w) => warnings.push(w) },
+    )
+    // duplicate verb+path dropped from Api map → also absent from manifest
+    const manifest = src.slice(src.indexOf('export const kickRpc'))
+    expect(manifest).not.toContain('also:')
+    // UsersController and Users both → 'users'
+    expect(warnings.some((w) => w.includes("controller key 'users'"))).toBe(true)
+  })
+
+  it('empty routes emit an empty kickRpc', () => {
+    const src = renderRoutes([], OUT, 'zod')
+    expect(src).toContain('export const kickRpc = {} as const')
+  })
+})

@@ -51,7 +51,8 @@ declare global {
   type KickApi = KickRoutes.Api
 }
 
-export {}
+/** Empty until the first route exists — see kick typegen. */
+export const kickRpc = {} as const
 `
   }
 
@@ -180,6 +181,9 @@ export {}
   // `/api/v{n}` prefix, which is not statically scannable.
   const apiEntries: string[] = []
   const seenApiKeys = new Set<string>()
+  // (controller, method) pairs that made it into the Api map — the RPC
+  // manifest below mirrors exactly this set.
+  const acceptedApi = new Set<string>()
   // 'Api' is reserved for the flat map below — a user controller class named
   // Api would declaration-merge its methods into the client map silently.
   if (byController.has('Api')) {
@@ -202,11 +206,49 @@ export {}
         continue
       }
       seenApiKeys.add(key)
+      acceptedApi.add(`${controller}.${m.method}`)
       apiEntries.push(`      '${key}': ${controller}['${m.method}']`)
     }
   }
   const apiInterface = [`    interface Api {`, ...apiEntries, `    }`].join('\n')
   interfaces.push(apiInterface)
+
+  // Runtime RPC manifest (`kickRpc`) — controller.method → 'VERB /mounted/path'.
+  // A VALUE export (this file is .ts, not .d.ts) consumed by
+  // `createRpc(api, kickRpc)` in @forinda/kickjs-client. Keys are friendly
+  // controller names (TasksController → tasks). Routes skipped from the Api
+  // map (duplicates) are skipped here too, so the two stay in lockstep.
+  const rpcEntries: string[] = []
+  const seenRpcKeys = new Set<string>()
+  for (const [controller, methods] of byController) {
+    const friendly = friendlyControllerKey(controller)
+    if (seenRpcKeys.has(friendly)) {
+      opts.onWarn?.(
+        `RPC manifest: controller key '${friendly}' (from ${controller}) collides with another ` +
+          `controller — keeping the first; rename one class for distinct RPC namespaces.`,
+      )
+      continue
+    }
+    seenRpcKeys.add(friendly)
+    const fnEntries: string[] = []
+    for (const m of methods) {
+      if (!acceptedApi.has(`${controller}.${m.method}`)) continue // dropped as duplicate above
+      const key = `${m.httpMethod} ${m.mountedPath ?? m.path}`
+      fnEntries.push(`    ${m.method}: '${key}',`)
+    }
+    if (fnEntries.length > 0) {
+      rpcEntries.push(`  ${friendly}: {\n${fnEntries.join('\n')}\n  },`)
+    }
+  }
+  const rpcManifest = [
+    `/**`,
+    ` * Runtime route manifest for the tRPC-style sugar:`,
+    ` * \`createRpc(api, kickRpc)\` from @forinda/kickjs-client.`,
+    ` */`,
+    `export const kickRpc = {`,
+    ...rpcEntries,
+    `} as const`,
+  ].join('\n')
 
   // Controller type imports — same hoisting rationale as schema imports.
   // `source: ''` semantics of resolveSchemaImportSpecifier point the
@@ -239,7 +281,7 @@ ${interfaceBlock}
   type KickApi = KickRoutes.Api
 }
 
-export {}
+${rpcManifest}
 `
 }
 
@@ -340,4 +382,13 @@ function resolveSchemaImportSpecifier(
   rel = rel.replace(/\.(ts|tsx|mts|cts)$/i, '')
   if (!rel.startsWith('.')) rel = './' + rel
   return rel
+}
+
+/** TasksController → tasks, UserProfileController → userProfile. */
+function friendlyControllerKey(controller: string): string {
+  const stripped = controller.endsWith('Controller')
+    ? controller.slice(0, -'Controller'.length)
+    : controller
+  const base = stripped.length > 0 ? stripped : controller
+  return base.charAt(0).toLowerCase() + base.slice(1)
 }

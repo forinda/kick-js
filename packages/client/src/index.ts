@@ -400,3 +400,61 @@ export function createTestClient<Api extends ApiMap>(
     fetch: (request) => app.fetch(request),
   })
 }
+
+// ── RPC sugar ─────────────────────────────────────────────────────────
+// tRPC-style call shape over the SAME path-keyed map — no new inference,
+// no Proxy magic. `kick typegen` emits the runtime manifest (`kickRpc` in
+// kick__routes.ts): controller.method → 'VERB /mounted/path'; the types
+// below re-derive everything from KickApi via ShapeOf/ArgsFor.
+
+/** Shape of the generated `kickRpc` manifest. */
+export type RpcManifest = Record<string, Record<string, string>>
+
+type RpcMethod<Api extends ApiMap, K> = K extends `${infer V} ${infer P}`
+  ? V extends ClientMethod
+    ? [SsePayloadOf<ShapeOf<Api, V, P>['response']>] extends [never]
+      ? (...args: ArgsFor<ShapeOf<Api, V, P>, V>) => Promise<ShapeOf<Api, V, P>['response']>
+      : never // SSE routes stay explicit — use api.stream(path)
+    : never
+  : never
+
+/** The typed RPC surface derived from a manifest + the Api map. */
+export type KickRpc<Api extends ApiMap, M extends RpcManifest> = {
+  [C in keyof M]: { [F in keyof M[C]]: RpcMethod<Api, M[C][F]> }
+}
+
+/**
+ * tRPC-style sugar over a typed client:
+ *
+ * ```ts
+ * import { kickRpc } from './.kickjs/types/kick__routes'
+ *
+ * const rpc = createRpc(api, kickRpc)
+ * const task = await rpc.tasks.get({ params: { id: '42' } })
+ * const made = await rpc.tasks.create({ body: { title: 'Ship' } })
+ * ```
+ *
+ * A plain nested object built eagerly from the manifest — every call
+ * delegates to the corresponding `api.<verb>()` with the manifest's path,
+ * so behavior (headers, errors, query serialization) is identical to the
+ * path-keyed surface. SSE routes are typed `never` here — open those with
+ * `api.stream(path)`.
+ */
+export function createRpc<Api extends ApiMap, const M extends RpcManifest>(
+  api: KickClient<Api>,
+  manifest: M,
+): KickRpc<Api, M> {
+  const rpc: Record<string, Record<string, unknown>> = {}
+  for (const [controller, methods] of Object.entries(manifest)) {
+    const ns: Record<string, unknown> = {}
+    for (const [fn, key] of Object.entries(methods)) {
+      const space = key.indexOf(' ')
+      const verb = key.slice(0, space).toLowerCase() as Lowercase<ClientMethod>
+      const path = key.slice(space + 1)
+      ns[fn] = (opts?: unknown) =>
+        (api[verb] as (p: string, o?: unknown) => Promise<unknown>)(path, opts)
+    }
+    rpc[controller] = ns
+  }
+  return rpc as KickRpc<Api, M>
+}
