@@ -1,5 +1,54 @@
 # @forinda/kickjs
 
+## 6.3.0
+
+### Minor Changes
+
+- [#465](https://github.com/forinda/kick-js/pull/465) [`0313b95`](https://github.com/forinda/kick-js/commit/0313b9576de7fd15ebc6467cfdbb210f19b3fee1) Thanks [@forinda](https://github.com/forinda)! - feat: typed SSE end to end + the `KickApi` alias
+
+  ```ts
+  // server — ctx.sse is now generic; `return sse` carries the event type
+  const sse = ctx.sse<{ n: number }>();
+  sse.send({ n: 1 }); // typed
+  return sse;
+
+  // client — only SSE routes accepted; events typed
+  const stream = await api.stream("/events");
+  for await (const ev of stream) ev.data; // { n: number }
+  ```
+
+  - `@forinda/kickjs`: `SseHandler<T>` (phantom `__sse` marker — structural
+    detection, no server imports needed client-side)
+  - `@forinda/kickjs-client`: `api.stream()` — fetch-based SSE parser (works
+    with injected fetch/`createTestClient`), `SseEvent<T>` with JSON-parsed
+    data + `event`/`id`, `close()` aborts; also STRICTER options: omitting a
+    required `params`/`body` argument is now a compile error (was a runtime
+    throw)
+  - `kick typegen` emits a global `KickApi` alias for `KickRoutes.Api` —
+    `createClient<KickApi>` everywhere
+
+### Patch Changes
+
+- [#460](https://github.com/forinda/kick-js/pull/460) [`f4e0b10`](https://github.com/forinda/kick-js/commit/f4e0b105d91303a53ada7b7cc4a83cd386a0b1a4) Thanks [@forinda](https://github.com/forinda)! - docs: README refresh — web-standard entries (`/h3-web`, `/web` for Workers/Bun/Deno), return-value handlers, and the typed-client loop
+
+- [#457](https://github.com/forinda/kick-js/pull/457) [`d08c1b9`](https://github.com/forinda/kick-js/commit/d08c1b917dadc8d4287104c5c2d8f43e5844a5ed) Thanks [@forinda](https://github.com/forinda)! - feat: declared response schemas — one declaration feeds Swagger AND the typed client
+
+  ```ts
+  @Get('/', { response: taskSchema })
+  list() { return this.tasks.all() }
+  ```
+
+  - `RouteDefinition.validation.response` (`@forinda/kickjs`): a declared,
+    never-runtime-validated response contract
+  - `@forinda/kickjs-swagger`: the schema documents the auto-generated success
+    response (`200`/`201`) as `application/json` content in
+    `components/schemas`; explicit `@ApiResponse` entries still win; `204`
+    defaults stay body-less
+  - `kick typegen`: a declared `response` schema overrides return-type inference
+    for that route in `KickRoutes[...].response` (both scan paths)
+
+  Docs, server types, and the typed client now share one source of truth per route.
+
 ## 6.2.0
 
 ### Minor Changes
@@ -89,7 +138,7 @@
   controller handler itself:
 
   ```ts
-  response: import('@forinda/kickjs').InferHandlerResponse<_C0['get']>
+  response: import("@forinda/kickjs").InferHandlerResponse<_C0["get"]>;
   ```
 
   Your tsc computes the actual type — the scanner stays checker-free and
@@ -112,10 +161,10 @@
 
   ```ts
   // Cloudflare Workers (compatibility_flags = ["nodejs_compat"])
-  import { createWebApp } from '@forinda/kickjs/web'
-  import * as h3 from 'h3' // v2
-  const app = createWebApp({ h3, modules })
-  export default { fetch: (req) => app.fetch(req) }
+  import { createWebApp } from "@forinda/kickjs/web";
+  import * as h3 from "h3"; // v2
+  const app = createWebApp({ h3, modules });
+  export default { fetch: (req) => app.fetch(req) };
   ```
 
   - `createFetchHandler((env) => options)` — Workers convenience that seeds
@@ -277,8 +326,8 @@
 - [#384](https://github.com/forinda/kick-js/pull/384) [`0e18440`](https://github.com/forinda/kick-js/commit/0e1844075a074e11413c6811b0eb3137ee0c4b7c) Thanks [@forinda](https://github.com/forinda)! - Add the **Fastify runtime** — `@forinda/kickjs/fastify` (M3c). Pick the engine at bootstrap with no controller, module, or context-decorator changes:
 
   ```ts
-  import { fastifyRuntime } from '@forinda/kickjs/fastify'
-  export const app = await bootstrap({ modules, runtime: fastifyRuntime() })
+  import { fastifyRuntime } from "@forinda/kickjs/fastify";
+  export const app = await bootstrap({ modules, runtime: fastifyRuntime() });
   ```
 
   - `fastifyRuntime()` implements the full `HttpRuntime` contract over Fastify 5: routes materialize as **native Fastify routes**, `reply` is wrapped in a `RuntimeResponse` so `ctx.json` / `ctx.html` / `ctx.download` / `ctx.problem` work unchanged, and connect middleware (the built-ins + adopter middleware) runs via `@fastify/middie`. Per spec §10, Fastify's built-in pino logger is disabled (`logger: false`) so the kickjs `requestLogger` stays the single log format.
@@ -292,8 +341,8 @@
 - [#390](https://github.com/forinda/kick-js/pull/390) [`07a3a15`](https://github.com/forinda/kick-js/commit/07a3a15d51aaa55372e58ee2eafa11f6841245dd) Thanks [@forinda](https://github.com/forinda)! - Add the **h3 runtime** — `@forinda/kickjs/h3` (M4). h3 is the HTTP layer behind Nitro / Nuxt; KickJS now runs on it with no controller or module changes:
 
   ```ts
-  import { h3Runtime } from '@forinda/kickjs/h3'
-  export const app = await bootstrap({ modules, runtime: h3Runtime() })
+  import { h3Runtime } from "@forinda/kickjs/h3";
+  export const app = await bootstrap({ modules, runtime: h3Runtime() });
   ```
 
   `h3Runtime()` implements the full `HttpRuntime` contract over **h3 v1** (the stable, node-based surface — `createApp` / `createRouter` / `toNodeListener`, with `event.node.req` / `event.node.res`). Routes become native h3 router routes; the node response is wrapped in a `RuntimeResponse` so `ctx.json` / `ctx.html` / `ctx.sse` work unchanged; connect middleware runs via h3's `fromNodeMiddleware`; bodies parse natively (`readBody`).
@@ -409,8 +458,8 @@
 - [#384](https://github.com/forinda/kick-js/pull/384) [`0e18440`](https://github.com/forinda/kick-js/commit/0e1844075a074e11413c6811b0eb3137ee0c4b7c) Thanks [@forinda](https://github.com/forinda)! - Add the **Fastify runtime** — `@forinda/kickjs/fastify` (M3c). Pick the engine at bootstrap with no controller, module, or context-decorator changes:
 
   ```ts
-  import { fastifyRuntime } from '@forinda/kickjs/fastify'
-  export const app = await bootstrap({ modules, runtime: fastifyRuntime() })
+  import { fastifyRuntime } from "@forinda/kickjs/fastify";
+  export const app = await bootstrap({ modules, runtime: fastifyRuntime() });
   ```
 
   - `fastifyRuntime()` implements the full `HttpRuntime` contract over Fastify 5: routes materialize as **native Fastify routes**, `reply` is wrapped in a `RuntimeResponse` so `ctx.json` / `ctx.html` / `ctx.download` / `ctx.problem` work unchanged, and connect middleware (the built-ins + adopter middleware) runs via `@fastify/middie`. Per spec §10, Fastify's built-in pino logger is disabled (`logger: false`) so the kickjs `requestLogger` stays the single log format.
@@ -424,8 +473,8 @@
 - [#390](https://github.com/forinda/kick-js/pull/390) [`07a3a15`](https://github.com/forinda/kick-js/commit/07a3a15d51aaa55372e58ee2eafa11f6841245dd) Thanks [@forinda](https://github.com/forinda)! - Add the **h3 runtime** — `@forinda/kickjs/h3` (M4). h3 is the HTTP layer behind Nitro / Nuxt; KickJS now runs on it with no controller or module changes:
 
   ```ts
-  import { h3Runtime } from '@forinda/kickjs/h3'
-  export const app = await bootstrap({ modules, runtime: h3Runtime() })
+  import { h3Runtime } from "@forinda/kickjs/h3";
+  export const app = await bootstrap({ modules, runtime: h3Runtime() });
   ```
 
   `h3Runtime()` implements the full `HttpRuntime` contract over **h3 v1** (the stable, node-based surface — `createApp` / `createRouter` / `toNodeListener`, with `event.node.req` / `event.node.res`). Routes become native h3 router routes; the node response is wrapped in a `RuntimeResponse` so `ctx.json` / `ctx.html` / `ctx.sse` work unchanged; connect middleware runs via h3's `fromNodeMiddleware`; bodies parse natively (`readBody`).
@@ -525,12 +574,12 @@
   `dependsOn` is now typed against the **union** of `keyof ContextMeta` and the new key-only `ContextKeys` registry:
 
   ```ts
-  declare module '@forinda/kickjs' {
+  declare module "@forinda/kickjs" {
     interface ContextMeta {
-      tenant: { id: string; name: string }
+      tenant: { id: string; name: string };
     } // typed ctx.get
     interface ContextKeys {
-      session: true
+      session: true;
     } // dependsOn-able, value stays unknown
   }
   ```
@@ -576,13 +625,13 @@
 
   ```ts
   const LoadTenant = defineContextDecorator.withParams<{
-    source: 'header' | 'subdomain'
+    source: "header" | "subdomain";
   }>()({
-    key: 'tenant',
+    key: "tenant",
     deps: { repo: TENANT_REPO }, // D inferred
-    paramDefaults: { source: 'header' },
+    paramDefaults: { source: "header" },
     resolve: (ctx, { repo }, params) => repo.findFor(ctx, params),
-  })
+  });
   ```
 
   The positional form keeps working unchanged for back-compat.
@@ -649,13 +698,13 @@
 
   ```ts
   const LoadTenant = defineContextDecorator.withParams<{
-    source: 'header' | 'subdomain'
+    source: "header" | "subdomain";
   }>()({
-    key: 'tenant',
+    key: "tenant",
     deps: { repo: TENANT_REPO }, // D inferred
-    paramDefaults: { source: 'header' },
+    paramDefaults: { source: "header" },
     resolve: (ctx, { repo }, params) => repo.findFor(ctx, params),
-  })
+  });
   ```
 
   The positional form keeps working unchanged for back-compat.
@@ -786,14 +835,14 @@
 
   ```ts
   ctx.problem({
-    type: 'https://api.example.com/problems/out-of-credit',
+    type: "https://api.example.com/problems/out-of-credit",
     status: 403,
-    detail: 'Your balance is 30, but that costs 50.',
+    detail: "Your balance is 30, but that costs 50.",
     balance: 30, // extension per §3.2
-  })
+  });
 
-  ctx.problem.notFound({ detail: 'User abc not found' })
-  ctx.problem.validation(zodResult.error.issues)
+  ctx.problem.notFound({ detail: "User abc not found" });
+  ctx.problem.validation(zodResult.error.issues);
   ```
 
   Each call sets `Content-Type: application/problem+json` and fills in defaults (`type` → `about:blank` per §3.1.1, `title` → IANA reason phrase per §3.1.4). Shortcuts: `badRequest`, `unauthorized`, `forbidden`, `notFound`, `conflict`, `unprocessable`, `tooManyRequests`, `internal`, plus the generic `ctx.problem({ status, ... })`.
@@ -802,10 +851,10 @@
 
   ```ts
   throw ProblemException.forbidden({
-    type: 'https://api.example.com/problems/out-of-credit',
-    detail: 'Your balance is 30, but that costs 50.',
+    type: "https://api.example.com/problems/out-of-credit",
+    detail: "Your balance is 30, but that costs 50.",
     balance: 30,
-  })
+  });
   ```
 
   Extends `HttpException` so existing catches keep working. The framework error handler dispatches `ProblemException` first and emits `application/problem+json`. Plain `HttpException` keeps its existing `{ message }` JSON shape — backward compatible by detection (data-driven), not by config.
@@ -986,23 +1035,23 @@
 
   ```ts
   export const MyAdapter = defineAdapter({
-    name: 'MyAdapter',
+    name: "MyAdapter",
     build: () => ({
       introspect() {
         // Return-type fully inferred — no `import type` needed.
         return {
           protocolVersion: 1,
-          name: 'MyAdapter',
-          kind: 'adapter',
+          name: "MyAdapter",
+          kind: "adapter",
           state: { connectedAt: Date.now() },
           memoryBytes: 12_345,
-          tokens: { provides: ['REDIS'], requires: [] },
-          version: '1.0',
+          tokens: { provides: ["REDIS"], requires: [] },
+          version: "1.0",
           metrics: { activeConnections: 3 },
-        }
+        };
       },
     }),
-  })
+  });
   ```
 
   **Tests**
@@ -1144,13 +1193,13 @@
   @Service()
   class UserRepo {
     // Property position — both names work.
-    @Autowired(DB) private db1!: KickDbClient
-    @Inject(DB) private db2!: KickDbClient
+    @Autowired(DB) private db1!: KickDbClient;
+    @Inject(DB) private db2!: KickDbClient;
 
     // Constructor parameter position — both names work.
     constructor(
       @Autowired(LOGGER) private logger: Logger,
-      @Inject(CACHE) private cache: Cache,
+      @Inject(CACHE) private cache: Cache
     ) {}
   }
   ```
@@ -1201,18 +1250,26 @@
   `RequestContext` now exposes a `signal: AbortSignal` getter that fires when the underlying HTTP request closes (client disconnect, response sent, or timeout). Thread it through anything that takes an `AbortSignal` so the work cancels as soon as the client gives up.
 
   ```ts
-  import { Controller, Get, Autowired, type RequestContext } from '@forinda/kickjs'
-  import { TasksRepository } from './tasks.repository'
+  import {
+    Controller,
+    Get,
+    Autowired,
+    type RequestContext,
+  } from "@forinda/kickjs";
+  import { TasksRepository } from "./tasks.repository";
 
   @Controller()
   export class TasksController {
-    @Autowired() private readonly tasks!: TasksRepository
+    @Autowired() private readonly tasks!: TasksRepository;
 
-    @Get('/:id/full')
+    @Get("/:id/full")
     async showFull(ctx: RequestContext) {
-      const row = await this.tasks.findFullById(ctx.params.id as string, ctx.signal)
-      if (!row) return ctx.notFound()
-      ctx.json(row)
+      const row = await this.tasks.findFullById(
+        ctx.params.id as string,
+        ctx.signal
+      );
+      if (!row) return ctx.notFound();
+      ctx.json(row);
     }
   }
   ```
@@ -1241,27 +1298,27 @@
 
   ```ts
   const TasksModule = defineModule({
-    name: 'TasksModule',
-    defaults: { scope: 'public' },
+    name: "TasksModule",
+    defaults: { scope: "public" },
     build: (config, { name }) => ({
       register(container) {
-        container.registerInstance(`tasks:scope:${name}`, config.scope)
+        container.registerInstance(`tasks:scope:${name}`, config.scope);
       },
       routes() {
-        return { path: `/${config.scope}/tasks`, controller: TasksController }
+        return { path: `/${config.scope}/tasks`, controller: TasksController };
       },
       contributors() {
-        return [LoadTenant.registration]
+        return [LoadTenant.registration];
       },
     }),
-  })
+  });
 
   bootstrap({
     modules: [
       TasksModule(), // public scope (defaults)
-      TasksModule.scoped('admin', { scope: 'admin' }), // namespaced clone
+      TasksModule.scoped("admin", { scope: "admin" }), // namespaced clone
     ],
-  })
+  });
   ```
 
   - `(config?)` call form returns the module instance.
@@ -1279,11 +1336,14 @@
   ## `defineModules()` — fluent module-list builder
 
   ```ts
-  import { bootstrap, defineModules } from '@forinda/kickjs'
+  import { bootstrap, defineModules } from "@forinda/kickjs";
 
-  const modules = defineModules().mount(HelloModule()).mount(TasksModule()).mount(AdminModule())
+  const modules = defineModules()
+    .mount(HelloModule())
+    .mount(TasksModule())
+    .mount(AdminModule());
 
-  await bootstrap({ modules })
+  await bootstrap({ modules });
   ```
 
   `defineModules()` returns a `ModuleList` (an `AppModuleEntry[]` subclass with a chainable `.mount()`). Drops into `bootstrap({ modules })` directly — no unwrap step — because `ModuleList extends Array<AppModuleEntry>`. Optional vararg seeds the list inline: `defineModules(HelloModule()).mount(TasksModule())` composes the two forms naturally.
@@ -1349,6 +1409,7 @@
   Active adopter-facing guides updated: `docs/guide/modules.md` (full rewrite leading with `defineModule`), `getting-started.md`, `project-structure.md` (canonical examples). `plugins.md`, `migration-from-express.md`, `testing.md`, `generators.md`, `tutorial-hmr-decorators.md`, `tutorial-generator-patterns.md` get the type-annotation rename so the `AppModuleEntry[]` story is consistent across the docs site. Versioned snapshots under `docs/versions/` left untouched (they're locked to their respective releases).
 
   ## What's deferred
+
   - `kick g scaffold` for REST / CQRS / minimal patterns — currently only emits DDD-shaped layouts. The command refuses on non-DDD projects with a clear error pointing at `kick g module` as the workaround.
   - Module-registry pattern for plugins (`.mount(module)` / `.use(module)` factory) — separate design conversation; the flat-array `modules?(): AppModuleEntry[]` is the stable shape for now.
 
@@ -1357,20 +1418,20 @@
   ## What's new
 
   ```ts
-  import { bootstrap } from '@forinda/kickjs'
+  import { bootstrap } from "@forinda/kickjs";
 
   await bootstrap({
     modules: [HelloModule()], // static — always mounted
 
     setup(registry) {
-      if (process.env.ENABLE_ADMIN === 'true') {
-        registry.mount(AdminModule())
+      if (process.env.ENABLE_ADMIN === "true") {
+        registry.mount(AdminModule());
       }
       for (const tenant of TENANTS) {
-        registry.mount(TenantModule.scoped(tenant.id, tenant))
+        registry.mount(TenantModule.scoped(tenant.id, tenant));
       }
     },
-  })
+  });
   ```
 
   - New `ModuleRegistry` type with one method: `.mount(module: AppModuleEntry)`. Internal collector `MutableModuleRegistry` is what bootstrap passes around; adopters interact through the interface.
@@ -1395,6 +1456,7 @@
   `AppModuleClass` now carries a `@deprecated` JSDoc tag pointing at `defineModule({...})` + `AppModuleEntry`. The class form keeps working through v5 — no runtime warnings, no breaking changes — the annotation is a soft "prefer the factory form" hint shown in IDE tooltips.
 
   ## Tests
+
   - `MutableModuleRegistry`: starts-empty, mount-appends-in-order, accepts both class and instance forms, referentially-stable entries array, surface only exposes `mount`.
   - Application integration: bootstrap setup callback runs and threads mounts through the loader; plugin.setup runs before bootstrap.setup; missing setup is backwards compatible; plugin setup threads captured config.
 
@@ -1432,9 +1494,9 @@
 
   ```ts
   // Before — silently accepted, even when bypassing Zod validation
-  ctx.body.injectedField = 'computed'
-  ctx.headers.authorization = 'fake'
-  ctx.files!.push(extra)
+  ctx.body.injectedField = "computed";
+  ctx.headers.authorization = "fake";
+  ctx.files!.push(extra);
 
   // After — tsc errors
   //   "Cannot assign to 'injectedField' because it is a read-only property."
@@ -1465,12 +1527,12 @@
 
   1. **Compute and stash** (preferred):
      ```ts
-     const enriched = { ...ctx.body, computed: f(ctx.body) }
-     ctx.set('enrichedBody', enriched)
+     const enriched = { ...ctx.body, computed: f(ctx.body) };
+     ctx.set("enrichedBody", enriched);
      ```
   2. **Drop down to the raw Express handle**:
      ```ts
-     ;(ctx.req.body as any).injectedField = 'computed'
+     (ctx.req.body as any).injectedField = "computed";
      ```
 
   The escape hatches stay supported. The default just stops surprising
@@ -1507,18 +1569,18 @@
   // Decorator form — opt into typing with one line
   @Builder
   class UserDto {
-    name!: string
-    email!: string
-    declare static readonly builder: () => BuilderOf<UserDto>
+    name!: string;
+    email!: string;
+    declare static readonly builder: () => BuilderOf<UserDto>;
   }
 
   // Factory form — same runtime, types inferred automatically
   class TaskDtoBase {
-    title!: string
-    done!: boolean
+    title!: string;
+    done!: boolean;
   }
-  export const TaskDto = withBuilder(TaskDtoBase)
-  export type TaskDto = InstanceType<typeof TaskDto>
+  export const TaskDto = withBuilder(TaskDtoBase);
+  export type TaskDto = InstanceType<typeof TaskDto>;
   ```
 
   `readonly` keeps SonarQube's `typescript:S1444` quiet — the runtime assigns `target.builder` once at decoration time and never reassigns it. Existing `@Builder` adopters keep working without changes; the typing opt-in is additive.

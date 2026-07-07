@@ -1,5 +1,27 @@
 # @forinda/kickjs-swagger
 
+## 7.1.0
+
+### Minor Changes
+
+- [#457](https://github.com/forinda/kick-js/pull/457) [`d08c1b9`](https://github.com/forinda/kick-js/commit/d08c1b917dadc8d4287104c5c2d8f43e5844a5ed) Thanks [@forinda](https://github.com/forinda)! - feat: declared response schemas — one declaration feeds Swagger AND the typed client
+
+  ```ts
+  @Get('/', { response: taskSchema })
+  list() { return this.tasks.all() }
+  ```
+
+  - `RouteDefinition.validation.response` (`@forinda/kickjs`): a declared,
+    never-runtime-validated response contract
+  - `@forinda/kickjs-swagger`: the schema documents the auto-generated success
+    response (`200`/`201`) as `application/json` content in
+    `components/schemas`; explicit `@ApiResponse` entries still win; `204`
+    defaults stay body-less
+  - `kick typegen`: a declared `response` schema overrides return-type inference
+    for that route in `KickRoutes[...].response` (both scan paths)
+
+  Docs, server types, and the typed client now share one source of truth per route.
+
 ## 7.0.1
 
 ### Patch Changes
@@ -73,6 +95,7 @@
 - [#291](https://github.com/forinda/kick-js/pull/291) [`0d9a895`](https://github.com/forinda/kick-js/commit/0d9a8955f358f8ca8be8aca169dfa38285c48f50) Thanks [@forinda](https://github.com/forinda)! - Schema-agnostic validation abstraction
 
   **New package: `@forinda/kickjs-schema`**
+
   - `KickSchema` interface — unified `safeParse()`, `toJsonSchema()`, `_raw`
   - `SchemaIssue` — normalized error format (path, message, code, expected, received)
   - `detectSchema()` — auto-detects KickSchema, Zod, Valibot, Yup, Standard Schema v1, functions, and duck-typed schemas
@@ -80,17 +103,20 @@
   - `InferSchemaOutput<T>` — type-level inference for Zod, Valibot, Standard Schema, and KickSchema
 
   **Adapters (tree-shakable sub-exports):**
+
   - `@forinda/kickjs-schema/zod` — `fromZod()` with full issue normalization and JSON Schema via `.toJSONSchema()`
   - `@forinda/kickjs-schema/valibot` — `fromValibot()` with issue mapping and JSON Schema via `@valibot/to-json-schema`
   - `@forinda/kickjs-schema/yup` — `fromYup()` with `validateSync` error mapping and JSON Schema from `describe()` metadata
 
   **Framework integration:**
+
   - `validate()` middleware uses `detectSchema()` — accepts any supported schema library
   - Swagger `SchemaParser` uses `detectSchema().toJsonSchema()` instead of Zod-specific conversion
   - MCP adapter uses `detectSchema()` for tool input/output schema conversion
   - `loadEnvFromSchema()` — schema-agnostic env loader alongside existing Zod-only `loadEnv()`
 
   **Typegen:**
+
   - New `schemaValidator: 'kickjs-schema'` option emits `InferSchemaOutput<>` for route body/query/params and env types
   - Default `'zod'` unchanged — fully backward compatible
   - CLI: `kick typegen --schema-validator kickjs-schema`
@@ -125,6 +151,7 @@
 - [#291](https://github.com/forinda/kick-js/pull/291) [`0d9a895`](https://github.com/forinda/kick-js/commit/0d9a8955f358f8ca8be8aca169dfa38285c48f50) Thanks [@forinda](https://github.com/forinda)! - Schema-agnostic validation abstraction
 
   **New package: `@forinda/kickjs-schema`**
+
   - `KickSchema` interface — unified `safeParse()`, `toJsonSchema()`, `_raw`
   - `SchemaIssue` — normalized error format (path, message, code, expected, received)
   - `detectSchema()` — auto-detects KickSchema, Zod, Valibot, Yup, Standard Schema v1, functions, and duck-typed schemas
@@ -132,17 +159,20 @@
   - `InferSchemaOutput<T>` — type-level inference for Zod, Valibot, Standard Schema, and KickSchema
 
   **Adapters (tree-shakable sub-exports):**
+
   - `@forinda/kickjs-schema/zod` — `fromZod()` with full issue normalization and JSON Schema via `.toJSONSchema()`
   - `@forinda/kickjs-schema/valibot` — `fromValibot()` with issue mapping and JSON Schema via `@valibot/to-json-schema`
   - `@forinda/kickjs-schema/yup` — `fromYup()` with `validateSync` error mapping and JSON Schema from `describe()` metadata
 
   **Framework integration:**
+
   - `validate()` middleware uses `detectSchema()` — accepts any supported schema library
   - Swagger `SchemaParser` uses `detectSchema().toJsonSchema()` instead of Zod-specific conversion
   - MCP adapter uses `detectSchema()` for tool input/output schema conversion
   - `loadEnvFromSchema()` — schema-agnostic env loader alongside existing Zod-only `loadEnv()`
 
   **Typegen:**
+
   - New `schemaValidator: 'kickjs-schema'` option emits `InferSchemaOutput<>` for route body/query/params and env types
   - Default `'zod'` unchanged — fully backward compatible
   - CLI: `kick typegen --schema-validator kickjs-schema`
@@ -178,6 +208,7 @@
   **`@forinda/kickjs-swagger`** — peer range tightened from `>=4.0.0` to `^4.0.0` for consistency with kickjs. Stays optional: `schema-parser.ts` duck-types Zod schemas (no `import 'zod'` in `src/`) so adopters using non-Zod parsers (Joi, Valibot, Yup, ArkType) don't need zod at all.
 
   **Upgrade impact:**
+
   - Projects scaffolded with `kick new` already pin `zod: ^4.4.3` — no action required.
   - Projects on `npm install`, `yarn` (non-strict), or `pnpm install` without `--strict-peer-dependencies` will see a "missing peer dependency" warning if they don't have zod. Fix: `pnpm add zod` (or your package manager's equivalent).
   - Projects using pnpm with `strict-peer-dependencies=true` or npm 7+ with `--legacy-peer-deps=false` will hard-fail until they add zod themselves.
@@ -193,6 +224,7 @@
   ## Why
 
   The previous behavior had Swagger silently reading `kick:auth:authenticated` / `kick:auth:public` metadata keys set by `@forinda/kickjs-auth`'s decorators. That implicit bridge:
+
   - Coupled Swagger conceptually to one specific auth library by knowing its metadata key strings.
   - Broke for adopters using a different auth library — their decorators wouldn't show up in the generated spec without monkey-patching.
   - Hid configuration mistakes — typos in scheme names silently produced empty `bearer` schemes.
@@ -241,18 +273,18 @@
   SwaggerAdapter({
     securitySchemes: {
       OAuth2: {
-        type: 'oauth2',
+        type: "oauth2",
         flows: {
           authorizationCode: {
-            authorizationUrl: 'https://example.com/oauth/authorize',
-            tokenUrl: 'https://example.com/oauth/token',
-            scopes: { 'users:read': 'Read user profile' },
+            authorizationUrl: "https://example.com/oauth/authorize",
+            tokenUrl: "https://example.com/oauth/token",
+            scopes: { "users:read": "Read user profile" },
           },
         },
       },
-      ApiKey: { type: 'apiKey', in: 'header', name: 'X-API-Key' },
+      ApiKey: { type: "apiKey", in: "header", name: "X-API-Key" },
     },
-  })
+  });
   ```
 
   Custom scheme names referenced via `@ApiSecurity('MyScheme')` MUST be declared here — the builder no longer auto-synthesizes a bearer scheme for arbitrary names. The literal `BearerAuth` name keeps its auto-synth fallback for back-compat with `@ApiBearerAuth()` / `bearerAuth: true`.
@@ -264,17 +296,19 @@
   ```ts
   SwaggerAdapter({
     securityResolver: ({ controllerClass, handlerName }) => {
-      const proto = controllerClass.prototype
-      if (Reflect.getMetadata('kick:auth:public', proto, handlerName)) return null
+      const proto = controllerClass.prototype;
+      if (Reflect.getMetadata("kick:auth:public", proto, handlerName))
+        return null;
       const secured =
-        Reflect.getMetadata('kick:auth:authenticated', controllerClass) ||
-        Reflect.getMetadata('kick:auth:authenticated', proto, handlerName)
-      return secured ? 'BearerAuth' : undefined
+        Reflect.getMetadata("kick:auth:authenticated", controllerClass) ||
+        Reflect.getMetadata("kick:auth:authenticated", proto, handlerName);
+      return secured ? "BearerAuth" : undefined;
     },
-  })
+  });
   ```
 
   Returns:
+
   - A scheme name (or `ApiSecurityRequirement` / array) → emit those requirements.
   - `null` → mark explicitly public (overrides class-level security).
   - `undefined` → fall through to decorator-driven resolution.
@@ -284,10 +318,12 @@
   ## Migration
 
   Adopters using `@forinda/kickjs-auth` + Swagger together previously got security-marked routes for free. After this change:
+
   - **Most adopters** can switch to `@ApiSecurity('BearerAuth')` on the class (or `bearerAuth: true` global).
   - **Adopters who want to keep auth-library-driven detection** copy the `securityResolver` snippet above into their `SwaggerAdapter({...})` call. Behavior matches the historical implicit bridge exactly.
 
   ## Resolution order
+
   1. `@ApiPublic()` on the method → no security emitted.
   2. `securityResolver({controllerClass, handlerName})` returns a value (or `null` for public).
   3. `@ApiSecurity` on the method.
@@ -306,6 +342,7 @@
 ### Patch Changes
 
 - [#166](https://github.com/forinda/kick-js/pull/166) [`a6d0dd6`](https://github.com/forinda/kick-js/commit/a6d0dd6038b215c0ae3cbe1a20e11ba0d8b1c46e) Thanks [@forinda](https://github.com/forinda)! - Minify published build output via the tsdown / oxc minifier.
+
   - **Library packages** use `minify: { compress: true, mangle: false }`. Whitespace and comments are stripped and constants folded, but identifiers stay intact so adopter stack traces remain readable.
   - **CLI** uses `minify: { compress: true, mangle: true }`. The CLI is an operator tool, not a library — full mangle is fine and gives a smaller binary.
 

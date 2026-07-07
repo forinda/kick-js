@@ -1,5 +1,68 @@
 # @forinda/kickjs-cli
 
+## 6.6.0
+
+### Minor Changes
+
+- [#463](https://github.com/forinda/kick-js/pull/463) [`58c0afe`](https://github.com/forinda/kick-js/commit/58c0afe8f134797b26fe70a077fad1973d8a46df) Thanks [@forinda](https://github.com/forinda)! - feat: fullstack-aware agent docs + modernized generated guidance
+
+  - `kick g agents` / `kick new` accept `fullstack`: the workspace root gets
+    CLAUDE.md + `.agents/` with a "Fullstack workspace layout" section (the
+    server/web type loop and its do-not-break rules)
+  - Generated AGENTS.md guidance now teaches return-value handlers +
+    `reply()`, declared `{ response: schema }` contracts, the typed client,
+    and the `@PostConstruct`/`@PreDestroy` lifecycle pair; the skills
+    controller sample returns `reply(201, ...)`
+  - Dead `ddd`/`cqrs` template labels removed; the ~100-line unused legacy
+    CLAUDE template remnant deleted (its comment invited removal)
+
+- [#457](https://github.com/forinda/kick-js/pull/457) [`d08c1b9`](https://github.com/forinda/kick-js/commit/d08c1b917dadc8d4287104c5c2d8f43e5844a5ed) Thanks [@forinda](https://github.com/forinda)! - feat: declared response schemas — one declaration feeds Swagger AND the typed client
+
+  ```ts
+  @Get('/', { response: taskSchema })
+  list() { return this.tasks.all() }
+  ```
+
+  - `RouteDefinition.validation.response` (`@forinda/kickjs`): a declared,
+    never-runtime-validated response contract
+  - `@forinda/kickjs-swagger`: the schema documents the auto-generated success
+    response (`200`/`201`) as `application/json` content in
+    `components/schemas`; explicit `@ApiResponse` entries still win; `204`
+    defaults stay body-less
+  - `kick typegen`: a declared `response` schema overrides return-type inference
+    for that route in `KickRoutes[...].response` (both scan paths)
+
+  Docs, server types, and the typed client now share one source of truth per route.
+
+- [#465](https://github.com/forinda/kick-js/pull/465) [`0313b95`](https://github.com/forinda/kick-js/commit/0313b9576de7fd15ebc6467cfdbb210f19b3fee1) Thanks [@forinda](https://github.com/forinda)! - feat: typed SSE end to end + the `KickApi` alias
+
+  ```ts
+  // server — ctx.sse is now generic; `return sse` carries the event type
+  const sse = ctx.sse<{ n: number }>();
+  sse.send({ n: 1 }); // typed
+  return sse;
+
+  // client — only SSE routes accepted; events typed
+  const stream = await api.stream("/events");
+  for await (const ev of stream) ev.data; // { n: number }
+  ```
+
+  - `@forinda/kickjs`: `SseHandler<T>` (phantom `__sse` marker — structural
+    detection, no server imports needed client-side)
+  - `@forinda/kickjs-client`: `api.stream()` — fetch-based SSE parser (works
+    with injected fetch/`createTestClient`), `SseEvent<T>` with JSON-parsed
+    data + `event`/`id`, `close()` aborts; also STRICTER options: omitting a
+    required `params`/`body` argument is now a compile error (was a runtime
+    throw)
+  - `kick typegen` emits a global `KickApi` alias for `KickRoutes.Api` —
+    `createClient<KickApi>` everywhere
+
+### Patch Changes
+
+- Updated dependencies [[`f4e0b10`](https://github.com/forinda/kick-js/commit/f4e0b105d91303a53ada7b7cc4a83cd386a0b1a4), [`d08c1b9`](https://github.com/forinda/kick-js/commit/d08c1b917dadc8d4287104c5c2d8f43e5844a5ed), [`0313b95`](https://github.com/forinda/kick-js/commit/0313b9576de7fd15ebc6467cfdbb210f19b3fee1)]:
+  - @forinda/kickjs@6.3.0
+  - @forinda/kickjs-db@7.1.1
+
 ## 6.5.0
 
 ### Minor Changes
