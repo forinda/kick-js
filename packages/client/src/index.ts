@@ -81,10 +81,10 @@ type StreamPathsFor<Api extends ApiMap> = {
 // Options argument is OPTIONAL only when the shape requires nothing
 // (no concrete params, no required body) — otherwise omitting it must be
 // a compile error, not a runtime missing-param throw.
-type ArgsFor<S extends RouteShapeLike> =
-  Record<string, never> extends RequestOptions<S>
-    ? [options?: RequestOptions<S>]
-    : [options: RequestOptions<S>]
+type ArgsFor<S extends RouteShapeLike, M extends ClientMethod> =
+  Record<string, never> extends RequestOptions<S, M>
+    ? [options?: RequestOptions<S, M>]
+    : [options: RequestOptions<S, M>]
 
 /** One parsed server-sent event. */
 export interface SseEvent<T = unknown> {
@@ -111,7 +111,13 @@ type ParamsField<T> = unknown extends T
     ? { params?: T }
     : { params: T }
 
-type BodyField<T> = unknown extends T ? { body?: unknown } : { body: T }
+// GET requests must not carry a body — `new Request(url, { method: 'GET',
+// body })` throws at runtime, so the type forbids it up front.
+type BodyField<T, M extends ClientMethod> = M extends 'GET'
+  ? { body?: never }
+  : unknown extends T
+    ? { body?: unknown }
+    : { body: T }
 
 /** Loose fallback for routes without a statically-known query shape. */
 type LooseQuery = Record<string, string | number | boolean | Array<string | number>>
@@ -121,13 +127,13 @@ type LooseQuery = Record<string, string | number | boolean | Array<string | numb
 // `query` — sort fields autocomplete as '-createdAt' | 'createdAt' | …
 type QueryField<T> = unknown extends T ? { query?: LooseQuery } : { query?: T }
 
-export type RequestOptions<S extends RouteShapeLike> = {
+export type RequestOptions<S extends RouteShapeLike, M extends ClientMethod = ClientMethod> = {
   /** Extra headers merged over the client-level ones. */
   headers?: Record<string, string>
   /** AbortSignal for cancellation. */
   signal?: AbortSignal
 } & ParamsField<S['params']> &
-  BodyField<S['body']> &
+  BodyField<S['body'], M> &
   QueryField<S['query']>
 
 export interface ClientOptions {
@@ -169,7 +175,7 @@ export class KickClientError extends Error {
 export interface KickClient<Api extends ApiMap> {
   get<P extends PathsFor<Api, 'GET'> & string>(
     path: P,
-    ...args: ArgsFor<ShapeOf<Api, 'GET', P>>
+    ...args: ArgsFor<ShapeOf<Api, 'GET', P>, 'GET'>
   ): Promise<ShapeOf<Api, 'GET', P>['response']>
   /**
    * Open a typed SSE connection to a route whose handler
@@ -182,23 +188,23 @@ export interface KickClient<Api extends ApiMap> {
    */
   stream<P extends StreamPathsFor<Api> & string>(
     path: P,
-    ...args: ArgsFor<ShapeOf<Api, 'GET', P>>
+    ...args: ArgsFor<ShapeOf<Api, 'GET', P>, 'GET'>
   ): Promise<SseStream<SsePayloadOf<ShapeOf<Api, 'GET', P>['response']>>>
   post<P extends PathsFor<Api, 'POST'> & string>(
     path: P,
-    ...args: ArgsFor<ShapeOf<Api, 'POST', P>>
+    ...args: ArgsFor<ShapeOf<Api, 'POST', P>, 'POST'>
   ): Promise<ShapeOf<Api, 'POST', P>['response']>
   put<P extends PathsFor<Api, 'PUT'> & string>(
     path: P,
-    ...args: ArgsFor<ShapeOf<Api, 'PUT', P>>
+    ...args: ArgsFor<ShapeOf<Api, 'PUT', P>, 'PUT'>
   ): Promise<ShapeOf<Api, 'PUT', P>['response']>
   delete<P extends PathsFor<Api, 'DELETE'> & string>(
     path: P,
-    ...args: ArgsFor<ShapeOf<Api, 'DELETE', P>>
+    ...args: ArgsFor<ShapeOf<Api, 'DELETE', P>, 'DELETE'>
   ): Promise<ShapeOf<Api, 'DELETE', P>['response']>
   patch<P extends PathsFor<Api, 'PATCH'> & string>(
     path: P,
-    ...args: ArgsFor<ShapeOf<Api, 'PATCH', P>>
+    ...args: ArgsFor<ShapeOf<Api, 'PATCH', P>, 'PATCH'>
   ): Promise<ShapeOf<Api, 'PATCH', P>['response']>
 }
 
@@ -272,7 +278,9 @@ export function createClient<Api extends ApiMap>(options: ClientOptions): KickCl
     const clientHeaders =
       typeof options.headers === 'function' ? await options.headers() : (options.headers ?? {})
     const headers = new Headers({ ...clientHeaders, ...opts.headers })
-    const hasBody = opts.body !== undefined
+    // Defensive: fetch's Request constructor throws on GET-with-body; the
+    // types already forbid it, but casts can smuggle one through.
+    const hasBody = method !== 'GET' && opts.body !== undefined
     if (hasBody && !headers.has('content-type')) {
       headers.set('content-type', 'application/json')
     }

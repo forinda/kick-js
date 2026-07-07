@@ -156,6 +156,21 @@ describe('createClient — runtime against a real web app', () => {
     await expect(api.get('/tasks/:id', {} as never)).rejects.toThrow(/missing path param ':id'/)
   })
 
+  it('a body smuggled onto GET via casts is stripped (no Request throw)', async () => {
+    let method = ''
+    const api = createClient<Api>({
+      baseUrl: 'http://x/api/v1',
+      fetch: (req) => {
+        method = req.method
+        return Promise.resolve(
+          new Response('[]', { headers: { 'content-type': 'application/json' } }),
+        )
+      },
+    })
+    await api.get('/tasks', { body: { nope: true } } as never)
+    expect(method).toBe('GET')
+  })
+
   it('query values serialize onto the URL', async () => {
     let seenUrl = ''
     const api = createClient<Api>({
@@ -204,6 +219,8 @@ describe('createClient — type-level contract', () => {
     void api.get('/tasks/:id')
     // @ts-expect-error — body.title is required for POST /tasks
     void api.post('/tasks', {})
+    // @ts-expect-error — GET requests must not carry a body
+    void api.get('/tasks', { body: { nope: true } })
 
     // @ts-expect-error — 'created' is not a sortable field on GET /tasks
     void api.get('/tasks', { query: { sort: 'created' } })
