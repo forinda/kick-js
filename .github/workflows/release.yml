@@ -42,7 +42,7 @@ jobs:
         uses: pnpm/action-setup@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           # Node 24 ships npm ≥ 11.5.1 which is required for npm
           # trusted publishers. If we ever need to drop to Node 20
