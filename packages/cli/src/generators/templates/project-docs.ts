@@ -663,16 +663,52 @@ Typed, ordered way to populate \`ctx.set/get\` keys before the handler runs.
 Use this **instead of \`@Middleware()\`** when the middleware's only output
 is a value other code reads off \`ctx\`.
 
+**Authoring** — pick the right factory:
+
+| Factory | When |
+|---------|------|
+| \`defineHttpContextDecorator(spec)\` | HTTP only (the common case). \`Ctx\` is \`RequestContext\`, so \`ctx.req\` / \`ctx.params\` / \`ctx.query\` are typed. |
+| \`defineContextDecorator(spec)\` | Transport-agnostic (HTTP + WS + queue + cron). \`Ctx\` is \`ExecutionContext\` — only \`get\` / \`require\` / \`set\` / \`requestId\`. |
+| \`<either>.withParams<P>()(spec)\` | The contributor takes per-call params. **Always use the curried form for params** — the positional form forces you to spell \`K\` and \`D\` and loses \`deps\` inference. |
+
+Spec fields: \`{ key, deps, dependsOn, optional, paramDefaults, requiredParams, onError, resolve }\`.
+
+**Call sites — all five, precedence high → low:**
+
+| # | Site | Form |
+|---|------|------|
+| 1 | Method | \`@LoadX\` / \`@LoadX({ ... })\` above a controller method |
+| 2 | Class | \`@LoadX\` / \`@LoadX({ ... })\` above the controller class |
+| 3 | Module | \`defineModule({ build: () => ({ contributors: () => [LoadX.registration] }) })\` — or \`AppModule.contributors?()\` in class form |
+| 4 | Adapter | \`AppAdapter.contributors?(): ContributorRegistration[]\` |
+| 5 | Global | \`bootstrap({ contributors: [LoadX.registration] })\` |
+
+Sites 3–5 take **registrations**, not decorators:
+
+- \`LoadX.registration\` — uses \`paramDefaults\` as-is.
+- \`LoadX.with({ ...params }).registration\` — call-site params merged over \`paramDefaults\`.
+
+Duplicate keys are resolved by precedence; the lower-precedence one is
+dropped silently, which is how a method-level decorator overrides an
+adapter-shipped default.
+
+**Params:** a **required** field of \`P\` with no \`paramDefaults\` entry must be
+supplied at every call site — \`@LoadX\` bare, \`@LoadX()\`, and \`.registration\`
+are compile errors for such a decorator. Never invent a placeholder default
+just to make the type check; add \`requiredParams: ['field']\` for runtime
+enforcement at JS call sites.
+
+**Reading values:** \`ctx.require('key')\` for values a contributor guarantees
+(throws \`MissingContextValueError\`, returns a non-optional type);
+\`ctx.get('key')\` for \`optional: true\` contributors and ad-hoc keys (returns
+\`| undefined\`). Never \`ctx.get('key')!\` — it compiles even when the producing
+decorator isn't applied to the route.
+
 | Concept | Where it lives |
 |---------|----------------|
-| \`defineContextDecorator({ key, deps, dependsOn, optional, onError, resolve })\` | \`@forinda/kickjs\` |
-| Method/class decorator | \`@LoadX\` on a controller method/class |
-| Module hook | \`build: () => ({ contributors() { return [...] } })\` (\`defineModule\`) — or \`AppModule.contributors?()\` for class form |
-| Adapter hook | \`AppAdapter.contributors?(): ContributorRegistration[]\` |
-| Global registration | \`bootstrap({ contributors: [LoadX.registration] })\` |
-| Type augmentation | \`declare module '@forinda/kickjs' { interface ContextMeta { ... } }\` |
+| Type augmentation (value types) | \`declare module '@forinda/kickjs' { interface ContextMeta { ... } }\` |
+| Type augmentation (key-only) | \`declare module '@forinda/kickjs' { interface ContextKeys { ... } }\` — valid in \`dependsOn\`, value stays \`unknown\` |
 
-Precedence high → low: **method > class > module > adapter > global**.
 Cycles and missing \`dependsOn\` keys throw at \`app.setup()\` (boot fails
 fast). The \`onError\` hook is async-permitted.
 
@@ -1173,6 +1209,10 @@ Same-key collisions WITHIN a precedence level throw \`DuplicateContributorError\
 **Don't use this for**: response short-circuit, stream mutation, or pre-route-matching work — keep \`@Middleware()\` for those.
 
 **Red flags**:
+- \`ctx.get('key')!\` — the non-null assertion compiles even when the producing decorator isn't on the route. Use \`ctx.require('key')\`.
+- \`contributors: [LoadX]\` at a module / adapter / bootstrap site — those take registrations: \`LoadX.registration\` or \`LoadX.with({ ... }).registration\`.
+- A \`paramDefaults\` value that every call site overrides (\`action: 'settings:read'\`) — drop it and let the compiler require the field at each site.
+- \`defineContextDecorator<'k', Deps, Params>(spec)\` positional form for a parameterised contributor — use \`.withParams<Params>()(spec)\` or \`deps\` inference is lost.
 - \`ctx.tenant = x\` instead of returning the value from \`resolve\` — sticks to one instance only.
 - \`defineAugmentation\` without the \`declare module\` block (or vice-versa) — discoverability and types drift apart; \`ctx.get('tenant')\` becomes \`unknown\`.
 - Plugin / adapter authors using bare keys (\`'state'\`) instead of namespaced (\`'@my-plugin/state'\`) — collides with adopter keys.
@@ -1599,7 +1639,7 @@ export const app = await bootstrap({ modules, middleware, plugins, adapters })
 
 \`\`\`yaml
 name: kickjs-context-contributor
-description: Use when a middleware's only job is to set ctx values consumed elsewhere — replace with defineHttpContextDecorator (HTTP) or defineContextDecorator (transport-agnostic).
+description: Authoring, registering, and reading KickJS context contributors. Use when a middleware's only job is to set ctx values consumed elsewhere; when wiring a contributor at a method/class/module/adapter/bootstrap site; when a contributor needs per-call params; or when reading a contributed value off ctx.
 \`\`\`
 
 **Pattern** (HTTP — most common):
@@ -1616,19 +1656,82 @@ const LoadTenant = defineHttpContextDecorator({
 const LoadProject = defineHttpContextDecorator({
   key: 'project',
   dependsOn: ['tenant'],
-  resolve: (ctx) => projectsRepo.find(ctx.get('tenant')!.id, ctx.params.id),
+  resolve: (ctx) => projectsRepo.find(ctx.require('tenant').id, ctx.params.id),
 })
 
 @LoadTenant
 @LoadProject
 @Get('/projects/:id')
-getProject(ctx: RequestContext) { ctx.json(ctx.get('project')) }
+getProject(ctx: RequestContext) { ctx.json(ctx.require('project')) }
 \`\`\`
 
-Use \`defineContextDecorator\` (no Http prefix) when authoring a contributor that must run across HTTP, WebSocket, queue, and cron transports — \`Ctx\` defaults to the smaller \`ExecutionContext\` surface (\`get\` / \`set\` / \`requestId\` only, no \`req\`).
+Use \`defineContextDecorator\` (no Http prefix) when authoring a contributor that must run across HTTP, WebSocket, queue, and cron transports — \`Ctx\` defaults to the smaller \`ExecutionContext\` surface (\`get\` / \`require\` / \`set\` / \`requestId\` only, no \`req\`).
 
-Precedence high → low: **method > class > module > adapter > global**.
-Cycles or unmet \`dependsOn\` keys throw \`MissingContributorError\` at boot.
+**Parameterised contributors** — always use the curried \`.withParams<P>()\` form. The positional form (\`defineContextDecorator<K, D, P, Ctx>\`) forces you to spell \`K\` and \`D\` by hand and loses \`deps\` inference in the resolver:
+
+\`\`\`ts
+type PermParams = { action: string; scope?: string }
+
+const OperatorPerm = defineHttpContextDecorator.withParams<PermParams>()({
+  key: 'operatorPerm',
+  deps: { perms: PERMISSIONS_SERVICE },
+  requiredParams: ['action'],       // runtime guard for JS call sites
+  resolve: (ctx, { perms }, { action }) => perms.check(ctx, action),
+})
+
+@OperatorPerm({ action: 'audit:read' })
+@Get('/audit')
+audit(ctx: RequestContext) { ... }
+\`\`\`
+
+**Params rules:**
+- A **required** field of \`P\` with no \`paramDefaults\` entry must be supplied at every call site. \`@Foo\` bare, \`@Foo()\`, and \`.registration\` are compile errors for such a decorator.
+- **Never invent a placeholder default** just to satisfy the type (\`action: 'settings:read'\` on a permission contributor). A default that is never correct means a call site that forgets the argument silently gates on the placeholder instead of failing to compile. Omit it and let the compiler demand it.
+- Give a \`paramDefaults\` entry only when the default is genuinely correct for an undecorated route — \`headerName: 'x-tenant-id'\` yes, a permission string no.
+- \`requiredParams: ['action']\` adds the same check at runtime (throws \`TypeError\` naming the decorator + field) for plain-JS and \`as any\` call sites the types can't reach.
+
+**All five call sites**, precedence high → low — **method > class > module > adapter > global**:
+
+| # | Site | Form |
+|---|------|------|
+| 1 | Method | \`@LoadX\` / \`@LoadX({ ... })\` above a controller method |
+| 2 | Class | \`@LoadX\` / \`@LoadX({ ... })\` above the controller class |
+| 3 | Module | \`defineModule({ build: () => ({ contributors: () => [LoadX.registration] }) })\`, or \`AppModule.contributors?()\` in class form |
+| 4 | Adapter | \`AppAdapter.contributors?(): ContributorRegistration[]\` |
+| 5 | Global | \`bootstrap({ contributors: [LoadX.registration] })\` |
+
+Sites 3–5 take **registrations**, not decorators — this is the most common
+thing agents get wrong:
+
+\`\`\`ts
+LoadTenant.registration                              // paramDefaults as-is
+LoadTenant.with({ source: 'subdomain' }).registration // params merged over defaults
+\`\`\`
+
+Passing the decorator itself (\`contributors: [LoadTenant]\`) is wrong — it's a
+function, not a \`ContributorRegistration\`. For a decorator with undefaulted
+required params, \`.registration\` doesn't exist; use \`.with({ ... }).registration\`.
+
+When the same key is registered at two levels, the higher-precedence one wins
+and the other is **dropped silently** — that's the mechanism for overriding an
+adapter-shipped contributor on a single route.
+
+Cycles or unmet \`dependsOn\` keys throw \`MissingContributorError\` /
+\`ContributorCycleError\` at \`app.setup()\` — boot fails, not the request.
+
+**Reading values back:**
+
+| Value | Read with |
+|-------|-----------|
+| Anything a contributor guarantees (tenant, permission, resolved subject) | \`ctx.require('key')\` — throws \`MissingContextValueError\`, returns a **non-optional** type |
+| \`optional: true\` contributors, ad-hoc keys | \`ctx.get('key')\` — returns \`\\| undefined\` |
+| From a service with no \`ctx\` | \`getRequestValue('key')\` — returns \`\\| undefined\` |
+
+**Never write \`ctx.get('key')!\`.** The assertion compiles whether or not the
+producing decorator is applied to the route, so dropping the decorator during a
+refactor is invisible to \`tsc\` and the handler reads \`undefined\`. On an auth
+value that fails open. Use \`ctx.require()\` — same read, loud failure.
+(\`null\` counts as present; only \`undefined\` throws.)
 
 **Critical rules — all stem from the same shared-via-ALS instance model**:
 - Every per-request stage (middleware → contributors → handler) gets its OWN \`RequestContext\` instance, but they all read/write the SAME \`AsyncLocalStorage\`-backed bag.

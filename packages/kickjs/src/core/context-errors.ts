@@ -1,11 +1,18 @@
 /**
  * Errors thrown by the Context Contributor pipeline.
  *
- * All three are startup-time errors raised during pipeline build (topo-sort
- * + validation), not per-request — a misconfigured app fails to boot rather
- * than fails a request. Per the locked design in `architecture.md` §20.4,
- * the pipeline is validated once when each route is mounted and the
- * resolved order is cached on the route.
+ * `MissingContributorError`, `ContributorCycleError`, and
+ * `DuplicateContributorError` are startup-time errors raised during
+ * pipeline build (topo-sort + validation), not per-request — a
+ * misconfigured app fails to boot rather than fails a request. Per the
+ * locked design in `architecture.md` §20.4, the pipeline is validated
+ * once when each route is mounted and the resolved order is cached on
+ * the route.
+ *
+ * `MissingContextValueError` is the one request-time error here: it is
+ * raised by `ctx.require(key)` when a value a handler declared it needs
+ * is absent. See its doc comment for why that case can't be caught at
+ * startup today.
  */
 
 /**
@@ -33,6 +40,49 @@ export class MissingContributorError extends Error {
     this.dependent = dependent
     this.route = route
     this.dependentDefinedAt = dependentDefinedAt
+  }
+}
+
+/**
+ * `ctx.require(key)` found no value under `key` in the per-request
+ * metadata store.
+ *
+ * Thrown at request time, by design. `ctx.get(key)` returns
+ * `T | undefined` for every key, so the usual workaround is a
+ * non-null assertion — `ctx.get('tenant')!` — which compiles whether or
+ * not the route actually carries the contributor that produces it. On
+ * an authorization value that is the worst possible thing to leave
+ * untypeable: dropping the decorator produces no diagnostic anywhere,
+ * and the handler reads `undefined` as though it were a real value.
+ *
+ * `ctx.require()` converts that silent hole into a loud, named failure
+ * that points at the missing contributor. Compile-time narrowing (so a
+ * dropped decorator fails `tsc` instead) needs per-route context-key
+ * unions out of typegen — tracked in `architecture.md` §20.14.
+ *
+ * @example
+ * ```text
+ * MissingContextValueError: No context value for 'tenantPerm' on GET /projects/:id
+ *     Nothing wrote this key before the handler ran. Either the contributor
+ *     that produces it isn't applied to this route, or it ran and resolved
+ *     to undefined (check `optional: true` contributors).
+ * ```
+ */
+export class MissingContextValueError extends Error {
+  readonly key: string
+  readonly route?: string
+
+  constructor(key: string, route?: string) {
+    const where = route ? ` on ${route}` : ''
+    super(
+      `No context value for '${key}'${where}\n` +
+        `    Nothing wrote this key before the handler ran. Either the contributor\n` +
+        `    that produces it isn't applied to this route, or it ran and resolved\n` +
+        `    to undefined (check \`optional: true\` contributors).`,
+    )
+    this.name = 'MissingContextValueError'
+    this.key = key
+    this.route = route
   }
 }
 

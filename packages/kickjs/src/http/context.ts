@@ -3,6 +3,7 @@ import type { Request, NextFunction } from 'express'
 import type { ActiveRuntime, RuntimeResponse } from './runtime'
 import { type ExecutionContext, type MetaValue } from '../core/execution-context'
 import { normalizeProblem, type ProblemDetails, type ValidationError } from '../core/errors'
+import { MissingContextValueError } from '../core/context-errors'
 import { requestStore } from './request-store'
 import {
   parseQuery,
@@ -561,6 +562,61 @@ export class RequestContext<TBody = any, TParams = any, TQuery = any> implements
    */
   get<K extends string>(key: K): MetaValue<K> | undefined {
     return this.metadataReadOnly()?.get(key) as MetaValue<K> | undefined
+  }
+
+  /**
+   * Read a value that a contributor is expected to have produced, and
+   * throw {@link MissingContextValueError} when it hasn't.
+   *
+   * Use this instead of `ctx.get(key)!` anywhere the value is a
+   * precondition rather than an optional extra — permissions, tenants,
+   * the resolved subject of the route. The non-null assertion compiles
+   * whether or not the producing contributor is actually applied to the
+   * route, so a dropped `@LoadTenant` turns into `undefined` flowing
+   * silently into an auth check. `require()` fails loudly at that point
+   * instead, naming the key.
+   *
+   * ```ts
+   * // before — compiles even if @OperatorPerm was never applied
+   * const perm = ctx.get('operatorPerm')!
+   *
+   * // after — throws MissingContextValueError naming the key + route
+   * const perm = ctx.require('operatorPerm')
+   * ```
+   *
+   * This is a runtime guarantee, not a compile-time one: it narrows the
+   * return type but cannot prove the decorator is present. Making a
+   * missing contributor a `tsc` error needs per-route key unions from
+   * typegen — see `architecture.md` §20.14.
+   *
+   * `null` counts as present; only `undefined` (or a missing entry)
+   * throws. A contributor that deliberately resolves to `null` is
+   * expressing "looked, found nothing", which is a real value — which
+   * is why the return type is `Exclude<…, undefined>` and NOT
+   * `NonNullable<…>`. The latter would strip `null` from the type while
+   * the runtime still hands it back, so a caller would be told a value
+   * is non-null and then get `null`.
+   */
+  require<K extends string>(key: K): Exclude<MetaValue<K>, undefined> {
+    const value = this.metadataReadOnly()?.get(key)
+    if (value === undefined) {
+      throw new MissingContextValueError(key, this.routeLabel())
+    }
+    return value as Exclude<MetaValue<K>, undefined>
+  }
+
+  /**
+   * Best-effort `"GET /path"` label for error messages. Runtime-agnostic:
+   * express/fastify requests and web-standard `Request` all expose
+   * `method` + `url`, but none of them are guaranteed here, so every
+   * access is defensive and the whole thing is optional.
+   */
+  private routeLabel(): string | undefined {
+    const req = this.req as { method?: unknown; url?: unknown } | undefined
+    const method = typeof req?.method === 'string' ? req.method : undefined
+    const url = typeof req?.url === 'string' ? req.url : undefined
+    if (method && url) return `${method} ${url}`
+    return method ?? url
   }
 
   /**

@@ -12,6 +12,7 @@ import {
   type ContextDecorator,
   type ContributorRegistration,
   type ExecutionContext,
+  MissingContextValueError,
   type KickPlugin,
   type MetaValue,
   type ModuleRoutes,
@@ -256,6 +257,14 @@ export async function runContributor<
     get(key) {
       return meta.get(key) as never
     },
+    require(key) {
+      // Same contract as RequestContext.require — a resolver under test
+      // that depends on an upstream key should fail here exactly the way
+      // it would in production, not read `undefined`.
+      const value = meta.get(key)
+      if (value === undefined) throw new MissingContextValueError(key)
+      return value as never
+    },
     set(key, value) {
       meta.set(key, value)
     },
@@ -419,6 +428,11 @@ export async function createTestPlugin(
       const ctx: ExecutionContext = {
         get(key) {
           return meta.get(key) as never
+        },
+        require(key) {
+          const value = meta.get(key)
+          if (value === undefined) throw new MissingContextValueError(key)
+          return value as never
         },
         set(key, value) {
           meta.set(key, value)

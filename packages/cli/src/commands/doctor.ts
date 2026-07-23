@@ -28,7 +28,13 @@ import { intro, outro, log } from '../utils/prompts'
 export interface DoctorContext {
   cwd: string
   pkg: any | null
-  tsconfig: any | null
+  /**
+   * The project's tsconfig with its full `extends` chain already merged
+   * into `compilerOptions`. `undefined` = no tsconfig.json; `null` = one
+   * exists but couldn't be parsed. Checks should distinguish the two —
+   * they call for different advice.
+   */
+  tsconfig: any | null | undefined
   /**
    * The project's HTTP runtime — from kick.config `runtime`, else sniffed from
    * deps, else `express`. Lets engine-aware checks (engine peers, the upload
@@ -143,45 +149,151 @@ function safeRead(filepath: string): string | null {
   }
 }
 
+/** Depth cap for `extends` chains — well past any real-world config. */
+const MAX_EXTENDS_DEPTH = 16
+
 /**
- * Read tsconfig.json with `extends` followed one level. Most adopters
- * use a single config; for those that extend kickjs-cli's preset, we
- * pick up the inherited `compilerOptions`. Avoids pulling in `tsc` just
- * to resolve the chain.
+ * Parse a tsconfig's JSONC: block comments, line comments, and trailing
+ * commas are all legal in tsconfig.json and all illegal in `JSON.parse`.
+ *
+ * Trailing commas matter more than they look: a plain `JSON.parse` throw
+ * used to make `loadTsConfig` return null, which the decorator check
+ * reports as "tsconfig.json present → fail" for a file that is sitting
+ * right there. A formatting nicety became a phantom missing file.
  */
-function loadTsConfig(cwd: string): any | null {
-  const tsconfigPath = join(cwd, 'tsconfig.json')
-  const raw = safeRead(tsconfigPath)
-  if (!raw) return null
-  // tsconfig files often contain comments; strip them before parsing.
-  const stripped = raw.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
-  let cfg: any
+function parseJsonc(raw: string): any | null {
+  const stripped = raw
+    // Block comments, but not inside strings — approximated by requiring
+    // the `/*` to not be preceded by a `:` + quote start. Good enough for
+    // config files; a full JSONC parser isn't worth the dependency here.
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:"'\\])\/\/.*$/gm, '$1')
+    // Trailing commas before } or ]
+    .replace(/,(\s*[}\]])/g, '$1')
   try {
-    cfg = JSON.parse(stripped)
+    return JSON.parse(stripped)
   } catch {
     return null
   }
-  if (typeof cfg?.extends === 'string') {
-    const extendsPath = resolveExtends(cwd, cfg.extends)
-    if (extendsPath) {
-      const parent = safeReadJson(extendsPath) ?? {}
-      cfg.compilerOptions = {
-        ...parent.compilerOptions,
-        ...cfg.compilerOptions,
-      }
-    }
+}
+
+/**
+ * Read a tsconfig and resolve its full `extends` chain.
+ *
+ * Previously this followed exactly one level, only when `extends` was a
+ * string, resolved relative paths against the project root rather than
+ * the containing file, and parsed parents with a bare `JSON.parse`. Any
+ * of those produced the same symptom: a project whose decorator options
+ * live in a shared base config got told it was missing
+ * `experimentalDecorators` / `emitDecoratorMetadata` that it plainly
+ * sets. Lean per-package configs in a monorepo hit every one of them at
+ * once.
+ *
+ * Now: chains of any depth, array `extends` (TS 5.0+), node_modules
+ * lookup walking up from the config's own directory (pnpm/monorepo
+ * hoisting), directory specifiers resolving to `tsconfig.json`, and
+ * JSONC parsing for every file in the chain.
+ *
+ * Returns `undefined` when no tsconfig.json exists, and `null` when one
+ * exists but couldn't be parsed — callers report those differently.
+ *
+ * Relative paths *inside* inherited options (`baseUrl`, `paths`,
+ * `outDir`) are NOT rebased onto the child's directory the way `tsc`
+ * does it. Every check that reads this cares only about booleans; revisit
+ * if a path-sensitive check is ever added.
+ */
+function loadTsConfig(cwd: string): any | null | undefined {
+  const tsconfigPath = join(cwd, 'tsconfig.json')
+  if (!existsSync(tsconfigPath)) return undefined
+  return loadTsConfigFrom(tsconfigPath, new Set())
+}
+
+function loadTsConfigFrom(filePath: string, seen: Set<string>): any | null {
+  if (seen.has(filePath) || seen.size >= MAX_EXTENDS_DEPTH) return null
+  seen.add(filePath)
+
+  const raw = safeRead(filePath)
+  if (raw === null) return null
+  const cfg = parseJsonc(raw)
+  if (cfg === null || typeof cfg !== 'object') return null
+
+  // `extends` is a string or, since TS 5.0, an array applied left to
+  // right with later entries overriding earlier ones.
+  const parents = Array.isArray(cfg.extends)
+    ? cfg.extends
+    : typeof cfg.extends === 'string'
+      ? [cfg.extends]
+      : []
+
+  // Mutating accumulator rather than re-spreading per iteration — later
+  // entries override earlier ones, which is the same result.
+  const inherited: Record<string, any> = {}
+  for (const ext of parents) {
+    if (typeof ext !== 'string') continue
+    const parentPath = resolveExtends(dirname(filePath), ext)
+    if (!parentPath) continue
+    const parent = loadTsConfigFrom(parentPath, seen)
+    if (!parent) continue
+    Object.assign(inherited, parent.compilerOptions)
   }
+
+  cfg.compilerOptions = { ...inherited, ...cfg.compilerOptions }
   return cfg
 }
 
-function resolveExtends(cwd: string, ext: string): string | null {
-  if (ext.startsWith('.')) {
-    const resolved = resolve(cwd, ext)
-    return existsSync(resolved) ? resolved : null
+/**
+ * Resolve one `extends` entry to an absolute file path, mirroring how
+ * `tsc` resolves them.
+ *
+ * `fromDir` is the directory of the config doing the extending — NOT the
+ * project root. A chain of relative extends only resolves correctly when
+ * each hop is relative to its own file.
+ *
+ * Handles: relative paths with an implied `.json`, bare package
+ * specifiers (`@tsconfig/node20`, `@acme/tsconfig/base.json`), directory
+ * specifiers that mean `<dir>/tsconfig.json`, and node_modules
+ * directories anywhere up the tree — the last of which is what pnpm
+ * workspaces need, since the preset is usually hoisted to the repo root
+ * rather than sitting in the package's own node_modules.
+ */
+function resolveExtends(fromDir: string, ext: string): string | null {
+  if (ext.startsWith('.') || ext.startsWith('/')) {
+    return resolveConfigTarget(resolve(fromDir, ext))
   }
-  const mod = join(cwd, 'node_modules', ext)
-  if (existsSync(mod)) return mod
+
+  // Bare specifier — walk up looking for node_modules/<specifier>.
+  let dir = fromDir
+  for (;;) {
+    const candidate = resolveConfigTarget(join(dir, 'node_modules', ext))
+    if (candidate) return candidate
+    const parent = dirname(dir)
+    if (parent === dir) break
+    dir = parent
+  }
   return null
+}
+
+/**
+ * Turn a resolved specifier into an actual config file: the path itself,
+ * the path with `.json` appended, or `<path>/tsconfig.json` when it names
+ * a directory. `@tsconfig/node20` resolves to a directory, and the old
+ * code handed that straight to `JSON.parse` — an EISDIR that silently
+ * became "no inherited options".
+ */
+function resolveConfigTarget(target: string): string | null {
+  if (existsSync(target)) {
+    try {
+      if (statSync(target).isDirectory()) {
+        const nested = join(target, 'tsconfig.json')
+        return existsSync(nested) ? nested : null
+      }
+    } catch {
+      return null
+    }
+    return target
+  }
+  const withJson = `${target}.json`
+  return existsSync(withJson) ? withJson : null
 }
 
 function escapeRegExp(s: string): string {
@@ -350,12 +462,26 @@ export function checkReflectMetadata(ctx: DoctorContext): DoctorResult {
 }
 
 export function checkDecoratorTsConfig(ctx: DoctorContext): DoctorResult[] {
-  if (!ctx.tsconfig) {
+  if (ctx.tsconfig === undefined) {
     return [
       {
         name: 'tsconfig.json present',
         status: 'fail',
         fix: 'Create a tsconfig.json with `experimentalDecorators: true` and `emitDecoratorMetadata: true`. `kick new` scaffolds one automatically.',
+      },
+    ]
+  }
+  if (ctx.tsconfig === null) {
+    // The file exists but we couldn't read it (or something in its
+    // `extends` chain). Reporting the decorator options as missing here
+    // would be a guess, and a wrong one more often than not — say what
+    // actually happened instead.
+    return [
+      {
+        name: 'tsconfig.json readable',
+        status: 'warn',
+        message: 'could not parse tsconfig.json (or a config it extends)',
+        fix: 'Check tsconfig.json for a syntax error, and that every path in its `extends` chain resolves. Decorator options could not be verified.',
       },
     ]
   }

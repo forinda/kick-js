@@ -2,7 +2,8 @@
 //
 // Sequentially invokes each plugin's generate(), prepends a banner, and
 // writes the result to `.kickjs/types/<id>.d.ts` only when the content
-// changes. `--check` mode skips writing and throws on the first drift —
+// changes. `--check` mode skips writing, collects every plugin whose
+// output drifted, and throws `TypegenDriftError` listing all of them —
 // CI gate so generated files in git stay in sync with code.
 //
 // Sequential (not parallel) on purpose: plugins are cheap, ordering keeps
@@ -22,6 +23,7 @@ import {
   type ScanOptions,
   type ScanResult,
 } from './scanner'
+import { TypegenDriftError } from './plugin'
 import type { TypegenContext, TypegenPlugin, TypegenPluginResult } from './plugin'
 
 const TYPES_DIR = '.kickjs/types'
@@ -50,7 +52,15 @@ export interface RunTypegenOptions {
 
 export async function runTypegen(opts: RunTypegenOptions): Promise<TypegenPluginResult[]> {
   const typesDirAbs = path.resolve(opts.cwd, TYPES_DIR)
-  await mkdir(typesDirAbs, { recursive: true })
+  // `--check` is read-only: it must not touch the working tree at all.
+  // Creating the output directory here would leave a clean checkout dirty
+  // just by running the gate. Everything the check path does is reads
+  // (`existsSync` + `readFile`), which work fine when the dir is absent —
+  // a missing directory simply means every plugin drifts, which is the
+  // correct verdict for a repo with no generated types committed.
+  if (!opts.check) {
+    await mkdir(typesDirAbs, { recursive: true })
+  }
 
   // Per-pass memoization of scanProject. Cache keyed by a stable
   // serialization of the resolved scan options so two plugins asking
@@ -98,6 +108,7 @@ export async function runTypegen(opts: RunTypegenOptions): Promise<TypegenPlugin
   }
 
   const results: TypegenPluginResult[] = []
+  const drifted: { id: string; outFile: string }[] = []
   for (const plugin of opts.plugins) {
     // Slashes in ids (kick/db) → __ on disk so they're valid filenames.
     // Default extension is .d.ts (declaration only); plugins emitting
@@ -119,6 +130,14 @@ export async function runTypegen(opts: RunTypegenOptions): Promise<TypegenPlugin
       // aborted the whole loop, so kick/routes never ran and the sweep
       // then deleted the stale-looking controller route types).
       const msg = err instanceof Error ? err.message : String(err)
+      // Under --check there is no "previous output" to keep — we aren't
+      // writing. A plugin that can't generate means the gate cannot
+      // verify that file, and a gate that can't verify must not pass.
+      if (opts.check) {
+        throw new Error(`kick typegen --check: ${plugin.id} failed to generate (${msg})`, {
+          cause: err,
+        })
+      }
       ctx.log.error(`  ${plugin.id}: typegen failed (${msg}) — keeping previous output`)
       results.push({ id: plugin.id, status: 'error', outFile: file })
       continue
@@ -140,11 +159,18 @@ export async function runTypegen(opts: RunTypegenOptions): Promise<TypegenPlugin
     }
 
     if (opts.check) {
-      throw new Error(`kick typegen --check: drift detected for ${plugin.id} (${file})`)
+      // Record and keep going — a CI run should report every stale file
+      // in one pass, not make the adopter re-run the gate N times to
+      // discover them one at a time.
+      drifted.push({ id: plugin.id, outFile: file })
+      results.push({ id: plugin.id, status: 'drifted', outFile: file })
+      continue
     }
     await writeFile(file, next, 'utf8')
     results.push({ id: plugin.id, status: 'written', outFile: file })
   }
+
+  if (drifted.length > 0) throw new TypegenDriftError(drifted)
 
   return results
 }

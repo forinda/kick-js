@@ -10,7 +10,13 @@
 
 import type { Command } from 'commander'
 import { resolve } from 'node:path'
-import { runTypegen, writeTypegenArtifacts, TokenCollisionError, watchTypegen } from '../typegen'
+import {
+  runTypegen,
+  writeTypegenArtifacts,
+  TokenCollisionError,
+  TypegenDriftError,
+  watchTypegen,
+} from '../typegen'
 import { runAllPluginTypegens } from '../typegen/run-plugins'
 import { loadKickConfig } from '../config'
 import { findProjectRoot } from '../utils/project-root'
@@ -79,7 +85,10 @@ export function registerTypegenCommand(program: Command): void {
       '--env-file <path>',
       "Path to env schema file for KickEnv typing (default 'src/env.ts'; pass 'false' to disable)",
     )
-    .option('--check', 'CI gate: fail on plugin-typegen drift instead of writing')
+    .option(
+      '--check',
+      'CI gate: exit non-zero if any generated file in .kickjs/types/ is out of date (routes, env, db, assets, adopter plugins) instead of writing it',
+    )
     .option(
       '--fix',
       "Patch module import.meta.glob() calls to cover decorated classes that aren't loaded by any glob (orphans)",
@@ -193,6 +202,9 @@ export function registerTypegenCommand(program: Command): void {
       } catch (err: unknown) {
         if (err instanceof TokenCollisionError) {
           console.error('\n' + err.message + '\n')
+        } else if (err instanceof TypegenDriftError) {
+          // Already formatted as a multi-line report by the error class.
+          console.error('\n  ' + err.message + '\n')
         } else if (err instanceof Error) {
           console.error(`\n  kick typegen failed: ${err.message}`)
         } else {

@@ -73,8 +73,35 @@ export interface TypegenPlugin {
 
 export interface TypegenPluginResult {
   id: string
-  status: 'written' | 'unchanged' | 'skipped' | 'error'
+  status: 'written' | 'unchanged' | 'skipped' | 'error' | 'drifted'
   outFile?: string
+}
+
+/**
+ * Thrown by the runner under `--check` when a plugin's generated output
+ * differs from what's on disk. Carries every drifted plugin, not just
+ * the first, so one CI run reports the full list.
+ *
+ * This has its own class for a load-bearing reason: `runAllPluginTypegens`
+ * wraps the pass in a catch that downgrades plugin failures to a warning
+ * so a transiently-broken plugin can't crash the `kick dev` loop. That
+ * catch used to swallow this error too, which made `--check` exit 0 on
+ * *every* drift — the gate silently passed while printing "skipped".
+ * The catch now rethrows this type. Do not make it a plain `Error`.
+ */
+export class TypegenDriftError extends Error {
+  /** Plugin ids whose output drifted, in run order. */
+  readonly drifted: readonly { id: string; outFile: string }[]
+
+  constructor(drifted: readonly { id: string; outFile: string }[]) {
+    const list = drifted.map((d) => `    ${d.id} → ${d.outFile}`).join('\n')
+    super(
+      `kick typegen --check: ${drifted.length} generated file(s) are out of date:\n${list}\n` +
+        `  Run \`kick typegen\` and commit the result.`,
+    )
+    this.name = 'TypegenDriftError'
+    this.drifted = drifted
+  }
 }
 
 /**

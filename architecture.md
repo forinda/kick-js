@@ -3396,6 +3396,109 @@ Audit results from grepping `__ctxMeta`, `requestStore`, `tenantStorage`, `getCu
 | `examples/task-drizzle-api` (or new example)          | Add `LoadTenant` contributor showing class-level + method-level + adapter-level use in one app          |
 | `examples/multi-tenant-{drizzle,prisma,mongoose}-api` | Optional: convert hand-written tenant resolution middleware to a contributor (showcases migration path) |
 
+### 20.14 Compile-time context narrowing (deferred — RFC)
+
+**Status:** deferred. `ctx.require()` ships as the runtime half; this section
+records the design for the compile-time half so it isn't relitigated.
+
+#### The gap
+
+`ctx.get(key)` returns `MetaValue<K> | undefined` for every key, unconditionally.
+A contributor guarantees its key is populated, but the type system has no way to
+know which contributors a given route carries, so the guarantee can't be
+expressed. Every consumer of a guaranteed value ends up writing:
+
+```ts
+const perm = ctx.get('operatorPerm')! // non-null assertion
+```
+
+The assertion is the problem. It compiles identically whether or not
+`@OperatorPerm` is actually applied to the route. Drop the decorator during a
+refactor and there is no diagnostic anywhere: `tsc` is satisfied, the pipeline
+runs fine, and the handler reads `undefined` where it expected a permission.
+On an authorization gate that is the worst possible thing to leave untypeable —
+the failure is silent and it fails open.
+
+This was surfaced by an adopter sweeping ~155 call sites across 39 routes: with
+no compile-time signal available, verifying the sweep fell back to parity
+counting and live `curl`s.
+
+#### What shipped instead
+
+`ctx.require(key)` (`packages/kickjs/src/http/context.ts`) returns
+`NonNullable<MetaValue<K>>` and throws `MissingContextValueError` naming the key
+and route when the value is absent. That converts a silent `undefined` into a
+loud, attributable failure, and removes the `!` from call sites.
+
+It is strictly a runtime guarantee. A dropped decorator still compiles; it now
+fails on the first request instead of authorizing against `undefined`.
+
+The sibling gap — `paramDefaults` having no "required" mode, which pushed
+adopters into inventing placeholder defaults like `action: 'settings:read'` for
+params every call site overrides — **was** fixable at compile time and is fixed:
+see `CallSiteParams` / `MissingParamKeys` in `context-decorator.ts`. Both issues
+had the same root cause (the type system knowing less than the decorator does);
+only one of them needed typegen to close.
+
+#### Design for the compile-time half
+
+The information needed already exists at build time. `kick typegen` scans every
+controller and knows, per route, which context decorators are applied — that's
+the same scan that produces `KickRoutes`. The missing piece is emitting it as a
+per-route key union and threading it through the handler signature.
+
+Sketch:
+
+1. **Emit per-route context keys.** The `kick/routes` typegen plugin gains a
+   `contextKeys` member per route, collected from method-, class-, and
+   module-level contributor registrations:
+
+   ```ts
+   interface KickRoutes {
+     'GET /projects/:id': {
+       handler: ...
+       contextKeys: 'tenant' | 'project' | 'operatorPerm'
+     }
+   }
+   ```
+
+   Adapter- and bootstrap-level contributors are global, so they union into
+   every route.
+
+2. **Parameterise the context type.** `RequestContext<TBody, TParams, TQuery>`
+   gains a `TKeys extends string = string` parameter, with:
+
+   ```ts
+   get<K extends TKeys>(key: K): MetaValue<K>              // no `| undefined`
+   get<K extends string>(key: K): MetaValue<K> | undefined // ad-hoc keys
+   ```
+
+3. **Bind the route's keys to its handler.** The generated route types already
+   drive `KickRoutes.X['handler']` param/body/query typing; `contextKeys` rides
+   the same channel so a handler on a route without `@OperatorPerm` sees
+   `ctx.get('operatorPerm')` as `undefined`, and `ctx.require('operatorPerm')`
+   as a compile error.
+
+#### Why it's deferred
+
+- The narrowing is only sound if typegen sees _every_ registration site. Five
+  exist (method, class, module, adapter, global) and the last two are resolved
+  from runtime values in `bootstrap()`, which a static scan can't always follow.
+  An unsound narrowing is worse than none: it would turn today's honest
+  `| undefined` into a false guarantee.
+- It only holds while generated types are current. That makes it depend on the
+  `--check` CI gate actually working — which, until it was fixed alongside this
+  work, it did not for any plugin.
+- Handler-signature changes are the highest-blast-radius edit in the codebase.
+
+#### Prerequisites
+
+- [x] `--check` genuinely fails on stale generated types
+- [ ] Typegen can enumerate adapter- and bootstrap-level contributors, or the
+      design explicitly degrades to `string` when it can't prove completeness
+- [ ] `contextKeys` emitted per route by the `kick/routes` plugin
+- [ ] `RequestContext` carries `TKeys` end to end
+
 ---
 
 ## 21. Plugin Ecosystem — improvement landscape

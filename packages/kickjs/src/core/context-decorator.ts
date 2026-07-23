@@ -54,6 +54,40 @@ export type ResolvedDeps<D extends Record<string, DepValue>> = {
 }
 
 /**
+ * Keys of `T` that are declared required (i.e. not `?`-optional).
+ */
+type RequiredParamKeys<T> = {
+  // eslint-disable-next-line @typescript-eslint/ban-types
+  [K in keyof T]-?: {} extends Pick<T, K> ? never : K
+}[keyof T]
+
+/**
+ * Params a call site MUST supply: the required keys of `P` that
+ * `paramDefaults` (type `PD`) doesn't already provide.
+ *
+ * The `string extends keyof P` guard short-circuits the index-signature
+ * case — `P` defaults to `Record<string, never>` for the overwhelmingly
+ * common zero-params contributor, and a mapped type over `string` would
+ * otherwise report "every key is required" and break `@Foo` for every
+ * existing decorator in the wild.
+ */
+export type MissingParamKeys<P, PD> = string extends keyof P
+  ? never
+  : Exclude<RequiredParamKeys<P>, keyof PD>
+
+/**
+ * The argument type for a call site (`@Foo({...})`, `.with({...})`).
+ *
+ * `Partial<P>` when every required field has a default, so adopters keep
+ * overriding just the fields they care about. Otherwise `Partial<P>`
+ * intersected with the undefaulted required fields, making those
+ * mandatory at each call site.
+ */
+export type CallSiteParams<P, PD> = [MissingParamKeys<P, PD>] extends [never]
+  ? Partial<P>
+  : Partial<P> & Pick<P, MissingParamKeys<P, PD> & keyof P>
+
+/**
  * Spec passed to {@link defineContextDecorator}. Describes one entry in
  * the per-request contributor pipeline.
  *
@@ -62,12 +96,16 @@ export type ResolvedDeps<D extends Record<string, DepValue>> = {
  * @typeParam Ctx - Concrete execution-context type. Defaults to the abstract
  *                  {@link ExecutionContext}; HTTP contributors typically
  *                  default to `RequestContext` at the call site.
+ * @typeParam PD  - Inferred from `paramDefaults`. Drives which params each
+ *                  call site is required to supply — see {@link CallSiteParams}.
+ *                  Never spell this by hand.
  */
 export interface ContextDecoratorSpec<
   K extends string = string,
   D extends Record<string, DepValue> = Record<string, never>,
   P extends Record<string, unknown> = Record<string, never>,
   Ctx extends ExecutionContext = ExecutionContext,
+  PD extends Partial<P> = Partial<P>,
 > {
   /** ContextMeta key the resolved value is written to. */
   key: K
@@ -107,23 +145,36 @@ export interface ContextDecoratorSpec<
    * validator-agnostic so projects can plug Zod / Valibot / hand-rolled
    * checks without the framework caring.
    *
-   * **Required-field caveat.** The factory call signature accepts
-   * `Partial<P>` so adopters can override only the fields they care
-   * about. If your `P` declares a *required* field that isn't in
-   * `paramDefaults`, the merged runtime value can be missing that
-   * field even though TypeScript types `params` as `P` inside
-   * `resolve()`. Mitigate by either:
+   * **Required fields are enforced at the call site.** A required field
+   * of `P` that has no entry here must be supplied wherever the
+   * decorator is applied — `@Foo({ action: 'audit:read' })`. The bare
+   * `@Foo` form and `.registration` stop type-checking for such a
+   * decorator, because neither can supply the value.
    *
-   * 1. Marking the field optional in `P` and `if`-checking inside
-   *    `resolve()`, or
-   * 2. Providing a default for every required field in
-   *    `paramDefaults`.
+   * This exists so nobody has to invent a meaningless default just to
+   * satisfy the type (`action: 'settings:read'` on a permission
+   * contributor every call site overrides anyway). A default that is
+   * never correct is worse than no default: forget the argument at one
+   * call site and the route silently gates on the placeholder instead
+   * of failing to compile.
    *
-   * The framework can't enforce option 2 at compile time without
-   * giving up the back-compat that lets `paramDefaults` be omitted
-   * entirely for `P = Record<string, never>`.
+   * Omit this entirely for the common zero-params case — `P` defaults
+   * to `Record<string, never>`, which requires nothing.
    */
-  paramDefaults?: Partial<P>
+  paramDefaults?: PD
+  /**
+   * Runtime mirror of the compile-time requirement above: param names
+   * that must be present after merging call-site params over
+   * `paramDefaults`. A missing one throws `TypeError` at the point of
+   * use (decoration time for `@Foo`, call time for `@Foo({...})` /
+   * `.with({...})`), naming the decorator and the field.
+   *
+   * The type-level check already covers TypeScript call sites, so this
+   * is for the paths types can't reach: plain-JS adopters, `as any`
+   * escapes, and params assembled dynamically. Optional — list only
+   * fields whose absence is a correctness bug rather than a default.
+   */
+  requiredParams?: readonly (keyof P & string)[]
   /**
    * Hook invoked when `resolve()` throws and `optional` is `false`.
    * Returning a value writes it to `ctx.set(key, …)`; returning
@@ -242,15 +293,41 @@ export interface ContextDecoratorTarget {
 }
 
 /**
- * The value returned by {@link defineContextDecorator}. Callable as
- * either a class or method decorator (with `paramDefaults` applied),
- * as a factory (`@Foo({...})` returning a per-site decorator), or
- * via `.with(params)` for non-decorator registration sites (module
- * hooks, adapter hooks, bootstrap option). `.registration` exposes
- * the underlying frozen {@link ContributorRegistration} for the
- * default-params case.
+ * The value returned by {@link defineContextDecorator}.
+ *
+ * Resolves to one of two shapes depending on whether every required
+ * field of `P` has a `paramDefaults` entry:
+ *
+ * - {@link ContextDecoratorWithDefaults} — the classic shape. Usable
+ *   bare (`@Foo`), as a factory (`@Foo({...})`), via `.with(params)`,
+ *   and via `.registration`.
+ * - {@link ContextDecoratorRequiringParams} — when `P` has required
+ *   fields `paramDefaults` doesn't cover. Only the factory and
+ *   `.with(params)` forms exist, because the others have no way to
+ *   supply the missing values. Applying such a decorator bare is a
+ *   compile error rather than a silent `undefined` at request time.
+ *
+ * `PD` is inferred from the spec's `paramDefaults`; the default here
+ * (`Partial<P>`) keeps hand-written `ContextDecorator<K, D, P>`
+ * annotations resolving to the permissive shape as before.
  */
-export interface ContextDecorator<
+export type ContextDecorator<
+  K extends string = string,
+  D extends Record<string, DepValue> = Record<string, never>,
+  P extends Record<string, unknown> = Record<string, never>,
+  Ctx extends ExecutionContext = ExecutionContext,
+  PD = Partial<P>,
+> = [MissingParamKeys<P, PD>] extends [never]
+  ? ContextDecoratorWithDefaults<K, D, P, Ctx>
+  : ContextDecoratorRequiringParams<K, D, P, Ctx, PD>
+
+/**
+ * Decorator whose params are fully defaulted (or which takes none).
+ * Callable as a class or method decorator directly, as a factory, or
+ * via `.with(params)` / `.registration` at non-decorator registration
+ * sites.
+ */
+export interface ContextDecoratorWithDefaults<
   K extends string = string,
   D extends Record<string, DepValue> = Record<string, never>,
   P extends Record<string, unknown> = Record<string, never>,
@@ -317,6 +394,56 @@ export interface ContextDecorator<
 }
 
 /**
+ * Decorator with at least one required param that `paramDefaults`
+ * doesn't cover. Deliberately narrower than
+ * {@link ContextDecoratorWithDefaults}: the bare `@Foo` form, the
+ * zero-arg `@Foo()` form, and the `.registration` accessor are all
+ * absent, because none of them can supply the missing value.
+ *
+ * ```ts
+ * const OperatorPerm = defineContextDecorator.withParams<{ action: string }>()({
+ *   key: 'operatorPerm',
+ *   resolve: (ctx, _deps, { action }) => check(ctx, action),
+ * })
+ *
+ * class Ops {
+ *   @OperatorPerm                     // ✗ compile error — `action` missing
+ *   @Get('/a')
+ *   a(ctx: RequestContext) {}
+ *
+ *   @OperatorPerm({ action: 'read' }) // ✓
+ *   @Get('/b')
+ *   b(ctx: RequestContext) {}
+ * }
+ * ```
+ *
+ * If you want the bare form back, give `action` a default in
+ * `paramDefaults` — but only when the default is genuinely correct for
+ * an undecorated route, which for a permission string it usually isn't.
+ */
+export interface ContextDecoratorRequiringParams<
+  K extends string = string,
+  D extends Record<string, DepValue> = Record<string, never>,
+  P extends Record<string, unknown> = Record<string, never>,
+  Ctx extends ExecutionContext = ExecutionContext,
+  PD = Partial<P>,
+> {
+  /**
+   * Factory usage — the only decorator form available here. The
+   * argument type carries every required field `paramDefaults` didn't
+   * provide, so omitting one is a compile error at this call site.
+   */
+  (params: CallSiteParams<P, PD>): ContextDecoratorTarget
+  /**
+   * Build a registration for non-decorator registration sites. Same
+   * required-field rule as the factory form.
+   */
+  with(params: CallSiteParams<P, PD>): {
+    readonly registration: ContributorRegistration<K, D, Ctx>
+  }
+}
+
+/**
  * Curried params-first helper for {@link defineContextDecorator}.
  *
  * Solves the partial-inference problem: TS generics are positional, so
@@ -350,9 +477,15 @@ export interface DefineContextDecoratorWithParams<P extends Record<string, unkno
     K extends string,
     D extends Record<string, DepValue> = Record<string, never>,
     Ctx extends ExecutionContext = ExecutionContext,
+    // Inferred from `spec.paramDefaults`. The `Record<never, never>`
+    // default (NOT `Partial<P>`) is what makes an omitted `paramDefaults`
+    // mean "nothing is defaulted" — so every required field of `P` lands
+    // on the call site. `Partial<P>` here would make `keyof PD` cover all
+    // of `P` and silently defeat the whole check.
+    PD extends Partial<P> = Record<never, never>,
   >(
-    spec: ContextDecoratorSpec<K, D, P, Ctx>,
-  ): ContextDecorator<K, D, P, Ctx>
+    spec: ContextDecoratorSpec<K, D, P, Ctx, PD>,
+  ): ContextDecorator<K, D, P, Ctx, PD>
 }
 
 /**
@@ -367,9 +500,10 @@ export interface DefineContextDecoratorFn {
     D extends Record<string, DepValue> = Record<string, never>,
     P extends Record<string, unknown> = Record<string, never>,
     Ctx extends ExecutionContext = ExecutionContext,
+    PD extends Partial<P> = Record<never, never>,
   >(
-    spec: ContextDecoratorSpec<K, D, P, Ctx>,
-  ): ContextDecorator<K, D, P, Ctx>
+    spec: ContextDecoratorSpec<K, D, P, Ctx, PD>,
+  ): ContextDecorator<K, D, P, Ctx, PD>
 
   /**
    * Curried entry point. Spell only the per-call params shape `P`;
@@ -418,7 +552,8 @@ function defineContextDecoratorImpl<
   D extends Record<string, DepValue> = Record<string, never>,
   P extends Record<string, unknown> = Record<string, never>,
   Ctx extends ExecutionContext = ExecutionContext,
->(spec: ContextDecoratorSpec<K, D, P, Ctx>): ContextDecorator<K, D, P, Ctx> {
+  PD extends Partial<P> = Record<never, never>,
+>(spec: ContextDecoratorSpec<K, D, P, Ctx, PD>): ContextDecorator<K, D, P, Ctx, PD> {
   // ---- Boot-time validation --------------------------------------
   // Surface mistakes the moment `defineContextDecorator` is called
   // (typically module-load time) instead of letting them ride to
@@ -454,6 +589,20 @@ function defineContextDecoratorImpl<
     throw new TypeError(
       `defineContextDecorator(${spec.key}): spec.dependsOn must be an array when provided ` +
         `(got ${typeof spec.dependsOn}).`,
+    )
+  }
+  if (spec.requiredParams !== undefined && !Array.isArray(spec.requiredParams)) {
+    throw new TypeError(
+      `defineContextDecorator(${spec.key}): spec.requiredParams must be an array when provided ` +
+        `(got ${typeof spec.requiredParams}).`,
+    )
+  }
+  if (
+    Array.isArray(spec.requiredParams) &&
+    spec.requiredParams.some((p) => typeof p !== 'string' || p.length === 0)
+  ) {
+    throw new TypeError(
+      `defineContextDecorator(${spec.key}): spec.requiredParams entries must be non-empty strings.`,
     )
   }
   if (
@@ -636,6 +785,33 @@ function defineContextDecoratorImpl<
     return { ...defaults, ...(override as Partial<P>) } as P
   }
 
+  const sharedRequiredParams = Object.freeze([...(spec.requiredParams ?? [])])
+
+  /**
+   * Runtime half of the required-params guarantee. The type system
+   * already stops TS call sites from omitting a required field, so this
+   * catches what types can't see: plain-JS adopters, `as any`, and
+   * params built dynamically.
+   *
+   * `usage` names the form that failed so the message points at the fix
+   * — a bare `@Foo` on a decorator with required params needs to become
+   * `@Foo({ ... })`, which is a different edit from a factory call that
+   * merely forgot one field.
+   */
+  const assertRequiredParams = (params: P, usage: string): void => {
+    if (sharedRequiredParams.length === 0) return
+    const missing = sharedRequiredParams.filter(
+      (name) => (params as Record<string, unknown>)[name] === undefined,
+    )
+    if (missing.length === 0) return
+    throw new TypeError(
+      `defineContextDecorator(${spec.key}): ${usage} is missing required param(s) ` +
+        `${missing.map((m) => `'${m}'`).join(', ')}. ` +
+        `Supply them at the call site — e.g. \`@${spec.key}({ ${missing[0]}: … })\` — or ` +
+        `add a default in \`paramDefaults\` if one is genuinely correct for every route.`,
+    )
+  }
+
   // Overloaded function signatures so `decoratorOrFactory`'s type
   // matches `ContextDecorator`'s call shapes directly — no
   // `as unknown as` double-cast needed. The implementation signature
@@ -657,11 +833,16 @@ function defineContextDecoratorImpl<
         string | symbol | undefined,
         PropertyDescriptor?,
       ]
+      // Bare `@Foo` — nothing can supply params here, so a required one
+      // that isn't defaulted is a decoration-time (module-load) failure
+      // rather than an undefined riding into the resolver.
+      assertRequiredParams({ ...defaults } as P, 'bare `@decorator` usage')
       applyAsDecorator(defaultRegistration, target, propertyKey)
       return undefined
     }
     // Factory call — capture merged params and return a decorator.
     const params = mergeParams(args[0])
+    assertRequiredParams(params, 'factory call')
     const registration = buildRegistration(params)
     return (target: object, propertyKey?: string | symbol) => {
       applyAsDecorator(registration, target, propertyKey)
@@ -686,13 +867,33 @@ function defineContextDecoratorImpl<
   // then `Object.freeze` locks the shape so adopters can't mutate
   // `decorator.registration = …` post-construction.
   const decorator = Object.assign(decoratorOrFactory, {
-    registration: defaultRegistration,
-    with: (params: Partial<P>) => ({
-      registration: buildRegistration(mergeParams(params)),
-    }),
+    with: (params: Partial<P>) => {
+      const merged = mergeParams(params)
+      assertRequiredParams(merged, '`.with()`')
+      return { registration: buildRegistration(merged) }
+    },
   })
 
-  return Object.freeze(decorator)
+  // `.registration` is a getter, not a plain property, so that reading it
+  // on a decorator with undefaulted required params throws instead of
+  // handing back a registration whose resolver will see `undefined`.
+  // (`Object.assign` would have copied the value and lost the check.)
+  Object.defineProperty(decorator, 'registration', {
+    get() {
+      assertRequiredParams({ ...defaults } as P, '`.registration`')
+      return defaultRegistration
+    },
+    enumerable: true,
+    configurable: false,
+  })
+
+  // `ContextDecorator` is a conditional type (permissive vs required-params
+  // shape), and TS can't evaluate a conditional whose input generics are
+  // still unresolved — so the assignment can't be checked structurally
+  // here regardless of how `decorator` is built. The cast is the price of
+  // the call-site guarantee; the two branches differ only in which call
+  // forms they expose, and every one of them is implemented above.
+  return Object.freeze(decorator) as unknown as ContextDecorator<K, D, P, Ctx, PD>
 }
 
 /**
@@ -715,9 +916,10 @@ export const defineContextDecorator: DefineContextDecoratorFn = Object.freeze(
         K extends string,
         D extends Record<string, DepValue> = Record<string, never>,
         Ctx extends ExecutionContext = ExecutionContext,
+        PD extends Partial<P> = Record<never, never>,
       >(
-        spec: ContextDecoratorSpec<K, D, P, Ctx>,
-      ): ContextDecorator<K, D, P, Ctx> => defineContextDecoratorImpl<K, D, P, Ctx>(spec)
+        spec: ContextDecoratorSpec<K, D, P, Ctx, PD>,
+      ): ContextDecorator<K, D, P, Ctx, PD> => defineContextDecoratorImpl<K, D, P, Ctx, PD>(spec)
     },
   }),
 ) as DefineContextDecoratorFn

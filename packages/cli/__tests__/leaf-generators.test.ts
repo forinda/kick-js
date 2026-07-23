@@ -135,8 +135,45 @@ describe('kick g <leaf>', () => {
       expect(content).toContain('source: string')
       expect(content).toContain('region: number')
       expect(content).toContain('.withParams<TenantParams>()')
-      expect(content).toContain('paramDefaults')
       expect(content).toContain('(ctx, _deps, params)')
+      // Scaffolded params are required at every call site, enforced at
+      // runtime too. The generator must NOT emit placeholder defaults
+      // (`source: ''`) — a default that is never correct means a call
+      // site that forgets the argument runs with the placeholder instead
+      // of failing to compile.
+      expect(content).toContain("requiredParams: ['source', 'region']")
+      // Anchored to a property line — the scaffold's guidance comment
+      // mentions `paramDefaults` on purpose, which is not the same thing.
+      expect(content).not.toMatch(/^\s*paramDefaults:/m)
+      expect(content).not.toContain("source: ''")
+      expect(content).not.toContain('region: 0')
+    })
+
+    it('keeps the usage example transport-appropriate for --type bare', () => {
+      // ExecutionContext has no @Get route and no ctx.json — an HTTP
+      // example here hands the adopter a snippet that does not compile
+      // against the contributor they just generated.
+      runCli(fixture, ['g', 'contributor', 'audit-log', '--type', 'bare'])
+      const bare = readFileSync(join(fixture, 'src/contributors/audit-log.contributor.ts'), 'utf-8')
+      expect(bare).not.toContain('ctx.json(')
+      expect(bare).not.toContain("@Get('/')")
+      expect(bare).toContain("ctx.require('auditLog')")
+
+      // The http form still demonstrates the HTTP surface.
+      runCli(fixture, ['g', 'contributor', 'tenant'])
+      const http = readFileSync(join(fixture, 'src/contributors/tenant.contributor.ts'), 'utf-8')
+      expect(http).toContain("@Get('/')")
+      expect(http).toContain("ctx.json(ctx.require('tenant'))")
+    })
+
+    it('points at .registration (not the decorator) for non-decorator sites', () => {
+      // Passing the decorator itself to `contributors: []` is the most
+      // common wiring mistake; the scaffold header should model the fix.
+      runCli(fixture, ['g', 'contributor', 'tenant'])
+      const content = readFileSync(join(fixture, 'src/contributors/tenant.contributor.ts'), 'utf-8')
+      expect(content).toContain('.registration')
+      expect(content).toContain('ctx.require(')
+      expect(content).not.toMatch(/ctx\.get\('tenant'\)!/)
     })
 
     it('honours an explicit --key', () => {
