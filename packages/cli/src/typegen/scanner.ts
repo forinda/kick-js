@@ -27,7 +27,7 @@
 
 import type { Dirent } from 'node:fs'
 import { readdir, readFile } from 'node:fs/promises'
-import { join, relative, resolve, sep } from 'node:path'
+import { dirname, join, relative, resolve, sep } from 'node:path'
 import { ScanCache } from './scanner-cache'
 import { extractFileAst } from './extract-ast'
 
@@ -1452,6 +1452,55 @@ const CONTRIBUTOR_FREE_DECORATORS = new Set([
  * it is still a false alarm, and false alarms are how a feature like this
  * gets switched off.
  */
+/** Strip a `.ts` / `.tsx` / `.js` / `.mjs` … extension and normalise slashes. */
+function normalizeModulePath(p: string): string {
+  return p
+    .split(sep)
+    .join('/')
+    .replace(/\.[mc]?[tj]sx?$/, '')
+}
+
+/**
+ * Does `specifier`, as written in `importerFile`, refer to `declFile`?
+ *
+ * Three forms, deliberately conservative — a `false` costs a route its
+ * narrowing (safe), a wrong `true` credits a route with a key it doesn't
+ * carry (not safe):
+ *
+ * - `''` — the decorator is declared in the importing file itself.
+ * - relative (`./x`, `../contributors/x`) — resolved against the
+ *   importer's directory, extension-insensitive, `/index` tolerated.
+ * - anything else — a bare package specifier or a path alias. tsconfig
+ *   `paths` aren't parsed here, but `@/*` → `./src/*` is what `kick new`
+ *   scaffolds and is near-universal in adopter projects, so an alias-ish
+ *   specifier is matched by path suffix. A real package specifier
+ *   (`@acme/auth`) won't suffix-match any local file and so degrades,
+ *   which is the outcome we want for a third-party decorator.
+ */
+function declarationMatchesImport(
+  importerFile: string,
+  specifier: string,
+  declFile: string,
+): boolean {
+  const decl = normalizeModulePath(declFile)
+
+  if (specifier === '') return decl === normalizeModulePath(importerFile)
+
+  if (specifier.startsWith('.')) {
+    const resolved = normalizeModulePath(resolve(dirname(importerFile), specifier))
+    return decl === resolved || decl === `${resolved}/index`
+  }
+
+  // Alias or bare specifier. Drop a leading alias marker, then require the
+  // remainder to be a path suffix of the declaration file.
+  const tail = specifier.replace(/^[@~#]\//, '')
+  // A scoped package (`@acme/auth`) keeps its `@`, so it can't suffix-match
+  // a real file path and correctly falls through to `false`.
+  if (tail === specifier && specifier.startsWith('@')) return false
+  const normalizedTail = normalizeModulePath(tail)
+  return decl === normalizedTail || decl.endsWith(`/${normalizedTail}`)
+}
+
 export function resolveRouteContextKeys(
   routes: DiscoveredRoute[],
   contextKeys: DiscoveredContextKey[],
@@ -1492,16 +1541,24 @@ export function resolveRouteContextKeys(
     for (const dec of applied) {
       if (CONTRIBUTOR_FREE_DECORATORS.has(dec.identifier)) continue
 
-      const matches = byExportName.get(dec.identifier)
-      if (!matches || matches.length !== 1) {
-        // Unknown decorator, or an ambiguous binding name. Either way we
-        // cannot enumerate this route's keys.
+      if (dec.source === null) {
+        // The binding didn't resolve to an import or a same-file const.
         provable = false
         break
       }
-      if (dec.source === null) {
-        // The binding didn't resolve to an import or a same-file const —
-        // we can't be confident it's the contributor we matched by name.
+
+      // Name AND declaration file must both match. Matching on the name
+      // alone was wrong: a route importing `@LoadTenant` from some other
+      // module (a third-party decorator that happens to share the name)
+      // would be credited with the project's unique local `LoadTenant`
+      // key, narrowing the route to a key it never actually carries.
+      const matches = (byExportName.get(dec.identifier) ?? []).filter((ck) =>
+        declarationMatchesImport(route.filePath, dec.source as string, ck.filePath),
+      )
+      if (matches.length !== 1) {
+        // Zero: not one of our context decorators (or imported from
+        // somewhere we can't resolve). More than one: ambiguous. Either
+        // way the route's key set can't be enumerated.
         provable = false
         break
       }

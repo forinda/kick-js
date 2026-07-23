@@ -7,7 +7,7 @@ Per-route context-key narrowing — a dropped contributor decorator is now a com
 
 `kick typegen` emits a `contextKeys` union per route from the context decorators applied at method and class level, and `ctx.require()` is narrowed to it. Removing a decorator removes the key:
 
-```
+```text
 error TS2345: Argument of type '"operatorPerm"' is not assignable to parameter of type '"tenant"'.
 ```
 

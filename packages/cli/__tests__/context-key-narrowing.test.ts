@@ -195,7 +195,9 @@ describe('resolveRouteContextKeys — narrows only what it can prove', () => {
     expect(keysFor(src, CONTRIBUTOR, true)).toEqual([null])
   })
 
-  it('degrades on an ambiguous binding name', () => {
+  it('disambiguates two same-named contributors via the import specifier', () => {
+    // Two `LoadTenant` exports in different files. The name alone is
+    // ambiguous, but the import says which one, so this still narrows.
     const ambiguous: DiscoveredContextKey[] = [
       ...CONTRIBUTOR,
       {
@@ -218,7 +220,136 @@ describe('resolveRouteContextKeys — narrows only what it can prove', () => {
         }`,
         ambiguous,
       ),
+    ).toEqual([['tenant']])
+
+    // ...and pointing at the other file picks up the other key.
+    expect(
+      keysFor(
+        `
+        import { Controller, Get } from '@forinda/kickjs'
+        import { LoadTenant } from '../other/tenant'
+        @Controller()
+        export class UserController {
+          @LoadTenant
+          @Get('/')
+          list(ctx) {}
+        }`,
+        ambiguous,
+      ),
+    ).toEqual([['otherTenant']])
+  })
+
+  it('degrades when an alias specifier suffix-matches more than one file', () => {
+    // `@/contributors/tenant` is matched by path suffix (tsconfig paths
+    // aren't parsed), so two files whose paths both end that way are
+    // genuinely ambiguous — refuse rather than pick one.
+    const ambiguous: DiscoveredContextKey[] = [
+      CONTRIBUTOR[0],
+      {
+        key: 'nestedTenant',
+        exportName: 'LoadTenant',
+        filePath: resolve('/proj/src/features/contributors/tenant.ts'),
+        relativePath: 'src/features/contributors/tenant.ts',
+      },
+    ]
+    expect(
+      keysFor(
+        `
+        import { Controller, Get } from '@forinda/kickjs'
+        import { LoadTenant } from '@/contributors/tenant'
+        @Controller()
+        export class UserController {
+          @LoadTenant
+          @Get('/')
+          list(ctx) {}
+        }`,
+        ambiguous,
+      ),
     ).toEqual([null])
+  })
+
+  it('does not credit a same-named decorator imported from elsewhere', () => {
+    // The route imports `LoadTenant` from a third-party package that has
+    // nothing to do with the project's own contributor of that name.
+    // Matching on the identifier alone would narrow this route to
+    // 'tenant' — a key it never actually carries.
+    expect(
+      keysFor(`
+        import { Controller, Get } from '@forinda/kickjs'
+        import { LoadTenant } from '@acme/auth'
+        @Controller()
+        export class UserController {
+          @LoadTenant
+          @Get('/')
+          list(ctx) {}
+        }`),
+    ).toEqual([null])
+  })
+
+  it('resolves a relative import to the declaring file', () => {
+    // Same identifier, and the specifier really does point at the file
+    // that declares it.
+    expect(
+      keysFor(`
+        import { Controller, Get } from '@forinda/kickjs'
+        import { LoadTenant } from '../contributors/tenant'
+        @Controller()
+        export class UserController {
+          @LoadTenant
+          @Get('/')
+          list(ctx) {}
+        }`),
+    ).toEqual([['tenant']])
+  })
+
+  it('degrades when a relative import points at a different file', () => {
+    expect(
+      keysFor(`
+        import { Controller, Get } from '@forinda/kickjs'
+        import { LoadTenant } from '../elsewhere/tenant'
+        @Controller()
+        export class UserController {
+          @LoadTenant
+          @Get('/')
+          list(ctx) {}
+        }`),
+    ).toEqual([null])
+  })
+
+  it('resolves the `@/` path alias that `kick new` scaffolds', () => {
+    // tsconfig `paths: { '@/*': ['./src/*'] }` is what the CLI emits, so
+    // alias imports are the norm in adopter projects; degrading on them
+    // would switch the feature off for most codebases.
+    expect(
+      keysFor(`
+        import { Controller, Get } from '@forinda/kickjs'
+        import { LoadTenant } from '@/contributors/tenant'
+        @Controller()
+        export class UserController {
+          @LoadTenant
+          @Get('/')
+          list(ctx) {}
+        }`),
+    ).toEqual([['tenant']])
+  })
+
+  it('resolves a same-file contributor', () => {
+    const routes = routesFrom(
+      `import { Controller, Get, defineHttpContextDecorator } from '@forinda/kickjs'
+       const LoadTenant = defineHttpContextDecorator({ key: 'tenant', resolve: () => 1 })
+       @Controller()
+       export class UserController {
+         @LoadTenant
+         @Get('/')
+         list(ctx) {}
+       }`,
+    )
+    resolveRouteContextKeys(
+      routes,
+      [{ key: 'tenant', exportName: 'LoadTenant', filePath: CONTROLLER, relativePath: 'x' }],
+      false,
+    )
+    expect(routes[0].contextKeys).toEqual(['tenant'])
   })
 
   it('degrades when the decorator binding cannot be resolved to an import', () => {
