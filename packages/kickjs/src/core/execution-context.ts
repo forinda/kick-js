@@ -94,6 +94,13 @@ export type MetaValue<K extends string, Fallback = unknown> = K extends keyof Co
 export interface ExecutionContext {
   /** Read a typed value from per-request metadata. */
   get<K extends string>(key: K): MetaValue<K> | undefined
+  /**
+   * Read a value that must be present, throwing `MissingContextValueError`
+   * when it isn't. Use for preconditions (permissions, tenant, resolved
+   * subject) where `get(key)!` would silently paper over a contributor
+   * that never ran. Only `undefined` throws — `null` is a real value.
+   */
+  require<K extends string>(key: K): NonNullable<MetaValue<K>>
   /** Write a typed value into per-request metadata. */
   set<K extends string>(key: K, value: MetaValue<K>): void
   /** Unique per-request identifier (HTTP: x-request-id; WS/queue/cron: transport-defined). */

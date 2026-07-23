@@ -205,6 +205,7 @@ export {
   MissingContributorError,
   ContributorCycleError,
   DuplicateContributorError,
+  MissingContextValueError,
 } from './context-errors'
 
 // Phase 2 — pipeline builder + topo-sort + validation.

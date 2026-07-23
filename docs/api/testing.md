@@ -104,7 +104,7 @@ const LoadProject = defineContextDecorator({
   key: 'project',
   dependsOn: ['tenant'],
   deps: { repo: ProjectsRepo },
-  resolve: (ctx, { repo }) => (repo as ProjectsRepo).find(ctx.get('tenant')!.id, 'p-1'),
+  resolve: (ctx, { repo }) => (repo as ProjectsRepo).find(ctx.require('tenant').id, 'p-1'),
 })
 
 const { value } = await runContributor(LoadProject, {

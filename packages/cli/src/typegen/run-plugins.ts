@@ -4,15 +4,17 @@
 //
 // Loads built-ins + adopter plugins, merges them, filters by
 // `kick.config.ts > typegen.disable`, runs every typegen via the T7
-// runner. In silent mode errors are swallowed so a transiently-broken
-// plugin doesn't crash the dev loop. Returns the per-plugin status
-// array — callers may log it, exit non-zero on drift (--check), etc.
+// runner. Plugin errors are downgraded to a warning so a transiently-
+// broken plugin doesn't crash the dev loop — EXCEPT under `--check`,
+// where every failure propagates so the CI gate can actually fail.
+// Returns the per-plugin status array — callers may log it, etc.
 
 import type { KickConfig } from '../config'
 import { mergeCliPlugins } from '../plugin'
 import { builtinCliPlugins } from '../plugin/builtins'
 import { runTypegen as runPluginTypegens } from './runner'
 import type { ScanDelta } from './scanner'
+import { TypegenDriftError } from './plugin'
 import type { TypegenPluginResult } from './plugin'
 import { applyDisableFilter } from './disable-filter'
 
@@ -91,6 +93,12 @@ export async function runAllPluginTypegens(
     }
     return results
   } catch (err) {
+    // `--check` failures are the whole point of `--check` — never
+    // downgrade them to a warning. This catch exists so a transiently
+    // broken plugin doesn't crash the `kick dev` loop; swallowing the
+    // drift error here made the CI gate exit 0 on every drift while
+    // printing "skipped", so the flag never once failed a build.
+    if (err instanceof TypegenDriftError || opts.check) throw err
     if (!opts.silent) {
       const msg = err instanceof Error ? err.message : String(err)
       console.warn(`  kick typegen plugins: skipped (${msg})`)

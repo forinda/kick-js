@@ -205,7 +205,7 @@ const LoadProject = defineContextDecorator({
   key: 'project',
   dependsOn: ['tenant'],
   resolve: async (ctx) => {
-    const tenant = ctx.get('tenant')! // guaranteed present — the framework ran LoadTenant first
+    const tenant = ctx.require('tenant') // throws if LoadTenant didn't run
     return projectsRepo.findFor(tenant.id, ctx.params.id)
   },
 })
@@ -246,6 +246,45 @@ declare module '@forinda/kickjs' {
 }
 ```
 
+:::
+
+## Reading guaranteed values: `ctx.require()`
+
+`ctx.get(key)` returns `T | undefined` for **every** key, including keys a contributor guarantees. The type system doesn't know which contributors a given route carries, so the guarantee can't be expressed in `get`'s return type.
+
+The tempting fix is a non-null assertion — and it's a trap:
+
+```ts
+// ⚠️ compiles whether or not @OperatorPerm is applied to this route
+const perm = ctx.get('operatorPerm')!
+```
+
+Drop the decorator during a refactor and nothing complains. `tsc` is satisfied, the pipeline runs, and your handler reads `undefined` where it expected a permission. On an authorization gate that fails **open**, silently.
+
+`ctx.require(key)` is the same read with the guarantee enforced:
+
+```ts
+// ✅ throws MissingContextValueError naming the key and the route
+const perm = ctx.require('operatorPerm')
+```
+
+It returns `NonNullable<MetaValue<K>>` — no `!`, no `| undefined` — and throws `MissingContextValueError` when the value isn't there. The message names the key and the route, and points at the two causes: the producing contributor isn't applied to that route, or it ran and resolved to `undefined`.
+
+**Use `require` for preconditions, `get` for optional extras:**
+
+| Value                                            | Read with       |
+| ------------------------------------------------ | --------------- |
+| Permission, tenant, the route's resolved subject | `ctx.require()` |
+| Anything a contributor marked `optional: true`   | `ctx.get()`     |
+| Ad-hoc keys nothing is guaranteed to write       | `ctx.get()`     |
+
+`null` counts as present — only `undefined` throws. A contributor that deliberately resolves to `null` is saying "looked, found nothing", which is a real answer.
+
+::: warning This is a runtime guarantee, not a compile-time one
+
+`ctx.require()` turns a silent `undefined` into a loud, named failure on the first request. It **cannot** make a missing decorator a compile error — proving that needs per-route context-key unions out of typegen. The design is written up in `architecture.md` §20.14; until it lands, a dropped decorator fails fast at runtime rather than at build time.
+
+Integration tests that exercise each route are still the thing that catches a dropped decorator before production.
 :::
 
 ## Error handling
@@ -737,7 +776,7 @@ const AssignAbBucket = defineHttpContextDecorator({
   key: 'abBucket',
   dependsOn: ['featureFlags'], // typed against ContextMeta — typos are TS errors
   resolve: (ctx) => {
-    const flags = ctx.get('featureFlags')! // guaranteed by dependsOn
+    const flags = ctx.require('featureFlags') // guaranteed by dependsOn
     if (!flags['new-checkout']) return 'control'
     // Stable per-user bucket from a hash of the user id — kept here for brevity
     const userId = ctx.req.headers['x-user-id'] as string | undefined
@@ -885,7 +924,7 @@ bootstrap({ modules, adapters: [GeoAdapter()] })
 @ResolveGeo
 @Get('/nearby')
 nearby(ctx: RequestContext) {
-  ctx.json({ country: ctx.get('geo')!.country })
+  ctx.json({ country: ctx.require('geo').country })
 }
 ```
 
@@ -1043,7 +1082,7 @@ export const LoadTenantDb = defineHttpContextDecorator.withParams<LoadTenantDbPa
   resolve: (ctx, { dbPool }, _params) => {
     // `params.pool === 'replica'` would route to a read-replica DSN
     // here — wired the same way; omitted for brevity.
-    const tenant = ctx.get('tenant')!
+    const tenant = ctx.require('tenant')
     return dbPool.for(tenant)
   },
 })
@@ -1278,7 +1317,7 @@ const Greet = defineHttpContextDecorator({
   key: 'greeting',
   dependsOn: ['locale'],
   resolve: (ctx) => {
-    const { language } = ctx.get('locale')! // guaranteed by dependsOn at runtime
+    const { language } = ctx.require('locale') // guaranteed by dependsOn at runtime
     return language === 'fr' ? 'Bonjour' : 'Hello'
   },
 })
@@ -1539,6 +1578,44 @@ export const LoadTenant = defineHttpContextDecorator.withParams<LoadTenantParams
 ```
 
 Use the core `defineContextDecorator.withParams<P>()(spec)` form when authoring contributors for non-HTTP transports (WebSocket, queue, cron) or when sharing one definition across transports — the resolver then sticks to the `ExecutionContext` surface (`ctx.get`, `ctx.set`, `ctx.requestId`).
+
+### Required params — don't invent a default
+
+`paramDefaults` is optional per field. Any field of `P` that is **required** and has **no** entry in `paramDefaults` must be supplied at every call site, and the compiler enforces it:
+
+```ts
+type PermParams = { action: string; scope?: string }
+
+const OperatorPerm = defineHttpContextDecorator.withParams<PermParams>()({
+  key: 'operatorPerm',
+  // no paramDefaults.action — every route must name its own action
+  resolve: (ctx, _deps, { action }) => checkPermission(ctx, action),
+})
+
+@OperatorPerm                       // ✗ TS error — `action` missing
+@OperatorPerm({})                   // ✗ TS error — `action` missing
+@OperatorPerm({ action: 'audit:read' })   // ✓
+```
+
+For such a decorator the bare `@Foo` form, the zero-arg `@Foo()` form, and the `.registration` accessor **do not exist** — none of them can supply the value. Use `Foo.with({ action: '…' }).registration` at module / adapter / bootstrap registration sites.
+
+This exists so you never have to invent a placeholder default just to satisfy the type. A default like `action: 'settings:read'` on a permission contributor every call site overrides is worse than no default: forget the argument on one route and it silently gates on the placeholder instead of failing to compile.
+
+Give a field a `paramDefaults` entry **only when the default is genuinely correct for an undecorated route** — `headerName: 'x-tenant-id'` yes, a permission string almost never.
+
+#### Runtime enforcement for JS call sites
+
+The compile-time check covers TypeScript. For plain-JS adopters, `as any` escapes, and params assembled dynamically, add `requiredParams`:
+
+```ts
+const OperatorPerm = defineHttpContextDecorator.withParams<PermParams>()({
+  key: 'operatorPerm',
+  requiredParams: ['action'],
+  resolve: (ctx, _deps, { action }) => checkPermission(ctx, action),
+})
+```
+
+A missing field then throws `TypeError` at the point of use — decoration time for `@Foo`, call time for `@Foo({...})` and `.with({...})` — naming the decorator and the field. Partial coverage is fine: list only the fields whose absence is a correctness bug.
 
 ### Positional form (no params)
 

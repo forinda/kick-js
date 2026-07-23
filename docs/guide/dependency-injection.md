@@ -369,7 +369,7 @@ const LoadCurrentUser = defineHttpContextDecorator({
 const LoadTenantId = defineHttpContextDecorator({
   key: 'tenantId',
   dependsOn: ['currentUser'],
-  resolve: (ctx) => ctx.get('currentUser')!.tenantId,
+  resolve: (ctx) => ctx.require('currentUser').tenantId,
 })
 
 @Controller()

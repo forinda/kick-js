@@ -34,6 +34,7 @@ export type {
   ScanResult,
 } from './scanner'
 export { TokenCollisionError } from './render/manifest'
+export { TypegenDriftError } from './plugin'
 export { validateTokenConventions, type TokenConventionWarning } from './token-conventions'
 
 /**

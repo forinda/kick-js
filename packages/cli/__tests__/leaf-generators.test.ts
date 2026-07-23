@@ -135,8 +135,28 @@ describe('kick g <leaf>', () => {
       expect(content).toContain('source: string')
       expect(content).toContain('region: number')
       expect(content).toContain('.withParams<TenantParams>()')
-      expect(content).toContain('paramDefaults')
       expect(content).toContain('(ctx, _deps, params)')
+      // Scaffolded params are required at every call site, enforced at
+      // runtime too. The generator must NOT emit placeholder defaults
+      // (`source: ''`) — a default that is never correct means a call
+      // site that forgets the argument runs with the placeholder instead
+      // of failing to compile.
+      expect(content).toContain("requiredParams: ['source', 'region']")
+      // Anchored to a property line — the scaffold's guidance comment
+      // mentions `paramDefaults` on purpose, which is not the same thing.
+      expect(content).not.toMatch(/^\s*paramDefaults:/m)
+      expect(content).not.toContain("source: ''")
+      expect(content).not.toContain('region: 0')
+    })
+
+    it('points at .registration (not the decorator) for non-decorator sites', () => {
+      // Passing the decorator itself to `contributors: []` is the most
+      // common wiring mistake; the scaffold header should model the fix.
+      runCli(fixture, ['g', 'contributor', 'tenant'])
+      const content = readFileSync(join(fixture, 'src/contributors/tenant.contributor.ts'), 'utf-8')
+      expect(content).toContain('.registration')
+      expect(content).toContain('ctx.require(')
+      expect(content).not.toMatch(/ctx\.get\('tenant'\)!/)
     })
 
     it('honours an explicit --key', () => {

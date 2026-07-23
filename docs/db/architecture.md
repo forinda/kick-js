@@ -554,7 +554,7 @@ bootstrap({ contributors: [TenantDb], ... })
 class ProjectsController {
   @Get('/:id')
   show(ctx: RequestContext) {
-    const db = ctx.get('db')!     // typed against ContextMeta['db']
+    const db = ctx.require('db')     // typed against ContextMeta['db']
     return db.query.projects.findUnique({ where: (p, { eq }) => eq(p.id, ctx.params.id) })
   }
 }

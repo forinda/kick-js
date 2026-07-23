@@ -246,9 +246,173 @@ describe('checkDecoratorTsConfig', () => {
   })
 
   it('fails when tsconfig.json is missing entirely', () => {
-    const rs = checkDecoratorTsConfig(ctx('/x', { tsconfig: null }))
+    const rs = checkDecoratorTsConfig(ctx('/x', { tsconfig: undefined }))
     expect(rs[0]?.status).toBe('fail')
+    expect(rs[0]?.name).toContain('present')
     expect(rs[0]?.fix).toContain('tsconfig.json')
+  })
+
+  it('warns (does not fail the flags) when tsconfig exists but cannot be parsed', () => {
+    // Reporting "experimentalDecorators missing" for a config we failed
+    // to read is a guess, and usually a wrong one.
+    const rs = checkDecoratorTsConfig(ctx('/x', { tsconfig: null }))
+    expect(rs[0]?.status).toBe('warn')
+    expect(rs[0]?.name).toContain('readable')
+    expect(rs.some((r) => r.name.includes('experimentalDecorators'))).toBe(false)
+  })
+})
+
+// ── tsconfig `extends` resolution ─────────────────────────────────────
+
+/**
+ * Regression suite: `kick doctor` used to report
+ * experimentalDecorators / emitDecoratorMetadata as missing whenever
+ * they were set in a config the project extends rather than inline.
+ * The old loader followed exactly one level, only for a string
+ * `extends`, resolved relative paths against the project root instead
+ * of the containing file, resolved bare specifiers only in the
+ * project's own node_modules, and parsed parents as strict JSON. Lean
+ * per-package configs in a monorepo tripped all five.
+ */
+describe('doctor tsconfig extends chain', () => {
+  const DECORATOR_OPTS = `{
+    "compilerOptions": {
+      "experimentalDecorators": true,
+      "emitDecoratorMetadata": true
+    }
+  }`
+
+  async function decoratorResults(dir: string) {
+    const rs = await runChecks(dir)
+    return rs.filter((r) => r.name.startsWith('tsconfig'))
+  }
+
+  /**
+   * Both decorator flags resolved to `pass`. Asserts the two results are
+   * actually present first — a bare `.every()` is vacuously true when the
+   * config failed to load and the decorator checks never ran, which would
+   * make these tests pass against the very bug they exist to catch.
+   */
+  const bothPass = (rs: { name: string; status: string }[]) => {
+    const flags = rs.filter((r) => r.name.includes('Decorator'))
+    expect(flags.map((r) => r.name).toSorted()).toEqual([
+      'tsconfig: emitDecoratorMetadata',
+      'tsconfig: experimentalDecorators',
+    ])
+    return flags.every((r) => r.status === 'pass')
+  }
+
+  it('inherits from a directly extended base config', async () => {
+    const dir = tempProject({
+      'tsconfig.base.json': DECORATOR_OPTS,
+      'tsconfig.json': '{ "extends": "./tsconfig.base.json" }',
+    })
+    expect(bothPass(await decoratorResults(dir))).toBe(true)
+  })
+
+  it('follows a chain more than one level deep', async () => {
+    const dir = tempProject({
+      'tsconfig.root.json': DECORATOR_OPTS,
+      'tsconfig.base.json': '{ "extends": "./tsconfig.root.json" }',
+      'tsconfig.json': '{ "extends": "./tsconfig.base.json" }',
+    })
+    expect(bothPass(await decoratorResults(dir))).toBe(true)
+  })
+
+  it('resolves relative extends against the extending file, not the project root', async () => {
+    const dir = tempProject({
+      'config/tsconfig.root.json': DECORATOR_OPTS,
+      // `./tsconfig.root.json` here is relative to config/, not the root.
+      'config/tsconfig.base.json': '{ "extends": "./tsconfig.root.json" }',
+      'tsconfig.json': '{ "extends": "./config/tsconfig.base.json" }',
+    })
+    expect(bothPass(await decoratorResults(dir))).toBe(true)
+  })
+
+  it('supports the TS 5.0 array form of extends', async () => {
+    const dir = tempProject({
+      'a.json': '{ "compilerOptions": { "experimentalDecorators": true } }',
+      'b.json': '{ "compilerOptions": { "emitDecoratorMetadata": true } }',
+      'tsconfig.json': '{ "extends": ["./a.json", "./b.json"] }',
+    })
+    expect(bothPass(await decoratorResults(dir))).toBe(true)
+  })
+
+  it('lets later array entries and the child win over earlier ones', async () => {
+    const dir = tempProject({
+      'a.json': '{ "compilerOptions": { "experimentalDecorators": false } }',
+      'b.json': DECORATOR_OPTS,
+      'tsconfig.json': '{ "extends": ["./a.json", "./b.json"] }',
+    })
+    expect(bothPass(await decoratorResults(dir))).toBe(true)
+  })
+
+  it('finds a bare specifier hoisted to a parent node_modules', async () => {
+    // The pnpm/monorepo case: the preset is not in the package's own
+    // node_modules, it's at the workspace root.
+    const dir = tempProject({
+      'node_modules/@tsconfig/kick/tsconfig.json': DECORATOR_OPTS,
+      'packages/api/tsconfig.json': '{ "extends": "@tsconfig/kick" }',
+    })
+    expect(bothPass(await decoratorResults(join(dir, 'packages/api')))).toBe(true)
+  })
+
+  it('resolves a directory specifier to its tsconfig.json', async () => {
+    const dir = tempProject({
+      'node_modules/@tsconfig/node20/tsconfig.json': DECORATOR_OPTS,
+      'tsconfig.json': '{ "extends": "@tsconfig/node20" }',
+    })
+    expect(bothPass(await decoratorResults(dir))).toBe(true)
+  })
+
+  it('appends .json to an extensionless specifier', async () => {
+    const dir = tempProject({
+      'base.json': DECORATOR_OPTS,
+      'tsconfig.json': '{ "extends": "./base" }',
+    })
+    expect(bothPass(await decoratorResults(dir))).toBe(true)
+  })
+
+  it('parses comments and trailing commas anywhere in the chain', async () => {
+    const dir = tempProject({
+      'tsconfig.base.json': `{
+        // decorator support
+        "compilerOptions": {
+          "experimentalDecorators": true,
+          /* required by the DI container */
+          "emitDecoratorMetadata": true,
+        },
+      }`,
+      'tsconfig.json': '{ "extends": "./tsconfig.base.json", }',
+    })
+    expect(bothPass(await decoratorResults(dir))).toBe(true)
+  })
+
+  it('does not report an existing-but-unreadable tsconfig as missing', async () => {
+    const dir = tempProject({ 'tsconfig.json': '{ this is not json at all' })
+    const rs = await decoratorResults(dir)
+    expect(rs[0]?.status).toBe('warn')
+    expect(rs[0]?.name).toContain('readable')
+  })
+
+  it('terminates on a circular extends chain', async () => {
+    const dir = tempProject({
+      'a.json': '{ "extends": "./b.json" }',
+      'b.json': '{ "extends": "./a.json" }',
+      'tsconfig.json': '{ "extends": "./a.json" }',
+    })
+    // Should return, not hang or blow the stack.
+    const rs = await decoratorResults(dir)
+    expect(rs.length).toBeGreaterThan(0)
+  })
+
+  it('still fails the flags when nothing in the chain sets them', async () => {
+    const dir = tempProject({
+      'tsconfig.base.json': '{ "compilerOptions": { "strict": true } }',
+      'tsconfig.json': '{ "extends": "./tsconfig.base.json" }',
+    })
+    const rs = await decoratorResults(dir)
+    expect(rs.find((r) => r.name.includes('experimentalDecorators'))?.status).toBe('fail')
   })
 })
 

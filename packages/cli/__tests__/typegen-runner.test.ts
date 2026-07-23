@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 
 import { runTypegen } from '../src/typegen/runner'
-import type { TypegenPlugin } from '../src/typegen/plugin'
+import { TypegenDriftError, type TypegenPlugin } from '../src/typegen/plugin'
 
 let dir: string
 beforeEach(async () => {
@@ -48,7 +48,44 @@ describe('runTypegen', () => {
     }
     await expect(
       runTypegen({ cwd: dir, config: {} as never, plugins: [drifted], check: true }),
-    ).rejects.toThrow(/drift detected/)
+    ).rejects.toThrow(/out of date/)
+  })
+
+  it('--check reports every drifted plugin, not just the first', async () => {
+    const a = (body: string): TypegenPlugin => ({
+      id: 'test/a',
+      inputs: [],
+      generate: async () => body,
+    })
+    const b = (body: string): TypegenPlugin => ({
+      id: 'test/b',
+      inputs: [],
+      generate: async () => body,
+    })
+    await runTypegen({ cwd: dir, config: {} as never, plugins: [a('1'), b('1')] })
+
+    const err = await runTypegen({
+      cwd: dir,
+      config: {} as never,
+      plugins: [a('2'), b('2')],
+      check: true,
+    }).catch((e: unknown) => e as TypegenDriftError)
+
+    expect(err).toBeInstanceOf(TypegenDriftError)
+    expect(err.drifted.map((d) => d.id)).toEqual(['test/a', 'test/b'])
+  })
+
+  it('--check writes nothing', async () => {
+    await runTypegen({ cwd: dir, config: {} as never, plugins: [plugin] })
+    const before = await readFile(path.join(dir, '.kickjs/types/test__echo.d.ts'), 'utf8')
+    await runTypegen({
+      cwd: dir,
+      config: {} as never,
+      plugins: [{ ...plugin, generate: async () => 'export type Echo = "drift"' }],
+      check: true,
+    }).catch(() => {})
+    const after = await readFile(path.join(dir, '.kickjs/types/test__echo.d.ts'), 'utf8')
+    expect(after).toBe(before)
   })
 
   it('skips plugin when generate returns null', async () => {

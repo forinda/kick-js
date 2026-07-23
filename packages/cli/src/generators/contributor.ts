@@ -65,22 +65,6 @@ export function parseContributorParams(raw: string | undefined): ContributorPara
     .filter((p) => p.name.length > 0)
 }
 
-/** Safe primitive default for `paramDefaults` so the scaffold compiles. */
-function defaultForType(type: string): string | null {
-  switch (type) {
-    case 'string':
-      return "''"
-    case 'number':
-      return '0'
-    case 'boolean':
-      return 'false'
-    default:
-      // Non-primitive — omit from paramDefaults (the field is `Partial<P>`)
-      // so we don't emit an un-typeable placeholder.
-      return null
-  }
-}
-
 export async function generateContributor(options: GenerateContributorOptions): Promise<string[]> {
   const { name, moduleName, modulesDir, pattern } = options
   const type: ContributorType = options.type ?? 'http'
@@ -119,17 +103,28 @@ export async function generateContributor(options: GenerateContributorOptions): 
   // plain `factory({...})` form otherwise.
   const callOpen = params.length > 0 ? `${factory}.withParams<${pascal}Params>()({` : `${factory}({`
 
-  const paramDefaultsEntries = params
-    .map((p) => ({ name: p.name, def: defaultForType(p.type) }))
-    .filter((p) => p.def !== null)
-    .map((p) => `    ${p.name}: ${p.def},`)
-  const paramDefaultsBlock =
-    params.length > 0 ? `  paramDefaults: {\n${paramDefaultsEntries.join('\n')}\n  },\n` : ''
+  // Deliberately NO `paramDefaults` placeholders.
+  //
+  // This scaffold used to emit `paramDefaults: { action: '' }` — a
+  // primitive stand-in per param, purely so the file compiled. That
+  // taught the wrong pattern: a default that is never correct means a
+  // call site which forgets the argument silently runs with the
+  // placeholder instead of failing to compile. Scaffolded params are
+  // required in `<Pascal>Params`, so leaving them undefaulted makes the
+  // compiler demand them at every call site — and `requiredParams`
+  // enforces the same at runtime for JS callers.
+  const requiredParamsBlock =
+    params.length > 0
+      ? `  // Every call site must supply these — no placeholder defaults.\n` +
+        `  // Add \`paramDefaults: { … }\` for any field whose default is\n` +
+        `  // genuinely correct for an undecorated route, and drop it from here.\n` +
+        `  requiredParams: [${params.map((p) => `'${p.name}'`).join(', ')}],\n`
+      : ''
 
   const resolveSig = params.length > 0 ? '(ctx, _deps, params)' : '(ctx)'
   const resolveHint =
     params.length > 0
-      ? `    // \`params\` is typed as ${pascal}Params (call-site overrides merged onto paramDefaults).`
+      ? `    // \`params\` is typed as ${pascal}Params (call-site params merged onto any paramDefaults).`
       : `    // \`ctx\` is a ${ctxType} — read ctx.req / ctx.headers / ctx.params (http) or ctx.get (bare).`
 
   const content = `import { ${factory} } from '@forinda/kickjs'
@@ -142,17 +137,23 @@ import type { ${ctxType} } from '@forinda/kickjs'
  * matched handler runs — the typed, ordered alternative to
  * \`@Middleware()\` when the only job is to populate \`ctx\`.
  *
- * Apply per method/class, or register globally via
- * \`bootstrap({ contributors: [${pascal}] })\`:
+ * Apply per method/class:
  *
  *   @${pascal}${params.length > 0 ? `({ ${params[0]?.name}: … })` : ''}
  *   @Get('/')
  *   handler(ctx: ${ctxType}) {
- *     return ctx.json(ctx.get('${key}'))
+ *     return ctx.json(ctx.require('${key}'))
  *   }
+ *
+ * Or register at a module / adapter / bootstrap site — those take a
+ * \`ContributorRegistration\`, not the decorator itself:
+ *
+ *   bootstrap({ contributors: [${pascal}${
+   params.length > 0 ? `.with({ ${params[0]?.name}: … })` : ''
+ }.registration] })
  */
 
-// Register '${key}' so \`ctx.get('${key}')\` is typed and \`dependsOn: ['${key}']\`
+// Register '${key}' so \`ctx.require('${key}')\` is typed and \`dependsOn: ['${key}']\`
 // is checked. Replace \`unknown\` with the resolved value's real type.
 // (For a key you only depend on — no value type needed — declare it in
 // \`interface ContextKeys\` instead.)
@@ -164,7 +165,7 @@ declare module '@forinda/kickjs' {
 ${paramsInterface}
 export const ${pascal} = ${callOpen}
   key: '${key}',
-${paramDefaultsBlock}  resolve: ${resolveSig} => {
+${requiredParamsBlock}  resolve: ${resolveSig} => {
 ${resolveHint}
     // TODO: compute and return the value written to ctx.set('${key}', …)
     throw new Error("${pascal} contributor: resolve() not implemented")
