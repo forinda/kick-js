@@ -33,6 +33,7 @@ import {
   type DiscoveredPluginOrAdapter,
   type DiscoveredRoute,
   type DiscoveredToken,
+  type DecoratorRef,
   type FileExtract,
   type ModuleMount,
   type SchemaRef,
@@ -231,6 +232,34 @@ function resolveSchemaRef(identifier: string, ctx: FileContext): SchemaRef {
   return { identifier, source: null }
 }
 
+/**
+ * Every decorator applied at a site, as `{ identifier, source }`, with the
+ * HTTP verb decorators (which *are* the route) filtered out.
+ *
+ * Deliberately unclassified here: the extractor sees one file at a time
+ * and can't know whether `@LoadTenant` resolves to a context contributor,
+ * a framework decorator, or an adopter's own wrapper. The scanner's join
+ * phase makes that call with the whole project in view — see
+ * `resolveRouteContextKeys`. Keeping the policy in one place is what
+ * makes "degrade when unprovable" auditable.
+ */
+function appliedDecoratorRefs(decorators: Node[], ctx: FileContext): DecoratorRef[] {
+  const out: DecoratorRef[] = []
+  for (const dec of decorators) {
+    // `@Foo(...)` → callee identifier; `@Foo` → the expression itself.
+    const call = decoratorCall(dec)
+    const name = call ? call.name : identifierName((dec as { expression?: Node }).expression)
+    if (!name || HTTP_DECORATORS.has(name)) continue
+    const imported = ctx.imports.get(name)
+    out.push({
+      identifier: name,
+      // '' = declared in this same file, null = couldn't be resolved.
+      source: imported ? imported.source : ctx.topLevelConsts.has(name) ? '' : null,
+    })
+  }
+  return out
+}
+
 /** Schema field (`body:` / `query:` / `params:`) — bare identifiers only. */
 function schemaFieldRef(options: Node | null, field: string, ctx: FileContext): SchemaRef | null {
   const value = getProp(options, field)
@@ -308,6 +337,19 @@ export function extractFileAst(source: string, filePath: string, cwd: string): F
 
   const seenHelperNames = new Set<string>()
   const seenContextKeys = new Set<string>()
+
+  // `const LoadTenant = defineHttpContextDecorator({...})` — map the init
+  // CallExpression back to the binding it's assigned to, so an applied
+  // `@LoadTenant` decorator can later be resolved to the key it writes.
+  // The walk below visits call expressions without their parent, hence
+  // the pre-pass.
+  const bindingByInit = new Map<Node, string>()
+  walk(program, (node) => {
+    if (node.type !== 'VariableDeclarator') return
+    const name = identifierName(node.id)
+    const init = node.init
+    if (name && isNode(init)) bindingByInit.set(init, name)
+  })
   const seenTokenNodes = new Set<Node>()
   /** Top-level `const X = <init>` map for @ApiQueryParams const refs. */
   const topLevelConstInits = new Map<string, Node>()
@@ -470,7 +512,12 @@ export function extractFileAst(source: string, filePath: string, cwd: string): F
       const key = stringValue(getProp(firstObjectArg(node), 'key'))
       if (key !== null && !seenContextKeys.has(key)) {
         seenContextKeys.add(key)
-        contextKeys.push({ key, filePath, relativePath: relPath })
+        contextKeys.push({
+          key,
+          exportName: bindingByInit.get(node) ?? null,
+          filePath,
+          relativePath: relPath,
+        })
       }
       return
     }
@@ -489,7 +536,12 @@ export function extractFileAst(source: string, filePath: string, cwd: string): F
           const key = stringValue(getProp(firstObjectArg(node), 'key'))
           if (key !== null && !seenContextKeys.has(key)) {
             seenContextKeys.add(key)
-            contextKeys.push({ key, filePath, relativePath: relPath })
+            contextKeys.push({
+              key,
+              exportName: bindingByInit.get(node) ?? null,
+              filePath,
+              relativePath: relPath,
+            })
           }
         }
       }
@@ -568,6 +620,12 @@ export function extractFileAst(source: string, filePath: string, cwd: string): F
       if (!discovered) continue
       const decs = decoratorsOf(member)
       const apiQp = extractApiQueryParams(decs, topLevelConstInits)
+      // Method- AND class-level decorators both contribute to the route's
+      // context keys (class-level applies to every method on it).
+      const appliedDecorators = [
+        ...appliedDecoratorRefs(decoratorsOf(cls), ctx),
+        ...appliedDecoratorRefs(decs, ctx),
+      ]
       for (const dec of decs) {
         const dc = decoratorCall(dec)
         if (!dc || !HTTP_DECORATORS.has(dc.name)) continue
@@ -594,6 +652,7 @@ export function extractFileAst(source: string, filePath: string, cwd: string): F
           filePath,
           relativePath: relPath,
           controllerIsDefaultExport: discovered.isDefault,
+          appliedDecorators,
           // Per-file contract: own path only (parity with the regex
           // extractor's empty-mount default); joinExtracts overwrites with
           // the cross-file mount-joined path.
@@ -625,6 +684,8 @@ export function extractFileAst(source: string, filePath: string, cwd: string): F
     routes,
     moduleMounts,
     globPatterns: /\.module\.[mc]?[tj]sx?$/.test(filePath) ? globPatterns : [],
+    // Overwritten by `extractFile` — see the note on the regex path.
+    hasNonDecoratorContributors: false,
   }
 }
 

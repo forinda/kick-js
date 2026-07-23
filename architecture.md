@@ -3396,10 +3396,59 @@ Audit results from grepping `__ctxMeta`, `requestStore`, `tenantStorage`, `getCu
 | `examples/task-drizzle-api` (or new example)          | Add `LoadTenant` contributor showing class-level + method-level + adapter-level use in one app          |
 | `examples/multi-tenant-{drizzle,prisma,mongoose}-api` | Optional: convert hand-written tenant resolution middleware to a contributor (showcases migration path) |
 
-### 20.14 Compile-time context narrowing (deferred — RFC)
+### 20.14 Compile-time context narrowing (SHIPPED — with one deliberate deviation)
 
-**Status:** deferred. `ctx.require()` ships as the runtime half; this section
-records the design for the compile-time half so it isn't relitigated.
+**Status:** shipped. `ctx.require()` is the runtime half; per-route
+`contextKeys` from `kick/routes` typegen is the compile-time half.
+
+**Deviation from the design below, made during implementation:** this
+section originally proposed narrowing `ctx.get()` — dropping `| undefined`
+for keys typegen believes are present. That was the wrong direction and
+was NOT built.
+
+The two options fail in opposite ways when typegen's view is incomplete:
+
+|                            | if typegen is wrong                    | failure mode                                               |
+| -------------------------- | -------------------------------------- | ---------------------------------------------------------- |
+| Narrow `get()` (proposed)  | a key it thinks is present isn't       | typed `T`, actually `undefined` — **fails open, silently** |
+| Narrow `require()` (built) | a key that is present isn't in the set | false compile error — **fails closed, loudly**             |
+
+Narrowing `get()` would have reintroduced the exact failure this whole line
+of work set out to remove: a value the type system promises and the runtime
+doesn't deliver. `get()` is therefore untouched and still returns
+`| undefined` for every key. `require()`'s key parameter is narrowed to the
+route's proven set, which is what makes a dropped decorator a `tsc` error.
+
+**What that buys:** dropping `@OperatorPerm` from a route turns
+`ctx.require('operatorPerm')` into
+`TS2345: Argument of type '"operatorPerm"' is not assignable to parameter of type '"tenant"'`.
+
+**Soundness rule — prove completeness or degrade.** A route gets a key
+union only when every decorator on it (method + class) is either a known
+contributor-free framework decorator or a resolvable context decorator.
+Anything else — an unrecognised decorator (adopter decorators can bundle
+contributors of their own), an unresolvable import, an ambiguous binding
+name, a route recovered by the regex fallback, or the presence of ANY
+non-decorator contributor registration in the project — emits `string`,
+which means "not proven" and disables narrowing for that route.
+
+Note `never` vs `string`: `never` is emitted when the scanner proved a
+route carries no contributors (so any `require()` on it is a real
+mistake); `string` means it couldn't tell. Conflating them would produce
+false errors across whole projects.
+
+**Escape hatch:** type the handler as plain `RequestContext` instead of
+`Ctx<KickRoutes…>`. `TKeys` defaults to `string` and no narrowing applies.
+
+**Still not covered (unchanged from the prerequisites below):** module,
+adapter, and bootstrap registration sites are detected but not resolved —
+their presence degrades the whole project. Resolving them is the next
+increment. A third-party adapter shipping a contributor from inside
+`node_modules` remains invisible; under the fail-closed direction that
+surfaces as a false compile error on `require()`, which the escape hatch
+covers.
+
+The original design follows, retained for the reasoning.
 
 #### The gap
 
@@ -3494,10 +3543,21 @@ Sketch:
 #### Prerequisites
 
 - [x] `--check` genuinely fails on stale generated types
-- [ ] Typegen can enumerate adapter- and bootstrap-level contributors, or the
-      design explicitly degrades to `string` when it can't prove completeness
-- [ ] `contextKeys` emitted per route by the `kick/routes` plugin
-- [ ] `RequestContext` carries `TKeys` end to end
+- [x] The design explicitly degrades to `string` when it can't prove
+      completeness (typegen still does not _enumerate_ adapter/bootstrap
+      contributors — it detects them and degrades)
+- [x] `contextKeys` emitted per route by the `kick/routes` plugin
+- [x] `RequestContext` carries `TKeys` end to end
+
+#### Next increment
+
+- Resolve module-level `contributors()` and map modules to their mounted
+  controllers, so a module-scoped contributor narrows instead of degrading
+  the project.
+- Resolve simple `bootstrap({ contributors: [X.registration] })` identifier
+  forms — these union into every route rather than degrading.
+- Adapter-level stays out of reach for third-party packages; the escape
+  hatch is the answer there.
 
 ---
 

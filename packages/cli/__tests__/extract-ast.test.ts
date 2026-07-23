@@ -9,12 +9,30 @@ const CWD = resolve('/proj')
 const FILE = resolve('/proj/src/modules/users/user.controller.ts')
 const MODULE_FILE = resolve('/proj/src/modules/users/user.module.ts')
 
-/** Run both extractors and assert deep equality (parity harness). */
+/**
+ * Run both extractors and assert deep equality (parity harness).
+ *
+ * `appliedDecorators` is excluded: it is AST-only by design. Recording
+ * which decorators a route carries needs real parsing, and a route from
+ * the regex fallback deliberately has no list at all — the absence is the
+ * signal that its context-key set can't be proven, which is what makes
+ * per-route narrowing degrade safely on an unparseable file. Demanding
+ * parity here would mean either faking the data or dropping the signal.
+ */
+function stripAstOnly(extract: unknown): unknown {
+  const e = extract as { routes?: Array<Record<string, unknown>> } | null
+  if (!e?.routes) return e
+  return {
+    ...e,
+    routes: e.routes.map(({ appliedDecorators: _ignored, ...rest }) => rest),
+  }
+}
+
 function expectParity(source: string, filePath = FILE): void {
   const ast = extractFileAst(source, filePath, CWD)
   const regex = extractFileRegex(source, filePath, CWD)
   expect(ast).not.toBeNull()
-  expect(ast).toEqual(regex)
+  expect(stripAstOnly(ast)).toEqual(stripAstOnly(regex))
 }
 
 describe('extractFileAst — parity with the regex extractors', () => {
