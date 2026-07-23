@@ -91,8 +91,15 @@ export type MetaValue<K extends string, Fallback = unknown> = K extends keyof Co
  * pipeline only depends on this interface — contributors authored against
  * `ExecutionContext` work across every transport that adopts it.
  */
-export interface ExecutionContext {
-  /** Read a typed value from per-request metadata. */
+export interface ExecutionContext<TKeys extends string = string> {
+  /**
+   * Read a typed value from per-request metadata.
+   *
+   * Deliberately NOT narrowed by `TKeys`: `get` accepts any key and
+   * always returns `| undefined`. Narrowing it would mean claiming a key
+   * is present, and a wrong claim there fails open — exactly the silent
+   * failure `require` exists to prevent.
+   */
   get<K extends string>(key: K): MetaValue<K> | undefined
   /**
    * Read a value that must be present, throwing `MissingContextValueError`
@@ -100,8 +107,14 @@ export interface ExecutionContext {
    * subject) where `get(key)!` would silently paper over a contributor
    * that never ran. Only `undefined` throws — `null` is a real value,
    * hence `Exclude<…, undefined>` rather than `NonNullable<…>`.
+   *
+   * When `TKeys` is narrowed (via a typegen'd `Ctx<KickRoutes…>`), asking
+   * for a key the route doesn't carry is a compile error — which is how a
+   * dropped decorator stops being invisible. The narrowing direction is
+   * deliberate: an incomplete typegen view produces a false *error*, not
+   * a false guarantee.
    */
-  require<K extends string>(key: K): Exclude<MetaValue<K>, undefined>
+  require<K extends TKeys>(key: K): Exclude<MetaValue<K>, undefined>
   /** Write a typed value into per-request metadata. */
   set<K extends string>(key: K, value: MetaValue<K>): void
   /** Unique per-request identifier (HTTP: x-request-id; WS/queue/cron: transport-defined). */

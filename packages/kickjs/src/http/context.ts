@@ -246,6 +246,21 @@ export interface RouteShape {
   body?: unknown
   query?: unknown
   response?: unknown
+  /**
+   * Union of context keys `kick typegen` proved are populated for this
+   * route — the keys of every context contributor applied at method or
+   * class level. Drives {@link RequestContext.require} narrowing, so
+   * calling `ctx.require()` for a key this route doesn't carry is a
+   * compile error instead of a request-time throw.
+   *
+   * `string` (the default) means "not proven", not "no keys". Typegen
+   * emits `string` whenever it cannot see the full picture — a
+   * contributor registered at module / adapter / bootstrap level, or an
+   * unrecognised decorator that might bundle contributors of its own.
+   * Narrowing an unprovable route would produce compile errors for keys
+   * that really are present.
+   */
+  contextKeys?: string
 }
 
 /**
@@ -256,7 +271,18 @@ export interface RouteShape {
  * Contributor pipeline (#107) can run against this concrete HTTP context
  * the same way it will run against future WS / queue / cron contexts.
  */
-export class RequestContext<TBody = any, TParams = any, TQuery = any> implements ExecutionContext {
+export class RequestContext<
+  TBody = any,
+  TParams = any,
+  TQuery = any,
+  /**
+   * Context keys proven present for this route. Defaults to `string`, so
+   * a handler typed as plain `RequestContext` keeps today's unnarrowed
+   * behaviour — which is also the deliberate escape hatch when typegen's
+   * view is incomplete.
+   */
+  TKeys extends string = string,
+> implements ExecutionContext<TKeys> {
   /**
    * Engine-agnostic response driver the response helpers write through. Under
    * the Express runtime it IS `res` (Express's Response satisfies
@@ -584,10 +610,13 @@ export class RequestContext<TBody = any, TParams = any, TQuery = any> implements
    * const perm = ctx.require('operatorPerm')
    * ```
    *
-   * This is a runtime guarantee, not a compile-time one: it narrows the
-   * return type but cannot prove the decorator is present. Making a
-   * missing contributor a `tsc` error needs per-route key unions from
-   * typegen — see `architecture.md` §20.14.
+   * When `TKeys` is narrowed — which it is for a handler typed as
+   * `Ctx<KickRoutes…>`, from typegen's per-route `contextKeys` — asking
+   * for a key the route doesn't carry is a compile error, so a dropped
+   * decorator fails the build. `TKeys` stays `string` (no narrowing) for
+   * a plain `RequestContext` and for any route typegen couldn't prove
+   * complete; there this is a runtime guarantee only.
+   * See `architecture.md` §20.14.
    *
    * `null` counts as present; only `undefined` (or a missing entry)
    * throws. A contributor that deliberately resolves to `null` is
@@ -597,7 +626,7 @@ export class RequestContext<TBody = any, TParams = any, TQuery = any> implements
    * the runtime still hands it back, so a caller would be told a value
    * is non-null and then get `null`.
    */
-  require<K extends string>(key: K): Exclude<MetaValue<K>, undefined> {
+  require<K extends TKeys>(key: K): Exclude<MetaValue<K>, undefined> {
     const value = this.metadataReadOnly()?.get(key)
     if (value === undefined) {
       throw new MissingContextValueError(key, this.routeLabel())
@@ -930,7 +959,10 @@ export interface SseHandler<T = unknown> {
 export type Ctx<TRoute extends RouteShape = RouteShape> = RequestContext<
   TRoute extends { body: infer B } ? B : any,
   TRoute extends { params: infer P } ? P : any,
-  TRoute extends { query: infer Q } ? Q : any
+  TRoute extends { query: infer Q } ? Q : any,
+  // Falls back to `string` (no narrowing) whenever typegen couldn't prove
+  // the route's full contributor set — see `RouteShape.contextKeys`.
+  TRoute extends { contextKeys: infer K } ? (K extends string ? K : string) : string
 >
 
 /**

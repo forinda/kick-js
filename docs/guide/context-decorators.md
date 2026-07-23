@@ -280,11 +280,34 @@ It returns `Exclude<MetaValue<K>, undefined>` — no `!`, no `| undefined` — a
 
 `null` counts as present — only `undefined` throws. A contributor that deliberately resolves to `null` is saying "looked, found nothing", which is a real answer.
 
-::: warning This is a runtime guarantee, not a compile-time one
+### A dropped decorator is a compile error
 
-`ctx.require()` turns a silent `undefined` into a loud, named failure on the first request. It **cannot** make a missing decorator a compile error — proving that needs per-route context-key unions out of typegen. The design is written up in `architecture.md` §20.14; until it lands, a dropped decorator fails fast at runtime rather than at build time.
+When your handler is typed with a generated route type — `Ctx<KickRoutes.AuditController['audit']>` — `kick typegen` narrows `require()` to the keys it proved that route actually carries. Removing the decorator removes the key:
 
-Integration tests that exercise each route are still the thing that catches a dropped decorator before production.
+```ts
+@LoadTenant
+@OperatorPerm({ action: 'audit:read' })   // ← delete this line
+@Get('/audit')
+audit(ctx: Ctx<KickRoutes.AuditController['audit']>) {
+  return ctx.json({ perm: ctx.require('operatorPerm') })
+}
+```
+
+```text
+error TS2345: Argument of type '"operatorPerm"' is not assignable to parameter of type '"tenant"'.
+```
+
+That's the refactor that used to be invisible: `ctx.get('operatorPerm')!` compiled either way, and the handler read `undefined` into an authorization check.
+
+`ctx.get()` is deliberately **not** narrowed. Narrowing it would mean claiming a key is present, and if typegen were ever wrong about that you'd have a value the types promise and the runtime doesn't deliver — the exact failure `require()` exists to prevent. `require()` narrows in the safe direction: if typegen's view is incomplete you get a compile error, not a false guarantee.
+
+::: tip When typegen can't prove it, it doesn't narrow
+
+Narrowing applies only to routes whose full contributor set is provable from method- and class-level decorators. Typegen emits no narrowing (today's behaviour) when it sees an unrecognised decorator, an unresolvable import, an ambiguous name, or **any** contributor registered at module / adapter / bootstrap level — a global registration adds keys to routes that carry no decorator for them, so nothing in the project can be proven complete while one exists.
+
+If narrowing is ever wrong for a route, type the handler as plain `RequestContext` instead of `Ctx<KickRoutes…>` — that opts out entirely.
+
+Integration tests that exercise each route are still worth having; narrowing covers the dropped-decorator case, not a contributor that throws or resolves to `undefined`.
 :::
 
 ## Error handling

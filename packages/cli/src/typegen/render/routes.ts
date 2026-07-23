@@ -167,6 +167,7 @@ export const kickRpc = {} as const
         `        body: ${bodyType}`,
         `        query: ${queryType}`,
         `        response: ${responseType}`,
+        `        contextKeys: ${renderContextKeys(m)}`,
         `      }`,
       )
     }
@@ -286,6 +287,23 @@ ${rpcManifest}
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────
+
+/**
+ * The route's `contextKeys` member: a union of proven context keys, or
+ * `string` when the scanner couldn't prove the set is complete.
+ *
+ * `string` means "unknown", which reads as "don't narrow" downstream and
+ * preserves today's behaviour. The empty-array case is deliberately
+ * `never`: the scanner proved this route carries NO contributors, so
+ * every `ctx.require()` on it genuinely is a mistake and should not
+ * compile.
+ */
+function renderContextKeys(m: DiscoveredRoute): string {
+  const keys = m.contextKeys
+  if (keys == null) return 'string'
+  if (keys.length === 0) return 'never'
+  return keys.map((k) => JSON.stringify(k)).join(' | ')
+}
 
 function renderQueryShape(m: DiscoveredRoute): string {
   if (m.queryFilterable === null) return 'unknown'

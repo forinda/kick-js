@@ -27,7 +27,7 @@
 
 import type { Dirent } from 'node:fs'
 import { readdir, readFile } from 'node:fs/promises'
-import { join, relative, resolve, sep } from 'node:path'
+import { dirname, join, relative, resolve, sep } from 'node:path'
 import { ScanCache } from './scanner-cache'
 import { extractFileAst } from './extract-ast'
 
@@ -113,6 +113,32 @@ export interface DiscoveredRoute {
    * against real URLs. Optional for old fixtures; falls back to `path`.
    */
   mountedPath?: string
+  /**
+   * Every decorator applied to this route's method or its controller
+   * class, minus the HTTP verb decorators. Unclassified on purpose — the
+   * join phase decides which are context contributors, which are known
+   * framework decorators, and which are unrecognised (and therefore make
+   * the route's key set unprovable).
+   */
+  appliedDecorators?: DecoratorRef[]
+  /**
+   * Union of context keys proven populated for this route, or `null` when
+   * completeness could not be established. `null` is emitted as `string`
+   * (no narrowing) — never as an empty union, which would wrongly reject
+   * every `ctx.require()` call on the route.
+   */
+  contextKeys?: string[] | null
+}
+
+/** A decorator as written at a call site, with its import resolved. */
+export interface DecoratorRef {
+  /** The decorator's local binding name, e.g. `LoadTenant`. */
+  identifier: string
+  /**
+   * Module specifier it was imported from; `''` when declared in the same
+   * file, `null` when the binding could not be resolved at all.
+   */
+  source: string | null
 }
 
 /** A statically-resolved schema identifier reference */
@@ -201,6 +227,18 @@ export interface DiscoveredPluginOrAdapter {
 export interface DiscoveredContextKey {
   /** The literal `key:` value the contributor writes. */
   key: string
+  /**
+   * The binding the decorator was assigned to — `LoadTenant` for
+   * `export const LoadTenant = defineHttpContextDecorator({ key: 'tenant' })`.
+   *
+   * `null` when the call isn't a simple `const X = …` initialiser (inline
+   * in an array, returned from a factory, …). Needed to map an applied
+   * `@LoadTenant` decorator back to the key it populates, which is what
+   * lets per-route context-key narrowing work at all; a `null` binding
+   * simply can't be resolved from a decorator site, so routes using it
+   * degrade to unnarrowed rather than guessing.
+   */
+  exportName: string | null
   /** Absolute file path. */
   filePath: string
   /** Path relative to scan root, with forward slashes. */
@@ -373,7 +411,7 @@ const DEFINE_HELPER_START = /\b(defineAdapter|definePlugin)\s*(?:<[^>]*>)?\s*\(/
 // (e.g. `defineHttpContextDecorator<'tenant', Record<string, never>>`),
 // which a flat `<[^>]*>` would truncate at the inner `>`.
 const CONTEXT_DECORATOR_START =
-  /\b(?:defineContextDecorator|defineHttpContextDecorator)\s*(?:\.withParams\s*<(?:[^<>]|<[^<>]*>)*>\s*\(\s*\))?\s*(?:<(?:[^<>]|<[^<>]*>)*>)?\s*\(/g
+  /(?:(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=]+)?=\s*)?\b(?:defineContextDecorator|defineHttpContextDecorator)\s*(?:\.withParams\s*<(?:[^<>]|<[^<>]*>)*>\s*\(\s*\))?\s*(?:<(?:[^<>]|<[^<>]*>)*>)?\s*\(/g
 
 /**
  * Match a class declaration whose `implements` clause includes `AppAdapter`.
@@ -1154,9 +1192,10 @@ export function extractContextKeysFromSource(
   const seen = new Set<string>()
 
   CONTEXT_DECORATOR_START.lastIndex = 0
-  // The match value itself is unused — we only need the loop to advance
-  // and `lastIndex` to point just past the spec's opening paren.
-  while (CONTEXT_DECORATOR_START.exec(source) !== null) {
+  // Capture group 1 is the optional `const <Name> =` binding; `lastIndex`
+  // points just past the spec's opening paren either way.
+  let match: RegExpExecArray | null
+  while ((match = CONTEXT_DECORATOR_START.exec(source)) !== null) {
     const openParen = CONTEXT_DECORATOR_START.lastIndex - 1
     const closeParen = findBalancedClose(source, openParen)
     if (closeParen < 0) continue
@@ -1166,7 +1205,7 @@ export function extractContextKeysFromSource(
     const key = keyMatch[1]
     if (seen.has(key)) continue
     seen.add(key)
-    out.push({ key, filePath, relativePath: relPath })
+    out.push({ key, exportName: match[1] ?? null, filePath, relativePath: relPath })
   }
 
   return out
@@ -1364,6 +1403,175 @@ export function findCollisions(classes: DiscoveredClass[]): ClassCollision[] {
 }
 
 /**
+ * Framework decorators that are known NOT to register context
+ * contributors. Anything applied to a route that isn't one of these and
+ * isn't a resolvable context decorator makes the route's key set
+ * unprovable — an adopter's own decorator can wrap contributors of its
+ * own (the composition recipe in the context-decorators guide does
+ * exactly that), so "unrecognised" cannot be treated as "harmless".
+ */
+const CONTRIBUTOR_FREE_DECORATORS = new Set([
+  'Controller',
+  'Service',
+  'Repository',
+  'Injectable',
+  'Component',
+  'Module',
+  'Middleware',
+  'ApiQueryParams',
+  'Public',
+  'Roles',
+  'Cron',
+  'Cacheable',
+  'CacheEvict',
+  'FileUpload',
+  'Asset',
+  'Builder',
+  'PostConstruct',
+  'PreDestroy',
+  'Value',
+  'Inject',
+  'Autowired',
+])
+
+/**
+ * Resolve each route's provable context-key union, mutating `routes` in
+ * place.
+ *
+ * The rule is "prove completeness or degrade". A route gets a key union
+ * only when EVERY decorator applied to it (method and class) is either a
+ * known contributor-free framework decorator or a context decorator whose
+ * key we resolved. Anything unaccounted for — an unresolvable import, an
+ * unrecognised decorator, an ambiguous binding name, or the presence of
+ * non-decorator contributor registration anywhere in the project — yields
+ * `null`, which downstream emits as `string` (today's behaviour).
+ *
+ * Degrading is always safe; narrowing wrongly is not. Because `require()`
+ * narrowing rejects unknown keys, an over-narrow union turns a legitimate
+ * call into a compile error. That fails loudly rather than silently, but
+ * it is still a false alarm, and false alarms are how a feature like this
+ * gets switched off.
+ */
+/** Strip a `.ts` / `.tsx` / `.js` / `.mjs` … extension and normalise slashes. */
+function normalizeModulePath(p: string): string {
+  return p
+    .split(sep)
+    .join('/')
+    .replace(/\.[mc]?[tj]sx?$/, '')
+}
+
+/**
+ * Does `specifier`, as written in `importerFile`, refer to `declFile`?
+ *
+ * Three forms, deliberately conservative — a `false` costs a route its
+ * narrowing (safe), a wrong `true` credits a route with a key it doesn't
+ * carry (not safe):
+ *
+ * - `''` — the decorator is declared in the importing file itself.
+ * - relative (`./x`, `../contributors/x`) — resolved against the
+ *   importer's directory, extension-insensitive, `/index` tolerated.
+ * - anything else — a bare package specifier or a path alias. tsconfig
+ *   `paths` aren't parsed here, but `@/*` → `./src/*` is what `kick new`
+ *   scaffolds and is near-universal in adopter projects, so an alias-ish
+ *   specifier is matched by path suffix. A real package specifier
+ *   (`@acme/auth`) won't suffix-match any local file and so degrades,
+ *   which is the outcome we want for a third-party decorator.
+ */
+function declarationMatchesImport(
+  importerFile: string,
+  specifier: string,
+  declFile: string,
+): boolean {
+  const decl = normalizeModulePath(declFile)
+
+  if (specifier === '') return decl === normalizeModulePath(importerFile)
+
+  if (specifier.startsWith('.')) {
+    const resolved = normalizeModulePath(resolve(dirname(importerFile), specifier))
+    return decl === resolved || decl === `${resolved}/index`
+  }
+
+  // Alias or bare specifier. Drop a leading alias marker, then require the
+  // remainder to be a path suffix of the declaration file.
+  const tail = specifier.replace(/^[@~#]\//, '')
+  // A scoped package (`@acme/auth`) keeps its `@`, so it can't suffix-match
+  // a real file path and correctly falls through to `false`.
+  if (tail === specifier && specifier.startsWith('@')) return false
+  const normalizedTail = normalizeModulePath(tail)
+  return decl === normalizedTail || decl.endsWith(`/${normalizedTail}`)
+}
+
+export function resolveRouteContextKeys(
+  routes: DiscoveredRoute[],
+  contextKeys: DiscoveredContextKey[],
+  hasNonDecoratorContributors: boolean,
+): void {
+  if (hasNonDecoratorContributors) {
+    // A contributor registered at module / adapter / bootstrap level adds
+    // keys to routes that carry no decorator for them. Until those sites
+    // are resolved, no route in the project can be proven complete.
+    for (const route of routes) route.contextKeys = null
+    return
+  }
+
+  // Binding name → the context decorators exporting it. More than one
+  // entry means the name is ambiguous project-wide and we refuse to guess.
+  const byExportName = new Map<string, DiscoveredContextKey[]>()
+  for (const ck of contextKeys) {
+    if (!ck.exportName) continue
+    const list = byExportName.get(ck.exportName)
+    if (list) list.push(ck)
+    else byExportName.set(ck.exportName, [ck])
+  }
+
+  for (const route of routes) {
+    const applied = route.appliedDecorators
+    if (!applied) {
+      // Only the AST extractor records applied decorators. A route that
+      // came from the regex fallback (unparseable file, mid-edit in watch
+      // mode) has no decorator list, so nothing about it is provable.
+      // Note the distinction from `[]`, which means "parsed fine, carries
+      // no decorators" and IS provable.
+      route.contextKeys = null
+      continue
+    }
+    const keys = new Set<string>()
+    let provable = true
+
+    for (const dec of applied) {
+      if (CONTRIBUTOR_FREE_DECORATORS.has(dec.identifier)) continue
+
+      if (dec.source === null) {
+        // The binding didn't resolve to an import or a same-file const.
+        provable = false
+        break
+      }
+
+      // Name AND declaration file must both match. Matching on the name
+      // alone was wrong: a route importing `@LoadTenant` from some other
+      // module (a third-party decorator that happens to share the name)
+      // would be credited with the project's unique local `LoadTenant`
+      // key, narrowing the route to a key it never actually carries.
+      const matches = (byExportName.get(dec.identifier) ?? []).filter((ck) =>
+        declarationMatchesImport(route.filePath, dec.source as string, ck.filePath),
+      )
+      if (matches.length !== 1) {
+        // Zero: not one of our context decorators (or imported from
+        // somewhere we can't resolve). More than one: ambiguous. Either
+        // way the route's key set can't be enumerated.
+        provable = false
+        break
+      }
+      keys.add(matches[0].key)
+    }
+
+    // Sorted so the emitted union is stable across runs — an unstable
+    // order would show up as spurious drift under `kick typegen --check`.
+    route.contextKeys = provable ? [...keys].toSorted() : null
+  }
+}
+
+/**
  * The complete per-file extraction result. Every field here is a pure
  * function of a single file's source text — no cross-file context — so
  * the whole object is cacheable keyed by the file's signature.
@@ -1388,7 +1596,25 @@ export interface FileExtract {
   moduleMounts: ModuleMount[]
   /** `import.meta.glob([...])` patterns (only non-empty for `*.module.ts`). */
   globPatterns: string[]
+  /**
+   * This file registers context contributors somewhere other than a
+   * method/class decorator — a `contributors()` module/adapter/plugin hook
+   * or `bootstrap({ contributors: [...] })`.
+   *
+   * Presence, not resolution: those sites add keys to routes that carry no
+   * corresponding decorator, so per-route narrowing can't be proven
+   * complete anywhere in the project once one exists. Detecting them is
+   * enough to degrade; resolving them is a later increment.
+   */
+  hasNonDecoratorContributors: boolean
 }
+
+/**
+ * `contributors` used as an object property (`contributors: [...]`) or a
+ * method (`contributors() {}` / `contributors: () =>`). Matches the
+ * module, adapter, plugin, and bootstrap registration sites in one shot.
+ */
+const CONTRIBUTOR_REGISTRATION = /\bcontributors\s*(?::|\()/
 
 /**
  * Run per-file extraction over one source string. Pure: depends only
@@ -1402,9 +1628,13 @@ export interface FileExtract {
  * the dev loop alive.
  */
 export function extractFile(source: string, filePath: string, cwd: string): FileExtract {
+  // Computed here rather than in either extractor so the AST and regex
+  // paths can't disagree about it — a false `false` would silently enable
+  // narrowing on a project that registers contributors globally.
+  const hasNonDecoratorContributors = CONTRIBUTOR_REGISTRATION.test(source)
   const ast = extractFileAst(source, filePath, cwd)
-  if (ast) return ast
-  return extractFileRegex(source, filePath, cwd)
+  if (ast) return { ...ast, hasNonDecoratorContributors }
+  return { ...extractFileRegex(source, filePath, cwd), hasNonDecoratorContributors }
 }
 
 /**
@@ -1424,6 +1654,9 @@ export function extractFileRegex(source: string, filePath: string, cwd: string):
     routes: extractRoutesFromSource(source, filePath, cwd, classes, new Map()),
     moduleMounts: extractModuleMounts(source),
     globPatterns: /\.module\.[mc]?[tj]sx?$/.test(filePath) ? extractGlobPatterns(source) : [],
+    // Overwritten by `extractFile`, which computes it once for both the
+    // AST and regex paths so they can't disagree.
+    hasNonDecoratorContributors: false,
   }
 }
 
@@ -1657,6 +1890,15 @@ function joinExtracts(files: string[], extracts: (FileExtract | null)[]): Omit<S
       }
     }
   }
+
+  // Per-route context-key resolution. Runs after the route list is
+  // complete because the decision is project-wide: one non-decorator
+  // registration site anywhere degrades every route.
+  resolveRouteContextKeys(
+    routes,
+    contextKeys,
+    extracts.some((e) => e?.hasNonDecoratorContributors === true),
+  )
 
   // forinda/kick-js#235 §4 — for every module file, extract its
   // `import.meta.glob([...])` patterns and flag any decorated class

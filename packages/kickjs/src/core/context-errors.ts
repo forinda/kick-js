@@ -56,9 +56,14 @@ export class MissingContributorError extends Error {
  * and the handler reads `undefined` as though it were a real value.
  *
  * `ctx.require()` converts that silent hole into a loud, named failure
- * that points at the missing contributor. Compile-time narrowing (so a
- * dropped decorator fails `tsc` instead) needs per-route context-key
- * unions out of typegen — tracked in `architecture.md` §20.14.
+ * that points at the missing contributor.
+ *
+ * A handler typed with a generated route type (`Ctx<KickRoutes…>`) also
+ * gets compile-time narrowing, so a dropped decorator fails `tsc` rather
+ * than reaching this error at all. This error remains the backstop for
+ * routes typegen couldn't prove (module/adapter/bootstrap registrations),
+ * handlers typed as plain `RequestContext`, and contributors that ran but
+ * resolved to `undefined`. See `architecture.md` §20.14.
  *
  * @example
  * ```text
