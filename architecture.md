@@ -3467,6 +3467,15 @@ extractor accepts both shapes. App-level registrations apply to every
 route, so unlike a module hook they need no attribution: their keys union
 into all of them.
 
+The entry point is matched by import source, not by name — the callee must
+be imported from `@forinda/kickjs`. Name-only matching would classify an
+adopter's own `bootstrap()` wrapper as an app-entry site and union its
+options' `contributors` into every route, asserting keys that may not
+exist. That's the same false-narrow the decorator resolution guards
+against with `declarationMatchesImport`. A namespace call
+(`kick.bootstrap(…)`) has a member-expression callee, isn't classified,
+and therefore degrades.
+
 **Still not covered:** adapter and plugin `contributors()`. Their bodies
 ship from packages typegen can't read, so the keys they add to every route
 are unknowable and their presence degrades the whole project. Under the

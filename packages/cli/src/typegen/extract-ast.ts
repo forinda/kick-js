@@ -261,6 +261,34 @@ function appliedDecoratorRefs(decorators: Node[], ctx: FileContext): DecoratorRe
   return out
 }
 
+/** Entry points taking `ApplicationOptions`, keyed by their framework module. */
+const APP_ENTRY_BINDINGS = new Set(['bootstrap', 'createWebApp', 'Application'])
+
+/**
+ * Is `name` one of the framework's app entry points, imported from the
+ * framework?
+ *
+ * The import check is load-bearing, not decoration. Matching on the bare
+ * name would classify an adopter's own local `bootstrap()` wrapper as an
+ * app-entry site and union whatever its options object called
+ * `contributors` into EVERY route's key set — asserting keys that may not
+ * exist. That is a false narrow, and under `require()` gating a false
+ * narrow means a call that should compile does, or worse one that
+ * shouldn't. Decorator bindings are matched against their declaration
+ * file for the same reason (see `declarationMatchesImport`); this is the
+ * equivalent check for call sites.
+ *
+ * An unrecognised callee simply isn't classified as app-level, so its
+ * `contributors` falls through to `hasNonDecoratorContributors` and
+ * degrades the project — the safe direction.
+ */
+function isFrameworkAppEntry(name: string, ctx: FileContext): boolean {
+  if (!APP_ENTRY_BINDINGS.has(name)) return false
+  const source = ctx.imports.get(name)?.source
+  // `@forinda/kickjs` and its subpaths (`/web` exports createWebApp).
+  return source === '@forinda/kickjs' || (source?.startsWith('@forinda/kickjs/') ?? false)
+}
+
 /**
  * Collect the contributor bindings referenced inside a module's
  * `contributors()` hook.
@@ -804,11 +832,15 @@ export function extractFileAst(source: string, filePath: string, cwd: string): F
   // EVERY route, so unlike a module hook they need no attribution: their
   // keys union into all of them.
   const appContributorNodes = new Set<Node>()
-  const APP_ENTRY_CALLS = new Set(['bootstrap', 'createWebApp'])
   walk(program, (node) => {
-    const isCall = node.type === 'CallExpression' && APP_ENTRY_CALLS.has(calleeName(node) ?? '')
-    const isNew = node.type === 'NewExpression' && identifierName(node.callee) === 'Application'
-    if (!isCall && !isNew) return
+    const callee =
+      node.type === 'CallExpression'
+        ? calleeName(node)
+        : node.type === 'NewExpression'
+          ? identifierName(node.callee)
+          : null
+    if (callee === null) return
+    if (!isFrameworkAppEntry(callee, ctx)) return
     const options = firstObjectArg(node)
     if (!options) return
     for (const prop of (options.properties as Node[] | undefined) ?? []) {

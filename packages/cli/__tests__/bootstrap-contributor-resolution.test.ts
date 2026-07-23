@@ -195,6 +195,55 @@ describe('app-level contributors — degradation', () => {
     expect(routes.map((r) => r.contextKeys)).toEqual([null])
   })
 
+  it("degrades on an adopter's own local bootstrap() wrapper", () => {
+    // Matching the callee by bare name would union this object's
+    // `contributors` into EVERY route — asserting keys that may not
+    // exist anywhere. The import source is what distinguishes the
+    // framework's entry point from a same-named local function.
+    const extract = extractFile(
+      `import { bootstrap } from './my-bootstrap'
+       import { LoadTenant } from './contributors/tenant'
+       export const app = bootstrap({ contributors: [LoadTenant.registration] })`,
+      ENTRY,
+      CWD,
+    )
+    expect(extract.appContributors).toBeNull()
+    expect(extract.hasNonDecoratorContributors).toBe(true)
+
+    expect(
+      resolveWith(`
+        import { bootstrap } from './my-bootstrap'
+        import { LoadTenant } from './contributors/tenant'
+        export const app = bootstrap({ contributors: [LoadTenant.registration] })`),
+    ).toEqual([null])
+  })
+
+  it('degrades on a locally declared Application class', () => {
+    const extract = extractFile(
+      `import { LoadTenant } from './contributors/tenant'
+       class Application { constructor(_o) {} }
+       export const app = new Application({ contributors: [LoadTenant.registration] })`,
+      ENTRY,
+      CWD,
+    )
+    expect(extract.appContributors).toBeNull()
+    expect(extract.hasNonDecoratorContributors).toBe(true)
+  })
+
+  it('degrades on a namespace-imported entry point', () => {
+    // `kick.bootstrap({...})` — a member-expression callee, which we make
+    // no attempt to resolve. Unclassified means degraded, not assumed.
+    const extract = extractFile(
+      `import * as kick from '@forinda/kickjs'
+       import { LoadTenant } from './contributors/tenant'
+       export const app = kick.bootstrap({ contributors: [LoadTenant.registration] })`,
+      ENTRY,
+      CWD,
+    )
+    expect(extract.appContributors).toBeNull()
+    expect(extract.hasNonDecoratorContributors).toBe(true)
+  })
+
   it('does not treat a contributors option on an unrelated call as app-level', () => {
     // Only the three ApplicationOptions entry points count. Anything else
     // is an unknown registration site and must degrade.
