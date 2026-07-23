@@ -230,39 +230,22 @@ describe('module contributors — degradation', () => {
     ).toEqual([null])
   })
 
-  it('still degrades the whole project for a bootstrap-level registration', () => {
-    // `bootstrap({ contributors })` has no sibling `routes`, so it is not
-    // classified as a module hook and keeps forcing degradation.
-    const controllerExtract = extractFile(CONTROLLER_SRC, CONTROLLER, CWD)
-    const bootstrapExtract = extractFile(
-      `import { bootstrap } from '@forinda/kickjs'
-       import { LoadTenant } from './contributors/tenant'
-       export const app = bootstrap({ modules: [], contributors: [LoadTenant.registration] })`,
-      resolve('/proj/src/index.ts'),
-      CWD,
-    )
-    expect(bootstrapExtract.hasNonDecoratorContributors).toBe(true)
-
-    const extracts: (FileExtract | null)[] = [controllerExtract, bootstrapExtract]
-    const routes = controllerExtract.routes
-    resolveRouteContextKeys(routes, CONTRIBUTORS, true, buildModuleContributorMap(extracts))
-    expect(routes.map((r) => r.contextKeys)).toEqual([null])
-  })
-
-  it('classifies an adapter contributors() hook as app-wide', () => {
-    // `defineAdapter({ contributors })` — no sibling `routes`.
+  it('classifies an adapter contributors() hook as unresolvable', () => {
+    // `defineAdapter({ contributors })` — no sibling `routes`, and not an
+    // app-entry call. Its body ships from a package we can't read.
     const extract = extractFile(
       `import { defineAdapter } from '@forinda/kickjs'
        import { LoadTenant } from './contributors/tenant'
        export const a = defineAdapter({
          name: 'x',
-         contributors: () => [LoadTenant.registration],
+         build: () => ({ contributors: () => [LoadTenant.registration] }),
        })`,
       resolve('/proj/src/adapters/a.ts'),
       CWD,
     )
     expect(extract.hasNonDecoratorContributors).toBe(true)
     expect(extract.moduleContributors).toBeNull()
+    expect(extract.appContributors).toBeNull()
   })
 
   it('does not flag a module file that has no contributors hook', () => {

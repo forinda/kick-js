@@ -34,7 +34,7 @@ import {
   type DiscoveredRoute,
   type DiscoveredToken,
   type DecoratorRef,
-  type ModuleContributorSet,
+  type ContributorRefSet,
   type FileExtract,
   type ModuleMount,
   type SchemaRef,
@@ -331,9 +331,15 @@ function collectContributorRefs(
  * which callers treat as unresolvable.
  */
 function returnedExpression(hook: Node): Node | null {
-  const fn = (hook.value ?? hook) as Node
-  if (!isNode(fn)) return null
-  const body = fn.body as Node | undefined
+  const value = (hook.value ?? hook) as Node
+  if (!isNode(value)) return null
+
+  // App-level `contributors: [X.registration]` is a bare array option, not
+  // a hook — `ApplicationOptions.contributors` is `ContributorRegistrations`
+  // where `AppModule.contributors` is `(): ContributorRegistrations`.
+  if (value.type === 'ArrayExpression') return value
+
+  const body = value.body as Node | undefined
   if (!isNode(body)) return null
 
   if (body.type !== 'BlockStatement') return body // concise arrow body
@@ -793,18 +799,39 @@ export function extractFileAst(source: string, filePath: string, cwd: string): F
     }
   })
 
-  let moduleContributors: ModuleContributorSet | null = null
-  if (moduleContributorNodes.size > 0) {
+  // App-level `contributors: [...]` — `bootstrap()`, `createWebApp()`, and
+  // `new Application()` all take `ApplicationOptions`. These apply to
+  // EVERY route, so unlike a module hook they need no attribution: their
+  // keys union into all of them.
+  const appContributorNodes = new Set<Node>()
+  const APP_ENTRY_CALLS = new Set(['bootstrap', 'createWebApp'])
+  walk(program, (node) => {
+    const isCall = node.type === 'CallExpression' && APP_ENTRY_CALLS.has(calleeName(node) ?? '')
+    const isNew = node.type === 'NewExpression' && identifierName(node.callee) === 'Application'
+    if (!isCall && !isNew) return
+    const options = firstObjectArg(node)
+    if (!options) return
+    for (const prop of (options.properties as Node[] | undefined) ?? []) {
+      if (prop.type === 'Property' && identifierName(prop.key) === 'contributors') {
+        appContributorNodes.add(prop)
+      }
+    }
+  })
+
+  const collectFrom = (nodes: Set<Node>): ContributorRefSet | null => {
+    if (nodes.size === 0) return null
     const refs: DecoratorRef[] = []
     let resolved = true
-    for (const node of moduleContributorNodes) {
-      const body = (node.value ?? node) as Node
-      const collected = collectContributorRefs(body, ctx)
+    for (const node of nodes) {
+      const collected = collectContributorRefs(node, ctx)
       if (!collected.resolved) resolved = false
       refs.push(...collected.refs)
     }
-    moduleContributors = { refs, resolved, filePath }
+    return { refs, resolved, filePath }
   }
+
+  const moduleContributors = collectFrom(moduleContributorNodes)
+  const appContributors = collectFrom(appContributorNodes)
 
   return {
     classes,
@@ -817,9 +844,12 @@ export function extractFileAst(source: string, filePath: string, cwd: string): F
     moduleMounts,
     globPatterns: /\.module\.[mc]?[tj]sx?$/.test(filePath) ? globPatterns : [],
     moduleContributors,
-    // Every `contributors` we could NOT tie to a module is app-wide
-    // (bootstrap / adapter / plugin) and still forces degradation.
-    hasNonDecoratorContributors: allContributorNodes.size > moduleContributorNodes.size,
+    appContributors,
+    // Whatever is left after module hooks and app-entry options is an
+    // adapter or plugin `contributors` — those ship from packages whose
+    // bodies we can't read, so they still force degradation.
+    hasNonDecoratorContributors:
+      allContributorNodes.size > moduleContributorNodes.size + appContributorNodes.size,
   }
 }
 

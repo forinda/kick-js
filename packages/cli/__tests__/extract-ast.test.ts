@@ -29,6 +29,7 @@ function stripAstOnly(extract: unknown): unknown {
     // (app-wide). The regex path therefore assumes the app-wide case,
     // which is the safe answer, not a parity violation.
     moduleContributors: _moduleContributors,
+    appContributors: _appContributors,
     hasNonDecoratorContributors: _hasNonDecoratorContributors,
     ...rest
   } = e
