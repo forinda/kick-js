@@ -3440,13 +3440,30 @@ false errors across whole projects.
 **Escape hatch:** type the handler as plain `RequestContext` instead of
 `Ctx<KickRoutes…>`. `TKeys` defaults to `string` and no narrowing applies.
 
-**Still not covered (unchanged from the prerequisites below):** module,
-adapter, and bootstrap registration sites are detected but not resolved —
-their presence degrades the whole project. Resolving them is the next
-increment. A third-party adapter shipping a contributor from inside
-`node_modules` remains invisible; under the fail-closed direction that
-surfaces as a false compile error on `require()`, which the escape hatch
-covers.
+**Module-level `contributors()` is resolved.** A module hook is attributed
+to the controllers that module mounts (the hook and the mounts live on the
+same module object, so they share a file), and its keys union into those
+routes exactly as a class-level decorator's would. Precedence
+(method > class > module) decides which registration wins for a duplicate
+key, not whether the key is present, so a union is the correct operation.
+
+The classifier is `AppModule`'s own shape rather than a heuristic:
+`contributors?()` and `routes()` are declared as siblings, so a
+`contributors` member alongside a `routes` member IS the module hook, and
+anything else — `bootstrap({ contributors })`, `defineAdapter({
+contributors })`, `definePlugin({ contributors })` — is app-wide.
+
+Module resolution degrades (rather than reporting a partial set) when the
+hook isn't a literal array of `X.registration` / `X.with(…).registration`
+entries — a spread, a helper call, a variable — or when a controller is
+mounted by two modules, where which set applied depends on which mount
+served the request.
+
+**Still not covered:** adapter and bootstrap registration sites are
+detected but not resolved — their presence degrades the whole project. A
+third-party adapter shipping a contributor from inside `node_modules`
+remains invisible; under the fail-closed direction that surfaces as a
+false compile error on `require()`, which the escape hatch covers.
 
 The original design follows, retained for the reasoning.
 
@@ -3551,13 +3568,16 @@ Sketch:
 
 #### Next increment
 
-- Resolve module-level `contributors()` and map modules to their mounted
-  controllers, so a module-scoped contributor narrows instead of degrading
-  the project.
+- ~~Resolve module-level `contributors()` and map modules to their mounted
+  controllers~~ — done; see above.
 - Resolve simple `bootstrap({ contributors: [X.registration] })` identifier
-  forms — these union into every route rather than degrading.
-- Adapter-level stays out of reach for third-party packages; the escape
-  hatch is the answer there.
+  forms — these union into every route rather than degrading. Same
+  `collectContributorRefs` machinery the module hook uses; the difference
+  is the attribution (every route, not a module's mounts).
+- Adapter-level stays out of reach for third-party packages, whose
+  `contributors()` bodies live in `node_modules`. A first-party
+  `defineAdapter` in the adopter's own `src/` could be resolved the same
+  way as bootstrap; the escape hatch is the answer for the rest.
 
 ---
 

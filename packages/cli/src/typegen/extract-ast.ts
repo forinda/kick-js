@@ -34,6 +34,7 @@ import {
   type DiscoveredRoute,
   type DiscoveredToken,
   type DecoratorRef,
+  type ModuleContributorSet,
   type FileExtract,
   type ModuleMount,
   type SchemaRef,
@@ -258,6 +259,91 @@ function appliedDecoratorRefs(decorators: Node[], ctx: FileContext): DecoratorRe
     })
   }
   return out
+}
+
+/**
+ * Collect the contributor bindings referenced inside a module's
+ * `contributors()` hook.
+ *
+ * The two supported forms are the two the guide documents:
+ *
+ * ```ts
+ * contributors: () => [LoadTenant.registration]
+ * contributors: () => [LoadTenant.with({ source: 'subdomain' }).registration]
+ * ```
+ *
+ * `resolved` is false when the hook contains anything else — a spread, a
+ * helper call, a variable holding the array. Narrowing then degrades for
+ * that module's routes rather than reporting a partial set, since a
+ * missing key produces a false compile error on `ctx.require()`.
+ */
+function collectContributorRefs(
+  hook: Node,
+  ctx: FileContext,
+): { refs: DecoratorRef[]; resolved: boolean } {
+  const unresolved = { refs: [] as DecoratorRef[], resolved: false }
+
+  // Structural, not a free walk. A walk that merely collects every
+  // `.registration` it can see reports `resolved: true` for a hook like
+  // `contributors: () => buildContributors()` — nothing to collect, so
+  // nothing looks wrong — and the route is then narrowed to a set that
+  // omits whatever the helper returns.
+  const returned = returnedExpression(hook)
+  if (!returned || returned.type !== 'ArrayExpression') return unresolved
+
+  const refs: DecoratorRef[] = []
+  for (const element of (returned.elements as unknown[] | undefined) ?? []) {
+    // A hole, a spread, or anything that isn't a plain member expression
+    // means we can't enumerate the list.
+    if (!isNode(element) || element.type !== 'MemberExpression') return unresolved
+    if (identifierName(element.property) !== 'registration') return unresolved
+
+    const object = element.object as Node
+    // `LoadTenant.registration`
+    let name = identifierName(object)
+    // `LoadTenant.with({...}).registration`
+    if (!name && isNode(object) && object.type === 'CallExpression') {
+      const callee = object.callee as Node
+      if (
+        isNode(callee) &&
+        callee.type === 'MemberExpression' &&
+        identifierName(callee.property) === 'with'
+      ) {
+        name = identifierName(callee.object)
+      }
+    }
+    if (!name) return unresolved
+
+    const imported = ctx.imports.get(name)
+    refs.push({
+      identifier: name,
+      source: imported ? imported.source : ctx.topLevelConsts.has(name) ? '' : null,
+    })
+  }
+
+  return { refs, resolved: true }
+}
+
+/**
+ * The expression a hook returns: the body of a concise arrow, or the
+ * argument of the single top-level `return` in a block body. Returns null
+ * for anything less obvious (multiple returns, conditional returns),
+ * which callers treat as unresolvable.
+ */
+function returnedExpression(hook: Node): Node | null {
+  const fn = (hook.value ?? hook) as Node
+  if (!isNode(fn)) return null
+  const body = fn.body as Node | undefined
+  if (!isNode(body)) return null
+
+  if (body.type !== 'BlockStatement') return body // concise arrow body
+
+  const statements = ((body.body as Node[] | undefined) ?? []).filter(
+    (s) => s.type === 'ReturnStatement',
+  )
+  if (statements.length !== 1) return null
+  const argument = statements[0].argument as Node | undefined
+  return isNode(argument) ? argument : null
 }
 
 /** Schema field (`body:` / `query:` / `params:`) — bare identifiers only. */
@@ -674,6 +760,52 @@ export function extractFileAst(source: string, filePath: string, cwd: string): F
     }
   })
 
+  // ── Module-level `contributors()` ──────────────────────────────────
+  //
+  // `AppModule` declares `contributors?()` and `routes()` as siblings, so
+  // a `contributors` member sitting next to a `routes` member IS the
+  // module hook. That distinction matters: `bootstrap({ contributors })`
+  // and `definePlugin({ contributors })` apply app-wide and can't be
+  // attributed to any particular route, so they still force degradation.
+  // Anything not positively classified as module-level is treated as one
+  // of those.
+  const moduleContributorNodes = new Set<Node>()
+  const allContributorNodes = new Set<Node>()
+
+  walk(program, (node) => {
+    const isProp = node.type === 'Property' && identifierName(node.key) === 'contributors'
+    const isMethod = node.type === 'MethodDefinition' && identifierName(node.key) === 'contributors'
+    if (isProp || isMethod) allContributorNodes.add(node)
+  })
+
+  /** Members of an object literal or class body, whichever this is. */
+  const membersOf = (container: Node): Node[] =>
+    ((container.properties ?? (container.body as Node | undefined)?.body) as Node[] | undefined) ??
+    []
+
+  walk(program, (node) => {
+    if (node.type !== 'ObjectExpression' && node.type !== 'ClassDeclaration') return
+    const members = membersOf(node)
+    const names = members.map((m) => identifierName(m.key))
+    if (!names.includes('routes')) return
+    for (const member of members) {
+      if (identifierName(member.key) === 'contributors') moduleContributorNodes.add(member)
+    }
+  })
+
+  let moduleContributors: ModuleContributorSet | null = null
+  if (moduleContributorNodes.size > 0) {
+    const refs: DecoratorRef[] = []
+    let resolved = true
+    for (const node of moduleContributorNodes) {
+      const body = (node.value ?? node) as Node
+      const collected = collectContributorRefs(body, ctx)
+      if (!collected.resolved) resolved = false
+      refs.push(...collected.refs)
+    }
+    moduleContributors = { refs, resolved, filePath }
+  }
+
   return {
     classes,
     tokens,
@@ -684,8 +816,10 @@ export function extractFileAst(source: string, filePath: string, cwd: string): F
     routes,
     moduleMounts,
     globPatterns: /\.module\.[mc]?[tj]sx?$/.test(filePath) ? globPatterns : [],
-    // Overwritten by `extractFile` — see the note on the regex path.
-    hasNonDecoratorContributors: false,
+    moduleContributors,
+    // Every `contributors` we could NOT tie to a module is app-wide
+    // (bootstrap / adapter / plugin) and still forces degradation.
+    hasNonDecoratorContributors: allContributorNodes.size > moduleContributorNodes.size,
   }
 }
 

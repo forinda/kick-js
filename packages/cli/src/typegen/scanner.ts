@@ -130,6 +130,20 @@ export interface DiscoveredRoute {
   contextKeys?: string[] | null
 }
 
+/** Contributor bindings a module registers via its `contributors()` hook. */
+export interface ModuleContributorSet {
+  refs: DecoratorRef[]
+  /** False when the hook contained an entry the extractor couldn't name. */
+  resolved: boolean
+  /**
+   * The module file the hook lives in. Relative import specifiers inside
+   * the hook resolve against THIS file, not against the controller's —
+   * a module and the controllers it mounts routinely sit in different
+   * directories.
+   */
+  filePath: string
+}
+
 /** A decorator as written at a call site, with its import resolved. */
 export interface DecoratorRef {
   /** The decorator's local binding name, e.g. `LoadTenant`. */
@@ -1501,15 +1515,60 @@ function declarationMatchesImport(
   return decl === normalizedTail || decl.endsWith(`/${normalizedTail}`)
 }
 
+/**
+ * Module `contributors()` resolved per controller. `'ambiguous'` marks a
+ * controller mounted by more than one module where contributors are in
+ * play — which set applies depends on which mount served the request, so
+ * neither can be asserted.
+ */
+export type ModuleContributorsByController = Map<string, ModuleContributorSet | 'ambiguous'>
+
+/**
+ * Attribute each module file's `contributors()` to the controllers that
+ * same file mounts. Mirrors how `moduleMounts` already ties a mount path
+ * to a controller — the hook and the mounts live on the same module
+ * object, so they share a file.
+ */
+export function buildModuleContributorMap(
+  extracts: (FileExtract | null)[],
+): ModuleContributorsByController {
+  const out: ModuleContributorsByController = new Map()
+  const mountedBy = new Map<string, number>()
+
+  for (const extract of extracts) {
+    if (!extract) continue
+    for (const { controller } of extract.moduleMounts) {
+      mountedBy.set(controller, (mountedBy.get(controller) ?? 0) + 1)
+    }
+  }
+
+  for (const extract of extracts) {
+    if (!extract?.moduleContributors) continue
+    for (const { controller } of extract.moduleMounts) {
+      // Mounted twice AND contributors are involved — can't attribute.
+      if ((mountedBy.get(controller) ?? 0) > 1) {
+        out.set(controller, 'ambiguous')
+        continue
+      }
+      const existing = out.get(controller)
+      out.set(controller, existing === undefined ? extract.moduleContributors : 'ambiguous')
+    }
+  }
+
+  return out
+}
+
 export function resolveRouteContextKeys(
   routes: DiscoveredRoute[],
   contextKeys: DiscoveredContextKey[],
   hasNonDecoratorContributors: boolean,
+  moduleContributors: ModuleContributorsByController = new Map(),
 ): void {
   if (hasNonDecoratorContributors) {
-    // A contributor registered at module / adapter / bootstrap level adds
-    // keys to routes that carry no decorator for them. Until those sites
-    // are resolved, no route in the project can be proven complete.
+    // An ADAPTER, PLUGIN, or BOOTSTRAP contributor applies to every route
+    // in the app and can't be attributed to any of them in particular, so
+    // nothing is provable while one exists. Module-level hooks no longer
+    // land here — they're tied to the controllers their module mounts.
     for (const route of routes) route.contextKeys = null
     return
   }
@@ -1538,31 +1597,54 @@ export function resolveRouteContextKeys(
     const keys = new Set<string>()
     let provable = true
 
+    /**
+     * Resolve one binding reference to the key it writes, or `null` when
+     * it can't be pinned down. Name AND declaration file must both match:
+     * matching on the name alone would credit a route that imports
+     * `@LoadTenant` from an unrelated package with the project's own
+     * `LoadTenant` key.
+     */
+    const resolveRef = (importerFile: string, ref: DecoratorRef): string | null => {
+      if (ref.source === null) return null
+      const matches = (byExportName.get(ref.identifier) ?? []).filter((ck) =>
+        declarationMatchesImport(importerFile, ref.source as string, ck.filePath),
+      )
+      return matches.length === 1 ? matches[0].key : null
+    }
+
     for (const dec of applied) {
       if (CONTRIBUTOR_FREE_DECORATORS.has(dec.identifier)) continue
-
-      if (dec.source === null) {
-        // The binding didn't resolve to an import or a same-file const.
+      const key = resolveRef(route.filePath, dec)
+      if (key === null) {
         provable = false
         break
       }
+      keys.add(key)
+    }
 
-      // Name AND declaration file must both match. Matching on the name
-      // alone was wrong: a route importing `@LoadTenant` from some other
-      // module (a third-party decorator that happens to share the name)
-      // would be credited with the project's unique local `LoadTenant`
-      // key, narrowing the route to a key it never actually carries.
-      const matches = (byExportName.get(dec.identifier) ?? []).filter((ck) =>
-        declarationMatchesImport(route.filePath, dec.source as string, ck.filePath),
-      )
-      if (matches.length !== 1) {
-        // Zero: not one of our context decorators (or imported from
-        // somewhere we can't resolve). More than one: ambiguous. Either
-        // way the route's key set can't be enumerated.
+    // Module-level `contributors()` — applies to every route the module
+    // mounts, so it unions into the route's key set the same way a
+    // class-level decorator does. Precedence (method > class > module)
+    // decides which registration wins for a duplicate key, not whether
+    // the key is present, so a union is the right operation here.
+    if (provable) {
+      const fromModule = moduleContributors.get(route.controller)
+      if (fromModule === 'ambiguous') {
         provable = false
-        break
+      } else if (fromModule) {
+        if (!fromModule.resolved) {
+          provable = false
+        } else {
+          for (const ref of fromModule.refs) {
+            const key = resolveRef(fromModule.filePath, ref)
+            if (key === null) {
+              provable = false
+              break
+            }
+            keys.add(key)
+          }
+        }
       }
-      keys.add(matches[0].key)
     }
 
     // Sorted so the emitted union is stable across runs — an unstable
@@ -1597,6 +1679,16 @@ export interface FileExtract {
   /** `import.meta.glob([...])` patterns (only non-empty for `*.module.ts`). */
   globPatterns: string[]
   /**
+   * Contributor bindings referenced by this file's module `contributors()`
+   * hook, or `null` when the file has no module hook. These apply to every
+   * controller the same file mounts (see `moduleMounts`).
+   *
+   * `resolved: false` means the hook exists but contains something the
+   * extractor couldn't enumerate — the mounted controllers' routes then
+   * degrade rather than narrowing to a partial set.
+   */
+  moduleContributors?: ModuleContributorSet | null
+  /**
    * This file registers context contributors somewhere other than a
    * method/class decorator — a `contributors()` module/adapter/plugin hook
    * or `bootstrap({ contributors: [...] })`.
@@ -1628,13 +1720,19 @@ const CONTRIBUTOR_REGISTRATION = /\bcontributors\s*(?::|\()/
  * the dev loop alive.
  */
 export function extractFile(source: string, filePath: string, cwd: string): FileExtract {
-  // Computed here rather than in either extractor so the AST and regex
-  // paths can't disagree about it — a false `false` would silently enable
-  // narrowing on a project that registers contributors globally.
-  const hasNonDecoratorContributors = CONTRIBUTOR_REGISTRATION.test(source)
   const ast = extractFileAst(source, filePath, cwd)
-  if (ast) return { ...ast, hasNonDecoratorContributors }
-  return { ...extractFileRegex(source, filePath, cwd), hasNonDecoratorContributors }
+  // The AST path classifies each `contributors` occurrence — module hook
+  // (attributable to the controllers that module mounts) vs adapter /
+  // plugin / bootstrap (app-wide, forces degradation) — so its own value
+  // is authoritative and must not be overwritten here.
+  if (ast) return ast
+  // The regex path can't tell the two apart, so it assumes the worse one.
+  // Erring the other way would silently enable narrowing on a project
+  // that registers contributors app-wide.
+  return {
+    ...extractFileRegex(source, filePath, cwd),
+    hasNonDecoratorContributors: CONTRIBUTOR_REGISTRATION.test(source),
+  }
 }
 
 /**
@@ -1898,6 +1996,7 @@ function joinExtracts(files: string[], extracts: (FileExtract | null)[]): Omit<S
     routes,
     contextKeys,
     extracts.some((e) => e?.hasNonDecoratorContributors === true),
+    buildModuleContributorMap(extracts),
   )
 
   // forinda/kick-js#235 §4 — for every module file, extract its

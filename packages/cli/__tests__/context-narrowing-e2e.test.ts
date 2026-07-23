@@ -144,6 +144,85 @@ export class EscapeController {
     if (tsc.exitCode !== 0) throw new Error(`tsc should pass:\n${tsc.stdout}\n${tsc.stderr}`)
   })
 
+  it('narrows from a module-level contributors() hook', () => {
+    // This case used to degrade the ENTIRE project — the scanner saw the
+    // word `contributors` and gave up everywhere. It's now attributed to
+    // the controllers the module mounts.
+    write('src/contributors/perm.ts', CONTRIBUTORS)
+    write(
+      'src/audit/audit.controller.ts',
+      `import { Controller, Get, type Ctx } from '@forinda/kickjs'
+${META}
+@Controller()
+export class AuditController {
+  @Get('/audit')
+  audit(ctx: Ctx<KickRoutes.AuditController['audit']>) {
+    return ctx.json({ tenant: ctx.require('tenant') })
+  }
+}
+`,
+    )
+    write(
+      'src/audit/audit.module.ts',
+      `import { defineModule } from '@forinda/kickjs'
+import { AuditController } from './audit.controller'
+import { LoadTenant } from '../contributors/perm'
+
+export const AuditModule = defineModule({
+  name: 'Audit',
+  build: () => ({
+    routes: () => ({ path: '/audit', controller: AuditController }),
+    contributors: () => [LoadTenant.registration],
+  }),
+})
+`,
+    )
+    typegen()
+
+    // The module hook supplies 'tenant' even though no decorator does.
+    expect(emittedRoutes()).toContain('contextKeys: "tenant"')
+
+    const tsc = runTsc(fixture)
+    if (tsc.exitCode !== 0) throw new Error(`tsc should pass:\n${tsc.stdout}\n${tsc.stderr}`)
+  })
+
+  it('still rejects a key the module hook does not supply', () => {
+    write('src/contributors/perm.ts', CONTRIBUTORS)
+    write(
+      'src/audit/audit.controller.ts',
+      `import { Controller, Get, type Ctx } from '@forinda/kickjs'
+${META}
+@Controller()
+export class AuditController {
+  @Get('/audit')
+  audit(ctx: Ctx<KickRoutes.AuditController['audit']>) {
+    return ctx.json({ perm: ctx.require('operatorPerm') })
+  }
+}
+`,
+    )
+    write(
+      'src/audit/audit.module.ts',
+      `import { defineModule } from '@forinda/kickjs'
+import { AuditController } from './audit.controller'
+import { LoadTenant } from '../contributors/perm'
+
+export const AuditModule = defineModule({
+  name: 'Audit',
+  build: () => ({
+    routes: () => ({ path: '/audit', controller: AuditController }),
+    contributors: () => [LoadTenant.registration],
+  }),
+})
+`,
+    )
+    typegen()
+
+    const tsc = runTsc(fixture)
+    expect(tsc.exitCode).not.toBe(0)
+    expect(`${tsc.stdout}${tsc.stderr}`).toContain('operatorPerm')
+  })
+
   it('degrades every route to `string` once contributors are registered globally', () => {
     // A bootstrap-level contributor populates keys on routes that carry
     // no decorator for them. Narrowing anything after that would produce
