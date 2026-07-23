@@ -223,12 +223,23 @@ export const AuditModule = defineModule({
     expect(`${tsc.stdout}${tsc.stderr}`).toContain('operatorPerm')
   })
 
-  it('degrades every route to `string` once contributors are registered globally', () => {
-    // A bootstrap-level contributor populates keys on routes that carry
-    // no decorator for them. Narrowing anything after that would produce
-    // false compile errors, so typegen stops narrowing entirely.
+  it('narrows from a bootstrap-level contributors option', () => {
+    // App-level contributors apply to every route, so they need no
+    // attribution — their keys union into all of them.
     write('src/contributors/perm.ts', CONTRIBUTORS)
-    write('src/audit/audit.controller.ts', controller({ withPermDecorator: false }))
+    write(
+      'src/audit/audit.controller.ts',
+      `import { Controller, Get, type Ctx } from '@forinda/kickjs'
+${META}
+@Controller()
+export class AuditController {
+  @Get('/audit')
+  audit(ctx: Ctx<KickRoutes.AuditController['audit']>) {
+    return ctx.json({ tenant: ctx.require('tenant') })
+  }
+}
+`,
+    )
     write(
       'src/index.ts',
       `import { bootstrap } from '@forinda/kickjs'
@@ -238,11 +249,38 @@ export const app = bootstrap({ modules: [], contributors: [LoadTenant.registrati
     )
     typegen()
 
+    expect(emittedRoutes()).toContain('contextKeys: "tenant"')
+
+    const tsc = runTsc(fixture)
+    if (tsc.exitCode !== 0) throw new Error(`tsc should pass:\n${tsc.stdout}\n${tsc.stderr}`)
+  })
+
+  it('degrades every route to `string` for an adapter-level registration', () => {
+    // An adapter's `contributors()` body ships from a package we can't
+    // read, so the keys it adds to every route are unknowable. Narrowing
+    // anything after that would produce false compile errors.
+    write('src/contributors/perm.ts', CONTRIBUTORS)
+    write('src/audit/audit.controller.ts', controller({ withPermDecorator: false }))
+    write(
+      'src/adapters/audit.adapter.ts',
+      `import { defineAdapter } from '@forinda/kickjs'
+import { LoadTenant } from '../contributors/perm'
+
+export const auditAdapter = defineAdapter({
+  name: 'audit',
+  build: () => ({
+    contributors: () => [LoadTenant.registration],
+  }),
+})
+`,
+    )
+    typegen()
+
     expect(emittedRoutes()).toContain('contextKeys: string')
     expect(emittedRoutes()).not.toContain('contextKeys: "')
 
     // The dropped decorator no longer errors — correctly, because the key
-    // could legitimately be arriving from the global registration.
+    // could legitimately be arriving from the adapter.
     const tsc = runTsc(fixture)
     if (tsc.exitCode !== 0) throw new Error(`tsc should pass:\n${tsc.stdout}\n${tsc.stderr}`)
   })

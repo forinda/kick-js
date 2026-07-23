@@ -130,16 +130,19 @@ export interface DiscoveredRoute {
   contextKeys?: string[] | null
 }
 
-/** Contributor bindings a module registers via its `contributors()` hook. */
-export interface ModuleContributorSet {
+/**
+ * Contributor bindings collected from one registration site — a module's
+ * `contributors()` hook, or an app-level `contributors: [...]` option.
+ */
+export interface ContributorRefSet {
   refs: DecoratorRef[]
   /** False when the hook contained an entry the extractor couldn't name. */
   resolved: boolean
   /**
-   * The module file the hook lives in. Relative import specifiers inside
-   * the hook resolve against THIS file, not against the controller's —
-   * a module and the controllers it mounts routinely sit in different
-   * directories.
+   * The file the registration lives in. Relative import specifiers inside
+   * it resolve against THIS file, not against the controller's — a module
+   * (or `src/index.ts`) and the controllers it affects routinely sit in
+   * different directories.
    */
   filePath: string
 }
@@ -1521,7 +1524,7 @@ function declarationMatchesImport(
  * play — which set applies depends on which mount served the request, so
  * neither can be asserted.
  */
-export type ModuleContributorsByController = Map<string, ModuleContributorSet | 'ambiguous'>
+export type ModuleContributorsByController = Map<string, ContributorRefSet | 'ambiguous'>
 
 /**
  * Attribute each module file's `contributors()` to the controllers that
@@ -1563,12 +1566,14 @@ export function resolveRouteContextKeys(
   contextKeys: DiscoveredContextKey[],
   hasNonDecoratorContributors: boolean,
   moduleContributors: ModuleContributorsByController = new Map(),
+  appContributors: ContributorRefSet[] = [],
 ): void {
   if (hasNonDecoratorContributors) {
-    // An ADAPTER, PLUGIN, or BOOTSTRAP contributor applies to every route
-    // in the app and can't be attributed to any of them in particular, so
-    // nothing is provable while one exists. Module-level hooks no longer
-    // land here — they're tied to the controllers their module mounts.
+    // An ADAPTER or PLUGIN `contributors()` — its body ships from a
+    // package we can't read, so the keys it adds to every route are
+    // unknowable and nothing is provable while one exists. Module hooks
+    // and app-entry `contributors: [...]` no longer land here; both are
+    // resolved below.
     for (const route of routes) route.contextKeys = null
     return
   }
@@ -1620,6 +1625,28 @@ export function resolveRouteContextKeys(
         break
       }
       keys.add(key)
+    }
+
+    // App-level `contributors: [...]` — applies to every route, so no
+    // attribution is needed. Resolved once outside the loop would be
+    // marginally faster; done here so a single unresolvable entry
+    // degrades routes uniformly with the other paths.
+    if (provable) {
+      for (const set of appContributors) {
+        if (!set.resolved) {
+          provable = false
+          break
+        }
+        for (const ref of set.refs) {
+          const key = resolveRef(set.filePath, ref)
+          if (key === null) {
+            provable = false
+            break
+          }
+          keys.add(key)
+        }
+        if (!provable) break
+      }
     }
 
     // Module-level `contributors()` — applies to every route the module
@@ -1687,7 +1714,14 @@ export interface FileExtract {
    * extractor couldn't enumerate — the mounted controllers' routes then
    * degrade rather than narrowing to a partial set.
    */
-  moduleContributors?: ModuleContributorSet | null
+  moduleContributors?: ContributorRefSet | null
+  /**
+   * Contributor bindings from an app-level `contributors: [...]` option —
+   * `bootstrap()`, `createWebApp()`, or `new Application()`. These apply
+   * to every route in the application, so they need no attribution; their
+   * keys union into all of them.
+   */
+  appContributors?: ContributorRefSet | null
   /**
    * This file registers context contributors somewhere other than a
    * method/class decorator — a `contributors()` module/adapter/plugin hook
@@ -1997,6 +2031,7 @@ function joinExtracts(files: string[], extracts: (FileExtract | null)[]): Omit<S
     contextKeys,
     extracts.some((e) => e?.hasNonDecoratorContributors === true),
     buildModuleContributorMap(extracts),
+    extracts.flatMap((e) => (e?.appContributors ? [e.appContributors] : [])),
   )
 
   // forinda/kick-js#235 §4 — for every module file, extract its

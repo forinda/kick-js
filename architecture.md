@@ -3459,11 +3459,35 @@ entries — a spread, a helper call, a variable — or when a controller is
 mounted by two modules, where which set applied depends on which mount
 served the request.
 
-**Still not covered:** adapter and bootstrap registration sites are
-detected but not resolved — their presence degrades the whole project. A
-third-party adapter shipping a contributor from inside `node_modules`
-remains invisible; under the fail-closed direction that surfaces as a
-false compile error on `require()`, which the escape hatch covers.
+**App-level `contributors: [...]` is resolved.** `bootstrap()`,
+`createWebApp()`, and `new Application()` all take `ApplicationOptions`,
+whose `contributors` is an ARRAY (`ContributorRegistrations`) where
+`AppModule.contributors` is a HOOK (`(): ContributorRegistrations`) — the
+extractor accepts both shapes. App-level registrations apply to every
+route, so unlike a module hook they need no attribution: their keys union
+into all of them.
+
+The entry point is matched by import source, not by name — the callee must
+be imported from `@forinda/kickjs`. Name-only matching would classify an
+adopter's own `bootstrap()` wrapper as an app-entry site and union its
+options' `contributors` into every route, asserting keys that may not
+exist. That's the same false-narrow the decorator resolution guards
+against with `declarationMatchesImport`. A namespace call
+(`kick.bootstrap(…)`) has a member-expression callee, isn't classified,
+and therefore degrades.
+
+**Still not covered:** adapter and plugin `contributors()`. Their bodies
+ship from packages typegen can't read, so the keys they add to every route
+are unknowable and their presence degrades the whole project. Under the
+fail-closed direction that surfaces as a false compile error on
+`require()`, which the escape hatch covers.
+
+A first-party `defineAdapter` in the adopter's own `src/` is in principle
+resolvable the same way, but `defineAdapter` exposes `contributors()` from
+its `build()` return rather than at the options top level, and an adapter
+imported from `node_modules` is indistinguishable at the point of use — so
+resolving the local case alone would narrow some projects and not others
+for reasons invisible in the source. Left out deliberately.
 
 The original design follows, retained for the reasoning.
 
@@ -3570,14 +3594,11 @@ Sketch:
 
 - ~~Resolve module-level `contributors()` and map modules to their mounted
   controllers~~ — done; see above.
-- Resolve simple `bootstrap({ contributors: [X.registration] })` identifier
-  forms — these union into every route rather than degrading. Same
-  `collectContributorRefs` machinery the module hook uses; the difference
-  is the attribution (every route, not a module's mounts).
-- Adapter-level stays out of reach for third-party packages, whose
-  `contributors()` bodies live in `node_modules`. A first-party
-  `defineAdapter` in the adopter's own `src/` could be resolved the same
-  way as bootstrap; the escape hatch is the answer for the rest.
+- ~~Resolve `bootstrap({ contributors: [X.registration] })`~~ — done;
+  covers `createWebApp()` and `new Application()` too.
+- Adapter and plugin `contributors()` remain out of reach — see above for
+  why the first-party case isn't worth splitting out. The escape hatch
+  (type the handler as plain `RequestContext`) is the answer there.
 
 ---
 
