@@ -303,7 +303,9 @@ That's the refactor that used to be invisible: `ctx.get('operatorPerm')!` compil
 
 ::: tip When typegen can't prove it, it doesn't narrow
 
-Narrowing applies only to routes whose full contributor set is provable from method- and class-level decorators. Typegen emits no narrowing (today's behaviour) when it sees an unrecognised decorator, an unresolvable import, an ambiguous name, or **any** contributor registered at module / adapter / bootstrap level — a global registration adds keys to routes that carry no decorator for them, so nothing in the project can be proven complete while one exists.
+Narrowing applies only to routes whose full contributor set is provable. Typegen resolves method decorators, class decorators, and a module's `contributors()` hook — the last is attributed to the controllers that module mounts, so a module-scoped contributor narrows just like a class-level one.
+
+It emits no narrowing (today's behaviour) when it sees an unrecognised decorator, an unresolvable import, an ambiguous name, a module hook it can't enumerate (a spread, a helper call), a controller mounted by two modules, or **any** contributor registered at **adapter or bootstrap** level — those apply app-wide and can't be tied to a particular route, so nothing in the project is provable while one exists.
 
 If narrowing is ever wrong for a route, type the handler as plain `RequestContext` instead of `Ctx<KickRoutes…>` — that opts out entirely.
 

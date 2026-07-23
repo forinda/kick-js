@@ -20,11 +20,23 @@ const MODULE_FILE = resolve('/proj/src/modules/users/user.module.ts')
  * parity here would mean either faking the data or dropping the signal.
  */
 function stripAstOnly(extract: unknown): unknown {
-  const e = extract as { routes?: Array<Record<string, unknown>> } | null
-  if (!e?.routes) return e
+  const e = extract as Record<string, unknown> | null
+  if (!e) return e
+  const {
+    // Both are classification the regex path structurally cannot do: it
+    // can't tell a module `contributors()` hook (attributable to the
+    // controllers that module mounts) from an adapter/bootstrap one
+    // (app-wide). The regex path therefore assumes the app-wide case,
+    // which is the safe answer, not a parity violation.
+    moduleContributors: _moduleContributors,
+    hasNonDecoratorContributors: _hasNonDecoratorContributors,
+    ...rest
+  } = e
+  const routes = rest.routes as Array<Record<string, unknown>> | undefined
+  if (!routes) return rest
   return {
-    ...e,
-    routes: e.routes.map(({ appliedDecorators: _ignored, ...rest }) => rest),
+    ...rest,
+    routes: routes.map(({ appliedDecorators: _ignored, ...route }) => route),
   }
 }
 
