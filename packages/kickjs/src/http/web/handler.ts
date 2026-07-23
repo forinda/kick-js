@@ -11,7 +11,9 @@ import { validate } from '../middleware/validate'
 import { applyUploadConfig, type RawUploadPart } from '../middleware/upload-config'
 import type { RouteEntry, RuntimeResponse } from '../runtime'
 import { WebRequestShim, WebResponseDriver } from './driver'
+import { createLogger, describeError } from '../../core/logger'
 
+const log = createLogger('WebPipeline')
 const NOOP_NEXT = (): void => {}
 const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 
@@ -32,7 +34,14 @@ export interface WebRouteHooks {
   onError?: (err: unknown, req: WebRequestShim, res: WebResponseDriver) => void | Promise<void>
 }
 
-/** Fallback error shape when no engine error handler settles the response. */
+/**
+ * Fallback error shape when no engine error handler settles the response.
+ *
+ * This path used to be completely silent: a bare
+ * `{ error: 'Internal Server Error' }` with no log line anywhere, so a
+ * failure that reached here left no trace on either side. It is a
+ * last-resort branch, which is exactly when diagnostics matter most.
+ */
 function defaultErrorResponse(err: unknown, driver: WebResponseDriver): void {
   const status =
     typeof (err as { status?: number })?.status === 'number'
@@ -40,9 +49,31 @@ function defaultErrorResponse(err: unknown, driver: WebResponseDriver): void {
       : typeof (err as { statusCode?: number })?.statusCode === 'number'
         ? (err as { statusCode: number }).statusCode
         : 500
-  const message =
-    status >= 500 ? 'Internal Server Error' : ((err as Error)?.message ?? 'Request failed')
-  driver.status(status).json({ error: message })
+
+  if (status >= 500) {
+    log.error(err, `Unhandled error in web pipeline — ${describeError(err)}`)
+    const stack = (err as Error)?.stack
+    driver.status(status).json({
+      error: 'Internal Server Error',
+      ...(isProduction()
+        ? {}
+        : {
+            message: describeError(err),
+            ...(typeof stack === 'string' ? { stack: stack.split('\n') } : {}),
+          }),
+    })
+    return
+  }
+
+  driver.status(status).json({ error: (err as Error)?.message ?? 'Request failed' })
+}
+
+/**
+ * Read per-call, not at module scope: the web entry is imported once and
+ * reused across invocations, and edge runtimes may not expose `process`.
+ */
+function isProduction(): boolean {
+  return typeof process !== 'undefined' && process.env?.NODE_ENV === 'production'
 }
 
 /**

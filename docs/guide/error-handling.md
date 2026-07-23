@@ -71,7 +71,33 @@ The handler reads `err.status` and returns the appropriate status code. If valid
 
 ### 3. Unexpected Errors
 
-Anything else falls through to a generic handler that reads `err.status` or `err.statusCode`, defaulting to **500**. For 500 errors, the original message is hidden from the client and replaced with `"Internal Server Error"`. All unexpected errors are logged with the request method and URL.
+Anything else falls through to a generic handler that reads `err.status` or `err.statusCode`, defaulting to **500**. For 500 errors the original message is hidden from the client and replaced with `"Internal Server Error"`, because it can carry table names, SQL, connection strings, or user data.
+
+The body is not bare, though. Every unexpected error response carries a **`requestId`** — the correlation handle back to the log line — and outside production it also carries the error summary and stack:
+
+::: code-group
+
+```json [development]
+{
+  "message": "Internal Server Error",
+  "requestId": "3e1fe4d4-ca15-4201-b536-c97dc7738ee4",
+  "error": "Error: findMany failed ← caused by Error: relation \"users\" does not exist",
+  "stack": ["Error: findMany failed", "    at UserRepo.list (src/users/user.repo.ts:24:11)", "..."]
+}
+```
+
+```json [production]
+{
+  "message": "Internal Server Error",
+  "requestId": "3e1fe4d4-ca15-4201-b536-c97dc7738ee4"
+}
+```
+
+:::
+
+The `error` field walks the **`cause` chain**, which is where ORM and database drivers put the reason that actually matters — a Prisma or Drizzle failure typically reports "query failed" at the top and names the missing relation three levels down.
+
+`requestId` comes from the request-scoped id, falling back to the inbound `x-request-id` header; it is omitted when neither is present. It is included in production on purpose: without it an opaque 500 can't be tied to its own log entry.
 
 ### Headers-Sent Guard
 
@@ -84,6 +110,8 @@ Errors are logged using the `@forinda/kickjs` `Logger` tagged with `ErrorHandler
 - **500+ HttpException** and **unexpected errors** are logged at `error` level with full stack traces.
 - **Headers-already-sent** conditions are logged at `warn` level.
 - **Client errors** (4xx) are not logged by default to reduce noise.
+
+The error object is passed through to the logger provider, so `console` renders the complete stack and a pino/winston adapter receives it as structured extra. If you swap in your own `LoggerProvider`, its `error(msg, ...args)` receives the error as the first vararg — forward it rather than dropping it, or you lose the stack.
 
 ## Not-Found Handler
 

@@ -13,9 +13,12 @@ const log = Logger.for('UserService')
 
 log.info('User created', { id: 'usr_123' })
 log.warn('Quota approaching')
-log.error('DB unreachable', err)
+log.error('DB unreachable', err) // message-first
+log.error(err, 'DB unreachable') // error-first (pino style) — also supported
 log.debug('Cache miss for key=%s', key)
 ```
+
+`log.error` accepts both orders. The error object is always forwarded to the provider, so the stack survives either way — `console` prints it in full, and a pino/winston adapter receives it as the first vararg. When you write a custom provider, forward `...args`; dropping them drops your stack traces.
 
 The default provider respects the `LOG_LEVEL` env var (default `info`): messages below the threshold are dropped, ordered `trace < debug < info < warn < error < fatal` (plus `silent`). So `debug`/`trace` calls — including the framework's verbose startup detail like the route table and DI wiring — stay quiet unless you run with `LOG_LEVEL=debug`. Custom providers (Pino, Winston, …) manage their own levels.
 

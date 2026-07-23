@@ -28,6 +28,9 @@ import type {
 } from '../runtime'
 import { compileWebRoute, type WebRouteHooks } from '../web/handler'
 import { WebRequestShim, WebResponseDriver } from '../web/driver'
+import { createLogger, describeError } from '../../core/logger'
+
+const log = createLogger('H3WebRuntime')
 
 const peerRequire = createRequire(import.meta.url)
 
@@ -110,8 +113,21 @@ async function runConnectTerminal(
     }
   }
   if (!driver.settled) {
-    if (err !== undefined) driver.status(500).json({ error: 'Internal Server Error' })
-    else driver.status(404).json({ error: 'Not Found' })
+    if (err !== undefined) {
+      // The configured error handler ran but didn't settle the response
+      // (or there wasn't one). Emitting a bare 500 with no log entry
+      // makes this failure invisible on both sides — log it here, since
+      // by definition nothing downstream will.
+      log.error(err, `h3-web: error handler did not settle the response — ${describeError(err)}`)
+      driver.status(500).json({
+        error: 'Internal Server Error',
+        ...(typeof process !== 'undefined' && process.env?.NODE_ENV === 'production'
+          ? {}
+          : { message: describeError(err) }),
+      })
+    } else {
+      driver.status(404).json({ error: 'Not Found' })
+    }
   }
   return driver.ready
 }

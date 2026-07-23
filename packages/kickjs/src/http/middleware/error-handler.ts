@@ -1,5 +1,11 @@
 import type { Request, Response, NextFunction } from 'express'
-import { HttpException, ProblemException, normalizeProblem, createLogger } from '../../core'
+import {
+  HttpException,
+  ProblemException,
+  normalizeProblem,
+  createLogger,
+  describeError,
+} from '../../core'
 
 const log = createLogger('ErrorHandler')
 
@@ -19,6 +25,10 @@ export function notFoundHandler() {
  * expose details in production — for client-facing field-level validation,
  * for example — should pass their own `onError` to `bootstrap()` and decide
  * the policy explicitly.
+ *
+ * Unexpected 500s carry `requestId` in every environment (the correlation
+ * handle back to the log line) and, outside production, the error summary
+ * plus stack. Production bodies stay opaque.
  *
  * {@link ProblemException} is dispatched first and emits an
  * `application/problem+json` response per RFC 9457. Plain
@@ -79,8 +89,40 @@ export function errorHandler() {
 
     // Unexpected errors — always log
     const status = err.status || err.statusCode || 500
-    log.error(err, `${req.method} ${req.originalUrl} — ${err.message || 'Unhandled error'}`)
-    const message = status === 500 ? 'Internal Server Error' : err.message || 'Error'
-    res.status(status).json({ message })
+    const requestId = (req as any).requestId ?? req.headers['x-request-id']
+    log.error(
+      err,
+      `${req.method} ${req.originalUrl} — ${describeError(err)}${
+        requestId ? ` [${requestId}]` : ''
+      }`,
+    )
+
+    if (status !== 500) {
+      return res.status(status).json({
+        message: err.message || 'Error',
+        ...(requestId ? { requestId } : {}),
+      })
+    }
+
+    // A 500 body must never carry the raw error in production — it can
+    // contain table names, SQL, connection strings, or user data. But
+    // returning a bare `{ message: 'Internal Server Error' }` in
+    // development means the one place a developer is looking tells them
+    // nothing, and the failure has to be re-diagnosed from the database.
+    //
+    // Development gets the full picture. Production gets the requestId,
+    // which is the correlation handle back to the (now stack-carrying)
+    // log line — without it an opaque 500 can't even be tied to its own
+    // log entry.
+    res.status(500).json({
+      message: 'Internal Server Error',
+      ...(requestId ? { requestId } : {}),
+      ...(isProduction
+        ? {}
+        : {
+            error: describeError(err),
+            ...(typeof err?.stack === 'string' ? { stack: err.stack.split('\n') } : {}),
+          }),
+    })
   }
 }
