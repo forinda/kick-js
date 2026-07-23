@@ -98,9 +98,10 @@ export interface ExecutionContext {
    * Read a value that must be present, throwing `MissingContextValueError`
    * when it isn't. Use for preconditions (permissions, tenant, resolved
    * subject) where `get(key)!` would silently paper over a contributor
-   * that never ran. Only `undefined` throws — `null` is a real value.
+   * that never ran. Only `undefined` throws — `null` is a real value,
+   * hence `Exclude<…, undefined>` rather than `NonNullable<…>`.
    */
-  require<K extends string>(key: K): NonNullable<MetaValue<K>>
+  require<K extends string>(key: K): Exclude<MetaValue<K>, undefined>
   /** Write a typed value into per-request metadata. */
   set<K extends string>(key: K, value: MetaValue<K>): void
   /** Unique per-request identifier (HTTP: x-request-id; WS/queue/cron: transport-defined). */

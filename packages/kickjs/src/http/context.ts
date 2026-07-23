@@ -591,14 +591,18 @@ export class RequestContext<TBody = any, TParams = any, TQuery = any> implements
    *
    * `null` counts as present; only `undefined` (or a missing entry)
    * throws. A contributor that deliberately resolves to `null` is
-   * expressing "looked, found nothing", which is a real value.
+   * expressing "looked, found nothing", which is a real value — which
+   * is why the return type is `Exclude<…, undefined>` and NOT
+   * `NonNullable<…>`. The latter would strip `null` from the type while
+   * the runtime still hands it back, so a caller would be told a value
+   * is non-null and then get `null`.
    */
-  require<K extends string>(key: K): NonNullable<MetaValue<K>> {
+  require<K extends string>(key: K): Exclude<MetaValue<K>, undefined> {
     const value = this.metadataReadOnly()?.get(key)
     if (value === undefined) {
       throw new MissingContextValueError(key, this.routeLabel())
     }
-    return value as NonNullable<MetaValue<K>>
+    return value as Exclude<MetaValue<K>, undefined>
   }
 
   /**

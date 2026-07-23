@@ -127,6 +127,24 @@ export async function generateContributor(options: GenerateContributorOptions): 
       ? `    // \`params\` is typed as ${pascal}Params (call-site params merged onto any paramDefaults).`
       : `    // \`ctx\` is a ${ctxType} — read ctx.req / ctx.headers / ctx.params (http) or ctx.get (bare).`
 
+  // The usage example has to match the transport. A `bare` contributor
+  // resolves against `ExecutionContext`, which has no `@Get` route and no
+  // `ctx.json` — showing an HTTP handler there hands the adopter a
+  // snippet that doesn't compile for the thing they just generated.
+  const usageExample =
+    type === 'http'
+      ? ` *   @${pascal}${params.length > 0 ? `({ ${params[0]?.name}: … })` : ''}
+ *   @Get('/')
+ *   handler(ctx: ${ctxType}) {
+ *     return ctx.json(ctx.require('${key}'))
+ *   }`
+      : ` *   // Any transport whose handler receives an ExecutionContext
+ *   // (WebSocket, queue, cron). Attach via that transport's decorator,
+ *   // or register the contributor at a module / bootstrap site below.
+ *   handler(ctx: ${ctxType}) {
+ *     const value = ctx.require('${key}')
+ *   }`
+
   const content = `import { ${factory} } from '@forinda/kickjs'
 import type { ${ctxType} } from '@forinda/kickjs'
 
@@ -139,11 +157,7 @@ import type { ${ctxType} } from '@forinda/kickjs'
  *
  * Apply per method/class:
  *
- *   @${pascal}${params.length > 0 ? `({ ${params[0]?.name}: … })` : ''}
- *   @Get('/')
- *   handler(ctx: ${ctxType}) {
- *     return ctx.json(ctx.require('${key}'))
- *   }
+${usageExample}
  *
  * Or register at a module / adapter / bootstrap site — those take a
  * \`ContributorRegistration\`, not the decorator itself:

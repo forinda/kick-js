@@ -52,7 +52,15 @@ export interface RunTypegenOptions {
 
 export async function runTypegen(opts: RunTypegenOptions): Promise<TypegenPluginResult[]> {
   const typesDirAbs = path.resolve(opts.cwd, TYPES_DIR)
-  await mkdir(typesDirAbs, { recursive: true })
+  // `--check` is read-only: it must not touch the working tree at all.
+  // Creating the output directory here would leave a clean checkout dirty
+  // just by running the gate. Everything the check path does is reads
+  // (`existsSync` + `readFile`), which work fine when the dir is absent —
+  // a missing directory simply means every plugin drifts, which is the
+  // correct verdict for a repo with no generated types committed.
+  if (!opts.check) {
+    await mkdir(typesDirAbs, { recursive: true })
+  }
 
   // Per-pass memoization of scanProject. Cache keyed by a stable
   // serialization of the resolved scan options so two plugins asking

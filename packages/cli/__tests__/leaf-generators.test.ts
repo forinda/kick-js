@@ -149,6 +149,23 @@ describe('kick g <leaf>', () => {
       expect(content).not.toContain('region: 0')
     })
 
+    it('keeps the usage example transport-appropriate for --type bare', () => {
+      // ExecutionContext has no @Get route and no ctx.json — an HTTP
+      // example here hands the adopter a snippet that does not compile
+      // against the contributor they just generated.
+      runCli(fixture, ['g', 'contributor', 'audit-log', '--type', 'bare'])
+      const bare = readFileSync(join(fixture, 'src/contributors/audit-log.contributor.ts'), 'utf-8')
+      expect(bare).not.toContain('ctx.json(')
+      expect(bare).not.toContain("@Get('/')")
+      expect(bare).toContain("ctx.require('auditLog')")
+
+      // The http form still demonstrates the HTTP surface.
+      runCli(fixture, ['g', 'contributor', 'tenant'])
+      const http = readFileSync(join(fixture, 'src/contributors/tenant.contributor.ts'), 'utf-8')
+      expect(http).toContain("@Get('/')")
+      expect(http).toContain("ctx.json(ctx.require('tenant'))")
+    })
+
     it('points at .registration (not the decorator) for non-decorator sites', () => {
       // Passing the decorator itself to `contributors: []` is the most
       // common wiring mistake; the scaffold header should model the fix.

@@ -6,7 +6,7 @@
 
 Close the gap between what context decorators guarantee and what the type system knows, and fix two checks that reported the wrong thing.
 
-**`ctx.require(key)`** — reads a value a contributor is expected to have produced and throws `MissingContextValueError` (naming the key and route) when it hasn't. `ctx.get(key)` returns `T | undefined` for every key, so consuming a guaranteed value meant `ctx.get(key)!` — an assertion that compiles whether or not the producing decorator is applied to the route. On an authorization value that fails open and silently. `require()` returns `NonNullable<MetaValue<K>>`, so the `!` goes away too. `null` still counts as present; only `undefined` throws.
+**`ctx.require(key)`** — reads a value a contributor is expected to have produced and throws `MissingContextValueError` (naming the key and route) when it hasn't. `ctx.get(key)` returns `T | undefined` for every key, so consuming a guaranteed value meant `ctx.get(key)!` — an assertion that compiles whether or not the producing decorator is applied to the route. On an authorization value that fails open and silently. `require()` returns `Exclude<MetaValue<K>, undefined>`, so the `!` goes away too. `null` still counts as present — only `undefined` throws, which is why the return type excludes `undefined` rather than using `NonNullable`.
 
 Compile-time narrowing (making a dropped decorator a `tsc` error) needs per-route context-key unions from typegen and is deferred — the design is recorded in `architecture.md` §20.14.
 

@@ -268,7 +268,7 @@ Drop the decorator during a refactor and nothing complains. `tsc` is satisfied, 
 const perm = ctx.require('operatorPerm')
 ```
 
-It returns `NonNullable<MetaValue<K>>` — no `!`, no `| undefined` — and throws `MissingContextValueError` when the value isn't there. The message names the key and the route, and points at the two causes: the producing contributor isn't applied to that route, or it ran and resolved to `undefined`.
+It returns `Exclude<MetaValue<K>, undefined>` — no `!`, no `| undefined` — and throws `MissingContextValueError` when the value isn't there. The message names the key and the route, and points at the two causes: the producing contributor isn't applied to that route, or it ran and resolved to `undefined`.
 
 **Use `require` for preconditions, `get` for optional extras:**
 
@@ -1592,9 +1592,20 @@ const OperatorPerm = defineHttpContextDecorator.withParams<PermParams>()({
   resolve: (ctx, _deps, { action }) => checkPermission(ctx, action),
 })
 
-@OperatorPerm                       // ✗ TS error — `action` missing
-@OperatorPerm({})                   // ✗ TS error — `action` missing
-@OperatorPerm({ action: 'audit:read' })   // ✓
+@Controller()
+class AuditController {
+  @OperatorPerm // ✗ TS error — `action` missing
+  @Get('/a')
+  a(ctx: RequestContext) {}
+
+  @OperatorPerm({}) // ✗ TS error — `action` missing
+  @Get('/b')
+  b(ctx: RequestContext) {}
+
+  @OperatorPerm({ action: 'audit:read' }) // ✓
+  @Get('/c')
+  c(ctx: RequestContext) {}
+}
 ```
 
 For such a decorator the bare `@Foo` form, the zero-arg `@Foo()` form, and the `.registration` accessor **do not exist** — none of them can supply the value. Use `Foo.with({ action: '…' }).registration` at module / adapter / bootstrap registration sites.

@@ -1,5 +1,5 @@
 import 'reflect-metadata'
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, expectTypeOf } from 'vitest'
 import {
   MissingContextValueError,
   RequestContext,
@@ -70,6 +70,17 @@ describe('RequestContext.require', () => {
       const ctx = new RequestContext(mockReq(), ...mockResNext())
       expect(ctx.require('lookup')).toBeNull()
     })
+  })
+
+  it('keeps null in the return type — Exclude<…, undefined>, not NonNullable', () => {
+    // The runtime hands `null` back, so a `NonNullable` return type would
+    // be a lie: callers would be told the value is non-null and then get
+    // null. Only `undefined` is excluded, because only `undefined` throws.
+    type Meta = { nullable: { id: string } | null; plain: string }
+    expectTypeOf<Exclude<Meta['nullable'], undefined>>().toEqualTypeOf<{ id: string } | null>()
+    expectTypeOf<Exclude<Meta['plain'], undefined>>().toEqualTypeOf<string>()
+    // The distinction this pins down:
+    expectTypeOf<NonNullable<Meta['nullable']>>().toEqualTypeOf<{ id: string }>()
   })
 
   it('throws for a key explicitly set to undefined', () => {

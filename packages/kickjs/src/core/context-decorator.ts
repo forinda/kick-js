@@ -406,9 +406,15 @@ export interface ContextDecoratorWithDefaults<
  *   resolve: (ctx, _deps, { action }) => check(ctx, action),
  * })
  *
- * @OperatorPerm                       // ✗ compile error — `action` missing
- * @OperatorPerm({})                   // ✗ compile error — `action` missing
- * @OperatorPerm({ action: 'read' })   // ✓
+ * class Ops {
+ *   @OperatorPerm                     // ✗ compile error — `action` missing
+ *   @Get('/a')
+ *   a(ctx: RequestContext) {}
+ *
+ *   @OperatorPerm({ action: 'read' }) // ✓
+ *   @Get('/b')
+ *   b(ctx: RequestContext) {}
+ * }
  * ```
  *
  * If you want the bare form back, give `action` a default in

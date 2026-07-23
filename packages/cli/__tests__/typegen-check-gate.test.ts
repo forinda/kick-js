@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { mkdtemp, rm } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import path from 'node:path'
+import path, { join } from 'node:path'
 
 // The real builtins module transitively imports every command (init.ts
 // reads package.json relative to dist/), which can't load from src under
@@ -109,6 +110,20 @@ describe('runAllPluginTypegens — --check gate', () => {
       check: true,
     })
     expect(results.every((r) => r.status === 'unchanged')).toBe(true)
+  })
+
+  it('leaves the working tree untouched — creates no output directory', async () => {
+    // A CI gate that dirties a clean checkout just by running is not a
+    // gate. Nothing on the --check path writes, including the mkdir that
+    // the write path needs.
+    await expect(
+      runAllPluginTypegens({
+        cwd: dir,
+        config: configWith([echo('export type A = 1')]),
+        check: true,
+      }),
+    ).rejects.toBeInstanceOf(TypegenDriftError)
+    expect(existsSync(join(dir, '.kickjs'))).toBe(false)
   })
 
   it('fails the gate when a plugin cannot generate at all', async () => {
