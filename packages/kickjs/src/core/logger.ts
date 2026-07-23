@@ -59,7 +59,14 @@ const LEVEL_RANK: Record<string, number> = {
  * takes effect. An unrecognised value falls back to `info`.
  */
 function thresholdRank(): number {
-  const level = (process.env.LOG_LEVEL ?? 'info').toLowerCase()
+  // `process` is guarded because this module is reachable from the
+  // edge-safe web pipeline (`@forinda/kickjs/web`), where strict runtimes
+  // expose no `process` global at all. The colour probe below already
+  // guarded; this one did not, so merely importing the logger could throw
+  // on such a runtime.
+  const level = (
+    (typeof process !== 'undefined' ? process.env?.LOG_LEVEL : undefined) ?? 'info'
+  ).toLowerCase()
   return LEVEL_RANK[level] ?? LEVEL_RANK.info
 }
 
@@ -233,13 +240,38 @@ export class Logger {
     this.provider.warn(msg, ...args)
   }
 
-  error(msgOrObj: any, msg?: string, ...args: any[]) {
-    if (typeof msgOrObj === 'string') {
-      this.provider.error(msgOrObj)
-    } else if (msg) {
-      this.provider.error(msg, ...args)
+  /** Pino-style error-first form — `log.error(err, 'what failed')`. */
+  error(err: unknown, msg: string, ...args: any[]): void
+  /** Message-first form — `log.error('what failed', detail)`. */
+  error(msg: string, ...args: any[]): void
+  /** Error alone — `log.error(err)`. */
+  error(err: unknown): void
+  error(msgOrErr: any, ...rest: any[]): void {
+    if (typeof msgOrErr === 'string') {
+      // Message-first. `rest` used to be dropped on the floor, so
+      // `log.error('save failed', { id })` logged only the string.
+      this.provider.error(msgOrErr, ...rest)
+      return
+    }
+
+    // Error-first (the framework's own idiom at ~16 call sites). The
+    // error object used to be discarded entirely — `provider.error(msg)`
+    // with the error nowhere in the call — so every `log.error(err, msg)`
+    // in the codebase logged a bare sentence with NO stack, no error
+    // name, and no `cause` chain. That is what made an unexpected 500
+    // undiagnosable from the logs: you got the message and nothing else.
+    //
+    // The error is now forwarded as a trailing argument, which is what
+    // the msg-first `LoggerProvider` contract can carry. `console.error`
+    // renders the full stack from it; a pino/winston adapter receives it
+    // as structured extra.
+    const [maybeMsg, ...extra] = rest
+    if (typeof maybeMsg === 'string') {
+      this.provider.error(maybeMsg, msgOrErr, ...extra)
     } else {
-      this.provider.error(String(msgOrObj))
+      // No message supplied — use the error's own summary as the line so
+      // the log stays readable, and still pass the object for the stack.
+      this.provider.error(describeError(msgOrErr), msgOrErr, ...rest)
     }
   }
 
@@ -255,6 +287,45 @@ export class Logger {
   fatal(msg: string, ...args: any[]) {
     if (this.provider.fatal) this.provider.fatal(msg, ...args)
     else this.provider.error(msg, ...args)
+  }
+}
+
+/**
+ * One-line summary of an unknown thrown value, including the error name
+ * and — when present — the `cause` chain. ORM and driver errors routinely
+ * wrap the useful detail in `cause`, so dropping it is how a 500 ends up
+ * saying nothing actionable.
+ *
+ * Depth-capped and cycle-guarded: `cause` is attacker-influenced in some
+ * stacks and self-referential chains do occur.
+ */
+export function describeError(err: unknown, maxDepth = 4): string {
+  const parts: string[] = []
+  const seen = new Set<unknown>()
+  let current: unknown = err
+  for (let depth = 0; current !== undefined && current !== null && depth < maxDepth; depth++) {
+    if (seen.has(current)) {
+      parts.push('[circular cause]')
+      break
+    }
+    seen.add(current)
+    if (current instanceof Error) {
+      parts.push(current.name ? `${current.name}: ${current.message}` : current.message)
+      current = (current as { cause?: unknown }).cause
+    } else {
+      parts.push(typeof current === 'string' ? current : safeStringify(current))
+      break
+    }
+  }
+  return parts.length > 0 ? parts.join(' ← caused by ') : 'Unknown error'
+}
+
+/** `JSON.stringify` that never throws on circular / exotic values. */
+function safeStringify(value: unknown): string {
+  try {
+    return JSON.stringify(value) ?? String(value)
+  } catch {
+    return String(value)
   }
 }
 

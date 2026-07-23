@@ -109,7 +109,13 @@ export {
 } from './cache'
 
 // Logger
-export { Logger, createLogger, ConsoleLoggerProvider, type LoggerProvider } from './logger'
+export {
+  Logger,
+  createLogger,
+  describeError,
+  ConsoleLoggerProvider,
+  type LoggerProvider,
+} from './logger'
 
 // Disposables — framework-owned resource teardown drained by Application.shutdown()
 export { registerDisposable, disposeAll, type Disposable } from './disposables'

@@ -151,7 +151,13 @@ for (const rt of RUNTIMES) {
       await app.setup()
 
       const res = await request(app.handle.bind(app)).get('/api/v1/e/boom').expect(500)
-      expect(res.body).toEqual({ message: 'Internal Server Error' })
+      // The cross-runtime invariant is the status + the opaque client-facing
+      // message. Outside production the body also carries `error`, `stack`,
+      // and `requestId` — asserted in error-diagnostics.test.ts rather than
+      // pinned here, so this stays a conformance check and not a snapshot of
+      // the dev payload.
+      expect(res.body).toMatchObject({ message: 'Internal Server Error' })
+      expect(res.body.requestId).toBeTruthy()
     })
 
     it('returns 404 for an unmatched route', async () => {
