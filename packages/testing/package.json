@@ -42,15 +42,15 @@
   },
   "devDependencies": {
     "@forinda/kickjs": "workspace:*",
-    "@swc/core": "^1.15.43",
+    "@swc/core": "^1.15.46",
     "@types/express": "^5.0.6",
-    "@types/node": "^26.1.0",
-    "@types/supertest": "^7.2.0",
+    "@types/node": "^26.1.1",
+    "@types/supertest": "^7.2.1",
     "express": "^5.1.0",
     "reflect-metadata": "^0.2.2",
     "supertest": "^7.2.2",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.9"
+    "vitest": "^4.1.10"
   },
   "publishConfig": {
     "access": "public"
