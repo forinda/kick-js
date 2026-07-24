@@ -1,5 +1,96 @@
 # @forinda/kickjs-cli
 
+## 6.8.0
+
+### Minor Changes
+
+- [#483](https://github.com/forinda/kick-js/pull/483) [`65ba513`](https://github.com/forinda/kick-js/commit/65ba51330706f058e50d3ce6b2fa9f85e8971518) Thanks [@forinda](https://github.com/forinda)! - Resolve app-level `contributors: [...]` for per-route context-key narrowing.
+
+  A `bootstrap({ contributors })` registration previously degraded the whole project — narrowing switched off everywhere. It's now resolved and its keys union into every route, since app-level contributors apply to all of them and need no attribution. `createWebApp()` and `new Application()` take the same `ApplicationOptions` and are handled identically.
+
+  ```ts
+  export const app = bootstrap({
+    modules,
+    contributors: [LoadTenant.registration],
+  });
+  ```
+
+  Every route in the app now narrows to include `'tenant'`, and `ctx.require('somethingElse')` is a compile error.
+
+  Note the shape difference this had to accommodate: `ApplicationOptions.contributors` is an **array** (`ContributorRegistrations`) where `AppModule.contributors` is a **hook** (`(): ContributorRegistrations`). The extractor accepts both.
+
+  The entry point must be **imported from `@forinda/kickjs`** to be recognised. If you wrap bootstrap in your own function (`import { bootstrap } from './my-bootstrap'`) or call it off a namespace import (`kick.bootstrap({...})`), typegen won't classify it as an app-entry site and the project degrades to unnarrowed — the safe direction. Matching on the bare name instead would union whatever a same-named local function called `contributors` into every route's key set, asserting keys that may not exist.
+
+  **Adapter and plugin `contributors()` still degrade the project.** Their bodies ship from packages typegen can't read, so the keys they add to every route are unknowable. A first-party `defineAdapter` in the adopter's own `src/` is in principle resolvable, but `defineAdapter` exposes `contributors()` from its `build()` return rather than the options top level, and an adapter imported from `node_modules` is indistinguishable at the point of use — resolving only the local case would narrow some projects and not others for reasons invisible in the source. Left out deliberately.
+
+  With this, four of the five registration sites resolve: method decorator, class decorator, module hook, and bootstrap option. Degradation still applies for an unrecognised decorator, an unresolvable import, an ambiguous name, a registration list that isn't a literal array of `X.registration` / `X.with(…).registration` entries, and a controller mounted by two modules.
+
+- [#482](https://github.com/forinda/kick-js/pull/482) [`421017c`](https://github.com/forinda/kick-js/commit/421017ce4f7911aba639551f1fbe2d502c2ee284) Thanks [@forinda](https://github.com/forinda)! - Resolve module-level `contributors()` for per-route context-key narrowing.
+
+  A module's `contributors()` hook previously degraded the **entire project**: the scanner detected the word `contributors` anywhere and disabled narrowing everywhere, so any project using module-scoped contributors got no benefit from the feature at all. The hook is now attributed to the controllers that module mounts — it and the mounts live on the same module object, so they share a file — and its keys union into those routes exactly as a class-level decorator's would.
+
+  ```ts
+  export const AuditModule = defineModule({
+    name: "Audit",
+    build: () => ({
+      routes: () => ({ path: "/audit", controller: AuditController }),
+      contributors: () => [LoadTenant.registration],
+    }),
+  });
+  ```
+
+  Routes on `AuditController` now narrow to `'tenant'` with no decorator on the controller at all — and `ctx.require('somethingElse')` on them is a compile error.
+
+  Both registration forms are resolved (`X.registration` and `X.with({…}).registration`), in both the `defineModule` object form and the `class X implements AppModule` form.
+
+  **Adapter and bootstrap registrations still degrade the project.** They apply app-wide and can't be attributed to any particular route. The classifier isn't a heuristic: `AppModule` declares `contributors?()` and `routes()` as siblings, so a `contributors` member alongside a `routes` member is the module hook, and `bootstrap({ contributors })` / `defineAdapter({ contributors })` / `definePlugin({ contributors })` — which have no sibling `routes` — are not.
+
+  Module resolution itself degrades rather than reporting a partial set when the hook isn't a literal array of registration entries (a spread, a helper call, a variable holding the array), or when a controller is mounted by two modules — there, which contributor set applied depends on which mount served the request.
+
+- [#481](https://github.com/forinda/kick-js/pull/481) [`5667c4b`](https://github.com/forinda/kick-js/commit/5667c4b1f5e95c16a414c9262a9b420bdfb0b27b) Thanks [@forinda](https://github.com/forinda)! - Per-route context-key narrowing — a dropped contributor decorator is now a compile error.
+
+  `kick typegen` emits a `contextKeys` union per route from the context decorators applied at method and class level, and `ctx.require()` is narrowed to it. Removing a decorator removes the key:
+
+  ```text
+  error TS2345: Argument of type '"operatorPerm"' is not assignable to parameter of type '"tenant"'.
+  ```
+
+  That refactor was previously invisible to `tsc` — `ctx.get('operatorPerm')!` compiled whether or not the decorator was applied, and the handler read `undefined` into an authorization check.
+
+  **`ctx.get()` is deliberately not narrowed.** The original design (`architecture.md` §20.14) proposed dropping `| undefined` from `get()` for keys typegen believes are present. That was not built, because the two options fail in opposite directions: narrowing `get()` wrongly produces a value the types promise and the runtime doesn't deliver — silent, fails open, the exact failure this line of work removed. Narrowing `require()` wrongly produces a compile error — loud, fails closed, and covered by an escape hatch.
+
+  **Narrowing applies only where completeness is provable.** A route gets a key union only when every decorator on it is either a known contributor-free framework decorator or a resolvable context decorator. Typegen emits `string` (no narrowing, today's behaviour) for an unrecognised decorator — adopter decorators can bundle contributors of their own — an unresolvable import, an ambiguous binding name, a route recovered by the regex fallback, or the presence of **any** contributor registered at module / adapter / bootstrap level, since a global registration adds keys to routes that carry no decorator for them. `never` is distinct from `string`: it means the scanner proved the route carries no contributors, so `require()` on it really is a mistake.
+
+  **Escape hatch:** type the handler as plain `RequestContext` rather than `Ctx<KickRoutes…>` — `TKeys` defaults to `string` and no narrowing applies.
+
+  API changes, both source-compatible: `RequestContext` gains a fourth type parameter `TKeys extends string = string`, and `ExecutionContext` becomes `ExecutionContext<TKeys extends string = string>`. Existing annotations keep working — the defaults reproduce today's behaviour exactly. `RouteShape` gains an optional `contextKeys` member.
+
+  Module, adapter, and bootstrap registration sites are detected but not yet resolved; resolving them (so a module-scoped contributor narrows instead of degrading the project) is the next increment.
+
+### Patch Changes
+
+- [#478](https://github.com/forinda/kick-js/pull/478) [`139c5dd`](https://github.com/forinda/kick-js/commit/139c5dd94346ca2e65d32ad5b2e366cbeae7e6c6) Thanks [@forinda](https://github.com/forinda)! - Close the gap between what context decorators guarantee and what the type system knows, and fix two checks that reported the wrong thing.
+
+  **`ctx.require(key)`** — reads a value a contributor is expected to have produced and throws `MissingContextValueError` (naming the key and route) when it hasn't. `ctx.get(key)` returns `T | undefined` for every key, so consuming a guaranteed value meant `ctx.get(key)!` — an assertion that compiles whether or not the producing decorator is applied to the route. On an authorization value that fails open and silently. `require()` returns `Exclude<MetaValue<K>, undefined>`, so the `!` goes away too. `null` still counts as present — only `undefined` throws, which is why the return type excludes `undefined` rather than using `NonNullable`.
+
+  Compile-time narrowing (making a dropped decorator a `tsc` error) needs per-route context-key unions from typegen and is deferred — the design is recorded in `architecture.md` §20.14.
+
+  **Required params are enforced at the call site.** A required field of `P` with no `paramDefaults` entry must now be supplied wherever the decorator is applied; the bare `@Foo` form, `@Foo()`, and `.registration` are compile errors for such a decorator. Previously `paramDefaults` was the only way to satisfy a required field, which pushed adopters into inventing placeholder defaults (`action: 'settings:read'` on a permission contributor every call site overrides) — and a route that then forgot the argument silently gated on the placeholder. The new optional `requiredParams: ['action']` enforces the same rule at runtime for plain-JS and `as any` call sites.
+
+  **`kick typegen --check` actually fails now.** The wrapper that keeps a transiently-broken plugin from crashing `kick dev` was also catching the deliberate drift error, downgrading it to a `console.warn("… skipped")` and returning an empty result set — so the command exited 0 on drift, for every plugin, since the flag was introduced. Drift now propagates as `TypegenDriftError` listing every stale file in one pass, and a plugin that fails to generate under `--check` fails the gate instead of passing on "keeping previous output".
+
+  **`kick doctor` no longer false-alarms on extended tsconfigs.** The loader followed exactly one level of `extends`, only when it was a string, resolved relative paths against the project root rather than the extending file, looked for bare specifiers only in the project's own `node_modules`, and parsed parent configs as strict JSON. Any one of those made a project that sets `experimentalDecorators` / `emitDecoratorMetadata` in a shared base config get told it was missing them — and lean per-package configs in a monorepo hit all of them. Now: chains of any depth, array `extends` (TS 5.0+), `node_modules` lookup walking up the tree (pnpm hoisting), directory specifiers resolving to `tsconfig.json`, and JSONC parsing (comments and trailing commas) throughout. A tsconfig that exists but can't be parsed now reports as unreadable rather than as missing.
+
+  **Agent docs and the contributor scaffold teach the full surface.** `kick g agents` output covered context contributors thinly enough that agents routinely missed the call-site rules: the `.registration` / `.with({...}).registration` forms that module, adapter, and bootstrap sites actually take (passing the decorator itself is the most common wiring bug), when to reach for `.withParams<P>()`, and how to read a value back. Both the `AGENTS.md` section and the `kickjs-context-contributor` skill now carry the five registration sites, the params rules, the read-back table, and `ctx.get(key)!` / `contributors: [Decorator]` as named red flags.
+
+  `kick g contributor --params` no longer scaffolds placeholder `paramDefaults` (`action: ''`). It emits `requiredParams` instead, so the generated contributor demands its params at every call site — the scaffold was previously teaching the exact pattern that made forgotten arguments silent.
+
+  `ExecutionContext` gains a `require` member. Hand-written implementations of that interface need to add it; `RequestContext` and the `@forinda/kickjs-testing` fake contexts already do.
+
+- Updated dependencies [[`139c5dd`](https://github.com/forinda/kick-js/commit/139c5dd94346ca2e65d32ad5b2e366cbeae7e6c6), [`1ebcd00`](https://github.com/forinda/kick-js/commit/1ebcd000d84d8514b06cf1633ceccbbff4678c85), [`5667c4b`](https://github.com/forinda/kick-js/commit/5667c4b1f5e95c16a414c9262a9b420bdfb0b27b)]:
+  - @forinda/kickjs@6.5.0
+  - @forinda/kickjs-db@7.1.1
+
 ## 6.7.0
 
 ### Minor Changes

@@ -1,5 +1,61 @@
 # @forinda/kickjs
 
+## 6.5.0
+
+### Minor Changes
+
+- [#478](https://github.com/forinda/kick-js/pull/478) [`139c5dd`](https://github.com/forinda/kick-js/commit/139c5dd94346ca2e65d32ad5b2e366cbeae7e6c6) Thanks [@forinda](https://github.com/forinda)! - Close the gap between what context decorators guarantee and what the type system knows, and fix two checks that reported the wrong thing.
+
+  **`ctx.require(key)`** — reads a value a contributor is expected to have produced and throws `MissingContextValueError` (naming the key and route) when it hasn't. `ctx.get(key)` returns `T | undefined` for every key, so consuming a guaranteed value meant `ctx.get(key)!` — an assertion that compiles whether or not the producing decorator is applied to the route. On an authorization value that fails open and silently. `require()` returns `Exclude<MetaValue<K>, undefined>`, so the `!` goes away too. `null` still counts as present — only `undefined` throws, which is why the return type excludes `undefined` rather than using `NonNullable`.
+
+  Compile-time narrowing (making a dropped decorator a `tsc` error) needs per-route context-key unions from typegen and is deferred — the design is recorded in `architecture.md` §20.14.
+
+  **Required params are enforced at the call site.** A required field of `P` with no `paramDefaults` entry must now be supplied wherever the decorator is applied; the bare `@Foo` form, `@Foo()`, and `.registration` are compile errors for such a decorator. Previously `paramDefaults` was the only way to satisfy a required field, which pushed adopters into inventing placeholder defaults (`action: 'settings:read'` on a permission contributor every call site overrides) — and a route that then forgot the argument silently gated on the placeholder. The new optional `requiredParams: ['action']` enforces the same rule at runtime for plain-JS and `as any` call sites.
+
+  **`kick typegen --check` actually fails now.** The wrapper that keeps a transiently-broken plugin from crashing `kick dev` was also catching the deliberate drift error, downgrading it to a `console.warn("… skipped")` and returning an empty result set — so the command exited 0 on drift, for every plugin, since the flag was introduced. Drift now propagates as `TypegenDriftError` listing every stale file in one pass, and a plugin that fails to generate under `--check` fails the gate instead of passing on "keeping previous output".
+
+  **`kick doctor` no longer false-alarms on extended tsconfigs.** The loader followed exactly one level of `extends`, only when it was a string, resolved relative paths against the project root rather than the extending file, looked for bare specifiers only in the project's own `node_modules`, and parsed parent configs as strict JSON. Any one of those made a project that sets `experimentalDecorators` / `emitDecoratorMetadata` in a shared base config get told it was missing them — and lean per-package configs in a monorepo hit all of them. Now: chains of any depth, array `extends` (TS 5.0+), `node_modules` lookup walking up the tree (pnpm hoisting), directory specifiers resolving to `tsconfig.json`, and JSONC parsing (comments and trailing commas) throughout. A tsconfig that exists but can't be parsed now reports as unreadable rather than as missing.
+
+  **Agent docs and the contributor scaffold teach the full surface.** `kick g agents` output covered context contributors thinly enough that agents routinely missed the call-site rules: the `.registration` / `.with({...}).registration` forms that module, adapter, and bootstrap sites actually take (passing the decorator itself is the most common wiring bug), when to reach for `.withParams<P>()`, and how to read a value back. Both the `AGENTS.md` section and the `kickjs-context-contributor` skill now carry the five registration sites, the params rules, the read-back table, and `ctx.get(key)!` / `contributors: [Decorator]` as named red flags.
+
+  `kick g contributor --params` no longer scaffolds placeholder `paramDefaults` (`action: ''`). It emits `requiredParams` instead, so the generated contributor demands its params at every call site — the scaffold was previously teaching the exact pattern that made forgotten arguments silent.
+
+  `ExecutionContext` gains a `require` member. Hand-written implementations of that interface need to add it; `RequestContext` and the `@forinda/kickjs-testing` fake contexts already do.
+
+- [#480](https://github.com/forinda/kick-js/pull/480) [`1ebcd00`](https://github.com/forinda/kick-js/commit/1ebcd000d84d8514b06cf1633ceccbbff4678c85) Thanks [@forinda](https://github.com/forinda)! - Make an unexpected 500 diagnosable. Previously it told you nothing on either side at once — an adopter hitting a missing-table error had to go to the database to find out what happened.
+
+  **`Logger.error(err, msg)` discarded the error object.** The error-first form is the framework's own idiom at ~16 call sites (`error-handler`, `application`, `bootstrap`, `request-scope`, plus the `ai` and `mcp` adapters), and every one of them was logging a bare sentence: the implementation called `provider.error(msg)` with the error appearing nowhere in the call, so **no stack, no error name, no `cause` chain** ever reached the log. The error is now forwarded to the provider as a trailing argument — `console` renders the full stack, and pino/winston adapters receive it as structured extra. The message-first form (`log.error('save failed', { id })`) was dropping its trailing args for the same reason; also fixed.
+
+  **Unexpected 500 responses carry a correlation id and, outside production, real detail.** The body was a bare `{ message: 'Internal Server Error' }` in every environment. It now always includes `requestId` (from the request-scoped id, falling back to the inbound `x-request-id` header, omitted when neither exists) — without it an opaque 500 can't be tied to its own log line. Outside production the body also carries `error` (an error summary that walks the `cause` chain, which is where ORM and driver errors hide the reason that matters) and `stack`. Production bodies stay opaque: no message, no stack.
+
+  **The web/edge error fallbacks were completely silent.** `web/handler.ts` and the h3 v2 runtime emitted `{ error: 'Internal Server Error' }` with no log call at all, so a failure reaching those last-resort branches left no trace anywhere. Both now log the error and include the summary outside production.
+
+  **New `describeError(err)` export** — one-line error summary including the error name and `cause` chain, depth-capped and cycle-guarded. Used by the error paths above; exported because adopters writing a custom `onError` want the same thing.
+
+  **Edge-safety fix:** `logger.ts` read `process.env.LOG_LEVEL` unguarded, so importing it from a strict edge runtime with no `process` global threw. The colour probe next to it was already guarded; this one wasn't. It matters now that the edge-safe web pipeline imports the logger.
+
+  The cross-runtime conformance test for thrown errors now asserts the shared invariant (500 + opaque message + a `requestId`) rather than deep-equalling the old bare body, and passes on express, fastify, and h3 alike.
+
+- [#481](https://github.com/forinda/kick-js/pull/481) [`5667c4b`](https://github.com/forinda/kick-js/commit/5667c4b1f5e95c16a414c9262a9b420bdfb0b27b) Thanks [@forinda](https://github.com/forinda)! - Per-route context-key narrowing — a dropped contributor decorator is now a compile error.
+
+  `kick typegen` emits a `contextKeys` union per route from the context decorators applied at method and class level, and `ctx.require()` is narrowed to it. Removing a decorator removes the key:
+
+  ```text
+  error TS2345: Argument of type '"operatorPerm"' is not assignable to parameter of type '"tenant"'.
+  ```
+
+  That refactor was previously invisible to `tsc` — `ctx.get('operatorPerm')!` compiled whether or not the decorator was applied, and the handler read `undefined` into an authorization check.
+
+  **`ctx.get()` is deliberately not narrowed.** The original design (`architecture.md` §20.14) proposed dropping `| undefined` from `get()` for keys typegen believes are present. That was not built, because the two options fail in opposite directions: narrowing `get()` wrongly produces a value the types promise and the runtime doesn't deliver — silent, fails open, the exact failure this line of work removed. Narrowing `require()` wrongly produces a compile error — loud, fails closed, and covered by an escape hatch.
+
+  **Narrowing applies only where completeness is provable.** A route gets a key union only when every decorator on it is either a known contributor-free framework decorator or a resolvable context decorator. Typegen emits `string` (no narrowing, today's behaviour) for an unrecognised decorator — adopter decorators can bundle contributors of their own — an unresolvable import, an ambiguous binding name, a route recovered by the regex fallback, or the presence of **any** contributor registered at module / adapter / bootstrap level, since a global registration adds keys to routes that carry no decorator for them. `never` is distinct from `string`: it means the scanner proved the route carries no contributors, so `require()` on it really is a mistake.
+
+  **Escape hatch:** type the handler as plain `RequestContext` rather than `Ctx<KickRoutes…>` — `TKeys` defaults to `string` and no narrowing applies.
+
+  API changes, both source-compatible: `RequestContext` gains a fourth type parameter `TKeys extends string = string`, and `ExecutionContext` becomes `ExecutionContext<TKeys extends string = string>`. Existing annotations keep working — the defaults reproduce today's behaviour exactly. `RouteShape` gains an optional `contextKeys` member.
+
+  Module, adapter, and bootstrap registration sites are detected but not yet resolved; resolving them (so a module-scoped contributor narrows instead of degrading the project) is the next increment.
+
 ## 6.4.0
 
 ### Minor Changes
