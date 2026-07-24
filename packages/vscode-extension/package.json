@@ -360,10 +360,10 @@
   },
   "devDependencies": {
     "@types/vscode": "^1.125.0",
-    "@types/node": "^26.1.0",
+    "@types/node": "^26.1.1",
     "sharp": "^0.35.3",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.9"
+    "vitest": "^4.1.10"
   },
   "private": true
 }
