@@ -46,7 +46,7 @@
     "build": "tsdown",
     "dev": "tsdown --watch",
     "test": "vitest run",
-    "typecheck": "tsgo --noEmit",
+    "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist .wireit"
   },
   "dependencies": {},
@@ -61,7 +61,7 @@
   "devDependencies": {
     "@forinda/kickjs": "workspace:*",
     "@types/node": "^26.1.0",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "vitest": "^4.1.9"
   },
   "publishConfig": {

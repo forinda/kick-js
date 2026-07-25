@@ -132,7 +132,7 @@ export function generatePackageJson(
         'unplugin-swc': '^1.5.9',
         vite: '^8.0.3',
         vitest: '^4.1.2',
-        typescript: '^6.0.3',
+        typescript: '^7.0.2',
         prettier: '^3.8.1',
       },
     },

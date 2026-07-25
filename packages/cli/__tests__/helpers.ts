@@ -201,18 +201,18 @@ export function runCli(cwd: string, args: string[]): CliResult {
 }
 
 /**
- * Run `tsgo --noEmit` against a fixture project. Resolves the
- * workspace `tsgo` (@typescript/native-preview) so we don't need it
- * installed in every fixture.
+ * Run `tsc --noEmit` against a fixture project. Resolves the workspace
+ * `tsc` so we don't need TypeScript installed in every fixture.
  *
- * Was `tsc` — swapped to tsgo because per-fixture `tsc --noEmit`
- * shell-outs dominated CLI test wall time. tsgo is ~3× faster on the
- * same fixtures and produces identical diagnostics for the configs we
- * generate.
+ * This used to shell out to `tsgo` (@typescript/native-preview), because
+ * the JS `tsc` dominated CLI test wall time. TypeScript 7 makes `tsc`
+ * itself the native Go binary, so the preview package — and the split —
+ * is no longer needed. `tsgo` stays in the probe list so the helper keeps
+ * working in a tree that still has the preview package installed.
  */
 export function runTsc(cwd: string): CliResult {
-  // On Windows the runnable shim is `tsgo.CMD` / `tsgo.cmd`, not the
-  // extensionless `tsgo` (a POSIX shell script). spawnSync can't launch
+  // On Windows the runnable shim is `tsc.CMD` / `tsc.cmd`, not the
+  // extensionless `tsc` (a POSIX shell script). spawnSync can't launch
   // the latter on win32 — it returns status -1 with empty output, which
   // surfaces as a bogus "tsc failed" carrying no diagnostics. Probe the
   // platform-correct names so the helper works on every host.
@@ -220,13 +220,15 @@ export function runTsc(cwd: string): CliResult {
     resolve(WORKSPACE_ROOT, 'node_modules', '.pnpm', 'node_modules', '.bin'),
     resolve(WORKSPACE_ROOT, 'node_modules', '.bin'),
   ]
-  const names =
-    process.platform === 'win32' ? ['tsgo.CMD', 'tsgo.cmd', 'tsgo.exe', 'tsgo'] : ['tsgo']
+  const bases = ['tsc', 'tsgo']
+  const names = bases.flatMap((b) =>
+    process.platform === 'win32' ? [`${b}.CMD`, `${b}.cmd`, `${b}.exe`, b] : [b],
+  )
   const candidates = dirs.flatMap((d) => names.map((n) => resolve(d, n)))
   const tsc = candidates.find((p) => existsSync(p))
   if (!tsc) {
     throw new Error(
-      `tsgo binary not found in workspace node_modules (tried: ${candidates.join(', ')})`,
+      `No TypeScript binary found in workspace node_modules (tried: ${candidates.join(', ')})`,
     )
   }
   const result: SpawnSyncReturns<string> = spawnSync(tsc, ['--noEmit', '-p', cwd], {

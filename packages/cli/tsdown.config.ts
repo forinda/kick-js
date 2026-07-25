@@ -12,7 +12,7 @@ export default defineConfig([
     format: ['esm'],
     platform: 'node',
     minify: { compress: true, mangle: true },
-    dts: { tsgo: true },
+    dts: true,
     external: [
       '@forinda/kickjs-ai',
       '@forinda/kickjs-db',

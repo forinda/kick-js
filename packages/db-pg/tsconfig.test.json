@@ -2,7 +2,6 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "noEmit": true,
-    "baseUrl": ".",
     "types": [],
     "paths": {
       "@forinda/kickjs": ["../kickjs/src/index.ts"],
@@ -10,8 +9,8 @@
       "@forinda/kickjs-db/pg": ["../db/src/dsl/columns/pg.ts"],
       "@forinda/kickjs-db": ["../db/src/index.ts"],
       "@forinda/kickjs-db/*": ["../db/src/*"],
-      "@forinda/kickjs-db-pg": ["src/index.ts"],
-      "@forinda/kickjs-db-pg/*": ["src/*"]
+      "@forinda/kickjs-db-pg": ["./src/index.ts"],
+      "@forinda/kickjs-db-pg/*": ["./src/*"]
     }
   },
   "include": ["src", "__tests__"]

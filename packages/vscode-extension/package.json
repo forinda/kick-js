@@ -362,7 +362,7 @@
     "@types/vscode": "^1.125.0",
     "@types/node": "^26.1.0",
     "sharp": "^0.35.3",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "vitest": "^4.1.9"
   },
   "private": true
