@@ -43,6 +43,7 @@ packages/               # Workspace packages (@forinda/kickjs* on npm unless pri
   db/ db-pg/ db-mysql/ db-sqlite/  # kick/db code-first database family
   testing/              # createTestApp, createTestModule, plugin harness
   devtools/ devtools-kit/          # /_debug dashboard + adapter tab kit
+  grpc/                 # Connect RPC — gRPC-Web/Connect on the shared HTTP port
   ai/ mcp/ graphql/ ws/ queue/ cron/ mailer/ otel/
   notifications/ multi-tenant/ auth/ prisma/ drizzle/
   cli-kit/ lint/ vscode-extension/
