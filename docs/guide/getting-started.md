@@ -4,7 +4,8 @@
 
 ## Prerequisites
 
-- Node.js 20+
+- Node.js 20+ to **run** an app (`@forinda/kickjs` itself)
+- Node.js `^22.18.0 || >=24.11.0` to use the **dev server** (`kick dev`) — `@forinda/kickjs-vite` depends on Babel 8, which is ESM-only and sets that floor. Node 20 reached end-of-life in 2026, so upgrading is recommended regardless.
 - pnpm (recommended) or npm
 
 ## Release channels
