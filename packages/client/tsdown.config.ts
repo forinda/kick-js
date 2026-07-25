@@ -10,7 +10,7 @@ export default defineConfig({
   // node APIs, zero dependencies, fetch/URL/Headers only.
   platform: 'neutral',
   minify: { compress: true, mangle: false },
-  dts: { tsgo: true },
+  dts: true,
   external: [],
   banner: { js: createBanner(pkg.name, pkg.version) },
 })

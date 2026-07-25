@@ -84,8 +84,8 @@ docs/                   # VitePress documentation site
 1. Create `packages/<name>/` with `package.json`, `tsconfig.json`, `tsdown.config.ts`, `vitest.config.ts` (copy `packages/schema/` as the template — tsdown is the repo standard; the old vite-library recipe is retired)
 2. Name it `@forinda/kickjs-<name>`, start at `0.0.0` — changesets will set the first published version on the next release PR
 3. Use `workspace:*` for internal deps
-4. tsdown config: `format: ['esm']`, `dts: { tsgo: true }`, all runtime deps in `external`
-5. Scripts: `"build": "tsdown"`, `"typecheck": "tsgo --noEmit"` — and CHECK the exports map matches what tsdown emits (`dist/index.js` + `dist/index.d.ts`; a mismatch shipped an unresolvable package once)
+4. tsdown config: `format: ['esm']`, `dts: true`, all runtime deps in `external`
+5. Scripts: `"build": "tsdown"`, `"typecheck": "tsc --noEmit"` — and CHECK the exports map matches what tsdown emits (`dist/index.js` + `dist/index.d.ts`; a mismatch shipped an unresolvable package once)
 
 ### Adding an Adapter
 

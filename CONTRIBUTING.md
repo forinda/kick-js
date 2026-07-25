@@ -126,7 +126,7 @@ pnpm test:e2e           # Run end-to-end tests
 # Code Quality
 pnpm lint               # oxlint over packages/
 pnpm lint:fix           # oxlint --fix
-pnpm typecheck          # tsgo/tsc across packages (turbo)
+pnpm typecheck          # tsc (TypeScript 7, native) across packages (turbo)
 pnpm format             # oxfmt --write (repo standard; no ESLint/Prettier)
 ```
 

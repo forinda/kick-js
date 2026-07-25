@@ -57,7 +57,7 @@
     "build": "tsdown",
     "dev": "tsdown --watch",
     "test": "vitest run --typecheck --passWithNoTests",
-    "typecheck": "tsgo --noEmit",
+    "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist .wireit"
   },
   "dependencies": {
@@ -98,7 +98,7 @@
     "kysely": "^0.29.3",
     "mysql2": "^3.11.0",
     "pg": "^8.22.0",
-    "typescript": "^6.0.3"
+    "typescript": "^7.0.2"
   },
   "publishConfig": {
     "access": "public"

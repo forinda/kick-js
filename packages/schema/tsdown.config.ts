@@ -13,7 +13,7 @@ export default defineConfig({
   format: ['esm'],
   platform: 'node',
   minify: { compress: true, mangle: false },
-  dts: { tsgo: true },
+  dts: true,
   external: ['valibot', '@valibot/to-json-schema', 'yup', 'zod', /^node:/],
   banner: { js: createBanner(pkg.name, pkg.version) },
 })

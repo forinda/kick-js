@@ -27,14 +27,14 @@
     "build": "tsdown",
     "dev": "tsdown --watch",
     "test": "vitest run --passWithNoTests",
-    "typecheck": "tsgo --noEmit",
+    "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist .wireit"
   },
   "devDependencies": {
     "@forinda/kickjs": "workspace:*",
     "h3-v2": "npm:h3@2.0.1-rc.22",
     "reflect-metadata": "^0.2.2",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "vitest": "^4.1.8"
   },
   "publishConfig": {
