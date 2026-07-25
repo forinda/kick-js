@@ -775,8 +775,21 @@ export class RequestContext<
     return this._response.status(body.status).json(body)
   }
 
+  /**
+   * Send an HTML response.
+   *
+   * Passes the full MIME type rather than the `'html'` shorthand. The
+   * shorthand is an Express affordance — `res.type()` runs it through a MIME
+   * lookup — but the Fastify and h3 drivers forward the string to their own
+   * `type()` / `setHeader()` verbatim, so `'html'` reached the wire as a
+   * malformed `Content-Type: html` on those engines. Fastify 5.10 started
+   * normalising that invalid value to `text/plain`, which is what surfaced it.
+   *
+   * Express produces `text/html; charset=utf-8` for `.type('html')`, so
+   * spelling it out here is byte-identical there and correct everywhere else.
+   */
   html(content: string, status = 200) {
-    return this._response.status(status).type('html').send(content)
+    return this._response.status(status).type('text/html; charset=utf-8').send(content)
   }
 
   download(buffer: Buffer, filename: string, contentType = 'application/octet-stream') {

@@ -82,7 +82,10 @@ for (const rt of RUNTIMES) {
 
       const res = await request(app.handle.bind(app)).get('/api/v1/h/page').expect(200)
       expect(res.text).toContain('<h1>hi</h1>')
-      expect(res.headers['content-type']).toMatch(/html/)
+      // Anchored on `text/html`, not a bare /html/. The loose form matched the
+      // malformed `Content-Type: html` that Fastify and h3 emitted for years,
+      // so the bug stayed green on every engine but Express.
+      expect(res.headers['content-type']).toMatch(/^text\/html\b/)
     })
 
     it('runs a global connect middleware', async () => {
