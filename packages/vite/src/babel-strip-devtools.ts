@@ -35,7 +35,10 @@
  * Spec: docs/db/m3-plan.md §M3.C.
  */
 
-import babel from '@babel/core'
+// Namespace import, not a default import: Babel 8 ships as native ESM and
+// `@babel/core` exposes only named exports — `import babel from '@babel/core'`
+// fails at load with "does not provide an export named 'default'".
+import * as babel from '@babel/core'
 
 const DEVTOOLS_KIT_RE = /^@forinda\/kickjs-devtools-kit(\/.*)?$/
 const DEVTOOLS_EVENTS_RE = /(^|\/)devtools-events(\.[a-z]+)?$/
@@ -98,7 +101,7 @@ export function stripDevtoolsCode(
       retainLines: true,
     },
     plugins: [
-      function devtoolsStripPlugin(): babel.PluginObj {
+      function devtoolsStripPlugin(): babel.PluginObject {
         return {
           name: 'kickjs-strip-devtools',
           visitor: {
