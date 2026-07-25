@@ -269,9 +269,7 @@ end up with a doubled frame:
 import { bootstrap, requestScopeMiddleware } from '@forinda/kickjs'
 
 bootstrap({
-  modules: [
-    /* ... */
-  ],
+  modules: [/* ... */],
   middlewares: [
     tracing(),
     requestScopeMiddleware(), // mount here instead of the default position

@@ -232,9 +232,9 @@ is once per chain method; there is no observable JS difference.
 ```ts
 // packages/db/src/client/schema-types.ts (M1)
 export type SchemaToKysely<S> = {
-  [K in keyof S as S[K] extends TableDecl<Record<string, ColumnBuilder>>
-    ? S[K]['__name']
-    : never]: S[K] extends TableDecl<infer C>
+  [
+    K in keyof S as S[K] extends TableDecl<Record<string, ColumnBuilder>> ? S[K]['__name'] : never
+  ]: S[K] extends TableDecl<infer C>
     ? { [Col in keyof C]: unknown } // ← every column collapses to unknown
     : never
 }
@@ -274,9 +274,9 @@ type ColumnTSType<C> =
     : never
 
 export type SchemaToKysely<S> = {
-  [K in keyof S as S[K] extends TableDecl<Record<string, ColumnBuilder>>
-    ? S[K]['__name']
-    : never]: S[K] extends TableDecl<infer C> ? { [Col in keyof C]: ColumnTSType<C[Col]> } : never
+  [
+    K in keyof S as S[K] extends TableDecl<Record<string, ColumnBuilder>> ? S[K]['__name'] : never
+  ]: S[K] extends TableDecl<infer C> ? { [Col in keyof C]: ColumnTSType<C[Col]> } : never
 }
 ```
 
@@ -434,9 +434,7 @@ For two adopter pain points, codegen helps:
          isActive: boolean
          signupCount: number | null
        }
-       workspaces: {
-         /* … */
-       }
+       workspaces: {/* … */}
      }
    }
    ```
@@ -577,12 +575,8 @@ interface DB {
     isActive: boolean
     createdAt: Date | string
   }
-  workspaces: {
-    /* … */
-  }
-  tasks: {
-    /* … */
-  }
+  workspaces: {/* … */}
+  tasks: {/* … */}
 }
 
 export const dbClient: KickDbClient<DB> = createDbClient<typeof schema, DB>({

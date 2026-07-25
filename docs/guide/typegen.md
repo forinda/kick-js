@@ -435,9 +435,7 @@ export const AuthAdapter = defineAdapter({
   name: 'AuthAdapter',
   dependsOn: ['TenantAdapter'], // ✓ — autocompletes from the registry
   // dependsOn: ['Tennant'],      // ✗ — TS error: not assignable to keyof KickJsPluginRegistry
-  build: (config) => ({
-    /* ... */
-  }),
+  build: (config) => ({/* ... */}),
 })
 ```
 

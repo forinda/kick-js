@@ -517,9 +517,9 @@ type ColumnTSType<C> = C extends GeneratedBrand
     : never
 
 export type SchemaToKysely<S> = {
-  [K in keyof S as S[K] extends TableDecl<Record<string, ColumnBuilder>>
-    ? S[K]['__name']
-    : never]: S[K] extends TableDecl<infer C> ? { [Col in keyof C]: ColumnTSType<C[Col]> } : never
+  [
+    K in keyof S as S[K] extends TableDecl<Record<string, ColumnBuilder>> ? S[K]['__name'] : never
+  ]: S[K] extends TableDecl<infer C> ? { [Col in keyof C]: ColumnTSType<C[Col]> } : never
 }
 ```
 
@@ -1711,9 +1711,7 @@ function stripDevtoolsImports(): babel.PluginObj {
 import { devtoolsStrip } from './devtools-strip'
 
 export function kickjs(opts: KickjsOptions = {}): Plugin[] {
-  const plugins: Plugin[] = [
-    /* existing plugins… */
-  ]
+  const plugins: Plugin[] = [/* existing plugins… */]
   if (opts.devtools?.stripOnBuild ?? true) {
     plugins.push(devtoolsStrip(opts.devtools))
   }

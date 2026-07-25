@@ -36,7 +36,7 @@ Files: `pg.ts`, `alter-type.ts`.
 Files: `compile-shared.ts`, `compile-pg.ts`, `compile-mysql.ts`, `compile-sqlite.ts`.
 
 - The relational query layer is a thin wrapper over Kysely's `selectFrom` / `where` / `orderBy` / `limit` / `with` plus per-dialect JSON-aggregation helpers (`jsonArrayFrom`, `jsonObjectFrom`).
-- **`db.selectFrom(\`${table} as ${alias}\`)`** in `compile-shared.ts:98`: `table` is the table name from the schema (code-time). `alias` is `${table}_${depth}` derived from the same. Kysely's selectFrom parses the `name as alias` shorthand and quotes both sides.
+- **`db.selectFrom(\`${table} as ${alias}\`)`** in `compile-shared.ts:98`: `table`is the table name from the schema (code-time).`alias`is`${table}_${depth}`derived from the same. Kysely's selectFrom parses the`name as alias` shorthand and quotes both sides.
 - **`where: (proxy, eb) => ...`** delegates to Kysely's `ExpressionBuilder`. Any value the adopter passes (`eb('col', '=', value)`, `eb('col', 'in', userArray)`, etc.) compiles to a parameterised `ValueNode` → `$N` / `?` / `@N` placeholder + bound parameter at execution. No string interpolation of values.
 - **Operator strings** in `eb` (`'='`, `'<'`, `'is null'`, etc.) come from a typed union; Kysely rejects unrecognised operators at compile time.
 

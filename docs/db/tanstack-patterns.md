@@ -451,8 +451,7 @@ TanStack DB:
 
 ```ts
 type StringCollationConfig =
-  | { stringSort?: 'lexical' }
-  | { stringSort?: 'locale'; locale?: string; localeOptions?: object }
+  { stringSort?: 'lexical' } | { stringSort?: 'locale'; locale?: string; localeOptions?: object }
 ```
 
 `locale` only valid when `stringSort === 'locale'`. Compile-time check, no runtime

@@ -34,9 +34,7 @@ interface MyAdapterConfig {
 
 export const MyAdapter = defineAdapter<MyAdapterConfig>({
   name: 'MyAdapter',
-  defaults: {
-    /* config defaults */
-  },
+  defaults: {/* config defaults */},
   build: (config, { name }) => ({
     /** Express middleware entries to insert at named phases. */
     middleware(): AdapterMiddleware[] {
@@ -346,9 +344,7 @@ export const RedisAdapter = defineAdapter<{ url: string; ttl?: number }>({
   name: 'RedisAdapter',
   version: '1.2.0',
   defaults: { ttl: 60_000 },
-  build: (config) => ({
-    /* ... */
-  }),
+  build: (config) => ({/* ... */}),
 })
 
 console.log(RedisAdapter.definition.name) // 'RedisAdapter'

@@ -28,9 +28,7 @@ The runtime `enabled` flag above keeps the DevTools adapter inert in prod, but t
 /// <reference types="@forinda/kickjs-vite/globals" />
 import { bootstrap } from '@forinda/kickjs'
 
-const adapters = [
-  /* prod adapters… */
-]
+const adapters = [/* prod adapters… */]
 
 if (__KICKJS_DEVTOOLS__) {
   const { DevToolsAdapter } = await import('@forinda/kickjs-devtools')

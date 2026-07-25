@@ -236,9 +236,7 @@ export const RequestLogger = defineAdapter({
   build: () => ({
     dependsOn: ['OtelAdapter'], // topo-sorted; typo-checked against the plugin registry
     middleware(): AdapterMiddleware[] {
-      return [
-        /* express middleware */
-      ]
+      return [/* express middleware */]
     },
     beforeStart({ container }: AdapterContext) {
       /* warm caches, open pools */
@@ -265,15 +263,11 @@ import { defineCliPlugin } from '@forinda/kickjs-cli'
 
 export const myPlugin = defineCliPlugin({
   name: 'my-org-cli', // required — stable id, used for de-dup + conflict errors
-  commands: [
-    /* declarative shell commands */
-  ],
+  commands: [/* declarative shell commands */],
   register(program, ctx) {
     /* programmatic Commander commands */
   },
-  generators: [
-    /* `kick g <name>` scaffolders */
-  ],
+  generators: [/* `kick g <name>` scaffolders */],
   // typegens: [ … ]  // ← `kick typegen` plugins — see Type Generation
 })
 

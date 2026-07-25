@@ -84,9 +84,7 @@ viteChildCompiler = await vite.createServer({
     preTransformRequests: false,
     hmr: false, // No HMR for the analyzer
   },
-  plugins: [
-    /* excludes react-router plugin to avoid infinite loop */
-  ],
+  plugins: [/* excludes react-router plugin to avoid infinite loop */],
 })
 ```
 
@@ -345,9 +343,7 @@ import { UserModule } from './src/modules/users/user.module'
 import { TaskModule } from './src/modules/tasks/task.module'
 
 export const modules = [UserModule, TaskModule]
-export const config = {
-  /* kick.config.ts contents */
-}
+export const config = {/* kick.config.ts contents */}
 ```
 
 ```typescript
@@ -2086,13 +2082,7 @@ interface Registration {
   factory?: () => any
   // NEW fields:
   kind:
-    | 'service'
-    | 'controller'
-    | 'repository'
-    | 'component'
-    | 'injectable'
-    | 'factory'
-    | 'instance'
+    'service' | 'controller' | 'repository' | 'component' | 'injectable' | 'factory' | 'instance'
   resolveCount: number // How many times resolve() was called
   lastResolvedAt?: number // Timestamp of last resolution
   firstResolvedAt?: number // Timestamp of first resolution
