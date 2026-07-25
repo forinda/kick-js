@@ -41,9 +41,7 @@ db.query.users.findMany({
   offset: 0,
 })
 
-db.query.users.findFirst({
-  /* same options */
-})
+db.query.users.findFirst({/* same options */})
 db.query.users.findUnique({ where: (_u, eb) => eb('id', '=', '...') })
 ```
 

@@ -185,9 +185,7 @@ import express from 'express'
 import { bootstrap, helmet, cors, requestId, requestLogger, csrf, rateLimit } from '@forinda/kickjs'
 
 bootstrap({
-  modules: [
-    /* your modules */
-  ],
+  modules: [/* your modules */],
   middleware: [
     helmet(), // Security headers (X-Frame-Options, HSTS, etc.)
     cors({ origin: ['https://app.example.com'] }), // CORS with spec-correct behavior

@@ -53,9 +53,7 @@ export default defineConfig({
     trailingComma: 'all',
     indent: 2,
   },
-  commands: [
-    /* ... */
-  ],
+  commands: [/* ... */],
 })
 ```
 

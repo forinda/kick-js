@@ -3106,9 +3106,9 @@ import type { TableDecl } from '../dsl/table'
  * site if they need precise types pre-M2.
  */
 export type SchemaToKysely<S> = {
-  [K in keyof S as S[K] extends TableDecl<Record<string, ColumnBuilder>>
-    ? S[K]['__name']
-    : never]: S[K] extends TableDecl<infer C> ? { [Col in keyof C]: unknown } : never
+  [
+    K in keyof S as S[K] extends TableDecl<Record<string, ColumnBuilder>> ? S[K]['__name'] : never
+  ]: S[K] extends TableDecl<infer C> ? { [Col in keyof C]: unknown } : never
 }
 ```
 

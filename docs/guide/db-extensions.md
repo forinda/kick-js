@@ -264,9 +264,7 @@ Register the extended client under `DB_PRIMARY` instead of the bare one:
 ```ts
 // src/index.ts
 const dbX = dbClient.$extends({
-  model: {
-    /* ... */
-  },
+  model: {/* ... */},
 })
 
 Container.getInstance().registerFactory(DB_PRIMARY, () => dbX)

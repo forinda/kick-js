@@ -462,9 +462,7 @@ const LoadTenant = defineHttpContextDecorator({
     log.error(err, 'tenant load failed')
     return { id: 'unknown', name: 'Unknown' } // ← runner does ctx.set('tenant', this)
   },
-  resolve: (ctx) => ({
-    /* … */
-  }),
+  resolve: (ctx) => ({/* … */}),
 })
 ```
 
@@ -567,9 +565,7 @@ defineAugmentation('ContextMeta', {
 
 const LoadTenant = defineHttpContextDecorator({
   key: 'tenant',
-  resolve: (ctx) => ({
-    /* fetch and return the tenant */
-  }),
+  resolve: (ctx) => ({/* fetch and return the tenant */}),
 })
 
 export const TenantAdapter = defineAdapter({

@@ -32,11 +32,7 @@ import { analyticsPlugin } from './plugins/analytics.plugin'
 
 export const app = await bootstrap({
   modules,
-  plugins: [
-    analyticsPlugin({
-      /* options */
-    }),
-  ],
+  plugins: [analyticsPlugin({/* options */})],
 })
 ```
 
@@ -290,9 +286,7 @@ export const AuthPlugin = definePlugin<{ secret: string; expiresIn?: string }>({
   name: 'AuthPlugin',
   version: '1.2.0',
   defaults: { expiresIn: '1h' },
-  build: (config) => ({
-    /* ... */
-  }),
+  build: (config) => ({/* ... */}),
 })
 
 console.log(AuthPlugin.definition.name) // 'AuthPlugin'
@@ -334,9 +328,7 @@ const RequestLogger = definePlugin({
   build: () => ({
     dependsOn: ['OtelPlugin'],
     middleware() {
-      return [
-        /* reads otel trace id */
-      ]
+      return [/* reads otel trace id */]
     },
   }),
 })

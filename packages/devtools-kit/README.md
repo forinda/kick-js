@@ -43,9 +43,7 @@ let pendingJobs = 0
 export const QueueAdapter = defineAdapter({
   name: 'QueueAdapter',
   build: (config) => ({
-    middleware: () => [
-      /* ... */
-    ],
+    middleware: () => [/* ... */],
     introspect: (): IntrospectionSnapshot => ({
       protocolVersion: PROTOCOL_VERSION,
       name: 'QueueAdapter',
