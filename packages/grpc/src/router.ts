@@ -2,6 +2,7 @@ import {
   KickError,
   METADATA,
   buildPipeline,
+  createLogger,
   getClassMeta,
   getClassMetaOrUndefined,
   getMethodMeta,
@@ -11,11 +12,13 @@ import {
   type SourcedRegistration,
 } from '@forinda/kickjs'
 import type { DescMethod, DescService } from '@bufbuild/protobuf'
-import type { ConnectRouter } from '@connectrpc/connect'
+import { Code, type ConnectRouter } from '@connectrpc/connect'
 import { GRPC_METADATA, grpcServiceRegistry, type GrpcServiceEntry } from './interfaces'
 import type { GrpcAdapterOptions, GrpcHandlerDefinition } from './interfaces'
 import { GrpcContext } from './grpc-context'
 import { toConnectError } from './errors'
+
+const log = createLogger('GrpcAdapter')
 
 /**
  * Read every `@GrpcService` class out of the registry and pair it with its
@@ -174,7 +177,19 @@ export function buildConnectRoutes(
             service: entry.descriptor.typeName,
             method: desc.name,
           })
-          throw toConnectError(mapped ?? err)
+          const connectErr = toConnectError(mapped ?? err)
+
+          // `Code.Internal` responses ship an opaque message (see
+          // INTERNAL_ERROR_MESSAGE), so without this the real failure would
+          // vanish entirely. Log it here — server-side, where the details are
+          // safe — and let the client keep the redacted version. Deliberate
+          // faults (ConnectError / HttpException) already describe themselves
+          // to the caller and don't need an error-level log.
+          if (connectErr.code === Code.Internal) {
+            log.error({ err: connectErr.cause ?? err, rpc: key }, `RPC failed: ${key}`)
+          }
+
+          throw connectErr
         }
 
         const invoke = async (req: unknown, ctx: GrpcContext): Promise<unknown> => {

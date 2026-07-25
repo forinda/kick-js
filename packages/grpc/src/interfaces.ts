@@ -74,8 +74,14 @@ export interface GrpcAdapterOptions {
   connect?: boolean
   /**
    * Context Contributors applied to every RPC on every service, at the
-   * `'adapter'` precedence level — they lose to `@GrpcService`-class and
-   * per-method contributors, matching the HTTP precedence order.
+   * `'adapter'` level of the framework's **method > class > module > adapter
+   * > global** chain — they lose to `@GrpcService`-class and per-method
+   * contributors, matching the HTTP precedence order.
+   *
+   * The `module` and `global` levels do not apply to this transport:
+   * `AppModule.contributors()` is merged when a module mounts its HTTP
+   * *routes*, and `bootstrap({ contributors })` feeds the HTTP route table.
+   * Neither reaches an RPC, so this option is the way to cover all of them.
    */
   contributors?: ContributorRegistrations
   /**

@@ -29,7 +29,7 @@
 export { GrpcAdapter } from './grpc-adapter'
 export { GrpcService, GrpcMethod } from './decorators'
 export { GrpcContext } from './grpc-context'
-export { toConnectError, codeForStatus } from './errors'
+export { toConnectError, codeForStatus, INTERNAL_ERROR_MESSAGE } from './errors'
 export { collectServices, buildConnectRoutes } from './router'
 export type { BuildConnectRoutesOptions } from './router'
 

@@ -1,9 +1,15 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { Container, HttpException, defineContextDecorator } from '@forinda/kickjs'
+import {
+  Container,
+  HttpException,
+  MissingContextValueError,
+  defineContextDecorator,
+} from '@forinda/kickjs'
 import { Code, ConnectError, createClient, createRouterTransport } from '@connectrpc/connect'
 import {
   GrpcMethod,
   GrpcService,
+  INTERNAL_ERROR_MESSAGE,
   buildConnectRoutes,
   codeForStatus,
   collectServices,
@@ -250,6 +256,50 @@ describe('error mapping', () => {
     const mapped = toConnectError(boom)
     expect(mapped.code).toBe(Code.Internal)
     expect(mapped.cause).toBe(boom)
+    // The message must NOT survive — it routinely carries connection
+    // strings, SQL, and absolute paths.
+    expect(mapped.rawMessage).toBe(INTERNAL_ERROR_MESSAGE)
+    expect(mapped.rawMessage).not.toContain('db exploded')
+  })
+
+  it('redacts non-Error throws too', () => {
+    const mapped = toConnectError('postgres://user:hunter2@db.internal/prod')
+    expect(mapped.code).toBe(Code.Internal)
+    expect(mapped.rawMessage).toBe(INTERNAL_ERROR_MESSAGE)
+    expect(mapped.rawMessage).not.toContain('hunter2')
+    expect(mapped.cause).toBe('postgres://user:hunter2@db.internal/prod')
+  })
+
+  it('redacts a missing-context failure — it is a server wiring bug', () => {
+    const mapped = toConnectError(new MissingContextValueError('tenant'))
+    expect(mapped.code).toBe(Code.Internal)
+    expect(mapped.rawMessage).toBe(INTERNAL_ERROR_MESSAGE)
+    expect(mapped.cause).toBeInstanceOf(MissingContextValueError)
+  })
+
+  it('does not leak an internal message over the wire end-to-end', async () => {
+    @GrpcService(EchoService)
+    class Svc {
+      @GrpcMethod()
+      echo(): never {
+        throw new Error('connect ECONNREFUSED 10.0.0.5:5432')
+      }
+    }
+    ensureRegistered(Svc)
+
+    const client = clientFor([entryFor(Svc)])
+    const err = await client.echo({ text: '' }).catch((e: unknown) => e)
+    const connectErr = ConnectError.from(err)
+
+    expect(connectErr.code).toBe(Code.Internal)
+    expect(connectErr.rawMessage).toBe(INTERNAL_ERROR_MESSAGE)
+    expect(connectErr.rawMessage).not.toContain('10.0.0.5')
+  })
+
+  it('still surfaces a deliberate HttpException message — that is the point of raising one', () => {
+    const mapped = toConnectError(HttpException.notFound('no such user'))
+    expect(mapped.code).toBe(Code.NotFound)
+    expect(mapped.rawMessage).toBe('no such user')
   })
 
   it('maps a thrown HttpException across the wire', async () => {

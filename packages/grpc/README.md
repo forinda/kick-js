@@ -27,9 +27,9 @@ service UserService {
 
 ```ts
 // src/modules/user/user.rpc.ts
-import { Autowired } from '@forinda/kickjs'
+import { Autowired, HttpException } from '@forinda/kickjs'
 import { GrpcService, GrpcMethod, type GrpcContext } from '@forinda/kickjs-grpc'
-import { UserService } from '../../gen/user/v1/user_pb'
+import { UserService, type GetUserRequest } from '../../gen/user/v1/user_pb'
 import { UserRepository } from './user.repository'
 
 @GrpcService(UserService)
@@ -79,7 +79,9 @@ This is also why `prefix` defaults to empty: most native gRPC client implementat
 
 ## Context Contributors
 
-`GrpcContext` implements KickJS's transport-neutral `ExecutionContext`, so contributors written with `defineContextDecorator` work on RPCs exactly as they do on HTTP routes — same `dependsOn` topo-sort, same precedence (**method > class > adapter**), same boot-time cycle detection.
+`GrpcContext` implements KickJS's transport-neutral `ExecutionContext`, so contributors written with `defineContextDecorator` work on RPCs exactly as they do on HTTP routes — same `dependsOn` topo-sort, same boot-time cycle detection.
+
+**Three of the framework's five registration sites apply.** The full chain is **method > class > module > adapter > global**; RPCs participate in **method > class > adapter**. The `module` and `global` levels are HTTP-only by construction — `AppModule.contributors()` merges when a module mounts its _routes_, and `bootstrap({ contributors })` feeds the HTTP route table. Neither reaches a non-HTTP transport; use `GrpcAdapter({ contributors })` to cover every RPC.
 
 ```ts
 const LoadTenant = defineContextDecorator({
@@ -124,7 +126,9 @@ ctx.handler // raw Connect HandlerContext (escape hatch)
 
 ## Error mapping
 
-Throw what you already throw. `HttpException` maps by status; a `ConnectError` passes through untouched; anything else becomes `Code.Internal` with the original preserved as `cause` (logged, not sent on the wire).
+Throw what you already throw. `HttpException` maps by status and its message **is** sent — raising one is a deliberate act of describing a fault to the caller. A `ConnectError` passes through untouched.
+
+**Anything else is redacted.** A plain `Error`, a `MissingContextValueError`, or a non-`Error` throw becomes `Code.Internal` with the opaque message `"Internal error"`. The original never reaches the client — `err.message` routinely carries SQL, absolute paths, and connection strings — but it is logged server-side at `error` level with the RPC name, and kept on `ConnectError.cause`. To disclose a real message, throw a `ConnectError` / `HttpException` or map it through `onError`.
 
 | HTTP     | Connect code         |     | HTTP     | Connect code        |
 | -------- | -------------------- | --- | -------- | ------------------- |
@@ -140,7 +144,9 @@ Rewrite anything else with `onError`:
 ```ts
 GrpcAdapter({
   onError: (err, { service, method }) => {
-    log.error({ err, service, method }, 'rpc failed')
+    // The adapter already logs Code.Internal failures — add this only for
+    // your own reporting (Sentry, metrics, an audit trail).
+    reportToSentry(err, { service, method })
     return new ConnectError('Service unavailable', Code.Unavailable)
   },
 })
@@ -167,7 +173,7 @@ GrpcAdapter({
   grpc: true, // binary gRPC (needs HTTP/2 in front)
   grpcWeb: true,
   connect: true,
-  contributors: [], // applied to every RPC, at 'adapter' precedence
+  contributors: [], // every RPC, at 'adapter' precedence (see above)
   routes: (router) => {}, // register services Connect-style, bypassing decorators
   readMaxBytes: undefined,
   writeMaxBytes: undefined,

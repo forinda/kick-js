@@ -38,40 +38,51 @@ export function codeForStatus(status: number): Code {
 }
 
 /**
+ * Wire message used for every `Code.Internal` response this module produces.
+ *
+ * Deliberately opaque. An unexpected throw is a server-side fault the caller
+ * can do nothing about, and its `message` routinely carries details that must
+ * not cross a trust boundary — SQL fragments, absolute paths, connection
+ * strings, upstream hostnames. The original error is preserved on `cause` for
+ * server-side logging, which is where it belongs.
+ */
+export const INTERNAL_ERROR_MESSAGE = 'Internal error'
+
+/**
  * Normalize anything a handler (or a Context Contributor) threw into a
  * `ConnectError`, which Connect serializes onto the wire for all three
  * protocols.
  *
  * Precedence:
  * 1. An existing `ConnectError` passes through untouched — a handler that
- *    wants an exact code/detail payload stays authoritative.
+ *    wants an exact code/message/detail payload stays authoritative.
  * 2. `HttpException` maps by status via {@link codeForStatus}, and its
  *    `headers` become response metadata so `Retry-After` and friends survive.
- * 3. `MissingContextValueError` is `Code.Internal` — a required contributor
- *    not running is a server-side wiring bug, never the caller's fault.
- * 4. Anything else falls to `Code.Internal`, preserving the original as
- *    `cause` for logging without leaking it onto the wire.
+ *    Its message **is** sent: raising one is a deliberate act of describing a
+ *    fault to the caller, exactly as it would be over HTTP.
+ * 3. Everything else — `MissingContextValueError`, any other `Error`, and
+ *    non-`Error` throws — becomes `Code.Internal` with the opaque
+ *    {@link INTERNAL_ERROR_MESSAGE}. The original is kept on `cause` so the
+ *    adapter can log it server-side; it never reaches the client.
+ *
+ * Need the real message on the wire for a specific failure? Throw a
+ * `ConnectError` (rule 1) or an `HttpException` (rule 2), or map it yourself
+ * through `GrpcAdapter({ onError })` — all three are explicit decisions to
+ * disclose, which is the point.
  */
 export function toConnectError(err: unknown): ConnectError {
   if (err instanceof ConnectError) return err
 
   if (err instanceof HttpException) {
-    return new ConnectError(
-      err.message,
-      codeForStatus(err.status),
-      err.headers,
-      undefined,
-      err.details,
-    )
+    // `cause` carries the original exception (including its `details`
+    // payload) for logging. Connect's 4th parameter takes protobuf
+    // `OutgoingDetail`s, which arbitrary JSON details cannot satisfy.
+    return new ConnectError(err.message, codeForStatus(err.status), err.headers, undefined, err)
   }
 
   if (err instanceof MissingContextValueError) {
-    return new ConnectError(err.message, Code.Internal, undefined, undefined, err)
+    return new ConnectError(INTERNAL_ERROR_MESSAGE, Code.Internal, undefined, undefined, err)
   }
 
-  if (err instanceof Error) {
-    return new ConnectError(err.message, Code.Internal, undefined, undefined, err)
-  }
-
-  return new ConnectError(String(err), Code.Internal, undefined, undefined, err)
+  return new ConnectError(INTERNAL_ERROR_MESSAGE, Code.Internal, undefined, undefined, err)
 }

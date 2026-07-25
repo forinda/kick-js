@@ -36,10 +36,11 @@ pnpm add @forinda/kickjs-grpc @connectrpc/connect @connectrpc/connect-node @bufb
 
 ### Errors
 
-| Export                | Description                                              |
-| --------------------- | -------------------------------------------------------- |
-| `toConnectError(err)` | Normalize any thrown value into a `ConnectError`         |
-| `codeForStatus(n)`    | Map an HTTP status onto the corresponding Connect `Code` |
+| Export                   | Description                                                                                                                                 |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `toConnectError(err)`    | Normalize any thrown value into a `ConnectError`. Unexpected errors are redacted to `INTERNAL_ERROR_MESSAGE`; the original stays on `cause` |
+| `INTERNAL_ERROR_MESSAGE` | The opaque message sent for every `Code.Internal` response (`"Internal error"`)                                                             |
+| `codeForStatus(n)`       | Map an HTTP status onto the corresponding Connect `Code`                                                                                    |
 
 ### Lower-level
 
@@ -63,17 +64,17 @@ pnpm add @forinda/kickjs-grpc @connectrpc/connect @connectrpc/connect-node @bufb
 
 ## Adapter options
 
-| Option          | Default | Description                                                        |
-| --------------- | ------- | ------------------------------------------------------------------ |
-| `prefix`        | `''`    | Path prefix for all RPCs. Leave empty for native gRPC clients.     |
-| `grpc`          | `true`  | Enable the binary gRPC protocol (requires HTTP/2 in front)         |
-| `grpcWeb`       | `true`  | Enable gRPC-Web (works over HTTP/1.1)                              |
-| `connect`       | `true`  | Enable the Connect protocol (JSON over HTTP, curl-able)            |
-| `contributors`  | `[]`    | Context Contributors applied to every RPC, at `adapter` precedence |
-| `routes`        | —       | Register services Connect-style, bypassing decorators              |
-| `readMaxBytes`  | —       | Max size of an inbound message                                     |
-| `writeMaxBytes` | —       | Max size of an outbound message                                    |
-| `onError`       | —       | Rewrite a failure before it goes on the wire                       |
+| Option          | Default | Description                                                                                                                                                                                                                       |
+| --------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `prefix`        | `''`    | Path prefix for all RPCs. Leave empty for native gRPC clients.                                                                                                                                                                    |
+| `grpc`          | `true`  | Enable the binary gRPC protocol (requires HTTP/2 in front)                                                                                                                                                                        |
+| `grpcWeb`       | `true`  | Enable gRPC-Web (works over HTTP/1.1)                                                                                                                                                                                             |
+| `connect`       | `true`  | Enable the Connect protocol (JSON over HTTP, curl-able)                                                                                                                                                                           |
+| `contributors`  | `[]`    | Context Contributors applied to every RPC, at the `adapter` level of the **method > class > module > adapter > global** chain. `module` and `global` are HTTP-only and never reach an RPC — this is the way to cover all of them. |
+| `routes`        | —       | Register services Connect-style, bypassing decorators                                                                                                                                                                             |
+| `readMaxBytes`  | —       | Max size of an inbound message                                                                                                                                                                                                    |
+| `writeMaxBytes` | —       | Max size of an outbound message                                                                                                                                                                                                   |
+| `onError`       | —       | Rewrite a failure before it goes on the wire                                                                                                                                                                                      |
 
 ## Protocol support
 
