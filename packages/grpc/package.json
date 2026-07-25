@@ -1,0 +1,74 @@
+{
+  "name": "@forinda/kickjs-grpc",
+  "version": "0.0.0",
+  "description": "Connect RPC transport for KickJS — gRPC, gRPC-Web, and Connect protocol served from your existing app, with decorators, DI, and Context Contributors",
+  "keywords": [
+    "kickjs",
+    "grpc",
+    "grpc-web",
+    "connectrpc",
+    "connect-rpc",
+    "protobuf",
+    "rpc",
+    "nodejs",
+    "typescript",
+    "decorator-driven"
+  ],
+  "type": "module",
+  "main": "dist/index.mjs",
+  "types": "dist/index.d.mts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "types": "./dist/index.d.mts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsgo --noEmit",
+    "clean": "rm -rf dist .wireit"
+  },
+  "dependencies": {
+    "reflect-metadata": "^0.2.2"
+  },
+  "devDependencies": {
+    "@bufbuild/protobuf": "^2.13.0",
+    "@connectrpc/connect": "^2.1.2",
+    "@connectrpc/connect-node": "^2.1.2",
+    "@forinda/kickjs": "workspace:*",
+    "@swc/core": "^1.15.43",
+    "@types/node": "^26.1.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
+  },
+  "peerDependencies": {
+    "@bufbuild/protobuf": "^2.0.0",
+    "@connectrpc/connect": "^2.0.0",
+    "@connectrpc/connect-node": "^2.0.0",
+    "@forinda/kickjs": ">=5.18.0"
+  },
+  "peerDependenciesMeta": {},
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT",
+  "author": "Felix Orinda",
+  "engines": {
+    "node": ">=20.0"
+  },
+  "homepage": "https://kickjs.app/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/forinda/kick-js.git",
+    "directory": "packages/grpc"
+  },
+  "bugs": {
+    "url": "https://github.com/forinda/kick-js/issues"
+  }
+}

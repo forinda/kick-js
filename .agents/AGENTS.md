@@ -52,6 +52,9 @@ This guide helps AI agents (Claude, Copilot, etc.) work effectively on the KickJ
 | WebSocket decorators | `packages/ws/src/decorators.ts`                                            |
 | WebSocket context    | `packages/ws/src/ws-context.ts`                                            |
 | Room manager         | `packages/ws/src/room-manager.ts`                                          |
+| gRPC/Connect adapter | `packages/grpc/src/grpc-adapter.ts`                                        |
+| gRPC route builder   | `packages/grpc/src/router.ts`                                              |
+| gRPC context         | `packages/grpc/src/grpc-context.ts`                                        |
 
 ### Configuration
 
