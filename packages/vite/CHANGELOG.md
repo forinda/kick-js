@@ -1,5 +1,22 @@
 # @forinda/kickjs-vite
 
+## 8.0.0
+
+### Major Changes
+
+- [#485](https://github.com/forinda/kick-js/pull/485) [`431f889`](https://github.com/forinda/kick-js/commit/431f8899cc226667b822453a2669464c1a7d97c8) Thanks [@forinda](https://github.com/forinda)! - Upgrade to Babel 8 (`@babel/core` 7 → 8).
+
+  **Breaking: raises the Node floor to `^22.18.0 || >=24.11.0`.** Babel 8 is ESM-only and sets that engine requirement; the plugin inherits it. Node 20 reached end-of-life in 2026, so the practical impact is limited — but it is a breaking change for anyone still on it, hence the major.
+
+  Two changes were needed in `babel-strip-devtools.ts`, both consequences of Babel 8 shipping as native ESM with first-party types:
+
+  - `import babel from '@babel/core'` → `import * as babel from '@babel/core'`. Babel 8 exposes only named exports; the default import fails at load with `SyntaxError: The requested module '@babel/core' does not provide an export named 'default'`. This affected the published `dist/index.mjs`, not just the source.
+  - `babel.PluginObj` → `babel.PluginObject`, the spelling in Babel's own type declarations.
+
+  `@types/babel__core` is dropped — Babel 8 ships its own types.
+
+  No behavior change to the devtools strip itself. `transformSync`, the `typescript` / `decorators-legacy` / `classProperties` parser plugins, `generatorOpts.retainLines`, and the `babel.types.*` namespace all carry over unchanged, and the full existing test suite passes against Babel 8 untouched.
+
 ## 7.0.1
 
 ### Patch Changes
@@ -92,6 +109,7 @@
 ### Minor Changes
 
 - [#178](https://github.com/forinda/kick-js/pull/178) [`468773e`](https://github.com/forinda/kick-js/commit/468773e691f09036661fa7167c32c9714e38f7a3) Thanks [@forinda](https://github.com/forinda)! - `@forinda/kickjs-vite` now ships a Babel-based devtools strip alongside the existing `__KICKJS_DEVTOOLS__` flag plugin. On `vite build`, the new `kickjs:devtools-strip` plugin walks each module and removes:
+
   - `import ... from '@forinda/kickjs-devtools-kit'` declarations (and any sub-path: `/bus`, `/runtime`, etc.) — named, default, namespace, and side-effect forms.
   - Top-level `ExpressionStatement`s whose root identifier is a binding stripped above. Catches `defineDevtoolsRenderTab(...)`, `defineDevtoolsTab(...)`, and namespace member-calls like `devtools.defineDevtoolsRenderTab(...)`.
   - Side-effect imports whose path ends in `/devtools-events` — adapter-package augmentation modules.
@@ -99,6 +117,7 @@
   In dev (`kick dev`), the plugin is a no-op so the devtools UI keeps working. In prod, adopters who previously had to wrap every devtools call in `if (__KICKJS_DEVTOOLS__) { ... }` can now drop the wrapper for top-level cases and let the strip handle it. Adopters whose devtools calls live inside function bodies still need the flag (the strip leaves non-top-level references alone — a deliberate signal so the build fails loud rather than silently shipping dead code).
 
   **New public exports** from `@forinda/kickjs-vite`:
+
   - `devtoolsStripPlugin(opts?)` — standalone Vite plugin. Auto-registered by `kickjsVitePlugin()` unless `devtools: false` is passed.
   - `stripDevtoolsCode(source, filename, opts?)` — pure transform exposed for testing + adopter tooling that wants to run the same strip outside Vite.
   - `DevtoolsStripOptions`, `StripDevtoolsOptions`, `StripResult` — companion types.
@@ -112,6 +131,7 @@
 ### Patch Changes
 
 - [#166](https://github.com/forinda/kick-js/pull/166) [`a6d0dd6`](https://github.com/forinda/kick-js/commit/a6d0dd6038b215c0ae3cbe1a20e11ba0d8b1c46e) Thanks [@forinda](https://github.com/forinda)! - Minify published build output via the tsdown / oxc minifier.
+
   - **Library packages** use `minify: { compress: true, mangle: false }`. Whitespace and comments are stripped and constants folded, but identifiers stay intact so adopter stack traces remain readable.
   - **CLI** uses `minify: { compress: true, mangle: true }`. The CLI is an operator tool, not a library — full mangle is fine and gives a smaller binary.
 
