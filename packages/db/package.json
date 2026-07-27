@@ -94,7 +94,7 @@
     "@types/better-sqlite3": "^7.6.11",
     "@types/node": "^26.1.1",
     "@types/pg": "^8.11.10",
-    "better-sqlite3": "^12.11.1",
+    "better-sqlite3": "^13.0.1",
     "kysely": "^0.29.4",
     "mysql2": "^3.23.1",
     "pg": "^8.22.0",
