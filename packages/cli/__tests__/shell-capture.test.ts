@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { captureCommand } from '../src/utils/shell'
+import { captureCommand, shellSafeInvocation } from '../src/utils/shell'
 
 /**
  * Regression guard for the "scaffolded projects pin every sibling to the
@@ -34,14 +34,87 @@ describe('captureCommand', () => {
     expect(captureCommand('kick-definitely-not-a-real-binary', ['--version'])).toBeNull()
   })
 
-  it('refuses arguments carrying shell metacharacters', () => {
-    // Must not reach a shell that would treat `&&` as a command separator.
-    expect(captureCommand('npm', ['view', 'foo && echo pwned', 'version'])).toBeNull()
-    expect(captureCommand('npm', ['view', 'foo | echo pwned', 'version'])).toBeNull()
-    expect(captureCommand('npm', ['view', 'foo`whoami`', 'version'])).toBeNull()
-  })
-
   it('returns null when the command exits non-zero', () => {
     expect(captureCommand('npm', ['run', 'no-such-script-here'], { timeout: 30_000 })).toBeNull()
+  })
+})
+
+/**
+ * The argument guard only engages on the Windows branch, so asserting it via
+ * `captureCommand` would prove nothing on a Linux/macOS runner: there the
+ * invocation is passed through untouched and the call fails for an unrelated
+ * reason (npm rejecting a bogus package spec), which looks identical to the
+ * guard firing. `shellSafeInvocation` therefore takes the platform as an
+ * argument so both branches are exercised on every host.
+ */
+describe('shellSafeInvocation', () => {
+  const WIN = 'win32' as NodeJS.Platform
+  const NIX = 'linux' as NodeJS.Platform
+
+  it('passes the command through untouched off Windows', () => {
+    expect(shellSafeInvocation('npm', ['view', 'pkg', 'version'], NIX)).toEqual([
+      'npm',
+      ['view', 'pkg', 'version'],
+    ])
+  })
+
+  it('routes through cmd.exe on Windows', () => {
+    const invocation = shellSafeInvocation('npm', ['view', 'pkg', 'version'], WIN)
+    expect(invocation).not.toBeNull()
+    const [file, args] = invocation!
+    expect(file.toLowerCase()).toContain('cmd')
+    expect(args.slice(0, 3)).toEqual(['/d', '/s', '/c'])
+    expect(args[3]).toBe('npm view pkg version')
+  })
+
+  it('quotes arguments containing spaces', () => {
+    expect(shellSafeInvocation('npm', ['run', 'my script'], WIN)![1][3]).toBe('npm run "my script"')
+  })
+
+  it('rejects arguments carrying shell metacharacters', () => {
+    // Each of these would be command syntax, not data, if it reached cmd.exe.
+    for (const evil of [
+      'foo && echo pwned',
+      'foo | echo pwned',
+      'foo & calc',
+      'foo > out.txt',
+      'foo < in.txt',
+      'foo ^ bar',
+      'foo`whoami`',
+      'foo%PATH%',
+      '(foo)',
+      'foo;bar',
+      'foo\nbar',
+      'foo"bar',
+    ]) {
+      expect(shellSafeInvocation('npm', ['view', evil, 'version'], WIN)).toBeNull()
+    }
+  })
+
+  it('rejects a metacharacter in the command name itself', () => {
+    expect(shellSafeInvocation('npm && calc', ['--version'], WIN)).toBeNull()
+  })
+
+  /**
+   * A backslash is not shell syntax, but Windows argv quoting corrupts it:
+   * `['C:\some path\']` reaches the child as `['"C:\some', 'path\"']` — one
+   * argument silently becomes two. Rejecting beats corrupting.
+   */
+  it('rejects backslashes, which Windows quoting would mangle', () => {
+    expect(shellSafeInvocation('npm', ['view', 'C:\\some path\\', 'version'], WIN)).toBeNull()
+    expect(shellSafeInvocation('npm', ['view', 'no-space\\', 'version'], WIN)).toBeNull()
+  })
+
+  it('still accepts the argument shapes the CLI actually passes', () => {
+    // Scoped names, dist-tag specs, flags — none may trip the guard.
+    for (const args of [
+      ['view', '@forinda/kickjs', 'version'],
+      ['view', '@forinda/kickjs@alpha', 'exports', '--json'],
+      ['view', '@forinda/kickjs-cli@latest', 'version'],
+      ['install'],
+      ['--version'],
+    ]) {
+      expect(shellSafeInvocation('npm', args, WIN)).not.toBeNull()
+    }
   })
 })

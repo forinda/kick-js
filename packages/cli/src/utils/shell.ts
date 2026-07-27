@@ -1,7 +1,31 @@
 import { execFileSync, execSync, spawnSync } from 'node:child_process'
 
 /**
- * Whether a command needs to be routed through `cmd.exe` to run.
+ * Characters an argument may not contain when it has to travel through
+ * `cmd.exe`.
+ *
+ * The first group is shell syntax — `cmd.exe` would interpret these rather
+ * than pass them through. The trailing `\\` is different in kind: a backslash
+ * is not shell syntax, but Windows command-line quoting mangles it. Node's
+ * argv encoder doubles trailing backslashes, and a backslash immediately
+ * before a closing quote escapes that quote, so a single argument silently
+ * splits in two:
+ *
+ *   ['C:\\some path\\']  →  cmd receives  ['"C:\\some', 'path\\"']
+ *   ['no-space\\']       →  cmd receives  ['no-space\\\\']
+ *
+ * Correct escaping is possible but fiddly, and no caller in this CLI needs it
+ * — arguments here are package names, dist-tags, subcommands and flags, and
+ * working directories travel via the `cwd` option rather than as arguments.
+ * So a backslash is rejected outright: a loud `null` beats a silently
+ * corrupted argument, which is the exact failure mode this module exists to
+ * eliminate.
+ */
+const CMD_UNSAFE = /[&|<>^"'`(){}[\];!%\r\n\\]/
+
+/**
+ * Build the `[file, args]` pair to hand to `execFileSync`, routing through
+ * `cmd.exe` on Windows so `.cmd` shims are launchable.
  *
  * On Windows, `npm` / `pnpm` / `yarn` / `bun` are `.cmd` batch shims, not
  * `.exe`s, and `execFileSync` cannot launch either spelling:
@@ -13,29 +37,23 @@ import { execFileSync, execSync, spawnSync } from 'node:child_process'
  *
  * Both failures are silent wherever the caller swallows the error, so the
  * command looks like it "returned nothing" rather than "never ran".
- */
-const NEEDS_SHELL = process.platform === 'win32'
-
-/**
- * Characters that `cmd.exe` would interpret rather than pass through. Every
- * argument we route through the shell is checked against this: callers pass
- * package names, dist-tags and allowlisted binary names, none of which
- * legitimately contain these.
- */
-const CMD_METACHARACTERS = /[&|<>^"'`(){}[\];!%\r\n]/
-
-/**
- * Build the `[file, args]` pair to hand to `execFileSync`, routing through
- * `cmd.exe` on Windows so `.cmd` shims are launchable.
  *
  * `/d` skips AutoRun registry commands, `/s` makes cmd treat everything after
  * `/c` as one verbatim string (it strips only the outer quote pair Node adds).
- * Returns `null` when an argument contains shell metacharacters — refusing to
- * run beats running something the shell rewrote.
+ * Returns `null` when an argument is unsafe to pass through — refusing to run
+ * beats running something the shell rewrote.
+ *
+ * `platform` is injectable so both branches are unit-testable from any host
+ * OS; production callers use the default. It is read per call rather than
+ * captured at import time for the same reason.
  */
-function shellSafeInvocation(file: string, args: string[]): [string, string[]] | null {
-  if (!NEEDS_SHELL) return [file, args]
-  if (CMD_METACHARACTERS.test(file) || args.some((a) => CMD_METACHARACTERS.test(a))) return null
+export function shellSafeInvocation(
+  file: string,
+  args: string[],
+  platform: NodeJS.Platform = process.platform,
+): [string, string[]] | null {
+  if (platform !== 'win32') return [file, args]
+  if (CMD_UNSAFE.test(file) || args.some((a) => CMD_UNSAFE.test(a))) return null
   const command = [file, ...args].map((a) => (a.includes(' ') ? `"${a}"` : a)).join(' ')
   return [process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', command]]
 }
