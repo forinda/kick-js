@@ -15,6 +15,7 @@ import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
 
 import { writeFileSafe } from '../utils/fs'
+import { runCommand } from '../utils/shell'
 import { initProject, resolveSiblingVersions } from './project'
 
 export interface InitFullstackOptions {
@@ -96,7 +97,9 @@ export async function initFullstackProject(options: InitFullstackOptions): Promi
   if (options.installDeps) {
     console.log(`\n  Installing workspace dependencies with ${packageManager}...\n`)
     try {
-      execFileSync(packageManager, ['install'], { cwd: dir, stdio: 'inherit' })
+      // `runCommand`, not bare execFileSync — on Windows every package
+      // manager is a `.cmd` shim that execFileSync cannot spawn.
+      runCommand(packageManager, ['install'], { cwd: dir })
     } catch {
       console.log(`\n  Warning: ${packageManager} install failed. Run it manually.`)
     }

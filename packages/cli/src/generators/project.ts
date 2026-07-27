@@ -1,8 +1,9 @@
 import { join, dirname } from 'node:path'
-import { execFileSync, execSync } from 'node:child_process'
+import { execSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { writeFileSafe } from '../utils/fs'
+import { captureCommand } from '../utils/shell'
 import {
   generatePackageJson,
   generateViteConfig,
@@ -58,28 +59,19 @@ const SIBLING_PACKAGES = [
 
 /**
  * Resolve the latest published version of every sibling package via
- * `npm view <name> version` (via execFileSync — no shell, no
- * injection vector). Each query has a short timeout; failures fall
- * back to the CLI's own version with a `^` prefix so the scaffold
- * stays usable offline.
+ * `npm view <name> version` (through `captureCommand`, which routes
+ * around Windows' `.cmd` shims — see utils/shell.ts). Each query has a
+ * short timeout; failures fall back to the CLI's own version with a `^`
+ * prefix so the scaffold stays usable offline.
  */
 export async function resolveSiblingVersions(): Promise<Record<string, string>> {
   const results = await Promise.all(
     SIBLING_PACKAGES.map(async (name) => {
-      try {
-        const out = execFileSync('npm', ['view', name, 'version'], {
-          encoding: 'utf-8',
-          timeout: 5000,
-          stdio: ['ignore', 'pipe', 'ignore'],
-        })
-          .toString()
-          .trim()
-        if (out && /^\d+\.\d+\.\d+/.test(out)) {
-          return [name, `^${out}`] as const
-        }
-      } catch {
-        // Network failure / package not yet published / npm
-        // unavailable. Fall back to CLI version below.
+      // Network failure / package not yet published / npm unavailable
+      // all surface as null → fall back to the CLI's own version.
+      const out = captureCommand('npm', ['view', name, 'version'])
+      if (out && /^\d+\.\d+\.\d+/.test(out)) {
+        return [name, `^${out}`] as const
       }
       return [name, CLI_VERSION_FALLBACK] as const
     }),
@@ -101,18 +93,8 @@ export async function resolveSiblingVersions(): Promise<Record<string, string>> 
  * major`).
  */
 function resolveVersionAtTag(name: string, tag: string): string | null {
-  try {
-    const out = execFileSync('npm', ['view', `${name}@${tag}`, 'version'], {
-      encoding: 'utf-8',
-      timeout: 5000,
-      stdio: ['ignore', 'pipe', 'ignore'],
-    })
-      .toString()
-      .trim()
-    return out && /^\d+\.\d+\.\d+/.test(out) ? out : null
-  } catch {
-    return null
-  }
+  const out = captureCommand('npm', ['view', `${name}@${tag}`, 'version'])
+  return out && /^\d+\.\d+\.\d+/.test(out) ? out : null
 }
 
 /**
@@ -149,15 +131,9 @@ function baseVersionGte(a: string, b: string): boolean {
 }
 
 function tagExportsSubpath(name: string, tag: string, subpath: string): boolean {
+  const out = captureCommand('npm', ['view', `${name}@${tag}`, 'exports', '--json'])
+  if (!out) return false
   try {
-    const out = execFileSync('npm', ['view', `${name}@${tag}`, 'exports', '--json'], {
-      encoding: 'utf-8',
-      timeout: 5000,
-      stdio: ['ignore', 'pipe', 'ignore'],
-    })
-      .toString()
-      .trim()
-    if (!out) return false
     const exportsMap = JSON.parse(out) as Record<string, unknown>
     return Object.prototype.hasOwnProperty.call(exportsMap, subpath)
   } catch {
