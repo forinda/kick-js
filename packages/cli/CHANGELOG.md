@@ -1,5 +1,33 @@
 # @forinda/kickjs-cli
 
+## 6.10.0
+
+### Minor Changes
+
+- [#494](https://github.com/forinda/kick-js/pull/494) [`efeba24`](https://github.com/forinda/kick-js/commit/efeba24f6d9764cdf34788e7f15e286121b5c1c4) Thanks [@forinda](https://github.com/forinda)! - fix: generated controllers use return-value handlers, so `KickRoutes[...].response` infers a real type
+
+  `kick typegen` fills `KickRoutes[...].response` with `InferHandlerResponse<Controller['method']>`, which reads the handler's **return type** and nothing else. Every controller the CLI scaffolded wrote its response imperatively, so adopters got no response typing at all — and in one case got worse than nothing:
+
+  | Generated handler          | Old inferred `response`                                                                         |
+  | -------------------------- | ----------------------------------------------------------------------------------------------- |
+  | `ctx.json(result)`         | `unknown`                                                                                       |
+  | `ctx.created(result)`      | `unknown`                                                                                       |
+  | `ctx.noContent()`          | `unknown`                                                                                       |
+  | `return ctx.notFound(...)` | `RuntimeResponse` — the framework's internal response driver, leaked into the public route type |
+
+  Controllers now return their payload, use `reply.created()` / `reply.noContent()` for non-200 statuses, and route error branches through `ctx.problem.*` (RFC 9457) with a bare `return`, which keeps the 404 out of the success type. `getById` now infers the entity type, `create` the created entity, `remove` `undefined`.
+
+  Affects `kick g module` (rest + minimal patterns), `kick g controller`, `kick g scaffold`, and the `kick g contributor --type http` usage example.
+
+  Also: the minimal pattern now scaffolds the full CRUD surface (`list` / `getById` / `create` / `update` / `remove`) in its single controller file — "minimal" refers to the file count, not the route surface.
+
+  Generated code that already existed is unaffected; this only changes what new scaffolds emit.
+
+### Patch Changes
+
+- Updated dependencies [[`cddc77c`](https://github.com/forinda/kick-js/commit/cddc77c7a4f271ee69676543687c6811085c045f)]:
+  - @forinda/kickjs-db@7.2.0
+
 ## 6.9.2
 
 ### Patch Changes

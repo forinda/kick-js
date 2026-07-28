@@ -1,5 +1,40 @@
 # @forinda/kickjs-db
 
+## 7.2.0
+
+### Minor Changes
+
+- [#495](https://github.com/forinda/kick-js/pull/495) [`cddc77c`](https://github.com/forinda/kick-js/commit/cddc77c7a4f271ee69676543687c6811085c045f) Thanks [@forinda](https://github.com/forinda)! - feat: PostgreSQL named schemas via `pgSchema()`
+
+  Tables can now live in a named PG schema:
+
+  ```ts
+  import { pgSchema } from "@forinda/kickjs-db/pg";
+
+  const billing = pgSchema("billing");
+  const invoices = billing.table("invoices", {
+    id: serial().primaryKey(),
+    ref: varchar(32).notNull(),
+  });
+  ```
+
+  - Emits `CREATE SCHEMA IF NOT EXISTS "billing"` ahead of the tables that need it.
+  - Qualifies every generated statement — `CREATE`/`DROP`/`ALTER TABLE`, `CREATE INDEX`, `DROP INDEX` (whose name resolves through `search_path`), and any `REFERENCES` pointing at the table.
+  - Keys the row type as `KickDbSchema['billing.invoices']`, which Kysely reads as schema-qualified, so `db.selectFrom('billing.invoices')` resolves with no `withSchema()` call.
+  - Two schemas may hold same-named tables: snapshot keys are qualified, so `billing.events` and `audit.events` no longer collide.
+
+  `pgSchema('public')` collapses to "no schema" in both the runtime value and the type key — PG puts `public` on the default `search_path`, so treating it as a distinct key would make the diff emit `DROP TABLE users` + `CREATE TABLE public.users` for what is the same physical table.
+
+  Schemas are never dropped. There is no `dropSchema` change: a schema can hold objects this app never declared, so a `DROP SCHEMA` inferred from "nothing references it any more" could destroy data the diff never saw. Down migrations leave the emptied schema for an operator to remove.
+
+  PostgreSQL only — on MySQL a schema is a database and SQLite has none, so declaring one and diffing against those dialects throws at snapshot time, before any DDL is written.
+
+  Unqualified tables are completely unaffected: no `schema` field is written, no `schemas` array is added, and snapshots serialize byte-identically, so existing migration hashes stay valid.
+
+  Introspection is unchanged and still single-schema (`pgAdapter({ schema })`, default `public`) — tables in other schemas are created and migrated correctly but are not yet compared during drift detection.
+
+  Also fixes a latent bug this surfaced: `diffTable` stamped the bare table name onto every column/index/FK change instead of the snapshot key.
+
 ## 7.1.1
 
 ### Patch Changes
@@ -75,6 +110,7 @@
 - [#334](https://github.com/forinda/kick-js/pull/334) [`f050f6b`](https://github.com/forinda/kick-js/commit/f050f6b235d1fc54f7adc790cd2b5c999411c5c6) Thanks [@forinda](https://github.com/forinda)! - Ship the database CLI from `@forinda/kickjs-db/cli` — a mountable plugin **and** a standalone `kickjs-db` bin — so you can use the db tooling without (or alongside) `@forinda/kickjs-cli`.
 
   **New: `@forinda/kickjs-db/cli`**
+
   - `dbCliPlugin` — a CLI plugin (`@forinda/kickjs-cli-kit` contract). Mount it in `kick.config.ts` to get `kick db generate | migrate latest|up|down|rollback|status|review | introspect`. It reads config from the same `kick.config.ts` `db` block (via `ctx.config`, no re-parse).
   - `defineKickDbConfig` / `mergeKickDbConfig` / `resolveKickDbConfig` — vite-style config helpers. Author a standalone `kickjs-db.config.ts` (`export default defineKickDbConfig({ ... })`) or reuse the `kick.config.ts` `db` block; the two merge (later wins).
   - Standalone **`kickjs-db` bin** — `npx kickjs-db migrate latest` runs the whole command tree without kickjs-cli, loading `kickjs-db.config.ts` (or a `kick.config.ts` `db` block) through jiti.
@@ -83,10 +119,10 @@
   The `kick db` commands are no longer built into kickjs-cli. Add the plugin to your config:
 
   ```ts
-  import { defineConfig } from '@forinda/kickjs-cli'
-  import { dbCliPlugin } from '@forinda/kickjs-db/cli'
+  import { defineConfig } from "@forinda/kickjs-cli";
+  import { dbCliPlugin } from "@forinda/kickjs-db/cli";
 
-  export default defineConfig({ plugins: [dbCliPlugin] })
+  export default defineConfig({ plugins: [dbCliPlugin] });
   ```
 
   Zero-config **db type generation is unchanged** — it stays a built-in typegen (`kick typegen` still emits `.kickjs/types` for your schema). Only the `kick db` _commands_ moved.
@@ -104,9 +140,9 @@
 
   ```ts
   // before
-  import { pgAdapter, pgDialect } from '@forinda/kickjs-db-pg'
+  import { pgAdapter, pgDialect } from "@forinda/kickjs-db-pg";
   // after
-  import { pgAdapter, pgDialect } from '@forinda/kickjs-db/pg'
+  import { pgAdapter, pgDialect } from "@forinda/kickjs-db/pg";
   ```
 
   - New subpaths: `@forinda/kickjs-db/pg` (now also carries `pgAdapter` + `pgDialect` alongside the PG column types), `@forinda/kickjs-db/sqlite`, `@forinda/kickjs-db/mysql`.
@@ -115,6 +151,7 @@
   - CLI: `kick db` resolves the pg adapter from `@forinda/kickjs-db/pg`; `kick add pg|sqlite|mysql` installs `@forinda/kickjs-db` plus the matching driver.
 
 - [#337](https://github.com/forinda/kick-js/pull/337) [`cf3ba8c`](https://github.com/forinda/kick-js/commit/cf3ba8cb56e70385cc6906371d2f8cb3846a2093) Thanks [@forinda](https://github.com/forinda)! - `introspect()` now works for SQLite and MySQL, so `kick db introspect` can reverse-engineer a live SQLite / MySQL database into a `schema.ts` (previously Postgres-only — the SQLite/MySQL adapters threw `KICK_DB_INTROSPECT_NOT_SUPPORTED`).
+
   - `introspectSqlite` walks `sqlite_master` + `PRAGMA table_info|index_list|index_info|foreign_key_list` (skips constraint auto-indexes, groups multi-column FKs).
   - `introspectMysql` walks `information_schema.{TABLES,COLUMNS,STATISTICS,KEY_COLUMN_USAGE,REFERENTIAL_CONSTRAINTS}`.
   - Both are exported (`introspectSqlite` / `introspectMysql`) and wired into their adapters' `introspect()`.
@@ -134,6 +171,7 @@
   Verified end-to-end: a clean SQLite migrate passes the drift check (no false positive on lossy types), while an out-of-band `ALTER TABLE ... ADD COLUMN` is caught ("Schema drift detected: 1 added").
 
 - [#332](https://github.com/forinda/kick-js/pull/332) [`456e280`](https://github.com/forinda/kick-js/commit/456e280eaef89b0d0c357a06edbde6f8e7c2c789) Thanks [@forinda](https://github.com/forinda)! - SQLite migration generation, a `migrate review` command, and drift handling for non-Postgres dialects.
+
   - **`kick db generate` now emits SQLite DDL** when `db.dialect: 'sqlite'`. Previously the migration emitter was Postgres-only, so SQLite projects couldn't generate migrations from their schema (only the runner worked). The new `emitSqlite` maps PG types to SQLite affinities, normalises defaults (`gen_random_uuid()` → `(lower(hex(randomblob(16))))`, `false` → `0`, `now()` → `CURRENT_TIMESTAMP`), inlines a single integer PK as `INTEGER PRIMARY KEY` (rowid), and folds foreign keys into `CREATE TABLE` (SQLite has no `ALTER ... ADD CONSTRAINT`). Operations SQLite can't express via `ALTER TABLE` (column type/null/default changes, FK changes on an existing table) throw a clear `SqliteRebuildRequiredError` pointing at `kick db generate --empty` instead of emitting wrong SQL. `generate` now dispatches the emitter by dialect.
 
   - **`kick db migrate review <id>`** marks a migration reviewed: it flips `meta.json.reviewed`, swaps the `-- REVIEWED: false` markers in `up.sql`/`down.sql`, and recomputes the journal hash so all three stay in sync. Previously the only way to review was hand-editing `meta.json`, which left the SQL markers and the hash out of sync (the runner gates on `meta.json.reviewed`, not the comment).
@@ -155,6 +193,7 @@
 ### Patch Changes
 
 - [#330](https://github.com/forinda/kick-js/pull/330) [`91cf40f`](https://github.com/forinda/kick-js/commit/91cf40f2925b733dd39d46f3faf8ce29120c84f1) Thanks [@forinda](https://github.com/forinda)! - Fix `kick db` with plugin-importing configs, and non-string column defaults.
+
   - **`kick db` commands now load `kick.config.ts` through the CLI's jiti loader** (`loadKickConfig`) instead of `@forinda/kickjs-db`'s native `import()`. Native ESM can't resolve the extensionless, relative TypeScript imports a config commonly uses — e.g. `import { toolsPlugin } from './tools/cli-plugin'` to mount a CLI plugin — so every `kick db ...` command failed with `Cannot find module` whenever the config imported local TS. It now resolves exactly like the rest of the CLI.
 
   - **Column `.default()` accepts `string | number | boolean`** and normalises non-strings to their SQL-literal text. `boolean().default(false)` / `integer().default(0)` previously stored a raw boolean/number in the snapshot, which crashed migration emit with `value.replace is not a function`. The Postgres emitter (`formatDefault`) is also hardened to coerce booleans/numbers defensively, so a pre-existing snapshot with a non-string default emits a bare SQL literal (`false`, `0`) instead of throwing.
@@ -191,11 +230,13 @@
 - [#226](https://github.com/forinda/kick-js/pull/226) [`c42c33a`](https://github.com/forinda/kick-js/commit/c42c33aac8a40b18bcb7a2e71cba75f5acf21137) Thanks [@forinda](https://github.com/forinda)! - test(db): diff-engine fuzz harness — 1000 seeded round-trip property assertions
 
   Adds the diff-engine fuzz suite the original architecture spec ([§13](https://github.com/forinda/kick-js/blob/main/docs/db/architecture.md)) listed as an M5 hardening gate for the "production-grade" claim. 1000 randomly-generated `SchemaSnapshot` pairs run three structural property assertions against the diff engine:
+
   1. **Forward fidelity** — `applyChangeSet(A, diff(A, B)) ≡ B` for every pair. Catches missing changes (forward diff didn't notice some delta) and spurious changes (forward diff moves A away from B).
   2. **Reverse fidelity** — `applyChangeSet(B, invertChanges(diff(A, B))) ≡ A` when `hasAmbiguousReverse(forward)` is false. Ambiguous-reverse cases (`dropTable`, `dropColumn`, `alterColumn`, `addEnumValue`, `removeEnumValue`) are documented as best-effort drafts requiring operator review, so the property doesn't hold by design — those seeds are counted-and-skipped.
   3. **Reflexivity** — `diff(A, A) === []` for 1000 random snapshots. Catches a class of "always-emits-a-change" false-positives that would burn through migrations forever.
 
   Generator + applier scoped narrowly for the first cut:
+
   - PostgreSQL dialect only — other dialects share the same diff path; their emitters live in separate test scopes.
   - No `renameTable` / `renameColumn` (engine doesn't infer renames; those exercise the drop+add path, covered by `diff-rename.test.ts`).
   - Simple default values (`'0'`, `"'x'"`, `'true'`, `'CURRENT_TIMESTAMP'`) — avoids the pgEnum-cast-bracket dance that M5.A.1 handles.
@@ -223,15 +264,19 @@
   `@forinda/kickjs-db` now exports its own `safeNullComparison()` plugin. Wire it through `createDbClient({ plugins: [...] })` so `eb('col', '=', null)` (plus `!=` / `<>`) compiles to `IS NULL` / `IS NOT NULL` instead of the silently-false `= NULL` default.
 
   ```ts
-  import { createDbClient, safeNullComparison } from '@forinda/kickjs-db'
+  import { createDbClient, safeNullComparison } from "@forinda/kickjs-db";
 
   const db = createDbClient({
     schema,
     dialect: pgDialect({ pool }),
     plugins: [safeNullComparison()],
-  })
+  });
 
-  await db.selectFrom('users').where('deletedAt', '=', null).selectAll().execute()
+  await db
+    .selectFrom("users")
+    .where("deletedAt", "=", null)
+    .selectAll()
+    .execute();
   // → SQL: select * from "users" where "deletedAt" is null   (no parameter)
   ```
 
@@ -260,19 +305,19 @@
 
     findFullById(id: string, signal: AbortSignal) {
       return this.db.query.tasks.findUnique({
-        where: (_t, eb) => eb('id', '=', id),
+        where: (_t, eb) => eb("id", "=", id),
         with: { comments: true, assignees: true, labels: true },
         signal,
-      })
+      });
     }
   }
 
   @Controller()
   export class TasksController {
     constructor(private readonly tasks: TasksRepository) {}
-    @Get('/tasks/:id')
+    @Get("/tasks/:id")
     async show(ctx: RequestContext) {
-      return ctx.json(await this.tasks.findFullById(ctx.params.id, ctx.signal))
+      return ctx.json(await this.tasks.findFullById(ctx.params.id, ctx.signal));
     }
   }
   ```
@@ -292,19 +337,19 @@
   Kysely 0.29 ships three compile-time narrowing helpers — `$pickTables<...>()`, `$omitTables<...>()`, and the `ReadonlyKysely<DB>` type. They're reachable today through `KickDbClient`'s `db.qb` escape hatch, but adopters who hit them through the bare `@forinda/kickjs-db` import path got no autocomplete and no obvious entry point. M5.A.3 surfaces the type:
 
   ```ts
-  import type { KickDbClient, ReadonlyKysely } from '@forinda/kickjs-db'
-  import type { KickDb } from '../db/schema' // your SchemaToTypes alias
+  import type { KickDbClient, ReadonlyKysely } from "@forinda/kickjs-db";
+  import type { KickDb } from "../db/schema"; // your SchemaToTypes alias
 
   @Service()
   export class WorkspacesQueryRepository {
-    private readonly reader: ReadonlyKysely<KickDb>
+    private readonly reader: ReadonlyKysely<KickDb>;
 
     constructor(@Inject(DB_PRIMARY) db: KickDbClient<KickDb>) {
-      this.reader = db.qb as unknown as ReadonlyKysely<KickDb>
+      this.reader = db.qb as unknown as ReadonlyKysely<KickDb>;
     }
 
     list() {
-      return this.reader.selectFrom('workspaces').selectAll().execute()
+      return this.reader.selectFrom("workspaces").selectAll().execute();
     }
 
     // this.reader.insertInto('workspaces') → compile error:
@@ -345,14 +390,14 @@
   `CreateDbClientOptions` gains an additive `plugins?: KyselyPlugin[]` field — adopter plugins append after the built-in chain (`CodecPlugin` for `customType` mappers, `ParseJSONResultsPlugin` for SQLite + MySQL JSON decoding). Unset = byte-identical chain to pre-M5.B clients.
 
   ```ts
-  import { createDbClient } from '@forinda/kickjs-db'
-  import { CamelCasePlugin } from 'kysely'
+  import { createDbClient } from "@forinda/kickjs-db";
+  import { CamelCasePlugin } from "kysely";
 
   const db = createDbClient({
     schema,
     dialect: pgDialect({ pool }),
     plugins: [new CamelCasePlugin()],
-  })
+  });
   ```
 
   **Heads-up — Kysely 0.29's `SafeNullComparisonPlugin` ships broken on PG.** Verified empirically against `postgres:16-alpine` on this PR. The plugin rewrites `=` / `!=` against literal `null` to `IS` / `IS NOT` but keeps the null as a parameterised `ValueNode`, producing `WHERE "col" IS $1` with `$1=null` — which PG rejects with `syntax error at or near "$1"`. The original `safeNullComparison()` wrapper we'd planned to ship in this minor was pulled for that reason (would surface a runtime error instead of the silently-false comparison — arguably worse than the broken default). The `CreateDbClientOptions.plugins` docstring carries the warning + the recommended workaround (use the explicit `'is'` / `'is not'` operators directly via the Kysely expression builder).
@@ -360,6 +405,7 @@
   `packages/db-pg/__tests__/integration/kysely-safe-null-broken-pg.test.ts` locks the upstream-broken behaviour so an upstream Kysely fix (or our re-introduction of a fixed kickjs-side wrapper) surfaces here.
 
   ### Tests
+
   - 6 new unit cases in `packages/db/__tests__/unit/alter-type-helpers.test.ts` — covers the three IR builders + the `before` / `after` mutual-exclusion guard + identifier quoting.
   - 4 new integration cases in `packages/db-pg/__tests__/integration/kysely-safe-null-broken-pg.test.ts` — Testcontainers PG 16, raw protocol + end-to-end via `createDbClient({ plugins })`, plus the recommended `'is'` / `'is not'` workaround verification.
   - The existing pg-enum-pipeline + default-preservation snapshot tests continue to gate byte-identity of the ALTER TYPE refactor.
@@ -387,6 +433,7 @@
   Direct + peer ranges bumped on `@forinda/kickjs-db`, `@forinda/kickjs-db-pg`, `@forinda/kickjs-db-mysql`, `@forinda/kickjs-db-sqlite`. Adopters who pin `kysely@0.28.x` need to update their lockfile; nothing else.
 
   Why minor: the peer floor moves from `^0.28.16` to `^0.29.0`, so adopters bumping `@forinda/kickjs-db` get a transitive Kysely major. No source changes were required for the upgrade — the breaking-change list audited clean against kickjs-db's surface:
+
   - `sql.value` / `sql.literal` removed → not used.
   - `numUpdatedOrDeletedRows` → not used.
   - `executeQuery(query, queryId)` → `(query, options?)` — kickjs's call site (`packages/db/src/query/builder.ts`) passes one arg, which stays compatible.
@@ -395,6 +442,7 @@
   - CommonJS dropped → kickjs is ESM-first via tsdown; CJS-interop adopters pinned to `kysely@0.28.x` need to plan their own migration.
 
   Adopter-facing wins now reachable through `KickDbClient`:
+
   - `$pickTables<...>()` / `$omitTables<...>()` for compile-time schema narrowing.
   - `ReadonlyKysely` — type-level read-only client that prevents `insert`/`update`/`delete`/`merge` at compile time.
   - `AbortSignal` query cancellation — composable with `RequestContext.signal` (a future kickjs-db release will thread it through `db.query.X.findMany` natively).
@@ -428,24 +476,26 @@
   ## `@forinda/kickjs-db-sqlite` (initial release: 0.1.0)
 
   better-sqlite3 adapter for `@forinda/kickjs-db`. Mirrors the `@forinda/kickjs-db-pg` template:
+
   - **`sqliteDialect({ database })`** — wraps Kysely's `SqliteDialect`. Pair with `createDbClient({ schema, dialect })`.
   - **`sqliteAdapter({ database })`** — implements `MigrationAdapter` for the kickjs migration runner (`kick db migrate latest`, `kickDbAdapter` boot-time apply). Handles `kick_migrations` / `kick_migrations_lock` table creation, lock acquisition, applying SQL in / out of a transaction.
   - **Pairs with the SQLite relational compiler** that landed in `@forinda/kickjs-db@5.4.0` (M4.A.2). `db.query.X.findMany({ with })` round-trips correctly via the auto-attached `ParseJSONResultsPlugin`.
   - **Drift detection (`introspect()`)** is a follow-up — throws `KICK_DB_INTROSPECT_NOT_SUPPORTED` for now. Set `driftCheck: 'off'` until the `sqlite_master` + `pragma` walk lands.
 
   ```ts
-  import Database from 'better-sqlite3'
-  import { createDbClient } from '@forinda/kickjs-db'
-  import { sqliteAdapter, sqliteDialect } from '@forinda/kickjs-db-sqlite'
+  import Database from "better-sqlite3";
+  import { createDbClient } from "@forinda/kickjs-db";
+  import { sqliteAdapter, sqliteDialect } from "@forinda/kickjs-db-sqlite";
 
-  const database = new Database('app.db')
-  const db = createDbClient({ schema, dialect: sqliteDialect({ database }) })
-  const migrationAdapter = sqliteAdapter({ database })
+  const database = new Database("app.db");
+  const db = createDbClient({ schema, dialect: sqliteDialect({ database }) });
+  const migrationAdapter = sqliteAdapter({ database });
   ```
 
   ## `@forinda/kickjs-db-mysql` (initial release: 0.1.0)
 
   mysql2 adapter for `@forinda/kickjs-db`. **MySQL 8.0+ / MariaDB 10.5+ required** (the relational layer compiles to `JSON_ARRAYAGG`, which shipped in MySQL 8.0 and MariaDB 10.5).
+
   - **`mysqlDialect({ pool })`** — wraps Kysely's `MysqlDialect`.
   - **`mysqlAdapter({ pool })`** — implements `MigrationAdapter`. Asserts the version on first connection (lazy — no I/O at construction time). Throws `KickDbError(KICK_DB_RELATIONAL_NOT_SUPPORTED)` on MySQL 5.x / MariaDB 10.0–10.4 / unparseable version strings, with the detected version in the error message.
   - **Per-flavor version floor** — MySQL needs major `>= 8`; MariaDB needs `>= 10.5`. The adapter detects the flavor from the version string and applies the right floor.
@@ -454,13 +504,13 @@
   - **Drift detection** is a follow-up — same `KICK_DB_INTROSPECT_NOT_SUPPORTED` story as the SQLite adapter; the `information_schema` walk lands later.
 
   ```ts
-  import { createPool } from 'mysql2/promise'
-  import { createDbClient } from '@forinda/kickjs-db'
-  import { mysqlAdapter, mysqlDialect } from '@forinda/kickjs-db-mysql'
+  import { createPool } from "mysql2/promise";
+  import { createDbClient } from "@forinda/kickjs-db";
+  import { mysqlAdapter, mysqlDialect } from "@forinda/kickjs-db-mysql";
 
-  const pool = createPool({ host, user, password, database })
-  const db = createDbClient({ schema, dialect: mysqlDialect({ pool }) })
-  const migrationAdapter = mysqlAdapter({ pool })
+  const pool = createPool({ host, user, password, database });
+  const db = createDbClient({ schema, dialect: mysqlDialect({ pool }) });
+  const migrationAdapter = mysqlAdapter({ pool });
   ```
 
   ## `@forinda/kickjs-db` + `@forinda/kickjs-db-pg` (patch — keyword sweep)
@@ -468,10 +518,12 @@
   Patch bumps for a metadata-only sweep across the db-family packages. Every package in `@forinda/kickjs-*` now declares the consistent keyword set: `kickjs` (for plain-text npm search), `@forinda/kickjs` (the framework), the package's own name, and the related-package siblings — so adopters discover SQLite + MySQL alongside the PG adapter on npmjs.com. No code changes; no API surface changes.
 
   ## What's tested
+
   - `@forinda/kickjs-db-sqlite`: 10 real-driver integration tests using in-memory `better-sqlite3` — relational query round-trip (2-deep nested `with`, empty inner sets, `findFirst`/`findUnique`, per-relation filters, JSON parse plugin auto-attach) + migration adapter contract (table creation, applied-row lifecycle, lock acquisition, introspect-throws).
   - `@forinda/kickjs-db-mysql`: 11 unit tests covering the version-string parser + the version-assertion gate (MySQL 8 / MariaDB 10 pass, MySQL 5.7 / unparseable throw, version check is cached after first success). Real-driver Testcontainers integration test ships in a follow-up to keep CI cheap.
 
   ## What's deferred
+
   - Real-driver Testcontainers MySQL integration test — dropped to a follow-up so this PR stays cheap to run on every push.
   - `introspect()` for both dialects — the migration runner's drift check refuses without it; adopters set `driftCheck: 'off'` until follow-up impls land.
 
@@ -482,13 +534,13 @@
 - [#185](https://github.com/forinda/kick-js/pull/185) [`c601090`](https://github.com/forinda/kick-js/commit/c60109029a59694da9478dd714cb9aea684765fe) Thanks [@forinda](https://github.com/forinda)! - `db.query.X.findMany({ with })` now works on MySQL 8.0+. M4.A.3 from `docs/db/m4-plan.md` — closes the "PG only" caveat that started in v5.3 and shrank with M4.A.2 (SQLite). All three dialects now ship real compilers; the `RelationalQueryNotSupportedError` throw-stub is retired.
 
   ```ts
-  const db = createDbClient({ schema, dialect: mysqlDialect({ pool }) })
+  const db = createDbClient({ schema, dialect: mysqlDialect({ pool }) });
 
   const rows = await db.query.users.findMany({
     with: { posts: { with: { comments: true } } },
-    where: (_u, eb) => eb('isActive', '=', true),
+    where: (_u, eb) => eb("isActive", "=", true),
     limit: 20,
-  })
+  });
   ```
 
   The compiler emits `cast(coalesce(json_arrayagg(json_object(...)), '[]') as json)` for `many` (returns `[]` over zero rows, never `null`) and `JSON_OBJECT(...)` with `LIMIT 1` for `one` (returns `null` over zero rows). Same row-shape contract as PG and SQLite.
@@ -512,24 +564,25 @@
     sender: one(users, {
       fields: [messages.senderId],
       references: [users.id],
-      relationName: 'sentMessages',
+      relationName: "sentMessages",
     }),
     recipient: one(users, {
       fields: [messages.recipientId],
       references: [users.id],
-      relationName: 'receivedMessages',
+      relationName: "receivedMessages",
     }),
-  }))
+  }));
 
   relations(users, ({ many }) => ({
-    sentMessages: many(messages, { relationName: 'sentMessages' }),
-    receivedMessages: many(messages, { relationName: 'receivedMessages' }),
-  }))
+    sentMessages: many(messages, { relationName: "sentMessages" }),
+    receivedMessages: many(messages, { relationName: "receivedMessages" }),
+  }));
   ```
 
   The resolver pairs by name first; M3's single-inverse + FK-introspection fallbacks remain for schemas that don't need the disambiguation.
 
   **Resolution precedence** (`extractRelations`):
+
   1. Both sides declare matching `relationName` → use the matched `one`'s columns.
   2. Single untagged inverse `one` (no `relationName` on either side, exactly one `one` on the target points back at the source) → use it.
   3. FK introspection — exactly one FK back to the source → use those columns.
@@ -538,6 +591,7 @@
   **Behavior change vs M3:** Step 2 now requires the inverse to be **unique**. M3's `findInverseOne` returned the first match without a uniqueness check, which silently picked wrong on multi-FK schemas. M4.B makes those schemas surface as `MissingInverseError` instead of silently joining the wrong way. Single-FK schemas (the common case) behave identically.
 
   **New public surface:**
+
   - `Helpers.one`'s opts gain optional `relationName?: string`.
   - `Helpers.many`'s second arg becomes optional `{ relationName?: string }` (was required-positional `target` only).
   - `RelationOne<T>` + `RelationMany<T>` interfaces gain optional `relationName?: string`.
@@ -554,13 +608,13 @@
   The `pickCompiler('sqlite')` path now returns a real implementation (`compileSqlite`) backed by `kysely/helpers/sqlite`'s `jsonArrayFrom` / `jsonObjectFrom`. Same call shape as the PG layer; no adopter code changes:
 
   ```ts
-  const db = createDbClient({ schema, dialect: sqliteDialect({ database }) })
+  const db = createDbClient({ schema, dialect: sqliteDialect({ database }) });
 
   const rows = await db.query.users.findMany({
     with: { posts: { with: { comments: true } } },
-    where: (_u, eb) => eb('isActive', '=', true),
+    where: (_u, eb) => eb("isActive", "=", true),
     limit: 20,
-  })
+  });
   ```
 
   The compiler emits `coalesce(json_group_array(json_object(...)), '[]')` for `many` (returns `[]` over zero rows, never `null`) and `json_object(...)` with `LIMIT 1` for `one` (returns `null` over zero rows). Same row-shape contract as PG.
@@ -612,6 +666,7 @@
   The `USING column::text::foo` clause does the safety check: if any row holds a removed value, the cast fails and the whole transaction rolls back. Operators who need to map removed values to a replacement first must hand-roll a pre-migration that does the data update before generating the structural removal.
 
   **New public API on `@forinda/kickjs-db`:**
+
   - `RunnerOptions.confirmEnumDrop?: boolean` — opt-in flag for the runner.
   - `MigrationEnumDropError` — thrown by the gate; carries `id`, `enums`, `removed`, `columns`.
   - `parseEnumDropHeader(sql)` / `enforceEnumDropGate(id, sql, confirmEnumDrop)` / `EnumDropHeader` — exposed for adopters who run migrations through their own tooling and want the same gate semantics.
@@ -628,13 +683,13 @@
   After upgrading + running `kick typegen` (or `kick dev`), `.kickjs/types/kick__db.d.ts` carries:
 
   ```ts
-  declare module '@forinda/kickjs-db' {
+  declare module "@forinda/kickjs-db" {
     interface KickDbRegister {
-      db: KickDbClient<KickDbSchema>
+      db: KickDbClient<KickDbSchema>;
     }
 
     interface KickDbRelationsRegister {
-      db: SchemaToRelationsRegister<typeof appSchema>
+      db: SchemaToRelationsRegister<typeof appSchema>;
     }
   }
   ```
@@ -646,6 +701,7 @@
   `relations(source, builder)` and the `Helpers.one` / `Helpers.many` factories now preserve the source name and target literal at the type level. The runtime shape is unchanged and all existing call sites remain assignable to the prior less-specific signature; this is strictly a narrowing improvement that makes `SchemaToRelationsRegister<S>` derivable.
 
   Specifically:
+
   - `relations()` returns `RelationsDecl<TSourceName, TRelationsMap>` (was `RelationsDecl`).
   - `Helpers.one` returns `RelationOne<TTarget>` (was `RelationOne`).
   - `Helpers.many` returns `RelationMany<TTarget>` (was `RelationMany`).
@@ -657,24 +713,26 @@
 - [#178](https://github.com/forinda/kick-js/pull/178) [`0a63cfc`](https://github.com/forinda/kick-js/commit/0a63cfc90cdc02c94dbdd410ac5f46d1952c3d06) Thanks [@{](https://github.com/{)! - Land the runtime surface for `db.query.X.findMany({ with })`. After this release, adopters call the relational read API directly off the client returned by `createDbClient`:
 
   ```ts
-  const db = createDbClient({ schema, dialect: pgDialect({ pool }) })
+  const db = createDbClient({ schema, dialect: pgDialect({ pool }) });
 
   const rows = await db.query.users.findMany({
     with: { posts: { with: { comments: true } } },
-    where: (u, eb) => eb('isActive', '=', true),
+    where: (u, eb) => eb("isActive", "=", true),
     limit: 20,
-  })
+  });
   ```
 
   PostgreSQL only in this release. SQLite and MySQL clients throw `RelationalQueryNotSupportedError` on first call — a M4-tracked compiler lands in a follow-up.
 
   **New runtime pieces:**
+
   - `KickDbClient<DB>.query: QueryNamespace<DB>` — Proxy-based namespace. Materializes per-table sub-namespaces on first access (`findMany` / `findFirst` / `findUnique`).
   - `extractSnapshot` now populates an optional `SchemaSnapshot.relations` sidecar from `relations()` declarations. JSON-serializable; the migration pipeline ignores it. `many` relations resolve via the inverse `one` if declared, falling back to FK introspection so M0/M1 schemas keep working without rewrites.
   - `createDbClient` calls `extractSnapshot` once at boot, picks the dialect-specific compiler, and threads both into the client. Adopters write zero extra code.
   - `detectDialect` now also inspects the adapter class returned by `createAdapter()`, so hand-rolled `KyselyDialect` literals (common in tests) are recognized as PG / MySQL / SQLite correctly.
 
   **New public exports** from `@forinda/kickjs-db`:
+
   - Types: `FindManyOptions<DB, Table>`, `FindManyRow<DB, Table, Opts>`, `WithClause<DB, Rels>`, `QueryNamespace<DB>`, `TableQueryNamespace<DB, Table>`, `KickDbRelationsRegister`, `RegisteredRelations`, `RelationMapEntry`, `TableRelations<Table>`, `ResolvedRelation`, `ResolvedRelations`, `RelationSnapshot`.
   - Error classes: `RelationalQueryUnknownRelationError`, `RelationalQueryDepthError`, `RelationalQueryAliasCollisionError`, `RelationalQueryMissingInverseError`, `RelationalQueryNotSupportedError`. All extend `KickDbError` with stable codes (`KICK_DB_RELATIONAL_*`).
 
@@ -701,12 +759,14 @@
 - [#178](https://github.com/forinda/kick-js/pull/178) [`b98bcbe`](https://github.com/forinda/kick-js/commit/b98bcbe67ab3fd4bb33039831e3b87702a053919) Thanks [@forinda](https://github.com/forinda)! - Add the relational-query type surface and PostgreSQL compiler that back `db.query.X.findMany({ with })`. The runtime wire-up that exposes `db.query` on the client lands in a follow-up; this changeset ships the types, errors, and SQL emitter.
 
   **New types** (not yet re-exported from the public barrel — internal until the runtime wires up):
+
   - `FindManyOptions<Table>` — options bag for `findMany` / `findFirst` / `findUnique`. `where` / `orderBy` / `limit` / `offset` / `maxDepth` / `raw` / `with`. `with` keys are constrained to relations declared for the source table; nested `with` recurses with the same constraint.
   - `FindManyRow<Table, Opts>` — resolved row shape: base columns ∪ per-relation slot (`one` → `Related | null`, `many` → `Related[]`).
   - `KickDbRelationsRegister` — adopter-augmentable registry mirroring `KickDbRegister`. The kick/db typegen plugin will populate it alongside the column-shape augmentation.
   - `RelationMapEntry` / `RegisteredRelations` / `TableRelations` / `WithClause` / `QueryNamespace` / `TableQueryNamespace` — supporting types.
 
   **New PG compiler** at `packages/db/src/query/compile-pg.ts`:
+
   - Pure function `(db, table, options, relations, mode) → CompiledQuery`. No I/O.
   - Uses Kysely's `jsonArrayFrom` / `jsonObjectFrom` from `kysely/helpers/postgres` — produces `coalesce((select json_agg(agg) from ...) as agg, '[]')` for `many` and `(select to_json(obj) from ... limit 1) as obj` for `one`.
   - Recurses for nested `with` so deeply-nested relations compile to a single round-trip query.
@@ -714,6 +774,7 @@
   - `mode: 'first' | 'unique'` clamps the outer query to `LIMIT 1`.
 
   **New error classes** at `packages/db/src/query/errors.ts`:
+
   - `RelationalQueryUnknownRelationError` — thrown at compile time when a `with` key isn't declared on the source table.
   - `RelationalQueryDepthError` — thrown when a `with` clause exceeds `maxDepth` (default 5; configurable per call).
   - `RelationalQueryAliasCollisionError` — thrown when a relation name shadows a column on the same table.
@@ -730,6 +791,7 @@
 ### Patch Changes
 
 - [#166](https://github.com/forinda/kick-js/pull/166) [`a6d0dd6`](https://github.com/forinda/kick-js/commit/a6d0dd6038b215c0ae3cbe1a20e11ba0d8b1c46e) Thanks [@forinda](https://github.com/forinda)! - Minify published build output via the tsdown / oxc minifier.
+
   - **Library packages** use `minify: { compress: true, mangle: false }`. Whitespace and comments are stripped and constants folded, but identifiers stay intact so adopter stack traces remain readable.
   - **CLI** uses `minify: { compress: true, mangle: true }`. The CLI is an operator tool, not a library — full mangle is fine and gives a smaller binary.
 
@@ -740,6 +802,7 @@
 ### Patch Changes
 
 - [#161](https://github.com/forinda/kick-js/pull/161) [`5de61d9`](https://github.com/forinda/kick-js/commit/5de61d9a9cd99bac3e1e271a36b092fa7bf7ad98) Thanks [@forinda](https://github.com/forinda)! - Documentation fixes:
+
   - README example now references the actual exported `SchemaToTypes<S>` helper (was `SchemaToKysely<S>`, which was never exported).
   - JSDoc examples in `adapter.ts` and `client/types.ts` updated to match the public surface.
 
