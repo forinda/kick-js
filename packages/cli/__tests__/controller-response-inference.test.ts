@@ -125,6 +125,31 @@ describe('generated controllers infer a real response type', () => {
     }
   })
 
+  it('keeps generated controllers within the scaffold print width', () => {
+    // Scaffolded projects ship a .prettierrc with printWidth: 100, so an
+    // over-long line means the adopter's first `pnpm format` rewrites a file
+    // the CLI just wrote. tsc passes either way, so nothing else catches it.
+    assertCliOk(runCli(fixture, ['g', 'module', 'alpha', '--pattern', 'minimal']), 'minimal')
+    assertCliOk(runCli(fixture, ['g', 'controller', 'beta']), 'controller')
+    assertCliOk(runCli(fixture, ['g', 'scaffold', 'gamma', 'title:string']), 'scaffold')
+
+    for (const path of [
+      'src/modules/alphas/alpha.controller.ts',
+      'src/controllers/beta.controller.ts',
+      'src/modules/gammas/gamma.controller.ts',
+    ]) {
+      const lines = readFileSync(join(fixture, path), 'utf-8').split('\n')
+      const tooLong = lines
+        .map((line, i) => ({ line, n: i + 1 }))
+        .filter(({ line }) => line.length > 100)
+      expect(
+        tooLong,
+        `${path} has lines over 100 cols:\n` +
+          tooLong.map(({ line, n }) => `  ${n}: (${line.length}) ${line}`).join('\n'),
+      ).toEqual([])
+    }
+  })
+
   it('scaffolds full CRUD even for the minimal pattern', () => {
     assertCliOk(runCli(fixture, ['g', 'module', 'widget', '--pattern', 'minimal']), 'g module')
 
