@@ -129,14 +129,17 @@ export async function generateContributor(options: GenerateContributorOptions): 
 
   // The usage example has to match the transport. A `bare` contributor
   // resolves against `ExecutionContext`, which has no `@Get` route and no
-  // `ctx.json` — showing an HTTP handler there hands the adopter a
-  // snippet that doesn't compile for the thing they just generated.
+  // HTTP response helpers — showing an HTTP handler there hands the adopter
+  // a snippet that doesn't compile for the thing they just generated.
+  //
+  // The http example RETURNS the value rather than calling `ctx.json()`: that
+  // is what lets `kick typegen` infer the route's response type.
   const usageExample =
     type === 'http'
       ? ` *   @${pascal}${params.length > 0 ? `({ ${params[0]?.name}: … })` : ''}
  *   @Get('/')
  *   handler(ctx: ${ctxType}) {
- *     return ctx.json(ctx.require('${key}'))
+ *     return ctx.require('${key}')
  *   }`
       : ` *   // Any transport whose handler receives an ExecutionContext
  *   // (WebSocket, queue, cron). Attach via that transport's decorator,
