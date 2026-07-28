@@ -64,7 +64,14 @@ const SCHEMA_NAME = /^[A-Za-z_][A-Za-z0-9_$]*$/
  * {@link EffectiveSchema} for why that matters.
  */
 export function pgSchema<TName extends string>(name: TName): PgSchema<EffectiveSchema<TName>> {
-  if (!SCHEMA_NAME.test(name)) {
+  // The typeof check is load-bearing, not belt-and-braces: `RegExp.test(x)`
+  // stringifies its argument, so the regex alone accepts `undefined`
+  // ('undefined'), `null` ('null'), `true` ('true') and `['a']` ('a'). Each
+  // fails differently downstream — `undefined` yields a silently unqualified
+  // table, `null` serializes `"schema": null` into the snapshot, and the
+  // others key a table `"true.x"` / `"a.x"` and emit DDL creating a schema by
+  // that name. TS forbids all of them; JS callers and `any` do not.
+  if (typeof name !== 'string' || !SCHEMA_NAME.test(name)) {
     throw new Error(
       `pgSchema: invalid schema name ${JSON.stringify(name)}. ` +
         `Expected an unquoted PostgreSQL identifier matching ${SCHEMA_NAME.source}.`,

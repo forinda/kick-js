@@ -2,7 +2,7 @@
 // `.test-d.ts` file because vitest only enforces expectTypeOf assertions
 // under `--typecheck`, whose include list is `**/*.test-d.ts`.
 //
-// Run: vitest run --typecheck --typecheck.ignoreSourceErrors \
+// Run: pnpm exec vitest run --typecheck --typecheck.ignoreSourceErrors \
 //        __tests__/unit/columns-array-brands.test-d.ts
 import { describe, it, expectTypeOf } from 'vitest'
 import type { Generated } from 'kysely'
