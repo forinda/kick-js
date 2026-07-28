@@ -263,6 +263,76 @@ See [`docs/guide/db-extensions.md`](../guide/db-extensions.md) for the full mapp
 
 PostgreSQL-only ENUM type. See [Schema Types guide](../guide/db-schema-types.md#postgresql-enums).
 
+### `pgSchema(name)`
+
+Declare a PostgreSQL named schema and hang tables off it. Imported from the
+`/pg` subpath.
+
+```ts
+import { pgSchema } from '@forinda/kickjs-db/pg'
+import { table, serial, varchar } from '@forinda/kickjs-db'
+
+const billing = pgSchema('billing')
+
+const invoices = billing.table('invoices', {
+  id: serial().primaryKey(),
+  ref: varchar(32).notNull(),
+})
+
+const users = table('users', { id: serial().primaryKey() }) // default search_path
+```
+
+Generates:
+
+```sql
+CREATE SCHEMA IF NOT EXISTS "billing";
+CREATE TABLE "billing"."invoices" ( ... );
+CREATE TABLE "users" ( ... );
+```
+
+and keys the row type by the qualified name, which Kysely reads as
+schema-qualified:
+
+```ts
+type DB = KickDbSchema // { 'billing.invoices': {...}, users: {...} }
+
+await db.selectFrom('billing.invoices').selectAll().execute()
+```
+
+Every generated statement for the table is qualified — `CREATE`/`DROP`/`ALTER
+TABLE`, `CREATE INDEX`, `DROP INDEX` (whose name resolves through
+`search_path`, so it needs the qualifier), and any `REFERENCES` pointing at it.
+
+**Two schemas may hold same-named tables.** Snapshot keys are the qualified
+name, so `billing.events` and `audit.events` never collide.
+
+**`pgSchema('public')` collapses to no schema.** PG puts `public` on the
+default `search_path`, so `pgSchema('public').table('users', …)` and
+`table('users', …)` name the same physical table. Treating them as different
+snapshot keys would make the diff emit `DROP TABLE users` + `CREATE TABLE
+public.users`, so `public` is normalised away in both the runtime value and
+the row-type key.
+
+**Schemas are never dropped.** There is no `dropSchema` change. A schema can
+hold objects this app never declared — another service's tables, extensions,
+views — so a `DROP SCHEMA` inferred from "no table references it any more"
+could destroy data the diff never saw. Down migrations leave the emptied
+schema in place for an operator to remove deliberately.
+
+::: warning PostgreSQL only
+On MySQL a "schema" _is_ a database and SQLite has none (only `ATTACH`
+aliases), so the qualified identifiers would mean something different.
+Declaring a schema and then diffing against either dialect throws at snapshot
+time, before any DDL is written.
+:::
+
+::: tip Introspection scope
+`kick db pull` / drift detection still read a single schema — the one set via
+`pgAdapter({ schema })`, default `public`. Tables you declare in another schema
+are created and migrated correctly, but will not be compared against the live
+database. Multi-schema introspection is not implemented yet.
+:::
+
 ## Query API
 
 Three layers, all mix freely on the same `KickDbClient`.

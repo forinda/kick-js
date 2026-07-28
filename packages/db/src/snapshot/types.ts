@@ -31,7 +31,18 @@ export interface CheckSnapshot {
 }
 
 export interface TableSnapshot {
+  /**
+   * Bare table name, unqualified. The schema (when any) lives in
+   * {@link TableSnapshot.schema}; the map key on `SchemaSnapshot.tables` is
+   * the qualified form (`billing.invoices`).
+   */
   name: string
+  /**
+   * Named SQL schema, from `pgSchema('x').table(...)`. Absent for tables in
+   * the connection's default search_path, which keeps pre-schema snapshots
+   * byte-identical (and their migration hashes valid).
+   */
+  schema?: string
   columns: Record<string, ColumnSnapshot>
   indexes: IndexSnapshot[]
   foreignKeys: ForeignKeySnapshot[]
@@ -80,7 +91,20 @@ export interface RelationSnapshot {
 export interface SchemaSnapshot {
   version: 1
   dialect: Dialect
+  /**
+   * Keyed by QUALIFIED name — `billing.invoices` for a table declared through
+   * `pgSchema('billing')`, the bare name otherwise. Qualifying the key is what
+   * lets two schemas hold same-named tables without colliding, and it makes
+   * every `table: string` field on a diff `Change` already schema-correct:
+   * `quoteIdent` splits on `.`, rendering `"billing"."invoices"`.
+   */
   tables: Record<string, TableSnapshot>
+  /**
+   * Named schemas the tables in this snapshot live in, sorted. Drives
+   * `CREATE SCHEMA IF NOT EXISTS` emission. PG-only; absent when no table
+   * declares a schema, so existing snapshots keep their exact shape.
+   */
+  schemas?: readonly string[]
   /** ENUM types declared via `pgEnum()`. PG-only; absent on other dialects. */
   enums?: Record<string, EnumSnapshot>
   /**

@@ -6,6 +6,20 @@ import type {
   TableSnapshot,
 } from '../snapshot/types'
 
+/**
+ * `CREATE SCHEMA IF NOT EXISTS "x"` — emitted ahead of every table change so
+ * a new schema exists before anything is created inside it.
+ *
+ * There is deliberately no `dropSchema` counterpart. A schema can hold objects
+ * this app never declared (another service's tables, extensions, views), so a
+ * `DROP SCHEMA` inferred from "no table references it any more" could destroy
+ * data the diff never saw. Removing a schema stays a manual operation.
+ */
+export interface CreateSchema {
+  kind: 'createSchema'
+  schema: string
+}
+
 export interface CreateTable {
   kind: 'createTable'
   table: TableSnapshot
@@ -136,6 +150,7 @@ export interface RemoveEnumValue {
 }
 
 export type Change =
+  | CreateSchema
   | CreateTable
   | DropTable
   | RenameTable

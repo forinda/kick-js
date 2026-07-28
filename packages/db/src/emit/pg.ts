@@ -1,5 +1,6 @@
 import type { Change, ChangeSet } from '../diff/types'
 import type { ColumnSnapshot, TableSnapshot } from '../snapshot/types'
+import { snapshotTableName } from '../snapshot/name'
 import { quoteIdent, quoteLiteral } from './identifiers'
 import { alterTypeAddValue, alterTypeRenameTo, renderAlterType } from './alter-type'
 
@@ -7,14 +8,37 @@ export function emitPg(changes: ChangeSet): string {
   return changes.map(emitChange).join('\n')
 }
 
+/**
+ * Qualified identifier for a table snapshot. `quoteIdent` splits on `.`, so
+ * `billing.invoices` renders `"billing"."invoices"`.
+ *
+ * Changes that carry `table: string` already hold the qualified snapshot key
+ * and need no help; only the two that carry a whole `TableSnapshot` do.
+ */
+function tableIdent(t: TableSnapshot): string {
+  return quoteIdent(snapshotTableName(t))
+}
+
+/** Schema portion of a qualified snapshot key, or undefined when bare. */
+function schemaOf(qualified: string): string | undefined {
+  const dot = qualified.indexOf('.')
+  return dot === -1 ? undefined : qualified.slice(0, dot)
+}
+
 function emitChange(change: Change): string {
   switch (change.kind) {
+    case 'createSchema':
+      // IF NOT EXISTS: the schema may predate this app, and re-running a
+      // migration against a partially-applied database must not fail.
+      return `CREATE SCHEMA IF NOT EXISTS ${quoteIdent(change.schema)};`
     case 'createTable':
       return emitCreateTable(change.table)
     case 'dropTable':
-      return `DROP TABLE ${quoteIdent(change.table.name)};`
+      return `DROP TABLE ${tableIdent(change.table)};`
     case 'renameTable':
-      return `ALTER TABLE ${quoteIdent(change.from)} RENAME TO ${quoteIdent(change.to)};`
+      // PG requires the target of RENAME TO to be unqualified — the table
+      // cannot change schema this way (that is ALTER TABLE … SET SCHEMA).
+      return `ALTER TABLE ${quoteIdent(change.from)} RENAME TO ${quoteIdent(bareName(change.to))};`
     case 'addColumn':
       return emitAddColumn(change.table, change.column)
     case 'dropColumn':
@@ -25,8 +49,15 @@ function emitChange(change: Change): string {
       return emitAlterColumn(change.table, change.before, change.after)
     case 'addIndex':
       return emitAddIndex(change.table, change.index)
-    case 'dropIndex':
-      return `DROP INDEX ${quoteIdent(change.index.name)};`
+    case 'dropIndex': {
+      // An index lives in its table's schema, and DROP INDEX resolves through
+      // search_path — so a bare name would miss (or worse, hit a same-named
+      // index in public). CREATE INDEX needs no such qualification: it takes
+      // the schema from the qualified table it targets.
+      const schema = schemaOf(change.table)
+      const name = schema ? `${schema}.${change.index.name}` : change.index.name
+      return `DROP INDEX ${quoteIdent(name)};`
+    }
     case 'addForeignKey':
       return emitAddFk(change.table, change.fk)
     case 'dropForeignKey':
@@ -293,7 +324,13 @@ function emitCreateTable(t: TableSnapshot): string {
     .map((c) => quoteIdent(c.name))
   const lines = [...cols]
   if (pk.length > 0) lines.push(`PRIMARY KEY (${pk.join(', ')})`)
-  return `CREATE TABLE ${quoteIdent(t.name)} (\n  ${lines.join(',\n  ')}\n);`
+  return `CREATE TABLE ${tableIdent(t)} (\n  ${lines.join(',\n  ')}\n);`
+}
+
+/** Strip any schema qualifier: `billing.invoices` → `invoices`. */
+function bareName(qualified: string): string {
+  const dot = qualified.indexOf('.')
+  return dot === -1 ? qualified : qualified.slice(dot + 1)
 }
 
 function emitColumnDecl(c: ColumnSnapshot): string {
