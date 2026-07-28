@@ -72,15 +72,19 @@ export class HelloController {
 
   @Get('/')
   index(ctx: Ctx<KickRoutes.HelloController['index']>) {
-    ctx.json(this.helloService.greet('World'))
+    return this.helloService.greet('World')
   }
 
   @Get('/health')
   health(ctx: Ctx<KickRoutes.HelloController['health']>) {
-    ctx.json(this.helloService.healthCheck())
+    return this.helloService.healthCheck()
   }
 }
 ```
+
+Handlers return their payload; the runtime sends it as JSON and `kick typegen`
+infers the response type from the return type — that's what makes the
+[typed client](https://kickjs.app/guide/typed-client) know each route's shape.
 
 ```ts
 // src/modules/hello/hello.module.ts

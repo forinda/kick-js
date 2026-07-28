@@ -150,8 +150,8 @@ describe('kick g <leaf>', () => {
     })
 
     it('keeps the usage example transport-appropriate for --type bare', () => {
-      // ExecutionContext has no @Get route and no ctx.json — an HTTP
-      // example here hands the adopter a snippet that does not compile
+      // ExecutionContext has no @Get route and no HTTP response helpers — an
+      // HTTP example here hands the adopter a snippet that does not compile
       // against the contributor they just generated.
       runCli(fixture, ['g', 'contributor', 'audit-log', '--type', 'bare'])
       const bare = readFileSync(join(fixture, 'src/contributors/audit-log.contributor.ts'), 'utf-8')
@@ -163,7 +163,10 @@ describe('kick g <leaf>', () => {
       runCli(fixture, ['g', 'contributor', 'tenant'])
       const http = readFileSync(join(fixture, 'src/contributors/tenant.contributor.ts'), 'utf-8')
       expect(http).toContain("@Get('/')")
-      expect(http).toContain("ctx.json(ctx.require('tenant'))")
+      // Return-value style, not `ctx.json(...)` — that is what lets typegen
+      // infer the route's response type instead of emitting `unknown`.
+      expect(http).toContain("return ctx.require('tenant')")
+      expect(http).not.toContain('ctx.json(')
     })
 
     it('points at .registration (not the decorator) for non-decorator sites', () => {

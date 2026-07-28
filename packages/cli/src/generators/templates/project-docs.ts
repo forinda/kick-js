@@ -1178,7 +1178,7 @@ const LoadProject = defineHttpContextDecorator({
 @LoadProject
 @Get('/projects/:id')
 getProject(ctx: RequestContext) {
-  ctx.json(ctx.get('project'))
+  return ctx.get('project')
 }
 \`\`\`
 
@@ -1662,7 +1662,7 @@ const LoadProject = defineHttpContextDecorator({
 @LoadTenant
 @LoadProject
 @Get('/projects/:id')
-getProject(ctx: RequestContext) { ctx.json(ctx.require('project')) }
+getProject(ctx: RequestContext) { return ctx.require('project') }
 \`\`\`
 
 Use \`defineContextDecorator\` (no Http prefix) when authoring a contributor that must run across HTTP, WebSocket, queue, and cron transports — \`Ctx\` defaults to the smaller \`ExecutionContext\` surface (\`get\` / \`require\` / \`set\` / \`requestId\` only, no \`req\`).
