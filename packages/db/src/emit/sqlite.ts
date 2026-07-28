@@ -101,6 +101,14 @@ function perTableName(change: Change): string | null {
 
 function emitChange(change: Change): string {
   switch (change.kind) {
+    case 'createSchema':
+      // Unreachable through `generate()` — extractSnapshot rejects a declared
+      // schema on non-PG dialects first. SQLite has no CREATE SCHEMA at all;
+      // the nearest thing is an ATTACH alias, a connection-time concern.
+      throw new Error(
+        `kickjs-db: pgSchema() is PostgreSQL-only — cannot emit schema ` +
+          `"${change.schema}" for SQLite, which has no schemas (only ATTACH).`,
+      )
     case 'createTable':
       return emitCreateTable(change.table.name, change.table)
     case 'dropTable':

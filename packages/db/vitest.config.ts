@@ -28,8 +28,12 @@ export default defineConfig({
         replacement: path.resolve(__dirname, 'src/devtools-events.ts'),
       },
       {
+        // The real subpath barrel, matching `exports['./pg']` — not just the
+        // column types. Pointing this at src/dsl/columns/pg.ts made the alias
+        // narrower than the published surface, so anything else exported from
+        // ./pg (pgSchema, the adapter, the dialect) was invisible to tests.
         find: '@forinda/kickjs-db/pg',
-        replacement: path.resolve(__dirname, 'src/dsl/columns/pg.ts'),
+        replacement: path.resolve(__dirname, 'src/pg.ts'),
       },
       // M5.B — internal-only aliases so tests can reach helpers that
       // aren't part of the public `package.json` exports.

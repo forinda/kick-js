@@ -1,4 +1,5 @@
-import type { Change, ChangeSet } from './types'
+import { snapshotTableName } from '../snapshot/name'
+import type { Change, ChangeSet, CreateSchema } from './types'
 
 /**
  * Reverse a forward ChangeSet so emitting it produces the SQL that undoes
@@ -18,6 +19,11 @@ import type { Change, ChangeSet } from './types'
 export function invertChanges(forward: ChangeSet): ChangeSet {
   const reversed: Change[] = []
   for (const change of forward) {
+    // `createSchema` has no inverse by design. A schema can hold objects this
+    // app never declared, so a generated DROP SCHEMA could destroy data the
+    // diff never saw; the down migration leaves the (now empty) schema behind
+    // for an operator to remove deliberately. See CreateSchema in ./types.
+    if (change.kind === 'createSchema') continue
     reversed.push(invert(change))
   }
   const ordered = reversed.toReversed()
@@ -29,8 +35,12 @@ export function invertChanges(forward: ChangeSet): ChangeSet {
   // which no longer contains the table when the inversion of a
   // createTable is in the same set (every first migration of an
   // FK-bearing schema hit `SqliteRebuildRequiredError`).
+  // Qualified on both sides: `dropTable` carries a TableSnapshot (bare name +
+  // schema) while `dropForeignKey`/`dropIndex` carry the qualified snapshot
+  // key, so comparing raw `.name` would never match a schema-qualified table
+  // and the prune below would silently stop firing for it.
   const droppedTables = new Set(
-    ordered.filter((c) => c.kind === 'dropTable').map((c) => c.table.name),
+    ordered.filter((c) => c.kind === 'dropTable').map((c) => snapshotTableName(c.table)),
   )
   return ordered.filter((c) => {
     if (c.kind === 'dropForeignKey' || c.kind === 'dropIndex') {
@@ -40,7 +50,9 @@ export function invertChanges(forward: ChangeSet): ChangeSet {
   })
 }
 
-function invert(change: Change): Change {
+// `CreateSchema` is filtered out above rather than inverted, so excluding it
+// here keeps the switch exhaustive without a dead default branch.
+function invert(change: Exclude<Change, CreateSchema>): Change {
   switch (change.kind) {
     case 'createTable':
       return { kind: 'dropTable', table: change.table }

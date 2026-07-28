@@ -40,6 +40,14 @@ export function emitMysql(changes: ChangeSet): string {
 
 function emitChange(change: Change): string {
   switch (change.kind) {
+    case 'createSchema':
+      // Unreachable through `generate()` — extractSnapshot rejects a declared
+      // schema on non-PG dialects first. Kept explicit rather than silently
+      // emitting `CREATE SCHEMA`, which on MySQL means CREATE DATABASE.
+      throw new Error(
+        `kickjs-db: pgSchema() is PostgreSQL-only — cannot emit schema ` +
+          `"${change.schema}" for MySQL, where a schema is a database.`,
+      )
     case 'createTable':
       return emitCreateTable(change.table)
     case 'dropTable':
