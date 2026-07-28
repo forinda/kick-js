@@ -134,6 +134,15 @@ function applyOne(snapshot: SchemaSnapshot, change: ChangeSet[number]): void {
       }
       return
     }
+    case 'createSchema': {
+      // Mirrors extractSnapshot: `schemas` is sorted and only present when
+      // non-empty, so the fuzz round-trip stays an exact comparison. There is
+      // no dropSchema variant to mirror — schemas are never removed.
+      const schemas = new Set(snapshot.schemas ?? [])
+      schemas.add(change.schema)
+      snapshot.schemas = [...schemas].toSorted()
+      return
+    }
     default: {
       // Exhaustiveness guard: a new Change variant added without
       // an applier case here would silently no-op and make the
