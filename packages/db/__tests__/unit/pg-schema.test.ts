@@ -67,6 +67,22 @@ describe('pgSchema()', () => {
       expect(() => pgSchema('drop";--')).toThrow(/invalid schema name/)
       expect(() => pgSchema('')).toThrow(/invalid schema name/)
     })
+
+    it('rejects a non-string schema name', () => {
+      // `RegExp.test(x)` stringifies its argument, so a bare regex guard lets
+      // `undefined` ('undefined'), `null` ('null'), `true` ('true') and
+      // `['a']` ('a') through — each with a different downstream failure:
+      //   undefined → silently unqualified table
+      //   null      → `"schema": null` serialized into the snapshot
+      //   true/['a']→ a table keyed "true.x" / "a.x" and DDL creating a
+      //               schema by that name
+      // The types forbid all of these, but JS callers and `any` do not.
+      for (const bad of [undefined, null, 123, true, {}, ['a']]) {
+        expect(() => pgSchema(bad as unknown as string), `pgSchema(${String(bad)})`).toThrow(
+          /invalid schema name/,
+        )
+      }
+    })
   })
 
   describe('dialect guard', () => {

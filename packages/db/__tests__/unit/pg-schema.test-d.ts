@@ -3,7 +3,7 @@
 // whose include list is `**/*.test-d.ts` — and because the package tsconfig
 // only includes `src`, so `tsc --noEmit` would never see these.
 //
-// Run: vitest run --typecheck --typecheck.ignoreSourceErrors \
+// Run: pnpm exec vitest run --typecheck --typecheck.ignoreSourceErrors \
 //        __tests__/unit/pg-schema.test-d.ts
 import { describe, it, expectTypeOf } from 'vitest'
 import type { Generated } from 'kysely'
