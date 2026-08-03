@@ -53,8 +53,8 @@
   },
   "devDependencies": {
     "@forinda/kickjs": "workspace:*",
-    "@swc/core": "^1.15.46",
-    "@types/node": "^26.1.1",
+    "@swc/core": "^1.15.47",
+    "@types/node": "^26.1.2",
     "typescript": "^7.0.2",
     "unplugin-swc": "^1.5.9",
     "vitest": "^4.1.10",
