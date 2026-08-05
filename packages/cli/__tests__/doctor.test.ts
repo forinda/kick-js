@@ -11,6 +11,7 @@ import {
   checkKickJsInstalled,
   checkReflectMetadata,
   checkRuntimeEngine,
+  checkTestEnvIsolation,
   checkUploadDriver,
   defineDoctorCheck,
   defineDoctorExtension,
@@ -648,5 +649,66 @@ describe('defineDoctorCheck', () => {
     }))
     const results = await runChecks(dir, { extraChecks: [myCheck] })
     expect(results.find((r) => r.name === 'Bound check')?.status).toBe('pass')
+  })
+})
+
+describe('checkTestEnvIsolation', () => {
+  const VITEST_CFG = 'export default {}\n'
+
+  it('skips a project with no test runner config', () => {
+    const dir = tempProject({ '.env': 'DATABASE_URL=postgres://localhost/dev\n' })
+    expect(checkTestEnvIsolation(ctx(dir))).toBeNull()
+  })
+
+  it('skips a project with no .env — nothing can be inherited', () => {
+    const dir = tempProject({ 'vitest.config.ts': VITEST_CFG })
+    expect(checkTestEnvIsolation(ctx(dir))).toBeNull()
+  })
+
+  it('warns on the vulnerable shape: .env + a suite, no .env.test', () => {
+    const dir = tempProject({
+      'vitest.config.ts': VITEST_CFG,
+      '.env': 'DATABASE_URL=postgres://localhost/myapp_dev\n',
+    })
+    const r = checkTestEnvIsolation(ctx(dir))
+    expect(r?.status).toBe('warn')
+    expect(r?.fix).toContain('.env.test')
+    expect(r?.fix).toContain('KICKJS_ENV_FILE=off')
+  })
+
+  it('passes once .env.test exists', () => {
+    const dir = tempProject({
+      'vitest.config.ts': VITEST_CFG,
+      '.env': 'DATABASE_URL=postgres://localhost/myapp_dev\n',
+      '.env.test': 'DATABASE_URL=postgres://localhost/myapp_test\n',
+    })
+    expect(checkTestEnvIsolation(ctx(dir))?.status).toBe('pass')
+  })
+
+  it('passes when only .env.test.local provides the isolation', () => {
+    const dir = tempProject({
+      'vitest.config.ts': VITEST_CFG,
+      '.env': 'DATABASE_URL=postgres://localhost/myapp_dev\n',
+      '.env.test.local': 'DATABASE_URL=postgres://localhost/myapp_test\n',
+    })
+    expect(checkTestEnvIsolation(ctx(dir))?.status).toBe('pass')
+  })
+
+  it('warns on a bare .env.local with no .env — it leaks the same way', () => {
+    const dir = tempProject({
+      'vitest.config.ts': VITEST_CFG,
+      '.env.local': 'DATABASE_URL=postgres://localhost/myapp_dev\n',
+    })
+    const r = checkTestEnvIsolation(ctx(dir))
+    expect(r?.status).toBe('warn')
+    expect(r?.message).toContain('.env.local')
+  })
+
+  it('recognises a jest project too', () => {
+    const dir = tempProject({
+      'jest.config.js': 'module.exports = {}\n',
+      '.env': 'DATABASE_URL=postgres://localhost/myapp_dev\n',
+    })
+    expect(checkTestEnvIsolation(ctx(dir))?.status).toBe('warn')
   })
 })

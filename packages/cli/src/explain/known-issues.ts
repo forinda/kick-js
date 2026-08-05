@@ -336,6 +336,111 @@ const moduleNotRegistered: KnownIssue = {
   },
 }
 
+// ── Issue 8: test run inherited the developer's .env ─────────────────────
+
+const testEnvLeakedFromDotenv: KnownIssue = {
+  match(input, ctx) {
+    const hasTestContext = includesAny(input, [
+      'vitest',
+      'test',
+      'spec',
+      '__tests__',
+      '.test.',
+      'jest',
+    ])
+    if (!hasTestContext) return null
+
+    // Two distinct symptoms of the same cause.
+    //   a) the suite reached a real resource it should never have touched
+    //   b) a stub/override "did nothing" to ConfigService / @Value
+    const hitRealResource = includesAny(input, [
+      'wrong database',
+      'dev database',
+      'development database',
+      'production database',
+      'wrong db',
+      'dev db',
+      'connected to the wrong',
+      'wiped',
+      'truncated',
+      'deleted rows',
+      'sent a real email',
+      'real email',
+      'live api',
+    ])
+    const stubDidNothing =
+      includesAny(input, ['stubenv', 'process.env', 'setupfiles', 'test.env', 'env override']) &&
+      includesAny(input, [
+        'no effect',
+        'not applied',
+        'ignored',
+        'still',
+        'undefined',
+        'does nothing',
+        "doesn't work",
+        'not working',
+      ])
+
+    if (!hitRealResource && !stubDidNothing) return null
+
+    // A project with a `.env` but no `.env.test` is the exact vulnerable
+    // shape, so seeing it on disk is a strong corroborating signal.
+    const vulnerableShape = ctx?.hasFile?.('.env') === true && ctx?.hasFile?.('.env.test') === false
+
+    let confidence = hitRealResource && stubDidNothing ? 85 : hitRealResource ? 75 : 65
+    if (vulnerableShape) confidence = Math.min(95, confidence + 10)
+
+    return {
+      confidence,
+      diagnosis: {
+        id: 'test-env-leaked-from-dotenv',
+        title: 'Test run inherited env vars from your development .env',
+        explanation:
+          'KickJS loads dotenv as an import-time side effect, with `override: false`.\n' +
+          'That protects the vars your test runner pinned — but every var it did NOT\n' +
+          'pin is silently backfilled from your `.env`. So a suite can pin its database\n' +
+          'URL and still reach live development services through the vars it forgot,\n' +
+          'and nothing in the run reports it.\n' +
+          '\n' +
+          'The second symptom has the same root: `loadEnv()` parses process.env ONCE\n' +
+          'into a module-level cache, and ConfigService.get() / @Value() read that\n' +
+          'snapshot. A vi.stubEnv() in beforeAll runs long after the parse, so it is a\n' +
+          'silent no-op for them (it still works for code reading process.env directly).\n' +
+          '\n' +
+          "Under a test run (NODE_ENV=test, or vitest's VITEST), KickJS reads `.env.test`\n" +
+          'if it exists — and only `.env.test`, with no fallback to `.env`. Falling\n' +
+          'through is the leak, so one file wins outright.',
+        fix:
+          'Create a .env.test next to your .env holding the WHOLE environment the suite\n' +
+          'should run against. A var you leave out will be missing rather than\n' +
+          'inherited, which is the point — the run fails loudly instead of quietly\n' +
+          'reaching your dev stack.\n' +
+          '\n' +
+          'To stub a var mid-suite, drop the cache and re-parse. To opt out of dotenv\n' +
+          'entirely, set KICKJS_ENV_FILE=off (it also takes a comma-separated file list).',
+        codeBefore:
+          '# .env  ← read by your tests today, including every var you forgot to pin\n' +
+          'DATABASE_URL=postgres://localhost:5432/myapp_dev\n',
+        codeAfter:
+          '# .env.test  ← read INSTEAD of .env under NODE_ENV=test / VITEST\n' +
+          'NODE_ENV=test\n' +
+          'DATABASE_URL=postgres://localhost:5432/myapp_test\n' +
+          'LOG_LEVEL=silent\n' +
+          '\n' +
+          '// mid-suite stubs need the cache dropped:\n' +
+          "import { loadEnv, resetEnvCache } from '@forinda/kickjs'\n" +
+          "import { envSchema } from '../src/env'\n\n" +
+          'beforeAll(() => {\n' +
+          "  vi.stubEnv('JWT_SECRET', 'x'.repeat(32))\n" +
+          '  resetEnvCache()\n' +
+          '  loadEnv(envSchema)\n' +
+          '})',
+        docs: 'https://kickjs.app/guide/testing.html#environment-isolation',
+      },
+    }
+  },
+}
+
 // ── Registry ──────────────────────────────────────────────────────────────
 
 export const KNOWN_ISSUES: KnownIssue[] = [
@@ -346,6 +451,7 @@ export const KNOWN_ISSUES: KnownIssue[] = [
   clusterInDevMode,
   reflectMetadataMissing,
   moduleNotRegistered,
+  testEnvLeakedFromDotenv,
 ]
 
 /**

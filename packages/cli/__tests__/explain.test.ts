@@ -111,6 +111,32 @@ describe('known-issues registry', () => {
     expect(m!.diagnosis.id).toBe('cluster-in-vite-dev')
   })
 
+  it('matches test-env-leaked-from-dotenv when a suite hits a real resource', () => {
+    const m = findBestMatch('vitest run wiped the dev database — tests connected to the wrong db')
+    expect(m).not.toBeNull()
+    expect(m!.diagnosis.id).toBe('test-env-leaked-from-dotenv')
+  })
+
+  it('matches test-env-leaked-from-dotenv when vi.stubEnv appears to do nothing', () => {
+    const m = findBestMatch('in my vitest suite vi.stubEnv has no effect on ConfigService.get')
+    expect(m).not.toBeNull()
+    expect(m!.diagnosis.id).toBe('test-env-leaked-from-dotenv')
+  })
+
+  it('raises confidence when .env exists without .env.test', () => {
+    const input = 'vitest run wiped the dev database — tests connected to the wrong db'
+    const bare = findBestMatch(input)
+    const withShape = findBestMatch(input, {
+      hasFile: (p: string) => p === '.env',
+    })
+    expect(withShape!.confidence).toBeGreaterThan(bare!.confidence)
+  })
+
+  it('does not match a resource complaint with no test context', () => {
+    const m = findBestMatch('the production database was wiped during a migration')
+    expect(m?.diagnosis.id).not.toBe('test-env-leaked-from-dotenv')
+  })
+
   it('returns null for completely unrelated errors', () => {
     const m = findBestMatch('the rocket motor failed to ignite at T-minus 3')
     expect(m).toBeNull()
