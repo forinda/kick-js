@@ -1,5 +1,13 @@
 # @forinda/kickjs-cli
 
+## 6.10.1
+
+### Patch Changes
+
+- Updated dependencies [[`567e234`](https://github.com/forinda/kick-js/commit/567e234d8812678c30ad4c9cc71e130794c5780d)]:
+  - @forinda/kickjs@6.6.0
+  - @forinda/kickjs-db@7.2.0
+
 ## 6.10.0
 
 ### Minor Changes
