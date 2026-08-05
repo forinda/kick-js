@@ -315,15 +315,32 @@ placements are a `.env.test` file, your runner's `env` config, or a
 
 ### `.env.test` — the default
 
-Under a test run (`NODE_ENV=test`, or Vitest's `VITEST`), KickJS reads
-`.env.test` if the file exists — and **only** `.env.test`. It does not fall
-back to `.env`.
+KickJS uses the same env-file cascade Vite popularised (see its "Env Variables
+and Modes" guide): a mode-specific file outranks every generic one, and keys
+found only in a generic file are still available.
+
+```
+.env.[mode].local  >  .env.[mode]  >  .env.local  >  .env
+```
+
+`[mode]` is your `NODE_ENV`. Vars already in `process.env` outrank all four, so
+what your shell or CI exports always wins. `*.local` files are for personal
+machine overrides — add `*.local` to `.gitignore`.
+
+**Test mode is the one exception.** Under a test run (`NODE_ENV=test`, or
+Vitest's `VITEST`), if a `.env.test` or `.env.test.local` exists, those are read
+and the generic `.env` / `.env.local` are **not**. No layering, no fallback.
 
 That short-circuit is deliberate. With a fallback, every var your test config
 forgets to pin gets silently backfilled from your development `.env`: you can
 pin your database URL and still reach live development services through the
-vars you forgot, and nothing in the run tells you. One file wins outright
-instead.
+vars you forgot, and nothing in the run tells you. `.env.local` is excluded for
+the same reason — it is precisely the file holding one developer's machine
+setup.
+
+For `development` and `production` the layering is what you want (shared base
+plus per-mode overrides) and there is no dev-resource-in-a-test failure mode to
+guard against, so those cascade normally.
 
 ```bash
 # .env.test — checked in; the whole environment your suite runs against
@@ -335,14 +352,76 @@ LOG_LEVEL=silent
 With no `.env.test` present, `.env` is read as before and KickJS prints a
 one-time warning naming what it backfilled.
 
-Override the choice with `KICKJS_ENV_FILE` — a comma-separated list of files,
-or `off` to skip dotenv entirely (for env injected via the shell, Docker, or a
-secret manager):
+### `KICKJS_ENV_FILE` — taking manual control
+
+`KICKJS_ENV_FILE` replaces the whole cascade with a list you choose. It accepts
+a comma-separated list of paths, **highest precedence first**, or `off` to skip
+dotenv entirely:
 
 ```bash
+# Skip env files completely — env comes from the shell, Docker, or a
+# secret manager. Nothing on disk can leak in.
 KICKJS_ENV_FILE=off vitest run
+
+# One file, nothing else. Not even .env is consulted.
 KICKJS_ENV_FILE=.env.ci vitest run
 ```
+
+Order is precedence, so put the file that should win **first**. This is the
+manual equivalent of the built-in cascade — a base file plus overrides layered
+on top:
+
+```bash
+# .env.ci wins on conflicts; .env.shared supplies everything it omits.
+KICKJS_ENV_FILE=.env.ci,.env.shared vitest run
+```
+
+```bash
+# Three layers: a per-developer file beats the team's test defaults,
+# which beat the shared base.
+KICKJS_ENV_FILE=.env.test.local,.env.test,.env.shared vitest run
+```
+
+Reversing the list reverses the outcome — `.env.shared,.env.ci` lets
+`.env.shared` win, which is usually not what you meant:
+
+```bash
+# ✗ Wrong way round — the base overrides your CI values.
+KICKJS_ENV_FILE=.env.shared,.env.ci vitest run
+```
+
+Paths resolve relative to `process.cwd()`, so a monorepo can reach a file the
+cascade would never find on its own — note that cwd is the **package** dir when
+run through a workspace filter, not the repo root:
+
+```bash
+# Layer a repo-root file under the package's own.
+KICKJS_ENV_FILE=.env.test,../../.env.shared pnpm --filter api test
+```
+
+Missing files in the list are skipped silently, so an optional local override
+costs nothing:
+
+```bash
+# Works whether or not .env.test.local exists.
+KICKJS_ENV_FILE=.env.test.local,.env.test vitest run
+```
+
+Set it per command as above, or pin it for a whole suite from the runner —
+which also keeps it out of individual developers' shells:
+
+```ts
+// vitest.config.ts
+export default defineConfig({
+  test: {
+    env: { KICKJS_ENV_FILE: '.env.ci,.env.shared' },
+  },
+})
+```
+
+One caveat: vars already present in `process.env` still outrank every file in
+the list, `KICKJS_ENV_FILE` included. It picks which files are read, not whether
+files beat the environment.
 
 ### `vi.stubEnv()` mid-suite
 

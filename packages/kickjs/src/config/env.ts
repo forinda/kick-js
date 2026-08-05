@@ -59,21 +59,48 @@ function isTestRun(): boolean {
 }
 
 /**
- * Which env files dotenv should read, relative to `process.cwd()`.
- * `null` means "read nothing".
+ * The mode whose env files apply — `NODE_ENV`, falling back to `test`
+ * under a runner that sets `VITEST` without `NODE_ENV`, else the same
+ * `development` default `baseEnvSchema` uses.
+ */
+function envMode(): string {
+  return process.env['NODE_ENV'] ?? (process.env['VITEST'] ? 'test' : 'development')
+}
+
+const GENERIC_ENV_FILES = ['.env.local', '.env'] as const
+
+/**
+ * Which env files dotenv should read, relative to `process.cwd()`, in
+ * **highest-precedence-first** order. `null` means "read nothing".
  *
- * Under a test run, a `.env.test` on disk is treated as an explicit
- * opt-in to an isolated environment, and we deliberately do **not**
- * fall through to `.env`. That short-circuit is the whole point: with
- * `override: false`, every key a test runner forgets to pin is
- * silently backfilled from the developer's `.env`, so a suite can pin
- * its database URL and still reach live development services through
- * the keys it forgot. A Vite-style cascade (`.env.test` then `.env`)
- * would keep exactly that hole open, so one file wins outright.
+ * The cascade follows the convention Vite popularised, where a
+ * mode-specific file outranks every generic one:
+ *
+ * ```
+ * .env.[mode].local  >  .env.[mode]  >  .env.local  >  .env
+ * ```
+ *
+ * Vars already present in `process.env` still outrank all of them —
+ * that is what `override: false` at the call site buys, and it matches
+ * Vite ("environment variables that already exist … have the highest
+ * priority and will not be overwritten by `.env` files").
+ *
+ * **Test mode is the one exception, and deliberately so.** When the mode
+ * is `test` and a `.env.test` / `.env.test.local` exists, that file is
+ * treated as an explicit opt-in to an isolated environment and the
+ * generic files are dropped rather than layered under it. Layering is
+ * exactly the hole this closes: with `override: false`, every key a test
+ * runner forgets to pin is silently backfilled from the developer's
+ * `.env`, so a suite can pin its database URL and still reach live
+ * development services through the keys it forgot. For `development` and
+ * `production` the layering is what people expect and want (shared base
+ * plus overrides), and there is no dev-resource-in-a-test failure mode
+ * to guard against, so those cascade normally.
  *
  * `KICKJS_ENV_FILE` overrides the decision entirely — a comma-separated
- * list of files, or `off` to skip dotenv altogether (for apps that
- * inject env via the shell, Docker, or a secret manager).
+ * list of files (highest precedence first), or `off` to skip dotenv
+ * altogether (for apps that inject env via the shell, Docker, or a
+ * secret manager).
  */
 function resolveEnvFiles(): string[] | null {
   const explicit = process.env['KICKJS_ENV_FILE']
@@ -84,8 +111,18 @@ function resolveEnvFiles(): string[] | null {
       .map((f) => f.trim())
       .filter(Boolean)
   }
-  if (isTestRun() && existsSync(resolve(process.cwd(), '.env.test'))) return ['.env.test']
-  return ['.env']
+
+  const exists = (f: string): boolean => existsSync(resolve(process.cwd(), f))
+  const mode = envMode()
+  const modeFiles = [`.env.${mode}.local`, `.env.${mode}`]
+
+  // A test-scoped file present = isolate. Without one we still read the
+  // generic files (so an existing project is unchanged) and warn.
+  const isolate = mode === 'test' && modeFiles.some(exists)
+  const chain = isolate ? modeFiles : [...modeFiles, ...GENERIC_ENV_FILES]
+
+  const found = chain.filter(exists)
+  return found.length > 0 ? found : null
 }
 
 /** One-shot guard so the test-backfill warning cannot spam a suite. */
@@ -100,18 +137,28 @@ function tryLoadDotenv(override = false): void {
     // `quiet: true` suppresses dotenv 17's tip banner that goes to stdout.
     // Required for CLI tools whose stdout is parsed by callers (`kick explain
     // --json`, etc) — the banner would otherwise corrupt the JSON output.
-    const result = dotenv.config({ path: files, override, quiet: true })
+    //
+    // dotenv resolves array precedence positionally, and the DIRECTION
+    // depends on `override`: with `override: false` the first file to set a
+    // key wins; with `override: true` each file overwrites the last, so the
+    // final one wins. `files` is ordered highest-precedence-first, so the
+    // override path has to reverse it — otherwise a `reloadEnv()` would
+    // silently invert the cascade and let `.env` beat `.env.production`.
+    const path = override ? files.toReversed() : files
+    const result = dotenv.config({ path, override, quiet: true })
 
-    // `.env.test` is opt-in, and nobody discovers an opt-in. A test run
-    // that inherited the developer's `.env` says so once, on stderr.
-    if (!warnedTestBackfill && isTestRun() && files.includes('.env') && result.parsed) {
+    // Isolation is opt-in, and nobody discovers an opt-in. A test run that
+    // read the generic files says so once, on stderr.
+    const usedGeneric = files.some((f) => (GENERIC_ENV_FILES as readonly string[]).includes(f))
+    if (!warnedTestBackfill && isTestRun() && usedGeneric && result.parsed) {
       warnedTestBackfill = true
       const keys = Object.keys(result.parsed)
       if (keys.length > 0) {
         console.warn(
-          `[kickjs] test run backfilled ${keys.length} env var(s) from .env ` +
-            `(${keys.slice(0, 5).join(', ')}${keys.length > 5 ? ', …' : ''}). ` +
-            'Create a .env.test to isolate the suite, or set KICKJS_ENV_FILE=off.',
+          `[kickjs] test run backfilled ${keys.length} env var(s) from ` +
+            `${files.join(', ')} (${keys.slice(0, 5).join(', ')}` +
+            `${keys.length > 5 ? ', …' : ''}). Create a .env.test to isolate the ` +
+            'suite, or set KICKJS_ENV_FILE=off.',
         )
       }
     }

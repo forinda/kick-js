@@ -25,6 +25,8 @@ const KEYS = ['KICK_TEST_X', 'KICK_TEST_DEV_ONLY'] as const
 
 let dir: string
 let cwd: string
+let nodeEnv: string | undefined
+let vitestFlag: string | undefined
 
 function clearKeys(): void {
   for (const k of KEYS) delete process.env[k]
@@ -35,6 +37,8 @@ beforeEach(() => {
   Container.reset()
   resetEnvCache()
   clearKeys()
+  nodeEnv = process.env.NODE_ENV
+  vitestFlag = process.env.VITEST
   cwd = process.cwd()
   dir = mkdtempSync(path.join(tmpdir(), 'kick-envres-'))
   process.chdir(dir)
@@ -44,6 +48,12 @@ afterEach(() => {
   process.chdir(cwd)
   rmSync(dir, { recursive: true, force: true })
   clearKeys()
+  // The mode cases below drive NODE_ENV directly; restore it so a stray
+  // value can't leak into the next file's expectations.
+  if (nodeEnv === undefined) delete process.env.NODE_ENV
+  else process.env.NODE_ENV = nodeEnv
+  if (vitestFlag === undefined) delete process.env.VITEST
+  else process.env.VITEST = vitestFlag
 })
 
 /** Both files present — the shape a leaking project actually has. */
@@ -93,5 +103,84 @@ describe('env file resolution under a test run', () => {
 
     expect(process.env.KICK_TEST_X).toBe('dev')
     expect(process.env.KICK_TEST_DEV_ONLY).toBe('leaked')
+  })
+})
+
+/**
+ * Non-test modes follow the cascade Vite popularised: mode-specific files
+ * outrank every generic one, and keys that appear only in a generic file
+ * are still available. Test mode is the deliberate exception, covered above.
+ */
+describe('env file cascade for non-test modes', () => {
+  /** Drive the resolver as `production` rather than the ambient test run. */
+  function asProduction(): void {
+    process.env.NODE_ENV = 'production'
+    delete process.env.VITEST
+  }
+
+  it('layers .env.production over .env instead of replacing it', () => {
+    asProduction()
+    writeFileSync('.env', 'KICK_TEST_X=base\nKICK_TEST_DEV_ONLY=from-base\n')
+    writeFileSync('.env.production', 'KICK_TEST_X=prod\n')
+
+    reloadEnv()
+
+    expect(process.env.KICK_TEST_X).toBe('prod')
+    // The whole point of layering: base-only keys survive.
+    expect(process.env.KICK_TEST_DEV_ONLY).toBe('from-base')
+  })
+
+  it('ranks .env.[mode] above .env.local, per Vite', () => {
+    asProduction()
+    writeFileSync('.env.local', 'KICK_TEST_X=local\n')
+    writeFileSync('.env.production', 'KICK_TEST_X=prod\n')
+
+    reloadEnv()
+
+    // Mode beats generic — including generic `.local`.
+    expect(process.env.KICK_TEST_X).toBe('prod')
+  })
+
+  it('ranks .env.[mode].local highest of the four', () => {
+    asProduction()
+    writeFileSync('.env', 'KICK_TEST_X=base\n')
+    writeFileSync('.env.local', 'KICK_TEST_X=local\n')
+    writeFileSync('.env.production', 'KICK_TEST_X=prod\n')
+    writeFileSync('.env.production.local', 'KICK_TEST_X=prod-local\n')
+
+    reloadEnv()
+
+    expect(process.env.KICK_TEST_X).toBe('prod-local')
+  })
+
+  it('keeps precedence under reloadEnv (override:true reverses dotenv order)', () => {
+    // Regression guard: dotenv resolves array precedence positionally and
+    // flips direction with `override: true`. Without reversing the array,
+    // a reload lets `.env` beat `.env.production` — the cascade silently
+    // inverts on the HMR path only.
+    asProduction()
+    writeFileSync('.env', 'KICK_TEST_X=base\n')
+    writeFileSync('.env.production', 'KICK_TEST_X=prod\n')
+
+    reloadEnv()
+    expect(process.env.KICK_TEST_X).toBe('prod')
+
+    // Second reload — the override path runs again over already-set vars.
+    writeFileSync('.env.production', 'KICK_TEST_X=prod-v2\n')
+    reloadEnv()
+    expect(process.env.KICK_TEST_X).toBe('prod-v2')
+  })
+
+  it('still isolates under test mode, .local included', () => {
+    writeFileSync('.env', 'KICK_TEST_X=dev\nKICK_TEST_DEV_ONLY=leaked\n')
+    writeFileSync('.env.local', 'KICK_TEST_DEV_ONLY=leaked-local\n')
+    writeFileSync('.env.test.local', 'KICK_TEST_X=test-local\n')
+
+    reloadEnv()
+
+    expect(process.env.KICK_TEST_X).toBe('test-local')
+    // Neither generic file contributes — `.env.local` is a developer's
+    // personal machine config, which is precisely what must not leak in.
+    expect(process.env.KICK_TEST_DEV_ONLY).toBeUndefined()
   })
 })
