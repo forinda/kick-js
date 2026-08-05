@@ -670,6 +670,66 @@ export function checkTypegenFreshness(ctx: DoctorContext): DoctorResult | null {
   }
 }
 
+/** Test-runner configs that mean "this project has a suite". */
+const TEST_RUNNER_CONFIGS = [
+  'vitest.config.ts',
+  'vitest.config.js',
+  'vitest.config.mts',
+  'vite.config.ts',
+  'jest.config.ts',
+  'jest.config.js',
+]
+
+/**
+ * Warn when a project has a `.env` and a test suite but no `.env.test`.
+ *
+ * KickJS loads dotenv at import time with `override: false`, so vars the
+ * test runner pins are safe but everything it *doesn't* pin is backfilled
+ * from the developer's `.env`. That makes the runner's `env` block a
+ * hand-maintained allow-list, and the failure is silent: a suite can pin
+ * its database URL and still reach live development services through the
+ * vars it forgot.
+ *
+ * Under a test run, a `.env.test` / `.env.test.local` is read INSTEAD of the
+ * generic `.env` and `.env.local` — no layering, no fallback — which closes
+ * that hole, but only if one of those files exists. It is opt-in, and an
+ * opt-in nobody discovers is worth nothing, hence this check.
+ */
+const TEST_ENV_FILES = ['.env.test', '.env.test.local'] as const
+const GENERIC_ENV_FILES = ['.env', '.env.local'] as const
+
+export function checkTestEnvIsolation(ctx: DoctorContext): DoctorResult | null {
+  const hasTestRunner = TEST_RUNNER_CONFIGS.some((f) => existsSync(join(ctx.cwd, f)))
+  if (!hasTestRunner) return null
+
+  const generic = GENERIC_ENV_FILES.filter((f) => existsSync(join(ctx.cwd, f)))
+  if (generic.length === 0) return null
+
+  const isolating = TEST_ENV_FILES.filter((f) => existsSync(join(ctx.cwd, f)))
+  if (isolating.length > 0) {
+    return {
+      name: 'test env isolation',
+      status: 'pass',
+      message: `${isolating.join(', ')} present`,
+    }
+  }
+
+  return {
+    name: 'test env isolation',
+    status: 'warn',
+    message: `${generic.join(', ')} present, no .env.test`,
+    fix:
+      "Under NODE_ENV=test (or vitest's VITEST) KickJS reads .env.test / .env.test.local\n" +
+      `INSTEAD of ${generic.join(' and ')} — no layering, no fallback. Without one of\n` +
+      'those files, every var your test config does not pin resolves from your\n' +
+      'development env — including DATABASE_URL and any third-party credentials.\n' +
+      '\n' +
+      'Create .env.test holding the whole environment the suite should run against\n' +
+      '(a var you leave out is then missing, not inherited), or set KICKJS_ENV_FILE=off\n' +
+      'and supply env from the test runner.',
+  }
+}
+
 // ── Runner ────────────────────────────────────────────────────────────
 
 const BUILT_IN_CHECKS: DoctorCheck[] = [
@@ -681,6 +741,7 @@ const BUILT_IN_CHECKS: DoctorCheck[] = [
   checkReflectMetadata,
   checkDecoratorTsConfig,
   checkEnvWiring,
+  checkTestEnvIsolation,
   checkTypegenFreshness,
 ]
 
