@@ -383,9 +383,15 @@ const testEnvLeakedFromDotenv: KnownIssue = {
 
     if (!hitRealResource && !stubDidNothing) return null
 
-    // A project with a `.env` but no `.env.test` is the exact vulnerable
-    // shape, so seeing it on disk is a strong corroborating signal.
-    const vulnerableShape = ctx?.hasFile?.('.env') === true && ctx?.hasFile?.('.env.test') === false
+    // A project with a generic env file but no test-scoped one is the exact
+    // vulnerable shape, so seeing it on disk is a strong corroborating signal.
+    // Both `.env.test` and `.env.test.local` isolate — checking only the
+    // former would flag an already-isolated project, and it would disagree
+    // with `kick doctor`'s check, which counts both.
+    const hasGeneric = ctx?.hasFile?.('.env') === true || ctx?.hasFile?.('.env.local') === true
+    const hasTestScoped =
+      ctx?.hasFile?.('.env.test') === true || ctx?.hasFile?.('.env.test.local') === true
+    const vulnerableShape = hasGeneric && !hasTestScoped
 
     let confidence = hitRealResource && stubDidNothing ? 85 : hitRealResource ? 75 : 65
     if (vulnerableShape) confidence = Math.min(95, confidence + 10)

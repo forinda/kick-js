@@ -698,6 +698,27 @@ const TEST_RUNNER_CONFIGS = [
 const TEST_ENV_FILES = ['.env.test', '.env.test.local'] as const
 const GENERIC_ENV_FILES = ['.env', '.env.local'] as const
 
+/**
+ * The value a `KICKJS_ENV_FILE` override would carry into a test run, or
+ * `null` if nothing sets it. Checks the package's test scripts first (an
+ * override pinned there applies to everyone), then doctor's own env.
+ *
+ * Deliberately a shallow scan of `scripts.test*`: a var exported from a
+ * developer's shell profile or a CI job definition is not visible from
+ * here, so this catches the common committed case rather than every case.
+ */
+function findTestEnvFileOverride(ctx: DoctorContext): string | null {
+  const scripts = ctx.pkg?.scripts
+  if (scripts && typeof scripts === 'object') {
+    for (const [name, value] of Object.entries(scripts)) {
+      if (!name.startsWith('test') || typeof value !== 'string') continue
+      const hit = /KICKJS_ENV_FILE=(\S+)/.exec(value)
+      if (hit?.[1]) return hit[1]
+    }
+  }
+  return process.env['KICKJS_ENV_FILE'] ?? null
+}
+
 export function checkTestEnvIsolation(ctx: DoctorContext): DoctorResult | null {
   const hasTestRunner = TEST_RUNNER_CONFIGS.some((f) => existsSync(join(ctx.cwd, f)))
   if (!hasTestRunner) return null
@@ -707,6 +728,24 @@ export function checkTestEnvIsolation(ctx: DoctorContext): DoctorResult | null {
 
   const isolating = TEST_ENV_FILES.filter((f) => existsSync(join(ctx.cwd, f)))
   if (isolating.length > 0) {
+    // `KICKJS_ENV_FILE` is consulted BEFORE the test-mode short-circuit, so
+    // it wins outright: a script running `KICKJS_ENV_FILE=.env vitest` reads
+    // `.env` no matter how complete the `.env.test` sitting next to it is.
+    // Reporting a plain pass there would certify isolation that is not in
+    // effect. Look for the override in the test scripts (where it would be
+    // pinned for everyone) and in doctor's own environment.
+    const override = findTestEnvFileOverride(ctx)
+    if (override && override !== 'off' && override !== 'none') {
+      return {
+        name: 'test env isolation',
+        status: 'warn',
+        message: `${isolating.join(', ')} present, but KICKJS_ENV_FILE=${override} overrides it`,
+        fix:
+          `KICKJS_ENV_FILE is checked before test-mode isolation, so ${isolating[0]} is\n` +
+          `ignored and "${override}" is read instead. Drop the override to use the\n` +
+          'test files, or set KICKJS_ENV_FILE=off if env comes from the runner.',
+      }
+    }
     return {
       name: 'test env isolation',
       status: 'pass',

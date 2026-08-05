@@ -132,6 +132,16 @@ describe('known-issues registry', () => {
     expect(withShape!.confidence).toBeGreaterThan(bare!.confidence)
   })
 
+  it('treats .env.test.local as isolation, matching kick doctor', () => {
+    const input = 'vitest run wiped the dev database — tests connected to the wrong db'
+    const bare = findBestMatch(input)
+    const isolated = findBestMatch(input, {
+      hasFile: (p: string) => p === '.env' || p === '.env.test.local',
+    })
+    // Already isolated — no confidence bump for a vulnerable shape.
+    expect(isolated!.confidence).toBe(bare!.confidence)
+  })
+
   it('does not match a resource complaint with no test context', () => {
     const m = findBestMatch('the production database was wiped during a migration')
     expect(m?.diagnosis.id).not.toBe('test-env-leaked-from-dotenv')
