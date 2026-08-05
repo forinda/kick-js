@@ -59,12 +59,28 @@ function isTestRun(): boolean {
 }
 
 /**
- * The mode whose env files apply — `NODE_ENV`, falling back to `test`
- * under a runner that sets `VITEST` without `NODE_ENV`, else the same
- * `development` default `baseEnvSchema` uses.
+ * The mode whose env files apply. A test run is always mode `test`;
+ * otherwise `NODE_ENV`, defaulting to the same `development` value
+ * `baseEnvSchema` uses.
+ *
+ * The {@link isTestRun} check has to come FIRST, and the two predicates
+ * have to agree. They did not: this read `NODE_ENV ?? (VITEST ? 'test'
+ * : 'development')`, so an explicitly-set `NODE_ENV=development` won
+ * file selection while `isTestRun()` — which counts `VITEST` on its own
+ * — still gated the backfill warning. A vitest run with
+ * `NODE_ENV=development` exported (common in a shell profile or a CI
+ * image) therefore skipped the `.env.test` sitting right there, loaded
+ * the developer's `.env`, and printed a warning telling the user to
+ * create the very file it had just ignored. Worst of both: the alarm
+ * without the protection.
+ *
+ * So `VITEST` outranks a non-test `NODE_ENV` for file selection. To run
+ * a suite deliberately against another mode's files, name them with
+ * `KICKJS_ENV_FILE`, which still bypasses all of this.
  */
 function envMode(): string {
-  return process.env['NODE_ENV'] ?? (process.env['VITEST'] ? 'test' : 'development')
+  if (isTestRun()) return 'test'
+  return process.env['NODE_ENV'] ?? 'development'
 }
 
 const GENERIC_ENV_FILES = ['.env.local', '.env'] as const

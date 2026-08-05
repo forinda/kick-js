@@ -257,3 +257,59 @@ describe('backfill warning accounting', () => {
     }
   })
 })
+
+/**
+ * `envMode()` (file selection) and `isTestRun()` (the backfill warning)
+ * must agree about what a test run is.
+ *
+ * They didn't. `envMode()` read `NODE_ENV ?? (VITEST ? 'test' : ...)`, so an
+ * explicitly-set `NODE_ENV=development` won file selection, while
+ * `isTestRun()` counted `VITEST` on its own and still gated the warning. A
+ * vitest run with `NODE_ENV=development` exported — a shell profile, a CI
+ * image — skipped the `.env.test` sitting right there, loaded the developer's
+ * `.env`, and then printed a warning telling the user to create the very file
+ * it had just ignored.
+ */
+describe('test-run detection drives file selection', () => {
+  it('isolates when VITEST is set even if NODE_ENV says development', () => {
+    process.env.NODE_ENV = 'development'
+    process.env.VITEST = 'true'
+    writeFileSync('.env', 'KICK_TEST_X=dev\nKICK_TEST_DEV_ONLY=leaked\n')
+    writeFileSync('.env.test', 'KICK_TEST_X=test\n')
+
+    reloadEnv()
+
+    expect(process.env.KICK_TEST_X).toBe('test')
+    expect(process.env.KICK_TEST_DEV_ONLY).toBeUndefined()
+  })
+
+  it('never warns about a leak while skipping the file that prevents it', () => {
+    // The contradiction itself: warning fired, isolation bypassed.
+    process.env.NODE_ENV = 'development'
+    process.env.VITEST = 'true'
+    writeFileSync('.env', 'KICK_TEST_X=dev\nKICK_TEST_DEV_ONLY=leaked\n')
+    writeFileSync('.env.test', 'KICK_TEST_X=test\n')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    try {
+      reloadEnv()
+      const told = warn.mock.calls.map((c) => String(c[0])).filter((m) => m.includes('[kickjs]'))
+      expect(told).toEqual([])
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('still honours a real non-test NODE_ENV when not under a runner', () => {
+    // The fix must not make everything look like a test run.
+    process.env.NODE_ENV = 'production'
+    delete process.env.VITEST
+    writeFileSync('.env', 'KICK_TEST_X=base\n')
+    writeFileSync('.env.production', 'KICK_TEST_X=prod\n')
+    writeFileSync('.env.test', 'KICK_TEST_X=test\n')
+
+    reloadEnv()
+
+    expect(process.env.KICK_TEST_X).toBe('prod')
+  })
+})
