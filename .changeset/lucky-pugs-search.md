@@ -13,7 +13,7 @@ forgot, with nothing in the output saying so.
 Env files now follow the cascade Vite popularised, where a mode-specific file
 outranks every generic one (`[mode]` is `NODE_ENV`):
 
-```
+```text
 .env.[mode].local  >  .env.[mode]  >  .env.local  >  .env
 ```
 

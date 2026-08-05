@@ -319,7 +319,7 @@ KickJS uses the same env-file cascade Vite popularised (see its "Env Variables
 and Modes" guide): a mode-specific file outranks every generic one, and keys
 found only in a generic file are still available.
 
-```
+```text
 .env.[mode].local  >  .env.[mode]  >  .env.local  >  .env
 ```
 
