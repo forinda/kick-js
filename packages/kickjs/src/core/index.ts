@@ -205,6 +205,19 @@ export {
   type ContextDecoratorTarget,
   type DepValue,
   type ResolvedDeps,
+  // The two shapes `ContextDecorator` resolves to, plus the helpers that
+  // appear in their public positions. Exporting the union alone was not
+  // enough: `defineContextDecorator()` infers one of these concrete
+  // interfaces, so `export const Tenant = defineContextDecorator(...)` in a
+  // consumer failed `tsc --noEmit` with
+  //   TS4023: Exported variable 'Tenant' has or is using name
+  //   'ContextDecoratorWithDefaults' … but cannot be named
+  // — TS cannot write the declaration for a type it has no path to. Every
+  // file `kick g contributor` produces hit this.
+  type ContextDecoratorWithDefaults,
+  type ContextDecoratorRequiringParams,
+  type MissingParamKeys,
+  type CallSiteParams,
 } from './context-decorator'
 
 export {

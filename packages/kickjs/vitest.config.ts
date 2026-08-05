@@ -26,6 +26,10 @@ export default defineConfig({
         '**/infer-handler-response.test.ts',
         '**/context-required-params.test.ts',
         '**/context-require.test.ts',
+        // Guards the public type surface — `tsconfig.json` includes only
+        // `src`, so a broken import in `__tests__` is invisible to
+        // `pnpm typecheck` and this list is the only thing that checks it.
+        '**/context-decorator-public-types.test.ts',
       ],
     },
     environment: 'node',
