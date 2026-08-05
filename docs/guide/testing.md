@@ -344,9 +344,15 @@ beat any amount of env plumbing, because they check the thing you actually
 care about.
 :::
 
-**Test mode is the one exception.** Under a test run (`NODE_ENV=test`, or
-Vitest's `VITEST`), if a `.env.test` or `.env.test.local` exists, those are read
-and the generic `.env` / `.env.local` are **not**. No layering, no fallback.
+**Test mode is the one exception.** Under a test run, if a `.env.test` or
+`.env.test.local` exists, those are read and the generic `.env` / `.env.local`
+are **not**. No layering, no fallback.
+
+A run counts as a test run when `NODE_ENV=test` **or** Vitest's `VITEST` is set.
+`VITEST` wins over a conflicting `NODE_ENV`, so a suite run with
+`NODE_ENV=development` exported — from a shell profile or a CI image — still
+gets test-mode isolation rather than your development files. To point a suite at
+another mode's files deliberately, name them with `KICKJS_ENV_FILE`.
 
 That short-circuit is deliberate. With a fallback, every var your test config
 forgets to pin gets silently backfilled from your development `.env`: you can
@@ -368,6 +374,19 @@ LOG_LEVEL=silent
 
 With no `.env.test` present, `.env` is read as before and KickJS prints a
 one-time warning naming what it backfilled.
+
+**Commit `.env.test`.** Unlike `.env`, it belongs in version control — that is
+the difference between _everyone_ on the team being isolated and only whoever
+wrote the file locally. It is shared, reviewable test configuration, so a
+teammate's fresh clone and CI get the same isolation you do. `kick new`
+gitignores `.env` and `*.local` and leaves `.env.test` tracked.
+
+The corollary is that it must not hold real credentials or live endpoints —
+point it at test doubles or throwaway containers. A shared database URL sitting
+in a committed `.env.test` rebuilds the trap: a whole team, and CI, quietly
+aimed at one box. Compute per-run values (a container's port, a worker-scoped
+database name) in your test config or setup file instead, where they stay out
+of the repo and `process.env` still outranks the file.
 
 ### `KICKJS_ENV_FILE` — taking manual control
 
