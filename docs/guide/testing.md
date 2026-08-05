@@ -300,14 +300,65 @@ it('rejects files exceeding size limit', async () => {
 
 ## Environment Isolation
 
-Use `vi.stubEnv()` to set env vars without leaking to other tests:
+Load order decides this, so start there. Two things happen **before any
+`beforeAll` runs**:
+
+1. Importing `@forinda/kickjs` reads your env file into `process.env` as an
+   import-time side effect.
+2. Your `loadEnv(envSchema)` call parses `process.env` **once** and caches the
+   result. `ConfigService.get()` and `@Value()` read that cached snapshot, not
+   `process.env`.
+
+So a var must be set before the module graph is imported. The reliable
+placements are a `.env.test` file, your runner's `env` config, or a
+`setupFiles` entry that runs first.
+
+### `.env.test` — the default
+
+Under a test run (`NODE_ENV=test`, or Vitest's `VITEST`), KickJS reads
+`.env.test` if the file exists — and **only** `.env.test`. It does not fall
+back to `.env`.
+
+That short-circuit is deliberate. With a fallback, every var your test config
+forgets to pin gets silently backfilled from your development `.env`: you can
+pin your database URL and still reach live development services through the
+vars you forgot, and nothing in the run tells you. One file wins outright
+instead.
+
+```bash
+# .env.test — checked in; the whole environment your suite runs against
+NODE_ENV=test
+DATABASE_URL=postgresql://test@localhost/myapp_test
+LOG_LEVEL=silent
+```
+
+With no `.env.test` present, `.env` is read as before and KickJS prints a
+one-time warning naming what it backfilled.
+
+Override the choice with `KICKJS_ENV_FILE` — a comma-separated list of files,
+or `off` to skip dotenv entirely (for env injected via the shell, Docker, or a
+secret manager):
+
+```bash
+KICKJS_ENV_FILE=off vitest run
+KICKJS_ENV_FILE=.env.ci vitest run
+```
+
+### `vi.stubEnv()` mid-suite
+
+`vi.stubEnv()` mutates `process.env`, which is already too late for anything
+read through `ConfigService` / `@Value()` — the parse happened at import. To
+make a stub take effect, drop the cache and re-parse:
 
 ```ts
 import { vi, beforeAll, afterAll } from 'vitest'
+import { loadEnv, resetEnvCache } from '@forinda/kickjs'
+import { envSchema } from '../src/env'
 
 beforeAll(() => {
   vi.stubEnv('JWT_SECRET', 'test-secret-32-chars-minimum!!')
-  vi.stubEnv('DATABASE_URL', 'postgresql://test@localhost/test')
+  resetEnvCache()
+  loadEnv(envSchema)
 })
 
 afterAll(() => {
@@ -315,9 +366,8 @@ afterAll(() => {
 })
 ```
 
-::: warning
-Never use `process.env.X = 'value'` directly — it leaks across tests. Always use `vi.stubEnv()`.
-:::
+`vi.stubEnv()` alone is still correct for code that reads `process.env`
+directly.
 
 ## Container Isolation
 
@@ -359,7 +409,8 @@ The generated tests are scaffolds with real assertions. Customize them for your 
 - Use `beforeEach(() => Container.reset())` for serial test isolation
 - Use `isolated: true` for concurrent tests
 - Test controllers without auth by creating test-only controllers
-- Use `vi.stubEnv()` for env vars, never raw `process.env`
+- Put test env in `.env.test` — it wins outright and never falls back to `.env`
+- `vi.stubEnv()` after import needs `resetEnvCache()` + `loadEnv()` to reach `ConfigService`
 - The `expressApp` works directly with supertest — no server needed
 - Adapter lifecycle hooks (`beforeMount`, `beforeStart`) still run during setup
 - Generated tests work out of the box — `kick g module user && npx vitest run`
