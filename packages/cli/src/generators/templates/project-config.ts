@@ -259,6 +259,9 @@ export function generateGitIgnore(): string {
   return `node_modules/
 dist/
 .env
+# Personal machine overrides. \`.env.test\` itself is COMMITTED — it is the
+# suite's shared, reviewable environment — but \`*.local\` never is.
+*.local
 coverage/
 .DS_Store
 *.tsbuildinfo
@@ -300,6 +303,35 @@ NODE_ENV=development
 export function generateEnvExample(): string {
   return `PORT=3000
 NODE_ENV=development
+`
+}
+
+/**
+ * Generate `.env.test` — the environment the test suite runs against.
+ *
+ * Under a test run KickJS reads this file INSTEAD of `.env` (no layering,
+ * no fallback), so scaffolding it is what makes a new project isolated by
+ * default rather than inheriting the developer's environment.
+ *
+ * Deliberately NOT a copy of `.env.example`. The point of the file is that
+ * a var it omits is *missing* rather than quietly inherited, so the suite
+ * fails loudly on something it forgot to declare. Copying every key back
+ * in would rebuild the exact trap this closes.
+ *
+ * `PORT=0` asks the OS for a free port, so a test run cannot collide with
+ * a dev server already on 3000.
+ */
+export function generateEnvTest(): string {
+  return `# Read INSTEAD of .env when NODE_ENV=test (or under vitest).
+# No fallback to .env — declare here everything the suite needs, so a
+# missing var fails the run instead of silently resolving to your dev value.
+#
+# Keep real endpoints and credentials OUT of this file. Point at test
+# doubles or throwaway containers; anything committed here is shared with
+# everyone who clones the repo.
+NODE_ENV=test
+PORT=0
+LOG_LEVEL=silent
 `
 }
 
