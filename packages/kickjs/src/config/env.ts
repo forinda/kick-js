@@ -128,6 +128,26 @@ function resolveEnvFiles(): string[] | null {
 /** One-shot guard so the test-backfill warning cannot spam a suite. */
 let warnedTestBackfill = false
 
+/**
+ * Of the keys dotenv parsed out of the files, the ones whose value in
+ * `process.env` actually differs from `before` — i.e. the ones dotenv
+ * really applied.
+ *
+ * This distinction is the whole point of the warning. `result.parsed`
+ * is everything READ from the files, not everything APPLIED: under
+ * `override: false` a key already set by the test runner keeps the
+ * runner's value and the file's copy is discarded. Warning about those
+ * would name vars the user correctly pinned, which is exactly backwards
+ * — the message exists to say which vars leaked IN, and listing pinned
+ * ones alongside them makes it untrustworthy noise.
+ *
+ * Exported for tests only; not re-exported from the package index, so
+ * it is not public API.
+ */
+export function appliedKeys(before: NodeJS.ProcessEnv, parsed: Record<string, string>): string[] {
+  return Object.keys(parsed).filter((k) => process.env[k] !== before[k])
+}
+
 function tryLoadDotenv(override = false): void {
   const files = resolveEnvFiles()
   if (!files) return
@@ -145,19 +165,29 @@ function tryLoadDotenv(override = false): void {
     // override path has to reverse it — otherwise a `reloadEnv()` would
     // silently invert the cascade and let `.env` beat `.env.production`.
     const path = override ? files.toReversed() : files
-    const result = dotenv.config({ path, override, quiet: true })
 
     // Isolation is opt-in, and nobody discovers an opt-in. A test run that
-    // read the generic files says so once, on stderr.
+    // read the generic files says so once, on stderr — but only about the
+    // vars it actually pulled in, so snapshot process.env first. Skipped
+    // entirely when no warning could fire, to keep the copy off the boot
+    // path of a normal run.
     const usedGeneric = files.some((f) => (GENERIC_ENV_FILES as readonly string[]).includes(f))
-    if (!warnedTestBackfill && isTestRun() && usedGeneric && result.parsed) {
-      warnedTestBackfill = true
-      const keys = Object.keys(result.parsed)
-      if (keys.length > 0) {
+    const mayWarn = !warnedTestBackfill && isTestRun() && usedGeneric
+    const before = mayWarn ? { ...process.env } : undefined
+
+    const result = dotenv.config({ path, override, quiet: true })
+
+    if (mayWarn && result.parsed) {
+      const applied = appliedKeys(before!, result.parsed)
+      // Only latch the one-shot guard once something is actually reported;
+      // latching on a run that had nothing to say would swallow the real
+      // warning from a later reload.
+      if (applied.length > 0) {
+        warnedTestBackfill = true
         console.warn(
-          `[kickjs] test run backfilled ${keys.length} env var(s) from ` +
-            `${files.join(', ')} (${keys.slice(0, 5).join(', ')}` +
-            `${keys.length > 5 ? ', …' : ''}). Create a .env.test to isolate the ` +
+          `[kickjs] test run took ${applied.length} env var(s) from ` +
+            `${files.join(', ')} (${applied.slice(0, 5).join(', ')}` +
+            `${applied.length > 5 ? ', …' : ''}). Create a .env.test to isolate the ` +
             'suite, or set KICKJS_ENV_FILE=off.',
         )
       }
@@ -391,6 +421,10 @@ export function reloadEnv(): void {
 export function resetEnvCache(): void {
   cachedEnv = null
   cachedSchema = null
+  // Also re-arm the one-shot backfill warning. This is the "start fresh"
+  // hook, and a suite that swaps env between cases should get told each
+  // time it picks up the generic files, not only the first.
+  warnedTestBackfill = false
   // Drop the resolver too. It closes over `cachedEnv`, so leaving it
   // installed left `@Value()` reading through a live closure over a
   // null cache — indistinguishable from "key not set" but with no

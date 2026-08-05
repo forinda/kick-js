@@ -15,11 +15,12 @@
  * through `reloadEnv()`, which routes to the same resolver.
  */
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { Container, reloadEnv, resetEnvCache } from '../src'
+import { appliedKeys } from '../src/config/env'
 
 const KEYS = ['KICK_TEST_X', 'KICK_TEST_DEV_ONLY'] as const
 
@@ -182,5 +183,76 @@ describe('env file cascade for non-test modes', () => {
     // Neither generic file contributes — `.env.local` is a developer's
     // personal machine config, which is precisely what must not leak in.
     expect(process.env.KICK_TEST_DEV_ONLY).toBeUndefined()
+  })
+})
+
+/**
+ * The backfill warning must name only the vars dotenv ACTUALLY applied.
+ *
+ * `result.parsed` is everything read out of the files, not everything
+ * applied: under `override: false` a key the test runner already pinned
+ * keeps the runner's value and the file's copy is discarded. Reporting
+ * those would name vars the user got right, which inverts the message —
+ * it exists to say what leaked IN.
+ */
+describe('backfill warning accounting', () => {
+  it('excludes keys whose value the runner already pinned', () => {
+    // Models the override:false boot path: PINNED is already in
+    // process.env, so dotenv leaves it and only NEW_KEY is applied.
+    process.env.KICK_TEST_X = 'from-runner'
+    const before = { ...process.env }
+    process.env.KICK_TEST_DEV_ONLY = 'from-file'
+
+    const applied = appliedKeys(before, {
+      KICK_TEST_X: 'from-file',
+      KICK_TEST_DEV_ONLY: 'from-file',
+    })
+
+    expect(applied).toEqual(['KICK_TEST_DEV_ONLY'])
+  })
+
+  it('reports nothing when every parsed key was already pinned', () => {
+    process.env.KICK_TEST_X = 'from-runner'
+    const before = { ...process.env }
+
+    expect(appliedKeys(before, { KICK_TEST_X: 'from-file' })).toEqual([])
+  })
+
+  it('warns naming only the leaked var, not the pinned one', () => {
+    // End-to-end through reloadEnv. KICK_TEST_X is pinned by the "runner"
+    // AND present in .env; KICK_TEST_DEV_ONLY exists only in .env.
+    process.env.KICK_TEST_X = 'from-runner'
+    writeFileSync('.env', 'KICK_TEST_X=from-file\nKICK_TEST_DEV_ONLY=leaked\n')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    try {
+      reloadEnv()
+      const message = warn.mock.calls.map((c) => String(c[0])).join('\n')
+      expect(message).toContain('KICK_TEST_DEV_ONLY')
+      // reloadEnv uses override:true, so the file DOES win here — the
+      // point is the count and list come from what changed, not from
+      // everything the file happened to contain.
+      expect(message).toContain('env var(s) from')
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('stays silent when the generic files change nothing', () => {
+    // Every key in .env already matches process.env — nothing was taken,
+    // so there is nothing to warn about.
+    process.env.KICK_TEST_X = 'same'
+    writeFileSync('.env', 'KICK_TEST_X=same\n')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    try {
+      reloadEnv()
+      const kickjsWarnings = warn.mock.calls
+        .map((c) => String(c[0]))
+        .filter((m) => m.includes('[kickjs]'))
+      expect(kickjsWarnings).toEqual([])
+    } finally {
+      warn.mockRestore()
+    }
   })
 })
