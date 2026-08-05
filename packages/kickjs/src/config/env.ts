@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs'
+import { resolve } from 'node:path'
 import type { z } from 'zod'
 import { detectSchema, type InferSchemaOutput } from '@forinda/kickjs-schema'
 import { Container } from '../core/container'
@@ -49,15 +51,70 @@ function getZod(): typeof import('zod') {
  * shim that CJS caches aggressively, so the second `require` is a no-op
  * and new keys never reach `process.env` — the root cause of the
  * "DATABASE_URL undefined until restart" bug on Windows dev.
+ *
+ * Which file(s) get read is decided by {@link resolveEnvFiles}.
  */
-function tryLoadDotenv(): void {
+function isTestRun(): boolean {
+  return process.env['NODE_ENV'] === 'test' || !!process.env['VITEST']
+}
+
+/**
+ * Which env files dotenv should read, relative to `process.cwd()`.
+ * `null` means "read nothing".
+ *
+ * Under a test run, a `.env.test` on disk is treated as an explicit
+ * opt-in to an isolated environment, and we deliberately do **not**
+ * fall through to `.env`. That short-circuit is the whole point: with
+ * `override: false`, every key a test runner forgets to pin is
+ * silently backfilled from the developer's `.env`, so a suite can pin
+ * its database URL and still reach live development services through
+ * the keys it forgot. A Vite-style cascade (`.env.test` then `.env`)
+ * would keep exactly that hole open, so one file wins outright.
+ *
+ * `KICKJS_ENV_FILE` overrides the decision entirely — a comma-separated
+ * list of files, or `off` to skip dotenv altogether (for apps that
+ * inject env via the shell, Docker, or a secret manager).
+ */
+function resolveEnvFiles(): string[] | null {
+  const explicit = process.env['KICKJS_ENV_FILE']
+  if (explicit === 'off' || explicit === 'none') return null
+  if (explicit) {
+    return explicit
+      .split(',')
+      .map((f) => f.trim())
+      .filter(Boolean)
+  }
+  if (isTestRun() && existsSync(resolve(process.cwd(), '.env.test'))) return ['.env.test']
+  return ['.env']
+}
+
+/** One-shot guard so the test-backfill warning cannot spam a suite. */
+let warnedTestBackfill = false
+
+function tryLoadDotenv(override = false): void {
+  const files = resolveEnvFiles()
+  if (!files) return
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const dotenv = require('dotenv')
     // `quiet: true` suppresses dotenv 17's tip banner that goes to stdout.
     // Required for CLI tools whose stdout is parsed by callers (`kick explain
     // --json`, etc) — the banner would otherwise corrupt the JSON output.
-    dotenv.config({ override: false, quiet: true })
+    const result = dotenv.config({ path: files, override, quiet: true })
+
+    // `.env.test` is opt-in, and nobody discovers an opt-in. A test run
+    // that inherited the developer's `.env` says so once, on stderr.
+    if (!warnedTestBackfill && isTestRun() && files.includes('.env') && result.parsed) {
+      warnedTestBackfill = true
+      const keys = Object.keys(result.parsed)
+      if (keys.length > 0) {
+        console.warn(
+          `[kickjs] test run backfilled ${keys.length} env var(s) from .env ` +
+            `(${keys.slice(0, 5).join(', ')}${keys.length > 5 ? ', …' : ''}). ` +
+            'Create a .env.test to isolate the suite, or set KICKJS_ENV_FILE=off.',
+        )
+      }
+    }
   } catch {
     // dotenv not installed — fall through, env vars must come from
     // the environment directly. This is a valid deployment style.
@@ -255,14 +312,13 @@ export function getEnv(key: string, schema?: z.ZodObject<any>): any {
  * between cases), call {@link resetEnvCache} instead.
  */
 export function reloadEnv(): void {
-  // Re-read .env file into process.env if dotenv is installed.
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    require('dotenv').config({ override: true, quiet: true })
-  } catch {
-    // dotenv not installed — nothing to reload, env comes from the
-    // environment directly.
-  }
+  // Re-read the env file(s) into process.env if dotenv is installed.
+  // Routed through the same resolver as boot so a reload can never
+  // disagree with startup about which file is authoritative — the
+  // inline `dotenv.config()` this replaced always read `.env`, so
+  // under a test run it could clobber pinned `.env.test` values with
+  // the developer's own.
+  tryLoadDotenv(true)
 
   // Drop the parsed snapshot but keep the schema. Re-parse eagerly so
   // existing consumers (including ConfigService getters and @Value
@@ -288,6 +344,11 @@ export function reloadEnv(): void {
 export function resetEnvCache(): void {
   cachedEnv = null
   cachedSchema = null
+  // Drop the resolver too. It closes over `cachedEnv`, so leaving it
+  // installed left `@Value()` reading through a live closure over a
+  // null cache — indistinguishable from "key not set" but with no
+  // schema to re-parse against.
+  Container._envResolver = null
 }
 
 /**
