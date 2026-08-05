@@ -327,6 +327,23 @@ found only in a generic file are still available.
 what your shell or CI exports always wins. `*.local` files are for personal
 machine overrides — add `*.local` to `.gitignore`.
 
+::: warning What this does and does not protect against
+`.env.test` closes one specific hole: values reaching your suite from an env
+**file** it never meant to read. It is not a general guard against pointing a
+test at the wrong resource.
+
+Anything already in `process.env` — a var exported in your shell, set by your
+CI job, or injected by a test-container runner — outranks every file and is
+never reported by the backfill warning. That precedence is deliberate and is
+what lets a runner hand your suite a throwaway database URL. It also means an
+exported `DATABASE_URL` aimed at the wrong host is invisible here.
+
+For that failure mode you want an explicit assertion at the point of use — a
+few lines refusing to run against a database whose name isn't the test one
+beat any amount of env plumbing, because they check the thing you actually
+care about.
+:::
+
 **Test mode is the one exception.** Under a test run (`NODE_ENV=test`, or
 Vitest's `VITEST`), if a `.env.test` or `.env.test.local` exists, those are read
 and the generic `.env` / `.env.local` are **not**. No layering, no fallback.
