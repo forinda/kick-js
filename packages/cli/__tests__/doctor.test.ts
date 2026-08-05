@@ -704,6 +704,37 @@ describe('checkTestEnvIsolation', () => {
     expect(r?.message).toContain('.env.local')
   })
 
+  it('warns when a test script pins KICKJS_ENV_FILE past the isolation', () => {
+    // KICKJS_ENV_FILE is consulted before the test-mode short-circuit, so a
+    // complete .env.test sitting right there is simply not read.
+    const dir = tempProject({
+      'vitest.config.ts': VITEST_CFG,
+      '.env': 'DATABASE_URL=postgres://localhost/myapp_dev\n',
+      '.env.test': 'DATABASE_URL=postgres://localhost/myapp_test\n',
+      'package.json': JSON.stringify({
+        name: 'x',
+        scripts: { test: 'KICKJS_ENV_FILE=.env vitest run' },
+      }),
+    })
+    const r = checkTestEnvIsolation(ctx(dir))
+    expect(r?.status).toBe('warn')
+    expect(r?.message).toContain('KICKJS_ENV_FILE=.env')
+  })
+
+  it('still passes when the override is KICKJS_ENV_FILE=off', () => {
+    // `off` means env comes from the runner — isolation is not defeated.
+    const dir = tempProject({
+      'vitest.config.ts': VITEST_CFG,
+      '.env': 'DATABASE_URL=postgres://localhost/myapp_dev\n',
+      '.env.test': 'DATABASE_URL=postgres://localhost/myapp_test\n',
+      'package.json': JSON.stringify({
+        name: 'x',
+        scripts: { test: 'KICKJS_ENV_FILE=off vitest run' },
+      }),
+    })
+    expect(checkTestEnvIsolation(ctx(dir))?.status).toBe('pass')
+  })
+
   it('recognises a jest project too', () => {
     const dir = tempProject({
       'jest.config.js': 'module.exports = {}\n',

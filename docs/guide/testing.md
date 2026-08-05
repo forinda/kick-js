@@ -435,15 +435,23 @@ import { loadEnv, resetEnvCache } from '@forinda/kickjs'
 import { envSchema } from '../src/env'
 
 beforeAll(() => {
-  vi.stubEnv('JWT_SECRET', 'test-secret-32-chars-minimum!!')
+  vi.stubEnv('JWT_SECRET', 'test-secret-with-at-least-32-chars')
   resetEnvCache()
   loadEnv(envSchema)
 })
 
 afterAll(() => {
   vi.unstubAllEnvs()
+  // `unstubAllEnvs()` restores process.env, but the cached parse still
+  // holds the stub — drop it too, or a later test in the same worker
+  // reads your stubbed value through ConfigService / @Value().
+  resetEnvCache()
+  loadEnv(envSchema)
 })
 ```
+
+Your stub has to satisfy the schema: `loadEnv(envSchema)` re-validates, so a
+`JWT_SECRET` declared `z.string().min(32)` rejects a 30-character placeholder.
 
 `vi.stubEnv()` alone is still correct for code that reads `process.env`
 directly.

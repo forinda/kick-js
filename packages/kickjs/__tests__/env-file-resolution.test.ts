@@ -218,9 +218,11 @@ describe('backfill warning accounting', () => {
     expect(appliedKeys(before, { KICK_TEST_X: 'from-file' })).toEqual([])
   })
 
-  it('warns naming only the leaked var, not the pinned one', () => {
-    // End-to-end through reloadEnv. KICK_TEST_X is pinned by the "runner"
-    // AND present in .env; KICK_TEST_DEV_ONLY exists only in .env.
+  it('names every var the reload actually changed', () => {
+    // End-to-end through reloadEnv, which is the `override: true` path — so
+    // the file wins over the pre-set value and BOTH keys genuinely change.
+    // Both must therefore be named; the runner-pinned exclusion is an
+    // `override: false` behaviour, covered by the unit cases above.
     process.env.KICK_TEST_X = 'from-runner'
     writeFileSync('.env', 'KICK_TEST_X=from-file\nKICK_TEST_DEV_ONLY=leaked\n')
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -228,11 +230,10 @@ describe('backfill warning accounting', () => {
     try {
       reloadEnv()
       const message = warn.mock.calls.map((c) => String(c[0])).join('\n')
+      expect(message).toContain('KICK_TEST_X')
       expect(message).toContain('KICK_TEST_DEV_ONLY')
-      // reloadEnv uses override:true, so the file DOES win here — the
-      // point is the count and list come from what changed, not from
-      // everything the file happened to contain.
-      expect(message).toContain('env var(s) from')
+      expect(message).toContain('2 env var(s) from')
+      expect(process.env.KICK_TEST_X).toBe('from-file')
     } finally {
       warn.mockRestore()
     }
