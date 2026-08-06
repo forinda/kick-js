@@ -1,0 +1,25 @@
+{
+  // Type-surface guards that MUST run in CI.
+  //
+  // `tsconfig.json` includes only `src`, so nothing under `__tests__` is
+  // touched by `pnpm typecheck`. `tsconfig.test.json` does include them, but
+  // it is only read by `vitest --typecheck`, and no script passes that flag —
+  // so the `test.typecheck.include` allowlist in vitest.config.ts never runs
+  // either. A test whose entire purpose is a type-only import therefore passed
+  // happily with the export it guards deleted.
+  //
+  // This config exists so those guards have a home that the `typecheck` script
+  // actually executes. It is deliberately narrow: a whole-`__tests__` sweep
+  // surfaces a large pre-existing backlog (implicit `any` in fixtures, cluster
+  // typings) that is not this file's problem to fix.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["vitest/globals"],
+    "paths": {
+      "@forinda/kickjs": ["./src/index.ts"],
+      "@forinda/kickjs/*": ["./src/*"]
+    }
+  },
+  "include": ["src", "__tests__/context-decorator-public-types.test.ts"]
+}

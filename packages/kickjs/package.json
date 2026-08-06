@@ -118,7 +118,7 @@
     "build": "tsdown",
     "dev": "tsdown --watch",
     "test": "vitest run --passWithNoTests",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.typetests.json",
     "clean": "rm -rf dist .wireit"
   },
   "dependencies": {
