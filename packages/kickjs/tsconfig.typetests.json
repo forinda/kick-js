@@ -21,5 +21,12 @@
       "@forinda/kickjs/*": ["./src/*"]
     }
   },
-  "include": ["src", "__tests__/context-decorator-public-types.test.ts"]
+  "include": [
+    "src",
+    // The suite's ContextMeta keys — without these the program has an EMPTY
+    // registry, `ContextMetaKey` collapses to `string`, and the narrowing
+    // assertions below would pass while proving nothing.
+    "__tests__/context-meta.d.ts",
+    "__tests__/context-decorator-public-types.test.ts"
+  ]
 }

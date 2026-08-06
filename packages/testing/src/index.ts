@@ -10,6 +10,7 @@ import {
   type AppModuleEntry,
   type ApplicationOptions,
   type ContextDecorator,
+  type ContextMetaKey,
   type ContributorRegistration,
   type ExecutionContext,
   MissingContextValueError,
@@ -246,7 +247,7 @@ export interface RunContributorResult<K extends string> {
  * ```
  */
 export async function runContributor<
-  K extends string,
+  K extends ContextMetaKey,
   D extends Record<string, any> = Record<string, never>,
 >(
   decorator: ContextDecorator<K, D>,

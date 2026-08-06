@@ -65,6 +65,7 @@ import {
   defineContextDecorator,
   type ContextDecorator,
   type ContextDecoratorSpec,
+  type ContextMetaKey,
   type DepValue,
 } from '../core/context-decorator'
 import type { RequestContext } from './context'
@@ -75,7 +76,7 @@ import type { RequestContext } from './context'
  * from the spec, and `Ctx` is locked to `RequestContext`.
  */
 export interface DefineHttpContextDecoratorWithParams<P extends Record<string, unknown>> {
-  <K extends string, D extends Record<string, DepValue> = Record<string, never>>(
+  <K extends ContextMetaKey, D extends Record<string, DepValue> = Record<string, never>>(
     spec: ContextDecoratorSpec<K, D, P, RequestContext>,
   ): ContextDecorator<K, D, P, RequestContext>
 }
@@ -87,7 +88,7 @@ export interface DefineHttpContextDecoratorWithParams<P extends Record<string, u
  */
 export interface DefineHttpContextDecoratorFn {
   <
-    K extends string,
+    K extends ContextMetaKey,
     D extends Record<string, DepValue> = Record<string, never>,
     P extends Record<string, unknown> = Record<string, never>,
   >(
@@ -113,7 +114,7 @@ export interface DefineHttpContextDecoratorFn {
 }
 
 function defineHttpContextDecoratorImpl<
-  K extends string,
+  K extends ContextMetaKey,
   D extends Record<string, DepValue> = Record<string, never>,
   P extends Record<string, unknown> = Record<string, never>,
 >(spec: ContextDecoratorSpec<K, D, P, RequestContext>): ContextDecorator<K, D, P, RequestContext> {
@@ -123,7 +124,7 @@ function defineHttpContextDecoratorImpl<
 export const defineHttpContextDecorator: DefineHttpContextDecoratorFn = Object.freeze(
   Object.assign(defineHttpContextDecoratorImpl, {
     withParams: <P extends Record<string, unknown>>(): DefineHttpContextDecoratorWithParams<P> => {
-      return <K extends string, D extends Record<string, DepValue> = Record<string, never>>(
+      return <K extends ContextMetaKey, D extends Record<string, DepValue> = Record<string, never>>(
         spec: ContextDecoratorSpec<K, D, P, RequestContext>,
       ): ContextDecorator<K, D, P, RequestContext> => defineHttpContextDecoratorImpl<K, D, P>(spec)
     },

@@ -78,6 +78,29 @@ export interface ContextMeta {}
 // eslint-disable-next-line @typescript-eslint/no-empty-interface
 export interface ContextKeys {}
 
+/**
+ * Every context key the project has registered — the union of the
+ * {@link ContextKeys} (dependsOn-only) and {@link ContextMeta} (value-type)
+ * registries. Resolves to `string` when neither has been augmented, so a
+ * first-day project keeps compiling, and narrows to the concrete keys once
+ * `declare module '@forinda/kickjs' { interface ContextKeys/ContextMeta { … } }`
+ * lands.
+ *
+ * Unioning BOTH registries is deliberate: adding a value type via
+ * `ContextMeta` automatically makes that key a valid `dependsOn` target, and
+ * a key can be registered in `ContextKeys` without being forced to carry a
+ * value type. (Before the split, `dependsOn` keyed off `ContextMeta` alone,
+ * so augmenting it for some keys broke `dependsOn` for every key you had not
+ * added there.)
+ *
+ * Lives here, beside the two registries it reads, so `ExecutionContext` can
+ * use it without importing from `context-decorator` — which imports THIS
+ * module, and would make the pair circular. Re-exported from
+ * `context-decorator` for back-compat.
+ */
+type KnownContextKey = keyof ContextMeta | keyof ContextKeys
+export type ContextMetaKey = [KnownContextKey] extends [never] ? string : KnownContextKey & string
+
 /** Resolve a {@link ContextMeta} value type, falling back to `Fallback` for unknown keys. */
 export type MetaValue<K extends string, Fallback = unknown> = K extends keyof ContextMeta
   ? ContextMeta[K]
@@ -91,7 +114,7 @@ export type MetaValue<K extends string, Fallback = unknown> = K extends keyof Co
  * pipeline only depends on this interface — contributors authored against
  * `ExecutionContext` work across every transport that adopts it.
  */
-export interface ExecutionContext<TKeys extends string = string> {
+export interface ExecutionContext<TKeys extends ContextMetaKey = ContextMetaKey> {
   /**
    * Read a typed value from per-request metadata.
    *
@@ -100,7 +123,7 @@ export interface ExecutionContext<TKeys extends string = string> {
    * is present, and a wrong claim there fails open — exactly the silent
    * failure `require` exists to prevent.
    */
-  get<K extends string>(key: K): MetaValue<K> | undefined
+  get<K extends ContextMetaKey>(key: K): MetaValue<K> | undefined
   /**
    * Read a value that must be present, throwing `MissingContextValueError`
    * when it isn't. Use for preconditions (permissions, tenant, resolved
@@ -116,7 +139,7 @@ export interface ExecutionContext<TKeys extends string = string> {
    */
   require<K extends TKeys>(key: K): Exclude<MetaValue<K>, undefined>
   /** Write a typed value into per-request metadata. */
-  set<K extends string>(key: K, value: MetaValue<K>): void
+  set<K extends ContextMetaKey>(key: K, value: MetaValue<K>): void
   /** Unique per-request identifier (HTTP: x-request-id; WS/queue/cron: transport-defined). */
   readonly requestId: string | undefined
 }
