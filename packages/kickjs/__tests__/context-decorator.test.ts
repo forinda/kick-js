@@ -1,6 +1,7 @@
 import 'reflect-metadata'
 import { describe, it, expect } from 'vitest'
 import {
+  createToken,
   defineContextDecorator,
   METADATA,
   type ContributorRegistration,
@@ -81,7 +82,7 @@ describe('defineContextDecorator — factory shape', () => {
   })
 
   it('freezes the dependsOn array independently of the spec input', () => {
-    const dependsOn = ['tenant']
+    const dependsOn: ('tenant' | 'project' | 'user')[] = ['tenant']
     const decorator = defineContextDecorator({
       key: 'project',
       dependsOn,
@@ -90,7 +91,7 @@ describe('defineContextDecorator — factory shape', () => {
 
     // Mutating the original array does not leak into the registration —
     // the runner relies on this to skip defensive copies during topo-sort.
-    dependsOn.push('mutated')
+    dependsOn.push('user')
     expect(decorator.registration.dependsOn).toEqual(['tenant'])
     expect(Object.isFrozen(decorator.registration.dependsOn)).toBe(true)
   })
@@ -141,8 +142,8 @@ describe('defineContextDecorator — boot-time validation', () => {
 
   it('throws TypeError when spec.key is missing or empty', () => {
     expect(() =>
+      // @ts-expect-error — testing the runtime guard for a missing key
       defineContextDecorator({
-        // @ts-expect-error — testing runtime guard for missing key
         resolve: () => undefined,
       }),
     ).toThrow(/spec\.key must be a non-empty string/)
@@ -156,8 +157,8 @@ describe('defineContextDecorator — boot-time validation', () => {
 
   it('throws TypeError when spec.resolve is missing or not a function', () => {
     expect(() =>
+      // @ts-expect-error — testing the runtime guard for a missing resolve
       defineContextDecorator({
-        // @ts-expect-error — testing runtime guard for missing resolve
         key: 'tenant',
       }),
     ).toThrow(/spec\.resolve is required and must be a function/)
@@ -370,7 +371,11 @@ describe('defineContextDecorator — type inference (compile-time only)', () => 
     })
 
     const value = decorator.registration.resolve(
-      { get: () => undefined, set: () => undefined, requestId: 'r-1' },
+      {
+        get: () => undefined,
+        set: () => undefined,
+        requestId: 'r-1',
+      } as unknown as ExecutionContext,
       {} as never,
     )
     expect(value).toBe(42)
@@ -389,7 +394,7 @@ describe('parameterised contributors — factory call form', () => {
     }) as unknown as ExecutionContext
 
   it('zero-arg decorator applies paramDefaults', async () => {
-    const Trace = defineContextDecorator<'trace', Record<string, never>, { tag: string }>({
+    const Trace = defineContextDecorator.withParams<{ tag: string }>()({
       key: 'trace',
       paramDefaults: { tag: 'default' },
       resolve: (_ctx, _deps, params) => params.tag,
@@ -404,11 +409,7 @@ describe('parameterised contributors — factory call form', () => {
   })
 
   it('factory-call decorator merges call-site params over paramDefaults', async () => {
-    const Trace = defineContextDecorator<
-      'trace',
-      Record<string, never>,
-      { tag: string; level: number }
-    >({
+    const Trace = defineContextDecorator.withParams<{ tag: string; level: number }>()({
       key: 'trace',
       paramDefaults: { tag: 'default', level: 1 },
       resolve: (_ctx, _deps, params) => `${params.tag}:${params.level}`,
@@ -423,7 +424,7 @@ describe('parameterised contributors — factory call form', () => {
   })
 
   it('two factory-call decorators on different methods produce independent registrations', async () => {
-    const Trace = defineContextDecorator<'trace', Record<string, never>, { tag: string }>({
+    const Trace = defineContextDecorator.withParams<{ tag: string }>()({
       key: 'trace',
       paramDefaults: { tag: 'default' },
       resolve: (_ctx, _deps, params) => params.tag,
@@ -448,7 +449,7 @@ describe('parameterised contributors — factory call form', () => {
   })
 
   it('.with() builds a registration with merged params for non-decorator sites', async () => {
-    const Trace = defineContextDecorator<'trace', Record<string, never>, { tag: string }>({
+    const Trace = defineContextDecorator.withParams<{ tag: string }>()({
       key: 'trace',
       paramDefaults: { tag: 'default' },
       resolve: (_ctx, _deps, params) => params.tag,
@@ -459,7 +460,7 @@ describe('parameterised contributors — factory call form', () => {
   })
 
   it('.registration uses paramDefaults — back-compat for plugin / adapter sites', async () => {
-    const Trace = defineContextDecorator<'trace', Record<string, never>, { tag: string }>({
+    const Trace = defineContextDecorator.withParams<{ tag: string }>()({
       key: 'trace',
       paramDefaults: { tag: 'default' },
       resolve: (_ctx, _deps, params) => params.tag,
@@ -469,15 +470,13 @@ describe('parameterised contributors — factory call form', () => {
   })
 
   it('params can carry functions / closures', async () => {
-    const Trace = defineContextDecorator<
-      'trace',
-      Record<string, never>,
-      { keyOf: (ctx: ExecutionContext) => string }
-    >({
-      key: 'trace',
-      paramDefaults: { keyOf: () => 'fallback' },
-      resolve: (ctx, _deps, params) => params.keyOf(ctx),
-    })
+    const Trace = defineContextDecorator.withParams<{ keyOf: (ctx: ExecutionContext) => string }>()(
+      {
+        key: 'trace',
+        paramDefaults: { keyOf: () => 'fallback' },
+        resolve: (ctx, _deps, params) => params.keyOf(ctx),
+      },
+    )
 
     @Trace({
       keyOf: (ctx) =>
@@ -493,7 +492,7 @@ describe('parameterised contributors — factory call form', () => {
   })
 
   it('throws a descriptive TypeError on factory call with null / array / primitive', () => {
-    const Trace = defineContextDecorator<'trace', Record<string, never>, { tag: string }>({
+    const Trace = defineContextDecorator.withParams<{ tag: string }>()({
       key: 'trace',
       paramDefaults: { tag: 'default' },
       resolve: (_ctx, _deps, params) => params.tag,
@@ -509,7 +508,7 @@ describe('parameterised contributors — factory call form', () => {
   })
 
   it('rejects class instances / Map / Date — they spread to {} and silently drop params', () => {
-    const Trace = defineContextDecorator<'trace', Record<string, never>, { tag: string }>({
+    const Trace = defineContextDecorator.withParams<{ tag: string }>()({
       key: 'trace',
       paramDefaults: { tag: 'default' },
       resolve: (_ctx, _deps, params) => params.tag,
@@ -531,7 +530,7 @@ describe('parameterised contributors — factory call form', () => {
   })
 
   it('freezes captured params so a misbehaving resolver cannot mutate them across requests', async () => {
-    const Trace = defineContextDecorator<'trace', Record<string, never>, { counter: number }>({
+    const Trace = defineContextDecorator.withParams<{ counter: number }>()({
       key: 'trace',
       paramDefaults: { counter: 0 },
       resolve: (_ctx, _deps, params) => {
@@ -555,7 +554,7 @@ describe('parameterised contributors — factory call form', () => {
   })
 
   it('@Foo() (zero-arg factory call) returns a decorator using paramDefaults', async () => {
-    const Trace = defineContextDecorator<'trace', Record<string, never>, { tag: string }>({
+    const Trace = defineContextDecorator.withParams<{ tag: string }>()({
       key: 'trace',
       paramDefaults: { tag: 'default' },
       resolve: (_ctx, _deps, params) => params.tag,
@@ -574,7 +573,7 @@ describe('parameterised contributors — factory call form', () => {
 
   it('paramDefaults are snapshotted — caller mutating the spec object cannot affect future call sites', async () => {
     const liveDefaults = { tag: 'initial' }
-    const Trace = defineContextDecorator<'trace', Record<string, never>, { tag: string }>({
+    const Trace = defineContextDecorator.withParams<{ tag: string }>()({
       key: 'trace',
       paramDefaults: liveDefaults,
       resolve: (_ctx, _deps, params) => params.tag,
@@ -593,7 +592,7 @@ describe('parameterised contributors — factory call form', () => {
 
   it('onError receives the per-call params', async () => {
     const errors: { params: { tag: string }; err: unknown }[] = []
-    const Trace = defineContextDecorator<'trace', Record<string, never>, { tag: string }>({
+    const Trace = defineContextDecorator.withParams<{ tag: string }>()({
       key: 'trace',
       paramDefaults: { tag: 'default' },
       resolve: () => {
@@ -633,11 +632,13 @@ describe('defineContextDecorator.withParams — curried partial inference', () =
   }
 
   it('infers K and D from the spec while P is fixed by the curried call', () => {
-    const REPO = { findById: (id: string) => ({ id, name: `proj-${id}` }) }
+    const REPO = createToken<{ findById: (id: string) => { id: string; name: string } }>(
+      'test/project-repo',
+    )
 
     const LoadProject = defineContextDecorator.withParams<LoadProjectParams>()({
       key: 'project',
-      deps: { repo: REPO as { findById: (id: string) => { id: string; name: string } } },
+      deps: { repo: REPO },
       paramDefaults: { source: 'route' },
       resolve: (_ctx, deps, params) => {
         // `deps.repo` is fully typed via D inference; calling a method

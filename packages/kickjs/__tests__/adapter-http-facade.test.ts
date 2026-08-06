@@ -21,7 +21,7 @@ describe('AdapterContext.http facade (M2a)', () => {
       name: 'FacadeAdapter',
       beforeMount(ctx) {
         expect(ctx.http).toBeDefined()
-        ctx.http.use((_req, res, next) => {
+        ctx.http.use((_req: unknown, res: any, next: () => void) => {
           res.setHeader('x-facade', 'on')
           next()
         })

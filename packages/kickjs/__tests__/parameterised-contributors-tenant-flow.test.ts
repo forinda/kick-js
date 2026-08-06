@@ -54,12 +54,10 @@ interface TenantDbClient {
   orders: { sku: string; qty: number }[]
 }
 
-declare module '../src/core/execution-context' {
-  interface ContextMeta {
-    tenant: TenantRecord
-    tenantDb: TenantDbClient
-  }
-}
+// The `ContextMeta` augmentation for the whole suite lives in
+// `./context-meta.d.ts`. Declaring it here instead made this file's two keys
+// the ONLY legal ones program-wide, breaking every other suite's keys —
+// module augmentation is global, and `__tests__` compiles as one program.
 
 // ── Mock DI services ────────────────────────────────────────────────────
 

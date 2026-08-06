@@ -94,10 +94,12 @@ describe('Cluster module', () => {
 
       // Capture the exit callback
       let exitCallback: Function | undefined
-      vi.spyOn(cluster, 'on').mockImplementation((event: string, cb: Function) => {
-        if (event === 'exit') exitCallback = cb
-        return cluster
-      })
+      vi.spyOn(cluster, 'on').mockImplementation(
+        (event: string | symbol, cb: (...args: any[]) => void) => {
+          if (event === 'exit') exitCallback = cb
+          return cluster
+        },
+      )
       vi.spyOn(process, 'on').mockImplementation(() => process)
 
       const { setupClusterPrimary } = await import('../src/http/cluster')

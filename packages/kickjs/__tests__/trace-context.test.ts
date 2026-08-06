@@ -3,8 +3,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import request from 'supertest'
 import express from 'express'
 import {
+  getRequestValue,
   Container,
-  Logger,
   requestStore,
   requestScopeMiddleware,
   traceContext,
@@ -57,9 +57,8 @@ describe('traceContext middleware', () => {
     app.use(requestScopeMiddleware())
     app.use(traceContext())
     app.get('/probe', (_req, res) => {
-      const store = requestStore.getStore()
-      capturedTraceId = store?.values.get('traceId')
-      capturedSpanId = store?.values.get('spanId')
+      capturedTraceId = getRequestValue('traceId')
+      capturedSpanId = getRequestValue('spanId')
       res.json({ ok: true })
     })
 
@@ -80,8 +79,7 @@ describe('traceContext middleware', () => {
     app.use(requestScopeMiddleware())
     app.use(traceContext())
     app.get('/probe', (_req, res) => {
-      const store = requestStore.getStore()
-      capturedTraceId = store?.values.get('traceId')
+      capturedTraceId = getRequestValue('traceId')
       res.json({ ok: true })
     })
 
@@ -98,8 +96,7 @@ describe('traceContext middleware', () => {
     app.use(requestScopeMiddleware())
     app.use(traceContext())
     app.get('/probe', (_req, res) => {
-      const store = requestStore.getStore()
-      capturedTraceId = store?.values.get('traceId')
+      capturedTraceId = getRequestValue('traceId')
       res.json({ ok: true })
     })
 
@@ -157,9 +154,8 @@ describe('traceContext middleware', () => {
     app.use(requestScopeMiddleware())
     app.use(traceContext())
     app.get('/probe', (_req, res) => {
-      const store = requestStore.getStore()
-      flags = store?.values.get('traceFlags')
-      version = store?.values.get('traceVersion')
+      flags = getRequestValue('traceFlags')
+      version = getRequestValue('traceVersion')
       res.json({ ok: true })
     })
 
@@ -172,28 +168,37 @@ describe('traceContext middleware', () => {
   })
 })
 
-// ── Logger context integration ─────────────────────────────────────────
+// ── Trace values in the request store ──────────────────────────────────
 
-describe('traceId in Logger context', () => {
+/**
+ * The per-request trace fields, read straight from the request store.
+ *
+ * This used to go through a `Logger._contextProvider` hook that the test
+ * assigned to itself and then asserted on — a static that exists nowhere in
+ * `src`, so the round trip exercised no framework code. The real subject is
+ * `traceContext()` populating the store, which is what this reads.
+ */
+function readTraceContext(): Record<string, unknown> | null {
+  const store = requestStore.getStore()
+  if (!store) return null
+  const ctx: Record<string, unknown> = { requestId: store.requestId }
+  const traceId = getRequestValue('traceId')
+  if (traceId) ctx.traceId = traceId
+  const spanId = getRequestValue('spanId')
+  if (spanId) ctx.spanId = spanId
+  return ctx
+}
+
+// ── Trace context integration ──────────────────────────────────────────
+
+describe('traceId in the per-request trace context', () => {
   beforeEach(() => {
     Container.reset()
-    // Wire the logger context provider the same way Application does
     Container._requestStoreProvider = () => requestStore.getStore() ?? null
-    Logger._contextProvider = () => {
-      const store = requestStore.getStore()
-      if (!store) return null
-      const ctx: Record<string, any> = { requestId: store.requestId }
-      const traceId = store.values.get('traceId')
-      if (traceId) ctx.traceId = traceId
-      const spanId = store.values.get('spanId')
-      if (spanId) ctx.spanId = spanId
-      return ctx
-    }
   })
 
   afterEach(() => {
     Container._requestStoreProvider = null
-    Logger._contextProvider = null
   })
 
   it('traceId appears in logger context during a request with traceparent', async () => {
@@ -203,8 +208,7 @@ describe('traceId in Logger context', () => {
     app.use(requestScopeMiddleware())
     app.use(traceContext())
     app.get('/probe', (_req, res) => {
-      // Access the context the same way the Logger does internally
-      loggerContext = Logger._contextProvider?.() ?? null
+      loggerContext = readTraceContext()
       res.json({ ok: true })
     })
 
@@ -226,7 +230,7 @@ describe('traceId in Logger context', () => {
     app.use(requestScopeMiddleware())
     app.use(traceContext())
     app.get('/probe', (_req, res) => {
-      loggerContext = Logger._contextProvider?.() ?? null
+      loggerContext = readTraceContext()
       res.json({ ok: true })
     })
 

@@ -28,13 +28,13 @@ function withCtx<T>(
   overrides: CtxOverrides,
   fn: (ctx: RequestContext, req: EventEmitter, res: EventEmitter) => T,
 ): T {
-  const req: EventEmitter & Record<string, unknown> = Object.assign(new EventEmitter(), {
+  const req = Object.assign(new EventEmitter(), {
     body: overrides.body ?? {},
     params: overrides.params ?? {},
     query: overrides.query ?? {},
     headers: overrides.headers ?? {},
   })
-  const res: EventEmitter & Record<string, unknown> = new EventEmitter()
+  const res = new EventEmitter()
   const next = () => {}
 
   const store = { requestId: 'r-test', instances: new Map(), values: new Map() }
@@ -82,13 +82,13 @@ describe('RequestContext.signal', () => {
     // for middleware, the contributor pipeline, and the main handler.
     // All must observe the same abort signal — the controller is
     // cached on `req` via a shared Symbol key.
-    const req: EventEmitter & Record<string, unknown> = Object.assign(new EventEmitter(), {
+    const req = Object.assign(new EventEmitter(), {
       body: {},
       params: {},
       query: {},
       headers: {},
     })
-    const res: EventEmitter & Record<string, unknown> = new EventEmitter()
+    const res = new EventEmitter()
     const next = () => {}
 
     const store = { requestId: 'r-test', instances: new Map(), values: new Map() }
