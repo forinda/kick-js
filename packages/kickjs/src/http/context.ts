@@ -280,10 +280,12 @@ export class RequestContext<
   TParams = any,
   TQuery = any,
   /**
-   * Context keys proven present for this route. Defaults to `string`, so
-   * a handler typed as plain `RequestContext` keeps today's unnarrowed
-   * behaviour — which is also the deliberate escape hatch when typegen's
-   * view is incomplete.
+   * Context keys proven present for this route. Defaults to
+   * {@link ContextMetaKey} — every key the project has registered — which
+   * collapses to `string` when neither registry has been augmented, so a
+   * handler typed as plain `RequestContext` keeps today's behaviour. That
+   * default is also the deliberate escape hatch when typegen's view of a
+   * route is incomplete.
    */
   TKeys extends ContextMetaKey = ContextMetaKey,
 > implements ExecutionContext<TKeys> {
@@ -586,11 +588,21 @@ export class RequestContext<
   /**
    * Read a value from the per-request metadata store.
    *
-   * When `ContextMeta` has been augmented with a matching key, the return
-   * type is inferred automatically. For ad-hoc keys, pass a generic:
-   * `ctx.get<MyType>('custom')`.
+   * The key is constrained to {@link ContextMetaKey} — the keys registered in
+   * `ContextMeta` / `ContextKeys` — so a typo is a compile error rather than a
+   * permanent `undefined`. Projects that have augmented neither registry get
+   * `string`, exactly as before.
+   *
+   * Constrained by `ContextMetaKey` and deliberately NOT by `TKeys`: "does this
+   * key exist in the app" is a different question from "does this route carry
+   * it", and narrowing by the latter would turn an incomplete typegen view into
+   * false errors for keys written by middleware. Presence is `require`'s job;
+   * this always returns `| undefined`.
+   *
+   * When `ContextMeta` has a matching key the return type is inferred
+   * automatically. For ad-hoc keys, pass a generic: `ctx.get<MyType>('custom')`.
    */
-  get<K extends string>(key: K): MetaValue<K> | undefined {
+  get<K extends ContextMetaKey>(key: K): MetaValue<K> | undefined {
     return this.metadataReadOnly()?.get(key) as MetaValue<K> | undefined
   }
 
@@ -657,7 +669,7 @@ export class RequestContext<
    * AsyncLocalStorage frame is active — see {@link metadataForWrite}
    * for why a silent fallback is the wrong default.
    */
-  set<K extends string>(key: K, value: MetaValue<K>): void {
+  set<K extends ContextMetaKey>(key: K, value: MetaValue<K>): void {
     this.metadataForWrite().set(key, value)
   }
 

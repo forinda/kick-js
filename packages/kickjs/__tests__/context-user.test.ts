@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { RequestContext } from '../src/http/context'
+import type { ContextMetaKey } from '../src/core/execution-context'
 import { requestStore } from '../src/http/request-store'
 
 /**
@@ -25,7 +26,10 @@ function withCtx<T>(
   return requestStore.run(store, () => {
     const ctx = new RequestContext(req, res, next)
     if (overrides.meta) {
-      for (const [key, value] of Object.entries(overrides.meta)) ctx.set(key, value)
+      // Keys come from an arbitrary fixture bag, so they are `string` by
+      // construction — not a registry gap.
+      for (const [key, value] of Object.entries(overrides.meta))
+        ctx.set(key as ContextMetaKey, value)
     }
     return fn(ctx)
   })

@@ -25,8 +25,14 @@ function makeCtx() {
       return store.get(key) as never
     },
     require<K extends string>(key: K) {
-      if (!store.has(key)) throw new Error(`missing context value: ${key}`)
-      return store.get(key) as never
+      // `undefined` counts as missing, matching `RequestContext.require` and
+      // the `runContributor` harness. A `has()` check alone would return
+      // `undefined` for a key explicitly stored as `undefined`, so the stub
+      // would silently disagree with the contract it stands in for. `null`
+      // stays a real value — only `undefined` throws.
+      const value = store.get(key)
+      if (value === undefined) throw new Error(`missing context value: ${key}`)
+      return value as never
     },
     set<K extends string>(key: K, value: never) {
       store.set(key, value)
