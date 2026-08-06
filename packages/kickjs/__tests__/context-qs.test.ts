@@ -16,7 +16,7 @@ afterEach(() => {
 describe('RequestContext.qs', () => {
   it('memoizes repeat calls with the same config reference', () => {
     const ctx = makeCtx({ filter: 'status:eq:open' })
-    const config = { filterable: ['status'] } as const
+    const config = { filterable: ['status'] }
     const a = ctx.qs(config)
     const b = ctx.qs(config)
     expect(b).toBe(a) // identical reference — not re-parsed

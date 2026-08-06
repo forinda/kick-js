@@ -43,7 +43,7 @@ function buildApp(table: RouteTable) {
 
 beforeEach(() => {
   Container.reset()
-  Container._requestStoreProvider = () => requestStore.getStore()
+  Container._requestStoreProvider = () => requestStore.getStore() ?? null
 })
 
 describe('h3WebRuntime — fetch round-trips', () => {
@@ -96,7 +96,7 @@ describe('h3WebRuntime — fetch round-trips', () => {
       new Request('http://test/api/id', { headers: { 'x-request-id': 'abc-123' } }),
     )
     expect(given.headers.get('x-request-id')).toBe('abc-123')
-    expect((await given.json()).id).toBe('abc-123')
+    expect(((await given.json()) as { id: string }).id).toBe('abc-123')
 
     const minted = await app.fetch(new Request('http://test/api/id'))
     expect(minted.headers.get('x-request-id')).toMatch(/[0-9a-f-]{36}/)
@@ -233,7 +233,7 @@ describe('h3WebRuntime — fetch round-trips', () => {
       new Request('http://test/api/upload', { method: 'POST', body: form }),
     )
     expect(res.status).toBe(200)
-    const body = await res.json()
+    const body = (await res.json()) as { fields: unknown; file: string; size: number }
     expect(body.fields).toEqual({ title: 'hello' })
     expect(body.file).toBe('a.bin')
     expect(body.size).toBe(3)

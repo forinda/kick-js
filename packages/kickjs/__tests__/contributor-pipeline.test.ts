@@ -5,6 +5,7 @@ import {
   ContributorCycleError,
   DuplicateContributorError,
   MissingContributorError,
+  type ContextMetaKey,
   type ContributorRegistration,
   type ContributorSource,
   type SourcedRegistration,
@@ -12,7 +13,7 @@ import {
 
 function reg(opts: {
   key: string
-  dependsOn?: string[]
+  dependsOn?: ContextMetaKey[]
   optional?: boolean
 }): ContributorRegistration {
   return defineContextDecorator({

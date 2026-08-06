@@ -24,6 +24,10 @@ function makeCtx() {
     get<K extends string>(key: K) {
       return store.get(key) as never
     },
+    require<K extends string>(key: K) {
+      if (!store.has(key)) throw new Error(`missing context value: ${key}`)
+      return store.get(key) as never
+    },
     set<K extends string>(key: K, value: never) {
       store.set(key, value)
       writes.push({ key, value })

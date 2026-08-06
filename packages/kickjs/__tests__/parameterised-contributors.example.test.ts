@@ -76,7 +76,7 @@ describe('parameterised contributors — end-to-end recipe', () => {
    * matches the chosen "wide narrowing" convention from plan.md
    * (Decision 1 / Q4).
    */
-  const LoadTenant = defineContextDecorator<'tenant', Record<string, never>, LoadTenantParams>({
+  const LoadTenant = defineContextDecorator.withParams<LoadTenantParams>()({
     key: 'tenant',
     paramDefaults: { source: 'header', headerName: 'x-tenant-id' },
     resolve: (ctx, _deps, params) => {

@@ -135,7 +135,7 @@ describe('@PreDestroy — REQUEST-scope teardown', () => {
       }
     }
 
-    Container._requestStoreProvider = () => requestStore.getStore()
+    Container._requestStoreProvider = () => requestStore.getStore() ?? null
     const container = Container.getInstance()
     const store: RequestStore = createRequestStore()
     requestStore.run(store, () => {

@@ -140,8 +140,8 @@ describe('defineModule — boot-time validation', () => {
 
   it('throws when options.name is missing or empty', () => {
     expect(() =>
+      // @ts-expect-error — testing the runtime guard for a missing name
       defineModule({
-        // @ts-expect-error — testing runtime guard
         build: () => ({ routes: () => null }) as AppModule,
       }),
     ).toThrow(/options\.name must be a non-empty string/)
@@ -155,8 +155,8 @@ describe('defineModule — boot-time validation', () => {
 
   it('throws when options.build is missing or not a function', () => {
     expect(() =>
+      // @ts-expect-error — testing the runtime guard for a missing build
       defineModule({
-        // @ts-expect-error — testing runtime guard
         name: 'NoBuild',
       }),
     ).toThrow(/options\.build is required and must be a function/)
