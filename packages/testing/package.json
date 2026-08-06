@@ -42,9 +42,9 @@
   },
   "devDependencies": {
     "@forinda/kickjs": "workspace:*",
-    "@swc/core": "^1.15.46",
+    "@swc/core": "^1.15.47",
     "@types/express": "^5.0.6",
-    "@types/node": "^26.1.1",
+    "@types/node": "^26.1.2",
     "@types/supertest": "^7.2.1",
     "express": "^5.1.0",
     "reflect-metadata": "^0.2.2",
