@@ -24,37 +24,62 @@
  * failure, not just a red test.
  */
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, expectTypeOf, it } from 'vitest'
 import {
   defineContextDecorator,
   type CallSiteParams,
   type ContextDecorator,
   type ContextDecoratorRequiringParams,
   type ContextDecoratorWithDefaults,
+  type ExecutionContext,
   type MissingParamKeys,
 } from '../src'
 
 describe('context decorator public type surface', () => {
-  it('exports the shapes ContextDecorator resolves to', () => {
-    // Type-level assertions — the real check is that this file compiles.
-    type Defaulted = ContextDecoratorWithDefaults<'tenant'>
-    type Required = ContextDecoratorRequiringParams<
-      'tenant',
-      Record<string, never>,
-      { orgId: string },
-      never,
-      Record<string, never>
-    >
-    type Missing = MissingParamKeys<{ orgId: string }, Record<string, never>>
-    type CallSite = CallSiteParams<{ orgId: string }, Record<string, never>>
+  it('resolves the union to the exported defaulted shape', () => {
+    // The union's own default type args carry no required params, so it must
+    // land on the `WithDefaults` branch — and both names have to be public
+    // for this line to compile at all.
+    expectTypeOf<ContextDecorator<'tenant'>>().toEqualTypeOf<
+      ContextDecoratorWithDefaults<'tenant'>
+    >()
+  })
 
-    const declared: Record<string, boolean> = {
-      defaulted: (null as unknown as Defaulted) !== undefined,
-      required: (null as unknown as Required) !== undefined,
-      missing: (null as unknown as Missing) !== undefined,
-      callSite: (null as unknown as CallSite) !== undefined,
-    }
-    expect(Object.keys(declared)).toHaveLength(4)
+  it('resolves the union to the exported required-params shape', () => {
+    // A param with no default flips the conditional to the other branch.
+    //
+    // `NoDefaults` is `Record<never, never>`, NOT `Record<string, never>`:
+    // the latter's `keyof` is `string`, so `Exclude<'orgId', keyof PD>`
+    // collapses to `never` and the type silently reports "everything is
+    // defaulted" — the assertion would then pass against the wrong branch.
+    type Params = { orgId: string }
+    type NoDefaults = Record<never, never>
+
+    expectTypeOf<
+      ContextDecorator<'project', Record<string, never>, Params, ExecutionContext, NoDefaults>
+    >().toEqualTypeOf<
+      ContextDecoratorRequiringParams<
+        'project',
+        Record<string, never>,
+        Params,
+        ExecutionContext,
+        NoDefaults
+      >
+    >()
+  })
+
+  it('exports the helpers used in those shapes public positions', () => {
+    // `MissingParamKeys` drives the conditional above; `CallSiteParams` is the
+    // argument type of the factory / `.with()` forms. Both appear in emitted
+    // declarations, so both must be nameable downstream.
+    expectTypeOf<
+      MissingParamKeys<{ orgId: string }, Record<never, never>>
+    >().toEqualTypeOf<'orgId'>()
+    // No defaults, so the undefaulted required field is mandatory at the call
+    // site rather than merely optional.
+    expectTypeOf<CallSiteParams<{ orgId: string }, Record<never, never>>>().toEqualTypeOf<
+      Partial<{ orgId: string }> & Pick<{ orgId: string }, 'orgId'>
+    >()
   })
 
   it('an exported contributor is assignable to the public union', () => {
