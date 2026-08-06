@@ -20,13 +20,20 @@
  * this only ever shows up downstream.
  *
  * The imports below are the guard: drop one of these re-exports and this file
- * stops compiling. `tsc --noEmit` runs over `__tests__`, so that is a build
- * failure, not just a red test.
+ * stops compiling. It is `tsconfig.typetests.json` — wired into the package's
+ * `typecheck` script — that compiles it; the default `tsconfig.json` is
+ * `include: ["src"]` and never sees `__tests__`.
+ *
+ * This file guards the CAUSE (the types staying exported). It cannot reproduce
+ * TS4023 itself, because everything here resolves through `../src` and a type
+ * in the same program is always nameable. `dts-consumer-emit.test.ts` covers
+ * the emit path against the built `.d.mts`.
  */
 
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import {
   defineContextDecorator,
+  getRequestValue,
   type CallSiteParams,
   type ContextDecorator,
   type ContextDecoratorRequiringParams,
@@ -135,12 +142,18 @@ describe('declared keys narrow every key-taking surface', () => {
     ctx.set('not-a-declared-key', 1)
     // @ts-expect-error — undeclared key
     ctx.require('not-a-declared-key')
+    // Standalone reader, outside any context object — it was the clearest
+    // instance of the bug (its docblock promised to thread the augmented
+    // shape while leaving the key `string`), so it needs its own case.
+    // @ts-expect-error — undeclared key
+    getRequestValue('not-a-declared-key')
   }
 
   function _declaredKeyAccepted(ctx: ExecutionContext): void {
     // `tenant` is declared, so none of these are errors.
     ctx.get('tenant')
     ctx.set('tenant', undefined)
+    getRequestValue('tenant')
   }
 
   it('exposes the compile-time guards above', () => {
