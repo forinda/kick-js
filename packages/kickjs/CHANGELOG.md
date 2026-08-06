@@ -1,5 +1,70 @@
 # @forinda/kickjs
 
+## 6.7.0
+
+### Minor Changes
+
+- [#509](https://github.com/forinda/kick-js/pull/509) [`778573b`](https://github.com/forinda/kick-js/commit/778573b1e2d23debbb5707e3260998f787ec572a) Thanks [@forinda](https://github.com/forinda)! - Narrow every key-taking surface to the declared `ContextMeta` / `ContextKeys` keys
+
+  Augmenting `ContextMeta` narrowed `dependsOn` and nothing else. `key` on a
+  contributor spec, `ctx.get`, `ctx.set`, `ctx.require` and `getRequestValue` were
+  all `K extends string`, so in a fully augmented app a typo'd key still compiled
+  and failed at runtime — or silently read `undefined`.
+
+  The two questions are different and only one was being asked:
+
+  - `TKeys` — "does **this route** carry the key?" `get` deliberately stays loose
+    here, because claiming presence wrongly fails open.
+  - `ContextMetaKey` — "does this key exist in the app **at all**?" An undeclared
+    key here is a typo, not a maybe-absent value.
+
+  All key positions now use `ContextMetaKey`. Value types were already correct and
+  are unchanged: `ctx.get('user')` is `User | undefined`, `ctx.require('user')` is
+  `User`, and a key registered only in `ContextKeys` still reads as `unknown`.
+
+  `ContextMetaKey` moved next to the registries it reads in `execution-context`,
+  so that module can constrain `get`/`set` without a circular import. It is still
+  re-exported from `context-decorator`, so existing imports are unaffected.
+
+  Framework-internal positions that also said `string` — `AnyContributorRegistration`,
+  `RequestContext<TKeys>`, the typegen fallback, and `runContributor` in
+  `@forinda/kickjs-testing` — moved with them. Those were latent: they stopped
+  satisfying the constraint the moment any consumer augmented `ContextMeta`.
+
+  **Back-compat:** with no augmentation `ContextMetaKey` _is_ `string`, so nothing
+  changes. Augmented apps get compile errors where they previously had silent
+  typos — which is the point of augmenting.
+
+### Patch Changes
+
+- [#509](https://github.com/forinda/kick-js/pull/509) [`d2d4e80`](https://github.com/forinda/kick-js/commit/d2d4e805f13db0dcf296d37e84aaaedce6651b51) Thanks [@forinda](https://github.com/forinda)! - Export the concrete types `ContextDecorator` resolves to, so generated contributors typecheck
+
+  `ContextDecorator` was exported, but the two interfaces it resolves to —
+  `ContextDecoratorWithDefaults` and `ContextDecoratorRequiringParams` — were not,
+  nor were the `MissingParamKeys` / `CallSiteParams` helpers in their public
+  positions.
+
+  `defineContextDecorator()` infers one of those concrete interfaces, so the
+  ordinary consumer pattern
+
+  ```ts
+  export const Tenant = defineContextDecorator({ ... })
+  ```
+
+  made TypeScript emit a declaration for a type it had no import path to:
+
+  ```text
+  TS4023: Exported variable 'Tenant' has or is using name
+  'ContextDecoratorWithDefaults' from external module … but cannot be named
+  ```
+
+  Every file `kick g contributor` produces is exactly that shape, so all of them
+  failed `tsc --noEmit` in a scaffolded app while the framework's own build stayed
+  green — same-project types are always nameable, which is why this only appeared
+  downstream.
+
+  Type-only change; no runtime behaviour is affected.
+
 ## 6.6.1
 
 ### Patch Changes
