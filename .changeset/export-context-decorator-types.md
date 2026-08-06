@@ -18,7 +18,7 @@ export const Tenant = defineContextDecorator({ ... })
 
 made TypeScript emit a declaration for a type it had no import path to:
 
-```
+```text
 TS4023: Exported variable 'Tenant' has or is using name
 'ContextDecoratorWithDefaults' from external module … but cannot be named
 ```

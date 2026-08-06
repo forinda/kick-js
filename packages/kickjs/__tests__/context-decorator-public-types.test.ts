@@ -89,9 +89,12 @@ describe('context decorator public type surface', () => {
       resolve: () => ({ id: 'org_1' }),
     })
 
-    // If the inferred shape were not expressible through the public union,
-    // this annotation would fail — the same gap TS4023 reports downstream.
-    const asUnion: ContextDecorator<string> = Tenant as ContextDecorator<string>
+    // Assigned WITHOUT a cast on purpose: a cast would satisfy the compiler
+    // whatever the inferred shape was, leaving this asserting nothing. The
+    // bare annotation IS the check — if the shape were not expressible through
+    // the public union this line fails, which is the gap TS4023 reports
+    // downstream.
+    const asUnion: ContextDecorator<string> = Tenant
     expect(typeof asUnion).toBe('function')
   })
 })
