@@ -18,7 +18,12 @@
     "types": ["vitest/globals"],
     "paths": {
       "@forinda/kickjs": ["./src/index.ts"],
-      "@forinda/kickjs/*": ["./src/*"]
+      "@forinda/kickjs/*": ["./src/*"],
+      // Mirrors tsconfig.test.json. Node resolution finds the sibling through
+      // the workspace symlink, but only once it has been BUILT — an unbuilt
+      // checkout reports "Cannot find module '@forinda/kickjs-testing'". The
+      // alias points at source so this project resolves the same either way.
+      "@forinda/kickjs-testing": ["../testing/src/index.ts"]
     }
   },
   "include": [

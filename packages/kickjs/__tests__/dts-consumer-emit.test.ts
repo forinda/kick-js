@@ -54,6 +54,15 @@ export const Project = defineContextDecorator.withParams<{ orgId: string }>()({
   paramDefaults: { orgId: 'default' },
   resolve: (_ctx, _deps, params) => ({ id: params.orgId }),
 })
+
+// No \`paramDefaults\` for a required field, so this one infers the OTHER
+// branch of the union — \`ContextDecoratorRequiringParams\`. Without it both
+// consts above land on \`ContextDecoratorWithDefaults\` and a regression that
+// un-exported only the requires-params shape would sail through.
+export const Audit = defineContextDecorator.withParams<{ actorId: string }>()({
+  key: 'audit',
+  resolve: (_ctx, _deps, params) => ({ actor: params.actorId }),
+})
 `
 
 describe('a consumer can emit declarations for an exported contributor', () => {
@@ -107,7 +116,11 @@ describe('a consumer can emit declarations for an exported contributor', () => {
       // guards deleted.
       const emitted = join(dir, 'out', 'consumer.d.ts')
       expect(existsSync(emitted), `tsc emitted nothing. Output:\n${output}`).toBe(true)
-      expect(readFileSync(emitted, 'utf8')).toContain('Tenant')
+      const declaration = readFileSync(emitted, 'utf8')
+      expect(declaration).toContain('Tenant')
+      // Both union branches must be present, or this guard only covers one.
+      expect(declaration).toContain('ContextDecoratorWithDefaults')
+      expect(declaration).toContain('ContextDecoratorRequiringParams')
 
       // Assert on TS4023 specifically rather than a clean exit: unrelated
       // config noise in a throwaway project should not fail this, but a
