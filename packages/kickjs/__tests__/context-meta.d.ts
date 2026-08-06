@@ -72,6 +72,13 @@ declare module '../src/core/execution-context' {
     // Read via `ctx.require` / `ctx.get` rather than declared by a `key:`.
     tenantPerm: any
     lookup: any
+    // Used via `ctx.get` / `ctx.set` on a RequestContext rather than declared
+    // by a contributor `key:`.
+    flag: any
+    shared: any
+    val: any
+    legacy: any
+    anything: any
     trace: any
     // Written by the `traceContext()` middleware into the request store, so
     // `getRequestValue('traceId')` reads them typed rather than `unknown`.
