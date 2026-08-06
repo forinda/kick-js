@@ -1,7 +1,11 @@
 /// <reference types="multer" />
 import type { Request, NextFunction } from 'express'
 import type { ActiveRuntime, RuntimeResponse } from './runtime'
-import { type ExecutionContext, type MetaValue } from '../core/execution-context'
+import {
+  type ContextMetaKey,
+  type ExecutionContext,
+  type MetaValue,
+} from '../core/execution-context'
 import { normalizeProblem, type ProblemDetails, type ValidationError } from '../core/errors'
 import { MissingContextValueError } from '../core/context-errors'
 import { requestStore } from './request-store'
@@ -281,7 +285,7 @@ export class RequestContext<
    * behaviour — which is also the deliberate escape hatch when typegen's
    * view is incomplete.
    */
-  TKeys extends string = string,
+  TKeys extends ContextMetaKey = ContextMetaKey,
 > implements ExecutionContext<TKeys> {
   /**
    * Engine-agnostic response driver the response helpers write through. Under
@@ -975,7 +979,11 @@ export type Ctx<TRoute extends RouteShape = RouteShape> = RequestContext<
   TRoute extends { query: infer Q } ? Q : any,
   // Falls back to `string` (no narrowing) whenever typegen couldn't prove
   // the route's full contributor set — see `RouteShape.contextKeys`.
-  TRoute extends { contextKeys: infer K } ? (K extends string ? K : string) : string
+  TRoute extends { contextKeys: infer K }
+    ? K extends ContextMetaKey
+      ? K
+      : ContextMetaKey
+    : ContextMetaKey
 >
 
 /**

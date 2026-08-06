@@ -12,7 +12,7 @@ import {
 } from '../src/core'
 
 function reg(opts: {
-  key: string
+  key: ContextMetaKey
   dependsOn?: ContextMetaKey[]
   optional?: boolean
 }): ContributorRegistration {

@@ -2,7 +2,7 @@ import 'reflect-metadata'
 import { METADATA, type Constructor, type MaybePromise } from './interfaces'
 import { pushClassMeta, pushMethodMeta } from './metadata'
 import type { InjectionToken } from './token'
-import type { ContextKeys, ContextMeta, ExecutionContext, MetaValue } from './execution-context'
+import type { ContextMetaKey, ExecutionContext, MetaValue } from './execution-context'
 
 /**
  * String-literal union of every known context key — the union of the
@@ -25,8 +25,10 @@ import type { ContextKeys, ContextMeta, ExecutionContext, MetaValue } from './ex
  * `ContextMeta` for some keys broke `dependsOn` for every key you
  * hadn't added there.)
  */
-type KnownContextKey = keyof ContextMeta | keyof ContextKeys
-export type ContextMetaKey = [KnownContextKey] extends [never] ? string : KnownContextKey & string
+// Moved to `execution-context` (beside the registries it reads) so that
+// module can constrain `get`/`set` without a circular import. Re-exported
+// here so existing `from '@forinda/kickjs'` imports keep resolving.
+export type { ContextMetaKey } from './execution-context'
 
 /**
  * What a single `deps` entry is allowed to be — the runtime calls
@@ -101,7 +103,7 @@ export type CallSiteParams<P, PD> = [MissingParamKeys<P, PD>] extends [never]
  *                  Never spell this by hand.
  */
 export interface ContextDecoratorSpec<
-  K extends string = string,
+  K extends ContextMetaKey = ContextMetaKey,
   D extends Record<string, DepValue> = Record<string, never>,
   P extends Record<string, unknown> = Record<string, never>,
   Ctx extends ExecutionContext = ExecutionContext,
@@ -208,7 +210,7 @@ export interface ContextDecoratorSpec<
  * the precedence rule defined in §20.4 of `architecture.md`.
  */
 export interface ContributorRegistration<
-  K extends string = string,
+  K extends ContextMetaKey = ContextMetaKey,
   D extends Record<string, DepValue> = Record<string, never>,
   Ctx extends ExecutionContext = ExecutionContext,
 > {
@@ -266,7 +268,7 @@ export interface ContributorRegistration<
  * casting.
  */
 export type AnyContributorRegistration = ContributorRegistration<
-  string,
+  ContextMetaKey,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   any,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -312,7 +314,7 @@ export interface ContextDecoratorTarget {
  * annotations resolving to the permissive shape as before.
  */
 export type ContextDecorator<
-  K extends string = string,
+  K extends ContextMetaKey = ContextMetaKey,
   D extends Record<string, DepValue> = Record<string, never>,
   P extends Record<string, unknown> = Record<string, never>,
   Ctx extends ExecutionContext = ExecutionContext,
@@ -328,7 +330,7 @@ export type ContextDecorator<
  * sites.
  */
 export interface ContextDecoratorWithDefaults<
-  K extends string = string,
+  K extends ContextMetaKey = ContextMetaKey,
   D extends Record<string, DepValue> = Record<string, never>,
   P extends Record<string, unknown> = Record<string, never>,
   Ctx extends ExecutionContext = ExecutionContext,
@@ -422,7 +424,7 @@ export interface ContextDecoratorWithDefaults<
  * an undecorated route, which for a permission string it usually isn't.
  */
 export interface ContextDecoratorRequiringParams<
-  K extends string = string,
+  K extends ContextMetaKey = ContextMetaKey,
   D extends Record<string, DepValue> = Record<string, never>,
   P extends Record<string, unknown> = Record<string, never>,
   Ctx extends ExecutionContext = ExecutionContext,
@@ -474,7 +476,7 @@ export interface ContextDecoratorRequiringParams<
  */
 export interface DefineContextDecoratorWithParams<P extends Record<string, unknown>> {
   <
-    K extends string,
+    K extends ContextMetaKey,
     D extends Record<string, DepValue> = Record<string, never>,
     Ctx extends ExecutionContext = ExecutionContext,
     // Inferred from `spec.paramDefaults`. The `Record<never, never>`
@@ -496,7 +498,7 @@ export interface DefineContextDecoratorWithParams<P extends Record<string, unkno
  */
 export interface DefineContextDecoratorFn {
   <
-    K extends string,
+    K extends ContextMetaKey,
     D extends Record<string, DepValue> = Record<string, never>,
     P extends Record<string, unknown> = Record<string, never>,
     Ctx extends ExecutionContext = ExecutionContext,
@@ -548,7 +550,7 @@ export interface DefineContextDecoratorFn {
  * `defineContextDecorator.withParams<MyParams>()(spec)`.
  */
 function defineContextDecoratorImpl<
-  K extends string,
+  K extends ContextMetaKey,
   D extends Record<string, DepValue> = Record<string, never>,
   P extends Record<string, unknown> = Record<string, never>,
   Ctx extends ExecutionContext = ExecutionContext,
@@ -913,7 +915,7 @@ export const defineContextDecorator: DefineContextDecoratorFn = Object.freeze(
   Object.assign(defineContextDecoratorImpl, {
     withParams: <P extends Record<string, unknown>>(): DefineContextDecoratorWithParams<P> => {
       return <
-        K extends string,
+        K extends ContextMetaKey,
         D extends Record<string, DepValue> = Record<string, never>,
         Ctx extends ExecutionContext = ExecutionContext,
         PD extends Partial<P> = Record<never, never>,

@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
-import type { MetaValue } from '../core/execution-context'
+import type { ContextMetaKey, MetaValue } from '../core/execution-context'
 
 /** Per-request storage for REQUEST-scoped DI and request context propagation */
 export interface RequestStore {
@@ -79,7 +79,7 @@ export function getRequestStore(): RequestStore {
  * }
  * ```
  */
-export function getRequestValue<K extends string>(key: K): MetaValue<K> | undefined {
+export function getRequestValue<K extends ContextMetaKey>(key: K): MetaValue<K> | undefined {
   return requestStore.getStore()?.values.get(key) as MetaValue<K> | undefined
 }
 

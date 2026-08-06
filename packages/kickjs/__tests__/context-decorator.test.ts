@@ -149,6 +149,8 @@ describe('defineContextDecorator — boot-time validation', () => {
     ).toThrow(/spec\.key must be a non-empty string/)
     expect(() =>
       defineContextDecorator({
+        // @ts-expect-error — '' is not a declared key; the runtime guard is
+        // what this case asserts, so the type error is expected.
         key: '',
         resolve: () => undefined,
       }),

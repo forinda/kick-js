@@ -85,7 +85,7 @@ describe('context decorator public type surface', () => {
   it('an exported contributor is assignable to the public union', () => {
     // Mirrors what `kick g contributor` writes, including the `export`.
     const Tenant = defineContextDecorator({
-      key: 'tenant' as string,
+      key: 'tenant',
       resolve: () => ({ id: 'org_1' }),
     })
 
@@ -94,7 +94,57 @@ describe('context decorator public type surface', () => {
     // bare annotation IS the check — if the shape were not expressible through
     // the public union this line fails, which is the gap TS4023 reports
     // downstream.
-    const asUnion: ContextDecorator<string> = Tenant
+    const asUnion: ContextDecorator<'tenant'> = Tenant
     expect(typeof asUnion).toBe('function')
+  })
+})
+
+/**
+ * Once `ContextMeta` / `ContextKeys` are augmented, an undeclared key must be
+ * a compile error on EVERY surface that takes one — not just `dependsOn`.
+ *
+ * It used to be only `dependsOn`. `key`, `get`, `set`, `require` and
+ * `getRequestValue` all said `K extends string`, so in a fully augmented app a
+ * typo'd key compiled fine and failed at runtime (or silently read
+ * `undefined`). The two questions are genuinely different — "does this route
+ * carry the key" (`TKeys`, deliberately loose on `get`) versus "does this key
+ * exist in the app at all" (`ContextMetaKey`) — and only the first was ever
+ * being asked.
+ *
+ * These assertions are meaningful only because `tsconfig.typetests.json` pulls
+ * in `context-meta.d.ts`. Without it the registry is empty, `ContextMetaKey`
+ * collapses to `string`, and every `@ts-expect-error` below would report as
+ * unused.
+ */
+describe('declared keys narrow every key-taking surface', () => {
+  it('rejects an undeclared key on a decorator spec', () => {
+    defineContextDecorator({
+      // @ts-expect-error — 'not-a-declared-key' is in neither registry
+      key: 'not-a-declared-key',
+      resolve: () => 1,
+    })
+    expect(true).toBe(true)
+  })
+
+  // Declared, never called: these are compile-time assertions, and invoking
+  // them against a stub context would just throw.
+  function _undeclaredKeysRejected(ctx: ExecutionContext): void {
+    // @ts-expect-error — undeclared key
+    ctx.get('not-a-declared-key')
+    // @ts-expect-error — undeclared key
+    ctx.set('not-a-declared-key', 1)
+    // @ts-expect-error — undeclared key
+    ctx.require('not-a-declared-key')
+  }
+
+  function _declaredKeyAccepted(ctx: ExecutionContext): void {
+    // `tenant` is declared, so none of these are errors.
+    ctx.get('tenant')
+    ctx.set('tenant', undefined)
+  }
+
+  it('exposes the compile-time guards above', () => {
+    expect(typeof _undeclaredKeysRejected).toBe('function')
+    expect(typeof _declaredKeyAccepted).toBe('function')
   })
 })

@@ -69,6 +69,9 @@ declare module '../src/core/execution-context' {
     standalone: any
     tenant: any
     tenantDb: any
+    // Read via `ctx.require` / `ctx.get` rather than declared by a `key:`.
+    tenantPerm: any
+    lookup: any
     trace: any
     // Written by the `traceContext()` middleware into the request store, so
     // `getRequestValue('traceId')` reads them typed rather than `unknown`.
