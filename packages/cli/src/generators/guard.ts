@@ -50,7 +50,11 @@ export async function ${camel}Guard(ctx: RequestContext, next: () => void): Prom
   // Example: check for an authorization header
   const header = ctx.headers.authorization
   if (!header?.startsWith('Bearer ')) {
-    ctx.res.status(401).json({ message: 'Missing or invalid authorization header' })
+    // \`ctx.problem.*\` (RFC 9457) rather than \`ctx.res\`: \`ctx.res\` is the
+    // ENGINE-NATIVE response, so \`ctx.res.status(401).json(...)\` only works on
+    // Express — \`FastifyReply\` has no \`.json()\`, and h3's event has no
+    // \`.status()\`. The \`ctx.*\` helpers work on every runtime.
+    ctx.problem.unauthorized({ detail: 'Missing or invalid authorization header' })
     return
   }
 
@@ -65,7 +69,7 @@ export async function ${camel}Guard(ctx: RequestContext, next: () => void): Prom
 
     next()
   } catch {
-    ctx.res.status(401).json({ message: 'Invalid or expired token' })
+    ctx.problem.unauthorized({ detail: 'Invalid or expired token' })
   }
 }
 `,
