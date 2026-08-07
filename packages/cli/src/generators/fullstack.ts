@@ -60,6 +60,12 @@ export async function initFullstackProject(options: InitFullstackOptions): Promi
     // Root owns install + git so the lockfile/commit cover the workspace.
     initGit: false,
     installDeps: false,
+    // Production single-origin serving. `web/` builds to `web/dist`, and
+    // nothing served it before — `pnpm build` produced a frontend the API had
+    // no way to hand out, so every deploy needed a hand-wired static host or
+    // a second process. The adapter is inert until `../web/dist` exists, so
+    // `dev` (Vite serves the client and proxies /api here) is untouched.
+    spaClientDir: '../web/dist',
   })
 
   // ── web/ — Vite + React, typed client ──────────────────────────────
@@ -324,6 +330,8 @@ function rootPackageJson(name: string, pm: string): string {
     pm === 'pnpm'
       ? {
           dev: 'pnpm --parallel -r run dev',
+          // One origin: the server serves `web/dist` through SpaAdapter.
+          start: 'pnpm --filter ./server run start',
           'dev:server': 'pnpm --filter ./server dev',
           'dev:web': 'pnpm --filter ./web dev',
           build: 'pnpm -r run build',
@@ -333,6 +341,7 @@ function rootPackageJson(name: string, pm: string): string {
           // cd-based scripts — the one form npm, yarn (classic AND berry),
           // and bun all run identically; workspace-filter flags differ per
           // manager (--workspace vs `yarn workspace <name>` vs --filter).
+          start: `cd server && ${pm} run start`,
           'dev:server': `cd server && ${pm} run dev`,
           'dev:web': `cd web && ${pm} run dev`,
           build: `${pm} run build:server && ${pm} run build:web`,

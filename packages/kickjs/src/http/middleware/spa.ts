@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, statSync } from 'node:fs'
-import { resolve, join, sep } from 'node:path'
+import { resolve, join, sep, dirname, isAbsolute } from 'node:path'
 import { Logger, defineAdapter } from '../../core'
 import type { ConnectMiddleware } from '../runtime'
 
@@ -74,6 +74,53 @@ export interface SpaAdapterOptions {
    * routes without an `Accept` header.
    */
   alwaysFallback?: boolean
+}
+
+/**
+ * Nearest directory at or above `from` that holds a `package.json`.
+ * `null` when the walk reaches the filesystem root without finding one.
+ */
+function nearestPackageRoot(from: string): string | null {
+  let dir = from
+  for (;;) {
+    if (existsSync(join(dir, 'package.json'))) return dir
+    const parent = dirname(dir)
+    if (parent === dir) return null
+    dir = parent
+  }
+}
+
+/**
+ * Where to look for the built SPA.
+ *
+ * `process.cwd()` is the framework's convention (assets and env files resolve
+ * the same way) and stays the primary base. But a relative `clientDir` then
+ * only works when the process happens to be started from the app directory —
+ * `node server/dist/index.js` run from a monorepo root resolved `../web/dist`
+ * against the root and found nothing, serving no SPA with only a warning.
+ *
+ * So: try cwd first, and only if that misses, retry against the package root
+ * of the entry script. Both are checked for existence before being chosen, so
+ * this can never silently pick a directory that is not there — a genuinely
+ * missing build still lands on the cwd path, which is what the warning names.
+ *
+ * Deliberately not entry-relative FIRST: under `kick dev` the entry is the CLI
+ * binary, whose package root is the CLI itself.
+ */
+function resolveClientDir(clientDir: string): string {
+  if (isAbsolute(clientDir)) return clientDir
+  const fromCwd = resolve(process.cwd(), clientDir)
+  if (existsSync(fromCwd)) return fromCwd
+
+  const entry = process.argv[1]
+  if (entry) {
+    const root = nearestPackageRoot(dirname(resolve(entry)))
+    if (root) {
+      const fromEntry = resolve(root, clientDir)
+      if (existsSync(fromEntry)) return fromEntry
+    }
+  }
+  return fromCwd
 }
 
 /**
@@ -173,7 +220,7 @@ export const SpaAdapter = defineAdapter<SpaAdapterOptions>({
     alwaysFallback: false,
   },
   build: (config) => {
-    const clientDir = resolve(config.clientDir ?? 'dist/client')
+    const clientDir = resolveClientDir(config.clientDir ?? 'dist/client')
     const rawPrefix = config.apiPrefix ?? '/api'
     const apiPrefixes = Array.isArray(rawPrefix) ? rawPrefix : [rawPrefix]
     const excludePaths = config.exclude ?? []
@@ -213,7 +260,10 @@ export const SpaAdapter = defineAdapter<SpaAdapterOptions>({
       beforeMount({ http }) {
         if (!existsSync(clientDir)) {
           log.warn(`SPA client directory not found: ${clientDir}`)
-          log.warn('Build your frontend first, or set clientDir to the correct path.')
+          log.warn(
+            `Build your frontend first, or set clientDir to the correct path ` +
+              `(relative paths resolve from ${process.cwd()}).`,
+          )
           return
         }
 

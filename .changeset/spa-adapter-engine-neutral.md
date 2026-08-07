@@ -36,3 +36,10 @@ Cache headers are only applied to paths that resolve to a real file inside
 
 Adds 21 tests — the adapter previously had none despite being public API with
 its own export path.
+
+`clientDir` now falls back to the entry script's package root when the path
+misses from `process.cwd()`. `node server/dist/index.js` launched from a
+monorepo root resolved `../web/dist` against the root, found nothing, and served
+no SPA. cwd stays the primary base (matching how assets and env files resolve),
+and both candidates are existence-checked, so this can never silently pick a
+directory that is not there.

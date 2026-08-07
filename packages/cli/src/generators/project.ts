@@ -158,6 +158,8 @@ interface InitProjectOptions {
   schemaLib?: SchemaLib
   /** HTTP engine to scaffold. Defaults to `express`. */
   runtime?: 'express' | 'fastify' | 'h3'
+  /** Wire `SpaAdapter` at this clientDir (fullstack template). */
+  spaClientDir?: string
 }
 
 /** Scaffold a new KickJS project */
@@ -280,7 +282,7 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
   // ── src/index.ts — template-aware entry point ─────────────────────
   await writeFileSafe(
     join(dir, 'src/index.ts'),
-    generateEntryFile(name, template, cliPkg.version, packages, runtime),
+    generateEntryFile(name, template, cliPkg.version, packages, runtime, options.spaClientDir),
   )
 
   // ── src/modules/index.ts ────────────────────────────────────────────
