@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { resolve, join, sep, dirname, isAbsolute, relative } from 'node:path'
+import { resolve, join, dirname, isAbsolute } from 'node:path'
 import { Logger, defineAdapter } from '../../core'
 import type { ConnectMiddleware } from '../runtime'
 
@@ -302,19 +302,37 @@ export const SpaAdapter = defineAdapter<SpaAdapterOptions>({
     let assetPaths: ReadonlySet<string> = new Set()
 
     function snapshotClientDir(): ReadonlySet<string> {
-      try {
-        const entries = readdirSync(clientDir, { recursive: true, withFileTypes: true })
-        const paths = new Set<string>()
-        for (const entry of entries) {
-          if (!entry.isFile()) continue
-          // `parentPath` is absolute; make it a request path.
-          const abs = join(entry.parentPath, entry.name)
-          paths.add(`/${relative(clientDir, abs).split(sep).join('/')}`)
+      const paths = new Set<string>()
+      // A hand-rolled walk rather than `readdirSync(dir, { recursive: true })`
+      // with `Dirent.parentPath`. Both are newer than the package's declared
+      // `node >=20.0`: the `recursive` option landed in 20.1, `parentPath` in
+      // 20.12, and the older `Dirent.path` alias it replaced is already gone
+      // on Node 24 — so no single spelling covers the supported range. The
+      // failure would have been silent, too: the surrounding `catch` turns a
+      // `TypeError` from `join(undefined, name)` into an empty snapshot, which
+      // reads as "no files" and drops every Cache-Control header.
+      //
+      // `readdirSync(dir, { withFileTypes: true })` is ancient and stable, and
+      // tracking the parent ourselves needs no new API.
+      const walk = (absDir: string, prefix: string): void => {
+        for (const entry of readdirSync(absDir, { withFileTypes: true })) {
+          const child = `${prefix}/${entry.name}`
+          // Symlinks report as neither file nor directory here (readdir does
+          // not follow them), so a symlinked tree is skipped rather than
+          // risking a cycle. A symlinked asset simply goes unlabelled — the
+          // static layer still serves it, it just misses the cache header.
+          if (entry.isDirectory()) walk(join(absDir, entry.name), child)
+          else if (entry.isFile()) paths.add(child)
         }
-        return paths
+      }
+      try {
+        walk(clientDir, '')
       } catch {
+        // Unreadable build directory — fall back to labelling nothing rather
+        // than failing the boot. Serving still works; caching just opts out.
         return new Set()
       }
+      return paths
     }
 
     /**

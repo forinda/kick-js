@@ -459,3 +459,32 @@ describe('SpaAdapter — Accept media ranges', () => {
     expect(res.headers['cache-control']).toBe('public, max-age=31536000, immutable')
   })
 })
+
+describe('SpaAdapter — build snapshot portability', () => {
+  it('walks nested directories without newer fs APIs', () => {
+    // The walk uses only `readdirSync(dir, { withFileTypes: true })`. The
+    // `recursive` option (node 20.1) and `Dirent.parentPath` (20.12) are both
+    // newer than the declared `node >=20.0`, and the older `Dirent.path` alias
+    // is already gone on node 24 — no single spelling covers the range.
+    mkdirSync(join(dir, 'assets', 'nested', 'deep'), { recursive: true })
+    writeFileSync(join(dir, 'assets', 'nested', 'deep', 'chunk.js'), 'x')
+
+    const { middleware } = buildAdapter()
+    const res = dispatch(middleware.slice(0, 1), {
+      url: '/assets/nested/deep/chunk.js',
+      headers: { accept: '*/*' },
+    })
+    expect(res.headers['cache-control']).toBe('public, max-age=31536000, immutable')
+  })
+
+  it('does not label a directory as an asset', () => {
+    // `/assets` is a directory with no index.html — the static layer will not
+    // serve it, so it must not receive an asset cache header.
+    const { middleware } = buildAdapter()
+    const res = dispatch(middleware.slice(0, 1), {
+      url: '/assets',
+      headers: { accept: '*/*' },
+    })
+    expect(res.headers['cache-control']).toBeUndefined()
+  })
+})
