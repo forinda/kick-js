@@ -62,6 +62,35 @@ describe('resolvePathname', () => {
   })
 })
 
+describe('web Request shapes', () => {
+  // No runtime hands these helpers a raw `Request` today — `WebRequestShim`
+  // normalizes first on both web paths (web/handler.ts, runtimes/h3-web.ts).
+  // These lock the defensive handling: `Headers` is not index-accessible and
+  // `Request.url` is absolute, so BOTH would fail silently rather than throw.
+  it('reads a Headers object, which has no index access', () => {
+    const req = new Request('https://example.com/api/users', {
+      headers: { 'x-forwarded-for': '203.0.113.5, 70.41.3.18' },
+    })
+    expect(resolveClientIp({ headers: req.headers })).toBe('203.0.113.5')
+  })
+
+  it('reduces an absolute Request.url to its pathname', () => {
+    const req = new Request('https://example.com/health?verbose=1')
+    // The bug this guards: returning the whole absolute URL means a
+    // `skip: ['/health']` prefix never matches and the path is logged in full.
+    expect(resolvePathname({ url: req.url })).toBe('/health')
+  })
+
+  it('still prefers a real socket address over a spoofable header', () => {
+    const req = new Request('https://example.com/', {
+      headers: { 'x-forwarded-for': '1.2.3.4' },
+    })
+    expect(resolveClientIp({ headers: req.headers, socket: { remoteAddress: '10.0.0.7' } })).toBe(
+      '10.0.0.7',
+    )
+  })
+})
+
 describe('rateLimit — engine neutrality', () => {
   it('cannot be evaded by varying x-forwarded-for on a direct connection', async () => {
     // The same socket must land in the same bucket no matter what the client

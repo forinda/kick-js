@@ -24,13 +24,32 @@ export interface ClientRequestLike {
   originalUrl?: string
   /** Express and Fastify compute this from their trust-proxy settings. */
   ip?: unknown
-  headers?: Record<string, string | string[] | undefined>
+  /**
+   * A plain object on every path the framework currently takes — `WebRequestShim`
+   * normalizes a WHATWG `Headers` before the context is built. A `Headers`
+   * instance is accepted defensively: it is not index-accessible, so if one ever
+   * did arrive, every lookup would return `undefined` SILENTLY and drop each
+   * caller into one shared rate-limit bucket.
+   */
+  headers?: Record<string, string | string[] | undefined> | Headers
   socket?: { remoteAddress?: string }
 }
 
 /** First entry of a possibly comma-separated header value. */
 function firstHop(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value.split(',')[0]!.trim() : undefined
+}
+
+/** Read one header from either a plain object or a WHATWG `Headers`. */
+function headerValue(
+  headers: Record<string, string | string[] | undefined> | Headers | undefined,
+  name: string,
+): unknown {
+  if (!headers) return undefined
+  // `Headers` has no index access, so `headers[name]` silently yields
+  // `undefined` rather than the value.
+  if (typeof (headers as Headers).get === 'function') return (headers as Headers).get(name)
+  return (headers as Record<string, string | string[] | undefined>)[name]
 }
 
 /**
@@ -68,9 +87,11 @@ export function resolveClientIp(req: ClientRequestLike): string | undefined {
   // 3. Headers, only where there is no socket at all — the web/edge entry,
   //    where the platform terminates the connection and these are the only
   //    signal available.
-  const h = req.headers ?? {}
+  const h = req.headers
   return (
-    firstHop(h['cf-connecting-ip']) ?? firstHop(h['x-forwarded-for']) ?? firstHop(h['x-real-ip'])
+    firstHop(headerValue(h, 'cf-connecting-ip')) ??
+    firstHop(headerValue(h, 'x-forwarded-for')) ??
+    firstHop(headerValue(h, 'x-real-ip'))
   )
 }
 
@@ -79,6 +100,16 @@ export function resolvePathname(req: ClientRequestLike): string {
   if (typeof req.path === 'string' && req.path.length > 0) return req.path
   const url = req.url
   if (!url) return '/'
+  // `WebRequestShim` already reduces the WHATWG `Request.url` to path+search,
+  // but an ABSOLUTE url would otherwise be returned whole — so a skip prefix
+  // like `/health` would never match `https://host/health`.
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(url)) {
+    try {
+      return new URL(url).pathname || '/'
+    } catch {
+      return '/'
+    }
+  }
   const q = url.indexOf('?')
   return (q === -1 ? url : url.slice(0, q)) || '/'
 }
