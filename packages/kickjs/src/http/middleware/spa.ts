@@ -1,5 +1,5 @@
-import { existsSync, readFileSync, statSync } from 'node:fs'
-import { resolve, join, sep, dirname, isAbsolute } from 'node:path'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { resolve, join, sep, dirname, isAbsolute, relative } from 'node:path'
 import { Logger, defineAdapter } from '../../core'
 import type { ConnectMiddleware } from '../runtime'
 
@@ -181,30 +181,48 @@ function isUnder(pathname: string, prefix: string): boolean {
 /** Media ranges that count as "the client wants a document". */
 const HTML_TYPES = ['text/html', 'application/xhtml+xml']
 
+/** `q` for a media range, defaulting to 1 when absent or unparseable. */
+function qualityOf(params: string[]): number {
+  const q = params.find((param) => param.startsWith('q='))
+  if (!q) return 1
+  const value = Number.parseFloat(q.slice(2))
+  return Number.isNaN(value) ? 1 : value
+}
+
 /**
  * Does the client want an HTML document back?
  *
- * Parses q-values rather than substring-matching: `Accept: text/html;q=0`
- * explicitly says HTML is NOT acceptable (RFC 9110 §12.5.1 — "a value of 0
- * means not acceptable"), and a substring check read that as a yes and
- * returned the document anyway.
+ * Parses media ranges with q-values rather than substring-matching:
+ * `Accept: text/html;q=0` explicitly says HTML is NOT acceptable (RFC 9110
+ * §12.5.1 — "a value of 0 means not acceptable"), and a substring check read
+ * that as a yes and returned the document anyway.
  *
- * A bare `*` / `*` wildcard deliberately does NOT count. Assets are fetched
+ * Wildcards are matched by specificity, as RFC 9110 §12.5.1 requires: an exact
+ * `text/html` beats `text/*`, so `Accept: text/*, text/html;q=0` correctly
+ * rejects HTML even though the wildcard would have accepted it.
+ *
+ * A bare `*` / `*` deliberately does NOT count, at any q. Assets are fetched
  * with `Accept: * / *`, and treating that as a document request is what makes
- * a missing script come back as HTML.
+ * a missing script come back as HTML — the very thing the fallback rules
+ * exist to prevent.
  */
 function acceptsHtml(accept: string | string[] | undefined): boolean {
   const raw = Array.isArray(accept) ? accept.join(',') : (accept ?? '')
   if (!raw) return false
-  for (const part of raw.split(',')) {
-    const [type, ...params] = part.split(';').map((t) => t.trim().toLowerCase())
-    if (!type || !HTML_TYPES.includes(type)) continue
-    const q = params.find((param) => param.startsWith('q='))
-    if (!q) return true
-    const value = Number.parseFloat(q.slice(2))
-    if (Number.isNaN(value) || value > 0) return true
-  }
-  return false
+
+  const ranges = raw
+    .split(',')
+    .map((part) => part.split(';').map((t) => t.trim().toLowerCase()))
+    .filter(([type]) => Boolean(type))
+
+  return HTML_TYPES.some((htmlType) => {
+    const [group] = htmlType.split('/')
+    // Most specific match wins: exact type, else `type/*`. `*/*` is skipped.
+    const exact = ranges.find(([type]) => type === htmlType)
+    const wildcard = ranges.find(([type]) => type === `${group}/*`)
+    const match = exact ?? wildcard
+    return match ? qualityOf(match.slice(1)) > 0 : false
+  })
 }
 
 /**
@@ -268,14 +286,46 @@ export const SpaAdapter = defineAdapter<SpaAdapterOptions>({
     let indexHtml: string | null = null
 
     /**
-     * Is this request path a real file inside `clientDir`?
+     * Every file in the build, as request paths (`/assets/app.js`), captured
+     * once at mount.
      *
-     * `resolve` collapses any `..` before the containment check, so a
-     * traversal attempt lands outside `clientDir` and is rejected here rather
-     * than reaching the filesystem — the static layer guards itself, but this
-     * runs first and must not become the weak link.
+     * This used to be a `statSync` per request. That is a synchronous
+     * filesystem call on the hot path of every non-reserved request, and a
+     * slow or contended disk blocks the event loop for unrelated requests.
+     * The directory is a static build — its contents are already snapshotted
+     * at boot, since `index.html` is read into memory there — so the lookup
+     * belongs in memory too. No filesystem access remains in the request path.
+     *
+     * A build added to after boot is not picked up, which is the same
+     * contract `index.html` already had.
      */
-    const resolvesToFile = (pathname: string): 'file' | 'index' | null => {
+    let assetPaths: ReadonlySet<string> = new Set()
+
+    function snapshotClientDir(): ReadonlySet<string> {
+      try {
+        const entries = readdirSync(clientDir, { recursive: true, withFileTypes: true })
+        const paths = new Set<string>()
+        for (const entry of entries) {
+          if (!entry.isFile()) continue
+          // `parentPath` is absolute; make it a request path.
+          const abs = join(entry.parentPath, entry.name)
+          paths.add(`/${relative(clientDir, abs).split(sep).join('/')}`)
+        }
+        return paths
+      } catch {
+        return new Set()
+      }
+    }
+
+    /**
+     * How the static layer will answer this path: as the index document, as a
+     * long-lived asset, or not at all.
+     *
+     * Membership of the snapshot IS the containment guard — a traversal like
+     * `/../../etc/passwd` simply is not a key — so no prefix comparison is
+     * needed and the whole check is one `Set.has`.
+     */
+    const classifyPath = (pathname: string): 'file' | 'index' | null => {
       let decoded: string
       try {
         decoded = decodeURIComponent(pathname)
@@ -283,25 +333,14 @@ export const SpaAdapter = defineAdapter<SpaAdapterOptions>({
         return null
       }
       if (decoded.includes('\0')) return null
-      const target = resolve(clientDir, `.${decoded}`)
-      if (target !== clientDir && !target.startsWith(`${clientDir}${sep}`)) return null
 
-      // One `stat`, no `existsSync` first: a check-then-stat pair can throw
-      // mid-request when a deploy swaps the directory between the two calls.
-      // A throw here IS the "not a servable file" answer.
-      try {
-        const stats = statSync(target)
-        if (stats.isFile()) return decoded.endsWith('.html') ? 'index' : 'file'
-        // A directory is served by the static layer from its `index.html`, so
-        // `/` — the single most common request — is an index request, not an
-        // asset. Reporting it as neither meant the root document fell through
-        // to the static layer's default caching and never received the
-        // configured `indexCacheControl`.
-        if (stats.isDirectory() && existsSync(join(target, 'index.html'))) return 'index'
-        return null
-      } catch {
-        return null
-      }
+      // A directory is served from its `index.html`, so `/` — the single most
+      // common request — is an index request, not an asset. Reporting it as
+      // neither left the root document without the configured policy.
+      const asIndex = decoded.endsWith('/') ? `${decoded}index.html` : null
+      if (asIndex && assetPaths.has(asIndex)) return 'index'
+      if (!assetPaths.has(decoded)) return null
+      return decoded.endsWith('.html') ? 'index' : 'file'
     }
 
     /** Skipped by the fallback: API routes, opted-out paths. */
@@ -326,6 +365,7 @@ export const SpaAdapter = defineAdapter<SpaAdapterOptions>({
           return
         }
         indexHtml = readFileSync(indexPath, 'utf-8')
+        assetPaths = snapshotClientDir()
 
         // Cache-Control runs as its own middleware ahead of the static
         // handler: the engine-agnostic `serveStatic` takes no header hook,
@@ -340,7 +380,7 @@ export const SpaAdapter = defineAdapter<SpaAdapterOptions>({
             // a separate middleware loses that, and an unconditional header
             // put `immutable, max-age=31536000` on the 404 for a missing
             // asset — telling every cache to keep that miss for a year.
-            const kind = isReserved(pathname) ? null : resolvesToFile(pathname)
+            const kind = isReserved(pathname) ? null : classifyPath(pathname)
             if (kind) {
               res.setHeader('Cache-Control', kind === 'index' ? indexCacheControl : cacheControl)
             }
