@@ -1,6 +1,7 @@
-import { existsSync, readFileSync } from 'node:fs'
-import { resolve, join } from 'node:path'
-import { Logger, type AppAdapter, type AdapterContext } from '../../core'
+import { existsSync, readFileSync, statSync } from 'node:fs'
+import { resolve, join, sep } from 'node:path'
+import { Logger, defineAdapter } from '../../core'
+import type { ConnectMiddleware } from '../runtime'
 
 const log = Logger.for('SpaAdapter')
 
@@ -25,6 +26,10 @@ export interface SpaAdapterOptions {
    * non-API routes (routes NOT starting with this prefix).
    * Default: '/api'
    *
+   * Matching is segment-aware: `/api` excludes `/api` and `/api/users`, but
+   * NOT `/apidocs` — a plain `startsWith` swallowed any path that merely
+   * began with the same letters.
+   *
    * Set to an array for multiple prefixes:
    * ```ts
    * apiPrefix: ['/api', '/graphql', '/_debug']
@@ -34,7 +39,7 @@ export interface SpaAdapterOptions {
 
   /**
    * Additional paths to exclude from SPA fallback.
-   * These paths will NOT serve index.html.
+   * These paths will NOT serve index.html. Segment-aware, like `apiPrefix`.
    *
    * @example
    * ```ts
@@ -54,12 +59,82 @@ export interface SpaAdapterOptions {
    * index.html should not be cached to ensure clients get fresh builds.
    */
   indexCacheControl?: string
+
+  /**
+   * Serve index.html even when the client did not ask for HTML.
+   * Default: false.
+   *
+   * By default the fallback only fires for requests whose `Accept` header
+   * includes `text/html` — the rule `connect-history-api-fallback` uses. That
+   * keeps a missing `/assets/app.js` a 404 instead of handing back an HTML
+   * document that the browser then fails to parse as JavaScript, which is a
+   * confusing way to discover a broken build.
+   *
+   * Turn this on if you have non-browser clients that deep-link into SPA
+   * routes without an `Accept` header.
+   */
+  alwaysFallback?: boolean
+}
+
+/**
+ * The slice of the request/response this adapter touches, spelled from the
+ * node `http` shapes rather than Express's. `ConnectMiddleware` is typed as
+ * Express's `RequestHandler`, but under Fastify and h3 these handlers receive
+ * the raw node objects (or a driver), so relying on `req.path` / `res.send`
+ * is what made the previous version Express-only.
+ */
+interface SpaRequest {
+  url?: string
+  method?: string
+  headers?: Record<string, string | string[] | undefined>
+}
+
+interface SpaResponse {
+  setHeader(name: string, value: string): void
+  statusCode: number
+  end(chunk?: string): void
+}
+
+type SpaHandler = (req: SpaRequest, res: SpaResponse, next: () => void) => void
+
+/** Pathname only — `req.url` carries the query string, and `req.path` is Express-only. */
+function pathnameOf(url: string | undefined): string {
+  if (!url) return '/'
+  const q = url.indexOf('?')
+  const h = url.indexOf('#')
+  const end = Math.min(q === -1 ? url.length : q, h === -1 ? url.length : h)
+  return url.slice(0, end) || '/'
+}
+
+/**
+ * Segment-aware prefix test: `/api` covers `/api` and `/api/users`, not
+ * `/apidocs`. `startsWith` alone made any same-prefixed route disappear from
+ * the SPA fallback and 404 instead.
+ */
+function isUnder(pathname: string, prefix: string): boolean {
+  if (!prefix || prefix === '/') return true
+  const p = prefix.endsWith('/') ? prefix.slice(0, -1) : prefix
+  return pathname === p || pathname.startsWith(`${p}/`)
+}
+
+/** Does the client want an HTML document back? */
+function acceptsHtml(accept: string | string[] | undefined): boolean {
+  const value = Array.isArray(accept) ? accept.join(',') : (accept ?? '')
+  return value.includes('text/html') || value.includes('application/xhtml+xml')
 }
 
 /**
  * SPA adapter — serve a Vue, React, Svelte, or Angular build alongside
  * your KickJS API. API routes are handled by controllers; everything else
  * falls back to index.html for client-side routing.
+ *
+ * Written against the engine-agnostic `http` surface (`serveStatic` / `use`),
+ * so it runs under Express, Fastify, and h3 alike. The previous version
+ * reached for `express.static`, `req.path`, and `res.send`, all of which are
+ * Express-only — it silently served nothing on the other runtimes.
+ *
+ * Migrated to the `defineAdapter()` factory — call without `new`, as
+ * `ViewAdapter` has since v4.
  *
  * @example
  * ```ts
@@ -68,7 +143,7 @@ export interface SpaAdapterOptions {
  * bootstrap({
  *   modules,
  *   adapters: [
- *     new SpaAdapter({
+ *     SpaAdapter({
  *       clientDir: 'dist/client',  // or 'build', 'dist', etc.
  *       apiPrefix: '/api',
  *     }),
@@ -87,91 +162,123 @@ export interface SpaAdapterOptions {
  *   server/            ← KickJS server
  * ```
  */
-export class SpaAdapter implements AppAdapter {
-  name = 'SpaAdapter'
-  private clientDir: string
-  private apiPrefixes: string[]
-  private excludePaths: string[]
-  private cacheControl: string | false
-  private indexCacheControl: string
-  private indexHtml: string | null = null
+export const SpaAdapter = defineAdapter<SpaAdapterOptions>({
+  name: 'SpaAdapter',
+  defaults: {
+    clientDir: 'dist/client',
+    apiPrefix: '/api',
+    exclude: [],
+    cacheControl: 'public, max-age=31536000, immutable',
+    indexCacheControl: 'no-cache',
+    alwaysFallback: false,
+  },
+  build: (config) => {
+    const clientDir = resolve(config.clientDir ?? 'dist/client')
+    const rawPrefix = config.apiPrefix ?? '/api'
+    const apiPrefixes = Array.isArray(rawPrefix) ? rawPrefix : [rawPrefix]
+    const excludePaths = config.exclude ?? []
+    const cacheControl = config.cacheControl ?? 'public, max-age=31536000, immutable'
+    const indexCacheControl = config.indexCacheControl ?? 'no-cache'
+    const alwaysFallback = config.alwaysFallback ?? false
 
-  constructor(private options: SpaAdapterOptions = {}) {
-    this.clientDir = resolve(options.clientDir ?? 'dist/client')
-    this.excludePaths = options.exclude ?? []
-    this.cacheControl = options.cacheControl ?? 'public, max-age=31536000, immutable'
-    this.indexCacheControl = options.indexCacheControl ?? 'no-cache'
+    let indexHtml: string | null = null
 
-    const prefix = options.apiPrefix ?? '/api'
-    this.apiPrefixes = Array.isArray(prefix) ? prefix : [prefix]
-  }
-
-  beforeMount({ app }: AdapterContext): void {
-    if (!existsSync(this.clientDir)) {
-      log.warn(`SPA client directory not found: ${this.clientDir}`)
-      log.warn('Build your frontend first, or set clientDir to the correct path.')
-      return
+    /**
+     * Is this request path a real file inside `clientDir`?
+     *
+     * `resolve` collapses any `..` before the containment check, so a
+     * traversal attempt lands outside `clientDir` and is rejected here rather
+     * than reaching the filesystem — the static layer guards itself, but this
+     * runs first and must not become the weak link.
+     */
+    const resolvesToFile = (pathname: string): boolean => {
+      let decoded: string
+      try {
+        decoded = decodeURIComponent(pathname)
+      } catch {
+        return false
+      }
+      if (decoded.includes('\0')) return false
+      const target = resolve(clientDir, `.${decoded}`)
+      if (target !== clientDir && !target.startsWith(`${clientDir}${sep}`)) return false
+      return existsSync(target) && statSync(target).isFile()
     }
 
-    // Read index.html into memory
-    const indexPath = join(this.clientDir, 'index.html')
-    if (existsSync(indexPath)) {
-      this.indexHtml = readFileSync(indexPath, 'utf-8')
-    } else {
-      log.warn(`index.html not found in ${this.clientDir}`)
-      return
-    }
+    /** Skipped by the fallback: API routes, opted-out paths. */
+    const isReserved = (pathname: string): boolean =>
+      apiPrefixes.some((p) => isUnder(pathname, p)) ||
+      excludePaths.some((p) => isUnder(pathname, p))
 
-    // Serve static files with cache headers
-    try {
-      // Dynamic import to avoid hard dependency on express.static
-      const express = require('express')
-      const staticOpts: any = {}
-
-      if (this.cacheControl) {
-        staticOpts.setHeaders = (res: any, filePath: string) => {
-          if (filePath.endsWith('.html')) {
-            res.setHeader('Cache-Control', this.indexCacheControl)
-          } else {
-            res.setHeader('Cache-Control', this.cacheControl as string)
-          }
+    return {
+      beforeMount({ http }) {
+        if (!existsSync(clientDir)) {
+          log.warn(`SPA client directory not found: ${clientDir}`)
+          log.warn('Build your frontend first, or set clientDir to the correct path.')
+          return
         }
-      }
 
-      app.use(express.static(this.clientDir, staticOpts))
-    } catch {
-      log.error('express.static not available — SPA static file serving disabled')
-      return
+        const indexPath = join(clientDir, 'index.html')
+        if (!existsSync(indexPath)) {
+          log.warn(`index.html not found in ${clientDir}`)
+          return
+        }
+        indexHtml = readFileSync(indexPath, 'utf-8')
+
+        // Cache-Control runs as its own middleware ahead of the static
+        // handler: the engine-agnostic `serveStatic` takes no header hook,
+        // and headers set before the static layer writes still land on the
+        // response. Keyed off the request path rather than the resolved file,
+        // which is the same decision `express.static`'s `setHeaders` made.
+        if (cacheControl !== false) {
+          http.use(((req, res, next) => {
+            const pathname = pathnameOf(req.url)
+            // Only label a response the static layer will actually serve.
+            // `express.static`'s `setHeaders` fired on hits only; running as
+            // a separate middleware loses that, and an unconditional header
+            // put `immutable, max-age=31536000` on the 404 for a missing
+            // asset — telling every cache to keep that miss for a year.
+            if (!isReserved(pathname) && resolvesToFile(pathname)) {
+              res.setHeader(
+                'Cache-Control',
+                pathname.endsWith('.html') ? indexCacheControl : cacheControl,
+              )
+            }
+            next()
+          }) satisfies SpaHandler as unknown as ConnectMiddleware)
+        }
+
+        http.serveStatic('/', clientDir)
+        log.debug(`Serving SPA from ${clientDir}`)
+      },
+
+      beforeStart({ http }) {
+        if (!indexHtml) return
+
+        http.use(((req, res, next) => {
+          // GET and HEAD both navigate. HEAD used to fall through to a 404,
+          // which broke proxies and link checkers probing SPA routes.
+          const method = (req.method ?? 'GET').toUpperCase()
+          if (method !== 'GET' && method !== 'HEAD') return next()
+
+          const pathname = pathnameOf(req.url)
+          if (isReserved(pathname)) return next()
+
+          // Content negotiation instead of a "does the path contain a dot"
+          // guess. The old heuristic 404'd every legitimate route carrying a
+          // dot (`/users/john.doe`, `/v1.2/spec`) while still handing HTML to
+          // genuinely missing assets whose path had no extension.
+          const accept = req.headers?.['accept'] as string | string[] | undefined
+          if (!alwaysFallback && !acceptsHtml(accept)) return next()
+
+          const body = indexHtml as string
+          res.setHeader('Content-Type', 'text/html; charset=utf-8')
+          res.setHeader('Cache-Control', indexCacheControl)
+          res.setHeader('Content-Length', String(Buffer.byteLength(body)))
+          res.statusCode = 200
+          // HEAD must carry identical headers and no body.
+          res.end(method === 'HEAD' ? undefined : body)
+        }) satisfies SpaHandler as unknown as ConnectMiddleware)
+      },
     }
-
-    log.debug(`Serving SPA from ${this.clientDir}`)
-  }
-
-  beforeStart({ app }: AdapterContext): void {
-    if (!this.indexHtml) return
-
-    // SPA fallback: serve index.html for all non-API, non-file routes
-    app.use((req: any, res: any, next: any) => {
-      // Skip API routes
-      for (const prefix of this.apiPrefixes) {
-        if (req.path.startsWith(prefix)) return next()
-      }
-
-      // Skip excluded paths
-      for (const path of this.excludePaths) {
-        if (req.path.startsWith(path)) return next()
-      }
-
-      // Skip requests for files (have an extension)
-      if (req.path.includes('.')) return next()
-
-      // Skip non-GET requests
-      if (req.method !== 'GET') return next()
-
-      // Serve index.html
-      res.setHeader('Content-Type', 'text/html')
-      res.setHeader('Cache-Control', this.indexCacheControl)
-      res.send(this.indexHtml)
-    })
-  }
-}
+  },
+})
