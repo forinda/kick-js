@@ -22,3 +22,20 @@ context and the guard reuses it rather than keeping a second copy.
 through the runtime response surface, so it works everywhere. Its docblock warns
 against passing an unvalidated user-supplied URL — an attacker-controlled
 destination is an open redirect.
+
+Sweeping the same pattern turned up three shipped middlewares reading Express-only
+members, all of which receive the RAW node request under Fastify and h3:
+
+- **`rateLimit`** keyed every caller as its `'127.0.0.1'` fallback, because
+  `req.ip` is undefined there — a single shared bucket, so one client could
+  exhaust the limit for everyone. It now resolves the address the same way
+  `ctx.ip` does.
+- **`csrf`** matched `ignorePaths` against `req.path`, which is undefined, so
+  `has(undefined)` never matched and configured exemptions were silently dead.
+  (It failed closed, so CSRF stayed enforced — the feature simply did nothing.)
+- **`requestLogger`** THREW `Cannot read properties of undefined (reading
+'startsWith')` on every request once any `skip` prefix was configured, and
+  logged `GET undefined 200 12ms` otherwise.
+
+The resolution lives in one place (`http/client-ip.ts`) rather than a fourth
+copy drifting from the others.

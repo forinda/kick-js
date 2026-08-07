@@ -9,6 +9,7 @@ import {
 import { normalizeProblem, type ProblemDetails, type ValidationError } from '../core/errors'
 import { MissingContextValueError } from '../core/context-errors'
 import { requestStore } from './request-store'
+import { resolveClientIp, type ClientRequestLike } from './client-ip'
 import {
   parseQuery,
   type ParseQueryOptions,
@@ -817,18 +818,7 @@ export class RequestContext<
    * Fastify and h3.
    */
   get ip(): string | undefined {
-    const runtimeIp = (this.req as { ip?: unknown }).ip
-    if (typeof runtimeIp === 'string' && runtimeIp.length > 0) return runtimeIp
-    const first = (v: unknown): string | undefined =>
-      typeof v === 'string' && v.length > 0 ? v.split(',')[0]!.trim() : undefined
-    const h = this.headers
-    return (
-      first(h['cf-connecting-ip']) ??
-      first(h['x-forwarded-for']) ??
-      first(h['x-real-ip']) ??
-      // Node exposes it here when the engine did not compute one.
-      ((this.req as { socket?: { remoteAddress?: string } }).socket?.remoteAddress || undefined)
-    )
+    return resolveClientIp(this.req as ClientRequestLike)
   }
 
   /**

@@ -1,4 +1,5 @@
 import type { Request, Response, NextFunction } from 'express'
+import { resolveClientIp, resolvePathname, type ClientRequestLike } from '../client-ip'
 
 import { registerDisposable } from '../../core/disposables'
 
@@ -117,7 +118,12 @@ export function rateLimit(options: RateLimitOptions = {}) {
   const windowMs = options.windowMs ?? 60_000
   const message = options.message ?? 'Too Many Requests'
   const statusCode = options.statusCode ?? 429
-  const keyGenerator = options.keyGenerator ?? ((req: Request) => req.ip ?? '127.0.0.1')
+  // `req.ip` is Express-only. Under Fastify and h3 it is undefined, so EVERY
+  // caller fell back to the same `'127.0.0.1'` literal — one shared bucket,
+  // letting a single client exhaust the limit for everyone.
+  const keyGenerator =
+    options.keyGenerator ??
+    ((req: Request) => resolveClientIp(req as ClientRequestLike) ?? 'global')
   const sendHeaders = options.headers ?? true
   const store = options.store ?? new MemoryStore(windowMs)
   const skip = options.skip
@@ -125,7 +131,9 @@ export function rateLimit(options: RateLimitOptions = {}) {
 
   return async (req: Request, res: Response, next: NextFunction) => {
     // Skip if path is in the skip list
-    if (skipPaths.has(req.path)) {
+    // `req.path` is Express-only; `has(undefined)` never matched, so
+    // configured skips were silently dead on the other runtimes.
+    if (skipPaths.has(resolvePathname(req as ClientRequestLike))) {
       return next()
     }
 
