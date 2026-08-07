@@ -81,6 +81,24 @@ function dispatch(
   return res
 }
 
+/**
+ * Dispatch ONLY the cache-header middleware (registered in `beforeMount`),
+ * stopping before the SPA fallback.
+ *
+ * The fallback sets `indexCacheControl` itself on every document it serves, so
+ * running the whole chain makes any assertion about the cache layer pass
+ * whether or not that layer did anything — which is exactly how the first
+ * version of the root-path test came out green with its fix removed. In a real
+ * app `/` is answered by the static layer, never reaching the fallback, so the
+ * cache middleware is the only thing that can label it.
+ */
+function dispatchCacheOnly(
+  middleware: Handler[],
+  req: { url: string; method?: string; headers?: Record<string, string> },
+): RecordedResponse {
+  return dispatch(middleware.slice(0, 1), req)
+}
+
 let dir: string
 
 function buildAdapter(options: SpaAdapterOptions = {}) {
@@ -205,7 +223,7 @@ describe('SpaAdapter — fallback rules', () => {
 describe('SpaAdapter — cache headers', () => {
   it('sets the long-lived header for assets', () => {
     const { middleware } = buildAdapter()
-    const res = dispatch(middleware, { url: '/assets/app.js', headers: { accept: '*/*' } })
+    const res = dispatchCacheOnly(middleware, { url: '/assets/app.js', headers: { accept: '*/*' } })
     expect(res.headers['cache-control']).toBe('public, max-age=31536000, immutable')
   })
 
@@ -319,5 +337,55 @@ describe('SpaAdapter — clientDir resolution', () => {
     const rec = makeHttp()
     adapter.beforeMount?.({ http: rec.http } as never)
     expect(rec.statics[0]!.dir).toBe(dir)
+  })
+})
+
+describe('SpaAdapter — review follow-ups', () => {
+  it('respects q=0 — text/html;q=0 means HTML is NOT acceptable', () => {
+    // RFC 9110 §12.5.1: "a value of 0 means not acceptable". A substring
+    // check read this as a yes and returned the document anyway.
+    const { middleware } = buildAdapter()
+    const res = dispatch(middleware, { url: '/dashboard', headers: { accept: 'text/html;q=0' } })
+    expect(res.ended).toBe(false)
+  })
+
+  it('still serves when HTML carries a positive q', () => {
+    const { middleware } = buildAdapter()
+    for (const accept of ['text/html;q=0.9', 'text/html; q=1.0', 'application/xhtml+xml;q=0.8']) {
+      expect(dispatch(middleware, { url: '/dashboard', headers: { accept } }).statusCode).toBe(200)
+    }
+  })
+
+  it('picks HTML out of a real browser Accept header', () => {
+    const { middleware } = buildAdapter()
+    const accept = 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
+    expect(dispatch(middleware, { url: '/dashboard', headers: { accept } }).statusCode).toBe(200)
+  })
+
+  it('gives the root path the index cache policy, not the asset one', () => {
+    // `/` is served by the static layer from `clientDir/index.html`, so it
+    // never reaches the fallback. Treating it as "not a file" left the most
+    // common request in the app without the configured index policy — real
+    // Express returned `public, max-age=0`, the static default.
+    const { middleware } = buildAdapter()
+    const res = dispatchCacheOnly(middleware, { url: '/', headers: HTML })
+    expect(res.headers['cache-control']).toBe('no-cache')
+  })
+
+  it('treats an .html file as index, not as a long-lived asset', () => {
+    const { middleware } = buildAdapter()
+    const res = dispatchCacheOnly(middleware, { url: '/index.html', headers: HTML })
+    expect(res.headers['cache-control']).toBe('no-cache')
+  })
+
+  it('survives a file vanishing between checks', () => {
+    // A deploy can swap the directory mid-request. `existsSync` then
+    // `statSync` threw ENOENT inside request handling; one stat in a
+    // try/catch answers "not servable" instead.
+    const { middleware } = buildAdapter()
+    rmSync(dir, { recursive: true, force: true })
+    expect(() =>
+      dispatch(middleware, { url: '/assets/app.js', headers: { accept: '*/*' } }),
+    ).not.toThrow()
   })
 })

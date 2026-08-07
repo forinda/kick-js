@@ -164,10 +164,33 @@ function isUnder(pathname: string, prefix: string): boolean {
   return pathname === p || pathname.startsWith(`${p}/`)
 }
 
-/** Does the client want an HTML document back? */
+/** Media ranges that count as "the client wants a document". */
+const HTML_TYPES = ['text/html', 'application/xhtml+xml']
+
+/**
+ * Does the client want an HTML document back?
+ *
+ * Parses q-values rather than substring-matching: `Accept: text/html;q=0`
+ * explicitly says HTML is NOT acceptable (RFC 9110 §12.5.1 — "a value of 0
+ * means not acceptable"), and a substring check read that as a yes and
+ * returned the document anyway.
+ *
+ * A bare `*` / `*` wildcard deliberately does NOT count. Assets are fetched
+ * with `Accept: * / *`, and treating that as a document request is what makes
+ * a missing script come back as HTML.
+ */
 function acceptsHtml(accept: string | string[] | undefined): boolean {
-  const value = Array.isArray(accept) ? accept.join(',') : (accept ?? '')
-  return value.includes('text/html') || value.includes('application/xhtml+xml')
+  const raw = Array.isArray(accept) ? accept.join(',') : (accept ?? '')
+  if (!raw) return false
+  for (const part of raw.split(',')) {
+    const [type, ...params] = part.split(';').map((t) => t.trim().toLowerCase())
+    if (!type || !HTML_TYPES.includes(type)) continue
+    const q = params.find((param) => param.startsWith('q='))
+    if (!q) return true
+    const value = Number.parseFloat(q.slice(2))
+    if (Number.isNaN(value) || value > 0) return true
+  }
+  return false
 }
 
 /**
@@ -238,17 +261,33 @@ export const SpaAdapter = defineAdapter<SpaAdapterOptions>({
      * than reaching the filesystem — the static layer guards itself, but this
      * runs first and must not become the weak link.
      */
-    const resolvesToFile = (pathname: string): boolean => {
+    const resolvesToFile = (pathname: string): 'file' | 'index' | null => {
       let decoded: string
       try {
         decoded = decodeURIComponent(pathname)
       } catch {
-        return false
+        return null
       }
-      if (decoded.includes('\0')) return false
+      if (decoded.includes('\0')) return null
       const target = resolve(clientDir, `.${decoded}`)
-      if (target !== clientDir && !target.startsWith(`${clientDir}${sep}`)) return false
-      return existsSync(target) && statSync(target).isFile()
+      if (target !== clientDir && !target.startsWith(`${clientDir}${sep}`)) return null
+
+      // One `stat`, no `existsSync` first: a check-then-stat pair can throw
+      // mid-request when a deploy swaps the directory between the two calls.
+      // A throw here IS the "not a servable file" answer.
+      try {
+        const stats = statSync(target)
+        if (stats.isFile()) return decoded.endsWith('.html') ? 'index' : 'file'
+        // A directory is served by the static layer from its `index.html`, so
+        // `/` — the single most common request — is an index request, not an
+        // asset. Reporting it as neither meant the root document fell through
+        // to the static layer's default caching and never received the
+        // configured `indexCacheControl`.
+        if (stats.isDirectory() && existsSync(join(target, 'index.html'))) return 'index'
+        return null
+      } catch {
+        return null
+      }
     }
 
     /** Skipped by the fallback: API routes, opted-out paths. */
@@ -287,11 +326,9 @@ export const SpaAdapter = defineAdapter<SpaAdapterOptions>({
             // a separate middleware loses that, and an unconditional header
             // put `immutable, max-age=31536000` on the 404 for a missing
             // asset — telling every cache to keep that miss for a year.
-            if (!isReserved(pathname) && resolvesToFile(pathname)) {
-              res.setHeader(
-                'Cache-Control',
-                pathname.endsWith('.html') ? indexCacheControl : cacheControl,
-              )
+            const kind = isReserved(pathname) ? null : resolvesToFile(pathname)
+            if (kind) {
+              res.setHeader('Cache-Control', kind === 'index' ? indexCacheControl : cacheControl)
             }
             next()
           }) satisfies SpaHandler as unknown as ConnectMiddleware)
