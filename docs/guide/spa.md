@@ -27,7 +27,9 @@ written against the engine-agnostic `http` surface rather than `express.static`.
 1. Static files in `clientDir` are served with long-lived cache headers
 2. `index.html` is served with `no-cache` (so deploys are picked up immediately)
 3. API routes (matching `apiPrefix`) pass through to your controllers
-4. Everything else serves `index.html` — your SPA router handles client-side navigation
+4. Any remaining `GET`/`HEAD` request that accepts HTML serves `index.html` —
+   your SPA router handles client-side navigation. Anything else (other methods,
+   reserved paths, or clients not asking for HTML) falls through untouched.
 
 ### Which requests get the fallback
 
@@ -37,16 +39,26 @@ A request falls back to `index.html` when **all** of these hold:
 - the path is not under `apiPrefix` or `exclude`
 - the client accepts HTML (`Accept: text/html`)
 
-That last rule is content negotiation rather than a guess at the path. It means
-a route with a dot in it — `/users/john.doe`, `/v1.2/spec` — is served normally,
-while a genuinely missing `/assets/app.js` still returns **404** instead of an
-HTML document the browser cannot parse as JavaScript.
+The `Accept` rule is content negotiation rather than a guess at the path, and
+`q` values are honoured — `Accept: text/html;q=0` says HTML is _not_ acceptable
+and is treated as such.
+
+It means a route with a dot in it — `/users/john.doe`, `/v1.2/spec` — is served
+normally when a browser navigates to it, because browsers send
+`Accept: text/html`. A missing `/assets/app.js` fetched with `Accept: */*`
+returns **404** instead of an HTML document the browser cannot parse as
+JavaScript.
+
+Note the rule is about the header, not the path: a missing dotted path
+requested _with_ an HTML `Accept` does receive `index.html`, exactly as a
+missing extensionless route does. The SPA router decides what to render.
 
 Prefix matching is segment-aware: `apiPrefix: '/api'` covers `/api` and
 `/api/users`, but leaves `/apidocs` to the SPA.
 
-If you have non-browser clients deep-linking into SPA routes without an
-`Accept` header, set `alwaysFallback: true`.
+`alwaysFallback: true` skips the `Accept` check entirely — for non-browser
+clients that deep-link into SPA routes, whether they omit `Accept` or send a
+non-HTML one. The method and reserved-path rules still apply.
 
 ## Options
 

@@ -22,7 +22,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { SpaAdapter, type SpaAdapterOptions } from '../src/http/middleware/spa'
+import { resolveClientDir, SpaAdapter, type SpaAdapterOptions } from '../src/http/middleware/spa'
 
 interface RecordedResponse {
   statusCode: number
@@ -289,17 +289,14 @@ describe('SpaAdapter — cache headers only label real hits', () => {
 })
 
 describe('SpaAdapter — clientDir resolution', () => {
-  it('finds a relative clientDir from the process cwd', () => {
-    const prev = process.cwd()
-    process.chdir(dir)
-    try {
-      const adapter = SpaAdapter({ clientDir: '.' })
-      const rec = makeHttp()
-      adapter.beforeMount?.({ http: rec.http } as never)
-      expect(rec.statics).toHaveLength(1)
-    } finally {
-      process.chdir(prev)
-    }
+  // Exercised through `resolveClientDir` directly with injected cwd/entry.
+  // The earlier version used `process.chdir` + `process.argv[1]`, which
+  // throws `process.chdir() is not supported in workers` under the ROOT
+  // vitest config (`pool: 'threads'`). It passed under `pnpm test` only
+  // because turbo runs each package's own config, which defaults to forks.
+
+  it('finds a relative clientDir from the given cwd', () => {
+    expect(resolveClientDir('.', dir)).toBe(dir)
   })
 
   it('falls back to the entry package root when cwd misses', () => {
@@ -307,36 +304,30 @@ describe('SpaAdapter — clientDir resolution', () => {
     // cwd is the root, so `../web/dist` misses there and must be retried
     // against the entry script's own package root.
     const root = mkdtempSync(join(tmpdir(), 'kick-mono-'))
-    const serverDir = join(root, 'server')
-    mkdirSync(join(serverDir, 'dist'), { recursive: true })
-    mkdirSync(join(root, 'web', 'dist'), { recursive: true })
-    writeFileSync(join(serverDir, 'package.json'), '{"name":"server"}')
-    writeFileSync(join(root, 'web', 'dist', 'index.html'), '<!doctype html><title>x</title>')
-    const entry = join(serverDir, 'dist', 'index.js')
-    writeFileSync(entry, '')
-
-    const prevCwd = process.cwd()
-    const prevArgv = process.argv[1]
-    process.chdir(root) // launched from the ROOT, not from server/
-    process.argv[1] = entry
     try {
-      const adapter = SpaAdapter({ clientDir: '../web/dist' })
-      const rec = makeHttp()
-      adapter.beforeMount?.({ http: rec.http } as never)
-      expect(rec.statics).toHaveLength(1)
-      expect(rec.statics[0]!.dir).toBe(join(root, 'web', 'dist'))
+      const serverDir = join(root, 'server')
+      mkdirSync(join(serverDir, 'dist'), { recursive: true })
+      mkdirSync(join(root, 'web', 'dist'), { recursive: true })
+      writeFileSync(join(serverDir, 'package.json'), '{"name":"server"}')
+      const entry = join(serverDir, 'dist', 'index.js')
+      writeFileSync(entry, '')
+
+      // cwd = the ROOT, not server/.
+      expect(resolveClientDir('../web/dist', root, entry)).toBe(join(root, 'web', 'dist'))
     } finally {
-      process.chdir(prevCwd)
-      process.argv[1] = prevArgv as string
       rmSync(root, { recursive: true, force: true })
     }
   })
 
   it('leaves an absolute clientDir untouched', () => {
-    const adapter = SpaAdapter({ clientDir: dir })
-    const rec = makeHttp()
-    adapter.beforeMount?.({ http: rec.http } as never)
-    expect(rec.statics[0]!.dir).toBe(dir)
+    expect(resolveClientDir(dir, '/somewhere/else')).toBe(dir)
+  })
+
+  it('keeps the cwd candidate when neither location has the build', () => {
+    // The warning names the cwd path, so a genuinely missing build must
+    // resolve there rather than to some unrelated entry-relative guess.
+    const missing = join(dir, 'nope')
+    expect(resolveClientDir('nope', dir, undefined)).toBe(missing)
   })
 })
 
