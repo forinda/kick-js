@@ -45,6 +45,7 @@ import type {
   HttpRuntime,
   RouteEntry,
   RuntimeCapabilities,
+  RuntimeResponse,
 } from './runtime'
 import { requestStore } from './request-store'
 
@@ -281,25 +282,49 @@ export interface ApplicationOptions {
    * })
    * ```
    */
-  onNotFound?: (req: any, res: any, next: any) => void
+  onNotFound?: (req: any, res: RuntimeResponse, next: (err?: unknown) => void) => void
 
   /**
-   * Custom global error handler. Receives `(err, req, res, next)` — the
-   * standard Express error-handling signature. When omitted, the built-in
-   * handler formats ZodError, HttpException, and unexpected errors.
+   * Custom global error handler, receiving `(err, req, res, next)`. When
+   * omitted, the built-in handler formats ZodError, HttpException, and
+   * unexpected errors.
+   *
+   * The shape is connect-style, but it is NOT "the standard Express error
+   * handler" on every engine — what you actually receive differs, and the
+   * differences bite:
+   *
+   * | | `req` | `res` | `next` |
+   * | --- | --- | --- | --- |
+   * | Express | native `Request` | native `Response` | real `next` |
+   * | Fastify | `request.raw` | reply driver | **no-op** |
+   * | h3 | `event.node.req` | response driver | no-op (or dev fall-through) |
+   *
+   * Two consequences worth knowing before you write one:
+   *
+   * - **`next(err)` does nothing on Fastify and h3.** It is a no-op function
+   *   there, so delegating to the default handler silently drops the error.
+   *   Send a response yourself rather than passing it on.
+   * - **Express-only request members are `undefined` elsewhere.**
+   *   `req.originalUrl`, `req.path`, and `req.ip` do not exist on the raw node
+   *   request — use `req.url` and the `x-forwarded-*` headers, or reach for
+   *   `ctx.ip` in a contributor / guard where a `RequestContext` is available.
+   *
+   * `res` is typed {@link RuntimeResponse} because that is what every engine
+   * genuinely provides: `status`, `json`, `send`, `setHeader`, `render`,
+   * `writeHead`, `end`. Express's own `Response` satisfies it.
    *
    * @example
    * ```ts
    * bootstrap({
    *   modules,
-   *   onError: (err, req, res, next) => {
-   *     logger.error(err)
+   *   onError: (err, req, res) => {
+   *     logger.error(err, `${req.method} ${req.url}`) // not `originalUrl`
    *     res.status(err.status ?? 500).json({ error: err.message })
    *   },
    * })
    * ```
    */
-  onError?: (err: any, req: any, res: any, next: any) => void
+  onError?: (err: any, req: any, res: RuntimeResponse, next: (err?: unknown) => void) => void
 
   /**
    * Security defaults applied automatically unless opted out.
