@@ -201,7 +201,7 @@ bootstrap({
   onNotFound: (req, res) => {
     res.status(404).json({
       error: 'Route not found',
-      path: req.originalUrl,
+      path: req.url, // not `originalUrl` — Express-only
       timestamp: new Date().toISOString(),
     })
   },

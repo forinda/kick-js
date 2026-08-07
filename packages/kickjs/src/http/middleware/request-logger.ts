@@ -77,7 +77,9 @@ export function requestLogger(options: RequestLoggerOptions = {}) {
       // `originalUrl` is Express-only — on Fastify and h3 this logged
       // `GET undefined 200 12ms`, dropping the path from every access-log
       // line under those runtimes.
-      const path = req.originalUrl ?? req.url
+      // Both are optional, so the pair still needs a floor — otherwise the
+      // line reads `GET undefined` again, just via a different route.
+      const path = req.originalUrl ?? req.url ?? '/'
       log[level](`${req.method} ${path} ${status} ${duration}ms ${requestId}`)
     })
 

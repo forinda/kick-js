@@ -1756,7 +1756,7 @@ export const RateLimited = defineHttpContextDecorator.withParams<RateLimitParams
   paramDefaults: {
     window: '1m',
     max: 60,
-    keyOf: (ctx) => ctx.ip,
+    keyOf: (ctx) => ctx.ip ?? 'anonymous',
   },
   resolve: (ctx, { limiter }, params) => limiter.check(params.keyOf(ctx), params),
 })
@@ -1765,7 +1765,7 @@ export const RateLimited = defineHttpContextDecorator.withParams<RateLimitParams
 @RateLimited({
   window: '1m',
   max: 100,
-  keyOf: (ctx) => ctx.user?.id ?? ctx.ip,
+  keyOf: (ctx) => ctx.user?.id ?? ctx.ip ?? 'anonymous',
 })
 @Get('/api/expensive')
 expensive(ctx: RequestContext) {}
@@ -1819,7 +1819,7 @@ Same primitive, ten domains. Each entry shows the **old approach** (forking the 
 **4. Rate-limit override**
 
 - _Old_: per-route Express middleware with `rateLimit({ window, max, key })` inlined; lost type safety + DI.
-- _New_: `@RateLimited({ window: '1m', max: 100, keyOf: (ctx) => ctx.user?.id ?? ctx.ip })`. Typed, DI-resolved limiter.
+- _New_: `@RateLimited({ window: '1m', max: 100, keyOf: (ctx) => ctx.user?.id ?? ctx.ip ?? 'anonymous' })`. Typed, DI-resolved limiter.
 
 **5. Feature flag gate**
 
@@ -1964,7 +1964,7 @@ const RateLimited = defineHttpContextDecorator.withParams<RateLimitParams>()({
   resolve: (ctx, { limiter }, params) => limiter.check(params.keyOf(ctx), params),
 })
 
-@RateLimited({ window: '1m', max: 100, keyOf: (ctx) => ctx.user?.id ?? ctx.ip })
+@RateLimited({ window: '1m', max: 100, keyOf: (ctx) => ctx.user?.id ?? ctx.ip ?? 'anonymous' })
 @Get('/api/expensive') expensive(ctx) {}
 ```
 

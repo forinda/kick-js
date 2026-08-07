@@ -29,6 +29,27 @@ describe('resolveClientIp', () => {
   it('uses the socket when no proxy header and no computed address', () => {
     expect(resolveClientIp({ socket: { remoteAddress: '10.0.0.7' } })).toBe('10.0.0.7')
   })
+
+  it('prefers the socket over a forwarded header a direct client could forge', () => {
+    // A raw Fastify / h3 request has no `req.ip`. If forwarded headers were
+    // consulted first, a DIRECT client could send a different value on each
+    // request and land in a fresh rate-limit bucket every time — evading the
+    // limit entirely. The socket cannot be spoofed.
+    expect(
+      resolveClientIp({
+        socket: { remoteAddress: '10.0.0.7' },
+        headers: { 'x-forwarded-for': 'attacker-chosen' },
+      }),
+    ).toBe('10.0.0.7')
+  })
+
+  it('still reaches headers where there is no socket (edge)', () => {
+    // The web/edge entry terminates the connection at the platform, so these
+    // headers are the only signal that exists there.
+    expect(resolveClientIp({ headers: { 'cf-connecting-ip': '198.51.100.7' } })).toBe(
+      '198.51.100.7',
+    )
+  })
 })
 
 describe('resolvePathname', () => {
@@ -42,6 +63,33 @@ describe('resolvePathname', () => {
 })
 
 describe('rateLimit — engine neutrality', () => {
+  it('cannot be evaded by varying x-forwarded-for on a direct connection', async () => {
+    // The same socket must land in the same bucket no matter what the client
+    // claims in the header.
+    const keys: string[] = []
+    const mw = rateLimit({
+      max: 100,
+      store: {
+        increment: async (k: string) => (keys.push(k), { totalHits: 1, resetTime: new Date() }),
+        decrement: async () => {},
+        reset: async () => {},
+      } as never,
+    })
+    const res = { setHeader: () => {}, status: () => res, json: () => {} }
+    const socket = { remoteAddress: '10.0.0.9' }
+    await mw(
+      { method: 'GET', url: '/a', headers: { 'x-forwarded-for': 'one' }, socket } as never,
+      res as never,
+      () => {},
+    )
+    await mw(
+      { method: 'GET', url: '/a', headers: { 'x-forwarded-for': 'two' }, socket } as never,
+      res as never,
+      () => {},
+    )
+    expect(keys).toEqual(['10.0.0.9', '10.0.0.9'])
+  })
+
   it('keys distinct clients separately on a raw node request', async () => {
     const keys: string[] = []
     const mw = rateLimit({
