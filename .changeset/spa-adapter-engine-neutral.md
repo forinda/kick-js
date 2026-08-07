@@ -43,3 +43,12 @@ monorepo root resolved `../web/dist` against the root, found nothing, and served
 no SPA. cwd stays the primary base (matching how assets and env files resolve),
 and both candidates are existence-checked, so this can never silently pick a
 directory that is not there.
+
+Three review follow-ups: `Accept` is parsed with q-values, so `text/html;q=0`
+(explicitly "not acceptable" per RFC 9110 §12.5.1) no longer receives a
+document; the cache middleware uses a single `stat` in a `try`/`catch` rather
+than `existsSync` + `statSync`, which could throw mid-request when a deploy
+swaps the directory between the two calls; and a path resolving to a directory
+with an `index.html` — most importantly `/` itself — is treated as an index
+request, so the root document gets `indexCacheControl` instead of falling
+through to the static layer's default (`public, max-age=0` under Express).
