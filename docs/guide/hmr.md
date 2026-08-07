@@ -17,20 +17,42 @@ import { modules } from './modules'
 bootstrap({ modules })
 ```
 
-On the first call, `bootstrap()` creates the application, registers error/shutdown handlers, and starts the HTTP server. On subsequent calls (triggered by HMR), it rebuilds the Express app and swaps the request handler on the existing server — no restart needed.
+On the first call, `bootstrap()` creates the application, registers error/shutdown handlers, and starts the HTTP server. On subsequent calls (triggered by HMR), it **tears the previous app down**, rebuilds the Express app, and swaps the request handler on the existing server — no restart needed.
 
 ### What Is Preserved
 
-| Preserved across HMR      | Rebuilt on each reload  |
-| ------------------------- | ----------------------- |
-| `http.Server` instance    | Express app             |
-| Port binding              | Middleware stack        |
-| TCP connections           | Route table             |
-| Database connection pools | DI container singletons |
-| Redis clients             | Controller instances    |
-| Socket.IO server          | Service instances       |
+| Preserved across HMR   | Rebuilt on each reload         |
+| ---------------------- | ------------------------------ |
+| `http.Server` instance | Express app                    |
+| Port binding           | Middleware stack               |
+| TCP connections        | Route table                    |
+|                        | DI container singletons        |
+|                        | Controller / service instances |
+|                        | Adapters and plugins           |
 
-The HTTP server is created once and never recreated. Only the request handler is swapped, so existing connections and listeners remain intact.
+The HTTP server is created once and never recreated. Only the request handler is
+swapped, so existing connections and listeners remain intact.
+
+Everything an adapter or plugin owns — database pools, Redis clients, Socket.IO
+servers, message-queue consumers — is **rebuilt**, because the previous app's
+`shutdown()` runs before the new one starts.
+
+::: warning This changed
+Adapter-held resources used to be described as preserved. They were not
+preserved so much as **abandoned**: the old app was replaced without being shut
+down, so its adapters kept running and each save added another set.
+
+That surfaced as one process holding several message-queue consumer-group
+members — on a single-partition topic only one can hold the assignment, and it
+was a leaked consumer wired to nothing, so jobs silently stopped being
+processed. Two Socket.IO servers on the same HTTP server crashed
+`handleUpgrade()` the same way.
+
+The trade is deliberate: reconnecting a pool on each reload costs a moment,
+whereas leaking one costs a debugging session. If a resource is genuinely
+expensive to rebuild, hold it outside the adapter lifecycle — on `globalThis`,
+or behind a module-level singleton the adapter reuses.
+:::
 
 ## Configuring Vite
 
@@ -78,15 +100,54 @@ import.meta.hot?.on('kickjs:typecheck', (data) => {
 })
 ```
 
+### Writing an adapter that survives reloads
+
+Because `shutdown()` now runs on every rebuild and the adapter is then mounted
+again — often the _same instance_, since `config/adapters.ts` may not
+re-evaluate — an adapter has to be restartable, not just stoppable. Release the
+handle and null it out, so the next `beforeMount()` builds a fresh one:
+
+```ts
+let io: Server | undefined
+
+export const SocketAdapter = defineAdapter({
+  name: 'Socket',
+  build: () => ({
+    beforeStart({ server }) {
+      io = new Server(server) // rebuilt on each reload
+    },
+    async shutdown() {
+      if (!io) return
+      await new Promise<void>((resolve) => io!.close(() => resolve()))
+      io = undefined // ← without this, the next mount reuses a closed handle
+    },
+  }),
+})
+```
+
+An adapter that closes a resource without clearing its reference will appear to
+work on first boot and fail on the first save.
+
 ## Graceful Shutdown
 
-When the process receives `SIGINT` or `SIGTERM`, `bootstrap()` calls `app.shutdown()` which:
+`app.shutdown()` runs on two paths, and they differ in one respect.
 
-1. Runs all adapter `shutdown()` methods concurrently via `Promise.allSettled`
-2. Closes the HTTP server
-3. Exits the process
+**On `SIGINT` / `SIGTERM`** — the full sequence:
 
-Adapter shutdown failures are logged but do not prevent other adapters from cleaning up.
+1. Closes the HTTP server to stop accepting connections
+2. Waits for in-flight requests to drain (up to `shutdownTimeout`, default 30s)
+3. Runs all plugin and adapter `shutdown()` methods concurrently via `Promise.allSettled`
+4. Releases framework-owned resources (session / rate-limit intervals)
+5. Exits the process
+
+**On an HMR rebuild** — `shutdown({ closeServer: false })`, which runs steps 3
+and 4 only. The dev HTTP server is shared across rebuilds, so closing it would
+kill HMR on the first save; draining is skipped for the same reason, since the
+server keeps serving and there is nothing to drain toward.
+
+Plugin and adapter shutdown failures are logged but do not prevent the others
+from cleaning up — and on the HMR path a failure cannot leave the dev server
+with no app at all.
 
 ## Troubleshooting
 

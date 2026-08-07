@@ -108,7 +108,7 @@ beforeStart(ctx)
 | `onRouteMount(ctrl, path)` | After each module's routes are mounted          | OpenAPI spec generation, dependency-graph collection, route inventory                          |
 | `beforeStart(ctx)`         | After all routes mounted, before server listens | Log config summary, validate setup, late-stage DI                                              |
 | `afterStart(ctx)`          | After the HTTP server is listening              | Attach upgrade handlers (Socket.IO, gRPC), warm caches                                         |
-| `shutdown()`               | On SIGTERM/SIGINT                               | Close DB pools, flush logs, disconnect WS — runs concurrently via `Promise.allSettled`         |
+| `shutdown()`               | On SIGTERM/SIGINT **and on every HMR rebuild**  | Close DB pools, flush logs, disconnect WS — runs concurrently via `Promise.allSettled`         |
 
 Per-request teardown is separate from process shutdown: a REQUEST-scoped
 service method decorated with `@PreDestroy()` runs when its request's scope
