@@ -9,6 +9,7 @@
 // `@forinda/kickjs/web` entry.
 
 import type { RequestContext } from './context'
+import type { RuntimeResponse } from './runtime'
 
 // `Symbol.for` so the brand survives duplicate module copies (workspace-linked
 // + published package in one process — same rationale as the request-scope
@@ -67,7 +68,21 @@ export type InferHandlerResponse<H> = H extends (...args: never[]) => infer R
     : UnwrapReply<Exclude<Awaited<R>, void | undefined>>
   : unknown
 
-type UnwrapReply<A> = A extends Reply<number, infer B> ? B : A
+type UnwrapReply<A> =
+  A extends Reply<number, infer B>
+    ? B
+    : A extends RuntimeResponse
+      ? // The engine's own response object says nothing about the body, so a
+        // handler ending `return ctx.json(...)` degrades to `unknown` — which is
+        // what the typegen comment always claimed happened. It did not: the bare
+        // `RuntimeResponse` leaked into `KickRoutes[...].response`, offering
+        // `.status()` / `.setHeader()` to a client expecting a payload.
+        // Confidently wrong is worse than unknown.
+        //
+        // To carry a payload, return it (`return user`) or wrap it
+        // (`return reply(201, user)`) — that is what `reply` is for.
+        unknown
+      : A
 
 export function isReply(value: unknown): value is Reply {
   return (

@@ -858,7 +858,7 @@ export class RequestContext<
   async paginate<T, TConfig extends QueryFieldConfig | undefined = undefined>(
     fetcher: (parsed: TypedParsedQuery<TConfig>) => Promise<{ data: T[]; total: number }>,
     fieldConfig?: TConfig,
-  ) {
+  ): Promise<PaginatedResponse<T>> {
     const parsed = this.qs<TConfig>(fieldConfig)
     const { data, total } = await fetcher(parsed)
     const { page, limit } = parsed.pagination
@@ -876,7 +876,21 @@ export class RequestContext<
       },
     }
 
-    return this.json(response)
+    this.json(response)
+    // Sends AND returns the payload. Returning `this.json(...)` handed back
+    // the engine's `RuntimeResponse`, so the documented usage —
+    // `return ctx.paginate(...)` — emitted `response: RuntimeResponse` into
+    // `KickRoutes`, and the typed client offered `.status()` / `.setHeader()`
+    // where the caller expected `data` and `meta`.
+    //
+    // Returning the payload rather than tagging the response reuses the
+    // existing return-value inference (the same path `return user` and
+    // `return reply(201, user)` take) instead of adding a second mechanism
+    // beside `reply`. Sending here is kept for handlers that call `paginate`
+    // without returning it; the runtimes only auto-send a returned value when
+    // nothing was written (`if (!res.headersSent)`), so there is no double
+    // send.
+    return response
   }
 
   // ── Server-Sent Events ──────────────────────────────────────────────

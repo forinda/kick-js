@@ -157,9 +157,20 @@ async list(ctx: RequestContext) {
 
 ### Response helpers
 
-These write the response imperatively. They remain fully supported, but a
-handler that uses them and returns nothing infers as `response: unknown` — for
-a typed response, [return the payload](#return-value-handlers) instead.
+::: tip Prefer returning the payload
+[Returning the object](#return-value-handlers) is the recommended way to write a
+handler, and what the CLI scaffolds. Reach for these `ctx.*` helpers when you
+need imperative control — streaming, custom headers, or a branch that writes and
+exits early.
+:::
+
+These helpers **terminate** the response: they write immediately, which is why a
+`ctx.*` call always wins over a return value. They remain fully supported.
+
+What they cost you is the response _type_. A handler that ends
+`return ctx.json(user)` — or uses a helper and returns nothing — infers as
+`response: unknown`, because the helper hands back the engine's response object
+rather than the body, so the typed client has no payload to offer.
 
 | Method                                  | Status | Description                                     |
 | --------------------------------------- | ------ | ----------------------------------------------- |
@@ -176,7 +187,9 @@ a typed response, [return the payload](#return-value-handlers) instead.
 
 ### Pagination
 
-`ctx.paginate()` parses query params, calls your fetcher, and returns a standardized paginated response:
+`ctx.paginate()` parses query params, calls your fetcher, and returns a standardized paginated response.
+It both **sends** the response and **returns** the payload, so `return ctx.paginate(...)` carries
+`PaginatedResponse<T>` through to `KickRoutes` and the [typed client](./typed-client.md):
 
 ```ts
 @Get('/')
@@ -247,11 +260,12 @@ SSE helpers:
 
 ## Return-Value Handlers
 
-Handlers **return** the response payload instead of calling `ctx.json` — the
+**The default way to write a handler.** Return the response payload and the
 runtime auto-sends it as `200 application/json` when the handler wrote nothing.
 This is what the CLI scaffolds (`kick g module`, `kick g controller`,
-`kick g scaffold`) and works on every runtime (Express, Fastify, h3, h3-web,
-and the [edge fetch entry](./edge-deployment.md)):
+`kick g scaffold`), what keeps `KickRoutes` and the
+[typed client](./typed-client.md) exact, and it works on every runtime (Express,
+Fastify, h3, h3-web, and the [edge fetch entry](./edge-deployment.md)):
 
 ```ts
 @Get('/:id')
@@ -280,7 +294,15 @@ async remove(ctx: RequestContext) {
 
 Rules of precedence:
 
-- A `ctx.*` response (e.g. `ctx.json`) always wins — a return value after it is ignored.
+- A `ctx.*` response (e.g. `ctx.json`) always wins. It **terminates** the
+  response — the bytes are already on the wire — so the runtimes only auto-send
+  a returned value when nothing was written (`if (!res.headersSent)`). This is
+  the original, Express-shaped path and it stays authoritative; return values
+  are additive on top of it, never a replacement.
+- `return ctx.json(user)` types the response as `unknown`. The helper hands back
+  the engine's response object, which says nothing about the body — so the typed
+  client gets no payload type. Return the value (`return user`) or wrap it
+  (`return reply(201, user)`) to keep inference exact.
 - Returning `undefined`/`void` changes nothing — pure imperative handlers behave exactly as before.
 - Sugars: `reply.created(body)` (201), `reply.accepted(body)` (202), `reply.noContent()` (204).
 
