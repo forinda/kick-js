@@ -56,11 +56,16 @@ export function generateEntryFile(
       }
       if (spaClientDir) {
         imports.push(`import { SpaAdapter } from '@forinda/kickjs/spa'`)
+        // JSON.stringify, not a quoted template hole: this is arbitrary
+        // caller-supplied path text being written into a TypeScript file, and
+        // a quote, backslash, or newline in it would either break the emitted
+        // module or quietly change the path it resolves. The raw value stays
+        // out of the comment for the same reason.
         adapters.push(
           `    // Serves the built frontend from this origin in production.\n` +
-            `    // Inert until '${spaClientDir}' exists, so \`kick dev\` (where Vite\n` +
+            `    // Inert until the client build exists, so \`kick dev\` (where Vite\n` +
             `    // serves the client and proxies /api here) is unaffected.\n` +
-            `    SpaAdapter({ clientDir: '${spaClientDir}' }),`,
+            `    SpaAdapter({ clientDir: ${JSON.stringify(spaClientDir)} }),`,
         )
       }
       const importsBlock = imports.length ? imports.join('\n') + '\n' : ''

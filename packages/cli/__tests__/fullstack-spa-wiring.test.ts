@@ -16,7 +16,7 @@ describe('fullstack entry wiring', () => {
   it('wires SpaAdapter when a client dir is given', () => {
     const entry = generateEntryFile('demo', 'minimal', '1.0.0', [], 'express', '../web/dist')
     expect(entry).toContain("import { SpaAdapter } from '@forinda/kickjs/spa'")
-    expect(entry).toContain("SpaAdapter({ clientDir: '../web/dist' })")
+    expect(entry).toContain('SpaAdapter({ clientDir: \"../web/dist\" })')
     expect(entry).toContain('adapters:')
   })
 
@@ -44,5 +44,27 @@ describe('fullstack entry wiring', () => {
     )
     expect(entry).toContain('SwaggerAdapter')
     expect(entry).toContain('SpaAdapter')
+  })
+})
+
+describe('generated path is serialized, not interpolated', () => {
+  it('escapes a quote in the client dir instead of breaking the file', () => {
+    // The value is arbitrary caller-supplied path text written into a
+    // TypeScript module. A raw `'${dir}'` template hole let a quote close the
+    // string early and emit invalid TS — or worse, silently change the path.
+    const entry = generateEntryFile('demo', 'minimal', '1.0.0', [], 'express', "../we'b/dist")
+    expect(entry).toContain('SpaAdapter({ clientDir: "../we\'b/dist" })')
+    // The raw value must not reach the comment either.
+    expect(entry).not.toContain("Inert until '../we'b/dist'")
+  })
+
+  it('escapes a backslash (Windows-style path)', () => {
+    const entry = generateEntryFile('demo', 'minimal', '1.0.0', [], 'express', '..\\web\\dist')
+    expect(entry).toContain('SpaAdapter({ clientDir: "..\\\\web\\\\dist" })')
+  })
+
+  it('keeps the ordinary path readable', () => {
+    const entry = generateEntryFile('demo', 'minimal', '1.0.0', [], 'express', '../web/dist')
+    expect(entry).toContain('SpaAdapter({ clientDir: "../web/dist" })')
   })
 })

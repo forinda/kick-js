@@ -118,7 +118,12 @@ export function resolveClientDir(
   cwd: string = process.cwd(),
   entry: string | undefined = process.argv[1],
 ): string {
-  if (isAbsolute(clientDir)) return clientDir
+  // `resolve` even for an already-absolute path: `resolvesToFile` compares its
+  // (always normalized) target against this string, so a trailing slash or a
+  // `.`/`..` segment here would make the containment check never match and
+  // silently drop the Cache-Control header on every request. Fails closed, so
+  // it never weakened the traversal guard — it just stopped doing its job.
+  if (isAbsolute(clientDir)) return resolve(clientDir)
   const fromCwd = resolve(cwd, clientDir)
   if (existsSync(fromCwd)) return fromCwd
 
