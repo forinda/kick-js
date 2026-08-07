@@ -106,13 +106,22 @@ function nearestPackageRoot(from: string): string | null {
  *
  * Deliberately not entry-relative FIRST: under `kick dev` the entry is the CLI
  * binary, whose package root is the CLI itself.
+ *
+ * Exported for tests only — not re-exported from the package index.
  */
-function resolveClientDir(clientDir: string): string {
+export function resolveClientDir(
+  clientDir: string,
+  // Injected rather than read from the process so tests can exercise the
+  // monorepo-root case without `process.chdir` / `process.argv` mutation —
+  // neither is supported under vitest's `threads` pool, and the root config
+  // uses exactly that.
+  cwd: string = process.cwd(),
+  entry: string | undefined = process.argv[1],
+): string {
   if (isAbsolute(clientDir)) return clientDir
-  const fromCwd = resolve(process.cwd(), clientDir)
+  const fromCwd = resolve(cwd, clientDir)
   if (existsSync(fromCwd)) return fromCwd
 
-  const entry = process.argv[1]
   if (entry) {
     const root = nearestPackageRoot(dirname(resolve(entry)))
     if (root) {

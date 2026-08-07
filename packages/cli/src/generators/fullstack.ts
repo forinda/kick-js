@@ -83,7 +83,11 @@ export async function initFullstackProject(options: InitFullstackOptions): Promi
 
   // ── workspace root ──────────────────────────────────────────────────
   await writeFileSafe(join(dir, 'package.json'), rootPackageJson(name, packageManager))
-  await writeFileSafe(join(dir, 'pnpm-workspace.yaml'), `packages:\n  - server\n  - web\n`)
+  // Only pnpm reads this file. npm / yarn / bun declare workspaces via the
+  // `workspaces` field in the root package.json instead — see rootPackageJson.
+  if (packageManager === 'pnpm') {
+    await writeFileSafe(join(dir, 'pnpm-workspace.yaml'), `packages:\n  - server\n  - web\n`)
+  }
   await writeFileSafe(join(dir, '.gitignore'), rootGitignore())
   await writeFileSafe(join(dir, 'README.md'), rootReadme(name, packageManager))
 
