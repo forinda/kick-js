@@ -24,6 +24,13 @@ export function generateEntryFile(
   version: string,
   packages: string[] = [],
   runtime: ProjectRuntime = 'express',
+  /**
+   * When set, wire `SpaAdapter` at this `clientDir`. Used by the fullstack
+   * template so `web/`'s build is served from the API's origin in
+   * production. The adapter no-ops while the directory does not exist, so a
+   * dev run (where the SPA is served by Vite) is unaffected.
+   */
+  spaClientDir?: string,
 ): string {
   const factory = RUNTIME_FACTORY[runtime]
   const isExpress = runtime === 'express'
@@ -46,6 +53,15 @@ export function generateEntryFile(
       if (packages.includes('devtools')) {
         imports.push(`import { DevToolsAdapter } from '@forinda/kickjs-devtools'`)
         adapters.push(`    DevToolsAdapter(),`)
+      }
+      if (spaClientDir) {
+        imports.push(`import { SpaAdapter } from '@forinda/kickjs/spa'`)
+        adapters.push(
+          `    // Serves the built frontend from this origin in production.\n` +
+            `    // Inert until '${spaClientDir}' exists, so \`kick dev\` (where Vite\n` +
+            `    // serves the client and proxies /api here) is unaffected.\n` +
+            `    SpaAdapter({ clientDir: '${spaClientDir}' }),`,
+        )
       }
       const importsBlock = imports.length ? imports.join('\n') + '\n' : ''
       const adaptersBlock = adapters.length ? `,\n  adapters: [\n${adapters.join('\n')}\n  ]` : ''

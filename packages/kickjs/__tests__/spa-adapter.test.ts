@@ -269,3 +269,55 @@ describe('SpaAdapter — cache headers only label real hits', () => {
     expect(res.headers['cache-control']).toBeUndefined()
   })
 })
+
+describe('SpaAdapter — clientDir resolution', () => {
+  it('finds a relative clientDir from the process cwd', () => {
+    const prev = process.cwd()
+    process.chdir(dir)
+    try {
+      const adapter = SpaAdapter({ clientDir: '.' })
+      const rec = makeHttp()
+      adapter.beforeMount?.({ http: rec.http } as never)
+      expect(rec.statics).toHaveLength(1)
+    } finally {
+      process.chdir(prev)
+    }
+  })
+
+  it('falls back to the entry package root when cwd misses', () => {
+    // Reproduces `node server/dist/index.js` launched from a monorepo root:
+    // cwd is the root, so `../web/dist` misses there and must be retried
+    // against the entry script's own package root.
+    const root = mkdtempSync(join(tmpdir(), 'kick-mono-'))
+    const serverDir = join(root, 'server')
+    mkdirSync(join(serverDir, 'dist'), { recursive: true })
+    mkdirSync(join(root, 'web', 'dist'), { recursive: true })
+    writeFileSync(join(serverDir, 'package.json'), '{"name":"server"}')
+    writeFileSync(join(root, 'web', 'dist', 'index.html'), '<!doctype html><title>x</title>')
+    const entry = join(serverDir, 'dist', 'index.js')
+    writeFileSync(entry, '')
+
+    const prevCwd = process.cwd()
+    const prevArgv = process.argv[1]
+    process.chdir(root) // launched from the ROOT, not from server/
+    process.argv[1] = entry
+    try {
+      const adapter = SpaAdapter({ clientDir: '../web/dist' })
+      const rec = makeHttp()
+      adapter.beforeMount?.({ http: rec.http } as never)
+      expect(rec.statics).toHaveLength(1)
+      expect(rec.statics[0]!.dir).toBe(join(root, 'web', 'dist'))
+    } finally {
+      process.chdir(prevCwd)
+      process.argv[1] = prevArgv as string
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('leaves an absolute clientDir untouched', () => {
+    const adapter = SpaAdapter({ clientDir: dir })
+    const rec = makeHttp()
+    adapter.beforeMount?.({ http: rec.http } as never)
+    expect(rec.statics[0]!.dir).toBe(dir)
+  })
+})
