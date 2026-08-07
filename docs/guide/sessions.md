@@ -53,7 +53,10 @@ class AuthController {
   @Get('/me')
   async me(ctx: RequestContext) {
     const userId = ctx.session.data.userId
-    if (!userId) return ctx.res.status(401).json({ message: 'Not authenticated' })
+    if (!userId) {
+      ctx.problem.unauthorized({ detail: 'Not authenticated' })
+      return
+    }
     const user = await this.userService.findById(userId)
     ctx.json(user)
   }
