@@ -213,9 +213,10 @@ bootstrap({
 ```ts
 bootstrap({
   modules,
-  onError: (err, req, res, next) => {
+  onError: (err, req, res) => {
     const status = err.status ?? 500
-    logger.error({ err, method: req.method, url: req.originalUrl })
+    // `req.url`, not `req.originalUrl` — the latter is Express-only.
+    logger.error({ err, method: req.method, url: req.url })
     res.status(status).json({
       error: err.message,
       code: err.code ?? 'INTERNAL_ERROR',
@@ -224,7 +225,28 @@ bootstrap({
 })
 ```
 
-Both use the standard Express signature: `onNotFound` receives `(req, res, next)` and `onError` receives `(err, req, res, next)`. When omitted, the built-in handlers are used.
+Both are connect-**shaped** — `onNotFound` receives `(req, res, next)` and
+`onError` receives `(err, req, res, next)` — but they are not Express-
+**semantic** on every engine. What arrives differs:
+
+|         | `req`            | `res`             | `next`      |
+| ------- | ---------------- | ----------------- | ----------- |
+| Express | native `Request` | native `Response` | real `next` |
+| Fastify | `request.raw`    | reply driver      | **no-op**   |
+| h3      | `event.node.req` | response driver   | no-op       |
+
+Two consequences to write for:
+
+- **`next(err)` does nothing on Fastify and h3.** It is an inert function
+  there, so delegating to the default handler silently drops the error. Send a
+  response yourself instead.
+- **Express-only request members are `undefined` elsewhere.**
+  `req.originalUrl`, `req.path`, and `req.ip` are absent on the raw node
+  request — use `req.url`, or `ctx.ip` where a `RequestContext` is in scope.
+
+`res` is a {@link RuntimeResponse} on every engine, so `status`, `json`,
+`send`, `setHeader`, `render`, `writeHead`, and `end` are all available.
+When omitted, the built-in handlers are used.
 
 ## Writing Reusable Middleware
 
