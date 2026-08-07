@@ -90,3 +90,48 @@ describe('ctx.redirect', () => {
     expect(calls[0]).toEqual(['status', 301])
   })
 })
+
+/**
+ * `ctx.redirect()` on the web/edge entry.
+ *
+ * h3 has its own `sendRedirect(event, location, code)`, and Express and
+ * Fastify each have `res.redirect()` — three engine-specific spellings, none
+ * of them shared. Writing status + `Location` through the runtime response
+ * surface is the one form that works on all four, including the edge driver,
+ * which is a `Response` builder rather than a node socket.
+ */
+describe('ctx.redirect on the edge driver', () => {
+  it('produces a real 302 Response with a Location header', async () => {
+    const { WebResponseDriver } = await import('../src/http/web/driver')
+    const driver = new WebResponseDriver()
+    const ctx = new RequestContext(
+      { headers: {}, params: {}, query: {}, body: {} } as never,
+      driver as never,
+      (() => {}) as never,
+      driver as never,
+    )
+
+    ctx.redirect('/login')
+
+    const res = await driver.ready
+    expect(res.status).toBe(302)
+    expect(res.headers.get('location')).toBe('/login')
+  })
+
+  it('honours an explicit status at the edge', async () => {
+    const { WebResponseDriver } = await import('../src/http/web/driver')
+    const driver = new WebResponseDriver()
+    const ctx = new RequestContext(
+      { headers: {}, params: {}, query: {}, body: {} } as never,
+      driver as never,
+      (() => {}) as never,
+      driver as never,
+    )
+
+    ctx.redirect('https://example.com/next', 308)
+
+    const res = await driver.ready
+    expect(res.status).toBe(308)
+    expect(res.headers.get('location')).toBe('https://example.com/next')
+  })
+})

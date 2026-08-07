@@ -834,9 +834,15 @@ export class RequestContext<
   /**
    * Redirect the client. Works on every runtime.
    *
-   * `ctx.res.redirect()` is engine-native — Express and Fastify have it, h3
-   * does not — so this writes the status and `Location` header through the
-   * runtime response surface instead.
+   * Every engine spells this differently — Express and Fastify have
+   * `res.redirect()`, h3 has `sendRedirect(event, location, code)` — and none
+   * of them is shared, so this writes the status and `Location` header through
+   * the runtime response surface, which all four expose.
+   *
+   * The response carries no body. Express sends a short text line and h3 an
+   * HTML meta-refresh fallback; a bare `Location` with a 3xx is sufficient per
+   * RFC 9110, and interpolating the URL into an HTML body would add an
+   * injection surface to a value this method already warns is dangerous.
    *
    * ::: warning
    * Never pass an unvalidated user-supplied `url`. An attacker-controlled
