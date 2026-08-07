@@ -25,43 +25,37 @@ reads the path from `req.url`, so it works under all three.
 | `HEAD /dashboard`                         | 404    | 200, headers only |
 | `GET /apidocs` (with `apiPrefix: '/api'`) | 404    | `index.html`      |
 
-The dot rule is replaced by content negotiation — the fallback fires for
-`GET`/`HEAD` requests that accept HTML. A missing `/assets/app.js` still 404s
-rather than receiving an HTML document. `alwaysFallback: true` opts out for
-non-browser clients. Prefix matching is now segment-aware.
+The dot rule is replaced by content negotiation. The fallback fires for
+`GET`/`HEAD` requests that accept HTML, parsed as media ranges with q-values and
+RFC 9110 §12.5.1 specificity: `text/*` is honoured, an exact `text/html;q=0`
+overrides a permissive wildcard, and a bare `*/*` never counts at any q — assets
+are fetched that way, and treating it as a document request is what returns HTML
+for a missing script. `alwaysFallback: true` skips the check entirely for
+non-browser clients. Prefix matching is segment-aware.
 
-Cache headers are only applied to paths that resolve to a real file inside
-`clientDir`, so a missing asset's 404 is no longer labelled
-`max-age=31536000, immutable`.
+**Cache headers.** Applied only to paths the static layer will actually serve,
+so a missing asset's 404 is no longer labelled `max-age=31536000, immutable`, and
+a path resolving to a directory with an `index.html` — most importantly `/`
+itself — gets `indexCacheControl` rather than falling through to the static
+layer's default (`public, max-age=0` under Express).
 
-Adds 21 tests — the adapter previously had none despite being public API with
+Classification touches the filesystem **zero** times per request: the build
+directory is static and already snapshotted at mount (where `index.html` is
+read), so the file list is captured there and lookup is a `Set.has`. Membership
+of that snapshot is also the containment guard, so traversal is rejected
+inherently rather than by a prefix comparison. The snapshot walks with
+`readdirSync(dir, { withFileTypes: true })` only — the `recursive` option (Node
+20.1) and `Dirent.parentPath` (20.12) are both newer than the declared
+`node >=20.0`, and the `Dirent.path` alias they replaced is already gone on Node
+24, so no single spelling covers the supported range.
+
+`clientDir` resolves from `process.cwd()` as before, falling back to the entry
+script's package root when that misses — `node server/dist/index.js` launched
+from a monorepo root previously resolved `../web/dist` against the root, found
+nothing, and served no SPA. Both candidates are existence-checked, so it can
+never silently pick a directory that is not there. An absolute `clientDir` is
+normalised, since a trailing slash or a `.`/`..` segment made the containment
+check never match and silently dropped every cache header.
+
+Adds 40 tests — the adapter previously had none despite being public API with
 its own export path.
-
-`clientDir` now falls back to the entry script's package root when the path
-misses from `process.cwd()`. `node server/dist/index.js` launched from a
-monorepo root resolved `../web/dist` against the root, found nothing, and served
-no SPA. cwd stays the primary base (matching how assets and env files resolve),
-and both candidates are existence-checked, so this can never silently pick a
-directory that is not there.
-
-Three review follow-ups: `Accept` is parsed with q-values, so `text/html;q=0`
-(explicitly "not acceptable" per RFC 9110 §12.5.1) no longer receives a
-document; the cache middleware uses a single `stat` in a `try`/`catch` rather
-than `existsSync` + `statSync`, which could throw mid-request when a deploy
-swaps the directory between the two calls; and a path resolving to a directory
-with an `index.html` — most importantly `/` itself — is treated as an index
-request, so the root document gets `indexCacheControl` instead of falling
-through to the static layer's default (`public, max-age=0` under Express).
-
-The cache classifier no longer touches the filesystem per request. It ran a
-`statSync` on every non-reserved request, blocking the event loop on a slow or
-contended disk. The build directory is static and already snapshotted at mount
-(that is where `index.html` is read), so the file list is captured there too and
-classification is a `Set` lookup. Membership of that snapshot is also the
-containment guard, so the traversal check is now inherent rather than a separate
-prefix comparison.
-
-`Accept` handling honours type wildcards (`text/*`, `application/*`) with RFC
-9110 §12.5.1 specificity, so an exact `text/html;q=0` still overrides a
-permissive wildcard. A bare `*/*` continues to not count at any q — assets are
-fetched that way.
