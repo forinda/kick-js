@@ -377,6 +377,9 @@ class SocialAuthController {
     const state = randomBytes(32).toString('hex')
     ctx.session.data.oauthState = state
     const url = googleAuth.getAuthorizationUrl(state)
+    // `ctx.res.redirect()` is engine-native: Express and Fastify both have it,
+    // h3 does not. On h3, set the header yourself —
+    // `ctx.res.setHeader('location', url)` with a 302.
     return ctx.res.redirect(url)
   }
 
@@ -384,7 +387,10 @@ class SocialAuthController {
   @Public()
   async googleCallback(ctx: RequestContext) {
     const user = await googleAuth.validate(ctx.req)
-    if (!user) return ctx.res.status(401).json({ error: 'Auth failed' })
+    if (!user) {
+      ctx.problem.unauthorized({ detail: 'Auth failed' })
+      return
+    }
     // Clean up state
     delete ctx.session.data.oauthState
     // Issue your own JWT after social login
@@ -430,7 +436,10 @@ loginWithGoogle(ctx: RequestContext) {
 async googleCallback(ctx: RequestContext) {
   // PKCE verifier is read automatically from req.session.data.oauthCodeVerifier
   const user = await googleAuth.validate(ctx.req)
-  if (!user) return ctx.res.status(401).json({ error: 'Auth failed' })
+  if (!user) {
+    ctx.problem.unauthorized({ detail: 'Auth failed' })
+    return
+  }
   delete ctx.session.data.oauthState
   delete ctx.session.data.oauthCodeVerifier
   return ctx.json({ token: jwt.sign(user, JWT_SECRET), user })
