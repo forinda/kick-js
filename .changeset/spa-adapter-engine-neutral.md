@@ -52,3 +52,16 @@ swaps the directory between the two calls; and a path resolving to a directory
 with an `index.html` — most importantly `/` itself — is treated as an index
 request, so the root document gets `indexCacheControl` instead of falling
 through to the static layer's default (`public, max-age=0` under Express).
+
+The cache classifier no longer touches the filesystem per request. It ran a
+`statSync` on every non-reserved request, blocking the event loop on a slow or
+contended disk. The build directory is static and already snapshotted at mount
+(that is where `index.html` is read), so the file list is captured there too and
+classification is a `Set` lookup. Membership of that snapshot is also the
+containment guard, so the traversal check is now inherent rather than a separate
+prefix comparison.
+
+`Accept` handling honours type wildcards (`text/*`, `application/*`) with RFC
+9110 §12.5.1 specificity, so an exact `text/html;q=0` still overrides a
+permissive wildcard. A bare `*/*` continues to not count at any q — assets are
+fetched that way.

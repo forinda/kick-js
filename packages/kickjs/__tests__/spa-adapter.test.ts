@@ -369,10 +369,10 @@ describe('SpaAdapter — review follow-ups', () => {
     expect(res.headers['cache-control']).toBe('no-cache')
   })
 
-  it('survives a file vanishing between checks', () => {
-    // A deploy can swap the directory mid-request. `existsSync` then
-    // `statSync` threw ENOENT inside request handling; one stat in a
-    // try/catch answers "not servable" instead.
+  it('survives the build directory vanishing after mount', () => {
+    // Requests no longer touch the filesystem at all — the build is
+    // snapshotted at mount — so a deploy swapping the directory mid-flight
+    // cannot throw inside request handling.
     const { middleware } = buildAdapter()
     rmSync(dir, { recursive: true, force: true })
     expect(() =>
@@ -405,5 +405,57 @@ describe('SpaAdapter — absolute clientDir normalisation', () => {
   it('normalises . and .. segments in an absolute clientDir', () => {
     expect(resolveClientDir(`${dir}${sep}assets${sep}..`)).toBe(dir)
     expect(resolveClientDir(`${dir}${sep}.`)).toBe(dir)
+  })
+})
+
+describe('SpaAdapter — Accept media ranges', () => {
+  it('accepts a type wildcard', () => {
+    // `text/*` can accept `text/html`; rejecting it was over-strict.
+    const { middleware } = buildAdapter()
+    expect(
+      dispatch(middleware, { url: '/dashboard', headers: { accept: 'text/*' } }).statusCode,
+    ).toBe(200)
+    expect(
+      dispatch(middleware, { url: '/dashboard', headers: { accept: 'text/*;q=1' } }).statusCode,
+    ).toBe(200)
+  })
+
+  it('lets an exact zero-quality range override a wildcard', () => {
+    // RFC 9110 §12.5.1 precedence: the most specific range wins, so an
+    // explicit `text/html;q=0` rejects HTML even alongside `text/*`.
+    const { middleware } = buildAdapter()
+    const res = dispatch(middleware, {
+      url: '/dashboard',
+      headers: { accept: 'text/*, text/html;q=0' },
+    })
+    expect(res.ended).toBe(false)
+  })
+
+  it('accepts application/* for the xhtml representation', () => {
+    const { middleware } = buildAdapter()
+    expect(
+      dispatch(middleware, { url: '/dashboard', headers: { accept: 'application/*' } }).statusCode,
+    ).toBe(200)
+  })
+
+  it('still refuses a bare */* at any quality', () => {
+    // Assets are fetched this way; treating it as a document request is what
+    // makes a missing script come back as HTML.
+    const { middleware } = buildAdapter()
+    for (const accept of ['*/*', '*/*;q=1']) {
+      expect(dispatch(middleware, { url: '/dashboard', headers: { accept } }).ended).toBe(false)
+    }
+  })
+
+  it('reads the request path without touching the filesystem', () => {
+    // The build is snapshotted at mount, so classification is a Set lookup.
+    // Deleting the directory must not change how a known asset is labelled.
+    const { middleware } = buildAdapter()
+    rmSync(dir, { recursive: true, force: true })
+    const res = dispatch(middleware.slice(0, 1), {
+      url: '/assets/app.js',
+      headers: { accept: '*/*' },
+    })
+    expect(res.headers['cache-control']).toBe('public, max-age=31536000, immutable')
   })
 })
