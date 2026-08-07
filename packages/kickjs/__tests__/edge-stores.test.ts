@@ -7,7 +7,7 @@ import type { KvLike } from '../src/web'
 import { Container } from '../src/core/container'
 import { Controller, Get } from '../src/core/decorators'
 import { defineModule } from '../src/core/define-module'
-import type { RequestContext } from '../src/http/context'
+import { RequestContext } from '../src/http/context'
 
 /**
  * Edge-ready stores (KvLike) + the ctx-style rateLimitGuard — the pieces
@@ -167,10 +167,20 @@ describe('rateLimitGuard on the web entry', () => {
         reset: async () => {},
       },
     })
-    const fakeCtx = (ip: string | undefined, headers: Record<string, string>) =>
-      ({ req: { ip }, headers, setHeader: () => {}, json: () => {} }) as never
-    await guard(fakeCtx('10.0.0.1', { 'x-forwarded-for': 'spoofed' }), () => {})
-    await guard(fakeCtx(undefined, { 'x-forwarded-for': 'fallback, hop2' }), () => {})
+    // A REAL RequestContext, not an object literal: the key comes from
+    // `ctx.ip`, which is a getter on the class. A hand-rolled literal has no
+    // such property, so the assertion would pass or fail for reasons
+    // unrelated to the resolution being tested.
+    const realCtx = (ip: string | undefined, headers: Record<string, string>) => {
+      const res = { setHeader: () => res, status: () => res, json: () => res, end: () => res }
+      return new RequestContext(
+        { ip, headers, params: {}, query: {}, body: {} } as never,
+        res as never,
+        (() => {}) as never,
+      ) as never
+    }
+    await guard(realCtx('10.0.0.1', { 'x-forwarded-for': 'spoofed' }), () => {})
+    await guard(realCtx(undefined, { 'x-forwarded-for': 'fallback, hop2' }), () => {})
     expect(seen).toEqual(['10.0.0.1', 'fallback'])
   })
 })

@@ -377,10 +377,9 @@ class SocialAuthController {
     const state = randomBytes(32).toString('hex')
     ctx.session.data.oauthState = state
     const url = googleAuth.getAuthorizationUrl(state)
-    // `ctx.res.redirect()` is engine-native: Express and Fastify both have it,
-    // h3 does not. On h3, set the header yourself —
-    // `ctx.res.setHeader('location', url)` with a 302.
-    return ctx.res.redirect(url)
+    // `ctx.redirect()` works on every runtime. (`ctx.res.redirect()` is
+    // engine-native — h3's event has no such method.)
+    return ctx.redirect(url)
   }
 
   @Get('/google/callback')
@@ -428,7 +427,7 @@ loginWithGoogle(ctx: RequestContext) {
   const { url, codeVerifier } = googleAuth.getAuthorizationUrlWithPkce(state)
   ctx.session.data.oauthState = state
   ctx.session.data.oauthCodeVerifier = codeVerifier
-  return ctx.res.redirect(url)
+  return ctx.redirect(url)
 }
 
 @Get('/google/callback')

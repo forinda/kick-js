@@ -804,6 +804,51 @@ export class RequestContext<
    * Express produces `text/html; charset=utf-8` for `.type('html')`, so
    * spelling it out here is byte-identical there and correct everywhere else.
    */
+  /**
+   * The client's IP address, or `undefined` when it cannot be determined.
+   *
+   * Prefers the value the runtime computed (Express derives `req.ip` from the
+   * app's `trust proxy` setting; Fastify from `trustProxy`), because raw
+   * forwarded headers are client-SPOOFABLE on deployments that do not
+   * normalize them. The header fallbacks exist for runtimes with no `ip`
+   * field at all — notably the web/edge entry.
+   *
+   * `ctx.req.ip` is Express-only, so reaching for it directly broke on
+   * Fastify and h3.
+   */
+  get ip(): string | undefined {
+    const runtimeIp = (this.req as { ip?: unknown }).ip
+    if (typeof runtimeIp === 'string' && runtimeIp.length > 0) return runtimeIp
+    const first = (v: unknown): string | undefined =>
+      typeof v === 'string' && v.length > 0 ? v.split(',')[0]!.trim() : undefined
+    const h = this.headers
+    return (
+      first(h['cf-connecting-ip']) ??
+      first(h['x-forwarded-for']) ??
+      first(h['x-real-ip']) ??
+      // Node exposes it here when the engine did not compute one.
+      ((this.req as { socket?: { remoteAddress?: string } }).socket?.remoteAddress || undefined)
+    )
+  }
+
+  /**
+   * Redirect the client. Works on every runtime.
+   *
+   * `ctx.res.redirect()` is engine-native — Express and Fastify have it, h3
+   * does not — so this writes the status and `Location` header through the
+   * runtime response surface instead.
+   *
+   * ::: warning
+   * Never pass an unvalidated user-supplied `url`. An attacker-controlled
+   * destination turns this into an open redirect, which is a common phishing
+   * primitive. Allow-list the target or keep it relative.
+   * :::
+   */
+  redirect(url: string, status = 302) {
+    this._response.status(status).setHeader('location', url)
+    return this._response.end()
+  }
+
   html(content: string, status = 200) {
     return this._response.status(status).type('text/html; charset=utf-8').send(content)
   }

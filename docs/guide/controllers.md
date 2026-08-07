@@ -182,6 +182,7 @@ rather than the body, so the typed client has no payload to offer.
 | `ctx.notFound(message?)`                | 404    | **Deprecated** — use `ctx.problem.notFound()`   |
 | `ctx.badRequest(message)`               | 400    | **Deprecated** — use `ctx.problem.badRequest()` |
 | `ctx.html(content, status?)`            | 200    | HTML response                                   |
+| `ctx.redirect(url, status?)`            | 302    | Redirect (works on every runtime)               |
 | `ctx.download(buffer, filename, type?)` | --     | File download                                   |
 | `ctx.render(template, data?)`           | 200    | Render a template (requires ViewAdapter)        |
 
