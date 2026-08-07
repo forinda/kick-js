@@ -106,6 +106,29 @@ export async function bootstrap(options: ApplicationOptions): Promise<Applicatio
   // ── HMR rebuild ──────────────────────────────────────────────────────
   if (g.__app) {
     log.debug('HMR rebuild triggered')
+
+    // Tear the PREVIOUS app down before replacing it. Without this the old
+    // Application was dropped on the floor still running: its adapters kept
+    // their sockets and consumers open, so every save added another set.
+    //
+    // Observed in the wild as one process holding several consumer-group
+    // members — on a single-partition topic only one can hold the assignment,
+    // and it was a leaked consumer no longer wired to anything, so jobs
+    // stopped being processed. A second socket.io server on the same HTTP
+    // server crashed `handleUpgrade()` the same way.
+    //
+    // `closeServer: false` is load-bearing: the dev HTTP server is shared
+    // across rebuilds, so a full shutdown would close the listening socket and
+    // kill HMR on the first save.
+    //
+    // Failures are logged, not thrown — one broken adapter must not leave the
+    // dev server wedged with no app at all.
+    try {
+      await g.__app.shutdown({ closeServer: false })
+    } catch (err) {
+      log.error(err as Error, 'HMR teardown of the previous app failed')
+    }
+
     tryReloadEnv()
     Container.reset()
 
