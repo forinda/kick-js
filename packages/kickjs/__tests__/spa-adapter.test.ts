@@ -21,7 +21,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 import { resolveClientDir, SpaAdapter, type SpaAdapterOptions } from '../src/http/middleware/spa'
 
 interface RecordedResponse {
@@ -378,5 +378,32 @@ describe('SpaAdapter — review follow-ups', () => {
     expect(() =>
       dispatch(middleware, { url: '/assets/app.js', headers: { accept: '*/*' } }),
     ).not.toThrow()
+  })
+})
+
+describe('SpaAdapter — absolute clientDir normalisation', () => {
+  it('still sets cache headers when clientDir has a trailing slash', () => {
+    // `resolveClientDir` used to return an absolute path verbatim, while
+    // `resolvesToFile` compares against an always-normalised target. A
+    // trailing slash made `startsWith(clientDir + sep)` compare against
+    // `//`, so containment never matched and EVERY request silently lost
+    // its Cache-Control header. Fails closed, so the traversal guard was
+    // never weakened — it just stopped doing its job.
+    const adapter = SpaAdapter({ clientDir: `${dir}${sep}` })
+    const rec = makeHttp()
+    const ctx = { http: rec.http } as never
+    adapter.beforeMount?.(ctx)
+    adapter.beforeStart?.(ctx)
+
+    const res = dispatch(rec.middleware.slice(0, 1), {
+      url: '/assets/app.js',
+      headers: { accept: '*/*' },
+    })
+    expect(res.headers['cache-control']).toBe('public, max-age=31536000, immutable')
+  })
+
+  it('normalises . and .. segments in an absolute clientDir', () => {
+    expect(resolveClientDir(`${dir}${sep}assets${sep}..`)).toBe(dir)
+    expect(resolveClientDir(`${dir}${sep}.`)).toBe(dir)
   })
 })
