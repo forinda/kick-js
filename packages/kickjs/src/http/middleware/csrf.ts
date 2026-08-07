@@ -1,4 +1,5 @@
 import type { Request, Response, NextFunction } from 'express'
+import { resolvePathname, type ClientRequestLike } from '../client-ip'
 
 import { randomHex } from '../../core/web-crypto'
 
@@ -78,7 +79,9 @@ export function csrf(options: CsrfOptions = {}) {
       return next()
     }
 
-    if (ignorePaths.has(req.path)) {
+    // `req.path` is Express-only, so `has(undefined)` never matched and
+    // configured exemptions were silently ignored on Fastify / h3.
+    if (ignorePaths.has(resolvePathname(req as ClientRequestLike))) {
       return next()
     }
 

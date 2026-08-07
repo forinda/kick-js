@@ -263,7 +263,8 @@ export interface ApplicationOptions {
    * bootstrap({
    *   modules,
    *   onNotFound: (req, res) => {
-   *     res.status(404).json({ error: 'Route not found', path: req.originalUrl })
+   *     // `req.originalUrl` is Express-only — use `req.url` for portability.
+   *     res.status(404).json({ error: 'Route not found', path: req.url })
    *   },
    * })
    * ```
