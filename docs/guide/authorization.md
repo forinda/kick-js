@@ -289,10 +289,8 @@ kick g guard ip-whitelist
 // src/guards/ip-whitelist.guard.ts
 export async function ipWhitelistGuard(ctx: RequestContext, next: () => void) {
   const allowed = ['10.0.0.0/8', '192.168.1.0/24']
-  // `ctx.req` is the ENGINE-NATIVE request, and `.ip` is Express-only —
-  // under Fastify / h3 read `ctx.req.socket.remoteAddress` (or your proxy's
-  // `x-forwarded-for` header) instead.
-  if (!allowed.some((range) => isInSubnet(ctx.req.ip, range))) {
+  // `ctx.ip` works on every runtime. (`ctx.req.ip` is Express-only.)
+  if (!allowed.some((range) => isInSubnet(ctx.ip ?? '', range))) {
     // `ctx.res` is the ENGINE-NATIVE response — `.json()` is Express-only
     // (FastifyReply has no `.json()`, h3's event has no `.status()`).
     ctx.problem.forbidden({ detail: 'IP not allowed' })
