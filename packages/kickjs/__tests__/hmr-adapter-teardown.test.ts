@@ -25,7 +25,7 @@ import http from 'node:http'
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { Container } from '../src/index'
 import { Application } from '../src/http/application'
-import type { AppAdapter } from '../src/core'
+import type { AppAdapter, KickPlugin } from '../src/core'
 
 function countingAdapter(log: string[], name = 'Counting'): AppAdapter {
   return {
@@ -33,6 +33,15 @@ function countingAdapter(log: string[], name = 'Counting'): AppAdapter {
     beforeMount: () => {
       log.push(`${name}:start`)
     },
+    shutdown: async () => {
+      log.push(`${name}:shutdown`)
+    },
+  }
+}
+
+function countingPlugin(log: string[], name = 'Metrics'): KickPlugin {
+  return {
+    name,
     shutdown: async () => {
       log.push(`${name}:shutdown`)
     },
@@ -102,6 +111,44 @@ describe('shutdown({ closeServer: false }) — the HMR teardown path', () => {
     await app.shutdown({ closeServer: false })
 
     expect(log).toContain('Ws:shutdown')
+    expect(log).toContain('Kafka:shutdown')
+  })
+
+  it('tears plugins down too, not only adapters', async () => {
+    // Step 3 of shutdown runs plugins and adapters together, so a plugin
+    // holding a timer or a connection leaked exactly the same way.
+    const log: string[] = []
+    const app = new Application({
+      modules: [],
+      adapters: [countingAdapter(log, 'Kafka')],
+      plugins: [countingPlugin(log, 'Metrics')],
+      port: 0,
+    })
+    await app.setup()
+
+    await app.shutdown({ closeServer: false })
+
+    expect(log).toContain('Metrics:shutdown')
+    expect(log).toContain('Kafka:shutdown')
+  })
+
+  it('does not let one failing plugin block adapter teardown', async () => {
+    const log: string[] = []
+    const exploding: KickPlugin = {
+      name: 'Exploding',
+      shutdown: async () => {
+        throw new Error('plugin teardown failed')
+      },
+    }
+    const app = new Application({
+      modules: [],
+      adapters: [countingAdapter(log, 'Kafka')],
+      plugins: [exploding],
+      port: 0,
+    })
+    await app.setup()
+
+    await expect(app.shutdown({ closeServer: false })).resolves.toBeUndefined()
     expect(log).toContain('Kafka:shutdown')
   })
 

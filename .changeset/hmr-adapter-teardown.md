@@ -33,3 +33,12 @@ is skipped too — the server keeps serving, so there is nothing to drain toward
 
 Teardown failures are logged rather than thrown, so one broken adapter cannot
 leave the dev server with no app at all.
+
+Plugins are torn down alongside adapters — `shutdown()` step 3 always ran both,
+so a plugin holding a timer or connection leaked identically.
+
+Docs: the HMR guide previously listed database pools, Redis clients, and the
+Socket.IO server as _preserved across HMR_. They were not preserved so much as
+abandoned, which is the bug. They are now rebuilt, and the guide says so, along
+with what an adapter must do to be restartable — release the handle **and clear
+the reference**, since the same instance is often mounted again.
