@@ -56,6 +56,18 @@ const log = createLogger('Application')
  */
 export type MiddlewareEntry = RequestHandler | { path: string; handler: RequestHandler }
 
+/** Options for {@link Application.shutdown}. */
+export interface ShutdownOptions {
+  /**
+   * Close the HTTP server and drain in-flight requests. Default `true`.
+   *
+   * Set `false` for a dev HMR rebuild, where the server is shared across
+   * reloads — adapters, plugins, and disposables are still torn down, which is
+   * the part a reload needs.
+   */
+  closeServer?: boolean
+}
+
 export interface ApplicationOptions {
   /**
    * Feature modules to load. Accepts both class form
@@ -964,7 +976,13 @@ export class Application {
    *
    * Safe to call multiple times — subsequent calls return the same promise.
    */
-  async shutdown(): Promise<void> {
+  async shutdown(options: ShutdownOptions = {}): Promise<void> {
+    // `closeServer: false` is the HMR reload path. In dev the HTTP server is
+    // SHARED across rebuilds via `globalThis.__kickjs_httpServer`, so closing
+    // it would kill the dev server on the first save — which is why the reload
+    // path used to skip teardown entirely, leaking an adapter set per reload.
+    // Everything below Step 2 is what a reload actually needs.
+    const closeServer = options.closeServer ?? true
     // Prevent double-shutdown — return immediately if already initiated
     if (this._shutdownInitiated) {
       log.debug('Shutdown already in progress, skipping duplicate call')
@@ -992,12 +1010,15 @@ export class Application {
       // server.close() prevents new connections. Its callback fires only when
       // ALL existing connections are fully closed, so we do NOT await it here —
       // we track request draining separately via the tracking middleware.
-      if (this.httpServer) {
+      if (closeServer && this.httpServer) {
         this.httpServer.close(() => {})
       }
 
-      // Step 2: Wait for in-flight requests to drain (or timeout)
-      if (this._inFlightRequests > 0) {
+      // Step 2: Wait for in-flight requests to drain (or timeout).
+      // Skipped on a reload: the server keeps listening and the fresh app
+      // takes over, so there is nothing to drain toward — waiting would just
+      // stall the rebuild for up to `shutdownTimeout`.
+      if (closeServer && this._inFlightRequests > 0) {
         log.debug(`Waiting for ${this._inFlightRequests} in-flight request(s) to complete...`)
         const drainPromise = new Promise<'drained'>((resolve) => {
           this._drainResolvers.push(() => resolve('drained'))
