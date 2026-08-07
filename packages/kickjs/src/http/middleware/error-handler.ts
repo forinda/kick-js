@@ -1,4 +1,20 @@
-import type { Request, Response, NextFunction } from 'express'
+import type { RuntimeResponse } from '../runtime'
+
+/**
+ * The slice of the request this handler reads, spelled from node's
+ * `IncomingMessage` rather than Express's `Request`.
+ *
+ * Fastify and h3 hand the error handler `request.raw` — a plain
+ * `IncomingMessage` — so anything Express-only is `undefined` there. This is
+ * the default handler for EVERY runtime, so it must not assume Express.
+ */
+interface ErrorRequest {
+  method?: string
+  url?: string
+  /** Express-only; absent on the raw node request the other runtimes pass. */
+  originalUrl?: string
+  headers: Record<string, string | string[] | undefined>
+}
 import {
   HttpException,
   ProblemException,
@@ -11,7 +27,7 @@ const log = createLogger('ErrorHandler')
 
 /** Catch-all for unmatched routes */
 export function notFoundHandler() {
-  return (_req: Request, res: Response, _next: NextFunction) => {
+  return (_req: ErrorRequest, res: RuntimeResponse, _next: () => void) => {
     res.status(404).json({ message: 'Not Found' })
   }
 }
@@ -37,7 +53,7 @@ export function notFoundHandler() {
  */
 export function errorHandler() {
   const isProduction = process.env.NODE_ENV === 'production'
-  return (err: any, req: Request, res: Response, _next: NextFunction) => {
+  return (err: any, req: ErrorRequest, res: RuntimeResponse, _next: () => void) => {
     // Don't write after headers are already sent
     if (res.headersSent) {
       log.warn(`Error after headers sent: ${err?.message || 'Unknown'}`)
@@ -92,7 +108,11 @@ export function errorHandler() {
     const requestId = (req as any).requestId ?? req.headers['x-request-id']
     log.error(
       err,
-      `${req.method} ${req.originalUrl} — ${describeError(err)}${
+      // `originalUrl` is Express-only. Fastify and h3 pass `request.raw`, so
+      // this logged `GET undefined — <error>` on every error under those
+      // runtimes — the path silently dropped from the one line meant to
+      // identify the failing request.
+      `${req.method} ${req.originalUrl ?? req.url} — ${describeError(err)}${
         requestId ? ` [${requestId}]` : ''
       }`,
     )

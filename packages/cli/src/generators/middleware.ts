@@ -31,7 +31,7 @@ export async function generateMiddleware(options: GenerateMiddlewareOptions): Pr
   const filePath = join(outDir, `${kebab}.middleware.ts`)
   await writeFileSafe(
     filePath,
-    `import type { Request, Response, NextFunction } from 'express'
+    `import type { IncomingMessage, ServerResponse } from 'node:http'
 
 export interface ${toPascalCase(name)}Options {
   // Add configuration options here. The factory below closes over the
@@ -74,7 +74,14 @@ export interface ${toPascalCase(name)}Options {
  *   @Middleware(${camel}())
  */
 export function ${camel}(options: ${toPascalCase(name)}Options = {}) {
-  return (req: Request, res: Response, next: NextFunction) => {
+  // Typed from \`node:http\`, not \`express\`. Global middleware is connect-style
+  // on every engine, but a Fastify / h3 project has no \`express\` dependency —
+  // importing its types there is a compile error on a freshly generated file.
+  // Under Fastify the handler receives \`request.raw\` / a reply driver, and
+  // under h3 the node objects, so anything Express-only (\`req.originalUrl\`,
+  // \`res.json\`) is absent. Reach for \`ctx.*\` helpers when you need a typed
+  // response.
+  return (req: IncomingMessage, res: ServerResponse, next: () => void) => {
     // Implement your middleware logic here. \`options\` is captured by
     // closure — log or read it anywhere in this handler body.
     void options
