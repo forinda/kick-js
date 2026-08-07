@@ -9,7 +9,7 @@ nothing neutral to use. Both are engine-native: `req.ip` is Express-only, and
 `res.redirect()` exists on Express and Fastify but not h3. Documentation had to
 carry "this breaks on X" caveats instead of showing portable code.
 
-**`ctx.ip`** prefers the address the runtime computed — Express derives `req.ip`
+**`ctx.ip`** resolves `req.ip` → `socket.remoteAddress` → forwarded headers. It prefers the address the runtime computed — Express derives `req.ip`
 from `trust proxy`, Fastify from `trustProxy` — because raw forwarded headers
 are client-**spoofable** on deployments that do not normalize them. It falls back
 to `cf-connecting-ip` / `x-forwarded-for` / `x-real-ip` only for runtimes that
@@ -39,3 +39,10 @@ members, all of which receive the RAW node request under Fastify and h3:
 
 The resolution lives in one place (`http/client-ip.ts`) rather than a fourth
 copy drifting from the others.
+
+The socket is consulted **before** forwarded headers. A raw Fastify or h3 request
+has no `req.ip`, so reading `x-forwarded-for` first let a direct client vary the
+header per request and land in a fresh rate-limit bucket each time, evading the
+limit entirely. Headers are used only where there is no socket at all — the
+web/edge entry. Behind a real proxy, configure the runtime's trust-proxy setting
+so `req.ip` answers rather than relying on an unverified header.

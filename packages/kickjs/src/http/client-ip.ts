@@ -41,17 +41,36 @@ function firstHop(value: unknown): string | undefined {
  * client-SPOOFABLE wherever nothing normalizes them. h3 takes the same stance:
  * its `getRequestIP` only consults `x-forwarded-for` when explicitly opted in.
  *
- * Header fallbacks apply only to runtimes that compute no address at all
- * (notably the web/edge entry, which has no socket either).
+ * Order is `req.ip` → `socket.remoteAddress` → forwarded headers. The socket
+ * comes BEFORE the headers deliberately: it cannot be spoofed, whereas a direct
+ * client can vary `x-forwarded-for` per request to get a fresh rate-limit
+ * bucket each time. Headers are consulted only where there is no socket — the
+ * web/edge entry, where the platform terminates the connection.
  */
 export function resolveClientIp(req: ClientRequestLike): string | undefined {
+  // 1. What the runtime computed. Express derives `req.ip` from `trust proxy`,
+  //    Fastify from `trustProxy` — a value vetted against a CONFIGURED proxy,
+  //    which is the only reason to believe a forwarded header at all.
   if (typeof req.ip === 'string' && req.ip.length > 0) return req.ip
+
+  // 2. The socket. Unspoofable, and present on every node runtime.
+  //
+  //    This MUST precede the headers. A raw Fastify / h3 request has no
+  //    `req.ip`, so consulting `x-forwarded-for` first let a DIRECT client send
+  //    a different value per request and land in a fresh rate-limit bucket each
+  //    time — evading the limit entirely. Behind a real proxy the socket is the
+  //    proxy's address, which buckets clients together; the fix for that is to
+  //    configure the runtime's trust-proxy setting so step 1 answers, not to
+  //    trust an unverified header here.
+  const socketAddress = req.socket?.remoteAddress
+  if (socketAddress) return socketAddress
+
+  // 3. Headers, only where there is no socket at all — the web/edge entry,
+  //    where the platform terminates the connection and these are the only
+  //    signal available.
   const h = req.headers ?? {}
   return (
-    firstHop(h['cf-connecting-ip']) ??
-    firstHop(h['x-forwarded-for']) ??
-    firstHop(h['x-real-ip']) ??
-    (req.socket?.remoteAddress || undefined)
+    firstHop(h['cf-connecting-ip']) ?? firstHop(h['x-forwarded-for']) ?? firstHop(h['x-real-ip'])
   )
 }
 

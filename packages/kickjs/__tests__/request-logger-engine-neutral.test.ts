@@ -93,3 +93,16 @@ describe('requestLogger — engine neutrality', () => {
     expect(messages[0]).toContain('/api/v1/inner')
   })
 })
+
+describe('requestLogger — url fallback', () => {
+  it('never logs "undefined" when neither url member exists', () => {
+    // `originalUrl` and `url` are both optional; without a floor the line
+    // reads `GET undefined` again, just by a different route.
+    const messages = captureLogs()
+    const { res, finish } = makeRes()
+    requestLogger()({ method: 'GET', headers: {} } as never, res, () => {})
+    finish()
+    expect(messages[0]).not.toContain('undefined')
+    expect(messages[0]).toContain('GET /')
+  })
+})

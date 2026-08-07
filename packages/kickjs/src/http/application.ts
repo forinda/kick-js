@@ -255,9 +255,13 @@ export interface ApplicationOptions {
   cluster?: boolean | { workers?: number }
 
   /**
-   * Custom 404 handler for unmatched routes. Receives the raw Express
-   * `(req, res, next)` args. When omitted, the built-in handler returns
-   * `{ message: 'Not Found' }` with status 404.
+   * Custom 404 handler for unmatched routes. When omitted, the built-in
+   * handler returns `{ message: 'Not Found' }` with status 404.
+   *
+   * Connect-**shaped**, not Express-**semantic** — see {@link onError} for the
+   * per-runtime table. The same two caveats apply: `next()` is inert on
+   * Fastify and h3, and Express-only request members (`req.originalUrl`,
+   * `req.path`, `req.ip`) are `undefined` there, so read `req.url`.
    *
    * @example
    * ```ts
