@@ -311,17 +311,23 @@ inferable** — the foundation for typed-client generation. `kick typegen` fills
 `KickRoutes[...].response` with `InferHandlerResponse<Controller['method']>`,
 which reads the method's return type and nothing else:
 
-| Handler style                      | Inferred `response`                                  |
-| ---------------------------------- | ---------------------------------------------------- |
-| `return payload`                   | the payload's type                                   |
-| `return reply.created(payload)`    | the payload's type (`Reply<S, T>` → `T`)             |
-| `ctx.json(payload)` then no return | `unknown`                                            |
-| `return ctx.json(payload)`         | `RuntimeResponse` — the driver object, not your data |
+| Handler style                      | Inferred `response`                                    |
+| ---------------------------------- | ------------------------------------------------------ |
+| `return payload`                   | the payload's type                                     |
+| `return reply.created(payload)`    | the payload's type (`Reply<S, T>` → `T`)               |
+| `ctx.json(payload)` then no return | `unknown`                                              |
+| `return ctx.json(payload)`         | `unknown` — the helper reports no payload type         |
+| `return ctx.paginate(fetcher)`     | `PaginatedResponse<T>` — sends AND returns its payload |
 
-The last row is the trap: `ctx.json()` returns the runtime's response driver
-for fluent chaining, so `return ctx.json(x)` types the route as an internal
-framework object. Either return `x` directly, or call `ctx.json(x)` and return
-nothing.
+The two `ctx.json` rows are the same case: `ctx.json()` returns the runtime's response
+driver for fluent chaining, and a driver says nothing about the body — so
+inference has no payload to report either way. Return `x` directly to type the
+route.
+
+(That row used to read `RuntimeResponse`, and it was accurate: the driver object
+itself leaked into `KickRoutes` and the typed client, offering `.status()` /
+`.setHeader()` where a payload belonged. It degrades to `unknown` now — no type
+rather than a confidently wrong one.)
 
 ### Error branches
 
@@ -335,7 +341,7 @@ async get(ctx: Ctx<KickRoutes.UserController['get']>) {
   const user = await this.users.find(ctx.params.id)
   if (!user) {
     ctx.problem.notFound({ detail: `User ${ctx.params.id} not found` })
-    return // response stays `User`, not `User | RuntimeResponse`
+    return // response stays `User` — the `undefined` branch is dropped
   }
   return user
 }
