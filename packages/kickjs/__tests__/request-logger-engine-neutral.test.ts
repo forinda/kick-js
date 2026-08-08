@@ -11,7 +11,7 @@
  * The first is a crash, not a degradation: the middleware failed the request
  * rather than declining to log it.
  */
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { requestLogger } from '../src/http/middleware/request-logger'
 import { Logger } from '../src/core'
 
@@ -30,6 +30,13 @@ function makeRes() {
   }
   return { res: res as never, finish: () => handlers.finish?.() }
 }
+
+afterEach(() => {
+  // `captureLogs()` spies on `Logger.prototype` and no vitest config sets
+  // `restoreMocks`, so without this each test stacks another spy on the shared
+  // prototype and later assertions read the earlier tests' lines too.
+  vi.restoreAllMocks()
+})
 
 function captureLogs() {
   const messages: string[] = []

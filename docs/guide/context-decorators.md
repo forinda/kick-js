@@ -1960,7 +1960,7 @@ type RateLimitParams = {
 const RateLimited = defineHttpContextDecorator.withParams<RateLimitParams>()({
   key: 'rate-limit',
   deps: { limiter: RATE_LIMITER },
-  paramDefaults: { window: '1m', max: 60, keyOf: (ctx) => ctx.ip },
+  paramDefaults: { window: '1m', max: 60, keyOf: (ctx) => ctx.ip ?? 'anonymous' },
   resolve: (ctx, { limiter }, params) => limiter.check(params.keyOf(ctx), params),
 })
 
@@ -2086,7 +2086,8 @@ bootstrap({
   modules: [TenantModule],
   contributors: [
     LoadTenant.with({ source: 'header', headerName: 'x-org-id' }).registration,
-    RateLimited.with({ window: '1m', max: 1000, keyOf: (ctx) => ctx.ip }).registration,
+    RateLimited.with({ window: '1m', max: 1000, keyOf: (ctx) => ctx.ip ?? 'anonymous' })
+      .registration,
   ],
 })
 ```

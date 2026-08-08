@@ -12,8 +12,9 @@ carry "this breaks on X" caveats instead of showing portable code.
 **`ctx.ip`** resolves `req.ip` → `socket.remoteAddress` → forwarded headers. It prefers the address the runtime computed — Express derives `req.ip`
 from `trust proxy`, Fastify from `trustProxy` — because raw forwarded headers
 are client-**spoofable** on deployments that do not normalize them. It falls back
-to `cf-connecting-ip` / `x-forwarded-for` / `x-real-ip` only for runtimes that
-compute no address (notably the web/edge entry), then to the node socket.
+to the node socket address next, and consults `cf-connecting-ip` /
+`x-forwarded-for` / `x-real-ip` only when neither exists (notably the web/edge
+entry) — a spoofable header must never outrank a real connection address.
 
 That resolution already existed inside the rate-limit guard; it now lives on the
 context and the guard reuses it rather than keeping a second copy.

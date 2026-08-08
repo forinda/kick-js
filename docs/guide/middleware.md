@@ -244,7 +244,7 @@ Two consequences to write for:
   `req.originalUrl`, `req.path`, and `req.ip` are absent on the raw node
   request — use `req.url`, or `ctx.ip` where a `RequestContext` is in scope.
 
-`res` is a {@link RuntimeResponse} on every engine, so `status`, `json`,
+`res` is a `RuntimeResponse` on every engine, so `status`, `json`,
 `send`, `setHeader`, `render`, `writeHead`, and `end` are all available.
 When omitted, the built-in handlers are used.
 
