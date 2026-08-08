@@ -1,5 +1,175 @@
 # @forinda/kickjs
 
+## 7.1.0
+
+### Minor Changes
+
+- [#518](https://github.com/forinda/kick-js/pull/518) [`b2669ed`](https://github.com/forinda/kick-js/commit/b2669edb63be20f68a55baccd91680e41303b632) Thanks [@forinda](https://github.com/forinda)! - Add `ctx.ip` and `ctx.redirect()` — engine-neutral versions of two Express-only patterns
+
+  The guide reached for `ctx.req.ip` and `ctx.res.redirect()` because there was
+  nothing neutral to use. Both are engine-native: `req.ip` is Express-only, and
+  `res.redirect()` exists on Express and Fastify but not h3. Documentation had to
+  carry "this breaks on X" caveats instead of showing portable code.
+
+  **`ctx.ip`** resolves `req.ip` → `socket.remoteAddress` → forwarded headers. It prefers the address the runtime computed — Express derives `req.ip`
+  from `trust proxy`, Fastify from `trustProxy` — because raw forwarded headers
+  are client-**spoofable** on deployments that do not normalize them. It falls back
+  to the node socket address next, and consults `cf-connecting-ip` /
+  `x-forwarded-for` / `x-real-ip` only when neither exists (notably the web/edge
+  entry) — a spoofable header must never outrank a real connection address.
+
+  That resolution already existed inside the rate-limit guard; it now lives on the
+  context and the guard reuses it rather than keeping a second copy.
+
+  **`ctx.redirect(url, status = 302)`** writes the status and `Location` header
+  through the runtime response surface, so it works everywhere. Its docblock warns
+  against passing an unvalidated user-supplied URL — an attacker-controlled
+  destination is an open redirect.
+
+  Sweeping the same pattern turned up three shipped middlewares reading Express-only
+  members, all of which receive the RAW node request under Fastify and h3:
+
+  - **`rateLimit`** keyed every caller as its `'127.0.0.1'` fallback, because
+    `req.ip` is undefined there — a single shared bucket, so one client could
+    exhaust the limit for everyone. It now resolves the address the same way
+    `ctx.ip` does.
+  - **`csrf`** matched `ignorePaths` against `req.path`, which is undefined, so
+    `has(undefined)` never matched and configured exemptions were silently dead.
+    (It failed closed, so CSRF stayed enforced — the feature simply did nothing.)
+  - **`requestLogger`** THREW `Cannot read properties of undefined (reading
+'startsWith')` on every request once any `skip` prefix was configured, and
+    logged `GET undefined 200 12ms` otherwise.
+
+  The resolution lives in one place (`http/client-ip.ts`) rather than a fourth
+  copy drifting from the others.
+
+  The socket is consulted **before** forwarded headers. A raw Fastify or h3 request
+  has no `req.ip`, so reading `x-forwarded-for` first let a direct client vary the
+  header per request and land in a fresh rate-limit bucket each time, evading the
+  limit entirely. Headers are used only where there is no socket at all — the
+  web/edge entry. Behind a real proxy, configure the runtime's trust-proxy setting
+  so `req.ip` answers rather than relying on an unverified header.
+
+- [#518](https://github.com/forinda/kick-js/pull/518) [`7d16ebd`](https://github.com/forinda/kick-js/commit/7d16ebd13911c547bcdd86954828c8b640e4ea12) Thanks [@forinda](https://github.com/forinda)! - `onError` / `onNotFound`: document what each runtime actually passes
+
+  The docblock called `onError` "the standard Express error-handling signature".
+  That holds on exactly one of the three runtimes:
+
+  |         | `req`            | `res`             | `next`      |
+  | ------- | ---------------- | ----------------- | ----------- |
+  | Express | native `Request` | native `Response` | real `next` |
+  | Fastify | `request.raw`    | reply driver      | **no-op**   |
+  | h3      | `event.node.req` | response driver   | no-op       |
+
+  Two consequences that were undocumented and bite silently:
+
+  - **`next(err)` does nothing on Fastify and h3.** It is bound to an inert
+    function (`const NOOP_NEXT = (): void => {}`), so a handler that delegates to
+    the default handler drops the error instead.
+  - **Express-only request members are `undefined` elsewhere.** A handler reading
+    `req.originalUrl` — as the shipped example did — logs `undefined` on two of
+    three engines.
+
+  `res` is now typed `RuntimeResponse` rather than `any`, which is what every
+  engine genuinely provides (`status`, `json`, `send`, `setHeader`, `render`,
+  `writeHead`, `end`); Express's own `Response` satisfies it. `next` is typed
+  `(err?: unknown) => void`. `req` stays permissive because it genuinely differs
+  per engine, and the docblock now says how.
+
+  A handler using Express-only _response_ members (`res.locals`, and anything
+  outside `RuntimeResponse`) will now fail to compile. That is the point: those
+  members are absent at runtime on Fastify and h3.
+
+- [#514](https://github.com/forinda/kick-js/pull/514) [`d0f62bf`](https://github.com/forinda/kick-js/commit/d0f62bf7ea049f072bbcac77d7042de0f2166784) Thanks [@forinda](https://github.com/forinda)! - `ctx.paginate()` returns its payload, so response inference is exact
+
+  `paginate` ended with `return this.json(response)`, handing back the engine's
+  `RuntimeResponse`. The documented usage is `return ctx.paginate(...)`, so
+  typegen emitted `response: RuntimeResponse` into `KickRoutes[...].response` and
+  `@forinda/kickjs-client` offered `.status()` / `.setHeader()` where the caller
+  expected `data` and `meta`.
+
+  It now sends as before **and** returns the payload, typed
+  `Promise<PaginatedResponse<T>>`. That routes it through the same return-value
+  inference that already handles `return user` and `return reply(201, user)`,
+  rather than adding a second mechanism beside `reply`. Handlers that call
+  `paginate` without returning it still respond — the runtimes only auto-send a
+  returned value when nothing was written (`if (!res.headersSent)`), so there is
+  no double send.
+
+  `InferHandlerResponse` also maps a bare `RuntimeResponse` to `unknown`. A
+  handler ending `return ctx.json(user)` previously emitted the engine response
+  object into client types — confidently wrong rather than merely imprecise, and
+  contradicting typegen's own comment that imperative handlers "degrade to
+  unknown". They now do. To carry a payload type, return the value or wrap it
+  with `reply`.
+
+### Patch Changes
+
+- [#517](https://github.com/forinda/kick-js/pull/517) [`2acc2e9`](https://github.com/forinda/kick-js/commit/2acc2e92344a3c25acabbcf1de781478255f62cf) Thanks [@forinda](https://github.com/forinda)! - Generated guards, middleware, and the default error handler stop assuming Express
+
+  Three places emitted or ran Express-only code under a framework that advertises
+  a pluggable engine. All three were invisible because the default runtime is
+  Express.
+
+  **`kick g middleware`** emitted `import type { Request, Response, NextFunction }
+from 'express'`. A Fastify or h3 scaffold has neither `express` nor
+  `@types/express` — it installs `fastify` + `@fastify/middie` — so that was a
+  compile error on a freshly generated file. Now typed from `node:http`, which is
+  what the connect-style handler actually receives on every engine.
+
+  **`kick g guard`** emitted `ctx.res.status(401).json(...)`. `ctx.res` is the
+  ENGINE-NATIVE response: `FastifyReply` has no `.json()` (verified against
+  Fastify's own types) and h3's event has no `.status()`. Now uses
+  `ctx.problem.unauthorized({ detail })` — RFC 9457, engine-neutral, and what the
+  error-branch guidance in the controllers guide already teaches.
+
+  **The default `errorHandler()`** read `req.originalUrl`, which only Express
+  adds. Fastify and h3 pass `request.raw`, so every error logged
+  `GET undefined — <error>`: the path silently dropped from the one line meant to
+  identify the failing request. It now falls back to `req.url`, and both it and
+  `notFoundHandler()` are typed from node / `RuntimeResponse` rather than Express.
+
+- [#519](https://github.com/forinda/kick-js/pull/519) [`2f3a453`](https://github.com/forinda/kick-js/commit/2f3a453f1ca40972e202ad6ea6ef612dd505f0f1) Thanks [@forinda](https://github.com/forinda)! - Dispose the previous app on HMR rebuild instead of leaking it
+
+  `bootstrap()` keeps the live app on `globalThis.__app`, and the reload path
+  already tested for it — then replaced it without tearing it down:
+
+  ```ts
+  if (g.__app) {
+    const freshApp = new Application(options);
+    g.__app = freshApp; // old one dropped, still running
+  }
+  ```
+
+  `shutdown()` ran only from the `SIGINT` / `SIGTERM` handler, so in a dev session
+  every save added another live adapter set on top of the last.
+
+  Seen in production dev environments as a single API process holding several
+  Kafka consumer-group members. On a single-partition topic only one member can
+  hold the assignment, and it was a leaked consumer from an earlier reload wired
+  to nothing — so queued jobs silently stopped being processed, and the group had
+  never committed an offset. The same leak put two socket.io servers on one HTTP
+  server, crashing `handleUpgrade()`.
+
+  `Application.shutdown()` gains `{ closeServer?: boolean }`, and the reload path
+  passes `false`. That distinction is load-bearing: in dev the HTTP server is
+  shared across rebuilds via `globalThis.__kickjs_httpServer`, so a full shutdown
+  would close the listening socket and kill HMR on the first save. Adapters,
+  plugins, and disposables are torn down; the socket stays up. In-flight draining
+  is skipped too — the server keeps serving, so there is nothing to drain toward.
+
+  Teardown failures are logged rather than thrown, so one broken adapter cannot
+  leave the dev server with no app at all.
+
+  Plugins are torn down alongside adapters — `shutdown()` step 3 always ran both,
+  so a plugin holding a timer or connection leaked identically.
+
+  Docs: the HMR guide previously listed database pools, Redis clients, and the
+  Socket.IO server as _preserved across HMR_. They were not preserved so much as
+  abandoned, which is the bug. They are now rebuilt, and the guide says so, along
+  with what an adapter must do to be restartable — release the handle **and clear
+  the reference**, since the same instance is often mounted again.
+
 ## 7.0.0
 
 ### Major Changes
