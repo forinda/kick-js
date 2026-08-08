@@ -184,6 +184,46 @@ describe('shutdown({ closeServer: false }) — the HMR teardown path', () => {
  * rebuild". Calling it twice in one process is exactly what a dev-server save
  * does, so this counts how many adapter sets are left running.
  */
+describe('a wedged shutdown hook cannot stall the reload', () => {
+  /** An adapter whose shutdown never settles — socket.io's `io.close(cb)` with a client still connected. */
+  const hangingAdapter = (): AppAdapter => ({
+    name: 'Hanging',
+    shutdown: () => new Promise<void>(() => {}),
+  })
+
+  it('gives up on a hook that never settles and finishes the teardown', async () => {
+    const app = new Application({
+      modules: [],
+      adapters: [hangingAdapter()],
+      port: 0,
+      shutdownTimeout: 50,
+    })
+    await app.setup()
+
+    // Without the per-hook time-box this never resolves: `allSettled` waits
+    // on a promise with no path to settle, so every save wedges forever with
+    // no app and no error.
+    await expect(app.shutdown({ closeServer: false })).resolves.toBeUndefined()
+  })
+
+  it('still runs the other adapters when one hangs', async () => {
+    const log: string[] = []
+    const app = new Application({
+      modules: [],
+      adapters: [hangingAdapter(), countingAdapter(log, 'Kafka')],
+      port: 0,
+      shutdownTimeout: 50,
+    })
+    await app.setup()
+
+    await app.shutdown({ closeServer: false })
+
+    // A wedged neighbour must not cost the Kafka consumer its teardown —
+    // that leak is the whole reason this path runs at all.
+    expect(log).toContain('Kafka:shutdown')
+  })
+})
+
 describe('bootstrap() HMR rebuild', () => {
   const g = globalThis as unknown as {
     __app?: unknown
