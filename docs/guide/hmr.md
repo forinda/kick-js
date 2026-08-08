@@ -1,6 +1,6 @@
 # Hot Module Replacement (HMR)
 
-KickJS uses Vite's HMR to provide zero-downtime reloading during development. When you save a file, the Express handler is rebuilt and swapped on the existing HTTP server. Database pools, Redis connections, and port bindings survive across reloads.
+KickJS uses Vite's HMR to provide zero-downtime reloading during development. When you save a file, the handler is rebuilt and swapped on the existing HTTP server, so the port binding and open TCP connections survive across reloads. Anything an adapter or plugin owns — database pools, Redis clients, queue consumers — is torn down and rebuilt, because the previous app's `shutdown()` runs first. Only resources outside the adapter/plugin lifecycle persist.
 
 ## How It Works
 
@@ -17,7 +17,7 @@ import { modules } from './modules'
 bootstrap({ modules })
 ```
 
-On the first call, `bootstrap()` creates the application, registers error/shutdown handlers, and starts the HTTP server. On subsequent calls (triggered by HMR), it **tears the previous app down**, rebuilds the Express app, and swaps the request handler on the existing server — no restart needed.
+On the first call, `bootstrap()` creates the application and registers error/shutdown handlers. In dev, Vite owns the `http.Server` and exposes it as `globalThis.__kickjs_httpServer`; `bootstrap()` attaches to that server rather than creating or listening on its own. (Outside dev, with no such global, it does create and listen.) On subsequent calls (triggered by HMR), it **tears the previous app down**, rebuilds the Express app, and swaps the request handler on the existing server — no restart needed.
 
 ### What Is Preserved
 
@@ -30,8 +30,8 @@ On the first call, `bootstrap()` creates the application, registers error/shutdo
 |                        | Controller / service instances |
 |                        | Adapters and plugins           |
 
-The HTTP server is created once and never recreated. Only the request handler is
-swapped, so existing connections and listeners remain intact.
+The HTTP server is created once — by Vite in dev — and never recreated. Only the
+request handler is swapped, so existing connections and listeners remain intact.
 
 Everything an adapter or plugin owns — database pools, Redis clients, Socket.IO
 servers, message-queue consumers — is **rebuilt**, because the previous app's
