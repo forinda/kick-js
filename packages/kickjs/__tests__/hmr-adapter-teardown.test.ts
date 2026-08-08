@@ -22,9 +22,10 @@
  */
 import 'reflect-metadata'
 import http from 'node:http'
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Container } from '../src/index'
 import { Application } from '../src/http/application'
+import { Logger } from '../src/core'
 import type { AppAdapter, KickPlugin } from '../src/core'
 
 function countingAdapter(log: string[], name = 'Counting'): AppAdapter {
@@ -220,6 +221,76 @@ describe('a wedged shutdown hook cannot stall the reload', () => {
 
     // A wedged neighbour must not cost the Kafka consumer its teardown —
     // that leak is the whole reason this path runs at all.
+    expect(log).toContain('Kafka:shutdown')
+  })
+})
+
+describe('time-box edge cases', () => {
+  it('does not warn about a hook that finished in time', async () => {
+    const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => {})
+    try {
+      const app = new Application({
+        modules: [],
+        adapters: [countingAdapter([], 'Fast')],
+        port: 0,
+        shutdownTimeout: 30,
+      })
+      await app.setup()
+      await app.shutdown({ closeServer: false })
+
+      // Outlive the budget. `Promise.race` left the timer armed, so the
+      // warning fired here — accusing a hook that had already finished.
+      await new Promise((r) => setTimeout(r, 80))
+      expect(warn.mock.calls.flat().join(' ')).not.toContain('did not finish shutting down')
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('treats shutdownTimeout: 0 as no budget, not a zero-ms one', async () => {
+    const log: string[] = []
+    // Must be ASYNC to discriminate: a synchronous hook finishes before any
+    // timer can fire, so it passes either way and proves nothing.
+    const slowAdapter: AppAdapter = {
+      name: 'Kafka',
+      shutdown: async () => {
+        await new Promise((r) => setTimeout(r, 20))
+        log.push('Kafka:shutdown')
+      },
+    }
+    const app = new Application({
+      modules: [],
+      adapters: [slowAdapter],
+      port: 0,
+      shutdownTimeout: 0,
+    })
+    await app.setup()
+
+    // `Math.min(0, 5000)` is 0, so a zero-ms timer beat the hook and
+    // shutdown returned early — the exact opposite of "no forced exit".
+    await app.shutdown({ closeServer: false })
+    expect(log).toContain('Kafka:shutdown')
+  })
+
+  it('isolates a hook that throws synchronously', async () => {
+    const log: string[] = []
+    const exploding: AppAdapter = {
+      name: 'Exploding',
+      shutdown: () => {
+        throw new Error('sync boom')
+      },
+    }
+    const app = new Application({
+      modules: [],
+      adapters: [exploding, countingAdapter(log, 'Kafka')],
+      port: 0,
+      shutdownTimeout: 50,
+    })
+    await app.setup()
+
+    // The throw used to escape at the argument site, before `allSettled`
+    // could wrap it — taking the whole teardown down with it.
+    await expect(app.shutdown({ closeServer: false })).resolves.toBeUndefined()
     expect(log).toContain('Kafka:shutdown')
   })
 })
