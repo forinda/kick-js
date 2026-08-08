@@ -127,19 +127,43 @@ interface KickPluginInstance {
 }
 ```
 
-| Method           | When it runs                   | Use Case                                                                                  |
-| ---------------- | ------------------------------ | ----------------------------------------------------------------------------------------- |
-| `dependsOn`      | Topo-sorted at boot            | Names of other plugins that must mount first — see [Ordering](#plugin-ordering-dependson) |
-| `register()`     | Before modules load            | Bind services in DI                                                                       |
-| `modules()`      | Before user modules (static)   | Add feature modules — array form, statically introspectable                               |
-| `setup()`        | After `modules()`, before user | Conditionally `.mount(module)` based on captured config / env / runtime                   |
-| `adapters()`     | Before user adapters           | Add lifecycle adapters                                                                    |
-| `middleware()`   | Before user middleware         | Add global middleware                                                                     |
-| `contributors()` | Per-route, at mount            | Ship typed [Context Contributors](./context-decorators.md) the plugin owns                |
-| `onReady()`      | After server starts            | Post-startup tasks                                                                        |
-| `shutdown()`     | On SIGINT/SIGTERM              | Cleanup resources                                                                         |
-| `introspect()`   | DevTools poll                  | Snapshot of plugin state for the DevTools dashboard (counters, flags, tokens)             |
-| `devtoolsTabs()` | DevTools mount                 | Plugin-owned tabs rendered inside the DevTools UI                                         |
+| Method           | When it runs                     | Use Case                                                                                  |
+| ---------------- | -------------------------------- | ----------------------------------------------------------------------------------------- |
+| `dependsOn`      | Topo-sorted at boot              | Names of other plugins that must mount first — see [Ordering](#plugin-ordering-dependson) |
+| `register()`     | Before modules load              | Bind services in DI                                                                       |
+| `modules()`      | Before user modules (static)     | Add feature modules — array form, statically introspectable                               |
+| `setup()`        | After `modules()`, before user   | Conditionally `.mount(module)` based on captured config / env / runtime                   |
+| `adapters()`     | Before user adapters             | Add lifecycle adapters                                                                    |
+| `middleware()`   | Before user middleware           | Add global middleware                                                                     |
+| `contributors()` | Per-route, at mount              | Ship typed [Context Contributors](./context-decorators.md) the plugin owns                |
+| `onReady()`      | After server starts              | Post-startup tasks                                                                        |
+| `shutdown()`     | On shutdown AND every HMR reload | Release what the plugin owns                                                              |
+| `introspect()`   | DevTools poll                    | Snapshot of plugin state for the DevTools dashboard (counters, flags, tokens)             |
+| `devtoolsTabs()` | DevTools mount                   | Plugin-owned tabs rendered inside the DevTools UI                                         |
+
+### Shutdown discipline
+
+`shutdown()` runs on a real shutdown **and on every HMR reload** — in dev it is
+a hot path, not an exit-only courtesy. Two rules follow:
+
+**Release only what the plugin owns.** Never close the shared HTTP server. In
+dev that is Vite's listener; closing it leaves the port dead with no rebind,
+and since the process stays alive it presents as a hang rather than a crash.
+The framework closes that server itself on a real shutdown. Adapters hit this
+most often via socket.io — see
+[Shutdown discipline](./adapters.md#shutdown-discipline) for the full example.
+
+**Make it settle.** Each hook is time-boxed — `shutdownTimeout` on a real
+shutdown, `min(shutdownTimeout, 5s)` on a reload — and one that overruns is
+logged by name and skipped so it cannot stall its siblings:
+
+```
+WARN  Plugin 'Realtime' did not finish shutting down within 5000ms —
+      continuing without it. Its resources may still be held.
+```
+
+That warning is a bug report about the plugin. The budget keeps the dev server
+alive; it does not release the resource.
 
 ### `modules()` vs `setup()`
 

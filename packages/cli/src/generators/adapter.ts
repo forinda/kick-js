@@ -181,11 +181,18 @@ export const ${pascal}Adapter = defineAdapter<${pascal}AdapterConfig>({
       },
 
       /**
-       * Runs on graceful shutdown (SIGINT/SIGTERM). Clean up long-lived
-       * resources the adapter owns: close connections, flush buffers,
-       * cancel timers. The framework runs every adapter's \`shutdown\`
-       * concurrently via \`Promise.allSettled\` — one failure won't block
-       * sibling adapters.
+       * Runs on graceful shutdown AND on every HMR reload. Clean up
+       * long-lived resources the adapter OWNS: close connections, flush
+       * buffers, cancel timers.
+       *
+       * Close only what you own — \`ctx.server\` is shared (in dev it is
+       * Vite's listener), and closing it kills the dev server with no
+       * rebind. socket.io's \`io.close()\` does this; use
+       * \`io.engine.close()\` to detach instead.
+       *
+       * The framework runs every adapter's \`shutdown\` concurrently via
+       * \`Promise.allSettled\`, each time-boxed — one failure or hang won't
+       * block sibling adapters.
        *
        * Delete this hook if your adapter holds no resources.
        */

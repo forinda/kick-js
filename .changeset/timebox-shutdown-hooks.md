@@ -29,3 +29,9 @@ teardown.
 
 A reload that ends with the shared server no longer listening now logs an
 explicit error naming the cause, instead of failing silently.
+
+Documents the rule this exposed: `shutdown()` runs on every HMR reload, and an
+adapter or plugin must release only what it owns — never the shared HTTP
+server. Covered in the adapter and plugin guides, the `AppAdapter` /
+`KickPlugin` type docs, and both generator scaffolds, which previously said
+`shutdown()` runs on SIGINT/SIGTERM only.

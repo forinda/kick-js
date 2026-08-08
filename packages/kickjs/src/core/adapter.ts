@@ -223,7 +223,21 @@ export interface AppAdapter {
    */
   onHealthCheck?(): Promise<{ name: string; status: 'up' | 'down' }>
 
-  /** Called on shutdown — clean up connections */
+  /**
+   * Called on shutdown — release what this adapter owns.
+   *
+   * Runs on a real shutdown AND on **every HMR reload**, so treat it as a hot
+   * path in dev, not an exit-only courtesy.
+   *
+   * Close only what you own. The `server` from {@link AdapterContext} is
+   * SHARED — in dev it is Vite's listener — and closing it takes the dev
+   * server down with no way to rebind. `io.close()` on a socket.io server
+   * does exactly that; detach with `io.engine.close()` instead. The framework
+   * closes the shared server itself on a real shutdown.
+   *
+   * Time-boxed: `shutdownTimeout` on a real shutdown, `min(shutdownTimeout,
+   * 5s)` on a reload. Overruns are logged by name and skipped.
+   */
   shutdown?(): MaybePromise
 
   /**
