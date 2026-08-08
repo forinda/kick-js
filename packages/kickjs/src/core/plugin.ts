@@ -181,8 +181,18 @@ export interface KickPlugin {
   onReady?(container: Container): void | Promise<void>
 
   /**
-   * Called during application shutdown.
-   * Clean up plugin resources (connections, intervals, etc.).
+   * Called during application shutdown — release what this plugin owns
+   * (connections, intervals, subscriptions).
+   *
+   * Runs on a real shutdown AND on **every HMR reload**, so it is a hot path
+   * in dev, not an exit-only courtesy.
+   *
+   * Close only what you own. Never close the shared HTTP server: in dev it is
+   * Vite's listener, and closing it leaves the port dead with no rebind. The
+   * framework closes it itself on a real shutdown.
+   *
+   * Time-boxed: `shutdownTimeout` on a real shutdown, `min(shutdownTimeout,
+   * 5s)` on a reload. Overruns are logged by name and skipped.
    */
   shutdown?(): void | Promise<void>
 

@@ -37,6 +37,16 @@ Everything an adapter or plugin owns — database pools, Redis clients, Socket.I
 servers, message-queue consumers — is **rebuilt**, because the previous app's
 `shutdown()` runs before the new one starts.
 
+::: warning Your `shutdown()` now runs on every save
+Because teardown runs per reload, an adapter that closes the **shared** HTTP
+server takes the dev server down on the first save and it never rebinds — the
+process stays alive, so it looks like a hang, not a crash. `io.close()` on a
+socket.io server does exactly this.
+
+Close only what your adapter owns. See
+[Shutdown discipline](./adapters.md#shutdown-discipline).
+:::
+
 ::: warning This changed
 Adapter-held resources used to be described as preserved. They were not
 preserved so much as **abandoned**: the old app was replaced without being shut

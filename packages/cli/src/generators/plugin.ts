@@ -64,7 +64,7 @@ export interface ${pascal}PluginConfig {
  *   4. \`middleware()\`         — plugin middleware runs before user middleware.
  *   5. \`contributors()\`       — Context Contributors merged into every route.
  *   6. \`onReady(container)\`   — runs after the app has fully bootstrapped.
- *   7. \`shutdown()\`           — runs on graceful shutdown.
+ *   7. \`shutdown()\`           — on shutdown AND every HMR reload.
  *
  * @example
  * \`\`\`ts
@@ -161,8 +161,10 @@ export const ${pascal}Plugin = definePlugin<${pascal}PluginConfig>({
     },
 
     /**
-     * Called during graceful shutdown. Clean up any long-lived
-     * resources this plugin owns (connections, timers, subscriptions).
+     * Called during graceful shutdown AND on every HMR reload. Clean up
+     * long-lived resources this plugin OWNS (connections, timers,
+     * subscriptions). Never close the shared HTTP server — in dev that is
+     * Vite's listener and it will not rebind.
      */
     async shutdown(): Promise<void> {
       // Example: await this.connection?.close()

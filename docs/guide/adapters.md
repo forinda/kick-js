@@ -118,7 +118,72 @@ The `Application.setup()` method executes these steps in order:
 10. **Error handlers** -- notFound + global error handler
 11. **Adapter `beforeStart` hooks**
 
-After setup, when the HTTP server starts listening, `afterStart` is called. On shutdown, all adapter `shutdown` methods run concurrently via `Promise.allSettled` -- one failure does not block others.
+After setup, when the HTTP server starts listening, `afterStart` is called. On shutdown, all adapter `shutdown` methods run concurrently via `Promise.allSettled` -- one failure does not block others, and each hook is time-boxed so one that never settles cannot stall the others (see [Shutdown discipline](#shutdown-discipline) below).
+
+## Shutdown discipline
+
+**Close only what your adapter owns.** The `server` handed to `afterStart` is
+shared -- it belongs to the application, and in dev it belongs to Vite. Closing
+it from an adapter takes down the whole process's listener.
+
+This matters more than it looks, because adapter `shutdown()` runs on **every
+HMR reload**, not just on exit. A hook that is merely impolite at process exit
+becomes a hook that fires on every file save.
+
+### The socket.io trap
+
+`io.close()` is the canonical way to get this wrong:
+
+```ts
+// ✗ Wrong — two separate failures, both fatal in dev
+async shutdown() {
+  await new Promise<void>((resolve) => io.close(() => resolve()))
+}
+```
+
+1. `io.close()` **closes the HTTP server socket.io was constructed with**. In
+   dev that is Vite's listener. Nothing rebinds it, so every request after the
+   first save is `ECONNREFUSED` -- and because the process stays alive, it
+   reads as a hang rather than a crash.
+2. The callback fires only once **every client has disconnected**. One open
+   browser tab and the promise never settles, so the reload never finishes.
+
+Detach instead. `engine.close()` disconnects the clients and removes the
+`upgrade` / `request` listeners engine.io attached -- everything the adapter
+actually owns -- while leaving the server listening:
+
+```ts
+// ✓ Right — releases what the adapter owns, leaves the server alone
+async shutdown() {
+  io.disconnectSockets(true)
+  io.engine.close()
+  io.removeAllListeners()
+}
+```
+
+The same rule covers any `ws` / engine.io / GraphQL-WS server built on the
+shared `server`. On a real shutdown the framework closes that server itself, so
+an adapter never needs to.
+
+### Hooks are time-boxed
+
+Each `shutdown()` gets its own budget: `shutdownTimeout` (default 30s) on a real
+shutdown, or `min(shutdownTimeout, 5s)` on an HMR reload -- waiting the full
+timeout on every save would be unusable. A hook that overruns is logged by name
+and skipped:
+
+```
+WARN  Adapter 'Realtime' did not finish shutting down within 5000ms —
+      continuing without it. Its resources may still be held.
+```
+
+The remaining hooks still run, so one wedged adapter does not cost its
+neighbours their teardown. Treat that warning as a bug in the adapter: the
+budget keeps the dev server alive, it does not release the resource.
+
+If a reload ends with the shared server no longer listening, the framework logs
+an error naming the likely cause -- a silent dead port is the worst failure mode
+a dev server can have.
 
 ## Writing a Custom Adapter
 
