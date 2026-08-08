@@ -1075,27 +1075,50 @@ export class Application {
       //
       // A reload gets a much shorter budget than a real shutdown — nobody
       // wants to wait `shutdownTimeout` (30s by default) per keystroke-save.
+      // `shutdownTimeout: 0` means "no forced exit" for the drain above, so it
+      // disables the per-hook budget too. Anything else would invert the
+      // setting: `Math.min(0, 5_000)` is a ZERO-ms budget, which fires before
+      // any hook can settle and silently skips every cleanup there is.
       const hookTimeoutMs = closeServer ? timeoutMs : Math.min(timeoutMs, 5_000)
-      const timeBoxed = (label: string, hook: unknown): Promise<unknown> =>
-        Promise.race([
-          Promise.resolve(hook),
-          new Promise<undefined>((resolve) => {
-            const t = setTimeout(() => {
-              log.warn(
-                `${label} did not finish shutting down within ${hookTimeoutMs}ms — continuing without it. ` +
-                  `Its resources may still be held.`,
-              )
-              resolve(undefined)
-            }, hookTimeoutMs)
-            t.unref()
-          }),
-        ])
+      const timeBoxed = (label: string, run: () => unknown): Promise<unknown> => {
+        // Invoke inside the promise: a hook that throws SYNCHRONOUSLY would
+        // otherwise escape at the argument site, before `allSettled` wraps it,
+        // taking down the whole teardown instead of just its own entry.
+        const hook = (async () => run())()
+        if (hookTimeoutMs <= 0) return hook
+        return new Promise<unknown>((resolve, reject) => {
+          const t = setTimeout(() => {
+            log.warn(
+              `${label} did not finish shutting down within ${hookTimeoutMs}ms — continuing without it. ` +
+                `Its resources may still be held.`,
+            )
+            resolve(undefined)
+          }, hookTimeoutMs)
+          t.unref()
+          // Clear on BOTH paths. `Promise.race` alone leaves the timer armed,
+          // so a hook that finished promptly still logged a timeout warning
+          // once the budget elapsed — on the reload path that is a false
+          // accusation after every save.
+          hook.then(
+            (value) => {
+              clearTimeout(t)
+              resolve(value)
+            },
+            (err) => {
+              clearTimeout(t)
+              reject(err)
+            },
+          )
+        })
+      }
 
       const wasListening = this.httpServer?.listening === true
       const results = await Promise.allSettled([
-        ...this.plugins.map((plugin) => timeBoxed(`Plugin '${plugin.name}'`, plugin.shutdown?.())),
+        ...this.plugins.map((plugin) =>
+          timeBoxed(`Plugin '${plugin.name}'`, () => plugin.shutdown?.()),
+        ),
         ...this.adapters.map((adapter) =>
-          timeBoxed(`Adapter '${adapter.name}'`, adapter.shutdown?.()),
+          timeBoxed(`Adapter '${adapter.name}'`, () => adapter.shutdown?.()),
         ),
       ])
 
