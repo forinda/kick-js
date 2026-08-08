@@ -76,7 +76,11 @@ describe('shutdown({ closeServer: false }) — the HMR teardown path', () => {
     g.__kickjs_httpServer = server
     try {
       const app = new Application({ modules: [], adapters: [], port: 0 })
-      await app.setup()
+      // `start()`, not `setup()` — only `start()` adopts the shared
+      // `__kickjs_httpServer`. Under `setup()` `app.httpServer` stays undefined,
+      // so `closeServer` is never reached and this passed even when the flag
+      // was ignored outright.
+      await app.start()
 
       await app.shutdown({ closeServer: false })
 
@@ -186,16 +190,34 @@ describe('bootstrap() HMR rebuild', () => {
     __kickBootstrapped?: boolean
     __kickjs_container?: unknown
     __kickjs_httpServer?: http.Server
+    __kickjs_app_shutdown?: unknown
   }
-  let saved: typeof g
+  // Every global `bootstrap()`/`start()` touch, not just the two this suite
+  // sets itself — `__kickjs_container` and `__kickjs_app_shutdown` are written
+  // as a side effect, and leaving either behind hands the next test file a
+  // stale container or a shutdown hook bound to a dead app.
+  const GLOBAL_KEYS = [
+    '__app',
+    '__kickBootstrapped',
+    '__kickjs_container',
+    '__kickjs_httpServer',
+    '__kickjs_app_shutdown',
+  ] as const
+  let saved: Partial<Record<(typeof GLOBAL_KEYS)[number], unknown>>
 
   beforeEach(() => {
-    saved = { __app: g.__app, __kickBootstrapped: g.__kickBootstrapped }
+    saved = {}
+    for (const k of GLOBAL_KEYS) saved[k] = g[k]
     delete g.__app
   })
   afterEach(() => {
-    g.__app = saved.__app
-    g.__kickBootstrapped = saved.__kickBootstrapped
+    for (const k of GLOBAL_KEYS) {
+      // Restore absence as absence — assigning `undefined` leaves the key
+      // present, and `if (g.__kickjs_httpServer)` reads differently from
+      // a key that was never set.
+      if (saved[k] === undefined) delete (g as Record<string, unknown>)[k]
+      else (g as Record<string, unknown>)[k] = saved[k]
+    }
   })
 
   it('shuts the previous app down before replacing it', async () => {
@@ -207,19 +229,17 @@ describe('bootstrap() HMR rebuild', () => {
     await new Promise<void>((resolve) => server.listen(0, resolve))
     g.__kickjs_httpServer = server
 
-    try {
-      const opts = () => ({ modules: [], adapters: [countingAdapter(log, 'Kafka')], port: 0 })
-      await bootstrap(opts())
-      // The "save a file" moment.
-      await bootstrap(opts())
+    // No try/finally — the suite-level afterEach restores
+    // `__kickjs_httpServer` to whatever it was, which `delete` did not do.
+    const opts = () => ({ modules: [], adapters: [countingAdapter(log, 'Kafka')], port: 0 })
+    await bootstrap(opts())
+    // The "save a file" moment.
+    await bootstrap(opts())
 
-      // Previously: two live adapter sets, zero shutdowns — one leaked
-      // consumer per reload.
-      expect(log.filter((l) => l === 'Kafka:shutdown')).toHaveLength(1)
-      // And the shared dev server must survive the rebuild.
-      expect(server.listening).toBe(true)
-    } finally {
-      delete g.__kickjs_httpServer
-    }
+    // Previously: two live adapter sets, zero shutdowns — one leaked
+    // consumer per reload.
+    expect(log.filter((l) => l === 'Kafka:shutdown')).toHaveLength(1)
+    // And the shared dev server must survive the rebuild.
+    expect(server.listening).toBe(true)
   })
 })
