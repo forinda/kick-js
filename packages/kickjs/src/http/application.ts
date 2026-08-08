@@ -1064,11 +1064,53 @@ export class Application {
         }
       }
 
-      // Step 3: Run all plugin + adapter shutdowns concurrently
+      // Step 3: Run all plugin + adapter shutdowns concurrently.
+      //
+      // Each hook is time-boxed INDIVIDUALLY. An unbounded `allSettled` here
+      // means one hook that never settles wedges the whole shutdown, and on
+      // the reload path that leaves the dev server with no app and no error —
+      // it just stops rebuilding. Seen with a socket.io adapter calling
+      // `io.close(cb)`: that callback fires only once every client
+      // disconnects, so a single open browser tab hung every save forever.
+      //
+      // A reload gets a much shorter budget than a real shutdown — nobody
+      // wants to wait `shutdownTimeout` (30s by default) per keystroke-save.
+      const hookTimeoutMs = closeServer ? timeoutMs : Math.min(timeoutMs, 5_000)
+      const timeBoxed = (label: string, hook: unknown): Promise<unknown> =>
+        Promise.race([
+          Promise.resolve(hook),
+          new Promise<undefined>((resolve) => {
+            const t = setTimeout(() => {
+              log.warn(
+                `${label} did not finish shutting down within ${hookTimeoutMs}ms — continuing without it. ` +
+                  `Its resources may still be held.`,
+              )
+              resolve(undefined)
+            }, hookTimeoutMs)
+            t.unref()
+          }),
+        ])
+
+      const wasListening = this.httpServer?.listening === true
       const results = await Promise.allSettled([
-        ...this.plugins.map((plugin) => Promise.resolve(plugin.shutdown?.())),
-        ...this.adapters.map((adapter) => Promise.resolve(adapter.shutdown?.())),
+        ...this.plugins.map((plugin) => timeBoxed(`Plugin '${plugin.name}'`, plugin.shutdown?.())),
+        ...this.adapters.map((adapter) =>
+          timeBoxed(`Adapter '${adapter.name}'`, adapter.shutdown?.()),
+        ),
       ])
+
+      // A reload must leave the shared dev server listening. If a hook closed
+      // it, every later request is ECONNREFUSED and the port never comes back
+      // — with nothing in the log to say why. socket.io's `close()` does
+      // exactly this: it closes the HTTP server it was constructed with.
+      if (!closeServer && wasListening && this.httpServer?.listening === false) {
+        log.error(
+          'An adapter or plugin closed the shared HTTP server during an HMR reload. ' +
+            'The dev server is now unreachable and will not rebind until you restart it. ' +
+            "Close only what you own: socket.io's `io.close()` closes the HTTP server passed " +
+            'to its constructor — on a reload, disconnect the sockets instead.',
+        )
+      }
       for (const result of results) {
         if (result.status === 'rejected') {
           log.error({ err: result.reason }, 'Adapter shutdown failed')
