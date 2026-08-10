@@ -123,7 +123,13 @@ export function generatePackageJson(
       dependencies: baseDeps,
       devDependencies: {
         '@forinda/kickjs-cli': take(versions, '@forinda/kickjs-cli'),
+        // The generated AGENTS.md and the `write-controller-test` skill both
+        // tell you to test with `createTestApp` + supertest. Shipping those
+        // instructions without the packages means the first test a reader
+        // writes fails on a missing import.
+        '@forinda/kickjs-testing': take(versions, '@forinda/kickjs-testing'),
         '@forinda/kickjs-vite': take(versions, '@forinda/kickjs-vite'),
+        '@types/supertest': '^7.2.1',
         '@swc/core': '^1.15.21',
         // Express types only when Express is the engine (it's the only runtime
         // that imports `express` in src/index.ts).
@@ -131,6 +137,7 @@ export function generatePackageJson(
         '@types/node': '^25.0.0',
         'unplugin-swc': '^1.5.9',
         vite: '^8.0.3',
+        supertest: '^7.2.2',
         vitest: '^4.1.2',
         typescript: '^7.0.2',
         prettier: '^3.8.1',
