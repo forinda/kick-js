@@ -59,6 +59,18 @@ export interface AugmentationMeta {
 }
 
 /**
+ * @deprecated Since 7.2. This was tooling for a time when Context
+ * Contributors were still settling — a catalogue so adopters could discover
+ * which interfaces were augmentable. Contributors are a stable, typed API now
+ * (`defineContextDecorator`, `ContextMeta`), and the catalogue adds a second
+ * call that must be kept in step with the `declare module` block for no
+ * type-level benefit.
+ *
+ * Nothing breaks: existing calls still emit their catalogue entry and
+ * `kick typegen` still scans for them. Just drop the call — the
+ * `declare module '@forinda/kickjs'` block alone gives you the types, which
+ * is all it ever gave you.
+ *
  * Advertise an augmentable interface so `kick typegen` can list it in
  * `.kickjs/types/augmentations.d.ts` for project-wide discovery.
  *

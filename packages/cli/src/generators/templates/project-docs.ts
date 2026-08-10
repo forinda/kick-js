@@ -445,7 +445,7 @@ If not using generators:
 - [ ] Create \`src/modules/<name>/<name>.controller.ts\`
 - [ ] Add \`@Controller()\` decorator
 - [ ] Add route handlers with \`@Get()\`, \`@Post()\`, etc.
-- [ ] Create module file with \`defineModule({ name, build: () => ({ routes() { return { path, controller } } }) })\` — the framework derives the Express router from the controller. Class-form (\`class XModule implements AppModule\`) is the legacy alternative; toggle via \`kick.config.ts > modules.style\`.
+- [ ] Create module file with \`defineModule({ name, build: () => ({ routes() { return { path, controller } } }) })\` — the framework derives the router from the controller, on whichever engine is active. Class-form (\`class XModule implements AppModule\`) is the legacy alternative; toggle via \`kick.config.ts > modules.style\`.
 - [ ] Register module in \`src/modules/index.ts\`. Default form is the fluent chain: \`defineModules().mount(MyModule()).mount(...)\`. \`kick g module <name>\` appends \`.mount(NewModule())\` automatically.
 - [ ] Test with \`kick dev\`
 
@@ -460,7 +460,7 @@ If not using generators:
 ### New Middleware
 
 - [ ] Create \`src/middleware/<name>.middleware.ts\`
-- [ ] Export middleware function (Express format)
+- [ ] Export middleware function (connect signature \`(req, res, next)\` — the same on every engine)
 - [ ] Register in \`src/index.ts\` or attach to routes with \`@Middleware()\`
 - [ ] Test with sample requests
 
@@ -512,15 +512,16 @@ bootstrap({
 })
 \`\`\`
 
-### Add Database (Prisma)
+### Add a Database
+
+\`inmemory\` is the only built-in repository preset. \`--repo <anything-else>\`
+scaffolds a generic repository stub you wire to your own client — that includes
+\`prisma\` and \`drizzle\`, whose dedicated generators are **deprecated**; they now
+emit the same stub as any other name plus a deprecation note.
 
 \`\`\`bash
-kick add prisma
-${pm} install prisma @prisma/client
-npx prisma init
-# Edit prisma/schema.prisma
-npx prisma migrate dev --name init
-kick g module user --repo prisma
+# Install your DB client however you normally would, then:
+kick g module user --repo postgres    # any name — generates a stub to wire up
 \`\`\`
 
 ### Add WebSocket Support
@@ -754,7 +755,7 @@ Full guide: <https://kickjs.app/guide/context-decorators>.
 
 > **Note:** When using \`kick new\` in scripts or CI, pass \`-t\` (or \`--template\`), \`-r\` (or \`--repo\`), and \`--runtime express|fastify|h3\` to bypass interactive prompts:
 > \`\`\`bash
-> kick new my-api -t ddd -r prisma --runtime fastify --pm ${pm} --no-git --no-install -f
+> kick new my-api -t ddd -r postgres --runtime fastify --pm ${pm} --no-git --no-install -f
 > \`\`\`
 
 ## Learn More
@@ -1113,6 +1114,8 @@ export const modules = defineModules().mount(HelloModule()).mount(UsersModule())
 
 // src/middleware/index.ts — global middleware uses RAW EXPRESS signature
 //                            (req, res, next), NOT (ctx, next)
+// \`express.json()\` is auto-skipped on Fastify and h3, which parse bodies
+// natively — harmless to list, but don't reach for it as the body parser there.
 export const middleware = [requestId(), express.json(), helmet(), cors(), traceContext()]
 
 // src/plugins/index.ts
@@ -1163,13 +1166,8 @@ declare module '@forinda/kickjs' {
   }
 }
 
-// Optionally publish discoverability for tooling (Swagger, DevTools)
-defineAugmentation('ContextMeta', {
-  description: 'Per-request tenant resolved from x-tenant-id header.',
-  // \`example\` is a TS SNIPPET STRING, not an object literal — an object
-  // here is a type error against \`AugmentationMeta\`.
-  example: \`{ id: string; name: string }\`,
-})
+// The \`declare module\` block above is all you need. \`defineAugmentation\` is
+// DEPRECATED — it only added a typegen catalogue entry, never any types.
 
 const LoadTenant = defineHttpContextDecorator({
   key: 'tenant',
@@ -1206,7 +1204,7 @@ Same-key collisions WITHIN a precedence level throw \`DuplicateContributorError\
 **Critical rules — all stem from the same shared-via-ALS instance model**:
 - Every per-request stage (middleware → contributors → handler) gets its OWN \`RequestContext\` instance, but they all read/write the SAME \`AsyncLocalStorage\`-backed bag.
 - **\`resolve\` and \`onError\` must RETURN the value** — the runner writes it via \`ctx.set(key, value)\`. Direct property assignment (\`ctx.tenant = …\`) sticks to one instance only and the handler instance never sees it.
-- \`ctx.set('tenant', x)\` then \`ctx.get('tenant')\` works across instances. \`ctx.req.headers[...]\` works (the underlying Express request is shared).
+- \`ctx.set('tenant', x)\` then \`ctx.get('tenant')\` works across instances. \`ctx.req.headers[...]\` works (the underlying node request is shared). Note it is a node \`IncomingMessage\` on Fastify and h3, not an \`express.Request\`.
 - Services with no \`ctx\` reference: \`getRequestValue('tenant')\` returns \`MetaValue<'tenant'> | undefined\` (typed via the augmented \`ContextMeta\`). For \`requestId\` use \`getRequestStore()\`.
 - **No \`setRequestValue\` — writes flow through \`ctx.set\` or a contributor's return value.** Avoids "spooky action at a distance" where any service can pollute the per-request bag.
 
@@ -1223,7 +1221,7 @@ Same-key collisions WITHIN a precedence level throw \`DuplicateContributorError\
 - A \`paramDefaults\` value that every call site overrides (\`action: 'settings:read'\`) — drop it and let the compiler require the field at each site.
 - \`defineContextDecorator<'k', Deps, Params>(spec)\` positional form for a parameterised contributor — use \`.withParams<Params>()(spec)\` or \`deps\` inference is lost.
 - \`ctx.tenant = x\` instead of returning the value from \`resolve\` — sticks to one instance only.
-- \`defineAugmentation\` without the \`declare module\` block (or vice-versa) — discoverability and types drift apart; \`ctx.get('tenant')\` becomes \`unknown\`.
+- Reaching for \`defineAugmentation\` — deprecated, and it never affected types. The \`declare module\` block alone is what makes \`ctx.get('tenant')\` typed.
 - Plugin / adapter authors using bare keys (\`'state'\`) instead of namespaced (\`'@my-plugin/state'\`) — collides with adopter keys.
 - \`getRequestValue<string>('traceId')\` — generic is the **key** type, not value type.`,
     },
@@ -1365,7 +1363,7 @@ kick g scaffold Post title:string body:text:optional   # Shell-safe optional fie
 kick g agents -f --only skills                         # Refresh just the skills after upgrade
 kick add queue:bullmq                                  # Package + peer deps (bullmq + ioredis) in one shot
 kick inspect --port 4000 --json                        # Machine-readable route/adapter dump
-kick g config --force --repo drizzle                   # Drop a kick.config.ts into a legacy project
+kick g config --force --repo postgres                  # Drop a kick.config.ts into a legacy project
 \`\`\`
 
 **Lesser-known, high-value**:
@@ -1443,7 +1441,7 @@ Customisation goes in \`.local.md\` siblings (\`AGENTS.local.md\`, \`skills/<slu
 
 **Context contributors**:
 - \`ctx.tenant = x\` from a contributor — only sticks to one \`RequestContext\` instance. **Return the value** so the runner writes it via \`ctx.set(key, value)\`.
-- \`defineAugmentation('ContextMeta', ...)\` without the matching \`declare module '@forinda/kickjs'\` block (or vice-versa).
+- Omitting the \`declare module '@forinda/kickjs'\` block — without it \`ctx.get('tenant')\` is \`unknown\`. (\`defineAugmentation\` is deprecated and was never a substitute for it.)
 - \`getRequestValue<string>('traceId')\` — generic is the **key** type, not value type.
 
 **Env / config**:
@@ -1747,7 +1745,7 @@ value that fails open. Use \`ctx.require()\` — same read, loud failure.
 **Critical rules — all stem from the same shared-via-ALS instance model**:
 - Every per-request stage (middleware → contributors → handler) gets its OWN \`RequestContext\` instance, but they all read/write the SAME \`AsyncLocalStorage\`-backed bag.
 - **\`resolve\` and \`onError\` must RETURN the value** — the runner writes it via \`ctx.set(key, value)\`. Direct property assignment (\`ctx.tenant = …\`) sticks to one instance only and the handler instance never sees it.
-- \`ctx.set('tenant', x)\` then \`ctx.get('tenant')\` works across instances. \`ctx.req.headers[...]\` works (the underlying Express request is shared).
+- \`ctx.set('tenant', x)\` then \`ctx.get('tenant')\` works across instances. \`ctx.req.headers[...]\` works (the underlying node request is shared). Note it is a node \`IncomingMessage\` on Fastify and h3, not an \`express.Request\`.
 - Services with no \`ctx\` reference: \`getRequestValue('tenant')\` returns \`MetaValue<'tenant'> | undefined\` (typed via the augmented \`ContextMeta\`). For \`requestId\` use \`getRequestStore()\`.
 - **No \`setRequestValue\` — writes flow through \`ctx.set\` or a contributor's return value.** Avoids "spooky action at a distance" where any service can pollute the per-request bag.
 
