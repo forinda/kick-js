@@ -89,14 +89,10 @@ const envSchemaNotRegistered: KnownIssue = {
     // `src/index.ts`, so the entry's `import './config'` cannot run no matter
     // how correct it is — sending someone to inspect the entry file here is
     // sending them to the one place that already looks right.
-    const inTest = includesAny(input, [
-      'vitest',
-      'test',
-      'spec',
-      '__tests__',
-      '.test.',
-      'createTestApp',
-    ])
+    // Deliberately NOT bare 'test' / 'spec': `includesAny` is substring
+    // matching, so those fire on 'latest', 'unspecified', 'manifest' — routing
+    // ordinary production errors to the test-only fix.
+    const inTest = includesAny(input, ['vitest', 'createTestApp', '__tests__', '.test.', '.spec.'])
     if (inTest) {
       return {
         confidence: 85,
@@ -157,7 +153,14 @@ const envSchemaNotRegistered: KnownIssue = {
 
 const containerNotReset: KnownIssue = {
   match(input, _ctx) {
-    const hasTestContext = includesAny(input, ['vitest', 'test', 'spec', '__tests__', '.test.'])
+    // Same substring caveat as above — 'latest' must not read as test context.
+    const hasTestContext = includesAny(input, [
+      'vitest',
+      'createTestApp',
+      '__tests__',
+      '.test.',
+      '.spec.',
+    ])
     const hasDuplicate = includesAny(input, [
       'already registered',
       'already exists',

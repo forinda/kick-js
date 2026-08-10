@@ -477,7 +477,7 @@ defineHttpContextDecorator({
 
 > **Deprecated.** `defineAugmentation` does nothing at runtime or at the type level — the `declare module '@forinda/kickjs' { … }` block alone gives you the augmentation, and the catalogue it feeds is documentation-only. Prefer a plain `declare module` block with a JSDoc comment on your own interface. `defineAugmentation` and the `kick/augmentations` typegen plugin will be removed in a future major.
 
-Plugins advertise augmentable interfaces by calling `defineAugmentation('Name', meta)` — a runtime no-op that exists purely for `kick typegen` to discover:
+Kept for compatibility: plugins written before this was deprecated advertise augmentable interfaces by calling `defineAugmentation('Name', meta)`, a runtime no-op that exists purely for `kick typegen` to discover. New code should use a `declare module` block with JSDoc instead.
 
 ```ts
 import { defineAugmentation } from '@forinda/kickjs'
@@ -490,11 +490,7 @@ defineAugmentation('FeatureFlags', {
 })
 ```
 
-::: warning `defineAugmentation` is deprecated
-Context Contributors are a stable typed API now, so this catalogue no longer earns the second call it requires. It never affected types — the `declare module` block does that. Existing calls still generate their entry.
-:::
-
-Each call surfaces in `.kickjs/types/kick__augmentations.d.ts` as an empty `<Name>Augmentation` marker interface carrying the description, an example snippet, and a `@see` link back to the source file. Adopters jumping into one file see every augmentable interface their plugins offer rather than grepping each plugin's README.
+Each call surfaces in `.kickjs/types/kick__augmentations.d.ts` as an empty `<Name>Augmentation` marker interface carrying the description, an example snippet, and a `@see` link back to the source file. That was the point: adopters saw every augmentable interface in one file rather than grepping each plugin's README. JSDoc on the augmented interface now covers the same ground without a second call to keep in sync.
 
 ## Limitations
 
