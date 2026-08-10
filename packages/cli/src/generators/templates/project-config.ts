@@ -161,7 +161,7 @@ export function generatePackageJson(
  */
 export function generateViteConfig(): string {
   return `import { defineConfig } from 'vite'
-import { resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import swc from 'unplugin-swc'
 import { kickjsVitePlugin, envWatchPlugin } from '@forinda/kickjs-vite'
 
@@ -176,7 +176,7 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      '@': resolve(__dirname, 'src'),
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
   build: {
@@ -185,7 +185,7 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: true,
     rollupOptions: {
-      input: resolve(__dirname, 'src/index.ts'),
+      input: fileURLToPath(new URL('./src/index.ts', import.meta.url)),
       output: { format: 'esm' },
     },
   },
@@ -344,28 +344,23 @@ LOG_LEVEL=silent
 
 /** Generate vitest.config.ts for test configuration */
 export function generateVitestConfig(): string {
-  return `import { defineConfig } from 'vitest/config'
-import { resolve } from 'node:path'
-import swc from 'unplugin-swc'
+  return `import { defineConfig, mergeConfig } from 'vitest/config'
+import viteConfig from './vite.config.ts'
 
-export default defineConfig({
-  plugins: [swc.vite()],
-  // Must mirror the alias in vite.config.ts and the \`paths\` block in
-  // tsconfig.json. Vitest does NOT read tsconfig paths, so without this an
-  // \`@/…\` import type-checks and builds but fails only under test — the
-  // worst place to find out. \`kick g module --repo prisma\` emits these when
-  // \`prismaClientPath\` is set to the Prisma 7 default of
-  // \`@/generated/prisma/client\`.
-  resolve: {
-    alias: {
-      '@': resolve(__dirname, 'src'),
+// A \`vitest.config.ts\` OVERRIDES \`vite.config.ts\` outright — vitest does not
+// merge the two, and it never reads tsconfig \`paths\`. Restating settings here
+// would mean the \`@\` alias lives in three files and drifts in two of them, so
+// merge the real config instead: the alias, plugins, and ssr externals all come
+// from one place.
+export default mergeConfig(
+  viteConfig,
+  defineConfig({
+    test: {
+      globals: true,
+      environment: 'node',
+      include: ['src/**/*.test.ts'],
     },
-  },
-  test: {
-    globals: true,
-    environment: 'node',
-    include: ['src/**/*.test.ts'],
-  },
-})
+  }),
+)
 `
 }
