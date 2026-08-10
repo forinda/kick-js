@@ -72,6 +72,24 @@ describe('known-issues registry', () => {
     expect(m!.confidence).toBeGreaterThanOrEqual(70)
   })
 
+  it('routes the same symptom to the TEST cause when the input smells of a test', () => {
+    const m = findBestMatch(
+      "vitest: ConfigService.get('MY_KEY') returned undefined in user.test.ts",
+    )
+    expect(m).not.toBeNull()
+    // Without the test branch this matched `env-schema-not-registered` and told
+    // the reader to add `import './config'` to src/index.ts — where it already
+    // is. `createTestApp` never loads the entry file, so the entry cannot be
+    // the cause here.
+    expect(m!.diagnosis.id).toBe('env-schema-not-registered-in-test')
+    expect(m!.diagnosis.codeAfter).toContain("import '@/config'")
+  })
+
+  it('keeps the entry-file diagnosis when there is no test context', () => {
+    const m = findBestMatch("config.get('DATABASE_URL') returned undefined")
+    expect(m!.diagnosis.id).toBe('env-schema-not-registered')
+  })
+
   it('matches reflect-metadata-missing for the canonical error', () => {
     const m = findBestMatch('TypeError: Reflect.getMetadata is not a function')
     expect(m).not.toBeNull()

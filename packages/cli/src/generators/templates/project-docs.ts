@@ -1071,7 +1071,12 @@ async create(ctx: Ctx<KickRoutes.TodoController['create']>) {
       frontmatterName: 'kickjs-env-wiring-check',
       description:
         "Use when ConfigService.get('SOME_KEY') returns undefined or @Value silently falls back to process.env.",
-      body: `**Diagnosis (in order)**:
+      body: `**Fastest path**: \`kick explain "ConfigService.get('MY_KEY') returned undefined"\` —
+pipe a failing run straight in if you prefer (\`pnpm test 2>&1 | kick explain\`). It
+distinguishes the entry-file cause from the test-file one, which is the step most
+people lose time on. The manual checks below are the same reasoning.
+
+**Diagnosis (in order)**:
 1. Open \`src/index.ts\`. The **first non-\`reflect-metadata\`** import MUST be \`import './config'\`.
 2. Open \`src/config/index.ts\`. It MUST run the loader as a top-level side effect — not just declare the schema. This is what \`kick new\` generates:
    \`\`\`ts

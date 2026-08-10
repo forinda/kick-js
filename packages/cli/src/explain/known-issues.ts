@@ -85,6 +85,46 @@ const envSchemaNotRegistered: KnownIssue = {
 
     if (!hasConfigGetUndefined && !hasValueUndefined) return null
 
+    // Same symptom, different cause under test. `createTestApp` never loads
+    // `src/index.ts`, so the entry's `import './config'` cannot run no matter
+    // how correct it is — sending someone to inspect the entry file here is
+    // sending them to the one place that already looks right.
+    const inTest = includesAny(input, [
+      'vitest',
+      'test',
+      'spec',
+      '__tests__',
+      '.test.',
+      'createTestApp',
+    ])
+    if (inTest) {
+      return {
+        confidence: 85,
+        diagnosis: {
+          id: 'env-schema-not-registered-in-test',
+          title: 'ConfigService.get() returns undefined inside a test',
+          explanation:
+            'The env schema is registered by a module-load side effect in\n' +
+            'src/config/index.ts, and src/index.ts imports it before bootstrap().\n' +
+            'Tests never load src/index.ts — `createTestApp` builds the app\n' +
+            'directly — so that import does not run and ConfigService falls back to\n' +
+            'the base schema. @Value() still reads through to process.env, so the\n' +
+            'app and its tests disagree and only the tests are wrong.',
+          fix: 'Import the side-effect module in the test file itself:',
+          codeBefore:
+            "import { createTestApp } from '@forinda/kickjs-testing'\n" +
+            '\n' +
+            'const { expressApp } = await createTestApp({ modules: [UserModule] })\n',
+          codeAfter:
+            "import { createTestApp } from '@forinda/kickjs-testing'\n" +
+            "import '@/config'  // ← registers the env schema, as src/index.ts does\n" +
+            '\n' +
+            'const { expressApp } = await createTestApp({ modules: [UserModule] })\n',
+          docs: 'https://kickjs.app/guide/configuration.html#wiring-the-schema-at-startup',
+        },
+      }
+    }
+
     return {
       confidence: hasConfigGetUndefined && hasValueUndefined ? 90 : 75,
       diagnosis: {

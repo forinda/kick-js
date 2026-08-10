@@ -51,3 +51,10 @@ That skill also showed `loadEnv(envSchema)` with `defineEnv` while the scaffold
 generates `loadEnvFromSchema` with `fromZod`, so anyone following it saw code
 that did not match their project. Both forms are valid; the skill now shows the
 generated one.
+
+`kick explain` shared the blind spot and now branches on it. Given a
+config-undefined error with test context, it previously returned the
+entry-file diagnosis — "add `import './config'` to src/index.ts" — which is
+already true in that scenario, so the tool pointed at the one file that looked
+correct. It now returns a test-specific diagnosis, and the env-wiring skill
+leads with `kick explain` rather than the manual checklist.
