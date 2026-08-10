@@ -111,7 +111,7 @@ Same job, different ergonomics. Each line below maps a middleware pain point to 
 - **Per-route override** — middleware is global: every route pays the cost, no opt-out per endpoint. Contributors have five precedence levels (method > class > module > adapter > global) — override per-route without forking the stack.
 - **Transport-agnostic** — middleware is HTTP-only; WebSocket / queue / cron use different lifecycles. `defineContextDecorator` registrations reuse across every ctx the pipeline supports.
 - **Plugin distribution** — middleware authors ship `app.use(myMiddleware())` and hope you call it in the right spot. Contributor authors ship `MyAdapter` (which registers via `contributors?()`) AND the raw decorator — adopters pick the ergonomic.
-- **Augmentation surface** — middleware leaks via `declare global { namespace Express { interface Request { ... } } }` across every handler in the app. `ContextMeta` augmentation is typed; `defineAugmentation` advertises it in the typegen catalogue for discovery.
+- **Augmentation surface** — middleware leaks via `declare global { namespace Express { interface Request { ... } } }` across every handler in the app. `ContextMeta` augmentation is typed via `declare module`.
 - **Error handling** — middleware throw → 500 unless you wrote `try/catch` around every middleware. Contributors expose `optional: true` (skip silently) + `onError` (typed fallback value).
 - **Per-route opt-out** — "remove the rate-limit middleware on `/health`" forces forking the stack or path-checking inside. Mount `@SkipRateLimit` at method level — higher precedence wins, adapter's registration silently drops for that one route.
 
@@ -529,9 +529,9 @@ In practice, the file pattern looks like this:
 
 ```ts
 // src/adapters/tenant.adapter.ts
-import { defineAdapter, defineAugmentation, defineHttpContextDecorator } from '@forinda/kickjs'
+import { defineAdapter, defineHttpContextDecorator } from '@forinda/kickjs'
 
-// (1) The actual augmentation — TypeScript reads this and gives you
+// The augmentation — TypeScript reads this and gives you
 // `ctx.get('tenant')` typed as `{ id: string; name: string; ... }`.
 declare module '@forinda/kickjs' {
   interface ContextMeta {
@@ -543,29 +543,6 @@ declare module '@forinda/kickjs' {
     }
   }
 }
-
-// (2) Catalogue entry — `kick typegen` lists this in
-// `.kickjs/types/kick__augmentations.d.ts` so other devs (and future-you)
-// can browse every augmentable surface without grepping.
-//
-// `description` and `example` may both be multi-line — typegen
-// preserves newlines when rendering the JSDoc. Drop in entire shape
-// definitions or worked snippets, not just one-liners.
-defineAugmentation('ContextMeta', {
-  description: `Tenant resolved from the x-tenant-id header by TenantAdapter.
-
-  Set on every request that survives the auth/tenant middleware chain.
-  Read with \`ctx.get('tenant')\` in handlers; \`getRequestValue('tenant')\`
-  in services that don't hold a ctx reference.`,
-  example: `{
-    tenant: {
-      id: string
-      name: string
-      plan: 'free' | 'pro' | 'enterprise'
-      featureFlags: Record<string, boolean>
-    }
-  }`,
-})
 
 const LoadTenant = defineHttpContextDecorator({
   key: 'tenant',
@@ -582,11 +559,8 @@ export const TenantAdapter = defineAdapter({
 
 Three traps to avoid:
 
-- **`defineAugmentation` alone is not enough.** It's documentation. Without the `declare module` block, `ctx.get('tenant')` is typed `unknown` and you'll cast at every read site.
-- **`declare module` alone works fine** — it's only the catalogue entry you give up. If your project doesn't use the catalogue, skip `defineAugmentation`.
+- **`declare module` is the whole mechanism.** It is what makes `ctx.get('tenant')` typed; without it you cast at every read site. (`defineAugmentation` never typed anything and is deprecated — safe to drop.)
 - **Augmenting the wrong module** — `ContextMeta` lives in `@forinda/kickjs`. `AuthUser` lives in `@forinda/kickjs-auth`. The `declare module '...'` string must match the package the interface was originally declared in, or the augmentation is silently a no-op.
-
-For huge shapes, both `description` and `example` accept multi-line strings — typegen splits on newlines and renders each line as proper JSDoc, so the catalogue stays readable for entire interface bodies, not just one-liners.
 
 ### When the same registration runs at multiple levels
 
@@ -908,7 +882,7 @@ The pattern most reusable packages will follow — expose both the registration 
 
 ```ts
 // packages/geo/src/index.ts
-import { defineAdapter, defineAugmentation, defineHttpContextDecorator } from '@forinda/kickjs'
+import { defineAdapter, defineHttpContextDecorator } from '@forinda/kickjs'
 
 declare module '@forinda/kickjs' {
   interface ContextMeta {
@@ -920,12 +894,6 @@ declare module '@forinda/kickjs' {
     }
   }
 }
-
-defineAugmentation('ContextMeta', {
-  description:
-    'Geolocation resolved from CDN headers (Cloudflare / Fastly / Vercel) by GeoAdapter.',
-  example: `{ geo: { country: string | null; city: string | null; latitude: number | null; longitude: number | null } }`,
-})
 
 const ResolveGeo = defineHttpContextDecorator({
   key: 'geo',
@@ -1008,13 +976,6 @@ declare module '@forinda/kickjs' {
     tenantDb: KickDbClient
   }
 }
-
-import { defineAugmentation } from '@forinda/kickjs'
-
-defineAugmentation('ContextMeta', {
-  description: 'Per-request tenant identity + tenant-scoped Postgres client.',
-  example: `ctx.get('tenantDb')`,
-})
 ```
 
 #### Tenant registry + connection pool — DI services
