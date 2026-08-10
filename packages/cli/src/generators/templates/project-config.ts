@@ -345,10 +345,22 @@ LOG_LEVEL=silent
 /** Generate vitest.config.ts for test configuration */
 export function generateVitestConfig(): string {
   return `import { defineConfig } from 'vitest/config'
+import { resolve } from 'node:path'
 import swc from 'unplugin-swc'
 
 export default defineConfig({
   plugins: [swc.vite()],
+  // Must mirror the alias in vite.config.ts and the \`paths\` block in
+  // tsconfig.json. Vitest does NOT read tsconfig paths, so without this an
+  // \`@/…\` import type-checks and builds but fails only under test — the
+  // worst place to find out. \`kick g module --repo prisma\` emits these when
+  // \`prismaClientPath\` is set to the Prisma 7 default of
+  // \`@/generated/prisma/client\`.
+  resolve: {
+    alias: {
+      '@': resolve(__dirname, 'src'),
+    },
+  },
   test: {
     globals: true,
     environment: 'node',

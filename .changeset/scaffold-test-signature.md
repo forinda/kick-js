@@ -22,3 +22,10 @@ alongside `@types/supertest`.
 
 A test in `@forinda/kickjs-testing` now pins the documented call shape, so the
 docs and the API cannot drift apart again silently.
+
+The generated `vitest.config.ts` also lacked the `@` path alias that
+`vite.config.ts` and `tsconfig.json` both declare. Vitest does not read
+tsconfig `paths`, so an `@/…` import type-checked and built but failed only
+under test with `Cannot find package '@/…'` — including the
+`@/generated/prisma/client` imports `kick g module --repo prisma` emits on
+Prisma 7. All three now agree, with a test pinning the parity.
