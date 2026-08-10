@@ -556,6 +556,12 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import request from 'supertest'
 import { Container } from '@forinda/kickjs'
 import { createTestApp } from '@forinda/kickjs-testing'
+// Side-effect import — registers the env schema, exactly as src/index.ts does.
+// \`createTestApp\` never loads the entry file, so without this
+// \`ConfigService.get('YOUR_KEY')\` is undefined under test while \`@Value()\`
+// still appears to work via its process.env fallback — the two disagree only
+// in tests.
+import '@/config'
 
 describe('UserController', () => {
   // Module registration lands on the GLOBAL container even when
@@ -1013,6 +1019,12 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import request from 'supertest'
 import { Container } from '@forinda/kickjs'
 import { createTestApp } from '@forinda/kickjs-testing'
+// Side-effect import — registers the env schema, exactly as src/index.ts does.
+// \`createTestApp\` never loads the entry file, so without this
+// \`ConfigService.get('YOUR_KEY')\` is undefined under test while \`@Value()\`
+// still appears to work via its process.env fallback — the two disagree only
+// in tests.
+import '@/config'
 
 describe('UserController', () => {
   beforeEach(() => Container.reset()) // isolate DI between tests
@@ -1061,14 +1073,26 @@ async create(ctx: Ctx<KickRoutes.TodoController['create']>) {
         "Use when ConfigService.get('SOME_KEY') returns undefined or @Value silently falls back to process.env.",
       body: `**Diagnosis (in order)**:
 1. Open \`src/index.ts\`. The **first non-\`reflect-metadata\`** import MUST be \`import './config'\`.
-2. Open \`src/config/index.ts\`. It MUST call \`loadEnv(envSchema)\` as a top-level side effect — not just declare the schema:
+2. Open \`src/config/index.ts\`. It MUST run the loader as a top-level side effect — not just declare the schema. This is what \`kick new\` generates:
    \`\`\`ts
-   import { loadEnv, defineEnv } from '@forinda/kickjs'
-   const envSchema = defineEnv((base) => base.extend({ DATABASE_URL: z.string().url() }))
-   export const env = loadEnv(envSchema)
+   import { loadEnvFromSchema } from '@forinda/kickjs/config'
+   import { fromZod } from '@forinda/kickjs-schema/zod'
+   const envSchema = fromZod(z.object({ DATABASE_URL: z.string().url() }))
+   export const env = loadEnvFromSchema(envSchema)
    \`\`\`
+   (\`loadEnv(zodSchema)\` from \`@forinda/kickjs\` is the equivalent for a bare Zod
+   object. Either is fine — what matters is that it RUNS at module load.)
 3. The new key MUST be declared in the Zod schema. \`@Value('NEW_KEY')\` accepts any string at the type level and **falls back to raw \`process.env\`** when the schema doesn't know the key — silently skipping Zod coercion.
 4. After adding a key, re-run \`kick typegen\` (or restart \`kick dev\` if the typegen watcher missed it) so the global \`KickEnv\` augmentation picks it up.
+
+3. **In a test?** \`createTestApp\` never loads \`src/index.ts\`, so the entry's
+   \`import './config'\` never runs no matter how correct it is. The test file
+   must import it itself:
+   \`\`\`ts
+   import '@/config'
+   \`\`\`
+   Symptom is identical to the missing-entry-import case, and step 1 will look
+   fine, which is what makes it slow to spot.
 
 **Why \`@Value\` "works" but \`ConfigService.get\` doesn't**: \`@Value\` has the \`process.env\` fallback that masks missing-side-effect-import bugs; \`ConfigService\` has none. If \`@Value('FOO')\` returns a value but \`ConfigService.get('FOO')\` returns \`undefined\`, the side-effect import of \`./config\` is missing.
 
@@ -1082,7 +1106,7 @@ async create(ctx: Ctx<KickRoutes.TodoController['create']>) {
 - \`dotenv\` is an **optional peer dep** in v5+ — projects upgrading from older versions may need to add it explicitly.
 - For HMR-friendly \`.env\` edits, add \`envWatchPlugin()\` to \`vite.config.ts\` — calls \`reloadEnv()\` automatically.
 
-**Fix recipe**: add the key to the schema; add \`import './config'\` as the first non-reflect-metadata import in \`src/index.ts\`; re-run \`kick typegen\`.`,
+**Fix recipe**: add the key to the schema; add \`import './config'\` as the first non-reflect-metadata import in \`src/index.ts\`; add \`import '@/config'\` to any test that reads config; re-run \`kick typegen\`.`,
     },
     {
       slug: 'bootstrap-export',
@@ -1556,6 +1580,12 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import request from 'supertest'
 import { Container } from '@forinda/kickjs'
 import { createTestApp } from '@forinda/kickjs-testing'
+// Side-effect import — registers the env schema, exactly as src/index.ts does.
+// \`createTestApp\` never loads the entry file, so without this
+// \`ConfigService.get('YOUR_KEY')\` is undefined under test while \`@Value()\`
+// still appears to work via its process.env fallback — the two disagree only
+// in tests.
+import '@/config'
 
 describe('UserController', () => {
   beforeEach(() => Container.reset()) // isolate DI between tests

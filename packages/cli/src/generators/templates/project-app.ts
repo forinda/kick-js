@@ -157,7 +157,7 @@ export const modules = defineModules().mount(HelloModule())
  *
  * Default-exports a `defineEnv(...)` schema so `kick typegen` can
  * infer it into the global `KickEnv` registry, and *also* calls
- * `loadEnv(envSchema)` as a module-load side effect so `ConfigService`
+ * `loadEnvFromSchema(envSchema)` as a module-load side effect so `ConfigService`
  * and `@Value()` see the extended shape from the very first DI
  * resolution. The companion `src/index.ts` template adds
  * `import './config'` immediately after `reflect-metadata` so the
