@@ -23,9 +23,17 @@ alongside `@types/supertest`.
 A test in `@forinda/kickjs-testing` now pins the documented call shape, so the
 docs and the API cannot drift apart again silently.
 
-The generated `vitest.config.ts` also lacked the `@` path alias that
-`vite.config.ts` and `tsconfig.json` both declare. Vitest does not read
-tsconfig `paths`, so an `@/…` import type-checked and built but failed only
-under test with `Cannot find package '@/…'` — including the
-`@/generated/prisma/client` imports `kick g module --repo prisma` emits on
-Prisma 7. All three now agree, with a test pinning the parity.
+The generated `vitest.config.ts` also lost the `@` path alias that
+`tsconfig.json` and `vite.config.ts` declare. A `vitest.config.ts` overrides
+`vite.config.ts` outright — vitest merges nothing and never reads tsconfig
+`paths` — so any `@/…` import type-checked, built, and ran in dev while
+failing only under test with `Cannot find package '@/…'`.
+
+It now merges the vite config via `mergeConfig` rather than restating it, so
+the alias, plugins, and ssr externals have exactly one definition instead of
+three that can drift apart.
+
+Loading the vite config through vitest also surfaced `__dirname`, which does
+not exist under Vite's `configLoader: 'native'` — slated to become the default
+— and warned on every test run. The generated vite config now derives its
+paths from `import.meta.url`, which needs no Node version floor.
