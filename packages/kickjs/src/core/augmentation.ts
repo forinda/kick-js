@@ -36,7 +36,7 @@ export type KickJsPluginName = keyof KickJsPluginRegistry extends never
 /**
  * Metadata attached to a `defineAugmentation` call. The fields are
  * documentation-only — `kick typegen` surfaces them in the generated
- * `.kickjs/types/augmentations.d.ts` so adopters can browse every
+ * `.kickjs/types/kick__augmentations.d.ts` so adopters can browse every
  * augmentable interface from one place.
  *
  * `description` and `example` may both be multi-line — typegen preserves
@@ -66,19 +66,31 @@ export interface AugmentationMeta {
  * call that must be kept in step with the `declare module` block for no
  * type-level benefit.
  *
- * Nothing breaks: existing calls still emit their catalogue entry and
- * `kick typegen` still scans for them. Just drop the call — the
- * `declare module '@forinda/kickjs'` block alone gives you the types, which
- * is all it ever gave you.
+ * Nothing breaks: `kick typegen` still discovers the call and still writes the
+ * catalogue. Just drop it — the `declare module '@forinda/kickjs'` block alone
+ * gives you the types, which is all it ever gave you.
+ *
+ * What it actually emits, for the record: one empty marker interface per call
+ * in `.kickjs/types/kick__augmentations.d.ts` —
+ *
+ * ```ts
+ * // from defineAugmentation('ContextMeta', { description, example })
+ * export interface ContextMetaAugmentation {}
+ * ```
+ *
+ * with your `description` / `example` rendered as its JSDoc and a `@see` back
+ * to the call site. The interface is empty and unreferenced; nothing consumes
+ * it at type level.
  *
  * Advertise an augmentable interface so `kick typegen` can list it in
- * `.kickjs/types/augmentations.d.ts` for project-wide discovery.
+ * `.kickjs/types/kick__augmentations.d.ts` for project-wide discovery.
  *
  * **This function is a runtime AND type-level no-op.** It does NOT
  * augment the interface for TypeScript. The actual augmentation is
  * the `declare module` block — `defineAugmentation` only adds an
- * entry to the typegen catalogue so other contributors / adopters
- * can find the interface and know its expected shape.
+ * entry to the typegen catalogue (`.kickjs/types/kick__augmentations.d.ts`)
+ * so other contributors / adopters can find the interface and know its
+ * expected shape.
  *
  * Both calls are needed:
  *
@@ -93,7 +105,7 @@ export interface AugmentationMeta {
  * }
  *
  * // (2) Catalogue entry — what `kick typegen` lists in
- * //     `.kickjs/types/augmentations.d.ts` for browseability.
+ * //     `.kickjs/types/kick__augmentations.d.ts` for browseability.
  * defineAugmentation('ContextMeta', {
  *   description: 'Tenant resolved from x-tenant-id by TenantAdapter',
  *   example: `{

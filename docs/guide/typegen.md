@@ -490,7 +490,11 @@ defineAugmentation('FeatureFlags', {
 })
 ```
 
-Each call surfaces in `.kickjs/types/augmentations.d.ts` as a documentation-only block with the description, an example snippet, and a `@see` link back to the source file. Adopters jumping into one file see every augmentable interface their plugins offer rather than grepping each plugin's README.
+::: warning `defineAugmentation` is deprecated
+Context Contributors are a stable typed API now, so this catalogue no longer earns the second call it requires. It never affected types — the `declare module` block does that. Existing calls still generate their entry.
+:::
+
+Each call surfaces in `.kickjs/types/kick__augmentations.d.ts` as an empty `<Name>Augmentation` marker interface carrying the description, an example snippet, and a `@see` link back to the source file. Adopters jumping into one file see every augmentable interface their plugins offer rather than grepping each plugin's README.
 
 ## Limitations
 
