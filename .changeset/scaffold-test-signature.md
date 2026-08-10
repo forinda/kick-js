@@ -37,3 +37,17 @@ Loading the vite config through vitest also surfaced `__dirname`, which does
 not exist under Vite's `configLoader: 'native'` — slated to become the default
 — and warned on every test run. The generated vite config now derives its
 paths from `import.meta.url`, which needs no Node version floor.
+
+The generated test templates also never imported the env side-effect module.
+`createTestApp` does not load `src/index.ts`, so the `import './config'` that
+registers the extended env schema never ran under test: `ConfigService.get()`
+returned `undefined` while `@Value()` kept working through its `process.env`
+fallback, so the two disagreed only in tests. The templates now import
+`@/config`, and the env-wiring skill gained a test-specific diagnosis step —
+its existing step 1 checks `src/index.ts`, which looks correct in exactly this
+case.
+
+That skill also showed `loadEnv(envSchema)` with `defineEnv` while the scaffold
+generates `loadEnvFromSchema` with `fromZod`, so anyone following it saw code
+that did not match their project. Both forms are valid; the skill now shows the
+generated one.
