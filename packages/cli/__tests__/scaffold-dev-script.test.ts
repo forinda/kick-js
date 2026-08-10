@@ -15,6 +15,7 @@ describe('scaffolded package.json scripts', () => {
       '@forinda/kickjs': '^5.16.0',
       '@forinda/kickjs-schema': '^0.1.2',
       '@forinda/kickjs-cli': '^6.0.1',
+      '@forinda/kickjs-testing': '^7.0.0',
       '@forinda/kickjs-vite': '^6.0.1',
     }
     const pkg = JSON.parse(generatePackageJson('demo-app', 'minimal', versions))
