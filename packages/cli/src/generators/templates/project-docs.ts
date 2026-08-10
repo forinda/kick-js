@@ -420,220 +420,47 @@ src/
 
 ## Checklist: Adding a Feature
 
-### New Module (Recommended)
-
-Use the CLI generator for consistency:
-
-\`\`\`bash
-kick g module <name>              # Generate full module
-# or
-kick g scaffold <name> <fields>   # Generate CRUD from fields
-\`\`\`
-
-Then:
-- [ ] Review generated files in \`src/modules/<name>/\`
-- [ ] Verify module is registered in \`src/modules/index.ts\`
-- [ ] Update DTOs in \`<name>.dto.ts\` if needed
-- [ ] Implement business logic in \`<name>.service.ts\`
-- [ ] Run \`kick dev\` to test with HMR
-- [ ] Write tests in \`<name>.test.ts\`
-
-### Manual Controller
-
-If not using generators:
-
-- [ ] Create \`src/modules/<name>/<name>.controller.ts\`
-- [ ] Add \`@Controller()\` decorator
-- [ ] Add route handlers with \`@Get()\`, \`@Post()\`, etc.
-- [ ] Create module file with \`defineModule({ name, build: () => ({ routes() { return { path, controller } } }) })\` — the framework derives the router from the controller, on whichever engine is active. Class-form (\`class XModule implements AppModule\`) is the legacy alternative; toggle via \`kick.config.ts > modules.style\`.
-- [ ] Register module in \`src/modules/index.ts\`. Default form is the fluent chain: \`defineModules().mount(MyModule()).mount(...)\`. \`kick g module <name>\` appends \`.mount(NewModule())\` automatically.
-- [ ] Test with \`kick dev\`
-
-### Manual Service
-
-- [ ] Create \`src/modules/<name>/<name>.service.ts\`
-- [ ] Add \`@Service()\` decorator
-- [ ] Inject dependencies with \`@Autowired()\`
-- [ ] Inject via \`@Autowired()\` where needed
-- [ ] Write unit tests
-
-### New Middleware
-
-- [ ] Create \`src/middleware/<name>.middleware.ts\`
-- [ ] Export middleware function (connect signature \`(req, res, next)\` — the same on every engine)
-- [ ] Register in \`src/index.ts\` or attach to routes with \`@Middleware()\`
-- [ ] Test with sample requests
-
-### Adding a Package
-
-Use \`kick add\` to install KickJS packages with correct peer dependencies:
-
-- [ ] Run \`kick add <package>\` (e.g., \`kick add auth\`)
-- [ ] Follow package-specific setup in terminal output
-- [ ] Update \`src/index.ts\` to register adapter (if needed)
-- [ ] Configure environment variables in \`.env\`
-- [ ] Test integration with \`kick dev\`
+Follow the **\`kickjs-add-module\`** skill — it has the ordered steps, the
+canonical \`defineModule\` shape, and the \`import.meta.glob\` requirement that
+silently breaks DI when omitted.
 
 ## Common Tasks
 
-### Generate CRUD Module
+Each of these has a skill with the steps and the traps:
 
-\`\`\`bash
-kick g scaffold user name:string email:string:optional age:number
-\`\`\`
-
-Append \`:optional\` for optional fields (shell-safe, no quoting needed).
-Quoted \`?\` syntax also works: \`"email:string?"\` or \`"email?:string"\`.
-
-This creates a full CRUD module with:
-- Controller with GET, POST, PUT, DELETE routes
-- Service with business logic
-- Repository with data access
-- DTOs with Zod validation
-
-### Add Authentication
-
-\`\`\`bash
-kick add auth
-\`\`\`
-
-Then configure in \`src/index.ts\`:
-
-\`\`\`ts
-import { AuthAdapter, JwtStrategy } from '@forinda/kickjs-auth'
-
-bootstrap({
-  modules,
-  adapters: [
-    AuthAdapter({
-      strategies: [JwtStrategy({ secret: process.env.JWT_SECRET! })],
-    }),
-  ],
-})
-\`\`\`
-
-### Add a Database
-
-\`inmemory\` is the only built-in repository preset. \`--repo <anything-else>\`
-scaffolds a generic repository stub you wire to your own client — that includes
-\`prisma\` and \`drizzle\`, whose dedicated generators are **deprecated**; they now
-emit the same stub as any other name plus a deprecation note.
-
-\`\`\`bash
-# Install your DB client however you normally would, then:
-kick g module user --repo postgres    # any name — generates a stub to wire up
-\`\`\`
-
-### Add WebSocket Support
-
-\`\`\`bash
-kick add ws
-\`\`\`
-
-Then add adapter in \`src/index.ts\`:
-
-\`\`\`ts
-import { WsAdapter } from '@forinda/kickjs-ws'
-
-bootstrap({
-  modules,
-  adapters: [WsAdapter()],
-})
-\`\`\`
-
-Create WebSocket controller:
-
-\`\`\`bash
-kick g controller chat --ws
-\`\`\`
+| Task | Skill |
+| --- | --- |
+| Add a feature module | \`kickjs-add-module\` |
+| Add an adapter | \`kickjs-add-adapter\` |
+| Add a plugin | \`kickjs-add-plugin\` |
+| Add a context contributor | \`kickjs-context-contributor\` |
+| Write a controller test | \`kickjs-write-controller-test\` |
+| List endpoint with filters / pagination | \`kickjs-query-parsing-list-endpoint\` |
+| Serve bundled assets | \`kickjs-use-asset-manager\` |
+| Anything else | \`kickjs-docs-lookup\` |
 
 ## Testing Guidelines
 
-All tests use Vitest:
+See the **\`kickjs-write-controller-test\`** skill for the canonical test — it
+carries the call shape, the DI reset, and the env side-effect import, each of
+which has its own failure mode.
 
-\`\`\`ts
-import { describe, it, expect, beforeEach } from 'vitest'
-import request from 'supertest'
-import { Container } from '@forinda/kickjs'
-import { createTestApp } from '@forinda/kickjs-testing'
-// Side-effect import — registers the env schema, exactly as src/index.ts does.
-// \`createTestApp\` never loads the entry file, so without this
-// \`ConfigService.get('YOUR_KEY')\` is undefined under test while \`@Value()\`
-// still appears to work via its process.env fallback — the two disagree only
-// in tests.
-import '@/config'
-
-describe('UserController', () => {
-  // Module registration lands on the GLOBAL container even when
-  // \`createTestApp\` hands back an isolated one, so reset between tests or
-  // registrations bleed into the next. (Instances registered with
-  // \`registerInstance\`/\`registerFactory\` survive reset on purpose — that is
-  // the HMR persistence store, not a leak.)
-  beforeEach(() => Container.reset())
-
-  it('should return users', async () => {
-    // Options object, NOT a positional array — a bare array throws
-    // "this.options.modules is not iterable" at setup.
-    const { expressApp } = await createTestApp({
-      modules: [UserModule],
-    })
-    // The result has no \`.get()\` — drive the returned app with supertest.
-    const res = await request(expressApp).get('/api/v1/users')
-
-    expect(res.status).toBe(200)
-    expect(res.body).toHaveProperty('users')
-  })
-})
-\`\`\`
-
-Run tests:
-- \`${pm} run test\` — run all tests once
-- \`${pm} run test:watch\` — watch mode
-- Individual file: \`${pm} run test src/modules/user/user.test.ts\`
+Run with \`${pm} run test\` (\`test:watch\` for watch mode).
 
 ## Environment Variables
 
-Schema is declared in \`src/config/index.ts\` (extends the base
-\`PORT\`/\`NODE_ENV\`/\`LOG_LEVEL\` shape via \`defineEnv\`) and registered
-with kickjs at module load. \`src/index.ts\` imports it via
-\`import './config'\` **before** \`bootstrap()\` so the cache is populated
-in time for DI. Add new keys to the schema, drop their values into
-\`.env\`, and they're typed everywhere.
+The schema lives in \`src/config/index.ts\` and registers itself with kickjs **at
+module load**; \`src/index.ts\` imports it (\`import './config'\`) before
+\`bootstrap()\` so the cache is populated before DI resolves anything. Add a key
+to the schema, put its value in \`.env\`, and it is typed everywhere.
 
-Access patterns:
+Read it with \`@Value('KEY')\` for construction-time values, or inject
+\`ConfigService\` for dynamic access.
 
-1. **@Value() decorator** (recommended for known-at-construction keys):
-\`\`\`ts
-@Value('DATABASE_URL')
-private dbUrl!: string
-\`\`\`
-
-2. **ConfigService** (recommended for dynamic / method-scoped access):
-\`\`\`ts
-@Autowired()
-private config!: ConfigService
-
-const port = this.config.get('PORT')  // typed: number
-\`\`\`
-
-3. **Standalone utilities** (no DI — works in scripts, CLI, plain files):
-\`\`\`ts
-import { loadEnv, getEnv, reloadEnv, resetEnvCache } from '@forinda/kickjs/config'
-
-const env = loadEnv(schema)         // Parse + validate all vars
-const port = getEnv('PORT')         // Single value lookup
-reloadEnv()                         // Re-read .env from disk
-resetEnvCache()                     // Full reset (for tests)
-\`\`\`
-
-4. **Direct \`process.env\`** — avoid in app code; bypasses Zod
-   coercion and the typed \`KickEnv\` registry.
-
-> **Pitfall**: never delete \`import './config'\` from \`src/index.ts\`.
-> If the schema is not registered before DI runs, \`config.get()\`
-> returns \`undefined\` for user keys (the base shape only) and
-> \`@Value()\` only works because of its raw \`process.env\` fallback —
-> Zod coercion + schema defaults are silently skipped.
+When a key reads as \`undefined\`, use the **\`kickjs-env-wiring-check\`** skill or
+run \`kick explain "ConfigService.get('KEY') returned undefined"\`. The cause
+differs between app code and tests and the two look identical, which is what
+makes it slow to spot.
 
 ## Standalone Utilities (No DI Required)
 
@@ -733,49 +560,26 @@ Full guide: <https://kickjs.app/guide/context-decorators>.
 
 ## Common Pitfalls
 
-1. **Forgot to register module** — Add to \`src/modules/index.ts\` exports array
-2. **DI not working** — Ensure \`reflect-metadata\` is imported in \`src/index.ts\`
-3. **Tests failing randomly** — Sharing the global container between tests. Default to \`Container.create()\` per test (or per \`beforeEach\`) instead of \`new Container()\` / \`getInstance().reset()\`
-4. **Routes not found** — Check controller path and module registration
-5. **HMR not working** — Two checks: (a) \`vite.config.ts\` has \`hmr: true\`; (b) module file is named \`<name>.module.ts\` (or \`.tsx\`/\`.js\`/\`.jsx\`) and lives under \`src/modules/\`. The Vite plugin auto-discovers \`*.module.[tj]sx?\` for graceful HMR — a misnamed module file (e.g., \`projects.ts\`) silently degrades to a full restart on every save.
-6. **Decorators not working** — Check \`tsconfig.json\` has \`experimentalDecorators: true\`
-7. **\`config.get('YOUR_KEY')\` returns \`undefined\`** — \`src/index.ts\` is missing \`import './config'\`. That side-effect import registers the env schema with kickjs (\`loadEnv(envSchema)\` runs at module load). Without it, \`ConfigService\` falls back to the base schema (\`PORT\`/\`NODE_ENV\`/\`LOG_LEVEL\` only) and every user-defined key reads as \`undefined\`. \`@Value()\` may *appear* to work because of a raw \`process.env\` fallback, but Zod coercion and schema defaults are silently skipped — investigate \`src/index.ts\` and \`src/config/index.ts\` first.
-8. **Used \`@Middleware()\` to compute a value for \`ctx\`** — prefer \`defineContextDecorator()\` (see Context Decorators above). It's typed via \`ContextMeta\`, supports \`dependsOn\` for ordering, and validates the pipeline at boot. \`@Middleware()\` is for response short-circuiting, stream mutation, and pre-route-matching work.
-9. **Context contributor's \`dependsOn\` key not produced anywhere** — boot throws \`MissingContributorError\` naming the dependent and the route. Either remove the dep or register a contributor that produces the key (at any precedence level: method/class/module/adapter/global).
-10. **\`bootstrap()\` not exported** — \`src/index.ts\` calls \`await bootstrap({ ... })\` but discards the return value (no \`export const app = ...\`). Vite HMR can't locate the running instance, so module saves degrade to full restarts; \`createTestApp\`/\`@forinda/kickjs-testing\` consumers can't import the handle either. Always: \`export const app = await bootstrap({ ... })\`.
-11. **Refresh AGENTS.md / CLAUDE.md after a framework upgrade** — these files are scaffolded by the CLI and don't auto-update. Run \`kick g agents -f\` (or \`kick g agent-docs -f\`) to regenerate from the latest CLI templates after \`kick add\` / version bumps. Hand-edited sections will be overwritten — keep customisation in a separate file like \`AGENTS.local.md\`.
+See the **\`kickjs-deny-list\`** skill — the maintained list of things that
+compile, run, and are still wrong.
+
+For a specific failure, \`kick explain "<error message>"\` beats reading either:
+it matches the message against known causes and prints the fix.
 
 ## CLI Commands Reference
 
-| Command | Description |
-|---------|-------------|
-| \`kick dev\` | Dev server with HMR |
-| \`kick dev:debug\` | Dev server with debugger |
-| \`kick build\` | Production build |
-| \`kick start\` | Run production build |
-| \`kick g module <names...>\` | Generate one or more modules |
-| \`kick g scaffold <name> <fields>\` | Generate CRUD |
-| \`kick g controller <name>\` | Generate controller |
-| \`kick g service <name>\` | Generate service |
-| \`kick g middleware <name>\` | Generate middleware |
-| \`kick add <package>\` | Add KickJS package |
-| \`kick add upload\` | Install the multipart upload driver for this project's runtime |
-| \`kick add --list\` | List available packages |
-| \`kick doctor\` | Pre-flight checks — runtime engine peers, upload driver, env wiring |
-| \`kick rm module <names...>\` | Remove one or more modules |
-
-> **Note:** When using \`kick new\` in scripts or CI, pass \`-t\` (or \`--template\`), \`-r\` (or \`--repo\`), and \`--runtime express|fastify|h3\` to bypass interactive prompts:
-> \`\`\`bash
-> kick new my-api -t ddd -r postgres --runtime fastify --pm ${pm} --no-git --no-install -f
-> \`\`\`
+See the **\`kickjs-cli-commands-cheatsheet\`** skill for the full table, the
+shell-safe field syntax, and the non-obvious flags. \`kick --help\` and
+\`kick <cmd> --help\` are authoritative for the installed version.
 
 ## Learn More
 
-- [KickJS Docs](https://kickjs.app/)
-- [CLI Reference](https://kickjs.app/api/cli.html)
-- [Decorators Guide](https://kickjs.app/guide/decorators.html)
-- [DI System](https://kickjs.app/guide/dependency-injection.html)
-- [Testing](https://kickjs.app/api/testing.html)
+Use the **\`kickjs-docs-lookup\`** skill — it maps questions to the right guide
+page and lists the local tools (\`kick explain\`, \`kick doctor\`, \`kick inspect\`,
+\`.kickjs/types/\`) that usually answer faster than a search.
+
+Start at <https://kickjs.app/>.
+
 `
 }
 
@@ -1428,7 +1232,7 @@ kick g config --force --repo postgres                  # Drop a kick.config.ts i
 - Editing \`kick.config.ts\` with deprecated top-level \`modulesDir\` / \`defaultRepo\` / \`schemaDir\` / \`pluralize\` instead of the nested \`modules\` block.`,
     },
     {
-      slug: 'kickjs-docs-lookup',
+      slug: 'docs-lookup',
       frontmatterName: 'kickjs-docs-lookup',
       description:
         'Use FIRST when unsure about any KickJS API, option, or behaviour — before guessing from memory or inferring from surrounding code.',
