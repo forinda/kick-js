@@ -20,3 +20,11 @@ tools (`kick explain`, `kick doctor`, `kick inspect`, `.kickjs/types/`, the
 installed `.d.mts`) for anything the short skills do not cover. The skills
 carry the traps; the docs carry the API surface. It also states the precedence
 rule: when a doc page and the installed types disagree, the types win.
+
+`AGENTS.md` is slimmed from 574 to 378 lines. Seven sections restated content
+the skills already own — Testing Guidelines was a near-verbatim third copy of
+the `write-controller-test` skill, and Common Pitfalls held a fourth copy of
+the env story that still named a superseded API and recommended a test-isolation
+approach we have since disproved. Those now point at the skill that owns the
+topic. Sections with no skill equivalent — runtime neutrality, conventions,
+project layout, the decorator table — are untouched.
