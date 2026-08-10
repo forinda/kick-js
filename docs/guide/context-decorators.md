@@ -516,9 +516,13 @@ Two calls, two jobs, **both needed if you want both type safety and discoverabil
 - **What it does** — tells **TypeScript** that `ctx.get('tenant')` returns your shape. Resolved at compile time by `tsc` / your IDE.
 - **What it doesn't do** — doesn't show up anywhere else in the project. Other devs reading the codebase have to grep for `declare module` to discover what keys are augmented.
 
-#### `defineAugmentation('ContextMeta', { description, example })`
+#### `defineAugmentation('ContextMeta', { description, example })` <Badge type="warning" text="deprecated" />
 
-- **What it does** — tells **`kick typegen`** to list the interface in `.kickjs/types/augmentations.d.ts` so every augmentable surface is discoverable from one place. Runtime + type-level no-op.
+::: warning Deprecated
+This was discovery tooling from when Context Contributors were still settling. Contributors are a stable typed API now, and this call never contributed a type — it only added a catalogue entry you had to keep in step with the `declare module` block. Drop it; keep the `declare module` block. Existing calls still work.
+:::
+
+- **What it does** — tells **`kick typegen`** to list the interface in `.kickjs/types/kick__augmentations.d.ts` so every augmentable surface is discoverable from one place. Runtime + type-level no-op.
 - **What it doesn't do** — doesn't actually augment anything. Skipping the `declare module` block leaves `ctx.get('tenant')` as `unknown`.
 
 In practice, the file pattern looks like this:
@@ -541,7 +545,7 @@ declare module '@forinda/kickjs' {
 }
 
 // (2) Catalogue entry — `kick typegen` lists this in
-// `.kickjs/types/augmentations.d.ts` so other devs (and future-you)
+// `.kickjs/types/kick__augmentations.d.ts` so other devs (and future-you)
 // can browse every augmentable surface without grepping.
 //
 // `description` and `example` may both be multi-line — typegen
