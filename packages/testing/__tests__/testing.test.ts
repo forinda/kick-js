@@ -123,6 +123,31 @@ describe('createTestApp', () => {
     Container.reset()
   })
 
+  // Pins the exact shape the generated docs and the `write-controller-test`
+  // skill hand people. Those shipped a positional array plus `app.get(...)`
+  // for several releases — the array threw "this.options.modules is not
+  // iterable" and there is no `.get()` on the result, so every scaffolded
+  // controller test was dead on arrival. If this ever needs editing, the
+  // generated docs in packages/cli need the same edit.
+  it('matches the documented usage: options object in, supertest against expressApp', async () => {
+    const TestModule = createTestModule({
+      register: () => {},
+      routes: () => null,
+    })
+
+    const { expressApp, container, app } = await createTestApp({
+      modules: [TestModule],
+      isolated: true, // the container is RETURNED, never passed in
+    })
+
+    expect(app).toBeDefined()
+    expect(container).toBeInstanceOf(Container)
+    // No `.get()` on the result — supertest drives `expressApp`.
+    expect((expressApp as unknown as { get?: unknown }).get).not.toBe(undefined)
+    const res = await request(expressApp).get('/definitely-not-a-route')
+    expect(res.status).toBe(404)
+  })
+
   it('returns expressApp, app, and container', async () => {
     const TestModule = createTestModule({
       register: () => {},

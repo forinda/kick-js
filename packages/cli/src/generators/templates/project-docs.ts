@@ -551,17 +551,22 @@ kick g controller chat --ws
 All tests use Vitest:
 
 \`\`\`ts
-import { describe, it, expect, beforeEach } from 'vitest'
-import { Container } from '@forinda/kickjs'
+import { describe, it, expect } from 'vitest'
+import request from 'supertest'
 import { createTestApp } from '@forinda/kickjs-testing'
 
 describe('UserController', () => {
   it('should return users', async () => {
-    // Container.create() — isolated DI state per test, never new Container()
-    // and never getInstance().reset() (both leak registrations between tests).
-    const container = Container.create()
-    const app = await createTestApp([UserModule], { container })
-    const res = await app.get('/users')
+    // Options object, NOT a positional array — a bare array throws
+    // "this.options.modules is not iterable" at setup.
+    // \`isolated: true\` gives this test its own container; the container is
+    // RETURNED, never passed in.
+    const { expressApp } = await createTestApp({
+      modules: [UserModule],
+      isolated: true,
+    })
+    // The result has no \`.get()\` — drive the returned app with supertest.
+    const res = await request(expressApp).get('/api/v1/users')
 
     expect(res.status).toBe(200)
     expect(res.body).toHaveProperty('users')
@@ -998,18 +1003,20 @@ build: (config, { name }) => ({
       body: `**Template** (copy/paste, adjust):
 
 \`\`\`ts
-import { describe, it, expect, beforeEach } from 'vitest'
-import { Container } from '@forinda/kickjs'
+import { describe, it, expect } from 'vitest'
+import request from 'supertest'
 import { createTestApp } from '@forinda/kickjs-testing'
-
-beforeEach(() => {
-  Container.reset() // isolated DI per test
-})
 
 describe('UserController', () => {
   it('returns users', async () => {
-    const app = await createTestApp([UserModule])
-    const res = await app.get('/api/v1/users')
+    // \`createTestApp\` takes an OPTIONS OBJECT and returns
+    // \`{ app, expressApp, container }\`. Passing a bare array throws
+    // "this.options.modules is not iterable"; the result has no \`.get()\`.
+    const { expressApp } = await createTestApp({
+      modules: [UserModule],
+      isolated: true, // own container per test — do not pass one in
+    })
+    const res = await request(expressApp).get('/api/v1/users')
     expect(res.status).toBe(200)
   })
 })
@@ -1159,7 +1166,9 @@ declare module '@forinda/kickjs' {
 // Optionally publish discoverability for tooling (Swagger, DevTools)
 defineAugmentation('ContextMeta', {
   description: 'Per-request tenant resolved from x-tenant-id header.',
-  example: { id: 'acme', name: 'Acme Inc' },
+  // \`example\` is a TS SNIPPET STRING, not an object literal — an object
+  // here is a type error against \`AugmentationMeta\`.
+  example: \`{ id: string; name: string }\`,
 })
 
 const LoadTenant = defineHttpContextDecorator({
@@ -1539,14 +1548,16 @@ description: Use when adding a Vitest test that exercises an HTTP route or DI gr
 
 \`\`\`ts
 import { describe, it, expect } from 'vitest'
-import { Container } from '@forinda/kickjs'
+import request from 'supertest'
 import { createTestApp } from '@forinda/kickjs-testing'
 
 describe('UserController', () => {
   it('returns users', async () => {
-    const container = Container.create()           // isolated DI per test
-    const app = await createTestApp([UserModule], { container })
-    const res = await app.get('/users')
+    const { expressApp } = await createTestApp({
+      modules: [UserModule],
+      isolated: true, // isolated DI per test — container is returned, not passed
+    })
+    const res = await request(expressApp).get('/api/v1/users')
     expect(res.status).toBe(200)
   })
 })
