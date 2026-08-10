@@ -552,19 +552,24 @@ kick g controller chat --ws
 All tests use Vitest:
 
 \`\`\`ts
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import request from 'supertest'
+import { Container } from '@forinda/kickjs'
 import { createTestApp } from '@forinda/kickjs-testing'
 
 describe('UserController', () => {
+  // Module registration lands on the GLOBAL container even when
+  // \`createTestApp\` hands back an isolated one, so reset between tests or
+  // registrations bleed into the next. (Instances registered with
+  // \`registerInstance\`/\`registerFactory\` survive reset on purpose — that is
+  // the HMR persistence store, not a leak.)
+  beforeEach(() => Container.reset())
+
   it('should return users', async () => {
     // Options object, NOT a positional array — a bare array throws
     // "this.options.modules is not iterable" at setup.
-    // \`isolated: true\` gives this test its own container; the container is
-    // RETURNED, never passed in.
     const { expressApp } = await createTestApp({
       modules: [UserModule],
-      isolated: true,
     })
     // The result has no \`.get()\` — drive the returned app with supertest.
     const res = await request(expressApp).get('/api/v1/users')
@@ -1004,18 +1009,20 @@ build: (config, { name }) => ({
       body: `**Template** (copy/paste, adjust):
 
 \`\`\`ts
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import request from 'supertest'
+import { Container } from '@forinda/kickjs'
 import { createTestApp } from '@forinda/kickjs-testing'
 
 describe('UserController', () => {
+  beforeEach(() => Container.reset()) // isolate DI between tests
+
   it('returns users', async () => {
     // \`createTestApp\` takes an OPTIONS OBJECT and returns
     // \`{ app, expressApp, container }\`. Passing a bare array throws
     // "this.options.modules is not iterable"; the result has no \`.get()\`.
     const { expressApp } = await createTestApp({
       modules: [UserModule],
-      isolated: true, // own container per test — do not pass one in
     })
     const res = await request(expressApp).get('/api/v1/users')
     expect(res.status).toBe(200)
@@ -1545,15 +1552,17 @@ description: Use when adding a Vitest test that exercises an HTTP route or DI gr
 **Template** (copy/paste, adjust):
 
 \`\`\`ts
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import request from 'supertest'
+import { Container } from '@forinda/kickjs'
 import { createTestApp } from '@forinda/kickjs-testing'
 
 describe('UserController', () => {
+  beforeEach(() => Container.reset()) // isolate DI between tests
+
   it('returns users', async () => {
     const { expressApp } = await createTestApp({
       modules: [UserModule],
-      isolated: true, // isolated DI per test — container is returned, not passed
     })
     const res = await request(expressApp).get('/api/v1/users')
     expect(res.status).toBe(200)
