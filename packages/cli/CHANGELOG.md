@@ -1,5 +1,131 @@
 # @forinda/kickjs-cli
 
+## 6.13.0
+
+### Minor Changes
+
+- [#523](https://github.com/forinda/kick-js/pull/523) [`edd6935`](https://github.com/forinda/kick-js/commit/edd69351b3a7866d3de585726cf61c312a68f14d) Thanks [@forinda](https://github.com/forinda)! - Consolidate the agent skills onto one source and add a docs-lookup skill.
+
+  The skills existed twice: a structured array rendered to
+  `.agents/skills/<slug>/SKILL.md`, and `generateKickJsSkills()`, which restated
+  them by hand as one aggregate markdown file. The copy had drifted to 9 skills
+  against 13, and its env recipe still named a superseded API — a fix applied to
+  one copy silently missed the other, which is how the stale `createTestApp`
+  signature survived as long as it did.
+
+  `generateKickJsSkills()` turned out to have no callers at all: nothing writes
+  `kickjs-skills.md`, so those lines were dead as well as duplicated, which is
+  why nobody noticed the drift. Removed rather than rewired.
+
+  New `kickjs-docs-lookup` skill points at the online guides plus the local
+  tools (`kick explain`, `kick doctor`, `kick inspect`, `.kickjs/types/`, the
+  installed `.d.mts`) for anything the short skills do not cover. The skills
+  carry the traps; the docs carry the API surface. It also states the precedence
+  rule: when a doc page and the installed types disagree, the types win.
+
+  `AGENTS.md` is slimmed from 574 to 378 lines. Seven sections restated content
+  the skills already own — Testing Guidelines was a near-verbatim third copy of
+  the `write-controller-test` skill, and Common Pitfalls held a fourth copy of
+  the env story that still named a superseded API and recommended a test-isolation
+  approach we have since disproved. Those now point at the skill that owns the
+  topic. Sections with no skill equivalent — runtime neutrality, conventions,
+  project layout, the decorator table — are untouched.
+
+### Patch Changes
+
+- [#523](https://github.com/forinda/kick-js/pull/523) [`68566a3`](https://github.com/forinda/kick-js/commit/68566a3bfb82bd2bb7ceb9230a0a75c040caa886) Thanks [@forinda](https://github.com/forinda)! - Deprecate `defineAugmentation`.
+
+  It existed to publish a typegen catalogue of augmentable interfaces, from when
+  Context Contributors were still settling and adopters needed to discover what
+  could be augmented. Contributors are a stable typed API now, so the catalogue
+  buys nothing while costing a second call that has to be kept in step with the
+  `declare module` block — and which never contributed a single type. Forgetting
+  one of the pair was itself a documented footgun.
+
+  Nothing breaks. `kick typegen` still discovers the call and still writes the
+  catalogue. Drop it and keep the `declare module '@forinda/kickjs'` block, which
+  is what actually types `ctx.get(...)`.
+
+  Verified against the real pipeline rather than the docstring: a call emits one
+  empty marker interface in `.kickjs/types/kick__augmentations.d.ts` —
+
+  ```ts
+  export interface ContextMetaAugmentation {}
+  ```
+
+  with the description and example as its JSDoc and a `@see` to the call site.
+  The interface is empty and unreferenced, so nothing consumes it at type level.
+
+  That check also turned up the catalogue's filename being wrong in five places —
+  the JSDoc, both public guides, and two inline comments all still named the
+  legacy `augmentations.d.ts` rather than the `kick__augmentations.d.ts` the
+  plugin has been writing. Corrected, and both guides now carry the deprecation.
+
+  The scaffolded contributor skill no longer teaches it, and the two deny-list
+  entries that policed the "keep both in sync" rule now point at the
+  `declare module` block instead.
+
+- [#523](https://github.com/forinda/kick-js/pull/523) [`6602a5d`](https://github.com/forinda/kick-js/commit/6602a5d69f417cafccc89d04e196b76c50cbe5c5) Thanks [@forinda](https://github.com/forinda)! - Fix the `createTestApp` signature in every generated doc and skill, and install
+  the packages those docs depend on.
+
+  The scaffolded AGENTS.md and the `write-controller-test` skill showed
+  `createTestApp([UserModule])` followed by `app.get('/…')`. Neither is real:
+  the function takes an options object, and the result is
+  `{ app, expressApp, container }` with no `.get()`. Following the generated
+  instructions threw `this.options.modules is not iterable`, so every scaffolded
+  controller test failed before asserting anything — including tests written by
+  coding agents, which read these files as their source of truth.
+
+  `defineAugmentation`'s catalogue example passed an object literal for
+  `example`, which is typed `string` — a type error in the generated docs.
+
+  The scaffold also told readers to import `@forinda/kickjs-testing` and
+  `supertest` without installing either. Both are now in `devDependencies`
+  alongside `@types/supertest`.
+
+  A test in `@forinda/kickjs-testing` now pins the documented call shape, so the
+  docs and the API cannot drift apart again silently.
+
+  The generated `vitest.config.ts` also lost the `@` path alias that
+  `tsconfig.json` and `vite.config.ts` declare. A `vitest.config.ts` overrides
+  `vite.config.ts` outright — vitest merges nothing and never reads tsconfig
+  `paths` — so any `@/…` import type-checked, built, and ran in dev while
+  failing only under test with `Cannot find package '@/…'`.
+
+  It now merges the vite config via `mergeConfig` rather than restating it, so
+  the alias, plugins, and ssr externals have exactly one definition instead of
+  three that can drift apart.
+
+  Loading the vite config through vitest also surfaced `__dirname`, which does
+  not exist under Vite's `configLoader: 'native'` — slated to become the default
+  — and warned on every test run. The generated vite config now derives its
+  paths from `import.meta.url`, which needs no Node version floor.
+
+  The generated test templates also never imported the env side-effect module.
+  `createTestApp` does not load `src/index.ts`, so the `import './config'` that
+  registers the extended env schema never ran under test: `ConfigService.get()`
+  returned `undefined` while `@Value()` kept working through its `process.env`
+  fallback, so the two disagreed only in tests. The templates now import
+  `@/config`, and the env-wiring skill gained a test-specific diagnosis step —
+  its existing step 1 checks `src/index.ts`, which looks correct in exactly this
+  case.
+
+  That skill also showed `loadEnv(envSchema)` with `defineEnv` while the scaffold
+  generates `loadEnvFromSchema` with `fromZod`, so anyone following it saw code
+  that did not match their project. Both forms are valid; the skill now shows the
+  generated one.
+
+  `kick explain` shared the blind spot and now branches on it. Given a
+  config-undefined error with test context, it previously returned the
+  entry-file diagnosis — "add `import './config'` to src/index.ts" — which is
+  already true in that scenario, so the tool pointed at the one file that looked
+  correct. It now returns a test-specific diagnosis, and the env-wiring skill
+  leads with `kick explain` rather than the manual checklist.
+
+- Updated dependencies [[`68566a3`](https://github.com/forinda/kick-js/commit/68566a3bfb82bd2bb7ceb9230a0a75c040caa886)]:
+  - @forinda/kickjs@7.2.0
+  - @forinda/kickjs-db@7.2.0
+
 ## 6.12.2
 
 ### Patch Changes
