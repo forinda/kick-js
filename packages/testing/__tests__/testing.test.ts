@@ -135,15 +135,16 @@ describe('createTestApp', () => {
       routes: () => null,
     })
 
-    const { expressApp, container, app } = await createTestApp({
-      modules: [TestModule],
-      isolated: true, // the container is RETURNED, never passed in
-    })
+    const result = await createTestApp({ modules: [TestModule] })
+    const { expressApp, container, app } = result
 
     expect(app).toBeDefined()
     expect(container).toBeInstanceOf(Container)
-    // No `.get()` on the result — supertest drives `expressApp`.
-    expect((expressApp as unknown as { get?: unknown }).get).not.toBe(undefined)
+    // The trap the docs shipped for years was `await createTestApp(...)` then
+    // `app.get('/…')`. Assert on the RESULT, not on `expressApp` — Express apps
+    // do have a `.get`, so checking that one passes while proving nothing.
+    expect((result as unknown as { get?: unknown }).get).toBeUndefined()
+    // supertest drives the returned express app instead.
     const res = await request(expressApp).get('/definitely-not-a-route')
     expect(res.status).toBe(404)
   })

@@ -903,7 +903,7 @@ people lose time on. The manual checks below are the same reasoning.
 3. The new key MUST be declared in the Zod schema. \`@Value('NEW_KEY')\` accepts any string at the type level and **falls back to raw \`process.env\`** when the schema doesn't know the key — silently skipping Zod coercion.
 4. After adding a key, re-run \`kick typegen\` (or restart \`kick dev\` if the typegen watcher missed it) so the global \`KickEnv\` augmentation picks it up.
 
-3. **In a test?** \`createTestApp\` never loads \`src/index.ts\`, so the entry's
+5. **In a test?** \`createTestApp\` never loads \`src/index.ts\`, so the entry's
    \`import './config'\` never runs no matter how correct it is. The test file
    must import it itself:
    \`\`\`ts
