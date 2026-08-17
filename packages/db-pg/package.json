@@ -45,10 +45,10 @@
     "@forinda/kickjs": "workspace:*",
     "@forinda/kickjs-db": "workspace:*",
     "@testcontainers/postgresql": "^12.1.0",
-    "@types/node": "^26.1.2",
-    "@types/pg": "^8.20.3",
+    "@types/node": "^26.2.0",
+    "@types/pg": "^8.21.0",
     "kysely": "^0.29.4",
-    "pg": "^8.22.0",
+    "pg": "^8.23.0",
     "typescript": "^7.0.2"
   },
   "publishConfig": {

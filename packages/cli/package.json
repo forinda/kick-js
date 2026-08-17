@@ -55,12 +55,12 @@
   "devDependencies": {
     "@forinda/kickjs-ai": "workspace:*",
     "@swc/core": "^1.15.47",
-    "@types/node": "^26.1.2",
-    "@types/pg": "^8.20.3",
+    "@types/node": "^26.2.0",
+    "@types/pg": "^8.21.0",
     "@types/pluralize": "^0.0.33",
-    "pg": "^8.22.0",
+    "pg": "^8.23.0",
     "typescript": "^7.0.2",
-    "vite": "^8.2.0",
+    "vite": "^8.2.1",
     "vitest": "^4.1.10"
   },
   "publishConfig": {
