@@ -92,12 +92,12 @@
     "@forinda/kickjs-devtools-kit": "workspace:*",
     "@testcontainers/postgresql": "^12.1.0",
     "@types/better-sqlite3": "^7.6.11",
-    "@types/node": "^26.1.2",
-    "@types/pg": "^8.20.3",
-    "better-sqlite3": "^13.0.2",
+    "@types/node": "^26.2.0",
+    "@types/pg": "^8.21.0",
+    "better-sqlite3": "^13.0.3",
     "kysely": "^0.29.4",
-    "mysql2": "^3.23.2",
-    "pg": "^8.22.0",
+    "mysql2": "^3.23.3",
+    "pg": "^8.23.0",
     "typescript": "^7.0.2"
   },
   "publishConfig": {
