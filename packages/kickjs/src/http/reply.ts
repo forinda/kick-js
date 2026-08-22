@@ -41,6 +41,8 @@ export function reply<S extends number, T>(status: S, body: T): Reply<S, T> {
   return { [REPLY_BRAND]: true, status, body }
 }
 
+/** `reply(200, body)` — explicit form of a bare `return body`. */
+reply.ok = <T>(body: T): Reply<200, T> => reply(200, body)
 /** `reply(201, body)` */
 reply.created = <T>(body: T): Reply<201, T> => reply(201, body)
 /** `reply(202, body)` */

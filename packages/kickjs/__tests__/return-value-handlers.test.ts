@@ -34,6 +34,11 @@ function makeControllers() {
       return [1, 2, 3]
     }
 
+    @Get('/ok')
+    ok(_ctx: RequestContext) {
+      return reply.ok({ via: 'reply.ok' })
+    }
+
     @Post('/created')
     create(_ctx: RequestContext) {
       return reply(201, { id: 'x1' })
@@ -103,6 +108,12 @@ for (const rt of RUNTIMES) {
       const app = await makeApp()
       const res = await request(app.handle.bind(app)).post('/api/v1/r/created').expect(201)
       expect(res.body).toEqual({ id: 'x1' })
+    })
+
+    it('reply.ok() sends 200 with the body', async () => {
+      const app = await makeApp()
+      const res = await request(app.handle.bind(app)).get('/api/v1/r/ok').expect(200)
+      expect(res.body).toEqual({ via: 'reply.ok' })
     })
 
     it('reply.noContent() sends an empty 204', async () => {
