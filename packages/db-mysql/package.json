@@ -46,7 +46,7 @@
     "@forinda/kickjs": "workspace:*",
     "@forinda/kickjs-db": "workspace:*",
     "@types/node": "^26.2.0",
-    "kysely": "^0.29.4",
+    "kysely": "^0.29.5",
     "mysql2": "^3.23.3",
     "typescript": "^7.0.2"
   },

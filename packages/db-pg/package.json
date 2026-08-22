@@ -47,7 +47,7 @@
     "@testcontainers/postgresql": "^12.1.0",
     "@types/node": "^26.2.0",
     "@types/pg": "^8.21.0",
-    "kysely": "^0.29.4",
+    "kysely": "^0.29.5",
     "pg": "^8.23.0",
     "typescript": "^7.0.2"
   },
