@@ -305,7 +305,11 @@ Rules of precedence:
   client gets no payload type. Return the value (`return user`) or wrap it
   (`return reply(201, user)`) to keep inference exact.
 - Returning `undefined`/`void` changes nothing — pure imperative handlers behave exactly as before.
-- Sugars: `reply.ok(body)` (200), `reply.created(body)` (201), `reply.accepted(body)` (202), `reply.noContent()` (204). `reply.ok(body)` is the explicit form of a bare `return body` — same result, useful when a handler mixes statuses and you want every branch to read alike.
+- Sugars: `reply.ok(body)` (200), `reply.created(body)` (201), `reply.accepted(body)` (202), `reply.noContent()` (204). `reply.ok(body)` is the explicit form of a bare `return body` for any defined
+  body — useful when a handler mixes statuses and you want every branch to read
+  alike. The two differ for `undefined`: a bare `return undefined` sends nothing
+  (the imperative path stays in charge), while `reply.ok(undefined)` is an
+  explicit 200 with an empty json body.
 
 Returning values is what makes the handler's **response type statically
 inferable** — the foundation for typed-client generation. `kick typegen` fills
