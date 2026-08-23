@@ -35,6 +35,14 @@ export default defineConfig({
         find: '@forinda/kickjs-db/pg',
         replacement: path.resolve(__dirname, 'src/pg.ts'),
       },
+      {
+        find: '@forinda/kickjs-db/sqlite',
+        replacement: path.resolve(__dirname, 'src/sqlite.ts'),
+      },
+      {
+        find: '@forinda/kickjs-db/mysql',
+        replacement: path.resolve(__dirname, 'src/mysql.ts'),
+      },
       // M5.B — internal-only aliases so tests can reach helpers that
       // aren't part of the public `package.json` exports.
       {
@@ -64,6 +72,6 @@ export default defineConfig({
     globals: false,
     pool: 'threads',
     maxConcurrency: 1,
-    testTimeout: 60_000,
+    testTimeout: 90_000,
   },
 })

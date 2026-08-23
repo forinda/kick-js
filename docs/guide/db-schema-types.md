@@ -46,7 +46,7 @@ type DB = SchemaToTypes<typeof schema>
 // db/client.ts
 import { Pool } from 'pg'
 import { createDbClient } from '@forinda/kickjs-db'
-import { pgAdapter, pgDialect } from '@forinda/kickjs-db-pg'
+import { pgAdapter, pgDialect } from '@forinda/kickjs-db/pg'
 import * as schema from './schema'
 
 export const pool = new Pool({ connectionString: process.env.DATABASE_URL })

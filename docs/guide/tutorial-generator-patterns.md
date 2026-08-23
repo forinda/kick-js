@@ -243,10 +243,11 @@ When you pick a non-`inmemory` repo, the generator still writes an `in-memory-<n
 
 The generator only ever produces two repository shapes: the built-in `inmemory` impl, or a generic stub for any other name. It deliberately does **not** generate ORM-specific data-access code — you own the integration behind the repository interface.
 
-When you're ready for a real database, the first-party option is `@forinda/kickjs-db` (with `db-pg` / `db-sqlite` / `db-mysql` drivers):
+When you're ready for a real database, the first-party option is `@forinda/kickjs-db` — the PostgreSQL, SQLite and MySQL dialects ship as subpaths of it (`@forinda/kickjs-db/pg`, `/sqlite`, `/mysql`):
 
 ```bash
-kick add db db-pg
+kick add db
+pnpm add pg # or better-sqlite3 / mysql2
 ```
 
 Implement the generated `I<Name>Repository` interface against your client and bind it in the module's `register()` factory. The generator hands you the interface boundary; you decide what runs behind it.

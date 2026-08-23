@@ -20,7 +20,7 @@ import {
   splitMysqlStatements,
   type MysqlConnectionLike,
   type MysqlPoolLike,
-} from '../../src'
+} from '@forinda/kickjs-db/mysql'
 
 describe('parseMysqlVersion', () => {
   it('parses standard MySQL 8.x.y shapes as flavor=mysql', () => {

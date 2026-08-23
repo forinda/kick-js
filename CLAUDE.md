@@ -40,7 +40,8 @@ packages/               # Workspace packages (@forinda/kickjs* on npm unless pri
   vite/                 # Vite HMR plugin + typegen watcher
   schema/               # Schema-agnostic validation (Zod/Valibot/Yup/StdSchema)
   swagger/              # OpenAPI from decorators + declared response schemas
-  db/ db-pg/ db-mysql/ db-sqlite/  # kick/db code-first database family
+  db/                   # kick/db code-first database family — dialects ship as
+                        #   subpaths (@forinda/kickjs-db/{pg,mysql,sqlite})
   testing/              # createTestApp, createTestModule, plugin harness
   devtools/ devtools-kit/          # /_debug dashboard + adapter tab kit
   grpc/                 # Connect RPC — gRPC-Web/Connect on the shared HTTP port

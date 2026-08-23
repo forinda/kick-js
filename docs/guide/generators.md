@@ -192,7 +192,7 @@ export default defineConfig({
 ```
 
 ::: tip Wiring a real database
-The only built-in repository is `inmemory`. For persistence, scaffold a generic custom repository (any name, e.g. `postgres`) and wire it to your own client, or install the first-party DB layer with `kick add db` (`@forinda/kickjs-db`, plus `db-pg` / `db-sqlite` / `db-mysql` drivers) and implement the generated stub against it.
+The only built-in repository is `inmemory`. For persistence, scaffold a generic custom repository (any name, e.g. `postgres`) and wire it to your own client, or install the first-party DB layer with `kick add db` (`@forinda/kickjs-db`, whose `/pg`, `/sqlite` and `/mysql` subpaths carry the dialects) and implement the generated stub against it.
 :::
 
 ### Auto-Registration

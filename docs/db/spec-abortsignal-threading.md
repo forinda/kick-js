@@ -103,9 +103,9 @@ What that means per dialect:
 
 | Dialect                              | What aborts on signal                                                                                                             | What the DB sees                                                                               |
 | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| PostgreSQL (`@forinda/kickjs-db-pg`) | The JS-side promise rejects with `RelationalQueryCancelledError` immediately.                                                     | The query keeps running until completion; the connection returns to the pool when it finishes. |
-| SQLite (`@forinda/kickjs-db-sqlite`) | Synchronous — the signal can only short-circuit before the call or between statements (better-sqlite3 has no async cancellation). | Same: in-flight statement runs to completion.                                                  |
-| MySQL (`@forinda/kickjs-db-mysql`)   | Same as PG — JS-side reject, DB query continues.                                                                                  | Same.                                                                                          |
+| PostgreSQL (`@forinda/kickjs-db/pg`) | The JS-side promise rejects with `RelationalQueryCancelledError` immediately.                                                     | The query keeps running until completion; the connection returns to the pool when it finishes. |
+| SQLite (`@forinda/kickjs-db/sqlite`) | Synchronous — the signal can only short-circuit before the call or between statements (better-sqlite3 has no async cancellation). | Same: in-flight statement runs to completion.                                                  |
+| MySQL (`@forinda/kickjs-db/mysql`)   | Same as PG — JS-side reject, DB query continues.                                                                                  | Same.                                                                                          |
 
 **Adopters who need true DB-side cancellation** (`pg_cancel_backend`, `KILL QUERY`) for long-running PG/MySQL queries can drive Kysely directly until a future release exposes a per-call override:
 
@@ -169,9 +169,9 @@ Stub `executeQuery` to observe the `{ signal }` second arg. Cases:
 
 ### Integration
 
-- `packages/db-pg/__tests__/integration/abort-signal-pg.test.ts` — Testcontainers PG, `SELECT pg_sleep(10)` query, abort the signal at 100ms, assert `RelationalQueryCancelledError` + `pg_stat_activity` shows the backend cancelled (state `idle` or row gone).
-- `packages/db-sqlite/__tests__/integration/abort-signal-sqlite.test.ts` — Two-statement query bound to a signal aborted between statements; assert second statement doesn't run.
-- `packages/db-mysql/__tests__/integration/abort-signal-mysql.test.ts` — Testcontainers MySQL 8, `SELECT SLEEP(10)`, abort at 100ms, assert cancellation + `KILL QUERY` fired (visible in `INFORMATION_SCHEMA.PROCESSLIST` row gone).
+- `packages/db/__tests__/pg/abort-signal-pg.test.ts` — Testcontainers PG, `SELECT pg_sleep(10)` query, abort the signal at 100ms, assert `RelationalQueryCancelledError` + `pg_stat_activity` shows the backend cancelled (state `idle` or row gone).
+- `packages/db/__tests__/sqlite/abort-signal-sqlite.test.ts` — Two-statement query bound to a signal aborted between statements; assert second statement doesn't run.
+- `packages/db/__tests__/mysql/abort-signal-mysql.test.ts` — Testcontainers MySQL 8, `SELECT SLEEP(10)`, abort at 100ms, assert cancellation + `KILL QUERY` fired (visible in `INFORMATION_SCHEMA.PROCESSLIST` row gone).
 
 ## Migration path for adopters
 

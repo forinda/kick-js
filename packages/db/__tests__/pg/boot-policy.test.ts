@@ -8,7 +8,7 @@ import pg from 'pg'
 
 import { Container } from '@forinda/kickjs'
 import { kickDbAdapter } from '@forinda/kickjs-db'
-import { pgAdapter } from '@forinda/kickjs-db-pg'
+import { pgAdapter } from '@forinda/kickjs-db/pg'
 import { seedMigration } from '../../../db/__tests__/fixtures/seed-migration'
 
 let container: StartedPostgreSqlContainer

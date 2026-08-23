@@ -3,7 +3,7 @@ import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers
 import pg from 'pg'
 
 import type { MigrationAdapter } from '@forinda/kickjs-db'
-import { pgAdapter } from '@forinda/kickjs-db-pg'
+import { pgAdapter } from '@forinda/kickjs-db/pg'
 
 let container: StartedPostgreSqlContainer
 let pool: pg.Pool
