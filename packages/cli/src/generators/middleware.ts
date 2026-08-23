@@ -29,6 +29,13 @@ export async function generateMiddleware(options: GenerateMiddlewareOptions): Pr
   // dependency on a Fastify / h3 scaffold, so the import fails to compile.
   // `kick new` always writes the field, so real Express projects still opt in.
   const isExpress = options.runtime === 'express'
+  // An unset `runtime` is a hand-written or pre-`--runtime` kick.config, so the
+  // comment must not claim the project runs on one.
+  const engineClause = options.runtime
+    ? `this project runs on ${options.runtime} and has no
+  // \`express\``
+    : `this project declares no \`runtime\` in kick.config.ts, so it
+  // may have no \`express\``
   const outDir = resolveOutDir({
     type: 'middleware',
     outDir: options.outDir,
@@ -102,8 +109,7 @@ ${
   // re-typing this signature from \`node:http\`.
   return (req: Request, res: Response, next: NextFunction) => {`
     : `  // Typed from \`node:http\`, not \`express\`. Global middleware is connect-style
-  // on every engine, but this project runs on ${options.runtime} and has no
-  // \`express\` dependency to import types from. Under Fastify the handler
+  // on every engine, but ${engineClause} dependency to import types from. Under Fastify the handler
   // receives \`request.raw\` / a reply driver, and under h3 the node objects, so
   // anything Express-only (\`req.originalUrl\`, \`res.json\`) is absent. Reach
   // for \`ctx.*\` helpers when you need a typed response.
