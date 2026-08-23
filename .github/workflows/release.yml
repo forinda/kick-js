@@ -68,11 +68,11 @@ jobs:
           # "Version Packages" PR that bumps the affected packages
           # + writes per-package CHANGELOG.md entries. Merging that
           # PR triggers another run of this workflow with no pending
-          # changesets — the action then runs `publish:` instead.
-          version: pnpm changeset:version
-          publish: pnpm changeset:publish
-          title: 'chore: version packages'
-          commit: 'chore: version packages'
+          # changesets — the action then runs `publish-script:` instead.
+          version-script: pnpm changeset:version
+          publish-script: pnpm changeset:publish
+          pr-title: 'chore: version packages'
+          commit-message: 'chore: version packages'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # No NPM_TOKEN: npm trusted-publisher OIDC handles auth.

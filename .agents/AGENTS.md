@@ -115,7 +115,7 @@ When adding new features, use these as templates:
 
 - [ ] Scaffold with CLI: `cd examples && node ../packages/cli/bin.js new <name> --template rest --pm pnpm --repo inmemory --no-git --no-install --force`
 - [ ] Add `package.json` (private: true, `workspace:*` deps — examples don't publish; their version is irrelevant)
-- [ ] Add the package name to `.changeset/config.json:ignore` so changesets doesn't try to version it
+- [ ] Nothing to do for changesets — `"private": true` is enough; changesets v3 skips private packages by default
 - [ ] Add docs page at `docs/examples/<name>.md`
 - [ ] Add to sidebar in `docs/.vitepress/config.mts`
 - [ ] Reference examples: `minimal-api/` (simple), `task-prisma-api/` (full DDD)

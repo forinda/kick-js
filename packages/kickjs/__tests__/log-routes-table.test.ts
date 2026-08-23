@@ -62,13 +62,11 @@ function makeModule(controllers: { cls: any; path: string }[]) {
       }
     },
     routes: () =>
-      controllers.map(
-        ({ cls, path }): ModuleRoutes => ({
-          path,
-          router: buildRoutes(cls),
-          controller: cls,
-        }),
-      ),
+      controllers.map(({ cls, path }): ModuleRoutes => ({
+        path,
+        router: buildRoutes(cls),
+        controller: cls,
+      })),
   })
 }
 
