@@ -156,6 +156,11 @@ expect(await api.get('/tasks/:id', { params: { id: '1' } })).toEqual(task)
   with `@Get('/', { response: schema })` (which also feeds
   [Swagger](./swagger.md#declared-response-schemas)).
 
+- The `fetch` option is the transport seam — pass any
+  `(request: Request) => Promise<Response>` to swap in a platform fetch, add
+  retries/logging, or drive the client with axios. See
+  [axios instead of native fetch](./typed-client-recipes.md#axios-instead-of-native-fetch).
+
 Using TanStack Query or SWR? See the
 [recipes](./typed-client-recipes.md) — the client's inference flows straight
 through `queryFn`/fetchers, no wrapper needed.

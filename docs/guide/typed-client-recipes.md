@@ -153,6 +153,91 @@ function NewTask() {
 }
 ```
 
+## axios instead of native fetch
+
+The client never calls global `fetch` directly — it goes through the optional
+`fetch` option, which takes a web-standard `Request` and returns a `Response`.
+Anything matching that shape works, so axios needs an adapter, not a wrapper
+package:
+
+```ts
+// src/api.ts
+import axios from 'axios'
+import { createClient } from '@forinda/kickjs-client'
+
+export const api = createClient<KickApi>({
+  baseUrl: '/api/v1',
+  fetch: async (request) => {
+    const res = await axios({
+      url: request.url,
+      method: request.method,
+      headers: Object.fromEntries(request.headers),
+      data: request.body ? await request.text() : undefined,
+      signal: request.signal,
+      responseType: 'arraybuffer',
+      validateStatus: () => true, // KickClientError owns non-2xx, not axios
+    })
+
+    const headers = new Headers()
+    for (const [key, value] of Object.entries(res.headers.toJSON())) {
+      for (const one of Array.isArray(value) ? value : [value]) {
+        headers.append(key, String(one))
+      }
+    }
+    const empty = res.status === 204 || res.status === 205 || res.status === 304
+    return new Response(empty ? null : res.data, { status: res.status, headers })
+  },
+})
+```
+
+Everything downstream is unchanged — the recipes above, `KickClientError`, and
+the inferred return types all work the same way.
+
+### Three things that will bite you
+
+- **`validateStatus: () => true` is mandatory.** axios rejects on 4xx/5xx by
+  default, so the axios error escapes before the client can build a
+  [`KickClientError`](./typed-client.md#errors). Every `catch` block that reads
+  `err.status` / `err.body` breaks. Let axios resolve every status and leave the
+  throwing to the client.
+- **Null-body statuses throw in the `Response` constructor.** `204`, `205` and
+  `304` must be constructed with `null`, hence the `empty` guard. Without it a
+  `noContent()` handler fails in the adapter rather than resolving to
+  `undefined`.
+- **SSE does not work.** [`api.stream()`](./typed-client.md#typed-sse-streams)
+  reads `response.body` as a `ReadableStream`; `responseType: 'arraybuffer'`
+  produces none, and in the browser axios is XHR-based and cannot stream at all.
+  On Node you can special-case streaming requests with `responseType: 'stream'`
+  plus `Readable.toWeb()`, but there is no browser fix. **If the app calls
+  `api.stream()`, keep native fetch.**
+
+### Do you actually need axios?
+
+Two of the usual reasons are already covered without the dependency:
+
+- **Auth interceptors** — `headers` accepts an async factory that runs per
+  request, so token refresh needs no interceptor:
+  ```ts
+  createClient<KickApi>({
+    baseUrl: '/api/v1',
+    headers: async () => ({ authorization: `Bearer ${await getToken()}` }),
+  })
+  ```
+- **Retries, logging, tracing** — the `fetch` option is the interceptor. Wrap
+  native fetch and you keep streaming:
+  ```ts
+  fetch: async (request) => {
+    for (let attempt = 0; ; attempt++) {
+      const res = await fetch(request.clone())
+      if (res.status < 500 || attempt === 2) return res
+    }
+  }
+  ```
+
+axios earns its place when you need something native fetch genuinely lacks —
+upload/download progress events, or a shared instance the rest of a legacy app
+already configures.
+
 ## Conventions that pay off
 
 - **One `api.ts`, one place for auth** — the `headers` factory runs per request,
