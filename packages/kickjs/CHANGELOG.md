@@ -1,5 +1,15 @@
 # @forinda/kickjs
 
+## 7.3.0
+
+### Minor Changes
+
+- [#528](https://github.com/forinda/kick-js/pull/528) [`3c83390`](https://github.com/forinda/kick-js/commit/3c8339046188ae418152b1a11bd48894aa87f941) Thanks [@forinda](https://github.com/forinda)! - Add `reply.ok(body)` — the 200 sugar alongside `reply.created` / `reply.accepted` / `reply.noContent`.
+  
+  A bare `return body` already sends 200, but handlers that mix statuses ended up
+  half-wrapped and half-bare. `reply.ok(body)` lets every branch read the same way
+  and carries `Reply<200, T>` through response inference exactly like the others.
+
 ## 7.2.0
 
 ### Minor Changes

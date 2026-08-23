@@ -1,5 +1,17 @@
 # @forinda/kickjs-db
 
+## 7.2.1
+
+### Patch Changes
+
+- [#531](https://github.com/forinda/kick-js/pull/531) [`97aaab5`](https://github.com/forinda/kick-js/commit/97aaab589d3c5e159e8dfe9981a768b2f4f24ddb) Thanks [@forinda](https://github.com/forinda)! - Retire the `@forinda/kickjs-db-pg` / `-db-mysql` / `-db-sqlite` shim packages.
+  
+  They had been frozen as `private: true` nine-line re-exports of
+  `@forinda/kickjs-db/{pg,mysql,sqlite}` since the dialects merged into this
+  package, so they no longer publish — their last npm versions still resolve for
+  existing installs. Their integration suites (121 tests) move here under
+  `__tests__/{pg,sqlite,mysql}`; no runtime code changed.
+
 ## 7.2.0
 
 ### Minor Changes

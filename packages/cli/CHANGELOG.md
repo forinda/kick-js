@@ -1,5 +1,39 @@
 # @forinda/kickjs-cli
 
+## 6.14.0
+
+### Minor Changes
+
+- [#532](https://github.com/forinda/kick-js/pull/532) [`b2911e8`](https://github.com/forinda/kick-js/commit/b2911e875a10e3d7d90b53a49801b2bad0095f36) Thanks [@forinda](https://github.com/forinda)! - Add a `guard-vs-middleware-vs-contributor` skill to the generated agent docs.
+  
+  Guards had one mention across every generated skill — a row in the docs-lookup
+  table. Nothing said that KickJS has no guard primitive (a guard is a `(ctx, next)`
+  middleware attached with `@Middleware()`, not a `CanActivate` class), that
+  guards run before context contributors on every runtime, or that `ctx.res` is
+  engine-native so `ctx.res.status(401).json(...)` is Express-only. The new skill
+  covers the three-way choice, the ordering, and those traps; `kick g guard` /
+  `g middleware` / `g contributor` are now in the CLI cheatsheet too.
+
+- [#533](https://github.com/forinda/kick-js/pull/533) [`49c324c`](https://github.com/forinda/kick-js/commit/49c324c5650c6f1a68d994a4f5041a1ffaf8486e) Thanks [@forinda](https://github.com/forinda)! - `kick g middleware` now types the handler for the project's configured runtime.
+  
+  With `runtime: 'express'` in `kick.config.ts` it emits
+  `(req: Request, res: Response, next: NextFunction)` from `express` — those
+  scaffolds already carry `@types/express`, and only Express hands the handler its
+  own request/response, so `req.originalUrl` and `res.json()` stop needing a cast.
+  Fastify and h3 keep `node:http` types, which is what they actually receive
+  (`request.raw` under Fastify, the node objects under h3).
+  
+  The express shape is opt-in on an explicit `runtime: 'express'`, never on an
+  absent field: an unset `runtime` means a hand-written or pre-`--runtime` config
+  that says nothing about the engine, and emitting `express` imports there is
+  exactly how the original cross-runtime bug shipped.
+
+### Patch Changes
+
+- Updated dependencies [[`97aaab5`](https://github.com/forinda/kick-js/commit/97aaab589d3c5e159e8dfe9981a768b2f4f24ddb), [`3c83390`](https://github.com/forinda/kick-js/commit/3c8339046188ae418152b1a11bd48894aa87f941)]:
+  - @forinda/kickjs-db@7.2.1
+  - @forinda/kickjs@7.3.0
+
 ## 6.13.0
 
 ### Minor Changes
