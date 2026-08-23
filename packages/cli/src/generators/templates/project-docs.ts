@@ -1075,6 +1075,95 @@ Same-key collisions WITHIN a precedence level throw \`DuplicateContributorError\
 - \`getRequestValue<string>('traceId')\` — generic is the **key** type, not value type.`,
     },
     {
+      slug: 'guard-vs-middleware-vs-contributor',
+      frontmatterName: 'kickjs-guard-vs-middleware-vs-contributor',
+      description:
+        'Use when adding auth checks, request-scoped values, or anything "before the handler" — picks between a guard, a middleware, and a context contributor.',
+      body: `**KickJS has no guard primitive.** There is no \`@Guard\`, no \`canActivate\`, no guard
+class to implement. A guard IS a middleware — the word only names a convention
+and a directory. If you are porting NestJS habits, this is the first thing to
+unlearn.
+
+| | Guard | Middleware | Context contributor |
+|---|---|---|---|
+| What it is | a middleware, by convention | a middleware | a declarative value producer |
+| Signature | \`(ctx, next)\` | \`(ctx, next)\` on \`@Middleware()\`, \`(req, res, next)\` in \`bootstrap({ middleware })\` | \`resolve(ctx, deps)\` returning a value |
+| Can end the request | yes | yes | **no** |
+| Runs | in the middleware stage | in the middleware stage | after ALL middleware |
+| Attached by | \`@Middleware(fn)\` | \`@Middleware(fn)\` or \`bootstrap({ middleware })\` | \`@LoadX\`, or a registration at module / adapter / bootstrap level |
+| Generator | \`kick g guard <name>\` | \`kick g middleware <name>\` | \`kick g contributor <name>\` |
+| Lands in | \`src/guards/<name>.guard.ts\` | \`src/middleware/<name>.middleware.ts\` | \`src/contributors/<name>.contributor.ts\` |
+
+Add \`-m <module>\` to any of those generators to place the file inside a module
+instead of the app-level directory.
+
+**Choosing**: does the thing ever need to STOP the request?
+- Yes, and it is authorization → guard.
+- Yes, anything else (rate limit, body rewrite, response stream, work before route matching) → middleware.
+- No, it only computes a value the handler or a service reads off \`ctx\` → contributor. Typed, ordered, boot-validated, and it cannot silently swallow the request.
+
+**Ordering — guards run BEFORE contributors.** Every runtime does the same
+thing: run \`entry.middlewares\` in order, bail if the response was written,
+then run the contributor pipeline, then the handler. So:
+
+\`\`\`ts
+// WRONG — tenant is always undefined here.
+export async function tenantGuard(ctx: RequestContext, next: () => void) {
+  const tenant = ctx.get('tenant') // contributors have not run yet
+  if (!tenant) return ctx.problem.forbidden()
+  next()
+}
+\`\`\`
+
+A guard that needs a resolved value must resolve it itself, or the check
+belongs in the contributor's own \`resolve\` (throw from there and the request
+error handler takes over).
+
+**Write responses with \`ctx.*\`, never \`ctx.res\`.** \`ctx.res\` is the ENGINE-NATIVE
+response object, so \`ctx.res.status(401).json(...)\` only works on Express —
+\`FastifyReply\` has no \`.json()\` and h3's event has no \`.status()\`. Use
+\`ctx.problem.unauthorized({ detail })\` (RFC 9457) or \`ctx.json(body, status)\`;
+those work on all four runtimes.
+
+**Guard shape**:
+
+\`\`\`ts
+import type { RequestContext } from '@forinda/kickjs'
+
+export async function adminGuard(ctx: RequestContext, next: () => void): Promise<void> {
+  const user = ctx.session?.user // requires the session middleware
+  if (!user) {
+    ctx.problem.unauthorized({ detail: 'Not signed in' })
+    return // do NOT call next()
+  }
+  if (user.role !== 'admin') {
+    ctx.problem.forbidden({ detail: 'Admin only' })
+    return
+  }
+  next()
+}
+\`\`\`
+
+\`\`\`ts
+@Middleware(adminGuard)
+@Get('/admin/stats')
+stats(ctx: RequestContext) { ... }
+\`\`\`
+
+Role checks that are purely declarative (\`@Public()\`, \`@Roles('admin')\`,
+\`@Can(...)\`) come from \`@forinda/kickjs-auth\` and need its adapter mounted.
+Hand-write a guard only for logic those don't express.
+
+**Red flags**:
+- \`class AdminGuard implements CanActivate\` / \`@UseGuards()\` — NestJS, not KickJS. Export a \`(ctx, next)\` function and attach with \`@Middleware()\`.
+- A guard calling \`next()\` AND writing a response — pick one; writing then continuing double-sends.
+- A guard reading \`ctx.get(...)\` for a contributor-produced key — contributors have not run yet.
+- \`ctx.res.status(403).json(...)\` in a guard — Express-only. Use \`ctx.problem.forbidden()\`.
+- A "guard" that only sets a value and always calls \`next()\` — that is a contributor wearing a guard's name.
+- Passing a \`(ctx, next)\` guard to \`bootstrap({ middleware })\` — global middleware is connect-style \`(req, res, next)\`. Mount guards per-route with \`@Middleware()\`.
+`,
+    },
+    {
       slug: 'query-parsing-list-endpoint',
       frontmatterName: 'kickjs-query-parsing-list-endpoint',
       description:
@@ -1197,6 +1286,7 @@ afterEach(() => {
 - \`kick start\` — run the built artifact (\`NODE_ENV=production\` auto-set).
 - \`kick g module <name>\` — add a feature module; structure follows \`pattern\` in \`kick.config.ts\`.
 - \`kick g scaffold <Name> <field:type>...\` — full CRUD module from field definitions.
+- \`kick g guard <name>\` / \`kick g middleware <name>\` / \`kick g contributor <name>\` — the three "before the handler" shapes. A guard is a middleware by convention, NOT a separate primitive.
 - \`kick add <pkg>\` — install optional packages (auto-resolves peer deps + package manager).
 - \`kick g --list\` — list every available generator (built-ins + plugin-shipped).
 - \`kick info\` — environment / version dump for bug reports.
