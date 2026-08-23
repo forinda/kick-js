@@ -71,6 +71,9 @@ describe('kick g middleware', () => {
     const src = readOnly(dir)
     expect(src).not.toContain("from 'express'")
     expect(src).toContain('req: IncomingMessage')
+    // The comment interpolates the engine name; with no engine to name it must
+    // not say the project runs on `undefined`.
+    expect(src).not.toContain('undefined')
   })
 
   it('types the handler from express when the config says express', async () => {
