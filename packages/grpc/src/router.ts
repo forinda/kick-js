@@ -137,20 +137,16 @@ export function buildConnectRoutes(
         adapterContributors.length > 0
       ) {
         const sources: SourcedRegistration[] = [
-          ...methodContributors.map(
-            (registration, i): SourcedRegistration => ({
-              source: 'method',
-              registration,
-              label: `${serviceName}.${handler.handlerName}#${i}(${registration.key})`,
-            }),
-          ),
-          ...classContributors.map(
-            (registration, i): SourcedRegistration => ({
-              source: 'class',
-              registration,
-              label: `${serviceName}.@class#${i}(${registration.key})`,
-            }),
-          ),
+          ...methodContributors.map((registration, i): SourcedRegistration => ({
+            source: 'method',
+            registration,
+            label: `${serviceName}.${handler.handlerName}#${i}(${registration.key})`,
+          })),
+          ...classContributors.map((registration, i): SourcedRegistration => ({
+            source: 'class',
+            registration,
+            label: `${serviceName}.@class#${i}(${registration.key})`,
+          })),
           ...adapterContributors,
         ]
         const pipeline = buildPipeline(sources, { route: key })

@@ -155,20 +155,16 @@ export function buildRouteTable(
       // at one precedence level points at the conflicting decorator slot,
       // not just the host method/class.
       const sources: SourcedRegistration[] = [
-        ...methodContributors.map(
-          (registration, i): SourcedRegistration => ({
-            source: 'method',
-            registration,
-            label: `${controllerClass.name}.${String(route.handlerName)}#${i}(${registration.key})`,
-          }),
-        ),
-        ...classContributors.map(
-          (registration, i): SourcedRegistration => ({
-            source: 'class',
-            registration,
-            label: `${controllerClass.name}.@class#${i}(${registration.key})`,
-          }),
-        ),
+        ...methodContributors.map((registration, i): SourcedRegistration => ({
+          source: 'method',
+          registration,
+          label: `${controllerClass.name}.${String(route.handlerName)}#${i}(${registration.key})`,
+        })),
+        ...classContributors.map((registration, i): SourcedRegistration => ({
+          source: 'class',
+          registration,
+          label: `${controllerClass.name}.@class#${i}(${registration.key})`,
+        })),
         ...externalSources,
       ]
       const pipeline = buildPipeline(sources, {

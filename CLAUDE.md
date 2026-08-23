@@ -360,7 +360,7 @@ test: description      # Test changes
 ## Important Notes
 
 - Decorators fire at class definition time — tests need `Container.reset()` + re-registration
-- Don't manually publish — the changesets workflow does it via OIDC. Examples are private and skipped automatically (they're in `.changeset/config.json:ignore`).
+- Don't manually publish — the changesets workflow does it via OIDC. Examples are private, and changesets v3 skips private packages by default — no `ignore` entry needed.
 - All internal links in docs must be **relative** (for versioning/i18n support)
 - The `kick` CLI binary comes from `packages/cli/src/cli.ts`
 - Vite configs: `minify: 'esbuild'`, all runtime deps in `rollupOptions.external`

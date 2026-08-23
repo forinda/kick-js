@@ -57,9 +57,9 @@ type TableKey<T> = T extends { __name: infer N extends string }
   : never
 
 export type SchemaToTypes<S> = {
-  [K in keyof S as S[K] extends { __isTable: true }
-    ? TableKey<S[K]>
-    : never]: S[K] extends TableDecl<string, infer C, string | undefined>
+  [
+    K in keyof S as S[K] extends { __isTable: true } ? TableKey<S[K]> : never
+  ]: S[K] extends TableDecl<string, infer C, string | undefined>
     ? { [Col in keyof C]: ColumnTSType<C[Col]> }
     : never
 }
