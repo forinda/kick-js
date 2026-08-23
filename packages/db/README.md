@@ -62,7 +62,7 @@ Each dialect ships inside this package — no extra install beyond the driver:
 - `@forinda/kickjs-db/mysql` — MySQL (`mysqlDialect`, `mysqlAdapter`); peer driver `mysql2`
 - `@forinda/kickjs-db/sqlite` — SQLite (`sqliteDialect`, `sqliteAdapter`); peer driver `better-sqlite3`
 
-> The standalone `@forinda/kickjs-db-pg` / `-db-mysql` / `-db-sqlite` packages are deprecated re-export shims kept for one release; import from the subpaths above instead.
+> The standalone `@forinda/kickjs-db-pg` / `-db-mysql` / `-db-sqlite` packages are retired. Their last published versions still resolve, but they only re-export the subpaths above — import from the subpaths directly.
 
 ## Companion packages
 

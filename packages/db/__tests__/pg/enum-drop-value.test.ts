@@ -36,7 +36,7 @@ import {
   computeMigrationHash,
   migrateLatest,
 } from '@forinda/kickjs-db'
-import { pgAdapter } from '@forinda/kickjs-db-pg'
+import { pgAdapter } from '@forinda/kickjs-db/pg'
 
 let container: StartedPostgreSqlContainer
 let pool: pg.Pool

@@ -2,7 +2,7 @@
 
 KickJS-native ORM — code-first schema, reversible migrations, multi-dialect SQL builder. Snapshot-diff migration engine, a single-round-trip relational query layer, lifecycle hooks, and DI integration.
 
-Pair with a dialect adapter package — [`@forinda/kickjs-db-pg`](./db-pg.md), [`@forinda/kickjs-db-sqlite`](./db-sqlite.md), or [`@forinda/kickjs-db-mysql`](./db-mysql.md).
+Dialect adapters ship as subpaths of the same package — `@forinda/kickjs-db/pg`, `@forinda/kickjs-db/sqlite`, `@forinda/kickjs-db/mysql`. Install the matching driver (`pg`, `better-sqlite3`, `mysql2`) yourself.
 
 ## Installation
 
@@ -10,8 +10,8 @@ Pair with a dialect adapter package — [`@forinda/kickjs-db-pg`](./db-pg.md), [
 # Using the KickJS CLI (recommended)
 kick add db
 
-# Manual install — pick the adapter for your dialect
-pnpm add @forinda/kickjs-db @forinda/kickjs-db-pg pg
+# Manual install — one package plus your dialect's driver
+pnpm add @forinda/kickjs-db pg
 ```
 
 ## Quick Start
@@ -27,7 +27,7 @@ import {
   kickDbAdapter,
   DB_PRIMARY,
 } from '@forinda/kickjs-db'
-import { pgAdapter, pgDialect } from '@forinda/kickjs-db-pg'
+import { pgAdapter, pgDialect } from '@forinda/kickjs-db/pg'
 
 // 1. Schema — code-first, type-inferred end-to-end.
 const users = table('users', {

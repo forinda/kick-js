@@ -20,7 +20,7 @@ import {
   varchar,
   type KickDbClient,
 } from '@forinda/kickjs-db'
-import { sqliteAdapter, sqliteDialect } from '../../src'
+import { sqliteAdapter, sqliteDialect } from '@forinda/kickjs-db/sqlite'
 
 const users = table('users', {
   id: serial().primaryKey(),

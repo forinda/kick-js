@@ -27,7 +27,7 @@ import {
   table,
   varchar,
 } from '@forinda/kickjs-db'
-import { pgDialect } from '@forinda/kickjs-db-pg'
+import { pgDialect } from '@forinda/kickjs-db/pg'
 
 let container: StartedPostgreSqlContainer
 let pool: pg.Pool

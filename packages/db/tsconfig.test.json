@@ -11,5 +11,12 @@
       "@forinda/kickjs-db/*": ["./src/*"]
     }
   },
-  "include": ["src", "__tests__"]
+  "include": ["src", "__tests__"],
+  // The dialect suites moved here from the retired db-pg / db-sqlite / db-mysql
+  // packages, which never ran `vitest --typecheck`. Each of them declares its own
+  // `KickDbRelationsRegister.db` augmentation, and that interface has exactly one
+  // owner per TS program (`RegisteredRelations` reads the literal `db` key), so
+  // merging them into this program makes every declaration but one lose. They run
+  // as runtime tests; keep them out of the type program.
+  "exclude": ["__tests__/pg", "__tests__/sqlite", "__tests__/mysql"]
 }

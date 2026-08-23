@@ -33,7 +33,7 @@ import { safeNullComparison } from '@forinda/kickjs-db/client/plugins'
 // `SafeNullComparisonPlugin`, which keeps the null operand
 // parameterised and produces invalid `WHERE "col" IS $1` SQL —
 // locked separately in
-// `packages/db-pg/__tests__/integration/kysely-safe-null-broken-pg.test.ts`.
+// `packages/db/__tests__/pg/kysely-safe-null-broken-pg.test.ts`.
 
 const dummy: Dialect = {
   createAdapter: () => new PostgresAdapter(),
