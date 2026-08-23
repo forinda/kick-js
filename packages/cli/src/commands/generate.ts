@@ -424,7 +424,7 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
   gen
     .command('middleware <name>')
     .description(
-      'Generate an Express middleware function\n' +
+      'Generate a global middleware function, typed for the configured runtime\n' +
         '  Use -m to scope it to a module: kick g middleware auth -m users',
     )
     .option('-o, --out <dir>', 'Output directory (overrides --module)')
@@ -442,6 +442,7 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
         modulesDir,
         pattern: config?.pattern,
         pluralize: mc.pluralize ?? true,
+        runtime: config?.runtime,
       })
       printGenerated(files, dryRun)
     })

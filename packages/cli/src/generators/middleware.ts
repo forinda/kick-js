@@ -2,7 +2,7 @@ import { join } from 'node:path'
 import { writeFileSafe } from '../utils/fs'
 import { toPascalCase, toKebabCase, toCamelCase } from '../utils/naming'
 import { resolveOutDir } from '../utils/resolve-out-dir'
-import type { ProjectPattern } from '../config'
+import type { KickConfig, ProjectPattern } from '../config'
 
 interface GenerateMiddlewareOptions {
   name: string
@@ -11,10 +11,24 @@ interface GenerateMiddlewareOptions {
   modulesDir?: string
   pattern?: ProjectPattern
   pluralize?: boolean
+  /**
+   * The engine from `kick.config.ts`. Global middleware is connect-style on
+   * every runtime, but only Express hands the handler an `express.Request` —
+   * Fastify passes `request.raw` and h3 the node objects, so `node:http` is
+   * the honest type there (and those projects have no `express` dependency to
+   * import types from).
+   */
+  runtime?: KickConfig['runtime']
 }
 
 export async function generateMiddleware(options: GenerateMiddlewareOptions): Promise<string[]> {
   const { name, moduleName, modulesDir, pattern } = options
+  // Explicit opt-in, not a fallback: an unset `runtime` means a hand-written or
+  // pre-`--runtime` kick.config, which says nothing about the engine. Emitting
+  // express types there is how the original bug shipped — `express` isn't a
+  // dependency on a Fastify / h3 scaffold, so the import fails to compile.
+  // `kick new` always writes the field, so real Express projects still opt in.
+  const isExpress = options.runtime === 'express'
   const outDir = resolveOutDir({
     type: 'middleware',
     outDir: options.outDir,
@@ -31,7 +45,11 @@ export async function generateMiddleware(options: GenerateMiddlewareOptions): Pr
   const filePath = join(outDir, `${kebab}.middleware.ts`)
   await writeFileSafe(
     filePath,
-    `import type { IncomingMessage, ServerResponse } from 'node:http'
+    `${
+      isExpress
+        ? `import type { Request, Response, NextFunction } from 'express'`
+        : `import type { IncomingMessage, ServerResponse } from 'node:http'`
+    }
 
 export interface ${toPascalCase(name)}Options {
   // Add configuration options here. The factory below closes over the
@@ -74,14 +92,23 @@ export interface ${toPascalCase(name)}Options {
  *   @Middleware(${camel}())
  */
 export function ${camel}(options: ${toPascalCase(name)}Options = {}) {
-  // Typed from \`node:http\`, not \`express\`. Global middleware is connect-style
-  // on every engine, but a Fastify / h3 project has no \`express\` dependency —
-  // importing its types there is a compile error on a freshly generated file.
-  // Under Fastify the handler receives \`request.raw\` / a reply driver, and
-  // under h3 the node objects, so anything Express-only (\`req.originalUrl\`,
-  // \`res.json\`) is absent. Reach for \`ctx.*\` helpers when you need a typed
-  // response.
-  return (req: IncomingMessage, res: ServerResponse, next: () => void) => {
+${
+  isExpress
+    ? `  // Typed from \`express\` because that is this project's runtime
+  // (\`runtime: 'express'\` in kick.config.ts). Global middleware is
+  // connect-style on every engine, but only Express hands the handler its own
+  // request / response objects — so \`req.originalUrl\`, \`req.query\` and
+  // \`res.json()\` are all available here. Switching \`runtime\` later means
+  // re-typing this signature from \`node:http\`.
+  return (req: Request, res: Response, next: NextFunction) => {`
+    : `  // Typed from \`node:http\`, not \`express\`. Global middleware is connect-style
+  // on every engine, but this project runs on ${options.runtime} and has no
+  // \`express\` dependency to import types from. Under Fastify the handler
+  // receives \`request.raw\` / a reply driver, and under h3 the node objects, so
+  // anything Express-only (\`req.originalUrl\`, \`res.json\`) is absent. Reach
+  // for \`ctx.*\` helpers when you need a typed response.
+  return (req: IncomingMessage, res: ServerResponse, next: () => void) => {`
+}
     // Implement your middleware logic here. \`options\` is captured by
     // closure — log or read it anywhere in this handler body.
     void options

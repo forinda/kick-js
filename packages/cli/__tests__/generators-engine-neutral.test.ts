@@ -50,21 +50,41 @@ function readOnly(dir: string): string {
 }
 
 describe('kick g middleware', () => {
-  it('does not import from express', async () => {
+  for (const runtime of ['fastify', 'h3'] as const) {
+    it(`does not import from express on ${runtime}`, async () => {
+      const dir = tempDir()
+      await generateMiddleware({ name: 'audit', outDir: dir, runtime })
+      const src = readOnly(dir)
+      // A Fastify / h3 scaffold has neither `express` nor `@types/express`.
+      expect(src).not.toContain("from 'express'")
+      expect(src).toContain("from 'node:http'")
+      expect(src).toContain('req: IncomingMessage')
+      expect(src).toContain('res: ServerResponse')
+    })
+  }
+
+  it('stays on node:http when the config declares no runtime', async () => {
+    // An unset `runtime` is a hand-written or pre-`--runtime` config — it says
+    // nothing about the engine, so the portable shape is the only safe one.
     const dir = tempDir()
     await generateMiddleware({ name: 'audit', outDir: dir })
     const src = readOnly(dir)
-    // A Fastify / h3 scaffold has neither `express` nor `@types/express`.
     expect(src).not.toContain("from 'express'")
-    expect(src).toContain("from 'node:http'")
+    expect(src).toContain('req: IncomingMessage')
   })
 
-  it('types the handler from node, not the engine', async () => {
+  it('types the handler from express when the config says express', async () => {
+    // `@types/express` is a devDependency on exactly those scaffolds, and only
+    // Express hands the handler its own request/response — `req.originalUrl`
+    // and `res.json()` are real there and absent everywhere else.
     const dir = tempDir()
-    await generateMiddleware({ name: 'audit', outDir: dir })
+    await generateMiddleware({ name: 'audit', outDir: dir, runtime: 'express' })
     const src = readOnly(dir)
-    expect(src).toContain('req: IncomingMessage')
-    expect(src).toContain('res: ServerResponse')
+    expect(src).toContain("from 'express'")
+    expect(src).toContain('req: Request')
+    expect(src).toContain('res: Response')
+    expect(src).toContain('next: NextFunction')
+    expect(src).not.toContain("from 'node:http'")
   })
 })
 
