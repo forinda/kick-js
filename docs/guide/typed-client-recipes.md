@@ -204,12 +204,17 @@ the inferred return types all work the same way.
   `304` must be constructed with `null`, hence the `empty` guard. Without it a
   `noContent()` handler fails in the adapter rather than resolving to
   `undefined`.
-- **SSE does not work.** [`api.stream()`](./typed-client.md#typed-sse-streams)
-  reads `response.body` as a `ReadableStream`; `responseType: 'arraybuffer'`
-  produces none, and in the browser axios is XHR-based and cannot stream at all.
-  On Node you can special-case streaming requests with `responseType: 'stream'`
-  plus `Readable.toWeb()`, but there is no browser fix. **If the app calls
-  `api.stream()`, keep native fetch.**
+- **SSE hangs — it does not fail.**
+  [`api.stream()`](./typed-client.md#typed-sse-streams) consumes
+  `response.body` incrementally, but `responseType: 'arraybuffer'` makes axios
+  buffer: it resolves only once the response _ends_, and an SSE response never
+  ends. So `await axios(...)` never returns. The stream is not the problem —
+  the `Response` this adapter builds does carry a `body` — the buffering is.
+  Axios can stream (`responseType: 'stream'` on Node's `http` adapter, or the
+  `fetch` adapter, which is not the browser default — that's `xhr`), but each
+  route needs a second code path in the adapter, and the `fetch` adapter puts
+  you back on fetch anyway. **If the app calls `api.stream()`, keep native
+  fetch for it.**
 
 ### Do you actually need axios?
 
@@ -227,12 +232,18 @@ Two of the usual reasons are already covered without the dependency:
   native fetch and you keep streaming:
   ```ts
   fetch: async (request) => {
+    // Replay only what is safe to repeat. A 5xx does NOT prove the server
+    // ignored the request — retrying a POST can double-charge a customer.
+    const replayable = request.method === 'GET' || request.method === 'HEAD'
     for (let attempt = 0; ; attempt++) {
       const res = await fetch(request.clone())
-      if (res.status < 500 || attempt === 2) return res
+      if (!replayable || res.status < 500 || attempt === 2) return res
     }
   }
   ```
+  Retrying writes needs more than a method check: the endpoint has to be
+  idempotent on the server, usually via a client-sent idempotency key it
+  dedupes on. Don't widen the condition without that guarantee.
 
 axios earns its place when you need something native fetch genuinely lacks —
 upload/download progress events, or a shared instance the rest of a legacy app
