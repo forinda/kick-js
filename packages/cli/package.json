@@ -54,14 +54,14 @@
   },
   "devDependencies": {
     "@forinda/kickjs-ai": "workspace:*",
-    "@swc/core": "^1.15.47",
+    "@swc/core": "^1.16.1",
     "@types/node": "^26.2.0",
-    "@types/pg": "^8.21.0",
+    "@types/pg": "^8.23.1",
     "@types/pluralize": "^0.0.33",
     "pg": "^8.23.0",
     "typescript": "^7.0.2",
-    "vite": "^8.2.1",
-    "vitest": "^4.1.10"
+    "vite": "^8.2.2",
+    "vitest": "^4.1.11"
   },
   "publishConfig": {
     "access": "public"
