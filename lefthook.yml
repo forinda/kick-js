@@ -12,6 +12,14 @@
 # Commands below run in parallel. Each `glob:` filters the command to
 # the files actually staged in this commit, so a commit that touches
 # only Markdown skips the token-lint pass entirely.
+#
+# Each source glob is listed TWICE — `dir/*.ts` alongside `dir/**/*.ts`.
+# lefthook's `**` requires at least one intervening directory, so
+# `packages/*/src/**/*.ts` matches `src/http/application.ts` but NOT
+# `src/web.ts`. Without the single-star twin, every file sitting directly
+# in `packages/*/src` or `packages/*/__tests__` reported
+# "no files for inspection" and skipped both format and lint — 300+ files,
+# including every package's `index.ts`. Only CI caught them.
 
 pre-commit:
   parallel: true
@@ -21,7 +29,7 @@ pre-commit:
     # (VitePress docs, README, articles), mirroring the
     # `format:check` script.
     format:
-      glob: '{packages/*/src/**/*.{ts,tsx,js,mjs,cjs},packages/*/__tests__/**/*.{ts,tsx},packages/*/spa/src/**/*.{ts,tsx},docs/**/*.md,docs/.vitepress/**/*.{ts,mts,vue},tutorials/**/*.md,scripts/*.{ts,js,mjs},*.md}'
+      glob: '{packages/*/src/*.{ts,tsx,js,mjs,cjs},packages/*/src/**/*.{ts,tsx,js,mjs,cjs},packages/*/__tests__/*.{ts,tsx},packages/*/__tests__/**/*.{ts,tsx},packages/*/spa/src/*.{ts,tsx},packages/*/spa/src/**/*.{ts,tsx},docs/**/*.md,docs/.vitepress/**/*.{ts,mts,vue},tutorials/**/*.md,scripts/*.{ts,js,mjs},*.md}'
       # CHANGELOGs are changesets-generated and oxfmt-ignored (.oxfmtrc).
       # Without this exclude, the release bot's version commit stages ONLY
       # changelogs, oxfmt sees zero unignored targets, exits 2, and the
@@ -32,7 +40,7 @@ pre-commit:
     # repo). Runs only when a TS file under packages/ is staged so
     # markdown-only or example-only commits skip lint.
     lint:
-      glob: '{packages/*/src/**/*.{ts,tsx},packages/*/__tests__/**/*.{ts,tsx},packages/*/spa/src/**/*.{ts,tsx},scripts/*.ts,docs/.vitepress/**/*.{ts,mts}}'
+      glob: '{packages/*/src/*.{ts,tsx},packages/*/src/**/*.{ts,tsx},packages/*/__tests__/*.{ts,tsx},packages/*/__tests__/**/*.{ts,tsx},packages/*/spa/src/*.{ts,tsx},packages/*/spa/src/**/*.{ts,tsx},scripts/*.ts,docs/.vitepress/**/*.{ts,mts}}'
       run: pnpm exec oxlint {staged_files}
     # Token-convention lint (kick-lint). Runs only when a TS file
     # under packages/ is staged — adopters editing docs / examples
