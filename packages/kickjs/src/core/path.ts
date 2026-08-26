@@ -37,3 +37,15 @@ export function joinPaths(...segments: (string | undefined)[]): string {
   // Strip trailing slash (unless it's just '/')
   return normalized === '/' ? '/' : normalized.replace(/\/+$/, '')
 }
+
+/**
+ * Mount path for a module's routes: `{apiPrefix}/v{version}{path}`.
+ *
+ * `version: false` drops the `/v{n}` segment entirely — opting out of URL
+ * versioning without giving up the prefix. Both mount sites (the node
+ * `Application` and the web `createWebApp`) go through here so the two
+ * cannot drift.
+ */
+export function buildMountPath(apiPrefix: string, version: number | false, path?: string): string {
+  return joinPaths(apiPrefix, version === false ? undefined : `v${version}`, normalizePath(path))
+}

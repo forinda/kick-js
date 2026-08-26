@@ -4,8 +4,8 @@ import {
   Container,
   createLogger,
   Logger,
-  normalizePath,
   joinPaths,
+  buildMountPath,
   tokenName,
   METADATA,
   type AppModule,
@@ -104,10 +104,17 @@ export interface ApplicationOptions {
   adapters?: AppAdapter[]
   /** Server port (falls back to PORT env var, then 3000) */
   port?: number
-  /** Global API prefix (default: '/api') */
+  /** Global API prefix (default: '/api'). Pass `''` to mount at the root. */
   apiPrefix?: string
-  /** Default API version (default: 1) — routes become /{prefix}/v{version}/{path} */
-  defaultVersion?: number
+  /**
+   * Default API version (default: 1) — routes become /{prefix}/v{version}/{path}.
+   *
+   * `false` opts out of URL versioning: routes mount at /{prefix}/{path}.
+   * A module can still version itself by setting `version` on its
+   * `ModuleRoutes` — the per-mount value always wins over this default, in
+   * either direction.
+   */
+  defaultVersion?: number | false
 
   /**
    * Global middleware pipeline. Declared in order.
@@ -775,7 +782,7 @@ export class Application {
 
         for (const route of routeSets) {
           const version = route.version ?? defaultVersion
-          const mountPath = `${apiPrefix}/v${version}${normalizePath(route.path)}`
+          const mountPath = buildMountPath(apiPrefix, version, route.path)
           // Common-case `{ path, controller }`: build the engine-neutral route
           // table and let the runtime materialize it natively (Express Router /
           // Fastify routes / …). Adopters who hand-build a `router` (composing

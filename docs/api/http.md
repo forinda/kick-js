@@ -22,8 +22,8 @@ interface ApplicationOptions {
   adapters?: AppAdapter[]
   plugins?: KickPlugin[] // see ../api/core.md#plugins
   port?: number
-  apiPrefix?: string // default: '/api'
-  defaultVersion?: number // default: 1
+  apiPrefix?: string // default: '/api' — '' mounts at the root
+  defaultVersion?: number | false // default: 1 — false drops the /v{n} segment
   middleware?: MiddlewareEntry[]
   trustProxy?: boolean | number | string | ((ip: string, hopIndex: number) => boolean)
   jsonLimit?: string | number

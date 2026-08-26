@@ -142,7 +142,7 @@ export {
 } from './kick-error'
 
 // Path utilities
-export { normalizePath, joinPaths } from './path'
+export { normalizePath, joinPaths, buildMountPath } from './path'
 
 // Metadata utilities
 export {
