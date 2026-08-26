@@ -33,7 +33,7 @@ import {
 } from './http/router-builder'
 import { requestStore } from './http/request-store'
 import { compileWebRoute } from './http/web/handler'
-import { normalizePath } from './core/path'
+import { buildMountPath, normalizePath } from './core/path'
 
 export { WebRequestShim, WebResponseDriver } from './http/web/driver'
 export { compileWebRoute } from './http/web/handler'
@@ -75,8 +75,11 @@ export interface CreateWebAppOptions {
   modules: AppModuleEntry[]
   /** Route prefix (default '/api') — parity with bootstrap. */
   apiPrefix?: string
-  /** Default route version (default 1) — parity with bootstrap. */
-  defaultVersion?: number
+  /**
+   * Default route version (default 1) — parity with bootstrap. `false` opts
+   * out of URL versioning; a module's own `version` still overrides it.
+   */
+  defaultVersion?: number | false
   /** Global Context Contributors — parity with `bootstrap({ contributors })`. */
   contributors?: ContributorRegistrations
   /**
@@ -181,7 +184,7 @@ export function createWebApp(options: CreateWebAppOptions): WebApp {
           )
         }
         const version = route.version ?? defaultVersion
-        const mountPath = `${apiPrefix}/v${version}${normalizePath(route.path)}`
+        const mountPath = buildMountPath(apiPrefix, version, route.path)
         for (const entry of buildRouteTable(route.controller)) {
           const url = joinPath(mountPath, entry.path)
           // Per-handler owner so intra-controller duplicates name both methods.

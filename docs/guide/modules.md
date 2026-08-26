@@ -75,7 +75,7 @@ interface ModuleRoutes {
   path: string // URL prefix, e.g. '/todos'
   controller?: any // Controller class — framework derives the router via buildRoutes(controller)
   router?: any // Express Router — only when you need to hand-build the router
-  version?: number // API version override (defaults to Application.defaultVersion)
+  version?: number | false // API version override (false = no /v{n} segment)
 }
 ```
 
@@ -111,6 +111,68 @@ export const TodosModule = defineModule({
 ```
 
 This mounts `/api/v1/todos`, `/api/v2/todos`, and `/api/v1/admin/todos` — three controllers, one module, one DI registration block.
+
+### Opting out of versioning
+
+URL versioning is a default, not a requirement. Set `defaultVersion: false` to
+drop the `/v{n}` segment app-wide:
+
+```ts
+bootstrap({
+  modules,
+  defaultVersion: false, // /api/todos
+})
+```
+
+Pair it with an empty prefix to mount at the root:
+
+```ts
+bootstrap({
+  modules,
+  apiPrefix: '',
+  defaultVersion: false, // /todos
+})
+```
+
+The per-mount `version` still wins over the app default, **in both
+directions** — that's the escape hatch. An unversioned app can carry one
+versioned module:
+
+```ts
+bootstrap({ modules, defaultVersion: false })
+
+routes() {
+  return [
+    { path: '/todos', controller: TodoController },              // /api/todos
+    { path: '/payments', version: 2, controller: PayController }, // /api/v2/payments
+  ]
+}
+```
+
+…and a versioned app can carry one unversioned module — useful for a webhook
+receiver or a health surface a third party has already hardcoded:
+
+```ts
+bootstrap({ modules }) // defaultVersion: 1
+
+routes() {
+  return [
+    { path: '/todos', controller: TodoController },                // /api/v1/todos
+    { path: '/webhooks', version: false, controller: HookController }, // /api/webhooks
+  ]
+}
+```
+
+`createWebApp` ([edge deployment](./edge-deployment.md)) takes the same two
+options and computes mount paths through the same helper, so the node and web
+entries cannot disagree.
+
+::: warning Changing this moves every URL
+`defaultVersion: false` is not a compatibility shim — it rewrites the mount
+path of every module that doesn't set its own `version`. On a deployed API
+that means every existing client 404s. Flipping it is a breaking change to
+your own consumers; the typed client's `baseUrl` has to move with it.
+:::
 
 ## DI registration patterns
 

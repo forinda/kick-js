@@ -21,8 +21,12 @@ export interface ModuleRoutes {
    * controllers or hand-roll the router shape.
    */
   router?: any
-  /** Optional API version override (defaults to Application.defaultVersion) */
-  version?: number
+  /**
+   * Optional API version override (defaults to Application.defaultVersion).
+   * `false` mounts this module without a `/v{n}` segment even when the app
+   * has a default version.
+   */
+  version?: number | false
   /**
    * Controller class. Required unless `router` is provided. Used both
    * for the auto-derived router (via `buildRoutes(controller)`) and
