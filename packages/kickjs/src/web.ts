@@ -33,7 +33,7 @@ import {
 } from './http/router-builder'
 import { requestStore } from './http/request-store'
 import { compileWebRoute } from './http/web/handler'
-import { buildMountPath, normalizePath } from './core/path'
+import { buildMountPath } from './core/path'
 
 export { WebRequestShim, WebResponseDriver } from './http/web/driver'
 export { compileWebRoute } from './http/web/handler'
