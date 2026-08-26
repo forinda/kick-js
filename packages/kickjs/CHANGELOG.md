@@ -1,5 +1,23 @@
 # @forinda/kickjs
 
+## 7.4.0
+
+### Minor Changes
+
+- [#537](https://github.com/forinda/kick-js/pull/537) [`166e3ee`](https://github.com/forinda/kick-js/commit/166e3ee69f7711a39deb74677dbedaac1ddbb715) Thanks [@forinda](https://github.com/forinda)! - `defaultVersion: false` opts out of URL versioning
+  
+  `bootstrap({ defaultVersion: false })` drops the `/v{n}` segment, so modules
+  mount at `/{apiPrefix}/{path}` — `/api/todos` instead of `/api/v1/todos`. Pair
+  it with `apiPrefix: ''` to mount at the root. `createWebApp` accepts the same
+  option.
+  
+  A module's own `version` still wins over the app default in both directions:
+  an unversioned app can carry a versioned module (`version: 2`), and a
+  versioned app can carry an unversioned one (`version: false`) — useful for a
+  webhook or health surface a third party has hardcoded.
+  
+  Purely additive; the default stays `1`.
+
 ## 7.3.0
 
 ### Minor Changes
