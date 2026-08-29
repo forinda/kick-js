@@ -1,4 +1,7 @@
-import { execFileSync, execSync, spawnSync } from 'node:child_process'
+import { execFile, execFileSync, execSync, spawnSync } from 'node:child_process'
+import { promisify } from 'node:util'
+
+const execFileAsync = promisify(execFile)
 
 /**
  * Characters an argument may not contain when it has to travel through
@@ -134,5 +137,34 @@ export function runNodeWithEnv(entry: string, env: NodeJS.ProcessEnv, cwd?: stri
   })
   if (result.status !== 0) {
     process.exit(result.status ?? 1)
+  }
+}
+
+/**
+ * Async twin of `captureCommand` — same Windows `.cmd` routing, same
+ * `null`-on-any-failure contract, but genuinely concurrent.
+ *
+ * `captureCommand` is `execFileSync`, so `Promise.all` over it runs the
+ * commands one after another. Callers that fan out over a list of network
+ * queries (`npm view` per package) need real concurrency, otherwise the
+ * per-call timeout multiplies by the list length.
+ */
+export async function captureCommandAsync(
+  file: string,
+  args: string[],
+  opts: { timeout?: number; cwd?: string } = {},
+): Promise<string | null> {
+  const invocation = shellSafeInvocation(file, args)
+  if (!invocation) return null
+  try {
+    const { stdout } = await execFileAsync(invocation[0], invocation[1], {
+      encoding: 'utf-8',
+      timeout: opts.timeout ?? 5000,
+      cwd: opts.cwd,
+      windowsHide: true,
+    })
+    return stdout.toString().trim() || null
+  } catch {
+    return null
   }
 }

@@ -1,9 +1,9 @@
 import { join, dirname } from 'node:path'
 import { execSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { writeFileSafe } from '../utils/fs'
-import { captureCommand } from '../utils/shell'
+import { captureCommand, captureCommandAsync } from '../utils/shell'
 import {
   generatePackageJson,
   generateViteConfig,
@@ -30,14 +30,29 @@ import { generateReadme } from './templates/project-docs'
 import { AVAILABLE_ADD_PACKAGES } from '../commands/add'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const cliPkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'))
-const CLI_VERSION_FALLBACK = `^${cliPkg.version}`
+
+/**
+ * The CLI's own package.json sits one level up from the bundle
+ * (`dist/project-*.mjs`) but two levels up from this source file
+ * (`src/generators/project.ts`). Checking both is what lets this module be
+ * imported from a test at all — reading only the bundle-relative path threw
+ * ENOENT the moment anything imported it from source, which is why the
+ * version-resolution path shipped untested.
+ */
+const cliPkg = JSON.parse(
+  readFileSync(
+    [join(__dirname, '..', 'package.json'), join(__dirname, '..', '..', 'package.json')].find(
+      existsSync,
+    )!,
+    'utf-8',
+  ),
+)
 
 /**
  * Sibling `@forinda/kickjs-*` packages whose versions are resolved
  * independently when scaffolding a new project. Each entry is queried
- * via `npm view <name> version`; failure falls back to the CLI's own
- * version (`CLI_VERSION_FALLBACK`).
+ * via `npm view <name> version`; failure falls back to `latest`
+ * (see `fallbackRange`).
  *
  * Per-package independent versioning landed with changesets — before
  * that, every sibling shipped in lockstep with the CLI so a single
@@ -59,22 +74,44 @@ const SIBLING_PACKAGES = [
 ] as const
 
 /**
+ * Range to write when `npm view <name> version` gives us nothing.
+ *
+ * It must never be the CLI's own version. Sibling packages version
+ * independently, so `@forinda/kickjs-vite@^${cliVersion}` names a release
+ * that does not exist — the scaffold then dies at install time with
+ * `npm error 404 '@forinda/kickjs-vite@^6.14.1' is not in this registry`,
+ * which is worse than the under-install this fallback was meant to avoid.
+ * `latest` is the one range that is always resolvable and always current.
+ *
+ * The CLI itself is the exception: its version IS the CLI's version, and
+ * pinning it keeps a scaffold reproducible against the CLI that made it.
+ */
+function fallbackRange(name: string): string {
+  return name === '@forinda/kickjs-cli' ? `^${cliPkg.version}` : 'latest'
+}
+
+/**
  * Resolve the latest published version of every sibling package via
- * `npm view <name> version` (through `captureCommand`, which routes
- * around Windows' `.cmd` shims — see utils/shell.ts). Each query has a
- * short timeout; failures fall back to the CLI's own version with a `^`
- * prefix so the scaffold stays usable offline.
+ * `npm view <name> version` (through `captureCommandAsync`, which routes
+ * around Windows' `.cmd` shims — see utils/shell.ts).
+ *
+ * The timeout is generous and the queries are genuinely concurrent: a
+ * warm `npm view` against the public registry measures 0.6–3.6s per
+ * package, so the old 5s budget was one slow response away from expiring,
+ * and the sync `captureCommand` under `Promise.all` ran all ten serially
+ * — making the per-call budget the only thing standing between a scaffold
+ * and a package.json full of fallbacks.
  */
 export async function resolveSiblingVersions(): Promise<Record<string, string>> {
   const results = await Promise.all(
     SIBLING_PACKAGES.map(async (name) => {
       // Network failure / package not yet published / npm unavailable
-      // all surface as null → fall back to the CLI's own version.
-      const out = captureCommand('npm', ['view', name, 'version'])
+      // all surface as null → fall back to a range that always resolves.
+      const out = await captureCommandAsync('npm', ['view', name, 'version'], { timeout: 20_000 })
       if (out && /^\d+\.\d+\.\d+/.test(out)) {
         return [name, `^${out}`] as const
       }
-      return [name, CLI_VERSION_FALLBACK] as const
+      return [name, fallbackRange(name)] as const
     }),
   )
   return Object.fromEntries(results)
@@ -94,7 +131,7 @@ export async function resolveSiblingVersions(): Promise<Record<string, string>> 
  * major`).
  */
 function resolveVersionAtTag(name: string, tag: string): string | null {
-  const out = captureCommand('npm', ['view', `${name}@${tag}`, 'version'])
+  const out = captureCommand('npm', ['view', `${name}@${tag}`, 'version'], { timeout: 20_000 })
   return out && /^\d+\.\d+\.\d+/.test(out) ? out : null
 }
 
@@ -132,7 +169,9 @@ function baseVersionGte(a: string, b: string): boolean {
 }
 
 function tagExportsSubpath(name: string, tag: string, subpath: string): boolean {
-  const out = captureCommand('npm', ['view', `${name}@${tag}`, 'exports', '--json'])
+  const out = captureCommand('npm', ['view', `${name}@${tag}`, 'exports', '--json'], {
+    timeout: 20_000,
+  })
   if (!out) return false
   try {
     const exportsMap = JSON.parse(out) as Record<string, unknown>
@@ -189,6 +228,14 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
   // working offline.
   log('Resolving package versions...')
   const versions = await resolveSiblingVersions()
+
+  // A 'latest' range means the registry query failed for that package. The
+  // install still works, but the pin is looser than intended and the user
+  // should know why their package.json does not read like the docs.
+  const unresolved = Object.keys(versions).filter((name) => versions[name] === 'latest')
+  if (unresolved.length > 0) {
+    log(`WARNING: could not reach npm for ${unresolved.join(', ')} — pinned to 'latest'`)
+  }
 
   // The pluggable-runtimes work (Fastify / h3 engine subpaths, the
   // `kick/runtime` typegen, `kick add upload`, `kick doctor` runtime checks)
