@@ -148,7 +148,7 @@ export function createTypegenDevWatcher(opts: TypegenDevWatcherOptions): Typegen
       .then(() => reporter.clear('scan'))
       .catch((err) => reporter.report('scan', err))
     pipeline
-      .runAllPluginTypegens({ cwd, config, silent: true, changedFiles: delta })
+      .runAllPluginTypegens({ cwd, config, silent: true, changedFiles: delta, watch: true })
       .then((r) => pipeline.writeTypegenArtifacts(typesOutDir, r, true))
       .then(() => reporter.clear('plugins'))
       .catch((err) => reporter.report('plugins', err))

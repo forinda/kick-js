@@ -50,6 +50,50 @@ const made = await api.post('/tasks', { body: { title: 'Ship' } }) // made: Task
 
 Wrong path, missing `params.id`, wrong body shape — all **compile errors**.
 
+## Frontends outside the server's TypeScript program
+
+`KickApi` above is an **ambient global**, populated by importing the server's
+generated route types. Those types infer responses by referencing controller
+classes, so the frontend's `tsc` ends up compiling the server's source graph —
+decorators, path aliases, ORM types and all. In a small repo that is free. At
+scale it is not: one measured app needed `experimentalDecorators`,
+`emitDecoratorMetadata`, a `@/*` fallback into server source and five ambient
+imports before it compiled, and its typecheck went from 1.7s / 819 MB to 10.8s
+/ 4.9 GB — per frontend, per CI run.
+
+`kick typegen` also emits `.kickjs/types/kick__client.d.ts`, which removes the
+reference entirely: every type resolved to a literal shape, shared shapes
+hoisted, and **no imports at all**. A frontend of any size needs one line:
+
+```ts
+import type { KickApi } from '../../../api/.kickjs/types/kick__client'
+
+export const api = createClient<KickApi>({ baseUrl: '/api/v1' })
+```
+
+No decorator settings, no path aliases, no ambient bridge file. Both maps carry
+the same types — the client one is produced by resolving the ambient one, not by
+inferring a second time — so you can move a frontend across without changing a
+single call site.
+
+`kick typegen --check` gates staleness in CI, exactly as with the other
+generated files.
+
+::: warning Not refreshed by `kick dev`
+Resolving these types builds a full TypeScript program over the server, which is
+a build-step cost rather than a per-save one — so `kick dev` leaves this one
+file alone while everything else in `.kickjs/types/` keeps updating on save.
+Re-run `kick typegen` after changing a response shape. The ambient
+`KickRoutes.Api` the server itself uses is unaffected.
+:::
+
+::: tip Needs a compiler API
+This uses TypeScript's compiler API, an optional peer dependency. TypeScript 7
+ships no JS compiler API at all, so install the compatibility package there:
+`pnpm add -D @typescript/typescript6`. Without one, `kick typegen` prints a
+warning and skips just this file.
+:::
+
 ## baseUrl and route keys
 
 `KickRoutes.Api` keys are **module-mount relative** (`'GET /tasks/:id'`); the

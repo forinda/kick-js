@@ -45,6 +45,8 @@ export interface RunAllPluginTypegensOptions {
    * whole tree. Used by `kick dev`'s file-change handler.
    */
   changedFiles?: ScanDelta
+  /** Part of a watch loop — forwarded to plugins as `ctx.watch`. */
+  watch?: boolean
 }
 
 export async function runAllPluginTypegens(
@@ -82,6 +84,7 @@ export async function runAllPluginTypegens(
       cwd: opts.cwd,
       config: opts.config ?? ({} as never),
       plugins: enabled,
+      watch: opts.watch,
       check: opts.check,
       changedFiles: opts.changedFiles,
     })

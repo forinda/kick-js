@@ -96,7 +96,7 @@ export class TypeExpander {
     }
 
     // A type the frontend already has — emit the name, expand nothing.
-    if (this.isLibType(type)) return this.checker.typeToString(type)
+    if (this.isLibType(type)) return this.renderLibType(type, depth)
 
     if (type.flags & F.Object) return this.renderObject(type, depth)
 
@@ -157,11 +157,39 @@ export class TypeExpander {
     return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name) ? name : JSON.stringify(name)
   }
 
-  /** Declared in TypeScript's own lib files → the frontend already has it. */
+  /**
+   * Declared in TypeScript's own lib files → the frontend already has it.
+   *
+   * A lib declaration covers the NAME, not the arguments: `Record` and `Map`
+   * live in lib.es5, but `Record<string, SubjectCell>` names a project type
+   * the client file has never heard of. So a lib alias is emitted by name and
+   * its arguments are expanded — see `renderLibType`.
+   */
   private isLibType(type: ts.Type): boolean {
-    const decls = type.getSymbol()?.declarations
+    const decls = type.aliasSymbol?.declarations ?? type.getSymbol()?.declarations
     if (!decls || decls.length === 0) return false
     return decls.every((d) => this.program.isSourceFileDefaultLibrary(d.getSourceFile()))
+  }
+
+  /**
+   * A lib type, with any type arguments expanded: `Record<string, __T4>`.
+   *
+   * Printing `typeToString` here instead is the bug this exists to prevent —
+   * it emitted `Record<string, SubjectCell>` into a file with no `SubjectCell`,
+   * and `tsc` on the frontend answered with `TS2304: Cannot find name`.
+   */
+  private renderLibType(type: ts.Type, depth: number): string {
+    const name = (type.aliasSymbol ?? type.getSymbol())?.getName()
+    const args = type.aliasTypeArguments ?? this.typeArguments(type)
+    if (!name || args.length === 0) return this.checker.typeToString(type)
+    return `${name}<${args.map((a) => this.render(a, depth + 1)).join(', ')}>`
+  }
+
+  /** Type arguments of a generic reference; empty for anything else. */
+  private typeArguments(type: ts.Type): readonly ts.Type[] {
+    if (!(type.flags & this.ts.TypeFlags.Object)) return []
+    if (!((type as ts.ObjectType).objectFlags & this.ts.ObjectFlags.Reference)) return []
+    return this.checker.getTypeArguments(type as ts.TypeReference)
   }
 
   /** Has a declared name worth hoisting (interface / class / named alias). */
