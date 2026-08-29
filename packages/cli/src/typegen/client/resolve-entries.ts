@@ -67,6 +67,13 @@ export async function resolveClientMap(opts: ResolveClientMapOptions): Promise<R
     )
   }
 
+  // If the routes file itself does not compile, every controller reference in
+  // it is an error type and every entry below resolves to `any`. That is the
+  // worst possible output: a map that looks like a typed client and checks
+  // nothing, emitted without a single warning. Refuse it — the caller turns a
+  // throw into "warn, skip, and delete any stale map".
+  assertRoutesFileCompiles(t, program, opts.routesFile)
+
   // A key the map does not carry is a compile error on its own alias. Reading
   // that from the diagnostics is exact, where inspecting the resolved type
   // would confuse "missing route" with "route whose entry really is `any`".
@@ -91,10 +98,52 @@ export async function resolveClientMap(opts: ResolveClientMapOptions): Promise<R
       opts.onWarn?.(`route '${key}' could not be resolved — skipped.`)
       continue
     }
-    entries.set(key, expander.expand(checker.getTypeAtLocation(alias.type)))
+    const type = checker.getTypeAtLocation(alias.type)
+    // A whole route entry is never legitimately `any` — the ambient map always
+    // gives an object with params/body/query/response. `any` here means the
+    // checker gave up on something, and emitting it would hand the frontend a
+    // route that accepts anything at all.
+    if (type.flags & t.TypeFlags.Any) {
+      opts.onWarn?.(
+        `route '${key}' resolved to 'any' — skipped rather than emitted, since an ` +
+          `'any' entry silently accepts every call. Check that the server type-checks.`,
+      )
+      continue
+    }
+    entries.set(key, expander.expand(type))
   }
 
   return { entries, hoisted: expander.hoisted() }
+}
+
+/**
+ * Fail loudly when the generated routes file does not compile.
+ *
+ * Its diagnostics are the difference between "this app has no typed responses"
+ * and "this program could not resolve anything" — and the two look identical in
+ * the output, because both end in entries the checker will not narrow. The
+ * second one produced 1,940 routes of `response: any` with zero warnings when a
+ * project's dependencies were missing.
+ */
+function assertRoutesFileCompiles(t: TsApi, program: ts.Program, routesFile: string): void {
+  const source = program.getSourceFile(routesFile)
+  if (!source) {
+    throw new Error(
+      `kick/client: ${routesFile} is not in the TypeScript program. ` +
+        `Run \`kick typegen\` first, and check that tsconfig.json includes .kickjs.`,
+    )
+  }
+  const diagnostics = program.getSemanticDiagnostics(source)
+  if (diagnostics.length === 0) return
+  const first = diagnostics
+    .slice(0, 3)
+    .map((d) => `    ${t.flattenDiagnosticMessageText(d.messageText, ' ')}`)
+    .join('\n')
+  throw new Error(
+    `${routesFile} has ${diagnostics.length} type error(s), so its route types cannot ` +
+      `be resolved — every entry would come out as 'any'.\n${first}\n` +
+      `  Usually this means dependencies are not installed or the server does not type-check.`,
+  )
 }
 
 function aliasName(index: number): string {

@@ -19,10 +19,13 @@ module-scoped, and with no imports at all. The frontend needs one line:
 import type { KickApi } from '../../../api/.kickjs/types/kick__client'
 ```
 
-The types are identical to the ambient map's because they are _produced_ from
-it — each entry is resolved through the server's own program rather than
-inferred a second time — so the two cannot drift, and moving a frontend across
-changes no call sites. `kick typegen --check` gates staleness in CI.
+Every entry that resolves carries the ambient map's type exactly, because it is
+_produced_ from that map — each one resolved through the server's own program
+rather than inferred a second time — so moving a frontend across changes no call
+sites. A route the resolver cannot resolve is skipped with a warning rather than
+guessed at, so a run that warned yields a subset of `KickRoutes.Api`: the types
+present are still exact, but one may be missing. `kick typegen --check` gates
+staleness in CI.
 
 The file is not refreshed under `kick dev`: resolving the types builds a full
 TypeScript program over the server, which is a build-step cost, not a per-save

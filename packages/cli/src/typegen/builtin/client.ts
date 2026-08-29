@@ -22,10 +22,39 @@
  * @module @forinda/kickjs-cli/typegen/builtin/client
  */
 import path from 'node:path'
+import { rm } from 'node:fs/promises'
 
 import { resolveClientMap } from '../client/resolve-entries'
 import { renderClient } from '../render/client'
-import type { TypegenPlugin } from '../plugin'
+import type { TypegenLogger, TypegenPlugin } from '../plugin'
+
+const OUT_FILE = '.kickjs/types/kick__client.d.ts'
+
+/**
+ * Delete a previously generated client map after a failed one-shot run.
+ *
+ * Missing beats stale: a frontend importing a deleted file fails to compile
+ * immediately and points straight here, while an obsolete map type-checks
+ * cleanly against routes that no longer exist.
+ */
+async function discardStaleOutput(ctx: { cwd: string; log: TypegenLogger }): Promise<void> {
+  const outFile = path.resolve(ctx.cwd, OUT_FILE)
+  try {
+    await rm(outFile, { force: true })
+  } catch (err) {
+    // Best-effort: an unremovable file is not a reason to fail typegen, but
+    // it IS a reason to say the map on disk can no longer be trusted.
+    ctx.log.warn(
+      `  kick/client: could not remove the stale ${OUT_FILE} — treat it as out of date ` +
+        `(${err instanceof Error ? err.message : String(err)})`,
+    )
+    return
+  }
+  ctx.log.warn(
+    `  kick/client: removed the previously generated ${OUT_FILE} rather than leave a ` +
+      `stale one — re-run \`kick typegen\` once the cause above is fixed.`,
+  )
+}
 
 export const kickClientTypegen = (): TypegenPlugin => ({
   id: 'kick/client',
@@ -72,6 +101,16 @@ export const kickClientTypegen = (): TypegenPlugin => ({
       // missing tsconfig / unreadable routes file is equally recoverable —
       // every one of them means "skip this file", never "fail the pass".
       ctx.log.warn(`  kick/client: skipped — ${err instanceof Error ? err.message : String(err)}`)
+      // Skipping leaves whatever is already on disk, and on a one-shot run
+      // that file is now a lie: the routes were rescanned, this map was not
+      // rebuilt, and nothing downstream can tell. A MISSING map is a compile
+      // error in the frontend — loud, immediate, obviously about this. A
+      // STALE one type-checks perfectly against routes the server no longer
+      // serves. So remove it, and say that is what happened.
+      //
+      // Only here. The watch skip returns earlier precisely so the dev loop
+      // keeps the last good map.
+      await discardStaleOutput(ctx)
       return null
     }
   },

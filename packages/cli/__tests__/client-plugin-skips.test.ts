@@ -10,6 +10,9 @@
  */
 
 import { describe, expect, it, vi } from 'vitest'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 import { kickClientTypegen } from '../src/typegen/builtin/client'
 import type { TypegenContext } from '../src/typegen/plugin'
@@ -63,5 +66,43 @@ describe('kick/client plugin', () => {
     await kickClientTypegen().generate(ctx)
 
     expect(getScanResult).toHaveBeenCalled()
+  })
+
+  it('deletes a stale map when a one-shot run fails, rather than leaving a lie', async () => {
+    // A MISSING map is a compile error in the frontend — loud and obviously
+    // about this. A STALE one type-checks perfectly against routes the server
+    // no longer serves. Silence is the dangerous outcome, so prefer the noise.
+    const dir = mkdtempSync(join(tmpdir(), 'kick-stale-'))
+    try {
+      mkdirSync(join(dir, '.kickjs/types'), { recursive: true })
+      const out = join(dir, '.kickjs/types/kick__client.d.ts')
+      writeFileSync(out, 'export interface KickApi { "GET /gone": never }\n')
+
+      const { ctx, log } = makeCtx({ cwd: dir })
+      expect(await kickClientTypegen().generate(ctx)).toBeNull()
+
+      expect(existsSync(out)).toBe(false)
+      expect(log.warn.mock.calls.flat().join(' ')).toContain('removed')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps the last good map when the skip is the watch one', async () => {
+    // The dev loop deliberately leaves the file alone; deleting it there would
+    // break the frontend on every save.
+    const dir = mkdtempSync(join(tmpdir(), 'kick-watch-'))
+    try {
+      mkdirSync(join(dir, '.kickjs/types'), { recursive: true })
+      const out = join(dir, '.kickjs/types/kick__client.d.ts')
+      writeFileSync(out, 'export interface KickApi {}\n')
+
+      const { ctx } = makeCtx({ cwd: dir, watch: true })
+      expect(await kickClientTypegen().generate(ctx)).toBeNull()
+
+      expect(existsSync(out)).toBe(true)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })
