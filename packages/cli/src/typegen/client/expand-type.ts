@@ -83,10 +83,7 @@ export class TypeExpander {
     }
 
     // Tuples before arrays — a tuple is also a reference to an array type.
-    if (this.isTuple(type)) {
-      const args = this.checker.getTypeArguments(type as ts.TypeReference)
-      return `[${args.map((a) => this.render(a, depth + 1)).join(', ')}]`
-    }
+    if (this.isTuple(type)) return this.renderTuple(type, depth)
     const element = this.arrayElement(type)
     if (element) {
       const inner = this.render(element, depth + 1)
@@ -140,7 +137,7 @@ export class TypeExpander {
         ? this.checker.getTypeOfSymbolAtLocation(prop, decl)
         : this.checker.getDeclaredTypeOfSymbol(prop)
       const optional = (prop.flags & this.ts.SymbolFlags.Optional) !== 0
-      const rendered = this.renderPropertyType(propType, optional, depth + 1)
+      const rendered = this.renderPropertyType(propType, optional, prop, depth + 1)
       lines.push(`${indent}${this.propName(prop.getName())}${optional ? '?' : ''}: ${rendered}`)
     }
     return lines.join(join === '\n' ? '\n' : join)
@@ -157,11 +154,67 @@ export class TypeExpander {
    * disagreeing with the ambient map is the one thing this generator must
    * never do.
    */
-  private renderPropertyType(type: ts.Type, optional: boolean, depth: number): string {
+  private renderPropertyType(
+    type: ts.Type,
+    optional: boolean,
+    prop: ts.Symbol,
+    depth: number,
+  ): string {
     if (!optional || !type.isUnion()) return this.render(type, depth)
+    // `a?: string | undefined` and `a?: string` are the same type normally and
+    // DIFFERENT under `exactOptionalPropertyTypes`, where only the first
+    // accepts an explicit `{ a: undefined }`. The checker adds `undefined` to
+    // every optional property, so the resolved type cannot tell them apart —
+    // only the declaration can.
+    if (this.declaresUndefined(prop)) return this.render(type, depth)
     const members = type.types.filter((m) => !(m.flags & this.ts.TypeFlags.Undefined))
     if (members.length === 0) return 'undefined'
     return members.map((m) => this.render(m, depth)).join(' | ')
+  }
+
+  /** Whether the property's declaration spells `undefined` out. */
+  private declaresUndefined(prop: ts.Symbol): boolean {
+    const decl = prop.valueDeclaration ?? prop.declarations?.[0]
+    if (!decl || !(this.ts.isPropertySignature(decl) || this.ts.isPropertyDeclaration(decl))) {
+      return false
+    }
+    const node = decl.type
+    if (!node) return false
+    const isUndefined = (n: ts.TypeNode): boolean =>
+      n.kind === this.ts.SyntaxKind.UndefinedKeyword ||
+      (this.ts.isLiteralTypeNode(n) && n.literal.kind === this.ts.SyntaxKind.UndefinedKeyword)
+    return this.ts.isUnionTypeNode(node) ? node.types.some(isUndefined) : isUndefined(node)
+  }
+
+  /**
+   * A tuple, with each element's flags honoured.
+   *
+   * `getTypeArguments` alone loses the shape entirely: `[string, number?]`
+   * came out as `[string, undefined | number]` (one required element became
+   * two), and `[string, ...number[]]` came out as `[string, number]` — a
+   * variable-length tuple silently pinned to arity 2.
+   */
+  private renderTuple(type: ts.Type, depth: number): string {
+    const E = this.ts.ElementFlags
+    const args = this.checker.getTypeArguments(type as ts.TypeReference)
+    const target = (type as ts.TypeReference).target as unknown as ts.TupleType
+    const flags = target.elementFlags ?? []
+
+    const parts = args.map((arg, i) => {
+      const flag = flags[i] ?? E.Required
+      if (flag & E.Optional) {
+        // The `?` carries the undefined; leaving it in the type as well reads
+        // as an explicitly-undefined element, which is a different thing.
+        const inner = arg.isUnion()
+          ? arg.types.filter((m) => !(m.flags & this.ts.TypeFlags.Undefined))
+          : [arg]
+        return `${inner.map((m) => this.render(m, depth + 1)).join(' | ')}?`
+      }
+      if (flag & E.Rest) return `...${this.render(arg, depth + 1)}[]`
+      if (flag & E.Variadic) return `...${this.render(arg, depth + 1)}`
+      return this.render(arg, depth + 1)
+    })
+    return `[${parts.join(', ')}]`
   }
 
   /** Quote a property name that isn't a plain identifier. */
