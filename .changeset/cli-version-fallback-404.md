@@ -9,7 +9,7 @@ back to the CLI's own version on failure. Sibling packages version
 independently, so that fallback names a release that does not exist and the
 scaffold died at install time:
 
-```
+```text
 npm error 404 '@forinda/kickjs-vite@^6.14.1' is not in this registry
 ```
 
