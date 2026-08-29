@@ -31,7 +31,10 @@ afterAll(() => rmSync(dir, { recursive: true, force: true }))
  * files resolve the way they do in a real project, which is exactly what the
  * `isSourceFileDefaultLibrary` check depends on.
  */
-function expand(source: string, opts: { maxDepth?: number } = {}) {
+function expand(
+  source: string,
+  opts: { maxDepth?: number; compilerOptions?: ts.CompilerOptions } = {},
+) {
   const file = join(dir, `case-${Math.random().toString(36).slice(2)}.ts`)
   writeFileSync(file, source)
 
@@ -39,6 +42,7 @@ function expand(source: string, opts: { maxDepth?: number } = {}) {
     target: ts.ScriptTarget.ES2022,
     strict: true,
     noEmit: true,
+    ...opts.compilerOptions,
   }
   const program = ts.createProgram({ rootNames: [file], options })
   const checker = program.getTypeChecker()
@@ -172,6 +176,36 @@ describe('TypeExpander', () => {
 
   it('expands a tuple positionally', () => {
     expect(expand('type Target = [string, number]').text).toBe('[string, number]')
+  })
+
+  it('keeps a tuple element optional instead of making it required', () => {
+    // Was `[string, undefined | number]` — one required element became two.
+    expect(expand('type Target = [string, number?]').text).toBe('[string, number?]')
+  })
+
+  it('keeps a rest element variable-length', () => {
+    // Was `[string, number]` — a variable-length tuple pinned to arity 2.
+    expect(expand('type Target = [string, ...number[]]').text).toBe('[string, ...number[]]')
+  })
+
+  it('expands element types inside a tuple', () => {
+    const out = expand(`
+      interface Cell { v: number }
+      type Target = [Cell, ...Cell[]]
+    `)
+    expect(out.text).toBe('[__T0, ...__T0[]]')
+  })
+
+  it('keeps an explicitly declared undefined on an optional property', () => {
+    // Under `exactOptionalPropertyTypes` only the declared-undefined form
+    // accepts `{ a: undefined }`, and the checker adds `undefined` to every
+    // optional property — so the resolved type cannot tell the two apart.
+    const opts = { compilerOptions: { exactOptionalPropertyTypes: true } }
+    expect(expand('type Target = { a?: string | undefined }', opts).text).toBe(
+      // TypeScript normalises union member order.
+      '{ a?: undefined | string }',
+    )
+    expect(expand('type Target = { a?: string }', opts).text).toBe('{ a?: string }')
   })
 
   it('cuts off runaway depth rather than hanging', () => {
