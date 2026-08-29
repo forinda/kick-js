@@ -48,6 +48,8 @@ export interface RunTypegenOptions {
    * Ignored when a `scan` stub is supplied (tests).
    */
   changedFiles?: ScanDelta
+  /** Part of a watch loop — surfaced to plugins as `ctx.watch`. */
+  watch?: boolean
 }
 
 export async function runTypegen(opts: RunTypegenOptions): Promise<TypegenPluginResult[]> {
@@ -105,6 +107,7 @@ export async function runTypegen(opts: RunTypegenOptions): Promise<TypegenPlugin
     },
     getScanResult,
     log: console,
+    watch: opts.watch,
   }
 
   const results: TypegenPluginResult[] = []

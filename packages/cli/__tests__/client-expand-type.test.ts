@@ -125,6 +125,26 @@ describe('TypeExpander', () => {
     expect(out.hoisted[0]).toContain('kickExtra: string')
   })
 
+  it('expands the arguments of a lib generic instead of naming them', () => {
+    // Found by running this against a real 1,940-route app: `Record` is
+    // declared in lib.es5, so naming the whole type emitted
+    // `Record<string, SubjectCell>` into a file with no `SubjectCell` — and
+    // the frontend's tsc answered `TS2304: Cannot find name 'SubjectCell'`.
+    const out = expand(`
+      interface Cell { score: number }
+      type Target = { cells: Record<string, Cell> }
+    `)
+    expect(out.text).toBe('{ cells: Record<string, __T0> }')
+    expect(out.text).not.toContain('Cell>')
+    expect(out.hoisted[0]).toContain('score: number')
+  })
+
+  it('keeps a lib generic over primitives intact', () => {
+    expect(expand('type Target = { m: Map<string, number> }').text).toBe(
+      '{ m: Map<string, number> }',
+    )
+  })
+
   it('emits an index signature', () => {
     expect(expand('type Target = { [k: string]: number }').text).toBe('{ [key: string]: number }')
   })

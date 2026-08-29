@@ -42,6 +42,13 @@ export interface TypegenContext {
    */
   getScanResult(opts: ScanOptions): Promise<ScanResult>
   log: TypegenLogger
+  /**
+   * True when this pass is part of a watch loop (`kick typegen --watch`,
+   * `kick dev`). Plugins whose work is a build-step cost rather than a
+   * keystroke cost return `null` when it is set — see `kick/client`, which
+   * builds a whole TypeScript program.
+   */
+  watch?: boolean
 }
 
 export interface TypegenPlugin {

@@ -484,6 +484,7 @@ export async function watchTypegen(opts: RunTypegenOptions = {}): Promise<() => 
         cwd,
         config: pluginConfig,
         silent: true,
+        watch: true,
       })
       await writeTypegenArtifacts(resolved.outDir, pluginResults, true)
     } catch {

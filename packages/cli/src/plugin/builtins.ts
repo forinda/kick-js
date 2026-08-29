@@ -24,6 +24,7 @@ import { registerDoctorCommand } from '../commands/doctor'
 import { registerCodemodCommands } from '../commands/codemod'
 import { kickAssetsTypegen } from '../typegen/builtin/assets'
 import { kickRoutesTypegen } from '../typegen/builtin/routes'
+import { kickClientTypegen } from '../typegen/builtin/client'
 import { kickEnvTypegen } from '../typegen/builtin/env'
 import { kickRegistryTypegen } from '../typegen/builtin/registry'
 import { kickServiceTokensTypegen } from '../typegen/builtin/service-tokens'
@@ -71,6 +72,9 @@ export const builtinCliPlugins: readonly KickCliPlugin[] = [
   defineCliPlugin({ name: 'kick/context', typegens: [kickContextTypegen()] }),
   defineCliPlugin({ name: 'kick/assets', typegens: [kickAssetsTypegen()] }),
   defineCliPlugin({ name: 'kick/routes', typegens: [kickRoutesTypegen()] }),
+  // After kick/routes, and that IS load-bearing here: this plugin resolves
+  // types out of the map that one emits.
+  defineCliPlugin({ name: 'kick/client', typegens: [kickClientTypegen()] }),
   defineCliPlugin({ name: 'kick/env', typegens: [kickEnvTypegen()] }),
   defineCliPlugin({ name: 'kick/runtime', typegens: [kickRuntimeTypegen()] }),
 ]
