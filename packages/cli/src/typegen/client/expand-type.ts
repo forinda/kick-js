@@ -140,16 +140,28 @@ export class TypeExpander {
         ? this.checker.getTypeOfSymbolAtLocation(prop, decl)
         : this.checker.getDeclaredTypeOfSymbol(prop)
       const optional = (prop.flags & this.ts.SymbolFlags.Optional) !== 0
-      // An optional property's type already includes `undefined`; emitting
-      // both is noise, and under `exactOptionalPropertyTypes` it is a
-      // difference the consumer feels.
-      const rendered = this.render(
-        optional ? this.checker.getNonNullableType(propType) : propType,
-        depth + 1,
-      )
+      const rendered = this.renderPropertyType(propType, optional, depth + 1)
       lines.push(`${indent}${this.propName(prop.getName())}${optional ? '?' : ''}: ${rendered}`)
     }
     return lines.join(join === '\n' ? '\n' : join)
+  }
+
+  /**
+   * A property's type, with `undefined` dropped from an optional one — the
+   * `?` already says that, and under `exactOptionalPropertyTypes` emitting
+   * both is a difference the consumer feels.
+   *
+   * `null` must survive. `checker.getNonNullableType` strips both, which
+   * turned `z.string().nullable().optional()` into `description?: string` —
+   * a client that then rejects a `null` the server happily accepts. Silently
+   * disagreeing with the ambient map is the one thing this generator must
+   * never do.
+   */
+  private renderPropertyType(type: ts.Type, optional: boolean, depth: number): string {
+    if (!optional || !type.isUnion()) return this.render(type, depth)
+    const members = type.types.filter((m) => !(m.flags & this.ts.TypeFlags.Undefined))
+    if (members.length === 0) return 'undefined'
+    return members.map((m) => this.render(m, depth)).join(' | ')
   }
 
   /** Quote a property name that isn't a plain identifier. */

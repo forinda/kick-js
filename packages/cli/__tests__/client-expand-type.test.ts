@@ -73,6 +73,21 @@ describe('TypeExpander', () => {
     expect(expand('type Target = { id?: string }').text).toBe('{ id?: string }')
   })
 
+  it('keeps null on an optional property, dropping only undefined', () => {
+    // Found by running this against a real app: `z.string().nullable()
+    // .optional()` is `string | null | undefined`, and getNonNullableType
+    // stripped BOTH — emitting `description?: string`, a client that rejects
+    // a null the server accepts. The `?` covers undefined; null is data.
+    expect(expand('type Target = { description?: string | null }').text).toBe(
+      // TypeScript normalises union member order.
+      '{ description?: null | string }',
+    )
+  })
+
+  it('still drops undefined from a plain optional', () => {
+    expect(expand('type Target = { id?: string }').text).toBe('{ id?: string }')
+  })
+
   it('expands arrays through their element type', () => {
     expect(expand('type Target = { id: string }[]').text).toBe('{ id: string }[]')
   })
