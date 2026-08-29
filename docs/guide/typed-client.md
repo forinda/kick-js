@@ -71,13 +71,22 @@ import type { KickApi } from '../../../api/.kickjs/types/kick__client'
 export const api = createClient<KickApi>({ baseUrl: '/api/v1' })
 ```
 
-No decorator settings, no path aliases, no ambient bridge file. Both maps carry
-the same types — the client one is produced by resolving the ambient one, not by
-inferring a second time — so you can move a frontend across without changing a
-single call site.
+No decorator settings, no path aliases, no ambient bridge file. Every entry that
+resolves carries the same type as the ambient map — it is produced by resolving
+that map, not by inferring a second time — so moving a frontend across changes
+no call sites.
 
 `kick typegen --check` gates staleness in CI, exactly as with the other
 generated files.
+
+::: warning Read the warnings on a generation run
+A route the resolver cannot resolve is **skipped with a warning**, not guessed
+at, so a run that printed warnings produced a map that is a _subset_ of
+`KickRoutes.Api` — the types in it are still exact, but a route may be missing
+and a call to it will not compile. Treat a warning as an incomplete refresh:
+fix what it names and re-run, and keep `kick typegen --check` in CI so an
+incomplete map cannot be committed unnoticed.
+:::
 
 ::: warning Not refreshed by `kick dev`
 Resolving these types builds a full TypeScript program over the server, which is

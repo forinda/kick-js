@@ -164,6 +164,35 @@ describe('TypeExpander', () => {
     )
   })
 
+  it('keeps ReadonlyArray readonly instead of handing back a mutable array', () => {
+    // `T[]` gives the consumer a `push` the route type forbids.
+    expect(expand('type Target = ReadonlyArray<string>').text).toBe('readonly string[]')
+    expect(expand('type Target = readonly string[]').text).toBe('readonly string[]')
+  })
+
+  it('keeps a tuple readonly', () => {
+    expect(expand('type Target = readonly [string, number]').text).toBe('readonly [string, number]')
+  })
+
+  it('keeps a readonly property readonly', () => {
+    expect(expand('type Target = { readonly id: string }').text).toBe('{ readonly id: string }')
+  })
+
+  it('sees undefined through a type alias on an optional property', () => {
+    // `a?: U` where `type U = string | undefined` spells no `undefined` in the
+    // declaration, but accepts `{ a: undefined }` under
+    // exactOptionalPropertyTypes exactly as the spelled-out form does. Reading
+    // the syntax misses it; asking the checker for the declared type does not.
+    const out = expand(
+      `
+        type U = string | undefined
+        type Target = { a?: U }
+      `,
+      { compilerOptions: { exactOptionalPropertyTypes: true } },
+    )
+    expect(out.text).toBe('{ a?: undefined | string }')
+  })
+
   it('emits an index signature', () => {
     expect(expand('type Target = { [k: string]: number }').text).toBe('{ [key: string]: number }')
   })

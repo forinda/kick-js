@@ -84,12 +84,15 @@ export class TypeExpander {
 
     // Tuples before arrays — a tuple is also a reference to an array type.
     if (this.isTuple(type)) return this.renderTuple(type, depth)
-    const element = this.arrayElement(type)
-    if (element) {
-      const inner = this.render(element, depth + 1)
+    const array = this.arrayElement(type)
+    if (array) {
+      const inner = this.render(array.element, depth + 1)
       // Parenthesise a union so `string | number[]` doesn't stand in for
       // `(string | number)[]`.
-      return /[|&]/.test(inner) ? `(${inner})[]` : `${inner}[]`
+      const body = /[|&]/.test(inner) ? `(${inner})[]` : `${inner}[]`
+      // `ReadonlyArray<T>` rendered as `T[]` hands the consumer a `push` the
+      // route type forbids — permissive in the wrong direction.
+      return array.readonly ? `readonly ${body}` : body
     }
 
     // A type the frontend already has — emit the name, expand nothing.
@@ -138,7 +141,10 @@ export class TypeExpander {
         : this.checker.getDeclaredTypeOfSymbol(prop)
       const optional = (prop.flags & this.ts.SymbolFlags.Optional) !== 0
       const rendered = this.renderPropertyType(propType, optional, prop, depth + 1)
-      lines.push(`${indent}${this.propName(prop.getName())}${optional ? '?' : ''}: ${rendered}`)
+      const readonly = this.isReadonlyProp(prop) ? 'readonly ' : ''
+      lines.push(
+        `${indent}${readonly}${this.propName(prop.getName())}${optional ? '?' : ''}: ${rendered}`,
+      )
     }
     return lines.join(join === '\n' ? '\n' : join)
   }
@@ -172,18 +178,35 @@ export class TypeExpander {
     return members.map((m) => this.render(m, depth)).join(' | ')
   }
 
-  /** Whether the property's declaration spells `undefined` out. */
+  /**
+   * Whether the property's DECLARED type includes `undefined`.
+   *
+   * Resolved semantically rather than by reading the syntax: `a?: U` where
+   * `type U = string | undefined` spells no `undefined` anywhere in the
+   * declaration, yet accepts `{ a: undefined }` under
+   * `exactOptionalPropertyTypes` exactly as the spelled-out form does.
+   * Asking the checker for the declared node's type sees through the alias;
+   * walking the union syntax does not.
+   *
+   * The declared type is the right question because the checker adds
+   * `undefined` to every optional property's RESOLVED type, which is what
+   * makes the two forms indistinguishable after resolution.
+   */
+  private isReadonlyProp(prop: ts.Symbol): boolean {
+    const decl = prop.valueDeclaration ?? prop.declarations?.[0]
+    if (!decl) return false
+    return (this.ts.getCombinedModifierFlags(decl) & this.ts.ModifierFlags.Readonly) !== 0
+  }
+
   private declaresUndefined(prop: ts.Symbol): boolean {
     const decl = prop.valueDeclaration ?? prop.declarations?.[0]
     if (!decl || !(this.ts.isPropertySignature(decl) || this.ts.isPropertyDeclaration(decl))) {
       return false
     }
-    const node = decl.type
-    if (!node) return false
-    const isUndefined = (n: ts.TypeNode): boolean =>
-      n.kind === this.ts.SyntaxKind.UndefinedKeyword ||
-      (this.ts.isLiteralTypeNode(n) && n.literal.kind === this.ts.SyntaxKind.UndefinedKeyword)
-    return this.ts.isUnionTypeNode(node) ? node.types.some(isUndefined) : isUndefined(node)
+    if (!decl.type) return false
+    const declared = this.checker.getTypeFromTypeNode(decl.type)
+    const members = declared.isUnion() ? declared.types : [declared]
+    return members.some((m) => (m.flags & this.ts.TypeFlags.Undefined) !== 0)
   }
 
   /**
@@ -214,7 +237,10 @@ export class TypeExpander {
       if (flag & E.Variadic) return `...${this.render(arg, depth + 1)}`
       return this.render(arg, depth + 1)
     })
-    return `[${parts.join(', ')}]`
+    // `readonly [A, B]` losing its modifier is the tuple form of the same
+    // over-permissiveness as ReadonlyArray.
+    const prefix = target.readonly ? 'readonly ' : ''
+    return `${prefix}[${parts.join(', ')}]`
   }
 
   /** Quote a property name that isn't a plain identifier. */
@@ -273,11 +299,12 @@ export class TypeExpander {
     return Boolean(target && target.objectFlags & objectFlags.Tuple)
   }
 
-  /** Element type if `type` is `T[]` / `ReadonlyArray<T>`, else null. */
-  private arrayElement(type: ts.Type): ts.Type | null {
+  /** Element type and mutability if `type` is `T[]` / `ReadonlyArray<T>`. */
+  private arrayElement(type: ts.Type): { element: ts.Type; readonly: boolean } | null {
     const symbolName = type.getSymbol()?.getName()
     if (symbolName !== 'Array' && symbolName !== 'ReadonlyArray') return null
     const args = this.checker.getTypeArguments(type as ts.TypeReference)
-    return args.length === 1 ? args[0] : null
+    if (args.length !== 1) return null
+    return { element: args[0], readonly: symbolName === 'ReadonlyArray' }
   }
 }

@@ -110,4 +110,61 @@ describe('resolveClientMap', () => {
     expect(out.entries.has('GET /ghost')).toBe(false)
     expect(warnings.join('\n')).toContain('GET /ghost')
   })
+
+  it('refuses to emit anything when the routes file does not compile', async () => {
+    // The failure this guards against produced 1,940 routes of `response: any`
+    // and zero warnings, on a project whose dependencies had gone missing. A
+    // map of `any` looks like a typed client and checks nothing, so it must
+    // never be written — better no file than a file that lies.
+    const broken = mkdtempSync(join(tmpdir(), 'kick-broken-'))
+    try {
+      mkdirSync(join(broken, '.kickjs/types'), { recursive: true })
+      writeFileSync(
+        join(broken, 'package.json'),
+        JSON.stringify({ name: 'broken-fixture', private: true, version: '0.0.0' }),
+      )
+      writeFileSync(
+        join(broken, 'tsconfig.json'),
+        JSON.stringify({
+          compilerOptions: {
+            target: 'ES2022',
+            module: 'ESNext',
+            moduleResolution: 'bundler',
+            strict: true,
+            noEmit: true,
+          },
+          include: ['.kickjs'],
+        }),
+      )
+      const brokenRoutes = join(broken, '.kickjs/types/kick__routes.ts')
+      writeFileSync(
+        brokenRoutes,
+        // The shape typegen emits, but the import cannot resolve — exactly what
+        // an uninstalled dependency tree looks like.
+        `import type { Term } from './does-not-exist'
+
+declare global {
+  namespace KickRoutes {
+    interface Api {
+      'GET /terms': { params: {}; body: unknown; query: unknown; response: Term[]; contextKeys: never }
+    }
+  }
+}
+
+export const kickRpc = {} as const
+`,
+      )
+
+      await expect(
+        resolveClientMap({
+          projectDir: broken,
+          compilerFrom: process.cwd(),
+          routesFile: brokenRoutes,
+          keys: ['GET /terms'],
+        }),
+      ).rejects.toThrow(/type error|cannot be resolved|'any'/)
+    } finally {
+      rmSync(broken, { recursive: true, force: true })
+    }
+  })
 })
