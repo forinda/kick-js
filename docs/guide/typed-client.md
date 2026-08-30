@@ -109,9 +109,10 @@ than refreshing it silently — a map left to rot is how a frontend ends up
 type-checking against routes the server no longer serves.
 
 That cost is paid only when something the map depends on actually moved. Each
-run fingerprints the project's source files, its lockfile, the compiler options
-and the CLI version; when the fingerprint matches the one recorded beside the
-last map, the program is never built and the existing file stands. On that same
+run fingerprints the project's source files, its lockfile, the compiler options,
+the CLI version and the scanned route keys; when the fingerprint matches the one
+recorded beside the last map — and the map on disk is still the file that
+fingerprint produced — the program is never built and the existing file stands. On that same
 1,940-route app an unchanged run is **0.85s and 230 MB** against 7.5s and
 1.2 GB — and because the fingerprint hashes contents rather than timestamps, a
 rebuild that rewrites identical bytes does not invalidate it. Editing a single

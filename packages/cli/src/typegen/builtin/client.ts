@@ -27,10 +27,13 @@ import { createRequire } from 'node:module'
 import { rm } from 'node:fs/promises'
 
 import { fingerprintClientMap, resolveClientMap } from '../client/resolve-entries'
+import { hashText } from '../client/fingerprint'
+import { BANNER_PREFIX } from '../runner'
 import { renderClient } from '../render/client'
 import { isDebugLog, type TypegenLogger, type TypegenPlugin } from '../plugin'
 import type { KickConfig } from '../../config'
 
+const PLUGIN_ID = 'kick/client'
 const OUT_FILE = '.kickjs/types/kick__client.d.ts'
 /** Sidecar recording what the emitted map was built from. */
 const STAMP_FILE = '.kickjs/cache/client-map.sha1'
@@ -44,10 +47,35 @@ const CLI_VERSION: string = (() => {
   }
 })()
 
-/** The recorded fingerprint, or null when there is none to compare against. */
-function readStamp(file: string): string | null {
+/**
+ * The recorded stamp: the input fingerprint, and the hash of the output those
+ * inputs produced.
+ *
+ * Both halves are needed. The runner writes the output file *after*
+ * `generate()` returns, so a stamp recording only the inputs would still match
+ * if that write failed — and the next run would skip, leaving a stale map
+ * behind silently. Recording what the file should contain means a skip is only
+ * taken when the file on disk actually is that file.
+ */
+function readStamp(file: string): { inputs: string; output: string } | null {
   try {
-    return existsSync(file) ? readFileSync(file, 'utf-8').trim() : null
+    if (!existsSync(file)) return null
+    const [inputs, output] = readFileSync(file, 'utf-8').trim().split(/\s+/)
+    return inputs && output ? { inputs, output } : null
+  } catch {
+    return null
+  }
+}
+
+/** What the runner will write to disk for `rendered`. */
+function expectedOutput(rendered: string): string {
+  return `${BANNER_PREFIX}${PLUGIN_ID} */\n\n${rendered}\n`
+}
+
+/** The output file's current bytes, or null when it is absent or unreadable. */
+function readOutput(file: string): string | null {
+  try {
+    return existsSync(file) ? readFileSync(file, 'utf-8') : null
   } catch {
     return null
   }
@@ -122,7 +150,7 @@ function clientMapWanted(ctx: { cwd: string; config: KickConfig; log: TypegenLog
 }
 
 export const kickClientTypegen = (): TypegenPlugin => ({
-  id: 'kick/client',
+  id: PLUGIN_ID,
   outExtension: '.d.ts',
   inputs: ['src/**/*.controller.ts', 'src/**/*.module.ts'],
   async generate(ctx) {
@@ -159,10 +187,20 @@ export const kickClientTypegen = (): TypegenPlugin => ({
     // 1,940-route app. Fingerprinting what the map depends on costs ~35ms, so
     // an unchanged project skips two orders of magnitude of work. Returning
     // null leaves the existing file in place.
-    const stamp = await fingerprintClientMap({ projectDir: ctx.cwd, cliVersion: CLI_VERSION })
-    const stampFile = path.resolve(ctx.cwd, STAMP_FILE)
-    const outFile = path.resolve(ctx.cwd, OUT_FILE)
-    if (stamp && existsSync(outFile) && readStamp(stampFile) === stamp) {
+    const stamp = await fingerprintClientMap({
+      projectDir: ctx.cwd,
+      keys,
+      cliVersion: CLI_VERSION,
+    })
+    const recorded = readStamp(path.resolve(ctx.cwd, STAMP_FILE))
+    const onDisk = readOutput(path.resolve(ctx.cwd, OUT_FILE))
+    if (
+      stamp &&
+      recorded &&
+      onDisk !== null &&
+      recorded.inputs === stamp &&
+      recorded.output === hashText(onDisk)
+    ) {
       if (isDebugLog()) ctx.log.info?.(`  kick/client: unchanged, keeping ${OUT_FILE}`)
       return null
     }
@@ -178,7 +216,7 @@ export const kickClientTypegen = (): TypegenPlugin => ({
       // Not under --check: that gate is read-only, and a cache file written
       // there would dirty a clean checkout just by running it.
       if (stamp && !ctx.check) {
-        await ctx.writeFile(STAMP_FILE, stamp)
+        await ctx.writeFile(STAMP_FILE, `${stamp} ${hashText(expectedOutput(rendered))}`)
       }
       return rendered
     } catch (err) {
