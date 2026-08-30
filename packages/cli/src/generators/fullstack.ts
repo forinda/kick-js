@@ -7,7 +7,7 @@
 //
 // The type loop: server controllers use return-value handlers → `kick
 // typegen` (run here once, re-run by `kick dev`) emits
-// server/.kickjs/types/kick__routes.ts → web/src/types/kick-routes.d.ts
+// server/.kickjs/types/kick__client.d.ts → web tsconfig `types` (ambient)
 // side-effect-imports that file (type-only, erased at runtime) → the web
 // client calls `api.get('/hello')` with the handler's actual response type.
 
@@ -57,6 +57,9 @@ export async function initFullstackProject(options: InitFullstackOptions): Promi
     template: 'minimal',
     schemaLib,
     runtime,
+    // web/ reads the resolved route map from the ambient KickClientApi
+    // namespace, which needs the TS 7 compiler API to produce.
+    withClientMap: true,
     // Root owns install + git so the lockfile/commit cover the workspace.
     initGit: false,
     installDeps: false,
@@ -79,7 +82,6 @@ export async function initFullstackProject(options: InitFullstackOptions): Promi
   await writeFileSafe(join(dir, 'web/src/main.tsx'), webMain())
   await writeFileSafe(join(dir, 'web/src/App.tsx'), webApp())
   await writeFileSafe(join(dir, 'web/src/api.ts'), webApi())
-  await writeFileSafe(join(dir, 'web/src/types/kick-routes.d.ts'), webRouteTypes())
 
   // ── workspace root ──────────────────────────────────────────────────
   await writeFileSafe(join(dir, 'package.json'), rootPackageJson(name, packageManager))
@@ -206,7 +208,7 @@ export default defineConfig({
 `
 }
 
-function webTsConfig(): string {
+export function webTsConfig(): string {
   return `${JSON.stringify(
     {
       compilerOptions: {
@@ -219,12 +221,21 @@ function webTsConfig(): string {
         skipLibCheck: true,
         noEmit: true,
         isolatedModules: true,
-        // The type bridge pulls server controller sources into this
-        // program — they use legacy TS decorators.
-        experimentalDecorators: true,
-        // The KickRoutes ambient types come from the server's generated
-        // typegen output via src/types/kick-routes.d.ts.
-        types: [],
+        // The resolved client route map, as an ambient global type package —
+        // the same mechanism as "node" or "vitest/globals". It makes
+        // `KickClientApi.Api` available with no import and no bridge file.
+        //
+        // Note this is a `types` ENTRY, not an `include`: the map is a global
+        // type package, not source of this app. It also means the file must
+        // exist — `kick new` runs typegen for you, and `kick typegen` in
+        // server/ refreshes it. (An `include` entry tolerates the file being
+        // absent; a `types` entry reports TS2688, which is the louder and
+        // more useful failure for something the app depends on.)
+        //
+        // No `experimentalDecorators` here: unlike the ambient
+        // `KickRoutes.Api` bridge, this map carries no reference to the
+        // server's decorated controller sources.
+        types: ['../server/.kickjs/types/kick__client'],
       },
       include: ['src'],
     },
@@ -308,22 +319,21 @@ export function App() {
 `
 }
 
-function webApi(): string {
+export function webApi(): string {
   return `import { createClient } from '@forinda/kickjs-client'
 
-// KickApi (alias of KickRoutes.Api) is ambient — populated by server/.kickjs/types (see
-// src/types/kick-routes.d.ts). Keys are module-mount-relative paths;
-// the bootstrap-level '/api/v1' prefix lives here in baseUrl, and the
-// Vite dev proxy forwards it to the KickJS server.
-export const api = createClient<KickApi>({ baseUrl: '/api/v1' })
-`
-}
-
-function webRouteTypes(): string {
-  return `// Type-only bridge to the server's generated route types. The import is
-// erased at build time — no server code ever enters the web bundle.
-// Regenerate with \`kick typegen\` in server/ (automatic under \`kick dev\`).
-import '../../../server/.kickjs/types/kick__routes'
+// KickClientApi is ambient — the resolved route map from
+// server/.kickjs/types/kick__client.d.ts, wired in tsconfig's \`types\`. Every
+// response type is a literal shape, so nothing from the server's source graph
+// enters this program.
+//
+// Keys are module-mount-relative paths; the bootstrap-level '/api/v1' prefix
+// lives here in baseUrl, and the Vite dev proxy forwards it to the KickJS
+// server.
+//
+// Prefer an explicit import? The same file exports the type:
+//   import type { Api } from '../../server/.kickjs/types/kick__client'
+export const api = createClient<KickClientApi.Api>({ baseUrl: '/api/v1' })
 `
 }
 
@@ -398,52 +408,57 @@ Server: http://localhost:3000 · Web: http://localhost:5173 (Vite proxies \`/api
 ## The type loop
 
 1. Server handlers **return** their payloads (\`return this.service.greet(...)\`).
-2. \`kick typegen\` (auto under \`kick dev\`) emits \`server/.kickjs/types/kick__routes.ts\` —
-   including the flat \`KickRoutes.Api\` map with inferred response types.
-3. \`web/src/types/kick-routes.d.ts\` imports that file type-only.
-4. \`web/src/api.ts\`'s \`createClient<KickRoutes.Api>\` types every call site.
+2. \`kick typegen\` emits \`server/.kickjs/types/kick__client.d.ts\` — the flat
+   route map with every response type resolved to a literal shape.
+3. \`web/tsconfig.json\` lists that file in \`types\`, so \`KickClientApi\` is
+   ambient — no import, no bridge file.
+4. \`web/src/api.ts\`'s \`createClient<KickClientApi.Api>\` types every call site.
+
+Because the map holds resolved types rather than references to controllers,
+\`web\` never compiles server source: no \`experimentalDecorators\`, no path
+aliases into \`server/src\`.
 
 Rename a field in \`server/src/modules/hello/hello.service.ts\` → \`web/src/App.tsx\`
 stops compiling. That's the point.
 
-### When to switch to \`kick__client.d.ts\`
+### Keeping the map fresh
 
-Step 3 works because \`web\` compiles the server's route types — which reference
-controller classes, so the server's source graph is pulled into \`web\`'s own
-\`tsc\` run. That is why \`web/tsconfig.json\` carries \`experimentalDecorators\`.
-In one workspace of this size the cost is invisible, and the payoff is the live
-loop above.
+\`server/.kickjs/types/kick__client.d.ts\` is generated, and \`web\` reads it as
+an ambient type package. Two things follow.
 
-It stops being invisible when the frontend grows or moves. \`kick typegen\` also
-emits \`server/.kickjs/types/kick__client.d.ts\` — the same routes with every
-type resolved to a literal shape and **no imports at all**:
+**It is not refreshed by \`kick dev\`.** Resolving it builds a whole TypeScript
+program over the server, which is a build-step cost rather than a per-save one,
+so a renamed response field surfaces on the next \`kick typegen\` rather than on
+save. Everything else in \`.kickjs/types\` still updates on save. Add
+\`kick typegen --check\` to CI and a stale map fails the build.
 
-On TypeScript 7 the resolver needs a compiler API, which TS 7 does not ship:
+**It needs a compiler API.** TypeScript 7 ships none, so \`server\` depends on
+\`@typescript/typescript6\`. Remove it and typegen skips this one file, saying
+so; \`web\` then reports \`TS2688\` because the file it lists in \`types\` is gone.
 
-\`\`\`bash
-cd server && ${pm} add -D @typescript/typescript6
+### The other way to wire it
+
+A \`types\` entry says "this is a global type package", which is what the map is,
+and it fails loudly when the file is missing. If you would rather it be quiet
+when absent — say, a repo where the map is not always generated — use
+\`include\` instead:
+
+\`\`\`json
+{ "include": ["src", "../server/.kickjs/types/kick__client.d.ts"] }
 \`\`\`
 
-It is not installed by default — it pulls a second TypeScript, and this
-template's \`web\` does not use the map.
+That tolerates the file not existing, at the cost of \`KickClientApi\` silently
+not resolving. Note \`types\` replaces TypeScript's automatic \`@types\`
+inclusion, so if you add entries there, list the ones you rely on too
+(\`"types": ["node", "../server/.kickjs/types/kick__client"]\`).
+
+Or skip the global entirely — the same file exports the type:
 
 \`\`\`ts
-// web/src/api.ts
-import type { KickApi } from '../../server/.kickjs/types/kick__client'
+import type { Api } from '../../server/.kickjs/types/kick__client'
 
-export const api = createClient<KickApi>({ baseUrl: '/api/v1' })
+export const api = createClient<Api>({ baseUrl: '/api/v1' })
 \`\`\`
-
-Then delete \`web/src/types/kick-routes.d.ts\` and drop \`experimentalDecorators\`
-from \`web/tsconfig.json\`. Call sites do not change: both maps carry the same
-types, because the second is produced by resolving the first.
-
-Switch when the frontend lives in its own repo, when it sets
-\`verbatimModuleSyntax\`, or when its typecheck starts paying for the server's.
-The trade is that this file is **not** refreshed by \`kick dev\` — resolving it
-builds a whole TypeScript program — so a renamed field surfaces on the next
-\`kick typegen\` rather than on save. \`kick typegen --check\` catches a stale one
-in CI.
 
 Docs: https://kickjs.app/guide/typed-client.html
 `

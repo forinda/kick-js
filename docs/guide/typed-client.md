@@ -63,18 +63,70 @@ imports before it compiled, and its typecheck went from 1.7s / 819 MB to 10.8s
 
 `kick typegen` also emits `.kickjs/types/kick__client.d.ts`, which removes the
 reference entirely: every type resolved to a literal shape, shared shapes
-hoisted, and **no imports at all**. A frontend of any size needs one line:
+hoisted, and **no imports at all**.
 
-```ts
-import type { KickApi } from '../../../api/.kickjs/types/kick__client'
+List it in the frontend's tsconfig `types`, the same way you would `node` or
+`vitest/globals`:
 
-export const api = createClient<KickApi>({ baseUrl: '/api/v1' })
+```json
+{
+  "compilerOptions": {
+    "types": ["../../api/.kickjs/types/kick__client"]
+  }
+}
 ```
 
-No decorator settings, no path aliases, no ambient bridge file. Every entry that
-resolves carries the same type as the ambient map — it is produced by resolving
-that map, not by inferring a second time — so moving a frontend across changes
-no call sites.
+The route map is then ambient — no import, no bridge file, no decorator
+settings, no path aliases:
+
+```ts
+export const api = createClient<KickClientApi.Api>({ baseUrl: '/api/v1' })
+```
+
+Only the namespace is global. The resolved shapes it references stay inside the
+file, so nothing else lands in your global scope.
+
+This is what `kick new --template fullstack` scaffolds.
+
+::: warning `types` replaces automatic `@types` inclusion
+Listing anything in `types` switches off TypeScript's automatic inclusion of
+every `@types/*` package. If your frontend relies on that, name what it needs
+alongside the map: `"types": ["node", "../../api/.kickjs/types/kick__client"]`.
+:::
+
+### The alternatives
+
+**`include`**, if you would rather not touch `types` at all:
+
+```json
+{ "include": ["src", "../../api/.kickjs/types/kick__client.d.ts"] }
+```
+
+The difference is what happens when the file has not been generated. A `types`
+entry reports `TS2688: Cannot find type definition file`, which is the useful
+failure for something your app depends on. An `include` entry tolerates it
+silently, and `KickClientApi` simply fails to resolve — better for a repo where
+the map is not always present.
+
+**An explicit import**, if you would rather have no global at all. The same file
+exports the type:
+
+```ts
+import type { Api } from '../../api/.kickjs/types/kick__client'
+
+export const api = createClient<Api>({ baseUrl: '/api/v1' })
+```
+
+Every entry that resolves carries the same type as the ambient map — it is
+produced by resolving that map, not by inferring a second time — so moving a
+frontend across changes no call sites, whichever wiring you pick.
+
+::: tip Why `KickClientApi` and not `KickApi`
+`kick__routes.ts` already declares a global `KickApi`, and both files live in
+`.kickjs/types`, which the server's own tsconfig includes. Sharing the name
+makes the **server** stop compiling with `TS2300: Duplicate identifier`. The two
+maps coexist under separate names, and a frontend only ever sees this one.
+:::
 
 `kick typegen --check` gates staleness in CI, exactly as with the other
 generated files.

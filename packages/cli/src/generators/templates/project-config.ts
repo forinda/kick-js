@@ -53,6 +53,16 @@ export function generatePackageJson(
   packages: string[] = [],
   schemaLib: SchemaLib = 'zod',
   runtime: 'express' | 'fastify' | 'h3' = 'express',
+  /**
+   * Pin the TypeScript 7 compiler API, needed to resolve the client route map
+   * (`.kickjs/types/kick__client.d.ts`). Set by the fullstack generator, whose
+   * web app reads that map from the ambient `KickClientApi` namespace.
+   *
+   * Deliberately a flag rather than `template === 'fullstack'`: the fullstack
+   * workspace scaffolds its SERVER with `template: 'minimal'`, so keying off
+   * the template name silently pinned nothing.
+   */
+  withClientMap = false,
 ): string {
   const schemaDep = SCHEMA_LIB_DEPS[schemaLib]
   const baseDeps: Record<string, string> = {
@@ -140,15 +150,12 @@ export function generatePackageJson(
         supertest: '^7.2.2',
         vitest: '^4.1.2',
         typescript: '^7.0.2',
-        // NOT pinned here: `@typescript/typescript6`, the compiler API
-        // `kick typegen` needs to resolve the self-contained client route map
-        // on TypeScript 7. It is a 10 kB shim over a 24 MB `typescript@6`, and
-        // no template consumes the map — the fullstack web app is wired to the
-        // ambient `KickRoutes.Api` so it stays live under `kick dev`, and the
-        // rest/minimal templates have no frontend at all. A second compiler in
-        // every scaffold, for a file nothing reads, is not a default worth
-        // shipping. Projects that adopt the map install it then; the README
-        // section that describes the swap says so.
+        // Only scaffolds that consume the client route map pin the TypeScript 7
+        // compiler API: it is a 10 kB shim over a 24 MB `typescript@6`, which is
+        // not something to put in every project. Today that means fullstack,
+        // whose web app reads the map from the ambient `KickClientApi`
+        // namespace. rest/minimal have no frontend and stay lean.
+        ...(withClientMap ? { '@typescript/typescript6': '^6.0.2' } : {}),
         prettier: '^3.8.1',
       },
     },
