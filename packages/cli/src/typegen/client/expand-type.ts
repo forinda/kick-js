@@ -135,10 +135,7 @@ export class TypeExpander {
     }
 
     for (const prop of this.checker.getPropertiesOfType(type)) {
-      const decl = prop.valueDeclaration ?? prop.declarations?.[0]
-      const propType = decl
-        ? this.checker.getTypeOfSymbolAtLocation(prop, decl)
-        : this.checker.getDeclaredTypeOfSymbol(prop)
+      const propType = this.typeOfProperty(prop)
       const optional = (prop.flags & this.ts.SymbolFlags.Optional) !== 0
       const rendered = this.renderPropertyType(propType, optional, prop, depth + 1)
       const readonly = this.isReadonlyProp(prop) ? 'readonly ' : ''
@@ -147,6 +144,39 @@ export class TypeExpander {
       )
     }
     return lines.join(join === '\n' ? '\n' : join)
+  }
+
+  /**
+   * The type of a property, declared or synthesized.
+   *
+   * `getTypeOfSymbol` is the only API that answers for both. A key-remapped
+   * mapped type — `{ [K in keyof T as Camel<K>]: T[K] }` — produces properties
+   * with NO declaration at all, and the previous code fell back to
+   * `getDeclaredTypeOfSymbol` for those. That function answers for *type*
+   * symbols (aliases, interfaces, classes); handed a property symbol it
+   * returns the error type, so every remapped field emitted `any`:
+   *
+   *     { [K in keyof T as Camel<K>]: T[K] }  →  { contactName: any }
+   *     { [K in keyof T]: T[K] }              →  { contact_name: string }
+   *
+   * The homomorphic form only ever worked by accident — its properties keep a
+   * declaration pointing back at the source property.
+   *
+   * `any` is the worst possible degradation here: `unknown` forces a cast at
+   * the call site, `any` silently type-checks against anything, so a route
+   * that degraded this way was less safe than one still emitting `unknown`.
+   */
+  private typeOfProperty(prop: ts.Symbol): ts.Type {
+    const checker = this.checker as ts.TypeChecker & {
+      getTypeOfSymbol?: (symbol: ts.Symbol) => ts.Type
+    }
+    if (typeof checker.getTypeOfSymbol === 'function') return checker.getTypeOfSymbol(prop)
+    // Older compiler APIs: the location-based call, which is correct for any
+    // property that has a declaration to point at.
+    const decl = prop.valueDeclaration ?? prop.declarations?.[0]
+    return decl
+      ? this.checker.getTypeOfSymbolAtLocation(prop, decl)
+      : this.checker.getDeclaredTypeOfSymbol(prop)
   }
 
   /**

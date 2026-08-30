@@ -193,6 +193,53 @@ describe('TypeExpander', () => {
     expect(out.text).toBe('{ a?: undefined | string }')
   })
 
+  it('carries values through a key-remapped mapped type (#547)', () => {
+    // `as` produces SYNTHESIZED properties — no declaration at all — and the
+    // old fallback asked getDeclaredTypeOfSymbol, which answers for type
+    // symbols and hands back the error type for a property. Every remapped
+    // field came out `any`, which is worse than the `unknown` it replaced:
+    // unknown forces a cast, any silently type-checks against anything.
+    const out = expand(`
+      type Camel<S extends string> = S extends \`\${infer H}_\${infer M}\${infer T}\`
+        ? \`\${H}\${Uppercase<M>}\${Camel<T>}\`
+        : S
+      type Plain = { contact_name: string; school_count: number }
+      type Remap<T> = { [K in keyof T as K extends string ? Camel<K> : K]: T[K] }
+      type Target = Remap<Plain>
+    `)
+    expect(out.text).toBe('{ contactName: string; schoolCount: number }')
+    expect(out.text).not.toContain('any')
+  })
+
+  it('carries values through a composed remap over a picked row (#547)', () => {
+    // The reported shape: CamelizeKeys<DateToIsoValues<Pick<Row, …>>>, which is
+    // how a DTO stays bound to the table type.
+    const out = expand(`
+      type Camel<S extends string> = S extends \`\${infer H}_\${infer M}\${infer T}\`
+        ? \`\${H}\${Uppercase<M>}\${Camel<T>}\`
+        : S
+      type DateToIso<V> = V extends Date ? string : V
+      type DateToIsoValues<T> = { [K in keyof T]: DateToIso<T[K]> }
+      type CamelizeKeys<T> = { [K in keyof T as K extends string ? Camel<K> : K]: T[K] }
+      type Dto<Row> = CamelizeKeys<DateToIsoValues<Row>>
+      interface Row { id: string; contact_name: string; created_at: Date; extra: number }
+      type Target = Dto<Pick<Row, 'id' | 'contact_name' | 'created_at'>>
+    `)
+    expect(out.text).toBe('{ id: string; contactName: string; createdAt: string }')
+    expect(out.text).not.toContain('any')
+  })
+
+  it('keeps a homomorphic mapped type working', () => {
+    // This one always worked, but only by accident — its properties keep a
+    // declaration pointing back at the source property. Pin it.
+    const out = expand(`
+      type Plain = { contact_name: string; school_count: number }
+      type Identity<T> = { [K in keyof T]: T[K] }
+      type Target = Identity<Plain>
+    `)
+    expect(out.text).toBe('{ contact_name: string; school_count: number }')
+  })
+
   it('emits an index signature', () => {
     expect(expand('type Target = { [k: string]: number }').text).toBe('{ [key: string]: number }')
   })
