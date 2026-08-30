@@ -15,5 +15,12 @@ and prints `inspector.url()` rather than a hand-built one — the real URL
 carries the session id, without which a debugger client cannot attach even to
 an open port.
 
+It also binds to **loopback** now, as `node --inspect` does. The old code
+hardcoded `0.0.0.0`, which never mattered while nothing was listening — but an
+attached inspector can evaluate arbitrary code in the process, so making it
+work turned that into a real open port on every interface. `--inspect-host` is
+there for containers, which legitimately need `0.0.0.0`, and warns when the
+address is not loopback.
+
 A port it cannot take (`Inspector is already activated`) is now reported with a
 pointer to `--inspect-port`, instead of being swallowed.

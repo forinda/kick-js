@@ -33,6 +33,19 @@ describe('openInspector', () => {
     expect(await res.json()).toHaveProperty('Protocol-Version')
   })
 
+  it('binds to loopback by default', async () => {
+    // An attached inspector evaluates arbitrary code in the process, so the
+    // bind address is a security boundary, not a convenience. `node --inspect`
+    // defaults to loopback for this reason; `dev:debug` used to hardcode
+    // 0.0.0.0, which on a laptop means the café wifi.
+    //
+    // No host argument — the default is what this pins.
+    const url = await openInspector(39232)
+
+    expect(url).toContain('127.0.0.1')
+    expect(url).not.toContain('0.0.0.0')
+  })
+
   it('throws rather than reporting a URL it did not open', async () => {
     await openInspector(39230, '127.0.0.1')
 
