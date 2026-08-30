@@ -159,6 +159,7 @@ export function generatePackageJson(
         // namespace. rest/minimal have no frontend and stay lean.
         ...(withClientMap ? { '@typescript/typescript6': '^6.0.2' } : {}),
         oxfmt: '^0.65.0',
+        oxlint: '^1.80.0',
       },
     },
     null,

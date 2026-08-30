@@ -21,13 +21,13 @@ export interface TypecheckBin {
   args: string[]
   /** `.CMD` shims require a shell on Windows. */
   shell: boolean
-  kind: 'tsgo' | 'tsc'
+  kind: 'vue-tsc' | 'tsgo' | 'tsc'
 }
 
 /**
  * Locate the project's checker binary under `node_modules/.bin`,
  * preferring tsgo (`@typescript/native-preview`) over tsc. Returns
- * null when neither is installed — callers print a one-time notice
+ * null when none is installed — callers print a one-time notice
  * and skip checking rather than failing the dev server.
  *
  * On Windows the runnable shim is `<name>.CMD` / `<name>.cmd`; the
@@ -36,7 +36,11 @@ export interface TypecheckBin {
 export function resolveTypecheckBin(projectDir: string): TypecheckBin | null {
   const binDir = join(projectDir, 'node_modules', '.bin')
   const isWin = process.platform === 'win32'
-  for (const kind of ['tsgo', 'tsc'] as const) {
+  // `vue-tsc` first, and it being installed is the signal: plain tsc does not
+  // understand `.vue`, so in a Vue project it matches no inputs and reports
+  // TS18003 "No inputs were found" while real errors sit unchecked in the
+  // SFCs. vue-tsc checks plain `.ts` too, so preferring it costs nothing.
+  for (const kind of ['vue-tsc', 'tsgo', 'tsc'] as const) {
     const names = isWin ? [`${kind}.CMD`, `${kind}.cmd`, `${kind}.exe`] : [kind]
     for (const name of names) {
       const candidate = join(binDir, name)
@@ -53,7 +57,7 @@ export interface TypecheckResult {
   /** Combined stdout+stderr of the checker run. */
   output: string
   durationMs: number
-  kind: 'tsgo' | 'tsc'
+  kind: 'vue-tsc' | 'tsgo' | 'tsc'
 }
 
 export interface DevTypechecker {

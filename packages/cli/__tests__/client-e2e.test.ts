@@ -197,6 +197,29 @@ export const ids = (terms: Terms): string[] => terms.map((t) => t.id)
     expect(typecheckWeb().ok).toBe(false)
   })
 
+  it('compiles before the first route exists', () => {
+    // A project with no routes yet is the scaffold's first moment. The empty
+    // branch used to re-export `Api` from its own filename, which TypeScript
+    // rejects with `TS2303: Circular definition of import alias` — so a fresh
+    // project emitted a file that did not compile.
+    writeFileSync(
+      join(web, 'kick__client.d.ts'),
+      renderClient({ entries: new Map(), hoisted: [] }, []),
+    )
+    writeFileSync(
+      join(web, 'src/app.ts'),
+      `import type { Api } from '../kick__client'
+
+export type Keys = keyof Api
+export type Ambient = keyof KickClientApi.Api
+`,
+    )
+
+    const { ok, output } = typecheckWeb()
+    expect(output).toBe('')
+    expect(ok).toBe(true)
+  })
+
   it('still rejects a route that does not exist', () => {
     writeFileSync(
       join(web, 'src/app.ts'),

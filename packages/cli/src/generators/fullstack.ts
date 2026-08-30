@@ -84,11 +84,26 @@ export async function initFullstackProject(options: InitFullstackOptions): Promi
   await writeFileSafe(join(dir, 'web/src/api.ts'), webApi())
 
   // ── workspace root ──────────────────────────────────────────────────
-  await writeFileSafe(join(dir, 'package.json'), rootPackageJson(name, packageManager))
+  await writeFileSafe(
+    join(dir, 'package.json'),
+    rootPackageJson(name, packageManager, versions['@forinda/kickjs-cli']),
+  )
   // Only pnpm reads this file. npm / yarn / bun declare workspaces via the
   // `workspaces` field in the root package.json instead — see rootPackageJson.
   if (packageManager === 'pnpm') {
-    await writeFileSafe(join(dir, 'pnpm-workspace.yaml'), `packages:\n  - server\n  - web\n`)
+    // `allowBuilds` is answered here, not left to pnpm. This scaffold installs
+    // non-interactively, so pnpm cannot prompt — it writes
+    // `'@swc/core': set this to true or false` and then refuses to run ANY
+    // script with ERR_PNPM_IGNORED_BUILDS, leaving a fresh project unable to
+    // run `pnpm typecheck` or `pnpm dev` until someone edits this file.
+    //
+    // Both are build tools this template chose: swc compiles the decorators,
+    // esbuild is Vite's. Approving their install scripts is the same decision
+    // as depending on them.
+    await writeFileSafe(
+      join(dir, 'pnpm-workspace.yaml'),
+      `packages:\n  - server\n  - web\n\nallowBuilds:\n  '@swc/core': true\n  esbuild: true\n`,
+    )
   }
   await writeFileSafe(join(dir, '.gitignore'), rootGitignore())
   await writeFileSafe(join(dir, 'README.md'), rootReadme(name, packageManager))
@@ -278,8 +293,9 @@ function webApp(): string {
 import { api } from './api'
 
 // The response types below are INFERRED from the server's handlers —
-// change server/src/modules/hello/hello.service.ts and these types follow
-// on the next \`kick typegen\` (automatic under \`kick dev\`).
+// change server/src/modules/hello/hello.service.ts and these types follow on
+// the next \`kick typegen\`. Not under \`kick dev\`: resolving the client map
+// builds a whole TypeScript program, so it is a build step, not a per-save one.
 type Greeting = Awaited<ReturnType<typeof fetchGreeting>>
 
 function fetchGreeting() {
@@ -339,7 +355,7 @@ export const api = createClient<KickClientApi.Api>({ baseUrl: '/api/v1' })
 
 // ── root templates ────────────────────────────────────────────────────
 
-function rootPackageJson(name: string, pm: string): string {
+function rootPackageJson(name: string, pm: string, cliVersion: string): string {
   const scripts: Record<string, string> =
     pm === 'pnpm'
       ? {
@@ -349,7 +365,16 @@ function rootPackageJson(name: string, pm: string): string {
           'dev:server': 'pnpm --filter ./server dev',
           'dev:web': 'pnpm --filter ./web dev',
           build: 'pnpm -r run build',
-          typecheck: 'pnpm -r run typecheck',
+          // No `npx`: the binary is `kick` but the package is
+          // `@forinda/kickjs-cli`, so npx cannot map one to the other and
+          // falls back to the REGISTRY — where `kick` is an unrelated
+          // AngularJS scaffolder. It runs, prints its own help, and exits 0,
+          // so this script would pass without type-checking anything.
+          //
+          // Every package manager puts `node_modules/.bin` on PATH for
+          // scripts, so the bare name resolves locally, and a missing install
+          // fails loudly instead of fetching a stranger.
+          typecheck: 'kick typecheck --cwd server && kick typecheck --cwd web',
         }
       : {
           // cd-based scripts — the one form npm, yarn (classic AND berry),
@@ -361,7 +386,16 @@ function rootPackageJson(name: string, pm: string): string {
           build: `${pm} run build:server && ${pm} run build:web`,
           'build:server': `cd server && ${pm} run build`,
           'build:web': `cd web && ${pm} run build`,
-          typecheck: `cd web && ${pm} run typecheck`,
+          // No `npx`: the binary is `kick` but the package is
+          // `@forinda/kickjs-cli`, so npx cannot map one to the other and
+          // falls back to the REGISTRY — where `kick` is an unrelated
+          // AngularJS scaffolder. It runs, prints its own help, and exits 0,
+          // so this script would pass without type-checking anything.
+          //
+          // Every package manager puts `node_modules/.bin` on PATH for
+          // scripts, so the bare name resolves locally, and a missing install
+          // fails loudly instead of fetching a stranger.
+          typecheck: 'kick typecheck --cwd server && kick typecheck --cwd web',
         }
   return `${JSON.stringify(
     {
@@ -370,6 +404,10 @@ function rootPackageJson(name: string, pm: string): string {
       version: '0.0.0',
       type: 'module',
       scripts,
+      // The CLI is a ROOT dependency so the bare `kick` in the scripts above
+      // resolves: package managers put `node_modules/.bin` on PATH for
+      // scripts, and the CLI otherwise lives only in `server/node_modules`.
+      devDependencies: { '@forinda/kickjs-cli': cliVersion },
       workspaces: ['server', 'web'],
     },
     null,

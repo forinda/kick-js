@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process'
 import { cpSync, existsSync, mkdirSync } from 'node:fs'
 import { resolve, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -367,6 +368,34 @@ export function registerRunCommands(program: Command): void {
       const env: NodeJS.ProcessEnv = { NODE_ENV: 'production' }
       if (opts.port) env.PORT = String(opts.port)
       runNodeWithEnv(opts.entry, env)
+    })
+
+  program
+    .command('typecheck')
+    .description('Type-check the project with its own tsgo/tsc')
+    .option('--cwd <dir>', 'Directory to type-check', '.')
+    .action((opts: any) => {
+      // The point of routing this through `kick` is that a scaffold should not
+      // have to spell the package manager. `pnpm -r exec tsc --noEmit` and
+      // `cd server && npx tsc --noEmit` do the same job in two incompatible
+      // dialects, and the fullstack template had to branch on the manager to
+      // write them. `kick typecheck` is the same command everywhere.
+      //
+      // Same resolver `kick dev --typecheck` uses, so it prefers tsgo and
+      // handles Windows' .CMD shims.
+      const dir = resolve(process.cwd(), opts.cwd ?? '.')
+      const bin = resolveTypecheckBin(dir)
+      if (!bin) {
+        console.error(
+          '\n  No type-checker found. Install one in this project:' +
+            '\n    pnpm add -D typescript        (tsc)' +
+            '\n    pnpm add -D @typescript/native-preview   (tsgo, faster)\n',
+        )
+        process.exit(1)
+        return
+      }
+      const result = spawnSync(bin.cmd, bin.args, { stdio: 'inherit', shell: bin.shell, cwd: dir })
+      process.exit(result.status ?? 1)
     })
 
   program

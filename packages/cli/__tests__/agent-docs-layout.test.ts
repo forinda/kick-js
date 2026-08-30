@@ -122,8 +122,12 @@ describe('generateKickJsSkillFiles — direct contract', () => {
     const addModulePnpm = pnpmSkills.find((s) => s.slug === 'add-module')!
     const addModuleYarn = yarnSkills.find((s) => s.slug === 'add-module')!
 
-    expect(addModulePnpm.content).toMatch(/pnpm run typecheck/)
-    expect(addModuleYarn.content).toMatch(/yarn run typecheck/)
+    // `run test`, not `run typecheck`: typechecking goes through
+    // `kick typecheck` now, which is the same command under every manager —
+    // that is the point of routing it through the CLI. `test` is still a
+    // package script, so it remains the thing that must be interpolated.
+    expect(addModulePnpm.content).toMatch(/pnpm run test/)
+    expect(addModuleYarn.content).toMatch(/yarn run test/)
     // The pnpm copy should NOT mention yarn and vice versa
     expect(addModulePnpm.content).not.toMatch(/yarn run/)
     expect(addModuleYarn.content).not.toMatch(/pnpm run/)

@@ -39,16 +39,16 @@ export function renderClient(map: ResolvedClientMap, keys: string[]): string {
     return `${HEADER}
 // (no routes discovered yet — annotate a controller method with
 //  @Get/@Post/@Put/@Delete/@Patch and re-run \`kick typegen\`)
+interface Api {}
+
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace KickClientApi {
-    interface Api {}
+    export { Api }
   }
 }
 
-export type { Api } from './kick__client'
-
-export {}
+export type { Api }
 `
   }
 
