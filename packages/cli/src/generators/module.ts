@@ -32,7 +32,6 @@ interface GenerateModuleOptions {
   dryRun?: boolean
   /** When false, skip pluralization — use singular names for folders, routes, and classes */
   pluralize?: boolean
-  /** Prisma client import path (default: '@prisma/client', Prisma 7+: '@/generated/prisma/client') */
   /**
    * DI-token scope prefix substituted into emitted `createToken<T>()`
    * literals. Resolved by the orchestrating command from

@@ -18,6 +18,7 @@ import { generateService } from '../generators/service'
 import { generateController } from '../generators/controller'
 import { generateDto } from '../generators/dto'
 import { hasSwagger } from '../config'
+import { findProjectRoot } from '../utils/project-root'
 import { generateConfig } from '../generators/config'
 import { generateAgentDocs } from '../generators/agent-docs'
 import { findStyleDriftModules } from '../generators/migrate-modules'
@@ -151,7 +152,6 @@ const GENERATORS = [
   { name: 'dto <name>', description: 'Zod DTO schema                  [-m module]' },
   { name: 'adapter <name>', description: 'AppAdapter with lifecycle hooks (app-level only)' },
   { name: 'test <name>', description: 'Vitest test scaffold            [-m module]' },
-  { name: 'job <name>', description: 'Queue @Job processor' },
   { name: 'config', description: 'Generate kick.config.ts' },
   {
     name: 'agents',
@@ -165,9 +165,24 @@ const GENERATORS = [
  * scaffolding modules when the first arg is actually a generator name
  * that failed to route (older CLI, typo'd flag).
  */
-const RESERVED_GENERATOR_NAMES: ReadonlySet<string> = new Set(
-  GENERATORS.map((g) => g.name.split(' ')[0]),
-)
+/**
+ * Generators this CLI no longer ships. Kept out of `--list` but still reserved,
+ * so `kick g job email` fails with an explanation instead of silently
+ * scaffolding modules named `job` and `email` — the exact fall-through the
+ * guard below exists to stop.
+ */
+const REMOVED_GENERATOR_NAMES: ReadonlyMap<string, string> = new Map([
+  [
+    'job',
+    'Queue processors are no longer built in — their shape belongs to whichever queue you run.\n' +
+      '  Add your own in kick.config.ts: https://kickjs.app/guide/plugin-generators.html',
+  ],
+])
+
+const RESERVED_GENERATOR_NAMES: ReadonlySet<string> = new Set([
+  ...GENERATORS.map((g) => g.name.split(' ')[0]),
+  ...REMOVED_GENERATOR_NAMES.keys(),
+])
 
 async function printGeneratorList(): Promise<void> {
   console.log('\n  Built-in generators:\n')
@@ -221,7 +236,11 @@ async function runModuleGeneration(
   const pattern = opts.pattern ?? config?.pattern ?? 'rest'
   const shouldPluralize = opts.pluralize === false ? false : (mc.pluralize ?? true)
   const tokenScope = resolveTokenScope(config, process.cwd())
-  const swagger = hasSwagger(process.cwd())
+  // findProjectRoot, not cwd: `kick g` is routinely run from inside a module
+  // directory, and reading package.json relative to cwd there finds nothing —
+  // so a project that HAS swagger silently generates controllers without it.
+  // The extension guide warns generator authors about exactly this trap.
+  const swagger = hasSwagger(findProjectRoot())
   const resolvedStyle = mc.style ?? 'define'
 
   // Style-drift gate. When the project pins `modules.style: 'define'`
@@ -355,11 +374,20 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
         // after the generator + its argument (`kick g contributor tenant`
         // → modules `contributor` and `tenant`). Fail loud instead.
         if (generatorName !== 'module' && RESERVED_GENERATOR_NAMES.has(generatorName)) {
-          console.error(`\n  '${generatorName}' is a generator, not a module name.`)
-          console.error(`  Did you mean:  kick g ${generatorName} ${itemName ?? '<name>'}`)
-          console.error(
-            `  If that errors, your @forinda/kickjs-cli is older than the '${generatorName}' generator — upgrade it.\n`,
-          )
+          const removed = REMOVED_GENERATOR_NAMES.get(generatorName)
+          if (removed) {
+            // Never "upgrade to get it" — this one was removed on purpose, and
+            // sending someone to a newer version they will not find is worse
+            // than saying nothing.
+            console.error(`\n  'kick g ${generatorName}' has been removed.`)
+            console.error(`  ${removed}\n`)
+          } else {
+            console.error(`\n  '${generatorName}' is a generator, not a module name.`)
+            console.error(`  Did you mean:  kick g ${generatorName} ${itemName ?? '<name>'}`)
+            console.error(
+              `  If that errors, your @forinda/kickjs-cli is older than the '${generatorName}' generator — upgrade it.\n`,
+            )
+          }
           process.exitCode = 1
           return
         }
@@ -650,7 +678,11 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
       const modulesDir = opts.modulesDir ?? mc.dir ?? 'src/modules'
       const fields = parseFields(rawFields)
       const tokenScope = resolveTokenScope(config, process.cwd())
-      const swagger = hasSwagger(process.cwd())
+      // findProjectRoot, not cwd: `kick g` is routinely run from inside a module
+      // directory, and reading package.json relative to cwd there finds nothing —
+      // so a project that HAS swagger silently generates controllers without it.
+      // The extension guide warns generator authors about exactly this trap.
+      const swagger = hasSwagger(findProjectRoot())
       // `kick g scaffold` emits the flat REST layout with field-aware
       // DTOs / repository. (The DDD layout it used to produce was removed
       // alongside the ddd/cqrs patterns.)

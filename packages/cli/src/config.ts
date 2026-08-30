@@ -39,8 +39,9 @@ export const PACKAGE_MANAGERS: readonly PackageManager[] = ['pnpm', 'npm', 'yarn
  * There are deliberately no ORM presets. A repository shaped to Prisma or
  * Drizzle is that library's interface, not KickJS's, and a generator for it is
  * a promise to track someone else's API across versions. Any other name
- * scaffolds a generic custom-repository stub you own:
- * `repo: { name: 'postgres' }`.
+ * scaffolds a generic custom-repository stub you own, passed as an object
+ * because `RepoTypeConfig` is `BuiltinRepoType | CustomRepoType` and the
+ * builtin side is `'inmemory'` alone: `repo: { name: 'postgres' }`.
  */
 export type BuiltinRepoType = 'inmemory'
 
@@ -277,7 +278,7 @@ export interface ModuleConfig {
    * — generate a stub repository with TODO markers.
    *
    * @example
-   * repo: 'postgres'              // custom stub
+   * repo: { name: 'postgres' }    // custom stub
    * repo: { name: 'typeorm' }     // custom
    */
   repo?: RepoTypeConfig
@@ -564,7 +565,18 @@ export function defineConfig(config: KickConfig): KickConfig {
  * emit what the project DECLARES it uses. A transitively-present copy in
  * node_modules is not a dependency this code may import.
  */
-export function hasDependency(cwd: string, name: string): boolean {
+export function hasDependency(
+  cwd: string,
+  name: string,
+  /**
+   * Where the dependency must be declared. Default `'runtime'`: generated
+   * code that *imports a value* — `@ApiTags` is a decorator, evaluated at
+   * boot — needs the package present in a production install, and
+   * `npm install --omit=dev` drops devDependencies. Pass `'any'` only for
+   * something used at build or test time.
+   */
+  scope: 'runtime' | 'any' = 'runtime',
+): boolean {
   try {
     const pkgPath = join(cwd, 'package.json')
     if (!existsSync(pkgPath)) return false
@@ -572,7 +584,8 @@ export function hasDependency(cwd: string, name: string): boolean {
       dependencies?: Record<string, string>
       devDependencies?: Record<string, string>
     }
-    return Boolean(pkg.dependencies?.[name] ?? pkg.devDependencies?.[name])
+    if (pkg.dependencies?.[name]) return true
+    return scope === 'any' ? Boolean(pkg.devDependencies?.[name]) : false
   } catch {
     // An unreadable package.json means we cannot prove the dependency —
     // and emitting an import we cannot justify is the failure being fixed.
@@ -580,9 +593,15 @@ export function hasDependency(cwd: string, name: string): boolean {
   }
 }
 
-/** Whether the project declares the swagger package that `@ApiTags` comes from. */
+/**
+ * Whether the project declares the swagger package `@ApiTags` comes from.
+ *
+ * Runtime scope: the decorator is evaluated when the controller class is
+ * defined, so a devDependency-only install would emit controllers that import
+ * a package a production install does not have.
+ */
 export function hasSwagger(cwd: string): boolean {
-  return hasDependency(cwd, '@forinda/kickjs-swagger')
+  return hasDependency(cwd, '@forinda/kickjs-swagger', 'runtime')
 }
 
 export function resolveTokenScope(config: KickConfig | null, cwd: string): string {

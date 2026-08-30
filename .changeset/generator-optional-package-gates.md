@@ -12,12 +12,11 @@ project depended on them, producing files that could not compile:
   decorators. The `rest` template does not install swagger, so a generated
   module in a fresh project was broken on arrival — and nobody asked for
   swagger.
-- `kick g job` emitted `import { … } from '@forinda/kickjs-queue'`.
+- `kick g job` emitted `import { … } from '@forinda/kickjs-queue'`. That
+  generator is removed outright rather than gated — a queue processor's shape
+  belongs to whichever queue you run. Add your own with `defineGenerator`.
 
 The decorators are now emitted only when the project declares the dependency.
-`kick g job` refuses with `kick add queue` rather than leaving a broken file
-behind, since there is no useful job template without the package.
-
 Both read `package.json` rather than resolving from `node_modules`: what a
 project declares is what its generated code may import, and a transitively
 installed copy is not a dependency to rely on.
