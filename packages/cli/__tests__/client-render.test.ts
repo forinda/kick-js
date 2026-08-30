@@ -18,7 +18,7 @@ const code = (out: string) =>
     .join('\n')
 
 describe('renderClient', () => {
-  it('emits a module-scoped interface with no imports', () => {
+  it('emits no imports, and exposes only the namespace globally', () => {
     const out = renderClient(
       {
         entries: new Map([['GET /terms', '{ params: {}; response: __T0[] }']]),
@@ -27,22 +27,31 @@ describe('renderClient', () => {
       ['GET /terms'],
     )
 
-    expect(out).toContain('export interface KickApi {')
+    expect(out).toContain('namespace KickClientApi {')
+    // Module-local, so the 86 hoisted shapes of a real app do not land in the
+    // consuming frontend's global scope.
+    expect(out).toContain('interface Api {')
+    expect(out).toContain('export type { Api }')
+    // NOT a global `KickApi`: kick__routes.ts already declares one, and both
+    // files sit in .kickjs/types which the server's own tsconfig includes.
+    expect(out).not.toContain('type KickApi')
     expect(out).toContain('"GET /terms": { params: {}; response: __T0[] }')
     expect(out).toContain('interface __T0 {')
     expect(code(out)).not.toContain('import ')
-    expect(code(out)).not.toContain('declare global')
+    // One global namespace, and nothing else ambient: the hoisted `__T<n>`
+    // shapes must not reach the consuming frontend's global scope.
+    expect(out.match(/declare global/g)).toHaveLength(1)
   })
 
   it('still emits a usable empty map before the first route exists', () => {
     const out = renderClient({ entries: new Map(), hoisted: [] }, [])
-    expect(out).toContain('export interface KickApi {}')
+    expect(out).toContain('interface Api {}')
   })
 
   it('emits the empty map rather than a broken one when every key was skipped', () => {
     // Keys with no resolved entry would otherwise render as `'K': undefined`.
     const out = renderClient({ entries: new Map(), hoisted: [] }, ['GET /ghost'])
-    expect(out).toContain('export interface KickApi {}')
+    expect(out).toContain('interface Api {}')
     expect(out).not.toContain('ghost')
   })
 
