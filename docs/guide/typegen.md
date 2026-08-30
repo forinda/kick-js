@@ -471,7 +471,7 @@ defineHttpContextDecorator({
 })
 ```
 
-`ContextMeta` still drives the value type of `ctx.get('tenant')`; `ContextKeys` only records that the key exists. Scaffold a contributor (and its `ContextMeta` stub) with [`kick g contributor`](./context-decorators.md). Empty project → no `kick__context.d.ts` emitted and `dependsOn` falls back to `string[]`.
+`ContextMeta` still drives the value type of `ctx.get('tenant')`; `ContextKeys` only records that the key exists. Write the contributor (and its `ContextMeta` stub) by hand — see [Context Decorators](./context-decorators.md). Empty project → no `kick__context.d.ts` emitted and `dependsOn` falls back to `string[]`.
 
 ## Augmentation catalogue
 
