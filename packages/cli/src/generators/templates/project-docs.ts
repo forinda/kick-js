@@ -390,7 +390,7 @@ package additions, env access patterns, troubleshooting) is detailed below.
 | TypeScript config | \`tsconfig.json\` |
 | Vite config (HMR) | \`vite.config.ts\` |
 | Vitest config | \`vitest.config.ts\` |
-| Prettier config | \`.prettierrc\` |
+| Formatter config | \`.oxfmtrc.json\` (oxfmt) |
 | CLI config | \`kick.config.ts\` |
 
 ### Module Pattern (${template.toUpperCase()})

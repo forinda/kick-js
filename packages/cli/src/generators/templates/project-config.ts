@@ -119,16 +119,18 @@ export function generatePackageJson(
         // typegen-on-save watcher. Plain `vite` gives working HMR but
         // frozen `.kickjs/types` — new routes silently lose their typing
         // until a manual `kick typegen`.
+        // Four scripts, not ten. Everything dropped from here is still one
+        // command away — `kick dev:debug`, `kick typegen`, `pnpm exec vitest`,
+        // `pnpm exec tsc --noEmit` — and a scaffold that opens with a wall of
+        // aliases teaches less than one that shows the binary.
+        //
+        // `lint: 'eslint src/'` used to be here without eslint ever being a
+        // dependency, so `lint` failed with "command not found" in every
+        // generated project.
         dev: 'kick dev',
-        'dev:debug': 'kick dev:debug',
         build: 'kick build',
         start: 'kick start',
         test: 'vitest run',
-        'test:watch': 'vitest',
-        typecheck: 'tsc --noEmit',
-        typegen: 'kick typegen',
-        lint: 'eslint src/',
-        format: 'prettier --write src/',
       },
       dependencies: baseDeps,
       devDependencies: {
@@ -156,7 +158,7 @@ export function generatePackageJson(
         // whose web app reads the map from the ambient `KickClientApi`
         // namespace. rest/minimal have no frontend and stay lean.
         ...(withClientMap ? { '@typescript/typescript6': '^6.0.2' } : {}),
-        prettier: '^3.8.1',
+        oxfmt: '^0.65.0',
       },
     },
     null,
@@ -244,15 +246,28 @@ export function generateTsConfig(): string {
   )
 }
 
-/** Generate .prettierrc with project formatting rules */
-export function generatePrettierConfig(): string {
+/**
+ * Generate `.oxfmtrc.json`.
+ *
+ * oxfmt over prettier: same options, same output for these settings, one
+ * binary instead of a package plus plugins — and it is what the framework
+ * itself is formatted with, so a scaffold no longer arrives holding a
+ * different tool than the project it came from.
+ *
+ * There is no `format` script. `pnpm exec oxfmt` is the command, and a
+ * scaffold that opens with ten aliases teaches less than one that shows the
+ * tools.
+ */
+export function generateFormatterConfig(): string {
   return JSON.stringify(
     {
+      $schema: './node_modules/oxfmt/configuration_schema.json',
       semi: false,
       singleQuote: true,
       trailingComma: 'all',
       printWidth: 100,
       tabWidth: 2,
+      ignorePatterns: ['**/dist/', '**/.kickjs/', '**/node_modules/'],
     },
     null,
     2,
