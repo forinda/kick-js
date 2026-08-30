@@ -10,7 +10,6 @@ export interface ModuleContext {
   repo: RepoType
   noEntity: boolean
   noTests: boolean
-  prismaClientPath: string
   /**
    * DI-token scope prefix substituted into emitted `createToken<T>()`
    * literals. Threaded down through pattern generators into every

@@ -113,12 +113,12 @@ node ../packages/cli/bin.js new my-example-api --yes --no-install --force
 
 # Or specify each flag explicitly when you want a non-default template/repo
 node ../packages/cli/bin.js new my-example-api \
-  --template rest --pm pnpm --repo prisma --no-git --no-install --force
+  --template rest --pm pnpm --repo postgres --no-git --no-install --force
 ```
 
 `--yes` (alias `--non-interactive`) bypasses every prompt with safe defaults; explicit flags override individual answers. Without `--yes`, every unset flag prompts interactively.
 
-Available flags: `--template rest|minimal|fullstack`, `--pm pnpm|npm|yarn|bun`, `--repo prisma|drizzle|inmemory|custom`, `--packages auth,swagger,...`, `--no-git`, `--no-install`, `--force`, `-y / --yes / --non-interactive`.
+Available flags: `--template rest|minimal|fullstack`, `--pm pnpm|npm|yarn|bun`, `--repo inmemory|<any-name>`, `--packages auth,swagger,...`, `--no-git`, `--no-install`, `--force`, `-y / --yes / --non-interactive`.
 
 3. Update generated `package.json`:
    - Rename to `@forinda/kickjs-example-<name>`
@@ -276,10 +276,9 @@ export default defineConfig({
   pattern: 'rest',
   modules: {
     dir: 'src/modules',
-    repo: 'prisma',                     // 'drizzle' | 'inmemory' | 'prisma' | { name: 'custom' }
+    repo: 'postgres',                   // 'inmemory' (built-in) | any name → custom stub
     pluralize: true,
-    schemaDir: 'prisma/',
-    prismaClientPath: '@/generated/prisma/client',  // Prisma 7
+    schemaDir: 'src/db/schema',
   },
   commands: [...],
 })
@@ -297,7 +296,6 @@ interface TemplateContext {
   pluralPascal?: string // Pluralized Pascal
   repoPrefix?: string // Repository import prefix
   dtoPrefix?: string // DTO import prefix
-  prismaClientPath?: string
   repoType?: string // Custom repo type name
 }
 ```
