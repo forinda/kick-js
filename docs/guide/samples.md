@@ -189,7 +189,7 @@ export const LoadTenant = defineHttpContextDecorator.withParams<LoadTenantParams
 })
 ```
 
-**Best pattern:** declare the `ContextMeta` type first; reach for `dependsOn` to order contributors (it's typo-checked); write one with `defineContextDecorator`. Keep `@Middleware()` for short-circuiting responses or mutating the stream. → [Context Decorators](./context-decorators.md)
+**Best pattern:** declare the `ContextMeta` type first; reach for `dependsOn` to order contributors (it's typo-checked); scaffold one with `kick g contributor <name> --type http|bare [--params …]`. Keep `@Middleware()` for short-circuiting responses or mutating the stream. → [Context Decorators](./context-decorators.md)
 
 ---
 

@@ -20,8 +20,7 @@ This page covers **runtime plugins** — `definePlugin()` factories registered v
 The fastest way is the generator:
 
 ```bash
-# Plugins are hand-written, or scaffolded by your own generator:
-#   https://kickjs.app/guide/plugin-generators.html
+kick g plugin analytics
 # → src/plugins/analytics.plugin.ts
 ```
 
