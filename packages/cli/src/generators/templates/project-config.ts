@@ -140,12 +140,15 @@ export function generatePackageJson(
         supertest: '^7.2.2',
         vitest: '^4.1.2',
         typescript: '^7.0.2',
-        // TypeScript 7 ships no JS compiler API, and `kick typegen` needs one
-        // to resolve the self-contained client route map
-        // (.kickjs/types/kick__client.d.ts). Without it every typegen run
-        // prints a skip warning and the file never appears — so a scaffold
-        // that pins TS 7 has to pin this too.
-        '@typescript/typescript6': '^6.0.2',
+        // NOT pinned here: `@typescript/typescript6`, the compiler API
+        // `kick typegen` needs to resolve the self-contained client route map
+        // on TypeScript 7. It is a 10 kB shim over a 24 MB `typescript@6`, and
+        // no template consumes the map — the fullstack web app is wired to the
+        // ambient `KickRoutes.Api` so it stays live under `kick dev`, and the
+        // rest/minimal templates have no frontend at all. A second compiler in
+        // every scaffold, for a file nothing reads, is not a default worth
+        // shipping. Projects that adopt the map install it then; the README
+        // section that describes the swap says so.
         prettier: '^3.8.1',
       },
     },

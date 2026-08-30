@@ -418,6 +418,15 @@ It stops being invisible when the frontend grows or moves. \`kick typegen\` also
 emits \`server/.kickjs/types/kick__client.d.ts\` — the same routes with every
 type resolved to a literal shape and **no imports at all**:
 
+On TypeScript 7 the resolver needs a compiler API, which TS 7 does not ship:
+
+\`\`\`bash
+cd server && ${pm} add -D @typescript/typescript6
+\`\`\`
+
+It is not installed by default — it pulls a second TypeScript, and this
+template's \`web\` does not use the map.
+
 \`\`\`ts
 // web/src/api.ts
 import type { KickApi } from '../../server/.kickjs/types/kick__client'

@@ -46,16 +46,39 @@ describe('kick/client plugin', () => {
     expect(getScanResult).not.toHaveBeenCalled()
   })
 
-  it('warns and skips on any resolution failure, instead of failing typegen', async () => {
+  it('stays quiet when the project never had a client map', async () => {
+    // This plugin runs for every adopter, and most do not consume the map:
+    // the fullstack template's web app is wired to the ambient KickRoutes.Api,
+    // and rest/minimal have no frontend at all. Warning on every
+    // `kick typegen` about a file they do not use is pure noise — and the
+    // compiler API it needs pulls a second TypeScript, so "just install it"
+    // is not a free answer either.
     const { ctx, log } = makeCtx()
 
-    // An unusable project — no tsconfig, no routes file, possibly no compiler
-    // API. Every one of those means "skip this file", never "fail the pass":
-    // this plugin runs for every adopter, and an additive feature must not
-    // turn into a hard break. (The compiler-API message itself is asserted in
-    // client-ts-compiler.test.ts, where the decision lives.)
     expect(await kickClientTypegen().generate(ctx)).toBeNull()
-    expect(log.warn.mock.calls.flat().join(' ')).toContain('kick/client: skipped')
+    expect(log.warn).not.toHaveBeenCalled()
+  })
+
+  it('warns loudly when a map WAS on disk, because that is a regression', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'kick-skip-'))
+    try {
+      mkdirSync(join(dir, '.kickjs/types'), { recursive: true })
+      const out = join(dir, '.kickjs/types/kick__client.d.ts')
+      writeFileSync(out, 'export interface KickApi {}\n')
+
+      const { ctx, log } = makeCtx({ cwd: dir })
+      expect(await kickClientTypegen().generate(ctx)).toBeNull()
+
+      const warnings = log.warn.mock.calls.flat().join(' ')
+      expect(warnings).toContain('kick/client: skipped')
+      // Missing beats stale: a frontend importing a deleted file fails to
+      // compile immediately, where an obsolete map type-checks cleanly
+      // against routes the server no longer serves.
+      expect(warnings).toContain('removed the previously generated')
+      expect(existsSync(out)).toBe(false)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 
   it('runs the resolution when not watching', async () => {
