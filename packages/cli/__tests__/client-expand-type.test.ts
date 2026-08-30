@@ -33,7 +33,11 @@ afterAll(() => rmSync(dir, { recursive: true, force: true }))
  */
 function expand(
   source: string,
-  opts: { maxDepth?: number; compilerOptions?: ts.CompilerOptions } = {},
+  opts: {
+    maxDepth?: number
+    compilerOptions?: ts.CompilerOptions
+    onWarn?: (msg: string) => void
+  } = {},
 ) {
   const file = join(dir, `case-${Math.random().toString(36).slice(2)}.ts`)
   writeFileSync(file, source)
@@ -282,6 +286,41 @@ describe('TypeExpander', () => {
       '{ a?: undefined | string }',
     )
     expect(expand('type Target = { a?: string }', opts).text).toBe('{ a?: string }')
+  })
+
+  it('does not spend the depth budget on hoisted types', () => {
+    // Hoisting ENDS inline nesting: each named type becomes its own top-level
+    // `interface __Tn { … }` block. Carrying the caller's depth into that body
+    // made a chain of named DTOs exhaust the budget on a nesting the output
+    // does not contain — a real app emitted 34 "type nesting exceeded"
+    // warnings, and a 15-link chain produced `interface __T12 { v: unknown }`
+    // where `v` was a plain `string`. Degrading real types is worse than the
+    // runaway the guard exists to stop.
+    let src = ''
+    for (let i = 0; i < 15; i++) src += `interface L${i} { v: string; next: L${i + 1} }\n`
+    src += 'interface L15 { v: string }\ntype Target = L0\n'
+
+    const warnings: string[] = []
+    const out = expand(src, { onWarn: (m) => warnings.push(m) })
+
+    expect(warnings).toEqual([])
+    expect(out.hoisted).toHaveLength(16)
+    // Every link keeps its real type, including the last one.
+    expect(out.hoisted[15]).toContain('v: string')
+    expect(out.hoisted.join('\n')).not.toContain('unknown')
+  })
+
+  it('still cuts off genuinely deep inline nesting', () => {
+    // The case the guard is actually for: anonymous levels really do nest in
+    // the emitted text, so something has to stop them.
+    let t = '{ v: string }'
+    for (let i = 0; i < 15; i++) t = `{ v: string; next: ${t} }`
+
+    const warnings: string[] = []
+    const out = expand(`type Target = ${t}`, { onWarn: (m) => warnings.push(m) })
+
+    expect(warnings.length).toBeGreaterThan(0)
+    expect(out.text).toContain('unknown')
   })
 
   it('cuts off runaway depth rather than hanging', () => {
