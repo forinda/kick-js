@@ -12,7 +12,13 @@ function project() {
     dir,
     src,
     hash: () =>
-      fingerprint({ projectDir: dir, fileNames: [src], options: {}, cliVersion: '1.0.0' }),
+      fingerprint({
+        projectDir: dir,
+        fileNames: [src],
+        keys: [],
+        options: {},
+        cliVersion: '1.0.0',
+      }),
   }
 }
 
@@ -43,6 +49,7 @@ describe('client map fingerprint', () => {
     const other = fingerprint({
       projectDir: p.dir,
       fileNames: [p.src],
+      keys: [],
       options: {},
       cliVersion: '2.0.0',
     })
@@ -54,6 +61,7 @@ describe('client map fingerprint', () => {
     const other = fingerprint({
       projectDir: p.dir,
       fileNames: [p.src],
+      keys: [],
       options: { strict: true },
       cliVersion: '1.0.0',
     })
@@ -75,17 +83,70 @@ describe('client map fingerprint', () => {
     mkdirSync(nm, { recursive: true })
     const dep = join(nm, 'index.d.ts')
     writeFileSync(dep, 'export const v = 1')
-    const opts = { projectDir: p.dir, fileNames: [p.src, dep], options: {}, cliVersion: '1.0.0' }
+    const opts = {
+      projectDir: p.dir,
+      fileNames: [p.src, dep],
+      keys: [],
+      options: {},
+      cliVersion: '1.0.0',
+    }
     const before = fingerprint(opts)
     writeFileSync(dep, 'export const v = 2')
     expect(fingerprint(opts)).toBe(before)
+  })
+
+  // A route can move without any hashed file moving: the scan root is
+  // configurable and need not sit inside the tsconfig program.
+  it('changes when the route keys change', () => {
+    const p = project()
+    const base = { projectDir: p.dir, fileNames: [p.src], options: {}, cliVersion: '1.0.0' }
+    expect(fingerprint({ ...base, keys: ['GET /a'] })).not.toBe(
+      fingerprint({ ...base, keys: ['GET /b'] }),
+    )
+  })
+
+  // The scaffolded tsconfig includes `.kickjs/types/**\/*.d.ts`, which is where
+  // this map itself is written. Hashing it would make the fingerprint depend on
+  // the previous run's output, so it could never match twice.
+  it('does not hash typegen output under .kickjs', () => {
+    const p = project()
+    const gen = join(p.dir, '.kickjs', 'types')
+    mkdirSync(gen, { recursive: true })
+    const out = join(gen, 'kick__client.d.ts')
+    writeFileSync(out, 'declare const a: 1')
+    const opts = {
+      projectDir: p.dir,
+      fileNames: [p.src, out],
+      keys: [],
+      options: {},
+      cliVersion: '1.0.0',
+    }
+    const before = fingerprint(opts)
+    writeFileSync(out, 'declare const a: 2')
+    expect(fingerprint(opts)).toBe(before)
+  })
+
+  // A stable "unreadable" marker would hash the same every run, so a later
+  // dependency change would still match the stamp and skip.
+  it('throws rather than hashing a marker for an unreadable file', () => {
+    const p = project()
+    const gone = join(p.dir, 'nope.ts')
+    expect(() =>
+      fingerprint({
+        projectDir: p.dir,
+        fileNames: [gone],
+        keys: [],
+        options: {},
+        cliVersion: '1.0.0',
+      }),
+    ).toThrow(/cannot read project file/)
   })
 
   it('is order-independent', () => {
     const p = project()
     const b = join(p.dir, 'b.ts')
     writeFileSync(b, 'export const b = 1')
-    const base = { projectDir: p.dir, options: {}, cliVersion: '1.0.0' }
+    const base = { projectDir: p.dir, keys: [], options: {}, cliVersion: '1.0.0' }
     expect(fingerprint({ ...base, fileNames: [p.src, b] })).toBe(
       fingerprint({ ...base, fileNames: [b, p.src] }),
     )

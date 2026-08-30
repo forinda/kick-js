@@ -62,6 +62,8 @@ const PROBE = '__kick_client_probe__.ts'
 export async function fingerprintClientMap(opts: {
   projectDir: string
   compilerFrom?: string
+  /** Route keys the map is built for — see `FingerprintInput.keys`. */
+  keys: readonly string[]
   cliVersion: string
 }): Promise<string | null> {
   try {
@@ -79,6 +81,7 @@ export async function fingerprintClientMap(opts: {
     return fingerprint({
       projectDir: opts.projectDir,
       fileNames: parsed.fileNames,
+      keys: opts.keys,
       options: parsed.options,
       cliVersion: opts.cliVersion,
     })
