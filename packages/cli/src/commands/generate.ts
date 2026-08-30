@@ -17,11 +17,11 @@ import { generateContributor, type ContributorType } from '../generators/contrib
 import { generateService } from '../generators/service'
 import { generateController } from '../generators/controller'
 import { generateDto } from '../generators/dto'
+import { hasSwagger } from '../config'
 import { generateConfig } from '../generators/config'
 import { generateAgentDocs } from '../generators/agent-docs'
 import { findStyleDriftModules } from '../generators/migrate-modules'
 import { colors } from '../utils/colors'
-import { generateJob } from '../generators/job'
 import { generateScaffold, parseFields } from '../generators/scaffold'
 import { generateTest } from '../generators/test'
 import {
@@ -61,10 +61,6 @@ interface OutDirOpts {
 interface ModuleScopedOpts {
   out?: string
   module?: string
-}
-
-interface JobOpts extends OutDirOpts {
-  queue?: string
 }
 
 interface ScaffoldOpts {
@@ -225,6 +221,7 @@ async function runModuleGeneration(
   const pattern = opts.pattern ?? config?.pattern ?? 'rest'
   const shouldPluralize = opts.pluralize === false ? false : (mc.pluralize ?? true)
   const tokenScope = resolveTokenScope(config, process.cwd())
+  const swagger = hasSwagger(process.cwd())
   const resolvedStyle = mc.style ?? 'define'
 
   // Style-drift gate. When the project pins `modules.style: 'define'`
@@ -284,6 +281,7 @@ async function runModuleGeneration(
       pluralize: shouldPluralize,
       prismaClientPath: mc.prismaClientPath,
       tokenScope,
+      swagger,
       style: mc.style,
     })
     allFiles.push(...files)
@@ -622,19 +620,6 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
       printGenerated(files, dryRun)
     })
 
-  // ── kick g job <name> ────────────────────────────────────────────────
-  gen
-    .command('job <name>')
-    .description('Generate a @Job queue processor with @Process handlers')
-    .option('-o, --out <dir>', 'Output directory', 'src/jobs')
-    .option('-q, --queue <name>', 'Queue name (default: <name>-queue)')
-    .action(async (name: string, opts: JobOpts, cmd: Command) => {
-      const dryRun = isDryRun(cmd)
-      setDryRun(dryRun)
-      const files = await generateJob({ name, outDir: resolve(opts.out), queue: opts.queue })
-      printGenerated(files, dryRun)
-    })
-
   // ── kick g scaffold <name> <fields...> ─────────────────────────────
   gen
     .command('scaffold <name> [fields...]')
@@ -666,6 +651,7 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
       const modulesDir = opts.modulesDir ?? mc.dir ?? 'src/modules'
       const fields = parseFields(rawFields)
       const tokenScope = resolveTokenScope(config, process.cwd())
+      const swagger = hasSwagger(process.cwd())
       // `kick g scaffold` emits the flat REST layout with field-aware
       // DTOs / repository. (The DDD layout it used to produce was removed
       // alongside the ddd/cqrs patterns.)
@@ -677,6 +663,7 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
         noTests: opts.tests === false,
         pluralize: opts.pluralize === false ? false : (mc.pluralize ?? true),
         tokenScope,
+        swagger,
         style: mc.style,
       })
       console.log(`\n  Scaffolded ${name} with ${fields.length} field(s):`)

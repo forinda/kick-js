@@ -17,6 +17,7 @@ import {
 
 export async function generateRestFiles(ctx: ModuleContext): Promise<void> {
   const { pascal, kebab, plural, pluralPascal, repo, noTests, tokenScope, style, write } = ctx
+  const swagger = ctx.swagger ?? false
 
   // Module file (named `<kebab>.module.ts` so Vite's module-discovery plugin picks it up)
   await write(`${kebab}.module.ts`, generateRestModuleIndex({ pascal, kebab, plural, repo, style }))
@@ -27,7 +28,7 @@ export async function generateRestFiles(ctx: ModuleContext): Promise<void> {
   // Controller (injects service)
   await write(
     `${kebab}.controller.ts`,
-    generateRestController({ pascal, kebab, plural, pluralPascal }),
+    generateRestController({ pascal, kebab, plural, pluralPascal, swagger }),
   )
 
   // Service (wraps repository)

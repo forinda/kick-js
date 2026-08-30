@@ -560,6 +560,39 @@ export function defineConfig(config: KickConfig): KickConfig {
  * @param config Loaded `kick.config.ts` (null when not present)
  * @param cwd Project root — used to read package.json
  */
+/**
+ * Whether this project actually depends on `@forinda/kickjs-swagger`.
+ *
+ * The REST generator decorates controllers with `@ApiTags`, which comes from
+ * that package. Emitting it unconditionally put an import of a package the
+ * project does not have into every generated controller — five decorators and
+ * a broken build, in a file the adopter did not write.
+ *
+ * Reading package.json rather than resolving the module: a generator should
+ * emit what the project DECLARES it uses. A transitively-present copy in
+ * node_modules is not a dependency this code may import.
+ */
+export function hasDependency(cwd: string, name: string): boolean {
+  try {
+    const pkgPath = join(cwd, 'package.json')
+    if (!existsSync(pkgPath)) return false
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8')) as {
+      dependencies?: Record<string, string>
+      devDependencies?: Record<string, string>
+    }
+    return Boolean(pkg.dependencies?.[name] ?? pkg.devDependencies?.[name])
+  } catch {
+    // An unreadable package.json means we cannot prove the dependency —
+    // and emitting an import we cannot justify is the failure being fixed.
+    return false
+  }
+}
+
+/** Whether the project declares the swagger package that `@ApiTags` comes from. */
+export function hasSwagger(cwd: string): boolean {
+  return hasDependency(cwd, '@forinda/kickjs-swagger')
+}
+
 export function resolveTokenScope(config: KickConfig | null, cwd: string): string {
   if (config?.tokenScope && typeof config.tokenScope === 'string' && config.tokenScope.length > 0) {
     const sanitised = sanitizeScope(config.tokenScope)

@@ -35,6 +35,12 @@ export interface TemplateContext {
   /** Custom repo type name (e.g. 'typeorm') — only for generateCustomRepository */
   repoType?: string
   /**
+   * Emit `@ApiTags` and its import. Only when the project actually depends on
+   * `@forinda/kickjs-swagger` — generating an import for a package that is
+   * not installed produces a module that cannot compile.
+   */
+  swagger?: boolean
+  /**
    * DI-token scope prefix used by templates that emit `createToken<T>()`
    * literals. Default `'app'`. The orchestrating generator
    * (module / scaffold / leaf) resolves this from `kick.config.ts`

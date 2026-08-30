@@ -140,6 +140,8 @@ interface ScaffoldOptions {
    * callers stay backward-compatible.
    */
   tokenScope?: string
+  /** Project depends on @forinda/kickjs-swagger — gates @ApiTags emission. */
+  swagger?: boolean
   /**
    * Module declaration style — `'define'` (factory) or `'class'`
    * (legacy). Defaults to `'define'`. Resolved by the caller from
@@ -187,7 +189,13 @@ export async function generateScaffold(options: ScaffoldOptions): Promise<string
   // Controller + service (generic CRUD boilerplate)
   await write(
     `${kebab}.controller.ts`,
-    generateRestController({ pascal, kebab, plural, pluralPascal }),
+    generateRestController({
+      pascal,
+      kebab,
+      plural,
+      pluralPascal,
+      swagger: options.swagger ?? false,
+    }),
   )
   await write(`${kebab}.service.ts`, generateRestService({ pascal, kebab }))
 

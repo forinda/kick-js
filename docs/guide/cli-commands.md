@@ -468,7 +468,6 @@ Generate code scaffolds. See the [Generators](./generators.md) page for full det
 kick g --list            # List all available generators
 kick g module user       # Structure depends on pattern in kick.config.ts
 kick g module user --pattern rest  # Force flat REST structure
-kick g job email         # Queue job processor with @Job/@Process
 kick g scaffold Post title:string body:text:optional  # CRUD from fields
 kick g controller auth
 kick g service payment

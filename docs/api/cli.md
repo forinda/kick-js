@@ -39,7 +39,6 @@ cd packages/cli && pnpm link --global
 | `kick generate controller <name>`           | `kick g controller`                            | Generate a `@Controller()` class with routes                                      |
 | `kick generate dto <name>`                  | `kick g dto`                                   | Generate a Zod DTO schema                                                         |
 | `kick generate resolver <name>`             | `kick g resolver`                              | Generate a GraphQL `@Resolver` class                                              |
-| `kick generate job <name>`                  | `kick g job`                                   | Generate a `@Job` queue processor                                                 |
 | `kick generate test <name>`                 | `kick g test`                                  | Generate a Vitest test scaffold                                                   |
 | `kick generate config`                      | `kick g config`                                | Generate `kick.config.ts`                                                         |
 | `kick generate agents`                      | `kick g agents` (also `agent-docs`, `ai-docs`) | Regenerate `AGENTS.md` / `CLAUDE.md` / `kickjs-skills.md` from upstream templates |
