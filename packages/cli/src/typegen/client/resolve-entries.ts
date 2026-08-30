@@ -36,6 +36,8 @@ export interface ResolvedClientMap {
 }
 
 export interface ResolveClientMapOptions {
+  /** Inline nesting expanded before a type becomes `unknown`. Default 12. */
+  maxDepth?: number
   /** Project root — holds `tsconfig.json`, and is where the program is built. */
   projectDir: string
   /**
@@ -62,6 +64,8 @@ const PROBE = '__kick_client_probe__.ts'
 export async function fingerprintClientMap(opts: {
   projectDir: string
   compilerFrom?: string
+  /** Part of the fingerprint: changing it changes the emitted map. */
+  maxDepth?: number
   /** Route keys the map is built for — see `FingerprintInput.keys`. */
   keys: readonly string[]
   cliVersion: string
@@ -82,7 +86,7 @@ export async function fingerprintClientMap(opts: {
       projectDir: opts.projectDir,
       fileNames: parsed.fileNames,
       keys: opts.keys,
-      options: parsed.options,
+      options: { ...parsed.options, __kickMaxDepth: opts.maxDepth ?? null },
       cliVersion: opts.cliVersion,
     })
   } catch {
@@ -124,6 +128,7 @@ export async function resolveClientMap(opts: ResolveClientMapOptions): Promise<R
   // and fix. Track the route being expanded and prefix on the way out.
   let currentKey: string | null = null
   const expander = new TypeExpander(t, checker, program, {
+    maxDepth: opts.maxDepth,
     onWarn: (msg) => opts.onWarn?.(currentKey ? `route '${currentKey}': ${msg}` : msg),
   })
   const entries = new Map<string, string>()

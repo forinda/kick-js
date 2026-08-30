@@ -127,9 +127,18 @@ async function discardStaleOutput(ctx: { cwd: string; log: TypegenLogger }): Pro
  * `kick new --template fullstack` writes `client: true`, so its web app has
  * the map from the first run.
  */
+/** The configured expansion depth, or undefined for the expander's default. */
+function clientMaxDepth(config: KickConfig): number | undefined {
+  const configured = config?.typegen?.client
+  return typeof configured === 'object' ? configured.maxDepth : undefined
+}
+
 function clientMapWanted(ctx: { cwd: string; config: KickConfig; log: TypegenLogger }): boolean {
   const configured = ctx.config?.typegen?.client
   if (typeof configured === 'boolean') return configured
+  // An object means on unless it says otherwise, so `{ maxDepth: 24 }` alone
+  // reads the way it looks.
+  if (configured && typeof configured === 'object') return configured.enabled !== false
 
   // Unset means off. Inferring "on" from the file being there would work, but
   // it puts the switch somewhere nobody looks — a project would be paying
@@ -187,9 +196,11 @@ export const kickClientTypegen = (): TypegenPlugin => ({
     // 1,940-route app. Fingerprinting what the map depends on costs ~35ms, so
     // an unchanged project skips two orders of magnitude of work. Returning
     // null leaves the existing file in place.
+    const maxDepth = clientMaxDepth(ctx.config)
     const stamp = await fingerprintClientMap({
       projectDir: ctx.cwd,
       keys,
+      maxDepth,
       cliVersion: CLI_VERSION,
     })
     const recorded = readStamp(path.resolve(ctx.cwd, STAMP_FILE))
@@ -210,6 +221,7 @@ export const kickClientTypegen = (): TypegenPlugin => ({
         projectDir: ctx.cwd,
         routesFile: path.resolve(ctx.cwd, '.kickjs/types/kick__routes.ts'),
         keys,
+        maxDepth,
         onWarn: (msg) => ctx.log.warn(msg),
       })
       const rendered = renderClient(map, keys)

@@ -196,3 +196,19 @@ describe('kick/client plugin', () => {
     }
   })
 })
+
+describe('kick/client depth configuration', () => {
+  it('treats an object config as on, so { maxDepth } alone reads the way it looks', async () => {
+    const { ctx, getScanResult } = makeCtx({ config: { typegen: { client: { maxDepth: 24 } } } })
+    await kickClientTypegen().generate(ctx)
+    expect(getScanResult).toHaveBeenCalled()
+  })
+
+  it('still honours an explicit opt-out on the object form', async () => {
+    const { ctx, getScanResult } = makeCtx({
+      config: { typegen: { client: { enabled: false, maxDepth: 24 } } },
+    })
+    expect(await kickClientTypegen().generate(ctx)).toBeNull()
+    expect(getScanResult).not.toHaveBeenCalled()
+  })
+})
