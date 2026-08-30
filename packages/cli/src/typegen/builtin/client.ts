@@ -28,6 +28,7 @@ import { rm } from 'node:fs/promises'
 import { resolveClientMap } from '../client/resolve-entries'
 import { renderClient } from '../render/client'
 import { isDebugLog, type TypegenLogger, type TypegenPlugin } from '../plugin'
+import type { KickConfig } from '../../config'
 
 const OUT_FILE = '.kickjs/types/kick__client.d.ts'
 
@@ -62,11 +63,50 @@ async function discardStaleOutput(ctx: { cwd: string; log: TypegenLogger }): Pro
   return true
 }
 
+/**
+ * Whether this project wants the client route map.
+ *
+ * Producing it builds a whole TypeScript program over the server — 1.1 GB and
+ * ~7.6s on a 1,940-route app, against ~130ms for every other typegen plugin
+ * combined. An API with no frontend should not pay that for a file nothing
+ * reads, and most projects have no frontend.
+ *
+ * So: `typegen.client` decides when set. Otherwise the existing file decides,
+ * which makes the common cases right without anyone configuring anything —
+ * a project that has the map keeps it fresh (a stale map is worse than a slow
+ * pass), and a project that has never had one never starts paying.
+ * `kick new --template fullstack` writes `client: true`, so its web app has
+ * the map from the first run.
+ */
+function clientMapWanted(ctx: { cwd: string; config: KickConfig; log: TypegenLogger }): boolean {
+  const configured = ctx.config?.typegen?.client
+  if (typeof configured === 'boolean') return configured
+
+  // Unset means off. Inferring "on" from the file being there would work, but
+  // it puts the switch somewhere nobody looks — a project would be paying
+  // seconds and a gigabyte per typegen because of a file on disk, with nothing
+  // in its config to explain why.
+  //
+  // A map already on disk is still worth a word, though: silently leaving it
+  // to rot is how a frontend ends up type-checking against routes the server
+  // no longer serves.
+  if (existsSync(path.resolve(ctx.cwd, OUT_FILE))) {
+    ctx.log.warn(
+      `  kick/client: ${OUT_FILE} exists but typegen.client is not set, so it is NOT ` +
+        `being refreshed.\n  Add \`typegen: { client: true }\` to kick.config.ts to keep it ` +
+        `current, or delete the file if nothing reads it.`,
+    )
+  }
+  return false
+}
+
 export const kickClientTypegen = (): TypegenPlugin => ({
   id: 'kick/client',
   outExtension: '.d.ts',
   inputs: ['src/**/*.controller.ts', 'src/**/*.module.ts'],
   async generate(ctx) {
+    if (!clientMapWanted(ctx)) return null
+
     if (ctx.watch) {
       // Not a warning: this is the designed behaviour, and a warning per save
       // would be its own kind of noise.

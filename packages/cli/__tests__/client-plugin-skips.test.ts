@@ -37,13 +37,80 @@ function makeCtx(over: Partial<TypegenContext> = {}) {
 
 describe('kick/client plugin', () => {
   it('emits nothing under watch, and says why', async () => {
-    const { ctx, log, getScanResult } = makeCtx({ watch: true })
+    // Opted in, so the watch check is what this exercises — the wanted/not
+    // gate runs first and would otherwise skip for a different reason.
+    const { ctx, log, getScanResult } = makeCtx({
+      watch: true,
+      config: { typegen: { client: true } },
+    })
 
     expect(await kickClientTypegen().generate(ctx)).toBeNull()
 
     expect(log.info.mock.calls.flat().join(' ')).toContain('watch')
     // The expensive part must not even be reached.
     expect(getScanResult).not.toHaveBeenCalled()
+  })
+
+  it('does nothing at all for a project that never asked for the map', async () => {
+    // The reason this gate exists: producing the map builds a TypeScript
+    // program over the server. Measured on a 1,940-route API, the whole
+    // typegen pass goes 7.50s / 1127 MB with the map to 0.59s / 182 MB
+    // without. An API with no frontend should not pay that for a file nothing
+    // reads — and most projects have no frontend.
+    const { ctx, getScanResult } = makeCtx()
+
+    expect(await kickClientTypegen().generate(ctx)).toBeNull()
+    // Not even the scan: the gate is checked before any work.
+    expect(getScanResult).not.toHaveBeenCalled()
+  })
+
+  it('runs when the config asks for it', async () => {
+    const { ctx, getScanResult } = makeCtx({ config: { typegen: { client: true } } })
+
+    await kickClientTypegen().generate(ctx)
+
+    expect(getScanResult).toHaveBeenCalled()
+  })
+
+  it('does not infer "on" from the file being there, but says so', async () => {
+    // Inferring from disk would put the switch somewhere nobody looks: a
+    // project paying seconds and a gigabyte per typegen because of a file,
+    // with nothing in its config explaining why. Config is the switch.
+    //
+    // A map left to rot is still worth a word — that is how a frontend ends
+    // up type-checking against routes the server no longer serves.
+    const dir = mkdtempSync(join(tmpdir(), 'kick-gate-'))
+    try {
+      mkdirSync(join(dir, '.kickjs/types'), { recursive: true })
+      writeFileSync(join(dir, '.kickjs/types/kick__client.d.ts'), 'export {}\n')
+
+      const { ctx, log, getScanResult } = makeCtx({ cwd: dir })
+      expect(await kickClientTypegen().generate(ctx)).toBeNull()
+
+      expect(getScanResult).not.toHaveBeenCalled()
+      const warned = log.warn.mock.calls.flat().join(' ')
+      expect(warned).toContain('typegen.client')
+      expect(warned).toContain('NOT')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('stays off when explicitly disabled, even with the map on disk', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'kick-gate-'))
+    try {
+      mkdirSync(join(dir, '.kickjs/types'), { recursive: true })
+      writeFileSync(join(dir, '.kickjs/types/kick__client.d.ts'), 'export {}\n')
+
+      const { ctx, getScanResult } = makeCtx({
+        cwd: dir,
+        config: { typegen: { client: false } },
+      })
+      expect(await kickClientTypegen().generate(ctx)).toBeNull()
+      expect(getScanResult).not.toHaveBeenCalled()
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 
   it('stays quiet when the project never had a client map', async () => {
@@ -66,7 +133,7 @@ describe('kick/client plugin', () => {
       const out = join(dir, '.kickjs/types/kick__client.d.ts')
       writeFileSync(out, 'export interface KickApi {}\n')
 
-      const { ctx, log } = makeCtx({ cwd: dir })
+      const { ctx, log } = makeCtx({ cwd: dir, config: { typegen: { client: true } } })
       expect(await kickClientTypegen().generate(ctx)).toBeNull()
 
       const warnings = log.warn.mock.calls.flat().join(' ')
@@ -84,7 +151,7 @@ describe('kick/client plugin', () => {
   it('runs the resolution when not watching', async () => {
     // Guards against "skipped" becoming the only path: the watch check must
     // be the reason for the skip above, not an unconditional return.
-    const { ctx, getScanResult } = makeCtx()
+    const { ctx, getScanResult } = makeCtx({ config: { typegen: { client: true } } })
 
     await kickClientTypegen().generate(ctx)
 
@@ -101,7 +168,7 @@ describe('kick/client plugin', () => {
       const out = join(dir, '.kickjs/types/kick__client.d.ts')
       writeFileSync(out, 'export interface KickApi { "GET /gone": never }\n')
 
-      const { ctx, log } = makeCtx({ cwd: dir })
+      const { ctx, log } = makeCtx({ cwd: dir, config: { typegen: { client: true } } })
       expect(await kickClientTypegen().generate(ctx)).toBeNull()
 
       expect(existsSync(out)).toBe(false)

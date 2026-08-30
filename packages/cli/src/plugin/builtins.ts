@@ -74,6 +74,9 @@ export const builtinCliPlugins: readonly KickCliPlugin[] = [
   defineCliPlugin({ name: 'kick/routes', typegens: [kickRoutesTypegen()] }),
   // After kick/routes, and that IS load-bearing here: this plugin resolves
   // types out of the map that one emits.
+  // Registered always; the plugin itself decides whether to run — see
+  // `typegen.client`. Gating registration instead would hide the id from
+  // `kick typegen --list` and from the disable filter.
   defineCliPlugin({ name: 'kick/client', typegens: [kickClientTypegen()] }),
   defineCliPlugin({ name: 'kick/env', typegens: [kickEnvTypegen()] }),
   defineCliPlugin({ name: 'kick/runtime', typegens: [kickRuntimeTypegen()] }),
