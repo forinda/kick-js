@@ -26,13 +26,41 @@ import type { TsApi } from './ts-compiler'
 export interface TypeExpanderOptions {
   /** Depth beyond which a type degrades to `unknown`. Default 12. */
   maxDepth?: number
+  /** Depth-guard hits tolerated per route before the expansion is abandoned. */
+  truncationBudget?: number
   onWarn?: (msg: string) => void
 }
 
+/**
+ * Depth-guard hits tolerated in one route before the expansion is abandoned.
+ *
+ * A genuinely deep response trips the guard a handful of times. Hundreds of
+ * thousands means the type is recursive and the walk is exponential — that is
+ * an OOM, not a slow render, so it has to stop rather than warn its way there.
+ */
+const TRUNCATION_BUDGET = 1000
+const BUDGET_EXHAUSTED = Symbol('kick/client: expansion budget exhausted')
+
 export class TypeExpander {
   private readonly hoistedByType = new Map<ts.Type, string>()
+  /**
+   * Anonymous object types currently being rendered inline.
+   *
+   * A type alias to an object literal (`type J = { … }`) carries the anonymous
+   * `__type` symbol, so it is not "named" and renders inline. That is right
+   * until it reaches itself — zod v4's `JSONSchema` has
+   * `properties?: Record<string, JSONSchema>` — at which point inlining cannot
+   * terminate. Recording the render in progress lets a self-reference claim a
+   * name, which promotes the type to a hoisted interface and ends the walk.
+   * Without it, one such route produced 1.66M warnings, 4.4 GB and a V8 abort.
+   */
+  private readonly inProgress = new Map<ts.Type, { name: string | null }>()
+  private nextName = 0
   private readonly blocks: string[] = []
   private readonly maxDepth: number
+  /** Depth-guard hits for the route being expanded; reset per `expand()`. */
+  private truncations = 0
+  private readonly budget: number
 
   constructor(
     private readonly ts: TsApi,
@@ -41,6 +69,7 @@ export class TypeExpander {
     private readonly opts: TypeExpanderOptions = {},
   ) {
     this.maxDepth = opts.maxDepth ?? 12
+    this.budget = opts.truncationBudget ?? TRUNCATION_BUDGET
   }
 
   /** Hoisted `interface __T<n> { … }` blocks, in creation order. */
@@ -49,13 +78,30 @@ export class TypeExpander {
   }
 
   expand(type: ts.Type): string {
-    return this.render(type, 0)
+    this.truncations = 0
+    try {
+      return this.render(type, 0)
+    } catch (err) {
+      if (err !== BUDGET_EXHAUSTED) throw err
+      // One clear line beats a flood. A type that hits the depth guard this
+      // many times in a single route is pathological, not merely deep, and
+      // expanding the rest of it buys nothing: the output is already mostly
+      // `unknown`. Finding the last one of these meant counting 8.1 million
+      // warnings to notice a single route was responsible.
+      this.opts.onWarn?.(
+        `expansion abandoned after ${this.budget} truncations — emitting 'unknown'. ` +
+          `This usually means a recursive type. Declare a response schema on the route ` +
+          `for an exact type.`,
+      )
+      return 'unknown'
+    }
   }
 
   private render(type: ts.Type, depth: number): string {
     const F = this.ts.TypeFlags
 
     if (depth > this.maxDepth) {
+      if (++this.truncations > this.budget) throw BUDGET_EXHAUSTED
       this.opts.onWarn?.(
         `type nesting exceeded ${this.maxDepth} levels — emitting 'unknown'. ` +
           `Declare a response schema on the route for an exact type.`,
@@ -114,7 +160,7 @@ export class TypeExpander {
     if (this.isNamed(type)) {
       // Reserve the name BEFORE expanding the body: a self-referencing type
       // must find its own name already in the map.
-      const name = `__T${this.hoistedByType.size}`
+      const name = this.allocName()
       this.hoistedByType.set(type, name)
       const index = this.blocks.length
       this.blocks.push('') // hold the slot so ordering matches creation order
@@ -129,8 +175,36 @@ export class TypeExpander {
       return name
     }
 
-    const inline = this.members(type, depth, '', '; ')
+    // Anonymous. Render inline, but stay reachable: a self-reference during
+    // this render claims a name, and a named type must be hoisted.
+    const active = this.inProgress.get(type)
+    if (active) return (active.name ??= this.allocName())
+
+    const marker: { name: string | null } = { name: null }
+    this.inProgress.set(type, marker)
+    let inline: string
+    try {
+      inline = this.members(type, depth, '', '; ')
+    } finally {
+      this.inProgress.delete(type)
+    }
+
+    if (marker.name) {
+      // Recursive after all. Bind the name first so the re-render terminates
+      // on the memo, then emit the body as its own block. Re-rendering from
+      // depth 0 also recovers whatever the first pass truncated on the way in.
+      this.hoistedByType.set(type, marker.name)
+      const index = this.blocks.length
+      this.blocks.push('')
+      this.blocks[index] = `interface ${marker.name} {\n${this.members(type, 0, '  ')}\n}`
+      return marker.name
+    }
+
     return inline.length > 0 ? `{ ${inline} }` : '{}'
+  }
+
+  private allocName(): string {
+    return `__T${this.nextName++}`
   }
 
   private members(type: ts.Type, depth: number, indent: string, join = '\n'): string {
