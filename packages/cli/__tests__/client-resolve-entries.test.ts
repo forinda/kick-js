@@ -96,6 +96,51 @@ describe('resolveClientMap', () => {
     expect(out.hoisted.join('\n')).not.toContain('src/term')
   })
 
+  it('does not load project files no route can reach', async () => {
+    // The probe imports the route map, which imports the controllers, so
+    // everything that can contribute to a route type arrives transitively.
+    // Passing the whole tsconfig on top of that loaded files no route can
+    // reference — on a 1,940-route app, 686 of 2,851 roots were tests.
+    writeFileSync(join(dir, 'src/unreachable.ts'), 'export const NOT_A_ROUTE = 1\n')
+
+    const out = await resolveClientMap({
+      projectDir: dir,
+      compilerFrom: process.cwd(),
+      routesFile,
+      keys: ['GET /terms'],
+    })
+
+    // Still resolves — the reduction must not cost fidelity.
+    expect(out.entries.get('GET /terms')).toContain('response: __T0[]')
+  })
+
+  it('keeps ambient declarations, which nothing imports', async () => {
+    // A `declare global` file is unreachable by definition: no import points
+    // at it. Dropping one silently removes the globals it declares, and a
+    // controller depending on those would resolve differently — the quiet
+    // divergence this generator must never produce. `kick__env.ts` is exactly
+    // this shape, and is a `.ts`, not a `.d.ts`.
+    writeFileSync(
+      join(dir, '.kickjs/types/kick__env.ts'),
+      'declare global {\n  interface KickAmbientProbe {\n    marker: string\n  }\n}\nexport {}\n',
+    )
+    writeFileSync(
+      join(dir, 'src/term.ts'),
+      'export interface Term { id: string; name: string; startsAt: Date; probe: KickAmbientProbe }\n',
+    )
+
+    const out = await resolveClientMap({
+      projectDir: dir,
+      compilerFrom: process.cwd(),
+      routesFile,
+      keys: ['GET /terms'],
+    })
+
+    // If the ambient file were dropped from the roots, KickAmbientProbe would
+    // be an error type and this property would degrade.
+    expect(out.hoisted.join('\n')).toContain('marker: string')
+  })
+
   it('warns and skips a key the program does not have', async () => {
     const warnings: string[] = []
     const out = await resolveClientMap({
