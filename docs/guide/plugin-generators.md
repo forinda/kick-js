@@ -179,7 +179,8 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { defineConfig, defineCliPlugin, defineGenerator } from '@forinda/kickjs-cli'
 
-const jobGenerator = defineGenerator({
+// Exported, so the test below can import it — see "Testing a generator".
+export const jobGenerator = defineGenerator({
   name: 'job',
   description: 'Generate a @Job queue processor with @Process handlers',
   args: [{ name: 'name', required: true }],
