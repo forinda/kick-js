@@ -1,5 +1,346 @@
 # @forinda/kickjs-cli
 
+## 7.0.0
+
+### Major Changes
+
+- [#553](https://github.com/forinda/kick-js/pull/553) [`7229219`](https://github.com/forinda/kick-js/commit/7229219ce5a537823e17ed7da25e7e630b2ab9d4) Thanks [@forinda](https://github.com/forinda)! - Drop the Prisma/Drizzle repository config, and say why `--repo prisma` no longer presets
+  
+  BREAKING: `modules.prismaClientPath` is removed. It was part of the exported
+  `ModuleConfig`, so an existing `kick.config.ts` that sets it now fails to
+  typecheck — delete the line, it did nothing. It was threaded through four layers —
+  `kick.config.ts` → module options → `ModuleContext` → `TemplateContext` — and
+  consumed by nothing: dead plumbing left behind when the ORM templates were
+  taken out, and a Prisma-specific knob in the framework's own config.
+  
+  A repository shaped to Prisma or Drizzle is that library's interface, not
+  KickJS's, and a generator for it is a promise to track someone else's API
+  across versions. `--repo prisma` and `--repo drizzle` still scaffold — as the
+  generic custom-repository stub every other name produces — and the deprecation
+  note now explains that reasoning instead of just saying "deprecated".
+  
+  `@forinda/kickjs-prisma` and `@forinda/kickjs-drizzle` are unaffected: adapters
+  that wire an ORM into DI are first-party code with a first-party interface.
+  This is only about generating repository _code_ shaped to a third-party API.
+
+### Minor Changes
+
+- [#550](https://github.com/forinda/kick-js/pull/550) [`d3eddf4`](https://github.com/forinda/kick-js/commit/d3eddf455cd9284bb9588542a9188f04a6b03bc7) Thanks [@forinda](https://github.com/forinda)! - typegen: only build the client route map for projects that use it
+  
+  Producing `.kickjs/types/kick__client.d.ts` builds a whole TypeScript program
+  over the server. On a 1,940-route API that is the entire cost of `kick typegen`:
+  
+  |            | with the map | without    |
+  | ---------- | ------------ | ---------- |
+  | wall clock | 7.50s        | **0.59s**  |
+  | peak RSS   | 1127 MB      | **182 MB** |
+  
+  Every other typegen plugin combined accounts for ~130ms of that. An API with no
+  frontend was paying twelve seconds and a gigabyte for a file nothing reads.
+  
+  `typegen.client` now decides:
+  
+  ```ts
+  export default defineConfig({
+    typegen: { client: true },
+  })
+  ```
+  
+  Off unless set — the config is the switch, not a file on disk. `kick new
+  --template fullstack` writes `client: true`, because its web app reads the map.
+  
+  An existing map does not silently turn it back on; that would leave a project
+  paying seconds and a gigabyte per typegen with nothing in its config to explain
+  why. It does warn, naming the setting to add, because a map left unrefreshed is
+  how a frontend ends up type-checking against routes the server no longer
+  serves. Existing adopters therefore need one line of config to keep the map
+  current.
+
+- [#550](https://github.com/forinda/kick-js/pull/550) [`8e24bc0`](https://github.com/forinda/kick-js/commit/8e24bc08532e9984bf1bc9cecc071a5efd01758c) Thanks [@forinda](https://github.com/forinda)! - `kick new --template fullstack`: the web app now reads the resolved route map
+  
+  The scaffolded frontend consumes `server/.kickjs/types/kick__client.d.ts` as an
+  ambient type package rather than bridging to the server's route types:
+  
+  ```jsonc
+  // web/tsconfig.json
+  "types": ["../server/.kickjs/types/kick__client"]
+  ```
+  
+  ```ts
+  // web/src/api.ts
+  export const api = createClient<KickClientApi.Api>({ baseUrl: '/api/v1' })
+  ```
+  
+  `web/src/types/kick-routes.d.ts` is gone, and with it `experimentalDecorators`
+  — the map holds resolved literal types, so no server source enters the web
+  program. `kick new` runs typegen, so a scaffolded project type-checks
+  immediately.
+  
+  A `types` entry rather than `include` because the failure modes differ: a
+  missing map is `TS2688: Cannot find type definition file` with `types`, and
+  silence with `include`. Loud is right for something the app depends on. Both
+  are documented, along with the explicit-import form and the fact that `types`
+  replaces TypeScript's automatic `@types` inclusion.
+  
+  The fullstack server therefore pins `@typescript/typescript6`, the compiler API
+  that resolves the map on TypeScript 7. Only that template does — rest and
+  minimal have no frontend, and it is a 10 kB shim over a 24 MB `typescript@6`.
+  
+  One behaviour change worth knowing: the map is not refreshed by `kick dev`, so
+  a renamed response field surfaces on the next `kick typegen` rather than on
+  save. `kick typegen --check` catches a stale one in CI.
+
+- [#550](https://github.com/forinda/kick-js/pull/550) [`5afd216`](https://github.com/forinda/kick-js/commit/5afd216dbdcd944e18c287dae41b26a624764efa) Thanks [@forinda](https://github.com/forinda)! - `kick typecheck`: one type-check command, whatever the package manager
+  
+  Generated projects had to spell type-checking in whichever dialect their
+  manager speaks — `pnpm -r exec tsc --noEmit` against
+  `cd server && npx tsc --noEmit` — and the fullstack template branched on the
+  manager to write them. `kick typecheck` is the same command everywhere, takes
+  `--cwd <dir>`, and exits non-zero on errors so it works as a gate.
+  
+  It resolves the project's own checker, preferring **`vue-tsc`** when installed.
+  That preference matters: plain `tsc` does not understand `.vue`, so in a Vue
+  project it matches no inputs and reports `TS18003: No inputs were found` while
+  real errors sit unchecked in the SFCs. vue-tsc checks plain `.ts` too, so
+  preferring it costs nothing.
+  
+  `kick dev --typecheck` picks up the same preference.
+
+- [#553](https://github.com/forinda/kick-js/pull/553) [`037fff5`](https://github.com/forinda/kick-js/commit/037fff5717f10d2823fd4a6d6ac0dac7fd902894) Thanks [@forinda](https://github.com/forinda)! - Remove `kick g job`
+  
+  The job generator scaffolded a `@Job` processor around
+  `@forinda/kickjs-queue`, a package no template installs — so in most projects
+  it wrote a file that could not compile.
+  
+  The deeper reason is ownership. A generator for an interface KickJS defines —
+  `AppAdapter`, `KickPlugin`, a context contributor, a middleware signature —
+  prevents a class of mistake that fails at boot rather than at the keyboard, and
+  maintaining it is work the framework owes adopters. A queue processor is not
+  that shape: it belongs to whichever queue you actually run, which the framework
+  cannot know and should not track.
+  
+  Every other framework-owned generator stays. Also removed:
+  `generators/auth-scaffold.ts`, which no command reached — `kick g auth-scaffold`
+  was documented but never registered. `defineGenerator` in `kick.config.ts` gives a
+  project its own `kick g job` in about twenty lines, shaped to the library it
+  chose — see
+  [plugin generators](https://kickjs.app/guide/plugin-generators.html), which now
+  documents the full `GeneratorSpec` / `GeneratorContext` / `GeneratorFile` API,
+  testing, dispatch, and that worked example.
+
+- [#550](https://github.com/forinda/kick-js/pull/550) [`e98a02f`](https://github.com/forinda/kick-js/commit/e98a02f3f9e9b8c18fd5f0778279f99bc2742e2a) Thanks [@forinda](https://github.com/forinda)! - `kick new`: four scripts instead of ten, and oxfmt instead of prettier
+  
+  Generated projects shipped ten npm scripts, one of which could not run:
+  `lint: 'eslint src/'`, with eslint in no dependency list, so `pnpm lint` failed
+  with "command not found" in every scaffolded project.
+  
+  The set is now `dev`, `build`, `start`, `test`. Everything dropped stays one
+  command away — `kick dev:debug`, `kick typegen`, `pnpm exec vitest`,
+  `pnpm exec tsc --noEmit` — and a scaffold that opens with a wall of aliases
+  teaches less than one that shows the binary.
+  
+  Formatting moves from prettier to **oxfmt**: same options, same output for
+  these settings, one binary instead of a package plus plugins — and it is what
+  the framework itself is formatted with, so a generated project no longer
+  arrives holding a different toolchain than the repo it came from. `.prettierrc`
+  becomes `.oxfmtrc.json`, and the `format` / `format:check` / `ci:check`
+  commands in the generated `kick.config.ts` follow.
+  
+  Existing projects are unaffected; this changes only what new ones are created
+  with.
+
+- [#550](https://github.com/forinda/kick-js/pull/550) [`5afd216`](https://github.com/forinda/kick-js/commit/5afd216dbdcd944e18c287dae41b26a624764efa) Thanks [@forinda](https://github.com/forinda)! - `kick new`: oxc by default, and no `npx` in anything generated
+  
+  Generated scripts and `kick.config.ts` commands invoked their tools through
+  `npx`, which resolves a missing binary by fetching whatever the registry has
+  under that name. For a binary whose package is named differently that is a
+  stranger's code: the CLI's binary is `kick`, its package is
+  `@forinda/kickjs-cli`, and `kick` on npm is an unrelated AngularJS scaffolder.
+  Run from a workspace root where the local binary was not visible, it installed
+  that package, printed its help, and exited 0 — so a root `typecheck` script
+  passed without type-checking anything.
+  
+  Generated steps now name tools plainly. `kick`'s custom-command runner puts the
+  project's `node_modules/.bin` on PATH, so a step resolves the project's own
+  binary and a missing one fails as "command not found" rather than downloading
+  something. The fullstack root gains the CLI as a dependency so the bare `kick`
+  in its scripts resolves there too.
+  
+  `oxfmt` and `oxlint` ship as scaffold dependencies, with `lint`, `format`,
+  `format:check` and `ci:check` commands wired to them.
+  
+  Two fixes fell out of the same pass:
+  
+  - The fullstack root's `typecheck` ran `pnpm -r run typecheck`, which skips
+    packages lacking that script — after the script trim, that silently narrowed
+    it to the frontend.
+  - A scaffolded pnpm workspace could not run any script. The non-interactive
+    install left `allowBuilds: '@swc/core': set this to true or false` in
+    `pnpm-workspace.yaml`, and pnpm then refuses every script with
+    `ERR_PNPM_IGNORED_BUILDS`. The generator answers it now — both are build
+    tools this template chose.
+
+### Patch Changes
+
+- [#550](https://github.com/forinda/kick-js/pull/550) [`6865421`](https://github.com/forinda/kick-js/commit/6865421b62f727ef62f2c1fff4d19fd6a1b9f644) Thanks [@forinda](https://github.com/forinda)! - typegen: expose the client route map as an ambient `KickClientApi` namespace
+  
+  The generated `kick__client.d.ts` now declares a global namespace as well as
+  exporting its type, so a frontend that lists the file in its tsconfig
+  `include` needs no import at all:
+  
+  ```ts
+  export const api = createClient<KickClientApi.Api>({ baseUrl: '/api/v1' })
+  ```
+  
+  The explicit form still works for anyone who would rather not have a global:
+  
+  ```ts
+  import type { Api } from '../../server/.kickjs/types/kick__client'
+  ```
+  
+  Two details the shape depends on. The hoisted `__T<n>` interfaces stay
+  **module-local** — declaring them at the top level to make them ambient put all
+  86 of a real app's shapes into the consuming frontend's global scope. And the
+  namespace is `KickClientApi`, not `KickApi`: `kick__routes.ts` already declares
+  a global `KickApi`, and both files live in `.kickjs/types`, which the server's
+  own tsconfig includes — sharing the name made the _server_ fail to compile with
+  `TS2300: Duplicate identifier 'KickApi'`.
+
+- [#550](https://github.com/forinda/kick-js/pull/550) [`ce7c4fb`](https://github.com/forinda/kick-js/commit/ce7c4fb1a3f9547ad0997999c84ef1fcf472f28e) Thanks [@forinda](https://github.com/forinda)! - typegen: stop the client route map's depth guard from firing on hoisted types
+  
+  A real 1,940-route app emitted 34 copies of:
+  
+  ```text
+  type nesting exceeded 12 levels — emitting 'unknown'. Declare a response schema on the route for an exact type.
+  ```
+  
+  The guard bounds how deeply types nest _inline_, but it was counting through
+  hoists. Hoisting ends inline nesting — each named type becomes its own
+  top-level `interface __Tn { … }` block, referenced by name — so a chain of
+  named DTOs spent the whole budget on a nesting the emitted file does not
+  contain. It also corrupted rather than merely truncating: a 15-link chain
+  produced `interface __T12 { v: unknown }` where `v` was a plain `string`.
+  
+  Depth now resets when a type is hoisted. On that app: 34 warnings to 0, and
+  the hoisted interfaces go from 10 to 86 as chains expand into their own blocks
+  instead of being cut off. Genuinely deep inline nesting still degrades to
+  `unknown`, which is what the guard is for.
+  
+  The warnings also name their route now (`route 'GET /x': …`). Thirty-four
+  identical lines with no route between them said nothing about where to look.
+
+- [#550](https://github.com/forinda/kick-js/pull/550) [`5afd216`](https://github.com/forinda/kick-js/commit/5afd216dbdcd944e18c287dae41b26a624764efa) Thanks [@forinda](https://github.com/forinda)! - typegen: fix the client route map emitted before any route exists
+  
+  With no routes discovered, the map re-exported `Api` from its own filename:
+  
+  ```ts
+  export type { Api } from './kick__client'
+  ```
+  
+  TypeScript rejects that with `TS2303: Circular definition of import alias`, so
+  a freshly scaffolded project emitted a file that did not compile — the one
+  moment every new project passes through.
+  
+  It now mirrors the populated form: a module-local `interface Api {}`, the
+  ambient `KickClientApi` namespace, and a direct export. Both the namespace and
+  the explicit-import forms compile.
+
+- [#550](https://github.com/forinda/kick-js/pull/550) [`63bb62f`](https://github.com/forinda/kick-js/commit/63bb62fb04319203cbe0e1adff30e8c2578d0607) Thanks [@forinda](https://github.com/forinda)! - typegen: stop loading project files the client route map cannot reach
+  
+  The client map built its TypeScript program over every file the tsconfig
+  lists. It does not need to: the probe imports the generated route map, which
+  imports the controllers, which import their services and DTOs — so everything
+  that can contribute to a route type arrives transitively. Passing the whole
+  project on top loaded files no route can reference. On a 1,940-route app, 686
+  of the 2,851 roots were tests.
+  
+  Measured on that app, median of five runs:
+  
+  |            | before  | after   |
+  | ---------- | ------- | ------- |
+  | peak RSS   | 1376 MB | 1122 MB |
+  | wall clock | 8.62s   | 7.61s   |
+  
+  with byte-identical output.
+  
+  Roots are now the tsconfig's declaration files plus everything typegen itself
+  emits — and that second list is read from disk rather than taken from the
+  tsconfig. TypeScript's `include` skips dot-directories, so `.kickjs/types` was
+  absent from the file list unless the adopter happened to spell out a glob for
+  it, and `kick__env.ts` carries a `declare global` that nothing imports. Those
+  globals were therefore missing for a project that did not glob them, and a
+  controller referencing one resolved against an error type — visible in the
+  emitted map as a bare identifier the frontend has never heard of.
+
+- [#550](https://github.com/forinda/kick-js/pull/550) [`e98a02f`](https://github.com/forinda/kick-js/commit/e98a02f3f9e9b8c18fd5f0778279f99bc2742e2a) Thanks [@forinda](https://github.com/forinda)! - `kick dev:debug`: actually attach the debugger
+  
+  The command printed `Debugger: ws://0.0.0.0:9229` and attached nothing. It set
+  `process.env.NODE_OPTIONS = '--inspect=…'` and then started the dev server in
+  the same process — but Node reads `NODE_OPTIONS` once, at startup, and
+  `startDevServer` calls Vite's `createServer` directly rather than spawning. The
+  server came up normally and port 9229 stayed closed, so nothing ever failed.
+  
+  It now uses `inspector.open()`, which opens the port on the running process,
+  and prints `inspector.url()` rather than a hand-built one — the real URL
+  carries the session id, without which a debugger client cannot attach even to
+  an open port.
+  
+  It also binds to **loopback** now, as `node --inspect` does. The old code
+  hardcoded `0.0.0.0`, which never mattered while nothing was listening — but an
+  attached inspector can evaluate arbitrary code in the process, so making it
+  work turned that into a real open port on every interface. `--inspect-host` is
+  there for containers, which legitimately need `0.0.0.0`, and warns when the
+  address is not loopback.
+  
+  A port it cannot take (`Inspector is already activated`) is now reported with a
+  pointer to `--inspect-port`, instead of being swallowed.
+
+- [#553](https://github.com/forinda/kick-js/pull/553) [`037fff5`](https://github.com/forinda/kick-js/commit/037fff5717f10d2823fd4a6d6ac0dac7fd902894) Thanks [@forinda](https://github.com/forinda)! - generators: stop emitting imports for packages the project does not have
+  
+  Two generators wrote code referring to optional packages whether or not the
+  project depended on them, producing files that could not compile:
+  
+  - `kick g module` / `kick g scaffold` emitted
+    `import { ApiTags } from '@forinda/kickjs-swagger'` plus five `@ApiTags(...)`
+    decorators. The `rest` template does not install swagger, so a generated
+    module in a fresh project was broken on arrival — and nobody asked for
+    swagger.
+  - `kick g job` emitted `import { … } from '@forinda/kickjs-queue'`. That
+    generator is removed outright rather than gated — a queue processor's shape
+    belongs to whichever queue you run. Add your own with `defineGenerator`.
+  
+  The decorators are now emitted only when the project declares the dependency.
+  Both read `package.json` rather than resolving from `node_modules`: what a
+  project declares is what its generated code may import, and a transitively
+  installed copy is not a dependency to rely on.
+  
+  `kick new` was already correct — its swagger and devtools imports are gated on
+  `--packages`, which also installs them.
+
+- [#550](https://github.com/forinda/kick-js/pull/550) [`3c0aa5a`](https://github.com/forinda/kick-js/commit/3c0aa5ab2a995dcc94ddb2f592d3c3906ba6043d) Thanks [@forinda](https://github.com/forinda)! - typegen: stop warning about the client route map in projects that do not use it
+  
+  `kick/client` warned on every `kick typegen` when no TypeScript compiler API
+  was available, and reported having "removed the previously generated"
+  `kick__client.d.ts` even in projects that never had one — `rm --force`
+  succeeds either way.
+  
+  Most projects do not consume that file. The fullstack template's web app is
+  wired to the ambient `KickRoutes.Api` so it stays live under `kick dev`, and
+  the rest/minimal templates have no frontend at all. The compiler API is not a
+  free thing to tell them to install either: on TypeScript 7 it means
+  `@typescript/typescript6`, a 10 kB shim over a 24 MB `typescript@6`.
+  
+  So the skip is now quiet when there is no map on disk (visible under
+  `LOG_LEVEL=debug`) and loud when there is one — a project with a map is using
+  it, and losing it is a regression worth interrupting for. The removal notice
+  only fires when a file was actually removed, and now prints after the cause it
+  refers to.
+  
+  The fullstack template's README gains a "When to switch to
+  `kick__client.d.ts`" section: the one-line swap, the `@typescript/typescript6`
+  install it needs on TS 7, the two lines to delete afterwards, and the trade —
+  no refresh under `kick dev`, with `--check` as the CI backstop.
+
 ## 6.15.1
 
 ### Patch Changes
