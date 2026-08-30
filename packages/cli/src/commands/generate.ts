@@ -279,7 +279,6 @@ async function runModuleGeneration(
       pattern,
       dryRun,
       pluralize: shouldPluralize,
-      prismaClientPath: mc.prismaClientPath,
       tokenScope,
       swagger,
       style: mc.style,

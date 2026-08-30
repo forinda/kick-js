@@ -113,7 +113,6 @@ interface KickConfig {
     repo?: 'inmemory' | 'prisma' | 'drizzle' | { name: string } // default: 'inmemory'
     pluralize?: boolean // default: true
     schemaDir?: string // Drizzle/Prisma schema files
-    prismaClientPath?: string // Prisma 7: '@/generated/prisma/client'
   }
 
   typegen?: {

@@ -31,7 +31,6 @@ export interface TemplateContext {
   /** DTO import prefix (default: '../../application/dtos') */
   dtoPrefix?: string
   /** Prisma client import path (default: '@prisma/client') */
-  prismaClientPath?: string
   /** Custom repo type name (e.g. 'typeorm') — only for generateCustomRepository */
   repoType?: string
   /**

@@ -34,10 +34,12 @@ export const PACKAGE_MANAGERS: readonly PackageManager[] = ['pnpm', 'npm', 'yarn
 /**
  * Built-in repository type with first-class code generation support.
  *
- * Only `inmemory` remains built-in (zero-dep, framework-owned). The
- * `prisma` and `drizzle` ORM presets are **deprecated** — they now
- * scaffold a generic custom-repository stub like any other name (see
- * {@link DEPRECATED_REPO_TYPES}). Bring your own DB by passing a name:
+ * Only `inmemory` is built in — zero-dependency and framework-owned.
+ *
+ * There are deliberately no ORM presets. A repository shaped to Prisma or
+ * Drizzle is that library's interface, not KickJS's, and a generator for it is
+ * a promise to track someone else's API across versions. Any other name
+ * scaffolds a generic custom-repository stub you own:
  * `repo: { name: 'postgres' }`.
  */
 export type BuiltinRepoType = 'inmemory'
@@ -45,23 +47,22 @@ export type BuiltinRepoType = 'inmemory'
 export const BUILTIN_REPO_TYPES: readonly string[] = ['inmemory']
 
 /**
- * Repo names that used to have dedicated ORM generators. They still
- * work — they just produce the same generic stub every other custom
- * name does — but the CLI prints a one-line deprecation note.
+ * Repo names that once had dedicated ORM generators. They still scaffold — as
+ * the same generic stub any other custom name produces — and the CLI says so
+ * once, because silently changing what a flag generates is worse than a note.
  */
 export const DEPRECATED_REPO_TYPES: readonly string[] = ['prisma', 'drizzle']
 
 /**
- * Print a deprecation note when a generator is asked for a
- * `prisma`/`drizzle` repo. No-op for every other name. Returns whether
- * a note was printed (handy for tests).
+ * Print a note when a generator is asked for a repo that used to be a preset.
+ * No-op for every other name. Returns whether a note was printed.
  */
 export function warnIfDeprecatedRepo(repo: string): boolean {
   if (!DEPRECATED_REPO_TYPES.includes(repo)) return false
   console.warn(
-    `  Note: the '${repo}' repository preset is deprecated. Generating a generic ` +
-      `custom repository named '${repo}' instead — wire it to your DB by hand. ` +
-      `Pass any name via \`--repo <name>\` or \`modules.repo: { name: '<name>' }\`.`,
+    `  Note: '${repo}' is no longer a built-in repository preset — a repository ` +
+      `shaped to it is that library's interface, not KickJS's.\n` +
+      `  Scaffolding a generic custom-repository stub instead; wire it to ${repo} yourself.`,
   )
   return true
 }
@@ -268,18 +269,19 @@ export interface ModuleConfig {
   /**
    * Default repository implementation for generators.
    *
-   * Built-in types (string): `'drizzle'`, `'inmemory'`, `'prisma'`
+   * Built-in type (string): `'inmemory'`. Any other name scaffolds a
+   * custom-repository stub — see {@link BuiltinRepoType}.
    * — generate fully working repository code.
    *
    * Custom types (object): `{ name: 'typeorm' }`
    * — generate a stub repository with TODO markers.
    *
    * @example
-   * repo: 'prisma'                // built-in
+   * repo: 'postgres'              // custom stub
    * repo: { name: 'typeorm' }     // custom
    */
   repo?: RepoTypeConfig
-  /** Schema output directory (e.g. 'src/db/schema' for Drizzle, 'prisma/' for Prisma) */
+  /** Schema output directory (e.g. 'src/db/schema') */
   schemaDir?: string
   /**
    * Whether to pluralize module names in generated code.
@@ -287,16 +289,6 @@ export interface ModuleConfig {
    * When false, it creates `src/modules/user/` and uses singular names throughout.
    */
   pluralize?: boolean
-  /**
-   * Import path for the Prisma generated client in `--repo prisma` templates.
-   * Must resolve within `src/` for path alias compatibility.
-   *
-   * @default '@prisma/client' (Prisma 5/6)
-   * @example
-   * prismaClientPath: '@/generated/prisma/client'  // Prisma 7+
-   * prismaClientPath: './generated/prisma/client'   // relative
-   */
-  prismaClientPath?: string
   /**
    * Module declaration style emitted by `kick g module` and the
    * project scaffold.
@@ -335,9 +327,9 @@ export interface KickConfig {
    * @example
    * modules: {
    *   dir: 'src/modules',
-   *   repo: 'prisma',
+   *   repo: 'postgres',
    *   pluralize: false,
-   *   schemaDir: 'prisma/',
+   *   schemaDir: 'src/db/schema',
    * }
    */
   modules?: ModuleConfig
@@ -639,7 +631,6 @@ export function resolveModuleConfig(config: KickConfig | null): ModuleConfig {
     repo: config.modules?.repo,
     schemaDir: config.modules?.schemaDir,
     pluralize: config.modules?.pluralize,
-    prismaClientPath: config.modules?.prismaClientPath,
     style: config.modules?.style,
   }
   // Validate `style` — silently coerce unknown values to the default.

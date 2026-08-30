@@ -33,7 +33,6 @@ interface GenerateModuleOptions {
   /** When false, skip pluralization — use singular names for folders, routes, and classes */
   pluralize?: boolean
   /** Prisma client import path (default: '@prisma/client', Prisma 7+: '@/generated/prisma/client') */
-  prismaClientPath?: string
   /**
    * DI-token scope prefix substituted into emitted `createToken<T>()`
    * literals. Resolved by the orchestrating command from
@@ -104,7 +103,6 @@ export async function generateModule(options: GenerateModuleOptions): Promise<st
     repo,
     noEntity: noEntity ?? false,
     noTests: noTests ?? false,
-    prismaClientPath: options.prismaClientPath ?? '@prisma/client',
     tokenScope: options.tokenScope ?? 'app',
     swagger: options.swagger ?? false,
     style: options.style ?? 'define',

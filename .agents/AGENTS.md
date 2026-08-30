@@ -157,7 +157,7 @@ node ../packages/cli/bin.js new upload-api --yes --no-install --force
 
 # Or specify each flag for a non-default scaffold
 node ../packages/cli/bin.js new upload-api \
-  --template rest --pm pnpm --repo prisma --no-git --no-install --force
+  --template rest --pm pnpm --repo postgres --no-git --no-install --force
 
 # Generate modules inside the example
 cd upload-api
@@ -166,7 +166,7 @@ node ../../packages/cli/bin.js g module upload
 
 `--yes` (alias `--non-interactive`, short `-y`) bypasses every prompt. Without it, missing flags trigger interactive selection.
 
-Available flags for `new`: `--template rest|minimal|fullstack`, `--pm pnpm|npm|yarn|bun`, `--repo prisma|drizzle|inmemory|custom`, `--packages auth,swagger,...`, `--no-git`, `--no-install`, `--force`, `-y / --yes / --non-interactive`.
+Available flags for `new`: `--template rest|minimal|fullstack`, `--pm pnpm|npm|yarn|bun`, `--repo inmemory|<any-name>`, `--packages auth,swagger,...`, `--no-git`, `--no-install`, `--force`, `-y / --yes / --non-interactive`.
 
 After scaffolding, customize the generated code for the example's purpose.
 
@@ -182,7 +182,6 @@ interface TemplateContext {
   pluralPascal?: string
   repoPrefix?: string
   dtoPrefix?: string
-  prismaClientPath?: string
   repoType?: string
 }
 ```
@@ -203,9 +202,8 @@ export default defineConfig({
   pattern: 'rest',
   modules: {
     dir: 'src/modules',
-    repo: 'prisma', // 'drizzle' | 'inmemory' | 'prisma' | { name: 'custom' }
+    repo: 'postgres', // 'drizzle' | 'inmemory' | 'prisma' | { name: 'custom' }
     pluralize: true,
-    prismaClientPath: '@/generated/prisma/client', // Prisma 7
   },
 })
 ```
