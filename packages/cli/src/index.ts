@@ -1,5 +1,6 @@
 // Generators
 export { generateModule } from './generators/module'
+export { generateAdapter } from './generators/adapter'
 export { generateMiddleware } from './generators/middleware'
 export { generateGuard } from './generators/guard'
 export { generateService } from './generators/service'

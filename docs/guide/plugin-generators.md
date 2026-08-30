@@ -300,113 +300,36 @@ to load" in `kick g --list`, for one more minor version.
 - **Return every file from one call.** `files()` returning the complete set lets
   `--dry-run` preview the whole change and keeps writes atomic in intent.
 
-## Replacing a removed generator
+## What stays built in, and what does not
 
-`kick g` used to ship generators for `job`, `test`, `adapter`, `plugin` and
-`contributor`. They were removed because a built-in has to guess — which queue
-library, which test style, which folder layout, which optional packages are
-installed — and guessing wrong writes a broken file into a repo the adopter did
-not ask to have touched. `kick g job` importing `@forinda/kickjs-queue` whether
-or not the project depended on it is exactly that.
+The line is ownership, not size.
 
-Each is a short `defineGenerator`. Add the ones you use to `kick.config.ts`,
-then edit them to match your conventions — which is the part a built-in could
-never do.
+**Generators for first-class KickJS interfaces stay.** `plugin`, `middleware`,
+`guard`, `contributor`, `adapter`, `dto`, `controller`, `service`, `module` all
+scaffold a shape the framework itself defines — an `AppAdapter` with the right
+lifecycle hooks, a `KickPlugin` with the right registration fields, a context
+contributor with its `ContextMeta` stub, a DTO wired to the configured schema
+library. Those interfaces are easy to get subtly wrong by hand, and getting
+them wrong fails at boot rather than at the keyboard. Maintaining a generator
+for a shape we define is work we owe adopters.
 
-### `test`
+**Generators for third-party shapes do not.** `kick g job` scaffolded a queue
+processor around `@forinda/kickjs-queue` — a package no template installs, so
+in most projects it wrote a file that could not compile. Worse, its shape
+belonged to whichever queue you actually run, which is not something the
+framework can know or should track. It was removed.
 
-```ts
-defineGenerator({
-  name: 'test',
-  description: 'Vitest scaffold for a service',
-  args: [{ name: 'name', required: true }],
-  files: (ctx) => [
-    {
-      path: join(ctx.projectRoot, ctx.modulesDir, ctx.kebab, `${ctx.kebab}.test.ts`),
-      content: `import { describe, expect, it } from 'vitest'
+That is the test for anything proposed as a built-in: **is the interface ours?**
+If it is, a generator prevents a whole class of mistake. If it is not, the
+generator becomes a promise to track someone else's API, and the adopter is
+better served by a `defineGenerator` shaped to the library they chose. The
+worked example above is exactly that — `kick g job`, rebuilt as twenty lines
+you own.
 
-import { ${ctx.pascal}Service } from './${ctx.kebab}.service'
+## Why extend rather than wait
 
-describe('${ctx.pascal}Service', () => {
-  it('...', () => {
-    expect(new ${ctx.pascal}Service()).toBeDefined()
-  })
-})
-`,
-    },
-  ],
-})
-```
-
-### `adapter`
-
-```ts
-defineGenerator({
-  name: 'adapter',
-  description: 'AppAdapter with lifecycle hooks',
-  args: [{ name: 'name', required: true }],
-  files: (ctx) => [
-    {
-      path: join(ctx.projectRoot, 'src/adapters', `${ctx.kebab}.adapter.ts`),
-      content: `import type { AppAdapter, AdapterContext } from '@forinda/kickjs/adapter'
-
-export class ${ctx.pascal}Adapter implements AppAdapter {
-  readonly name = '${ctx.kebab}'
-
-  async beforeStart({ container }: AdapterContext): Promise<void> {
-    // resolve services, open connections
-  }
-
-  async shutdown(): Promise<void> {
-    // close what beforeStart opened
-  }
-}
-`,
-    },
-  ],
-})
-```
-
-### `contributor`
-
-```ts
-defineGenerator({
-  name: 'contributor',
-  description: 'Context contributor for ctx.set()',
-  args: [{ name: 'name', required: true }],
-  files: (ctx) => [
-    {
-      path: join(ctx.projectRoot, ctx.modulesDir, ctx.kebab, `${ctx.kebab}.contributor.ts`),
-      content: `import { defineContextDecorator } from '@forinda/kickjs'
-
-export const Load${ctx.pascal} = defineContextDecorator({
-  key: '${ctx.camel}',
-  resolve: (ctx) => {
-    // return the value other code reads off ctx.get('${ctx.camel}')
-  },
-})
-`,
-    },
-  ],
-})
-```
-
-`plugin` and `job` follow the same shape — see the worked example above for a
-generator with flags and defaults.
-
-## Why the built-in set is small
-
-The CLI ships generators for the things every KickJS project has — modules,
-controllers, services, middleware, guards, DTOs. It deliberately does not ship
-one for every shape a project might want.
-
-A built-in has to guess: which queue library, which test style, which folder
-layout, which optional packages are installed. Guessing wrong produces a file
-the adopter did not write and has to fix — `kick g job` imported
-`@forinda/kickjs-queue` whether or not the project depended on it, which is
-exactly that failure.
-
-A generator living in your `kick.config.ts` has none of that problem. It knows
-your layout because you wrote it, and it changes when your conventions change.
-That is the trade: fewer built-ins, and a documented way to add precisely the
-ones you need.
+Even inside the first-class set, a built-in only knows the shape — not your
+conventions. If `kick g service` almost fits, copy its output into a
+`defineGenerator` and change the parts you always change. Yours can read your
+own registry, follow your folder layout, emit the matching test, and import
+only what your project actually depends on.
