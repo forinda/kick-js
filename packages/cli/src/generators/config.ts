@@ -64,7 +64,7 @@ export default defineConfig({
     },
     {
       name: 'ci:check',
-      description: 'Run typecheck + format check',
+      description: 'Run typecheck + lint + format check',
       steps: ['kick typecheck', 'oxlint src/', 'oxfmt --check src/'],
       aliases: ['verify'],
     },

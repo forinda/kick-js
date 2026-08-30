@@ -3,8 +3,8 @@ import type { TemplateContext } from './types'
 /** DDD controller — injects use-cases, nested import paths */
 export function generateController(ctx: TemplateContext): string {
   const { pascal, kebab, plural = '', pluralPascal = '' } = ctx
-  // Wrapped exactly as Prettier would at the scaffold's printWidth of 100 —
-  // a single-line import is 112 chars, so `pnpm format` on a fresh project
+  // Wrapped exactly as oxfmt would at the scaffold's printWidth of 100 —
+  // a single-line import is 112 chars, so `kick format` on a fresh project
   // would otherwise rewrite this file on the adopter's first run.
   return `import {
   Controller,
@@ -98,8 +98,8 @@ export class ${pascal}Controller {
 export function generateRestController(ctx: TemplateContext): string {
   const { pascal, kebab } = ctx
   const camel = pascal.charAt(0).toLowerCase() + pascal.slice(1)
-  // Wrapped exactly as Prettier would at the scaffold's printWidth of 100 —
-  // a single-line import is 112 chars, so `pnpm format` on a fresh project
+  // Wrapped exactly as oxfmt would at the scaffold's printWidth of 100 —
+  // a single-line import is 112 chars, so `kick format` on a fresh project
   // would otherwise rewrite this file on the adopter's first run.
   return `import {
   Controller,
