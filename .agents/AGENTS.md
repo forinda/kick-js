@@ -39,8 +39,6 @@ This guide helps AI agents (Claude, Copilot, etc.) work effectively on the KickJ
 | Code generators      | `packages/cli/src/generators/`                                             |
 | Generator patterns   | `packages/cli/src/generators/patterns/{rest,minimal}.ts`                   |
 | Template functions   | `packages/cli/src/generators/templates/`                                   |
-| Drizzle templates    | `packages/cli/src/generators/templates/drizzle/`                           |
-| Prisma templates     | `packages/cli/src/generators/templates/prisma/`                            |
 | TemplateContext type | `packages/cli/src/generators/templates/types.ts`                           |
 | ModuleConfig type    | `packages/cli/src/config.ts`                                               |
 | PrismaModelDelegate  | `packages/prisma/src/types.ts`                                             |
@@ -118,7 +116,7 @@ When adding new features, use these as templates:
 - [ ] Nothing to do for changesets — `"private": true` is enough; changesets v3 skips private packages by default
 - [ ] Add docs page at `docs/examples/<name>.md`
 - [ ] Add to sidebar in `docs/.vitepress/config.mts`
-- [ ] Reference examples: `minimal-api/` (simple), `task-prisma-api/` (full DDD)
+- [ ] Reference examples live in github.com/forinda/kickjs-examples-archive
 
 ### Documentation Changes
 
@@ -186,10 +184,9 @@ interface TemplateContext {
 }
 ```
 
-ORM-specific templates live in subfolders:
-
-- `templates/drizzle/` — `generateDrizzleRepository`, `generateDrizzleConstants`
-- `templates/prisma/` — `generatePrismaRepository` (uses `PrismaModelDelegate`)
+There are no ORM-specific templates. A repository shaped to Prisma or Drizzle
+is that library's interface, not KickJS's, so `--repo <name>` scaffolds a
+generic custom-repository stub the project owns.
 
 Pattern generators are in `generators/patterns/`:
 
@@ -202,7 +199,7 @@ export default defineConfig({
   pattern: 'rest',
   modules: {
     dir: 'src/modules',
-    repo: 'postgres', // 'drizzle' | 'inmemory' | 'prisma' | { name: 'custom' }
+    repo: { name: 'postgres' }, // 'inmemory' (built-in) | { name } → custom stub
     pluralize: true,
   },
 })

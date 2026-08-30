@@ -276,7 +276,7 @@ export default defineConfig({
   pattern: 'rest',
   modules: {
     dir: 'src/modules',
-    repo: 'postgres',                   // 'inmemory' (built-in) | any name → custom stub
+    repo: { name: 'postgres' },         // 'inmemory' (built-in) | { name } → custom stub
     pluralize: true,
     schemaDir: 'src/db/schema',
   },
