@@ -22,8 +22,11 @@ const HEADER = `/* eslint-disable */
 // Self-contained: this file has no imports, so a frontend consumes it without
 // compiling the server, its decorators, or its path aliases.
 //
-//   import type { KickApi } from './path/to/kick__client'
-//   export const api = createClient<KickApi>({ baseUrl: '/api/v1' })
+//   // Ambient — add this file to the frontend's tsconfig "include", then:
+//   export const api = createClient<KickClientApi.Api>({ baseUrl: '/api/v1' })
+//
+//   // Or import it explicitly, if you prefer no globals:
+//   import type { Api } from './path/to/kick__client'
 //
 // Not refreshed by \`kick dev\` — resolving these types builds a full
 // TypeScript program over the server. Re-run \`kick typegen\`.
@@ -36,16 +39,43 @@ export function renderClient(map: ResolvedClientMap, keys: string[]): string {
     return `${HEADER}
 // (no routes discovered yet — annotate a controller method with
 //  @Get/@Post/@Put/@Delete/@Patch and re-run \`kick typegen\`)
-export interface KickApi {}
+declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
+  namespace KickClientApi {
+    interface Api {}
+  }
+}
+
+export type { Api } from './kick__client'
+
+export {}
 `
   }
 
   const hoisted = map.hoisted.length > 0 ? map.hoisted.join('\n\n') + '\n\n' : ''
   const lines = emitted.map((key) => `  ${JSON.stringify(key)}: ${map.entries.get(key)!}`)
 
+  // The hoisted shapes stay MODULE-local while only the namespace is global.
+  // Emitting them at the top level instead would put all 86 `__T<n>` into the
+  // frontend's global scope, which was measurable: a file shaped that way let
+  // `type Leaked = __T0` compile in the consuming app.
+  //
+  // The name matters too. `kick__routes.ts` already declares a global
+  // `KickApi`, and both files live in `.kickjs/types`, which the server's own
+  // tsconfig includes — reusing that name made the SERVER fail to compile with
+  // `TS2300: Duplicate identifier 'KickApi'`.
   return `${HEADER}
-${hoisted}export interface KickApi {
+${hoisted}interface Api {
 ${lines.join('\n')}
 }
+
+declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
+  namespace KickClientApi {
+    export { Api }
+  }
+}
+
+export type { Api }
 `
 }

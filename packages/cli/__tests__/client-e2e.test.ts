@@ -138,23 +138,28 @@ describe('the client route map, end to end', () => {
     expect(existsSync(TSC)).toBe(true)
   })
 
-  it('emits a file with no imports and no ambient declarations', () => {
+  it('emits a file with no imports, and only the namespace globally', () => {
     const emitted = require('node:fs').readFileSync(join(web, 'kick__client.d.ts'), 'utf-8')
     const code = emitted
       .split('\n')
       .filter((line: string) => !line.trimStart().startsWith('//'))
       .join('\n')
 
+    // No imports is the load-bearing one: an import is a dependency on the
+    // server's program, which is the thing being removed.
     expect(code).not.toContain('import ')
-    expect(code).not.toContain('declare global')
     expect(code).not.toContain('src/term')
-    expect(emitted).toContain('export interface KickApi')
+    // The ambient surface is exactly one namespace. The hoisted shapes stay
+    // module-local — see the leak test below.
+    expect(code).toContain('namespace KickClientApi')
+    expect(emitted).toContain('namespace KickClientApi')
+    expect(emitted).toContain('export type { Api }')
   })
 
   it('type-checks in a frontend with none of the server tsconfig gymnastics', () => {
     writeFileSync(
       join(web, 'src/app.ts'),
-      `import type { KickApi } from '../kick__client'
+      `import type { Api as KickApi } from '../kick__client'
 
 type Terms = KickApi['GET /terms']['response']
 
@@ -168,10 +173,34 @@ export const credits = (terms: Terms): (number | undefined)[] => terms.map((t) =
     expect(ok).toBe(true)
   })
 
+  it('is usable with no import at all, via the ambient namespace', () => {
+    // The reason the map is ambient as well as exported: a frontend that puts
+    // this file in its tsconfig "include" needs no bridge file and no import
+    // line — `KickClientApi.Api` is just there.
+    writeFileSync(
+      join(web, 'src/app.ts'),
+      `type Terms = KickClientApi.Api['GET /terms']['response']
+
+export const ids = (terms: Terms): string[] => terms.map((t) => t.id)
+`,
+    )
+
+    const { ok, output } = typecheckWeb()
+    expect(output).toBe('')
+    expect(ok).toBe(true)
+  })
+
+  it('does not leak its hoisted shapes into the consuming global scope', () => {
+    // Emitting the hoisted interfaces at the top level would make every
+    // `__T<n>` global in the frontend — 86 of them on a real app.
+    writeFileSync(join(web, 'src/app.ts'), 'export type Leaked = __T0\n')
+    expect(typecheckWeb().ok).toBe(false)
+  })
+
   it('still rejects a route that does not exist', () => {
     writeFileSync(
       join(web, 'src/app.ts'),
-      `import type { KickApi } from '../kick__client'
+      `import type { Api as KickApi } from '../kick__client'
 
 export type Nope = KickApi['GET /nope']
 `,
@@ -183,7 +212,7 @@ export type Nope = KickApi['GET /nope']
   it('still rejects a field the response does not have', () => {
     writeFileSync(
       join(web, 'src/app.ts'),
-      `import type { KickApi } from '../kick__client'
+      `import type { Api as KickApi } from '../kick__client'
 
 type Terms = KickApi['GET /terms']['response']
 
