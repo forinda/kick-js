@@ -53,7 +53,7 @@ function resolvePolling(flag: boolean | undefined): boolean {
  * The returned URL carries the session id. A hand-built `ws://host:port`
  * cannot be connected to even when the port is open.
  */
-export async function openInspector(port: number, host = '0.0.0.0'): Promise<string> {
+export async function openInspector(port: number, host = '127.0.0.1'): Promise<string> {
   const inspector = await import('node:inspector')
   inspector.open(port, host, false)
   const url = inspector.url()
@@ -375,8 +375,25 @@ export function registerRunCommands(program: Command): void {
     .option('-e, --entry <file>', 'Entry file', 'src/index.ts')
     .option('-p, --port <port>', 'Port number')
     .option('--inspect-port <port>', 'Inspector port', '9229')
+    .option(
+      '--inspect-host <host>',
+      'Inspector bind address (use 0.0.0.0 to reach it from outside a container)',
+      '127.0.0.1',
+    )
     .action(async (opts: any) => {
       const inspectPort = Number(opts.inspectPort ?? '9229')
+      const inspectHost = opts.inspectHost ?? '127.0.0.1'
+
+      // Anyone who reaches an open inspector can evaluate code in this
+      // process. Loopback keeps that to this machine; a wildcard bind is a
+      // real choice a container makes, not a default to inherit silently.
+      if (!['127.0.0.1', 'localhost', '::1'].includes(inspectHost)) {
+        console.warn(
+          `  WARNING: the debugger is bound to ${inspectHost}, not loopback. Anyone who can` +
+            `\n  reach port ${inspectPort} can run code in this process. Use it on a trusted` +
+            `\n  network only, and prefer publishing the port from your container instead.`,
+        )
+      }
 
       // Attach the inspector to THIS process. Setting NODE_OPTIONS here does
       // nothing: Node reads it once, at startup, and the dev server runs
@@ -389,7 +406,7 @@ export function registerRunCommands(program: Command): void {
       // running process. `false` means do not block waiting for a client.
       let url: string
       try {
-        url = await openInspector(inspectPort)
+        url = await openInspector(inspectPort, inspectHost)
       } catch (err: any) {
         console.error(
           `\n  Could not open the inspector on ${inspectPort}: ${err.message ?? err}` +
