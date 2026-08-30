@@ -1,10 +1,12 @@
 ---
-'@forinda/kickjs-cli': minor
+'@forinda/kickjs-cli': major
 ---
 
 Drop the Prisma/Drizzle repository config, and say why `--repo prisma` no longer presets
 
-`modules.prismaClientPath` is removed. It was threaded through four layers —
+BREAKING: `modules.prismaClientPath` is removed. It was part of the exported
+`ModuleConfig`, so an existing `kick.config.ts` that sets it now fails to
+typecheck — delete the line, it did nothing. It was threaded through four layers —
 `kick.config.ts` → module options → `ModuleContext` → `TemplateContext` — and
 consumed by nothing: dead plumbing left behind when the ORM templates were
 taken out, and a Prisma-specific knob in the framework's own config.

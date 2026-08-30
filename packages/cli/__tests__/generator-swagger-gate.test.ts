@@ -18,6 +18,7 @@ import { join } from 'node:path'
 
 import { generateController, generateRestController } from '../src/generators/templates/controller'
 import { hasDependency, hasSwagger } from '../src/config'
+import { findProjectRoot } from '../src/utils/project-root'
 
 const ctx = { pascal: 'Product', kebab: 'product', plural: 'products', pluralPascal: 'Products' }
 
@@ -69,9 +70,12 @@ describe('swagger gate', () => {
     expect(hasSwagger(projectWith({ dependencies: { '@forinda/kickjs-swagger': '^7.1.0' } }))).toBe(
       true,
     )
-    expect(
-      hasSwagger(projectWith({ devDependencies: { '@forinda/kickjs-swagger': '^7.1.0' } })),
-    ).toBe(true)
+    // A devDependency does NOT satisfy it: `@ApiTags` is a decorator, evaluated
+    // when the class is defined, and `npm install --omit=dev` would leave the
+    // generated controller importing a package that is not installed.
+    const devOnly = projectWith({ devDependencies: { '@forinda/kickjs-swagger': '^7.1.0' } })
+    expect(hasSwagger(devOnly)).toBe(false)
+    expect(hasDependency(devOnly, '@forinda/kickjs-swagger', 'any')).toBe(true)
     expect(hasSwagger(projectWith({ dependencies: { '@forinda/kickjs': '^7.4.0' } }))).toBe(false)
     expect(hasSwagger(projectWith({}))).toBe(false)
   })
@@ -83,6 +87,20 @@ describe('swagger gate', () => {
     const dir = projectWith({ dependencies: { '@forinda/kickjs-queue': '^7.0.0' } })
     expect(hasDependency(dir, '@forinda/kickjs-queue')).toBe(true)
     expect(hasDependency(dir, '@forinda/kickjs-swagger')).toBe(false)
+  })
+
+  it('finds the dependency from a nested working directory', () => {
+    // `kick g` is routinely run from inside a module directory. Reading
+    // package.json relative to cwd there finds nothing, so a project that HAS
+    // swagger would silently generate controllers without it — the same
+    // cwd-vs-project-root trap the extension guide warns authors about, which
+    // the generators themselves then fell into.
+    const dir = projectWith({ dependencies: { '@forinda/kickjs-swagger': '^7.1.0' } })
+    const nested = join(dir, 'src', 'modules', 'orders')
+    mkdirSync(nested, { recursive: true })
+
+    expect(hasSwagger(nested)).toBe(false) // reading the nested dir directly
+    expect(hasSwagger(findProjectRoot(nested))).toBe(true) // what the CLI does
   })
 
   it('says no when there is no package.json to read', () => {

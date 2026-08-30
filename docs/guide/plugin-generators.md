@@ -175,6 +175,7 @@ the queues you actually run:
 
 ```ts
 // kick.config.ts
+import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { defineConfig, defineCliPlugin, defineGenerator } from '@forinda/kickjs-cli'
 
@@ -184,6 +185,19 @@ const jobGenerator = defineGenerator({
   args: [{ name: 'name', required: true }],
   flags: [{ name: 'queue', alias: 'q', takesValue: true, description: 'Queue name' }],
   files: (ctx) => {
+    // `required: true` on an arg populates help output; it does not make the
+    // CLI reject a call. Check what you need, and say what is missing.
+    if (!ctx.name) throw new Error('kick g job <name> — a job name is required')
+
+    // Do not emit an import the project may not have. This is the exact defect
+    // that got the built-in `job` generator removed: it imported
+    // @forinda/kickjs-queue whether or not the project depended on it, and the
+    // generated file could not compile.
+    const pkg = JSON.parse(readFileSync(join(ctx.projectRoot, 'package.json'), 'utf-8'))
+    if (!pkg.dependencies?.['@forinda/kickjs-queue']) {
+      throw new Error('kick g job needs @forinda/kickjs-queue.\n  Install it first: kick add queue')
+    }
+
     const queue = typeof ctx.flags.queue === 'string' ? ctx.flags.queue : `${ctx.kebab}-queue`
 
     return [

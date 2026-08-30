@@ -15,7 +15,9 @@ maintaining it is work the framework owes adopters. A queue processor is not
 that shape: it belongs to whichever queue you actually run, which the framework
 cannot know and should not track.
 
-Every other generator stays. `defineGenerator` in `kick.config.ts` gives a
+Every other framework-owned generator stays. Also removed:
+`generators/auth-scaffold.ts`, which no command reached — `kick g auth-scaffold`
+was documented but never registered. `defineGenerator` in `kick.config.ts` gives a
 project its own `kick g job` in about twenty lines, shaped to the library it
 chose — see
 [plugin generators](https://kickjs.app/guide/plugin-generators.html), which now
