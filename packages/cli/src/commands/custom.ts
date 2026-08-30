@@ -1,5 +1,7 @@
 import type { Command } from 'commander'
 import type { KickConfig, KickCommandDefinition } from '../config'
+import { join, delimiter } from 'node:path'
+
 import { runShellCommand } from '../utils/shell'
 
 /**
@@ -83,6 +85,25 @@ function registerSingleCommand(program: Command, def: KickCommandDefinition): vo
   command.allowUnknownOption(true)
   command.argument('[args...]', 'Additional arguments passed to the command')
 
+  /**
+   * PATH with the project's `node_modules/.bin` in front.
+   *
+   * Steps inherit the PATH of whatever launched `kick`. Run through a package
+   * script that already includes local binaries; run from a shell with a
+   * global `kick`, it does not — which is why these steps used to be written
+   * `npx <tool>`, and npx resolves an ABSENT binary by fetching whatever the
+   * registry has under that name. For a bin whose package is named differently
+   * that is a stranger's code: `kick` on npm is an AngularJS scaffolder.
+   *
+   * Putting the project's own binaries on PATH means steps can name tools
+   * plainly, and a missing one fails as "command not found" rather than
+   * downloading something.
+   */
+  function binPathEnv(): NodeJS.ProcessEnv {
+    const bin = join(process.cwd(), 'node_modules', '.bin')
+    return { PATH: `${bin}${delimiter}${process.env.PATH ?? ''}` }
+  }
+
   command.action((args: string[]) => {
     const extraArgs = args.join(' ')
     const steps = Array.isArray(def.steps) ? def.steps : [def.steps]
@@ -92,7 +113,7 @@ function registerSingleCommand(program: Command, def: KickCommandDefinition): vo
       const finalCmd = extraArgs ? `${step} ${extraArgs}` : step
       console.log(`  $ ${finalCmd}`)
       try {
-        runShellCommand(finalCmd)
+        runShellCommand(finalCmd, undefined, binPathEnv())
       } catch {
         console.error(`  Command failed: ${def.name}`)
         process.exitCode = 1

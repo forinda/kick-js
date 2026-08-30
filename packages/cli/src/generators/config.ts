@@ -45,22 +45,27 @@ export default defineConfig({
     {
       name: 'test',
       description: 'Run tests with Vitest',
-      steps: 'npx vitest run',
+      steps: 'vitest run',
+    },
+    {
+      name: 'lint',
+      description: 'Lint with oxlint',
+      steps: 'oxlint src/',
     },
     {
       name: 'format',
       description: 'Format code with oxfmt',
-      steps: 'npx oxfmt src/',
+      steps: 'oxfmt src/',
     },
     {
       name: 'format:check',
       description: 'Check formatting without writing',
-      steps: 'npx oxfmt --check src/',
+      steps: 'oxfmt --check src/',
     },
     {
       name: 'ci:check',
       description: 'Run typecheck + format check',
-      steps: ['npx tsc --noEmit', 'npx oxfmt --check src/'],
+      steps: ['kick typecheck', 'oxlint src/', 'oxfmt --check src/'],
       aliases: ['verify'],
     },
   ],

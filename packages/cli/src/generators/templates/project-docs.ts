@@ -141,8 +141,8 @@ ${pm} install            # Install dependencies
 kick dev                 # Dev server with HMR + typegen
 kick build && kick start # Production
 ${pm} run test           # Vitest
-${pm} run typecheck      # tsc --noEmit
-${pm} run format         # Prettier
+kick typecheck           # tsc/tsgo, whichever the project has
+kick format              # oxfmt
 \`\`\`
 
 ## v4 framework reminders
@@ -652,7 +652,7 @@ function buildSkills(pm: string): KickJsSkill[] {
 2. Verify the new folder under \`src/modules/<name>/\` contains \`<name>.module.ts\` (filename suffix is mandatory for Vite HMR).
 3. Confirm the module appears in \`src/modules/index.ts\` exports — generator does this automatically; verify if you bypassed it.
 4. Open \`<name>.dto.ts\` and tighten the Zod schemas to real fields (the generator emits placeholders).
-5. Run \`${pm} run typecheck\` and \`${pm} run test\` before claiming done.
+5. Run \`kick typecheck\` and \`${pm} run test\` before claiming done.
 
 **Canonical module shape** — \`defineModule\` factory, never \`class implements AppModule\`:
 
