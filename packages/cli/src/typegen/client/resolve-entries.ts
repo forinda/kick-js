@@ -19,6 +19,7 @@
  *
  * @module @forinda/kickjs-cli/typegen/client/resolve-entries
  */
+import { readdirSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 
 import type ts from '@typescript/typescript6'
@@ -200,6 +201,47 @@ function keysWithDiagnostics(
 }
 
 /**
+ * The roots this pass actually needs, out of everything the tsconfig lists.
+ *
+ * The probe imports the generated route map, which imports the controllers,
+ * which import their services and DTOs — so every file that can contribute to
+ * a route type is reachable and TypeScript pulls it in on its own. Handing it
+ * the whole project on top of that loads files no route can reference: on a
+ * 1,940-route app, 686 of the 2,851 roots were tests.
+ *
+ * Two kinds of file stay, because nothing imports them and dropping one
+ * silently removes the globals it declares — a controller depending on those
+ * would then resolve differently, which is exactly the quiet divergence this
+ * generator must not produce:
+ *
+ *   - every declaration file the tsconfig lists, wherever it lives;
+ *   - everything typegen itself emits, read from disk rather than taken from
+ *     the tsconfig.
+ *
+ * That second list is read from disk deliberately. TypeScript's `include`
+ * skips dot-directories, so `.kickjs/types` is absent from `fileNames` unless
+ * the adopter spelled out a glob for it — and `kick__env.ts` carries a
+ * `declare global` that nothing imports. Relying on the tsconfig meant those
+ * globals were simply missing for every project that did not happen to glob
+ * them, and a controller referencing one resolved against an error type.
+ */
+function clientRootNames(fileNames: readonly string[], typesDir: string): string[] {
+  const declarations = fileNames.filter((f) => /\.d\.(ts|mts|cts)$/.test(f))
+
+  let generated: string[] = []
+  try {
+    generated = readdirSync(typesDir)
+      .filter((f) => f.endsWith('.ts'))
+      .map((f) => join(typesDir, f))
+  } catch {
+    // No generated types yet — the probe still reaches the route map through
+    // its own import, and a missing map is reported by the caller.
+  }
+
+  return [...new Set([...declarations, ...generated])]
+}
+
+/**
  * Build a program over the project's tsconfig with the probe added as a root.
  *
  * The probe lives only in memory. Writing it would leave a stray file in
@@ -237,7 +279,7 @@ function createProbeProgram(
       : getSourceFile(name, languageVersion, onError, shouldCreate)
 
   return t.createProgram({
-    rootNames: [...parsed.fileNames, probePath],
+    rootNames: [...clientRootNames(parsed.fileNames, dirname(probePath)), probePath],
     options: parsed.options,
     host: compilerHost,
   })
