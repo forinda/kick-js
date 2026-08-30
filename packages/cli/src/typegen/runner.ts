@@ -108,6 +108,7 @@ export async function runTypegen(opts: RunTypegenOptions): Promise<TypegenPlugin
     getScanResult,
     log: console,
     watch: opts.watch,
+    check: opts.check,
   }
 
   const results: TypegenPluginResult[] = []
