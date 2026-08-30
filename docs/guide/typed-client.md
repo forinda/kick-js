@@ -107,6 +107,19 @@ web app has the map from the first run; every other project opts in here.
 If the file is already on disk and this is unset, `kick typegen` says so rather
 than refreshing it silently — a map left to rot is how a frontend ends up
 type-checking against routes the server no longer serves.
+
+That cost is paid only when something the map depends on actually moved. Each
+run fingerprints the project's source files, its lockfile, the compiler options
+and the CLI version; when the fingerprint matches the one recorded beside the
+last map, the program is never built and the existing file stands. On that same
+1,940-route app an unchanged run is **0.85s and 230 MB** against 7.5s and
+1.2 GB — and because the fingerprint hashes contents rather than timestamps, a
+rebuild that rewrites identical bytes does not invalidate it. Editing a single
+source file does.
+
+The record lives in `.kickjs/cache/client-map.sha1`, inside the already-ignored
+`.kickjs/` directory. Delete it to force a rebuild. `kick typegen --check`
+never writes it — that flag is read-only.
 :::
 
 ::: warning `types` replaces automatic `@types` inclusion

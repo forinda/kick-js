@@ -22,15 +22,36 @@
  * @module @forinda/kickjs-cli/typegen/builtin/client
  */
 import path from 'node:path'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { rm } from 'node:fs/promises'
 
-import { resolveClientMap } from '../client/resolve-entries'
+import { fingerprintClientMap, resolveClientMap } from '../client/resolve-entries'
 import { renderClient } from '../render/client'
 import { isDebugLog, type TypegenLogger, type TypegenPlugin } from '../plugin'
 import type { KickConfig } from '../../config'
 
 const OUT_FILE = '.kickjs/types/kick__client.d.ts'
+/** Sidecar recording what the emitted map was built from. */
+const STAMP_FILE = '.kickjs/cache/client-map.sha1'
+
+const CLI_VERSION: string = (() => {
+  try {
+    const require = createRequire(import.meta.url)
+    return require('../../../package.json').version ?? '0.0.0'
+  } catch {
+    return '0.0.0'
+  }
+})()
+
+/** The recorded fingerprint, or null when there is none to compare against. */
+function readStamp(file: string): string | null {
+  try {
+    return existsSync(file) ? readFileSync(file, 'utf-8').trim() : null
+  } catch {
+    return null
+  }
+}
 
 /**
  * Delete a previously generated client map after a failed one-shot run.
@@ -134,6 +155,18 @@ export const kickClientTypegen = (): TypegenPlugin => ({
       keys.push(key)
     }
 
+    // Resolving costs a whole TypeScript program — 6.6s and 1.1 GB on a
+    // 1,940-route app. Fingerprinting what the map depends on costs ~35ms, so
+    // an unchanged project skips two orders of magnitude of work. Returning
+    // null leaves the existing file in place.
+    const stamp = await fingerprintClientMap({ projectDir: ctx.cwd, cliVersion: CLI_VERSION })
+    const stampFile = path.resolve(ctx.cwd, STAMP_FILE)
+    const outFile = path.resolve(ctx.cwd, OUT_FILE)
+    if (stamp && existsSync(outFile) && readStamp(stampFile) === stamp) {
+      if (isDebugLog()) ctx.log.info?.(`  kick/client: unchanged, keeping ${OUT_FILE}`)
+      return null
+    }
+
     try {
       const map = await resolveClientMap({
         projectDir: ctx.cwd,
@@ -141,7 +174,13 @@ export const kickClientTypegen = (): TypegenPlugin => ({
         keys,
         onWarn: (msg) => ctx.log.warn(msg),
       })
-      return renderClient(map, keys)
+      const rendered = renderClient(map, keys)
+      // Not under --check: that gate is read-only, and a cache file written
+      // there would dirty a clean checkout just by running it.
+      if (stamp && !ctx.check) {
+        await ctx.writeFile(STAMP_FILE, stamp)
+      }
+      return rendered
     } catch (err) {
       // Order matters: discard first, because whether a map was on disk is
       // what decides how loud this should be.

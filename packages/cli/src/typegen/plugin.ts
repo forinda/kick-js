@@ -56,6 +56,12 @@ export interface TypegenContext {
   getScanResult(opts: ScanOptions): Promise<ScanResult>
   log: TypegenLogger
   /**
+   * True under `kick typegen --check`. The gate is read-only — it must not
+   * touch the working tree — so a plugin that caches state alongside its
+   * output has to skip the write.
+   */
+  check?: boolean
+  /**
    * True when this pass is part of a watch loop (`kick typegen --watch`,
    * `kick dev`). Plugins whose work is a build-step cost rather than a
    * keystroke cost return `null` when it is set — see `kick/client`, which
