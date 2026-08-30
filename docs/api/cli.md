@@ -110,9 +110,9 @@ interface KickConfig {
 
   modules?: {
     dir?: string // default: 'src/modules'
-    repo?: 'inmemory' | 'prisma' | 'drizzle' | { name: string } // default: 'inmemory'
+    repo?: 'inmemory' | { name: string } // default: 'inmemory'
     pluralize?: boolean // default: true
-    schemaDir?: string // Drizzle/Prisma schema files
+    schemaDir?: string // schema output dir, e.g. 'src/db/schema'
   }
 
   typegen?: {
@@ -191,11 +191,18 @@ function initProject(options: {
 function loadKickConfig(cwd: string): Promise<KickConfig | null>
 ```
 
-### RepoType
+### RepoTypeConfig
 
 ```typescript
-type RepoType = 'drizzle' | 'inmemory' | 'prisma'
+type BuiltinRepoType = 'inmemory'
+type CustomRepoType = { name: string }
+type RepoTypeConfig = BuiltinRepoType | CustomRepoType
 ```
+
+`inmemory` is the only built-in — zero-dependency and framework-owned. There
+are deliberately no ORM presets: a repository shaped to Prisma or Drizzle is
+that library's interface, not KickJS's. Any other name scaffolds a generic
+custom-repository stub you own, passed as an object: `repo: { name: 'postgres' }`.
 
 ## Naming Utilities
 
