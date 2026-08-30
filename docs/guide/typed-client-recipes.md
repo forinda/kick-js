@@ -260,7 +260,8 @@ already configures.
 - **Tests**: [`createTestClient`](./typed-client.md#network-free-testing) +
   a `QueryClientProvider` wrapper gives fully-typed hook tests with zero
   network.
-- **Separate repo or a frontend that typechecks slowly?** Import
-  `.kickjs/types/kick__client.d.ts` instead of the ambient bridge — same types,
-  no server source in your `tsc` run. See
+- **Separate repo or a frontend that typechecks slowly?** Add
+  `.kickjs/types/kick__client.d.ts` to your tsconfig `include` and swap
+  `KickApi` for `KickClientApi.Api` — same types, no server source in your
+  `tsc` run, and every example on this page works unchanged. See
   [frontends outside the server's TypeScript program](./typed-client.md#frontends-outside-the-server-s-typescript-program).

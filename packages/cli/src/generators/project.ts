@@ -199,6 +199,8 @@ interface InitProjectOptions {
   runtime?: 'express' | 'fastify' | 'h3'
   /** Wire `SpaAdapter` at this clientDir (fullstack template). */
   spaClientDir?: string
+  /** Pin the compiler API + generate the client route map (fullstack). */
+  withClientMap?: boolean
 }
 
 /** Scaffold a new KickJS project */
@@ -287,7 +289,15 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
   // ── package.json — template-aware deps ────────────────────────────
   await writeFileSafe(
     join(dir, 'package.json'),
-    generatePackageJson(name, template, versions, packages, schemaLib, runtime),
+    generatePackageJson(
+      name,
+      template,
+      versions,
+      packages,
+      schemaLib,
+      runtime,
+      options.withClientMap,
+    ),
   )
 
   // ── vite.config.ts — enables HMR + SWC for decorators ──────────────
