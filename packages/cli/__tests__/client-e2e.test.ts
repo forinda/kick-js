@@ -12,6 +12,10 @@
  * The negative half matters as much: a route that does not exist must still
  * fail to compile, or the map is not typing anything.
  *
+ * Resolved through `require.resolve` rather than a path relative to
+ * `process.cwd()`: vitest can be invoked from the repo root with `--root`,
+ * and a cwd-relative guess then points outside the repo entirely.
+ *
  * The checker used here is the repo's own `tsc` — TypeScript 7 — not the
  * TypeScript 6 compiler API the generator runs on. That is the real
  * cross-version pairing an adopter gets.
@@ -21,9 +25,10 @@
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { createRequire } from 'node:module'
+import { dirname, join } from 'node:path'
 
 import { resolveClientMap } from '../src/typegen/client/resolve-entries'
 import { renderClient } from '../src/typegen/render/client'
@@ -32,7 +37,14 @@ let server: string
 let web: string
 
 /** The repo's TypeScript 7 binary — what an adopter's frontend actually runs. */
-const TSC = resolve(process.cwd(), '../../node_modules/typescript/bin/tsc')
+const TSC = (() => {
+  // Not `resolve('typescript/bin/tsc')`: TypeScript 7's `exports` map does not
+  // expose that subpath. Go through the manifest and read the declared bin.
+  const req = createRequire(import.meta.url)
+  const pkgPath = req.resolve('typescript/package.json')
+  const bin = JSON.parse(readFileSync(pkgPath, 'utf-8')).bin
+  return join(dirname(pkgPath), typeof bin === 'string' ? bin : bin.tsc)
+})()
 
 beforeAll(async () => {
   const root = mkdtempSync(join(tmpdir(), 'kick-client-e2e-'))
