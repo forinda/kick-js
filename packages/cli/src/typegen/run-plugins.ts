@@ -14,22 +14,12 @@ import { mergeCliPlugins } from '../plugin'
 import { builtinCliPlugins } from '../plugin/builtins'
 import { runTypegen as runPluginTypegens } from './runner'
 import type { ScanDelta } from './scanner'
-import { TypegenDriftError } from './plugin'
+import { isDebugLog, TypegenDriftError } from './plugin'
 import type { TypegenPluginResult } from './plugin'
 import { applyDisableFilter } from './disable-filter'
 
 // Re-export so the existing public surface (cli/index.ts) still resolves.
 export { applyDisableFilter } from './disable-filter'
-
-/**
- * True when verbose typegen output is requested via `LOG_LEVEL=debug`
- * (the kickjs log-level convention). Gates the per-plugin status list so
- * a normal `kick typegen` run only prints its one-line summary.
- */
-function isDebugLog(): boolean {
-  const level = (process.env.LOG_LEVEL ?? process.env.KICKJS_LOG_LEVEL ?? '').toLowerCase()
-  return level === 'debug' || level === 'trace'
-}
 
 export interface RunAllPluginTypegensOptions {
   cwd: string

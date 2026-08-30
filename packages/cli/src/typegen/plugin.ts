@@ -10,6 +10,19 @@
 import type { KickConfig } from '../config'
 import type { ScanOptions, ScanResult } from './scanner'
 
+/**
+ * True when verbose typegen output is requested via `LOG_LEVEL=debug` (the
+ * kickjs log-level convention).
+ *
+ * Lives here rather than in `run-plugins` because plugins need it too, and
+ * `run-plugins` → `plugin/builtins` → any builtin plugin is a cycle: importing
+ * it the other way left `kickClientTypegen` undefined at module-eval time.
+ */
+export function isDebugLog(): boolean {
+  const level = (process.env.LOG_LEVEL ?? process.env.KICKJS_LOG_LEVEL ?? '').toLowerCase()
+  return level === 'debug' || level === 'trace'
+}
+
 export interface TypegenLogger {
   info(msg: string): void
   warn(msg: string): void

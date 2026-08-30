@@ -22,11 +22,12 @@
  * @module @forinda/kickjs-cli/typegen/builtin/client
  */
 import path from 'node:path'
+import { existsSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 
 import { resolveClientMap } from '../client/resolve-entries'
 import { renderClient } from '../render/client'
-import type { TypegenLogger, TypegenPlugin } from '../plugin'
+import { isDebugLog, type TypegenLogger, type TypegenPlugin } from '../plugin'
 
 const OUT_FILE = '.kickjs/types/kick__client.d.ts'
 
@@ -37,8 +38,12 @@ const OUT_FILE = '.kickjs/types/kick__client.d.ts'
  * immediately and points straight here, while an obsolete map type-checks
  * cleanly against routes that no longer exist.
  */
-async function discardStaleOutput(ctx: { cwd: string; log: TypegenLogger }): Promise<void> {
+async function discardStaleOutput(ctx: { cwd: string; log: TypegenLogger }): Promise<boolean> {
   const outFile = path.resolve(ctx.cwd, OUT_FILE)
+  // Nothing to discard, and nothing to announce. `rm --force` succeeds either
+  // way, so without this check the run claimed to have "removed the previously
+  // generated" file in projects that never had one.
+  if (!existsSync(outFile)) return false
   try {
     await rm(outFile, { force: true })
   } catch (err) {
@@ -48,12 +53,13 @@ async function discardStaleOutput(ctx: { cwd: string; log: TypegenLogger }): Pro
       `  kick/client: could not remove the stale ${OUT_FILE} — treat it as out of date ` +
         `(${err instanceof Error ? err.message : String(err)})`,
     )
-    return
+    return true
   }
   ctx.log.warn(
     `  kick/client: removed the previously generated ${OUT_FILE} rather than leave a ` +
       `stale one — re-run \`kick typegen\` once the cause above is fixed.`,
   )
+  return true
 }
 
 export const kickClientTypegen = (): TypegenPlugin => ({
@@ -97,10 +103,23 @@ export const kickClientTypegen = (): TypegenPlugin => ({
       })
       return renderClient(map, keys)
     } catch (err) {
-      // loadCompilerApi's message already names the install command, and a
-      // missing tsconfig / unreadable routes file is equally recoverable —
-      // every one of them means "skip this file", never "fail the pass".
-      ctx.log.warn(`  kick/client: skipped — ${err instanceof Error ? err.message : String(err)}`)
+      // Order matters: discard first, because whether a map was on disk is
+      // what decides how loud this should be.
+      //
+      // A project that has one is USING it, so a skip is a regression and
+      // says so. A project that never had one — no frontend, or a TS 7 setup
+      // that never installed the compiler API — is not broken, and a warning
+      // on every single `kick typegen` would be pure noise for a file it
+      // does not consume. loadCompilerApi's message names the install command
+      // either way; it just belongs at debug level until someone asks.
+      const hadOutput = existsSync(path.resolve(ctx.cwd, OUT_FILE))
+      const message = `  kick/client: skipped — ${err instanceof Error ? err.message : String(err)}`
+      // Cause first: the removal notice below says "the cause above".
+      if (hadOutput) ctx.log.warn(message)
+      // `ctx.log` is `console`, whose `debug` still writes to stdout — so the
+      // level has to be gated here, on the same LOG_LEVEL convention the
+      // plugin runner uses for its per-plugin status list.
+      else if (isDebugLog()) ctx.log.info?.(message)
       // Skipping leaves whatever is already on disk, and on a one-shot run
       // that file is now a lie: the routes were rescanned, this map was not
       // rebuilt, and nothing downstream can tell. A MISSING map is a compile
@@ -110,7 +129,7 @@ export const kickClientTypegen = (): TypegenPlugin => ({
       //
       // Only here. The watch skip returns earlier precisely so the dev loop
       // keeps the last good map.
-      await discardStaleOutput(ctx)
+      if (hadOutput) await discardStaleOutput(ctx)
       return null
     }
   },
