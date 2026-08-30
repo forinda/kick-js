@@ -49,18 +49,18 @@ export default defineConfig({
     },
     {
       name: 'format',
-      description: 'Format code with Prettier',
-      steps: 'npx prettier --write src/',
+      description: 'Format code with oxfmt',
+      steps: 'npx oxfmt src/',
     },
     {
       name: 'format:check',
       description: 'Check formatting without writing',
-      steps: 'npx prettier --check src/',
+      steps: 'npx oxfmt --check src/',
     },
     {
       name: 'ci:check',
       description: 'Run typecheck + format check',
-      steps: ['npx tsc --noEmit', 'npx prettier --check src/'],
+      steps: ['npx tsc --noEmit', 'npx oxfmt --check src/'],
       aliases: ['verify'],
     },
   ],

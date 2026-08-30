@@ -41,6 +41,26 @@ function resolvePolling(flag: boolean | undefined): boolean {
   return env === '1' || env === 'true'
 }
 
+/**
+ * Attach a Node inspector to the CURRENT process and return its real URL.
+ *
+ * Not `NODE_OPTIONS`: Node reads that once, at startup, and the dev server
+ * runs in-process — `startDevServer` calls Vite's `createServer` directly
+ * rather than spawning. Setting it here printed a debugger URL that nothing
+ * was listening on, which is how this went unnoticed: the server booted
+ * normally and only the port was missing.
+ *
+ * The returned URL carries the session id. A hand-built `ws://host:port`
+ * cannot be connected to even when the port is open.
+ */
+export async function openInspector(port: number, host = '0.0.0.0'): Promise<string> {
+  const inspector = await import('node:inspector')
+  inspector.open(port, host, false)
+  const url = inspector.url()
+  if (!url) throw new Error('inspector.open() reported no URL')
+  return url
+}
+
 async function startDevServer(
   _entry: string,
   port?: string,
@@ -356,11 +376,29 @@ export function registerRunCommands(program: Command): void {
     .option('-p, --port <port>', 'Port number')
     .option('--inspect-port <port>', 'Inspector port', '9229')
     .action(async (opts: any) => {
-      // For debug mode, we need --inspect on the Node.js process itself.
-      // Re-launch the dev command with NODE_OPTIONS=--inspect
-      const inspectPort = opts.inspectPort ?? '9229'
-      process.env.NODE_OPTIONS = `--inspect=0.0.0.0:${inspectPort}`
-      console.log(`  Debugger: ws://0.0.0.0:${inspectPort}`)
+      const inspectPort = Number(opts.inspectPort ?? '9229')
+
+      // Attach the inspector to THIS process. Setting NODE_OPTIONS here does
+      // nothing: Node reads it once, at startup, and the dev server runs
+      // in-process (`startDevServer` calls Vite's `createServer` directly, it
+      // does not spawn). So the previous version printed a debugger URL that
+      // nothing was listening on — the server came up fine and port 9229 was
+      // closed.
+      //
+      // `inspector.open` is the supported way in: it opens the port on the
+      // running process. `false` means do not block waiting for a client.
+      let url: string
+      try {
+        url = await openInspector(inspectPort)
+      } catch (err: any) {
+        console.error(
+          `\n  Could not open the inspector on ${inspectPort}: ${err.message ?? err}` +
+            `\n  Another process may already hold it — try --inspect-port <port>.`,
+        )
+        process.exit(1)
+        return
+      }
+      console.log(`  Debugger: ${url}`)
 
       try {
         await startDevServer(opts.entry, opts.port)

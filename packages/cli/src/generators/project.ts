@@ -8,7 +8,7 @@ import {
   generatePackageJson,
   generateViteConfig,
   generateTsConfig,
-  generatePrettierConfig,
+  generateFormatterConfig,
   generateEditorConfig,
   generateGitIgnore,
   generateGitAttributes,
@@ -306,8 +306,8 @@ export async function initProject(options: InitProjectOptions): Promise<void> {
   // ── tsconfig.json ───────────────────────────────────────────────────
   await writeFileSafe(join(dir, 'tsconfig.json'), generateTsConfig())
 
-  // ── .prettierrc ─────────────────────────────────────────────────────
-  await writeFileSafe(join(dir, '.prettierrc'), generatePrettierConfig())
+  // ── .oxfmtrc.json ───────────────────────────────────────────────────
+  await writeFileSafe(join(dir, '.oxfmtrc.json'), generateFormatterConfig())
 
   // ── .editorconfig ─────────────────────────────────────────────────────
   await writeFileSafe(join(dir, '.editorconfig'), generateEditorConfig())
