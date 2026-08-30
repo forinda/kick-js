@@ -152,3 +152,17 @@ describe('client map fingerprint', () => {
     )
   })
 })
+
+describe('client map fingerprint — expansion depth', () => {
+  // The depth changes what is emitted, so a project that raises it must get a
+  // rebuilt map rather than the cached one.
+  it('changes when maxDepth changes', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'kick-fp-depth-'))
+    const src = join(dir, 'a.ts')
+    writeFileSync(src, 'export const a = 1')
+    const base = { projectDir: dir, fileNames: [src], keys: [], cliVersion: '1.0.0' }
+    expect(fingerprint({ ...base, options: { __kickMaxDepth: 12 } })).not.toBe(
+      fingerprint({ ...base, options: { __kickMaxDepth: 24 } }),
+    )
+  })
+})

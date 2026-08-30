@@ -123,6 +123,31 @@ The record lives in `.kickjs/cache/client-map.sha1`, inside the already-ignored
 never writes it — that flag is read-only.
 :::
 
+### Expansion depth
+
+A response is expanded inline up to 12 levels; past that it is emitted as
+`unknown` and the route is named in a warning. Truncation is loud and safe —
+`unknown` has to be narrowed by the consumer, so it can never be mistaken for a
+type the server does not return.
+
+The default is rarely reached. Recursive types and named types both hoist into
+their own `interface __Tn`, which costs one level instead of the whole budget,
+so only deep _anonymous_ nesting spends it. On a 1,940-route app the emitted map
+is byte-identical at 12, 24, 48 and 96.
+
+Raise it if a route tells you it hit the limit:
+
+```ts
+// kick.config.ts
+export default defineConfig({
+  typegen: { client: { maxDepth: 24 } },
+})
+```
+
+The object form is on unless you say otherwise, so `{ maxDepth: 24 }` on its own
+also enables the map; `{ enabled: false }` turns it off. Changing the depth
+changes what is emitted, so it invalidates the cache and rebuilds.
+
 ::: warning `types` replaces automatic `@types` inclusion
 Listing anything in `types` switches off TypeScript's automatic inclusion of
 every `@types/*` package. If your frontend relies on that, name what it needs

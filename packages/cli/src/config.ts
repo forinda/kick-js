@@ -259,8 +259,35 @@ export interface TypegenConfig {
    * somewhere nobody looks. It does get a warning, since a map left to rot is
    * how a frontend ends up type-checking against routes the server no longer
    * serves.
+   *
+   * Pass an object to tune the expansion. `{ maxDepth }` raises the limit on
+   * how deeply a response type is expanded inline before it is emitted as
+   * `unknown`:
+   *
+   * ```ts
+   * typegen: { client: { maxDepth: 24 } }
+   * ```
+   *
+   * The default of 12 truncates nothing on a 1,940-route app — recursion and
+   * named types both hoist, which costs one level rather than the whole
+   * budget, so only deep *anonymous* nesting spends it. Raise it if a route
+   * warns that it exceeded the limit; the warning names the route.
    */
-  client?: boolean
+  client?: boolean | ClientTypegenConfig
+}
+
+/** Tuning for the client route map — see `TypegenConfig.client`. */
+export interface ClientTypegenConfig {
+  /** On, unless explicitly false. Lets `{ maxDepth }` alone mean "on". */
+  enabled?: boolean
+  /**
+   * Levels of inline nesting expanded before a type is emitted as `unknown`.
+   *
+   * Truncation is loud and safe — it warns naming the route, and `unknown`
+   * cannot be mistaken for a wrong type — so this is a knob for fidelity, not
+   * correctness. Default 12.
+   */
+  maxDepth?: number
 }
 
 /** Module generation settings — controls how `kick g module` produces code */
