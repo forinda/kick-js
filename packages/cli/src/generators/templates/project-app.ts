@@ -391,6 +391,8 @@ export function generateKickConfig(
   defaultRepo: string = 'inmemory',
   packageManager: 'pnpm' | 'npm' | 'yarn' | 'bun' = 'pnpm',
   runtime: 'express' | 'fastify' | 'h3' = 'express',
+  /** Emit the client route map — set for scaffolds whose frontend reads it. */
+  withClientMap = false,
 ): string {
   // `inmemory` is the only built-in; every other name (incl. the
   // deprecated prisma/drizzle) is emitted as a `{ name }` custom repo.
@@ -421,7 +423,15 @@ export default defineConfig({
   // to \`'zod'\` if you ship Zod schemas without \`fromZod()\` wrapping, or
   // set \`schemaValidator: false\` to skip schema-driven body typing.
   typegen: {
-    schemaValidator: 'kickjs-schema',
+    schemaValidator: 'kickjs-schema',${
+      withClientMap
+        ? `
+    // web/ reads this map from the ambient KickClientApi namespace. Producing
+    // it builds a TypeScript program over the server, so it stays off unless a
+    // project actually consumes it.
+    client: true,`
+        : ''
+    }
   },
 
   commands: [

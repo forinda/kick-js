@@ -240,6 +240,25 @@ export interface TypegenConfig {
    * not a strict registry.
    */
   disable?: string[]
+
+  /**
+   * Generate `.kickjs/types/kick__client.d.ts`, the self-contained route map
+   * a frontend consumes without compiling the server.
+   *
+   * Producing it means building a whole TypeScript program over the server —
+   * measured at 1.1 GB and ~7.6s on a 1,940-route app, against ~130ms for
+   * every other typegen plugin combined. An API with no frontend should not
+   * pay that for a file nothing reads, so this is not on for everyone.
+   *
+   * Off unless set. `kick new --template fullstack` writes `true`, since its
+   * web app reads the map; anything else opts in here.
+   *
+   * A map already on disk does NOT turn this on — that would put the switch
+   * somewhere nobody looks. It does get a warning, since a map left to rot is
+   * how a frontend ends up type-checking against routes the server no longer
+   * serves.
+   */
+  client?: boolean
 }
 
 /** Module generation settings — controls how `kick g module` produces code */

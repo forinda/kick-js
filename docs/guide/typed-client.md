@@ -88,6 +88,27 @@ file, so nothing else lands in your global scope.
 
 This is what `kick new --template fullstack` scaffolds.
 
+::: tip Off unless the project uses it
+Producing this map builds a whole TypeScript program over the server — measured
+at 1.1 GB and ~7.6s on a 1,940-route app, against ~130ms for every other
+typegen plugin combined. An API with no frontend should not pay that for a file
+nothing reads, so `kick typegen` only builds it when the project wants it:
+
+```ts
+// kick.config.ts
+export default defineConfig({
+  typegen: { client: true },
+})
+```
+
+Off unless set. `kick new --template fullstack` writes `client: true`, so its
+web app has the map from the first run; every other project opts in here.
+
+If the file is already on disk and this is unset, `kick typegen` says so rather
+than refreshing it silently — a map left to rot is how a frontend ends up
+type-checking against routes the server no longer serves.
+:::
+
 ::: warning `types` replaces automatic `@types` inclusion
 Listing anything in `types` switches off TypeScript's automatic inclusion of
 every `@types/*` package. If your frontend relies on that, name what it needs
