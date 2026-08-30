@@ -118,7 +118,14 @@ export class TypeExpander {
       this.hoistedByType.set(type, name)
       const index = this.blocks.length
       this.blocks.push('') // hold the slot so ordering matches creation order
-      this.blocks[index] = `interface ${name} {\n${this.members(type, depth, '  ')}\n}`
+      // Depth RESETS here. The counter bounds how deeply types nest *inline*,
+      // and a hoist ends that nesting: this body becomes its own top-level
+      // `interface __Tn { … }` block, referenced by name from wherever it
+      // appeared. Carrying the caller's depth in made a chain of named DTOs
+      // spend the budget on nothing — a 15-link chain emitted
+      // `interface __T12 { v: unknown }` where `v` was a plain `string`,
+      // degrading real types over a nesting the output does not contain.
+      this.blocks[index] = `interface ${name} {\n${this.members(type, 0, '  ')}\n}`
       return name
     }
 

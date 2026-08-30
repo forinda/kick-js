@@ -79,7 +79,14 @@ export async function resolveClientMap(opts: ResolveClientMapOptions): Promise<R
   // would confuse "missing route" with "route whose entry really is `any`".
   const broken = keysWithDiagnostics(t, program, probe, opts.keys)
 
-  const expander = new TypeExpander(t, checker, program, { onWarn: opts.onWarn })
+  // The expander is shared across routes so hoisted shapes are reused, but a
+  // warning from inside it is useless without knowing which route provoked it
+  // — "type nesting exceeded 12 levels" repeated 34 times names nothing to go
+  // and fix. Track the route being expanded and prefix on the way out.
+  let currentKey: string | null = null
+  const expander = new TypeExpander(t, checker, program, {
+    onWarn: (msg) => opts.onWarn?.(currentKey ? `route '${currentKey}': ${msg}` : msg),
+  })
   const entries = new Map<string, string>()
 
   for (const [index, key] of opts.keys.entries()) {
@@ -110,7 +117,9 @@ export async function resolveClientMap(opts: ResolveClientMapOptions): Promise<R
       )
       continue
     }
+    currentKey = key
     entries.set(key, expander.expand(type))
+    currentKey = null
   }
 
   return { entries, hoisted: expander.hoisted() }
