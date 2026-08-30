@@ -300,6 +300,100 @@ to load" in `kick g --list`, for one more minor version.
 - **Return every file from one call.** `files()` returning the complete set lets
   `--dry-run` preview the whole change and keeps writes atomic in intent.
 
+## Replacing a removed generator
+
+`kick g` used to ship generators for `job`, `test`, `adapter`, `plugin` and
+`contributor`. They were removed because a built-in has to guess — which queue
+library, which test style, which folder layout, which optional packages are
+installed — and guessing wrong writes a broken file into a repo the adopter did
+not ask to have touched. `kick g job` importing `@forinda/kickjs-queue` whether
+or not the project depended on it is exactly that.
+
+Each is a short `defineGenerator`. Add the ones you use to `kick.config.ts`,
+then edit them to match your conventions — which is the part a built-in could
+never do.
+
+### `test`
+
+```ts
+defineGenerator({
+  name: 'test',
+  description: 'Vitest scaffold for a service',
+  args: [{ name: 'name', required: true }],
+  files: (ctx) => [
+    {
+      path: join(ctx.projectRoot, ctx.modulesDir, ctx.kebab, `${ctx.kebab}.test.ts`),
+      content: `import { describe, expect, it } from 'vitest'
+
+import { ${ctx.pascal}Service } from './${ctx.kebab}.service'
+
+describe('${ctx.pascal}Service', () => {
+  it('...', () => {
+    expect(new ${ctx.pascal}Service()).toBeDefined()
+  })
+})
+`,
+    },
+  ],
+})
+```
+
+### `adapter`
+
+```ts
+defineGenerator({
+  name: 'adapter',
+  description: 'AppAdapter with lifecycle hooks',
+  args: [{ name: 'name', required: true }],
+  files: (ctx) => [
+    {
+      path: join(ctx.projectRoot, 'src/adapters', `${ctx.kebab}.adapter.ts`),
+      content: `import type { AppAdapter, AdapterContext } from '@forinda/kickjs/adapter'
+
+export class ${ctx.pascal}Adapter implements AppAdapter {
+  readonly name = '${ctx.kebab}'
+
+  async beforeStart({ container }: AdapterContext): Promise<void> {
+    // resolve services, open connections
+  }
+
+  async shutdown(): Promise<void> {
+    // close what beforeStart opened
+  }
+}
+`,
+    },
+  ],
+})
+```
+
+### `contributor`
+
+```ts
+defineGenerator({
+  name: 'contributor',
+  description: 'Context contributor for ctx.set()',
+  args: [{ name: 'name', required: true }],
+  files: (ctx) => [
+    {
+      path: join(ctx.projectRoot, ctx.modulesDir, ctx.kebab, `${ctx.kebab}.contributor.ts`),
+      content: `import { defineContextDecorator } from '@forinda/kickjs'
+
+export const Load${ctx.pascal} = defineContextDecorator({
+  key: '${ctx.camel}',
+  resolve: (ctx) => {
+    // return the value other code reads off ctx.get('${ctx.camel}')
+  },
+})
+`,
+    },
+  ],
+})
+```
+
+`plugin` and `job` follow the same shape — see the worked example above for a
+generator with flags and defaults.
+
 ## Why the built-in set is small
 
 The CLI ships generators for the things every KickJS project has — modules,

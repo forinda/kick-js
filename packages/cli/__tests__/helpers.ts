@@ -95,9 +95,17 @@ export function createFixtureProject(name = 'kick-cli-test'): string {
   mkdirSync(join(dir, 'node_modules', '@forinda'), { recursive: true })
   const kickjsSrc = join(WORKSPACE_ROOT, 'packages', 'kickjs')
   linkDir(kickjsSrc, join(dir, 'node_modules', '@forinda', 'kickjs'))
-  // Some scaffolds also import from @forinda/kickjs-swagger
-  const swaggerSrc = join(WORKSPACE_ROOT, 'packages', 'swagger')
-  linkDir(swaggerSrc, join(dir, 'node_modules', '@forinda', 'kickjs-swagger'))
+  // @forinda/kickjs-swagger is deliberately NOT linked. It used to be, with
+  // the note "some scaffolds also import from it" — which is precisely the bug
+  // that made these fixtures unable to catch it: the generated controller
+  // imported swagger whether or not a project depended on it, the symlink made
+  // that resolve here, `tsc --noEmit` passed, and every real adopter got
+  // TS2307 in a file they did not write. The test was fixed instead of the
+  // generator.
+  //
+  // Leaving it out means the compile check below now proves the thing it
+  // looked like it was proving: generated code imports only what a scaffolded
+  // project actually has.
 
   // Symlink @types/node and zod from the workspace so tsc can resolve
   // both the `types: ['node']` reference and any `import { z } from 'zod'`

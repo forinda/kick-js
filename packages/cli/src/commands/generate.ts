@@ -9,11 +9,8 @@ import { mergeCliPlugins } from '../plugin'
 import type { KickCliPluginContext } from '../plugin/types'
 import { generateModule } from '../generators/module'
 import { resolveRepoType, type RepoType } from '../generators/module'
-import { generateAdapter } from '../generators/adapter'
-import { generatePlugin } from '../generators/plugin'
 import { generateMiddleware } from '../generators/middleware'
 import { generateGuard } from '../generators/guard'
-import { generateContributor, type ContributorType } from '../generators/contributor'
 import { generateService } from '../generators/service'
 import { generateController } from '../generators/controller'
 import { generateDto } from '../generators/dto'
@@ -23,7 +20,6 @@ import { generateAgentDocs } from '../generators/agent-docs'
 import { findStyleDriftModules } from '../generators/migrate-modules'
 import { colors } from '../utils/colors'
 import { generateScaffold, parseFields } from '../generators/scaffold'
-import { generateTest } from '../generators/test'
 import {
   loadKickConfig,
   resolveModuleConfig,
@@ -53,9 +49,6 @@ interface GenerateRootOpts extends ModuleGenOpts {
 }
 
 /** Generators that drop a single file at a configurable directory. */
-interface OutDirOpts {
-  out: string
-}
 
 /** Generators that scope output into a module folder. */
 interface ModuleScopedOpts {
@@ -392,32 +385,6 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
       await runModuleGeneration(names, { ...merged, ...opts }, dryRun)
     })
 
-  // ── kick g adapter <name> ──────────────────────────────────────────
-  gen
-    .command('adapter <name>')
-    .description('Generate an AppAdapter with lifecycle hooks and middleware support')
-    .option('-o, --out <dir>', 'Output directory', 'src/adapters')
-    .action(async (name: string, opts: OutDirOpts, cmd: Command) => {
-      const dryRun = isDryRun(cmd)
-      setDryRun(dryRun)
-      const files = await generateAdapter({ name, outDir: resolve(opts.out) })
-      printGenerated(files, dryRun)
-    })
-
-  // ── kick g plugin <name> ────────────────────────────────────────────
-  gen
-    .command('plugin <name>')
-    .description(
-      'Generate a KickPlugin with DI, modules, adapters, middleware, and lifecycle hooks',
-    )
-    .option('-o, --out <dir>', 'Output directory', 'src/plugins')
-    .action(async (name: string, opts: OutDirOpts, cmd: Command) => {
-      const dryRun = isDryRun(cmd)
-      setDryRun(dryRun)
-      const files = await generatePlugin({ name, outDir: resolve(opts.out) })
-      printGenerated(files, dryRun)
-    })
-
   // ── kick g middleware <name> ────────────────────────────────────────
   gen
     .command('middleware <name>')
@@ -470,51 +437,6 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
       })
       printGenerated(files, dryRun)
     })
-
-  // ── kick g contributor <name> ──────────────────────────────────────
-  gen
-    .command('contributor <name>')
-    .description(
-      'Generate a Context Contributor (typed alternative to @Middleware for ctx.set)\n' +
-        '  --type http (default, RequestContext) | bare (ExecutionContext)\n' +
-        '  --params "source:string,region:number" → emits the withParams<T>() form\n' +
-        '  Use -m to scope it to a module: kick g contributor tenant -m users',
-    )
-    .option('-o, --out <dir>', 'Output directory (overrides --module)')
-    .option('-m, --module <module>', 'Place inside a module folder')
-    .option('-t, --type <type>', 'Contributor flavour: http | bare', 'http')
-    .option('-k, --key <key>', 'Context key it writes (defaults to camelCase of name)')
-    .option('--params <fields>', 'Per-call params, e.g. "source:string,region:number"')
-    .action(
-      async (
-        name: string,
-        opts: ModuleScopedOpts & { type?: string; key?: string; params?: string },
-        cmd: Command,
-      ) => {
-        const dryRun = isDryRun(cmd)
-        setDryRun(dryRun)
-        let type = (opts.type ?? 'http').toLowerCase()
-        if (type !== 'http' && type !== 'bare') {
-          console.warn(`  kick g contributor: unknown --type '${opts.type}', using 'http'.`)
-          type = 'http'
-        }
-        const config = await loadKickConfig(process.cwd())
-        const mc = resolveModuleConfig(config)
-        const modulesDir = mc.dir ?? 'src/modules'
-        const files = await generateContributor({
-          name,
-          type: type as ContributorType,
-          key: opts.key,
-          params: opts.params,
-          outDir: opts.out,
-          moduleName: opts.module,
-          modulesDir,
-          pattern: config?.pattern,
-          pluralize: mc.pluralize ?? true,
-        })
-        printGenerated(files, dryRun)
-      },
-    )
 
   // ── kick g service <name> ──────────────────────────────────────────
   gen
@@ -590,31 +512,6 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
         moduleName: opts.module,
         modulesDir,
         pattern: config?.pattern,
-        pluralize: mc.pluralize ?? true,
-      })
-      printGenerated(files, dryRun)
-    })
-
-  // ── kick g test <name> ────────────────────────────────────────────────
-  gen
-    .command('test <name>')
-    .description(
-      'Generate a Vitest test scaffold\n' +
-        '  Use -m to scope it to a module: kick g test user-service -m users',
-    )
-    .option('-o, --out <dir>', 'Output directory (overrides --module)')
-    .option('-m, --module <module>', "Place inside a module's __tests__/ folder")
-    .action(async (name: string, opts: ModuleScopedOpts, cmd: Command) => {
-      const dryRun = isDryRun(cmd)
-      setDryRun(dryRun)
-      const config = await loadKickConfig(process.cwd())
-      const mc = resolveModuleConfig(config)
-      const modulesDir = mc.dir ?? 'src/modules'
-      const files = await generateTest({
-        name,
-        outDir: opts.out,
-        moduleName: opts.module,
-        modulesDir,
         pluralize: mc.pluralize ?? true,
       })
       printGenerated(files, dryRun)

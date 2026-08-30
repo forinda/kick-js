@@ -32,14 +32,12 @@ cd packages/cli && pnpm link --global
 | `kick generate --list`                      | `kick g --list`                                | List all available generators                                                     |
 | `kick generate module <name>`               | `kick g module`                                | Generate a full DDD module with all layers                                        |
 | `kick generate scaffold <name> <fields...>` | `kick g scaffold`                              | CRUD module from field definitions (`name:type:optional`)                         |
-| `kick generate adapter <name>`              | `kick g adapter`                               | Generate an AppAdapter scaffold                                                   |
 | `kick generate middleware <name>`           | `kick g middleware`                            | Generate an Express middleware function                                           |
 | `kick generate guard <name>`                | `kick g guard`                                 | Generate a route guard                                                            |
 | `kick generate service <name>`              | `kick g service`                               | Generate a `@Service()` class                                                     |
 | `kick generate controller <name>`           | `kick g controller`                            | Generate a `@Controller()` class with routes                                      |
 | `kick generate dto <name>`                  | `kick g dto`                                   | Generate a Zod DTO schema                                                         |
 | `kick generate resolver <name>`             | `kick g resolver`                              | Generate a GraphQL `@Resolver` class                                              |
-| `kick generate test <name>`                 | `kick g test`                                  | Generate a Vitest test scaffold                                                   |
 | `kick generate config`                      | `kick g config`                                | Generate `kick.config.ts`                                                         |
 | `kick generate agents`                      | `kick g agents` (also `agent-docs`, `ai-docs`) | Regenerate `AGENTS.md` / `CLAUDE.md` / `kickjs-skills.md` from upstream templates |
 | `kick info`                                 |                                                | Print system and framework info                                                   |
@@ -77,7 +75,7 @@ cd packages/cli && pnpm link --global
 - `-o, --out <dir>` -- Output directory (overrides `--module`)
 - `-m, --module <name>` -- Place inside a module's DDD folder structure
 
-**kick g adapter / resolver / job**
+**kick g controller / service / dto**
 
 - `-o, --out <dir>` -- Output directory (defaults vary per generator)
 
