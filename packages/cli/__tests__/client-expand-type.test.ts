@@ -338,3 +338,34 @@ describe('TypeExpander', () => {
     expect(out.text).not.toContain('Term')
   })
 })
+
+describe('TypeExpander — expansion budget', () => {
+  it('abandons an expansion that keeps hitting the depth guard', () => {
+    // Depth alone was never the danger — unbounded *work* was. The guard fired
+    // correctly every time on a recursive type and never bailed, so one route
+    // emitted 1.66M warnings and exhausted the heap. Past the budget the walk
+    // stops and says so once.
+    const deep = Array.from(
+      { length: 6 },
+      (_, i) => `type L${i} = { a: L${i + 1}; b: L${i + 1}; c: L${i + 1} }`,
+    ).join('\n')
+    const warnings: string[] = []
+    const out = expand(`${deep}\ntype L6 = { end: string }\ntype Target = L0`, {
+      maxDepth: 2,
+      truncationBudget: 3,
+      onWarn: (m) => warnings.push(m),
+    })
+    expect(out.text).toBe('unknown')
+    expect(warnings.at(-1)).toMatch(/expansion abandoned after 3/)
+  })
+
+  it('leaves an ordinary deep type alone', () => {
+    const warnings: string[] = []
+    const out = expand(`type Target = { a: { b: { c: string } } }`, {
+      truncationBudget: 3,
+      onWarn: (m) => warnings.push(m),
+    })
+    expect(out.text).toBe('{ a: { b: { c: string } } }')
+    expect(warnings).toEqual([])
+  })
+})
