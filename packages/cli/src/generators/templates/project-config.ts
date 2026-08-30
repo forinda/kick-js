@@ -140,6 +140,12 @@ export function generatePackageJson(
         supertest: '^7.2.2',
         vitest: '^4.1.2',
         typescript: '^7.0.2',
+        // TypeScript 7 ships no JS compiler API, and `kick typegen` needs one
+        // to resolve the self-contained client route map
+        // (.kickjs/types/kick__client.d.ts). Without it every typegen run
+        // prints a skip warning and the file never appears — so a scaffold
+        // that pins TS 7 has to pin this too.
+        '@typescript/typescript6': '^6.0.2',
         prettier: '^3.8.1',
       },
     },

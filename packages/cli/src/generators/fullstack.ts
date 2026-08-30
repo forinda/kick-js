@@ -406,6 +406,36 @@ Server: http://localhost:3000 · Web: http://localhost:5173 (Vite proxies \`/api
 Rename a field in \`server/src/modules/hello/hello.service.ts\` → \`web/src/App.tsx\`
 stops compiling. That's the point.
 
+### When to switch to \`kick__client.d.ts\`
+
+Step 3 works because \`web\` compiles the server's route types — which reference
+controller classes, so the server's source graph is pulled into \`web\`'s own
+\`tsc\` run. That is why \`web/tsconfig.json\` carries \`experimentalDecorators\`.
+In one workspace of this size the cost is invisible, and the payoff is the live
+loop above.
+
+It stops being invisible when the frontend grows or moves. \`kick typegen\` also
+emits \`server/.kickjs/types/kick__client.d.ts\` — the same routes with every
+type resolved to a literal shape and **no imports at all**:
+
+\`\`\`ts
+// web/src/api.ts
+import type { KickApi } from '../../server/.kickjs/types/kick__client'
+
+export const api = createClient<KickApi>({ baseUrl: '/api/v1' })
+\`\`\`
+
+Then delete \`web/src/types/kick-routes.d.ts\` and drop \`experimentalDecorators\`
+from \`web/tsconfig.json\`. Call sites do not change: both maps carry the same
+types, because the second is produced by resolving the first.
+
+Switch when the frontend lives in its own repo, when it sets
+\`verbatimModuleSyntax\`, or when its typecheck starts paying for the server's.
+The trade is that this file is **not** refreshed by \`kick dev\` — resolving it
+builds a whole TypeScript program — so a renamed field surfaces on the next
+\`kick typegen\` rather than on save. \`kick typegen --check\` catches a stale one
+in CI.
+
 Docs: https://kickjs.app/guide/typed-client.html
 `
 }
