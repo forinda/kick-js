@@ -26,4 +26,6 @@ export interface ModuleContext {
   style: ModuleStyle
   write: (relativePath: string, content: string) => Promise<void>
   files: string[]
+  /** Project depends on @forinda/kickjs-swagger — gates @ApiTags. */
+  swagger?: boolean
 }

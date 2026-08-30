@@ -2,7 +2,13 @@ import type { TemplateContext } from './types'
 
 /** DDD controller — injects use-cases, nested import paths */
 export function generateController(ctx: TemplateContext): string {
-  const { pascal, kebab, plural = '', pluralPascal = '' } = ctx
+  const { pascal, kebab, plural = '', pluralPascal = '', swagger = false } = ctx
+  // `@ApiTags` lives in @forinda/kickjs-swagger. Emitting it for a project
+  // that does not depend on that package writes a controller which cannot
+  // compile — five decorators and an unresolvable import, in a file the
+  // adopter did not write. `kick add swagger` turns it on for later modules.
+  const swaggerImport = swagger ? "import { ApiTags } from '@forinda/kickjs-swagger'\n" : ''
+  const apiTags = swagger ? `  @ApiTags('${pascal}')\n` : ''
   // Wrapped exactly as oxfmt would at the scaffold's printWidth of 100 —
   // a single-line import is 112 chars, so `kick format` on a fresh project
   // would otherwise rewrite this file on the adopter's first run.
@@ -17,8 +23,7 @@ export function generateController(ctx: TemplateContext): string {
   reply,
   type Ctx,
 } from '@forinda/kickjs'
-import { ApiTags } from '@forinda/kickjs-swagger'
-import { Create${pascal}UseCase } from '../application/use-cases/create-${kebab}.use-case'
+${swaggerImport}import { Create${pascal}UseCase } from '../application/use-cases/create-${kebab}.use-case'
 import { Get${pascal}UseCase } from '../application/use-cases/get-${kebab}.use-case'
 import { List${pluralPascal}UseCase } from '../application/use-cases/list-${plural}.use-case'
 import { Update${pascal}UseCase } from '../application/use-cases/update-${kebab}.use-case'
@@ -50,8 +55,7 @@ export class ${pascal}Controller {
   @Autowired() private readonly delete${pascal}UseCase!: Delete${pascal}UseCase
 
   @Get('/')
-  @ApiTags('${pascal}')
-  @ApiQueryParams(${pascal.toUpperCase()}_QUERY_CONFIG)
+${apiTags}  @ApiQueryParams(${pascal.toUpperCase()}_QUERY_CONFIG)
   async list(ctx: Ctx<KickRoutes.${pascal}Controller['list']>) {
     return ctx.paginate(
       (parsed) => this.list${pluralPascal}UseCase.execute(parsed),
@@ -60,8 +64,7 @@ export class ${pascal}Controller {
   }
 
   @Get('/:id')
-  @ApiTags('${pascal}')
-  async getById(ctx: Ctx<KickRoutes.${pascal}Controller['getById']>) {
+${apiTags}  async getById(ctx: Ctx<KickRoutes.${pascal}Controller['getById']>) {
     const result = await this.get${pascal}UseCase.execute(ctx.params.id)
     if (!result) {
       // Sends RFC 9457 problem+json now; returning nothing keeps the 404 out
@@ -73,20 +76,17 @@ export class ${pascal}Controller {
   }
 
   @Post('/', { body: create${pascal}Schema, name: 'Create${pascal}' })
-  @ApiTags('${pascal}')
-  async create(ctx: Ctx<KickRoutes.${pascal}Controller['create']>) {
+${apiTags}  async create(ctx: Ctx<KickRoutes.${pascal}Controller['create']>) {
     return reply.created(await this.create${pascal}UseCase.execute(ctx.body))
   }
 
   @Put('/:id', { body: update${pascal}Schema, name: 'Update${pascal}' })
-  @ApiTags('${pascal}')
-  async update(ctx: Ctx<KickRoutes.${pascal}Controller['update']>) {
+${apiTags}  async update(ctx: Ctx<KickRoutes.${pascal}Controller['update']>) {
     return this.update${pascal}UseCase.execute(ctx.params.id, ctx.body)
   }
 
   @Delete('/:id')
-  @ApiTags('${pascal}')
-  async remove(ctx: Ctx<KickRoutes.${pascal}Controller['remove']>) {
+${apiTags}  async remove(ctx: Ctx<KickRoutes.${pascal}Controller['remove']>) {
     await this.delete${pascal}UseCase.execute(ctx.params.id)
     return reply.noContent()
   }
@@ -97,6 +97,9 @@ export class ${pascal}Controller {
 /** REST controller — injects service directly, flat import paths */
 export function generateRestController(ctx: TemplateContext): string {
   const { pascal, kebab } = ctx
+  // Same gate as generateController: no @ApiTags without the package.
+  const swaggerImport = ctx.swagger ? "import { ApiTags } from '@forinda/kickjs-swagger'\n" : ''
+  const apiTags = ctx.swagger ? `  @ApiTags('${ctx.pascal}')\n` : ''
   const camel = pascal.charAt(0).toLowerCase() + pascal.slice(1)
   // Wrapped exactly as oxfmt would at the scaffold's printWidth of 100 —
   // a single-line import is 112 chars, so `kick format` on a fresh project
@@ -112,8 +115,7 @@ export function generateRestController(ctx: TemplateContext): string {
   reply,
   type Ctx,
 } from '@forinda/kickjs'
-import { ApiTags } from '@forinda/kickjs-swagger'
-import { ${pascal}Service } from './${kebab}.service'
+${swaggerImport}import { ${pascal}Service } from './${kebab}.service'
 import { create${pascal}Schema } from './dtos/create-${kebab}.dto'
 import { update${pascal}Schema } from './dtos/update-${kebab}.dto'
 import { ${pascal.toUpperCase()}_QUERY_CONFIG } from './${kebab}.constants'
@@ -137,8 +139,7 @@ export class ${pascal}Controller {
   @Autowired() private readonly ${camel}Service!: ${pascal}Service
 
   @Get('/')
-  @ApiTags('${pascal}')
-  @ApiQueryParams(${pascal.toUpperCase()}_QUERY_CONFIG)
+${apiTags}  @ApiQueryParams(${pascal.toUpperCase()}_QUERY_CONFIG)
   async list(ctx: Ctx<KickRoutes.${pascal}Controller['list']>) {
     return ctx.paginate(
       (parsed) => this.${camel}Service.findPaginated(parsed),
@@ -147,8 +148,7 @@ export class ${pascal}Controller {
   }
 
   @Get('/:id')
-  @ApiTags('${pascal}')
-  async getById(ctx: Ctx<KickRoutes.${pascal}Controller['getById']>) {
+${apiTags}  async getById(ctx: Ctx<KickRoutes.${pascal}Controller['getById']>) {
     const result = await this.${camel}Service.findById(ctx.params.id)
     if (!result) {
       // Sends RFC 9457 problem+json now; returning nothing keeps the 404 out
@@ -160,20 +160,17 @@ export class ${pascal}Controller {
   }
 
   @Post('/', { body: create${pascal}Schema, name: 'Create${pascal}' })
-  @ApiTags('${pascal}')
-  async create(ctx: Ctx<KickRoutes.${pascal}Controller['create']>) {
+${apiTags}  async create(ctx: Ctx<KickRoutes.${pascal}Controller['create']>) {
     return reply.created(await this.${camel}Service.create(ctx.body))
   }
 
   @Put('/:id', { body: update${pascal}Schema, name: 'Update${pascal}' })
-  @ApiTags('${pascal}')
-  async update(ctx: Ctx<KickRoutes.${pascal}Controller['update']>) {
+${apiTags}  async update(ctx: Ctx<KickRoutes.${pascal}Controller['update']>) {
     return this.${camel}Service.update(ctx.params.id, ctx.body)
   }
 
   @Delete('/:id')
-  @ApiTags('${pascal}')
-  async remove(ctx: Ctx<KickRoutes.${pascal}Controller['remove']>) {
+${apiTags}  async remove(ctx: Ctx<KickRoutes.${pascal}Controller['remove']>) {
     await this.${camel}Service.delete(ctx.params.id)
     return reply.noContent()
   }

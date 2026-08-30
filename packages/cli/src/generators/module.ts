@@ -42,6 +42,8 @@ interface GenerateModuleOptions {
    * without a config in tests/fixtures.
    */
   tokenScope?: string
+  /** Project depends on @forinda/kickjs-swagger — gates @ApiTags emission. */
+  swagger?: boolean
   /**
    * Module declaration style — `'define'` (factory, default) or
    * `'class'` (legacy). Resolved by the orchestrating command from
@@ -104,6 +106,7 @@ export async function generateModule(options: GenerateModuleOptions): Promise<st
     noTests: noTests ?? false,
     prismaClientPath: options.prismaClientPath ?? '@prisma/client',
     tokenScope: options.tokenScope ?? 'app',
+    swagger: options.swagger ?? false,
     style: options.style ?? 'define',
     write,
     files,
