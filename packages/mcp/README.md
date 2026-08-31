@@ -532,7 +532,7 @@ The MCP SDK's `StreamableHTTPServerTransport` allows **one active session per se
 Browser-based MCP clients (Inspector, web UIs) require CORS with the session header exposed:
 
 ```ts
-middleware: [cors({ origin: '*', exposedHeaders: ['mcp-session-id'] }), express.json()]
+middlewares: [cors({ origin: '*', exposedHeaders: ['mcp-session-id'] }), express.json()]
 ```
 
 Without `exposedHeaders`, the Inspector can't read the session ID and every request after `initialize` fails. Stdio transport doesn't need CORS.

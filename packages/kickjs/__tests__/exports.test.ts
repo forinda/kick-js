@@ -216,7 +216,7 @@ describe('Custom error handlers (onNotFound, onError)', () => {
 
     const app = new Application({
       modules: [],
-      middleware: [express.json()],
+      middlewares: [express.json()],
       onNotFound: (req: any, res: any) => {
         res.status(404).json({ custom: true, path: req.originalUrl })
       },
@@ -235,7 +235,7 @@ describe('Custom error handlers (onNotFound, onError)', () => {
 
     const app = new Application({
       modules: [],
-      middleware: [
+      middlewares: [
         express.json(),
         // Middleware that always throws
         (_req: any, _res: any, _next: any) => {
@@ -260,7 +260,7 @@ describe('Custom error handlers (onNotFound, onError)', () => {
 
     const app = new Application({
       modules: [],
-      middleware: [express.json()],
+      middlewares: [express.json()],
     })
     await app.setup()
 

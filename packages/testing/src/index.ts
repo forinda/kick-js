@@ -28,7 +28,7 @@ type BootstrapPassthroughOptions = Pick<
   | 'port'
   | 'apiPrefix'
   | 'defaultVersion'
-  | 'middleware'
+  | 'middlewares'
   | 'onError'
   | 'onNotFound'
   | 'plugins'
@@ -176,8 +176,8 @@ export async function createTestApp(options: CreateTestAppOptions): Promise<{
     // parser then consumes the stream before Fastify reads it: a JSON POST
     // hangs until the test times out. `RuntimeCapabilities.nativeBodyParsing`
     // is the same flag the Application guards on.
-    middleware:
-      options.middleware ??
+    middlewares:
+      options.middlewares ??
       (options.runtime?.capabilities.nativeBodyParsing ? [] : [express.json()]),
     onError: options.onError,
     onNotFound: options.onNotFound,

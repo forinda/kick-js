@@ -90,10 +90,10 @@ export interface CreateWebAppOptions {
   env?: Record<string, string | undefined>
   /**
    * Global `(ctx, next)` middlewares, run before route middlewares on every
-   * route — the web-entry counterpart of `bootstrap({ middleware })`. Only
+   * route — the web-entry counterpart of `bootstrap({ middlewares })`. Only
    * ctx-style handlers are accepted (no connect/express middleware here).
    */
-  middleware?: MiddlewareHandler[]
+  middlewares?: MiddlewareHandler[]
 }
 
 export interface WebApp {
@@ -144,7 +144,7 @@ export function createWebApp(options: CreateWebAppOptions): WebApp {
   const app = new h3mod.H3()
   const apiPrefix = options.apiPrefix ?? '/api'
   const defaultVersion = options.defaultVersion ?? 1
-  const globalMiddleware = options.middleware ?? []
+  const globalMiddleware = options.middlewares ?? []
 
   const globalSources: SourcedRegistration[] = (options.contributors ?? []).map(
     (registration): SourcedRegistration => ({

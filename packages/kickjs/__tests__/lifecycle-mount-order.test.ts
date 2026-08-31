@@ -196,7 +196,7 @@ describe('Application lifecycle mount order', () => {
       modules: [buildTracingModule(trace)],
       adapters: [buildTracingAdapter(trace, 'A')],
       plugins: [buildTracingPlugin(trace, 'P')],
-      middleware: [userMiddleware(trace, 'user-global-mw')],
+      middlewares: [userMiddleware(trace, 'user-global-mw')],
       apiPrefix: '/api',
       defaultVersion: 1,
     })
@@ -227,7 +227,7 @@ describe('Application lifecycle mount order', () => {
     const app = new Application({
       modules: [buildTracingModule(trace)],
       adapters: [buildTracingAdapter(trace, 'A')],
-      middleware: [],
+      middlewares: [],
       apiPrefix: '/api',
       defaultVersion: 1,
     })
@@ -288,7 +288,7 @@ describe('Application lifecycle mount order', () => {
     const app = new Application({
       modules: [buildTracingModule(trace)],
       plugins: [buildTracingPlugin(trace, 'P')],
-      middleware: [userMiddleware(trace, 'user-mw')],
+      middlewares: [userMiddleware(trace, 'user-mw')],
       apiPrefix: '/api',
       defaultVersion: 1,
     })

@@ -121,8 +121,8 @@ To run one suite across every engine you support:
 
 ```ts
 describe.each([
-  { name: 'express', runtime: () => expressRuntime(), middleware: [express.json()] },
-  { name: 'fastify', runtime: () => fastifyRuntime(), middleware: [] },
+  { name: 'express', runtime: () => expressRuntime(), middlewares: [express.json()] },
+  { name: 'fastify', runtime: () => fastifyRuntime(), middlewares: [] },
 ])('users on $name', ({ runtime, middleware }) => {
   // Fastify parses JSON natively; Express needs the middleware.
 })

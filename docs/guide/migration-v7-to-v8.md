@@ -9,10 +9,10 @@ pnpm add @forinda/kickjs@8
 ```
 
 ::: tip Only the framework goes to 8
-Versions are per-package and independent. This release is `@forinda/kickjs` **8.0.0**, `@forinda/kickjs-cli` **7.2.0** and `@forinda/kickjs-testing` **7.1.0** — the CLI and the test harness carry no breaking change, so they do not follow the framework's major. Upgrade them with `@latest`, not `@8`:
+Versions are per-package and independent. This release is `@forinda/kickjs` **8.0.0**, `@forinda/kickjs-testing` **8.0.0** and `@forinda/kickjs-cli` **7.2.0**. The harness follows the framework to 8 because it renames an option alongside it (below); the CLI carries no breaking change and stays on 7:
 
 ```bash
-pnpm add -D @forinda/kickjs-cli@latest @forinda/kickjs-testing@latest
+pnpm add -D @forinda/kickjs-testing@8 @forinda/kickjs-cli@latest
 ```
 
 :::
@@ -21,6 +21,7 @@ pnpm add -D @forinda/kickjs-cli@latest @forinda/kickjs-testing@latest
 
 | Change                                          | Affects                     | Action                                              |
 | ----------------------------------------------- | --------------------------- | --------------------------------------------------- |
+| `middleware` option renamed to `middlewares`    | Any app setting it          | Rename the key — the compiler finds every one       |
 | 404 body is now problem details                 | Any app                     | Read `title`/`status`, or restore with `onNotFound` |
 | Wrong verb answers 405, not 404                 | Any app                     | Move the case to the 405 branch                     |
 | Health probes moved inside the middleware chain | Apps with global auth       | Exempt the path, or `health: false`                 |
@@ -30,6 +31,31 @@ pnpm add -D @forinda/kickjs-cli@latest @forinda/kickjs-testing@latest
 | `csrf`, `rateLimit`, `session` now work         | Fastify / h3                | Re-test — they used to throw                        |
 | `helmet()` options now take effect              | Apps passing helmet options | Re-check which security headers you send            |
 | `@PreDestroy` on a singleton warns              | Any app                     | Move teardown to an adapter `shutdown()`            |
+
+## Breaking: `middleware` is now `middlewares`
+
+`bootstrap()` took both — `middlewares` as the real name, `middleware` as a deprecated alias that the plural beat when both were set. v8 drops the alias, so there is one name for one thing:
+
+```ts
+bootstrap({
+  modules,
+  middlewares: [helmet(), cors(), requestId()], // was: middleware
+})
+```
+
+This is the least dangerous change in the release: `middleware` is no longer a key on `ApplicationOptions`, so passing it is a **type error**, not a silently ignored object. Rename and the compiler confirms you got them all.
+
+Renamed for the same reason, in the same release:
+
+| call            | was          | now           |
+| --------------- | ------------ | ------------- |
+| `bootstrap`     | `middleware` | `middlewares` |
+| `createTestApp` | `middleware` | `middlewares` |
+| `createWebApp`  | `middleware` | `middlewares` |
+
+`createTestApp` passes the option straight through to `bootstrap()`, so a harness whose option name disagreed with the thing it configures was exactly the inconsistency being removed — that is why `@forinda/kickjs-testing` takes a major too.
+
+**`AppAdapter.middleware()` and `Plugin.middleware()` are unchanged.** Those are a different API — a hook that returns entries, not an option that takes them — and nothing about them was ambiguous. If you write adapters, nothing there moves.
 
 ## Breaking: the catch-all
 
@@ -177,7 +203,7 @@ If you mounted any of these on Fastify or h3, they now do what they always claim
 `bootstrap()` auto-injects `helmet()` with defaults, and it did so _ahead of_ your middleware array. So an app declaring its own helmet ran two — and the second can only overwrite a header, never drop one:
 
 ```ts
-bootstrap({ middleware: [helmet({ frameguard: false })] })
+bootstrap({ middlewares: [helmet({ frameguard: false })] })
 // v7: still X-Frame-Options: DENY
 // v8: header absent, as asked
 ```
@@ -258,14 +284,15 @@ const { app } = await createTestApp({
 
 ## Upgrade checklist
 
-1. `pnpm add @forinda/kickjs@8` and `pnpm add -D @forinda/kickjs-cli@latest @forinda/kickjs-testing@latest` — only the framework goes to 8.
-2. Grep your tests and clients for `'Not Found'` — assert on `title`/`status`, or pass `onNotFound`.
-3. Grep for 404 handling that covers the wrong-verb case; split out 405.
-4. If you have global auth, exempt `/health` or pass `health: false`.
-5. Boot the app and read the startup log for a `@PreDestroy` warning.
-6. On Fastify or h3: re-test anything that mounted `csrf`, `rateLimit` or `session`.
-7. If you pass options to `helmet()`, re-read them — they take effect now, and a header you disabled in v7 was still being sent.
-8. Point `createTestApp` at your production runtime and run the suite again — that is the check that catches everything above at once.
+1. `pnpm add @forinda/kickjs@8` and `pnpm add -D @forinda/kickjs-testing@8 @forinda/kickjs-cli@latest` — the CLI stays on 7.
+2. Rename `middleware:` to `middlewares:` at every `bootstrap`, `createTestApp` and `createWebApp` call — then typecheck; anything missed is an error, not a silent no-op.
+3. Grep your tests and clients for `'Not Found'` — assert on `title`/`status`, or pass `onNotFound`.
+4. Grep for 404 handling that covers the wrong-verb case; split out 405.
+5. If you have global auth, exempt `/health` or pass `health: false`.
+6. Boot the app and read the startup log for a `@PreDestroy` warning.
+7. On Fastify or h3: re-test anything that mounted `csrf`, `rateLimit` or `session`.
+8. If you pass options to `helmet()`, re-read them — they take effect now, and a header you disabled in v7 was still being sent.
+9. Point `createTestApp` at your production runtime and run the suite again — that is the check that catches everything above at once.
 
 ## Older migrations
 

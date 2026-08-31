@@ -31,7 +31,7 @@
  * // Export the Express app — Vite serves it in dev, you start it in prod
  * export const app = bootstrap({
  *   modules: [UserModule],
- *   middleware: [express.json()],
+ *   middlewares: [express.json()],
  * })
  *
  * // Production: start the server directly

@@ -149,7 +149,7 @@ function unsign(signed: string, secret: string): string | false {
  *
  * bootstrap({
  *   modules,
- *   middleware: [
+ *   middlewares: [
  *     session({ secret: process.env.SESSION_SECRET! }),
  *     // ... other middleware
  *   ],

@@ -357,7 +357,7 @@ describe('REQUEST scope — HTTP integration', () => {
 
     const { expressApp } = await createTestApp({
       modules: [TestModule],
-      middleware: [express.json(), requestScopeMiddleware()],
+      middlewares: [express.json(), requestScopeMiddleware()],
     })
 
     const res1 = await request(expressApp).get('/api/v1/counter/')
@@ -403,7 +403,7 @@ describe('REQUEST scope — HTTP integration', () => {
 
     const { expressApp } = await createTestApp({
       modules: [TestModule],
-      middleware: [express.json(), requestScopeMiddleware()],
+      middlewares: [express.json(), requestScopeMiddleware()],
     })
 
     const res = await request(expressApp).get('/api/v1/shared/')
@@ -446,7 +446,7 @@ describe('REQUEST scope — HTTP integration', () => {
 
     const { expressApp } = await createTestApp({
       modules: [TestModule],
-      middleware: [express.json(), requestScopeMiddleware()],
+      middlewares: [express.json(), requestScopeMiddleware()],
     })
 
     const responses = await Promise.all(
@@ -481,7 +481,7 @@ describe('REQUEST scope — HTTP integration', () => {
 
     const { expressApp } = await createTestApp({
       modules: [TestModule],
-      middleware: [express.json(), requestScopeMiddleware()],
+      middlewares: [express.json(), requestScopeMiddleware()],
     })
 
     const res = await request(expressApp).get('/api/v1/reqid/').set('x-request-id', 'trace-abc-123')
