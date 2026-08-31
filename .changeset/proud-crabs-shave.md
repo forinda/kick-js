@@ -29,6 +29,14 @@ which let `response.createdAt.getFullYear()` compile against a string. This
 assumes the default JSON transport; a client that revives values will have
 richer runtime types than the map claims.
 
+Optional methods and optional callbacks are covered too. The checker adds
+`undefined` to every optional property, so `save?(): void` arrives as
+`(() => void) | undefined`; requiring every union member to be callable kept
+those, which then rendered as `onDone?: {}` — and an optional method earned its
+own empty hoisted interface. A callable member inside any union is dropped as
+well, since `(() => void) | Foo` reaches the client as `Foo` or not at all,
+never as an empty object.
+
 Every `typeToString` call now passes `NoTruncation`. Truncated output is never
 valid type syntax, so this is unconditional rather than a heuristic.
 
