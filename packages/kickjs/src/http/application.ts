@@ -1358,9 +1358,17 @@ export class Application {
   private mountHealthEndpoints(): void {
     const http = this.adapterHttp()
 
+    // `ctx.json(body, status)` throughout, never `ctx.res.status().json()`.
+    // `ctx.res` is the ENGINE-NATIVE response: under Fastify it is a
+    // `FastifyReply`, which has `.status()` but no `.json()`, so the Express
+    // form threw `TypeError: ctx.res.status(...).json is not a function` and
+    // every readiness probe got a 500 — a pod that never becomes ready.
+    // These are the only routes the framework itself mounts, so they have to
+    // follow the rule AGENTS.md gives adopters: write to `ctx`, not the raw
+    // response.
     http.route('GET', '/health/live', (ctx) => {
       if (this._draining) {
-        ctx.res.status(503).json({ status: 'draining', uptime: process.uptime() })
+        ctx.json({ status: 'draining', uptime: process.uptime() }, 503)
       } else {
         ctx.json({ status: 'ok', uptime: process.uptime() })
       }
@@ -1368,7 +1376,7 @@ export class Application {
 
     http.route('GET', '/health/ready', async (ctx) => {
       if (this._draining) {
-        ctx.res.status(503).json({ status: 'draining', checks: [] })
+        ctx.json({ status: 'draining', checks: [] }, 503)
         return
       }
       const adaptersWithHealth = this.adapters.filter((a) => a.onHealthCheck)
@@ -1378,10 +1386,7 @@ export class Application {
         return { name: adaptersWithHealth[i].name ?? 'unknown', status: 'down' as const }
       })
       const healthy = results.every((r) => r.status === 'up')
-      ctx.res.status(healthy ? 200 : 503).json({
-        status: healthy ? 'ready' : 'degraded',
-        checks: results,
-      })
+      ctx.json({ status: healthy ? 'ready' : 'degraded', checks: results }, healthy ? 200 : 503)
     })
   }
 }
