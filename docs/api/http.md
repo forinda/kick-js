@@ -1,36 +1,46 @@
-# @forinda/kickjs-http
+# HTTP layer
 
-Express-based HTTP layer with declarative middleware pipeline, request context, routing, and query string parsing.
+Runtime-agnostic HTTP layer with a declarative middleware pipeline, request context, routing, and query string parsing. The engine is pluggable — Express (default), Fastify or h3 — selected with `bootstrap({ runtime })`.
+
+Exported from `@forinda/kickjs`; there is no separate `@forinda/kickjs-http` package.
 
 ## Application
 
-Main application class that wires Express, the DI container, modules, adapters, and middleware.
+Wires the chosen engine, the DI container, modules, adapters and middleware.
 
 ```typescript
 class Application {
   constructor(options: ApplicationOptions)
-  setup(): void
-  start(): void
-  rebuild(): void
-  shutdown(): Promise<void>
+
+  setup(): Promise<void>
+  start(): Promise<void>
+  rebuild(): Promise<void>
+  shutdown(options?: ShutdownOptions): Promise<void>
+
+  /** The Node request listener, following whichever runtime is configured. */
+  handle(req: IncomingMessage, res: ServerResponse, next?: (err?: any) => void): void
+
+  getRuntimeApp(): ActiveRuntime['app']
+  getActiveRuntime(): { name: string; capabilities: RuntimeCapabilities }
+  /** Express-only — throws under Fastify or h3. Prefer `handle` or `getRuntimeApp`. */
   getExpressApp(): Express
   getHttpServer(): http.Server | null
 }
+```
 
-interface ApplicationOptions {
-  modules: AppModuleClass[]
-  adapters?: AppAdapter[]
-  plugins?: KickPlugin[] // see ../api/core.md#plugins
-  port?: number
-  apiPrefix?: string // default: '/api' — '' mounts at the root
-  defaultVersion?: number | false // default: 1 — false drops the /v{n} segment
-  middleware?: MiddlewareEntry[]
-  trustProxy?: boolean | number | string | ((ip: string, hopIndex: number) => boolean)
-  jsonLimit?: string | number
-}
+`setup`, `start`, `rebuild` and `shutdown` are all **async**.
 
+Use `handle` to drive the app in tests or to mount it inside another server — it is engine-neutral, where `getExpressApp()` throws on any runtime but Express.
+
+`ApplicationOptions` is documented once, in the [core reference](./core.md#bootstrap-options) — it is the same object `bootstrap()` takes.
+
+```typescript
 type MiddlewareEntry = RequestHandler | { path: string; handler: RequestHandler }
 ```
+
+::: warning `middleware` was removed in v8
+The option is `middlewares`. The singular alias is deleted, so passing it is a type error rather than a silently ignored object. See the [v8 migration guide](../guide/migration-v7-to-v8.md#breaking-middleware-is-now-middlewares).
+:::
 
 Plugins (`KickPlugin[]`) are the highest-level extension primitive — they can bundle modules, adapters, middleware, DI bindings, and context contributors into one reusable unit. Build them with `definePlugin()` and pass the factory output here. See the [Plugins guide](../guide/plugins.md) and the [`definePlugin` API reference](./core.md#plugins).
 
@@ -39,8 +49,10 @@ Plugins (`KickPlugin[]`) are the highest-level extension primitive — they can 
 Zero-boilerplate entry point. Handles Vite HMR, graceful shutdown, and global error handlers.
 
 ```typescript
-function bootstrap(options: ApplicationOptions): void
+async function bootstrap(options: ApplicationOptions): Promise<Application>
 ```
+
+It resolves to the started `Application`, so `const app = await bootstrap({ ... })` is the normal call.
 
 ## RequestContext
 
@@ -95,14 +107,44 @@ class RequestContext<TBody = any, TParams = any, TQuery = any> {
 ## Router Builder
 
 ```typescript
-function buildRoutes(controllerClass: any): Router
+function buildRoutes(controllerClass: any, options?: BuildRoutesOptions): Router
 function getControllerPath(controllerClass: any): string
+
+interface BuildRoutesOptions {
+  /**
+   * Extra contributors merged into the per-route pipeline at their declared
+   * precedence. Pass explicitly when calling this outside the Application's
+   * route-mount loop — typically in tests. Omitted, it falls back to the slot
+   * set by `Application.setup()`.
+   */
+  externalSources?: readonly SourcedRegistration[]
+}
 ```
 
 - **buildRoutes** -- Builds an Express Router from a decorated controller class, resolving it from the DI container.
 - **getControllerPath** -- Returns the path prefix set by `@Controller()`.
 
 ## Middleware
+
+All of the below are exported from `@forinda/kickjs` and mounted through `bootstrap({ middlewares: [...] })`, in the order you declare.
+
+| Middleware                         | Purpose                                                                  |
+| ---------------------------------- | ------------------------------------------------------------------------ |
+| `requestId()`                      | Generate / propagate `x-request-id`                                      |
+| `requestLogger()`                  | Pino request logging — types: `LoggedRequest`, `LoggedResponse`          |
+| `helmet()`                         | Security headers. Auto-injected with defaults; declare it to change them |
+| `cors()`                           | CORS with spec-correct preflight                                         |
+| `csrf()`                           | Double-submit cookie CSRF                                                |
+| `session()`                        | Cookie sessions                                                          |
+| `rateLimit()` / `rateLimitGuard()` | Rate limiting, pluggable store (`KvRateLimitStore`)                      |
+| `validate()`                       | Body / query / params schema validation                                  |
+| `upload()`                         | Multipart file handling                                                  |
+| `traceContext()`                   | W3C `traceparent` propagation                                            |
+| `views()` / `spa()`                | Server-rendered views, SPA fallback                                      |
+
+::: tip Declaring `helmet()` turns off the automatic one
+The framework auto-injects `helmet()` unless `security.helmet` is `false`. Declaring your own stands that down — which is what makes its options work. Before v8 both ran, and the second could only add a header, never drop one, so `helmet({ frameguard: false })` still emitted `DENY`.
+:::
 
 ### requestId
 
@@ -125,8 +167,16 @@ function validate(schema: { body?: any; query?: any; params?: any }): RequestHan
 
 ```typescript
 function errorHandler(): ErrorRequestHandler
-function notFoundHandler(): RequestHandler
+function notFoundHandler(routes?: readonly MountedRoute[]): RequestHandler
 ```
+
+The Application passes `notFoundHandler` its mounted route table — it is the only place that knows the full path, prefix and version joined. With it, a request to a **known path with an unsupported verb** answers `405` and an `Allow` header rather than `404`:
+
+```
+DELETE /api/v1/things/1     405   Allow: GET, PATCH
+```
+
+Both responses are RFC 9457 problem details (`application/problem+json`). `bootstrap({ onNotFound })` still wins over the whole thing.
 
 ### csrf
 
@@ -170,6 +220,30 @@ interface UploadOptions {
   dest?: string
 }
 ```
+
+## Returning a response
+
+```typescript
+function reply(status: number, body?: unknown): HandlerResult
+function isReply(value: unknown): value is HandlerResult
+function applyHandlerResult(ctx: RequestContext, result: unknown): void
+```
+
+`return reply(status, body)` from a handler carries the status without touching the engine-native response. Prefer it to `ctx.res.status(...)` — `ctx.res` is a `FastifyReply` under Fastify, which has no `.json()`. Every runtime routes a handler's return value through `applyHandlerResult`.
+
+## Health module
+
+```typescript
+const healthModule: ModuleFactory
+const HEALTH_PROBE: InjectionToken<HealthProbe>
+
+interface HealthProbe {
+  isDraining(): boolean
+  runChecks(): Promise<HealthCheckResult[]>
+}
+```
+
+Mounted automatically at `/health/live` and `/health/ready`; pass `bootstrap({ health: false })` to replace it. It reads draining state and adapter checks through `HEALTH_PROBE` rather than Application internals, so a replacement module can satisfy the same contract. Behaviour and the v8 mounting change are documented in the [core reference](./core.md#health-endpoints).
 
 ## Query String Parsing
 

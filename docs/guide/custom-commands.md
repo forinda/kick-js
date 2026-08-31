@@ -44,6 +44,7 @@ import { defineConfig } from '@forinda/kickjs-cli'
 export default defineConfig({
   modules: {
     dir: 'src/modules',
+    // deprecated — the name only changes the stub's TODO text now
     repo: { name: 'postgres' },
     schemaDir: 'src/db/schema',
   },
@@ -128,6 +129,7 @@ import { defineConfig } from '@forinda/kickjs-cli'
 export default defineConfig({
   modules: {
     dir: 'src/modules',
+    // deprecated — the name only changes the stub's TODO text now
     repo: { name: 'postgres' },
   },
   commands: [

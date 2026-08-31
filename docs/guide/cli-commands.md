@@ -107,7 +107,7 @@ When run without `--yes` (and without specific flags), the CLI prompts for:
 1. **Project template** — REST, Minimal, or Fullstack (server + typed web app)
 2. **Package manager** — pnpm, npm, yarn, or bun
 3. **Default repository** — In-Memory or a custom DB name (e.g. `postgres`, `mongo`)
-4. **Optional packages** — auth, swagger, ws, queue, devtools
+4. **Optional packages** — swagger, ws, queue, devtools
 5. **Git init** — initialize a git repository with an initial commit
 6. **Install deps** — run the selected package manager's install command
 
@@ -394,21 +394,23 @@ Print system and framework information:
 kick info
 ```
 
-Output — the CLI's own version, plus every `@forinda/kickjs*` dependency the nearest project declares with the version actually installed in `node_modules` (declared range shown when not installed). Packages the `kick add` catalog marks as deprecated are flagged:
+Output — the CLI's own version, plus every `@forinda/kickjs*` dependency the nearest project declares with the version actually installed in `node_modules` (declared range shown when not installed):
 
 ```text
-  KickJS CLI v6.1.0
+  KickJS CLI v8.0.0
 
   System:
     OS:       linux 6.x.x (x64)
     Node:     v22.x.x
 
   Packages:
-    @forinda/kickjs          5.16.0
-    @forinda/kickjs-cli      6.1.0
-    @forinda/kickjs-prisma   6.0.1  [DEPRECATED — see `kick add --list --all`]
-    @forinda/kickjs-vite     6.1.0
+    @forinda/kickjs          8.0.0
+    @forinda/kickjs-cli      8.0.0
+    @forinda/kickjs-db       8.0.0
+    @forinda/kickjs-vite     8.0.0
 ```
+
+A package the `kick add` catalog marks deprecated is flagged `[DEPRECATED — see \`kick add --list --all\`]`. Nothing in the catalog carries that mark today.
 
 `kick --version` / `-V` / `-v` print just the CLI version.
 
@@ -431,7 +433,7 @@ Default output (3 core packages):
     vite             Vite plugin: dev server, HMR, module discovery (+ vite)
     cli              CLI tool and code generators
 
-  Plus N optional packages (auth, swagger, db, queue, …).
+  Plus N optional packages (swagger, db, queue, …).
   Run `kick list --all` for the full catalog.
 ```
 
@@ -449,7 +451,7 @@ kick add --list           # show core packages (alias: kick list)
 kick add --list --all     # full optional catalog
 ```
 
-Deprecated catalog entries (`auth`, `drizzle`, `prisma`) still install but print a migration warning first, and `--list --all` flags them with `[DEPRECATED — …]` plus the recommended replacement (BYO auth via context decorators; `@forinda/kickjs-db` for the early-adoption ORM adapters).
+`auth`, `drizzle` and `prisma` were **removed from the catalog in v8** along with their packages — `kick add auth` now reports an unknown package. Replacements: [BYO auth](./byo-recipes.md#auth) composed from context decorators, and `@forinda/kickjs-db` (`kick add db` / `pg` / `sqlite` / `mysql`) for the ORM adapters.
 
 ### Core packages
 
@@ -462,7 +464,7 @@ Deprecated catalog entries (`auth`, `drizzle`, `prisma`) still install but print
     vite             Vite plugin: dev server, HMR, module discovery (+ vite)
     cli              CLI tool and code generators
 
-  Plus N optional packages (auth, swagger, db, queue, …).
+  Plus N optional packages (swagger, db, queue, …).
   Run `kick add --list --all` for the full catalog.
 ```
 
@@ -508,8 +510,6 @@ kick g middleware logger
 kick g guard admin
 kick g adapter websocket
 kick g dto create-user
-kick g auth-scaffold             # Complete auth module (register/login/logout)
-kick g auth-scaffold -s session  # Session-based variant
 kick g config
 kick g agents -f                 # Refresh AGENTS.md / CLAUDE.md / kickjs-skills.md
 ```
@@ -677,6 +677,7 @@ export default defineConfig({
   pattern: 'rest',
   modules: {
     dir: 'src/modules',
+    // repo is deprecated — the name no longer changes the generated code
     repo: { name: 'postgres' },
     pluralize: true,
     schemaDir: 'src/db/schema',

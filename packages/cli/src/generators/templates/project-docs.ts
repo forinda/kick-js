@@ -54,7 +54,6 @@ ${packages.map((p) => `- \`${p}\``).join('\n')}
 ## Adding Features
 
 \`\`\`bash
-kick add auth          # Authentication (JWT, API key, OAuth)
 kick add swagger       # OpenAPI documentation
 kick add ws            # WebSocket support
 kick add queue         # Background job processing
@@ -161,7 +160,7 @@ When generating or modifying code in this project, stay aligned with the v4 conv
 - **Context Contributors** (\`defineContextDecorator\`) over \`@Middleware()\` for ctx-population work.
 - **Repos under tests**: \`Container.create()\` for isolation — never \`new Container()\` or \`getInstance().reset()\`.
 - **Bootstrap export**: \`src/index.ts\` must end with \`export const app = await bootstrap({ ... })\`. The Vite plugin and \`createTestApp\` import the named \`app\`; without the export, HMR silently degrades to full restarts.
-- **Thin entry file**: aggregate \`modules\`, \`middleware\`, \`plugins\`, \`adapters\` in their own folders (\`src/modules/index.ts\`, \`src/middleware/index.ts\`, …) and pass them by name to \`bootstrap()\` — never inline the lists in \`src/index.ts\`.
+- **Thin entry file**: aggregate \`modules\`, \`middlewares\`, \`plugins\`, \`adapters\` in their own folders (\`src/modules/index.ts\`, \`src/middleware/index.ts\`, …) and pass them by name to \`bootstrap()\` — never inline the lists in \`src/index.ts\`.
 - **Refresh these files**: \`kick g agents -f\` regenerates \`CLAUDE.md\` at the project root and \`.agents/AGENTS.md\` + \`.agents/GEMINI.md\` + \`.agents/COPILOT.md\` + every \`.agents/skills/<name>/SKILL.md\` from the latest CLI templates. Hand-edited content is overwritten — keep customisation in \`.agents/AGENTS.local.md\` or per-skill \`SKILL.local.md\` files alongside.
 
 For everything else (controllers, services, modules, RequestContext API, generators, CLI commands, package additions, env wiring, troubleshooting) → \`.agents/AGENTS.md\`.
@@ -231,7 +230,7 @@ Rules that keep generated code correct on **every** engine:
   objects — their **type follows the active runtime** (Express by default; the
   \`kick/runtime\` typegen retypes them to Fastify / h3 when \`runtime\` is set).
   Don't assume \`ctx.req\` is an \`express.Request\` in portable code.
-- **Global middleware** in \`bootstrap({ middleware })\` is connect-style
+- **Global middleware** in \`bootstrap({ middlewares })\` is connect-style
   \`(req, res, next)\` — it runs on all engines (Fastify via \`@fastify/middie\`,
   h3 via \`fromNodeMiddleware\`). But on Fastify / h3 the engine parses the body
   natively, so the default \`express.json()\` is **auto-skipped** (\`nativeBodyParsing\`).
@@ -365,7 +364,7 @@ mistakes:
   import { plugins } from './plugins'
   import { adapters } from './adapters'
 
-  export const app = await bootstrap({ modules, middleware, plugins, adapters })
+  export const app = await bootstrap({ modules, middlewares, plugins, adapters })
   \`\`\`
 
   This keeps the entry file diff-friendly, scales to dozens of modules
@@ -406,7 +405,7 @@ ${
 <name>/
 ├── <name>.controller.ts     # HTTP routes (@Controller)
 ├── <name>.service.ts        # Business logic (@Service)
-├── <name>.repository.ts     # Data access (@Repository)
+├── <name>.repository.ts     # Data access — factory + contract + token
 ├── dtos/                    # Request/response schemas (Zod)
 └── <name>.module.ts         # Module definition (defineModule factory)
 \`\`\`
@@ -665,7 +664,7 @@ export const TodosModule = defineModule({
   name: 'TodosModule',
   build: () => ({
     register(container) {
-      container.registerFactory(TODO_REPO, () => container.resolve(InMemoryTodoRepository))
+      container.registerFactory(TODO_REPO, () => createTodoRepository())
     },
     routes() {
       return { path: '/todos', controller: TodosController }
@@ -990,7 +989,7 @@ import { modules } from './modules'
 import { middleware } from './middleware'
 import { plugins } from './plugins'
 import { adapters } from './adapters'
-export const app = await bootstrap({ modules, middleware, plugins, adapters })
+export const app = await bootstrap({ modules, middlewares, plugins, adapters })
 \`\`\`
 
 **One-off DI binding** — inline a literal plugin inside \`plugins\`, not a top-level option:
@@ -1004,7 +1003,7 @@ plugins: [
 
 **Red flags**:
 - Any \`new SomeAdapter()\` / \`SomePlugin()\` literal inside \`bootstrap({ ... })\` instead of imported from a category folder.
-- Mixing middleware signatures: \`bootstrap({ middleware })\` is **raw Express** \`(req, res, next)\`; \`@Middleware()\` decorators are \`(ctx, next)\`; adapter middleware is raw Express again. Wrong shape in the wrong slot throws "Cannot read properties of undefined".
+- Mixing middleware signatures: \`bootstrap({ middlewares })\` is **raw Express** \`(req, res, next)\`; \`@Middleware()\` decorators are \`(ctx, next)\`; adapter middleware is raw Express again. Wrong shape in the wrong slot throws "Cannot read properties of undefined".
 - \`bootstrap({ register: ... })\` — that option doesn't exist. Use an inline plugin.`,
     },
     {
@@ -1096,10 +1095,10 @@ unlearn.
 | | Guard | Middleware | Context contributor |
 |---|---|---|---|
 | What it is | a middleware, by convention | a middleware | a declarative value producer |
-| Signature | \`(ctx, next)\` | \`(ctx, next)\` on \`@Middleware()\`, \`(req, res, next)\` in \`bootstrap({ middleware })\` | \`resolve(ctx, deps)\` returning a value |
+| Signature | \`(ctx, next)\` | \`(ctx, next)\` on \`@Middleware()\`, \`(req, res, next)\` in \`bootstrap({ middlewares })\` | \`resolve(ctx, deps)\` returning a value |
 | Can end the request | yes | yes | **no** |
 | Runs | in the middleware stage | in the middleware stage | after ALL middleware |
-| Attached by | \`@Middleware(fn)\` | \`@Middleware(fn)\` or \`bootstrap({ middleware })\` | \`@LoadX\`, or a registration at module / adapter / bootstrap level |
+| Attached by | \`@Middleware(fn)\` | \`@Middleware(fn)\` or \`bootstrap({ middlewares })\` | \`@LoadX\`, or a registration at module / adapter / bootstrap level |
 | Generator | \`kick g guard <name>\` | \`kick g middleware <name>\` | \`kick g contributor <name>\` |
 | Lands in | \`src/guards/<name>.guard.ts\` | \`src/middleware/<name>.middleware.ts\` | \`src/contributors/<name>.contributor.ts\` |
 
@@ -1169,7 +1168,7 @@ Hand-write a guard only for logic those don't express.
 - A guard reading \`ctx.get(...)\` for a contributor-produced key — contributors have not run yet.
 - \`ctx.res.status(403).json(...)\` in a guard — Express-only. Use \`ctx.problem.forbidden()\`.
 - A "guard" that only sets a value and always calls \`next()\` — that is a contributor wearing a guard's name.
-- Passing a \`(ctx, next)\` guard to \`bootstrap({ middleware })\` — global middleware is connect-style \`(req, res, next)\`. Mount guards per-route with \`@Middleware()\`.
+- Passing a \`(ctx, next)\` guard to \`bootstrap({ middlewares })\` — global middleware is connect-style \`(req, res, next)\`. Mount guards per-route with \`@Middleware()\`.
 `,
     },
     {
@@ -1423,7 +1422,7 @@ Customisation goes in \`.local.md\` siblings (\`AGENTS.local.md\`, \`skills/<slu
 - \`bootstrap({ register: ... })\` — that option doesn't exist. Use an inline plugin in \`plugins\`.
 
 **Middleware**:
-- Using \`(ctx, next)\` for global middleware in \`bootstrap({ middleware })\` — global middleware uses raw Express \`(req, res, next)\`. Wrong signature throws "Cannot read properties of undefined".
+- Using \`(ctx, next)\` for global middleware in \`bootstrap({ middlewares })\` — global middleware uses raw Express \`(req, res, next)\`. Wrong signature throws "Cannot read properties of undefined".
 - Using \`(req, res, next)\` for an \`@Middleware()\` decorator — those use \`(ctx, next)\`.
 - \`@Middleware()\` whose only output is \`ctx.set('x', v)\` — should be a context decorator (typed, ordered, testable).
 

@@ -21,6 +21,7 @@ Inversion-of-Control container, decorators, logger, and error types shared by al
 | `trustProxy`      | `boolean \| number \| string \| fn`   | `false`                         | Express `trust proxy` setting.                                                                                                                                   |
 | `jsonLimit`       | `string \| number`                    | `'1mb'`                         | Max JSON body size — only applied when `middlewares` is omitted.                                                                                                 |
 | `security`        | `{ helmet?: boolean }`                | `{ helmet: true }`              | Auto-inject helmet headers unless opted out.                                                                                                                     |
+| `health`          | `boolean`                             | `true`                          | Mount the built-in [health module](#health-endpoints). `false` leaves `/health/*` to you.                                                                        |
 | `contextStore`    | `'auto' \| 'manual'`                  | `'auto'`                        | ALS frame for `RequestContext.set/get` + REQUEST-scoped DI. `'manual'` only if you own the frame.                                                                |
 | `processHooks`    | `'auto' \| 'errors-only' \| 'manual'` | `'auto'`                        | Process-level error loggers + SIGINT/SIGTERM → shutdown. Use `'errors-only'` when an SDK owns shutdown.                                                          |
 | `cluster`         | `boolean \| { workers?: number }`     | `false`                         | Fork workers across CPU cores (shared port).                                                                                                                     |
@@ -29,7 +30,7 @@ Inversion-of-Control container, decorators, logger, and error types shared by al
 | `onNotFound`      | `(req, res, next) => void`            | built-in 404                    | Custom unmatched-route handler.                                                                                                                                  |
 | `onError`         | `(err, req, res, next) => void`       | built-in                        | Custom global error handler (built-in formats ZodError / HttpException).                                                                                         |
 
-Deprecated aliases (kept for back-compat; the new name wins when both are set): `middleware` → `middlewares`, `logRoutesTable` → `logRouteTable`.
+Deprecated alias (kept for back-compat; the new name wins when both are set): `logRoutesTable` → `logRouteTable`. The `middleware` alias for `middlewares` was **removed in v8** — passing it is now a type error.
 
 ```ts
 import { bootstrap, helmet, cors, requestId } from '@forinda/kickjs'
@@ -203,17 +204,24 @@ Interface every feature module must implement.
 
 ```typescript
 interface AppModule {
-  register(container: Container): void
-  routes(): ModuleRoutes | ModuleRoutes[]
+  /** Optional — modules holding only decorated classes need no explicit bindings. */
+  register?(container: Container): void
+  /** `null` for non-HTTP modules. */
+  routes(): ModuleRoutes | ModuleRoutes[] | null
 }
 
 type AppModuleClass = new () => AppModule
 
 interface ModuleRoutes {
   path: string
-  router: any
-  version?: number
+  /** Required unless `controller` is given — the router is derived from it. */
+  router?: any
+  /** Used for the auto-derived router and for OpenAPI generation. */
   controller?: any
+  /** `false` mounts without the `/v{n}` segment, even when the app has a default version. */
+  version?: number | false
+  /** `false` mounts at `path` exactly, outside `apiPrefix` — for probes, fixed webhook URLs, `/.well-known`. */
+  prefix?: false
 }
 ```
 
@@ -674,7 +682,17 @@ Use `isClusterPrimary()` to check if the current process is the primary (e.g. fo
 
 ## Health Endpoints
 
-Built-in health check endpoints are mounted at the root path (outside the API prefix) before any middleware runs.
+Built-in health check endpoints are mounted at the root path, outside the API prefix.
+
+They ship as an ordinary module — `healthModule()`, registered automatically — so they appear in the OpenAPI spec, in `logRouteTable`, and in the route registry.
+
+::: warning They run INSIDE the middleware chain
+Before v8 these were mounted straight onto the engine, ahead of every middleware. They are now mounted with your other modules, which means **global auth applies to them**. An app with app-wide authentication will require it on its probes.
+
+That is the intended default — your app controls its own auth, and a framework route quietly bypassing it is the surprise — but it will fail a liveness check the first time it runs. Exempt the path as you would any other, or pass `health: false` and mount your own.
+:::
+
+`prefix: false` on their `ModuleRoutes` is what keeps them at the root: a probe URL an orchestrator is configured against must not move when `apiPrefix` or the API version changes.
 
 ### GET /health/live
 
