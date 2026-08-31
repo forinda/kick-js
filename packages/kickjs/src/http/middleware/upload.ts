@@ -1,3 +1,4 @@
+import { HttpException, HttpStatus } from '../../core/errors'
 import { unlink } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import type { Request, Response, NextFunction, RequestHandler } from 'express'
@@ -54,6 +55,32 @@ export interface UploadOptions extends BaseUploadOptions {
   dest?: string
 }
 
+/**
+ * Turn multer's own errors into the exceptions the other runtimes raise.
+ *
+ * multer reports a file over the limit as `MulterError: File too large`, a
+ * plain error the handler maps to 500 — so an oversized upload was reported as
+ * a server fault on Express while Fastify and h3 answered 413. The message is
+ * matched to `applyUploadConfig` so the response does not depend on the engine.
+ */
+function translateMulterErrors(mw: RequestHandler, options: UploadOptions): RequestHandler {
+  const maxSize = options.maxSize ?? 5 * 1024 * 1024
+  return (req, res, next) => {
+    mw(req, res, (err?: unknown) => {
+      if (err && (err as { code?: string }).code === 'LIMIT_FILE_SIZE') {
+        const name = (err as { field?: string }).field ?? 'file'
+        return next(
+          new HttpException(
+            HttpStatus.PAYLOAD_TOO_LARGE,
+            `File ${name} exceeds the ${maxSize}-byte limit`,
+          ),
+        )
+      }
+      next(err as never)
+    })
+  }
+}
+
 function createMulter(options: UploadOptions) {
   const limits: MulterOptions['limits'] = {
     fileSize: options.maxSize ?? 5 * 1024 * 1024,
@@ -66,7 +93,16 @@ function createMulter(options: UploadOptions) {
       if (typeAllowed(file.mimetype, file.originalname)) {
         cb(null, true)
       } else {
-        cb(new Error(`File type ${file.mimetype} is not allowed`))
+        // Same exception the Fastify and h3 path raises from
+        // `applyUploadConfig`. A plain Error here reached the handler as a 500,
+        // so Express blamed itself for the client's file — and leaked a multer
+        // stack doing it.
+        cb(
+          new HttpException(
+            HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+            `File type ${file.mimetype} is not allowed`,
+          ),
+        )
       }
     }
   }
@@ -95,7 +131,7 @@ function createMulter(options: UploadOptions) {
  */
 function single(fieldName: string, options: UploadOptions = {}): RequestHandler {
   const m = createMulter(options)
-  return m.single(fieldName) as RequestHandler
+  return translateMulterErrors(m.single(fieldName) as RequestHandler, options)
 }
 
 /**
@@ -103,7 +139,7 @@ function single(fieldName: string, options: UploadOptions = {}): RequestHandler 
  */
 function array(fieldName: string, maxCount = 10, options: UploadOptions = {}): RequestHandler {
   const m = createMulter(options)
-  return m.array(fieldName, maxCount) as RequestHandler
+  return translateMulterErrors(m.array(fieldName, maxCount) as RequestHandler, options)
 }
 
 /**
@@ -111,7 +147,7 @@ function array(fieldName: string, maxCount = 10, options: UploadOptions = {}): R
  */
 function none(options: UploadOptions = {}): RequestHandler {
   const m = createMulter(options)
-  return m.none() as RequestHandler
+  return translateMulterErrors(m.none() as RequestHandler, options)
 }
 
 /**
