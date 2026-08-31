@@ -88,7 +88,9 @@ describe('resolveClientMap', () => {
 
     const entry = out.entries.get('GET /terms')!
     expect(entry).toContain('response: __T0[]')
-    expect(out.hoisted.join('\n')).toContain('startsAt: Date')
+    // `string`, not `Date`: JSON.stringify calls Date.toJSON, so an ISO
+    // string is what the client receives. See client-expand-type.test.ts.
+    expect(out.hoisted.join('\n')).toContain('startsAt: string')
 
     // The point of the whole feature: nothing reaches back into src/.
     expect(entry).not.toContain('import')

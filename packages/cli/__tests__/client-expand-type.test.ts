@@ -106,8 +106,11 @@ describe('TypeExpander', () => {
   })
 
   it('keeps lib types by name — every frontend already has them', () => {
-    // Expanding Date would emit hundreds of methods AND be wrong.
-    expect(expand('type Target = { at: Date }').text).toBe('{ at: Date }')
+    // Expanding one of these would emit hundreds of methods AND be wrong.
+    // Deliberately not `Date`: it declares `toJSON()`, so it is transformed to
+    // a string on the wire and has its own test below. This case is about lib
+    // types that survive as themselves.
+    expect(expand('type Target = { at: ArrayBuffer }').text).toBe('{ at: ArrayBuffer }')
   })
 
   it('hoists a named project interface instead of inlining it everywhere', () => {
@@ -334,7 +337,8 @@ describe('TypeExpander', () => {
       type Target = { params: {}; response: Term[] }
     `)
     expect(out.text).toBe('{ params: {}; response: __T0[] }')
-    expect(out.hoisted.join('\n')).toContain('startsAt: Date')
+    // `string`, not `Date` — that is what arrives over the wire.
+    expect(out.hoisted.join('\n')).toContain('startsAt: string')
     expect(out.text).not.toContain('Term')
   })
 })
@@ -419,5 +423,31 @@ describe('TypeExpander — what cannot survive JSON', () => {
   it('keeps a data-only object untouched', () => {
     const out = expand(`type Target = { a: string; b: { c: number } }`)
     expect(out.text).toBe('{ a: string; b: { c: number } }')
+  })
+})
+
+describe('TypeExpander — what JSON transforms', () => {
+  // Dropping what JSON drops is only half the rule. `JSON.stringify` also
+  // *calls* `toJSON()`, so for those types the wire shape is that method's
+  // return type. Emitting the type itself type-checks and then lies: a map
+  // saying `Date` lets `r.createdAt.getFullYear()` compile against a value
+  // that is a string at runtime. One app had 496 of them.
+  it('emits Date as the string the client actually receives', () => {
+    const out = expand(`type Target = { createdAt: Date; deletedAt: Date | null }`)
+    expect(out.text).toBe('{ createdAt: string; deletedAt: null | string }')
+  })
+
+  it('uses a custom toJSON return type over the object itself', () => {
+    const out = expand(`
+      declare class Money { amount: number; currency: string; toJSON(): { cents: number } }
+      type Target = { total: Money }
+    `)
+    expect(out.text).toContain('cents: number')
+    expect(out.text).not.toContain('currency')
+  })
+
+  it('leaves a type without toJSON alone', () => {
+    const out = expand(`type Target = { a: { b: string } }`)
+    expect(out.text).toBe('{ a: { b: string } }')
   })
 })

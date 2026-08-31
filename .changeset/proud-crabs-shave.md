@@ -21,6 +21,14 @@ omitted, as are well-known symbol keys — the checker prints those as
 anything a client could index by, and which would also churn the map's
 fingerprint between compiler versions.
 
+The same rule covers what JSON _transforms_, not only what it drops: a type
+declaring `toJSON()` is emitted as that method's return type. `Date` becomes
+`string` and `Buffer` becomes `{ type: 'Buffer'; data: number[] }` — what the
+client actually receives. One app's map carried 496 bare `Date`s, every one of
+which let `response.createdAt.getFullYear()` compile against a string. This
+assumes the default JSON transport; a client that revives values will have
+richer runtime types than the map claims.
+
 Every `typeToString` call now passes `NoTruncation`. Truncated output is never
 valid type syntax, so this is unconditional rather than a heuristic.
 

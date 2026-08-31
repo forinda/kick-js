@@ -123,6 +123,27 @@ The record lives in `.kickjs/cache/client-map.sha1`, inside the already-ignored
 never writes it — that flag is read-only.
 :::
 
+### The map describes JSON, not the server's objects
+
+The types are the shape the client _receives_, which is not always the shape the
+handler returned. `JSON.stringify` is applied on the way out, so the map applies
+the same rules:
+
+| in the handler         | in the map                           | why                                           |
+| ---------------------- | ------------------------------------ | --------------------------------------------- |
+| `Date`                 | `string`                             | `Date.prototype.toJSON` returns an ISO string |
+| `Buffer`               | `{ type: 'Buffer'; data: number[] }` | its `toJSON`                                  |
+| a method               | omitted                              | functions do not serialize                    |
+| `[Symbol.toStringTag]` | omitted                              | symbol keys do not serialize                  |
+
+Any type declaring `toJSON()` is emitted as that method's return type. Without
+this the map type-checks and then lies — `response.createdAt.getFullYear()`
+compiles against a value that is a string at runtime.
+
+This assumes the default transport: JSON over `fetch`, parsed with `JSON.parse`.
+If your client revives values (`superjson`, a `JSON.parse` reviver that rebuilds
+dates), the runtime types will be richer than the map claims.
+
 ### Expansion depth
 
 A response is expanded inline up to 12 levels; past that it is emitted as

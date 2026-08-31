@@ -152,6 +152,15 @@ export class TypeExpander {
       return array.readonly ? `readonly ${body}` : body
     }
 
+    // `JSON.stringify` calls `toJSON()` when a value has one, so the wire
+    // shape is that method's return type — not the type itself. `Date` becomes
+    // an ISO `string`, `Buffer` becomes `{ type: 'Buffer'; data: number[] }`.
+    // Emitting `Date` here type-checks and then lies: the client gets a string,
+    // so `r.createdAt.getFullYear()` compiles and throws at runtime. This runs
+    // before the lib-type branch, which would otherwise print `Date` by name.
+    const json = this.toJsonType(type)
+    if (json) return this.render(json, depth)
+
     // A type the frontend already has — emit the name, expand nothing.
     if (this.isLibType(type)) return this.renderLibType(type, depth)
 
@@ -417,6 +426,24 @@ export class TypeExpander {
   }
 
   /** Has a declared name worth hoisting (interface / class / named alias). */
+  /**
+   * The type `JSON.stringify` would actually produce for this value, when it
+   * declares `toJSON()`. Null when it does not, which is the common case.
+   */
+  private toJsonType(type: ts.Type): ts.Type | null {
+    if (!(type.flags & this.ts.TypeFlags.Object)) return null
+    const prop = this.checker.getPropertyOfType(type, 'toJSON')
+    if (!prop) return null
+    const [signature] = this.checker.getSignaturesOfType(
+      this.typeOfProperty(prop),
+      this.ts.SignatureKind.Call,
+    )
+    if (!signature) return null
+    const returned = this.checker.getReturnTypeOfSignature(signature)
+    // A `toJSON` returning the same type would spin; let the normal path run.
+    return returned === type ? null : returned
+  }
+
   /** Has call or construct signatures — a method or function, never JSON. */
   private isCallable(type: ts.Type): boolean {
     if (type.isUnion()) return type.types.every((m) => this.isCallable(m))
