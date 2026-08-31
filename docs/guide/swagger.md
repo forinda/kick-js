@@ -213,7 +213,7 @@ If your project uses a different auth library and wants its decorators to drive 
 ```typescript
 SwaggerAdapter({
   securityResolver: ({ controllerClass, handlerName }) => {
-    // Bridge `@forinda/kickjs-auth`'s metadata without coupling.
+    // Bridge your own auth decorators' metadata without coupling.
     const proto = controllerClass.prototype
     if (Reflect.getMetadata('kick:auth:public', proto, handlerName)) return null
     const secured =

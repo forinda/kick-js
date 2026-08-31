@@ -560,7 +560,7 @@ export const TenantAdapter = defineAdapter({
 Three traps to avoid:
 
 - **`declare module` is the whole mechanism.** It is what makes `ctx.get('tenant')` typed; without it you cast at every read site. (`defineAugmentation` never typed anything and is deprecated — safe to drop.)
-- **Augmenting the wrong module** — `ContextMeta` lives in `@forinda/kickjs`. `AuthUser` lives in `@forinda/kickjs-auth`. The `declare module '...'` string must match the package the interface was originally declared in, or the augmentation is silently a no-op.
+- **Augmenting the wrong module** — the `declare module '...'` string must match the package the interface was originally declared in, or the augmentation is silently a no-op. `ContextMeta` lives in `@forinda/kickjs`; a type you declared yourself, like `AuthUser`, is augmented in your own module, not the framework's.
 
 ### When the same registration runs at multiple levels
 

@@ -28,7 +28,7 @@ KickJS integrates with external services through **adapters** and **middleware**
 
 ## Authentication
 
-- [Authentication (BYO)](../authentication.md) — compose JWT / API-key / role checks with context decorators (the `@forinda/kickjs-auth` package is deprecated).
+- [Authentication (BYO)](../authentication.md) — compose JWT / API-key / role checks with context decorators. The framework ships no auth layer; `@forinda/kickjs-auth` was removed in v8.
 
 ## Observability
 
