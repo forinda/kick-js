@@ -54,6 +54,25 @@ describe('@PreDestroy scope warning', () => {
     expect(said()).not.toContain('PerRequest')
   })
 
+  it('warns for every offending class, even when two share a name', () => {
+    // Distinct constructors can share a `name` — two `DatabaseService` classes
+    // in different modules is ordinary. Deduping by name silently suppressed
+    // the second one's warning, which is the exact failure this exists to
+    // prevent.
+    function makeOne() {
+      @Service()
+      class DatabaseService {
+        @PreDestroy() close() {}
+      }
+      return DatabaseService
+    }
+    const a = makeOne()
+    const b = makeOne()
+    expect(a).not.toBe(b)
+    const hits = warn.mock.calls.filter((c) => String(c[0]).includes('DatabaseService'))
+    expect(hits).toHaveLength(2)
+  })
+
   it('stays quiet for a singleton without the hook', () => {
     @Service()
     class Plain {

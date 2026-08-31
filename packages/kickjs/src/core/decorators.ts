@@ -54,8 +54,19 @@ Container._onReset = (container: any) => {
 
 // ── Class Decorators ────────────────────────────────────────────────────
 
-/** Classes already warned about, so HMR replay does not repeat the notice. */
-const preDestroyWarned = new Set<string>()
+/**
+ * Classes already warned about.
+ *
+ * Keyed by the constructor, not its `name`: distinct classes can share a name —
+ * two `DatabaseService` classes in separate modules is ordinary — and deduping
+ * by name silently suppressed the second one's warning, which is precisely the
+ * failure this warning exists to prevent.
+ *
+ * A WeakSet means an HMR reload, which builds a NEW class object, warns again.
+ * That is correct rather than noisy: the reloaded code still has the problem,
+ * and the notice stops as soon as it is fixed.
+ */
+const preDestroyWarned = new WeakSet<object>()
 
 /**
  * `@PreDestroy` only runs for REQUEST-scoped services — the request scope is
@@ -79,9 +90,9 @@ function warnIfInertPreDestroy(target: any, scope: Scope): void {
   if (!proto) return
   const hook = Reflect.getMetadata?.(METADATA.PRE_DESTROY, proto)
   if (!hook) return
+  if (preDestroyWarned.has(target)) return
+  preDestroyWarned.add(target)
   const name = target.name || String(target)
-  if (preDestroyWarned.has(name)) return
-  preDestroyWarned.add(name)
   console.warn(
     `  kickjs: @PreDestroy on ${name} (${scope}) will never run — that hook fires ` +
       `only when a REQUEST scope closes.\n` +

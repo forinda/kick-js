@@ -17,7 +17,7 @@ scope the author may never have considered.
 Applying `@PreDestroy` to a non-REQUEST service now logs once, naming the class,
 its scope, and the seam that does work:
 
-```
+```text
 kickjs: @PreDestroy on DatabaseService (singleton) will never run — that hook
 fires only when a REQUEST scope closes.
 For application-lifetime resources, release them from an adapter's shutdown()
