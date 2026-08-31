@@ -19,6 +19,48 @@
  * @module @forinda/kickjs/http/middleware/respond
  */
 
+/**
+ * Cookies on the request, whoever parsed them.
+ *
+ * `req.cookies` exists only when an upstream cookie parser populated it —
+ * `cookie-parser` under Express, nothing at all under Fastify and h3, which
+ * pass a raw node request. A middleware that reads only `req.cookies` therefore
+ * sees no cookies on those runtimes, and none under Express either unless the
+ * app happens to mount a parser.
+ *
+ * For `csrf` that broke the double-submit flow outright: with no cookie visible
+ * it minted a fresh token on every request and compared the submitted header
+ * against that new value, so a client could never complete a protected request.
+ */
+export function readCookies(req: unknown): Record<string, string> {
+  const source = req as { cookies?: Record<string, string>; headers?: Record<string, unknown> }
+  if (source.cookies) return source.cookies
+  const header = source.headers?.cookie
+  return typeof header === 'string' ? parseCookieHeader(header) : {}
+}
+
+/** `a=1; b=2` → `{ a: '1', b: '2' }`. */
+export function parseCookieHeader(header: string): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const pair of header.split(';')) {
+    const eq = pair.indexOf('=')
+    if (eq === -1) continue
+    const key = pair.slice(0, eq).trim()
+    if (!key) continue
+    let value = pair.slice(eq + 1).trim()
+    if (value.startsWith('"') && value.endsWith('"')) {
+      value = value.slice(1, -1)
+    }
+    try {
+      out[key] = decodeURIComponent(value)
+    } catch {
+      // A malformed escape is not a reason to lose the whole cookie jar.
+      out[key] = value
+    }
+  }
+  return out
+}
+
 /** Cookie attributes, matching the subset of Express's `res.cookie` we use. */
 export interface CookieOptions {
   maxAge?: number

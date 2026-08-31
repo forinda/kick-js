@@ -1,4 +1,4 @@
-import { setCookie } from './respond'
+import { parseCookieHeader, setCookie } from './respond'
 import { randomUUID, createHmac, timingSafeEqual } from 'node:crypto'
 import type { Request, Response, NextFunction } from 'express'
 
@@ -101,28 +101,6 @@ class MemoryStore implements SessionStore {
       }
     }
   }
-}
-
-// ── Cookie Header Parsing ─────────────────────────────────────────────
-
-function parseCookieHeader(header: string): Record<string, string> {
-  const out: Record<string, string> = {}
-  for (const pair of header.split(';')) {
-    const eq = pair.indexOf('=')
-    if (eq === -1) continue
-    const key = pair.slice(0, eq).trim()
-    if (!key) continue
-    let value = pair.slice(eq + 1).trim()
-    if (value.startsWith('"') && value.endsWith('"')) {
-      value = value.slice(1, -1)
-    }
-    try {
-      out[key] = decodeURIComponent(value)
-    } catch {
-      out[key] = value
-    }
-  }
-  return out
 }
 
 // ── Cookie Signing ────────────────────────────────────────────────────

@@ -169,6 +169,30 @@ describe.each(runtimes)('middleware on $name', ({ make }) => {
       expect((await agent.get(URL)).status).toBe(200)
     })
 
+    it('accepts a request that returns the token it issued', async () => {
+      // The double-submit flow end to end: take the cookie the middleware set,
+      // send it back with the matching header. csrf read `req.cookies`, which
+      // only Express populates — under Fastify and h3 it saw no cookie, minted
+      // a NEW token, and compared the submitted header against that, so a
+      // client could never complete a protected request.
+      const { app } = await createTestApp({
+        modules: [ProbeModule],
+        runtime: make(),
+        middleware: [csrf()] as never,
+        isolated: true,
+      })
+      const agent = request.agent(app.handle.bind(app))
+
+      const seed = await agent.get(URL)
+      const setCookie = seed.headers['set-cookie']
+      expect(setCookie, 'no csrf cookie was issued').toBeTruthy()
+      const token = /_csrf=([^;]+)/.exec(String(setCookie))?.[1]
+      expect(token, 'could not read the token out of the cookie').toBeTruthy()
+
+      const res = await agent.post(URL).set('x-csrf-token', decodeURIComponent(token!))
+      expect(res.status).toBe(200)
+    })
+
     it('honours ignorePaths', async () => {
       // The path is read off the request; under Fastify and h3 that is a raw
       // node request with no `req.path`, which is how this silently did nothing.

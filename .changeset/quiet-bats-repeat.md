@@ -18,6 +18,18 @@ Express-only conveniences on it:
 500 for everything, which is a hard failure rather than a quiet one — but
 `session` failed quietly, and every visitor looked new.
 
+`csrf` had a second, worse problem on the request side: it read the token from
+`req.cookies`, which only an upstream cookie parser populates. Fastify and h3
+never have one, and Express only does if the app mounts `cookie-parser` — so the
+middleware could not see the cookie it had just issued, minted a fresh token on
+every request, and compared the submitted header against that new value. **The
+double-submit flow could never succeed on any runtime**, which the "no token →
+403" test could not show because a rejection is what it expected either way.
+
+Cookies are now read through a shared `readCookies`, which falls back to parsing
+the `Cookie` header — the same fallback `session` already had, now shared rather
+than duplicated.
+
 All three now go through `setCookie` / `sendJson` helpers that take the Express
 path when it exists — so behaviour under Express is unchanged — and fall back to
 `Set-Cookie` and the Node response primitives otherwise.
