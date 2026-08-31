@@ -26,7 +26,7 @@ pnpm add -D @forinda/kickjs-testing supertest @types/supertest vitest
 
 ## createTestApp
 
-Creates an Application instance for testing — resets DI, runs `setup()`, returns the Express app for supertest:
+Creates an Application instance for testing — resets DI, runs `setup()`, and returns the app to drive with supertest:
 
 ```ts
 import { createTestApp } from '@forinda/kickjs-testing'
@@ -53,7 +53,45 @@ interface CreateTestAppOptions {
   defaultVersion?: number
   middleware?: express.RequestHandler[] // replaces default (express.json())
   isolated?: boolean // use Container.create() instead of reset()
+  runtime?: HttpRuntime // engine under test — defaults to Express
 }
+```
+
+### Testing the engine you deploy
+
+The HTTP engine is pluggable, and routing, body parsing and error mapping all
+live in the runtime seam. A suite that runs Express while production runs
+Fastify is not testing those at all.
+
+Pass the same `runtime` your `bootstrap()` uses, and drive the app rather than
+`expressApp` — `app.handle` is the Application's own Node listener and follows
+whichever engine is configured:
+
+```ts
+import request from 'supertest'
+import { fastifyRuntime } from '@forinda/kickjs/fastify'
+
+const { app } = await createTestApp({
+  modules: [UserModule],
+  runtime: fastifyRuntime(),
+})
+
+const res = await request(app.handle.bind(app)).get('/api/v1/users')
+```
+
+`expressApp` still works under the Express runtime, but throws under any other
+engine rather than handing back that engine's instance mistyped as
+`express.Express`.
+
+To run one suite across every engine you support:
+
+```ts
+describe.each([
+  { name: 'express', runtime: () => expressRuntime(), middleware: [express.json()] },
+  { name: 'fastify', runtime: () => fastifyRuntime(), middleware: [] },
+])('users on $name', ({ runtime, middleware }) => {
+  // Fastify parses JSON natively; Express needs the middleware.
+})
 ```
 
 ## Testing a Module
