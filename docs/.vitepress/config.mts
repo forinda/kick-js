@@ -138,6 +138,11 @@ const guideSidebar = [
       { text: 'Typed Client Vision', link: '/guide/tutorial-typed-client' },
     ],
   },
+  {
+    text: 'Project Direction',
+    collapsed: false,
+    items: [{ text: 'Roadmap & Proposals', link: '/guide/roadmap' }],
+  },
 ]
 
 const apiSidebar = [

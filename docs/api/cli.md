@@ -38,7 +38,6 @@ cd packages/cli && pnpm link --global
 | `kick generate service <name>`              | `kick g service`                               | Generate a `@Service()` class                                                     |
 | `kick generate controller <name>`           | `kick g controller`                            | Generate a `@Controller()` class with routes                                      |
 | `kick generate dto <name>`                  | `kick g dto`                                   | Generate a Zod DTO schema                                                         |
-| `kick generate resolver <name>`             | `kick g resolver`                              | Generate a GraphQL `@Resolver` class                                              |
 | `kick generate test <name>`                 | `kick g test`                                  | Generate a Vitest test scaffold                                                   |
 | `kick generate config`                      | `kick g config`                                | Generate `kick.config.ts`                                                         |
 | `kick generate agents`                      | `kick g agents` (also `agent-docs`, `ai-docs`) | Regenerate `AGENTS.md` / `CLAUDE.md` / `kickjs-skills.md` from upstream templates |
@@ -51,7 +50,7 @@ cd packages/cli && pnpm link --global
 **kick new [name]** (use `.` for current directory)
 
 - `-d, --directory <dir>` -- Target directory (defaults to project name)
-- `--pm <manager>` -- Package manager: `pnpm` | `npm` | `yarn` (prompted if omitted)
+- `--pm <manager>` -- Package manager: `pnpm` | `npm` | `yarn` | `bun` (prompted if omitted)
 - `--git / --no-git` -- Initialize git repository (prompted if omitted)
 - `--install / --no-install` -- Install dependencies (prompted if omitted)
 
@@ -64,10 +63,10 @@ cd packages/cli && pnpm link --global
 
 **kick g module**
 
-- `--pattern <type>` -- Module structure: `rest` | `ddd` | `cqrs` | `minimal` (default: from config or `ddd`)
-- `--no-entity` -- Skip entity and value object generation (DDD only)
+- `--pattern <type>` -- Module structure: `rest` | `minimal` (default: from config or `rest`)
+- `--no-entity` -- Skip entity and value object generation
 - `--no-tests` -- Skip test file generation
-- `--repo <type>` -- Repository implementation: `inmemory` | `drizzle` | `prisma` (default: from config or `inmemory`)
+- `--repo <type>` -- Repository name: `inmemory` (default) or any DB name. Only the stub's TODO text changes; the file name and identifiers do not.
 - `--minimal` -- Shorthand for `--pattern minimal`
 - `--modules-dir <dir>` -- Modules directory (default: from config or `src/modules`)
 - `-f, --force` -- Overwrite existing files without prompting
@@ -75,9 +74,9 @@ cd packages/cli && pnpm link --global
 **kick g controller / service / dto / guard / middleware**
 
 - `-o, --out <dir>` -- Output directory (overrides `--module`)
-- `-m, --module <name>` -- Place inside a module's DDD folder structure
+- `-m, --module <name>` -- Place inside a module folder
 
-**kick g adapter / resolver / job**
+**kick g adapter**
 
 - `-o, --out <dir>` -- Output directory (defaults vary per generator)
 
@@ -86,7 +85,7 @@ cd packages/cli && pnpm link --global
 - `--only <which>` -- Scope: `agents` | `claude` | `skills` | `both` | `all` (default: `all`)
 - `--name <name>` -- Project name override (default: from `package.json`)
 - `--pm <pm>` -- Package manager override (default: from corepack `packageManager` field)
-- `--template <template>` -- Template: `rest` | `graphql` | `ddd` | `cqrs` | `minimal` (default: from `kick.config.ts` `pattern`)
+- `--template <template>` -- Template: `rest` | `minimal` (default: from `kick.config.ts` `pattern`)
 - `-f, --force` -- Overwrite without prompting
 
 ## defineConfig
@@ -103,14 +102,16 @@ The `kick.config.ts` shape — configures the CLI, code generators, typegen, and
 
 ```typescript
 interface KickConfig {
-  pattern?: 'rest' | 'ddd' | 'cqrs' | 'minimal' // generator scaffolding style
+  pattern?: 'rest' | 'minimal' // generator scaffolding style
   runtime?: 'express' | 'fastify' | 'h3' // HTTP engine — drives `kick add upload`, `kick doctor`, runtime typegen
   packageManager?: 'pnpm' | 'npm' | 'yarn' | 'bun' // overrides lockfile auto-detection for `kick add`
   tokenScope?: string // DI token prefix for generated `createToken('<scope>/...')`
 
   modules?: {
     dir?: string // default: 'src/modules'
+    /** @deprecated The name no longer changes the generated code — only the stub's TODO text. */
     repo?: 'inmemory' | { name: string } // default: 'inmemory'
+    style?: 'define' | 'class' // module generation style — define (default) or class
     pluralize?: boolean // default: true
     schemaDir?: string // schema output dir, e.g. 'src/db/schema'
   }
@@ -135,7 +136,7 @@ interface KickConfig {
   commands?: KickCommandDefinition[] // custom `kick <name>` commands
   plugins?: KickCliPlugin[] // CLI plugins (e.g. dbCliPlugin from '@forinda/kickjs-db/cli')
   doctor?: { checks?: DoctorCheck[] } // extra `kick doctor` checks
-  style?: 'define' | 'class' // module generation style
+  style?: CodeStyleOptions // code style overrides (quotes, semicolons, …) — NOT the module style, which is modules.style
 }
 ```
 
@@ -180,9 +181,6 @@ function generateGuard(options: { name: string; outDir: string }): Promise<strin
 function generateService(options: { name: string; outDir: string }): Promise<string[]>
 function generateController(options: { name: string; outDir: string }): Promise<string[]>
 function generateDto(options: { name: string; outDir: string }): Promise<string[]>
-function generateResolver(options: { name: string; outDir: string }): Promise<string[]>
-function generateJob(options: { name: string; outDir: string; queue?: string }): Promise<string[]>
-function generateConfig(options: ConfigOptions): Promise<string[]>
 function initProject(options: {
   name: string
   directory: string
