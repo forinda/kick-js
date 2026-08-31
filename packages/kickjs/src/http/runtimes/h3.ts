@@ -227,6 +227,26 @@ function makeEventHandler(entry: RouteEntry): (event: H3EventLike) => Promise<vo
 }
 
 /**
+ * The original error h3 wrapped.
+ *
+ * h3 routes every thrown value through `createError()`, which returns its own
+ * error with the original on `cause`. Handing that wrapper to the shared error
+ * middleware means it sees something Express and Fastify never give it, and the
+ * responses diverge: `instanceof HttpException` fails, so a thrown
+ * `HttpException(418)` falls through to the generic branch and picks up a
+ * `requestId` the other two omit, and `describeError` walks the cause chain to
+ * report `kaboom ← caused by kaboom`.
+ *
+ * Only an `Error` cause is unwrapped. h3's own 404 carries no cause, so the
+ * not-found path above is unaffected.
+ */
+function unwrapH3Error(error: unknown): unknown {
+  if (!(error instanceof Error)) return error
+  const { cause } = error as { cause?: unknown }
+  return cause instanceof Error ? cause : error
+}
+
+/**
  * The h3 HTTP runtime. Pass to `bootstrap({ runtime: h3Runtime() })`.
  * h3 parses bodies itself (`readBody`), so the Application skips its default
  * `express.json()` (see `nativeBodyParsing`).
@@ -270,7 +290,7 @@ export function h3Runtime(): HttpRuntime<H3AppLike> {
           const mw = state[ERROR_MW]
           if (mw) {
             ;(mw as (e: unknown, req: unknown, res: unknown, next: () => void) => void)(
-              error,
+              unwrapH3Error(error),
               event.node.req,
               resDriver(res),
               NOOP_NEXT,
