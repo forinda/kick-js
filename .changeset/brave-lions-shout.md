@@ -1,12 +1,26 @@
 ---
-'@forinda/kickjs': minor
+'@forinda/kickjs': major
 ---
 
 The catch-all answers problem details, and 405 when the verb is the problem.
 
-**Breaking: the default 404 body changed.** It was `{ "message": "Not Found" }`
-and is now RFC 9457 problem details with `Content-Type:
-application/problem+json`:
+Two breaking changes to responses an app produces without asking for them, which
+is why this is a major rather than a minor. Both are reachable through the
+existing bootstrap options: `onNotFound` and `onError` still win, so an app that
+supplies either is unaffected.
+
+## Migrating
+
+- A client asserting `body.message === 'Not Found'` reads `body.title` or
+  `body.status` instead, or passes `bootstrap({ onNotFound })` to restore the
+  old shape.
+- A client treating "known path, wrong verb" as 404 now sees 405. That is the
+  correct answer, but it moves the case from one branch to another.
+
+## The 404 body
+
+It was `{ "message": "Not Found" }` and is now RFC 9457 problem details with
+`Content-Type: application/problem+json`:
 
 ```json
 { "type": "about:blank", "title": "Not Found", "status": 404 }
@@ -17,8 +31,9 @@ client parsing `application/problem+json` — which the framework already return
 for every `ProblemException` — had to special-case exactly one path. Pass
 `bootstrap({ onNotFound })` to restore the old shape or supply any other.
 
-**A known path with the wrong method is now 405, not 404**, carrying `Allow` as
-RFC 9110 §15.5.6 requires:
+## Wrong verb on a known path
+
+Now 405, not 404, carrying `Allow` as RFC 9110 §15.5.6 requires:
 
 ```
 DELETE /api/v1/things/1     405   Allow: GET, PATCH
@@ -31,7 +46,9 @@ handler takes the mounted route table — the Application is the only place that
 knows the full path, prefix and version joined — and an app that supplies its
 own `onNotFound` is unaffected.
 
-Also fixes a related h3 bug found while testing this: `NodeResDriver.json()` set
+## An h3 bug this surfaced
+
+Not breaking — it makes h3 agree with the other two. `NodeResDriver.json()` set
 `application/json` unconditionally, clobbering a content-type the caller had
 already chosen. Every `application/problem+json` response went out mislabelled
 on that runtime alone — not only the new catch-all, but every `ProblemException`
