@@ -2,6 +2,14 @@
 
 Controllers are the presentation layer in KickJS. They handle HTTP requests, delegate to use cases or services, and send responses. A controller is a class decorated with `@Controller()` that defines route handlers using method decorators.
 
+::: tip Scaffold one
+`kick g controller <name>` writes a controller with typed `Ctx<KickRoutes...>` handlers already wired, and reruns `kick typegen` so the types exist before you open the file.
+
+<PmCommand exec="kick g controller users" />
+
+`-m, --module <module>` places it inside a module folder. `kick g module` writes one for you as part of the module. Full flag list: [Generators](./generators.md#kick-g-controller).
+:::
+
 ## Defining a Controller
 
 ```ts
@@ -63,36 +71,39 @@ The loose `RequestContext` type still works for backward compatibility — `Ctx<
 
 ## @Controller Decorator
 
-`@Controller(path?)` registers the class in the DI container as a singleton and marks it as a controller. The optional path serves as **metadata only** (used by adapters like Swagger for OpenAPI spec generation) — it is **not** baked into the Express router.
+`@Controller()` registers the class in the DI container as a singleton and marks it as a controller. It takes **no arguments**:
 
 ```ts
 @Controller()
 export class AdminController { ... }
 ```
 
-### Route Prefix: Module, Not Controller
+::: warning `@Controller('/path')` was removed in v4
+The signature is `Controller(): ClassDecorator` — passing a path is a TypeScript error, not an ignored argument. In v3 the path was accepted as Swagger-only metadata, which made it look like it set the route prefix when it never did. See [Migration v3 → v4](./migration-v3-to-v4.md).
+:::
 
-The route prefix for a controller comes from the **module's `routes().path`**, not from `@Controller()`. This is the single source of truth for where routes are mounted:
+### The route prefix comes from the module
+
+The mount prefix is the **module's `routes().path`** — the single source of truth for where routes live:
 
 ```ts
-// Module defines the mount prefix
-class AdminModule implements AppModule {
-  register(container: Container) { ... }
-  routes() {
-    return { path: '/admin', router: buildRoutes(AdminController) }
-  }
-}
+export const AdminModule = defineModule({
+  name: 'AdminModule',
+  build: () => ({
+    routes() {
+      return { path: '/admin', controller: AdminController }
+    },
+  }),
+})
 
-@Controller()  // no path needed — module handles the prefix
+@Controller()
 export class AdminController {
-  @Get('/stats')   // resolves to /api/v1/admin/stats
+  @Get('/stats') // resolves to /api/v1/admin/stats
   async stats(ctx: RequestContext) { ... }
 }
 ```
 
-::: warning
-Do **not** set the same path on both the module and the controller. The module path is the mount prefix — the controller path is metadata only. Setting both would have previously caused path doubling (e.g. `/api/v1/admin/admin/stats`).
-:::
+`/api` is `apiPrefix` and `/v1` is `defaultVersion`; a module can drop either with `version: false` or `prefix: false` on its `ModuleRoutes`. See [Modules](./modules.md).
 
 ## Route Decorators
 
