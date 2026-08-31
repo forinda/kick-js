@@ -54,7 +54,11 @@ whichever runtime the app is configured with. See
 interface CreateTestAppOptions {
   modules: AppModuleEntry[]
   adapters?: AppAdapter[]
-  overrides?: Record<symbol | string, any>
+  // string / symbol keys, or entries / a Map for `createToken()` keys
+  overrides?:
+    | Record<symbol | string, any>
+    | ReadonlyArray<readonly [token: unknown, value: unknown]>
+    | ReadonlyMap<unknown, unknown>
   port?: number
   apiPrefix?: string
   defaultVersion?: number
@@ -63,6 +67,29 @@ interface CreateTestAppOptions {
   runtime?: HttpRuntime // engine under test — defaults to Express
 }
 ```
+
+### Overriding a token binding
+
+An object literal covers string and symbol keys. It cannot cover
+`createToken()` — a token is a frozen _object_ identified by reference, and
+TypeScript rejects an object as a computed key (`TS2464`). Pass entries instead:
+
+```ts
+const DATABASE = createToken<Database>('app/Db/connection')
+
+const { app } = await createTestApp({
+  modules: [UserModule()],
+  overrides: [[DATABASE, fakeDb()]],
+})
+```
+
+A `Map` works the same way.
+
+::: danger `[TOKEN.name]` compiles and does nothing
+`TOKEN.name` is a string, so it type-checks — but the container keys tokens by
+_reference_, so the override is accepted and never applied, leaving the real
+binding in place. Use the entries form.
+:::
 
 ### Testing the engine you deploy
 

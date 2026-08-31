@@ -83,6 +83,36 @@ interface AdapterContext {
 
 No need to import Express or http types — destructure only what you use.
 
+## Every hook, and what runs it
+
+All ten are optional. `kick g adapter <name>` scaffolds every one of them, so
+the generated file doubles as this reference — delete what you don't need.
+
+| Hook                       | Runs when                              | Consumed by                                                |
+| -------------------------- | -------------------------------------- | ---------------------------------------------------------- |
+| `middleware()`             | during setup                           | the pipeline, at the phase each entry names                |
+| `contributors()`           | during setup                           | the [context-contributor](./context-decorators.md) chain   |
+| `beforeMount(ctx)`         | before routes mount                    | you — early routes, docs, static assets                    |
+| `onRouteMount(ctrl, path)` | per controller mounted                 | you — route metadata, spec building                        |
+| `beforeStart(ctx)`         | inside `app.setup()`                   | you — also fires under `createTestApp`                     |
+| `afterStart(ctx)`          | once the server listens                | you — needs a live `server`; **not** under `createTestApp` |
+| `onHealthCheck()`          | on `GET /health/ready`                 | the built-in readiness endpoint                            |
+| `shutdown()`               | real shutdown **and** every HMR reload | the framework, time-boxed and concurrent                   |
+| `introspect()`             | DevTools topology poll                 | the `/_debug` dashboard                                    |
+| `devtoolsTabs()`           | DevTools panel discovery               | the `/_debug` dashboard                                    |
+
+Two are worth calling out because nothing else surfaces them:
+
+- **`onHealthCheck()`** is the only hook with a built-in consumer. The
+  Application aggregates every adapter's check through `Promise.allSettled`
+  and serves the result at `GET /health/ready`, so contributing one here is
+  what makes your dependency visible to readiness probes — you do not need a
+  route of your own.
+- **`introspect()`** must be cheap. The topology endpoint polls on a short
+  interval, so `state` and `metrics` should be counters and flags already in
+  memory. It may be async so a snapshot can be assembled, not so it can do
+  work.
+
 ## Middleware Phases
 
 The `middleware()` method returns entries that are inserted at a specific phase in the pipeline. Each entry has a `handler`, an optional `phase`, and an optional `path` for scoping:
