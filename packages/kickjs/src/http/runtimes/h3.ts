@@ -24,6 +24,7 @@ import { applyHandlerResult } from '../reply'
 import { requestStore } from '../request-store'
 import { createRequestStore, disposeRequestStore } from '../middleware/request-scope'
 import { validate } from '../middleware/validate'
+import { HttpException } from '../../core/errors'
 import { applyUploadConfig, type RawUploadPart } from '../middleware/upload'
 import type {
   ConnectMiddleware,
@@ -165,7 +166,32 @@ function makeEventHandler(entry: RouteEntry): (event: H3EventLike) => Promise<vo
       req.files = files
       req.body = fields
     } else if (BODY_METHODS.has(req.method ?? 'GET')) {
-      req.body = await readBody(event).catch(() => undefined)
+      // Swallow ONLY the absent-body case. `.catch(() => undefined)` also
+      // swallowed a malformed one, so h3 answered 200 with the handler running
+      // on `undefined` where Express and Fastify both answer 400 — a client
+      // sending broken JSON got a success response, and the handler executed
+      // against data that was never valid.
+      const { 'content-length': length, 'transfer-encoding': encoding } = req.headers
+      const sentBody = encoding !== undefined || (length !== undefined && length !== '0')
+      if (sentBody) {
+        try {
+          // `readBody` matches `application/json` EXACTLY, so
+          // `application/json; charset=utf-8` — what most clients actually send
+          // — fell to its catch-all branch and parsed non-strictly, handing the
+          // handler a raw string for malformed JSON instead of throwing. Decide
+          // on the normalised media type and ask for strict parsing ourselves.
+          // Only `application/json` — the type h3 itself special-cases. Widening
+          // this to `+json` would make h3 stricter than Express, which does not
+          // parse those at all: a different divergence, not a fix.
+          const mediaType = (req.headers['content-type'] ?? '').split(';')[0].trim().toLowerCase()
+          const strict = mediaType === 'application/json'
+          req.body = await readBody(event, strict ? { strict: true } : {})
+        } catch (err) {
+          throw HttpException.badRequest(
+            err instanceof Error ? err.message : 'Request body could not be parsed',
+          )
+        }
+      }
     }
 
     const headerId = req.headers['x-request-id']
@@ -208,6 +234,26 @@ function makeEventHandler(entry: RouteEntry): (event: H3EventLike) => Promise<vo
       if (!res.writableEnded && !res.headersSent) applyHandlerResult(ctx, result)
     })
   }
+}
+
+/**
+ * The original error h3 wrapped.
+ *
+ * h3 routes every thrown value through `createError()`, which returns its own
+ * error with the original on `cause`. Handing that wrapper to the shared error
+ * middleware means it sees something Express and Fastify never give it, and the
+ * responses diverge: `instanceof HttpException` fails, so a thrown
+ * `HttpException(418)` falls through to the generic branch and picks up a
+ * `requestId` the other two omit, and `describeError` walks the cause chain to
+ * report `kaboom ← caused by kaboom`.
+ *
+ * Only an `Error` cause is unwrapped. h3's own 404 carries no cause, so the
+ * not-found path above is unaffected.
+ */
+function unwrapH3Error(error: unknown): unknown {
+  if (!(error instanceof Error)) return error
+  const { cause } = error as { cause?: unknown }
+  return cause instanceof Error ? cause : error
 }
 
 /**
@@ -254,7 +300,7 @@ export function h3Runtime(): HttpRuntime<H3AppLike> {
           const mw = state[ERROR_MW]
           if (mw) {
             ;(mw as (e: unknown, req: unknown, res: unknown, next: () => void) => void)(
-              error,
+              unwrapH3Error(error),
               event.node.req,
               resDriver(res),
               NOOP_NEXT,
