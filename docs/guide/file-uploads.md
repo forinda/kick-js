@@ -153,6 +153,26 @@ All middleware methods accept an `UploadOptions` object:
 | `storage`       | Multer `StorageEngine`     | memory                   | Custom Multer storage engine (Express only) |
 | `dest`          | `string`                   | —                        | Disk storage destination dir, Express only  |
 
+## What a rejected upload returns
+
+A violation is the client's, so it answers 4xx — identically on every runtime,
+even though each engine detects it in its own backend:
+
+| Violation                  | Status                       | Body                                               |
+| -------------------------- | ---------------------------- | -------------------------------------------------- |
+| Larger than `maxSize`      | `413 Payload Too Large`      | `{ "message": "File … exceeds the N-byte limit" }` |
+| Type not in `allowedTypes` | `415 Unsupported Media Type` | `{ "message": "File type … is not allowed" }`      |
+
+::: tip Express names the field, the others name the file
+On a `413`, Express reports the form **field** (`doc`) where Fastify and h3
+report the **filename** (`big.txt`) — Multer's `LIMIT_FILE_SIZE` error carries
+no filename to pass on. The status and the limit are identical, so branch on
+those rather than parsing the message.
+:::
+
+Both are `HttpException`s, so `onError` sees them like any other and can reshape
+the body.
+
 ## Allowed Types — Value or Function
 
 `allowedTypes` follows a Vue-style pattern: pass a **value** (string array) or a **function** for full control.
