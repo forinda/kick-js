@@ -110,12 +110,12 @@ const envSchemaNotRegistered: KnownIssue = {
           codeBefore:
             "import { createTestApp } from '@forinda/kickjs-testing'\n" +
             '\n' +
-            'const { expressApp } = await createTestApp({ modules: [UserModule] })\n',
+            'const { app } = await createTestApp({ modules: [UserModule] })\n',
           codeAfter:
             "import { createTestApp } from '@forinda/kickjs-testing'\n" +
             "import '@/config'  // ← registers the env schema, as src/index.ts does\n" +
             '\n' +
-            'const { expressApp } = await createTestApp({ modules: [UserModule] })\n',
+            'const { app } = await createTestApp({ modules: [UserModule] })\n',
           docs: 'https://kickjs.app/guide/configuration.html#wiring-the-schema-at-startup',
         },
       }
