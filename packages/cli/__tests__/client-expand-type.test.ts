@@ -481,3 +481,39 @@ describe('TypeExpander — optional and unioned callables', () => {
     expect(out.text).toBe('{ a?: string; b: number }')
   })
 })
+
+describe('TypeExpander — cyclic toJSON', () => {
+  // `A.toJSON(): B` and `B.toJSON(): A` alternate forever. The direct
+  // self-return check does not see it, and the hop is not structural nesting
+  // so it spends no depth — nothing stopped it but the call stack, which
+  // overflowed with `RangeError: Maximum call stack size exceeded`.
+  it('emits unknown rather than overflowing the stack', () => {
+    const warnings: string[] = []
+    const out = expand(
+      `
+      declare class A { toJSON(): B }
+      declare class B { toJSON(): A }
+      type Target = { x: A }
+    `,
+      { onWarn: (m) => warnings.push(m) },
+    )
+    expect(out.text).toBe('{ x: unknown }')
+    expect(warnings.join('\n')).toMatch(/cyclic toJSON/)
+  })
+
+  it('still resolves a toJSON that returns a plain shape', () => {
+    // The guard must not break the ordinary single hop it sits in front of.
+    const out = expand(`
+      declare class Money { toJSON(): { cents: number } }
+      type Target = { total: Money; when: Date }
+    `)
+    expect(out.text).toBe('{ total: { cents: number }; when: string }')
+  })
+
+  it('allows the same toJSON type twice in one shape', () => {
+    // Sequential use is not a cycle — the guard is scoped to the walk, not a
+    // permanent blocklist.
+    const out = expand(`type Target = { a: Date; b: Date }`)
+    expect(out.text).toBe('{ a: string; b: string }')
+  })
+})
