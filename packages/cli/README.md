@@ -19,9 +19,10 @@ kick dev                  # Start dev server with Vite HMR
 kick build                # Production build via Vite
 kick start                # Run production build
 
-kick g module <name>      # Generate a full DDD module
+kick g module <name>      # Controller, service, repository, DTOs, tests
 kick g scaffold <name> <fields…>  # CRUD module from field definitions
-kick g controller|service|middleware|guard|adapter|dto <name>
+kick g controller|service|middleware|guard|adapter|plugin|contributor|dto|test <name>
+kick g agents             # Regenerate AGENTS.md / CLAUDE.md / skills after an upgrade
 
 kick rm module <name>     # Remove a module
 kick add <pkg>            # Install a KickJS package + peers
@@ -33,7 +34,7 @@ kick mcp start            # Run app as an MCP stdio server
 kick typegen              # Refresh KickRoutes / KickEnv / KickRuntimeRegister type maps
 ```
 
-`kick new` is interactive (template, runtime, package manager, repository, package multi-select, git init, install) — every prompt has a flag for CI: `--template rest|minimal`, `--runtime express|fastify|h3`, `--pm pnpm|npm|yarn|bun`, `--repo inmemory|<db-name>` (e.g. `postgres`), `--packages auth,swagger,…`, `--no-git`, `--no-install`, `--force`, `-y/--yes`.
+`kick new` is interactive (template, runtime, package manager, repository, package multi-select, git init, install) — every prompt has a flag for CI: `--template rest|minimal|fullstack`, `--runtime express|fastify|h3`, `--pm pnpm|npm|yarn|bun`, `--repo inmemory|<db-name>` (e.g. `postgres`), `--packages swagger,ws,queue,devtools`, `--no-git`, `--no-install`, `--force`, `-y/--yes`.
 
 ## HTTP runtimes
 

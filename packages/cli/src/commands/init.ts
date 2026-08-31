@@ -36,7 +36,7 @@ export function registerInitCommand(program: Command): void {
     )
     .option(
       '--packages <packages>',
-      'Comma-separated packages to include (e.g. auth,swagger,ws,queue)',
+      'Comma-separated packages to include (e.g. swagger,ws,queue,devtools)',
     )
     .option(
       '-y, --yes',
