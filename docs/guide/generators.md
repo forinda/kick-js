@@ -36,11 +36,10 @@ kick g module product --pattern rest
 ```
 products/
   product.module.ts                 # Module declaration (register + routes)
-  product.constants.ts              # Query config (filterable, sortable, searchable) + repo token
+  product.constants.ts              # Query config (filterable, sortable, searchable)
   product.controller.ts             # @Controller with full CRUD
   product.service.ts                # @Service wrapping the repository
-  product.repository.ts             # Interface + Symbol token
-  in-memory-product.repository.ts   # @Repository implementation (in-memory default)
+  product.repository.ts             # Factory + contract (ReturnType) + DI token, one file
   dtos/
     create-product.dto.ts           # Zod schema for POST
     update-product.dto.ts           # Zod schema for PUT
@@ -50,7 +49,7 @@ products/
     product.repository.test.ts
 ```
 
-The controller injects `ProductService`, which handles all CRUD. No use-cases, no domain layer — just clean REST. With a custom repo name (e.g. `--repo postgres`) the implementation file becomes `product-postgres.repository.ts`, a generic stub with TODO markers you wire to your own client.
+The controller injects `ProductService`, which handles all CRUD. No use-cases, no domain layer — just clean REST. A custom repo name (e.g. `--repo postgres`) does not change the file name or the identifiers — you get the same `product.repository.ts` with an unimplemented body and TODO markers naming the store.
 
 ### Pattern: `minimal`
 
@@ -106,6 +105,8 @@ export default defineConfig({
   pattern: 'rest',
   modules: {
     dir: 'src/modules',
+    // deprecated — the name no longer changes the generated code, only
+    // the TODO text in the stub body
     repo: { name: 'postgres' },
     pluralize: true,
     schemaDir: 'src/db/schema',
@@ -162,20 +163,19 @@ Use `--force` to skip all prompts and overwrite everything.
 
 The `--repo` flag is name-based. There is exactly one built-in repository — `inmemory` — and any other name scaffolds a generic custom-repository stub.
 
-| Value      | Generated file                   | Description                                                              |
-| ---------- | -------------------------------- | ------------------------------------------------------------------------ |
-| `inmemory` | `in-memory-{name}.repository.ts` | Working, zero-dependency Map-based store. The default.                   |
-| any name   | `{name}-{repo}.repository.ts`    | Generic custom-repository stub with TODO markers — wire your own client. |
+| Value              | Generated file         | Body                                                             |
+| ------------------ | ---------------------- | ---------------------------------------------------------------- |
+| unset / `inmemory` | `{name}.repository.ts` | Working, zero-dependency Map-based store. The default.           |
+| any name           | `{name}.repository.ts` | Unimplemented, with TODO markers naming the store you asked for. |
 
-**Custom repos** accept any database or ORM name and generate a stub you complete yourself:
+**The file name and identifiers are the same either way.** Only the body differs:
 
 ```bash
-kick g module user --repo postgres    # → postgres-user.repository.ts
-kick g module user --repo mongo       # → mongo-user.repository.ts
-kick g module user --repo typeorm     # → typeorm-user.repository.ts
+kick g module user                    # → user.repository.ts, working Map body
+kick g module user --repo postgres    # → user.repository.ts, "write the postgres query"
 ```
 
-Custom repositories use a working in-memory implementation as a placeholder with `// TODO: Implement with {repo}` markers, so the generated module compiles and runs immediately — swap the body for your real client when ready.
+The generator used to bake the store into the names — `postgres-user.repository.ts` exporting `PostgresUserRepository`, whose every method read and wrote a `Map`. An app could be booted and manually tested against a class asserting Postgres while every write went to a store that empties on restart. The name was the lie, not the Map, so the name is gone.
 
 You can set the default via `kick.config.ts`. The CLI suggests the `{ name }` object form for any non-inmemory repo:
 
@@ -186,6 +186,8 @@ export default defineConfig({
     repo: 'inmemory',
 
     // Custom — generates stub with TODO markers (preferred object form)
+    // deprecated — the name no longer changes the generated code, only
+    // the TODO text in the stub body
     repo: { name: 'postgres' },
   },
 })
@@ -222,17 +224,14 @@ The module file (`product.module.ts`) registers the repository binding in the DI
 
 ```ts
 import { defineModule } from '@forinda/kickjs'
-import { PRODUCT_REPOSITORY } from './product.constants'
-import { InMemoryProductRepository } from './in-memory-product.repository'
+import { PRODUCT_REPOSITORY, createProductRepository } from './product.repository'
 import { ProductController } from './product.controller'
 
 export const ProductModule = defineModule({
   name: 'ProductModule',
   build: () => ({
     register(container) {
-      container.registerFactory(PRODUCT_REPOSITORY, () =>
-        container.resolve(InMemoryProductRepository),
-      )
+      container.registerFactory(PRODUCT_REPOSITORY, () => createProductRepository())
     },
     routes() {
       return {
@@ -465,7 +464,7 @@ Generates a `@Service()` class. Default output: `src/services/`.
 kick g middleware logger
 ```
 
-Generates an Express middleware function. Default output: `src/middleware/`.
+Generates a connect-style middleware function (runs on Express, Fastify and h3 through the runtime seam). Default output: `src/middleware/`.
 
 ### kick g guard
 
@@ -481,7 +480,7 @@ Generates a route guard function. Default output: `src/guards/`.
 kick g adapter websocket
 ```
 
-Generates an `AppAdapter` class with all lifecycle hooks stubbed out. Default output: `src/adapters/`.
+Generates a `defineAdapter()` factory with all lifecycle hooks stubbed out. Default output: `src/adapters/`.
 
 ### kick g plugin
 
@@ -523,37 +522,24 @@ kick g test user-service -m users         # → src/modules/users/__tests__/user
 
 Generates a Vitest test scaffold with `Container.reset()` setup. Default output: `src/__tests__/`.
 
-### kick g auth-scaffold
+### kick g contributor
 
-Generate a complete auth module with registration, login, logout, and password hashing.
+Generate a [Context Contributor](./context-decorators.md) — the typed alternative to `@Middleware()` when the job is to compute a value other code reads off `ctx`.
 
 ```bash
-kick g auth-scaffold                          # JWT strategy (default)
-kick g auth-scaffold --strategy session       # Session-based auth
-kick g auth-scaffold --out src/modules/auth   # Custom output dir
+kick g contributor tenant
+kick g contributor tenant -m users                        # inside a module folder
+kick g contributor tenant --params "source:string"        # emits the withParams<T>() form
+kick g contributor trace -t bare                          # ExecutionContext instead of RequestContext
 ```
 
-Generated files:
-
-```
-src/modules/auth/
-  auth.module.ts          # Module registration
-  auth.controller.ts      # POST /register, /login, /logout + GET /me
-  auth.service.ts         # Business logic with PasswordService
-  dto/
-    register.dto.ts       # Zod schema for registration
-    login.dto.ts          # Zod schema for login
-  auth.test.ts            # Test stubs
-```
-
-| Flag             | Default            | Description                       |
-| ---------------- | ------------------ | --------------------------------- |
-| `-s, --strategy` | `jwt`              | Auth strategy: `jwt` or `session` |
-| `-o, --out`      | `src/modules/auth` | Output directory                  |
-
-The **JWT** variant generates token-based auth. The **session** variant uses `sessionLogin()` / `sessionLogout()` from `@forinda/kickjs-auth` for cookie-based sessions.
-
-Both variants use `PasswordService` for secure password hashing (scrypt by default, with optional argon2/bcrypt support).
+| Flag                    | Description                                                                     |
+| ----------------------- | ------------------------------------------------------------------------------- |
+| `-t, --type <type>`     | `http` (default, `RequestContext`) or `bare` (`ExecutionContext`)               |
+| `-k, --key <key>`       | Context key it writes. Defaults to the camelCase of the name                    |
+| `--params <fields>`     | Per-call params, e.g. `"source:string,region:number"` — emits `withParams<T>()` |
+| `-m, --module <module>` | Place inside a module folder                                                    |
+| `-o, --out <dir>`       | Output directory (overrides `--module`)                                         |
 
 ## Common Options
 
