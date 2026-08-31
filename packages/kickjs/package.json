@@ -164,17 +164,17 @@
     "@swc/core": "^1.16.1",
     "@types/express": "^5.0.6",
     "@types/multer": "^2.2.0",
-    "@types/node": "^26.2.0",
+    "@types/node": "^26.4.0",
     "@types/serve-static": "^2.2.0",
     "fastify": "^5.12.1",
     "h3": "1.15.11",
     "h3-v2": "npm:h3@2.0.1-rc.22",
-    "multer": "^2.2.0",
+    "multer": "^2.3.0",
     "serve-static": "^2.2.0",
     "typescript": "^7.0.2",
     "vite": "^8.2.2",
     "vitest": "^4.1.11",
-    "zod": "^4.4.3"
+    "zod": "^4.5.1"
   },
   "publishConfig": {
     "access": "public"
