@@ -18,9 +18,11 @@ exist to cover.
 It stayed invisible because the one branch that used the neutral `ctx.json()`
 is the happy path of `/health/live` — exactly what a smoke test curls.
 
-All four branches now use `ctx.json(body, status)`, which is engine-neutral and
-already takes a status. This is the framework following the rule `AGENTS.md`
-gives adopters: write to `ctx`, not the raw response.
+All four branches now `return reply(status, body)`. Both runtimes route a
+handler's return value through `applyHandlerResult`, so this carries the status
+without touching the engine-native response at all — and it is the same
+return-style the framework tells adopters to use, rather than a second way of
+doing the same thing.
 
 Covered by a runtime matrix over the built-in routes — ready, degraded, a
 rejecting adapter check, and both draining paths, on Express and Fastify. The

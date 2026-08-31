@@ -38,6 +38,7 @@ import {
   assertRouteUnique,
   buildRouteTable,
 } from './router-builder'
+import { reply } from './reply'
 import { expressRuntime } from './runtimes/express'
 import type {
   ActiveRuntime,
@@ -1358,7 +1359,11 @@ export class Application {
   private mountHealthEndpoints(): void {
     const http = this.adapterHttp()
 
-    // `ctx.json(body, status)` throughout, never `ctx.res.status().json()`.
+    // `reply(status, body)` throughout, never `ctx.res.status().json()`.
+    // Both runtimes route a handler's return value through
+    // `applyHandlerResult`, so this is the same return-style the framework
+    // tells adopters to use — and it carries the status without touching the
+    // engine-native response at all.
     // `ctx.res` is the ENGINE-NATIVE response: under Fastify it is a
     // `FastifyReply`, which has `.status()` but no `.json()`, so the Express
     // form threw `TypeError: ctx.res.status(...).json is not a function` and
@@ -1366,18 +1371,15 @@ export class Application {
     // These are the only routes the framework itself mounts, so they have to
     // follow the rule AGENTS.md gives adopters: write to `ctx`, not the raw
     // response.
-    http.route('GET', '/health/live', (ctx) => {
-      if (this._draining) {
-        ctx.json({ status: 'draining', uptime: process.uptime() }, 503)
-      } else {
-        ctx.json({ status: 'ok', uptime: process.uptime() })
-      }
-    })
+    http.route('GET', '/health/live', () =>
+      this._draining
+        ? reply(503, { status: 'draining', uptime: process.uptime() })
+        : reply(200, { status: 'ok', uptime: process.uptime() }),
+    )
 
-    http.route('GET', '/health/ready', async (ctx) => {
+    http.route('GET', '/health/ready', async () => {
       if (this._draining) {
-        ctx.json({ status: 'draining', checks: [] }, 503)
-        return
+        return reply(503, { status: 'draining', checks: [] })
       }
       const adaptersWithHealth = this.adapters.filter((a) => a.onHealthCheck)
       const checks = await Promise.allSettled(adaptersWithHealth.map((a) => a.onHealthCheck!()))
@@ -1386,7 +1388,10 @@ export class Application {
         return { name: adaptersWithHealth[i].name ?? 'unknown', status: 'down' as const }
       })
       const healthy = results.every((r) => r.status === 'up')
-      ctx.json({ status: healthy ? 'ready' : 'degraded', checks: results }, healthy ? 200 : 503)
+      return reply(healthy ? 200 : 503, {
+        status: healthy ? 'ready' : 'degraded',
+        checks: results,
+      })
     })
   }
 }
