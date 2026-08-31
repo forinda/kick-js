@@ -37,6 +37,10 @@ type BootstrapPassthroughOptions = Pick<
   | 'security'
   | 'contributors'
   | 'contextStore'
+  // The engine under test. Without this every test ran Express while
+  // production ran Fastify or h3 — the one thing an integration test exists
+  // to rule out.
+  | 'runtime'
 >
 
 /**
@@ -66,19 +70,38 @@ export interface CreateTestAppOptions extends BootstrapPassthroughOptions {
 /**
  * Create an Application instance configured for testing.
  * Resets the DI container, registers modules, applies overrides,
- * and returns both the Application and its Express app.
+ * and returns the Application, which drives whichever runtime is configured.
+ *
+ * Drive it through `app` — `app.handle` is the Application's own Node request
+ * listener and follows whichever runtime is configured, so the same test runs
+ * against the engine you actually deploy.
  *
  * @example
  * ```ts
- * const { expressApp, container } = await createTestApp({
+ * const { app, container } = await createTestApp({
  *   modules: [UserModule],
  *   overrides: { [USER_REPO]: new InMemoryUserRepo() },
  * })
- * const res = await request(expressApp).get('/api/v1/users')
+ * const res = await request(app.handle.bind(app)).get('/api/v1/users')
+ * ```
+ *
+ * @example Test the engine you actually deploy
+ * ```ts
+ * import { fastifyRuntime } from '@forinda/kickjs/fastify'
+ *
+ * const { app } = await createTestApp({ modules: [UserModule], runtime: fastifyRuntime() })
+ * const res = await request(app.handle.bind(app)).get('/api/v1/users')
  * ```
  */
 export async function createTestApp(options: CreateTestAppOptions): Promise<{
   app: Application
+  /**
+   * @deprecated Use `app.handle.bind(app)`. Only valid under the Express
+   * runtime — under
+   * any other engine this throws rather than handing back that engine's
+   * instance mistyped as `express.Express`, which is how a suite ends up
+   * silently exercising the wrong runtime.
+   */
   expressApp: express.Express
   container: Container
 }> {
@@ -108,6 +131,9 @@ export async function createTestApp(options: CreateTestAppOptions): Promise<{
     security: options.security,
     contributors: options.contributors,
     contextStore: options.contextStore,
+    // Without this the option is accepted and ignored, which is worse than
+    // not offering it: the suite reports Express while claiming Fastify.
+    runtime: options.runtime,
   })
 
   // Run setup — mounts routes, registers modules, initializes adapters.
@@ -137,9 +163,20 @@ export async function createTestApp(options: CreateTestAppOptions): Promise<{
     }
   }
 
+  const runtimeName = app.getActiveRuntime().name
+
   return {
     app,
-    expressApp: app.getExpressApp(),
+    get expressApp(): express.Express {
+      if (runtimeName !== 'express') {
+        throw new Error(
+          `createTestApp: 'expressApp' is only available under the Express runtime — ` +
+            `this app is running '${runtimeName}'. Drive the app instead, which follows ` +
+            `whichever engine is configured: request(app.handle.bind(app)).get('/...').`,
+        )
+      }
+      return app.getExpressApp()
+    },
     container,
   }
 }
