@@ -12,7 +12,6 @@
 
 import { describe, expect, it } from 'vitest'
 import request from 'supertest'
-import express from 'express'
 import { Controller, Get, Post, type RequestContext } from '@forinda/kickjs'
 import { expressRuntime } from '@forinda/kickjs'
 // Source path, not the '@forinda/kickjs/fastify' subpath: this package's
@@ -21,7 +20,7 @@ import { fastifyRuntime } from '../../kickjs/src/http/runtimes/fastify'
 
 import { createTestApp, createTestModule } from '../src/index'
 
-@Controller('/things')
+@Controller()
 class ThingsController {
   @Get('/')
   list(_ctx: RequestContext) {
@@ -40,16 +39,20 @@ const ThingsModule = createTestModule({
 })
 
 const runtimes = [
-  { name: 'express', make: () => expressRuntime(), middleware: [express.json()] },
-  { name: 'fastify', make: () => fastifyRuntime(), middleware: [] },
+  { name: 'express', make: () => expressRuntime() },
+  { name: 'fastify', make: () => fastifyRuntime() },
 ] as const
 
-describe.each(runtimes)('createTestApp on $name', ({ make, middleware }) => {
+describe.each(runtimes)('createTestApp on $name', ({ make }) => {
+  // No `middleware` — the default path is the one that matters. Passing
+  // `express.json()` explicitly bypasses the Application's native-body guard,
+  // and under Fastify the connect parser then eats the stream before Fastify
+  // reads it, so a JSON POST hangs. An earlier revision of this suite passed
+  // `middleware: []` for Fastify and never exercised it.
   async function boot() {
     const { app, container } = await createTestApp({
       modules: [ThingsModule],
       runtime: make(),
-      middleware: [...middleware],
       isolated: true,
     })
     return { app, container, agent: request(app.handle.bind(app)) }
@@ -67,10 +70,9 @@ describe.each(runtimes)('createTestApp on $name', ({ make, middleware }) => {
     expect(res.body).toEqual([{ id: '1' }])
   })
 
-  it('parses a JSON body through the real engine', async () => {
-    // Body parsing is runtime-specific — Fastify parses natively, Express
-    // needs the middleware. Exactly the class of thing an Express-only suite
-    // could never have caught.
+  it('parses a JSON body with the DEFAULT middleware', async () => {
+    // Body parsing is runtime-specific: Fastify parses natively, Express needs
+    // `express.json()`. Getting the default wrong does not fail — it hangs.
     const { agent } = await boot()
     const res = await agent.post('/api/v1/things').send({ name: 'widget' })
     expect(res.status).toBe(200)
@@ -85,11 +87,7 @@ describe.each(runtimes)('createTestApp on $name', ({ make, middleware }) => {
 
 describe('expressApp escape hatch', () => {
   it('still works under Express', async () => {
-    const { expressApp } = await createTestApp({
-      modules: [ThingsModule],
-      middleware: [express.json()],
-      isolated: true,
-    })
+    const { expressApp } = await createTestApp({ modules: [ThingsModule], isolated: true })
     expect((await request(expressApp).get('/api/v1/things')).status).toBe(200)
   })
 
