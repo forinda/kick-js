@@ -24,15 +24,15 @@ describe('helmet opt-out via user middleware', () => {
   it('an explicit frameguard: false actually removes X-Frame-Options', async () => {
     const { app } = await createTestApp({
       modules: [PingModule()],
-      middleware: [helmet({ frameguard: false })],
+      middlewares: [helmet({ frameguard: false })],
     })
     const res = await request(app.handle.bind(app)).get('/ping')
     expect(res.headers['x-frame-options']).toBeUndefined()
   })
 
   it('scaffolded helmet() adds nothing over the auto-injected one', async () => {
-    const bare = await createTestApp({ modules: [PingModule()], middleware: [] })
-    const withHelmet = await createTestApp({ modules: [PingModule()], middleware: [helmet()] })
+    const bare = await createTestApp({ modules: [PingModule()], middlewares: [] })
+    const withHelmet = await createTestApp({ modules: [PingModule()], middlewares: [helmet()] })
     const a = await request(bare.app.handle.bind(bare.app)).get('/ping')
     const b = await request(withHelmet.app.handle.bind(withHelmet.app)).get('/ping')
     const names = (r: any) => Object.keys(r.headers).toSorted().join(',')
@@ -44,7 +44,7 @@ describe('a path-scoped helmet', () => {
   it('does not strip security headers from other paths', async () => {
     const { app } = await createTestApp({
       modules: [PingModule()],
-      middleware: [{ path: '/admin', handler: helmet({ frameguard: 'SAMEORIGIN' }) }],
+      middlewares: [{ path: '/admin', handler: helmet({ frameguard: 'SAMEORIGIN' }) }],
     })
     const res = await request(app.handle.bind(app)).get('/ping')
     // auto-helmet must still cover /ping

@@ -187,7 +187,7 @@ import { bootstrap, helmet, cors, requestId, requestLogger, csrf, rateLimit } fr
 
 bootstrap({
   modules: [/* your modules */],
-  middleware: [
+  middlewares: [
     helmet(), // Security headers (X-Frame-Options, HSTS, etc.)
     cors({ origin: ['https://app.example.com'] }), // CORS with spec-correct behavior
     requestId(), // X-Request-Id generation/propagation

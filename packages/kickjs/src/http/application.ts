@@ -139,12 +139,6 @@ export interface ApplicationOptions {
    *   requestId(), express.json({ limit: '100kb' })
    */
   middlewares?: MiddlewareEntry[]
-  /**
-   * @deprecated Use {@link ApplicationOptions.middlewares} (plural).
-   * Kept as an alias for back-compat; `middlewares` wins when both are
-   * set.
-   */
-  middleware?: MiddlewareEntry[]
 
   /** Plugins that bundle modules, adapters, middleware, and DI bindings */
   plugins?: KickPlugin[]
@@ -742,7 +736,7 @@ export class Application {
     // does not replace the app-wide pass — standing down for it would strip
     // security headers from every OTHER path.
     // `Symbol.for` registry lookup, so the dynamic import() below stays intact.
-    const declaredHelmet = (this.options.middlewares ?? this.options.middleware ?? []).some(
+    const declaredHelmet = (this.options.middlewares ?? []).some(
       (entry) => typeof entry === 'function' && Symbol.for('kick/http/helmet') in entry,
     )
     const autoHelmet = this.options.security?.helmet !== false && !declaredHelmet
@@ -755,7 +749,7 @@ export class Application {
       }
     }
 
-    const userMiddlewares = this.options.middlewares ?? this.options.middleware
+    const userMiddlewares = this.options.middlewares
     if (userMiddlewares) {
       // User-declared pipeline — full control
       for (const entry of userMiddlewares) {
@@ -1455,7 +1449,7 @@ export class Application {
   private shouldAutoMountRequestScope(): boolean {
     if (this.options.contextStore === 'manual') return false
 
-    const userEntries = this.options.middlewares ?? this.options.middleware ?? []
+    const userEntries = this.options.middlewares ?? []
     for (const entry of userEntries) {
       const handler = typeof entry === 'function' ? entry : entry.handler
       if (isRequestScopeMiddleware(handler)) return false

@@ -29,7 +29,7 @@ export interface HelmetOptions {
  * @example
  * ```ts
  * bootstrap({
- *   middleware: [helmet(), requestId(), express.json()],
+ *   middlewares: [helmet(), requestId(), express.json()],
  * })
  * ```
  */

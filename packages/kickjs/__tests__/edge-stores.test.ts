@@ -121,7 +121,7 @@ describe('rateLimitGuard on the web entry', () => {
       name: 'PingModule',
       build: () => ({ routes: () => ({ path: '/p', controller: PingController }) }),
     })()
-    return createWebApp({ h3: h3v2, modules: [mod], middleware: [guard] })
+    return createWebApp({ h3: h3v2, modules: [mod], middlewares: [guard] })
   }
 
   const req = (ip = '1.2.3.4') =>

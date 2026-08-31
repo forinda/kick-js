@@ -48,7 +48,7 @@ describe.each(runtimes)('createTestApp on $name', ({ make }) => {
   // `express.json()` explicitly bypasses the Application's native-body guard,
   // and under Fastify the connect parser then eats the stream before Fastify
   // reads it, so a JSON POST hangs. An earlier revision of this suite passed
-  // `middleware: []` for Fastify and never exercised it.
+  // `middlewares: []` for Fastify and never exercised it.
   async function boot() {
     const { app, container } = await createTestApp({
       modules: [ThingsModule],

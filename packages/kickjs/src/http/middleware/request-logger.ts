@@ -55,7 +55,7 @@ export interface RequestLoggerOptions {
  * @example
  * ```ts
  * bootstrap({
- *   middleware: [requestId(), requestLogger(), express.json()],
+ *   middlewares: [requestId(), requestLogger(), express.json()],
  * })
  * ```
  *

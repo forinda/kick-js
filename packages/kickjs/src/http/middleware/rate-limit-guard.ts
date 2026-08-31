@@ -81,7 +81,7 @@ function defaultKey(ctx: RequestContext): string {
  * // Edge (Cloudflare Workers) — app-wide:
  * const app = createWebApp({
  *   h3, modules,
- *   middleware: [rateLimitGuard({ max: 60, windowMs: 60_000, store: new KvRateLimitStore(env.KV, { windowMs: 60_000 }) })],
+ *   middlewares: [rateLimitGuard({ max: 60, windowMs: 60_000, store: new KvRateLimitStore(env.KV, { windowMs: 60_000 }) })],
  * })
  *
  * // Any runtime — per controller/route:

@@ -35,7 +35,7 @@ export interface SessionStrategyOptions {
  * Requires the session middleware from `@forinda/kickjs`:
  * ```ts
  * import { session } from '@forinda/kickjs'
- * middleware: [session({ secret: process.env.SESSION_SECRET! })]
+ * middlewares: [session({ secret: process.env.SESSION_SECRET! })]
  * ```
  *
  * @example

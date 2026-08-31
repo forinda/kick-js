@@ -69,7 +69,7 @@ export interface ${toPascalCase(name)}Options {
  * ${toPascalCase(name)} middleware.
  *
  * Usage in bootstrap (fires on every request):
- *   middleware: [${camel}()]
+ *   middlewares: [${camel}()]
  *
  * Usage with adapter — phase controls *when* the handler runs:
  *
