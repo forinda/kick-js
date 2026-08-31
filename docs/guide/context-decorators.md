@@ -30,6 +30,68 @@ Compared to writing two custom middlewares for the same job, you get:
 - **DI integration** — the resolver receives a typed `deps` object resolved from the container.
 - **Reusable across registration sites** — the same decorator works on a method, a class, a module, an adapter, or globally in `bootstrap()`.
 
+## Quickstart
+
+Scaffold one with the CLI:
+
+<PmCommand exec="kick g contributor tenant" />
+
+The variants:
+
+```bash
+kick g contributor tenant                          # HTTP (RequestContext), key 'tenant'
+kick g contributor session --type bare             # ExecutionContext (transport-agnostic)
+kick g contributor tenant --params "source:string" # emits the withParams<T>() form
+kick g contributor admin -m users                  # scoped inside the users module
+```
+
+`--type http` (default) types the resolver against `RequestContext`; `--type bare` against `ExecutionContext`. `--params` switches to the curried `.withParams<T>()` form with a generated params type. The scaffold also drops a `ContextMeta` augmentation stub for the key. Or write one by hand:
+
+```ts
+import { defineHttpContextDecorator, Controller, Get, type RequestContext } from '@forinda/kickjs'
+
+// 1. Declare the value's type via ContextMeta augmentation.
+//    This is what TypeScript reads to type `ctx.get('locale')`.
+declare module '@forinda/kickjs' {
+  interface ContextMeta {
+    locale: { language: string; region: string | null }
+  }
+}
+
+// 2. Define the decorator with a resolver.
+//    `defineHttpContextDecorator` pre-binds `Ctx` to `RequestContext` so
+//    `ctx.req`, `ctx.headers`, `ctx.params`, etc. are typed in the resolver.
+const ResolveLocale = defineHttpContextDecorator({
+  key: 'locale',
+  resolve: (ctx) => {
+    const header = (ctx.req.headers['accept-language'] as string | undefined) ?? 'en'
+    const [language, region] = header.split(',')[0].trim().split('-')
+    return { language, region: region ?? null }
+  },
+})
+
+// 3. Apply it on a controller method (or class)
+@Controller()
+class HomeController {
+  @ResolveLocale
+  @Get('/')
+  home(ctx: RequestContext) {
+    const locale = ctx.get('locale') // typed: { language: string; region: string | null }
+    return ctx.json({ greeting: greetingFor(locale) })
+  }
+}
+```
+
+That's the whole minimum surface. The rest of this guide covers DI deps, dependency ordering, error handling, the four registration sites beyond `@`-on-method, and how to author reusable decorators inside an adapter or plugin.
+
+::: tip Two factories, same pipeline
+
+- **`defineHttpContextDecorator`** — recommended for HTTP work. `Ctx` is `RequestContext`, so the resolver can read `ctx.req` / `ctx.headers` / `ctx.params` / `ctx.body` directly.
+- **`defineContextDecorator`** — transport-agnostic. `Ctx` defaults to the smaller `ExecutionContext` surface (`get` / `set` / `requestId`). Use this when authoring a contributor that needs to run across HTTP, WebSocket, queue, and cron transports.
+
+Both produce the same `ContributorRegistration` and run through the same pipeline. The wrapper exists purely to remove the third-generic ceremony for the common HTTP case.
+:::
+
 ## When to use
 
 Use a context decorator when:
@@ -114,68 +176,6 @@ Same job, different ergonomics. Each line below maps a middleware pain point to 
 - **Augmentation surface** — middleware leaks via `declare global { namespace Express { interface Request { ... } } }` across every handler in the app. `ContextMeta` augmentation is typed via `declare module`.
 - **Error handling** — middleware throw → 500 unless you wrote `try/catch` around every middleware. Contributors expose `optional: true` (skip silently) + `onError` (typed fallback value).
 - **Per-route opt-out** — "remove the rate-limit middleware on `/health`" forces forking the stack or path-checking inside. Mount `@SkipRateLimit` at method level — higher precedence wins, adapter's registration silently drops for that one route.
-
-## Quickstart
-
-Scaffold one with the CLI:
-
-<PmCommand exec="kick g contributor tenant" />
-
-The variants:
-
-```bash
-kick g contributor tenant                          # HTTP (RequestContext), key 'tenant'
-kick g contributor session --type bare             # ExecutionContext (transport-agnostic)
-kick g contributor tenant --params "source:string" # emits the withParams<T>() form
-kick g contributor admin -m users                  # scoped inside the users module
-```
-
-`--type http` (default) types the resolver against `RequestContext`; `--type bare` against `ExecutionContext`. `--params` switches to the curried `.withParams<T>()` form with a generated params type. The scaffold also drops a `ContextMeta` augmentation stub for the key. Or write one by hand:
-
-```ts
-import { defineHttpContextDecorator, Controller, Get, type RequestContext } from '@forinda/kickjs'
-
-// 1. Declare the value's type via ContextMeta augmentation.
-//    This is what TypeScript reads to type `ctx.get('locale')`.
-declare module '@forinda/kickjs' {
-  interface ContextMeta {
-    locale: { language: string; region: string | null }
-  }
-}
-
-// 2. Define the decorator with a resolver.
-//    `defineHttpContextDecorator` pre-binds `Ctx` to `RequestContext` so
-//    `ctx.req`, `ctx.headers`, `ctx.params`, etc. are typed in the resolver.
-const ResolveLocale = defineHttpContextDecorator({
-  key: 'locale',
-  resolve: (ctx) => {
-    const header = (ctx.req.headers['accept-language'] as string | undefined) ?? 'en'
-    const [language, region] = header.split(',')[0].trim().split('-')
-    return { language, region: region ?? null }
-  },
-})
-
-// 3. Apply it on a controller method (or class)
-@Controller()
-class HomeController {
-  @ResolveLocale
-  @Get('/')
-  home(ctx: RequestContext) {
-    const locale = ctx.get('locale') // typed: { language: string; region: string | null }
-    return ctx.json({ greeting: greetingFor(locale) })
-  }
-}
-```
-
-That's the whole minimum surface. The rest of this guide covers DI deps, dependency ordering, error handling, the four registration sites beyond `@`-on-method, and how to author reusable decorators inside an adapter or plugin.
-
-::: tip Two factories, same pipeline
-
-- **`defineHttpContextDecorator`** — recommended for HTTP work. `Ctx` is `RequestContext`, so the resolver can read `ctx.req` / `ctx.headers` / `ctx.params` / `ctx.body` directly.
-- **`defineContextDecorator`** — transport-agnostic. `Ctx` defaults to the smaller `ExecutionContext` surface (`get` / `set` / `requestId`). Use this when authoring a contributor that needs to run across HTTP, WebSocket, queue, and cron transports.
-
-Both produce the same `ContributorRegistration` and run through the same pipeline. The wrapper exists purely to remove the third-generic ceremony for the common HTTP case.
-:::
 
 ## Declaring dependencies (`deps`)
 
