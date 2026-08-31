@@ -39,7 +39,8 @@ application rewrite.
 - No performance-parity promise on day one — Fastify behind the runtime
   seam initially routes through the shared pipeline, not Fastify's
   schema-compiled serializers (see §7 Risks).
-- No migration of the deprecated `@forinda/kickjs-auth` package (BYO auth
+- No migration of the `@forinda/kickjs-auth` package, deprecated at the time
+  of writing and since removed in v8 (BYO auth
   already composes from `ctx`, which is runtime-neutral by design here).
 
 ## 2. Where Express actually lives today

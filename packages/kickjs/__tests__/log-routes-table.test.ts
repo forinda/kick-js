@@ -114,7 +114,7 @@ async function buildApp(options: {
 
   const app = new Application({
     modules: [TestModule],
-    middleware: [express.json()],
+    middlewares: [express.json()],
     logRouteTable: options.logRouteTable,
     logRoutesTable: options.logRoutesTable,
   })

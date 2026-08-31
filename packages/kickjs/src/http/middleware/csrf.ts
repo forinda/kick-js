@@ -37,7 +37,7 @@ export interface CsrfOptions {
  *
  * bootstrap({
  *   modules,
- *   middleware: [
+ *   middlewares: [
  *     cookieParser(),
  *     csrf(),
  *     // ... other middleware

@@ -248,7 +248,7 @@ KickJS's HTTP layer already parses `page` / `limit` / filters / sort off the que
 ```ts
 import { Controller, Get, type RequestContext } from '@forinda/kickjs'
 
-@Controller('/users')
+@Controller()
 export class UsersController {
   @Inject(DB_PRIMARY) private db!: KickDbClient
 

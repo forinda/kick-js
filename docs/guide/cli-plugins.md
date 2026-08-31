@@ -2,7 +2,7 @@
 
 Extend the `kick` CLI with new commands and typegen emitters by writing
 a `KickCliPlugin` and adding it to `kick.config.ts`. The same contract
-backs every built-in command — `kick init`, `kick generate`, `kick db`
+backs every built-in command — `kick init`, `kick generate`, `kick doctor`
 all ship as plugins internally.
 
 ## When to write one
@@ -208,7 +208,7 @@ full pattern.
 
 Every built-in command — `init`, `generate`, `run`, `info`, `inspect`,
 `add`, `list`, `explain`, `mcp`, `tinker`, `remove`, `typegen`,
-`check`, `db` — ships as a `KickCliPlugin` in
+`check`, `doctor`, `codemod` — ships as a `KickCliPlugin` in
 `packages/cli/src/plugin/builtins.ts`. Adding a built-in command means
 appending one entry there; the merge + conflict pipeline runs the same
 way for built-ins and adopter plugins.

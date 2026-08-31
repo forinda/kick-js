@@ -4,9 +4,7 @@ KickJS ships with a `ws`-based WebSocket adapter (`@forinda/kickjs-ws`), but you
 
 ## Setup
 
-```bash
-pnpm add socket.io
-```
+<PmCommand add="socket.io" />
 
 ## Create a Socket.IO Adapter
 
@@ -239,23 +237,36 @@ io.on('connection', (socket) => {
 })
 ```
 
-## With KickJS Auth
+## Sharing auth with your HTTP routes
 
-If you're using `@forinda/kickjs-auth`, you can reuse your JWT strategy:
+Auth is [bring-your-own](./byo-recipes.md#auth), so the piece to share is a plain function you own — not a framework strategy. Keep token verification separate from the transport, and both sides call it:
 
 ```ts
-import { JwtStrategy } from '@forinda/kickjs-auth'
+// src/auth/verify-token.ts — no HTTP, no socket, just the token
+import jwt from 'jsonwebtoken'
+import type { AuthUser } from './context'
 
-const jwtStrategy = JwtStrategy({ secret: JWT_SECRET })
-
-io.use(async (socket, next) => {
-  // Create a mock request object for the strategy
-  const mockReq = {
-    headers: { authorization: `Bearer ${socket.handshake.auth?.token}` },
+export function verifyToken(token: string | undefined): AuthUser | null {
+  if (!token) return null
+  try {
+    return mapPayload(jwt.verify(token, JWT_SECRET) as jwt.JwtPayload)
+  } catch {
+    return null
   }
-  const user = await jwtStrategy.validate(mockReq)
+}
+```
+
+The HTTP side calls it from the `user` contributor ([Step 3 of the recipe](./byo-recipes.md#auth)); the socket side calls it from `io.use`:
+
+```ts
+import { verifyToken } from './auth/verify-token'
+
+io.use((socket, next) => {
+  const user = verifyToken(socket.handshake.auth?.token)
   if (!user) return next(new Error('Unauthorized'))
   socket.data.user = user
   next()
 })
 ```
+
+Resist reusing a `RequestContext`-shaped strategy here by faking a request object. A handshake is not an HTTP request — it has no route, params or body — and the mock drifts the moment the strategy reads something the fake does not have.

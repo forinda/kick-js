@@ -6,7 +6,7 @@ KickJS provides 22 decorators across `@forinda/kickjs` and `@forinda/kickjs-swag
 
 ### @Controller()
 
-Marks a class as an HTTP controller and registers it in the DI container. Takes no arguments — route prefixes are defined by the module's `routes().path`, the single source of truth for where routes mount. The legacy `@Controller('/path')` form was removed in v4; see [Migration v3 → v4](./migration-v3-to-v4.md) for the rename map.
+Marks a class as an HTTP controller and registers it in the DI container. Takes no arguments — route prefixes are defined by the module's `routes().path`, the single source of truth for where routes mount. The legacy `@Controller('/path')` form was removed in v4 — passing a path is now a TypeScript error; see [Migration v3 → v4](./migration-v3-to-v4.md) for the rename map.
 
 ```ts
 import { Controller } from '@forinda/kickjs'
@@ -350,7 +350,7 @@ Generic security decorator. Pick this when the scheme isn't bearer-shaped (API k
 ```ts
 import { ApiSecurity } from '@forinda/kickjs-swagger'
 
-@Controller('/users')
+@Controller()
 @ApiSecurity('BearerAuth') // class-level default
 class UsersController {
   @Get('/me')
@@ -370,7 +370,7 @@ Three input shapes: a string (single scheme, no scopes), an object (`{ name, sco
 Mark a single method as publicly accessible — opts out of any class-level security requirement (set via `@ApiSecurity` or `@ApiBearerAuth`).
 
 ```ts
-@Controller('/internal')
+@Controller()
 @ApiSecurity('BearerAuth')
 class InternalController {
   @Get('/health')

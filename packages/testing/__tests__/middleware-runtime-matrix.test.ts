@@ -74,7 +74,7 @@ describe.each(runtimes)('middleware on $name', ({ make }) => {
     const { app } = await createTestApp({
       modules: [ProbeModule],
       runtime: make(),
-      middleware: middleware as never,
+      middlewares: middleware as never,
       isolated: true,
     })
     return request(app.handle.bind(app))
@@ -141,7 +141,7 @@ describe.each(runtimes)('middleware on $name', ({ make }) => {
       const { app } = await createTestApp({
         modules: [ProbeModule],
         runtime: make(),
-        middleware: [session({ secret: 'test-secret-value' })] as never,
+        middlewares: [session({ secret: 'test-secret-value' })] as never,
         isolated: true,
       })
       // A supertest *agent* keeps the cookie jar between requests, which is the
@@ -178,7 +178,7 @@ describe.each(runtimes)('middleware on $name', ({ make }) => {
       const { app } = await createTestApp({
         modules: [ProbeModule],
         runtime: make(),
-        middleware: [csrf()] as never,
+        middlewares: [csrf()] as never,
         isolated: true,
       })
       const agent = request.agent(app.handle.bind(app))

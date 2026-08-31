@@ -107,7 +107,7 @@ class MemoryStore implements RateLimitStore {
  *
  * bootstrap({
  *   modules,
- *   middleware: [
+ *   middlewares: [
  *     rateLimit({ max: 100, windowMs: 60_000 }),
  *     // ... other middleware
  *   ],

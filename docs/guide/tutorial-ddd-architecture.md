@@ -59,9 +59,7 @@ Creating this structure by hand for a dozen modules would be tedious and error-p
 fastest path is `kick g scaffold`, which generates the same flat layout as `kick g module`
 but builds the DTOs from `<field>:<type>` definitions instead of leaving empty stubs:
 
-```bash
-kick g scaffold task title:string done:boolean
-```
+<PmCommand exec="kick g scaffold task title:string done:boolean" />
 
 This writes the module under `src/modules/tasks/` and auto-registers it in
 `src/modules/index.ts` so it's mounted on the next dev-server restart.
@@ -75,9 +73,7 @@ Supported field types include `string`, `text`, `number`, `int`, `float`, `boole
 `email`, `url`, `uuid`, `json`, and `enum:a,b,c`. Mark a field optional with a trailing
 `:optional` segment (shell-safe — no quoting needed):
 
-```bash
-kick g scaffold post title:string body:text:optional published:boolean:optional
-```
+<PmCommand exec="kick g scaffold post title:string body:text:optional published:boolean:optional" />
 
 If you don't have fields in mind yet, `kick g module task` produces the identical structure
 with a single placeholder `name` field you fill in later. See
@@ -452,9 +448,7 @@ change. There are two steps.
 Generate a custom stub by passing any database name as the repo. Anything other than
 `inmemory` scaffolds a generic custom repository file with TODOs:
 
-```bash
-kick g module task --repo postgres
-```
+<PmCommand exec="kick g module task --repo postgres" />
 
 That writes `postgres-task.repository.ts` — a stub that already `implements ITaskRepository`
 and is decorated with `@Repository()`. Fill in the TODOs with your real client calls:
@@ -521,9 +515,7 @@ prefer. For a first-party database layer, reach for `@forinda/kickjs-db`.
 
 Start the dev server and the module is live under its route prefix:
 
-```bash
-kick dev
-```
+<PmCommand exec="kick dev" />
 
 `kick dev` also runs `kick typegen` so the `KickRoutes` types stay in sync. Hit the endpoints:
 

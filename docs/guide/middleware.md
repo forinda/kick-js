@@ -2,6 +2,14 @@
 
 KickJS provides middleware at three levels: global (applied to all requests), class-level (applied to all routes in a controller), and method-level (applied to a single route handler). Adapters can also inject middleware at specific phases of the pipeline.
 
+::: tip Scaffold one
+`kick g middleware <name>` writes a typed middleware function, and `-m` drops it inside a module folder rather than the shared directory.
+
+<PmCommand exec="kick g middleware request-timer" />
+
+For the short-circuiting kind, see [Guards](#guards) below. Full flag list: [Generators](./generators.md#kick-g-middleware).
+:::
+
 ## MiddlewareHandler Type
 
 All KickJS middleware follows the same signature:
@@ -79,6 +87,40 @@ For a given route, middleware executes in this order:
 6. The route handler
 
 Steps 1-4 use the `@Middleware()` mechanism described above. Step 5 is the typed `defineContextDecorator()` primitive — use it when the only job of a middleware is to compute a value and stash it on `ctx`.
+
+## Guards
+
+A guard is middleware whose job is to **stop the request** — auth, IP allow-lists, feature flags. Same `(ctx, next)` signature; the difference is that it answers instead of calling `next()`.
+
+<PmCommand exec="kick g guard admin" />
+
+The scaffold answers through `ctx.problem.*` rather than `ctx.res`:
+
+```ts
+export async function adminGuard(ctx: RequestContext, next: () => void): Promise<void> {
+  const header = ctx.headers.authorization
+  if (!header) {
+    // `ctx.res` is the ENGINE-NATIVE response — `ctx.res.status(401).json(...)`
+    // only works on Express. A FastifyReply has no `.json()`, h3's event has no
+    // `.status()`. The `ctx.*` helpers work on every runtime.
+    ctx.problem.unauthorized({ detail: 'Missing or invalid authorization header' })
+    return
+  }
+  next()
+}
+```
+
+Mount it with `@Middleware()` at class or method level:
+
+```ts
+@Controller()
+@Middleware(adminGuard)
+export class AdminController { ... }
+```
+
+`-m, --module <module>` puts it in a module folder instead of the shared directory.
+
+**Reach for a contributor instead when the job is to produce a value** rather than to reject — see below.
 
 ## Middleware vs context decorators
 

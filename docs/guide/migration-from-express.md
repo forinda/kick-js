@@ -19,14 +19,15 @@ KickJS is built on Express 5, so your existing Express knowledge applies directl
 
 ## Step 1: Install KickJS
 
-```bash
-# In your existing Express project
-pnpm add @forinda/kickjs @forinda/kickjs-swagger reflect-metadata zod
-pnpm add -D @forinda/kickjs-cli
+In your existing Express project:
 
-# Or use the CLI to add packages
-kick add swagger
-```
+<PmCommand add="@forinda/kickjs @forinda/kickjs-swagger reflect-metadata zod" />
+
+<PmCommand add="@forinda/kickjs-cli" dev />
+
+Or let the CLI resolve the package and its peers for you:
+
+<PmCommand exec="kick add swagger" />
 
 ## Step 2: Replace app.listen with bootstrap
 

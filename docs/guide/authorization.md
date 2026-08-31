@@ -1,12 +1,33 @@
 # Authorization
 
-::: warning `@forinda/kickjs-auth` is deprecated — and there is no built-in authorization layer anymore
-The framework ships **no roles system and no policy engine**. `@Roles`, `@Policy`, `@Can`, `AuthorizationService`, and the policy registry were features of the deprecated package and have no first-party replacement. Authorization is **your code**: the sections below show the recommended shapes to compose from [context decorators](context-decorators.md). The [legacy package reference](#legacy-role-based-access-control-deprecated) follows for existing projects.
+::: tip There is no built-in authorization layer
+The framework ships **no roles system and no policy engine**. `@Roles`, `@Policy`, `@Can` and `AuthorizationService` belonged to `@forinda/kickjs-auth`, removed in **v8**, and have no first-party replacement by design. Authorization is **your code**: the sections below are the recommended shapes to compose from [context decorators](./context-decorators.md).
+:::
+
+::: tip Scaffold the pieces
+The role check below is a contributor — `kick g contributor <name> --params "roles:string"` writes the parameterised form. For a check that must short-circuit the response, `kick g guard <name>` writes middleware instead.
+
+<PmCommand exec="kick g contributor require-role --params &quot;roles:string&quot;" />
+
+Full flag list: [Generators](./generators.md#kick-g-contributor).
 :::
 
 ## BYO role checks — `@RequireRole`
 
-A role check is a contributor that depends on the auth user and throws 401/403. The full implementation is Step 4 of the [BYO Auth recipe](byo-recipes.md#auth):
+A role check is a contributor that depends on the auth user and throws 401/403.
+
+**It depends on a `user` contributor that this page does not define.** That one is the authentication half — it reads the credential, resolves the user, and puts it on the context under the key `user`. In full it is Step 3 of the [BYO Auth recipe](./byo-recipes.md#auth); the shape the check below relies on is:
+
+```ts
+// src/auth/context-decorators.ts — the producer of `ctx.get('user')`
+export const LoadAuthUser = defineContextDecorator({
+  key: 'user', //  ← the key `dependsOn: ['user']` refers to
+  deps: { auth: AUTH_SERVICE },
+  resolve: async (ctx, { auth }) => auth.authenticate(ctx), // AuthUser | null
+})
+```
+
+Registered globally — `bootstrap({ contributors: [LoadAuthUser] })` — so every route has a resolved user before any role check runs. With that in place:
 
 ```ts
 export const RequireRole = defineHttpContextDecorator.withParams<{
@@ -14,7 +35,7 @@ export const RequireRole = defineHttpContextDecorator.withParams<{
   mode?: 'all' | 'any'
 }>()({
   key: 'roleCheck',
-  dependsOn: ['user'], // strict ordering — @LoadAuthUser resolves first
+  dependsOn: ['user'], // strict ordering — LoadAuthUser above resolves first
   paramDefaults: { roles: [], mode: 'any' },
   resolve: (ctx, _deps, params) => {
     const user = ctx.get('user')
@@ -77,213 +98,11 @@ Swap the engine implementation (CASL, a rules table, hardcoded checks) by re-bin
 
 ---
 
-## Legacy: Role-Based Access Control (deprecated)
-
-Everything below documents the deprecated `@forinda/kickjs-auth` package for existing projects.
-
-`@Roles()` checks that the authenticated user has at least one of the required roles:
-
-```ts
-@Delete('/:id')
-@Roles('admin')
-deleteUser(ctx) { ... }
-
-@Get('/dashboard')
-@Roles('admin', 'manager')   // Any of these roles
-dashboard(ctx) { ... }
-```
-
-The user object must have a `roles: string[]` property.
-
-### Tenant-Scoped Roles
-
-When using multi-tenancy, roles can be resolved per-tenant:
-
-```ts
-AuthAdapter({
-  strategies,
-  roleResolver: async (user, tenantId) => {
-    const roles = await db.userRoles.where({ userId: user.id, tenantId }).select('role')
-    return roles.map((r) => r.role)
-  },
-})
-```
-
-When `roleResolver` is set and `req.tenant` exists, `@Roles()` checks the tenant-scoped roles instead of the user's global roles.
-
-### Type-narrowing roles via `AuthUser` augmentation
-
-`@Roles()` is generic over `AuthUser['roles'][number]`. Augment `AuthUser` to a literal-string array and typos at decoration sites become compile errors — no runtime check needed:
-
-```ts
-declare module '@forinda/kickjs-auth' {
-  interface AuthUser {
-    id: string
-    email: string
-    roles: ('admin' | 'editor' | 'viewer')[]
-  }
-}
-
-@Roles('admin', 'editor')   // ✓ typechecks
-@Roles('typo')              // ✗ TS error: 'typo' is not assignable to '"admin" | "editor" | "viewer"'
-```
-
-Apps that don't augment `AuthUser['roles']` get the loose `string[]` fallback — full backwards compatibility.
-
-## Legacy: Policy-Based Authorization (deprecated)
-
-For resource-level permissions ("can this user edit THIS post?"), use policies.
-
-### Defining Policies
-
-A policy is a class with methods for each action:
-
-```ts
-import { Policy } from '@forinda/kickjs-auth'
-
-@Policy('post')
-class PostPolicy {
-  view(user: AuthUser, post: Post) {
-    return post.published || user.id === post.authorId
-  }
-
-  update(user: AuthUser, post: Post) {
-    return user.id === post.authorId || user.roles.includes('admin')
-  }
-
-  delete(user: AuthUser) {
-    return user.roles.includes('admin')
-  }
-
-  create(user: AuthUser) {
-    return user.roles.includes('author') || user.roles.includes('admin')
-  }
-}
-```
-
-Each method receives the authenticated user and optionally the resource instance. Return `true` to allow, `false` to deny.
-
-### Auto-Discovering Policies
-
-`@Policy()` decorators only register when their file is imported. If you forget to import a policy file, `@Can()` checks will silently deny (policy not found = deny by default).
-
-Use `loadPolicies()` with `import.meta.glob` to auto-discover all policy files:
-
-```ts
-// src/index.ts — before bootstrap()
-import { loadPolicies } from '@forinda/kickjs-auth'
-
-// Eagerly import all *.policy.ts files across all modules
-loadPolicies(import.meta.glob('./modules/**/*.policy.ts', { eager: true }))
-
-// Or if policies live in a dedicated folder
-loadPolicies(import.meta.glob('./policies/**/*.ts', { eager: true }))
-```
-
-This uses Vite's `import.meta.glob` with `{ eager: true }` to import all matching files at startup. The `@Policy()` decorators fire as a side effect, registering each class in the global policy registry.
-
-> **Recommended convention:** Name policy files `*.policy.ts` (e.g., `post.policy.ts`, `user.policy.ts`) so the glob pattern is specific and predictable.
-
-### @Can() Decorator
-
-Use `@Can()` on controller methods to enforce a policy check before the handler runs:
-
-```ts
-import { Can } from '@forinda/kickjs-auth'
-
-@Controller()
-@Authenticated()
-class PostController {
-  @Get('/')
-  @Can('view', 'post')
-  list(ctx) { ... }
-
-  @Delete('/:id')
-  @Can('delete', 'post')
-  remove(ctx) { ... }
-}
-```
-
-`@Can()` implies `@Authenticated()` — no need to add both. If the policy returns `false`, the request gets a 403 Forbidden response.
-
-### Type-narrowing `@Can` and `AuthorizationService.can` via `PolicyRegistry`
-
-`@Can(action, resource)` is generic over `PolicyRegistry`. Augment the registry with the (resource → actions) map and both arguments narrow at decoration sites:
-
-```ts
-declare module '@forinda/kickjs-auth' {
-  interface PolicyRegistry {
-    post: 'create' | 'update' | 'delete' | 'publish'
-    user: 'invite' | 'suspend'
-  }
-}
-
-@Can('delete', 'post')      // ✓ typechecks
-@Can('typo', 'post')        // ✗ TS error: 'typo' is not assignable to '"create" | "update" | "delete" | "publish"'
-@Can('delete', 'unknown')   // ✗ TS error: 'unknown' is not assignable to '"post" | "user"'
-@Can('invite', 'post')      // ✗ TS error: 'invite' is not assignable to actions of 'post' (it's on 'user')
-```
-
-The same `PolicyRegistry`-based narrowing also applies to `AuthorizationService.can()` and `AuthorizationService.listObjects()`, so the runtime checks stay type-safe too:
-
-```ts
-const allowed = await authz.can(user, 'delete', 'post') // ✓
-const ids = await authz.listObjects(user, 'delete', 'post') // ✓
-```
-
-Apps that don't augment `PolicyRegistry` get the loose `(string, string)` fallback — full backwards compatibility.
-
-### Programmatic Checks
-
-Use `AuthorizationService` for checks inside services:
-
-```ts
-import { AuthorizationService } from '@forinda/kickjs-auth'
-
-@Service()
-class PostService {
-  @Autowired() private authz!: AuthorizationService
-
-  async update(user: AuthUser, postId: string, data: UpdateDto) {
-    const post = await this.repo.findById(postId)
-
-    if (!(await this.authz.can(user, 'update', 'post', post))) {
-      throw new HttpException(HttpStatus.FORBIDDEN, 'Cannot update this post')
-    }
-
-    return this.repo.update(postId, data)
-  }
-}
-```
-
-### How Policies Are Resolved
-
-1. `@Policy('name')` registers the class in a global policy registry
-2. `@Can('action', 'resource')` stores metadata on the controller method
-3. `AuthAdapter` middleware reads the metadata after authentication
-4. It instantiates the policy class and calls the named method
-5. If the method returns `false`, a 403 response is sent
-
-Missing policy or missing action both result in denial (deny by default).
-
-## Legacy: Combining Roles and Policies (deprecated)
-
-You can use `@Roles()` and `@Can()` together. Roles are checked first:
-
-```ts
-@Delete('/:id')
-@Roles('editor', 'admin')       // Must have editor or admin role
-@Can('delete', 'post')          // AND pass the policy check
-remove(ctx) { ... }
-```
-
 ## Guards (Custom Middleware)
 
-`kick g guard <name>` generates a middleware function for authorization logic that needs to short-circuit the response or run before route matching — the cases [context decorators deliberately don't cover](context-decorators.md). For value-producing checks, prefer a contributor; reach for a guard when you need raw Express middleware semantics.
+`kick g guard <name>` generates a middleware function for authorization logic that needs to **short-circuit the response** or run before route matching — the cases [context decorators deliberately don't cover](./context-decorators.md). For value-producing checks, prefer a contributor. The mechanics are in [Middleware → Guards](./middleware.md#guards); what follows is the authorization-specific shape.
 
-```bash
-kick g guard ip-whitelist
-```
+<PmCommand exec="kick g guard ip-whitelist" />
 
 ```ts
 // src/guards/ip-whitelist.guard.ts
@@ -316,24 +135,27 @@ class InternalController {
 
 ### When to Use What
 
-| Mechanism                | Use When                                    | Example                                     |
-| ------------------------ | ------------------------------------------- | ------------------------------------------- |
-| `@Roles('admin')`        | Check user has a string role                | Admin panel access                          |
-| `@Can('update', 'post')` | Check user can act on a specific resource   | "Can this user edit THIS post?"             |
-| `@Middleware(guard)`     | Custom logic not tied to roles or resources | IP whitelist, feature flags, API versioning |
-| `@RateLimit()`           | Throttle specific endpoints                 | Login endpoint, search API                  |
+| Mechanism                         | Use when                                                         | Example                                     |
+| --------------------------------- | ---------------------------------------------------------------- | ------------------------------------------- |
+| `@RequireRole('admin')` (yours)   | The user needs a string role                                     | Admin panel access                          |
+| A policy resolved from DI (yours) | The check depends on the specific resource                       | "Can this user edit THIS post?"             |
+| `@Middleware(guard)`              | Logic not tied to roles or resources, or that must short-circuit | IP whitelist, feature flags, API versioning |
+| `rateLimit()`                     | Throttle specific endpoints                                      | Login endpoint, search API                  |
 
-**Precedence in the auth middleware:**
+The first two are code you own — see [BYO role checks](#byo-role-checks-requirerole) and [Policies](#policies-bring-your-own-engine-via-di) above. The framework ships the primitives they are built from, not the checks themselves.
 
-1. `@Public()` — skips all auth
-2. `@Authenticated()` / `defaultPolicy` — user must be authenticated
-3. `@Roles()` — user must have at least one required role
-4. `@Can()` — policy method must return `true`
-5. `@RateLimit()` — request count within window
-6. `@Middleware()` guards — run as Express middleware (before or after auth depending on order)
+**Ordering is yours to set.** There is no built-in auth middleware imposing a precedence any more, so the order is simply the order you register things:
+
+1. Global middleware, in the order given to `bootstrap({ middlewares })`
+2. Context contributors, topologically sorted by `dependsOn` — this is where the user is loaded
+3. `@Middleware()` guards, class-level then method-level
+4. The handler
+
+A role check that reads `ctx.get('user')` therefore has to run as a contributor that `dependsOn` the one loading the user, or as a guard mounted after it. See [Context Decorators](./context-decorators.md#ordering).
 
 ## See Also
 
-- [Authentication](/guide/authentication) — strategies, decorators, events
+- [Authentication](./authentication.md) — loading the user this page authorizes
+- [BYO Auth recipe](./byo-recipes.md#auth) — the full walkthrough
 - [Multi-Tenancy](/guide/multi-tenancy) — tenant-scoped role resolution
 - [Middleware](/guide/middleware) — custom middleware and guards

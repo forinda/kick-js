@@ -70,17 +70,6 @@ export const PACKAGE_REGISTRY: Record<string, PackageEntry> = {
     description: 'Yup schema validation — wrap with fromYup()',
   },
 
-  // Auth — deprecated in favour of BYO (bring-your-own) auth composed
-  // from context contributors. Still installable for existing projects;
-  // JWT is the common path, so it co-installs jsonwebtoken.
-  auth: {
-    pkg: '@forinda/kickjs-auth',
-    peers: ['jsonwebtoken'],
-    description: 'JWT, API key, OAuth strategies, @Public, @Roles (+ optional argon2/bcryptjs)',
-    deprecated:
-      'auth is moving to BYO — compose @LoadAuthUser/@RequireRole/@Public from defineContextDecorator (see the BYO Auth recipe in the docs)',
-  },
-
   // AI — requires zod (^4) for tool/schema definitions.
   ai: {
     pkg: '@forinda/kickjs-ai',
@@ -116,20 +105,6 @@ export const PACKAGE_REGISTRY: Record<string, PackageEntry> = {
     pkg: '@forinda/kickjs-db',
     peers: ['mysql2'],
     description: 'kick/db + MySQL driver (use @forinda/kickjs-db/mysql)',
-  },
-  drizzle: {
-    pkg: '@forinda/kickjs-drizzle',
-    peers: ['drizzle-orm'],
-    description: 'Drizzle ORM adapter + query builder',
-    deprecated:
-      'early-adoption adapter, no longer maintained — wire Drizzle directly (BYO), or use @forinda/kickjs-db, the built-in Kick ORM (`kick add db` / pg / sqlite / mysql)',
-  },
-  prisma: {
-    pkg: '@forinda/kickjs-prisma',
-    peers: ['@prisma/client'],
-    description: 'Prisma adapter + query builder',
-    deprecated:
-      'early-adoption adapter, no longer maintained — wire Prisma directly (BYO), or use @forinda/kickjs-db, the built-in Kick ORM (`kick add db` / pg / sqlite / mysql)',
   },
 
   // Real-time
@@ -193,7 +168,8 @@ export const PACKAGE_REGISTRY: Record<string, PackageEntry> = {
 /**
  * Headline `kick add` packages shown after scaffolding — derived from
  * {@link PACKAGE_REGISTRY} so it can never advertise a deprecated package (the
- * old hardcoded list included auth / drizzle / prisma). Excludes core packages
+ * old hardcoded list included auth / drizzle / prisma, all three since removed).
+ * Excludes core packages
  * (already installed), deprecated ones, `:` sub-variants (e.g. `queue:bullmq`),
  * and the db-dialect / schema-lib duplicates that clutter a one-line summary.
  * `kick add --list` shows the full catalog.
@@ -389,7 +365,7 @@ export function printPackageList(all = false): void {
     console.log('\n  Optional packages (add as needed):\n')
     for (const row of optional) console.log(formatRow(row))
   } else {
-    console.log(`\n  Plus ${optional.length} optional packages (auth, swagger, db, queue, …).`)
+    console.log(`\n  Plus ${optional.length} optional packages (swagger, db, queue, …).`)
     console.log('  Run `kick add --list --all` for the full catalog.')
   }
 

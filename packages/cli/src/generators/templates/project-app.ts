@@ -128,7 +128,11 @@ ${restImportsBlock}import { modules } from './modules'
 export const app = await bootstrap({
   modules,
   runtime: ${factory.name}(),${restAdaptersBlock}
-  middleware: [
+  middlewares: [
+    // Security headers. The framework injects helmet() with these defaults
+    // anyway — declaring it here is what lets you CHANGE them, e.g.
+    // helmet({ frameguard: 'SAMEORIGIN' }) or helmet({ hsts: false }).
+    // Auto-injection stands down as soon as this line is present.
     helmet(),
     cors({ origin: '*' }),
     requestId(),

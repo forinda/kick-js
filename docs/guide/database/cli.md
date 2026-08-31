@@ -51,10 +51,8 @@ kick db migrate latest
 
 Run the same tree without installing `@forinda/kickjs-cli`:
 
-```bash
-npx kickjs-db migrate latest
-npx kickjs-db generate add_users
-```
+<PmCommand exec="kickjs-db migrate latest
+kickjs-db generate add_users" />
 
 Config resolves from a standalone `kickjs-db.config.ts` (or a
 `kick.config.ts` `db` block — the two merge, later wins):

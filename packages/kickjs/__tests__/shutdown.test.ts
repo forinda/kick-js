@@ -64,7 +64,7 @@ describe('Graceful shutdown with request draining', () => {
   it('shutdown waits for in-flight requests to complete', async () => {
     const app = new Application({
       modules: [createSlowModule()],
-      middleware: [express.json()],
+      middlewares: [express.json()],
       shutdownTimeout: 5000,
     })
     await app.setup()
@@ -113,7 +113,7 @@ describe('Graceful shutdown with request draining', () => {
 
     const app = new Application({
       modules: [HangModule],
-      middleware: [
+      middlewares: [
         express.json(),
         // Add a route inline that will never finish
         ((_req: any, res: any, next: any) => {
@@ -166,7 +166,7 @@ describe('Graceful shutdown with request draining', () => {
     const app = new Application({
       modules: [],
       adapters: [adapter],
-      middleware: [express.json()],
+      middlewares: [express.json()],
     })
     await app.setup()
 
@@ -186,7 +186,7 @@ describe('Graceful shutdown with request draining', () => {
     const app = new Application({
       modules: [],
       adapters: [adapter1, adapter2],
-      middleware: [express.json()],
+      middlewares: [express.json()],
     })
     await app.setup()
 
@@ -208,7 +208,7 @@ describe('Graceful shutdown with request draining', () => {
     const app = new Application({
       modules: [],
       adapters: [adapter],
-      middleware: [express.json()],
+      middlewares: [express.json()],
     })
     await app.setup()
 
@@ -223,7 +223,7 @@ describe('Graceful shutdown with request draining', () => {
     Container.reset()
     const app = new Application({
       modules: [],
-      middleware: [express.json()],
+      middlewares: [express.json()],
     })
     await app.setup()
 
@@ -287,7 +287,7 @@ describe('Graceful shutdown with request draining', () => {
     const { bootstrap } = await import('../src/http/bootstrap')
     const app = await bootstrap({
       modules: [],
-      middleware: [express.json()],
+      middlewares: [express.json()],
       port: 0,
     })
 

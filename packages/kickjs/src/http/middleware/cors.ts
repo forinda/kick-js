@@ -41,11 +41,11 @@ function isOriginAllowed(requestOrigin: string, allowed: CorsOptions['origin']):
  * @example
  * ```ts
  * // Allow all origins
- * bootstrap({ middleware: [cors(), express.json()] })
+ * bootstrap({ middlewares: [cors(), express.json()] })
  *
  * // Allowlist specific origins
  * bootstrap({
- *   middleware: [
+ *   middlewares: [
  *     cors({
  *       origin: ['https://app.example.com', /\.example\.com$/],
  *       credentials: true,

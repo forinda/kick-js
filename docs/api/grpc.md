@@ -6,9 +6,7 @@ See the [gRPC guide](../guide/grpc.md) for the full walkthrough.
 
 ## Installation
 
-```bash
-pnpm add @forinda/kickjs-grpc @connectrpc/connect @connectrpc/connect-node @bufbuild/protobuf
-```
+<PmCommand add="@forinda/kickjs-grpc @connectrpc/connect @connectrpc/connect-node @bufbuild/protobuf" />
 
 `@connectrpc/connect`, `@connectrpc/connect-node`, and `@bufbuild/protobuf` are peer dependencies — they carry the protocol implementation and the generated descriptor runtime.
 

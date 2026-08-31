@@ -6,32 +6,19 @@
 
 - Node.js 20+ to **run** an app (`@forinda/kickjs` itself)
 - Node.js `^22.18.0 || >=24.11.0` to use the **dev server** (`kick dev`) — `@forinda/kickjs-vite` depends on Babel 8, which is ESM-only and sets that floor. Node 20 reached end-of-life in 2026, so upgrading is recommended regardless.
-- pnpm (recommended) or npm
-
-## Release channels
-
-KickJS publishes to two npm dist-tags:
-
-- **`@latest`** — the stable channel. This is the default; `npm install @forinda/kickjs` and `npx @forinda/kickjs-cli new` install from here. Use it for production.
-- **`@alpha`** — the preview channel for upcoming features and experiments (new HTTP runtimes, in-progress subsystems). Opt in to try things before they stabilize:
-
-  ```bash
-  # scaffold with the preview CLI
-  npx @forinda/kickjs-cli@alpha new my-api
-
-  # or pin a package to the alpha channel in an existing project
-  pnpm add @forinda/kickjs@alpha
-  ```
-
-  Alpha builds can change without notice — pin an exact version if you depend on one.
+- pnpm (recommended), npm, yarn or bun
 
 ## Create a New Project
 
+<PmCommand dlx="@forinda/kickjs-cli new my-api" />
+
 ```bash
-npx @forinda/kickjs-cli new my-api
 cd my-api
-pnpm install
 ```
+
+<PmCommand install />
+
+`kick new` detects your package manager from corepack and the lockfile; `--pm pnpm|npm|yarn|bun` overrides it.
 
 This scaffolds a project with the **default layout** — every path below is a convention configurable through `kick.config.ts`, not a framework requirement:
 
@@ -43,23 +30,32 @@ This scaffolds a project with the **default layout** — every path below is a c
 - `CLAUDE.md` — thin Claude-specific layer that points at `AGENTS.md`
 - `kickjs-skills.md` — task-oriented skill index for AI agents (`add-module`, `bootstrap-export`, `deny-list`, …)
 
-After a framework upgrade, refresh all three with `kick g agents -f` (see [Generators → kick g agents](./generators.md#kick-g-agents)).
-
 - `README.md` — project documentation
+
+After a framework upgrade, refresh the three agent files with `kick g agents -f` (see [Generators → kick g agents](./generators.md#kick-g-agents)).
 
 ## Start Development
 
-```bash
-pnpm kick dev
-```
+<PmCommand run="dev" />
 
 The dev server starts with Vite HMR — edit any file and the server rebuilds instantly without restarting. Database connections, Redis, and WebSocket state are preserved.
 
-## Generate a Module
+Check it came up:
 
 ```bash
-pnpm kick g module users
+curl localhost:3000/health/live
+# {"status":"ok","uptime":1.42}
 ```
+
+`/health/live` and `/health/ready` are built in — a liveness probe and a readiness probe that runs every adapter's `onHealthCheck()`. They mount at the root, outside `apiPrefix`, so a probe URL an orchestrator is configured against does not move when your prefix or API version does. Pass `bootstrap({ health: false })` to replace them with your own.
+
+::: tip They run inside your middleware chain
+Which means app-wide auth applies to them. If you add global authentication later, exempt `/health` or your liveness probe starts failing.
+:::
+
+## Generate a Module
+
+<PmCommand exec="kick g module users" />
 
 This generates a flat REST module under the configured `modules.dir` (default `src/modules`, override via `kick.config.ts`):
 
@@ -69,8 +65,7 @@ src/modules/users/
   users.controller.ts      # @Controller() — HTTP routes
   users.service.ts         # @Service() — business logic
   users.constants.ts       # query config
-  users.repository.ts      # repository interface + DI token
-  in-memory-users.repository.ts   # zero-dep impl (the `inmemory` default)
+  users.repository.ts      # factory + contract + DI token, one file
   dtos/
     create-users.dto.ts
     update-users.dto.ts
@@ -80,7 +75,13 @@ src/modules/users/
     users.repository.test.ts
 ```
 
-`rest` is the default pattern; pass `--template minimal` for just a controller + module, or `--template fullstack` for a server + typed-web-app workspace (see the [typed client](./typed-client.md)). Need a real database? Pick a repo by name (`--repo postgres`) for a stub you wire yourself, or reach for the first-party [`@forinda/kickjs-db`](./database/) layer.
+`rest` is the default pattern; pass `--pattern minimal` (or `--minimal`) for just a controller + module.
+
+Need a real database? `--repo postgres` names the store in the stub's TODOs — the file and its identifiers are the same either way — or reach for the first-party [`@forinda/kickjs-db`](./database/) layer.
+
+::: tip `--pattern` picks a module shape, `--template` picks a project
+`--pattern rest|minimal` is a `kick g module` flag. Whole-project templates are chosen once at scaffold time with `kick new -t rest|minimal|fullstack` — `fullstack` gives you a server plus a typed web app in one workspace (see the [typed client](./typed-client.md)).
+:::
 
 ## Your First Controller
 
@@ -94,16 +95,16 @@ const createUserSchema = z.object({
 })
 
 @Controller()
-export class UserController {
+export class UsersController {
   @Get('/')
-  async list(_ctx: Ctx<KickRoutes.UserController['list']>) {
+  async list(_ctx: Ctx<KickRoutes.UsersController['list']>) {
     // Return-value handlers: the runtime sends this as 200 json, and
     // `kick typegen` infers the response type for the typed client.
     return [{ id: '1', name: 'Alice' }]
   }
 
   @Post('/', { body: createUserSchema, name: 'CreateUser' })
-  async create(ctx: Ctx<KickRoutes.UserController['create']>) {
+  async create(ctx: Ctx<KickRoutes.UsersController['create']>) {
     // ctx.body is validated and typed from the Zod schema
     return reply(201, { id: '2', ...ctx.body })
   }
@@ -118,15 +119,15 @@ payload is what makes the response type statically inferable. See
 
 ```ts
 import { defineModule } from '@forinda/kickjs'
-import { UserController } from './user.controller'
+import { UsersController } from './users.controller'
 
-export const UserModule = defineModule({
-  name: 'UserModule',
+export const UsersModule = defineModule({
+  name: 'UsersModule',
   build: () => ({
     routes() {
       return {
         path: '/users',
-        controller: UserController, // framework derives the router via buildRoutes()
+        controller: UsersController, // framework derives the router via buildRoutes()
       }
     },
   }),
@@ -137,11 +138,11 @@ Register it in `src/modules/index.ts`:
 
 ```ts
 import type { AppModuleEntry } from '@forinda/kickjs'
-import { UserModule } from './users/user.module'
+import { UsersModule } from './users/users.module'
 
 // `defineModule` factories are called at the registration site —
 // the invocation produces the AppModule instance bootstrap registers.
-export const modules: AppModuleEntry[] = [UserModule()]
+export const modules: AppModuleEntry[] = [UsersModule()]
 ```
 
 ## Bootstrap
@@ -168,6 +169,20 @@ update on file changes.
 
 That's it. Your API is running at `http://localhost:3000/api/v1/users`.
 
+### Choosing an HTTP engine
+
+Express is the default, but controllers, modules, DI and `RequestContext` are engine-neutral — swap the engine with one option and nothing else changes:
+
+```ts
+import { fastifyRuntime } from '@forinda/kickjs/fastify'
+
+export const app = await bootstrap({ modules, runtime: fastifyRuntime() })
+```
+
+`expressRuntime()` (default), `fastifyRuntime()` and `h3Runtime()` all ship in the box; h3 also has web-standard entries for edge, Bun and Deno. See [HTTP Runtimes](./http-runtimes.md).
+
+Point your tests at the same engine you deploy — `createTestApp({ runtime })` — or a green Express suite tells you nothing about the Fastify app you ship.
+
 ### Route Summary
 
 Opt in to a compact route table at startup with `logRouteTable: true`:
@@ -181,7 +196,7 @@ export const app = await bootstrap({
 
 ```
 [Application] Routes:
-  UserController   /api/v1/users   5 routes (2 GET, 1 POST, 1 PUT, 1 DELETE)
+  UsersController  /api/v1/users   5 routes (2 GET, 1 POST, 1 PUT, 1 DELETE)
   Total: 5 routes
 ```
 
@@ -189,9 +204,7 @@ It is **off by default** (it used to print automatically in dev). When enabled i
 
 ## Add Swagger Docs
 
-```bash
-pnpm add @forinda/kickjs-swagger
-```
+<PmCommand add="@forinda/kickjs-swagger" />
 
 ```ts
 import { SwaggerAdapter } from '@forinda/kickjs-swagger'
@@ -208,12 +221,18 @@ export const app = await bootstrap({
 
 Visit `http://localhost:3000/docs` for Swagger UI.
 
+## Run the Tests
+
+`kick g module` writes a `__tests__/` folder next to the module. Run them with your test runner — the scaffold ships Vitest:
+
+<PmCommand run="test" />
+
+The generated controller test boots the module through `createTestApp` and asserts against real responses, so it fails if you break a route.
+
 ## Production Build
 
-```bash
-pnpm kick build
-pnpm kick start
-```
+<PmCommand run="build
+start" />
 
 ## Next Steps
 
@@ -221,5 +240,7 @@ pnpm kick start
 - [Controllers & Routes](./controllers.md) — route decorators and validation
 - [Middleware](./middleware.md) — class and method middleware
 - [Plugins](./plugins.md) — bundle modules, adapters, middleware, and DI bindings into one reusable unit with `definePlugin()` and mount them via `bootstrap({ plugins: [...] })`
+- [HTTP Runtimes](./http-runtimes.md) — run the same app on Express, Fastify or h3
+- [Testing](./testing.md) — `createTestApp`, DI overrides, and testing the engine you deploy
 - [Typed Client](./typed-client.md) — call the API from your frontend with response types inferred from these handlers
 - [Examples](../examples/index.md) — see complete example applications

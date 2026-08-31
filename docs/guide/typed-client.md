@@ -4,9 +4,7 @@
 frontend calls your API with **full autocomplete and inferred response types**,
 generated from the backend's own handlers — no duplicated interfaces, no drift.
 
-```bash
-pnpm add @forinda/kickjs-client
-```
+<PmCommand add="@forinda/kickjs-client" />
 
 `kick typegen` emits a global `KickApi` alias for `KickRoutes.Api` — use
 whichever reads better; they're identical.

@@ -17,26 +17,29 @@
 
 ## Install
 
-Install the core package plus the driver for your database. Use `kick add`:
+`kick add` pulls the core package **and** the database client for your dialect in one step:
 
-```bash
-# PostgreSQL
-kick add pg
+**PostgreSQL**
 
-# SQLite
-kick add sqlite
+<PmCommand exec="kick add pg" />
 
-# MySQL / MariaDB
-kick add mysql
-```
+**SQLite**
 
-Each driver package needs the underlying database client too:
+<PmCommand exec="kick add sqlite" />
 
-```bash
-pnpm add @forinda/kickjs-db pg          # PostgreSQL
-pnpm add @forinda/kickjs-db better-sqlite3   # SQLite
-pnpm add @forinda/kickjs-db mysql2   # MySQL
-```
+**MySQL / MariaDB**
+
+<PmCommand exec="kick add mysql" />
+
+Or install the pair yourself — this is exactly what `kick add` does:
+
+| dialect         | packages                                |
+| --------------- | --------------------------------------- |
+| PostgreSQL      | `@forinda/kickjs-db` + `pg`             |
+| SQLite          | `@forinda/kickjs-db` + `better-sqlite3` |
+| MySQL / MariaDB | `@forinda/kickjs-db` + `mysql2`         |
+
+<PmCommand add="@forinda/kickjs-db pg" />
 
 See [Drivers](./drivers) for the differences between dialects.
 

@@ -39,8 +39,14 @@ pre-commit:
     # ESLint-replacement linter via oxlint (Rust, sub-second on full
     # repo). Runs only when a TS file under packages/ is staged so
     # markdown-only or example-only commits skip lint.
+    #
+    # `docs/.vitepress/**` is deliberately NOT here. `.oxlintrc.json`
+    # ignores `docs/`, so staging only theme files handed oxlint a list it
+    # ignored entirely — it found zero targets and exited 1, failing the
+    # commit. Any docs-only change that touched the VitePress theme could
+    # not be committed.
     lint:
-      glob: '{packages/*/src/*.{ts,tsx},packages/*/src/**/*.{ts,tsx},packages/*/__tests__/*.{ts,tsx},packages/*/__tests__/**/*.{ts,tsx},packages/*/spa/src/*.{ts,tsx},packages/*/spa/src/**/*.{ts,tsx},scripts/*.ts,docs/.vitepress/**/*.{ts,mts}}'
+      glob: '{packages/*/src/*.{ts,tsx},packages/*/src/**/*.{ts,tsx},packages/*/__tests__/*.{ts,tsx},packages/*/__tests__/**/*.{ts,tsx},packages/*/spa/src/*.{ts,tsx},packages/*/spa/src/**/*.{ts,tsx},scripts/*.ts}'
       run: pnpm exec oxlint {staged_files}
     # Token-convention lint (kick-lint). Runs only when a TS file
     # under packages/ is staged — adopters editing docs / examples

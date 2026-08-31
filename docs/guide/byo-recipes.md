@@ -22,7 +22,7 @@ layer it actually needs.
 
 This doc collects working recipes for the domains we've moved to BYO.
 
-## Deprecated packages → BYO targets
+## Removed packages → BYO targets
 
 The current BYO targets, with a recipe for each:
 
@@ -39,7 +39,7 @@ The framework keeps shipping the **primitives** that those packages wrapped (`de
 
 ## Auth
 
-The deprecated `@forinda/kickjs-auth` package shipped:
+`@forinda/kickjs-auth` was removed in v8. It shipped:
 
 - Decorators: `@Authenticated`, `@Public`, `@Roles`, `@Can`, `@CsrfExempt`, `@RateLimit`, `@Policy`
 - Adapter: `AuthAdapter({ strategies, defaultPolicy, onForbidden, … })`
@@ -320,12 +320,14 @@ parameterised contributor over the primitives the framework ships.
   if you need it; most apps just inline the check inside the
   handler.
 - **No `OAuthStrategy` / `SessionStrategy` / `PassportBridge` ready-made**
-  — they're 50–80 lines each. Copy from `@forinda/kickjs-auth@5.1.x`
-  source if you used them; they're unchanged in BYO form.
+  — they're 50–80 lines each. The last published version,
+  `@forinda/kickjs-auth@6.0.1`, still carries the source if you used them;
+  they're unchanged in BYO form.
 
 ### Migration checklist
 
-- [ ] Pin `@forinda/kickjs-auth` to `^5.1.x` until you migrate.
+- [ ] Pin `@forinda/kickjs-auth` to `6.0.1` — its last release — and stay on
+      kickjs 7 until you have migrated.
 - [ ] Copy the recipe above into `src/auth/` (or wherever).
 - [ ] Replace `import { JwtStrategy } from '@forinda/kickjs-auth'` with
       your local `jwtStrategy` (lowercase — it's a function, not a
@@ -336,6 +338,6 @@ parameterised contributor over the primitives the framework ships.
       (or the `Public` shim re-export).
 - [ ] Replace `@Roles('admin')` with `@RequireRole({ roles: ['admin'] })`.
 - [ ] Run your existing auth tests — they should pass without changes.
-- [ ] `pnpm remove @forinda/kickjs-auth`.
+- [ ] Remove `@forinda/kickjs-auth`, then upgrade to kickjs 8.
 - [ ] Open an issue if anything from the original surface isn't
       reachable from the recipe.

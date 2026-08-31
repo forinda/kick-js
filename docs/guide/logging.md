@@ -51,9 +51,7 @@ Logger.setProvider(new MyProvider())
 
 ## Recipe: Pino
 
-```bash
-pnpm add pino pino-pretty
-```
+<PmCommand add="pino pino-pretty" />
 
 ```ts
 import pino from 'pino'
@@ -108,9 +106,7 @@ export default defineConfig({
 
 ## Recipe: Winston
 
-```bash
-pnpm add winston
-```
+<PmCommand add="winston" />
 
 ```ts
 import winston from 'winston'

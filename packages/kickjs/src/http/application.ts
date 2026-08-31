@@ -139,12 +139,6 @@ export interface ApplicationOptions {
    *   requestId(), express.json({ limit: '100kb' })
    */
   middlewares?: MiddlewareEntry[]
-  /**
-   * @deprecated Use {@link ApplicationOptions.middlewares} (plural).
-   * Kept as an alias for back-compat; `middlewares` wins when both are
-   * set.
-   */
-  middleware?: MiddlewareEntry[]
 
   /** Plugins that bundle modules, adapters, middleware, and DI bindings */
   plugins?: KickPlugin[]
@@ -733,8 +727,19 @@ export class Application {
     }
 
     // ── 4. Global middleware ─────────────────────────────────────────
-    // Auto-inject helmet unless opted out
-    const autoHelmet = this.options.security?.helmet !== false
+    // Auto-inject helmet unless opted out, or unless the app mounts its own.
+    // Injecting alongside a user helmet makes its options half-inert: ours runs
+    // first with defaults, and theirs can only overwrite a header, never drop
+    // one — so `helmet({ frameguard: false })` would still emit DENY.
+    // Only a GLOBAL declaration stands us down. The object form of
+    // MiddlewareEntry always carries a `path`, so a helmet scoped to one route
+    // does not replace the app-wide pass — standing down for it would strip
+    // security headers from every OTHER path.
+    // `Symbol.for` registry lookup, so the dynamic import() below stays intact.
+    const declaredHelmet = (this.options.middlewares ?? []).some(
+      (entry) => typeof entry === 'function' && Symbol.for('kick/http/helmet') in entry,
+    )
+    const autoHelmet = this.options.security?.helmet !== false && !declaredHelmet
     if (autoHelmet) {
       try {
         const { helmet: helmetFn } = await import('./middleware/helmet')
@@ -744,7 +749,7 @@ export class Application {
       }
     }
 
-    const userMiddlewares = this.options.middlewares ?? this.options.middleware
+    const userMiddlewares = this.options.middlewares
     if (userMiddlewares) {
       // User-declared pipeline — full control
       for (const entry of userMiddlewares) {
@@ -1444,7 +1449,7 @@ export class Application {
   private shouldAutoMountRequestScope(): boolean {
     if (this.options.contextStore === 'manual') return false
 
-    const userEntries = this.options.middlewares ?? this.options.middleware ?? []
+    const userEntries = this.options.middlewares ?? []
     for (const entry of userEntries) {
       const handler = typeof entry === 'function' ? entry : entry.handler
       if (isRequestScopeMiddleware(handler)) return false

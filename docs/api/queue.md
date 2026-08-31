@@ -4,9 +4,7 @@ Background job processing for KickJS applications using [BullMQ](https://docs.bu
 
 ## Installation
 
-```bash
-pnpm add @forinda/kickjs-queue bullmq ioredis
-```
+<PmCommand add="@forinda/kickjs-queue bullmq ioredis" />
 
 ## Exports
 

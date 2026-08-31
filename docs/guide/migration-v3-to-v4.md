@@ -97,9 +97,7 @@ See [§22.2 of `architecture.md`](https://github.com/forinda/kick-js/blob/main/a
 
 The framework ships [`@forinda/kickjs-lint`](https://www.npmjs.com/package/@forinda/kickjs-lint) — a tiny package with the rules behind the convention. Add it to your project to flag new `Symbol(...)` DI token declarations and warn on `kick/`-prefix squatting:
 
-```bash
-pnpm add -D @forinda/kickjs-lint
-```
+<PmCommand add="@forinda/kickjs-lint" dev />
 
 ```bash
 # adopter project — warns on squatting, errors on Symbol() in token files

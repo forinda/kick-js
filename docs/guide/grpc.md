@@ -4,9 +4,7 @@
 
 Services are ordinary KickJS classes with full DI and the same Context Contributor pipeline your HTTP routes use.
 
-```bash
-pnpm add @forinda/kickjs-grpc @connectrpc/connect @connectrpc/connect-node @bufbuild/protobuf
-```
+<PmCommand add="@forinda/kickjs-grpc @connectrpc/connect @connectrpc/connect-node @bufbuild/protobuf" />
 
 ## Setup
 

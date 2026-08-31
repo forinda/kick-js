@@ -2,6 +2,14 @@
 
 Adapters plug into the KickJS application lifecycle. Use them to add health checks, CORS, rate limiting, WebSocket support, database connections, Swagger docs, or any cross-cutting concern.
 
+::: tip Scaffold one
+Rather than copying the factory below, generate it:
+
+<PmCommand exec="kick g adapter tracing" />
+
+`-o, --out <dir>` picks the output directory. Full flag list: [Generators](./generators.md#kick-g-adapter).
+:::
+
 ## The `defineAdapter()` factory
 
 v4 declares adapters with `defineAdapter({ name, defaults?, build })` — never `class Foo implements AppAdapter`.

@@ -121,7 +121,7 @@ export default {
       h3,
       modules,
       env,
-      middleware: [
+      middlewares: [
         rateLimitGuard({
           max: 60,
           windowMs: 60_000,

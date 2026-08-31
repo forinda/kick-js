@@ -8,11 +8,9 @@ One of the things I appreciate most about working with a framework is when it me
 
 The command is simple:
 
-```bash
-kick g module <name> --template <pattern>
-```
+<PmCommand exec="kick g module <name> --pattern <pattern>" />
 
-That `--template` flag is where the decision lives. KickJS ships **two** architecture patterns: `rest` (the default) and `minimal`. Each one generates a different number of files with a different structural philosophy. Instead of forcing you into one way of building modules, the generator lets you pick the right level of complexity for the job at hand.
+That `--pattern` flag is where the decision lives. KickJS ships **two** architecture patterns: `rest` (the default) and `minimal`. Each one generates a different number of files with a different structural philosophy. Instead of forcing you into one way of building modules, the generator lets you pick the right level of complexity for the job at hand.
 
 ::: tip
 Earlier versions of KickJS also shipped `ddd` and `cqrs` patterns. Those have been **removed** — the generator now focuses on two well-defined shapes: a flat, batteries-included `rest` module and a bare `minimal` module. If you need layered DDD/CQRS boundaries, build them on top of `rest` by hand.
@@ -24,7 +22,7 @@ All directory layouts below reflect the **default** that `kick g module` writes.
 
 ```bash
 kick g module cats                  # rest is the default
-kick g module cats --template rest  # same thing, explicit
+kick g module cats --pattern rest  # same thing, explicit
 ```
 
 This is the workhorse pattern. It covers the full CRUD lifecycle in a flat folder under `src/modules/<plural>/` — no subdirectories to navigate, everything for the module in one place:
@@ -34,9 +32,8 @@ cats/
 ├── cats.module.ts
 ├── cats.controller.ts
 ├── cats.service.ts
-├── cats.constants.ts
-├── cats.repository.ts            # interface + DI token
-├── in-memory-cats.repository.ts  # working Map implementation
+├── cats.constants.ts              # query config
+├── cats.repository.ts             # factory + contract + DI token, one file
 ├── dtos/
 │   ├── create-cat.dto.ts
 │   ├── update-cat.dto.ts
@@ -50,8 +47,7 @@ The service wraps the repository, the controller delegates to the service, and t
 
 ```ts
 import { defineModule } from '@forinda/kickjs'
-import { CATS_REPOSITORY } from './cats.repository'
-import { InMemoryCatsRepository } from './in-memory-cats.repository'
+import { CAT_REPOSITORY, createCatRepository } from './cats.repository'
 import { CatsController } from './cats.controller'
 
 // Eagerly load decorated classes so @Service()/@Repository() register in the DI container
@@ -61,7 +57,7 @@ export const CatsModule = defineModule({
   name: 'CatsModule',
   build: () => ({
     register(container) {
-      container.registerFactory(CATS_REPOSITORY, () => container.resolve(InMemoryCatsRepository))
+      container.registerFactory(CAT_REPOSITORY, () => createCatRepository())
     },
     routes() {
       return {
@@ -80,7 +76,7 @@ You get a working module the instant the generator finishes — no database setu
 ## Pattern 2: minimal
 
 ```bash
-kick g module health --template minimal
+kick g module health --pattern minimal
 kick g module health --minimal          # shorthand
 ```
 
@@ -159,89 +155,78 @@ export default defineConfig({
 })
 ```
 
-The `--template` flag (alias `--pattern`) on any individual `kick g module` call overrides the config value for that one invocation.
+The `--pattern` flag on any individual `kick g module` call overrides the config value for that one invocation. (`--minimal` is shorthand for `--pattern minimal`.)
 
-## Repositories: name-based, not ORM-based
+## Repositories: one file, whatever the name
 
-The `rest` pattern always generates two repository files: an **interface plus a DI token** (`cats.repository.ts`) and an **implementation**. Which implementation you get depends on the `--repo` flag (or `modules.repo` in config):
+The `rest` pattern generates **one** repository file, `cats.repository.ts`, holding the factory, the contract and the DI token. `--repo` (or `modules.repo` in config) no longer changes the file name, the identifiers, or the shape:
 
 ```bash
-kick g module cats --repo inmemory        # default — working Map impl
-kick g module cats --repo postgres        # generic custom stub named "postgres"
-kick g module cats --repo mongo           # generic custom stub named "mongo"
+kick g module cats                    # cats.repository.ts — working Map body
+kick g module cats --repo postgres    # cats.repository.ts — unimplemented, "write the postgres query"
 ```
 
-There are exactly two outcomes:
+::: warning `modules.repo` is deprecated
+The name no longer changes the generated code. It survives only as **prose** — the store appears in the stub's comments and in its "not implemented" errors, as a note to whoever writes the query. Set it for that hint, or leave it unset and get the in-memory implementation. It keeps working, and will not be removed without a replacement.
+:::
 
-- **`inmemory`** (the default and the only built-in) — a zero-dependency, fully working `Map`-backed implementation. You can run and test the module immediately.
-- **Any other name** (`postgres`, `mongo`, `dynamo`, …) — a generic **custom-repository stub** that implements the same interface but with `TODO` markers where you wire in your own DB client. The file is named after the repo (e.g. `postgres-cats.repository.ts`) and the class becomes `PostgresCatsRepository`.
+There are two outcomes, and the difference is the body, not the name:
 
-In config, the same two choices look like:
+- **unset / `inmemory`** — a zero-dependency, fully working `Map`-backed factory. Run and test the module immediately.
+- **any other name** — the same file with an unimplemented body and TODOs where you wire your client.
 
-```ts
-modules: {
-  repo: 'inmemory',          // built-in working impl
-}
-// or
-modules: {
-  repo: { name: 'postgres' }, // generic custom stub
-}
-```
+**The store name is deliberately absent from the identifiers.** The generator used to emit `postgres-cats.repository.ts` exporting `PostgresCatsRepository` — whose every method read and wrote a `Map`. An app could be wired, booted and manually tested against a class asserting Postgres while every write went to a store that empties on restart, with nothing in the types or the logs to say so. The name was the lie, not the Map.
 
-### How the interface, token, and implementation fit together
+### How the factory, contract and token fit together
 
-The generated `cats.repository.ts` declares the contract and a typed DI token:
+All three live in one file, `cats.repository.ts`. The factory is the implementation; the contract is **derived from it** rather than declared beside it, so the two cannot drift:
 
 ```ts
-import { createToken } from '@forinda/kickjs'
+import { createToken, HttpException } from '@forinda/kickjs'
 import type { ParsedQuery } from '@forinda/kickjs'
 import type { CatResponseDTO } from './dtos/cat-response.dto'
 import type { CreateCatDTO } from './dtos/create-cat.dto'
 import type { UpdateCatDTO } from './dtos/update-cat.dto'
 
-export interface ICatRepository {
-  findById(id: string): Promise<CatResponseDTO | null>
-  findAll(): Promise<CatResponseDTO[]>
-  findPaginated(parsed: ParsedQuery): Promise<{ data: CatResponseDTO[]; total: number }>
-  create(dto: CreateCatDTO): Promise<CatResponseDTO>
-  update(id: string, dto: UpdateCatDTO): Promise<CatResponseDTO>
-  delete(id: string): Promise<void>
+export function createCatRepository() {
+  const store = new Map<string, CatResponseDTO>()
+
+  return {
+    async findById(id: string) {
+      return store.get(id) ?? null
+    },
+    // ...findAll, findPaginated, create, update, delete
+  }
 }
 
-// Collision-safe DI token bound to ICatRepository.
-// container.resolve(CATS_REPOSITORY) and @Inject(CATS_REPOSITORY)
-// both return the typed interface — no manual generic, no `any` cast.
-export const CATS_REPOSITORY = createToken<ICatRepository>('app/Cat/repository')
+/** The contract, derived from the factory rather than declared beside it. */
+export type CatRepository = ReturnType<typeof createCatRepository>
+
+/**
+ * Collision-safe DI token bound to `CatRepository`.
+ * `container.resolve(CAT_REPOSITORY)` and `@Inject(CAT_REPOSITORY)` both
+ * return the typed contract — no manual generic, no `any` cast.
+ */
+export const CAT_REPOSITORY = createToken<CatRepository>('app/Cat/repository')
 ```
 
-The implementation (`in-memory-cats.repository.ts` or a custom stub) is a `@Repository()`-decorated class that `implements ICatRepository`:
+There is no `I`-prefixed interface, no `@Repository()` class, and no separate implementation file. The store name is not in any identifier either: an in-memory body under a name like `PostgresCatRepository` was a lie the types could not catch, so the name says what it is and the TODO says what to swap in.
+
+The module's `register()` binds the **token** to the **factory**, and the service depends only on the token:
 
 ```ts
-import { randomUUID } from 'node:crypto'
-import { Repository, HttpException } from '@forinda/kickjs'
-import type { ICatRepository } from './cats.repository'
-// ...DTO imports
-
-@Repository()
-export class InMemoryCatsRepository implements ICatRepository {
-  private store = new Map<string, CatResponseDTO>()
-
-  async findById(id: string) {
-    return this.store.get(id) ?? null
-  }
-  // ...findAll, findPaginated, create, update, delete
-}
+container.registerFactory(CAT_REPOSITORY, () => createCatRepository())
 ```
 
-The module's `register()` binds the **token** to the **implementation**, and the service depends only on the token. Swapping `inmemory` for a real DB later means changing one factory line — the controller, service, and DTOs never change. (The `'app/'` token prefix tracks your project's `tokenScope`, so `kick-lint`'s reserved-prefix rule never fires.)
+Swapping in a real database later means changing that one line — the controller, service and DTOs never change. (The `'app/'` token prefix tracks your project's `tokenScope`, so `kick-lint`'s reserved-prefix rule never fires.)
 
-::: tip Custom repos still get an in-memory repo for tests
-When you pick a non-`inmemory` repo, the generator still writes an `in-memory-<name>.repository.ts` alongside your custom stub so the generated `__tests__` have something working to run against. Point your test wiring at the in-memory impl while you fill in the real one.
+::: tip One file, whatever the repo name
+`--repo postgres` no longer changes the generated code or the file name. You get the same `cats.repository.ts` with an in-memory body and a TODO — which runs, so the generated `__tests__` have something real to exercise while you fill in the driver.
 :::
 
 ## Wiring a real database
 
-The generator only ever produces two repository shapes: the built-in `inmemory` impl, or a generic stub for any other name. It deliberately does **not** generate ORM-specific data-access code — you own the integration behind the repository interface.
+The generator produces one repository shape regardless of `--repo`: a factory with an in-memory body and a TODO. It deliberately does **not** generate ORM-specific data-access code — you own the integration behind the boundary.
 
 When you're ready for a real database, the first-party option is `@forinda/kickjs-db` — the PostgreSQL, SQLite and MySQL dialects ship as subpaths of it (`@forinda/kickjs-db/pg`, `/sqlite`, `/mysql`):
 
@@ -250,15 +235,13 @@ kick add db
 pnpm add pg # or better-sqlite3 / mysql2
 ```
 
-Implement the generated `I<Name>Repository` interface against your client and bind it in the module's `register()` factory. The generator hands you the interface boundary; you decide what runs behind it.
+Replace the factory body with calls against your client — the exported `<Name>Repository` type follows automatically, since it is the factory's return type. The generator hands you the boundary; you decide what runs behind it.
 
 ## Field-aware scaffolding: `kick g scaffold`
 
 When you already know the shape of a resource, `kick g scaffold` emits the **flat REST layout** with DTOs derived from your field definitions — no hand-editing the generated `create`/`update`/`response` DTOs:
 
-```bash
-kick g scaffold Post title:string body:text:optional published:boolean:optional
-```
+<PmCommand exec="kick g scaffold Post title:string body:text:optional published:boolean:optional" />
 
 This produces the same flat `rest` tree (module, controller, service, constants, repository interface + token, in-memory repository, `dtos/`, `__tests__/`), but the DTOs and types are generated from your fields. Supported field types include:
 
@@ -277,7 +260,7 @@ kick g scaffold Post "body?:text"            # needs quoting
 Useful flags: `--no-tests` (skip the `__tests__/`), `--no-pluralize` (use singular names), and `--modules-dir <dir>` (override the target directory).
 
 ::: tip
-`kick g scaffold` always emits the REST layout — it is the field-aware front door to the same structure `kick g module --template rest` produces. (The DDD layout this command used to generate was removed alongside the `ddd`/`cqrs` patterns.)
+`kick g scaffold` always emits the REST layout — it is the field-aware front door to the same structure `kick g module --pattern rest` produces. (The DDD layout this command used to generate was removed alongside the `ddd`/`cqrs` patterns.)
 :::
 
 ## Auto-wiring: the generator updates your module registry
@@ -300,7 +283,7 @@ Pick your persistence by **name**: `inmemory` for a working impl out of the box,
 kick g module cats
 
 # A bare endpoint
-kick g module health --template minimal
+kick g module health --pattern minimal
 
 # A resource you already know the shape of
 kick g scaffold post title:string body:text:optional published:boolean:optional

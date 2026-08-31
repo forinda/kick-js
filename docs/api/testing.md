@@ -4,28 +4,66 @@ Test utilities for creating isolated KickJS application instances with DI overri
 
 ## createTestApp
 
-Create an Application instance configured for testing. Resets the DI container, registers modules, applies overrides, and returns the Application, Express app, and container. Uses a minimal middleware stack (no helmet, cors, compression, or morgan).
+Create an Application configured for testing. Resets the DI container, registers modules, applies overrides, and returns the Application and container. Uses a minimal middleware stack — no helmet, cors, compression or morgan.
 
 ```typescript
-function createTestApp(options: CreateTestAppOptions): {
+async function createTestApp(options: CreateTestAppOptions): Promise<{
   app: Application
-  expressApp: any
+  /** @deprecated Express-only — throws under any other runtime. Use `app.handle`. */
+  expressApp: express.Express
   container: Container
-}
+}>
 ```
 
-**Example:**
+It is **async** — `await` it, or supertest receives a Promise.
+
+**Drive `app`, not `expressApp`.** `app.handle` is the Application's own Node request listener and follows whichever runtime is configured, so one suite runs against every engine. `expressApp` is deprecated and throws under Fastify or h3 rather than handing back that engine's instance mistyped as `express.Express` — which is how a suite ends up silently exercising the wrong runtime.
 
 ```typescript
-const { expressApp, container } = createTestApp({
-  modules: [UserModule],
-  overrides: {
-    userRepository: new InMemoryUserRepo(),
-  },
+import request from 'supertest'
+import { createToken } from '@forinda/kickjs'
+
+const { app, container } = await createTestApp({
+  modules: [UserModule()],
+  overrides: [[USER_REPO, new InMemoryUserRepo()]],
 })
 
-const res = await supertest(expressApp).get('/api/v1/users').expect(200)
+const res = await request(app.handle.bind(app)).get('/api/v1/users').expect(200)
 ```
+
+### Testing the runtime you deploy
+
+Pass `runtime` — the same value given to `bootstrap()`. Routing, body parsing, status handling and error mapping all live in the runtime seam, so a green Express suite says nothing about them if you ship Fastify.
+
+```typescript
+import { fastifyRuntime } from '@forinda/kickjs/fastify'
+
+const { app } = await createTestApp({
+  modules: [UserModule()],
+  runtime: fastifyRuntime(),
+})
+```
+
+The default middleware follows the runtime: empty on an engine that parses bodies natively, `[express.json()]` otherwise. Passing `middlewares: [express.json()]` explicitly on Fastify bypasses the Application's own native-body guard — the connect parser then consumes the stream before Fastify reads it, and a JSON POST hangs until the test times out.
+
+### Overriding a token
+
+`createToken()` returns a frozen **object** identified by reference, which TypeScript rejects as a computed property key (`TS2464`). Pass entries or a `Map` instead:
+
+```typescript
+const DATABASE = createToken<Database>('app/Db/connection')
+
+await createTestApp({
+  modules: [UserModule()],
+  overrides: [[DATABASE, fakeDb()]], // or: new Map([[DATABASE, fakeDb()]])
+})
+```
+
+::: warning Do not reach for `[TOKEN.name]`
+It compiles — `name` is a string — and does nothing. The container keys tokens by **reference**, so the override is accepted and never applied, and the test passes against the real implementation.
+:::
+
+The object form still works for string and symbol keys.
 
 ## createTestModule
 
@@ -34,7 +72,7 @@ Build a quick test module that explicitly registers dependencies and declares ro
 ```typescript
 function createTestModule(config: {
   register: (container: Container) => void
-  routes: () => ModuleRoutes | ModuleRoutes[]
+  routes: () => ModuleRoutes | ModuleRoutes[] | null
 }): AppModuleClass
 ```
 
@@ -52,24 +90,81 @@ const TestModule = createTestModule({
   }),
 })
 
-const { expressApp } = createTestApp({ modules: [TestModule] })
+const { app } = await createTestApp({ modules: [TestModule] })
 ```
 
 ## CreateTestAppOptions
 
 ```typescript
 interface CreateTestAppOptions {
-  modules: AppModuleClass[]
-  overrides?: Record<symbol | string, any>
+  /** Class form (`class UserModule extends AppModule`) or `defineModule` factory output (`UserModule()`). */
+  modules: AppModuleEntry[]
+  /** Adapters to attach (queue, devtools, your own auth adapter, …). */
+  adapters?: AppAdapter[]
+  /** DI overrides applied after module registration. Entries or a Map preserve token identity. */
+  overrides?:
+    | Record<symbol | string, any>
+    | ReadonlyArray<readonly [token: unknown, value: unknown]>
+    | ReadonlyMap<unknown, unknown>
+  /** Isolated container instead of the global singleton — safe for concurrent tests. */
+  isolated?: boolean
+
+  // Forwarded verbatim to the underlying Application:
+  /** The engine under test — `expressRuntime()` (default), `fastifyRuntime()`, `h3Runtime()`. */
+  runtime?: HttpRuntime
+  /** Mount the built-in health module. Default: true. */
+  health?: boolean
+  middlewares?: MiddlewareEntry[]
   port?: number
   apiPrefix?: string
-  defaultVersion?: number
-  /** Global Context Contributors (#107) — same as ApplicationOptions.contributors. */
+  defaultVersion?: number | false
   contributors?: ContributorRegistration[]
-  /** ALS strategy. 'auto' (default) or 'manual'. Same as ApplicationOptions.contextStore. */
   contextStore?: 'auto' | 'manual'
+  plugins?: KickPlugin[]
+  onError?: ApplicationOptions['onError']
+  onNotFound?: ApplicationOptions['onNotFound']
+  trustProxy?: boolean | number | string
+  jsonLimit?: string
+  security?: ApplicationOptions['security']
 }
 ```
+
+## createTestPlugin
+
+Exercise a plugin's hooks without booting an app. Registers the plugin into a container and hands back lifecycle invokers plus whatever it contributed. Aliased as `testPlugin`.
+
+```typescript
+async function createTestPlugin(
+  plugin: KickPlugin,
+  options?: CreateTestPluginOptions,
+): Promise<PluginTestHarness>
+
+interface CreateTestPluginOptions {
+  /** Isolated container, never touching the global singleton. Default: true. */
+  isolated?: boolean
+  /** Skip the eager `plugin.register(container)` — to assert container state before it runs. Default: false. */
+  skipRegister?: boolean
+}
+
+interface PluginTestHarness {
+  readonly plugin: KickPlugin
+  readonly container: Container
+
+  callOnReady(): Promise<void>
+  shutdown(): Promise<void>
+
+  /** What the plugin ships. These are getters, not properties — call them. */
+  modules(): AppModuleEntry[]
+  adapters(): AppAdapter[]
+  middleware(): any[]
+  contributors(): ContributorRegistration[]
+
+  makeContext(initial?: Record<string, unknown>): ExecutionContext
+  runContributors(ctx: ExecutionContext): Promise<void>
+}
+```
+
+`modules()` returns the module classes without instantiating them — use `createTestApp` for that. It answers "does the plugin expose the module I expect", not "does that module work".
 
 ## runContributor
 

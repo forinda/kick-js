@@ -85,7 +85,7 @@ export function parseTraceparent(header: string): TraceContext | null {
  * @example
  * ```ts
  * bootstrap({
- *   middleware: [
+ *   middlewares: [
  *     requestScopeMiddleware(),
  *     traceContext(),          // extracts or generates traceId
  *     requestLogger(),

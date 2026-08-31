@@ -128,7 +128,7 @@ Generic security decorator. Pick this when the scheme isn't bearer-shaped (API k
 ```typescript
 import { ApiSecurity } from '@forinda/kickjs-swagger'
 
-@Controller('/users')
+@Controller()
 @ApiSecurity('BearerAuth') // class-level default
 class UsersController {
   @Get('/me')
@@ -158,7 +158,7 @@ Class-level requirements cascade to every method; method-level requirements over
 Mark a single method as publicly accessible — opts out of any class-level security requirement (set via `@ApiSecurity` or `@ApiBearerAuth`).
 
 ```typescript
-@Controller('/internal')
+@Controller()
 @ApiSecurity('BearerAuth')
 class InternalController {
   @Get('/health')
@@ -213,7 +213,7 @@ If your project uses a different auth library and wants its decorators to drive 
 ```typescript
 SwaggerAdapter({
   securityResolver: ({ controllerClass, handlerName }) => {
-    // Bridge `@forinda/kickjs-auth`'s metadata without coupling.
+    // Bridge your own auth decorators' metadata without coupling.
     const proto = controllerClass.prototype
     if (Reflect.getMetadata('kick:auth:public', proto, handlerName)) return null
     const secured =

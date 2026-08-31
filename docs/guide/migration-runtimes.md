@@ -77,20 +77,14 @@ default), but an adapter written against `ctx.http` works on every runtime.
 `Express` by default. If you build a **mock** `AdapterContext` in tests, it now
 needs an `http` entry alongside `app`.
 
-## Deprecated packages
+## Removed packages
 
-`@forinda/kickjs-auth`, `@forinda/kickjs-prisma`, `@forinda/kickjs-drizzle`, and
-the `@forinda/kickjs-db-{pg,mysql,sqlite}` shims are frozen — they stay installed
-and working at their last published version, but no longer receive updates. See
-their READMEs for the recommended replacements (BYO auth via context decorators,
-`@forinda/kickjs-db` with its `/pg` · `/mysql` · `/sqlite` subpaths).
+`@forinda/kickjs-auth`, `@forinda/kickjs-prisma` and `@forinda/kickjs-drizzle`
+were **removed in v8**, along with their `kick add` entries. The
+`@forinda/kickjs-db-{pg,mysql,sqlite}` shims are frozen at their last published
+version. Nothing uninstalls itself — an app pinned to one keeps working against
+the version it was built for — but none of them come with you to v8.
 
-## Trying it early
-
-Preview builds publish under the `@alpha` npm channel:
-
-```bash
-pnpm add @forinda/kickjs@alpha
-```
-
-See [Release channels](./getting-started.md#release-channels).
+Replacements: [BYO auth](./byo-recipes.md#auth) composed from context
+decorators, and `@forinda/kickjs-db` with its `/pg` · `/mysql` · `/sqlite`
+subpaths. See the [v8 migration guide](./migration-v7-to-v8.md).

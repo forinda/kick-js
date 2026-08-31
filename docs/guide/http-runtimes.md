@@ -44,9 +44,7 @@ small response driver, so the same handler code runs unchanged on every engine.
 Fastify ships as a **subpath** of the core package — there's no separate npm
 package. Install the engine peers alongside `@forinda/kickjs`:
 
-```bash
-pnpm add fastify @fastify/middie
-```
+<PmCommand add="fastify @fastify/middie" />
 
 ```ts
 import { fastifyRuntime } from '@forinda/kickjs/fastify'
@@ -69,9 +67,7 @@ Fastify's built-in pino logger is disabled (`logger: false`) so the kickjs
 [h3](https://h3.dev) is the HTTP layer behind Nitro / Nuxt. It ships as a
 subpath too:
 
-```bash
-pnpm add h3
-```
+<PmCommand add="h3" />
 
 ```ts
 import { h3Runtime } from '@forinda/kickjs/h3'
@@ -91,9 +87,7 @@ via h3's built-in `readMultipartFormData` — no driver to install).
 h3 v2 rebased on WHATWG `Request` / `Response` — KickJS supports it through a
 **separate, additive runtime**, so v1 adopters are untouched:
 
-```bash
-pnpm add h3@latest   # the v2 line
-```
+<PmCommand add="h3@latest   # the v2 line" />
 
 ```ts
 import { h3WebRuntime } from '@forinda/kickjs/h3-web'

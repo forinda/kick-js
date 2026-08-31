@@ -196,9 +196,7 @@ And the **SwaggerAdapter** already aggregates all of this into an OpenAPI spec s
 
 Here's what I think this should look like as a CLI command:
 
-```bash
-kick generate:client --out ./client
-```
+<PmCommand exec="kick generate:client --out ./client" />
 
 This would scan the codebase — reading decorator metadata from controllers, Zod schemas from DTOs, and route configurations from modules — then produce a typed TypeScript client package.
 
@@ -354,9 +352,7 @@ Cons: Requires a generation step. Client can drift from server if you forget to 
 
 Since `SwaggerAdapter` already generates an OpenAPI spec, generate the client from that spec. This is essentially what tools like `openapi-typescript` do.
 
-```bash
-kick generate:client --from openapi --out ./client
-```
+<PmCommand exec="kick generate:client --from openapi --out ./client" />
 
 Pros: Leverages existing OpenAPI generation. Works with any OpenAPI-compatible tooling.
 

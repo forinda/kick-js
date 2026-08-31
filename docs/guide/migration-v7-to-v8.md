@@ -8,26 +8,71 @@ If nothing in your codebase asserts on the body of a 404, and no client of yours
 pnpm add @forinda/kickjs@8
 ```
 
-::: tip Only the framework goes to 8
-Versions are per-package and independent. This release is `@forinda/kickjs` **8.0.0**, `@forinda/kickjs-cli` **7.2.0** and `@forinda/kickjs-testing` **7.1.0** — the CLI and the test harness carry no breaking change, so they do not follow the framework's major. Upgrade them with `@latest`, not `@8`:
+::: tip All three go to 8
+Versions are per-package and independent, but this release bumps all three together — `@forinda/kickjs`, `@forinda/kickjs-testing` and `@forinda/kickjs-cli` are each **8.0.0**. The harness renames an option alongside the framework; the CLI drops three `kick add` entries.
 
 ```bash
-pnpm add -D @forinda/kickjs-cli@latest @forinda/kickjs-testing@latest
+pnpm add -D @forinda/kickjs-testing@8 @forinda/kickjs-cli@8
 ```
 
 :::
 
 ## At a glance
 
-| Change                                          | Affects               | Action                                              |
-| ----------------------------------------------- | --------------------- | --------------------------------------------------- |
-| 404 body is now problem details                 | Any app               | Read `title`/`status`, or restore with `onNotFound` |
-| Wrong verb answers 405, not 404                 | Any app               | Move the case to the 405 branch                     |
-| Health probes moved inside the middleware chain | Apps with global auth | Exempt the path, or `health: false`                 |
-| Malformed body answers 400                      | h3 only               | None — it was answering 200                         |
-| Rejected upload answers 413/415                 | Express only          | None — it was answering 500                         |
-| `csrf`, `rateLimit`, `session` now work         | Fastify / h3          | Re-test — they used to throw                        |
-| `@PreDestroy` on a singleton warns              | Any app               | Move teardown to an adapter `shutdown()`            |
+| Change                                          | Affects                     | Action                                              |
+| ----------------------------------------------- | --------------------------- | --------------------------------------------------- |
+| `kickjs-auth`, `-drizzle`, `-prisma` removed    | Apps still on them          | Move to BYO auth or kick/db                         |
+| `middleware` option renamed to `middlewares`    | Any app setting it          | Rename the key — the compiler finds every one       |
+| 404 body is now problem details                 | Any app                     | Read `title`/`status`, or restore with `onNotFound` |
+| Wrong verb answers 405, not 404                 | Any app                     | Move the case to the 405 branch                     |
+| Health probes moved inside the middleware chain | Apps with global auth       | Exempt the path, or `health: false`                 |
+| `/health/ready` answers instead of 500          | Fastify / h3                | None — the probe was permanently failing            |
+| Malformed body answers 400                      | h3 only                     | None — it was answering 200                         |
+| Rejected upload answers 413/415                 | Express only                | None — it was answering 500                         |
+| `csrf`, `rateLimit`, `session` now work         | Fastify / h3                | Re-test — they used to throw                        |
+| `helmet()` options now take effect              | Apps passing helmet options | Re-check which security headers you send            |
+| `@PreDestroy` on a singleton warns              | Any app                     | Move teardown to an adapter `shutdown()`            |
+
+## Removed: the auth, Drizzle and Prisma packages
+
+`@forinda/kickjs-auth`, `@forinda/kickjs-drizzle` and `@forinda/kickjs-prisma` are gone, and `kick add auth|drizzle|prisma` no longer offers them.
+
+None had shipped in a long time: all three were frozen at **6.0.1** while the framework moved to 7.4, so `kick add auth` installed a package two majors behind the kickjs it was joining. v8 finishes what those deprecation warnings started.
+
+| removed                   | replacement                                                                                |
+| ------------------------- | ------------------------------------------------------------------------------------------ |
+| `@forinda/kickjs-auth`    | [BYO Auth recipe](./byo-recipes.md#auth)                                                   |
+| `@forinda/kickjs-drizzle` | `@forinda/kickjs-db` (`kick add db` / `pg` / `sqlite` / `mysql`), or wire Drizzle directly |
+| `@forinda/kickjs-prisma`  | `@forinda/kickjs-db`, or wire Prisma directly                                              |
+
+**The auth decorators went with the package.** `@Public`, `@Roles`, `@Can`, `@Authenticated`, `AuthAdapter` and `AUTH_USER` lived in `@forinda/kickjs-auth` — never in the framework core, though `@Public` reads like a framework decorator. If you use any of them, the [BYO Auth recipe](./byo-recipes.md#auth) rebuilds each one from `defineContextDecorator` and `defineAdapter`, in roughly 200 lines you own.
+
+The npm versions stay published. Nothing uninstalls itself, and an app pinned to `6.0.1` keeps working against kickjs 7 — it just cannot come with you to 8.
+
+## Breaking: `middleware` is now `middlewares`
+
+`bootstrap()` took both — `middlewares` as the real name, `middleware` as a deprecated alias that the plural beat when both were set. v8 drops the alias, so there is one name for one thing:
+
+```ts
+bootstrap({
+  modules,
+  middlewares: [helmet(), cors(), requestId()], // was: middleware
+})
+```
+
+This is the least dangerous change in the release: `middleware` is no longer a key on `ApplicationOptions`, so passing it is a **type error**, not a silently ignored object. Rename and the compiler confirms you got them all.
+
+Renamed for the same reason, in the same release:
+
+| call            | was          | now           |
+| --------------- | ------------ | ------------- |
+| `bootstrap`     | `middleware` | `middlewares` |
+| `createTestApp` | `middleware` | `middlewares` |
+| `createWebApp`  | `middleware` | `middlewares` |
+
+`createTestApp` passes the option straight through to `bootstrap()`, so a harness whose option name disagreed with the thing it configures was exactly the inconsistency being removed — that is why `@forinda/kickjs-testing` takes a major too.
+
+**`AppAdapter.middleware()` and `Plugin.middleware()` are unchanged.** Those are a different API — a hook that returns entries, not an option that takes them — and nothing about them was ambiguous. If you write adapters, nothing there moves.
 
 ## Breaking: the catch-all
 
@@ -170,6 +215,22 @@ Connect middleware receives an Express response under Express and a raw `ServerR
 
 If you mounted any of these on Fastify or h3, they now do what they always claimed to. Re-run the suites that were passing around them.
 
+### `helmet()` options were being ignored
+
+`bootstrap()` auto-injects `helmet()` with defaults, and it did so _ahead of_ your middleware array. So an app declaring its own helmet ran two — and the second can only overwrite a header, never drop one:
+
+```ts
+bootstrap({ middlewares: [helmet({ frameguard: false })] })
+// v7: still X-Frame-Options: DENY
+// v8: header absent, as asked
+```
+
+Every `false` option behaved this way — `frameguard`, `hsts`, `referrerPolicy`, `noSniff`. Each was accepted, type-checked, and silently did nothing, because the automatic pass had already set the header.
+
+**This is the one fix in the release that can remove a security header you are currently sending.** If you pass options to `helmet()`, list them and confirm you meant each one — in v7 an option that disabled a header did nothing, so an app may be relying on a header it explicitly asked to turn off. Nothing changes for an app that passes `helmet()` bare or declares none.
+
+A helmet scoped to one path is unaffected — auto-injection only stands down for an app-wide `helmet()`, so a `{ path, handler }` entry does not strip headers from your other routes.
+
 ### `@PreDestroy` on a singleton now warns
 
 `@PreDestroy` fires when a REQUEST scope closes. On a SINGLETON — the default scope — nothing closes, so the hook is inert. It was _silently_ inert, which is a trap because `@PostConstruct` **does** run for singletons: the pair reads as init/teardown while one half quietly opts out.
@@ -240,13 +301,16 @@ const { app } = await createTestApp({
 
 ## Upgrade checklist
 
-1. `pnpm add @forinda/kickjs@8` and `pnpm add -D @forinda/kickjs-cli@latest @forinda/kickjs-testing@latest` — only the framework goes to 8.
-2. Grep your tests and clients for `'Not Found'` — assert on `title`/`status`, or pass `onNotFound`.
-3. Grep for 404 handling that covers the wrong-verb case; split out 405.
-4. If you have global auth, exempt `/health` or pass `health: false`.
-5. Boot the app and read the startup log for a `@PreDestroy` warning.
-6. On Fastify or h3: re-test anything that mounted `csrf`, `rateLimit` or `session`.
-7. Point `createTestApp` at your production runtime and run the suite again — that is the check that catches everything above at once.
+1. `pnpm add @forinda/kickjs@8` and `pnpm add -D @forinda/kickjs-testing@8 @forinda/kickjs-cli@8`.
+2. If you depend on `kickjs-auth`, `-drizzle` or `-prisma`, move off them first — auth is the big one, and the BYO recipe is a copy-paste starting point.
+3. Rename `middleware:` to `middlewares:` at every `bootstrap`, `createTestApp` and `createWebApp` call — then typecheck; anything missed is an error, not a silent no-op.
+4. Grep your tests and clients for `'Not Found'` — assert on `title`/`status`, or pass `onNotFound`.
+5. Grep for 404 handling that covers the wrong-verb case; split out 405.
+6. If you have global auth, exempt `/health` or pass `health: false`.
+7. Boot the app and read the startup log for a `@PreDestroy` warning.
+8. On Fastify or h3: re-test anything that mounted `csrf`, `rateLimit` or `session`.
+9. If you pass options to `helmet()`, re-read them — they take effect now, and a header you disabled in v7 was still being sent.
+10. Point `createTestApp` at your production runtime and run the suite again — that is the check that catches everything above at once.
 
 ## Older migrations
 

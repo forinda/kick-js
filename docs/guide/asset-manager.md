@@ -85,9 +85,7 @@ the build emits one informational log per collision group it auto-resolved, e.g.
 
 ## Run typegen
 
-```bash
-kick typegen
-```
+<PmCommand exec="kick typegen" />
 
 This walks every `assetMap.*.src` directory and emits `.kickjs/types/assets.d.ts` augmenting the framework's `KickAssets` interface:
 
@@ -205,9 +203,7 @@ export default defineConfig({
 
 For a manifest-only refresh (no JS rebuild), use:
 
-```bash
-kick build:assets
-```
+<PmCommand exec="kick build:assets" />
 
 Useful in dev when you've just added a template and want the manifest to pick it up without running the full Vite build.
 
