@@ -690,7 +690,7 @@ routes() {
 **Red flags** (stop and ask):
 - File created as \`<name>.ts\` instead of \`<name>.module.ts\` — Vite plugin's \`*.module.[tj]sx?\` glob doesn't pick it up; every save becomes a full restart.
 - \`@Controller('/path')\` with a path argument combined with module \`routes().path\` — duplicates the prefix. The decorator path is OpenAPI metadata only.
-- \`TodosModule\` in \`bootstrap({ modules: [TodosModule] })\` instead of \`TodosModule()\` — passing the factory instead of the invoked instance.
+- Mixing \`TodosModule\` and \`TodosModule()\` across the same modules array — both are accepted (the factory is invoked for you), but pick one and keep it consistent with \`modules.style\`.
 - \`routes()\` returning \`router: …\` when a \`controller:\` would do — controller form is required for OpenAPI/Swagger introspection.
 - Module not registered in \`src/modules/index.ts\`.`,
     },
@@ -851,7 +851,9 @@ describe('UserController', () => {
     // own Node listener, so the test runs on whichever runtime the app is
     // configured with. Pass \`runtime\` to \`createTestApp\` to match production.
     const { app } = await createTestApp({
-      modules: [UserModule],
+      // Invoked form, matching \`modules.style: 'define'\`. The bare
+      // \`UserModule\` also works; a class-style module is passed bare.
+      modules: [UserModule()],
     })
     const res = await request(app.handle.bind(app)).get('/api/v1/users')
     expect(res.status).toBe(200)

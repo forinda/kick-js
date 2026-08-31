@@ -365,6 +365,52 @@ export interface ApplicationOptions {
  * The main application class. Wires together Express, the DI container,
  * feature modules, adapters, and the middleware pipeline.
  */
+
+/**
+ * A `defineModule()` factory, as opposed to a module class.
+ *
+ * Both are functions, so `typeof` cannot tell them apart. The factory carries a
+ * frozen `definition` and a `scoped` helper, neither of which a class has.
+ */
+function isModuleFactory(entry: unknown): entry is () => AppModule {
+  return (
+    typeof entry === 'function' &&
+    'definition' in entry &&
+    typeof (entry as { scoped?: unknown }).scoped === 'function'
+  )
+}
+
+/**
+ * Resolve a module entry to an `AppModule`, whichever shape it arrives in.
+ *
+ * Three forms reach here: an instance (`defineModule(...)()` output), a legacy
+ * module class, and — the case this exists for — a `defineModule()` factory
+ * passed UNINVOKED. That last one used to hit `new factory()` and die with a
+ * bare `TypeError: entry is not a constructor`, naming neither the module nor
+ * the fix. It is easy to hit because the class form takes the bare name, so
+ * the two styles look interchangeable and are not.
+ *
+ * Calling the factory with no arguments produces exactly what `Module()` would,
+ * so accepting it is equivalent rather than lenient.
+ */
+function toAppModule(entry: AppModuleEntry): AppModule {
+  if (typeof entry !== 'function') return entry
+  if (isModuleFactory(entry)) return entry()
+  try {
+    return new (entry as AppModuleClass)()
+  } catch (err) {
+    const name = (entry as { name?: string }).name || '<anonymous>'
+    throw new TypeError(
+      `bootstrap: module entry \`${name}\` is a function but not a module class, ` +
+        `and not a defineModule() factory either (no \`definition\`).\n` +
+        `  If it is a defineModule() module, make sure it is the factory itself ` +
+        `or its result — \`${name}\` or \`${name}()\` both work.\n` +
+        `  If it is a class, it must implement AppModule.`,
+      { cause: err },
+    )
+  }
+}
+
 export class Application {
   private app: Express
   /** The HTTP engine driver. Defaults to {@link expressRuntime}. */
@@ -661,12 +707,7 @@ export class Application {
     this.options.setup?.(moduleRegistry)
     const allModuleEntries: AppModuleEntry[] = moduleRegistry.entries
     const modules = allModuleEntries.map((entry) => {
-      // Discriminate class vs instance: classes are functions whose
-      // `prototype` carries the AppModule shape; defineModule output is
-      // a plain object with `routes`, `register`, `contributors`. Calling
-      // `new` on a plain object throws, so we branch up-front rather
-      // than try/catch.
-      const mod: AppModule = typeof entry === 'function' ? new (entry as AppModuleClass)() : entry
+      const mod: AppModule = toAppModule(entry)
       // `register()` is optional — modules whose classes are entirely
       // decorator-managed (@Service, @Controller, @Repository) don't need it.
       mod.register?.(this.container)
