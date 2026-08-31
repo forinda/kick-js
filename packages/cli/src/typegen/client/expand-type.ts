@@ -42,6 +42,17 @@ const TRUNCATION_BUDGET = 1000
 const BUDGET_EXHAUSTED = Symbol('kick/client: expansion budget exhausted')
 
 export class TypeExpander {
+  /**
+   * `typeToString` elides long types with `...` by default — and that `...` is
+   * not valid type syntax, so it lands in the emitted `.d.ts` and the whole
+   * map stops parsing. One `Buffer` in a response produced 34 syntax errors
+   * (`TS1110: Type expected`) and made the file unusable. Truncated output is
+   * never correct here, whatever the type.
+   */
+  private get printFlags(): ts.TypeFormatFlags {
+    return this.ts.TypeFormatFlags.NoTruncation
+  }
+
   private readonly hoistedByType = new Map<ts.Type, string>()
   /**
    * Anonymous object types currently being rendered inline.
@@ -112,13 +123,13 @@ export class TypeExpander {
     // Primitives and keywords — typeToString is exactly right for these and
     // carries no names from the program.
     if (type.flags & (F.String | F.Number | F.Boolean | F.BigInt | F.ESSymbol)) {
-      return this.checker.typeToString(type)
+      return this.checker.typeToString(type, undefined, this.printFlags)
     }
     if (type.flags & (F.Any | F.Unknown | F.Never | F.Void | F.Undefined | F.Null)) {
-      return this.checker.typeToString(type)
+      return this.checker.typeToString(type, undefined, this.printFlags)
     }
     if (type.isLiteral() || type.flags & F.BooleanLiteral) {
-      return this.checker.typeToString(type)
+      return this.checker.typeToString(type, undefined, this.printFlags)
     }
 
     if (type.isUnion()) {
@@ -211,12 +222,22 @@ export class TypeExpander {
     const lines: string[] = []
 
     for (const info of this.checker.getIndexInfosOfType(type)) {
-      const key = this.checker.typeToString(info.keyType)
+      const key = this.checker.typeToString(info.keyType, undefined, this.printFlags)
       lines.push(`${indent}[key: ${key}]: ${this.render(info.type, depth + 1)}`)
     }
 
     for (const prop of this.checker.getPropertiesOfType(type)) {
       const propType = this.typeOfProperty(prop)
+      // A response is JSON, and JSON has no functions: `JSON.stringify` drops
+      // every method, so a method in this map describes a field the client
+      // will never receive. Expanding them is how one `Buffer` became a
+      // 107-member interface of `slice`/`write`/`reduce` overloads.
+      if (this.isCallable(propType)) continue
+      // Same reasoning for symbol keys: `JSON.stringify` ignores them, and the
+      // checker prints them with an internal mangled name
+      // (`__@toStringTag@138`) whose numeric suffix is compiler state, not
+      // anything the client could index by.
+      if (prop.getName().startsWith('__@')) continue
       const optional = (prop.flags & this.ts.SymbolFlags.Optional) !== 0
       const rendered = this.renderPropertyType(propType, optional, prop, depth + 1)
       const readonly = this.isReadonlyProp(prop) ? 'readonly ' : ''
@@ -383,7 +404,8 @@ export class TypeExpander {
   private renderLibType(type: ts.Type, depth: number): string {
     const name = (type.aliasSymbol ?? type.getSymbol())?.getName()
     const args = type.aliasTypeArguments ?? this.typeArguments(type)
-    if (!name || args.length === 0) return this.checker.typeToString(type)
+    if (!name || args.length === 0)
+      return this.checker.typeToString(type, undefined, this.printFlags)
     return `${name}<${args.map((a) => this.render(a, depth + 1)).join(', ')}>`
   }
 
@@ -395,6 +417,15 @@ export class TypeExpander {
   }
 
   /** Has a declared name worth hoisting (interface / class / named alias). */
+  /** Has call or construct signatures — a method or function, never JSON. */
+  private isCallable(type: ts.Type): boolean {
+    if (type.isUnion()) return type.types.every((m) => this.isCallable(m))
+    return (
+      this.checker.getSignaturesOfType(type, this.ts.SignatureKind.Call).length > 0 ||
+      this.checker.getSignaturesOfType(type, this.ts.SignatureKind.Construct).length > 0
+    )
+  }
+
   private isNamed(type: ts.Type): boolean {
     const symbol = type.getSymbol()
     if (!symbol) return false
