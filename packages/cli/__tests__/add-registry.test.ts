@@ -27,18 +27,14 @@ function workspaceManifests(): Map<string, { name: string; private?: boolean }> 
 describe('PACKAGE_REGISTRY catalog health', () => {
   const manifests = workspaceManifests()
 
-  it('covers auth and ai', () => {
-    expect(PACKAGE_REGISTRY.auth?.pkg).toBe('@forinda/kickjs-auth')
+  it('covers ai', () => {
     expect(PACKAGE_REGISTRY.ai?.pkg).toBe('@forinda/kickjs-ai')
   })
 
-  it('marks drizzle and prisma as deprecated with a kickjs-db migration hint', () => {
-    expect(PACKAGE_REGISTRY.drizzle?.deprecated).toContain('@forinda/kickjs-db')
-    expect(PACKAGE_REGISTRY.prisma?.deprecated).toContain('@forinda/kickjs-db')
-  })
-
-  it('marks auth as deprecated with the BYO migration hint', () => {
-    expect(PACKAGE_REGISTRY.auth?.deprecated).toContain('BYO')
+  it('no longer offers auth, drizzle or prisma', () => {
+    expect(PACKAGE_REGISTRY.auth).toBeUndefined()
+    expect(PACKAGE_REGISTRY.drizzle).toBeUndefined()
+    expect(PACKAGE_REGISTRY.prisma).toBeUndefined()
   })
 
   it('every first-party entry points at an existing workspace package; non-deprecated ones are public', () => {
@@ -100,12 +96,11 @@ describe('planAddPackages', () => {
     expect(plan.warnings).toEqual([])
   })
 
-  it('auth still installs (with jsonwebtoken) but carries a deprecation warning', () => {
+  it('no longer installs anything for auth', () => {
     const plan = planAddPackages(['auth'], false)
-    expect(plan.prodDeps).toContain('@forinda/kickjs-auth')
-    expect(plan.prodDeps).toContain('jsonwebtoken')
-    expect(plan.warnings.length).toBe(1)
-    expect(plan.warnings[0]).toContain('BYO')
+    expect(plan.prodDeps).not.toContain('@forinda/kickjs-auth')
+    expect(plan.prodDeps).not.toContain('jsonwebtoken')
+    expect(plan.unknown).toEqual(['auth'])
   })
 
   it('collects unknown names without dropping known ones', () => {
@@ -114,12 +109,10 @@ describe('planAddPackages', () => {
     expect(plan.prodDeps).toContain('@forinda/kickjs-swagger')
   })
 
-  it('warns when adding a deprecated package but still installs it', () => {
+  it('no longer installs anything for prisma', () => {
     const plan = planAddPackages(['prisma'], false)
-    expect(plan.prodDeps).toContain('@forinda/kickjs-prisma')
-    expect(plan.warnings.length).toBe(1)
-    expect(plan.warnings[0]).toContain('prisma')
-    expect(plan.warnings[0]).toContain('@forinda/kickjs-db')
+    expect(plan.prodDeps).not.toContain('@forinda/kickjs-prisma')
+    expect(plan.unknown).toEqual(['prisma'])
   })
 
   it('honours the dev flag and per-entry dev defaults', () => {

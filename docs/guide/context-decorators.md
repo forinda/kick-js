@@ -1898,7 +1898,7 @@ const RequirePolicy = defineHttpContextDecorator.withParams<{ policy: new () => 
 @Get('/billing') billing(ctx) {}
 ```
 
-The auth package's deprecation roadmap rests on this exact shape — adopters compose their own policy chain instead of inheriting framework primitives.
+This is the exact shape the auth package's removal rests on — adopters compose their own policy chain instead of inheriting framework primitives.
 
 #### 4. Rate-limit override — function-valued params
 

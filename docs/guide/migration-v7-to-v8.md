@@ -8,11 +8,11 @@ If nothing in your codebase asserts on the body of a 404, and no client of yours
 pnpm add @forinda/kickjs@8
 ```
 
-::: tip Only the framework goes to 8
-Versions are per-package and independent. This release is `@forinda/kickjs` **8.0.0**, `@forinda/kickjs-testing` **8.0.0** and `@forinda/kickjs-cli` **7.2.0**. The harness follows the framework to 8 because it renames an option alongside it (below); the CLI carries no breaking change and stays on 7:
+::: tip All three go to 8
+Versions are per-package and independent, but this release bumps all three together — `@forinda/kickjs`, `@forinda/kickjs-testing` and `@forinda/kickjs-cli` are each **8.0.0**. The harness renames an option alongside the framework; the CLI drops three `kick add` entries.
 
 ```bash
-pnpm add -D @forinda/kickjs-testing@8 @forinda/kickjs-cli@latest
+pnpm add -D @forinda/kickjs-testing@8 @forinda/kickjs-cli@8
 ```
 
 :::
@@ -21,6 +21,7 @@ pnpm add -D @forinda/kickjs-testing@8 @forinda/kickjs-cli@latest
 
 | Change                                          | Affects                     | Action                                              |
 | ----------------------------------------------- | --------------------------- | --------------------------------------------------- |
+| `kickjs-auth`, `-drizzle`, `-prisma` removed    | Apps still on them          | Move to BYO auth or kick/db                         |
 | `middleware` option renamed to `middlewares`    | Any app setting it          | Rename the key — the compiler finds every one       |
 | 404 body is now problem details                 | Any app                     | Read `title`/`status`, or restore with `onNotFound` |
 | Wrong verb answers 405, not 404                 | Any app                     | Move the case to the 405 branch                     |
@@ -31,6 +32,22 @@ pnpm add -D @forinda/kickjs-testing@8 @forinda/kickjs-cli@latest
 | `csrf`, `rateLimit`, `session` now work         | Fastify / h3                | Re-test — they used to throw                        |
 | `helmet()` options now take effect              | Apps passing helmet options | Re-check which security headers you send            |
 | `@PreDestroy` on a singleton warns              | Any app                     | Move teardown to an adapter `shutdown()`            |
+
+## Removed: the auth, Drizzle and Prisma packages
+
+`@forinda/kickjs-auth`, `@forinda/kickjs-drizzle` and `@forinda/kickjs-prisma` are gone, and `kick add auth|drizzle|prisma` no longer offers them.
+
+None had shipped in a long time: all three were frozen at **6.0.1** while the framework moved to 7.4, so `kick add auth` installed a package two majors behind the kickjs it was joining. v8 finishes what those deprecation warnings started.
+
+| removed                   | replacement                                                                                |
+| ------------------------- | ------------------------------------------------------------------------------------------ |
+| `@forinda/kickjs-auth`    | [BYO Auth recipe](./byo-recipes.md#auth)                                                   |
+| `@forinda/kickjs-drizzle` | `@forinda/kickjs-db` (`kick add db` / `pg` / `sqlite` / `mysql`), or wire Drizzle directly |
+| `@forinda/kickjs-prisma`  | `@forinda/kickjs-db`, or wire Prisma directly                                              |
+
+**The auth decorators went with the package.** `@Public`, `@Roles`, `@Can`, `@Authenticated`, `AuthAdapter` and `AUTH_USER` lived in `@forinda/kickjs-auth` — never in the framework core, though `@Public` reads like a framework decorator. If you use any of them, the [BYO Auth recipe](./byo-recipes.md#auth) rebuilds each one from `defineContextDecorator` and `defineAdapter`, in roughly 200 lines you own.
+
+The npm versions stay published. Nothing uninstalls itself, and an app pinned to `6.0.1` keeps working against kickjs 7 — it just cannot come with you to 8.
 
 ## Breaking: `middleware` is now `middlewares`
 
@@ -284,15 +301,16 @@ const { app } = await createTestApp({
 
 ## Upgrade checklist
 
-1. `pnpm add @forinda/kickjs@8` and `pnpm add -D @forinda/kickjs-testing@8 @forinda/kickjs-cli@latest` — the CLI stays on 7.
-2. Rename `middleware:` to `middlewares:` at every `bootstrap`, `createTestApp` and `createWebApp` call — then typecheck; anything missed is an error, not a silent no-op.
-3. Grep your tests and clients for `'Not Found'` — assert on `title`/`status`, or pass `onNotFound`.
-4. Grep for 404 handling that covers the wrong-verb case; split out 405.
-5. If you have global auth, exempt `/health` or pass `health: false`.
-6. Boot the app and read the startup log for a `@PreDestroy` warning.
-7. On Fastify or h3: re-test anything that mounted `csrf`, `rateLimit` or `session`.
-8. If you pass options to `helmet()`, re-read them — they take effect now, and a header you disabled in v7 was still being sent.
-9. Point `createTestApp` at your production runtime and run the suite again — that is the check that catches everything above at once.
+1. `pnpm add @forinda/kickjs@8` and `pnpm add -D @forinda/kickjs-testing@8 @forinda/kickjs-cli@8`.
+2. If you depend on `kickjs-auth`, `-drizzle` or `-prisma`, move off them first — auth is the big one, and the BYO recipe is a copy-paste starting point.
+3. Rename `middleware:` to `middlewares:` at every `bootstrap`, `createTestApp` and `createWebApp` call — then typecheck; anything missed is an error, not a silent no-op.
+4. Grep your tests and clients for `'Not Found'` — assert on `title`/`status`, or pass `onNotFound`.
+5. Grep for 404 handling that covers the wrong-verb case; split out 405.
+6. If you have global auth, exempt `/health` or pass `health: false`.
+7. Boot the app and read the startup log for a `@PreDestroy` warning.
+8. On Fastify or h3: re-test anything that mounted `csrf`, `rateLimit` or `session`.
+9. If you pass options to `helmet()`, re-read them — they take effect now, and a header you disabled in v7 was still being sent.
+10. Point `createTestApp` at your production runtime and run the suite again — that is the check that catches everything above at once.
 
 ## Older migrations
 

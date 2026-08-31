@@ -1160,7 +1160,7 @@ stats(ctx: RequestContext) { ... }
 \`\`\`
 
 Role checks that are purely declarative (\`@Public()\`, \`@Roles('admin')\`,
-\`@Can(...)\`) come from \`@forinda/kickjs-auth\` and need its adapter mounted.
+\`@Can(...)\`) are yours to define — see the BYO Auth recipe in the docs.
 Hand-write a guard only for logic those don't express.
 
 **Red flags**:

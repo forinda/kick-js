@@ -58,8 +58,8 @@ export type OpenAPISecurityScheme = Record<string, any>
 /**
  * Information passed to {@link SwaggerOptions.securityResolver} for
  * each route. The hook receives the raw controller class + method
- * name so adopters bridging another auth library (kickjs-auth,
- * passport-style decorators, custom annotations) can read whatever
+ * name so adopters bridging their own auth layer (BYO decorators,
+ * passport-style annotations, custom metadata) can read whatever
  * metadata they want via `Reflect.getMetadata`.
  */
 export interface SecurityResolverContext {
@@ -125,7 +125,7 @@ export interface SwaggerOptions {
    * ```ts
    * SwaggerAdapter({
    *   securityResolver: ({ controllerClass, handlerName }) => {
-   *     // Bridge `@forinda/kickjs-auth`'s metadata without coupling.
+   *     // Bridge your own auth decorators' metadata without coupling.
    *     const proto = controllerClass.prototype
    *     if (Reflect.getMetadata('kick:auth:public', proto, handlerName)) return null
    *     const secured =
