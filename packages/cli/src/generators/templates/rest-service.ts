@@ -5,7 +5,7 @@ export function generateRestService(ctx: TemplateContext): string {
   const { pascal, kebab } = ctx
   return `import { Service, Inject, HttpException } from '@forinda/kickjs'
 import type { ParsedQuery } from '@forinda/kickjs'
-import { ${pascal.toUpperCase()}_REPOSITORY, type I${pascal}Repository } from './${kebab}.repository'
+import { ${pascal.toUpperCase()}_REPOSITORY, type ${pascal}Repository } from './${kebab}.repository'
 import type { ${pascal}ResponseDTO } from './dtos/${kebab}-response.dto'
 import type { Create${pascal}DTO } from './dtos/create-${kebab}.dto'
 import type { Update${pascal}DTO } from './dtos/update-${kebab}.dto'
@@ -13,7 +13,7 @@ import type { Update${pascal}DTO } from './dtos/update-${kebab}.dto'
 @Service()
 export class ${pascal}Service {
   constructor(
-    @Inject(${pascal.toUpperCase()}_REPOSITORY) private readonly repo: I${pascal}Repository,
+    @Inject(${pascal.toUpperCase()}_REPOSITORY) private readonly repo: ${pascal}Repository,
   ) {}
 
   async findById(id: string): Promise<${pascal}ResponseDTO | null> {

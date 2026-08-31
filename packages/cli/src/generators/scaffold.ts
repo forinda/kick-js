@@ -7,9 +7,7 @@ import {
   generateRestController,
   generateRestConstants,
   generateRestService,
-  generateRepositoryInterface,
-  generateInMemoryRepository,
-  generateCustomRepository,
+  generateRepositoryFactory,
 } from './templates'
 
 // ── Field Parsing ───────────────────────────────────────────────────────
@@ -204,23 +202,12 @@ export async function generateScaffold(options: ScaffoldOptions): Promise<string
   await write(`dtos/update-${kebab}.dto.ts`, genUpdateDTO(pascal, fields))
   await write(`dtos/${kebab}-response.dto.ts`, genResponseDTO(pascal, fields))
 
-  // Repository interface + implementation
+  // ONE repository file: factory, contract, token. The factory's return type
+  // is the interface, so there is nothing to keep in step.
   await write(
     `${kebab}.repository.ts`,
-    generateRepositoryInterface({ pascal, kebab, dtoPrefix: './dtos', tokenScope }),
+    generateRepositoryFactory({ pascal, kebab, repoType: repo, dtoPrefix: './dtos', tokenScope }),
   )
-  const isInMemory = repo === 'inmemory'
-  const repoFile = isInMemory ? `in-memory-${kebab}` : `${toKebabCase(repo)}-${kebab}`
-  const repoImpl = isInMemory
-    ? generateInMemoryRepository({ pascal, kebab, repoPrefix: '.', dtoPrefix: './dtos' })
-    : generateCustomRepository({
-        pascal,
-        kebab,
-        repoType: repo,
-        repoPrefix: '.',
-        dtoPrefix: './dtos',
-      })
-  await write(`${repoFile}.repository.ts`, repoImpl)
 
   // Auto-register in modules index
   await autoRegisterModule(modulesDir, pascal, plural, kebab, style)

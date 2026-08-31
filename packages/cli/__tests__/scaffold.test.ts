@@ -47,7 +47,6 @@ describe('kick g scaffold', () => {
       'src/modules/widgets/dtos/update-widget.dto.ts',
       'src/modules/widgets/dtos/widget-response.dto.ts',
       'src/modules/widgets/widget.repository.ts',
-      'src/modules/widgets/in-memory-widget.repository.ts',
     ]
     for (const f of expectedFiles) {
       expect(existsSync(join(fixture, f)), `expected ${f} to exist`).toBe(true)
@@ -73,13 +72,11 @@ describe('kick g scaffold', () => {
     expect(responseDto).toContain('count: number')
     expect(responseDto).toContain('tags: any')
 
-    // The repo builds the entity by spreading the create DTO, so it works
-    // for any field set without hard-coding field names.
-    const inMemoryRepo = readFileSync(
-      join(fixture, 'src/modules/widgets/in-memory-widget.repository.ts'),
-      'utf-8',
-    )
-    expect(inMemoryRepo).toContain('...dto')
+    // The repository builds the entity by spreading the create DTO, so it
+    // works for any field set without hard-coding field names. One file now:
+    // factory, contract, token.
+    const repo = readFileSync(join(fixture, 'src/modules/widgets/widget.repository.ts'), 'utf-8')
+    expect(repo).toContain('...dto')
   })
 
   it('emits a collision-safe createToken for the repository token', () => {
@@ -89,13 +86,14 @@ describe('kick g scaffold', () => {
       join(fixture, 'src/modules/widgets/widget.repository.ts'),
       'utf-8',
     )
-    // Repository token should use createToken<IWidgetRepository>(...) so
+    // Repository token should use createToken<WidgetRepository>(...) so
     // container.resolve(WIDGET_REPOSITORY) returns the typed interface,
     // not `any`. This is the project's standard hardening pattern.
-    expect(repoInterface).toContain("import { createToken } from '@forinda/kickjs'")
-    expect(repoInterface).toContain('createToken<IWidgetRepository>(')
+    // `HttpException` rides along now that the working body lives in this file.
+    expect(repoInterface).toMatch(/import \{ createToken[^}]*\} from '@forinda\/kickjs'/)
+    expect(repoInterface).toContain('createToken<WidgetRepository>(')
     // The legacy Symbol() pattern must NOT appear
-    expect(repoInterface).not.toContain("Symbol('IWidgetRepository')")
+    expect(repoInterface).not.toContain("Symbol('WidgetRepository')")
   })
 
   it('emits a module index with the correct ModuleRoutes shape', () => {

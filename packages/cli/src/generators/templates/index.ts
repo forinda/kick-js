@@ -7,11 +7,7 @@ export {
 export { generateController, generateRestController } from './controller'
 export { generateConstants } from './constants'
 export { generateCreateDTO, generateUpdateDTO, generateResponseDTO } from './dtos'
-export {
-  generateRepositoryInterface,
-  generateInMemoryRepository,
-  generateCustomRepository,
-} from './repository'
+export { generateRepositoryFactory } from './repository'
 export { generateControllerTest, generateRepositoryTest } from './tests'
 export { generateRestService, generateRestConstants } from './rest-service'
 export {

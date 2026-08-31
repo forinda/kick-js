@@ -14,29 +14,25 @@ function toPascalRepoType(repo: string): string {
   )
 }
 
-function toKebabRepoType(repo: string): string {
-  return repo.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase()
-}
-
 function repoLabel(repo: RepoType): string {
   return repoLabelMap[repo] ?? toPascalRepoType(repo)
 }
 
-function repoMaps(pascal: string, kebab: string, repo: RepoType) {
-  const repoClassMap: Record<string, string> = {
-    inmemory: `InMemory${pascal}Repository`,
-    drizzle: `Drizzle${pascal}Repository`,
-    prisma: `Prisma${pascal}Repository`,
-  }
-  const repoFileMap: Record<string, string> = {
-    inmemory: `in-memory-${kebab}`,
-    drizzle: `drizzle-${kebab}`,
-    prisma: `prisma-${kebab}`,
-  }
-  return {
-    repoClass: repoClassMap[repo] ?? `${toPascalRepoType(repo)}${pascal}Repository`,
-    repoFile: repoFileMap[repo] ?? `${toKebabRepoType(repo)}-${kebab}`,
-  }
+/**
+ * Class and file basename for the repository implementation.
+ *
+ * Only `inmemory` is special: it is the one built-in with a real working
+ * implementation, and its name describes what it actually is.
+ *
+ * Everything else — including `drizzle` and `prisma`, which no longer have
+ * dedicated generators — scaffolds the same unimplemented stub, so naming it
+ * after the store would assert a technology the file does not implement. It
+ * takes the module's name instead, which the folder already carries. The
+ * chosen store still appears in the stub's prose and its error messages.
+ */
+/** The repository factory to call when registering the binding. */
+function repoFactory(pascal: string): string {
+  return `create${pascal}Repository`
 }
 
 /** Resolve the style flag, defaulting to 'define' for new code. */
@@ -47,7 +43,7 @@ function resolveStyle(style?: ModuleStyle): ModuleStyle {
 /** DDD module index — nested folders, use-cases, domain services */
 export function generateModuleIndex(ctx: TemplateContext & { repo: RepoType }): string {
   const { pascal, kebab, plural = '', repo, style } = ctx
-  const { repoClass, repoFile } = repoMaps(pascal, kebab, repo)
+  const factory = repoFactory(pascal)
   const resolvedStyle = resolveStyle(style)
 
   const header = `/**
@@ -64,7 +60,7 @@ export function generateModuleIndex(ctx: TemplateContext & { repo: RepoType }): 
  */`
 
   const repoImports = `import { ${pascal.toUpperCase()}_REPOSITORY } from './domain/repositories/${kebab}.repository'
-import { ${repoClass} } from './infrastructure/repositories/${repoFile}.repository'
+
 import { ${pascal}Controller } from './presentation/${kebab}.controller'
 
 // Eagerly load decorated classes so @Controller()/@Service()/@Repository() decorators
@@ -109,12 +105,12 @@ export class ${pascal}Module implements AppModule {
   /**
    * Register module dependencies in the DI container.
    * Bind repository interface tokens to their implementations here.
-   * Currently wired to ${repoLabel(repo)}. To swap implementations, change the factory target.
+   * Currently wired to ${repoLabel(repo)}. To swap stores, write another
+     * factory returning a compatible shape and call that one here — the
+     * contract is the factory's return type, so nothing else changes.
    */
   register(container: Container): void {
-    container.registerFactory(${pascal.toUpperCase()}_REPOSITORY, () =>
-      container.resolve(${repoClass}),
-    )
+    container.registerFactory(${pascal.toUpperCase()}_REPOSITORY, () => ${factory}())
   }
 
 ${routesDoc.replace(/^ {4}/gm, '  ').replace(/^ {6}/gm, '    ')}
@@ -138,11 +134,13 @@ export const ${pascal}Module = defineModule({
     /**
      * Register module dependencies in the DI container.
      * Bind repository interface tokens to their implementations here.
-     * Currently wired to ${repoLabel(repo)}. To swap implementations, change the factory target.
+     * Currently wired to ${repoLabel(repo)}. To swap stores, write another
+     * factory returning a compatible shape and call that one here — the
+     * contract is the factory's return type, so nothing else changes.
      */
     register(container) {
       container.registerFactory(${pascal.toUpperCase()}_REPOSITORY, () =>
-        container.resolve(${repoClass}),
+        ${factory}(),
       )
     },
 
@@ -161,7 +159,7 @@ ${routesDoc}
 /** REST module index — flat folder, service + controller, no use-cases */
 export function generateRestModuleIndex(ctx: TemplateContext & { repo: RepoType }): string {
   const { pascal, kebab, plural = '', repo, style } = ctx
-  const { repoClass, repoFile } = repoMaps(pascal, kebab, repo)
+  const factory = repoFactory(pascal)
   const resolvedStyle = resolveStyle(style)
 
   const header = `/**
@@ -173,13 +171,16 @@ export function generateRestModuleIndex(ctx: TemplateContext & { repo: RepoType 
  * Structure:
  *   ${kebab}.controller.ts  — HTTP routes (CRUD)
  *   ${kebab}.service.ts     — Business logic
- *   ${kebab}.repository.ts  — Repository interface
- *   ${repoFile}.repository.ts — Repository implementation
+ *   ${kebab}.repository.ts  — Repository: factory, contract, token
  *   dtos/                   — Request/response schemas
+ *
+ * The repository is backed by an in-memory Map so this module works as
+ * generated. Swap in ${repoLabel(repo)} by replacing the factory body in
+ * ${kebab}.repository.ts — the contract is whatever that factory returns, so
+ * nothing else has to change.
  */`
 
-  const repoImports = `import { ${pascal.toUpperCase()}_REPOSITORY } from './${kebab}.repository'
-import { ${repoClass} } from './${repoFile}.repository'
+  const repoImports = `import { ${pascal.toUpperCase()}_REPOSITORY, ${factory} } from './${kebab}.repository'
 import { ${pascal}Controller } from './${kebab}.controller'
 
 // Eagerly load decorated classes so @Controller()/@Service()/@Repository() decorators
@@ -213,9 +214,7 @@ ${repoImports}
 
 export class ${pascal}Module implements AppModule {
   register(container: Container): void {
-    container.registerFactory(${pascal.toUpperCase()}_REPOSITORY, () =>
-      container.resolve(${repoClass}),
-    )
+    container.registerFactory(${pascal.toUpperCase()}_REPOSITORY, () => ${factory}())
   }
 
 ${routesDoc.replace(/^ {4}/gm, '  ').replace(/^ {6}/gm, '    ')}
@@ -238,7 +237,7 @@ export const ${pascal}Module = defineModule({
   build: () => ({
     register(container) {
       container.registerFactory(${pascal.toUpperCase()}_REPOSITORY, () =>
-        container.resolve(${repoClass}),
+        ${factory}(),
       )
     },
 

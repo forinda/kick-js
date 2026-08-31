@@ -297,16 +297,23 @@ export interface ModuleConfig {
   /**
    * Default repository implementation for generators.
    *
-   * Built-in type (string): `'inmemory'`. Any other name scaffolds a
-   * custom-repository stub — see {@link BuiltinRepoType}.
-   * — generate fully working repository code.
+   * @deprecated The name no longer changes the generated code. Only
+   * `'inmemory'` produces a distinct file — the one built-in with a real
+   * working implementation. Every other value scaffolds the SAME
+   * unimplemented stub, named for the module rather than the store, since a
+   * `PostgresUserRepository` that is not yet Postgres asserts something the
+   * file does not honour.
    *
-   * Custom types (object): `{ name: 'typeorm' }`
-   * — generate a stub repository with TODO markers.
+   * The value survives only as prose: the store appears in the stub's comments
+   * and in its "not implemented" errors, as a note to the person writing the
+   * query. Set it for that hint, or leave it unset and get the in-memory
+   * implementation.
+   *
+   * Kept working, and there is no plan to remove it without a replacement.
    *
    * @example
-   * repo: { name: 'postgres' }    // custom stub
-   * repo: { name: 'typeorm' }     // custom
+   * // unset            → InMemoryUserRepository, a working store
+   * repo: { name: 'postgres' }  // → UserRepository, unimplemented, "write the postgres query"
    */
   repo?: RepoTypeConfig
   /** Schema output directory (e.g. 'src/db/schema') */
