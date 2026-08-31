@@ -66,6 +66,8 @@ export class TypeExpander {
    * Without it, one such route produced 1.66M warnings, 4.4 GB and a V8 abort.
    */
   private readonly inProgress = new Map<ts.Type, { name: string | null }>()
+  /** Types whose `toJSON()` result is being rendered — see the guard in `render`. */
+  private readonly jsonInProgress = new Set<ts.Type>()
   private nextName = 0
   private readonly blocks: string[] = []
   private readonly maxDepth: number
@@ -166,7 +168,27 @@ export class TypeExpander {
     // so `r.createdAt.getFullYear()` compiles and throws at runtime. This runs
     // before the lib-type branch, which would otherwise print `Date` by name.
     const json = this.toJsonType(type)
-    if (json) return this.render(json, depth)
+    if (json) {
+      // `A.toJSON(): B` and `B.toJSON(): A` alternate between two distinct
+      // types forever. The `returned === type` check in `toJsonType` only
+      // catches a direct self-return, and this hop is not structural nesting
+      // so it does not spend depth — leaving nothing to stop it but the call
+      // stack. A cycle here has no serializable fixpoint, so `unknown` is the
+      // honest answer rather than a guess at which side to stop on.
+      if (this.jsonInProgress.has(type)) {
+        this.opts.onWarn?.(
+          `'${this.checker.typeToString(type, undefined, this.printFlags)}' has a ` +
+            `cyclic toJSON() — emitting 'unknown', since it has no serializable form.`,
+        )
+        return 'unknown'
+      }
+      this.jsonInProgress.add(type)
+      try {
+        return this.render(json, depth)
+      } finally {
+        this.jsonInProgress.delete(type)
+      }
+    }
 
     // A type the frontend already has — emit the name, expand nothing.
     if (this.isLibType(type)) return this.renderLibType(type, depth)

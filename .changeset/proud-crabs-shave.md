@@ -37,6 +37,12 @@ own empty hoisted interface. A callable member inside any union is dropped as
 well, since `(() => void) | Foo` reaches the client as `Foo` or not at all,
 never as an empty object.
 
+A cycle through `toJSON()` — `A.toJSON(): B` and `B.toJSON(): A` — is emitted
+as `unknown` with a warning. That hop is not structural nesting, so it spends no
+depth, and a direct self-return check cannot see a two-type cycle; nothing
+bounded it but the call stack, which overflowed. Such a value has no
+serializable form, so `unknown` is the honest answer.
+
 Every `typeToString` call now passes `NoTruncation`. Truncated output is never
 valid type syntax, so this is unconditional rather than a heuristic.
 
