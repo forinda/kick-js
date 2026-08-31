@@ -165,7 +165,9 @@ NOT YET IN PLACE:
   [ ] Server-side approval / human-in-the-loop
 ```
 
-The mental model: treat MCP exposure exactly like exposing the same route to a public HTTP client. Your existing auth + RBAC + rate-limit story carries the weight. The `@McpTool` decorator is the firewall — if you would not expose a route to an unauthenticated client, do not decorate it with `@McpTool`.
+The mental model: treat MCP exposure exactly like exposing the same route to a public HTTP client. Your existing auth + RBAC + rate-limit story carries the weight.
+
+In the default `explicit` mode, `@McpTool` is the gate — if you would not expose a route to an unauthenticated client, do not decorate it. **`mode: 'auto'` removes that gate**: every route matching `include` / `exclude` becomes a tool whether or not it carries the decorator, so the filters and the route's own authorization are the only things standing between a model and the endpoint. Use `@McpTool({ hidden: true })` to opt a route out, and do not rely on the absence of a decorator to keep anything private.
 
 ## Documentation
 

@@ -102,7 +102,7 @@ GrpcAdapter({
   grpc: true, // binary gRPC (needs HTTP/2 in front)
   grpcWeb: true,
   connect: true,
-  contributors: [], // every RPC, at 'adapter' precedence (see above)
+  contributors: [], // every RPC, at 'adapter' precedence — see the guide
   routes: (router) => {}, // register services Connect-style, bypassing decorators
   readMaxBytes: undefined,
   writeMaxBytes: undefined,
