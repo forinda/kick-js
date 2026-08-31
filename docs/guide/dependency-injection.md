@@ -222,6 +222,26 @@ class TxService {
 Hooks may be async; errors are logged and swallowed so one failing teardown
 can't break request completion.
 
+::: warning `@PreDestroy` does not run on a singleton
+The request scope is what closes and fires the hook, so on a SINGLETON — the
+default scope — there is nothing to trigger it. This is **not** symmetric with
+`@PostConstruct`, which does run for singletons, so the pair reads as
+init/teardown while one half quietly opts out.
+
+Applying it to a non-REQUEST service logs a warning naming the class rather
+than failing silently:
+
+```text
+kickjs: @PreDestroy on DatabaseService (singleton) will never run — that hook
+fires only when a REQUEST scope closes.
+```
+
+For application-lifetime resources — a connection pool, a timer, a socket
+server — release them from an adapter's [`shutdown()`](./adapters.md#shutdown-discipline)
+hook, which runs on a real shutdown **and** on every HMR reload, time-boxed and
+concurrent.
+:::
+
 ## Environment Injection
 
 Use `@Value` to inject environment variables. When `kick typegen` has populated the project's `KickEnv` global from `src/env.ts`, the key autocompletes and the `Env<K>` type alias resolves to the schema-inferred type — see [Configuration](configuration.md) and [Type Generation](typegen.md#how-env-vars-are-typed) for the full pipeline.

@@ -189,6 +189,39 @@ kick dev:debug -p 4000
 
 Same flags as `kick dev`. Opens a debug port so you can attach Chrome DevTools or your IDE's debugger.
 
+## kick typecheck
+
+Type-check the project with its own checker, without spelling out the package
+manager:
+
+```bash
+kick typecheck
+kick typecheck --cwd server
+kick typecheck --no-typegen
+```
+
+Routing this through `kick` is the point: `pnpm -r exec tsc --noEmit` and
+`cd server && npx tsc --noEmit` do the same job in two incompatible dialects.
+Same resolver `kick dev --typecheck` uses — `vue-tsc` first (plain `tsc`
+reports `TS18003` on `.vue`), then `tsgo`, then `tsc`.
+
+**Typegen runs first.** Otherwise the check reports errors from
+`.kickjs/types` describing routes that no longer exist — and the most confusing
+of them point at correct, current source:
+
+```text
+src/modules/health/health.controller.ts(11,46): error TS2339: Property 'live'
+  does not exist on type 'HealthController'
+```
+
+That method does exist; the stale `KickRoutes` namespace has no entry for it.
+A pre-commit hook or a fresh clone hits this every time, since neither has run
+the dev server — and a fresh clone has no generated types at all.
+
+Pass `--no-typegen` when the caller has just run typegen itself. A typegen
+failure is reported and does not abort the check, so a typegen problem never
+masquerades as a type error.
+
 ## kick build
 
 Build the project for production using Vite:
