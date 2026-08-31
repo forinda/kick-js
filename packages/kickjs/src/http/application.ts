@@ -737,13 +737,13 @@ export class Application {
     // Injecting alongside a user helmet makes its options half-inert: ours runs
     // first with defaults, and theirs can only overwrite a header, never drop
     // one — so `helmet({ frameguard: false })` would still emit DENY.
+    // Only a GLOBAL declaration stands us down. The object form of
+    // MiddlewareEntry always carries a `path`, so a helmet scoped to one route
+    // does not replace the app-wide pass — standing down for it would strip
+    // security headers from every OTHER path.
+    // `Symbol.for` registry lookup, so the dynamic import() below stays intact.
     const declaredHelmet = (this.options.middlewares ?? this.options.middleware ?? []).some(
-      (entry) => {
-        const fn = typeof entry === 'function' ? entry : entry?.handler
-        // `Symbol.for` registry lookup — no import, so the dynamic-import
-        // tolerance below stays intact.
-        return typeof fn === 'function' && Symbol.for('kick/http/helmet') in fn
-      },
+      (entry) => typeof entry === 'function' && Symbol.for('kick/http/helmet') in entry,
     )
     const autoHelmet = this.options.security?.helmet !== false && !declaredHelmet
     if (autoHelmet) {

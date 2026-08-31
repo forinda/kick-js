@@ -19,15 +19,17 @@ pnpm add -D @forinda/kickjs-cli@latest @forinda/kickjs-testing@latest
 
 ## At a glance
 
-| Change                                          | Affects               | Action                                              |
-| ----------------------------------------------- | --------------------- | --------------------------------------------------- |
-| 404 body is now problem details                 | Any app               | Read `title`/`status`, or restore with `onNotFound` |
-| Wrong verb answers 405, not 404                 | Any app               | Move the case to the 405 branch                     |
-| Health probes moved inside the middleware chain | Apps with global auth | Exempt the path, or `health: false`                 |
-| Malformed body answers 400                      | h3 only               | None — it was answering 200                         |
-| Rejected upload answers 413/415                 | Express only          | None — it was answering 500                         |
-| `csrf`, `rateLimit`, `session` now work         | Fastify / h3          | Re-test — they used to throw                        |
-| `@PreDestroy` on a singleton warns              | Any app               | Move teardown to an adapter `shutdown()`            |
+| Change                                          | Affects                     | Action                                              |
+| ----------------------------------------------- | --------------------------- | --------------------------------------------------- |
+| 404 body is now problem details                 | Any app                     | Read `title`/`status`, or restore with `onNotFound` |
+| Wrong verb answers 405, not 404                 | Any app                     | Move the case to the 405 branch                     |
+| Health probes moved inside the middleware chain | Apps with global auth       | Exempt the path, or `health: false`                 |
+| `/health/ready` answers instead of 500          | Fastify / h3                | None — the probe was permanently failing            |
+| Malformed body answers 400                      | h3 only                     | None — it was answering 200                         |
+| Rejected upload answers 413/415                 | Express only                | None — it was answering 500                         |
+| `csrf`, `rateLimit`, `session` now work         | Fastify / h3                | Re-test — they used to throw                        |
+| `helmet()` options now take effect              | Apps passing helmet options | Re-check which security headers you send            |
+| `@PreDestroy` on a singleton warns              | Any app                     | Move teardown to an adapter `shutdown()`            |
 
 ## Breaking: the catch-all
 
@@ -170,6 +172,22 @@ Connect middleware receives an Express response under Express and a raw `ServerR
 
 If you mounted any of these on Fastify or h3, they now do what they always claimed to. Re-run the suites that were passing around them.
 
+### `helmet()` options were being ignored
+
+`bootstrap()` auto-injects `helmet()` with defaults, and it did so _ahead of_ your middleware array. So an app declaring its own helmet ran two — and the second can only overwrite a header, never drop one:
+
+```ts
+bootstrap({ middleware: [helmet({ frameguard: false })] })
+// v7: still X-Frame-Options: DENY
+// v8: header absent, as asked
+```
+
+Every `false` option behaved this way — `frameguard`, `hsts`, `referrerPolicy`, `noSniff`. Each was accepted, type-checked, and silently did nothing, because the automatic pass had already set the header.
+
+**This is the one fix in the release that can remove a security header you are currently sending.** If you pass options to `helmet()`, list them and confirm you meant each one — in v7 an option that disabled a header did nothing, so an app may be relying on a header it explicitly asked to turn off. Nothing changes for an app that passes `helmet()` bare or declares none.
+
+A helmet scoped to one path is unaffected — auto-injection only stands down for an app-wide `helmet()`, so a `{ path, handler }` entry does not strip headers from your other routes.
+
 ### `@PreDestroy` on a singleton now warns
 
 `@PreDestroy` fires when a REQUEST scope closes. On a SINGLETON — the default scope — nothing closes, so the hook is inert. It was _silently_ inert, which is a trap because `@PostConstruct` **does** run for singletons: the pair reads as init/teardown while one half quietly opts out.
@@ -246,7 +264,8 @@ const { app } = await createTestApp({
 4. If you have global auth, exempt `/health` or pass `health: false`.
 5. Boot the app and read the startup log for a `@PreDestroy` warning.
 6. On Fastify or h3: re-test anything that mounted `csrf`, `rateLimit` or `session`.
-7. Point `createTestApp` at your production runtime and run the suite again — that is the check that catches everything above at once.
+7. If you pass options to `helmet()`, re-read them — they take effect now, and a header you disabled in v7 was still being sent.
+8. Point `createTestApp` at your production runtime and run the suite again — that is the check that catches everything above at once.
 
 ## Older migrations
 

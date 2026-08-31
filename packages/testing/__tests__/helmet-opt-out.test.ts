@@ -39,3 +39,15 @@ describe('helmet opt-out via user middleware', () => {
     expect(names(b)).toBe(names(a))
   })
 })
+
+describe('a path-scoped helmet', () => {
+  it('does not strip security headers from other paths', async () => {
+    const { app } = await createTestApp({
+      modules: [PingModule()],
+      middleware: [{ path: '/admin', handler: helmet({ frameguard: 'SAMEORIGIN' }) }],
+    })
+    const res = await request(app.handle.bind(app)).get('/ping')
+    // auto-helmet must still cover /ping
+    expect(res.headers['x-frame-options']).toBe('DENY')
+  })
+})
