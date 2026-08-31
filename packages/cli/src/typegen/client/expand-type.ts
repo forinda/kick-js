@@ -133,7 +133,14 @@ export class TypeExpander {
     }
 
     if (type.isUnion()) {
-      return type.types.map((m) => this.render(m, depth + 1)).join(' | ')
+      // A callable member cannot appear in JSON either — `(() => void) | Foo`
+      // arrives as `Foo` or not at all, never as the function. Dropping the
+      // member beats rendering it as `{}`, which claims an empty object is a
+      // possible value.
+      const members = type.types.filter((m) => !this.isCallable(m))
+      return (members.length > 0 ? members : type.types)
+        .map((m) => this.render(m, depth + 1))
+        .join(' | ')
     }
     if (type.isIntersection()) {
       return type.types.map((m) => this.render(m, depth + 1)).join(' & ')
@@ -446,7 +453,17 @@ export class TypeExpander {
 
   /** Has call or construct signatures — a method or function, never JSON. */
   private isCallable(type: ts.Type): boolean {
-    if (type.isUnion()) return type.types.every((m) => this.isCallable(m))
+    if (type.isUnion()) {
+      // The checker adds `undefined` to every optional property, so
+      // `save?(): void` arrives as `(() => void) | undefined`. Requiring
+      // *every* member to be callable therefore kept optional methods, which
+      // then rendered as `{}` — or, for a method, as a hoisted interface with
+      // no members. Decide on what is actually there.
+      const present = type.types.filter(
+        (m) => !(m.flags & (this.ts.TypeFlags.Undefined | this.ts.TypeFlags.Null)),
+      )
+      return present.length > 0 && present.every((m) => this.isCallable(m))
+    }
     return (
       this.checker.getSignaturesOfType(type, this.ts.SignatureKind.Call).length > 0 ||
       this.checker.getSignaturesOfType(type, this.ts.SignatureKind.Construct).length > 0

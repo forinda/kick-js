@@ -451,3 +451,33 @@ describe('TypeExpander — what JSON transforms', () => {
     expect(out.text).toBe('{ a: { b: string } }')
   })
 })
+
+describe('TypeExpander — optional and unioned callables', () => {
+  // The checker adds `undefined` to every optional property, so `save?(): void`
+  // arrives as `(() => void) | undefined`. Requiring every union member to be
+  // callable therefore kept optional methods: they rendered as `onDone?: {}`,
+  // and an optional *method* even earned its own empty hoisted interface.
+  it('drops optional methods and optional callbacks', () => {
+    const out = expand(`
+      type Target = {
+        keep: string
+        save?(): void
+        onDone?: () => void
+      }
+    `)
+    expect(out.text).toBe('{ keep: string }')
+    expect(out.hoisted).toEqual([])
+  })
+
+  it('drops a callable member from a union rather than emitting {}', () => {
+    // `(() => void) | Foo` arrives as `Foo` or not at all — never as the
+    // function, and never as an empty object.
+    const out = expand(`type Target = { mixed: (() => void) | { value: string } }`)
+    expect(out.text).toBe('{ mixed: { value: string } }')
+  })
+
+  it('keeps an optional data property optional', () => {
+    const out = expand(`type Target = { a?: string; b: number }`)
+    expect(out.text).toBe('{ a?: string; b: number }')
+  })
+})
