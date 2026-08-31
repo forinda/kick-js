@@ -119,6 +119,10 @@ Same job, different ergonomics. Each line below maps a middleware pain point to 
 
 Scaffold one with the CLI:
 
+<PmCommand exec="kick g contributor tenant" />
+
+The variants:
+
 ```bash
 kick g contributor tenant                          # HTTP (RequestContext), key 'tenant'
 kick g contributor session --type bare             # ExecutionContext (transport-agnostic)

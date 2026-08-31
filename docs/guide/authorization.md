@@ -100,7 +100,7 @@ Swap the engine implementation (CASL, a rules table, hardcoded checks) by re-bin
 
 ## Guards (Custom Middleware)
 
-`kick g guard <name>` generates a middleware function for authorization logic that needs to short-circuit the response or run before route matching — the cases [context decorators deliberately don't cover](context-decorators.md). For value-producing checks, prefer a contributor; reach for a guard when you need raw Express middleware semantics.
+`kick g guard <name>` generates a middleware function for authorization logic that needs to **short-circuit the response** or run before route matching — the cases [context decorators deliberately don't cover](./context-decorators.md). For value-producing checks, prefer a contributor. The mechanics are in [Middleware → Guards](./middleware.md#guards); what follows is the authorization-specific shape.
 
 <PmCommand exec="kick g guard ip-whitelist" />
 
