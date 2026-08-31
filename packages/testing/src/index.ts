@@ -41,6 +41,9 @@ type BootstrapPassthroughOptions = Pick<
   // production ran Fastify or h3 — the one thing an integration test exists
   // to rule out.
   | 'runtime'
+  // Without this the option is accepted by the type and dropped on the way
+  // through, so `health: false` silently kept the endpoints mounted.
+  | 'health'
 >
 
 /**
@@ -187,6 +190,7 @@ export async function createTestApp(options: CreateTestAppOptions): Promise<{
     // Without this the option is accepted and ignored, which is worse than
     // not offering it: the suite reports Express while claiming Fastify.
     runtime: options.runtime,
+    health: options.health,
   })
 
   // Run setup — mounts routes, registers modules, initializes adapters.
