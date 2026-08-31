@@ -31,7 +31,7 @@ import {
 } from '../core/disposables'
 import { getClassMeta } from '../core/metadata'
 import { requestId } from './middleware/request-id'
-import { notFoundHandler, errorHandler } from './middleware/error-handler'
+import { notFoundHandler, errorHandler, type MountedRoute } from './middleware/error-handler'
 import { requestScopeMiddleware, isRequestScopeMiddleware } from './middleware/request-scope'
 import {
   _setExternalContributorSources,
@@ -842,6 +842,12 @@ export class Application {
     // silently losing the dispatch race.
     const seenRoutes = new Map<string, string>()
 
+    // Every path this app mounts, for the catch-all: a request that matches a
+    // path but not its method is a 405, not a 404. Collected here because this
+    // is the only place that knows the FULL mounted path — prefix, version and
+    // controller route joined.
+    const mountedPaths: MountedRoute[] = []
+
     for (const mod of modules) {
       // Prefer the declared `name` field (set by `defineModule({ name: 'X', ... })`)
       // over `constructor.name`. Factory-built modules are plain objects whose
@@ -904,7 +910,9 @@ export class Application {
             for (const entry of routeTable) {
               // Per-handler owner so intra-controller duplicates name both methods.
               const owner = `${ctrl}.${String(entry.meta.handlerName ?? '?')}`
-              assertRouteUnique(seenRoutes, entry.method, joinPaths(mountPath, entry.path), owner)
+              const fullPath = joinPaths(mountPath, entry.path)
+              assertRouteUnique(seenRoutes, entry.method, fullPath, owner)
+              mountedPaths.push({ method: entry.method, path: fullPath })
             }
             this.runtime.mountRoutes(this.app, [{ mountPath, routes: routeTable }])
           } else {
@@ -983,7 +991,9 @@ export class Application {
     // ── 11. Error handlers ───────────────────────────────────────────
     // Last in the chain so any adapter-mounted route (step 10) gets
     // a chance to match before the catch-all 404 fires.
-    this.runtime.setNotFound(this.app, this.options.onNotFound ?? notFoundHandler())
+    // `onNotFound` / `onError` still win — the route table only sharpens the
+    // DEFAULT, so an app that supplies its own catch-all is unaffected.
+    this.runtime.setNotFound(this.app, this.options.onNotFound ?? notFoundHandler(mountedPaths))
     this.runtime.setErrorHandler(this.app, this.options.onError ?? errorHandler())
   }
 

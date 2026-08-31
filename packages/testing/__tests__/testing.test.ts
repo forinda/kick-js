@@ -372,8 +372,10 @@ describe('createTestApp bootstrap option forwarding', () => {
 
     const res = await request(expressApp).get('/api/v1/missing')
     expect(res.status).toBe(404)
-    // Built-in handler returns { message: 'Not Found' }
-    expect(res.body).toHaveProperty('message')
+    // The built-in catch-all answers RFC 9457 problem details, like every other
+    // error the framework produces. It used to emit a bare `{ message }`, which
+    // made it the one response a problem+json client had to special case.
+    expect(res.body).toEqual({ type: 'about:blank', title: 'Not Found', status: 404 })
   })
 })
 
