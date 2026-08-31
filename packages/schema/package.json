@@ -65,7 +65,7 @@
   },
   "devDependencies": {
     "@swc/core": "^1.16.1",
-    "@types/node": "^26.2.0",
+    "@types/node": "^26.4.0",
     "@valibot/to-json-schema": "^1.7.1",
     "typescript": "^7.0.2",
     "valibot": "^1.4.2",

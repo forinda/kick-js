@@ -55,7 +55,7 @@
   "devDependencies": {
     "@forinda/kickjs-ai": "workspace:*",
     "@swc/core": "^1.16.1",
-    "@types/node": "^26.2.0",
+    "@types/node": "^26.4.0",
     "@types/pg": "^8.23.1",
     "@types/pluralize": "^0.0.33",
     "@typescript/typescript6": "^6.0.2",
