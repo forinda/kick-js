@@ -24,6 +24,7 @@ import { applyHandlerResult } from '../reply'
 import { requestStore } from '../request-store'
 import { createRequestStore, disposeRequestStore } from '../middleware/request-scope'
 import { validate } from '../middleware/validate'
+import { HttpException } from '../../core/errors'
 import { applyUploadConfig, type RawUploadPart } from '../middleware/upload'
 import type {
   ConnectMiddleware,
@@ -165,7 +166,22 @@ function makeEventHandler(entry: RouteEntry): (event: H3EventLike) => Promise<vo
       req.files = files
       req.body = fields
     } else if (BODY_METHODS.has(req.method ?? 'GET')) {
-      req.body = await readBody(event).catch(() => undefined)
+      // Swallow ONLY the absent-body case. `.catch(() => undefined)` also
+      // swallowed a malformed one, so h3 answered 200 with the handler running
+      // on `undefined` where Express and Fastify both answer 400 — a client
+      // sending broken JSON got a success response, and the handler executed
+      // against data that was never valid.
+      const { 'content-length': length, 'transfer-encoding': encoding } = req.headers
+      const sentBody = encoding !== undefined || (length !== undefined && length !== '0')
+      if (sentBody) {
+        try {
+          req.body = await readBody(event)
+        } catch (err) {
+          throw HttpException.badRequest(
+            err instanceof Error ? err.message : 'Request body could not be parsed',
+          )
+        }
+      }
     }
 
     const headerId = req.headers['x-request-id']
