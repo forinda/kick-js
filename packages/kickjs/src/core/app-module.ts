@@ -91,4 +91,26 @@ export type AppModuleClass = new () => AppModule
  * instantiation. defineModule callers use this union so adopters can
  * mix-and-match in the same `modules` array.
  */
-export type AppModuleEntry = AppModuleClass | AppModule
+/**
+ * A `defineModule()` factory, as an entry.
+ *
+ * Structural rather than importing `ModuleFactory<TConfig>`: that generic
+ * would force a type argument at every use site, and the entry union only
+ * needs to know the shape is callable and carries a definition. Declared here
+ * so `app-module.ts` stays free of a dependency on `define-module.ts`.
+ */
+export interface AppModuleFactoryEntry {
+  (config?: never): AppModule
+  readonly definition: { readonly name: string; readonly defaults?: unknown }
+}
+
+/**
+ * Anything accepted in `bootstrap({ modules })`.
+ *
+ * The factory form is accepted only for a module that takes no configuration —
+ * see `toAppModule` in `http/application.ts`. It is in the union so the bare
+ * name type-checks without a cast; a configurable module still fails at boot
+ * with a message naming it, because there the bare name would silently select
+ * the defaults.
+ */
+export type AppModuleEntry = AppModuleClass | AppModule | AppModuleFactoryEntry

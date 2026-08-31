@@ -365,6 +365,118 @@ export interface ApplicationOptions {
  * The main application class. Wires together Express, the DI container,
  * feature modules, adapters, and the middleware pipeline.
  */
+
+/**
+ * A `defineModule()` factory, as opposed to a module class.
+ *
+ * Both are functions, so `typeof` cannot tell them apart. The factory carries a
+ * frozen `definition` and a `scoped` helper, neither of which a class has.
+ */
+function isModuleFactory(entry: unknown): entry is (() => AppModule) & {
+  definition: { name?: string; defaults?: unknown }
+} {
+  return (
+    typeof entry === 'function' &&
+    'definition' in entry &&
+    typeof (entry as { scoped?: unknown }).scoped === 'function'
+  )
+}
+
+/**
+ * Whether a factory takes configuration.
+ *
+ * `defaults` is the only runtime signal that a module has config at all — the
+ * type parameter is erased. Its presence is what separates "the bare name is
+ * exactly equivalent" from "the bare name silently picked defaults for you".
+ */
+function isConfigurable(factory: { definition: { defaults?: unknown } }): boolean {
+  const defaults = factory.definition?.defaults
+  return defaults !== undefined && defaults !== null
+}
+
+/**
+ * Resolve a module entry to an `AppModule`, whichever shape it arrives in.
+ *
+ * Three forms reach here: an instance (`defineModule(...)()` output), a legacy
+ * module class, and — the case this exists for — a `defineModule()` factory
+ * passed UNINVOKED. That last one used to hit `new factory()` and die with a
+ * bare `TypeError: entry is not a constructor`, naming neither the module nor
+ * the fix. It is easy to hit because the class form takes the bare name, so
+ * the two styles look interchangeable and are not.
+ *
+ * For a module with NO config, calling the factory with no arguments produces
+ * exactly what `Module()` would, so accepting the bare name is equivalent
+ * rather than lenient.
+ *
+ * For a CONFIGURABLE module it is not equivalent in intent: the bare name
+ * silently selects the defaults, and an author who meant `Module({ … })` would
+ * get a running app wired the wrong way with nothing said. That is the failure
+ * mode this whole change exists to remove, so those stay loud — with a message
+ * that names the module and both correct spellings, rather than the bare
+ * `entry is not a constructor` it used to produce.
+ */
+function toAppModule(entry: AppModuleEntry): AppModule {
+  if (typeof entry !== 'function') return entry as AppModule
+  if (isModuleFactory(entry)) {
+    if (isConfigurable(entry)) {
+      const name = entry.definition?.name || entry.name || '<anonymous>'
+      throw new TypeError(
+        `bootstrap: module \`${name}\` takes configuration, so it must be invoked.\n` +
+          `  Write \`${name}()\` for its defaults, or \`${name}({ … })\` to configure it.\n` +
+          `  Passing it bare would have silently selected the defaults.`,
+      )
+    }
+    return entry()
+  }
+
+  const name = (entry as { name?: string }).name || '<anonymous>'
+  if (!isConstructible(entry)) {
+    throw new TypeError(
+      `bootstrap: module entry \`${name}\` is a function, but not a module class ` +
+        `and not a defineModule() factory (no \`definition\`).\n` +
+        `  A defineModule() module is passed as \`${name}\` or \`${name}()\`; ` +
+        `a class must implement AppModule.`,
+    )
+  }
+
+  // Constructed OUTSIDE any catch. Wrapping this was masking real failures:
+  // a legacy module whose constructor threw came back reported as "not a
+  // module class", hiding the actual error and sending the reader to the
+  // wrong place entirely.
+  const mod = new (entry as AppModuleClass)() as AppModule
+
+  // A plain `function Foo() {}` IS constructible and returns `{}`, so it
+  // reaches here and would fail later inside the framework at `mod.routes()`
+  // — a generic error, far from the entry that caused it. Check the shape
+  // where the entry is still in hand.
+  if (typeof mod?.routes !== 'function') {
+    throw new TypeError(
+      `bootstrap: module entry \`${name}\` constructed, but the result does not ` +
+        `implement AppModule — \`routes()\` is missing.\n` +
+        `  A module class needs \`routes()\`; a defineModule() module is passed ` +
+        `as \`${name}\` or \`${name}()\`.`,
+    )
+  }
+  return mod
+}
+
+/**
+ * Whether `new fn()` is legal, without calling it.
+ *
+ * Reflect.construct with a deliberately unrelated `newTarget` performs the
+ * constructibility check and then throws before running any constructor body,
+ * so this stays side-effect free — which matters, because the whole point is
+ * to avoid invoking something that may not be a constructor at all.
+ */
+function isConstructible(fn: unknown): boolean {
+  try {
+    Reflect.construct(String, [], fn as never)
+    return true
+  } catch {
+    return false
+  }
+}
+
 export class Application {
   private app: Express
   /** The HTTP engine driver. Defaults to {@link expressRuntime}. */
@@ -661,12 +773,7 @@ export class Application {
     this.options.setup?.(moduleRegistry)
     const allModuleEntries: AppModuleEntry[] = moduleRegistry.entries
     const modules = allModuleEntries.map((entry) => {
-      // Discriminate class vs instance: classes are functions whose
-      // `prototype` carries the AppModule shape; defineModule output is
-      // a plain object with `routes`, `register`, `contributors`. Calling
-      // `new` on a plain object throws, so we branch up-front rather
-      // than try/catch.
-      const mod: AppModule = typeof entry === 'function' ? new (entry as AppModuleClass)() : entry
+      const mod: AppModule = toAppModule(entry)
       // `register()` is optional — modules whose classes are entirely
       // decorator-managed (@Service, @Controller, @Repository) don't need it.
       mod.register?.(this.container)

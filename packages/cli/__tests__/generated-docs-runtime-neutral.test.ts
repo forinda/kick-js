@@ -33,3 +33,24 @@ describe('CLI-emitted samples', () => {
     expect(source).not.toMatch(/request\(\s*expressApp\s*\)/)
   })
 })
+
+describe('generated skill docs follow modules.style', () => {
+  // `buildSkills` emitted `UserModule()` unconditionally. Under
+  // `modules.style: 'class'` that calls a class without `new`; under
+  // `define` the bare name is refused for a configurable module. The
+  // scaffolded guidance has to match the project it was generated for.
+  it('invokes the module for define style', async () => {
+    const { generateKickJsSkillFiles } = await import('../src/generators/templates/project-docs')
+    const files = generateKickJsSkillFiles('demo', 'rest', 'pnpm', 'define')
+    const test = files.find((f) => f.slug.includes('controller-test'))!
+    expect(test.content).toContain('modules: [UserModule()]')
+  })
+
+  it('passes the module bare for class style', async () => {
+    const { generateKickJsSkillFiles } = await import('../src/generators/templates/project-docs')
+    const files = generateKickJsSkillFiles('demo', 'rest', 'pnpm', 'class')
+    const test = files.find((f) => f.slug.includes('controller-test'))!
+    expect(test.content).toContain('modules: [UserModule]')
+    expect(test.content).not.toContain('modules: [UserModule()]')
+  })
+})
