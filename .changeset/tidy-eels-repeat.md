@@ -23,6 +23,13 @@ Drive the returned `app` rather than `expressApp`: `app.handle` is the
 Application's own Node request listener and follows whichever runtime is
 configured, so one suite can run against every engine.
 
+The default middleware follows the runtime too. `createTestApp` defaulted to
+`[express.json()]` unconditionally, and passing it explicitly bypasses the
+Application's own native-body guard — under Fastify the connect parser then
+consumes the stream before Fastify reads it, and a JSON POST hangs until the
+test times out rather than failing. The default is now empty on a runtime that
+reports `nativeBodyParsing`.
+
 `expressApp` still works under the Express runtime. Under any other engine it
 now throws, instead of returning that engine's instance mistyped as
 `express.Express` — which is how a suite silently exercises the wrong runtime.

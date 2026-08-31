@@ -844,12 +844,16 @@ describe('UserController', () => {
 
   it('returns users', async () => {
     // \`createTestApp\` takes an OPTIONS OBJECT and returns
-    // \`{ app, expressApp, container }\`. Passing a bare array throws
+    // \`{ app, container }\`. Passing a bare array throws
     // "this.options.modules is not iterable"; the result has no \`.get()\`.
-    const { expressApp } = await createTestApp({
+    //
+    // Drive \`app.handle\` rather than \`expressApp\`: it is the Application's
+    // own Node listener, so the test runs on whichever runtime the app is
+    // configured with. Pass \`runtime\` to \`createTestApp\` to match production.
+    const { app } = await createTestApp({
       modules: [UserModule],
     })
-    const res = await request(expressApp).get('/api/v1/users')
+    const res = await request(app.handle.bind(app)).get('/api/v1/users')
     expect(res.status).toBe(200)
   })
 })

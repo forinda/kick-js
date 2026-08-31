@@ -29,13 +29,20 @@ pnpm add -D @forinda/kickjs-testing supertest @types/supertest vitest
 Creates an Application instance for testing — resets DI, runs `setup()`, and returns the app to drive with supertest:
 
 ```ts
+import request from 'supertest'
 import { createTestApp } from '@forinda/kickjs-testing'
 import { UserModule } from '../src/modules/users'
 
-const { expressApp, container } = await createTestApp({
+const { app, container } = await createTestApp({
   modules: [UserModule],
 })
+
+const res = await request(app.handle.bind(app)).get('/api/v1/users')
 ```
+
+`app.handle` is the Application's own Node request listener, so this works
+whichever runtime the app is configured with. See
+[Testing the engine you deploy](#testing-the-engine-you-deploy).
 
 ::: tip
 `createTestApp` is **async** — always `await` it.
@@ -192,20 +199,20 @@ describe('UserController', () => {
   }
 
   it('GET /api/v1/users returns user list', async () => {
-    const { expressApp } = await createTestApp({ modules: [buildTestModule()] })
-    const res = await request(expressApp).get('/api/v1/users').expect(200)
+    const { app } = await createTestApp({ modules: [buildTestModule()] })
+    const res = await request(app.handle.bind(app)).get('/api/v1/users').expect(200)
     expect(res.body.data).toHaveLength(1)
   })
 
   it('GET /api/v1/users/:id returns 404 for unknown', async () => {
-    const { expressApp } = await createTestApp({ modules: [buildTestModule()] })
-    await request(expressApp).get('/api/v1/users/unknown').expect(404)
+    const { app } = await createTestApp({ modules: [buildTestModule()] })
+    await request(app.handle.bind(app)).get('/api/v1/users/unknown').expect(404)
   })
 
   it('DELETE removes and reduces count', async () => {
-    const { expressApp } = await createTestApp({ modules: [buildTestModule()] })
-    await request(expressApp).delete('/api/v1/users/u1').expect(204)
-    const res = await request(expressApp).get('/api/v1/users').expect(200)
+    const { app } = await createTestApp({ modules: [buildTestModule()] })
+    await request(app.handle.bind(app)).delete('/api/v1/users/u1').expect(204)
+    const res = await request(app.handle.bind(app)).get('/api/v1/users').expect(200)
     expect(res.body.data).toHaveLength(0)
   })
 })
@@ -248,15 +255,15 @@ class ProtectedController {
 
 // Tests
 it('rejects requests without token', async () => {
-  const { expressApp } = await createTestApp({ modules: [buildProtectedModule()] })
-  await request(expressApp).get('/api/v1/protected/me').expect(401)
+  const { app } = await createTestApp({ modules: [buildProtectedModule()] })
+  await request(app.handle.bind(app)).get('/api/v1/protected/me').expect(401)
 })
 
 it('accepts valid JWT', async () => {
-  const { expressApp } = await createTestApp({ modules: [buildProtectedModule()] })
+  const { app } = await createTestApp({ modules: [buildProtectedModule()] })
   const token = jwt.sign({ sub: 'u1', email: 'alice@test.com' }, TEST_SECRET, { expiresIn: '1h' })
 
-  const res = await request(expressApp)
+  const res = await request(app.handle.bind(app))
     .get('/api/v1/protected/me')
     .set('Authorization', `Bearer ${token}`)
     .expect(200)
@@ -265,10 +272,10 @@ it('accepts valid JWT', async () => {
 })
 
 it('rejects expired tokens', async () => {
-  const { expressApp } = await createTestApp({ modules: [buildProtectedModule()] })
+  const { app } = await createTestApp({ modules: [buildProtectedModule()] })
   const token = jwt.sign({ sub: 'u1' }, TEST_SECRET, { expiresIn: '-1s' })
 
-  await request(expressApp)
+  await request(app.handle.bind(app))
     .get('/api/v1/protected/me')
     .set('Authorization', `Bearer ${token}`)
     .expect(401)
@@ -314,9 +321,9 @@ class UploadController {
 
 // Test
 it('accepts file upload', async () => {
-  const { expressApp } = await createTestApp({ modules: [buildUploadModule()] })
+  const { app } = await createTestApp({ modules: [buildUploadModule()] })
 
-  const res = await request(expressApp)
+  const res = await request(app.handle.bind(app))
     .post('/api/v1/uploads')
     .attach('file', Buffer.from('hello world'), 'test.txt')
     .expect(200)
@@ -326,10 +333,10 @@ it('accepts file upload', async () => {
 })
 
 it('rejects files exceeding size limit', async () => {
-  const { expressApp } = await createTestApp({ modules: [buildUploadModule()] })
+  const { app } = await createTestApp({ modules: [buildUploadModule()] })
   const largeBuffer = Buffer.alloc(6 * 1024 * 1024) // 6MB > 5MB limit
 
-  await request(expressApp)
+  await request(app.handle.bind(app))
     .post('/api/v1/uploads')
     .attach('file', largeBuffer, 'big.bin')
     .expect(413)
@@ -535,7 +542,7 @@ directly.
 For concurrent test environments (`--pool threads`), use isolated containers:
 
 ```ts
-const { expressApp } = await createTestApp({
+const { app } = await createTestApp({
   modules: [UserModule],
   isolated: true, // uses Container.create() instead of Container.reset()
 })
@@ -572,6 +579,6 @@ The generated tests are scaffolds with real assertions. Customize them for your 
 - Test controllers without auth by creating test-only controllers
 - Put test env in `.env.test` — it wins outright and never falls back to `.env`
 - `vi.stubEnv()` after import needs `resetEnvCache()` + `loadEnv()` to reach `ConfigService`
-- The `expressApp` works directly with supertest — no server needed
+- The returned `app` works directly with supertest via `app.handle.bind(app)` — no server needed, on any runtime
 - Adapter lifecycle hooks (`beforeMount`, `beforeStart`) still run during setup
 - Generated tests work out of the box — `kick g module user && npx vitest run`
