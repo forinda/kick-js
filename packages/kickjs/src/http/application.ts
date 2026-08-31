@@ -38,7 +38,7 @@ import {
   assertRouteUnique,
   buildRouteTable,
 } from './router-builder'
-import { reply } from './reply'
+import { HEALTH_PROBE, healthModule } from './health-module'
 import { expressRuntime } from './runtimes/express'
 import type {
   ActiveRuntime,
@@ -229,6 +229,19 @@ export interface ApplicationOptions {
    * registry (`ActiveRuntime`, spec §4.3b) — Express by default, or the augmented
    * engine once the `kick/runtime` typegen output is present.
    */
+  /**
+   * Mount the built-in `GET /health/live` and `GET /health/ready`.
+   *
+   * On by default. Set `false` to take them over completely — supply your own
+   * module at `/health` and nothing collides. The built-in is registered last,
+   * so an app module claiming the same path already wins without this.
+   *
+   * They mount as an ordinary module, which means they sit inside the
+   * middleware chain: whatever guards the rest of the app guards these too.
+   * Exempt the path if your orchestrator must reach them unauthenticated.
+   */
+  health?: boolean
+
   runtime?: HttpRuntime
 
   /** Express `trust proxy` setting */
@@ -692,9 +705,6 @@ export class Application {
     // ── 2a. In-flight request tracking ──────────────────────────────
     this.runtime.useConnect(this.app, this.requestTrackingMiddleware())
 
-    // ── 2b. Health check endpoints (before middleware, at root) ──────
-    this.mountHealthEndpoints()
-
     // ── 2c. Request scope (AsyncLocalStorage) ────────────────────────
     // Auto-mounted unless the user opted out (`contextStore: 'manual'`)
     // or already included one in their middleware list.
@@ -771,6 +781,30 @@ export class Application {
     }
     for (const m of this.options.modules) moduleRegistry.mount(m)
     this.options.setup?.(moduleRegistry)
+
+    // The built-in health endpoints, as an ordinary module. Registered last so
+    // an app's own `/health` module wins by being mounted first, and skipped
+    // entirely with `health: false`.
+    //
+    // The probe is bound before `register()` runs below, because the module's
+    // factory resolves it. It closes over the Application rather than exposing
+    // it: `isDraining` and `checks` are the whole surface the endpoints need,
+    // so a replacement module can satisfy the same token.
+    if (this.options.health !== false) {
+      this.container.registerInstance(HEALTH_PROBE, {
+        isDraining: () => this._draining,
+        checks: async () => {
+          const withCheck = this.adapters.filter((a) => a.onHealthCheck)
+          const settled = await Promise.allSettled(withCheck.map((a) => a.onHealthCheck!()))
+          return settled.map((c, i) =>
+            c.status === 'fulfilled'
+              ? c.value
+              : { name: withCheck[i].name ?? 'unknown', status: 'down' as const },
+          )
+        },
+      })
+      moduleRegistry.mount(healthModule())
+    }
     const allModuleEntries: AppModuleEntry[] = moduleRegistry.entries
     const modules = allModuleEntries.map((entry) => {
       const mod: AppModule = toAppModule(entry)
@@ -896,7 +930,12 @@ export class Application {
 
         for (const route of routeSets) {
           const version = route.version ?? defaultVersion
-          const mountPath = buildMountPath(apiPrefix, version, route.path)
+          // `prefix: false` mounts at the root — see ModuleRoutes.prefix.
+          const mountPath = buildMountPath(
+            route.prefix === false ? '' : apiPrefix,
+            version,
+            route.path,
+          )
           // Common-case `{ path, controller }`: build the engine-neutral route
           // table and let the runtime materialize it natively (Express Router /
           // Fastify routes / …). Adopters who hand-build a `router` (composing
@@ -1473,42 +1512,4 @@ export class Application {
   }
 
   /** Mount /health/live and /health/ready endpoints at the root (no API prefix) */
-  private mountHealthEndpoints(): void {
-    const http = this.adapterHttp()
-
-    // `reply(status, body)` throughout, never `ctx.res.status().json()`.
-    // Both runtimes route a handler's return value through
-    // `applyHandlerResult`, so this is the same return-style the framework
-    // tells adopters to use — and it carries the status without touching the
-    // engine-native response at all.
-    // `ctx.res` is the ENGINE-NATIVE response: under Fastify it is a
-    // `FastifyReply`, which has `.status()` but no `.json()`, so the Express
-    // form threw `TypeError: ctx.res.status(...).json is not a function` and
-    // every readiness probe got a 500 — a pod that never becomes ready.
-    // These are the only routes the framework itself mounts, so they have to
-    // follow the rule AGENTS.md gives adopters: write to `ctx`, not the raw
-    // response.
-    http.route('GET', '/health/live', () =>
-      this._draining
-        ? reply(503, { status: 'draining', uptime: process.uptime() })
-        : reply(200, { status: 'ok', uptime: process.uptime() }),
-    )
-
-    http.route('GET', '/health/ready', async () => {
-      if (this._draining) {
-        return reply(503, { status: 'draining', checks: [] })
-      }
-      const adaptersWithHealth = this.adapters.filter((a) => a.onHealthCheck)
-      const checks = await Promise.allSettled(adaptersWithHealth.map((a) => a.onHealthCheck!()))
-      const results = checks.map((c, i) => {
-        if (c.status === 'fulfilled') return c.value
-        return { name: adaptersWithHealth[i].name ?? 'unknown', status: 'down' as const }
-      })
-      const healthy = results.every((r) => r.status === 'up')
-      return reply(healthy ? 200 : 503, {
-        status: healthy ? 'ready' : 'degraded',
-        checks: results,
-      })
-    })
-  }
 }

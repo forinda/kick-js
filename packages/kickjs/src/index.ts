@@ -10,6 +10,13 @@ export * from './core'
 
 // ── HTTP ────────────────────────────────────────────────────────────────
 export { Application, type ApplicationOptions, type MiddlewareEntry } from './http/application'
+export {
+  healthModule,
+  HealthController,
+  HEALTH_PROBE,
+  type HealthProbe,
+  type HealthCheckResult,
+} from './http/health-module'
 
 export { bootstrap } from './http/bootstrap'
 

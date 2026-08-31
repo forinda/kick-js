@@ -219,9 +219,18 @@ describe('logRouteTable option', () => {
     expect(userLine).toMatch(/PUT/)
     expect(userLine).toMatch(/PATCH/)
 
-    // Total should be 6 routes
+    // The built-in health module contributes GET /health/live and
+    // /health/ready, so 6 app routes plus 2. They appear here at all only
+    // because health is now a module — a raw `http.route()` mount was absent
+    // from this table, from the OpenAPI spec, and from anything else that
+    // reads the route registry.
+    const healthLine = messages.find((m: string) => m.includes('HealthController'))
+    expect(healthLine, 'health routes should appear in the route table').toBeDefined()
+    expect(healthLine).toMatch(/\/health/)
+    expect(healthLine).toMatch(/2 routes/)
+
     const totalLine = messages.find((m: string) => m.includes('Total:'))
-    expect(totalLine).toMatch(/6 routes/)
+    expect(totalLine).toMatch(/8 routes/)
   })
 
   // ── 6. Routes are sorted by method order ─────────────────────────────

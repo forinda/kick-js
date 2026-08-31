@@ -28,6 +28,19 @@ export interface ModuleRoutes {
    */
   version?: number | false
   /**
+   * Mount outside the API prefix, at the root.
+   *
+   * `version: false` drops the `/v{n}` segment but keeps `apiPrefix`, so a
+   * module still lands under `/api`. Some routes must not: a health probe an
+   * orchestrator is configured against, a provider's fixed webhook URL, a
+   * `/.well-known` document. Those move with the prefix and break on a change
+   * that has nothing to do with them.
+   *
+   * Set `false` to mount at `path` exactly. The built-in health module uses it.
+   */
+  prefix?: false
+
+  /**
    * Controller class. Required unless `router` is provided. Used both
    * for the auto-derived router (via `buildRoutes(controller)`) and
    * for OpenAPI spec generation via `SwaggerAdapter`.
