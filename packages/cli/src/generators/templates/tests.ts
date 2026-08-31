@@ -128,20 +128,17 @@ ${listBlock}
 }
 
 export function generateRepositoryTest(ctx: TemplateContext): string {
-  const {
-    pascal,
-    kebab,
-    plural = '',
-    repoPrefix = `../infrastructure/repositories/in-memory-${kebab}.repository`,
-  } = ctx
-  return `import { describe, it, expect, beforeEach } from 'vitest'
-import { InMemory${pascal}Repository } from '${repoPrefix}'
+  const { pascal, kebab, plural = '', repoPrefix = `../${kebab}.repository` } = ctx
+  const factory = `create${pascal}Repository`
 
-describe('InMemory${pascal}Repository', () => {
-  let repo: InMemory${pascal}Repository
+  return `import { describe, it, expect, beforeEach } from 'vitest'
+import { ${factory}, type ${pascal}Repository } from '${repoPrefix}'
+
+describe('${pascal} repository', () => {
+  let repo: ${pascal}Repository
 
   beforeEach(() => {
-    repo = new InMemory${pascal}Repository()
+    repo = ${factory}()
   })
 
   it('should create and retrieve a ${kebab}', async () => {

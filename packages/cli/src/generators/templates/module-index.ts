@@ -30,15 +30,9 @@ function repoLabel(repo: RepoType): string {
  * takes the module's name instead, which the folder already carries. The
  * chosen store still appears in the stub's prose and its error messages.
  */
-function repoMaps(pascal: string, kebab: string, repo: RepoType) {
-  if (repo === 'inmemory') {
-    return {
-      repoClass: `InMemory${pascal}Repository`,
-      repoFile: `in-memory-${kebab}.repository`,
-    }
-  }
-  // `.impl` because `${kebab}.repository.ts` is the interface.
-  return { repoClass: `${pascal}Repository`, repoFile: `${kebab}.repository.impl` }
+/** The repository factory to call when registering the binding. */
+function repoFactory(pascal: string): string {
+  return `create${pascal}Repository`
 }
 
 /** Resolve the style flag, defaulting to 'define' for new code. */
@@ -49,7 +43,7 @@ function resolveStyle(style?: ModuleStyle): ModuleStyle {
 /** DDD module index — nested folders, use-cases, domain services */
 export function generateModuleIndex(ctx: TemplateContext & { repo: RepoType }): string {
   const { pascal, kebab, plural = '', repo, style } = ctx
-  const { repoClass, repoFile } = repoMaps(pascal, kebab, repo)
+  const factory = repoFactory(pascal)
   const resolvedStyle = resolveStyle(style)
 
   const header = `/**
@@ -66,7 +60,7 @@ export function generateModuleIndex(ctx: TemplateContext & { repo: RepoType }): 
  */`
 
   const repoImports = `import { ${pascal.toUpperCase()}_REPOSITORY } from './domain/repositories/${kebab}.repository'
-import { ${repoClass} } from './infrastructure/repositories/${repoFile}'
+
 import { ${pascal}Controller } from './presentation/${kebab}.controller'
 
 // Eagerly load decorated classes so @Controller()/@Service()/@Repository() decorators
@@ -111,12 +105,12 @@ export class ${pascal}Module implements AppModule {
   /**
    * Register module dependencies in the DI container.
    * Bind repository interface tokens to their implementations here.
-   * Currently wired to ${repoLabel(repo)}. To swap implementations, change the factory target.
+   * Currently wired to ${repoLabel(repo)}. To swap stores, write another
+     * factory returning a compatible shape and call that one here — the
+     * contract is the factory's return type, so nothing else changes.
    */
   register(container: Container): void {
-    container.registerFactory(${pascal.toUpperCase()}_REPOSITORY, () =>
-      container.resolve(${repoClass}),
-    )
+    container.registerFactory(${pascal.toUpperCase()}_REPOSITORY, () => ${factory}())
   }
 
 ${routesDoc.replace(/^ {4}/gm, '  ').replace(/^ {6}/gm, '    ')}
@@ -140,11 +134,13 @@ export const ${pascal}Module = defineModule({
     /**
      * Register module dependencies in the DI container.
      * Bind repository interface tokens to their implementations here.
-     * Currently wired to ${repoLabel(repo)}. To swap implementations, change the factory target.
+     * Currently wired to ${repoLabel(repo)}. To swap stores, write another
+     * factory returning a compatible shape and call that one here — the
+     * contract is the factory's return type, so nothing else changes.
      */
     register(container) {
       container.registerFactory(${pascal.toUpperCase()}_REPOSITORY, () =>
-        container.resolve(${repoClass}),
+        ${factory}(),
       )
     },
 
@@ -163,7 +159,7 @@ ${routesDoc}
 /** REST module index — flat folder, service + controller, no use-cases */
 export function generateRestModuleIndex(ctx: TemplateContext & { repo: RepoType }): string {
   const { pascal, kebab, plural = '', repo, style } = ctx
-  const { repoClass, repoFile } = repoMaps(pascal, kebab, repo)
+  const factory = repoFactory(pascal)
   const resolvedStyle = resolveStyle(style)
 
   const header = `/**
@@ -175,13 +171,16 @@ export function generateRestModuleIndex(ctx: TemplateContext & { repo: RepoType 
  * Structure:
  *   ${kebab}.controller.ts  — HTTP routes (CRUD)
  *   ${kebab}.service.ts     — Business logic
- *   ${kebab}.repository.ts  — Repository interface
- *   ${repoFile}.ts — Repository implementation
+ *   ${kebab}.repository.ts  — Repository: factory, contract, token
  *   dtos/                   — Request/response schemas
+ *
+ * The repository is backed by an in-memory Map so this module works as
+ * generated. Swap in ${repoLabel(repo)} by replacing the factory body in
+ * ${kebab}.repository.ts — the contract is whatever that factory returns, so
+ * nothing else has to change.
  */`
 
-  const repoImports = `import { ${pascal.toUpperCase()}_REPOSITORY } from './${kebab}.repository'
-import { ${repoClass} } from './${repoFile}'
+  const repoImports = `import { ${pascal.toUpperCase()}_REPOSITORY, ${factory} } from './${kebab}.repository'
 import { ${pascal}Controller } from './${kebab}.controller'
 
 // Eagerly load decorated classes so @Controller()/@Service()/@Repository() decorators
@@ -215,9 +214,7 @@ ${repoImports}
 
 export class ${pascal}Module implements AppModule {
   register(container: Container): void {
-    container.registerFactory(${pascal.toUpperCase()}_REPOSITORY, () =>
-      container.resolve(${repoClass}),
-    )
+    container.registerFactory(${pascal.toUpperCase()}_REPOSITORY, () => ${factory}())
   }
 
 ${routesDoc.replace(/^ {4}/gm, '  ').replace(/^ {6}/gm, '    ')}
@@ -240,7 +237,7 @@ export const ${pascal}Module = defineModule({
   build: () => ({
     register(container) {
       container.registerFactory(${pascal.toUpperCase()}_REPOSITORY, () =>
-        container.resolve(${repoClass}),
+        ${factory}(),
       )
     },
 

@@ -34,7 +34,6 @@ describe('kick g module', () => {
       'src/modules/tasks/dtos/update-task.dto.ts',
       'src/modules/tasks/dtos/task-response.dto.ts',
       'src/modules/tasks/task.repository.ts',
-      'src/modules/tasks/in-memory-task.repository.ts',
     ]
     for (const f of expectedFiles) {
       expect(existsSync(join(fixture, f)), `expected ${f} to exist`).toBe(true)
@@ -57,9 +56,10 @@ describe('kick g module', () => {
       join(fixture, 'src/modules/tasks/task.repository.ts'),
       'utf-8',
     )
-    expect(repoInterface).toContain("import { createToken } from '@forinda/kickjs'")
-    expect(repoInterface).toContain('createToken<ITaskRepository>(')
-    expect(repoInterface).not.toContain("Symbol('ITaskRepository')")
+    // `HttpException` rides along now that the working body lives in this file.
+    expect(repoInterface).toMatch(/import \{ createToken[^}]*\} from '@forinda\/kickjs'/)
+    expect(repoInterface).toContain('createToken<TaskRepository>(')
+    expect(repoInterface).not.toContain("Symbol('TaskRepository')")
   })
 
   it('passes tsc --noEmit', () => {

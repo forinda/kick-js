@@ -10,7 +10,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
 import { resolveTokenScope } from '../src/config'
-import { generateRepositoryInterface } from '../src/generators/templates/repository'
+import { generateRepositoryFactory } from '../src/generators/templates/repository'
 
 describe('resolveTokenScope', () => {
   let dir: string
@@ -88,32 +88,32 @@ describe('resolveTokenScope', () => {
   })
 })
 
-describe('generateRepositoryInterface — token-scope substitution', () => {
+describe('generateRepositoryFactory — token-scope substitution', () => {
   it("emits 'app/<Pascal>/repository' when tokenScope is omitted", () => {
-    const out = generateRepositoryInterface({ pascal: 'User', kebab: 'user' })
-    expect(out).toContain(`createToken<IUserRepository>('app/User/repository')`)
+    const out = generateRepositoryFactory({ pascal: 'User', kebab: 'user' })
+    expect(out).toContain(`createToken<UserRepository>('app/User/repository')`)
   })
 
   it('emits the resolved scope when tokenScope is set', () => {
-    const out = generateRepositoryInterface({
+    const out = generateRepositoryFactory({
       pascal: 'User',
       kebab: 'user',
       tokenScope: 'mycorp',
     })
-    expect(out).toContain(`createToken<IUserRepository>('mycorp/User/repository')`)
+    expect(out).toContain(`createToken<UserRepository>('mycorp/User/repository')`)
     // Documents the 'no kick/' rule inline so adopters reading the
     // file understand why the scope is what it is.
     expect(out).toMatch(/`'mycorp\/'` prefix matches the project scope/)
   })
 
   it('uses PascalCase for the key segment in the token literal', () => {
-    const out = generateRepositoryInterface({
+    const out = generateRepositoryFactory({
       pascal: 'TaskAssignee',
       kebab: 'task-assignee',
       tokenScope: 'billing-api',
     })
     expect(out).toContain(
-      `createToken<ITaskAssigneeRepository>('billing-api/TaskAssignee/repository')`,
+      `createToken<TaskAssigneeRepository>('billing-api/TaskAssignee/repository')`,
     )
   })
 })
