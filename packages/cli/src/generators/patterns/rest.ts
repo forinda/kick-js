@@ -16,7 +16,18 @@ import {
 } from '../templates'
 
 export async function generateRestFiles(ctx: ModuleContext): Promise<void> {
-  const { pascal, kebab, plural, pluralPascal, repo, noTests, tokenScope, style, write } = ctx
+  const {
+    pascal,
+    kebab,
+    plural,
+    pluralPascal,
+    repo,
+    noTests,
+    tokenScope,
+    style,
+    testHarness,
+    write,
+  } = ctx
   const swagger = ctx.swagger ?? false
 
   // Module file (named `<kebab>.module.ts` so Vite's module-discovery plugin picks it up)
@@ -73,7 +84,7 @@ export async function generateRestFiles(ctx: ModuleContext): Promise<void> {
     }
     await write(
       `__tests__/${kebab}.controller.test.ts`,
-      generateControllerTest({ pascal, kebab, plural }),
+      generateControllerTest({ pascal, kebab, plural, style, testHarness }),
     )
     await write(
       `__tests__/${kebab}.repository.test.ts`,

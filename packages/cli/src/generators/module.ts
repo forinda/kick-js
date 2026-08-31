@@ -43,6 +43,12 @@ interface GenerateModuleOptions {
   /** Project depends on @forinda/kickjs-swagger — gates @ApiTags emission. */
   swagger?: boolean
   /**
+   * Project has `@forinda/kickjs-testing` and `supertest` — gates the
+   * generated controller test booting the module for real. Without them the
+   * imports would not resolve and the generated file could not compile.
+   */
+  testHarness?: boolean
+  /**
    * Module declaration style — `'define'` (factory, default) or
    * `'class'` (legacy). Resolved by the orchestrating command from
    * `kick.config.ts > modules.style`.
@@ -104,6 +110,7 @@ export async function generateModule(options: GenerateModuleOptions): Promise<st
     noTests: noTests ?? false,
     tokenScope: options.tokenScope ?? 'app',
     swagger: options.swagger ?? false,
+    testHarness: options.testHarness ?? false,
     style: options.style ?? 'define',
     write,
     files,
