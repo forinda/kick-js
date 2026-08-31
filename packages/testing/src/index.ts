@@ -57,8 +57,38 @@ export interface CreateTestAppOptions extends BootstrapPassthroughOptions {
   modules: AppModuleEntry[]
   /** Adapters to attach (auth, queue, devtools, etc.) */
   adapters?: AppAdapter[]
-  /** DI overrides applied after module registration. Supports both string and symbol keys. */
-  overrides?: Record<symbol | string, any>
+  /**
+   * DI overrides applied after module registration.
+   *
+   * An object literal covers string and symbol keys. It cannot cover
+   * `createToken()`, though — a token is a frozen OBJECT identified by
+   * reference, and TypeScript rejects an object as a computed key
+   * (`TS2464: A computed property name must be of type 'string', 'number',
+   * 'symbol', or 'any'`). Since tokens are the documented way to bind an
+   * interface to an implementation, that excluded exactly the key type most
+   * worth overriding in a test.
+   *
+   * Worse, the obvious workaround compiles and does nothing: `[TOKEN.name]` is
+   * a string, and the container keys tokens by reference, so the override is
+   * accepted and never applied.
+   *
+   * Pass entries to override a token:
+   *
+   * ```ts
+   * const DATABASE = createToken<Database>('app/Db/connection')
+   *
+   * await createTestApp({
+   *   modules: [UserModule()],
+   *   overrides: [[DATABASE, fakeDb()]],
+   * })
+   * ```
+   *
+   * A `Map` works too. The object form is unchanged.
+   */
+  overrides?:
+    | Record<symbol | string, any>
+    | ReadonlyArray<readonly [token: unknown, value: unknown]>
+    | ReadonlyMap<unknown, unknown>
   /**
    * Use an isolated container instead of the global singleton.
    * Prevents concurrent tests from interfering with each other's DI state.
@@ -93,6 +123,22 @@ export interface CreateTestAppOptions extends BootstrapPassthroughOptions {
  * const res = await request(app.handle.bind(app)).get('/api/v1/users')
  * ```
  */
+/**
+ * Normalize every accepted `overrides` shape to `[token, value]` pairs.
+ *
+ * An array or Map keeps the token's identity, which is what the container
+ * matches on; an object literal is limited to string and symbol keys by the
+ * language itself.
+ */
+function overrideEntries(
+  overrides: NonNullable<CreateTestAppOptions['overrides']>,
+): Array<[unknown, unknown]> {
+  if (Array.isArray(overrides)) return overrides.map(([token, value]) => [token, value])
+  if (overrides instanceof Map) return [...overrides.entries()]
+  const record = overrides as Record<symbol | string, unknown>
+  return Reflect.ownKeys(record).map((key) => [key, record[key as never]])
+}
+
 export async function createTestApp(options: CreateTestAppOptions): Promise<{
   app: Application
   /**
@@ -165,8 +211,8 @@ export async function createTestApp(options: CreateTestAppOptions): Promise<{
   // Apply DI overrides AFTER setup so they take precedence over
   // bindings registered by modules during register().
   if (options.overrides) {
-    for (const token of Reflect.ownKeys(options.overrides)) {
-      container.registerInstance(token, options.overrides[token as any])
+    for (const [token, value] of overrideEntries(options.overrides)) {
+      container.registerInstance(token, value)
     }
   }
 
