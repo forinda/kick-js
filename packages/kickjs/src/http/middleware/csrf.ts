@@ -1,3 +1,4 @@
+import { readCookies, sendJson, setCookie } from './respond'
 import type { Request, Response, NextFunction } from 'express'
 import { resolvePathname, type ClientRequestLike } from '../client-ip'
 
@@ -66,12 +67,15 @@ export function csrf(options: CsrfOptions = {}) {
 
   return (req: Request, res: Response, next: NextFunction) => {
     // Generate or reuse CSRF token
-    const cookies = (req as any).cookies || {}
+    // NOT `req.cookies` alone: that is populated only by an upstream parser,
+    // which Fastify and h3 never have and Express only has if the app mounts
+    // one. Without this the middleware never saw the token it had just issued.
+    const cookies = readCookies(req)
     let token = cookies[cookieName]
 
     if (!token) {
       token = randomHex(tokenLength)
-      res.cookie(cookieName, token, cookieOpts)
+      setCookie(res, cookieName, token, cookieOpts)
     }
 
     // Skip validation for safe methods and ignored paths
@@ -89,7 +93,7 @@ export function csrf(options: CsrfOptions = {}) {
     const headerToken = req.headers[headerName] as string | undefined
 
     if (!headerToken || headerToken !== token) {
-      return res.status(403).json({
+      return sendJson(res, 403, {
         message: 'CSRF token mismatch',
       })
     }

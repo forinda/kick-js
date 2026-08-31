@@ -1,3 +1,4 @@
+import { parseCookieHeader, setCookie } from './respond'
 import { randomUUID, createHmac, timingSafeEqual } from 'node:crypto'
 import type { Request, Response, NextFunction } from 'express'
 
@@ -100,28 +101,6 @@ class MemoryStore implements SessionStore {
       }
     }
   }
-}
-
-// ── Cookie Header Parsing ─────────────────────────────────────────────
-
-function parseCookieHeader(header: string): Record<string, string> {
-  const out: Record<string, string> = {}
-  for (const pair of header.split(';')) {
-    const eq = pair.indexOf('=')
-    if (eq === -1) continue
-    const key = pair.slice(0, eq).trim()
-    if (!key) continue
-    let value = pair.slice(eq + 1).trim()
-    if (value.startsWith('"') && value.endsWith('"')) {
-      value = value.slice(1, -1)
-    }
-    try {
-      out[key] = decodeURIComponent(value)
-    } catch {
-      out[key] = value
-    }
-  }
-  return out
 }
 
 // ── Cookie Signing ────────────────────────────────────────────────────
@@ -239,7 +218,7 @@ export function session(options: SessionOptions) {
         currentData = {}
         sessionObj.data = currentData
         await store.set(currentSid, currentData, maxAge)
-        res.cookie(cookieName, sign(currentSid, secret), cookieDefaults)
+        setCookie(res, cookieName, sign(currentSid, secret), cookieDefaults)
       },
 
       async destroy() {
@@ -261,7 +240,7 @@ export function session(options: SessionOptions) {
 
     // Set cookie for new sessions
     if (isNew) {
-      res.cookie(cookieName, sign(currentSid, secret), cookieDefaults)
+      setCookie(res, cookieName, sign(currentSid, secret), cookieDefaults)
     }
 
     // Auto-save on response finish
@@ -280,7 +259,7 @@ export function session(options: SessionOptions) {
 
     // Rolling: refresh cookie on every response
     if (rolling && !isNew) {
-      res.cookie(cookieName, sign(currentSid, secret), cookieDefaults)
+      setCookie(res, cookieName, sign(currentSid, secret), cookieDefaults)
     }
 
     next()
