@@ -247,6 +247,53 @@ async function startDevServer(
   process.on('SIGBREAK', shutdown)
 }
 
+/**
+ * Refresh `.kickjs/types` before type-checking.
+ *
+ * `kick dev` runs typegen on startup, `kick typecheck` did not — so the moment
+ * a controller method is renamed or a module deleted without the dev server
+ * running, typecheck fails against types describing routes that no longer
+ * exist:
+ *
+ *   .kickjs/types/kick__routes.ts(12,45): error TS2307: Cannot find module
+ *     '../../src/modules/hello/hello.controller'
+ *   src/modules/health/health.controller.ts(11,46): error TS2339: Property
+ *     'live' does not exist on type 'HealthController'
+ *
+ * The last one is the trap: it points at correct, current source and blames a
+ * method that does exist, because the stale `KickRoutes` namespace has no entry
+ * for it. The cause is a generated file the developer never edited and may not
+ * know about. A pre-commit hook or a fresh clone hits this every time, since
+ * neither has run the dev server.
+ *
+ * Failures here are reported and swallowed: a typegen problem must not
+ * masquerade as a type error, but it also must not stop the type-check the
+ * user asked for.
+ */
+async function refreshTypesForTypecheck(cwd: string): Promise<void> {
+  const config = await loadKickConfig(cwd)
+  try {
+    await runTypegen({
+      cwd,
+      allowDuplicates: true,
+      schemaValidator: config?.typegen?.schemaValidator ?? 'zod',
+      envFile: config?.typegen?.envFile,
+      srcDir: config?.typegen?.srcDir,
+      outDir: config?.typegen?.outDir,
+      assetMap: config?.assetMap,
+      runPlugins: false,
+    })
+    const outDir = resolve(cwd, config?.typegen?.outDir ?? '.kickjs/types')
+    const results = await runAllPluginTypegens({ cwd, config })
+    await writeTypegenArtifacts(outDir, results, false)
+  } catch (err: any) {
+    console.warn(
+      `  kick typegen: skipped before typecheck (${err?.message ?? err}).\n` +
+        '  Generated types may be stale — errors inside .kickjs/types are likely from that.',
+    )
+  }
+}
+
 export function registerRunCommands(program: Command): void {
   program
     .command('dev')
@@ -374,7 +421,8 @@ export function registerRunCommands(program: Command): void {
     .command('typecheck')
     .description('Type-check the project with its own tsgo/tsc')
     .option('--cwd <dir>', 'Directory to type-check', '.')
-    .action((opts: any) => {
+    .option('--no-typegen', 'Skip refreshing .kickjs/types first')
+    .action(async (opts: any) => {
       // The point of routing this through `kick` is that a scaffold should not
       // have to spell the package manager. `pnpm -r exec tsc --noEmit` and
       // `cd server && npx tsc --noEmit` do the same job in two incompatible
@@ -384,6 +432,13 @@ export function registerRunCommands(program: Command): void {
       // Same resolver `kick dev --typecheck` uses, so it prefers tsgo and
       // handles Windows' .CMD shims.
       const dir = resolve(process.cwd(), opts.cwd ?? '.')
+
+      // Refresh generated types first. Without this, typecheck reports errors
+      // from `.kickjs/types` describing routes that no longer exist — and the
+      // most confusing of them point at correct source files. `--no-typegen`
+      // opts out for a caller that has just run typegen itself.
+      if (opts.typegen !== false) await refreshTypesForTypecheck(dir)
+
       const bin = resolveTypecheckBin(dir)
       if (!bin) {
         console.error(
