@@ -175,7 +175,17 @@ function makeEventHandler(entry: RouteEntry): (event: H3EventLike) => Promise<vo
       const sentBody = encoding !== undefined || (length !== undefined && length !== '0')
       if (sentBody) {
         try {
-          req.body = await readBody(event)
+          // `readBody` matches `application/json` EXACTLY, so
+          // `application/json; charset=utf-8` — what most clients actually send
+          // — fell to its catch-all branch and parsed non-strictly, handing the
+          // handler a raw string for malformed JSON instead of throwing. Decide
+          // on the normalised media type and ask for strict parsing ourselves.
+          // Only `application/json` — the type h3 itself special-cases. Widening
+          // this to `+json` would make h3 stricter than Express, which does not
+          // parse those at all: a different divergence, not a fix.
+          const mediaType = (req.headers['content-type'] ?? '').split(';')[0].trim().toLowerCase()
+          const strict = mediaType === 'application/json'
+          req.body = await readBody(event, strict ? { strict: true } : {})
         } catch (err) {
           throw HttpException.badRequest(
             err instanceof Error ? err.message : 'Request body could not be parsed',

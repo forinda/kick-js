@@ -58,8 +58,40 @@ describe.each(runtimes)('body parsing on $name', ({ make }) => {
     expect(res.body).not.toHaveProperty('got')
   })
 
+  it.each([['application/json'], ['application/json; charset=utf-8']])(
+    'rejects malformed JSON sent as %s',
+    async (contentType) => {
+      // The content type is normally parameterised — `; charset=utf-8` is what
+      // most clients send. h3's `readBody` matches `application/json` EXACTLY, so
+      // anything with a parameter took its non-strict branch and handed the
+      // handler a raw string. The first fix here only covered the bare form,
+      // because the test only sent the bare form.
+      const res = await (
+        await agent()
+      )
+        .post('/api/v1/echo')
+        .set('Content-Type', contentType)
+        .send('{"a":')
+
+      expect(res.status).toBe(400)
+      expect(res.body).not.toHaveProperty('got')
+    },
+  )
+
   it('accepts a well-formed body', async () => {
     const res = await (await agent()).post('/api/v1/echo').send({ a: 1 })
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ got: 1 })
+  })
+
+  it('accepts a well-formed body with a parameterised content type', async () => {
+    // The strict flag must not break the ordinary case it was added for.
+    const res = await (
+      await agent()
+    )
+      .post('/api/v1/echo')
+      .set('Content-Type', 'application/json; charset=utf-8')
+      .send('{"a":1}')
     expect(res.status).toBe(200)
     expect(res.body).toEqual({ got: 1 })
   })

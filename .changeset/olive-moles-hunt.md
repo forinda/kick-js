@@ -24,6 +24,14 @@ The runtime now only skips the read when nothing was sent, deciding on
 A body that is present but unparseable raises `HttpException.badRequest`, so all
 three runtimes answer 400.
 
+The content type has to be normalised for that to hold. `readBody` matches
+`application/json` **exactly**, so `application/json; charset=utf-8` — what most
+clients actually send — fell to its catch-all branch and parsed non-strictly,
+handing the handler a raw string rather than throwing. The runtime now strips
+parameters itself and asks for strict parsing when the media type is JSON.
+Deliberately not extended to `+json` types: Express does not parse those at all,
+so making h3 stricter there would be a different divergence rather than a fix.
+
 Covered by a matrix over all three: malformed JSON is rejected and the handler
 does not run, a well-formed body still works, and a request with no body at all
 still succeeds — that last one being why the original catch existed.
