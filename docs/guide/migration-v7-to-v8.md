@@ -8,6 +8,15 @@ If nothing in your codebase asserts on the body of a 404, and no client of yours
 pnpm add @forinda/kickjs@8
 ```
 
+::: tip Only the framework goes to 8
+Versions are per-package and independent. This release is `@forinda/kickjs` **8.0.0**, `@forinda/kickjs-cli` **7.2.0** and `@forinda/kickjs-testing` **7.1.0** — the CLI and the test harness carry no breaking change, so they do not follow the framework's major. Upgrade them with `@latest`, not `@8`:
+
+```bash
+pnpm add -D @forinda/kickjs-cli@latest @forinda/kickjs-testing@latest
+```
+
+:::
+
 ## At a glance
 
 | Change                                          | Affects               | Action                                              |
@@ -102,6 +111,16 @@ routes() {
 ## Fixes that change what you observe
 
 These are patches, not breaks — but each one changes a response you may have built around.
+
+### Fastify / h3: `/health/ready` answered 500
+
+The built-in health routes used `ctx.res.status(code).json(body)` in three of their four branches. `ctx.res` is the _engine-native_ response — under Fastify a `FastifyReply`, which has `.status()` but no `.json()` — so those branches threw and the error handler answered 500.
+
+**Readiness probes therefore failed permanently on Fastify.** A pod never becomes ready, which blocks a deployment rather than degrading it. Both draining branches had the same defect, and they fire during exactly the shutdown window they exist to cover.
+
+It stayed invisible because the one branch using the neutral `ctx.json()` is the happy path of `/health/live` — which is what a smoke test curls.
+
+All four branches now `return reply(status, body)`. If you worked around this with your own readiness route, the built-in one is worth reclaiming — see [health probes moved](#health-probes-moved) above for where it now mounts.
 
 ### h3: a malformed body answered 200
 
@@ -200,17 +219,19 @@ const { app } = await createTestApp({
 })
 ```
 
-## CLI (`@forinda/kickjs-cli` 8.x)
+## CLI (`@forinda/kickjs-cli` 7.2)
 
 - **The generated repository is one file.** `<module>.repository.ts` now holds the factory, the contract (`ReturnType` of the factory) and the token. Previously three files, with the store name baked into the class — `PostgresAuditRepository` whose every method read and wrote a `Map`. The store is gone from the generated names, so an in-memory body is honest and the TODO says what to swap in.
 - **`modules.repo` in `kick.config.ts` is deprecated.** It only ever selected a name for the lie above. Remove it; the generator no longer needs it.
 - **`kick typecheck` refreshes generated types first.** `kick dev` always did, so the two disagreed the moment a route changed.
 - **`kick g adapter` scaffolds every `AppAdapter` hook** and stops describing the middleware hook as Express-only.
 - **Generated controller tests assert something.** Every case used to be `expect(true).toBe(true)`.
+- **Generated project docs stop calling the bare module form an error.** They listed `bootstrap({ modules: [TodosModule] })` as a red flag — which is now the supported form for a config-less module, as above.
+- **Generated docs and `kick explain` stop teaching the Express-only test pattern**, matching `createTestApp`'s new `runtime` option.
 
 ## Upgrade checklist
 
-1. `pnpm add @forinda/kickjs@8 @forinda/kickjs-cli@8 @forinda/kickjs-testing@8`
+1. `pnpm add @forinda/kickjs@8` and `pnpm add -D @forinda/kickjs-cli@latest @forinda/kickjs-testing@latest` — only the framework goes to 8.
 2. Grep your tests and clients for `'Not Found'` — assert on `title`/`status`, or pass `onNotFound`.
 3. Grep for 404 handling that covers the wrong-verb case; split out 405.
 4. If you have global auth, exempt `/health` or pass `health: false`.
