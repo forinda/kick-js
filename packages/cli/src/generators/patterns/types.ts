@@ -27,4 +27,6 @@ export interface ModuleContext {
   files: string[]
   /** Project depends on @forinda/kickjs-swagger — gates @ApiTags. */
   swagger?: boolean
+  /** Project has kickjs-testing + supertest — gates the real controller test. */
+  testHarness?: boolean
 }

@@ -48,6 +48,17 @@ export interface TemplateContext {
    */
   tokenScope?: string
   /**
+   * Project has `@forinda/kickjs-testing` and `supertest` available, so the
+   * generated controller test can boot the module for real.
+   *
+   * Same rule as {@link TemplateContext.swagger}: emitting an import for a
+   * package that is not installed produces a file that cannot compile. The
+   * scaffolded templates install both as devDependencies, so this is true for
+   * `kick new` projects and false for a bare one — which then gets the same
+   * test with every case as `it.todo` and no extra imports.
+   */
+  testHarness?: boolean
+  /**
    * Module declaration style emitted for the module-index file.
    * Defaults to `'define'`. Resolved from `kick.config.ts > modules.style`
    * by the orchestrating generator before the template is invoked.

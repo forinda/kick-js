@@ -17,7 +17,7 @@ import { generateContributor, type ContributorType } from '../generators/contrib
 import { generateService } from '../generators/service'
 import { generateController } from '../generators/controller'
 import { generateDto } from '../generators/dto'
-import { hasSwagger } from '../config'
+import { hasDependency, hasSwagger } from '../config'
 import { findProjectRoot } from '../utils/project-root'
 import { generateConfig } from '../generators/config'
 import { generateAgentDocs } from '../generators/agent-docs'
@@ -241,6 +241,12 @@ async function runModuleGeneration(
   // so a project that HAS swagger silently generates controllers without it.
   // The extension guide warns generator authors about exactly this trap.
   const swagger = hasSwagger(findProjectRoot())
+  // Both are devDependencies — a test harness is not needed in a production
+  // install — so this asks for 'any' rather than 'runtime'.
+  const projectRoot = findProjectRoot()
+  const testHarness =
+    hasDependency(projectRoot, '@forinda/kickjs-testing', 'any') &&
+    hasDependency(projectRoot, 'supertest', 'any')
   const resolvedStyle = mc.style ?? 'define'
 
   // Style-drift gate. When the project pins `modules.style: 'define'`
@@ -296,6 +302,7 @@ async function runModuleGeneration(
       minimal: opts.minimal,
       force: opts.force,
       pattern,
+      testHarness,
       dryRun,
       pluralize: shouldPluralize,
       tokenScope,
