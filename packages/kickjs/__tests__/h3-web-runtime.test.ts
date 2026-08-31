@@ -63,6 +63,49 @@ describe('h3WebRuntime — fetch round-trips', () => {
     expect(await res.json()).toEqual({ hi: 'world', q: 'fast' })
   })
 
+  // #605: `.catch(() => undefined)` could not tell an ABSENT body from an
+  // UNPARSEABLE one, so a malformed payload answered 200 with the handler
+  // running against `undefined` — the defect #586 removed from the node h3
+  // runtime, still live on the entry used for edge / Bun / Deno.
+  it('rejects a malformed JSON body without running the handler', async () => {
+    let ran = false
+    const { app } = mount([
+      entry({
+        method: 'POST',
+        path: '/things',
+        handler: async (ctx: RequestContext) => {
+          ran = true
+          ctx.created({ got: ctx.body })
+        },
+      }),
+    ])
+    const res = await app.fetch(
+      new Request('http://test/api/things', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{"a":',
+      }),
+    )
+    expect(res.status).toBe(400)
+    expect(ran).toBe(false)
+  })
+
+  // The absent-body case the catch existed for: it must still succeed.
+  it('accepts a POST with no body at all', async () => {
+    const { app } = mount([
+      entry({
+        method: 'POST',
+        path: '/things',
+        handler: async (ctx: RequestContext) => {
+          ctx.created({ got: ctx.body ?? null })
+        },
+      }),
+    ])
+    const res = await app.fetch(new Request('http://test/api/things', { method: 'POST' }))
+    expect(res.status).toBe(201)
+    expect(await res.json()).toEqual({ got: null })
+  })
+
   it('parses JSON bodies and echoes ctx.created', async () => {
     const { app } = mount([
       entry({
