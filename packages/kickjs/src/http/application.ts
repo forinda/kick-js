@@ -416,7 +416,7 @@ function isConfigurable(factory: { definition: { defaults?: unknown } }): boolea
  * `entry is not a constructor` it used to produce.
  */
 function toAppModule(entry: AppModuleEntry): AppModule {
-  if (typeof entry !== 'function') return entry
+  if (typeof entry !== 'function') return entry as AppModule
   if (isModuleFactory(entry)) {
     if (isConfigurable(entry)) {
       const name = entry.definition?.name || entry.name || '<anonymous>'
@@ -428,18 +428,52 @@ function toAppModule(entry: AppModuleEntry): AppModule {
     }
     return entry()
   }
-  try {
-    return new (entry as AppModuleClass)()
-  } catch (err) {
-    const name = (entry as { name?: string }).name || '<anonymous>'
+
+  const name = (entry as { name?: string }).name || '<anonymous>'
+  if (!isConstructible(entry)) {
     throw new TypeError(
-      `bootstrap: module entry \`${name}\` is a function but not a module class, ` +
-        `and not a defineModule() factory either (no \`definition\`).\n` +
-        `  If it is a defineModule() module, make sure it is the factory itself ` +
-        `or its result — \`${name}\` or \`${name}()\` both work.\n` +
-        `  If it is a class, it must implement AppModule.`,
-      { cause: err },
+      `bootstrap: module entry \`${name}\` is a function, but not a module class ` +
+        `and not a defineModule() factory (no \`definition\`).\n` +
+        `  A defineModule() module is passed as \`${name}\` or \`${name}()\`; ` +
+        `a class must implement AppModule.`,
     )
+  }
+
+  // Constructed OUTSIDE any catch. Wrapping this was masking real failures:
+  // a legacy module whose constructor threw came back reported as "not a
+  // module class", hiding the actual error and sending the reader to the
+  // wrong place entirely.
+  const mod = new (entry as AppModuleClass)() as AppModule
+
+  // A plain `function Foo() {}` IS constructible and returns `{}`, so it
+  // reaches here and would fail later inside the framework at `mod.routes()`
+  // — a generic error, far from the entry that caused it. Check the shape
+  // where the entry is still in hand.
+  if (typeof mod?.routes !== 'function') {
+    throw new TypeError(
+      `bootstrap: module entry \`${name}\` constructed, but the result does not ` +
+        `implement AppModule — \`routes()\` is missing.\n` +
+        `  A module class needs \`routes()\`; a defineModule() module is passed ` +
+        `as \`${name}\` or \`${name}()\`.`,
+    )
+  }
+  return mod
+}
+
+/**
+ * Whether `new fn()` is legal, without calling it.
+ *
+ * Reflect.construct with a deliberately unrelated `newTarget` performs the
+ * constructibility check and then throws before running any constructor body,
+ * so this stays side-effect free — which matters, because the whole point is
+ * to avoid invoking something that may not be a constructor at all.
+ */
+function isConstructible(fn: unknown): boolean {
+  try {
+    Reflect.construct(String, [], fn as never)
+    return true
+  } catch {
+    return false
   }
 }
 

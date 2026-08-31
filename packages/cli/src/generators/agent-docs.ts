@@ -10,6 +10,7 @@ import {
   generateCopilot,
 } from './templates/project-docs'
 import { loadKickConfig } from '../config'
+import type { ModuleStyle } from './templates/types'
 
 type ProjectTemplate = 'rest' | 'minimal' | 'fullstack'
 
@@ -79,6 +80,20 @@ function detectPm(outDir: string, override?: string): string {
   return 'pnpm'
 }
 
+/**
+ * Module declaration style, so generated examples show the form this project
+ * actually uses. A `class` module passed as `UserModule()` calls a class
+ * without `new`; a `define` module passed bare is refused when it takes config.
+ */
+async function detectStyle(outDir: string): Promise<ModuleStyle> {
+  try {
+    const cfg = await loadKickConfig(outDir)
+    return cfg?.modules?.style === 'class' ? 'class' : 'define'
+  } catch {
+    return 'define'
+  }
+}
+
 async function detectTemplate(
   outDir: string,
   override?: ProjectTemplate,
@@ -99,6 +114,7 @@ export async function generateAgentDocs(options: GenerateAgentDocsOptions): Prom
   const name = detectName(options.outDir, options.name)
   const pm = detectPm(options.outDir, options.pm)
   const template = await detectTemplate(options.outDir, options.template)
+  const style = await detectStyle(options.outDir)
 
   const wantsAgents = only === 'agents' || only === 'both' || only === 'all'
   const wantsClaude = only === 'claude' || only === 'both' || only === 'all'
@@ -128,7 +144,7 @@ export async function generateAgentDocs(options: GenerateAgentDocsOptions): Prom
     // auto-discover skills (Claude Code, Copilot CLI plugins, Gemini's
     // activate_skill) pick each up by its frontmatter without needing
     // a separate index file.
-    for (const skill of generateKickJsSkillFiles(name, template, pm)) {
+    for (const skill of generateKickJsSkillFiles(name, template, pm, style)) {
       targets.push({
         file: join(options.outDir, AGENTS_DIR, 'skills', skill.slug, 'SKILL.md'),
         render: () => skill.content,

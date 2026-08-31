@@ -36,6 +36,13 @@ bootstrap: module `TenantModule` takes configuration, so it must be invoked.
   Passing it bare would have silently selected the defaults.
 ```
 
-When an entry is a function that is neither, the error now names it and says
-what both valid shapes are, instead of surfacing a bare constructor complaint
-from inside the framework.
+`AppModuleEntry` includes the factory form, so the bare name type-checks
+without a cast.
+
+Entry validation was also restructured. Construction happens outside any catch:
+wrapping it meant a module whose own constructor threw came back reported as
+"not a module class", hiding the real error and sending the reader somewhere
+else entirely. Constructibility is checked first without invoking anything, and
+the constructed value is checked for `routes()` — a plain `function Foo() {}`
+is constructible and returns `{}`, so it used to slip past the diagnostic and
+fail later inside the framework, far from the entry that caused it.

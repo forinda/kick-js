@@ -14,7 +14,13 @@
  */
 
 import { beforeEach, describe, expect, it } from 'vitest'
-import { Application, Container, defineModule, type AppModule } from '../src/index'
+import {
+  Application,
+  Container,
+  defineModule,
+  type AppModule,
+  type AppModuleEntry,
+} from '../src/index'
 
 const Core = defineModule({
   name: 'CoreModule',
@@ -27,8 +33,8 @@ class LegacyModule implements AppModule {
   }
 }
 
-async function boot(modules: unknown[]) {
-  const app = new Application({ modules: modules as never })
+async function boot(modules: AppModuleEntry[]) {
+  const app = new Application({ modules })
   await Promise.resolve(app.setup())
   return app
 }
@@ -75,6 +81,32 @@ describe('module entry forms', () => {
     await expect(boot([LegacyModule])).resolves.toBeDefined()
   })
 
+  it('surfaces a constructor error instead of blaming the module shape', async () => {
+    // The first version wrapped `new entry()` in a catch that reported every
+    // failure as "not a module class" — so a module whose constructor threw
+    // sent the reader to the wrong place entirely, with the real error gone.
+    class ExplodingModule implements AppModule {
+      constructor() {
+        throw new Error('DATABASE_URL is not set')
+      }
+      routes() {
+        return null
+      }
+    }
+    await expect(boot([ExplodingModule])).rejects.toThrow(/DATABASE_URL is not set/)
+  })
+
+  it('names an entry that constructs but is not a module', async () => {
+    // `function Foo() {}` IS constructible and returns `{}`, so it used to slip
+    // past the diagnostic and die later inside the framework at `mod.routes()`
+    // — a generic error, far from the entry that caused it.
+    function NotAModule() {}
+    await expect(boot([NotAModule as unknown as AppModuleEntry])).rejects.toThrow(/NotAModule/)
+    await expect(boot([NotAModule as unknown as AppModuleEntry])).rejects.toThrow(
+      /does not implement AppModule/,
+    )
+  })
+
   it('names the entry when a function is neither', async () => {
     // The bare `entry is not a constructor` said nothing about which module or
     // what to do; anything that replaces it has to say both.
@@ -82,7 +114,9 @@ describe('module entry forms', () => {
     // a defineModule factory either. A plain `function` would construct fine
     // and fail later on a missing method, which is a different message.
     const NotAModule = () => ({})
-    await expect(boot([NotAModule])).rejects.toThrow(/NotAModule/)
-    await expect(boot([NotAModule])).rejects.toThrow(/defineModule\(\) factory/)
+    await expect(boot([NotAModule as unknown as AppModuleEntry])).rejects.toThrow(/NotAModule/)
+    await expect(boot([NotAModule as unknown as AppModuleEntry])).rejects.toThrow(
+      /defineModule\(\) factory/,
+    )
   })
 })
