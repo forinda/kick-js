@@ -2,6 +2,14 @@
 
 The `@forinda/kickjs-testing` package provides utilities for integration testing KickJS applications. Works with Vitest and supertest.
 
+::: tip Scaffold one
+`kick g test <name>` writes a Vitest file with the `Container.reset()` setup already in place — the step most easily forgotten, and the one that makes tests interfere when it is missing.
+
+<PmCommand exec="kick g test users" />
+
+`kick g module` writes controller and repository tests alongside the module. Full flag list: [Generators](./generators.md#kick-g-test).
+:::
+
 ## Typed API tests with the client
 
 For request-level integration tests, [`@forinda/kickjs-client`](./typed-client.md)'s

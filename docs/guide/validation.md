@@ -6,6 +6,14 @@ KickJS validates request data through the [`@forinda/kickjs-schema`](schema.md) 
 Under the hood the validate middleware calls `detectSchema(schema).safeParse(payload)`. The same `KickSchema` flows into the swagger spec generator and `loadEnvFromSchema()` — so picking Valibot for one DTO and Yup for another in the same project Just Works, no extra config. See the [schema-agnostic validation guide](schema.md) for the adapter surface.
 :::
 
+::: tip Scaffold one
+`kick g dto <name>` writes a Zod schema plus its inferred type, in the shape the route decorators below expect.
+
+<PmCommand exec="kick g dto create-user" />
+
+`-m, --module <module>` places it in a module's `dtos/` folder. Full flag list: [Generators](./generators.md#kick-g-dto).
+:::
+
 ## Inline Validation on Route Decorators
 
 The route decorators (`@Get`, `@Post`, `@Put`, `@Delete`, `@Patch`) accept a second argument with `body`, `query`, and `params` schemas. Pass a Zod, Valibot, or Yup schema directly — `detectSchema()` routes each one to the right adapter:

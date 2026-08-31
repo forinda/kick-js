@@ -2,6 +2,14 @@
 
 KickJS provides middleware at three levels: global (applied to all requests), class-level (applied to all routes in a controller), and method-level (applied to a single route handler). Adapters can also inject middleware at specific phases of the pipeline.
 
+::: tip Scaffold one
+`kick g middleware <name>` writes a typed middleware function, and `-m` drops it inside a module folder rather than the shared directory.
+
+<PmCommand exec="kick g middleware request-timer" />
+
+Also `kick g guard <name>` for the short-circuiting kind. Full flag list: [Generators](./generators.md#kick-g-middleware).
+:::
+
 ## MiddlewareHandler Type
 
 All KickJS middleware follows the same signature:

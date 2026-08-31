@@ -19,10 +19,9 @@ This page covers **runtime plugins** — `definePlugin()` factories registered v
 
 The fastest way is the generator:
 
-```bash
-kick g plugin analytics
-# → src/plugins/analytics.plugin.ts
-```
+<PmCommand exec="kick g plugin analytics" />
+
+It writes `src/plugins/analytics.plugin.ts`.
 
 This scaffolds a factory function with every optional `KickPlugin` hook stubbed out and commented — uncomment the ones you need, delete the rest. The factory name is camelCased from the plugin name so it drops straight into `bootstrap({ plugins })`:
 
