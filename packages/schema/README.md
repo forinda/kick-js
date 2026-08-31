@@ -103,11 +103,47 @@ interface SchemaIssue {
 ## Adapters
 
 One wrapper per library, each behind its own subpath so you pay for only what
-you import — see the table below. Writing your own is one function returning
-`{ parse, safeParse }`.
+you import — see the table below.
 
-[The guide](https://kickjs.app/guide/schema) has a worked Joi adapter, the
-`detectSchema()` resolution order, and how `InferSchemaOutput<T>` unwraps a type.
+To support a library that has no wrapper, register an adapter. It is three
+members: a `name`, a `detect` that recognises the library's schemas, and a
+`wrap` that returns a `KickSchema` — meaning **both** `safeParse` and
+`toJsonSchema`, since the second is what feeds OpenAPI generation:
+
+```ts
+import { registerAdapter, type SchemaAdapter } from '@forinda/kickjs-schema'
+import Joi from 'joi'
+import joiToJson from 'joi-to-json'
+
+registerAdapter({
+  name: 'joi',
+  detect: (schema): boolean => Joi.isSchema(schema),
+  wrap: (schema): KickSchema => ({
+    safeParse(data) {
+      const { value, error } = (schema as Joi.Schema).validate(data, { abortEarly: false })
+      if (error) {
+        return {
+          success: false,
+          issues: error.details.map((d) => ({
+            path: d.path.map(String),
+            message: d.message,
+            code: d.type,
+          })),
+        }
+      }
+      return { success: true, data: value }
+    },
+    toJsonSchema() {
+      return joiToJson(schema as Joi.Schema)
+    },
+    _raw: schema,
+  }),
+})
+```
+
+[The guide](https://kickjs.app/guide/schema) has the full worked Joi adapter,
+the `detectSchema()` resolution order, and how `InferSchemaOutput<T>` unwraps a
+type.
 
 ## Subpath exports
 
