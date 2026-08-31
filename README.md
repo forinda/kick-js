@@ -55,8 +55,8 @@ export class HelloService {
     return { message: `Hello ${name} from KickJS!`, timestamp: new Date().toISOString() }
   }
 
-  healthCheck() {
-    return { status: 'ok', uptime: process.uptime() }
+  greetAll(names: string[]) {
+    return names.map((name) => this.greet(name))
   }
 }
 ```
@@ -75,9 +75,9 @@ export class HelloController {
     return this.helloService.greet('World')
   }
 
-  @Get('/health')
-  health(ctx: Ctx<KickRoutes.HelloController['health']>) {
-    return this.helloService.healthCheck()
+  @Get('/all')
+  all(ctx: Ctx<KickRoutes.HelloController['all']>) {
+    return this.helloService.greetAll(['World', 'KickJS'])
   }
 }
 ```
@@ -85,6 +85,12 @@ export class HelloController {
 Handlers return their payload; the runtime sends it as JSON and `kick typegen`
 infers the response type from the return type — that's what makes the
 [typed client](https://kickjs.app/guide/typed-client) know each route's shape.
+
+You do not need to write a health route: `GET /health/live` and
+`GET /health/ready` ship as a module, mounted at the root outside `apiPrefix`,
+with the readiness probe running every adapter's `onHealthCheck()`. They sit
+inside your middleware chain, so app-wide auth applies to them — exempt the
+path, or pass `bootstrap({ health: false })` and mount your own.
 
 ```ts
 // src/modules/hello/hello.module.ts
@@ -214,11 +220,11 @@ Three packages ship with every project — `kick new` always installs them, and 
 
 ### Optional packages
 
-Everything else — swagger, the db family, queue, ws, devtools, drizzle, prisma — installs on demand. The catalog moves over time, so the live list lives next to the CLI rather than this README:
+Everything else — swagger, the db family, queue, ws, devtools, ai, grpc, mcp — installs on demand. The catalog moves over time, so the live list lives next to the CLI rather than this README:
 
 ```bash
 kick add --list           # current optional catalog
-kick add swagger drizzle  # install several at once
+kick add swagger pg       # install several at once
 ```
 
 One optional package lives on the frontend side instead: [`@forinda/kickjs-client`](packages/client/) — the zero-dependency typed fetch client (`pnpm add @forinda/kickjs-client` in your web app; see the [typed client guide](https://kickjs.app/guide/typed-client.html)).
@@ -239,20 +245,20 @@ The fastest way to start a real project is still `kick new <name>` — `kick.con
 
 ```bash
 # Project lifecycle
-kick new my-api                      # Scaffold project (rest | ddd | cqrs | minimal)
+kick new my-api                      # Scaffold project (rest | minimal | fullstack)
 kick dev                             # Vite HMR dev server (~200ms reload)
 kick build && kick start             # Production build + run
 
 # Code generation
-kick g module users                  # Full DDD module
-kick g module users --repo prisma    # …with a Prisma repository
-kick g module users --repo drizzle   # …with a Drizzle repository
+kick g module users                  # Controller, service, repository, DTOs, tests
+kick g module users --repo postgres  # …repository stub with postgres TODOs
+kick g module users --pattern minimal  # …just a controller + module
 kick g scaffold post title:string body:text:optional  # CRUD from field defs
 kick g controller users              # Single @Controller class
 kick g service payment               # Single @Service class
 kick g adapter websocket             # AppAdapter — every hook stubbed + JSDoc
 kick g plugin analytics              # KickPlugin — every hook stubbed + JSDoc
-kick g job / dto / guard / middleware / test  # one-file scaffolds
+kick g dto / guard / middleware / contributor / test  # one-file scaffolds
 
 # AI agent docs (regenerate from upstream templates after framework upgrades)
 kick g agents                        # CLAUDE.md (root) + .agents/{AGENTS,GEMINI,COPILOT}.md + .agents/skills/*/SKILL.md
@@ -260,7 +266,7 @@ kick g agents --only skills -f       # Just the per-skill SKILL.md files
 kick g agents --only gemini -f       # Just .agents/GEMINI.md
 
 # Package management
-kick add swagger drizzle             # Install KickJS packages with peer deps
+kick add swagger pg                  # Install KickJS packages with peer deps
 kick add --list                      # Show all available packages
 
 # Introspection
