@@ -72,7 +72,14 @@ class NodeResDriver implements RuntimeResponse {
     return this
   }
   json(data: unknown): this {
-    if (!this.res.headersSent) this.res.setHeader('content-type', 'application/json; charset=utf-8')
+    // Do not clobber a content-type the caller already chose. This used to set
+    // `application/json` unconditionally, so every `application/problem+json`
+    // response — RFC 9457 problem details, which the error handler sets the
+    // header for before serialising — went out as plain JSON on this runtime
+    // alone. Express and Fastify both leave an existing value alone.
+    if (!this.res.headersSent && !this.res.getHeader('content-type')) {
+      this.res.setHeader('content-type', 'application/json; charset=utf-8')
+    }
     this.res.end(JSON.stringify(data))
     return this
   }

@@ -25,10 +25,71 @@ import {
 
 const log = createLogger('ErrorHandler')
 
-/** Catch-all for unmatched routes */
-export function notFoundHandler() {
-  return (_req: ErrorRequest, res: RuntimeResponse, _next: () => void) => {
-    res.status(404).json({ message: 'Not Found' })
+/** A mounted route, as the catch-all needs to see it. */
+export interface MountedRoute {
+  method: string
+  /** Full path as mounted, `:param` segments included. */
+  path: string
+}
+
+/** `/things/:id` → `^/things/[^/]+$`, so a concrete path can be matched. */
+function patternToRegExp(pattern: string): RegExp {
+  const source = pattern
+    .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+    .replace(/\/:[^/]+/g, '/[^/]+')
+    .replace(/\*/g, '.*')
+  return new RegExp(`^${source}/?$`)
+}
+
+/** Path without query string or hash. */
+function pathOf(req: ErrorRequest): string {
+  const url = req.originalUrl ?? req.url ?? '/'
+  const cut = url.search(/[?#]/)
+  return cut === -1 ? url : url.slice(0, cut)
+}
+
+/**
+ * Catch-all for unmatched routes.
+ *
+ * Answers RFC 9457 problem details, like every other error the framework
+ * produces — the catch-all was the one path still emitting a bare
+ * `{ message }`, so a client parsing `application/problem+json` had to special
+ * case it.
+ *
+ * Distinguishes a path that does not exist from a path that does not accept
+ * this method. `DELETE /things/1` where only `GET` is mounted is a **405** with
+ * an `Allow` header, not a 404: the resource is there, the verb is not, and
+ * 404 tells a client to stop looking for something that exists. Requires the
+ * mounted route table, so an app that does not pass one keeps answering 404.
+ */
+export function notFoundHandler(routes: readonly MountedRoute[] = []) {
+  const matchers = routes.map((route) => ({
+    method: route.method.toUpperCase(),
+    matches: patternToRegExp(route.path),
+  }))
+
+  return (req: ErrorRequest, res: RuntimeResponse, _next: () => void) => {
+    const path = pathOf(req)
+    const method = (req.method ?? 'GET').toUpperCase()
+    const allowed = [...new Set(matchers.filter((m) => m.matches.test(path)).map((m) => m.method))]
+
+    if (allowed.length > 0 && !allowed.includes(method)) {
+      // Sorted once: the header and the detail must list the same verbs in the
+      // same order, and `sort()` would mutate `allowed` under the second read.
+      const verbs = allowed.toSorted().join(', ')
+      // RFC 9110 §15.5.6 requires Allow on a 405.
+      res.setHeader('Allow', verbs)
+      res.setHeader('Content-Type', 'application/problem+json')
+      return res.status(405).json(
+        normalizeProblem({
+          status: 405,
+          detail: `${method} is not supported for this resource. Allowed: ${verbs}.`,
+        }),
+      )
+    }
+
+    res.setHeader('Content-Type', 'application/problem+json')
+    return res.status(404).json(normalizeProblem({ status: 404 }))
   }
 }
 

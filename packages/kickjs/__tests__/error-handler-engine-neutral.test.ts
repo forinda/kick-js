@@ -64,6 +64,30 @@ describe('errorHandler — engine neutrality', () => {
   it('notFoundHandler answers through the runtime response surface', () => {
     const { res, calls } = makeRes()
     notFoundHandler()({ method: 'GET', url: '/nope', headers: {} } as never, res as never, () => {})
-    expect(calls[0]).toEqual({ status: 404, body: { message: 'Not Found' } })
+    expect(calls[0]).toEqual({
+      status: 404,
+      body: { type: 'about:blank', title: 'Not Found', status: 404 },
+    })
+  })
+
+  it('notFoundHandler answers 405 when the path exists under another method', () => {
+    // Given the mounted table, a matching path with a different verb is a 405,
+    // not a 404 — the resource is there and a 404 says otherwise.
+    const { res, calls } = makeRes()
+    notFoundHandler([
+      { method: 'GET', path: '/things/:id' },
+      { method: 'PATCH', path: '/things/:id' },
+    ])({ method: 'DELETE', url: '/things/7', headers: {} } as never, res as never, () => {})
+    expect(calls[0]).toMatchObject({ status: 405, body: { status: 405 } })
+  })
+
+  it('notFoundHandler still 404s a path no route matches', () => {
+    const { res, calls } = makeRes()
+    notFoundHandler([{ method: 'GET', path: '/things/:id' }])(
+      { method: 'GET', url: '/elsewhere', headers: {} } as never,
+      res as never,
+      () => {},
+    )
+    expect(calls[0]).toMatchObject({ status: 404 })
   })
 })

@@ -70,10 +70,11 @@ describe.each(runtimes)('error handling on $name', ({ make }) => {
     return request(app.handle.bind(app))
   }
 
-  it('404s an unknown route under the API prefix', async () => {
+  it('404s an unknown route under the API prefix, as problem details', async () => {
     const res = await (await agent()).get('/api/v1/nope')
     expect(res.status).toBe(404)
-    expect(res.body).toEqual({ message: 'Not Found' })
+    expect(res.headers['content-type']).toContain('application/problem+json')
+    expect(res.body).toEqual({ type: 'about:blank', title: 'Not Found', status: 404 })
   })
 
   it('404s an unknown route at the root, outside the prefix', async () => {
@@ -83,8 +84,22 @@ describe.each(runtimes)('error handling on $name', ({ make }) => {
     expect(res.status).toBe(404)
   })
 
-  it('404s a known path with the wrong method', async () => {
+  it('405s a known path with the wrong method, and says what is allowed', async () => {
+    // The resource exists; the verb does not. A 404 here tells a client to stop
+    // looking for something that is right there.
     const res = await (await agent()).delete('/api/v1/things/ok')
+    expect(res.status).toBe(405)
+    // RFC 9110 §15.5.6 requires Allow on a 405.
+    expect(res.headers.allow).toBe('GET')
+    expect(res.headers['content-type']).toContain('application/problem+json')
+    expect(res.body).toMatchObject({ status: 405, title: 'Method Not Allowed' })
+    expect(res.body.detail).toContain('GET')
+  })
+
+  it('404s a path that does not exist at all, even with a mounted sibling', async () => {
+    // `/things/nope` shares a prefix with mounted routes but matches none, so
+    // it is genuinely absent — not a method problem.
+    const res = await (await agent()).get('/api/v1/things/nope')
     expect(res.status).toBe(404)
   })
 
@@ -104,6 +119,14 @@ describe.each(runtimes)('error handling on $name', ({ make }) => {
     expect(res.body.requestId).toBeTruthy()
     // Once — h3's wrapper produced `kaboom ← caused by kaboom`.
     expect(res.body.error).toBe('Error: kaboom')
+  })
+
+  it('sends problem details as problem+json, not plain JSON', async () => {
+    // The h3 driver used to set `application/json` unconditionally in `json()`,
+    // clobbering the content-type the error handler had already chosen — so
+    // every RFC 9457 response went out mislabelled on that runtime alone.
+    const res = await (await agent()).get('/api/v1/nope')
+    expect(res.headers['content-type']).toContain('application/problem+json')
   })
 
   it('still serves a working route', async () => {

@@ -266,6 +266,7 @@ describe('Custom error handlers (onNotFound, onError)', () => {
 
     const res = await request(app.getExpressApp()).get('/nonexistent')
     expect(res.status).toBe(404)
-    expect(res.body.message).toBe('Not Found')
+    // RFC 9457 problem details, matching every other error the framework emits.
+    expect(res.body).toEqual({ type: 'about:blank', title: 'Not Found', status: 404 })
   })
 })
