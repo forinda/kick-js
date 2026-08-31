@@ -15,7 +15,7 @@ const guideSidebar = [
       { text: 'Samples', link: '/guide/samples' },
       { text: 'Migration from Express', link: '/guide/migration-from-express' },
       { text: 'Pluggable Runtimes (major upgrade)', link: '/guide/migration-runtimes' },
-      { text: 'Migrating v3 → v4', link: '/guide/migration-v3-to-v4' },
+      { text: 'Migrating v7 → v8', link: '/guide/migration-v7-to-v8' },
       { text: 'Project Structure', link: '/guide/project-structure' },
     ],
   },
