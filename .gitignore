@@ -31,3 +31,7 @@ examples/
 # Tutorials + generated thumbnails — authored locally, not tracked
 tutorials/
 .tmp-posters/
+
+# Throwaway consumer fixtures written inside the package by
+# dts-consumer-emit.test.ts (removed in `finally`; ignored in case a run dies).
+packages/kickjs/.dts-mw-*/

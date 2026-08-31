@@ -65,6 +65,16 @@ export const Audit = defineContextDecorator.withParams<{ actorId: string }>()({
 })
 `
 
+// The documented \`src/middleware/index.ts\` layout: export the array and let
+// its type be inferred. \`requestLogger()\` typed its handler with private
+// \`LoggedRequest\`/\`LoggedResponse\` interfaces, so this could not be named
+// downstream — the recommended project layout walked straight into TS4023.
+const MIDDLEWARE_CONSUMER = `
+import { cors, helmet, requestId, requestLogger } from '@forinda/kickjs'
+
+export const middleware = [helmet(), cors({ origin: '*' }), requestId(), requestLogger()]
+`
+
 describe('a consumer can emit declarations for an exported contributor', () => {
   it('produces no TS4023 against the built package types', () => {
     expect(existsSync(DTS_ENTRY), 'dist/index.d.mts missing — run pnpm build first').toBe(true)
@@ -125,6 +135,66 @@ describe('a consumer can emit declarations for an exported contributor', () => {
       // Assert on TS4023 specifically rather than a clean exit: unrelated
       // config noise in a throwaway project should not fail this, but a
       // type that stopped being nameable must.
+      expect(output).not.toContain('TS4023')
+      expect(output).not.toContain('cannot be named')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('a consumer can emit declarations for an exported middleware array', () => {
+  // The documented "keep src/index.ts thin" layout: build the array in
+  // src/middleware/index.ts and export it with an inferred type. requestLogger()
+  // typed its handler with private LoggedRequest / LoggedResponse interfaces,
+  // so downstream that type had no importable name and the recommended layout
+  // failed to compile. Two teams hit it independently.
+  it('produces no TS4023 for the documented middleware/index.ts pattern', () => {
+    expect(existsSync(DTS_ENTRY), 'dist/index.d.mts missing — run pnpm build first').toBe(true)
+
+    // Inside the package, not tmpdir: a real dependant resolves `@types/express`
+    // through its own node_modules, and only then are Express's own symbols
+    // nameable. From /tmp the array trips TS2883 ("not portable") on
+    // `ParamsDictionary` long before it reaches the symbols this test is about.
+    const dir = mkdtempSync(join(PKG_ROOT, '.dts-mw-'))
+    try {
+      writeFileSync(join(dir, 'consumer.ts'), MIDDLEWARE_CONSUMER)
+      writeFileSync(
+        join(dir, 'tsconfig.json'),
+        JSON.stringify(
+          {
+            compilerOptions: {
+              declaration: true,
+              emitDeclarationOnly: true,
+              outDir: 'out',
+              strict: true,
+              module: 'esnext',
+              moduleResolution: 'bundler',
+              target: 'es2022',
+              skipLibCheck: true,
+              experimentalDecorators: true,
+              paths: { '@forinda/kickjs': [DTS_ENTRY] },
+            },
+            files: ['consumer.ts'],
+          },
+          null,
+          2,
+        ),
+      )
+
+      const tsc = resolve(PKG_ROOT, 'node_modules', 'typescript', 'bin', 'tsc')
+      const result = spawnSync(process.execPath, [tsc, '-p', dir], {
+        encoding: 'utf8',
+        timeout: 120_000,
+      })
+      const output = `${result.stdout ?? ''}${result.stderr ?? ''}`
+
+      // Same reasoning as the sibling test: prove it emitted before asserting
+      // on the absence of a diagnostic, or empty output passes trivially.
+      const emitted = join(dir, 'out', 'consumer.d.ts')
+      expect(existsSync(emitted), `tsc emitted nothing. Output:\n${output}`).toBe(true)
+      expect(readFileSync(emitted, 'utf8')).toContain('middleware')
+
       expect(output).not.toContain('TS4023')
       expect(output).not.toContain('cannot be named')
     } finally {
