@@ -54,9 +54,48 @@ Container._onReset = (container: any) => {
 
 // ── Class Decorators ────────────────────────────────────────────────────
 
+/** Classes already warned about, so HMR replay does not repeat the notice. */
+const preDestroyWarned = new Set<string>()
+
+/**
+ * `@PreDestroy` only runs for REQUEST-scoped services — the request scope is
+ * what closes and triggers it. On a SINGLETON it is silently inert, which
+ * reads as a working teardown and is not: the reported case was a Postgres
+ * pool never closed on shutdown, invisible in development and surfacing as
+ * connection exhaustion under repeated restarts and HMR reloads.
+ *
+ * The asymmetry is the trap. `@PostConstruct` DOES run for singletons, so the
+ * pair looks like init/teardown while one half quietly opts out on a scope the
+ * author may never have considered.
+ *
+ * Warn rather than run it: making it fire on shutdown is a behaviour change
+ * whose ordering, timeout and concurrency semantics have to match the adapter
+ * shutdown path, and an adapter's `shutdown()` is already the seam for
+ * application-lifetime resources.
+ */
+function warnIfInertPreDestroy(target: any, scope: Scope): void {
+  if (scope === Scope.REQUEST) return
+  const proto = target?.prototype
+  if (!proto) return
+  const hook = Reflect.getMetadata?.(METADATA.PRE_DESTROY, proto)
+  if (!hook) return
+  const name = target.name || String(target)
+  if (preDestroyWarned.has(name)) return
+  preDestroyWarned.add(name)
+  console.warn(
+    `  kickjs: @PreDestroy on ${name} (${scope}) will never run — that hook fires ` +
+      `only when a REQUEST scope closes.\n` +
+      `  For application-lifetime resources, release them from an adapter's ` +
+      `shutdown() hook instead.`,
+  )
+}
+
 function registerInContainer(target: any, scope: Scope): void {
   setClassMeta(METADATA.INJECTABLE, true, target)
   setClassMeta(METADATA.SCOPE, scope, target)
+  // Method decorators run before the class decorator, so PRE_DESTROY metadata
+  // is already present by the time we get here.
+  warnIfInertPreDestroy(target, scope)
 
   // Track in persistent registry — survives Container.reset() for HMR replay.
   // Keyed by name so HMR class re-creation replaces the old entry.
@@ -138,6 +177,15 @@ export function PostConstruct(): MethodDecorator {
  * (response finished or aborted): release per-request resources there
  * (transactions, handles, subscriptions). May be async; errors are logged
  * and swallowed so one failing hook can't break request completion.
+ *
+ * It does NOT run on a SINGLETON — the default scope — because nothing closes
+ * a singleton's scope. Unlike {@link PostConstruct}, which does run for
+ * singletons, so the pair is not symmetric. Applying it to a singleton logs a
+ * warning naming the class rather than failing silently.
+ *
+ * For application-lifetime resources (a connection pool, a timer, a socket
+ * server) use an adapter's `shutdown()` hook, which the framework runs on a
+ * real shutdown AND on every HMR reload, time-boxed and concurrent.
  */
 export function PreDestroy(): MethodDecorator {
   return (target, propertyKey) => {
