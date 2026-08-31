@@ -1,3 +1,4 @@
+import { sendJson } from './respond'
 import type { Request, Response, NextFunction } from 'express'
 import { resolveClientIp, resolvePathname, type ClientRequestLike } from '../client-ip'
 
@@ -153,7 +154,7 @@ export function rateLimit(options: RateLimitOptions = {}) {
     }
 
     if (totalHits > max) {
-      return res.status(statusCode).json({ message })
+      return sendJson(res, statusCode, { message })
     }
 
     next()

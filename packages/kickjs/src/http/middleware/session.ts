@@ -1,3 +1,4 @@
+import { setCookie } from './respond'
 import { randomUUID, createHmac, timingSafeEqual } from 'node:crypto'
 import type { Request, Response, NextFunction } from 'express'
 
@@ -239,7 +240,7 @@ export function session(options: SessionOptions) {
         currentData = {}
         sessionObj.data = currentData
         await store.set(currentSid, currentData, maxAge)
-        res.cookie(cookieName, sign(currentSid, secret), cookieDefaults)
+        setCookie(res, cookieName, sign(currentSid, secret), cookieDefaults)
       },
 
       async destroy() {
@@ -261,7 +262,7 @@ export function session(options: SessionOptions) {
 
     // Set cookie for new sessions
     if (isNew) {
-      res.cookie(cookieName, sign(currentSid, secret), cookieDefaults)
+      setCookie(res, cookieName, sign(currentSid, secret), cookieDefaults)
     }
 
     // Auto-save on response finish
@@ -280,7 +281,7 @@ export function session(options: SessionOptions) {
 
     // Rolling: refresh cookie on every response
     if (rolling && !isNew) {
-      res.cookie(cookieName, sign(currentSid, secret), cookieDefaults)
+      setCookie(res, cookieName, sign(currentSid, secret), cookieDefaults)
     }
 
     next()

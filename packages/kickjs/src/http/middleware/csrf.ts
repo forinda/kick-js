@@ -1,3 +1,4 @@
+import { sendJson, setCookie } from './respond'
 import type { Request, Response, NextFunction } from 'express'
 import { resolvePathname, type ClientRequestLike } from '../client-ip'
 
@@ -71,7 +72,7 @@ export function csrf(options: CsrfOptions = {}) {
 
     if (!token) {
       token = randomHex(tokenLength)
-      res.cookie(cookieName, token, cookieOpts)
+      setCookie(res, cookieName, token, cookieOpts)
     }
 
     // Skip validation for safe methods and ignored paths
@@ -89,7 +90,7 @@ export function csrf(options: CsrfOptions = {}) {
     const headerToken = req.headers[headerName] as string | undefined
 
     if (!headerToken || headerToken !== token) {
-      return res.status(403).json({
+      return sendJson(res, 403, {
         message: 'CSRF token mismatch',
       })
     }
