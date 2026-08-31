@@ -21,9 +21,7 @@ yarn global add @forinda/kickjs-cli
 
 Verify it's available:
 
-```bash
-kick --version
-```
+<PmCommand exec="kick --version" />
 
 Or use `npx` without a global install:
 
@@ -226,9 +224,7 @@ masquerades as a type error.
 
 Build the project for production using Vite:
 
-```bash
-kick build
-```
+<PmCommand exec="kick build" />
 
 Runs `npx vite build`. Configure output in your `vite.config.ts`.
 
@@ -253,9 +249,7 @@ Sets `NODE_ENV=production` automatically.
 
 Pre-flight checks for your KickJS project's dev environment. Catches the common "doesn't work on my machine" misconfigs before they bite — missing decorator flags, env-wiring footguns, stale typegen, wrong Node version.
 
-```bash
-kick doctor
-```
+<PmCommand exec="kick doctor" />
 
 Sibling to `kick check --deploy` (which scans for production-readiness — JWT secrets, CORS, rate limits, etc.). Doctor is the dev-setup counterpart.
 
@@ -390,9 +384,7 @@ The framework stays ORM-agnostic on purpose — database- or ORM-specific checks
 
 Print system and framework information:
 
-```bash
-kick info
-```
+<PmCommand exec="kick info" />
 
 Output — the CLI's own version, plus every `@forinda/kickjs*` dependency the nearest project declares with the version actually installed in `node_modules` (declared range shown when not installed):
 

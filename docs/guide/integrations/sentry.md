@@ -4,9 +4,7 @@ Set up [Sentry](https://sentry.io) for error tracking, performance monitoring, a
 
 ## Installation
 
-```bash
-pnpm add @sentry/node
-```
+<PmCommand add="@sentry/node" />
 
 ## Quick Setup
 
@@ -283,9 +281,7 @@ bootstrap({ modules, adapters, middlewares: [...] })
 
 For readable stack traces in production, upload source maps during your build:
 
-```bash
-pnpm add -D @sentry/cli
-```
+<PmCommand add="@sentry/cli" dev />
 
 ```bash
 # After kick build

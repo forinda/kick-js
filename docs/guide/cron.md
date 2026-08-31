@@ -8,9 +8,7 @@ The recipe below uses [`croner`](https://github.com/Hexagon/croner) (zero deps, 
 
 ## Setup
 
-```bash
-pnpm add croner
-```
+<PmCommand add="croner" />
 
 ## Decorator + adapter
 

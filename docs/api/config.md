@@ -40,9 +40,7 @@ which is now an **optional peer dependency** of `@forinda/kickjs`. New
 projects scaffolded with `kick new` get it pre-installed; existing apps
 that rely on `.env` files should add it explicitly:
 
-```bash
-pnpm add dotenv
-```
+<PmCommand add="dotenv" />
 
 Apps that load env via the shell, Docker, or a secret manager don't need
 `dotenv` at all.

@@ -20,9 +20,7 @@ const created = await api.post('/tasks', { body: { title: 'x' } }) // created: T
 
 ## Setup
 
-```bash
-pnpm add -D @forinda/kickjs-testing supertest @types/supertest vitest
-```
+<PmCommand add="@forinda/kickjs-testing supertest @types/supertest vitest" dev />
 
 ## createTestApp
 

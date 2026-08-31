@@ -4,9 +4,7 @@ KickJS ships with a `ws`-based WebSocket adapter (`@forinda/kickjs-ws`), but you
 
 ## Setup
 
-```bash
-pnpm add socket.io
-```
+<PmCommand add="socket.io" />
 
 ## Create a Socket.IO Adapter
 

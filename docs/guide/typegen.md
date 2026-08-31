@@ -338,9 +338,7 @@ The plugin still loads (so merge-time conflict detection still runs); only its `
 
 ### Discover registered ids
 
-```bash
-kick typegen --list
-```
+<PmCommand exec="kick typegen --list" />
 
 Prints every typegen plugin id with its watched inputs:
 

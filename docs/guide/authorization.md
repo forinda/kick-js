@@ -94,9 +94,7 @@ Swap the engine implementation (CASL, a rules table, hardcoded checks) by re-bin
 
 `kick g guard <name>` generates a middleware function for authorization logic that needs to short-circuit the response or run before route matching — the cases [context decorators deliberately don't cover](context-decorators.md). For value-producing checks, prefer a contributor; reach for a guard when you need raw Express middleware semantics.
 
-```bash
-kick g guard ip-whitelist
-```
+<PmCommand exec="kick g guard ip-whitelist" />
 
 ```ts
 // src/guards/ip-whitelist.guard.ts

@@ -8,9 +8,7 @@ One of the things I appreciate most about working with a framework is when it me
 
 The command is simple:
 
-```bash
-kick g module <name> --pattern <pattern>
-```
+<PmCommand exec="kick g module <name> --pattern <pattern>" />
 
 That `--pattern` flag is where the decision lives. KickJS ships **two** architecture patterns: `rest` (the default) and `minimal`. Each one generates a different number of files with a different structural philosophy. Instead of forcing you into one way of building modules, the generator lets you pick the right level of complexity for the job at hand.
 
@@ -243,9 +241,7 @@ Replace the factory body with calls against your client — the exported `<Name>
 
 When you already know the shape of a resource, `kick g scaffold` emits the **flat REST layout** with DTOs derived from your field definitions — no hand-editing the generated `create`/`update`/`response` DTOs:
 
-```bash
-kick g scaffold Post title:string body:text:optional published:boolean:optional
-```
+<PmCommand exec="kick g scaffold Post title:string body:text:optional published:boolean:optional" />
 
 This produces the same flat `rest` tree (module, controller, service, constants, repository interface + token, in-memory repository, `dtos/`, `__tests__/`), but the DTOs and types are generated from your fields. Supported field types include:
 

@@ -13,9 +13,7 @@ existing app is three lines of configuration.
 
 ## Install
 
-```bash
-pnpm add @forinda/kickjs-mcp
-```
+<PmCommand add="@forinda/kickjs-mcp" />
 
 The package depends on `@modelcontextprotocol/sdk` and `@forinda/kickjs`.
 
@@ -548,9 +546,7 @@ middleware, same context decorators, same auth flow.
 
 Use the CLI to run a KickJS app as an MCP stdio server:
 
-```bash
-kick mcp start
-```
+<PmCommand exec="kick mcp start" />
 
 This boots the app in a special mode where Express sits idle and the
 MCP server owns stdin/stdout. Register it in your client's MCP
@@ -571,9 +567,7 @@ config:
 
 Or scaffold the config directly:
 
-```bash
-kick mcp init   # writes .mcp.json
-```
+<PmCommand exec="kick mcp init   # writes .mcp.json" />
 
 ### HTTP (remote clients)
 

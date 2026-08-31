@@ -4,9 +4,7 @@ WebSocket support for KickJS applications via the lightweight [`ws`](https://git
 
 ## Installation
 
-```bash
-pnpm add @forinda/kickjs-ws ws
-```
+<PmCommand add="@forinda/kickjs-ws ws" />
 
 ## Exports
 

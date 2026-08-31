@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PmCommand from './PmCommand.vue'
 import { VPButton } from 'vitepress/theme'
 </script>
 
@@ -41,7 +42,7 @@ import { VPButton } from 'vitepress/theme'
         />
       </div>
       <div class="hero-install">
-        <code>npx @forinda/kickjs-cli new my-api</code>
+        <PmCommand dlx="@forinda/kickjs-cli new my-api" />
       </div>
     </div>
     <div class="hero-visual">
@@ -176,19 +177,16 @@ import { VPButton } from 'vitepress/theme'
 }
 
 .hero-install {
-  margin-top: 28px;
+  margin-top: 20px;
 }
 
-.hero-install code {
-  display: inline-block;
-  padding: 10px 20px;
-  border-radius: 8px;
-  background: var(--vp-c-bg-soft);
-  border: 1px solid var(--vp-c-divider);
-  font-family: var(--vp-font-family-mono);
-  font-size: 0.9rem;
-  color: var(--vp-c-text-1);
-  letter-spacing: -0.01em;
+/* Left-aligned at every width — the command reads as a thing you run, not a
+   banner, so it stays on the same left edge rather than following the hero's
+   centring at narrow widths. */
+.hero-install :deep(.pm-command) {
+  max-width: 420px;
+  margin: 0;
+  text-align: left;
 }
 
 /* ── Code Preview ─── */

@@ -26,9 +26,7 @@ stores is a configuration change, not a code change.
 
 ## Install
 
-```bash
-pnpm add @forinda/kickjs-ai
-```
+<PmCommand add="@forinda/kickjs-ai" />
 
 The package declares `@forinda/kickjs` and `reflect-metadata` as
 dependencies and `zod` as a peer. No other runtime is required for

@@ -582,9 +582,7 @@ Internally reads via `getRequestValue('db')`. Never exposes raw store APIs to us
 
 `@forinda/kickjs-cli` gains `--repo kickdb` for `kick g module`:
 
-```bash
-kick g module users --repo kickdb
-```
+<PmCommand exec="kick g module users --repo kickdb" />
 
 Generates the standard DDD layout:
 
@@ -756,9 +754,7 @@ These catch the inference regressions drizzle's two-year hardening had to discov
 
 Reverse direction: existing DB → generated `schema.ts`.
 
-```bash
-kick db introspect --url postgres://... --out src/db/schema.ts
-```
+<PmCommand exec="kick db introspect --url postgres://... --out src/db/schema.ts" />
 
 Per-adapter implementation:
 

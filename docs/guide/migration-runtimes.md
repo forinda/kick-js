@@ -84,13 +84,3 @@ the `@forinda/kickjs-db-{pg,mysql,sqlite}` shims are frozen — they stay instal
 and working at their last published version, but no longer receive updates. See
 their READMEs for the recommended replacements (BYO auth via context decorators,
 `@forinda/kickjs-db` with its `/pg` · `/mysql` · `/sqlite` subpaths).
-
-## Trying it early
-
-Preview builds publish under the `@alpha` npm channel:
-
-```bash
-pnpm add @forinda/kickjs@alpha
-```
-
-See [Release channels](./getting-started.md#release-channels).

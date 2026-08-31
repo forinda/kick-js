@@ -6,9 +6,7 @@ KickJS doesn't ship a MongoDB package — instead, you wire it through the exist
 
 ### Setup
 
-```bash
-pnpm add mongoose
-```
+<PmCommand add="mongoose" />
 
 ### Create a Mongoose Adapter
 
@@ -162,9 +160,7 @@ For direct control without an ODM.
 
 ### Setup
 
-```bash
-pnpm add mongodb
-```
+<PmCommand add="mongodb" />
 
 ### Create a MongoDB Adapter
 

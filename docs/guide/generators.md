@@ -29,9 +29,7 @@ The `pattern` field in `kick.config.ts` controls what files are generated. You c
 
 Generates a flat, simple module with a controller that delegates to a service. Every endpoint works out of the box with the in-memory repository.
 
-```bash
-kick g module product --pattern rest
-```
+<PmCommand exec="kick g module product --pattern rest" />
 
 ```
 products/
@@ -55,9 +53,7 @@ The controller injects `ProductService`, which handles all CRUD. No use-cases, n
 
 Generates only a module declaration and a bare controller. Use this as a starting point when you want full control.
 
-```bash
-kick g module product --pattern minimal
-```
+<PmCommand exec="kick g module product --pattern minimal" />
 
 ```
 products/
@@ -247,9 +243,7 @@ export const ProductModule = defineModule({
 
 Generate a full CRUD module from field definitions. Unlike `kick g module`, which creates empty DTOs, scaffold generates Zod schemas with concrete fields and a working repository — ready to use immediately. It produces the same flat REST layout as `kick g module` (controller + service + field-aware DTOs + repository), not a layered DDD structure.
 
-```bash
-kick g scaffold Post title:string body:text:optional published:boolean:optional
-```
+<PmCommand exec="kick g scaffold Post title:string body:text:optional published:boolean:optional" />
 
 ### Field Syntax
 
@@ -274,9 +268,7 @@ Each field uses the format `name:type` or `name:type:optional`:
 
 Append `:optional` to make a field optional (shell-safe, no quoting needed):
 
-```bash
-kick g scaffold Post title:string body:text:optional published:boolean:optional
-```
+<PmCommand exec="kick g scaffold Post title:string body:text:optional published:boolean:optional" />
 
 The `?` syntax also works but requires quoting in bash/zsh because `?` is a shell glob character:
 
@@ -320,9 +312,7 @@ With a custom repo name (e.g. `--repo postgres`), the implementation file is `po
 
 ### Example
 
-```bash
-kick g scaffold User name:string email:email:optional age:int role:enum:admin,user,guest
-```
+<PmCommand exec="kick g scaffold User name:string email:email:optional age:int role:enum:admin,user,guest" />
 
 Generates DTOs like:
 
@@ -452,33 +442,25 @@ Generates a `@Controller()` class with basic `@Get('/')` route. Default output: 
 
 ### kick g service
 
-```bash
-kick g service payment
-```
+<PmCommand exec="kick g service payment" />
 
 Generates a `@Service()` class. Default output: `src/services/`.
 
 ### kick g middleware
 
-```bash
-kick g middleware logger
-```
+<PmCommand exec="kick g middleware logger" />
 
 Generates a connect-style middleware function (runs on Express, Fastify and h3 through the runtime seam). Default output: `src/middleware/`.
 
 ### kick g guard
 
-```bash
-kick g guard admin
-```
+<PmCommand exec="kick g guard admin" />
 
 Generates a route guard function. Default output: `src/guards/`.
 
 ### kick g adapter
 
-```bash
-kick g adapter websocket
-```
+<PmCommand exec="kick g adapter websocket" />
 
 Generates a `defineAdapter()` factory with all lifecycle hooks stubbed out. Default output: `src/adapters/`.
 
@@ -507,9 +489,7 @@ Plugins are the canonical place to wire DI bindings, contribute modules or adapt
 
 ### kick g dto
 
-```bash
-kick g dto create-user
-```
+<PmCommand exec="kick g dto create-user" />
 
 Generates a Zod schema with inferred TypeScript type. Default output: `src/dtos/`.
 

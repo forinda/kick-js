@@ -11,9 +11,7 @@ kick tinker --entry src/app.ts     # custom entry point
 
 Requires `tsx` as a dev dependency:
 
-```bash
-pnpm add -D tsx
-```
+<PmCommand add="tsx" dev />
 
 ## Available Globals
 

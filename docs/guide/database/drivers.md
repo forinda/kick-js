@@ -17,9 +17,7 @@ Set the matching `dialect` in your `kick.config.ts` `db:` block (`'postgres'`, `
 
 ## PostgreSQL — `@forinda/kickjs-db/pg`
 
-```bash
-pnpm add @forinda/kickjs-db pg
-```
+<PmCommand add="@forinda/kickjs-db pg" />
 
 ```ts
 import { Pool } from 'pg'
@@ -49,9 +47,7 @@ Postgres is the most complete dialect:
 
 ## SQLite — `@forinda/kickjs-db/sqlite`
 
-```bash
-pnpm add @forinda/kickjs-db better-sqlite3
-```
+<PmCommand add="@forinda/kickjs-db better-sqlite3" />
 
 ```ts
 import Database from 'better-sqlite3'
@@ -80,9 +76,7 @@ Notes:
 
 ## MySQL / MariaDB — `@forinda/kickjs-db/mysql`
 
-```bash
-pnpm add @forinda/kickjs-db mysql2
-```
+<PmCommand add="@forinda/kickjs-db mysql2" />
 
 ```ts
 import { createPool } from 'mysql2/promise'

@@ -109,9 +109,7 @@ WebSocket requires the `@forinda/kickjs-ws` package and a `WsAdapter`.
 
 ### Setup
 
-```bash
-pnpm add @forinda/kickjs-ws
-```
+<PmCommand add="@forinda/kickjs-ws" />
 
 ```typescript
 // config/adapters.ts
