@@ -46,7 +46,7 @@ packages/               # Workspace packages (@forinda/kickjs* on npm unless pri
   devtools/ devtools-kit/          # /_debug dashboard + adapter tab kit
   grpc/                 # Connect RPC — gRPC-Web/Connect on the shared HTTP port
   ai/ mcp/ graphql/ ws/ queue/ cron/ mailer/ otel/
-  notifications/ multi-tenant/ auth/ prisma/ drizzle/
+  notifications/ multi-tenant/
   cli-kit/ lint/ vscode-extension/
   core/ http/ config/   # LEGACY split — superseded by packages/kickjs; do not edit
 examples/               # Test fixtures only (typegen-test). Runnable apps live in
@@ -139,8 +139,6 @@ Available flags: `--template rest|minimal|fullstack`, `--pm pnpm|npm|yarn|bun`, 
 @Inject('token')           // Token-based injection
 @Value('ENV_VAR')          // Config value injection
 @Middleware(fn)            // Attach middleware
-@Public()                  // Opt out of auth
-@Roles('admin')            // Role-based access
 @Cron('0 * * * *')        // Cron schedule
 ```
 
@@ -264,8 +262,6 @@ src/
     templates/                    # Code template functions
       types.ts                    # TemplateContext interface
       repository.ts               # inmemory + custom repo generators
-      drizzle/index.ts            # Drizzle-specific templates
-      prisma/index.ts             # Prisma-specific templates
       controller.ts, dtos.ts, domain.ts, ...
 ```
 
@@ -299,14 +295,6 @@ interface TemplateContext {
   repoType?: string // Custom repo type name
 }
 ```
-
-## Prisma Adapter
-
-- `PrismaAdapter` — registers client in DI, supports Prisma 5/6/7
-- `PrismaModelDelegate` — typed CRUD interface for cast-free repos
-- `PrismaQueryAdapter` — translates ParsedQuery to findMany args
-- `PrismaQueryConfig<TModel>` — generic validates searchColumns against model fields
-- Logging: `$on` for v5/6, `$extends` for v7 (auto-detected)
 
 ## Linking the CLI Locally
 
@@ -363,6 +351,5 @@ test: description      # Test changes
 - All internal links in docs must be **relative** (for versioning/i18n support)
 - The `kick` CLI binary comes from `packages/cli/src/cli.ts`
 - Vite configs: `minify: 'esbuild'`, all runtime deps in `rollupOptions.external`
-- `@prisma/client` peer dep is optional (Prisma 7 generates client locally)
 - Old top-level config fields (`modulesDir`, `defaultRepo`, etc.) are deprecated — use `modules` block
 - **Env wiring**: `src/env.ts` must call `loadEnv(envSchema)` as a side effect AND be imported from `src/index.ts` (`import './env'`) before `bootstrap()` runs. Otherwise `ConfigService.get('CUSTOM_KEY')` returns `undefined` while `@Value('CUSTOM_KEY')` _appears_ to work via its `process.env` fallback. The CLI generators wire both halves automatically; manual upgrades must add both. See `docs/guide/configuration.md#wiring-the-schema-at-startup`.

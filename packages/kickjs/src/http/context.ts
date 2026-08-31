@@ -449,7 +449,8 @@ export class RequestContext<
    * Reads from the per-request metadata store first (`ctx.set('user', ...)`),
    * then falls back to `req.user` (set directly by AuthAdapter middleware).
    *
-   * Extend the `AuthUser` interface via module augmentation in `@forinda/kickjs-auth`
+   * Extend the `AuthUser` interface via module augmentation in your own auth
+   * module — see the BYO Auth recipe in the docs
    * to get full typing.
    *
    * @example

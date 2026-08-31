@@ -46,19 +46,9 @@ describe('resolveInstalledKickPackages', () => {
     expect(cli.declared).toBe('^6.0.1')
   })
 
-  it('flags deprecated packages from the kick add catalog', () => {
-    writeManifest(project, {
-      name: 'app',
-      dependencies: {
-        '@forinda/kickjs-prisma': '^6.0.0',
-        '@forinda/kickjs-db': '^6.1.1',
-      },
-    })
-
-    const pkgs = resolveInstalledKickPackages(project)
-    expect(pkgs.find((p) => p.name === '@forinda/kickjs-prisma')?.deprecated).toBe(true)
-    expect(pkgs.find((p) => p.name === '@forinda/kickjs-db')?.deprecated).toBe(false)
-  })
+  // No test for the deprecated flag: removing auth, drizzle and prisma left the
+  // catalog with no deprecated entry, so the path is unreachable from real data.
+  // Restore a case here when something is deprecated again.
 
   it('returns empty outside a project', () => {
     expect(resolveInstalledKickPackages(join(project, 'does-not-exist'))).toEqual([])
