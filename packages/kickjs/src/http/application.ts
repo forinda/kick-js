@@ -372,12 +372,26 @@ export interface ApplicationOptions {
  * Both are functions, so `typeof` cannot tell them apart. The factory carries a
  * frozen `definition` and a `scoped` helper, neither of which a class has.
  */
-function isModuleFactory(entry: unknown): entry is () => AppModule {
+function isModuleFactory(entry: unknown): entry is (() => AppModule) & {
+  definition: { name?: string; defaults?: unknown }
+} {
   return (
     typeof entry === 'function' &&
     'definition' in entry &&
     typeof (entry as { scoped?: unknown }).scoped === 'function'
   )
+}
+
+/**
+ * Whether a factory takes configuration.
+ *
+ * `defaults` is the only runtime signal that a module has config at all — the
+ * type parameter is erased. Its presence is what separates "the bare name is
+ * exactly equivalent" from "the bare name silently picked defaults for you".
+ */
+function isConfigurable(factory: { definition: { defaults?: unknown } }): boolean {
+  const defaults = factory.definition?.defaults
+  return defaults !== undefined && defaults !== null
 }
 
 /**
@@ -390,12 +404,30 @@ function isModuleFactory(entry: unknown): entry is () => AppModule {
  * the fix. It is easy to hit because the class form takes the bare name, so
  * the two styles look interchangeable and are not.
  *
- * Calling the factory with no arguments produces exactly what `Module()` would,
- * so accepting it is equivalent rather than lenient.
+ * For a module with NO config, calling the factory with no arguments produces
+ * exactly what `Module()` would, so accepting the bare name is equivalent
+ * rather than lenient.
+ *
+ * For a CONFIGURABLE module it is not equivalent in intent: the bare name
+ * silently selects the defaults, and an author who meant `Module({ … })` would
+ * get a running app wired the wrong way with nothing said. That is the failure
+ * mode this whole change exists to remove, so those stay loud — with a message
+ * that names the module and both correct spellings, rather than the bare
+ * `entry is not a constructor` it used to produce.
  */
 function toAppModule(entry: AppModuleEntry): AppModule {
   if (typeof entry !== 'function') return entry
-  if (isModuleFactory(entry)) return entry()
+  if (isModuleFactory(entry)) {
+    if (isConfigurable(entry)) {
+      const name = entry.definition?.name || entry.name || '<anonymous>'
+      throw new TypeError(
+        `bootstrap: module \`${name}\` takes configuration, so it must be invoked.\n` +
+          `  Write \`${name}()\` for its defaults, or \`${name}({ … })\` to configure it.\n` +
+          `  Passing it bare would have silently selected the defaults.`,
+      )
+    }
+    return entry()
+  }
   try {
     return new (entry as AppModuleClass)()
   } catch (err) {

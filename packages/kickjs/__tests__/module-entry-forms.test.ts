@@ -40,10 +40,35 @@ describe('module entry forms', () => {
     await expect(boot([Core()])).resolves.toBeDefined()
   })
 
-  it('accepts an UNINVOKED defineModule factory', async () => {
-    // Calling it with no arguments produces exactly what `Core()` would, so
-    // accepting this is equivalent rather than lenient.
+  it('accepts an UNINVOKED factory when the module takes no config', async () => {
+    // With nothing to configure, calling it with no arguments produces exactly
+    // what `Core()` would — equivalent rather than lenient.
     await expect(boot([Core])).resolves.toBeDefined()
+  })
+
+  it('refuses an UNINVOKED factory when the module takes config', async () => {
+    // Not equivalent in intent: the bare name silently selects the defaults, so
+    // an author who meant `Tenant({ region })` gets an app wired the wrong way
+    // with nothing said. Staying loud here is the point of the whole change.
+    const Tenant = defineModule({
+      name: 'TenantModule',
+      defaults: { region: 'eu' },
+      build: () => ({ routes: () => null }),
+    })
+    await expect(boot([Tenant])).rejects.toThrow(/TenantModule/)
+    await expect(boot([Tenant])).rejects.toThrow(/must be invoked/)
+    await expect(boot([Tenant])).rejects.toThrow(/silently selected the defaults/)
+  })
+
+  it('accepts that same configurable module once invoked, either way', async () => {
+    const Tenant = defineModule({
+      name: 'TenantModule',
+      defaults: { region: 'eu' },
+      build: () => ({ routes: () => null }),
+    })
+    await expect(boot([Tenant()])).resolves.toBeDefined()
+    Container.reset()
+    await expect(boot([Tenant({ region: 'us' })])).resolves.toBeDefined()
   })
 
   it('accepts a legacy module class', async () => {

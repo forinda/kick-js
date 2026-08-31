@@ -690,7 +690,7 @@ routes() {
 **Red flags** (stop and ask):
 - File created as \`<name>.ts\` instead of \`<name>.module.ts\` — Vite plugin's \`*.module.[tj]sx?\` glob doesn't pick it up; every save becomes a full restart.
 - \`@Controller('/path')\` with a path argument combined with module \`routes().path\` — duplicates the prefix. The decorator path is OpenAPI metadata only.
-- Mixing \`TodosModule\` and \`TodosModule()\` across the same modules array — both are accepted (the factory is invoked for you), but pick one and keep it consistent with \`modules.style\`.
+- \`TodosModule\` instead of \`TodosModule()\` for a module that takes config — refused, since the bare name would silently select the defaults. A module with no config accepts either, but prefer the invoked form for consistency.
 - \`routes()\` returning \`router: …\` when a \`controller:\` would do — controller form is required for OpenAPI/Swagger introspection.
 - Module not registered in \`src/modules/index.ts\`.`,
     },
