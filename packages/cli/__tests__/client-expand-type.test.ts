@@ -369,3 +369,55 @@ describe('TypeExpander — expansion budget', () => {
     expect(warnings).toEqual([])
   })
 })
+
+describe('TypeExpander — what cannot survive JSON', () => {
+  // A response is JSON. `JSON.stringify` drops functions and symbol keys, so a
+  // method in this map describes a field the client never receives. Expanding
+  // them turned one `Buffer` into a 107-member interface of `slice`/`write`/
+  // `reduce` overloads — and the overloads printed through `typeToString`,
+  // which elides with `...`, which is not type syntax. 34 syntax errors, and
+  // the whole map stopped parsing.
+  it('drops methods and function-valued properties', () => {
+    const out = expand(`
+      type Target = {
+        name: string
+        save(): void
+        onDone: (x: number) => void
+        nested: { id: string; run(): number }
+      }
+    `)
+    expect(out.text).toContain('name: string')
+    expect(out.text).toContain('id: string')
+    expect(out.text).not.toContain('save')
+    expect(out.text).not.toContain('onDone')
+    expect(out.text).not.toContain('run')
+    expect(out.text).not.toContain('=>')
+  })
+
+  it('drops well-known symbol keys, whose printed name is compiler state', () => {
+    // The checker prints these as `__@toStringTag@138` — the suffix is an
+    // internal id, so it is neither indexable by a client nor stable to hash.
+    const out = expand(`
+      type Target = { readonly [Symbol.toStringTag]: 'Thing'; a: string }
+    `)
+    expect(out.text).toContain('a: string')
+    expect(out.text).not.toContain('__@')
+  })
+
+  // Smoke check, not a regression test: dropping methods removes the only path
+  // that reached `typeToString` with something long enough to elide, so this
+  // passes with the NoTruncation flag off. The flag stays because the invariant
+  // is unconditional — truncated output is never valid type syntax — and
+  // because it is the last line of defence if a long type reaches the printer
+  // by some route this suite does not model.
+  it('never emits an elision, whatever the type', () => {
+    const out = expand(`type Target = { d: Uint8Array; b: ArrayBuffer }`)
+    expect(out.text).not.toContain('...')
+    for (const block of out.hoisted) expect(block).not.toContain('...')
+  })
+
+  it('keeps a data-only object untouched', () => {
+    const out = expand(`type Target = { a: string; b: { c: number } }`)
+    expect(out.text).toBe('{ a: string; b: { c: number } }')
+  })
+})
