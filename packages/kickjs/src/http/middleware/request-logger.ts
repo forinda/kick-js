@@ -4,7 +4,19 @@
  * connect middleware the raw node objects — so anything Express-only is
  * `undefined` there.
  */
-interface LoggedRequest {
+/**
+ * The request shape this middleware reads.
+ *
+ * Exported because it appears in the returned handler's signature: a consumer
+ * following the documented `src/middleware/index.ts` layout exports the
+ * middleware array with an inferred type, and a type the entry does not
+ * re-export cannot be named there — `TS4023: Exported variable 'middleware'
+ * has or is using name 'LoggedRequest' … but cannot be named`.
+ *
+ * Deliberately structural rather than Express's `Request`: the Fastify and h3
+ * runtimes pass a raw Node request, which has `url` but no `path`.
+ */
+export interface LoggedRequest {
   method?: string
   url?: string
   /** Express-only convenience; the raw node request has only `url`. */
@@ -14,7 +26,8 @@ interface LoggedRequest {
   headers: Record<string, string | string[] | undefined>
 }
 
-interface LoggedResponse {
+/** The response shape this middleware reads. Exported for the same reason as {@link LoggedRequest}. */
+export interface LoggedResponse {
   statusCode: number
   on(event: 'finish', listener: () => void): unknown
 }

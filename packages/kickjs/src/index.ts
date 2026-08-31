@@ -70,7 +70,12 @@ export { requestId, REQUEST_ID_HEADER } from './http/middleware/request-id'
 export { validate } from './http/middleware/validate'
 export { notFoundHandler, errorHandler } from './http/middleware/error-handler'
 export { csrf, type CsrfOptions } from './http/middleware/csrf'
-export { requestLogger, type RequestLoggerOptions } from './http/middleware/request-logger'
+export {
+  requestLogger,
+  type RequestLoggerOptions,
+  type LoggedRequest,
+  type LoggedResponse,
+} from './http/middleware/request-logger'
 export { helmet, type HelmetOptions } from './http/middleware/helmet'
 export { cors, type CorsOptions } from './http/middleware/cors'
 export { rateLimit, type RateLimitOptions, type RateLimitStore } from './http/middleware/rate-limit'
