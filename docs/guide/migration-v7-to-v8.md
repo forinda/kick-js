@@ -108,6 +108,15 @@ routes() {
 }
 ```
 
+That completes the URL-shape matrix. Both segments are now droppable at either scope:
+
+|           | drop `/v{n}`                           | drop `/{apiPrefix}`                         |
+| --------- | -------------------------------------- | ------------------------------------------- |
+| whole app | `bootstrap({ defaultVersion: false })` | `bootstrap({ apiPrefix: '' })`              |
+| one mount | `version: false` on `ModuleRoutes`     | `prefix: false` on `ModuleRoutes` **(new)** |
+
+`defaultVersion: false` is not new — it shipped in **7.4.0** — but it is worth knowing next to the per-mount flag, because the two are read together and the per-mount value always wins over the app default, in either direction. `version: false` drops only the version segment and still lands the module under `/api`; `prefix: false` mounts at `path` exactly.
+
 ## Fixes that change what you observe
 
 These are patches, not breaks — but each one changes a response you may have built around.
