@@ -118,77 +118,73 @@ export function generateCustomRepository(ctx: TemplateContext): string {
     repoPrefix = '../../domain/repositories',
     dtoPrefix = '../../application/dtos',
   } = ctx
-  const repoTypePascal =
-    repoType.charAt(0).toUpperCase() +
-    repoType.slice(1).replace(/-([a-z])/g, (_, c: string) => c.toUpperCase())
-  return `/**
- * ${repoTypePascal} ${pascal} Repository
+  // The class is named for the MODULE, not the backing store. A
+  // `PostgresAuditRepository` that is not yet Postgres is a claim the code does
+  // not honour, and the module folder already carries the name — so the store
+  // appears only in prose, where it is guidance rather than an assertion.
+  const store = repoType || 'your database'
+  return (
+    `/**
+ * ${pascal} Repository
  *
- * Stub implementation for a custom '${repoType}' repository.
- * Implements the repository interface using an in-memory Map as a placeholder.
+ * UNIMPLEMENTED. Every method throws until you write the ${store}
+ * data-access logic — see I${pascal}Repository for the contract.
  *
- * TODO: Replace the in-memory Map with your ${repoType} data-access logic.
- * See I${pascal}Repository for the interface contract.
+ * This deliberately does NOT fall back to an in-memory store. A stub that
+ * quietly kept rows in a Map would let the app boot, serve traffic and pass a
+ * manual smoke test while every write was discarded on restart, with nothing in
+ * the types or the logs to say so. Throwing makes the gap impossible to miss
+ * and impossible to ship.
+ *
+ * For a working store while you build this out, the generator also emits
+ * InMemory${pascal}Repository — bind that in the module instead.
  *
  * @Repository() registers this class in the DI container as a singleton.
  */
-import { randomUUID } from 'node:crypto'
-import { Repository, HttpException } from '@forinda/kickjs'
+import { Repository } from '@forinda/kickjs'
 import type { ParsedQuery } from '@forinda/kickjs'
 import type { I${pascal}Repository } from '${repoPrefix}/${kebab}.repository'
 import type { ${pascal}ResponseDTO } from '${dtoPrefix}/${kebab}-response.dto'
 import type { Create${pascal}DTO } from '${dtoPrefix}/create-${kebab}.dto'
 import type { Update${pascal}DTO } from '${dtoPrefix}/update-${kebab}.dto'
 
-@Repository()
-export class ${repoTypePascal}${pascal}Repository implements I${pascal}Repository {
-  // TODO: Replace with your ${repoType} client/connection
-  private store = new Map<string, ${pascal}ResponseDTO>()
+/** Names the method that still needs writing, rather than failing vaguely. */
+function notImplemented(method: string): never {
+  throw new Error(
+    \`${pascal}Repository.\${method}() is not implemented — \` +
+      \`write the ${store} query, or bind InMemory${pascal}Repository in the module ` +
+    `while you build it out.\`,
+  )
+}
 
-  async findById(id: string): Promise<${pascal}ResponseDTO | null> {
-    // TODO: Implement with ${repoType}
-    return this.store.get(id) ?? null
+@Repository()
+export class ${pascal}Repository implements I${pascal}Repository {
+  // TODO: inject your ${store} client/connection here.
+
+  async findById(_id: string): Promise<${pascal}ResponseDTO | null> {
+    notImplemented('findById')
   }
 
   async findAll(): Promise<${pascal}ResponseDTO[]> {
-    // TODO: Implement with ${repoType}
-    return Array.from(this.store.values())
+    notImplemented('findAll')
   }
 
-  async findPaginated(parsed: ParsedQuery): Promise<{ data: ${pascal}ResponseDTO[]; total: number }> {
-    // TODO: Implement with ${repoType}
-    const all = Array.from(this.store.values())
-    const data = all.slice(parsed.pagination.offset, parsed.pagination.offset + parsed.pagination.limit)
-    return { data, total: all.length }
+  async findPaginated(_parsed: ParsedQuery): Promise<{ data: ${pascal}ResponseDTO[]; total: number }> {
+    notImplemented('findPaginated')
   }
 
-  async create(dto: Create${pascal}DTO): Promise<${pascal}ResponseDTO> {
-    // TODO: Implement with ${repoType}
-    const now = new Date().toISOString()
-    const entity: ${pascal}ResponseDTO = {
-      id: randomUUID(),
-      ...dto,
-      createdAt: now,
-      updatedAt: now,
-    }
-    this.store.set(entity.id, entity)
-    return entity
+  async create(_dto: Create${pascal}DTO): Promise<${pascal}ResponseDTO> {
+    notImplemented('create')
   }
 
-  async update(id: string, dto: Update${pascal}DTO): Promise<${pascal}ResponseDTO> {
-    // TODO: Implement with ${repoType}
-    const existing = this.store.get(id)
-    if (!existing) throw HttpException.notFound('${pascal} not found')
-    const updated = { ...existing, ...dto, updatedAt: new Date().toISOString() }
-    this.store.set(id, updated)
-    return updated
+  async update(_id: string, _dto: Update${pascal}DTO): Promise<${pascal}ResponseDTO> {
+    notImplemented('update')
   }
 
-  async delete(id: string): Promise<void> {
-    // TODO: Implement with ${repoType}
-    if (!this.store.has(id)) throw HttpException.notFound('${pascal} not found')
-    this.store.delete(id)
+  async delete(_id: string): Promise<void> {
+    notImplemented('delete')
   }
 }
 `
+  )
 }

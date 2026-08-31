@@ -1,5 +1,4 @@
 import type { ModuleContext } from './types'
-import { toKebabCase } from '../../utils/naming'
 import {
   generateRestModuleIndex,
   generateRestController,
@@ -61,7 +60,11 @@ export async function generateRestFiles(ctx: ModuleContext): Promise<void> {
   // generic custom stub — prisma/drizzle no longer have dedicated
   // generators (see `warnIfDeprecatedRepo`).
   const isInMemory = repo === 'inmemory'
-  const repoFile = isInMemory ? `in-memory-${kebab}` : `${toKebabCase(repo)}-${kebab}`
+  // Full basename. Only `inmemory` is named for what it is; every other repo
+  // gets the same unimplemented stub, so it takes the module's name rather
+  // than asserting a store it does not implement yet. `.impl` because
+  // `${kebab}.repository.ts` is already the interface.
+  const repoFile = isInMemory ? `in-memory-${kebab}.repository` : `${kebab}.repository.impl`
   const repoContent = isInMemory
     ? generateInMemoryRepository({ pascal, kebab, repoPrefix: '.', dtoPrefix: './dtos' })
     : generateCustomRepository({
@@ -71,7 +74,7 @@ export async function generateRestFiles(ctx: ModuleContext): Promise<void> {
         repoPrefix: '.',
         dtoPrefix: './dtos',
       })
-  await write(`${repoFile}.repository.ts`, repoContent)
+  await write(`${repoFile}.ts`, repoContent)
 
   // Tests
   if (!noTests) {

@@ -14,29 +14,31 @@ function toPascalRepoType(repo: string): string {
   )
 }
 
-function toKebabRepoType(repo: string): string {
-  return repo.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase()
-}
-
 function repoLabel(repo: RepoType): string {
   return repoLabelMap[repo] ?? toPascalRepoType(repo)
 }
 
+/**
+ * Class and file basename for the repository implementation.
+ *
+ * Only `inmemory` is special: it is the one built-in with a real working
+ * implementation, and its name describes what it actually is.
+ *
+ * Everything else — including `drizzle` and `prisma`, which no longer have
+ * dedicated generators — scaffolds the same unimplemented stub, so naming it
+ * after the store would assert a technology the file does not implement. It
+ * takes the module's name instead, which the folder already carries. The
+ * chosen store still appears in the stub's prose and its error messages.
+ */
 function repoMaps(pascal: string, kebab: string, repo: RepoType) {
-  const repoClassMap: Record<string, string> = {
-    inmemory: `InMemory${pascal}Repository`,
-    drizzle: `Drizzle${pascal}Repository`,
-    prisma: `Prisma${pascal}Repository`,
+  if (repo === 'inmemory') {
+    return {
+      repoClass: `InMemory${pascal}Repository`,
+      repoFile: `in-memory-${kebab}.repository`,
+    }
   }
-  const repoFileMap: Record<string, string> = {
-    inmemory: `in-memory-${kebab}`,
-    drizzle: `drizzle-${kebab}`,
-    prisma: `prisma-${kebab}`,
-  }
-  return {
-    repoClass: repoClassMap[repo] ?? `${toPascalRepoType(repo)}${pascal}Repository`,
-    repoFile: repoFileMap[repo] ?? `${toKebabRepoType(repo)}-${kebab}`,
-  }
+  // `.impl` because `${kebab}.repository.ts` is the interface.
+  return { repoClass: `${pascal}Repository`, repoFile: `${kebab}.repository.impl` }
 }
 
 /** Resolve the style flag, defaulting to 'define' for new code. */
@@ -64,7 +66,7 @@ export function generateModuleIndex(ctx: TemplateContext & { repo: RepoType }): 
  */`
 
   const repoImports = `import { ${pascal.toUpperCase()}_REPOSITORY } from './domain/repositories/${kebab}.repository'
-import { ${repoClass} } from './infrastructure/repositories/${repoFile}.repository'
+import { ${repoClass} } from './infrastructure/repositories/${repoFile}'
 import { ${pascal}Controller } from './presentation/${kebab}.controller'
 
 // Eagerly load decorated classes so @Controller()/@Service()/@Repository() decorators
@@ -174,12 +176,12 @@ export function generateRestModuleIndex(ctx: TemplateContext & { repo: RepoType 
  *   ${kebab}.controller.ts  — HTTP routes (CRUD)
  *   ${kebab}.service.ts     — Business logic
  *   ${kebab}.repository.ts  — Repository interface
- *   ${repoFile}.repository.ts — Repository implementation
+ *   ${repoFile}.ts — Repository implementation
  *   dtos/                   — Request/response schemas
  */`
 
   const repoImports = `import { ${pascal.toUpperCase()}_REPOSITORY } from './${kebab}.repository'
-import { ${repoClass} } from './${repoFile}.repository'
+import { ${repoClass} } from './${repoFile}'
 import { ${pascal}Controller } from './${kebab}.controller'
 
 // Eagerly load decorated classes so @Controller()/@Service()/@Repository() decorators
