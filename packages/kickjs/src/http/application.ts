@@ -733,8 +733,19 @@ export class Application {
     }
 
     // ── 4. Global middleware ─────────────────────────────────────────
-    // Auto-inject helmet unless opted out
-    const autoHelmet = this.options.security?.helmet !== false
+    // Auto-inject helmet unless opted out, or unless the app mounts its own.
+    // Injecting alongside a user helmet makes its options half-inert: ours runs
+    // first with defaults, and theirs can only overwrite a header, never drop
+    // one — so `helmet({ frameguard: false })` would still emit DENY.
+    const declaredHelmet = (this.options.middlewares ?? this.options.middleware ?? []).some(
+      (entry) => {
+        const fn = typeof entry === 'function' ? entry : entry?.handler
+        // `Symbol.for` registry lookup — no import, so the dynamic-import
+        // tolerance below stays intact.
+        return typeof fn === 'function' && Symbol.for('kick/http/helmet') in fn
+      },
+    )
+    const autoHelmet = this.options.security?.helmet !== false && !declaredHelmet
     if (autoHelmet) {
       try {
         const { helmet: helmetFn } = await import('./middleware/helmet')

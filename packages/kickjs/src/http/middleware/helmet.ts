@@ -1,5 +1,8 @@
 import type { Request, Response, NextFunction } from 'express'
 
+/** Brand identifying a `helmet()` handler, so auto-injection can stand down. */
+export const HELMET_MIDDLEWARE = Symbol.for('kick/http/helmet')
+
 export interface HelmetOptions {
   /** Set Content-Security-Policy header (default: self-only policy) */
   contentSecurityPolicy?: boolean | Record<string, string[]>
@@ -42,7 +45,7 @@ export function helmet(options: HelmetOptions = {}) {
     contentSecurityPolicy = false,
   } = options
 
-  return (req: Request, res: Response, next: NextFunction) => {
+  const handler = (req: Request, res: Response, next: NextFunction) => {
     if (hidePoweredBy) res.removeHeader('X-Powered-By')
     if (noSniff) res.setHeader('X-Content-Type-Options', 'nosniff')
     if (frameguard) res.setHeader('X-Frame-Options', frameguard)
@@ -70,4 +73,10 @@ export function helmet(options: HelmetOptions = {}) {
 
     next()
   }
+
+  // Brand the handler so the Application skips its own auto-injection. Without
+  // that, auto-helmet runs first with defaults and a user helmet can only ADD
+  // headers — an explicit `frameguard: false` would leave the auto-injected
+  // `X-Frame-Options: DENY` standing.
+  return Object.defineProperty(handler, HELMET_MIDDLEWARE, { value: true })
 }
