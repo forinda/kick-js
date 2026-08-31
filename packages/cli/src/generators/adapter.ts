@@ -12,11 +12,16 @@ interface GenerateAdapterOptions {
  *
  * v4 dropped the `class implements AppAdapter` pattern in favour of the
  * `defineAdapter()` factory (architecture.md §21.3.4). The generated
- * template uses the new factory shape so adopters get a working
- * adapter with all four lifecycle hooks (beforeMount, beforeStart,
- * afterStart, shutdown), a typed config object with defaults, and the
- * factory's call / `.scoped()` / `.async()` surfaces — without
- * writing a single class.
+ * template uses the new factory shape so adopters get a working adapter with
+ * EVERY hook on `AppAdapter`, a typed config object with defaults, and the
+ * factory's call / `.scoped()` / `.async()` surfaces — without writing a
+ * single class.
+ *
+ * "Every hook" is the point, and `adapter-generator.test.ts` pins it: the
+ * scaffold is how adopters discover what an adapter can do, so a hook missing
+ * here is a feature that effectively does not exist. `onHealthCheck` was
+ * absent for several releases, and adopters hand-rolled their own
+ * `/health/ready` instead of contributing to the built-in one.
  */
 export async function generateAdapter(options: GenerateAdapterOptions): Promise<string[]> {
   const { name, outDir } = options
@@ -85,7 +90,9 @@ export const ${pascal}Adapter = defineAdapter<${pascal}AdapterConfig>({
 
     return {
       /**
-       * Express middleware entries the Application mounts at named phases.
+       * Connect-style middleware entries the Application mounts at named
+       * phases. Works on every runtime — Express, Fastify and h3 all accept
+       * the connect signature through the runtime seam.
        *
        * \`phase\` controls where each handler sits in the pipeline:
        *   'beforeGlobal' | 'afterGlobal' | 'beforeRoutes' | 'afterRoutes'.
@@ -200,6 +207,67 @@ export const ${pascal}Adapter = defineAdapter<${pascal}AdapterConfig>({
         // Example: await this.pool.end()
         // Example: clearInterval(this.heartbeatTimer)
       },
+
+      /**
+       * Reports this adapter's backing service to \`GET /health/ready\`.
+       *
+       * The Application aggregates every adapter's check through
+       * \`Promise.allSettled\` and serves the combined result, so contributing
+       * one here is what makes your dependency visible to the built-in
+       * readiness endpoint — no route of your own required.
+       *
+       * Keep it cheap and time-boxed: readiness is polled by orchestrators.
+       *
+       * Delete this hook if your adapter has nothing to report.
+       */
+      async onHealthCheck(): Promise<{ name: string; status: 'up' | 'down' }> {
+        // Example:
+        // try {
+        //   await _config.client.ping()
+        //   return { name: '${kebab}', status: 'up' }
+        // } catch {
+        //   return { name: '${kebab}', status: 'down' }
+        // }
+        return { name: '${kebab}', status: 'up' }
+      },
+
+      /**
+       * Snapshot for the DevTools topology view (\`/_debug\`).
+       *
+       * Must be CHEAP — the topology endpoint polls on a short interval, so
+       * \`state\` and \`metrics\` should be counters and flags already in memory,
+       * never a database round trip. Async is allowed for that reason, not as
+       * an invitation to do work.
+       *
+       * Delete this hook if the adapter has nothing worth showing.
+       */
+      // introspect(): IntrospectionSnapshot {
+      //   return {
+      //     protocolVersion: 1,
+      //     state: { connected: true },
+      //     metrics: { handled: 0 },
+      //     tokens: [],
+      //   }
+      // },
+
+      /**
+       * DevTools panels this adapter contributes.
+       *
+       * Import \`defineDevtoolsTab\` from \`@forinda/kickjs-devtools-kit\`;
+       * \`@forinda/kickjs\` deliberately does not depend on the kit at runtime.
+       *
+       * Delete this hook unless the adapter ships a panel.
+       */
+      // devtoolsTabs() {
+      //   return [
+      //     defineDevtoolsTab({
+      //       id: '${kebab}',
+      //       title: '${pascal}',
+      //       kind: 'html',
+      //       render: () => '<p>${pascal} adapter</p>',
+      //     }),
+      //   ]
+      // },
     }
   },
 })
