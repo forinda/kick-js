@@ -344,37 +344,21 @@ html {
 
 /* ── Table Styling ───────────────────────────────────────────── */
 
+/*
+ * Only the corners. VitePress already ships
+ * `.vp-doc table { display: block; overflow-x: auto }`, so a table wider than
+ * the viewport scrolls on its own — and a scroll container clips its own
+ * rounded corners, so no `overflow` declaration is needed here.
+ *
+ * Both table bugs came from overriding that default. Pairing `border-radius`
+ * with the `overflow` shorthand set BOTH axes and clipped wide tables on narrow
+ * screens; replacing it with `overflow-wrap: anywhere` on cells then let the
+ * layout algorithm collapse a narrow column to a single character, stacking
+ * `dropped` vertically on a wide desktop screen. Neither was a VitePress
+ * problem. Wide tables scroll, which is the affordance readers already know.
+ */
 .vp-doc table {
   border-radius: 8px;
-  /*
-   * `overflow-x`, never the `overflow` shorthand. VitePress ships
-   * `.vp-doc table { display: block; overflow-x: auto }` so a table wider than
-   * the viewport scrolls; the shorthand sets BOTH axes and silently overrode
-   * that, clipping every wide table on narrow screens instead. The rounded
-   * corners still clip correctly — a scroll container rounds its own overflow.
-   */
-  overflow-x: auto;
-  /* Momentum scrolling on iOS, and a visible affordance that there is more. */
-  -webkit-overflow-scrolling: touch;
-}
-
-/*
- * Let prose cells wrap so a table fits the viewport instead of scrolling —
- * measured at a 320px column, this alone takes a typical docs table from 97px
- * of unreachable content to none.
- */
-.vp-doc table :is(td, th) {
-  overflow-wrap: anywhere;
-}
-
-/*
- * ...but never break a code token. `GET /academics/terms/:termId` split across
- * two lines is worse than a scrollbar: the reader cannot tell whether the break
- * is part of the path. These keep their shape and the table scrolls instead,
- * which is what the `overflow-x` above is for.
- */
-.vp-doc table :is(td, th) :is(code, a) {
-  overflow-wrap: normal;
 }
 
 .vp-doc th {
