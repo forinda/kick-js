@@ -24,6 +24,7 @@ pnpm add -D @forinda/kickjs-testing@8 @forinda/kickjs-cli@8
 | Change                                          | Affects                     | Action                                              |
 | ----------------------------------------------- | --------------------------- | --------------------------------------------------- |
 | `kickjs-auth`, `-drizzle`, `-prisma` removed    | Apps still on them          | Move to BYO auth or kick/db                         |
+| `kick add auth\|drizzle\|prisma` now fails      | Anyone scripting `kick add` | Drop those from setup scripts and CI                |
 | `middleware` option renamed to `middlewares`    | Any app setting it          | Rename the key — the compiler finds every one       |
 | 404 body is now problem details                 | Any app                     | Read `title`/`status`, or restore with `onNotFound` |
 | Wrong verb answers 405, not 404                 | Any app                     | Move the case to the 405 branch                     |
@@ -345,6 +346,8 @@ const { app } = await createTestApp({
 ```
 
 ## CLI (`@forinda/kickjs-cli` 8.0)
+
+**Why the CLI is also a major:** `kick add auth`, `kick add drizzle` and `kick add prisma` no longer install anything — the three entries are gone from the catalog with their packages, so those commands now report an unknown package. Everything else below is additive or a fix.
 
 - **The generated repository is one file.** `<module>.repository.ts` now holds the factory, the contract (`ReturnType` of the factory) and the token. Previously three files, with the store name baked into the class — `PostgresAuditRepository` whose every method read and wrote a `Map`. The store is gone from the generated names, so an in-memory body is honest and the TODO says what to swap in.
 - **`modules.repo` in `kick.config.ts` is deprecated.** It only ever selected a name for the lie above. Remove it; the generator no longer needs it.
