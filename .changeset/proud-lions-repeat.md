@@ -1,5 +1,5 @@
 ---
-'@forinda/kickjs': major
+'@forinda/kickjs': minor
 ---
 
 Every error the framework serialises is RFC 9457 problem details.
@@ -28,6 +28,12 @@ bodies move with it.
 
 **Migrating:** assert on `body.detail` rather than `body.message`. Nothing is
 lost, it is renamed to the RFC's field.
+
+Released as a **minor** rather than a major, deliberately. The response shape
+does change, so semver would argue for a major — but 8.0.0 shipped a day
+earlier, and moving to 9.0.0 for this would say something much louder about the
+release cadence than about the change. The window where an adopter has pinned
+`{ message }` against 8.0.0 specifically is roughly that one day.
 
 The error handler's own contract previously said `HttpException` "keeps the
 existing `{ message, errors? }` shape for backward compatibility". That clause

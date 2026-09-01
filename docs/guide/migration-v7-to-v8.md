@@ -80,7 +80,7 @@ Renamed for the same reason, in the same release:
 
 **`AppAdapter.middleware()` and `Plugin.middleware()` are unchanged.** Those are a different API — a hook that returns entries, not an option that takes them — and nothing about them was ambiguous. If you write adapters, nothing there moves.
 
-## Breaking: every error is problem details
+## In 8.1: every error is problem details
 
 A plain `HttpException` used to answer a bare `{ "message": … }` with `application/json`. It now emits RFC 9457, the same as `ProblemException` and `ctx.problem.*`:
 
@@ -96,6 +96,8 @@ throw HttpException.forbidden('Not your project')
 `HttpException` was the last shape a client parsing `application/problem+json` had to special-case — and the most common one, since it is how most apps reject a request. Route validation raises `HttpException` too, so 422 bodies move with it: `details` becomes an `errors` extension member, still withheld in production.
 
 **If you assert on `body.message`, read `body.detail`.** The message is not lost; it is the `detail` field.
+
+This landed in **8.1**, just after the v8 release, rather than in 8.0 itself.
 
 ## Breaking: the catch-all
 
