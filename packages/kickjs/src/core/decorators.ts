@@ -40,17 +40,27 @@ function flushPending(container: any): void {
 // Wire up synchronously — Container._onReady is called on first getInstance()
 Container._onReady = flushPending
 
-// On Container.reset(), update containerRef and replay ALL decorator
-// registrations on the fresh container. This handles HMR where the container
-// is wiped but not all decorated modules are re-evaluated.
-Container._onReset = (container: any) => {
-  containerRef = container
+/** Replay every decorator registration onto a container. */
+function seed(container: any): void {
   for (const [, { target, scope }] of allRegistrations) {
     if (!container.has(target)) {
       container.register(target, target, scope)
     }
   }
 }
+
+// On Container.reset(), update containerRef and replay ALL decorator
+// registrations on the fresh container. This handles HMR where the container
+// is wiped but not all decorated modules are re-evaluated.
+Container._onReset = (container: any) => {
+  containerRef = container
+  seed(container)
+}
+
+// On Container.create(), seed the same way but leave `containerRef` alone: an
+// isolated container should receive what has been registered so far, not
+// become the destination for everything registered next.
+Container._onCreate = seed
 
 // ── Class Decorators ────────────────────────────────────────────────────
 

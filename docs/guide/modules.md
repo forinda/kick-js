@@ -46,10 +46,7 @@ import { TodosController } from './todos.controller'
 
 // Eagerly load decorated classes so @Controller()/@Service()/@Repository()
 // decorators register in the DI container
-import.meta.glob(
-  ['./**/*.controller.ts', './**/*.service.ts', './**/*.repository.ts', '!./**/*.test.ts'],
-  { eager: true },
-)
+import.meta.glob(['./**/*.ts', '!./**/*.test.ts', '!./**/*.d.ts'], { eager: true })
 
 export const TodosModule = defineModule({
   name: 'TodosModule',
@@ -67,17 +64,14 @@ export const TodosModule = defineModule({
 })
 ```
 
-The `import.meta.glob` call ensures all decorated classes in the module are imported at module load time. Without this, `@Service()` and `@Repository()` decorators would never fire, and the DI container wouldn't know about those classes. The globs are recursive (`./**/`) so the module keeps working however you nest files — moving controllers into a `controllers/` sub-folder does not break registration.
+The `import.meta.glob` call ensures all decorated classes in the module are imported at module load time. Without this, `@Service()` and `@Repository()` decorators would never fire, and the DI container wouldn't know about those classes. The glob is deliberately broad rather than a list of suffixes. A suffix list only covers the filenames the generator emits, so a hand-written `*.usecase.ts` or `*.policy.ts` never registered and failed later as `No provider for X` — the exact problem the eager load exists to prevent. It is recursive too, so nesting files does not break registration.
 
 ## Eager loading with import.meta.glob
 
 Classes decorated with `@Service()`, `@Repository()`, or `@Component()` must be imported so their decorators execute and register them in the DI container. The generated modules use `import.meta.glob` for this:
 
 ```ts
-import.meta.glob(
-  ['./**/*.controller.ts', './**/*.service.ts', './**/*.repository.ts', '!./**/*.test.ts'],
-  { eager: true },
-)
+import.meta.glob(['./**/*.ts', '!./**/*.test.ts', '!./**/*.d.ts'], { eager: true })
 ```
 
 Plain side-effect imports work too — the glob form is just convenient.

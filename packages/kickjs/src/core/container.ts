@@ -172,6 +172,14 @@ export class Container {
   static _onReady: ((container: Container) => void) | null = null
   /** Callback invoked on reset so decorators can update their container reference */
   static _onReset: ((container: Container) => void) | null = null
+
+  /**
+   * Seeds a NEWLY CREATED container with the decorator registrations, without
+   * adopting it as the global one. `_onReset` does both; an isolated container
+   * must only have the first half, or it would capture every subsequent
+   * decorator registration in the process.
+   */
+  static _onCreate: ((container: Container) => void) | null = null
   /**
    * Environment resolver for @Value decorator. Set by the unified
    * `@forinda/kickjs` config layer to return Zod-validated, type-coerced
@@ -259,7 +267,14 @@ export class Container {
    * ```
    */
   static create(): Container {
-    return new Container()
+    const container = new Container()
+    // Decorators register at class-definition time, into whichever container
+    // was global then. Without this replay an isolated container is missing
+    // every @Service / @Repository / @Controller in the process — and
+    // `isolated: true` is what the generated docs recommend for test
+    // isolation, so the failure reached adopters as `No provider for X`.
+    Container._onCreate?.(container)
+    return container
   }
 
   /** Register a class constructor under the given token */
