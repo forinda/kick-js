@@ -534,12 +534,12 @@ kick g scaffold User name:string email:email:optional role:enum:admin,user,guest
 
 #### Scaffold Flags
 
-| Flag                  | Description               | Default       |
-| --------------------- | ------------------------- | ------------- |
-| `--no-tests`          | Skip test file generation | `false`       |
-| `--no-pluralize`      | Use singular names        | from config   |
-| `--repo <name>`       | Repository name           | from config   |
-| `--modules-dir <dir>` | Modules directory         | `src/modules` |
+| Flag                  | Description                           | Default       |
+| --------------------- | ------------------------------------- | ------------- |
+| `--no-entity`         | Skip entity + value object generation | `false`       |
+| `--no-tests`          | Skip test file generation             | `false`       |
+| `--no-pluralize`      | Use singular names                    | from config   |
+| `--modules-dir <dir>` | Modules directory                     | `src/modules` |
 
 ::: tip Shell-safe optional syntax
 Use `name:type:optional` instead of `"name:type?"` — the `?` character is a shell glob in bash/zsh and needs quoting.
@@ -583,13 +583,13 @@ kick g agents -f --only both       # .agents/AGENTS.md + CLAUDE.md (skip skills)
 
 Aliases: `kick g agent-docs`, `kick g ai-docs`. Auto-detects project name (from `package.json`), package manager (corepack `packageManager` field), and template (from `kick.config.ts` `pattern`).
 
-| Flag                    | Description                                         | Default               |
-| ----------------------- | --------------------------------------------------- | --------------------- |
-| `--only <which>`        | `agents` \| `claude` \| `skills` \| `both` \| `all` | `all`                 |
-| `--name <name>`         | Project name override                               | from `package.json`   |
-| `--pm <pm>`             | Package manager override                            | from `package.json`   |
-| `--template <template>` | `rest` \| `minimal` \| `fullstack`                  | from `kick.config.ts` |
-| `-f, --force`           | Overwrite without prompting                         | `false`               |
+| Flag                    | Description                                                                  | Default               |
+| ----------------------- | ---------------------------------------------------------------------------- | --------------------- |
+| `--only <which>`        | `agents` \| `claude` \| `skills` \| `gemini` \| `copilot` \| `both` \| `all` | `all`                 |
+| `--name <name>`         | Project name override                                                        | from `package.json`   |
+| `--pm <pm>`             | Package manager override                                                     | from `package.json`   |
+| `--template <template>` | `rest` \| `minimal` \| `fullstack`                                           | from `kick.config.ts` |
+| `-f, --force`           | Overwrite without prompting                                                  | `false`               |
 
 See [Generators — kick g agents](./generators.md#kick-g-agents) for what each file contains and how to keep local customisations from being overwritten.
 

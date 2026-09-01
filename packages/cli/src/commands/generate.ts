@@ -744,12 +744,12 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
     .description('Regenerate .agents/* + root CLAUDE.md (sync after framework upgrades)')
     .option(
       '--only <which>',
-      'Limit scope: agents | claude | skills | both (agents+claude) | all (default: all)',
+      'Limit scope: agents | claude | skills | gemini | copilot | both (agents+claude) | all (default: all)',
       'all',
     )
     .option('--name <name>', 'Project name (defaults to package.json name)')
     .option('--pm <pm>', 'Package manager (defaults to package.json packageManager)')
-    .option('--template <template>', 'Template: rest | minimal')
+    .option('--template <template>', 'Template: rest | minimal | fullstack')
     .option('-f, --force', 'Overwrite existing files without prompting')
     .action(async (opts: AgentDocsOpts, cmd: Command) => {
       const dryRun = isDryRun(cmd)
