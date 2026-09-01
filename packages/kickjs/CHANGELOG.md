@@ -1,5 +1,154 @@
 # @forinda/kickjs
 
+## 8.1.0
+
+### Minor Changes
+
+- [#612](https://github.com/forinda/kick-js/pull/612) [`31677ce`](https://github.com/forinda/kick-js/commit/31677cef0d24a906dfe3ba9c90fc56233b6eb329) Thanks [@forinda](https://github.com/forinda)! - Every error the framework serialises is RFC 9457 problem details.
+  
+  A plain `HttpException` answered a bare `{ "message": … }` with
+  `application/json`, while `ProblemException` and `ctx.problem.*` answered
+  `application/problem+json`. So `HttpException` was the one shape a client
+  parsing problem details had to special-case — and the most common one, since it
+  is how most apps reject a request. The same situation the v8 catch-all change
+  removed, in the path it did not reach ([#611](https://github.com/forinda/kick-js/issues/611)).
+  
+  ```ts
+  throw HttpException.forbidden('Not your project')
+  ```
+  
+  ```json
+  403  content-type: application/problem+json
+  { "type": "about:blank", "title": "Forbidden", "status": 403, "detail": "Not your project" }
+  ```
+  
+  The message becomes `detail`; `title` and `type` default from the status.
+  `details` becomes an `errors` extension member, permitted by §3.2 and still
+  withheld in production for the same reason as before — it can carry the shape
+  of the request that failed. Route validation raises `HttpException`, so 422
+  bodies move with it.
+  
+  **Migrating:** assert on `body.detail` rather than `body.message`. Nothing is
+  lost, it is renamed to the RFC's field.
+  
+  Released as a **minor** rather than a major, deliberately. The response shape
+  does change, so semver would argue for a major — but 8.0.0 shipped a day
+  earlier, and moving to 9.0.0 for this would say something much louder about the
+  release cadence than about the change. The window where an adopter has pinned
+  `{ message }` against 8.0.0 specifically is roughly that one day.
+  
+  The error handler's own contract previously said `HttpException` "keeps the
+  existing `{ message, errors? }` shape for backward compatibility". That clause
+  is gone — it was cheapest to drop inside the v8 window, and keeping it meant the
+  framework shipped two error shapes and no rule for which one an app would get.
+  
+  Reported against contributors, which is where it is most visible: a contributor
+  is the natural place to authorise, and answering off-spec there pushed
+  authorisation checks back into `@Middleware()` for the wrong reason. Contributors
+  could always reach `ctx.problem.*` — `resolve()` gets a full `RequestContext` —
+  but should not have had to in order to get a conformant body. Both guides now
+  say which to reach for and why.
+
+### Patch Changes
+
+- [#616](https://github.com/forinda/kick-js/pull/616) [`8070eb6`](https://github.com/forinda/kick-js/commit/8070eb6dafbba4579f797c5c2d638acbc16aad7f) Thanks [@forinda](https://github.com/forinda)! - `trustProxy` now works on the h3 runtime, and the rate-limit key is documented
+  as what it is.
+  
+  Reported as `rateLimitGuard`'s default `keyGenerator` ignoring
+  `x-forwarded-for` ([#614](https://github.com/forinda/kick-js/issues/614)). The keying behaviour is correct and deliberate — but
+  two real problems sat behind the report.
+  
+  **The doc comment described a different implementation.** It promised
+  `cf-connecting-ip` → `x-forwarded-for` → `x-real-ip` → `'global'`. The default
+  is `ctx.ip`, and `resolveClientIp` consults forwarded headers only where there
+  is no socket — the `@forinda/kickjs/web` edge entry. On a node runtime it uses
+  the address the engine vetted against its own trust-proxy setting, then the
+  socket.
+  
+  That ordering is the safe one: `x-forwarded-for` is client-controllable unless
+  a proxy overwrites it, so believing it unconditionally would let a direct caller
+  mint a fresh allowance per request by varying the header — evading the limiter
+  rather than being held by it. The comment now says that, and says plainly that
+  behind a proxy you must set `trustProxy` or every client shares one bucket.
+  
+  **`trustProxy` was silently ignored on h3.** Express derives `req.ip` from
+  `trust proxy` and Fastify from `trustProxy`; h3's `createApp` took the option
+  and dropped it (`_options`), so `resolveClientIp` fell through to the socket no
+  matter what the app configured. Behind a load balancer that is one bucket for
+  every caller, with no way to configure out of it — a rate limiter that protects
+  nothing, failing quietly, because in development each client really does have
+  its own address.
+  
+  h3 now derives `req.ip` from the first `x-forwarded-for` hop when — and only
+  when — `trustProxy` is set, matching what the other two engines do with their
+  own settings.
+  
+  Pinned across all three runtimes: an untrusted `x-forwarded-for` cannot mint
+  buckets, and a configured proxy buckets per client.
+
+- [#610](https://github.com/forinda/kick-js/pull/610) [`9b761fc`](https://github.com/forinda/kick-js/commit/9b761fc6f7039117e2b47ce0fd28550e4c245a02) Thanks [@forinda](https://github.com/forinda)! - Fix isolated containers resolving nothing, and a glob that missed half a module.
+  
+  **`Container.create()` returned a container with no decorator registrations
+  ([#608](https://github.com/forinda/kick-js/issues/608)).** Decorators register at class-definition time into whichever container
+  was global then, keeping a copy in `allRegistrations` so a fresh container can
+  be re-seeded. `Container.reset()` replays that map; `create()` was literally
+  `new Container()`, so an isolated container was missing every `@Service`,
+  `@Repository` and `@Controller` in the process:
+  
+  ```text
+  KICK001: No provider for PricingService
+  ```
+  
+  `createTestApp({ isolated: true })` and `createTestPlugin` both take that path,
+  and `createTestPlugin` defaults `isolated` to true. Worse, the scaffolded
+  project docs recommend `Container.create()` for test isolation in five places —
+  so the advice every new project ships produced this failure the moment a test
+  resolved a decorator-registered class.
+  
+  `create()` now seeds the same way `reset()` does, through a separate
+  `_onCreate` hook that deliberately does **not** reassign the decorators'
+  `containerRef`. Seeding and adopting are different things: an isolated
+  container should receive what has been registered so far, not become the
+  destination for everything registered next. Pinned by a test that the isolated
+  container resolves the service, agrees with the shared one, and still does not
+  leak either way.
+  
+  **Isolated containers also leaked, in the other direction.** `registerInstance`,
+  `registerFactory` and `resolve`'s singleton cache all wrote to the persistent
+  store — the `globalThis` map that exists so the GLOBAL container survives HMR
+  and module re-evaluation. `Container.reset()` replays that store, so an override
+  registered in an isolated container reappeared in every later test:
+  
+  ```ts
+  Container.create().registerInstance('probe', { v: 1 })
+  Container.reset()
+  Container.getInstance().has('probe') // true
+  ```
+  
+  `createTestApp({ isolated: true, overrides })` takes exactly that path, so the
+  option meant to isolate tests was contaminating them. The reads leaked the same
+  way in reverse: `registerFactory` adopted a globally cached instance, so a
+  freshly created isolated container could start out already polluted.
+  
+  Persistence is now scoped to the global singleton by an explicit `isGlobal`
+  flag, rather than inferred. Pinned by three tests: an override does not survive
+  a reset, a resolved factory instance does not either, and the isolated container
+  is still a distinct object from the global one.
+  
+  **The generated module's eager glob only matched three suffixes ([#609](https://github.com/forinda/kick-js/issues/609)).** It
+  covered `*.controller.ts`, `*.service.ts` and `*.repository.ts`, so a decorated
+  class in `*.usecase.ts`, `*.policy.ts` or `*.mapper.ts` was never imported,
+  never registered, and failed later as `No provider for X`. A routed class was
+  pulled in transitively by its controller, so the gap only showed for an unrouted
+  one reached through `resolve()` or `@Autowired` — the case least likely to be
+  covered by the generated tests.
+  
+  It is now `./**/*.ts` minus tests and declarations. A suffix list only ever
+  covers the filenames the generator itself emits, which reproduces the original
+  problem in a smaller and less obvious form: it works until an adopter picks a
+  fourth name, and nothing warns. `docs/guide/modules.md` describes the same glob
+  and is updated with it.
+
 ## 8.0.0
 
 ### Major Changes
