@@ -82,10 +82,10 @@ cd packages/cli && pnpm link --global
 
 **kick g agents** (aliases: `kick g agent-docs`, `kick g ai-docs`)
 
-- `--only <which>` -- Scope: `agents` | `claude` | `skills` | `both` | `all` (default: `all`)
+- `--only <which>` -- Scope: `agents` | `claude` | `skills` | `gemini` | `copilot` | `both` | `all` (default: `all`)
 - `--name <name>` -- Project name override (default: from `package.json`)
 - `--pm <pm>` -- Package manager override (default: from corepack `packageManager` field)
-- `--template <template>` -- Template: `rest` | `minimal` (default: from `kick.config.ts` `pattern`)
+- `--template <template>` -- Template: `rest` | `minimal` | `fullstack` (default: from `kick.config.ts` `pattern`)
 - `-f, --force` -- Overwrite without prompting
 
 ## defineConfig

@@ -34,7 +34,7 @@ export interface GenerateAgentDocsOptions {
   name?: string
   /** Override package manager (defaults to package.json `packageManager` field, then 'pnpm'). */
   pm?: string
-  /** Override template (defaults to kick.config.ts `pattern`, then 'ddd'). */
+  /** Override template (defaults to kick.config.ts `pattern`, then 'rest'). */
   template?: ProjectTemplate
   /**
    * Which file(s) to (re)generate. All `.agents/`-bound files land in

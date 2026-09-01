@@ -298,16 +298,16 @@ Scaffold emits the same flat REST module layout as `kick g module`, but with fie
 | `dtos/post-response.dto.ts` | Response interface                                      |
 | `__tests__/`                | Controller + repository tests                           |
 
-With a custom repo name (e.g. `--repo postgres`), the same `post.repository.ts` is emitted — still a working Map-backed factory, with the prose and TODO markers naming the store you asked for. Replace the factory body; the contract is `ReturnType<typeof createPostRepository>`, so nothing else changes.
+`post.repository.ts` is always the Map-backed factory — `kick g scaffold` takes no `--repo` flag, so it can't name a store in the generated prose the way `kick g module --repo postgres` does. Replace the factory body with your own queries; the contract is `ReturnType<typeof createPostRepository>`, so nothing else changes.
 
 ### Scaffold Flags
 
-| Flag                  | Description               | Default                      |
-| --------------------- | ------------------------- | ---------------------------- |
-| `--no-tests`          | Skip test file generation | `false`                      |
-| `--no-pluralize`      | Use singular names        | from config or `false`       |
-| `--repo <name>`       | Repository name           | from config or `inmemory`    |
-| `--modules-dir <dir>` | Modules directory         | from config or `src/modules` |
+| Flag                  | Description                           | Default                      |
+| --------------------- | ------------------------------------- | ---------------------------- |
+| `--no-entity`         | Skip entity + value object generation | `false`                      |
+| `--no-tests`          | Skip test file generation             | `false`                      |
+| `--no-pluralize`      | Use singular names                    | from config or `false`       |
+| `--modules-dir <dir>` | Modules directory                     | from config or `src/modules` |
 
 ### Example
 
