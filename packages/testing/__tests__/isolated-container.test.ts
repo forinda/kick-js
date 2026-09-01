@@ -47,6 +47,30 @@ describe('isolated test containers', () => {
     )
   })
 
+  // The inverse leak: an isolated container used to write its registrations
+  // into the persistent store, which `Container.reset()` replays — so an
+  // override from one isolated test reappeared in every later test.
+  it('does not leak an override into the global container via reset()', async () => {
+    const TOKEN = 'test/only/in/isolated'
+    await createTestApp({
+      modules: [PingModule()],
+      isolated: true,
+      overrides: [[TOKEN, { from: 'isolated' }]],
+    })
+
+    Container.reset()
+    expect(Container.getInstance().has(TOKEN)).toBe(false)
+  })
+
+  it('does not leak a resolved factory instance either', async () => {
+    const isolated = Container.create()
+    isolated.registerFactory('test/isolated/factory', () => ({ v: 1 }))
+    isolated.resolve('test/isolated/factory')
+
+    Container.reset()
+    expect(Container.getInstance().has('test/isolated/factory')).toBe(false)
+  })
+
   // Seeding must not turn the isolated container into the global one — that
   // would trade a missing-provider bug for a cross-test-contamination bug.
   it('stays a separate instance from the global container', async () => {

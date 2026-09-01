@@ -30,6 +30,28 @@ destination for everything registered next. Pinned by a test that the isolated
 container resolves the service, agrees with the shared one, and still does not
 leak either way.
 
+**Isolated containers also leaked, in the other direction.** `registerInstance`,
+`registerFactory` and `resolve`'s singleton cache all wrote to the persistent
+store — the `globalThis` map that exists so the GLOBAL container survives HMR
+and module re-evaluation. `Container.reset()` replays that store, so an override
+registered in an isolated container reappeared in every later test:
+
+```ts
+Container.create().registerInstance('probe', { v: 1 })
+Container.reset()
+Container.getInstance().has('probe') // true
+```
+
+`createTestApp({ isolated: true, overrides })` takes exactly that path, so the
+option meant to isolate tests was contaminating them. The reads leaked the same
+way in reverse: `registerFactory` adopted a globally cached instance, so a
+freshly created isolated container could start out already polluted.
+
+Persistence is now scoped to the global singleton by an explicit `isGlobal`
+flag, rather than inferred. Pinned by three tests: an override does not survive
+a reset, a resolved factory instance does not either, and the isolated container
+is still a distinct object from the global one.
+
 **The generated module's eager glob only matched three suffixes (#609).** It
 covered `*.controller.ts`, `*.service.ts` and `*.repository.ts`, so a decorated
 class in `*.usecase.ts`, `*.policy.ts` or `*.mapper.ts` was never imported,
