@@ -232,7 +232,29 @@ The `context` field carries structured data (the token name, the env key, the mo
 
 KickJS ships first-class support for [RFC 9457 — Problem Details for HTTP APIs](https://datatracker.ietf.org/doc/html/rfc9457) (the successor to RFC 7807). It's the canonical answer to "what shape should our error JSON have?" — five standard fields, a known content type (`application/problem+json`), and arbitrary extensions per §3.2.
 
-Two entry points: `ctx.problem.*` for the response-side flow, and `ProblemException` for throwing from services where `ctx` isn't in scope.
+**Every error the framework serialises is problem details.** A plain `HttpException` produces the same content type and shape as `ProblemException` — its message becomes `detail`, and `title` / `type` default from the status:
+
+```ts
+throw HttpException.forbidden('Not your project')
+```
+
+```json
+403  content-type: application/problem+json
+{ "type": "about:blank", "title": "Forbidden", "status": 403, "detail": "Not your project" }
+```
+
+So a client parses one shape, whichever way the app rejected the request. Before v8, `HttpException` answered a bare `{ "message": … }`, which left it as the single path a problem-details client had to special-case.
+
+### Which one to throw
+
+|                                      | use                                                                                                             | you control                          |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| `HttpException.forbidden('…')`       | the common case — a status and a sentence                                                                       | `status`, `detail`                   |
+| `ProblemException` / `ctx.problem.*` | when the response needs a stable machine-readable `type`, a custom `title`, an `instance`, or extension members | all five RFC fields, plus extensions |
+
+Reach for `HttpException` by default. Reach for `ProblemException` when a client is expected to branch on `type` — that is the field the RFC intends for programmatic dispatch, and a defaulted `about:blank` carries no information.
+
+Two entry points for the richer form: `ctx.problem.*` for the response-side flow, and `ProblemException` for throwing from services where `ctx` isn't in scope.
 
 ### `ctx.problem` — response helpers
 

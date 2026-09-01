@@ -108,7 +108,18 @@ describe.each(runtimes)('error handling on $name', ({ make }) => {
     // one because its wrapper defeated the `instanceof` check.
     const res = await (await agent()).get('/api/v1/things/teapot')
     expect(res.status).toBe(418)
-    expect(res.body).toEqual({ message: 'I am a teapot' })
+    // #611: an HttpException is RFC 9457 like everything else — the message
+    // becomes `detail`, title and type default from the status.
+    expect(res.headers['content-type']).toContain('application/problem+json')
+    expect(res.body).toEqual({
+      status: 418,
+      type: 'about:blank',
+      // 418 is RFC 2324's joke status and is "(Unused)" in the IANA registry,
+      // so it has no reason phrase to default from — `defaultProblemTitle`
+      // falls back to "Error". The status and detail are what carry here.
+      title: 'Error',
+      detail: 'I am a teapot',
+    })
   })
 
   it('maps an unexpected throw to a 500 that names the error once', async () => {

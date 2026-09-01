@@ -326,6 +326,35 @@ Integration tests that exercise each route are still worth having; narrowing cov
 
 ## Error handling
 
+A contributor is the natural place to authorise — `dependsOn` gives you "resolve the actor, then check them" without a second lookup — so it needs the same error vocabulary as a handler. It has it.
+
+`resolve()` receives a full `RequestContext` under `defineHttpContextDecorator`, so both forms are available and both emit RFC 9457:
+
+```ts
+const RequireAdmin = defineHttpContextDecorator({
+  key: 'allowed',
+  dependsOn: ['user'],
+  resolve: (ctx) => {
+    const user = ctx.require('user')
+
+    // A status and a sentence — the common case.
+    if (!user.roles.includes('admin')) throw HttpException.forbidden('Admin only')
+
+    // Or the full problem shape, when a client should branch on `type`.
+    if (user.suspended) {
+      ctx.problem.forbidden({
+        type: 'https://example.com/probs/suspended',
+        detail: 'This account is suspended',
+      })
+    }
+
+    return true
+  },
+})
+```
+
+Both answer `application/problem+json`; see [Error Handling](./error-handling.md#rfc-9457-problem-details) for which to pick. There is no shape penalty for rejecting from a contributor rather than a guard — which there was before v8, and which pushed authorisation checks back into `@Middleware()` for the wrong reason.
+
 When a `resolve()` throws, the runner consults two flags before deciding what to do:
 
 | `resolve()` outcome                    | `optional` | `onError` defined | Behaviour                                                               |

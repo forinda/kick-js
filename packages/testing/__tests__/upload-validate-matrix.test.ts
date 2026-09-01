@@ -153,7 +153,7 @@ describe.each(runtimes)('uploads and validation on $name', ({ make }) => {
       // Express names the FIELD here and the others the filename — multer's
       // LIMIT_FILE_SIZE error carries no filename to report. The status and the
       // limit are what a client acts on, so those are what this pins.
-      expect(res.body.message).toContain('exceeds the 16-byte limit')
+      expect(res.body.detail).toContain('exceeds the 16-byte limit')
     })
 
     it('accepts a file under maxSize', async () => {
@@ -177,7 +177,7 @@ describe.each(runtimes)('uploads and validation on $name', ({ make }) => {
         })
 
       expect(res.status).toBe(415)
-      expect(res.body.message).toBe('File type text/plain is not allowed')
+      expect(res.body.detail).toBe('File type text/plain is not allowed')
     })
   })
 
