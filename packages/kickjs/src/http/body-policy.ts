@@ -14,6 +14,13 @@
 
 import { HttpException } from '../core/errors'
 
+/**
+ * A header as the runtimes hand it over. Node's `IncomingHttpHeaders` and
+ * Fastify's normalised map both allow `string[]`, so take the union here
+ * rather than casting at every call site.
+ */
+export type HeaderValue = string | string[] | undefined
+
 /** What the framework does with a body of a given media type. */
 export type BodyKind =
   /** Parse as JSON, strictly. */
@@ -33,8 +40,9 @@ export type BodyKind =
  * why `application/json; charset=utf-8` — what most clients actually send —
  * missed it and fell to a non-strict branch.
  */
-export function normalizeMediaType(contentType: string | undefined): string {
-  return (contentType ?? '').split(';')[0].trim().toLowerCase()
+export function normalizeMediaType(contentType: HeaderValue): string {
+  const value = Array.isArray(contentType) ? contentType[0] : contentType
+  return (value ?? '').split(';')[0].trim().toLowerCase()
 }
 
 /**
@@ -61,7 +69,7 @@ function isJsonMediaType(mediaType: string): boolean {
  * CSRF that requiring `application/json` closes. h3's own source carries this
  * warning, and h3 v2 pulled back from `destr` partly because of it.
  */
-export function classifyMediaType(contentType: string | undefined): BodyKind {
+export function classifyMediaType(contentType: HeaderValue): BodyKind {
   const mediaType = normalizeMediaType(contentType)
   if (!mediaType) return 'unsupported'
   if (isJsonMediaType(mediaType)) return 'json'
@@ -101,7 +109,7 @@ export const SUPPORTED_BODY_TYPES = [
  * Carries `Accept`, which RFC 9110 §15.5.16 says a 415 "can" use to indicate
  * which media types would have been accepted.
  */
-export function unsupportedMediaTypeError(contentType: string | undefined): HttpException {
+export function unsupportedMediaTypeError(contentType: HeaderValue): HttpException {
   const mediaType = normalizeMediaType(contentType)
   return new HttpException(
     415,
@@ -140,8 +148,28 @@ export function hasRequestBody(headers: Record<string, unknown>): boolean {
 export function rejectUnsupportedBody() {
   return (req: any, _res: unknown, next: (err?: unknown) => void): void => {
     if (!BODY_METHODS.has((req.method ?? 'GET').toUpperCase())) return next()
-    if (!hasRequestBody(req.headers ?? {})) return next()
     if (classifyMediaType(req.headers?.['content-type']) !== 'unsupported') return next()
-    next(unsupportedMediaTypeError(req.headers?.['content-type']))
+
+    const reject = (): void => next(unsupportedMediaTypeError(req.headers?.['content-type']))
+    const length = req.headers?.['content-length'] as string | undefined
+    if (length !== undefined) return length === '0' ? next() : reject()
+    if (req.headers?.['transfer-encoding'] === undefined) return next()
+
+    // Chunked: the framing headers say a body MAY follow, but an empty chunked
+    // post sends none. Deciding on the headers alone would 415 a request that
+    // sent nothing, so wait to see whether a byte actually arrives — the same
+    // distinction the other runtimes make by inspecting the read body.
+    let decided = false
+    const settle = (fn: () => void) => (): void => {
+      if (decided) return
+      decided = true
+      req.off?.('data', onData)
+      req.off?.('end', onEnd)
+      fn()
+    }
+    const onData = settle(reject)
+    const onEnd = settle(() => next())
+    req.on?.('data', onData)
+    req.on?.('end', onEnd)
   }
 }

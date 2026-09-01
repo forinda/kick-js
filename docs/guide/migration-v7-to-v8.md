@@ -243,7 +243,7 @@ The framework now decides in one place. `application/json` and `application/*+js
 
 The rejection is for a body that cannot be read, never for the absence of one: a bodyless `POST` succeeds whatever its declared type.
 
-```
+```text
 POST /things   Content-Type: application/xml   <a>1</a>
 415   Accept: application/json, application/*+json, application/x-www-form-urlencoded, text/*, multipart/form-data
 

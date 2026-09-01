@@ -188,15 +188,19 @@ function makeEventHandler(entry: RouteEntry): (event: H3EventLike) => Promise<vo
         // and routes everything unrecognised through `destr`, which returns the
         // RAW STRING for malformed input instead of throwing (#590).
         const kind = classifyMediaType(req.headers['content-type'])
-        if (kind === 'unsupported') {
-          // A body was sent in a format the framework does not parse. Say so
-          // rather than handing the handler `undefined` and letting it fail
-          // somewhere less obvious.
-          throw unsupportedMediaTypeError(req.headers['content-type'])
-        }
         if (kind !== 'multipart') {
           const raw = await readRawBody(event, 'utf8')
+          // Reject only once the body is known to be non-empty. `sentBody` is
+          // true for an empty CHUNKED post — `transfer-encoding` is present
+          // with no payload — and rejecting on that alone would 415 a request
+          // that sent nothing, contradicting the rule the other runtimes apply.
           if (raw) {
+            if (kind === 'unsupported') {
+              // A body was sent in a format the framework does not parse. Say
+              // so rather than handing the handler `undefined` and letting it
+              // fail somewhere less obvious.
+              throw unsupportedMediaTypeError(req.headers['content-type'])
+            }
             if (kind === 'json') {
               try {
                 req.body = JSON.parse(raw)

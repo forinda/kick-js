@@ -119,6 +119,20 @@ describe.each(runtimes)('body content types on $name', ({ make }) => {
     expect(res.body.body).toBeNull()
   })
 
+  // An empty CHUNKED post carries `transfer-encoding` with no payload, so a
+  // "was a body sent" check based on framing headers alone says yes. Rejecting
+  // on that would 415 a request that sent nothing.
+  it('does NOT 415 an empty chunked request with an unsupported type', async () => {
+    const { app } = await createTestApp({ modules: [EchoModule()], runtime: make() })
+    const res = await request(app.handle.bind(app))
+      .post('/echo')
+      .set('content-type', 'application/xml')
+      .set('transfer-encoding', 'chunked')
+      .send('')
+    expect(res.status).toBe(200)
+    expect(res.body.body).toBeNull()
+  })
+
   it('still accepts a POST with no body', async () => {
     const { app } = await createTestApp({ modules: [EchoModule()], runtime: make() })
     const res = await request(app.handle.bind(app)).post('/echo')
