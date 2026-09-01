@@ -63,19 +63,13 @@ export function generateModuleIndex(ctx: TemplateContext & { repo: RepoType }): 
 
 import { ${pascal}Controller } from './presentation/${kebab}.controller'
 
-// Eagerly load decorated classes so @Controller()/@Service()/@Repository() decorators
-// register in the DI container. Recursive globs (./**/) so the module keeps working
-// however you nest files (e.g. moving controllers into a controllers/ sub-folder).
-import.meta.glob(
-  [
-    './**/*.controller.ts',
-    './**/*.service.ts',
-    './**/*.repository.ts',
-    './application/use-cases/**/*.ts',
-    '!./**/*.test.ts',
-  ],
-  { eager: true },
-)`
+// Eagerly load every module file so decorators (@Controller / @Service /
+// @Repository, and anything you add) register in the DI container. The glob is
+// deliberately broad: a suffix list only covers the names the generator happens
+// to emit, so a hand-written \`*.usecase.ts\` or \`*.policy.ts\` silently never
+// registered and failed later as \`No provider for X\` (#609). Recursive (./**/)
+// so nesting keeps working.
+import.meta.glob(['./**/*.ts', '!./**/*.test.ts', '!./**/*.d.ts'], { eager: true })`
 
   const routesDoc = `    /**
      * Declare HTTP routes for this module. Return value shape:
@@ -183,13 +177,13 @@ export function generateRestModuleIndex(ctx: TemplateContext & { repo: RepoType 
   const repoImports = `import { ${pascal.toUpperCase()}_REPOSITORY, ${factory} } from './${kebab}.repository'
 import { ${pascal}Controller } from './${kebab}.controller'
 
-// Eagerly load decorated classes so @Controller()/@Service()/@Repository() decorators
-// register in the DI container. Recursive globs (./**/) so the module keeps working
-// however you nest files (e.g. moving controllers into a controllers/ sub-folder).
-import.meta.glob(
-  ['./**/*.controller.ts', './**/*.service.ts', './**/*.repository.ts', '!./**/*.test.ts'],
-  { eager: true },
-)`
+// Eagerly load every module file so decorators (@Controller / @Service /
+// @Repository, and anything you add) register in the DI container. The glob is
+// deliberately broad: a suffix list only covers the names the generator happens
+// to emit, so a hand-written \`*.usecase.ts\` or \`*.policy.ts\` silently never
+// registered and failed later as \`No provider for X\` (#609). Recursive (./**/)
+// so nesting keeps working.
+import.meta.glob(['./**/*.ts', '!./**/*.test.ts', '!./**/*.d.ts'], { eager: true })`
 
   const routesDoc = `    /**
      * Declare HTTP routes for this module. Return value shape:

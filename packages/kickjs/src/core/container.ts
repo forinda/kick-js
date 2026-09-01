@@ -172,6 +172,14 @@ export class Container {
   static _onReady: ((container: Container) => void) | null = null
   /** Callback invoked on reset so decorators can update their container reference */
   static _onReset: ((container: Container) => void) | null = null
+
+  /**
+   * Seeds a NEWLY CREATED container with the decorator registrations, without
+   * adopting it as the global one. `_onReset` does both; an isolated container
+   * must only have the first half, or it would capture every subsequent
+   * decorator registration in the process.
+   */
+  static _onCreate: ((container: Container) => void) | null = null
   /**
    * Environment resolver for @Value decorator. Set by the unified
    * `@forinda/kickjs` config layer to return Zod-validated, type-coerced
@@ -184,6 +192,17 @@ export class Container {
    * AsyncLocalStorage store. Returns { instances: Map, values: Map } or
    * null if outside a request.
    */
+  /**
+   * Whether this container is the global singleton.
+   *
+   * The persistent store exists to carry the GLOBAL container's registrations
+   * across HMR and module re-evaluation. An isolated container is per-test and
+   * must neither write to it — a `registerInstance` override was replayed into
+   * every later `Container.reset()` — nor read from it, which would pull global
+   * state into a container created to be free of it.
+   */
+  private isGlobal = false
+
   static _requestStoreProvider:
     | (() => { instances: Map<any, any>; values: Map<any, any> } | null)
     | null = null
@@ -191,6 +210,7 @@ export class Container {
   static getInstance(): Container {
     if (!Container.instance) {
       Container.instance = new Container()
+      Container.instance.isGlobal = true
     }
     // Flush any decorator registrations that queued before the container existed
     if (Container._onReady) {
@@ -207,6 +227,7 @@ export class Container {
    */
   static reset(): void {
     Container.instance = new Container()
+    Container.instance.isGlobal = true
     // Notify decorators so they update their container reference
     Container._onReset?.(Container.instance)
     // Replay persistent registrations from globalThis store
@@ -259,7 +280,14 @@ export class Container {
    * ```
    */
   static create(): Container {
-    return new Container()
+    const container = new Container()
+    // Decorators register at class-definition time, into whichever container
+    // was global then. Without this replay an isolated container is missing
+    // every @Service / @Repository / @Controller in the process — and
+    // `isolated: true` is what the generated docs recommend for test
+    // isolation, so the failure reached adopters as `No provider for X`.
+    Container._onCreate?.(container)
+    return container
   }
 
   /** Register a class constructor under the given token */
@@ -284,12 +312,18 @@ export class Container {
     // Only reuse if the factory hasn't changed (same reference). When a new
     // factory is provided (e.g. swapping implementations), clear the stale
     // instance so the new factory runs on next resolve.
-    const existingEntry = store.factories.find((r) => tokenName(r.token) === name)
+    // Reads are global-only too. An isolated container adopting a cached
+    // instance from the global store would be contaminated on creation — the
+    // same leak, in the other direction.
+    const existingEntry = this.isGlobal
+      ? store.factories.find((r) => tokenName(r.token) === name)
+      : undefined
     const factoryUnchanged = existingEntry?.factory === factory
-    const existingInstance = factoryUnchanged ? store.resolvedInstances.get(name) : undefined
+    const existingInstance =
+      this.isGlobal && factoryUnchanged ? store.resolvedInstances.get(name) : undefined
 
     // Clear stale resolved instance when factory changes
-    if (!factoryUnchanged) {
+    if (this.isGlobal && !factoryUnchanged) {
       store.resolvedInstances.delete(name)
     }
 
@@ -305,12 +339,16 @@ export class Container {
         postConstructStatus: existingInstance ? 'completed' : 'skipped',
       }),
     )
-    // Track in globalThis for persistence across HMR + module re-evaluation
-    const idx = store.factories.findIndex((r) => tokenName(r.token) === name)
-    if (idx >= 0) {
-      store.factories[idx] = { token, factory, scope }
-    } else {
-      store.factories.push({ token, factory, scope })
+    // Track in globalThis for persistence across HMR + module re-evaluation —
+    // global container only, or an isolated container's factories are replayed
+    // into the next Container.reset().
+    if (this.isGlobal) {
+      const idx = store.factories.findIndex((r) => tokenName(r.token) === name)
+      if (idx >= 0) {
+        store.factories[idx] = { token, factory, scope }
+      } else {
+        store.factories.push({ token, factory, scope })
+      }
     }
     this.emit(name, 'registered', 'factory')
   }
@@ -333,13 +371,17 @@ export class Container {
         lastResolvedAt: Date.now(),
       }),
     )
-    // Track in globalThis for persistence across HMR + module re-evaluation
-    store.resolvedInstances.set(name, instance)
-    const idx = store.instances.findIndex((r) => tokenName(r.token) === name)
-    if (idx >= 0) {
-      store.instances[idx] = { token, instance }
-    } else {
-      store.instances.push({ token, instance })
+    // Track in globalThis for persistence across HMR + module re-evaluation —
+    // global container only. An isolated one that wrote here had its overrides
+    // replayed into the next Container.reset().
+    if (this.isGlobal) {
+      store.resolvedInstances.set(name, instance)
+      const idx = store.instances.findIndex((r) => tokenName(r.token) === name)
+      if (idx >= 0) {
+        store.instances[idx] = { token, instance }
+      } else {
+        store.instances.push({ token, instance })
+      }
     }
     this.emit(name, 'registered', 'instance')
   }
@@ -478,8 +520,11 @@ export class Container {
       if (!reg.firstResolvedAt) reg.firstResolvedAt = Date.now()
       if (reg.scope === Scope.SINGLETON) {
         reg.instance = instance
-        // Persist resolved factory instances so they survive module re-evaluation
-        getPersistentStore().resolvedInstances.set(tokenName(token), instance)
+        // Persist resolved factory instances so they survive module
+        // re-evaluation — global container only, for the same reason.
+        if (this.isGlobal) {
+          getPersistentStore().resolvedInstances.set(tokenName(token), instance)
+        }
       }
       this.emit(token, 'resolved', reg.kind)
       return instance
