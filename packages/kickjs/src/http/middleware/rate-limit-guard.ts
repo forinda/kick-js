@@ -17,9 +17,26 @@ export interface RateLimitGuardOptions {
   /** HTTP status code when the limit is exceeded (default: 429). */
   statusCode?: number
   /**
-   * Rate-limit key per request. Default: `cf-connecting-ip`, then the first
-   * hop of `x-forwarded-for`, then `x-real-ip`, then `'global'`. Return a
-   * user/tenant id here for authenticated quotas.
+   * Rate-limit key per request. Defaults to `ctx.ip`, falling back to
+   * `'global'`. Return a user/tenant id here for authenticated quotas.
+   *
+   * ::: warning Behind a proxy, configure `trustProxy` or every client shares
+   * one bucket
+   * On a node runtime `ctx.ip` is the runtime's vetted client address —
+   * Express derives it from `trust proxy`, Fastify from `trustProxy`. Without
+   * that setting it is the SOCKET address, which behind a load balancer or
+   * Cloudflare is the proxy's, so every caller lands in the same bucket and one
+   * noisy client exhausts the allowance for everyone.
+   *
+   * `bootstrap({ trustProxy: true })` is the fix. Forwarded headers are
+   * deliberately not consulted here: `x-forwarded-for` is client-controllable
+   * unless a proxy overwrites it, so trusting it unconditionally would let a
+   * direct caller mint a fresh allowance per request by varying the header —
+   * evading the limit rather than enforcing it. The header chain
+   * (`cf-connecting-ip` → `x-forwarded-for` → `x-real-ip`) applies only on the
+   * `@forinda/kickjs/web` edge entry, where there is no socket and the platform
+   * has already terminated the connection.
+   * :::
    */
   keyGenerator?: (ctx: RequestContext) => string
   /** Send `X-RateLimit-*` / `Retry-After` headers (default: true). */
