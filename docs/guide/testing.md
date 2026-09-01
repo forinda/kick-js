@@ -589,18 +589,31 @@ When you scaffold a module with `kick g module`, the CLI generates test stubs au
 kick g module user
 # Creates:
 #   __tests__/user.controller.test.ts  — HTTP integration test scaffold
-#   __tests__/user.repository.test.ts  — InMemoryRepository unit tests
+#   __tests__/user.repository.test.ts  — repository unit tests
 ```
 
-When you generate a module with a custom repo name (e.g. `--repo postgres`), the generator creates **both** the custom repository stub and an in-memory repository for testing. The in-memory repo implements the same interface, so tests run without a database.
+Pass `--no-tests` to skip both.
 
+A custom repo name (e.g. `--repo postgres`) does **not** add a second file. There
+is one `user.repository.ts`, and as generated its factory is backed by a `Map`,
+so the repository test runs without a database from the start:
+
+```ts
+// __tests__/user.repository.test.ts
+import { createUserRepository, type UserRepository } from '../user.repository'
+
+describe('User repository', () => {
+  let repo: UserRepository
+
+  beforeEach(() => {
+    repo = createUserRepository() // fresh Map per test — no shared state
+  })
+})
 ```
-src/modules/users/
-  postgres-user.repository.ts     # Production — wire to your DB client
-  in-memory-user.repository.ts    # Testing — in-memory stub
-  __tests__/
-    user.repository.test.ts       # Imports InMemoryUserRepository
-```
+
+Once you replace the factory body with real queries, keep the tests honest by
+either pointing them at a test database or exporting a second in-memory factory
+for tests to call.
 
 The generated tests are scaffolds with real assertions. Customize them for your domain logic.
 

@@ -155,7 +155,7 @@ const GENERATORS = [
   { name: 'config', description: 'Generate kick.config.ts' },
   {
     name: 'agents',
-    description: 'Regenerate AGENTS.md + CLAUDE.md + kickjs-skills.md from upstream templates',
+    description: 'Regenerate .agents/* + root CLAUDE.md from upstream templates',
   },
 ]
 
@@ -741,9 +741,7 @@ export function registerGenerateCommand(program: Command, ctx?: KickCliPluginCon
     .command('agents')
     .alias('agent-docs')
     .alias('ai-docs')
-    .description(
-      'Regenerate AGENTS.md + CLAUDE.md + kickjs-skills.md (sync after framework upgrades)',
-    )
+    .description('Regenerate .agents/* + root CLAUDE.md (sync after framework upgrades)')
     .option(
       '--only <which>',
       'Limit scope: agents | claude | skills | both (agents+claude) | all (default: all)',

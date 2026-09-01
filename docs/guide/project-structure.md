@@ -16,11 +16,17 @@ my-api/                           # Default layout — adopters can rearrange
 │       │   ├── hello.module.ts
 │       │   └── hello.service.ts
 │       └── index.ts              # Exports the modules array
-├── .env / .env.example
-├── .prettierrc
-├── AGENTS.md                     # Canonical multi-agent reference (Claude, Copilot, Codex, …)
-├── CLAUDE.md                     # Thin Claude-specific layer pointing at AGENTS.md
-├── kickjs-skills.md              # Task-oriented skill recipes for AI agents
+├── .agents/                      # AI-agent docs (kick g agents regenerates)
+│   ├── AGENTS.md                 # Canonical multi-agent reference (Copilot, Codex, …)
+│   ├── COPILOT.md
+│   ├── GEMINI.md
+│   └── skills/<slug>/SKILL.md    # One folder per skill, auto-discovered by agents
+├── .kickjs/types/                # kick typegen output (KickRoutes, KickEnv, …)
+├── .env / .env.example / .env.test
+├── .editorconfig
+├── .gitattributes / .gitignore
+├── .oxfmtrc.json                 # Formatter config
+├── CLAUDE.md                     # Root by convention — thin pointer to .agents/AGENTS.md
 ├── README.md
 ├── kick.config.ts                # CLI configuration (pattern, repo, modules dir)
 ├── package.json
@@ -33,28 +39,28 @@ my-api/                           # Default layout — adopters can rearrange
 
 ```ts
 // src/index.ts
+import 'reflect-metadata'
+// Side-effect import — registers the env schema BEFORE any @Value() resolves.
+import './config'
 import express from 'express'
-import { bootstrap, helmet, cors, requestId, requestLogger } from '@forinda/kickjs'
+import { bootstrap, expressRuntime, helmet, cors, requestId, requestLogger } from '@forinda/kickjs'
 import { modules } from './modules'
 
-export const app = bootstrap({
+// Exported for the Vite plugin in dev mode.
+export const app = await bootstrap({
   modules,
-  apiPrefix: '/api',
-  defaultVersion: 1,
+  runtime: expressRuntime(),
   middlewares: [
     helmet(),
     cors({ origin: ['https://app.example.com'] }),
     requestId(),
     requestLogger(),
-    express.json(),
+    express.json(), // Express only — Fastify and h3 parse bodies natively
   ],
 })
-
-// Production: start the server directly
-if (process.env.NODE_ENV === 'production') {
-  app.start()
-}
 ```
+
+`bootstrap()` is async — `await` it. On Fastify or h3 the generator swaps `expressRuntime()` for `fastifyRuntime()` (from `@forinda/kickjs/fastify`) or `h3Runtime()` (from `@forinda/kickjs/h3`), and drops the `express.json()` line — those engines parse bodies natively.
 
 ## Dev Mode
 
@@ -109,8 +115,7 @@ src/modules/users/
   users.constants.ts
   users.controller.ts
   users.service.ts
-  users.repository.ts                # Interface + DI token
-  in-memory-users.repository.ts      # Default implementation (in-memory)
+  users.repository.ts                # Factory + contract + DI token, one file
   dtos/
     create-users.dto.ts
     update-users.dto.ts
@@ -120,7 +125,14 @@ src/modules/users/
     users.repository.test.ts
 ```
 
-With a custom repo name (e.g. `--repo postgres`) the implementation file becomes `users-postgres.repository.ts`, a generic stub with TODO markers you wire to your own client.
+The repository is **one file**: `createUsersRepository()` is the factory, its
+return type _is_ the contract, and the DI token sits alongside it. It ships
+backed by a `Map`, so a fresh module runs as generated. With a custom repo name
+(e.g. `--repo postgres`) the same file is emitted as a stub with TODO markers —
+you replace the factory body and nothing else changes, because the contract is
+whatever the factory returns.
+
+Pass `--no-tests` to skip the `__tests__/` pair.
 
 ### Choosing a Pattern
 
@@ -136,18 +148,20 @@ Each generated module uses `import.meta.glob` to eagerly load decorated classes.
 ```ts
 // REST pattern — src/modules/users/users.module.ts
 import { defineModule } from '@forinda/kickjs'
-import { USERS_REPOSITORY } from './users.constants'
-import { InMemoryUsersRepository } from './in-memory-users.repository'
+import { USERS_REPOSITORY, createUsersRepository } from './users.repository'
 import { UsersController } from './users.controller'
 
-// Eagerly load decorated classes so @Service()/@Repository() decorators register in the DI container
-import.meta.glob(['./**/*.service.ts', './**/*.repository.ts', '!./**/*.test.ts'], { eager: true })
+// Eagerly load every module file so decorators (@Controller / @Service /
+// @Repository, and anything you add) register in the DI container. The glob is
+// deliberately broad — a suffix list missed hand-written *.usecase.ts / *.policy.ts
+// files, which then failed at resolve time as `No provider for X` (#609).
+import.meta.glob(['./**/*.ts', '!./**/*.test.ts', '!./**/*.d.ts'], { eager: true })
 
 export const UsersModule = defineModule({
   name: 'UsersModule',
   build: () => ({
     register(container) {
-      container.registerFactory(USERS_REPOSITORY, () => container.resolve(InMemoryUsersRepository))
+      container.registerFactory(USERS_REPOSITORY, () => createUsersRepository())
     },
     routes() {
       return {
@@ -167,14 +181,19 @@ Modules are self-contained and composed via the `modules` array:
 
 ```ts
 // src/modules/index.ts
-import type { AppModuleEntry } from '@forinda/kickjs'
-import { TodoModule } from './todos'
-import { OrderModule } from './orders'
+import { defineModules } from '@forinda/kickjs'
+import { TodoModule } from './todos/todo.module'
+import { OrderModule } from './orders/order.module'
 
-// `defineModule` factories are called at the registration site —
-// the invocation produces the AppModule instance bootstrap registers.
-export const modules: AppModuleEntry[] = [TodoModule(), OrderModule()]
+// `defineModules()` returns a chainable list — `kick g module` appends a
+// `.mount(NewModule())` call on every generation. The `defineModule` factories
+// are invoked at the registration site, producing the AppModule instances
+// bootstrap registers.
+export const modules = defineModules().mount(TodoModule()).mount(OrderModule())
 ```
+
+A plain `AppModuleEntry[]` array still works if you prefer it — the generator
+just can't append to it automatically.
 
 Routes are mounted at `/{apiPrefix}/v{version}{path}`, so a module with `path: '/todos'` becomes `/api/v1/todos`.
 
@@ -184,17 +203,16 @@ The REST pattern supports swapping the repository implementation by name. `inmem
 
 ```bash
 kick g module users --repo inmemory    # Default — working in-memory store
-kick g module users --repo postgres    # Generic custom-repository stub
-kick g module users --repo mongo       # Generic custom-repository stub
+kick g module users --repo postgres    # Same file, emitted as a stub with TODOs
+kick g module users --repo mongo       # Same file, emitted as a stub with TODOs
 ```
 
-The module's `register()` method binds the interface token to the implementation. Swap implementations by changing the factory target — no other code changes needed:
+The module's `register()` binds the token to the factory, so swapping the store
+means editing the factory body in `users.repository.ts` — the binding never
+changes:
 
 ```ts
-container.registerFactory(
-  USER_REPOSITORY,
-  () => container.resolve(InMemoryUserRepository), // ← change this line
-)
+container.registerFactory(USERS_REPOSITORY, () => createUsersRepository())
 ```
 
 ## Testing

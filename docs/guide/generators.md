@@ -286,20 +286,19 @@ kick g scaffold Post title:string "body?:text" "published?:boolean"
 
 Scaffold emits the same flat REST module layout as `kick g module`, but with field-aware DTOs and a working repository instead of empty stubs. Inside `posts/`:
 
-| File                           | Description                                             |
-| ------------------------------ | ------------------------------------------------------- |
-| `post.module.ts`               | Module declaration (register + routes)                  |
-| `post.constants.ts`            | Query config (filterable, sortable, searchable) + token |
-| `post.controller.ts`           | Full CRUD with typed `Ctx`                              |
-| `post.service.ts`              | `@Service` wrapping the repository                      |
-| `post.repository.ts`           | Interface + Symbol token                                |
-| `in-memory-post.repository.ts` | Working Map-based store (default repo)                  |
-| `dtos/create-post.dto.ts`      | Zod schema built from the fields                        |
-| `dtos/update-post.dto.ts`      | All fields optional                                     |
-| `dtos/post-response.dto.ts`    | Response interface                                      |
-| `__tests__/`                   | Controller + repository tests                           |
+| File                        | Description                                             |
+| --------------------------- | ------------------------------------------------------- |
+| `post.module.ts`            | Module declaration (register + routes)                  |
+| `post.constants.ts`         | Query config (filterable, sortable, searchable) + token |
+| `post.controller.ts`        | Full CRUD with typed `Ctx`                              |
+| `post.service.ts`           | `@Service` wrapping the repository                      |
+| `post.repository.ts`        | Factory + derived contract + DI token, one file         |
+| `dtos/create-post.dto.ts`   | Zod schema built from the fields                        |
+| `dtos/update-post.dto.ts`   | All fields optional                                     |
+| `dtos/post-response.dto.ts` | Response interface                                      |
+| `__tests__/`                | Controller + repository tests                           |
 
-With a custom repo name (e.g. `--repo postgres`), the implementation file is `post-postgres.repository.ts` — a generic stub with TODO markers.
+With a custom repo name (e.g. `--repo postgres`), the same `post.repository.ts` is emitted — still a working Map-backed factory, with the prose and TODO markers naming the store you asked for. Replace the factory body; the contract is `ReturnType<typeof createPostRepository>`, so nothing else changes.
 
 ### Scaffold Flags
 
@@ -344,15 +343,17 @@ The command also supports `kick remove module` as the full form.
 
 ## kick g agents
 
-Regenerate the AI-agent documentation trio (`AGENTS.md`, `CLAUDE.md`, `kickjs-skills.md`) from the latest CLI templates. Use this after a KickJS upgrade to pull in new conventions, decorator changes, and gotchas without manually copy-pasting between projects.
+Regenerate the AI-agent documentation from the latest CLI templates. Everything lands under `.agents/` except `CLAUDE.md`, which stays at the project root because Claude Code auto-loads it from there. Use this after a KickJS upgrade to pull in new conventions, decorator changes, and gotchas without manually copy-pasting between projects.
 
 ```bash
-kick g agents                          # Refresh all three (prompts before overwrite)
-kick g agents -f                       # Refresh all three, no prompt
-kick g agents -f --only skills         # Just kickjs-skills.md
+kick g agents                          # Refresh everything (prompts before overwrite)
+kick g agents -f                       # Refresh everything, no prompt
+kick g agents -f --only skills         # Just .agents/skills/<slug>/SKILL.md
 kick g agents -f --only claude         # Just CLAUDE.md
-kick g agents -f --only agents         # Just AGENTS.md
-kick g agents -f --only both           # AGENTS.md + CLAUDE.md (skip skills)
+kick g agents -f --only agents         # Just .agents/AGENTS.md
+kick g agents -f --only gemini         # Just .agents/GEMINI.md
+kick g agents -f --only copilot        # Just .agents/COPILOT.md
+kick g agents -f --only both           # .agents/AGENTS.md + CLAUDE.md (skip skills)
 ```
 
 Aliases: `kick g agent-docs`, `kick g ai-docs`.
@@ -365,28 +366,29 @@ The generator auto-detects:
 
 Override any of those with `--name`, `--pm`, `--template`.
 
-| Flag                    | Description                                         | Default               |
-| ----------------------- | --------------------------------------------------- | --------------------- |
-| `--only <which>`        | `agents` \| `claude` \| `skills` \| `both` \| `all` | `all`                 |
-| `--name <name>`         | Project name (overrides `package.json`)             | auto                  |
-| `--pm <pm>`             | Package manager (overrides `package.json`)          | auto                  |
-| `--template <template>` | `rest` \| `minimal`                                 | from `kick.config.ts` |
-| `-f, --force`           | Overwrite without prompting                         | `false`               |
+| Flag                    | Description                                                                  | Default               |
+| ----------------------- | ---------------------------------------------------------------------------- | --------------------- |
+| `--only <which>`        | `agents` \| `claude` \| `skills` \| `gemini` \| `copilot` \| `both` \| `all` | `all`                 |
+| `--name <name>`         | Project name (overrides `package.json`)                                      | auto                  |
+| `--pm <pm>`             | Package manager (overrides `package.json`)                                   | auto                  |
+| `--template <template>` | `rest` \| `minimal`                                                          | from `kick.config.ts` |
+| `-f, --force`           | Overwrite without prompting                                                  | `false`               |
 
 ::: tip Local customisations
-The three files are overwritten on regeneration. Keep project-specific notes in `AGENTS.local.md` (or any other filename) so they survive `kick g agents -f`.
+Generated files are overwritten on regeneration. Keep project-specific notes in `.agents/AGENTS.local.md`, `.agents/GEMINI.local.md`, or a per-skill `.agents/skills/<slug>/SKILL.local.md` — `.local.md` siblings are never overwritten.
 :::
 
 ### What's in each file
 
-- **`AGENTS.md`** — narrative reference: project structure, v4 conventions, decorator patterns, env wiring, common pitfalls. Read first by every AI agent.
-- **`CLAUDE.md`** — thin redirect to `AGENTS.md` plus Claude-specific affordances (slash commands, persistent memory, `/loop`, `/schedule`).
-- **`kickjs-skills.md`** — short rigid recipes keyed to triggers (`add-module`, `add-adapter`, `write-controller-test`, `bootstrap-export`, `thin-entry-file`, `context-contributor`, `env-wiring-check`, `refresh-agent-docs`, `deny-list`). Designed for agents that read skills from a top-level index (Claude superpowers, Copilot, …).
+- **`.agents/AGENTS.md`** — narrative reference: project structure, conventions, decorator patterns, env wiring, common pitfalls. Read first by every AI agent.
+- **`CLAUDE.md`** (project root) — thin redirect to `.agents/AGENTS.md` plus Claude-specific affordances (slash commands, persistent memory, `/loop`, `/schedule`).
+- **`.agents/GEMINI.md`**, **`.agents/COPILOT.md`** — the same context shaped for Gemini and Copilot.
+- **`.agents/skills/<slug>/SKILL.md`** — one folder per skill, each a short rigid recipe keyed to a trigger (`add-module`, `add-adapter`, `write-controller-test`, `bootstrap-export`, `thin-entry-file`, `context-contributor`, `env-wiring-check`, `refresh-agent-docs`, `deny-list`). Agents that auto-discover skills pick each up from its frontmatter — no top-level index file.
 
 ## Module-Scoped vs Global Generation
 
 ::: tip When to use `kick g module` vs standalone generators
-**`kick g module <name>`** creates a full flat REST module in one shot — controller, service, DTOs, repository interface + token, repository implementation, and tests. Use this when starting a new feature.
+**`kick g module <name>`** creates a full flat REST module in one shot — controller, service, DTOs, repository (factory + contract + token in one file), and tests. Use this when starting a new feature.
 
 **Standalone generators** (`kick g controller`, `kick g service`, `kick g dto`, `kick g guard`, `kick g middleware`) create a single file. Use these to **add files to an existing module** or to create **app-level** artifacts that don't belong to any module.
 :::
