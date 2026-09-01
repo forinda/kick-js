@@ -30,7 +30,7 @@ import {
   runDisposables,
 } from '../core/disposables'
 import { getClassMeta } from '../core/metadata'
-import { EXPRESS_JSON_TYPES } from './body-policy'
+import { EXPRESS_JSON_TYPES, rejectUnsupportedBody } from './body-policy'
 import { requestId } from './middleware/request-id'
 import { notFoundHandler, errorHandler, type MountedRoute } from './middleware/error-handler'
 import { requestScopeMiddleware, isRequestScopeMiddleware } from './middleware/request-scope'
@@ -772,6 +772,10 @@ export class Application {
         // only what its middleware list happened to cover.
         this.runtime.useConnect(this.app, express.urlencoded({ extended: true, limit }))
         this.runtime.useConnect(this.app, express.text({ limit, type: 'text/*' }))
+        // After the parsers: Express leaves an unmatched type as `undefined`,
+        // which is indistinguishable from "no body sent". This restores the
+        // difference so an unsupported type is answered rather than ignored.
+        this.runtime.useConnect(this.app, rejectUnsupportedBody())
       }
     }
 

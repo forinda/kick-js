@@ -4,7 +4,7 @@
 // Edge-safe: no node imports beyond the sanctioned ALS request store.
 
 import { HttpException } from '../../core/errors'
-import { classifyMediaType } from '../body-policy'
+import { classifyMediaType, unsupportedMediaTypeError } from '../body-policy'
 import { RequestContext } from '../context'
 import { applyHandlerResult } from '../reply'
 import { requestStore } from '../request-store'
@@ -131,7 +131,10 @@ export function compileWebRoute(
       // so a malformed payload answered 200 with the handler running against
       // `undefined` (#605), the defect #586 removed from the node runtime.
       const kind = classifyMediaType(req.headers['content-type'])
-      if (raw !== '' && kind !== 'unsupported' && kind !== 'multipart') {
+      if (raw !== '' && kind === 'unsupported') {
+        // Held for the same reason as a parse failure: no driver yet.
+        bodyError = unsupportedMediaTypeError(req.headers['content-type'])
+      } else if (raw !== '' && kind !== 'multipart') {
         if (kind === 'json') {
           try {
             req.body = JSON.parse(raw)

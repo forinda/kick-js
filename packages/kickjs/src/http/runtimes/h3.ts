@@ -19,7 +19,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createRequire } from 'node:module'
 
-import { classifyMediaType } from '../body-policy'
+import { classifyMediaType, unsupportedMediaTypeError } from '../body-policy'
 import { RequestContext } from '../context'
 import { applyHandlerResult } from '../reply'
 import { requestStore } from '../request-store'
@@ -188,7 +188,13 @@ function makeEventHandler(entry: RouteEntry): (event: H3EventLike) => Promise<vo
         // and routes everything unrecognised through `destr`, which returns the
         // RAW STRING for malformed input instead of throwing (#590).
         const kind = classifyMediaType(req.headers['content-type'])
-        if (kind !== 'unsupported' && kind !== 'multipart') {
+        if (kind === 'unsupported') {
+          // A body was sent in a format the framework does not parse. Say so
+          // rather than handing the handler `undefined` and letting it fail
+          // somewhere less obvious.
+          throw unsupportedMediaTypeError(req.headers['content-type'])
+        }
+        if (kind !== 'multipart') {
           const raw = await readRawBody(event, 'utf8')
           if (raw) {
             if (kind === 'json') {

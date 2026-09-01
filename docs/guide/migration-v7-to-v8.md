@@ -239,7 +239,19 @@ The framework now decides in one place. `application/json` and `application/*+js
 
 **What to re-check:** handlers that treated `!ctx.body` as "no form data" on Express, or relied on Fastify's 415 for forms. Both now receive a parsed body.
 
-Still divergent, and tracked in [#590](https://github.com/forinda/kick-js/issues/590): a content type **outside** that set — `application/xml`, say — is ignored on Express and h3 (`ctx.body` undefined) but still answered `415` by Fastify. Whether unsupported types should be ignored or rejected is an open decision.
+**A type outside that set is now rejected.** A body the framework cannot read answers **415** with an `Accept` header naming what it accepts, on every runtime — where Express previously handed the handler `undefined` and let it fail somewhere less obvious.
+
+The rejection is for a body that cannot be read, never for the absence of one: a bodyless `POST` succeeds whatever its declared type.
+
+```
+POST /things   Content-Type: application/xml   <a>1</a>
+415   Accept: application/json, application/*+json, application/x-www-form-urlencoded, text/*, multipart/form-data
+
+POST /things   Content-Type: application/xml   (no body)
+200
+```
+
+If you have an Express app that accepted an unusual content type and ignored the body, it now answers 415. Handle the type, or stop sending the header.
 
 ### `helmet()` options were being ignored
 

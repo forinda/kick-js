@@ -1,5 +1,5 @@
 ---
-'@forinda/kickjs': minor
+'@forinda/kickjs': major
 '@forinda/kickjs-testing': patch
 ---
 
@@ -53,11 +53,26 @@ its own defaults. Naming one put it on the user-declared branch, so a test app
 parsed only `application/json` while the same app in production parsed the full
 set — the harness quietly exercised a different pipeline from the one deployed.
 
-**Not covered, still tracked in #590:** a content type outside the supported
-set is ignored on Express and h3 but still 415'd by Fastify. Whether an
-unsupported type should be ignored or rejected is an open decision, and the
-answer is a breaking change either way.
+**An unsupported type is rejected, not ignored.** A body the framework cannot
+read answers **415** with an `Accept` header naming what it accepts, so the
+sender learns the request was not understood — where previously Express handed
+the handler `undefined` and let it fail somewhere less obvious.
+
+The rejection is for a body that cannot be read, never for the absence of one.
+A bodyless `POST` succeeds whatever its declared type, matching what Spring's
+`readWithMessageConverters` and ASP.NET's `BodyModelBinder` both do. Fastify
+needed this explicitly: it invokes a content-type parser even for an empty
+payload, so without the guard a bodyless POST carrying an unrelated type was
+rejected.
+
+**This is the breaking part.** An Express app that accepted, say,
+`application/xml` and ignored the body now answers 415 to those requests. If you
+were relying on silent ignoring, either handle the type or strip the header
+client-side.
 
 Pinned by a runtime matrix over all three engines: JSON, `+json`, malformed
-`+json`, form-urlencoded, `text/plain` as a string, malformed JSON, and a POST
-with no body.
+`+json`, form-urlencoded, `text/plain` as a string, malformed JSON, a POST with
+no body, 415 for an unsupported type, 415 for a body with no `Content-Type`,
+the `Accept` header on a 415, and no 415 for a bodyless request.
+
+Closes #590

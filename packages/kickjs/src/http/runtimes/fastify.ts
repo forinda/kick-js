@@ -18,6 +18,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createRequire } from 'node:module'
 
 import { HttpException } from '../../core/errors'
+import { unsupportedMediaTypeError } from '../body-policy'
 import { RequestContext } from '../context'
 import { applyHandlerResult } from '../reply'
 import { requestStore } from '../request-store'
@@ -334,6 +335,18 @@ export function fastifyRuntime(): HttpRuntime<FastifyAppLike> {
         // re-open no-preflight CSRF against a JSON API.
         addParser(/^text\//, { parseAs: 'string' }, (_req, body, done) => {
           done(null, body)
+        })
+        // Fastify already answers 415 for a type it has no parser for, but with
+        // its own message and no `Accept`. `'*'` is Fastify's documented
+        // fallback — consulted only when nothing more specific matches — so it
+        // does not shadow the parsers above, nor `@fastify/multipart`, which
+        // registers `multipart/form-data` when an upload route needs it.
+        addParser('*', { parseAs: 'string' }, (req, body, done) => {
+          // No body is not an unsupported body. Fastify calls the parser even
+          // for an empty payload, so without this a bodyless POST carrying an
+          // unrelated content type would be rejected.
+          if (!body) return done(null, undefined)
+          done(unsupportedMediaTypeError(req.headers?.['content-type']), undefined)
         })
       }
 

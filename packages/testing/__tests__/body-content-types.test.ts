@@ -42,9 +42,11 @@ const runtimes = [
 
 async function post(make: () => any, contentType: string | null, payload: string) {
   const { app } = await createTestApp({ modules: [EchoModule()], runtime: make() })
-  let req = request(app.handle.bind(app)).post('/echo')
-  if (contentType) req = req.set('content-type', contentType)
-  return req.send(payload)
+  const req = request(app.handle.bind(app)).post('/echo')
+  if (contentType) return req.set('content-type', contentType).send(payload)
+  // superagent infers a content-type from the payload, so the no-content-type
+  // case has to strip it AFTER send() has added one.
+  return req.send(payload).unset('Content-Type')
 }
 
 describe.each(runtimes)('body content types on $name', ({ make }) => {
@@ -85,6 +87,36 @@ describe.each(runtimes)('body content types on $name', ({ make }) => {
   it('still rejects malformed application/json', async () => {
     const res = await post(make, 'application/json', '{"a":')
     expect(res.status).toBe(400)
+  })
+
+  // The decision in #590: an unsupported type is REJECTED, not ignored, so the
+  // sender learns the framework will not read what they sent instead of the
+  // handler receiving `undefined` and failing somewhere less obvious.
+  it('answers 415 for an unsupported content type', async () => {
+    const res = await post(make, 'application/xml', '<a>1</a>')
+    expect(res.status).toBe(415)
+  })
+
+  it('names the accepted types on a 415, per RFC 9110', async () => {
+    const res = await post(make, 'application/xml', '<a>1</a>')
+    expect(res.headers.accept).toContain('application/json')
+    expect(res.headers.accept).toContain('application/x-www-form-urlencoded')
+  })
+
+  it('answers 415 for a body sent with no content-type at all', async () => {
+    const res = await post(make, null, '{"a":1}')
+    expect(res.status).toBe(415)
+  })
+
+  // 415 is for a body we cannot read — not for the absence of one. Spring and
+  // ASP.NET both make this distinction, and a bodyless POST is legitimate.
+  it('does NOT 415 a bodyless request, whatever its content type', async () => {
+    const { app } = await createTestApp({ modules: [EchoModule()], runtime: make() })
+    const res = await request(app.handle.bind(app))
+      .post('/echo')
+      .set('content-type', 'application/xml')
+    expect(res.status).toBe(200)
+    expect(res.body.body).toBeNull()
   })
 
   it('still accepts a POST with no body', async () => {

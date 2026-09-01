@@ -12,6 +12,8 @@
  * @module @forinda/kickjs/http/body-policy
  */
 
+import { HttpException } from '../core/errors'
+
 /** What the framework does with a body of a given media type. */
 export type BodyKind =
   /** Parse as JSON, strictly. */
@@ -86,3 +88,60 @@ export const SUPPORTED_BODY_TYPES = [
   'text/*',
   'multipart/form-data',
 ] as const
+
+/**
+ * The 415 for a body whose media type the framework does not parse.
+ *
+ * Only ever raised when a body was actually SENT. An absent or empty body is
+ * treated as absent regardless of its declared type — the same call Spring's
+ * `readWithMessageConverters` and ASP.NET's `BodyModelBinder` both make, and
+ * the reason neither rejects a bodyless POST. A bare `POST` with no payload is
+ * a legitimate request, not an unsupported one.
+ *
+ * Carries `Accept`, which RFC 9110 §15.5.16 says a 415 "can" use to indicate
+ * which media types would have been accepted.
+ */
+export function unsupportedMediaTypeError(contentType: string | undefined): HttpException {
+  const mediaType = normalizeMediaType(contentType)
+  return new HttpException(
+    415,
+    mediaType
+      ? `Unsupported Media Type: ${mediaType}`
+      : 'Unsupported Media Type: request has a body but no Content-Type',
+    undefined,
+    { Accept: SUPPORTED_BODY_TYPES.join(', ') },
+  )
+}
+
+/** Verbs whose body the framework reads. */
+const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
+
+/**
+ * Did this request actually carry a body? Decided from the framing headers
+ * rather than from whether a parser produced anything — the distinction that
+ * separates "nothing was sent" from "something was sent that we could not
+ * read", which is the whole basis for answering 415 on one and 200 on the other.
+ */
+export function hasRequestBody(headers: Record<string, unknown>): boolean {
+  const length = headers['content-length'] as string | undefined
+  const encoding = headers['transfer-encoding'] as string | undefined
+  return encoding !== undefined || (length !== undefined && length !== '0')
+}
+
+/**
+ * Connect middleware that answers 415 for a body Express's parsers left
+ * untouched.
+ *
+ * Express has no concept of an unsupported type: a parser whose `type` does not
+ * match simply calls `next()` and leaves `req.body` undefined, indistinguishable
+ * from a request that sent nothing. Mounted after the parsers, this restores the
+ * distinction so Express agrees with the other runtimes.
+ */
+export function rejectUnsupportedBody() {
+  return (req: any, _res: unknown, next: (err?: unknown) => void): void => {
+    if (!BODY_METHODS.has((req.method ?? 'GET').toUpperCase())) return next()
+    if (!hasRequestBody(req.headers ?? {})) return next()
+    if (classifyMediaType(req.headers?.['content-type']) !== 'unsupported') return next()
+    next(unsupportedMediaTypeError(req.headers?.['content-type']))
+  }
+}
