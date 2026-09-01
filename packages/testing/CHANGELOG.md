@@ -1,5 +1,188 @@
 # @forinda/kickjs-testing
 
+## 8.0.0
+
+### Major Changes
+
+- [#595](https://github.com/forinda/kick-js/pull/595) [`ddcd0ba`](https://github.com/forinda/kick-js/commit/ddcd0baf9827205d8070e84f4bbbaf2922969aae) Thanks [@forinda](https://github.com/forinda)! - `middleware` is gone; the option is `middlewares`.
+  
+  `bootstrap()` took both — `middlewares` as the real name and `middleware` as a
+  deprecated alias, with the plural winning when both were set. The alias has
+  carried a `@deprecated` tag for several releases, and v8 is the window to drop
+  it, so there is one name for one thing:
+  
+  ```ts
+  bootstrap({
+    modules,
+    middlewares: [helmet(), cors(), requestId()],
+  })
+  ```
+  
+  The rename is mechanical and the compiler finds every site: `middleware` is no
+  longer a key on `ApplicationOptions`, so passing it is a type error rather than
+  a silently ignored object.
+  
+  Renamed in the same place, for the same reason:
+  
+  - **`createTestApp({ middlewares })`** — the harness passes the option straight
+    through to `bootstrap()`, and a test harness whose option name disagreed with
+    the thing it configures is the inconsistency this change exists to remove.
+    This is why `@forinda/kickjs-testing` takes a major too.
+  - **`createWebApp({ middlewares })`** — the web/edge entry had its own
+    `middleware`, ctx-style rather than connect-style, but the same name.
+  
+  **`AppAdapter.middleware()` and `Plugin.middleware()` are unchanged.** They are a
+  different API — a hook returning entries, not an option taking them — and
+  nothing about them was ambiguous.
+  
+  Generated projects emit `middlewares` from the CLI's `rest` template.
+
+### Minor Changes
+
+- [#581](https://github.com/forinda/kick-js/pull/581) [`2ae6a37`](https://github.com/forinda/kick-js/commit/2ae6a37b3f711ddfc9368d17be43b79b68769651) Thanks [@forinda](https://github.com/forinda)! - `createTestApp` overrides accept an `InjectionToken` key.
+  
+  `overrides` was typed `Record<symbol | string, any>`, but the framework's own
+  recommended DI key is `createToken()` — a frozen OBJECT identified by reference.
+  TypeScript rejects an object as a computed property key, so the natural call did
+  not compile:
+  
+  ```
+  error TS2464: A computed property name must be of type 'string', 'number',
+  'symbol', or 'any'.
+  ```
+  
+  Tokens are the documented way to bind an interface to an implementation, and the
+  generator emits one per repository, so the one key type most worth overriding in
+  a test was the one shape `overrides` could not take.
+  
+  The obvious workaround is worse than the error: `[TOKEN.name]` is a string, so
+  it compiles — and the container keys tokens by reference, so the override is
+  accepted and silently never applied.
+  
+  `overrides` now also accepts entries or a `Map`, both of which preserve the
+  token's identity:
+  
+  ```ts
+  const DATABASE = createToken<Database>('app/Db/connection')
+  
+  await createTestApp({
+    modules: [UserModule()],
+    overrides: [[DATABASE, fakeDb()]],
+  })
+  ```
+  
+  The object form is unchanged for string and symbol keys. A test pins the
+  silent-failure case too, so the by-name behaviour cannot drift into looking like
+  it works.
+
+- [#563](https://github.com/forinda/kick-js/pull/563) [`54f6503`](https://github.com/forinda/kick-js/commit/54f6503c35aee83206e3141f72e3a105520d4d79) Thanks [@forinda](https://github.com/forinda)! - Let `createTestApp` run the engine you actually deploy.
+  
+  The harness hardcoded Express and returned `expressApp`, so a project running
+  Fastify or h3 in production had its entire suite passing against a different
+  engine. Routing, body parsing, status handling and error mapping all live in the
+  runtime seam, so a green Express suite says nothing about any of them — the one
+  thing an integration test exists to rule out.
+  
+  `createTestApp` now accepts `runtime`, the same value passed to `bootstrap()`:
+  
+  ```ts
+  import { fastifyRuntime } from '@forinda/kickjs/fastify'
+  
+  const { app } = await createTestApp({ modules: [UserModule], runtime: fastifyRuntime() })
+  const res = await request(app.handle.bind(app)).get('/api/v1/users')
+  ```
+  
+  Drive the returned `app` rather than `expressApp`: `app.handle` is the
+  Application's own Node request listener and follows whichever runtime is
+  configured, so one suite can run against every engine.
+  
+  The default middleware follows the runtime too. `createTestApp` defaulted to
+  `[express.json()]` unconditionally, and passing it explicitly bypasses the
+  Application's own native-body guard — under Fastify the connect parser then
+  consumes the stream before Fastify reads it, and a JSON POST hangs until the
+  test times out rather than failing. The default is now empty on a runtime that
+  reports `nativeBodyParsing`.
+  
+  `expressApp` still works under the Express runtime. Under any other engine it
+  now throws, instead of returning that engine's instance mistyped as
+  `express.Express` — which is how a suite silently exercises the wrong runtime.
+
+### Patch Changes
+
+- [#607](https://github.com/forinda/kick-js/pull/607) [`6b0bb1e`](https://github.com/forinda/kick-js/commit/6b0bb1e79184d2bec1534a2eb334a1e21a9ac14f) Thanks [@forinda](https://github.com/forinda)! - Request bodies parse the same way on every runtime.
+  
+  Each engine brought its own library's opinion about content types, so the same
+  request produced three different results ([#590](https://github.com/forinda/kick-js/issues/590)):
+  
+  | body sent                           | Express     | Fastify   | h3             |
+  | ----------------------------------- | ----------- | --------- | -------------- |
+  | `application/x-www-form-urlencoded` | `undefined` | **415**   | parsed         |
+  | `application/merge-patch+json`      | `undefined` | **415**   | parsed         |
+  | malformed `+json`                   | `undefined` | 415       | **raw string** |
+  | `text/plain`                        | `undefined` | `'hello'` | `'hello'`      |
+  
+  `bootstrap({ runtime })` is meant to be swappable. It was not, for any app
+  accepting a body outside `application/json`: Express → Fastify turned every
+  form post into a 415, and Express → h3 started parsing bodies that previously
+  did not, silently changing handlers that guarded on `!ctx.body`.
+  
+  One policy now decides, in `http/body-policy.ts`, and all four runtimes follow
+  it — including the web entry for edge, Bun and Deno:
+  
+  - `application/json` and `application/*+json` — strict JSON; malformed is 400
+  - `application/x-www-form-urlencoded` — parsed to an object
+  - `text/*` — the raw string
+  - `multipart/*` — unchanged, the upload path consumes the stream itself
+  
+  **`+json` is JSON by specification, not by liberty.** RFC 6838 §4.2.8: a media
+  type "MUST NOT be given names incorporating suffixes for structured syntaxes
+  they do not actually employ"; RFC 6839 §2 exists so receivers can do "generic
+  processing of the underlying representation". Spring, ASP.NET Core and Hono all
+  match the suffix by default. It also means the framework can read back the
+  `application/problem+json` it emits for every problem response.
+  
+  **`text/*` is never JSON-parsed, deliberately.** `text/plain` is one of three
+  CORS-safelisted content types, so it crosses origins with no preflight;
+  JSON-parsing it would re-open the simple-request CSRF that requiring
+  `application/json` closes. h3's own source carries that warning.
+  
+  Per engine: Express's default chain gains `urlencoded` and `text`, and its JSON
+  parser is given both `application/json` and `application/*+json` (`type-is`
+  will not match plain JSON against the wildcard alone, so both are required).
+  Fastify gains content-type parsers for the same set — deliberately not a `'*'`
+  catch-all, which would swallow multipart, since `@fastify/multipart` is itself
+  the multipart parser. h3 reads raw and applies the policy instead of calling
+  `readBody`, whose own dispatch is where its divergence came from.
+  
+  `createTestApp` no longer names a middleware list, so the Application applies
+  its own defaults. Naming one put it on the user-declared branch, so a test app
+  parsed only `application/json` while the same app in production parsed the full
+  set — the harness quietly exercised a different pipeline from the one deployed.
+  
+  **An unsupported type is rejected, not ignored.** A body the framework cannot
+  read answers **415** with an `Accept` header naming what it accepts, so the
+  sender learns the request was not understood — where previously Express handed
+  the handler `undefined` and let it fail somewhere less obvious.
+  
+  The rejection is for a body that cannot be read, never for the absence of one.
+  A bodyless `POST` succeeds whatever its declared type, matching what Spring's
+  `readWithMessageConverters` and ASP.NET's `BodyModelBinder` both do. Fastify
+  needed this explicitly: it invokes a content-type parser even for an empty
+  payload, so without the guard a bodyless POST carrying an unrelated type was
+  rejected.
+  
+  **This is the breaking part.** An Express app that accepted, say,
+  `application/xml` and ignored the body now answers 415 to those requests. If you
+  were relying on silent ignoring, either handle the type or strip the header
+  client-side.
+  
+  Pinned by a runtime matrix over all three engines: JSON, `+json`, malformed
+  `+json`, form-urlencoded, `text/plain` as a string, malformed JSON, a POST with
+  no body, 415 for an unsupported type, 415 for a body with no `Content-Type`,
+  the `Accept` header on a 415, and no 415 for a bodyless request.
+  
+  Closes [#590](https://github.com/forinda/kick-js/issues/590)
+
 ## 7.0.3
 
 ### Patch Changes

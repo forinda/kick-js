@@ -1,5 +1,541 @@
 # @forinda/kickjs
 
+## 8.0.0
+
+### Major Changes
+
+- [#587](https://github.com/forinda/kick-js/pull/587) [`5614f7e`](https://github.com/forinda/kick-js/commit/5614f7e02a57bcd75e5145af2adb8df48cfd1742) Thanks [@forinda](https://github.com/forinda)! - The catch-all answers problem details, and 405 when the verb is the problem.
+  
+  Two breaking changes to responses an app produces without asking for them, which
+  is why this is a major rather than a minor. Both are reachable through the
+  existing bootstrap options: `onNotFound` and `onError` still win, so an app that
+  supplies either is unaffected.
+  
+  ## Migrating
+  
+  - A client asserting `body.message === 'Not Found'` reads `body.title` or
+    `body.status` instead, or passes `bootstrap({ onNotFound })` to restore the
+    old shape.
+  - A client treating "known path, wrong verb" as 404 now sees 405. That is the
+    correct answer, but it moves the case from one branch to another.
+  
+  ## The 404 body
+  
+  It was `{ "message": "Not Found" }` and is now RFC 9457 problem details with
+  `Content-Type: application/problem+json`:
+  
+  ```json
+  { "type": "about:blank", "title": "Not Found", "status": 404 }
+  ```
+  
+  The catch-all was the last response still emitting a bare `{ message }`, so a
+  client parsing `application/problem+json` — which the framework already returns
+  for every `ProblemException` — had to special-case exactly one path. Pass
+  `bootstrap({ onNotFound })` to restore the old shape or supply any other.
+  
+  ## Wrong verb on a known path
+  
+  Now 405, not 404, carrying `Allow` as RFC 9110 §15.5.6 requires:
+  
+  ```
+  DELETE /api/v1/things/1     405   Allow: GET, PATCH
+  { "type": "about:blank", "title": "Method Not Allowed", "status": 405,
+    "detail": "DELETE is not supported for this resource. Allowed: GET, PATCH." }
+  ```
+  
+  A 404 there tells a client to stop looking for a resource that is present. The
+  handler takes the mounted route table — the Application is the only place that
+  knows the full path, prefix and version joined — and an app that supplies its
+  own `onNotFound` is unaffected.
+  
+  ## An h3 bug this surfaced
+  
+  Not breaking — it makes h3 agree with the other two. `NodeResDriver.json()` set
+  `application/json` unconditionally, clobbering a content-type the caller had
+  already chosen. Every `application/problem+json` response went out mislabelled
+  on that runtime alone — not only the new catch-all, but every `ProblemException`
+  the error handler has ever emitted there.
+  
+  Covered by a runtime matrix over Express, Fastify and h3: unknown path under the
+  prefix, unknown path at the root, wrong method with `Allow`, a sibling path that
+  matches no route, problem+json content type, `HttpException` mapping, and an
+  unexpected throw.
+
+- [#607](https://github.com/forinda/kick-js/pull/607) [`6b0bb1e`](https://github.com/forinda/kick-js/commit/6b0bb1e79184d2bec1534a2eb334a1e21a9ac14f) Thanks [@forinda](https://github.com/forinda)! - Request bodies parse the same way on every runtime.
+  
+  Each engine brought its own library's opinion about content types, so the same
+  request produced three different results ([#590](https://github.com/forinda/kick-js/issues/590)):
+  
+  | body sent                           | Express     | Fastify   | h3             |
+  | ----------------------------------- | ----------- | --------- | -------------- |
+  | `application/x-www-form-urlencoded` | `undefined` | **415**   | parsed         |
+  | `application/merge-patch+json`      | `undefined` | **415**   | parsed         |
+  | malformed `+json`                   | `undefined` | 415       | **raw string** |
+  | `text/plain`                        | `undefined` | `'hello'` | `'hello'`      |
+  
+  `bootstrap({ runtime })` is meant to be swappable. It was not, for any app
+  accepting a body outside `application/json`: Express → Fastify turned every
+  form post into a 415, and Express → h3 started parsing bodies that previously
+  did not, silently changing handlers that guarded on `!ctx.body`.
+  
+  One policy now decides, in `http/body-policy.ts`, and all four runtimes follow
+  it — including the web entry for edge, Bun and Deno:
+  
+  - `application/json` and `application/*+json` — strict JSON; malformed is 400
+  - `application/x-www-form-urlencoded` — parsed to an object
+  - `text/*` — the raw string
+  - `multipart/*` — unchanged, the upload path consumes the stream itself
+  
+  **`+json` is JSON by specification, not by liberty.** RFC 6838 §4.2.8: a media
+  type "MUST NOT be given names incorporating suffixes for structured syntaxes
+  they do not actually employ"; RFC 6839 §2 exists so receivers can do "generic
+  processing of the underlying representation". Spring, ASP.NET Core and Hono all
+  match the suffix by default. It also means the framework can read back the
+  `application/problem+json` it emits for every problem response.
+  
+  **`text/*` is never JSON-parsed, deliberately.** `text/plain` is one of three
+  CORS-safelisted content types, so it crosses origins with no preflight;
+  JSON-parsing it would re-open the simple-request CSRF that requiring
+  `application/json` closes. h3's own source carries that warning.
+  
+  Per engine: Express's default chain gains `urlencoded` and `text`, and its JSON
+  parser is given both `application/json` and `application/*+json` (`type-is`
+  will not match plain JSON against the wildcard alone, so both are required).
+  Fastify gains content-type parsers for the same set — deliberately not a `'*'`
+  catch-all, which would swallow multipart, since `@fastify/multipart` is itself
+  the multipart parser. h3 reads raw and applies the policy instead of calling
+  `readBody`, whose own dispatch is where its divergence came from.
+  
+  `createTestApp` no longer names a middleware list, so the Application applies
+  its own defaults. Naming one put it on the user-declared branch, so a test app
+  parsed only `application/json` while the same app in production parsed the full
+  set — the harness quietly exercised a different pipeline from the one deployed.
+  
+  **An unsupported type is rejected, not ignored.** A body the framework cannot
+  read answers **415** with an `Accept` header naming what it accepts, so the
+  sender learns the request was not understood — where previously Express handed
+  the handler `undefined` and let it fail somewhere less obvious.
+  
+  The rejection is for a body that cannot be read, never for the absence of one.
+  A bodyless `POST` succeeds whatever its declared type, matching what Spring's
+  `readWithMessageConverters` and ASP.NET's `BodyModelBinder` both do. Fastify
+  needed this explicitly: it invokes a content-type parser even for an empty
+  payload, so without the guard a bodyless POST carrying an unrelated type was
+  rejected.
+  
+  **This is the breaking part.** An Express app that accepted, say,
+  `application/xml` and ignored the body now answers 415 to those requests. If you
+  were relying on silent ignoring, either handle the type or strip the header
+  client-side.
+  
+  Pinned by a runtime matrix over all three engines: JSON, `+json`, malformed
+  `+json`, form-urlencoded, `text/plain` as a string, malformed JSON, a POST with
+  no body, 415 for an unsupported type, 415 for a body with no `Content-Type`,
+  the `Accept` header on a 415, and no 415 for a bodyless request.
+  
+  Closes [#590](https://github.com/forinda/kick-js/issues/590)
+
+- [#595](https://github.com/forinda/kick-js/pull/595) [`ddcd0ba`](https://github.com/forinda/kick-js/commit/ddcd0baf9827205d8070e84f4bbbaf2922969aae) Thanks [@forinda](https://github.com/forinda)! - `middleware` is gone; the option is `middlewares`.
+  
+  `bootstrap()` took both — `middlewares` as the real name and `middleware` as a
+  deprecated alias, with the plural winning when both were set. The alias has
+  carried a `@deprecated` tag for several releases, and v8 is the window to drop
+  it, so there is one name for one thing:
+  
+  ```ts
+  bootstrap({
+    modules,
+    middlewares: [helmet(), cors(), requestId()],
+  })
+  ```
+  
+  The rename is mechanical and the compiler finds every site: `middleware` is no
+  longer a key on `ApplicationOptions`, so passing it is a type error rather than
+  a silently ignored object.
+  
+  Renamed in the same place, for the same reason:
+  
+  - **`createTestApp({ middlewares })`** — the harness passes the option straight
+    through to `bootstrap()`, and a test harness whose option name disagreed with
+    the thing it configures is the inconsistency this change exists to remove.
+    This is why `@forinda/kickjs-testing` takes a major too.
+  - **`createWebApp({ middlewares })`** — the web/edge entry had its own
+    `middleware`, ctx-style rather than connect-style, but the same name.
+  
+  **`AppAdapter.middleware()` and `Plugin.middleware()` are unchanged.** They are a
+  different API — a hook returning entries, not an option taking them — and
+  nothing about them was ambiguous.
+  
+  Generated projects emit `middlewares` from the CLI's `rest` template.
+
+### Minor Changes
+
+- [#591](https://github.com/forinda/kick-js/pull/591) [`dc14396`](https://github.com/forinda/kick-js/commit/dc14396c1dab62967ff97e81304546411af09d9b) Thanks [@forinda](https://github.com/forinda)! - The built-in health endpoints are a module you can see.
+  
+  `GET /health/live` and `GET /health/ready` were mounted straight onto the engine
+  with `http.route()`, ahead of the middleware chain. That worked, and made them
+  invisible in three ways:
+  
+  - **The OpenAPI spec never had them.** The generator builds from controller
+    decorators, and a raw route carries none — so the only two routes the
+    framework itself serves were missing from every spec.
+  - **`logRouteTable` never listed them**, along with anything else reading the
+    route registry.
+  - **Nothing in an adopter's code said they existed.** `kick g adapter` documents
+    `onHealthCheck`, but the endpoint consuming it appeared nowhere, so people
+    wrote their own `/health/ready` next to the built-in one.
+  
+  They are now `healthModule()` — a `defineModule` factory with a real
+  `HealthController`, registered automatically. It reads draining state and
+  adapter checks through a `HEALTH_PROBE` token rather than Application
+  internals, so a replacement module can satisfy the same contract.
+  
+  Paths and bodies are unchanged, verified on Express, Fastify and h3. `prefix:
+  false` keeps them at the root: a probe URL an orchestrator is configured against
+  must not move when `apiPrefix` or the API version does.
+  
+  **Behaviour change worth knowing:** mounting with the other modules puts them
+  INSIDE the middleware chain, where they previously sat ahead of it. An app with
+  global auth will now require auth on its probes. That is the correct default —
+  an app controls its own auth, and a framework route quietly bypassing it is the
+  surprise — but it is a change. Exempt the path as you would any other, or pass
+  `health: false` and mount your own.
+  
+  `ModuleRoutes` gains `prefix?: false` for this, and it is useful beyond health:
+  a provider's fixed webhook URL or a `/.well-known` document has the same problem
+  of being dragged around by a prefix that has nothing to do with it.
+
+### Patch Changes
+
+- [#589](https://github.com/forinda/kick-js/pull/589) [`6c2121f`](https://github.com/forinda/kick-js/commit/6c2121f1fa7c90b3841459a168745b9651f7d137) Thanks [@forinda](https://github.com/forinda)! - Answer 413 / 415 for a rejected upload on Express, matching the other runtimes.
+  
+  `@FileUpload` enforces `maxSize` and `allowedTypes` through a different backend
+  per engine — Multer under Express, `@fastify/multipart` under Fastify,
+  `readMultipartFormData` under h3 — and only two of the three reported a
+  violation as the client's:
+  
+  | upload          | express                                                                | fastify / h3                                   |
+  | --------------- | ---------------------------------------------------------------------- | ---------------------------------------------- |
+  | over `maxSize`  | **500** `MulterError: File too large`, with a Multer stack in the body | `413` `File big.txt exceeds the 16-byte limit` |
+  | disallowed type | **500** `Error: File type text/plain is not allowed`                   | `415` `File type text/plain is not allowed`    |
+  
+  So an Express app told the client it had itself failed, for a file the client
+  chose — and leaked a Multer stack trace doing it.
+  
+  Multer's `LIMIT_FILE_SIZE` is now translated to `HttpException(413)` and the
+  type filter raises `HttpException(415)` directly, matching the messages
+  `applyUploadConfig` already produced on the other engines.
+  
+  One difference remains and is documented rather than papered over: on a 413
+  Express names the form **field** where the others name the **file**, because
+  Multer's error carries no filename. Status and limit are identical.
+  
+  Found by running `@FileUpload` and route validation as a runtime matrix.
+  Validation was already consistent across all three, including that the schema's
+  transform reaches the handler and not just its check.
+
+- [#580](https://github.com/forinda/kick-js/pull/580) [`494e94b`](https://github.com/forinda/kick-js/commit/494e94b7615f5352992c7f31ef02845e9d4f68fc) Thanks [@forinda](https://github.com/forinda)! - Warn when `@PreDestroy` is applied to a service it will never run on.
+  
+  `@PreDestroy` fires when a REQUEST scope closes. On a SINGLETON — the default
+  scope — nothing closes, so the hook is inert. It was silently inert: no type
+  error, no log, no startup check. The reported case was a Postgres pool never
+  closed on shutdown, invisible in development and surfacing as connection
+  exhaustion under repeated restarts and HMR reloads.
+  
+  The asymmetry is what makes it a trap. `@PostConstruct` DOES run for singletons,
+  so the pair reads as init/teardown while one half quietly opts out based on a
+  scope the author may never have considered.
+  
+  Applying `@PreDestroy` to a non-REQUEST service now logs once, naming the class,
+  its scope, and the seam that does work:
+  
+  ```text
+  kickjs: @PreDestroy on DatabaseService (singleton) will never run — that hook
+  fires only when a REQUEST scope closes.
+  For application-lifetime resources, release them from an adapter's shutdown()
+  hook instead.
+  ```
+  
+  The decorator's own documentation now says the same, since it previously
+  described only the REQUEST case and left the singleton behaviour to be inferred.
+  
+  Deliberately a warning rather than running the hook on shutdown: making it fire
+  is a behaviour change whose ordering, timeout and concurrency semantics have to
+  match the adapter shutdown path, and an adapter's `shutdown()` already covers
+  application-lifetime resources — the framework runs it on a real shutdown and on
+  every HMR reload, time-boxed and concurrent.
+
+- [#594](https://github.com/forinda/kick-js/pull/594) [`9a18bf4`](https://github.com/forinda/kick-js/commit/9a18bf4c0c03b6a07b15e62923db9d19aa750e05) Thanks [@forinda](https://github.com/forinda)! - `helmet()` options were half-inert, because the framework injected a second one.
+  
+  `bootstrap()` auto-injects `helmet()` with defaults unless `security.helmet` is
+  `false`, and it did so **ahead of the user middleware array**. So an app that
+  declared its own `helmet(...)` ran two of them, and the second could only ever
+  overwrite a header — never drop one:
+  
+  ```ts
+  bootstrap({ middleware: [helmet({ frameguard: false })] })
+  // still: X-Frame-Options: DENY
+  ```
+  
+  Every `false` option behaves this way — `frameguard: false`, `hsts: false`,
+  `referrerPolicy: false`, `noSniff: false`. The option is accepted, type-checks,
+  and silently does nothing, because the auto-injected pass already set the header
+  and the user's pass merely declines to set it again. Disabling `frameguard` to
+  allow embedding is the case that bites: the app looks configured and is not.
+  
+  `helmet()` now brands its handler with `Symbol.for('kick/http/helmet')`, and
+  auto-injection stands down when it finds that brand in the declared middleware —
+  so a declared helmet is the only one, and its options mean what they say.
+  `security.helmet: false` still turns the automatic one off for an app that
+  declares nothing.
+  
+  Read through the registry rather than an import, so the Application keeps the
+  dynamic `import()` that lets the helmet module be absent.
+  
+  **The scaffolded template kept `helmet()`**, now with a comment saying what it is
+  for. Reported as a no-op in the `rest` template ([#569](https://github.com/forinda/kick-js/issues/569)) — accurately: it sets the
+  same headers the automatic one already set, so adding or removing that line
+  changed no response. The measurement was right and the conclusion would have been
+  wrong. It is not decoration, it is the configuration seam — and until this fix
+  it was a seam that did not work.
+  
+  Guarded by two tests: an explicit `frameguard: false` removes the header, and a
+  bare `helmet()` still emits exactly the same header set as none at all — the
+  second being the reporter's own observation, kept so the template's line stays
+  honest.
+
+- [#586](https://github.com/forinda/kick-js/pull/586) [`76b56da`](https://github.com/forinda/kick-js/commit/76b56da564ad08a6e570210f0ff631948e9bc475) Thanks [@forinda](https://github.com/forinda)! - Fix the h3 runtime answering 200 for a malformed request body.
+  
+  The h3 runtime read bodies with `readBody(event).catch(() => undefined)`. That
+  catch was there for the legitimate absent-body case, but it swallowed a PARSE
+  failure just as readily — so broken JSON produced a **200**, with the handler
+  running against `undefined`:
+  
+  | runtime | malformed JSON                                   |
+  | ------- | ------------------------------------------------ |
+  | express | `400 {"message":"Unexpected end of JSON input"}` |
+  | fastify | `400 {"message":"Body is not valid JSON…"}`      |
+  | h3      | `200 {"got":null}`                               |
+  
+  Worse than the wrong status: the client was told it succeeded, and the handler
+  executed on data that never parsed — a create endpoint would write whatever its
+  defaults were.
+  
+  The runtime now only skips the read when nothing was sent, deciding on
+  `content-length` / `transfer-encoding` rather than on whether parsing threw.
+  A body that is present but unparseable raises `HttpException.badRequest`, so all
+  three runtimes answer 400.
+  
+  The content type has to be normalised for that to hold. `readBody` matches
+  `application/json` **exactly**, so `application/json; charset=utf-8` — what most
+  clients actually send — fell to its catch-all branch and parsed non-strictly,
+  handing the handler a raw string rather than throwing. The runtime now strips
+  parameters itself and asks for strict parsing when the media type is JSON.
+  Deliberately not extended to `+json` types: Express does not parse those at all,
+  so making h3 stricter there would be a different divergence rather than a fix.
+  
+  Covered by a matrix over all three: malformed JSON is rejected and the handler
+  does not run, a well-formed body still works, and a request with no body at all
+  still succeeds — that last one being why the original catch existed.
+  
+  The same comparison turned up a second h3 divergence, also fixed here. h3 routes
+  every thrown value through `createError()`, which returns its own error with the
+  original on `cause`, and that wrapper was handed to the shared error middleware.
+  Express and Fastify hand it the original, so responses differed by runtime for
+  the same thrown value:
+  
+  | thrown                                | express / fastify             | h3 (before)                                 |
+  | ------------------------------------- | ----------------------------- | ------------------------------------------- |
+  | `HttpException(418, 'I am a teapot')` | `{"message":"I am a teapot"}` | `{"message":"I am a teapot","requestId":…}` |
+  | `new Error('kaboom')` → `error` field | `Error: kaboom`               | `Error: kaboom ← caused by Error: kaboom`   |
+  
+  `instanceof HttpException` failed against the wrapper, so an expected 4xx fell
+  through to the generic branch and picked up a `requestId` the other runtimes
+  omit for that case. The runtime now unwraps an `Error` cause before delegating.
+  h3's own 404 carries no cause, so the not-found path is untouched.
+  
+  A parity suite pins the catch-all and error mapping on all three: unknown route
+  under the prefix, unknown route at the root, known path with the wrong method,
+  `HttpException` status and body, an unexpected throw naming the error once with
+  a correlation id, and a working route.
+
+- [#578](https://github.com/forinda/kick-js/pull/578) [`f21f01c`](https://github.com/forinda/kick-js/commit/f21f01c1466ef2de9ac2e7e32a209726e143263d) Thanks [@forinda](https://github.com/forinda)! - Fix `/health/ready` returning 500 on every non-Express runtime.
+  
+  The built-in health routes used `ctx.res.status(code).json(body)` in three of
+  their four branches. `ctx.res` is the ENGINE-NATIVE response: under Fastify it
+  is a `FastifyReply`, which has `.status()` but no `.json()`, so those branches
+  threw `TypeError: ctx.res.status(...).json is not a function` and the error
+  handler answered 500.
+  
+  Readiness probes therefore failed permanently on Fastify — a pod never becomes
+  ready, which blocks a deployment rather than degrading it. Both draining
+  branches had the same defect, and they fire during the shutdown window they
+  exist to cover.
+  
+  It stayed invisible because the one branch that used the neutral `ctx.json()`
+  is the happy path of `/health/live` — exactly what a smoke test curls.
+  
+  All four branches now `return reply(status, body)`. Both runtimes route a
+  handler's return value through `applyHandlerResult`, so this carries the status
+  without touching the engine-native response at all — and it is the same
+  return-style the framework tells adopters to use, rather than a second way of
+  doing the same thing.
+  
+  Covered by a runtime matrix over the built-in routes — ready, degraded, a
+  rejecting adapter check, and both draining paths, on Express and Fastify. The
+  matrix needs `createTestApp`'s `runtime` option, whose absence is plausibly why
+  this was never caught.
+
+- [#573](https://github.com/forinda/kick-js/pull/573) [`2e6f981`](https://github.com/forinda/kick-js/commit/2e6f981cd6d79900970c0d6033d0b563d04beaa0) Thanks [@forinda](https://github.com/forinda)! - Export `LoggedRequest` / `LoggedResponse` so the documented middleware layout compiles.
+  
+  `requestLogger()` types its handler with these two interfaces, and they were
+  module-private. The documented "keep `src/index.ts` thin" layout builds the
+  middleware array in `src/middleware/index.ts` and exports it with an inferred
+  type — which a dependant cannot name:
+  
+  ```
+  error TS4023: Exported variable 'middleware' has or is using name 'LoggedRequest'
+  from external module ".../dist/request-logger-D_pf4xzE" but cannot be named.
+  ```
+  
+  So the recommended project layout walked straight into a compile error, and the
+  workaround was to annotate with `MiddlewareEntry[]` rather than infer.
+  
+  Both interfaces are now exported from the package entry. They stay structural
+  rather than Express's `Request`/`Response` on purpose: the Fastify and h3
+  runtimes pass a raw Node request, which has `url` but no `path`.
+  
+  Sibling of the TS4058 leak in [#235](https://github.com/forinda/kick-js/issues/235) — same class, different symbol. Guarded the
+  same way, by emitting a declaration from a consumer that resolves the built
+  `.d.mts` by name. That fixture now lives inside the package rather than
+  `tmpdir()`: from `/tmp` the array trips `TS2883` on Express's own
+  `ParamsDictionary` first, so the case under test was never reached.
+
+- [#588](https://github.com/forinda/kick-js/pull/588) [`62c55ff`](https://github.com/forinda/kick-js/commit/62c55ffe3dba4404ee3f517ecee028ad53317e86) Thanks [@forinda](https://github.com/forinda)! - Fix `csrf`, `rateLimit` and `session` breaking on Fastify and h3.
+  
+  Connect middleware receives an Express response under Express and a raw
+  `ServerResponse` under Fastify and h3. Three shipped middlewares reached for
+  Express-only conveniences on it:
+  
+  | middleware  | call                  | effect on Fastify / h3                                                                                                 |
+  | ----------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+  | `csrf`      | `res.cookie()`        | threw before any check ran, so **every request became a 500** — including the safe methods it is meant to wave through |
+  | `rateLimit` | `res.status().json()` | threw once the limit was hit, and the throw left the request **hanging** instead of answering 429                      |
+  | `session`   | `res.cookie()`        | threw on every response issuing a session, so no cookie was ever set                                                   |
+  
+  `csrf` is the worst of the three: an app that mounted it on Fastify or h3 served
+  500 for everything, which is a hard failure rather than a quiet one — but
+  `session` failed quietly, and every visitor looked new.
+  
+  `csrf` had a second, worse problem on the request side: it read the token from
+  `req.cookies`, which only an upstream cookie parser populates. Fastify and h3
+  never have one, and Express only does if the app mounts `cookie-parser` — so the
+  middleware could not see the cookie it had just issued, minted a fresh token on
+  every request, and compared the submitted header against that new value. **The
+  double-submit flow could never succeed on any runtime**, which the "no token →
+  403" test could not show because a rejection is what it expected either way.
+  
+  Cookies are now read through a shared `readCookies`, which falls back to parsing
+  the `Cookie` header — the same fallback `session` already had, now shared rather
+  than duplicated.
+  
+  All three now go through `setCookie` / `sendJson` helpers that take the Express
+  path when it exists — so behaviour under Express is unchanged — and fall back to
+  `Set-Cookie` and the Node response primitives otherwise.
+  
+  Found by running the middleware suites as a runtime matrix rather than against
+  Express alone. The existing "engine-neutral" tests check the helpers
+  (`resolveClientIp`, `resolvePathname`) in isolation; they never mount a
+  middleware on an engine, which is why this survived.
+
+- [#584](https://github.com/forinda/kick-js/pull/584) [`9d160a9`](https://github.com/forinda/kick-js/commit/9d160a919d42be3437a5d0bb22ae62097e525588) Thanks [@forinda](https://github.com/forinda)! - Accept a `defineModule()` factory passed uninvoked.
+  
+  A module factory and a module class are both functions, so `typeof` cannot tell
+  them apart. Passing the factory bare reached `new factory()` and died with:
+  
+  ```text
+  TypeError: entry is not a constructor
+  ```
+  
+  naming neither the offending module nor the fix. It is easy to hit because the
+  class form _does_ take the bare name, so the two styles read as
+  interchangeable — and the scaffolded test guidance showed the class form even
+  in projects the generator emits as `define`.
+  
+  A factory carries a frozen `definition` and a `scoped` helper, neither of which
+  a class has, so the two are distinguishable with certainty.
+  
+  The bare form is accepted **only for a module that takes no configuration**,
+  where calling the factory with no arguments produces exactly what `Module()`
+  would — equivalent rather than lenient.
+  
+  A configurable module still refuses it, because there the two are not
+  equivalent in intent: the bare name silently selects the defaults, so an author
+  who meant `TenantModule({ region })` would get a running app wired the wrong
+  way with nothing said. That is the failure mode this change exists to remove,
+  so it stays loud — now with a message that names the module and both correct
+  spellings:
+  
+  ```text
+  bootstrap: module `TenantModule` takes configuration, so it must be invoked.
+    Write `TenantModule()` for its defaults, or `TenantModule({ … })` to configure it.
+    Passing it bare would have silently selected the defaults.
+  ```
+  
+  `AppModuleEntry` includes the factory form, so the bare name type-checks
+  without a cast.
+  
+  Entry validation was also restructured. Construction happens outside any catch:
+  wrapping it meant a module whose own constructor threw came back reported as
+  "not a module class", hiding the real error and sending the reader somewhere
+  else entirely. Constructibility is checked first without invoking anything, and
+  the constructed value is checked for `routes()` — a plain `function Foo() {}`
+  is constructible and returns `{}`, so it used to slip past the diagnostic and
+  fail later inside the framework, far from the entry that caused it.
+
+- [#606](https://github.com/forinda/kick-js/pull/606) [`168f4cf`](https://github.com/forinda/kick-js/commit/168f4cfa4d93022be142dacb87e4efeabeafbd02) Thanks [@forinda](https://github.com/forinda)! - Fix the web entry answering 200 for a malformed request body.
+  
+  `h3WebRuntime` — the `./web` entry for edge, Bun and Deno — read JSON bodies
+  with `request.json().catch(() => undefined)`. That catch cannot tell an
+  **absent** body from an **unparseable** one, so broken JSON produced a **200**
+  with the handler running against `undefined`.
+  
+  It is the same defect [#586](https://github.com/forinda/kick-js/issues/586) removed from the node h3 runtime. That fix did not
+  reach here, because the web entry has its own body-reading path and the runtime
+  matrix in `body-parse-errors.test.ts` covers express / fastify / h3 but not this
+  entry — which is exactly why it survived.
+  
+  Worse than the wrong status: the client is told it succeeded and the handler
+  executes on data that never parsed, so a create endpoint writes whatever its
+  defaults are. On the entry used for edge deployments, where it is least likely
+  to be noticed.
+  
+  The body is now read once as text, and the decision comes from the request
+  rather than from whether parsing threw:
+  
+  - no body, or an empty one, reads as **absent** — `ctx.body` stays undefined and
+    the request succeeds, which is the case the original catch existed for and the
+    same call the node runtime makes on `content-length: 0`
+  - a body that is present but unparseable raises `HttpException.badRequest`, so
+    all four runtimes answer 400
+  
+  The parse failure is held rather than thrown at the point of discovery: the
+  response driver does not exist yet there, so throwing escaped the route and
+  surfaced as a 500. It is rethrown as the pipeline's first act, where the
+  existing error path maps it.
+  
+  Two behaviour changes ride along, both toward parity with the node runtime: a
+  failed `x-www-form-urlencoded` read now leaves `ctx.body` undefined rather than
+  `{}`, and an empty body of any type reads as absent rather than as an empty
+  object.
+  
+  Covered by two tests on the web runtime — malformed JSON is rejected and the
+  handler does not run, and a POST with no body at all still succeeds.
+  
+  Closes [#605](https://github.com/forinda/kick-js/issues/605)
+- Updated dependencies [[`bfb9319`](https://github.com/forinda/kick-js/commit/bfb9319d0b9d66c80d874352e93f7c9afcbef4ab)]:
+  - @forinda/kickjs-schema@0.1.4
+
 ## 7.4.0
 
 ### Minor Changes
