@@ -228,8 +228,8 @@ describe('UserController', () => {
   beforeEach(() => Container.reset())
 
   it('lists users', async () => {
-    const { expressApp } = await createTestApp({ modules: [UserModule] })
-    const res = await request(expressApp).get('/api/v1/users')
+    const { app } = await createTestApp({ modules: [UserModule] })
+    const res = await request(app.handle.bind(app)).get('/api/v1/users')
     expect(res.status).toBe(200)
   })
 })
