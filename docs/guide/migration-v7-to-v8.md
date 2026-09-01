@@ -27,6 +27,7 @@ pnpm add -D @forinda/kickjs-testing@8 @forinda/kickjs-cli@8
 | `kick add auth\|drizzle\|prisma` now fails      | Anyone scripting `kick add` | Drop those from setup scripts and CI                |
 | `middleware` option renamed to `middlewares`    | Any app setting it          | Rename the key — the compiler finds every one       |
 | 404 body is now problem details                 | Any app                     | Read `title`/`status`, or restore with `onNotFound` |
+| Every `HttpException` is problem details        | Any app                     | Read `detail`/`status`, not `message`               |
 | Wrong verb answers 405, not 404                 | Any app                     | Move the case to the 405 branch                     |
 | Health probes moved inside the middleware chain | Apps with global auth       | Exempt the path, or `health: false`                 |
 | `/health/ready` answers instead of 500          | Fastify / h3                | None — the probe was permanently failing            |
@@ -78,6 +79,23 @@ Renamed for the same reason, in the same release:
 `createTestApp` passes the option straight through to `bootstrap()`, so a harness whose option name disagreed with the thing it configures was exactly the inconsistency being removed — that is why `@forinda/kickjs-testing` takes a major too.
 
 **`AppAdapter.middleware()` and `Plugin.middleware()` are unchanged.** Those are a different API — a hook that returns entries, not an option that takes them — and nothing about them was ambiguous. If you write adapters, nothing there moves.
+
+## Breaking: every error is problem details
+
+A plain `HttpException` used to answer a bare `{ "message": … }` with `application/json`. It now emits RFC 9457, the same as `ProblemException` and `ctx.problem.*`:
+
+```ts
+throw HttpException.forbidden('Not your project')
+```
+
+```json
+403  content-type: application/problem+json
+{ "type": "about:blank", "title": "Forbidden", "status": 403, "detail": "Not your project" }
+```
+
+`HttpException` was the last shape a client parsing `application/problem+json` had to special-case — and the most common one, since it is how most apps reject a request. Route validation raises `HttpException` too, so 422 bodies move with it: `details` becomes an `errors` extension member, still withheld in production.
+
+**If you assert on `body.message`, read `body.detail`.** The message is not lost; it is the `detail` field.
 
 ## Breaking: the catch-all
 

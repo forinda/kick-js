@@ -107,10 +107,11 @@ export function notFoundHandler(routes: readonly MountedRoute[] = []) {
  * handle back to the log line) and, outside production, the error summary
  * plus stack. Production bodies stay opaque.
  *
- * {@link ProblemException} is dispatched first and emits an
- * `application/problem+json` response per RFC 9457. Plain
- * {@link HttpException} keeps the existing `{ message, errors? }` shape
- * for backward compatibility.
+ * {@link ProblemException} and plain {@link HttpException} both emit
+ * `application/problem+json` per RFC 9457. `ProblemException` carries a
+ * caller-supplied `type` / `title` / extensions; an `HttpException`'s message
+ * becomes `detail`, with `title` and `type` defaulted from the status. One
+ * shape, so a client never has to branch on which one the app threw.
  */
 export function errorHandler() {
   const isProduction = process.env.NODE_ENV === 'production'
@@ -147,7 +148,11 @@ export function errorHandler() {
       })
     }
 
-    // HttpException (expected application errors)
+    // HttpException (expected application errors) — RFC 9457, same as
+    // ProblemException. It used to answer a bare `{ message }`, which made it
+    // THE path a client parsing `application/problem+json` had to special-case
+    // (#611) — the exact situation #587 removed from the catch-all. The
+    // message becomes `detail`; `title` and `type` default from the status.
     if (err instanceof HttpException) {
       if (err.status >= 500) {
         log.error(err, err.message)
@@ -158,10 +163,17 @@ export function errorHandler() {
         }
       }
       const exposeDetails = !isProduction && err.details !== undefined
-      return res.status(err.status).json({
-        message: err.message,
-        ...(exposeDetails ? { errors: err.details } : {}),
-      })
+      res.setHeader('Content-Type', 'application/problem+json')
+      return res.status(err.status).json(
+        normalizeProblem({
+          status: err.status,
+          detail: err.message,
+          // Extension member, permitted by RFC 9457 §3.2. Held back in
+          // production for the same reason as before: `details` can carry the
+          // shape of the request that failed.
+          ...(exposeDetails ? { errors: err.details } : {}),
+        }),
+      )
     }
 
     // Unexpected errors — always log

@@ -250,12 +250,21 @@ describe('errorHandler — ProblemException', () => {
     expect(res.headers['retry-after']).toBe('60')
   })
 
-  it('keeps existing JSON shape for plain HttpException (backward compat)', async () => {
+  // #611: a plain HttpException is RFC 9457 too. It used to answer a bare
+  // `{ message }`, which left it as the one shape a client parsing
+  // problem+json had to special-case — the situation #587 removed from the
+  // catch-all. The message becomes `detail`; title and type default.
+  it('emits problem details for a plain HttpException', async () => {
     const ex = new HttpException(404, 'Old shape')
     const res = await request(appThrowing(ex)).get('/boom')
     expect(res.status).toBe(404)
-    expect(res.headers['content-type']).toMatch(/^application\/json/)
-    expect(res.body).toEqual({ message: 'Old shape' })
+    expect(res.headers['content-type']).toMatch(/^application\/problem\+json/)
+    expect(res.body).toEqual({
+      status: 404,
+      type: 'about:blank',
+      title: 'Not Found',
+      detail: 'Old shape',
+    })
   })
 })
 

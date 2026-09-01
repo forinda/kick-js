@@ -22,7 +22,12 @@ describe('HttpException', () => {
       const res = await request(appThrowing(err)).get('/boom')
       expect(res.status).toBe(429)
       expect(res.headers['retry-after']).toBe('60')
-      expect(res.body).toEqual({ message: 'slow down' })
+      expect(res.body).toEqual({
+        status: 429,
+        type: 'about:blank',
+        title: 'Too Many Requests',
+        detail: 'slow down',
+      })
     })
 
     it('propagates a WWW-Authenticate header on 401', async () => {
@@ -47,7 +52,12 @@ describe('HttpException', () => {
       const err = new HttpException(404, 'Not Found')
       const res = await request(appThrowing(err)).get('/boom')
       expect(res.status).toBe(404)
-      expect(res.body).toEqual({ message: 'Not Found' })
+      expect(res.body).toEqual({
+        status: 404,
+        type: 'about:blank',
+        title: 'Not Found',
+        detail: 'Not Found',
+      })
     })
   })
 
@@ -138,7 +148,12 @@ describe('HttpException', () => {
       const err = new HttpException(500, 'something broke', { dbError: 'syntax error at line 12' })
       const res = await request(appThrowing(err)).get('/boom')
       expect(res.status).toBe(500)
-      expect(res.body).toEqual({ message: 'something broke' })
+      expect(res.body).toEqual({
+        status: 500,
+        type: 'about:blank',
+        title: 'Internal Server Error',
+        detail: 'something broke',
+      })
       expect(res.body).not.toHaveProperty('errors')
     })
 
@@ -149,7 +164,7 @@ describe('HttpException', () => {
       ])
       const res = await request(appThrowing(err)).get('/boom')
       expect(res.status).toBe(422)
-      expect(res.body.message).toBe('bad')
+      expect(res.body.detail).toBe('bad')
       expect(res.body).not.toHaveProperty('errors')
     })
 
