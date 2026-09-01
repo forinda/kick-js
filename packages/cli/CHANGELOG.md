@@ -1,5 +1,31 @@
 # @forinda/kickjs-cli
 
+## 8.0.2
+
+### Patch Changes
+
+- [#619](https://github.com/forinda/kick-js/pull/619) [`d56d186`](https://github.com/forinda/kick-js/commit/d56d186fd62b6775381d6d508963e64f82900085) Thanks [@forinda](https://github.com/forinda)! - Fix two stale flag lists in `kick g` help text.
+  
+  - `kick g agents --only` accepts `gemini` and `copilot`, but the option help only
+    listed `agents | claude | skills | both | all`.
+  - `kick g agents --template` accepts `fullstack` alongside `rest` and `minimal`;
+    the help omitted it, and the JSDoc still named the removed `ddd` template as
+    the fallback.
+  
+  Text only — no behaviour change. The matching reference tables in the guide and
+  API docs are corrected too, along with a `--repo` flag the scaffold docs
+  advertised that `kick g scaffold` never accepted.
+
+- [#618](https://github.com/forinda/kick-js/pull/618) [`a1eb264`](https://github.com/forinda/kick-js/commit/a1eb2649fd0fd0e44e21d039867018136bd429a5) Thanks [@forinda](https://github.com/forinda)! - Fix `kick g agents` help text, which still advertised files the generator no longer writes.
+  
+  `--help` (and the generator list) described the output as "AGENTS.md + CLAUDE.md +
+  kickjs-skills.md". Since the move to the `.agents/` layout there is no `kickjs-skills.md`:
+  the command writes `.agents/AGENTS.md`, `.agents/GEMINI.md`, `.agents/COPILOT.md`, one
+  `.agents/skills/<slug>/SKILL.md` per skill, and `CLAUDE.md` at the project root. The
+  `--only skills` JSDoc pointed at the same missing file.
+  
+  Text only — no behaviour change.
+
 ## 8.0.1
 
 ### Patch Changes
