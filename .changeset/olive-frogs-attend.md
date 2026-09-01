@@ -12,7 +12,7 @@ be re-seeded. `Container.reset()` replays that map; `create()` was literally
 `new Container()`, so an isolated container was missing every `@Service`,
 `@Repository` and `@Controller` in the process:
 
-```
+```text
 KICK001: No provider for PricingService
 ```
 
