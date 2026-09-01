@@ -3,6 +3,8 @@
 // (node bootstrap) and the `@forinda/kickjs/web` fetch entry (edge/Bun/Deno).
 // Edge-safe: no node imports beyond the sanctioned ALS request store.
 
+import { HttpException } from '../../core/errors'
+import { classifyMediaType, unsupportedMediaTypeError } from '../body-policy'
 import { RequestContext } from '../context'
 import { applyHandlerResult } from '../reply'
 import { requestStore } from '../request-store'
@@ -91,10 +93,10 @@ export function compileWebRoute(
   return async ({ request, url, params }) => {
     const req = new WebRequestShim(request, url)
     req.params = params
+    let bodyError: unknown
 
     // Body: uploads consume the stream as FormData; everything else parses
-    // by content-type. A failed parse leaves body undefined (validation
-    // rejects it downstream if the route demands a shape).
+    // by content-type.
     if (upload) {
       const form = await request.formData().catch(() => undefined)
       if (form) {
@@ -118,14 +120,37 @@ export function compileWebRoute(
         req.body = fields
       }
     } else if (BODY_METHODS.has(request.method)) {
-      const contentType = req.headers['content-type'] ?? ''
-      if (contentType.includes('application/json')) {
-        req.body = await request.json().catch(() => undefined)
-      } else if (contentType.includes('application/x-www-form-urlencoded')) {
-        const text = await request.text().catch(() => '')
-        req.body = Object.fromEntries(new URLSearchParams(text))
-      } else if (contentType.startsWith('text/')) {
-        req.body = await request.text().catch(() => undefined)
+      // Read once — a Request body is a stream and cannot be consumed twice.
+      // A read that fails (client aborted mid-flight) is treated as an absent
+      // body: there is nobody left to answer, and it is not a malformed one.
+      const raw = request.body === null ? '' : await request.text().catch(() => '')
+
+      // An empty body is ABSENT, not unparseable — the same call the node h3
+      // runtime makes on `content-length: 0`. Distinguishing the two is the
+      // whole point: `.catch(() => undefined)` around the parse could not,
+      // so a malformed payload answered 200 with the handler running against
+      // `undefined` (#605), the defect #586 removed from the node runtime.
+      const kind = classifyMediaType(req.headers['content-type'])
+      if (raw !== '' && kind === 'unsupported') {
+        // Held for the same reason as a parse failure: no driver yet.
+        bodyError = unsupportedMediaTypeError(req.headers['content-type'])
+      } else if (raw !== '' && kind !== 'multipart') {
+        if (kind === 'json') {
+          try {
+            req.body = JSON.parse(raw)
+          } catch (err) {
+            // Held, not thrown: the driver that turns an error into a response
+            // does not exist yet, so throwing here escapes the route entirely
+            // and surfaces as a 500. Rethrown as the pipeline's first act.
+            bodyError = HttpException.badRequest(
+              err instanceof Error ? err.message : 'Request body could not be parsed',
+            )
+          }
+        } else if (kind === 'urlencoded') {
+          req.body = Object.fromEntries(new URLSearchParams(raw))
+        } else {
+          req.body = raw
+        }
       }
     }
 
@@ -136,6 +161,8 @@ export function compileWebRoute(
     driver.setHeader('x-request-id', store.requestId)
 
     const pipeline = requestStore.run(store, async () => {
+      if (bodyError) throw bodyError
+
       const ctx = new RequestContext(
         req as never,
         driver as never,
