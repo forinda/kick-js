@@ -1457,8 +1457,8 @@ class HomeModule {
 
 describe('locale contributor — integration', () => {
   it('handler sees the parsed locale from the request', async () => {
-    const { expressApp } = createTestApp({ modules: [HomeModule] })
-    const res = await supertest(expressApp)
+    const { app } = await createTestApp({ modules: [HomeModule] })
+    const res = await supertest(app.handle.bind(app))
       .get('/api/v1/')
       .set('Accept-Language', 'fr-CA')
       .expect(200)
@@ -1487,11 +1487,11 @@ class StaticController {
 }
 
 it('method-level override beats the global contributor', async () => {
-  const { expressApp } = createTestApp({
+  const { app } = await createTestApp({
     modules: [StaticModule],
     contributors: [ResolveLocale.registration], // global
   })
-  const res = await supertest(expressApp)
+  const res = await supertest(app.handle.bind(app))
     .get('/api/v1/static')
     .set('Accept-Language', 'fr-CA') // would be `fr` under the global
     .expect(200)
@@ -1535,8 +1535,8 @@ class GreetingService {
 }
 
 it('service reads the locale via getRequestValue during a request', async () => {
-  const { expressApp } = createTestApp({ modules: [HomeModule] })
-  const res = await supertest(expressApp)
+  const { app } = await createTestApp({ modules: [HomeModule] })
+  const res = await supertest(app.handle.bind(app))
     .get('/api/v1/greet')
     .set('Accept-Language', 'fr-CA')
     .expect(200)
