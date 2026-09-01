@@ -1,5 +1,308 @@
 # @forinda/kickjs-cli
 
+## 8.0.0
+
+### Major Changes
+
+- [#596](https://github.com/forinda/kick-js/pull/596) [`221499c`](https://github.com/forinda/kick-js/commit/221499ce60d50acd39c6887583c07a8842d6e3f9) Thanks [@forinda](https://github.com/forinda)! - `kick add` no longer offers `auth`, `drizzle` or `prisma`.
+  
+  The three packages behind those entries — `@forinda/kickjs-auth`,
+  `@forinda/kickjs-drizzle`, `@forinda/kickjs-prisma` — are removed from the repo.
+  All three were marked `private` and frozen at **6.0.1** while the framework moved
+  to 7.4, so `kick add auth` installed a package two majors behind the kickjs it
+  was being added to. The entries carried deprecation warnings; v8 finishes the
+  job.
+  
+  `kick add auth|drizzle|prisma` now reports an unknown package rather than
+  installing one, which is why this is a major for the CLI.
+  
+  Where each one goes:
+  
+  | removed                   | replacement                                                                                                                                                                     |
+  | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | `@forinda/kickjs-auth`    | the [BYO Auth recipe](https://kickjs.dev/guide/byo-recipes.html#auth) — `@LoadAuthUser` / `@RequireRole` / `@Public` composed from `defineContextDecorator` and `defineAdapter` |
+  | `@forinda/kickjs-drizzle` | `@forinda/kickjs-db` (`kick add db` / `pg` / `sqlite` / `mysql`), or wire Drizzle directly                                                                                      |
+  | `@forinda/kickjs-prisma`  | `@forinda/kickjs-db`, or wire Prisma directly                                                                                                                                   |
+  
+  The auth decorators went with the package: `@Public`, `@Roles`, `@Can`,
+  `@Authenticated`, `AuthAdapter` and `AUTH_USER` lived in
+  `@forinda/kickjs-auth`, never in the framework core. The BYO recipe rebuilds
+  each of them.
+  
+  Docs: the Authentication and Authorization guides keep their BYO halves and lose
+  the legacy package reference they said would go "in a future major" — this is
+  that major. The Authorization guide now also shows the `user` contributor its
+  `dependsOn: ['user']` refers to, which was previously only named in passing on
+  another page. The outdated Roadmap page is removed.
+
+### Minor Changes
+
+- [#585](https://github.com/forinda/kick-js/pull/585) [`053c547`](https://github.com/forinda/kick-js/commit/053c547f3f403e9d6b6cad378414d7b1a793a6d3) Thanks [@forinda](https://github.com/forinda)! - `kick g module`: the repository is one file, and it stops lying about what it is.
+  
+  With `modules.repo: { name: 'postgres' }` the generator emitted
+  `postgres-audit.repository.ts` whose every method read and wrote an in-memory
+  `Map` — bound by the module as the live implementation. The filename and class
+  name both asserted Postgres, so an app could be wired, booted and manually
+  tested against `PostgresAuditRepository` while every write went to a store that
+  empties on restart, with nothing in the types or the logs to say so.
+  
+  **The name was the lie, not the Map.** The store is gone from the generated
+  names, so an in-memory body is honest: this is the repository, currently in
+  memory, and the TODO says what to swap in. It still works as generated, which a
+  throwing stub would not.
+  
+  **Three files collapsed to one.** `<module>.repository.ts` now holds the
+  factory, the contract and the token:
+  
+  ```ts
+  export function createAuditRepository() {
+    const store = new Map<string, AuditResponseDTO>()
+    return { async findById(id) { … }, … }
+  }
+  
+  /** The contract, derived from the factory rather than declared beside it. */
+  export type AuditRepository = ReturnType<typeof createAuditRepository>
+  
+  export const AUDIT_REPOSITORY = createToken<AuditRepository>('app/Audit/repository')
+  ```
+  
+  The return type IS the interface, so an implementation cannot drift from its own
+  contract, and there is no `IAuditRepository` to keep in step. Swapping stores
+  means writing another factory with a compatible return type and calling that one
+  in the module — nothing else changes.
+  
+  The module registers it declaratively:
+  
+  ```ts
+  container.registerFactory(AUDIT_REPOSITORY, () => createAuditRepository())
+  ```
+  
+  Gone with it: the separate interface file, the `InMemory…Repository` class, and
+  the store-named class. `drizzle` and `prisma` had no dedicated generators either
+  — both already scaffolded the same stub — so their entries in the name maps were
+  dead special-casing that produced `DrizzleAuditRepository` for a file containing
+  no Drizzle.
+  
+  `modules.repo` is deprecated as a result: the name no longer changes the
+  generated code, only the TODO inside it. It keeps working, and nothing is
+  removed without a replacement.
+
+### Patch Changes
+
+- [#576](https://github.com/forinda/kick-js/pull/576) [`79f3806`](https://github.com/forinda/kick-js/commit/79f38065541cd196137612145ac00522fec1591a) Thanks [@forinda](https://github.com/forinda)! - `kick g adapter`: scaffold every hook on `AppAdapter`, and stop calling the
+  middleware hook Express-only.
+  
+  The scaffold emitted 7 of the 10 hooks while its own comment promised "every
+  lifecycle hook below is OPTIONAL. The scaffold emits all of them so adopters can
+  browse what's available". `onHealthCheck`, `introspect` and `devtoolsTabs` were
+  missing entirely.
+  
+  `onHealthCheck` is the costly omission: it is the one hook with a built-in
+  consumer, since `Application` aggregates every adapter's check through
+  `Promise.allSettled` and serves the result at `GET /health/ready`. Undiscoverable
+  from the generator, adopters wrote their own readiness endpoints instead of
+  contributing a check to the built-in one. `introspect` and `devtoolsTabs` feed
+  DevTools and had the same problem.
+  
+  Each new hook names its consumer, so the scaffold says what the hook is _for_
+  rather than only that it exists. `onHealthCheck` ships uncommented and compiles
+  as generated; the two DevTools hooks are commented out like their neighbours,
+  since `devtoolsTabs` needs an import from `@forinda/kickjs-devtools-kit`.
+  
+  The middleware hook's comment said "Express middleware entries" on every
+  project, including one configured for Fastify or h3. It now says connect-style,
+  which is accurate on all three engines.
+  
+  A new test pins the full hook list against `AppAdapter`, so the scaffold cannot
+  silently fall behind the interface again.
+
+- [#584](https://github.com/forinda/kick-js/pull/584) [`9d160a9`](https://github.com/forinda/kick-js/commit/9d160a919d42be3437a5d0bb22ae62097e525588) Thanks [@forinda](https://github.com/forinda)! - Generated project docs: stop calling the bare module form an error.
+  
+  The scaffolded guidance listed `bootstrap({ modules: [TodosModule] })` as a red
+  flag while its own `write-controller-test` snippet used exactly that form — so
+  the generated docs contradicted themselves, and following either half could
+  produce `TypeError: entry is not a constructor`.
+  
+  The snippet now follows the project's own `modules.style`, which is threaded
+  into the skill generator: a `class` module is passed bare, a `define` module is
+  invoked. Emitting one form unconditionally called a class without `new` in
+  class-style projects.
+  
+  The red flag is corrected too — the bare name is accepted for a `define` module
+  with no config, and refused for one that takes config, where it would silently
+  select the defaults.
+
+- [#583](https://github.com/forinda/kick-js/pull/583) [`d70bd70`](https://github.com/forinda/kick-js/commit/d70bd701cd5d6d51a4fedc77008a50372a499234) Thanks [@forinda](https://github.com/forinda)! - `kick g module`: generated controller tests assert something.
+  
+  Every case in the generated controller test was `expect(true).toBe(true)`, so a
+  new module reported a full green suite while asserting nothing — and kept
+  reporting it after every route it named had been deleted. A suite that passes
+  unconditionally is worse than no suite: it survives review, and it makes
+  `pnpm test` stop carrying information.
+  
+  In a project with `@forinda/kickjs-testing` and `supertest` — which `kick new`
+  installs — the list endpoint is now exercised for real: the module is booted
+  through `createTestApp` and the response asserted. The remaining CRUD cases are
+  `it.todo`, which the reporter lists as outstanding and which can never be
+  counted as coverage.
+  
+  Without those packages the same scaffold is emitted with every case as a todo
+  and no extra imports, since emitting an import for a package that is not
+  installed produces a file that cannot compile — the same rule that gates
+  `@ApiTags` on `swagger`.
+  
+  Two details the generated test gets right that are easy to get wrong by hand:
+  
+  - It passes the module in the shape its declaration style requires —
+    `Module()` for `define`, `Module` for `class`. The other way round is
+    `TypeError: entry is not a constructor`.
+  - It drives `app.handle` rather than an Express app, so the generated suite
+    runs on whichever runtime the project is configured with.
+  
+  The mount path it assumes is stated as a `BASE` constant with the reason:
+  `createTestApp` builds its own Application with the framework defaults
+  (`apiPrefix: '/api'`, `defaultVersion: 1`) whatever `bootstrap()` uses, so it is
+  correct as generated — and the comment shows what to change for an app that
+  configures them differently, including `defaultVersion: false`.
+
+- [#598](https://github.com/forinda/kick-js/pull/598) [`f285991`](https://github.com/forinda/kick-js/commit/f2859919a7f2aba833d68550ff05fd376c2cb454) Thanks [@forinda](https://github.com/forinda)! - Scaffolded project docs: fix guidance that contradicts the code beside it.
+  
+  `project-docs.ts` writes `AGENTS.md` / `CLAUDE.md` into every new project, so a
+  stale line there ships to every adopter and is read by their agents as fact.
+  
+  - **`bootstrap({ middleware })` in eight places.** The option is `middlewares`
+    and the singular alias is deleted, so the documented call silently drops every
+    global middleware — while `project-app.ts`, written in the same run, correctly
+    emits `middlewares:`. The generated docs contradicted the generated code.
+  - **`kick add auth`** was the first command under "Adding Features". That entry
+    is gone from the catalog; the command now fails.
+  - **`container.resolve(InMemoryTodoRepository)`** in the module example. No such
+    class is generated — the repository is a `createTodoRepository()` factory, and
+    `module-index.ts` emits `registerFactory(TODO_REPO, () => createTodoRepository())`.
+  - **`<name>.repository.ts # Data access (@Repository)`** in the folder map. The
+    generated file has no decorator and no class.
+
+- [#579](https://github.com/forinda/kick-js/pull/579) [`7f94e8b`](https://github.com/forinda/kick-js/commit/7f94e8b687db70724fd455eaa6cd2906767b1062) Thanks [@forinda](https://github.com/forinda)! - `kick typecheck` refreshes generated types before checking.
+  
+  `kick dev` runs typegen on startup; `kick typecheck` did not. So the moment a
+  handler was renamed or a module deleted without the dev server running, the
+  check failed against `.kickjs/types` describing routes that no longer exist:
+  
+  ```
+  .kickjs/types/kick__routes.ts(12,45): error TS2307: Cannot find module
+    '../../src/modules/hello/hello.controller'
+  src/modules/health/health.controller.ts(11,46): error TS2339: Property 'live'
+    does not exist on type 'HealthController'
+  ```
+  
+  The second one is the trap: it points at correct, current source and claims a
+  method that does exist is missing, because the stale `KickRoutes` namespace has
+  no entry for it. The cause is a generated file the developer never edited and
+  may not know about. A pre-commit hook or a fresh clone hits this every time,
+  since neither has run the dev server — and a fresh clone has no generated types
+  at all.
+  
+  Typegen failures are reported and swallowed rather than aborting: a typegen
+  problem must not masquerade as a type error, and must not stop the check that
+  was asked for. `--no-typegen` skips the refresh for a caller that has just run
+  typegen itself.
+
+- [#594](https://github.com/forinda/kick-js/pull/594) [`9a18bf4`](https://github.com/forinda/kick-js/commit/9a18bf4c0c03b6a07b15e62923db9d19aa750e05) Thanks [@forinda](https://github.com/forinda)! - `helmet()` options were half-inert, because the framework injected a second one.
+  
+  `bootstrap()` auto-injects `helmet()` with defaults unless `security.helmet` is
+  `false`, and it did so **ahead of the user middleware array**. So an app that
+  declared its own `helmet(...)` ran two of them, and the second could only ever
+  overwrite a header — never drop one:
+  
+  ```ts
+  bootstrap({ middleware: [helmet({ frameguard: false })] })
+  // still: X-Frame-Options: DENY
+  ```
+  
+  Every `false` option behaves this way — `frameguard: false`, `hsts: false`,
+  `referrerPolicy: false`, `noSniff: false`. The option is accepted, type-checks,
+  and silently does nothing, because the auto-injected pass already set the header
+  and the user's pass merely declines to set it again. Disabling `frameguard` to
+  allow embedding is the case that bites: the app looks configured and is not.
+  
+  `helmet()` now brands its handler with `Symbol.for('kick/http/helmet')`, and
+  auto-injection stands down when it finds that brand in the declared middleware —
+  so a declared helmet is the only one, and its options mean what they say.
+  `security.helmet: false` still turns the automatic one off for an app that
+  declares nothing.
+  
+  Read through the registry rather than an import, so the Application keeps the
+  dynamic `import()` that lets the helmet module be absent.
+  
+  **The scaffolded template kept `helmet()`**, now with a comment saying what it is
+  for. Reported as a no-op in the `rest` template ([#569](https://github.com/forinda/kick-js/issues/569)) — accurately: it sets the
+  same headers the automatic one already set, so adding or removing that line
+  changed no response. The measurement was right and the conclusion would have been
+  wrong. It is not decoration, it is the configuration seam — and until this fix
+  it was a seam that did not work.
+  
+  Guarded by two tests: an explicit `frameguard: false` removes the header, and a
+  bare `helmet()` still emits exactly the same header set as none at all — the
+  second being the reporter's own observation, kept so the template's line stays
+  honest.
+
+- [#604](https://github.com/forinda/kick-js/pull/604) [`4687f65`](https://github.com/forinda/kick-js/commit/4687f656807d364a28207134262e274db0a9de6d) Thanks [@forinda](https://github.com/forinda)! - `kick new --packages` no longer advertises `auth`.
+  
+  The flag's help string read `(e.g. auth,swagger,ws,queue)`. `auth` was removed
+  from the catalog with the package, so the one example the flag gives is a name
+  that now fails.
+
+- [#563](https://github.com/forinda/kick-js/pull/563) [`cfda790`](https://github.com/forinda/kick-js/commit/cfda79054c70e352b4eb232e7a884d3a1809489d) Thanks [@forinda](https://github.com/forinda)! - Stop generated docs and `kick explain` from teaching the Express-only test
+  pattern.
+  
+  Every scaffolded sample drove `request(expressApp)`. The HTTP engine is
+  pluggable, so under Fastify or h3 that is the wrong object — and generated docs
+  are copied before anyone reads a guide, which propagates the pattern into
+  projects that never see the corrected documentation.
+  
+  The project docs the CLI writes, and the `kick explain` known-issue snippets,
+  now destructure `app` and drive `request(app.handle.bind(app))`, which follows
+  whichever runtime the app is configured with. A test pins every CLI-emitting
+  source so a sample cannot regress.
+  
+  Pairs with the `runtime` option on `createTestApp` in `@forinda/kickjs-testing`.
+
+- [#595](https://github.com/forinda/kick-js/pull/595) [`ddcd0ba`](https://github.com/forinda/kick-js/commit/ddcd0baf9827205d8070e84f4bbbaf2922969aae) Thanks [@forinda](https://github.com/forinda)! - `middleware` is gone; the option is `middlewares`.
+  
+  `bootstrap()` took both — `middlewares` as the real name and `middleware` as a
+  deprecated alias, with the plural winning when both were set. The alias has
+  carried a `@deprecated` tag for several releases, and v8 is the window to drop
+  it, so there is one name for one thing:
+  
+  ```ts
+  bootstrap({
+    modules,
+    middlewares: [helmet(), cors(), requestId()],
+  })
+  ```
+  
+  The rename is mechanical and the compiler finds every site: `middleware` is no
+  longer a key on `ApplicationOptions`, so passing it is a type error rather than
+  a silently ignored object.
+  
+  Renamed in the same place, for the same reason:
+  
+  - **`createTestApp({ middlewares })`** — the harness passes the option straight
+    through to `bootstrap()`, and a test harness whose option name disagreed with
+    the thing it configures is the inconsistency this change exists to remove.
+    This is why `@forinda/kickjs-testing` takes a major too.
+  - **`createWebApp({ middlewares })`** — the web/edge entry had its own
+    `middleware`, ctx-style rather than connect-style, but the same name.
+  
+  **`AppAdapter.middleware()` and `Plugin.middleware()` are unchanged.** They are a
+  different API — a hook returning entries, not an option taking them — and
+  nothing about them was ambiguous.
+  
+  Generated projects emit `middlewares` from the CLI's `rest` template.
+- Updated dependencies [[`5614f7e`](https://github.com/forinda/kick-js/commit/5614f7e02a57bcd75e5145af2adb8df48cfd1742), [`6c2121f`](https://github.com/forinda/kick-js/commit/6c2121f1fa7c90b3841459a168745b9651f7d137), [`6b0bb1e`](https://github.com/forinda/kick-js/commit/6b0bb1e79184d2bec1534a2eb334a1e21a9ac14f), [`494e94b`](https://github.com/forinda/kick-js/commit/494e94b7615f5352992c7f31ef02845e9d4f68fc), [`9a18bf4`](https://github.com/forinda/kick-js/commit/9a18bf4c0c03b6a07b15e62923db9d19aa750e05), [`76b56da`](https://github.com/forinda/kick-js/commit/76b56da564ad08a6e570210f0ff631948e9bc475), [`f21f01c`](https://github.com/forinda/kick-js/commit/f21f01c1466ef2de9ac2e7e32a209726e143263d), [`dc14396`](https://github.com/forinda/kick-js/commit/dc14396c1dab62967ff97e81304546411af09d9b), [`2e6f981`](https://github.com/forinda/kick-js/commit/2e6f981cd6d79900970c0d6033d0b563d04beaa0), [`62c55ff`](https://github.com/forinda/kick-js/commit/62c55ffe3dba4404ee3f517ecee028ad53317e86), [`9d160a9`](https://github.com/forinda/kick-js/commit/9d160a919d42be3437a5d0bb22ae62097e525588), [`ddcd0ba`](https://github.com/forinda/kick-js/commit/ddcd0baf9827205d8070e84f4bbbaf2922969aae), [`168f4cf`](https://github.com/forinda/kick-js/commit/168f4cfa4d93022be142dacb87e4efeabeafbd02)]:
+  - @forinda/kickjs@8.0.0
+  - @forinda/kickjs-db@7.2.1
+
 ## 7.1.1
 
 ### Patch Changes

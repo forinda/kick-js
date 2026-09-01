@@ -1,6 +1,6 @@
 {
   "name": "@forinda/kickjs-grpc",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Connect RPC transport for KickJS — gRPC, gRPC-Web, and Connect protocol served from your existing app, with decorators, DI, and Context Contributors",
   "keywords": [
     "kickjs",
