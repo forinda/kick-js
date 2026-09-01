@@ -9,7 +9,9 @@ pnpm add @forinda/kickjs@8
 ```
 
 ::: tip All three go to 8
-Versions are per-package and independent, but this release bumps all three together — `@forinda/kickjs`, `@forinda/kickjs-testing` and `@forinda/kickjs-cli` are each **8.0.0**. The harness renames an option alongside the framework; the CLI drops three `kick add` entries.
+Versions are per-package and independent, but the three you install directly bump together — `@forinda/kickjs`, `@forinda/kickjs-testing` and `@forinda/kickjs-cli` are each **8.0.0**. The harness renames an option alongside the framework; the CLI drops three `kick add` entries.
+
+Other packages move on their own numbers in the same release and need nothing from you: `-devtools` 7.1.2, `-devtools-kit` 7.0.2, `-grpc` 0.1.1, `-mcp` 7.0.2, `-queue` 7.0.2, `-schema` 0.1.4, `-swagger` 7.1.1. Upgrade any you use with `@latest`.
 
 ```bash
 pnpm add -D @forinda/kickjs-testing@8 @forinda/kickjs-cli@8
@@ -28,6 +30,7 @@ pnpm add -D @forinda/kickjs-testing@8 @forinda/kickjs-cli@8
 | Health probes moved inside the middleware chain | Apps with global auth       | Exempt the path, or `health: false`                 |
 | `/health/ready` answers instead of 500          | Fastify / h3                | None — the probe was permanently failing            |
 | Malformed body answers 400                      | h3 only                     | None — it was answering 200                         |
+| `./web` entry answers 400 for a malformed body  | Edge / Bun / Deno           | None — it was answering 200                         |
 | Rejected upload answers 413/415                 | Express only                | None — it was answering 500                         |
 | `csrf`, `rateLimit`, `session` now work         | Fastify / h3                | Re-test — they used to throw                        |
 | Forms, `+json` and `text/*` now parse           | Any app                     | Re-check handlers that guarded on `!ctx.body`       |
@@ -191,6 +194,18 @@ Worse than the wrong status: the client was told it succeeded, and a create endp
 
 An h3 app that was silently accepting bad payloads will start rejecting them. That is the fix.
 
+### The `./web` entry answered 200 for a malformed body
+
+`h3WebRuntime` — the entry for edge, Bun and Deno — read JSON with
+`request.json().catch(() => undefined)`, which cannot tell an **absent** body
+from an **unparseable** one. Broken JSON produced a `200` with the handler
+running against `undefined`.
+
+It is the same defect fixed for the node h3 runtime above; that fix did not
+reach here, because the web entry has its own body-reading path. If you deploy
+to an edge runtime, this is the fix most likely to change what your app does:
+requests you were silently accepting now answer 400.
+
 ### Express: a rejected upload answered 500
 
 `@FileUpload` enforces `maxSize` and `allowedTypes` through a different backend per engine, and only two of the three reported a violation as the client's:
@@ -309,6 +324,8 @@ A _configurable_ module still refuses the bare form, because there the two are n
 
 **`createTestApp` runs the engine you deploy** (`@forinda/kickjs-testing`). The harness hardcoded Express, so a project running Fastify or h3 in production had its whole suite passing against a different engine — and routing, body parsing, status handling and error mapping all live in the runtime seam.
 
+It also no longer names its own middleware list, so a test app now gets the Application's real defaults — including the body-parsing policy above. Previously a test app parsed only `application/json` while the same app in production parsed the full set, so the harness was quietly exercising a different pipeline. **A test that posts an unusual content type will now see the same 415 your users would.**
+
 ```ts
 import { fastifyRuntime } from '@forinda/kickjs/fastify'
 
@@ -327,7 +344,7 @@ const { app } = await createTestApp({
 })
 ```
 
-## CLI (`@forinda/kickjs-cli` 7.2)
+## CLI (`@forinda/kickjs-cli` 8.0)
 
 - **The generated repository is one file.** `<module>.repository.ts` now holds the factory, the contract (`ReturnType` of the factory) and the token. Previously three files, with the store name baked into the class — `PostgresAuditRepository` whose every method read and wrote a `Map`. The store is gone from the generated names, so an in-memory body is honest and the TODO says what to swap in.
 - **`modules.repo` in `kick.config.ts` is deprecated.** It only ever selected a name for the lie above. Remove it; the generator no longer needs it.
