@@ -17,6 +17,8 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createRequire } from 'node:module'
 
+import { HttpException } from '../../core/errors'
+import { unsupportedMediaTypeError } from '../body-policy'
 import { RequestContext } from '../context'
 import { applyHandlerResult } from '../reply'
 import { requestStore } from '../request-store'
@@ -293,6 +295,61 @@ export function fastifyRuntime(): HttpRuntime<FastifyAppLike> {
         [QUEUE]?: Array<{ mw: ConnectMiddleware; opts?: UseConnectOptions }>
       }
       app[QUEUE] = []
+
+      // Fastify ships parsers for `application/json` and `text/plain` only, and
+      // answers 415 for everything else. That made a form post work on Express
+      // and h3 but fail on Fastify alone (#590). Register the rest of the
+      // framework's supported set so all engines agree.
+      //
+      // Deliberately NOT a `'*'` catch-all: that would swallow multipart, and
+      // `@fastify/multipart` is itself the multipart content-type parser,
+      // registered conditionally in `nodeHandler` when a route needs it.
+      const addParser = app.addContentTypeParser?.bind(app)
+      if (addParser) {
+        // `application/*+json` — RFC 6838 §4.2.8 guarantees the bytes are JSON.
+        addParser(/^application\/[\w.+-]+\+json$/, { parseAs: 'string' }, (_req, body, done) => {
+          if (body === '') return done(null, undefined)
+          try {
+            done(null, JSON.parse(body as string))
+          } catch (err) {
+            // A bare SyntaxError carries no status, so the shared error handler
+            // would call it a 500 — Fastify's own JSON parser answers 400
+            // (FST_ERR_CTP_INVALID_JSON_BODY), and so must this one.
+            done(
+              HttpException.badRequest(
+                err instanceof Error ? err.message : 'Request body could not be parsed',
+              ),
+              undefined,
+            )
+          }
+        })
+        addParser(
+          'application/x-www-form-urlencoded',
+          { parseAs: 'string' },
+          (_req, body, done) => {
+            done(null, Object.fromEntries(new URLSearchParams(body as string)))
+          },
+        )
+        // `text/*` beyond Fastify's built-in `text/plain`. Raw string, never
+        // JSON: `text/plain` is CORS-safelisted, so parsing it as JSON would
+        // re-open no-preflight CSRF against a JSON API.
+        addParser(/^text\//, { parseAs: 'string' }, (_req, body, done) => {
+          done(null, body)
+        })
+        // Fastify already answers 415 for a type it has no parser for, but with
+        // its own message and no `Accept`. `'*'` is Fastify's documented
+        // fallback — consulted only when nothing more specific matches — so it
+        // does not shadow the parsers above, nor `@fastify/multipart`, which
+        // registers `multipart/form-data` when an upload route needs it.
+        addParser('*', { parseAs: 'string' }, (req, body, done) => {
+          // No body is not an unsupported body. Fastify calls the parser even
+          // for an empty payload, so without this a bodyless POST carrying an
+          // unrelated content type would be rejected.
+          if (!body) return done(null, undefined)
+          done(unsupportedMediaTypeError(req.headers?.['content-type']), undefined)
+        })
+      }
+
       return app
     },
 
