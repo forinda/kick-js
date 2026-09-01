@@ -19,6 +19,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createRequire } from 'node:module'
 
+import { classifyMediaType } from '../body-policy'
 import { RequestContext } from '../context'
 import { applyHandlerResult } from '../reply'
 import { requestStore } from '../request-store'
@@ -128,7 +129,7 @@ function resDriver(res: ServerResponse): RuntimeResponse {
 
 /** Build the h3 event handler that runs the kickjs pipeline for one route. */
 function makeEventHandler(entry: RouteEntry): (event: H3EventLike) => Promise<void> {
-  const { getRouterParams, getQuery, readBody, readMultipartFormData } = h3()
+  const { getRouterParams, getQuery, readRawBody, readMultipartFormData } = h3()
   const upload = entry.meta.upload
   // Validation middleware built ONCE per route (parity with Express) — calling
   // validate() per request re-allocated the closure every time.
@@ -181,22 +182,29 @@ function makeEventHandler(entry: RouteEntry): (event: H3EventLike) => Promise<vo
       const { 'content-length': length, 'transfer-encoding': encoding } = req.headers
       const sentBody = encoding !== undefined || (length !== undefined && length !== '0')
       if (sentBody) {
-        try {
-          // `readBody` matches `application/json` EXACTLY, so
-          // `application/json; charset=utf-8` — what most clients actually send
-          // — fell to its catch-all branch and parsed non-strictly, handing the
-          // handler a raw string for malformed JSON instead of throwing. Decide
-          // on the normalised media type and ask for strict parsing ourselves.
-          // Only `application/json` — the type h3 itself special-cases. Widening
-          // this to `+json` would make h3 stricter than Express, which does not
-          // parse those at all: a different divergence, not a fix.
-          const mediaType = (req.headers['content-type'] ?? '').split(';')[0].trim().toLowerCase()
-          const strict = mediaType === 'application/json'
-          req.body = await readBody(event, strict ? { strict: true } : {})
-        } catch (err) {
-          throw HttpException.badRequest(
-            err instanceof Error ? err.message : 'Request body could not be parsed',
-          )
+        // Read raw and apply the shared policy rather than calling `readBody`,
+        // whose own content-type dispatch is the source of the divergence:
+        // it matches `application/json` with `===` (so `; charset=utf-8` misses)
+        // and routes everything unrecognised through `destr`, which returns the
+        // RAW STRING for malformed input instead of throwing (#590).
+        const kind = classifyMediaType(req.headers['content-type'])
+        if (kind !== 'unsupported' && kind !== 'multipart') {
+          const raw = await readRawBody(event, 'utf8')
+          if (raw) {
+            if (kind === 'json') {
+              try {
+                req.body = JSON.parse(raw)
+              } catch (err) {
+                throw HttpException.badRequest(
+                  err instanceof Error ? err.message : 'Request body could not be parsed',
+                )
+              }
+            } else if (kind === 'urlencoded') {
+              req.body = Object.fromEntries(new URLSearchParams(raw))
+            } else {
+              req.body = raw
+            }
+          }
         }
       }
     }

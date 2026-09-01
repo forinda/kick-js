@@ -30,6 +30,7 @@ import {
   runDisposables,
 } from '../core/disposables'
 import { getClassMeta } from '../core/metadata'
+import { EXPRESS_JSON_TYPES } from './body-policy'
 import { requestId } from './middleware/request-id'
 import { notFoundHandler, errorHandler, type MountedRoute } from './middleware/error-handler'
 import { requestScopeMiddleware, isRequestScopeMiddleware } from './middleware/request-scope'
@@ -761,7 +762,16 @@ export class Application {
       // Skip express.json on engines that parse bodies natively (Fastify, h3) —
       // otherwise the body stream is read twice and the engine's parser hangs.
       if (!this.runtime.capabilities.nativeBodyParsing) {
-        this.runtime.useConnect(this.app, express.json({ limit: this.options.jsonLimit ?? '1mb' }))
+        const limit = this.options.jsonLimit ?? '1mb'
+        // EXPRESS_JSON_TYPES, not the default: `express.json()` matches the
+        // exact string `application/json`, so `application/merge-patch+json`
+        // arrived unparsed while Fastify answered 415 and h3 parsed it (#590).
+        this.runtime.useConnect(this.app, express.json({ limit, type: [...EXPRESS_JSON_TYPES] }))
+        // Forms and text were parsed by h3 and rejected by Fastify; on Express
+        // they reached the handler as `undefined`, because the engine parsed
+        // only what its middleware list happened to cover.
+        this.runtime.useConnect(this.app, express.urlencoded({ extended: true, limit }))
+        this.runtime.useConnect(this.app, express.text({ limit, type: 'text/*' }))
       }
     }
 

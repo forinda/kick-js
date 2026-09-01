@@ -30,6 +30,7 @@ pnpm add -D @forinda/kickjs-testing@8 @forinda/kickjs-cli@8
 | Malformed body answers 400                      | h3 only                     | None — it was answering 200                         |
 | Rejected upload answers 413/415                 | Express only                | None — it was answering 500                         |
 | `csrf`, `rateLimit`, `session` now work         | Fastify / h3                | Re-test — they used to throw                        |
+| Forms, `+json` and `text/*` now parse           | Any app                     | Re-check handlers that guarded on `!ctx.body`       |
 | `helmet()` options now take effect              | Apps passing helmet options | Re-check which security headers you send            |
 | `@PreDestroy` on a singleton warns              | Any app                     | Move teardown to an adapter `shutdown()`            |
 
@@ -214,6 +215,31 @@ Connect middleware receives an Express response under Express and a raw `ServerR
 `csrf` had a second problem on every runtime: it read the token from `req.cookies`, which only an upstream cookie parser populates. It could not see the cookie it had just issued, so **the double-submit flow could never succeed anywhere**. Cookies are now read through a shared helper that falls back to parsing the `Cookie` header.
 
 If you mounted any of these on Fastify or h3, they now do what they always claimed to. Re-run the suites that were passing around them.
+
+### Bodies parse the same way on every runtime
+
+Each engine used to bring its own library's opinion about content types, so the same request produced three different results:
+
+| body sent                           | v7 Express  | v7 Fastify | v7 h3          | v8, all three      |
+| ----------------------------------- | ----------- | ---------- | -------------- | ------------------ |
+| `application/x-www-form-urlencoded` | `undefined` | **415**    | parsed         | **parsed**         |
+| `application/merge-patch+json`      | `undefined` | **415**    | parsed         | **parsed as JSON** |
+| malformed `+json`                   | `undefined` | 415        | **raw string** | **400**            |
+| `text/plain`                        | `undefined` | `'hello'`  | `'hello'`      | **`'hello'`**      |
+
+That made `bootstrap({ runtime })` not actually swappable for any app accepting a body outside `application/json` — moving Express → Fastify turned every form post into a 415.
+
+The framework now decides in one place. `application/json` and `application/*+json` parse strictly; `application/x-www-form-urlencoded` parses to an object; `text/*` arrives as a **raw string**; `multipart/*` continues through the upload path.
+
+`+json` is not a liberty: RFC 6838 §4.2.8 says a media type "MUST NOT" carry a structured-syntax suffix it does not actually use, and RFC 6839 §2 exists so receivers can generically parse it. Spring, ASP.NET Core and Hono do the same. It also means the framework can finally read back the `application/problem+json` it emits.
+
+::: warning `text/*` is never JSON-parsed, deliberately
+`text/plain` is one of three CORS-safelisted content types — it crosses origins **without a preflight**. JSON-parsing it would re-open the simple-request CSRF that requiring `application/json` closes. If a client sends JSON as `text/plain` (which `fetch(url, { body: JSON.stringify(x) })` does when you set no headers), fix the client's `Content-Type`.
+:::
+
+**What to re-check:** handlers that treated `!ctx.body` as "no form data" on Express, or relied on Fastify's 415 for forms. Both now receive a parsed body.
+
+Still divergent, and tracked in [#590](https://github.com/forinda/kick-js/issues/590): a content type **outside** that set — `application/xml`, say — is ignored on Express and h3 (`ctx.body` undefined) but still answered `415` by Fastify. Whether unsupported types should be ignored or rejected is an open decision.
 
 ### `helmet()` options were being ignored
 

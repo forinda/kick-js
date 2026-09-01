@@ -170,15 +170,15 @@ export async function createTestApp(options: CreateTestAppOptions): Promise<{
     port: options.port,
     apiPrefix: options.apiPrefix,
     defaultVersion: options.defaultVersion,
-    // Default to JSON body parsing only — but NOT on a runtime that parses
-    // bodies itself. Passing `express.json()` explicitly bypasses the
-    // Application's own native-body guard, and under Fastify the connect
-    // parser then consumes the stream before Fastify reads it: a JSON POST
-    // hangs until the test times out. `RuntimeCapabilities.nativeBodyParsing`
-    // is the same flag the Application guards on.
-    middlewares:
-      options.middlewares ??
-      (options.runtime?.capabilities.nativeBodyParsing ? [] : [express.json()]),
+    // Left undefined so the Application applies its OWN defaults, including
+    // the shared body-parsing policy (#590). Naming a middleware list here
+    // put the Application on its user-declared branch, so a test app parsed
+    // only `application/json` while the same app in production also parsed
+    // `+json`, forms and text — the harness quietly tested a different
+    // pipeline. The Application already guards on
+    // `RuntimeCapabilities.nativeBodyParsing`, which is what kept a connect
+    // parser off Fastify and h3.
+    middlewares: options.middlewares,
     onError: options.onError,
     onNotFound: options.onNotFound,
     plugins: options.plugins,

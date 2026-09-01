@@ -4,6 +4,7 @@
 // Edge-safe: no node imports beyond the sanctioned ALS request store.
 
 import { HttpException } from '../../core/errors'
+import { classifyMediaType } from '../body-policy'
 import { RequestContext } from '../context'
 import { applyHandlerResult } from '../reply'
 import { requestStore } from '../request-store'
@@ -119,8 +120,6 @@ export function compileWebRoute(
         req.body = fields
       }
     } else if (BODY_METHODS.has(request.method)) {
-      const contentType = req.headers['content-type'] ?? ''
-
       // Read once — a Request body is a stream and cannot be consumed twice.
       // A read that fails (client aborted mid-flight) is treated as an absent
       // body: there is nobody left to answer, and it is not a malformed one.
@@ -131,8 +130,9 @@ export function compileWebRoute(
       // whole point: `.catch(() => undefined)` around the parse could not,
       // so a malformed payload answered 200 with the handler running against
       // `undefined` (#605), the defect #586 removed from the node runtime.
-      if (raw !== '') {
-        if (contentType.includes('application/json')) {
+      const kind = classifyMediaType(req.headers['content-type'])
+      if (raw !== '' && kind !== 'unsupported' && kind !== 'multipart') {
+        if (kind === 'json') {
           try {
             req.body = JSON.parse(raw)
           } catch (err) {
@@ -143,9 +143,9 @@ export function compileWebRoute(
               err instanceof Error ? err.message : 'Request body could not be parsed',
             )
           }
-        } else if (contentType.includes('application/x-www-form-urlencoded')) {
+        } else if (kind === 'urlencoded') {
           req.body = Object.fromEntries(new URLSearchParams(raw))
-        } else if (contentType.startsWith('text/')) {
+        } else {
           req.body = raw
         }
       }
