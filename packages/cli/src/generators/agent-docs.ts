@@ -43,7 +43,7 @@ export interface GenerateAgentDocsOptions {
    *
    * - `agents`  → `.agents/AGENTS.md`
    * - `claude`  → `CLAUDE.md` (root; thin pointer to .agents/)
-   * - `skills`  → `.agents/kickjs-skills.md`
+   * - `skills`  → `.agents/skills/<slug>/SKILL.md` (one per skill)
    * - `gemini`  → `.agents/GEMINI.md`
    * - `copilot` → `.agents/COPILOT.md`
    * - `both`    → `.agents/AGENTS.md` + `CLAUDE.md` (legacy alias)

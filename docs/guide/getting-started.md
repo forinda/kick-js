@@ -26,13 +26,13 @@ This scaffolds a project with the **default layout** — every path below is a c
 - `src/modules/` — feature modules directory (configurable via `modules.dir`)
 - `vite.config.ts` — Vite config for HMR dev server
 - `kick.config.ts` — CLI configuration (optional)
-- `AGENTS.md` — canonical multi-agent reference (Claude, Copilot, Codex, Gemini, …) — conventions, patterns, gotchas
-- `CLAUDE.md` — thin Claude-specific layer that points at `AGENTS.md`
-- `kickjs-skills.md` — task-oriented skill index for AI agents (`add-module`, `bootstrap-export`, `deny-list`, …)
-
+- `.agents/AGENTS.md` — canonical multi-agent reference (Copilot, Codex, Gemini, …) — conventions, patterns, gotchas
+- `.agents/GEMINI.md`, `.agents/COPILOT.md` — per-agent context files
+- `.agents/skills/<slug>/SKILL.md` — one folder per task-oriented skill (`add-module`, `bootstrap-export`, `deny-list`, …), auto-discovered by agents that read skill frontmatter
+- `CLAUDE.md` — stays at the project root (Claude Code auto-loads it there); a thin pointer at `.agents/AGENTS.md`
 - `README.md` — project documentation
 
-After a framework upgrade, refresh the three agent files with `kick g agents -f` (see [Generators → kick g agents](./generators.md#kick-g-agents)).
+After a framework upgrade, refresh the agent files with `kick g agents -f` (see [Generators → kick g agents](./generators.md#kick-g-agents)).
 
 ## Start Development
 

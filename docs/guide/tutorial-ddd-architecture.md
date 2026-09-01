@@ -7,11 +7,11 @@ _Part of "Building a Jira Clone with KickJS"_
 A real app has many feature modules — tasks, projects, comments, users — and they all
 benefit from following the same shape. KickJS's generators scaffold that shape for you:
 a **flat REST module** where a controller delegates to a service, the service depends on a
-repository _interface_, and a concrete repository implementation is wired in via a DI token.
+repository _contract_, and the concrete repository is wired in via a DI token.
 
 This article walks through that layout end to end. We'll scaffold a `task` module, read
 every file the generator emits, trace the dependency flow, then swap the default in-memory
-repository for a real database implementation — without touching the controller or service.
+store for a real database — without touching the controller or service.
 
 ## The Module Structure
 
@@ -25,8 +25,7 @@ src/modules/tasks/
 ├── task.controller.ts          # HTTP endpoints (CRUD)
 ├── task.service.ts             # Business logic
 ├── task.constants.ts           # Query config (filter/sort/search fields)
-├── task.repository.ts          # Repository INTERFACE + DI token
-├── in-memory-task.repository.ts # Default repository implementation (a Map)
+├── task.repository.ts          # Repository: factory, derived contract, DI token
 ├── dtos/
 │   ├── create-task.dto.ts      # Zod schema + Create DTO type
 │   ├── update-task.dto.ts      # Zod schema + Update DTO type
@@ -46,11 +45,15 @@ it maps cleanly onto three responsibilities, top to bottom:
 The golden rule that keeps these honest: **each layer depends only on the layer directly
 below it, and the repository is consumed through an interface — never a concrete class.**
 
-::: tip Why "program to an interface"?
-The service depends on `ITaskRepository`, not on `InMemoryTaskRepository`. That single
-indirection is what lets you start with a zero-dependency in-memory store and later drop in
-a real database (e.g. `@forinda/kickjs-db`) without editing a line of the controller or
-service. We'll do exactly that at the end of this guide.
+::: tip Why "program to a contract"?
+The service depends on the `TaskRepository` type and the `TASK_REPOSITORY` token — never on a
+particular store. That single indirection is what lets you start with a zero-dependency
+in-memory store and later drop in a real database (e.g. `@forinda/kickjs-db`) without editing
+a line of the controller or service. We'll do exactly that at the end of this guide.
+
+Note the contract is _derived_, not declared: `type TaskRepository = ReturnType<typeof
+createTaskRepository>`. There is no hand-written interface to keep in step with the
+implementation, so the two cannot drift apart.
 :::
 
 ## Scaffolding a Module
@@ -92,18 +95,19 @@ implementation in `register()` and declares the route prefix in `routes()`:
 ```ts
 // src/modules/tasks/task.module.ts
 import { defineModule } from '@forinda/kickjs'
-import { TASK_REPOSITORY } from './task.repository'
-import { InMemoryTaskRepository } from './in-memory-task.repository'
+import { TASK_REPOSITORY, createTaskRepository } from './task.repository'
 import { TaskController } from './task.controller'
 
-// Eagerly load decorated classes so @Service()/@Repository() decorators register in the DI container
-import.meta.glob(['./**/*.service.ts', './**/*.repository.ts', '!./**/*.test.ts'], { eager: true })
+// Eagerly load every module file so decorators (@Controller / @Service, and anything you
+// add) register in the DI container. The glob is deliberately broad — a suffix list missed
+// hand-written *.usecase.ts / *.policy.ts files, which then failed as `No provider for X`.
+import.meta.glob(['./**/*.ts', '!./**/*.test.ts', '!./**/*.d.ts'], { eager: true })
 
 export const TaskModule = defineModule({
   name: 'TaskModule',
   build: () => ({
     register(container) {
-      container.registerFactory(TASK_REPOSITORY, () => container.resolve(InMemoryTaskRepository))
+      container.registerFactory(TASK_REPOSITORY, () => createTaskRepository())
     },
 
     routes() {
@@ -117,8 +121,8 @@ export const TaskModule = defineModule({
 ```
 
 The `registerFactory(TASK_REPOSITORY, …)` line is the single place that says "when something
-asks for the task repository interface, hand it the in-memory implementation." This is the
-**only** line you change to swap databases.
+asks for the task repository, call this factory." This is the **only** line you change to
+point at a different store.
 
 ### The controller — HTTP in, service calls out
 
@@ -198,20 +202,20 @@ A few things worth noting:
 ### The service — business logic, depends on the interface
 
 `task.service.ts` is where logic lives. Crucially, it injects the repository through the
-**token + interface**, never the concrete class:
+**token + derived contract**, never a concrete store:
 
 ```ts
 // src/modules/tasks/task.service.ts
 import { Service, Inject } from '@forinda/kickjs'
 import type { ParsedQuery } from '@forinda/kickjs'
-import { TASK_REPOSITORY, type ITaskRepository } from './task.repository'
+import { TASK_REPOSITORY, type TaskRepository } from './task.repository'
 import type { TaskResponseDTO } from './dtos/task-response.dto'
 import type { CreateTaskDTO } from './dtos/create-task.dto'
 import type { UpdateTaskDTO } from './dtos/update-task.dto'
 
 @Service()
 export class TaskService {
-  constructor(@Inject(TASK_REPOSITORY) private readonly repo: ITaskRepository) {}
+  constructor(@Inject(TASK_REPOSITORY) private readonly repo: TaskRepository) {}
 
   async findById(id: string): Promise<TaskResponseDTO | null> {
     return this.repo.findById(id)
@@ -244,113 +248,96 @@ where you add real logic: derived fields, authorization checks, cross-entity coo
 transactions. The point is that all of it lives _here_, behind a stable interface, not in the
 controller and not in the database layer.
 
-### The repository interface + DI token
+### The repository — factory, contract, and DI token in one file
 
-`task.repository.ts` defines **what** data operations exist, with no hint of **how**. It also
-exports the DI token that binds the interface to its implementation:
+`task.repository.ts` is a single file holding three things: a **factory** that builds the
+store, the **contract** derived from that factory's return type, and the **DI token** typed
+by the contract. There is no separate interface file and no second implementation file:
 
 ```ts
 // src/modules/tasks/task.repository.ts
-import { createToken } from '@forinda/kickjs'
+import { randomUUID } from 'node:crypto'
+import { createToken, HttpException } from '@forinda/kickjs'
 import type { ParsedQuery } from '@forinda/kickjs'
 import type { TaskResponseDTO } from './dtos/task-response.dto'
 import type { CreateTaskDTO } from './dtos/create-task.dto'
 import type { UpdateTaskDTO } from './dtos/update-task.dto'
 
-export interface ITaskRepository {
-  findById(id: string): Promise<TaskResponseDTO | null>
-  findAll(): Promise<TaskResponseDTO[]>
-  findPaginated(parsed: ParsedQuery): Promise<{ data: TaskResponseDTO[]; total: number }>
-  create(dto: CreateTaskDTO): Promise<TaskResponseDTO>
-  update(id: string, dto: UpdateTaskDTO): Promise<TaskResponseDTO>
-  delete(id: string): Promise<void>
+export function createTaskRepository() {
+  const store = new Map<string, TaskResponseDTO>()
+
+  return {
+    async findById(id: string): Promise<TaskResponseDTO | null> {
+      return store.get(id) ?? null
+    },
+
+    async findAll(): Promise<TaskResponseDTO[]> {
+      return [...store.values()]
+    },
+
+    async findPaginated(parsed: ParsedQuery): Promise<{ data: TaskResponseDTO[]; total: number }> {
+      const all = [...store.values()]
+      const { offset, limit } = parsed.pagination
+      return { data: all.slice(offset, offset + limit), total: all.length }
+    },
+
+    async create(dto: CreateTaskDTO): Promise<TaskResponseDTO> {
+      const now = new Date().toISOString()
+      const entity = { id: randomUUID(), ...dto, createdAt: now, updatedAt: now } as TaskResponseDTO
+      store.set(entity.id, entity)
+      return entity
+    },
+
+    async update(id: string, dto: UpdateTaskDTO): Promise<TaskResponseDTO> {
+      const existing = store.get(id)
+      if (!existing) throw HttpException.notFound('Task not found')
+      const updated = { ...existing, ...dto, updatedAt: new Date().toISOString() }
+      store.set(id, updated)
+      return updated
+    },
+
+    async delete(id: string): Promise<void> {
+      if (!store.has(id)) throw HttpException.notFound('Task not found')
+      store.delete(id)
+    },
+  }
 }
 
-// Collision-safe DI token bound to `ITaskRepository`.
-// `container.resolve(TASK_REPOSITORY)` and `@Inject(TASK_REPOSITORY)`
-// both return the typed interface — no manual generic, no `any` cast.
-export const TASK_REPOSITORY = createToken<ITaskRepository>('app/Task/repository')
+/** The contract, derived from the factory rather than declared beside it. */
+export type TaskRepository = ReturnType<typeof createTaskRepository>
+
+/** Collision-safe DI token bound to `TaskRepository`. */
+export const TASK_REPOSITORY = createToken<TaskRepository>('app/Task/repository')
 ```
 
-`createToken<T>` returns a frozen, reference-identified token that carries its type
-parameter. That's what makes `@Inject(TASK_REPOSITORY) repo: ITaskRepository` type-safe with
-no cast, and what prevents the classic "two `Symbol('TaskRepository')` calls produce two
-different symbols" bug. See [Dependency Injection](./dependency-injection.md) for the full
-token hierarchy (class identity → `createToken<T>` → symbol → raw string).
+Three things are worth pausing on.
 
-::: tip One token per interface
-The generator declares exactly one token per repository interface and exports it from the
-same file. Import that token everywhere you need the repository — never declare a parallel
+**The contract is derived.** `TaskRepository` is `ReturnType<typeof createTaskRepository>`, so
+the implementation and its type cannot drift — there is no hand-written interface to forget to
+update. Consumers still program against a name (`TaskRepository`), they just never maintain it.
+
+**It is a closure, not a class.** `store` is private because it is a local variable, not
+because a keyword says so, and each `createTaskRepository()` call gets a fresh one. That is
+what makes the repository trivial to instantiate in a test.
+
+**It always works as generated.** Even with `--repo postgres`, the body ships backed by a
+`Map`. An earlier generation named that file `PostgresTaskRepository` while it was really a
+`Map` — a name asserting a technology it did not implement, which an app could boot and smoke-test
+on. With the store out of the name, an in-memory body is honest: this is the repository,
+currently in memory, and the file's TODO says what to swap in.
+
+`createToken<T>` returns a frozen, reference-identified token that carries its type parameter.
+That's what makes `@Inject(TASK_REPOSITORY) repo: TaskRepository` type-safe with no cast, and
+what prevents the classic "two `Symbol('TaskRepository')` calls produce two different symbols"
+bug. See [Dependency Injection](./dependency-injection.md) for the full token hierarchy (class
+identity → `createToken<T>` → symbol → raw string).
+
+::: tip One token per repository
+The generator declares exactly one token per repository and exports it from the same file as
+the factory. Import that token everywhere you need the repository — never declare a parallel
 `Symbol()` or a centralized `TOKENS` map. A single source of truth is what keeps the binding
 unambiguous across HMR reloads and cross-module injection.
 :::
-
-### The in-memory implementation — the default
-
-`in-memory-task.repository.ts` fulfills the contract with a plain `Map`. It carries zero
-dependencies, so a freshly scaffolded module runs and passes its tests immediately:
-
-```ts
-// src/modules/tasks/in-memory-task.repository.ts
-import { randomUUID } from 'node:crypto'
-import { Repository, HttpException } from '@forinda/kickjs'
-import type { ParsedQuery } from '@forinda/kickjs'
-import type { ITaskRepository } from './task.repository'
-import type { TaskResponseDTO } from './dtos/task-response.dto'
-import type { CreateTaskDTO } from './dtos/create-task.dto'
-import type { UpdateTaskDTO } from './dtos/update-task.dto'
-
-@Repository()
-export class InMemoryTaskRepository implements ITaskRepository {
-  private store = new Map<string, TaskResponseDTO>()
-
-  async findById(id: string): Promise<TaskResponseDTO | null> {
-    return this.store.get(id) ?? null
-  }
-
-  async findAll(): Promise<TaskResponseDTO[]> {
-    return Array.from(this.store.values())
-  }
-
-  async findPaginated(parsed: ParsedQuery): Promise<{ data: TaskResponseDTO[]; total: number }> {
-    const all = Array.from(this.store.values())
-    const data = all.slice(
-      parsed.pagination.offset,
-      parsed.pagination.offset + parsed.pagination.limit,
-    )
-    return { data, total: all.length }
-  }
-
-  async create(dto: CreateTaskDTO): Promise<TaskResponseDTO> {
-    const now = new Date().toISOString()
-    const entity: TaskResponseDTO = {
-      id: randomUUID(),
-      ...dto,
-      createdAt: now,
-      updatedAt: now,
-    }
-    this.store.set(entity.id, entity)
-    return entity
-  }
-
-  async update(id: string, dto: UpdateTaskDTO): Promise<TaskResponseDTO> {
-    const existing = this.store.get(id)
-    if (!existing) throw HttpException.notFound('Task not found')
-    const updated = { ...existing, ...dto, updatedAt: new Date().toISOString() }
-    this.store.set(id, updated)
-    return updated
-  }
-
-  async delete(id: string): Promise<void> {
-    if (!this.store.has(id)) throw HttpException.notFound('Task not found')
-    this.store.delete(id)
-  }
-}
-```
-
-`@Repository()` registers the class in the DI container as a singleton (it's semantically the
-same as `@Service()`, just clearer about intent). The module's `register()` then routes the
-`TASK_REPOSITORY` token to this class.
 
 ### The DTOs — request and response shapes
 
@@ -423,92 +410,105 @@ Put the pieces together and the direction of dependency is strictly one-way:
 HTTP request
    │
    ▼
-TaskController        depends on →  TaskService           (concrete class, @Autowired)
+TaskController        depends on →  TaskService          (concrete class, @Autowired)
    │
    ▼
-TaskService           depends on →  ITaskRepository        (interface, via TASK_REPOSITORY token)
+TaskService           depends on →  TaskRepository       (derived contract, via TASK_REPOSITORY token)
    │
    ▼
-TASK_REPOSITORY  ──bound in module's register()──►  InMemoryTaskRepository  (implements ITaskRepository)
+TASK_REPOSITORY  ──bound in module's register()──►  createTaskRepository()  (currently a Map)
 ```
 
 The controller knows nothing about the database. The service knows nothing about _which_
-database — only the `ITaskRepository` contract. The single arrow that crosses into "how data
-is actually stored" is the `registerFactory` call in `task.module.ts`. That's the seam you
-exploit to swap implementations.
+database — only the `TaskRepository` contract. The single arrow that crosses into "how data is
+actually stored" is the `registerFactory` call in `task.module.ts`. That's the seam you exploit
+to swap implementations.
 
-## Swapping the In-Memory Repo for a Real Database
+## Swapping the In-Memory Store for a Real Database
 
 The in-memory store is perfect for prototyping and tests, but eventually you need persistence.
-Because everything above the repository depends on the _interface_, switching is a localized
-change. There are two steps.
+Because everything above the repository depends on the derived contract, switching is a
+localized change. There are two ways to do it.
 
-### 1. Write a new implementation of the same interface
+### Option 1 — replace the factory body
 
-Generate a custom stub by passing any database name as the repo. Anything other than
-`inmemory` scaffolds a generic custom repository file with TODOs:
-
-<PmCommand exec="kick g module task --repo postgres" />
-
-That writes `postgres-task.repository.ts` — a stub that already `implements ITaskRepository`
-and is decorated with `@Repository()`. Fill in the TODOs with your real client calls:
+The simplest path, and the one the generator's TODOs point at: keep one factory, swap what it
+returns.
 
 ```ts
-// src/modules/tasks/postgres-task.repository.ts
-import { Repository, HttpException } from '@forinda/kickjs'
+// src/modules/tasks/task.repository.ts
+import { createToken, HttpException } from '@forinda/kickjs'
 import type { ParsedQuery } from '@forinda/kickjs'
-import type { ITaskRepository } from './task.repository'
 import type { TaskResponseDTO } from './dtos/task-response.dto'
 import type { CreateTaskDTO } from './dtos/create-task.dto'
 import type { UpdateTaskDTO } from './dtos/update-task.dto'
 import { db } from '../../db' // your own client
 
-@Repository()
-export class PostgresTaskRepository implements ITaskRepository {
-  async findById(id: string): Promise<TaskResponseDTO | null> {
-    const row = await db.query('SELECT * FROM tasks WHERE id = $1', [id])
-    return row ?? null
-  }
+export function createTaskRepository() {
+  return {
+    async findById(id: string): Promise<TaskResponseDTO | null> {
+      const row = await db.query('SELECT * FROM tasks WHERE id = $1', [id])
+      return row ?? null
+    },
 
-  async findPaginated(parsed: ParsedQuery): Promise<{ data: TaskResponseDTO[]; total: number }> {
-    // Use parsed.pagination, parsed.filters, parsed.sort, parsed.search here
-    // ...
-    return { data, total }
-  }
+    async findPaginated(parsed: ParsedQuery): Promise<{ data: TaskResponseDTO[]; total: number }> {
+      // Use parsed.pagination, parsed.filters, parsed.sort, parsed.search here
+      // ...
+      return { data, total }
+    },
 
-  // ...create / update / delete, implementing the same contract
+    // ...findAll / create / update / delete
+  }
+}
+
+export type TaskRepository = ReturnType<typeof createTaskRepository>
+export const TASK_REPOSITORY = createToken<TaskRepository>('app/Task/repository')
+```
+
+Nothing else in the module changes: `task.module.ts` still calls `createTaskRepository()`, and
+the service still injects `TASK_REPOSITORY`.
+
+::: warning Keep the return-type annotations
+The contract is inferred from what the factory returns, so a method that loses its explicit
+`Promise<TaskResponseDTO>` annotation silently widens the contract instead of failing. Annotate
+every method's return type and the compiler catches drift at the call sites, exactly like a
+hand-written interface would.
+:::
+
+### Option 2 — a second factory, bound per environment
+
+When you want the fast in-memory store in tests and Postgres in production, write a second
+factory returning a compatible shape and pick between them in the module:
+
+```ts
+// src/modules/tasks/postgres-task.repository.ts
+import type { TaskRepository } from './task.repository'
+
+export function createPostgresTaskRepository(): TaskRepository {
+  return {
+    /* ...same shape, real queries... */
+  }
 }
 ```
 
-Because TypeScript checks `implements ITaskRepository`, you can't accidentally drift from the
-contract — a missing or mistyped method is a compile error.
-
-::: warning Implement the whole interface
-The new class must satisfy every method on `ITaskRepository`. The interface is your safety
-net: if a method's signature doesn't match, the build fails before runtime.
-:::
-
-### 2. Re-point the token in the module
-
-Change the one binding in `task.module.ts` to resolve the new class:
-
 ```ts
-// src/modules/tasks/task.module.ts
-import { PostgresTaskRepository } from './postgres-task.repository'
-
-// ...inside build().register(container):
-container.registerFactory(TASK_REPOSITORY, () => container.resolve(PostgresTaskRepository))
+// src/modules/tasks/task.module.ts — inside build().register(container):
+container.registerFactory(TASK_REPOSITORY, () =>
+  process.env.NODE_ENV === 'test' ? createTaskRepository() : createPostgresTaskRepository(),
+)
 ```
 
-That's it. The controller, service, DTOs, and query config are untouched. Every consumer that
-injects `TASK_REPOSITORY` now receives the Postgres-backed implementation. You can even keep
-both classes in the tree and switch per environment — in-memory for tests, Postgres for
-production.
+The explicit `: TaskRepository` return annotation is what makes this safe — a missing or
+mistyped method is a compile error in the new factory, not a surprise at runtime.
+
+Either way the controller, service, DTOs, and query config are untouched. Every consumer that
+injects `TASK_REPOSITORY` receives the new store.
 
 ::: tip Pick persistence by name
-`--repo inmemory` (the default) gives you the zero-dependency working impl; any other name
-(e.g. `--repo postgres`) gives you the generic stub above to wire to whatever client you
-prefer. For a first-party database layer, reach for `@forinda/kickjs-db`.
+`--repo inmemory` (the default) and any other name (e.g. `--repo postgres`) emit the **same
+single file** with the same working `Map` body — the store name only changes the prose and the
+TODO markers telling you what to wire in. For a first-party database layer, reach for
+`@forinda/kickjs-db`.
 :::
 
 ## Running and Testing
@@ -532,19 +532,19 @@ curl http://localhost:3000/api/v1/tasks
 curl http://localhost:3000/api/v1/tasks/<id>
 ```
 
-The scaffolded tests (generated by `kick g module`) exercise the repository directly against
-the in-memory implementation — no HTTP, no database, fast to run:
+The scaffolded tests (generated by `kick g module`, unless you passed `--no-tests`) exercise
+the repository directly through its factory — no HTTP, no database, fast to run:
 
 ```ts
 // src/modules/tasks/__tests__/task.repository.test.ts (excerpt)
 import { describe, it, expect, beforeEach } from 'vitest'
-import { InMemoryTaskRepository } from '../in-memory-task.repository'
+import { createTaskRepository, type TaskRepository } from '../task.repository'
 
-describe('InMemoryTaskRepository', () => {
-  let repo: InMemoryTaskRepository
+describe('Task repository', () => {
+  let repo: TaskRepository
 
   beforeEach(() => {
-    repo = new InMemoryTaskRepository()
+    repo = createTaskRepository() // fresh Map per test — no shared state
   })
 
   it('should create and retrieve a task', async () => {
@@ -561,8 +561,8 @@ Run the suite:
 pnpm test
 ```
 
-Because the repository is just a class implementing an interface, you can unit-test it in
-isolation, and you can hand a fresh `InMemoryTaskRepository` to a service in a test without
+Because the repository is just a function returning an object, you can unit-test it in
+isolation, and you can hand a fresh `createTaskRepository()` to a service in a test without
 spinning up a database — the same indirection that lets you swap Postgres in production lets
 you swap the fast in-memory store in tests.
 

@@ -503,7 +503,7 @@ kick g guard admin
 kick g adapter websocket
 kick g dto create-user
 kick g config
-kick g agents -f                 # Refresh AGENTS.md / CLAUDE.md / kickjs-skills.md
+kick g agents -f                 # Refresh .agents/* + CLAUDE.md
 ```
 
 ### kick g scaffold
@@ -568,15 +568,17 @@ If `kick.config.ts` already exists, the CLI prompts for confirmation before over
 
 ### kick g agents
 
-Regenerate the AI-agent documentation trio (`AGENTS.md`, `CLAUDE.md`, `kickjs-skills.md`) from the latest CLI templates. Use after a KickJS upgrade to pull in new conventions and gotchas without copy-pasting between projects.
+Regenerate the AI-agent documentation from the latest CLI templates: `.agents/AGENTS.md`, `.agents/GEMINI.md`, `.agents/COPILOT.md`, one `.agents/skills/<slug>/SKILL.md` per skill, and `CLAUDE.md` at the project root. Use after a KickJS upgrade to pull in new conventions and gotchas without copy-pasting between projects.
 
 ```bash
-kick g agents                      # All three (prompts before overwrite)
-kick g agents -f                   # All three, no prompt
-kick g agents -f --only skills     # Just kickjs-skills.md
+kick g agents                      # Everything (prompts before overwrite)
+kick g agents -f                   # Everything, no prompt
+kick g agents -f --only skills     # Just .agents/skills/<slug>/SKILL.md
 kick g agents -f --only claude     # Just CLAUDE.md
-kick g agents -f --only agents     # Just AGENTS.md
-kick g agents -f --only both       # AGENTS.md + CLAUDE.md (skip skills)
+kick g agents -f --only agents     # Just .agents/AGENTS.md
+kick g agents -f --only gemini     # Just .agents/GEMINI.md
+kick g agents -f --only copilot    # Just .agents/COPILOT.md
+kick g agents -f --only both       # .agents/AGENTS.md + CLAUDE.md (skip skills)
 ```
 
 Aliases: `kick g agent-docs`, `kick g ai-docs`. Auto-detects project name (from `package.json`), package manager (corepack `packageManager` field), and template (from `kick.config.ts` `pattern`).
