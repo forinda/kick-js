@@ -127,8 +127,14 @@ function resDriver(res: ServerResponse): RuntimeResponse {
   return new NodeResDriver(res) as unknown as RuntimeResponse
 }
 
+/** Carries `trustProxy` from createApp() to the per-route handlers. */
+const TRUST_PROXY = Symbol('kickjs.h3.trustProxy')
+
 /** Build the h3 event handler that runs the kickjs pipeline for one route. */
-function makeEventHandler(entry: RouteEntry): (event: H3EventLike) => Promise<void> {
+function makeEventHandler(
+  entry: RouteEntry,
+  trustProxy: boolean,
+): (event: H3EventLike) => Promise<void> {
   const { getRouterParams, getQuery, readRawBody, readMultipartFormData } = h3()
   const upload = entry.meta.upload
   // Validation middleware built ONCE per route (parity with Express) — calling
@@ -144,6 +150,19 @@ function makeEventHandler(entry: RouteEntry): (event: H3EventLike) => Promise<vo
       files?: unknown
     }
     const res = event.node.res
+
+    // h3 computes no client address of its own, so `resolveClientIp` fell
+    // straight through to the socket — which behind a proxy is the proxy, and
+    // put every caller in one rate-limit bucket with no way to configure out
+    // of it (#614). Express and Fastify derive `req.ip` from their own
+    // trust-proxy settings; this is h3's equivalent, and like theirs it is
+    // OFF unless the app opts in, because an unverified `x-forwarded-for` is
+    // client-controllable.
+    if (trustProxy && !(req as { ip?: string }).ip) {
+      const forwarded = req.headers['x-forwarded-for']
+      const first = (Array.isArray(forwarded) ? forwarded[0] : forwarded)?.split(',')[0]?.trim()
+      if (first) (req as { ip?: string }).ip = first
+    }
 
     // Populate the express-shaped request fields h3 keeps elsewhere.
     req.params = getRouterParams(event) ?? {}
@@ -290,7 +309,7 @@ export function h3Runtime(): HttpRuntime<H3AppLike> {
   return {
     name: 'h3',
 
-    createApp(_options: RuntimeAppOptions = {}): H3AppLike {
+    createApp(options: RuntimeAppOptions = {}): H3AppLike {
       const { createApp } = h3()
       const app = createApp({
         onError: (error: unknown, event: H3EventLike) => {
@@ -333,6 +352,9 @@ export function h3Runtime(): HttpRuntime<H3AppLike> {
           }
         },
       })
+      // Stash the setting for mountRoutes — h3 has no app-level config object
+      // of its own to hang it on.
+      ;(app as { [TRUST_PROXY]?: unknown })[TRUST_PROXY] = options.trustProxy
       return app as H3AppLike
     },
 
@@ -358,6 +380,7 @@ export function h3Runtime(): HttpRuntime<H3AppLike> {
 
     mountRoutes(app, table: RouteTable) {
       const { createRouter, eventHandler } = h3()
+      const trustProxy = Boolean((app as { [TRUST_PROXY]?: unknown })[TRUST_PROXY])
       // One shared router per app — every mountRoutes call (controllers, health,
       // devtools, ad-hoc adapter routes) adds to it. `app.use(router)` is
       // deferred to nodeHandler so the router lands after connect middleware.
@@ -368,7 +391,7 @@ export function h3Runtime(): HttpRuntime<H3AppLike> {
         for (const entry of routes) {
           const url = joinPath(mountPath, entry.path)
           const method = entry.method.toLowerCase() as 'get' | 'post' | 'put' | 'delete' | 'patch'
-          router[method](url, eventHandler(makeEventHandler(entry)))
+          router[method](url, eventHandler(makeEventHandler(entry, trustProxy)))
         }
       }
     },
