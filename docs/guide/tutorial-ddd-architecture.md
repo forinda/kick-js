@@ -486,7 +486,10 @@ import type { TaskRepository } from './task.repository'
 
 export function createPostgresTaskRepository(): TaskRepository {
   return {
-    /* ...same shape, real queries... */
+    async findById(id) {
+      return db.query('SELECT * FROM tasks WHERE id = $1', [id])
+    },
+    // ...the rest of the contract, backed by real queries
   }
 }
 ```
