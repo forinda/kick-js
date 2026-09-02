@@ -50,7 +50,7 @@ export const MyAdapter = defineAdapter<MyAdapterConfig>({
     },
 
     /** Runs before global middleware — mount routes that bypass the stack. */
-    beforeMount({ app }: AdapterContext): void | Promise<void> {},
+    beforeMount({ http }: AdapterContext): void | Promise<void> {},
 
     /** Fires once per controller class as the router mounts. Useful for
      *  building OpenAPI specs, dependency graphs, route inventories. */
@@ -81,7 +81,8 @@ export const MyAdapter = defineAdapter<MyAdapterConfig>({
 
 ```ts
 interface AdapterContext {
-  app: Express // Express application instance
+  http: AdapterHttp // engine-agnostic HTTP surface — use this
+  app: ActiveRuntime['app'] // engine-native instance — escape hatch
   container: Container // DI container
   server?: http.Server // populated only inside afterStart
   env: string // NODE_ENV (default 'development')
@@ -89,7 +90,32 @@ interface AdapterContext {
 }
 ```
 
-No need to import Express or http types — destructure only what you use.
+No need to import any engine types — destructure only what you use.
+
+### `http` vs `app`
+
+`http` is the supported surface. It is the same four operations on every engine,
+so an adapter written against it works under Express, Fastify and h3 unchanged:
+
+```ts
+interface AdapterHttp {
+  /** Register one ctx-handler route (docs endpoint, transport, probe). */
+  route(method: RouteMethod, path: string, handler: CtxHandler): void
+  /** Mount a pre-built route table under a prefix. */
+  mount(prefix: string, routes: RouteEntry[]): void
+  /** Serve a static directory under a prefix. */
+  serveStatic(prefix: string, dir: string): void
+  /** Register a connect-style middleware, optionally path-scoped. */
+  use(mw: ConnectMiddleware, opts?: UseConnectOptions): void
+}
+```
+
+`app` is the **engine-native** instance — an `express.Express` under the default
+runtime, a `FastifyInstance` under Fastify, an h3 app under h3. It is typed from
+the active runtime (`ActiveRuntime['app']`), not as Express. Reach for it only
+when you need something genuinely engine-specific, and know that an adapter
+which calls `app.get(...)` or `app.use(...)` is an Express adapter, not a KickJS
+one — those methods don't exist, or don't mean the same thing, elsewhere.
 
 ## Every hook, and what runs it
 
@@ -288,9 +314,10 @@ import { defineAdapter, type AdapterContext, type AdapterMiddleware } from '@for
 export const HealthAdapter = defineAdapter({
   name: 'HealthAdapter',
   build: () => ({
-    beforeMount({ app }: AdapterContext): void {
-      app.get('/health', (_req, res) => {
-        res.json({
+    beforeMount({ http }: AdapterContext): void {
+      // `http.route` takes a ctx handler, so this works on every engine.
+      http.route('GET', '/health', (ctx) => {
+        ctx.json({
           status: 'ok',
           timestamp: new Date().toISOString(),
           uptime: process.uptime(),

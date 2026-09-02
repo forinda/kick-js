@@ -66,14 +66,19 @@ export interface AdapterMiddleware {
 
 /**
  * Context passed to adapter lifecycle hooks.
- * Populated by the Application — provides access to the Express app,
- * DI container, http.Server, and environment info without requiring
- * external type imports. Cast `app` or `server` if you need specific types.
+ * Populated by the Application — provides the engine-agnostic HTTP surface,
+ * the engine-native app instance, the DI container, the http.Server, and
+ * environment info without requiring external type imports.
+ *
+ * Prefer `http` over `app`: `http` is the same on every runtime, while `app`
+ * is whatever the active engine's instance happens to be (Express, Fastify,
+ * h3), so an adapter that reaches for it only runs on that engine.
  *
  * @example
  * ```ts
- * beforeMount({ app, container }: AdapterContext) {
- *   app.use(myMiddleware())
+ * beforeMount({ http, container }: AdapterContext) {
+ *   http.use(myConnectMiddleware())
+ *   http.route('GET', '/status', (ctx) => ctx.json({ ok: true }))
  * }
  * ```
  */
@@ -115,8 +120,11 @@ export interface AdapterContext {
  * class SentryAdapter implements AppAdapter {
  *   name = 'SentryAdapter'
  *
- *   beforeMount({ app, container }: AdapterContext) {
- *     app.use(Sentry.expressRequestHandler())
+ *   beforeMount({ http, container }: AdapterContext) {
+ *     // `http.use` takes any connect-style middleware and mounts it on
+ *     // whichever engine is active. Reach for `app` only when the thing you
+ *     // are wiring is engine-specific — and accept the engine lock-in.
+ *     http.use(Sentry.expressRequestHandler())
  *   }
  *
  *   afterStart({ server }: AdapterContext) {
