@@ -127,11 +127,64 @@ The `middleware()` method returns entries that are inserted at a specific phase 
 
 ```ts
 interface AdapterMiddleware {
-  handler: any
+  /** `(req, res, next)` — or `(err, req, res, next)`, dispatched by arity. */
+  handler: RequestHandler | ErrorRequestHandler
   phase?: 'beforeGlobal' | 'afterGlobal' | 'beforeRoutes' | 'afterRoutes'
-  path?: string
+  /** Prefix, pattern, or a list mixing both. Omit to apply unconditionally. */
+  path?: string | RegExp | ReadonlyArray<string | RegExp>
 }
 ```
+
+`path` mirrors what `app.use(path, handler)` accepts: `'/api'` matches `/api` and
+everything under it, `/^\/api\/v\d+/` matches `/api/v1` and `/api/v42`, and
+`['/api', /^\/internal\//]` matches either.
+
+### Write the handler connect-style, not Express-style
+
+Entries are mounted through `runtime.useConnect()`, which every engine
+implements — so an adapter's middleware runs under Express, Fastify and h3
+alike. What does **not** survive the bridge is Express's response sugar. The
+handler receives the raw Node `req` / `res` on the other engines, so:
+
+```ts
+middleware(): AdapterMiddleware[] {
+  return [
+    {
+      phase: 'afterGlobal',
+      handler: (req, res, next) => {
+        // ✅ works on every engine — node API only
+        res.setHeader('x-adapter', 'mine')
+
+        if (blocked(req)) {
+          // ❌ Express only: `res.status is not a function` on Fastify / h3,
+          //    surfacing as a 500 on that request
+          // return res.status(403).json({ error: 'blocked' })
+
+          // ✅ portable equivalent
+          res.statusCode = 403
+          res.setHeader('content-type', 'application/json')
+          return res.end(JSON.stringify({ error: 'blocked' }))
+        }
+        next()
+      },
+    },
+  ]
+}
+```
+
+The `RequestHandler` type comes from Express because that is the shape of the
+contract, not a statement about which engine you get. The rule of thumb: if you
+only touch `req.url`, `req.method`, `req.headers`, `res.setHeader`,
+`res.statusCode`, `res.write` and `res.end`, the adapter is portable.
+
+::: tip Two places where the sugar _is_ safe
+`bootstrap({ onNotFound, onError })` receive a `RuntimeResponse` driver rather
+than the raw response, so `res.status().json()` works there on every engine —
+see [Middleware → Custom error handlers](./middleware.md#custom-error-handlers).
+And anything with a `RequestContext` in scope (guards, `@Middleware()`,
+contributors) should use `ctx.json()` / `ctx.problem.*`, which are portable by
+construction.
+:::
 
 | Phase          | When it runs                                            |
 | -------------- | ------------------------------------------------------- |

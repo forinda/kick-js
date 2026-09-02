@@ -133,7 +133,7 @@ interface KickPluginInstance {
 | `modules()`      | Before user modules (static)     | Add feature modules — array form, statically introspectable                               |
 | `setup()`        | After `modules()`, before user   | Conditionally `.mount(module)` based on captured config / env / runtime                   |
 | `adapters()`     | Before user adapters             | Add lifecycle adapters                                                                    |
-| `middleware()`   | Before user middleware           | Add global middleware                                                                     |
+| `middleware()`   | Before user middleware           | Add global middleware — see [Plugin middleware](#plugin-middleware)                       |
 | `contributors()` | Per-route, at mount              | Ship typed [Context Contributors](./context-decorators.md) the plugin owns                |
 | `onReady()`      | After server starts              | Post-startup tasks                                                                        |
 | `shutdown()`     | On shutdown AND every HMR reload | Release what the plugin owns                                                              |
@@ -340,6 +340,47 @@ export const AdminAuthPlugin = definePlugin({
 ```
 
 `.definition` is **metadata only** — it does not produce a mountable plugin. To mount, call the factory: `AuthPlugin()`, `AuthPlugin.scoped(...)`, or `AuthPlugin.async(...)`.
+
+## Plugin Middleware
+
+`middleware()` returns connect-style handlers that are mounted globally, in
+plugin order, before any user-declared middleware:
+
+```ts
+build: (config) => ({
+  middleware() {
+    return [cors({ origin: config.origin })]
+  },
+})
+```
+
+Two limits distinguish it from [adapter middleware](./adapters.md#middleware-phases):
+
+- **No phases.** Every entry lands at the same point — after plugin
+  `register()`, before the global pipeline. An adapter can choose between
+  `beforeGlobal`, `afterGlobal`, `beforeRoutes` and `afterRoutes`.
+- **No path scoping.** Entries apply to every request. Adapter entries take a
+  `path` (string, RegExp, or a list). Scope it inside the handler, or ship an
+  adapter via `adapters()` instead.
+
+Reach for `adapters()` when either of those matters — a plugin can return
+adapters, so this is not a fork in the road.
+
+### Write handlers connect-style
+
+Plugin middleware is mounted through `runtime.useConnect()`, the same bridge
+adapter middleware uses, so it runs under Express, Fastify and h3. Express's
+response sugar does **not** cross that bridge: on the other engines the handler
+receives the raw Node `res`, and `res.status(...).json(...)` throws
+`TypeError: res.status is not a function`, surfacing as a 500 on that request.
+
+Stick to node API — `res.setHeader`, `res.statusCode`, `res.end` — or wrap what
+you need in an adapter and use the `RequestContext` helpers. The framework's own
+middleware (`cors`, `helmet`, `csrf`, `rateLimit`, `requestId`, `session`) is
+written this way, which is why returning it from a plugin works on every engine.
+
+If a plugin genuinely targets one engine, say so in its README and check
+`bootstrap({ runtime })` at boot rather than failing per-request.
 
 ## Plugin Ordering: `dependsOn`
 
