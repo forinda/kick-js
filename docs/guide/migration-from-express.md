@@ -24,7 +24,11 @@ One thing to know up front, because it explains most of the differences below: t
 
 In your existing Express project:
 
-<PmCommand add="@forinda/kickjs @forinda/kickjs-swagger reflect-metadata zod" />
+<PmCommand add="@forinda/kickjs @forinda/kickjs-schema @forinda/kickjs-swagger reflect-metadata zod dotenv" />
+
+`@forinda/kickjs-schema` is what lets one Zod schema serve env validation,
+request validation and the OpenAPI spec; `dotenv` is an optional peer that makes
+`.env` files work. Both are covered in [Step 3](#step-3-config-and-environment).
 
 <PmCommand add="@forinda/kickjs-cli" dev />
 
@@ -175,7 +179,122 @@ The Vite dev plugin reads the `app` export to wire HMR. Skipping the
 update on file changes.
 :::
 
-## Step 3: Convert Routes to Controllers
+## Step 3: Config and Environment
+
+Express projects usually call `dotenv.config()` somewhere near the top and then
+read `process.env.WHATEVER` — a string, unvalidated, everywhere. KickJS wants one
+schema file instead, and gives you typed access to it from anywhere in the DI
+graph.
+
+### Before (Express)
+
+```ts
+import dotenv from 'dotenv'
+dotenv.config()
+
+const port = Number(process.env.PORT ?? 3000) // coerce by hand, every time
+const dbUrl = process.env.DATABASE_URL! // trust me, it's there
+```
+
+### After (KickJS)
+
+Declare the shape once in `src/config/index.ts`:
+
+```ts
+// src/config/index.ts
+import { loadEnvFromSchema } from '@forinda/kickjs/config'
+import { fromZod } from '@forinda/kickjs-schema/zod'
+import { z } from 'zod'
+
+const envSchema = fromZod(
+  z.object({
+    PORT: z.coerce.number().default(3000),
+    NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+    LOG_LEVEL: z.string().default('info'),
+    DATABASE_URL: z.string().url(),
+    JWT_SECRET: z.string().min(32),
+  }),
+)
+
+// Side effect: registers the schema with the env cache at module-load time.
+export const env = loadEnvFromSchema(envSchema)
+
+// Default export: the contract `kick typegen` reads to populate `KickEnv`.
+export default envSchema
+```
+
+`fromZod` wraps the schema as a `KickSchema`, which is the same shape the
+validate middleware and the OpenAPI generator consume — so one schema library
+choice covers env, request validation and docs. Valibot and Yup work too
+(`fromValibot`, `fromYup` from `@forinda/kickjs-schema/*`); the file is otherwise
+identical.
+
+Missing or malformed values fail at startup with a message naming the key,
+rather than surfacing as `undefined` three layers into a request.
+
+### Mount it before `bootstrap()`
+
+The schema registers as a **module-load side effect**, so the import has to come
+first — this is the line in `src/index.ts` from Step 2:
+
+```ts
+import 'reflect-metadata'
+import './config' // ← must be above bootstrap()
+import { bootstrap } from '@forinda/kickjs'
+```
+
+::: danger This is the failure that looks like it works
+Skip that import and `ConfigService.get('DATABASE_URL')` returns `undefined` —
+it reads the env cache, and nothing registered a schema. Meanwhile
+`@Value('DATABASE_URL')` keeps returning a value, because it falls back to raw
+`process.env` when no resolver is registered
+(`container.ts:902`).
+
+So half your config works, the other half is silently `undefined`, and the half
+that "works" hands you the **unparsed string** — `PORT` is `'3000'`, not `3000`,
+and every `z.coerce` / `.default()` in your schema is skipped. Import
+`./config` and both paths agree.
+:::
+
+### Reading config
+
+Two ways, both typed against the schema once `kick typegen` has run:
+
+```ts
+import { Service, Autowired, Value, ConfigService } from '@forinda/kickjs'
+
+@Service()
+export class DatabaseService {
+  // Property injection — good for one or two values
+  @Value('DATABASE_URL') private readonly url!: string
+  @Value('PORT') private readonly port!: number // already a number
+
+  // Or inject the service — good when you need several
+  @Autowired() private readonly config!: ConfigService
+
+  connect() {
+    const level = this.config.get('LOG_LEVEL') // typed string
+    // this.config.get('NOPE')                 // tsc error after typegen
+  }
+}
+```
+
+Before `kick typegen` runs, both accept any string key (so existing code keeps
+compiling). After it runs, `KickEnv` is populated from your default export and
+unknown keys become type errors — that's the whole reason the file
+`export default`s the schema.
+
+### `.env` files
+
+`dotenv` is loaded for you (it ships as a dependency of a scaffolded app). Keep
+your existing `.env`; add `.env.test` when you have a suite, because under a test
+run KickJS reads `.env.test` **instead of** `.env` — no layering, no fallback —
+so a test can't reach a live service through a var it forgot to override.
+
+See [Configuration](./configuration.md) for the full precedence rules and the
+`ConfigService` API.
+
+## Step 4: Convert Routes to Controllers
 
 ### Before (Express)
 
@@ -243,7 +362,7 @@ Key differences:
 - No `new UserService()` — DI injects it via `@Autowired()`
 - `req`/`res` → `ctx` — unified context with helper methods
 
-## Step 4: Convert Services
+## Step 5: Convert Services
 
 ### Before (Express)
 
@@ -281,7 +400,7 @@ export class UserService {
 
 The `@Service()` decorator registers the class as a singleton in the DI container. Dependencies are injected automatically.
 
-## Step 5: Convert Middleware
+## Step 6: Convert Middleware
 
 ### Before (Express)
 
@@ -393,7 +512,7 @@ getProfile(ctx: RequestContext) {
 Keep `@Middleware()` for the jobs contributors deliberately don't do: short-circuiting a
 response, touching the response stream, or running before route matching.
 
-## Step 6: Create a Module
+## Step 7: Create a Module
 
 Modules replace the Express Router mounting pattern:
 
