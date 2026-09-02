@@ -220,7 +220,7 @@ interface ModuleRoutes {
   controller?: any
   /** `false` mounts without the `/v{n}` segment, even when the app has a default version. */
   version?: number | false
-  /** `false` mounts at `path` exactly, outside `apiPrefix` — for probes, fixed webhook URLs, `/.well-known`. */
+  /** `false` drops `apiPrefix` — for probes, fixed webhook URLs, `/.well-known`. Pair with `version: false` to mount at `path` exactly. */
   prefix?: false
 }
 ```
@@ -692,7 +692,7 @@ Before v8 these were mounted straight onto the engine, ahead of every middleware
 That is the intended default — your app controls its own auth, and a framework route quietly bypassing it is the surprise — but it will fail a liveness check the first time it runs. Exempt the path as you would any other, or pass `health: false` and mount your own.
 :::
 
-`prefix: false` on their `ModuleRoutes` is what keeps them at the root: a probe URL an orchestrator is configured against must not move when `apiPrefix` or the API version changes.
+`version: false` **and** `prefix: false` on their `ModuleRoutes` is what keeps them at the root: a probe URL an orchestrator is configured against must not move when `apiPrefix` or the API version changes. The two flags are independent — `prefix: false` alone drops `/api` but keeps `/v1`, mounting at `/v1/health`.
 
 ### GET /health/live
 
