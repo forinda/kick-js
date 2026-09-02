@@ -185,7 +185,18 @@ That completes the URL-shape matrix. Both segments are now droppable at either s
 | whole app | `bootstrap({ defaultVersion: false })` | `bootstrap({ apiPrefix: '' })`              |
 | one mount | `version: false` on `ModuleRoutes`     | `prefix: false` on `ModuleRoutes` **(new)** |
 
-`defaultVersion: false` is not new — it shipped in **7.4.0** — but it is worth knowing next to the per-mount flag, because the two are read together and the per-mount value always wins over the app default, in either direction. `version: false` drops only the version segment and still lands the module under `/api`; `prefix: false` mounts at `path` exactly.
+`defaultVersion: false` is not new — it shipped in **7.4.0** — but it is worth knowing next to the per-mount flag, because the two are read together and the per-mount value always wins over the app default, in either direction.
+
+The two per-mount flags are independent, and each drops exactly one segment. With `apiPrefix: '/api'` and `defaultVersion: 1`, a module at `path: '/x'` mounts at:
+
+| `ModuleRoutes`                                  | Mounted at  |
+| ----------------------------------------------- | ----------- |
+| `{ path: '/x' }`                                | `/api/v1/x` |
+| `{ path: '/x', version: false }`                | `/api/x`    |
+| `{ path: '/x', prefix: false }`                 | `/v1/x`     |
+| `{ path: '/x', version: false, prefix: false }` | `/x`        |
+
+So mounting at `path` exactly takes **both** flags — which is what the built-in health module sets.
 
 ## Fixes that change what you observe
 

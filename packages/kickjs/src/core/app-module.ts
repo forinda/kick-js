@@ -36,7 +36,10 @@ export interface ModuleRoutes {
    * `/.well-known` document. Those move with the prefix and break on a change
    * that has nothing to do with them.
    *
-   * Set `false` to mount at `path` exactly. The built-in health module uses it.
+   * Set `false` to drop `apiPrefix`. It does **not** drop the version segment:
+   * with `defaultVersion: 1`, `{ path: '/x', prefix: false }` mounts at
+   * `/v1/x`. Pair it with `version: false` to mount at `path` exactly — the
+   * built-in health module sets both.
    */
   prefix?: false
 
