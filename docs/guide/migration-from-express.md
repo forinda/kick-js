@@ -414,9 +414,16 @@ return { path: '/legacy', router: legacyRouter, version: false, prefix: false } 
 ::: warning What a router opts out of
 `router` and `controller` take different paths through the framework. When you pass `router`,
 KickJS mounts it as an opaque handler and cannot see inside it: those routes don't appear in
-the boot-time duplicate-route check (KICK006), in `kick typegen` / the typed client, or in the
-generated OpenAPI spec. That's fine for code on its way out — just don't expect the framework
-features that read the route table to know about them.
+the boot-time duplicate-route check (KICK006), in `kick typegen` / the typed client, in the
+generated OpenAPI spec, or in the boot route summary and the DevTools route list. That's fine
+for code on its way out — just don't expect the framework features that read the route table to
+know about them.
+
+**Nothing warns about this.** `controller` is optional, and a route entry only fails
+(`KICK005`) when _neither_ `router` nor `controller` is given — so a router-only module boots
+silently and the first sign that it's invisible is usually a missing Swagger entry. Adapter
+notification (`onRouteMount`) and the route summary both run on the `controller` branch, not the
+`router` one.
 
 The duplicate check is the one worth watching during a migration: if a router and a controller
 both claim `GET /api/v1/things/:id`, boot succeeds and whichever module mounted first answers
