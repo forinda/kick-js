@@ -1,21 +1,24 @@
 # Migrating from Express to KickJS
 
-KickJS is built on Express 5, so your existing Express knowledge applies directly. This guide shows how to translate common Express patterns into KickJS equivalents.
+KickJS runs on Express 5 by default, so your existing Express knowledge applies directly. This guide shows how to translate common Express patterns into KickJS equivalents.
+
+One thing to know up front, because it explains most of the differences below: the HTTP engine is **pluggable**. The same app runs on Express, Fastify, or h3 depending on `bootstrap({ runtime })`, so anything the framework hands your code is engine-neutral — a `RequestContext`, not Express's `req`/`res`. Global middleware is the deliberate exception: it stays engine-native, so your existing `(req, res, next)` functions keep working.
 
 ## Quick Comparison
 
-| Express                      | KickJS                                      |
-| ---------------------------- | ------------------------------------------- |
-| `app.get('/users', handler)` | `@Get('/') list(ctx)` on a `@Controller`    |
-| `app.use(middleware)`        | `bootstrap({ middlewares: [...] })`         |
-| `req.body`                   | `ctx.body`                                  |
-| `req.params`                 | `ctx.params`                                |
-| `req.query`                  | `ctx.query` or `ctx.qs()`                   |
-| `res.json(data)`             | `ctx.json(data)`                            |
-| `res.status(201).json(data)` | `ctx.created(data)`                         |
-| Manual DI / singletons       | `@Service()` + `@Inject()` / `@Autowired()` |
-| `express.Router()`           | `@Controller()` + `buildRoutes()`           |
-| Swagger via swagger-jsdoc    | `@ApiTags()` + `SwaggerAdapter` (automatic) |
+| Express                      | KickJS                                                                  |
+| ---------------------------- | ----------------------------------------------------------------------- |
+| `app.get('/users', handler)` | `@Get('/') list(ctx)` on a `@Controller`                                |
+| `app.use(middleware)`        | `bootstrap({ middlewares: [...] })` — same `(req, res, next)` signature |
+| `router.get('/x', mw, h)`    | `@Middleware((ctx, next) => …)` — ctx, not `req`/`res`                  |
+| `req.body`                   | `ctx.body`                                                              |
+| `req.params`                 | `ctx.params`                                                            |
+| `req.query`                  | `ctx.query` or `ctx.qs()`                                               |
+| `res.json(data)`             | `ctx.json(data)`                                                        |
+| `res.status(201).json(data)` | `ctx.created(data)`                                                     |
+| Manual DI / singletons       | `@Service()` + `@Inject()` / `@Autowired()`                             |
+| `express.Router()`           | `@Controller()` + `buildRoutes()`                                       |
+| Swagger via swagger-jsdoc    | `@ApiTags()` + `SwaggerAdapter` (automatic)                             |
 
 ## Step 1: Install KickJS
 
@@ -175,7 +178,7 @@ import { DB_CLIENT } from '@forinda/kickjs-db'
 
 @Service()
 export class UserService {
-  constructor(@Inject(DB_CLIENT) private db: AppDatabase) {}
+  constructor(@Inject(DB_CLIENT) private db: Database) {}
 
   async findAll() {
     return this.db.query('SELECT * FROM users')
@@ -204,14 +207,54 @@ router.get('/profile', authMiddleware, (req, res) => { ... })
 
 ### After (KickJS)
 
-```ts
-// You can still use Express middleware directly:
-import { Controller, Get, Middleware, HttpException, type Ctx } from '@forinda/kickjs'
+There are two places middleware can go, and they take **different signatures**. Getting this
+backwards is the most common migration bug, so it's worth reading the distinction once.
 
-const requireAuth = (req, res, next) => {
-  const token = req.headers.authorization?.split(' ')[1]
+#### Global middleware — keep your Express functions as-is
+
+`bootstrap({ middlewares })` is engine-native. Under the default Express runtime your existing
+`(req, res, next)` middleware runs unchanged, third-party packages included:
+
+```ts
+import cors from 'cors'
+import helmet from 'helmet'
+import express from 'express'
+import { authMiddleware } from './middleware/auth'
+
+export const app = await bootstrap({
+  modules,
+  middlewares: [cors(), helmet(), express.json(), authMiddleware],
+})
+```
+
+Anything `authMiddleware` hangs off `req` is still reachable: `ctx.user` falls back to
+`req.user`, and `ctx.req` is the raw request.
+
+::: warning Engine-native means engine-specific
+These run before route matching and are handed to the engine directly, so a middleware written
+against Express won't port if you later switch `runtime` to Fastify or h3. That's the trade for
+being able to reuse what you already have.
+:::
+
+#### Per-route middleware — `@Middleware()` takes `(ctx, next)`
+
+`@Middleware()` is engine-neutral, so the framework hands the handler a `RequestContext`, not
+`req`/`res`:
+
+```ts
+import { Controller, Get, Middleware, HttpException, type RequestContext } from '@forinda/kickjs'
+
+// Declare the key once so `ctx.set('user', …)` and `ctx.user` are typed.
+declare module '@forinda/kickjs' {
+  interface ContextMeta {
+    user: { id: string; email: string }
+  }
+}
+
+const requireAuth = (ctx: RequestContext, next: () => void) => {
+  const token = ctx.headers.authorization?.split(' ')[1]
   if (!token) throw new HttpException(401, 'Unauthorized')
-  ;(req as any).user = verifyToken(token)
+  ctx.set('user', verifyToken(token))
   next()
 }
 
@@ -219,21 +262,43 @@ const requireAuth = (req, res, next) => {
 export class ProfileController {
   @Get('/profile')
   @Middleware(requireAuth)
-  async getProfile(ctx: Ctx<KickRoutes.ProfileController['getProfile']>) {
-    const user = (ctx.req as any).user
-    ctx.json(user)
+  async getProfile(ctx: RequestContext) {
+    ctx.json(ctx.user)
   }
 }
 ```
 
-Or keep your Express middleware as-is and apply it globally:
+`ctx.set('key', value)` is how a middleware passes a value down to the handler; `ctx.get('key')`
+reads it back, and `ctx.user` is a built-in shortcut for the `'user'` key.
+
+::: danger Don't pass an Express middleware to `@Middleware()`
+Handing `(req, res, next)` to `@Middleware()` fails in a confusing way rather than a loud one.
+The first argument is a `RequestContext`, so `req.headers.authorization` appears to work — and
+then `req.user = …` throws `Cannot set property user of #<RequestContext> which has only a
+getter`, surfacing as a 500 on that route only. Convert the function to `(ctx, next)`, or move
+it to the global `middlewares` array where the Express signature is what's expected.
+:::
+
+#### Or skip middleware entirely
+
+If the middleware's only job is to compute a value the handler reads off the request, a
+[context decorator](./context-decorators.md) does it with typed DI and declared ordering:
 
 ```ts
-export const app = await bootstrap({
-  modules,
-  middlewares: [authMiddleware, express.json()],
+const LoadUser = defineHttpContextDecorator({
+  key: 'user',
+  resolve: (ctx) => verifyToken(ctx.headers.authorization?.split(' ')[1]),
 })
+
+@LoadUser
+@Get('/profile')
+getProfile(ctx: RequestContext) {
+  ctx.json(ctx.get('user'))
+}
 ```
+
+Keep `@Middleware()` for the jobs contributors deliberately don't do: short-circuiting a
+response, touching the response stream, or running before route matching.
 
 ## Step 6: Create a Module
 
@@ -251,25 +316,27 @@ app.use('/api/v1/products', productsRouter)
 
 ```ts
 // src/modules/users/user.module.ts
-import { type AppModule, type ModuleRoutes, buildRoutes } from '@forinda/kickjs'
+import { defineModule } from '@forinda/kickjs'
 import { UserController } from './user.controller'
 
-export class UserModule implements AppModule {
-  routes(): ModuleRoutes {
-    return {
-      path: '/users',
-      router: buildRoutes(UserController),
-      controller: UserController,
-    }
-  }
-}
+export const UserModule = defineModule({
+  name: 'UserModule',
+  build: () => ({
+    routes() {
+      // `router` is optional — omit it and the framework calls
+      // `buildRoutes(controller)` for you.
+      return { path: '/users', controller: UserController }
+    },
+  }),
+})
 
 // src/modules/index.ts
-import type { AppModuleEntry } from '@forinda/kickjs'
+import { defineModules } from '@forinda/kickjs'
 import { UserModule } from './users/user.module'
 import { ProductModule } from './products/product.module'
 
-export const modules: AppModuleEntry[] = [UserModule(), ProductModule()]
+// `defineModule` factories are invoked at the registration site.
+export const modules = defineModules().mount(UserModule()).mount(ProductModule())
 
 // src/index.ts — apiPrefix + versioning are automatic
 export const app = await bootstrap({
@@ -279,6 +346,13 @@ export const app = await bootstrap({
 })
 // Routes: /api/v1/users, /api/v1/products
 ```
+
+::: tip Class modules are still supported — but don't call them
+A `class UserModule implements AppModule` works too; pass the **class itself**, not a call:
+`[UserModule, ProductModule]`. Calling a class without `new` throws
+`TypeError: Class constructor cannot be invoked without 'new'`. Only `defineModule()` factories
+are invoked at the registration site, which is why the generator emits those.
+:::
 
 ## What You Get for Free
 
@@ -291,33 +365,57 @@ By migrating to KickJS, you automatically get:
 - **Query parsing** — `ctx.qs()` with filters, sort, pagination, search
 - **Paginated responses** — `ctx.paginate()` with standardized meta
 - **File uploads** — `@FileUpload` decorator with MIME validation
-- **CLI generators** — `kick g module user` scaffolds 18 DDD files
+- **CLI generators** — `kick g module user` scaffolds a complete flat REST module (controller, service, repository, DTOs, tests)
 
 ## Incremental Migration
 
-You don't have to convert everything at once. KickJS runs on Express 5, so you can:
+You don't have to convert everything at once:
 
 1. Start with `bootstrap()` and your existing middleware
 2. Convert one route file at a time to a `@Controller`
 3. Add `@Service()` to existing classes gradually
-4. Keep raw Express routes alongside KickJS modules
+4. Keep raw Express routers mounted alongside KickJS modules
+
+### Mounting an existing Express Router
+
+A module can hand the framework a finished router instead of a controller. `ModuleRoutes.router`
+takes any connect-style handler — an `express.Router()`, a third-party router, a hand-composed
+stack — and mounts it at the module's path:
 
 ```ts
-export const app = await bootstrap({
-  modules, // converted modules from src/modules/index.ts
-  middlewares: [
-    cors(),
-    express.json(),
-    // Mount legacy Express router directly:
-    (req, res, next) => {
-      if (req.path.startsWith('/legacy')) {
-        return legacyRouter(req, res, next)
-      }
-      next()
+// src/modules/legacy/legacy.module.ts
+import { defineModule } from '@forinda/kickjs'
+import { legacyRouter } from '../../routes/legacy' // your existing express.Router()
+
+export const LegacyModule = defineModule({
+  name: 'LegacyModule',
+  build: () => ({
+    routes() {
+      return { path: '/legacy', router: legacyRouter }
     },
-  ],
+  }),
 })
 ```
+
+It mounts under the same prefix rules as everything else — `/api/v1/legacy/*` above — so
+converted and unconverted routes sit side by side and you migrate one router at a time. Use
+`version: false` to drop the `/v1` segment, or `prefix: false` to mount outside `apiPrefix`
+entirely, when a legacy URL has to stay exactly where it is.
+
+::: warning What a router opts out of
+`router` and `controller` take different paths through the framework. When you pass `router`,
+KickJS mounts it as an opaque handler and cannot see inside it: those routes don't appear in
+the boot-time duplicate-route check, in `kick typegen` / the typed client, or in the generated
+OpenAPI spec. That's fine for code on its way out — just don't expect the framework features
+that read the route table to know about them.
+
+You can pass **both**: `router` mounts the traffic, and `controller` is what adapters like
+`SwaggerAdapter` introspect. Useful while a controller is being extracted from a router.
+:::
+
+The engine bridge is `useConnect()`, which every runtime implements — so a connect-style router
+still mounts if you later switch to Fastify or h3. An `express.Router()` specifically keeps its
+own dependency on `express`, so budget for replacing it if you plan to drop the Express engine.
 
 ## Related
 
