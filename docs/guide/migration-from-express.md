@@ -398,24 +398,52 @@ export const LegacyModule = defineModule({
 ```
 
 It mounts under the same prefix rules as everything else — `/api/v1/legacy/*` above — so
-converted and unconverted routes sit side by side and you migrate one router at a time. Use
-`version: false` to drop the `/v1` segment, or `prefix: false` to mount outside `apiPrefix`
-entirely, when a legacy URL has to stay exactly where it is.
+converted and unconverted routes sit side by side and you migrate one router at a time.
+Everything in front of it still runs: global `middlewares` (so `express.json()` parses bodies
+for the router too), the framework's error handler (a `throw` inside the router becomes a
+normal JSON 500), and the 404 handler for unmatched paths underneath it.
+
+When a legacy URL has to stay exactly where it is, `version: false` drops the `/v{n}` segment
+and `prefix: false` drops `apiPrefix`. They're independent — set **both** to mount at `path`
+exactly, which is what the built-in health module does:
+
+```ts
+return { path: '/legacy', router: legacyRouter, version: false, prefix: false } // → /legacy/*
+```
 
 ::: warning What a router opts out of
 `router` and `controller` take different paths through the framework. When you pass `router`,
 KickJS mounts it as an opaque handler and cannot see inside it: those routes don't appear in
-the boot-time duplicate-route check, in `kick typegen` / the typed client, or in the generated
-OpenAPI spec. That's fine for code on its way out — just don't expect the framework features
-that read the route table to know about them.
+the boot-time duplicate-route check (KICK006), in `kick typegen` / the typed client, or in the
+generated OpenAPI spec. That's fine for code on its way out — just don't expect the framework
+features that read the route table to know about them.
+
+The duplicate check is the one worth watching during a migration: if a router and a controller
+both claim `GET /api/v1/things/:id`, boot succeeds and whichever module mounted first answers
+every request. The half you just rewrote can sit there serving nothing, silently — so remove the
+old route from the router in the same commit that adds the controller.
 
 You can pass **both**: `router` mounts the traffic, and `controller` is what adapters like
 `SwaggerAdapter` introspect. Useful while a controller is being extracted from a router.
 :::
 
-The engine bridge is `useConnect()`, which every runtime implements — so a connect-style router
-still mounts if you later switch to Fastify or h3. An `express.Router()` specifically keeps its
-own dependency on `express`, so budget for replacing it if you plan to drop the Express engine.
+::: warning An `express.Router()` only works on the Express engine
+The bridge is `useConnect()`, which every runtime implements, so a **plain connect handler**
+(one that writes with `res.setHeader` / `res.end`) mounts and runs on Express, Fastify and h3
+alike.
+
+An `express.Router()` is not that. Its handlers call Express's response sugar — `res.json()`,
+`res.send()`, `res.status()` — which only exists because Express decorated the response object.
+Bridged into Fastify or h3, the handler gets the raw Node `ServerResponse` and dies on the first
+call:
+
+```
+TypeError: res.json is not a function
+```
+
+It fails per-request, at 500, not at boot. So a mounted Express router is fine while Express is
+your engine — just convert those routes before switching `runtime`.
+:::
 
 ## Related
 
