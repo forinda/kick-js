@@ -32,6 +32,99 @@ Or let the CLI resolve the package and its peers for you:
 
 <PmCommand exec="kick add swagger" />
 
+### The build setup KickJS expects
+
+Decorators need a compiler that emits metadata, and `kick dev` runs your app
+_inside_ Vite. An existing Express project built with `tsc` and `nodemon` needs
+four files before `bootstrap()` will run. `kick new` writes them for a fresh
+project; migrating means adding them by hand.
+
+**`tsconfig.json`** — decorator metadata is what makes `@Inject()` and
+`@Autowired()` resolve types at runtime, and the `include` is what puts the
+generated types in scope:
+
+```jsonc
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["node", "vite/client"],
+    "experimentalDecorators": true, // required
+    "emitDecoratorMetadata": true, // required
+    "strict": true,
+    "paths": { "@/*": ["./src/*"] },
+  },
+  // .kickjs/types is written by `kick typegen`, outside src/
+  "include": ["src", ".kickjs/types/**/*.d.ts", ".kickjs/types/**/*.ts"],
+}
+```
+
+**`vite.config.ts`** — SWC does the decorator transform (esbuild, Vite's
+default, does not emit decorator metadata), and `kickjsVitePlugin` reads your
+`app` export to drive HMR:
+
+```ts
+import { defineConfig } from 'vite'
+import { fileURLToPath } from 'node:url'
+import swc from 'unplugin-swc'
+import { kickjsVitePlugin, envWatchPlugin } from '@forinda/kickjs-vite'
+
+export default defineConfig({
+  oxc: false, // let SWC own the transform
+  plugins: [
+    swc.vite(),
+    kickjsVitePlugin({ entry: 'src/index.ts' }),
+    envWatchPlugin(), // full reload when .env changes
+  ],
+  resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
+  build: {
+    target: 'node20',
+    ssr: true,
+    outDir: 'dist',
+    rollupOptions: {
+      input: fileURLToPath(new URL('./src/index.ts', import.meta.url)),
+      output: { format: 'esm' },
+    },
+  },
+})
+```
+
+<PmCommand add="@forinda/kickjs-vite unplugin-swc" dev />
+
+**`kick.config.ts`** — what the generators read (module directory, repository
+default, typegen settings). Let the CLI write it:
+
+<PmCommand exec="kick g config" />
+
+**`package.json`** — `"type": "module"`, and the scripts move to the CLI. Use
+`kick dev`, not bare `vite`: `kick dev` boots Vite _and_ owns the
+typegen-on-save watcher, so new routes keep their types.
+
+```jsonc
+{
+  "type": "module",
+  "scripts": {
+    "dev": "kick dev",
+    "build": "kick build",
+    "start": "kick start",
+    "test": "vitest run",
+  },
+}
+```
+
+Then run `kick typegen` once so `KickRoutes` and `KickEnv` exist before you
+reference them (`kick dev` re-runs it on every save):
+
+<PmCommand exec="kick typegen" />
+
+::: tip Check the setup before converting routes
+`kick doctor` runs pre-flight checks on an existing project and reports each one
+with a fix — including the two decorator flags above, which are the failure
+that's hardest to read: without them the app boots and then throws
+`No provider for …` on the first injected dependency.
+:::
+
 ## Step 2: Replace app.listen with bootstrap
 
 ### Before (Express)
@@ -174,11 +267,11 @@ export class UserService {
 ```ts
 // modules/users/user.service.ts
 import { Service, Inject } from '@forinda/kickjs'
-import { DB_CLIENT } from '@forinda/kickjs-db'
+import { DB_CLIENT, type KickDbClient } from '@forinda/kickjs-db'
 
 @Service()
 export class UserService {
-  constructor(@Inject(DB_CLIENT) private db: Database) {}
+  constructor(@Inject(DB_CLIENT) private db: KickDbClient) {}
 
   async findAll() {
     return this.db.query('SELECT * FROM users')
