@@ -79,7 +79,7 @@ it is why the problem keeps recurring.
 Flags are a **substrate**, not a fourth mechanism. One statement on the route; every consumer
 reads it, including the contributor pipeline itself.
 
-```
+```text
                  @Public  /  @CsrfExempt  /  @RateLimit({ rpm: 10 })
                                    │
                             route flags          ← the fact, stated once on the route
@@ -121,6 +121,42 @@ class WebhooksController {
 Resolution reuses `contributor-pipeline.ts`'s ranked-source dedup verbatim — highest precedence
 wins per flag name. No new ordering rules to learn or document.
 
+#### A `false` flag is _absent_, not present-and-false
+
+This rule is load-bearing, and getting it wrong is an authorization bypass rather than a
+papercut. `@Public(false)` at method level must make the flag **unset** on that route, not set it
+to `false` — otherwise `flags.has('auth.public')` returns `true` for the route that just opted
+back **in**, and every presence-checking consumer reads a protected route as public.
+
+So resolution produces a map of **enabled flags only**:
+
+| Declaration                                            | Resolved                   |
+| ------------------------------------------------------ | -------------------------- |
+| `@Public` on the class, nothing on the method          | `auth.public → true`       |
+| `@Public` on the class, `@Public(false)` on the method | _key absent_               |
+| `@RateLimit({ rpm: 10 })`                              | `rate.limit → { rpm: 10 }` |
+| `@RateLimit(false)` overriding an inherited one        | _key absent_               |
+
+A flag therefore resolves to one of two states — absent, or present with a value that defaults to
+`true`. `flags.has(name)` is then always the right question for a boolean flag, and
+`flags.get(name)` for a valued one. There is no third "present but falsy" state to reason about,
+and no consumer can be wrong by checking presence.
+
+Two consequences worth stating:
+
+- **`false` is only meaningful as an override.** `@Public(false)` on a route that never inherited
+  `auth.public` is a no-op, and should probably warn at boot — it usually means the author
+  believed something was inherited that is not.
+- **The resolver, not the consumer, carries this.** Every alternative (a `ReadonlyMap<string,
+unknown>` where consumers must remember `get(x) === true`) puts the security-relevant step in
+  the hands of whoever writes the next guard. That is the failure mode this whole proposal
+  exists to remove.
+
+**Phase 1 acceptance test** (the case that fails if the rule regresses): class-level `@Public`
+with a method-level `@Public(false)` — the method must resolve with `auth.public` absent, and a
+request to it must be rejected by the auth contributor while its sibling routes stay open. Both
+directions asserted, since a resolver that drops the key everywhere would pass a one-sided test.
+
 ### 2. `ctx.route` — the matched route, exposed
 
 ```ts
@@ -129,6 +165,7 @@ interface MatchedRoute {
   path: string // mounted path, e.g. '/api/v1/users/:id'
   controller?: Constructor
   handlerName?: string
+  /** Enabled flags only — see "a `false` flag is absent" above. */
   flags: ReadonlyMap<string, unknown>
 }
 ```
@@ -273,9 +310,9 @@ Each phase ships alone and is useful alone.
    Cheap to add, and covers "skip unless both flags are present" without inventing an expression
    language. Risk: a predicate that reads anything other than flags reintroduces the coupling
    this design removes.
-5. Does `@Public(false)` (re-opting-in at method level) read clearly enough, or should the
-   inverse be its own decorator? Boolean-valued flags make precedence uniform; a second
-   decorator reads better at the call site.
+5. `@Public(false)` now has defined semantics (the flag resolves absent), but does it _read_
+   clearly enough at the call site? A named inverse — `@Protected` — may be plainer than a
+   boolean argument, at the cost of two decorators per flag. Semantics are settled either way.
 
 ## Why this is not just the contributor pipeline again
 
