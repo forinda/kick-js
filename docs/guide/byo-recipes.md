@@ -190,18 +190,37 @@ export const RequireRole = defineHttpContextDecorator.withParams<RequireRolePara
 })
 ```
 
-### Step 5 — `@Public` shim (just sugar over `LoadAuthUser({on401: 'allow'})`)
+### Step 5 — `@Public` as a route flag
 
 ```ts
-// src/auth/public.ts
-import { LoadAuthUser } from './load-auth-user'
+// src/auth/flags.ts
+import { defineRouteFlag } from '@forinda/kickjs'
 
-// `@Public` is just `@LoadAuthUser({ on401: 'allow' })` — pass through
-// without rejecting unauthenticated requests. Method-level decorators
-// have higher precedence than class-level, so a `@Public()` method on
-// a `@LoadAuthUser` controller wins.
-export const Public = LoadAuthUser({ on401: 'allow' })
+// A fact about the route, not a second copy of the auth contributor.
+// Declared on a controller it covers every route below; `@Public.off` on
+// one method opts that route back in.
+export const Public = defineRouteFlag('auth.public')
 ```
+
+The contributor from step 4 skips it by name:
+
+```ts
+defineHttpContextDecorator({ key: 'user', skipWhen: 'auth.public', resolve })
+```
+
+The older shim — `export const Public = LoadAuthUser({ on401: 'allow' })` — still works, and
+relies on method-level precedence beating class-level. Prefer the flag: it composes.
+Registering a permissive twin requires owning the contributor's key, so it cannot exempt a
+contributor a plugin shipped, and no other consumer can see that the route is public. With a
+flag, CSRF, rate limiting and the OpenAPI spec read the same declaration:
+
+```ts
+csrfGuard({ exemptWhen: 'csrf.exempt' })
+rateLimitGuard({ max: 60, exemptWhen: 'auth.public' })
+SwaggerAdapter({ bearerAuth: true, publicFlag: 'auth.public' })
+```
+
+See [Route Flags](./route-flags.md).
 
 ### Step 6 — `AuthAdapter` factory
 
@@ -334,7 +353,7 @@ parameterised contributor over the primitives the framework ships.
       decorator).
 - [ ] Replace `@Authenticated()` with adapter-level
       `defaultPolicy: 'protected'`.
-- [ ] Replace `@Public()` with `@LoadAuthUser({ on401: 'allow' })`
+- [ ] Replace `@Public()` with a route flag (`defineRouteFlag('auth.public')` + `skipWhen`)
       (or the `Public` shim re-export).
 - [ ] Replace `@Roles('admin')` with `@RequireRole({ roles: ['admin'] })`.
 - [ ] Run your existing auth tests — they should pass without changes.
