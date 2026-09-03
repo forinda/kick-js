@@ -348,6 +348,53 @@ Only the **error-shape helpers** (`ctx.notFound()`, `ctx.badRequest()`) get a `@
 
 ---
 
+### B.6 Route flags — one vocabulary for per-route policy
+
+**Status:** `in design` — working spec at [`route-flags-design.md`](https://github.com/forinda/kick-js/blob/main/route-flags-design.md)
+**Effort:** 1–2 weeks for phase 1; phases 2–4 independently schedulable
+
+**Why it matters.** "Whitelist these endpoints" is a request every API eventually makes, and today the answer depends on which subsystem is asking. Auth uses a contributor (`@Public` = `LoadAuthUser({ on401: 'allow' })`). CSRF uses `ignorePaths`. Rate limiting uses `skipPaths` / `skip`. One fact — _this endpoint is open_ — stated three ways, in two places, under two notions of identity.
+
+The path-string half has real defects: both are an exact `Set.has(pathname)`, so `/users/:id` cannot be expressed; and the list keeps parsing after an `apiPrefix` or `version` change that silently voids it.
+
+The contributor half looks better but doesn't compose. `@Public` wins by being a _second instance of the same contributor_ at higher precedence — which only works if you own the key. You cannot exempt a plugin's contributor, and you cannot exempt anything that isn't a contributor at all.
+
+**What it looks like.** A flag is a named, inheritable fact about a route, resolved through the existing five registration sites (`method > class > module > adapter > global`) and readable by every consumer:
+
+```ts
+export const Public = defineRouteFlag('auth.public')
+
+@Public // class level — propagates to every route below
+@Controller()
+class WebhooksController {
+  @Get('/health') health(ctx: RequestContext) {} // inherits
+
+  @Public(false) // method wins
+  @Post('/admin')
+  admin(ctx: RequestContext) {}
+}
+```
+
+Consumers read them wherever they already hold a `RequestContext`:
+
+```ts
+ctx.route.flags.has('auth.public')          // guards, @Middleware(), handlers
+defineHttpContextDecorator({ skipWhen: 'auth.public', … })   // contributors
+csrf({ exemptWhen: 'csrf.exempt' })                          // phase 2
+```
+
+That split is what keeps the cost down: everything after route matching gets flags from one addition (`ctx.route`), with no per-consumer API. Only the two pre-match middleware need further mechanism.
+
+Phasing: **1)** primitive + `ctx.route` + contributor `skipWhen`/`onlyWhen`; **2)** CSRF; **3)** rate limiting (also unlocks per-route limits, which the current shape cannot express); **4)** OpenAPI security schemes + DevTools display. Phase 1 stands alone.
+
+**Open questions.**
+
+- Do flags carry values, or is presence enough? `@RateLimit({ rpm: 10 })` wants values, and values turn precedence into a merge question rather than pick-one.
+- `skipWhen` as a flag name only, or also a predicate? A predicate that reads anything but flags reintroduces the coupling this removes.
+- Pre-match consumers: per-route mounting (exact, but a 404 then skips the check) or a boot-compiled policy table (preserves ordering, but is a second implementation of routing)? Current thinking: per-route for CSRF, table for rate limiting — a token check is meaningless on an unmatched route, an abuse control is not.
+
+**Risk.** `kickjs-auth` was deprecated for baking in an auth opinion. Mitigation: core ships `defineRouteFlag` and names no flags. `auth.public` is a string the adopter picks; nothing in core branches on it.
+
 ## Track C — Bold Bets
 
 High-risk, high-reward. Each of these could be the thing KickJS is famous for, if it works.
@@ -535,11 +582,12 @@ Rough order if we were optimizing for **impact-per-effort**:
 2. **B.2 — Error messages with fix hints** (2–3 weeks, changes how the framework feels forever)
 3. **B.4 — `kick doctor` command** (1 week, kills a huge category of support questions)
 4. **A.1 — Typed client** (2–3 months, but it's the moat)
-5. **B.1 — Scaffolder feature-overlay** (3–6 weeks, contributor-friendly)
-6. **A.2 — Observability** (1–2 months, production-readiness story)
-7. **B.3 — Interactive docs** (2–4 weeks, depends on hosting cost analysis)
-8. **A.3 — Runtime-portable core** (long arc — gradual, every peer-dep cleanup advances it)
-9. **C.1, C.2, C.3** — bold bets, sequence after the moat is in place
+5. **B.6 — Route flags** (1–2 weeks for phase 1, retires three exemption mechanisms and unblocks per-route rate limits)
+6. **B.1 — Scaffolder feature-overlay** (3–6 weeks, contributor-friendly)
+7. **A.2 — Observability** (1–2 months, production-readiness story)
+8. **B.3 — Interactive docs** (2–4 weeks, depends on hosting cost analysis)
+9. **A.3 — Runtime-portable core** (long arc — gradual, every peer-dep cleanup advances it)
+10. **C.1, C.2, C.3** — bold bets, sequence after the moat is in place
 
 Open for redirection — these are starting points, not commitments.
 
