@@ -32,6 +32,7 @@
     // registry, `ContextMetaKey` collapses to `string`, and the narrowing
     // assertions below would pass while proving nothing.
     "__tests__/context-meta.d.ts",
-    "__tests__/context-decorator-public-types.test.ts"
+    "__tests__/context-decorator-public-types.test.ts",
+    "__tests__/route-flag-types.test.ts"
   ]
 }

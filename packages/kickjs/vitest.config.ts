@@ -33,7 +33,7 @@ export default defineConfig({
       ],
     },
     environment: 'node',
-    include: ['__tests__/**/*.test.ts', '**/__tests__/**/*.test.ts','**/*.test.ts'],
+    include: ['__tests__/**/*.test.ts', '**/__tests__/**/*.test.ts', '**/*.test.ts'],
     globals: false,
   },
 })

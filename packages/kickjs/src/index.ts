@@ -32,6 +32,7 @@ export {
 } from './http/context'
 export { defineHttpContextDecorator } from './http/define-http-context-decorator'
 export { defineRouteFlag, getRouteFlags } from './core/route-flag'
+export { bindRoutePolicy, type RoutePolicyTable } from './core/route-policy'
 export type {
   RouteFlag,
   RouteFlagContext,
@@ -84,7 +85,7 @@ export { requestScopeMiddleware } from './http/middleware/request-scope'
 export { requestId, REQUEST_ID_HEADER } from './http/middleware/request-id'
 export { validate } from './http/middleware/validate'
 export { notFoundHandler, errorHandler } from './http/middleware/error-handler'
-export { csrf, type CsrfOptions } from './http/middleware/csrf'
+export { csrf, csrfGuard, type CsrfOptions, type CsrfGuardOptions } from './http/middleware/csrf'
 export {
   requestLogger,
   type RequestLoggerOptions,

@@ -106,3 +106,64 @@ class RedisStore implements RateLimitStore {
 
 rateLimit({ store: new RedisStore(redis, 60_000) })
 ```
+
+## Exempting routes by flag
+
+`rateLimitGuard()` accepts `exemptWhen`, so "this endpoint is not limited" is
+declared on the route rather than restated as a path here:
+
+```ts
+import { defineRouteFlag, rateLimitGuard, Middleware } from '@forinda/kickjs'
+
+const Public = defineRouteFlag('auth.public')
+
+@Middleware(rateLimitGuard({ max: 60, exemptWhen: 'auth.public' }))
+@Controller()
+export class ApiController {
+  @Public
+  @Get('/health') // never limited
+  health(ctx: RequestContext) {}
+
+  @Get('/search') // limited
+  search(ctx: RequestContext) {}
+}
+```
+
+It takes a flag name, a list (any-of), or a predicate — including one that reads
+a flag's value:
+
+```ts
+rateLimitGuard({ max: 60, exemptWhen: ['auth.public', 'health.probe'] })
+rateLimitGuard({
+  max: 60,
+  exemptWhen: ({ flags }) => (flags.get('rate.limit') as { rpm: number })?.rpm === 0,
+})
+```
+
+### The app-wide limiter reads flags too
+
+`rateLimit()` runs before route matching, so there is no `ctx.route` for it to read. It gets the
+flags a different way: every mounted route registers its method, path and flags in a table at
+boot, and the limiter looks the incoming request up against it.
+
+```ts
+bootstrap({
+  modules,
+  middlewares: [rateLimit({ max: 60, exemptWhen: 'auth.public' })],
+})
+```
+
+That covers what `skipPaths` could not — a flagged route with a param is exempt by declaration:
+
+```ts
+@Public
+@Get('/probe/:name') // exempt for every :name
+probe(ctx: RequestContext) {}
+```
+
+**A request matching no route matches no flags, and stays limited.** That is the reason to keep
+this middleware pre-match rather than replacing it with a guard: an abuse control has to see
+traffic that hits nothing, and a route-scoped guard never does.
+
+Keep `skipPaths` for paths that are not routes at all — a static mount, a proxied prefix. A flag
+cannot describe those, because there is no handler to put it on.

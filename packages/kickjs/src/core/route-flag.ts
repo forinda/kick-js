@@ -30,7 +30,19 @@ export interface RouteFlagDeclaration {
  * (`@Public(false)`, `@RateLimit({ rpm: 10 })`), on a class or a method.
  */
 export interface RouteFlag<V = true> {
-  (target: object, propertyKey?: string | symbol): void
+  /**
+   * Bare on a class — `@Public`. Typed against `Function` rather than `object`
+   * so a flag VALUE that happens to be an object (`@Limit({ rpm: 10 })`) cannot
+   * match this signature: overload resolution would otherwise pick it, return
+   * `void`, and fail with "Type 'void' has no call signatures".
+   */
+  (target: Function): void
+  /**
+   * Bare on a method — `@Public`. `propertyKey` is required for the same
+   * reason: it makes a one-argument call unambiguous.
+   */
+  (target: object, propertyKey: string | symbol, descriptor?: PropertyDescriptor): void
+  /** Called with a value — `@Public(false)`, `@Limit({ rpm: 10 })`. */
   (value: V | false): (target: object, propertyKey?: string | symbol) => void
   readonly flagName: string
 }
@@ -170,6 +182,26 @@ export type RouteFlagPredicate = (ctx: RouteFlagContext) => boolean
  * ```
  */
 export type RouteFlagTest = string | readonly string[] | RouteFlagPredicate
+
+/**
+ * Evaluate a {@link RouteFlagTest} against a route's resolved flags.
+ *
+ * Shared by every consumer that can be exempted per route — the contributor
+ * runner, `csrfGuard`, `rateLimitGuard` — so "which routes does this apply to"
+ * means the same thing everywhere, and a list is any-of in all of them.
+ */
+export function matchesFlagTest(
+  test: RouteFlagTest,
+  flags: ReadonlyMap<string, unknown> | undefined,
+  route?: RouteFlagContext['route'],
+): boolean {
+  const resolved = flags ?? EMPTY_FLAGS
+  if (typeof test === 'string') return resolved.has(test)
+  if (typeof test === 'function') return test({ flags: resolved, route })
+  return test.some((name) => resolved.has(name))
+}
+
+const EMPTY_FLAGS: ReadonlyMap<string, unknown> = new Map()
 
 /**
  * Where the matched route is stashed for `ctx.route` to read.

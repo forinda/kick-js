@@ -192,10 +192,10 @@ interface CsrfOptions {
   ignorePaths?: string[]
   tokenLength?: number // default: 32
   cookieOptions?: {
-    httpOnly?: boolean
-    sameSite?: 'strict' | 'lax' | 'none'
-    secure?: boolean
-    path?: string
+    httpOnly?: boolean // default: false — the page must read the token to echo it
+    sameSite?: 'strict' | 'lax' | 'none' // default: 'strict'
+    secure?: boolean // default: true in production
+    path?: string // default: '/'
   }
 }
 ```

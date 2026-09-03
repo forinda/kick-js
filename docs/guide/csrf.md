@@ -36,13 +36,25 @@ csrf({
   ignorePaths: ['/webhooks/stripe', '/webhooks/github'],
   tokenLength: 32, // bytes before hex encoding (default: 32 = 64 hex chars)
   cookieOptions: {
-    httpOnly: true, // default: true
+    httpOnly: false, // default: false — the page must be able to read the token
     sameSite: 'strict', // default: 'strict'
     secure: true, // default: true in production
     path: '/', // default: '/'
   },
 })
 ```
+
+::: tip Why `httpOnly` defaults to `false` here
+Double-submit CSRF requires the **client** to read the token cookie and echo it in a header. Under
+`httpOnly: true`, `document.cookie` returns nothing, no header is sent, and every mutating request
+answers `403` — the flow below could not work.
+
+The token is not a credential: it is compared against the cookie the browser already sends, so a
+token an attacker cannot read is also one your own page cannot send.
+
+Set `httpOnly: true` only when the client receives the token another way — rendered into the page
+by the server, or fetched from an endpoint of your own.
+:::
 
 | Option          | Type       | Default                              |
 | --------------- | ---------- | ------------------------------------ |
@@ -57,7 +69,8 @@ The `secure` cookie flag defaults to `true` when `NODE_ENV` is `'production'` an
 
 ## Client-Side Usage
 
-Your frontend needs to read the CSRF cookie and send it back as a header on every mutating request.
+Your frontend needs to read the CSRF cookie and send it back as a header on every mutating
+request. The default cookie is readable by JavaScript for exactly this reason.
 
 ### JavaScript / Fetch
 
@@ -110,3 +123,36 @@ When validation fails, the middleware returns:
 ```
 
 with HTTP status **403**.
+
+## Exempting routes by flag
+
+`csrf()` runs before route matching, so its only handle on "not this endpoint" is
+`ignorePaths` — an exact pathname. That cannot express `/webhooks/:provider`, and
+it keeps parsing after an `apiPrefix` or `version` change that silently voids it.
+
+`csrfGuard()` is the ctx-style counterpart. It runs inside the matched route, so
+it reads [route flags](./route-flags.md) and works on every runtime including the
+web entry:
+
+```ts
+import { csrfGuard, defineRouteFlag, Middleware } from '@forinda/kickjs'
+
+const CsrfExempt = defineRouteFlag('csrf.exempt')
+
+@Middleware(csrfGuard({ exemptWhen: 'csrf.exempt' }))
+@Controller()
+export class WebhooksController {
+  @CsrfExempt
+  @Post('/:provider') // exempt, params and all
+  receive(ctx: RequestContext) {}
+
+  @Post('/settings') // still protected
+  settings(ctx: RequestContext) {}
+}
+```
+
+`exemptWhen` takes a flag name, a list of names (matched any-of), or a predicate
+`({ flags, route }) => boolean`.
+
+Keep `csrf()` when you want one app-wide middleware that also covers requests
+matching no route — there is nothing to exempt there, and nothing to read.
