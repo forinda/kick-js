@@ -253,6 +253,15 @@ first declaration, and you can adopt it one flag at a time.
 The framework declares nothing in this registry. `auth.public` above is a name you chose — see
 [Naming](#naming).
 
+Two constraints on what a flag can be:
+
+- **A name cannot start with `!`.** That prefix means "does not carry this flag" in a test, so a
+  flag literally named `!x` would be indistinguishable from the negation of `x`. `defineRouteFlag`
+  rejects it.
+- **A value type should not include `false`.** `false` is the deletion sentinel — `@Flag(false)`
+  removes the flag rather than storing it — so a flag declared `boolean` could never actually read
+  back as `false`. `flags.get()` excludes `false` from its result type to say so.
+
 ## Where flags can be declared
 
 Method and class today, resolved method-over-class. Module, adapter and global registration sites are planned, matching the [context contributor](./context-decorators.md) precedence chain.

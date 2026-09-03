@@ -117,6 +117,18 @@ describe('route flags — resolution', () => {
   })
 })
 
+describe('route flags — reserved names', () => {
+  it("rejects a flag name starting with '!'", () => {
+    // '!x' as a NAME would be indistinguishable from the negation of 'x', so a
+    // test written as `exemptWhen: '!x'` would silently change meaning.
+    expect(() => defineRouteFlag('!csrf.exempt' as never)).toThrow(/cannot start with '!'/)
+  })
+
+  it('still accepts a name containing ! elsewhere', () => {
+    expect(() => defineRouteFlag('urgent!' as never)).not.toThrow()
+  })
+})
+
 describe('route flags — ctx.route', () => {
   beforeEach(() => Container.reset())
 

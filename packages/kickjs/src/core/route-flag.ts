@@ -41,6 +41,14 @@ import { getClassMeta, getMethodMeta, pushClassMeta, pushMethodMeta } from './me
  *
  * The framework itself declares nothing here: it ships the mechanism and names
  * no flags, so `auth.public` above is a name you chose.
+ *
+ * Two constraints on what you can declare:
+ * - A name cannot start with `!` — that prefix means "does not carry this flag"
+ *   in a {@link RouteFlagTest}, and `defineRouteFlag` rejects it.
+ * - A value type should not include `false`, which is the deletion sentinel:
+ *   `@Flag(false)` removes the flag rather than storing `false`, so
+ *   `flags.get()` can never return it (its result type excludes `false` to say
+ *   so).
  */
 // eslint-disable-next-line @typescript-eslint/no-empty-interface
 export interface KickRouteFlags {}
@@ -162,6 +170,19 @@ export function defineRouteFlag<const N extends RouteFlagName>(
 ): RouteFlag<RouteFlagValue<N, true>>
 export function defineRouteFlag<V>(name: RouteFlagName): RouteFlag<V>
 export function defineRouteFlag(name: string): RouteFlag<never> {
+  // `!` is reserved: a test string starting with it means "does NOT carry this
+  // flag", so a flag literally named '!x' would be indistinguishable from the
+  // negation of 'x' — `exemptWhen: '!x'` would silently stop meaning what the
+  // author wrote. Rejecting at definition is the only point where the two can
+  // still be told apart.
+  if (name.startsWith('!')) {
+    throw new Error(
+      `defineRouteFlag('${name}'): a flag name cannot start with '!' — that prefix is reserved ` +
+        `for negated tests ('!${name.slice(1)}' means "does not carry ${name.slice(1)}"). ` +
+        `Rename the flag.`,
+    )
+  }
+
   function apply(value: unknown, target: object, propertyKey?: string | symbol): void {
     const declaration: RouteFlagDeclaration = { name, value }
     if (propertyKey === undefined) {
@@ -236,7 +257,13 @@ export function resolveRouteFlags(
  */
 export interface RouteFlags extends ReadonlyMap<string, unknown> {
   has(name: RouteFlagName): boolean
-  get<K extends RouteFlagName>(name: K): RouteFlagValue<K> | undefined
+  /**
+   * `false` is excluded from the result on purpose: it is the deletion
+   * sentinel, so a flag resolved to `false` is *absent*, and `get` returns
+   * `undefined` for it. A registry entry typed `boolean` would otherwise
+   * promise a `false` that can never arrive.
+   */
+  get<K extends RouteFlagName>(name: K): Exclude<RouteFlagValue<K>, false> | undefined
 }
 
 /**

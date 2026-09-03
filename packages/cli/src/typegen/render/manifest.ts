@@ -282,13 +282,30 @@ export function isSelfContainedType(typeText: string): boolean {
   return identifiers.every((id) => SELF_CONTAINED_NAMES.has(id))
 }
 
+/** Whitespace-insensitive comparison — `{ rpm: number }` and `{rpm:number}` are one type. */
+const normaliseType = (t: string | null): string => (t ?? 'true').replace(/\s+/g, '')
+
 export function renderRouteFlags(items: DiscoveredRouteFlag[]): string {
-  // Two calls with the same name are the same flag; first wins, and a
-  // conflicting value type is the author's problem to notice, not ours to
-  // guess at.
+  // Two calls with the same name are the same flag. Identical declarations are
+  // fine (a re-export, a duplicated import); DIFFERENT value types are not —
+  // keeping the first would type `flags.get(name)` from one declaration while
+  // `defineRouteFlag` at the other site stores the other shape, and nothing
+  // would report the mismatch. Fail generation instead, naming both files.
   const byName = new Map<string, DiscoveredRouteFlag>()
   for (const item of items) {
-    if (!byName.has(item.name)) byName.set(item.name, item)
+    const prior = byName.get(item.name)
+    if (!prior) {
+      byName.set(item.name, item)
+      continue
+    }
+    if (normaliseType(prior.valueType) !== normaliseType(item.valueType)) {
+      throw new Error(
+        `Route flag '${item.name}' is declared with two different value types:\n` +
+          `  ${prior.relativePath}: ${prior.valueType ?? 'true'}\n` +
+          `  ${item.relativePath}: ${item.valueType ?? 'true'}\n` +
+          `Declare the flag once and import it, or give the two flags different names.`,
+      )
+    }
   }
 
   const sorted = [...byName.values()].toSorted((a, b) => a.name.localeCompare(b.name))
@@ -304,8 +321,11 @@ export function renderRouteFlags(items: DiscoveredRouteFlag[]): string {
       // inside this `declare module` block — emitting it produces
       // `Cannot find name 'X'` and breaks every consumer's typecheck. Degrade
       // to `unknown` and say why, rather than emitting a file that won't compile.
+      // Collapse the type text onto one line: a multiline type would end the
+      // `//` comment early and put the rest of it into the file as code.
+      const oneLine = item.valueType.replace(/\s+/g, ' ').trim()
       return (
-        `    // '${item.valueType}' is declared in ${item.relativePath}, not in scope here.\n` +
+        `    // '${oneLine}' is declared in ${item.relativePath}, not in scope here.\n` +
         `    // Inline the type at the defineRouteFlag call, or declare this flag by hand.\n` +
         `    ${key}: unknown`
       )

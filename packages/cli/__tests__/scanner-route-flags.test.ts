@@ -108,6 +108,45 @@ describe('renderRouteFlags', () => {
     expect(out.indexOf('"alpha"')).toBeLessThan(out.indexOf('"zeta"'))
   })
 
+  it('keeps a multiline named type on one line in the diagnostic', () => {
+    const out = render(`import type { Big } from './types'
+      const L = defineRouteFlag<
+        Big
+      >('big')`)
+    // A raw line break would end the `//` comment and drop the rest into the
+    // file as code.
+    for (const line of out.split('\n')) {
+      if (line.includes('not in scope here')) expect(line.trim().startsWith('//')).toBe(true)
+    }
+    expect(out).toContain('"big": unknown')
+  })
+
+  it('fails when one flag is declared with two different value types', () => {
+    const a = extractFileAst(
+      `const L = defineRouteFlag<{ rpm: number }>('rate.limit')`,
+      '/proj/src/a.ts',
+      '/proj',
+    ).routeFlags
+    const b = extractFileAst(
+      `const L = defineRouteFlag<{ rps: number }>('rate.limit')`,
+      '/proj/src/b.ts',
+      '/proj',
+    ).routeFlags
+    expect(() => renderRouteFlags([...a, ...b])).toThrow(/two different value types/)
+  })
+
+  it('tolerates the same flag declared identically twice', () => {
+    const decl = `const L = defineRouteFlag<{ rpm: number }>('rate.limit')`
+    const a = extractFileAst(decl, '/proj/src/a.ts', '/proj').routeFlags
+    const b = extractFileAst(
+      `const L = defineRouteFlag<{rpm:number}>('rate.limit')`,
+      '/proj/src/b.ts',
+      '/proj',
+    ).routeFlags
+    // Same type, different spacing — one flag, no error.
+    expect(renderRouteFlags([...a, ...b])).toContain('"rate.limit"')
+  })
+
   it('emits a valid empty registry when a project declares none', () => {
     const out = renderRouteFlags([])
     expect(out).toContain('interface KickRouteFlags')
