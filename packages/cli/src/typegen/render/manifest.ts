@@ -222,6 +222,66 @@ export function buildModuleTokens(classes: DiscoveredClass[]): string[] {
  * (`skipWhen`, `exemptWhen`, `flags.has`), and `flags.get(name)` is typed —
  * without anyone hand-writing a `declare module` block.
  */
+/**
+ * Can this type text stand alone inside a generated `declare module` block?
+ *
+ * The value type is captured as raw source from the call site, where imports
+ * and local declarations are in scope — neither of which exists in the emitted
+ * `.d.ts`. A reference to anything the global scope lacks would emit as
+ * `Cannot find name`, so it is degraded to `unknown` instead.
+ *
+ * The allowlist is deliberately conservative: primitives, type keywords, and
+ * the handful of always-available globals. A false negative costs an adopter
+ * one `unknown`; a false positive breaks their build.
+ */
+const SELF_CONTAINED_NAMES = new Set([
+  'string',
+  'number',
+  'boolean',
+  'bigint',
+  'symbol',
+  'object',
+  'unknown',
+  'any',
+  'never',
+  'void',
+  'null',
+  'undefined',
+  'true',
+  'false',
+  'Array',
+  'ReadonlyArray',
+  'Record',
+  'Partial',
+  'Required',
+  'Readonly',
+  'Pick',
+  'Omit',
+  'Date',
+  'RegExp',
+  'Map',
+  'Set',
+  'ReadonlyMap',
+  'ReadonlySet',
+  'Promise',
+  'Error',
+  'URL',
+  'Uint8Array',
+  'ArrayBuffer',
+])
+
+export function isSelfContainedType(typeText: string): boolean {
+  const scrubbed = typeText
+    // String-literal types: their contents are values, not references.
+    .replace(/'[^']*'|"[^"]*"|`[^`]*`/g, '')
+    // Property names in an object type — `{ rpm: number; burst?: number }`.
+    // These are declarations, not references, so they need no scope.
+    .replace(/[A-Za-z_$][A-Za-z0-9_$]*\s*\??\s*:/g, ':')
+
+  const identifiers = scrubbed.match(/[A-Za-z_$][A-Za-z0-9_$]*/g) ?? []
+  return identifiers.every((id) => SELF_CONTAINED_NAMES.has(id))
+}
+
 export function renderRouteFlags(items: DiscoveredRouteFlag[]): string {
   // Two calls with the same name are the same flag; first wins, and a
   // conflicting value type is the author's problem to notice, not ours to
@@ -232,7 +292,25 @@ export function renderRouteFlags(items: DiscoveredRouteFlag[]): string {
   }
 
   const sorted = [...byName.values()].toSorted((a, b) => a.name.localeCompare(b.name))
-  const entries = sorted.map((item) => `    '${item.name}': ${item.valueType ?? 'true'}`).join('\n')
+  const entries = sorted
+    .map((item) => {
+      // `JSON.stringify`, not a hand-rolled quoted key: a flag name may legally
+      // contain a quote (`defineRouteFlag("author's")`), which would emit a
+      // syntax error into the generated file.
+      const key = JSON.stringify(item.name)
+      if (item.valueType === null) return `    ${key}: true`
+      if (isSelfContainedType(item.valueType)) return `    ${key}: ${item.valueType}`
+      // A named type is resolved in the flag's own module and means nothing
+      // inside this `declare module` block — emitting it produces
+      // `Cannot find name 'X'` and breaks every consumer's typecheck. Degrade
+      // to `unknown` and say why, rather than emitting a file that won't compile.
+      return (
+        `    // '${item.valueType}' is declared in ${item.relativePath}, not in scope here.\n` +
+        `    // Inline the type at the defineRouteFlag call, or declare this flag by hand.\n` +
+        `    ${key}: unknown`
+      )
+    })
+    .join('\n')
 
   const body = entries
     ? entries

@@ -172,12 +172,27 @@ method name rather than a live request.
 Every `skipWhen` / `onlyWhen` / `exemptWhen` accepts the same three forms:
 
 ```ts
-'auth.public' // this flag
-;['auth.public', 'health.probe'] // any of these
+'auth.public' // carries this flag
+'!auth.public' // does NOT carry it
+;['auth.public', 'health.probe'] // carries any of these
+;['!auth.public', '!health.probe'] // carries none of these
 ;({ flags, route }) => flags.has('a') && flags.has('b') // anything else
 ```
 
-A list is **any-of** — it reads as "these are all reasons to skip". All-of, value checks and path checks go through a predicate:
+A positive list is **any-of** — it reads as "these are all reasons to skip". A negated list is its
+complement, **none-of**, so flipping every entry inverts the meaning the way a reader expects.
+
+::: warning A list is single-polarity
+`['auth.public', '!metered']` is a compile error. Under any-of it would mean "public present **or**
+metered absent", which almost everyone reads as "and" — so rather than pick a reading, the type
+forbids it and a predicate says it unambiguously. Mixing them at runtime (from untyped config)
+throws where the consumer is constructed, not on the first request that hits it.
+:::
+
+Negation matters most on `exemptWhen`, which has no `onlyWhen` counterpart — `skipWhen: '!x'` is
+just `onlyWhen: 'x'` written differently.
+
+All-of, value checks and path checks go through a predicate:
 
 ```ts
 exemptWhen: ({ flags }) => (flags.get('rate.limit') as { rpm: number } | undefined)?.rpm === 0

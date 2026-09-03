@@ -37,6 +37,7 @@ export type {
   KickRouteFlags,
   RouteFlag,
   RouteFlagContext,
+  NegatedRouteFlagName,
   RouteFlagName,
   RouteFlagPredicate,
   RouteFlagTest,

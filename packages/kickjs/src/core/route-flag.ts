@@ -74,23 +74,47 @@ export interface RouteFlagDeclaration {
  * A flag decorator. Usable bare (`@Public`) or called with a value
  * (`@Public(false)`, `@RateLimit({ rpm: 10 })`), on a class or a method.
  */
-export interface RouteFlag<V = true> {
+/**
+ * The bare application forms — `@Public` with no call.
+ *
+ * Split out so they can be withheld from a flag whose declared value is not
+ * assignable from `true`: applying `@Limit` bare would store `true` while
+ * `flags.get('rate.limit')` promises `{ rpm: number }`, and nothing would catch
+ * the mismatch until a consumer read the wrong shape at runtime.
+ */
+export interface BareRouteFlag {
   /**
-   * Bare on a class — `@Public`. Typed against `Function` rather than `object`
-   * so a flag VALUE that happens to be an object (`@Limit({ rpm: 10 })`) cannot
-   * match this signature: overload resolution would otherwise pick it, return
+   * Bare on a class. Typed against `Function` rather than `object` so a flag
+   * VALUE that happens to be an object (`@Limit({ rpm: 10 })`) cannot match
+   * this signature: overload resolution would otherwise pick it, return
    * `void`, and fail with "Type 'void' has no call signatures".
    */
   (target: Function): void
   /**
-   * Bare on a method — `@Public`. `propertyKey` is required for the same
-   * reason: it makes a one-argument call unambiguous.
+   * Bare on a method. `propertyKey` is required for the same reason — it makes
+   * a one-argument call unambiguous.
    */
   (target: object, propertyKey: string | symbol, descriptor?: PropertyDescriptor): void
-  /** Called with a value — `@Public(false)`, `@Limit({ rpm: 10 })`. */
+}
+
+/** The called form — `@Public(false)`, `@Limit({ rpm: 10 })`. */
+export interface ValuedRouteFlag<V> {
   (value: V | false): (target: object, propertyKey?: string | symbol) => void
   readonly flagName: string
 }
+
+/**
+ * A flag decorator.
+ *
+ * Bare application is available only when `true` is a valid value for the flag
+ * — which is every flag until {@link KickRouteFlags} declares a value type for
+ * it. Declare `'rate.limit': { rpm: number }` and `@RateLimit` on its own stops
+ * compiling, because the value it would store is not the value the registry
+ * promises readers.
+ */
+export type RouteFlag<V = true> = true extends V
+  ? BareRouteFlag & ValuedRouteFlag<V>
+  : ValuedRouteFlag<V>
 
 /**
  * True when the arguments look like a decorator application rather than a
@@ -259,7 +283,35 @@ export type RouteFlagPredicate = (ctx: RouteFlagContext) => boolean
  * skipWhen: ({ flags }) => flags.has('a') && flags.has('b')   // both
  * ```
  */
-export type RouteFlagTest = RouteFlagName | readonly RouteFlagName[] | RouteFlagPredicate
+/**
+ * A flag name with `!` in front — matches routes that do **not** carry it.
+ *
+ * Narrows with the registry like the positive form: once `KickRouteFlags`
+ * declares `'auth.public'`, this is `'!auth.public' | …`, so a misspelt
+ * negation is a compile error too.
+ */
+export type NegatedRouteFlagName = `!${RouteFlagName}`
+
+/**
+ * How a consumer names the routes it cares about.
+ *
+ * - `'auth.public'` — carries the flag
+ * - `'!auth.public'` — does **not** carry it
+ * - `['a', 'b']` — carries **any** of them
+ * - `['!a', '!b']` — carries **none** of them
+ * - a predicate — anything else: all-of, a flag's value, the route's path
+ *
+ * Lists are single-polarity by construction: `['a', '!b']` matches neither
+ * array member of this union, so it is a compile error. Mixed polarity has no
+ * reading everyone agrees on — under any-of it means "a present OR b absent",
+ * which most readers parse as "and" — and a predicate says it unambiguously.
+ */
+export type RouteFlagTest =
+  | RouteFlagName
+  | NegatedRouteFlagName
+  | readonly RouteFlagName[]
+  | readonly NegatedRouteFlagName[]
+  | RouteFlagPredicate
 
 /**
  * Evaluate a {@link RouteFlagTest} against a route's resolved flags.
@@ -274,10 +326,60 @@ export function matchesFlagTest(
   route?: RouteFlagContext['route'],
 ): boolean {
   const resolved = flags ?? EMPTY_FLAGS
-  if (typeof test === 'string') return resolved.has(test)
   if (typeof test === 'function') return test({ flags: resolved, route })
-  return test.some((name) => resolved.has(name))
+
+  if (typeof test === 'string') {
+    return isNegated(test)
+      ? !resolved.has(stripNegation(test))
+      : resolved.has(test as RouteFlagName)
+  }
+
+  if (test.length === 0) return false
+
+  // Single polarity per list — the type forbids mixing, and this guards the
+  // untyped callers (plain JS, a value read from config) that the type cannot.
+  const negated = isNegated(test[0])
+  if (test.some((name) => isNegated(name) !== negated)) {
+    throw new Error(
+      `Route flag test mixes polarities: [${test.map((n) => `'${n}'`).join(', ')}]. ` +
+        `A list is either all names ("carries any of these") or all negated ` +
+        `("carries none of these") — for anything else, pass a predicate.`,
+    )
+  }
+
+  // Positive list is any-of; negated list is its complement, none-of. The two
+  // read as opposites, which is what makes flipping every entry do what a
+  // reader expects.
+  return negated
+    ? test.every((name) => !resolved.has(stripNegation(name)))
+    : test.some((name) => resolved.has(name as RouteFlagName))
 }
+
+/**
+ * Reject a mixed-polarity list at construction time.
+ *
+ * A list like `['auth.public', '!metered']` is a static mistake, so it fails
+ * where it is written — when the contributor or guard is built — rather than
+ * on the first request that reaches it. Same reasoning as the contributor
+ * pipeline failing a dependency cycle at boot.
+ *
+ * Call from every factory that accepts a {@link RouteFlagTest}; the check in
+ * {@link matchesFlagTest} stays as a backstop for direct callers.
+ */
+export function assertFlagTest(test: RouteFlagTest, site: string): void {
+  if (typeof test === 'function' || typeof test === 'string' || test.length === 0) return
+  const negated = isNegated(test[0])
+  if (test.some((name) => isNegated(name) !== negated)) {
+    throw new Error(
+      `${site}: route flag test mixes polarities: [${test.map((n) => `'${n}'`).join(', ')}]. ` +
+        `A list is either all names ("carries any of these") or all negated ` +
+        `("carries none of these") — for anything else, pass a predicate.`,
+    )
+  }
+}
+
+const isNegated = (name: string): boolean => name.startsWith('!')
+const stripNegation = (name: string): RouteFlagName => name.slice(1) as RouteFlagName
 
 const EMPTY_FLAGS: RouteFlags = new Map()
 

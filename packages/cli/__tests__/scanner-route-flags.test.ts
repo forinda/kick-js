@@ -70,8 +70,34 @@ describe('renderRouteFlags', () => {
     `)
     expect(out).toContain("declare module '@forinda/kickjs'")
     expect(out).toContain('interface KickRouteFlags')
-    expect(out).toContain("'auth.public': true")
-    expect(out).toContain("'rate.limit': { rpm: number }")
+    expect(out).toContain('"auth.public": true')
+    expect(out).toContain('"rate.limit": { rpm: number }')
+  })
+
+  it('degrades a named value type — it is not in scope in the generated file', () => {
+    const out = render(`import type { RateLimit } from './types'
+      const L = defineRouteFlag<RateLimit>('rate.limit')`)
+    // Emitting `'rate.limit': RateLimit` would be `Cannot find name 'RateLimit'`
+    // inside the declare-module block and break every consumer's typecheck.
+    expect(out).not.toMatch(/'rate\.limit':\s*RateLimit/)
+    expect(out).toContain('"rate.limit": unknown')
+    expect(out).toContain('not in scope here')
+  })
+
+  it('keeps a self-contained type verbatim', () => {
+    const out = render(`const L = defineRouteFlag<{ rpm: number; burst?: number }>('rate.limit')`)
+    expect(out).toContain('"rate.limit": { rpm: number; burst?: number }')
+  })
+
+  it('keeps a self-contained type built from globals', () => {
+    const out = render(`const W = defineRouteFlag<Record<string, number[]>>('w')`)
+    expect(out).toContain('"w": Record<string, number[]>')
+  })
+
+  it('escapes a name containing a quote', () => {
+    const out = render(`const A = defineRouteFlag("author's")`)
+    // A hand-rolled quoted key would emit `'author's'` — a syntax error.
+    expect(out).toContain('"author\'s": true')
   })
 
   it('sorts entries so the file does not churn between runs', () => {
@@ -79,7 +105,7 @@ describe('renderRouteFlags', () => {
       const B = defineRouteFlag('zeta')
       const A = defineRouteFlag('alpha')
     `)
-    expect(out.indexOf("'alpha'")).toBeLessThan(out.indexOf("'zeta'"))
+    expect(out.indexOf('"alpha"')).toBeLessThan(out.indexOf('"zeta"'))
   })
 
   it('emits a valid empty registry when a project declares none', () => {

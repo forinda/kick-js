@@ -389,3 +389,75 @@ describe('route flags — buildRoutes parity', () => {
     expect(buildRouteTable(C)[0].meta.flags?.has('auth.public')).toBe(true)
   })
 })
+
+describe('route flags — negated tests', () => {
+  beforeEach(() => Container.reset())
+
+  const Metered = defineRouteFlag('billing.metered')
+
+  const runsFor = async (skipWhen: unknown) => {
+    const ran: string[] = []
+    const Track = defineHttpContextDecorator({
+      key: 'user',
+      skipWhen: skipWhen as never,
+      resolve: (ctx: RequestContext) => {
+        ran.push(ctx.route?.path ?? '?')
+        return null
+      },
+    })
+
+    @Controller()
+    class C {
+      @Public
+      @Get('/pub')
+      pub(ctx: RequestContext) {
+        ctx.json({})
+      }
+
+      @Metered
+      @Get('/metered')
+      metered(ctx: RequestContext) {
+        ctx.json({})
+      }
+
+      @Public
+      @Metered
+      @Get('/both')
+      both(ctx: RequestContext) {
+        ctx.json({})
+      }
+
+      @Get('/plain')
+      plain(ctx: RequestContext) {
+        ctx.json({})
+      }
+    }
+
+    const app = await bootWith({ modules: [mod('/n', C)], contributors: [Track.registration] })
+    const h = app.handle.bind(app)
+    for (const p of ['/pub', '/metered', '/both', '/plain']) await request(h).get(`/api/v1/n${p}`)
+    return ran
+  }
+
+  it("'!flag' skips the routes that do NOT carry it", async () => {
+    // Skip where auth.public is absent → only the flagged routes run.
+    expect(await runsFor('!auth.public')).toEqual(['/pub', '/both'])
+  })
+
+  it('a negated list means "carries none of these"', async () => {
+    // Skip only where BOTH are absent → /plain is the only one skipped.
+    expect(await runsFor(['!auth.public', '!billing.metered'])).toEqual([
+      '/pub',
+      '/metered',
+      '/both',
+    ])
+  })
+
+  it('a positive list still means "carries any of these"', async () => {
+    expect(await runsFor(['auth.public', 'billing.metered'])).toEqual(['/plain'])
+  })
+
+  it('throws on a mixed-polarity list rather than guessing', async () => {
+    await expect(runsFor(['auth.public', '!billing.metered'])).rejects.toThrow(/mixes polarities/)
+  })
+})

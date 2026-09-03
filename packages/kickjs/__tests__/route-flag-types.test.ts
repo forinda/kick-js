@@ -22,6 +22,21 @@ describe('KickRouteFlags narrowing', () => {
     expectTypeOf(Pub).toEqualTypeOf<RouteFlag<true>>()
   })
 
+  it('refuses bare application on a flag whose value is not `true`', () => {
+    const Limit = defineRouteFlag('rate.limit')
+
+    class T {
+      // @ts-expect-error bare `@Limit` would store `true`, but the registry
+      // promises readers `{ rpm: number }`
+      @Limit
+      wrong() {}
+
+      @Limit({ rpm: 10 })
+      right() {}
+    }
+    expectTypeOf<T>().toBeObject()
+  })
+
   it('rejects a name the registry does not declare', () => {
     // @ts-expect-error 'auth.pubic' is a typo — the whole point of the registry
     defineRouteFlag('auth.pubic')
@@ -99,5 +114,25 @@ describe('RouteFlag overloads', () => {
       on() {}
     }
     expectTypeOf<T>().toBeObject()
+  })
+})
+
+describe('negated flag tests', () => {
+  it('accepts a negated name and a single-polarity list', () => {
+    expectTypeOf<'!auth.public'>().toMatchTypeOf<RouteFlagTest>()
+    expectTypeOf<['!auth.public', '!rate.limit']>().toMatchTypeOf<RouteFlagTest>()
+  })
+
+  it('rejects a misspelt negation', () => {
+    // @ts-expect-error 'auth.pubic' is not a declared flag, negated or not
+    const bad: RouteFlagTest = '!auth.pubic'
+    void bad
+  })
+
+  it('rejects a list that mixes polarities', () => {
+    // @ts-expect-error mixed polarity has no reading everyone agrees on —
+    // use a predicate
+    const mixed: RouteFlagTest = ['auth.public', '!rate.limit']
+    void mixed
   })
 })

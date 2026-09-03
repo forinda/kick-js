@@ -3,7 +3,7 @@
 // entry (via `@Middleware()` or `createWebApp({ middleware })`), unlike the
 // connect-style `rateLimit()` which is node-only. Zero runtime imports —
 // part of the edge purity graph.
-import { matchesFlagTest, type RouteFlagTest } from '../../core/route-flag'
+import { assertFlagTest, matchesFlagTest, type RouteFlagTest } from '../../core/route-flag'
 import type { MiddlewareHandler } from '../../core/decorators'
 import type { RequestContext } from '../context'
 import type { RateLimitStore } from './rate-limit'
@@ -133,6 +133,7 @@ export function rateLimitGuard(options: RateLimitGuardOptions = {}): MiddlewareH
   const store = options.store ?? new LazyMemoryStore(windowMs)
 
   const exemptWhen = options.exemptWhen
+  if (exemptWhen !== undefined) assertFlagTest(exemptWhen, 'rateLimitGuard({ exemptWhen })')
 
   return async (ctx: RequestContext, next: () => void): Promise<void> => {
     if (options.skip?.(ctx)) return next()

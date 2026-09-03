@@ -304,6 +304,7 @@ export type {
   RouteFlag,
   RouteFlagContext,
   RouteFlagDeclaration,
+  NegatedRouteFlagName,
   RouteFlagName,
   RouteFlagPredicate,
   RouteFlagTest,

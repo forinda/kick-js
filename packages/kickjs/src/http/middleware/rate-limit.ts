@@ -1,4 +1,4 @@
-import { matchesFlagTest, type RouteFlagTest } from '../../core/route-flag'
+import { assertFlagTest, matchesFlagTest, type RouteFlagTest } from '../../core/route-flag'
 import { bindRoutePolicy, type RoutePolicyTable } from '../../core/route-policy'
 import { sendJson } from './respond'
 import type { Request, Response, NextFunction } from 'express'
@@ -151,6 +151,7 @@ export function rateLimit(options: RateLimitOptions = {}) {
   const skip = options.skip
   const skipPaths = new Set(options.skipPaths ?? [])
   const exemptWhen = options.exemptWhen
+  if (exemptWhen !== undefined) assertFlagTest(exemptWhen, 'rateLimit({ exemptWhen })')
 
   // Filled in by the Application once routes are mounted, via the slot
   // declared below. Absent when this middleware runs outside an Application
