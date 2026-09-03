@@ -211,6 +211,131 @@ registerAdapter(joiAdapter)
 
 Custom adapters sit between the KickSchema passthrough and the built-in Zod/Valibot/Yup detectors, so an adopter who genuinely wants Joi (or a fork of Zod with different internals) plugs in without forking the framework.
 
+### Where to register it
+
+`registerAdapter` mutates a module-level list, so it has to run before anything
+calls `detectSchema` — that means before `bootstrap()`. The reliable spot is the
+top of `src/config/index.ts`, which `src/index.ts` already imports as a side
+effect before bootstrap for the env schema:
+
+```ts
+// src/config/index.ts
+import { registerAdapter } from '@forinda/kickjs-schema'
+import { joiAdapter } from './joi-adapter'
+
+registerAdapter(joiAdapter) // ← before any schema is detected
+
+// ...env schema below
+```
+
+A plugin's `build()` works too, as long as the plugin is registered in
+`bootstrap({ plugins })` rather than resolved lazily.
+
+### Joi for request bodies
+
+Once registered, a raw Joi schema is accepted anywhere a schema is:
+
+```ts
+@Post('/users', {
+  body: Joi.object({
+    name: Joi.string().min(2).required(),
+    age: Joi.number().integer().min(0),
+  }),
+})
+create(ctx: RequestContext) {
+  ctx.json({ got: ctx.body }) // coerced: age is a number
+}
+```
+
+A violation answers **422** in the standard problem shape, with Joi's own
+messages and its `path` mapped onto `field`:
+
+```json
+{
+  "status": 422,
+  "title": "Unprocessable Entity",
+  "type": "about:blank",
+  "detail": "\"name\" length must be at least 2 characters long",
+  "errors": [{ "field": "name", "message": "\"name\" length must be at least 2 characters long" }]
+}
+```
+
+### Joi for env
+
+The same adapter drives `loadEnvFromSchema`, including coercion — a
+`Joi.number()` key arrives as a number, not the string `process.env` held:
+
+```ts
+// src/config/index.ts
+import { loadEnvFromSchema } from '@forinda/kickjs/config'
+import { detectSchema } from '@forinda/kickjs-schema'
+import Joi from 'joi'
+
+const envSchema = detectSchema(
+  Joi.object({
+    PORT: Joi.number().default(3000),
+    DATABASE_URL: Joi.string().uri().required(),
+  }).unknown(true), // ← required, see below
+)
+
+export const env = loadEnvFromSchema(envSchema)
+export default envSchema
+```
+
+::: danger `.unknown(true)` is not optional for env schemas
+The env schema is validated against the whole of `process.env`, which carries
+hundreds of keys you never declared. A Zod object strips unknown keys silently;
+**Joi rejects them**, so a schema without `.unknown(true)` fails at boot with a
+list of everything else in your environment:
+
+```
+Environment validation failed:
+  VITEST_WORKER_ID: "VITEST_WORKER_ID" is not allowed
+  npm_config_registry: "npm_config_registry" is not allowed
+  ...
+```
+
+The same applies to any adapter whose library treats unknown keys as an error.
+:::
+
+### Typing: parameterise `wrap`
+
+`InferSchemaOutput` has no Joi branch, so a raw Joi schema infers `unknown` —
+`KickEnv` stays empty and `ctx.body` is untyped. The first branch reads
+`KickSchema<TOutput>`, so declaring the output on the wrapper is what restores
+inference:
+
+```ts
+interface AppEnv {
+  PORT: number
+  DATABASE_URL: string
+}
+
+const envSchema = detectSchema(joiEnv) as KickSchema<AppEnv>
+// InferSchemaOutput<typeof envSchema> === AppEnv → typed KickEnv, typed @Value()
+```
+
+Joi has no static inference of its own, so `AppEnv` is written by hand and the
+cast is the seam where you promise the two agree. Zod and Valibot skip this
+step because their schemas carry their output type.
+
+### `toJsonSchema` is what Swagger reads
+
+The adapter's `toJsonSchema()` feeds the OpenAPI spec. Returning `{}` (or a
+placeholder) leaves every Joi-validated route documented as an empty object —
+validation still works, the docs just say nothing. `joi-to-json` covers the
+common cases:
+
+```bash
+pnpm add joi-to-json
+```
+
+::: tip Verified
+The adapter above was run end to end: `detectSchema` resolution, request-body
+validation (200 with coerced values / 422 with mapped issues), and
+`loadEnvFromSchema` + `ConfigService.get()` returning a coerced `number`.
+:::
+
 ## `InferSchemaOutput<T>`
 
 Type-level inference of a schema's parsed output. `kick typegen` runs this against the env schema's default export (under `schemaValidator: 'kickjs-schema'`) to populate `KickEnv`, and the validate middleware uses it to type `ctx.body` / `ctx.query` / `ctx.params`.
