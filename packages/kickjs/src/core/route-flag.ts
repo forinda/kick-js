@@ -18,6 +18,51 @@
 import { METADATA } from './interfaces'
 import { getClassMeta, getMethodMeta, pushClassMeta, pushMethodMeta } from './metadata'
 
+/**
+ * Augmentable route-flag registry — the flag counterpart of `ContextMeta`.
+ *
+ * Declare a project's flags here and every use of them narrows: a misspelt
+ * name is a compile error rather than a flag that silently never matches, and
+ * `flags.get('rate.limit')` comes back typed instead of `unknown`.
+ *
+ * ```ts
+ * declare module '@forinda/kickjs' {
+ *   interface KickRouteFlags {
+ *     'auth.public': true
+ *     'rate.limit': { rpm: number }
+ *   }
+ * }
+ * ```
+ *
+ * The interface is empty by default, and everything below falls back to plain
+ * `string` while it stays that way — a project that has not augmented anything
+ * keeps compiling exactly as before. The narrowing switches on with the first
+ * declaration.
+ *
+ * The framework itself declares nothing here: it ships the mechanism and names
+ * no flags, so `auth.public` above is a name you chose.
+ */
+// eslint-disable-next-line @typescript-eslint/no-empty-interface
+export interface KickRouteFlags {}
+
+/**
+ * A flag name. Narrows to the declared keys once {@link KickRouteFlags} is
+ * augmented, and stays `string` until then — the same
+ * `[Known] extends [never]` fallback `ContextMetaKey` uses, for the same
+ * reason: first-day code must keep compiling.
+ */
+export type RouteFlagName = [keyof KickRouteFlags] extends [never]
+  ? string
+  : keyof KickRouteFlags & string
+
+/**
+ * The value type declared for a flag, defaulting to `true` for a bare flag and
+ * `unknown` for a name the registry does not know.
+ */
+export type RouteFlagValue<K extends string, Fallback = unknown> = K extends keyof KickRouteFlags
+  ? KickRouteFlags[K]
+  : Fallback
+
 /** One `@Flag` application, before precedence resolution. */
 export interface RouteFlagDeclaration {
   readonly name: string
@@ -74,8 +119,25 @@ function isDecoratorApplication(args: unknown[]): boolean {
  * export const Public = defineRouteFlag('auth.public')
  * export const RateLimit = defineRouteFlag<{ rpm: number }>('rate.limit')
  * ```
+ *
+ * Once {@link KickRouteFlags} declares the name, the value type comes from the
+ * registry and the explicit generic is redundant:
+ *
+ * ```ts
+ * declare module '@forinda/kickjs' {
+ *   interface KickRouteFlags {
+ *     'rate.limit': { rpm: number }
+ *   }
+ * }
+ *
+ * const RateLimit = defineRouteFlag('rate.limit') // RouteFlag<{ rpm: number }>
+ * ```
  */
-export function defineRouteFlag<V = true>(name: string): RouteFlag<V> {
+export function defineRouteFlag<const N extends RouteFlagName>(
+  name: N,
+): RouteFlag<RouteFlagValue<N, true>>
+export function defineRouteFlag<V>(name: RouteFlagName): RouteFlag<V>
+export function defineRouteFlag(name: string): RouteFlag<never> {
   function apply(value: unknown, target: object, propertyKey?: string | symbol): void {
     const declaration: RouteFlagDeclaration = { name, value }
     if (propertyKey === undefined) {
@@ -106,7 +168,7 @@ export function defineRouteFlag<V = true>(name: string): RouteFlag<V> {
   }
 
   Object.defineProperty(flag, 'flagName', { value: name, enumerable: true })
-  return flag as RouteFlag<V>
+  return flag as RouteFlag<never>
 }
 
 /**
@@ -122,7 +184,7 @@ export function defineRouteFlag<V = true>(name: string): RouteFlag<V> {
 export function resolveRouteFlags(
   classDeclarations: readonly RouteFlagDeclaration[],
   methodDeclarations: readonly RouteFlagDeclaration[],
-): ReadonlyMap<string, unknown> {
+): RouteFlags {
   const resolved = new Map<string, unknown>()
 
   // Lowest precedence first, so higher levels overwrite.
@@ -134,7 +196,23 @@ export function resolveRouteFlags(
     resolved.set(name, value)
   }
 
-  return resolved
+  // The map is built from declarations, so its value types are whatever the
+  // registry says they are — this cast is the one place that knowledge crosses
+  // from runtime data into the type system.
+  return resolved as RouteFlags
+}
+
+/**
+ * The resolved flags for a route.
+ *
+ * A `ReadonlyMap` whose `has` is narrowed to known names and whose `get`
+ * returns the declared value type — so `flags.get('rate.limit')` is
+ * `{ rpm: number } | undefined` rather than `unknown`, once the registry
+ * declares it. Until then it behaves like `ReadonlyMap<string, unknown>`.
+ */
+export interface RouteFlags extends ReadonlyMap<string, unknown> {
+  has(name: RouteFlagName): boolean
+  get<K extends RouteFlagName>(name: K): RouteFlagValue<K> | undefined
 }
 
 /**
@@ -144,7 +222,7 @@ export function resolveRouteFlags(
  * which today means a non-HTTP transport running the same contributor pipeline.
  */
 export interface RouteFlagContext {
-  readonly flags: ReadonlyMap<string, unknown>
+  readonly flags: RouteFlags
   readonly route?: {
     readonly method: string
     readonly path: string
@@ -181,7 +259,7 @@ export type RouteFlagPredicate = (ctx: RouteFlagContext) => boolean
  * skipWhen: ({ flags }) => flags.has('a') && flags.has('b')   // both
  * ```
  */
-export type RouteFlagTest = string | readonly string[] | RouteFlagPredicate
+export type RouteFlagTest = RouteFlagName | readonly RouteFlagName[] | RouteFlagPredicate
 
 /**
  * Evaluate a {@link RouteFlagTest} against a route's resolved flags.
@@ -192,7 +270,7 @@ export type RouteFlagTest = string | readonly string[] | RouteFlagPredicate
  */
 export function matchesFlagTest(
   test: RouteFlagTest,
-  flags: ReadonlyMap<string, unknown> | undefined,
+  flags: RouteFlags | undefined,
   route?: RouteFlagContext['route'],
 ): boolean {
   const resolved = flags ?? EMPTY_FLAGS
@@ -201,7 +279,7 @@ export function matchesFlagTest(
   return test.some((name) => resolved.has(name))
 }
 
-const EMPTY_FLAGS: ReadonlyMap<string, unknown> = new Map()
+const EMPTY_FLAGS: RouteFlags = new Map()
 
 /**
  * Where the matched route is stashed for `ctx.route` to read.
@@ -235,10 +313,7 @@ export const ROUTE_SLOT: unique symbol = Symbol.for('kick.route') as never
  * })
  * ```
  */
-export function getRouteFlags(
-  controllerClass: object,
-  handlerName: string,
-): ReadonlyMap<string, unknown> {
+export function getRouteFlags(controllerClass: object, handlerName: string): RouteFlags {
   return resolveRouteFlags(
     getClassFlagDeclarations(controllerClass),
     getMethodFlagDeclarations(controllerClass, handlerName),
