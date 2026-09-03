@@ -140,6 +140,30 @@ rateLimitGuard({
 })
 ```
 
-The connect-style `rateLimit()` keeps `skipPaths` / `skip`: it runs before route
-matching, which is what you want for an abuse control that must also see traffic
-matching no route — but it cannot read flags. See [route flags](./route-flags.md).
+### The app-wide limiter reads flags too
+
+`rateLimit()` runs before route matching, so there is no `ctx.route` for it to read. It gets the
+flags a different way: every mounted route registers its method, path and flags in a table at
+boot, and the limiter looks the incoming request up against it.
+
+```ts
+bootstrap({
+  modules,
+  middlewares: [rateLimit({ max: 60, exemptWhen: 'auth.public' })],
+})
+```
+
+That covers what `skipPaths` could not — a flagged route with a param is exempt by declaration:
+
+```ts
+@Public
+@Get('/probe/:name') // exempt for every :name
+probe(ctx: RequestContext) {}
+```
+
+**A request matching no route matches no flags, and stays limited.** That is the reason to keep
+this middleware pre-match rather than replacing it with a guard: an abuse control has to see
+traffic that hits nothing, and a route-scoped guard never does.
+
+Keep `skipPaths` for paths that are not routes at all — a static mount, a proxied prefix. A flag
+cannot describe those, because there is no handler to put it on.

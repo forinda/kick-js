@@ -102,7 +102,70 @@ This is what makes exemption composable. Without it, the only way to opt out of 
 export class ApiController {}
 ```
 
-Both are ctx-style, so they run inside the matched route. The connect-style `csrf()` and `rateLimit()` run _before_ route matching — they cover requests that match no route, but they cannot read flags. That is a real choice, not a migration.
+Both are ctx-style, so they run inside the matched route.
+
+### Middleware that runs before routing
+
+`rateLimit()` is mounted app-wide and runs before a route is matched, so it has no `ctx.route`. It reads flags from a **policy table** instead: every mounted route registers its method, path and flags at boot, and the limiter looks up the incoming request.
+
+```ts
+bootstrap({ middlewares: [rateLimit({ max: 60, exemptWhen: 'auth.public' })] })
+```
+
+A request matching no route matches no flags and stays limited — which is exactly why this one keeps running pre-match instead of becoming a guard.
+
+Your own pre-match middleware can read the same table:
+
+```ts
+import { bindRoutePolicy, type RoutePolicyTable } from '@forinda/kickjs'
+
+export function auditUnflagged() {
+  let policy: RoutePolicyTable | undefined
+  const handler = (req, _res, next) => {
+    const flags = policy?.lookup(req.method, req.url ?? '/')
+    if (!flags?.has('audit.skip')) log(req.url)
+    next()
+  }
+  return bindRoutePolicy(handler, (table) => {
+    policy = table
+  })
+}
+```
+
+The Application hands the table to any middleware declaring that slot, once routes are mounted. It is per-application rather than a global, so two apps in one process never see each other's routes.
+
+The connect-style `csrf()` has no table equivalent — a token check on an unmatched route is meaningless, so use `csrfGuard()` where you want flags.
+
+### Readers: OpenAPI and DevTools
+
+Two consumers read flags without running per request.
+
+**OpenAPI.** Name the flag your project uses for public endpoints and the spec reads the same
+declaration the runtime does, instead of a second annotation that can drift from it:
+
+```ts
+SwaggerAdapter({ bearerAuth: true, publicFlag: 'auth.public' })
+SwaggerAdapter({ bearerAuth: true, publicFlag: ['auth.public', 'health.probe'] })
+```
+
+The name is configuration because the framework names no flags — see [Naming](#naming). For
+anything richer than a name (a flag's value, two flags combined), `securityResolver` plus
+`getRouteFlags` covers it:
+
+```ts
+SwaggerAdapter({
+  securityResolver: ({ controllerClass, handlerName }) =>
+    getRouteFlags(controllerClass, handlerName).has('auth.public') ? null : undefined,
+})
+```
+
+**DevTools.** `GET /_debug/routes` reports each route's resolved flags, and the dashboard's Routes
+tab shows them in a Flags column — so "why does this endpoint not require auth" is answerable from
+the route list rather than by reading the controller.
+
+`getRouteFlags(controllerClass, handlerName)` is the out-of-request resolver behind both: the same
+method-over-class result `ctx.route.flags` carries, for consumers that see a controller and a
+method name rather than a live request.
 
 ## Matching: name, list, or predicate
 

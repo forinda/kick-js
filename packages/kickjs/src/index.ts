@@ -32,6 +32,7 @@ export {
 } from './http/context'
 export { defineHttpContextDecorator } from './http/define-http-context-decorator'
 export { defineRouteFlag } from './core/route-flag'
+export { bindRoutePolicy, type RoutePolicyTable } from './core/route-policy'
 export type {
   RouteFlag,
   RouteFlagContext,

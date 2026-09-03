@@ -1,11 +1,12 @@
 # Route Flags — a shared vocabulary for "this endpoint is open"
 
-> Status: **phases 1–2 implemented.** Phase 1: `defineRouteFlag`, `ctx.route`,
+> Status: **phases 1–3 implemented.** Phase 1: `defineRouteFlag`, `ctx.route`,
 > contributor `skipWhen` / `onlyWhen`. Phase 2: `exemptWhen` on the ctx-style
 > guards — `csrfGuard()` (new) and `rateLimitGuard()`. See
 > `packages/kickjs/__tests__/route-flags.test.ts` and `route-flag-guards.test.ts`.
-> Phase 3 (the connect-style `rateLimit()` policy table) and phase 4 (OpenAPI +
-> DevTools readers) are still proposals.
+> Phase 3: the policy table, so the pre-match `rateLimit()` reads flags without
+> giving up the traffic a guard cannot see. Phase 4 (OpenAPI + DevTools readers)
+> ships alongside in its own PR.
 > Decisions taken: core primitive in `@forinda/kickjs`; auth first, other consumers follow;
 > declaration must sit on the controller and propagate to its routes.
 

@@ -23,6 +23,7 @@ import {
   MutableModuleRegistry,
 } from '../core'
 import { moduleRouteMissingControllerError } from '../core/kick-errors'
+import { RoutePolicyTable, offerRoutePolicy } from '../core/route-policy'
 import {
   disposeAll,
   drainDisposables,
@@ -492,6 +493,12 @@ export class Application {
   private container: Container
   private httpServer: http.Server | null = null
   private readonly adapters: AppAdapter[]
+  /**
+   * Flags of every mounted route, for middleware that runs before routing and
+   * therefore cannot read `ctx.route` (the connect-style rate limiter). Handed
+   * to middleware that declares the slot — see `core/route-policy.ts`.
+   */
+  private readonly routePolicy = new RoutePolicyTable()
 
   private readonly plugins: KickPlugin[]
 
@@ -971,6 +978,7 @@ export class Application {
               const fullPath = joinPaths(mountPath, entry.path)
               assertRouteUnique(seenRoutes, entry.method, fullPath, owner)
               mountedPaths.push({ method: entry.method, path: fullPath })
+              this.routePolicy.add(entry.method, fullPath, entry.meta.flags)
             }
             this.runtime.mountRoutes(this.app, [{ mountPath, routes: routeTable }])
           } else {
@@ -1051,6 +1059,16 @@ export class Application {
     // a chance to match before the catch-all 404 fires.
     // `onNotFound` / `onError` still win — the route table only sharpens the
     // DEFAULT, so an app that supplies its own catch-all is unaffected.
+    // Routes are mounted: middleware that asked for the policy table can have
+    // it now. Global middleware was mounted earlier — its closure reads the
+    // table per request, so binding after the fact is in time.
+    for (const entry of this.options.middlewares ?? []) {
+      offerRoutePolicy(typeof entry === 'function' ? entry : entry.handler, this.routePolicy)
+    }
+    for (const adapter of this.adapters) {
+      for (const mw of adapter.middleware?.() ?? []) offerRoutePolicy(mw.handler, this.routePolicy)
+    }
+
     this.runtime.setNotFound(this.app, this.options.onNotFound ?? notFoundHandler(mountedPaths))
     this.runtime.setErrorHandler(this.app, this.options.onError ?? errorHandler())
   }
