@@ -297,7 +297,7 @@ export {
   type GroupAssetKeysResult,
 } from './asset-keys'
 
-export { defineRouteFlag, resolveRouteFlags } from './route-flag'
+export { defineRouteFlag, getRouteFlags, resolveRouteFlags } from './route-flag'
 export type {
   RouteFlag,
   RouteFlagContext,

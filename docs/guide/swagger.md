@@ -224,6 +224,42 @@ SwaggerAdapter({
 })
 ```
 
+## Public routes from a route flag — `publicFlag`
+
+If your auth already marks public endpoints with a [route flag](./route-flags.md), name the flag
+and the spec reads the same declaration the runtime does — no second annotation to keep in step:
+
+```typescript
+// src/flags.ts
+export const Public = defineRouteFlag('auth.public')
+
+SwaggerAdapter({ bearerAuth: true, publicFlag: 'auth.public' })
+```
+
+```typescript
+@Public // whole controller documented public
+@Controller()
+export class WebhooksController {
+  @Get('/health') health(ctx: RequestContext) {}
+
+  @Public(false) // this one is documented as secured again
+  @Post('/admin')
+  admin(ctx: RequestContext) {}
+}
+```
+
+The **name is configuration, not a constant**: the framework deliberately names no flags, so one
+project's `auth.public` is another's `public` or `security.none`. Pass a list to accept several:
+
+```typescript
+SwaggerAdapter({ bearerAuth: true, publicFlag: ['auth.public', 'health.probe'] })
+```
+
+Flags inherit from the controller and a method can turn one off, so the spec follows the same
+method-over-class rule as the runtime. For anything more involved than a name — reading a flag's
+value, combining two — use `securityResolver` with `getRouteFlags(controllerClass, handlerName)`,
+which resolves the same map outside a request.
+
 The resolver runs **after** `@ApiPublic()` (which short-circuits to public) but **before** the decorator-driven `@ApiSecurity` / `@ApiBearerAuth` lookups. Returning a value drives the requirement; returning `null` is "explicitly public" (overrides class-level security); returning `undefined` falls through.
 
 ## Resolution order
@@ -232,10 +268,11 @@ When the spec builder picks security for a route, the first match wins:
 
 1. `@ApiPublic()` on the method → no security emitted.
 2. `securityResolver({ controllerClass, handlerName })` returns a value (or `null` for public).
-3. `@ApiSecurity` on the method.
-4. `@ApiBearerAuth` on the method.
-5. `@ApiSecurity` on the class.
-6. `@ApiBearerAuth` on the class.
+3. `publicFlag` — the route carries one of the named flags → no security emitted.
+4. `@ApiSecurity` on the method.
+5. `@ApiBearerAuth` on the method.
+6. `@ApiSecurity` on the class.
+7. `@ApiBearerAuth` on the class.
 
 ## Schema-Driven Documentation
 

@@ -185,6 +185,34 @@ export type RouteFlagTest = string | readonly string[] | RouteFlagPredicate
  */
 export const ROUTE_SLOT: unique symbol = Symbol.for('kick.route') as never
 
+/**
+ * Resolve the flags in force for one handler, straight from the controller
+ * class — the same method-over-class result `buildRouteTable` computes.
+ *
+ * For consumers that see a controller and a method name rather than a live
+ * request: an adapter's `onRouteMount`, an OpenAPI generator, a DevTools route
+ * listing. Inside a request, read `ctx.route.flags` instead — it is already
+ * resolved.
+ *
+ * ```ts
+ * // Mark flagged routes public in the OpenAPI spec:
+ * SwaggerAdapter({
+ *   bearerAuth: true,
+ *   securityResolver: ({ controllerClass, handlerName }) =>
+ *     getRouteFlags(controllerClass, handlerName).has('auth.public') ? null : undefined,
+ * })
+ * ```
+ */
+export function getRouteFlags(
+  controllerClass: object,
+  handlerName: string,
+): ReadonlyMap<string, unknown> {
+  return resolveRouteFlags(
+    getClassFlagDeclarations(controllerClass),
+    getMethodFlagDeclarations(controllerClass, handlerName),
+  )
+}
+
 /** Read the class-level declarations off a controller. */
 export function getClassFlagDeclarations(controllerClass: object): RouteFlagDeclaration[] {
   return getClassMeta<RouteFlagDeclaration[]>(METADATA.CLASS_FLAGS, controllerClass, [])

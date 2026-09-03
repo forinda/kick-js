@@ -35,6 +35,8 @@ export interface RouteEntry {
   controller: string
   handler: string
   middleware: string[]
+  /** Route flags in force, resolved method-over-class. */
+  flags?: Record<string, unknown>
 }
 
 export interface ContainerRegistration {
