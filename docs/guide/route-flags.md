@@ -15,7 +15,7 @@ export class WebhooksController {
   @Get('/health')
   health(ctx: RequestContext) {} // public
 
-  @Public(false) // the method wins
+  @Public.off // the method wins
   @Post('/admin')
   admin(ctx: RequestContext) {} // not public
 }
@@ -59,19 +59,20 @@ ctx.route?.flags.get('rate.limit') // { rpm: 10 }
 
 ## A `false` flag is absent, not false
 
-::: warning This is the rule that makes `has()` safe
-`@Public(false)` **removes** the flag its class set — it does not store `false`. So a resolved flag is either absent or present with a value defaulting to `true`, and there is no present-but-falsy state.
+::: warning Removal is `.off`, not a falsy value
+`@Public.off` **removes** the flag its class set. A resolved flag is either absent or present — presence is the whole question `has()` answers, so there is no "present but turned off" state to reason about.
 
-Without that rule, `flags.has('auth.public')` would answer `true` for the route that just opted back _in_, and every presence-checking consumer would read a protected route as public.
+Removal is spelled as its own member rather than `@Public(false)` for two reasons. It keeps `false` usable as a real value: a flag declared `boolean` can store it, and `flags.get()` can return it. And it removes the trap where `@Public(false)` looked like "not public" while a presence check still answered `true` — which would read a protected route as public.
 :::
 
-| Declaration                                    | Resolved                   |
-| ---------------------------------------------- | -------------------------- |
-| `@Public` on the class, nothing on the method  | `auth.public → true`       |
-| `@Public` on the class, `@Public(false)` on it | _absent_                   |
-| `@RateLimit({ rpm: 10 })`                      | `rate.limit → { rpm: 10 }` |
+| Declaration                                   | Resolved                   |
+| --------------------------------------------- | -------------------------- |
+| `@Public` on the class, nothing on the method | `auth.public → true`       |
+| `@Public` on the class, `@Public.off` on it   | _absent_                   |
+| `@RateLimit({ rpm: 10 })`                     | `rate.limit → { rpm: 10 }` |
+| `@Enabled(false)` (flag declared `boolean`)   | `feature.enabled → false`  |
 
-`@Public(false)` on a route that never inherited the flag is a no-op — usually a sign the author expected an inheritance that isn't there.
+`@Public.off` on a route that never inherited the flag is a no-op — usually a sign the author expected an inheritance that isn't there.
 
 ## Consumers
 
@@ -258,9 +259,9 @@ Two constraints on what a flag can be:
 - **A name cannot start with `!`.** That prefix means "does not carry this flag" in a test, so a
   flag literally named `!x` would be indistinguishable from the negation of `x`. `defineRouteFlag`
   rejects it.
-- **A value type should not include `false`.** `false` is the deletion sentinel — `@Flag(false)`
-  removes the flag rather than storing it — so a flag declared `boolean` could never actually read
-  back as `false`. `flags.get()` excludes `false` from its result type to say so.
+- **Removal is `@Flag.off`, not `@Flag(false)`.** `false` is an ordinary value, so a flag declared
+  `boolean` stores and reads it back normally — `@Enabled(false)` means the feature is off, and
+  `flags.get('feature.enabled')` returns `false`. Only `.off` removes.
 
 ## Where flags can be declared
 

@@ -787,7 +787,7 @@ describe('buildOpenAPISpec — security (Swagger-owned, not coupled to any auth 
       @Get('/open')
       open() {}
 
-      @Public(false)
+      @Public.off
       @Get('/admin')
       admin() {}
     }
@@ -832,7 +832,7 @@ describe('buildOpenAPISpec — security (Swagger-owned, not coupled to any auth 
       @Get('/open')
       open() {}
 
-      @Public(false)
+      @Public.off
       @Get('/secret')
       secret() {}
     }

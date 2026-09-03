@@ -1,4 +1,5 @@
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 import { describe, it, expect } from 'vitest'
@@ -8,6 +9,7 @@ import {
   planAddPackages,
   UPLOAD_DRIVERS,
   ENGINE_PEERS,
+  detectRuntimeFromDepsDetailed,
   AVAILABLE_ADD_PACKAGES,
 } from '../src/commands/add'
 
@@ -125,6 +127,40 @@ describe('planAddPackages', () => {
     expect([...ENGINE_PEERS.express]).toEqual(['express'])
     expect([...ENGINE_PEERS.fastify]).toEqual(['fastify', '@fastify/middie', 'serve-static'])
     expect([...ENGINE_PEERS.h3]).toEqual(['h3', 'serve-static'])
+  })
+
+  it('prefers a prod engine dep over a dev one', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'kick-engine-'))
+    writeFileSync(
+      join(dir, 'package.json'),
+      JSON.stringify({ dependencies: { express: '^5' }, devDependencies: { fastify: '^5' } }),
+    )
+    // Fastify in devDependencies (a benchmark, a comparison test) must not
+    // decide which engine the app deploys on.
+    const detected = detectRuntimeFromDepsDetailed(dir)
+    expect(detected.runtime).toBe('express')
+    expect(detected.ambiguous).toBe(true)
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('flags genuine ambiguity instead of picking by precedence', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'kick-engine-'))
+    writeFileSync(
+      join(dir, 'package.json'),
+      JSON.stringify({ dependencies: { fastify: '^5', h3: '^1' } }),
+    )
+    const detected = detectRuntimeFromDepsDetailed(dir)
+    expect(detected.ambiguous).toBe(true)
+    expect(detected.candidates).toEqual(['fastify', 'h3'])
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('is unambiguous with a single engine', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'kick-engine-'))
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ dependencies: { h3: '^1' } }))
+    const detected = detectRuntimeFromDepsDetailed(dir)
+    expect(detected).toMatchObject({ runtime: 'h3', ambiguous: false })
+    rmSync(dir, { recursive: true, force: true })
   })
 
   it('names the engine in a notice so the install is explainable', () => {

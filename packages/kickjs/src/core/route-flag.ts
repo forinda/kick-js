@@ -8,12 +8,11 @@
  * mark a security scheme — none of them needs to know about the others.
  *
  * The rule that makes presence checks safe: a flag resolves to **absent**, or
- * **present with a value defaulting to `true`**. There is no present-but-false
- * state, so `flags.has(name)` is always the right question for a boolean flag.
- * `@Public(false)` on a method does not store `false` — it removes the flag the
- * class put there. Without that, `has('auth.public')` would answer `true` for
- * the route that just opted back IN, which is an authorization bypass rather
- * than a papercut.
+ * **present with a value**. `@Public.off` on a method removes what the class
+ * set, rather than storing something falsy — so `flags.has(name)` is always the
+ * right question for a boolean flag. Without that, `has('auth.public')` could
+ * answer `true` for the route that just opted back IN, which is an
+ * authorization bypass rather than a papercut.
  */
 import { METADATA } from './interfaces'
 import { getClassMeta, getMethodMeta, pushClassMeta, pushMethodMeta } from './metadata'
@@ -45,10 +44,8 @@ import { getClassMeta, getMethodMeta, pushClassMeta, pushMethodMeta } from './me
  * Two constraints on what you can declare:
  * - A name cannot start with `!` — that prefix means "does not carry this flag"
  *   in a {@link RouteFlagTest}, and `defineRouteFlag` rejects it.
- * - A value type should not include `false`, which is the deletion sentinel:
- *   `@Flag(false)` removes the flag rather than storing `false`, so
- *   `flags.get()` can never return it (its result type excludes `false` to say
- *   so).
+ * - Removal is `@Flag.off`, not `@Flag(false)` — so `false` stays usable as a
+ *   real value for a flag declared `boolean`.
  */
 // eslint-disable-next-line @typescript-eslint/no-empty-interface
 export interface KickRouteFlags {}
@@ -70,6 +67,17 @@ export type RouteFlagName = [keyof KickRouteFlags] extends [never]
 export type RouteFlagValue<K extends string, Fallback = unknown> = K extends keyof KickRouteFlags
   ? KickRouteFlags[K]
   : Fallback
+
+/**
+ * Marks a declaration as "remove this flag" during resolution.
+ *
+ * A dedicated sentinel rather than `false`: `false` is a perfectly good flag
+ * VALUE (a registry entry typed `boolean`), and overloading it meant
+ * `@Enabled(false)` deleted the flag while `flags.get('enabled')` could never
+ * return `false`. With the sentinel, `false` stores like any other value and
+ * removal is spelled `@Enabled.off`.
+ */
+export const FLAG_UNSET: unique symbol = Symbol.for('kick.flagUnset') as never
 
 /** One `@Flag` application, before precedence resolution. */
 export interface RouteFlagDeclaration {
@@ -105,9 +113,18 @@ export interface BareRouteFlag {
   (target: object, propertyKey: string | symbol, descriptor?: PropertyDescriptor): void
 }
 
-/** The called form — `@Public(false)`, `@Limit({ rpm: 10 })`. */
+/** The called form — `@Limit({ rpm: 10 })` — plus removal via `.off`. */
 export interface ValuedRouteFlag<V> {
-  (value: V | false): (target: object, propertyKey?: string | symbol) => void
+  (value: V): (target: object, propertyKey?: string | symbol) => void
+  /**
+   * Remove the flag on this route — `@Public.off` on a method drops what the
+   * controller set.
+   *
+   * Applied bare, like the flag itself. Spelled as its own member rather than
+   * `@Public(false)` so that `false` stays available as a real value: a flag
+   * declared `boolean` can store it, and `flags.get()` can return it.
+   */
+  readonly off: BareRouteFlag
   readonly flagName: string
 }
 
@@ -213,7 +230,15 @@ export function defineRouteFlag(name: string): RouteFlag<never> {
   }
 
   Object.defineProperty(flag, 'flagName', { value: name, enumerable: true })
-  return flag as RouteFlag<never>
+  // `.off` is the removal decorator: bare-applicable, and the only way to drop
+  // an inherited flag now that `false` is an ordinary value.
+  Object.defineProperty(flag, 'off', {
+    value: (target: object, propertyKey?: string | symbol): void => {
+      apply(FLAG_UNSET, target, propertyKey)
+    },
+    enumerable: true,
+  })
+  return flag as unknown as RouteFlag<never>
 }
 
 /**
@@ -234,7 +259,7 @@ export function resolveRouteFlags(
 
   // Lowest precedence first, so higher levels overwrite.
   for (const { name, value } of [...classDeclarations, ...methodDeclarations]) {
-    if (value === false) {
+    if (value === FLAG_UNSET) {
       resolved.delete(name)
       continue
     }
@@ -257,13 +282,7 @@ export function resolveRouteFlags(
  */
 export interface RouteFlags extends ReadonlyMap<string, unknown> {
   has(name: RouteFlagName): boolean
-  /**
-   * `false` is excluded from the result on purpose: it is the deletion
-   * sentinel, so a flag resolved to `false` is *absent*, and `get` returns
-   * `undefined` for it. A registry entry typed `boolean` would otherwise
-   * promise a `false` that can never arrive.
-   */
-  get<K extends RouteFlagName>(name: K): Exclude<RouteFlagValue<K>, false> | undefined
+  get<K extends RouteFlagName>(name: K): RouteFlagValue<K> | undefined
 }
 
 /**

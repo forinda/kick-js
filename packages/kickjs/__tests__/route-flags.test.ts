@@ -2,7 +2,7 @@
  * Route flags (spec: `route-flags-design.md`).
  *
  * The load-bearing case is the last group: a class-level `@Public` with a
- * method-level `@Public(false)` must resolve with the flag ABSENT on that
+ * method-level `@Public.off` must resolve with the flag ABSENT on that
  * method, not present-and-false. Both directions are asserted, because a
  * resolver that dropped the key everywhere would pass a one-sided test.
  */
@@ -101,7 +101,7 @@ describe('route flags — resolution', () => {
     class C {
       @Get('/inherits') inherits(_ctx: RequestContext) {}
 
-      @Public(false)
+      @Public.off
       @Get('/overrides')
       overrides(_ctx: RequestContext) {}
     }
@@ -229,7 +229,7 @@ describe('route flags — contributor skipWhen', () => {
       ctx.json({ user: ctx.get('user') ?? null })
     }
 
-    @Public(false)
+    @Public.off
     @Get('/admin')
     admin(ctx: RequestContext) {
       ctx.json({ user: ctx.get('user') ?? null })
@@ -471,5 +471,46 @@ describe('route flags — negated tests', () => {
 
   it('throws on a mixed-polarity list rather than guessing', async () => {
     await expect(runsFor(['auth.public', '!billing.metered'])).rejects.toThrow(/mixes polarities/)
+  })
+})
+
+describe('route flags — false is a value, not a sentinel', () => {
+  beforeEach(() => Container.reset())
+
+  const Enabled = defineRouteFlag<boolean>('feature.enabled')
+
+  it('stores `false` as a value rather than deleting the flag', () => {
+    @Controller()
+    class C {
+      @Enabled(false)
+      @Get('/off')
+      off(_ctx: RequestContext) {}
+
+      @Enabled(true)
+      @Get('/on')
+      on(_ctx: RequestContext) {}
+    }
+
+    const byPath = Object.fromEntries(buildRouteTable(C).map((e) => [e.path, e.meta.flags!]))
+    // Present AND false — the old `false`-as-removal made this unreachable.
+    expect(byPath['/off'].has('feature.enabled')).toBe(true)
+    expect(byPath['/off'].get('feature.enabled')).toBe(false)
+    expect(byPath['/on'].get('feature.enabled')).toBe(true)
+  })
+
+  it('`.off` is what removes an inherited flag', () => {
+    @Enabled(true)
+    @Controller()
+    class C {
+      @Get('/keeps') keeps(_ctx: RequestContext) {}
+
+      @Enabled.off
+      @Get('/drops')
+      drops(_ctx: RequestContext) {}
+    }
+
+    const byPath = Object.fromEntries(buildRouteTable(C).map((e) => [e.path, e.meta.flags!]))
+    expect(byPath['/keeps'].get('feature.enabled')).toBe(true)
+    expect(byPath['/drops'].has('feature.enabled')).toBe(false)
   })
 })

@@ -72,7 +72,7 @@ describe('RouteFlag overloads', () => {
       @Public
       bare() {}
 
-      @Public(false)
+      @Public.off
       off() {}
 
       @Limit({ rpm: 10 })
@@ -85,7 +85,7 @@ describe('RouteFlag overloads', () => {
     @Limit({ rpm: 5 })
     class ValuedClass {}
 
-    @Public(false)
+    @Public.off
     class OffClass {}
 
     expectTypeOf<MethodTarget>().toBeObject()
