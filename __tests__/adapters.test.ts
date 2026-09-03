@@ -50,8 +50,12 @@ describe('Adapters: lifecycle hooks', () => {
 
     const adapter: AppAdapter = {
       name: 'LifecycleAdapter',
-      beforeMount: (_ctx) => { order.push('beforeMount') },
-      beforeStart: (_ctx) => { order.push('beforeStart') },
+      beforeMount: (_ctx) => {
+        order.push('beforeMount')
+      },
+      beforeStart: (_ctx) => {
+        order.push('beforeStart')
+      },
     }
 
     const { Module } = createSimpleModule()
@@ -167,9 +171,13 @@ describe('Adapters: onRouteMount', () => {
 
     await createTestApp({ modules: [UsersModule, PostsModule], adapters: [spyAdapter] })
 
-    expect(mounted).toHaveLength(2)
-    expect(mounted[0]).toEqual({ ctrl: 'UsersCtrl', path: '/api/v1/users' })
-    expect(mounted[1]).toEqual({ ctrl: 'PostsCtrl', path: '/api/v1/posts' })
+    // The framework mounts its own health controller too; assert on the
+    // modules under test rather than on the total.
+    const ours = mounted.filter((m) => m.ctrl !== 'HealthController')
+    expect(ours).toEqual([
+      { ctrl: 'UsersCtrl', path: '/api/v1/users' },
+      { ctrl: 'PostsCtrl', path: '/api/v1/posts' },
+    ])
   })
 
   it('onRouteMount is not called for modules without controller', async () => {
@@ -200,7 +208,9 @@ describe('Adapters: onRouteMount', () => {
 
     await createTestApp({ modules: [WithCtrl, WithoutCtrl], adapters: [spyAdapter] })
 
-    expect(mounted).toEqual(['/api/v1/with'])
+    // '/health' is the framework's own module — the point here is that
+    // '/api/v1/without' never appears, having declared no controller.
+    expect(mounted.filter((p) => p !== '/health')).toEqual(['/api/v1/with'])
   })
 })
 
@@ -291,14 +301,22 @@ describe('Adapters: multiple adapters', () => {
 
     const adapterA: AppAdapter = {
       name: 'A',
-      beforeMount: (_ctx: AdapterContext) => { events.push('A:beforeMount') },
-      beforeStart: (_ctx: AdapterContext) => { events.push('A:beforeStart') },
+      beforeMount: (_ctx: AdapterContext) => {
+        events.push('A:beforeMount')
+      },
+      beforeStart: (_ctx: AdapterContext) => {
+        events.push('A:beforeStart')
+      },
     }
 
     const adapterB: AppAdapter = {
       name: 'B',
-      beforeMount: (_ctx: AdapterContext) => { events.push('B:beforeMount') },
-      beforeStart: (_ctx: AdapterContext) => { events.push('B:beforeStart') },
+      beforeMount: (_ctx: AdapterContext) => {
+        events.push('B:beforeMount')
+      },
+      beforeStart: (_ctx: AdapterContext) => {
+        events.push('B:beforeStart')
+      },
     }
 
     const { Module } = createSimpleModule()
